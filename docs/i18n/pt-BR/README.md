@@ -31,12 +31,12 @@ Combinado com Claude Code ou OpenAI Codex, se transforma em uma ferramenta de en
 **Análise de Erlang e BEAM:** Erlang compila para arquivos .beam, e a mesma abordagem de mapeamento de superfície usada para ELF se aplica diretamente, então a busca de átomos, auditoria de importações e detecção de ofuscação não precisam de tratamento especial. Varrer um diretório de release leva segundos.
 
 **Decriptação**
-- **Entropy Mapper:** Encontra seções criptografadas, comprimidas ou empacotadas em um binário.
-- **Crypto Audit:** Escaneia em busca de criptografia.
-- **XorSolver:** Recupera e depois decripta a seção alvo, permitindo continuar a engenharia reversa.
-- **BmpKeyExtractor:** Reconstrói chaves secretas ocultas em esteganografia de pixels BMP usando interpolação polinomial de Lagrange, porque firmware e APKs às vezes armazenam fragmentos de chave em ativos de imagem em vez de seções de dados.
-- **ELFVtableReconstructor:** Reconstrói mapas de slot-para-função de vtable C++ a partir do .rela.dyn em binários ELF x86-64 ET_DYN sem executar o binário, tornando todos os caminhos de despacho de métodos virtuais visíveis somente pela análise estática.
-- **VtableDispatchScanner:** Varre seções executáveis em busca de padrões `call [reg+disp]` para determinar quais slots de funções virtuais são realmente despachados (ativos) versus nunca chamados (código morto).
+- **Entropy Mapper:** Seções de um binário que contêm dados cifrados ou comprimidos parecem estatisticamente aleatórias. Entropy Mapper mede essa aleatoriedade em todo o arquivo e sinaliza as regiões que merecem atenção.
+- **Crypto Audit:** Analisa o binário em busca de constantes criptográficas, assinaturas de algoritmos conhecidos e material de chave para saber o que o código está fazendo com os dados antes de ler uma única linha.
+- **XorSolver:** A criptografia XOR é comum em firmware porque é rápida e trivial de implementar. XorSolver recupera a chave e decripta a seção para que o conteúdo real seja legível.
+- **BmpKeyExtractor:** Alguns firmwares e APKs dividem chaves secretas em partes e as escondem em arquivos de imagem em vez de seções de dados, porque assets de imagem recebem menos escrutínio. BmpKeyExtractor localiza e remonta essas partes.
+- **ELFVtableReconstructor:** Em uma biblioteca compartilhada, a vtable está vazia no disco e só é preenchida pelo SO no carregamento. ELFVtableReconstructor lê as instruções de realocação que o SO usaria e reconstrói a tabela estaticamente, para ver qual função ocupa qual slot sem executar o binário.
+- **VtableDispatchScanner:** Ter uma entrada na vtable não significa que o código a chama em algum lugar. VtableDispatchScanner busca no binário cada lugar onde um método virtual é realmente chamado, para distinguir quais slots são alcançáveis e quais são código morto que nada jamais aciona.
 
 ---
 

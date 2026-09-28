@@ -31,12 +31,12 @@ Claude Code veya OpenAI Codex ile birleştirildiğinde tam otonom bir tersine m�
 **Erlang/BEAM Analizi:** Erlang .beam dosyalarına derlenir ve ELF için kullanılan yüzey eşleme yaklaşımı doğrudan uygulanır, böylece atom arama, içe aktarma denetimi ve gizleme tespiti özel işlem gerektirmez. Bir yayın dizinini taramak saniyeler alır.
 
 **Şifre Çözme**
-- **Entropy Mapper:** İkili dosyada şifrelenmiş, sıkıştırılmış veya paketlenmiş bölümleri bulur.
-- **Crypto Audit:** Kriptografiyi tarar.
-- **XorSolver:** Hedef bölümü kurtarır ve şifresini çözerek daha fazla tersine mühendisliğe olanak tanır.
-- **BmpKeyExtractor:** Lagrange polinom interpolasyonu kullanarak BMP piksel steganografisinde gizlenen gizli anahtarları yeniden yapılandırır.
-- **ELFVtableReconstructor:** x86-64 ET_DYN ELF ikili dosyalarında .rela.dyn'den binary çalıştırmadan C++ vtable slot-fonksiyon haritalarını yeniden oluşturur; böylece tüm sanal yöntem gönderim yolları yalnızca statik analizle görünür hale gelir.
-- **VtableDispatchScanner:** Hangi sanal fonksiyon slotlarının gerçekten gönderildiğini (canlı) ve hiç çağrılmayanları (ölü kod) belirlemek için çalıştırılabilir bölümlerde `call [reg+disp]` kalıplarını tarar.
+- **Entropy Mapper:** Şifreli veya sıkıştırılmış veri içeren binary bölümleri istatistiksel olarak rastgele görünür. Entropy Mapper bu rastgeleliği dosyanın tamamında ölçer ve incelenmeye değer bölgeleri işaretler.
+- **Crypto Audit:** Binary dosyasını kriptografik sabitler, bilinen algoritma imzaları ve anahtar malzemesi için tarar; böylece tek bir satır okumadan önce kodun verilerle gerçekte ne yaptığını bilirsiniz.
+- **XorSolver:** XOR şifreleme, hızlı ve uygulaması kolay olduğu için firmware'lerde yaygındır. XorSolver anahtarı kurtarır ve bölümün şifresini çözerek gerçek içeriği okunabilir hale getirir.
+- **BmpKeyExtractor:** Bazı firmware ve APK'lar gizli anahtarları parçalara ayırıp veri bölümleri yerine görüntü dosyalarına saklar, çünkü görüntü varlıkları daha az incelemeye tabi tutulur. BmpKeyExtractor bu parçaları bulur ve yeniden bir araya getirir.
+- **ELFVtableReconstructor:** Paylaşılan bir kütüphanede vtable diskte boştur ve yalnızca OS tarafından yüklenirken doldurulur. ELFVtableReconstructor, OS'nin kullanacağı yeniden konumlandırma talimatlarını okur ve tabloyu statik olarak yeniden oluşturur; böylece binary'yi çalıştırmadan hangi fonksiyonun hangi slotta olduğunu görebilirsiniz.
+- **VtableDispatchScanner:** vtable'da bir girişin bulunması, kodun onu bir yerde çağırdığı anlamına gelmez. VtableDispatchScanner, binary genelinde sanal bir metodun gerçekten çağrıldığı her yeri arar; hangi slotların erişilebilir, hangilerinin hiçbir şeyin tetiklemediği ölü kod olduğunu ayırt eder.
 
 ---
 

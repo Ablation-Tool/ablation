@@ -31,12 +31,12 @@ Kết hợp với Claude Code hoặc OpenAI Codex, nó trở thành một công 
 **Phân tích Erlang/BEAM:** Erlang biên dịch thành tệp .beam và cùng phương pháp ánh xạ bề mặt dùng cho ELF áp dụng trực tiếp, vì vậy tìm kiếm atom, kiểm toán import và phát hiện làm rối không cần xử lý đặc biệt. Quét thư mục phát hành mất vài giây.
 
 **Giải mã**
-- **Entropy Mapper:** Tìm các phần được mã hóa, nén hoặc đóng gói trong tệp nhị phân.
-- **Crypto Audit:** Quét mật mã học.
-- **XorSolver:** Phục hồi rồi giải mã phần đích cho phép dịch ngược tiếp theo.
-- **BmpKeyExtractor:** Tái tạo khóa bí mật ẩn trong steganography pixel BMP bằng nội suy đa thức Lagrange.
-- **ELFVtableReconstructor:** Tái tạo bản đồ slot-to-function của vtable C++ từ .rela.dyn trong các file ELF x86-64 ET_DYN mà không cần thực thi binary, giúp tất cả các đường dẫn dispatch phương thức ảo hiển thị qua phân tích tĩnh.
-- **VtableDispatchScanner:** Quét các phần thực thi để tìm các mẫu `call [reg+disp]` nhằm xác định slot hàm ảo nào thực sự được dispatch (live) so với không bao giờ được gọi (dead code).
+- **Entropy Mapper:** Các phần trong binary chứa dữ liệu được mã hóa hoặc nén trông có vẻ ngẫu nhiên về mặt thống kê. Entropy Mapper đo độ ngẫu nhiên đó trên toàn bộ file và đánh dấu các vùng đáng kiểm tra.
+- **Crypto Audit:** Quét binary để tìm hằng số mật mã, chữ ký thuật toán đã biết và tài liệu khóa để biết code thực sự làm gì với dữ liệu trước khi đọc một dòng nào.
+- **XorSolver:** Mã hóa XOR phổ biến trong firmware vì nhanh và dễ cài đặt. XorSolver phục hồi khóa và giải mã phần đó để nội dung thực có thể đọc được.
+- **BmpKeyExtractor:** Một số firmware và APK chia khóa bí mật thành từng phần và giấu trong các file ảnh thay vì các phần dữ liệu, vì tài nguyên ảnh ít bị chú ý hơn. BmpKeyExtractor tìm và ghép lại những phần đó.
+- **ELFVtableReconstructor:** Trong thư viện chia sẻ, vtable trống trên đĩa và chỉ được OS điền vào khi tải. ELFVtableReconstructor đọc các lệnh tái định vị mà OS sẽ sử dụng và xây dựng lại bảng theo cách tĩnh, giúp bạn thấy hàm nào nằm ở slot nào mà không cần chạy binary.
+- **VtableDispatchScanner:** Có một mục trong vtable không có nghĩa là code gọi nó ở đâu đó. VtableDispatchScanner tìm kiếm trong binary mọi nơi mà một phương thức ảo thực sự được gọi, để phân biệt slot nào có thể đến được và slot nào là dead code mà không có gì kích hoạt.
 
 ---
 

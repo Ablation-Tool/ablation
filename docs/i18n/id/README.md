@@ -31,12 +31,12 @@ Dikombinasikan dengan Claude Code atau OpenAI Codex, ia menjadi alat rekayasa te
 **Analisis Erlang/BEAM:** Erlang dikompilasi ke file .beam, dan pendekatan pemetaan permukaan yang sama yang digunakan untuk ELF berlaku langsung, sehingga pencarian atom, audit impor, dan deteksi obfuskasi tidak memerlukan penanganan khusus. Memindai direktori rilis membutuhkan waktu beberapa detik.
 
 **Dekripsi**
-- **Entropy Mapper:** Menemukan bagian terenkripsi, terkompresi, atau dikemas dalam biner.
-- **Crypto Audit:** Memindai kriptografi.
-- **XorSolver:** Memulihkan lalu mendekripsi bagian target sehingga memungkinkan rekayasa terbalik lebih lanjut.
-- **BmpKeyExtractor:** Merekonstruksi kunci rahasia yang tersembunyi dalam steganografi piksel BMP menggunakan interpolasi polinomial Lagrange.
-- **ELFVtableReconstructor:** Merekonstruksi peta slot-ke-fungsi vtable C++ dari .rela.dyn dalam binary ELF x86-64 ET_DYN tanpa mengeksekusi binary, sehingga semua jalur dispatch metode virtual terlihat dari analisis statis saja.
-- **VtableDispatchScanner:** Memindai bagian executable untuk pola `call [reg+disp]` guna menentukan slot fungsi virtual mana yang benar-benar didispatch (live) versus tidak pernah dipanggil (dead code).
+- **Entropy Mapper:** Bagian binary yang berisi data terenkripsi atau terkompresi terlihat acak secara statistik. Entropy Mapper mengukur keacakan itu di seluruh file dan menandai wilayah yang layak diperiksa.
+- **Crypto Audit:** Memindai binary untuk konstanta kriptografi, tanda tangan algoritma yang dikenal, dan materi kunci sehingga Anda tahu apa yang sebenarnya dilakukan kode terhadap data sebelum membaca satu baris pun.
+- **XorSolver:** Enkripsi XOR umum di firmware karena cepat dan mudah diimplementasikan. XorSolver memulihkan kunci dan mendekripsi bagian tersebut sehingga konten aslinya dapat dibaca.
+- **BmpKeyExtractor:** Beberapa firmware dan APK membagi kunci rahasia menjadi bagian-bagian yang disembunyikan di file gambar daripada bagian data, karena aset gambar mendapat pengawasan yang lebih sedikit. BmpKeyExtractor menemukan dan merangkai ulang bagian-bagian itu.
+- **ELFVtableReconstructor:** Dalam shared library, vtable kosong di disk dan hanya diisi oleh OS saat dimuat. ELFVtableReconstructor membaca instruksi relokasi yang akan digunakan OS dan membangun kembali tabel secara statis, sehingga Anda dapat melihat fungsi mana yang ada di slot mana tanpa menjalankan binary.
+- **VtableDispatchScanner:** Memiliki entri vtable tidak berarti kode memanggilnya di suatu tempat. VtableDispatchScanner mencari di seluruh binary setiap tempat di mana metode virtual benar-benar dipanggil, sehingga Anda dapat membedakan slot yang dapat dijangkau dari dead code yang tidak pernah dipicu oleh apapun.
 
 ---
 

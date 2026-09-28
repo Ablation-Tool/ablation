@@ -31,12 +31,12 @@ Gecombineerd met Claude Code of OpenAI Codex wordt het een volledig autonoom rev
 **Erlang/BEAM-analyse:** Erlang compileert naar .beam-bestanden, en dezelfde oppervlaktekaartbenadering die voor ELF wordt gebruikt, is direct van toepassing, zodat atoomzoekopdrachten, import-audits en obfuscatiedetectie geen speciale behandeling vereisen. Een releasedirectory scannen duurt seconden.
 
 **Ontcijfering**
-- **Entropy Mapper:** Vindt versleutelde, gecomprimeerde of verpakte secties in een binair bestand.
-- **Crypto Audit:** Scant op cryptografie.
-- **XorSolver:** Herstelt en ontsleutelt vervolgens de doelsectie voor verdere reverse engineering.
-- **BmpKeyExtractor:** Reconstrueert geheime sleutels verborgen in BMP-pixelsteganografie met behulp van Lagrange-polynoominterpolatie.
-- **ELFVtableReconstructor:** Reconstrueert C++ vtable slot-naar-functie-maps uit .rela.dyn in x86-64 ET_DYN ELF-binaries zonder het binary uit te voeren, zodat alle virtuele methode dispatch-paden zichtbaar zijn via statische analyse alleen.
-- **VtableDispatchScanner:** Scant uitvoerbare secties op `call [reg+disp]`-patronen om te bepalen welke virtuele functieslots daadwerkelijk worden gedispatcht (live) versus nooit worden aangeroepen (dode code).
+- **Entropy Mapper:** Binaire secties die versleutelde of gecomprimeerde gegevens bevatten zien er statistisch willekeurig uit. Entropy Mapper meet die willekeurigheid over het hele bestand en markeert de gebieden die de moeite waard zijn om te bekijken.
+- **Crypto Audit:** Scant het binary op cryptografische constanten, bekende algoritme-signaturen en sleutelmateriaal, zodat je weet wat de code daadwerkelijk met de gegevens doet voordat je een regel leest.
+- **XorSolver:** XOR-versleuteling komt veel voor in firmware omdat het snel en triviaal te implementeren is. XorSolver herstelt de sleutel en ontsleutelt de sectie zodat de echte inhoud leesbaar wordt.
+- **BmpKeyExtractor:** Sommige firmware en APKs splitsen geheime sleutels op in delen die in afbeeldingsbestanden worden verstopt in plaats van in datasecties, omdat afbeeldingsassets minder controle krijgen. BmpKeyExtractor vindt en hermonteert die delen.
+- **ELFVtableReconstructor:** In een gedeelde bibliotheek is de vtable leeg op schijf en wordt pas bij het laden door het OS ingevuld. ELFVtableReconstructor leest de relocatie-instructies die het OS zou gebruiken en bouwt de tabel statisch op, zodat je kunt zien welke functie in welk slot zit zonder het binary uit te voeren.
+- **VtableDispatchScanner:** Een vtable-entry hebben betekent niet dat code het ergens aanroept. VtableDispatchScanner doorzoekt het binary naar elke plek waar een virtuele methode daadwerkelijk wordt aangeroepen, zodat je kunt onderscheiden welke slots bereikbaar zijn en welke dode code zijn die niets ooit activeert.
 
 ---
 
