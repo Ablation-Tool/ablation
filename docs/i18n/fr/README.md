@@ -31,12 +31,12 @@ Combiné avec Claude Code ou OpenAI Codex, il devient un outil de rétro-ingéni
 **Analyse Erlang et BEAM:** Erlang compile en fichiers .beam, et la même approche de cartographie de surface utilisée pour ELF s'applique directement, donc la recherche d'atomes, l'audit des imports et la détection d'obfuscation ne nécessitent aucun traitement particulier. L'analyse d'un répertoire de release prend quelques secondes.
 
 **Déchiffrement**
-- **Entropy Mapper:** Trouve les sections chiffrées, compressées ou packées dans un binaire.
-- **Crypto Audit:** Scanne à la recherche de cryptographie.
-- **XorSolver:** Récupère puis déchiffre la section cible, ce qui permet de poursuivre la rétro-ingénierie.
-- **BmpKeyExtractor:** Reconstruit des clés secrètes cachées dans la stéganographie de pixels BMP en utilisant l'interpolation polynomiale de Lagrange, parce que le firmware et les APK stockent parfois des fragments de clé dans des ressources d'image plutôt que dans des sections de données.
-- **ELFVtableReconstructor:** Reconstruit les maps slot-vers-fonction de vtable C++ depuis .rela.dyn dans des binaires ELF x86-64 ET_DYN sans exécuter le binaire, rendant tous les chemins de dispatch des méthodes virtuelles visibles par analyse statique seule.
-- **VtableDispatchScanner:** Analyse les sections exécutables pour trouver des patterns `call [reg+disp]` afin de déterminer quels slots de fonctions virtuelles sont réellement dispatchés (actifs) ou jamais appelés (code mort).
+- **Entropy Mapper:** Les sections binaires contenant des données chiffrées ou compressées semblent statistiquement aléatoires. Entropy Mapper mesure cette aléatoire sur l'ensemble du fichier et signale les régions qui méritent attention.
+- **Crypto Audit:** Analyse le binaire à la recherche de constantes cryptographiques, de signatures d'algorithmes connus et de matériel de clé, pour savoir ce que le code fait réellement avec les données avant d'en lire une seule ligne.
+- **XorSolver:** Le chiffrement XOR est courant dans les firmwares parce qu'il est rapide et trivial à implémenter. XorSolver retrouve la clé et déchiffre la section pour que le contenu réel devienne lisible.
+- **BmpKeyExtractor:** Certains firmwares et APKs fractionnent les clés secrètes en parts cachées dans des fichiers image plutôt que dans des sections de données, parce que les assets image font l'objet de moins de scrutin. BmpKeyExtractor localise et réassemble ces parts.
+- **ELFVtableReconstructor:** Dans une bibliothèque partagée, la vtable est vide sur le disque et n'est remplie par l'OS qu'au chargement. ELFVtableReconstructor lit les instructions de relocalisation que l'OS utiliserait et reconstruit la table statiquement, pour voir quelle fonction occupe quel slot sans exécuter le binaire.
+- **VtableDispatchScanner:** Avoir une entrée dans la vtable ne signifie pas que du code l'appelle. VtableDispatchScanner cherche dans le binaire chaque endroit où une méthode virtuelle est réellement appelée, pour distinguer les slots atteignables des slots en code mort que rien ne déclenche jamais.
 
 ---
 
