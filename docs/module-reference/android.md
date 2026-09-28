@@ -470,7 +470,7 @@ pseudo_java = DEXLifter.report(dex, 'Lcom/example/Foo;', 'methodName')
 
 ### Limitations
 
-- No full SSA or dominator-tree analysis — if/else blocks show as `if (cond) goto :Lxxx`
+- No full SSA or dominator-tree analysis. If/else blocks show as `if (cond) goto :Lxxx`
   labels rather than structured braces. Sufficient for reading control flow.
 - `new-instance` + `invoke-direct <init>` is shown as two lines; constructor
   arguments appear on the `<init>` call comment line, not on the `new T()` line.
@@ -479,5 +479,5 @@ pseudo_java = DEXLifter.report(dex, 'Lcom/example/Foo;', 'methodName')
 - Try/catch blocks and exception handlers are not structurally represented
   (exception registers still appear via `move-exception`).
 - Obfuscator instrumentation (e.g. ByteDance `Tz.a()/Tz.b()` anti-tamper
-  calls) is rendered as-is — which is itself a finding: heavy wrapping around
+  calls) is rendered as-is, which is itself a finding: heavy wrapping around
   simple logic is a pattern signature for the ByteDance runtime protection.
