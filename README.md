@@ -53,7 +53,7 @@ Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Securit
 
 ---
 
-## Local Decompilers
+## 13 Local Decompilers
 
 | Architecture | Variants |
 |---|---|
