@@ -2,6 +2,23 @@
 
 ---
 
+## v2.11.0
+
+- **BmpKeyExtractor / LSBStegoReader / LagrangeKeyExtractor**
+  (`analyzers/lsb_stego_extractor.py`): BMP LSB steganography reader and
+  Lagrange polynomial secret-sharing key extractor. Recovers key material
+  hidden in BMP pixel LSBs using a Shamir-style scheme over rational arithmetic.
+  `LSBStegoReader` reads the per-seed pixel LSB channel (1 bit/pixel, 8 pixels/byte,
+  LE bit order, modular wrap-around). `LagrangeKeyExtractor` reconstructs P(0) via
+  Lagrange interpolation at x=0 using CRT over multiple 63-bit primes; matches the
+  imath `mp_int_to_binary` byte-order: little-endian output, reverse two's complement
+  for negative values (carry MSByte to LSByte), extra byte for bit-aligned integers.
+  `BmpKeyExtractor` is the high-level entry point: BMP path + seed -> `StegoKeyResult`
+  with per-component hex strings and concatenated `raw_key_hex`. Stdlib-only;
+  no sympy or scipy dependency.
+
+---
+
 ## v2.10.0
 
 - **DEXLifter** (`analyzers/dex_lifter.py`): pseudo-Java IR lifter for DEX bytecode.
@@ -23,7 +40,7 @@
 
 - **DEXDisasm** (`analyzers/dex_disasm.py`): DEX bytecode disassembler with
   smali-style output. Covers all 17 instruction formats (`10x` through `51l`).
-  Annotates every reference with resolved descriptors from the DEX flat tables —
+  Annotates every reference with resolved descriptors from the DEX flat tables:
   full method signatures (class, name, proto), field names and types,
   type names, and string literals. Builds a code_off lookup map at init time
   by walking all `class_data_item` entries. `disasm_method(class, method)`,

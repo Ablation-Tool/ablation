@@ -32,6 +32,7 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 - **Entropy Mapper:** Finds encrypted, compressed, or packed sections in a binary.
 - **Crypto Audit:** Scans for cryptography.
 - **XorSolver:** Recovers, then decrypts the target section which allows further reverse engineering.
+- **BmpKeyExtractor:** Reconstructs secret keys hidden in BMP pixel steganography using Lagrange polynomial interpolation, because firmware and APKs sometimes store key shares in image assets rather than data sections.
 
 ---
 
