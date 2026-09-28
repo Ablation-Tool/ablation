@@ -2,6 +2,36 @@
 
 ---
 
+## v2.10.0
+
+- **DEXLifter** (`analyzers/dex_lifter.py`): pseudo-Java IR lifter for DEX bytecode.
+  Converts `DEXInstruction` streams to readable Java-like source without SSA
+  or external dependencies. Type inference propagates through move-result, iget,
+  sget, check-cast, and const opcodes. Renders field access as dot notation,
+  invoke-* as typed method calls, if-* as labelled conditionals, backward
+  gotos as loop markers. Pending-invoke state correctly handles move-result
+  (result assigned to typed variable on the invoke line, not a separate line).
+  Handles binary/unary arithmetic, array access, new-instance, instanceof,
+  monitor-enter/exit, switch, fill-array-data. Falls back to annotated smali
+  comment for any unrecognised opcode so output is always complete.
+  Verified on PetTech APK: reveals ByteDance `Tz.a()`/`Tz.b()` anti-tamper
+  wrapping pattern and `BWFlashData.c` as the device key storage field.
+
+---
+
+## v2.9.0
+
+- **DEXDisasm** (`analyzers/dex_disasm.py`): DEX bytecode disassembler with
+  smali-style output. Covers all 17 instruction formats (`10x` through `51l`).
+  Annotates every reference with resolved descriptors from the DEX flat tables —
+  full method signatures (class, name, proto), field names and types,
+  type names, and string literals. Builds a code_off lookup map at init time
+  by walking all `class_data_item` entries. `disasm_method(class, method)`,
+  `disasm_class(class)`, `list_methods(class)`, `decode_code_item(dex, off)`.
+  53,635 methods decoded in PetTech APK. No external dependencies.
+
+---
+
 ## v2.8.0
 
 - **SqlSinkScanner** (`sql_sink_scanner.py`): detect raw SQL injection in C/C++
