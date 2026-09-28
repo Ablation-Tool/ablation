@@ -35,6 +35,8 @@ W połączeniu z Claude Code lub OpenAI Codex staje się w pełni autonomicznym 
 - **Crypto Audit:** Skanuje kryptografię.
 - **XorSolver:** Odtwarza, a następnie odszyfrowuje sekcję docelową, co umożliwia dalszą inżynierię wsteczną.
 - **BmpKeyExtractor:** Rekonstruuje tajne klucze ukryte w steganografii pikseli BMP używając interpolacji wielomianowej Lagrange'a.
+- **ELFVtableReconstructor:** Rekonstruuje mapy slotów vtable C++ do funkcji z .rela.dyn w binariach ELF x86-64 ET_DYN bez uruchamiania binarnego, dzięki czemu wszystkie ścieżki wywołań metod wirtualnych są widoczne w samej analizie statycznej.
+- **VtableDispatchScanner:** Przeszukuje sekcje wykonywalne w poszukiwaniu wzorców `call [reg+disp]`, aby ustalić, które sloty funkcji wirtualnych są faktycznie wysyłane (aktywne) a które nigdy nie są wywoływane (martwy kod).
 
 ---
 
