@@ -1,7 +1,7 @@
 # Crypto Modules
 
-Three independent tools: encrypted region detection, XOR key recovery, and cryptographic
-posture auditing.
+Four independent tools: encrypted region detection, XOR key recovery, cryptographic
+posture auditing, and BMP LSB steganography / Lagrange secret-sharing key extraction.
 
 ---
 
@@ -176,3 +176,99 @@ result = auditor.check_tls('api.internal.example.com', port=443)
 print(result.summary())
 # Checks: protocol version, cipher suite strength, cert expiry, weak curves
 ```
+
+---
+
+## BmpKeyExtractor / LSBStegoReader / LagrangeKeyExtractor
+
+**File:** `ablation/analyzers/lsb_stego_extractor.py`
+
+Recovers key material hidden in BMP files using LSB steganography combined with a
+Lagrange polynomial secret-sharing scheme (Shamir-style, evaluated over rational
+arithmetic via imath). Found in stripped ARM32 Android .so binaries where multiple
+seeds index into separate polynomials stored in the LSB channel of a BMP asset.
+
+The byte-order behavior matches the imath `mp_int_to_binary` path:
+- Output bytes are little-endian.
+- Negative polynomial values receive a reverse two's complement transformation:
+  carry propagates from MSByte toward LSByte (not the standard direction).
+- Bit-aligned integers (nbits % 8 == 0) get one extra trailing zero byte appended.
+
+No external dependencies beyond stdlib. Prime generation uses pure-Python Miller-Rabin.
+
+---
+
+### BmpKeyExtractor
+
+High-level entry point.
+
+```python
+from ablation.analyzers.lsb_stego_extractor import BmpKeyExtractor
+
+ext = BmpKeyExtractor('/path/to/keys.bmp')
+
+result = ext.extract('MySeed')
+print(result.fmt())
+# seed='MySeed'  type_count=2  n_groups=147  n_pts=73
+# raw_key_hex (124B): f5d794352a4f64f2...
+#   component[0] (62B): f5d794352a4f64f2...
+#   component[1] (62B): 320b9aa4d6fbbb43...
+
+# Multiple seeds
+for seed in ['SeedA', 'SeedB']:
+    r = ext.extract(seed)
+    print(f"{seed}: {r.raw_key_hex[:32]}...")
+```
+
+---
+
+### LSBStegoReader
+
+Low-level pixel LSB reader. Use when you need raw coordinate pairs without running
+the Lagrange reconstruction.
+
+```python
+from ablation.analyzers.lsb_stego_extractor import LSBStegoReader
+
+bmp = open('/path/to/keys.bmp', 'rb').read()
+reader = LSBStegoReader(bmp[0x36:])        # skip 54-byte BMP header
+
+offset = reader.seed_offset('MySeed')      # hash seed to pixel offset
+raw_bytes, next_off = reader.read_bytes(offset, 8)
+pairs, type_count, n_groups = reader.extract_coords('MySeed')
+print(f"type_count={type_count}, n_groups={n_groups}, pairs={len(pairs)}")
+```
+
+---
+
+### LagrangeKeyExtractor
+
+Reconstructs one polynomial component from coordinate pairs via CRT over multiple
+63-bit primes.
+
+```python
+from ablation.analyzers.lsb_stego_extractor import LagrangeKeyExtractor
+
+kex = LagrangeKeyExtractor()               # 8 default 63-bit primes
+n_pts = n_groups // type_count
+
+for comp in range(type_count):
+    slice_pairs = pairs[comp * n_pts : (comp + 1) * n_pts]
+    hex_str = kex.extract(slice_pairs, n_pts)
+    print(f"component {comp}: {len(hex_str)//2}B")
+```
+
+---
+
+### Identification checklist
+
+Look for this scheme when:
+
+1. A `.so` imports `read_keys_from_content` or a similarly named symbol.
+2. The BMP is a small image with no obvious visual content.
+3. `mp_rat_read_string` is called with radix 16 -- coordinates are hex integers.
+4. A Vandermonde matrix construction precedes Gaussian elimination over rationals.
+5. Output strings are 60-70 bytes each, multiple per seed.
+
+Typical output width: 62 bytes (124 hex chars) per negative component (reverse-TC
+applied); 63 bytes (126 hex chars) per positive bit-aligned component (extra byte).
