@@ -141,7 +141,98 @@ Windows: `ExAllocatePool`, `ExAllocatePoolWithTag`, `ExAllocatePool2`, `HeapAllo
 
 ---
 
-## Running both scanners together
+## SqlSinkScanner
+
+**File:** `ablation/analyzers/sql_sink_scanner.py`
+
+Detects raw SQL injection in C/C++ binaries that call the MySQL C API or SQLite3
+directly, without a prepared-statement layer. The classic pattern:
+
+```c
+snprintf(buf, sizeof(buf), "SELECT ... WHERE login='%s'", username);
+mysql_query(conn, buf);              // username flows unsanitized into SQL
+```
+
+`FormatStringScanner` cannot catch this because `snprintf` is safe by itself —
+the danger is in what the formatted buffer is *then used for*. `SqlSinkScanner`
+specifically follows the data flow from format-string builder to SQL execution sink.
+
+### Detection algorithm
+
+For each call site to a SQL sink (`mysql_query`, `mysql_real_query`, `sqlite3_exec`,
+`sqlite3_prepare_v2`, `sqlite3_prepare`):
+
+1. Identify the SQL string register for the callee (`RSI` for `mysql_query`/`mysql_real_query`,
+   `RDX` for `sqlite3_exec`/`sqlite3_prepare_v2`).
+2. Walk backward up to 40 instructions looking for how that register was populated:
+   - **`LEA reg, [rip+off]`** pointing to `.rodata` → `RODATA_CONST`.  
+     Inspect the literal for `%s`: if present, mark `INJECTABLE_LITERAL` (rare but real).
+   - **`MOV reg, rbp/rsp+N`** (stack-local buffer): look further back for the
+     `snprintf`/`sprintf` that filled it. Inspect *its* format string for `%s`.
+   - **`MOV reg, rax`** after a call: consider the call's return value as the SQL
+     string — mark `RETURN_VALUE` (requires caller trace; verdict = `UNKNOWN`).
+   - **Entry register** (`rdi/rsi/rdx/rcx/r8/r9` unchanged since function entry):
+     mark `ARG_PROPAGATED`.
+3. For `snprintf`/`sprintf`-built buffers: extract the format string (should be a
+   `LEA`/`MOVQ` from `.rodata`). Scan for `%s` (string interpolation). A `%s`
+   specifier with a non-RODATA argument → `INJECTABLE`.
+4. `%d`, `%u`, `%ld`, `%llu`, `%x` etc. → numeric only → `SAFE_NUMERIC`.
+
+### Verdict values
+
+| Verdict | Meaning |
+|---|---|
+| `INJECTABLE` | Format string has `%s`; arg is not RODATA. High-confidence SQL injection candidate. |
+| `INJECTABLE_LITERAL` | SQL literal in RODATA already contains `%s`. Should not happen in safe code. |
+| `RODATA_CONST` | SQL string is a RODATA literal with no `%s`. Safe. |
+| `SAFE_NUMERIC` | Format string has only `%d`/`%u`/`%x` — no string interpolation. Safe. |
+| `ARG_PROPAGATED` | SQL string arrived from an entry-argument register. Caller controls it; needs caller trace. |
+| `UNKNOWN` | Provenance not resolved within look-back window. |
+
+### Covered sinks
+
+| Function | SQL arg | Arg position |
+|---|---|---|
+| `mysql_query(conn, sql)` | `RSI` | arg1 |
+| `mysql_real_query(conn, sql, len)` | `RSI` | arg1 |
+| `sqlite3_exec(db, sql, ...)` | `RSI` | arg1 |
+| `sqlite3_prepare_v2(db, sql, ...)` | `RSI` | arg1 |
+| `sqlite3_prepare(db, sql, ...)` | `RSI` | arg1 |
+
+### Usage
+
+```python
+from ablation.analyzers.sql_sink_scanner import SqlSinkScanner
+
+scanner = SqlSinkScanner.from_path('/path/to/binary')
+findings = scanner.scan()
+print(scanner.report(findings))
+
+# Reusing an existing BinaryContext
+from ablation.analyzers.binary_context import BinaryContext
+ctx = BinaryContext.load_or_build('/path/to/binary')
+scanner = SqlSinkScanner.from_context(ctx)
+findings = scanner.scan()
+
+# INJECTABLE only
+injections = [f for f in findings if f.verdict == 'INJECTABLE']
+```
+
+### Finding fields
+
+| Field | Description |
+|---|---|
+| `sink_name` | PLT symbol called (`mysql_query`, `sqlite3_exec`, etc.) |
+| `call_va` | VA of the sink call instruction |
+| `func_va` | VA of the enclosing function |
+| `verdict` | `INJECTABLE` / `INJECTABLE_LITERAL` / `RODATA_CONST` / `SAFE_NUMERIC` / `ARG_PROPAGATED` / `UNKNOWN` |
+| `fmt_string` | Format string literal if resolved (e.g. `"SELECT ... WHERE x='%s'"`) |
+| `fmt_va` | VA of the format string in RODATA (if resolved) |
+| `description` | Human-readable summary |
+
+---
+
+## Running all scanners together
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
