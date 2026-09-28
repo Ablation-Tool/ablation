@@ -43,7 +43,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 |---|---|
 | [Core Analyzers](module-reference/core.md) | BinaryContext, XRefGraph, CFGBuilder, TaintTracker, PathSolver, CrossBinaryTaintTracker |
 | [Semantic Search](module-reference/semantic-search.md) | SemanticSearcher, CorpusBuilder, PatternLibrary |
-| [Vulnerability Scanners](module-reference/vuln-scanners.md) | FormatStringScanner, HeapVulnScanner (INT_OVERFLOW, UAF, double-free, off-by-one) |
+| [Vulnerability Scanners](module-reference/vuln-scanners.md) | FormatStringScanner, HeapVulnScanner (INT_OVERFLOW, UAF, double-free, off-by-one), SqlSinkScanner (mysql_query/sqlite3 injection) |
 | [Windows Kernel Drivers](module-reference/kernel-drivers.md) | KernelDriverAnalyzer, ByovdDetector: IOCTL surface, 8 capability classes |
 | [Erlang / BEAM](module-reference/beam.md) | BeamContext: exports, imports, atoms, literals, dangerous import sweep |
 | [Signature Matching](module-reference/sig-library.md) | SigLibrary, auto-naming fn_0x* functions |
@@ -72,6 +72,8 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.7.0 | APKParser (AXML+DEX+ACC_NATIVE), JniBridgeScanner (JNI_OnLoad/Java_*/opaque peer), BinderScanner (exported services, AIDL Stubs, onTransact), android_sweep.py |
+| v2.6.0 | FirmwareContainer partitioned image parser, VideoContainerAnalyzer MP4/MKV/AVI forensics |
 | v2.5.0 | FormatStringScanner fortify variants, IoctlAttackSurfaceGenerator, CrossBinaryTaintTracker, BYOVDDetector PDB fingerprints |
 | v2.4.0 | MIPS32TaintTracker, HeapVulnScanner (INT_OVERFLOW/UAF/double-free/off-by-one) |
 | v2.3.0 | BYOVDDetector 8-path scoring, SSDT/CR0/CR4/token-steal/APC primitives |
