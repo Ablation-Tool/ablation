@@ -65,6 +65,9 @@ from .fork_exec_classifier import (
     WORKER, EXEC_AFTER_FORK, EXIT_IN_CHILD, UNKNOWN as FORK_UNKNOWN,
 )
 from .vendor_profile import VendorProfile
+from .dex_analyzer import DexAnalyzer, DexFinding
+from .jni_bridge_scanner import JniBridgeScanner, JniBridgeFinding
+from .binder_scanner import BinderScanner, BinderFinding
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -122,4 +125,8 @@ __all__ = [
     "ForkExecClassifier", "ForkCallerResult",
     "WORKER", "EXEC_AFTER_FORK", "EXIT_IN_CHILD", "FORK_UNKNOWN",
     "VendorProfile",
+    # ── Android / DEX / JNI / Binder ───────────────────────────────────────
+    "DexAnalyzer", "DexFinding",
+    "JniBridgeScanner", "JniBridgeFinding",
+    "BinderScanner", "BinderFinding",
 ]
