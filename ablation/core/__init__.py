@@ -6,6 +6,10 @@ from .pe_parser import PEParser
 from .pe_analyzer import PEAnalyzer
 from .macho_analyzer import MachoAnalyzer
 from .firmware_analyzer import scan_firmware_file, analyze_firmware_entropy
+from .apk_parser import (
+    APKParser, ManifestInfo, ComponentInfo,
+    DEXFile, MethodRef, FieldRef, ClassDef, NativeMethod,
+)
 
 __all__ = [
     "ELFParser", "BinaryParser",
@@ -13,4 +17,6 @@ __all__ = [
     "PlatformDetector",
     "PEParser", "PEAnalyzer", "MachoAnalyzer",
     "scan_firmware_file", "analyze_firmware_entropy",
+    "APKParser", "ManifestInfo", "ComponentInfo",
+    "DEXFile", "MethodRef", "FieldRef", "ClassDef", "NativeMethod",
 ]
