@@ -35,6 +35,8 @@ Claude Code veya OpenAI Codex ile birleştirildiğinde tam otonom bir tersine m�
 - **Crypto Audit:** Kriptografiyi tarar.
 - **XorSolver:** Hedef bölümü kurtarır ve şifresini çözerek daha fazla tersine mühendisliğe olanak tanır.
 - **BmpKeyExtractor:** Lagrange polinom interpolasyonu kullanarak BMP piksel steganografisinde gizlenen gizli anahtarları yeniden yapılandırır.
+- **ELFVtableReconstructor:** x86-64 ET_DYN ELF ikili dosyalarında .rela.dyn'den binary çalıştırmadan C++ vtable slot-fonksiyon haritalarını yeniden oluşturur; böylece tüm sanal yöntem gönderim yolları yalnızca statik analizle görünür hale gelir.
+- **VtableDispatchScanner:** Hangi sanal fonksiyon slotlarının gerçekten gönderildiğini (canlı) ve hiç çağrılmayanları (ölü kod) belirlemek için çalıştırılabilir bölümlerde `call [reg+disp]` kalıplarını tarar.
 
 ---
 

@@ -35,6 +35,8 @@ Ablation 是一个逆向工程框架，提供与 Ghidra、IDA Pro 和 Binary Nin
 - **Crypto Audit：** 扫描密码学内容。
 - **XorSolver：** 恢复并解密目标节区，从而允许进一步的逆向工程。
 - **BmpKeyExtractor：** 使用 Lagrange 多项式插值重建隐藏在 BMP 像素隐写术中的密钥，因为固件和 APK 有时将密钥片段存储在图像资产而非数据节区中。
+- **ELFVtableReconstructor：** 从 x86-64 ET_DYN ELF 二进制文件的 .rela.dyn 重建 C++ 虚表槽到函数的映射，无需执行二进制文件，因此仅凭静态分析即可看清所有虚方法调度路径。
+- **VtableDispatchScanner：** 扫描可执行节区中的 `call [reg+disp]` 模式，以确定哪些虚函数槽实际被调度（活跃）与从未调用（死代码）。
 
 ---
 

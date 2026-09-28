@@ -35,6 +35,8 @@ Claude Code 또는 OpenAI Codex와 결합하면 완전 자율 리버스 엔지�
 - **Crypto Audit:** 암호화를 스캔합니다.
 - **XorSolver:** 대상 섹션을 복구한 후 복호화하여 추가 리버스 엔지니어링을 가능하게 합니다.
 - **BmpKeyExtractor:** Lagrange 다항식 보간법을 사용해 BMP 픽셀 스테가노그래피에 숨겨진 비밀 키를 재구성합니다. 펌웨어와 APK는 때때로 데이터 섹션이 아닌 이미지 자산에 키 조각을 저장하기 때문입니다.
+- **ELFVtableReconstructor:** 바이너리를 실행하지 않고 x86-64 ET_DYN ELF 바이너리의 .rela.dyn에서 C++ vtable 슬롯-함수 맵을 재구성하여, 정적 분석만으로 모든 가상 메서드 디스패치 경로를 확인할 수 있습니다.
+- **VtableDispatchScanner:** 실행 가능한 섹션에서 `call [reg+disp]` 패턴을 스캔하여 어떤 가상 함수 슬롯이 실제로 디스패치되는지(라이브) 아니면 전혀 호출되지 않는지(데드 코드)를 결정합니다.
 
 ---
 
