@@ -35,6 +35,8 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 - **Crypto Audit:** Scans for cryptography.
 - **XorSolver:** Recovers, then decrypts the target section which allows further reverse engineering.
 - **BmpKeyExtractor:** Reconstructs secret keys hidden in BMP pixel steganography using Lagrange polynomial interpolation, because firmware and APKs sometimes store key shares in image assets rather than data sections.
+- **ELFVtableReconstructor:** Reconstructs C++ vtable slot-to-function maps from .rela.dyn in x86-64 ET_DYN ELF binaries without executing the binary, so all virtual method dispatch paths are visible from static analysis alone.
+- **VtableDispatchScanner:** Scans executable sections for `call [reg+disp]` patterns to determine which virtual function slots are actually dispatched (live) versus never called (dead code).
 
 ---
 

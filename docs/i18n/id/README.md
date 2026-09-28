@@ -35,6 +35,8 @@ Dikombinasikan dengan Claude Code atau OpenAI Codex, ia menjadi alat rekayasa te
 - **Crypto Audit:** Memindai kriptografi.
 - **XorSolver:** Memulihkan lalu mendekripsi bagian target sehingga memungkinkan rekayasa terbalik lebih lanjut.
 - **BmpKeyExtractor:** Merekonstruksi kunci rahasia yang tersembunyi dalam steganografi piksel BMP menggunakan interpolasi polinomial Lagrange.
+- **ELFVtableReconstructor:** Merekonstruksi peta slot-ke-fungsi vtable C++ dari .rela.dyn dalam binary ELF x86-64 ET_DYN tanpa mengeksekusi binary, sehingga semua jalur dispatch metode virtual terlihat dari analisis statis saja.
+- **VtableDispatchScanner:** Memindai bagian executable untuk pola `call [reg+disp]` guna menentukan slot fungsi virtual mana yang benar-benar didispatch (live) versus tidak pernah dipanggil (dead code).
 
 ---
 

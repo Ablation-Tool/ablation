@@ -35,6 +35,8 @@ Combiné avec Claude Code ou OpenAI Codex, il devient un outil de rétro-ingéni
 - **Crypto Audit:** Scanne à la recherche de cryptographie.
 - **XorSolver:** Récupère puis déchiffre la section cible, ce qui permet de poursuivre la rétro-ingénierie.
 - **BmpKeyExtractor:** Reconstruit des clés secrètes cachées dans la stéganographie de pixels BMP en utilisant l'interpolation polynomiale de Lagrange, parce que le firmware et les APK stockent parfois des fragments de clé dans des ressources d'image plutôt que dans des sections de données.
+- **ELFVtableReconstructor:** Reconstruit les maps slot-vers-fonction de vtable C++ depuis .rela.dyn dans des binaires ELF x86-64 ET_DYN sans exécuter le binaire, rendant tous les chemins de dispatch des méthodes virtuelles visibles par analyse statique seule.
+- **VtableDispatchScanner:** Analyse les sections exécutables pour trouver des patterns `call [reg+disp]` afin de déterminer quels slots de fonctions virtuelles sont réellement dispatchés (actifs) ou jamais appelés (code mort).
 
 ---
 
