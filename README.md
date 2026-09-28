@@ -85,7 +85,6 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 - Python >= 3.10
 - `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
-- Optional: `anthropic` for LLM features
 
 ---
 
