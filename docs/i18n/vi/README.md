@@ -53,7 +53,7 @@ Sau khi công bố phối hợp về Cisco FMC và ISE, Cisco Product Security I
 
 ---
 
-## Bộ dịch ngược cục bộ
+## 13 Bộ dịch ngược cục bộ
 
 | Kiến trúc | Biến thể |
 |---|---|
