@@ -2,6 +2,61 @@
 
 ---
 
+## v2.8.0
+
+- **SqlSinkScanner** (`sql_sink_scanner.py`): detect raw SQL injection in C/C++
+  ELF binaries using the MySQL C API or SQLite3 directly. Covers
+  `mysql_query`/`mysql_real_query`/`sqlite3_exec`/`sqlite3_prepare_v2`. For each
+  call site, traces the SQL string argument backward: RODATA literal with `%s` →
+  `INJECTABLE_LITERAL`; `snprintf`-built buffer with `%s` format specifier →
+  `INJECTABLE`; numeric-only format specifiers → `SAFE_NUMERIC`; entry-register
+  propagation → `ARG_PROPAGATED`. Reuses PLT extraction and function-start
+  helpers from `SinkArgClassifier`. Dead PLT imports (0 callers) are pre-filtered
+  and reported separately. CLI: `python3 -m ablation.analyzers.sql_sink_scanner
+  <binary>` exits 2 on HIGH findings.
+
+---
+
+## v2.7.0
+
+- **APKParser** (`apk_parser.py`): zero-dependency APK/XAPK container parser. Binary
+  XML (AXML) decoder with `ResXMLTree_attrExt` offset fix. DEX flat-table iteration:
+  strings, method refs, field refs, class defs. Handles multi-dex APKs (`classes*.dex`)
+  and APKPure XAPK containers transparently. API: `from_path()`, `parse_manifest()`,
+  `iter_dex()`, `native_libs()`, `extract_native_lib()`.
+
+- **DEXFile.iter_native_methods()** (`apk_parser.py`): streaming `class_data_item`
+  parser for authoritative ACC_NATIVE detection (`0x0100`). Walks `encoded_method`
+  ULEB128 arrays with correct running-index reset between `direct_methods` and
+  `virtual_methods`. Returns `NativeMethod` dataclass with class name, method name,
+  proto shorty, and code_off. Combined with ELF dynsym scan: three-way classification
+  — confirmed native, stripped/dynamically registered, ELF-only helper.
+  `dump_class_methods()` debug dump produces ASCII table with kind/flags/code_off per
+  method.
+
+- **JniBridgeScanner** (`jni_bridge_scanner.py`): JNI bridge RE from DEX + ELF dynsym.
+  DEX side: ACC_NATIVE methods via `iter_native_methods()`, opaque peer FieldRef
+  (type `J` + peer-like name), `loadLibrary` call sites. ELF side: `JNI_OnLoad` export
+  (HIGH — dynamic registration; `RegisterNatives` function pointers not in symbol table)
+  vs `Java_*` exports (MEDIUM — canonical naming directly recoverable). No androguard
+  dependency. API: `from_path()`, `scan()`, `report()`.
+  Docs: `docs/module-reference/android.md`.
+
+- **BinderScanner** (`binder_scanner.py`): Binder IPC surface map from DEX ClassDef
+  superclass scan, `onTransact` MethodRef, and manifest exported component cross-reference.
+  Detects exported Services (HIGH), raw `onTransact` overrides (HIGH), AIDL-generated
+  `$Stub` inner classes (MEDIUM), unexported Service subclasses (MEDIUM), and Messenger
+  usage (INFO). AIDL Stub integer transaction code fuzzing noted per finding.
+  API: `from_path()`, `scan()`, `report()`.
+  Docs: `docs/module-reference/android.md`.
+
+- **android_sweep.py** (`sweeps/android_sweep.py`): orchestration sweep for full APK
+  RE pass. Runs manifest analysis, DexAnalyzer, JniBridgeScanner, BinderScanner, and
+  native lib ELF security properties in a single call. XAPK containers handled
+  transparently.
+
+---
+
 ## v2.6.0
 
 - **FirmwareContainer** (`firmware_container.py`): parser for partitioned firmware
