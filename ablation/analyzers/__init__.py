@@ -70,6 +70,10 @@ from .jni_bridge_scanner import JniBridgeScanner, JniBridgeFinding
 from .binder_scanner import BinderScanner, BinderFinding
 from .dex_disasm import DEXDisasm, DEXInstruction, decode_code_item
 from .dex_lifter import DEXLifter, RegVal
+from .lsb_stego_extractor import (
+    LSBStegoReader, LagrangeKeyExtractor, BmpKeyExtractor,
+    StegoKeyResult, CoordPair,
+)
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -133,4 +137,7 @@ __all__ = [
     "BinderScanner", "BinderFinding",
     "DEXDisasm", "DEXInstruction", "decode_code_item",
     "DEXLifter", "RegVal",
+    # ── Steganography / secret-sharing key extraction ───────────────────────
+    "LSBStegoReader", "LagrangeKeyExtractor", "BmpKeyExtractor",
+    "StegoKeyResult", "CoordPair",
 ]
