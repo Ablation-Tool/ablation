@@ -1,50 +1,50 @@
-<img src="assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
+<img src="../../../assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
-*[Español](docs/i18n/es/README.md) · [Português](docs/i18n/pt-BR/README.md) · [Français](docs/i18n/fr/README.md) · [Deutsch](docs/i18n/de/README.md) · [中文](docs/i18n/zh/README.md) · [日本語](docs/i18n/ja/README.md) · [Русский](docs/i18n/ru/README.md) · [العربية](docs/i18n/ar/README.md)*
+[English](../../../README.md) · [Español](../es/README.md) · [Português](../pt-BR/README.md) · **Français** · [Deutsch](../de/README.md) · [中文](../zh/README.md) · [日本語](../ja/README.md) · [Русский](../ru/README.md) · [العربية](../ar/README.md)
 
-Ablation is a reverse engineering framework that provides the exact same core disassembly, decompilation, and binary analysis capabilities as industry-standard tools like Ghidra, IDA Pro, and Binary Ninja. 
+Ablation est un framework de rétro-ingénierie qui fournit les mêmes capacités fondamentales de désassemblage, décompilation et analyse binaire que les outils standard du secteur tels que Ghidra, IDA Pro et Binary Ninja.
 
-Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous reverse engineering tool.
-
----
-
-![Codex demo](assets/codex-demo.gif)
-
-## Capabilities
-
-**Semantic Search via BERT:** Semantic search finds results based on meaning rather than exact keywords. BERT reads text and figures out what it means. Similar meanings get similar scores, so you can search by concept instead of exact words. By combining the two, it speeds up the main bottleneck of reverse engineering while finding the vulnerable functions.
-
-**Extreme Performance:** A 50 MB binary loads in 35 seconds. Ghidra and IDA Pro can take hours because they parse the entire file into a database before you can do anything. Ablation only analyzes the functions you are actively working on, so you start immediately. 
-
-**Version Diffing:** Utilizing the Jaccard method to measure how much a function's behavior overlaps between releases and Dynamic Time Warping that tracks the "shape" of how a function executes across those versions of firmware or software that a vendor updated, Ablation confirms whether a patch actually changed the logic or just the packaging, because a cosmetic recompile can't hide an unpatched vulnerability.
-
-**Cross-Binary Analysis:** Analyze every shared library in a firmware image simultaneously, tracking data flows across binary boundaries.
-
-**Source Code Audit:** Audit any large codebase faster than reading it linearly, with higher accuracy than pattern matching alone. Every source file gets a 5-bit security profile that determines exactly how much attention it needs, so nothing gets missed and nothing gets read twice.
-
-**Windows Kernel Driver & BYOVD Analysis:** Maps the IRP dispatch table, decodes every IOCTL code, and identifies which kernel APIs expose physical memory and token primitives from user mode. The BYOVD Detector fingerprints signed drivers carrying those capabilities, because one legitimate signed driver is enough to blind EDR from ring-0.
-
-**Android / APK Analysis:** Reads Android APKs at the binary level with no dependencies. It maps native code entry points and IPC surface from compiled bytecode, so the full surface is visible without decompiling.
-
-**Erlang / BEAM Analysis:** Erlang compiles to .beam files, and the same surface-map approach used for ELF applies directly, so atom search, import auditing, and obfuscation detection need no special handling. Sweeping a release directory takes seconds.
-
-**Decryption**
-- **Entropy Mapper:** Finds encrypted, compressed, or packed sections in a binary.
-- **Crypto Audit:** Scans for cryptography.
-- **XorSolver:** Recovers, then decrypts the target section which allows further reverse engineering.
-- **BmpKeyExtractor:** Reconstructs secret keys hidden in BMP pixel steganography using Lagrange polynomial interpolation, because firmware and APKs sometimes store key shares in image assets rather than data sections.
+Combiné avec Claude Code ou OpenAI Codex, il devient un outil de rétro-ingénierie autonome.
 
 ---
 
-## Real-World Results
+![Démo Codex](../../../assets/codex-demo.gif)
 
-Ablation has been used to analyze production firmware and kernel drivers from Fortinet, Cisco, Juniper, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, and Dahua Security System.
+## Capacités
 
-Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Security Incident Response Team (PSIRT) has adopted Ablation for internal vulnerability triage. Cisco PSIRT is actively using it to triage ongoing disclosure reports across Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex, and Catalyst. Cisco Adaptive Security Appliance (ASA) LINA has also been reverse engineered using Ablation, with findings currently under coordinated triage via CERT/CC VINCE.
+**Recherche sémantique avec BERT:** La recherche sémantique trouve des résultats par signification et non par mots-clés exacts. BERT lit le texte et comprend ce qu'il signifie. Des significations similaires obtiennent des scores similaires, donc vous pouvez rechercher par concept plutôt que par mots exacts. En combinant les deux, on accélère le principal goulot d'étranglement de la rétro-ingénierie tout en trouvant les fonctions vulnérables.
 
-| CVE | Product | Title | CVSS | Advisory |
+**Performance extrême:** Un binaire de 50 Mo se charge en 35 secondes. Ghidra et IDA Pro peuvent prendre des heures parce qu'ils analysent le fichier entier dans une base de données avant que vous puissiez faire quoi que ce soit. Ablation n'analyse que les fonctions sur lesquelles vous travaillez activement, donc vous commencez immédiatement.
+
+**Comparaison de versions:** En utilisant la méthode de Jaccard pour mesurer combien le comportement d'une fonction se chevauche entre les versions et Dynamic Time Warping pour suivre la "forme" d'exécution à travers les versions de firmware, Ablation confirme si un patch a réellement modifié la logique ou seulement l'empaquetage, parce qu'une recompilation cosmétique ne peut pas cacher une vulnérabilité non corrigée.
+
+**Analyse multi-binaire:** Analyse chaque bibliothèque partagée dans une image firmware simultanément, en suivant les flux de données à travers les limites binaires.
+
+**Audit de code source:** Audite n'importe quelle codebase volumineuse plus rapidement qu'en la lisant de façon linéaire, avec une précision supérieure à la correspondance de motifs seule. Chaque fichier source reçoit un profil de sécurité de 5 bits qui détermine exactement l'attention qu'il nécessite, donc rien n'est manqué et rien n'est lu deux fois.
+
+**Analyse des drivers du noyau Windows et BYOVD:** Cartographie la table de dispatch IRP, décode chaque code IOCTL et identifie quelles API du noyau exposent des primitives de mémoire physique et de jetons depuis le mode utilisateur. Le détecteur BYOVD identifie les drivers signés portant ces capacités, parce qu'un seul driver signé légitime suffit à aveugler l'EDR depuis le ring-0.
+
+**Analyse Android et APK:** Lit les APK Android au niveau binaire sans dépendances. Cartographie les points d'entrée du code natif et la surface IPC depuis le bytecode compilé, donc la surface complète est visible sans décompiler.
+
+**Analyse Erlang et BEAM:** Erlang compile en fichiers .beam, et la même approche de cartographie de surface utilisée pour ELF s'applique directement, donc la recherche d'atomes, l'audit des imports et la détection d'obfuscation ne nécessitent aucun traitement particulier. L'analyse d'un répertoire de release prend quelques secondes.
+
+**Déchiffrement**
+- **Entropy Mapper:** Trouve les sections chiffrées, compressées ou packées dans un binaire.
+- **Crypto Audit:** Scanne à la recherche de cryptographie.
+- **XorSolver:** Récupère puis déchiffre la section cible, ce qui permet de poursuivre la rétro-ingénierie.
+- **BmpKeyExtractor:** Reconstruit des clés secrètes cachées dans la stéganographie de pixels BMP en utilisant l'interpolation polynomiale de Lagrange, parce que le firmware et les APK stockent parfois des fragments de clé dans des ressources d'image plutôt que dans des sections de données.
+
+---
+
+## Résultats concrets
+
+Ablation a été utilisé pour analyser du firmware de production et des drivers du noyau de Fortinet, Cisco, Juniper, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio et Dahua Security System.
+
+Suite à la divulgation coordonnée sur Cisco FMC et ISE, le Cisco Product Security Incident Response Team (PSIRT) a adopté Ablation pour le triage interne des vulnérabilités. Cisco PSIRT l'utilise activement pour trier les rapports de divulgation en cours sur Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex et Catalyst. Cisco Adaptive Security Appliance (ASA) LINA a également été soumis à la rétro-ingénierie avec Ablation, les découvertes étant actuellement sous triage coordonné via CERT/CC VINCE.
+
+| CVE | Produit | Titre | CVSS | Avis |
 |---|---|---|---|---|
 | CVE-2026-76420 | Secure Firewall Management Center (FMC) | Peer Impersonation | 9.0 Critical | [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) |
 | CVE-2026-76412 | Secure Firewall Management Center (FMC) | Privilege Escalation to root | 8.5 High | [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) |
@@ -53,29 +53,29 @@ Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Securit
 
 ---
 
-## Local Decompilers
+## Décompilateurs locaux
 
-| Architecture | Variants |
+| Architecture | Variantes |
 |---|---|
 | x86 | x86-32 · x86-64 |
 | ARM | ARM-32 · ARM-64 |
 | MIPS | MIPS-32 · nanoMIPS · MIPS-64 |
 | PowerPC | PPC-32 · PPC-64 |
 | RISC-V | RISC-V 32 · RISC-V 64 |
-| Embedded | ARC EM/HS · V850-32 |
+| Embarqué | ARC EM/HS · V850-32 |
 
 ---
 
-## LLM Compatibility
+## Compatibilité LLM
 
-| Provider | Models |
+| Fournisseur | Modèles |
 |---|---|
 | **Claude Code** | /model claude-sonnet-4-6 |
-| **OpenAI Codex** | All known models |
+| **OpenAI Codex** | Tous les modèles connus |
 
 ---
 
-## Install
+## Installation
 
 ```bash
 pip install git+https://github.com/Ablation-Tool/ablation
@@ -83,25 +83,27 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 ---
 
-## Requirements
+## Prérequis
 
 - Python >= 3.10
 - `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
+- Optionnel: `anthropic` pour les fonctionnalités LLM
 
 ---
 
-## Responsible Use
+## Utilisation responsable
 
-Ablation is built for authorized security research. Use it only against systems you own or have explicit written permission to test. Running it against systems without authorization violates computer fraud laws in most jurisdictions. The authors are not responsible for misuse.
+Ablation est conçu pour la recherche en sécurité autorisée. Utilisez-le uniquement contre des systèmes que vous possédez ou pour lesquels vous avez une permission écrite explicite de tester. L'utiliser contre des systèmes sans autorisation viole les lois sur la fraude informatique dans la plupart des juridictions. Les auteurs ne sont pas responsables des utilisations abusives.
 
 ---
 
-## Acknowledgments
-This project was greatly informed and inspired by several key literary works.
+## Remerciements
 
-**Research Papers**
+Ce projet a été largement informé et inspiré par plusieurs ouvrages littéraires fondamentaux.
 
-| Title | Authors | Citation |
+**Articles de recherche**
+
+| Titre | Auteurs | Citation |
 |---|---|---|
 | [Finding Taint-Style Vulnerabilities in Linux-based Embedded Firmware with SSE-based Alias Analysis](https://arxiv.org/abs/2109.12209) | Cheng, Zheng, Liu, Guan, Liu, Li, Zhu, Ye, Sun | [sse_slicer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/sse_slicer.py) · [arm64_global_tracker.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/arm64_global_tracker.py) |
 | [iResolveX: Multi-Layered Indirect Call Resolution via Static Reasoning and Learning-Augmented Refinement](https://arxiv.org/abs/2601.17888) | Monika Santra, Bokai Zhang, Mark Lim, [Vishnu Asutosh Dasu](https://github.com/vdasu), Dongrui Zeng, [Gang Tan](https://github.com/gangtan) | [vtable_resolver.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/vtable_resolver.py) · [interproc_field_writer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/interproc_field_writer.py) · [arm64_global_tracker.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/arm64_global_tracker.py) |
@@ -114,9 +116,9 @@ This project was greatly informed and inspired by several key literary works.
 | [A Simple, Fast Dominance Algorithm](https://www.cs.princeton.edu/techreports/2005/737.pdf) | Cooper, Harvey, Kennedy | [dataflow_engine.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/dataflow_engine.py) |
 | [libdft: Practical Dynamic Data Flow Tracking for Commodity Systems](https://dl.acm.org/doi/10.1145/2151024.2151042) | [Vasileios P. Kemerlis](https://github.com/vkemerlis), [Georgios Portokalidis](https://github.com/portokalidis), [Kangkook Jee](https://github.com/jikk), Angelos D. Keromytis | [taint_tracker_x86.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/taint_tracker_x86.py) · [taint_tracker_arm32.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/taint_tracker_arm32.py) |
 
-**Books** supplied by [www.oreilly.com](https://www.oreilly.com) | [github.com/oreillymedia](https://github.com/oreillymedia)
+**Livres** fournis par [www.oreilly.com](https://www.oreilly.com) | [github.com/oreillymedia](https://github.com/oreillymedia)
 
-| Title | Authors | Citation |
+| Titre | Auteurs | Citation |
 |---|---|---|
 | The Art of Software Security Assessment | [Mark Dowd](https://github.com/mdowd79), John McDonald, [Justin Schuh](https://github.com/jschuh) | [heap_vuln_scanner.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/heap_vuln_scanner.py) · [format_string_scanner.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/format_string_scanner.py) · [ioctl_attack_surface.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/ioctl_attack_surface.py) |
 | Practical Binary Analysis | [Dennis Andriesse](https://github.com/dennisaa) | [taint_tracker_x86.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/taint_tracker_x86.py) · [disasm_engine.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/disasm_engine.py) |
@@ -135,13 +137,13 @@ This project was greatly informed and inspired by several key literary works.
 | Hacking Cryptography | [Kamran Khan](https://github.com/krkhan), [Bill Cox](https://github.com/waywardgeek) | [tls_enum.py](https://github.com/Ablation-Tool/ablation/blob/main/modules/tls_enum.py) |
 | Real-World Cryptography | David Wong | [tls_analyzer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/tls_analyzer.py) |
 
-**Honorable Mention**
+**Mention honorable**
 
-[Microsoft Excel (Data Analysis ToolPak)](https://support.microsoft.com/en-us/office/use-the-analysis-toolpak-to-perform-complex-data-analysis-6c67ccf0-f4a9-487c-8dec-bdb5a2cefab6) When analyzing closed infrastructure or securing black-box systems, this exact process is called timing analysis or telemetry reverse engineering. Without source code, the Data Analysis ToolPak mathematically deconstructs how an application works on the backend by strictly observing its inputs and outputs.
+[Microsoft Excel (Data Analysis ToolPak)](https://support.microsoft.com/en-us/office/use-the-analysis-toolpak-to-perform-complex-data-analysis-6c67ccf0-f4a9-487c-8dec-bdb5a2cefab6) Lors de l'analyse d'infrastructures fermées ou de la sécurisation de systèmes boîte noire, ce processus exact s'appelle l'analyse temporelle ou la rétro-ingénierie de télémétrie. Sans code source, le Data Analysis ToolPak décompose mathématiquement le fonctionnement d'une application en observant strictement ses entrées et sorties.
 
 ---
 
-## Framework Architecture & Module Orchestration
+## Architecture du framework et orchestration des modules
 
 ```mermaid
 flowchart TD
@@ -183,9 +185,9 @@ flowchart TD
 
 ---
 
-## Example RE Workflow
+## Exemple de flux de travail de rétro-ingénierie
 
-End-to-end analysis of stripped binaries from an RPM bundle. Extraction through BinaryContext, string xrefs, and capstone disassembly to confirmed findings.
+Analyse de bout en bout de binaires sans symboles depuis un paquet RPM. Extraction via BinaryContext, références de chaînes et désassemblage avec Capstone jusqu'aux découvertes confirmées.
 
 ```mermaid
 flowchart TD
