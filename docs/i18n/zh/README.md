@@ -31,12 +31,12 @@ Ablation 是一个逆向工程框架，提供与 Ghidra、IDA Pro 和 Binary Nin
 **Erlang / BEAM 分析：** Erlang 编译为 .beam 文件，用于 ELF 的表面映射方法直接适用，因此原子搜索、导入审计和混淆检测无需特殊处理。扫描一个发布目录只需数秒。
 
 **解密**
-- **Entropy Mapper：** 在二进制文件中查找加密、压缩或打包的节区。
-- **Crypto Audit：** 扫描密码学内容。
-- **XorSolver：** 恢复并解密目标节区，从而允许进一步的逆向工程。
-- **BmpKeyExtractor：** 使用 Lagrange 多项式插值重建隐藏在 BMP 像素隐写术中的密钥，因为固件和 APK 有时将密钥片段存储在图像资产而非数据节区中。
-- **ELFVtableReconstructor：** 从 x86-64 ET_DYN ELF 二进制文件的 .rela.dyn 重建 C++ 虚表槽到函数的映射，无需执行二进制文件，因此仅凭静态分析即可看清所有虚方法调度路径。
-- **VtableDispatchScanner：** 扫描可执行节区中的 `call [reg+disp]` 模式，以确定哪些虚函数槽实际被调度（活跃）与从未调用（死代码）。
+- **Entropy Mapper：** 二进制文件中存放加密或压缩数据的节区，其统计随机性会明显偏高。Entropy Mapper 测量整个文件的随机性分布，并标记出值得深入分析的区域。
+- **Crypto Audit：** 扫描二进制文件中的密码学常量、已知算法特征和密钥材料，让你在阅读任何代码之前就清楚该程序实际对数据做了什么。
+- **XorSolver：** XOR 加密在固件中很常见，因为它速度快且实现简单。XorSolver 恢复密钥并解密目标节区，使原始内容可读。
+- **BmpKeyExtractor：** 部分固件和 APK 将密钥拆分成碎片隐藏在图像文件中而非数据节区，因为图像资产受到的审查更少。BmpKeyExtractor 定位并重组这些碎片。
+- **ELFVtableReconstructor：** 在共享库中，虚表在磁盘上全为零，只有 OS 加载时才会填入真实地址。ELFVtableReconstructor 读取 OS 本会使用的重定位指令，静态重建虚表，让你无需运行二进制文件即可看清每个槽位对应的函数。
+- **VtableDispatchScanner：** 虚表中有一个条目，并不意味着代码中有任何地方会调用它。VtableDispatchScanner 在整个二进制文件中搜索每一处虚方法实际被调用的位置，从而区分哪些槽位是可达的，哪些是永远不会触发的死代码。
 
 ---
 

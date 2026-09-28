@@ -31,12 +31,12 @@ In Kombination mit Claude Code oder OpenAI Codex wird es zu einem autonomen Reve
 **Erlang- und BEAM-Analyse:** Erlang kompiliert zu .beam-Dateien, und derselbe Oberflächenkartierungsansatz für ELF gilt direkt, so dass Atom-Suche, Import-Audit und Obfuskationserkennung keine besondere Behandlung erfordern. Das Durchsuchen eines Release-Verzeichnisses dauert Sekunden.
 
 **Entschlüsselung**
-- **Entropy Mapper:** Findet verschlüsselte, komprimierte oder gepackte Sektionen in einem Binary.
-- **Crypto Audit:** Scannt nach Kryptographie.
-- **XorSolver:** Stellt den verschlüsselten Abschnitt wieder her und entschlüsselt ihn, was weiteres Reverse Engineering ermöglicht.
-- **BmpKeyExtractor:** Rekonstruiert geheime Schlüssel, die in BMP-Pixel-Steganographie versteckt sind, mithilfe der Lagrange-Polynominterpolation, weil Firmware und APKs manchmal Schlüsselteile in Bild-Assets statt in Datensektionen speichern.
-- **ELFVtableReconstructor:** Rekonstruiert C++ Vtable-Slot-zu-Funktion-Maps aus .rela.dyn in x86-64 ET_DYN ELF-Binaries ohne Ausführung des Binaries, sodass alle virtuellen Methoden-Dispatch-Pfade durch statische Analyse allein sichtbar sind.
-- **VtableDispatchScanner:** Durchsucht ausführbare Sektionen nach `call [reg+disp]`-Mustern, um zu bestimmen, welche virtuellen Funktions-Slots tatsächlich aufgerufen werden (live) und welche nie aufgerufen werden (toter Code).
+- **Entropy Mapper:** Binärabschnitte mit verschlüsselten oder komprimierten Daten wirken statistisch zufällig. Entropy Mapper misst diese Zufälligkeit über die gesamte Datei und markiert die Bereiche, die eine nähere Untersuchung lohnen.
+- **Crypto Audit:** Durchsucht das Binary nach kryptographischen Konstanten, bekannten Algorithmus-Signaturen und Schlüsselmaterial, damit du weißt, was der Code tatsächlich mit den Daten macht, bevor du eine einzige Zeile liest.
+- **XorSolver:** XOR-Verschlüsselung ist in Firmware verbreitet, weil sie schnell und trivial zu implementieren ist. XorSolver ermittelt den Schlüssel und entschlüsselt den Abschnitt, sodass der eigentliche Inhalt lesbar wird.
+- **BmpKeyExtractor:** Manche Firmware und APKs teilen geheime Schlüssel in Teile auf und verstecken sie in Bilddateien statt in Datensektionen, weil Bild-Assets weniger Aufmerksamkeit erregen. BmpKeyExtractor findet und setzt diese Teile wieder zusammen.
+- **ELFVtableReconstructor:** In einer Shared Library ist die Vtable auf der Festplatte leer und wird erst beim Laden durch das OS befüllt. ELFVtableReconstructor liest die Relokationsanweisungen, die das OS verwenden würde, und baut die Tabelle statisch auf, sodass du sehen kannst, welche Funktion in welchem Slot liegt, ohne das Binary auszuführen.
+- **VtableDispatchScanner:** Ein Eintrag in der Vtable bedeutet nicht, dass irgendwo Code ihn aufruft. VtableDispatchScanner durchsucht das Binary nach jeder Stelle, an der eine virtuelle Methode tatsächlich aufgerufen wird, damit du erkennst, welche Slots erreichbar sind und welche toter Code sind, den nichts jemals auslöst.
 
 ---
 
