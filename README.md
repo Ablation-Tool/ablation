@@ -28,7 +28,7 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 **Android / APK Analysis:** Reads Android APKs at the binary level with no dependencies. It maps native code entry points and IPC surface from compiled bytecode, so the full surface is visible without decompiling.
 
-**Erlang / BEAM Analysis:** Erlang compiles to .beam files, and the same surface-map approach used for ELF applies directly, so atom search, import auditing, and obfuscation detection need no special handling. Sweeping a release directory takes seconds.
+**Erlang / BEAM Analysis:** Maps exports, imports, and atoms from .beam bytecode files, so dangerous calls like `os:cmd` and `code:load_binary` are visible without running the release.
 
 **Cryptographic Analysis**
 
