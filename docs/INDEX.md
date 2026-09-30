@@ -73,6 +73,7 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.14.5 | ZIM-BERT wired into `VersionTracker`: `with_zimbert()` classmethod, `model=` pass-through to `FuncMatcher` |
 | v2.14.4 | ZIM-BERT integration in `FuncMatcher`: `with_zimbert()` classmethod, `model` override, `_get_encoder()` helper |
 | v2.14.3 | `BinaryContext` kernel-space VA fix: `_va_to_i64()` / `_va_arr_to_i64()` ctypes bit-cast helpers; 6 call sites fixed |
 | v2.14.1–2 | FindingRegistry/PatternLibrary flywheel hardening: 13 bugs fixed (thread safety, lock upgrade, tag filter, double-save, Unicode edge cases) |
