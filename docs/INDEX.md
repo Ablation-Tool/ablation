@@ -41,14 +41,14 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 
 | Document | Covers |
 |---|---|
-| [Core Analyzers](module-reference/core.md) | BinaryContext, XRefGraph, CFGBuilder, TaintTracker, PathSolver, CrossBinaryTaintTracker |
+| [Core Analyzers](module-reference/core.md) | BinaryContext, XRefGraph, CFGBuilder, TaintTracker, ARM64TaintTracker, PathSolver, CrossBinaryTaintTracker |
 | [Semantic Search](module-reference/semantic-search.md) | SemanticSearcher, CorpusBuilder, PatternLibrary |
 | [Vulnerability Scanners](module-reference/vuln-scanners.md) | FormatStringScanner, HeapVulnScanner (INT_OVERFLOW, UAF, double-free, off-by-one), SqlSinkScanner (mysql_query/sqlite3 injection) |
 | [Windows Kernel Drivers](module-reference/kernel-drivers.md) | KernelDriverAnalyzer, ByovdDetector: IOCTL surface, 8 capability classes |
 | [Erlang / BEAM](module-reference/beam.md) | BeamContext: exports, imports, atoms, literals, dangerous import sweep |
 | [Signature Matching](module-reference/sig-library.md) | SigLibrary, auto-naming fn_0x* functions |
 | [Export Formats](module-reference/export.md) | SARIF 2.1.0, JSON, GitHub Code Scanning |
-| [Registry](module-reference/registry.md) | NameRegistry, FindingRegistry |
+| [Registry](module-reference/registry.md) | NameRegistry, FindingRegistry, `export_patterns()`, `ingest_from_registry()` flywheel |
 | [Crypto](module-reference/crypto.md) | CryptoAudit, XorSolver, EntropyMapper |
 | [Structural](module-reference/structural.md) | VtableResolver (ARM64), VersionDelta, StructuralSim |
 | [x86-64 Vtable Analysis](module-reference/vtable-x86-64.md) | ELFVtableReconstructor (.rela.dyn slot reconstruction), VtableDispatchScanner (dead/live method detection) |
@@ -73,6 +73,9 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.14.3 | `BinaryContext` kernel-space VA fix: `_va_to_i64()` / `_va_arr_to_i64()` ctypes bit-cast helpers; 6 call sites fixed |
+| v2.14.1–2 | FindingRegistry/PatternLibrary flywheel hardening: 13 bugs fixed (thread safety, lock upgrade, tag filter, double-save, Unicode edge cases) |
+| v2.13.0 | ZIM-BERT distillation: teacher-student fine-tuning for cross-version binary similarity |
 | v2.12.0 | ELFVtableReconstructor (.rela.dyn slot reconstruction), VtableDispatchScanner (dead/live virtual method detection) |
 | v2.11.0 | BmpKeyExtractor: BMP LSB steganography, Lagrange secret sharing key recovery |
 | v2.10.0 | DEXLifter: pseudo-Java IR lifter with type inference, field dot-notation, invoke formatting, if/else labels |

@@ -45,6 +45,36 @@ from typing import Optional
 
 import numpy as np
 
+# Maps CWE codes to PatternLibrary tag strings.
+_CWE_TAG_MAP = {
+    "CWE-22":  "path-traversal",
+    "CWE-77":  "cmd-exec",
+    "CWE-78":  "cmd-exec",
+    "CWE-88":  "cmd-exec",
+    "CWE-119": "buffer-overflow",
+    "CWE-120": "buffer-overflow",
+    "CWE-121": "buffer-overflow",
+    "CWE-122": "buffer-overflow",
+    "CWE-125": "info-leak",
+    "CWE-134": "format-string",
+    "CWE-190": "integer-overflow",
+    "CWE-191": "integer-overflow",
+    "CWE-200": "info-leak",
+    "CWE-287": "auth-bypass",
+    "CWE-306": "auth-bypass",
+    "CWE-362": "race-condition",
+    "CWE-400": "dos",
+    "CWE-415": "double-free",
+    "CWE-416": "use-after-free",
+    "CWE-476": "null-deref",
+    "CWE-502": "deserialization",
+    "CWE-611": "xxe",
+}
+
+
+def _cwe_to_tag(cwe: str) -> str:
+    return _CWE_TAG_MAP.get(cwe.strip().upper(), "finding") if cwe else "finding"
+
 _DEFAULT_DB = Path.home() / ".ablation" / "findings.db"
 _SEED_PATH = Path(__file__).parent.parent / "data" / "seed_corpus.json"
 
@@ -75,7 +105,7 @@ class FindingRegistry:
     def __init__(self, db_path: Optional[Path] = None):
         self.db_path = Path(db_path or _DEFAULT_DB)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._con = sqlite3.connect(str(self.db_path))
+        self._con = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self._con.executescript(_SCHEMA)
         self._con.commit()
         self._load_seed_corpus()
@@ -237,6 +267,43 @@ class FindingRegistry:
         for cwe, title, desc in rows:
             label = f"{cwe} | {title}" if cwe else title
             out.append(f"{label}: {desc}")
+        return out
+
+    def export_patterns(self, confirmed_only: bool = True) -> list:
+        """Return confirmed findings as pattern dicts for PatternLibrary.ingest_from_registry().
+
+        Unlike prior_queries() which returns one entry per CWE class, this returns every
+        unique (title, description) pair so all confirmed findings feed the sweep — not
+        just one representative per class.
+
+        Returns list of {'query': str, 'tag': str} dicts.
+        """
+        # Require both title and non-empty/non-whitespace description: title alone
+        # is too broad a sweep query and increases false positives.
+        clause = "WHERE description IS NOT NULL AND TRIM(description) != '' AND title IS NOT NULL"
+        if confirmed_only:
+            clause += " AND confirmed=1"
+        rows = self._con.execute(
+            f"SELECT cwe_class, title, description FROM findings {clause} ORDER BY id"
+        ).fetchall()
+        seen: set = set()
+        out = []
+        for cwe, title, desc in rows:
+            t = (title or "").strip()
+            d = (desc or "").strip()
+            # Reject descriptions whose visible content is entirely non-printing
+            # Unicode (e.g. zero-width spaces that pass SQLite TRIM and str.strip).
+            if d and not any(c.isprintable() and not c.isspace() for c in d):
+                d = ""
+            key = (t, d)
+            if key in seen:
+                continue
+            seen.add(key)
+            query = f"{t}: {d}" if (t and d) else (t or d or "")
+            query = query.strip()
+            if not query:
+                continue
+            out.append({"query": query, "tag": _cwe_to_tag(cwe)})
         return out
 
     def stats(self) -> dict:

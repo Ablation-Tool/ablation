@@ -28,6 +28,7 @@ Invalidation: SHA256 mismatch triggers rebuild.
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import json
 import os
@@ -55,6 +56,24 @@ _MIN_STR_LEN = 4
 
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _va_to_i64(va: int) -> "np.int64":
+    """Reinterpret an unsigned VA as a signed int64 without OverflowError.
+
+    np.int64() raises OverflowError for kernel-space addresses (VA > 2^63-1).
+    ctypes.c_int64 bit-casts the value the same way C's (int64_t) does.
+    """
+    return np.int64(ctypes.c_int64(va).value)
+
+
+def _va_arr_to_i64(vas) -> "np.ndarray":
+    """Create an int64 ndarray from a VA sequence without OverflowError.
+
+    np.array([...], dtype=np.int64) also raises OverflowError on kernel-space
+    addresses. Route through uint64 first, then view-cast the bits to int64.
+    """
+    return np.array(list(vas), dtype=np.uint64).view(np.int64)
 
 
 def _cache_path(binary_sha256: str, binary_name: str) -> Path:
@@ -629,12 +648,12 @@ class BinaryContext:
         disp_i32 = disp_u32.view(np.int32)
 
         # target_va[i] = sec_va + cand_pos[i] + 5 + disp32[i]
-        site_vas    = np.int64(sec_va) + cand_pos.astype(np.int64)
+        site_vas    = _va_to_i64(sec_va) + cand_pos.astype(np.int64)
         target_vas  = site_vas + np.int64(5) + disp_i32.astype(np.int64)
 
         # Filter: target must be a known PLT stub or function entry
-        plt_arr  = np.array(sorted(self.plt.keys()),   dtype=np.int64) if self.plt         else np.empty(0, np.int64)
-        func_arr = np.array(self.func_starts,           dtype=np.int64) if self.func_starts else np.empty(0, np.int64)
+        plt_arr  = _va_arr_to_i64(sorted(self.plt.keys())) if self.plt         else np.empty(0, np.int64)
+        func_arr = _va_arr_to_i64(self.func_starts)         if self.func_starts else np.empty(0, np.int64)
 
         valid = np.zeros(len(target_vas), dtype=bool)
         if len(plt_arr):
@@ -706,11 +725,11 @@ class BinaryContext:
         fill = np.uint32(0xFF000000)
         imm_i32 = np.where(imm24 & sign_bit, (imm24 | fill).view(np.int32), imm24.astype(np.int32))
 
-        insn_vas = np.int64(sec_va) + byte_off.astype(np.int64)
+        insn_vas = _va_to_i64(sec_va) + byte_off.astype(np.int64)
         target_vas = insn_vas + np.int64(8) + imm_i32.astype(np.int64) * 4
 
-        plt_arr  = np.array(sorted(self.plt.keys()),   dtype=np.int64) if self.plt         else np.empty(0, np.int64)
-        func_arr = np.array(self.func_starts,           dtype=np.int64) if self.func_starts else np.empty(0, np.int64)
+        plt_arr  = _va_arr_to_i64(sorted(self.plt.keys())) if self.plt         else np.empty(0, np.int64)
+        func_arr = _va_arr_to_i64(self.func_starts)         if self.func_starts else np.empty(0, np.int64)
 
         valid = np.zeros(len(target_vas), dtype=bool)
         if len(plt_arr):
@@ -826,7 +845,7 @@ class BinaryContext:
         if N < 4 or not self.strings:
             return
 
-        str_va_arr = np.array(sorted(self.strings.keys()), dtype=np.int64)
+        str_va_arr = _va_arr_to_i64(sorted(self.strings.keys()))
 
         # Build 4-byte LE windows at every byte offset using stride tricks
         from numpy.lib.stride_tricks import as_strided
@@ -843,7 +862,7 @@ class BinaryContext:
 
         # target_va[p] = text_va + p + 4 + disp32[p]
         positions = np.arange(end, dtype=np.int64)
-        target_vas = np.int64(text_va) + positions + np.int64(4) + disp_i32.astype(np.int64)
+        target_vas = _va_to_i64(text_va) + positions + np.int64(4) + disp_i32.astype(np.int64)
 
         # Binary-search for string VA matches
         hits = np.searchsorted(str_va_arr, target_vas)

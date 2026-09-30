@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -205,7 +206,15 @@ class Pattern:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "Pattern":
-        hits = [PatternHit(**h) for h in d.get("hits", [])]
+        _hit_fields = {"binary", "va", "score", "confirmed", "timestamp"}
+        hits = []
+        for h in d.get("hits", []):
+            if not isinstance(h, dict) or "binary" not in h:
+                continue
+            try:
+                hits.append(PatternHit(**{k: v for k, v in h.items() if k in _hit_fields}))
+            except (TypeError, ValueError):
+                pass
         return cls(
             query=d["query"],
             tag=d.get("tag", ""),
@@ -226,11 +235,13 @@ class PatternLibrary:
     Persistent registry of semantic search patterns with hit tracking.
 
     Backed by ~/.ablation/patterns.json. First instantiation seeds default patterns.
+    Thread-safe for concurrent ingest: a per-instance lock serialises save() calls.
     """
 
     def __init__(self, store_path: Optional[str] = None):
         self._path = Path(store_path) if store_path else _STORE_PATH
         self._patterns: List[Pattern] = []
+        self._lock = threading.RLock()
         self._load()
 
     # ── load / save ──────────────────────────────────────────────────────────
@@ -241,19 +252,30 @@ class PatternLibrary:
         if self._path.exists():
             try:
                 data = json.loads(self._path.read_text())
-                self._patterns = [Pattern.from_dict(p) for p in data.get("patterns", [])]
+                raw_patterns = data.get("patterns", [])
+                if not isinstance(raw_patterns, list):
+                    raise ValueError("patterns field is not a list")
                 stored_version = data.get("schema_version", 0)
-            except (json.JSONDecodeError, KeyError):
+            except (json.JSONDecodeError, KeyError, ValueError, AttributeError):
                 self._patterns = []
+                raw_patterns = []
+            for p in raw_patterns:
+                if not isinstance(p, dict):
+                    continue
+                try:
+                    self._patterns.append(Pattern.from_dict(p))
+                except (KeyError, TypeError, ValueError, AttributeError):
+                    pass  # skip this entry, keep the rest
         if not self._patterns:
             self._seed_defaults()
         elif stored_version < _SCHEMA_VERSION:
             self._merge_new_defaults()
 
     def save(self) -> None:
-        _STORE_DIR.mkdir(parents=True, exist_ok=True)
-        data = {"schema_version": _SCHEMA_VERSION, "patterns": [p.to_dict() for p in self._patterns]}
-        self._path.write_text(json.dumps(data, indent=2))
+        with self._lock:
+            _STORE_DIR.mkdir(parents=True, exist_ok=True)
+            data = {"schema_version": _SCHEMA_VERSION, "patterns": [p.to_dict() for p in self._patterns]}
+            self._path.write_text(json.dumps(data, indent=2))
 
     def _seed_defaults(self) -> None:
         for d in _DEFAULT_PATTERNS:
@@ -261,13 +283,9 @@ class PatternLibrary:
 
     def _merge_new_defaults(self) -> None:
         existing = {p.query for p in self._patterns}
-        added = 0
         for d in _DEFAULT_PATTERNS:
             if d["query"] not in existing:
                 self._patterns.append(Pattern(query=d["query"], tag=d["tag"]))
-                added += 1
-        if added:
-            self.save()
         self.save()
 
     # ── management ───────────────────────────────────────────────────────────
@@ -296,7 +314,7 @@ class PatternLibrary:
     def list(self, tag: Optional[str] = None) -> str:
         """Return formatted table of patterns with hit stats."""
         patterns = self._patterns
-        if tag:
+        if tag is not None:
             patterns = [p for p in patterns if p.tag == tag]
         lines = [
             f"PatternLibrary: {len(patterns)} patterns  ({self._path})",
@@ -353,7 +371,7 @@ class PatternLibrary:
         """
         results: Dict[str, SweepResult] = {}
         patterns = self._patterns
-        if tags:
+        if tags is not None:
             patterns = [p for p in patterns if p.tag in tags]
 
         for p in patterns:
@@ -369,6 +387,35 @@ class PatternLibrary:
             )
 
         return results
+
+    def ingest_from_registry(self, reg) -> int:
+        """Pull confirmed findings from a FindingRegistry and add them as patterns.
+
+        Calls reg.export_patterns(), adds each to the library if not already present,
+        then saves. Returns count of new patterns added.
+
+        reg: a FindingRegistry instance — accepted as a duck-typed parameter so
+        pattern_library.py carries no hard import of finding_registry.py.
+
+        Usage:
+            from ablation.analyzers.finding_registry import FindingRegistry
+            from ablation.analyzers.pattern_library import PatternLibrary
+
+            reg = FindingRegistry()
+            pl  = PatternLibrary()
+            n   = pl.ingest_from_registry(reg)
+            print(f"{n} new patterns ingested from {reg.stats()['total']} findings")
+        """
+        with self._lock:
+            patterns = reg.export_patterns()
+            added = 0
+            for p in patterns:
+                if self.get(p["query"]) is None:
+                    self.add(p["query"], tag=p["tag"])
+                    added += 1
+            if added:
+                self.save()
+            return added
 
     def fmt_sweep(
         self,
