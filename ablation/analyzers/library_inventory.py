@@ -115,6 +115,18 @@ _CRYPTO_PATTERNS: List[re.Pattern] = [
     ]
 ]
 
+# PLT import names that indicate high-risk behavior regardless of rodata strings.
+# Checked against the library's dynamic symbol names (value == 0 imports).
+_PLT_CRITICAL_IMPORTS: List[tuple] = [
+    # (name_substring, score_delta, label)
+    ('SSL_CTX_set_keylog_callback', 3, '[TLS-KEYLOG]'),  # TLS session key export
+    ('bytehook_hook_all',           2, '[PLT-HOOK]'),    # process-wide PLT interception
+    ('bytehook_hook_single',        2, '[PLT-HOOK]'),    # targeted PLT interception
+    ('shadowhook_hook_sym_name',    2, '[PLT-HOOK]'),    # ShadowHook variant
+    ('ssl_log_secret',              2, '[TLS-KEYLOG]'),  # OpenSSL internal key logger
+    ('ssl_log_rsa_client_key_exchange', 2, '[TLS-KEYLOG]'),  # RSA premaster secret
+]
+
 # Command/exec sink patterns
 _EXEC_PATTERNS: List[re.Pattern] = [
     re.compile(p, re.IGNORECASE) for p in [
@@ -312,6 +324,7 @@ class LibInventoryEntry:
     has_jni_on_load: bool
     security_score: int                     # 0-10
     security_strings: List[str] = field(default_factory=list)
+    plt_hooks: List[str] = field(default_factory=list)  # critical PLT import labels found
 
     def __repr__(self) -> str:
         return (
@@ -376,10 +389,11 @@ class LibraryInventory:
             except Exception:
                 pass
 
-        # Exports and JNI counts
+        # Exports, JNI counts, and critical PLT imports
         exports = 0
         jni = 0
         has_jni_on_load = False
+        plt_hooks: List[str] = []
         if _binary is not None:
             try:
                 syms = [s for s in _binary.dynamic_symbols if s.value != 0]
@@ -389,6 +403,14 @@ class LibraryInventory:
                         jni += 1
                     if s.name == 'JNI_OnLoad':
                         has_jni_on_load = True
+                # Check PLT imports (value == 0) and exported symbols for critical patterns.
+                # Imports: dynamically linked in from another library.
+                # Exports: statically linked OpenSSL re-exports the function itself.
+                all_syms = [s.name for s in _binary.dynamic_symbols if s.name]
+                for sym_name in all_syms:
+                    for needle, _delta, label in _PLT_CRITICAL_IMPORTS:
+                        if needle in sym_name and label not in plt_hooks:
+                            plt_hooks.append(label)
             except Exception:
                 pass
 
@@ -424,6 +446,12 @@ class LibraryInventory:
             score += 1
         if internal >= 1000:
             score += 1   # extra for very large
+        # PLT critical import bonus
+        for imp_label in plt_hooks:
+            for _needle, delta, label in _PLT_CRITICAL_IMPORTS:
+                if label == imp_label:
+                    score += delta
+                    break
         # Cap at 10
         score = min(score, 10)
 
@@ -438,6 +466,7 @@ class LibraryInventory:
             has_jni_on_load=has_jni_on_load,
             security_score=score,
             security_strings=sec_strings,
+            plt_hooks=plt_hooks,
         )
 
     def scan(self) -> List[LibInventoryEntry]:
@@ -504,9 +533,12 @@ class LibraryInventory:
             if show_strings and e.security_strings:
                 previews = [s[:60] for s in e.security_strings[:2]]
                 str_preview = "  " + " | ".join(f'"{p}"' for p in previews)
+            hook_str = ""
+            if e.plt_hooks:
+                hook_str = "  " + " ".join(e.plt_hooks)
             lines.append(
                 f"{e.filename:<45} {e.size_kb:>5} {e.arch:>6} {e.exports:>5}"
-                f" {internal_str:>5} {e.jni:>4} {score_str:>5}{str_preview}"
+                f" {internal_str:>5} {e.jni:>4} {score_str:>5}{hook_str}{str_preview}"
             )
 
         lines.append("-" * 100)
@@ -522,7 +554,8 @@ class LibraryInventory:
         if high_risk:
             lines.append(f"\nHigh-risk libraries (score >= 5):")
             for e in high_risk:
-                lines.append(f"  {e.filename}  score={e.security_score}/10  jni={e.jni}")
+                hooks = f"  hooks={e.plt_hooks}" if e.plt_hooks else ""
+                lines.append(f"  {e.filename}  score={e.security_score}/10  jni={e.jni}{hooks}")
         return "\n".join(lines)
 
     @staticmethod
@@ -537,3 +570,135 @@ class LibraryInventory:
                 tag = '[?]'
             lines.append(f"  {tag:12}  {s[:100]}")
         return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # Internal function taxonomy (ARM64)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def classify_internals(elf_path: str) -> Dict[str, List[int]]:
+        """
+        Classify ARM64 internal functions by PLT call signature.
+
+        Returns a dict mapping subsystem label to list of function VAs.
+        Labels are derived from the first 6 distinct PLT symbols called
+        within each function, joined with '+'. Functions with no PLT calls
+        are grouped under '(pure-internal)'.
+
+        Requires LIEF. Returns {} if arch is not ARM64 or LIEF is absent.
+
+        Example:
+            clusters = LibraryInventory.classify_internals('/tmp/lib/libfoo.so')
+            for label, vas in sorted(clusters.items(), key=lambda x: -len(x[1])):
+                print(f"[{len(vas):3d}] {label}")
+        """
+        if not _LIEF_OK:
+            return {}
+        try:
+            import capstone as _cs
+        except ImportError:
+            return {}
+
+        data = Path(elf_path).read_bytes()
+        if _elf_arch(data) != 'arm64':
+            return {}
+
+        try:
+            b = _lief.parse(data)
+        except Exception:
+            return {}
+        if not b or not isinstance(b, _lief.ELF.Binary):
+            return {}
+
+        text = b.get_section('.text')
+        if not text:
+            return {}
+        tv0 = text.virtual_address
+        traw = bytes(text.content)
+        text_end = tv0 + text.size
+
+        # Build PLT map
+        got_to_sym: Dict[int, str] = {}
+        rela_plt = b.get_section('.rela.plt')
+        if rela_plt:
+            rd = bytes(rela_plt.content)
+            for off in range(0, len(rd), 24):
+                if off + 24 > len(rd):
+                    break
+                r_offset, r_info = struct.unpack_from('<QQ', rd, off)
+                sym_idx = r_info >> 32
+                try:
+                    got_to_sym[r_offset] = b.dynamic_symbols[sym_idx].name
+                except Exception:
+                    pass
+
+        plt_sec = b.get_section('.plt')
+        plt_map: Dict[int, str] = {}
+        if plt_sec:
+            pd = bytes(plt_sec.content)
+            pv0 = plt_sec.virtual_address
+            for i in range(1, len(pd) // 16):
+                wo = i * 16
+                stub_va = pv0 + wo
+                w0, w1, w2, w3 = struct.unpack_from('<IIII', pd, wo)
+                if (w0 & 0x9f00001f) != 0x90000010:
+                    continue
+                if (w1 & 0xFFC003FF) != 0xF9400211:
+                    continue
+                if w3 != 0xD61F0220:
+                    continue
+                immlo = (w0 >> 29) & 0x3
+                immhi = (w0 >> 5) & 0x7ffff
+                imm21 = (immhi << 2) | immlo
+                if imm21 & (1 << 20):
+                    imm21 -= (1 << 21)
+                page = (stub_va & ~0xfff) + (imm21 << 12)
+                imm12 = (w1 >> 10) & 0xfff
+                got_va = page + imm12 * 8
+                if got_va in got_to_sym:
+                    plt_map[stub_va] = got_to_sym[got_va]
+
+        dynsym_vas = {s.value for s in b.dynamic_symbols if s.value != 0}
+
+        # Enumerate internal BL targets
+        internals: set = set()
+        for wo in range(0, len(traw), 4):
+            w = struct.unpack_from('<I', traw, wo)[0]
+            if (w >> 26) == 0x25:
+                imm26 = w & 0x3FFFFFF
+                if imm26 & (1 << 25):
+                    imm26 -= (1 << 26)
+                tgt = (tv0 + wo) + imm26 * 4
+                if tv0 <= tgt < text_end and tgt not in dynsym_vas and tgt not in plt_map:
+                    internals.add(tgt)
+
+        md = _cs.Cs(_cs.CS_ARCH_ARM64, _cs.CS_MODE_ARM)
+
+        def _plt_calls(va: int) -> tuple:
+            wo = va - tv0
+            if wo < 0 or wo >= len(traw):
+                return ()
+            chunk = traw[wo:min(wo + 200 * 4, len(traw))]
+            calls: List[str] = []
+            for insn in md.disasm(chunk, va):
+                if insn.mnemonic == 'bl':
+                    try:
+                        tgt = int(insn.op_str.strip().lstrip('#'), 16)
+                        if tgt in plt_map:
+                            name = plt_map[tgt]
+                            if name not in calls:
+                                calls.append(name)
+                    except ValueError:
+                        pass
+                elif insn.mnemonic == 'ret':
+                    break
+            return tuple(calls[:6])
+
+        from collections import defaultdict
+        clusters: Dict[str, List[int]] = defaultdict(list)
+        for va in sorted(internals):
+            sig = _plt_calls(va)
+            label = '+'.join(sig) if sig else '(pure-internal)'
+            clusters[label].append(va)
+
+        return dict(clusters)
