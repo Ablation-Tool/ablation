@@ -125,7 +125,6 @@ class WindowAnalyzer:
             rela_plt = binary.get_section(".rela.plt")
             if rela_plt:
                 rela_data = bytes(rela_plt.content)
-                rela_va = rela_plt.virtual_address
                 for off in range(0, len(rela_data), 24):
                     if off + 24 > len(rela_data):
                         break
@@ -138,6 +137,10 @@ class WindowAnalyzer:
                         pass
         except Exception:
             pass
+
+        if self.arch == 'arm64':
+            self._build_plt_arm64(binary, got_to_sym)
+            return
 
         # Walk .plt.sec: each entry = endbr64 (4) + jmp [rip+disp] (6) or similar
         for sec_name in (".plt.sec", ".plt", ".plt.got"):
@@ -167,6 +170,48 @@ class WindowAnalyzer:
                         self.plt[stub_va] = got_to_sym[got_va]
                 elif chunk[start:start + 2] == b'\xff\xa3':  # jmp [rbx+disp] unlikely
                     pass
+
+    def _build_plt_arm64(self, binary, got_to_sym: Dict[int, str]) -> None:
+        # ARM64 PLT stub: adrp x16, page / ldr x17, [x16, #off] / br x17 (12 bytes, padded to 16)
+        # GOT VA = ADRP page result + LDR immediate offset
+        try:
+            plt_sec = binary.get_section(".plt")
+        except Exception:
+            plt_sec = None
+        if not plt_sec:
+            return
+
+        sec_data = bytes(plt_sec.content)
+        sec_va = plt_sec.virtual_address
+        # PLT[0] is the lazy-binding trampoline; skip it
+        for i in range(1, len(sec_data) // 16):
+            off = i * 16
+            stub_va = sec_va + off
+            if off + 16 > len(sec_data):
+                break
+            w0, w1, w2, w3 = struct.unpack_from("<IIII", sec_data, off)
+            # ARM64 PLT stub: ADRP x16 / LDR x17, [x16, #imm] / ADD x16, x16, #imm / BR x17
+            # ADRP x16: (w & 0x9f00001f) == 0x90000010
+            if (w0 & 0x9f00001f) != 0x90000010:
+                continue
+            # LDR x17, [x16, #imm12]: 64-bit unsigned-offset, Rn=x16, Rt=x17
+            if (w1 & 0xFFC003FF) != 0xF9400211:
+                continue
+            # BR x17 is the 4th instruction (w3)
+            if w3 != 0xD61F0220:
+                continue
+            # Decode ADRP imm: sign-extend 21-bit (immhi:immlo) << 12
+            immlo = (w0 >> 29) & 0x3
+            immhi = (w0 >> 5) & 0x7ffff
+            imm21 = (immhi << 2) | immlo
+            if imm21 & (1 << 20):
+                imm21 -= (1 << 21)
+            adrp_page = (stub_va & ~0xfff) + (imm21 << 12)
+            # Decode LDR imm12 (scaled by 8 for 64-bit loads)
+            ldr_imm12 = (w1 >> 10) & 0xfff
+            got_slot_va = adrp_page + ldr_imm12 * 8
+            if got_slot_va in got_to_sym:
+                self.plt[stub_va] = got_to_sym[got_slot_va]
 
     def _build_strings(self, binary) -> None:
         for sec_name in (".rodata", ".data.rel.ro", ".data"):
