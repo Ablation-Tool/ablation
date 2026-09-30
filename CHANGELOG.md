@@ -2,6 +2,12 @@
 
 ---
 
+## v2.16.0
+
+- **`LibraryInventory`** (`analyzers/library_inventory.py`): batch triage scanner for directories of native ELF `.so` files. `LibraryInventory.from_dir(path).scan()` returns a `List[LibInventoryEntry]` sorted by security score, one entry per library: `size_kb`, `arch`, `exports`, `internal` (ARM64 BL-target count), `jni` (Java_* exports), `has_jni_on_load`, `security_score` (0-10), and a `security_strings` sample. `report(entries)` prints a formatted triage table; `security_entries(entries, min_score=3)` filters to libraries worth detailed review. Security score weights credential-field format strings (+3), credential names (+2), crypto primitive strings (+1), JNI surface size, and internal function density. Replaces the ad-hoc BL-target enumeration loops written per engagement.
+
+---
+
 ## v2.15.2
 
 - **`WindowAnalyzer` ARM64 PLT resolver** (`analyzers/window_analyzer.py`): added `_build_plt_arm64()` method that parses ARM64 PLT stubs (`ADRP x16 / LDR x17, [x16, #imm] / ADD x16 / BR x17`, 16-byte entries) and maps each stub VA to its symbol name via `.rela.plt`. Previously, all `bl` instructions on ARM64 binaries produced no PLT annotation; now they resolve inline (e.g., `PLT -> std::string::push_back`). Supports both full 4-instruction stubs and handles the 2-slot trampoline at the PLT start.
