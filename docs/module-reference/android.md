@@ -534,6 +534,7 @@ print(entry.security_score, entry.security_strings[:3])
 | `has_jni_on_load` | bool | Whether `JNI_OnLoad` is exported |
 | `security_score` | int | 0–10 score (see below) |
 | `security_strings` | List[str] | Up to 20 security-relevant rodata strings |
+| `plt_hooks` | List[str] | Critical PLT import labels found (e.g. `[TLS-KEYLOG]`, `[PLT-HOOK]`) |
 
 ### Security scoring
 
@@ -546,9 +547,17 @@ print(entry.security_score, entry.security_strings[:3])
 | JNI count ≥ 10 | +1 |
 | Internal function count ≥ 1000 | +2 |
 | Internal function count ≥ 200 | +1 |
+| `SSL_CTX_set_keylog_callback` in symbols (TLS session key export) | +3 |
+| `ssl_log_secret` or `ssl_log_rsa_client_key_exchange` in symbols | +2 |
+| `bytehook_hook_all` or `bytehook_hook_single` in PLT imports | +2 |
+| `shadowhook_hook_sym_name` in PLT imports | +2 |
 
 Known false-positive contexts (LAME `noise shaping`, MMKV `key-value`, parser
 `unknown token`) are filtered before scoring.
+
+PLT hook detection (`plt_hooks` field) covers both dynamic imports (value == 0) and
+statically-linked re-exports (value != 0). A library that statically links OpenSSL and
+re-exports `SSL_CTX_set_keylog_callback` scores the same as one that dynamically imports it.
 
 ### Finding categories
 
@@ -568,3 +577,20 @@ full protocol engine. Computed via single-pass opcode scan: `(w >> 26) == 0x25`
 identifies BL instructions; sign-extend the 26-bit immediate; targets in `.text`
 range but absent from dynsym are internal. Requires `lief` for section layout;
 falls back to -1 (unsupported) for non-ARM64 or missing `lief`.
+
+### classify_internals
+
+`LibraryInventory.classify_internals(elf_path)` groups ARM64 internal functions by
+PLT call signature. Returns `{label: [va, ...]}`.
+
+```python
+clusters = LibraryInventory.classify_internals('/tmp/lib/libThingP2PSDK.so')
+for label, vas in sorted(clusters.items(), key=lambda x: -len(x[1])):
+    print(f"[{len(vas):3d}] {label}")
+```
+
+Each function's label is the first 6 distinct PLT symbols it calls, joined with `+`.
+Functions with no PLT calls are grouped under `(pure-internal)` — these are typically
+crypto math, state machine transitions, or hardware-accelerated codecs.
+
+Requires `lief` and `capstone`. Returns `{}` for non-ARM64 binaries.
