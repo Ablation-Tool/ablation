@@ -24,19 +24,17 @@ In Kombination mit Claude Code oder OpenAI Codex wird es zu einem autonomen Reve
 
 **Quellcode-Audit:** Auditiert jede große Codebasis schneller als lineares Lesen, mit höherer Genauigkeit als reine Mustererkennung. Jede Quelldatei erhält ein 5-Bit-Sicherheitsprofil, das genau bestimmt, wie viel Aufmerksamkeit sie benötigt, so dass nichts übersehen und nichts zweimal gelesen wird.
 
-**Windows-Kerneltreiber- und BYOVD-Analyse:** Kartiert die IRP-Dispatch-Tabelle, dekodiert jeden IOCTL-Code und identifiziert, welche Kernel-APIs physische Speicher- und Token-Primitiven aus dem User-Mode exponieren. Der BYOVD-Detektor identifiziert signierte Treiber mit diesen Fähigkeiten, weil ein einziger legitim signierter Treiber ausreicht, um EDR aus Ring-0 zu blenden.
+**Windows-Kerneltreiber- und BYOVD-Analyse:** Durchsucht Kernel-Treiber nach Einstiegspunkten, die Systemspeicher oder Administratorrechte aus dem User-Mode freilegen. Ein signierter Treiber mit diesen Fähigkeiten reicht aus, um Endpoint-Security-Software zu deaktivieren.
 
 **Android- und APK-Analyse:** Liest Android-APKs auf Binärebene ohne Abhängigkeiten. Kartiert native Code-Einstiegspunkte und IPC-Oberfläche aus kompiliertem Bytecode, so dass die gesamte Oberfläche ohne Dekompilierung sichtbar ist.
 
-**Erlang- und BEAM-Analyse:** Erlang kompiliert zu .beam-Dateien, und derselbe Oberflächenkartierungsansatz für ELF gilt direkt, so dass Atom-Suche, Import-Audit und Obfuskationserkennung keine besondere Behandlung erfordern. Das Durchsuchen eines Release-Verzeichnisses dauert Sekunden.
+**Erlang- und BEAM-Analyse:** Ordnet Exporte, Importe und Atome aus .beam-Bytecode-Dateien zu, sodass gefährliche Aufrufe wie `os:cmd` und `code:load_binary` ohne Ausführen des Release sichtbar sind.
 
-**Entschlüsselung**
-- **Entropy Mapper:** Binärabschnitte mit verschlüsselten oder komprimierten Daten wirken statistisch zufällig. Entropy Mapper misst diese Zufälligkeit über die gesamte Datei und markiert die Bereiche, die eine nähere Untersuchung lohnen.
-- **Crypto Audit:** Durchsucht das Binary nach kryptographischen Konstanten, bekannten Algorithmus-Signaturen und Schlüsselmaterial, damit du weißt, was der Code tatsächlich mit den Daten macht, bevor du eine einzige Zeile liest.
-- **XorSolver:** XOR-Verschlüsselung ist in Firmware verbreitet, weil sie schnell und trivial zu implementieren ist. XorSolver ermittelt den Schlüssel und entschlüsselt den Abschnitt, sodass der eigentliche Inhalt lesbar wird.
-- **BmpKeyExtractor:** Manche Firmware und APKs teilen geheime Schlüssel in Teile auf und verstecken sie in Bilddateien statt in Datensektionen, weil Bild-Assets weniger Aufmerksamkeit erregen. BmpKeyExtractor findet und setzt diese Teile wieder zusammen.
-- **ELFVtableReconstructor:** In einer Shared Library ist die Vtable auf der Festplatte leer und wird erst beim Laden durch das OS befüllt. ELFVtableReconstructor liest die Relokationsanweisungen, die das OS verwenden würde, und baut die Tabelle statisch auf, sodass du sehen kannst, welche Funktion in welchem Slot liegt, ohne das Binary auszuführen.
-- **VtableDispatchScanner:** Ein Eintrag in der Vtable bedeutet nicht, dass irgendwo Code ihn aufruft. VtableDispatchScanner durchsucht das Binary nach jeder Stelle, an der eine virtuelle Methode tatsächlich aufgerufen wird, damit du erkennst, welche Slots erreichbar sind und welche toter Code sind, den nichts jemals auslöst.
+**Kryptografische Analyse**
+
+Ablation entfernt jede Schicht, die Kryptografie in einem kompilierten Binary unsichtbar macht. Entropy Mapper lokalisiert die verschlüsselte Region. Crypto Audit und HashAlgoDiscriminator identifizieren den Algorithmus. XorSolver, BmpKeyExtractor und CustomCBCDetector brechen die Verschlüsselung oder stellen den Schlüssel wieder her. ELFVtableReconstructor und VtableDispatchScanner rekonstruieren, was die Laufzeit mit dem Ergebnis macht.
+
+Ein Binary kann sein Krypto vor Import-Tabellen-Analyse, Symboltabellen und String-Suche verbergen. Diese acht Tools schließen diese Lücke gemeinsam, sodass am Ende der Algorithmus, der Schlüssel und der Chiffretext bekannt sind.
 
 ---
 

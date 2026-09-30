@@ -24,19 +24,17 @@ Combinato con Claude Code o OpenAI Codex, diventa uno strumento di reverse engin
 
 **Audit del codice sorgente:** Controlla qualsiasi codebase di grandi dimensioni più velocemente della lettura lineare, con maggiore precisione del solo pattern matching. Ogni file sorgente riceve un profilo di sicurezza a 5 bit che determina esattamente quanta attenzione richiede, così nulla viene tralasciato e nulla viene letto due volte.
 
-**Analisi driver kernel Windows e BYOVD:** Mappa la tabella di dispatch IRP, decodifica ogni codice IOCTL e identifica quali API del kernel espongono primitive di memoria fisica e token dalla modalità utente. Il rilevatore BYOVD identifica i driver firmati con quelle capacità, perché un singolo driver firmato legittimo è sufficiente per accecare EDR dal ring-0.
+**Analisi driver kernel Windows e BYOVD:** Analizza i driver del kernel alla ricerca di punti di ingresso che espongono memoria di sistema o privilegi di amministratore dalla modalità utente. Un singolo driver firmato con quelle capacità è sufficiente per disabilitare il software di sicurezza endpoint.
 
 **Analisi Android/APK:** Legge gli APK Android a livello binario senza dipendenze. Mappa i punti di ingresso del codice nativo e la superficie IPC dal bytecode compilato, così l'intera superficie è visibile senza decompilare.
 
-**Analisi Erlang/BEAM:** Erlang compila in file .beam, e lo stesso approccio di mappatura della superficie usato per ELF si applica direttamente. La ricerca di atomi, l'audit delle importazioni e il rilevamento dell'offuscamento non richiedono gestione speciale. La scansione di una directory di release richiede secondi.
+**Analisi Erlang/BEAM:** Mappa export, import e atomi dai file .beam di bytecode, così le chiamate pericolose come `os:cmd` e `code:load_binary` sono visibili senza eseguire il release.
 
-**Decrittografia**
-- **Entropy Mapper:** Le sezioni di un binario che contengono dati cifrati o compressi sembrano statisticamente casuali. Entropy Mapper misura quella casualità su tutto il file e segnala le regioni che vale la pena esaminare.
-- **Crypto Audit:** Analizza il binario alla ricerca di costanti crittografiche, firme di algoritmi noti e materiale chiave, così sai cosa il codice sta effettivamente facendo con i dati prima di leggere una sola riga.
-- **XorSolver:** La cifratura XOR è comune nel firmware perché è veloce e banale da implementare. XorSolver recupera la chiave e decifra la sezione in modo che il contenuto reale sia leggibile.
-- **BmpKeyExtractor:** Alcuni firmware e APK dividono le chiavi segrete in parti e le nascondono in file immagine invece che in sezioni dati, perché gli asset immagine ricevono meno controllo. BmpKeyExtractor trova e riassembla quelle parti.
-- **ELFVtableReconstructor:** In una libreria condivisa, la vtable è vuota su disco e viene riempita dall'OS solo al caricamento. ELFVtableReconstructor legge le istruzioni di rilocazione che l'OS userebbe e ricostruisce la tabella staticamente, per vedere quale funzione si trova in quale slot senza eseguire il binario.
-- **VtableDispatchScanner:** Avere una voce nella vtable non significa che il codice la chiami da qualche parte. VtableDispatchScanner cerca nel binario ogni posto in cui un metodo virtuale viene effettivamente chiamato, per distinguere quali slot sono raggiungibili e quali sono codice morto che niente attiva mai.
+**Analisi crittografica**
+
+Ablation rimuove ogni strato che rende la crittografia invisibile in un binary compilato. Entropy Mapper individua la regione cifrata. Crypto Audit e HashAlgoDiscriminator identificano l'algoritmo. XorSolver, BmpKeyExtractor e CustomCBCDetector rompono la cifratura o recuperano la chiave. ELFVtableReconstructor e VtableDispatchScanner ricostruiscono cosa fa il runtime con il risultato.
+
+Un binary può nascondere la sua crittografia dall'analisi della tabella delle importazioni, dalle tabelle dei simboli e dalla ricerca di stringhe. Questi otto strumenti chiudono collettivamente quel divario, così alla fine conosci l'algoritmo, la chiave e il testo cifrato.
 
 ---
 
