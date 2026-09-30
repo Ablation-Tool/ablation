@@ -1,7 +1,9 @@
 # Crypto Modules
 
-Four independent tools: encrypted region detection, XOR key recovery, cryptographic
-posture auditing, and BMP LSB steganography / Lagrange secret-sharing key extraction.
+Six independent tools: encrypted region detection, XOR key recovery, cryptographic
+posture auditing, BMP LSB steganography / Lagrange secret-sharing key extraction,
+hash algorithm identification from K-table constants, and hand-rolled AES-CBC
+detection in ARM32 Thumb2 binaries.
 
 ---
 
@@ -272,3 +274,140 @@ Look for this scheme when:
 
 Typical output width: 62 bytes (124 hex chars) per negative component (reverse-TC
 applied); 63 bytes (126 hex chars) per positive bit-aligned component (extra byte).
+
+---
+
+## HashAlgoDiscriminator
+
+**File:** `ablation/analyzers/crypto_pattern_detector.py`
+
+Identifies hash algorithms (MD5 / SHA-1 / SHA-256 / SHA-512 / CRC32) from K-table
+and round-constant signatures found in compiled ARM32 / Thumb2 code.
+
+Extracts 32-bit constants via two mechanisms:
+
+- **MOVW/MOVT pairs** -- Thumb2 encodes large immediates as a pair of 16-bit half-words.
+  `MOVW Rd, #lo16` followed by `MOVT Rd, #hi16` is reconstructed into the full 32-bit
+  constant by tracking pending MOVW values per register.
+
+- **LDR Rx, [PC, #N]** -- literal pool loads. The constant is read directly from the
+  binary at `(insn_va & ~3) + 4 + N`.
+
+Matched against five algorithm signature tables. The shared SHA-256 / SHA-512 ambiguity
+(first eight K-table upper-half words are identical) is resolved by checking for
+SHA-512-unique lower-half constants (K[0..3]\_LO, IV[0..3]\_LO).
+
+```python
+from ablation.analyzers.crypto_pattern_detector import HashAlgoDiscriminator
+
+disc = HashAlgoDiscriminator(open('/path/to/lib.so', 'rb').read(), load_addr=0)
+
+# Scan a known function range
+result = disc.scan_function(va=0xf978, size=0x200)
+print(result.fmt())
+# MD5  conf=100  [0xf9ba:MD5_K0, 0xf9da:MD5_K1, 0xf9fc:MD5_K2, 0xfa1e:MD5_K3...]
+
+# Match from a list of constants (no disassembly -- e.g., from a prior sweep)
+result = HashAlgoDiscriminator.identify([0xd76aa478, 0xe8c7b756, 0x242070db])
+# HashAlgoMatch(algo='MD5', confidence=37, matched=[...])
+
+# Get all raw constants in a range (for manual inspection)
+pairs = disc.extract_constants(va=0xf978, size=0x200)
+# [(0xf9ba, 0xd76aa478), (0xf9da, 0xe8c7b756), ...]
+```
+
+### Algorithm signatures
+
+| Algorithm | Discriminating constants | Notes |
+|---|---|---|
+| MD5 | K[0..7]: 0xd76aa478, 0xe8c7b756, 0x242070db, ... | K-table from sin() |
+| SHA-1 | Round constants: 0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6 | 4 constants cover all 80 rounds |
+| SHA-256 | IV H[0..7] + K[0..7]: 0x6a09e667, 0x428a2f98, ... | Shared upper half with SHA-512; disambiguated below |
+| SHA-512 | Unique K[0..3] lower halves + IV lower halves: 0xd728ae22, 0xf3bcc908, ... | These values do not appear in SHA-256 |
+| CRC32 | Reflected polynomial: 0xedb88320 | |
+
+### Init constants are NOT discriminating
+
+MD5 and SHA-1 share the same four initialization constants (A=0x67452301,
+B=0xEFCDAB89, C=0x98BADCFE, D=0x10325476). A function that sets only these values
+is an init function common to both algorithms. Use `scan_function` on the block
+compress function (which uses the K-table), not the init function.
+
+---
+
+## CustomCBCDetector
+
+**File:** `ablation/analyzers/crypto_pattern_detector.py`
+
+Detects hand-rolled AES-128-CBC patterns in ARM32 Thumb2 binaries. Targets the
+structural fingerprint of vendor-implemented CBC where the developer calls a
+single-block AES function in a loop and manually handles the CBC chaining, rather
+than calling `mbedtls_aes_crypt_cbc`.
+
+### What it detects
+
+```
+; pre-loop: IV pointer loaded into chaining register
+LDR  r5, [pc, #N]        ; r5 = ptr to IV in .rodata
+
+; loop body:
+loop:
+  STR  r6, [bss1]        ; update block pointer in BSS
+  BL   aes_block_fn      ; single-block AES decrypt/encrypt
+
+  ; XOR 16 bytes of AES output with r5 (prev CT or IV)
+  LDRB r2, [r5, #0]  ;  x16, incrementing offset
+  EOR  r2, r2, r8
+  STRB r2, [r7, #0]
+
+  MOV  r5, r4            ; advance chaining reg = ptr to current CT block
+  CMP  ...
+  BLO  loop
+```
+
+### Scoring heuristic (four signals)
+
+| Signal | Points | How detected |
+|---|---|---|
+| BL inside a backward-branch loop | 40 | CS_GRP_CALL in backward-branch loop body |
+| 16-byte XOR with register | 30 | 4+ EOR or 1+ VEOR in loop body |
+| MOV updates LDRB base register | 20 | MOV Rd, Rs where Rd appears as LDRB base |
+| Pre-loop LDR into chaining reg | 10 | LDR Rx, [PC, #N] before loop; 16 non-null bytes at target |
+
+Patterns scoring >= 50 are returned. Score 90-100 = high-confidence CBC.
+
+```python
+from ablation.analyzers.crypto_pattern_detector import CustomCBCDetector
+
+det = CustomCBCDetector(open('/path/to/lib.so', 'rb').read(), load_addr=0)
+
+# Scan a .text range for CBC patterns
+patterns = det.scan_range(va=0xa000, size=0x2000)
+for p in patterns:
+    print(p.fmt())
+# CBCPattern  conf=90  outer=0xa000  block_fn=0xa9a0  chain_reg=r5
+#             iv_va=0x6f10  iv=b'7178265647164836'
+
+# When function boundaries are known
+pat = det.scan_function(va=0xa684, size=0xa0)
+```
+
+### Identification checklist
+
+Look for this pattern when:
+
+1. The binary does NOT import `mbedtls_aes_crypt_cbc` or `AES_cbc_encrypt` from the
+   PLT but clearly does AES operations.
+2. The binary has a BSS pointer that is overwritten at the start of each loop iteration
+   (tracks the current ciphertext block position).
+3. A `.rodata` string of 8-16 printable characters exists near the string pool -- it
+   is almost certainly the hardcoded IV.
+4. The single-block AES function starts by loading a round key at an offset of 0xa0
+   from the key schedule BSS (= last round key = decryption direction).
+
+### Limitation
+
+The EOR-register detection works for byte-by-byte CBC implementations. If the
+compiler vectorizes the XOR into NEON VEOR only, the chaining register cannot be
+derived from LDRB bases; in that case signals 3 and 4 are not scored and maximum
+confidence is 70.
