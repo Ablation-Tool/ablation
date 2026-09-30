@@ -37,8 +37,8 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 - **BmpKeyExtractor:** Some firmware and APKs split secret keys into shares and hide them in image files rather than data sections, because image assets get less scrutiny. BmpKeyExtractor finds and reassembles those shares.
 - **ELFVtableReconstructor:** In a shared library, the vtable is blank on disk and only filled in by the OS at load time. ELFVtableReconstructor reads the relocation instructions the OS would use and rebuilds the table statically, so you can see which function lives at which slot without running the binary.
 - **VtableDispatchScanner:** Having a vtable entry does not mean anything calls it. VtableDispatchScanner searches the binary for every place where a virtual method actually gets called, so you can tell which slots are reachable and which ones are dead code that nothing ever triggers.
-- **HashAlgoDiscriminator:** When a binary implements a hash function by hand, the compiled code carries no algorithm label. HashAlgoDiscriminator extracts the constant tables from ARM32 Thumb2 code and identifies the algorithm from them, distinguishing MD5, SHA-1, SHA-256, SHA-512, and CRC32.
-- **CustomCBCDetector:** Vendors sometimes implement AES-CBC without calling a library, which makes the cipher invisible to import-table analysis. CustomCBCDetector finds those loops in ARM32 assembly and recovers the IV and the chaining register without executing the code.
+- **HashAlgoDiscriminator:** A stripped binary carries no label on its hash functions. HashAlgoDiscriminator reads the constant tables the compiler embedded and identifies the algorithm, so you know whether you are looking at MD5, SHA-1, SHA-256, SHA-512, or CRC32.
+- **CustomCBCDetector:** When a vendor implements AES-CBC by hand instead of calling a library, the cipher mode leaves no trace in the import table. CustomCBCDetector finds those loops in ARM32 assembly and recovers the IV and the chaining register.
 
 ---
 
