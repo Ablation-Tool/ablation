@@ -481,3 +481,90 @@ pseudo_java = DEXLifter.report(dex, 'Lcom/example/Foo;', 'methodName')
 - Obfuscator instrumentation (e.g. ByteDance `Tz.a()/Tz.b()` anti-tamper
   calls) is rendered as-is, which is itself a finding: heavy wrapping around
   simple logic is a pattern signature for the ByteDance runtime protection.
+
+---
+
+## LibraryInventory
+
+**File:** `ablation/analyzers/library_inventory.py`
+
+Batch triage scanner for directories of native ELF `.so` files. Returns a scored
+summary table for every library in one call — replacing the ad-hoc BL-target
+enumeration loops written at the start of each Android engagement.
+
+### Construction
+
+| Form | Description |
+|---|---|
+| `LibraryInventory.from_dir(path)` | Collect all `*.so` files in a directory (non-recursive) |
+| `LibraryInventory.from_paths([list])` | Explicit file list |
+| `LibraryInventory.scan_one(elf_path)` | Single file, returns one `LibInventoryEntry` directly |
+
+### Usage
+
+```python
+from ablation.analyzers.library_inventory import LibraryInventory
+
+# Scan all libraries in a directory
+inv = LibraryInventory.from_dir('/tmp/target/lib/arm64-v8a/')
+entries = inv.scan()
+
+# Print formatted triage table
+print(LibraryInventory.report(entries))
+
+# Filter to libraries worth detailed review
+for e in LibraryInventory.security_entries(entries, min_score=3):
+    print(LibraryInventory.report_strings(e))
+
+# Single library
+entry = LibraryInventory.scan_one('/tmp/target/lib/arm64-v8a/libfoo.so')
+print(entry.security_score, entry.security_strings[:3])
+```
+
+### LibInventoryEntry fields
+
+| Field | Type | Description |
+|---|---|---|
+| `filename` | str | Basename of the library |
+| `size_kb` | int | File size in KB |
+| `arch` | str | `arm64`, `arm32`, `x86_64`, `mips32`, `x86`, etc. |
+| `exports` | int | Dynamic symbols with value != 0 |
+| `internal` | int | ARM64 BL-targets inside `.text` not in exports; `-1` for non-ARM64 |
+| `jni` | int | Exports with `Java_` prefix |
+| `has_jni_on_load` | bool | Whether `JNI_OnLoad` is exported |
+| `security_score` | int | 0–10 score (see below) |
+| `security_strings` | List[str] | Up to 20 security-relevant rodata strings |
+
+### Security scoring
+
+| Signal | Points |
+|---|---|
+| Credential-field format string (`sk=%s`, `password=%s`, `token=%s`) | +3 |
+| Credential-field name or exec pattern (`system(`, `/bin/sh`) | +2 |
+| Crypto primitive string (`AES`, `HMAC`, `SHA256`, `DTLS`, `PPCS`) | +1 |
+| JNI count ≥ 50 | +2 |
+| JNI count ≥ 10 | +1 |
+| Internal function count ≥ 1000 | +2 |
+| Internal function count ≥ 200 | +1 |
+
+Known false-positive contexts (LAME `noise shaping`, MMKV `key-value`, parser
+`unknown token`) are filtered before scoring.
+
+### Finding categories
+
+| Severity | Category | Meaning |
+|---|---|---|
+| HIGH (score 7–10) | `credential-log` | Credential field names + format specifiers: live credential exposure in logs |
+| HIGH (score 7–10) | `exec-surface` | `system(` / `/bin/sh` strings with high JNI count: command injection surface |
+| MEDIUM (score 3–6) | `crypto-impl` | Crypto primitive strings: contains cryptographic implementation |
+| INFO (score 1–2) | `large-impl` | High internal function count: complex implementation worth tracing |
+
+### Internal function count (ARM64)
+
+`internal` is the count of BL-call targets inside `.text` that are not in the
+dynamic export table. This measures implementation depth: a library with
+`internal=0` is a pure passthrough stub; one with `internal=4553` contains a
+full protocol engine. Computed via single-pass opcode scan: `(w >> 26) == 0x25`
+identifies BL instructions; sign-extend the 26-bit immediate; targets in `.text`
+range but absent from dynsym are internal. Requires `lief` for section layout;
+falls back to -1 (unsupported) for non-ARM64 or missing `lief`.
