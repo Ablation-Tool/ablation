@@ -39,5 +39,6 @@ PLAN.md
 CLAUDE.md
 targets/
 test/
+models/
 docs/fortinet-api/
 docs/cisco_hyperflex_psirt.*
