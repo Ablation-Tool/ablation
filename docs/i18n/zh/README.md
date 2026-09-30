@@ -24,19 +24,17 @@ Ablation 是一个逆向工程框架，提供与 Ghidra、IDA Pro 和 Binary Nin
 
 **源代码审计：** 审计大型代码库的速度比线性阅读快，精确度比单纯的模式匹配高。每个源文件获得一个 5 位安全配置文件，精确确定其需要的关注程度，因此不会遗漏任何内容，也不会重复阅读。
 
-**Windows 内核驱动与 BYOVD 分析：** 映射 IRP 调度表，解码每个 IOCTL 代码，识别哪些内核 API 从用户模式暴露物理内存和令牌原语。BYOVD 检测器对携带这些能力的签名驱动进行指纹识别，因为一个合法签名的驱动就足以从 ring-0 致盲 EDR。
+**Windows 内核驱动与 BYOVD 分析：** 扫描内核驱动程序，寻找从用户模式暴露系统内存或管理员权限的入口点。一个具有这些能力的已签名驱动程序足以禁用端点安全软件。
 
 **Android / APK 分析：** 在无任何依赖的情况下在二进制层面读取 Android APK。从编译后的字节码映射本机代码入口点和 IPC 表面，因此无需反编译即可看到完整表面。
 
-**Erlang / BEAM 分析：** Erlang 编译为 .beam 文件，用于 ELF 的表面映射方法直接适用，因此原子搜索、导入审计和混淆检测无需特殊处理。扫描一个发布目录只需数秒。
+**Erlang / BEAM 分析：** 从 .beam 字节码文件中映射导出、导入和原子，使 `os:cmd` 和 `code:load_binary` 等危险调用无需运行发布版即可可见。
 
-**解密**
-- **Entropy Mapper：** 二进制文件中存放加密或压缩数据的节区，其统计随机性会明显偏高。Entropy Mapper 测量整个文件的随机性分布，并标记出值得深入分析的区域。
-- **Crypto Audit：** 扫描二进制文件中的密码学常量、已知算法特征和密钥材料，让你在阅读任何代码之前就清楚该程序实际对数据做了什么。
-- **XorSolver：** XOR 加密在固件中很常见，因为它速度快且实现简单。XorSolver 恢复密钥并解密目标节区，使原始内容可读。
-- **BmpKeyExtractor：** 部分固件和 APK 将密钥拆分成碎片隐藏在图像文件中而非数据节区，因为图像资产受到的审查更少。BmpKeyExtractor 定位并重组这些碎片。
-- **ELFVtableReconstructor：** 在共享库中，虚表在磁盘上全为零，只有 OS 加载时才会填入真实地址。ELFVtableReconstructor 读取 OS 本会使用的重定位指令，静态重建虚表，让你无需运行二进制文件即可看清每个槽位对应的函数。
-- **VtableDispatchScanner：** 虚表中有一个条目，并不意味着代码中有任何地方会调用它。VtableDispatchScanner 在整个二进制文件中搜索每一处虚方法实际被调用的位置，从而区分哪些槽位是可达的，哪些是永远不会触发的死代码。
+**密码分析**
+
+Ablation 去除了使已编译二进制文件中的密码学不可见的每一层。Entropy Mapper 定位加密区域。Crypto Audit 和 HashAlgoDiscriminator 识别算法。XorSolver、BmpKeyExtractor 和 CustomCBCDetector 破解加密或恢复密钥。ELFVtableReconstructor 和 VtableDispatchScanner 重建运行时对结果的处理。
+
+二进制文件可以从导入表分析、符号表和字符串搜索中隐藏其加密。这八个工具共同填补了这一空白，所以最终你会知道算法、密钥和密文。
 
 ---
 

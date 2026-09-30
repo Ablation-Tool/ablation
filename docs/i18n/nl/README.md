@@ -24,19 +24,17 @@ Gecombineerd met Claude Code of OpenAI Codex wordt het een volledig autonoom rev
 
 **Broncode-audit:** Audit elke grote codebase sneller dan lineair lezen, met hogere nauwkeurigheid dan patroonovereenkomst alleen. Elk bronbestand krijgt een 5-bits beveiligingsprofiel dat precies bepaalt hoeveel aandacht het nodig heeft, zodat niets wordt gemist en niets twee keer wordt gelezen.
 
-**Windows kernelstuurprogramma en BYOVD-analyse:** Brengt de IRP-verzendingtabel in kaart, decodeert elke IOCTL-code en identificeert welke kernel-API's fysiek geheugen en token-primitieven vanuit de gebruikersmodus blootstellen. De BYOVD-detector neemt vingerafdrukken van ondertekende stuurprogramma's met die mogelijkheden, omdat één legitiem ondertekend stuurprogramma genoeg is om EDR vanuit ring-0 te verblinden.
+**Windows kernelstuurprogramma en BYOVD-analyse:** Scant kernelstuurprogramma's op ingangspunten die systeemgeheugen of beheerdersrechten vanuit de gebruikersmodus blootstellen. Eén ondertekend stuurprogramma met die mogelijkheden is genoeg om endpoint-beveiligingssoftware uit te schakelen.
 
 **Android/APK-analyse:** Leest Android-APK's op binair niveau zonder afhankelijkheden. Brengt native code-ingangspunten en IPC-oppervlak in kaart vanuit gecompileerde bytecode, zodat het volledige oppervlak zichtbaar is zonder decompilatie.
 
-**Erlang/BEAM-analyse:** Erlang compileert naar .beam-bestanden, en dezelfde oppervlaktekaartbenadering die voor ELF wordt gebruikt, is direct van toepassing, zodat atoomzoekopdrachten, import-audits en obfuscatiedetectie geen speciale behandeling vereisen. Een releasedirectory scannen duurt seconden.
+**Erlang/BEAM-analyse:** Brengt exports, imports en atomen in kaart vanuit .beam-bytecodebestanden, zodat gevaarlijke aanroepen zoals `os:cmd` en `code:load_binary` zichtbaar zijn zonder de release uit te voeren.
 
-**Ontcijfering**
-- **Entropy Mapper:** Binaire secties die versleutelde of gecomprimeerde gegevens bevatten zien er statistisch willekeurig uit. Entropy Mapper meet die willekeurigheid over het hele bestand en markeert de gebieden die de moeite waard zijn om te bekijken.
-- **Crypto Audit:** Scant het binary op cryptografische constanten, bekende algoritme-signaturen en sleutelmateriaal, zodat je weet wat de code daadwerkelijk met de gegevens doet voordat je een regel leest.
-- **XorSolver:** XOR-versleuteling komt veel voor in firmware omdat het snel en triviaal te implementeren is. XorSolver herstelt de sleutel en ontsleutelt de sectie zodat de echte inhoud leesbaar wordt.
-- **BmpKeyExtractor:** Sommige firmware en APKs splitsen geheime sleutels op in delen die in afbeeldingsbestanden worden verstopt in plaats van in datasecties, omdat afbeeldingsassets minder controle krijgen. BmpKeyExtractor vindt en hermonteert die delen.
-- **ELFVtableReconstructor:** In een gedeelde bibliotheek is de vtable leeg op schijf en wordt pas bij het laden door het OS ingevuld. ELFVtableReconstructor leest de relocatie-instructies die het OS zou gebruiken en bouwt de tabel statisch op, zodat je kunt zien welke functie in welk slot zit zonder het binary uit te voeren.
-- **VtableDispatchScanner:** Een vtable-entry hebben betekent niet dat code het ergens aanroept. VtableDispatchScanner doorzoekt het binary naar elke plek waar een virtuele methode daadwerkelijk wordt aangeroepen, zodat je kunt onderscheiden welke slots bereikbaar zijn en welke dode code zijn die niets ooit activeert.
+**Cryptografische analyse**
+
+Ablation verwijdert elke laag die cryptografie onzichtbaar maakt in een gecompileerd binary. Entropy Mapper lokaliseert het versleutelde gebied. Crypto Audit en HashAlgoDiscriminator identificeren het algoritme. XorSolver, BmpKeyExtractor en CustomCBCDetector breken de versleuteling of herstellen de sleutel. ELFVtableReconstructor en VtableDispatchScanner reconstrueren wat de runtime met het resultaat doet.
+
+Een binary kan zijn crypto verbergen voor import-tabelanalyse, symbooltabellen en het zoeken naar strings. Deze acht tools dichten samen die kloof, zodat je aan het einde het algoritme, de sleutel en de codetekst kent.
 
 ---
 
