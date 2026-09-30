@@ -2,6 +2,14 @@
 
 ---
 
+## v2.17.0
+
+- **`LibraryInventory` PLT hook and TLS keylog detection** (`analyzers/library_inventory.py`): adds `plt_hooks: List[str]` field to `LibInventoryEntry`. Six critical symbol patterns are now detected in both dynamic imports and statically-linked re-exports: `SSL_CTX_set_keylog_callback` (`[TLS-KEYLOG]`, +3), `ssl_log_secret` (`[TLS-KEYLOG]`, +2), `ssl_log_rsa_client_key_exchange` (`[TLS-KEYLOG]`, +2), `bytehook_hook_all` (`[PLT-HOOK]`, +2), `bytehook_hook_single` (`[PLT-HOOK]`, +2), `shadowhook_hook_sym_name` (`[PLT-HOOK]`, +2). The score delta from each matching import is added to the security score (capped at 10). `report()` shows detected labels inline per row; the high-risk summary also lists hook labels.
+
+- **`LibraryInventory.classify_internals()`** (`analyzers/library_inventory.py`): new static method. Groups ARM64 internal functions by their PLT call signature (first 6 distinct PLT symbols called, joined with `+`). Returns `{label: [va, ...]}`. Functions with no PLT calls cluster as `(pure-internal)`. Requires `capstone`. Replaces the per-session `defaultdict` cluster scripts written during engagements.
+
+---
+
 ## v2.16.0
 
 - **`LibraryInventory`** (`analyzers/library_inventory.py`): batch triage scanner for directories of native ELF `.so` files. `LibraryInventory.from_dir(path).scan()` returns a `List[LibInventoryEntry]` sorted by security score, one entry per library: `size_kb`, `arch`, `exports`, `internal` (ARM64 BL-target count), `jni` (Java_* exports), `has_jni_on_load`, `security_score` (0-10), and a `security_strings` sample. `report(entries)` prints a formatted triage table; `security_entries(entries, min_score=3)` filters to libraries worth detailed review. Security score weights credential-field format strings (+3), credential names (+2), crypto primitive strings (+1), JNI surface size, and internal function density. Replaces the ad-hoc BL-target enumeration loops written per engagement.
