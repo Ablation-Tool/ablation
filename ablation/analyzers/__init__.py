@@ -74,6 +74,10 @@ from .lsb_stego_extractor import (
     LSBStegoReader, LagrangeKeyExtractor, BmpKeyExtractor,
     StegoKeyResult, CoordPair,
 )
+from .crypto_pattern_detector import (
+    HashAlgoDiscriminator, HashAlgoMatch, ConstMatch,
+    CustomCBCDetector, CBCPattern,
+)
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -140,4 +144,7 @@ __all__ = [
     # ── Steganography / secret-sharing key extraction ───────────────────────
     "LSBStegoReader", "LagrangeKeyExtractor", "BmpKeyExtractor",
     "StegoKeyResult", "CoordPair",
+    # ── Crypto pattern recognition (binary / disassembly) ───────────────────
+    "HashAlgoDiscriminator", "HashAlgoMatch", "ConstMatch",
+    "CustomCBCDetector", "CBCPattern",
 ]
