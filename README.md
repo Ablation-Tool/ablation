@@ -31,14 +31,10 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 **Erlang / BEAM Analysis:** Erlang compiles to .beam files, and the same surface-map approach used for ELF applies directly, so atom search, import auditing, and obfuscation detection need no special handling. Sweeping a release directory takes seconds.
 
 **Decryption**
-- **Entropy Mapper:** Binary sections that hold encrypted or compressed data look statistically random. Entropy Mapper measures that randomness across the entire file and flags the regions worth looking at.
-- **Crypto Audit:** Scans the binary for cryptographic constants, known algorithm signatures, and key material so you know what the code is actually doing with data before you read a line of it.
-- **XorSolver:** XOR encryption is common in firmware because it is fast and trivial to implement. XorSolver recovers the key and decrypts the section so the real content is readable.
-- **BmpKeyExtractor:** Some firmware and APKs split secret keys into shares and hide them in image files rather than data sections, because image assets get less scrutiny. BmpKeyExtractor finds and reassembles those shares.
-- **ELFVtableReconstructor:** In a shared library, the vtable is blank on disk and only filled in by the OS at load time. ELFVtableReconstructor reads the relocation instructions the OS would use and rebuilds the table statically, so you can see which function lives at which slot without running the binary.
-- **VtableDispatchScanner:** Having a vtable entry does not mean anything calls it. VtableDispatchScanner searches the binary for every place where a virtual method actually gets called, so you can tell which slots are reachable and which ones are dead code that nothing ever triggers.
-- **HashAlgoDiscriminator:** A stripped binary carries no label on its hash functions. HashAlgoDiscriminator reads the constant tables the compiler embedded and identifies the algorithm, so you know whether you are looking at MD5, SHA-1, SHA-256, SHA-512, or CRC32.
-- **CustomCBCDetector:** When a vendor implements AES-CBC by hand instead of calling a library, the cipher mode leaves no trace in the import table. CustomCBCDetector finds those loops in ARM32 assembly and recovers the IV and the chaining register.
+
+Ablation's decryption method strips away every layer that makes cryptography invisible in a compiled binary. Entropy Mapper locates the encrypted region. Crypto Audit and HashAlgoDiscriminator identify the algorithm. XorSolver, BmpKeyExtractor, and CustomCBCDetector break the encryption or recover the key. ELFVtableReconstructor and VtableDispatchScanner reconstruct what the runtime does with the result.
+
+A binary can hide its crypto from import-table analysis, from symbol tables, and from string search. These eight tools collectively close that gap, so by the end you know the algorithm, the key, and the ciphertext.
 
 ---
 
