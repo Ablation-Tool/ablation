@@ -50,7 +50,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [Export Formats](module-reference/export.md) | SARIF 2.1.0, JSON, GitHub Code Scanning |
 | [Registry](module-reference/registry.md) | NameRegistry, FindingRegistry, `export_patterns()`, `ingest_from_registry()` flywheel |
 | [Crypto](module-reference/crypto.md) | CryptoAudit, XorSolver, EntropyMapper, HashAlgoDiscriminator, CustomCBCDetector |
-| [Structural](module-reference/structural.md) | VtableResolver (ARM64), VersionDelta, StructuralSim, ZIM-BERT fine-tuning |
+| [Structural](module-reference/structural.md) | VtableResolver (ARM64), VersionDelta, StructuralSim |
 | [x86-64 Vtable Analysis](module-reference/vtable-x86-64.md) | ELFVtableReconstructor (.rela.dyn slot reconstruction), VtableDispatchScanner (dead/live method detection) |
 | [Firmware Containers](module-reference/firmware-containers.md) | FirmwareContainer (partitioned image parser + payload detection), VideoContainerAnalyzer (MP4/MKV/AVI forensics) |
 | [Android / APK](module-reference/android.md) | APKParser (AXML+DEX), DexAnalyzer, JniBridgeScanner (JNI_OnLoad/Java_*/opaque peer), BinderScanner (exported services, AIDL Stubs, onTransact) |
@@ -73,11 +73,8 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
-| v2.14.5 | ZIM-BERT wired into `VersionTracker`: `with_zimbert()` classmethod, `model=` pass-through to `FuncMatcher` |
-| v2.14.4 | ZIM-BERT integration in `FuncMatcher`: `with_zimbert()` classmethod, `model` override, `_get_encoder()` helper |
 | v2.14.3 | `BinaryContext` kernel-space VA fix: `_va_to_i64()` / `_va_arr_to_i64()` ctypes bit-cast helpers; 6 call sites fixed |
 | v2.14.1–2 | FindingRegistry/PatternLibrary flywheel hardening: 13 bugs fixed (thread safety, lock upgrade, tag filter, double-save, Unicode edge cases) |
-| v2.13.0 | ZIM-BERT distillation: teacher-student fine-tuning for cross-version binary similarity |
 | v2.12.0 | ELFVtableReconstructor (.rela.dyn slot reconstruction), VtableDispatchScanner (dead/live virtual method detection) |
 | v2.11.0 | BmpKeyExtractor: BMP LSB steganography, Lagrange secret sharing key recovery |
 | v2.10.0 | DEXLifter: pseudo-Java IR lifter with type inference, field dot-notation, invoke formatting, if/else labels |

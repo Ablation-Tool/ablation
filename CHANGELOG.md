@@ -2,35 +2,6 @@
 
 ---
 
-## v2.14.5
-
-- **ZIM-BERT integration in `VersionTracker`** (`analyzers/version_delta.py`):
-  `VersionTracker.with_zimbert(binaries, ...)` classmethod loads `zimbert_lina_v1` and
-  passes it through to `FuncMatcher` via the new `model=` parameter on `VersionTracker.__init__`.
-  Engagement-level code can now activate ZIM-BERT in one call without manually instantiating
-  `FuncMatcher`. Scope: lina x86-64 only; degrades on OOD targets.
-
-## v2.14.4
-
-- **ZIM-BERT integration in `FuncMatcher`** (`analyzers/version_delta.py`):
-  `FuncMatcher` now accepts an optional `model` parameter (a `SentenceTransformer` instance)
-  that overrides the encoder used in `_build_whitening` and `_semantic_score`. A new
-  `with_zimbert(semantic_searcher=None, model_path=None)` classmethod loads the default
-  lina checkpoint (`~/ablation/models/zimbert_lina_v1`) and wires it in. The `_get_encoder()`
-  helper resolves precedence: explicit override → SemanticSearcher fallback → None. Scope:
-  use for lina-family VersionDelta tasks only; `zimbert_lina_v1` degrades on
-  out-of-distribution targets (dcerpc: rank 158→1225).
-
-- **ZIM-BERT distillation** (`analyzers/version_delta_finetune.py`): Teacher-student training
-  for cross-version binary similarity. `zimbert_finetune()` uses `all-mpnet-base-v2` as teacher
-  and `all-MiniLM-L6-v2` as student. Two auxiliary losses on top of MultipleNegativesRankingLoss:
-  `L_KL_output` (KL divergence on batch pairwise cosine distributions) and `L_value` (MSE on
-  attention value projections from teacher→student layer pairs). Trained on 2,250 lina 9.12.4
-  pairs over 4 epochs; achieved 2.521x separation ratio (vs 2.248x fortinet_cross_v1 baseline,
-  vs 2.009x vanilla MiniLM) on independent eval seed=99.
-
----
-
 ## v2.14.3
 
 - **`BinaryContext` kernel-space VA fix** (`analyzers/binary_context.py`):
@@ -69,19 +40,6 @@
   once at engagement start before `sweep()`. Idempotent: subsequent calls only add findings
   registered since the last ingest. No hard coupling between modules; `PatternLibrary` accepts
   any object with `export_patterns()`.
-
----
-
-## v2.13.0
-
-- **ZIM-BERT distillation** (`analyzers/version_delta_finetune.py`): Teacher-student training
-  for cross-version binary similarity. `zimbert_finetune()` uses `all-mpnet-base-v2` as teacher
-  and `all-MiniLM-L6-v2` as student. Two auxiliary losses on top of MultipleNegativesRankingLoss:
-  L_KL_output (KL divergence on batch pairwise similarity distributions) forces the student's
-  similarity structure to match the teacher's; L_value (MSE on value projection vectors across
-  paired encoder layers) transfers the teacher's attention routing. Architecture-aware value
-  hooks handle both BERT and MPNet attention layouts. Standard fine-tuning entry point
-  (`finetune_model()`, `generate_structural_pairs()`) unchanged.
 
 ---
 
