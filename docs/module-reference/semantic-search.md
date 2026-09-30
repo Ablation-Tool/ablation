@@ -158,6 +158,30 @@ print(pl.fmt_sweep(pl_results, binary_name='target.so'))
 Output shows each confirmed pattern, its CVSS score, and the top candidates in the new binary.
 Patterns with CVSS >= 7.0 are highlighted for immediate triage.
 
+### Ingest confirmed findings from FindingRegistry (flywheel)
+
+`ingest_from_registry()` pulls every confirmed finding from a `FindingRegistry` and adds it
+as a pattern. Call this at the start of each engagement to ensure all past confirmed findings
+run in the sweep — without any manual `pl.add()` calls.
+
+```python
+from ablation.analyzers.finding_registry import FindingRegistry
+from ablation.analyzers.pattern_library import PatternLibrary
+
+reg = FindingRegistry()
+pl  = PatternLibrary()
+
+n = pl.ingest_from_registry(reg)  # idempotent — only adds findings not already present
+print(f"{n} new patterns ingested")
+
+pl_results = pl.sweep(searcher, top_k=8, min_score=0.30)
+print(pl.fmt_sweep(pl_results, binary_name='target.so'))
+```
+
+`ingest_from_registry()` accepts any object with an `export_patterns()` method — no hard
+import of `finding_registry` at module level, so `PatternLibrary` remains independently
+usable.
+
 ### Pattern storage
 
 Patterns are stored at `~/.ablation/patterns.json`. They are user-local and not committed to
