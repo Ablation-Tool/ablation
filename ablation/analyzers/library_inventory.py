@@ -394,23 +394,34 @@ class LibraryInventory:
         jni = 0
         has_jni_on_load = False
         plt_hooks: List[str] = []
+        plt_score_bonus = 0
         if _binary is not None:
             try:
-                syms = [s for s in _binary.dynamic_symbols if s.value != 0]
+                syms = [s for s in _binary.dynamic_symbols if s.value != 0 and s.name]
                 exports = len(syms)
                 for s in syms:
                     if s.name.startswith('Java_'):
                         jni += 1
                     if s.name == 'JNI_OnLoad':
                         has_jni_on_load = True
+            except Exception:
+                pass
+            try:
                 # Check PLT imports (value == 0) and exported symbols for critical patterns.
                 # Imports: dynamically linked in from another library.
                 # Exports: statically linked OpenSSL re-exports the function itself.
+                # Dedup by needle so each distinct symbol contributes its delta once.
                 all_syms = [s.name for s in _binary.dynamic_symbols if s.name]
+                matched_needles: set = set()
+                plt_hooks_set: set = set()
                 for sym_name in all_syms:
-                    for needle, _delta, label in _PLT_CRITICAL_IMPORTS:
-                        if needle in sym_name and label not in plt_hooks:
-                            plt_hooks.append(label)
+                    for needle, delta, label in _PLT_CRITICAL_IMPORTS:
+                        if (sym_name == needle or sym_name.startswith(needle + '@')) \
+                                and needle not in matched_needles:
+                            matched_needles.add(needle)
+                            plt_hooks_set.add(label)
+                            plt_score_bonus += delta
+                plt_hooks = list(plt_hooks_set)
             except Exception:
                 pass
 
@@ -446,12 +457,8 @@ class LibraryInventory:
             score += 1
         if internal >= 1000:
             score += 1   # extra for very large
-        # PLT critical import bonus
-        for imp_label in plt_hooks:
-            for _needle, delta, label in _PLT_CRITICAL_IMPORTS:
-                if label == imp_label:
-                    score += delta
-                    break
+        # PLT critical import bonus — accumulated per matched needle during detection
+        score += plt_score_bonus
         # Cap at 10
         score = min(score, 10)
 
@@ -554,7 +561,7 @@ class LibraryInventory:
         if high_risk:
             lines.append(f"\nHigh-risk libraries (score >= 5):")
             for e in high_risk:
-                hooks = f"  hooks={e.plt_hooks}" if e.plt_hooks else ""
+                hooks = f"  hooks={' '.join(e.plt_hooks)}" if e.plt_hooks else ""
                 lines.append(f"  {e.filename}  score={e.security_score}/10  jni={e.jni}{hooks}")
         return "\n".join(lines)
 
@@ -615,7 +622,7 @@ class LibraryInventory:
             return {}
         tv0 = text.virtual_address
         traw = bytes(text.content)
-        text_end = tv0 + text.size
+        text_end = tv0 + min(text.size, len(traw))
 
         # Build PLT map
         got_to_sym: Dict[int, str] = {}
@@ -627,17 +634,24 @@ class LibraryInventory:
                     break
                 r_offset, r_info = struct.unpack_from('<QQ', rd, off)
                 sym_idx = r_info >> 32
+                if sym_idx == 0:  # IRELATIVE ifunc resolver — no symbol name
+                    continue
                 try:
                     got_to_sym[r_offset] = b.dynamic_symbols[sym_idx].name
                 except Exception:
                     pass
 
-        plt_sec = b.get_section('.plt')
         plt_map: Dict[int, str] = {}
-        if plt_sec:
+        # Scan both .plt (classic) and .plt.sec (Android NDK r23+ BTI).
+        # In BTI builds .plt contains only landing pads; real stubs are in .plt.sec.
+        # Start each section at i=0 — the ADRP/LDR/ADD/BR pattern check skips resolvers.
+        for _plt_name in ('.plt', '.plt.sec'):
+            plt_sec = b.get_section(_plt_name)
+            if not plt_sec:
+                continue
             pd = bytes(plt_sec.content)
             pv0 = plt_sec.virtual_address
-            for i in range(1, len(pd) // 16):
+            for i in range(0, len(pd) // 16):
                 wo = i * 16
                 stub_va = pv0 + wo
                 w0, w1, w2, w3 = struct.unpack_from('<IIII', pd, wo)
@@ -662,7 +676,7 @@ class LibraryInventory:
 
         # Enumerate internal BL targets
         internals: set = set()
-        for wo in range(0, len(traw), 4):
+        for wo in range(0, len(traw) - 3, 4):
             w = struct.unpack_from('<I', traw, wo)[0]
             if (w >> 26) == 0x25:
                 imm26 = w & 0x3FFFFFF
