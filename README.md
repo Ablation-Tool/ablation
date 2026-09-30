@@ -26,7 +26,7 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 **Windows Kernel Driver & BYOVD Analysis:** Scans kernel drivers for entry points that expose system memory or admin privileges from user mode. One signed driver with those capabilities is enough to disable endpoint security software.
 
-**Android / APK Analysis:** Reads Android APKs at the binary level with no dependencies. It maps native code entry points and IPC surface from compiled bytecode, so the full surface is visible without decompiling.
+**Android / APK Analysis:** Reads Android APKs at the binary level with no dependencies. It maps native code entry points and IPC surface from compiled bytecode, so the full surface is visible without decompiling. LibraryInventory batch-triages every native `.so` in one call — ARM64 BL-target count, JNI surface, and credential/crypto string detection — so the high-risk libraries are ranked before any disassembly begins.
 
 **Erlang / BEAM Analysis:** Maps exports, imports, and atoms from .beam bytecode files, so dangerous calls like `os:cmd` and `code:load_binary` are visible without running the release.
 
