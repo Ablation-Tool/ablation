@@ -10,7 +10,7 @@ Combinato con Claude Code o OpenAI Codex, diventa uno strumento di reverse engin
 
 ---
 
-![Demo di Codex](../../../assets/codex-demo.gif)
+![Demo di Codex](../../../assets/screencast-2026-09-30.gif)
 
 ## Funzionalità
 
@@ -40,9 +40,9 @@ Un binary può nascondere la sua crittografia dall'analisi della tabella delle i
 
 ## Risultati reali
 
-Ablation è stato usato per analizzare firmware di produzione e driver del kernel di Fortinet, Cisco, Juniper, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio e Dahua Security System.
+Ablation è stato usato per analizzare firmware di produzione e driver del kernel di Cisco, Fortinet, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System e Tuya.
 
-Dopo la divulgazione coordinata su Cisco FMC e ISE, il Cisco Product Security Incident Response Team (PSIRT) ha adottato Ablation per il triage interno delle vulnerabilità. Cisco PSIRT lo usa attivamente per il triage dei report di divulgazione su Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex e Catalyst. Cisco ASA LINA è stato anch'esso sottoposto a reverse engineering con Ablation.
+Dopo la divulgazione coordinata su Cisco FMC e ISE, il Cisco Product Security Incident Response Team (PSIRT) ha adottato Ablation per il triage interno delle vulnerabilità. Cisco PSIRT lo usa attivamente per il triage dei report di divulgazione su Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex e Catalyst. Cisco Adaptive Security Appliance (ASA) LINA è stato anch'esso sottoposto a reverse engineering con Ablation, con i risultati attualmente in fase di triage coordinato tramite CERT/CC VINCE.
 
 | CVE | Prodotto | Titolo | CVSS | Advisory |
 |---|---|---|---|---|

@@ -10,7 +10,7 @@ Claude CodeまたはOpenAI Codexと組み合わせることで、自律的なリ
 
 ---
 
-![Codexデモ](../../../assets/codex-demo.gif)
+![Codexデモ](../../../assets/screencast-2026-09-30.gif)
 
 ## 機能
 
@@ -40,7 +40,7 @@ Ablationはコンパイル済みバイナリで暗号化を不可視にするす
 
 ## 実際の成果
 
-Ablationは、Fortinet、Cisco、Juniper、Axis、Fujitsu、MikroTik、Orka、TencentOS、Enigma2、Skydio、Dahua Security Systemの製品ファームウェアとカーネルドライバの解析に使用されました。
+Ablationは、Cisco、Fortinet、Juniper、Apple MacOS、Microsoft Windows、Fujitsu、MikroTik、Orka、TencentOS、Enigma2、Skydio、Axis Communications、Dahua Security System、Tuyaの製品ファームウェアとカーネルドライバの解析に使用されました。
 
 Cisco FMCとISEに関する協調的な開示の後、Cisco Product Security Incident Response Team（PSIRT）はAblationを内部脆弱性トリアージに採用しました。Cisco PSIRTはFirepower Threat Defense（FTD）、Cisco Secure Client（AnyConnect）、HyperFlex、Catalystの進行中の開示レポートのトリアージに積極的に使用しています。Cisco Adaptive Security Appliance（ASA）LINAもAblationを使ったリバースエンジニアリングが行われており、現在CERT/CC VINCEを通じて協調トリアージ中です。
 
@@ -87,7 +87,6 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 - Python >= 3.10
 - `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
-- オプション: LLM機能用 `anthropic`
 
 ---
 
