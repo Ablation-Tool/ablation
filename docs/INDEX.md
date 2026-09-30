@@ -49,7 +49,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [Signature Matching](module-reference/sig-library.md) | SigLibrary, auto-naming fn_0x* functions |
 | [Export Formats](module-reference/export.md) | SARIF 2.1.0, JSON, GitHub Code Scanning |
 | [Registry](module-reference/registry.md) | NameRegistry, FindingRegistry, `export_patterns()`, `ingest_from_registry()` flywheel |
-| [Crypto](module-reference/crypto.md) | CryptoAudit, XorSolver, EntropyMapper |
+| [Crypto](module-reference/crypto.md) | CryptoAudit, XorSolver, EntropyMapper, HashAlgoDiscriminator, CustomCBCDetector |
 | [Structural](module-reference/structural.md) | VtableResolver (ARM64), VersionDelta, StructuralSim, ZIM-BERT fine-tuning |
 | [x86-64 Vtable Analysis](module-reference/vtable-x86-64.md) | ELFVtableReconstructor (.rela.dyn slot reconstruction), VtableDispatchScanner (dead/live method detection) |
 | [Firmware Containers](module-reference/firmware-containers.md) | FirmwareContainer (partitioned image parser + payload detection), VideoContainerAnalyzer (MP4/MKV/AVI forensics) |
