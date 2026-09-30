@@ -2,6 +2,12 @@
 
 ---
 
+## v2.15.1
+
+- **`WindowAnalyzer` ARM64 fix** (`analyzers/window_analyzer.py`): use `capstone.CS_ARCH_ARM64` instead of `capstone.CS_ARCH_AARCH64`; the latter was removed in Capstone v5.x. ARM64 disassembly via `WindowAnalyzer.from_path()` now works on Capstone 5.x installs.
+
+---
+
 ## v2.15.0
 
 - **`HashAlgoDiscriminator`** (`analyzers/crypto_pattern_detector.py`): identifies hash algorithms from K-table and round-constant values extracted via ARM32 Thumb2 disassembly. Handles MOVW/MOVT pairs and LDR-literal pool loads. Covers MD5 (64-entry K-table), SHA-1 (4 round constants), SHA-256 (8 init + 4 K constants), SHA-512 (unique lower-half constants for disambiguation), and CRC32. Returns per-algorithm confidence scores.
