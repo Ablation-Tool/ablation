@@ -147,9 +147,34 @@ ablation-search my-vendor
 ablation-commit
 ```
 
+### Export patterns for PatternLibrary (flywheel)
+
+`export_patterns()` returns all confirmed findings as `{'query': str, 'tag': str}` dicts —
+one per unique (title, description) pair, tagged by CWE class. Unlike `prior_queries()` which
+returns one entry per CWE class, `export_patterns()` returns every confirmed finding so the
+full history feeds future sweeps.
+
+Pass the result directly to `PatternLibrary.ingest_from_registry()` to wire the loop:
+
+```python
+from ablation.analyzers.finding_registry import FindingRegistry
+from ablation.analyzers.pattern_library import PatternLibrary
+
+reg = FindingRegistry()
+pl  = PatternLibrary()
+
+n = pl.ingest_from_registry(reg)
+print(f"{n} new patterns added from confirmed findings")
+# Call pl.sweep(searcher) — confirmed findings from all past engagements now run automatically
+```
+
+`ingest_from_registry()` is idempotent: calling it again adds only findings registered since
+the last call. Save is automatic when new patterns are added.
+
 ### How it seeds future sweeps
 
 When findings carry BERT embeddings, SemanticSearcher uses them as additional query vectors
-during a sweep. This pulls in cross-vendor patterns that pure-text queries miss. A TLV loop vulnerability confirmed in one vendor's binary surfaces as a seed hit when sweeping
-another vendor's binary, even when the function description uses different protocol-specific
+during a sweep. This pulls in cross-vendor patterns that pure-text queries miss. A TLV loop
+vulnerability confirmed in one vendor's binary surfaces as a seed hit when sweeping another
+vendor's binary, even when the function description uses different protocol-specific
 terminology.
