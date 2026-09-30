@@ -2,6 +2,12 @@
 
 ---
 
+## v2.15.2
+
+- **`WindowAnalyzer` ARM64 PLT resolver** (`analyzers/window_analyzer.py`): added `_build_plt_arm64()` method that parses ARM64 PLT stubs (`ADRP x16 / LDR x17, [x16, #imm] / ADD x16 / BR x17`, 16-byte entries) and maps each stub VA to its symbol name via `.rela.plt`. Previously, all `bl` instructions on ARM64 binaries produced no PLT annotation; now they resolve inline (e.g., `PLT -> std::string::push_back`). Supports both full 4-instruction stubs and handles the 2-slot trampoline at the PLT start.
+
+---
+
 ## v2.15.1
 
 - **`WindowAnalyzer` ARM64 fix** (`analyzers/window_analyzer.py`): use `capstone.CS_ARCH_ARM64` instead of `capstone.CS_ARCH_AARCH64`; the latter was removed in Capstone v5.x. ARM64 disassembly via `WindowAnalyzer.from_path()` now works on Capstone 5.x installs.
