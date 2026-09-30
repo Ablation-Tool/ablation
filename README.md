@@ -10,7 +10,7 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 ---
 
-![Codex demo](assets/codex-demo.gif)
+![demo](assets/screencast-2026-09-30.gif)
 
 ## Capabilities
 
