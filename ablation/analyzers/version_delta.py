@@ -630,9 +630,32 @@ class FuncMatcher:
     _WHITEN_MIN_N    = 50      # minimum candidates to fit whitening transform
     _WHITEN_SAMPLE_N = 1000   # max candidates sampled to fit transform (performance)
 
-    def __init__(self, semantic_searcher=None):
+    def __init__(self, semantic_searcher=None, model=None):
         self._sem = semantic_searcher
+        self._model_override = model  # SentenceTransformer passed directly (e.g. ZIM-BERT)
         self._whitening = None   # fitted WhiteningTransform, built per find_homolog call
+
+    @classmethod
+    def with_zimbert(cls, semantic_searcher=None, model_path=None):
+        """Return a VersionDelta that uses ZIM-BERT for semantic scoring.
+
+        Loads from ~/ablation/models/zimbert_lina_v1 by default. Pass a
+        SemanticSearcher for the rest of the pipeline; the model override
+        replaces only the encoder used in _build_whitening and _semantic_score.
+        """
+        from sentence_transformers import SentenceTransformer
+        import os
+        path = model_path or os.path.expanduser("~/ablation/models/zimbert_lina_v1")
+        m = SentenceTransformer(path, device='cpu')
+        return cls(semantic_searcher=semantic_searcher, model=m)
+
+    def _get_encoder(self):
+        """Return the active SentenceTransformer: explicit override → searcher → None."""
+        if self._model_override is not None:
+            return self._model_override
+        if self._sem is not None:
+            return self._sem._get_model()
+        return None
 
     def _structural_candidates(
         self, seed: FuncFeatures, candidates: list[FuncFeatures]
@@ -670,14 +693,14 @@ class FuncMatcher:
         Stage 2 ranking, so the transform is calibrated to the target
         binary's embedding distribution rather than a generic prior.
         """
-        if self._sem is None or len(candidates) < self._WHITEN_MIN_N:
+        if self._get_encoder() is None or len(candidates) < self._WHITEN_MIN_N:
             self._whitening = None
             return
         try:
             import random
             import numpy as np
             from .semantic_search import WhiteningTransform, describe_function
-            model = self._sem._get_model()
+            model = self._get_encoder()
             # Sample for efficiency — distribution estimate is stable at 1k samples
             sample = candidates
             if len(candidates) > self._WHITEN_SAMPLE_N:
@@ -708,12 +731,12 @@ class FuncMatcher:
         fitted in _build_whitening(), applies it before computing similarity
         to correct BERT embedding anisotropy (Su et al. 2021).
         """
-        if self._sem is None:
+        if self._get_encoder() is None:
             return 0.0
         try:
             import numpy as np
             from .semantic_search import describe_function
-            model = self._sem._get_model()
+            model = self._get_encoder()
             seed_desc = describe_function(
                 seed.name, 'UNKNOWN',
                 seed.callees, seed.string_xrefs,
