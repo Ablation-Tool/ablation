@@ -2,6 +2,22 @@
 
 ---
 
+## v2.17.1
+
+- **`LibraryInventory` bug fixes** (`analyzers/library_inventory.py`): seven correctness bugs fixed after code review.
+  - **`.plt.sec` support**: `classify_internals()` now scans both `.plt` and `.plt.sec`. Android NDK r23+ with BTI places real PLT stubs in `.plt.sec`; previously, `plt_map` was always empty on modern NDK targets and every function clustered as `(pure-internal)` silently.
+  - **Wrong delta for same-label symbols**: the scoring loop previously looked up the delta of the first `_PLT_CRITICAL_IMPORTS` entry whose label matched — so `ssl_log_secret` (delta=2) was scored as +3 because `SSL_CTX_set_keylog_callback` (delta=3) shares the `[TLS-KEYLOG]` label. Score bonus is now computed per matched needle during detection and carried forward as `plt_score_bonus`, not re-derived at scoring time.
+  - **Multi-symbol additive scoring**: the label deduplication that prevented `SSL_CTX_set_keylog_callback` (+3) and `ssl_log_secret` (+2) from both contributing is replaced by per-needle deduplication. Each distinct matched needle contributes its delta once.
+  - **Separated try/except**: the JNI loop and PLT detection loop now each have their own try/except. A None-named symbol causing AttributeError in the JNI loop no longer silently zeroes out `plt_hooks`.
+  - **struct bounds guard in BL scan**: `range(0, len(traw), 4)` replaced with `range(0, len(traw) - 3, 4)` to avoid `struct.error` on non-4-byte-aligned content.
+  - **IRELATIVE skip in RELA parsing**: entries with `sym_idx == 0` (ifunc resolvers with no symbol) are now skipped; previously, an empty string was written into `got_to_sym`, which could corrupt PLT cluster labels.
+  - **text_end clamped to actual content**: `text_end = tv0 + text.size` replaced with `min(text.size, len(traw))` to prevent phantom VAs when `text.size > len(text.content)`.
+  - **Exact symbol match**: `needle in sym_name` substring check replaced with `sym_name == needle or sym_name.startswith(needle + '@')` to avoid false positives from wrapper names (e.g., `frida_ssl_log_secret_interceptor`).
+  - **Consistent `plt_hooks` formatting** in `report()` high-risk summary: was rendering as Python list repr; now uses `' '.join()` matching the table column format.
+- **`docs/INDEX.md`**: added `LibraryInventory` to the Android/APK module row (was missing since v2.16.0).
+
+---
+
 ## v2.17.0
 
 - **`LibraryInventory` PLT hook and TLS keylog detection** (`analyzers/library_inventory.py`): adds `plt_hooks: List[str]` field to `LibInventoryEntry`. Six critical symbol patterns are now detected in both dynamic imports and statically-linked re-exports: `SSL_CTX_set_keylog_callback` (`[TLS-KEYLOG]`, +3), `ssl_log_secret` (`[TLS-KEYLOG]`, +2), `ssl_log_rsa_client_key_exchange` (`[TLS-KEYLOG]`, +2), `bytehook_hook_all` (`[PLT-HOOK]`, +2), `bytehook_hook_single` (`[PLT-HOOK]`, +2), `shadowhook_hook_sym_name` (`[PLT-HOOK]`, +2). The score delta from each matching import is added to the security score (capped at 10). `report()` shows detected labels inline per row; the high-risk summary also lists hook labels.
