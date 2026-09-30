@@ -10,7 +10,7 @@ Ablation 是一个逆向工程框架，提供与 Ghidra、IDA Pro 和 Binary Nin
 
 ---
 
-![Codex 演示](../../../assets/codex-demo.gif)
+![Codex 演示](../../../assets/screencast-2026-09-30.gif)
 
 ## 功能特性
 
@@ -40,7 +40,7 @@ Ablation 去除了使已编译二进制文件中的密码学不可见的每一�
 
 ## 真实案例
 
-Ablation 已用于分析来自 Fortinet、Cisco、Juniper、Axis、Fujitsu、MikroTik、Orka、TencentOS、Enigma2、Skydio 和大华安全系统的生产固件和内核驱动程序。
+Ablation 已用于分析来自 Cisco、Fortinet、Juniper、Apple MacOS、Microsoft Windows、Fujitsu、MikroTik、Orka、TencentOS、Enigma2、Skydio、Axis Communications、大华安全系统和 Tuya 的生产固件和内核驱动程序。
 
 在对 Cisco FMC 和 ISE 进行协调披露后，Cisco 产品安全事件响应团队（PSIRT）已采用 Ablation 进行内部漏洞分类。Cisco PSIRT 正在积极使用它对 Firepower Threat Defense（FTD）、Cisco Secure Client（AnyConnect）、HyperFlex 和 Catalyst 的持续披露报告进行分类。Cisco Adaptive Security Appliance（ASA）LINA 也已使用 Ablation 进行逆向工程，相关发现目前正通过 CERT/CC VINCE 进行协调分类。
 
@@ -87,7 +87,6 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 - Python >= 3.10
 - `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
-- 可选：`anthropic`（用于 LLM 功能）
 
 ---
 

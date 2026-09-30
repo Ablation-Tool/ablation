@@ -10,7 +10,7 @@ Ablation — это фреймворк для реверс-инжиниринг�
 
 ---
 
-![Демо Codex](../../../assets/codex-demo.gif)
+![Демо Codex](../../../assets/screencast-2026-09-30.gif)
 
 ## Возможности
 
@@ -40,7 +40,7 @@ Ablation снимает каждый слой, делающий криптогр
 
 ## Реальные результаты
 
-Ablation использовался для анализа производственной прошивки и драйверов ядра от Fortinet, Cisco, Juniper, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio и Dahua Security System.
+Ablation использовался для анализа производственной прошивки и драйверов ядра от Cisco, Fortinet, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System и Tuya.
 
 После скоординированного раскрытия информации о Cisco FMC и ISE команда Cisco Product Security Incident Response Team (PSIRT) приняла Ablation для внутренней сортировки уязвимостей. Cisco PSIRT активно использует его для сортировки текущих отчётов в Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex и Catalyst. Реверс-инжиниринг Cisco Adaptive Security Appliance (ASA) LINA также был выполнен с помощью Ablation, а результаты в настоящее время находятся на координированной проверке через CERT/CC VINCE.
 
@@ -87,7 +87,6 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 - Python >= 3.10
 - `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
-- Опционально: `anthropic` для функций LLM
 
 ---
 
