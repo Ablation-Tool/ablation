@@ -24,19 +24,17 @@ Claude Code veya OpenAI Codex ile birleştirildiğinde tam otonom bir tersine m�
 
 **Kaynak Kodu Denetimi:** Herhangi bir büyük kod tabanını doğrusal okumadan daha hızlı ve tek başına desen eşleştirmeden daha yüksek doğrulukla denetler. Her kaynak dosya, tam olarak ne kadar dikkat gerektirdiğini belirleyen 5 bitlik bir güvenlik profili alır, böylece hiçbir şey kaçırılmaz ve hiçbir şey iki kez okunmaz.
 
-**Windows Çekirdek Sürücüsü ve BYOVD Analizi:** IRP dağıtım tablosunu eşler, her IOCTL kodunu çözer ve hangi çekirdek API'lerinin kullanıcı modundan fiziksel bellek ve token ilkellerini ortaya çıkardığını tanımlar. BYOVD Dedektörü bu yetenekleri taşıyan imzalı sürücülerin parmak izini alır, çünkü tek bir yasal imzalı sürücü ring-0'dan EDR'yi kör etmeye yeterlidir.
+**Windows Çekirdek Sürücüsü ve BYOVD Analizi:** Kullanıcı modundan sistem belleğini veya yönetici ayrıcalıklarını açığa çıkaran giriş noktaları için kernel sürücülerini tarar. Bu yeteneklere sahip imzalı bir sürücü, uç nokta güvenlik yazılımını devre dışı bırakmak için yeterlidir.
 
 **Android/APK Analizi:** Android APK'larını bağımlılık olmadan ikili düzeyde okur. Derlenmiş bayt kodundan yerel kod giriş noktalarını ve IPC yüzeyini eşler, böylece decompile etmeden tam yüzey görünür olur.
 
-**Erlang/BEAM Analizi:** Erlang .beam dosyalarına derlenir ve ELF için kullanılan yüzey eşleme yaklaşımı doğrudan uygulanır, böylece atom arama, içe aktarma denetimi ve gizleme tespiti özel işlem gerektirmez. Bir yayın dizinini taramak saniyeler alır.
+**Erlang/BEAM Analizi:** .beam bytecode dosyalarından dışa aktarmaları, içe aktarmaları ve atomları eşler, böylece `os:cmd` ve `code:load_binary` gibi tehlikeli çağrılar release çalıştırılmadan görünür olur.
 
-**Şifre Çözme**
-- **Entropy Mapper:** Şifreli veya sıkıştırılmış veri içeren binary bölümleri istatistiksel olarak rastgele görünür. Entropy Mapper bu rastgeleliği dosyanın tamamında ölçer ve incelenmeye değer bölgeleri işaretler.
-- **Crypto Audit:** Binary dosyasını kriptografik sabitler, bilinen algoritma imzaları ve anahtar malzemesi için tarar; böylece tek bir satır okumadan önce kodun verilerle gerçekte ne yaptığını bilirsiniz.
-- **XorSolver:** XOR şifreleme, hızlı ve uygulaması kolay olduğu için firmware'lerde yaygındır. XorSolver anahtarı kurtarır ve bölümün şifresini çözerek gerçek içeriği okunabilir hale getirir.
-- **BmpKeyExtractor:** Bazı firmware ve APK'lar gizli anahtarları parçalara ayırıp veri bölümleri yerine görüntü dosyalarına saklar, çünkü görüntü varlıkları daha az incelemeye tabi tutulur. BmpKeyExtractor bu parçaları bulur ve yeniden bir araya getirir.
-- **ELFVtableReconstructor:** Paylaşılan bir kütüphanede vtable diskte boştur ve yalnızca OS tarafından yüklenirken doldurulur. ELFVtableReconstructor, OS'nin kullanacağı yeniden konumlandırma talimatlarını okur ve tabloyu statik olarak yeniden oluşturur; böylece binary'yi çalıştırmadan hangi fonksiyonun hangi slotta olduğunu görebilirsiniz.
-- **VtableDispatchScanner:** vtable'da bir girişin bulunması, kodun onu bir yerde çağırdığı anlamına gelmez. VtableDispatchScanner, binary genelinde sanal bir metodun gerçekten çağrıldığı her yeri arar; hangi slotların erişilebilir, hangilerinin hiçbir şeyin tetiklemediği ölü kod olduğunu ayırt eder.
+**Kriptografik Analiz**
+
+Ablation, derlenmiş bir binary'de kriptografiyi görünmez kılan her katmanı soyar. Entropy Mapper şifreli bölgeyi tespit eder. Crypto Audit ve HashAlgoDiscriminator algoritmayı tanımlar. XorSolver, BmpKeyExtractor ve CustomCBCDetector şifrelemeyi kırar veya anahtarı kurtarır. ELFVtableReconstructor ve VtableDispatchScanner çalışma zamanının sonuçla ne yaptığını yeniden oluşturur.
+
+Bir binary kriptosunu import tablosu analizinden, sembol tablolarından ve string aramadan gizleyebilir. Bu sekiz araç toplu olarak bu açığı kapatır, böylece sonunda algoritmayı, anahtarı ve şifreli metni bilirsiniz.
 
 ---
 

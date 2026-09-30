@@ -24,19 +24,17 @@ Combiné avec Claude Code ou OpenAI Codex, il devient un outil de rétro-ingéni
 
 **Audit de code source:** Audite n'importe quelle codebase volumineuse plus rapidement qu'en la lisant de façon linéaire, avec une précision supérieure à la correspondance de motifs seule. Chaque fichier source reçoit un profil de sécurité de 5 bits qui détermine exactement l'attention qu'il nécessite, donc rien n'est manqué et rien n'est lu deux fois.
 
-**Analyse des drivers du noyau Windows et BYOVD:** Cartographie la table de dispatch IRP, décode chaque code IOCTL et identifie quelles API du noyau exposent des primitives de mémoire physique et de jetons depuis le mode utilisateur. Le détecteur BYOVD identifie les drivers signés portant ces capacités, parce qu'un seul driver signé légitime suffit à aveugler l'EDR depuis le ring-0.
+**Analyse des drivers du noyau Windows et BYOVD:** Analyse les drivers du noyau à la recherche de points d'entrée qui exposent la mémoire système ou des privilèges administrateur depuis le mode utilisateur. Un driver signé avec ces capacités suffit à désactiver les logiciels de sécurité des terminaux.
 
 **Analyse Android et APK:** Lit les APK Android au niveau binaire sans dépendances. Cartographie les points d'entrée du code natif et la surface IPC depuis le bytecode compilé, donc la surface complète est visible sans décompiler.
 
-**Analyse Erlang et BEAM:** Erlang compile en fichiers .beam, et la même approche de cartographie de surface utilisée pour ELF s'applique directement, donc la recherche d'atomes, l'audit des imports et la détection d'obfuscation ne nécessitent aucun traitement particulier. L'analyse d'un répertoire de release prend quelques secondes.
+**Analyse Erlang et BEAM:** Cartographie les exports, imports et atomes depuis les fichiers .beam de bytecode, afin que les appels dangereux comme `os:cmd` et `code:load_binary` soient visibles sans exécuter le release.
 
-**Déchiffrement**
-- **Entropy Mapper:** Les sections binaires contenant des données chiffrées ou compressées semblent statistiquement aléatoires. Entropy Mapper mesure cette aléatoire sur l'ensemble du fichier et signale les régions qui méritent attention.
-- **Crypto Audit:** Analyse le binaire à la recherche de constantes cryptographiques, de signatures d'algorithmes connus et de matériel de clé, pour savoir ce que le code fait réellement avec les données avant d'en lire une seule ligne.
-- **XorSolver:** Le chiffrement XOR est courant dans les firmwares parce qu'il est rapide et trivial à implémenter. XorSolver retrouve la clé et déchiffre la section pour que le contenu réel devienne lisible.
-- **BmpKeyExtractor:** Certains firmwares et APKs fractionnent les clés secrètes en parts cachées dans des fichiers image plutôt que dans des sections de données, parce que les assets image font l'objet de moins de scrutin. BmpKeyExtractor localise et réassemble ces parts.
-- **ELFVtableReconstructor:** Dans une bibliothèque partagée, la vtable est vide sur le disque et n'est remplie par l'OS qu'au chargement. ELFVtableReconstructor lit les instructions de relocalisation que l'OS utiliserait et reconstruit la table statiquement, pour voir quelle fonction occupe quel slot sans exécuter le binaire.
-- **VtableDispatchScanner:** Avoir une entrée dans la vtable ne signifie pas que du code l'appelle. VtableDispatchScanner cherche dans le binaire chaque endroit où une méthode virtuelle est réellement appelée, pour distinguer les slots atteignables des slots en code mort que rien ne déclenche jamais.
+**Analyse cryptographique**
+
+Ablation supprime chaque couche qui rend la cryptographie invisible dans un binaire compilé. Entropy Mapper localise la région chiffrée. Crypto Audit et HashAlgoDiscriminator identifient l'algorithme. XorSolver, BmpKeyExtractor et CustomCBCDetector cassent le chiffrement ou récupèrent la clé. ELFVtableReconstructor et VtableDispatchScanner reconstruisent ce que le runtime fait avec le résultat.
+
+Un binaire peut cacher sa crypto à l'analyse de la table d'importation, aux tables de symboles et à la recherche de chaînes. Ces huit outils comblent collectivement cette lacune, de sorte qu'à la fin vous connaissez l'algorithme, la clé et le texte chiffré.
 
 ---
 
