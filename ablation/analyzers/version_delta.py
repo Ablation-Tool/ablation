@@ -630,29 +630,12 @@ class FuncMatcher:
     _WHITEN_MIN_N    = 50      # minimum candidates to fit whitening transform
     _WHITEN_SAMPLE_N = 1000   # max candidates sampled to fit transform (performance)
 
-    def __init__(self, semantic_searcher=None, model=None):
+    def __init__(self, semantic_searcher=None):
         self._sem = semantic_searcher
-        self._model_override = model  # SentenceTransformer passed directly (e.g. ZIM-BERT)
         self._whitening = None   # fitted WhiteningTransform, built per find_homolog call
 
-    @classmethod
-    def with_zimbert(cls, semantic_searcher=None, model_path=None):
-        """Return a VersionDelta that uses ZIM-BERT for semantic scoring.
-
-        Loads from ~/ablation/models/zimbert_lina_v1 by default. Pass a
-        SemanticSearcher for the rest of the pipeline; the model override
-        replaces only the encoder used in _build_whitening and _semantic_score.
-        """
-        from sentence_transformers import SentenceTransformer
-        import os
-        path = model_path or os.path.expanduser("~/ablation/models/zimbert_lina_v1")
-        m = SentenceTransformer(path, device='cpu')
-        return cls(semantic_searcher=semantic_searcher, model=m)
-
     def _get_encoder(self):
-        """Return the active SentenceTransformer: explicit override → searcher → None."""
-        if self._model_override is not None:
-            return self._model_override
+        """Return the active SentenceTransformer, or None if no searcher is set."""
         if self._sem is not None:
             return self._sem._get_model()
         return None
@@ -883,36 +866,11 @@ class VersionTracker:
         binaries: dict[str, str],
         semantic_searcher=None,
         angr_load_options: Optional[dict] = None,
-        model=None,
     ):
         self._binaries   = binaries          # {version_str: binary_path}
-        self._matcher    = FuncMatcher(semantic_searcher, model=model)
+        self._matcher    = FuncMatcher(semantic_searcher)
         self._load_opts  = angr_load_options or {'auto_load_libs': False}
         self._cfg_cache: dict[str, object] = {}
-
-    @classmethod
-    def with_zimbert(
-        cls,
-        binaries: dict[str, str],
-        semantic_searcher=None,
-        angr_load_options: Optional[dict] = None,
-        model_path: Optional[str] = None,
-    ) -> "VersionTracker":
-        """Return a VersionTracker that uses ZIM-BERT for semantic scoring.
-
-        Scope: lina x86-64 VersionDelta. zimbert_lina_v1 degrades on
-        out-of-distribution targets — do not use for non-lina binaries.
-        """
-        from sentence_transformers import SentenceTransformer
-        import os
-        path = model_path or os.path.expanduser("~/ablation/models/zimbert_lina_v1")
-        m = SentenceTransformer(path, device='cpu')
-        return cls(
-            binaries=binaries,
-            semantic_searcher=semantic_searcher,
-            angr_load_options=angr_load_options,
-            model=m,
-        )
 
     def _load_cfg(self, binary_path: str):
         """Load angr project and CFGFast, cached by path."""
