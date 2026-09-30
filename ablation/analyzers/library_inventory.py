@@ -27,11 +27,12 @@ Usage:
 
 Security score (0-10):
     +3  credential-field format strings found (sk=%s, password=%s, token=%s …)
-    +2  general crypto-primitive strings found (AES, HMAC, SHA256, RSA …)
+    +2  credential-field name alone, or exec/command sink strings found
+    +1  crypto-primitive strings found (AES, HMAC, SHA256, RSA …)
     +2  JNI count >= 50 (large attack surface)
     +1  JNI count >= 10
     +1  internal function count >= 200
-    +1  command/exec strings found (system(, popen(, exec() …)
+    +1  internal function count >= 1000 (extra)
 
 Strings are matched against two corpora:
     CRED_PATTERNS   — credential field names followed by = or : or %
@@ -110,7 +111,6 @@ _CRYPTO_PATTERNS: List[re.Pattern] = [
         r'\bDTLS\b',
         r'\bSTUN\b',
         r'\bPPCS\b',                    # PPCS P2P auth (IoT cameras)
-        r'\bppcs\b',
         r'(?:HMAC|MD5|SHA)\s*=',        # hash value assignment
     ]
 ]
@@ -165,26 +165,27 @@ def _is_fp(s: str) -> bool:
     return any(fp in sl for fp in _KNOWN_FP_LOWER)
 
 
-def _score_string(s: str) -> int:
-    """Return 0 (no match), 1 (crypto), 2 (credential), or 3 (cred+format specifier)."""
+def _classify_string(s: str) -> tuple:
+    """Return (score, tag) where tag is one of [CRED+FMT]/[CRED]/[EXEC]/[CRYPTO]/''."""
     if _is_fp(s):
-        return 0
-    # Credential match — highest score
+        return 0, ''
     for pat in _CRED_PATTERNS:
         if pat.search(s):
-            # Extra point if immediately followed by a format specifier
             if re.search(r'[=:%]\s*%[sd]', s, re.IGNORECASE):
-                return 3
-            return 2
-    # Exec patterns — score 2
+                return 3, '[CRED+FMT]'
+            return 2, '[CRED]'
     for pat in _EXEC_PATTERNS:
         if pat.search(s):
-            return 2
-    # Crypto patterns — score 1
+            return 2, '[EXEC]'
     for pat in _CRYPTO_PATTERNS:
         if pat.search(s):
-            return 1
-    return 0
+            return 1, '[CRYPTO]'
+    return 0, ''
+
+
+def _score_string(s: str) -> int:
+    """Return 0 (no match), 1 (crypto), 2 (credential/exec), or 3 (cred+format specifier)."""
+    return _classify_string(s)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -215,12 +216,12 @@ def _elf_arch(data: bytes) -> str:
 # Internal function counter (ARM64 only — BL-target enumeration)
 # ---------------------------------------------------------------------------
 
-def _count_internal_arm64(data: bytes) -> int:
+def _count_internal_arm64(data: bytes, binary=None) -> int:
     """Count ARM64 BL targets inside .text that are not in the export set."""
     if not _LIEF_OK:
         return -1
     try:
-        b = _lief.parse(data)
+        b = binary if binary is not None else _lief.parse(data)
     except Exception:
         return -1
     if not b or not isinstance(b, _lief.ELF.Binary):
@@ -249,7 +250,7 @@ def _count_internal_arm64(data: bytes) -> int:
 # Rodata string extractor
 # ---------------------------------------------------------------------------
 
-def _extract_strings(data: bytes, min_len: int = 6) -> List[str]:
+def _extract_strings(data: bytes, min_len: int = 6, binary=None) -> List[str]:
     """Extract printable ASCII strings from .rodata (and .data.rel.ro)."""
     if not _LIEF_OK:
         # Fallback: scan whole file for printable runs
@@ -266,7 +267,7 @@ def _extract_strings(data: bytes, min_len: int = 6) -> List[str]:
                 i = start + 1
         return result
     try:
-        b = _lief.parse(data)
+        b = binary if binary is not None else _lief.parse(data)
     except Exception:
         return []
     if not b or not isinstance(b, _lief.ELF.Binary):
@@ -365,29 +366,37 @@ class LibraryInventory:
         data = p.read_bytes()
         arch = _elf_arch(data)
 
+        # Parse once; share across all three uses below
+        _binary = None
+        if _LIEF_OK:
+            try:
+                _binary = _lief.parse(data)
+                if not isinstance(_binary, _lief.ELF.Binary):
+                    _binary = None
+            except Exception:
+                pass
+
         # Exports and JNI counts
         exports = 0
         jni = 0
         has_jni_on_load = False
-        if _LIEF_OK:
+        if _binary is not None:
             try:
-                b = _lief.parse(data)
-                if b and isinstance(b, _lief.ELF.Binary):
-                    syms = [s for s in b.dynamic_symbols if s.value != 0]
-                    exports = len(syms)
-                    for s in syms:
-                        if s.name.startswith('Java_'):
-                            jni += 1
-                        if s.name == 'JNI_OnLoad':
-                            has_jni_on_load = True
+                syms = [s for s in _binary.dynamic_symbols if s.value != 0]
+                exports = len(syms)
+                for s in syms:
+                    if s.name.startswith('Java_'):
+                        jni += 1
+                    if s.name == 'JNI_OnLoad':
+                        has_jni_on_load = True
             except Exception:
                 pass
 
         # Internal function count (ARM64 only)
-        internal = _count_internal_arm64(data) if arch == 'arm64' else -1
+        internal = _count_internal_arm64(data, binary=_binary) if arch == 'arm64' else -1
 
         # Security strings
-        all_strings = _extract_strings(data)
+        all_strings = _extract_strings(data, binary=_binary)
         scored: List[tuple] = []
         for s in all_strings:
             sc = _score_string(s)
@@ -523,7 +532,8 @@ class LibraryInventory:
             return f"{entry.filename}: no security strings found"
         lines = [f"{entry.filename} security strings ({entry.security_score}/10):"]
         for s in entry.security_strings:
-            sc = max((_score_string(s),), default=0)[0]
-            tag = {3: '[CRED+FMT]', 2: '[CRED]', 1: '[CRYPTO]'}.get(sc, '[?]')
+            _sc, tag = _classify_string(s)
+            if not tag:
+                tag = '[?]'
             lines.append(f"  {tag:12}  {s[:100]}")
         return "\n".join(lines)
