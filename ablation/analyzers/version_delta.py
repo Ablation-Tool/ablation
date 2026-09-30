@@ -883,11 +883,36 @@ class VersionTracker:
         binaries: dict[str, str],
         semantic_searcher=None,
         angr_load_options: Optional[dict] = None,
+        model=None,
     ):
         self._binaries   = binaries          # {version_str: binary_path}
-        self._matcher    = FuncMatcher(semantic_searcher)
+        self._matcher    = FuncMatcher(semantic_searcher, model=model)
         self._load_opts  = angr_load_options or {'auto_load_libs': False}
         self._cfg_cache: dict[str, object] = {}
+
+    @classmethod
+    def with_zimbert(
+        cls,
+        binaries: dict[str, str],
+        semantic_searcher=None,
+        angr_load_options: Optional[dict] = None,
+        model_path: Optional[str] = None,
+    ) -> "VersionTracker":
+        """Return a VersionTracker that uses ZIM-BERT for semantic scoring.
+
+        Scope: lina x86-64 VersionDelta. zimbert_lina_v1 degrades on
+        out-of-distribution targets — do not use for non-lina binaries.
+        """
+        from sentence_transformers import SentenceTransformer
+        import os
+        path = model_path or os.path.expanduser("~/ablation/models/zimbert_lina_v1")
+        m = SentenceTransformer(path, device='cpu')
+        return cls(
+            binaries=binaries,
+            semantic_searcher=semantic_searcher,
+            angr_load_options=angr_load_options,
+            model=m,
+        )
 
     def _load_cfg(self, binary_path: str):
         """Load angr project and CFGFast, cached by path."""

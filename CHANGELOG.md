@@ -2,6 +2,14 @@
 
 ---
 
+## v2.14.5
+
+- **ZIM-BERT integration in `VersionTracker`** (`analyzers/version_delta.py`):
+  `VersionTracker.with_zimbert(binaries, ...)` classmethod loads `zimbert_lina_v1` and
+  passes it through to `FuncMatcher` via the new `model=` parameter on `VersionTracker.__init__`.
+  Engagement-level code can now activate ZIM-BERT in one call without manually instantiating
+  `FuncMatcher`. Scope: lina x86-64 only; degrades on OOD targets.
+
 ## v2.14.4
 
 - **ZIM-BERT integration in `FuncMatcher`** (`analyzers/version_delta.py`):

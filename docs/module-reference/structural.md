@@ -244,29 +244,39 @@ SemanticSearcher so no extra download is needed.
 Use `evaluate_separation()` to measure ratio before and after any training run. Do not swap
 in a new model unless it beats the current checkpoint's ratio on the same eval set.
 
-### Using ZIM-BERT with FuncMatcher
+### Using ZIM-BERT with VersionTracker and FuncMatcher
 
-A trained ZIM-BERT model can be used as the semantic encoder in `FuncMatcher` (Stage 3 of
-the homolog-finding pipeline). Use the `with_zimbert()` classmethod to load the lina-specific
-model and wire it in:
+A trained ZIM-BERT model replaces the Stage 3 semantic encoder in both `VersionTracker` and
+`FuncMatcher`. Use the `with_zimbert()` classmethod on whichever class you instantiate:
+
+```python
+from ablation.analyzers.version_delta import VersionTracker
+
+# Engagement-level: track lina homologs across versions with ZIM-BERT
+tracker = VersionTracker.with_zimbert(
+    binaries={
+        '9.12.4': '/path/to/lina_9.12.4',
+        '9.14.1': '/path/to/lina_9.14.1',
+    }
+)
+reports = tracker.track(seed_binary='9.12.4', seed_va=0x4a1234)
+```
 
 ```python
 from ablation.analyzers.version_delta import FuncMatcher
 
-# Load ZIM-BERT from the standard path and use it for semantic scoring
+# Lower-level: use ZIM-BERT in a single FuncMatcher call
 matcher = FuncMatcher.with_zimbert()
-
-# Custom path or pre-loaded model
-from sentence_transformers import SentenceTransformer
-m = SentenceTransformer('~/ablation/models/zimbert_lina_v1')
-matcher = FuncMatcher(model=m)
+match = matcher.find_homolog(seed_func, target_funcs)
 ```
 
-**Scope note:** The current `zimbert_lina_v1` checkpoint was trained on Cisco lina (x86-64,
-9.12.x). It improves separation on lina-family binaries. It degrades on out-of-distribution
-targets (e.g., libips DoS patterns — C17 dcerpc: rank 158 → 1225, an 8x regression). Do not
-use it as a general-purpose `SemanticSearcher` replacement. Use it for `FuncMatcher` on lina
-VersionDelta tasks.
+Both classmethods load from `~/ablation/models/zimbert_lina_v1` by default. Pass
+`model_path=` to override.
+
+**Scope note:** `zimbert_lina_v1` was trained on Cisco lina (x86-64, 9.12.x). It improves
+separation on lina-family binaries (2.521x vs 2.248x baseline). It degrades on
+out-of-distribution targets (C17 dcerpc on libips.so: rank 158 → 1225, 8x regression). Do not
+use it as a general-purpose `SemanticSearcher` replacement. Use it for lina VersionDelta tasks.
 
 ---
 
