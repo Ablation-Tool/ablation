@@ -10,7 +10,7 @@ Claude Code veya OpenAI Codex ile birleştirildiğinde tam otonom bir tersine m�
 
 ---
 
-![Codex demosu](../../../assets/codex-demo.gif)
+![Codex demosu](../../../assets/screencast-2026-09-30.gif)
 
 ## Özellikler
 
@@ -40,9 +40,9 @@ Bir binary kriptosunu import tablosu analizinden, sembol tablolarından ve strin
 
 ## Gerçek Dünya Sonuçları
 
-Ablation, Fortinet, Cisco, Juniper, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio ve Dahua Security System'den üretim firmware'lerini ve çekirdek sürücülerini analiz etmek için kullanılmıştır.
+Ablation, Cisco, Fortinet, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System ve Tuya'dan üretim firmware'lerini ve çekirdek sürücülerini analiz etmek için kullanılmıştır.
 
-Cisco FMC ve ISE'de koordineli açıklama sonrasında, Cisco Ürün Güvenliği Olay Müdahale Ekibi (PSIRT), dahili güvenlik açığı önceliklendirilmesi için Ablation'ı benimsedi. Cisco PSIRT, Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex ve Catalyst genelinde devam eden açıklama raporlarını önceliklendirmek için aktif olarak kullanmaktadır. Cisco ASA LINA da Ablation kullanılarak tersine mühendislik uygulanmıştır.
+Cisco FMC ve ISE'de koordineli açıklama sonrasında, Cisco Ürün Güvenliği Olay Müdahale Ekibi (PSIRT), dahili güvenlik açığı önceliklendirilmesi için Ablation'ı benimsedi. Cisco PSIRT, Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex ve Catalyst genelinde devam eden açıklama raporlarını önceliklendirmek için aktif olarak kullanmaktadır. Cisco Adaptive Security Appliance (ASA) LINA da Ablation kullanılarak tersine mühendislik uygulanmış olup bulgular şu anda CERT/CC VINCE aracılığıyla koordineli triaj altındadır.
 
 | CVE | Ürün | Başlık | CVSS | Danışma Belgesi |
 |---|---|---|---|---|
