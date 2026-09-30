@@ -10,7 +10,7 @@ Claude Code या OpenAI Codex के साथ मिलाने पर य�
 
 ---
 
-![Codex डेमो](../../../assets/codex-demo.gif)
+![Codex डेमो](../../../assets/screencast-2026-09-30.gif)
 
 ## क्षमताएं
 
@@ -40,9 +40,9 @@ Ablation हर उस परत को हटा देता है जो क
 
 ## वास्तविक परिणाम
 
-Ablation का उपयोग Fortinet, Cisco, Juniper, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio और Dahua Security System के प्रोडक्शन फर्मवेयर और कर्नेल ड्राइवरों के विश्लेषण में किया गया है।
+Ablation का उपयोग Cisco, Fortinet, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System और Tuya के प्रोडक्शन फर्मवेयर और कर्नेल ड्राइवरों के विश्लेषण में किया गया है।
 
-Cisco FMC और ISE पर समन्वित प्रकटीकरण के बाद, Cisco Product Security Incident Response Team (PSIRT) ने आंतरिक भेद्यता ट्राइएज के लिए Ablation अपनाया है। Cisco PSIRT इसे Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex और Catalyst पर चल रही डिस्क्लोजर रिपोर्ट ट्राइएज करने में सक्रिय रूप से उपयोग कर रहा है। Cisco ASA LINA को भी Ablation से रिवर्स इंजीनियर किया गया है।
+Cisco FMC और ISE पर समन्वित प्रकटीकरण के बाद, Cisco Product Security Incident Response Team (PSIRT) ने आंतरिक भेद्यता ट्राइएज के लिए Ablation अपनाया है। Cisco PSIRT इसे Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex और Catalyst पर चल रही डिस्क्लोजर रिपोर्ट ट्राइएज करने में सक्रिय रूप से उपयोग कर रहा है। Cisco Adaptive Security Appliance (ASA) LINA को भी Ablation का उपयोग करके रिवर्स इंजीनियर किया गया है, और निष्कर्ष वर्तमान में CERT/CC VINCE के माध्यम से समन्वित ट्राइएज के अंतर्गत हैं।
 
 | CVE | उत्पाद | शीर्षक | CVSS | सलाह |
 |---|---|---|---|---|

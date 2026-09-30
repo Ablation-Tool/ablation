@@ -10,7 +10,7 @@ Claude Code 또는 OpenAI Codex와 결합하면 완전 자율 리버스 엔지�
 
 ---
 
-![Codex 데모](../../../assets/codex-demo.gif)
+![Codex 데모](../../../assets/screencast-2026-09-30.gif)
 
 ## 기능
 
@@ -40,7 +40,7 @@ Ablation은 컴파일된 바이너리에서 암호화를 보이지 않게 만드
 
 ## 실제 결과
 
-Ablation은 Fortinet, Cisco, Juniper, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Dahua Security System의 프로덕션 펌웨어와 커널 드라이버를 분석하는 데 사용되었습니다.
+Ablation은 Cisco, Fortinet, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System, Tuya의 프로덕션 펌웨어와 커널 드라이버를 분석하는 데 사용되었습니다.
 
 Cisco FMC와 ISE에 대한 조율된 공개 이후, Cisco 제품 보안 사고 대응팀(PSIRT)은 내부 취약점 분류를 위해 Ablation을 채택했습니다. Cisco PSIRT는 Firepower Threat Defense(FTD), Cisco Secure Client(AnyConnect), HyperFlex, Catalyst에 걸쳐 진행 중인 공개 보고서를 분류하는 데 적극적으로 사용하고 있습니다. Cisco Adaptive Security Appliance(ASA) LINA도 Ablation으로 리버스 엔지니어링되었으며, 현재 CERT/CC VINCE를 통해 조율된 분류 중입니다.
 

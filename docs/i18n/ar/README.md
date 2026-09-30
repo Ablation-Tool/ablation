@@ -10,7 +10,7 @@ Ablation هو إطار عمل للهندسة العكسية يوفر نفس قد
 
 ---
 
-![عرض Codex](../../../assets/codex-demo.gif)
+![عرض Codex](../../../assets/screencast-2026-09-30.gif)
 
 ## القدرات
 
@@ -40,7 +40,7 @@ Ablation هو إطار عمل للهندسة العكسية يوفر نفس قد
 
 ## نتائج حقيقية
 
-استُخدم Ablation لتحليل البرامج الثابتة الإنتاجية ومشغلات kernel من Fortinet وCisco وJuniper وAxis وFujitsu وMikroTik وOrka وTencentOS وEnigma2 وSkydio وDahua Security System.
+استُخدم Ablation لتحليل البرامج الثابتة الإنتاجية ومشغلات kernel من Cisco وFortinet وJuniper وApple MacOS وMicrosoft Windows وFujitsu وMikroTik وOrka وTencentOS وEnigma2 وSkydio وAxis Communications وDahua Security System وTuya.
 
 في أعقاب الإفصاح المنسق عن Cisco FMC وISE، اعتمد فريق Cisco Product Security Incident Response Team (PSIRT) برنامج Ablation للفرز الداخلي للثغرات. يستخدمه Cisco PSIRT بنشاط لفرز تقارير الإفصاح الجارية في Firepower Threat Defense (FTD) وCisco Secure Client (AnyConnect) وHyperFlex وCatalyst. كما خضع Cisco Adaptive Security Appliance (ASA) LINA للهندسة العكسية باستخدام Ablation، مع اكتشافات قيد الفرز المنسق حالياً عبر CERT/CC VINCE.
 
@@ -87,7 +87,6 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 - Python >= 3.10
 - `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
-- اختياري: `anthropic` لميزات LLM
 
 ---
 

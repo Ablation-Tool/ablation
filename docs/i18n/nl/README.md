@@ -10,7 +10,7 @@ Gecombineerd met Claude Code of OpenAI Codex wordt het een volledig autonoom rev
 
 ---
 
-![Codex demo](../../../assets/codex-demo.gif)
+![Codex demo](../../../assets/screencast-2026-09-30.gif)
 
 ## Mogelijkheden
 
@@ -40,9 +40,9 @@ Een binary kan zijn crypto verbergen voor import-tabelanalyse, symbooltabellen e
 
 ## Praktijkresultaten
 
-Ablation is gebruikt om productiefirmware en kernelstuurprogramma's van Fortinet, Cisco, Juniper, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio en Dahua Security System te analyseren.
+Ablation is gebruikt om productiefirmware en kernelstuurprogramma's van Cisco, Fortinet, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System en Tuya te analyseren.
 
-Na gecoördineerde openbaarmaking over Cisco FMC en ISE heeft het Cisco Product Security Incident Response Team (PSIRT) Ablation geadopteerd voor interne kwetsbaarheids-triage. Cisco PSIRT gebruikt het actief om lopende openbaarmakingsrapporten over Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex en Catalyst te triageren. Cisco ASA LINA is ook reverse engineered met Ablation.
+Na gecoördineerde openbaarmaking over Cisco FMC en ISE heeft het Cisco Product Security Incident Response Team (PSIRT) Ablation geadopteerd voor interne kwetsbaarheids-triage. Cisco PSIRT gebruikt het actief om lopende openbaarmakingsrapporten over Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex en Catalyst te triageren. Cisco Adaptive Security Appliance (ASA) LINA is ook reverse engineered met Ablation, met bevindingen die momenteel onder gecoördineerde triage zijn via CERT/CC VINCE.
 
 | CVE | Product | Titel | CVSS | Beveiligingsbulletin |
 |---|---|---|---|---|
