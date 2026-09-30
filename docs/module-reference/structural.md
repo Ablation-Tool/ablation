@@ -153,6 +153,123 @@ calls -- resolves `BLR xN` sites to their concrete target function sets.
 
 ---
 
+## Cross-Version Fine-Tuning (ZIM-BERT)
+
+**File:** `ablation/analyzers/version_delta_finetune.py`
+
+Self-supervised fine-tuning for cross-version binary similarity. When MiniLM-L6-v2 collapses
+stripped binary function descriptions to the same embedding neighborhood — every function gets
+cosine > 0.65 against every other regardless of size or behavior — this module bootstraps
+better separation from structural signal that already works.
+
+The problem is concrete: opcode n-gram descriptions like `push sub mov call ret` are nearly
+universal. The semantic layer has nothing to distinguish functions with different behaviors but
+the same instruction mix. The fix is to build ground-truth homolog pairs from Jaccard
+similarity on PLT call sets, then fine-tune on those pairs.
+
+### Standard fine-tuning
+
+```python
+from ablation.analyzers.version_delta_finetune import (
+    FunctionMeta, generate_structural_pairs, finetune_model, evaluate_separation
+)
+
+# Build FunctionMeta objects from your two binary versions
+corpus_a = [FunctionMeta(va=..., n_insns=..., calls=[...], desc=...) for ...]
+corpus_b = [FunctionMeta(va=..., n_insns=..., calls=[...], desc=...) for ...]
+
+train_pairs, eval_pairs = generate_structural_pairs(corpus_a, corpus_b)
+model = finetune_model(train_pairs, eval_pairs, output_path='~/ablation/models/mymodel')
+
+# Measure separation quality
+results = evaluate_separation(model, homolog_pairs, nonhomolog_pairs)
+print(f"separation ratio: {results['separation_ratio']:.3f}x")  # target: > 1.30
+```
+
+**When to use:** You have two builds of the same binary and want to improve VersionDelta's
+semantic tiebreaker for that specific product family. The fine-tuned model trains PLT call
+pattern → embedding alignment that vanilla MiniLM never learned.
+
+### ZIM-BERT distillation
+
+ZIM-BERT extends the standard training with mpnet teacher knowledge. It adds two losses on
+top of MultipleNegativesRankingLoss:
+
+**L_KL_output** — KL divergence on batch pairwise cosine similarity distributions. The
+teacher (mpnet, 768-dim) has already learned which functions are similar across a wide
+firmware corpus. Forcing the student's similarity structure to match the teacher's pulls the
+student away from the opcode-collapse attractor.
+
+**L_value** — MSE on value projection vectors from corresponding encoder layers. Teacher
+layers {0,2,4,6,8,10} map to student layers {0,1,2,3,4,5}. Value vectors encode what
+information each attention head selects from the input; matching them transfers the teacher's
+attention routing to the student without requiring identical architecture depth.
+
+```
+L_total = L_MNR + 10.0 * L_KL_output + 0.5 * L_value
+```
+
+```python
+from ablation.analyzers.version_delta_finetune import zimbert_finetune, evaluate_separation
+
+model = zimbert_finetune(
+    train_pairs=train_pairs,
+    eval_pairs=eval_pairs,
+    teacher_name='sentence-transformers/all-mpnet-base-v2',   # default
+    student_name='sentence-transformers/all-MiniLM-L6-v2',    # default
+    output_path='~/ablation/models/zimbert_v1',
+    alpha=10.0,   # weight for L_KL_output
+    beta=0.5,     # weight for L_value
+    epochs=4,
+    batch_size=16,
+    device='cpu',
+)
+
+results = evaluate_separation(model, homolog_pairs, nonhomolog_pairs)
+print(f"separation ratio: {results['separation_ratio']:.3f}x")
+```
+
+**When to use:** You have enough training pairs (500+) and want to squeeze additional
+separation improvement on top of standard fine-tuning. The mpnet teacher is already cached by
+SemanticSearcher so no extra download is needed.
+
+### Separation ratio target
+
+| Model | Separation ratio | Notes |
+|---|---|---|
+| Vanilla MiniLM-L6-v2 | ~1.26x | baseline, no fine-tuning |
+| Fine-tuned (standard) | ~1.35-1.60x | after structural pair training |
+| ZIM-BERT | measured per run | compare against fine-tuned baseline |
+
+Use `evaluate_separation()` to measure ratio before and after any training run. Do not swap
+in a new model unless it beats the current checkpoint's ratio on the same eval set.
+
+### Using ZIM-BERT with FuncMatcher
+
+A trained ZIM-BERT model can be used as the semantic encoder in `FuncMatcher` (Stage 3 of
+the homolog-finding pipeline). Use the `with_zimbert()` classmethod to load the lina-specific
+model and wire it in:
+
+```python
+from ablation.analyzers.version_delta import FuncMatcher
+
+# Load ZIM-BERT from the standard path and use it for semantic scoring
+matcher = FuncMatcher.with_zimbert()
+
+# Custom path or pre-loaded model
+from sentence_transformers import SentenceTransformer
+m = SentenceTransformer('~/ablation/models/zimbert_lina_v1')
+matcher = FuncMatcher(model=m)
+```
+
+**Scope note:** The current `zimbert_lina_v1` checkpoint was trained on Cisco lina (x86-64,
+9.12.x). It improves separation on lina-family binaries. It degrades on out-of-distribution
+targets (e.g., libips DoS patterns — C17 dcerpc: rank 158 → 1225, an 8x regression). Do not
+use it as a general-purpose `SemanticSearcher` replacement. Use it for `FuncMatcher` on lina
+VersionDelta tasks.
+
+---
+
 ## MatrixProfileDiff
 
 **File:** `ablation/analyzers/matrix_profile_diff.py`
