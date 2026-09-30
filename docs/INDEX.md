@@ -73,6 +73,7 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.15.0 | HashAlgoDiscriminator and CustomCBCDetector: ARM32 hash-algorithm identification and hand-rolled CBC detection from disassembly |
 | v2.14.3 | `BinaryContext` kernel-space VA fix: `_va_to_i64()` / `_va_arr_to_i64()` ctypes bit-cast helpers; 6 call sites fixed |
 | v2.14.1–2 | FindingRegistry/PatternLibrary flywheel hardening: 13 bugs fixed (thread safety, lock upgrade, tag filter, double-save, Unicode edge cases) |
 | v2.13.0 | ZIM-BERT distillation: teacher-student fine-tuning for cross-version binary similarity |

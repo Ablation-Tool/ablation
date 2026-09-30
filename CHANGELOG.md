@@ -2,6 +2,14 @@
 
 ---
 
+## v2.15.0
+
+- **`HashAlgoDiscriminator`** (`analyzers/crypto_pattern_detector.py`): identifies hash algorithms from K-table and round-constant values extracted via ARM32 Thumb2 disassembly. Handles MOVW/MOVT pairs and LDR-literal pool loads. Covers MD5 (64-entry K-table), SHA-1 (4 round constants), SHA-256 (8 init + 4 K constants), SHA-512 (unique lower-half constants for disambiguation), and CRC32. Returns per-algorithm confidence scores.
+
+- **`CustomCBCDetector`** (`analyzers/crypto_pattern_detector.py`): detects hand-rolled AES-128-CBC in ARM32 Thumb2 binaries without requiring symbol names or import tables. Scores four signals: BL inside a backward-branch loop (40 pts), 16-byte EOR/VEOR block (30 pts), MOV updating the LDRB base register (20 pts), pre-loop `.rodata` LDR (10 pts). Reports `CBCPattern` with confidence, block function VA, and chaining register when score >= 50.
+
+---
+
 ## v2.14.3
 
 - **`BinaryContext` kernel-space VA fix** (`analyzers/binary_context.py`):
