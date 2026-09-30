@@ -24,19 +24,17 @@ Dikombinasikan dengan Claude Code atau OpenAI Codex, ia menjadi alat rekayasa te
 
 **Audit Kode Sumber:** Audit codebase besar lebih cepat dari membaca secara linier, dengan akurasi lebih tinggi dari pencocokan pola saja. Setiap file sumber mendapat profil keamanan 5-bit yang menentukan persis berapa banyak perhatian yang dibutuhkan, sehingga tidak ada yang terlewat dan tidak ada yang dibaca dua kali.
 
-**Analisis Driver Kernel Windows dan BYOVD:** Memetakan tabel dispatch IRP, mendekode setiap kode IOCTL, dan mengidentifikasi API kernel mana yang mengekspos memori fisik dan token primitif dari mode pengguna. Detektor BYOVD mengambil sidik jari driver yang ditandatangani dengan kemampuan tersebut, karena satu driver yang ditandatangani saja cukup untuk membutakan EDR dari ring-0.
+**Analisis Driver Kernel Windows dan BYOVD:** Memindai driver kernel untuk menemukan titik masuk yang mengekspos memori sistem atau hak admin dari mode pengguna. Satu driver bertanda tangan dengan kemampuan tersebut cukup untuk menonaktifkan perangkat lunak keamanan endpoint.
 
 **Analisis Android/APK:** Membaca APK Android di tingkat biner tanpa dependensi. Memetakan titik masuk kode native dan permukaan IPC dari bytecode yang dikompilasi, sehingga seluruh permukaan terlihat tanpa dekompilasi.
 
-**Analisis Erlang/BEAM:** Erlang dikompilasi ke file .beam, dan pendekatan pemetaan permukaan yang sama yang digunakan untuk ELF berlaku langsung, sehingga pencarian atom, audit impor, dan deteksi obfuskasi tidak memerlukan penanganan khusus. Memindai direktori rilis membutuhkan waktu beberapa detik.
+**Analisis Erlang/BEAM:** Memetakan ekspor, impor, dan atom dari file bytecode .beam, sehingga panggilan berbahaya seperti `os:cmd` dan `code:load_binary` terlihat tanpa menjalankan release.
 
-**Dekripsi**
-- **Entropy Mapper:** Bagian binary yang berisi data terenkripsi atau terkompresi terlihat acak secara statistik. Entropy Mapper mengukur keacakan itu di seluruh file dan menandai wilayah yang layak diperiksa.
-- **Crypto Audit:** Memindai binary untuk konstanta kriptografi, tanda tangan algoritma yang dikenal, dan materi kunci sehingga Anda tahu apa yang sebenarnya dilakukan kode terhadap data sebelum membaca satu baris pun.
-- **XorSolver:** Enkripsi XOR umum di firmware karena cepat dan mudah diimplementasikan. XorSolver memulihkan kunci dan mendekripsi bagian tersebut sehingga konten aslinya dapat dibaca.
-- **BmpKeyExtractor:** Beberapa firmware dan APK membagi kunci rahasia menjadi bagian-bagian yang disembunyikan di file gambar daripada bagian data, karena aset gambar mendapat pengawasan yang lebih sedikit. BmpKeyExtractor menemukan dan merangkai ulang bagian-bagian itu.
-- **ELFVtableReconstructor:** Dalam shared library, vtable kosong di disk dan hanya diisi oleh OS saat dimuat. ELFVtableReconstructor membaca instruksi relokasi yang akan digunakan OS dan membangun kembali tabel secara statis, sehingga Anda dapat melihat fungsi mana yang ada di slot mana tanpa menjalankan binary.
-- **VtableDispatchScanner:** Memiliki entri vtable tidak berarti kode memanggilnya di suatu tempat. VtableDispatchScanner mencari di seluruh binary setiap tempat di mana metode virtual benar-benar dipanggil, sehingga Anda dapat membedakan slot yang dapat dijangkau dari dead code yang tidak pernah dipicu oleh apapun.
+**Analisis Kriptografi**
+
+Ablation menghapus setiap lapisan yang membuat kriptografi tidak terlihat dalam binary yang dikompilasi. Entropy Mapper menemukan wilayah terenkripsi. Crypto Audit dan HashAlgoDiscriminator mengidentifikasi algoritma. XorSolver, BmpKeyExtractor, dan CustomCBCDetector memecah enkripsi atau memulihkan kunci. ELFVtableReconstructor dan VtableDispatchScanner merekonstruksi apa yang dilakukan runtime dengan hasilnya.
+
+Sebuah binary dapat menyembunyikan kriptografinya dari analisis tabel impor, tabel simbol, dan pencarian string. Delapan alat ini secara kolektif menutup celah itu, sehingga pada akhirnya Anda mengetahui algoritma, kunci, dan ciphertext.
 
 ---
 

@@ -24,19 +24,17 @@ Combinado com Claude Code ou OpenAI Codex, se transforma em uma ferramenta de en
 
 **Auditoria de código-fonte:** Audita qualquer codebase grande mais rápido do que lendo linearmente, com maior precisão do que a correspondência de padrões sozinha. Cada arquivo fonte recebe um perfil de segurança de 5 bits que determina exatamente quanta atenção ele precisa, então nada é perdido e nada é lido duas vezes.
 
-**Análise de drivers do kernel do Windows e BYOVD:** Mapeia a tabela de despacho IRP, decodifica cada código IOCTL e identifica quais APIs do kernel expõem primitivas de memória física e de token a partir do modo usuário. O detector BYOVD identifica drivers assinados que carregam essas capacidades, porque um único driver assinado legítimo é suficiente para cegar o EDR a partir do ring-0.
+**Análise de drivers do kernel do Windows e BYOVD:** Verifica drivers do kernel em busca de pontos de entrada que expõem memória do sistema ou privilégios de administrador a partir do modo usuário. Um driver assinado com essas capacidades é suficiente para desabilitar o software de segurança de endpoint.
 
 **Análise de Android e APK:** Lê APKs Android no nível binário sem dependências. Mapeia pontos de entrada de código nativo e superfície IPC a partir do bytecode compilado, então a superfície completa é visível sem descompilar.
 
-**Análise de Erlang e BEAM:** Erlang compila para arquivos .beam, e a mesma abordagem de mapeamento de superfície usada para ELF se aplica diretamente, então a busca de átomos, auditoria de importações e detecção de ofuscação não precisam de tratamento especial. Varrer um diretório de release leva segundos.
+**Análise de Erlang e BEAM:** Mapeia exports, imports e átomos de arquivos de bytecode .beam, para que chamadas perigosas como `os:cmd` e `code:load_binary` sejam visíveis sem executar o release.
 
-**Decriptação**
-- **Entropy Mapper:** Seções de um binário que contêm dados cifrados ou comprimidos parecem estatisticamente aleatórias. Entropy Mapper mede essa aleatoriedade em todo o arquivo e sinaliza as regiões que merecem atenção.
-- **Crypto Audit:** Analisa o binário em busca de constantes criptográficas, assinaturas de algoritmos conhecidos e material de chave para saber o que o código está fazendo com os dados antes de ler uma única linha.
-- **XorSolver:** A criptografia XOR é comum em firmware porque é rápida e trivial de implementar. XorSolver recupera a chave e decripta a seção para que o conteúdo real seja legível.
-- **BmpKeyExtractor:** Alguns firmwares e APKs dividem chaves secretas em partes e as escondem em arquivos de imagem em vez de seções de dados, porque assets de imagem recebem menos escrutínio. BmpKeyExtractor localiza e remonta essas partes.
-- **ELFVtableReconstructor:** Em uma biblioteca compartilhada, a vtable está vazia no disco e só é preenchida pelo SO no carregamento. ELFVtableReconstructor lê as instruções de realocação que o SO usaria e reconstrói a tabela estaticamente, para ver qual função ocupa qual slot sem executar o binário.
-- **VtableDispatchScanner:** Ter uma entrada na vtable não significa que o código a chama em algum lugar. VtableDispatchScanner busca no binário cada lugar onde um método virtual é realmente chamado, para distinguir quais slots são alcançáveis e quais são código morto que nada jamais aciona.
+**Análise criptográfica**
+
+Ablation remove cada camada que torna a criptografia invisível em um binário compilado. Entropy Mapper localiza a região criptografada. Crypto Audit e HashAlgoDiscriminator identificam o algoritmo. XorSolver, BmpKeyExtractor e CustomCBCDetector quebram a criptografia ou recuperam a chave. ELFVtableReconstructor e VtableDispatchScanner reconstroem o que o runtime faz com o resultado.
+
+Um binário pode ocultar sua criptografia da análise de tabela de importações, de tabelas de símbolos e da busca de strings. Essas oito ferramentas coletivamente fecham essa lacuna, para que no final você conheça o algoritmo, a chave e o texto cifrado.
 
 ---
 

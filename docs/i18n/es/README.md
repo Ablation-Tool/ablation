@@ -24,19 +24,17 @@ Combinado con Claude Code u OpenAI Codex, se convierte en una herramienta de ing
 
 **Auditoría de código fuente:** Audita cualquier codebase grande más rápido que leyéndolo de forma lineal, con mayor precisión que la coincidencia de patrones sola. Cada archivo fuente recibe un perfil de seguridad de 5 bits que determina exactamente cuánta atención necesita, así que nada se pierde y nada se lee dos veces.
 
-**Análisis de drivers del kernel de Windows y BYOVD:** Mapea la tabla de despacho IRP, decodifica cada código IOCTL e identifica qué APIs del kernel exponen primitivas de memoria física y de token desde el modo usuario. El detector BYOVD toma huellas de drivers firmados que llevan esas capacidades, porque un solo driver firmado legítimo es suficiente para cegar a EDR desde ring-0.
+**Análisis de drivers del kernel de Windows y BYOVD:** Analiza drivers del kernel en busca de puntos de entrada que expongan memoria del sistema o privilegios de administrador desde el modo usuario. Un driver firmado con esas capacidades es suficiente para deshabilitar el software de seguridad de endpoints.
 
 **Análisis de Android y APK:** Lee APKs de Android al nivel binario sin dependencias. Mapea los puntos de entrada de código nativo y la superficie IPC desde el bytecode compilado, así que la superficie completa es visible sin descompilar.
 
-**Análisis de Erlang y BEAM:** Erlang compila a archivos .beam, y el mismo enfoque de mapeo de superficie usado para ELF aplica directamente, así que la búsqueda de átomos, la auditoría de importaciones y la detección de ofuscación no necesitan manejo especial. Analizar un directorio de release tarda segundos.
+**Análisis de Erlang y BEAM:** Mapea exportaciones, importaciones y átomos desde archivos .beam de bytecode, para que las llamadas peligrosas como `os:cmd` y `code:load_binary` sean visibles sin ejecutar el release.
 
-**Descifrado**
-- **Entropy Mapper:** Las secciones de un binario que contienen datos cifrados o comprimidos parecen estadísticamente aleatorias. Entropy Mapper mide esa aleatoriedad en todo el archivo y señala las regiones que vale la pena examinar.
-- **Crypto Audit:** Analiza el binario en busca de constantes criptográficas, firmas de algoritmos conocidos y material de claves, para saber qué está haciendo realmente el código con los datos antes de leer una sola línea.
-- **XorSolver:** El cifrado XOR es común en firmware porque es rápido y trivial de implementar. XorSolver recupera la clave y descifra la sección para que el contenido real sea legible.
-- **BmpKeyExtractor:** Algunos firmwares y APKs dividen las claves secretas en partes y las ocultan en archivos de imagen en lugar de secciones de datos, porque los assets de imagen reciben menos escrutinio. BmpKeyExtractor localiza y reensambla esas partes.
-- **ELFVtableReconstructor:** En una biblioteca compartida, la vtable está vacía en el disco y solo la rellena el SO al cargarla. ELFVtableReconstructor lee las instrucciones de reubicación que usaría el SO y reconstruye la tabla estáticamente, para ver qué función vive en qué slot sin ejecutar el binario.
-- **VtableDispatchScanner:** Tener una entrada en la vtable no significa que el código la llame en algún lugar. VtableDispatchScanner busca en el binario cada lugar donde se llama realmente a un método virtual, para distinguir qué slots son alcanzables y cuáles son código muerto que nada activa.
+**Análisis criptográfico**
+
+Ablation elimina cada capa que hace invisible la criptografía en un binario compilado. Entropy Mapper localiza la región cifrada. Crypto Audit y HashAlgoDiscriminator identifican el algoritmo. XorSolver, BmpKeyExtractor y CustomCBCDetector rompen el cifrado o recuperan la clave. ELFVtableReconstructor y VtableDispatchScanner reconstruyen lo que el runtime hace con el resultado.
+
+Un binario puede ocultar su criptografía del análisis de tabla de importaciones, de las tablas de símbolos y de la búsqueda de cadenas. Estas ocho herramientas cierran colectivamente esa brecha, para que al final conozcas el algoritmo, la clave y el texto cifrado.
 
 ---
 
