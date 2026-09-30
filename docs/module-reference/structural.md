@@ -237,12 +237,18 @@ SemanticSearcher so no extra download is needed.
 
 | Model | Separation ratio | Notes |
 |---|---|---|
-| Vanilla MiniLM-L6-v2 | ~1.26x | baseline, no fine-tuning |
-| Fine-tuned (standard) | ~1.35-1.60x | after structural pair training |
-| ZIM-BERT | measured per run | compare against fine-tuned baseline |
+| Vanilla MiniLM-L6-v2 (lina x86-64) | 2.248x | baseline on lina eval set |
+| ZIM-BERT lina v1 | 2.521x | trained on lina 9.12.4 x86-64; **do not use on other targets** |
+| Vanilla MiniLM-L6-v2 (FAP_221E ARM32) | 1.124x | baseline on FAP_221E eval set |
+| ZIM-BERT arm32 v1 | 1.083x | **REGRESSION** — do not deploy; training data too homogeneous (Jaccard mean=0.994) |
 
 Use `evaluate_separation()` to measure ratio before and after any training run. Do not swap
 in a new model unless it beats the current checkpoint's ratio on the same eval set.
+
+**ARM32 lesson:** ZIM-BERT training requires a corpus where Jaccard mean < 0.80. When two
+firmware versions are nearly identical (same codegen, minor patches), the KL divergence loss
+collapses nonhomolog separation. Use firmware versions that are at least one major release apart,
+or mix multiple products in the training corpus.
 
 ### Using ZIM-BERT with VersionTracker and FuncMatcher
 
