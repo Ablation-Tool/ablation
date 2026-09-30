@@ -2,6 +2,60 @@
 
 ---
 
+## v2.14.3
+
+- **`BinaryContext` kernel-space VA fix** (`analyzers/binary_context.py`):
+  `np.int64(va)` and `np.array([...], dtype=np.int64)` both raise `OverflowError` on kernel-space addresses (VA > 2^63−1, e.g. `0xffffffff81000000`). Added two module-level helpers: `_va_to_i64()` for scalar VAs and `_va_arr_to_i64()` for VA sequences. Both use `ctypes.c_int64` / `uint64.view(int64)` to bit-cast without value conversion. Fixed six call sites across the x86-64 call graph builder, ARM32 call graph builder, and string xref scanner.
+
+---
+
+## v2.14.2
+
+- **Flywheel hardening continued** (3 additional bugs fixed):
+  - `PatternLibrary._merge_new_defaults()`: fixed double `save()`. The redundant `if added: self.save()` before the unconditional call caused two disk writes when new defaults were added. Reduced to one unconditional call, which also handles the schema_version bump-only case.
+  - `PatternLibrary.list()`: `if tag:` replaced with `if tag is not None:`. Same class of bug as Bug 11 in `sweep()`. `list(tag="")` now filters to untagged patterns instead of showing all.
+  - `PatternLibrary.sweep()`: Bug 11 fix verified across 4 scenarios (empty list, None, real tag, nonexistent tag). Concurrent `add()` is GIL-safe in CPython. Lock is released correctly after an `AttributeError` from a duck-typed non-registry.
+
+## v2.14.1
+
+- **Flywheel hardening** (10 bugs fixed via adversarial test suite):
+  - `export_patterns()`: whitespace-only title no longer produces a leading `': '` in the query. Title is stripped before building the query string.
+  - `export_patterns()`: descriptions made entirely of non-printing Unicode (e.g. zero-width spaces `U+200B`) are rejected. They pass SQLite `TRIM()` and Python `str.strip()` but fail `isprintable()`.
+  - `export_patterns()`: `TRIM()` guard added to the WHERE clause so whitespace-only descriptions are excluded at the SQL level.
+  - `export_patterns()`: query string is stripped of leading and trailing whitespace.
+  - `PatternLibrary._load()`: a non-list `patterns` field no longer crashes on load. It falls back to defaults.
+  - `PatternLibrary.save()`: acquires `self._lock`. Without it, an external save call could race with `ingest_from_registry()` and overwrite its in-progress results.
+  - `PatternLibrary._lock`: upgraded from `threading.Lock` to `threading.RLock`. `ingest_from_registry()` holds the lock and calls `save()` internally. A plain Lock deadlocks on that path.
+  - `FindingRegistry.__init__`: `check_same_thread=False` added to the SQLite connection. `export_patterns()` can now be called from a thread other than the one that created the registry.
+  - `PatternLibrary._load()`: one broken pattern entry no longer wipes all valid patterns. Broken entries are skipped one at a time instead of triggering a full reset to defaults.
+  - `Pattern.from_dict()`: extra fields in stored `PatternHit` dicts are filtered before construction. An unknown field from a newer version caused an uncaught `TypeError`.
+  - `Pattern.from_dict()`: `PatternHit` entries with no `binary` field are skipped instead of crashing the parent `Pattern` load.
+
+## v2.14.0
+
+- **FindingRegistry flywheel** (`analyzers/finding_registry.py`, `analyzers/pattern_library.py`):
+  Confirmed findings now feed future sweeps automatically. `FindingRegistry.export_patterns()`
+  returns all confirmed findings as `{query, tag}` dicts tagged by CWE class.
+  `PatternLibrary.ingest_from_registry(reg)` consumes them, deduplicates, and saves. Call it
+  once at engagement start before `sweep()`. Idempotent: subsequent calls only add findings
+  registered since the last ingest. No hard coupling between modules; `PatternLibrary` accepts
+  any object with `export_patterns()`.
+
+---
+
+## v2.13.0
+
+- **ZIM-BERT distillation** (`analyzers/version_delta_finetune.py`): Teacher-student training
+  for cross-version binary similarity. `zimbert_finetune()` uses `all-mpnet-base-v2` as teacher
+  and `all-MiniLM-L6-v2` as student. Two auxiliary losses on top of MultipleNegativesRankingLoss:
+  L_KL_output (KL divergence on batch pairwise similarity distributions) forces the student's
+  similarity structure to match the teacher's; L_value (MSE on value projection vectors across
+  paired encoder layers) transfers the teacher's attention routing. Architecture-aware value
+  hooks handle both BERT and MPNet attention layouts. Standard fine-tuning entry point
+  (`finetune_model()`, `generate_structural_pairs()`) unchanged.
+
+---
+
 ## v2.12.0
 
 - **ELFVtableReconstructor** (`analyzers/elf_vtable_reconstructor.py`): Static C++ vtable
