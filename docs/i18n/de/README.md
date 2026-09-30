@@ -10,7 +10,7 @@ In Kombination mit Claude Code oder OpenAI Codex wird es zu einem autonomen Reve
 
 ---
 
-![Codex-Demo](../../../assets/codex-demo.gif)
+![Codex-Demo](../../../assets/screencast-2026-09-30.gif)
 
 ## Fähigkeiten
 
@@ -40,7 +40,7 @@ Ein Binary kann sein Krypto vor Import-Tabellen-Analyse, Symboltabellen und Stri
 
 ## Reale Ergebnisse
 
-Ablation wurde zur Analyse von Produktions-Firmware und Kerneltreibern von Fortinet, Cisco, Juniper, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio und Dahua Security System eingesetzt.
+Ablation wurde zur Analyse von Produktions-Firmware und Kerneltreibern von Cisco, Fortinet, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System und Tuya eingesetzt.
 
 Nach der koordinierten Offenlegung zu Cisco FMC und ISE hat das Cisco Product Security Incident Response Team (PSIRT) Ablation für die interne Schwachstellen-Triage übernommen. Cisco PSIRT nutzt es aktiv zur Triage laufender Offenlegungsberichte für Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex und Catalyst. Cisco Adaptive Security Appliance (ASA) LINA wurde ebenfalls mit Ablation einem Reverse Engineering unterzogen, wobei Erkenntnisse derzeit über CERT/CC VINCE koordiniert werden.
 
@@ -87,7 +87,6 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 - Python >= 3.10
 - `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
-- Optional: `anthropic` für LLM-Funktionen
 
 ---
 
