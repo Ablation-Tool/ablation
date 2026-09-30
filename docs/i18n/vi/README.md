@@ -24,19 +24,17 @@ Kết hợp với Claude Code hoặc OpenAI Codex, nó trở thành một công 
 
 **Kiểm toán mã nguồn:** Kiểm toán bất kỳ codebase lớn nào nhanh hơn đọc tuyến tính, với độ chính xác cao hơn so với chỉ khớp mẫu. Mỗi tệp nguồn nhận một hồ sơ bảo mật 5 bit xác định chính xác mức độ chú ý cần thiết, vì vậy không có gì bị bỏ qua và không có gì được đọc hai lần.
 
-**Phân tích driver kernel Windows và BYOVD:** Ánh xạ bảng dispatch IRP, giải mã mọi mã IOCTL và xác định API kernel nào phơi bày bộ nhớ vật lý và token primitives từ chế độ người dùng. BYOVD Detector lấy dấu vân tay các driver đã ký mang những khả năng đó, vì một driver đã ký hợp lệ duy nhất là đủ để làm mù EDR từ ring-0.
+**Phân tích driver kernel Windows và BYOVD:** Quét driver kernel để tìm các điểm vào phơi bày bộ nhớ hệ thống hoặc quyền quản trị từ chế độ người dùng. Một driver đã ký với những khả năng đó là đủ để vô hiệu hóa phần mềm bảo mật endpoint.
 
 **Phân tích Android/APK:** Đọc APK Android ở cấp độ nhị phân không có phụ thuộc. Ánh xạ các điểm vào mã native và bề mặt IPC từ bytecode đã biên dịch, vì vậy toàn bộ bề mặt hiển thị mà không cần dịch ngược.
 
-**Phân tích Erlang/BEAM:** Erlang biên dịch thành tệp .beam và cùng phương pháp ánh xạ bề mặt dùng cho ELF áp dụng trực tiếp, vì vậy tìm kiếm atom, kiểm toán import và phát hiện làm rối không cần xử lý đặc biệt. Quét thư mục phát hành mất vài giây.
+**Phân tích Erlang/BEAM:** Ánh xạ các export, import và atom từ các file bytecode .beam, vì vậy các lệnh gọi nguy hiểm như `os:cmd` và `code:load_binary` hiển thị mà không cần chạy release.
 
-**Giải mã**
-- **Entropy Mapper:** Các phần trong binary chứa dữ liệu được mã hóa hoặc nén trông có vẻ ngẫu nhiên về mặt thống kê. Entropy Mapper đo độ ngẫu nhiên đó trên toàn bộ file và đánh dấu các vùng đáng kiểm tra.
-- **Crypto Audit:** Quét binary để tìm hằng số mật mã, chữ ký thuật toán đã biết và tài liệu khóa để biết code thực sự làm gì với dữ liệu trước khi đọc một dòng nào.
-- **XorSolver:** Mã hóa XOR phổ biến trong firmware vì nhanh và dễ cài đặt. XorSolver phục hồi khóa và giải mã phần đó để nội dung thực có thể đọc được.
-- **BmpKeyExtractor:** Một số firmware và APK chia khóa bí mật thành từng phần và giấu trong các file ảnh thay vì các phần dữ liệu, vì tài nguyên ảnh ít bị chú ý hơn. BmpKeyExtractor tìm và ghép lại những phần đó.
-- **ELFVtableReconstructor:** Trong thư viện chia sẻ, vtable trống trên đĩa và chỉ được OS điền vào khi tải. ELFVtableReconstructor đọc các lệnh tái định vị mà OS sẽ sử dụng và xây dựng lại bảng theo cách tĩnh, giúp bạn thấy hàm nào nằm ở slot nào mà không cần chạy binary.
-- **VtableDispatchScanner:** Có một mục trong vtable không có nghĩa là code gọi nó ở đâu đó. VtableDispatchScanner tìm kiếm trong binary mọi nơi mà một phương thức ảo thực sự được gọi, để phân biệt slot nào có thể đến được và slot nào là dead code mà không có gì kích hoạt.
+**Phân tích mã hóa**
+
+Ablation loại bỏ mọi lớp khiến mật mã học không nhìn thấy trong binary đã biên dịch. Entropy Mapper tìm vùng được mã hóa. Crypto Audit và HashAlgoDiscriminator xác định thuật toán. XorSolver, BmpKeyExtractor và CustomCBCDetector phá vỡ mã hóa hoặc khôi phục khóa. ELFVtableReconstructor và VtableDispatchScanner tái cấu trúc những gì runtime làm với kết quả.
+
+Một binary có thể ẩn mã hóa của nó khỏi phân tích bảng import, bảng ký hiệu và tìm kiếm chuỗi. Tám công cụ này cùng nhau lấp đầy khoảng trống đó, để cuối cùng bạn biết thuật toán, khóa và văn bản mã hóa.
 
 ---
 
