@@ -10,7 +10,7 @@ Dikombinasikan dengan Claude Code atau OpenAI Codex, ia menjadi alat rekayasa te
 
 ---
 
-![Demo Codex](../../../assets/codex-demo.gif)
+![Demo Codex](../../../assets/screencast-2026-09-30.gif)
 
 ## Kemampuan
 
@@ -40,9 +40,9 @@ Sebuah binary dapat menyembunyikan kriptografinya dari analisis tabel impor, tab
 
 ## Hasil Nyata
 
-Ablation telah digunakan untuk menganalisis firmware produksi dan driver kernel dari Fortinet, Cisco, Juniper, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, dan Dahua Security System.
+Ablation telah digunakan untuk menganalisis firmware produksi dan driver kernel dari Cisco, Fortinet, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System, dan Tuya.
 
-Setelah pengungkapan terkoordinasi pada Cisco FMC dan ISE, Cisco Product Security Incident Response Team (PSIRT) telah mengadopsi Ablation untuk triase kerentanan internal. Cisco PSIRT secara aktif menggunakannya untuk mentriase laporan pengungkapan yang sedang berlangsung di Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex, dan Catalyst. Cisco ASA LINA juga telah direkayasa terbalik menggunakan Ablation.
+Setelah pengungkapan terkoordinasi pada Cisco FMC dan ISE, Cisco Product Security Incident Response Team (PSIRT) telah mengadopsi Ablation untuk triase kerentanan internal. Cisco PSIRT secara aktif menggunakannya untuk mentriase laporan pengungkapan yang sedang berlangsung di Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex, dan Catalyst. Cisco Adaptive Security Appliance (ASA) LINA juga telah direkayasa terbalik menggunakan Ablation, dengan temuan yang saat ini dalam triase terkoordinasi melalui CERT/CC VINCE.
 
 | CVE | Produk | Judul | CVSS | Advisory |
 |---|---|---|---|---|

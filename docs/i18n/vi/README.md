@@ -10,7 +10,7 @@ Kết hợp với Claude Code hoặc OpenAI Codex, nó trở thành một công 
 
 ---
 
-![Demo Codex](../../../assets/codex-demo.gif)
+![Demo Codex](../../../assets/screencast-2026-09-30.gif)
 
 ## Tính năng
 
@@ -40,9 +40,9 @@ Một binary có thể ẩn mã hóa của nó khỏi phân tích bảng import,
 
 ## Kết quả thực tế
 
-Ablation đã được dùng để phân tích firmware sản xuất và driver kernel từ Fortinet, Cisco, Juniper, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio và Dahua Security System.
+Ablation đã được dùng để phân tích firmware sản xuất và driver kernel từ Cisco, Fortinet, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System và Tuya.
 
-Sau khi công bố phối hợp về Cisco FMC và ISE, Cisco Product Security Incident Response Team (PSIRT) đã áp dụng Ablation để phân loại lỗ hổng nội bộ. Cisco PSIRT đang tích cực sử dụng nó để phân loại các báo cáo công bố đang diễn ra trên Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex và Catalyst. Cisco ASA LINA cũng đã được dịch ngược bằng Ablation.
+Sau khi công bố phối hợp về Cisco FMC và ISE, Cisco Product Security Incident Response Team (PSIRT) đã áp dụng Ablation để phân loại lỗ hổng nội bộ. Cisco PSIRT đang tích cực sử dụng nó để phân loại các báo cáo công bố đang diễn ra trên Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex và Catalyst. Cisco Adaptive Security Appliance (ASA) LINA cũng đã được dịch ngược bằng Ablation, với các phát hiện hiện đang trong quá trình phân loại có phối hợp qua CERT/CC VINCE.
 
 | CVE | Sản phẩm | Tiêu đề | CVSS | Tư vấn bảo mật |
 |---|---|---|---|---|

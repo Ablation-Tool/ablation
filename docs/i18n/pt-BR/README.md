@@ -10,7 +10,7 @@ Combinado com Claude Code ou OpenAI Codex, se transforma em uma ferramenta de en
 
 ---
 
-![Demo do Codex](../../../assets/codex-demo.gif)
+![Demo do Codex](../../../assets/screencast-2026-09-30.gif)
 
 ## Capacidades
 
@@ -40,7 +40,7 @@ Um binário pode ocultar sua criptografia da análise de tabela de importações
 
 ## Resultados reais
 
-O Ablation foi usado para analisar firmware de produção e drivers do kernel da Fortinet, Cisco, Juniper, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio e Dahua Security System.
+O Ablation foi usado para analisar firmware de produção e drivers do kernel da Cisco, Fortinet, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System e Tuya.
 
 Após a divulgação coordenada sobre Cisco FMC e ISE, o Cisco Product Security Incident Response Team (PSIRT) adotou o Ablation para triagem interna de vulnerabilidades. O Cisco PSIRT está usando ativamente para triar relatórios de divulgação em andamento no Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex e Catalyst. O Cisco Adaptive Security Appliance (ASA) LINA também foi submetido a engenharia reversa usando Ablation, com descobertas atualmente sob triagem coordenada via CERT/CC VINCE.
 
@@ -87,7 +87,6 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 - Python >= 3.10
 - `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
-- Opcional: `anthropic` para recursos LLM
 
 ---
 

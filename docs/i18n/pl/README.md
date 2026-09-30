@@ -10,7 +10,7 @@ W połączeniu z Claude Code lub OpenAI Codex staje się w pełni autonomicznym 
 
 ---
 
-![Demo Codex](../../../assets/codex-demo.gif)
+![Demo Codex](../../../assets/screencast-2026-09-30.gif)
 
 ## Możliwości
 
@@ -40,9 +40,9 @@ Plik binarny może ukryć swoją kryptografię przed analizą tabeli importów, 
 
 ## Wyniki w praktyce
 
-Ablation był używany do analizy oprogramowania układowego produkcyjnego i sterowników jądra od Fortinet, Cisco, Juniper, Axis, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio i Dahua Security System.
+Ablation był używany do analizy oprogramowania układowego produkcyjnego i sterowników jądra od Cisco, Fortinet, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System i Tuya.
 
-Po skoordynowanym ujawnieniu dotyczącym Cisco FMC i ISE, Cisco Product Security Incident Response Team (PSIRT) przyjął Ablation do wewnętrznego triażu podatności. Cisco PSIRT aktywnie go używa do triażu bieżących raportów ujawniania w Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex i Catalyst. Cisco ASA LINA został również poddany inżynierii wstecznej przy użyciu Ablation.
+Po skoordynowanym ujawnieniu dotyczącym Cisco FMC i ISE, Cisco Product Security Incident Response Team (PSIRT) przyjął Ablation do wewnętrznego triażu podatności. Cisco PSIRT aktywnie go używa do triażu bieżących raportów ujawniania w Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex i Catalyst. Cisco Adaptive Security Appliance (ASA) LINA został również poddany inżynierii wstecznej przy użyciu Ablation, a wyniki są obecnie w ramach skoordynowanego triażu za pośrednictwem CERT/CC VINCE.
 
 | CVE | Produkt | Tytuł | CVSS | Poradnik bezpieczeństwa |
 |---|---|---|---|---|
