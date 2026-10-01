@@ -97,6 +97,7 @@ from .abc_parser import (
     ABCParser, ABCHeader, ABCIndexHeader,
     MethodInfo, CodeItem, FieldInfo, ClassInfo,
 )
+from .abc_disasm import ARKDisasm, ARKInstruction
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -175,4 +176,5 @@ __all__ = [
     # ── HarmonyOS / ArkTS ────────────────────────────────────────────────────
     "ABCParser", "ABCHeader", "ABCIndexHeader",
     "MethodInfo", "CodeItem", "FieldInfo", "ClassInfo",
+    "ARKDisasm", "ARKInstruction",
 ]
