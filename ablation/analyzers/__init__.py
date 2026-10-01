@@ -93,6 +93,10 @@ from .crypto_pattern_detector import (
     HashAlgoDiscriminator, HashAlgoMatch, ConstMatch,
     CustomCBCDetector, CBCPattern,
 )
+from .abc_parser import (
+    ABCParser, ABCHeader, ABCIndexHeader,
+    MethodInfo, CodeItem, FieldInfo, ClassInfo,
+)
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -168,4 +172,7 @@ __all__ = [
     # ── Crypto pattern recognition (binary / disassembly) ───────────────────
     "HashAlgoDiscriminator", "HashAlgoMatch", "ConstMatch",
     "CustomCBCDetector", "CBCPattern",
+    # ── HarmonyOS / ArkTS ────────────────────────────────────────────────────
+    "ABCParser", "ABCHeader", "ABCIndexHeader",
+    "MethodInfo", "CodeItem", "FieldInfo", "ClassInfo",
 ]
