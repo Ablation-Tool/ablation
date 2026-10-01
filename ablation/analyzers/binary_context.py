@@ -97,6 +97,11 @@ def _detect_arch(binary) -> str:
         if 'MIPS' in m:
             cls = str(binary.header.identity_class)
             return 'mips64' if '64' in cls else 'mips32'
+        if 'LOONGARCH' in m or 'LARCH' in m:
+            return 'loongarch64'
+        if 'PPC' in m or 'POWERPC' in m:
+            cls = str(binary.header.identity_class)
+            return 'ppc64' if '64' in cls else 'ppc32'
     except Exception:
         pass
     return 'x86_64'
@@ -106,7 +111,7 @@ class BinaryContext:
     """
     Pre-computed binary context. One object = complete working context for a
     stripped ELF binary: symbols, strings, function starts, call graph.
-    Supports x86_64, arm64, and arm32 ELF binaries.
+    Supports x86_64, arm64, arm32, loongarch64, mips32, mips64, ppc32, ppc64, riscv32, riscv64 ELF binaries.
     """
 
     def __init__(self):
