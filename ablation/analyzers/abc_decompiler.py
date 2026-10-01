@@ -30,6 +30,7 @@ Usage:
 
 from __future__ import annotations
 
+import re as _re
 from dataclasses import dataclass
 from typing import Dict, Iterator, List, Optional, Set, Tuple
 
@@ -179,6 +180,221 @@ def _propagate_acc(lines: List[str]) -> List[str]:
     return [line for idx, line in enumerate(lines) if idx not in drop]
 
 
+# ── v2.27.0: Control flow structuring (Cifuentes §6.6.1/§6.6.2) ──────────────
+
+_LBL_RE  = _re.compile(r'^  (L_[0-9a-f]+):$')
+_GOTO_RE = _re.compile(r'^    goto (L_[0-9a-f]+)$')
+_COND_RE = _re.compile(r'^    if \((.+)\) goto (L_[0-9a-f]+)$')
+
+
+@dataclass
+class _BB:
+    idx:       int
+    label:     Optional[str]
+    stmts:     List[str]       # body lines as-emitted (indented)
+    term:      str             # terminal line as-emitted, or ""
+    term_type: str             # "goto" | "cond" | "return" | "fall"
+    goto_tgt:  Optional[str]
+    cond_expr: Optional[str]
+
+
+def _parse_blocks(body: List[str]) -> List[_BB]:
+    """Split flat body lines into basic blocks at label and branch boundaries."""
+    blocks:    List[_BB]     = []
+    cur_label: Optional[str] = None
+    cur_stmts: List[str]     = []
+
+    def _flush(term: str = '', tt: str = 'fall',
+               tgt: Optional[str] = None,
+               cexpr: Optional[str] = None) -> None:
+        nonlocal cur_label, cur_stmts
+        b = _BB(len(blocks), cur_label, cur_stmts[:], term, tt, tgt, cexpr)
+        if b.label or b.stmts or b.term:
+            blocks.append(b)
+        cur_label = None
+        cur_stmts = []
+
+    for line in body:
+        lm = _LBL_RE.match(line)
+        if lm:
+            _flush()
+            cur_label = lm.group(1)
+            continue
+        gm = _GOTO_RE.match(line)
+        if gm:
+            _flush(line, 'goto', gm.group(1))
+            continue
+        cm = _COND_RE.match(line)
+        if cm:
+            _flush(line, 'cond', cm.group(2), cm.group(1))
+            continue
+        if line.strip().startswith('return'):
+            _flush(line, 'return')
+            continue
+        cur_stmts.append(line)
+
+    _flush()
+    for k, b in enumerate(blocks):
+        b.idx = k
+    return blocks
+
+
+_OP_FLIP: Dict[str, str] = {
+    '==': '!=',  '!=': '==',
+    '===': '!==', '!==': '===',
+    '<': '>=',   '>=': '<',
+    '>': '<=',   '<=': '>',
+}
+
+
+def _negate(cond: str) -> str:
+    for op, neg in _OP_FLIP.items():
+        tok = f' {op} '
+        if tok in cond:
+            return cond.replace(tok, f' {neg} ', 1)
+    return f'!({cond})'
+
+
+def _structure_cfg(lines: List[str]) -> List[str]:
+    """Control flow structuring pass (Cifuentes §6.6.1/§6.6.2).
+
+    Recovers while loops (pre-tested), if/else, and simple if from the
+    label+goto skeleton produced by the lift and propagation passes.
+    Unrecognized patterns fall back to raw label+goto output unchanged.
+    """
+    if not lines or len(lines) < 4:
+        return lines
+    header, footer = lines[0], lines[-1]
+    body = lines[1:-1]
+
+    blocks = _parse_blocks(body)
+    if len(blocks) <= 1:
+        return lines
+
+    lidx: Dict[str, int] = {b.label: b.idx for b in blocks if b.label}
+
+    out: List[str] = [header]
+    _cfg_emit(blocks, lidx, 0, len(blocks), out, '    ')
+    out.append(footer)
+    return out
+
+
+def _cfg_emit(bls: List[_BB], lidx: Dict[str, int],
+              start: int, end: int, out: List[str], pfx: str) -> None:
+    i = start
+    while i < end:
+        n = _try_while(bls, lidx, i, end, out, pfx)
+        if not n:
+            n = _try_if(bls, lidx, i, end, out, pfx)
+        if n:
+            i += n
+        else:
+            _raw_bb(bls[i], out, pfx)
+            i += 1
+
+
+def _raw_bb(bb: _BB, out: List[str], pfx: str) -> None:
+    if bb.label:
+        lp = pfx[2:] if len(pfx) >= 2 else ''
+        out.append(f'{lp}{bb.label}:')
+    for s in bb.stmts:
+        out.append(f'{pfx}{s.strip()}')
+    if bb.term:
+        out.append(f'{pfx}{bb.term.strip()}')
+
+
+def _try_while(bls: List[_BB], lidx: Dict[str, int],
+               i: int, end: int, out: List[str], pfx: str) -> int:
+    """Detect pre-tested while loop (Cifuentes §6.6.1, Definition 59).
+
+    Header (i):      L_head: [stmts] if (exit_cond) goto L_after
+    Body (i+1..j-1): body blocks
+    Latching (j):    [stmts] goto L_head  (back-edge)
+    After (after_idx): L_after block
+
+    Returns blocks consumed (i through after_idx-1 inclusive), or 0.
+    """
+    bb = bls[i]
+    if not (bb.label and bb.term_type == 'cond'):
+        return 0
+    after_idx = lidx.get(bb.goto_tgt, -1)
+    if not (i < after_idx <= end):
+        return 0
+
+    back_j = -1
+    for j in range(i + 1, after_idx):
+        if bls[j].term_type == 'goto' and bls[j].goto_tgt == bb.label:
+            back_j = j  # take last back-edge (innermost continue stays raw)
+
+    if back_j < 0:
+        return 0
+
+    body_pfx = pfx + '    '
+    for s in bb.stmts:
+        out.append(f'{pfx}{s.strip()}')
+    out.append(f'{pfx}while ({_negate(bb.cond_expr)}) {{')
+    _cfg_emit(bls, lidx, i + 1, back_j, out, body_pfx)
+    lj = bls[back_j]
+    if lj.label:
+        out.append(f'{body_pfx[2:]}{lj.label}:')
+    for s in lj.stmts:
+        out.append(f'{body_pfx}{s.strip()}')
+    out.append(f'{pfx}}}')
+    return after_idx - i
+
+
+def _try_if(bls: List[_BB], lidx: Dict[str, int],
+            i: int, end: int, out: List[str], pfx: str) -> int:
+    """Detect if/else and simple if (Cifuentes §6.6.2).
+
+    Pattern A (if/else):
+        if (cond) goto L_else; [then ending with goto L_end]; L_else: [else]; L_end:
+    Pattern B (simple if):
+        if (cond) goto L_skip; [then]; L_skip:
+
+    In both cases the fall-through path is the then-branch, so the emitted
+    condition is negated: if (!cond) { then }.
+
+    Returns blocks consumed, or 0 if no pattern matches.
+    """
+    bb = bls[i]
+    if bb.term_type != 'cond':
+        return 0
+    else_idx = lidx.get(bb.goto_tgt, -1)
+    if not (i < else_idx <= end):
+        return 0
+
+    for s in bb.stmts:
+        out.append(f'{pfx}{s.strip()}')
+
+    body_pfx = pfx + '    '
+
+    # Pattern A: last then-block ends with a forward goto (the join point)
+    if else_idx > i + 1:
+        lt = bls[else_idx - 1]
+        if lt.term_type == 'goto':
+            end_idx = lidx.get(lt.goto_tgt, -1)
+            if else_idx <= end_idx <= end:
+                out.append(f'{pfx}if ({_negate(bb.cond_expr)}) {{')
+                _cfg_emit(bls, lidx, i + 1, else_idx - 1, out, body_pfx)
+                if lt.label:
+                    out.append(f'{body_pfx[2:]}{lt.label}:')
+                for s in lt.stmts:
+                    out.append(f'{body_pfx}{s.strip()}')
+                out.append(f'{pfx}}} else {{')
+                _cfg_emit(bls, lidx, else_idx, end_idx, out, body_pfx)
+                out.append(f'{pfx}}}')
+                return end_idx - i
+
+    # Pattern B: simple if
+    out.append(f'{pfx}if ({_negate(bb.cond_expr)}) {{')
+    _cfg_emit(bls, lidx, i + 1, else_idx, out, body_pfx)
+    out.append(f'{pfx}}}')
+    return else_idx - i
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 def _label(offset: int) -> str:
     return f'L_{offset:04x}'
 
@@ -308,6 +524,7 @@ class ABCDecompiler:
 
         lines.append('}')
         lines = _propagate_acc(lines)
+        lines = _structure_cfg(lines)
         return '\n'.join(lines)
 
     def decompile_class(self, class_name: str) -> str:
