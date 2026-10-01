@@ -506,7 +506,7 @@ class KernelDriverAnalyzer:
                 # Characteristics(4), TimeDateStamp(4), MajorVersion(2), MinorVersion(2),
                 # Type(4), SizeOfData(4), AddressOfRawData(4), PointerToRawData(4)
                 (_, _, _, _, debug_type, _, _, ptr_to_raw
-                ) = struct.unpack_from('<IIHHIII', self.data, entry_off)
+                ) = struct.unpack_from('<IIHHIIII', self.data, entry_off)
             except struct.error:
                 break
 
