@@ -184,23 +184,31 @@ class LA64MaxNotMinFinding:
 
 class LA64MaxNotMinScanner:
     """
-    Scans a LoongArch64 ELF for the GCC 12.3.1.7 max-not-min sequence
-    and confirms whether the result reaches a memory-sizing sink.
+    Scans a LoongArch64 ELF or PE32+ (UEFI DXE) binary for the GCC 12.3.1.7
+    max-not-min sequence and confirms whether the result reaches a sink.
 
-    Call sequence: from_path(elf) -> scan() -> report(findings)
+    ELF mode  : from_path(elf)     -> scan() -> report(findings)
+    PE32+ mode: from_pe32plus(data) -> scan() -> report(findings)
+
+    In PE32+ mode, PLT resolution is impossible (no GOT/PLT; external calls go
+    through EFI Boot Services Table pointers via JIRL).  Instead, any BL or JIRL
+    where the max-not-min result is live in an argument register ($a0-$a7) at
+    call time is reported with sink_name "<direct>" or "<indirect>".
     """
 
     # How far to look past the `or` instruction for a sink call.
     LOOKAHEAD = 20
 
     def __init__(self, data: bytes, base: int, plt: Dict[int, str],
-                 text_va: int, text_size: int, is_rel: bool = False):
-        self._data    = data
-        self._base    = base
-        self._plt     = plt
-        self._text_va = text_va
-        self._text_sz = text_size
-        self._is_rel  = is_rel  # True for ET_REL (kernel modules): plt keyed by file offset
+                 text_va: int, text_size: int, is_rel: bool = False,
+                 pe32plus: bool = False):
+        self._data     = data
+        self._base     = base
+        self._plt      = plt
+        self._text_va  = text_va
+        self._text_sz  = text_size
+        self._is_rel   = is_rel    # True for ET_REL (kernel modules): plt keyed by file offset
+        self._pe32plus = pe32plus  # True for UEFI PE32+: arg-register feed detection only
 
     @classmethod
     def from_path(cls, path: str) -> 'LA64MaxNotMinScanner':
@@ -287,6 +295,66 @@ class LA64MaxNotMinScanner:
 
         return cls(data, base, plt, text_va, text_sz, is_rel=_is_rel_flag)
 
+    @classmethod
+    def from_pe32plus(cls, data: bytes, image_base: int = 0) -> 'LA64MaxNotMinScanner':
+        """
+        Load a PE32+ (UEFI DXE/PEIM) binary for scanning.
+
+        Parses the PE32+ section table to find the first code section (.text),
+        then sets up the VA→file-offset bias so the standard _words_at() path
+        works without modification.
+
+        Because PE32+ has no PLT/GOT, sink names cannot be resolved.  The
+        scanner instead reports any BL/JIRL call site where the max-not-min
+        result is live in an argument register at call time.  Confirm sinks
+        manually: AllocatePool is always JIRL through the Boot Services Table;
+        CopyMem/SetMem are similar.
+
+        Parameters
+        ----------
+        data        : raw file bytes of the .efi module
+        image_base  : preferred load address reported in the optional header
+                      (pass 0 to use the on-disk section layout directly)
+        """
+        text_va  = 0
+        text_sz  = 0
+        # bias = image_base + vaddr - raw_off  so that off = va - bias = raw_off + delta
+        base     = 0
+
+        found_text = False
+        if len(data) >= 0x40:
+            pe_off = struct.unpack_from('<I', data, 0x3c)[0]
+            if pe_off + 24 <= len(data) and data[pe_off:pe_off+4] == b'PE\x00\x00':
+                num_sections = struct.unpack_from('<H', data, pe_off + 6)[0]
+                opt_size     = struct.unpack_from('<H', data, pe_off + 20)[0]
+                sect_off     = pe_off + 24 + opt_size
+                for i in range(num_sections):
+                    s = sect_off + i * 40
+                    if s + 40 > len(data):
+                        break
+                    chars   = struct.unpack_from('<I', data, s + 36)[0]
+                    # IMAGE_SCN_CNT_CODE (0x20) marks executable sections
+                    if chars & 0x20:
+                        vsize   = struct.unpack_from('<I', data, s + 8)[0]
+                        vaddr   = struct.unpack_from('<I', data, s + 12)[0]
+                        raw_sz  = struct.unpack_from('<I', data, s + 16)[0]
+                        raw_off = struct.unpack_from('<I', data, s + 20)[0]
+                        text_va  = image_base + vaddr
+                        text_sz  = min(vsize, raw_sz)
+                        # bias: _words_at(va) computes off = va - base
+                        # we want off = raw_off when va = text_va
+                        base     = text_va - raw_off
+                        found_text = True
+                        break
+
+        if not found_text:
+            # Fallback: treat the whole file as a flat .text region at VA 0
+            text_va = 0
+            text_sz = len(data)
+            base    = 0
+
+        return cls(data, base, {}, text_va, text_sz, is_rel=False, pe32plus=True)
+
     # ------------------------------------------------------------------
 
     def _words_at(self, va: int, count: int) -> Optional[List[int]]:
@@ -346,11 +414,13 @@ class LA64MaxNotMinScanner:
                 continue
             rtmp2 = _rd(w2)
 
-            # Instruction 3: or Rout, Rtmp2, Rtmp1
+            # Instruction 3: or Rout, Rtmp2, Rtmp1  (or commuted: Rtmp1, Rtmp2)
+            # OR is commutative; GCC may emit either operand order depending on
+            # register allocation.  Use set equality to accept both.
             if (w3 & _MASK_3R) != _MATCH_OR:
                 va += 4
                 continue
-            if _rj(w3) != rtmp2 or _rk(w3) != rtmp1:
+            if {_rj(w3), _rk(w3)} != {rtmp1, rtmp2}:
                 va += 4
                 continue
             rout = _rd(w3)
@@ -382,10 +452,14 @@ class LA64MaxNotMinScanner:
         Walk up to LOOKAHEAD instructions from start_va. Track register rout.
         Return (sink_va, sym, arg_label) if rout flows into a sink arg, else None.
 
-        Handles:
+        ELF mode:
           - rout already in a sink arg position when bl fires
           - or Rx, rout, $zero (move rout -> Rx)
           - addi.d Rx, rout, 0  (zero-offset add = move; mask 0xffc003ff)
+
+        PE32+ mode (self._pe32plus):
+          - No PLT. Any BL or JIRL where a live register is in $a0-$a7 is
+            reported as sink_name="<direct>" or "<indirect>".
         """
         # current_reg tracks which register currently holds the max-not-min value
         live: Set[int] = {rout}
@@ -396,22 +470,34 @@ class LA64MaxNotMinScanner:
             if word is None:
                 break
 
-            # BL instruction: check if a live register is in a known sink arg
+            # BL instruction
             if (word & _MASK_BL) == _MATCH_BL:
-                # ET_REL: plt is keyed by call-site file offset (= va in rel mode)
-                # ET_DYN/EXEC: plt is keyed by PLT stub VA (= resolved BL target)
-                target = va if self._is_rel else _bl_target(word, va)
-                sym = self._plt.get(target)
-                if sym and sym in _SINKS:
-                    expected_reg, arg_label = _SINKS[sym]
-                    if expected_reg in live:
-                        return (va, sym, arg_label)
+                if self._pe32plus:
+                    # PE32+: no PLT — report if any live reg is an argument register
+                    live_args = live & _ARG_REGS
+                    if live_args:
+                        arg_reg = min(live_args)
+                        return (va, "<direct>", self._reg_name(arg_reg))
+                else:
+                    # ET_REL: plt is keyed by call-site file offset (= va in rel mode)
+                    # ET_DYN/EXEC: plt is keyed by PLT stub VA (= resolved BL target)
+                    target = va if self._is_rel else _bl_target(word, va)
+                    sym = self._plt.get(target)
+                    if sym and sym in _SINKS:
+                        expected_reg, arg_label = _SINKS[sym]
+                        if expected_reg in live:
+                            return (va, sym, arg_label)
                 # Calls to unknown functions clobber $a0-$a7; reset argument registers
                 live -= _ARG_REGS
                 continue
 
-            # JIRL indirect call: same conservative clobber
+            # JIRL indirect call (rd != $zero means return address is saved -> it is a call)
             if (word & _MASK_JIRL) == _MATCH_JIRL and _rd(word) != 0:
+                if self._pe32plus:
+                    live_args = live & _ARG_REGS
+                    if live_args:
+                        arg_reg = min(live_args)
+                        return (va, "<indirect>", self._reg_name(arg_reg))
                 live -= _ARG_REGS
                 continue
 
