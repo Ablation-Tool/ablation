@@ -2,6 +2,19 @@
 
 ---
 
+## v2.23.0
+
+- **`abc_parser`: HarmonyOS Ark Bytecode (ABC) parser — foundation of the HarmonyOS analysis layer** (`analyzers/abc_parser.py`, new)
+  - Parses ABC binary format (ArkCompiler `libpandafile`) for versions v9–v13+, covering both dynamic (ECMAScript/ArkTS runtime) and static dialects.
+  - 60-byte header with version-aware literal-array detection: `has_literal_in_header()` returns True for versions ≤ `[12,0,6,0]`.
+  - Class body walker: reads MUTF-8 inline name strings, ULEB128 access/field/method counts, `ClassTaggedValues`, `Field12` items, and `MethodItem` records. Entity IDs are absolute file offsets.
+  - `get_code(method)`: CodeItem parsing with all-ULEB128 prologue (`register_count + parameter_count + code_size + exception_handler_count`); confirmed from ArkCompiler `ark-rs/src/lowlevel/bytecode.rs`. The fixed u16/u32 layout (often cited in docs) is the static dialect only.
+  - Security API: `find_native_methods()`, `find_methods_by_name()`, `find_methods_in_class()`, `find_string_refs_in_code()`, `iter_class_info()`, `summary()`.
+  - Verified on wechat.abc v12.0.6.0 (356 KB): 39 classes, 867 methods, all `get_code()` calls succeed.
+  - Docs: `docs/module-reference/harmonyos.md` (new); `docs/INDEX.md` updated.
+
+---
+
 ## v2.22.0
 
 - **`dwarf_loongarch64`: follow `DW_AT_abstract_origin` / `DW_AT_specification` for LTO-compiled binaries**
