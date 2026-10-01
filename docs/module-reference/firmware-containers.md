@@ -588,3 +588,131 @@ HWTYPE prefix `0x12xxxxxx` = CE6810 chassis board (vs `0x4xxxxxxx` = ARM in MA58
 | CE5810 CPLD firmware without CMS signature | INFO | 156KB CPLD binary controls port electrical config; no adjacent .cms/.crl |
 | DE51FCMA.bin (CR55/56) without CMS signature | INFO | Unlike NE8000 patch files which carry dual .cms+.pss.cms |
 | 4-CPU-architecture attack surface | INFO | P3041/P2020/ARM/CR-card boot independently; LPU compromise may be invisible to MPU |
+
+---
+
+## Huawei VRP V600 Campus Switch Container (RE findings)
+
+**File:** `targets/huawei/s6750_v600_re.py`
+
+366MB campus switch firmware (S6750-H/S7400/S7500/S6800 family), VRP V600R024.
+Same .cc format version as NE8000 (0x00000002). First VRP campus switch generation
+using HiSilicon silicon exclusively (no Freescale, no Broadcom).
+
+### Container structure
+
+```
+0x00  4   Format version: 0x00000002 (shared with NE8000 V800)
+0x04  4   Entry count: 0x4C = 76
+0x08    Version string: "V600R024C00SPC500"
+0x1984  SquashFS 1 — 264MB xz — AArch64 VRP V8 application FS
+0x10A69AE4  SquashFS 2 — 1.2MB xz — signed board filelists + SELinux labels
+```
+
+### AArch64 HiSilicon silicon (V600 transition)
+
+| Generation | Management CPU | Data ASIC |
+|---|---|---|
+| V200/V100 (S6720EI, CE6810EI) | Freescale e500mc/e500v2 (PowerPC BE) | Broadcom BCM56xxx |
+| V600 (S6750-H, S7400/S7500) | HiSilicon SA8009 (AArch64 LE) | HiSilicon SD5981 NSE + Hi1213 NSE |
+
+HiSilicon chip library names: `libhs_sa8009.so`, `libhs_sd5981_nse.so`, `libhs_hi1213_nse.so`.
+Clock driver: `clk_kernel_driver_8xx9.ko` (HiSilicon 8xx9 SoC clock domain).
+
+### Multi-product HWTYPE map (catalog SquashFS)
+
+13 board types across S6750/S7400/S7500/S7700/S9700/S6800: `0x10644_7500` through `0xC12921_6800`.
+Product suffix: `_7500` = S7500, `_7400` = S7400, `_7C00` = S7000C, `_6800` = S6800.
+
+### SELinux (first campus switch generation with MAC)
+
+`selinux_labels_list.txt` in catalog SquashFS confirms SELinux present. Mode (Enforcing vs
+Permissive) not determinable from static analysis.
+
+### Security findings
+
+| Finding | Severity | Detail |
+|---|---|---|
+| SELinux present (V600 first) — mode unknown | INFO | First VRP campus switch with MAC; enforcing mode unconfirmed |
+| libsqlite3.so.0.8.6 — SQLite 3.8.6 known CVEs | LOW | CVE-2017-10989 + others in 3.8.x; requires SQL injection path |
+| HiSilicon NSE drivers opaque (no public SDK) | INFO | SD5981/Hi1213 replace publicly-documented Broadcom BDE |
+
+---
+
+## Huawei Consumer/CPE Firmware Formats (RE findings)
+
+**File:** `targets/huawei/consumer_router_re.py`
+
+Kamchia HG231f (2011 MIPS) + Ufanet ISP-customized builds (WS319/WS880/HG232f/WS325).
+
+### HG231f — U-Boot uImage (Kamchia, 2011)
+
+Magic: `0x27051956` (U-Boot legacy uImage). Architecture: MIPS 32-bit big-endian, Linux
+kernel, LZMA compressed. Build date: 2011-10-10. Load address: `0x80000000`. This is
+the oldest device in the corpus (2011 MIPS) with no ASLR/SSP/PIE mitigations.
+
+### WS319/WS880 — Huawei AP firmware format
+
+Magic: `0x76543210` LE32 (bytes `10 32 54 76`). Header:
+
+```
+0x00  4   Magic: 0x76543210 LE32
+0x04  10  Device name ("WS319\0\0...")
+0x24  16  Version string ("V100R001C199B015")
+0x78+ partition table entries: type(2) + index(2) + field_a(4) + field_b(4) + name
+```
+
+`C199` = Ufanet Russian ISP custom build.
+
+### HG232f/WS325 — encrypted firmware (analysis blocked)
+
+Entropy 7.94/8.0 from byte 0 = encrypted. No recognizable magic. Static analysis
+blocked without the encryption key (stored in production bootloader).
+
+---
+
+## Huawei iBMC / iMana Server BMC Firmware (RE findings)
+
+**File:** `targets/huawei/ibmc_server_re.py`
+
+Three server BMC generations from the Chinese-Mirrors corpus.
+
+### Generation evolution
+
+| Generation | Era | Format | Signature |
+|---|---|---|---|
+| iMana (V2 servers) | ~2013 | Unknown (.rar archives) | None observed |
+| iBMC 3.x (V3 servers) | ~2016-2020 | Standard IPMI HPM.1 (`PICMGFWU` magic) | Checksum only |
+| iBMC 6.x (V5 servers) | ~2019+ | Huawei extended HPM.1 = manifest + CMS/PKCS#7 + HPM.1 | CMS/PKCS#7 |
+
+### Standard HPM.1 (iBMC 3.x, RH1288V3 V3.97)
+
+```
+0x00  8   Magic: "PICMGFWU"
+0x08  2   HPM.1 version: 0x01 0x01 = 1.1
+...
+0x38      Component name: "CONFIG"
+```
+
+Size: 42.6MB. Model UID: 0x00010F00. Active mode: Immediately (no BMC reboot required).
+Package also contains: BIOS V521 (6.1MB, unknown format), 3 CPLD binaries.
+
+### Huawei extended HPM.1 (iBMC 6.x, 2288HV5 V6.27)
+
+Pre-pended manifest block:
+```
+"Manifest Version: 1.0\n"
+"Create By: Huawei Technology Inc.\n"
+"Name: rootfs_2288hv5.hpm\n"
+"SHA256-Digest: ab610ea6...\n"
+[CMS/PKCS#7 DER block, OID 1.2.840.113549.1.7.2]
+[Standard PICMGFWU HPM.1 payload follows]
+```
+
+### Security findings
+
+| Finding | Severity | Detail |
+|---|---|---|
+| Standard HPM.1 (V3 gen) no payload signature | MEDIUM | Pure HPM.1 = checksum only; arbitrary BMC flash via IPMI if HPM update reachable |
+| V5 gen CMS uses same corpus-wide CA | INFO | Single Huawei CA covers all product lines |
+| RH1288V3 CPLD binaries not individually signed | INFO | 3 CPLDs in ZIP without .cms/.crl |
