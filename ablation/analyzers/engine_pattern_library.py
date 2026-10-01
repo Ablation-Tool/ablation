@@ -522,11 +522,13 @@ class EnginePatternLibrary:
         labels: Dict[int, EngineLabel] = {}
 
         # Pass 1: string marker matching (exact string constants via xrefs)
-        if xg is not None:
+        # Also run when ctx carries its own xref index (PPC64/stripped binaries)
+        _has_ctx_xrefs = bool(getattr(ctx, "_str_xref_idx", None))
+        if xg is not None or _has_ctx_xrefs:
             self._pass_string_markers(ctx, xg, labels, min_confidence)
 
         # Pass 2: string pattern matching (regex in string xrefs)
-        if xg is not None:
+        if xg is not None or _has_ctx_xrefs:
             self._pass_string_patterns(ctx, xg, labels, min_confidence)
 
         # Pass 2b: spatial proximity for exception-embedded strings (no xrefs needed).
