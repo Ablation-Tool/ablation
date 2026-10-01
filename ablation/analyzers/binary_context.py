@@ -1120,6 +1120,7 @@ class BinaryContext:
 
         if not r2:
             return
+        self._r2 = r2  # expose for _augment_xrefs_ppc64_arrays
 
         # Scan data segment for 4-byte values that are known string VAs.
         # Build two lookup tables keyed by TOC offset components:
@@ -1213,8 +1214,300 @@ class BinaryContext:
                     for str_va in entries:
                         _record(str_va, lpos)
 
+        # Pass 3: pre-call argument register trace (BL → backward LIS+ADDI/ORI scan)
+        self._augment_xrefs_ppc64_precall(code_data, code_va, str_xref, func_str, func_arr)
+
+        # Pass 4: string-pointer array detection (dense ptr blocks in data seg)
+        self._augment_xrefs_ppc64_arrays(
+            ds_data, ds_va, code_data, code_va, str_xref, func_str, func_arr
+        )
+
+        # Pass 5: near-TOC 2-hop string array xref detection
+        self._augment_xrefs_ppc64_twohop(
+            ds_data, ds_va, code_data, code_va, str_xref, func_str, func_arr
+        )
+
         self._str_xref_idx = {k: list(dict.fromkeys(v)) for k, v in str_xref.items()}
         self._func_str_idx = {k: list(dict.fromkeys(v)) for k, v in func_str.items()}
+
+    def _augment_xrefs_ppc64_precall(
+        self,
+        code_data: bytes,
+        code_va: int,
+        str_xref: Dict,
+        func_str: Dict,
+        func_arr,
+    ) -> None:
+        """Pass 3 — pre-call argument register trace.
+
+        For each BL (call) instruction, walk backward up to 32 instructions and
+        simulate register state for argument registers r3-r6.  If a LIS+ADDI or
+        LIS+ORI sequence reconstructs a known string VA, record that call site's
+        containing function as a string reference.
+
+        This catches the common Cell GCC pattern where absolute string addresses
+        are loaded directly into argument registers before log/error calls, bypassing
+        the TOC entirely.
+        """
+        buf = code_data
+        M   = len(buf)
+        str_vas   = set(self.strings.keys())
+        ARG_REGS  = {3, 4, 5, 6}
+        SCAN_BACK = 128  # bytes = 32 instructions
+
+        for i in range(0, M - 3, 4):
+            b0 = buf[i]; b3 = buf[i + 3]
+            # BL: opcode 18, b0 in 0x48-0x4B, LK=1 AA=0 → b3 & 3 == 1
+            if b0 < 0x48 or b0 > 0x4B or (b3 & 0x3) != 0x1:
+                continue
+
+            reg_hi: Dict[int, int]   = {}  # rD -> upper 16 bits from LIS
+            reg_val: Dict[int, int]  = {}  # rD -> fully reconstructed 32-bit VA
+
+            start = max(0, i - SCAN_BACK)
+            for j in range(start, i, 4):
+                jb0 = buf[j]; jb1 = buf[j + 1]; jb2 = buf[j + 2]; jb3 = buf[j + 3]
+                rD  = ((jb0 & 0x03) << 3) | (jb1 >> 5)
+                imm = (jb2 << 8) | jb3
+
+                if 0x3C <= jb0 <= 0x3F and (jb1 & 0x1F) == 0:
+                    # LIS rD, imm16  (ADDIS rD, r0, imm16)
+                    if rD in ARG_REGS:
+                        reg_hi[rD]  = imm
+                        reg_val.pop(rD, None)
+                elif 0x38 <= jb0 <= 0x3B:
+                    # ADDI rD, rA, imm16
+                    rA = jb1 & 0x1F
+                    if rD in ARG_REGS and rA == rD and rD in reg_hi:
+                        simm = imm if imm < 0x8000 else imm - 0x10000
+                        reg_val[rD] = ((reg_hi[rD] << 16) + simm) & 0xFFFFFFFF
+                    elif rD in ARG_REGS and rA != rD:
+                        # Different source reg → clobbers our tracked state
+                        reg_hi.pop(rD, None); reg_val.pop(rD, None)
+                elif 0x60 <= jb0 <= 0x63:
+                    # ORI rA, rS, imm16  (rS == rD in symmetric encoding)
+                    rA = jb1 & 0x1F
+                    if rA in ARG_REGS and rA == rD and rA in reg_hi:
+                        reg_val[rA] = (reg_hi[rA] << 16) | imm
+
+            site_va = code_va + i
+            idx = int(np.searchsorted(func_arr, site_va, side='right')) - 1
+            if idx < 0:
+                continue
+            fva = int(func_arr[idx])
+            for val in reg_val.values():
+                if val in str_vas:
+                    str_xref.setdefault(val, []).append(fva)
+                    func_str.setdefault(fva, []).append(val)
+
+    def _augment_xrefs_ppc64_arrays(
+        self,
+        ds_data: bytes,
+        ds_va: int,
+        code_data: bytes,
+        code_va: int,
+        str_xref: Dict,
+        func_str: Dict,
+        func_arr,
+    ) -> None:
+        """Pass 4 — string-pointer array detection.
+
+        Cell GCC sometimes groups all string pointers for a class into a contiguous
+        array in the data segment, then accesses the array via a single base-pointer
+        load.  This pass:
+          1. Finds runs of ≥5 consecutive 4-byte values in the data segment that all
+             point to known string VAs ('string-pointer arrays').
+          2. Finds any TOC (r2-relative near) entry that holds the array base VA.
+          3. Maps the LWZ rD, N(r2) code instruction → all strings in the array.
+
+        Also records the array-base VA so that LIS+LWZ patterns (mediumcode) can
+        attribute the same array.
+        """
+        import struct as _st
+
+        str_vas  = set(self.strings.keys())
+        r2       = getattr(self, '_r2', 0)
+        if not r2:
+            return
+
+        # Step 1 — detect string-pointer arrays
+        n_slots = len(ds_data) // 4
+        arrays: List[Tuple[int, List[int]]] = []  # [(array_base_va, [str_va, ...])]
+        i = 0
+        while i < n_slots - 5:
+            va = _st.unpack_from('>I', ds_data, i * 4)[0]
+            if va not in str_vas:
+                i += 1
+                continue
+            j = i
+            run: List[int] = []
+            while j < n_slots:
+                vj = _st.unpack_from('>I', ds_data, j * 4)[0]
+                if vj not in str_vas:
+                    break
+                run.append(vj)
+                j += 1
+            if len(run) >= 5:
+                arrays.append((ds_va + i * 4, run))
+                i = j
+            else:
+                i += 1
+
+        if not arrays:
+            return
+
+        # Step 2 — for each array, check near-TOC window for a pointer to it
+        buf = code_data
+        M   = len(buf)
+        near_lo = r2 - 0x8000
+        near_hi = r2 + 0x7FFF
+
+        for arr_va, str_list in arrays:
+            # Does a near-TOC slot hold arr_va?
+            if near_lo <= arr_va <= near_hi:
+                toc_off = arr_va - r2
+                lo16    = toc_off & 0xFFFF
+                lo_b2   = (lo16 >> 8) & 0xFF
+                lo_b3   = lo16 & 0xFF
+                # Scan code for LWZ rX, lo16(r2) that loads the array base
+                for k in range(0, M - 3, 4):
+                    kb0 = buf[k]; kb1 = buf[k + 1]; kb2 = buf[k + 2]; kb3 = buf[k + 3]
+                    if kb0 < 0x80 or kb0 > 0x83:
+                        continue
+                    if (kb1 & 0x1F) != 2 or kb2 != lo_b2 or kb3 != lo_b3:
+                        continue
+                    site_va = code_va + k
+                    idx     = int(np.searchsorted(func_arr, site_va, side='right')) - 1
+                    if idx < 0:
+                        continue
+                    fva = int(func_arr[idx])
+                    for sv in str_list:
+                        str_xref.setdefault(sv, []).append(fva)
+                        func_str.setdefault(fva, []).append(sv)
+            else:
+                # Far TOC: check if any far-TOC ha16/lo16 pair for arr_va exists
+                toc_off = (arr_va - r2) & 0xFFFFFFFF
+                if toc_off > 0x7FFFFFFF:
+                    toc_off -= 0x100000000
+                ha16 = ((toc_off + 0x8000) >> 16) & 0xFFFF
+                lo16 = toc_off & 0xFFFF
+                ha_b2, ha_b3 = (ha16 >> 8) & 0xFF, ha16 & 0xFF
+                lo_b2, lo_b3 = (lo16 >> 8) & 0xFF, lo16 & 0xFF
+                for k in range(0, M - 7, 4):
+                    kb0 = buf[k]; kb1 = buf[k + 1]; kb2 = buf[k + 2]; kb3 = buf[k + 3]
+                    if kb0 < 0x3C or kb0 > 0x3F:
+                        continue
+                    if (kb1 & 0x1F) != 2 or kb2 != ha_b2 or kb3 != ha_b3:
+                        continue
+                    rD = ((kb0 & 0x03) << 3) | (kb1 >> 5)
+                    for fwd in range(k + 4, min(k + 64, M - 4), 4):
+                        fb0 = buf[fwd]; fb1 = buf[fwd + 1]; fb2 = buf[fwd + 2]; fb3 = buf[fwd + 3]
+                        if fb0 < 0x80 or fb0 > 0x83:
+                            continue
+                        # rA(LWZ) must equal rD(ADDIS); rD(LWZ) may differ (Cell GCC scratch pattern)
+                        if (fb1 & 0x1F) != rD or fb2 != lo_b2 or fb3 != lo_b3:
+                            continue
+                        site_va = code_va + k
+                        idx     = int(np.searchsorted(func_arr, site_va, side='right')) - 1
+                        if idx < 0:
+                            continue
+                        fva = int(func_arr[idx])
+                        for sv in str_list:
+                            str_xref.setdefault(sv, []).append(fva)
+                            func_str.setdefault(fva, []).append(sv)
+                        break
+
+    def _augment_xrefs_ppc64_twohop(
+        self,
+        ds_data: bytes,
+        ds_va: int,
+        code_data: bytes,
+        code_va: int,
+        str_xref: Dict,
+        func_str: Dict,
+        func_arr,
+    ) -> None:
+        """Pass 5 — near-TOC 2-hop string array xref detection.
+
+        CryEngine PS3 stores string pointer arrays far from r2 (beyond ±32KB), so
+        direct near-TOC LWZ can't reach individual string VAs.  The actual pattern is:
+            LWZ rX, near_off(r2)   # load array BASE ptr from near-TOC slot
+            LWZ rY, N*4(rX)        # load individual string VA from the array
+
+        This pass:
+        1. Scans the near-TOC window (r2±32KB) for 4-byte entries whose target
+           is the start of a run of ≥3 consecutive string-pointer values in ds_data.
+        2. Does a single linear pass over code looking for LWZ rX, off(r2) whose
+           (b2,b3) displacement bytes match any discovered array-base TOC offset.
+           Each hit attributes ALL strings in the pointed-to array to the
+           enclosing function.
+
+        Covers ~12K function xrefs for CryEngine PS3 in a ~60s scan.
+        """
+        import struct as _st
+
+        r2 = getattr(self, '_r2', 0)
+        if not r2:
+            return
+
+        near_lo = r2 - 0x8000
+        near_hi = r2 + 0x7FFF
+        str_vas = set(self.strings.keys())
+        ds_end  = ds_va + len(ds_data)
+
+        # Step 1: scan near-TOC window for entries pointing to dense string arrays
+        lo_off        = max(0, near_lo - ds_va)
+        hi_off        = min(len(ds_data), near_hi - ds_va + 4)
+        near_toc_data = ds_data[lo_off:hi_off]
+        n             = len(near_toc_data) // 4
+
+        imm_to_strs: Dict[Tuple[int, int], List[int]] = {}
+        for i in range(n):
+            v = _st.unpack_from('>I', near_toc_data, i * 4)[0]
+            if not (ds_va <= v < ds_end):
+                continue
+            t_off    = v - ds_va
+            str_list: List[int] = []
+            for j in range(200):
+                if t_off + j * 4 + 3 >= len(ds_data):
+                    break
+                kv = _st.unpack_from('>I', ds_data, t_off + j * 4)[0]
+                if kv in str_vas:
+                    str_list.append(kv)
+                elif j > 0:
+                    break
+            if len(str_list) >= 3:
+                toc_va  = near_lo + i * 4
+                toc_off = (toc_va - r2) & 0xFFFF
+                key     = (toc_off >> 8, toc_off & 0xFF)
+                if key in imm_to_strs:
+                    imm_to_strs[key].extend(str_list)
+                else:
+                    imm_to_strs[key] = list(str_list)
+
+        if not imm_to_strs:
+            return
+
+        # Step 2: single linear pass — LWZ rX, off(r2) matching array-base TOC keys
+        buf = code_data
+        M   = len(buf)
+        for k in range(0, M - 3, 4):
+            kb0 = buf[k]; kb1 = buf[k + 1]; kb2 = buf[k + 2]; kb3 = buf[k + 3]
+            if not (0x80 <= kb0 <= 0x83):
+                continue
+            if (kb1 & 0x1F) != 2:
+                continue
+            key = (kb2, kb3)
+            if key not in imm_to_strs:
+                continue
+            site_va = code_va + k
+            idx     = int(np.searchsorted(func_arr, site_va, side='right')) - 1
+            if idx < 0:
+                continue
+            fva = int(func_arr[idx])
+            for sv in imm_to_strs[key]:
+                str_xref.setdefault(sv, []).append(fva)
+                func_str.setdefault(fva, []).append(sv)
 
     def _build_indices(self) -> None:
         # Rebuild callers_idx: sym_name -> [(caller_va, label)]
