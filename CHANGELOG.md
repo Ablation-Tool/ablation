@@ -2,6 +2,16 @@
 
 ---
 
+## v2.21.0
+
+- **LoongArch64 Steps 8–10: tests, CLI, and package exports**
+  - `tests/test_taint_loongarch64.py`: unit tests covering ALU propagation, `andi` bound semantics, `$sp` rebase + load/store roundtrip, syscall source/sink/escalation, `ertn`/`break` termination, two-label union, and callee-saved preservation.
+  - `cli.py`: `ablation loongarch64 [--interprocedural] [--depth N] [--full]` and `ablation loongarch64-decode [--frames] [--base N] [--limit N]` subcommands. `--full` selects `from_path_full()` with `.eh_frame`/DWARF/BTF enrichment.
+  - `analyzers/__init__.py`: exports `LoongArchDecoder`, `LoongArchFrame`, `LoongArch64TaintTracker`, `TaintFindingLA64`, `LOONGARCH_ESCALATION_NAMES`, `LOONGARCH_SYSCALL_TABLE`, `loongarch_classify_syscall`, `extract_eh_frame_starts`, `extract_debug_funcs`, `extract_btf_funcs`.
+  - `docs/INDEX.md`: updated LoongArch64 row description.
+
+---
+
 ## v2.20.0
 
 - **LoongArch64 Step 7: syscalls, kernel traps, and exception paths** (`analyzers/syscall_loongarch64.py`, new; `cfg_loongarch64.py`, `taint_tracker_loongarch64.py` updated)

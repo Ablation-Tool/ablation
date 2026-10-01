@@ -361,6 +361,19 @@ def cmd_byovd(args):
 
 
 _RECENT_UPDATES = """\
+v3.4.0 (2026-09-30)  LoongArch64 taint tracker + decoder
+  ablation loongarch64       <binary> [--interprocedural] [--depth N] [--full] [--json FILE]
+  ablation loongarch64-decode <binary> [--base N] [--frames] [--limit N] [--json FILE]
+  - LoongArch64TaintTracker: lp64 ABI; $a0-$a7 args, $ra caller-saved
+  - Sources: recv/recvfrom/read/fgets (libc) + copy_from_user/nla_get_string (kernel)
+  - Sinks: system/execve/strcpy/memcpy (libc) + copy_to_user/call_usermodehelper (kernel)
+  - Escalation (CRITICAL): commit_creds, prepare_kernel_cred
+  - Syscall tracking: $a7 const-folding -> 318-entry asm-generic table; source/sink/escalation
+  - Exception paths: ertn (no successors), break/dbcl (trap)
+  - from_path_full(): .eh_frame FDE + DWARF subprogram + BTF func_info
+  - PLT resolution: R_LARCH_JUMP_SLOT -> exact plt_va -> sym_name (no ±16 scan)
+  - Targets: TencentOS 4.6 server packages, Loongson 3A5000/3C5000, kernel modules
+
 v3.3.0 (2026-09-30)  nanoMIPS taint tracker
   ablation nanomips-taint <binary> [--le] [--interprocedural] [--depth N] [--json FILE]
   - NanoMIPSTaintTracker: O32-compatible ABI; $a0-$a3 args, $v0 return,
@@ -890,6 +903,87 @@ def cmd_v850_decode(args):
             print(f"  {hex(va)}")
 
 
+def cmd_loongarch64(args):
+    from ablation.analyzers.taint_tracker_loongarch64 import LoongArch64TaintTracker
+
+    p = str(_require_binary(args.binary))
+    if args.full:
+        tracker = LoongArch64TaintTracker.from_path_full(p)
+    else:
+        tracker = LoongArch64TaintTracker.from_path(p)
+
+    if args.interprocedural:
+        findings = tracker.run_interprocedural(depth=args.depth)
+    else:
+        findings = tracker.run()
+
+    if args.json:
+        import json
+        data = [
+            {
+                'func_va':     hex(f.func_va),
+                'func_name':   f.func_name,
+                'sink_va':     hex(f.sink_va),
+                'sink_name':   f.sink_name,
+                'tainted_args': f.tainted_args,
+                'source':      f.source_name,
+                'severity':    f.severity,
+            }
+            for f in findings
+        ]
+        Path(args.json).write_text(json.dumps(data, indent=2))
+        print(f"Wrote {len(data)} findings to {args.json}")
+    else:
+        print(tracker.report(findings))
+
+
+def cmd_loongarch64_decode(args):
+    from ablation.analyzers.loongarch_decoder import LoongArchDecoder
+
+    binary_path = _require_binary(args.binary)
+    data        = binary_path.read_bytes()
+    dec         = LoongArchDecoder()
+
+    if args.frames:
+        frames = list(dec.decode_frames(data, base_addr=args.base))
+        if args.limit:
+            frames = frames[:args.limit]
+        if args.json:
+            import json
+            out = [
+                {
+                    'va': hex(f.va), 'mnemonic': f.mnemonic, 'op_str': f.op_str,
+                    'is_branch': f.is_branch, 'is_call': f.is_call,
+                    'is_ret': f.is_ret, 'target': hex(f.target) if f.target else None,
+                }
+                for f in frames
+            ]
+            Path(args.json).write_text(json.dumps(out, indent=2))
+            print(f"Wrote {len(out)} frames to {args.json}")
+        else:
+            for f in frames:
+                cf = ""
+                if f.is_call:   cf = " [call]"
+                elif f.is_ret:  cf = " [ret]"
+                elif f.is_branch: cf = f" [branch -> {f.target:#x}]" if f.target else " [branch]"
+                print(f"  {f.va:#010x}  {f.mnemonic:<16} {f.op_str}{cf}")
+        return
+
+    # Function start discovery: use prologue heuristic via the tracker
+    from ablation.analyzers.taint_tracker_loongarch64 import LoongArch64TaintTracker
+    tracker = LoongArch64TaintTracker(data, 0, args.base, args.base + len(data), {})
+    starts  = tracker._get_func_starts()
+    if args.json:
+        import json
+        out = [{'func_va': hex(va)} for va in starts]
+        Path(args.json).write_text(json.dumps(out, indent=2))
+        print(f"Wrote {len(out)} function starts to {args.json}")
+    else:
+        print(f"LoongArch64 function starts ({len(starts)} found, base={args.base:#x}):")
+        for va in starts:
+            print(f"  {va:#x}")
+
+
 def cmd_news(args):
     print(_RECENT_UPDATES)
 
@@ -1132,6 +1226,24 @@ def main():
     p_v850_decode.add_argument('--limit', type=int, default=0, help='limit output to N frames (0 = all)')
     p_v850_decode.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
     p_v850_decode.set_defaults(func=cmd_v850_decode)
+
+    # loongarch64 (LoongArch64 taint tracker)
+    p_la64 = sub.add_parser('loongarch64', help='LoongArch64 taint analysis: lp64 ABI; TencentOS 4.6, Loongson 3A5000/3C5000, kernel modules')
+    p_la64.add_argument('binary')
+    p_la64.add_argument('--interprocedural', action='store_true', help='cross-function BFS (default: intraprocedural)')
+    p_la64.add_argument('--depth', type=int, default=4, help='BFS depth (default: 4)')
+    p_la64.add_argument('--full', action='store_true', help='use from_path_full: .eh_frame FDE + DWARF + BTF for precise function boundaries')
+    p_la64.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_la64.set_defaults(func=cmd_loongarch64)
+
+    # loongarch64-decode (LoongArch64 frame decoder)
+    p_la64d = sub.add_parser('loongarch64-decode', help='LoongArch64 instruction frame decoder: fixed 32-bit width, jirl polymorphism, branch classification')
+    p_la64d.add_argument('binary')
+    p_la64d.add_argument('--base', type=lambda x: int(x, 0), default=0, help='base VA for .text (hex ok)')
+    p_la64d.add_argument('--frames', action='store_true', help='dump all frames (not just function starts)')
+    p_la64d.add_argument('--limit', type=int, default=0, help='limit output to N frames (0 = all)')
+    p_la64d.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_la64d.set_defaults(func=cmd_loongarch64_decode)
 
     # news
     p_news = sub.add_parser('news', help='show recent updates')
