@@ -108,6 +108,7 @@ from .probe_adapters import (
     TaintAdapter, ManualAdapter,
     execute_probe, available_kinds,
 )
+from .dynamic_sandbox import DynamicSandbox, DynamicProbeAdapter, SandboxResult, LeafFunctionChecker
 from .engine_pattern_library import (
     EnginePatternLibrary, EngineSignature, EngineLabel,
     ENGINES, CATEGORIES,
@@ -214,6 +215,8 @@ __all__ = [
     "LifterAdapter", "SemanticAdapter", "VersionAdapter",
     "TaintAdapter", "ManualAdapter",
     "execute_probe", "available_kinds",
+    # ── Dynamic Sandbox (Phase 3 — Unicorn leaf-function execution) ────────────
+    "DynamicSandbox", "DynamicProbeAdapter", "SandboxResult", "LeafFunctionChecker",
     # ── Engine Pattern Library (PC game engine-stripping) ──────────────────────
     "EnginePatternLibrary", "EngineSignature", "EngineLabel", "ENGINES", "CATEGORIES",
     # ── Steganography / secret-sharing key extraction ───────────────────────

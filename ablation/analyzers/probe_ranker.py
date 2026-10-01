@@ -81,6 +81,13 @@ _PROBE_CATALOG: Dict[str, Dict] = {
         "reliability": 0.80,
         "description": "Lift function to pseudo-C IR and inspect data flow",
     },
+    "dynamic": {
+        "analyzer": "DynamicSandbox",
+        "estimated_cost": 2.0,
+        "observability": 0.95,
+        "reliability": 0.85,
+        "description": "Execute leaf function in Unicorn sandbox; observe return value and memory writes",
+    },
 }
 
 
