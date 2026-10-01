@@ -35,6 +35,20 @@ from .taint_tracker_riscv32 import RISCV32TaintTracker, TaintFindingRISCV32
 from .taint_tracker_riscv64 import RISCV64TaintTracker, TaintFindingRISCV64
 from .v850_decoder import V850Decoder, V850Disasm, V850Frame
 from .taint_tracker_v850 import V850TaintTracker, TaintFindingV850
+from .loongarch_decoder import LoongArchDecoder, LoongArchFrame
+from .taint_tracker_loongarch64 import (
+    LoongArch64TaintTracker, TaintFindingLA64,
+    _ESCALATION_NAMES as LOONGARCH_ESCALATION_NAMES,
+)
+from .syscall_loongarch64 import (
+    SYSCALL_TABLE as LOONGARCH_SYSCALL_TABLE,
+    classify_syscall as loongarch_classify_syscall,
+)
+from .dwarf_loongarch64 import (
+    extract_eh_frame_starts,
+    extract_debug_funcs,
+    extract_btf_funcs,
+)
 from .beam_context import (
     BeamContext, BeamExport, BeamImport, BeamAstFunction,
     BeamDiffEntry,
@@ -118,6 +132,11 @@ __all__ = [
     "RISCV64TaintTracker", "TaintFindingRISCV64",
     "V850Decoder", "V850Disasm", "V850Frame",
     "V850TaintTracker", "TaintFindingV850",
+    "LoongArchDecoder", "LoongArchFrame",
+    "LoongArch64TaintTracker", "TaintFindingLA64",
+    "LOONGARCH_ESCALATION_NAMES",
+    "LOONGARCH_SYSCALL_TABLE", "loongarch_classify_syscall",
+    "extract_eh_frame_starts", "extract_debug_funcs", "extract_btf_funcs",
     "BeamContext", "BeamExport", "BeamImport", "BeamAstFunction", "BeamDiffEntry",
     "sweep_beam_dir", "fmt_sweep", "sweep_beam_diff", "fmt_sweep_diff",
     "SEVERITY_DISPATCH", "SEVERITY_NETWORK", "SEVERITY_INFO",
