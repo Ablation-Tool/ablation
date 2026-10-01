@@ -14,21 +14,21 @@ Ablation 是一个逆向工程框架，提供与 Ghidra、IDA Pro 和 Binary Nin
 
 ## 功能特性
 
-**基于 BERT 的语义搜索：** 语义搜索按含义而非精确关键词查找结果。BERT 读取文本并理解其含义。含义相近的内容得分相近，因此可以按概念而非精确词语进行搜索。两者结合加速了逆向工程的主要瓶颈，同时找到存在漏洞的函数。
+**基于 BERT 的语义搜索：** 通过概念而非精确词语搜索代码。通过映射文本的实际含义，突破逆向工程最主要的瓶颈，帮助您更快地定位漏洞。
 
-**极致性能：** 50 MB 的二进制文件在 35 秒内加载完成。Ghidra 和 IDA Pro 可能需要数小时，因为它们在允许操作前会将整个文件解析到数据库。Ablation 只分析当前正在处理的函数，因此可以立即开始工作。
+**极致性能：** 在秒级而非数小时内加载大型二进制文件。通过只分析您正在查看的代码，跳过传统工具繁重的前期处理，让您可以立即开始逆向工程。
 
-**版本对比：** 使用 Jaccard 方法衡量函数行为在版本间的重叠程度，使用 Dynamic Time Warping 追踪函数在各固件版本中的执行"形态"，Ablation 确认补丁是否真正改变了逻辑而非仅改变了打包，因为表面重编译无法掩盖未修补的漏洞。
+**版本对比：** 分析已更新软件的实际行为以验证供应商补丁。它穿透表面的重新打包，确认漏洞是真正修复还是仅仅被隐藏。
 
 **跨二进制分析：** 同时分析固件镜像中的每个共享库，跨二进制边界追踪数据流。
 
 **源代码审计：** 审计大型代码库的速度比线性阅读快，精确度比单纯的模式匹配高。每个源文件获得一个 5 位安全配置文件，精确确定其需要的关注程度，因此不会遗漏任何内容，也不会重复阅读。
 
-**Windows 内核驱动与 BYOVD 分析：** 扫描内核驱动程序，寻找从用户模式暴露系统内存或管理员权限的入口点。一个具有这些能力的已签名驱动程序足以禁用端点安全软件。
+**Windows 内核驱动与 BYOVD 分析：** 扫描内核驱动程序中的风险入口点，阻止攻击者利用有漏洞的已签名驱动程序绕过您的安全软件。
 
-**Android / APK 分析：** 在无任何依赖的情况下在二进制层面读取 Android APK。从编译后的字节码映射本机代码入口点和 IPC 表面，因此无需反编译即可看到完整表面。
+**Android / APK 分析：** 无需反编译代码即可映射 Android 应用攻击面。它自动扫描并按安全风险对内部库进行排名，使您能够立即针对最脆弱的组件。
 
-**Erlang / BEAM 分析：** 从 .beam 字节码文件中映射导出、导入和原子，使 `os:cmd` 和 `code:load_binary` 等危险调用无需运行发布版即可可见。
+**Erlang / BEAM 分析：** 安全扫描 Erlang 字节码，无需运行应用程序即可即时突出显示危险函数和隐藏的攻击面。
 
 **密码分析**
 
@@ -40,9 +40,9 @@ Ablation 去除了使已编译二进制文件中的密码学不可见的每一�
 
 ## 真实案例
 
-Ablation 已用于分析来自 Cisco、Fortinet、Juniper、Apple MacOS、Microsoft Windows、Fujitsu、MikroTik、Orka、TencentOS、Enigma2、Skydio、Axis Communications、大华安全系统和 Tuya 的生产固件和内核驱动程序。
+Ablation 已被用于分析来自思科、Fortinet、TencentOS、华为、大华安全系统等的生产固件和内核驱动程序。
 
-在对 Cisco FMC 和 ISE 进行协调披露后，Cisco 产品安全事件响应团队（PSIRT）已采用 Ablation 进行内部漏洞分类。Cisco PSIRT 正在积极使用它对 Firepower Threat Defense（FTD）、Cisco Secure Client（AnyConnect）、HyperFlex 和 Catalyst 的持续披露报告进行分类。Cisco Adaptive Security Appliance（ASA）LINA 也已使用 Ablation 进行逆向工程，相关发现目前正通过 CERT/CC VINCE 进行协调分类。
+在对 Cisco FMC 和 ISE 进行协调披露后，Cisco 产品安全事件响应团队（PSIRT）已采用 Ablation 进行内部漏洞分类。Cisco PSIRT 正在积极使用它对 Firepower Threat Defense（FTD）、Cisco Secure Client（AnyConnect）、Catalyst 的持续披露报告进行分类。Cisco Adaptive Security Appliance（ASA）LINA 也已使用 Ablation 进行逆向工程，相关发现目前正通过 CERT/CC VINCE 进行协调分类。
 
 | CVE | 产品 | 标题 | CVSS | 公告 |
 |---|---|---|---|---|
@@ -53,16 +53,21 @@ Ablation 已用于分析来自 Cisco、Fortinet、Juniper、Apple MacOS、Micros
 
 ---
 
-## 13 个本地反编译器
+## 反编译器
 
-| 架构 | 变体 |
+| ISA / Runtime | 变体 |
 |---|---|
 | x86 | x86-32 · x86-64 |
 | ARM | ARM-32 · ARM-64 |
 | MIPS | MIPS-32 · nanoMIPS · MIPS-64 |
 | PowerPC | PPC-32 · PPC-64 |
 | RISC-V | RISC-V 32 · RISC-V 64 |
-| 嵌入式 | ARC EM/HS · V850-32 |
+| ARC | ARC EM/HS |
+| V850 | V850-32 |
+| LoongArch | LoongArch64 |
+| DEX | Dalvik · ART |
+| ARK | ArkTS |
+| BEAM | Erlang · Elixir |
 
 ---
 
@@ -104,6 +109,8 @@ Ablation 专为授权安全研究而构建。仅对您拥有或获得明确书�
 
 | 标题 | 作者 | 引用 |
 |---|---|---|
+| [Reverse Compilation Techniques](https://scholar.google.com/citations?view_op=view_citation&hl=en&user=iseZ69MAAAAJ&citation_for_view=iseZ69MAAAAJ:u-x6o8ySG0sC) · [Specifying the Semantics of Machine Instructions](https://ieeexplore.ieee.org/document/693702) · [UQBT: Adaptable Binary Translation at Low Cost](https://ieeexplore.ieee.org/document/825697) · [Machine-Adaptable Dynamic Binary Translation](https://dl.acm.org/doi/10.1145/351397.351414) | [Dr. Cristina Cifuentes](https://scholar.google.com/citations?hl=en&user=iseZ69MAAAAJ) | [abc_parser.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/abc_parser.py) · [abc_disasm.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/abc_disasm.py) · [abc_decompiler.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/abc_decompiler.py) · [dataflow_engine.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/dataflow_engine.py) · [loongarch_decoder_v2.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/loongarch_decoder_v2.py) |
+| [Design of a Retargetable Decompiler for a Static Platform-Independent Malware Analysis](https://www.researchgate.net/publication/220849941_Design_of_a_Retargetable_Decompiler_for_a_Static_Platform-Independent_Malware_Analysis) | [Petr Zemek](https://github.com/s3rvac), Lukáš Ďurfina, Jakub Křoustek, Dušan Kolář, Tomas Hruska, Karel Masařík, Alexander Meduna | [abc_decompiler.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/abc_decompiler.py) |
 | [Finding Taint-Style Vulnerabilities in Linux-based Embedded Firmware with SSE-based Alias Analysis](https://arxiv.org/abs/2109.12209) | Cheng, Zheng, Liu, Guan, Liu, Li, Zhu, Ye, Sun | [sse_slicer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/sse_slicer.py) · [arm64_global_tracker.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/arm64_global_tracker.py) |
 | [iResolveX: Multi-Layered Indirect Call Resolution via Static Reasoning and Learning-Augmented Refinement](https://arxiv.org/abs/2601.17888) | Monika Santra, Bokai Zhang, Mark Lim, [Vishnu Asutosh Dasu](https://github.com/vdasu), Dongrui Zeng, [Gang Tan](https://github.com/gangtan) | [vtable_resolver.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/vtable_resolver.py) · [interproc_field_writer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/interproc_field_writer.py) · [arm64_global_tracker.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/arm64_global_tracker.py) |
 | [Extracting Protocol Format as State Machine via Controlled Static Loop Analysis](https://arxiv.org/abs/2305.13483) | [Qingkai Shi](https://github.com/qingkaishi), Xiangzhe Xu, Xiangyu Zhang | [proto_fsm.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/proto_fsm.py) |
@@ -155,7 +162,7 @@ flowchart TD
     BCtx -->|"context"| Diffing["<b>Diffing Engine</b><br/><i>DTW / Version Delta</i>"]
     BCtx -->|"context"| FmtStr["<b>Format String</b><br/><i>Specifier Scanner</i>"]
     BCtx -->|"context"| Heap["<b>Heap Scanner</b><br/><i>Chunk / UAF Audit</i>"]
-    BCtx -->|"context"| MultiArch["<b>Multi-Arch Engine</b><br/><i>MIPS · PPC · RISC-V · ARC · V850</i>"]
+    BCtx -->|"context"| MultiArch["<b>Multi-Arch Engine</b><br/><i>MIPS · PPC · RISC-V · ARC · V850 · LoongArch64</i>"]
     BCtx -->|"context"| Driver["<b>Driver Engine</b><br/><i>Kernel IOCTL / BYOVD Audit</i>"]
 
     Corpus -->|"embeddings"| Semantic["<b>Semantic Search</b><br/><i>BERT Behavioral Fingerprints</i>"]
