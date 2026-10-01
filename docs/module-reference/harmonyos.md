@@ -389,9 +389,18 @@ The lifter follows the Durfina 2012 three-phase pipeline:
 
 The ARK ISA is accumulator-centric: most instructions read from or write to
 `_acc`. The decompiler tracks `_acc` as a named slot alongside the numbered
-virtual registers. Future passes (Cifuentes 1994 §5.4.6 register copy
-propagation, §6.6.2 control flow structuring) will eliminate intermediate
-`_acc` assignments and recover `if/else`/`while` from the `label+goto` CFG.
+virtual registers.
+
+After all instructions are lifted, `_propagate_acc()` runs a single-pass
+accumulator copy-propagation (Cifuentes 1994 §5.4.6). For each `_acc = EXPR`
+line: if the next substantive line's rhs contains `_acc` exactly once,
+substitute EXPR inline and drop the assignment; if it contains no `_acc` (dead
+assignment), drop it silently. This eliminates most intermediate accumulator
+lines within a basic block, producing `return foo.bar` instead of
+`_acc = foo.bar; return _acc`.
+
+A future pass (§6.6.1/§6.6.2 control flow structuring) will recover
+`if/else`/`while` from the `label+goto` CFG.
 
 ### Index table routing
 
