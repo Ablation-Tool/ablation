@@ -168,6 +168,21 @@ STB_NAMES = {STB_LOCAL: "LOCAL", STB_GLOBAL: "GLOBAL", STB_WEAK: "WEAK"}
 DF_1_NOW     = 0x00000001  # BIND_NOW
 DF_1_PIE     = 0x08000000  # Position-independent executable
 
+# LoongArch relocation types (psABI v2.30 / binutils include/elf/loongarch.h)
+R_LARCH_NONE          = 0
+R_LARCH_32            = 1
+R_LARCH_64            = 2
+R_LARCH_RELATIVE      = 3
+R_LARCH_COPY          = 4
+R_LARCH_JUMP_SLOT     = 5   # GOT entry patched at load: jirl through PLT stub
+R_LARCH_TLS_DTPMOD32  = 6
+R_LARCH_TLS_DTPMOD64  = 7
+R_LARCH_TLS_DTPREL32  = 8
+R_LARCH_TLS_DTPREL64  = 9
+R_LARCH_TLS_TPREL32   = 10
+R_LARCH_TLS_TPREL64   = 11
+R_LARCH_IRELATIVE     = 12  # indirect function (ifunc)
+
 
 # ---------------------------------------------------------------------------
 # ELF Header Structs
