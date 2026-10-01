@@ -1317,11 +1317,12 @@ class BinaryContext:
         load.  This pass:
           1. Finds runs of ≥5 consecutive 4-byte values in the data segment that all
              point to known string VAs ('string-pointer arrays').
-          2. Finds any TOC (r2-relative near) entry that holds the array base VA.
-          3. Maps the LWZ rD, N(r2) code instruction → all strings in the array.
+          2. Batch-indexes all arrays by their TOC key (near and far).
+          3. Single O(M) scan for near-TOC arrays   — LWZ rX, lo16(r2).
+          4. Single O(M×16) scan for far-TOC arrays — ADDIS rD, r2, ha16 + LWZ.
 
-        Also records the array-base VA so that LIS+LWZ patterns (mediumcode) can
-        attribute the same array.
+        Batched approach (step 2-4) replaces O(arrays × M) with O(M × 16).
+        Critical for CryEngine PS3 which has ~1900 far-TOC string-pointer arrays.
         """
         import struct as _st
 
@@ -1356,66 +1357,84 @@ class BinaryContext:
         if not arrays:
             return
 
-        # Step 2 — for each array, check near-TOC window for a pointer to it
         buf = code_data
         M   = len(buf)
         near_lo = r2 - 0x8000
         near_hi = r2 + 0x7FFF
 
+        # Step 2 — batch-index all arrays by TOC key
+        # near: {(lo_b2, lo_b3): [str_list, ...]}  — LWZ rX, lo16(r2)
+        # far:  {(ha_b2, ha_b3, lo_b2, lo_b3): merged_str_list}  — ADDIS+LWZ
+        near_idx: Dict[Tuple[int, int], List[List[int]]] = {}
+        far_lo_idx: Dict[Tuple[int, int, int, int], List[int]] = {}
+
         for arr_va, str_list in arrays:
-            # Does a near-TOC slot hold arr_va?
             if near_lo <= arr_va <= near_hi:
                 toc_off = arr_va - r2
                 lo16    = toc_off & 0xFFFF
-                lo_b2   = (lo16 >> 8) & 0xFF
-                lo_b3   = lo16 & 0xFF
-                # Scan code for LWZ rX, lo16(r2) that loads the array base
-                for k in range(0, M - 3, 4):
-                    kb0 = buf[k]; kb1 = buf[k + 1]; kb2 = buf[k + 2]; kb3 = buf[k + 3]
-                    if kb0 < 0x80 or kb0 > 0x83:
-                        continue
-                    if (kb1 & 0x1F) != 2 or kb2 != lo_b2 or kb3 != lo_b3:
-                        continue
-                    site_va = code_va + k
-                    idx     = int(np.searchsorted(func_arr, site_va, side='right')) - 1
-                    if idx < 0:
-                        continue
-                    fva = int(func_arr[idx])
-                    for sv in str_list:
-                        str_xref.setdefault(sv, []).append(fva)
-                        func_str.setdefault(fva, []).append(sv)
+                key     = ((lo16 >> 8) & 0xFF, lo16 & 0xFF)
+                near_idx.setdefault(key, []).append(str_list)
             else:
-                # Far TOC: check if any far-TOC ha16/lo16 pair for arr_va exists
                 toc_off = (arr_va - r2) & 0xFFFFFFFF
                 if toc_off > 0x7FFFFFFF:
                     toc_off -= 0x100000000
-                ha16 = ((toc_off + 0x8000) >> 16) & 0xFFFF
-                lo16 = toc_off & 0xFFFF
-                ha_b2, ha_b3 = (ha16 >> 8) & 0xFF, ha16 & 0xFF
-                lo_b2, lo_b3 = (lo16 >> 8) & 0xFF, lo16 & 0xFF
-                for k in range(0, M - 7, 4):
-                    kb0 = buf[k]; kb1 = buf[k + 1]; kb2 = buf[k + 2]; kb3 = buf[k + 3]
-                    if kb0 < 0x3C or kb0 > 0x3F:
+                ha16   = ((toc_off + 0x8000) >> 16) & 0xFFFF
+                lo16   = toc_off & 0xFFFF
+                full_k = (
+                    (ha16 >> 8) & 0xFF, ha16 & 0xFF,
+                    (lo16 >> 8) & 0xFF, lo16 & 0xFF,
+                )
+                far_lo_idx.setdefault(full_k, []).extend(str_list)
+
+        # Step 3 — near-TOC: single O(M) scan for all near arrays
+        if near_idx:
+            for k in range(0, M - 3, 4):
+                kb0 = buf[k]; kb1 = buf[k + 1]; kb2 = buf[k + 2]; kb3 = buf[k + 3]
+                if kb0 < 0x80 or kb0 > 0x83:
+                    continue
+                if (kb1 & 0x1F) != 2:
+                    continue
+                entries = near_idx.get((kb2, kb3))
+                if not entries:
+                    continue
+                site_va = code_va + k
+                idx     = int(np.searchsorted(func_arr, site_va, side='right')) - 1
+                if idx < 0:
+                    continue
+                fva = int(func_arr[idx])
+                for sl in entries:
+                    for sv in sl:
+                        str_xref.setdefault(sv, []).append(fva)
+                        func_str.setdefault(fva, []).append(sv)
+
+        # Step 4 — far-TOC: single O(M×16) batched scan for all far arrays
+        if far_lo_idx:
+            ha_set = {(k[0], k[1]) for k in far_lo_idx}
+            for k in range(0, M - 7, 4):
+                kb0 = buf[k]; kb1 = buf[k + 1]; kb2 = buf[k + 2]; kb3 = buf[k + 3]
+                if kb0 < 0x3C or kb0 > 0x3F:
+                    continue
+                if (kb1 & 0x1F) != 2:
+                    continue
+                if (kb2, kb3) not in ha_set:
+                    continue
+                rD    = ((kb0 & 0x03) << 3) | (kb1 >> 5)
+                ha_b2 = kb2; ha_b3 = kb3
+                for fwd in range(k + 4, min(k + 64, M - 4), 4):
+                    fb0 = buf[fwd]; fb1 = buf[fwd + 1]; fb2 = buf[fwd + 2]; fb3 = buf[fwd + 3]
+                    if fb0 < 0x80 or fb0 > 0x83:
                         continue
-                    if (kb1 & 0x1F) != 2 or kb2 != ha_b2 or kb3 != ha_b3:
+                    if (fb1 & 0x1F) != rD:
                         continue
-                    rD = ((kb0 & 0x03) << 3) | (kb1 >> 5)
-                    for fwd in range(k + 4, min(k + 64, M - 4), 4):
-                        fb0 = buf[fwd]; fb1 = buf[fwd + 1]; fb2 = buf[fwd + 2]; fb3 = buf[fwd + 3]
-                        if fb0 < 0x80 or fb0 > 0x83:
-                            continue
-                        # rA(LWZ) must equal rD(ADDIS); rD(LWZ) may differ (Cell GCC scratch pattern)
-                        if (fb1 & 0x1F) != rD or fb2 != lo_b2 or fb3 != lo_b3:
-                            continue
+                    sl = far_lo_idx.get((ha_b2, ha_b3, fb2, fb3))
+                    if sl:
                         site_va = code_va + k
                         idx     = int(np.searchsorted(func_arr, site_va, side='right')) - 1
-                        if idx < 0:
-                            continue
-                        fva = int(func_arr[idx])
-                        for sv in str_list:
-                            str_xref.setdefault(sv, []).append(fva)
-                            func_str.setdefault(fva, []).append(sv)
-                        break
+                        if idx >= 0:
+                            fva = int(func_arr[idx])
+                            for sv in sl:
+                                str_xref.setdefault(sv, []).append(fva)
+                                func_str.setdefault(fva, []).append(sv)
 
     def _augment_xrefs_ppc64_twohop(
         self,
