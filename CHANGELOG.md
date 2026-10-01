@@ -2,6 +2,16 @@
 
 ---
 
+## v2.26.0
+
+- **`abc_decompiler`: accumulator copy-propagation pass** (`_propagate_acc`, Cifuentes §5.4.6)
+  - Post-lift pass over the flat statement list. For each `_acc = EXPR` line: if the next substantive line's rhs does not contain `_acc` (dead assignment), drop the line; if it contains `_acc` exactly once, substitute EXPR inline and drop the line; if it contains `_acc` multiple times, leave both lines.
+  - Labels, blank lines, and comment-only lines are transparent for look-ahead purposes.
+  - `_paren(expr)` adds parentheses when EXPR contains a binary operator, preserving precedence after inlining.
+  - Removed the redundant `// = X` comment from `return _acc` emission — propagation now produces clean `return EXPR` directly.
+  - Verified on wechat.abc: `_acc = Row  // global; v6 = _acc` → `v6 = Row  // global`; `_acc = Row.create; v6 = _acc` → `v6 = Row.create`; dead intermediate accumulator assignments eliminated across all 867 methods.
+  - Sound within a single basic block. Cross-block propagation requires full ud-chain / liveness analysis (future pass).
+
 ## v2.25.0
 
 - **`abc_decompiler`: ARK Bytecode to JavaScript-like pseudocode decompiler** (`analyzers/abc_decompiler.py`, new)
