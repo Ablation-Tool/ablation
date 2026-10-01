@@ -146,6 +146,119 @@ p.summary()
 # }
 ```
 
+### String Resolution
+
+```python
+# Resolve an lda.str operand index to the actual string value.
+# N is the 16-bit operand from the instruction — it is an INDEX
+# into IndexHeader.class_idx[], not a raw file offset.
+s = p.resolve_class_idx(n, region=0)    # returns "" if out of range
+```
+
+This method is used internally by `ARKDisasm.find_string_loads()` and exists
+as a public API for callers that want to resolve operands without a full
+disassembly pass.
+
+---
+
+## ARKDisasm
+
+**File:** `ablation/analyzers/abc_disasm.py`
+
+Disassembler for the ARK Bytecode ISA. Wraps an `ABCParser` and consumes
+`CodeItem` objects to produce `ARKInstruction` sequences. The full ISA table
+(324 opcodes, ArkCompiler v13.0.0.0) is embedded in the module — no external
+`isa.json` file required at runtime.
+
+### Construction
+
+```python
+from ablation.analyzers.abc_disasm import ARKDisasm
+from ablation.analyzers.abc_parser import ABCParser
+
+parser = ABCParser.from_path('/path/to/modules.abc')
+dis = ARKDisasm(parser)
+```
+
+### Instruction iteration
+
+```python
+code = parser.get_code(method)
+for insn in dis.iter_insns(code):
+    print(f'+{insn.offset:04x}  {insn.mnemonic:20s}  {insn.operands}')
+```
+
+`ARKInstruction` fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `offset` | `int` | Byte offset within bytecode |
+| `mnemonic` | `str` | Instruction mnemonic (e.g. `lda.str`) |
+| `size` | `int` | Instruction size in bytes (1–5) |
+| `raw` | `bytes` | Raw bytes |
+| `operands` | `list` | Decoded operand values |
+
+Unknown opcodes are emitted as single-byte `.data` instructions so that
+`iter_insns` always advances and alignment is preserved.
+
+Convenience accessor: `insn.string_id` returns the 16-bit entity ID operand
+if the instruction is `lda.str`, else `None`.
+
+### Disassembly text
+
+```python
+# Single method — smali-style with inline string annotations
+text = dis.disasm_method(method, code)
+# Example output:
+# func_main_0  (10 regs, 3 args, 129 bytes)
+# +0000  ldai      0
+# +000e  lda.str   0x21  # "L@system.curves;"
+```
+
+`disasm_method(method, code)` resolves `lda.str` operands via
+`ABCParser.resolve_class_idx()` and appends the string as a `# "..."` comment.
+
+```python
+# All methods in the file
+for text in dis.disasm_all():
+    print(text)
+```
+
+### Security queries
+
+```python
+# Call sites
+for insn in dis.find_calls(code):
+    print(f'+{insn.offset:04x}  {insn.mnemonic}')
+
+# String loads — resolved to actual string value
+for insn, s in dis.find_string_loads(code):
+    print(f'+{insn.offset:04x}  {repr(s)}')
+```
+
+`find_string_loads()` resolves each `lda.str N` operand through
+`IndexHeader.class_idx[N]` → entity_id → string bytes. The raw 16-bit operand
+is NOT a file offset; it is an index into the current index region.
+
+### ISA table design
+
+The embedded `_OPCODE_TABLE` is keyed by `(prefix_byte | None, opcode_byte)`.
+Four prefix groups:
+
+| Prefix | Byte | Examples |
+|---|---|---|
+| `callruntime` | `0xfb` | `callruntime.notifyconcurrentresult` |
+| `deprecated` | `0xfc` | `deprecated.lda.str` |
+| `wide` | `0xfd` | `wide.createobjectwithexcludedkeys` |
+| `throw` | `0xfe` | `throw.ifdefinednotundefined` |
+| (none) | — | everything else |
+
+The ISA uses parallel arrays: `opcode_idx[i] ↔ format[i]`. Iterating format
+strings naively against all opcodes creates 138 false collisions (e.g.
+`getiterator` appears at both opcode 103 with format `op_imm_8` and opcode 171
+with format `op_imm_16`). The table is built by pairing arrays at the same
+index, yielding 324 clean entries.
+
 ---
 
 ## Format Notes
