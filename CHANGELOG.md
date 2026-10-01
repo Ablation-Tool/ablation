@@ -2,6 +2,18 @@
 
 ---
 
+## v2.22.0
+
+- **`dwarf_loongarch64`: follow `DW_AT_abstract_origin` / `DW_AT_specification` for LTO-compiled binaries**
+  - `extract_debug_funcs()` now builds a flat `{offset: DIE}` map for each ELF and resolves names via `_resolve_name()`, which walks `DW_AT_abstract_origin` and `DW_AT_specification` chains before giving up. GCC LTO emits concrete function instances with no `DW_AT_name`; the name lives in the abstract definition DIE. Without this fix, all LTO-compiled functions returned empty-string names. With fix: all 431 functions in `libtss2-fapi.so.1.0.0` (TencentOS 4.6) now resolve correctly (0 unnamed). Surface exposed by sweeping the TencentOS corpus.
+
+- **LoongArch64 PLT header size fix (`elf_parser.py`, `taint_tracker_loongarch64.py`)**
+  - LoongArch64 emits a 2-slot (32-byte) PLT header; `elf_parser.py` and the tracker's pyelftools path both assumed a 1-slot (16-byte) header. This shifted every PLT symbol assignment one position early, causing systematic sink mislabeling (e.g., `fclose` reported as `strcpy`, `__stack_chk_fail` as `execvp`).
+  - Fix: `elf_parser.py` `get_plt_got_table()` now starts `plt_idx=2` when `e_machine == EM_LOONGARCH`; tracker pyelftools path changed from `enumerate(start=1)` to `enumerate(start=2)`.
+  - Verified via `pcaddu12i` GOT cross-check: `PLT@0x220` → `GOT@0xef2a0` → `rela[0]=fcntl` for all 38 stubs checked. All prior LoongArch64 findings (F-001 through F-006) were false positives from this bug and have been updated to ELIMINATED.
+
+---
+
 ## v2.21.0
 
 - **LoongArch64 Steps 8–10: tests, CLI, and package exports**
