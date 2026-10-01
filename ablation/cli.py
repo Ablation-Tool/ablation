@@ -361,6 +361,20 @@ def cmd_byovd(args):
 
 
 _RECENT_UPDATES = """\
+v3.3.0 (2026-09-30)  nanoMIPS taint tracker
+  ablation nanomips-taint <binary> [--le] [--interprocedural] [--depth N] [--json FILE]
+  - NanoMIPSTaintTracker: O32-compatible ABI; $a0-$a3 args, $v0 return,
+    $t0-$t9 caller-saved; no branch delay slots
+  - Sources: recv/recvfrom/read/fgets/gets/fread (return value in $v0)
+  - Sinks: system/execve/execl/execvp/popen/strcpy/sprintf/snprintf/memcpy/strcat/bcopy
+  - Two paths: capstone 6.x full decode (register-level) or conservative fallback
+    (frame-walk BALC target extraction + conservative $a0-$a3 taint after source call)
+  - BALC target decode: P32 bits[31:26]=0x2a, 26-bit signed offset; P16 bits[15:10]=0b110010, 10-bit
+  - Return: JRC $ra (no delay slot); Call: BALC (P16/P32), JALRC (P32)
+  - PLT stub size: 12 bytes (3 × P32 insns); prologue: ADDIU $sp, $sp, -N
+  - Targets: Ingenic X-series (JZ4780, X1000, X2000), MediaTek Helio embedded,
+    MIPS32r6 microcontrollers
+
 v3.2.0 (2026-09-24)  Renesas V850 taint tracker + frame decoder
   ablation v850       <binary> [--be] [--interprocedural] [--depth N] [--json FILE]
   ablation v850-decode <binary> [--be] [--base N] [--frames] [--limit N] [--json FILE]
@@ -631,6 +645,41 @@ def cmd_nanomips(args):
             print(f"  {hex(va)}")
         if not dis.has_full_decode:
             print("\nNote: install capstone 6.x for full nanoMIPS decode.")
+
+
+def cmd_nanomips_taint(args):
+    from ablation.analyzers.taint_tracker_nanomips import NanoMIPSTaintTracker
+
+    p = str(_require_binary(args.binary))
+    endian = 'little' if args.le else 'big'
+    tracker = NanoMIPSTaintTracker.from_path(p, endian=endian)
+
+    if not tracker.has_full_decode:
+        print("Note: capstone 6.x not available; using conservative fallback decode.")
+        print("      Install capstone 6.x for register-level precision.\n")
+
+    if args.interprocedural:
+        findings = tracker.run_interprocedural(depth=args.depth)
+    else:
+        findings = tracker.run()
+
+    if args.json:
+        import json
+        data = [
+            {
+                'func_va': hex(f.func_va) if hasattr(f, 'func_va') else hex(f.func_chain[0]),
+                'sink_va': hex(f.sink_va),
+                'sink_name': f.sink_name,
+                'tainted_args': f.tainted_args,
+                'source': f.source_name,
+                'full_decode': f.full_decode,
+            }
+            for f in findings
+        ]
+        Path(args.json).write_text(json.dumps(data, indent=2))
+        print(f"Wrote {len(data)} findings to {args.json}")
+    else:
+        print(tracker.report(findings))
 
 
 def cmd_arc(args):
@@ -1002,6 +1051,15 @@ def main():
     p_nm.add_argument('--limit', type=int, default=0, help='max frames to print (0 = all)')
     p_nm.add_argument('--json', metavar='FILE', default=None, help='write function starts JSON to FILE')
     p_nm.set_defaults(func=cmd_nanomips)
+
+    # nanomips-taint (nanoMIPS taint tracker)
+    p_nmt = sub.add_parser('nanomips-taint', help='nanoMIPS taint analysis: O32 ABI; Ingenic X-series, MediaTek Helio embedded')
+    p_nmt.add_argument('binary')
+    p_nmt.add_argument('--le', action='store_true', help='little-endian (default: big-endian)')
+    p_nmt.add_argument('--interprocedural', action='store_true', help='cross-function BFS (default: intraprocedural)')
+    p_nmt.add_argument('--depth', type=int, default=4, help='BFS depth (default: 4)')
+    p_nmt.add_argument('--json', metavar='FILE', default=None, help='write JSON to FILE')
+    p_nmt.set_defaults(func=cmd_nanomips_taint)
 
     # ppc32 (PowerPC 32-bit taint tracker)
     p_ppc32 = sub.add_parser('ppc32', help='PPC32 taint analysis: System V/EABI; Cisco IOS, VxWorks, MikroTik RB600')
