@@ -572,6 +572,33 @@ class BinaryContext:
                     self.strings[sec_va + start] = content
                 else:
                     i = start + 1
+        # Fallback: scan readable LOAD segments when section names are unavailable
+        # (e.g. PS3 SELF→ELF where shstrtab is zeroed by scetool).
+        if not self.strings and _LIEF_OK:
+            try:
+                for seg in binary.segments:
+                    seg_type = str(getattr(seg, 'type', ''))
+                    seg_flags = str(getattr(seg, 'flags', ''))
+                    if 'LOAD' not in seg_type:
+                        continue
+                    # On PPC64 Cell, rodata is combined with code in the X|R segment.
+                    # Always scan all readable LOAD segments (including X|R) for strings.
+                    if 'R' not in seg_flags:
+                        continue
+                    seg_data = bytes(seg.content)
+                    seg_va = int(seg.virtual_address)
+                    i = 0
+                    while i < len(seg_data):
+                        start = i
+                        while i < len(seg_data) and 0x20 <= seg_data[i] < 0x7f:
+                            i += 1
+                        if i - start >= _MIN_STR_LEN:
+                            content = seg_data[start:i].decode("ascii", errors="replace")
+                            self.strings[seg_va + start] = content
+                        else:
+                            i = start + 1
+            except Exception:
+                pass
 
     def _extract_func_starts(self, path: str, binary) -> None:
         starts: Set[int] = set()
@@ -608,6 +635,43 @@ class BinaryContext:
                             va &= ~1
                             thumb.add(va)
                         starts.add(va)
+            except Exception:
+                pass
+        # PPC64: scan code segment for MFLR r0 (7C 08 02 A6, big-endian) function prologues.
+        # Every non-leaf Cell PPU function opens with MFLR r0 to save the link register.
+        # This is the single reliable prologue discriminator for stripped PPC64 Cell binaries.
+        if self.arch in ('ppc64', 'ppc32') and not starts and path:
+            try:
+                import struct
+                MFLR_R0 = b'\x7c\x08\x02\xa6'  # big-endian
+                with open(path, 'rb') as fh:
+                    raw = fh.read()
+                # Find the executable LOAD segment via ELF program headers
+                # ELF64 big-endian: e_phoff at 0x20 (NOT 0x28 which is e_shoff!)
+                # e_phentsize at 0x36, e_phnum at 0x38
+                e_phoff = struct.unpack_from('>Q', raw, 0x20)[0]
+                e_phentsize = struct.unpack_from('>H', raw, 0x36)[0]
+                e_phnum = struct.unpack_from('>H', raw, 0x38)[0]
+                for i in range(e_phnum):
+                    ph_off = e_phoff + i * e_phentsize
+                    p_type = struct.unpack_from('>I', raw, ph_off)[0]
+                    p_flags = struct.unpack_from('>I', raw, ph_off + 0x04)[0]
+                    p_offset = struct.unpack_from('>Q', raw, ph_off + 0x08)[0]
+                    p_vaddr = struct.unpack_from('>Q', raw, ph_off + 0x10)[0]
+                    p_filesz = struct.unpack_from('>Q', raw, ph_off + 0x20)[0]
+                    PT_LOAD = 1
+                    PF_X = 0x1  # execute flag
+                    if p_type == PT_LOAD and (p_flags & PF_X) and p_filesz > 0:
+                        seg = raw[p_offset: p_offset + p_filesz]
+                        pos = 0
+                        while True:
+                            idx = seg.find(MFLR_R0, pos)
+                            if idx < 0:
+                                break
+                            # Must be 4-byte aligned
+                            if idx % 4 == 0:
+                                starts.add(p_vaddr + idx)
+                            pos = idx + 4
             except Exception:
                 pass
         self.func_starts = sorted(starts)
@@ -847,6 +911,9 @@ class BinaryContext:
             return
 
         text_sec = binary.get_section(".text")
+        if not text_sec and self.arch in ('ppc64', 'ppc32'):
+            self._build_string_xref_index_ppc64(data, binary)
+            return
         if not text_sec:
             return
 
@@ -982,6 +1049,171 @@ class BinaryContext:
                     continue
 
         self._str_xref_idx = str_xref
+        self._func_str_idx = {k: list(dict.fromkeys(v)) for k, v in func_str.items()}
+
+    def _build_string_xref_index_ppc64(self, data: bytes, binary) -> None:
+        """PPC64 Cell PS3 string xref via TOC (r2-relative) addressing.
+
+        Cell GCC stores string pointers in the TOC (Table of Contents).
+        The code accesses them via:
+          Far:  ADDIS rD, r2, ha16(N)  +  LWZ rD, lo16(N)(rD)
+          Near: LWZ rD, N(r2)                [|N| < 32768]
+        where N = toc_entry_va - r2 and mem[r2 + N] = string_va.
+
+        r2 is read from the first .opd function descriptor (ELF e_entry in data seg:
+        bytes[0:4] = code ptr, bytes[4:8] = TOC ptr == r2 runtime value).
+        """
+        if not _NUMPY_OK or not self.strings or not self.func_starts:
+            return
+        import struct
+        from collections import defaultdict
+
+        # Parse LOAD segments: find executable (X|R) code seg and writable (W) data seg.
+        try:
+            e_phoff     = struct.unpack_from('>Q', data, 0x20)[0]
+            e_phentsize = struct.unpack_from('>H', data, 0x36)[0]
+            e_phnum     = struct.unpack_from('>H', data, 0x38)[0]
+        except Exception:
+            return
+
+        code_seg = None  # (file_off, vaddr, filesz)
+        data_seg = None
+        for i in range(e_phnum):
+            ph = e_phoff + i * e_phentsize
+            try:
+                p_type  = struct.unpack_from('>I', data, ph)[0]
+                p_flags = struct.unpack_from('>I', data, ph + 0x04)[0]
+                p_off   = struct.unpack_from('>Q', data, ph + 0x08)[0]
+                p_vaddr = struct.unpack_from('>Q', data, ph + 0x10)[0]
+                p_fsz   = struct.unpack_from('>Q', data, ph + 0x20)[0]
+            except Exception:
+                continue
+            if p_type != 1 or p_fsz == 0:
+                continue
+            if (p_flags & 0x1) and p_fsz > 0x100000 and code_seg is None:
+                code_seg = (int(p_off), int(p_vaddr), int(p_fsz))
+            elif not (p_flags & 0x1) and (p_flags & 0x2) and p_fsz > 0x1000 and data_seg is None:
+                data_seg = (int(p_off), int(p_vaddr), int(p_fsz))
+
+        if not code_seg or not data_seg:
+            return
+
+        code_off, code_va, code_fsz = code_seg
+        ds_off,   ds_va,  ds_fsz   = data_seg
+        code_data = data[code_off : code_off + code_fsz]
+        ds_data   = data[ds_off   : ds_off  + ds_fsz]
+
+        # Discover r2 (TOC pointer) from .opd function descriptor.
+        # PS3 Cell uses 32-bit EA mode: each descriptor = [4B code_ptr][4B toc_ptr].
+        # ELF e_entry points into the data segment at the first descriptor.
+        e_entry = struct.unpack_from('>Q', data, 0x18)[0]
+        r2 = 0
+        if ds_va <= e_entry < ds_va + ds_fsz:
+            opd_foff = ds_off + (e_entry - ds_va)
+            try:
+                cptr     = struct.unpack_from('>I', data, opd_foff)[0]
+                toc_cand = struct.unpack_from('>I', data, opd_foff + 4)[0]
+                if code_va <= cptr < code_va + code_fsz and ds_va <= toc_cand < ds_va + ds_fsz:
+                    r2 = toc_cand
+            except Exception:
+                pass
+
+        if not r2:
+            return
+
+        # Scan data segment for 4-byte values that are known string VAs.
+        # Build two lookup tables keyed by TOC offset components:
+        #   ha16_map[ha16] -> [(lo16, string_va)]   for ADDIS rD, r2, ha16 + LWZ rD, lo16(rD)
+        #   near_map[lo16] -> [string_va]            for direct LWZ rD, N(r2) when |N|<32768
+        str_vas = set(self.strings.keys())
+        ha16_map: Dict[int, list] = defaultdict(list)
+        near_map: Dict[int, list] = defaultdict(list)
+
+        for i in range(0, len(ds_data) - 3, 4):
+            val = struct.unpack_from('>I', ds_data, i)[0]
+            if val not in str_vas:
+                continue
+            toc_va     = ds_va + i
+            toc_offset = toc_va - r2            # signed Python int
+            lo16 = toc_offset & 0xFFFF          # 16-bit displacement for LWZ
+            ha16 = ((toc_offset + 0x8000) >> 16) & 0xFFFF  # high-adjusted for ADDIS
+            ha16_map[ha16].append((lo16, val))
+            if -32768 <= toc_offset <= 32767:
+                near_map[lo16].append(val)
+
+        if not ha16_map and not near_map:
+            return
+
+        buf = np.frombuffer(code_data, dtype=np.uint8)
+        M   = len(buf)
+        str_xref: Dict[int, List[int]] = {}
+        func_str: Dict[int, List[int]] = {}
+        func_arr = np.array(self.func_starts, dtype=np.int64)
+        SCAN_AHEAD = 128
+
+        def _record(str_va: int, site_off: int) -> None:
+            idx = int(np.searchsorted(func_arr, code_va + site_off, side='right')) - 1
+            if idx >= 0:
+                fva = int(func_arr[idx])
+                str_xref.setdefault(str_va, []).append(fva)
+                func_str.setdefault(fva, []).append(str_va)
+
+        # PPC64 instruction encoding:
+        #   ADDIS rD, rA, SIMM16:  opcode=15; byte[0]=0x3C|(rD>>3); byte[1]=(rD&7)<<5|rA
+        #   LWZ   rD, SIMM16(rA):  opcode=32; byte[0]=0x80|(rD>>3); byte[1]=(rD&7)<<5|rA
+        # For ADDIS rD, r2, ha16: byte[1] & 0x1F == 2
+        # For LWZ   rD, lo16(rD): byte[1] low5 == rD
+
+        aligned = np.arange(0, M - 3, 4, dtype=np.int64)
+        b0_arr = buf[aligned]
+        b1_arr = buf[aligned + 1]
+
+        # --- Pass 1: ADDIS rD, r2, ha16 + LWZ rD, lo16(rD) ---
+        addis_mask = (b0_arr >= 0x3C) & (b0_arr <= 0x3F) & ((b1_arr & 0x1F) == 2)
+        addis_pos  = aligned[addis_mask]
+
+        if len(addis_pos) > 0:
+            addis_rd   = ((buf[addis_pos].astype(np.uint32) & 0x03) << 3) | (buf[addis_pos + 1].astype(np.uint32) >> 5)
+            addis_ha16 = (buf[addis_pos + 2].astype(np.uint32) << 8) | buf[addis_pos + 3].astype(np.uint32)
+
+            for k in range(len(addis_pos)):
+                ha16    = int(addis_ha16[k])
+                entries = ha16_map.get(ha16)
+                if not entries:
+                    continue
+                rD   = int(addis_rd[k])
+                apos = int(addis_pos[k])
+                end  = min(apos + SCAN_AHEAD, M - 4)
+                for fwd in range(apos + 4, end, 4):
+                    lb0 = int(buf[fwd])
+                    if lb0 < 0x80 or lb0 > 0x83:
+                        continue
+                    lrD  = ((lb0 & 0x03) << 3) | (int(buf[fwd + 1]) >> 5)
+                    lrA  = int(buf[fwd + 1]) & 0x1F
+                    if lrD != rD or lrA != rD:
+                        continue
+                    l_lo16 = (int(buf[fwd + 2]) << 8) | int(buf[fwd + 3])
+                    for (elo16, str_va) in entries:
+                        if l_lo16 == elo16:
+                            _record(str_va, apos)
+                            break
+
+        # --- Pass 2: direct LWZ rD, N(r2) for near TOC entries ---
+        if near_map:
+            lwz_mask = (b0_arr >= 0x80) & (b0_arr <= 0x83) & ((b1_arr & 0x1F) == 2)
+            lwz_pos  = aligned[lwz_mask]
+            if len(lwz_pos) > 0:
+                lwz_lo16 = (buf[lwz_pos + 2].astype(np.uint32) << 8) | buf[lwz_pos + 3].astype(np.uint32)
+                for k in range(len(lwz_pos)):
+                    lo16    = int(lwz_lo16[k])
+                    entries = near_map.get(lo16)
+                    if not entries:
+                        continue
+                    lpos = int(lwz_pos[k])
+                    for str_va in entries:
+                        _record(str_va, lpos)
+
+        self._str_xref_idx = {k: list(dict.fromkeys(v)) for k, v in str_xref.items()}
         self._func_str_idx = {k: list(dict.fromkeys(v)) for k, v in func_str.items()}
 
     def _build_indices(self) -> None:
