@@ -40,7 +40,7 @@ A binary can hide its crypto from import-table analysis, from symbol tables, and
 
 ## Real-World Results
 
-Ablation has been used to analyze production firmware and kernel drivers from Cisco, Fortinet, Hoenywell, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System, and Tuya.
+Ablation has been used to analyze production firmware and kernel drivers from Cisco, Fortinet, Honeywell, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System, and Tuya.
 
 
 Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Security Incident Response Team (PSIRT) has adopted Ablation for internal vulnerability triage. Cisco PSIRT is actively using it to triage ongoing disclosure reports across Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), and Catalyst. Cisco Adaptive Security Appliance (ASA) LINA has also been reverse engineered using Ablation, with findings currently under coordinated triage via CERT/CC VINCE.
