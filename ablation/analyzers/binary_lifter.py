@@ -6,7 +6,7 @@ ARM64. DEXLifter (dex_lifter.py) is the structural template.
 
 Architecture support:
     arm64    — full; CFG + register state machine + calling convention
-    x86_64   — stub; planned Phase 1 extension
+    x86_64   — full; linear disasm + _X86_64State register tracking; PE + ELF
     la64     — stub; planned Phase 1 extension
 
 Usage:
@@ -163,15 +163,38 @@ def _mem_address_expr(mem: Mem, regs: Dict[str, NativeVal]) -> str:
 # ── Section mapping helper ─────────────────────────────────────────────────────
 
 def _build_section_map(binary_path: str) -> List[Tuple[int, int, int]]:
-    """Return sorted list of (vaddr, size, file_offset) for each loadable section."""
+    """Return sorted list of (vaddr, size, file_offset) for each loadable section.
+
+    Handles ELF and PE (Windows game binaries).
+    """
     try:
         import lief  # type: ignore
-        elf = lief.parse(binary_path)
+        obj = lief.parse(binary_path)
+        if obj is None:
+            return []
         secs = []
-        for s in elf.sections:
-            va, sz, off = int(s.virtual_address), int(s.size), int(s.offset)
-            if sz > 0 and va > 0:
-                secs.append((va, sz, off))
+        if hasattr(lief, "ELF") and isinstance(obj, lief.ELF.Binary):
+            for s in obj.sections:
+                va, sz, off = int(s.virtual_address), int(s.size), int(s.offset)
+                if sz > 0 and va > 0:
+                    secs.append((va, sz, off))
+        elif hasattr(lief, "PE") and isinstance(obj, lief.PE.Binary):
+            # PE: VAs are RVA + image_base; raw_offset is the file offset
+            base = obj.optional_header.imagebase
+            for s in obj.sections:
+                va  = base + int(s.virtual_address)
+                sz  = int(s.virtual_size) or int(s.size)
+                off = int(s.pointerto_raw_data)
+                if sz > 0 and va > base:
+                    secs.append((va, sz, off))
+        else:
+            # Generic fallback: section-based
+            for s in obj.sections:
+                va  = int(getattr(s, "virtual_address", 0))
+                sz  = int(getattr(s, "size", 0))
+                off = int(getattr(s, "offset", 0))
+                if sz > 0 and va > 0:
+                    secs.append((va, sz, off))
         secs.sort()
         return secs
     except Exception:
@@ -279,8 +302,8 @@ class BinaryLifter:
         """
         if self.arch == "arm64":
             return self._lift_arm64(va, max_insns)
-        if self.arch in ("x86_64", "x86-64", "amd64"):
-            return f"// x86-64 lifter not yet implemented — use BinaryLifter.arch='arm64'\n"
+        if self.arch in ("x86_64", "x86-64", "amd64", "x86"):
+            return self._lift_x86_64(va, max_insns)
         if self.arch in ("la64", "loongarch64", "loongarch_64"):
             return f"// LoongArch64 lifter not yet implemented — use BinaryLifter.arch='arm64'\n"
         return f"// unsupported arch: {self.arch}\n"
@@ -336,6 +359,51 @@ class BinaryLifter:
             for succ in block.succs:
                 if succ not in visited:
                     queue.append(succ)
+
+        lines.append("}")
+        return "\n".join(lines) + "\n"
+
+    # ── x86-64 lifter ─────────────────────────────────────────────────────────
+
+    def _lift_x86_64(self, func_va: int, max_insns: int) -> str:
+        import capstone
+
+        # Read up to max_insns * 7 bytes (avg x86_64 insn ~4 bytes, max 15)
+        try:
+            code = self._read_va(func_va, max_insns * 7)
+        except ValueError as e:
+            return f"// {e}\n"
+
+        cs = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+        cs.detail = True
+        insns = list(cs.disasm(code, func_va))[:max_insns]
+        if not insns:
+            return f"// no instructions decoded at {func_va:#x}\n"
+
+        tainted_params = self._taint_map.get(func_va, set())
+        fname = self._func_name(func_va)
+        state = _X86_64State(tainted_params, self._func_name, self._plt)
+
+        lines: List[str] = [f"// {fname} @ {func_va:#x}", "{"]
+
+        # Build a quick set of known branch targets for label emission
+        branch_targets: Set[int] = set()
+        for insn in insns:
+            mn = insn.mnemonic.lower()
+            if mn in _X86_JCCS or mn == "jmp":
+                if insn.operands and insn.operands[0].type == 2:  # X86_OP_IMM
+                    branch_targets.add(insn.operands[0].imm)
+
+        for insn in insns:
+            if insn.address != func_va and insn.address in branch_targets:
+                lines.append(f"  loc_{insn.address:x}:")
+            try:
+                stmt = state.lift_insn(insn)
+            except Exception:
+                stmt = f"// {insn.mnemonic} {insn.op_str}"
+            if stmt:
+                for s in stmt.splitlines():
+                    lines.append("  " + s)
 
         lines.append("}")
         return "\n".join(lines) + "\n"
@@ -901,3 +969,366 @@ class _ARM64State:
 
 
 __all__ = ["BinaryLifter", "NativeVal"]
+
+
+# ── x86-64 support ─────────────────────────────────────────────────────────────
+
+# Canonical 64-bit name for any x86_64 sub-register
+_X86_CANON: Dict[str, str] = {}
+for _n64, _aliases in [
+    ("rax", ("eax", "ax", "al", "ah")),
+    ("rbx", ("ebx", "bx", "bl", "bh")),
+    ("rcx", ("ecx", "cx", "cl", "ch")),
+    ("rdx", ("edx", "dx", "dl", "dh")),
+    ("rsi", ("esi", "si", "sil")),
+    ("rdi", ("edi", "di", "dil")),
+    ("rbp", ("ebp", "bp", "bpl")),
+    ("rsp", ("esp", "sp", "spl")),
+    ("rip", ("eip",)),
+]:
+    _X86_CANON[_n64] = _n64
+    for _a in _aliases:
+        _X86_CANON[_a] = _n64
+for _i in range(8, 16):
+    _n = f"r{_i}"
+    _X86_CANON[_n] = _n
+    for _sfx in ("d", "w", "b"):
+        _X86_CANON[f"{_n}{_sfx}"] = _n
+
+# bit width from register name
+_X86_BITS: Dict[str, int] = {}
+for _n in ("rax","rbx","rcx","rdx","rsi","rdi","rbp","rsp","rip"):
+    _X86_BITS[_n] = 64
+for _n in ("eax","ebx","ecx","edx","esi","edi","ebp","esp","eip"):
+    _X86_BITS[_n] = 32
+for _n in ("ax","bx","cx","dx","si","di","bp","sp"):
+    _X86_BITS[_n] = 16
+for _n in ("al","bl","cl","dl","sil","dil","bpl","spl","ah","bh","ch","dh"):
+    _X86_BITS[_n] = 8
+for _i in range(8, 16):
+    _X86_BITS[f"r{_i}"] = 64
+    _X86_BITS[f"r{_i}d"] = 32
+    _X86_BITS[f"r{_i}w"] = 16
+    _X86_BITS[f"r{_i}b"] = 8
+
+_X86_PARAM_REGS = ("rdi", "rsi", "rdx", "rcx", "r8", "r9")
+_X86_CALLEE_SAVED = frozenset({"rbx", "rbp", "r12", "r13", "r14", "r15"})
+
+_X86_JCCS = frozenset({
+    "je","jz","jne","jnz","jg","jge","jl","jle",
+    "ja","jae","jb","jbe","js","jns","jo","jno","jp","jnp",
+})
+_X86_JCC_OPS: Dict[str, str] = {
+    "je": "==", "jz": "==",
+    "jne": "!=", "jnz": "!=",
+    "jg": ">", "jge": ">=",
+    "jl": "<", "jle": "<=",
+    "ja": ">u", "jae": ">=u",
+    "jb": "<u", "jbe": "<=u",
+    "js": "< 0", "jns": ">= 0",
+}
+
+
+def _x86_canon(name: str) -> str:
+    return _X86_CANON.get(name.lower(), name.lower())
+
+
+def _x86_bits(name: str) -> int:
+    return _X86_BITS.get(name.lower(), 64)
+
+
+def _x86_ctype(name: str, signed: bool = False) -> str:
+    return _ctype_from_bits(_x86_bits(name), signed)
+
+
+class _X86_64State:
+    """Per-function register state for x86-64 lifting."""
+
+    def __init__(
+        self,
+        tainted_params: Set[str],
+        name_fn,
+        plt: Dict[int, str],
+    ):
+        self._regs: Dict[str, NativeVal] = {}
+        self._written: Set[str] = set()
+        self._declared: Set[str] = set()
+        self._cmp_expr: str = ""          # last cmp/test left operand
+        self._cmp_rhs: str = ""
+        self._var_counter = 0
+        self._name_fn = name_fn
+        self._plt = plt
+
+        # Seed parameter registers
+        for i, reg in enumerate(_X86_PARAM_REGS):
+            vname = f"arg{i}"
+            tainted = reg in tainted_params
+            nv = NativeVal("uint64_t", vname, is_ptr=False, tainted=tainted)
+            self._regs[reg] = nv
+            self._written.add(reg)
+            self._declared.add(vname)
+
+        # Seed callee-saved registers
+        for reg in _X86_CALLEE_SAVED:
+            self._regs[reg] = NativeVal("uint64_t", reg)
+            self._written.add(reg)
+
+        # rbp and rsp
+        self._regs["rbp"] = NativeVal("uint64_t", "fp", is_ptr=True)
+        self._regs["rsp"] = NativeVal("uint64_t", "sp", is_ptr=True)
+        for r in ("rbp", "rsp"):
+            self._written.add(r)
+
+    def _alloc(self) -> str:
+        self._var_counter += 1
+        return f"v{self._var_counter}"
+
+    def _read(self, reg: str) -> NativeVal:
+        c = _x86_canon(reg)
+        if c not in self._written:
+            # First read of an un-seeded register: allocate
+            vname = self._alloc()
+            nv = NativeVal(_x86_ctype(reg), vname)
+            self._regs[c] = nv
+            self._written.add(c)
+        return self._regs.get(c, NativeVal("uint64_t", c))
+
+    def _write(self, reg: str, nv: NativeVal) -> None:
+        c = _x86_canon(reg)
+        self._regs[c] = nv
+        self._written.add(c)
+
+    def _decl(self, ctype: str, vname: str, expr: str, ann: str = "") -> str:
+        if vname in self._declared:
+            return f"{vname} = {expr};{ann}"
+        self._declared.add(vname)
+        return f"{ctype} {vname} = {expr};{ann}"
+
+    def _taint_ann(self, nv: NativeVal) -> str:
+        return "  /* TAINTED */" if nv.tainted else ""
+
+    def _mem_expr(self, insn, op) -> str:
+        """Format a memory operand as a C pointer expression."""
+        import capstone.x86_const as x86c
+        m = op.mem
+        base_name = insn.reg_name(m.base) if m.base else ""
+        idx_name  = insn.reg_name(m.index) if m.index else ""
+        base_expr = self._read(_x86_canon(base_name)).expr if base_name else ""
+        idx_expr  = self._read(_x86_canon(idx_name)).expr  if idx_name  else ""
+
+        parts = []
+        if base_expr and base_expr not in ("0", ""):
+            parts.append(base_expr)
+        if idx_expr and idx_expr not in ("0", ""):
+            scale = m.scale if m.scale > 1 else 1
+            parts.append(f"{idx_expr}*{scale}" if scale > 1 else idx_expr)
+        if m.disp:
+            parts.append(_imm_expr(m.disp))
+
+        if not parts:
+            return "0"
+        addr = " + ".join(parts)
+        if len(parts) > 1:
+            addr = f"({addr})"
+        return addr
+
+    def lift_insn(self, insn) -> Optional[str]:
+        """Lift one Capstone x86_64 instruction to a C statement string, or None."""
+        import capstone
+        import capstone.x86_const as x86c
+
+        mn = insn.mnemonic.lower()
+        ops = insn.operands
+
+        # ── MOV ──────────────────────────────────────────────────────────────
+        if mn in ("mov", "movabs"):
+            if len(ops) < 2:
+                return None
+            dst, src = ops[0], ops[1]
+            src_expr, src_taint = self._operand_read(insn, src)
+            if dst.type == x86c.X86_OP_REG:
+                dn = insn.reg_name(dst.reg)
+                vname = self._alloc()
+                ctype = _x86_ctype(dn)
+                nv = NativeVal(ctype, vname, tainted=src_taint)
+                self._write(dn, nv)
+                return self._decl(ctype, vname, src_expr, self._taint_ann(nv))
+            elif dst.type == x86c.X86_OP_MEM:
+                addr = self._mem_expr(insn, dst)
+                ctype = _x86_ctype("rax") if dst.size == 8 else _ctype_from_bits(dst.size * 8)
+                return f"*({ctype}*)({addr}) = {src_expr};"
+            return None
+
+        # ── MOVZX / MOVSX ─────────────────────────────────────────────────
+        if mn in ("movzx", "movsx", "movsxd"):
+            if len(ops) < 2:
+                return None
+            dst, src = ops[0], ops[1]
+            src_expr, src_taint = self._operand_read(insn, src)
+            dn = insn.reg_name(dst.reg)
+            vname = self._alloc()
+            cast = "int64_t" if mn in ("movsx", "movsxd") else "uint64_t"
+            nv = NativeVal(_x86_ctype(dn), vname, tainted=src_taint)
+            self._write(dn, nv)
+            return self._decl(_x86_ctype(dn), vname,
+                               f"({cast})({src_expr})", self._taint_ann(nv))
+
+        # ── LEA ──────────────────────────────────────────────────────────────
+        if mn == "lea":
+            if len(ops) < 2:
+                return None
+            dst, src = ops[0], ops[1]
+            addr = self._mem_expr(insn, src)
+            dn = insn.reg_name(dst.reg)
+            vname = self._alloc()
+            nv = NativeVal("void *", vname, is_ptr=True)
+            self._write(dn, nv)
+            return self._decl("void *", vname, f"(void *)({addr})")
+
+        # ── Loads ─────────────────────────────────────────────────────────────
+        if mn in ("movq",):
+            mn = "mov"  # treat movq as mov
+
+        # ── PUSH / POP ────────────────────────────────────────────────────────
+        if mn == "push":
+            if ops and ops[0].type == x86c.X86_OP_REG:
+                return f"// push {insn.reg_name(ops[0].reg)}"
+            return None
+        if mn == "pop":
+            if ops and ops[0].type == x86c.X86_OP_REG:
+                dn = insn.reg_name(ops[0].reg)
+                vname = self._alloc()
+                nv = NativeVal("uint64_t", vname)
+                self._write(dn, nv)
+                return self._decl("uint64_t", vname, "stack_pop()")
+            return None
+
+        # ── Arithmetic: ADD / SUB / AND / OR / XOR / IMUL / SHL / SHR / SAR ──
+        if mn in ("add", "sub", "and", "or", "xor", "imul",
+                  "shl", "sal", "shr", "sar", "ror", "rol"):
+            if len(ops) < 2:
+                return None
+            dst = ops[0]
+            if dst.type != x86c.X86_OP_REG:
+                return None
+            dn = insn.reg_name(dst.reg)
+            lv = self._read(_x86_canon(dn))
+            rhs_expr, rhs_taint = self._operand_read(insn, ops[1])
+            op_sym = {
+                "add": "+", "sub": "-", "and": "&", "or": "|",
+                "xor": "^", "shl": "<<", "sal": "<<",
+                "shr": ">>", "sar": ">>", "ror": "ror", "rol": "rol",
+                "imul": "*",
+            }.get(mn, mn)
+            # xor reg, reg → zero
+            if mn == "xor" and ops[0].reg == ops[1].reg:
+                vname = self._alloc()
+                nv = NativeVal(_x86_ctype(dn), vname)
+                self._write(dn, nv)
+                return self._decl(_x86_ctype(dn), vname, "0")
+            vname = self._alloc()
+            tainted = lv.tainted or rhs_taint
+            ctype = _x86_ctype(dn)
+            nv = NativeVal(ctype, vname, tainted=tainted)
+            self._write(dn, nv)
+            ann = self._taint_ann(nv)
+            expr = f"{lv.expr} {op_sym} {rhs_expr}"
+            return self._decl(ctype, vname, expr, ann)
+
+        # ── INC / DEC / NEG / NOT ─────────────────────────────────────────────
+        if mn in ("inc", "dec", "neg", "not"):
+            if not ops or ops[0].type != x86c.X86_OP_REG:
+                return None
+            dn = insn.reg_name(ops[0].reg)
+            lv = self._read(_x86_canon(dn))
+            vname = self._alloc()
+            delta = "+1" if mn == "inc" else ("-1" if mn == "dec" else "")
+            if mn == "neg":
+                expr = f"-{lv.expr}"
+            elif mn == "not":
+                expr = f"~{lv.expr}"
+            else:
+                expr = f"{lv.expr} {delta}"
+            nv = NativeVal(lv.ctype, vname, tainted=lv.tainted)
+            self._write(dn, nv)
+            return self._decl(lv.ctype, vname, expr)
+
+        # ── CMP / TEST ────────────────────────────────────────────────────────
+        if mn in ("cmp", "test"):
+            if len(ops) < 2:
+                return None
+            lhs_expr, _ = self._operand_read(insn, ops[0])
+            rhs_expr, _ = self._operand_read(insn, ops[1])
+            self._cmp_expr = lhs_expr
+            self._cmp_rhs  = rhs_expr
+            if mn == "test":
+                self._cmp_expr = f"({lhs_expr} & {rhs_expr})"
+                self._cmp_rhs  = "0"
+            return None  # emitted at branch
+
+        # ── Conditional jumps ─────────────────────────────────────────────────
+        if mn in _X86_JCCS:
+            target = ops[0].imm if ops and ops[0].type == x86c.X86_OP_IMM else 0
+            cond_op = _X86_JCC_OPS.get(mn, "?")
+            lhs = self._cmp_expr or "cond"
+            rhs = self._cmp_rhs  or "0"
+            return f"if ({lhs} {cond_op} {rhs}) goto {hex(target)};"
+
+        # ── Unconditional JMP ─────────────────────────────────────────────────
+        if mn == "jmp":
+            if ops and ops[0].type == x86c.X86_OP_IMM:
+                return f"goto {hex(ops[0].imm)};"
+            if ops and ops[0].type == x86c.X86_OP_REG:
+                return f"goto *{self._read(_x86_canon(insn.reg_name(ops[0].reg))).expr};"
+            return "goto *<indirect>;"
+
+        # ── CALL ──────────────────────────────────────────────────────────────
+        if mn == "call":
+            if not ops:
+                return "rax = <indirect_call>();"
+            if ops[0].type == x86c.X86_OP_IMM:
+                target_va = ops[0].imm
+                fname = self._plt.get(target_va) or self._name_fn(target_va)
+            elif ops[0].type == x86c.X86_OP_REG:
+                fname = self._read(_x86_canon(insn.reg_name(ops[0].reg))).expr
+            else:
+                fname = "<indirect>"
+            args = [self._read(r).expr for r in _X86_PARAM_REGS]
+            arg_str = ", ".join(args[:6])
+            vname = self._alloc()
+            nv = NativeVal("uint64_t", vname)
+            self._write("rax", nv)
+            # Clobber caller-saved regs after call
+            for r in ("rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11"):
+                self._write(r, NativeVal("uint64_t", f"<clobber>"))
+            return self._decl("uint64_t", vname, f"{fname}({arg_str})")
+
+        # ── RET ───────────────────────────────────────────────────────────────
+        if mn in ("ret", "retn", "retq"):
+            rv = self._read("rax")
+            return f"return {rv.expr};"
+
+        # ── NOP / ENDBR / PREFETCH ────────────────────────────────────────────
+        if mn in ("nop", "endbr64", "endbr32", "prefetchnta", "prefetcht0",
+                  "prefetcht1", "prefetcht2", "lfence", "mfence", "sfence"):
+            return None
+
+        # ── Unhandled ─────────────────────────────────────────────────────────
+        ops_str = insn.op_str
+        return f"// {mn} {ops_str}"
+
+    def _operand_read(self, insn, op) -> tuple:
+        """Return (expr_str, is_tainted) for a source operand."""
+        import capstone.x86_const as x86c
+        if op.type == x86c.X86_OP_IMM:
+            return (_imm_expr(op.imm), False)
+        if op.type == x86c.X86_OP_REG:
+            reg_name = insn.reg_name(op.reg)
+            nv = self._read(_x86_canon(reg_name))
+            return (nv.expr, nv.tainted)
+        if op.type == x86c.X86_OP_MEM:
+            addr = self._mem_expr(insn, op)
+            size_bits = op.size * 8 if op.size else 64
+            ctype = _ctype_from_bits(size_bits)
+            return (f"*({ctype}*)({addr})", False)
+        return ("???", False)
