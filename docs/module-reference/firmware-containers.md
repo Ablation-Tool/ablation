@@ -716,3 +716,73 @@ Pre-pended manifest block:
 | Standard HPM.1 (V3 gen) no payload signature | MEDIUM | Pure HPM.1 = checksum only; arbitrary BMC flash via IPMI if HPM update reachable |
 | V5 gen CMS uses same corpus-wide CA | INFO | Single Huawei CA covers all product lines |
 | RH1288V3 CPLD binaries not individually signed | INFO | 3 CPLDs in ZIP without .cms/.crl |
+
+---
+
+## Huawei NearLink / SparkLink IoT SoC Firmware (HiBurn .fwpkg)
+
+Source: `/media/cowboy/research/Huawei-Firmware/NearLink/` — 18 `.fwpkg` packages for HiSilicon NearLink/SparkLink development boards (BS21/Hi2821, WS63/Hi3863, WS63E, Hi3863).
+
+### HiBurn fwpkg format
+
+```
+Offset  Size  Field
+0x00     4    Magic: 0xEFBEADDF LE32 (bytes DF AD BE EF — "DEADBEEF" in little-endian)
+0x04     4    Field 1 LE32 (partition table total length or CRC)
+0x08     4    Field 2 LE32 (total payload size ≈ file size)
+0x0C     N    Partition table (52-byte entries, terminated by empty name)
+```
+
+Each partition table entry (52 bytes):
+```
+[0:32]   32  Partition name (null-padded, e.g. "flashboot_sign_a.bin\0...")
+[32:36]   4  File offset of this partition within the .fwpkg (LE32)
+[36:40]   4  Partition data size in bytes (LE32)
+[40:44]   4  Target flash address (LE32; 0 if flags=0)
+[44:48]   4  Target flash allocation size (LE32; may differ from data size)
+[48:52]   4  Flags LE32: 0 = not directly flashed, 1 = flash mapped
+```
+
+### BS21 / Hi2821 partition map (491KB, bare-metal)
+
+Flash base: 0x90100000 (AHB/AXI-mapped NOR flash)
+
+| Partition | Flash addr | Size | Notes |
+|---|---|---|---|
+| loaderboot_sign.bin | — | 24KB | Programmer loader; not directly flashed (flags=0) |
+| partition.bin | 0x90100000 | 1KB | Flash partition table |
+| flashboot_sign_a.bin | 0x90101000 | 36KB | A copy flashboot (A/B redundancy) |
+| flashboot_sign_b.bin | 0x9010B000 | 36KB | B copy flashboot (A/B redundancy) |
+| application_sign.bin | 0x90115000 | 398KB | Main application (bare-metal or minimal RTOS) |
+| bs21_all_nv.bin | 0x9017E000 | 4KB | Non-volatile config storage |
+
+### WS63 / Hi3863 partition map (1.4MB, LiteOS)
+
+Flash base: 0x200000 (QSPI NOR flash)
+
+| Partition | Flash addr | Size | Notes |
+|---|---|---|---|
+| root_loaderboot_sign.bin | — | — | Root programmer loader; not directly flashed |
+| root_params_sign.bin | 0x200000 | 1.8KB | Root parameters |
+| ssb_sign.bin | 0x202000 | 21KB | Secure Secondary Boot (absent in BS21) |
+| flashboot_sign.bin | 0x220000 | 49KB | Primary flashboot |
+| flashboot_backup_sign.bin | 0x210000 | 49KB | Backup flashboot (A/B redundancy) |
+| ws63_all_nv.bin | 0x5FC000 | 16KB | NV config |
+| ws63_all_nv_backup.bin | 0x20C000 | 16KB | NV backup (A/B redundancy) |
+| ws63-liteos-app-sign.bin | 0x230000 | 1.19MB | Full LiteOS application |
+
+### SoC boot chain comparison
+
+**BS21:** loaderboot → partition.bin → flashboot (A/B) → application  
+**WS63:** root_loaderboot → root_params → SSB → flashboot (A/B) → LiteOS app
+
+WS63 adds an explicit SSB (Secure Secondary Boot) stage and A/B NV redundancy that BS21 lacks. Every component ends in `_sign.bin` — per-partition signing before packaging. The fwpkg container has no CMS/PKCS#7 wrapper (unlike VRP, iBMC, HPM); package integrity relies on individual partition signatures.
+
+### Security findings
+
+| Finding | Severity | Detail |
+|---|---|---|
+| All partitions individually signed (_sign.bin naming) | INFO | Per-component signing prevents swapping; signing algorithm requires loaderboot analysis |
+| A/B redundancy for flashboot and NV (OTA safety) | INFO | BS21: A/B flashboot; WS63: A/B flashboot + A/B NV |
+| LiteOS core auditable but NearLink radio stack is proprietary | INFO | WS63 app = LiteOS + proprietary HiSilicon NearLink SLE stack |
+| No CMS/PKCS#7 fwpkg wrapper (unlike VRP/iBMC/HPM) | INFO | Integrity via per-partition signing only |
