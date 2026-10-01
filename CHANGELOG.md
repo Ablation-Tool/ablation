@@ -2,6 +2,17 @@
 
 ---
 
+## v2.29.0
+
+- **`loongarch_decoder_v2`: KASAN/KCOV-aware LoongArch64 decoder** (`analyzers/loongarch_decoder_v2.py`, new)
+  - `LoongArchDecoderV2` extends `LoongArchDecoder` (V1) with a two-pass semantic layer modeled on the Cifuentes & Sendall 1998 SSL (Semantic Specification Language) idiom-recognition architecture.
+  - **Pass 1 — BL tagging**: every `bl` whose resolved target VA appears in the instrumentation VA set gets `is_instrumentation=True`.  The VA set is extracted from kernel `System.map` via `from_system_map(path)`, matching any symbol with prefix `__asan_`, `__kasan_`, or `__sanitizer_cov_`.
+  - **Pass 2 — preamble walk**: from each tagged BL, walk backwards up to 6 instructions and tag KASAN shadow-address computation instructions (`srli.d`, `lu12i.w`, `lu52i.d`, `addi.d`, `ld.b`, `andi`, `slti`, `sltui`, `add.d`) as `idiom="kasan_shadow"`.  Stops at calls, branches, stores, or function start.  Recovers the 4–6 instruction KASAN check idiom observed in TencentOS 4.6 kernel 6.6.119-52.9.tl4+debug.
+  - `LoongArchFrameV2` extends `LoongArchFrame` with `is_instrumentation: bool` and `idiom: str` fields.
+  - `decode_frames_v2()` returns a list (random-access required for pass 2).  `decode_frames_clean()` is the iterator interface that filters `is_instrumentation=True` frames.
+  - `count_instrumentation()` returns `{total, instrumentation, real, pct_instrumentation}` — measured ~40% overhead on `kvm_eiointc_write` (208 instructions, 84 ghost calls).
+  - Theoretical basis: the V1/V2 split maps onto the UQBT paper (Cifuentes & Van Emmerik 2000): V1 is the SLED pass (instruction encoding → boundary + operands), V2 is the SSL pass (instruction windows → named semantic units).
+
 ## v2.28.0
 
 - **`abc_decompiler`: short-circuit evaluation merging** (`_merge_short_circuit`, Cifuentes 1995 Figure 7; Cifuentes/Simon 1998 §5.2)
