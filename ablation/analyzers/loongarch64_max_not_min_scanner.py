@@ -60,6 +60,47 @@ _MASK_BL       = 0xfc000000   # bl offs26
 _MATCH_JIRL    = 0x4c000000
 _MASK_JIRL     = 0xfc000000
 
+# ---------------------------------------------------------------------------
+# Dead-register kill tables (Cifuentes §5.4.1 liveness analysis).
+# LoongArch64 stores and conditional branches use bits[4:0] as a SOURCE
+# register, NOT a destination.  Every other instruction class writes rd.
+# ---------------------------------------------------------------------------
+
+# 2RI12-format stores: bits[31:22] opcode  (ST.B / ST.H / ST.W / ST.D)
+_STORE_OP22: frozenset = frozenset({
+    0x29c00000 >> 22,   # ST.B
+    0x2a000000 >> 22,   # ST.H
+    0x2a400000 >> 22,   # ST.W
+    0x2a800000 >> 22,   # ST.D
+    0x2b000000 >> 22,   # FST.S
+    0x2b400000 >> 22,   # FST.D
+})
+
+# 3R-format indexed stores: bits[31:15] opcode  (STX.B / STX.H / STX.W / STX.D)
+_STOREX_OP15: frozenset = frozenset({
+    0x38100000 >> 15,   # STX.B
+    0x38108000 >> 15,   # STX.H
+    0x38110000 >> 15,   # STX.W
+    0x38118000 >> 15,   # STX.D
+    0x38400000 >> 15,   # STPTR.W
+    0x38408000 >> 15,   # STPTR.D
+})
+
+# Conditional branches: bits[31:26] opcode — bits[4:0] are part of the
+# offset immediate or a source register, never a destination.
+_BRANCH_TOP6: frozenset = frozenset({
+    0x10,  # BEQZ
+    0x11,  # BNEZ
+    0x14,  # B
+    0x15,  # BL   (handled before we reach the kill check, but included for safety)
+    0x16,  # BEQ
+    0x17,  # BNE
+    0x18,  # BLT
+    0x19,  # BGE
+    0x1a,  # BLTU
+    0x1b,  # BGEU
+})
+
 # OR instruction used as a register move: or Rd, Rj, $zero (rk=0)
 _MASK_OR_MOVE  = 0xffff83e0   # bits[31:15] + bits[14:10] (rk forced to 0)
 _MATCH_OR_MOVE = 0x00150000   # rk=0 encodes as bits[14:10]=00000
@@ -388,17 +429,18 @@ class LA64MaxNotMinScanner:
                     live.add(_rd(word))
                 continue
 
-            # If the or-result is overwritten by a non-move instruction, stop tracking
-            # that register (but keep others in live).
+            # Dead-register kill (Cifuentes §5.4.1): if this instruction
+            # defines bits[4:0] as a destination register, the or-result value
+            # is no longer live in that register.
+            # Stores (2RI12 and 3R indexed) use bits[4:0] as a SOURCE.
+            # Conditional branches use bits[4:0] as part of an immediate.
+            # Every other instruction class (ALU, loads, pcaddu*, etc.) writes rd.
             rd = _rd(word)
-            if rd in live and rd != 0:
-                # Only remove if this instruction actually writes rd (non-load/store dest).
-                # Conservative: any 3R/2R instruction with matching rd removes it.
-                # Stores do not write rd (they use rs fields). Skip bl (handled above).
-                # A simple heuristic: if opcode is in the ALU range (bits[31:24] < 0x10),
-                # or in the immediate ALU range, treat it as a def and remove.
-                ophi = (word >> 24) & 0xff
-                if ophi < 0x10 or (0x02 <= ophi <= 0x09):
+            if rd != 0 and rd in live:
+                top6  = word >> 26
+                op22  = word >> 22
+                op15  = word >> 15
+                if top6 not in _BRANCH_TOP6 and op22 not in _STORE_OP22 and op15 not in _STOREX_OP15:
                     live.discard(rd)
 
         return None
