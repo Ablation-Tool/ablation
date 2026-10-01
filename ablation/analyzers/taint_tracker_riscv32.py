@@ -263,24 +263,43 @@ class RISCV32TaintTracker:
             binary = _lief.parse(self.binary_path)
             if not binary:
                 return
-            for sym in binary.pltgot_relocations:
-                if sym.symbol and sym.symbol.name:
-                    self._plt[sym.address] = sym.symbol.name
-                    self._plt_by_name[sym.symbol.name] = sym.address
-            for sym in binary.plt_relocations:
-                if sym.symbol and sym.symbol.name:
-                    self._plt[sym.address] = sym.symbol.name
-                    self._plt_by_name[sym.symbol.name] = sym.address
+            # lief >=0.14 renames: plt_relocations gone (pltgot only), static_symbols -> symtab_symbols,
+            # SYMBOL_TYPES -> Symbol.TYPE, SEGMENT_TYPES -> Segment.TYPE, FLAGS & int not supported.
+            for reloc_src in ('pltgot_relocations', 'plt_relocations', 'dynamic_relocations'):
+                for sym in getattr(binary, reloc_src, []):
+                    try:
+                        if sym.symbol and sym.symbol.name:
+                            self._plt[sym.address] = sym.symbol.name
+                            self._plt_by_name[sym.symbol.name] = sym.address
+                    except Exception:
+                        pass
+            _sym_func = getattr(
+                getattr(getattr(_lief, 'ELF', None), 'Symbol', None), 'TYPE', None
+            )
+            if _sym_func is not None:
+                _sym_func = _sym_func.FUNC
+            else:
+                _sym_func = getattr(getattr(_lief.ELF, 'SYMBOL_TYPES', None), 'FUNC', None)
+            _seg_load = getattr(
+                getattr(getattr(_lief, 'ELF', None), 'Segment', None), 'TYPE', None
+            )
+            if _seg_load is not None:
+                _seg_load = _seg_load.LOAD
+            else:
+                _seg_load = getattr(getattr(_lief.ELF, 'SEGMENT_TYPES', None), 'LOAD', None)
             starts: Set[int] = set()
-            for sym in binary.static_symbols:
-                if sym.type == _lief.ELF.SYMBOL_TYPES.FUNC and sym.value:
-                    starts.add(sym.value)
-            for sym in binary.dynamic_symbols:
-                if sym.type == _lief.ELF.SYMBOL_TYPES.FUNC and sym.value:
-                    starts.add(sym.value)
+            for sym_src in ('symtab_symbols', 'static_symbols', 'dynamic_symbols'):
+                for sym in getattr(binary, sym_src, []):
+                    try:
+                        if _sym_func is None or sym.type == _sym_func:
+                            if sym.value:
+                                starts.add(sym.value)
+                    except Exception:
+                        pass
             self._func_starts = sorted(starts)
             for seg in binary.segments:
-                if seg.type == _lief.ELF.SEGMENT_TYPES.LOAD and seg.flags & 0x1:
+                type_match = (_seg_load is None) or (seg.type == _seg_load)
+                if type_match and (int(seg.flags) & 0x1):
                     self._text_va   = seg.virtual_address
                     self._text_off  = seg.file_offset
                     self._text_size = seg.physical_size
