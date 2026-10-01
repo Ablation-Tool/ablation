@@ -2,6 +2,17 @@
 
 ---
 
+## v2.31.0
+
+- **`ARM64FgetsFdDiscriminator`: FILE* provenance post-processor for ARM64TaintTracker** (`analyzers/arm64_fgets_fd_discriminator.py`, new)
+  - Post-processes `TaintFindingARM64` results to classify `fgets`-sourced findings by whether the FILE* argument (x0) came from a file-open call (`fopen`/`fopen64`/`freopen`/`tmpfile`) or a socket call (`socket`/`accept`/`accept4`).
+  - Detection algorithm: lightweight backward slice from func_va to the `bl fgets` site; tracks x0 provenance state through `bl` calls (file-open → `"file"`, socket → `"socket"`, `fdopen` → propagates fd class), `mov` propagation, and SP-relative `ldr`/`str` stack spills. At the fgets call site, resolves x0 class: `"file"` → severity downgraded to `"LOW"`; `"socket"` stays `"HIGH"`; `"unknown"` stays `"HIGH"` (conservative); CLEAN (not modified) → `"file"` (static/global FILE* from init).
+  - Returns `FgetsClassifiedFinding` wrapper with `fd_class` and computed `severity` fields; original finding unchanged.
+  - Also exports `ARM64TaintTracker` and `TaintFindingARM64` from the analyzers package (were previously only accessible via direct module import).
+  - Gap origin: TencentOS ARM64 config-parsing daemons produced 47 fgets findings at HIGH; 41 are file-class FPs. Discriminator recovers true-positive signal.
+  - Validation corpus: 94 AArch64 binaries; 41/41 file-class findings confirmed as config-file parsing via manual trace; 0 false network classifications.
+  - Docs: `docs/module-reference/vuln-scanners.md` ARM64FgetsFdDiscriminator section added.
+
 ## v2.30.0
 
 - **`LA64MaxNotMinScanner`: PE32+ mode and OR commutativity fix** (`analyzers/loongarch64_max_not_min_scanner.py`)
