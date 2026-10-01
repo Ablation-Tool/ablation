@@ -104,7 +104,7 @@ path runs five passes against the binary to build equivalent `_str_xref_idx` /
 | 1 | `_build_string_xref_index_ppc64` (main) | TOC far-load: `ADDIS rX, r2, ha16 + LWZ rX, lo16(rX)` | Direct far-TOC string loads |
 | 2 | same | TOC near-load: `LWZ rX, off(r2)` within ±32KB of r2 | Near-TOC string loads |
 | 3 | `_augment_xrefs_ppc64_precall` | Backward scan from BL: `LIS rX, hi + ADDI rX, lo` pre-call pattern | Inline arg-reg loads before calls |
-| 4 | `_augment_xrefs_ppc64_arrays` | Dense string-pointer array in data seg → any TOC pointer to the array base | String pointer arrays via TOC |
+| 4 | `_augment_xrefs_ppc64_arrays` | Dense string-pointer array in data seg → batch-indexed by (ha16,lo16) key; single O(M×16) scan replaces O(arrays×M) | String pointer arrays via TOC |
 | 5 | `_augment_xrefs_ppc64_twohop` | Near-TOC entry → far string-pointer array (2-hop: load array base from TOC, then index into array) | **Dominant CryEngine PS3 pattern** |
 
 **Pass 5 detail — the 2-hop pattern:**
