@@ -64,6 +64,58 @@ for frame in dec.decode_frames(section_bytes, base_addr=0x400000):
 | `$ra` | any | any | `is_call = True` |
 | `$zero` | any≠`$ra` | any | `is_branch = True` |
 
+### `loongarch_decoder_v2`
+
+KASAN/KCOV-aware decoder built on V1.  Adds a two-pass semantic layer
+(Cifuentes & Sendall 1998 SSL idiom recognition) that tags debug-kernel
+instrumentation ghost calls and strips them on demand.
+
+Relevant for any kernel built with `CONFIG_KASAN=y` or `CONFIG_KCOV=y` — the
+debug vmlinuz.elf inserts 4–6 ghost instructions before virtually every memory
+access; without stripping, ~40% of a kernel function's instructions are noise.
+
+```python
+from ablation.analyzers.loongarch_decoder_v2 import LoongArchDecoderV2
+
+# Load KASAN/KCOV target VAs from System.map (preferred)
+dec = LoongArchDecoderV2.from_system_map("/path/to/System.map")
+
+# Full decode with tags
+for frame in dec.decode_frames_v2(section_bytes, base_addr):
+    print(frame)   # [kasan_shadow] / [kasan] annotations visible
+
+# Noise-free view
+for frame in dec.decode_frames_clean(section_bytes, base_addr):
+    print(frame)   # only real program instructions
+
+# Coverage stats
+stats = dec.count_instrumentation(section_bytes, base_addr)
+print(stats)  # {"total": 208, "instrumentation": 84, "real": 124, "pct_instrumentation": 40.4}
+```
+
+`LoongArchFrameV2` extends `LoongArchFrame` with:
+
+| Field | Type | Description |
+|---|---|---|
+| `is_instrumentation` | bool | True if KASAN/KCOV ghost call or preamble |
+| `idiom` | str | `"kasan_shadow"`, `"kasan"`, `"kcov_trace_pc"`, `"kcov"`, or `""` |
+
+**Two-pass semantic analysis:**
+
+Pass 1 — BL tagging: every `bl` whose resolved target VA matches a symbol in
+`KASAN_SYMBOL_PREFIXES` or `KCOV_SYMBOL_PREFIXES` gets
+`is_instrumentation=True`.
+
+Pass 2 — preamble walk: from each tagged BL, walk backwards up to 6
+instructions.  Tag any instruction in `_KASAN_PREAMBLE_MNEMS` (srli.d,
+lu12i.w, lu52i.d, addi.d, ld.b, andi, slti, sltui, or, add.d) as
+`is_instrumentation=True, idiom="kasan_shadow"`.  Stop at calls, branches,
+stores, or the function start.
+
+**`from_system_map(path)`**: parses kernel `System.map` (format: `<va> <type>
+<name>`) and extracts all KASAN/KCOV VAs automatically.  Use this for any
+TencentOS or mainline kernel debug RPM.
+
 ### `isa_loongarch64`
 
 Register model, lp64 ABI classification, and mnemonic sets.
