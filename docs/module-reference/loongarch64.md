@@ -181,6 +181,58 @@ print(tt.report(findings))
 
 ---
 
+## Syscall tracking
+
+`LoongArch64TaintTracker` tracks data flow through the `syscall 0` instruction.
+
+**ABI:** syscall number in `$a7`; args in `$a0`–`$a5`; return value in `$a0`.
+
+When the constant-folding path has a value for `$a7` (set by `ori $a7,$zero,N`
+or `addi.d $a7,$zero,N`), the syscall is classified from the 318-entry
+asm-generic unistd.h table (Linux 6.6). Three classification tracks:
+
+| Track | Examples | Effect |
+|---|---|---|
+| `source` | read(63), recvfrom(207), recvmsg(212), getrandom(278) | `$a0` tainted with `syscall:network` / `syscall:read` etc. |
+| `sink` | execve(221), execveat(281), bpf(280), ptrace(117), kexec_load(104) | Finding emitted if any `$a0`–`$a5` tainted |
+| `escalation` | setuid(146), setgid(144), setresuid(147), capset(91) | Finding emitted with `CRITICAL` severity |
+
+When `$a7` is unknown/tainted: caller-saved registers are conservatively clobbered.
+
+```python
+from ablation.analyzers.syscall_loongarch64 import classify_syscall, SYSCALL_TABLE
+
+# Check classification of a syscall number
+result = classify_syscall(207)   # ('recvfrom', 'source')
+result = classify_syscall(221)   # ('execve', 'sink')
+result = classify_syscall(146)   # ('setuid', 'escalation')
+```
+
+### Kernel module sources and sinks
+
+When analysing kernel modules, the `_SOURCE_NAMES`/`_SINK_NAMES` sets cover
+kernel-space function names in addition to libc names:
+
+| Function | Track | Notes |
+|---|---|---|
+| `copy_from_user`, `get_user`, `strncpy_from_user` | source | User→kernel memory copy |
+| `memdup_user`, `nla_get_string`, `nla_data` | source | Netlink / sysfs attribute reads |
+| `copy_to_user`, `put_user` | sink | Kernel→user copy |
+| `call_usermodehelper`, `kernel_execve` | sink (CRITICAL) | Exec from kernel |
+| `commit_creds`, `prepare_kernel_cred` | escalation (CRITICAL) | Privilege escalation |
+| `kmalloc`, `kzalloc`, `vmalloc` | sink (HIGH) | Size-controlled allocation |
+
+### Exception paths
+
+| Mnemonic | CFG treatment | Taint treatment |
+|---|---|---|
+| `ertn` | no successors (exception return) | terminates scan of exception handler |
+| `break N` | no successors (trap) | terminates scan |
+| `dbcl N` | no successors (debug call) | terminates scan |
+| `syscall 0` | fall-through | classify via `$a7`; source taints `$a0`, sink emits finding |
+
+---
+
 ## PLT/GOT resolution
 
 `_load_elf()` merges PLT stub addresses into the symbol map before scanning.
