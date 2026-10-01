@@ -393,6 +393,143 @@ Upgrade validation path embedded in HS8145C5: `file:/var/UpgradeCheck.xml`.
 
 ### Cross-product PKI note
 
-All three Huawei product lines use CMS/PKCS#7 OID `1.2.840.113549.1.7.2` for firmware
-signing (Ascend NPU, VRP OLT, iBMC HPM). Single Huawei internal PKI; compromise of the
-Signature Center CA would affect all product lines simultaneously.
+All Huawei product lines use CMS/PKCS#7 OID `1.2.840.113549.1.7.2` for firmware
+signing (Ascend NPU, VRP OLT/router/switch, iBMC HPM, ONT). Single Huawei internal PKI;
+compromise of the Signature Center CA would affect all product lines simultaneously.
+
+---
+
+## Huawei VRP V800 RPG Container (RE findings)
+
+**File:** `targets/huawei/ne8000_router_re.py`
+
+Reverse-engineered firmware container for NE8000-F1A carrier-grade core router
+(VRP V800R023 platform, also used by CE6810EI datacenter switch).
+
+### RPG_YUNSHAN / RPG_PNF dual-container structure
+
+Magic prefix: `"RPG_"` followed by platform codename and version string.
+
+The NE8000 uses two nested codenames:
+
+- **YUNSHAN** — outer container (`RPG_YUNSHANV800R023C00SPC500B697`)
+- **PNF** — inner platform package (`RPG_PNF`, `PKG_PNFV800R023C00SPC500B697`)
+
+"PNF" = Physical Network Function — Huawei's NFV architecture term for hardware
+appliances (counterpart is VNF = Virtual Network Function for VM-based NE deployment).
+
+`.cc` container version byte for NE8000: `0x00000002` (older VRP series used `0x00000001`).
+`package_format_ver: 1.3.1` (embedded in RPG header).
+
+### Architecture (from PAT binary scan)
+
+| ELF arch | Role |
+|---|---|
+| x86-64 | Control-plane routing daemons, management processes |
+| AArch64 | NPU / forwarding-engine linecard modules |
+
+### Patch package format (RPG_PNF SPH patches)
+
+Patch units are named `HP000XXX.pat` (HP = Hotfix Patch), numbered sequentially.
+SPH120 contains patches HP000020 through HP000126.
+
+`patch.rinfo` fields:
+```
+Name:        V800R023
+Version:     1.1.120        (major.minor.sph_level)
+rpgName:     PKG_PNF
+rpgVersion:  V800R023C00SPC500B697
+patPkgType:  COLD           (requires system reboot to activate)
+```
+
+`patchtype.info` format: `<pkg_name>:<comma-separated CPT type IDs>`
+
+`patchpkg.txt` manifest columns (14 fields, tab-separated):
+`SHA256  NA  path  filename  dest  type_id  0  owner:uid  group:gid  perms  NA  0  NA  NA`
+
+### Filesystem users (from patch file ownership)
+
+| User/Group | ID | Role |
+|---|---|---|
+| `root` | 0 | Privileged VRP processes |
+| `ftpvrpv8` | UID 1001 | FTP service (VRP V8 generation) |
+| `swm` | GID 2000 | Software Management daemon |
+| `verona` | GID 2001 | Third internal codename group (development codename) |
+
+### Hardware types (HWTYPE) observed in SPH120
+
+| HWTYPE | Description |
+|---|---|
+| `0x00137F3` | NE8000-F1A standard control plane board |
+| `0x01137F3` | NE8000-F1A extended feature board |
+| `0x0C137F3` | NE8000 carrier/cluster variant |
+
+Each HWTYPE has separate `.cms`, `.pss.cms`, and `.crl` signature files (dual
+CAdES+RSA-PSS algorithms with inline CRL distribution).
+
+### Security findings
+
+| Finding | Severity | Detail |
+|---|---|---|
+| Dual CAdES+PSS signatures + CRL on filelists | INFO | Both .cms (7814B) and .pss.cms per HWTYPE; explicit CRL (4975B) distributed inline |
+| "verona" group (GID 2001) — third codename | INFO | Alongside YUNSHAN/PNF; controls VRP module file access |
+| COLD patch — all 120 patches require reboot | INFO | Carrier operator deferral risk amplifies exposure window |
+| swm-owned modules with perms 777 | LOW | Group-writable if group membership misconfigured post-auth |
+
+---
+
+## Huawei VRP V200 Switch Bootloader (RE findings)
+
+**File:** `targets/huawei/s6720_switch_re.py`
+
+Reverse-engineered S6720EI campus switch bootloader SquashFS (VRP V200R012C00).
+
+### Platform architecture
+
+| Component | Detail |
+|---|---|
+| Management CPU | Freescale e500mc (PowerPC 32-bit, big-endian) |
+| Data-plane ASIC | Broadcom BCM56xxx (Trident2/Tomahawk, iProc) |
+| Secondary CPU | HiSilicon Hi1215 (board initialization) |
+| OS | Wind River Linux 6.0.0.36 (LTSI) |
+| Kernel | Linux 3.10.62-ltsi-WR6.0.0.36_standard |
+| RTOS | Dopra Linux (`taskDopra.ko` LKM) |
+
+Confirmed from ELF header (`ELF 32-bit MSB executable, PowerPC or cisco 4500`) and
+build path in bootloader binary: `/usr1/Codes/R12/V200R012C00/build/linux/kernel_project/build-fsl_e500mc/`.
+
+### Broadcom BDE modules
+
+`linux-kernel-bde.ko` + `linux-user-bde.ko` — Broadcom Device Environment, standard
+SDK components shipped with BCM switch ASICs. The iProc reference
+(`shbde_pci_iproc_version_get`) confirms a Trident2/Tomahawk-class ASIC with embedded
+ARM Cortex-A9 management core.
+
+`linux-user-bde.ko` exposes DMA memory to userspace. The default DMA buffer is 4MB.
+Historical BDE versions have allowed privilege escalation when the DMA buffer is
+accessible to non-root processes.
+
+### Dopra RTOS
+
+`taskDopra.ko` — Huawei's proprietary real-time scheduler loaded as an LKM on top of
+Wind River Linux. Author: HUAWEI. License: GPL (declaration required for kernel module
+loading; Dopra code itself is proprietary). Exports `callstack_kernel_version_get`.
+
+The same Dopra architecture appears in MA5800 OLT (Linux 3.10.53-HULK2, ARM).
+Two different Dopra kernel generations confirmed across the Huawei carrier portfolio.
+
+### Flash partitions
+
+Dual-redundancy flash scheme:
+- `/mnt/nsysmain/` — primary system flash (bootloader, kernel, Hi1215 firmware)
+- `/mnt/nsysback/` — backup system flash (same structure)
+
+HiSilicon Hi1215 firmware blob path: `/mnt/nsysmain/hi1215_bootloader.bin`
+
+### Security findings
+
+| Finding | Severity | Detail |
+|---|---|---|
+| SSH/SFTP in bootloader recovery SquashFS | MEDIUM | `sftp`, `sftp.sh`, `sftpwd`, `ssh` present before VRP OS load; no RBAC/AAA |
+| `supp_kernel_NoHeart.ko` watchdog suppressor | INFO | Intentional design; attack relevance bounded by CAP_SYS_MODULE requirement |
+| Broadcom BDE DMA userspace interface | INFO | `linux-user-bde.ko` exposes 4MB DMA buffer; historical privilege escalation vector |
