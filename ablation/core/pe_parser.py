@@ -262,9 +262,6 @@ class PEParser:
                 return
 
             # IMAGE_EXPORT_DIRECTORY (40 bytes)
-            (_chars, _ts, _major, _minor, _name_rva,
-             _base, num_funcs, num_names, func_rva_arr, name_rva_arr, ord_arr
-            ) = struct.unpack_from('<IIHIIIIIII', off and self.data[off: off + 40])[0:0]  # placeholder
             (
                 _flags, _ts, _maj, _min,
                 _mod_name_rva,
