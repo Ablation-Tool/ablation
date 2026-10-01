@@ -391,7 +391,7 @@ The ARK ISA is accumulator-centric: most instructions read from or write to
 `_acc`. The decompiler tracks `_acc` as a named slot alongside the numbered
 virtual registers.
 
-After all instructions are lifted, two post-processing passes run in order:
+After all instructions are lifted, three post-processing passes run in order:
 
 **Pass 1 — accumulator copy-propagation** (`_propagate_acc`, Cifuentes §5.4.6).
 For each `_acc = EXPR` line: if the next substantive line's rhs contains `_acc`
@@ -402,7 +402,8 @@ transparent for look-ahead. Produces `return foo.bar` instead of
 
 **Pass 2 — control flow structuring** (`_structure_cfg`, Cifuentes §6.6.1/§6.6.2).
 Parses the flat `label+goto` statement list into `_BB` basic blocks, builds a
-`label → index` map, then recursively matches three structural patterns:
+`label → index` map, then runs Pass 2.5 before recursively matching structural
+patterns:
 
 - **While loop**: header block ends with `if (exit_cond) goto L_after`; a later
   block ends with `goto L_head` (back-edge). Emitted as `while (!exit_cond) { body }`.
@@ -415,6 +416,14 @@ Condition negation is required in all three cases because ARK bytecode encodes
 conditionals as jump-if-false exits: the fall-through path is always the
 then-branch. Unrecognized patterns (exception handlers, non-reducible CFGs)
 fall back to raw `label+goto` output.
+
+**Pass 2.5 — short-circuit evaluation merging** (`_merge_short_circuit`,
+Cifuentes 1995 Figure 7; Cifuentes/Simon 1998 §5.2). Runs inside Pass 2
+between `_parse_blocks` and `_cfg_emit`. Collapses consecutive conditional
+blocks with the same `goto_tgt` into a single `||`-merged condition. ArkTS
+`a || b` compiles to two consecutive conditional jumps with the same target;
+without this pass both branches appear as raw gotos. Iterates until stable to
+handle chains of three or more conditions (e.g. null/undefined guard triples).
 
 ### Index table routing
 

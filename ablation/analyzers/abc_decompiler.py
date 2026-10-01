@@ -248,11 +248,64 @@ _OP_FLIP: Dict[str, str] = {
 
 
 def _negate(cond: str) -> str:
+    if ' || ' in cond or ' && ' in cond:
+        return f'!({cond})'
     for op, neg in _OP_FLIP.items():
         tok = f' {op} '
         if tok in cond:
             return cond.replace(tok, f' {neg} ', 1)
     return f'!({cond})'
+
+
+def _merge_short_circuit(bls: List[_BB]) -> List[_BB]:
+    """Merge consecutive same-target conditionals into a single || expression.
+
+    ArkTS `a || b` compiles to two consecutive conditional jumps with the same
+    target.  `_try_if` cannot match the first block alone (its fall-through is
+    another conditional, not a body).  Merging restores the compound condition
+    before structuring runs (Cifuentes 1995, Figure 7).
+
+    Conditions:
+    - Both blocks have term_type == 'cond' and the same goto_tgt.
+    - The second block has no label (no external entry) and no stmts
+      (no side-effectful instructions between the two branch points).
+
+    Iterates until stable to handle chains of three or more conditions.
+    """
+    changed = True
+    while changed:
+        changed = False
+        result: List[_BB] = []
+        i = 0
+        while i < len(bls):
+            bb = bls[i]
+            j = i + 1
+            if (j < len(bls)
+                    and bb.term_type == 'cond'
+                    and bls[j].term_type == 'cond'
+                    and bb.goto_tgt == bls[j].goto_tgt
+                    and not bls[j].label
+                    and not bls[j].stmts):
+                new_cond = f'{_paren(bb.cond_expr)} || {_paren(bls[j].cond_expr)}'
+                new_term = f'    if ({new_cond}) goto {bb.goto_tgt}'
+                result.append(_BB(
+                    idx=bb.idx,
+                    label=bb.label,
+                    stmts=bb.stmts[:],
+                    term=new_term,
+                    term_type='cond',
+                    goto_tgt=bb.goto_tgt,
+                    cond_expr=new_cond,
+                ))
+                i += 2
+                changed = True
+            else:
+                result.append(bb)
+                i += 1
+        bls = result
+    for k, bb in enumerate(bls):
+        bb.idx = k
+    return bls
 
 
 def _structure_cfg(lines: List[str]) -> List[str]:
@@ -271,6 +324,7 @@ def _structure_cfg(lines: List[str]) -> List[str]:
     if len(blocks) <= 1:
         return lines
 
+    blocks = _merge_short_circuit(blocks)
     lidx: Dict[str, int] = {b.label: b.idx for b in blocks if b.label}
 
     out: List[str] = [header]
