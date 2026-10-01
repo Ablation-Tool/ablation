@@ -326,6 +326,36 @@ for f in findings:
 | `sink_arg` | Human label for the dangerous argument (`count`, `size`, etc.) |
 | `context` | Space-separated hex words of the four-instruction sequence |
 
+### PE32+ mode (UEFI DXE modules)
+
+```python
+from ablation.analyzers.loongarch64_max_not_min_scanner import LA64MaxNotMinScanner
+
+data = open('/path/to/TlsDxe.efi', 'rb').read()
+scanner = LA64MaxNotMinScanner.from_pe32plus(data, image_base=0)
+findings = scanner.scan()
+print(scanner.report(findings))
+```
+
+PE32+ (UEFI DXE/PEIM) binaries have no PLT/GOT — external functions such as
+`AllocatePool` and `CopyMem` are called via EFI Boot Services Table pointers
+through `jirl $ra, rj, 0` indirect calls.  The scanner cannot resolve sink names
+automatically.  Instead, in PE32+ mode the scanner flags any `bl` or `jirl` call
+where the max-not-min result is live in an argument register (`$a0`–`$a7`) at
+call time.  Findings use `sink_name="<direct>"` or `"<indirect>"` with
+`sink_arg` set to the register name; confirm manually whether the callee is
+`AllocatePool`, `CopyMem`, or another sizing sink.
+
+The VA/file-offset mapping is handled automatically: the parser reads the PE32+
+optional header and code section table, then sets a bias so the standard
+`_words_at()` path resolves VAs to the correct file offsets without copying
+the section into a new buffer.
+
+Validation corpus: TencentOS Server 4.6 EDK2 UEFI (QEMU_EFI.fd, LoongArch64).
+87 DXE modules, 63 sink-proximate findings, 26 affected modules.
+Highest-risk module: TlsDxe (GUID 3aceb0c0-3c72-11e4-9a56-74d435052646, 13
+findings) — network-reachable in PXE/HTTP-boot context, no ASLR.
+
 ### Known false positives
 
 The Rust Vec-append pattern uses a `bltu remaining_cap, read_result, error` guard

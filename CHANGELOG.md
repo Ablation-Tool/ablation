@@ -2,6 +2,15 @@
 
 ---
 
+## v2.30.0
+
+- **`LA64MaxNotMinScanner`: PE32+ mode and OR commutativity fix** (`analyzers/loongarch64_max_not_min_scanner.py`)
+  - `from_pe32plus(data, image_base=0)` classmethod: loads a UEFI PE32+ DXE/PEIM module directly. Parses the PE32+ section table to find the first code section, computes a file-offset bias so the existing `_words_at()` address machinery works without copying section data. No lief dependency for PE32+ path.
+  - PE32+ has no PLT/GOT. `_check_lookahead()` enters arg-register feed mode when `self._pe32plus` is True: any `bl` or `jirl $ra,...` call where the max-not-min result is live in `$a0`–`$a7` produces a finding with `sink_name="<direct>"` or `"<indirect>"` and `sink_arg` set to the ABI register name. Confirm callee manually (AllocatePool/CopyMem arrive via EFI Boot Services Table pointers through `jirl`).
+  - **OR commutativity fix**: the four-instruction sequence check previously required `or Rout, Rtmp2, Rtmp1` exactly. GCC may also emit `or Rout, Rtmp1, Rtmp2` (commuted). Both encode the same `max(Ra,Rb)`. Changed the check to `{rj, rk} == {rtmp1, rtmp2}` (set equality). This was a silent miss on every binary where GCC chose the commuted ordering — validated on TencentOS EDK2 PE32+ modules.
+  - Validation: 87 DXE modules from `edk2-loongarch64-fw` (TencentOS Server 4.6, `QEMU_EFI.fd`). 63 sink-proximate findings across 26 modules. Highest-risk module: TlsDxe (13 findings, network-reachable in PXE/HTTP-boot, no ASLR). ELF regression clean (existing libstd findings unaffected).
+  - Docs: `docs/module-reference/vuln-scanners.md` PE32+ mode section added; `CLAUDE.md` tool table and quick-reference updated.
+
 ## v2.29.0
 
 - **`loongarch_decoder_v2`: KASAN/KCOV-aware LoongArch64 decoder** (`analyzers/loongarch_decoder_v2.py`, new)
