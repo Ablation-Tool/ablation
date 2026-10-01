@@ -2,6 +2,19 @@
 
 ---
 
+## v2.33.0
+
+- **TencentOS kernel modules sweep: 14 findings across 1096 .ko files** (targets, not in repo)
+  - Swept all 1096 kernel modules from `kernel-modules-6.6.119-52.9.tl4` with LA64MaxNotMinScanner + LA64HeapVulnScanner
+  - **6 CONFIRMED HIGH** (F-037..F-042): `mlx5_ib_post_send` ×2 (RDMA), `hidp_raw_request` (BT proximity), `tcmu_copy_data` (remote iSCSI), `qedi_ll2_recv_thread` (remote iSCSI), `brcmf_cfg80211_join_ibss` (WiFi + 3× memcpy)
+  - **2 PLAUSIBLE** (F-043..F-044): `rds_info_copy` (LOCAL getsockopt), `btusb_setup_qca_download_fw` (USB BT firmware)
+  - **3 PLAUSIBLE_LOW** (F-045..F-047): ntb_tool debug ×2, mpt3sas hardware event
+  - **3 ELIMINATED** (F-048..F-050): hso_resume (power mgmt), qla2xx sysfs stats, snd-cs46xx audio
+  - All 14 patterns byte-verified; all memcpy sinks confirmed via `.rela.text` R_LARCH_B26 entries
+  - Fixed ET_REL VA bug: `pattern_va = text_file_off + section_offset`; rela lookup uses section-relative `r_offset`
+  - Root cause: same GCC 12.3.1.7-1.tl4 max-not-min codegen bug as F-029..F-034; ring-0 context elevates severity
+  - RE module docstring updated to reflect extended status
+
 ## v2.32.0
 
 - **TencentOS LoongArch64 RE: full corpus survey complete** (targets, not in repo)
