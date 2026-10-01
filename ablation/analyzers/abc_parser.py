@@ -333,6 +333,25 @@ class ABCParser:
         eid = self._read_u32(ih.class_idx_off + n * 4)
         return self.get_string(eid)
 
+    def resolve_method_idx(self, n: int, region: int = 0) -> str:
+        """
+        Resolve a property/global name index N from IndexHeader[region].method_idx.
+
+        Property-access instructions (ldobjbyname, stobjbyname, tryldglobalbyname,
+        stglobalvar, etc.) encode their 'd'-kind operand as an INDEX into the
+        per-region method_idx array, which is separate from class_idx.
+        method_idx[N] → entity_id → string offset → decoded name.
+
+        Returns the decoded string, or "" if N is out of range.
+        """
+        if region >= len(self._idx_headers):
+            return ""
+        ih = self._idx_headers[region]
+        if n < 0 or n >= ih.method_idx_size:
+            return ""
+        eid = self._read_u32(ih.method_idx_off + n * 4)
+        return self.get_string(eid)
+
     def _read_string(self, off: int) -> Tuple[str, int]:
         """
         Returns (decoded_str, end_pos_after_null).

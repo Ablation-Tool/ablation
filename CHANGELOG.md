@@ -2,6 +2,18 @@
 
 ---
 
+## v2.25.0
+
+- **`abc_decompiler`: ARK Bytecode to JavaScript-like pseudocode decompiler** (`analyzers/abc_decompiler.py`, new)
+  - `ABCDecompiler.decompile_method(method, code)`: lifts a `CodeItem` to readable JS-like pseudocode via register-state accumulator tracking (Durfina 2012 front-end/IR/back-end pipeline).
+  - `decompile_class(class_name)`: decompiles all methods whose class name contains the substring.
+  - `decompile_all()`: iterator over every method with code in the file.
+  - Register-state machine tracks `_acc` (ARK accumulator) and all virtual registers as expression strings; argument registers seeded as `a0..aN`.
+  - Semantic tables covering ~40 instruction categories: binary ops (`add2/sub2/mul2/...`), unary ops (`neg/not/typeof/...`), property access (`ldobjbyname/stobjbyname/...`), global vars (`tryldglobalbyname/stglobalvar/...`), call instructions (`callarg0..callthis3/callrange/...`), object construction, function/class definition, conditional branches, lexical scope, module vars, iterators, generators, async.
+  - Branch labels: `_branch_targets()` pre-scans all jumps and inserts `L_XXXX:` labels at target offsets.
+  - `ABCParser.resolve_method_idx(n, region=0)` added: resolves property/global name `d`-kind operands through `IndexHeader.method_idx[]`. Property-access instructions (`ldobjbyname`, `stobjbyname`, `tryldglobalbyname`, `stglobalvar`, etc.) encode their operand as an INDEX into `method_idx`, not `class_idx` and not a raw file offset. Prior `_resolve_entity()` called `get_string(val)` directly, which returned "" for any index < 60 (header size). Fix: route all property/global name operands through `resolve_method_idx(val)`.
+  - Verified on wechat.abc: string loads resolve correctly (`"L@system.curves;"`); property names (`AudioCapturerManager`, `prototype`) resolve via method_idx.
+
 ## v2.24.0
 
 - **`abc_disasm`: ARK Bytecode disassembler** (`analyzers/abc_disasm.py`, new)
