@@ -209,6 +209,10 @@ class RISCV32TaintTracker:
     Custom sinks:
         tracker = RISCV32TaintTracker.from_path('fw', custom_sinks={'arc_exec': [0]})
 
+    HiSilicon WS63 / Hi3863 custom-3 extension:
+        from ablation.analyzers.hisi_rv32_ext import HiSiliconRV32ExtDecoder
+        tracker = RISCV32TaintTracker.from_path(elf, ext_decoder=HiSiliconRV32ExtDecoder())
+
     From BinaryContext:
         tracker = RISCV32TaintTracker.from_context(ctx)
     """
@@ -218,6 +222,7 @@ class RISCV32TaintTracker:
         binary_path: str,
         ctx=None,
         custom_sinks: Optional[Dict[str, List[int]]] = None,
+        ext_decoder=None,
     ):
         self.binary_path = binary_path
         self._ctx = ctx
@@ -226,10 +231,15 @@ class RISCV32TaintTracker:
             self._sinks.update(custom_sinks)
 
         self._data = Path(binary_path).read_bytes()
-        self._md = None
-        if _HAS_CAPSTONE:
-            self._md = capstone.Cs(CS_ARCH_RISCV, CS_MODE_RISCV32 | CS_MODE_RISCVC)
-            self._md.detail = False
+        # ext_decoder: optional drop-in for capstone.Cs (e.g. HiSiliconRV32ExtDecoder).
+        # Must expose disasm_lite(code, base_va) with the same 4-tuple yield contract.
+        if ext_decoder is not None:
+            self._md = ext_decoder
+        else:
+            self._md = None
+            if _HAS_CAPSTONE:
+                self._md = capstone.Cs(CS_ARCH_RISCV, CS_MODE_RISCV32 | CS_MODE_RISCVC)
+                self._md.detail = False
 
         self._plt: Dict[int, str] = {}
         self._plt_by_name: Dict[str, int] = {}
