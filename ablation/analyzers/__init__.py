@@ -2,6 +2,8 @@ from .semantic_search import SemanticSearcher, describe_function, normalize_asm,
 from .taint_tracker_arm32 import ARM32TaintTracker, TaintFinding32, TaintState32
 from .intoverflow_scanner_arm32 import ARM32IntOverflowScanner, IntOverflowFinding32
 from .arm32_reg_annotator import ARM32RegAnnotator
+from .taint_tracker_arm64 import ARM64TaintTracker, TaintFindingARM64
+from .arm64_fgets_fd_discriminator import ARM64FgetsFdDiscriminator, FgetsClassifiedFinding
 from .version_delta import VersionTracker, diff_functions
 from .func_id_db import FuncDB
 from .go_pclntab import GoFuncTable
@@ -111,6 +113,8 @@ __all__ = [
     "ARM32TaintTracker", "TaintFinding32", "TaintState32",
     "ARM32IntOverflowScanner", "IntOverflowFinding32",
     "ARM32RegAnnotator",
+    "ARM64TaintTracker", "TaintFindingARM64",
+    "ARM64FgetsFdDiscriminator", "FgetsClassifiedFinding",
     "VersionTracker", "diff_functions",
     "FuncDB",
     "GoFuncTable",
