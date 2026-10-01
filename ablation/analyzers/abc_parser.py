@@ -315,6 +315,24 @@ class ABCParser:
         name, _ = self._read_string(offset)
         return name
 
+    def resolve_class_idx(self, n: int, region: int = 0) -> str:
+        """
+        Resolve a class/string index N from IndexHeader[region].class_idx.
+
+        In dynamic ABC, bytecode instruction operands of kind 'd' (entity ID)
+        are NOT raw file offsets — they are INDICES into the per-region
+        class_idx array.  E.g. lda.str N → class_idx[N] → entity_id → string.
+
+        Returns the decoded string, or "" if N is out of range.
+        """
+        if region >= len(self._idx_headers):
+            return ""
+        ih = self._idx_headers[region]
+        if n < 0 or n >= ih.class_idx_size:
+            return ""
+        eid = self._read_u32(ih.class_idx_off + n * 4)
+        return self.get_string(eid)
+
     def _read_string(self, off: int) -> Tuple[str, int]:
         """
         Returns (decoded_str, end_pos_after_null).
