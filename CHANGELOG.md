@@ -2,6 +2,18 @@
 
 ---
 
+## v2.27.0
+
+- **`abc_decompiler`: control flow structuring pass** (`_structure_cfg`, `_BB`, Cifuentes §6.6.1/§6.6.2)
+  - Runs after `_propagate_acc` on the flat `label+goto` statement list. Parses the list into `_BB` basic blocks at label and branch boundaries, builds a `label → block_index` map, then applies three structural patterns recursively.
+  - **While loop** (§6.6.1): header block has a label, ends with `if (exit_cond) goto L_after`, and some later block ends with `goto L_head` (back-edge detected by position: `label_idx[target] <= source_idx`). The exit condition is negated to produce `while (loop_cond) { body }`. The latching block's terminal goto is suppressed.
+  - **If/else** (§6.6.2, Pattern A): conditional block ends with `if (cond) goto L_else`; last then-block ends with `goto L_end`. Emitted as `if (!cond) { then } else { else }`.
+  - **Simple if** (§6.6.2, Pattern B): `if (cond) goto L_skip`; fall-through is the then-body. Emitted as `if (!cond) { body }`.
+  - `_negate(cond)` flips the operator (`==↔!=`, `<↔>=`, `>↔<=`, strict variants) rather than wrapping in `!(...)` when possible.
+  - Condition negation is required because ARK bytecode encodes branches as "jump-if-false" exits: the fall-through path is the then-branch, so the emitted condition is the negation of the jump condition.
+  - Unrecognized patterns (exception-handler targets, multi-exit loops, cross-region gotos) fall back to raw `label+goto` output unchanged.
+  - Verified on wechat.abc: 867/867 methods OK, 0 errors; 2 while loops structured, 227 if-bodies structured, 154 if/else pairs; 45 residual raw conditional gotos (exception paths and non-reducible patterns).
+
 ## v2.26.0
 
 - **`abc_decompiler`: accumulator copy-propagation pass** (`_propagate_acc`, Cifuentes §5.4.6)
