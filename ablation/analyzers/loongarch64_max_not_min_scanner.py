@@ -153,12 +153,13 @@ class LA64MaxNotMinScanner:
     LOOKAHEAD = 20
 
     def __init__(self, data: bytes, base: int, plt: Dict[int, str],
-                 text_va: int, text_size: int):
+                 text_va: int, text_size: int, is_rel: bool = False):
         self._data    = data
         self._base    = base
         self._plt     = plt
         self._text_va = text_va
         self._text_sz = text_size
+        self._is_rel  = is_rel  # True for ET_REL (kernel modules): plt keyed by file offset
 
     @classmethod
     def from_path(cls, path: str) -> 'LA64MaxNotMinScanner':
@@ -168,42 +169,82 @@ class LA64MaxNotMinScanner:
         text_va  = 0
         text_sz  = len(data)
 
+        _is_rel_flag = False
         if _LIEF_OK:
             try:
                 binary = lief.parse(data)
                 if isinstance(binary, lief.ELF.Binary):
-                    base = binary.imagebase
-                    text_sec = binary.get_section('.text')
-                    if text_sec:
-                        text_va = int(text_sec.virtual_address)
-                        text_sz = int(text_sec.size)
+                    _is_rel_flag = (int(binary.header.file_type) == 1)  # ET_REL = 1
+                    is_rel = _is_rel_flag
 
-                    # LoongArch64 PLT uses 2-slot (32-byte) header; stubs start at index 2.
-                    # Each PLT stub is 16 bytes (4 instructions: pcaddu12i + ld.d + jirl + nop).
-                    plt_sec  = binary.get_section('.plt')
-                    rela_plt = binary.get_section('.rela.plt')
-                    if plt_sec and rela_plt:
-                        plt_base = int(plt_sec.virtual_address)
-                        rela_data = bytes(rela_plt.content)
-                        # Rela64: 8-byte offset + 8-byte info + 8-byte addend = 24 bytes each
-                        entry_size = 24
-                        for idx in range(len(rela_data) // entry_size):
-                            off = idx * entry_size
-                            r_info = struct.unpack_from('<Q', rela_data, off + 8)[0]
-                            sym_idx = r_info >> 32
-                            try:
-                                sym = binary.dynamic_symbols[sym_idx]
-                                name = sym.name or ''
-                            except Exception:
-                                name = ''
-                            if name:
-                                # stub slot = 2 (header) + idx, each 16 bytes
-                                stub_va = plt_base + (2 + idx) * 16
-                                plt[stub_va] = name
+                    if is_rel:
+                        # ET_REL (kernel module): sections have no load VA.
+                        # Use file offset as the "VA" so that _words_at(offset, n)
+                        # computes off = offset - base = offset - offset = 0 from section start.
+                        # base stays 0; text_va = section file offset.
+                        text_sec = binary.get_section('.text')
+                        if text_sec:
+                            text_va = int(text_sec.offset)
+                            text_sz = int(text_sec.size)
+
+                        # Build sink map from .rela.text: relocations that target external
+                        # symbols (UND) are calls to kernel exports like kmalloc/memcpy.
+                        # RELA entry for a BL is placed at the BL instruction's file offset.
+                        rela_text = binary.get_section('.rela.text')
+                        if rela_text:
+                            rela_data = bytes(rela_text.content)
+                            entry_size = 24  # Rela64
+                            text_file_off = int(text_sec.offset) if text_sec else 0
+                            syms = list(binary.symbols)
+                            for i in range(len(rela_data) // entry_size):
+                                off = i * entry_size
+                                r_offset = struct.unpack_from('<Q', rela_data, off)[0]
+                                r_info   = struct.unpack_from('<Q', rela_data, off + 8)[0]
+                                sym_idx  = r_info >> 32
+                                r_type   = r_info & 0xffffffff
+                                # R_LARCH_B26 = 66 (0x42) — BL relocation type for function calls
+                                if r_type != 66:
+                                    continue
+                                try:
+                                    sym = syms[sym_idx]
+                                    name = sym.name or ''
+                                except Exception:
+                                    name = ''
+                                if name and name in _SINKS:
+                                    # r_offset is the offset within .text where the BL lives
+                                    call_file_off = text_file_off + r_offset
+                                    plt[call_file_off] = name
+                    else:
+                        base = binary.imagebase
+                        text_sec = binary.get_section('.text')
+                        if text_sec:
+                            text_va = int(text_sec.virtual_address)
+                            text_sz = int(text_sec.size)
+
+                        # LoongArch64 PLT uses 2-slot (32-byte) header; stubs start at index 2.
+                        # Each PLT stub is 16 bytes (4 instructions: pcaddu12i + ld.d + jirl + nop).
+                        plt_sec  = binary.get_section('.plt')
+                        rela_plt = binary.get_section('.rela.plt')
+                        if plt_sec and rela_plt:
+                            plt_base = int(plt_sec.virtual_address)
+                            rela_data = bytes(rela_plt.content)
+                            entry_size = 24
+                            for idx in range(len(rela_data) // entry_size):
+                                off = idx * entry_size
+                                r_info = struct.unpack_from('<Q', rela_data, off + 8)[0]
+                                sym_idx = r_info >> 32
+                                try:
+                                    sym = binary.dynamic_symbols[sym_idx]
+                                    name = sym.name or ''
+                                except Exception:
+                                    name = ''
+                                if name:
+                                    stub_va = plt_base + (2 + idx) * 16
+                                    plt[stub_va] = name
             except Exception:
                 pass
 
-        return cls(data, base, plt, text_va, text_sz)
+        return cls(data, base, plt, text_va, text_sz, is_rel=_is_rel_flag)
 
     # ------------------------------------------------------------------
 
@@ -316,7 +357,9 @@ class LA64MaxNotMinScanner:
 
             # BL instruction: check if a live register is in a known sink arg
             if (word & _MASK_BL) == _MATCH_BL:
-                target = _bl_target(word, va)
+                # ET_REL: plt is keyed by call-site file offset (= va in rel mode)
+                # ET_DYN/EXEC: plt is keyed by PLT stub VA (= resolved BL target)
+                target = va if self._is_rel else _bl_target(word, va)
                 sym = self._plt.get(target)
                 if sym and sym in _SINKS:
                     expected_reg, arg_label = _SINKS[sym]
