@@ -14,21 +14,21 @@ Combinado con Claude Code u OpenAI Codex, se convierte en una herramienta de ing
 
 ## Capacidades
 
-**Búsqueda semántica con BERT:** La búsqueda semántica encuentra resultados por significado, no por palabras clave exactas. BERT lee el texto e infiere su significado. Significados similares obtienen puntuaciones similares, así que puedes buscar por concepto en lugar de por palabras exactas. Al combinar ambas técnicas, se acelera el principal cuello de botella de la ingeniería inversa mientras se identifican las funciones vulnerables.
+**Búsqueda semántica con BERT:** Busca código por concepto en lugar de palabras exactas. Al mapear el significado real del texto, supera el principal cuello de botella de la ingeniería inversa para ayudarte a identificar vulnerabilidades más rápido.
 
-**Rendimiento extremo:** Un binario de 50 MB carga en 35 segundos. Ghidra e IDA Pro pueden tardar horas porque analizan el archivo completo en una base de datos antes de que puedas hacer nada. Ablation solo analiza las funciones en las que estás trabajando activamente, así que empiezas de inmediato.
+**Rendimiento extremo:** Carga binarios masivos en segundos en lugar de horas. Al analizar solo el código que estás viendo activamente, omite el procesamiento inicial pesado de las herramientas tradicionales para que puedas empezar a hacer ingeniería inversa de inmediato.
 
-**Comparación de versiones:** Utilizando el método de Jaccard para medir cuánto se superpone el comportamiento de una función entre versiones y Dynamic Time Warping para rastrear la "forma" de ejecución a través de versiones de firmware, Ablation confirma si un parche realmente cambió la lógica o solo el empaquetado, porque una recompilación cosmética no puede ocultar una vulnerabilidad sin parchear.
+**Comparación de versiones:** Analiza el comportamiento real del software actualizado para verificar los parches del proveedor. Atraviesa el reempaquetado superficial para confirmar si una vulnerabilidad fue realmente corregida u ocultada.
 
 **Análisis multi-binario:** Analiza cada biblioteca compartida en una imagen de firmware simultáneamente, rastreando flujos de datos a través de los límites binarios.
 
 **Auditoría de código fuente:** Audita cualquier codebase grande más rápido que leyéndolo de forma lineal, con mayor precisión que la coincidencia de patrones sola. Cada archivo fuente recibe un perfil de seguridad de 5 bits que determina exactamente cuánta atención necesita, así que nada se pierde y nada se lee dos veces.
 
-**Análisis de drivers del kernel de Windows y BYOVD:** Analiza drivers del kernel en busca de puntos de entrada que expongan memoria del sistema o privilegios de administrador desde el modo usuario. Un driver firmado con esas capacidades es suficiente para deshabilitar el software de seguridad de endpoints.
+**Análisis de drivers del kernel de Windows y BYOVD:** Analiza drivers del kernel en busca de puntos de entrada de riesgo para detener a los atacantes que usan drivers firmados y vulnerables para eludir tu software de seguridad.
 
-**Análisis de Android y APK:** Lee APKs de Android al nivel binario sin dependencias. Mapea los puntos de entrada de código nativo y la superficie IPC desde el bytecode compilado, así que la superficie completa es visible sin descompilar.
+**Análisis de Android y APK:** Mapea las superficies de ataque de las aplicaciones Android sin necesidad de decompilar el código. Analiza y clasifica automáticamente las bibliotecas internas por riesgo de seguridad, permitiéndote apuntar de inmediato a los componentes más vulnerables.
 
-**Análisis de Erlang y BEAM:** Mapea exportaciones, importaciones y átomos desde archivos .beam de bytecode, para que las llamadas peligrosas como `os:cmd` y `code:load_binary` sean visibles sin ejecutar el release.
+**Análisis de Erlang y BEAM:** Analiza de forma segura el bytecode de Erlang para resaltar instantáneamente funciones peligrosas y superficies de ataque ocultas sin ejecutar la aplicación.
 
 **Análisis criptográfico**
 
@@ -40,9 +40,9 @@ Un binario puede ocultar su criptografía del análisis de tabla de importacione
 
 ## Resultados reales
 
-Ablation se ha utilizado para analizar firmware de producción y drivers del kernel de Cisco, Fortinet, Juniper, Apple MacOS, Microsoft Windows, Fujitsu, MikroTik, Orka, TencentOS, Enigma2, Skydio, Axis Communications, Dahua Security System y Tuya.
+Ablation se ha utilizado para analizar firmware de producción y drivers del kernel de Cisco, Fortinet, TencentOS, Huawei, Dahua Security System y otros.
 
-Tras la divulgación coordinada sobre Cisco FMC e ISE, el Cisco Product Security Incident Response Team (PSIRT) ha adoptado Ablation para la clasificación interna de vulnerabilidades. Cisco PSIRT lo está utilizando activamente para clasificar informes de divulgación en curso en Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex y Catalyst. Cisco Adaptive Security Appliance (ASA) LINA también ha sido sometido a ingeniería inversa con Ablation, con hallazgos actualmente bajo clasificación coordinada a través de CERT/CC VINCE.
+Tras la divulgación coordinada sobre Cisco FMC e ISE, el Cisco Product Security Incident Response Team (PSIRT) ha adoptado Ablation para la clasificación interna de vulnerabilidades. Cisco PSIRT lo está utilizando activamente para clasificar informes de divulgación en curso en Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), Catalyst. Cisco Adaptive Security Appliance (ASA) LINA también ha sido sometido a ingeniería inversa con Ablation, con hallazgos actualmente bajo clasificación coordinada a través de CERT/CC VINCE.
 
 | CVE | Producto | Título | CVSS | Aviso |
 |---|---|---|---|---|
@@ -53,16 +53,21 @@ Tras la divulgación coordinada sobre Cisco FMC e ISE, el Cisco Product Security
 
 ---
 
-## 13 Descompiladores locales
+## Descompiladores
 
-| Arquitectura | Variantes |
+| ISA / Runtime | Variantes |
 |---|---|
 | x86 | x86-32 · x86-64 |
 | ARM | ARM-32 · ARM-64 |
 | MIPS | MIPS-32 · nanoMIPS · MIPS-64 |
 | PowerPC | PPC-32 · PPC-64 |
 | RISC-V | RISC-V 32 · RISC-V 64 |
-| Embebido | ARC EM/HS · V850-32 |
+| ARC | ARC EM/HS |
+| V850 | V850-32 |
+| LoongArch | LoongArch64 |
+| DEX | Dalvik · ART |
+| ARK | ArkTS |
+| BEAM | Erlang · Elixir |
 
 ---
 
@@ -104,6 +109,8 @@ Este proyecto fue fundamentalmente informado e inspirado por varias obras litera
 
 | Título | Autores | Cita |
 |---|---|---|
+| [Reverse Compilation Techniques](https://scholar.google.com/citations?view_op=view_citation&hl=en&user=iseZ69MAAAAJ&citation_for_view=iseZ69MAAAAJ:u-x6o8ySG0sC) · [Specifying the Semantics of Machine Instructions](https://ieeexplore.ieee.org/document/693702) · [UQBT: Adaptable Binary Translation at Low Cost](https://ieeexplore.ieee.org/document/825697) · [Machine-Adaptable Dynamic Binary Translation](https://dl.acm.org/doi/10.1145/351397.351414) | [Dr. Cristina Cifuentes](https://scholar.google.com/citations?hl=en&user=iseZ69MAAAAJ) | [abc_parser.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/abc_parser.py) · [abc_disasm.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/abc_disasm.py) · [abc_decompiler.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/abc_decompiler.py) · [dataflow_engine.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/dataflow_engine.py) · [loongarch_decoder_v2.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/loongarch_decoder_v2.py) |
+| [Design of a Retargetable Decompiler for a Static Platform-Independent Malware Analysis](https://www.researchgate.net/publication/220849941_Design_of_a_Retargetable_Decompiler_for_a_Static_Platform-Independent_Malware_Analysis) | [Petr Zemek](https://github.com/s3rvac), Lukáš Ďurfina, Jakub Křoustek, Dušan Kolář, Tomas Hruska, Karel Masařík, Alexander Meduna | [abc_decompiler.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/abc_decompiler.py) |
 | [Finding Taint-Style Vulnerabilities in Linux-based Embedded Firmware with SSE-based Alias Analysis](https://arxiv.org/abs/2109.12209) | Cheng, Zheng, Liu, Guan, Liu, Li, Zhu, Ye, Sun | [sse_slicer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/sse_slicer.py) · [arm64_global_tracker.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/arm64_global_tracker.py) |
 | [iResolveX: Multi-Layered Indirect Call Resolution via Static Reasoning and Learning-Augmented Refinement](https://arxiv.org/abs/2601.17888) | Monika Santra, Bokai Zhang, Mark Lim, [Vishnu Asutosh Dasu](https://github.com/vdasu), Dongrui Zeng, [Gang Tan](https://github.com/gangtan) | [vtable_resolver.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/vtable_resolver.py) · [interproc_field_writer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/interproc_field_writer.py) · [arm64_global_tracker.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/arm64_global_tracker.py) |
 | [Extracting Protocol Format as State Machine via Controlled Static Loop Analysis](https://arxiv.org/abs/2305.13483) | [Qingkai Shi](https://github.com/qingkaishi), Xiangzhe Xu, Xiangyu Zhang | [proto_fsm.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/proto_fsm.py) |
@@ -155,7 +162,7 @@ flowchart TD
     BCtx -->|"context"| Diffing["<b>Diffing Engine</b><br/><i>DTW / Version Delta</i>"]
     BCtx -->|"context"| FmtStr["<b>Format String</b><br/><i>Specifier Scanner</i>"]
     BCtx -->|"context"| Heap["<b>Heap Scanner</b><br/><i>Chunk / UAF Audit</i>"]
-    BCtx -->|"context"| MultiArch["<b>Multi-Arch Engine</b><br/><i>MIPS · PPC · RISC-V · ARC · V850</i>"]
+    BCtx -->|"context"| MultiArch["<b>Multi-Arch Engine</b><br/><i>MIPS · PPC · RISC-V · ARC · V850 · LoongArch64</i>"]
     BCtx -->|"context"| Driver["<b>Driver Engine</b><br/><i>Kernel IOCTL / BYOVD Audit</i>"]
 
     Corpus -->|"embeddings"| Semantic["<b>Semantic Search</b><br/><i>BERT Behavioral Fingerprints</i>"]
