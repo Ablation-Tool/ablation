@@ -479,6 +479,15 @@ class ManualAdapter(ProbeAdapter):
 
 # ── Adapter registry + dispatch ───────────────────────────────────────────────
 
+def _make_dynamic_adapter():
+    try:
+        from .dynamic_sandbox import DynamicProbeAdapter
+        return DynamicProbeAdapter()
+    except Exception:
+        return None
+
+
+_dynamic = _make_dynamic_adapter()
 _ADAPTERS: List[ProbeAdapter] = [
     DisassemblyAdapter(),
     CFGAdapter(),
@@ -489,6 +498,8 @@ _ADAPTERS: List[ProbeAdapter] = [
     TaintAdapter(),
     ManualAdapter(),
 ]
+if _dynamic is not None:
+    _ADAPTERS.append(_dynamic)
 
 _ADAPTER_MAP: Dict[str, ProbeAdapter] = {a.kind: a for a in _ADAPTERS}
 
@@ -523,4 +534,5 @@ __all__ = [
     "LifterAdapter", "SemanticAdapter", "VersionAdapter",
     "TaintAdapter", "ManualAdapter",
     "execute_probe", "available_kinds",
+    # DynamicProbeAdapter re-exported if unicorn is installed
 ]
