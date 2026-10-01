@@ -55,9 +55,9 @@ Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Securit
 
 ---
 
-## 14 Local Decompilers
+## Decompilers
 
-| Architecture | Variants |
+| ISA / Runtime | Variants |
 |---|---|
 | x86 | x86-32 · x86-64 |
 | ARM | ARM-32 · ARM-64 |
@@ -66,16 +66,9 @@ Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Securit
 | RISC-V | RISC-V 32 · RISC-V 64 |
 | Embedded | ARC EM/HS · V850-32 |
 | LoongArch | LoongArch64 |
-
----
-
-## Bytecode Decompilers
-
-| Runtime | Target |
-|---|---|
-| DEX | Android (Dalvik / ART) |
-| ARK | HarmonyOS (ArkTS) |
-| BEAM | Erlang / Elixir |
+| DEX | Dalvik · ART |
+| ARK | ArkTS |
+| BEAM | Erlang · Elixir |
 
 ---
 
@@ -126,6 +119,8 @@ This project was greatly informed and inspired by several key literary works.
 | [Constant Propagation with Conditional Branches](https://dl.acm.org/doi/abs/10.1145/103135.103136) | Mark N. Wegman, F. Kenneth Zadeck | [dataflow_engine.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/dataflow_engine.py) |
 | [A Simple, Fast Dominance Algorithm](https://www.cs.princeton.edu/techreports/2005/737.pdf) | Cooper, Harvey, Kennedy | [dataflow_engine.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/dataflow_engine.py) |
 | [libdft: Practical Dynamic Data Flow Tracking for Commodity Systems](https://dl.acm.org/doi/10.1145/2151024.2151042) | [Vasileios P. Kemerlis](https://github.com/vkemerlis), [Georgios Portokalidis](https://github.com/portokalidis), [Kangkook Jee](https://github.com/jikk), Angelos D. Keromytis | [taint_tracker_x86.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/taint_tracker_x86.py) · [taint_tracker_arm32.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/taint_tracker_arm32.py) |
+| Reverse Compilation Techniques (PhD thesis, Queensland University of Technology, 1994) | Cristina Cifuentes | [abc_decompiler.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/abc_decompiler.py) · [dataflow_engine.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/dataflow_engine.py) |
+| Design of a Retargetable Decompiler for a Static Platform-Independent Malware Analysis (2012) | Durfina, L., Krcal, J., Zemek, P., Dudak, B., Lengal, O., Krulis, M. | [abc_decompiler.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/abc_decompiler.py) |
 
 **Books** supplied by [www.oreilly.com](https://www.oreilly.com) | [github.com/oreillymedia](https://github.com/oreillymedia)
 
@@ -147,6 +142,14 @@ This project was greatly informed and inspired by several key literary works.
 | Evasive Malware | [Kyle Cucci](https://github.com/d4rksystem) | [process_enum.py](https://github.com/Ablation-Tool/ablation/blob/main/modules/process_enum.py) |
 | Hacking Cryptography | [Kamran Khan](https://github.com/krkhan), [Bill Cox](https://github.com/waywardgeek) | [tls_enum.py](https://github.com/Ablation-Tool/ablation/blob/main/modules/tls_enum.py) |
 | Real-World Cryptography | David Wong | [tls_analyzer.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/core/tls_analyzer.py) |
+
+**Open-Source References**
+
+| Project | Citation |
+|---|---|
+| [OpenHarmony ArkCompiler](https://gitee.com/openharmony/arkcompiler_runtime_core) | [abc_parser.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/abc_parser.py) · [abc_disasm.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/abc_disasm.py) · [abc_decompiler.py](https://github.com/Ablation-Tool/ablation/blob/main/ablation/analyzers/abc_decompiler.py) |
+
+The ARK ISA table (324 opcodes) and CodeItem binary layout were derived from ArkCompiler v13.0.0.0 source — specifically `isa.json` and the `ark-rs` bytecode crate. The dual-array opcode/format pairing and all-ULEB128 prologue are documented there.
 
 **Honorable Mention**
 
