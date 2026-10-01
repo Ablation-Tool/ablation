@@ -2,6 +2,14 @@
 
 ---
 
+## v2.18.0
+
+- **LoongArch64 Step 5: PLT/GOT resolution + R_LARCH_\* constants**
+  - `elf_parser.py`: added `R_LARCH_NONE/32/64/RELATIVE/COPY/JUMP_SLOT/TLS_DTPMOD32/64/TLS_DTPREL32/64/TLS_TPREL32/64/IRELATIVE` constants (psABI v2.30 / binutils loongarch.h).
+  - `taint_tracker_loongarch64.py` — `_load_elf()`: fixed three broken attribute accesses in the `ELFParser` branch (`little_endian`→`endian=="<"`, `section_by_name`→`get_section`, `sym.name/value`→`sym["name"]/sym["st_value"]`); the branch now actually runs instead of silently falling through to pyelftools. Both branches now merge PLT stub addresses (VA→imported symbol name) into `syms` from `get_plt_got_table()` / `.rela.plt`, so every `bl <plt_stub>` call resolves to the exact imported function name rather than the ±16-byte `_PLT_TOL` heuristic.
+
+---
+
 ## v2.17.1
 
 - **`LibraryInventory` bug fixes** (`analyzers/library_inventory.py`): seven correctness bugs fixed after code review.
