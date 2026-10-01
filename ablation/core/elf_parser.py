@@ -34,19 +34,21 @@ ET_NAMES = {ET_NONE: "ET_NONE", ET_REL: "ET_REL",
             ET_EXEC: "ET_EXEC", ET_DYN: "ET_DYN", ET_CORE: "ET_CORE"}
 
 # e_machine
-EM_NONE    = 0
-EM_386     = 3
-EM_MIPS    = 8
-EM_PPC     = 20
-EM_PPC64   = 21
-EM_ARM     = 40
-EM_X86_64  = 62
-EM_AARCH64 = 183
+EM_NONE       = 0
+EM_386        = 3
+EM_MIPS       = 8
+EM_PPC        = 20
+EM_PPC64      = 21
+EM_ARM        = 40
+EM_X86_64     = 62
+EM_AARCH64    = 183
+EM_LOONGARCH  = 258   # LoongArch (LA32/LA64), binutils elf/common.h EM_LOONGARCH
 
 EM_NAMES = {
     EM_NONE: "None", EM_386: "i386", EM_MIPS: "MIPS",
     EM_PPC: "PowerPC", EM_PPC64: "PowerPC64",
     EM_ARM: "ARM", EM_X86_64: "x86-64", EM_AARCH64: "AArch64",
+    EM_LOONGARCH: "LoongArch64",
 }
 
 # Program header types (p_type)
