@@ -888,3 +888,149 @@ WS63 adds an explicit SSB (Secure Secondary Boot) stage and A/B NV redundancy th
 | A/B redundancy for flashboot and NV (OTA safety) | INFO | BS21: A/B flashboot; WS63: A/B flashboot + A/B NV |
 | LiteOS core auditable but NearLink radio stack is proprietary | INFO | WS63 app = LiteOS + proprietary HiSilicon NearLink SLE stack |
 | No CMS/PKCS#7 fwpkg wrapper (unlike VRP/iBMC/HPM) | INFO | Integrity via per-partition signing only |
+
+---
+
+## Huawei Go-Trex Campus Switch VRP V200R022 (.cc three-SquashFS format)
+
+**Analyzed:** S5732-H_V200R022C00SPC500.cc (161MB), S6730-H_V200R022C00SPC500.cc (159MB), S5720EI-V200R019SPH3b0.pat (4.7MB)  
+**Source module:** `targets/huawei/gotrex_switch_re.py`
+
+### VRP V200R022 .cc format
+
+This format is distinct from both the RPG v2 (.cc for NE40E/NE20E) and the CE6810EI format:
+
+| Offset | Size | Field | Notes |
+|---|---|---|---|
+| 0x00 | 4 | Magic | 0x00000000 (no magic bytes — format-version discriminator) |
+| 0x04 | 4 | Entry count BE32 | 0x7C=124 (S5732-H), 0x6B=107 (S6730-H) |
+| 0x08 | N | Version string | Null-terminated: "V200R022C00SPC500" |
+| 0x08+N | variable | Entry metadata | Binary-encoded (partially opaque) |
+
+One ASCII string found in the header region before the first SquashFS: `linux file TYPE!`
+
+The container holds exactly three SquashFS filesystems. There is no CMS/PKCS#7 wrapper. The header occupies ~13KB (S5732-H) or ~19KB (S6730-H) before the first SquashFS.
+
+### Three-SquashFS layout
+
+| SquashFS | Offset (S5732-H) | Offset (S6730-H) | Size | Inodes | Compression | Date | Layer |
+|---|---|---|---|---|---|---|---|
+| 1 | 0x000033D4 | 0x00004CBC | 114MB | 49 | XZ | 2022-11-09 | AI/ASIC platform |
+| 2 | 0x0728EBC4 | 0x072904AC | 7MB | 119 | gzip | 2022-11-07 | BSP/CBB drivers |
+| 3 | 0x07D5CF94 | 0x07D5E87C | 7MB | 717 | gzip | 2022-11-09 | NETCONF/YANG mgmt |
+
+The 114MB SquashFS contains only 49 inodes — each "file" is a large binary blob (compiled ML model, shared library, or binary executable). The split ensures hardware-specific binaries (model-specific ASIC libs) are isolated from the common management stack (SquashFS 3).
+
+### SquashFS 1: AI/ASIC platform layer (114MB, 49 inodes)
+
+Both S5732-H and S6730-H carry the same 49-entry SquashFS 1 (identical NTID model files and AI binaries across both models).
+
+**HiSilicon SD5875 + SD5981 NSE ASICs:**
+
+| Binary | Description |
+|---|---|
+| `lib/libhs_sd5981_nse.so` | HiSilicon SD5981 NSE ASIC driver library |
+| `lib/libhs_lsw_sd5875_armel.so` | SD5875 Layer Switch library (AArch64 EL) |
+| `lib/libhs_lsw_sd5981_armel.so` | SD5981 Layer Switch library (AArch64 EL) |
+| `lib/libenp5981_campus.so` | ENP5981 campus Elastic Network Platform API |
+| `pre_init/np_pre_pcie5981.ko` | NP PCIe pre-init LKM (SD5981 connected via PCIe) |
+| `pre_init/sdkpcie5981.ko` | SD5981 SDK PCIe LKM |
+
+SD5981 is the same NSE ASIC family as S6750-H V600. The `armel` suffix indicates AArch64 execution level (EL). SD5981 is PCIe-connected to the management CPU — two LKMs handle initialization and SDK respectively.
+
+**Atlas A10x AI chip:**
+
+```
+a10xbin/A0104_FW_V12_00_00_release.hdr   (dedicated AI accelerator chip firmware)
+```
+
+A dedicated Atlas 100-series NPU is embedded in the switch hardware, separate from the forwarding ASIC. `A0104` is a board variant code; `V12.00.00` indicates a mature release. The `.hdr` extension matches Huawei's signed firmware header format. This chip enables hardware-accelerated traffic classification without CPU overhead.
+
+**NTID (Network Traffic Intelligence Detection) — on-device ML inference:**
+
+| File | Role |
+|---|---|
+| `ntid.o` | NTID binary module |
+| `lib/libsiteai_cml.so` | SiteAI Compiled ML Model inference library |
+| `lib/libsiteai_util.so` | SiteAI utility library |
+| `usr/local/etc/ntid/knn_model_csv/knn_model.cml` | Compiled KNN model |
+| `usr/local/etc/ntid/knn_model_csv/pca_components.csv` | PCA decomposition components |
+| `usr/local/etc/ntid/knn_model_csv/pca_mean.csv` | PCA mean vector |
+| `usr/local/etc/ntid/knn_model_csv/standard.csv` | Feature standardization parameters |
+| `usr/local/etc/ntid/knn_model_csv/class_gmd.csv` | Traffic class labels |
+| `usr/local/etc/ntid/knn_model_csv/x_train_process_df.csv` | Training data preprocessing descriptor |
+
+NTID pipeline: raw traffic → PCA dimensionality reduction (`pca_components.csv` + `pca_mean.csv`) → feature standardization → KNN classification (`knn_model.cml` via `libsiteai_cml.so`) → traffic type label. The model is trained externally, serialized to CSV+CML format, and deployed on-device for real-time inference.
+
+**TLS/IP decryption and IPS:**
+
+| Binary | Description |
+|---|---|
+| `decpt_ip.out` | On-switch TLS/IP decryption binary |
+| `libdecpt_adp.so` | Decryption adapter library |
+| `ips.so` | Intrusion Prevention System library |
+| `nac.o` | Network Access Control module |
+
+`decpt` = decrypt. The switch can perform inline TLS decryption for deep packet inspection, requiring TLS session keys to be held or injected by a centralized controller. Combined with `ips.so`, this is an inline TLS MitM + IPS architecture at the switch level.
+
+**NGE (Network Graph Engine):**
+
+| Binary | Description |
+|---|---|
+| `nge.out` | NGE binary (purpose requires binary analysis) |
+| `nge.conf` | NGE configuration |
+| `nge-version.zip` | NGE version archive |
+
+### SquashFS 2: BSP/CBB driver layer (7MB, 119 inodes)
+
+Kernel modules for physical switch hardware. Mixed-vendor silicon:
+
+| Module | Vendor | Purpose |
+|---|---|---|
+| `ko/cbb/altera_cpldjtag_drv.ko` | Altera | CPLD JTAG programmer |
+| `ko/cbb/altera_fpga_load_drv.ko` | Altera | FPGA bitstream loader |
+| `ko/cbb/hisi_fpga_load_drv.ko` | HiSilicon | FPGA loader (alongside Altera) |
+| `ko/cbb/bcm54219_phy_drv.ko` | Broadcom | BCM54219 1GbE PHY driver |
+| `ko/cbb/ina220_power_drv.ko` | Texas Instruments | INA220 power monitor |
+| `ko/cbb/can_bus.ko` | — | CAN bus (atypical for switch; likely inter-board management) |
+| `etc/bootload_step1.sh`, `step2.sh` | — | Two-stage bootloader shell scripts |
+
+14 CPLD driver variants total. The presence of `can_bus.ko` is unusual for a campus switch — likely used for inter-board management on modular chassis variants.
+
+### SquashFS 3: NETCONF/YANG management stack (7MB, 717 inodes)
+
+Python 3.9 NETCONF management plane with Redis-backed internal store:
+
+| Component | Detail |
+|---|---|
+| Python 3.9 | `usr/bin/python3.9` |
+| NETCONF plugins | `netconf_remote_plugin.py`, `netconf_ctrl.py`, `netconf_notification.py`, `netconf_patterns.py`, `netconf_pylibconf.py` |
+| YANG models | 40+ protocols: AAA, BGP, BGP-L3VPN, BFD, Capture (!), EVPN, Interfaces, IP, L2VPN, LLDP, Free-Mobility, etc. |
+| libhiredis.so | Redis C client — internal management-plane KV store |
+| libredisapi.so | Redis API wrapper |
+| libconf.so | Huawei configuration management library |
+| libxml2.so.2.9.13 | XML parsing (2022-05-03 release) |
+
+All YANG model plugins are plaintext Python (`.py` files) — extracting SquashFS 3 exposes the complete NETCONF API schema for static analysis.
+
+### S5720EI V200R019 PAT patch format
+
+Same header layout as NE40E SPH and NE8000 SPH patches:
+
+| Offset | Size | Field | Value |
+|---|---|---|---|
+| 0x00 | 32 | Platform version (null-padded) | "V200R019" |
+| 0x20 | 32 | Patch name (null-padded) | "SPH3b0" |
+
+Embedded version strings in the body: `V200R019C00SPC200B319` (from build) and `V200R019C00SPC500B327` (target build). "SPH3b0" is an alphanumeric version tag (not a pure decimal patch count).
+
+### Security findings
+
+| Finding | ID | Severity | Detail |
+|---|---|---|---|
+| On-switch TLS/IP decryption (decpt_ip.out + libdecpt_adp.so) | GOTREX_SEC_001 | MEDIUM | Inline DPI decryption; key storage requires binary analysis; compromise → all TLS sessions decryptable |
+| YANG capture plugin — NETCONF packet capture API | GOTREX_SEC_002 | MEDIUM | `yang_huawei_capture.py` exposes NETCONF capture; plaintext plugins expose full API schema pre-auth |
+| libxml2 2.9.13 — post-release CVE exposure | GOTREX_SEC_003 | LOW | CVE-2022-40303/40304, CVE-2023-28484/29469 may apply; Huawei patch level unconfirmed |
+| All YANG plugins are plaintext Python in firmware | GOTREX_SEC_004 | INFO | Full NETCONF surface exposed via SquashFS 3 extraction |
+| Atlas A10x AI chip embedded (A0104 V12.00.00) | GOTREX_SEC_005 | INFO | Dedicated AI NPU; opaque firmware; management CPU compromise → NPU reflash risk |
+| Redis internal management store (libhiredis) | GOTREX_SEC_006 | INFO | Default Redis = no auth; NETCONF plugin RCE → Redis config store accessible |
