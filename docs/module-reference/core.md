@@ -105,9 +105,10 @@ path runs five passes against the binary to build equivalent `_str_xref_idx` /
 | 2 | same | TOC near-load: `LWZ rX, off(r2)` within ±32KB of r2 | Near-TOC string loads |
 | 3 | `_augment_xrefs_ppc64_precall` | Backward scan from BL: `LIS rX, hi + ADDI rX, lo` pre-call pattern | Inline arg-reg loads before calls |
 | 4 | `_augment_xrefs_ppc64_arrays` | Dense string-pointer array in data seg → batch-indexed by (ha16,lo16) key; single O(M×16) scan replaces O(arrays×M) | String pointer arrays via TOC |
-| 5 | `_augment_xrefs_ppc64_twohop` | Near-TOC entry → far string-pointer array (2-hop: load array base from TOC, then index into array) | **Dominant CryEngine PS3 pattern** |
+| 5 | `_augment_xrefs_ppc64_twohop` | Near-TOC entry → far string-pointer array (2-hop: load array base from TOC, then index into array) — target segment: writable data | **Dominant CryEngine PS3 pattern** |
+| 6 | `_augment_xrefs_ppc64_twohop` (Pass 6) | Same 2-hop mechanism; target segment: X\|R LOAD (code/rodata) — covers arrays that LIEF places in the executable segment | NanoSuit display strings and other rodata arrays |
 
-**Pass 5 detail — the 2-hop pattern:**
+**Pass 5/6 detail — the 2-hop pattern:**
 
 CryEngine PS3 packs string VAs into dense arrays far from r2.  The access pattern is:
 ```
@@ -119,6 +120,12 @@ Pass 5 scans the near-TOC window (r2±32KB) for slots whose target begins a run 
 consecutive string VAs.  It then does a single linear pass over `.text` matching any
 `LWZ rX, off(r2)` whose displacement bytes collide with a discovered slot offset, and
 attributes all strings in the pointed-to array to the enclosing function.
+
+Pass 6 is identical but the "target" segment is the X|R LOAD segment (code/rodata) rather
+than the writable data segment.  The two segments are passed separately because LIEF may
+split them differently depending on whether `.rodata` is in the same PT_LOAD as `.text`.
+`_augment_xrefs_ppc64_twohop` accepts optional `target_data`/`target_va` parameters;
+Pass 5 omits them (defaults to ds_data/ds_va); Pass 6 passes `target_data=code_data`.
 
 For the Crysis 2 PS3 binary (CryEngine 3, Cell PPU, ELFCLASS64), Pass 5 alone produces
 ~12,600 function → string xrefs from 51 array-base TOC slots.
