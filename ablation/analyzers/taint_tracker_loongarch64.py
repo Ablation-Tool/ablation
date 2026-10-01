@@ -568,7 +568,7 @@ def _load_elf(path: str):
                ef.get_section_by_name(".rel.plt"))
     if rela_sh and plt_base and plt_entsz:
         dynsym_sh = ef.get_section_by_name(".dynsym")
-        for plt_idx, rel in enumerate(rela_sh.iter_relocations(), start=1):
+        for plt_idx, rel in enumerate(rela_sh.iter_relocations(), start=2):
             sym_idx = rel["r_info_sym"]
             if dynsym_sh and sym_idx:
                 sym = dynsym_sh.get_symbol(sym_idx)

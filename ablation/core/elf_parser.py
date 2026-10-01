@@ -1158,7 +1158,9 @@ class ELFParser:
         ptr_sz  = struct.calcsize(ptr_fmt)
 
         num_entries = rela_sz // rela_entsz
-        plt_idx     = 1   # slot 0 is the PLT resolver stub
+        # LoongArch64 PLT header is 2 slots (32 bytes); all others are 1 slot.
+        _e_machine = self.ehdr.get("e_machine", 0)
+        plt_idx = 2 if _e_machine == EM_LOONGARCH else 1
 
         for i in range(num_entries):
             pos = rela_off + i * rela_entsz
