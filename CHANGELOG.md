@@ -2,6 +2,17 @@
 
 ---
 
+## v2.24.0
+
+- **`abc_disasm`: ARK Bytecode disassembler** (`analyzers/abc_disasm.py`, new)
+  - Full 324-opcode ISA table embedded from ArkCompiler v13.0.0.0 `isa.json` (4 prefix groups: callruntime/deprecated/wide/throw).
+  - `ARKDisasm.iter_insns(code)`: yields `ARKInstruction` per instruction; unknown opcodes emitted as single-byte `.data` to preserve alignment.
+  - `disasm_method(method, code)`: smali-style text with inline string annotations.
+  - `find_calls(code)`: yields all call-site instructions.
+  - `find_string_loads(code)`: returns `[(insn, resolved_string), ...]`. Resolves `lda.str N` via `ABCParser.resolve_class_idx(N)` — the 16-bit ID is an INDEX into `IndexHeader.class_idx`, not a raw file offset. Added `ABCParser.resolve_class_idx()` to `abc_parser.py`.
+  - Key finding: dual-size opcodes (e.g. `getiterator` at 0x67 vs 0xab) use parallel `opcode_idx[i] ↔ format[i]` arrays in `isa.json`; naive iteration caused 138 false collisions, fixed by pairing arrays.
+  - Verified: `func_main_0` in wechat.abc resolves `lda.str 0x21 → "L@system.curves;"` correctly.
+
 ## v2.23.0
 
 - **`abc_parser`: HarmonyOS Ark Bytecode (ABC) parser — foundation of the HarmonyOS analysis layer** (`analyzers/abc_parser.py`, new)
