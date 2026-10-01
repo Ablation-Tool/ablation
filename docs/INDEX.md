@@ -55,6 +55,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [x86-64 Vtable Analysis](module-reference/vtable-x86-64.md) | ELFVtableReconstructor (.rela.dyn slot reconstruction), VtableDispatchScanner (dead/live method detection) |
 | [Firmware Containers](module-reference/firmware-containers.md) | FirmwareContainer (partitioned image parser + payload detection), VideoContainerAnalyzer (MP4/MKV/AVI forensics) |
 | [Android / APK](module-reference/android.md) | APKParser (AXML+DEX), DexAnalyzer, JniBridgeScanner (JNI_OnLoad/Java_*/opaque peer), BinderScanner (exported services, AIDL Stubs, onTransact), LibraryInventory (native .so scanner: arch, exports, JNI count, PLT hook detection, security score, classify_internals) |
+| [HarmonyOS / ArkTS](module-reference/harmonyos.md) | ABCParser (Ark Bytecode v9–v13+): header, class walk, method iteration, CodeItem (ULEB128), native/string queries |
 | [LLM Analyst](module-reference/llm.md) | LlmAnalyst ReAct agent loop |
 | [LoongArch64](module-reference/loongarch64.md) | LoongArch64TaintTracker (`from_path` / `from_path_full`), LoongArchDecoder, ISA model, CFG builder, DWARF/BTF enrichment, syscall tracking, kernel escalation — TencentOS 4.6 / Loongson 3A5000 |
 
