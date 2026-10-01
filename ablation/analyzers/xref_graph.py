@@ -240,6 +240,9 @@ class XRefGraph:
         if self._arch == 'arm32':
             self._extract_plt_arm32()
             return
+        if self._arch == 'arm64':
+            self._extract_plt_arm64()
+            return
         try:
             # LIEF 1.x API
             for sym in self._binary.imported_functions:
@@ -325,6 +328,85 @@ class XRefGraph:
         except Exception:
             pass
 
+    def _extract_plt_arm64(self):
+        """
+        ARM64 PLT: two-pass.
+        Pass 1: LIEF relocations (JUMP_SLOT) -> GOT VA -> symbol name.
+        Pass 2: Disassemble .plt stubs (ADRP/LDR/ADD/BR, 16 bytes each, skip
+                32-byte resolver at index 0) -> PLT stub VA -> GOT VA -> name.
+        Callers use BL <plt_stub_va>, so stub VAs must be in self._plt.
+        """
+        # Pass 1: GOT VA -> name from dynamic relocations
+        got_to_name: Dict[int, str] = {}
+        try:
+            for rel in self._binary.relocations:
+                if not rel.has_symbol:
+                    continue
+                rtype = str(getattr(rel, 'type', ''))
+                if 'JUMP_SLOT' in rtype and rel.symbol.name:
+                    got_to_name[rel.address] = rel.symbol.name
+        except Exception:
+            pass
+        # Also via imported_functions if available
+        try:
+            for sym in self._binary.imported_functions:
+                if hasattr(sym, 'value') and sym.value and sym.name:
+                    got_to_name[sym.value] = sym.name
+        except Exception:
+            pass
+
+        self._plt.update(got_to_name)
+
+        # Pass 2: disassemble .plt stubs to map stub VA -> GOT VA -> name
+        arm64_arch = getattr(capstone, 'CS_ARCH_AARCH64', None) or getattr(capstone, 'CS_ARCH_ARM64', None)
+        if arm64_arch is None:
+            return
+        try:
+            plt_sec = self._binary.get_section('.plt')
+            if not plt_sec:
+                return
+            plt_data = bytes(plt_sec.content)
+            plt_base = int(plt_sec.virtual_address)
+            # First 32 bytes = resolver stub; real entries start at offset 32, 16 bytes each
+            RESOLVER_SIZE = 32
+            STUB_SIZE = 16
+            md = capstone.Cs(arm64_arch, capstone.CS_MODE_ARM)
+            md.detail = False
+            offset = RESOLVER_SIZE
+            while offset + STUB_SIZE <= len(plt_data):
+                stub_va = plt_base + offset
+                chunk = plt_data[offset: offset + STUB_SIZE]
+                insns = list(md.disasm(chunk, stub_va))
+                # Expect: ADRP x16, page; LDR/NOP; ADD x16, x16, #off; BR x17
+                # Extract page from ADRP and offset from ADD to reconstruct GOT VA
+                page = None
+                got_off = None
+                for insn in insns:
+                    mn = insn.mnemonic.lower()
+                    op = insn.op_str
+                    if mn == 'adrp' and 'x16' in op:
+                        parts = op.split(',')
+                        if len(parts) >= 2:
+                            try:
+                                page = int(parts[-1].strip().lstrip('#'), 16)
+                            except ValueError:
+                                pass
+                    elif mn == 'add' and 'x16' in op:
+                        parts = op.split(',')
+                        if len(parts) >= 3:
+                            try:
+                                got_off = int(parts[-1].strip().lstrip('#'), 16)
+                            except ValueError:
+                                pass
+                if page is not None and got_off is not None:
+                    got_va = page + got_off
+                    name = got_to_name.get(got_va)
+                    if name:
+                        self._plt[stub_va] = name
+                offset += STUB_SIZE
+        except Exception:
+            pass
+
     def _extract_strings(self, min_len: int = 4):
         """Extract null-terminated ASCII strings from .rodata section."""
         rodata = None
@@ -363,10 +445,12 @@ class XRefGraph:
     def _build_call_graph(self, func_starts: Optional[Set[int]] = None):
         """
         Flat-scan disassembly: attribute every call and string-load to its
-        containing function via binary search. Arch-aware for x86-64 and ARM32.
+        containing function via binary search. Arch-aware for x86-64, ARM32, ARM64.
         """
         if self._arch == 'arm32':
             self._build_call_graph_arm32(func_starts)
+        elif self._arch == 'arm64':
+            self._build_call_graph_arm64(func_starts)
         else:
             self._build_call_graph_x86(func_starts)
 
@@ -544,6 +628,130 @@ class XRefGraph:
                                     ptr = struct.unpack_from('<I', chunk, pool_off)[0]
                                 if ptr is not None and self._rodata_start <= ptr < self._rodata_end:
                                     s = self._strings.get(ptr)
+                                    if s:
+                                        self._str_refs.setdefault(fva, set()).add(s)
+                    except Exception:
+                        pass
+
+        for caller_va, callee_set in self._callees.items():
+            for callee in callee_set:
+                self._callers.setdefault(callee, set()).add(caller_va)
+
+    def _build_call_graph_arm64(self, func_starts: Optional[Set[int]] = None):
+        """ARM64 flat scan: BL (direct call) + ADRP+ADD/LDR string refs."""
+        import bisect
+
+        # Determine capstone ARM64 arch constant (CS_ARCH_AARCH64 in capstone 6+, CS_ARCH_ARM64 in 5.x)
+        arm64_arch = getattr(capstone, 'CS_ARCH_AARCH64', None) or getattr(capstone, 'CS_ARCH_ARM64', None)
+        if arm64_arch is None:
+            return
+
+        text_sections = []
+        if self._binary is not None:
+            try:
+                for sect in self._binary.sections:
+                    if sect.name == '.text':
+                        text_sections.append(
+                            (int(sect.virtual_address), int(sect.offset), int(sect.size))
+                        )
+            except Exception:
+                pass
+        if not text_sections:
+            return
+
+        md = capstone.Cs(arm64_arch, capstone.CS_MODE_ARM)
+        md.detail = True
+        md.skipdata = True
+
+        # Use caller-supplied or eh_frame func starts; fall back to STP x29,x30 prologue heuristic
+        all_func_starts = set(func_starts or [])
+        if not all_func_starts:
+            for vaddr, offset, size in text_sections:
+                chunk = self.data[offset: offset + size]
+                # stp x29, x30, [sp, #-N]!  encoding: fd 7b ?? a9 (pre-index, negative offset)
+                for i in range(0, len(chunk) - 3, 4):
+                    if chunk[i] == 0xfd and chunk[i + 1] == 0x7b and chunk[i + 3] == 0xa9:
+                        all_func_starts.add(vaddr + i)
+
+        if not all_func_starts:
+            return
+
+        self._func_starts.update(all_func_starts)
+        sorted_starts = sorted(self._func_starts)
+
+        # Capstone ARM64 operand type constants
+        try:
+            from capstone import arm64 as C_A64
+            OP_IMM = C_A64.ARM64_OP_IMM
+            OP_REG = C_A64.ARM64_OP_REG
+            OP_MEM = C_A64.ARM64_OP_MEM
+        except ImportError:
+            try:
+                from capstone import aarch64 as C_A64
+                OP_IMM = C_A64.AARCH64_OP_IMM
+                OP_REG = C_A64.AARCH64_OP_REG
+                OP_MEM = C_A64.AARCH64_OP_MEM
+            except ImportError:
+                OP_IMM, OP_REG, OP_MEM = 2, 1, 3
+
+        for vaddr, offset, size in text_sections:
+            chunk = self.data[offset: offset + size]
+            if not chunk:
+                continue
+
+            # adrp state: reg_id -> (page_va, insn_va) for ADRP+ADD/LDR string resolution
+            adrp_state: Dict[int, Tuple[int, int]] = {}
+
+            for insn in md.disasm(chunk, vaddr):
+                ia = insn.address
+                mn = insn.mnemonic.lower()
+
+                idx = bisect.bisect_right(sorted_starts, ia) - 1
+                if idx < 0:
+                    continue
+                fva = sorted_starts[idx]
+                if ia - fva > 16384:
+                    continue
+
+                try:
+                    ops = insn.operands
+                except Exception:
+                    ops = []
+
+                # BL <imm>: direct call with immediate target
+                if mn == 'bl' and ops:
+                    for op in ops:
+                        if op.type == OP_IMM:
+                            self._callees.setdefault(fva, set()).add(op.imm)
+                            break
+
+                # ADRP Xn, page: record page base per dest register
+                elif mn == 'adrp' and len(ops) >= 2:
+                    try:
+                        dest_reg = ops[0].reg
+                        page_va = ops[1].imm
+                        adrp_state[dest_reg] = (page_va, ia)
+                    except Exception:
+                        pass
+
+                # ADD Xd, Xn, #imm or LDR Xd, [Xn, #imm]: resolve ADRP+offset -> string ref
+                elif mn in ('add', 'ldr', 'ldrb', 'ldrh', 'ldrsb', 'ldrsh', 'ldrsw') and len(ops) >= 2:
+                    try:
+                        if mn == 'add' and len(ops) >= 3:
+                            base_reg = ops[1].reg if ops[1].type == OP_REG else None
+                            imm_off = ops[2].imm if ops[2].type == OP_IMM else None
+                        elif ops[1].type == OP_MEM:
+                            base_reg = ops[1].mem.base
+                            imm_off = ops[1].mem.disp
+                        else:
+                            base_reg, imm_off = None, None
+
+                        if base_reg is not None and imm_off is not None and base_reg in adrp_state:
+                            page_va, adrp_ia = adrp_state[base_reg]
+                            if ia - adrp_ia <= 12:  # within 3 instructions
+                                target = page_va + imm_off
+                                if self._rodata_start <= target < self._rodata_end:
+                                    s = self._strings.get(target)
                                     if s:
                                         self._str_refs.setdefault(fva, set()).add(s)
                     except Exception:
