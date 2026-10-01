@@ -902,7 +902,7 @@ This format is distinct from both the RPG v2 (.cc for NE40E/NE20E) and the CE681
 
 | Offset | Size | Field | Notes |
 |---|---|---|---|
-| 0x00 | 4 | Magic | 0x00000000 (no magic bytes — format-version discriminator) |
+| 0x00 | 4 | Magic | 0x00000000 (no magic bytes; absence is the format discriminator) |
 | 0x04 | 4 | Entry count BE32 | 0x7C=124 (S5732-H), 0x6B=107 (S6730-H) |
 | 0x08 | N | Version string | Null-terminated: "V200R022C00SPC500" |
 | 0x08+N | variable | Entry metadata | Binary-encoded (partially opaque) |
@@ -919,7 +919,7 @@ The container holds exactly three SquashFS filesystems. There is no CMS/PKCS#7 w
 | 2 | 0x0728EBC4 | 0x072904AC | 7MB | 119 | gzip | 2022-11-07 | BSP/CBB drivers |
 | 3 | 0x07D5CF94 | 0x07D5E87C | 7MB | 717 | gzip | 2022-11-09 | NETCONF/YANG mgmt |
 
-The 114MB SquashFS contains only 49 inodes — each "file" is a large binary blob (compiled ML model, shared library, or binary executable). The split ensures hardware-specific binaries (model-specific ASIC libs) are isolated from the common management stack (SquashFS 3).
+The 114MB SquashFS contains only 49 inodes. Each file is a large binary blob: compiled ML model, shared library, or binary executable. The split ensures hardware-specific binaries are isolated from the common management stack in SquashFS 3.
 
 ### SquashFS 1: AI/ASIC platform layer (114MB, 49 inodes)
 
@@ -936,7 +936,7 @@ Both S5732-H and S6730-H carry the same 49-entry SquashFS 1 (identical NTID mode
 | `pre_init/np_pre_pcie5981.ko` | NP PCIe pre-init LKM (SD5981 connected via PCIe) |
 | `pre_init/sdkpcie5981.ko` | SD5981 SDK PCIe LKM |
 
-SD5981 is the same NSE ASIC family as S6750-H V600. The `armel` suffix indicates AArch64 execution level (EL). SD5981 is PCIe-connected to the management CPU — two LKMs handle initialization and SDK respectively.
+SD5981 is the same NSE ASIC family as S6750-H V600. The `armel` suffix indicates AArch64 execution level (EL). SD5981 is PCIe-connected to the management CPU. Two LKMs handle initialization and SDK respectively.
 
 **Atlas A10x AI chip:**
 
@@ -944,7 +944,7 @@ SD5981 is the same NSE ASIC family as S6750-H V600. The `armel` suffix indicates
 a10xbin/A0104_FW_V12_00_00_release.hdr   (dedicated AI accelerator chip firmware)
 ```
 
-A dedicated Atlas 100-series NPU is embedded in the switch hardware, separate from the forwarding ASIC. `A0104` is a board variant code; `V12.00.00` indicates a mature release. The `.hdr` extension matches Huawei's signed firmware header format. This chip enables hardware-accelerated traffic classification without CPU overhead.
+A dedicated Atlas 100-series NPU is embedded in the switch hardware, separate from the forwarding ASIC. `A0104` is a board variant code. The `.hdr` extension matches Huawei's signed firmware header format. The A10x handles traffic classification in hardware so the main CPU is not in the forwarding path.
 
 **NTID (Network Traffic Intelligence Detection) — on-device ML inference:**
 
@@ -960,7 +960,7 @@ A dedicated Atlas 100-series NPU is embedded in the switch hardware, separate fr
 | `usr/local/etc/ntid/knn_model_csv/class_gmd.csv` | Traffic class labels |
 | `usr/local/etc/ntid/knn_model_csv/x_train_process_df.csv` | Training data preprocessing descriptor |
 
-NTID pipeline: raw traffic → PCA dimensionality reduction (`pca_components.csv` + `pca_mean.csv`) → feature standardization → KNN classification (`knn_model.cml` via `libsiteai_cml.so`) → traffic type label. The model is trained externally, serialized to CSV+CML format, and deployed on-device for real-time inference.
+NTID pipeline: raw traffic → PCA dimensionality reduction (`pca_components.csv` + `pca_mean.csv`) → feature standardization → KNN classification (`knn_model.cml` via `libsiteai_cml.so`) → traffic type label. Training happens offline. The model ships as CSV + CML files and runs on-device.
 
 **TLS/IP decryption and IPS:**
 
@@ -995,7 +995,7 @@ Kernel modules for physical switch hardware. Mixed-vendor silicon:
 | `ko/cbb/can_bus.ko` | — | CAN bus (atypical for switch; likely inter-board management) |
 | `etc/bootload_step1.sh`, `step2.sh` | — | Two-stage bootloader shell scripts |
 
-14 CPLD driver variants total. The presence of `can_bus.ko` is unusual for a campus switch — likely used for inter-board management on modular chassis variants.
+14 CPLD driver variants total. `can_bus.ko` is unusual for a campus switch, likely for inter-board management on modular chassis variants.
 
 ### SquashFS 3: NETCONF/YANG management stack (7MB, 717 inodes)
 
@@ -1011,7 +1011,7 @@ Python 3.9 NETCONF management plane with Redis-backed internal store:
 | libconf.so | Huawei configuration management library |
 | libxml2.so.2.9.13 | XML parsing (2022-05-03 release) |
 
-All YANG model plugins are plaintext Python (`.py` files) — extracting SquashFS 3 exposes the complete NETCONF API schema for static analysis.
+All YANG model plugins are plaintext Python (`.py` files). Extracting SquashFS 3 exposes the complete NETCONF API schema for static analysis.
 
 ### S5720EI V200R019 PAT patch format
 
