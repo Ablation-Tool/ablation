@@ -2,6 +2,15 @@
 
 ---
 
+## v2.20.0
+
+- **LoongArch64 Step 7: syscalls, kernel traps, and exception paths** (`analyzers/syscall_loongarch64.py`, new; `cfg_loongarch64.py`, `taint_tracker_loongarch64.py` updated)
+  - `syscall_loongarch64.py`: full asm-generic/unistd.h syscall table (318 entries, Linux 6.6). Three classification tracks: `SYSCALL_SOURCES` (taint `$a0` on return — read/recvfrom/recvmsg/getrandom/etc.), `SYSCALL_SINKS` (CRITICAL/HIGH — execve/execveat/bpf/ptrace/kexec etc.), `SYSCALL_ESCALATION` (setuid/setgid family). Kernel-space function counterparts: `KERNEL_SOURCES` (copy_from_user family), `KERNEL_SINKS`, `KERNEL_ESCALATION` (commit_creds/prepare_kernel_cred).
+  - `cfg_loongarch64.py`: `ertn` and `break`/`dbcl` added as no-successor terminators.
+  - `taint_tracker_loongarch64.py`: `_SOURCE_NAMES`/`_SINK_NAMES` expanded with kernel-space counterparts; `_ESCALATION_NAMES` frozenset added. `_handle_syscall_frame()` reads `$a7` from constant-folding table for precise source/sink/escalation classification; unknown `$a7` conservatively clobbers caller-saved. Both `_scan_func_binary()` and `run_interprocedural()` handle `syscall`, `ertn`, and `break`/`dbcl` frames.
+
+---
+
 ## v2.19.0
 
 - **LoongArch64 Step 6: DWARF, CFI, and BTF function-boundary enrichment** (`analyzers/dwarf_loongarch64.py`, new)
