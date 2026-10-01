@@ -82,6 +82,39 @@ def _cache_path(binary_sha256: str, binary_name: str) -> Path:
     return _CACHE_DIR / f"{slug}.json"
 
 
+def _extract_strings_into(data: bytes, base_va: int, out: dict,
+                          min_len: int = _MIN_STR_LEN) -> None:
+    """Extract printable ASCII strings from data, writing {va: content} into out.
+
+    Uses a numpy run-detection pass (O(N) with low constant) when available;
+    falls back to a byte-by-byte Python loop otherwise.
+    """
+    if not data:
+        return
+    if _NUMPY_OK:
+        buf     = np.frombuffer(data, dtype=np.uint8)
+        printable = (buf >= 0x20) & (buf < 0x7F)
+        padded  = np.empty(len(buf) + 2, dtype=bool)
+        padded[0] = padded[-1] = False
+        padded[1:-1] = printable
+        starts = np.where(~padded[:-1] &  padded[1:])[0]
+        ends   = np.where( padded[:-1] & ~padded[1:])[0]
+        mask   = (ends - starts) >= min_len
+        for s, e in zip(starts[mask].tolist(), ends[mask].tolist()):
+            out[base_va + s] = data[s:e].decode("ascii", errors="replace")
+    else:
+        i    = 0
+        dlen = len(data)
+        while i < dlen:
+            start = i
+            while i < dlen and 0x20 <= data[i] < 0x7F:
+                i += 1
+            if i - start >= min_len:
+                out[base_va + start] = data[start:i].decode("ascii", errors="replace")
+            else:
+                i = start + 1
+
+
 def _detect_arch(binary) -> str:
     try:
         m = str(binary.header.machine_type)
@@ -560,24 +593,13 @@ class BinaryContext:
                 sec = None
             if not sec:
                 continue
-            sec_data = bytes(sec.content)
-            sec_va = sec.virtual_address
-            i = 0
-            while i < len(sec_data):
-                start = i
-                while i < len(sec_data) and 0x20 <= sec_data[i] < 0x7f:
-                    i += 1
-                if i - start >= _MIN_STR_LEN:
-                    content = sec_data[start:i].decode("ascii", errors="replace")
-                    self.strings[sec_va + start] = content
-                else:
-                    i = start + 1
+            _extract_strings_into(bytes(sec.content), sec.virtual_address, self.strings)
         # Fallback: scan readable LOAD segments when section names are unavailable
         # (e.g. PS3 SELF→ELF where shstrtab is zeroed by scetool).
         if not self.strings and _LIEF_OK:
             try:
                 for seg in binary.segments:
-                    seg_type = str(getattr(seg, 'type', ''))
+                    seg_type  = str(getattr(seg, 'type', ''))
                     seg_flags = str(getattr(seg, 'flags', ''))
                     if 'LOAD' not in seg_type:
                         continue
@@ -585,18 +607,9 @@ class BinaryContext:
                     # Always scan all readable LOAD segments (including X|R) for strings.
                     if 'R' not in seg_flags:
                         continue
-                    seg_data = bytes(seg.content)
-                    seg_va = int(seg.virtual_address)
-                    i = 0
-                    while i < len(seg_data):
-                        start = i
-                        while i < len(seg_data) and 0x20 <= seg_data[i] < 0x7f:
-                            i += 1
-                        if i - start >= _MIN_STR_LEN:
-                            content = seg_data[start:i].decode("ascii", errors="replace")
-                            self.strings[seg_va + start] = content
-                        else:
-                            i = start + 1
+                    _extract_strings_into(
+                        bytes(seg.content), int(seg.virtual_address), self.strings
+                    )
             except Exception:
                 pass
 
@@ -1222,9 +1235,17 @@ class BinaryContext:
             ds_data, ds_va, code_data, code_va, str_xref, func_str, func_arr
         )
 
-        # Pass 5: near-TOC 2-hop string array xref detection
+        # Pass 5: near-TOC 2-hop string array xref detection (arrays in data seg)
         self._augment_xrefs_ppc64_twohop(
             ds_data, ds_va, code_data, code_va, str_xref, func_str, func_arr
+        )
+
+        # Pass 6: 2-hop detection for string arrays in the code/rodata segment.
+        # Covers arrays like NanoSuit display strings that live in the X|R LOAD
+        # segment rather than the writable data segment.
+        self._augment_xrefs_ppc64_twohop(
+            ds_data, ds_va, code_data, code_va, str_xref, func_str, func_arr,
+            target_data=code_data, target_va=code_va,
         )
 
         self._str_xref_idx = {k: list(dict.fromkeys(v)) for k, v in str_xref.items()}
@@ -1445,8 +1466,10 @@ class BinaryContext:
         str_xref: Dict,
         func_str: Dict,
         func_arr,
+        target_data: Optional[bytes] = None,
+        target_va: Optional[int] = None,
     ) -> None:
-        """Pass 5 — near-TOC 2-hop string array xref detection.
+        """Pass 5/6 — near-TOC 2-hop string array xref detection.
 
         CryEngine PS3 stores string pointer arrays far from r2 (beyond ±32KB), so
         direct near-TOC LWZ can't reach individual string VAs.  The actual pattern is:
@@ -1454,8 +1477,10 @@ class BinaryContext:
             LWZ rY, N*4(rX)        # load individual string VA from the array
 
         This pass:
-        1. Scans the near-TOC window (r2±32KB) for 4-byte entries whose target
-           is the start of a run of ≥3 consecutive string-pointer values in ds_data.
+        1. Scans the near-TOC window (r2±32KB) in ds_data for 4-byte entries whose
+           target is the start of a run of ≥3 consecutive string-pointer values in
+           target_data (defaults to ds_data — Pass 5; set to code_data for Pass 6
+           to cover string arrays that live in the code/rodata segment).
         2. Does a single linear pass over code looking for LWZ rX, off(r2) whose
            (b2,b3) displacement bytes match any discovered array-base TOC offset.
            Each hit attributes ALL strings in the pointed-to array to the
@@ -1469,12 +1494,17 @@ class BinaryContext:
         if not r2:
             return
 
+        # Target segment: where the string arrays live (default: data seg).
+        tgt_data = target_data if target_data is not None else ds_data
+        tgt_va   = target_va   if target_va   is not None else ds_va
+        tgt_end  = tgt_va + len(tgt_data)
+
         near_lo = r2 - 0x8000
         near_hi = r2 + 0x7FFF
         str_vas = set(self.strings.keys())
-        ds_end  = ds_va + len(ds_data)
 
-        # Step 1: scan near-TOC window for entries pointing to dense string arrays
+        # Step 1: scan near-TOC window (always in ds_data — TOC is in data seg)
+        # for entries pointing to dense string arrays in tgt_data.
         lo_off        = max(0, near_lo - ds_va)
         hi_off        = min(len(ds_data), near_hi - ds_va + 4)
         near_toc_data = ds_data[lo_off:hi_off]
@@ -1483,14 +1513,14 @@ class BinaryContext:
         imm_to_strs: Dict[Tuple[int, int], List[int]] = {}
         for i in range(n):
             v = _st.unpack_from('>I', near_toc_data, i * 4)[0]
-            if not (ds_va <= v < ds_end):
+            if not (tgt_va <= v < tgt_end):
                 continue
-            t_off    = v - ds_va
+            t_off    = v - tgt_va
             str_list: List[int] = []
             for j in range(200):
-                if t_off + j * 4 + 3 >= len(ds_data):
+                if t_off + j * 4 + 3 >= len(tgt_data):
                     break
-                kv = _st.unpack_from('>I', ds_data, t_off + j * 4)[0]
+                kv = _st.unpack_from('>I', tgt_data, t_off + j * 4)[0]
                 if kv in str_vas:
                     str_list.append(kv)
                 elif j > 0:

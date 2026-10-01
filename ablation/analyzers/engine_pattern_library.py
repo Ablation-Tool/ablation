@@ -400,6 +400,46 @@ def _seed_signatures() -> List[EngineSignature]:
             notes="PS3 Cell PPU release build; -fno-rtti; 2-hop near-TOC xref pattern",
         ))
 
+    # ── Cell BE / libspe2 SPE threading ──────────────────────────────────────
+    # Present in any PS3 title that manages SPE threads from the PPU side.
+    # Error strings are from the libspe2 API surface; CryEngine wraps them in
+    # CryThreadUtil_PS3_SPU_Job and CryEngine::ThreadUtils::CThreadDescriptor.
+
+    cry_cell_sigs = [
+        ("cry.cell.spe.create",     "thread",    "SPE context creation (libspe2)",
+         "libspe2 SPE thread creation; calls spe_context_create; stores context handle "
+         "for subsequent spe_program_load and spe_context_run calls",
+         ["Failed creating context", "spe_context_create"],
+         [r"Failed creating context"]),
+        ("cry.cell.spe.load",       "thread",    "SPE program load (libspe2)",
+         "libspe2 SPE kernel loader; calls spe_program_load to DMA compiled SPU "
+         "object into SPE local store before context execution",
+         ["Failed loading program"],
+         [r"Failed loading program"]),
+        ("cry.cell.spe.run",        "thread",    "SPE context execution (libspe2)",
+         "libspe2 SPE context runner; calls spe_context_run; blocks PPU pthread "
+         "until SPE exits or raises a stop-and-signal event",
+         ["Failed running context"],
+         [r"Failed running context"]),
+        ("cry.cell.spe.thread",     "thread",    "SPE pthread wrapper (libspe2)",
+         "PPU pthread that wraps a single SPE context lifecycle; creates context, "
+         "loads program, runs, then joins; canonical libspe2 multi-SPE pattern",
+         ["Failed joining thread", "Failed creating thread"],
+         [r"Failed (joining|creating) thread"]),
+        ("cry.cell.mfc.dma",        "thread",    "MFC DMA helper (Cell BE)",
+         "Memory Flow Controller DMA helper; calls mfc_tag_reserve then mfc_get/mfc_put; "
+         "waits for completion via mfc_write_tag_mask + mfc_read_tag_status_all",
+         ["MFC_TAG_INVALID"],
+         [r"MFC_TAG_INVALID"]),
+    ]
+    for (sid, cat, name, desc, markers, patterns) in cry_cell_sigs:
+        sigs.append(EngineSignature(
+            sig_id=sid, engine="cryengine", category=cat, name=name,
+            description=desc, string_markers=markers, string_patterns=patterns,
+            confidence_base=0.73,
+            notes="Cell BE PPU side; libspe2 API; PS3/Cell game SPE thread management",
+        ))
+
     # ── Cross-engine runtime / stdlib ─────────────────────────────────────────
     # These appear in virtually all game binaries (MSVC CRT, libstdc++, etc.)
 
