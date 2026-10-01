@@ -7,6 +7,9 @@ Block termination rules:
   jirl $ra,rj,0       -> fall-through only (indirect call; callee abstracted)
   jirl $zero,rj,*     -> no successors (indirect branch)
   beqz/bnez/beq/bne/blt/bge/bltu/bgeu/bceqz/bcnez -> fall-through + target
+  ertn                -> no successors (exception return; kernel only)
+  syscall             -> fall-through only (like a call; returns to next insn)
+  break / dbcl        -> no successors (trap; treated as unreachable)
   .word (unknown)     -> fall-through (treated as data)
 
 No delay slots. All instructions are 4 bytes.
@@ -24,7 +27,13 @@ from .isa_loongarch64 import (
 _INDIRECT_BRANCH_MNEM = "jirl"
 
 
+_TRAP_MNEMS = frozenset({"break", "dbcl"})  # unconditional trap — no successors
+
 def _is_ret(insn: Insn) -> bool:
+    if insn.mnemonic == "ertn":
+        return True   # exception return from kernel handler
+    if insn.mnemonic in _TRAP_MNEMS:
+        return True   # trap is unreachable past this point
     if insn.mnemonic != _INDIRECT_BRANCH_MNEM:
         return False
     rd = insn.reg(0)
