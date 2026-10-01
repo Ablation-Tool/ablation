@@ -2,6 +2,16 @@
 
 ---
 
+## v2.19.0
+
+- **LoongArch64 Step 6: DWARF, CFI, and BTF function-boundary enrichment** (`analyzers/dwarf_loongarch64.py`, new)
+  - `extract_eh_frame_starts(path)` — FDE `initial_location` from `.eh_frame`; present in all GCC-compiled stripped binaries. Recovers leaf functions and tail-call-optimised bodies missed by the `addi.d $sp` prologue heuristic.
+  - `extract_debug_funcs(path)` — DW_TAG_subprogram `low_pc`/`high_pc` from `.debug_info`; handles both absolute and relative (byte-count) `high_pc` forms. Returns `{va: (name, end_va)}`.
+  - `extract_btf_funcs(path)` — `.BTF` type records + `.BTF.ext` `func_info` section; gives function name→VA for Linux kernel modules that lack `.symtab`.
+  - `LoongArch64TaintTracker.from_path_full()` — merges all three sources into `_syms` and stores DWARF end VAs in `tt._dwarf_ends`. Both `run()` and `run_interprocedural()` prefer DWARF `high_pc` over the next-function-start approximation when available.
+
+---
+
 ## v2.18.0
 
 - **LoongArch64 Step 5: PLT/GOT resolution + R_LARCH_\* constants**
