@@ -146,18 +146,31 @@ p.summary()
 # }
 ```
 
-### String Resolution
+### String and Name Resolution
 
 ```python
 # Resolve an lda.str operand index to the actual string value.
 # N is the 16-bit operand from the instruction — it is an INDEX
 # into IndexHeader.class_idx[], not a raw file offset.
 s = p.resolve_class_idx(n, region=0)    # returns "" if out of range
+
+# Resolve a property/global name operand index to a string.
+# Property-access instructions (ldobjbyname, stobjbyname, tryldglobalbyname,
+# stglobalvar, etc.) use IndexHeader.method_idx[], NOT class_idx[].
+# method_idx[N] -> entity_id -> string offset -> decoded name.
+name = p.resolve_method_idx(n, region=0)  # returns "" if out of range
 ```
 
-This method is used internally by `ARKDisasm.find_string_loads()` and exists
-as a public API for callers that want to resolve operands without a full
-disassembly pass.
+Two separate index tables exist per region:
+
+| Table | Used by | Example |
+|---|---|---|
+| `class_idx` | `lda.str`, class references | `lda.str 0x21` → `"L@system.curves;"` |
+| `method_idx` | property/global access | `ldobjbyname 0x36` → `"prototype"` |
+
+`resolve_class_idx` is used internally by `ARKDisasm.find_string_loads()`.
+`resolve_method_idx` is used internally by `ABCDecompiler._resolve_entity()`.
+Both are public API for callers that want to resolve operands without a full pass.
 
 ---
 
@@ -309,3 +322,87 @@ MethodTaggedValues (terminated by tag=0)
 
 Key `MethodTag` values: `CODE=1` (u32 code_off), `SOURCE_LANG=2` (u8),
 `DEBUG_INFO=5` (u32).
+
+---
+
+## ABCDecompiler
+
+**File:** `ablation/analyzers/abc_decompiler.py`
+
+Lifts ARK Bytecode instruction streams to JavaScript-like pseudocode using a
+register-state machine with accumulator tracking. Wraps `ABCParser` and
+`ARKDisasm`; no external dependencies.
+
+### Construction
+
+```python
+from ablation.analyzers.abc_decompiler import ABCDecompiler
+
+# From path
+dec = ABCDecompiler.from_path('/path/to/modules.abc')
+
+# From an existing parser
+from ablation.analyzers.abc_parser import ABCParser
+parser = ABCParser.from_path('/path/to/modules.abc')
+dec = ABCDecompiler(parser)
+```
+
+### Decompiling methods
+
+```python
+for method in dec.parser.iter_methods():
+    code = dec.parser.get_code(method)
+    if code:
+        print(dec.decompile_method(method, code))
+```
+
+Example output for `func_main_0` in wechat.abc:
+
+```
+function func_main_0(a0, a1, a2) {
+    // Lcn.icheny.wechat/entry/ets/component/ListChatContentLeftItem;
+    _acc = "L@system.curves;"
+    _acc = AudioCapturerManager.prototype
+    if (_acc == 0) goto L_002a
+    ...
+}
+```
+
+```python
+# Decompile all methods in a class by name substring
+text = dec.decompile_class('ListChatContentLeftItem')
+
+# Decompile every method in the file
+for text in dec.decompile_all():
+    print(text)
+```
+
+### Architecture
+
+The lifter follows the Durfina 2012 three-phase pipeline:
+
+1. **Front-end**: `ARKDisasm.iter_insns()` yields `ARKInstruction` objects.
+2. **IR lift**: `_lift(insn, state)` translates each instruction to a
+   pseudocode statement, updating a register-state dict (`Dict[str, _Reg]`).
+3. **Back-end**: Statements assembled into labelled blocks with `if/goto`
+   control flow.
+
+The ARK ISA is accumulator-centric: most instructions read from or write to
+`_acc`. The decompiler tracks `_acc` as a named slot alongside the numbered
+virtual registers. Future passes (Cifuentes 1994 §5.4.6 register copy
+propagation, §6.6.2 control flow structuring) will eliminate intermediate
+`_acc` assignments and recover `if/else`/`while` from the `label+goto` CFG.
+
+### Index table routing
+
+ABC `d`-kind operands are indices, not file offsets. Two separate tables exist:
+
+| Instruction | Operand routes through |
+|---|---|
+| `lda.str` | `class_idx[N]` via `resolve_class_idx(N)` |
+| `ldobjbyname`, `stobjbyname`, `tryldglobalbyname`, `stglobalvar`, etc. | `method_idx[N]` via `resolve_method_idx(N)` |
+| `definefunc`, `definemethod` | direct entity_id (file offset of method item) |
+
+Mixing these tables produces empty strings for any index < 60 (below the
+header boundary). The decompiler routes each instruction category to the
+correct resolver.
