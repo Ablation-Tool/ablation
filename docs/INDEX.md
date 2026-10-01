@@ -9,6 +9,7 @@ Semantic firmware analysis for vulnerability researchers.
 | Document | Description |
 |---|---|
 | [Getting Started](getting-started.md) | Install, first binary, first sweep -- 15 minutes |
+| [Understanding Ablation](understanding-ablation.md) | Architecture, analysis model, limitations, and Codex workflow |
 
 ---
 
@@ -55,7 +56,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [Firmware Containers](module-reference/firmware-containers.md) | FirmwareContainer (partitioned image parser + payload detection), VideoContainerAnalyzer (MP4/MKV/AVI forensics) |
 | [Android / APK](module-reference/android.md) | APKParser (AXML+DEX), DexAnalyzer, JniBridgeScanner (JNI_OnLoad/Java_*/opaque peer), BinderScanner (exported services, AIDL Stubs, onTransact), LibraryInventory (native .so scanner: arch, exports, JNI count, PLT hook detection, security score, classify_internals) |
 | [LLM Analyst](module-reference/llm.md) | LlmAnalyst ReAct agent loop |
-| [LoongArch64](module-reference/loongarch64.md) | LoongArch64TaintTracker, LoongArchDecoder, ISA model, CFG builder — TencentOS/Loongson targets |
+| [LoongArch64](module-reference/loongarch64.md) | LoongArch64TaintTracker (`from_path` / `from_path_full`), LoongArchDecoder, ISA model, CFG builder, DWARF/BTF enrichment, syscall tracking, kernel escalation — TencentOS 4.6 / Loongson 3A5000 |
 
 ---
 
