@@ -36,6 +36,8 @@ from .taint_tracker_riscv64 import RISCV64TaintTracker, TaintFindingRISCV64
 from .v850_decoder import V850Decoder, V850Disasm, V850Frame
 from .taint_tracker_v850 import V850TaintTracker, TaintFindingV850
 from .loongarch_decoder import LoongArchDecoder, LoongArchFrame
+from .loongarch64_max_not_min_scanner import LA64MaxNotMinScanner, LA64MaxNotMinFinding
+from .la64_heap_vuln_scanner import LA64HeapVulnScanner, LA64HeapVulnFinding
 from .taint_tracker_loongarch64 import (
     LoongArch64TaintTracker, TaintFindingLA64,
     _ESCALATION_NAMES as LOONGARCH_ESCALATION_NAMES,
@@ -139,6 +141,8 @@ __all__ = [
     "V850Decoder", "V850Disasm", "V850Frame",
     "V850TaintTracker", "TaintFindingV850",
     "LoongArchDecoder", "LoongArchFrame",
+    "LA64MaxNotMinScanner", "LA64MaxNotMinFinding",
+    "LA64HeapVulnScanner", "LA64HeapVulnFinding",
     "LoongArch64TaintTracker", "TaintFindingLA64",
     "LOONGARCH_ESCALATION_NAMES",
     "LOONGARCH_SYSCALL_TABLE", "loongarch_classify_syscall",
