@@ -719,6 +719,108 @@ Pre-pended manifest block:
 
 ---
 
+## Huawei NE40E / NE20E Core Router VRP V800 (.cc and .PAT)
+
+Source: `/media/cowboy/research/Huawei-Firmware/OpenX/Routers/` — NE40E-M2K-B V800R023/V800R024, NE20E V800R022, SPH122 patch.
+
+Platform codename "M2": all packages named `M2V800R02{2,3,4}CxxSPCxxxBxxx.rpg`.
+
+### Architecture transition: V800R022 → V800R023
+
+| Feature | NE20E V800R022 | NE40E V800R023/024 |
+|---|---|---|
+| MPU SoC | Freescale P40xx (PowerPC) | HiSilicon Hi1610 (AArch64, 16-core) |
+| Boot | U-Boot uImage (0x27051956) | UEFI + ARM64 Linux Image (MZ/0x4D5A0091) |
+| NPU | Huawei CX68M (80 or 160 core) | Not present as separate entry |
+| VRP rootfs | `vrp_ppc_rtos_mpu.img` | `vrp_arm64_mpu.img` |
+| TPM | None | TPM 2.0 (`tpm_arm64.img`, `tpm2.0_arm64.img`) |
+| Container entries | 33 | 34–35 |
+
+### RPG container format (same as NE8000 version 0x00000002)
+
+```
+0x00  4   Format version: 0x00000002 (BE32)
+0x04  4   Entry count: 33-35 (BE32)
+0x08  N   Version string (null-padded to 28 bytes)
+0x1C  4   Separator: 0xAA550000
+0x20  N   Entry table (24 bytes per entry)
+```
+
+Per-entry (24 bytes):
+```
+[0:1]   1   Marker byte (encodes entry type; 0xFF=standard, 0xFE-0xFB=MPU boot stages, etc.)
+[1:4]   3   HWTYPE (BE)
+[4:8]   4   File offset (BE32) — absolute byte offset in .cc
+[8:12]  4   Entry size (BE32) — includes 0x160-byte sub-header
+[12:16] 4   Field C (unknown, possibly CRC)
+[16:20] 4   Flags (BE32)
+[20:24] 4   Padding
+```
+
+Payload starts at: `entry_file_offset + 0x160` (352-byte sub-header precedes each payload).
+
+Sub-header notable fields:
+```
+[0:6]   zeros
+[6:8]   inode/ref count
+[96..]  null-terminated strings: codename, filename, description
+        e.g. "M2V800R023C00SPC500B697.rpg\0V8_RPG.bin\0"
+             "mpu base boot file!\0Image_hi1610_mpu.bin\0"
+             "pnpp file for wang.guan!\0pnpp.7z.bin\0"  ← developer name OPSEC
+```
+
+### HWTYPE encoding (V800 series)
+
+| HWTYPE | Meaning |
+|---|---|
+| 0x000040–0x000043 | P40xx/P30xx PowerPC MPU variants (V800R022 only) |
+| 0x000050–0x000051 | Hi1610 AArch64 MPU variants (V800R023+) |
+| 0x005638 | VRP V8 RPG SquashFS (0x56='V', 0x38='8') |
+| 0xFF5638 | VRP V8 ASDK SquashFS (Application SDK) |
+| 0x005637 | VRP V8 rlist (file integrity list) |
+| 0x005678/0x005679 | Device lock file (hardware attestation) |
+| 0x000009/0x00000A/0x00000B | Signature chain (filelist / CMS / CRL) |
+| 0x000FF1/0x000FF2 | PSS signature chain (filelist / CMS) |
+| 0xEE0001/0xEE0002 | Digest integrity manifests |
+
+### Main SquashFS (NE40E V800R023)
+
+Entry [14], HWTYPE 0x005638, offset 0x018BA72C, size 332MB:
+- SquashFS LE at `+0x160` = 0x018BA88C
+- Inodes: 47,146 | Compression: LZMA | Block size: 128KB | Version: 4.0
+- Build date: 2023-09-04
+
+### CX68M NPU (NE20E V800R022 — last PPC generation)
+
+Huawei-custom network processor. No public documentation. Two configurations:
+- 80-core: `bootargs_p40xx_cx68mnpu80.bin`
+- 160-core: `bootargs_p40xx_cx68mnpu160.bin`
+- Reset Config Word: `p30xx_cx68mnpu_rcw.bin`
+
+Absent from V800R023+ — Hi1610 platform integrates or relocates forwarding plane.
+
+### PAT patch format (SPH122)
+
+```
+0x00  32  Platform version (null-padded): "M2V800R024"
+0x20  32  Patch name (null-padded): "SPH122"
+0x40  ..  Binary fields (CRC, size)
+Body:     SQFS catalog (0x2CA6) + multiple GZIP patch blobs + dual CMS signatures
+          (0x17354A, 0x371BA9 — CAdES+PSS, same CA as corpus)
+```
+
+### Security findings
+
+| Finding | Severity | Detail |
+|---|---|---|
+| Developer name "wang.guan" in PNPP sub-header (all versions) | OPSEC/INFO | "pnpp file for wang.guan!" in V800R022/023/024 production firmware |
+| CX68M NPU opaque (NE20E V800R022) | INFO | Proprietary 80/160-core NPU; no public documentation |
+| NE20E V800R022 has no TPM | INFO | TPM 2.0 added only with Hi1610 platform (V800R023); hardware-gated upgrade |
+| Dual CAdES+PSS CMS on SPH122 patch | INFO | Same corpus-wide Huawei Signature Center CA |
+| Device lock attestation mechanism | INFO | "device lock file for prevent steal!"; V800R024 adds _ex variant |
+
+---
+
 ## Huawei NearLink / SparkLink IoT SoC Firmware (HiBurn .fwpkg)
 
 Source: `/media/cowboy/research/Huawei-Firmware/NearLink/` — 18 `.fwpkg` packages for HiSilicon NearLink/SparkLink development boards (BS21/Hi2821, WS63/Hi3863, WS63E, Hi3863).
