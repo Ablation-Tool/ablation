@@ -181,6 +181,39 @@ print(tt.report(findings))
 
 ---
 
+## PLT/GOT resolution
+
+`_load_elf()` merges PLT stub addresses into the symbol map before scanning.
+Each entry from `ELFParser.get_plt_got_table()` (reads `.rela.plt`, resolves
+via `.dynsym`) contributes `plt_stub_va → imported_function_name`.
+
+Result: every `bl <plt_stub_va>` call in the taint tracker resolves to the
+exact imported name (e.g. `recv`, `strcpy`) without the ±16-byte tolerance
+scan. The `_PLT_TOL` heuristic in `_name_at` remains as a fallback for
+stripped binaries with no `.rela.plt`.
+
+LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes (same as AArch64):
+```
+pcalau12i  $t3, page_off    ; PC-relative page load — GOT page addr
+ld.d       $t3, $t3, off    ; load function pointer from GOT slot
+jirl       $zero, $t3, 0    ; indirect branch — no return address saved
+nop                         ; alignment pad
+```
+The stub terminates with `jirl $zero,rj,0` (indirect branch, not call), so
+it is correctly classified as `is_branch=True` by the decoder, not as a call.
+
+LoongArch relocation types (psABI v2.30, `elf_parser.R_LARCH_*`):
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `R_LARCH_NONE` | 0 | no-op |
+| `R_LARCH_JUMP_SLOT` | 5 | GOT entry for lazy-bind PLT call |
+| `R_LARCH_RELATIVE` | 3 | base-address-relative fixup |
+| `R_LARCH_IRELATIVE` | 12 | GNU IFUNC indirect relocation |
+| `R_LARCH_TLS_TPREL64` | 11 | thread-local initial-exec offset |
+
+---
+
 ## Function start detection
 
 Two heuristics used together:

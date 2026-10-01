@@ -425,30 +425,47 @@ class TaintEngine:
 # ---------------------------------------------------------------------------
 
 def _load_elf(path: str):
-    """Return (data, base_va, text_start, text_end, syms, endian)."""
+    """Return (data, base_va, text_start, text_end, syms, endian).
+
+    syms maps VA -> name for both static symbols and PLT stub addresses.
+    PLT entries are merged so that bl <plt_stub_va> resolves directly to the
+    imported function name without the ±_PLT_TOL scan.
+    """
     try:
         from ablation.core.elf_parser import ELFParser
-        elf = ELFParser(path)
-        data = Path(path).read_bytes()
-        endian = "little" if elf.little_endian else "big"
-        text_sh = elf.section_by_name(".text")
+        elf    = ELFParser(path).parse()
+        data   = Path(path).read_bytes()
+        endian = "little" if elf.endian == "<" else "big"
+        text_sh = elf.get_section(".text")
         if text_sh:
-            text_start = text_sh.sh_addr
-            text_end   = text_start + text_sh.sh_size
-            base_va    = text_sh.sh_addr - text_sh.sh_offset
+            text_start = text_sh["sh_addr"]
+            text_end   = text_start + text_sh["sh_size"]
+            base_va    = text_sh["sh_addr"] - text_sh["sh_offset"]
         else:
             base_va = text_start = 0
             text_end = len(data)
         syms: Dict[int, str] = {}
-        for sym in elf.symbols:
-            if sym.name and sym.value:
-                syms[sym.value] = sym.name
+        for sym in elf.dynsyms + elf.symtabs:
+            if sym.get("name") and sym.get("st_value"):
+                syms[sym["st_value"]] = sym["name"]
+        # PLT stub addresses -> imported symbol names (exact, no ±tol scan needed)
+        for entry in elf.get_plt_got_table():
+            plt_addr_str = entry.get("plt_addr")
+            func_name    = entry.get("function")
+            if plt_addr_str and func_name:
+                try:
+                    syms[int(plt_addr_str, 16)] = func_name
+                except (ValueError, TypeError):
+                    pass
         return data, base_va, text_start, text_end, syms, endian
-    except (ImportError, Exception):
+    except ImportError:
+        pass
+    except Exception:
         pass
 
     try:
         from elftools.elf.elffile import ELFFile
+        from elftools.elf.relocation import RelocationSection
     except ImportError:
         raise ImportError("pip install pyelftools")
 
@@ -469,6 +486,22 @@ def _load_elf(path: str):
             for sym in sec.iter_symbols():
                 if sym.name and sym["st_value"]:
                     syms[sym["st_value"]] = sym.name
+    # PLT merging via pyelftools: .rela.plt / .rel.plt
+    plt_sh = ef.get_section_by_name(".plt")
+    plt_base  = plt_sh["sh_addr"]    if plt_sh else 0
+    plt_entsz = plt_sh["sh_entsize"] if plt_sh else 0
+    if plt_base and plt_entsz == 0:
+        plt_entsz = 16  # LoongArch/AArch64/x86-64 default
+    rela_sh = (ef.get_section_by_name(".rela.plt") or
+               ef.get_section_by_name(".rel.plt"))
+    if rela_sh and plt_base and plt_entsz:
+        dynsym_sh = ef.get_section_by_name(".dynsym")
+        for plt_idx, rel in enumerate(rela_sh.iter_relocations(), start=1):
+            sym_idx = rel["r_info_sym"]
+            if dynsym_sh and sym_idx:
+                sym = dynsym_sh.get_symbol(sym_idx)
+                if sym and sym.name:
+                    syms[plt_base + plt_idx * plt_entsz] = sym.name
     return data, base_va, text_start, text_end, syms, endian
 
 
