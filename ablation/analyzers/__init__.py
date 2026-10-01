@@ -101,6 +101,10 @@ from .hypothesis_models import (
 from .evidence_scorer import EvidenceScorer, score_report
 from .probe_ranker import ProbeRanker, probe_kinds
 from .hypothesis_engine import HypothesisEngine
+from .engine_pattern_library import (
+    EnginePatternLibrary, EngineSignature, EngineLabel,
+    ENGINES, CATEGORIES,
+)
 from .lsb_stego_extractor import (
     LSBStegoReader, LagrangeKeyExtractor, BmpKeyExtractor,
     StegoKeyResult, CoordPair,
@@ -197,6 +201,8 @@ __all__ = [
     "EvidenceScorer", "score_report",
     "ProbeRanker", "probe_kinds",
     "HypothesisEngine",
+    # ── Engine Pattern Library (PC game engine-stripping) ──────────────────────
+    "EnginePatternLibrary", "EngineSignature", "EngineLabel", "ENGINES", "CATEGORIES",
     # ── Steganography / secret-sharing key extraction ───────────────────────
     "LSBStegoReader", "LagrangeKeyExtractor", "BmpKeyExtractor",
     "StegoKeyResult", "CoordPair",
