@@ -533,3 +533,58 @@ HiSilicon Hi1215 firmware blob path: `/mnt/nsysmain/hi1215_bootloader.bin`
 | SSH/SFTP in bootloader recovery SquashFS | MEDIUM | `sftp`, `sftp.sh`, `sftpwd`, `ssh` present before VRP OS load; no RBAC/AAA |
 | `supp_kernel_NoHeart.ko` watchdog suppressor | INFO | Intentional design; attack relevance bounded by CAP_SYS_MODULE requirement |
 | Broadcom BDE DMA userspace interface | INFO | `linux-user-bde.ko` exposes 4MB DMA buffer; historical privilege escalation vector |
+
+---
+
+## Huawei CE6810EI Multi-SoC Container (RE findings)
+
+**File:** `targets/huawei/ce6810_switch_re.py`
+
+257MB datacenter switch firmware with three distinct CPU/SoC boot stacks packed into one
+.cc image (VRP V200R019C10, codename DCTOR — Datacenter TOR).
+
+### Container format (CE6810EI .cc — distinct from NE8000/MA5800)
+
+```
+0x00  4   Magic: 5A 00 00 03  (unique to CE series)
+0x04  4   Entry count = 0x15 = 21
+0x08  4   Version: "2.0\0"
+...
+0x02F3EEF4  SquashFS (xz, 206 MB, 19757 inodes, 489 modules)
+```
+
+No ELF files are present at the .cc top level — all code is nested inside the SquashFS.
+
+### Multi-SoC hardware architecture (`hard-to-cpu.txt`)
+
+| HWTYPE | CPU | SoC | Role |
+|---|---|---|---|
+| `0x1200060C/0D/02/05` | `ppc_e500mc` | Freescale P3041 (4-core e500mc) | MPU control board |
+| `0x12000608/09` | `ppc_e500v2` | Freescale P2020 / MPC8572 (2-core) | LPU linecard |
+| `0x1200061A/1B` | `arm` | ARM (SoC undetermined) | unknown |
+| `CR55MPUB`, `CR56MPUC` | VRP V8 | CR55/CR56 core-router card | VRP V8 linecard |
+
+HWTYPE prefix `0x12xxxxxx` = CE6810 chassis board (vs `0x4xxxxxxx` = ARM in MA5800, `0x1xxxxxxx` = x86 in MA5800). String HWTYPEs (CR55MPUB, CR56MPUC) = named router-on-card modules.
+
+### Boot stacks (`oslist.ini`)
+
+**P3041 MPU stack** (e500mc, configs 0x1200060C/0D/02/05):
+- `uboot_ppc3041.bin` → `3041_tor_uImage.bin` (5MB kernel) + `rootfs_3041_tor.sqfs` (8.7MB) + `rootfs_3041_vrp.img` (31MB VRP app rootfs)
+- `rcw_3041_tor_68.bin` (Reset Configuration Word #68)
+
+**P2020 LPU stack** (e500v2, configs 0x12000608/09):
+- `uboot_ppc2020.bin` → `dc2020_5810_uImage.bin` (4.4MB) + `rootfs_2020_5810.sqfs` (8.8MB) + `rootfs_2020_vrp.img` (22MB)
+- `TOR_CE5810_48T4S_EI_CPLD.bin` (156KB CE5810 ToR CPLD firmware — **no .cms signature**)
+
+**CR55/CR56 stack** (string HWTYPE):
+- `DE51FCMA.bin` (4.5KB NPU/FPGA — **no .cms signature**)
+
+### Security findings
+
+| Finding | Severity | Detail |
+|---|---|---|
+| `dbg_server` + `dbg_agent` in production CPT (SYSTEMIC — 2nd platform) | MEDIUM | Cross-confirmed with MA5800 OLT V100R018; intentional across all VRP production builds |
+| Python VM + gRPC in production | INFO | `pythonvm`, `python_pack`, `grpc` all in production CPT |
+| CE5810 CPLD firmware without CMS signature | INFO | 156KB CPLD binary controls port electrical config; no adjacent .cms/.crl |
+| DE51FCMA.bin (CR55/56) without CMS signature | INFO | Unlike NE8000 patch files which carry dual .cms+.pss.cms |
+| 4-CPU-architecture attack surface | INFO | P3041/P2020/ARM/CR-card boot independently; LPU compromise may be invisible to MPU |
