@@ -113,6 +113,72 @@ def _sign_extend(val: int, bits: int) -> int:
     return (val & (sign_bit - 1)) - (val & sign_bit)
 
 
+_BINARY_OPS_RE = (' + ', ' - ', ' * ', ' / ', ' % ', ' ** ',
+                   ' == ', ' != ', ' === ', ' !== ',
+                   ' < ', ' > ', ' <= ', ' >= ',
+                   ' && ', ' || ', ' in ', ' instanceof ')
+
+
+def _paren(expr: str) -> str:
+    """Wrap expr in parentheses when inlining would change precedence."""
+    return f'({expr})' if any(op in expr for op in _BINARY_OPS_RE) else expr
+
+
+def _rhs_of(stmt: str) -> str:
+    """Return the right-hand side of a statement, stripping trailing comments."""
+    s = stmt.split('//')[0]  # strip comment
+    return s.split(' = ', 1)[1] if ' = ' in s else s
+
+
+def _propagate_acc(lines: List[str]) -> List[str]:
+    """Accumulator copy-propagation pass (Cifuentes §5.4.6, single-BB variant).
+
+    For each `_acc = EXPR` statement:
+    - If the next substantive line's rhs does not contain `_acc` at all:
+      the assignment is dead (next line redefines or ignores acc) → drop it.
+    - If the next substantive line's rhs contains `_acc` exactly once:
+      substitute EXPR inline and drop the assignment.
+    - If `_acc` appears multiple times in the rhs: keep (cannot safely inline).
+
+    Labels and blank lines are treated as transparent for look-ahead purposes.
+    This pass is sound within a single basic block; cross-block propagation
+    requires full ud-chain / liveness analysis and is left for a future pass.
+    """
+    drop: Set[int] = set()
+    lines = list(lines)  # work on a copy so mutations don't alias
+
+    def _is_transparent(s: str) -> bool:
+        t = s.strip()
+        return not t or t.endswith(':') or t in ('{', '}') or t.startswith('//')
+
+    for i, line in enumerate(lines):
+        if i in drop:
+            continue
+        stripped = line.strip()
+        if not stripped.startswith('_acc = '):
+            continue
+        expr = stripped[len('_acc = '):]
+
+        # Find next substantive line
+        j = i + 1
+        while j < len(lines) and _is_transparent(lines[j]):
+            j += 1
+        if j >= len(lines):
+            continue
+
+        rhs = _rhs_of(lines[j].strip())
+        cnt = rhs.count('_acc')
+
+        if cnt == 0:
+            drop.add(i)  # dead assignment
+        elif cnt == 1:
+            lines[j] = lines[j].replace('_acc', _paren(expr), 1)
+            drop.add(i)
+        # cnt > 1: leave both lines intact
+
+    return [line for idx, line in enumerate(lines) if idx not in drop]
+
+
 def _label(offset: int) -> str:
     return f'L_{offset:04x}'
 
@@ -241,6 +307,7 @@ class ABCDecompiler:
                 lines.append(f'    {stmt}')
 
         lines.append('}')
+        lines = _propagate_acc(lines)
         return '\n'.join(lines)
 
     def decompile_class(self, class_name: str) -> str:
@@ -572,7 +639,7 @@ class ABCDecompiler:
 
         # ── Return instructions ───────────────────────────────────────────────
         if m == 'return':
-            return f'return _acc  // = {_acc_val(state)}'
+            return 'return _acc'
 
         if m == 'returnundefined':
             return 'return undefined'
