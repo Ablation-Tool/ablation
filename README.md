@@ -30,6 +30,8 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 **Erlang / BEAM Analysis:** Maps exports, imports, and atoms from .beam bytecode files, so dangerous calls like `os:cmd` and `code:load_binary` are visible without running the release.
 
+**nanoMIPS Taint Analysis:** nanoMIPS is a variable-width MIPS derivative used by Ingenic X-series and MediaTek Helio embedded hardware. It uses 16, 32, and 48-bit instructions with no branch delay slots, so standard MIPS disassemblers misread the call graph. Ablation resolves every call target from the bit-field encoding and traces network input through to sinks like `system` and `popen`, because the attack surface on this hardware is the same as any other architecture even though the tooling isn't.
+
 **Cryptographic Analysis**
 
 Ablation strips away every layer that makes cryptography invisible in a compiled binary. Entropy Mapper locates the encrypted region. Crypto Audit and HashAlgoDiscriminator identify the algorithm. XorSolver, BmpKeyExtractor, and CustomCBCDetector break the encryption or recover the key. ELFVtableReconstructor and VtableDispatchScanner reconstruct what the runtime does with the result.
