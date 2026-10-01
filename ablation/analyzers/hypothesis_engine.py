@@ -62,6 +62,12 @@ from .evidence_scorer import EvidenceScorer, score_report
 from .probe_ranker import ProbeRanker
 
 
+def _lazy_execute_probe(probe, ctx, session):
+    """Import and call execute_probe without creating a top-level circular import."""
+    from .probe_adapters import execute_probe
+    return execute_probe(probe, ctx, session)
+
+
 class HypothesisEngine:
     """Active hypothesis engine for a single binary analysis session."""
 
@@ -71,12 +77,14 @@ class HypothesisEngine:
         scorer: Optional[EvidenceScorer] = None,
         ranker: Optional[ProbeRanker] = None,
         max_probes: int = 50,
+        ctx=None,
     ):
         self.session = session
         self._scorer = scorer or EvidenceScorer(session.configuration)
         self._ranker = ranker or ProbeRanker(session.configuration)
         self._max_probes = max_probes
         self._executed_kinds: List[str] = []
+        self._ctx = ctx  # BinaryContext — supplied for Milestone 3 probe execution
 
     # ── Constructors ──────────────────────────────────────────────────────────
 
@@ -87,14 +95,23 @@ class HypothesisEngine:
         architecture: Optional[str] = None,
         configuration: Optional[Dict[str, Any]] = None,
         max_probes: int = 50,
+        ctx=None,
     ) -> "HypothesisEngine":
-        """Create a new engine session for the given binary."""
+        """Create a new engine session for the given binary.
+
+        Pass ctx (BinaryContext) to enable Milestone 3 probe auto-execution.
+        """
         session = HypothesisSession.create(
             binary_path=binary_path,
             architecture=architecture,
             configuration=configuration,
         )
-        return cls(session, max_probes=max_probes)
+        return cls(session, max_probes=max_probes, ctx=ctx)
+
+    def with_context(self, ctx) -> "HypothesisEngine":
+        """Attach a BinaryContext to an existing engine instance."""
+        self._ctx = ctx
+        return self
 
     @classmethod
     def load(cls, session_path: str, max_probes: int = 50) -> "HypothesisEngine":
@@ -294,7 +311,20 @@ class HypothesisEngine:
             return None
 
         self.session.add_probe(probe)
-        if approved:
+
+        if approved and self._ctx is not None:
+            # Milestone 3: execute via concrete adapter, feed evidence back into scoring
+            evidence_list = _lazy_execute_probe(probe, self._ctx, self.session)
+            for ev in evidence_list:
+                self.session.add_evidence(ev)
+                for hid in ev.hypothesis_ids:
+                    h = self.session.get_hypothesis(hid)
+                    if h:
+                        self._scorer.update_hypothesis(h, self.session.evidence_for(hid))
+            probe.mark_executed([ev.id for ev in evidence_list])
+            self._executed_kinds.append(probe.kind)
+        elif approved:
+            # ctx not attached — mark for planning only, analyst adds evidence manually
             self._executed_kinds.append(probe.kind)
 
         return probe
