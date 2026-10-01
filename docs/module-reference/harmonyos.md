@@ -391,16 +391,30 @@ The ARK ISA is accumulator-centric: most instructions read from or write to
 `_acc`. The decompiler tracks `_acc` as a named slot alongside the numbered
 virtual registers.
 
-After all instructions are lifted, `_propagate_acc()` runs a single-pass
-accumulator copy-propagation (Cifuentes 1994 §5.4.6). For each `_acc = EXPR`
-line: if the next substantive line's rhs contains `_acc` exactly once,
-substitute EXPR inline and drop the assignment; if it contains no `_acc` (dead
-assignment), drop it silently. This eliminates most intermediate accumulator
-lines within a basic block, producing `return foo.bar` instead of
+After all instructions are lifted, two post-processing passes run in order:
+
+**Pass 1 — accumulator copy-propagation** (`_propagate_acc`, Cifuentes §5.4.6).
+For each `_acc = EXPR` line: if the next substantive line's rhs contains `_acc`
+exactly once, substitute EXPR inline and drop the assignment; if it contains no
+`_acc` (dead assignment), drop it silently. Labels and blank lines are
+transparent for look-ahead. Produces `return foo.bar` instead of
 `_acc = foo.bar; return _acc`.
 
-A future pass (§6.6.1/§6.6.2 control flow structuring) will recover
-`if/else`/`while` from the `label+goto` CFG.
+**Pass 2 — control flow structuring** (`_structure_cfg`, Cifuentes §6.6.1/§6.6.2).
+Parses the flat `label+goto` statement list into `_BB` basic blocks, builds a
+`label → index` map, then recursively matches three structural patterns:
+
+- **While loop**: header block ends with `if (exit_cond) goto L_after`; a later
+  block ends with `goto L_head` (back-edge). Emitted as `while (!exit_cond) { body }`.
+- **If/else**: `if (cond) goto L_else`; last then-block ends with `goto L_end`.
+  Emitted as `if (!cond) { then } else { else }`.
+- **Simple if**: `if (cond) goto L_skip`; fall-through is the then-body.
+  Emitted as `if (!cond) { body }`.
+
+Condition negation is required in all three cases because ARK bytecode encodes
+conditionals as jump-if-false exits: the fall-through path is always the
+then-branch. Unrecognized patterns (exception handlers, non-reducible CFGs)
+fall back to raw `label+goto` output.
 
 ### Index table routing
 
