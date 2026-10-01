@@ -289,3 +289,110 @@ Security-critical partitions:
 X.509 cert in `sec_xloader_header`: CN=secimg level1 cert, OU=Huawei Signature Center,
 RSA-PSS/SHA-256, valid 2025–2055. Issuer: Huawei internal Product CA.
 30-year validity is atypically long for a code-signing cert.
+
+---
+
+## Huawei VRP OLT Container (RE findings)
+
+**File:** `targets/huawei/ma5800_olt_re.py`
+
+Reverse-engineered proprietary firmware container used in Huawei MA5800/MA5600/EA5800
+carrier OLT packages (SmartAX series, GPON/XGS-PON OLTs).
+
+### HUAWEI PRODUCT BINARY FILE format
+
+Magic: `"HUAWEI PRODUCT BINARY FILE\x00"` (27 bytes).
+
+Header (0x180 = 384 bytes per container level):
+
+```
+0x00  27  Magic: "HUAWEI PRODUCT BINARY FILE\x00"
+0x21  10  Version: "VER 1.1"
+0x2A  64  Package filename (null-padded)
+0x6C   4  Total payload size LE32
+0x70  16  Product line: "SmartAX MA5600"
+0x91  32  Board version: "MA5800V100R018C00B056"
+0xC2  20  Build timestamp: "2017-10-27 17:49:09"
+0xD8   1  Directory entry count
+0xDF   4  Directory entry count LE32
+0xFA  32  First sub-package filename
+0x16C  4  First sub-package size LE32
+0x170  4  First sub-package offset LE32
+```
+
+Three nesting levels: outer package → mainboardpacket.bin sub-package → EFS directory.
+
+EFS directory entries: 0x84 (132) bytes each. Filename at entry[8:40], board version
+at entry[0x4D:0x6D], LE16 checksum at entry[6:8].
+
+Text manifest after directory: `"\n\nName: <file>.efs\nDigest: <sha256hex>\n"` per component.
+
+`patch_bak.efs` is zlib-deflate compressed (magic `0x78 0x9C`); decompresses to a nested
+HUAWEI PRODUCT BINARY FILE container.
+
+### VRP OS (ARM Cortex-A15, Linux 3.10.53-HULK2)
+
+- **Internal codename**: "Saturn" (`RTOS_Saturn_201706`)
+- **Build path**: `/usr1/CloudTools/cross_tools/RTOS_Saturn_201706/V100R005C00/armA15le_3.10_ek/`
+- **Dual architecture**: MPU = ARM Cortex-A15 (armA15le); LPU = x86-i386 (data plane)
+- **535 VRP modules** including AAA, RADIUS, HWTACACS, SSH, SNMP v3, vsftpd 3.0.2.8
+- `libtpmagent.so` — TPM-based PCR attestation and file integrity measurement
+- `libli.so` — Lawful Intercept module (carrier regulatory requirement)
+- `libdbg_server.so` / `libdbg_agent.so` — debug server/agent **in production** (component types 50/51)
+- `minios` and `monitor` binaries: **with debug_info, NOT stripped** (unusual for production)
+
+### Security findings
+
+| Finding | Severity | Detail |
+|---|---|---|
+| GPON password exposure | HIGH | `GPONNNI_QueryPortDecryptPassWord` returns plaintext ONU passwords; `GPONNNI_GetGemPortCarAes` returns AES keys |
+| Debug server in production | MEDIUM | `dbg_server` + `dbg_agent` components loaded in production CPT list |
+| SNMP USM MD5 | LOW | `UsmUserLocalizeMD5` present (RFC 8353 deprecated) |
+| vsftpd 3.0.2.8 | INFO | Huawei custom fork, version not in upstream history |
+| Build path leak | INFO | Saturn codename + HULK2 kernel fork name |
+
+---
+
+## Huawei HWNP ONT Container (RE findings)
+
+**File:** `targets/huawei/echolife_ont_re.py`
+
+Reverse-engineered firmware container for EchoLife GPON/XGS-PON ONT devices
+(HG8245H, HG8346M, HG8546M, HS8145C5, EG8145V5).
+
+### HWNP format
+
+Magic: `"HWNP"` (4 bytes). Header size: always **0x168 = 360 bytes** across all versions.
+
+```
+0x00  4   Magic: "HWNP"
+0x04  1   Version (0=oldest, 1, 2=newest)
+0x05  3   Partial hash bytes
+0x08  4   CRC32 of payload LE32
+0x10  4   Secondary CRC32 LE32
+0x14  4   Sub-image count LE32 (4, 8, or 12)
+0x1C  4   Header size LE32 = 0x168 (confirmed constant)
+0x24  64  Variant IDs: pipe-separated 4-char board codes
+          e.g. "148C|15BD|15FE|COMMON|CHINA|CMCC|"
+0x168 ... Payload (sub-image table + binaries)
+```
+
+Three device generations:
+
+| Device | Kernel | Sub-images | SoC |
+|---|---|---|---|
+| HG8245H (V100) | Linux 2.6.34.10 | 1–8 | HiSilicon SD5115 |
+| HG8245H (V300), HG8346M | Linux 2.6.34 | 8 | HiSilicon SD5115 family |
+| HG8546M V5, HS8145C5 | Linux 3.10.53-HULK2 | 4–12 | HiSilicon (newer) |
+
+U-Boot image header (magic `0x27051956`) encodes the kernel version string at +32 bytes
+(big-endian `img_size` at +12). Both newer ONT generations share Linux 3.10.53-HULK2
+with the MA5800 OLT — same Huawei embedded Linux platform across OLT and ONT.
+
+Upgrade validation path embedded in HS8145C5: `file:/var/UpgradeCheck.xml`.
+
+### Cross-product PKI note
+
+All three Huawei product lines use CMS/PKCS#7 OID `1.2.840.113549.1.7.2` for firmware
+signing (Ascend NPU, VRP OLT, iBMC HPM). Single Huawei internal PKI; compromise of the
+Signature Center CA would affect all product lines simultaneously.
