@@ -470,13 +470,20 @@ class EnginePatternLibrary:
         """
         labels: Dict[int, EngineLabel] = {}
 
-        # Pass 1: string marker matching (exact string constants)
+        # Pass 1: string marker matching (exact string constants via xrefs)
         if xg is not None:
             self._pass_string_markers(ctx, xg, labels, min_confidence)
 
         # Pass 2: string pattern matching (regex in string xrefs)
         if xg is not None:
             self._pass_string_patterns(ctx, xg, labels, min_confidence)
+
+        # Pass 2b: spatial proximity for exception-embedded strings (no xrefs needed).
+        # C++ EH metadata embeds strings near the function they belong to in address space.
+        # Works when string xrefs are 0 (stripped PS3/PPC64 binaries where strings live
+        # in the same X|R segment as code, accessible only via EH unwinder at runtime).
+        if hasattr(ctx, "strings") and hasattr(ctx, "func_starts") and ctx.func_starts:
+            self._pass_string_proximity(ctx, labels, min_confidence)
 
         # Pass 3: semantic description matching
         if semantic_searcher is not None:
@@ -493,6 +500,26 @@ class EnginePatternLibrary:
         """String-marker + string-pattern passes only. No semantic model required."""
         return self.label_binary(ctx, xg, semantic_searcher=None, min_confidence=min_confidence)
 
+    @staticmethod
+    def _iter_string_xrefs(ctx, xg):
+        """Yield (string_content, func_va) pairs from ctx or xg, whichever is available."""
+        # Prefer ctx.strings + ctx.funcs_referencing_string (populated by PPC64/stripped xref scanner)
+        if hasattr(ctx, "strings") and isinstance(ctx.strings, dict) and hasattr(ctx, "funcs_referencing_string"):
+            for s_va, s in ctx.strings.items():
+                for fva in (ctx.funcs_referencing_string(s_va) or []):
+                    yield s, fva
+            return
+        # Fallback: ctx.string_vas + ctx.string_at + xg.funcs_referencing_string
+        for s_va in getattr(ctx, "string_vas", []):
+            try:
+                s = ctx.string_at(s_va)
+            except Exception:
+                continue
+            funcs = (xg.funcs_referencing_string(s_va)
+                     if hasattr(xg, "funcs_referencing_string") else [])
+            for fva in funcs:
+                yield s, fva
+
     def _pass_string_markers(
         self,
         ctx,
@@ -503,14 +530,8 @@ class EnginePatternLibrary:
         """Pass 1: exact string constant matching."""
         # Build string content → set of function VAs
         string_to_funcs: Dict[str, Set[int]] = {}
-        for s_va in getattr(ctx, "string_vas", []):
-            try:
-                s = ctx.string_at(s_va)
-            except Exception:
-                continue
-            funcs = xg.funcs_referencing_string(s_va) if hasattr(xg, "funcs_referencing_string") else []
-            for fva in funcs:
-                string_to_funcs.setdefault(s, set()).add(fva)
+        for s, fva in self._iter_string_xrefs(ctx, xg):
+            string_to_funcs.setdefault(s, set()).add(fva)
 
         for sig in self._sigs:
             for marker in sig.string_markers:
@@ -553,15 +574,10 @@ class EnginePatternLibrary:
                 continue
 
             # Scan all string xrefs for pattern matches
-            for s_va in getattr(ctx, "string_vas", []):
-                try:
-                    s = ctx.string_at(s_va)
-                except Exception:
-                    continue
+            for s, fva in self._iter_string_xrefs(ctx, xg):
                 if not any(pat.search(s) for pat in patterns):
                     continue
-                funcs = xg.funcs_referencing_string(s_va) if hasattr(xg, "funcs_referencing_string") else []
-                for fva in funcs:
+                for fva in [fva]:
                     if fva in labels:
                         continue
                     confidence = sig.confidence_base
@@ -576,6 +592,84 @@ class EnginePatternLibrary:
                             sig_id=sig.sig_id,
                             notes=f"string pattern match: {s[:80]!r}",
                         )
+
+    def _pass_string_proximity(
+        self,
+        ctx,
+        labels: Dict[int, EngineLabel],
+        min_confidence: float,
+        max_proximity: int = 4096,
+    ) -> None:
+        """Pass 2b: spatial proximity for EH/metadata-embedded strings.
+
+        When a CryEngine marker string has no code xrefs (common on stripped PS3/PPC64
+        where strings live in the same X|R segment as code and are only referenced via
+        EH unwinder), attribute the string to the nearest preceding function start in
+        the virtual address space (within max_proximity bytes).
+        """
+        import bisect
+        func_arr = sorted(ctx.func_starts)
+        confidence_base = 0.65  # lower confidence than xref-based labeling
+
+        # Collect all unique string content → list of VAs
+        content_to_vas: Dict[str, List[int]] = {}
+        for va, s in ctx.strings.items():
+            content_to_vas.setdefault(s, []).append(va)
+
+        for sig in self._sigs:
+            for marker in sig.string_markers:
+                vas = content_to_vas.get(marker, [])
+                for s_va in vas:
+                    idx = bisect.bisect_right(func_arr, s_va) - 1
+                    if idx < 0:
+                        continue
+                    fva = func_arr[idx]
+                    if s_va - fva > max_proximity:
+                        continue
+                    if fva in labels:
+                        continue
+                    conf = min(1.0, confidence_base)
+                    if conf >= min_confidence:
+                        labels[fva] = EngineLabel(
+                            va=fva,
+                            engine=sig.engine,
+                            category=sig.category,
+                            name=sig.name,
+                            confidence=conf,
+                            match_kind="string_proximity",
+                            sig_id=sig.sig_id,
+                            notes=f"nearby EH-embedded marker: {marker!r} at 0x{s_va:x}",
+                        )
+
+            for p in sig.string_patterns:
+                try:
+                    pat = re.compile(p, re.IGNORECASE)
+                except re.error:
+                    continue
+                for s, vas in content_to_vas.items():
+                    if not pat.search(s):
+                        continue
+                    for s_va in vas:
+                        idx = bisect.bisect_right(func_arr, s_va) - 1
+                        if idx < 0:
+                            continue
+                        fva = func_arr[idx]
+                        if s_va - fva > max_proximity:
+                            continue
+                        if fva in labels:
+                            continue
+                        conf = min(1.0, confidence_base - 0.05)
+                        if conf >= min_confidence:
+                            labels[fva] = EngineLabel(
+                                va=fva,
+                                engine=sig.engine,
+                                category=sig.category,
+                                name=sig.name,
+                                confidence=conf,
+                                match_kind="string_proximity",
+                                sig_id=sig.sig_id,
+                                notes=f"nearby EH-embedded pattern {p!r} match: {s[:60]!r}",
+                            )
 
     def _pass_semantic(
         self,
