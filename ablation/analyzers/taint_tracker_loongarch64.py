@@ -542,11 +542,63 @@ class LoongArch64TaintTracker:
         self._syms       = symbols
         self._dec        = LoongArchDecoder()
         self._frames_by_va: Optional[Dict[int, LoongArchFrame]] = None
+        # Populated by from_path_full(): DWARF high_pc values give precise end VAs.
+        # When absent, run_interprocedural() falls back to next-function-start.
+        self._dwarf_ends: Dict[int, int] = {}
 
     @classmethod
     def from_path(cls, path: str) -> "LoongArch64TaintTracker":
         data, base_va, text_start, text_end, syms, _ = _load_elf(path)
         return cls(data, base_va, text_start, text_end, syms)
+
+    @classmethod
+    def from_path_full(cls, path: str) -> "LoongArch64TaintTracker":
+        """
+        Like from_path but augments function boundaries from three sources:
+
+          1. .eh_frame FDE initial_location (present in stripped binaries)
+          2. .debug_info DW_TAG_subprogram low_pc / high_pc (requires -g)
+          3. .BTF.ext func_info (kernel modules)
+
+        Use instead of from_path when analysing stripped binaries where the
+        addi.d prologue heuristic misses leaf or tail-call-optimised functions.
+        DWARF high_pc values are stored in self._dwarf_ends and used by
+        run_interprocedural() for precise function end VAs.
+        """
+        data, base_va, text_start, text_end, syms, _ = _load_elf(path)
+
+        try:
+            from .dwarf_loongarch64 import (
+                extract_eh_frame_starts,
+                extract_debug_funcs,
+                extract_btf_funcs,
+            )
+            dwarf_funcs = extract_debug_funcs(path)
+            # Merge DWARF-derived names and BTF names into syms
+            for va, (name, _end) in dwarf_funcs.items():
+                if text_start <= va < text_end:
+                    if name and va not in syms:
+                        syms[va] = name
+                    elif not name and va not in syms:
+                        syms[va] = f"fn_{va:x}"
+            for va, name in extract_btf_funcs(path).items():
+                if text_start <= va < text_end and va not in syms:
+                    syms[va] = name
+            # eh_frame starts: add anonymous entries so _get_func_starts() picks them up
+            for va in extract_eh_frame_starts(path):
+                if text_start <= va < text_end and va not in syms:
+                    syms[va] = f"fn_{va:x}"
+        except Exception:
+            dwarf_funcs = {}
+
+        tt = cls(data, base_va, text_start, text_end, syms)
+        # Store precise DWARF end VAs for use by run_interprocedural()
+        tt._dwarf_ends = {
+            va: end
+            for va, (_name, end) in dwarf_funcs.items()
+            if text_start <= va < text_end and end > va
+        }
+        return tt
 
     # ---- frame cache -------------------------------------------------------
 
@@ -665,7 +717,8 @@ class LoongArch64TaintTracker:
         starts   = self._get_func_starts()
         findings: List[TaintFindingLA64] = []
         for i, fva in enumerate(starts):
-            fend = starts[i + 1] if i + 1 < len(starts) else self._text_end
+            fend = (self._dwarf_ends.get(fva)
+                    or (starts[i + 1] if i + 1 < len(starts) else self._text_end))
             findings.extend(self._scan_func_binary(fva, fend))
         return findings
 
@@ -678,8 +731,10 @@ class LoongArch64TaintTracker:
         """
         starts   = self._get_func_starts()
         fv       = self._ensure_frames()
+        # Prefer DWARF high_pc (precise); fall back to next-function-start.
         func_end: Dict[int, int] = {
-            fva: (starts[i + 1] if i + 1 < len(starts) else self._text_end)
+            fva: (self._dwarf_ends.get(fva)
+                  or (starts[i + 1] if i + 1 < len(starts) else self._text_end))
             for i, fva in enumerate(starts)
         }
 
