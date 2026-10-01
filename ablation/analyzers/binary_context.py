@@ -89,8 +89,14 @@ def _detect_arch(binary) -> str:
             return 'x86_64'
         if 'AARCH64' in m or 'ARM64' in m:
             return 'arm64'
+        if 'RISCV' in m or 'RISC_V' in m:
+            cls = str(binary.header.identity_class)
+            return 'riscv64' if '64' in cls else 'riscv32'
         if 'ARM' in m:
             return 'arm32'
+        if 'MIPS' in m:
+            cls = str(binary.header.identity_class)
+            return 'mips64' if '64' in cls else 'mips32'
     except Exception:
         pass
     return 'x86_64'
