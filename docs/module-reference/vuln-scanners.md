@@ -333,4 +333,98 @@ immediately before the memcpy call. The scanner does not detect branch-based gua
 so these appear as candidates and require manual verification. In the TencentOS
 libstd corpus, four Vec-grow functions (around 0x1a3b4, 0x1a974, 0x1af48, 0x1b554)
 hit this false-positive class.
+
+---
+
+## LA64HeapVulnScanner
+
+**File:** `ablation/analyzers/la64_heap_vuln_scanner.py`
+
+Detects integer overflow before heap allocation on LoongArch64 (CWE-190 → CWE-122).
+Finds overflow-prone arithmetic — `mul.w`, `sll.w`, `add.w`, `addi.w` — whose
+result flows into an allocation sink without an intervening bounds check.
+
+The critical class is `mul.w`: LoongArch64 `mul.w rd, rj, rk` computes the low 32
+bits of `rj * rk` and sign-extends the result to 64 bits. If an attacker controls
+one multiplicand and drives the product past 2^31, the 64-bit size argument fed to
+`malloc` is far smaller than the caller intends.
+
+No capstone dependency. Uses the same pure-Python 32-bit opcode matching as
+`LA64MaxNotMinScanner`. Supports ET_DYN, ET_EXEC, and ET_REL (kernel modules).
+
+### Detection algorithm
+
+1. Scan `.text` for `BL` to an allocation sink (resolved via `.plt`/`.rela.plt` for
+   shared objects, or `.rela.text` R_LARCH_B26 for kernel modules).
+2. Identify the size argument register (`$a0` for malloc/kmalloc, `$a1` for realloc,
+   `$a2` for posix_memalign, etc.).
+3. Trace backward up to 32 instructions from the `BL`, following register-move
+   instructions (`or rd, rj, r0`).
+4. Find the instruction that last defined the size register.
+5. **Filter:** if that instruction is `addi.w rd, r0, const` (constant load) or any
+   arithmetic with a zero-register operand, skip — not overflow.
+6. **Filter:** if any `BLT/BGE/BLTU/BGEU/BEQ/BNE` between the definer and the `BL`
+   uses the size register, skip — bounds check present.
+7. Surviving candidates are findings.
+
+### Severity
+
+| Opcode | Severity | Rationale |
+|---|---|---|
+| `mul.w` | HIGH | 32-bit multiply, product wraps silently |
+| `sll.w` | HIGH | 32-bit left shift, wraps silently |
+| `add.w` | MEDIUM | 32-bit add, signed wrap then zero-extend |
+| `addi.w` | MEDIUM | 32-bit add-immediate with user-controlled base |
+| `mul.d` | MEDIUM | 64-bit multiply, harder to overflow but possible |
+| `sll.d` | MEDIUM | 64-bit shift |
+
+### Sink coverage
+
+| Sink | Size argument |
+|---|---|
+| `malloc`, `kmalloc`, `kzalloc`, `vmalloc`, `vzalloc`, `__kmalloc` | arg0 |
+| `calloc` | arg0 (nmemb) and arg1 (size) checked independently |
+| `realloc`, `krealloc`, `devm_kmalloc` | arg1 |
+| `posix_memalign`, `aligned_alloc` | arg1/arg2 |
+| `mmap` | arg1 (length) |
+
+### Usage
+
+```python
+from ablation.analyzers.la64_heap_vuln_scanner import LA64HeapVulnScanner
+
+scanner = LA64HeapVulnScanner.from_path('/path/to/binary')
+findings = scanner.scan()
+print(LA64HeapVulnScanner.report(findings))
+
+for f in findings:
+    print(f"[{f.severity}] {f.overflow_op} overflow@0x{f.overflow_va:x} → {f.sink_name}@0x{f.sink_va:x}")
+```
+
+### Finding fields
+
+| Field | Description |
+|---|---|
+| `overflow_va` | VA of the overflow arithmetic instruction |
+| `overflow_op` | Mnemonic: `mul.w`, `sll.w`, `add.w`, `addi.w`, `mul.d`, `sll.d` |
+| `overflow_reg` | Register number of the potentially-wrapped size value (0–31) |
+| `sink_va` | VA of the `bl` to the allocation sink |
+| `sink_name` | PLT symbol name (`malloc`, `calloc`, `kmalloc`, …) |
+| `size_arg` | Argument label (`size`, `nmemb`, `newsize`, `length`) |
+| `severity` | `HIGH` (32-bit wrap) or `MEDIUM` (64-bit or add-imm) |
+
+### Known false-positive classes
+
+**Constant addi.w via r0**: `addi.w $rd, $r0, const` is a constant load, not overflow.
+Filtered automatically (`rj == 0` check).
+
+**Zero-operand arithmetic**: `mul.w rd, r0, rx` always produces 0. Filtered.
+
+**Count+1 for null terminator**: `addi.w $a0, $s0, 1; bl malloc` where `$s0` is a
+string length. If `$s0` is bounded upstream this is safe. The scanner emits MEDIUM;
+byte-verify the upstream bounds check before promoting to CONFIRMED.
+
+**Struct-size add**: `addi.w $a0, $t0, sizeof(hdr)` where `t0` is a user-provided
+payload size. Genuine vulnerability if payload size is unbounded — confirms as HIGH
+after source-level verification.
 ```
