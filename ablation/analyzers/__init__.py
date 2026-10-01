@@ -101,6 +101,13 @@ from .hypothesis_models import (
 from .evidence_scorer import EvidenceScorer, score_report
 from .probe_ranker import ProbeRanker, probe_kinds
 from .hypothesis_engine import HypothesisEngine
+from .probe_adapters import (
+    ProbeAdapter,
+    DisassemblyAdapter, CFGAdapter, XRefAdapter,
+    LifterAdapter, SemanticAdapter, VersionAdapter,
+    TaintAdapter, ManualAdapter,
+    execute_probe, available_kinds,
+)
 from .engine_pattern_library import (
     EnginePatternLibrary, EngineSignature, EngineLabel,
     ENGINES, CATEGORIES,
@@ -201,6 +208,12 @@ __all__ = [
     "EvidenceScorer", "score_report",
     "ProbeRanker", "probe_kinds",
     "HypothesisEngine",
+    # ── Probe Adapters (Milestone 3 — auto-execution) ───────────────────────────
+    "ProbeAdapter",
+    "DisassemblyAdapter", "CFGAdapter", "XRefAdapter",
+    "LifterAdapter", "SemanticAdapter", "VersionAdapter",
+    "TaintAdapter", "ManualAdapter",
+    "execute_probe", "available_kinds",
     # ── Engine Pattern Library (PC game engine-stripping) ──────────────────────
     "EnginePatternLibrary", "EngineSignature", "EngineLabel", "ENGINES", "CATEGORIES",
     # ── Steganography / secret-sharing key extraction ───────────────────────
