@@ -26,6 +26,7 @@ from .sax_index import SAXIndex, SAXMatch, IndexEntry, encode_sax, sax_mindist
 from .subsequence_searcher import SubsequenceSearcher, PatternMatch, parse_pattern
 from .taint_tracker_mips64 import MIPS64TaintTracker, TaintFinding64, InterproceduralPath64
 from .nanomips_decoder import NanoMIPSDecoder, NanoMIPSDisasm, NanoFrame
+from .taint_tracker_nanomips import NanoMIPSTaintTracker, NanoMIPSTaintFinding, NanoMIPSInterproceduralPath
 from .taint_tracker_ppc32 import PPC32TaintTracker, TaintFindingPPC32
 from .taint_tracker_ppc64 import PPC64TaintTracker, TaintFindingPPC64
 from .arc_decoder import ARCDecoder, ARCDisasm, ARCFrame
@@ -108,6 +109,7 @@ __all__ = [
     "SubsequenceSearcher", "PatternMatch", "parse_pattern",
     "MIPS64TaintTracker", "TaintFinding64", "InterproceduralPath64",
     "NanoMIPSDecoder", "NanoMIPSDisasm", "NanoFrame",
+    "NanoMIPSTaintTracker", "NanoMIPSTaintFinding", "NanoMIPSInterproceduralPath",
     "PPC32TaintTracker", "TaintFindingPPC32",
     "PPC64TaintTracker", "TaintFindingPPC64",
     "ARCDecoder", "ARCDisasm", "ARCFrame",
