@@ -109,9 +109,9 @@ class VMXDensityScanner:
             raise ValueError(
                 f"VMXDensityScanner requires ppc64/ppc32 binary, got {ctx.arch!r}"
             )
-        path = getattr(ctx, "_path", None)
+        path = getattr(ctx, "path", None) or getattr(ctx, "_path", None)
         if not path:
-            raise ValueError("BinaryContext has no _path attribute")
+            raise ValueError("BinaryContext has no path attribute")
         with open(path, "rb") as fh:
             raw = fh.read()
         code_data, code_va = _load_code_segment(raw)
