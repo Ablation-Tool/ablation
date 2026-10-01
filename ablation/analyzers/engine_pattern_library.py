@@ -349,6 +349,52 @@ def _seed_signatures() -> List[EngineSignature]:
             confidence_base=0.70,
         ))
 
+    # CryEngine PS3 / Cell PPU signatures — markers are REGISTER_CVAR / script-enum
+    # registration strings that survive -fno-rtti release builds.
+    # String arrays accessed via near-TOC 2-hop pattern (Pass 5 in BinaryContext).
+    cry_ps3_sigs = [
+        ("cry.ps3.sys.init",        "system",    "CSystem::Init (module registry)",
+         "CryEngine system init; iterates module name table to load/register subsystems",
+         ["Cry3DEngine", "CryAction", "CryAISystem", "CryAnimation",
+          "CryEntitySystem", "CrySoundSystem", "CrySystem"],
+         [r"^Cry[A-Z]"]),
+        ("cry.ps3.nanosuit",        "gameplay",  "CNanoSuit (Crysis-specific gameplay)",
+         "CryAction NanoSuit system; registers script functions for energy/hit/events",
+         ["GetNanoSuitEnergy", "NanoSuitHit", "SendPlayerSuitEvent"],
+         [r"NanoSuit"]),
+        ("cry.ps3.weapon.params",   "gameplay",  "CWeapon param registration",
+         "CryAction weapon param serialisation; reads ffWeight/damage/fireRate CVARs",
+         ["ffWeight", "doubleAttackTime", "minDamage"], [r"^ff[A-Z]|[Dd]amage|[Ff]ire"]),
+        ("cry.ps3.render.consts",   "render",    "CRenderer PS3 render constants",
+         "CryRenderPS3 constant registration; TempDownsc buffers; GI propagation amp",
+         ["TempDownscNBuff", "TempDownscDBuff", "e_GIPropagationAmp"],
+         [r"^TempDownsc|^e_GI"]),
+        ("cry.ps3.camera.shader",   "render",    "CRenderer camera shader params",
+         "Per-frame camera matrix/position constants pushed to shader constant buffers",
+         ["PB_CameraMatrix", "PB_CameraFront", "PB_CameraRight"],
+         [r"^PB_Camera|^PF_Camera|^PI_OS"]),
+        ("cry.ps3.sound.ai",        "sound",     "CrySound AI semantic registration",
+         "CrySoundSystem AI readability/pain-death sound semantic table",
+         ["SOUND_SEMANTIC_AI_PAIN_DEATH", "SOUND_SEMANTIC_AI_READABILITY"],
+         [r"^SOUND_SEMANTIC_AI"]),
+        ("cry.ps3.entity.error",    "gameplay",  "CEntitySystem error path",
+         "CEntitySystem::SpawnEntity failure path; logs entity class name on error",
+         ["CEntitySystem::SpawnEntity Failed"], [r"SpawnEntity Failed"]),
+        ("cry.ps3.render.shadow",   "render",    "CRenderer shadow light prep",
+         "CRenderer::EF_PrepareShadowGenForLight; logs when too many light sources",
+         ["CRenderer::EF_PrepareShadowGenForLight"], [r"EF_PrepareShadowGenForLight"]),
+        ("cry.ps3.speed.camera",    "gameplay",  "SpeedCamera / vehicle camera",
+         "CryAction vehicle speed-camera registration; links SpeedCamera to physics",
+         ["SpeedCamera"], [r"SpeedCamera"]),
+    ]
+    for (sid, cat, name, desc, markers, patterns) in cry_ps3_sigs:
+        sigs.append(EngineSignature(
+            sig_id=sid, engine="cryengine", category=cat, name=name,
+            description=desc, string_markers=markers, string_patterns=patterns,
+            confidence_base=0.75,
+            notes="PS3 Cell PPU release build; -fno-rtti; 2-hop near-TOC xref pattern",
+        ))
+
     # ── Cross-engine runtime / stdlib ─────────────────────────────────────────
     # These appear in virtually all game binaries (MSVC CRT, libstdc++, etc.)
 
