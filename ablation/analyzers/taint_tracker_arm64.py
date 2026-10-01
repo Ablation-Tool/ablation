@@ -831,6 +831,39 @@ class ARM64TaintTracker:
         return cls(data, base_va, text_start, text_end, syms)
 
     @classmethod
+    def from_path_full(cls, path: str) -> "ARM64TaintTracker":
+        """
+        Like from_path but augments symbols with:
+          - PLT stub VAs from .plt section disassembly (so BL targets resolve to sink names)
+          - Function starts from XRefGraph (.eh_frame + BL-target discovery) so all
+            internal functions are scanned, not just exports.
+
+        Use this instead of from_path for stripped ARM64 binaries.
+        """
+        from .xref_graph import XRefGraph
+        import lief as _lief
+
+        data, base_va, text_start, text_end, syms = _load_elf(path)
+
+        try:
+            xg = XRefGraph.from_path(path)
+            xg.build()
+            # PLT stub VAs (in text-space, not GOT space)
+            got_threshold = text_end  # GOT is well above .text
+            for va, name in xg._plt.items():
+                if va < got_threshold:
+                    syms[va] = name
+            # Inject all eh_frame / BL-discovered func starts so _get_func_starts() covers
+            # all functions, not just dynamic symbol exports
+            for fva in xg._func_starts:
+                if text_start <= fva < text_end and fva not in syms:
+                    syms[fva] = f"fn_{fva:x}"
+        except Exception:
+            pass
+
+        return cls(data, base_va, text_start, text_end, syms)
+
+    @classmethod
     def from_context(cls, ctx) -> "ARM64TaintTracker":
         data = Path(ctx.path).read_bytes() if hasattr(ctx, "path") else b""
         base_va    = getattr(ctx, "base_va", 0)
