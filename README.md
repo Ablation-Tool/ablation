@@ -55,7 +55,7 @@ Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Securit
 
 ---
 
-## 14 Local Decompilers
+## 17 Local Decompilers
 
 | Architecture | Variants |
 |---|---|
@@ -66,6 +66,7 @@ Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Securit
 | RISC-V | RISC-V 32 · RISC-V 64 |
 | Embedded | ARC EM/HS · V850-32 |
 | LoongArch | LoongArch64 |
+| Bytecode | DEX (Android) · ARK (HarmonyOS) · BEAM (Erlang) |
 
 ---
 
