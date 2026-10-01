@@ -818,20 +818,26 @@ class ARM64TaintTracker:
     """
 
     def __init__(self, data: bytes, base_va: int, text_start: int, text_end: int,
-                 symbols: Dict[int, str]):
-        self._data       = data
-        self._base_va    = base_va
-        self._text_start = text_start
-        self._text_end   = text_end
-        self._syms       = symbols
+                 symbols: Dict[int, str],
+                 custom_sinks: Optional[Set[str]] = None,
+                 custom_sources: Optional[Set[str]] = None):
+        self._data        = data
+        self._base_va     = base_va
+        self._text_start  = text_start
+        self._text_end    = text_end
+        self._syms        = symbols
+        self._sink_names  = _SINK_NAMES | (custom_sinks or set())
+        self._source_names = _SOURCE_NAMES | (custom_sources or set())
 
     @classmethod
-    def from_path(cls, path: str) -> "ARM64TaintTracker":
+    def from_path(cls, path: str, custom_sinks: Optional[Set[str]] = None,
+                  custom_sources: Optional[Set[str]] = None) -> "ARM64TaintTracker":
         data, base_va, text_start, text_end, syms = _load_elf(path)
-        return cls(data, base_va, text_start, text_end, syms)
+        return cls(data, base_va, text_start, text_end, syms, custom_sinks, custom_sources)
 
     @classmethod
-    def from_path_full(cls, path: str) -> "ARM64TaintTracker":
+    def from_path_full(cls, path: str, custom_sinks: Optional[Set[str]] = None,
+                       custom_sources: Optional[Set[str]] = None) -> "ARM64TaintTracker":
         """
         Like from_path but augments symbols with:
           - PLT stub VAs from .plt section disassembly (so BL targets resolve to sink names)
@@ -861,7 +867,50 @@ class ARM64TaintTracker:
         except Exception:
             pass
 
-        return cls(data, base_va, text_start, text_end, syms)
+        return cls(data, base_va, text_start, text_end, syms, custom_sinks, custom_sources)
+
+    @classmethod
+    def from_path_ko(cls, path: str, custom_sinks: Optional[Set[str]] = None,
+                     custom_sources: Optional[Set[str]] = None) -> "ARM64TaintTracker":
+        """
+        Kernel module variant (.ko).
+
+        Kernel modules are relocatable objects — BL instructions targeting external
+        symbols have displacement=0 before the kernel loader patches them.  The
+        .rela.text section contains R_AARCH64_CALL26/JUMP26 entries that map
+        instruction offsets to their real external symbol names.  This method injects
+        those entries into _syms so the taint engine resolves them transparently.
+        """
+        import struct
+        import lief as _lief
+
+        data, base_va, text_start, text_end, syms = _load_elf(path)
+
+        try:
+            binary = _lief.parse(path)
+            syms_list = list(binary.symtab_symbols)
+            rela_text = next(
+                (s for s in binary.sections if s.name == ".rela.text"), None
+            )
+            if rela_text:
+                rdata = bytes(rela_text.content)
+                n = len(rdata) // 24
+                for i in range(n):
+                    off, info, addend = struct.unpack_from("<QQq", rdata, i * 24)
+                    sym_idx = info >> 32
+                    rtype = info & 0xFFFFFFFF
+                    if rtype in (282, 283):  # R_AARCH64_JUMP26 / CALL26
+                        if sym_idx < len(syms_list):
+                            sname = syms_list[sym_idx].name
+                            if sname:
+                                # BL at text_start+off resolves to external symbol sname.
+                                # The unrelocated BL has displacement=0, so capstone reports
+                                # target = text_start+off.  Map that address to the symbol.
+                                syms[text_start + off] = sname
+        except Exception:
+            pass
+
+        return cls(data, base_va, text_start, text_end, syms, custom_sinks, custom_sources)
 
     @classmethod
     def from_context(cls, ctx) -> "ARM64TaintTracker":
@@ -928,13 +977,13 @@ class ARM64TaintTracker:
                 callee_name = _name_at(self._syms, target) if target else None
                 st = eng.state
 
-                if callee_name in _SOURCE_NAMES:
+                if callee_name in self._source_names:
                     for r in CALLER_SAVED:
                         st.set(r, CLEAN)
                     for r in RET_REGS:
                         st.set(r, Taint(frozenset({callee_name}), None))
 
-                elif callee_name in _SINK_NAMES:
+                elif callee_name in self._sink_names:
                     tainted_args = [r for r in ARG_REGS if st.get(r).tainted]
                     if tainted_args:
                         labels = frozenset().union(*(st.get(r).labels for r in tainted_args))
@@ -998,13 +1047,13 @@ class ARM64TaintTracker:
                     callee_name = _name_at(self._syms, target) if target else None
                     st = eng.state
 
-                    if callee_name in _SOURCE_NAMES:
+                    if callee_name in self._source_names:
                         for r in CALLER_SAVED:
                             st.set(r, CLEAN)
                         for r in RET_REGS:
                             st.set(r, Taint(frozenset({callee_name}), None))
 
-                    elif callee_name in _SINK_NAMES:
+                    elif callee_name in self._sink_names:
                         tainted_args = [r for r in ARG_REGS if st.get(r).tainted]
                         if tainted_args:
                             labels = frozenset().union(*(st.get(r).labels for r in tainted_args))
