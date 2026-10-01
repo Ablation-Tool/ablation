@@ -216,12 +216,43 @@ LoongArch relocation types (psABI v2.30, `elf_parser.R_LARCH_*`):
 
 ## Function start detection
 
-Two heuristics used together:
+`from_path()` uses two heuristics:
 1. Symbol table entries (`st_value` in `.symtab` / `.dynsym`) within `.text`.
 2. `addi.d $sp, $sp, -N` (N > 0) instruction pattern — standard GCC/Clang prologue.
 
-When a binary is stripped with no symbols, heuristic 2 alone still recovers
-the majority of function boundaries in TencentOS glibc and OpenSSL builds.
+`from_path_full()` adds three DWARF/CFI data sources via `dwarf_loongarch64`:
+
+| Source | Section | Stripped? | Yields |
+|---|---|---|---|
+| `.eh_frame` FDE records | `.eh_frame` | Present (GCC default) | Function start VAs |
+| DWARF subprogram | `.debug_info` | Requires `-g` | Name + start + end VA |
+| BTF func_info | `.BTF` + `.BTF.ext` | Kernel modules | Name + VA |
+
+**Use `from_path_full()` for stripped TencentOS binaries** — `.eh_frame` recovers
+leaf functions and tail-call-optimised bodies that have no `addi.d $sp` prologue.
+
+```python
+# Stripped binary — use from_path_full for complete function coverage
+tt = LoongArch64TaintTracker.from_path_full("libssl.so.3.0.loongarch64")
+findings = tt.run_interprocedural()
+```
+
+When `.debug_info` is present (debug packages), `high_pc` values are stored in
+`tt._dwarf_ends` and used by `run()`/`run_interprocedural()` for precise function
+end VAs instead of the next-function-start approximation.
+
+### `dwarf_loongarch64` module
+
+```python
+from ablation.analyzers.dwarf_loongarch64 import (
+    extract_eh_frame_starts,  # Set[int] — FDE initial_locations
+    extract_debug_funcs,      # Dict[int, Tuple[str, int]] — va -> (name, end_va)
+    extract_btf_funcs,        # Dict[int, str] — va -> name (kernel modules)
+)
+```
+
+All three functions are best-effort: any missing section or parse error returns
+an empty result without raising.
 
 ---
 
