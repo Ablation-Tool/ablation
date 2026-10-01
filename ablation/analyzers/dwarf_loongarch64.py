@@ -72,19 +72,40 @@ def extract_debug_funcs(path: str) -> Dict[int, Tuple[str, int]]:
     result: Dict[int, Tuple[str, int]] = {}
     try:
         from elftools.elf.elffile import ELFFile
-        from elftools.dwarf.die import DIE
         with open(path, "rb") as fh:
             elf = ELFFile(fh)
             if not elf.has_dwarf_info():
                 return result
             di = elf.get_dwarf_info()
+
+            # Build a flat DIE-offset -> DIE map for abstract_origin resolution.
+            # GCC LTO emits concrete instances with DW_AT_abstract_origin pointing
+            # to the definition DIE that holds DW_AT_name.
+            die_by_offset: Dict[int, object] = {}
+            for cu in di.iter_CUs():
+                for die in cu.iter_DIEs():
+                    die_by_offset[die.offset] = die
+
+            def _resolve_name(die: object) -> str:
+                """Return name, following DW_AT_abstract_origin / DW_AT_specification."""
+                name_attr = die.attributes.get("DW_AT_name")
+                if name_attr is not None:
+                    raw = name_attr.value
+                    return raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
+                for link_key in ("DW_AT_abstract_origin", "DW_AT_specification"):
+                    ref = die.attributes.get(link_key)
+                    if ref is not None:
+                        target = die_by_offset.get(ref.value)
+                        if target is not None:
+                            return _resolve_name(target)
+                return ""
+
             for cu in di.iter_CUs():
                 for die in cu.iter_DIEs():
                     if die.tag != "DW_TAG_subprogram":
                         continue
                     low  = die.attributes.get("DW_AT_low_pc")
                     high = die.attributes.get("DW_AT_high_pc")
-                    name = die.attributes.get("DW_AT_name")
                     if low is None or high is None:
                         continue
                     low_va  = low.value
@@ -94,10 +115,7 @@ def extract_debug_funcs(path: str) -> Dict[int, Tuple[str, int]]:
                                      "DW_FORM_data4", "DW_FORM_data8",
                                      "DW_FORM_udata", "DW_FORM_sdata"):
                         high_va = low_va + high.value
-                    func_name = ""
-                    if name is not None:
-                        raw = name.value
-                        func_name = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
+                    func_name = _resolve_name(die)
                     if low_va > 0:
                         result[low_va] = (func_name, high_va)
     except Exception:
