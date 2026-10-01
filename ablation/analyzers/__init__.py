@@ -94,6 +94,13 @@ from .binder_scanner import BinderScanner, BinderFinding
 from .dex_disasm import DEXDisasm, DEXInstruction, decode_code_item
 from .dex_lifter import DEXLifter, RegVal
 from .binary_lifter import BinaryLifter, NativeVal
+from .hypothesis_models import (
+    ConfidenceState, EvidenceRelation, EVIDENCE_FAMILIES, HYPOTHESIS_KINDS,
+    HypothesisRecord, EvidenceRecord, ProbeRecord, HypothesisSession,
+)
+from .evidence_scorer import EvidenceScorer, score_report
+from .probe_ranker import ProbeRanker, probe_kinds
+from .hypothesis_engine import HypothesisEngine
 from .lsb_stego_extractor import (
     LSBStegoReader, LagrangeKeyExtractor, BmpKeyExtractor,
     StegoKeyResult, CoordPair,
@@ -184,6 +191,12 @@ __all__ = [
     "DEXDisasm", "DEXInstruction", "decode_code_item",
     "DEXLifter", "RegVal",
     "BinaryLifter", "NativeVal",
+    # ── Active Hypothesis Engine ────────────────────────────────────────────────
+    "ConfidenceState", "EvidenceRelation", "EVIDENCE_FAMILIES", "HYPOTHESIS_KINDS",
+    "HypothesisRecord", "EvidenceRecord", "ProbeRecord", "HypothesisSession",
+    "EvidenceScorer", "score_report",
+    "ProbeRanker", "probe_kinds",
+    "HypothesisEngine",
     # ── Steganography / secret-sharing key extraction ───────────────────────
     "LSBStegoReader", "LagrangeKeyExtractor", "BmpKeyExtractor",
     "StegoKeyResult", "CoordPair",
