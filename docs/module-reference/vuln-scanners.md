@@ -249,4 +249,88 @@ all_highs = (
     [f for f in heap_findings if f.severity == 'HIGH']
 )
 print(f"{len(all_highs)} HIGH findings across format string and heap classes")
+
+---
+
+## LA64MaxNotMinScanner
+
+**File:** `ablation/analyzers/loongarch64_max_not_min_scanner.py`
+
+Detects the GCC 12.3.1.7-1.tl4 LoongArch64 code-generation bug where branchless
+`min(a, b)` emits `max(a, b)` instead, and confirms that the wrong value flows
+into a memory-sizing sink.
+
+The compiler uses four instructions for branchless min/max:
+
+```
+sltu   Rcond, Ra, Rb       # Rcond = (Ra < Rb) unsigned
+masknez Rtmp1, Rb, Rcond   # Rtmp1 = Rcond ? Rb : 0
+maskeqz Rtmp2, Ra, Rcond   # Rtmp2 = !Rcond ? Ra : 0
+or     Rout, Rtmp2, Rtmp1  # Rout = Rtmp1 | Rtmp2
+```
+
+That sequence is `max(Ra, Rb)`. Correct `min(Ra, Rb)` swaps the masknez/maskeqz
+order. GCC 12.3.1.7-1.tl4 on TencentOS Server 4.6 emits the wrong order for
+every branchless min in the corpus, affecting libstd, swtpm, and 608 other ELF
+files. When the wrong value is a memcpy count or malloc size the result is a heap
+overflow (CWE-122).
+
+### Detection algorithm
+
+1. Slide a four-word window over `.text` looking for the exact opcode sequence
+   that matches the MAX pattern (sltu, then masknez with the same cond register,
+   then maskeqz with the same cond register, then or combining the two mask outputs).
+2. Track the `or` result register through register-move instructions for up to 20
+   instructions ahead of the pattern.
+3. Flag the finding when the tracked register reaches a memory-sizing sink argument
+   before being clobbered.
+
+No capstone dependency. Uses pure 32-bit integer matching against the binutils 2.41
+opcode table. Handles the LoongArch64 PLT two-slot (32-byte) header automatically.
+
+### Sink coverage
+
+| Sink | Argument |
+|---|---|
+| `memcpy`, `memmove`, `memset` | count (arg2) |
+| `read`, `pread`, `pread64` | nbytes (arg2) |
+| `fread` | nmemb (arg2) |
+| `recv`, `recvfrom` | len (arg2) |
+| `fgets` | size (arg1) |
+| `malloc`, `calloc`, `kmalloc`, `vmalloc`, `kzalloc` | size (arg0) |
+| `realloc`, `posix_memalign` | size (arg1/arg2) |
+
+### Usage
+
+```python
+from ablation.analyzers.loongarch64_max_not_min_scanner import LA64MaxNotMinScanner
+
+scanner = LA64MaxNotMinScanner.from_path('/path/to/binary')
+findings = scanner.scan()
+print(scanner.report(findings))
+
+# Sink-proximate findings only (already filtered by scan())
+for f in findings:
+    print(f"0x{f.pattern_va:x}  {f.result_name} -> {f.sink_name}({f.sink_arg})@0x{f.sink_va:x}")
+```
+
+### Finding fields
+
+| Field | Description |
+|---|---|
+| `pattern_va` | VA of the `sltu` instruction that starts the four-instruction sequence |
+| `result_reg` | Integer register number of the `or` result (0-31) |
+| `result_name` | ABI name of the result register (e.g. `$a2`) |
+| `sink_va` | VA of the `bl` instruction that calls the sink |
+| `sink_name` | PLT symbol name (e.g. `memcpy`) |
+| `sink_arg` | Human label for the dangerous argument (`count`, `size`, etc.) |
+| `context` | Space-separated hex words of the four-instruction sequence |
+
+### Known false positives
+
+The Rust Vec-append pattern uses a `bltu remaining_cap, read_result, error` guard
+immediately before the memcpy call. The scanner does not detect branch-based guards,
+so these appear as candidates and require manual verification. In the TencentOS
+libstd corpus, four Vec-grow functions (around 0x1a3b4, 0x1a974, 0x1af48, 0x1b554)
+hit this false-positive class.
 ```
