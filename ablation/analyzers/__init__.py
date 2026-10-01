@@ -98,6 +98,7 @@ from .abc_parser import (
     MethodInfo, CodeItem, FieldInfo, ClassInfo,
 )
 from .abc_disasm import ARKDisasm, ARKInstruction
+from .abc_decompiler import ABCDecompiler
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -177,4 +178,5 @@ __all__ = [
     "ABCParser", "ABCHeader", "ABCIndexHeader",
     "MethodInfo", "CodeItem", "FieldInfo", "ClassInfo",
     "ARKDisasm", "ARKInstruction",
+    "ABCDecompiler",
 ]
