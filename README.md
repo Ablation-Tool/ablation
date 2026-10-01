@@ -29,6 +29,8 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 **Android / APK Analysis:** Reads Android APKs at the binary level with no dependencies. It maps native code entry points and IPC surface from compiled bytecode, so the full surface is visible without decompiling. LibraryInventory scans every native library in a directory at once, scores each one by credential exposure and JNI attack surface, and sorts the results so the high-risk library surfaces first. The engagement starts on the library most likely to have a finding, not the one that happens to be listed first in the filesystem.
 
 **Erlang / BEAM Analysis:** Maps exports, imports, and atoms from .beam bytecode files, so dangerous calls like `os:cmd` and `code:load_binary` are visible without running the release.
+
+
 **Cryptographic Analysis**
 
 Ablation strips away every layer that makes cryptography invisible in a compiled binary. Entropy Mapper locates the encrypted region. Crypto Audit and HashAlgoDiscriminator identify the algorithm. XorSolver, BmpKeyExtractor, and CustomCBCDetector break the encryption or recover the key. ELFVtableReconstructor and VtableDispatchScanner reconstruct what the runtime does with the result.
