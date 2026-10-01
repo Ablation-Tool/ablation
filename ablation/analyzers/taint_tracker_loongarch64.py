@@ -39,14 +39,33 @@ Labels = FrozenSet[str]
 EMPTY: Labels = frozenset()
 
 _SOURCE_NAMES: frozenset = frozenset({
+    # libc network/file sources
     "recv", "recvfrom", "recvmsg", "read", "fread",
     "fgets", "gets", "getchar", "fgetc",
+    # kernel-space sources (copy_from_user family)
+    "copy_from_user", "__copy_from_user", "__copy_from_user_inatomic",
+    "get_user", "__get_user", "strncpy_from_user", "strnlen_user",
+    "nla_get_string", "nla_data", "nlmsg_data",
+    "memdup_user", "__memdup_user",
+    "skb_get_data", "skb_pull_data",
 })
 
 _SINK_NAMES: frozenset = frozenset({
+    # libc exec/string sinks
     "system", "execve", "execl", "execvp", "execle", "execvpe", "popen",
     "strcpy", "strcat", "sprintf", "vsprintf", "snprintf", "vsnprintf",
     "memcpy", "memmove", "gets",
+    # kernel-space sinks
+    "copy_to_user", "__copy_to_user", "put_user", "__put_user",
+    "call_usermodehelper", "call_usermodehelper_exec", "kernel_execve",
+    "kmalloc", "kzalloc", "vmalloc",
+})
+
+# Kernel privilege-escalation primitives — always CRITICAL.
+_ESCALATION_NAMES: frozenset = frozenset({
+    "commit_creds", "prepare_kernel_cred",
+    "set_current_cred", "override_creds",
+    "__sys_setuid", "security_setuid",
 })
 
 _PLT_TOL = 16
@@ -421,6 +440,59 @@ class TaintEngine:
 
 
 # ---------------------------------------------------------------------------
+# Syscall frame handler
+# ---------------------------------------------------------------------------
+
+def _handle_syscall_frame(
+    eng: "TaintEngine",
+    findings: list,
+    func_va: int,
+    func_name: str,
+    syscall_va: int,
+) -> None:
+    """
+    Handle a 'syscall 0' frame in the taint scan.
+
+    Reads $a7 from the constant-folding table to identify the syscall number.
+    Source syscalls taint $a0 with the syscall label.
+    Sink/escalation syscalls emit a finding if any of $a0–$a5 are tainted.
+    Unknown $a7: conservatively clobber caller-saved and continue.
+    """
+    from .syscall_loongarch64 import (
+        SYSCALL_ESCALATION, classify_syscall, syscall_label, syscall_severity,
+    )
+    st = eng.state
+    sysno = st.consts.get("$a7")
+
+    if sysno is not None:
+        result = classify_syscall(sysno)
+        if result is not None:
+            name, kind = result
+            if kind == "source":
+                for r in CALLER_SAVED:
+                    st.set(r, CLEAN)
+                st.taint_reg("$a0", syscall_label(sysno))
+                return
+            # sink or escalation
+            arg_regs = ("$a0", "$a1", "$a2", "$a3", "$a4", "$a5")
+            tainted_args = [r for r in arg_regs if st.get(r).tainted]
+            if tainted_args:
+                labels = frozenset().union(*(st.get(r).labels for r in tainted_args))
+                sev = syscall_severity(sysno)
+                findings.append(TaintFindingLA64(
+                    func_va=func_va, func_name=func_name,
+                    sink_va=syscall_va, sink_name=f"syscall:{name}",
+                    tainted_args=list(tainted_args),
+                    source_name=next(iter(sorted(labels)), "unknown"),
+                    severity=sev,
+                ))
+
+    # Conservatively clobber caller-saved registers after any syscall
+    for r in CALLER_SAVED:
+        st.set(r, CLEAN)
+
+
+# ---------------------------------------------------------------------------
 # ELF loader helper (shared with V850 approach)
 # ---------------------------------------------------------------------------
 
@@ -672,12 +744,27 @@ class LoongArch64TaintTracker:
                     for r in RET_REGS:
                         st.taint_reg(r, callee_name)
 
+                elif callee_name in _ESCALATION_NAMES:
+                    tainted_args = [r for r in ARG_REGS if st.get(r).tainted]
+                    if tainted_args:
+                        labels = frozenset().union(*(st.get(r).labels for r in tainted_args))
+                        findings.append(TaintFindingLA64(
+                            func_va=func_va, func_name=func_name,
+                            sink_va=va, sink_name=callee_name,
+                            tainted_args=tainted_args,
+                            source_name=next(iter(sorted(labels)), "unknown"),
+                            severity="CRITICAL",
+                        ))
+                    for r in CALLER_SAVED:
+                        st.set(r, CLEAN)
+
                 elif callee_name in _SINK_NAMES:
                     tainted_args = [r for r in ARG_REGS if st.get(r).tainted]
                     if tainted_args:
                         labels = frozenset().union(*(st.get(r).labels for r in tainted_args))
                         sev    = ("CRITICAL" if callee_name in
-                                  {"system", "execve", "execl", "execvp", "popen"} else "HIGH")
+                                  {"system", "execve", "execl", "execvp", "popen",
+                                   "kernel_execve", "call_usermodehelper"} else "HIGH")
                         findings.append(TaintFindingLA64(
                             func_va=func_va, func_name=func_name,
                             sink_va=va, sink_name=callee_name,
@@ -697,6 +784,17 @@ class LoongArch64TaintTracker:
                     if arg_labels:
                         for r in RET_REGS:
                             st.set(r, Taint(arg_labels, None))
+
+            elif frame.mnemonic == "syscall":
+                _handle_syscall_frame(eng, findings, func_va, func_name, va)
+
+            elif frame.mnemonic == "ertn":
+                # Exception return — terminates kernel exception handler
+                break
+
+            elif frame.mnemonic in ("break", "dbcl"):
+                # Unconditional trap — unreachable past this point
+                break
 
             elif frame.is_ret:
                 break
@@ -776,13 +874,29 @@ class LoongArch64TaintTracker:
                         for r in RET_REGS:
                             st.taint_reg(r, callee_name)
 
+                    elif callee_name in _ESCALATION_NAMES:
+                        tainted_args = [r for r in ARG_REGS if st.get(r).tainted]
+                        if tainted_args:
+                            labels = frozenset().union(
+                                *(st.get(r).labels for r in tainted_args))
+                            findings.append(TaintFindingLA64(
+                                func_va=fva, func_name=func_name,
+                                sink_va=va, sink_name=callee_name,
+                                tainted_args=tainted_args,
+                                source_name=next(iter(sorted(labels)), "unknown"),
+                                severity="CRITICAL",
+                            ))
+                        for r in CALLER_SAVED:
+                            st.set(r, CLEAN)
+
                     elif callee_name in _SINK_NAMES:
                         tainted_args = [r for r in ARG_REGS if st.get(r).tainted]
                         if tainted_args:
                             labels = frozenset().union(
                                 *(st.get(r).labels for r in tainted_args))
                             sev = ("CRITICAL" if callee_name in
-                                   {"system", "execve", "execl", "execvp", "popen"} else "HIGH")
+                                   {"system", "execve", "execl", "execvp", "popen",
+                                    "kernel_execve", "call_usermodehelper"} else "HIGH")
                             findings.append(TaintFindingLA64(
                                 func_va=fva, func_name=func_name,
                                 sink_va=va, sink_name=callee_name,
@@ -814,6 +928,12 @@ class LoongArch64TaintTracker:
                         if arg_labels:
                             for r in RET_REGS:
                                 st.set(r, Taint(arg_labels, None))
+
+                elif frame.mnemonic == "syscall":
+                    _handle_syscall_frame(eng, findings, fva, func_name, va)
+
+                elif frame.mnemonic in ("ertn", "break", "dbcl"):
+                    break
 
                 elif frame.is_ret:
                     break
