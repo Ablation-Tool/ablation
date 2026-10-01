@@ -299,6 +299,9 @@ class DisasmEngine:
         elif arch == 'v850':
             # capstone 5.x and next branch have no CS_ARCH_V850; use pure-Python decoder
             self._v850_endian = endian
+        elif arch == 'loongarch64':
+            # No capstone LoongArch support as of 5.x; use pure-Python loongarch_decoder
+            pass
         elif arch in ('riscv', 'riscv32', 'riscv64'):
             from capstone import CS_ARCH_RISCV, CS_MODE_RISCV32, CS_MODE_RISCV64, CS_MODE_RISCVC
             cs_width = CS_MODE_RISCV64 if arch == 'riscv64' else CS_MODE_RISCV32
@@ -355,6 +358,9 @@ class DisasmEngine:
             return
         if self.arch == 'v850':
             yield from self._v850_stream(code, base_addr, count)
+            return
+        if self.arch == 'loongarch64':
+            yield from self._loongarch_stream(code, base_addr, count)
             return
         if not HAS_CAPSTONE or not self.md:
             yield from self._fallback_disasm_stream(code, base_addr, count)
@@ -446,6 +452,30 @@ class DisasmEngine:
                 is_ret=frame.is_ret,
                 branch_type=('unconditional' if frame.is_call or frame.mnemonic in ('jr', 'jmp')
                              else 'conditional') if (frame.is_branch or frame.is_call) else None,
+            )
+
+    def _loongarch_stream(self, code, base_addr, count):
+        """LoongArch64 stream using pure-Python loongarch_decoder (no capstone)."""
+        from ablation.analyzers.loongarch_decoder import LoongArchDecoder
+        dec = LoongArchDecoder()
+        for i, frame in enumerate(dec.decode_frames(code, base_addr)):
+            if count and i >= count:
+                return
+            if frame.is_branch or frame.is_call:
+                _btype = 'unconditional' if (frame.is_call or
+                         frame.mnemonic in ('b', 'jirl')) else 'conditional'
+            else:
+                _btype = None
+            yield InsnRecord(
+                address=frame.va,
+                mnemonic=frame.mnemonic,
+                op_str=frame.op_str,
+                size=frame.width,
+                raw='',
+                is_branch=frame.is_branch,
+                is_call=frame.is_call,
+                is_ret=frame.is_ret,
+                branch_type=_btype,
             )
 
     def _fallback_disasm_stream(self, code, base_addr, count):
