@@ -91,6 +91,42 @@ binary-searches the result against the known string VA array.
 This builds `_str_xref_idx` (string_va -> [code_vas]) and `_func_str_idx`
 (func_va -> [string_vas]) in one O(N) pass over the binary.
 
+### PPC64 string xref — 5-pass system (Cell PPU / CryEngine PS3)
+
+PowerPC64 big-endian binaries use an ABI-defined Table of Contents (r2) for all global
+data access.  Direct RIP-relative displacement scanning finds nothing because PPC64 never
+encodes absolute addresses as inline 4-byte fields in the instruction stream.  The PPC64
+path runs five passes against the binary to build equivalent `_str_xref_idx` /
+`_func_str_idx` coverage:
+
+| Pass | Method | Mechanism | Coverage |
+|---|---|---|---|
+| 1 | `_build_string_xref_index_ppc64` (main) | TOC far-load: `ADDIS rX, r2, ha16 + LWZ rX, lo16(rX)` | Direct far-TOC string loads |
+| 2 | same | TOC near-load: `LWZ rX, off(r2)` within ±32KB of r2 | Near-TOC string loads |
+| 3 | `_augment_xrefs_ppc64_precall` | Backward scan from BL: `LIS rX, hi + ADDI rX, lo` pre-call pattern | Inline arg-reg loads before calls |
+| 4 | `_augment_xrefs_ppc64_arrays` | Dense string-pointer array in data seg → any TOC pointer to the array base | String pointer arrays via TOC |
+| 5 | `_augment_xrefs_ppc64_twohop` | Near-TOC entry → far string-pointer array (2-hop: load array base from TOC, then index into array) | **Dominant CryEngine PS3 pattern** |
+
+**Pass 5 detail — the 2-hop pattern:**
+
+CryEngine PS3 packs string VAs into dense arrays far from r2.  The access pattern is:
+```
+LWZ r11, near_off(r2)    # load array BASE pointer from near-TOC slot
+LWZ r3,  N*4(r11)        # load individual string VA from the array
+```
+
+Pass 5 scans the near-TOC window (r2±32KB) for slots whose target begins a run of ≥3
+consecutive string VAs.  It then does a single linear pass over `.text` matching any
+`LWZ rX, off(r2)` whose displacement bytes collide with a discovered slot offset, and
+attributes all strings in the pointed-to array to the enclosing function.
+
+For the Crysis 2 PS3 binary (CryEngine 3, Cell PPU, ELFCLASS64), Pass 5 alone produces
+~12,600 function → string xrefs from 51 array-base TOC slots.
+
+**ELFCLASS64 note:** The Crysis 2 PS3 ELF is ELFCLASS64 despite running in 32-bit
+effective-address mode.  The entry-point OPD descriptor (8 bytes: code-VA + TOC-VA) is
+parsed at `e_entry` using 64-bit struct layout; r2 is extracted from offset 4.
+
 ### Vectorized call graph
 
 `_build_call_graph` scans `.text` for the CALL rel32 opcode byte (`0xe8`) with
