@@ -2,6 +2,15 @@
 
 ---
 
+## v2.32.0
+
+- **TencentOS LoongArch64 RE: full corpus survey complete** (targets, not in repo)
+  - `GNU_EFI_ANALYSIS` block added to RE module for gnu-efi-3.0.17-5.tl4 (26 PE32+ EFI app binaries)
+  - Classification: PLAUSIBLE_LOW — GCC 12.3.1.7-1.tl4 max-not-min pattern confirmed (same libgnuefi.a CU in all 26 apps); BL target at VA 0xb8763c is an unresolved PE32+ relocation placeholder (outside text section); sink identity unverifiable without runtime relocation; dev-only package (not deployed on production servers)
+  - Language-Toolchains survey complete: golang-bin/libgccjit/cargo/rust all swept; clang-analyzer is Python/shell only; libatomic-static 65 object files → 0 findings on both scanners
+  - Firmware directory excluded: all packages are peripheral firmware blobs (WiFi, GPU, audio DSP) in non-LoongArch64 ISAs
+  - RE module docstring updated: "9 CONFIRMED | 27 ELIMINATED | 1 PLAUSIBLE_LOW"
+
 ## v2.31.0
 
 - **`ARM64FgetsFdDiscriminator`: FILE* provenance post-processor for ARM64TaintTracker** (`analyzers/arm64_fgets_fd_discriminator.py`, new)
