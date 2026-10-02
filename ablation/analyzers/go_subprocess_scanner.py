@@ -11,6 +11,12 @@ each site by path type:
   absolute : starts with "/" (not directly injectable via CWD/PATH)
   dynamic  : argument not resolvable statically (runtime-built string)
 
+Architecture support:
+  x86-64: full — CALL imm detection + GoStringResolver LEA/MOV string resolution
+  arm64:  partial — BL imm detection works; string resolution not implemented
+          (GoStringResolver uses x86-64 LEA/MOV patterns; ARM64 ADRP+ADD is a gap).
+          All arm64 call sites are reported as DYNAMIC/MEDIUM until the resolver is extended.
+
 Usage:
     from modules.go_subprocess_scanner import GoSubprocessScanner
 
@@ -30,6 +36,7 @@ from typing import Optional
 try:
     import capstone
     import capstone.x86 as x86
+    import capstone.arm64 as arm64_cs
     HAVE_CAPSTONE = True
 except ImportError:
     HAVE_CAPSTONE = False
@@ -59,6 +66,40 @@ _STDLIB_PREFIXES = (
     "html/", "image/", "mime/", "multipart.", "net.",
     "go:", "type.", "gclocals", "abi.", "ssa.", "itab.",
 )
+
+
+def _detect_arch(data: bytes) -> str:
+    """Return 'arm64' or 'x86_64' by reading the ELF e_machine field."""
+    if data[:4] != b'\x7fELF':
+        return 'x86_64'
+    e_machine = struct.unpack_from('<H', data, 18)[0]
+    # EM_AARCH64 = 0xb7 (183)
+    return 'arm64' if e_machine == 0xb7 else 'x86_64'
+
+
+def _extract_call_target(insn, arch: str):
+    """
+    Return the immediate call target VA from a BL (ARM64) or CALL imm (x86-64) instruction.
+    Returns None if the instruction is not a direct call/branch.
+    """
+    if arch == 'arm64':
+        if insn.mnemonic != 'bl':
+            return None
+        if not hasattr(insn, 'operands') or not insn.operands:
+            return None
+        op = insn.operands[0]
+        if op.type != arm64_cs.ARM64_OP_IMM:
+            return None
+        return op.imm
+    else:
+        if insn.mnemonic != 'call':
+            return None
+        if not hasattr(insn, 'operands') or not insn.operands:
+            return None
+        op = insn.operands[0]
+        if op.type != x86.X86_OP_IMM:
+            return None
+        return op.imm
 
 
 @dataclass
@@ -130,6 +171,7 @@ class GoSubprocessScanner:
         self.data = binary_data
         self.max_func_size = max_func_size
         self.lookback = lookback
+        self._arch = _detect_arch(binary_data)
         self.resolver = GoStringResolver(binary_data, segments, fallback_max_len=512)
 
         # Build VA->name and name->VA maps
@@ -175,7 +217,10 @@ class GoSubprocessScanner:
         code = self.data[foff: foff + size]
         if not code:
             return []
-        cs = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+        if self._arch == 'arm64':
+            cs = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
+        else:
+            cs = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
         cs.detail = True
         return list(cs.disasm(code, va))
 
@@ -224,20 +269,20 @@ class GoSubprocessScanner:
                 continue
 
             for idx, insn in enumerate(instrs):
-                if insn.mnemonic != 'call':
+                call_target = _extract_call_target(insn, self._arch)
+                if call_target is None:
                     continue
-                if not hasattr(insn, 'operands') or not insn.operands:
-                    continue
-                op = insn.operands[0]
-                if op.type != x86.X86_OP_IMM:
-                    continue
-                call_target = op.imm
                 if call_target not in target_va_set:
                     continue
 
                 # Found a call to an exec function. Resolve command arg.
                 exec_name = target_va_map[call_target]
-                resolved = self.resolver.resolve_call_site(instrs, idx, self.lookback)
+                # GoStringResolver uses x86-64 LEA/MOV patterns — not applicable for ARM64.
+                # ARM64 string resolution (ADRP+ADD) is not yet implemented; mark as dynamic.
+                if self._arch == 'arm64':
+                    resolved = None
+                else:
+                    resolved = self.resolver.resolve_call_site(instrs, idx, self.lookback)
 
                 if resolved:
                     str_va, cmd_str, cmd_len = resolved
@@ -285,19 +330,17 @@ class GoSubprocessScanner:
 
         results = []
         for idx, insn in enumerate(instrs):
-            if insn.mnemonic != 'call':
+            call_target = _extract_call_target(insn, self._arch)
+            if call_target is None:
                 continue
-            if not hasattr(insn, 'operands') or not insn.operands:
-                continue
-            op = insn.operands[0]
-            if op.type != x86.X86_OP_IMM:
-                continue
-            call_target = op.imm
             if call_target not in target_va_map:
                 continue
 
             exec_name = target_va_map[call_target]
-            resolved = self.resolver.resolve_call_site(instrs, idx, self.lookback)
+            if self._arch == 'arm64':
+                resolved = None
+            else:
+                resolved = self.resolver.resolve_call_site(instrs, idx, self.lookback)
             if resolved:
                 str_va, cmd_str, cmd_len = resolved
                 cmd_type, severity = _classify_cmd(cmd_str)
