@@ -1,20 +1,46 @@
 """
-hisi_rv32_ext.py: Correct-size decoder for HiSilicon RV32 custom-3 ISA extension.
+hisi_rv32_ext.py: Correct-size decoder for all HiSilicon riscv31 ISA extensions.
 
-HiSilicon WS63 / Hi3863 NearLink SoC firmware uses a proprietary custom-3 RISC-V
-extension (opcode 0x7b). Capstone 5.x skipdata mode emits the first 2 bytes as a
-raw .byte pair, then misinterprets the next 2 bytes as a valid compressed instruction.
-This cascades 2-byte misalignment through the rest of every function that contains
-a custom-3 instruction.
+HiSilicon WS63 / Hi3863 / BS21 (Hi2821) NearLink SoCs use a proprietary extended
+RISC-V core named "riscv31" (fbb_ws63 SDK). Five custom opcode spaces:
 
-Field layout (RISC-V R-type, nML AND-rule grammar):
-    image  = {funct7[6:0]} :: {rs2[4:0]} :: {rs1[4:0]} :: {funct3[2:0]} :: {rd[4:0]} :: 0b1111011
-    syntax = "hisi.{funct3}.{funct7:02x}  {rd}, {rs1}, {rs2}"
-    action = unknown without HiSilicon ISA docs
+  0x7b  custom-3  : R-type dispatch/context operations (~9000 hits in WS63-liteos-app)
+  0x5b  custom-2  : muliadd, push {ra,s0-sN}, pop, popret, ldmia, stmia
+  0x3b  OP-32     : beqi, bnei, bgei, blti, bgeui, bltui (branch-immediate)
+  0x1b  OP-IMM-32 : addshf, orshf, andshf, xorshf, subshf, uxtb, uxth (shift-fused ALU)
+  0x1f  reserved  : l.li — 6-byte long load-immediate (CRITICAL: variable-length!)
 
-With ~9000 occurrences across ~8900 unique encodings in WS63-liteos-app, this is a
-broad multi-operation extension, not a handful of accelerator calls. funct3 and funct7
-distribute uniformly, confirming operand-bearing R-type layout.
+Capstone 5.x mishandles all five spaces:
+  - 0x7b/0x5b/0x3b/0x1b: decoded as 4-byte raw, then next 2 bytes misinterpreted as RVC
+  - 0x1f: decoded as 4-byte instruction; trailing 2 bytes cause 2-byte misalignment cascade
+
+l.li encoding (6 bytes, LE):
+  bytes[0:4] word  = { imm[15:0] :: funct3=0 :: rd[4:0] :: 0x1f }
+  bytes[4:6] hword = imm[31:16]
+  Example: l.li a0,0x12345678  →  1f 05 78 56 34 12
+    word = 0x5678051F: bits[11:7]=10(a0), bits[31:16]=0x5678, hword=0x1234
+
+muliadd encoding (4 bytes, custom-2 opcode 0x5b):
+  bits[31:25]=uimm[7:1], bits[24:20]=rs2, bits[19:15]=rs1, bits[14:12]=funct3,
+  bits[11:7]=rd, bits[6:0]=0x5b
+  Semantics: rd = rs1 + (rs2 * zero_ext(uimm))   [array base + index*stride]
+
+addshf encoding (4 bytes, opcode 0x1b):
+  bits[31:25]=shamt, bits[24:20]=rs2, bits[19:15]=rs1, bits[14:12]=funct3(op),
+  bits[11:7]=rd, bits[6:0]=0x1b
+  funct3: 0=sll, 1=srl, 2=sra, 3=ror  (operation applied to rs1 before addition)
+  Semantics: rd = rs2 + shift_op(rs1, shamt)
+
+push/pop/popret (opcode 0x5b, identified by funct3):
+  push   funct3=5: saves {ra,s0-sN} to stack, adjusts sp
+  pop    funct3=6: restores {ra,s0-sN} from stack
+  popret funct3=7: pop + ret
+
+Source references:
+  - fbb_ws63/src/drivers/chips/ws63/arch/riscv/riscv31/ (HiSilicon SDK)
+  - riscv-code-size-reduction: existing_extensions/Huawei Custom Extension/riscv_muladd_extension.rst
+  - CARRV 2020: Perotti et al., "HW/SW approaches for RISC-V code size reduction"
+  - Empirical: tools_isa/poc_hisi_asm_map.py + HiSilicon-patched GCC 7.3.0 / binutils 2.38
 
 See: docs/module-reference/hisi-rv32-ext.md
 """
@@ -46,65 +72,213 @@ _ABI: List[str] = [
 
 _ARG_REGS = frozenset({'a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7'})
 
+# Callee-saved registers for push/pop: ra + s0-s11
+_CALLEE_SAVED = ['ra', 's0', 's1', 's2', 's3', 's4', 's5', 's6',
+                 's7', 's8', 's9', 's10', 's11']
+
+# Map funct3 values for 0x1b shift-fused ALU
+_SHFALU_F3: List[str] = ['sll', 'srl', 'sra', 'ror', '?', '?', '?', '?']
+
+# Map funct3 values for 0x3b branch-immediate
+_BRANCHI_F3: List[str] = ['beqi', 'bnei', 'bgei', 'blti', 'bgeui', 'bltui', '?', '?']
+
 # ---------------------------------------------------------------------------
 # Decoded instruction result
 # ---------------------------------------------------------------------------
 
 class HisiInsn:
-    """A decoded HiSilicon custom-3 instruction."""
+    """A decoded HiSilicon custom instruction (any opcode space)."""
     __slots__ = ('address', 'size', 'mnemonic', 'op_str',
-                 'rd', 'rs1', 'rs2', 'funct3', 'funct7')
+                 'rd', 'rs1', 'rs2', 'funct3', 'funct7',
+                 '_taint_srcs', '_taint_dst')
 
     def __init__(
         self,
         address: int,
-        rd: int, funct3: int, rs1: int, rs2: int, funct7: int,
-        conservative: bool,
+        size: int,
+        mnemonic: str,
+        op_str: str,
+        rd: int,
+        rs1: int,
+        rs2: int,
+        funct3: int,
+        funct7: int,
+        taint_srcs: List[int],
+        taint_dst: Optional[int],
     ) -> None:
-        self.address = address
-        self.size    = 4
-        self.funct3  = funct3
-        self.funct7  = funct7
-        self.rd      = rd
-        self.rs1     = rs1
-        self.rs2     = rs2
-        rd_n  = _ABI[rd]  if rd  < 32 else f'x{rd}'
-        rs1_n = _ABI[rs1] if rs1 < 32 else f'x{rs1}'
-        rs2_n = _ABI[rs2] if rs2 < 32 else f'x{rs2}'
-        self.mnemonic = f'hisi.{funct3}.{funct7:02x}'
-        self.op_str   = f'{rd_n}, {rs1_n}, {rs2_n}'
+        self.address   = address
+        self.size      = size
+        self.mnemonic  = mnemonic
+        self.op_str    = op_str
+        self.rd        = rd
+        self.rs1       = rs1
+        self.rs2       = rs2
+        self.funct3    = funct3
+        self.funct7    = funct7
+        self._taint_srcs = taint_srcs
+        self._taint_dst  = taint_dst
 
     @property
     def taint_sources(self) -> List[str]:
         """Registers that may carry taint into this instruction."""
-        return [_ABI[r] for r in (self.rs1, self.rs2) if r < 32]
+        return [_ABI[r] for r in self._taint_srcs if 0 <= r < 32]
 
     @property
     def taint_dest(self) -> Optional[str]:
-        """Register written by this instruction (None if rd == zero)."""
-        if self.rd == 0:
+        """Register written by this instruction (None if none or rd == zero)."""
+        if self._taint_dst is None or self._taint_dst == 0:
             return None
-        return _ABI[self.rd] if self.rd < 32 else f'x{self.rd}'
+        r = self._taint_dst
+        return _ABI[r] if r < 32 else f'x{r}'
 
     def as_tuple(self) -> Tuple[int, int, str, str]:
         """(address, size, mnemonic, op_str) — same layout as capstone.disasm_lite."""
         return (self.address, self.size, self.mnemonic, self.op_str)
 
 
+def _reg(r: int) -> str:
+    return _ABI[r] if r < 32 else f'x{r}'
+
+
+def _make_custom3(word: int, address: int, conservative: bool) -> HisiInsn:
+    """Decode 0x7b (custom-3) R-type."""
+    rd     = (word >>  7) & 0x1f
+    funct3 = (word >> 12) & 0x07
+    rs1    = (word >> 15) & 0x1f
+    rs2    = (word >> 20) & 0x1f
+    funct7 = (word >> 25) & 0x7f
+    mnem   = f'hisi.{funct3}.{funct7:02x}'
+    ops    = f'{_reg(rd)}, {_reg(rs1)}, {_reg(rs2)}'
+    srcs   = [rs1, rs2] if conservative else []
+    return HisiInsn(address, 4, mnem, ops, rd, rs1, rs2, funct3, funct7, srcs, rd)
+
+
+def _make_shfalu(word: int, address: int) -> HisiInsn:
+    """Decode 0x1b (OP-IMM-32 reuse): addshf/subshf/orshf/xorshf/andshf.
+
+    Encoding (R-type layout, riscv_preshifted_arithmetic.rst):
+      bits[31:25] = {shift_type[1:0], shamt[4:0]}
+        shift_type: 00=sll, 01=srl, 10=sra, 11=ror
+      bits[24:20] = rs2 (base register)
+      bits[19:15] = rs1 (register to be shifted)
+      bits[14:12] = funct3 (base op: 0=add, 1=sub, 2=or, 3=xor, 4=and)
+      bits[11:7]  = rd
+      bits[6:0]   = 0x1b
+    Semantics: rd = rs2 base_op shift_type(rs1, shamt)
+    Verified: addshf a0,a1,a2,sll,3 → 0x06C5851B ✓ (rd=a0,rs1=a1,rs2=a2,shamt=3)
+    """
+    rd         = (word >>  7) & 0x1f
+    funct3     = (word >> 12) & 0x07
+    rs1        = (word >> 15) & 0x1f
+    rs2        = (word >> 20) & 0x1f
+    f7         = (word >> 25) & 0x7f
+    shamt      = f7 & 0x1f
+    shift_type = (f7 >> 5) & 0x03
+    _OP   = ['addshf', 'subshf', 'orshf', 'xorshf', 'andshf']
+    _SHFT = ['sll', 'srl', 'sra', 'ror']
+    mnem  = _OP[funct3] if funct3 < 5 else f'hisi1b.{funct3}'
+    stype = _SHFT[shift_type]
+    ops   = f'{_reg(rd)}, {_reg(rs1)}, {_reg(rs2)}, {stype}, {shamt}'
+    return HisiInsn(address, 4, mnem, ops, rd, rs1, rs2, funct3, f7, [rs1, rs2], rd)
+
+
+def _make_lli(word: int, hword: int, address: int) -> HisiInsn:
+    """Decode 0x1f l.li — 6-byte long load-immediate.
+
+    Encoding:
+      bytes[0:4] = { imm[15:0] :: funct3=0 :: rd[4:0] :: 0x1f }  (LE uint32)
+      bytes[4:6] = imm[31:16]  (LE uint16)
+    Semantics: rd = sign_ext(imm32) ... HiSilicon uses zero-ext for unsigned addresses
+    """
+    rd   = (word >>  7) & 0x1f
+    imm_lo = (word >> 16) & 0xffff
+    imm_hi = hword & 0xffff
+    imm32  = (imm_hi << 16) | imm_lo
+    mnem   = 'l.li'
+    ops    = f'{_reg(rd)}, 0x{imm32:08x}'
+    # l.li loads a constant — no register source, writes rd
+    return HisiInsn(address, 6, mnem, ops, rd, 0, 0, 0, 0, [], rd)
+
+
+def _make_custom2(word: int, address: int) -> HisiInsn:
+    """Decode 0x5b (custom-2): muliadd [and ldmia/stmia — encoding TBD from ri5cy manual].
+
+    NOTE: push/pop/popret are NOT here. They are 16-bit RVC instructions
+    (bits[15:13]=100, bits[1:0]=00) per riscv_push_pop_extension.rst.
+
+    muliadd encoding (riscv_muladd_extension.rst):
+      bits[31:25] = uimm[7:1]  (uimm[0]=0 always; unsigned 7-bit via bits[7:1])
+      bits[24:20] = rs2         (register to multiply)
+      bits[19:15] = rs1         (base register)
+      bits[14:12] = funct3      (operand variant; typically 0)
+      bits[11:7]  = rd
+      bits[6:0]   = 0x5b
+    Semantics: rd = rs1 + (rs2 * zero_ext(uimm))
+    Verified: muliadd a0,a1,a2,4 → 0x04C5955B ✓ (rd=a0, rs1=a1, rs2=a2, uimm=4)
+
+    ldmia/stmia: multi-register load/store (exact funct3 TBD; treat as generic for now)
+    """
+    rd     = (word >>  7) & 0x1f
+    funct3 = (word >> 12) & 0x07
+    rs1    = (word >> 15) & 0x1f
+    rs2    = (word >> 20) & 0x1f
+    f7     = (word >> 25) & 0x7f
+    uimm   = (f7 << 1) & 0xff  # uimm[7:1] → full uimm (bit0=0)
+    mnem   = 'muliadd'
+    ops    = f'{_reg(rd)}, {_reg(rs1)}, {_reg(rs2)}, {uimm}'
+    return HisiInsn(address, 4, mnem, ops, rd, rs1, rs2, funct3, f7, [rs1, rs2], rd)
+
+
+def _make_branchi(word: int, address: int) -> HisiInsn:
+    """Decode 0x3b (OP-32 reuse): beqi/bnei/bgei/blti/bgeui/bltui.
+
+    Encoding (riscv_condbr_imm_extension.rst, empirically opcode=0x3b not 0x0b):
+      bits[31:24] = cmpimm[7:0]    (8-bit signed comparison immediate)
+      bits[23:20] = offset[9:6]    (branch offset upper 4 bits)
+      bits[19:15] = rs1            (register to compare)
+      bits[14:12] = funct3         (0=beqi,1=bnei,2=bgei,3=blti,4=bgeui,5=bltui)
+      bits[11:7]  = offset[5:1]    (branch offset lower 5 bits; bit0 always 0)
+      bits[6:0]   = 0x3b
+    Verified: beqi a0,7,. → 0x0705003B ✓ (cmpimm=7, rs1=a0, funct3=0, offset=0)
+
+    No register write (branch affects PC only).
+    """
+    off_lo  = (word >>  7) & 0x1f
+    funct3  = (word >> 12) & 0x07
+    rs1     = (word >> 15) & 0x1f
+    off_hi  = (word >> 20) & 0x0f
+    cmpimm  = (word >> 24) & 0xff
+    offset  = (off_hi << 6) | (off_lo << 1)  # PC-relative byte offset
+    mnem    = _BRANCHI_F3[funct3]
+    target  = address + offset
+    ops     = f'{_reg(rs1)}, {cmpimm}, 0x{target:08x}'
+    return HisiInsn(address, 4, mnem, ops, 0, rs1, 0, funct3, cmpimm, [rs1], None)
+
+
 # ---------------------------------------------------------------------------
 # Decoder
 # ---------------------------------------------------------------------------
 
+_HISI_OPCODES = frozenset({0x7b, 0x5b, 0x3b, 0x1b, 0x1f})
+
+
 class HiSiliconRV32ExtDecoder:
     """
-    Drop-in replacement for capstone.Cs whose disasm_lite() correctly handles
-    HiSilicon custom-3 instructions (opcode 0x7b, always 4 bytes).
+    Drop-in replacement for capstone.Cs that correctly handles all five
+    HiSilicon riscv31 custom opcode spaces (WS63/Hi3863/BS21/Hi2821).
 
-    Capstone handles everything else; this decoder wraps it transparently.
+    0x7b  custom-3  : R-type generic dispatch (4 bytes)
+    0x5b  custom-2  : muliadd + ldmia/stmia (4 bytes)
+    0x3b  OP-32     : beqi/bnei/bgei/blti/bgeui/bltui (4 bytes)
+    0x1b  OP-IMM-32 : addshf/subshf/orshf/xorshf/andshf (4 bytes)
+    0x1f  reserved  : l.li — 6-byte long load-immediate  ← MISALIGNMENT HAZARD
+
+    Capstone handles all other opcodes including standard RVC 16-bit instructions
+    (which includes push/pop/popret in the RVC Quadrant-0 custom slots).
 
     Args:
         conservative: if True, treat custom-3 as propagating taint from rs1/rs2
-            to rd. If False (default), treat them as opaque with no taint.
+            to rd. If False (default), treat custom-3 as opaque with no taint.
     """
 
     def __init__(self, conservative: bool = False) -> None:
@@ -116,18 +290,31 @@ class HiSiliconRV32ExtDecoder:
             self._cs.detail   = False
 
     # ------------------------------------------------------------------
-    # Core decode
+    # Core decode dispatch
     # ------------------------------------------------------------------
 
+    def decode_word(self, word: int, address: int) -> HisiInsn:
+        """Decode a single 32-bit HiSilicon custom word."""
+        op = word & 0x7f
+        if op == 0x7b:
+            return _make_custom3(word, address, self._conservative)
+        if op == 0x5b:
+            return _make_custom2(word, address)
+        if op == 0x3b:
+            return _make_branchi(word, address)
+        if op == 0x1b:
+            return _make_shfalu(word, address)
+        raise ValueError(f'decode_word: not a HiSilicon opcode: 0x{op:02x}')
+
+    def decode_lli(self, word: int, hword: int, address: int) -> HisiInsn:
+        """Decode a 6-byte l.li instruction."""
+        return _make_lli(word, hword, address)
+
+    # Backward-compat alias
     @staticmethod
     def decode_custom3(word: int, address: int, conservative: bool) -> HisiInsn:
-        """Decode a 32-bit custom-3 word (must have bits[6:0] == 0x7b) as R-type."""
-        rd     = (word >>  7) & 0x1f
-        funct3 = (word >> 12) & 0x07
-        rs1    = (word >> 15) & 0x1f
-        rs2    = (word >> 20) & 0x1f
-        funct7 = (word >> 25) & 0x7f
-        return HisiInsn(address, rd, funct3, rs1, rs2, funct7, conservative)
+        """Decode a 32-bit custom-3 word (bits[6:0] == 0x7b) as R-type."""
+        return _make_custom3(word, address, conservative)
 
     # ------------------------------------------------------------------
     # disasm_lite: drop-in for capstone.Cs.disasm_lite
@@ -141,80 +328,80 @@ class HiSiliconRV32ExtDecoder:
         """
         Yield (address, size, mnemonic, op_str) for each instruction.
 
-        Custom-3 instructions (opcode 0x7b at 2-byte aligned positions within
-        the stream) are decoded as R-type and emitted as 4-byte instructions.
-        All other bytes are forwarded to Capstone in contiguous chunks.
+        HiSilicon custom instructions (opcodes 0x7b/0x5b/0x3b/0x1b/0x1f at
+        2-byte aligned positions) are decoded natively. Critically, l.li (0x1f)
+        consumes 6 bytes — without this decoder, every l.li causes a 2-byte
+        misalignment cascade through the rest of the function.
 
-        The stream position is tracked at 2-byte granularity matching RISC-V's
-        minimum instruction alignment.
+        All other bytes are forwarded to Capstone in contiguous chunks,
+        including RVC push/pop/popret (16-bit, Quadrant 0 custom slots).
         """
         pos = 0
         length = len(code)
 
-        while pos < length - 3:
-            va = offset + pos
+        while pos < length - 1:
+            va  = offset + pos
+            b0  = code[pos]
+            op7 = b0 & 0x7f
 
-            # Peek at the opcode byte
-            b0 = code[pos]
-            b1 = code[pos + 1] if pos + 1 < length else 0xff
+            # l.li: 6-byte variable-length (must check before the 4-byte path)
+            if op7 == 0x1f and (b0 & 0x80) == 0:
+                if pos + 6 <= length:
+                    word  = struct.unpack_from('<I', code, pos)[0]
+                    hword = struct.unpack_from('<H', code, pos + 4)[0]
+                    insn  = _make_lli(word, hword, va)
+                    yield insn.as_tuple()
+                    pos += 6
+                    continue
+                # Not enough bytes: fall through to capstone
+                break
 
-            # Custom-3 detection: low 7 bits of byte[0] == 0x7b
-            # bits[1:0] == 11 → 4-byte instruction (guaranteed by RISC-V spec)
-            if (b0 & 0x7f) == 0x7b and (b0 & 0x80) == 0:
-                # Second byte must also align: for a standard R-type custom-3,
-                # byte[0] bit[7] = rd[0]. We accept any value of rd[0], but
-                # for this specific opcode byte[0]=0x7b rd[0]=0 always.
+            # 4-byte HiSilicon opcodes (bits[1:0] == 11 guaranteed)
+            if op7 in (0x7b, 0x5b, 0x3b, 0x1b) and (b0 & 0x80) == 0:
                 if pos + 4 <= length:
                     word = struct.unpack_from('<I', code, pos)[0]
-                    insn = self.decode_custom3(word, va, self._conservative)
+                    insn = self.decode_word(word, va)
                     yield insn.as_tuple()
                     pos += 4
                     continue
 
-            # Not custom-3: determine instruction size from bits[1:0]
-            # bits[1:0] == 11 → 4-byte; otherwise 2-byte (RVC)
-            if (b0 & 0x03) == 0x03:
-                insn_size = 4
-            else:
-                insn_size = 2
+            # Standard instruction: determine size (16 or 32 bit) from bits[1:0]
+            insn_size = 4 if (b0 & 0x03) == 0x03 else 2
 
-            # Collect a contiguous run of non-custom-3 bytes for Capstone.
-            # Run until we hit the end, a custom-3 byte, or exhaust the buffer.
+            # Build a contiguous run of non-HiSilicon bytes for Capstone
             run_start = pos
             run_pos   = pos + insn_size
 
-            while run_pos < length - 3:
-                nb0 = code[run_pos]
-                if (nb0 & 0x7f) == 0x7b and (nb0 & 0x80) == 0:
-                    break  # custom-3 ahead; end the run
+            while run_pos < length - 1:
+                nb0  = code[run_pos]
+                nop7 = nb0 & 0x7f
+                if (nb0 & 0x80) == 0 and nop7 in _HISI_OPCODES:
+                    break
                 nb_size = 4 if (nb0 & 0x03) == 0x03 else 2
                 run_pos += nb_size
 
-            # Clamp run to buffer
-            run_end = min(run_pos, length)
-            chunk   = code[run_start:run_end]
+            run_end  = min(run_pos, length)
+            chunk    = code[run_start:run_end]
             chunk_va = offset + run_start
 
             if self._cs is not None:
                 yield from self._cs.disasm_lite(chunk, chunk_va)
             else:
-                # Capstone unavailable: emit raw bytes as .byte entries
                 for i in range(0, len(chunk), 2):
-                    b = chunk[i]
-                    sz = 4 if (b & 0x03) == 0x03 else 2
-                    chunk_slice = chunk[i:i+sz]
-                    if len(chunk_slice) == sz:
-                        yield (chunk_va + i, sz, '.byte', ' '.join(f'0x{x:02x}' for x in chunk_slice))
+                    b   = chunk[i]
+                    sz  = 4 if (b & 0x03) == 0x03 else 2
+                    sl  = chunk[i:i + sz]
+                    if len(sl) == sz:
+                        yield (chunk_va + i, sz, '.byte', ' '.join(f'0x{x:02x}' for x in sl))
 
             pos = run_end
 
-        # Tail: fewer than 4 bytes remaining — pass to Capstone
+        # Tail: pass remainder to Capstone
         if pos < length and self._cs is not None:
-            tail = code[pos:]
-            yield from self._cs.disasm_lite(tail, offset + pos)
+            yield from self._cs.disasm_lite(code[pos:], offset + pos)
 
     # ------------------------------------------------------------------
-    # Convenience: filter for only custom-3 from a full scan
+    # Scan helpers
     # ------------------------------------------------------------------
 
     def scan_custom3(
@@ -222,13 +409,41 @@ class HiSiliconRV32ExtDecoder:
         code: bytes,
         base_va: int,
     ) -> List[HisiInsn]:
-        """Return all custom-3 instructions found in the code region."""
+        """Return all custom-3 instructions found in the code region (4-byte stride)."""
         results: List[HisiInsn] = []
-        for i in range(0, len(code) - 3, 2):
+        for i in range(0, len(code) - 3, 4):
             b0 = code[i]
             if (b0 & 0x7f) == 0x7b and (b0 & 0x80) == 0:
                 word = struct.unpack_from('<I', code, i)[0]
-                results.append(self.decode_custom3(word, base_va + i, self._conservative))
+                results.append(_make_custom3(word, base_va + i, self._conservative))
+        return results
+
+    def scan_all_custom(
+        self,
+        code: bytes,
+        base_va: int,
+    ) -> List[HisiInsn]:
+        """Return all HiSilicon custom instructions (all 5 opcode spaces, 4-byte stride).
+
+        Note: l.li is 6 bytes but starts on a 4-byte boundary; stride=4 finds the
+        start correctly. The trailing 2-byte extension is consumed as part of the
+        instruction and not scanned separately.
+        """
+        results: List[HisiInsn] = []
+        i = 0
+        while i < len(code) - 3:
+            b0  = code[i]
+            op7 = b0 & 0x7f
+            if (b0 & 0x80) == 0 and op7 in _HISI_OPCODES:
+                word = struct.unpack_from('<I', code, i)[0]
+                if op7 == 0x1f and i + 6 <= len(code):
+                    hword = struct.unpack_from('<H', code, i + 4)[0]
+                    results.append(_make_lli(word, hword, base_va + i))
+                    i += 6
+                    continue
+                elif op7 != 0x1f:
+                    results.append(self.decode_word(word, base_va + i))
+            i += 4
         return results
 
     # ------------------------------------------------------------------
@@ -236,12 +451,13 @@ class HiSiliconRV32ExtDecoder:
     # ------------------------------------------------------------------
 
     def opcode_report(self, code: bytes, base_va: int) -> str:
-        """Print top-N (funct3, funct7) pairs by occurrence count."""
+        """Frequency table for all HiSilicon custom instructions."""
         import collections
         counts: collections.Counter = collections.Counter()
-        for insn in self.scan_custom3(code, base_va):
-            counts[(insn.funct3, insn.funct7)] += 1
-        lines = [f"HiSilicon custom-3 opcode frequency ({sum(counts.values())} total, {len(counts)} unique):"]
-        for (f3, f7), cnt in counts.most_common(20):
-            lines.append(f"  hisi.{f3}.{f7:02x}  x{cnt}")
+        for insn in self.scan_all_custom(code, base_va):
+            counts[insn.mnemonic] += 1
+        total = sum(counts.values())
+        lines = [f"HiSilicon custom opcode frequency ({total} total):"]
+        for mnem, cnt in counts.most_common(30):
+            lines.append(f"  {mnem:<20s}  x{cnt}")
         return '\n'.join(lines)
