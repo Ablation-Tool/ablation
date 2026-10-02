@@ -116,15 +116,26 @@ Key confirmations:
 |---------|-------|----------|
 | v0 (initial) | ~33,000 | ~85% |
 | v1 (after addmat ground-truth) | ~36,100 | 93.8% |
+| v2 (RI16/RI10 gap fills) | ~36,600 | 95.0% |
 
-## Remaining Gaps (top unknowns after v1)
+## Added in v2
+
+| Op | Mnemonic | Evidence |
+|----|----------|----------|
+| op9=0x09A | lqr | RI16; produces values consumed by addx (146 hits) |
+| op9=0x09B | lqr | RI16; parallel to 0x09A with large I16 (145 hits) |
+| op9=0x0FE | lqr | RI16; loads pointer into $0 before cbd (43 hits) |
+| op8=0x79  | ceqbi | RI10; fills gap between cgtbi(0x78)/cgthi(0x7A) in compare-byte chain (136 hits) |
+
+## Remaining Gaps (top unknowns after v2)
 
 | Op | Hits | Notes |
 |----|------|-------|
-| op11=0x268 | 146 | paired with 0x269; rB=$0 always; long chains |
-| op11=0x269 | 145 | paired with 0x268; rB=$127 always; same rA patterns |
-| op11=0x3cc | 136 | op8=0x79; near stqx encoding |
-| op11=0x1d6 | 108 | near csflt range |
+| op11=0x1d6 | 108 | always same rA/rB as preceding fm; float domain |
+| op8=0x83 (0x418–0x41f) | ~250 total | RI10 group; 8 op11 variants; mixed contexts |
+| op11=0x2a5 | 84 | op8=0x54; rB=$0 always |
+| op11=0x008 | 58 | inline constant data (0x01010101 pattern) embedded in text |
+| op11=0x1b4 | 50 | rB=$0 always, follows andbi, before shufb |
 
 ## Embedded SPU ELF Extraction from PPU ELFs
 
