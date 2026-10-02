@@ -104,9 +104,12 @@ RI10_OPS = {
     # 0x38: unknown — 2167 hits in Crysis 2 SPU physics; not in addmat (integer only)
     0x74: "ceqi",   # compare equal immediate
     0x76: "cgti",   # compare greater than immediate (signed word)
+    0x48: "clgtbi", # compare logical greater than byte immediate (unsigned; always same rA/I10 as cgtbi, 62 hits)
+    0x54: "clgti",  # compare logical greater than word immediate (unsigned; rB=$0 always, 90 hits)
     0x78: "cgtbi",  # compare greater than byte immediate
     0x79: "ceqbi",  # compare equal byte immediate (tentative: 136 hits, fills gap 0x78–0x7A)
     0x7A: "cgthi",  # compare greater than halfword immediate
+    0x83: "clgtbi",  # compare logical greater than byte immediate (unsigned; op8=0x83; 179 hits; byte_vals 24-26/153-155)
     0x7C: "andbi",  # AND byte immediate
     0x7D: "andhi",  # AND halfword immediate
     0x7E: "andi",   # AND immediate
@@ -209,6 +212,7 @@ RR_OPS = {
     0x188: "shlqbybi",
     0x18C: "rotqbyi",   # rotate quadword by bytes immediate (RI7)
     0x194: "rotqmbyi",
+    0x197: "rotqmbybi", # rotate quadword and mask by bytes from bits (tentative: 38 hits; rA=rB=$127; between rotqmbyi=0x194 and shlqbyi=0x198)
     0x198: "shlqbyi",   # shift left quadword by bytes immediate (RI7)
     0x19C: "rotqby",
     0x19D: "rotqbyx",   # rotate quadword by bytes indexed (tentative: rB=$81 fixed, 402 hits)
@@ -226,6 +230,7 @@ RR_OPS = {
     0x1CC: "fceq",    # float compare equal
     0x1D0: "fcmeq",
     0x1D4: "fcgt",    # float compare greater than
+    0x1D6: "dfcgt",   # double float compare greater than (tentative: 108 hits; always paired with fm on same rA/rB)
     0x1D8: "fcmgt",
     0x1A9: "fence2",  # float-pipe sync/drain (tentative: always rT=$0, always follows csflt, 127 hits)
     0x1DC: "csflt",   # convert signed int to float (RI7: rB=scale7; confirmed from addmat rand())
