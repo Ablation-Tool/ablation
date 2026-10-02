@@ -250,7 +250,7 @@ class ARM32RegAnnotator:
                 call_args: Dict[str, RegVal] = {
                     r: state.get(r, RegVal.unknown()) for r in _ARM32_ARG_REGS
                 }
-                calls.append(CallSite(va=insn.address, target_va=target,
+                calls.append(CallSite(site_va=insn.address, target_va=target,
                                       target_name=target_name, args=call_args))
                 # Clobber caller-saved regs after call
                 for r in _ARM32_CALLER_SAVED:
