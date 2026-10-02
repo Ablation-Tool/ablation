@@ -117,6 +117,7 @@ Key confirmations:
 | v0 (initial) | ~33,000 | ~85% |
 | v1 (after addmat ground-truth) | ~36,100 | 93.8% |
 | v2 (RI16/RI10 gap fills) | ~36,600 | 95.0% |
+| v3 (RI10/RR gap fills) | ~37,100 | 96.3% |
 
 ## Added in v2
 
@@ -127,15 +128,40 @@ Key confirmations:
 | op9=0x0FE | lqr | RI16; loads pointer into $0 before cbd (43 hits) |
 | op8=0x79  | ceqbi | RI10; fills gap between cgtbi(0x78)/cgthi(0x7A) in compare-byte chain (136 hits) |
 
-## Remaining Gaps (top unknowns after v2)
+## Added in v3
+
+| Op | Mnemonic | Evidence |
+|----|----------|----------|
+| op8=0x48 | clgtbi | RI10; unsigned byte compare; always same rA/I10 as preceding cgtbi (62 hits) |
+| op8=0x54 | clgti  | RI10; unsigned word compare; rB=$0 always, I10 multiples of 128 (90 hits) |
+| op8=0x83 | clgtbi | RI10; unsigned byte compare; byte_vals cluster at 24-26/153-155 (179 hits) |
+| op11=0x1d6 | dfcgt | RR; double float compare GT; always paired with fm on same rA/rB (108 hits) |
+| op11=0x197 | rotqmbybi | RR; rotate quadword and mask by bytes from bits; rA=rB=$127 always (38 hits); position between rotqmbyi(0x194) and shlqbyi(0x198) |
+
+## Carry/Borrow Confirmed Chain
+
+Empirically confirmed from Crysis 2 SPU0 address 0x309c:
+
+```
+cg  $9,  $8, $3   # carry generate:  op11=0x2C0
+cgx $4,  $3, $0   # carry gen extended: op11=0x2E0
+addx $2, $9, $4   # add extended:    op11=0x0C1 ← confirmed triple
+```
+
+Borrow chain (10 hits): `bg op11=0x0C2` (borrow generate), observed in subtraction contexts.
+
+## Remaining Gaps (top unknowns after v3)
 
 | Op | Hits | Notes |
 |----|------|-------|
-| op11=0x1d6 | 108 | always same rA/rB as preceding fm; float domain |
-| op8=0x83 (0x418–0x41f) | ~250 total | RI10 group; 8 op11 variants; mixed contexts |
-| op11=0x2a5 | 84 | op8=0x54; rB=$0 always |
-| op11=0x008 | 58 | inline constant data (0x01010101 pattern) embedded in text |
-| op11=0x1b4 | 50 | rB=$0 always, follows andbi, before shufb |
+| op11=0x2c1 (op8=0x58) | 75 | appears in both float loops and carry chains; used before shufb |
+| op11=0x059 (op8=0x0b) | 67 | output consumed by sfc/andbi; load variant (byte-scaled?) |
+| op11=0x229 (op8=0x45) | 59 | inline ASCII data (0x45323030="E200", 0x45333530="E350") between stop/bra |
+| op11=0x008 (op8=0x01) | 58 | inline constant data (0x01010101 pattern) embedded in text |
+| op11=0x1b4 (op8=0x36) | 50 | rB=$0 always (102/104 hits); I10 always multiple of 128 |
+| op11=0x2c4 (op8=0x58) | 48 | same group as 0x2c1 |
+| op11=0x1f9 | 48 | rT=rA always; rB=$127(sp) always; 48/48 hits from one function region |
+| op8=0x82 (0x413–0x417) | ~125 | RR format; varying rB; appears after sfc in arithmetic chains |
 
 ## Embedded SPU ELF Extraction from PPU ELFs
 
