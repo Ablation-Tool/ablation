@@ -75,6 +75,7 @@ RI16_OPS = {
     0x062: "brasl",  # branch absolute and set link
     0x064: "br",     # branch relative
     0x066: "brsl",   # branch relative and set link
+    0x067: "stqr",   # store quadword PC-relative (op9=0x067; 402 hits Crysis2, forward offsets)
     0x07D: "stqr",   # store quadword PC-relative (confirmed: register saves in prologue)
     0x07F: "lqr",    # load quadword PC-relative (confirmed: large-neg I16 = static data offset)
     0x098: "stqr",   # store quadword PC-relative alt encoding (op9=0x098; confirmed from 0x4c002b60)
@@ -151,14 +152,23 @@ RR_OPS = {
     0x083: "iret",
     0x085: "bisled",
 
+    # Float-to-float precision conversions (Crysis 2 physics pipeline)
+    0x0A0: "frds",    # float round double to single (tentative: after csflt, before shufb)
+    0x0A1: "fesd",    # float extend single to double (tentative: rA=rT-1 pattern)
+
     # Memory indexed (confirmed from addmat: lqx=0x07B, stqx=0x079)
     0x079: "stqx",    # store quadword indexed: mem[(rA+rB)&~0xF] = rT (confirmed)
+    0x07A: "stqxl",   # store quadword indexed local (tentative: between stqx/lqx)
     0x07B: "lqx",     # load quadword indexed:  rT = mem[(rA+rB)&~0xF] (confirmed)
+    0x07F: "lqxl",    # load quadword indexed local (tentative: rB=$6 fixed in matrix ops)
 
     # Integer arithmetic
     0x0C0: "a",       # add word
+    0x0C1: "addx",    # add extended with carry (tentative: tree-reduction pattern, 344 hits)
     0x0C2: "bg",      # borrow generate
     0x0C4: "bgx",     # borrow generate extended
+    0x2C0: "cg",      # carry generate (tentative: precedes cgx/addx in multi-precision chain)
+    0x2E0: "cgx",     # carry generate extended (tentative: cg→cgx→addx triple confirmed)
     0x0C8: "ah",      # add halfword
     0x0C9: "avgb",    # average bytes unsigned
     0x0CA: "orx",     # or across (reduction)
@@ -166,6 +176,7 @@ RR_OPS = {
     0x0CD: "mpyh",    # multiply high halfwords
     0x0CE: "mpyhh",   # multiply high halfwords signed
     0x0CF: "mpyhhu",  # multiply high halfwords unsigned
+    0x0D3: "mpys",    # multiply and shift right (tentative: in shufb sequences, 224 hits)
     0x0D8: "clz",     # count leading zeros
     0x0D9: "cntb",    # count bits in bytes
 
@@ -196,7 +207,9 @@ RR_OPS = {
     0x194: "rotqmbyi",
     0x198: "shlqbyi",   # shift left quadword by bytes immediate (RI7)
     0x19C: "rotqby",
+    0x19D: "rotqbyx",   # rotate quadword by bytes indexed (tentative: rB=$81 fixed, 402 hits)
     0x1A4: "rotqmby",
+    0x1A8: "fence",     # SPU data fence / sync barrier (word=0x35000000, always rT=rA=rB=$0, 210 hits)
     0x1AC: "shlqby",
 
     # Floating-point
@@ -210,7 +223,11 @@ RR_OPS = {
     0x1D0: "fcmeq",
     0x1D4: "fcgt",    # float compare greater than
     0x1D8: "fcmgt",
+    0x1A9: "fence2",  # float-pipe sync/drain (tentative: always rT=$0, always follows csflt, 127 hits)
     0x1DC: "csflt",   # convert signed int to float (RI7: rB=scale7; confirmed from addmat rand())
+    0x1DD: "cuflt",   # convert unsigned int to float (RI7: rB=scale7; adjacent to csflt, 103 hits)
+    0x2AE: "cfltu",   # convert float to unsigned int (RI7: rB=scale7; rB=$0 in Crysis2, 211 hits)
+    0x2B6: "cflts",   # convert float to signed int (RI7: rB=scale7; rB=$0 in Crysis2, 244 hits)
     0x1F4: "frest",   # float reciprocal estimate (unary)
     0x1F8: "frsqest", # float reciprocal sqrt estimate (unary)
     0x1FC: "fi",      # float interpolate
@@ -228,7 +245,7 @@ RR_OPS = {
 }
 
 # RI7 subset: these op11 values use the rB field as a 7-bit immediate
-RI7_OPS = {0x18C, 0x194, 0x198, 0x204, 0x206, 0x208, 0x20A, 0x05B, 0x1DC}
+RI7_OPS = {0x18C, 0x194, 0x198, 0x204, 0x206, 0x208, 0x20A, 0x05B, 0x1DC, 0x1DD, 0x2AE, 0x2B6}
 
 
 # ---------------------------------------------------------------------------
