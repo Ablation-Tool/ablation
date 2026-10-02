@@ -91,24 +91,40 @@ Key confirmations:
 | op11=0x209 | `cwx` | 0x413fff88 in addmat |
 | op11=0x1C0 | `fa`  | was "op8=0x38 (2167 hits)" top unknown |
 | op11=0x1DC | `csflt` | 1590 hits Crysis2 (was "op11=0x1dc" unknown) |
+| op11=0x1DD | `cuflt` | convert unsigned int to float (RI7 scale7; adjacent to csflt) |
+| op11=0x2AE | `cfltu` | convert float to unsigned int (RI7 scale7; 211 hits Crysis2) |
+| op11=0x2B6 | `cflts` | convert float to signed int (RI7 scale7; 244 hits Crysis2) |
+| op11=0x0A0 | `frds`  | float round double to single (tentative; after csflt, 282 hits) |
+| op11=0x0A1 | `fesd`  | float extend single to double (tentative; rA=rT-1 pattern, 192 hits) |
+| op11=0x0C1 | `addx`  | add extended with carry (tentative; tree-reduction, 344 hits) |
+| op11=0x0D3 | `mpys`  | multiply and shift right (tentative; in shufb sequences, 224 hits) |
+| op11=0x19D | `rotqbyx` | rotate quadword by bytes indexed (tentative; rB=$81 fixed, 402 hits) |
+| op11=0x1A8 | `fence` | data sync barrier (word=0x35000000, rT=rA=rB=$0 always, 210 hits) |
+| op11=0x1A9 | `fence2` | float-pipe drain/sync (rT=$0 always, follows csflt, 127 hits) |
+| op11=0x2C0 | `cg`   | carry generate (tentative; precedes cgx in multi-precision chain) |
+| op11=0x2E0 | `cgx`  | carry generate extended (tentative; cg→cgx→addx triple) |
 | op9=0x043  | `il rt, s16` | sequential immediates 0x4010→0x4015 in addmat |
 | op9=0x047  | `ilhu rt, u16` | address-formation pairs in addmat |
+| op9=0x067  | `stqr rt, s16` | 402 hits Crysis2, forward PC-relative offsets |
 | op9=0x07D  | `stqr rt, s16` | register saves in function prologues |
 | op9=0x07F  | `lqr rt, s16`  | large-neg PC-relative offsets to static data |
 | op9=0x098  | `stqr rt, s16` | alt encoding (0x4c002b60 confirmed) |
 
-## Coverage Gaps (Crysis 2 SPU0, as of initial module version)
+## Coverage (Crysis 2 SPU0 — 38,556 instructions)
+
+| Version | Known | Coverage |
+|---------|-------|----------|
+| v0 (initial) | ~33,000 | ~85% |
+| v1 (after addmat ground-truth) | ~36,100 | 93.8% |
+
+## Remaining Gaps (top unknowns after v1)
 
 | Op | Hits | Notes |
 |----|------|-------|
-| op11=0x19d | 402 | unknown |
-| op11=0x0c1 | 344 | unknown |
-| op11=0x0a0 | 282 | unknown |
-| op11=0x2b6 | 244 | unknown |
-| op11=0x0d3 | 224 | unknown |
-| op11=0x2ae | 211 | unknown |
-| op11=0x1a8 | 210 | pipeline NOP variant (appears at function boundaries) |
-| op11=0x0a1 | 192 | unknown |
+| op11=0x268 | 146 | paired with 0x269; rB=$0 always; long chains |
+| op11=0x269 | 145 | paired with 0x268; rB=$127 always; same rA patterns |
+| op11=0x3cc | 136 | op8=0x79; near stqx encoding |
+| op11=0x1d6 | 108 | near csflt range |
 
 ## Embedded SPU ELF Extraction from PPU ELFs
 
