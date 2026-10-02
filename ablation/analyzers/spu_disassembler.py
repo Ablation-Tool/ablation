@@ -317,11 +317,25 @@ class SPUInstruction:
             return f"{m}\t${rT}, ${rA}"
         if fmt == "nop":
             return f"{m}\t${rT}"
+        if fmt == "data":
+            return f".word\t{w:#010x}{_word_ascii_hint(w)}"
         return f"{m}\t${rT}, ${rA}, ${rB}  ; {w:#010x}"
 
 
 # Unary RR instructions (rB field unused / set to 0 by assembler)
 _RR_UNARY = {0x0CA, 0x0D8, 0x0D9, 0x1F4, 0x1F8}
+
+# Inline data annotation: branch categories and unconditional terminators
+_RI16_REL_BRANCHES = frozenset({"br", "brsl", "brz", "brhz", "brnz", "brhnz"})
+_RI16_ABS_BRANCHES = frozenset({"bra", "brasl"})
+_TERMINATORS = frozenset({"stop", "bra", "br"})
+
+
+def _word_ascii_hint(w: int) -> str:
+    chars = [(w >> s) & 0xFF for s in (24, 16, 8, 0)]
+    if all(0x20 <= c <= 0x7E for c in chars):
+        return '  # "' + "".join(chr(c) for c in chars) + '"'
+    return ""
 
 
 def decode_spu_word(addr: int, word: int) -> SPUInstruction:
@@ -383,30 +397,72 @@ def disassemble_spu_text(data: bytes, base_vaddr: int = 0, limit: Optional[int] 
     """
     Decode a raw SPU text section (big-endian 32-bit words).
     Yields SPUInstruction objects.
+
+    Two-pass: first decodes all words, then annotates unknown words that follow
+    unconditional terminators (stop/bra/br) and are not branch targets as
+    fmt="data" / mnemonic=".word" (inline constant pools).
     """
     n = len(data) // 4
     if limit is not None:
         n = min(n, limit)
+
+    # Pass 1: decode
+    insns = []
     for i in range(n):
         addr = base_vaddr + i * 4
         word = struct.unpack_from(">I", data, i * 4)[0]
-        yield decode_spu_word(addr, word)
+        insns.append(decode_spu_word(addr, word))
+
+    # Build branch target set from RI16 control-flow instructions
+    branch_targets = set()
+    for insn in insns:
+        if insn.fmt == "ri16":
+            if insn.mnemonic in _RI16_REL_BRANCHES:
+                branch_targets.add(insn.addr + (insn.I16 << 2))
+            elif insn.mnemonic in _RI16_ABS_BRANCHES:
+                branch_targets.add(insn.I16 << 2)
+
+    # Pass 2: annotate unknown words after unconditional terminators
+    for i, insn in enumerate(insns):
+        if insn.mnemonic not in _TERMINATORS:
+            continue
+        j = i + 1
+        while j < len(insns):
+            nxt = insns[j]
+            if nxt.addr in branch_targets:
+                break
+            if nxt.fmt != "unknown":
+                break
+            nxt.fmt = "data"
+            nxt.mnemonic = ".word"
+            j += 1
+
+    yield from insns
 
 
 def frequency_report(data: bytes, base_vaddr: int = 0) -> str:
     """Return a mnemonic frequency table for coverage analysis."""
     counts: Counter = Counter()
     unknowns: Counter = Counter()
+    data_count = 0
+    total = 0
     for insn in disassemble_spu_text(data, base_vaddr):
+        total += 1
         if insn.fmt == "unknown":
             op11 = (insn.word >> 21) & 0x7FF
             op8  = (insn.word >> 24) & 0xFF
             unknowns[f"op11={op11:#05x}/op8={op8:#04x}"] += 1
+        elif insn.fmt == "data":
+            data_count += 1
         else:
             counts[insn.mnemonic] += 1
-    lines = ["=== SPU mnemonic frequency ==="]
+    known = total - sum(unknowns.values())
+    pct = 100.0 * known / total if total else 0.0
+    lines = [f"=== SPU mnemonic frequency (coverage {known}/{total} = {pct:.1f}%) ==="]
     for mnem, cnt in counts.most_common(40):
         lines.append(f"  {mnem:16s} {cnt:5d}")
+    if data_count:
+        lines.append(f"\n=== Inline data words: {data_count} (annotated as .word, excluded from unknown count) ===")
     if unknowns:
         lines.append("\n=== Unknown opcodes (coverage gaps) ===")
         for key, cnt in unknowns.most_common(20):

@@ -118,6 +118,7 @@ Key confirmations:
 | v1 (after addmat ground-truth) | ~36,100 | 93.8% |
 | v2 (RI16/RI10 gap fills) | ~36,600 | 95.0% |
 | v3 (RI10/RR gap fills) | ~37,100 | 96.3% |
+| v4 (inline data annotation) | ~37,220 | ~96.6% |
 
 ## Added in v2
 
