@@ -536,3 +536,93 @@ for f in classified:
 Corpus: 94 AArch64 binaries (TencentOS ARM64 config-parsing daemons).
 - 47 `fgets` findings: 41 reclassified `file` (LOW), 0 reclassified `network`, 6 `unknown`
 - 41/41 file-class findings confirmed via manual trace as config-file parsing (zero FPs at HIGH)
+
+---
+
+## GoSubprocessScanner
+
+**File:** `ablation/analyzers/go_subprocess_scanner.py`
+
+Scans stripped Go binaries for `os/exec` injection surface. Given a binary and its
+pclntab function table (from `GoFuncTable.from_binary`), finds every call site that
+invokes `os/exec.Command`, `os/exec.CommandContext`, or `exec.Cmd.Start/Run/Output`,
+resolves the static command-path argument where possible, and classifies each site.
+
+### Architecture support
+
+| Architecture | Call detection | String resolution |
+|---|---|---|
+| x86-64 | `CALL imm32` via capstone x86 | GoStringResolver (LEA/MOV lookback) |
+| arm64 | `BL imm26` via capstone arm64 | Not implemented — all sites marked DYNAMIC |
+
+Architecture is detected automatically from the ELF `e_machine` field (EM_AARCH64 = 0xb7).
+
+### Classification
+
+| Type | Severity | Condition |
+|---|---|---|
+| `relative` | HIGH | Command starts with `./` or `../` — exploitable if CWD is attacker-writable |
+| `path` | MEDIUM | Bare name with no slash — resolved via PATH; hijackable via PATH injection |
+| `absolute` | INFO | Starts with `/` — not directly injectable via CWD/PATH |
+| `dynamic` | MEDIUM | Command not statically resolvable; manual trace required |
+
+Format string arguments (`%s`, `%v`, etc.) and strings longer than 80 chars are
+automatically reclassified as `dynamic` since they are not literal command paths.
+
+### Usage
+
+```python
+from ablation.analyzers.go_pclntab import GoFuncTable
+from ablation.analyzers.go_subprocess_scanner import GoSubprocessScanner, scan_binary
+
+# One-shot from path (auto-detects arch)
+sites = scan_binary('/path/to/go_binary', skip_absolute=True)
+for s in sites:
+    print(s.severity, s.cmd_type, s.cmd_string, s.scanner_func)
+
+# Manual pipeline (reuse binary data)
+data = open('/path/to/go_binary', 'rb').read()
+ft = GoFuncTable.from_binary(data)
+segments = [...]  # PT_LOAD segments from ELF header
+
+scanner = GoSubprocessScanner(data, segments, ft)
+sites = scanner.scan()
+
+# Single function
+sites = scanner.scan_function(func_va=0x1234abcd)
+```
+
+### Finding fields (SubprocessSite)
+
+| Field | Description |
+|---|---|
+| `scanner_func` | Caller function name (from pclntab) |
+| `scanner_func_va` | VA of caller function |
+| `call_va` | VA of the CALL/BL instruction |
+| `exec_target` | e.g. `os/exec.Command` |
+| `exec_target_va` | VA of the exec function |
+| `cmd_string` | Resolved command string, or `""` if dynamic |
+| `cmd_va` | VA of the string literal in `.rodata` (0 if dynamic) |
+| `cmd_type` | `relative` / `path` / `absolute` / `dynamic` |
+| `severity` | `HIGH` / `MEDIUM` / `LOW` / `INFO` |
+| `note` | Human-readable exploitation note |
+
+### Known limitations
+
+**ARM64 string resolution gap:** On ARM64 Go binaries, `GoStringResolver` cannot
+resolve command arguments because it uses x86-64 `LEA`/`MOV` patterns. All ARM64
+call sites are reported as `DYNAMIC` / MEDIUM. Extend `GoStringResolver` with
+ADRP+ADD page-offset pattern matching to fix.
+
+**Stripped stdlib false-positives:** If a Go binary is not fully stripped, pclntab
+names for stdlib wrappers that call `os/exec.Command` internally may appear. The
+scanner skips functions whose names start with known stdlib prefixes
+(`runtime.`, `encoding/`, `net/`, etc.) but internal stdlib wrappers from
+`os/exec` itself are excluded by `if name in targets: continue`.
+
+### Validation
+
+Corpus: FortiClientEMS 8.0.0 `emsworkers_linux_arm64` (84,530 functions, arm64),
+`emscli` (27,447 functions, arm64). Three psql format strings found and traced to
+HA admin operations — all ELIMINATED as non-exploitable (inputs from
+`GetPostgresqlPassword()`, not user-controlled).
