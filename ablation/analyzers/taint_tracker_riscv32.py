@@ -160,6 +160,8 @@ _COPY_MNEMS: frozenset = frozenset({
     'auipc', 'lui',
     # loads: clear taint (memory not tracked)
     'lw', 'lh', 'lb', 'lhu', 'lbu',
+    # HiSilicon xlinx: ldmia clears taint (loads from memory); uxtb/uxth bound the value
+    'ldmia', 'uxtb', 'uxth',
     # RVC variants (RV32C + shared RV32C/RV64C -- ISA spec §16)
     'c.mv', 'c.li', 'c.addi', 'c.addi4spn',  # c.addi16sp intentionally absent (modifies sp)
     'c.andi',                                  # 6-bit signed imm AND; handled like andi
@@ -449,7 +451,12 @@ class RISCV32TaintTracker:
             return
 
         # Loads from memory: clear taint on destination (memory not tracked)
-        if mnemonic in ('lw', 'lh', 'lb', 'lhu', 'lbu', 'c.lw', 'c.lwsp'):
+        if mnemonic in ('lw', 'lh', 'lb', 'lhu', 'lbu', 'c.lw', 'c.lwsp', 'ldmia'):
+            tainted[rd] = False
+            return
+
+        # uxtb/uxth: in-place zero-extend to 8/16 bits — bounding operation, clears taint
+        if mnemonic in ('uxtb', 'uxth'):
             tainted[rd] = False
             return
 
