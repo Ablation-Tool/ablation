@@ -224,6 +224,11 @@ class PPC32TaintTracker:
         self._text_va: int = 0
         self._text_off: int = 0
         self._text_size: int = 0
+        # GOT-indirect call support (PPC32 EABI secure-PLT / got2 ABI):
+        #   calls use  lwz rX, N(r_got) + mtctr rX + bctrl
+        #   where r_got = GOT_base + 0x8000 (signed 16-bit offset range)
+        # _got_offset_to_name: signed-16-bit offset -> plt symbol name
+        self._got_offset_to_name: Dict[int, str] = {}
 
         cs_endian = (capstone.CS_MODE_BIG_ENDIAN if endian == 'big'
                      else capstone.CS_MODE_LITTLE_ENDIAN)
@@ -248,8 +253,14 @@ class PPC32TaintTracker:
     def _load_elf(self) -> None:
         if _HAS_LIEF:
             self._load_lief()
-        elif _HAS_PYELF:
+        if not self._text_va and _HAS_PYELF:
+            # Supplement: lief may populate PLT correctly but fail to set _text_va
+            # (lief 1.0.0 changed SEGMENT_TYPES/SYMBOL_TYPES enum paths).
+            # Only fill _text_va/_text_off/_text_size — never overwrite PLT already set by lief.
+            self._fill_text_from_pyelf()
+        elif not _HAS_LIEF and _HAS_PYELF:
             self._load_pyelf()
+        self._build_got_offset_table()
 
     def _load_lief(self) -> None:
         try:
@@ -263,15 +274,24 @@ class PPC32TaintTracker:
                 if sym.symbol and sym.symbol.name:
                     self._plt[sym.address] = sym.symbol.name
             starts: Set[int] = set()
+            # lief 1.0.0+ moved enums: SYMBOL_TYPES -> Symbol.TYPE, SEGMENT_TYPES -> Segment.TYPE
+            try:
+                _sym_func = _lief.ELF.Symbol.TYPE.FUNC
+            except AttributeError:
+                _sym_func = _lief.ELF.SYMBOL_TYPES.FUNC
+            try:
+                _seg_load = _lief.ELF.Segment.TYPE.LOAD
+            except AttributeError:
+                _seg_load = _lief.ELF.SEGMENT_TYPES.LOAD
             for sym in binary.static_symbols:
-                if sym.type == _lief.ELF.SYMBOL_TYPES.FUNC and sym.value:
+                if sym.type == _sym_func and sym.value:
                     starts.add(sym.value)
             for sym in binary.dynamic_symbols:
-                if sym.type == _lief.ELF.SYMBOL_TYPES.FUNC and sym.value:
+                if sym.type == _sym_func and sym.value:
                     starts.add(sym.value)
             self._func_starts = sorted(starts)
             for seg in binary.segments:
-                if seg.type == _lief.ELF.SEGMENT_TYPES.LOAD and seg.flags & 0x1:
+                if seg.type == _seg_load and int(seg.flags) & 0x1:
                     self._text_va   = seg.virtual_address
                     self._text_off  = seg.file_offset
                     self._text_size = seg.physical_size
@@ -313,6 +333,42 @@ class PPC32TaintTracker:
         except Exception:
             pass
 
+    def _fill_text_from_pyelf(self) -> None:
+        """Set _text_va/_text_off/_text_size from .text section without touching PLT."""
+        if not _HAS_PYELF:
+            return
+        try:
+            with open(self.binary_path, 'rb') as f:
+                elf = ELFFile(f)
+                text = elf.get_section_by_name('.text')
+                if text:
+                    self._text_va   = text['sh_addr']
+                    self._text_off  = text['sh_offset']
+                    self._text_size = text['sh_size']
+        except Exception:
+            pass
+
+    def _build_got_offset_table(self) -> None:
+        """
+        Build _got_offset_to_name for GOT-indirect bctrl dispatch.
+
+        PPC32 EABI secure-PLT / got2 ABI calling convention:
+          lwz  rX, N(r_got)   ; load function pointer from GOT
+          mtctr rX
+          bctrl               ; call via CTR
+
+        r_got = GOT_base + 0x8000 (so signed 16-bit offsets cover the entire GOT).
+        GOT_base = minimum address in self._plt (the .plt/.got.plt section start).
+        """
+        if not self._plt:
+            return
+        got_base = min(self._plt.keys())
+        got_reg_value = got_base + 0x8000  # r2 or r30 value
+        for got_va, name in self._plt.items():
+            offset = got_va - got_reg_value  # signed 16-bit offset from r_got
+            if -32768 <= offset <= 32767:
+                self._got_offset_to_name[offset] = name
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -320,7 +376,9 @@ class PPC32TaintTracker:
     def _get_func_starts(self) -> List[int]:
         if self._ctx is not None:
             return self._ctx.func_starts
-        if self._func_starts:
+        # Only trust lief/pyelf symbol list when it's symbol-rich (>= 50 entries).
+        # Stripped binaries yield 0-2 symbols; fall through to prologue scan in that case.
+        if len(self._func_starts) >= 50:
             return self._func_starts
         # Prologue scan: stwu r1, -N(r1)
         # Encoding: opcode=37(0x25), rs=1, ra=1, d=negative
@@ -352,6 +410,30 @@ class PPC32TaintTracker:
         if self._ctx is not None:
             return self._ctx.name(va)
         return self._plt.get(va, f'0x{va:x}')
+
+    def _resolve_bctrl_name(self, prev2, prev1) -> str:
+        """
+        Resolve a bctrl indirect call to a PLT name via GOT-offset lookup.
+
+        Expected pattern (2 instructions before bctrl):
+          prev2: lwz  rX, N(rGOT)   -- GOT load; N is signed disp
+          prev1: mtctr rX            -- load CTR from rX
+
+        Returns empty string if pattern not recognized.
+        """
+        if prev2 is None or prev1 is None:
+            return ''
+        if prev1.id != PPC_INS_MTCTR:
+            return ''
+        if prev2.id != PPC_INS_LWZ:
+            return ''
+        ops = prev2.operands
+        if len(ops) < 2:
+            return ''
+        if ops[1].type != PPC_OP_MEM:
+            return ''
+        disp = ops[1].mem.disp  # signed 16-bit displacement
+        return self._got_offset_to_name.get(disp, '')
 
     # ------------------------------------------------------------------
     # Taint semantics
@@ -473,6 +555,8 @@ class PPC32TaintTracker:
         except Exception:
             return findings
 
+        prev2 = None
+        prev1 = None
         for insn in all_insns:
             ops = insn.operands
 
@@ -482,6 +566,8 @@ class PPC32TaintTracker:
                 if insn.id in (PPC_INS_BL, PPC_INS_BLA) and ops:
                     if ops[0].type == PPC_OP_IMM:
                         target_name = self._plt.get(ops[0].imm, '')
+                elif insn.id == PPC_INS_BCTRL and self._got_offset_to_name:
+                    target_name = self._resolve_bctrl_name(prev2, prev1)
 
                 if target_name in _SOURCES:
                     tainted['r3'] = True
@@ -515,6 +601,8 @@ class PPC32TaintTracker:
             # -- Everything else: taint propagation --
             else:
                 self._exec_insn(insn, tainted)
+
+            prev2, prev1 = prev1, insn
 
         return findings
 
@@ -577,6 +665,8 @@ class PPC32TaintTracker:
             if not func_bytes or len(func_bytes) < 8:
                 continue
             try:
+                prev2 = None
+                prev1 = None
                 for insn in self._md.disasm(func_bytes, fva):
                     if insn.id == PPC_INS_BL and insn.operands:
                         op = insn.operands[0]
@@ -585,6 +675,12 @@ class PPC32TaintTracker:
                             if name in _SOURCES:
                                 seed_funcs[fva] = name
                                 break
+                    elif insn.id == PPC_INS_BCTRL and self._got_offset_to_name:
+                        name = self._resolve_bctrl_name(prev2, prev1)
+                        if name in _SOURCES:
+                            seed_funcs[fva] = name
+                            break
+                    prev2, prev1 = prev1, insn
             except Exception:
                 continue
 
