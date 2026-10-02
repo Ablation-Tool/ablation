@@ -1,39 +1,112 @@
 # HiSilicon RV32 Extension Decoder
 
-Correct-size disassembly for HiSilicon WS63 / Hi3863 NearLink SoC firmware and
-other HiSilicon bare-metal RISC-V targets that use the proprietary custom-3 ISA
-extension (opcode `0x7b`).
+Correct-size disassembly for HiSilicon WS63 / Hi3863 / BS21 (Hi2821) NearLink SoC
+firmware and all other HiSilicon bare-metal RISC-V targets using the proprietary
+`riscv31` core with HCC (Huawei Custom C) ISA extensions.
 
-## The problem
+## The problem — five custom opcode spaces
 
-Capstone 5.x's `skipdata` mode emits each custom-3 instruction as a 2-byte
-`.byte` pair, then misinterprets the following 2 bytes as a valid compressed
-instruction. The error cascades through the rest of the function: every
-subsequent instruction is decoded 2 bytes behind the true boundary. Prologue
-scanning, call-target resolution, and taint tracking all break downstream.
+HiSilicon's `riscv31` core extends base RV32GC with five custom opcode spaces:
+
+| Opcode | Space     | Instructions | Size |
+|--------|-----------|--------------|------|
+| `0x7b` | custom-3  | R-type dispatch/context (broad multi-op) | 4 B |
+| `0x5b` | custom-2  | `muliadd`, `ldmia`, `stmia` | 4 B |
+| `0x3b` | OP-32     | `beqi`, `bnei`, `bgei`, `blti`, `bgeui`, `bltui` | 4 B |
+| `0x1b` | OP-IMM-32 | `addshf`, `subshf`, `orshf`, `xorshf`, `andshf` | 4 B |
+| `0x1f` | reserved  | `l.li` — 48-bit long load-immediate | **6 B** |
+
+Capstone 5.x mishandles all five:
+
+- `0x7b/0x5b/0x3b/0x1b`: decoded as a 2-byte `.byte` pair, then the trailing
+  2 bytes are misinterpreted as a valid RVC instruction. 2-byte cascade misalignment.
+- `0x1f`: decoded as a 4-byte instruction (bits[1:0]=11 is satisfied), leaving
+  2 unaccounted bytes that corrupt the next instruction boundary.
+
+`l.li` is architecturally the most dangerous: every occurrence silently shifts
+the decoder 2 bytes behind the true instruction stream for the rest of the function.
 
 ## What this module provides
 
-`HiSiliconRV32ExtDecoder` is a drop-in replacement for `capstone.Cs` whose
-`disasm_lite()` method has the same signature but handles custom-3 correctly.
+`HiSiliconRV32ExtDecoder` is a drop-in replacement for `capstone.Cs` with the
+same `disasm_lite()` signature. It detects all five custom opcode bytes before
+forwarding to Capstone, consuming the correct number of bytes for each.
 
-It walks the byte stream. When it finds `0x7b` at a 2-byte-aligned position it
-consumes 4 bytes and decodes them as a standard R-type instruction using
-HiSilicon's observed field layout. Everything else is forwarded to the real
-Capstone instance.
+Push/pop/popret are **not** handled here — they are 16-bit RVC instructions in
+Quadrant-0 custom slots (bits[15:13]=100, bits[1:0]=00) per
+`riscv_push_pop_extension.rst`. Capstone's skipdata mode handles them adequately
+for taint purposes.
 
-## Field encoding (nML grammar, single AND rule)
+## Instruction encodings
+
+### 0x1f — `l.li rd, imm32` (6 bytes)
 
 ```
-image  = {funct7[6:0]} :: {rs2[4:0]} :: {rs1[4:0]} :: {funct3[2:0]} :: {rd[4:0]} :: 0b1111011
+bytes[0:4] (LE uint32):  { imm[15:0] :: funct3=0 :: rd[4:0] :: 0x1f }
+bytes[4:6] (LE uint16):  imm[31:16]
+```
+
+Verified: `l.li a0, 0x12345678` → `1f 05 78 56 34 12`
+- Word = 0x5678051F: bits[11:7]=10(a0), bits[31:16]=0x5678
+- HWord = 0x1234: imm[31:16]=0x1234 → full imm=0x12345678 ✓
+
+### 0x1b — `addshf/subshf/orshf/xorshf/andshf` (4 bytes)
+
+```
+bits[31:25] = {shift_type[1:0], shamt[4:0]}   (sll=00, srl=01, sra=10, ror=11)
+bits[24:20] = rs2   (base register)
+bits[19:15] = rs1   (register to shift)
+bits[14:12] = funct3  (0=add, 1=sub, 2=or, 3=xor, 4=and)
+bits[11:7]  = rd
+bits[6:0]   = 0x1b
+Semantics: rd = rs2 base_op shift_type(rs1, shamt)
+```
+
+Verified: `addshf a0,a1,a2,sll,3` → `0x06C5851B` (rd=a0, rs1=a1, rs2=a2, shamt=3) ✓
+
+Source: `riscv_preshifted_arithmetic.rst` (riscvarchive/riscv-code-size-reduction)
+
+### 0x5b — `muliadd rd, rs1, rs2, uimm` (4 bytes)
+
+```
+bits[31:25] = uimm[7:1]   (uimm[0]=0 always; unsigned 7-bit × 2)
+bits[24:20] = rs2          (register to multiply)
+bits[19:15] = rs1          (base register)
+bits[14:12] = funct3
+bits[11:7]  = rd
+bits[6:0]   = 0x5b
+Semantics: rd = rs1 + (rs2 * zero_ext(uimm))
+```
+
+Verified: `muliadd a0,a1,a2,4` → `0x04C5955B` (rd=a0, rs1=a1, rs2=a2, uimm=4) ✓
+
+Note: spec (`riscv_muladd_extension.rst`) assigns this to custom-1 (0x2b), but
+HiSilicon silicon uses custom-2 (0x5b). Empirical binary evidence takes precedence.
+
+### 0x3b — `beqi/bnei/bgei/blti/bgeui/bltui` (4 bytes)
+
+```
+bits[31:24] = cmpimm[7:0]    (8-bit signed comparison immediate)
+bits[23:20] = offset[9:6]    (PC-relative branch offset, upper 4 bits)
+bits[19:15] = rs1
+bits[14:12] = funct3          (0=beqi, 1=bnei, 2=bgei, 3=blti, 4=bgeui, 5=bltui)
+bits[11:7]  = offset[5:1]    (branch offset, lower 5 bits; bit0=0)
+bits[6:0]   = 0x3b
+```
+
+Verified: `beqi a0,7,.` → `0x0705003B` (cmpimm=7, rs1=a0, offset=0) ✓
+
+Note: spec assigns to custom-0 (0x0b); HiSilicon silicon uses 0x3b.
+
+### 0x7b — custom-3 R-type (4 bytes)
+
+```
+image  = {funct7[6:0]} :: {rs2[4:0]} :: {rs1[4:0]} :: {funct3[2:0]} :: {rd[4:0]} :: 0x7b
 syntax = "hisi.{funct3}.{funct7:02x}  {rd}, {rs1}, {rs2}"
-action = unknown (no public ISA docs); conservative taint: rs1,rs2 → rd
 ```
 
-The funct3 and funct7 fields follow standard RISC-V R-type layout (RISC-V ISA
-Spec, Unprivileged §2.6 — "Custom" opcode space). With ~9000 instruction
-occurrences across ~8900 unique encodings in the WS63 firmware, this is a broad
-multi-operation extension, not a narrow accelerator.
+~9000 occurrences, ~8900 unique encodings in WS63-liteos-app. Semantics unknown;
+conservative taint: rs1,rs2 → rd when `HiSiliconRV32ExtDecoder(conservative=True)`.
 
 ## Usage
 
@@ -41,40 +114,44 @@ multi-operation extension, not a narrow accelerator.
 from ablation.analyzers.hisi_rv32_ext import HiSiliconRV32ExtDecoder
 from ablation.analyzers.taint_tracker_riscv32 import RISCV32TaintTracker
 
-# Standalone: drop-in for capstone.Cs
 dec = HiSiliconRV32ExtDecoder()
+
+# Standalone: drop-in for capstone.Cs.disasm_lite
 for addr, sz, mnem, ops in dec.disasm_lite(code_bytes, base_va):
     print(f"0x{addr:08x}  {sz}  {mnem}  {ops}")
 
-# Taint tracking on HiSilicon firmware
+# Inventory of all HiSilicon custom instructions (4-byte stride scanner)
+for insn in dec.scan_all_custom(code_bytes, base_va):
+    print(insn.mnemonic, insn.taint_sources, '->', insn.taint_dest)
+
+# Frequency report
+print(dec.opcode_report(code_bytes, base_va))
+
+# With taint tracking
 tracker = RISCV32TaintTracker.from_path(elf_path, ext_decoder=dec)
 findings = tracker.run_interprocedural()
 ```
 
-## Output format
-
-Custom-3 instructions appear as:
-
-```
-0x002d346a  4  hisi.6.44  t5, s9, a1
-0x002d3496  4  hisi.6.44  t5, s3, a0
-0x002d351a  4  hisi.5.22  t5, s4, a1
-```
-
-Standard RISC-V instructions appear exactly as Capstone would decode them.
-
 ## Taint semantics
 
-By default `conservative=False`: custom-3 instructions are treated as opaque
-(no taint propagation). Set `conservative=True` to propagate taint from
-`rs1` and `rs2` into `rd` — appropriate when you suspect custom-3 carries
-copy-like semantics (e.g. `memcpy`, `strncpy`).
+| Space | Default taint | `conservative=True` |
+|-------|--------------|---------------------|
+| 0x7b (custom-3) | opaque (no propagation) | rs1,rs2 → rd |
+| 0x5b (muliadd)  | rs1,rs2 → rd | same |
+| 0x3b (branches) | none (branch only) | same |
+| 0x1b (addshf)   | rs1,rs2 → rd | same |
+| 0x1f (l.li)     | constant → rd (no reg src) | same |
 
-```python
-dec = HiSiliconRV32ExtDecoder(conservative=True)
-```
+## References
+
+- `fbb_ws63/src/drivers/chips/ws63/arch/riscv/riscv31/` (HiSilicon SDK)
+- `riscv-code-size-reduction/existing_extensions/Huawei Custom Extension/` (GitHub)
+- Perotti et al., CARRV 2020: "HW/SW approaches for RISC-V code size reduction"
+- `tools_isa/poc_hisi_asm_map.py` + HiSilicon-patched GCC 7.3.0 (empirical ground truth)
+- RI5CY User Manual (PULP Platform, April 2019) — base Xpulp encoding reference
 
 ## Targets
 
-- HiSilicon WS63 / Hi3863 (NearLink BearPi-HH-NB3 AT firmware)
-- Any HiSilicon bare-metal RV32GC firmware using the `0x7b` custom opcode space
+- HiSilicon WS63 / Hi3863 (NearLink WS63E kit, BearPi-HH-NB3 LiteOS firmware)
+- HiSilicon BS21 / Hi2821 (NearLink BS21E, BearPi-HH-NB3 SLE firmware)
+- Any HiSilicon bare-metal RV32GC firmware using the `riscv31` + HCC extensions
