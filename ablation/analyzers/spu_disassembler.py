@@ -4,19 +4,14 @@ SPU (Synergistic Processing Unit) Disassembler — neutral ISA module.
 Cell BE co-processor: 128 × 128-bit registers, 256KB local store, big-endian.
 32-bit fixed-width instructions. Dual even/odd pipeline.
 
-Opcode confirmation sources:
-  - IBM SDK addmat example (not-stripped SPU ELF):
-      /tmp/SG247575_addmat_eitanp/atomic_cache/spu/spu
-  - Crysis 2 PS3 embedded SPU ELFs (38,556 instructions, entry=0x3050):
-      extracted from crysis2_decrypted.elf, 23 embedded SPU ELFs
-  - IBM CBE Handbook v1.1 + SPU Assembly Language Spec v1.5
-    (both provide mnemonics/latency only; no binary encodings)
+Opcode source: IBM SPU ISA v1.2 (SPU_ISA_v1.2_27Jan2007_pub.pdf), extracted from
+the Cell SDK 3.0 documentation RPM.  All binary encodings match the PDF bit tables.
 
 Format hierarchy (big-endian, IBM bit notation: bit 0 = MSB):
-  RRR  4-bit op:  top nibble 0xA-0xF       → selb/shufb/mpya/fms/fnms/fma
+  RRR  4-bit op:  top nibble 0x8/0xB-0xF   → selb/shufb/mpya/fnms/fma/fms
   RI18 7-bit op:  (w>>25)&0x7F in RI18 set → hbra/hbrr/ila
-  RI16 9-bit op:  (w>>23)&0x1FF in RI16 set→ br*/il/ilhu/iohl/lqr/stqr
-  RI10 8-bit op:  (w>>24)&0xFF in RI10 set → ai/lqd/stqd/mpyi/...
+  RI16 9-bit op:  (w>>23)&0x1FF in RI16 set→ br*/il/ilhu/iohl/lqr/stqr/stqa/lqa
+  RI10 8-bit op:  (w>>24)&0xFF in RI10 set → ai/lqd/stqd/mpyi/ceqi/ori/...
   RR/RI7 11-bit:  remainder                → everything else
 
 Field extraction (Python LSB=0 convention):
@@ -27,6 +22,9 @@ Field extraction (Python LSB=0 convention):
   I10 = signed((w >> 14) & 0x3FF, 10)
   I16 = signed((w >> 7) & 0xFFFF, 16)
   I18 = signed((w >> 7) & 0x3FFFF, 18)
+
+csflt/cuflt/cflts/cfltu use a 10-bit opcode + 8-bit scale immediate (no rB).
+Two consecutive op11 slots per instruction cover the two possible MSB values of I8.
 """
 
 import struct
@@ -47,13 +45,14 @@ __all__ = [
 
 # RRR: 4-bit top nibble (bits 31-28), remaining bits encode rT/rA/rB/rC
 # format: op4 (bits31-28), rT (27-23), rA (22-18), rB (17-13), rC (12-8) ... varies
+# IBM ISA v1.2: selb=0x8, shufb=0xB, mpya=0xC, fnms=0xD, fma=0xE, fms=0xF
 RRR_OPS = {
-    0xA: "selb",   # conditional select: rT = (rC & rA) | (~rC & rB)
+    0x8: "selb",   # conditional select: rT = (rC & rA) | (~rC & rB)
     0xB: "shufb",  # shuffle bytes: uses 4 operands
     0xC: "mpya",
-    0xD: "fms",    # float multiply-subtract
-    0xE: "fnms",   # float negative multiply-subtract
-    0xF: "fma",    # float multiply-add
+    0xD: "fnms",   # float negative multiply-subtract
+    0xE: "fma",    # float multiply-add
+    0xF: "fms",    # float multiply-subtract
 }
 
 # RI18: 7-bit opcode (bits 31-25), I18 (bits 24-7), rT (bits 6-0)
@@ -64,197 +63,257 @@ RI18_OPS = {
 }
 
 # RI16: 9-bit opcode (bits 31-23), I16 (bits 22-7), rT (bits 6-0)
-# All branch offsets are PC-relative, shifted left 2 (word-addressed).
-# il/ilhu/iohl/lqr/stqr confirmed empirically from addmat binary.
+# All branch offsets are PC-relative word-addressed (target = PC + I16*4).
+# Absolute branches (bra/brasl) use I16 as an absolute word address.
 RI16_OPS = {
     0x040: "brz",    # branch if zero (word)
-    0x042: "brhz",   # branch if zero (halfword)
-    0x043: "il",     # load immediate signed 16-bit (confirmed: sequential imm loads in addmat)
-    0x047: "ilhu",   # load immediate halfword upper (confirmed: address formation pairs)
+    0x041: "stqa",   # store quadword absolute
+    0x042: "brnz",   # branch if not zero (word)
+    0x044: "brhz",   # branch if zero (halfword)
+    0x046: "brhnz",  # branch if not zero (halfword)
+    0x047: "stqr",   # store quadword PC-relative
     0x060: "bra",    # branch absolute
+    0x061: "lqa",    # load quadword absolute
     0x062: "brasl",  # branch absolute and set link
     0x064: "br",     # branch relative
+    0x065: "fsmbi",  # form select mask for bytes immediate
     0x066: "brsl",   # branch relative and set link
-    0x067: "stqr",   # store quadword PC-relative (op9=0x067; 402 hits Crysis2, forward offsets)
-    0x07D: "stqr",   # store quadword PC-relative (confirmed: register saves in prologue)
-    0x07F: "lqr",    # load quadword PC-relative (confirmed: large-neg I16 = static data offset)
-    0x098: "stqr",   # store quadword PC-relative alt encoding (op9=0x098; confirmed from 0x4c002b60)
-    0x099: "stqr",   # store quadword PC-relative alt encoding (op9=0x099 variant)
-    0x09A: "lqr",    # load quadword PC-relative (146 hits; produces values consumed by addx)
-    0x09B: "lqr",    # load quadword PC-relative (145 hits; large I16, parallel with op9=0x09A)
-    0x0C1: "iohl",   # OR immediate lower halfword (confirmed: rA=$127, I16=0xffff pairs)
-    0x0FE: "lqr",    # load quadword PC-relative (43 hits; loads pointer into $0 before cbd)
-    0x100: "brnz",   # branch if not zero (word)
-    0x102: "brhnz",  # branch if not zero (halfword)
+    0x067: "lqr",    # load quadword PC-relative
+    0x081: "il",     # load immediate signed 16-bit (all 4 word slots)
+    0x082: "ilhu",   # load immediate halfword upper
+    0x083: "ilh",    # load immediate halfword
+    0x0C1: "iohl",   # OR immediate lower halfword
 }
 
 # RI10: 8-bit opcode (bits 31-24), I10 (bits 23-14 signed), rA (13-7), rT (6-0)
-# Note: lqr/stqr/il/ilhu/iohl are RI16, NOT RI10 — prior tools had these wrong.
+# stqa/lqa are RI16 (op9), NOT RI10.  All values below are from ISA v1.2 directly.
 RI10_OPS = {
-    0x04: "stqa",   # store quadword absolute
-    0x0C: "lqa",    # load quadword absolute
+    0x04: "ori",    # OR immediate
+    0x05: "orhi",   # OR halfword immediate
+    0x06: "orbi",   # OR byte immediate
+    0x0C: "sfi",    # subtract from immediate
+    0x0D: "sfhi",   # subtract from halfword immediate
+    0x14: "andi",   # AND immediate
+    0x15: "andhi",  # AND halfword immediate
+    0x16: "andbi",  # AND byte immediate
     0x1C: "ai",     # add immediate (signed 10-bit)
     0x1D: "ahi",    # add halfword immediate
-    0x1E: "sfhi",   # subtract from halfword immediate
-    0x1F: "sfi",    # subtract from immediate
     0x24: "stqd",   # store quadword d-form: mem[(rA + I10*16) & ~0xF] = rT
-    0x28: "mpyi",   # multiply immediate (signed lower 16)
-    0x29: "mpyui",  # multiply immediate unsigned
     0x34: "lqd",    # load quadword d-form: rT = mem[(rA + I10*16) & ~0xF]
-    # 0x38: unknown — 2167 hits in Crysis 2 SPU physics; not in addmat (integer only)
-    0x74: "ceqi",   # compare equal immediate
-    0x76: "cgti",   # compare greater than immediate (signed word)
-    0x48: "clgtbi", # compare logical greater than byte immediate (unsigned; always same rA/I10 as cgtbi, 62 hits)
-    0x54: "clgti",  # compare logical greater than word immediate (unsigned; rB=$0 always, 90 hits)
-    0x78: "cgtbi",  # compare greater than byte immediate
-    0x79: "ceqbi",  # compare equal byte immediate (tentative: 136 hits, fills gap 0x78–0x7A)
-    0x7A: "cgthi",  # compare greater than halfword immediate
-    0x83: "clgtbi",  # compare logical greater than byte immediate (unsigned; op8=0x83; 179 hits; byte_vals 24-26/153-155)
-    0x7C: "andbi",  # AND byte immediate
-    0x7D: "andhi",  # AND halfword immediate
-    0x7E: "andi",   # AND immediate
+    0x44: "xori",   # XOR immediate
+    0x45: "xorhi",  # XOR halfword immediate
+    0x46: "xorbi",  # XOR byte immediate
+    0x4C: "cgti",   # compare greater than immediate (signed word)
+    0x4D: "cgthi",  # compare greater than halfword immediate
+    0x4E: "cgtbi",  # compare greater than byte immediate
+    0x4F: "hgti",   # halt if greater than immediate
+    0x5C: "clgti",  # compare logical greater than immediate (unsigned word)
+    0x5D: "clgthi", # compare logical greater than halfword immediate
+    0x5E: "clgtbi", # compare logical greater than byte immediate
+    0x5F: "hlgti",  # halt if logical greater than immediate
+    0x74: "mpyi",   # multiply immediate (signed lower 16)
+    0x75: "mpyui",  # multiply immediate unsigned
+    0x7C: "ceqi",   # compare equal immediate
+    0x7D: "ceqhi",  # compare equal halfword immediate
+    0x7E: "ceqbi",  # compare equal byte immediate
+    0x7F: "heqi",   # halt if equal immediate
 }
 
 # RR / RI7: 11-bit opcode (bits 31-21)
 # RI7 instructions use the rB field (bits 20-14) as a 7-bit immediate.
 # RR instructions use rB as a register.
+# All encodings from IBM SPU ISA v1.2 (SPU_ISA_v1.2_27Jan2007_pub.pdf).
 RR_OPS = {
-    # Special / channel
+    # Special / control
     0x000: "stop",
-    0x001: "lnop",    # odd-pipe NOP (fills pipeline slot, no effect)
+    0x001: "lnop",    # odd-pipe NOP
     0x002: "sync",
     0x003: "dsync",
-    0x00C: "mfspr",
+    0x00C: "mfspr",   # move from special-purpose register
     0x00D: "rdch",    # read channel
     0x00F: "rchcnt",  # read channel count
-    0x01C: "mtspr",
-    0x01D: "wrch",    # write channel (DMA, mailbox, event)
+    0x10C: "mtspr",   # move to special-purpose register
+    0x10D: "wrch",    # write channel (DMA, mailbox, event)
+    0x140: "stopd",   # stop and signal with dependencies
+    0x201: "nop",     # even-pipe NOP
 
-    # Arithmetic — subtract
-    0x040: "sf",      # subtract from (word)
-    0x041: "sfc",     # subtract from with carry
+    # Subtract / logical
+    0x040: "sf",      # subtract from word
+    0x041: "or",      # bitwise OR (or $rT, $rA, $rA = move)
+    0x042: "bg",      # borrow generate
     0x048: "sfh",     # subtract from halfword
-    0x049: "nor",
-    0x04B: "absdb",   # absolute difference of bytes
-    0x04C: "rot",     # rotate word
-    0x04D: "rotm",    # rotate and mask word
-    0x04E: "rotma",   # rotate and mask algebraic
-    0x050: "shl",     # shift left word
-    0x052: "shlh",    # shift left halfword
-    0x054: "roth",    # rotate halfword
-    0x056: "rothm",   # rotate and mask halfword
-    0x057: "rotmah",  # rotate and mask algebraic halfword
-    0x05B: "shlqbi",  # shift left quadword by bits (RI7: imm3 in rB lsbs)
-    0x05C: "shld",    # shift left doubleword
+    0x049: "nor",     # bitwise NOR
+    0x053: "absdb",   # absolute difference of bytes
+    0x058: "rot",     # rotate word
+    0x059: "rotm",    # rotate and mask word
+    0x05A: "rotma",   # rotate and mask algebraic word
+    0x05B: "shl",     # shift left word
+    0x05C: "roth",    # rotate halfword
+    0x05D: "rothm",   # rotate and mask halfword
+    0x05E: "rotmah",  # rotate and mask algebraic halfword
+    0x05F: "shlh",    # shift left halfword
+
+    # RI7 immediate shift/rotate word/halfword
+    0x078: "roti",    # rotate word immediate
+    0x079: "rotmi",   # rotate and mask word immediate
+    0x07A: "rotmai",  # rotate and mask algebraic word immediate
+    0x07B: "shli",    # shift left word immediate
+    0x07C: "rothi",   # rotate halfword immediate
+    0x07D: "rothmi",  # rotate and mask halfword immediate
+    0x07E: "rotmahi", # rotate and mask algebraic halfword immediate
+    0x07F: "shlhi",   # shift left halfword immediate
+
+    # Integer add / logical
+    0x0C0: "a",       # add word
+    0x0C1: "and",     # bitwise AND
+    0x0C2: "cg",      # carry generate
+    0x0C8: "ah",      # add halfword
+    0x0C9: "nand",    # bitwise NAND
+    0x0D3: "avgb",    # average bytes unsigned
+
+    # Compare (signed/unsigned word/halfword/byte)
+    0x240: "cgt",     # compare greater than word (signed)
+    0x241: "xor",     # bitwise XOR
+    0x248: "cgth",    # compare greater than halfword (signed)
+    0x249: "eqv",     # bitwise equivalence
+    0x250: "cgtb",    # compare greater than byte (signed)
+    0x253: "sumb",    # sum bytes into halfwords
+    0x258: "hgt",     # halt if greater than
+
+    # Unary sign/leading-zero
+    0x2A5: "clz",     # count leading zeros
+    0x2A6: "xswd",    # extend sign doubleword to quadword (unary)
+    0x2AE: "xshw",    # extend sign halfword to word (unary)
+    0x2B4: "cntb",    # count bits in bytes (population count, unary)
+    0x2B6: "xsbh",    # extend sign byte to halfword (unary)
+
+    # Compare logical (unsigned) / float compare
+    0x2C0: "clgt",    # compare logical greater than word
+    0x2C1: "andc",    # AND with complement: rT = rA & ~rB
+    0x2C2: "fcgt",    # float compare greater than
+    0x2C3: "dfcgt",   # double float compare greater than
+    0x2C4: "fa",      # float add
+    0x2C5: "fs",      # float subtract
+    0x2C6: "fm",      # float multiply
+    0x2C8: "clgth",   # compare logical greater than halfword
+    0x2C9: "orc",     # OR with complement: rT = rA | ~rB
+    0x2CA: "fcmgt",   # float compare magnitude greater than
+    0x2CB: "dfcmgt",  # double float compare magnitude greater than
+    0x2CC: "dfa",     # double float add
+    0x2CD: "dfs",     # double float subtract
+    0x2CE: "dfm",     # double float multiply
+    0x2D0: "clgtb",   # compare logical greater than byte
+    0x2D8: "hlgt",    # halt if logical greater than
+
+    # Extended integer (carry/borrow chains, multi-word arithmetic)
+    0x340: "addx",    # add extended (with carry from prior cg)
+    0x341: "sfx",     # subtract from extended
+    0x342: "cgx",     # carry generate extended
+    0x343: "bgx",     # borrow generate extended
+    0x346: "mpyhha",  # multiply high halfwords and add
+    0x34E: "mpyhhau", # multiply high halfwords and add unsigned
+
+    # Double-float fused ops
+    0x35C: "dfma",    # double float multiply-add
+    0x35D: "dfms",    # double float multiply-subtract
+    0x35E: "dfnms",   # double float negative multiply-subtract
+    0x35F: "dfnma",   # double float negative multiply-add
 
     # Branch indirect
-    0x068: "bid",
-    0x069: "bie",
-    0x070: "biz",
-    0x072: "bihz",
-    0x074: "binz",
-    0x076: "bihnz",
-    0x080: "bi",      # branch indirect
-    0x082: "bisl",    # branch indirect and set link
-    0x083: "iret",
-    0x085: "bisled",
+    0x128: "biz",     # branch indirect if zero
+    0x129: "binz",    # branch indirect if not zero
+    0x12A: "bihz",    # branch indirect if halfword zero
+    0x12B: "bihnz",   # branch indirect if halfword not zero
+    0x1A8: "bi",      # branch indirect
+    0x1A9: "bisl",    # branch indirect and set link
+    0x1AA: "iret",    # interrupt return
+    0x1AB: "bisled",  # branch indirect and set link if event dispatch enabled
+    0x1AC: "hbr",     # hint for indirect branch
 
-    # Float-to-float precision conversions (Crysis 2 physics pipeline)
-    0x0A0: "frds",    # float round double to single (tentative: after csflt, before shufb)
-    0x0A1: "fesd",    # float extend single to double (tentative: rA=rT-1 pattern)
+    # Gather / form select mask (unary: rA → rT)
+    0x1B0: "gb",      # gather bits from words
+    0x1B1: "gbh",     # gather bits from halfwords
+    0x1B2: "gbb",     # gather bits from bytes
+    0x1B4: "fsm",     # form select mask for words
+    0x1B5: "fsmh",    # form select mask for halfwords
+    0x1B6: "fsmb",    # form select mask for bytes
+    0x1B8: "frest",   # float reciprocal estimate (unary)
+    0x1B9: "frsqest", # float reciprocal sqrt estimate (unary)
 
-    # Memory indexed (confirmed from addmat: lqx=0x07B, stqx=0x079)
-    0x079: "stqx",    # store quadword indexed: mem[(rA+rB)&~0xF] = rT (confirmed)
-    0x07A: "stqxl",   # store quadword indexed local (tentative: between stqx/lqx)
-    0x07B: "lqx",     # load quadword indexed:  rT = mem[(rA+rB)&~0xF] (confirmed)
-    0x07F: "lqxl",    # load quadword indexed local (tentative: rB=$6 fixed in matrix ops)
+    # Memory indexed
+    0x144: "stqx",    # store quadword indexed: mem[(rA+rB)&~0xF] = rT
+    0x1C4: "lqx",     # load quadword indexed: rT = mem[(rA+rB)&~0xF]
 
-    # Integer arithmetic
-    0x0C0: "a",       # add word
-    0x0C1: "addx",    # add extended with carry (tentative: tree-reduction pattern, 344 hits)
-    0x0C2: "bg",      # borrow generate
-    0x0C4: "bgx",     # borrow generate extended
-    0x2C0: "cg",      # carry generate (tentative: precedes cgx/addx in multi-precision chain)
-    0x2E0: "cgx",     # carry generate extended (tentative: cg→cgx→addx triple confirmed)
-    0x0C8: "ah",      # add halfword
-    0x0C9: "avgb",    # average bytes unsigned
-    0x0CA: "orx",     # or across (reduction)
-    0x0CB: "mpy",     # multiply (even halfwords, signed)
-    0x0CD: "mpyh",    # multiply high halfwords
-    0x0CE: "mpyhh",   # multiply high halfwords signed
-    0x0CF: "mpyhhu",  # multiply high halfwords unsigned
-    0x0D3: "mpys",    # multiply and shift right (tentative: in shufb sequences, 224 hits)
-    0x0D8: "clz",     # count leading zeros
-    0x0D9: "cntb",    # count bits in bytes
+    # Quadword shift/rotate by register count
+    0x1CC: "rotqbybi",  # rotate quadword by bytes from bit count
+    0x1CD: "rotqmbybi", # rotate and mask quadword by bytes from bit count
+    0x1CF: "shlqbybi",  # shift left quadword by bytes from bit count
+    0x1D4: "cbx",       # control for byte insertion x-form
+    0x1D5: "chx",       # control for halfword insertion x-form
+    0x1D6: "cwx",       # control for word insertion x-form
+    0x1D7: "cdx",       # control for doubleword insertion x-form
+    0x1D8: "rotqbi",    # rotate quadword by bits
+    0x1D9: "rotqmbi",   # rotate and mask quadword by bits
+    0x1DB: "shlqbi",    # shift left quadword by bits
+    0x1DC: "rotqby",    # rotate quadword by bytes
+    0x1DD: "rotqmby",   # rotate and mask quadword by bytes
+    0x1DF: "shlqby",    # shift left quadword by bytes
+
+    # RI7 immediate quadword shift/rotate and control-for-insertion d-forms
+    0x1F0: "orx",     # OR across quadword (unary)
+    0x1F4: "cbd",     # control for byte insertion d-form (RI7: I7 = byte offset)
+    0x1F5: "chd",     # control for halfword insertion d-form
+    0x1F6: "cwd",     # control for word insertion d-form
+    0x1F7: "cdd",     # control for doubleword insertion d-form
+    0x1F8: "rotqbii",  # rotate quadword by bits immediate (RI7)
+    0x1F9: "rotqmbii", # rotate and mask quadword by bits immediate
+    0x1FB: "shlqbii",  # shift left quadword by bits immediate
+    0x1FC: "rotqbyi",  # rotate quadword by bytes immediate
+    0x1FD: "rotqmbyi", # rotate and mask quadword by bytes immediate
+    0x1FF: "shlqbyi",  # shift left quadword by bytes immediate
 
     # Compare equal
-    0x100: "ceq",     # compare equal word
-    0x104: "ceqb",    # compare equal byte
-    0x10C: "ceqh",    # compare equal halfword
+    0x3C0: "ceq",     # compare equal word
+    0x3C2: "fceq",    # float compare equal
+    0x3C3: "dfceq",   # double float compare equal
+    0x3C4: "mpy",     # multiply even halfwords (signed)
+    0x3C5: "mpyh",    # multiply high halfwords
+    0x3C6: "mpyhh",   # multiply high halfwords signed
+    0x3C7: "mpys",    # multiply and shift right
+    0x3C8: "ceqh",    # compare equal halfword
+    0x3CA: "fcmeq",   # float compare magnitude equal
+    0x3CB: "dfcmeq",  # double float compare magnitude equal
+    0x3CC: "mpyu",    # multiply even halfwords unsigned
+    0x3CE: "mpyhhu",  # multiply high halfwords unsigned
+    0x3D0: "ceqb",    # compare equal byte
+    0x3D4: "fi",      # float interpolate
+    0x3D8: "heq",     # halt if equal
 
-    # Logical
-    0x140: "and",
-    0x141: "andc",    # and with complement
-    0x150: "clgt",    # compare logical greater than word
-    0x154: "clgtb",   # compare logical greater than byte
-    0x15C: "clgth",   # compare logical greater than halfword
-    0x160: "or",      # also: "or $rt, $ra, $ra" = move alias
-    0x161: "orc",
-    0x164: "eqv",
-    0x168: "xor",
-    0x170: "cgt",     # compare greater than (signed word)
-    0x174: "cgtb",
-    0x17C: "cgth",
+    # Float status / precision
+    0x398: "fscrrd",  # float status and control register read (unary)
+    0x3B8: "fesd",    # float extend single to double (unary)
+    0x3B9: "frds",    # float round double to single (unary)
+    0x3BA: "fscrwr",  # float status and control register write (unary)
+    0x3BF: "dftsv",   # double float test special value
 
-    # Shift/rotate quadword
-    0x180: "rotqbybi",  # rotate quadword by bytes from bit shift count
-    0x184: "rotqmbybi",
-    0x188: "shlqbybi",
-    0x18C: "rotqbyi",   # rotate quadword by bytes immediate (RI7)
-    0x194: "rotqmbyi",
-    0x197: "rotqmbybi", # rotate quadword and mask by bytes from bits (tentative: 38 hits; rA=rB=$127; between rotqmbyi=0x194 and shlqbyi=0x198)
-    0x198: "shlqbyi",   # shift left quadword by bytes immediate (RI7)
-    0x19C: "rotqby",
-    0x19D: "rotqbyx",   # rotate quadword by bytes indexed (tentative: rB=$81 fixed, 402 hits)
-    0x1A4: "rotqmby",
-    0x1A8: "fence",     # SPU data fence / sync barrier (word=0x35000000, always rT=rA=rB=$0, 210 hits)
-    0x1AC: "shlqby",
-
-    # Floating-point
-    0x1C0: "fa",      # float add
-    0x1C1: "dfa",     # double float add
-    0x1C4: "fm",      # float multiply
-    0x1C5: "dfm",
-    0x1C8: "fs",      # float subtract
-    0x1C9: "dfs",
-    0x1CC: "fceq",    # float compare equal
-    0x1D0: "fcmeq",
-    0x1D4: "fcgt",    # float compare greater than
-    0x1D6: "dfcgt",   # double float compare greater than (tentative: 108 hits; always paired with fm on same rA/rB)
-    0x1D8: "fcmgt",
-    0x1A9: "fence2",  # float-pipe sync/drain (tentative: always rT=$0, always follows csflt, 127 hits)
-    0x1DC: "csflt",   # convert signed int to float (RI7: rB=scale7; confirmed from addmat rand())
-    0x1DD: "cuflt",   # convert unsigned int to float (RI7: rB=scale7; adjacent to csflt, 103 hits)
-    0x2AE: "cfltu",   # convert float to unsigned int (RI7: rB=scale7; rB=$0 in Crysis2, 211 hits)
-    0x2B6: "cflts",   # convert float to signed int (RI7: rB=scale7; rB=$0 in Crysis2, 244 hits)
-    0x1F4: "frest",   # float reciprocal estimate (unary)
-    0x1F8: "frsqest", # float reciprocal sqrt estimate (unary)
-    0x1FC: "fi",      # float interpolate
-
-    # NOP / control vector generation
-    0x201: "nop",     # even-pipe NOP: nop $rT (confirmed from addmat 0x4020007f)
-    0x204: "cbd",     # control for byte insertion d-form (confirmed: 2467 hits crysis2)
-    0x205: "cbx",     # control for byte insertion x-form
-    0x206: "chd",     # control for halfword insertion d-form
-    0x207: "chx",
-    0x208: "cwd",     # control for word insertion d-form
-    0x209: "cwx",     # control for word insertion x-form (confirmed from addmat 0x413fff88)
-    0x20A: "cdd",
-    0x20B: "cdx",
+    # Float conversion RI8-format: 10-bit fixed opcode, bit 10 = MSB of I8 scale
+    # Two consecutive op11 entries per instruction (I8 MSB = 0 and 1).
+    0x3B0: "cflts",  0x3B1: "cflts",  # convert float to signed fixed-point
+    0x3B2: "cfltu",  0x3B3: "cfltu",  # convert float to unsigned fixed-point
+    0x3B4: "csflt",  0x3B5: "csflt",  # convert signed fixed-point to float
+    0x3B6: "cuflt",  0x3B7: "cuflt",  # convert unsigned fixed-point to float
 }
 
-# RI7 subset: these op11 values use the rB field as a 7-bit immediate
-RI7_OPS = {0x18C, 0x194, 0x198, 0x204, 0x206, 0x208, 0x20A, 0x05B, 0x1DC, 0x1DD, 0x2AE, 0x2B6}
+# RI7 subset: these op11 values use the rB field as a 7-bit immediate instead of a register
+RI7_OPS = {
+    # Word/halfword shift/rotate immediates
+    0x078, 0x079, 0x07A, 0x07B,
+    0x07C, 0x07D, 0x07E, 0x07F,
+    # Quadword shift/rotate immediates and control-for-insertion d-forms
+    0x1F4, 0x1F5, 0x1F6, 0x1F7,
+    0x1F8, 0x1F9, 0x1FB,
+    0x1FC, 0x1FD, 0x1FF,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -299,13 +358,17 @@ class SPUInstruction:
         if fmt == "ri18":
             return f"{m}\t${rT}, {self.I18:#x}"
         if fmt == "ri16":
-            if m in ("br", "bra", "brasl", "brsl", "brz", "brhz", "brnz", "brhnz"):
+            if m in ("br", "brsl", "brz", "brhz", "brnz", "brhnz"):
                 target = self.addr + (self.I16 << 2)
                 return f"{m}\t${rT}, {target:#x}"
+            if m in ("bra", "brasl"):
+                target = self.I16 << 2
+                return f"{m}\t${rT}, {target:#x}"
             if m in ("lqr", "stqr"):
-                # PC-relative: target = (addr + I16*4 + 4) & ~0xF
                 target = (self.addr + self.I16 * 4 + 4) & ~0xF
                 return f"{m}\t${rT}, {target:#010x}"
+            if m in ("stqa", "lqa"):
+                return f"{m}\t${rT}, {self.I16 << 2:#x}"
             return f"{m}\t${rT}, {self.I16}"
         if fmt == "ri10":
             return f"{m}\t${rT}, {self.I10}(${rA})"
@@ -322,13 +385,21 @@ class SPUInstruction:
         return f"{m}\t${rT}, ${rA}, ${rB}  ; {w:#010x}"
 
 
-# Unary RR instructions (rB field unused / set to 0 by assembler)
-_RR_UNARY = {0x0CA, 0x0D8, 0x0D9, 0x1F4, 0x1F8}
+# Unary RR instructions: output format is rT, rA only (rB unused)
+_RR_UNARY = {
+    0x1B0, 0x1B1, 0x1B2,         # gb, gbh, gbb
+    0x1B4, 0x1B5, 0x1B6,         # fsm, fsmh, fsmb
+    0x1B8, 0x1B9,                 # frest, frsqest
+    0x1F0,                        # orx
+    0x2A5, 0x2A6, 0x2AE, 0x2B4, 0x2B6,  # clz, xswd, xshw, cntb, xsbh
+    0x398,                        # fscrrd
+    0x3B8, 0x3B9, 0x3BA,          # fesd, frds, fscrwr
+}
 
 # Inline data annotation: branch categories and unconditional terminators
 _RI16_REL_BRANCHES = frozenset({"br", "brsl", "brz", "brhz", "brnz", "brhnz"})
 _RI16_ABS_BRANCHES = frozenset({"bra", "brasl"})
-_TERMINATORS = frozenset({"stop", "bra", "br"})
+_TERMINATORS = frozenset({"stop", "stopd", "bra", "br"})
 
 
 def _word_ascii_hint(w: int) -> str:
