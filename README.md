@@ -12,6 +12,8 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 ![demo](assets/screencast-2026-09-30.gif)
 
+**[Interactive module explorer](https://ablation-tool.github.io)** — pipeline stages, module graph, and connections.
+
 ## Capabilities
 
 **Semantic Search via BERT:** Searches code by concept instead of exact words. By mapping the actual meaning of the text, it cuts through the heaviest bottleneck of reverse engineering to help you pinpoint vulnerabilities faster.
