@@ -2,13 +2,18 @@
 hisi_rv32_ext.py: Correct-size decoder for all HiSilicon riscv31 ISA extensions.
 
 HiSilicon WS63 / Hi3863 / BS21 (Hi2821) NearLink SoCs use a proprietary extended
-RISC-V core named "riscv31" (fbb_ws63 SDK). Five custom opcode spaces:
+RISC-V core named "riscv31" (fbb_ws63 SDK). Six custom opcode spaces:
 
+  0x0b  custom-0  : ldmia / stmia — multi-register load/store, ascending addresses
   0x7b  custom-3  : R-type dispatch/context operations (~9000 hits in WS63-liteos-app)
-  0x5b  custom-2  : muliadd, push {ra,s0-sN}, pop, popret, ldmia, stmia
+  0x5b  custom-2  : muliadd (bits[13:12]=01)
   0x3b  OP-32     : beqi, bnei, bgei, blti, bgeui, bltui (branch-immediate)
-  0x1b  OP-IMM-32 : addshf, orshf, andshf, xorshf, subshf, uxtb, uxth (shift-fused ALU)
+  0x1b  OP-IMM-32 : addshf, orshf, andshf, xorshf, subshf (shift-fused ALU)
   0x1f  reserved  : l.li — 6-byte long load-immediate (CRITICAL: variable-length!)
+
+  16-bit (RVC compressed-space reuse):
+  uxtb/uxth  : insn & 0xFC5F == 0x9C01 — in-place zero-extend byte/half
+  push/pop/popret, lbu/lhu, sb/sh — forwarded to Capstone (Quadrant-0/funct3 slots)
 
 Capstone 5.x mishandles all five spaces:
   - 0x7b/0x5b/0x3b/0x1b: decoded as 4-byte raw, then next 2 bytes misinterpreted as RVC
@@ -201,10 +206,10 @@ def _make_lli(word: int, hword: int, address: int) -> HisiInsn:
 
 
 def _make_custom2(word: int, address: int) -> HisiInsn:
-    """Decode 0x5b (custom-2): muliadd [and ldmia/stmia — encoding TBD from ri5cy manual].
+    """Decode 0x5b (custom-2): muliadd.
 
-    NOTE: push/pop/popret are NOT here. They are 16-bit RVC instructions
-    (bits[15:13]=100, bits[1:0]=00) per riscv_push_pop_extension.rst.
+    NOTE: push/pop/popret are NOT here — they are 16-bit RVC instructions
+    (bits[15:13]=100, bits[1:0]=00). ldmia/stmia are at opcode 0x0b, not 0x5b.
 
     muliadd encoding (riscv_muladd_extension.rst):
       bits[31:25] = uimm[7:1]  (uimm[0]=0 always; unsigned 7-bit via bits[7:1])
@@ -215,8 +220,6 @@ def _make_custom2(word: int, address: int) -> HisiInsn:
       bits[6:0]   = 0x5b
     Semantics: rd = rs1 + (rs2 * zero_ext(uimm))
     Verified: muliadd a0,a1,a2,4 → 0x04C5955B ✓ (rd=a0, rs1=a1, rs2=a2, uimm=4)
-
-    ldmia/stmia: multi-register load/store (exact funct3 TBD; treat as generic for now)
     """
     rd     = (word >>  7) & 0x1f
     funct3 = (word >> 12) & 0x07
@@ -256,25 +259,92 @@ def _make_branchi(word: int, address: int) -> HisiInsn:
 
 
 # ---------------------------------------------------------------------------
+# ldmia / stmia — opcode 0x0b (custom-0)
+# ---------------------------------------------------------------------------
+#
+# Encoding (verified against trans_xlinx.c.inc, hispark-rs/hisi-riscv-qemu):
+#   bit12:    0 = ldmia (load-multiple), 1 = stmia (store-multiple)
+#   bit31:    bank selector (0 = callee-saved {s0-s11, sp, ra};
+#                            1 = caller-saved {t0-t6, a0-a7, ra})
+#   bits[19:15]: base register (rs1); no writeback
+#   register presence bitmap: 16 slots, each controlled by one instruction bit:
+#     slot_bit[16] = {30,29,28,27,26,25,24,23,22,21,20,11,10,9,8,7}  (ascending-address order)
+#   bank 0 register mapping per slot:
+#     {s11,s10,s9,s8,s7,s6,s5,s4,s3,s2,a1,a0,s1,s0,sp,ra}
+#   bank 1 register mapping per slot:
+#     {t6,t5,t4,t3,a7,a6,a5,a4,a3,a2,a1,a0,t2,t1,t0,ra}
+#
+# Taint model: ldmia clears taint on all destination registers (memory not tracked).
+#              stmia writes no registers; no taint update.
+
+_LDMSTM_SLOT_BIT: List[int] = [30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 11, 10, 9, 8, 7]
+_LDMSTM_SLOT_REG: List[List[int]] = [
+    #        s11 s10  s9  s8  s7  s6  s5  s4  s3  s2  a1  a0  s1  s0  sp  ra
+    [27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 11, 10,  9,  8,  2,  1],  # bank 0
+    #        t6  t5   t4  t3  a7  a6  a5  a4  a3  a2  a1  a0  t2  t1  t0  ra
+    [31, 30, 29, 28, 17, 16, 15, 14, 13, 12, 11, 10,  7,  6,  5,  1],  # bank 1
+]
+
+
+def _make_ldmstm_tuples(
+    word: int,
+    address: int,
+) -> List[Tuple[int, int, str, str]]:
+    """Return (address, size, mnemonic, op_str) tuples for an ldmia/stmia instruction.
+
+    ldmia: one tuple per loaded register → disasm_lite yields each as a load.
+    stmia: single tuple (no register writes).
+    """
+    is_store  = bool((word >> 12) & 0x1)
+    bank      = (word >> 31) & 0x1
+    base      = (word >> 15) & 0x1f
+    mnem      = 'stmia' if is_store else 'ldmia'
+    base_name = _reg(base)
+    results: List[Tuple[int, int, str, str]] = []
+
+    if is_store:
+        regs = [
+            _reg(_LDMSTM_SLOT_REG[bank][slot])
+            for slot, bit in enumerate(_LDMSTM_SLOT_BIT)
+            if word & (1 << bit)
+        ]
+        reg_list = '{' + ','.join(regs) + '}' if regs else '{}'
+        results.append((address, 4, mnem, f'{reg_list}, ({base_name})'))
+    else:
+        for slot, bit in enumerate(_LDMSTM_SLOT_BIT):
+            if not (word & (1 << bit)):
+                continue
+            reg = _LDMSTM_SLOT_REG[bank][slot]
+            results.append((address, 4, mnem, f'{_reg(reg)}, 0({base_name})'))
+        if not results:
+            results.append((address, 4, mnem, f'0({base_name})'))
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Decoder
 # ---------------------------------------------------------------------------
 
-_HISI_OPCODES = frozenset({0x7b, 0x5b, 0x3b, 0x1b, 0x1f})
+_HISI_OPCODES = frozenset({0x0b, 0x7b, 0x5b, 0x3b, 0x1b, 0x1f})
 
 
 class HiSiliconRV32ExtDecoder:
     """
-    Drop-in replacement for capstone.Cs that correctly handles all five
+    Drop-in replacement for capstone.Cs that correctly handles all six
     HiSilicon riscv31 custom opcode spaces (WS63/Hi3863/BS21/Hi2821).
 
+    0x0b  custom-0  : ldmia/stmia — multi-register load/store (4 bytes)
     0x7b  custom-3  : R-type generic dispatch (4 bytes)
-    0x5b  custom-2  : muliadd + ldmia/stmia (4 bytes)
+    0x5b  custom-2  : muliadd (4 bytes)
     0x3b  OP-32     : beqi/bnei/bgei/blti/bgeui/bltui (4 bytes)
     0x1b  OP-IMM-32 : addshf/subshf/orshf/xorshf/andshf (4 bytes)
     0x1f  reserved  : l.li — 6-byte long load-immediate  ← MISALIGNMENT HAZARD
 
-    Capstone handles all other opcodes including standard RVC 16-bit instructions
-    (which includes push/pop/popret in the RVC Quadrant-0 custom slots).
+    16-bit (decoded natively, before Capstone):
+    uxtb/uxth : insn & 0xFC5F == 0x9C01 — in-place zero-extend byte/half
+
+    Capstone handles all other opcodes (push/pop/popret, lbu/lhu/sb/sh, etc.).
 
     Args:
         conservative: if True, treat custom-3 as propagating taint from rs1/rs2
@@ -328,13 +398,14 @@ class HiSiliconRV32ExtDecoder:
         """
         Yield (address, size, mnemonic, op_str) for each instruction.
 
-        HiSilicon custom instructions (opcodes 0x7b/0x5b/0x3b/0x1b/0x1f at
+        HiSilicon custom instructions (opcodes 0x0b/0x7b/0x5b/0x3b/0x1b/0x1f at
         2-byte aligned positions) are decoded natively. Critically, l.li (0x1f)
         consumes 6 bytes — without this decoder, every l.li causes a 2-byte
         misalignment cascade through the rest of the function.
 
-        All other bytes are forwarded to Capstone in contiguous chunks,
-        including RVC push/pop/popret (16-bit, Quadrant 0 custom slots).
+        ldmia (0x0b) yields one tuple per loaded register; stmia yields one tuple.
+        uxtb/uxth (16-bit, insn & 0xFC5F == 0x9C01) are intercepted before Capstone.
+        All other bytes are forwarded to Capstone in contiguous chunks.
         """
         pos = 0
         length = len(code)
@@ -356,6 +427,20 @@ class HiSiliconRV32ExtDecoder:
                 # Not enough bytes: fall through to capstone
                 break
 
+            # ldmia/stmia: opcode 0x0b (custom-0, 4 bytes)
+            # NOTE: no (b0 & 0x80) guard here — bit7 is register bitmap, not rd lsb
+            if op7 == 0x0b:
+                if pos + 4 <= length:
+                    word = struct.unpack_from('<I', code, pos)[0]
+                    funct3 = (word >> 12) & 0x7
+                    if funct3 >= 2:
+                        # pref/prefd: cache prefetch hints, no architectural effect → NOP
+                        yield (va, 4, 'prefd', '')
+                    else:
+                        yield from _make_ldmstm_tuples(word, va)
+                    pos += 4
+                    continue
+
             # 4-byte HiSilicon opcodes (bits[1:0] == 11 guaranteed)
             if op7 in (0x7b, 0x5b, 0x3b, 0x1b) and (b0 & 0x80) == 0:
                 if pos + 4 <= length:
@@ -368,6 +453,16 @@ class HiSiliconRV32ExtDecoder:
             # Standard instruction: determine size (16 or 32 bit) from bits[1:0]
             insn_size = 4 if (b0 & 0x03) == 0x03 else 2
 
+            # uxtb/uxth: 16-bit, intercept before building the Capstone run
+            if insn_size == 2 and pos + 2 <= length:
+                hw = struct.unpack_from('<H', code, pos)[0]
+                if (hw & 0xFC5F) == 0x9C01:
+                    rd = 8 + ((hw >> 7) & 0x7)
+                    mnem = 'uxth' if (hw & 0x20) else 'uxtb'
+                    yield (va, 2, mnem, _reg(rd))
+                    pos += 2
+                    continue
+
             # Build a contiguous run of non-HiSilicon bytes for Capstone
             run_start = pos
             run_pos   = pos + insn_size
@@ -375,6 +470,10 @@ class HiSiliconRV32ExtDecoder:
             while run_pos < length - 1:
                 nb0  = code[run_pos]
                 nop7 = nb0 & 0x7f
+                # 0x0b (ldmia/stmia) does not have (nb0 & 0x80) == 0 constraint
+                # (bit7 is register bitmap, not rd lsb); check separately.
+                if nop7 == 0x0b and (nb0 & 0x03) == 0x03:
+                    break
                 if (nb0 & 0x80) == 0 and nop7 in _HISI_OPCODES:
                     break
                 nb_size = 4 if (nb0 & 0x03) == 0x03 else 2
@@ -423,11 +522,14 @@ class HiSiliconRV32ExtDecoder:
         code: bytes,
         base_va: int,
     ) -> List[HisiInsn]:
-        """Return all HiSilicon custom instructions (all 5 opcode spaces, 4-byte stride).
+        """Return all HiSilicon custom instructions (all 6 opcode spaces, 4-byte stride).
 
         Note: l.li is 6 bytes but starts on a 4-byte boundary; stride=4 finds the
         start correctly. The trailing 2-byte extension is consumed as part of the
         instruction and not scanned separately.
+
+        ldmia/stmia (0x0b) may generate multiple HisiInsn per instruction; all are
+        included. For stmia the single emitted HisiInsn has taint_dst=None.
         """
         results: List[HisiInsn] = []
         i = 0
@@ -441,6 +543,17 @@ class HiSiliconRV32ExtDecoder:
                     results.append(_make_lli(word, hword, base_va + i))
                     i += 6
                     continue
+                elif op7 == 0x0b:
+                    funct3 = (word >> 12) & 0x7
+                    if funct3 < 2:
+                        va = base_va + i
+                        for tup in _make_ldmstm_tuples(word, va):
+                            addr, sz, mnem, ops = tup
+                            is_store = mnem == 'stmia'
+                            base_reg = (word >> 15) & 0x1f
+                            results.append(HisiInsn(addr, sz, mnem, ops, 0, base_reg, 0,
+                                                     (word >> 12) & 0x7, 0,
+                                                     [base_reg], None))
                 elif op7 != 0x1f:
                     results.append(self.decode_word(word, base_va + i))
             i += 4
