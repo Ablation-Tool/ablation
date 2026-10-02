@@ -80,7 +80,10 @@ RI16_OPS = {
     0x07F: "lqr",    # load quadword PC-relative (confirmed: large-neg I16 = static data offset)
     0x098: "stqr",   # store quadword PC-relative alt encoding (op9=0x098; confirmed from 0x4c002b60)
     0x099: "stqr",   # store quadword PC-relative alt encoding (op9=0x099 variant)
+    0x09A: "lqr",    # load quadword PC-relative (146 hits; produces values consumed by addx)
+    0x09B: "lqr",    # load quadword PC-relative (145 hits; large I16, parallel with op9=0x09A)
     0x0C1: "iohl",   # OR immediate lower halfword (confirmed: rA=$127, I16=0xffff pairs)
+    0x0FE: "lqr",    # load quadword PC-relative (43 hits; loads pointer into $0 before cbd)
     0x100: "brnz",   # branch if not zero (word)
     0x102: "brhnz",  # branch if not zero (halfword)
 }
@@ -102,6 +105,7 @@ RI10_OPS = {
     0x74: "ceqi",   # compare equal immediate
     0x76: "cgti",   # compare greater than immediate (signed word)
     0x78: "cgtbi",  # compare greater than byte immediate
+    0x79: "ceqbi",  # compare equal byte immediate (tentative: 136 hits, fills gap 0x78–0x7A)
     0x7A: "cgthi",  # compare greater than halfword immediate
     0x7C: "andbi",  # AND byte immediate
     0x7D: "andhi",  # AND halfword immediate
