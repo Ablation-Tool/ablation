@@ -2,7 +2,7 @@
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
-*[Español](docs/i18n/es/README.md) · [Português](docs/i18n/pt-BR/README.md) · [Français](docs/i18n/fr/README.md) · [Deutsch](docs/i18n/de/README.md) · [中文](docs/i18n/zh/README.md) · [日本語](docs/i18n/ja/README.md) · [Русский](docs/i18n/ru/README.md) · [العربية](docs/i18n/ar/README.md) · [한국어](docs/i18n/ko/README.md) · [हिन्दी](docs/i18n/hi/README.md) · [Italiano](docs/i18n/it/README.md) · [Türkçe](docs/i18n/tr/README.md) · [Tiếng Việt](docs/i18n/vi/README.md) · [Indonesia](docs/i18n/id/README.md) · [Polski](docs/i18n/pl/README.md) · [Nederlands](docs/i18n/nl/README.md)*
+**[Interactive module explorer](https://ablation-tool.github.io)** — pipeline stages, module graph, and connections.
 
 Ablation is a reverse engineering framework that provides the exact same core disassembly, decompilation, and binary analysis capabilities as industry-standard tools like Ghidra, IDA Pro, and Binary Ninja. 
 
@@ -11,8 +11,6 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 ---
 
 ![demo](assets/screencast-2026-09-30.gif)
-
-**[Interactive module explorer](https://ablation-tool.github.io)** — pipeline stages, module graph, and connections.
 
 ## Capabilities
 
