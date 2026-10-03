@@ -231,7 +231,12 @@ class PPC32GOT2Resolver:
             b = dynsym[i * 16:]
             name_off = struct.unpack_from(">I", b, 0)[0]
             st_value = struct.unpack_from(">I", b, 4)[0]
-            end = dynstr.index(b"\x00", name_off)
+            if name_off >= len(dynstr):
+                continue
+            try:
+                end = dynstr.index(b"\x00", name_off)
+            except ValueError:
+                end = len(dynstr)
             name = dynstr[name_off:end].decode("utf-8", "replace")
             if name and st_value:
                 va_to_name[st_value] = name
