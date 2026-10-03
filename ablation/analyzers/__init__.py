@@ -30,6 +30,7 @@ from .taint_tracker_mips64 import MIPS64TaintTracker, TaintFinding64, Interproce
 from .nanomips_decoder import NanoMIPSDecoder, NanoMIPSDisasm, NanoFrame
 from .taint_tracker_nanomips import NanoMIPSTaintTracker, NanoMIPSTaintFinding, NanoMIPSInterproceduralPath
 from .taint_tracker_ppc32 import PPC32TaintTracker, TaintFindingPPC32
+from .ppc32_plt_tracer import PPC32PLTTracer, PPC32ELF, PLTCallSite, batch_sweep as ppc32_batch_sweep, batch_scan as ppc32_batch_scan
 from .taint_tracker_ppc64 import PPC64TaintTracker, TaintFindingPPC64
 from .arc_decoder import ARCDecoder, ARCDisasm, ARCFrame
 from .taint_tracker_arc import ARCTaintTracker, TaintFindingARC
@@ -161,6 +162,7 @@ __all__ = [
     "NanoMIPSDecoder", "NanoMIPSDisasm", "NanoFrame",
     "NanoMIPSTaintTracker", "NanoMIPSTaintFinding", "NanoMIPSInterproceduralPath",
     "PPC32TaintTracker", "TaintFindingPPC32",
+    "PPC32PLTTracer", "PPC32ELF", "PLTCallSite", "ppc32_batch_sweep", "ppc32_batch_scan",
     "PPC64TaintTracker", "TaintFindingPPC64",
     "ARCDecoder", "ARCDisasm", "ARCFrame",
     "ARCTaintTracker", "TaintFindingARC",
