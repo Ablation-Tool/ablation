@@ -232,6 +232,10 @@ class PPC32TaintTracker:
         self._text_va: int = 0
         self._text_off: int = 0
         self._text_size: int = 0
+        # All PT_LOAD segments: (va_start, file_offset, file_size).
+        # Used by _va_to_slice for multi-segment binaries where the data segment
+        # has a different va-to-file-offset than the text segment (Huawei PPC32).
+        self._load_segs: List[Tuple[int, int, int]] = []
         # GOT-indirect call support (PPC32 EABI secure-PLT / got2 ABI):
         #   calls use  lwz rX, N(r_got) + mtctr rX + bctrl
         #   where r_got = GOT_base + 0x8000 (signed 16-bit offset range)
@@ -282,6 +286,9 @@ class PPC32TaintTracker:
         # unconditionally adds the correct SHN_UNDEF entries alongside any LIEF
         # entries; the GOT2 scanner matches against stub VAs, not .plt VAs.
         self._load_plt_from_dynsym_raw()
+        # Build complete VA→file-offset segment table from raw program headers.
+        # Must run before _build_got2_resolver which uses _va_to_slice.
+        self._load_segments_raw()
         self._build_got_offset_table()
         # Always build the GOT2-aware resolver — it's cheap and handles PPC32
         # GOT2 PIC (Huawei, embedded Linux) where _build_got_offset_table builds
@@ -323,6 +330,30 @@ class PPC32TaintTracker:
                     self._text_off  = seg.file_offset
                     self._text_size = seg.physical_size
                     break
+        except Exception:
+            pass
+
+    def _load_segments_raw(self) -> None:
+        """Populate _load_segs from raw ELF PT_LOAD program headers.
+
+        Reads program headers directly to build the complete VA→file-offset table.
+        This is needed for binaries with multiple LOAD segments (e.g. Huawei PPC32
+        which has a separate rw- segment at a different va-to-file-offset than the
+        rx segment).  Must be called after _load_lief/_load_pyelf.
+        """
+        import struct as _struct
+        bo = '>' if self._endian == 'big' else '<'
+        data = self._data
+        try:
+            e_phoff     = _struct.unpack_from(bo + 'I', data, 0x1c)[0]
+            e_phentsize = _struct.unpack_from(bo + 'H', data, 0x2a)[0]
+            e_phnum     = _struct.unpack_from(bo + 'H', data, 0x2c)[0]
+            for i in range(e_phnum):
+                off = e_phoff + i * e_phentsize
+                p_type, p_foff, p_vaddr = _struct.unpack_from(bo + 'III', data, off)
+                p_filesz = _struct.unpack_from(bo + 'I', data, off + 16)[0]
+                if p_type == 1 and p_filesz > 0:   # PT_LOAD with file content
+                    self._load_segs.append((p_vaddr, p_foff, p_filesz))
         except Exception:
             pass
 
@@ -593,6 +624,14 @@ class PPC32TaintTracker:
         return sorted(set(starts))
 
     def _va_to_slice(self, va: int, size: int) -> Optional[bytes]:
+        if self._load_segs:
+            for seg_va, seg_foff, seg_filesz in self._load_segs:
+                if seg_va <= va < seg_va + seg_filesz:
+                    off = seg_foff + (va - seg_va)
+                    if off + size <= len(self._data):
+                        return self._data[off: off + size]
+            return None
+        # Fallback for binaries where raw segment parsing failed.
         if not self._text_va:
             return None
         off = self._text_off + (va - self._text_va)
