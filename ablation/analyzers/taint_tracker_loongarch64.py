@@ -859,6 +859,54 @@ class LoongArch64TaintTracker:
             findings.extend(self._scan_func_binary(fva, fend))
         return findings
 
+    def run_on_function_seeded(
+        self,
+        func_va: int,
+        seed_arg_indices: Optional[List[int]] = None,
+        source_label: str = "caller_arg",
+        extra_sources: Optional[Set[str]] = None,
+    ) -> List[TaintFindingLA64]:
+        """
+        Seeded intraprocedural scan for library RE: treats the specified
+        argument registers as tainted at function entry, then tracks to sinks.
+
+        Useful for shared library analysis where external input arrives through
+        function arguments rather than through recv/read call sites.
+
+        Args:
+            func_va:          VA of the function to scan.
+            seed_arg_indices: Which argument registers to seed (0-7 → $a0-$a7).
+                              Defaults to [0,1,2,3,4,5,6,7] (all args tainted).
+            source_label:     Taint label applied to seeded registers.
+            extra_sources:    Additional function names to treat as taint sources
+                              within this function (extends _SOURCE_NAMES locally).
+        """
+        if seed_arg_indices is None:
+            seed_arg_indices = list(range(8))
+
+        starts = self._get_func_starts()
+        # Find function end via DWARF or next-start heuristic
+        try:
+            idx  = starts.index(func_va)
+            fend = (self._dwarf_ends.get(func_va)
+                    or (starts[idx + 1] if idx + 1 < len(starts) else self._text_end))
+        except ValueError:
+            # func_va not in starts list — scan up to 4096 bytes as fallback
+            fend = func_va + 4096
+
+        labels = {source_label}
+
+        # Temporarily extend _SOURCE_NAMES if requested
+        if extra_sources:
+            import ablation.analyzers.taint_tracker_loongarch64 as _mod
+            orig = _mod._SOURCE_NAMES
+            _mod._SOURCE_NAMES = orig | frozenset(extra_sources)
+            try:
+                return self._scan_func_binary(func_va, fend, init_labels=labels)
+            finally:
+                _mod._SOURCE_NAMES = orig
+        return self._scan_func_binary(func_va, fend, init_labels=labels)
+
     def run_interprocedural(self, depth: int = 4) -> List[TaintFindingLA64]:
         """
         Interprocedural BFS: follow tainted $a0-$a7 from callers into callees.

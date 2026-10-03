@@ -48,7 +48,8 @@ except ImportError:
 # All 3R format: bits[31:15] = opcode, bits[14:10] = rk, bits[9:5] = rj, bits[4:0] = rd
 # ---------------------------------------------------------------------------
 
-_MATCH_SLTU    = 0x00128000
+_MATCH_SLT     = 0x00120000   # slt  (signed compare) — smin variant of GCC bug
+_MATCH_SLTU    = 0x00128000   # sltu (unsigned compare) — umin variant
 _MATCH_MASKEQZ = 0x00130000
 _MATCH_MASKNEZ = 0x00138000
 _MATCH_OR      = 0x00150000
@@ -171,7 +172,7 @@ _SINKS: Dict[str, Tuple[int, str]] = {
 @dataclass
 class LA64MaxNotMinFinding:
     func_va:    int         # VA of the enclosing function (0 if unknown)
-    pattern_va: int         # VA of the sltu instruction (start of 4-insn sequence)
+    pattern_va: int         # VA of the slt/sltu instruction (start of 4-insn sequence)
     result_reg: int         # register number of the or result
     result_name: str        # ABI name of result_reg
     sink_va:    int         # VA of the bl to the sink
@@ -180,6 +181,7 @@ class LA64MaxNotMinFinding:
     context:    str = ""    # disassembly snippet
     fp_class:   str = ""    # "": real finding; "vec_growth": ELIMINATED (Rust Vec-resize);
                             # "copy_limit": PLAUSIBLE_LOW (max*elem_size via mul.d)
+    compare_op: str = "sltu"  # "sltu" (unsigned / umin bug) or "slt" (signed / smin bug)
 
     def __str__(self) -> str:
         tag = f"  [{self.fp_class.upper()}]" if self.fp_class else ""
@@ -399,8 +401,9 @@ class LA64MaxNotMinScanner:
 
             w0, w1, w2, w3 = words
 
-            # Instruction 0: sltu Rcond, Ra, Rb
-            if (w0 & _MASK_3R) != _MATCH_SLTU:
+            # Instruction 0: sltu Rcond, Ra, Rb  OR  slt Rcond, Ra, Rb
+            # GCC 12.3.1.7 inverts both smin (slt) and umin (sltu) variants.
+            if (w0 & _MASK_3R) not in (_MATCH_SLTU, _MATCH_SLT):
                 va += 4
                 continue
 
@@ -438,20 +441,22 @@ class LA64MaxNotMinScanner:
             rout = _rd(w3)
 
             # Found the MAX sequence. Now check the lookahead window for a sink.
+            compare_op = "slt" if (w0 & _MASK_3R) == _MATCH_SLT else "sltu"
             hit = self._check_lookahead(va + 16, rout)
             if hit:
                 sink_va, sink_name, sink_arg, fp_class = hit
                 ctx = self._context_snippet(va)
                 findings.append(LA64MaxNotMinFinding(
-                    func_va    = 0,  # not needed for triage; callers can fill in
-                    pattern_va = va,
-                    result_reg = rout,
+                    func_va     = 0,  # not needed for triage; callers can fill in
+                    pattern_va  = va,
+                    result_reg  = rout,
                     result_name = self._reg_name(rout),
-                    sink_va    = sink_va,
-                    sink_name  = sink_name,
-                    sink_arg   = sink_arg,
-                    context    = ctx,
-                    fp_class   = fp_class,
+                    sink_va     = sink_va,
+                    sink_name   = sink_name,
+                    sink_arg    = sink_arg,
+                    context     = ctx,
+                    fp_class    = fp_class,
+                    compare_op  = compare_op,
                 ))
 
             va += 4
