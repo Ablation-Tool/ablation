@@ -2,6 +2,29 @@
 
 ---
 
+## v2.35.0
+
+- **PPC32TaintTracker: multi-segment `_va_to_slice` fix** (`taint_tracker_ppc32.py`)
+  - **Bug**: `_va_to_slice` used a single-segment linear formula
+    (`file_off = text_off + (va - text_va)`) which gave file offsets 0x10000 bytes
+    too high for any VA in the second LOAD segment (rw-, `.got2`/`.data`). The
+    S6720EI binary has two PT_LOAD segments where segment[1] (VA `0x1014b000`,
+    file `0x13b000`) has a different VA→file gap than segment[0]. Reads via
+    `_va_to_slice(got2_va, 4)` returned garbage from `.data` instead of the
+    `.got2` contents.
+  - **Fix**: new `_load_segments_raw()` method reads all PT_LOAD entries from raw
+    ELF program headers and populates `self._load_segs` as a `[(va, foff, filesz)]`
+    list. `_va_to_slice` now searches this list; falls back to the legacy single-
+    segment path only when segment parsing fails. Called from `_load_elf()` before
+    `_build_got2_resolver()`.
+  - **Impact**: `_build_got2_resolver()` was already correct (uses `got2_foff`
+    from section headers directly); function disassembly was always correct (all
+    code in segment[0]). The bug only affected callers that read GOT2/data VAs
+    through `_va_to_slice` — e.g., resolving internal function pointers from the
+    second LOAD segment. Internal function targets in `fn@0x10031800` now resolve
+    to `0x100540d0`, `0x100526c4`, `0x10052cd0` (previously read as `0x03030000`
+    etc.).
+
 ## v2.34.0
 
 - **PPC32TaintTracker: GOT2 PIC support for Huawei/embedded Linux** (`taint_tracker_ppc32.py`)
