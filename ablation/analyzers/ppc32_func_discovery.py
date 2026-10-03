@@ -38,6 +38,8 @@ class PPC32FuncDiscovery:
             raise ValueError(f"Failed to parse ELF: {path}")
 
         entry_va = elf.header.entrypoint
+        if not entry_va:
+            raise ValueError(f"ELF has no entry point (PIE or malformed): {path}")
 
         # Find LOAD segment containing entry point
         main_seg = None
@@ -120,28 +122,30 @@ class PPC32FuncDiscovery:
         STW_R0_PATTERN = 0x9001   # stw r0, <offset>(r1) - upper 16 bits
         STWU_R1_PATTERN = 0x9421  # stwu r1, -<frame>(r1) - upper 16 bits
 
-        # Predecessor instructions that legitimately precede a function entry
-        _BOUNDARY_PREDECESSORS = (
+        # Predecessors that indicate a function boundary.
+        # Only non-linking branches: blr, bctr, b (LK=0).
+        # bl (LK=1) is a call — the instruction after a bl is still inside
+        # the caller's body, not a new function entry.
+        _BOUNDARY_PREDECESSORS = frozenset({
             0x4E800020,  # blr
             0x4E800420,  # bctr
-            0x48000000,  # b  (unconditional branch, no link)
-        )
+        })
 
         for offset in range(0, len(self.data) - 11, 4):
             insn1 = struct.unpack('>I', self.data[offset:offset+4])[0]
 
             # Pattern 1: mflr r0; stw r0, X(r1); stwu r1, -Y(r1)
-            insn2 = struct.unpack('>I', self.data[offset+4:offset+8])[0]
-            insn3 = struct.unpack('>I', self.data[offset+8:offset+12])[0]
-
-            if (insn1 == MFLR_R0 and
-                    (insn2 >> 16) == STW_R0_PATTERN and
-                    (insn3 >> 16) == STWU_R1_PATTERN):
-                prologue_vas.add(self.base_va + offset)
+            # Only unpack insn2/insn3 when insn1 can possibly match.
+            if insn1 == MFLR_R0:
+                insn2 = struct.unpack('>I', self.data[offset+4:offset+8])[0]
+                insn3 = struct.unpack('>I', self.data[offset+8:offset+12])[0]
+                if ((insn2 >> 16) == STW_R0_PATTERN and
+                        (insn3 >> 16) == STWU_R1_PATTERN):
+                    prologue_vas.add(self.base_va + offset)
                 continue
 
-            # Pattern 2: stwu r1, -<frame>(r1) — require a branch/return predecessor
-            # to avoid flagging stwu inside loop bodies or data regions.
+            # Pattern 2: stwu r1, -<frame>(r1) — require a non-linking branch
+            # or function-return predecessor to avoid flagging mid-function stwu.
             if (insn1 >> 16) == STWU_R1_PATTERN:
                 frame_size = insn1 & 0xFFFF
                 if frame_size & 0x8000:  # Negative displacement only
@@ -149,12 +153,14 @@ class PPC32FuncDiscovery:
                     if 16 <= frame_size <= 4096:
                         if offset >= 4:
                             prev = struct.unpack('>I', self.data[offset-4:offset])[0]
-                            prev_op6 = prev & 0xFC000000
+                            # b/ba (opcode 18, LK=0): top 6 bits = 0x48, LK bit = 0
+                            is_b_no_link = (prev & 0xFC000001) == 0x48000000
+                            # any conditional branch (opcode 16); covers all CR fields
+                            is_bc = (prev >> 26) == 16
                             is_boundary = (
                                 prev in _BOUNDARY_PREDECESSORS
-                                or prev_op6 == 0x48000000  # any b/bl
-                                or (prev >> 16) == 0x4182   # beq
-                                or (prev >> 16) == 0x4082   # bne
+                                or is_b_no_link
+                                or is_bc
                             )
                         else:
                             is_boundary = True  # segment start is always a boundary
