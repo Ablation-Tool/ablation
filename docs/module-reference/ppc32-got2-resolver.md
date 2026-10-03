@@ -72,6 +72,15 @@ Supplied to `__init__` / `from_path` / `from_sections`.  When present, any compu
 rejected with reason `entry_va_outside_got2`.  `from_path` extracts `.got2`
 automatically via lief.
 
+**Fix 3 — generalised r30 setup detection (automatic):**
+
+`_find_r30_setups` now uses a sliding-window scan: up to 16 instructions after the BCL
+for `MFLR r30`, up to 6 more for `ADDIS r30,r30,hi`, up to 6 more for `ADDI r30,r30,lo`.
+Any instruction that writes to r30 (other than the three target instructions) aborts the
+search.  This handles a third compiler variant found in Huawei CE6810 e500mc `.so` files
+where up to 8 frame spill instructions appear between BCL and MFLR r30.  No parameters
+needed — this is always-on.
+
 ---
 
 ## How it works
