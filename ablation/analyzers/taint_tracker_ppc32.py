@@ -139,20 +139,28 @@ _SOURCES: Set[str] = {
 }
 
 _DEFAULT_SINKS: Dict[str, List[int]] = {
-    'system':    [0],   # arg index 0 = r3
-    'execv':     [0],
-    'execvp':    [0],
-    'execve':    [0],
-    'popen':     [0],
-    'strcpy':    [1],   # strcpy(dst, src): src = r4
-    'strcat':    [1],
-    'sprintf':   [1],   # format = r4
-    'snprintf':  [2],   # format = r5
-    'memcpy':    [2],   # length = r5
-    'memmove':   [2],
-    'malloc':    [0],
-    'calloc':    [0, 1],
-    'realloc':   [1],
+    'system':      [0],   # arg index 0 = r3
+    'execv':       [0],
+    'execvp':      [0],
+    'execve':      [0],
+    'execl':       [0],   # execl(path, arg0, ...) -- path in r3
+    'execle':      [0],
+    'execlp':      [0],
+    'popen':       [0],
+    'strcpy':      [1],   # strcpy(dst, src): src = r4
+    'strcpy_s':    [2],   # strcpy_s(dst, n, src): src = r5
+    'strcat':      [1],
+    'strcat_s':    [2],   # strcat_s(dst, n, src): src = r5
+    'sprintf':     [1],   # format = r4
+    'sprintf_s':   [2],   # sprintf_s(dst, n, fmt, ...) -- fmt = r5
+    'snprintf':    [2],   # format = r5
+    'snprintf_s':  [3],   # snprintf_s(dst, n, maxlen, fmt, ...) -- fmt = r6
+    'memcpy':      [2],   # length = r5
+    'memcpy_s':    [3],   # memcpy_s(dst, dsz, src, count): src = r6
+    'memmove':     [2],
+    'malloc':      [0],
+    'calloc':      [0, 1],
+    'realloc':     [1],
 }
 
 MAX_FUNC_BYTES = 0x8000
@@ -236,6 +244,13 @@ class PPC32TaintTracker:
         self._md.detail = True
         self._md.skipdata = True
 
+        # GOT2 PIC: per-function r30 map (func_va -> r30_value)
+        # Populated by _build_got2_r30_map() for binaries using GOT2 ABI where
+        # each compilation unit has its own r30 (LIEF sees 0 JUMP_SLOT relocations).
+        self._func_r30: Dict[int, int] = {}
+        # got2_va -> symbol_name (populated from raw dynsym when LIEF PLT is empty)
+        self._got2_va_to_name: Dict[int, str] = {}
+
         self._load_elf()
 
     @classmethod
@@ -260,7 +275,19 @@ class PPC32TaintTracker:
             self._fill_text_from_pyelf()
         elif not _HAS_LIEF and _HAS_PYELF:
             self._load_pyelf()
+        # Always supplement _plt with raw dynsym SHN_UNDEF stub VAs.
+        # LIEF on Huawei PPC32 (vendor reloc type 0x40000054) maps _plt to the
+        # .plt section VAs (0x10150e6c...) instead of the actual PLT stub VAs
+        # (0x1011f...) that appear as values inside .got2.  Running this
+        # unconditionally adds the correct SHN_UNDEF entries alongside any LIEF
+        # entries; the GOT2 scanner matches against stub VAs, not .plt VAs.
+        self._load_plt_from_dynsym_raw()
         self._build_got_offset_table()
+        # Always build the GOT2-aware resolver — it's cheap and handles PPC32
+        # GOT2 PIC (Huawei, embedded Linux) where _build_got_offset_table builds
+        # a wrong table from .plt stub VAs instead of actual GOT2 entry VAs.
+        if self._plt:
+            self._build_got2_resolver()
 
     def _load_lief(self) -> None:
         try:
@@ -348,6 +375,173 @@ class PPC32TaintTracker:
         except Exception:
             pass
 
+    def _load_plt_from_dynsym_raw(self) -> None:
+        """
+        Fallback PLT loader for PPC32 GOT2 binaries where LIEF reports 0 JUMP_SLOT
+        relocations (e.g. vendor-specific relocation type 0x40000054 in Huawei bootloaders).
+
+        On PPC32 Linux with -mrelocatable / GOT2 ABI, dynamic symbols with non-zero
+        st_value and SHN_UNDEF (st_shndx == 0) are PLT stub VAs.  Parse the raw ELF
+        to recover them without relying on LIEF's relocation type table.
+        """
+        import struct as _struct
+        try:
+            data = self._data
+            bo = '>' if self._endian == 'big' else '<'
+            # ELF header: e_shoff [32], e_shnum [48], e_shstrndx [50]
+            e_shoff   = _struct.unpack_from(bo + 'I', data, 32)[0]
+            e_shnum   = _struct.unpack_from(bo + 'H', data, 48)[0]
+            e_shstrndx= _struct.unpack_from(bo + 'H', data, 50)[0]
+            # section header string table offset
+            shstrtab_foff = _struct.unpack_from(bo + 'I', data, e_shoff + e_shstrndx*40 + 16)[0]
+
+            def sh(i):
+                off = e_shoff + i * 40
+                sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size, sh_link = \
+                    _struct.unpack_from(bo + 'IIIIIII', data, off)
+                name_end = data.index(b'\x00', shstrtab_foff + sh_name)
+                sec_name = data[shstrtab_foff + sh_name:name_end].decode('ascii', errors='replace')
+                return sec_name, sh_addr, sh_offset, sh_size, sh_link
+
+            # find .dynsym and .dynstr
+            dynsym_foff = dynsym_size = dynstr_foff = 0
+            for i in range(e_shnum):
+                sname, saddr, sfoff, ssize, slink = sh(i)
+                if sname == '.dynsym':
+                    dynsym_foff, dynsym_size = sfoff, ssize
+                    _, _, dynstr_foff, _, _ = sh(slink)
+                elif sname == '.dynstr' and not dynstr_foff:
+                    dynstr_foff = sfoff
+
+            if not dynsym_foff or not dynstr_foff:
+                return
+
+            sym_size = 16  # ELF32 Sym: name(4)+value(4)+size(4)+info(1)+other(1)+shndx(2)
+            sym_count = dynsym_size // sym_size
+            for i in range(sym_count):
+                off = dynsym_foff + i * sym_size
+                st_name, st_value, st_size, st_info, st_other, st_shndx = \
+                    _struct.unpack_from(bo + 'IIIBBH', data, off)
+                # SHN_UNDEF (0) with non-zero st_value = PLT stub VA for external symbol.
+                # Skip internal symbols (st_shndx != 0) to avoid polluting _plt.
+                if st_shndx != 0 or not st_value:
+                    continue
+                ne = data.index(b'\x00', dynstr_foff + st_name)
+                name = data[dynstr_foff + st_name:ne].decode('ascii', errors='replace')
+                if name:
+                    self._plt[st_value] = name
+        except Exception:
+            pass
+
+    def _build_got2_resolver(self) -> None:
+        """
+        Build GOT2-VA → symbol name map for PPC32 GOT2 PIC binaries.
+
+        In this ABI each compilation unit sets r30 = LR + addis_hi<<16 + addi_lo
+        at function entry (PIC prologue).  Indirect calls are:
+          lwz  rX, N(r30)   ; load ptr from GOT2
+          mtctr rX
+          bctrl
+
+        Strategy:
+        1. Build plt_va → name from self._plt (already populated).
+        2. Scan the .got2 section (or all non-text writable data): for each 4-byte
+           entry whose value is in plt_va_to_name, record got2_entry_va → name.
+        3. At call-resolution time, compute got2_va = func_r30 + N and look up.
+        4. Pre-compute r30 for every function by scanning the PIC prologue.
+        """
+        import struct as _struct
+        bo = '>' if self._endian == 'big' else '<'
+        data = self._data
+
+        # Reverse-map: plt_stub_va → name (already in self._plt)
+        plt_va_to_name = self._plt  # va → name
+
+        # Find .got2 section via raw ELF headers
+        try:
+            e_shoff    = _struct.unpack_from(bo + 'I', data, 32)[0]
+            e_shnum    = _struct.unpack_from(bo + 'H', data, 48)[0]
+            e_shstrndx = _struct.unpack_from(bo + 'H', data, 50)[0]
+            shstrtab_foff = _struct.unpack_from(bo + 'I', data,
+                                                 e_shoff + e_shstrndx*40 + 16)[0]
+
+            got2_foff = got2_addr = got2_size = 0
+            for i in range(e_shnum):
+                soff = e_shoff + i * 40
+                sh_name_off = _struct.unpack_from(bo + 'I', data, soff)[0]
+                ne = data.index(b'\x00', shstrtab_foff + sh_name_off)
+                sname = data[shstrtab_foff + sh_name_off:ne].decode('ascii', errors='replace')
+                if sname in ('.got2', '.got', '.got.plt'):
+                    _, _, _, sh_addr, sh_foff, sh_size = \
+                        _struct.unpack_from(bo + 'IIIIII', data, soff)[:6]
+                    if sh_size > got2_size:  # prefer larger section
+                        got2_addr, got2_foff, got2_size = sh_addr, sh_foff, sh_size
+
+            if not got2_size:
+                return
+
+            # Scan every 4-byte word in .got2 for PLT pointers
+            for i in range(0, got2_size - 3, 4):
+                ptr = _struct.unpack_from(bo + 'I', data, got2_foff + i)[0]
+                if ptr in plt_va_to_name:
+                    entry_va = got2_addr + i
+                    self._got2_va_to_name[entry_va] = plt_va_to_name[ptr]
+
+        except Exception:
+            return
+
+        # Pre-compute r30 for each function by scanning PIC prologue.
+        # Pattern: bdnzl/bcl $+4  [insn at N stores LR=N+4]
+        #          mflr r30       [r30 = N+4]
+        #          addis r30, r30, HI
+        #          addi  r30, r30, LO
+        # r30 = (N+4) + sign_ext(HI)*0x10000 + sign_ext(LO)
+        if not self._text_va:
+            return
+        text_end = self._text_va + self._text_size
+        for fva in self._get_func_starts():
+            if fva < self._text_va or fva >= text_end:
+                continue
+            foff = self._text_off + (fva - self._text_va)
+            if foff + 64 > len(data):
+                continue
+            # Read first 16 instructions (64 bytes) — PIC prologues on Huawei PPC32
+            # reach instruction index 10+ before the addis/addi pair completes.
+            chunk = data[foff:foff + 64]
+            try:
+                insns = list(self._md.disasm(chunk, fva))
+            except Exception:
+                continue
+            # Look for mflr r30 followed by addis r30, r30, HI + addi r30, r30, LO
+            for idx, ins in enumerate(insns):
+                if ins.id != PPC_INS_MFLR:
+                    continue
+                ops = ins.operands
+                if not ops or ins.reg_name(ops[0].reg).lower() != 'r30':
+                    continue
+                # bcl sets LR = bcl_addr + 4 = mflr_addr; so lr_val = mflr address.
+                lr_val = ins.address
+                # Find addis r30, r30, HI
+                if idx + 2 >= len(insns):
+                    break
+                ins_addis = insns[idx + 1]
+                ins_addi  = insns[idx + 2]
+                if ins_addis.id != PPC_INS_ADDIS:
+                    break
+                aops = ins_addis.operands
+                if len(aops) < 3:
+                    break
+                hi = aops[2].imm  # signed 16-bit
+                if ins_addi.id not in (PPC_INS_ADDI, PPC_INS_ADDIC):
+                    break
+                bops = ins_addi.operands
+                if len(bops) < 3:
+                    break
+                lo = bops[2].imm  # signed 16-bit
+                r30 = (lr_val + hi * 0x10000 + lo) & 0xFFFFFFFF
+                self._func_r30[fva] = r30
+                break
+
     def _build_got_offset_table(self) -> None:
         """
         Build _got_offset_to_name for GOT-indirect bctrl dispatch.
@@ -411,20 +605,32 @@ class PPC32TaintTracker:
             return self._ctx.name(va)
         return self._plt.get(va, f'0x{va:x}')
 
-    def _resolve_bctrl_name(self, prev2, prev1) -> str:
+    def _resolve_bctrl_name(self, prev2, prev1, func_r30: int = 0, prev3=None) -> str:
         """
-        Resolve a bctrl indirect call to a PLT name via GOT-offset lookup.
+        Resolve a bctrl indirect call to a PLT name.
+
+        Handles two ABI variants:
+        - Secure-PLT / single-GOT: uses _got_offset_to_name keyed by signed disp.
+        - GOT2 PIC (Huawei PPC32): uses _got2_va_to_name keyed by got2_va = r30 + disp.
 
         Expected pattern (2 instructions before bctrl):
           prev2: lwz  rX, N(rGOT)   -- GOT load; N is signed disp
           prev1: mtctr rX            -- load CTR from rX
+
+        GCC PPC32 ABI also emits `crclr cr1eq` (or other CR insns) between
+        mtctr and bctrl as a varargs indicator; when prev1 is such an insn,
+        fall back to prev3=lwz / prev2=mtctr.
 
         Returns empty string if pattern not recognized.
         """
         if prev2 is None or prev1 is None:
             return ''
         if prev1.id != PPC_INS_MTCTR:
-            return ''
+            # GCC PPC32 ABI: crclr inserted between mtctr and bctrl
+            if prev2.id == PPC_INS_MTCTR and prev3 is not None and prev3.id == PPC_INS_LWZ:
+                prev2, prev1 = prev3, prev2  # shift window to recover lwz+mtctr
+            else:
+                return ''
         if prev2.id != PPC_INS_LWZ:
             return ''
         ops = prev2.operands
@@ -433,6 +639,13 @@ class PPC32TaintTracker:
         if ops[1].type != PPC_OP_MEM:
             return ''
         disp = ops[1].mem.disp  # signed 16-bit displacement
+        # Try GOT2 per-CU resolver first when func_r30 is known
+        if func_r30 and self._got2_va_to_name:
+            got2_va = (func_r30 + disp) & 0xFFFFFFFF
+            name = self._got2_va_to_name.get(got2_va, '')
+            if name:
+                return name
+        # Fall back to single-GOT offset table
         return self._got_offset_to_name.get(disp, '')
 
     # ------------------------------------------------------------------
@@ -523,7 +736,9 @@ class PPC32TaintTracker:
             if ops[1].type == PPC_OP_MEM:
                 base = insn.reg_name(ops[1].mem.base).lower()
                 if tainted.get(base):
-                    set_t(dst, True)  # dereferencing tainted pointer
+                    set_t(dst, True)   # dereferencing tainted pointer
+                else:
+                    set_t(dst, False)  # load from untainted addr — overwrites dst, clears prior taint
                 # LWZU also updates the base reg: base = base + offset
                 if insn.id in (PPC_INS_LWZU, PPC_INS_LBZU,
                                 PPC_INS_LHZU, PPC_INS_LHAU) and len(ops) >= 2:
@@ -549,12 +764,14 @@ class PPC32TaintTracker:
 
         findings: List[TaintFindingPPC32] = []
         func_name = self._func_name(func_va)
+        func_r30 = self._func_r30.get(func_va, 0)
 
         try:
             all_insns = list(self._md.disasm(func_bytes, func_va))
         except Exception:
             return findings
 
+        prev3 = None
         prev2 = None
         prev1 = None
         for insn in all_insns:
@@ -566,8 +783,8 @@ class PPC32TaintTracker:
                 if insn.id in (PPC_INS_BL, PPC_INS_BLA) and ops:
                     if ops[0].type == PPC_OP_IMM:
                         target_name = self._plt.get(ops[0].imm, '')
-                elif insn.id == PPC_INS_BCTRL and self._got_offset_to_name:
-                    target_name = self._resolve_bctrl_name(prev2, prev1)
+                elif insn.id == PPC_INS_BCTRL and (self._got_offset_to_name or self._got2_va_to_name):
+                    target_name = self._resolve_bctrl_name(prev2, prev1, func_r30, prev3)
 
                 if target_name in _SOURCES:
                     tainted['r3'] = True
@@ -602,7 +819,7 @@ class PPC32TaintTracker:
             else:
                 self._exec_insn(insn, tainted)
 
-            prev2, prev1 = prev1, insn
+            prev3, prev2, prev1 = prev2, prev1, insn
 
         return findings
 
@@ -665,6 +882,7 @@ class PPC32TaintTracker:
             if not func_bytes or len(func_bytes) < 8:
                 continue
             try:
+                prev3 = None
                 prev2 = None
                 prev1 = None
                 for insn in self._md.disasm(func_bytes, fva):
@@ -675,12 +893,13 @@ class PPC32TaintTracker:
                             if name in _SOURCES:
                                 seed_funcs[fva] = name
                                 break
-                    elif insn.id == PPC_INS_BCTRL and self._got_offset_to_name:
-                        name = self._resolve_bctrl_name(prev2, prev1)
+                    elif insn.id == PPC_INS_BCTRL and (self._got_offset_to_name or self._got2_va_to_name):
+                        cur_r30 = self._func_r30.get(fva, 0)
+                        name = self._resolve_bctrl_name(prev2, prev1, cur_r30, prev3)
                         if name in _SOURCES:
                             seed_funcs[fva] = name
                             break
-                    prev2, prev1 = prev1, insn
+                    prev3, prev2, prev1 = prev2, prev1, insn
             except Exception:
                 continue
 
