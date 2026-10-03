@@ -463,19 +463,16 @@ class LA64MaxNotMinScanner:
     ) -> Optional[Tuple[int, str, str, str]]:
         """
         Walk up to LOOKAHEAD instructions from start_va. Track register rout.
-        Return (sink_va, sym, arg_label) if rout flows into a sink arg, else None.
+        Return (sink_va, sym, arg_label, fp_class) if rout flows into a sink arg, else None.
 
-        ELF mode:
-          - rout already in a sink arg position when bl fires
-          - or Rx, rout, $zero (move rout -> Rx)
-          - addi.d Rx, rout, 0  (zero-offset add = move; mask 0xffc003ff)
-
-        PE32+ mode (self._pe32plus):
-          - No PLT. Any BL or JIRL where a live register is in $a0-$a7 is
-            reported as sink_name="<direct>" or "<indirect>".
+        fp_class values:
+          ""            -- real finding (confirm)
+          "vec_growth"  -- ELIMINATED: memset sink + >=2 BLT/BGE/BLTU/BGEU guards in window
+          "copy_limit"  -- PLAUSIBLE_LOW: max-not-min result passes through mul.d before sink
         """
-        # current_reg tracks which register currently holds the max-not-min value
-        live: Set[int] = {rout}
+        live:               Set[int] = {rout}
+        guard_branch_count: int      = 0      # BLT/BGE/BLTU/BGEU seen in window
+        is_copy_limit:      bool     = False  # mul.d with live operand seen
 
         for i in range(self.LOOKAHEAD):
             va = start_va + i * 4
@@ -486,20 +483,25 @@ class LA64MaxNotMinScanner:
             # BL instruction
             if (word & _MASK_BL) == _MATCH_BL:
                 if self._pe32plus:
-                    # PE32+: no PLT — report if any live reg is an argument register
                     live_args = live & _ARG_REGS
                     if live_args:
                         arg_reg = min(live_args)
-                        return (va, "<direct>", self._reg_name(arg_reg), "")
+                        fp_class = "copy_limit" if is_copy_limit else ""
+                        return (va, "<direct>", self._reg_name(arg_reg), fp_class)
                 else:
-                    # ET_REL: plt is keyed by call-site file offset (= va in rel mode)
-                    # ET_DYN/EXEC: plt is keyed by PLT stub VA (= resolved BL target)
+                    # ET_REL: plt keyed by call-site file offset; ET_DYN/EXEC: PLT stub VA
                     target = va if self._is_rel else _bl_target(word, va)
                     sym = self._plt.get(target)
                     if sym and sym in _SINKS:
                         expected_reg, arg_label = _SINKS[sym]
                         if expected_reg in live:
-                            return (va, sym, arg_label, "")
+                            if sym in ("memset", "__memset") and guard_branch_count >= _VEC_GUARD_THRESHOLD:
+                                fp_class = "vec_growth"
+                            elif is_copy_limit:
+                                fp_class = "copy_limit"
+                            else:
+                                fp_class = ""
+                            return (va, sym, arg_label, fp_class)
                 # Calls to unknown functions clobber $a0-$a7; reset argument registers
                 live -= _ARG_REGS
                 continue
@@ -510,8 +512,23 @@ class LA64MaxNotMinScanner:
                     live_args = live & _ARG_REGS
                     if live_args:
                         arg_reg = min(live_args)
-                        return (va, "<indirect>", self._reg_name(arg_reg), "")
+                        fp_class = "copy_limit" if is_copy_limit else ""
+                        return (va, "<indirect>", self._reg_name(arg_reg), fp_class)
                 live -= _ARG_REGS
+                continue
+
+            top6 = word >> 26
+
+            # BLT/BGE/BLTU/BGEU: capacity-guard branches for Vec-growth detection
+            if top6 in _VEC_GUARD_TOP6:
+                guard_branch_count += 1
+                continue
+
+            # mul.d Rdst, Rj, Rk -- propagate taint through multiply; tag copy_limit
+            if (word & _MASK_3R) == _MATCH_MULD:
+                if _rj(word) in live or _rk(word) in live:
+                    live.add(_rd(word))
+                    is_copy_limit = True
                 continue
 
             # or Rdst, Rsrc, $zero  (register move)
@@ -521,24 +538,19 @@ class LA64MaxNotMinScanner:
                 continue
 
             # addi.d Rdst, Rsrc, 0  (zero-immediate add = move)
-            # addi.d: match=0x02c00000 mask=0xffc00000; bits[21:10] = si12; format r0:5,r5:5,si10:12
             if (word & 0xffc00000) == 0x02c00000:
                 si12 = (word >> 10) & 0xfff
                 if si12 == 0 and _rj(word) in live:
                     live.add(_rd(word))
                 continue
 
-            # Dead-register kill (Cifuentes §5.4.1): if this instruction
-            # defines bits[4:0] as a destination register, the or-result value
-            # is no longer live in that register.
-            # Stores (2RI12 and 3R indexed) use bits[4:0] as a SOURCE.
-            # Conditional branches use bits[4:0] as part of an immediate.
-            # Every other instruction class (ALU, loads, pcaddu*, etc.) writes rd.
+            # Dead-register kill (Cifuentes §5.4.1): if this instruction writes rd,
+            # the max-not-min value is no longer live in that register.
+            # Stores and conditional branches use bits[4:0] as source/immediate, not dest.
             rd = _rd(word)
             if rd != 0 and rd in live:
-                top6  = word >> 26
-                op22  = word >> 22
-                op15  = word >> 15
+                op22 = word >> 22
+                op15 = word >> 15
                 if top6 not in _BRANCH_TOP6 and op22 not in _STORE_OP22 and op15 not in _STOREX_OP15:
                     live.discard(rd)
 
@@ -568,10 +580,20 @@ class LA64MaxNotMinScanner:
     def report(self, findings: List[LA64MaxNotMinFinding]) -> str:
         if not findings:
             return "LA64 max-not-min scan: no sink-proximate patterns found."
-        lines = [
-            f"LA64 max-not-min scan: {len(findings)} finding(s)",
-            "=" * 72,
-        ]
+        real       = [f for f in findings if not f.fp_class]
+        copy_limit = [f for f in findings if f.fp_class == "copy_limit"]
+        vec_growth = [f for f in findings if f.fp_class == "vec_growth"]
+        summary = f"LA64 max-not-min scan: {len(findings)} finding(s)"
+        parts = []
+        if real:
+            parts.append(f"{len(real)} CONFIRM")
+        if copy_limit:
+            parts.append(f"{len(copy_limit)} COPY_LIMIT (PLAUSIBLE_LOW)")
+        if vec_growth:
+            parts.append(f"{len(vec_growth)} ELIMINATED (vec_growth)")
+        if parts:
+            summary += "  [" + ", ".join(parts) + "]"
+        lines = [summary, "=" * 72]
         for f in findings:
             lines.append(str(f))
         return "\n".join(lines)
