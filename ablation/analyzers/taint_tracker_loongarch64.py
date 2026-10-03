@@ -672,6 +672,45 @@ class LoongArch64TaintTracker:
         }
         return tt
 
+    @classmethod
+    def from_system_map(cls, elf_path: str, sysmap_path: str) -> "LoongArch64TaintTracker":
+        """
+        Like from_path but loads symbol names from a kernel System.map file.
+        Use for vmlinux analysis where the binary is stripped but System.map
+        provides the canonical VA->name mapping (62k+ functions on TencentOS 6.6.119).
+
+        System.map format per line: <hex_va> <type> <name>
+        Only T/t/W/w (text function / weak) entries are injected; data symbols
+        (D/d/R/r/B/b/A/a) are excluded since the tracker only resolves call targets.
+        System.map entries take precedence over stripped ELF symtab entries.
+
+        Usage:
+            tt = LoongArch64TaintTracker.from_system_map(
+                '/path/to/vmlinux', '/boot/System.map-6.6.119')
+            findings = tt.run_interprocedural()
+        """
+        data, base_va, text_start, text_end, syms, _ = _load_elf(elf_path)
+
+        sysmap_syms: Dict[int, str] = {}
+        try:
+            with open(sysmap_path) as fh:
+                for line in fh:
+                    parts = line.split()
+                    if len(parts) < 3:
+                        continue
+                    if parts[1] not in ("T", "t", "W", "w"):
+                        continue
+                    try:
+                        sysmap_syms[int(parts[0], 16)] = parts[2]
+                    except (ValueError, IndexError):
+                        continue
+        except OSError:
+            pass
+
+        # System.map takes precedence; ELF syms fill any gaps System.map lacks
+        merged: Dict[int, str] = {**syms, **sysmap_syms}
+        return cls(data, base_va, text_start, text_end, merged)
+
     # ---- frame cache -------------------------------------------------------
 
     def _ensure_frames(self) -> Dict[int, LoongArchFrame]:
