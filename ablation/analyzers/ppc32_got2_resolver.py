@@ -121,6 +121,8 @@ class PPC32GOT2Resolver:
         dynsym_size: Optional[int] = None,
         dynstr_va: Optional[int] = None,
         dynstr_size: Optional[int] = None,
+        got2_va: Optional[int] = None,
+        got2_size: Optional[int] = None,
     ):
         self._data = data
         self._text_va = text_va
@@ -133,6 +135,8 @@ class PPC32GOT2Resolver:
         self._dynsym_size = dynsym_size
         self._dynstr_va = dynstr_va
         self._dynstr_size = dynstr_size
+        self._got2_va = got2_va
+        self._got2_end = (got2_va + got2_size) if (got2_va is not None and got2_size is not None) else None
 
     @classmethod
     def from_path(cls, elf_path: str) -> "PPC32GOT2Resolver":
@@ -144,6 +148,7 @@ class PPC32GOT2Resolver:
         data_sec = elf.get_section(".data")
         dynsym = elf.get_section(".dynsym")
         dynstr = elf.get_section(".dynstr")
+        got2 = elf.get_section(".got2")
         return cls(
             data=data,
             text_va=text.virtual_address,
@@ -156,6 +161,8 @@ class PPC32GOT2Resolver:
             dynsym_size=dynsym.size if dynsym else None,
             dynstr_va=dynstr.virtual_address if dynstr else None,
             dynstr_size=dynstr.size if dynstr else None,
+            got2_va=got2.virtual_address if got2 else None,
+            got2_size=got2.size if got2 else None,
         )
 
     @classmethod
@@ -166,6 +173,7 @@ class PPC32GOT2Resolver:
         data_va: int, data_size: int, data_file_off: int,
         dynsym_va: Optional[int] = None, dynsym_size: Optional[int] = None,
         dynstr_va: Optional[int] = None, dynstr_size: Optional[int] = None,
+        got2_va: Optional[int] = None, got2_size: Optional[int] = None,
     ) -> "PPC32GOT2Resolver":
         """Construct with explicitly provided section layout (no lief dependency)."""
         return cls(
@@ -174,14 +182,29 @@ class PPC32GOT2Resolver:
             data_va=data_va, data_size=data_size, data_file_off=data_file_off,
             dynsym_va=dynsym_va, dynsym_size=dynsym_size,
             dynstr_va=dynstr_va, dynstr_size=dynstr_size,
+            got2_va=got2_va, got2_size=got2_size,
         )
 
-    def resolve(self) -> GOT2ResolveResult:
+    def resolve(
+        self,
+        fn_starts: Optional[List[int]] = None,
+    ) -> GOT2ResolveResult:
+        """
+        Resolve all BCTRL sites.
+
+        Args:
+            fn_starts: Optional sorted list of function entry VAs (e.g. from the
+                export table).  When provided, the per-function r30 floor check
+                is enabled: a BCL setup site that precedes the current function's
+                entry is rejected.  Without this, large functions that lack their
+                own BCL preamble (rare) could inherit the previous CU's r30 value.
+        """
         sym_map = self._load_symbol_names()
         setups = self._find_r30_setups()
         r30_lookup = sorted(setups.items())
         bctrl_list = self._find_bctrl_sources()
-        return self._resolve_all(bctrl_list, r30_lookup, sym_map)
+        fn_sorted = sorted(fn_starts) if fn_starts else None
+        return self._resolve_all(bctrl_list, r30_lookup, sym_map, fn_sorted)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -267,7 +290,12 @@ class PPC32GOT2Resolver:
             setups[bcl_va] = r30
         return setups
 
-    def _r30_at(self, lookup: List[Tuple[int, int]], va: int) -> Optional[Tuple[int, int]]:
+    def _r30_at(
+        self,
+        lookup: List[Tuple[int, int]],
+        va: int,
+        fn_va: Optional[int] = None,
+    ) -> Optional[Tuple[int, int]]:
         lo, hi = 0, len(lookup) - 1
         result = None
         while lo <= hi:
@@ -277,6 +305,8 @@ class PPC32GOT2Resolver:
                 lo = mid + 1
             else:
                 hi = mid - 1
+        if result is not None and fn_va is not None and result[0] < fn_va:
+            return None
         return result
 
     def _find_bctrl_sources(self) -> List[dict]:
@@ -363,11 +393,26 @@ class PPC32GOT2Resolver:
 
         return results
 
+    def _fn_va_for(self, bctrl_va: int, fn_sorted: Optional[List[int]]) -> Optional[int]:
+        """Binary search fn_sorted for the largest entry ≤ bctrl_va."""
+        if fn_sorted is None:
+            return None
+        lo, hi, result = 0, len(fn_sorted) - 1, None
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            if fn_sorted[mid] <= bctrl_va:
+                result = fn_sorted[mid]
+                lo = mid + 1
+            else:
+                hi = mid - 1
+        return result
+
     def _resolve_all(
         self,
         bctrl_list: List[dict],
         r30_lookup: List[Tuple[int, int]],
         sym_map: Dict[int, str],
+        fn_sorted: Optional[List[int]] = None,
     ) -> GOT2ResolveResult:
         result = GOT2ResolveResult()
         for b in bctrl_list:
@@ -395,7 +440,8 @@ class PPC32GOT2Resolver:
                     bctrl_va=va, reason="unknown_ctr_source"))
                 continue
 
-            setup = self._r30_at(r30_lookup, va)
+            fn_va = self._fn_va_for(va, fn_sorted)
+            setup = self._r30_at(r30_lookup, va, fn_va)
             if setup is None:
                 result.unresolved.append(GOT2UnresolvedCall(
                     bctrl_va=va, reason="no_r30_setup_precedes"))
@@ -404,6 +450,17 @@ class PPC32GOT2Resolver:
             bcl_va, r30 = setup
             disp = b["disp"]
             entry_va = (r30 + disp) & 0xffffffff
+
+            # Fix 2: reject entry_vas that fall outside .got2 (stale/wrong r30)
+            if (self._got2_va is not None
+                    and not (self._got2_va <= entry_va < self._got2_end)):
+                result.unresolved.append(GOT2UnresolvedCall(
+                    bctrl_va=va,
+                    reason=f"entry_va_outside_got2: r30={hex(r30)} disp={disp:#x} "
+                           f"entry={hex(entry_va)} got2=[{hex(self._got2_va)},{hex(self._got2_end)})",
+                ))
+                continue
+
             target = self._read32(entry_va)
 
             if target is None:
