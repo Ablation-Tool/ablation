@@ -2,6 +2,29 @@
 
 ---
 
+## v2.34.0
+
+- **PPC32TaintTracker: GOT2 PIC support for Huawei/embedded Linux** (`taint_tracker_ppc32.py`)
+  - **LIEF vendor-reloc bypass**: LIEF discards Huawei relocation type `0x40000054` and
+    maps `_plt` to `.plt section` VAs (wrong range). `_load_plt_from_dynsym_raw()` now runs
+    unconditionally, loading SHN_UNDEF dynamic symbols directly from raw ELF headers to get
+    the correct PLT stub VAs. SHN_UNDEF filter added to exclude internal symbols.
+  - **Per-function r30 map**: pre-computes GOT2 PIC base register for all 2241 functions.
+    Two bugs fixed: `lr_val` was `mflr_addr + 4` (off-by-4 from bcl mechanics); prologue
+    window was 32 bytes (8 instructions), extended to 64 bytes (16 instructions) to cover
+    prologues with `stmw`/`stw r30`/`stw r31` before the `bcl`.
+  - **677 GOT2 VA→name entries** populated for S6720EI bootloader (previously 0).
+  - **`crclr cr1eq` transparent handling**: GCC PPC32 emits this varargs indicator between
+    `mtctr` and `bctrl`. The 2-instruction look-back now uses `prev3` to recover the
+    `lwz+mtctr` pair when `prev1` is a CR instruction; raises resolved calls from 12/59
+    to 45/59 in test function.
+  - **LWZ stale-taint fix**: load from a non-tainted base register now explicitly clears
+    the destination's taint (was silently preserving prior taint, causing false positives
+    when a GOT2 pointer load followed a source call).
+  - **New sinks**: `execl`, `execle`, `execlp`, `strcpy_s`, `strcat_s`, `sprintf_s`,
+    `snprintf_s`, `memcpy_s` (Huawei secure-string variants, heavily used in Huawei boot ROM).
+  - **New doc**: `docs/module-reference/ppc32-taint-tracker.md`
+
 ## v2.33.0
 
 - **TencentOS kernel modules sweep: 14 findings across 1096 .ko files** (targets, not in repo)
