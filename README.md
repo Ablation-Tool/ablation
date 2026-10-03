@@ -29,6 +29,8 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 **Erlang / BEAM Analysis:** Safely scans Erlang bytecode to instantly highlight dangerous functions and hidden attack surfaces without running the application.
 
+**PPC32 Shared Library Import Analysis:** Finds every call site inside a PPC32 shared library that reaches a dangerous import without reporting false positives from unrelated code. A naive scan finds hundreds of apparent call sites because shared dispatch stubs route to different functions depending on which compilation unit calls them. By verifying the active base register at each individual call site, the tool confirmed 8 real callers across 7 Huawei CE6810 modules from an initial pool of 184 apparent hits.
+
 
 **Cryptographic Analysis**
 
