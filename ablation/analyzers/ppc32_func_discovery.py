@@ -20,7 +20,6 @@ Prologue patterns (big-endian):
 
 from typing import Set
 import struct
-import capstone
 import lief
 
 class PPC32FuncDiscovery:
@@ -30,8 +29,6 @@ class PPC32FuncDiscovery:
         self.data = data
         self.base_va = base_va
         self.entry_va = entry_va
-        self.md = capstone.Cs(capstone.CS_ARCH_PPC, capstone.CS_MODE_BIG_ENDIAN | capstone.CS_MODE_32)
-        self.md.detail = True
 
     @classmethod
     def from_path(cls, path: str) -> "PPC32FuncDiscovery":
@@ -95,9 +92,8 @@ class PPC32FuncDiscovery:
             if (opcode & 0xFC000003) == 0x48000001:
                 # Extract 24-bit signed target offset
                 target_offset = (opcode & 0x03FFFFFC)
-                if target_offset & 0x02000000:  # Sign extend
-                    target_offset |= 0xFC000000
-                    target_offset = struct.unpack('>i', struct.pack('>I', target_offset & 0xFFFFFFFF))[0]
+                if target_offset & 0x02000000:  # Sign extend 26-bit value
+                    target_offset -= 0x04000000
 
                 # Calculate absolute target
                 va = self.base_va + offset
@@ -124,27 +120,46 @@ class PPC32FuncDiscovery:
         STW_R0_PATTERN = 0x9001   # stw r0, <offset>(r1) - upper 16 bits
         STWU_R1_PATTERN = 0x9421  # stwu r1, -<frame>(r1) - upper 16 bits
 
-        for offset in range(0, len(self.data) - 11, 4):
-            # Pattern 1: mflr r0; stw r0, X(r1); stwu r1, -Y(r1)
-            if offset + 12 <= len(self.data):
-                insn1 = struct.unpack('>I', self.data[offset:offset+4])[0]
-                insn2 = struct.unpack('>I', self.data[offset+4:offset+8])[0]
-                insn3 = struct.unpack('>I', self.data[offset+8:offset+12])[0]
+        # Predecessor instructions that legitimately precede a function entry
+        _BOUNDARY_PREDECESSORS = (
+            0x4E800020,  # blr
+            0x4E800420,  # bctr
+            0x48000000,  # b  (unconditional branch, no link)
+        )
 
-                if (insn1 == MFLR_R0 and
+        for offset in range(0, len(self.data) - 11, 4):
+            insn1 = struct.unpack('>I', self.data[offset:offset+4])[0]
+
+            # Pattern 1: mflr r0; stw r0, X(r1); stwu r1, -Y(r1)
+            insn2 = struct.unpack('>I', self.data[offset+4:offset+8])[0]
+            insn3 = struct.unpack('>I', self.data[offset+8:offset+12])[0]
+
+            if (insn1 == MFLR_R0 and
                     (insn2 >> 16) == STW_R0_PATTERN and
                     (insn3 >> 16) == STWU_R1_PATTERN):
-                    prologue_vas.add(self.base_va + offset)
+                prologue_vas.add(self.base_va + offset)
+                continue
 
-            # Pattern 2: stwu r1, -<frame>(r1) alone (frameless or leaf)
-            insn = struct.unpack('>I', self.data[offset:offset+4])[0]
-            if (insn >> 16) == STWU_R1_PATTERN:
-                # Verify reasonable frame size (typically < 4096)
-                frame_size = (insn & 0xFFFF)
-                if frame_size & 0x8000:  # Negative (two's complement)
+            # Pattern 2: stwu r1, -<frame>(r1) — require a branch/return predecessor
+            # to avoid flagging stwu inside loop bodies or data regions.
+            if (insn1 >> 16) == STWU_R1_PATTERN:
+                frame_size = insn1 & 0xFFFF
+                if frame_size & 0x8000:  # Negative displacement only
                     frame_size = (~frame_size + 1) & 0xFFFF
                     if 16 <= frame_size <= 4096:
-                        prologue_vas.add(self.base_va + offset)
+                        if offset >= 4:
+                            prev = struct.unpack('>I', self.data[offset-4:offset])[0]
+                            prev_op6 = prev & 0xFC000000
+                            is_boundary = (
+                                prev in _BOUNDARY_PREDECESSORS
+                                or prev_op6 == 0x48000000  # any b/bl
+                                or (prev >> 16) == 0x4182   # beq
+                                or (prev >> 16) == 0x4082   # bne
+                            )
+                        else:
+                            is_boundary = True  # segment start is always a boundary
+                        if is_boundary:
+                            prologue_vas.add(self.base_va + offset)
 
         return prologue_vas
 
@@ -172,17 +187,8 @@ class PPC32FuncDiscovery:
 
 
 def discover_ppc32_functions(elf_path: str) -> Set[int]:
-    """
-    Convenience function to discover PPC32 functions from an ELF file.
-
-    Args:
-        elf_path: Path to PowerPC 32-bit ELF binary
-
-    Returns:
-        Set of function start VAs
-    """
-    disc = PPC32FuncDiscovery.from_path(elf_path)
-    return disc.discover()
+    """Convenience wrapper: parse ELF and return all discovered function VAs."""
+    return PPC32FuncDiscovery.from_path(elf_path).discover()
 
 
 if __name__ == "__main__":
@@ -191,6 +197,6 @@ if __name__ == "__main__":
         print("Usage: python3 ppc32_func_discovery.py <elf_file>")
         sys.exit(1)
 
-    func_starts = discover_ppc32_functions(sys.argv[1])
     disc = PPC32FuncDiscovery.from_path(sys.argv[1])
+    func_starts = disc.discover()
     print(disc.report(func_starts))
