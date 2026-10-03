@@ -60,6 +60,14 @@ _MASK_BL       = 0xfc000000   # bl offs26
 _MATCH_JIRL    = 0x4c000000
 _MASK_JIRL     = 0xfc000000
 
+_MATCH_MULD    = 0x001d8000   # mul.d Rd, Rj, Rk (3R format)
+
+# Comparison branches used as capacity guards in Rust Vec-growth: blt/bge/bltu/bgeu.
+# When >= 2 of these appear in the lookahead window before a memset sink the pattern
+# is Rust Vec-resize (intentional max(cap*2, len+needed) → memset), not an overflow.
+_VEC_GUARD_TOP6: frozenset = frozenset({0x18, 0x19, 0x1a, 0x1b})  # BLT BGE BLTU BGEU
+_VEC_GUARD_THRESHOLD = 2
+
 # ---------------------------------------------------------------------------
 # Dead-register kill tables (Cifuentes §5.4.1 liveness analysis).
 # LoongArch64 stores and conditional branches use bits[4:0] as a SOURCE
@@ -170,12 +178,16 @@ class LA64MaxNotMinFinding:
     sink_name:  str         # PLT symbol name
     sink_arg:   str         # argument label ("count", "size", etc.)
     context:    str = ""    # disassembly snippet
+    fp_class:   str = ""    # "": real finding; "vec_growth": ELIMINATED (Rust Vec-resize);
+                            # "copy_limit": PLAUSIBLE_LOW (max*elem_size via mul.d)
 
     def __str__(self) -> str:
+        tag = f"  [{self.fp_class.upper()}]" if self.fp_class else ""
         return (f"LA64_MAX_NOT_MIN  pattern@0x{self.pattern_va:x}"
                 f"  {self.result_name} -> {self.sink_name}({self.sink_arg})"
                 f"@0x{self.sink_va:x}"
-                + (f"  [{self.context}]" if self.context else ""))
+                + (f"  [{self.context}]" if self.context else "")
+                + tag)
 
 
 # ---------------------------------------------------------------------------
@@ -428,7 +440,7 @@ class LA64MaxNotMinScanner:
             # Found the MAX sequence. Now check the lookahead window for a sink.
             hit = self._check_lookahead(va + 16, rout)
             if hit:
-                sink_va, sink_name, sink_arg = hit
+                sink_va, sink_name, sink_arg, fp_class = hit
                 ctx = self._context_snippet(va)
                 findings.append(LA64MaxNotMinFinding(
                     func_va    = 0,  # not needed for triage; callers can fill in
@@ -439,6 +451,7 @@ class LA64MaxNotMinScanner:
                     sink_name  = sink_name,
                     sink_arg   = sink_arg,
                     context    = ctx,
+                    fp_class   = fp_class,
                 ))
 
             va += 4
@@ -447,7 +460,7 @@ class LA64MaxNotMinScanner:
 
     def _check_lookahead(
         self, start_va: int, rout: int
-    ) -> Optional[Tuple[int, str, str]]:
+    ) -> Optional[Tuple[int, str, str, str]]:
         """
         Walk up to LOOKAHEAD instructions from start_va. Track register rout.
         Return (sink_va, sym, arg_label) if rout flows into a sink arg, else None.
@@ -477,7 +490,7 @@ class LA64MaxNotMinScanner:
                     live_args = live & _ARG_REGS
                     if live_args:
                         arg_reg = min(live_args)
-                        return (va, "<direct>", self._reg_name(arg_reg))
+                        return (va, "<direct>", self._reg_name(arg_reg), "")
                 else:
                     # ET_REL: plt is keyed by call-site file offset (= va in rel mode)
                     # ET_DYN/EXEC: plt is keyed by PLT stub VA (= resolved BL target)
@@ -486,7 +499,7 @@ class LA64MaxNotMinScanner:
                     if sym and sym in _SINKS:
                         expected_reg, arg_label = _SINKS[sym]
                         if expected_reg in live:
-                            return (va, sym, arg_label)
+                            return (va, sym, arg_label, "")
                 # Calls to unknown functions clobber $a0-$a7; reset argument registers
                 live -= _ARG_REGS
                 continue
@@ -497,7 +510,7 @@ class LA64MaxNotMinScanner:
                     live_args = live & _ARG_REGS
                     if live_args:
                         arg_reg = min(live_args)
-                        return (va, "<indirect>", self._reg_name(arg_reg))
+                        return (va, "<indirect>", self._reg_name(arg_reg), "")
                 live -= _ARG_REGS
                 continue
 
