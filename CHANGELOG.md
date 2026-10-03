@@ -2,6 +2,26 @@
 
 ---
 
+## v2.37.0
+
+- **PPC32PLTTracer** (`ppc32_plt_tracer.py`): verified import caller finder
+  for PPC32 BE `.so` files.
+  - `PPC32PLTTracer.find_callers(sym)` returns only call sites whose active
+    r30 matches the `implied_r30 = plt_slot(sym) - thunk_disp` — eliminates
+    the cross-compilation-unit false positive class where shared thunk VAs
+    route to different PLT slots from different r30 contexts.
+  - `batch_scan(directory, sinks)` runs the verified scan over every ELF in
+    a directory; returns `{filename: {sym: [PLTCallSite]}}`.
+  - `batch_sweep(directory, sinks)` quick import-surface scan (no call-site
+    detail) — compatible with `SinkArgClassifier.batch_plt_intersect` results.
+  - `PPC32ELF` helper: thin lief + capstone wrapper with `disasm`,
+    `print_disasm`, `plt_slot`, `find_bl_callers` for workspace use.
+  - Validated against CE6810 sessions 28–31: 184 apparent dangerous call
+    sites across 7 modules reduced to 8 confirmed by r30 check; all four
+    SESSION_28/29 ground-truth entries confirmed exact match.
+
+---
+
 ## v2.36.0
 
 - **PPC32GOT2Resolver: three hardening improvements** (`ppc32_got2_resolver.py`)

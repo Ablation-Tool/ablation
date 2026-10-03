@@ -46,6 +46,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [Core Analyzers](module-reference/core.md) | BinaryContext, XRefGraph, CFGBuilder, TaintTracker, ARM64TaintTracker, PathSolver, CrossBinaryTaintTracker |
 | [PPC32 Taint Tracker](module-reference/ppc32-taint-tracker.md) | PPC32TaintTracker: GOT2 PIC (Huawei/embedded Linux), crclr ABI, per-function r30 map, Huawei secure-string sinks |
 | [PPC32 GOT2 Resolver](module-reference/ppc32-got2-resolver.md) | PPC32GOT2Resolver: resolve 15k+ indirect BCTRL calls in stripped GOT2-PIC binaries; 98.6% resolution on S6720EI bootload |
+| [PPC32 PLT Tracer](module-reference/ppc32-plt-tracer.md) | PPC32PLTTracer: verified import caller finder for PPC32 BE .so files; r30 cross-check eliminates cross-CU false positives; batch_scan + PPC32ELF helper |
 | [HiSilicon RV32 Extension](module-reference/hisi-rv32-ext.md) | HiSiliconRV32ExtDecoder: 6-opcode-space + uxtb/uxth decoder for HiSilicon riscv31 (WS63/Hi3863/BS21); ldmia/stmia (0x0b), uxtb/uxth (16-bit), l.li (0x1f 6-byte), muliadd/addshf/branches |
 | [Semantic Search](module-reference/semantic-search.md) | SemanticSearcher, CorpusBuilder, PatternLibrary |
 | [Vulnerability Scanners](module-reference/vuln-scanners.md) | FormatStringScanner, HeapVulnScanner (INT_OVERFLOW, UAF, double-free, off-by-one), SqlSinkScanner (mysql_query/sqlite3 injection), GoSubprocessScanner (Go os/exec injection; x86-64 full / arm64 call-site detection) |
