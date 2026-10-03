@@ -266,26 +266,91 @@ class PPC32GOT2Resolver:
         return va_to_name
 
     def _find_r30_setups(self) -> Dict[int, int]:
-        """Find all BCL/MFLR r30/ADDIS/ADDI setup sites. Returns {bcl_va: r30_base}."""
+        """Find BCL/MFLR r30/ADDIS/ADDI setup sites. Returns {bcl_va: r30_base}.
+
+        PPC32 PIC prologues establish r30 via a BCL/MFLR/ADDIS/ADDI sequence,
+        but the four instructions are not always contiguous.  Compilers interleave
+        frame spills (STW/STWU rX, d(r1)), argument saves, and other bookkeeping
+        between them.  This method scans a window of up to 16 instructions after
+        the BCL to locate MFLR r30, then up to 6 more to locate ADDIS, then up to
+        6 more to locate ADDI, skipping any non-conflicting interleaved instructions.
+
+        An instruction "conflicts" (and ends the scan) only if it would clobber
+        r30 before the ADDIS/ADDI pair is complete.
+        """
         setups: Dict[int, int] = {}
         data = self._data
         text_off = self._text_off
         text_len = self._text_end - self._text_va
-        for off in range(text_off, text_off + text_len - 16, 4):
+
+        def _clobbers_r30(instr: int) -> bool:
+            """True if instr writes to r30 (other than the MFLR/ADDIS/ADDI we want)."""
+            op = (instr >> 26) & 0x3f
+            rt = (instr >> 21) & 0x1f
+            if rt != 30:
+                return False
+            # Allow only: MFLR r30 (handled explicitly), ADDIS r30, ADDI r30
+            if instr == self._MFLR_R30:
+                return False
+            if op == 15 and ((instr >> 16) & 0x1f) == 30:  # ADDIS r30,r30,hi
+                return False
+            if op == 14 and ((instr >> 16) & 0x1f) == 30:  # ADDI r30,r30,lo
+                return False
+            return True
+
+        for off in range(text_off, text_off + text_len - 64, 4):
             if struct.unpack_from(">I", data, off)[0] != self._BCL_20_31:
                 continue
-            if struct.unpack_from(">I", data, off + 4)[0] != self._MFLR_R30:
+
+            # Step 1: find MFLR r30 within the next 16 instructions
+            mflr_off = None
+            for j in range(1, 17):
+                p = off + j * 4
+                w = struct.unpack_from(">I", data, p)[0]
+                if w == self._MFLR_R30:
+                    mflr_off = p
+                    break
+                if _clobbers_r30(w):
+                    break
+            if mflr_off is None:
                 continue
-            i2 = struct.unpack_from(">I", data, off + 8)[0]
-            i3 = struct.unpack_from(">I", data, off + 12)[0]
-            if ((i2 >> 26) & 0x3f) != 15 or ((i2 >> 21) & 0x1f) != 30 or ((i2 >> 16) & 0x1f) != 30:
+
+            # Step 2: find ADDIS r30, r30, hi within 6 instructions of MFLR
+            addis_off = None
+            addis_instr = None
+            for k in range(1, 7):
+                p = mflr_off + k * 4
+                w = struct.unpack_from(">I", data, p)[0]
+                if (((w >> 26) & 0x3f) == 15
+                        and ((w >> 21) & 0x1f) == 30
+                        and ((w >> 16) & 0x1f) == 30):
+                    addis_off = p
+                    addis_instr = w
+                    break
+                if _clobbers_r30(w):
+                    break
+            if addis_off is None:
                 continue
-            if ((i3 >> 26) & 0x3f) != 14 or ((i3 >> 21) & 0x1f) != 30 or ((i3 >> 16) & 0x1f) != 30:
+
+            # Step 3: find ADDI r30, r30, lo within 6 instructions of ADDIS
+            addi_instr = None
+            for m in range(1, 7):
+                p = addis_off + m * 4
+                w = struct.unpack_from(">I", data, p)[0]
+                if (((w >> 26) & 0x3f) == 14
+                        and ((w >> 21) & 0x1f) == 30
+                        and ((w >> 16) & 0x1f) == 30):
+                    addi_instr = w
+                    break
+                if _clobbers_r30(w):
+                    break
+            if addi_instr is None:
                 continue
+
             bcl_va = self._text_va + (off - text_off)
             lr_val = bcl_va + 4
-            hi = (i2 & 0xffff) << 16
-            lo = self._sign16(i3 & 0xffff)
+            hi = (addis_instr & 0xffff) << 16
+            lo = self._sign16(addi_instr & 0xffff)
             r30 = (lr_val + hi + lo) & 0xffffffff
             setups[bcl_va] = r30
         return setups
