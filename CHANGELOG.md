@@ -2,6 +2,25 @@
 
 ---
 
+## v2.36.0
+
+- **PPC32GOT2Resolver: two hardening fixes** (`ppc32_got2_resolver.py`)
+  - **Fix 1 — per-function r30 floor:** `resolve()` now accepts an optional
+    `fn_starts: List[int]` parameter (sorted function entry VAs, e.g. from the
+    ELF export table).  When provided, `_r30_at` rejects any BCL setup site
+    whose VA precedes the calling function's entry VA, preventing cross-CU r30
+    inheritance at function boundaries in stripped binaries.
+  - **Fix 2 — GOT2 range validation:** `__init__`, `from_path`, and
+    `from_sections` now accept optional `got2_va` / `got2_size` parameters.
+    `from_path` extracts `.got2` automatically via lief.  Any resolved
+    `entry_va = r30 + disp` that falls outside `[got2_va, got2_va + got2_size)`
+    is rejected with reason `entry_va_outside_got2` rather than silently reading
+    whatever happens to be at that address.
+  - Both fixes are backward-compatible: when parameters are absent, existing
+    behaviour is unchanged.
+
+---
+
 ## v2.35.0
 
 - **PPC32TaintTracker: multi-segment `_va_to_slice` fix** (`taint_tracker_ppc32.py`)
