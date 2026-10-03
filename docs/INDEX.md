@@ -45,6 +45,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 |---|---|
 | [Core Analyzers](module-reference/core.md) | BinaryContext, XRefGraph, CFGBuilder, TaintTracker, ARM64TaintTracker, PathSolver, CrossBinaryTaintTracker |
 | [PPC32 Taint Tracker](module-reference/ppc32-taint-tracker.md) | PPC32TaintTracker: GOT2 PIC (Huawei/embedded Linux), crclr ABI, per-function r30 map, Huawei secure-string sinks |
+| [PPC32 GOT2 Resolver](module-reference/ppc32-got2-resolver.md) | PPC32GOT2Resolver: resolve 15k+ indirect BCTRL calls in stripped GOT2-PIC binaries; 98.6% resolution on S6720EI bootload |
 | [HiSilicon RV32 Extension](module-reference/hisi-rv32-ext.md) | HiSiliconRV32ExtDecoder: 6-opcode-space + uxtb/uxth decoder for HiSilicon riscv31 (WS63/Hi3863/BS21); ldmia/stmia (0x0b), uxtb/uxth (16-bit), l.li (0x1f 6-byte), muliadd/addshf/branches |
 | [Semantic Search](module-reference/semantic-search.md) | SemanticSearcher, CorpusBuilder, PatternLibrary |
 | [Vulnerability Scanners](module-reference/vuln-scanners.md) | FormatStringScanner, HeapVulnScanner (INT_OVERFLOW, UAF, double-free, off-by-one), SqlSinkScanner (mysql_query/sqlite3 injection), GoSubprocessScanner (Go os/exec injection; x86-64 full / arm64 call-site detection) |
@@ -80,6 +81,7 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.35.0 | PPC32GOT2Resolver: resolve indirect BCTRL calls in GOT2-PIC stripped binaries; 15120/15339 (98.6%) on S6720EI bootload; handles LWZ/LWZU/LWZX/direct patterns; zero unknowns |
 | v2.34.0 | PPC32TaintTracker: GOT2 PIC support (Huawei/embedded Linux) — r30 map, crclr ABI fix, LIEF vendor-reloc bypass, LWZ stale-taint fix, 8 new sinks |
 | v2.15.0 | HashAlgoDiscriminator and CustomCBCDetector: ARM32 hash-algorithm identification and hand-rolled CBC detection from disassembly |
 | v2.14.3 | `BinaryContext` kernel-space VA fix: `_va_to_i64()` / `_va_arr_to_i64()` ctypes bit-cast helpers; 6 call sites fixed |
