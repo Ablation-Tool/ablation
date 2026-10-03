@@ -4,7 +4,7 @@
 
 ## v2.36.0
 
-- **PPC32GOT2Resolver: two hardening fixes** (`ppc32_got2_resolver.py`)
+- **PPC32GOT2Resolver: three hardening improvements** (`ppc32_got2_resolver.py`)
   - **Fix 1 — per-function r30 floor:** `resolve()` now accepts an optional
     `fn_starts: List[int]` parameter (sorted function entry VAs, e.g. from the
     ELF export table).  When provided, `_r30_at` rejects any BCL setup site
@@ -16,8 +16,13 @@
     `entry_va = r30 + disp` that falls outside `[got2_va, got2_va + got2_size)`
     is rejected with reason `entry_va_outside_got2` rather than silently reading
     whatever happens to be at that address.
-  - Both fixes are backward-compatible: when parameters are absent, existing
-    behaviour is unchanged.
+  - **Fix 3 — generalised r30 setup detection:** `_find_r30_setups` now uses a
+    sliding-window scan (up to 16 instructions for MFLR r30, up to 6 more for
+    ADDIS, up to 6 more for ADDI) instead of checking fixed offsets.  Handles a
+    third compiler-generated variant found in Huawei CE6810 e500mc modules where
+    up to 8 frame spills appear between BCL and MFLR r30.  `_is_stw_r1` helper
+    removed (superseded by the general `_clobbers_r30` check).
+  - All three fixes are backward-compatible.
 
 ---
 
