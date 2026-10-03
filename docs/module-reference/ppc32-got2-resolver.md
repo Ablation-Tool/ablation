@@ -42,9 +42,35 @@ resolver = PPC32GOT2Resolver.from_sections(
     data_va=0x1014b000, data_size=0x1ffa0, data_file_off=0x13b000,
     dynsym_va=0x10000564, dynsym_size=0x830,
     dynstr_va=0x10000d94, dynstr_size=0x505,
+    got2_va=0x1013b000,  got2_size=0x2000,   # enables Fix 2 range check
 )
 result = resolver.resolve()
 ```
+
+### Hardening options
+
+Two optional parameters improve precision in stripped binaries:
+
+**`fn_starts` (Fix 1 — per-function r30 floor):**
+
+Pass a sorted list of function entry VAs (e.g. from `lief.parse(p).exported_functions`).
+When provided, a BCL setup site that precedes the current function's entry VA is
+rejected instead of inherited.  Useful when a small leaf function has no BCL preamble
+of its own and sits immediately after a function from a different CU with a different r30.
+
+```python
+import lief
+elf = lief.parse(path)
+fn_starts = sorted(f.address for f in elf.exported_functions if f.address)
+result = resolver.resolve(fn_starts=fn_starts)
+```
+
+**`got2_va` / `got2_size` (Fix 2 — GOT2 range validation):**
+
+Supplied to `__init__` / `from_path` / `from_sections`.  When present, any computed
+`entry_va = r30 + disp` that falls outside `[got2_va, got2_va + got2_size)` is
+rejected with reason `entry_va_outside_got2`.  `from_path` extracts `.got2`
+automatically via lief.
 
 ---
 
