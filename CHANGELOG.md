@@ -2,6 +2,22 @@
 
 ---
 
+## v2.38.0
+
+- **pe_sweep.py** (`sweeps/pe_sweep.py`): Windows PE32 (i386) semantic vulnerability sweep.
+  - IAT extraction via lief PE parser as PLT equivalent (`_build_iat`).
+  - x86-32 prologue detection: MSVC `55 8B EC` and GCC `55 89 E5` patterns.
+  - Capstone `CS_MODE_32` function extraction with per-function string and call lists.
+  - `.rdata`-only string index (prevents noise from writable `.data` segment).
+  - Regex handles both `dword ptr [0xXXXX]` and `dword ptr ds:[0xXXXX]` IAT call forms.
+  - 8 Windows/QuickTime-specific vulnerability profiles: `qt_heap_atom_parse`,
+    `qt_rtsp_recv_overflow`, `qt_registry_plugin_load`, `qt_path_string_overflow`,
+    `win_cmd_exec`, `win_format_string`, `qt_codec_intovf`, `qt_com_stream_overflow`.
+  - CLI: single binary or directory scan; outputs `reports/sweep_pe_*.md`.
+  - Docs: `docs/module-reference/pe-sweep.md`.
+  - Validated on `PlugInHelper.exe` (Apple QuickTime, 2002): 23 functions, 94 IAT entries,
+    9 profiles hit above 0.30 including integer overflow and path string candidates.
+
 ## v2.37.0
 
 - **PPC32PLTTracer** (`ppc32_plt_tracer.py`): verified import caller finder
