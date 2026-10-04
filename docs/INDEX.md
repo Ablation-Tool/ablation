@@ -43,7 +43,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 
 | Document | Covers |
 |---|---|
-| [Core Analyzers](module-reference/core.md) | BinaryContext, XRefGraph, CFGBuilder, TaintTracker, ARM64TaintTracker, PathSolver, CrossBinaryTaintTracker |
+| [Core Analyzers](module-reference/core.md) | BinaryContext, XRefGraph, CFGBuilder, TaintTracker, ARM64TaintTracker, PathSolver, CrossBinaryTaintTracker; StaticELF32FuncStartScanner (x86_32 stripped static func_starts) |
 | [PPC32 Taint Tracker](module-reference/ppc32-taint-tracker.md) | PPC32TaintTracker: GOT2 PIC (Huawei/embedded Linux), crclr ABI, per-function r30 map, Huawei secure-string sinks |
 | [PPC32 GOT2 Resolver](module-reference/ppc32-got2-resolver.md) | PPC32GOT2Resolver: resolve 15k+ indirect BCTRL calls in stripped GOT2-PIC binaries; 98.6% resolution on S6720EI bootload |
 | [PPC32 PLT Tracer](module-reference/ppc32-plt-tracer.md) | PPC32PLTTracer: verified import caller finder for PPC32 BE .so files; r30 cross-check eliminates cross-CU false positives; batch_scan + PPC32ELF helper |
