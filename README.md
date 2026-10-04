@@ -25,9 +25,9 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 **Cryptographic Analysis:** Know the algorithm, the key, and the ciphertext.
 
-**Inter-Binary Taint Analysis:** Track propagation of untrusted, user-controlled data across multiple distinct compiled binaries and executables.
+**Inter-Binary Taint Analysis:** Traces attacker-controlled data across process and library boundaries by following it from network input through shared libraries into a vulnerable sink, even when the code lives in separate compiled binaries.
 
-**DAG Language Adapter:** Maps raw machine code bytes through a structured bitfield layer to semantic operations, using the RGB/hex packing formula as the bridge between them.
+**DAG Language Adapter:** Converts machine code into labeled graph nodes, so analysis works the same on any CPU.
 
 ---
 
