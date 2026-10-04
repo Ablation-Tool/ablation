@@ -27,7 +27,7 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 **Inter-Binary Taint Analysis:** Track propagation of untrusted, user-controlled data across multiple distinct compiled binaries and executables.
 
-**DAG Adapter Language:** Maps raw machine code bytes through a structured bitfield layer to semantic operations, using the RGB/hex packing formula as the bridge between them.
+**DAG Language Adapter:** Maps raw machine code bytes through a structured bitfield layer to semantic operations, using the RGB/hex packing formula as the bridge between them.
 
 ---
 
