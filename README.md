@@ -13,11 +13,11 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 ## Capabilities
 
+**Inter-Binary Taint Analysi:** Track propagation of untrusted, user-controlled data across multiple distinct compiled binaries and executables.
+
 **FORGE:** Ablation lets users build their own modules and add-ons. FORGE automatically audits that code before it gets stored, so every local module meets the same standard as the ones that ship with Ablation.
 
 **Semantic Search via BERT:** Cut through the heaviest bottleneck of reverse engineering to help you pinpoint vulnerabilities faster.
-
-**Cross Binary Data Flow Analysis:** Track propagation of untrusted, user-controlled data across multiple distinct compiled binaries and executables.
 
 **Extreme Performance:** Load massive binaries in seconds.
 
