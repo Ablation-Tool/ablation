@@ -438,13 +438,25 @@ class RegAnnotator:
 
     def _parse_elf(self) -> None:
         data = self._data
-        if len(data) < 64 or data[:4] != b'\x7fELF':
+        if len(data) < 52 or data[:4] != b'\x7fELF':
             return
 
-        e_shoff = _read_u64_le(data, 0x28)
-        e_shnum = struct.unpack_from('<H', data, 0x3c)[0]
-        e_shentsize = struct.unpack_from('<H', data, 0x3a)[0]
-        e_shstrndx = struct.unpack_from('<H', data, 0x3e)[0]
+        # Detect ELF class: byte at offset 4 (1=ELF32, 2=ELF64)
+        elf_class = data[4]
+        is_elf32 = (elf_class == 1)
+
+        if is_elf32:
+            # ELF32 header: e_shoff@0x20(4), e_shentsize@0x2e(2), e_shnum@0x30(2), e_shstrndx@0x32(2)
+            e_shoff = _read_u32_le(data, 0x20)
+            e_shentsize = struct.unpack_from('<H', data, 0x2e)[0]
+            e_shnum = struct.unpack_from('<H', data, 0x30)[0]
+            e_shstrndx = struct.unpack_from('<H', data, 0x32)[0]
+        else:
+            # ELF64 header
+            e_shoff = _read_u64_le(data, 0x28)
+            e_shentsize = struct.unpack_from('<H', data, 0x3a)[0]
+            e_shnum = struct.unpack_from('<H', data, 0x3c)[0]
+            e_shstrndx = struct.unpack_from('<H', data, 0x3e)[0]
 
         if e_shoff == 0 or e_shnum == 0:
             return
@@ -453,9 +465,24 @@ class RegAnnotator:
             off = e_shoff + i * e_shentsize
             return data[off:off + e_shentsize]
 
+        def _sh_addr(s: bytes) -> int:
+            return _read_u32_le(s, 0x0c) if is_elf32 else _read_u64_le(s, 0x10)
+
+        def _sh_offset(s: bytes) -> int:
+            return _read_u32_le(s, 0x10) if is_elf32 else _read_u64_le(s, 0x18)
+
+        def _sh_size(s: bytes) -> int:
+            return _read_u32_le(s, 0x14) if is_elf32 else _read_u64_le(s, 0x20)
+
+        def _sh_flags(s: bytes) -> int:
+            return _read_u32_le(s, 0x08) if is_elf32 else _read_u64_le(s, 0x08)
+
         # section names
+        min_sh_size = 40 if is_elf32 else 64
         strtab_sh = sh(e_shstrndx)
-        strtab_off = _read_u64_le(strtab_sh, 0x18)
+        if len(strtab_sh) < 20:
+            return
+        strtab_off = _sh_offset(strtab_sh)
 
         def sh_name(sh_data: bytes) -> str:
             name_off = _read_u32_le(sh_data, 0)
@@ -465,15 +492,15 @@ class RegAnnotator:
         sections: Dict[str, Tuple[int, int, int]] = {}  # name -> (file_off, va, size)
         for i in range(e_shnum):
             s = sh(i)
-            if len(s) < 64:
+            if len(s) < min_sh_size:
                 continue
             try:
                 name = sh_name(s)
             except (ValueError, UnicodeDecodeError):
                 continue
-            foff = _read_u64_le(s, 0x18)
-            va = _read_u64_le(s, 0x10)
-            size = _read_u64_le(s, 0x20)
+            foff = _sh_offset(s)
+            va = _sh_addr(s)
+            size = _sh_size(s)
             sections[name] = (foff, va, size)
 
         # .text (or first PROGBITS executable section)
@@ -487,11 +514,11 @@ class RegAnnotator:
             for i in range(e_shnum):
                 s = sh(i)
                 sh_type = _read_u32_le(s, 4)
-                sh_flags = _read_u64_le(s, 8)
-                if sh_type == 1 and (sh_flags & 4):  # SHT_PROGBITS + SHF_EXECINSTR
-                    self._text_off = _read_u64_le(s, 0x18)
-                    self._text_va = _read_u64_le(s, 0x10)
-                    self._text_size = _read_u64_le(s, 0x20)
+                flags = _sh_flags(s)
+                if sh_type == 1 and (flags & 4):  # SHT_PROGBITS + SHF_EXECINSTR
+                    self._text_off = _sh_offset(s)
+                    self._text_va = _sh_addr(s)
+                    self._text_size = _sh_size(s)
                     break
 
         # .rodata strings
@@ -500,7 +527,7 @@ class RegAnnotator:
             self._load_strings(foff, va, size)
 
         # PLT map via .rela.plt -> .dynsym
-        self._load_plt(sections)
+        self._load_plt(sections, is_elf32=is_elf32)
 
     def _load_strings(self, foff: int, va: int, size: int) -> None:
         data = self._data
@@ -515,21 +542,63 @@ class RegAnnotator:
                 self._strings[va + (i - foff)] = s
             i = max(j + 1, i + 1)
 
-    def _load_plt(self, sections: Dict[str, Tuple[int, int, int]]) -> None:
+    def _load_plt(self, sections: Dict[str, Tuple[int, int, int]], is_elf32: bool = False) -> None:
         data = self._data
 
-        # .dynsym
+        # .dynsym — ELF32 entries are 16 bytes, ELF64 are 24 bytes
         if '.dynsym' not in sections or '.dynstr' not in sections:
             return
         dynsym_off, _, dynsym_size = sections['.dynsym']
         dynstr_off, _, _ = sections['.dynstr']
+        sym_entry_size = 16 if is_elf32 else 24
 
         def sym_name(idx: int) -> str:
-            name_off = _read_u32_le(data, dynsym_off + idx * 24)
+            name_off = _read_u32_le(data, dynsym_off + idx * sym_entry_size)
             end = data.index(b'\x00', dynstr_off + name_off)
             return data[dynstr_off + name_off:end].decode('ascii', errors='ignore')
 
-        # .rela.plt
+        if is_elf32:
+            # ELF32: .rel.plt — 8-byte records: r_offset(4), r_info(4)
+            # R_386_JMP_SLOT = 7, R_386_GLOB_DAT = 6
+            for rel_name in ('.rel.plt', '.rel.dyn'):
+                if rel_name not in sections:
+                    continue
+                rel_off, _, rel_size = sections[rel_name]
+                n = rel_size // 8
+                for i in range(n):
+                    base = rel_off + i * 8
+                    r_offset = _read_u32_le(data, base)
+                    r_info = _read_u32_le(data, base + 4)
+                    sym_idx = r_info >> 8
+                    r_type = r_info & 0xff
+                    if r_type not in (7, 6):
+                        continue
+                    try:
+                        name = sym_name(sym_idx)
+                        if not name:
+                            continue
+                    except Exception:
+                        continue
+
+                    got_va = r_offset
+                    # i386 PLT stubs: ff 25 <abs_got_va 4 bytes>
+                    for plt_name in ('.plt',):
+                        if plt_name not in sections:
+                            continue
+                        pfoff, pva, psize = sections[plt_name]
+                        stub_data = data[pfoff:pfoff + psize]
+                        for s_off in range(16, psize, 16):  # skip PLT[0] trampoline
+                            if s_off + 16 > psize:
+                                break
+                            stub = stub_data[s_off:s_off + 16]
+                            if stub[:2] == b'\xff\x25':
+                                abs_addr = _read_u32_le(stub, 2)
+                                if abs_addr == got_va:
+                                    self._plt[pva + s_off] = name
+                                    break
+            return
+
+        # .rela.plt — ELF64 24-byte records
         for rela_name in ('.rela.plt', '.rela.dyn'):
             if rela_name not in sections:
                 continue

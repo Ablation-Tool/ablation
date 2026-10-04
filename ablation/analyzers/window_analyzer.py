@@ -43,7 +43,7 @@ _ENDBR64 = bytes([0xf3, 0x0f, 0x1e, 0xfa])
 
 
 def _elf_arch(data: bytes) -> str:
-    """Return 'x86_64', 'arm64', or 'arm32' from ELF header e_machine."""
+    """Return 'x86_64', 'x86_32', 'arm64', or 'arm32' from ELF header e_machine."""
     if len(data) < 20:
         return 'x86_64'
     if data[:4] != b'\x7fELF':
@@ -53,6 +53,8 @@ def _elf_arch(data: bytes) -> str:
         return 'arm64'
     if e_machine == 40:    # EM_ARM
         return 'arm32'
+    if e_machine == 3:     # EM_386
+        return 'x86_32'
     return 'x86_64'
 
 
@@ -119,7 +121,7 @@ class WindowAnalyzer:
         self._build_strings(binary)
 
     def _build_plt(self, binary) -> None:
-        # Map: GOT VA -> symbol name from .rela.plt
+        # Map: GOT VA -> symbol name from .rela.plt (ELF64) or .rel.plt (ELF32)
         got_to_sym: Dict[int, str] = {}
         try:
             rela_plt = binary.get_section(".rela.plt")
@@ -138,8 +140,31 @@ class WindowAnalyzer:
         except Exception:
             pass
 
+        # ELF32: .rel.plt uses 8-byte records (no addend): r_offset(4), r_info(4)
+        if self.arch == 'x86_32' and not got_to_sym:
+            try:
+                rel_plt = binary.get_section(".rel.plt")
+                if rel_plt:
+                    rel_data = bytes(rel_plt.content)
+                    for off in range(0, len(rel_data), 8):
+                        if off + 8 > len(rel_data):
+                            break
+                        r_offset, r_info = struct.unpack_from("<II", rel_data, off)
+                        sym_idx = r_info >> 8
+                        try:
+                            sym = binary.dynamic_symbols[sym_idx]
+                            got_to_sym[r_offset] = sym.name
+                        except (IndexError, Exception):
+                            pass
+            except Exception:
+                pass
+
         if self.arch == 'arm64':
             self._build_plt_arm64(binary, got_to_sym)
+            return
+
+        if self.arch == 'x86_32':
+            self._build_plt_x86_32(binary, got_to_sym)
             return
 
         # Walk .plt.sec: each entry = endbr64 (4) + jmp [rip+disp] (6) or similar
@@ -170,6 +195,30 @@ class WindowAnalyzer:
                         self.plt[stub_va] = got_to_sym[got_va]
                 elif chunk[start:start + 2] == b'\xff\xa3':  # jmp [rbx+disp] unlikely
                     pass
+
+    def _build_plt_x86_32(self, binary, got_to_sym: Dict[int, str]) -> None:
+        # i386 PLT: each stub is 16 bytes, first stub is PLT[0] trampoline (skip it).
+        # Stub n: ff 25 <abs_got_va 4 bytes> (JMP [abs_addr]) or push + jmp pattern.
+        for sec_name in (".plt",):
+            try:
+                sec = binary.get_section(sec_name)
+            except Exception:
+                sec = None
+            if not sec:
+                continue
+            sec_data = bytes(sec.content)
+            sec_va = sec.virtual_address
+            # PLT[0] is the lazy-bind trampoline (16 bytes); skip it
+            for off in range(16, len(sec_data), 16):
+                stub_va = sec_va + off
+                chunk = sec_data[off:off + 16]
+                if len(chunk) < 6:
+                    break
+                # JMP [abs_addr]: ff 25 xx xx xx xx
+                if chunk[:2] == b'\xff\x25':
+                    got_va = struct.unpack_from("<I", chunk, 2)[0]
+                    if got_va in got_to_sym:
+                        self.plt[stub_va] = got_to_sym[got_va]
 
     def _build_plt_arm64(self, binary, got_to_sym: Dict[int, str]) -> None:
         # ARM64 PLT stub: adrp x16, page / ldr x17, [x16, #off] / br x17 (12 bytes, padded to 16)
@@ -240,6 +289,8 @@ class WindowAnalyzer:
                 self._md = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_ARM)
             elif self.arch == 'arm64':
                 self._md = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
+            elif self.arch == 'x86_32':
+                self._md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
             else:
                 self._md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
             self._md.detail = False
