@@ -13,32 +13,17 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 ## Capabilities
 
-**Semantic Search via BERT:** Searches code by concept instead of exact words. By mapping the actual meaning of the text, it cuts through the heaviest bottleneck of reverse engineering to help you pinpoint vulnerabilities faster.
+**FORGE:** Ablation lets users build their own modules and add-ons. FORGE automatically audits that code before it gets stored, so every local module meets the same standard as the ones that ship with Ablation.
 
-**Extreme Performance:** Loads massive binaries in seconds rather than hours. By only analyzing the code you are actively looking at, it skips the heavy upfront processing of traditional tools so you can start reverse engineering immediately.
+**Semantic Search via BERT:** Cut through the heaviest bottleneck of reverse engineering to help you pinpoint vulnerabilities faster.
 
-**Version Diffing:** Analyzes the actual behavior of updated software to verify vendor patches. It cuts through superficial repackaging to confirm if a vulnerability was genuinely fixed or just hidden.
+**Cross Binary Data Flow Analysis:** Track propagation of untrusted, user-controlled data across multiple distinct compiled binaries and executables.
 
-**Cross Binary Data Flow Analysis:** Tracks propagation of untrusted, user-controlled data across multiple distinct compiled binaries and executables.
+**Extreme Performance:** Load massive binaries in seconds.
 
-**Source Code Audit:** Audit any large codebase faster than reading it linearly, with higher accuracy than pattern matching alone. Every source file gets a 5-bit security profile that determines exactly how much attention it needs, so nothing gets missed and nothing gets read twice.
+**Version Diffing:** Cut through superficial repackaging to confirm if a vulnerability was genuinely fixed or just hidden.
 
-**Windows Kernel Driver & BYOVD Analysis:** Scans kernel drivers for risky entry points to stop attackers from using vulnerable, signed drivers to bypass your security software.
-
-**Android / APK Analysis:** Maps out Android app attack surfaces without needing to decompile the code. It automatically scans and ranks internal libraries by security risk, allowing you to immediately target the most vulnerable components.
-
-**Erlang / BEAM Analysis:** Safely scans Erlang bytecode to instantly highlight dangerous functions and hidden attack surfaces without running the application.
-
-**PPC32 Shared Library Import Analysis:** Finds every call site in a PPC32 shared library that reaches a dangerous import, without false positives from shared dispatch stubs. Verifying the active base register at each site cut 184 apparent hits to 8 confirmed callers across 7 Huawei modules.
-
-**Windows PE32 Analysis:** Scans Windows executables and DLLs for vulnerabilities on Linux, using the Import Address Table for call resolution instead of ELF symbols. Applied to a QuickTime binary from 2002, it surfaced a CWE-190 integer overflow candidate on the first pass.
-
-
-**Cryptographic Analysis**
-
-Ablation strips away every layer that makes cryptography invisible in a compiled binary. Entropy Mapper locates the encrypted region. Crypto Audit and HashAlgoDiscriminator identify the algorithm. XorSolver, BmpKeyExtractor, and CustomCBCDetector break the encryption or recover the key. ELFVtableReconstructor and VtableDispatchScanner reconstruct what the runtime does with the result.
-
-A binary can hide its crypto from import-table analysis, from symbol tables, and from string search. These eight tools collectively close that gap, so by the end you know the algorithm, the key, and the ciphertext.
+**Cryptographic Analysis:** Know the algorithm, the key, and the ciphertext.
 
 ---
 
