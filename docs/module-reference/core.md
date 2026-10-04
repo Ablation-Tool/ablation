@@ -143,6 +143,40 @@ single broadcast. A `searchsorted` filter against `plt | func_starts` eliminates
 positives from `0xe8` bytes that appear inside other instruction operands. Owner assignment
 uses one batched `searchsorted` call rather than per-site binary search.
 
+### func_starts for stripped static ELF32 binaries
+
+ELF32 binaries that are both statically linked and stripped have no `.symtab` or `.dynsym`
+entries, so `_extract_func_starts` normally produces an empty list.  lief finds no function
+starts because it relies on symbol tables.  Without `func_starts`, SemanticSearcher and
+TaintTracker have no function boundaries and cannot run.
+
+`BinaryContext` automatically calls `StaticELF32FuncStartScanner` for `x86_32` binaries when
+`func_starts` would otherwise be empty.  The scanner scans every PT_LOAD+PF_X segment for the
+3-byte i386 function prologue pattern `55 89 e5` (`push ebp; mov ebp, esp`) — the canonical
+CDECL frame setup emitted by GCC for every non-leaf function.  Secondary patterns (`55 57 56`,
+`55 53`) are tried only when the primary count is under ten, indicating a non-CDECL binary.
+
+The scanner is also available standalone when you want to augment a context from outside:
+
+```python
+from ablation.analyzers.static_elf32_func_start_scanner import StaticELF32FuncStartScanner
+
+scanner = StaticELF32FuncStartScanner.from_path('/path/to/stripped.elf')
+result = scanner.scan_full()
+print(result.report())
+# StaticELF32FuncStartScanner: /path/to/stripped.elf
+#   executable segments scanned: 1
+#   patterns used: primary (55 89 e5)
+#   function starts found: 2684
+
+# Inject into an existing context (no-op if ctx.func_starts is already populated)
+scanner.inject(ctx)
+```
+
+False-positive rate on GCC i386 code is low.  The ModRM byte 0xe5 in `89 e5` encodes
+(mod=11, reg=ESP, rm=EBP) — a combination that occurs inside other instruction operands
+rarely enough to be negligible in practice.
+
 ---
 
 ## XRefGraph
