@@ -690,6 +690,16 @@ class BinaryContext:
                             pos = idx + 4
             except Exception:
                 pass
+        # x86_32: scan for i386 function prologues (push ebp; mov ebp, esp)
+        # when eh_frame and exports both produce zero starts (static stripped binaries).
+        if self.arch == 'x86_32' and not starts and path:
+            try:
+                from ablation.analyzers.static_elf32_func_start_scanner import StaticELF32FuncStartScanner
+                scanner = StaticELF32FuncStartScanner.from_path(path)
+                for va in scanner.scan():
+                    starts.add(va)
+            except Exception:
+                pass
         self.func_starts = sorted(starts)
         self.thumb_funcs = thumb
 
