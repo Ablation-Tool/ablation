@@ -128,6 +128,8 @@ from .abc_parser import (
 )
 from .abc_disasm import ARKDisasm, ARKInstruction
 from .abc_decompiler import ABCDecompiler
+# ── FORGE: module validation and local storage ────────────────────────────────
+from .forge import FORGE, ForgeReport, ForgeFinding
 
 __all__ = [
     "SemanticSearcher", "describe_function", "normalize_asm", "WhiteningTransform",
@@ -232,4 +234,6 @@ __all__ = [
     "MethodInfo", "CodeItem", "FieldInfo", "ClassInfo",
     "ARKDisasm", "ARKInstruction",
     "ABCDecompiler",
+    # ── FORGE ────────────────────────────────────────────────────────────────
+    "FORGE", "ForgeReport", "ForgeFinding",
 ]
