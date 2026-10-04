@@ -59,7 +59,7 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 | Provider | Models |
 |---|---|
 | **Claude Code** | /model claude-sonnet-4-6 |
-| **OpenAI Codex** | All known models |
+| **OpenAI Codex** | All models |
 
 ---
 
