@@ -115,7 +115,6 @@ from .engine_pattern_library import (
     ENGINES, CATEGORIES,
 )
 from .safecode import SAFECODE, SafecodeReport, SafecodeFinding
-from ablation.local_modules import LocalModuleStore
 from .lsb_stego_extractor import (
     LSBStegoReader, LagrangeKeyExtractor, BmpKeyExtractor,
     StegoKeyResult, CoordPair,
@@ -229,9 +228,8 @@ __all__ = [
     # ── Crypto pattern recognition (binary / disassembly) ───────────────────
     "HashAlgoDiscriminator", "HashAlgoMatch", "ConstMatch",
     "CustomCBCDetector", "CBCPattern",
-    # ── SAFECODE + Local Module Store ────────────────────────────────────────
+    # ── SAFECODE ─────────────────────────────────────────────────────────────
     "SAFECODE", "SafecodeReport", "SafecodeFinding",
-    "LocalModuleStore",
     # ── HarmonyOS / ArkTS ────────────────────────────────────────────────────
     "ABCParser", "ABCHeader", "ABCIndexHeader",
     "MethodInfo", "CodeItem", "FieldInfo", "ClassInfo",
