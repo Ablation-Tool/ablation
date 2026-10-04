@@ -42,8 +42,8 @@ tracer.elf.print_disasm(sites[0].bl_va - 8*4, n=15, mark=sites[0].bl_va)
 | Field | Type | Description |
 |---|---|---|
 | `bl_va` | `int` | VA of the `BL` instruction |
-| `thunk_va` | `int` | VA of the `LWZ+MTCTR+BCTR` thunk |
-| `caller_r30` | `int` | Active r30 at the call site (verified) |
+| `thunk_va` | `int` | GOT2-PIC: VA of the `LWZ+MTCTR+BCTR` thunk. BSS PLT: VA of the PLT stub. |
+| `caller_r30` | `int` | GOT2-PIC: active r30 at call site (verified). BSS PLT: always `0` (no r30 in use). |
 | `func_name` | `Optional[str]` | Nearest export name |
 
 ---
@@ -139,10 +139,39 @@ False positive reduction: libupdatelpu 9→2, libpythonvm 59→1 after r30 check
 
 ---
 
+## BSS PLT (SYSV PIC — IBM HPS, glibc .so files)
+
+SYSV ABI PPC32 `.so` files (glibc-linked, `ET_DYN`) use a different calling
+model: calls go directly via `BL stub_va` with no indirection through r30 or
+a GOT2 thunk.  The `.plt` section has no file content (it is allocated in BSS
+and written by the dynamic linker at load time).
+
+`find_callers()` detects this case via `_is_bss_plt()` and dispatches to
+`_find_callers_bss_plt()`:
+
+1. `bss_plt_stub_map()` correlates `.rela.plt` entry order with `BL` targets
+   in `.text` that land in the `.plt` VA range.
+2. Stub index 0 is identified as the smallest BL target T where T+8 is also
+   a BL target (stub size = 8 bytes, standard for glibc SYSV PPC32 BSS PLT).
+3. `resolver_size = first_stub_va - plt_va` is computed empirically.
+4. All callers of each stub are returned via `find_bl_callers()`.
+
+No r30 verification is performed — a direct `BL stub_va` unambiguously names
+the callee. The `bss_plt_stub_map()` result is cached per `PPC32PLTTracer`
+instance to avoid recomputing the `.text` scan on repeated `find_callers()`
+calls (e.g. inside `batch_scan()`).
+
+**Limitation**: if stub index 0 is never called from `.text`, resolver_size
+is overestimated and indices 0..(k-1) map to wrong VAs (where k is the lowest
+observed consecutive stub index). In practice, index 0 is a common libc symbol
+and is always called in firmware with many imports.
+
+---
+
 ## Assumptions and failure modes
 
 **r30 = GOT2 register.** Standard SysV ABI PPC32. Non-standard toolchains
-using r29 or another register will not match.
+using r29 or another register will not match (GOT2-PIC path only).
 
 **BCL preamble within 8 KB.** Scan window is 8 KB backward from each BL.
 Very large compilation units (unusual in firmware .so files) could exceed this.
