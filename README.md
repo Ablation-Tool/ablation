@@ -29,9 +29,9 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 **Erlang / BEAM Analysis:** Safely scans Erlang bytecode to instantly highlight dangerous functions and hidden attack surfaces without running the application.
 
-**PPC32 Shared Library Import Analysis:** Finds every call site inside a PPC32 shared library that reaches a dangerous import without reporting false positives from unrelated code. A naive scan finds hundreds of apparent call sites because shared dispatch stubs route to different functions depending on which compilation unit calls them. By verifying the active base register at each individual call site, the tool confirmed 8 real callers across 7 Huawei CE6810 modules from an initial pool of 184 apparent hits.
+**PPC32 Shared Library Import Analysis:** Finds every call site in a PPC32 shared library that reaches a dangerous import, without false positives from shared dispatch stubs. Verifying the active base register at each site cut 184 apparent hits to 8 confirmed callers across 7 Huawei modules.
 
-**Windows PE32 Analysis:** Scans Windows executables and DLLs for vulnerabilities on Linux, without a Windows machine or debugger. It reads the Windows Import Address Table to resolve function calls instead of the ELF symbol table, so the same semantic sweep that finds vulnerabilities in embedded firmware also works on legacy PE binaries. Applied to a QuickTime for Windows binary from 2002, it identified a CWE-190 integer overflow candidate that matched confirmed patterns from three prior engagements across separate vendors.
+**Windows PE32 Analysis:** Scans Windows executables and DLLs for vulnerabilities on Linux, using the Import Address Table for call resolution instead of ELF symbols. Applied to a QuickTime binary from 2002, it surfaced a CWE-190 integer overflow candidate on the first pass.
 
 
 **Cryptographic Analysis**
