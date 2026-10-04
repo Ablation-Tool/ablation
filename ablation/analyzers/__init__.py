@@ -114,6 +114,7 @@ from .engine_pattern_library import (
     EnginePatternLibrary, EngineSignature, EngineLabel,
     ENGINES, CATEGORIES,
 )
+from .safecode import SAFECODE, SafecodeReport, SafecodeFinding
 from .lsb_stego_extractor import (
     LSBStegoReader, LagrangeKeyExtractor, BmpKeyExtractor,
     StegoKeyResult, CoordPair,
@@ -227,6 +228,8 @@ __all__ = [
     # ── Crypto pattern recognition (binary / disassembly) ───────────────────
     "HashAlgoDiscriminator", "HashAlgoMatch", "ConstMatch",
     "CustomCBCDetector", "CBCPattern",
+    # ── SAFECODE ─────────────────────────────────────────────────────────────
+    "SAFECODE", "SafecodeReport", "SafecodeFinding",
     # ── HarmonyOS / ArkTS ────────────────────────────────────────────────────
     "ABCParser", "ABCHeader", "ABCIndexHeader",
     "MethodInfo", "CodeItem", "FieldInfo", "ClassInfo",
