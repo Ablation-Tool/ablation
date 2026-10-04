@@ -19,7 +19,7 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 **Version Diffing:** Analyzes the actual behavior of updated software to verify vendor patches. It cuts through superficial repackaging to confirm if a vulnerability was genuinely fixed or just hidden.
 
-**Cross-Binary Analysis:** Analyze every shared library in a firmware image simultaneously, tracking data flows across binary boundaries.
+**Cross Binary Data Flow Analysis:** Tracks propagation of untrusted, user-controlled data across multiple distinct compiled binaries and executables.
 
 **Source Code Audit:** Audit any large codebase faster than reading it linearly, with higher accuracy than pattern matching alone. Every source file gets a 5-bit security profile that determines exactly how much attention it needs, so nothing gets missed and nothing gets read twice.
 
