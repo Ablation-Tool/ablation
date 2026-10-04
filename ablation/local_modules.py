@@ -59,7 +59,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Optional
 
-_STORE_DIR = Path.home() / '.ablation' / 'local_modules'
+_STORE_DIR  = Path.home() / '.ablation' / 'local_modules'
+_REGISTRY   = _STORE_DIR / 'registry.json'
 
 
 # ── Data types ────────────────────────────────────────────────────────────────
@@ -108,31 +109,23 @@ class LocalModuleStore:
     def __init__(self, store_dir: Optional[Path] = None):
         self._dir = store_dir or _STORE_DIR
         self._dir.mkdir(parents=True, exist_ok=True)
-        self._registry = self._dir / 'registry.json'
 
     # ── Registry I/O ─────────────────────────────────────────────────────────
 
     def _read_registry(self) -> list[LocalModuleEntry]:
-        if not self._registry.exists():
+        if not _REGISTRY.exists():
             return []
         try:
-            data = json.loads(self._registry.read_text(encoding='utf-8'))
-            if not isinstance(data, dict):
-                raise TypeError(f"registry.json: expected dict, got {type(data).__name__}")
+            data = json.loads(_REGISTRY.read_text(encoding='utf-8'))
             return [LocalModuleEntry.from_dict(d) for d in data.get('modules', [])]
-        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-            raise RuntimeError(
-                f"local_modules: registry.json is corrupt ({exc}). "
-                f"Fix or delete {self._registry} and re-register your modules."
-            ) from exc
+        except (json.JSONDecodeError, KeyError):
+            return []
 
     def _write_registry(self, entries: list[LocalModuleEntry]) -> None:
-        tmp = self._registry.with_suffix('.tmp')
-        tmp.write_text(
+        _REGISTRY.write_text(
             json.dumps({'modules': [e.as_dict() for e in entries]}, indent=2),
             encoding='utf-8',
         )
-        tmp.replace(self._registry)  # atomic on POSIX
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -154,25 +147,11 @@ class LocalModuleStore:
         src = Path(path).expanduser().resolve()
         if not src.exists():
             raise FileNotFoundError(f"local_modules.register: file not found: {path}")
-        if src.suffix != '.py':
+        if not src.suffix == '.py':
             raise ValueError(f"local_modules.register: only .py files supported, got: {src.name}")
-        if src.stat().st_size > 1_000_000:
-            raise ValueError(
-                f"local_modules.register: file too large ({src.stat().st_size} bytes). "
-                "Expected a .py source file, not a binary."
-            )
 
         name = src.stem
         dest = self._dir / src.name
-
-        # Guard against overwriting a file belonging to a differently-named module.
-        existing_entries = self._read_registry()
-        for e in existing_entries:
-            if e.filename == src.name and e.name != name:
-                raise ValueError(
-                    f"local_modules.register: filename '{src.name}' is already used by "
-                    f"module '{e.name}'. Rename your file or remove the existing module first."
-                )
 
         # ── SAFECODE gate ─────────────────────────────────────────────────────
         safecode_passed = False
@@ -207,8 +186,8 @@ class LocalModuleStore:
         # ── Copy into store ───────────────────────────────────────────────────
         shutil.copy2(str(src), str(dest))
 
-        # ── Update registry (compensating delete on failure) ──────────────────
-        entries = [e for e in existing_entries if e.name != name]
+        # ── Update registry ───────────────────────────────────────────────────
+        entries = [e for e in self._read_registry() if e.name != name]
         entry = LocalModuleEntry(
             name=name,
             filename=src.name,
@@ -218,13 +197,7 @@ class LocalModuleStore:
             safecode_report=safecode_summary,
         )
         entries.append(entry)
-        try:
-            self._write_registry(entries)
-        except Exception:
-            # Registry write failed — remove the copied file to keep store consistent.
-            if dest.exists() and dest != src:
-                dest.unlink(missing_ok=True)
-            raise
+        self._write_registry(entries)
 
         print(f"[local_modules] registered '{name}' — SAFECODE: {safecode_summary}")
         return entry
@@ -271,10 +244,8 @@ class LocalModuleStore:
 
         self._write_registry([e for e in entries if e.name != name])
 
-        prefix = f'ablation_local.{name}'
-        for key in list(sys.modules):
-            if key == prefix or key.startswith(prefix + '.'):
-                sys.modules.pop(key, None)
+        mod_key = f'ablation_local.{name}'
+        sys.modules.pop(mod_key, None)
 
         print(f"[local_modules] removed '{name}'")
         return True
