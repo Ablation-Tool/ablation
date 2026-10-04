@@ -54,33 +54,6 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 | CVE-2026-76447 | Identity Services Engine (ISE) | OCSP Responder Authentication Bypass | 5.3 Medium | [cisco-sa-ise-multiauth-bypass-sgD2HbL4](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4) 
 
 
-## LLM Compatibility
-
-| Provider | Models |
-|---|---|
-| **Claude Code** | /model claude-sonnet-4-6 |
-| **OpenAI Codex** | All models |
-
----
-
-## Install
-
-```bash
-pip install git+https://github.com/Ablation-Tool/ablation
-```
-
----
-
-## Requirements
-
-- Python >= 3.10
-- `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
-
----
-
-## Responsible Use
-
-Ablation is built for authorized security research. Use it only against systems you own or have explicit written permission to test. Running it against systems without authorization violates computer fraud laws in most jurisdictions. The authors are not responsible for misuse.
 
 ---
 
@@ -236,3 +209,31 @@ flowchart TD
     class PI,CTRL,LIBS binary
     class RPM,EXTRACT input
 ```
+
+## LLM Compatibility
+
+| Provider | Models |
+|---|---|
+| **Claude Code** | /model claude-sonnet-4-6 |
+| **OpenAI Codex** | All models |
+
+---
+
+## Install
+
+```bash
+pip install git+https://github.com/Ablation-Tool/ablation
+```
+
+---
+
+## Requirements
+
+- Python >= 3.10
+- `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
+
+---
+
+## Responsible Use
+
+Ablation is built for authorized security research. Use it only against systems you own or have explicit written permission to test. Running it against systems without authorization violates computer fraud laws in most jurisdictions. The authors are not responsible for misuse.
