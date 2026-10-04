@@ -1,3 +1,11 @@
+from .encoding_dag import (
+    Field, Template, EncodingNode,
+    MemRef, SemanticOp, DataflowEdge, SemanticBlock,
+    FieldBinding, Binding, ISASpec,
+    ISA24,
+    rgb_to_bytes, bytes_to_rgb, rgb_int,
+    EncodingError, DecodingError,
+)
 from .semantic_search import SemanticSearcher, describe_function, normalize_asm, WhiteningTransform
 from .taint_tracker_arm32 import ARM32TaintTracker, TaintFinding32, TaintState32
 from .intoverflow_scanner_arm32 import ARM32IntOverflowScanner, IntOverflowFinding32
