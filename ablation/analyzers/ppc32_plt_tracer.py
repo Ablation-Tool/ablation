@@ -200,6 +200,84 @@ class PPC32ELF:
         return r30_values
 
 
+    def _is_bss_plt(self) -> bool:
+        """Return True if .plt has no file content (SYSV PIC BSS PLT, written at load time)."""
+        plt = self.section('.plt')
+        if plt is None:
+            return False
+        content = bytes(plt.content)
+        return len(content) == 0 or all(b == 0 for b in content)
+
+    def bss_plt_stub_map(self) -> Dict[int, str]:
+        """Return {stub_va: sym_name} for SYSV PIC BSS PLT binaries.
+
+        Correlates .rela.plt entry order with BL targets in .text that land in the
+        .plt VA range.  Requires at least two consecutive stubs to be called so that
+        stub index 0 (and therefore resolver_size = first_stub_va - plt_va) can be
+        determined.  Returns empty dict if this condition is not met.
+        """
+        rela_plt = self.section('.rela.plt')
+        if rela_plt is None:
+            return {}
+        rela_data = bytes(rela_plt.content)
+        index_to_sym: List[str] = []
+        dyn_syms = list(self.elf.dynamic_symbols)
+        for off in range(0, len(rela_data), 12):
+            if off + 12 > len(rela_data):
+                break
+            # Elf32_Rela big-endian: r_offset(4), r_info(4), r_addend(4)
+            _, r_info, _ = struct.unpack_from('>III', rela_data, off)
+            sym_idx = r_info >> 8
+            try:
+                sym = dyn_syms[sym_idx] if sym_idx < len(dyn_syms) else None
+                index_to_sym.append(sym.name if sym and sym.name else '')
+            except Exception:
+                index_to_sym.append('')
+        if not index_to_sym:
+            return {}
+
+        plt_sec = self.section('.plt')
+        if plt_sec is None:
+            return {}
+        plt_va = plt_sec.virtual_address
+        stub_size = 8
+        plt_est_end = plt_va + 512 + len(index_to_sym) * stub_size
+
+        text = self.section('.text')
+        if text is None:
+            return {}
+        bl_targets: Set[int] = set()
+        for i in range(0, text.size - 3, 4):
+            w = struct.unpack_from('>I', self.data, text.offset + i)[0]
+            if (w & 0xFC000003) != 0x48000001:  # BL
+                continue
+            li = (w >> 2) & 0xFFFFFF
+            if li >= 0x800000:
+                li -= 0x1000000
+            target_va = text.virtual_address + i + li * 4
+            if plt_va <= target_va < plt_est_end:
+                bl_targets.add(target_va)
+        if not bl_targets:
+            return {}
+
+        sorted_t = sorted(bl_targets)
+        target_set = set(sorted_t)
+        first_stub_va = None
+        for t in sorted_t:
+            if (t + stub_size) in target_set:
+                first_stub_va = t
+                break
+        if first_stub_va is None:
+            return {}
+
+        resolver_size = first_stub_va - plt_va
+        result: Dict[int, str] = {}
+        for idx, sym_name in enumerate(index_to_sym):
+            if sym_name:
+                result[plt_va + resolver_size + idx * stub_size] = sym_name
+        return result
+
+
 class PPC32PLTTracer:
     """
     Verified import caller finder for PPC32 BE .so files.
@@ -207,12 +285,17 @@ class PPC32PLTTracer:
     Identifies every BL instruction that calls a named imported symbol
     and verifies each caller's active r30 against the expected value for
     that PLT slot, eliminating cross-compilation-unit false positives.
+
+    For SYSV PIC BSS PLT binaries (IBM HPS, glibc .so files), dispatches to
+    a direct BL scan path: no thunk, no r30 verification needed.  PLTCallSite
+    fields for BSS PLT callers: thunk_va = stub_va, caller_r30 = 0.
     """
 
     def __init__(self, elf: PPC32ELF):
         self._elf = elf
         self._thunks: Optional[Dict[int, int]] = None
         self._valid_r30s: Optional[Set[int]] = None
+        self._bss_stub_map: Optional[Dict[int, str]] = None
 
     @classmethod
     def from_path(cls, path: str) -> 'PPC32PLTTracer':
@@ -289,10 +372,13 @@ class PPC32PLTTracer:
         """
         Return every BL site that definitively calls sym_name.
 
-        For each candidate thunk (LWZ+MTCTR+BCTR pattern with displacement d
-        matching plt_slot(sym_name) - d = implied_r30), enumerate all BL callers
-        and keep only those whose active r30 equals the implied_r30.
+        Dispatches to the SYSV BSS PLT path when .plt has no file content
+        (IBM HPS, glibc SYSV PIC .so files); otherwise uses the GOT2-PIC
+        thunk path with r30 cross-check (Huawei CE6810, VxWorks).
         """
+        if self._elf._is_bss_plt():
+            return self._find_callers_bss_plt(sym_name)
+
         slot_va = self._elf.plt_slot(sym_name)
         if slot_va is None:
             return []
@@ -312,6 +398,25 @@ class PPC32PLTTracer:
                     bl_va=bl_va,
                     thunk_va=thunk_va,
                     caller_r30=actual_r30,
+                    func_name=self._nearest_export(bl_va),
+                ))
+        return sorted(sites, key=lambda s: s.bl_va)
+
+    def _find_callers_bss_plt(self, sym_name: str) -> List[PLTCallSite]:
+        """BSS PLT path: direct BL to stub, no thunk, no r30 verification."""
+        if self._bss_stub_map is None:
+            self._bss_stub_map = self._elf.bss_plt_stub_map()
+        stub_map = self._bss_stub_map
+        target_stubs = {va for va, name in stub_map.items() if name == sym_name}
+        if not target_stubs:
+            return []
+        sites: List[PLTCallSite] = []
+        for stub_va in sorted(target_stubs):
+            for bl_va in self._elf.find_bl_callers(stub_va):
+                sites.append(PLTCallSite(
+                    bl_va=bl_va,
+                    thunk_va=stub_va,  # stub_va in place of thunk_va
+                    caller_r30=0,
                     func_name=self._nearest_export(bl_va),
                 ))
         return sorted(sites, key=lambda s: s.bl_va)

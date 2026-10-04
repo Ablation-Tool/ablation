@@ -69,12 +69,18 @@ GOT2 entries that point to PLT stubs are indexed in `_got2_va_to_name`. At each
 
 Huawei bootloaders use vendor-specific ELF relocation type `0x40000054`, which
 LIEF reports as invalid and discards. This causes LIEF to return 0 JUMP_SLOT
-relocations and map `_plt` to `.plt section` VAs (`0x10150e6c`+) instead of the
-actual PLT stub VAs (`0x1011f`+) that appear as values inside `.got2`.
+relocations.
 
-The tracker bypasses this by always running `_load_plt_from_dynsym_raw()` to
-load SHN_UNDEF dynamic symbols with non-zero `st_value` directly from the raw
-ELF section headers. These are the true PLT stub VAs.
+The tracker calls `_load_plt_from_dynsym_raw()` to load SHN_UNDEF dynamic
+symbols with non-zero `st_value` directly from the raw ELF section headers.
+These are the true PLT stub VAs.  This fallback runs **only when LIEF populated
+zero PLT entries** (`if not self._plt:`), which is always the case for Huawei
+binaries with the vendor reloc type.
+
+On SYSV PIC binaries (IBM HPS, glibc `.so`), LIEF correctly populates `_plt`
+from `.rela.plt` R_PPC_JMP_SLOT entries.  The guard prevents
+`_load_plt_from_dynsym_raw()` from running on these binaries — undefined
+symbols in SYSV PIC have `st_value=0` and adding them would corrupt the PLT map.
 
 ### GCC `crclr cr1eq` between mtctr and bctrl
 
@@ -160,6 +166,8 @@ treated as clobbering r3–r10.
    in `_got2_va_to_name`. GOT2 entries pointing to internal function pointers or
    data constants appear as `??` and clobber r3.
 
-3. **LIEF relocation bug**: LIEF silently discards relocations with vendor-specific
-   types. `_load_plt_from_dynsym_raw()` works around this for PPC32 Linux ABI
-   binaries but requires a `.dynsym` section.
+3. **LIEF relocation bug (Huawei-specific)**: LIEF silently discards relocations
+   with vendor-specific types. `_load_plt_from_dynsym_raw()` works around this
+   for Huawei GOT2-PIC binaries (triggered by `if not self._plt:` guard).
+   SYSV PIC binaries (glibc `.so`) are not affected — LIEF handles their
+   standard R_PPC_JMP_SLOT relocations correctly.
