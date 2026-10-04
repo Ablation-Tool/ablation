@@ -37,6 +37,7 @@ ablation-search = "ablation.analyzers.finding_registry:_cli"
 ablation-taint = "ablation.analyzers.taint_tracker_x86:_cli"
 ablation-cfg = "ablation.analyzers.cfg_builder:_cli"
 ablation-sigs = "ablation.analyzers.sig_library:_cli"
+ablation-local = "ablation.local_modules:_cli"
 
 [tool.setuptools.packages.find]
 include = ["ablation*", "sweeps*", "modules*"]
