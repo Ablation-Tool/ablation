@@ -180,8 +180,11 @@ def _semantic_sweep(
 
     funcs = extract_functions(binary_path, xref=xref)
 
-    # Fallback: use eh_frame func_starts from XRefGraph when prologue scan is empty
-    if not funcs and xref is not None and xref._func_starts:
+    # Fallback: use eh_frame func_starts from XRefGraph when prologue scan coverage is low.
+    # Condition: xref has > 2x more functions than prologue scan found.
+    # Fortinet firmware is typically compiled with -fomit-frame-pointer, so push-rbp
+    # prologues are rare — the XRefGraph eh_frame coverage is authoritative.
+    if xref is not None and xref._func_starts and len(xref._func_starts) > 2 * max(len(funcs), 1):
         print(f"  [~] Prologue scan empty; using {len(xref._func_starts)} eh_frame func_starts")
         with open(binary_path, "rb") as f:
             data = f.read()
@@ -378,7 +381,8 @@ def _classify_sinks_x86(binary_path: str, vendor_profile) -> str:
 
     try:
         san = SanitizerDetector(binary_path)
-        san_report = san.report() if hasattr(san, "report") else str(san.detect())
+        san_profiles = san.detect()
+        san_report = san.report(san_profiles)
         lines.append("\n### SanitizerDetector\n")
         lines.append(san_report)
     except Exception as e:
