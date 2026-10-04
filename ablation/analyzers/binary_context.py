@@ -928,10 +928,14 @@ class BinaryContext:
         """Build string xref index.
 
         x86_64/arm64: vectorized RIP/PC-relative displacement scan.
+        x86_32 (i386): vectorized absolute 4-byte LE immediate scan.
         arm32: capstone LDR [PC, #off] literal pool scan per function.
         """
         if self.arch == 'arm32':
             self._build_string_xref_index_arm32(data, binary)
+            return
+        if self.arch == 'x86_32':
+            self._build_string_xref_index_x86_32()
             return
         if not _NUMPY_OK:
             return
@@ -991,6 +995,12 @@ class BinaryContext:
         # Deduplicate per-func string lists
         self._str_xref_idx = str_xref
         self._func_str_idx = {k: list(dict.fromkeys(v)) for k, v in func_str.items()}
+
+    def _build_string_xref_index_x86_32(self) -> None:
+        """i386 absolute-address string xref via I386AbsoluteXrefScanner."""
+        from ablation.analyzers.i386_absolute_xref_scanner import I386AbsoluteXrefScanner
+        scanner = I386AbsoluteXrefScanner(self.path, ctx=self)
+        scanner.inject(self)
 
     def _build_string_xref_index_arm32(self, data: bytes, binary) -> None:
         """ARM32 string xref via LDR Rd, [PC, #off] literal pool scan.

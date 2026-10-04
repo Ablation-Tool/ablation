@@ -2,6 +2,22 @@
 
 ---
 
+## v2.39.0
+
+- **I386AbsoluteXrefScanner** (`ablation/analyzers/i386_absolute_xref_scanner.py`): i386
+  absolute-address string xref scanner for ELF32 binaries.
+  - x86-32 encodes data references as 4-byte LE absolute immediates; the existing RIP-relative
+    scanner produces near-zero results on i386 (21 pairs on a 675KB binary vs 548 correct).
+  - Same numpy stride-trick window scan as the x86-64 scanner; target VA = raw u32 value
+    (no displacement arithmetic).
+  - `from_path(path)` / `from_context(ctx)` construction; `scan_full()` → `XrefResult`;
+    `inject(ctx)` populates `ctx._str_xref_idx` and `ctx._func_str_idx` in-place.
+  - `BinaryContext._build_string_xref_index` now dispatches to this scanner for `x86_32` arch.
+  - Pure-Python fallback when NumPy is unavailable.
+  - ELF32 only (PE32 excluded — too many false positives from vtable/jump-table entries).
+  - Validated on wsconv (AlphaSmart Dana): 934 string VAs, 548 xref pairs, 153 unique functions.
+  - Docs: `docs/module-reference/core.md` (new I386AbsoluteXrefScanner section).
+
 ## v2.38.0
 
 - **pe_sweep.py** (`sweeps/pe_sweep.py`): Windows PE32 (i386) semantic vulnerability sweep.
