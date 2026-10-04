@@ -50,6 +50,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [HiSilicon RV32 Extension](module-reference/hisi-rv32-ext.md) | HiSiliconRV32ExtDecoder: 6-opcode-space + uxtb/uxth decoder for HiSilicon riscv31 (WS63/Hi3863/BS21); ldmia/stmia (0x0b), uxtb/uxth (16-bit), l.li (0x1f 6-byte), muliadd/addshf/branches |
 | [Semantic Search](module-reference/semantic-search.md) | SemanticSearcher, CorpusBuilder, PatternLibrary |
 | [Vulnerability Scanners](module-reference/vuln-scanners.md) | FormatStringScanner, HeapVulnScanner (INT_OVERFLOW, UAF, double-free, off-by-one), SqlSinkScanner (mysql_query/sqlite3 injection), GoSubprocessScanner (Go os/exec injection; x86-64 full / arm64 call-site detection) |
+| [PE32 Sweep](module-reference/pe-sweep.md) | pe_sweep.py: Windows PE32 (i386) semantic vulnerability sweep; IAT call resolution; QuickTime/Win32 profiles |
 | [Windows Kernel Drivers](module-reference/kernel-drivers.md) | KernelDriverAnalyzer, ByovdDetector: IOCTL surface, 8 capability classes |
 | [Erlang / BEAM](module-reference/beam.md) | BeamContext: exports, imports, atoms, literals, dangerous import sweep |
 | [Signature Matching](module-reference/sig-library.md) | SigLibrary, auto-naming fn_0x* functions |
