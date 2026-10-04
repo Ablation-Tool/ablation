@@ -2,6 +2,27 @@
 
 ---
 
+## v2.40.0
+
+- **CMDBSurfaceMapper** (`ablation/analyzers/cmdb_surface_mapper.py`): forward-taint
+  CMDB attack surface mapper for x86-64 FortiWeb/FortiOS binaries.
+  - Phase 0.5 of the Fortinet RE methodology: enumerate `cmf_query_create()` call sites,
+    extract table_id from rdi (supports `mov edi/rdi, imm` and `xor edi, edi`),
+    then flag functions that co-locate CMDB access and exec-sink calls.
+  - Correct VA→file-offset mapping via lief section table; validates x86-64 `e_machine`
+    at entry; fails fast on non-CMDB binaries (cmf_query_create absent from PLT).
+  - Single-pass disassembly per function (create + field reads + exec sinks collected
+    simultaneously); window bounded by next function start, capped at 8192 bytes.
+  - `from_path(elf, extra_sinks=, extra_tables=, verbose=)` and
+    `from_context(ctx)` constructors.
+  - Report explicitly marks all exec-reach flags as co-location only; directs analyst
+    to SinkArgClassifier + TaintTracker for confirmed data-flow verification.
+  - 19 unit + integration tests; integration baseline: cmdbsvr 7.4.3 → 19 tables,
+    libcmdb_plugin.so 7.4.3 → exec-reach present (FWB-KRB-1 origin signal).
+  - Origin: FWB-KRB-1 CONFIRMED (FortiWeb 7.4.3, CVSS 7.2) — backward TaintTracker
+    missed this because the CMDB abstraction blocked the trace; forward mapper found
+    the exec-reach table in the first run.
+
 ## v2.39.0
 
 - **I386AbsoluteXrefScanner** (`ablation/analyzers/i386_absolute_xref_scanner.py`): i386
