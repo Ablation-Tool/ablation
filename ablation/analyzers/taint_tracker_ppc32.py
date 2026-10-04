@@ -279,13 +279,16 @@ class PPC32TaintTracker:
             self._fill_text_from_pyelf()
         elif not _HAS_LIEF and _HAS_PYELF:
             self._load_pyelf()
-        # Always supplement _plt with raw dynsym SHN_UNDEF stub VAs.
-        # LIEF on Huawei PPC32 (vendor reloc type 0x40000054) maps _plt to the
-        # .plt section VAs (0x10150e6c...) instead of the actual PLT stub VAs
-        # (0x1011f...) that appear as values inside .got2.  Running this
-        # unconditionally adds the correct SHN_UNDEF entries alongside any LIEF
-        # entries; the GOT2 scanner matches against stub VAs, not .plt VAs.
-        self._load_plt_from_dynsym_raw()
+        # Supplement _plt with raw dynsym SHN_UNDEF stub VAs only when LIEF found
+        # zero PLT entries.  On Huawei PPC32 (vendor reloc type 0x40000054) LIEF
+        # discards all JUMP_SLOT relocations, so _plt is empty after _load_lief()
+        # and dynsym st_value entries carry the actual PLT stub VAs.
+        # On SYSV PIC binaries (BSS PLT) LIEF correctly populates _plt from
+        # .rela.plt R_PPC_JMP_SLOT entries — calling _load_plt_from_dynsym_raw()
+        # unconditionally on those would add st_value=0 undefined-symbol entries
+        # and corrupt the GOT-slot-VA keyed _plt map.
+        if not self._plt:
+            self._load_plt_from_dynsym_raw()
         # Build complete VA→file-offset segment table from raw program headers.
         # Must run before _build_got2_resolver which uses _va_to_slice.
         self._load_segments_raw()

@@ -43,18 +43,24 @@ _ENDBR64 = bytes([0xf3, 0x0f, 0x1e, 0xfa])
 
 
 def _elf_arch(data: bytes) -> str:
-    """Return 'x86_64', 'x86_32', 'arm64', or 'arm32' from ELF header e_machine."""
+    """Return arch string from ELF e_machine, respecting EI_DATA byte order."""
     if len(data) < 20:
         return 'x86_64'
     if data[:4] != b'\x7fELF':
         return 'x86_64'
-    e_machine = struct.unpack_from('<H', data, 18)[0]
+    ei_data = data[5]  # ELFDATA2LSB=1, ELFDATA2MSB=2
+    bo = '>' if ei_data == 2 else '<'
+    e_machine = struct.unpack_from(bo + 'H', data, 18)[0]
     if e_machine == 183:   # EM_AARCH64
         return 'arm64'
     if e_machine == 40:    # EM_ARM
         return 'arm32'
     if e_machine == 3:     # EM_386
         return 'x86_32'
+    if e_machine == 20:    # EM_PPC
+        return 'ppc32'
+    if e_machine == 21:    # EM_PPC64
+        return 'ppc64'
     return 'x86_64'
 
 
@@ -121,6 +127,9 @@ class WindowAnalyzer:
         self._build_strings(binary)
 
     def _build_plt(self, binary) -> None:
+        if self.arch in ('ppc32', 'ppc64'):
+            self._build_plt_ppc32_bss(binary)
+            return
         # Map: GOT VA -> symbol name from .rela.plt (ELF64) or .rel.plt (ELF32)
         got_to_sym: Dict[int, str] = {}
         try:
@@ -262,6 +271,96 @@ class WindowAnalyzer:
             if got_slot_va in got_to_sym:
                 self.plt[stub_va] = got_to_sym[got_slot_va]
 
+    def _build_plt_ppc32_bss(self, binary) -> None:
+        """BSS PLT for PPC32/PPC64 SYSV ABI.
+
+        Stubs are written at load time by glibc, not stored in the ELF file.
+        Recover stub_va → symbol by correlating .rela.plt entry order with BL
+        targets in .text that land in the .plt VA range.  Stub size is always
+        8 bytes (2 words) for the glibc SYSV PPC32 BSS PLT; resolver_size is
+        inferred as (first_observed_consecutive_stub_va - plt_va).  The algorithm
+        is correct when stub index 0 is called from .text (the common case in
+        firmware with many imports).
+        """
+        bo = '>' if (len(self.data) > 5 and self.data[5] == 2) else '<'
+
+        # 1. Build index → sym_name from .rela.plt (Elf32_Rela: r_offset, r_info, r_addend)
+        index_to_sym: List[str] = []
+        try:
+            rela_plt = binary.get_section('.rela.plt')
+            if rela_plt is None:
+                return
+            rela_data = bytes(rela_plt.content)
+            dyn_syms = list(binary.dynamic_symbols)
+            for off in range(0, len(rela_data), 12):
+                if off + 12 > len(rela_data):
+                    break
+                _, r_info, _ = struct.unpack_from(bo + 'III', rela_data, off)
+                sym_idx = r_info >> 8
+                try:
+                    sym = dyn_syms[sym_idx] if sym_idx < len(dyn_syms) else None
+                    index_to_sym.append(sym.name if sym and sym.name else '')
+                except Exception:
+                    index_to_sym.append('')
+        except Exception:
+            return
+        if not index_to_sym:
+            return
+
+        # 2. Get .plt section VA (BSS — no file content)
+        try:
+            plt_sec = binary.get_section('.plt')
+        except Exception:
+            return
+        if plt_sec is None:
+            return
+        plt_va = plt_sec.virtual_address
+        stub_size = 8
+        plt_est_end = plt_va + 512 + len(index_to_sym) * stub_size
+
+        # 3. Scan .text for BL targets in [plt_va, plt_est_end)
+        try:
+            text_sec = binary.get_section('.text')
+        except Exception:
+            return
+        if text_sec is None:
+            return
+        text_data = bytes(text_sec.content)
+        if not text_data:
+            return
+        text_va = text_sec.virtual_address
+        bl_targets: set = set()
+        for i in range(0, len(text_data) - 3, 4):
+            w = struct.unpack_from(bo + 'I', text_data, i)[0]
+            if (w & 0xFC000003) != 0x48000001:  # BL (opcode 18, AA=0, LK=1)
+                continue
+            li = (w >> 2) & 0xFFFFFF
+            if li >= 0x800000:
+                li -= 0x1000000
+            target_va = text_va + i + li * 4
+            if plt_va <= target_va < plt_est_end:
+                bl_targets.add(target_va)
+        if not bl_targets:
+            return
+
+        # 4. Find first stub VA: smallest BL target T where T+stub_size is also observed.
+        #    That T is stub index 0 (assuming it is called from .text).
+        sorted_t = sorted(bl_targets)
+        target_set = set(sorted_t)
+        first_stub_va = None
+        for t in sorted_t:
+            if (t + stub_size) in target_set:
+                first_stub_va = t
+                break
+        if first_stub_va is None:
+            return  # no consecutive stub pair observed; cannot determine index 0
+
+        # 5. Map each rela.plt index to its stub VA
+        resolver_size = first_stub_va - plt_va
+        for idx, sym_name in enumerate(index_to_sym):
+            if sym_name:
+                self.plt[plt_va + resolver_size + idx * stub_size] = sym_name
+
     def _build_strings(self, binary) -> None:
         for sec_name in (".rodata", ".data.rel.ro", ".data"):
             try:
@@ -291,6 +390,9 @@ class WindowAnalyzer:
                 self._md = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
             elif self.arch == 'x86_32':
                 self._md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
+            elif self.arch in ('ppc32', 'ppc64'):
+                ppc_mode = capstone.CS_MODE_32 if self.arch == 'ppc32' else capstone.CS_MODE_64
+                self._md = capstone.Cs(capstone.CS_ARCH_PPC, ppc_mode | capstone.CS_MODE_BIG_ENDIAN)
             else:
                 self._md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
             self._md.detail = False

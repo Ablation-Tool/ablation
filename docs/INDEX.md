@@ -83,6 +83,9 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.39.0 | WindowAnalyzer: PPC32/PPC64 big-endian support — `_elf_arch()` respects EI_DATA byte order; `_cs()` emits Capstone PPC decoder; `_build_plt_ppc32_bss()` recovers BSS PLT stub→symbol map via BL scan + `.rela.plt` index correlation |
+| v2.38.0 | PPC32PLTTracer: SYSV PIC BSS PLT support — `_is_bss_plt()` detection, `bss_plt_stub_map()` with cached stub map, `_find_callers_bss_plt()` direct BL scan path; GOT2-PIC path unchanged |
+| v2.37.0 | PPC32TaintTracker: `_load_plt_from_dynsym_raw()` now gated by `if not self._plt:` — prevents BSS PLT SYSV PIC binaries from having their correct LIEF-populated PLT map corrupted by zero st_value dynsym entries |
 | v2.36.0 | PPC32GOT2Resolver: two hardening fixes — per-function r30 floor (`fn_starts` param) + GOT2 range validation (`got2_va`/`got2_size`); both backward-compatible |
 | v2.35.0 | PPC32GOT2Resolver: resolve indirect BCTRL calls in GOT2-PIC stripped binaries; 15120/15339 (98.6%) on S6720EI bootload; handles LWZ/LWZU/LWZX/direct patterns; zero unknowns |
 | v2.34.0 | PPC32TaintTracker: GOT2 PIC support (Huawei/embedded Linux) — r30 map, crclr ABI fix, LIEF vendor-reloc bypass, LWZ stale-taint fix, 8 new sinks |
