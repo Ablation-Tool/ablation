@@ -179,6 +179,52 @@ rarely enough to be negligible in practice.
 
 ---
 
+## I386AbsoluteXrefScanner
+
+**File:** `ablation/analyzers/i386_absolute_xref_scanner.py`
+
+### Why the default xref index finds almost nothing in i386 code
+
+The default `BinaryContext` xref scanner is built for x86-64, where the compiler encodes
+data references as RIP-relative 32-bit signed displacements: `target_va = insn_end_va + disp32`.
+On i386, the same role is played by 4-byte LE absolute immediates embedded in `push imm32`,
+`mov reg, imm32`, and `lea reg, [addr]` instructions.  The formula is simply `target_va = u32`.
+
+Without this scanner, a 675KB statically linked i386 binary yields 21 xref pairs from the
+x86-64 scanner (coincidental false hits) instead of the correct 548.
+
+### How it works
+
+1. Read every 4-byte LE window at every byte offset in `.text` — identical stride-trick
+   approach to the x86-64 scanner, but no displacement arithmetic.
+2. Binary-search each window value against the sorted list of known string VAs.
+3. Attribute each hit to the enclosing function via `func_containing()`.
+4. Populate `ctx._str_xref_idx` and `ctx._func_str_idx` in the same format as the x86-64 index.
+
+`BinaryContext` calls this scanner automatically for `x86_32` binaries.  StaticELF32FuncStartScanner
+must already have run (so `func_starts` is populated) before this scanner fires.
+
+```python
+from ablation.analyzers.i386_absolute_xref_scanner import I386AbsoluteXrefScanner
+
+scanner = I386AbsoluteXrefScanner.from_context(ctx)
+result  = scanner.scan_full()
+print(result.report())
+# I386AbsoluteXrefScanner: /path/to/wsconv
+#   .text size    : 452568 bytes
+#   string VAs    : 934
+#   xref pairs    : 548
+#   unique strings: 388  unique functions: 153
+
+# Inject into an existing context (no-op if ctx._str_xref_idx already populated)
+scanner.inject(ctx)
+```
+
+**ELF32 only.** PE32 (i386 DLL/EXE) is not supported — too many false positives from vtable
+and jump-table entries that accidentally fall in `.rdata` ranges.
+
+---
+
 ## XRefGraph
 
 **File:** `ablation/analyzers/xref_graph.py`
