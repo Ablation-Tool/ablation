@@ -255,6 +255,42 @@ def _find_prologue_starts_x86_32(data: bytes, start_offset: int, end_offset: int
     return hits
 
 
+# ── FPO call-target recovery ──────────────────────────────────────────────────
+
+def _find_fpo_call_targets_x86_32(
+    data: bytes,
+    text_file_offset: int,
+    text_size: int,
+    text_section_va: int,
+    imagebase: int,
+) -> set:
+    """
+    Recover function starts missed by prologue detection (FPO-compiled code).
+
+    Scans the .text section for direct call rel32 instructions (opcode 0xe8)
+    and returns the set of VA targets that land within .text.  Any such target
+    is a function entry point regardless of whether it has a frame-pointer
+    prologue.
+
+    Returns a set of file offsets (not VAs) of recovered function starts.
+    """
+    text_start_va = imagebase + text_section_va
+    text_end_va   = text_start_va + text_size
+    recovered: set = set()
+
+    end = text_file_offset + text_size - 4
+    for i in range(text_file_offset, end):
+        if data[i] == 0xe8:
+            rel32 = int.from_bytes(data[i + 1: i + 5], "little", signed=True)
+            # call rel32 target = address of next instruction + rel32
+            insn_va = imagebase + text_section_va + (i - text_file_offset)
+            target_va = insn_va + 5 + rel32
+            if text_start_va <= target_va < text_end_va:
+                target_offset = text_file_offset + (target_va - text_start_va)
+                recovered.add(target_offset)
+    return recovered
+
+
 # ── call target resolution ────────────────────────────────────────────────────
 
 def _resolve_call_target(op_str: str, iat: Dict[int, str]) -> str:
@@ -330,9 +366,24 @@ def _extract_functions_pe(
     prologue_offsets = _find_prologue_starts_x86_32(
         data, text_file_offset, text_file_offset + text_size
     )
-    if not prologue_offsets:
-        print(f"  [!] No x86-32 prologues found in .text section")
+
+    # FPO recovery: collect call targets not already found by prologue detection
+    fpo_offsets = _find_fpo_call_targets_x86_32(
+        data, text_file_offset, text_size,
+        text_section.virtual_address, imagebase,
+    )
+    prologue_set = set(prologue_offsets)
+    fpo_only = sorted(fpo_offsets - prologue_set)
+    all_offsets = sorted(prologue_set | fpo_offsets)
+
+    if not all_offsets:
+        print(f"  [!] No x86-32 functions found in .text section (prologue+FPO)")
         return []
+
+    fpo_count = len(fpo_only)
+    if fpo_count:
+        print(f"  [*] FPO recovery: +{fpo_count} call-target functions "
+              f"(total {len(all_offsets)} incl. {len(prologue_set)} prologue)")
 
     md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
     md.detail = False
@@ -340,7 +391,8 @@ def _extract_functions_pe(
     rdata_str_set = set(rdata_strings.values())
 
     funcs = []
-    for file_offset in prologue_offsets:
+    for file_offset in all_offsets:
+        is_fpo = file_offset not in prologue_set
         # Absolute VA of this function
         va = imagebase + (file_offset - text_file_offset) + text_section.virtual_address
 
@@ -370,9 +422,10 @@ def _extract_functions_pe(
         if len(lines) < 5:
             continue
 
+        role = "FPO" if is_fpo else "FUNC"
         desc = describe_function(
             name=f"func_{va:08x}",
-            role="FUNC",
+            role=role,
             call_targets=calls,
             strings=str_refs,
             asm_lines=lines,
@@ -382,6 +435,7 @@ def _extract_functions_pe(
             "desc": desc,
             "calls": calls,
             "strings": str_refs,
+            "fpo": is_fpo,
         })
     return funcs
 
