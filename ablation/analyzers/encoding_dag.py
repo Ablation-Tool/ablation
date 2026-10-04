@@ -268,8 +268,50 @@ class SemanticBlock:
         self.edges.append(edge)
 
     def dag_nodes(self) -> Iterator[SemanticOp]:
-        """Yield ops in definition order (topological for straight-line code)."""
-        yield from self.ops
+        """Yield ops in topological order derived from DataflowEdges.
+
+        Nodes with no incoming edges are emitted first; each node is emitted
+        only after all its producers have been emitted. Falls back to insertion
+        order for ops not referenced by any edge (e.g. side-effect-only stores
+        with no explicit dataflow consumers).
+
+        Raises ValueError if the edge set contains a cycle.
+        """
+        if not self.edges:
+            yield from self.ops
+            return
+
+        by_id: Dict[str, SemanticOp] = {op.node_id: op for op in self.ops if op.node_id}
+        # count incoming edges per node
+        in_degree: Dict[str, int] = {nid: 0 for nid in by_id}
+        dependents: Dict[str, List[str]] = {nid: [] for nid in by_id}
+        for e in self.edges:
+            if e.consumer_id in in_degree:
+                in_degree[e.consumer_id] += 1
+            if e.producer_id in dependents:
+                dependents[e.producer_id].append(e.consumer_id)
+
+        # Kahn's algorithm — preserves relative insertion order for ties
+        ready = [op for op in self.ops if op.node_id and in_degree[op.node_id] == 0]
+        emitted: set = set()
+        while ready:
+            op = ready.pop(0)
+            yield op
+            emitted.add(op.node_id)
+            for consumer_id in dependents.get(op.node_id, []):
+                in_degree[consumer_id] -= 1
+                if in_degree[consumer_id] == 0:
+                    consumer_op = by_id.get(consumer_id)
+                    if consumer_op:
+                        ready.append(consumer_op)
+
+        # emit any ops without node_id or not in the edge graph
+        for op in self.ops:
+            if op.node_id not in emitted:
+                yield op
+
+        if len(emitted) < len(by_id):
+            raise ValueError(f"SemanticBlock '{self.label}': cycle detected in dataflow edges")
 
 
 # ── FieldBinding and Binding ──────────────────────────────────────────────────
