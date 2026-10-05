@@ -32,6 +32,9 @@ reports/
 *.swp
 .DS_Store
 
+# Target RE findings — never committed
+re/
+
 # Internal
 SESSION.md
 SESSION_*.md
