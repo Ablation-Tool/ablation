@@ -14,6 +14,12 @@ Full attack surface mapping for Windows kernel drivers (`.sys` files). Classifie
 driver framework, recovers the IRP dispatch table, decodes every IOCTL code, audits
 the kernel API surface, and flags dangerous byte patterns.
 
+### Architecture support
+
+`KernelDriverAnalyzer` detects PE machine type on construction:
+- **x86 (IMAGE_FILE_MACHINE_I386, 0x014c):** uses Capstone `CS_MODE_32`; recovers `MajorFunction` from `DRIVER_OBJECT+0x38` (4-byte slots); uses prologue-seeded disassembly for IOCTL extraction and pattern scanning (see below)
+- **x64 (IMAGE_FILE_MACHINE_AMD64, 0x8664):** uses Capstone `CS_MODE_64`; recovers `MajorFunction` from `DRIVER_OBJECT+0x70` (8-byte slots); uses `.pdata`-bounded disassembly
+
 ### What it maps
 
 - **Driver framework:** WDM / KMDF / minifilter classification
@@ -34,6 +40,49 @@ kda = KernelDriverAnalyzer.from_path('/path/to/driver.sys')
 report = kda.analyze()
 print(report.fmt())
 ```
+
+### IoctlCascadeDecoder
+
+MSVC-compiled `switch(IoControlCode)` handlers emit a cascade of register subtractions
+rather than a jump table. The decoder reconstructs every `CTL_CODE` in the cascade,
+including those derived via a **stride register** loaded with `push imm; pop reg` (a
+3-byte MSVC optimizer idiom that saves 2 bytes over `sub reg, imm32` per arm):
+
+```
+MOV  ECX, EAX              ; ECX = IoControlCode
+SUB  ECX, 0x1a2504         ; base (first IOCTL)
+JE   handler_0
+PUSH 4
+POP  EAX                   ; stride = 4 loaded into EAX
+SUB  ECX, EAX              ; derive 0x1a2508
+JE   handler_1
+SUB  ECX, EAX              ; derive 0x1a250c
+JE   handler_2
+```
+
+Used internally by `KernelDriverAnalyzer._extract_ioctl_codes`. Exported for standalone use:
+
+```python
+from ablation.analyzers.kernel_driver_analyzer import IoctlCascadeDecoder
+import capstone
+
+cs = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
+cs.detail = True
+decoder = IoctlCascadeDecoder(cs, image_base=0x10000)
+codes = decoder.decode_section(section_code_bytes, section_va)
+```
+
+### Boundary-safe disassembly
+
+x86 WDM drivers embed function pointer tables at the start of `.text` and `INIT`
+sections. The byte `0x67` (address-size override prefix) appears as a ModRM byte in
+those tables; Capstone stops generating instructions when it encounters this sequence.
+`KernelDriverAnalyzer` avoids this by scanning for `55 8B EC` (PUSH EBP; MOV EBP, ESP)
+prologues and disassembling only from known function starts.
+
+For x64, `UNWIND_INFO` data is sometimes embedded after function bodies inside `.text`.
+The `.pdata` exception directory (`IMAGE_DIRECTORY_ENTRY_EXCEPTION`) gives
+`[BeginAddress, EndAddress)` ranges for each function; only those ranges are disassembled.
 
 ### IOCTL decoder (standalone)
 
