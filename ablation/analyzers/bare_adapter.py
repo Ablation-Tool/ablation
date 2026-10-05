@@ -2,7 +2,7 @@
 BARE adapter — converts ablation vuln findings to findings.json and pipes
 through the BARE binary to get ranked Metasploit modules.
 
-BARE binary: ~/.local/bin/bare  (installed at ~/.local/bin/bare)
+BARE binary: installed at ~/.local/bin/bare
 Corpus:      3,904 Metasploit modules encoded at compile time.
 
 AI/ML-specific findings (HPKE, STRAP, RADIUS dialects) will typically
@@ -74,8 +74,7 @@ def run_bare(findings: dict, timeout: int = 60) -> dict:
     """Write *findings* to a temp file, invoke BARE, return parsed output."""
     if not _bare_available():
         raise FileNotFoundError(
-            f"bare binary not found. Install from ~/.local/bin/bare or "
-            f"check {_BARE_BIN}"
+            f"bare binary not found at {_BARE_BIN}"
         )
 
     with tempfile.NamedTemporaryFile(
