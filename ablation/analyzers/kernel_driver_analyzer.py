@@ -361,6 +361,156 @@ class KernelDriverReport:
 
 
 # ---------------------------------------------------------------------------
+# IOCTL cascade decoder
+# ---------------------------------------------------------------------------
+
+class IoctlCascadeDecoder:
+    """
+    Decode IOCTL codes from SUB/JE dispatch cascades in WDM driver IOCTL handlers.
+
+    WDM drivers compiled from switch(IoControlCode) emit cascades like:
+
+        MOV  ECX, EAX                  ; ECX = IoControlCode
+        SUB  ECX, 0x1a2504             ; subtract group base
+        JE   handler_0                  ; ECX_orig == 0x1a2504
+        PUSH 4
+        POP  EAX                        ; load stride 4 into EAX
+        SUB  ECX, EAX                   ; ECX_orig - 0x1a2508
+        JE   handler_1                  ; ECX_orig == 0x1a2508
+        SUB  ECX, EAX                   ; ECX_orig - 0x1a250c
+        JE   handler_2                  ; ECX_orig == 0x1a250c
+
+    The stride may be an immediate (SUB reg, 4) or loaded via PUSH/POP or MOV
+    into a separate register. This decoder tracks stride registers to handle
+    the MSVC-generated PUSH imm; POP reg pattern.
+    """
+
+    def __init__(self, cs, image_base: int):
+        self._cs         = cs
+        self._image_base = image_base
+
+    def decode_section(self, code: bytes, base_va: int) -> list:
+        """
+        Scan one executable section for SUB/JE cascade patterns.
+        Returns list of IoctlCode instances.
+        """
+        if not _HAS_CAPSTONE or self._cs is None:
+            return []
+        results  = []
+        seen_raw = set()
+        insns    = list(self._cs.disasm(code, base_va))
+
+        for i, insn in enumerate(insns):
+            if insn.mnemonic != 'sub':
+                continue
+            try:
+                ops = insn.operands
+            except AttributeError:
+                continue
+            if len(ops) != 2:
+                continue
+            if ops[0].type != capstone.x86.X86_OP_REG:
+                continue
+            if ops[1].type != capstone.x86.X86_OP_IMM:
+                continue
+
+            base_val = ops[1].imm & 0xFFFFFFFF
+            base_ic  = decode_ioctl_code(base_val, site_va=insn.address)
+            if base_ic is None:
+                continue
+            # Require a JE/JZ immediately after to confirm dispatch branch
+            if i + 1 >= len(insns):
+                continue
+            if insns[i + 1].mnemonic not in ('je', 'jz'):
+                continue
+
+            if base_val not in seen_raw:
+                seen_raw.add(base_val)
+                results.append(base_ic)
+
+            # Trace derived codes. Strides may be:
+            #   immediate:  SUB reg, 4
+            #   via register: PUSH 4; POP eax; SUB reg, eax  (MSVC optimizer)
+            reg         = ops[0].reg
+            accum       = base_val
+            stride_regs: dict = {}   # reg_id -> small imm value
+            j           = i + 2
+            while j < len(insns):
+                cur = insns[j]
+
+                # PUSH imm; POP reg — stride register loader
+                if cur.mnemonic == 'push':
+                    try:
+                        push_ops = cur.operands
+                        if (len(push_ops) == 1
+                                and push_ops[0].type == capstone.x86.X86_OP_IMM
+                                and j + 1 < len(insns)
+                                and insns[j + 1].mnemonic == 'pop'):
+                            pop_ops = insns[j + 1].operands
+                            if (len(pop_ops) == 1
+                                    and pop_ops[0].type == capstone.x86.X86_OP_REG):
+                                sv = push_ops[0].imm & 0xFFFF
+                                if 0 < sv <= 0x100:
+                                    stride_regs[pop_ops[0].reg] = sv
+                            j += 2
+                            continue
+                    except AttributeError:
+                        pass
+                    break
+
+                # MOV reg, imm — alternative stride loader
+                if cur.mnemonic == 'mov':
+                    try:
+                        mv_ops = cur.operands
+                        if (len(mv_ops) == 2
+                                and mv_ops[0].type == capstone.x86.X86_OP_REG
+                                and mv_ops[1].type == capstone.x86.X86_OP_IMM):
+                            sv = mv_ops[1].imm & 0xFFFF
+                            if 0 < sv <= 0x100:
+                                stride_regs[mv_ops[0].reg] = sv
+                            j += 1
+                            continue
+                    except AttributeError:
+                        pass
+                    break
+
+                if cur.mnemonic != 'sub':
+                    break
+                try:
+                    sub_ops = cur.operands
+                except AttributeError:
+                    break
+                if len(sub_ops) != 2:
+                    break
+                if (sub_ops[0].type != capstone.x86.X86_OP_REG
+                        or sub_ops[0].reg != reg):
+                    break
+
+                # Determine stride: immediate or via stride register
+                if sub_ops[1].type == capstone.x86.X86_OP_IMM:
+                    stride = sub_ops[1].imm & 0xFFFF
+                elif sub_ops[1].type == capstone.x86.X86_OP_REG:
+                    stride = stride_regs.get(sub_ops[1].reg)
+                    if stride is None:
+                        break
+                else:
+                    break
+
+                if stride == 0 or stride > 0x100:
+                    break
+                if j + 1 >= len(insns) or insns[j + 1].mnemonic not in ('je', 'jz'):
+                    break
+                accum += stride
+                derived = decode_ioctl_code(accum, site_va=cur.address)
+                if derived is not None and accum not in seen_raw:
+                    seen_raw.add(accum)
+                    results.append(derived)
+                j += 2
+
+        return results
+
+
+# ---------------------------------------------------------------------------
 # Main analyzer
 # ---------------------------------------------------------------------------
 
@@ -388,9 +538,11 @@ class KernelDriverAnalyzer:
         self.data = data
         self.path = path
         self._pe = PEParser(data)
+        self._machine = self._read_machine()
         self._cs: Optional[object] = None
         if _HAS_CAPSTONE:
-            cs = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+            mode = capstone.CS_MODE_32 if self._machine == 0x014c else capstone.CS_MODE_64
+            cs = capstone.Cs(capstone.CS_ARCH_X86, mode)
             cs.detail = True
             self._cs = cs
 
@@ -399,6 +551,106 @@ class KernelDriverAnalyzer:
         with open(path, 'rb') as fh:
             data = fh.read()
         return cls(data, path)
+
+    # -----------------------------------------------------------------------
+    # Architecture helpers
+    # -----------------------------------------------------------------------
+
+    def _read_machine(self) -> int:
+        """Read IMAGE_FILE_MACHINE from COFF header. 0x014c=i386, 0x8664=AMD64."""
+        try:
+            return struct.unpack_from('<H', self.data, self._pe.pe_offset + 4)[0]
+        except (struct.error, AttributeError):
+            return 0x8664
+
+    def _pdata_code_ranges(self) -> list:
+        """
+        Parse IMAGE_DIRECTORY_ENTRY_EXCEPTION (.pdata) for x64 binaries.
+        Each RUNTIME_FUNCTION: BeginAddress(4) EndAddress(4) UnwindInfoAddress(4).
+        Returns sorted list of (begin_rva, end_rva) pairs covering actual function code.
+        Used by _disasm_exec_sections to exclude UNWIND_INFO data embedded in .text.
+        """
+        pe = self._pe
+        if len(pe._data_dirs) <= 3:
+            return []
+        pdata_rva, pdata_size = pe._data_dirs[3]
+        if not pdata_rva or not pdata_size:
+            return []
+        off = pe._rva_to_offset(pdata_rva)
+        if off is None:
+            return []
+        ranges = []
+        n = pdata_size // 12
+        for i in range(n):
+            o = off + i * 12
+            if o + 12 > len(self.data):
+                break
+            try:
+                begin, end, _ = struct.unpack_from('<III', self.data, o)
+            except struct.error:
+                break
+            if 0 < begin < end < 0x10000000:
+                ranges.append((begin, end))
+        return sorted(ranges)
+
+    def _disasm_exec_sections(self):
+        """
+        Yield Capstone instructions from executable sections using boundary-safe disassembly.
+
+        x86 (CS_MODE_32): prologue-seeded. Finds 55 8B EC (PUSH EBP; MOV EBP, ESP)
+        function starts and disassembles only from those offsets. WDM x86 .text and INIT
+        sections begin with function pointer tables (not code); linear disassembly from
+        offset 0 desynchronises there and produces false HLT/RDMSR hits.
+
+        x64 (CS_MODE_64): .pdata-bounded. Parses RUNTIME_FUNCTION entries and disassembles
+        only within [BeginAddress, EndAddress) ranges, excluding UNWIND_INFO data blocks
+        that the linker embeds at the end of .text and that cause spurious RDMSR reports.
+        """
+        if not _HAS_CAPSTONE or self._cs is None:
+            return
+
+        pe = self._pe
+
+        if self._machine == 0x014c:
+            for section in pe.sections:
+                if not section['executable']:
+                    continue
+                raw_off = section['raw_offset']
+                raw_sz  = section['raw_size']
+                sec_va  = pe.image_base + section['vaddr']
+                code    = self.data[raw_off: raw_off + raw_sz]
+                # Find 55 8B EC (PUSH EBP; MOV EBP, ESP) prologues
+                starts = [i for i in range(len(code) - 2)
+                          if code[i] == 0x55 and code[i+1] == 0x8B and code[i+2] == 0xEC]
+                if not starts:
+                    continue
+                starts.append(len(code))
+                for i in range(len(starts) - 1):
+                    chunk = code[starts[i]: starts[i + 1]]
+                    yield from self._cs.disasm(chunk, sec_va + starts[i])
+        else:
+            code_ranges = self._pdata_code_ranges()
+            for section in pe.sections:
+                if not section['executable']:
+                    continue
+                raw_off  = section['raw_offset']
+                raw_sz   = section['raw_size']
+                sec_va   = pe.image_base + section['vaddr']
+                sec_vend = sec_va + raw_sz
+                code     = self.data[raw_off: raw_off + raw_sz]
+                if code_ranges:
+                    for begin_rva, end_rva in code_ranges:
+                        begin_va = pe.image_base + begin_rva
+                        end_va   = pe.image_base + end_rva
+                        if end_va <= sec_va or begin_va >= sec_vend:
+                            continue
+                        rel_s = max(begin_va - sec_va, 0)
+                        rel_e = min(end_va   - sec_va, raw_sz)
+                        if rel_s >= rel_e:
+                            continue
+                        yield from self._cs.disasm(code[rel_s:rel_e], sec_va + rel_s)
+                else:
+                    yield from self._cs.disasm(code, sec_va)
 
     # -----------------------------------------------------------------------
     # Public entry point
@@ -596,9 +848,11 @@ class KernelDriverAnalyzer:
         window  = min(8192, len(self.data) - ep_off)
         code    = self.data[ep_off: ep_off + window]
 
-        MF_BASE  = 0x70
-        MF_SLOTS = 28
-        MF_END   = MF_BASE + MF_SLOTS * 8   # 0x210
+        if self._machine == 0x014c:   # x86: DRIVER_OBJECT.MajorFunction at +0x38, 4-byte slots
+            MF_BASE = 0x38; slot_sz = 4
+        else:                          # x64: DRIVER_OBJECT.MajorFunction at +0x70, 8-byte slots
+            MF_BASE = 0x70; slot_sz = 8
+        MF_END = MF_BASE + 28 * slot_sz
 
         found: dict = {}
         for insn in self._cs.disasm(code, ep_va):
@@ -608,12 +862,11 @@ class KernelDriverAnalyzer:
                 op0, op1 = insn.operands[0], insn.operands[1]
             except (IndexError, AttributeError):
                 continue
-            # MOV QWORD PTR [reg+disp], reg  -> writing a function pointer
             if op0.type != capstone.x86.X86_OP_MEM:
                 continue
             disp = op0.mem.disp
-            if MF_BASE <= disp < MF_END and (disp - MF_BASE) % 8 == 0:
-                slot = (disp - MF_BASE) // 8
+            if MF_BASE <= disp < MF_END and (disp - MF_BASE) % slot_sz == 0:
+                slot = (disp - MF_BASE) // slot_sz
                 if slot not in found:
                     # Try to capture the handler VA if the source is an immediate
                     handler_rva = 0
@@ -652,16 +905,47 @@ class KernelDriverAnalyzer:
         ioctls   = []
         seen: set = set()
 
-        for section in pe.sections:
-            if not section['executable']:
-                continue
-            raw_off = section['raw_offset']
-            raw_sz  = section['raw_size']
-            sec_va  = pe.image_base + section['vaddr']
-            code    = self.data[raw_off: raw_off + raw_sz]
+        # x86 WDM drivers place function pointer tables at the start of .text and INIT
+        # sections. Capstone CS_MODE_32 stops generating instructions when it hits the
+        # address-size prefix byte (0x67) used as a ModRM byte in those tables.
+        # Use the same prologue-seeded chunks as _disasm_exec_sections so disassembly
+        # always starts at a known 55 8B EC (PUSH EBP; MOV EBP, ESP) function entry.
+        is_x86 = (self._machine == 0x014c)
 
-            for insn in self._cs.disasm(code, sec_va):
-                if insn.mnemonic not in ('cmp', 'mov', 'sub', 'test'):
+        def _iter_code_chunks():
+            for section in pe.sections:
+                if not section['executable']:
+                    continue
+                raw_off = section['raw_offset']
+                raw_sz  = section['raw_size']
+                sec_va  = pe.image_base + section['vaddr']
+                code    = self.data[raw_off: raw_off + raw_sz]
+                if is_x86:
+                    starts = [i for i in range(len(code) - 2)
+                              if code[i] == 0x55 and code[i+1] == 0x8B and code[i+2] == 0xEC]
+                    if not starts:
+                        continue
+                    starts.append(len(code))
+                    for k in range(len(starts) - 1):
+                        yield code[starts[k]: starts[k+1]], sec_va + starts[k]
+                else:
+                    yield code, sec_va
+
+        # Pass 1: SUB/JE cascade decoder — handles compiled switch(IoControlCode) dispatchers
+        # that use register-relative subtraction (incl. push imm; pop reg; sub reg, reg stride).
+        cascade = IoctlCascadeDecoder(self._cs, pe.image_base)
+        for chunk, chunk_va in _iter_code_chunks():
+            for ic in cascade.decode_section(chunk, chunk_va):
+                if ic.raw not in seen:
+                    seen.add(ic.raw)
+                    ioctls.append(ic)
+
+        # Pass 2: CMP/SUB/TEST immediate scan — catches table-driven or hand-coded dispatch.
+        # MOV excluded: DriverEntry MOV [DRIVER_OBJECT+disp], handler_va produces handler VAs
+        # that pass decode_ioctl_code plausibility checks and create false positives.
+        for chunk, chunk_va in _iter_code_chunks():
+            for insn in self._cs.disasm(chunk, chunk_va):
+                if insn.mnemonic not in ('cmp', 'sub', 'test'):
                     continue
                 try:
                     ops = insn.operands
@@ -1003,47 +1287,100 @@ class KernelDriverAnalyzer:
         """
         findings = []
 
-        # RDMSR (0F 32): reads MSR indexed by ECX.
-        # If ECX is attacker-controlled (e.g. from user IOCTL input without
-        # bounds check), reading MSR_LSTAR (0xC0000082) reveals kernel base.
-        for m in re.finditer(rb'\x0f\x32', self.data):
-            findings.append(DangerousPattern(
-                pattern='RDMSR',
-                offset=m.start(),
-                description='reads MSR[ECX]; if ECX is IOCTL-tainted = kernel info leak',
-                severity='CRITICAL',
-            ))
+        # For instruction-boundary-sensitive patterns (HLT, RDMSR, WRMSR, MOV_CR0, MOV_CR4)
+        # use _disasm_exec_sections() which avoids false positives from function pointer tables
+        # and UNWIND_INFO data embedded in executable sections. Raw byte scan kept as
+        # fallback (marked [UNVERIFIED]) when Capstone is unavailable.
+        if _HAS_CAPSTONE and self._cs is not None:
+            pe = self._pe
+            for insn in self._disasm_exec_sections():
+                mn   = insn.mnemonic
+                ops  = insn.op_str
+                # Convert VA → file offset (consistent with raw-byte fallback path).
+                rva  = insn.address - pe.image_base
+                foff = pe._rva_to_offset(rva) or rva
 
-        # WRMSR (0F 30): writes MSR indexed by ECX with EDX:EAX value.
-        # Writing MSR_LSTAR (0xC0000082) redirects syscall handler = full ring-0 takeover.
-        for m in re.finditer(rb'\x0f\x30', self.data):
-            findings.append(DangerousPattern(
-                pattern='WRMSR',
-                offset=m.start(),
-                description='writes MSR[ECX]=EDX:EAX; MSR_LSTAR write = syscall hijack',
-                severity='CRITICAL',
-            ))
+                if mn == 'hlt':
+                    findings.append(DangerousPattern(
+                        pattern='HLT',
+                        offset=foff,
+                        description='CPU halt instruction; DoS if reachable from user-mode IOCTL',
+                        severity='HIGH',
+                    ))
 
-        # MOV CR4, reg (0F 22 E0..E7): CR4 bit 20 = SMEP, bit 21 = SMAP.
-        # Clearing SMEP allows ring-0 execution of user-mode pages (classic LPE chain).
-        for m in re.finditer(rb'\x0f\x22[\xe0-\xe7]', self.data):
-            findings.append(DangerousPattern(
-                pattern='MOV_CR4',
-                offset=m.start(),
-                description='writes CR4; clearing bit 20 (SMEP) enables user-page execution',
-                severity='CRITICAL',
-            ))
+                elif mn == 'rdmsr':
+                    findings.append(DangerousPattern(
+                        pattern='RDMSR',
+                        offset=foff,
+                        description='reads MSR[ECX]; if ECX is IOCTL-tainted = kernel info leak',
+                        severity='CRITICAL',
+                    ))
 
-        # MOV CR0, reg (0F 22 C0..C7): CR0 bit 16 = WP (Write Protect).
-        # Clearing WP disables write protection on read-only kernel pages,
-        # enabling direct patching of SSDT or kernel .text.
-        for m in re.finditer(rb'\x0f\x22[\xc0-\xc7]', self.data):
-            findings.append(DangerousPattern(
-                pattern='MOV_CR0',
-                offset=m.start(),
-                description='writes CR0; clearing bit 16 (WP) enables kernel .text patching',
-                severity='CRITICAL',
-            ))
+                elif mn == 'wrmsr':
+                    findings.append(DangerousPattern(
+                        pattern='WRMSR',
+                        offset=foff,
+                        description='writes MSR[ECX]=EDX:EAX; MSR_LSTAR write = syscall hijack',
+                        severity='CRITICAL',
+                    ))
+
+                elif mn == 'mov' and ops.startswith('cr0'):
+                    findings.append(DangerousPattern(
+                        pattern='MOV_CR0',
+                        offset=foff,
+                        description='writes CR0; clearing bit 16 (WP) enables kernel .text patching',
+                        severity='CRITICAL',
+                    ))
+
+                elif mn == 'mov' and ops.startswith('cr4'):
+                    findings.append(DangerousPattern(
+                        pattern='MOV_CR4',
+                        offset=foff,
+                        description='writes CR4; clearing bit 20 (SMEP) enables user-page execution',
+                        severity='CRITICAL',
+                    ))
+
+        else:
+            # Capstone unavailable: raw byte fallback. Offset is file offset, not RVA.
+            for m in re.finditer(rb'\x0f\x32', self.data):
+                findings.append(DangerousPattern(
+                    pattern='RDMSR',
+                    offset=m.start(),
+                    description='reads MSR[ECX]; if ECX is IOCTL-tainted = kernel info leak [UNVERIFIED]',
+                    severity='CRITICAL',
+                ))
+
+            for m in re.finditer(rb'\x0f\x30', self.data):
+                findings.append(DangerousPattern(
+                    pattern='WRMSR',
+                    offset=m.start(),
+                    description='writes MSR[ECX]=EDX:EAX; MSR_LSTAR write = syscall hijack [UNVERIFIED]',
+                    severity='CRITICAL',
+                ))
+
+            for m in re.finditer(rb'\x0f\x22[\xe0-\xe7]', self.data):
+                findings.append(DangerousPattern(
+                    pattern='MOV_CR4',
+                    offset=m.start(),
+                    description='writes CR4; clearing bit 20 (SMEP) enables user-page execution [UNVERIFIED]',
+                    severity='CRITICAL',
+                ))
+
+            for m in re.finditer(rb'\x0f\x22[\xc0-\xc7]', self.data):
+                findings.append(DangerousPattern(
+                    pattern='MOV_CR0',
+                    offset=m.start(),
+                    description='writes CR0; clearing bit 16 (WP) enables kernel .text patching [UNVERIFIED]',
+                    severity='CRITICAL',
+                ))
+
+            for m in re.finditer(rb'\xf4', self.data):
+                findings.append(DangerousPattern(
+                    pattern='HLT',
+                    offset=m.start(),
+                    description='CPU halt instruction; DoS if reachable from user-mode IOCTL [UNVERIFIED]',
+                    severity='HIGH',
+                ))
 
         # Combined CR0 WP-disable sequence: canonical SSDT hook prerequisite.
         # Source: Rootkits: Subverting the Windows Kernel (Hoglund/Butler ch3).
@@ -1088,16 +1425,6 @@ class KernelDriverAnalyzer:
                 offset=m.start(),
                 description='re-enables interrupts; usually paired with CLI sequence',
                 severity='LOW',
-            ))
-
-        # HLT (F4): halts the CPU until next interrupt.
-        # If reachable from an IOCTL handler without privilege check = kernel DoS.
-        for m in re.finditer(rb'\xf4', self.data):
-            findings.append(DangerousPattern(
-                pattern='HLT',
-                offset=m.start(),
-                description='CPU halt instruction; DoS if reachable from user-mode IOCTL',
-                severity='HIGH',
             ))
 
         # SWAPGS (0F 01 F8): swaps GS base between user/kernel.
