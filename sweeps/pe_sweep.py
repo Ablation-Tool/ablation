@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
-sweeps/pe_sweep.py — Windows PE32 (i386) binary vulnerability sweep.
+sweeps/pe_sweep.py — Windows PE (i386 and AMD64) binary vulnerability sweep.
 
-Adapted from fortinet_sweep.py for Windows PE32 targets. Key differences:
+Adapted from fortinet_sweep.py for Windows PE targets. Key differences:
   - Import Address Table (IAT) replaces PLT for call resolution
-  - x86-32 Capstone (CS_MODE_32) instead of x86-64
-  - i386 prologue detection: push ebp + mov ebp,esp (55 8B EC / 55 89 E5)
+  - i386: CS_MODE_32; AMD64: CS_MODE_64 with RIP-relative IAT resolution
+  - i386 prologue: 55 8B EC / 55 89 E5 (PUSH EBP; MOV EBP,ESP)
+  - AMD64 prologue: 48 83 EC (SUB RSP,imm8) / 55 48 89 E5 (PUSH RBP; MOV RBP,RSP)
   - PE section boundaries from lief.PE.Binary
   - No XRefGraph (ELF-only); inline .rdata string index instead
   - Taint analysis skipped (all taint trackers are ELF-only); semantic sweep only
 
 Pipeline
 --------
-Phase 0 (directory mode): filter files to PE32 i386 only.
+Phase 0 (directory mode): filter files to PE i386 or AMD64.
 
 Phase 1 (every PE binary): IAT build + prologue scan + SemanticSearcher.
          Runs base VULN_PROFILES + PE_WIN_PROFILES (Windows/QuickTime-specific).
@@ -44,11 +45,20 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-# ── IAT indirect call pattern ─────────────────────────────────────────────────
+# ── IAT indirect call patterns ────────────────────────────────────────────────
 # Capstone 32-bit: call dword ptr [0x4XXXXX] → op_str = "dword ptr [0x4xxxxx]"
 # Some Capstone builds include a segment prefix: "dword ptr ds:[0x4xxxxx]"
 _IAT_PTR_RE = re.compile(r'dword ptr (?:[a-z]{2}:)?\[0x([0-9a-f]+)\]', re.I)
 _DIRECT_CALL_RE = re.compile(r'^0x([0-9a-f]+)$')
+
+# Capstone 64-bit: call qword ptr [rip + 0xNNNNN]  (Capstone never resolves RIP)
+# IAT slot VA = insn.address + insn.size + offset
+_IAT_RIP_RE = re.compile(r'qword ptr \[rip \+ 0x([0-9a-f]+)\]', re.I)
+_IAT_RIP_NEG_RE = re.compile(r'qword ptr \[rip - 0x([0-9a-f]+)\]', re.I)
+
+# x64 string refs: lea reg, [rip + offset]  →  str VA = insn.address + insn.size + offset
+_LEA_RIP_RE = re.compile(r'\[rip \+ 0x([0-9a-f]+)\]', re.I)
+_LEA_RIP_NEG_RE = re.compile(r'\[rip - 0x([0-9a-f]+)\]', re.I)
 
 
 # ── PE32 vulnerability profiles (Windows/QuickTime-specific) ──────────────────
@@ -255,6 +265,35 @@ def _find_prologue_starts_x86_32(data: bytes, start_offset: int, end_offset: int
     return hits
 
 
+# ── AMD64 prologue detection ──────────────────────────────────────────────────
+
+def _find_prologue_starts_x86_64(data: bytes, start_offset: int, end_offset: int) -> List[int]:
+    """
+    Return file offsets of likely x86-64 function starts.
+
+    Detects three common x64 prologues:
+      55 48 89 E5    PUSH RBP; MOV RBP,RSP  (GCC/Clang frame pointer)
+      48 83 EC XX    SUB RSP, imm8          (MSVC typical; most common)
+      48 89 5C 24    MOV [RSP+N], RBX       (MSVC callee-save preamble)
+
+    start_offset / end_offset are byte offsets into data (not VAs).
+    """
+    hits: set = set()
+    # end = len(data) - 4 guarantees data[i+3] is always a safe read inside the loop
+    end = min(end_offset, len(data) - 4)
+    i = start_offset
+    while i < end:
+        b = data[i]
+        if b == 0x55 and data[i + 1] == 0x48 and data[i + 2] == 0x89 and data[i + 3] == 0xE5:
+            hits.add(i)
+        elif b == 0x48 and data[i + 1] == 0x83 and data[i + 2] == 0xEC:
+            hits.add(i)
+        elif b == 0x48 and data[i + 1] == 0x89 and data[i + 2] == 0x5C and data[i + 3] == 0x24:
+            hits.add(i)
+        i += 1
+    return sorted(hits)
+
+
 # ── FPO call-target recovery ──────────────────────────────────────────────────
 
 def _find_fpo_call_targets_x86_32(
@@ -313,7 +352,37 @@ def _resolve_call_target(op_str: str, iat: Dict[int, str]) -> str:
     return op_str
 
 
-# ── function extraction (PE / x86-32) ────────────────────────────────────────
+def _resolve_call_target_x64(
+    op_str: str, insn_va: int, insn_size: int, iat: Dict[int, str]
+) -> str:
+    """
+    Resolve a Capstone x86-64 call operand to a human-readable name.
+
+    Capstone does not resolve RIP-relative addresses; we compute:
+      IAT slot VA = insn_va + insn_size + signed_offset
+
+    Handles:
+      - RIP-relative IAT:  "qword ptr [rip + 0xNNNNN]"
+      - RIP-relative IAT:  "qword ptr [rip - 0xNNNNN]"
+      - Direct call:       "0x1400XXXXX"
+    Falls back to raw op_str when no IAT entry matches.
+    """
+    m = _IAT_RIP_RE.search(op_str)
+    if m:
+        offset = int(m.group(1), 16)
+        return iat.get(insn_va + insn_size + offset, op_str)
+    m = _IAT_RIP_NEG_RE.search(op_str)
+    if m:
+        offset = int(m.group(1), 16)
+        return iat.get(insn_va + insn_size - offset, op_str)
+    m = _DIRECT_CALL_RE.match(op_str.strip())
+    if m:
+        addr = int(m.group(1), 16)
+        return iat.get(addr, op_str)
+    return op_str
+
+
+# ── function extraction (PE / i386 + AMD64) ──────────────────────────────────
 
 def _extract_functions_pe(
     binary_path: str,
@@ -322,13 +391,15 @@ def _extract_functions_pe(
     rdata_strings: Dict[int, str],
     data: Optional[bytes] = None,
     max_bytes: int = 2048,
+    is_64: bool = False,
 ) -> List[dict]:
     """
-    Disassemble PE32 binary and return function dicts:
+    Disassemble PE32/PE32+ binary and return function dicts:
         {'va': int, 'desc': str, 'calls': list[str], 'strings': list[str]}
 
-    Uses x86-32 prologue detection + Capstone CS_MODE_32.
-    String references are built from .rdata and matched by immediate operand values.
+    i386: CS_MODE_32, prologue 55 8B EC / 55 89 E5, string refs via push imm.
+    AMD64: CS_MODE_64, prologues 48 83 EC / 55 48 89 E5, string refs via lea+RIP,
+           call resolution via RIP-relative slot computation.
     """
     import capstone
     from ablation.analyzers import describe_function
@@ -362,12 +433,17 @@ def _extract_functions_pe(
         print(f"  [!] .text file offset is 0 — packed or virtual-only PE, skipping")
         return []
 
-    # Find prologues within .text file offset range
-    prologue_offsets = _find_prologue_starts_x86_32(
-        data, text_file_offset, text_file_offset + text_size
-    )
+    # Prologue detection (arch-specific)
+    if is_64:
+        prologue_offsets = _find_prologue_starts_x86_64(
+            data, text_file_offset, text_file_offset + text_size
+        )
+    else:
+        prologue_offsets = _find_prologue_starts_x86_32(
+            data, text_file_offset, text_file_offset + text_size
+        )
 
-    # FPO recovery: collect call targets not already found by prologue detection
+    # FPO recovery: E8 rel32 direct-call scanning — same opcode for i386 and AMD64
     fpo_offsets = _find_fpo_call_targets_x86_32(
         data, text_file_offset, text_size,
         text_section.virtual_address, imagebase,
@@ -377,7 +453,8 @@ def _extract_functions_pe(
     all_offsets = sorted(prologue_set | fpo_offsets)
 
     if not all_offsets:
-        print(f"  [!] No x86-32 functions found in .text section (prologue+FPO)")
+        arch_tag = "x64" if is_64 else "x86-32"
+        print(f"  [!] No {arch_tag} functions found in .text section (prologue+FPO)")
         return []
 
     fpo_count = len(fpo_only)
@@ -385,10 +462,9 @@ def _extract_functions_pe(
         print(f"  [*] FPO recovery: +{fpo_count} call-target functions "
               f"(total {len(all_offsets)} incl. {len(prologue_set)} prologue)")
 
-    md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
+    cs_mode = capstone.CS_MODE_64 if is_64 else capstone.CS_MODE_32
+    md = capstone.Cs(capstone.CS_ARCH_X86, cs_mode)
     md.detail = False
-
-    rdata_str_set = set(rdata_strings.values())
 
     funcs = []
     for file_offset in all_offsets:
@@ -404,10 +480,13 @@ def _extract_functions_pe(
             lines.append(text)
 
             if insn.mnemonic == "call":
-                resolved = _resolve_call_target(insn.op_str, iat)
+                if is_64:
+                    resolved = _resolve_call_target_x64(insn.op_str, insn.address, insn.size, iat)
+                else:
+                    resolved = _resolve_call_target(insn.op_str, iat)
                 calls.append(resolved)
-            elif insn.mnemonic == "push" and insn.op_str.startswith("0x"):
-                # Check if immediate push is a .rdata string VA
+            elif not is_64 and insn.mnemonic == "push" and insn.op_str.startswith("0x"):
+                # x86-32: string refs via push immediate (string VA as imm)
                 try:
                     pushed_va = int(insn.op_str, 16)
                     s = rdata_strings.get(pushed_va)
@@ -415,6 +494,21 @@ def _extract_functions_pe(
                         str_refs.append(s)
                 except ValueError:
                     pass
+            elif is_64 and insn.mnemonic == "lea":
+                # x64: string refs via lea reg, [rip + offset]
+                m = _LEA_RIP_RE.search(insn.op_str)
+                if m:
+                    str_va = insn.address + insn.size + int(m.group(1), 16)
+                    s = rdata_strings.get(str_va)
+                    if s:
+                        str_refs.append(s)
+                else:
+                    m = _LEA_RIP_NEG_RE.search(insn.op_str)
+                    if m:
+                        str_va = insn.address + insn.size - int(m.group(1), 16)
+                        s = rdata_strings.get(str_va)
+                        if s:
+                            str_refs.append(s)
 
             if insn.mnemonic in ("ret", "retn"):
                 break
@@ -560,7 +654,7 @@ def _sweep_pe_one(
 
     # Function extraction
     try:
-        funcs = _extract_functions_pe(binary_path, pe, iat, rdata_strings, data=data)
+        funcs = _extract_functions_pe(binary_path, pe, iat, rdata_strings, data=data, is_64=is_64)
         result["functions_found"] = len(funcs)
         print(f"  [*] Functions extracted: {len(funcs)}")
     except Exception as e:
@@ -594,7 +688,7 @@ def _render_report(
 ) -> str:
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines: List[str] = [
-        "# PE32 Sweep Report",
+        "# PE Sweep Report",
         "",
         f"**Vendor:** {vendor}  **Product:** {product}  **Version:** {version}",
         f"**Generated:** {ts}  **Targets:** {len(results)} binaries",
@@ -648,7 +742,7 @@ def sweep_directory_pe(
     top_k: int,
 ) -> List[dict]:
     """
-    Scan all .exe and .dll files in directory for PE32 i386 binaries,
+    Scan all .exe and .dll files in directory for PE i386 or AMD64 binaries,
     then run _sweep_pe_one on each.
     """
     dir_path = Path(directory)
@@ -668,11 +762,13 @@ def sweep_directory_pe(
 
     print(f"[Phase 0] {len(candidates)} PE file(s) found in {directory}")
 
+    _SUPPORTED_ARCHS = {"ARCH.I386", "ARCH.AMD64"}
+
     results: List[dict] = []
     for p in candidates:
         arch_str, _ = _detect_pe_arch(str(p))
-        if arch_str != "ARCH.I386":
-            print(f"  [~] SKIP {p.name}: arch={arch_str} (PE sweep handles i386 only)")
+        if arch_str not in _SUPPORTED_ARCHS:
+            print(f"  [~] SKIP {p.name}: arch={arch_str} (PE sweep handles i386/AMD64 only)")
             continue
         try:
             r = _sweep_pe_one(str(p), model, profiles, top_k)
@@ -690,7 +786,7 @@ def sweep_directory_pe(
 
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="Windows PE32 (i386) binary vulnerability sweep",
+        description="Windows PE (i386 and AMD64) binary vulnerability sweep",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("target", help="Path to PE32 binary OR directory")
@@ -723,8 +819,8 @@ def main() -> None:
             print(f"[!] {target} does not look like a PE binary")
             sys.exit(1)
         arch_str, _ = _detect_pe_arch(str(target))
-        if arch_str != "ARCH.I386":
-            print(f"[!] {target} is {arch_str}, not i386 (this sweep handles PE32 i386 only)")
+        if arch_str not in ("ARCH.I386", "ARCH.AMD64"):
+            print(f"[!] {target} is {arch_str} — PE sweep handles i386 and AMD64 only")
             sys.exit(1)
         results = [_sweep_pe_one(str(target), model, profiles, args.top)]
 

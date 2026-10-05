@@ -1,21 +1,21 @@
-# PE32 Sweep
+# PE Sweep
 
 **File:** `sweeps/pe_sweep.py`
 
-Semantic vulnerability sweep for Windows PE32 (i386) binaries. Adapted from
+Semantic vulnerability sweep for Windows PE (i386 and AMD64) binaries. Adapted from
 `fortinet_sweep.py` for targets where the binary format is PE rather than ELF.
-Covers `.exe`, `.dll`, `.ocx`, and `.ax` files compiled for x86-32.
+Covers `.exe`, `.dll`, `.ocx`, and `.ax` files compiled for x86-32 or x86-64.
 
 ---
 
 ## When to use
 
-Use `pe_sweep.py` when the research target is a Windows PE32 binary:
+Use `pe_sweep.py` when the research target is a Windows PE binary:
 
 - QuickTime for Windows tools and SDKs
 - Windows COM/ActiveX components
 - Win32 media codecs (`.ax`, `.acm`)
-- Any legacy PE32 (i386) executable or library
+- Any PE32 (i386) or PE32+ (AMD64) executable or library
 
 **Do not** use this sweep on ELF binaries. For those, use `fortinet_sweep.py`
 or `base_sweep.py` as appropriate.
@@ -26,13 +26,39 @@ or `base_sweep.py` as appropriate.
 
 | Aspect | `fortinet_sweep.py` | `pe_sweep.py` |
 |---|---|---|
-| Binary format | ELF | PE32 |
-| Call resolution | ELF PLT (`.plt` section) | PE Import Address Table (IAT) |
-| Disassembler mode | Capstone x86-64 | Capstone x86-32 |
-| Prologue pattern | `55 48 89` (push rbp; mov rbp,rsp) | `55 8B EC` / `55 89 E5` (push ebp; mov ebp,esp) |
+| Binary format | ELF | PE32 / PE32+ |
+| Call resolution | ELF PLT (`.plt` section) | PE IAT; i386: absolute addr; AMD64: RIP-relative |
+| Disassembler mode | Capstone x86-64 | CS_MODE_32 (i386) or CS_MODE_64 (AMD64) |
+| Prologue pattern (i386) | N/A | `55 8B EC` / `55 89 E5` (PUSH EBP; MOV EBP,ESP) |
+| Prologue pattern (AMD64) | N/A | `48 83 EC` (SUB RSP,imm8); `55 48 89 E5` (PUSH RBP; MOV RBP,RSP) |
 | String index | XRefGraph (ELF `.rodata`) | `.rdata` section scan |
 | Taint analysis | Yes (arch-routed) | No (all taint trackers are ELF-only) |
 | SinkArgClassifier | Yes (x86-64) | No |
+
+---
+
+## Architecture support
+
+`pe_sweep.py` detects PE machine type at runtime and routes to the correct path:
+
+- **i386 (IMAGE_FILE_MACHINE_I386):** `CS_MODE_32`; IAT indirect calls via `dword ptr [0xXXXXXX]`; string refs via `push imm32`
+- **AMD64 (IMAGE_FILE_MACHINE_AMD64):** `CS_MODE_64`; IAT indirect calls via `qword ptr [rip + offset]`; string refs via `lea reg, [rip + offset]`
+
+ARM and other architectures are rejected at startup.
+
+---
+
+## AMD64 RIP-relative call resolution
+
+Capstone x64 preserves `rip + offset` form and never resolves it to an absolute address.
+`pe_sweep.py` computes the IAT slot VA as:
+
+```
+slot_va = insn.address + insn.size + offset
+```
+
+For example, `call qword ptr [rip + 0x1234]` at VA `0x140001000` with instruction size 6
+resolves to IAT slot `0x140002640`. String references via `lea` use the same computation.
 
 ---
 
@@ -78,8 +104,8 @@ from sweeps.pe_sweep import _sweep_pe_one, _build_win_profiles
 model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
 profiles = _build_win_profiles()
 
-result = _sweep_pe_one("/path/to/PlugInHelper.exe", model, profiles, top_k=5)
-print(f"functions found: {result['functions_found']}")
+result = _sweep_pe_one("/path/to/TwTouch.sys", model, profiles, top_k=5)
+print(f"arch: {result['arch']}  functions: {result['functions_found']}")
 for profile_name, hits in result["semantic"].items():
     if hits and hits[0][0] >= 0.30:
         score, va, calls, desc = hits[0]
@@ -107,19 +133,30 @@ iat = _build_iat(pe)
 
 ## Prologue detection
 
-Only detects standard frame-pointer prologues. Binaries compiled with FPO
-(Frame Pointer Omission, common with `/O2`) produce fewer detected functions.
-On `PlugInHelper.exe` (2002, MSVC), 23 of ~N total functions are detected.
+### i386
 
-If prologue coverage is insufficient, consider using the `--no-xref` path in
-`base_sweep.py` adapted for PE (future work: add eh_frame equivalent via PE
-exception directory parsing for AMD64 PE+ targets).
+Detects `55 8B EC` (MSVC) and `55 89 E5` (GCC) frame-pointer prologues.
+Binaries compiled with FPO (Frame Pointer Omission, `/O2`) produce fewer detected
+functions; FPO recovery via E8 call-target scanning supplements prologue detection.
+
+### AMD64
+
+Detects three patterns covering MSVC and GCC/Clang x64 ABIs:
+
+| Pattern | Encoding | Compiler |
+|---|---|---|
+| `PUSH RBP; MOV RBP,RSP` | `55 48 89 E5` | GCC / Clang frame-pointer |
+| `SUB RSP, imm8` | `48 83 EC XX` | MSVC typical (most common) |
+| `MOV [RSP+N], RBX` | `48 89 5C 24 XX` | MSVC callee-save preamble |
+
+FPO recovery (E8 rel32 scanning) is shared between i386 and AMD64 since direct call
+encoding is identical in both modes.
 
 ---
 
 ## Limitations
 
 - **No taint analysis**: semantic sweep only. Manual capstone trace required for CONFIRMED findings.
-- **i386 only**: AMD64 PE+ (`.exe` on modern Windows) is rejected at startup.
-- **FPO blindness**: functions compiled with frame pointer omission are missed.
-- **No XRefGraph**: string references limited to immediate push of .rdata VAs.
+- **FPO blindness**: functions with non-standard prologues (heavy inlining, naked functions) may be missed.
+- **No XRefGraph**: string references limited to `.rdata` + prologue-bounded disassembly; no full cross-reference graph.
+- **ARM/ARM64 PE**: rejected at startup (no prologue patterns or IAT resolution implemented for those ISAs).
