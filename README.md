@@ -46,6 +46,9 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 ---
 ## Real-World Results
+Ablation has been used to analyze production firmware and kernel drivers from Fortinet, Cisco, Juniper, IBM, Playstation 3, Apple MacOS, Microsoft Windows, Axis Communications, HPE, Fujitsu, MikroTik, Orka Macstadium, Acronis, TencentOS, Huawei, Enigma2, Skydio, Intel, NVIDIA, Dahua Security System, Tuya, Point of Sales Systems,
+
+Following coordinated disclosure on Cisco FMC and ISE, the Cisco Product Security Incident Response Team (PSIRT) has adopted Ablation for internal vulnerability triage. Cisco PSIRT is actively using it to triage ongoing disclosure reports across Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), HyperFlex, and Catalyst. Cisco Adaptive Security Appliance (ASA) LINA has also been reverse engineered using Ablation, with findings currently under coordinated triage via CERT/CC VINCE.
 
 | CVE | Product | Title | CVSS | Advisory |
 |---|---|---|---|---|
