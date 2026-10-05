@@ -20,7 +20,7 @@ Do not open a public GitHub issue for security vulnerabilities.
 
 **Preferred:** Use GitHub's private advisory flow -- click "Report a vulnerability" on the [Security tab](https://github.com/Ablation-Tool/ablation/security/advisories/new).
 
-**Alternative:** Email [the project maintainers via the GitHub repository](mailto:the project maintainers via the GitHub repository) with `[SECURITY]` in the subject line, or message on Signal at [](https://github.com/Ablation-Tool/ablation/security/advisories/new). Include:
+**Alternative:** Open a draft security advisory directly at the link above. Include:
 
 - A description of the vulnerability and its impact
 - Steps to reproduce or a minimal proof-of-concept binary
