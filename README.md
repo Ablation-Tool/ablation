@@ -29,8 +29,6 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 **Inter-Binary Taint Analysis:** Tracks the propagation of untrusted, user-controlled data across distinct, compiled executable files or binaries within a system (such as multi-binary firmware or cooperating processes) to detect vulnerabilities where data reaches sinks.
 
-**DAG Adapter Language:** Maps raw machine code bytes through a structured bitfield layer to semantic operations, using the RGB/hex packing formula as the bridge between them.
-
 **Cryptographic Analysis**
 
 Ablation strips away every layer that makes cryptography invisible in a compiled binary. Entropy Mapper locates the encrypted region. Crypto Audit and HashAlgoDiscriminator identify the algorithm. XorSolver, BmpKeyExtractor, and CustomCBCDetector break the encryption or recover the key. ELFVtableReconstructor and VtableDispatchScanner reconstruct what the runtime does with the result.
