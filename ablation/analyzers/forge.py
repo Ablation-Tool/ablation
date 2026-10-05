@@ -61,6 +61,7 @@ import importlib.util
 import json
 import re
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -254,6 +255,26 @@ def _extract_summary(raw: str) -> str:
     return ""
 
 
+def _run_via_claude_cli(system: str, user_msg: str, timeout: int = 600) -> str:
+    """Run the audit via the `claude --print` CLI.
+
+    Used as a fallback when no ANTHROPIC_API_KEY is configured — Claude Code
+    is already authenticated, so `claude --print` works without a separate key.
+    """
+    result = subprocess.run(
+        ['claude', '--print', '--system-prompt', system, '--output-format', 'text'],
+        input=user_msg,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    if result.returncode != 0 and not result.stdout.strip():
+        raise RuntimeError(
+            f"claude --print failed (exit {result.returncode}): {result.stderr[:300]}"
+        )
+    return result.stdout
+
+
 # ── Main class ────────────────────────────────────────────────────────────────
 
 class FORGE:
@@ -279,12 +300,6 @@ class FORGE:
         Returns ForgeReport; gate_passed=False blocks on any HIGH/CRITICAL finding.
         Requires ablation[llm] (pip install 'ablation[llm]').
         """
-        if not _ANTHROPIC_AVAILABLE:
-            raise ImportError(
-                "FORGE.audit_module requires anthropic. "
-                "Install with: pip install 'ablation[llm]'"
-            )
-
         source_path = Path(path).expanduser().resolve()
         if not source_path.exists():
             raise FileNotFoundError(f"FORGE.audit_module: file not found: {path}")
@@ -304,15 +319,25 @@ class FORGE:
             "Severity must be one of: CRITICAL, HIGH, MEDIUM, LOW, INFO."
         )
 
-        client = _anthropic.Anthropic(timeout=120.0)
-        resp = client.messages.create(
-            model=model,
-            max_tokens=16384,
-            system=system,
-            messages=[{"role": "user", "content": user_msg}],
-        )
+        raw = ""
+        # Primary path: direct Anthropic SDK call (requires ANTHROPIC_API_KEY).
+        # Fallback: claude --print CLI, which uses Claude Code's existing auth.
+        _sdk_error: Exception | None = None
+        if _ANTHROPIC_AVAILABLE:
+            try:
+                client = _anthropic.Anthropic(timeout=120.0)
+                resp = client.messages.create(
+                    model=model,
+                    max_tokens=16384,
+                    system=system,
+                    messages=[{"role": "user", "content": user_msg}],
+                )
+                raw = resp.content[0].text if resp.content else ""
+            except Exception as exc:
+                _sdk_error = exc
 
-        raw = resp.content[0].text if resp.content else ""
+        if not raw:
+            raw = _run_via_claude_cli(system, user_msg)
         if not raw:
             warnings.warn(
                 "FORGE.audit_module: LLM returned empty content — audit incomplete, "
