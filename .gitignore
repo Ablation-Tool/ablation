@@ -34,6 +34,7 @@ reports/
 
 # Internal
 SESSION.md
+SESSION_*.md
 AUDIT.md
 PLAN.md
 CLAUDE.md
