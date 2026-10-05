@@ -15,8 +15,6 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 **Semantic Search via BERT:** Searches code by concept instead of exact words. By mapping the actual meaning of the text, it cuts through the heaviest bottleneck of reverse engineering to help you pinpoint vulnerabilities faster.
 
-**DAG Adapter Language:** Maps raw machine code bytes through a structured bitfield layer to semantic operations, using the RGB/hex packing formula as the bridge between them.
-
 **Extreme Performance:** Loads massive binaries in seconds rather than hours. By only analyzing the code you are actively looking at, it skips the heavy upfront processing of traditional tools so you can start reverse engineering immediately.
 
 **Version Diffing:** Analyzes the actual behavior of updated software to verify vendor patches. It cuts through superficial repackaging to confirm if a vulnerability was genuinely fixed or just hidden.
