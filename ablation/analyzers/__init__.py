@@ -244,4 +244,7 @@ __all__ = [
     "ABCDecompiler",
     # ── FORGE ────────────────────────────────────────────────────────────────
     "FORGE", "ForgeReport", "ForgeFinding",
+    # ── C++ Vtable Reconstruction ─────────────────────────────────────────────
+    "CppVtableReconstructorAnalyzer",
+    "VtableSpec", "SlotSpec", "TypePropSite", "VtableReconstructorResult",
 ]

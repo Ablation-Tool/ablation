@@ -63,6 +63,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [Crypto](module-reference/crypto.md) | CryptoAudit, XorSolver, EntropyMapper, HashAlgoDiscriminator, CustomCBCDetector |
 | [Structural](module-reference/structural.md) | VtableResolver (ARM64), VersionDelta, StructuralSim |
 | [x86-64 Vtable Analysis](module-reference/vtable-x86-64.md) | ELFVtableReconstructor (.rela.dyn slot reconstruction), VtableDispatchScanner (dead/live method detection) |
+| [C++ Vtable Reconstructor](module-reference/cpp-vtable-reconstructor.md) | CppVtableReconstructorAnalyzer: any-arch vtable extraction (RELA + byte scan), slot naming via exports/string-xref/callees, x86-64 + ARM64 call-site tracing, IDAPython set_type script emitter |
 | [Firmware Containers](module-reference/firmware-containers.md) | FirmwareContainer (partitioned image parser + payload detection), VideoContainerAnalyzer (MP4/MKV/AVI forensics) |
 | [Android / APK](module-reference/android.md) | APKParser (AXML+DEX), DexAnalyzer, JniBridgeScanner (JNI_OnLoad/Java_*/opaque peer), BinderScanner (exported services, AIDL Stubs, onTransact), LibraryInventory (native .so scanner: arch, exports, JNI count, PLT hook detection, security score, classify_internals) |
 | [SPU Disassembler](module-reference/spu-disassembler.md) | Cell BE SPU (PS3) instruction decoder: all formats (RRR/RI18/RI16/RI10/RR/RI7), confirmed opcode table, frequency/coverage report, embedded SPU ELF extraction |
@@ -87,6 +88,7 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.41.0 | CppVtableReconstructorAnalyzer: any-arch vtable extraction (RELA + byte scan), slot naming (export/string-xref/callee), x86-64 + ARM64 call-site tracing, IDAPython set_type script emitter |
 | v2.39.0 | WindowAnalyzer: PPC32/PPC64 big-endian support — `_elf_arch()` respects EI_DATA byte order; `_cs()` emits Capstone PPC decoder; `_build_plt_ppc32_bss()` recovers BSS PLT stub→symbol map via BL scan + `.rela.plt` index correlation |
 | v2.38.0 | PPC32PLTTracer: SYSV PIC BSS PLT support — `_is_bss_plt()` detection, `bss_plt_stub_map()` with cached stub map, `_find_callers_bss_plt()` direct BL scan path; GOT2-PIC path unchanged |
 | v2.37.0 | PPC32TaintTracker: `_load_plt_from_dynsym_raw()` now gated by `if not self._plt:` — prevents BSS PLT SYSV PIC binaries from having their correct LIEF-populated PLT map corrupted by zero st_value dynsym entries |
