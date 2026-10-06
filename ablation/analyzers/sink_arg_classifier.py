@@ -707,7 +707,85 @@ class SinkArgClassifier:
             return (verdict,
                     f'{snprintf_name}({base_reg}+{disp:#x}) fmt={detail}')
 
+        # No snprintf writer found — check for immediate-constant writes to this slot.
+        # Handles GCC's pattern of storing short string literals as movabs+mov:
+        #   movabs rcx, 0x68732f6e69622f   ; "/bin/sh" packed as int64
+        #   mov    [rbp-0xa0], rcx          ; write to slot
+        # Also handles direct mov [rbp+disp], <imm32>.
+        imm_result = self._scan_immediate_slot_write(insns, load_idx, base_reg, disp)
+        if imm_result is not None:
+            return imm_result
+
         return (UNKNOWN, f'stack slot [{base_reg}+{disp:#x}]: no snprintf writer found')
+
+    def _scan_immediate_slot_write(
+        self,
+        insns: list,
+        load_idx: int,
+        base_reg: str,
+        disp: int,
+    ):
+        """
+        Scan backwards from load_idx for a MOV that writes to stack slot (base_reg, disp)
+        where the source is an immediate constant. Two patterns:
+
+          1. movabs <reg>, <imm64>   (GCC packed-string optimisation)
+             mov    [base_reg+disp], <reg>
+          2. mov    [base_reg+disp], <imm32>  (direct immediate store)
+
+        Uses the full function body (not limited to _SNPRINTF_SEARCH_WINDOW) because
+        GCC may place the movabs at the very start of a function whose execl call is
+        deep in the body — a 60-instruction window misses it when the gap is ~80+ insns.
+
+        Returns (RODATA_CONST, detail) on success, None if not found.
+        """
+        search_limit = -1  # scan full function body
+
+        for j in range(load_idx - 1, search_limit, -1):
+            insn = insns[j]
+            mnem = insn.mnemonic.lower()
+            if mnem not in ('mov', 'movabs', 'movq'):
+                continue
+            if len(insn.operands) < 2:
+                continue
+
+            dst = insn.operands[0]
+            src = insn.operands[1]
+
+            # Pattern 2: mov [base_reg+disp], <imm32>
+            if (dst.type == X86_OP_MEM and src.type == X86_OP_IMM):
+                dst_base = self._reg_id_to_canon(dst.mem.base) if dst.mem.base else ''
+                if dst_base == base_reg and dst.mem.disp == disp:
+                    return (RODATA_CONST,
+                            f'immediate 0x{src.imm:x} written to [{base_reg}{disp:#x}]'
+                            f' @ 0x{insn.address:x}')
+
+            # Pattern 1: mov [base_reg+disp], <reg> — check if reg came from movabs
+            if (dst.type == X86_OP_MEM and src.type == X86_OP_REG):
+                dst_base = self._reg_id_to_canon(dst.mem.base) if dst.mem.base else ''
+                if dst_base == base_reg and dst.mem.disp == disp:
+                    src_canon = self._reg_id_to_canon(src.reg)
+                    # Look backwards for movabs/mov <src_canon>, <imm>
+                    inner_limit = max(j - _LOOKBACK, -1)
+                    for k in range(j - 1, inner_limit, -1):
+                        kins = insns[k]
+                        if kins.mnemonic.lower() not in ('movabs', 'mov', 'movq'):
+                            continue
+                        if len(kins.operands) < 2:
+                            continue
+                        kdst = kins.operands[0]
+                        ksrc = kins.operands[1]
+                        if kdst.type != X86_OP_REG:
+                            continue
+                        if self._reg_id_to_canon(kdst.reg) != src_canon:
+                            continue
+                        if ksrc.type == X86_OP_IMM:
+                            return (RODATA_CONST,
+                                    f'movabs/mov 0x{ksrc.imm:x} → {src_canon}'
+                                    f' → [{base_reg}{disp:#x}] @ 0x{insn.address:x}')
+                        break  # reg set to non-immediate; not constant
+
+        return None
 
     def _verify_rdi_is_slot(
         self,
