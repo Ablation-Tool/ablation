@@ -34,6 +34,7 @@ reports/
 
 # Target RE findings — never committed
 re/
+targets/
 
 # Internal
 SESSION.md
