@@ -872,6 +872,7 @@ class SinkArgClassifier:
 def batch_plt_intersect(
     directory: str,
     sinks: Optional[List[str]] = None,
+    recursive: bool = True,
 ) -> Dict[str, List[str]]:
     """
     Scan every ELF in `directory` and return only those whose PLT intersects
@@ -880,9 +881,12 @@ def batch_plt_intersect(
     Returns {elf_path: [matching_sink_names]}. Files with zero matches are
     omitted — they are auto-CLEAN and need no individual audit.
 
-    This is the 30-second stub-lib batch check that avoids the mistake of
-    auditing 17+ ~14KB stub libraries one-by-one when a single PLT intersection
-    loop would have produced the same result.
+    When recursive=True (default), traverses all subdirectories via os.walk.
+    Use recursive=False for a flat single-directory scan (original behaviour).
+    The recursive default is required for firmware rootfs trees where binaries
+    live in deeply nested paths (e.g., VRP board squashfs 6 levels deep).
+    Note: os.walk does not follow symlinks (followlinks=False). ELFs that live
+    only under symlinked subdirectories will be skipped in recursive mode.
 
     Usage:
         from ablation.analyzers.sink_arg_classifier import batch_plt_intersect
@@ -894,8 +898,17 @@ def batch_plt_intersect(
     target_sinks: List[str] = sinks if sinks is not None else list(_DEFAULT_SINKS.keys())
     sink_set = set(target_sinks)
     hits: Dict[str, List[str]] = {}
-    for fname in sorted(os.listdir(directory)):
-        fpath = os.path.join(directory, fname)
+
+    def _iter_files(d: str):
+        if recursive:
+            for root, _dirs, files in os.walk(d):
+                for fname in sorted(files):
+                    yield os.path.join(root, fname)
+        else:
+            for fname in sorted(os.listdir(d)):
+                yield os.path.join(d, fname)
+
+    for fpath in _iter_files(directory):
         if not os.path.isfile(fpath):
             continue
         try:
