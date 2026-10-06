@@ -1034,3 +1034,68 @@ Embedded version strings in the body: `V200R019C00SPC200B319` (from build) and `
 | All YANG plugins are plaintext Python in firmware | GOTREX_SEC_004 | INFO | Full NETCONF surface exposed via SquashFS 3 extraction |
 | Atlas A10x AI chip embedded (A0104 V12.00.00) | GOTREX_SEC_005 | INFO | Dedicated AI NPU; opaque firmware; management CPU compromise → NPU reflash risk |
 | Redis internal management store (libhiredis) | GOTREX_SEC_006 | INFO | Default Redis = no auth; NETCONF plugin RCE → Redis config store accessible |
+
+---
+
+## HuaweiSquashfsExtractor
+
+**File:** `ablation/analyzers/huawei_squashfs_extractor.py`
+
+Pure-Python squashfs v4 reader for Huawei VRP firmware images that use XZ compression with
+per-block ARM64 BCJ filtering. Standard tools (unsquashfs 4.7.5, 7z 26.00) fail on files
+spanning multiple squashfs blocks because Python's `lzma` C extension — when compiled against
+pre-5.4.0 liblzma headers — does not expose XZ filter ID 0x0A (ARM64 BCJ). This module
+bypasses the filter by extracting the raw LZMA2 payload from each XZ block and decompressing
+it with `FORMAT_RAW`. Non-branch bytes (arithmetic instructions, data) are BCJ-invariant and
+byte-verify correctly; branch targets in BCJ-filtered blocks are modified.
+
+Confirmed working on: S6750-H V600R024C00SPC500 (sqfs_00_00001984.sqfs, 264MB, 96448 inodes).
+
+### Key squashfs v4 format notes
+
+- Superblock: 96 bytes. `root_inode_ref` at offset 32 (LE uint64); table pointers at offsets 48–88.
+- Metadata blocks: 2-byte LE header. Bit 15 = NOCOMPRESS. Low 15 bits = compressed size (max 8192 decompressed).
+- `squashfs_dir_entry.size` is `__le16` (8-byte entry header), not `__le8` as shown in some unofficial sources. Kernel `squashfs_fs.h` is authoritative.
+- `inode_ref = (block_byte_offset_from_table_start << 16) | within_decompressed_block_offset`.
+- Inode types: 1=DIR 2=REG 3=SYM 4=BLK 5=CHR 6=FIFO 7=SOCK 8=LDIR 9=LREG.
+
+### XZ block evasion mechanism
+
+S6750-H XZ blocks that contain AArch64 code include the ARM64 BCJ filter (xz filter ID 0x0A,
+added in xz 5.4.0). The standard `lzma.decompress(FORMAT_XZ)` fails with "Corrupt input data"
+on Python builds compiled against older liblzma headers. Bypass: parse the XZ block header to
+find the LZMA2 payload start offset, then decompress with `FORMAT_RAW + LZMA2`. Branch
+instructions in these blocks will have BCJ-modified targets; all other bytes are correct.
+
+### API
+
+```python
+from ablation.analyzers.huawei_squashfs_extractor import HuaweiSquashfsExtractor
+
+ext = HuaweiSquashfsExtractor(path)
+data = ext.extract("aarch64/0x10644_7500/usr/local/lib/libhttpstackcore.so")
+# data is bytes, file_size bytes long
+```
+
+### `HuaweiSquashfsExtractor(path)`
+
+Opens the squashfs image at `path` and parses the superblock.
+
+### `extract(file_path: str) -> bytes`
+
+Walk the squashfs directory tree to `file_path` and return the full decompressed file content.
+Returns `bytes` of exactly `inode.file_size` length. Raises `FileNotFoundError` if any path
+component is missing.
+
+### `list_dir(dir_path: str) -> list[tuple[str, int, int]]`
+
+Return a sorted list of `(name, inode_ref, type)` tuples for all entries in `dir_path`.
+
+### Implementation notes
+
+- `MetaStream`: lazy cache of decompressed metadata blocks with block-boundary crossing.
+  When `within_off >= block_size`, advances to the next block recursively. Earlier versions
+  that did not handle this caused infinite recursion when reading large directory listings.
+- `_extract_lzma2_payload(block_bytes)`: parses XZ stream header (12 bytes) + block header
+  to find the LZMA2 compressed data start and length. Returns `(payload, has_arm64_bcj)`.
+- Per-file data blocks: each is an independent XZ stream. Decompress individually; concatenate outputs.
