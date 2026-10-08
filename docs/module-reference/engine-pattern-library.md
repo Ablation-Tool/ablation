@@ -13,16 +13,32 @@ only game-specific code for human reverse engineering.
 
 ## Why this module exists
 
-Every AAA game binary contains tens of thousands of engine functions
-that are identical (or nearly so) across games and studios. Manually
-triaging these functions wastes RE time on already-known code. The
-EnginePatternLibrary automates that triage pass so the analyst sees
-only the residual — the game-specific 20–40% that is actually new.
+Three things that weren't possible before in Ablation:
 
-The library integrates with the ablation flywheel: confirmed findings
-from any RE project can be ingested as new signatures via
-`ingest_from_findings()`, making future labeling coverage grow
-automatically.
+**1. Separating engine code from game code automatically.**
+A stripped AAA game binary contains 30,000 to 80,000 functions. 60 to
+80% of them are Unreal Engine, id Tech, Unity, or CryEngine code that
+is identical across studios and titles. Without this module, every new
+game binary started at zero. The analyst manually triaged each function
+to decide whether it was already-known boilerplate or game-specific
+logic worth analyzing. There was no batch classification.
+
+**2. Signal-quality-ordered labeling.**
+Even when patterns were known informally, there was no structured way
+to apply them. A weak semantic hit could shadow a strong string-marker
+match because nothing enforced priority. The three-pass pipeline fixes
+that: exact string markers run first, regex patterns second, semantic
+similarity last. The highest-confidence evidence always wins.
+
+**3. A flywheel that grows coverage from confirmed findings.**
+Each RE engagement produced confirmed function names that sat in a
+session file and were never reused. `ingest_from_findings()` closes
+that loop. Confirmed findings become new signatures, so every future
+binary benefits from the accumulated corpus without any manual curation.
+
+`EnginePatternLibrary` addresses all three with a single
+`label_binary(ctx, xg)` call, returning an `{va: EngineLabel}` map
+and an `unlabeled()` residual that is the actual human RE target.
 
 ---
 
