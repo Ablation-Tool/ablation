@@ -504,7 +504,10 @@ WIN16_NE_PROFILES: List[Tuple[str, str]] = [
 
 
 def _build_win16_profiles() -> List[Tuple[str, str]]:
-    from sweeps.base_sweep import VULN_PROFILES as BASE
+    try:
+        from sweeps.base_sweep import VULN_PROFILES as BASE
+    except ImportError:
+        BASE = []
     seen = {name for name, _ in BASE}
     extra = [(n, q) for n, q in WIN16_NE_PROFILES if n not in seen]
     return list(BASE) + extra
@@ -543,6 +546,8 @@ class NEBinary:
         for i in range(self.mod_ref_cnt):
             name_off = struct.unpack_from('<H', d, mod_ref_abs + i * 2)[0]
             name_abs = ne_off + self.imp_names_off + name_off
+            if name_abs >= len(d):
+                continue
             nlen = d[name_abs]
             name = d[name_abs + 1: name_abs + 1 + nlen].decode('ascii', 'replace')
             self.module_names.append(name)
@@ -595,6 +600,9 @@ class NEBinary:
                 mod_ref  = struct.unpack_from('<H', d, rec_off + 4)[0]
                 name_off = struct.unpack_from('<H', d, rec_off + 6)[0]
                 name_abs = self.ne_off + self.imp_names_off + name_off
+                if name_abs >= len(d):
+                    rec_off += 8
+                    continue
                 nlen = d[name_abs]
                 name = d[name_abs + 1: name_abs + 1 + nlen].decode('ascii', 'replace')
                 if 1 <= mod_ref <= len(self.module_names) - 1:
@@ -794,45 +802,45 @@ def _semantic_sweep_ne(
     from ablation.analyzers import FindingRegistry
 
     registry = FindingRegistry()
+    try:
+        if not funcs:
+            return {}
 
-    if not funcs:
+        print(f"  [*] {len(funcs)} functions; encoding ...")
+        corpus = model.encode(
+            [f['desc'] for f in funcs],
+            normalize_embeddings=True,
+            batch_size=128,
+            show_progress_bar=False,
+        ).astype(np.float32)
+
+        all_profiles = list(profiles)
+        prior = registry.prior_queries(top_n=15)
+        for i, desc in enumerate(prior):
+            label = (
+                f"prior:{i:02d}:{desc[:35].replace(' ', '_').replace('|', '').strip('_')}"
+            )
+            all_profiles.append((label, desc))
+        if prior:
+            print(f"  [*] +{len(prior)} prior-finding queries from registry")
+
+        n_built = registry.build_embeddings(model)
+        if n_built:
+            print(f"  [*] Registry embeddings: {n_built} entries cached")
+
+        results: Dict = {}
+        for name, query in all_profiles:
+            qvec = model.encode(query, normalize_embeddings=True).astype(np.float32)
+            scores = corpus @ qvec
+            top = np.argsort(scores)[::-1][:top_k]
+            results[name] = [
+                (float(scores[i]), funcs[i]['va'], funcs[i]['calls'], funcs[i]['desc'])
+                for i in top
+            ]
+
+        return results
+    finally:
         registry.close()
-        return {}
-
-    print(f"  [*] {len(funcs)} functions; encoding ...")
-    corpus = model.encode(
-        [f['desc'] for f in funcs],
-        normalize_embeddings=True,
-        batch_size=128,
-        show_progress_bar=False,
-    ).astype(np.float32)
-
-    all_profiles = list(profiles)
-    prior = registry.prior_queries(top_n=15)
-    for i, desc in enumerate(prior):
-        label = (
-            f"prior:{i:02d}:{desc[:35].replace(' ', '_').replace('|', '').strip('_')}"
-        )
-        all_profiles.append((label, desc))
-    if prior:
-        print(f"  [*] +{len(prior)} prior-finding queries from registry")
-
-    n_built = registry.build_embeddings(model)
-    if n_built:
-        print(f"  [*] Registry embeddings: {n_built} entries cached")
-
-    results: Dict = {}
-    for name, query in all_profiles:
-        qvec = model.encode(query, normalize_embeddings=True).astype(np.float32)
-        scores = corpus @ qvec
-        top = np.argsort(scores)[::-1][:top_k]
-        results[name] = [
-            (float(scores[i]), funcs[i]['va'], funcs[i]['calls'], funcs[i]['desc'])
-            for i in top
-        ]
-
-    registry.close()
-    return results
 
 
 # ── per-binary sweep orchestrator ────────────────────────────────────────────
