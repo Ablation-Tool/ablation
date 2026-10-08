@@ -8,11 +8,25 @@ model already loaded for semantic search.
 
 ## Why it exists
 
+Two things that weren't possible before in Ablation:
+
+**1. Identifying standard library functions without reading disassembly.**
 Stripped firmware routinely contains hundreds of functions named `fn_0x1d700`. Most
-are wrappers for `memcpy`, `strlen`, `recv`, or other libc functions inlined by the
-compiler. Manually identifying them is tedious. SigLibrary does it automatically:
-a match above 0.62 cosine similarity renames the function to `likely:memcpy` in the
-corpus DB.
+are inlined wrappers for `memcpy`, `strlen`, `recv`, or other libc functions. Without
+this module, identifying them meant reading each function's disassembly and recognizing
+the pattern by hand. On a 500-function binary that could mean hours of work before
+reaching the first interesting function.
+
+**2. Cleaning the semantic search corpus before analysis.**
+`SemanticSearcher` builds embeddings from function descriptions. When hundreds of those
+functions are still named `fn_0x*`, their descriptions pollute every downstream query
+because libc call patterns appear as noise across the embedding space. Running
+`auto_name()` before building the corpus removes that noise. Semantic queries then
+return results from actual logic, not from `memcpy` wrappers that happen to match the
+description.
+
+`SigLibrary.auto_name()` does both: it renames placeholder functions in the corpus DB
+so every subsequent analysis tool sees clean names.
 
 ---
 
