@@ -630,7 +630,9 @@ class BinaryContext:
                         if di.has_EH_CFI():
                             for e in di.EH_CFI_entries():
                                 if isinstance(e, FDE) and e["initial_location"] > 0:
-                                    va = e["initial_location"]
+                                    # pyelftools can return Python ints > 2^64 for PPC64
+                                    # ELF V1 eh_frame pcrel entries; mask to 64 bits.
+                                    va = int(e["initial_location"]) & 0xFFFFFFFFFFFFFFFF
                                     if self.arch == 'arm32' and (va & 1):
                                         va &= ~1
                                         thumb.add(va)
