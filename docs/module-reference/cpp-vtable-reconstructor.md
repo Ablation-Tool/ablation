@@ -7,13 +7,23 @@ binary. No IDA license. No relocation requirement. Runs at sweep scale.
 
 ## Why this exists
 
-The standard Hex-Rays workflow for virtual dispatch: find the vtable, `set_type` the
-producer function return, then manually `set_type` every consumer local that receives the
-pointer — one variable at a time. The decompiler does not propagate struct types from a
-producer's return value to the callers' locals automatically; every step in the chain must
-be touched by hand.
+Three things were missing from Ablation's vtable tooling before v2.41.0:
 
-`CppVtableReconstructorAnalyzer` replaces all three IDA steps with a single Python call:
+**1. Architecture coverage.** `ELFVtableReconstructor` was x86-64 only. `VtableResolver`
+was ARM64 only. Neither ran on LoongArch64, PPC64, MIPS, RISC-V, or any other arch. Any
+firmware RE on a non-x86/ARM target had no vtable discovery at all.
+
+**2. Slot naming.** Even on supported arches, the existing modules returned a numbered
+array — `slot_3 → 0x13450`. No names. The Hex-Rays decompiler then showed
+`(alg_vtbl[3])(...)` with no indication that slot 3 is `modexp`. You had to manually trace
+every slot to figure out what it did before you could start analysis.
+
+**3. Type propagation friction.** Even after naming slots by hand, setting the struct type
+in IDA required calling `set_type` on the producer function return and then hunting down
+every consumer local in every caller — one variable at a time — to propagate the type
+through the decompiler. There was no batch automation for this.
+
+`CppVtableReconstructorAnalyzer` resolves all three with a single Python call:
 
 1. **VtableScanner** — finds vtables in any ELF using RELA relocations (dynamic) or
    code-pointer scanning (static)
