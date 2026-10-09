@@ -12,6 +12,17 @@ GCC for LoongArch64 branchless min/max uses a four-instruction sequence:
 That implements max(Ra, Rb). Correct min(Ra, Rb) swaps the masknez/maskeqz order.
 In GCC 12.3.1.7-1.tl4 the swap is missing, so every branchless min emits max.
 
+A second variant uses immediate-compare instructions (sltui/slti) with a constant
+bound loaded by addi.w/addi.d.  The combiner `or` may appear up to ~20 instructions
+after the mask pair because GCC schedules surrounding stores between them:
+
+    sltui  Rcond, Ra, imm+1   # Rcond = (Ra <= imm) [unsigned], i.e. Ra < imm+1
+    addi.w Rb, $zero, imm     # Rb = the clamped upper bound
+    maskeqz Rtmp2, Ra, Rcond  # (BUG: should be masknez)
+    masknez Rtmp1, Rb, Rcond  # (BUG: should be maskeqz)
+    ... intervening instructions ...
+    or     Rout, Rtmp2, Rtmp1 # result = max(Ra, imm) instead of min(Ra, imm)
+
 The scanner finds the four-instruction MAX sequence and checks whether Rout reaches
 a memory-sizing sink (memcpy/memmove count, read/fread count, malloc size) within a
 configurable lookahead window without being clobbered. A hit means the operation
@@ -45,7 +56,7 @@ except ImportError:
 
 # ---------------------------------------------------------------------------
 # Instruction encoding constants (from binutils 2.41 loongarch-opc.c)
-# All 3R format: bits[31:15] = opcode, bits[14:10] = rk, bits[9:5] = rj, bits[4:0] = rd
+# 3R format: bits[31:15] = opcode, bits[14:10] = rk, bits[9:5] = rj, bits[4:0] = rd
 # ---------------------------------------------------------------------------
 
 _MATCH_SLT     = 0x00120000   # slt  (signed compare) — smin variant of GCC bug
@@ -54,6 +65,18 @@ _MATCH_MASKEQZ = 0x00130000
 _MATCH_MASKNEZ = 0x00138000
 _MATCH_OR      = 0x00150000
 _MASK_3R       = 0xffff8000   # bits[31:15]
+
+# 2RI12 format: bits[31:22] = opcode (10 bits), bits[21:10] = imm12,
+#               bits[9:5] = rj, bits[4:0] = rd
+_MASK_2RI12  = 0xffc00000
+_MATCH_SLTUI = 0x02400000  # sltui Rd, Rj, ui12 — unsigned imm compare  (9  << 22)
+_MATCH_SLTI  = 0x02000000  # slti  Rd, Rj, si12 — signed imm compare    (8  << 22)
+_MATCH_ADDIW = 0x02800000  # addi.w Rd, Rj, si12                         (10 << 22)
+_MATCH_ADDID = 0x02c00000  # addi.d Rd, Rj, si12                         (11 << 22)
+
+# Max instructions past masknez to scan for the combining `or` in the sltui variant.
+# O-024 (libcrypto OCB helper) has 5 intervening instructions; 20 gives headroom.
+_SLTUI_OR_LOOKAHEAD = 20
 
 _MATCH_BL      = 0x54000000
 _MASK_BL       = 0xfc000000   # bl offs26
@@ -404,6 +427,11 @@ class LA64MaxNotMinScanner:
             # Instruction 0: sltu Rcond, Ra, Rb  OR  slt Rcond, Ra, Rb
             # GCC 12.3.1.7 inverts both smin (slt) and umin (sltu) variants.
             if (w0 & _MASK_3R) not in (_MATCH_SLTU, _MATCH_SLT):
+                # 2RI12 sltui/slti immediate-compare variant (O-024 class)
+                if (w0 & _MASK_2RI12) in (_MATCH_SLTUI, _MATCH_SLTI):
+                    f = self._check_sltui_variant(va, words)
+                    if f:
+                        findings.append(f)
                 va += 4
                 continue
 
@@ -543,7 +571,7 @@ class LA64MaxNotMinScanner:
                 continue
 
             # addi.d Rdst, Rsrc, 0  (zero-immediate add = move)
-            if (word & 0xffc00000) == 0x02c00000:
+            if (word & _MASK_2RI12) == _MATCH_ADDID:
                 si12 = (word >> 10) & 0xfff
                 if si12 == 0 and _rj(word) in live:
                     live.add(_rd(word))
@@ -560,6 +588,119 @@ class LA64MaxNotMinScanner:
                     live.discard(rd)
 
         return None
+
+    def _check_sltui_variant(
+        self, va: int, words: List[int]
+    ) -> Optional[LA64MaxNotMinFinding]:
+        """
+        Detect the 2RI12 immediate-compare variant of the GCC max-not-min bug.
+
+        Pattern (O-024 canonical):
+            [0] sltui/slti  Rcond, Ra, imm    -- Rcond = (Ra < imm)
+            [1] addi.w/addi.d Rb, $zero, imm-1 -- load bound constant
+            [2] maskeqz/masknez Rtmp2, Ra, Rcond
+            [3] masknez/maskeqz Rtmp1, Rb, Rcond  (opposite of [2])
+            ... up to _SLTUI_OR_LOOKAHEAD (20) instructions ...
+            [N] or Rout, Rtmp1, Rtmp2          -- combining or (operands commutative)
+
+        Returns a finding if the combiner `or` is reached within _SLTUI_OR_LOOKAHEAD
+        instructions of [3] and Rout flows into a sink, or None otherwise.
+        """
+        w0, w1, w2, w3 = words
+
+        # [0] sltui or slti: 2RI12 format, opcode in bits[31:22]
+        cmp_mask = w0 & _MASK_2RI12
+        # (caller already checked this; guard is here for safety)
+        if cmp_mask not in (_MATCH_SLTUI, _MATCH_SLTI):
+            return None
+        rcond = _rd(w0)
+        ra    = _rj(w0)
+
+        # [1] addi.w or addi.d loading from $zero — synthesises the bound constant
+        addi_mask = w1 & _MASK_2RI12
+        if addi_mask not in (_MATCH_ADDIW, _MATCH_ADDID):
+            return None
+        if _rj(w1) != 0:   # must be addi.{w,d} Rb, $zero, imm
+            return None
+        rb = _rd(w1)
+        if rb == 0:         # writing to $zero is a nop, not a real load
+            return None
+
+        # [2] maskeqz or masknez with rk == rcond
+        if (w2 & _MASK_3R) not in (_MATCH_MASKEQZ, _MATCH_MASKNEZ):
+            return None
+        if _rk(w2) != rcond:
+            return None
+        rtmp2 = _rd(w2)
+
+        # [3] the opposite mask instruction with rk == rcond
+        expected_mask3 = _MATCH_MASKNEZ if (w2 & _MASK_3R) == _MATCH_MASKEQZ else _MATCH_MASKEQZ
+        if (w3 & _MASK_3R) != expected_mask3:
+            return None
+        if _rk(w3) != rcond:
+            return None
+        rtmp1 = _rd(w3)
+
+        # The two mask instructions must select between Ra and Rb
+        # (set equality handles both maskeqz-first and masknez-first orderings).
+        if {_rj(w2), _rj(w3)} != {ra, rb}:
+            return None
+
+        # Scan for the combining `or` up to _SLTUI_OR_LOOKAHEAD instructions past [3].
+        target_pair = frozenset({rtmp1, rtmp2})
+        or_va: Optional[int] = None
+        rout:  Optional[int] = None
+
+        for i in range(_SLTUI_OR_LOOKAHEAD):
+            scan_va = va + 16 + i * 4  # first candidate is [4], i.e., va+16
+            word = self._word_at(scan_va)
+            if word is None:
+                break
+
+            if (word & _MASK_3R) == _MATCH_OR:
+                if frozenset({_rj(word), _rk(word)}) == target_pair:
+                    or_va = scan_va
+                    rout  = _rd(word)
+                    break
+                # A different `or` that overwrites rtmp1 or rtmp2 breaks the chain.
+                if _rd(word) in target_pair:
+                    break
+                continue
+
+            # Dead-register kill (Cifuentes §5.4.1): store and branch instructions
+            # encode bits[4:0] as source/offset, not destination — skip them.
+            rd_w = _rd(word)
+            if rd_w in target_pair and rd_w != 0:
+                top6 = word >> 26
+                op22 = word >> 22
+                op15 = word >> 15
+                if (top6 not in _BRANCH_TOP6
+                        and op22 not in _STORE_OP22
+                        and op15 not in _STOREX_OP15):
+                    break  # rtmp1 or rtmp2 clobbered before the combining `or`
+
+        if or_va is None or rout is None:
+            return None
+
+        compare_op = "sltui" if cmp_mask == _MATCH_SLTUI else "slti"
+        hit = self._check_lookahead(or_va + 4, rout)
+        if not hit:
+            return None
+
+        sink_va, sink_name, sink_arg, fp_class = hit
+        ctx = self._context_snippet(va)
+        return LA64MaxNotMinFinding(
+            func_va     = 0,
+            pattern_va  = va,
+            result_reg  = rout,
+            result_name = self._reg_name(rout),
+            sink_va     = sink_va,
+            sink_name   = sink_name,
+            sink_arg    = sink_arg,
+            context     = ctx,
+            fp_class    = fp_class,
+            compare_op  = compare_op,
+        )
 
     # ------------------------------------------------------------------
 
