@@ -92,6 +92,22 @@ class ROMLayout:
                 return r.end
         return 0
 
+    def is_calibration_only(self) -> tuple[bool, str]:
+        """Return (True, reason) when the image contains no CODE regions.
+
+        OBD tuning tools capture only the calibration flash partition.
+        The program flash is absent, so any disassembler or security
+        scanner run against such an image produces only false positives.
+        Callers should check this before running EcuSecurityAccessScanner
+        or any other code-oriented analysis.
+        """
+        if self.code_regions():
+            return (False, "")
+        active = [r for r in self.regions if r.region_type not in ("ERASED", "PADDING")]
+        if not active:
+            return (False, "image is fully erased")
+        return (True, "OBD cal-only dump, program flash absent")
+
 
 class EcuROMLayoutAnalyzer:
     """
