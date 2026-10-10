@@ -703,6 +703,8 @@ class BinaryLifter:
     def _lift_sh2a(self, func_va: int, max_insns: int) -> str:
         try:
             from .ecu_sh2a_decoder import EcuSH2aDecoder
+            from .cfg_sh2a import build_cfg as _sh2a_cfg
+            from .structurizer import Structurizer as _Structurizer
         except ImportError as e:
             return f"// SH-2A decoder not available: {e}\n"
 
@@ -728,26 +730,47 @@ class BinaryLifter:
         if not insns:
             return f"// no instructions decoded at {func_va:#x}\n"
 
-        # Truncate at first RETURN + 1 delay-slot instruction
-        for stop_i, _insn in enumerate(insns):
-            if _insn.insn_type == "RETURN":
-                insns = insns[:min(stop_i + 2, len(insns))]
-                break
+        try:
+            cfg = _sh2a_cfg(insns, entry=func_va)
+        except Exception as e:
+            return f"// SH-2A CFG build failed: {e}\n"
 
         tainted_params = self._taint_map.get(func_va, set())
         state = _SH2aState(tainted_params, self._func_name, self._plt)
         fname = self._func_name(func_va)
-        lines: List[str] = [f"// {fname} @ {func_va:#x}", "{"]
-        for insn in insns:
+
+        def _safe_emit(insn):
             try:
-                stmt = state.emit(insn)
+                return state.emit(insn)
             except Exception:
-                stmt = f"// {insn.mnemonic}"
-            if stmt:
-                for s in stmt.splitlines():
-                    lines.append("  " + s)
-        lines.append("}")
-        return "\n".join(lines) + "\n"
+                return f"// {insn.mnemonic}"
+
+        # NOTE: _SH2aState is stateful (register/taint tracking). The structurizer
+        # calls _safe_emit in RPO/structured order, not original linear order. For
+        # functions with non-trivial cross-branch register state, taint propagation
+        # may reflect incorrect register values. This is a known limitation; a future
+        # SH2aCondTracker pass should snapshot register state per branch arm.
+        try:
+            structurizer = _Structurizer(cfg)
+            return structurizer.emit(_safe_emit, func_name=fname) + "\n"
+        except Exception as e:
+            import warnings
+            warnings.warn(
+                f"SH-2A structurizer fallback at {func_va:#x}: {e}",
+                stacklevel=2,
+            )
+            # Fall back to linear-walk emit on structurizer failure.
+            lines: List[str] = [
+                f"// {fname} @ {func_va:#x}  (linear fallback: {e})", "{"
+            ]
+            for block in sorted(cfg.blocks.values(), key=lambda b: b.start):
+                for insn in block.insns:
+                    stmt = _safe_emit(insn)
+                    if stmt:
+                        for s in stmt.splitlines():
+                            lines.append("  " + s)
+            lines.append("}")
+            return "\n".join(lines) + "\n"
 
     # ── ARC lifter ────────────────────────────────────────────────────────────
 
