@@ -31,16 +31,16 @@ Combined with any coding agent, it runs as an autonomous reverse engineering too
 </details>
 
 <details>
-<summary><strong>Vulnerability Detection:</strong> taint tracking, pre-auth surface mapping, PoC generation, source code auditing, compiler bug detection, cryptographic analysis</summary>
+<summary><strong>Vulnerability Detection:</strong> taint analysis, exposure mapping, finding validation, source code auditing, compiler defect detection, cryptographic analysis</summary>
 
 | Capability | |
 |:---|:---|
-| **Taint-Based Vulnerability Detection** | Tracks data from network entry points to dangerous sinks across 14 architectures, interprocedurally, across shared library boundaries. |
-| **Pre-Authentication Attack Surface** |  Maps code paths reachable before authentication completes, so the unauthenticated exposure is understood before any manual review begins. |
-| **PoC Generation** |  Generates curl-based proof-of-concept scripts. |
-| **Source Code Auditing** | Scans a codebase for vulnerabilities without an LLM; a 40x read-reduction compressor buckets files by security profile so only the highest-risk files require individual attention. |
-| **Compiler Bug Detection** | Identifies compiler-introduced vulnerabilities; a single GCC 12.3.1.7 code generation defect produced 172 confirmed findings across TencentOS 4.6. |
-| **Cryptographic Analysis** | Eight tools that collectively strip away every layer that makes cryptography invisible in a compiled binary. |
+| **Taint Analysis** | Traces externally-supplied data from entry points to security-sensitive operations across 14 architectures, interprocedurally, across shared library boundaries. |
+| **Pre-Authentication Exposure** | Maps code paths that execute before authentication completes, so the pre-authentication boundary is understood before manual review begins. |
+| **Finding Validation** | Produces minimal curl-based reproducers for confirmed findings, suitable for inclusion in vendor disclosure reports. |
+| **Source Code Auditing** | Scans a codebase for security defects without an LLM; a 40x read-reduction compressor buckets files by security profile so only the highest-risk files get individual attention. |
+| **Compiler Defect Detection** | Identifies security defects introduced by compiler code generation errors; a single GCC 12.3.1.7 codegen error produced 172 confirmed findings in TencentOS 4.6. |
+| **Cryptographic Analysis** | Eight tools that make cryptographic primitives, key material, and protocol implementations visible and auditable inside compiled binaries. |
 
 </details>
 
