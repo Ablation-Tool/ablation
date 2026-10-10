@@ -139,10 +139,20 @@ class ScanResultVersionCache:
             return
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self._cache_path.with_suffix(".tmp")
-        with open(tmp, "w") as fh:
-            json.dump(self._cache, fh, indent=2)
-        tmp.replace(self._cache_path)
-        self._dirty = False
+        try:
+            with open(tmp, "w") as fh:
+                json.dump(self._cache, fh, indent=2)
+            tmp.replace(self._cache_path)
+            self._dirty = False
+        except Exception as e:
+            warnings.warn(
+                f"ScanResultVersionCache: failed to write cache to {self._cache_path}: {e}",
+                stacklevel=2,
+            )
+            try:
+                tmp.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     def get_or_scan(self, file_path: str, force: bool = False, **scanner_kwargs) -> List[dict]:
         """Return cached results if valid; otherwise scan and cache.
