@@ -3,11 +3,11 @@
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
 
-Ablation is a self-contained reverse-engineering framework.
+Ablation is a self-contained reverse engineering framework.
 
 It depends on neither legacy tools nor an MCP server, which removes the attack surface associated with MCP.
 
-When used with Codex or Claude Code, it operates as an autonomous reverse-engineering system.
+When used with Codex or Claude Code, it operates as an autonomous reverse engineering system.
 
 
 
