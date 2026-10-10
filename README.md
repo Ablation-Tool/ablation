@@ -21,13 +21,23 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 **FORGE:** Ablation lets users build their own modules and add-ons. FORGE automatically audits that code before it gets stored, so every local module meets the same standard as the ones that ship with Ablation.
 
+**Taint-Based Vulnerability Detection:** Tracks attacker-controlled data from network entry points to dangerous sinks across 14 processor architectures, including LoongArch64, nanoMIPS, V850, ARC, and ARM Thumb. The interprocedural engine follows data through function calls, pointer aliases, and stack frames in stripped binaries with no symbols or debug information. For multi-process firmware, it crosses executable boundaries to follow data between cooperating processes.
+
+**Cross-Target Learning:** Every confirmed finding is stored in a cross-target registry and used to seed future semantic searches. A vulnerability pattern confirmed in one binary becomes a behavioral fingerprint that Ablation applies automatically when it analyzes the next one. The registry grows with each engagement, so each new target benefits from every prior finding rather than starting from scratch.
+
+**Windows PE Security Analysis:** Seven analyzers cover the full attack surface of a Windows binary in one pass. The suite identifies Control Flow Guard bypass exports, SafeSEH handler gaps, unauthenticated RPC registrations, COM CLSID hijacking candidates, and pool allocation overflows in kernel code. PDBSymbolIntegrator fetches public symbols from the Microsoft symbol server and injects them directly into the analysis context, so every other tool operates on named functions rather than raw addresses.
+
 **Windows Kernel Driver & BYOVD Analysis:** Scans kernel drivers for risky entry points to stop attackers from using vulnerable, signed drivers to bypass your security software.
 
 **Android / APK Analysis:** Maps out Android app attack surfaces without needing to decompile the code. It automatically scans and ranks internal libraries by security risk, allowing you to immediately target the most vulnerable components.
 
 **Erlang / BEAM Analysis:** Safely scans Erlang bytecode to instantly highlight dangerous functions and hidden attack surfaces without running the application.
 
-**Inter-Binary Taint Analysis:** Tracks the propagation of untrusted, user-controlled data across distinct, compiled executable files or binaries within a system (such as multi-binary firmware or cooperating processes) to detect vulnerabilities where data reaches sinks.
+**Go Binary Reverse Engineering:** Recovers function names and string literals from stripped and obfuscated Go binaries. Most tools fail on Go because stripped Go binaries lack traditional symbols, and obfuscated Go deliberately scrambles the names and constants that remain. Ablation reads the Go runtime metadata table to recover function boundaries, and separately handles the garble obfuscator, which is designed specifically to defeat this. The result is a named, navigable binary instead of an opaque address space.
+
+**Compiler Bug Detection:** Identifies vulnerabilities introduced by the compiler rather than by the programmer. The LoongArch64 scanner detects a GCC 12.3.1.7 codegen error where a max comparison emits min logic, producing incorrect bounds checks across every function in the release that uses the pattern. In TencentOS 4.6 this produced 172 confirmed findings from a single compiler defect. The analysis runs across the entire binary, so a systemic toolchain error surfaces as a systemic finding rather than a one-off.
+
+**Pre-Authentication Attack Surface:** Maps the code paths reachable before a client authenticates, identifying what an unauthenticated attacker can reach without manual review of every entry point. For network devices and embedded systems, this separates the high-priority attack surface from everything else before any deep analysis begins.
 
 **DAG Adapter Language:** Decodes raw instruction bytes into a named-field bitfield layer before lifting them into a semantic operation graph. Every instruction form gets its own template with its own field positions, so a scanner reading the semantic layer gets the right register for every opcode without per-architecture exception cases. The resulting dataflow graph lets vulnerability detectors check producer-consumer relationships directly rather than walking backwards through raw bytes and guessing at basic block boundaries.
 
