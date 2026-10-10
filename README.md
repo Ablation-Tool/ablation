@@ -31,16 +31,16 @@ Combined with any coding agent, it runs as an autonomous reverse engineering too
 </details>
 
 <details>
-<summary><strong>Vulnerability Detection:</strong> taint analysis, exposure mapping, finding validation, source code auditing, compiler defect detection, cryptographic analysis</summary>
+<summary><strong>Security Analysis:</strong> taint analysis, exposure mapping, finding validation, source code auditing, compiler defect detection, cryptographic analysis</summary>
 
 | Capability | |
 |:---|:---|
-| **Taint Analysis** | Follows data from network entry points to security-sensitive operations across 14 architectures and library boundaries. |
-| **Pre-Authentication Exposure** | Maps code paths that run before authentication completes, so the exposure is clear before manual review starts. |
-| **Finding Validation** | Produces a minimal curl-based reproducer for each confirmed finding, so the disclosure report contains working proof. |
-| **Source Code Auditing** | Scans source for security defects without an LLM. A 40x read-reduction compressor ranks files by risk so only the highest-risk files need individual attention. |
-| **Compiler Defect Detection** | Finds security defects the compiler introduced. A single GCC 12.3.1.7 codegen error produced 172 confirmed findings in TencentOS 4.6. |
-| **Cryptographic Analysis** | Eight tools expose cryptographic primitives, key material, and protocol implementations inside compiled binaries. |
+| **Taint Analysis** | Follows data from network-facing entry points through the call graph to security-sensitive sinks across 14 architectures, interprocedurally and across shared library boundaries. Register-level tracking resolves PLT stubs so the trace does not stop at library call sites. |
+| **Pre-Authentication Exposure** | Traverses the control flow graph from the network entry point and identifies every code path that reaches a security-sensitive operation before an authentication gate. Produces a reachability map so manual review starts at the authentication boundary, not before it. |
+| **Finding Validation** | Generates a minimal curl-based HTTP request that reproduces each confirmed finding at the protocol level. Output includes the expected response delta and CWE classification so the PSIRT submission contains working proof. |
+| **Source Code Auditing** | Runs a source-level sink and source scanner without an LLM. A profile compressor assigns each file a 5-bit security profile based on sink density, data flow indicators, and import surface, then batches low-risk files so only the highest-risk files need individual reads. |
+| **Compiler Defect Detection** | Finds security defects the compiler introduced through miscompilation. The GCC 12.3.1.7 max-not-min defect, a four-instruction sltu/masknez/maskeqz/or sequence that selects the wrong comparison operand, produced 172 confirmed findings in TencentOS 4.6. |
+| **Cryptographic Analysis** | Eight tools make the cryptographic layer of a compiled binary readable. They recover XOR keys by known-plaintext attack, locate embedded PKCS#1 v1.5 key blocks, reconstruct Lagrange-shared secrets from LSB-steganographic channels, and audit TLS and JWT configurations. |
 
 </details>
 
