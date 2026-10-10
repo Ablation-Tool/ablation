@@ -21,80 +21,27 @@ A taint tracker returns a list of findings. A semantic searcher returns ranked V
 
 ## Architecture
 
-```
-  ┌──────────────────────────────────────────────────────────────┐
-  │  Seed: N competing claims for the same subject               │
-  │    subject = {call_site_va: "0x401920"}                      │
-  │    claim A = {target_va: "0x4026c0"}  prior=0.5             │
-  │    claim B = {target_va: "0x403110"}  prior=0.5             │
-  │                                                              │
-  │  HypothesisRecord: uuid, kind, subject, claim, status,       │
-  │    prior, confidence, support_score, contradiction_score,    │
-  │    evidence_ids[]                                            │
-  └──────────────────────┬───────────────────────────────────────┘
-                         |
-              add_evidence() from any analyzer
-                         |
-                         v
-  ┌──────────────────────────────────────────────────────────────┐
-  │  EvidenceScorer: deterministic scoring per family            │
-  │                                                              │
-  │  Raw strength: provided by caller (0.5 – 1.0)               │
-  │                                                              │
-  │  Family weights:                                             │
-  │    behavioral    1.00   runtime traces, emulator output      │
-  │    data_flow     0.90   taint paths, use-def chains          │
-  │    structure     0.75   CFG, instruction boundaries          │
-  │    cross_ref     0.65   strings, PLT, callers/callees        │
-  │    version       0.60   DTW, Jaccard, structural homologs    │
-  │    manual        0.50   analyst observation with provenance  │
-  │    semantic      0.25   embeddings, function similarity      │
-  │                                                              │
-  │  Diminishing returns: each additional item from same family  │
-  │    contributes: weight × (1 / (1 + ln(count)))              │
-  │    count=1 → 1.00× ; count=2 → 0.59× ; count=5 → 0.38×     │
-  │                                                              │
-  │  contribution(item) = strength × reliability × independence  │
-  └──────────────────────┬───────────────────────────────────────┘
-                         |
-              score() → confidence, status
-                         |
-                         v
-  ┌──────────────────────────────────────────────────────────────┐
-  │  State transition rules (deterministic — not a threshold)    │
-  │                                                              │
-  │  UNTESTED   → no meaningful evidence yet                     │
-  │  PLAUSIBLE  → weak or single-family support                  │
-  │  SUPPORTED  → multiple independent families agree            │
-  │  CONFIRMED  → confidence ≥ 0.75 AND                         │
-  │               ≥1 structural/data_flow/behavioral item AND    │
-  │               ≥2 independent families AND                    │
-  │               zero hard contradictions                       │
-  │  REJECTED   → hard contradiction (strength ≥ 0.80)          │
-  │               immediately REJECTS — no other scoring matters │
-  │  UNRESOLVED → two or more hypotheses observationally equiv.  │
-  └──────────────────────┬───────────────────────────────────────┘
-                         |
-              plan() → ProbeRanker selects next probe
-                         |
-                         v
-  ┌──────────────────────────────────────────────────────────────┐
-  │  ProbeRanker: Expected Information Gain (EIG) ranking        │
-  │                                                              │
-  │  EIG = disagreement × observability / cost                  │
-  │                                                              │
-  │  disagreement: fraction of hypotheses the probe would        │
-  │    distinguish (probes that affect all hypotheses equally     │
-  │    have disagreement ≈ 0; probes that split them have ≈ 1)  │
-  │                                                              │
-  │  observability: fraction of the probe's target that the      │
-  │    analyzer can actually observe (disassembly=0.95, taint=0.80)│
-  │                                                              │
-  │  cost: analyst time + compute cost (manual=10, disasm=0.5)  │
-  │                                                              │
-  │  Executed probes are excluded from future rankings.          │
-  │  Multiple probes of the same kind are also suppressed.       │
-  └──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A["Seed: N competing claims for the same subject\nsubject = {call_site_va: '0x401920'}\nclaim A = {target_va: '0x4026c0'}  prior=0.5\nclaim B = {target_va: '0x403110'}  prior=0.5\n\nHypothesisRecord: uuid · kind · subject · claim\nstatus · prior · confidence\nsupport_score · contradiction_score · evidence_ids[]"] --> B["add_evidence() from any analyzer"]
+
+    B --> C["EvidenceScorer — deterministic scoring per family\nRaw strength: provided by caller (0.5 – 1.0)\n\nFamily weights:\n  behavioral  1.00  runtime traces, emulator output\n  data_flow   0.90  taint paths, use-def chains\n  structure   0.75  CFG, instruction boundaries\n  cross_ref   0.65  strings, PLT, callers/callees\n  version     0.60  DTW, Jaccard, structural homologs\n  manual      0.50  analyst observation with provenance\n  semantic    0.25  embeddings, function similarity\n\nDiminishing returns (same family):\n  weight × 1/(1+ln(count))\n  count=1 → 1.00×  count=2 → 0.59×  count=5 → 0.38×\n\ncontribution = strength × reliability × independence"]
+
+    C --> D["score() → confidence, status"]
+
+    D --> E{"State transition\n(deterministic, not a threshold)"}
+
+    E -->|"No meaningful evidence"| F["UNTESTED"]
+    E -->|"Weak or single-family support"| G["PLAUSIBLE"]
+    E -->|"Multiple independent families agree"| H["SUPPORTED"]
+    E -->|"confidence ≥ 0.75 AND\n≥1 structural/data_flow/behavioral\nAND ≥2 independent families\nAND zero hard contradictions"| I[/"CONFIRMED"/]
+    E -->|"Hard contradiction\nstrength ≥ 0.80\nimmediately overrides all scoring"| J[/"REJECTED"/]
+    E -->|"Two or more hypotheses\nobservationally equivalent"| K["UNRESOLVED"]
+
+    H --> L["plan() → ProbeRanker selects next probe\n\nEIG = disagreement × observability / cost\n\ndisagreement: fraction of hypotheses the probe splits\n  (≈0 if affects all equally, ≈1 if splits them)\nobservability: fraction of target the analyzer observes\n  (disassembly=0.95, taint=0.80)\ncost: analyst time + compute\n  (manual=10, disasm=0.5)\n\nExecuted probes excluded from future rankings"]
+
+    style I fill:#14532d,stroke:#166534,color:#dcfce7
+    style J fill:#7f1d1d,stroke:#991b1b,color:#fecaca
 ```
 
 ---

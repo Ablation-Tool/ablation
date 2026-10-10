@@ -23,39 +23,42 @@ Erlang obfuscators strip or corrupt the `Dbgi` debug chunk and the `AtU8` atom t
 A BEAM file is an IFF (Interchange File Format) container. IFF was designed for structured binary data exchange. The BEAM format uses it to pack all module information into one file with self-describing chunk types.
 
 ```
-  BEAM file IFF structure:
-  ┌────────────────────────────────────────────────────────────┐
-  │  IFF header:                                               │
-  │    "FOR1"  (4 bytes, IFF form marker)                      │
-  │    length  (4 bytes big-endian, total file size - 8)       │
-  │    "BEAM"  (4 bytes, form type identifier)                 │
-  └──────────────────────┬─────────────────────────────────────┘
-                         |
-                         v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Chunk sequence (each chunk):                              │
-  │    chunk_id  (4 bytes, ASCII tag: "Atom", "Code", ...)     │
-  │    length    (4 bytes big-endian, payload size)            │
-  │    payload   (length bytes, 4-byte aligned)                │
-  └──────────────────────┬─────────────────────────────────────┘
-                         |
-                         v
-  Chunk IDs and their content:
-    AtU8 / Atom  →  atom table: count + (len + bytes) per atom
-    ExpT         →  exports: [(atom_idx, arity, label), ...]
-    ImpT         →  imports: [(module_idx, fn_idx, arity), ...]
-    Code         →  BEAM bytecode: header + opcode stream
-    LitT         →  literals: zlib-compressed ETF terms
-    StrT         →  string table: raw bytes (character lists)
-    Dbgi         →  debug info: AST in ETF (stripped by obfuscators)
-    Attr         →  module attributes: ETF proplist
-    CInf         →  compiler info: ETF with OTP version, flags
-    Line         →  line number table: (file_name, line_no) pairs
+  IFF header (12 bytes):
+    "FOR1"   4 bytes — IFF form marker
+    length   4 bytes BE — total file size minus 8
+    "BEAM"   4 bytes — form type identifier
+
+  Each chunk that follows:
+    chunk_id  4 bytes ASCII tag (e.g. "AtU8", "Code")
+    length    4 bytes BE — payload size
+    payload   length bytes, padded to 4-byte alignment
 ```
 
-The atom table is the foundation of all other tables. Exports, imports, and literals all reference atoms by index. `AtU8` is the UTF-8 atom table (OTP 20+). `Atom` is the Latin-1 predecessor. BeamContext tries `AtU8` first and falls back to `Atom`.
+```mermaid
+flowchart TD
+    A[/"module.beam — IFF container"/] --> B["IFF header\n'FOR1' · length · 'BEAM'"]
 
-The ImpT entries encode calls as three atom indices: `(module_atom_idx, function_atom_idx, arity)`. BeamContext resolves these to readable `"os:cmd/1"` strings using the atom table.
+    B --> C["AtU8 / Atom chunk\nAtom table: count + (len + bytes) per atom\nAll other tables reference atoms by index\nAtU8 = UTF-8 (OTP 20+); Atom = Latin-1 fallback"]
+
+    B --> D["ExpT chunk\nExports: [(atom_idx, arity, label), ...]\nMirror of ELF exported symbols"]
+
+    B --> E["ImpT chunk\nImports: [(module_idx, fn_idx, arity), ...]\nMirror of PLT entries\nResolved to 'os:cmd/1' via atom table"]
+
+    B --> F["Code chunk\nBEAM bytecode: header + opcode stream"]
+
+    B --> G["LitT chunk\nLiterals: zlib-compressed ETF terms\nMirror of .rodata constants"]
+
+    B --> H["Dbgi chunk (optional)\nDebug info: AST in ETF\nStripped by obfuscators\nIf absent: obfuscated=True"]
+
+    C --> I["BeamContext built\nctx.atoms · ctx.exports · ctx.imports\nctx.literals · ctx.ast_functions\nctx.obfuscated"]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style I fill:#14532d,stroke:#166534,color:#dcfce7
+```
+
+The atom table is the foundation of all other tables. Exports, imports, and literals all reference atoms by index. `AtU8` is the UTF-8 atom table (OTP 20+). `Atom` is the Latin-1 predecessor. `BeamContext` tries `AtU8` first and falls back to `Atom`.
+
+The ImpT entries encode calls as three atom indices: `(module_atom_idx, function_atom_idx, arity)`. `BeamContext` resolves these to readable `"os:cmd/1"` strings using the atom table.
 
 ---
 
