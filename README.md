@@ -23,10 +23,10 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | Capability | |
 |:---|:---|
 | [**Semantic Code Search**](docs/module-reference/semantic-search.md) | Uses a BERT-family encoder to find functions by meaning in stripped binaries without symbols. A binary-scoped constructor takes a loaded binary context and builds a searcher configured for that binary, encoding only its functions rather than everything in the database. |
-| [**On-Demand Analysis**](docs/module-reference/on-demand-analysis.md) | Loads in seconds because it only analyzes the code being examined; Ghidra and IDA Pro parse the entire file upfront. |
+| [**On-Demand Analysis**](docs/module-reference/on-demand-analysis.md) | Loads in seconds because it only analyzes the code being examined; traditional disassemblers parse the entire file upfront. |
 | [**Binary Lifting**](docs/module-reference/binary-lifter.md) | Pseudo-C IR across 19 ISA targets and runtimes; ARM64 and x86-64 receive register-level taint propagation. |
 | [**Hypothesis Engine**](docs/module-reference/hypothesis-engine.md) | Tracks competing RE hypotheses, scores evidence across four families, and auto-executes probes; sessions persist across engagements. |
-| [**C++ Vtable Reconstruction**](docs/module-reference/cpp-vtable-reconstructor.md) | Reconstructs vtable slots from any ELF on any architecture and emits an IDAPython script that injects the producer-to-consumer type chain into IDA. |
+| [**C++ Vtable Reconstruction**](docs/module-reference/cpp-vtable-reconstructor.md) | Reconstructs vtable slots from any ELF on any architecture and emits a type-annotation script that propagates the producer-to-consumer type chain to all call sites. |
 | [**Cross-Library Analysis**](docs/module-reference/taint-analysis.md) | Traces an argument across up to three shared library hops, so taint paths that cross library boundaries reach their sink rather than stopping at the first boundary. |
 | [**DAG Adapter Language**](docs/module-reference/encoding-dag.md) | Describes instruction set encodings as directed acyclic graphs so every architecture shares the same analysis code path. Without it, each ISA requires its own exception handler and the analyzer count scales with the architecture count. |
 
