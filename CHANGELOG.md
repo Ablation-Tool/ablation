@@ -2,6 +2,31 @@
 
 ---
 
+## v2.56.0
+
+**EcuSecurityAccessScanner: static-seed SecurityAccess handler fingerprinter for M68K/CPU32 and
+PPC32 ECU ROMs.** Detects the `move.b #$67 + 2x clr.b` pattern (M68K/CPU32) and
+`li rX,0x67 + stb + 2x(li rY,0 + stb)` pattern (PPC32). Confirmed across the full GM P-series
+CPU32 family (P01/P04/P05/P08/P10/P11/P59) and the GM E38 PCM PPC32 region.
+
+- `EcuSecurityAccessScanner`: two-architecture scanner; `scan()` returns `list[SecurityAccessFinding]`
+- M68K fingerprint: `(byte[0] & 0xF0) == 0x10` and `(byte[1] & 0x3F) == 0x3C` and
+  `byte[2:4] == 0x00 0x67`; covers all M68K destination addressing modes in one mask
+- PPC32 fingerprint: `(word & 0xFC1FFFFF) == 0x38000067` for `li rX, 0x67`; `(word >> 26) == 38`
+  for `stb`; same masks for the confirming zero pairs
+- `window` parameter (default 256) applies uniformly to both architectures; eliminates earlier
+  inconsistency where M68K and PPC32 used separate hidden constants
+- `SecurityAccessFinding`: offset, arch, pattern, evidence bytes, note; `__str__` for CLI output
+- 30 tests (21 for scanner, 9 for `is_calibration_only`)
+
+**ROMLayout.is_calibration_only(): OBD calibration-only dump detector.** Returns
+`(True, "OBD cal-only dump, program flash absent")` when the layout contains zero CODE regions
+and at least one active region. Confirmed on Bosch EDC16C34 PSA Berlingo corpus image
+(1792 KB ERASED + 184 KB CALIBRATION/PADDING, zero CODE regions). Added as 4th gap in
+`ecu-rom-layout-analyzer.md`.
+
+---
+
 ## v2.48.0
 
 **BEAMLifter: function-level BEAM bytecode decompiler.** Upgrades `_lift_beam()`

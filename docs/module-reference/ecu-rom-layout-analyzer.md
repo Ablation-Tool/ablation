@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+4 things that were not possible before in Ablation:
 
 **1. No region map for ECU ROMs.** Before this module, applying any ECU scanner to a firmware dump
 required knowing which address range held code and which held calibration data. For a 2 MB GM E38
@@ -23,6 +23,14 @@ ARM Cortex-M ROMs because Shannon entropy and instruction density are independen
 **3. No calibration region boundary source for downstream scanners.** `EcuCalibrationTableScanner`
 needs a list of `(start, end)` byte ranges to search. `ROMLayout.calibration_regions()` returns them
 directly so the scanner never processes ERASED or CODE ranges.
+
+**4. No way to detect OBD calibration-only dumps before running code analysis.** OBD tuning tools
+capture only the calibration flash partition; the program flash is absent. Running
+`EcuSecurityAccessScanner` or any disassembler against such an image produces only false positives
+because the byte patterns it recognizes as M68K or PPC32 instructions do not appear. Before this,
+there was no way to detect this condition programmatically. `ROMLayout.is_calibration_only()` returns
+`(True, reason)` when the layout has zero CODE regions and at least one active (non-erased) region,
+so callers can skip code analysis entirely.
 
 ---
 
@@ -154,7 +162,30 @@ class ROMLayout:
     def erased_regions(self) -> list[ROMRegion]
     def active_start(self) -> int    # first non-ERASED/PADDING offset
     def active_end(self) -> int      # last non-ERASED/PADDING offset
+    def is_calibration_only(self) -> tuple[bool, str]
 ```
+
+### `is_calibration_only() -> tuple[bool, str]`
+
+Returns `(True, reason)` when the layout contains no CODE regions and at least one active
+(non-ERASED, non-PADDING) region. Returns `(False, "")` when CODE regions are present.
+Returns `(False, "image is fully erased")` when no active regions exist at all.
+
+Use this before running `EcuSecurityAccessScanner` or any disassembly pipeline:
+
+```python
+layout = EcuROMLayoutAnalyzer.from_path("9663944680.bin").analyze()
+cal_only, reason = layout.is_calibration_only()
+if cal_only:
+    print(f"Skip code analysis: {reason}")
+else:
+    from ablation.analyzers.ecu_security_access_scanner import EcuSecurityAccessScanner
+    findings = EcuSecurityAccessScanner.from_bytes(data).scan()
+```
+
+The confirmed corpus case is the Bosch EDC16C34 PSA Berlingo image: 1792 KB ERASED followed by
+184 KB of CALIBRATION and PADDING regions, zero CODE regions. Running `is_calibration_only()` on
+this image returns `(True, "OBD cal-only dump, program flash absent")`.
 
 Each `ROMRegion`:
 
