@@ -23,45 +23,20 @@ A function with zero or one external PLT call has no meaningful PLT-overlap scor
 
 **File:** `ablation/analyzers/version_delta.py`
 
-```
-  func_va_v1 in binary_v1
-          |
-          v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Stage 1: Structural pre-filter                            │
-  │    Criteria: basic_block_count ±2                          │
-  │              edge_count ±30%                               │
-  │    Purpose: reduce N=thousands to N~tens candidates        │
-  │    No instruction decode needed — CFG header only          │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Stage 2: Mnemonic 4-gram Jaccard                          │
-  │    Normalize: strip addresses, normalize immediates to 0   │
-  │    Build set of 4-grams from mnemonic sequence             │
-  │    Jaccard(A,B) = |A ∩ B| / |A ∪ B|                      │
-  │    Keep top-10 by Jaccard score                            │
-  │    Stable across recompilation — only structural rewrites  │
-  │    shift the 4-gram set significantly                      │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Stage 3: Semantic tiebreaker (BERT)                       │
-  │    Triggered when top-2 candidates within 0.05 Jaccard     │
-  │    SemanticSearcher encoding of both functions             │
-  │    Cosine similarity in 768-dim embedding space            │
-  │    Breaks ties that 4-gram cannot resolve                  │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Patch localization                                        │
-  │    difflib.SequenceMatcher on normalized instruction lines │
-  │    Addresses and RIP-relative immediates stripped          │
-  │    Output: unified diff showing only logic changes         │
-  └──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A["func_va_v1 in binary_v1"] --> B["Stage 1 · Structural pre-filter\nCriteria: basic_block_count ±2\n          edge_count ±30%\nPurpose: reduce N=thousands to N~tens\nNo instruction decode needed — CFG header only"]
+
+    B --> C["Stage 2 · Mnemonic 4-gram Jaccard\nNormalize: strip addresses, normalize immediates to 0\nBuild set of 4-grams from mnemonic sequence\nJaccard(A,B) = |A ∩ B| / |A ∪ B|\nKeep top-10 by Jaccard score\nStable across recompilation — only structural rewrites\nshift the 4-gram set significantly"]
+
+    C --> D{"Top-2 within\n0.05 Jaccard?"}
+    D -->|No, clear winner| E["Patch localization\ndifflib.SequenceMatcher\nAddresses and RIP-relative immediates stripped\nOutput: unified diff showing logic changes only"]
+    D -->|Yes, tie| F["Stage 3 · Semantic tiebreaker (BERT)\nSemanticSearcher encoding of both functions\nCosine similarity in 768-dim space\nBreaks ties that 4-gram cannot resolve"]
+
+    F --> E
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style E fill:#14532d,stroke:#166534,color:#dcfce7
 ```
 
 ### Usage
@@ -148,44 +123,18 @@ A composite score >= 0.70 across two different vendors' binaries means the funct
 
 Static vtable reconstruction and BLR indirect call resolution for stripped ARM64 binaries.
 
-```
-  stripped ARM64 .so
-          |
-          v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Phase 1: Vtable candidate extraction                      │
-  │    Scan .rodata for runs of code pointers                  │
-  │    (addresses that fall within .text)                      │
-  │    Candidate vtables: N or more consecutive 8-byte ptrs    │
-  │    Minimum run length filters out incidental pointer arrays │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Phase 2: Constructor vptr detection                       │
-  │    Pattern: ADRP + ADD + STR in .text                      │
-  │    ADRP Xn, page          ; compute vtable page address    │
-  │    ADD  Xn, Xn, #off      ; add page offset → vtable VA    │
-  │    STR  Xn, [X0, #field]  ; store vptr into object field   │
-  │    Each match: this constructor → vtable at VA X           │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Phase 3: BLR site detection                               │
-  │    Pattern: LDR vptr / LDR slot_N / BLR xN                 │
-  │    LDR X8,  [X0]          ; load vtable pointer from object│
-  │    LDR X9,  [X8, #slot*8] ; load function pointer at slot N│
-  │    BLR X9                 ; dispatch call                  │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Phase 4: Resolution                                       │
-  │    Map each BLR@slot-k to Phase 1 vtable identified in Ph2 │
-  │    Concrete target = vtable_base + k * 8                   │
-  │    Produces resolved call graph for all indirect calls     │
-  └──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[/"Stripped ARM64 .so"/] --> B["Phase 1 · Vtable candidate extraction\nScan .rodata for runs of code pointers\n(addresses that fall within .text)\nCandidate vtables: N or more consecutive 8-byte ptrs\nMinimum run length filters out incidental pointer arrays"]
+
+    B --> C["Phase 2 · Constructor vptr detection\nPattern: ADRP + ADD + STR in .text\n  ADRP Xn, page        ; compute vtable page address\n  ADD  Xn, Xn, #off   ; add page offset → vtable VA\n  STR  Xn, [X0, #field]; store vptr into object field\nEach match: this constructor → vtable at VA X"]
+
+    C --> D["Phase 3 · BLR site detection\nPattern: LDR vptr / LDR slot_N / BLR xN\n  LDR X8, [X0]         ; load vtable pointer from object\n  LDR X9, [X8, #slot*8]; load function pointer at slot N\n  BLR X9               ; dispatch call"]
+
+    D --> E[/"Phase 4 · Resolution\nMap each BLR@slot-k to Phase 1 vtable from Phase 2\nConcrete target = vtable_base + k * 8\nProduces resolved call graph for all indirect calls"/]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style E fill:#14532d,stroke:#166534,color:#dcfce7
 ```
 
 ```python

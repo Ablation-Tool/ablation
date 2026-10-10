@@ -18,70 +18,22 @@ A kernel binary built with `CONFIG_KASAN=y` inserts a 4–6 instruction shadow-m
 
 ## Module stack
 
-```
-  /path/to/binary.elf
-          |
-          v
-  ┌────────────────────────────────────────────────────────────┐
-  │  loongarch_decoder (V1)                                    │
-  │    Fixed-width 32-bit LE instruction decode                │
-  │    Covers: ALU, immediate, CSR/TLB/privilege, FP compare,  │
-  │    load/store, atomics, barriers, float load/store,        │
-  │    branch/call/return                                      │
-  │    LSX/LASX → .word (deferred)                             │
-  │    jirl polymorphism: $zero/$ra/$ra decodes to ret/call/br │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  loongarch_decoder_v2 (KASAN/KCOV-aware)                   │
-  │    Pass 1 — BL tagging:                                    │
-  │      every bl whose target VA is in KASAN_SYMBOL_PREFIXES  │
-  │      or KCOV_SYMBOL_PREFIXES → is_instrumentation=True     │
-  │                                                            │
-  │    Pass 2 — preamble walk:                                 │
-  │      from each tagged BL, walk backward up to 6 insns      │
-  │      tag: srli.d / lu12i.w / lu52i.d / addi.d / ld.b /    │
-  │           andi / slti / sltui / or / add.d                 │
-  │      stop: on call, branch, store, or function start       │
-  │                                                            │
-  │    decode_frames_clean() skips all is_instrumentation=True │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  isa_loongarch64 + insn_loongarch64                        │
-  │    Register model: $zero, $ra, $tp, $sp, $a0-$a7,          │
-  │      $t0-$t8, $fp, $s0-$s8                                 │
-  │    lp64 ABI: ARG_REGS=($a0..$a7), RET_REGS=($a0,$a1)      │
-  │    insn_loongarch64: typed Reg/Imm operands from op_str     │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  cfg_loongarch64                                           │
-  │    Leader set: entry VA + branch targets + fallthrough     │
-  │    Splits at terminators (branch, call, ret, ertn, break)  │
-  │    Calls treated as fall-through (callee abstracted)       │
-  │    Indirect branches → no successors                       │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  analysis_loongarch64                                      │
-  │    Flow-sensitive, path-insensitive fixpoint analysis      │
-  │    Loop widening: bounded-iteration then widen to top       │
-  │    State: taint_reg(name, label) / mem_taint(base, off)    │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  taint_tracker_loongarch64 / LoongArch64TaintTracker       │
-  │    Interprocedural BFS over call graph                     │
-  │    PLT/GOT stub resolution: .rela.plt + .dynsym            │
-  │    Function start: symbols + addi.d $sp,$sp,-N prologue     │
-  │    from_path_full() adds: eh_frame FDE / DWARF / BTF       │
-  └──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[/"/path/to/binary.elf"/] --> B["loongarch_decoder (V1)\nFixed-width 32-bit LE instruction decode\nALU · immediate · CSR/TLB/privilege · FP compare\nload/store · atomics · barriers · float load/store\nbranch/call/return\nLSX/LASX → .word (deferred)\njirl polymorphism: $zero/$ra/$ra → ret/call/br"]
+
+    B --> C["loongarch_decoder_v2 (KASAN/KCOV-aware)\nPass 1 — BL tagging:\n  every bl targeting KASAN_SYMBOL_PREFIXES\n  or KCOV_SYMBOL_PREFIXES → is_instrumentation=True\nPass 2 — preamble walk:\n  from each tagged BL, walk backward up to 6 insns\n  tag: srli.d / lu12i.w / addi.d / ld.b / andi / add.d\n  stop: on call, branch, store, or function start\ndecode_frames_clean() skips all instrumentation"]
+
+    C --> D["isa_loongarch64 + insn_loongarch64\nRegister model: $zero · $ra · $tp · $sp\n  $a0-$a7 · $t0-$t8 · $fp · $s0-$s8\nlp64 ABI: ARG_REGS=($a0..$a7), RET_REGS=($a0,$a1)\ninsn_loongarch64: typed Reg/Imm operands from op_str"]
+
+    D --> E["cfg_loongarch64\nLeader set: entry VA + branch targets + fallthrough\nSplits at terminators (branch, call, ret, ertn, break)\nCalls treated as fall-through (callee abstracted)\nIndirect branches → no successors"]
+
+    E --> F["analysis_loongarch64\nFlow-sensitive, path-insensitive fixpoint analysis\nLoop widening: bounded-iteration then widen to top\nState: taint_reg(name, label) / mem_taint(base, off)"]
+
+    F --> G["LoongArch64TaintTracker\nInterprocedural BFS over call graph\nPLT/GOT stub resolution: .rela.plt + .dynsym\nFunction start: symbols + addi.d $sp,$sp,-N prologue\nfrom_path_full() adds: eh_frame FDE / DWARF / BTF"]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style G fill:#14532d,stroke:#166534,color:#dcfce7
 ```
 
 ---
