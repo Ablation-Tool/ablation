@@ -71,7 +71,7 @@ from typing import Dict, List, Optional
 # MD5 -> (family_name, severity, description)
 # MD5 is used for family identification only, not integrity verification.
 # Each KeyEntry also carries a sha256 field for cross-validation.
-# Source: Fortinet firmware corpus RE sessions 1-21
+# Source: Fortinet firmware corpus RE sessions 1-22
 
 KNOWN_KEY_FAMILIES: Dict[str, tuple] = {
     "1158fa1e43c915520a051fe4bebf90d6": (
@@ -93,6 +93,12 @@ KNOWN_KEY_FAMILIES: Dict[str, tuple] = {
     "c0ab56309ab9647b28529d412d44b676": (
         "fsw_512.key", "CRITICAL",
         "512-bit RSA, factorable in <1s; FortiSwitch v7 shared key"
+    ),
+    "2f231375192f6a4900b41d1594a7b4c0": (
+        "fgt.key (FortiAP MIPS)", "HIGH",
+        "2048-bit RSA, plaintext; MIPS-based FortiAP JFFS2 /etc/fgt.key; "
+        "shared across FAP_14C/21D/221B/221C/223B/223C/320C v5.4.x-v6.0.x; "
+        "cert CN=Fortigate (identity confusion); cert expired 2026-03-13"
     ),
 }
 

@@ -45,6 +45,7 @@ All FortiGate virtual disks place P1 at LBA 2048 (256 MiB ext4, contains `datafs
 | `c8eaa255efceab1512356f46f90b57b5` | fgt2.key | CRITICAL | 2048-bit RSA; cross-platform; FortiRecorder MitM path |
 | `4e447a814e6ea1e8b9ac8581ffd4c600` | fgt.key | HIGH | 2048-bit RSA; FGT VM64 + FortiWiFi JFFS2; FortiRecorder MitM path |
 | `c0ab56309ab9647b28529d412d44b676` | fsw_512.key | CRITICAL | 512-bit RSA; FortiSwitch v7 |
+| `2f231375192f6a4900b41d1594a7b4c0` | fgt.key (FortiAP MIPS) | HIGH | 2048-bit RSA; MIPS-based FortiAP v5.4.x–v6.0.x; CN=Fortigate; expired 2026-03-13 |
 
 MD5 is used for family identification only. Each `KeyEntry` also carries `sha256` for cross-validation. A result with `family == "UNKNOWN"` means the MD5 is not in this table and is an immediate finding candidate.
 
