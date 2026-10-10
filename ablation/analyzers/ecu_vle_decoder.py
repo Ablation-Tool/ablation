@@ -101,10 +101,12 @@ class EcuVLEDecoder:
 
     @classmethod
     def from_path(cls, path: "str | Path", base_va: int = 0) -> "EcuVLEDecoder":
+        """Convenience wrapper; equivalent to EcuVLEDecoder(path, base_va)."""
         return cls(path, base_va)
 
     @classmethod
     def from_bytes(cls, data: bytes, base_va: int = 0) -> "EcuVLEDecoder":
+        """Convenience wrapper; equivalent to EcuVLEDecoder(data, base_va)."""
         return cls(data, base_va)
 
     # ------------------------------------------------------------------
