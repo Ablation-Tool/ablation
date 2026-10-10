@@ -164,14 +164,13 @@ This project was greatly informed and inspired by several key literary works.
 <summary><img src="https://img.shields.io/badge/Target_Binary-dc2626?style=flat-square" alt="Target Binary"> ELF · PE · firmware</summary>
 
 ```
-         ╔══════════════════════════════════════╗
-         ║             Target Binary            ║
-         ╠══════════════════════════════════════╣
-         ║    ELF  ·  PE / Driver  ·  firmware  ║
-         ╚══════════════════════════════════════╝
-                            │
-                          load
-                            ▼
+  ┌────────┐     ┌───────────┐     ┌──────────┐
+  │  ELF   │     │ PE/Driver │     │ firmware │
+  └───┬────┘     └─────┬─────┘     └────┬─────┘
+      └────────────────┴────────────────┘
+                             │
+                            load
+                             ▼
 ```
 
 <details>
@@ -197,12 +196,15 @@ This project was greatly informed and inspired by several key literary works.
          ║       Claude Code (Orchestrator)     ║
          ╚══════════════════════════════════════╝
                             │
-    ────────────────────────┴────────────────────────
-    │          │          │          │          │
-    ▼          ▼          ▼          ▼          ▼
-  Corpus    Taint     Diffing    FmtStr      Heap
-                               Multi-Arch  Driver
-                    ········ findings ········▶
+              ┌─────────────┼─────────────┐
+              ▼             ▼             ▼
+       ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+       │   Corpus    │ │    Taint    │ │   FmtStr    │
+       │  Semantic   │ │   Diffing   │ │    Heap     │
+       └─────────────┘ └─────────────┘ │  MultiArch  │
+                                       │   Driver    │
+                                       └─────────────┘
+                    ·· findings ··▶
 ```
 
 <details>
@@ -280,12 +282,12 @@ Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads e
   ├── bin/controller          stripped PIE · x86-64
   ├── lib/libcore.so
   └── lib/libruntime.so
-                │
-       ┌────────┴─────────┐
-       │                  │
-  ┌────┴────┐  ┌────┴────┐  ┌────┴────┐
-  │inference│  │  libs   │  │  ctrl   │
-  └─────────┘  └─────────┘  └─────────┘
+                  │
+       ┌──────────┼──────────┐
+       ▼          ▼          ▼
+  ┌──────────┐ ┌────────┐ ┌──────────┐
+  │inference │ │  libs  │ │   ctrl   │
+  └──────────┘ └────────┘ └──────────┘
 ```
 
 <details>
