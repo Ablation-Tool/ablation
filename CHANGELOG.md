@@ -2,6 +2,22 @@
 
 ---
 
+## v2.61.0
+
+**FlatBinaryFuncStartScanner: arch-agnostic function-start scanner for flat ECU ROMs.**  Combines
+call-target harvesting (BFS from the reset vector following direct call instructions) and ISA-specific
+prologue pattern scanning.  Uses `EcuArchDetector` internally — HIGH/MEDIUM confidence selects one ISA
+catalog, LOW confidence unions all five.
+
+- `FlatBinaryFuncStartScanner`: `scan(arch=None)` → `FuncStartResult`; `arch` override skips detection
+- `FuncStartResult`: `arch`, `confidence`, `function_starts` (sorted union), `call_targets`, `prologue_hits`, `detect_result`
+- Call harvesting: Thumb2 BL/BLX (ARM Cortex-M), BSR.W/BSR.L (M68K), BL (PPC32/VLE), BSR (SH-2A); stops at return instruction or 512 instructions
+- Prologue scan: Thumb2 PUSH+LR (`0xB5xx`), LINK.W A6 (`0x4E56`+neg), MFLR r0 (`7C0802A6`), e_stwu r1 (`0x1C21`+neg D8), STS.L PR (`0x4F22`) + leaf STS PR
+- `from_path()` / `from_bytes()` wrappers; `max_call_depth` caps BFS recursion
+- 27 tests; FORGE gate: PASSED (0 findings)
+
+---
+
 ## v2.60.0
 
 **EcuArchDetector: ISA fingerprinter for unknown flat ECU ROM images.** Five discriminators
