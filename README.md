@@ -22,7 +22,7 @@ Combined with any coding agent, it runs as an autonomous reverse engineering too
 |:---|:---|
 | [**Semantic Code Search**](docs/module-reference/semantic-search.md) | Uses a BERT-family encoder to find functions by meaning in stripped binaries without symbols. |
 | [**On-Demand Analysis**](docs/module-reference/on-demand-analysis.md) | Loads in seconds because it only analyzes the code being examined; Ghidra and IDA Pro parse the entire file upfront. |
-| [**Binary Lifting**](docs/module-reference/binary-lifter.md) | Pseudo-C IR across 17 ISAs; ARM64 and x86-64 receive register-level taint propagation. |
+| [**Binary Lifting**](docs/module-reference/binary-lifter.md) | Pseudo-C IR across 19 ISA targets and runtimes; ARM64 and x86-64 receive register-level taint propagation. |
 | [**Hypothesis Engine**](docs/module-reference/hypothesis-engine.md) | Tracks competing RE hypotheses, scores evidence across four families, and auto-executes probes; sessions persist across engagements. |
 | [**C++ Vtable Reconstruction**](docs/module-reference/cpp-vtable-reconstructor.md) | Reconstructs vtable slots from any ELF on any architecture and emits an IDAPython script that injects the producer-to-consumer type chain into IDA. |
 | [**Cross-Library Analysis**](docs/module-reference/taint-analysis.md) | Traces an argument across up to three shared library hops, so taint paths that cross library boundaries reach their sink rather than stopping at the first boundary. |
@@ -54,7 +54,7 @@ Combined with any coding agent, it runs as an autonomous reverse engineering too
 | [**Windows PE Security Analysis**](docs/module-reference/windows-pe.md) | Seven analyzers in one pass: CFG bypass exports, SafeSEH gaps, unauthenticated RPC, COM hijacking candidates, and kernel pool overflows. |
 | [**Windows Kernel Driver & BYOVD**](docs/module-reference/kernel-drivers.md) | Detects eight BYOVD capability classes in signed drivers, including physical memory read/write, token stealing, and callback removal. |
 | [**Android / APK Analysis**](docs/module-reference/android.md) | Maps APK attack surfaces and ranks internal libraries by security risk before any manual analysis begins. |
-| [**Erlang / BEAM Analysis**](docs/module-reference/beam.md) | Scans BEAM bytecode for dangerous function calls and unexposed attack surfaces without executing the application. |
+| [**Erlang / BEAM Analysis**](docs/module-reference/beam.md) | Decodes BEAM bytecode to function-level pseudo-IR: calls with resolved import names, arithmetic via gc_bif, exception handling, send, and select_val branch tables. Also surfaces dangerous import patterns and obfuscation indicators without executing the application. |
 | [**Go Binary Reverse Engineering**](docs/workflows/go-binaries.md) | Recovers function names from stripped and garble-obfuscated Go binaries by reading the Go runtime metadata table. |
 | [**Game & Legacy RE**](docs/module-reference/game-re.md) | Labels stripped game binaries by engine, covering UE4, id Tech, Unity, Source2, and CryEngine; also decodes PS3 Cell SPU and Mac OS 8/9 PEF binaries. |
 | [**Firmware Extraction**](docs/module-reference/firmware-analysis.md) | Decrypts proprietary firmware through outer XOR, PKCS#1 v1.5 key block scan, and RC4 known-plaintext attack; Huawei VRP squashfs with ARM64 BCJ filter also supported. |
