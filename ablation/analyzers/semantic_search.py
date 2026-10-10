@@ -299,6 +299,18 @@ class SemanticSearcher:
     Corpus is cached as a pickle keyed on a hash of the db file.  Repeated
     queries after the first corpus build cost only a dot-product over the
     cached numpy matrix — ~1ms for 23 functions, ~50ms for 10k.
+
+    Performance notes
+    -----------------
+    Always use from_context(ctx) rather than the bare constructor.  Scoping
+    the corpus to one binary encodes ~11k functions instead of all 296k,
+    which is the source of the 26x speedup (9 min vs 4 hours on first build).
+
+    On a cache hit (db unchanged since last build): 0.1s regardless of scope.
+    On a cache miss: encoding time dominates (~549s for 11k functions on CPU).
+      The SQL binary_id filter and Python VA post-filter each save ~150ms
+      combined — under 0.1% of the cache-miss time.  The memory saving is
+      more meaningful: ~86MB less peak heap (296k row objects vs 11k).
     """
 
     def __init__(self, db_path: str, cache_dir: Optional[Path] = None):
