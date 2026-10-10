@@ -161,7 +161,7 @@ This project was greatly informed and inspired by several key literary works.
 ## Framework Architecture & Module Orchestration
 
 <details>
-<summary><strong>Target Binary</strong> — ELF · PE · firmware</summary>
+<summary><strong>Target Binary:</strong> ELF · PE · firmware</summary>
 
 ```
               ┌──────────────────────────────┐
@@ -174,7 +174,7 @@ This project was greatly informed and inspired by several key literary works.
 ```
 
 <details>
-<summary><strong>BinaryContext</strong> — PLT · Strings · Call Graph · XRefs</summary>
+<summary><strong>BinaryContext:</strong> PLT · Strings · Call Graph · XRefs</summary>
 
 ```
               ┌──────────────────────────────┐
@@ -188,7 +188,7 @@ This project was greatly informed and inspired by several key literary works.
 ```
 
 <details>
-<summary><strong>Claude Code</strong> — Central Orchestrator</summary>
+<summary><strong>Claude Code:</strong> Central Orchestrator</summary>
 
 ```
          ┌────────────────────────────────────┐
@@ -201,7 +201,7 @@ This project was greatly informed and inspired by several key literary works.
 ```
 
 <details>
-<summary><strong>Analysis Engines</strong> — Semantic · Taint · Diffing · FmtStr · Heap · MultiArch · Driver</summary>
+<summary><strong>Analysis Engines:</strong> Semantic · Taint · Diffing · FmtStr · Heap · MultiArch · Driver</summary>
 
 ```
  ┌──────────────────┐     ┌────────────────────┐
@@ -221,7 +221,7 @@ This project was greatly informed and inspired by several key literary works.
 ```
 
 <details>
-<summary><strong>Finding Registry</strong> — cross-target corpus · seeds future sweeps</summary>
+<summary><strong>Finding Registry:</strong> cross-target corpus · seeds future sweeps</summary>
 
 ```
   Claude ──▶ ┌──────────────────────────┐
@@ -235,7 +235,7 @@ This project was greatly informed and inspired by several key literary works.
                     Semantic Search
 ```
 
-Every confirmed finding enters the registry. Searches on the next target start with those embeddings already seeded.
+Every confirmed finding enters the registry and seeds semantic search embeddings for every subsequent target.
 
 </details>
 </details>
@@ -247,10 +247,10 @@ Every confirmed finding enters the registry. Searches on the next target start w
 
 ## Example RE Workflow
 
-End-to-end analysis of stripped binaries from an RPM bundle. BinaryContext loads each binary, string xrefs locate the functions of interest, capstone traces the code to confirmed findings.
+Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads each one, string xrefs find the target functions, and capstone disassembles to confirmed findings.
 
 <details>
-<summary><strong>target-package.rpm</strong> — third-party bundle · x86-64</summary>
+<summary><strong>target-package.rpm:</strong> third-party bundle · x86-64</summary>
 
 ```
               ┌──────────────────────────────┐
@@ -264,7 +264,7 @@ End-to-end analysis of stripped binaries from an RPM bundle. BinaryContext loads
 ```
 
 <details>
-<summary><strong>Extracted Binaries</strong> — inference_engine · controller · libcore.so · libruntime.so</summary>
+<summary><strong>Extracted Binaries:</strong> inference_engine · controller · libcore.so · libruntime.so</summary>
 
 ```
          platform/linux-x86_64/
@@ -279,7 +279,7 @@ End-to-end analysis of stripped binaries from an RPM bundle. BinaryContext loads
 ```
 
 <details>
-<summary><strong>Inference Engine Track</strong> — BinaryContext · string xrefs · disasm</summary>
+<summary><strong>Inference Engine Track:</strong> BinaryContext · string xrefs · disasm</summary>
 
 ```
   BinaryContext.load_or_build()
@@ -313,7 +313,7 @@ End-to-end analysis of stripped binaries from an RPM bundle. BinaryContext loads
 </details>
 
 <details>
-<summary><strong>Library Analysis Track</strong> — nm · disasm · op scan</summary>
+<summary><strong>Library Analysis Track:</strong> nm · disasm · op scan</summary>
 
 ```
   nm -D libcore.so
@@ -334,7 +334,7 @@ End-to-end analysis of stripped binaries from an RPM bundle. BinaryContext loads
 </details>
 
 <details>
-<summary><strong>Controller Track</strong> — BinaryContext · spawn path · arg validation</summary>
+<summary><strong>Controller Track:</strong> BinaryContext · spawn path · arg validation</summary>
 
 ```
   BinaryContext.load_or_build()
@@ -362,7 +362,7 @@ End-to-end analysis of stripped binaries from an RPM bundle. BinaryContext loads
 </details>
 
 <details>
-<summary><strong>Findings</strong> — F1 HIGH · F2 LOW · F3 INFO</summary>
+<summary><strong>Findings:</strong> F1 HIGH · F2 LOW · F3 INFO</summary>
 
 ```
   ┌─────────────────────────────────────────────────────┐
@@ -411,7 +411,7 @@ pip install git+https://github.com/Ablation-Tool/ablation
 ## Module Map
 
 <details>
-<summary><strong>Input Formats</strong> — ELF · PE · Firmware · .mpy · APK/DEX · BEAM/Erlang</summary>
+<summary><strong>Input Formats:</strong> ELF · PE · Firmware · .mpy · APK/DEX · BEAM/Erlang</summary>
 
 ```
 ┌────────┐ ┌───────────┐ ┌──────────┐ ┌──────┐ ┌─────────┐ ┌────────────┐
@@ -424,7 +424,7 @@ pip install git+https://github.com/Ablation-Tool/ablation
 Ablation loads native binaries, compiled bytecode, and firmware images. Each goes through the same loader before analysis begins.
 
 <details>
-<summary><strong>BinaryContext</strong> — PLT · Strings · XRef · Call Graph · CFG</summary>
+<summary><strong>BinaryContext:</strong> PLT · Strings · XRef · Call Graph · CFG</summary>
 
 ```
                         ┌──────────────────────────┐
@@ -440,7 +440,7 @@ Ablation loads native binaries, compiled bytecode, and firmware images. Each goe
 Every analyzer receives a BinaryContext. It resolves PLT stubs, indexes strings with cross-references, maps function boundaries, and builds the call graph on demand rather than up front.
 
 <details>
-<summary><strong>Taint Engine</strong> — 16 ISAs</summary>
+<summary><strong>Taint Engine:</strong> 16 ISAs</summary>
 
 ```
         ┌──────────────────────────────────────────┐
@@ -457,14 +457,14 @@ Every analyzer receives a BinaryContext. It resolves PLT stubs, indexes strings 
                          [ FORGE ]
 ```
 
-Follows network input through the call graph to security-sensitive sinks. Library call sites do not stop the trace because register-level tracking resolves shared library stubs.
+The taint engine follows network input through the call graph to security-sensitive sinks. Library call sites do not stop the trace because register-level tracking resolves shared library stubs.
 
 → [Taint Analysis](docs/module-reference/taint-analysis.md)
 
 </details>
 
 <details>
-<summary><strong>Analysis Modules</strong> — Semantic Search · Version Diffing · Hypothesis Engine · Vtable Recon</summary>
+<summary><strong>Analysis Modules:</strong> Semantic Search · Version Diffing · Hypothesis Engine · Vtable Recon</summary>
 
 ```
   ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
@@ -480,18 +480,18 @@ Follows network input through the call graph to security-sensitive sinks. Librar
                                [ FORGE ]
 ```
 
-| Module | What it does |
+| Module | |
 |---|---|
 | [Semantic Search](docs/module-reference/semantic-search.md) | Takes a plain-language description and returns matching functions. Queries scope to the target binary, so results land in under a second. |
 | [Version Diffing](docs/workflows/cross-version.md) | Checks whether logic changed, not whether the file changed. A cosmetic recompile cannot hide an unpatched vulnerability. |
-| [Hypothesis Engine](docs/module-reference/hypothesis-engine.md) | Tracks competing theories about what a function does and scores evidence against each one. Sessions persist across engagements. |
+| [Hypothesis Engine](docs/module-reference/hypothesis-engine.md) | Runs multiple working hypotheses about a function simultaneously and scores incoming evidence against each. Analysis state persists across sessions. |
 | [Vtable Recon](docs/module-reference/cpp-vtable-reconstructor.md) | Recovers C++ virtual dispatch tables from stripped ELF. A generated annotation script propagates slot names through every call site. |
 | [Cross-Target Learning](docs/module-reference/cross-target-learning.md) | Every confirmed finding seeds semantic searches on every future target. |
 
 </details>
 
 <details>
-<summary><strong>Security Scanners</strong> — Pre-Auth · Crypto · Heap · Format String · BYOVD · MpyLifter</summary>
+<summary><strong>Security Scanners:</strong> Pre-Auth · Crypto · Heap · Format String · BYOVD · MpyLifter</summary>
 
 ```
   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
@@ -507,12 +507,12 @@ Follows network input through the call graph to security-sensitive sinks. Librar
                          [ FORGE ]
 ```
 
-| Scanner | What it does |
+| Scanner | |
 |---|---|
 | [Pre-Auth Exposure](docs/module-reference/preauth-exposure.md) | Maps every path from the network entry point to a sensitive operation that runs before authentication. |
-| [Crypto Analysis](docs/module-reference/crypto.md) | Recovers key material from compiled firmware. Audits TLS and JWT configurations without source access. |
-| [Heap Scanner](docs/module-reference/binary-lifter.md) | Chunk and UAF audit across all supported architectures. |
-| [Format String](docs/module-reference/binary-lifter.md) | Specifier scanner. Flags format string sinks reachable from tainted input. |
+| [Crypto Analysis](docs/module-reference/crypto.md) | Recovers key material from compiled firmware and audits TLS and JWT configurations. |
+| [Heap Scanner](docs/module-reference/binary-lifter.md) | Audits heap allocations for chunk corruption and use-after-free across all supported architectures. |
+| [Format String](docs/module-reference/binary-lifter.md) | Finds format string sinks reachable from tainted input. |
 | [BYOVD / Kernel](docs/module-reference/kernel-drivers.md) | Classifies signed kernel drivers for BYOVD capability before deployment. |
 | [MpyLifter](docs/module-reference/mpy-lifter.md) | Lifts .mpy v6 bytecode to pseudo-Python. Detects dangerous imports, exec/eval, and machine.mem32 across ESP32, STM32, and CC13xx firmware. |
 
