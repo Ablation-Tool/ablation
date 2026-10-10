@@ -17,56 +17,22 @@ An ad-hoc ISA decoder embeds knowledge of bit layouts, field names, and semantic
 
 ## Three-layer architecture
 
-```
-  ┌──────────────────────────────────────────────────────────────┐
-  │  Layer 1: Raw bytes / RGB-style integer                      │
-  │                                                              │
-  │  Three bytes (B0, B1, B2) pack into a 24-bit integer:        │
-  │    I24 = (B0 × 65536) + (B1 × 256) + B2                     │
-  │         = (R  × 256²) + (G  × 256¹) + (B × 256⁰)           │
-  │                                                              │
-  │  Convenience: rgb_to_bytes, bytes_to_rgb, rgb_int helpers    │
-  └──────────────────────────┬───────────────────────────────────┘
-                             |
-                     ISASpec.decode()
-                             |
-                             v
-  ┌──────────────────────────────────────────────────────────────┐
-  │  Layer 2: Encoding DAG                                       │
-  │                                                              │
-  │  Field: a named bit range with optional fixed value          │
-  │    Field("opcode", width=6, fixed=0b000001)                  │
-  │    Field("rA",     width=4, fixed=None)   <- variable        │
-  │                                                              │
-  │  Template: MSB-first sequence of Fields for one insn form    │
-  │    Template("LOAD_mem", [opcode, mode, rA, rB, imm8])        │
-  │    .encode({"rA": 0, "rB": 5, "imm8": 4}) -> I24            │
-  │    .decode(I24) -> {"opcode": 1, "mode": 2, "rA": 0, ...}   │
-  │                                                              │
-  │  EncodingNode: instantiated Template (DAG root)              │
-  │    node.to_hex() / to_bytes() / to_rgb() / show_layout()     │
-  └──────────────────────────┬───────────────────────────────────┘
-                             |
-                     ISASpec.decode() + Binding
-                             |
-                             v
-  ┌──────────────────────────────────────────────────────────────┐
-  │  Layer 3: Semantic DAG / IR                                  │
-  │                                                              │
-  │  SemanticOp: one operation with typed operands               │
-  │    SemanticOp("LOAD", {"dst": "r0", "base": "r5", "offset": 4})  │
-  │    operands: registers (str), immediates (int), MemRef(base,off)  │
-  │                                                              │
-  │  DataflowEdge: explicit producer-consumer link               │
-  │    DataflowEdge(producer_id="n1", consumer_id="n3", reg="r0")│
-  │                                                              │
-  │  SemanticBlock: basic block of SemanticOps with edges        │
-  │    SemanticBlock("entry").add_op(...).add_edge(...)          │
-  └──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[/"Raw bytes from binary"/] --> B["Layer 1 · Raw bytes / RGB-style integer\nThree bytes pack into a 24-bit integer:\n  I24 = (B0 × 65536) + (B1 × 256) + B2\n       = (R  × 256²) + (G  × 256¹) + (B × 256⁰)\nHelpers: rgb_to_bytes · bytes_to_rgb · rgb_int"]
 
-  ISASpec: ties all three layers together for round-trip encode/decode
-    .encode(SemanticOp) -> EncodingNode
-    .decode(bytes)      -> (EncodingNode, SemanticOp)
+    B --> C["ISASpec.decode()"]
+
+    C --> D["Layer 2 · Encoding DAG\nField: named bit range with optional fixed value\n  Field('opcode', width=6, fixed=0b000001)\n  Field('rA',     width=4, fixed=None)  ← variable\n\nTemplate: MSB-first sequence of Fields for one insn form\n  Template('LOAD_mem', [opcode, mode, rA, rB, imm8])\n  .encode({'rA': 0, 'rB': 5, 'imm8': 4}) → I24\n  .decode(I24) → {'opcode': 1, 'mode': 2, 'rA': 0, ...}\n\nEncodingNode: instantiated Template (DAG root)\n  node.to_hex() / to_bytes() / to_rgb() / show_layout()"]
+
+    D --> E["ISASpec.decode() + Binding"]
+
+    E --> F["Layer 3 · Semantic DAG / IR\nSemanticOp: one operation with typed operands\n  SemanticOp('LOAD', {'dst': 'r0', 'base': 'r5', 'offset': 4})\n  operands: registers (str), immediates (int), MemRef(base, off)\n\nDataflowEdge: explicit producer-consumer link\n  DataflowEdge(producer_id='n1', consumer_id='n3', reg='r0')\n\nSemanticBlock: basic block of SemanticOps with edges\n  SemanticBlock('entry').add_op(...).add_edge(...)"]
+
+    F --> G["ISASpec: ties all three layers together\n.encode(SemanticOp) → EncodingNode\n.decode(bytes)      → (EncodingNode, SemanticOp)"]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style G fill:#14532d,stroke:#166534,color:#dcfce7
 ```
 
 ---
@@ -232,11 +198,13 @@ for op in ops:
 
 ## Extending to a new ISA
 
-1. Define `Field` objects for each bitfield in the instruction encoding.
-2. Group them into `Template` instances, one per instruction form.
-3. Write `FieldBinding` entries that map semantic operand keys to template fields.
-4. Wrap in a `Binding` (op name + template name + field bindings).
-5. Build an `ISASpec` with the template registry and binding list.
+```mermaid
+flowchart LR
+    A["Define Field objects\nfor each bit range\nin the instruction encoding"] --> B["Group into Template instances\none per instruction form"]
+    B --> C["Write FieldBinding entries\nmapping semantic operand keys\nto template fields"]
+    C --> D["Wrap in a Binding\n(op name + template name + field bindings)"]
+    D --> E["Build ISASpec\nwith template registry\nand binding list"]
+```
 
 For variable-length ISAs (x86), build hierarchical templates: one for the opcode byte, one for ModRM, one for SIB, etc. The EncodingDAG composition nodes are Template references; the root template aggregates sub-templates by concatenating their encodings.
 

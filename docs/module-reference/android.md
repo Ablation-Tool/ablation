@@ -23,69 +23,28 @@ Knowing which Java methods have native implementations and whether those impleme
 
 ## Full analysis pipeline
 
-```
-  app.apk (or app.xapk)
-          |
-          v
-  ┌────────────────────────────────────────────────────────────┐
-  │  APKParser.from_path(path)                                 │
-  │                                                            │
-  │  ZIP container:                                            │
-  │    AndroidManifest.xml  (binary AXML format)               │
-  │    classes.dex          (primary DEX file)                 │
-  │    classes2.dex, ...    (multidex additional files)        │
-  │    lib/arm64-v8a/*.so   (native libraries by ABI)          │
-  │    assets/keys.bmp      (optional: steganographic keys)    │
-  │                                                            │
-  │  XAPK: outer ZIP has no AndroidManifest.xml                │
-  │    → extract inner base.apk first, then proceed normally   │
-  └──────────────┬──────────────────────┬──────────────────────┘
-                 |                      |
-                 v                      v
-  ┌─────────────────────┐   ┌──────────────────────────────────┐
-  │  AXML parser        │   │  DEX parser (all classes*.dex)   │
-  │                     │   │                                  │
-  │  Binary XML format: │   │  DEX flat-table structure:       │
-  │    ResXMLTree chunks│   │    header: magic, version,       │
-  │    START_ELEMENT    │   │      checksum, SHA-1, file_size  │
-  │    ATTRIBUTE chunks │   │    string_ids: [offset, ...]     │
-  │                     │   │    type_ids: [offset, ...]       │
-  │  Attribute offset   │   │    proto_ids: [shorty, ret, ...]  │
-  │  fix: attr_base =   │   │    field_ids: [class,type,name]  │
-  │  body + _attr_start │   │    method_ids: [cls,proto,name]  │
-  │  NOT body+8+start   │   │    class_defs: [cls,flags,...]   │
-  │  (garbage reads     │   │    data: code_items, string data │
-  │   without this fix) │   │                                  │
-  └─────────┬───────────┘   └─────────────┬────────────────────┘
-            |                             |
-            v                             v
-  ┌─────────────────────┐   ┌──────────────────────────────────┐
-  │  Manifest fields    │   │  DexAnalyzer.scan()              │
-  │    package name     │   │    string pool scan: AKIA*, AIza*│
-  │    min/target sdk   │   │    method ref scan: addJS*, exec │
-  │    permissions      │   │    manifest: debuggable, backup  │
-  │    components       │   │    → findings by severity        │
-  │    security flags   │   │                                  │
-  └─────────────────────┘   │  JniBridgeScanner.scan()         │
-                            │    DEX: ACC_NATIVE (0x0100) flag │
-                            │    ELF: Java_* exports           │
-                            │         JNI_OnLoad export        │
-                            │    → bridge map + risk tier      │
-                            │                                  │
-                            │  BinderScanner.scan()            │
-                            │    Service subclasses            │
-                            │    raw onTransact override       │
-                            │    AIDL $Stub classes            │
-                            └──────────────────────────────────┘
-                                          |
-                                          v
-                            ┌──────────────────────────────────┐
-                            │  LibraryInventory.from_dir()     │
-                            │    ARM64 BL-target count         │
-                            │    security string scoring       │
-                            │    PLT hook detection            │
-                            │    → ranked .so triage table     │
-                            └──────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[/"app.apk (or app.xapk)"/] --> B["APKParser.from_path(path)\nZIP container:\n  AndroidManifest.xml (binary AXML)\n  classes.dex · classes2.dex (multidex)\n  lib/arm64-v8a/*.so\n  assets/keys.bmp (optional steganographic keys)\nXAPK: outer ZIP lacks AndroidManifest.xml\n  → extract inner base.apk first"]
+
+    B --> C["AXML parser\nBinary XML: ResXMLTree chunks\nSTART_ELEMENT + ATTRIBUTE chunks\nOffset fix: attr_base = body + _attr_start\n  NOT body+8+start\n  (garbage reads without this fix)"]
+
+    B --> D["DEX parser (all classes*.dex)\nFlat-table structure:\n  string_ids → type_ids → proto_ids\n  field_ids → method_ids → class_defs → data\n  code_items · string data"]
+
+    C --> E["Manifest fields\npackage · min/target SDK · permissions\ncomponents · security flags\ndebugable · allowBackup · cleartext traffic"]
+
+    D --> F["DexAnalyzer.scan()\nString pool: AKIA* / AIza* (cloud keys)\nMethod refs: addJavascriptInterface / exec / Runtime\nManifest flags: debuggable / allowBackup\n→ findings by severity"]
+
+    D --> G["JniBridgeScanner.scan()\nDEX: ACC_NATIVE (0x0100) flag on methods\nELF: Java_* exports (canonical naming)\n     JNI_OnLoad export (dynamic registration)\n→ bridge map + risk tier"]
+
+    D --> H["BinderScanner.scan()\nService subclasses\nRaw onTransact override\nAIDL $Stub classes\n→ exported Binder surface"]
+
+    F --> I["LibraryInventory.from_dir()\nARM64 BL-target count\nSecurity string scoring\nPLT hook detection\n→ ranked .so triage table"]
+    G --> I
+    H --> I
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style I fill:#14532d,stroke:#166534,color:#dcfce7
 ```
 
 ---
