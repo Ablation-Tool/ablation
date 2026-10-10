@@ -28,7 +28,7 @@ Extracts and fingerprints `fgt_512.key`, `fgt2.key`, and `fgt.key` from FortiGat
 | `from_disk()` | Hyper-V VHDX (`.vhdx`) | vhdx |
 | `from_disk()` | Bare VMDK (`.vmdk`) | vmdk |
 
-All FortiGate virtual disks place P1 at LBA 2048 (256 MiB ext4, contains `datafs.tar.gz`). FAZ and FMG KVM images use P1 at LBA 8193 and have no `datafs.tar.gz`; `from_disk()` returns an error result for those — this is correct behavior, not a scanner bug.
+All FortiGate virtual disks place P1 at LBA 2048 (256 MiB ext4, contains `datafs.tar.gz`). FAZ and FMG KVM images use P1 at LBA 8193 and have no `datafs.tar.gz`; `from_disk()` returns an error result for those; this is correct behavior, not a scanner bug.
 
 **Not supported:** Hardware `.out` files (inner partitions encrypted; use `FirmwareContainerKeyExtractor` for those).
 
@@ -118,7 +118,7 @@ Intermediate files live in a temporary directory and are removed before the resu
 
 ## Cache
 
-Results are cached in `~/.ablation/cache/fortigate_cert_key_scanner.json`. The cache key is the file path, size, and modification time in nanoseconds — any change to the file triggers a rescan. Cache reads and writes are protected by `fcntl.flock` so concurrent batch scans on overlapping directories do not corrupt the cache. Cache writes are atomic (write to `.tmp`, then `os.replace`).
+Results are cached in `~/.ablation/cache/fortigate_cert_key_scanner.json`. The cache key is the file path, size, and modification time in nanoseconds; any change to the file triggers a rescan. Cache reads and writes are protected by `fcntl.flock` so concurrent batch scans on overlapping directories do not corrupt the cache. Cache writes are atomic (write to `.tmp`, then `os.replace`).
 
 Error results are never written to cache. If a scan fails (missing tool, disk full, corrupt firmware), the next run re-attempts the full pipeline. Use `force_rescan=True` to bypass a stale successful-but-wrong cache entry.
 
@@ -129,8 +129,8 @@ Error results are never written to cache. If a scan fails (missing tool, disk fu
 | Field | Type | Meaning |
 |---|---|---|
 | `name` | str | Key filename (e.g. `fgt_512.key`) |
-| `md5` | str | MD5 hexdigest — family identification only |
-| `sha256` | str | SHA-256 hexdigest — cross-validation |
+| `md5` | str | MD5 hexdigest: family identification only |
+| `sha256` | str | SHA-256 hexdigest: cross-validation |
 | `family` | str | Family name from `KNOWN_KEY_FAMILIES`, or `"UNKNOWN"` |
 | `severity` | str | `"CRITICAL"`, `"HIGH"`, or `"UNKNOWN"` |
 | `description` | str | Human-readable note from the known-family table |

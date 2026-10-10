@@ -29,7 +29,7 @@ layout divergence that breaks verification.
 
 ---
 
-## Step 1 — Suppress KASAN ghost calls (debug build)
+## Step 1: Suppress KASAN ghost calls (debug build)
 
 Before scanning the debug build, suppress KASAN/KCOV instrumentation calls.
 Without this, every function has a `bl __asan_load8` ghost call that produces
@@ -51,7 +51,7 @@ pre-load the KASAN symbol set from the full kernel System.map.
 
 ---
 
-## Step 2 — Scan the KASAN debug build
+## Step 2: Scan the KASAN debug build
 
 ```python
 from ablation.analyzers.la64_max_not_min_scanner import LA64MaxNotMinScanner
@@ -72,7 +72,7 @@ Record all hit function names and their file offsets. These are the candidates.
 
 ---
 
-## Step 3 — Verify each candidate in the stripped production build
+## Step 3: Verify each candidate in the stripped production build
 
 For each candidate function name from Step 2:
 
@@ -83,9 +83,9 @@ For each candidate function name from Step 2:
 
 | Outcome | Meaning |
 |---|---|
-| Production hit: same pattern | **CONFIRMED** — real finding |
+| Production hit: same pattern | **CONFIRMED**: real finding |
 | Production hit: different pattern | Verify independently; may be a distinct issue |
-| Production: pattern absent | **ELIMINATED** — KASAN codegen artifact |
+| Production: pattern absent | **ELIMINATED**: KASAN codegen artifact |
 | Production: function absent | Module not included in production kernel |
 
 ```python
@@ -96,7 +96,7 @@ hits_prod = scanner_prod.scan_function(func_va=production_va)
 
 ---
 
-## Step 4 — Record the KASAN/production split
+## Step 4: Record the KASAN/production split
 
 Document which hits survived verification and which did not. The split is informative:
 a high elimination rate (>50%) signals KASAN-only optimization behavior, not scanner noise.
@@ -137,6 +137,6 @@ These appear in KASAN builds but are not real findings:
 
 ## Related
 
-- `docs/module-reference/loongarch64.md` — LoongArchDecoderV2 KASAN ghost-call suppression
-- `docs/module-reference/loongarch64.md` — LA64MaxNotMinScanner, including ET_REL mode and Vec-growth FP class
-- `docs/module-reference/kernel-drivers.md` — ET_REL `.ko` analysis, `.rela.text` relocations
+- `docs/module-reference/loongarch64.md`: LoongArchDecoderV2 KASAN ghost-call suppression
+- `docs/module-reference/loongarch64.md`: LA64MaxNotMinScanner, including ET_REL mode and Vec-growth FP class
+- `docs/module-reference/kernel-drivers.md`: ET_REL `.ko` analysis, `.rela.text` relocations

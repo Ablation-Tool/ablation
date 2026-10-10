@@ -65,7 +65,7 @@ MIPS32 delay slots required the instruction after a branch or call to execute be
 flowchart TD
     A["NanoMIPSTaintTracker.from_path(elf)"] --> B{"capstone.__version__\n>= '6.0.0a1'?"}
 
-    B -->|"YES (6.x — has nanoMIPS support)"| C["Full decode path\nCapstone 6.x decodes P16/P32/P48\noperand-by-operand taint propagation\nXFER / ALU / CLR / LEA rules\nstack slot tracking\nhas_full_decode = True"]
+    B -->|"YES (Capstone 6.x: nanoMIPS support present)"| C["Full decode path\nCapstone 6.x decodes P16/P32/P48\noperand-by-operand taint propagation\nXFER / ALU / CLR / LEA rules\nstack slot tracking\nhas_full_decode = True"]
 
     B -->|"NO (5.x or absent)"| D["Conservative fallback path\nBALC targets extracted via manual\nbitfield parsing of P32 and P16 forms\nAfter any source call:\nmark ALL $a0-$a3 tainted on entry\nto next function\nhas_full_decode = False"]
 

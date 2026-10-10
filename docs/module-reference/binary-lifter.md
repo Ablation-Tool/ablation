@@ -11,11 +11,11 @@ Lift native binary functions to annotated C pseudocode.
 
 3 things that weren't possible before in Ablation:
 
-1. **A single lifting entry point for 17 ISA variants** — the ISA infrastructure (decoders, CFG builders, taint trackers) existed for MIPS, PPC, RISC-V, LoongArch64, ARC, V850, nanoMIPS, and BEAM, but there was no way to get readable pseudocode from any of them. Reviewing a PPC32 function required manual Capstone loops and ad-hoc register tracking per engagement. Now `BinaryLifter.from_path(binary, arch='ppc32').lift_function(va)` produces a structural skeleton for any of the 17 supported ISAs in one call.
+1. **A single lifting entry point for 17 ISA variants**: the ISA infrastructure (decoders, CFG builders, taint trackers) existed for MIPS, PPC, RISC-V, LoongArch64, ARC, V850, nanoMIPS, and BEAM, but there was no way to get readable pseudocode from any of them. Reviewing a PPC32 function required manual Capstone loops and ad-hoc register tracking per engagement. Now `BinaryLifter.from_path(binary, arch='ppc32').lift_function(va)` produces a structural skeleton for any of the 17 supported ISAs in one call.
 
-2. **Structural pseudocode for all ablation-native decoders** — the CFG walk infrastructure (block-level BFS over `cfg_*.blocks`) was identical across ISAs but had never been connected to an IR emitter. `_walk_ablation_cfg` closes that gap: one shared BFS walker, ISA-specific emit closures, no code duplication.
+2. **Structural pseudocode for all ablation-native decoders**: the CFG walk infrastructure (block-level BFS over `cfg_*.blocks`) was identical across ISAs but had never been connected to an IR emitter. `_walk_ablation_cfg` closes that gap: one shared BFS walker, ISA-specific emit closures, no code duplication.
 
-3. **BEAM module analysis via the BinaryLifter interface** — `BeamContext` existed but required a separate invocation outside the `BinaryLifter` API. Now `BinaryLifter.from_path(beam_file, arch='beam').lift_function(0)` returns a module-level summary (exports, dangerous imports, atom inventory) through the same interface as native ISA lifting.
+3. **BEAM module analysis via the BinaryLifter interface**: `BeamContext` existed but required a separate invocation outside the `BinaryLifter` API. Now `BinaryLifter.from_path(beam_file, arch='beam').lift_function(0)` returns a module-level summary (exports, dangerous imports, atom inventory) through the same interface as native ISA lifting.
 
 ---
 
@@ -23,22 +23,22 @@ Lift native binary functions to annotated C pseudocode.
 
 | Arch | `arch=` strings | Status |
 |---|---|---|
-| ARM64 | `arm64` | Full — CFG + register state machine + calling convention |
-| x86-64 | `x86_64`, `x86-64`, `amd64` | Full — linear disasm + register tracking; PE + ELF |
-| x86-32 | `x86_32`, `i386`, `i686` | Structural — Capstone CS_MODE_32; CDECL; eax return |
-| ARM32 | `arm32`, `arm` | Structural — insn_arm32 + cfg_arm32; AAPCS r0–r3 |
-| Thumb/Thumb-2 | `thumb`, `thumb2` | Structural — insn_arm32 Thumb mode |
-| MIPS-32 | `mips32`, `mips`, `mips32el` | Structural — insn_mips + cfg_mips; o32 $a0–$a3 |
-| MIPS-64 | `mips64`, `mips64el` | Structural — insn_mips + cfg_mips; n64 $a0–$a7 |
-| nanoMIPS | `nanomips` | Structural — NanoMIPSDecoder linear walk; o32 ABI |
-| PPC-32 | `ppc32`, `ppc`, `powerpc` | Structural — insn_ppc + cfg_ppc; SysV32 r3–r10 |
-| PPC-64 | `ppc64`, `powerpc64` | Structural — insn_ppc + cfg_ppc; ELFv2 r3–r10 |
-| RISC-V 32 | `rv32`, `riscv32` | Structural — insn_riscv + cfg_riscv; psABI a0–a7 |
-| RISC-V 64 | `rv64`, `riscv64` | Structural — insn_riscv + cfg_riscv; psABI a0–a7 |
-| ARC EM/HS | `arc`, `arcem`, `archs` | Structural — requires `arc-elf32-objdump` in PATH |
-| V850/RH850 | `v850`, `rh850`, `v850e2` | Structural — requires `v850-elf-objdump` in PATH |
-| LoongArch64 | `la64`, `loongarch64` | Structural — LoongArchDecoder + cfg_loongarch64; lp64 $a0–$a7 |
-| BEAM (Erlang/Elixir) | `beam`, `erlang`, `elixir` | Module summary — BeamContext; no VA space |
+| ARM64 | `arm64` | Full: CFG + register state machine + calling convention |
+| x86-64 | `x86_64`, `x86-64`, `amd64` | Full: linear disasm + register tracking; PE + ELF |
+| x86-32 | `x86_32`, `i386`, `i686` | Structural: Capstone CS_MODE_32; CDECL; eax return |
+| ARM32 | `arm32`, `arm` | Structural: insn_arm32 + cfg_arm32; AAPCS r0-r3 |
+| Thumb/Thumb-2 | `thumb`, `thumb2` | Structural: insn_arm32 Thumb mode |
+| MIPS-32 | `mips32`, `mips`, `mips32el` | Structural: insn_mips + cfg_mips; o32 $a0-$a3 |
+| MIPS-64 | `mips64`, `mips64el` | Structural: insn_mips + cfg_mips; n64 $a0-$a7 |
+| nanoMIPS | `nanomips` | Structural: NanoMIPSDecoder linear walk; o32 ABI |
+| PPC-32 | `ppc32`, `ppc`, `powerpc` | Structural: insn_ppc + cfg_ppc; SysV32 r3-r10 |
+| PPC-64 | `ppc64`, `powerpc64` | Structural: insn_ppc + cfg_ppc; ELFv2 r3-r10 |
+| RISC-V 32 | `rv32`, `riscv32` | Structural: insn_riscv + cfg_riscv; psABI a0-a7 |
+| RISC-V 64 | `rv64`, `riscv64` | Structural: insn_riscv + cfg_riscv; psABI a0-a7 |
+| ARC EM/HS | `arc`, `arcem`, `archs` | Structural: requires `arc-elf32-objdump` in PATH |
+| V850/RH850 | `v850`, `rh850`, `v850e2` | Structural: requires `v850-elf-objdump` in PATH |
+| LoongArch64 | `la64`, `loongarch64` | Structural: LoongArchDecoder + cfg_loongarch64; lp64 $a0-$a7 |
+| BEAM (Erlang/Elixir) | `beam`, `erlang`, `elixir` | Module summary: BeamContext; no VA space |
 
 **Full** backends emit register-tracked pseudo-C IR with type annotations. **Structural** backends resolve call/return/branch and emit all other instructions as `// mnemonic ops` comments. ARC and V850 require a GNU cross-toolchain in PATH; they return a comment explaining the requirement if the toolchain is absent.
 
@@ -96,7 +96,7 @@ BinaryLifter.report('/path/to/binary', 0x12340, arch='mips32')
 
 ### `BinaryLifter.from_path(binary_path, arch='arm64') → BinaryLifter`
 
-Construct from a binary path. `arch` selects the ISA backend — see the architecture support table above for valid strings.
+Construct from a binary path. `arch` selects the ISA backend; see the architecture support table above for valid strings.
 
 ### `BinaryLifter.from_context(ctx, arch='arm64') → BinaryLifter`
 

@@ -7,8 +7,8 @@ Intraprocedural taint analysis for stripped i386 ELF binaries (32-bit x86, SysV 
 First deployed on Acronis True Image 2018 build 15560 rescue environment (`asamba` and `product.bin`, both i386 ELF).
 
 Confirmed findings that drove this module:
-- **ATI-KRB-001**: `asamba_mount_cifs_krb5` (0x804ec40) — `snprintf` injects five Kerberos credential fields into `/bin/mount.cifs` command string → `system()`. toupper-only sanitizer at 0x804de18 does not strip shell metacharacters. CWE-78 HIGH.
-- **ATI-KRB-002**: `asamba_kerberos_domain_prep` (0x804e986) — `snprintf` injects SMB server hostname into `/bin/net time set -S %s` → `system()`. CWE-78 HIGH.
+- **ATI-KRB-001**: `asamba_mount_cifs_krb5` (0x804ec40): `snprintf` injects five Kerberos credential fields into `/bin/mount.cifs` command string → `system()`. toupper-only sanitizer at 0x804de18 does not strip shell metacharacters. CWE-78 HIGH.
+- **ATI-KRB-002**: `asamba_kerberos_domain_prep` (0x804e986): `snprintf` injects SMB server hostname into `/bin/net time set -S %s` → `system()`. CWE-78 HIGH.
 
 ---
 
@@ -37,7 +37,7 @@ tracker = X86_32TaintTracker.from_path(
 
 ---
 
-## ABI model — CDECL32 (i386 SysV)
+## ABI model: CDECL32 (i386 SysV)
 
 | Register | Role |
 |---|---|
@@ -97,7 +97,7 @@ The tracker indexes `stack: Dict[int, FrozenSet[str]]` on the signed ebp-relativ
 
 ## GOT-relative string detection
 
-In PIC i386 binaries, strings are accessed as `ebx + disp32` where `ebx` is the GOT base (set by the PIC thunk: `call __x86.get_pc_thunk.bx; add $offset, %ebx`). The tracker does not perform GOT-base emulation — format-string references in sink arg analysis are resolved by `_build_plt_map()` using lief's relocation table.
+In PIC i386 binaries, strings are accessed as `ebx + disp32` where `ebx` is the GOT base (set by the PIC thunk: `call __x86.get_pc_thunk.bx; add $offset, %ebx`). The tracker does not perform GOT-base emulation; format-string references in sink arg analysis are resolved by `_build_plt_map()` using lief's relocation table.
 
 For full format-string constant detection on i386, pass the result of `SinkArgClassifier.from_path(elf).classify_all()` separately.
 
@@ -115,6 +115,6 @@ For full format-string constant detection on i386, pass the result of `SinkArgCl
 
 ## Ablation gap this module closes
 
-Prior to this module, `taint_tracker_x86.py` was hardcoded to `CS_MODE_64`, making i386 binaries invisible to the taint analysis pipeline. The `isa_x86.py` infrastructure had `Mode.X86 = "x86"` (IA-32) and `Abi.CDECL32` already defined — this module provides the corresponding runtime tracker.
+Prior to this module, `taint_tracker_x86.py` was hardcoded to `CS_MODE_64`, making i386 binaries invisible to the taint analysis pipeline. The `isa_x86.py` infrastructure had `Mode.X86 = "x86"` (IA-32) and `Abi.CDECL32` already defined; this module provides the corresponding runtime tracker.
 
 Add to `CompilerSecurityGate` dispatch table when i386 ELF support is needed there.

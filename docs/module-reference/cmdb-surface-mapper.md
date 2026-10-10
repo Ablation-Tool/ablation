@@ -20,7 +20,7 @@ field-read counts.
 
 ## Analysis direction
 
-The CMDB abstraction layer blocks backward taint tracing — `cmf_query_get_string()`
+The CMDB abstraction layer blocks backward taint tracing; `cmf_query_get_string()`
 returns a char pointer, but the handle chain (`cmf_query_create → cmf_query_update →
 cmf_query_get_string`) is opaque to TaintTracker. Tracing **forward** from `cmf_query_create`
 call sites bypasses this: the table ID is concrete, the caller function is identified,

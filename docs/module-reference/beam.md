@@ -36,7 +36,7 @@ A BEAM file is an IFF (Interchange File Format) container. IFF was designed for 
 
 ```mermaid
 flowchart TD
-    A[/"module.beam — IFF container"/] --> B["IFF header\n'FOR1' · length · 'BEAM'"]
+    A[/"module.beam: IFF container"/] --> B["IFF header\n'FOR1' · length · 'BEAM'"]
 
     B --> C["AtU8 / Atom chunk\nAtom table: count + (len + bytes) per atom\nAll other tables reference atoms by index\nAtU8 = UTF-8 (OTP 20+); Atom = Latin-1 fallback"]
 

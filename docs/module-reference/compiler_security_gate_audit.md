@@ -1,8 +1,8 @@
-# SAFE CODE Audit — compiler_security_gate.py
+# SAFE CODE Audit: compiler_security_gate.py
 
 > Auditor: Claude Sonnet 4.6 (manual, 10-section SOP)
 > Date: 2026-10-05
-> Gate result: **PASSED** — no HIGH or CRITICAL findings
+> Gate result: **PASSED**; no HIGH or CRITICAL findings
 
 ---
 
@@ -22,67 +22,67 @@ Assumptions:
 
 ## 2. Functional Correctness Assessment
 
-**Positive — DAG construction is cycle-free by design.**
+**Positive: DAG construction is cycle-free by design.**
 Type: Positive. Location: `_taint_dag()`. The source→carry→sink structure is a strict DAG; `dag_nodes()` topological sort cannot encounter a cycle. ✓
 
-**Risk — `_normalize_taint()` silent `None` return on malformed finding.**
+**Risk: `_normalize_taint()` silent `None` return on malformed finding.**
 Type: Risk. Location: `_normalize_taint()`. If a taint tracker returns a non-standard object, the `except Exception: return None` path returns `None`, which is filtered at call site. Correct behavior, but failure is invisible.
 Recommendation: Low priority. The filter `if gf is not None` at call site handles this correctly.
 
-**Risk — `_CRITICAL_SINKS` may drift from taint tracker `_SINKS`.**
+**Risk: `_CRITICAL_SINKS` may drift from taint tracker `_SINKS`.**
 Type: Risk. Location: module-level constant. `_CRITICAL_SINKS` is defined independently of `taint_tracker_x86._SINKS`. If new command-injection sinks are added to the taint tracker, severity classification in the gate will not automatically update.
 Recommendation: In a future revision, import the critical-sink list from a shared constant or from the tracker module.
 
-**Positive — `_run_taint()` correctly dispatches per architecture.**
+**Positive: `_run_taint()` correctly dispatches per architecture.**
 Type: Positive. All dispatch paths tested against CLAUDE.md API reference. Module paths, class names, and method signatures match documented APIs. ✓
 
 ---
 
 ## 3. Operational Safety & Failure Modes
 
-**Medium — Silent failure in all sub-scanner runners.**
+**Medium: Silent failure in all sub-scanner runners.**
 Severity: Medium. Location: `_run_taint()`, `_run_format_string()`, `_run_heap()`, `_run_length_underflow()`. Each wraps its entire body in `try/except Exception: return []`. A missing dependency, OOM, or corrupt binary causes the gate to return CLEAN when it could not analyze. This is a false-negative risk.
 Recommendation: At minimum, catch `ImportError` and `FileNotFoundError` separately and surface them as warnings, while still catching `Exception` for runtime errors to avoid crashing the build pipeline.
 
-**Low — No binary existence check in CLI.**
+**Low: No binary existence check in CLI.**
 Severity: Low. Location: `_main()`. An invalid path will fail inside `BinaryContext.load_or_build()` with a LIEF/OS error rather than a clean user-facing message.
 Recommendation: Add `if not Path(args.binary).exists(): sys.exit(f"error: {args.binary}: not found")` before `from_path()`.
 
-**Positive — Never raises from `scan()` or `report()`.**
+**Positive: Never raises from `scan()` or `report()`.**
 Severity: N/A. All scanner failures return empty lists; `report()` handles empty findings gracefully. The build pipeline will not crash. ✓
 
 ---
 
 ## 4. Reliability & Resilience Issues
 
-**Low — `self._ctx` mutation in `_ctx_or_build()` is not thread-safe.**
+**Low: `self._ctx` mutation in `_ctx_or_build()` is not thread-safe.**
 Severity: Low. `_ctx_or_build()` sets `self._ctx` without a lock. Non-issue for single-threaded CLI use; would be a race condition in a concurrent build pipeline that reuses one gate instance. The typical use pattern (one instance per binary) is safe.
 Recommendation: Document that one `CompilerSecurityGate` instance is not safe for concurrent use.
 
-**Positive — Context built once, reused across all sub-scanners.**
+**Positive: Context built once, reused across all sub-scanners.**
 `scan()` calls `self._arch()` first, which calls `_ctx_or_build()` and caches `self._ctx`. All subsequent `_run_*()` calls get the cached context. No redundant BinaryContext builds. ✓
 
 ---
 
 ## 5. Performance & Resource Use Considerations
 
-**Low — Full taint tracker run on large binaries can be slow.**
+**Low: Full taint tracker run on large binaries can be slow.**
 Impact: Low (expected). `run_interprocedural()` is O(N) to O(N²) depending on function count. This is a known and accepted cost for security analysis. No concern for the gate's correctness.
 
-**Low — `findings.sort()` at end of `scan()` is O(N log N) on finding count.**
+**Low: `findings.sort()` at end of `scan()` is O(N log N) on finding count.**
 Impact: Low. Finding counts are typically small (tens to hundreds). No concern.
 
 ---
 
 ## 6. Maintainability & Operability Observations
 
-**Maintainability — `_CRITICAL_SINKS` is a maintenance liability.**
+**Maintainability: `_CRITICAL_SINKS` is a maintenance liability.**
 Type: Maintainability. See Section 2 risk. A shared constant module would eliminate drift risk.
 
-**Readability — `_normalize_taint()` duck typing is undocumented.**
+**Readability: `_normalize_taint()` duck typing is undocumented.**
 Type: Readability. The duck-typing contract (expected attributes on raw taint findings) is implicit. A docstring or protocol class would make the contract explicit.
 
-**Operability — No debug/verbose mode.**
+**Operability: No debug/verbose mode.**
 Type: Operability. When sub-scanners fail silently, there is no way to detect this without modifying the source. A `verbose=False` parameter on `scan()` that prints scanner import errors would aid diagnostics.
 
 ---

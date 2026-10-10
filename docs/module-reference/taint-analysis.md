@@ -78,7 +78,7 @@ stateDiagram-v2
 |---|---|
 | `XFER` (mov / ldr / str) | `dst_taint = src_taint` |
 | `ALU` (add / sub / and) | `dst_taint = taint(op1) \| taint(op2)` |
-| `CLR` (xor r, r) | `dst_taint = {}` — clears unconditionally |
+| `CLR` (xor r, r) | `dst_taint = {}`: clears unconditionally |
 | `LEA` | `dst_taint = taint(base) \| taint(index)` |
 | `CALL` (source fn) | Return register ← `{source_label}` |
 | `CALL` (sink fn) | If relevant arg register is tainted → emit finding |

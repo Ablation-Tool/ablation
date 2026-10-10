@@ -32,9 +32,9 @@ flowchart TD
 
     C --> D["Stage 3 · Description construction\n'{name} role={role} | calls: {plt_calls} |\nstrings: {xrefs} | asm: {category_sequence} |\ntrans: {transition_counts}'"]
 
-    D --> E["Stage 4 · BERT encoding\nall-mpnet-base-v2 (768-dim)\nTokenize → 12-layer MPNet → mean pool → L2 normalize\n→ raw (768,) vector — anisotropic\nUnrelated pairs score 0.6-0.9"]
+    D --> E["Stage 4 · BERT encoding\nall-mpnet-base-v2 (768-dim)\nTokenize → 12-layer MPNet → mean pool → L2 normalize\n→ raw (768,) vector: anisotropic\nUnrelated pairs score 0.6-0.9"]
 
-    E --> F["Stage 4b · PCA whitening\nSu et al. 2021\ncentered = embedding - corpus_mean\nwhitened = centered @ W\nW = eigenvectors / sqrt(eigenvalues)\nRe-normalize to unit sphere\n→ whitened (768,) vector — isotropic\nUnrelated pairs drop to 0.4-0.6"]
+    E --> F["Stage 4b · PCA whitening\nSu et al. 2021\ncentered = embedding - corpus_mean\nwhitened = centered @ W\nW = eigenvectors / sqrt(eigenvalues)\nRe-normalize to unit sphere\n→ whitened (768,) vector: isotropic\nUnrelated pairs drop to 0.4-0.6"]
 
     F --> G[("N × 768 corpus matrix\ncached at\n~/.ablation/func_semantic_cache_{sha}.pkl")]
 
@@ -123,7 +123,7 @@ flowchart TD
 
     D --> E["L2 normalization\nDivide by vector magnitude\n→ unit sphere\nDot product between normalized = cosine similarity"]
 
-    E --> F[/"Raw (768,) embedding vector\nAnisotropic — unrelated pairs score 0.6-0.9"/]
+    E --> F[/"Raw (768,) embedding vector\nAnisotropic: unrelated pairs score 0.6-0.9"/]
 
     style A fill:#1e293b,stroke:#475569,color:#e2e8f0
     style F fill:#1e3a5f,stroke:#1d4ed8,color:#bfdbfe

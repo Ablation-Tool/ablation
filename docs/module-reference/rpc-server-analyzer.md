@@ -6,7 +6,7 @@
 
 1. **No RPC interface UUID extraction.** Windows RPC servers register interfaces with `RpcServerRegisterIf*`. The first argument is a pointer to `RPC_SERVER_INTERFACE`, which contains the interface UUID and transfer syntax. Before this module, finding out what RPC interfaces a binary exposes required Ghidra's RPC parser or manual struct reading. Ablation had no automated path from `RpcServerRegisterIf` call site to interface UUID.
 
-2. **No authentication level analysis.** `RpcServerRegisterIfEx` takes an auth level argument. `RPC_C_AUTHN_LEVEL_NONE` (1) means any network caller can invoke methods with no credentials — a direct lateral movement path. Before this module, confirming whether a given binary registered unauthenticated RPC required manual trace through the `RpcServerRegisterIfEx` argument list.
+2. **No authentication level analysis.** `RpcServerRegisterIfEx` takes an auth level argument. `RPC_C_AUTHN_LEVEL_NONE` (1) means any network caller can invoke methods with no credentials. This is a direct lateral movement path. Before this module, confirming whether a given binary registered unauthenticated RPC required manual trace through the `RpcServerRegisterIfEx` argument list.
 
 3. **No endpoint string extraction.** `RpcServerUseProtseqEp*` binds the server to a specific named pipe, TCP port, or ALPC port. That string is the network address of the attack surface. Before this module, enumerating those strings required string search plus manual cross-referencing to verify they were actually passed to an endpoint registration function.
 
@@ -57,14 +57,14 @@ print("Endpoints:", ana.endpoint_strings())
 
 | Level | Value | Meaning |
 |---|---|---|
-| `RPC_C_AUTHN_LEVEL_NONE` | 1 | No authentication — any caller accepted |
+| `RPC_C_AUTHN_LEVEL_NONE` | 1 | No authentication: any caller accepted |
 | `RPC_C_AUTHN_LEVEL_CONNECT` | 2 | Auth on connect only |
 | `RPC_C_AUTHN_LEVEL_CALL` | 3 | Auth on each call |
 | `RPC_C_AUTHN_LEVEL_PKT` | 4 | Auth + packet integrity |
 | `RPC_C_AUTHN_LEVEL_PKT_INTEGRITY` | 5 | Auth + integrity check |
 | `RPC_C_AUTHN_LEVEL_PKT_PRIVACY` | 6 | Auth + encryption |
 
-When `RpcServerRegisterIf` (not `IfEx`) is used, no auth level is passed — the server's default applies. The module reports this case as `auth_level = -1` with a descriptive message.
+When `RpcServerRegisterIf` (not `IfEx`) is used, no auth level is passed. The server's default applies. The module reports this case as `auth_level = -1` with a descriptive message.
 
 ---
 

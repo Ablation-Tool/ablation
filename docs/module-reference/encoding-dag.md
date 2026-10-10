@@ -11,7 +11,7 @@ Generic bitfield-to-instruction encoding framework for fixed-width ISAs. Impleme
 One architectural problem made adding new ISA support expensive:
 
 **Without a shared encoding model, every ISA requires its own exception handler.**
-An ad-hoc ISA decoder embeds knowledge of bit layouts, field names, and semantic meanings in a single tightly-coupled function. Adding a new architecture means writing a new decoder from scratch. The EncodingDAG separates the three concerns — bit extraction (Layer 1), field composition (Layer 2), and semantic meaning (Layer 3) — so each can be specified once and composed. A new ISA adds Templates and Bindings without touching any existing code.
+An ad-hoc ISA decoder embeds knowledge of bit layouts, field names, and semantic meanings in a single tightly-coupled function. Adding a new architecture means writing a new decoder from scratch. The EncodingDAG separates the three concerns: bit extraction (Layer 1), field composition (Layer 2), and semantic meaning (Layer 3). Each can be specified once and composed. A new ISA adds Templates and Bindings without touching any existing code.
 
 ---
 
@@ -63,7 +63,7 @@ print(node.show_layout())
 
 ---
 
-## Layer 2 — Encoding DAG
+## Layer 2: Encoding DAG
 
 ### Field
 
@@ -111,7 +111,7 @@ node.show_layout()   # ASCII diagram
 
 ---
 
-## Layer 3 — Semantic DAG / IR
+## Layer 3: Semantic DAG
 
 ### SemanticBlock with dataflow edges
 
@@ -132,7 +132,7 @@ blk.add_edge(DataflowEdge("n3", "n4", "r0"))
 
 ---
 
-## ISASpec — round-trip encode / decode
+## ISASpec: Round-Trip Encode and Decode
 
 `ISASpec` owns a template registry plus Bindings that map semantic op names to template names and semantic operand keys to template field names.
 

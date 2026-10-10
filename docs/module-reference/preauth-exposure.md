@@ -24,7 +24,7 @@ flowchart TD
     A[/"firmware binary (e.g., libservice.so)"/] --> B["Step 1 · Route init function scan\nCapstone disassembly from route_init_va to route_init_end_va\nFor each call instruction in range:\n  Extract registration args:\n    arg[0] = HTTP path string\n    arg[1] = HTTP method (GET/POST/PUT/DELETE)\n    arg[2] = handler class name\n    arg[3] = middleware list"]
 
     B --> C{"arg[3] includes\nWorkflowLockWithoutSessionPermit?"}
-    C -->|Yes| D["Route is authenticated\nSkip — not attack surface"]
+    C -->|Yes| D["Route is authenticated\nSkip: not attack surface"]
     C -->|No| E["Route is pre-auth candidate"]
 
     E --> F["Step 2 · Handler factory resolution\nfactory_va points to vtable dispatch table\nGET_REGISTER and POST_REGISTER calls\nassign handler VAs per HTTP method\nExtract GET handler VA and POST handler VA"]
@@ -45,7 +45,7 @@ flowchart TD
     B --> C["Route match: path = 'api/v2/monitor/system/status'"]
     C --> D{"Middleware list\nevaluation"}
 
-    D -->|"WorkflowLockWithoutSessionPermit\nNOT in list"| E[/"Request handler runs directly\nPre-auth route — attack surface"/]
+    D -->|"WorkflowLockWithoutSessionPermit\nNOT in list"| E[/"Request handler runs directly\nPre-auth route: attack surface"/]
     D -->|"Session validation middleware\nin list"| F{"Session cookie\nvalid?"}
 
     F -->|Yes| G["Handler runs"]

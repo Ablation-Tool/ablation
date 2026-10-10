@@ -12,7 +12,7 @@ Two things Ablation could not do before this module:
 
 **File:** `ablation/analyzers/fortibuild_track_classifier.py`
 
-Parses Fortinet firmware filenames and returns the build track (M/F), expected cert key set, key generation, version, and product family. Pure Python — no disk I/O, no external tools.
+Parses Fortinet firmware filenames and returns the build track (M/F), expected cert key set, key generation, version, and product family. Pure Python; no disk I/O, no external tools.
 
 The M vs F distinction is not documented in Fortinet's public materials. It was established through systematic corpus analysis across every virtual deployment format: VMware OVF, Hyper-V VHD/VHDX, KVM QCOW2, ARM64 KVM. The pattern is 100% consistent in the tested corpus.
 
@@ -106,5 +106,5 @@ Fortinet firmware filename (no I/O)
 
 ## Related modules
 
-- `FortiGateCertKeyScanner` (`fortigate_cert_key_scanner.py`) — extracts and fingerprints actual cert keys from disk images
-- `FirmwareContainerKeyExtractor` (`firmware_container_key_extractor.py`) — hardware `.out` file key recovery
+- `FortiGateCertKeyScanner` (`fortigate_cert_key_scanner.py`): extracts and fingerprints actual cert keys from disk images
+- `FirmwareContainerKeyExtractor` (`firmware_container_key_extractor.py`): hardware `.out` file key recovery

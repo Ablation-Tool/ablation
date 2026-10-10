@@ -53,7 +53,7 @@ print(f"Extracted {len(names)} symbols from PDB")
 
 | Severity | Category | Trigger |
 |---|---|---|
-| INFO | `pdb_info` | CodeView RSDS record found — reports GUID, age, symbol URL |
+| INFO | `pdb_info` | CodeView RSDS record found: reports GUID, age, symbol URL |
 | INFO | `no_pdb` | No CodeView debug directory |
 
 ---

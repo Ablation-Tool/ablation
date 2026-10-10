@@ -24,7 +24,7 @@ After confirming a heap overflow in Fortinet firmware, the next engagement on a 
 flowchart TD
     A["Engagement N\nTaintTracker confirms heap overflow\nin auth_radius_parse (Fortinet, x86-64)"] --> B["FindingRegistry.register()\nvendor='fortinet' · product='fortigate'\ncwe_class='CWE-122' · severity='CRITICAL'\nembedding = model.encode(description)\n← BERT vector, 768 dims"]
 
-    B --> C[("~/.ablation/findings.db\nSQLite — persists forever\nfields: vendor · product · title\ndescription · cwe_class · severity\nfunc_addr · binary · embedding BLOB")]
+    B --> C[("~/.ablation/findings.db\nSQLite: persists forever\nfields: vendor · product · title\ndescription · cwe_class · severity\nfunc_addr · binary · embedding BLOB")]
 
     C --> D["Engagement N+1\nNew vendor, different architecture\n(e.g., Huawei VRP, MIPS32)"]
 

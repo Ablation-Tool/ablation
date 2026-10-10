@@ -1,6 +1,6 @@
 # Android / APK Analysis
 
-Zero-dependency analysis for Android APK files. No androguard, no apktool, no jadx — pure Python stdlib. Works on raw `.apk` files and APKPure `.xapk` containers.
+Zero-dependency analysis for Android APK files. No androguard, no apktool, no jadx. Pure Python stdlib only. Works on raw `.apk` files and APKPure `.xapk` containers.
 
 Four analysis layers: **APKParser** (ZIP + AXML + DEX format), **DexAnalyzer** (security scanner over DEX bytecode), **JniBridgeScanner** (JNI bridge RE), **BinderScanner** (exported Binder service surface).
 

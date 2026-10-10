@@ -1,4 +1,4 @@
-# FORGE Audit — compiler_security_gate.py
+# FORGE Audit: compiler_security_gate.py
 
 > Auditor: FORGE.audit_module (claude --print fallback, no API key required)
 > Date: 2026-10-05
@@ -11,7 +11,7 @@ I have all the information needed to produce the full audit. Here is the complet
 
 ## 1. Scope & Assumptions
 
-**Code reviewed:** `ablation/analyzers/compiler_security_gate.py` — a single Python module (~440 lines) implementing a post-linker binary security gate for the Ablation RE toolkit.
+**Code reviewed:** `ablation/analyzers/compiler_security_gate.py`, a single Python module (~440 lines) implementing a post-linker binary security gate for the Ablation RE toolkit.
 
 **Language / execution model:** Python 3, used both as an importable library (`CompilerSecurityGate` class) and as a CLI batch tool (`python -m ablation.analyzers.compiler_security_gate <binary>`). Invoked synchronously as a CI gate step after the linker produces its output binary.
 
@@ -21,7 +21,7 @@ I have all the information needed to produce the full audit. Here is the complet
 - `Assumption:` `BinaryContext.load_or_build()` (confirmed at line 154: `self.path`) is the intended arch-detection mechanism and is expected to succeed on any valid ELF/PE binary the gate is applied to.
 - `Assumption:` The taint tracker module for MIPS32 is `taint_tracker_mips.py` (file confirmed on disk); the CLAUDE.md entry naming it `taint_tracker_mips32` is a doc discrepancy, not a code error.
 - `Assumption:` `encoding_dag.SemanticBlock.dag_nodes()` raises `ValueError` on cyclic edge sets (confirmed by code reading and live test).
-- `Assumption:` The gate is a hard CI gate — exit 0 means "safe to ship," making false negatives (CLEAN on failure) the most severe failure mode.
+- `Assumption:` The gate is a hard CI gate; exit 0 means "safe to ship," making false negatives (CLEAN on failure) the most severe failure mode.
 - `Assumption:` The `encoding_dag` module (`SemanticBlock`, `DataflowEdge`, `SemanticOp`) is stable and already tested separately.
 - `Assumption:` `FormatStringScanner`, `HeapVulnScanner`, and `LengthUnderflowScanner` all expose both `from_context(ctx)` and `from_path(path)` constructors (confirmed by reading their source files).
 
@@ -58,7 +58,7 @@ I have all the information needed to produce the full audit. Here is the complet
 
 ---
 
-**Finding 2-4: `_normalize_taint` defaults `sink_name` to `"?"` — always produces HIGH, never CRITICAL**
+**Finding 2-4: `_normalize_taint` defaults `sink_name` to `"?"`; always produces HIGH, never CRITICAL**
 - **Type:** Risk
 - **Location:** `_normalize_taint()` (line 216), `_taint_severity()` (lines 201–204)
 - **Description:** `getattr(raw, "sink_name", getattr(raw, "sink", "?"))`. If neither attribute is present, `sink_name = "?"`. `"?"` is not in `_CRITICAL_SINKS`, so `_taint_severity` returns `"HIGH"`. A taint path reaching `system()` in a tracker that exposes the sink as, say, `target_name` instead of `sink_name` would be misclassified as HIGH instead of CRITICAL, potentially masking command injection from strict-mode blocking logic.
@@ -85,12 +85,12 @@ I have all the information needed to produce the full audit. Here is the complet
 **Finding 2-7: `check()` re-runs `scan()` independently**
 - **Type:** Issue (correctness + efficiency)
 - **Location:** `check()` (line 406), `_main()` (lines 432–435)
-- **Description:** `check()` calls `self.scan()` unconditionally. In `_main()`, `findings = gate.scan()` is called at line 432, then `gate.check()` at line 435 invokes `scan()` again. Live-tested: `scan()` is called exactly 2× in the CLI path. This is not merely a performance issue — if any scanner is non-deterministic (e.g., depends on ordering of dict iteration in an interpreter with random seed), the two scans could return different results, and the report and exit code would be based on different data.
+- **Description:** `check()` calls `self.scan()` unconditionally. In `_main()`, `findings = gate.scan()` is called at line 432, then `gate.check()` at line 435 invokes `scan()` again. Live-tested: `scan()` is called exactly 2× in the CLI path. This is not merely a performance issue; if any scanner is non-deterministic (e.g., depends on ordering of dict iteration in an interpreter with random seed), the two scans could return different results, and the report and exit code would be based on different data.
 - **Recommendation:** Add `check(self, findings=None)` that accepts pre-computed findings: `if findings is None: findings = self.scan()`. Update `_main()` to pass `findings` to `check()`.
 
 ---
 
-**Finding 2-8: Positive — clean `dataclass`-based `GateFinding` with optional DAG field**
+**Finding 2-8: Positive: clean `dataclass`-based `GateFinding` with optional DAG field**
 - **Type:** Positive
 - **Location:** `GateFinding` (lines 65–93)
 - **Description:** Using `@dataclass` with a typed optional `taint_dag` field keeps the finding schema explicit and IDE-navigable. The separation of the DAG annotation from the core finding fields is clean.
@@ -99,10 +99,10 @@ I have all the information needed to produce the full audit. Here is the complet
 
 ## 3. Operational Safety & Failure Modes
 
-**Finding 3-1: All scanner runners swallow `Exception` silently — gate always reports CLEAN on total failure**
+**Finding 3-1: All scanner runners swallow `Exception` silently; gate always reports CLEAN on total failure**
 - **Severity:** HIGH
 - **Location:** `_run_taint()` (lines 152–198), `_run_format_string()` (lines 283–304), `_run_heap()` (lines 306–325), `_run_length_underflow()` (lines 327–349)
-- **Description:** Every scanner runner wraps its body in `except Exception: pass/return []`. An `ImportError` (module not installed), a runtime crash in a taint tracker, an `OSError` during binary loading — all produce `[]` findings. From the gate's perspective these are indistinguishable from "analysis completed, no vulnerabilities." In a CI environment, a broken Ablation install silently passes every binary.
+- **Description:** Every scanner runner wraps its body in `except Exception: pass/return []`. An `ImportError` (module not installed), a runtime crash in a taint tracker, an `OSError` during binary loading; all produce `[]` findings. From the gate's perspective these are indistinguishable from "analysis completed, no vulnerabilities." In a CI environment, a broken Ablation install silently passes every binary.
 - **Recommendation:** Change the pattern to: catch the exception, emit a stderr warning with the scanner name and exception message, set a `scan_errors: List[str]` attribute on the gate, and surface errors in `report()`. Exit code 1 when any scanner error occurs (unless a `--allow-scan-errors` flag is passed explicitly).
 
 ---
@@ -118,7 +118,7 @@ I have all the information needed to produce the full audit. Here is the complet
 **Finding 3-3: `GateFinding.fmt()` propagates unguarded `ValueError` from `dag_nodes()`**
 - **Severity:** MEDIUM
 - **Location:** `GateFinding.fmt()` (lines 79–85), `SemanticBlock.dag_nodes()` (encoding_dag.py line 314)
-- **Description:** `dag_nodes()` raises `ValueError` when a cycle is detected in the DAG. The current `_taint_dag()` construction is acyclic (source→carry→sink topology), but the `ValueError` is confirmed to propagate. If taint tracker raw findings ever carry pre-built DAG-like objects that are passed through, or if future changes to `_taint_dag` introduce a cycle (e.g., when `source_calls` and `tainted_regs` happen to share the same string), `fmt()` raises. This crashes `report()` inside a `print()` call in `_main()` with an unhandled exception traceback. The exit code from an unhandled exception is system-dependent but is typically 1, so the gate technically blocks — but the diagnostic is a Python traceback, not a finding report.
+- **Description:** `dag_nodes()` raises `ValueError` when a cycle is detected in the DAG. The current `_taint_dag()` construction is acyclic (source→carry→sink topology), but the `ValueError` is confirmed to propagate. If taint tracker raw findings ever carry pre-built DAG-like objects that are passed through, or if future changes to `_taint_dag` introduce a cycle (e.g., when `source_calls` and `tainted_regs` happen to share the same string), `fmt()` raises. This crashes `report()` inside a `print()` call in `_main()` with an unhandled exception traceback. The exit code from an unhandled exception is system-dependent but is typically 1, so the gate technically blocks; the diagnostic is a Python traceback, not a finding report.
 - **Recommendation:** Wrap `list(self.taint_dag.dag_nodes())` in `try/except ValueError` inside `fmt()`, falling back to insertion-order iteration. Separately, add cycle detection or assertion to `_taint_dag()` itself.
 
 ---
@@ -131,7 +131,7 @@ I have all the information needed to produce the full audit. Here is the complet
 
 ---
 
-**Finding 3-5: Positive — `_SEV_ORDER.keys()` in strict mode is functionally correct**
+**Finding 3-5: Positive: `_SEV_ORDER.keys()` in strict mode is functionally correct**
 - **Severity:** N/A (Positive)
 - **Location:** `check()` (line 409)
 - **Description:** Using `_SEV_ORDER.keys()` as the blocking set in strict mode works correctly: `dict_keys` supports O(1) `in` membership testing and enumerates all defined severity strings. Not a bug.
@@ -159,12 +159,12 @@ I have all the information needed to produce the full audit. Here is the complet
 **Finding 4-3: `from_context()` assumes `ctx.path` attribute exists without guard**
 - **Severity:** LOW
 - **Location:** `from_context()` (lines 259–261)
-- **Description:** `return cls(binary_path=ctx.path, ctx=ctx)` — confirmed that `BinaryContext` uses `self.path`, but any other context-like object passed here that lacks `.path` raises `AttributeError` with no informative message.
+- **Description:** `return cls(binary_path=ctx.path, ctx=ctx)`. Confirmed that `BinaryContext` uses `self.path`, but any other context-like object passed here that lacks `.path` raises `AttributeError` with no informative message.
 - **Recommendation:** Add `if not hasattr(ctx, 'path'): raise TypeError(f"ctx must have a .path attribute; got {type(ctx)}")`.
 
 ---
 
-**Finding 4-4: Positive — lazy BinaryContext construction via `_ctx_or_build()`**
+**Finding 4-4: Positive: lazy BinaryContext construction via `_ctx_or_build()`**
 - **Severity:** N/A (Positive)
 - **Location:** `_ctx_or_build()` (lines 265–273)
 - **Description:** Delaying BinaryContext construction until first use means `from_path()` is cheap and the gate can be instantiated in environments where context building is not always needed (e.g., `check()` with an already-cached context).
@@ -191,7 +191,7 @@ I have all the information needed to produce the full audit. Here is the complet
 
 **Finding 5-3: x86_64 XRefGraph rebuild on every invocation**
 - **Impact:** MEDIUM
-- **Location:** `_run_taint()` (lines 154–158) — x86_64 path
+- **Location:** `_run_taint()` (lines 154–158), x86_64 path
 - **Description:** `XRefGraph.from_path(path); xg.build()` is called inside `_run_taint()` on every scan. If `BinaryContext` was already built externally (e.g., via `from_context(ctx)`), the XRefGraph is rebuilt from scratch rather than derived from the existing context.
 - **Recommendation:** When `self._ctx` is available for x86_64, check if `ctx` exposes an `xref_graph` or similar; pass it directly rather than rebuilding.
 
@@ -215,7 +215,7 @@ I have all the information needed to produce the full audit. Here is the complet
 
 **Finding 6-3: Module docstring claims `mips32` support but CLAUDE.md names the module `taint_tracker_mips32`**
 - **Type:** Maintainability / Readability
-- **Description:** The module docstring correctly lists `mips32` in "Architecture support." The file on disk is `taint_tracker_mips.py` (not `taint_tracker_mips32.py`). The CLAUDE.md entry names it `taint_tracker_mips32` — the documentation is wrong, not the code, but this creates confusion for future developers trying to locate the MIPS32 tracker from the docs.
+- **Description:** The module docstring correctly lists `mips32` in "Architecture support." The file on disk is `taint_tracker_mips.py` (not `taint_tracker_mips32.py`). The CLAUDE.md entry names it `taint_tracker_mips32`; the documentation is wrong, not the code, but this creates confusion for future developers trying to locate the MIPS32 tracker from the docs.
 - **Suggestion:** Update the CLAUDE.md table entry to reflect the actual filename `taint_tracker_mips`.
 
 ---
@@ -237,7 +237,7 @@ I have all the information needed to produce the full audit. Here is the complet
 
 ## 7. Data Integrity & Consistency Risks
 
-**Finding 7-1: No deduplication — same vulnerability site can appear from multiple scanners**
+**Finding 7-1: No deduplication; same vulnerability site can appear from multiple scanners**
 - **Severity:** LOW
 - **Location:** `scan()` (lines 353–376)
 - **Description:** A format-string vulnerability that also matches a taint path (e.g., tainted input flowing to `printf` with a non-literal format) would appear once from `TaintTracker` (category `TAINT_FLOW`) and once from `FormatStringScanner` (category `FORMAT_STRING`) with no cross-reference. A reviewer counting findings would double-count the severity.
@@ -245,10 +245,10 @@ I have all the information needed to produce the full audit. Here is the complet
 
 ---
 
-**Finding 7-2: `_normalize_taint` drops findings silently — gate may report fewer HIGH findings than actually exist**
+**Finding 7-2: `_normalize_taint` drops findings silently; gate may report fewer HIGH findings than actually exist**
 - **Severity:** HIGH
 - **Location:** `_normalize_taint()` (lines 207–235), `scan()` (lines 364–367)
-- **Description:** The `if gf is not None` filter at line 366 silently excludes any taint finding that failed normalization. If a new arch taint tracker uses slightly different attribute names (e.g., `call_site` instead of `sink_va`), all of its findings are dropped. The gate reports CLEAN. This is not a theoretical concern — it is the exact failure mode that would occur when integrating a new tracker without updating `_normalize_taint`.
+- **Description:** The `if gf is not None` filter at line 366 silently excludes any taint finding that failed normalization. If a new arch taint tracker uses slightly different attribute names (e.g., `call_site` instead of `sink_va`), all of its findings are dropped. The gate reports CLEAN. This is not a theoretical concern; it is the exact failure mode that would occur when integrating a new tracker without updating `_normalize_taint`.
 - **Recommendation:** Count the number of raw findings vs. normalized findings. If `len(normalized) < len(raw_taint)`, include a `NORMALIZATION_WARNINGS: N finding(s) dropped` line in the report and return exit code 1 if any were dropped (or add a `--strict-normalization` flag).
 
 ---
@@ -300,31 +300,31 @@ I have all the information needed to produce the full audit. Here is the complet
 
 ## 9. Prioritized Production Readiness Checklist
 
-1. **Add file existence and readability validation in `from_path()` and `_main()`** — raises `FileNotFoundError` immediately on missing binary. Effort: Low. (Refs: 2-1, 3-2)
+1. **Add file existence and readability validation in `from_path()` and `_main()`**: raises `FileNotFoundError` immediately on missing binary. Effort: Low. (Refs: 2-1, 3-2)
 
-2. **Replace all silent `except Exception: pass/return []` with error accumulation and surfacing** — collect scanner name + exception in `self._scan_errors`; include in `report()`; exit 1 when any scanner error occurred. Effort: Medium. (Refs: 3-1, 4-2, 6-1)
+2. **Replace all silent `except Exception: pass/return []` with error accumulation and surfacing**: collect scanner name + exception in `self._scan_errors`; include in `report()`; exit 1 when any scanner error occurred. Effort: Medium. (Refs: 3-1, 4-2, 6-1)
 
-3. **Fix double-scan in CLI and `check()` method** — add `check(self, findings=None, strict=False)` accepting pre-computed findings; update `_main()` to pass findings. Effort: Low. (Refs: 2-7, 5-1)
+3. **Fix double-scan in CLI and `check()` method**: add `check(self, findings=None, strict=False)` accepting pre-computed findings; update `_main()` to pass findings. Effort: Low. (Refs: 2-7, 5-1)
 
-4. **Guard `_arch()` against silent `x86_64` fallback** — when BinaryContext fails, either raise or require explicit `arch=` argument; never silently mismatch architecture. Effort: Low. (Refs: 2-2)
+4. **Guard `_arch()` against silent `x86_64` fallback**: when BinaryContext fails, either raise or require explicit `arch=` argument; never silently mismatch architecture. Effort: Low. (Refs: 2-2)
 
-5. **Add normalization-failure accounting in `_normalize_taint` / `scan()`** — count dropped findings; emit a warning and optionally block. Effort: Low. (Refs: 2-3, 7-2)
+5. **Add normalization-failure accounting in `_normalize_taint` / `scan()`**: count dropped findings; emit a warning and optionally block. Effort: Low. (Refs: 2-3, 7-2)
 
-6. **Treat `sink_name == "?"` as UNKNOWN / CRITICAL-candidate, not silent HIGH** — emit a warning; do not silently downgrade potentially-CRITICAL findings. Effort: Low. (Refs: 2-4, 7-3)
+6. **Treat `sink_name == "?"` as UNKNOWN / CRITICAL-candidate, not silent HIGH**: emit a warning; do not silently downgrade potentially-CRITICAL findings. Effort: Low. (Refs: 2-4, 7-3)
 
-7. **Guard `GateFinding.fmt()` against `ValueError` from `dag_nodes()`** — wrap in `try/except ValueError`, fall back to insertion-order iteration. Effort: Low. (Refs: 3-3)
+7. **Guard `GateFinding.fmt()` against `ValueError` from `dag_nodes()`**: wrap in `try/except ValueError`, fall back to insertion-order iteration. Effort: Low. (Refs: 3-3)
 
-8. **Deduplicate `tainted_regs` in `_taint_dag()` to prevent node ID collision** — `tainted_regs = list(dict.fromkeys(tainted_regs))` before the carry loop. Effort: Low. (Refs: 2-5)
+8. **Deduplicate `tainted_regs` in `_taint_dag()` to prevent node ID collision**: `tainted_regs = list(dict.fromkeys(tainted_regs))` before the carry loop. Effort: Low. (Refs: 2-5)
 
-9. **Add scanner timeout mechanism** — configurable via env var; run each tracker with a timeout; record `SCAN_TIMEOUT` errors. Effort: High. (Refs: 3-4)
+9. **Add scanner timeout mechanism**: configurable via env var; run each tracker with a timeout; record `SCAN_TIMEOUT` errors. Effort: High. (Refs: 3-4)
 
-10. **Fix `report()` newline handling** — change `"\n".join(lines)` to `"".join(lines)` since each element already ends with `\n`. Effort: Low. (Refs: 2-6)
+10. **Fix `report()` newline handling**: change `"\n".join(lines)` to `"".join(lines)` since each element already ends with `\n`. Effort: Low. (Refs: 2-6)
 
-11. **Add result caching to `scan()`** — memoize findings on first call; expose `rescan=False` parameter. Effort: Low. (Refs: 5-2)
+11. **Add result caching to `scan()`**: memoize findings on first call; expose `rescan=False` parameter. Effort: Low. (Refs: 5-2)
 
-12. **Replace `_run_taint` if-chain with dispatch dict** — each arch in its own private function; the `try/except` can be per-arch for more precise error attribution. Effort: Low. (Refs: 6-2)
+12. **Replace `_run_taint` if-chain with dispatch dict**: each arch in its own private function; the `try/except` can be per-arch for more precise error attribution. Effort: Low. (Refs: 6-2)
 
-13. **Remove unused `field` import** — trivial cleanup. Effort: Low. (Refs: 6-5)
+13. **Remove unused `field` import**: trivial cleanup. Effort: Low. (Refs: 6-5)
 
 14. **Add `--verbose` CLI flag** for per-scanner diagnostics. Effort: Low. (Refs: 6-4)
 
@@ -370,7 +370,7 @@ This assessment is based solely on the provided source file and the related file
   Scope Hint: `_normalize_taint()` (line 234), `scan()` (lines 364–367).
 
 - **Treat `sink_name == "?"` as UNKNOWN/CRITICAL-candidate, not silent HIGH.**
-  In `_normalize_taint()`, when `sink_name == "?"`, log a warning and assign severity `"CRITICAL"` with a note "sink name unresolvable — conservatively escalated."
+  In `_normalize_taint()`, when `sink_name == "?"`, log a warning and assign severity `"CRITICAL"` with a note "sink name unresolvable; conservatively escalated."
   Source Finding(s): Section 2 – Finding 2-4, Section 7 – Finding 7-3.
   Scope Hint: `_normalize_taint()` (line 216), `_taint_severity()` (line 201).
 
@@ -481,10 +481,10 @@ This assessment is based solely on the provided source file and the related file
 
 - **Target:** `GateFinding.fmt()`
   - Scenarios: `taint_dag=None`; `taint_dag` with a valid acyclic graph; `taint_dag` with a cyclic graph (regression for Finding 3-3).
-  - Expected Behavior: No `dag_note` section when `taint_dag=None`; chain rendered correctly for acyclic graph; no `ValueError` raised for cyclic graph — fallback output returned.
+  - Expected Behavior: No `dag_note` section when `taint_dag=None`; chain rendered correctly for acyclic graph; no `ValueError` raised for cyclic graph; fallback output returned.
 
 - **Target:** `CompilerSecurityGate.check()`
-  - Scenarios: No findings; CRITICAL finding, non-strict; HIGH finding, non-strict; MEDIUM finding, non-strict; MEDIUM finding, strict; pre-computed `findings` passed (after A.1 fix — assert `scan()` not called).
+  - Scenarios: No findings; CRITICAL finding, non-strict; HIGH finding, non-strict; MEDIUM finding, non-strict; MEDIUM finding, strict; pre-computed `findings` passed (after A.1 fix; assert `scan()` not called).
   - Expected Behavior: Exit 0 for no findings; exit 1 for CRITICAL/HIGH in non-strict; exit 0 for MEDIUM in non-strict; exit 1 for MEDIUM in strict; `scan()` called 0 additional times when findings passed.
 
 - **Target:** `report()` output format
@@ -517,7 +517,7 @@ This assessment is based solely on the provided source file and the related file
 
 - **Interaction:** `CompilerSecurityGate` + `LengthUnderflowScanner` on ELF with header-subtraction pattern
   - Happy Path: `LENGTH_UNDERFLOW` finding with correct `sub_const` and `call_label` values.
-  - Failure Scenario: Binary has no underflow pattern — assert scanner runs and returns empty list without error.
+  - Failure Scenario: Binary has no underflow pattern; assert scanner runs and returns empty list without error.
 
 - **Interaction:** CLI invocation via `_main()` on a known-vulnerable binary
   - Happy Path: Exit code 1, stdout contains finding report.
@@ -525,17 +525,17 @@ This assessment is based solely on the provided source file and the related file
 
 ### B.3 End-to-End (E2E) / System Tests
 
-- **Flow Name:** Full CI gate pass — clean binary
+- **Flow Name:** Full CI gate pass: clean binary
   - Steps: (1) Compile a minimal C binary with no taint paths. (2) Run `python -m ablation.analyzers.compiler_security_gate ./clean_binary`. (3) Capture exit code and stdout.
   - Success Criteria: Exit code 0; stdout contains "CLEAN — no findings"; `scan()` called exactly once.
   - Failure/Edge Variant: Provide a binary that fails to open (wrong ELF magic); after fix, exit code is non-zero with a diagnostic message, not 0.
 
-- **Flow Name:** Full CI gate fail — vulnerable binary
+- **Flow Name:** Full CI gate fail: vulnerable binary
   - Steps: (1) Compile a minimal C binary with a `recv`→`system` path. (2) Run `python -m ablation.analyzers.compiler_security_gate ./vuln_binary`. (3) Capture exit code and stdout.
   - Success Criteria: Exit code 1; stdout contains at least one `CRITICAL` GateFinding with a DAG chain; DAG chain includes source and sink nodes.
   - Failure/Edge Variant: Run with `--quiet`; assert stdout is empty and exit code is still 1.
 
-- **Flow Name:** Strict mode — MEDIUM-severity binary
+- **Flow Name:** Strict mode: MEDIUM-severity binary
   - Steps: (1) Compile a binary triggering only format string scanner (MEDIUM severity). (2) Run gate with `--strict`. (3) Capture exit code.
   - Success Criteria: Exit code 1 in strict mode; exit code 0 in non-strict mode for the same binary.
   - Failure/Edge Variant: Ensure `scan()` is called exactly once in both modes after the double-scan fix.
@@ -560,7 +560,7 @@ This assessment is based solely on the provided source file and the related file
   - Pass Criteria: Gate exits in ≤15 seconds; `scan_errors` contains `"SCAN_TIMEOUT"` entry; exit code is 1 (error present).
 
 - **Test Type:** Soak
-  - Target: CLI invocation in a Makefile loop — 100 consecutive builds on the same binary.
+  - Target: CLI invocation in a Makefile loop: 100 consecutive builds on the same binary.
   - Load/Condition Description: Simulate a fast-iteration build loop invoking the gate on every compile cycle.
   - Metrics of Interest: CPU time per invocation, total wall time for 100 runs, absence of subprocess/fd leaks.
   - Pass Criteria: No fd leaks; 100-run total wall time < 100× single-run baseline (no superlinear accumulation).
@@ -594,7 +594,7 @@ This assessment is based solely on the provided source file and the related file
 
 2. **Replace all bare exception swallowing with `self._scan_errors` accumulation; expose in `report()` and `check()`.**
    Covers A.2 (error accumulation), A.5 (scan_errors property), B.1 (unit test for scanner ImportError), B.2 (scanner failure integration test).
-   Rationale: Without this, test results in steps 3–N are ambiguous — a scanner crash is indistinguishable from "no findings."
+   Rationale: Without this, test results in steps 3–N are ambiguous; a scanner crash is indistinguishable from "no findings."
 
 3. **Fix double-scan: add `findings` parameter to `check()`; update `_main()` to pass pre-computed findings.**
    Covers A.1 (double-scan fix), B.1 (unit: check() not calling scan() when findings supplied), B.3 (E2E: scan() called once).
@@ -602,7 +602,7 @@ This assessment is based solely on the provided source file and the related file
 
 4. **Add BinaryContext failure sentinel in `_ctx_or_build()` and harden `_arch()` against silent x86_64 fallback.**
    Covers A.3 (sentinel), A.1 (arch hardening), B.1 (unit: arch fallback behavior, ctx_or_build retry prevention).
-   Rationale: Must precede integration tests for non-x86_64 arches — tests can only confirm correct arch dispatch once the failure path is surfaced rather than silently defaulted.
+   Rationale: Must precede integration tests for non-x86_64 arches; tests can only confirm correct arch dispatch once the failure path is surfaced rather than silently defaulted.
 
 5. **Add normalization-drop accounting in `_normalize_taint()` and fix `sink_name == "?"` to CRITICAL-candidate.**
    Covers A.1 (normalization accounting, sink severity fix), B.1 (unit: normalize with missing attrs, severity for "?"), B.2 (integration: tracker with wrong schema).
@@ -674,18 +674,18 @@ This assessment is based solely on the provided source file and the related file
 
 ### E.1 Coding Practices to Maintain
 
-- **Unified `GateFinding` dataclass as the single findings schema**: All scanners produce raw objects that are normalized into `GateFinding` via a single function. This single normalization point is the correct pattern — maintain it as the exclusive path; do not let individual scanner runners return `GateFinding` objects directly, which would bypass normalization accounting.
+- **Unified `GateFinding` dataclass as the single findings schema**: All scanners produce raw objects that are normalized into `GateFinding` via a single function. This single normalization point is the correct pattern; maintain it as the exclusive path. Do not let individual scanner runners return `GateFinding` objects directly, which would bypass normalization accounting.
   Benefit: Keeps audit trail consistent; makes normalization-drop accounting (A.1) effective.
 
 - **`from_context()` / `from_path()` dual construction pattern**: The dual constructor pattern correctly separates "I have an existing context" from "start fresh." Preserve this distinction; do not collapse them into a single constructor that accepts `Union[str, BinaryContext]`.
   Benefit: Allows callers to avoid redundant BinaryContext builds without coupling the gate to a specific context type.
 
-- **Severity constants centralized in `_SEV_ORDER` and `_CRITICAL_SINKS`**: All severity logic is defined at module level as immutable `frozenset` / `dict`. Preserve this — do not hardcode severity strings inside individual scanner runners.
+- **Severity constants centralized in `_SEV_ORDER` and `_CRITICAL_SINKS`**: All severity logic is defined at module level as immutable `frozenset` / `dict`. Preserve this; do not hardcode severity strings inside individual scanner runners.
   Benefit: A single place to update when new critical sinks are identified (e.g., vendor sinks from `VendorProfile`).
 
 ### E.2 Regression Risks to Watch
 
-- **Any new arch taint tracker added to `_run_taint()`**: The new branch must be tested with an actual binary for that arch, not just import-tested. The risk pattern is "tracker is imported and runs but returns objects with different attribute names" — `_normalize_taint` silently drops them. Mitigation: For every new arch, add a `_normalize_taint(real_finding_from_that_arch)` unit test using a fixture captured from the tracker's own test suite.
+- **Any new arch taint tracker added to `_run_taint()`**: The new branch must be tested with an actual binary for that arch, not just import-tested. The risk pattern is "tracker is imported and runs but returns objects with different attribute names"; `_normalize_taint` silently drops them. Mitigation: For every new arch, add a `_normalize_taint(real_finding_from_that_arch)` unit test using a fixture captured from the tracker's own test suite.
 
 - **Changes to `_normalize_taint` attribute fallback chain**: The `getattr(raw, "sink_va", getattr(raw, "site_va", 0))` pattern is fragile. Any change to the fallback attribute names (e.g., adding `"call_va"` as a third fallback) must be accompanied by a unit test for every combination. Mitigation: Require a test for each `getattr` fallback pair before merging.
 

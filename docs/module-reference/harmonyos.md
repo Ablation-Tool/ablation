@@ -13,8 +13,8 @@ literal-array header boundary.
 Parses the binary ABC format defined by ArkCompiler's `libpandafile`. ABC files
 appear in HarmonyOS as:
 
-- `modules.abc` — compiled ArkTS module (inside a HAP)
-- `*.abc` — individual class or utility files
+- `modules.abc`: compiled ArkTS module (inside a HAP)
+- `*.abc`: individual class or utility files
 - Obfuscated HAP bundles (e.g. WeChat HarmonyOS port)
 
 ### Construction
@@ -180,8 +180,7 @@ Both are public API for callers that want to resolve operands without a full pas
 
 Disassembler for the ARK Bytecode ISA. Wraps an `ABCParser` and consumes
 `CodeItem` objects to produce `ARKInstruction` sequences. The full ISA table
-(324 opcodes, ArkCompiler v13.0.0.0) is embedded in the module — no external
-`isa.json` file required at runtime.
+(324 opcodes, ArkCompiler v13.0.0.0) is embedded in the module. No external `isa.json` file required at runtime.
 
 ### Construction
 
@@ -393,14 +392,14 @@ virtual registers.
 
 After all instructions are lifted, three post-processing passes run in order:
 
-**Pass 1 — accumulator copy-propagation** (`_propagate_acc`, Cifuentes §5.4.6).
+**Pass 1: accumulator copy-propagation** (`_propagate_acc`, Cifuentes §5.4.6).
 For each `_acc = EXPR` line: if the next substantive line's rhs contains `_acc`
 exactly once, substitute EXPR inline and drop the assignment; if it contains no
 `_acc` (dead assignment), drop it silently. Labels and blank lines are
 transparent for look-ahead. Produces `return foo.bar` instead of
 `_acc = foo.bar; return _acc`.
 
-**Pass 2 — control flow structuring** (`_structure_cfg`, Cifuentes §6.6.1/§6.6.2).
+**Pass 2: control flow structuring** (`_structure_cfg`, Cifuentes §6.6.1/§6.6.2).
 Parses the flat `label+goto` statement list into `_BB` basic blocks, builds a
 `label → index` map, then runs Pass 2.5 before recursively matching structural
 patterns:
@@ -417,7 +416,7 @@ conditionals as jump-if-false exits: the fall-through path is always the
 then-branch. Unrecognized patterns (exception handlers, non-reducible CFGs)
 fall back to raw `label+goto` output.
 
-**Pass 2.5 — short-circuit evaluation merging** (`_merge_short_circuit`,
+**Pass 2.5: short-circuit evaluation merging** (`_merge_short_circuit`,
 Cifuentes 1995 Figure 7; Cifuentes/Simon 1998 §5.2). Runs inside Pass 2
 between `_parse_blocks` and `_cfg_emit`. Collapses consecutive conditional
 blocks with the same `goto_tgt` into a single `||`-merged condition. ArkTS

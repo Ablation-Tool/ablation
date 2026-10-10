@@ -81,13 +81,13 @@ flowchart TD
 
     E --> F{"Family\nknown?"}
     F -->|Yes| G["Classify: Gen1 / Gen2 / maintenance / feature"]
-    F -->|No| H[/"Flag family=UNKNOWN\nNew finding — possible novel key family"/]
+    F -->|No| H[/"Flag family=UNKNOWN\nNew finding: possible novel key family"/]
 
     G --> I["FortiBuildTrackClassifier\nParse filename: FGT_XXXX-vY.Z.W-buildNNNN.out\nExtract build_track (M=maintenance / F=feature)\nExtract key_generation from build number"]
 
     I --> J{"result.discrepancy\n(actual_keys)?"}
     J -->|"Expected Gen1, found Gen2"| K[/"Anomalous build\nPossible tampered image"/]
-    J -->|Consistent| L["Normal — archive or deploy"]
+    J -->|Consistent| L["Normal: archive or deploy"]
 
     style A fill:#1e293b,stroke:#475569,color:#e2e8f0
     style H fill:#7f1d1d,stroke:#991b1b,color:#fecaca
@@ -114,7 +114,7 @@ flowchart TD
     C --> D{"Decompress\nsucceeded?"}
 
     D -->|Yes| E["Standard XZ decompression\n(x86 BCJ filter or no filter)"]
-    D -->|No — filter mismatch| F["Retry with lzma.decompress(data,\n  format=lzma.FORMAT_RAW,\n  filters=[{'id': 0x0A}])\nARM64 BCJ filter ID"]
+    D -->|No: filter mismatch| F["Retry with lzma.decompress(data,\n  format=lzma.FORMAT_RAW,\n  filters=[{'id': 0x0A}])\nARM64 BCJ filter ID"]
 
     E --> G[/"Filesystem extracted\next.list_files() → inner paths\next.extract(path) → bytes"/]
     F --> G

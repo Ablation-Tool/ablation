@@ -1,8 +1,8 @@
-# SAFE CODE Audit — win16_ne_sweep.py
+# SAFE CODE Audit: win16_ne_sweep.py
 
 > Auditor: Claude Sonnet 4.6 (manual, 10-section SOP)
 > Date: 2026-10-08
-> Gate result: **PASSED** — no HIGH or CRITICAL findings
+> Gate result: **PASSED**; no HIGH or CRITICAL findings
 
 ---
 
@@ -25,55 +25,55 @@ Assumptions:
 
 ## 2. Functional Correctness Assessment
 
-**Positive — NE `align_shift=0` fallback is correct.**
+**Positive: NE `align_shift=0` fallback is correct.**
 Type: Positive. Location: `NEBinary._parse()` line 537–538. The NE spec states that an `align_shift` of 0 means the default 512-byte alignment (2^9). The `if self.align_shift == 0: self.align_shift = 9` guard matches this. ✓
 
-**Positive — `file_size = ... or 65536` handles the NE size=0 convention.**
+**Positive: `file_size = ... or 65536` handles the NE size=0 convention.**
 Type: Positive. Location: `NEBinary._parse()` line 556. NE spec: a segment file size of 0 means the segment occupies a full 64KB page. Defaulting to 65536 is correct. ✓
 
-**Risk — `_parse()` reads name at `ne_off + imp_names_off + name_off` without bounds check.**
+**Risk: `_parse()` reads name at `ne_off + imp_names_off + name_off` without bounds check.**
 Type: Risk. Severity: Low. Location: `NEBinary._parse()` lines 544–547 and 598. A malformed NE binary with a corrupt `name_off` in the module-reference table or import-names table could produce `name_abs > len(d)`, causing an `IndexError` when accessing `d[name_abs]`. Worst case: exception propagates to `_sweep_ne_one` which catches it at the `NEBinary(binary_path)` call site, marks `result['error']`, and returns. No data corruption or code execution possible.
 Recommendation: Low priority. The caller wraps in `try/except`. Optional: add `if name_abs >= len(d): continue` guard.
 
-**Risk — `_find_near_call_targets_x86_16` scan is byte-by-byte O(n×m).**
+**Risk: `_find_near_call_targets_x86_16` scan is byte-by-byte O(n×m).**
 Type: Correctness observation. Location: lines 648–657. `0xE8` is the NEAR CALL opcode, but 0xE8 also appears as operand bytes inside other instructions. The function will recover false function start candidates when 0xE8 appears in a data literal or instruction operand. These false starts will be disassembled as short (< 4 instruction) function bodies and filtered by the `if len(lines) < 4: continue` guard at line 762. False starts that produce ≥ 4 decodable instructions may emit low-value function descriptions, but they cannot affect the semantic sweep result significantly (scores for garbage disassembly are uniformly low).
 Recommendation: Acceptable. This is the same trade-off as prologue scanning: false starts are a known limitation of static function discovery.
 
-**Positive — Relocation record loop has an explicit EOF guard.**
+**Positive: Relocation record loop has an explicit EOF guard.**
 Type: Positive. Location: `build_segment_import_map()` line 581. `if rec_off + 8 > len(d): break` prevents reading past the end of file on corrupt relocation records. ✓
 
-**Risk — `_resolve_ne_call` FAR CALL `+1` offset may miss some compilers.**
-Type: Risk. Severity: Low. Location: `_resolve_ne_call()` lines 676–680. The code adjusts `far_reloc_key = (call_file_off + 1) - seg_file_off` for FAR CALL (0x9A, which is 1 opcode byte followed by the 4-byte target). This is correct for the common form. However, some Win16 toolchains (Borland, Watcom) may use CALL FAR [mem] (FF 1F / FF 9C / FF 9F) forms. These FAR indirect calls will not match and fall through to the `NEAR` regex, returning the operand string as-is. This is safe — the worst case is a call labeled `"cs:0x1234"` instead of `"KERNEL!LoadLibrary"`, producing lower semantic scores. No crash or data integrity issue.
+**Risk: `_resolve_ne_call` FAR CALL `+1` offset may miss some compilers.**
+Type: Risk. Severity: Low. Location: `_resolve_ne_call()` lines 676–680. The code adjusts `far_reloc_key = (call_file_off + 1) - seg_file_off` for FAR CALL (0x9A, which is 1 opcode byte followed by the 4-byte target). This is correct for the common form. However, some Win16 toolchains (Borland, Watcom) may use CALL FAR [mem] (FF 1F / FF 9C / FF 9F) forms. These FAR indirect calls will not match and fall through to the `NEAR` regex, returning the operand string as-is. This is safe; the worst case is a call labeled `"cs:0x1234"` instead of `"KERNEL!LoadLibrary"`, producing lower semantic scores. No crash or data integrity issue.
 Recommendation: Low priority. Acceptable for the sweep use case.
 
 ---
 
 ## 3. Operational Safety & Failure Modes
 
-**Positive — No subprocess, exec, eval, or dangerous calls.**
+**Positive: No subprocess, exec, eval, or dangerous calls.**
 Location: entire file. AST scan confirms zero uses of `subprocess`, `os.system`, `eval`, `exec`, `__import__`, `open(... 'w')` on attacker-supplied paths. ✓
 
-**Positive — Report output path is always `Path(__file__).parent.parent / "reports"`.**
+**Positive: Report output path is always `Path(__file__).parent.parent / "reports"`.**
 Location: `main()` lines 1007–1013. The output directory is derived from the script's own location, not from user-supplied arguments. The filename is constructed from `--vendor`, `--product`, `--version` arguments after regex sanitization (`re.sub(r'[^a-z0-9_\-]', '', ...)`). Path traversal via arguments is not possible. ✓
 
-**Low — `_semantic_sweep_ne` has no `try/except` wrapper.**
-Severity: Low. Location: `_sweep_ne_one()` lines 892–897. `_semantic_sweep_ne` calls `model.encode()` and `registry.prior_queries()`. If the model is missing or the registry is corrupt, the exception propagates to the caller's `try/except Exception as e:` which sets `result['error']` and returns — correct behavior. However, the reported error will include `traceback.format_exc()` which reveals internal paths.
+**Low: `_semantic_sweep_ne` has no `try/except` wrapper.**
+Severity: Low. Location: `_sweep_ne_one()` lines 892–897. `_semantic_sweep_ne` calls `model.encode()` and `registry.prior_queries()`. If the model is missing or the registry is corrupt, the exception propagates to the caller's `try/except Exception as e:` which sets `result['error']` and returns; correct behavior. However, the reported error will include `traceback.format_exc()` which reveals internal paths.
 Recommendation: Low priority. Acceptable for a local analysis tool.
 
-**Low — `NEBinary._parse()` reads `ne_off` from `d[0x3c:0x3e]` without checking file length.**
+**Low: `NEBinary._parse()` reads `ne_off` from `d[0x3c:0x3e]` without checking file length.**
 Severity: Low. Location: `NEBinary._parse()` line 526. A file shorter than 0x3E bytes would cause `struct.unpack_from` to raise, which propagates to `_sweep_ne_one`'s outer try/except. ✓
 
 ---
 
 ## 4. Reliability & Resilience Issues
 
-**Low — `from ablation.analyzers import describe_function` is a deferred import inside `_extract_functions_ne`.**
+**Low: `from ablation.analyzers import describe_function` is a deferred import inside `_extract_functions_ne`.**
 Severity: Low. Location: `_extract_functions_ne()` line 700. The import runs at function call time, not module load time. If ablation is not installed, the import error is caught by `_sweep_ne_one`'s `try/except Exception`. This is correct and avoids import errors at module load when win16_ne_sweep.py is imported by other tools.
 
-**Low — `_build_win16_profiles` imports `from sweeps.base_sweep import VULN_PROFILES` unconditionally at module level via `main()`.**
+**Low: `_build_win16_profiles` imports `from sweeps.base_sweep import VULN_PROFILES` unconditionally at module level via `main()`.**
 Severity: Low. Location: `_build_win16_profiles()` line 508. `base_sweep` exists (`sweeps/base_sweep.py`) and is importable. If `base_sweep` is removed in a future refactor, `_build_win16_profiles` will raise `ImportError`. This is a single point of failure but low probability given the stable sweeps directory structure.
 
-**Positive — `reports_dir.mkdir(exist_ok=True)` handles race-free directory creation.**
+**Positive: `reports_dir.mkdir(exist_ok=True)` handles race-free directory creation.**
 Location: `main()` line 1008. `exist_ok=True` prevents `FileExistsError` if the directory was created between the check and the call. ✓
 
 ---
@@ -88,24 +88,24 @@ The MiniLM model is loaded from the HuggingFace cache (set up at install time); 
 
 ## 6. Performance & Resource Use Considerations
 
-**Acceptable — byte-by-byte prologue scan and NEAR call scan are O(n) per segment.**
+**Acceptable: byte-by-byte prologue scan and NEAR call scan are O(n) per segment.**
 Impact: Acceptable. Win16 code segments are at most 64KB. An O(64KB) scan per segment completes in microseconds. ✓
 
-**Acceptable — MiniLM encode is the dominant cost.**
+**Acceptable: MiniLM encode is the dominant cost.**
 Impact: Acceptable (same as pe_sweep.py). For a typical NE binary with 20–200 functions, `model.encode()` runs in < 1 second on CPU. ✓
 
-**Low — `_render_report` constructs the report as a list of strings joined at end.**
+**Low: `_render_report` constructs the report as a list of strings joined at end.**
 Impact: Low. For typical reports (< 1MB), this is fine. Memory usage is bounded.
 
 ---
 
 ## 7. Data Integrity & Consistency Risks
 
-**Low — FindingRegistry is closed via `registry.close()` only in the normal path.**
+**Low: FindingRegistry is closed via `registry.close()` only in the normal path.**
 Severity: Low. Location: `_semantic_sweep_ne()` lines 799, 834. If an exception is raised between `registry = FindingRegistry()` and `registry.close()`, the registry connection is leaked. This is a SQLite file handle leak; the OS will clean it up on process exit, and the database is not corrupted. `try/finally` would be cleaner.
 Recommendation: Low priority. Wrap `registry.close()` in a `finally` block.
 
-**Positive — Report file uses `write_text(encoding='utf-8')`.**
+**Positive: Report file uses `write_text(encoding='utf-8')`.**
 Location: `main()` line 1017. UTF-8 encoding handles any Unicode in vendor/product names or in disassembled strings. ✓
 
 ---

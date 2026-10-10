@@ -65,9 +65,9 @@ for fn in changed:
 | Confidence | Meaning |
 |---|---|
 | >= 0.90 | Near-certain match |
-| 0.70 - 0.90 | Likely match — verify with strings_in_func |
-| 0.50 - 0.70 | Possible match — manual verification recommended |
-| < 0.50 | Ambiguous — function may have been split, merged, or removed |
+| 0.70 - 0.90 | Likely match; verify with strings_in_func |
+| 0.50 - 0.70 | Possible match; manual verification recommended |
+| < 0.50 | Ambiguous; function may have been split, merged, or removed |
 
 Functions with `change_score >= 0.20` had meaningful code changes, not just recompilation address shifts.
 
@@ -95,7 +95,7 @@ Masked byte-pattern anchors classify the implementation variant. Useful for larg
 | Signal | Weight | Details |
 |---|---|---|
 | Opcode category histogram | High | Cosine similarity on 12-category frequency vector: DATA, ARITH, BIT, CMP, BRANCH, CALL, RET, FRAME, MEMOP, FLOAT, SIMD, OTHER |
-| Immediate value Jaccard | High | Shared integer constants — struct offsets, magic bytes, buffer sizes. RIP-relative offsets filtered (position-dependent). |
+| Immediate value Jaccard | High | Shared integer constants: struct offsets, magic bytes, buffer sizes. RIP-relative offsets filtered (position-dependent). |
 | PLT call overlap | Medium | Shared external function call set |
 | Branch density proximity | Low | Control flow shape: linear / switch / loop-heavy |
 | Size proximity | Low | Instruction count ratio |
@@ -163,7 +163,7 @@ Matrix Profile-based sequence anomaly detection for binary diffing. Finds the mo
 
 ### How STOMP works
 
-The matrix profile of a sequence T is a vector where entry i holds the z-normalized Euclidean distance from subsequence T[i..i+m] to its nearest neighbor in T. For binary diffing, two sequences T1 (v1 instructions) and T2 (v2 instructions) are compared: the cross-matrix-profile between T1 and T2 finds the subsequence in T1 whose nearest match in T2 is most distant — that is the most changed region.
+The matrix profile of a sequence T is a vector where entry i holds the z-normalized Euclidean distance from subsequence T[i..i+m] to its nearest neighbor in T. For binary diffing, two sequences T1 (v1 instructions) and T2 (v2 instructions) are compared: the cross-matrix-profile between T1 and T2 finds the subsequence in T1 whose nearest match in T2 is most distant; that is the most changed region.
 
 ```
   T1 = [mnem_v1_0, mnem_v1_1, ..., mnem_v1_n]

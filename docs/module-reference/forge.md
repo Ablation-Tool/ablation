@@ -12,7 +12,7 @@ Three things were not possible before FORGE:
 
 2. **Every re-audit was a full LLM round-trip.** Running `FORGE.audit_module()` on a module that had not changed still blocked for two minutes. A cache keyed on the system prompt hash and file hash now returns the previous result instantly on cache hit.
 
-3. **Audit calls required a subprocess.** The old implementation called `claude --print` in a subprocess, which backgrounded unpredictably in Claude Code sessions. FORGE now raises `ForgeAuditRequired` on cache miss. The audit happens inline in the Claude Code session — no subprocess, no backgrounding, no Anthropic API key.
+3. **Audit calls required a subprocess.** The old implementation called `claude --print` in a subprocess, which backgrounded unpredictably in Claude Code sessions. FORGE now raises `ForgeAuditRequired` on cache miss. The audit happens inline in the Claude Code session; no subprocess, no backgrounding, no Anthropic API key.
 
 ---
 
