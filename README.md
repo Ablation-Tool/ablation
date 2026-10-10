@@ -75,7 +75,7 @@ Combined with any coding agent, it runs as an autonomous reverse engineering too
 
 ---
 
-## Decompilers
+## 19 Decompilers
 
 | ISA / Runtime | Variants |
 |---|---|
