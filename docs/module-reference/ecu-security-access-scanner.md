@@ -87,6 +87,29 @@ followed by: (word >> 26) == 38     (stb)
 
 ---
 
+## API
+
+```python
+class EcuSecurityAccessScanner:
+    def __init__(path_or_data, window=256)
+    @classmethod from_path(path, window=256) -> EcuSecurityAccessScanner
+    @classmethod from_bytes(data, window=256) -> EcuSecurityAccessScanner
+    def scan() -> list[SecurityAccessFinding]
+```
+
+`scan()` runs both the M68K and PPC32 scanners over the full ROM buffer and returns every
+finding from both architectures in one list. It is safe to call on any image regardless of
+architecture; a PPC32 image will not produce M68K findings and vice versa because the byte
+masks are architecture-specific enough that random non-matching code does not trigger them.
+
+The `window` parameter applies to both ISA scanners. All three constructors accept it.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `window` | 256 | Byte radius to search for confirming instructions after the trigger is found. Confirmed corpus patterns have ≤32 bytes between the seed instruction and the clearing pair. 256 gives headroom for compiler-reordered output without measurable false-positive increase. |
+
+---
+
 ## Usage
 
 ```python
@@ -100,6 +123,9 @@ for f in findings:
 # Scan from bytes already loaded
 findings = EcuSecurityAccessScanner.from_bytes(rom_bytes).scan()
 
+# Custom window (for heavily compiler-reordered output)
+findings = EcuSecurityAccessScanner.from_path("rom.bin", window=512).scan()
+
 # Always check is_calibration_only() first on an unknown image
 from ablation.analyzers.ecu_rom_layout_analyzer import EcuROMLayoutAnalyzer
 
@@ -108,12 +134,6 @@ cal_only, reason = layout.is_calibration_only()
 if not cal_only:
     findings = EcuSecurityAccessScanner.from_bytes(rom_bytes).scan()
 ```
-
-### Constructor parameters
-
-| Parameter | Default | Description |
-|---|---|---|
-| `window` | 256 | Byte radius to search for confirming instructions. M68K corpus patterns use ≤8 bytes; PPC32 can have setup code up to ~200 bytes before the confirming stores. |
 
 ---
 
