@@ -283,74 +283,65 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 ## Module Map
 
-```mermaid
-flowchart LR
-    subgraph IN ["Input Formats"]
-        ELF["ELF"]
-        PE["PE / Driver"]
-        FW["Firmware"]
-        MPY[".mpy Bytecode"]
-        DEX["APK / DEX"]
-        BM["BEAM / Erlang"]
-    end
+<details>
+<summary><strong>Input Formats</strong> — ELF · PE · Firmware · .mpy · APK/DEX · BEAM/Erlang</summary>
 
-    subgraph CORE ["Foundation"]
-        BC["BinaryContext\nPLT · Strings · XRef · CFG"]
-    end
+Ablation accepts native binaries, compiled bytecode, and firmware images. Each format is normalized through a common loading interface before analysis begins.
 
-    subgraph TAINT ["Taint Engine · 16 ISAs"]
-        TX["x86-32 / x86-64"]
-        TA["ARM32 / ARM64"]
-        TP["PPC32 / PPC64"]
-        TM["MIPS32 / nanoMIPS"]
-        TR["RISC-V 32 / 64"]
-        TL["ARC · V850 · LoongArch64"]
-    end
+<details>
+<summary><strong>BinaryContext</strong> — PLT · Strings · XRef · Call Graph · CFG</summary>
 
-    subgraph ANALYSIS ["Analysis"]
-        SEM["Semantic Search"]
-        DIFF["Version Diffing"]
-        HYPO["Hypothesis Engine"]
-        VTBL["Vtable Recon"]
-        CTL["Cross-Target Learning"]
-    end
+The foundation every analyzer builds on. BinaryContext resolves PLT stubs, indexes strings with cross-references, maps function boundaries, and builds the call graph — on demand, not up front.
 
-    subgraph SCANNERS ["Security Scanners"]
-        PRE["Pre-Auth Exposure"]
-        CRY["Crypto Analysis"]
-        HP["Heap Scanner"]
-        FMT["Format String"]
-        DRV["BYOVD / Kernel"]
-        MPYL["MpyLifter"]
-    end
+<details>
+<summary><strong>Taint Engine</strong> — 16 ISAs</summary>
 
-    subgraph OUT ["Output"]
-        FORGE["FORGE\nQuality Gate"]
-        REG["Finding Registry"]
-    end
+Follows network input through the call graph to security-sensitive sinks. Library call sites do not stop the trace because register-level tracking resolves shared library stubs.
 
-    IN --> BC
-    BC --> TAINT
-    BC --> ANALYSIS
-    BC --> SCANNERS
-    TAINT --> FORGE
-    ANALYSIS --> FORGE
-    SCANNERS --> FORGE
-    FORGE --> REG
-    REG -->|"seeds future sweeps"| SEM
+Architectures: x86-32 · x86-64 · ARM32 · ARM64 · PPC32 · PPC64 · MIPS32 · nanoMIPS · MIPS64 · RISC-V 32 · RISC-V 64 · ARC EM/HS · V850 · LoongArch64 · TriCore · RH850
 
-    classDef input fill:#1a0533,stroke:#7c3aed,stroke-width:2px,color:#e5e7eb
-    classDef core fill:#0d1117,stroke:#58a6ff,stroke-width:2px,color:#e5e7eb
-    classDef engine fill:#111827,stroke:#374151,stroke-width:1px,color:#d1d5db
-    classDef scanner fill:#111827,stroke:#374151,stroke-width:1px,color:#d1d5db
-    classDef output fill:#0d2818,stroke:#238636,stroke-width:2px,color:#e5e7eb
+→ [Taint Analysis](docs/module-reference/taint-analysis.md)
 
-    class ELF,PE,FW,MPY,DEX,BM input
-    class BC core
-    class TX,TA,TP,TM,TR,TL,SEM,DIFF,HYPO,VTBL,CTL engine
-    class PRE,CRY,HP,FMT,DRV,MPYL scanner
-    class FORGE,REG output
-```
+</details>
+
+<details>
+<summary><strong>Analysis Modules</strong> — Semantic Search · Version Diffing · Hypothesis Engine · Vtable Recon · Cross-Target Learning</summary>
+
+| Module | What it does |
+|---|---|
+| [Semantic Search](docs/module-reference/semantic-search.md) | Finds functions by describing what they do. Results in under a second because queries are scoped to the target binary. |
+| [Version Diffing](docs/workflows/cross-version.md) | Checks whether logic changed, not whether the file changed. A cosmetic recompile cannot hide an unpatched vulnerability. |
+| [Hypothesis Engine](docs/module-reference/hypothesis-engine.md) | Tracks competing theories about what a function does and scores evidence against each one. Sessions persist across engagements. |
+| [Vtable Recon](docs/module-reference/cpp-vtable-reconstructor.md) | Recovers C++ virtual dispatch tables from stripped ELF. A generated annotation script propagates slot names through every call site. |
+| [Cross-Target Learning](docs/module-reference/cross-target-learning.md) | Every confirmed finding seeds future semantic searches. The tool gets sharper with each engagement. |
+
+</details>
+
+<details>
+<summary><strong>Security Scanners</strong> — Pre-Auth · Crypto · Heap · Format String · BYOVD · MpyLifter</summary>
+
+| Scanner | What it does |
+|---|---|
+| [Pre-Auth Exposure](docs/module-reference/preauth-exposure.md) | Maps every path from the network entry point to a sensitive operation that runs before authentication. |
+| [Crypto Analysis](docs/module-reference/crypto.md) | Recovers key material from compiled firmware. Audits TLS and JWT configurations without source access. |
+| [Heap Scanner](docs/module-reference/binary-lifter.md) | Chunk and UAF audit across all supported architectures. |
+| [Format String](docs/module-reference/binary-lifter.md) | Specifier scanner. Flags format string sinks reachable from tainted input. |
+| [BYOVD / Kernel](docs/module-reference/kernel-drivers.md) | Classifies signed kernel drivers for BYOVD capability before deployment. |
+| [MpyLifter](docs/module-reference/mpy-lifter.md) | Lifts .mpy v6 bytecode to pseudo-Python. Detects dangerous imports, exec/eval, and machine.mem32 across ESP32, STM32, and CC13xx firmware. |
+
+</details>
+
+<details>
+<summary><strong>FORGE Quality Gate → Finding Registry</strong></summary>
+
+Every module and finding passes a 10-section audit before it can be stored. Confirmed findings enter the Finding Registry, which cross-references patterns across targets and seeds future semantic searches — each engagement sharpens the next.
+
+→ [FORGE](docs/module-reference/forge.md)
+
+</details>
+
+</details>
+</details>
 
 ---
 
