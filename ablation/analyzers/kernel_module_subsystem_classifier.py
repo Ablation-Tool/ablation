@@ -46,7 +46,6 @@ Usage:
 from __future__ import annotations
 
 import os
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -136,6 +135,21 @@ _SUBSYSTEM_RULES = [
     ("lib/",                        "lib",                        "LOCAL",              False, "MEDIUM"),
     ("security/",                   "security",                   "LOCAL",              False, "MEDIUM"),
 ]
+
+
+def _check_rule_order() -> None:
+    for i, (prefix_i, *_) in enumerate(_SUBSYSTEM_RULES):
+        for j in range(i + 1, len(_SUBSYSTEM_RULES)):
+            prefix_j = _SUBSYSTEM_RULES[j][0]
+            if prefix_j.startswith(prefix_i) and prefix_j != prefix_i:
+                raise AssertionError(
+                    f"_SUBSYSTEM_RULES ordering error: rule {j} ({prefix_j!r}) is more "
+                    f"specific than rule {i} ({prefix_i!r}) but comes after it. "
+                    "More-specific rules must appear first."
+                )
+
+
+_check_rule_order()
 
 
 def _extract_subsystem_path(ko_path: str) -> Optional[str]:
