@@ -2,6 +2,26 @@
 
 ---
 
+## v2.60.0
+
+**EcuArchDetector: ISA fingerprinter for unknown flat ECU ROM images.** Five discriminators
+identify the instruction set of a raw binary with no ELF/IHEX wrapper, returning a HIGH/MEDIUM/LOW
+confidence verdict and the best-match ISA token, enabling automatic decoder selection before any
+disassembly step.
+
+- `EcuArchDetector`: `detect()` → `ArchDetectResult`; `candidates()` → `list[ArchCandidate]` sorted by score
+- `ArchDetectResult`: `arch`, `confidence` (HIGH/MEDIUM/LOW), `score`, `reason`, `candidates`, `is_confident`
+- `ArchCandidate`: `arch`, `score`, `reason`
+- ARM Cortex-M: LE vector table — MSP in SRAM `0x20000000–0x3FFFFFFF` + Thumb reset handler; score 0.90 (both) / 0.55 (MSP only)
+- M68K/CPU32: BE reset vector in-range + LINK.W A6, #-N prologue density; score 0.85 / 0.70 / 0.35
+- PPC32 Book E: primary opcode density (0x08-0x0F, 0x38-0x3F, 0x80-0x9F ranges); fires at ≥ 35% density
+- PPC VLE: `(byte0 & 0x90) == 0x10` halfword density; score = `min(density * 2.5, 0.92)` at ≥ 15% density
+- SH-2A: BE reset vector at offset 4 + STS.L PR (0x4F22) density + RTS (0x000B) density; score 0.88/0.75/0.60/0.40
+- `from_path()` / `from_bytes()` convenience wrappers; `sample_size=0` scans full image
+- 31 tests; FORGE gate: PASSED (0 findings)
+
+---
+
 ## v2.59.0
 
 **EcuSH2aDecoder: Renesas SH-2A decoder for Honda/Subaru ECU firmware.** Pure-Python decoder
