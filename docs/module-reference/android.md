@@ -1,20 +1,98 @@
 # Android / APK Analysis
 
-Zero-dependency analysis for Android APK files. No androguard, no apktool, no
-jadx — pure Python stdlib. Works on raw `.apk` files and APKPure `.xapk` containers.
+Zero-dependency analysis for Android APK files. No androguard, no apktool, no jadx — pure Python stdlib. Works on raw `.apk` files and APKPure `.xapk` containers.
 
-Three layers: **APKParser** (ZIP + AXML + DEX format), **DexAnalyzer** (security
-scanner over DEX bytecode), **JniBridgeScanner** (JNI bridge RE), **BinderScanner**
-(exported Binder service surface).
+Four analysis layers: **APKParser** (ZIP + AXML + DEX format), **DexAnalyzer** (security scanner over DEX bytecode), **JniBridgeScanner** (JNI bridge RE), **BinderScanner** (exported Binder service surface).
+
+---
+
+## Why this exists
+
+Three things made APK security analysis slow before this stack:
+
+**1. External tool dependencies blocked scripted analysis.**
+androguard, apktool, and jadx are GUI-focused tools with installation friction. Running them headlessly in a scan pipeline required subprocess wrappers, output parsing, and version compatibility management. APKParser uses only `zipfile`, `struct`, and `io` from the Python stdlib. It runs anywhere Python runs.
+
+**2. DEX bytecode was opaque without disassembly.**
+Finding `addJavascriptInterface` calls or `InMemoryDexClassLoader` usage required full decompilation or searching decompiled Java output. DEXDisasm decodes the DEX flat-table format directly: method references, string pool, field references, and the instruction stream are all addressable by offset from the binary file. No decompilation step is needed to find dangerous API patterns.
+
+**3. JNI bridge reconstruction required manual symbol table reading.**
+Knowing which Java methods have native implementations and whether those implementations use canonical naming (`Java_*`) or dynamic registration (`RegisterNatives`) required reading both the DEX access flags and the ELF symbol table. JniBridgeScanner cross-references both automatically and flags the harder-to-analyze dynamic registration case.
+
+---
+
+## Full analysis pipeline
+
+```
+  app.apk (or app.xapk)
+          |
+          v
+  ┌────────────────────────────────────────────────────────────┐
+  │  APKParser.from_path(path)                                 │
+  │                                                            │
+  │  ZIP container:                                            │
+  │    AndroidManifest.xml  (binary AXML format)               │
+  │    classes.dex          (primary DEX file)                 │
+  │    classes2.dex, ...    (multidex additional files)        │
+  │    lib/arm64-v8a/*.so   (native libraries by ABI)          │
+  │    assets/keys.bmp      (optional: steganographic keys)    │
+  │                                                            │
+  │  XAPK: outer ZIP has no AndroidManifest.xml                │
+  │    → extract inner base.apk first, then proceed normally   │
+  └──────────────┬──────────────────────┬──────────────────────┘
+                 |                      |
+                 v                      v
+  ┌─────────────────────┐   ┌──────────────────────────────────┐
+  │  AXML parser        │   │  DEX parser (all classes*.dex)   │
+  │                     │   │                                  │
+  │  Binary XML format: │   │  DEX flat-table structure:       │
+  │    ResXMLTree chunks│   │    header: magic, version,       │
+  │    START_ELEMENT    │   │      checksum, SHA-1, file_size  │
+  │    ATTRIBUTE chunks │   │    string_ids: [offset, ...]     │
+  │                     │   │    type_ids: [offset, ...]       │
+  │  Attribute offset   │   │    proto_ids: [shorty, ret, ...]  │
+  │  fix: attr_base =   │   │    field_ids: [class,type,name]  │
+  │  body + _attr_start │   │    method_ids: [cls,proto,name]  │
+  │  NOT body+8+start   │   │    class_defs: [cls,flags,...]   │
+  │  (garbage reads     │   │    data: code_items, string data │
+  │   without this fix) │   │                                  │
+  └─────────┬───────────┘   └─────────────┬────────────────────┘
+            |                             |
+            v                             v
+  ┌─────────────────────┐   ┌──────────────────────────────────┐
+  │  Manifest fields    │   │  DexAnalyzer.scan()              │
+  │    package name     │   │    string pool scan: AKIA*, AIza*│
+  │    min/target sdk   │   │    method ref scan: addJS*, exec │
+  │    permissions      │   │    manifest: debuggable, backup  │
+  │    components       │   │    → findings by severity        │
+  │    security flags   │   │                                  │
+  └─────────────────────┘   │  JniBridgeScanner.scan()         │
+                            │    DEX: ACC_NATIVE (0x0100) flag │
+                            │    ELF: Java_* exports           │
+                            │         JNI_OnLoad export        │
+                            │    → bridge map + risk tier      │
+                            │                                  │
+                            │  BinderScanner.scan()            │
+                            │    Service subclasses            │
+                            │    raw onTransact override       │
+                            │    AIDL $Stub classes            │
+                            └──────────────────────────────────┘
+                                          |
+                                          v
+                            ┌──────────────────────────────────┐
+                            │  LibraryInventory.from_dir()     │
+                            │    ARM64 BL-target count         │
+                            │    security string scoring       │
+                            │    PLT hook detection            │
+                            │    → ranked .so triage table     │
+                            └──────────────────────────────────┘
+```
 
 ---
 
 ## APKParser
 
 **File:** `ablation/core/apk_parser.py`
-
-Handles the full APK/XAPK container format down to the binary XML and DEX
-flat-table sections.
 
 ### Construction
 
@@ -27,86 +105,67 @@ with APKParser.from_path('/path/to/app.apk') as apk:
     print(mf.package, mf.version_name, mf.version_code)
 ```
 
-XAPK containers are supported: the parser transparently unpacks the inner
-`base.apk` when the outer ZIP does not contain `AndroidManifest.xml` directly.
+XAPK containers are supported: the parser transparently unpacks the inner `base.apk` when the outer ZIP does not contain `AndroidManifest.xml` directly.
+
+### AXML binary format
+
+Android binary XML is a chunk-based format. The critical offset fix: in `ResXMLTree_attrExt`, the `attributeStart` field is relative to the start of the `ResXMLTree_attrExt` struct (which begins at `body+8`), not relative to the chunk body start. Using `attr_base = body + _attr_start` instead of `attr_base = body + 8 + _attr_start` silently reads garbage attribute data.
+
+```
+  AndroidManifest.xml (binary AXML)
+  ┌─────────────────────────────────────────────────────────────
+  │ RES_XML_TYPE chunk header (0x00080003)
+  │   → file size, header size
+  ├─────────────────────────────────────────────────────────────
+  │ RES_STRING_POOL_TYPE (0x00080001)
+  │   → string table: all attribute names and values as UTF-16
+  ├─────────────────────────────────────────────────────────────
+  │ RES_XML_START_NAMESPACE_TYPE (0x00100100)
+  │   → android namespace URI
+  ├─────────────────────────────────────────────────────────────
+  │ RES_XML_START_ELEMENT_TYPE (0x00100102) per XML tag
+  │   ResXMLTree_attrExt:
+  │     attributeStart: RELATIVE to this struct's start (+8 from body)
+  │     attributeCount: number of attributes
+  │   per attribute (attributeStart + i*attributeSize bytes from body+8):
+  │     ns_idx, name_idx, raw_value_idx, data_type, data
+  └─────────────────────────────────────────────────────────────
+```
 
 ### Manifest
 
 ```python
 mf = apk.parse_manifest()
-
-# Basic identity
 mf.package             # "com.example.app"
 mf.version_name        # "1.2.3"
-mf.version_code        # 42
 mf.min_sdk             # 24
 mf.target_sdk          # 34
-
-# Permissions
 mf.permissions         # requested: ["android.permission.CAMERA", ...]
-mf.declared_permissions  # app-defined custom permissions
 mf.dangerous_permissions()  # filtered to DANGEROUS-level perms only
-
-# Components (Activity, Service, Receiver, Provider)
-mf.components          # all ComponentInfo objects
-mf.exported_components()  # only exported=true components
-
-# Security flags
-mf.debuggable          # True → APK debuggable (not production build)
+mf.exported_components()    # only exported=true components
+mf.debuggable          # True → not a production build
 mf.allow_backup        # True → adb backup allowed (data exfil)
-mf.uses_cleartext_traffic  # True → HTTP allowed
+mf.uses_cleartext_traffic   # True → HTTP allowed
 ```
 
 ### DEX iteration
 
 ```python
 for dex in apk.iter_dex():
-    print(dex.filename, dex.method_count, 'methods', dex.string_count, 'strings')
-
-    # Strings (all — use for secret scanning)
     for s in dex.iter_strings():
         if s.startswith('AKIA'):
             print('AWS key:', s)
-
-    # Method references (all cross-class calls in this DEX)
     for m in dex.iter_method_refs():
-        # m.class_name: descriptor form, e.g. "Landroid/util/Log;"
-        # m.method_name: "d", "e", "i", "w", "v"
-        # m.proto_shorty: return+args type string, e.g. "VLjava/lang/String;"
         if 'loadLibrary' in m.method_name:
             print('native lib load:', m)
-
-    # Field references
-    for f in dex.iter_field_refs():
-        # f.class_name, f.field_name, f.type_desc
-        if f.type_desc == 'J' and 'peer' in f.field_name.lower():
-            print('opaque peer field:', f)
-
-    # Class definitions
-    for cls in dex.iter_classes():
-        # cls.class_name, cls.superclass, cls.access_flags, cls.source_file
-        if 'Service' in cls.superclass:
-            print('Service subclass:', cls.class_name)
 ```
 
 ### Native libs
 
 ```python
-# All native libs (entry paths within the APK ZIP)
-libs = apk.native_libs()         # all ABIs
-libs = apk.native_libs('armeabi-v7a')  # filter to one ABI
-
-# Extract a specific lib (returns destination path)
-dest = apk.extract_native_lib('lib/armeabi-v7a/libfoo.so', Path('/tmp/out/'))
+libs = apk.native_libs('arm64-v8a')
+dest = apk.extract_native_lib('lib/arm64-v8a/libfoo.so', Path('/tmp/out/'))
 ```
-
-### AXML binary format notes
-
-Android binary XML uses a chunk-based layout. The critical offset fix: in
-`ResXMLTree_attrExt`, the `attributeStart` field is relative to the start of
-the `ResXMLTree_attrExt` struct (which begins at `body+8`), not relative to
-the chunk body start. Using `attr_base = body + _attr_start` instead of
-`attr_base = body + 8 + _attr_start` silently reads garbage attribute data.
 
 ---
 
@@ -114,22 +173,14 @@ the chunk body start. Using `attr_base = body + _attr_start` instead of
 
 **File:** `ablation/analyzers/dex_analyzer.py`
 
-Security scanner over DEX string pool and method reference table. Runs on the
-full APK (iterates all `classes*.dex` files).
-
-### Usage
+Security scanner over DEX string pool and method reference table. Runs on the full APK (iterates all `classes*.dex` files).
 
 ```python
 from ablation.analyzers.dex_analyzer import DexAnalyzer
 
-with APKParser.from_path('/path/to/app.apk') as apk:
-    scanner = DexAnalyzer(apk)
-    findings = scanner.scan()
-    print(DexAnalyzer.report(findings))
-
-# From path directly
 scanner = DexAnalyzer.from_path('/path/to/app.apk')
 findings = scanner.scan()
+print(DexAnalyzer.report(findings))
 ```
 
 ### Finding categories
@@ -149,17 +200,7 @@ findings = scanner.scan()
 | HIGH | `secret/jwt_bearer` | `eyJ`-prefixed string |
 | HIGH | `secret/private_key_pem` | `BEGIN PRIVATE KEY` |
 | MEDIUM | `manifest/exported_N` | N exported components |
-| MEDIUM | `secret/hex_key_32` | 64-char hex string |
 | LOW | `manifest/permission_N` | dangerous permission count |
-
-### Extending with custom patterns
-
-```python
-scanner._secret_patterns.append(
-    ('my_api_key', re.compile(r'sk-[A-Za-z0-9]{32}'), HIGH)
-)
-scanner._dangerous_apis['myDangerousMethod'] = (CRITICAL, "custom/sink", "Description")
-```
 
 ---
 
@@ -167,27 +208,29 @@ scanner._dangerous_apis['myDangerousMethod'] = (CRITICAL, "custom/sink", "Descri
 
 **File:** `ablation/analyzers/jni_bridge_scanner.py`
 
-Reconstructs the Java ↔ native boundary from DEX `class_data_item` access flags
-and ELF dynsym. Three-way classification: methods confirmed native in both DEX and
-ELF (strongly confirmed), methods with `ACC_NATIVE` but no ELF symbol (stripped or
-dynamically registered), and ELF `Java_*` symbols with no `ACC_NATIVE` flag (helpers
-or dead code).
+Reconstructs the Java-native boundary from DEX `class_data_item` access flags and ELF dynsym. Three-way classification: confirmed native in both DEX and ELF, ACC_NATIVE with no ELF symbol (stripped or dynamically registered), and `Java_*` ELF symbols with no ACC_NATIVE flag (helpers or dead code).
 
-**DEX side:**
-- `iter_native_methods()` over `class_data_item` encoded_method arrays — authoritative
-  `ACC_NATIVE` (`0x0100`) flag detection
-- `Ljava/lang/System;->loadLibrary` method reference → identifies which classes
-  load native libraries
-- `FieldRef` with type descriptor `J` (long) and a peer-like name → opaque peer
-  pattern (Java object holds native pointer in a `long` field, set by native code
-  via `GetFieldID`/`SetLongField`)
+### Two JNI registration modes
 
-**ELF side (native lib dynsym):**
-- `JNI_OnLoad` export present → library uses `RegisterNatives` for dynamic
-  registration; canonical `Java_*` symbol names will NOT appear; this is the
-  harder-to-RE path
-- `Java_*` exports → canonical naming; symbol names directly encode the Java
-  class and method name
+```
+  Mode 1: Canonical naming (easier to RE)
+    ART resolves Java_pkg_ClassName_methodName automatically.
+    ELF export: Java_com_example_Foo_bar
+      → Java class: com.example.Foo, method: bar
+    Symbol name directly encodes the Java-native binding.
+    ARM64TaintTracker starts from the function VA directly.
+
+  Mode 2: Dynamic registration via JNI_OnLoad (harder to RE)
+    Library exports only JNI_OnLoad.
+    JNI_OnLoad calls: env->FindClass("com/example/Foo")
+                      env->RegisterNatives(klass, methods, count)
+    'methods' is an array of JNINativeMethod structs:
+      { char* name, char* signature, void* fnPtr }
+    Function pointers may be stripped (no name in dynsym).
+    ARM64TaintTracker must start from JNI_OnLoad,
+    walk the RegisterNatives call's third argument (the array),
+    and read the fnPtr values to recover the binding.
+```
 
 ### Usage
 
@@ -203,19 +246,10 @@ print(JniBridgeScanner.report(findings))
 
 | Severity | Category | Meaning |
 |---|---|---|
-| HIGH | `jni/dynamic_registration` | Lib uses `JNI_OnLoad`+`RegisterNatives`; function pointers not in symbol table |
-| MEDIUM | `jni/canonical_naming` | Lib exports `Java_*` symbols; naming is recoverable |
+| HIGH | `jni/dynamic_registration` | `JNI_OnLoad`+`RegisterNatives`; function pointers not in symbol table |
+| MEDIUM | `jni/canonical_naming` | `Java_*` symbols; naming is recoverable |
 | HIGH | `jni/opaque_peer` | Class has `long` field with peer-like name; native holds raw pointer |
 | INFO | `jni/load_sites` | Count of `System.loadLibrary` call sites |
-
-### Why JNI_OnLoad matters for RE
-
-The canonical `Java_pkg_ClassName_methodName` naming scheme is automatically
-resolved by ART. When a library instead implements `JNI_OnLoad` and calls
-`env->RegisterNatives(klass, methods, count)`, the function pointers in the
-`JNINativeMethod` array can have arbitrary names — or be stripped entirely.
-`ARM32TaintTracker` must start from `JNI_OnLoad` and walk the `RegisterNatives`
-call's third argument (the array) to recover the Java↔native mapping.
 
 ---
 
@@ -223,29 +257,32 @@ call's third argument (the array) to recover the Java↔native mapping.
 
 **File:** `ablation/analyzers/binder_scanner.py`
 
-Maps the exported Binder service surface from DEX class definitions and the
-manifest. Binder is Android's primary IPC mechanism; exported services are the
-first-hop attack surface for privilege escalation and authentication bypass.
+Maps the exported Binder service surface from DEX class definitions and the manifest. Binder is Android's primary IPC mechanism. Exported services are the first-hop attack surface for privilege escalation and authentication bypass.
 
-### What it detects
+### Binder IPC dispatch path
 
-**Service subclasses** — Any class extending `android.app.Service` or
-`android.app.IntentService` is a potential Binder server if it implements
-`onBind()`. Cross-referenced against the manifest to flag exported=true entries.
+```
+  Client process calls:
+    IBinder binder = context.getSystemService("my_service")
+    IMyService iface = IMyService.Stub.asInterface(binder)
+    iface.doSomething(arg)
 
-**Raw Binder implementations** — Classes directly extending `android.os.Binder`
-and overriding `onTransact(int code, Parcel data, Parcel reply, int flags)`.
-This is the lowest-level Binder API; `onTransact` receives an integer transaction
-code and a raw `Parcel` — missing authentication checks here are critical.
+  This generates a Binder transaction:
+    code = TRANSACTION_doSomething  (= 1 for first method)
+    data = Parcel(arg serialized)
+    reply = Parcel()
+    binder.transact(code, data, reply, 0)
 
-**AIDL Stub classes** — Inner classes named `$Stub` extending `android.os.Binder`
-are generated by the AIDL compiler. They dispatch on transaction codes
-(starting at `FIRST_CALL_TRANSACTION = 1`). The outer interface name encodes
-the service contract.
+  Server side receives in onTransact(code, data, reply, flags):
+    switch (code):
+      case TRANSACTION_doSomething:
+        // deserialize from data Parcel
+        // process
+        // write to reply Parcel
 
-**Messenger-based IPC** — `android.os.Messenger` wraps a `Handler` behind a
-Binder, used for message-passing. Lower attack surface than raw Binder but still
-an IPC entry point.
+  AIDL-generated $Stub.onTransact handles this dispatch automatically.
+  Raw Binder subclasses write it manually — missing auth checks here are CRITICAL.
+```
 
 ### Usage
 
@@ -261,18 +298,11 @@ print(BinderScanner.report(findings))
 
 | Severity | Category | Meaning |
 |---|---|---|
-| HIGH | `binder/exported_service` | Service exported=true in manifest; accepts binds from other apps |
+| HIGH | `binder/exported_service` | Service exported=true; accepts binds from other apps |
 | HIGH | `binder/raw_transact` | Class overrides `onTransact`; manual dispatch; missing auth check risk |
 | MEDIUM | `binder/aidl_stub` | AIDL-generated `$Stub` class; dispatch by integer transaction code |
 | MEDIUM | `binder/service_subclass` | Service subclass; potential Binder server |
 | INFO | `binder/messenger` | Messenger IPC usage |
-
-### Binder transaction code attack surface
-
-AIDL stubs dispatch on integer transaction codes in `onTransact`. The first
-method in the AIDL interface maps to code `1`, second to `2`, etc. Fuzzing
-transaction codes (especially codes beyond the defined range) often triggers
-unguarded paths. Each `$Stub` class found is a candidate for code enumeration.
 
 ---
 
@@ -280,11 +310,7 @@ unguarded paths. Each `$Stub` class found is a candidate for code enumeration.
 
 **File:** `sweeps/android_sweep.py`
 
-Orchestration script that runs the full APK RE pass in one call: manifest
-analysis, DexAnalyzer, JniBridgeScanner, BinderScanner, and native lib ELF
-security properties.
-
-### Usage
+Orchestration script that runs the full APK RE pass in one call: manifest analysis, DexAnalyzer, JniBridgeScanner, BinderScanner, and native lib ELF security properties.
 
 ```python
 from sweeps.android_sweep import run_sweep
@@ -300,9 +326,7 @@ Or from the command line:
 python sweeps/android_sweep.py /path/to/app.apk
 ```
 
-XAPK containers are handled transparently — pass the `.xapk` file directly.
-All scanner output is printed in order: manifest summary, CRITICAL/HIGH/MEDIUM
-findings across all scanners, native lib security summary.
+XAPK containers are handled transparently. Pass the `.xapk` file directly.
 
 ---
 
@@ -310,11 +334,43 @@ findings across all scanners, native lib security summary.
 
 **File:** `ablation/analyzers/dex_disasm.py`
 
-Disassembles DEX bytecode to smali-style text. Covers all 17 DEX instruction
-formats and annotates every reference with the full descriptor from the DEX flat
-tables: method signatures, field types, class names, and string literals.
+Disassembles DEX bytecode to smali-style text. Covers all 17 DEX instruction formats and annotates every reference with the full descriptor from the DEX flat tables: method signatures, field types, class names, and string literals.
 
-### Construction
+### DEX flat-table structure
+
+DEX does not use a traditional symbol table. All references are encoded as indices into four flat arrays:
+
+```
+  DEX file layout:
+  ┌──────────────────────────────────────────────────────────
+  │ header (112 bytes): magic, checksum, SHA-1, file_size...
+  ├──────────────────────────────────────────────────────────
+  │ string_ids[N]:   4-byte offsets into string_data section
+  │   string_data[i]: ULEB128 length + UTF-16 chars
+  ├──────────────────────────────────────────────────────────
+  │ type_ids[N]:     4-byte indices into string_ids
+  │   type descriptor: "Ljava/lang/String;" or "I" or "[B"
+  ├──────────────────────────────────────────────────────────
+  │ proto_ids[N]:    (shorty_idx, return_type_idx, params_off)
+  │   shorty: "VLjava/lang/String;" encodes return+param types
+  ├──────────────────────────────────────────────────────────
+  │ field_ids[N]:    (class_idx, type_idx, name_idx)
+  ├──────────────────────────────────────────────────────────
+  │ method_ids[N]:   (class_idx, proto_idx, name_idx)
+  │   every method reference (invoke-*) indexes into this table
+  ├──────────────────────────────────────────────────────────
+  │ class_defs[N]:   (class_idx, access_flags, superclass_idx,
+  │                   interfaces_off, source_file_idx,
+  │                   annotations_off, class_data_off,
+  │                   static_values_off)
+  │   class_data_item: static_fields, instance_fields,
+  │                    direct_methods, virtual_methods
+  │   encoded_method: (method_idx_diff, access_flags, code_off)
+  │     access_flags & 0x0100 == 0x0100 → ACC_NATIVE
+  └──────────────────────────────────────────────────────────
+```
+
+### Usage
 
 ```python
 from ablation.core.apk_parser import APKParser
@@ -324,82 +380,11 @@ with APKParser.from_path('/path/to/app.apk') as apk:
     dexes = list(apk.iter_dex())
 
 dd = DEXDisasm(dexes[0])
-```
-
-### Disassemble one method
-
-```python
-# Both descriptor form and dotted Java form are accepted
 smali = dd.disasm_method('Lcom/example/Foo;', 'onCreate')
 print(smali)
-
-# Output:
-# .method Lcom/example/Foo;->onCreate
-#     .registers 4
-#
-#     0000  const/4 v0, #0
-#     0001  invoke-virtual {v1, v0}, Landroid/widget/TextView;->setText(I)V
-#     0004  return-void
-# .end method
 ```
 
-### Disassemble a full class
-
-```python
-smali = dd.disasm_class('Lcom/example/Foo;')
-print(smali)
-```
-
-### List methods with code
-
-```python
-methods = dd.list_methods('Lcom/example/Foo;')
-# Returns sorted list of method names that have a code_item
-```
-
-### One-call convenience
-
-```python
-smali = DEXDisasm.report(dex, 'Lcom/example/Foo;', 'authenticate')
-```
-
-### DEXInstruction fields
-
-| Field | Type | Meaning |
-|---|---|---|
-| `cu_offset` | int | Code unit offset from start of `insns[]` |
-| `opcode` | int | Raw opcode byte |
-| `mnemonic` | str | Smali mnemonic (e.g., `invoke-virtual`) |
-| `fmt` | str | DEX format string (e.g., `35c`) |
-| `regs` | List[int] | Register indices |
-| `ref_idx` | int | DEX table index (-1 if none) |
-| `literal` | int | Literal value |
-| `branch` | int | Branch offset in code units (relative) |
-
-### Low-level: decode a code_item directly
-
-```python
-from ablation.analyzers.dex_disasm import decode_code_item
-
-registers, ins_size, outs_size, instrs = decode_code_item(dex, code_off)
-for ins in instrs:
-    print(f"{ins.cu_offset:04x}  {ins.smali(dex)}")
-```
-
-### Instruction formats decoded
-
-All 17 DEX formats: `10x`, `10t`, `11x`, `11n`, `12x`, `20t`, `21c`, `21h`,
-`21s`, `21t`, `22b`, `22c`, `22s`, `22t`, `22x`, `23x`, `30t`, `31c`, `31i`,
-`31t`, `32x`, `35c`, `3rc`, `45cc`, `4rcc`, `51l`. Unknown opcodes emit
-`data-XX` and advance one code unit so decoding continues past data payloads.
-
-### Limitations
-
-- `fill-array-data`, `packed-switch`, and `sparse-switch` payloads are data
-  blocks embedded in the instruction stream. The disassembler skips their
-  content but prints the branch target label correctly.
-- Try/catch blocks and annotation tables are not rendered (code_item header
-  fields `tries_size` and `debug_info_off` are parsed but not displayed).
+Covers all 17 DEX formats: `10x`, `10t`, `11x`, `11n`, `12x`, `20t`, `21c`, `21h`, `21s`, `21t`, `22b`, `22c`, `22s`, `22t`, `22x`, `23x`, `30t`, `31c`, `31i`, `31t`, `32x`, `35c`, `3rc`, `45cc`, `4rcc`, `51l`. Unknown opcodes emit `data-XX` and advance one code unit so decoding continues past data payloads.
 
 ---
 
@@ -407,51 +392,14 @@ All 17 DEX formats: `10x`, `10t`, `11x`, `11n`, `12x`, `20t`, `21c`, `21h`,
 
 **File:** `ablation/analyzers/dex_lifter.py`
 
-Lifts DEX bytecode to pseudo-Java IR. Produces readable Java-like source from
-the instruction stream without external dependencies or SSA construction.
-
-### Construction
+Lifts DEX bytecode to pseudo-Java IR without external dependencies or SSA construction.
 
 ```python
-from ablation.core.apk_parser import APKParser
 from ablation.analyzers.dex_lifter import DEXLifter
 
-with APKParser.from_path('/path/to/app.apk') as apk:
-    dexes = list(apk.iter_dex())
-
 lifter = DEXLifter(dexes[0])
-```
-
-### Lift one method
-
-```python
 pseudo_java = lifter.lift_method('Lcom/thingclips/smart/sdk/ThingNfcPlugin;', 'findDeviceKeys')
 print(pseudo_java)
-```
-
-Output (abbreviated):
-```java
-// com.thingclips.smart.sdk.ThingNfcPlugin.findDeviceKeys
-DeviceKeys findDeviceKeys(String p1, String p2) {
-    // registers=5  params=3  outs=3
-    Intrinsics.checkNotNullParameter(p1, "uid");
-    Intrinsics.checkNotNullParameter(p2, "devId");
-    qbdqpqq v1 = this.getManagerOrThrow();
-    DeviceKeys p1 = v1.findDeviceKeys(p1, p2);
-    return p1;
-}
-```
-
-### Lift a whole class
-
-```python
-pseudo_java = lifter.lift_class('Lcom/example/Foo;')
-```
-
-### One-call convenience
-
-```python
-pseudo_java = DEXLifter.report(dex, 'Lcom/example/Foo;', 'methodName')
 ```
 
 ### What the lifter translates
@@ -462,25 +410,8 @@ pseudo_java = DEXLifter.report(dex, 'Lcom/example/Foo;', 'methodName')
 | `iget-object v0, v1, Lf/Bar;->mField:Ljava/lang/String;` | `String v0 = v1.mField;` |
 | `invoke-virtual {v0, v1}, Landroid/widget/TV;->setText(I)V` | `v0.setText(v1);` |
 | `invoke-static + move-result-object vA` | `RetType vA = ClassName.method(args);` |
-| `new-instance v0, Ljava/lang/StringBuilder;` | `StringBuilder v0;  // <init> call follows` |
 | `if-eqz v0, :L000a` | `if (v0 == null) goto :L000a;` |
-| backward `goto :L0000` | `// ↑ back-edge → :L0000  (loop end)` |
-| `check-cast v0, Ljava/util/Map;` | `Map v0 = (Map) v0;` |
-| `sget-object v0, Lfoo/Bar;->TAG:Ljava/lang/String;` | `String v0 = Bar.TAG;` |
-
-### Limitations
-
-- No full SSA or dominator-tree analysis. If/else blocks show as `if (cond) goto :Lxxx`
-  labels rather than structured braces. Sufficient for reading control flow.
-- `new-instance` + `invoke-direct <init>` is shown as two lines; constructor
-  arguments appear on the `<init>` call comment line, not on the `new T()` line.
-- Switch tables (`packed-switch`, `sparse-switch`) show the switch expression
-  and a reference to the payload offset but not the individual case values.
-- Try/catch blocks and exception handlers are not structurally represented
-  (exception registers still appear via `move-exception`).
-- Obfuscator instrumentation (e.g. ByteDance `Tz.a()/Tz.b()` anti-tamper
-  calls) is rendered as-is, which is itself a finding: heavy wrapping around
-  simple logic is a pattern signature for the ByteDance runtime protection.
+| backward `goto :L0000` | `// loop end → :L0000` |
 
 ---
 
@@ -488,53 +419,11 @@ pseudo_java = DEXLifter.report(dex, 'Lcom/example/Foo;', 'methodName')
 
 **File:** `ablation/analyzers/library_inventory.py`
 
-Batch triage scanner for directories of native ELF `.so` files. Returns a scored
-summary table for every library in one call — replacing the ad-hoc BL-target
-enumeration loops written at the start of each Android engagement.
+Batch triage scanner for directories of native ELF `.so` files. Returns a scored summary table for every library in one call.
 
-### Construction
+### ARM64 internal function count
 
-| Form | Description |
-|---|---|
-| `LibraryInventory.from_dir(path)` | Collect all `*.so` files in a directory (non-recursive) |
-| `LibraryInventory.from_paths([list])` | Explicit file list |
-| `LibraryInventory.scan_one(elf_path)` | Single file, returns one `LibInventoryEntry` directly |
-
-### Usage
-
-```python
-from ablation.analyzers.library_inventory import LibraryInventory
-
-# Scan all libraries in a directory
-inv = LibraryInventory.from_dir('/tmp/target/lib/arm64-v8a/')
-entries = inv.scan()
-
-# Print formatted triage table
-print(LibraryInventory.report(entries))
-
-# Filter to libraries worth detailed review
-for e in LibraryInventory.security_entries(entries, min_score=3):
-    print(LibraryInventory.report_strings(e))
-
-# Single library
-entry = LibraryInventory.scan_one('/tmp/target/lib/arm64-v8a/libfoo.so')
-print(entry.security_score, entry.security_strings[:3])
-```
-
-### LibInventoryEntry fields
-
-| Field | Type | Description |
-|---|---|---|
-| `filename` | str | Basename of the library |
-| `size_kb` | int | File size in KB |
-| `arch` | str | `arm64`, `arm32`, `x86_64`, `mips32`, `x86`, etc. |
-| `exports` | int | Dynamic symbols with value != 0 |
-| `internal` | int | ARM64 BL-targets inside `.text` not in exports; `-1` for non-ARM64 |
-| `jni` | int | Exports with `Java_` prefix |
-| `has_jni_on_load` | bool | Whether `JNI_OnLoad` is exported |
-| `security_score` | int | 0–10 score (see below) |
-| `security_strings` | List[str] | Up to 20 security-relevant rodata strings |
-| `plt_hooks` | List[str] | Critical PLT import labels found (e.g. `[TLS-KEYLOG]`, `[PLT-HOOK]`) |
+`internal` is the count of BL-call targets inside `.text` that are not in the dynamic export table. This measures implementation depth. A library with `internal=0` is a pure passthrough stub. One with `internal=4553` contains a full protocol engine. Computed via single-pass opcode scan: `(w >> 26) == 0x25` identifies BL instructions; sign-extend the 26-bit immediate; targets in `.text` range but absent from dynsym are internal.
 
 ### Security scoring
 
@@ -542,55 +431,20 @@ print(entry.security_score, entry.security_strings[:3])
 |---|---|
 | Credential-field format string (`sk=%s`, `password=%s`, `token=%s`) | +3 |
 | Credential-field name or exec pattern (`system(`, `/bin/sh`) | +2 |
-| Crypto primitive string (`AES`, `HMAC`, `SHA256`, `DTLS`, `PPCS`) | +1 |
-| JNI count ≥ 50 | +2 |
-| JNI count ≥ 10 | +1 |
-| Internal function count ≥ 1000 | +2 |
-| Internal function count ≥ 200 | +1 |
-| `SSL_CTX_set_keylog_callback` in symbols (TLS session key export) | +3 |
-| `ssl_log_secret` or `ssl_log_rsa_client_key_exchange` in symbols | +2 |
-| `bytehook_hook_all` or `bytehook_hook_single` in PLT imports | +2 |
-| `shadowhook_hook_sym_name` in PLT imports | +2 |
-
-Known false-positive contexts (LAME `noise shaping`, MMKV `key-value`, parser
-`unknown token`) are filtered before scoring.
-
-PLT hook detection (`plt_hooks` field) covers both dynamic imports (value == 0) and
-statically-linked re-exports (value != 0). A library that statically links OpenSSL and
-re-exports `SSL_CTX_set_keylog_callback` scores the same as one that dynamically imports it.
-
-### Finding categories
-
-| Severity | Category | Meaning |
-|---|---|---|
-| HIGH (score 7–10) | `credential-log` | Credential field names + format specifiers: live credential exposure in logs |
-| HIGH (score 7–10) | `exec-surface` | `system(` / `/bin/sh` strings with high JNI count: command injection surface |
-| MEDIUM (score 3–6) | `crypto-impl` | Crypto primitive strings: contains cryptographic implementation |
-| INFO (score 1–2) | `large-impl` | High internal function count: complex implementation worth tracing |
-
-### Internal function count (ARM64)
-
-`internal` is the count of BL-call targets inside `.text` that are not in the
-dynamic export table. This measures implementation depth: a library with
-`internal=0` is a pure passthrough stub; one with `internal=4553` contains a
-full protocol engine. Computed via single-pass opcode scan: `(w >> 26) == 0x25`
-identifies BL instructions; sign-extend the 26-bit immediate; targets in `.text`
-range but absent from dynsym are internal. Requires `lief` for section layout;
-falls back to -1 (unsupported) for non-ARM64 or missing `lief`.
-
-### classify_internals
-
-`LibraryInventory.classify_internals(elf_path)` groups ARM64 internal functions by
-PLT call signature. Returns `{label: [va, ...]}`.
+| Crypto primitive string (`AES`, `HMAC`, `SHA256`, `DTLS`) | +1 |
+| JNI count >= 50 | +2 |
+| JNI count >= 10 | +1 |
+| Internal function count >= 1000 | +2 |
+| `SSL_CTX_set_keylog_callback` in symbols | +3 |
+| `bytehook_hook_all` or `bytehook_hook_single` in PLT | +2 |
 
 ```python
-clusters = LibraryInventory.classify_internals('/tmp/lib/libThingP2PSDK.so')
-for label, vas in sorted(clusters.items(), key=lambda x: -len(x[1])):
-    print(f"[{len(vas):3d}] {label}")
+from ablation.analyzers.library_inventory import LibraryInventory
+
+inv = LibraryInventory.from_dir('/tmp/target/lib/arm64-v8a/')
+entries = inv.scan()
+print(LibraryInventory.report(entries))
+
+for e in LibraryInventory.security_entries(entries, min_score=3):
+    print(LibraryInventory.report_strings(e))
 ```
-
-Each function's label is the first 6 distinct PLT symbols it calls, joined with `+`.
-Functions with no PLT calls are grouped under `(pure-internal)` — these are typically
-crypto math, state machine transitions, or hardware-accelerated codecs.
-
-Requires `lief` and `capstone`. Returns `{}` for non-ARM64 binaries.

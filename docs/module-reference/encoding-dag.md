@@ -2,24 +2,72 @@
 
 **File:** `ablation/analyzers/encoding_dag.py`
 
-Generic bitfield-to-instruction encoding framework for fixed-width ISAs.
-Implements the three-layer model described in the EDAG-24 design document:
+Generic bitfield-to-instruction encoding framework for fixed-width ISAs. Implements a three-layer model: raw bytes map to named bitfields, named bitfields map to semantic operations, and semantic operations link through dataflow edges into basic blocks.
+
+---
+
+## Why this exists
+
+One architectural problem made adding new ISA support expensive:
+
+**Without a shared encoding model, every ISA requires its own exception handler.**
+An ad-hoc ISA decoder embeds knowledge of bit layouts, field names, and semantic meanings in a single tightly-coupled function. Adding a new architecture means writing a new decoder from scratch. The EncodingDAG separates the three concerns — bit extraction (Layer 1), field composition (Layer 2), and semantic meaning (Layer 3) — so each can be specified once and composed. A new ISA adds Templates and Bindings without touching any existing code.
+
+---
+
+## Three-layer architecture
 
 ```
-Layer 1  Raw bytes / hex / RGB-integer
-         (B0, B1, B2) ↔ 0xRRGGBB ↔ I24 = R*65536 + G*256 + B
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Layer 1: Raw bytes / RGB-style integer                      │
+  │                                                              │
+  │  Three bytes (B0, B1, B2) pack into a 24-bit integer:        │
+  │    I24 = (B0 × 65536) + (B1 × 256) + B2                     │
+  │         = (R  × 256²) + (G  × 256¹) + (B × 256⁰)           │
+  │                                                              │
+  │  Convenience: rgb_to_bytes, bytes_to_rgb, rgb_int helpers    │
+  └──────────────────────────┬───────────────────────────────────┘
+                             |
+                     ISASpec.decode()
+                             |
+                             v
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Layer 2: Encoding DAG                                       │
+  │                                                              │
+  │  Field: a named bit range with optional fixed value          │
+  │    Field("opcode", width=6, fixed=0b000001)                  │
+  │    Field("rA",     width=4, fixed=None)   <- variable        │
+  │                                                              │
+  │  Template: MSB-first sequence of Fields for one insn form    │
+  │    Template("LOAD_mem", [opcode, mode, rA, rB, imm8])        │
+  │    .encode({"rA": 0, "rB": 5, "imm8": 4}) -> I24            │
+  │    .decode(I24) -> {"opcode": 1, "mode": 2, "rA": 0, ...}   │
+  │                                                              │
+  │  EncodingNode: instantiated Template (DAG root)              │
+  │    node.to_hex() / to_bytes() / to_rgb() / show_layout()     │
+  └──────────────────────────┬───────────────────────────────────┘
+                             |
+                     ISASpec.decode() + Binding
+                             |
+                             v
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Layer 3: Semantic DAG / IR                                  │
+  │                                                              │
+  │  SemanticOp: one operation with typed operands               │
+  │    SemanticOp("LOAD", {"dst": "r0", "base": "r5", "offset": 4})  │
+  │    operands: registers (str), immediates (int), MemRef(base,off)  │
+  │                                                              │
+  │  DataflowEdge: explicit producer-consumer link               │
+  │    DataflowEdge(producer_id="n1", consumer_id="n3", reg="r0")│
+  │                                                              │
+  │  SemanticBlock: basic block of SemanticOps with edges        │
+  │    SemanticBlock("entry").add_op(...).add_edge(...)          │
+  └──────────────────────────────────────────────────────────────┘
 
-Layer 2  Encoding DAG
-         Named bitfields (Field) + positional composition (Template)
-         EncodingNode = one instantiated template (the DAG root)
-
-Layer 3  Semantic DAG / IR
-         SemanticOp nodes with typed operands; DataflowEdge for
-         producer/consumer links; SemanticBlock for basic blocks
+  ISASpec: ties all three layers together for round-trip encode/decode
+    .encode(SemanticOp) -> EncodingNode
+    .decode(bytes)      -> (EncodingNode, SemanticOp)
 ```
-
-Binding ties Layer 3 ↔ Layer 2. ISASpec owns a template registry plus
-bindings, giving a single object for round-trip encode/decode.
 
 ---
 
@@ -45,28 +93,6 @@ print(node.show_layout())
 # Fields:      opcode   mode     rA       rB      imm8
 # Values:      000001   10       0000     0101    00000100
 # Hex: 0x060504  I=394500
-```
-
----
-
-## Layer 1 — Raw / RGB-style
-
-Every instruction is 3 bytes `(B0, B1, B2)`. The RGB packing formula gives the
-canonical 24-bit integer:
-
-```
-I24 = (B0 × 65536) + (B1 × 256) + B2
-    = (R  × 256²)  + (G  × 256¹) + (B × 256⁰)
-```
-
-Convenience helpers:
-
-```python
-from ablation.analyzers.encoding_dag import rgb_to_bytes, bytes_to_rgb, rgb_int
-
-rgb_to_bytes(6, 5, 4)          # b'\x06\x05\x04'
-bytes_to_rgb(b'\x06\x05\x04')  # (6, 5, 4)
-rgb_int(6, 5, 4)               # 394500
 ```
 
 ---
@@ -98,10 +124,7 @@ tmpl = Template("ADD_reg", [
     Field("imm8",   8, fixed=0),
 ])
 
-# Encode to integer
-tmpl.encode({"rA": 0, "rB": 1})        # 0x130100
-
-# Decode from integer
+tmpl.encode({"rA": 0, "rB": 1})   # 0x130100
 tmpl.decode(0x130100)
 # {"opcode": 4, "mode": 3, "rA": 0, "rB": 1, "imm8": 0}
 ```
@@ -115,7 +138,7 @@ node = EncodingNode(tmpl, {"rA": 0, "rB": 1})
 node.to_hex()        # "0x130100"
 node.to_bytes()      # b'\x13\x01\x00'
 node.to_rgb()        # (19, 1, 0)
-node.to_rgb_int()    # 1245440 = 19*65536 + 1*256 + 0
+node.to_rgb_int()    # 1245440
 node.all_fields()    # {"opcode": 4, "mode": 3, "rA": 0, "rB": 1, "imm8": 0}
 node.show_layout()   # ASCII diagram
 ```
@@ -124,24 +147,7 @@ node.show_layout()   # ASCII diagram
 
 ## Layer 3 — Semantic DAG / IR
 
-### SemanticOp
-
-```python
-SemanticOp(
-    op="LOAD",
-    operands={"dst": "r0", "base": "r5", "offset": 4},
-    node_id="n1",       # optional, used in show_layout and block edges
-)
-```
-
-Operand values are typed:
-- Registers: string names (`"r0"`, `"r5"`, `"rBP"`)
-- Immediates: `int`
-- Memory references: `MemRef(base="r5", offset=4)`
-
-### SemanticBlock
-
-Groups SemanticOps into a basic block with explicit dataflow edges:
+### SemanticBlock with dataflow edges
 
 ```python
 from ablation.analyzers.encoding_dag import SemanticBlock, DataflowEdge
@@ -152,7 +158,7 @@ blk.add_op(SemanticOp("LOAD",  {"dst": "r1", "base": "r5", "offset": 8},  "n2"))
 blk.add_op(SemanticOp("ADD",   {"dst": "r0", "src": "r1"},                "n3"))
 blk.add_op(SemanticOp("STORE", {"src": "r0", "base": "r5", "offset": 12}, "n4"))
 
-# Explicit dataflow edges (n1→n3: r0, n2→n3: r1, n3→n4: r0)
+# Explicit dataflow edges: n1→n3 via r0, n2→n3 via r1, n3→n4 via r0
 blk.add_edge(DataflowEdge("n1", "n3", "r0"))
 blk.add_edge(DataflowEdge("n2", "n3", "r1"))
 blk.add_edge(DataflowEdge("n3", "n4", "r0"))
@@ -161,6 +167,8 @@ blk.add_edge(DataflowEdge("n3", "n4", "r0"))
 ---
 
 ## ISASpec — round-trip encode / decode
+
+`ISASpec` owns a template registry plus Bindings that map semantic op names to template names and semantic operand keys to template field names.
 
 ```python
 from ablation.analyzers.encoding_dag import ISASpec, Template, Field, Binding, FieldBinding
@@ -185,25 +193,24 @@ enode, sop = spec.decode(node.to_bytes())
 
 ## ISA-24 (bundled example)
 
-Pre-built `ISASpec` for the 24-bit toy ISA:
+Pre-built `ISASpec` for a 24-bit toy ISA:
 
 ```
-[ opcode(6) | mode(2) | rA(4) | rB(4) | imm8(8) ] = 24 bits
+  [ opcode(6) | mode(2) | rA(4) | rB(4) | imm8(8) ] = 24 bits
 ```
 
-| Mnemonic | opcode  | mode | Semantics |
-|----------|---------|------|-----------|
-| LOAD     | 000001  | 10   | `rA = mem[rB + imm8]` |
-| STORE    | 000010  | 10   | `mem[rB + imm8] = rA` |
-| ADD      | 000100  | 11   | `rA += rB` (two-operand) |
-| MUL      | 001000  | 11   | `rA *= rB` |
-| JMP      | 010000  | 00   | `PC += imm8` (signed) |
-| MOV      | 010101  | 11   | `rA = rB` |
+| Mnemonic | opcode | mode | Semantics |
+|---|---|---|---|
+| LOAD | 000001 | 10 | `rA = mem[rB + imm8]` |
+| STORE | 000010 | 10 | `mem[rB + imm8] = rA` |
+| ADD | 000100 | 11 | `rA += rB` |
+| MUL | 001000 | 11 | `rA *= rB` |
+| JMP | 010000 | 00 | `PC += imm8` (signed) |
+| MOV | 010101 | 11 | `rA = rB` |
 
 ```python
 from ablation.analyzers.encoding_dag import ISA24
 
-# Encode the 4-instruction sequence from the design document
 ops = [
     SemanticOp("LOAD",  {"dst": "r0", "base": "r5", "offset":  4}, "n1"),
     SemanticOp("LOAD",  {"dst": "r1", "base": "r5", "offset":  8}, "n2"),
@@ -213,17 +220,12 @@ ops = [
 for op in ops:
     node = ISA24.encode(op)
     r, g, b = node.to_rgb()
-    print(f"{op.node_id}: {op.op:6s}  {node.to_hex()}  "
-          f"I24={node.to_rgb_int():<10}  R={r} G={g} B={b}")
+    print(f"{op.node_id}: {op.op:6s}  {node.to_hex()}  I24={node.to_rgb_int():<10}  R={r} G={g} B={b}")
 
 # n1: LOAD    0x060504  I24=394500      R=6  G=5  B=4
 # n2: LOAD    0x061508  I24=398600      R=6  G=21 B=8
 # n3: ADD     0x130100  I24=1245440     R=19 G=1  B=0
 # n4: STORE   0x0A050C  I24=656652      R=10 G=5  B=12
-
-# Decode a raw hex string
-enode, sop = ISA24.decode_hex("57AABC")
-print(sop)   # MOV  dst=r10, src=r10
 ```
 
 ---
@@ -236,16 +238,13 @@ print(sop)   # MOV  dst=r10, src=r10
 4. Wrap in a `Binding` (op name + template name + field bindings).
 5. Build an `ISASpec` with the template registry and binding list.
 
-For variable-length ISAs (x86), build hierarchical templates: one for the
-opcode byte, one for ModRM, one for SIB, etc. The Encoding DAG's composition
-nodes are just Template references; the root template aggregates sub-templates
-by concatenating their encodings.
+For variable-length ISAs (x86), build hierarchical templates: one for the opcode byte, one for ModRM, one for SIB, etc. The EncodingDAG composition nodes are Template references; the root template aggregates sub-templates by concatenating their encodings.
 
 ---
 
 ## Exceptions
 
 | Exception | When raised |
-|-----------|-------------|
+|---|---|
 | `EncodingError` | Field value too wide; no binding for op; register not in table |
 | `DecodingError` | No template matches the opcode; fixed-field mismatch |
