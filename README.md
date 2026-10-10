@@ -5,7 +5,7 @@
 
 Ablation is a reverse engineering framework. 
 
-It carries no dependency on legacy tools or any MCP server. 
+Carrying no dependency on legacy tools and no MCP server, which removes the attack surface that MCP servers introduce.
 
 Combined with Codex or Claude Code, it runs as an autonomous reverse engineering tool.
 
