@@ -3,7 +3,7 @@
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
 
-Ablation is a reverse engineering framework built for AI-agent-driven analysis. Where most tools expect a human at a graphical interface, every capability in Ablation ships as a programmatic API. Combined with Claude Code or OpenAI Codex, it runs as an autonomous reverse engineering agent.
+Ablation is a reverse engineering framework built for AI-agent-driven analysis. Where most tools expect a human at a graphical interface, every capability in Ablation ships as a programmatic API. Combined with Claude Code or OpenAI Codex, it runs as an autonomous reverse engineering agent. It requires no Ghidra, IDA Pro, Binary Ninja, or MCP server.
 
 ---
 
@@ -12,7 +12,7 @@ Ablation is a reverse engineering framework built for AI-agent-driven analysis. 
 ## Capabilities
 
 <details>
-<summary><strong>Analysis:</strong> semantic search, binary lifting, hypothesis engine, C++ vtable reconstruction, DAG adapter</summary>
+<summary><strong>Analysis:</strong> semantic search, binary lifting, hypothesis engine, C++ vtable reconstruction, cross-library tracing, DAG adapter</summary>
 
 | Capability | |
 |:---|:---|
@@ -21,17 +21,20 @@ Ablation is a reverse engineering framework built for AI-agent-driven analysis. 
 | **Binary Lifting** | Pseudo-C IR across 17 ISAs; ARM64 and x86-64 receive register-level taint propagation. |
 | **Hypothesis Engine** | Tracks competing RE hypotheses, scores evidence across four families, and auto-executes probes; sessions persist across engagements. |
 | **C++ Vtable Reconstruction** | Reconstructs vtable slots from any ELF on any architecture and emits an IDAPython script that injects the producer-to-consumer type chain into IDA. |
+| **Cross-Library Analysis** | Traces an argument across up to three shared library hops, so taint paths that cross library boundaries reach their sink rather than stopping at the first boundary. |
 | **DAG Adapter Language** | The ISA description layer that makes multi-architecture analysis work without per-architecture exception cases. |
 
 </details>
 
 <details>
-<summary><strong>Vulnerability Detection:</strong> taint tracking, pre-auth surface mapping, compiler bug detection, cryptographic analysis</summary>
+<summary><strong>Vulnerability Detection:</strong> taint tracking, pre-auth surface mapping, PoC generation, source code auditing, compiler bug detection, cryptographic analysis</summary>
 
 | Capability | |
 |:---|:---|
 | **Taint-Based Vulnerability Detection** | Tracks attacker-controlled data from network entry points to dangerous sinks across 14 architectures, interprocedurally, across process boundaries. |
 | **Pre-Authentication Attack Surface** | Maps code paths reachable before authentication so an unauthenticated attacker's reach is clear before any manual review. |
+| **PoC Generation** | Finds pre-auth attack routes and generates working curl exploit scripts for each one. |
+| **Source Code Auditing** | Scans a codebase for vulnerabilities without an LLM; a 40x read-reduction compressor buckets files by security profile so only the highest-risk files get individual attention. |
 | **Compiler Bug Detection** | Identifies compiler-introduced vulnerabilities; a single GCC 12.3.1.7 codegen error produced 172 confirmed findings in TencentOS 4.6. |
 | **Cryptographic Analysis** | Eight tools that collectively strip away every layer that makes cryptography invisible in a compiled binary. |
 
