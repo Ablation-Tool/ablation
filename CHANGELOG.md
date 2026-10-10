@@ -2,6 +2,61 @@
 
 ---
 
+## v2.43.0
+
+- **FORGE** (`ablation/analyzers/forge.py`): redesigned audit gate — no subprocess, no API key.
+  - **Result cache** (`_ForgeCache`): persists audit results to `~/.ablation/forge_cache.json`.
+    Key is `sha256(system_prompt)[:16] + ":" + sha256(file_bytes)[:16]`. Cache hit on an
+    unchanged module returns the `ForgeReport` instantly. Any change to the SOP file or the
+    module source invalidates the entry. Lazy load on first use. Atomic writes via `.tmp` rename.
+  - **ForgeAuditRequired exception**: `audit_module()` raises this on cache miss instead of
+    calling `claude --print` in a subprocess. The audit runs inline in the Claude Code session —
+    read the file, apply the 10-section SAFE CODE review, call `FORGE.record_result()` to cache.
+    No subprocess, no backgrounding, no Anthropic API key.
+  - **FORGE.record_result(path, findings, summary)**: new classmethod. Stores the result of an
+    inline audit in the cache. `findings` accepts `list[ForgeFinding]` or `list[dict]`. Future
+    `audit_module()` calls return the cached result instantly.
+  - **Removed dead SDK path and streaming path**: the `anthropic` SDK branch, `subprocess` import,
+    `_STREAM_PATH`, and `_run_via_claude_cli` are gone. Removed dead helper functions
+    `_parse_json_findings`, `_parse_prose_findings`, `_extract_summary` (no callers after redesign).
+  - CLI `module` and `register` commands now print a clear how-to message on `ForgeAuditRequired`
+    (exit code 2) instead of an unformatted traceback.
+  - `_extract_subsystem_path` in `kernel_module_subsystem_classifier.py`: fixed first-vs-last
+    "kernel" component bug — now uses `indices[-1]` instead of `next(...)` so paths like
+    `/home/kernel/linux/.../kernel/net/mac80211/mac80211.ko` classify correctly.
+
+---
+
+## v2.42.0
+
+- **ScanResultVersionCache** (`ablation/analyzers/scan_result_version_cache.py`): version-aware
+  persistent cache for any ablation scanner that implements `from_path(path).scan()`.
+  - Cache key: (scanner source SHA-256[:16], file abspath, mtime_ns, size, sha256 prefix[:16]).
+    Invalidates automatically when the scanner source changes or the target file changes.
+    No manual version bumping required.
+  - Fast path on cache hit uses stat only (mtime_ns + size prefix scan). A batch of 1096
+    cached `.ko` files costs 1096 stat calls, not 1096 file reads.
+  - Atomic writes via `.tmp` rename. Cache file at
+    `~/.ablation/cache/scan_results/<ClassName>.json`.
+  - `get_or_scan(path, force=False)`, `scan_batch(paths)`, `is_cached(path)`, `evict(path)`,
+    `cache_stats()`, `report(stats)`. Works with any scanner.
+  - Fixes the stale-result class: kernel module sweeps produced silently wrong results after
+    scanner updates (S35 discovery — 23 modules missed because sweep_kernel_modules_results.json
+    predated the sltui variant and OR commutativity fix).
+
+- **KernelModuleSubsystemClassifier** (`ablation/analyzers/kernel_module_subsystem_classifier.py`):
+  infers attack surface from a Linux kernel module's path in the standard
+  `lib/modules/<version>/kernel/` layout.
+  - 26 rules, most-specific first. Returns `KernelModuleClassification` with `attack_surface`,
+    `subsystem`, `network_reachable`, `confidence`, and `rule_matched`.
+  - Surfaces: PROXIMITY (mac80211, wireless), NETWORK-cluster (dlm), NETWORK (net/), LOCAL-USB,
+    LOCAL-HARDWARE-ISDN, LOCAL-HARDWARE-MEDIA, LOCAL-HARDWARE-SAS, LOCAL-HARDWARE-SCSI,
+    LOCAL-DRM, LOCAL-DEV-ACCESS (sound/), LOCAL-HARDWARE, LOCAL.
+  - `classify(path)`, `classify_batch(paths)`, `report(results)`.
+  - Fixes manual attack surface annotation for every kernel module finding. Before this module,
+    every `.ko` finding required looking up the kernel source tree manually (S35: 28 findings
+    across 20 modules, all annotated by hand).
+
 ## v2.40.0
 
 - **CMDBSurfaceMapper** (`ablation/analyzers/cmdb_surface_mapper.py`): forward-taint
