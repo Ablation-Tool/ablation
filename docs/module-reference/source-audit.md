@@ -164,6 +164,21 @@ read to confirm the pattern.
 A 2861-file authentik codebase compresses to 72 priority reads without dropping any
 high-severity coverage.
 
+**No model inference.** The compressor runs entirely on `re.search()`. There are no
+embeddings, no LLM calls, and no API tokens needed. A 2000-file repo finishes in
+milliseconds. Compare this to `SemanticSearcher` in binary RE, which uses MiniLM
+embeddings to rank functions by semantic similarity to a query; that does involve a
+model inference step. `SourceAuditCompressor` is the source-side analog: it trades
+semantic recall for speed, and it works because the signal patterns it tracks
+(`innerHTML=`, direct `eval()`, `window.location.assign()`) have very low false-negative
+rates within the vulnerability categories they cover. A file that contains none of those
+literal patterns provably contains none of those risk signals.
+
+The output is a priority-sorted read list, not findings. The compressor tells you which
+files to read and in what order; the actual vulnerability determination happens when you
+read those files and reason about the context. The compressor eliminates files that
+provably contain none of the tracked signals so you do not waste reads on them.
+
 ### The 5-bit profile
 
 Each bit is detected independently via regex scan:
