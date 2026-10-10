@@ -184,7 +184,7 @@ class BinaryContext:
         _NON_ELF = {
             b'FOR1': 'Erlang BEAM bytecode',
             b'PK\x03\x04': 'ZIP/JAR/APK archive',
-            b'MZ': 'PE/DOS executable',
+            b'MZ': 'Windows PE executable',
             b'\xca\xfe\xba\xbe': 'Mach-O fat binary',
             b'\xce\xfa\xed\xfe': 'Mach-O 32-bit',
             b'\xcf\xfa\xed\xfe': 'Mach-O 64-bit',
@@ -192,10 +192,18 @@ class BinaryContext:
         for magic, label in _NON_ELF.items():
             if data[:len(magic)] == magic:
                 import warnings
+                hints = {
+                    'Windows PE executable': (
+                        'Use CFGBypassDetector, SEHChainAnalyzer, ETWProviderExtractor, '
+                        'RPCServerAnalyzer, COMAttackSurfaceMapper, PDBSymbolIntegrator, '
+                        'WindowsPoolTaintTracker, KernelDriverAnalyzer, or ByovdDetector.'
+                    ),
+                }
+                hint = hints.get(label, 'Use the appropriate format-specific analyzer instead.')
                 warnings.warn(
                     f"BinaryContext: {Path(path).name!r} appears to be {label}, "
                     f"not an ELF binary -- context will be empty. "
-                    f"Use the appropriate format-specific analyzer instead.",
+                    f"{hint}",
                     stacklevel=2,
                 )
                 break
