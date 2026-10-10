@@ -2,6 +2,25 @@
 
 ---
 
+## v2.59.0
+
+**EcuSH2aDecoder: Renesas SH-2A decoder for Honda/Subaru ECU firmware.** Pure-Python decoder
+for the SH-2A ISA (Renesas SH7058/SH7059).  Capstone 5.0.7 has no SH-2A support; this module
+closes the gap and enables BinaryContext, WindowAnalyzer, and manual RE on Honda CBR250RR and
+Subaru (SH7058S, EcuFlash corpus) ECU ROMs.
+
+- `EcuSH2aDecoder`: `disassemble()`, `decode_one()`, `function_starts()`, `insn_length()`
+- `SH2aInsn`: `offset`, `is_32bit`, `mnemonic`, `insn_type`, `raw`, `target`, `rd`, `rs`, `imm`
+- `insn_type`: RETURN, BRANCH, CALL, LR_SAVE, LR_RESTORE, LOAD, STORE, MISC
+- 32-bit SH-2A discrimination: four `0xF00F` masks per Renesas SH2A HW Manual Rev.2.00; MOWI20 uses `0xF00F == 0x0005` (not `0xF0FF`) because imm[19:16] occupies bits[7:4] and varies
+- `function_starts()` primary: `STS.L PR, @-R15` (0x4F22); secondary: `STS PR, Rn` leaf prologue with preceding-STS.L suppression
+- Branch targets include SH-2 delay slot: `target = VA + 4 + disp * 2`
+- PC-relative load: `(VA + 4 & ~3) + disp * 4` (4-byte aligned PC)
+- `from_path()` / `from_bytes()` convenience wrappers; `FileNotFoundError` wrapped with context
+- 69 tests; FORGE gate: PASSED (0 findings)
+
+---
+
 ## v2.58.0
 
 **EcuM68kDecoder: M68K/CPU32 decoder for GM P-series ECU firmware.** Wraps Capstone
