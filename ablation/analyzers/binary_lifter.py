@@ -545,7 +545,9 @@ class BinaryLifter:
             cfg = _arm32_cfg(raw_insns, entry=func_va)
         except Exception as e:
             return f"// CFG build failed: {e}\n"
-        return self._walk_ablation_cfg(cfg, func_va, _make_arm32_emit(self._func_name, self._plt))
+        tainted_params = self._taint_map.get(func_va, set())
+        state = _ARM32State(tainted_params, self._func_name, self._plt)
+        return self._walk_ablation_cfg(cfg, func_va, state.emit)
 
     # ── MIPS lifter ───────────────────────────────────────────────────────────
 
@@ -568,7 +570,9 @@ class BinaryLifter:
             cfg = _mips_cfg(raw_insns, entry=func_va)
         except Exception as e:
             return f"// CFG build failed: {e}\n"
-        return self._walk_ablation_cfg(cfg, func_va, _make_mips_emit(bits, self._func_name, self._plt))
+        tainted_params = self._taint_map.get(func_va, set())
+        state = _MIPSState(bits, tainted_params, self._func_name, self._plt)
+        return self._walk_ablation_cfg(cfg, func_va, state.emit)
 
     # ── PPC lifter ────────────────────────────────────────────────────────────
 
@@ -591,7 +595,9 @@ class BinaryLifter:
             cfg = _ppc_cfg(raw_insns, entry=func_va)
         except Exception as e:
             return f"// CFG build failed: {e}\n"
-        return self._walk_ablation_cfg(cfg, func_va, _make_ppc_emit(self._func_name, self._plt))
+        tainted_params = self._taint_map.get(func_va, set())
+        state = _PPCState(bits, tainted_params, self._func_name, self._plt)
+        return self._walk_ablation_cfg(cfg, func_va, state.emit)
 
     # ── RISC-V lifter ─────────────────────────────────────────────────────────
 
@@ -616,7 +622,9 @@ class BinaryLifter:
             cfg = _rv_cfg(raw_insns, isa, entry=func_va)
         except Exception as e:
             return f"// CFG build failed: {e}\n"
-        return self._walk_ablation_cfg(cfg, func_va, _make_riscv_emit(self._func_name, self._plt))
+        tainted_params = self._taint_map.get(func_va, set())
+        state = _RISCVState(bits, tainted_params, self._func_name, self._plt)
+        return self._walk_ablation_cfg(cfg, func_va, state.emit)
 
     # ── LoongArch64 lifter (replaces stub) ────────────────────────────────────
 
@@ -646,7 +654,9 @@ class BinaryLifter:
             cfg = _la64_cfg(raw_insns, entry=func_va)
         except Exception as e:
             return f"// CFG build failed: {e}\n"
-        return self._walk_ablation_cfg(cfg, func_va, _make_la64_emit(self._func_name, self._plt))
+        tainted_params = self._taint_map.get(func_va, set())
+        state = _LA64State(tainted_params, self._func_name, self._plt)
+        return self._walk_ablation_cfg(cfg, func_va, state.emit)
 
     # ── nanoMIPS lifter ───────────────────────────────────────────────────────
 
@@ -670,12 +680,13 @@ class BinaryLifter:
         if not frames:
             return f"// no instructions decoded at {func_va:#x}\n"
 
+        tainted_params = self._taint_map.get(func_va, set())
+        state = _NanoMIPSState(tainted_params, self._func_name, self._plt)
         fname = self._func_name(func_va)
         lines: List[str] = [f"// {fname} @ {func_va:#x}", "{"]
-        emit_fn = _make_nanomips_emit(self._func_name, self._plt)
         for frame in frames:
             try:
-                stmt = emit_fn(frame)
+                stmt = state.emit(frame)
             except Exception:
                 stmt = f"// {frame.mnemonic} {frame.op_str}"
             if stmt:
@@ -725,7 +736,9 @@ class BinaryLifter:
         except Exception as e:
             return f"// CFG build failed: {e}\n"
 
-        return self._walk_ablation_cfg(cfg, func_va, _make_arc_emit(self._func_name, self._plt))
+        tainted_params = self._taint_map.get(func_va, set())
+        state = _ARCState(tainted_params, self._func_name, self._plt)
+        return self._walk_ablation_cfg(cfg, func_va, state.emit)
 
     # ── V850 lifter ───────────────────────────────────────────────────────────
 
@@ -771,7 +784,9 @@ class BinaryLifter:
         except Exception as e:
             return f"// CFG build failed: {e}\n"
 
-        return self._walk_ablation_cfg(cfg, func_va, _make_v850_emit(self._func_name, self._plt))
+        tainted_params = self._taint_map.get(func_va, set())
+        state = _V850State(tainted_params, self._func_name, self._plt)
+        return self._walk_ablation_cfg(cfg, func_va, state.emit)
 
     # ── BEAM lifter ───────────────────────────────────────────────────────────
 
@@ -2008,6 +2023,1889 @@ class _X86_32State:
 def _ablation_ops_str(insn) -> str:
     """Format insn.ops as a comma-separated string for fallback comments."""
     return ", ".join(str(o) for o in getattr(insn, "ops", []))
+
+
+def _ablation_mem_addr(mem, regs: Dict[str, NativeVal]) -> str:
+    """Memory address expression for ablation-native Mem objects (.disp or .offset)."""
+    if getattr(mem, 'base', None) is None:
+        return "???"
+    base_expr = regs.get(mem.base, NativeVal("uint64_t", mem.base)).expr
+    disp = getattr(mem, 'disp', getattr(mem, 'offset', 0))
+    if disp:
+        return f"({base_expr} + {_imm_expr(disp)})"
+    return base_expr
+
+
+# ── ARM32 / Thumb full decompiler ─────────────────────────────────────────────
+
+class _ARM32State:
+    """Per-function register-tracking state for ARM32/Thumb full decompiler.
+
+    AAPCS: r0-r3 args, r0 return. Conditional execution encoded in insn.cond.
+    """
+    _PARAM_REGS = ("r0", "r1", "r2", "r3")
+    _RETURN_REG = "r0"
+
+    _COND_OPS: Dict[str, str] = {
+        "eq": "==", "ne": "!=",
+        "lt": "<",  "gt": ">", "le": "<=", "ge": ">=",
+        "cs": ">=u", "hs": ">=u", "cc": "<u", "lo": "<u",
+        "hi": ">u",  "ls": "<=u",
+        "mi": "< 0", "pl": ">= 0",
+    }
+
+    _LOAD_W: Dict[str, tuple] = {
+        "ldr": (32, False), "ldrt": (32, False),
+        "ldrb": (8, False),  "ldrbt": (8, False),
+        "ldrh": (16, False), "ldrht": (16, False),
+        "ldrsb": (8, True),  "ldrsbt": (8, True),
+        "ldrsh": (16, True), "ldrsht": (16, True),
+    }
+    _STORE_W: Dict[str, int] = {
+        "str": 32, "strt": 32,
+        "strb": 8,  "strbt": 8,
+        "strh": 16, "strht": 16,
+    }
+    _ARITH: Dict[str, str] = {
+        "add": "+", "adds": "+", "adc": "+", "adcs": "+",
+        "sub": "-", "subs": "-", "sbc": "-", "sbcs": "-",
+        "mul": "*", "muls": "*", "mla": "*",
+        "and": "&", "ands": "&",
+        "bic": "& ~", "bics": "& ~",
+        "orr": "|", "orrs": "|",
+        "eor": "^", "eors": "^",
+        "lsl": "<<", "lsls": "<<",
+        "lsr": ">>", "lsrs": ">>",
+        "asr": ">>", "asrs": ">>",
+        "ror": ">>/*ror*/",
+    }
+
+    def __init__(self, tainted_params: Set[str], name_fn, plt: Dict[int, str]):
+        self._regs: Dict[str, NativeVal] = {}
+        self._written: Set[str] = set()
+        self._declared: Set[str] = set()
+        self._cmp: Optional[Tuple[str, str]] = None
+        self._var_n = 0
+        self._name_fn = name_fn
+        self._plt = plt
+
+        for i, r in enumerate(self._PARAM_REGS):
+            nv = NativeVal("uint32_t", f"arg{i}", tainted=(r in tainted_params))
+            self._regs[r] = nv
+            self._written.add(r)
+            self._declared.add(f"arg{i}")
+        self._regs["sp"] = NativeVal("uint32_t", "sp", is_ptr=True)
+        self._regs["lr"] = NativeVal("uint32_t", "lr")
+        for r in ("sp", "lr"):
+            self._written.add(r); self._declared.add(r)
+        for r in (f"r{i}" for i in range(4, 13)):
+            self._regs[r] = NativeVal("uint32_t", r)
+            self._written.add(r); self._declared.add(r)
+
+    def _alloc(self) -> str:
+        n = f"v{self._var_n}"; self._var_n += 1; return n
+
+    def _read(self, reg: str) -> NativeVal:
+        if reg not in self._written:
+            self._regs[reg] = NativeVal("uint32_t", reg)
+            self._written.add(reg)
+        return self._regs.get(reg, _UNKNOWN)
+
+    def _write(self, reg: str, nv: NativeVal) -> str:
+        old = self._regs.get(reg)
+        if old and reg in self._written:
+            e = old.expr
+            if (e.startswith("v") and e[1:].isdigit()) or (e.startswith("arg") and e[3:].isdigit()):
+                self._regs[reg] = NativeVal(nv.ctype, e, nv.is_ptr, nv.tainted); return e
+        vn = self._alloc()
+        self._regs[reg] = NativeVal(nv.ctype, vn, nv.is_ptr, nv.tainted)
+        self._written.add(reg); return vn
+
+    def _decl(self, ctype: str, vn: str, expr: str, ann: str = "") -> str:
+        if vn in self._declared:
+            return f"{vn} = {expr};{ann}"
+        self._declared.add(vn); return f"{ctype} {vn} = {expr};{ann}"
+
+    def _tainted(self, *regs: str) -> bool:
+        return any(self._regs.get(r, _UNKNOWN).tainted for r in regs)
+
+    def _op_expr(self, op) -> Tuple[str, bool]:
+        if hasattr(op, 'value'):
+            return _imm_expr(op.value), False
+        if hasattr(op, 'name'):
+            nv = self._read(op.name); return nv.expr, nv.tainted
+        return str(op), False
+
+    def _cond_expr(self, cond: Optional[str]) -> str:
+        if not cond or self._cmp is None:
+            return f"/* {cond or 'al'} */"
+        a, b = self._cmp
+        op = self._COND_OPS.get(cond, cond)
+        if op.endswith("u"):
+            return f"(unsigned){a} {op[:-1]} (unsigned){b}"
+        if op in ("< 0", ">= 0"):
+            return f"{a} {op}"
+        return f"{a} {op} {b}"
+
+    def emit(self, insn) -> str:
+        m = insn.mnemonic.lower()
+        cond = getattr(insn, "cond", None)
+
+        # Return
+        if m == "bx" and insn.reg(0) == "lr":
+            return f"return {self._read(self._RETURN_REG).expr};"
+        if m == "pop":
+            rl = insn.reglist(0) if hasattr(insn, "reglist") else None
+            if rl and "pc" in getattr(rl, "regs", ()):
+                return f"return {self._read(self._RETURN_REG).expr};"
+
+        # Call
+        if m in ("bl", "blx", "blxns"):
+            tgt = insn.imm(0)
+            callee = self._name_fn(tgt) if tgt is not None else (
+                f"*{self._read(insn.reg(0)).expr}" if insn.reg(0) else "???")
+            args_str = ", ".join(self._read(r).expr for r in self._PARAM_REGS)
+            vn = self._alloc()
+            is_t = self._tainted(*self._PARAM_REGS)
+            self._regs["r0"] = NativeVal("uint32_t", vn, tainted=is_t)
+            self._written.add("r0")
+            ann = " /* TAINTED */" if is_t else ""
+            stmt = self._decl("uint32_t", vn, f"{callee}({args_str})", ann)
+            return (f"if ({self._cond_expr(cond)}) " + stmt) if cond else stmt
+
+        # Unconditional branch
+        if m == "b" and cond is None:
+            tgt = insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else "goto *???;"
+
+        # Conditional branch
+        if m == "b" and cond:
+            tgt = insn.imm(0)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            return f"if ({self._cond_expr(cond)}) goto {label};"
+
+        # Compare
+        if m in ("cmp", "cmn", "tst", "teq"):
+            a = self._read(insn.reg(0) or "r0").expr if insn.reg(0) else "???"
+            b, _ = self._op_expr(insn.ops[1]) if len(insn.ops) > 1 else ("0", False)
+            self._cmp = (a, f"-({b})") if m == "cmn" else (
+                (f"({a} & {b})", "0") if m == "tst" else
+                (f"({a} ^ {b})", "0") if m == "teq" else (a, b))
+            return f"// {m} {a}, {b}"
+
+        # Load
+        if m in self._LOAD_W:
+            dst = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if dst is None or mem is None:
+                return f"// {m} ???"
+            bits, signed = self._LOAD_W[m]
+            ctype = _ctype_from_bits(bits, signed)
+            addr = _ablation_mem_addr(mem, self._regs)
+            tainted = self._tainted(mem.base) if mem.base else False
+            expr = f"*({_ptr_cast(ctype)}{addr})"
+            vn = self._write(dst, NativeVal(ctype, expr, tainted=tainted))
+            result = self._decl(ctype, vn, expr, " /* TAINTED */" if tainted else "")
+            if getattr(mem, 'writeback', False) or getattr(mem, 'post', False):
+                disp = getattr(mem, 'disp', 0)
+                if disp and mem.base:
+                    bv = self._read(mem.base).expr
+                    wb_vn = self._write(mem.base, NativeVal("uint32_t", f"({bv} + {_imm_expr(disp)})", is_ptr=True))
+                    result += f"\n{wb_vn} = {bv} + {_imm_expr(disp)};"
+            return result
+
+        # Store
+        if m in self._STORE_W:
+            src = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if src is None or mem is None:
+                return f"// {m} ???"
+            bits = self._STORE_W[m]
+            addr = _ablation_mem_addr(mem, self._regs)
+            return f"*({_ptr_cast(_ctype_from_bits(bits))}{addr}) = {self._read(src).expr};{' /* TAINTED */' if self._tainted(src) else ''}"
+
+        # Move
+        if m in ("mov", "movs", "mvn", "mvns", "movw", "movt"):
+            dst = insn.reg(0)
+            if dst is None or len(insn.ops) < 2:
+                return f"// {m} ???"
+            src_expr, tainted = self._op_expr(insn.ops[1])
+            if m in ("mvn", "mvns"):
+                src_expr = f"~({src_expr})"
+            vn = self._write(dst, NativeVal("uint32_t", src_expr, tainted=tainted))
+            return self._decl("uint32_t", vn, src_expr, " /* TAINTED */" if tainted else "")
+
+        # Arithmetic
+        if m in self._ARITH:
+            dst = insn.reg(0)
+            if dst is None:
+                return f"// {m} ???"
+            src1 = insn.reg(1) or dst
+            a = self._read(src1).expr
+            b, b_tainted = self._op_expr(insn.ops[2]) if len(insn.ops) > 2 else self._op_expr(insn.ops[1]) if len(insn.ops) > 1 else ("0", False)
+            tainted = self._tainted(src1) or b_tainted
+            op = self._ARITH[m]
+            expr = f"{b} - {a}" if m == "rsb" else (f"{a} {op[:-2]}({b})" if op.endswith("~") else f"{a} {op} {b}")
+            vn = self._write(dst, NativeVal("uint32_t", expr, tainted=tainted))
+            return self._decl("uint32_t", vn, expr, " /* TAINTED */" if tainted else "")
+
+        # NOP / barriers
+        if m in ("nop", "nop.w", "dmb", "dsb", "isb", "wfi", "sev", "sevl", "yield"):
+            return ""
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+
+# ── MIPS32 / MIPS64 full decompiler ──────────────────────────────────────────
+
+class _MIPSState:
+    """Per-function register-tracking state for MIPS32 (o32) and MIPS64 (n64).
+
+    Registers use ablation canonical $N form. Params: $4-$7 (o32) / $4-$11 (n64).
+    Return: $2. Zero: $0. RA: $31.
+    """
+    _ZERO = frozenset({"$0"})
+    _RETURN = "$2"
+    _RA = "$31"
+    _SP = "$29"
+
+    _JCC = frozenset({"beq","bne","blt","bge","bltu","bgeu","beql","bnel",
+                      "bgtz","bltz","bgez","blez","bgtzl","bltzl","bgezl","blezl",
+                      "beqz","bnez"})
+    _CALLS = frozenset({"jal","jalr","bal","bltzal","bgezal","bltzall","bgezall"})
+
+    _LOAD_W: Dict[str, tuple] = {
+        "lw": (32, False), "lwu": (32, False), "lwl": (32, False), "lwr": (32, False),
+        "lh": (16, True),  "lhu": (16, False),
+        "lb": (8,  True),  "lbu": (8,  False),
+        "ld": (64, False), "ldl": (64, False), "ldr": (64, False),
+    }
+    _STORE_W: Dict[str, int] = {
+        "sw": 32, "swl": 32, "swr": 32,
+        "sh": 16, "sb": 8,
+        "sd": 64, "sdl": 64, "sdr": 64,
+    }
+    _ARITH: Dict[str, str] = {
+        "add": "+",  "addu": "+",  "addi": "+",  "addiu": "+",
+        "dadd":"+",  "daddu":"+",  "daddi":"+",  "daddiu":"+",
+        "sub": "-",  "subu": "-",  "dsub": "-",  "dsubu": "-",
+        "mul": "*",  "mulu": "*",
+        "and": "&",  "andi": "&",
+        "or":  "|",  "ori":  "|",
+        "xor": "^",  "xori": "^",
+        "nor": "|~", "sll": "<<",  "srl": ">>",  "sra": ">>",
+        "sllv":"<<", "srlv":">>",  "srav":">>",
+        "dsll":"<<", "dsrl":">>",  "dsra":">>",
+        "dsllv":"<<","dsrlv":">>", "dsrav":">>",
+        "slt": "<",  "sltu":"<u",  "slti":"<",   "sltiu":"<u",
+    }
+
+    def __init__(self, bits: int, tainted_params: Set[str], name_fn, plt: Dict[int, str]):
+        self._bits = bits
+        self._ctype = f"uint{bits}_t"
+        self._param_regs = tuple(f"${i}" for i in range(4, 8 if bits == 32 else 12))
+        self._regs: Dict[str, NativeVal] = {}
+        self._written: Set[str] = set()
+        self._declared: Set[str] = set()
+        self._cmp: Optional[Tuple[str, str]] = None
+        self._var_n = 0
+        self._name_fn = name_fn
+        self._plt = plt
+
+        for i, r in enumerate(self._param_regs):
+            nv = NativeVal(self._ctype, f"arg{i}", tainted=(r in tainted_params))
+            self._regs[r] = nv; self._written.add(r); self._declared.add(f"arg{i}")
+        self._regs["$0"] = NativeVal(self._ctype, "0")
+        self._written.add("$0")
+        for r in (self._SP, "$28", "$30", "$31"):
+            self._regs[r] = NativeVal(self._ctype, r)
+            self._written.add(r); self._declared.add(r)
+
+    def _alloc(self) -> str:
+        n = f"v{self._var_n}"; self._var_n += 1; return n
+
+    def _read(self, reg: str) -> NativeVal:
+        if reg in self._ZERO:
+            return NativeVal(self._ctype, "0")
+        if reg not in self._written:
+            self._regs[reg] = NativeVal(self._ctype, reg)
+            self._written.add(reg)
+        return self._regs.get(reg, _UNKNOWN)
+
+    def _write(self, reg: str, nv: NativeVal) -> str:
+        if reg in self._ZERO:
+            return "0"
+        old = self._regs.get(reg)
+        if old and reg in self._written:
+            e = old.expr
+            if (e.startswith("v") and e[1:].isdigit()) or (e.startswith("arg") and e[3:].isdigit()):
+                self._regs[reg] = NativeVal(nv.ctype, e, nv.is_ptr, nv.tainted); return e
+        vn = self._alloc()
+        self._regs[reg] = NativeVal(nv.ctype, vn, nv.is_ptr, nv.tainted)
+        self._written.add(reg); return vn
+
+    def _decl(self, ctype: str, vn: str, expr: str, ann: str = "") -> str:
+        if vn in self._declared:
+            return f"{vn} = {expr};{ann}"
+        self._declared.add(vn); return f"{ctype} {vn} = {expr};{ann}"
+
+    def _tainted(self, *regs: str) -> bool:
+        return any(self._regs.get(r, _UNKNOWN).tainted for r in regs)
+
+    def emit(self, insn) -> str:
+        m = insn.mnemonic.lower()
+
+        # Return
+        if m in ("jr", "jr.hb", "jalr") and insn.reg(0) in (self._RA, "$31"):
+            return f"return {self._read(self._RETURN).expr};"
+
+        # Call
+        if m in self._CALLS:
+            tgt = insn.imm(0)
+            callee = self._name_fn(tgt) if tgt is not None else (
+                f"*{self._read(insn.reg(0)).expr}" if insn.reg(0) else "???")
+            args_str = ", ".join(self._read(r).expr for r in self._param_regs)
+            vn = self._alloc()
+            is_t = self._tainted(*self._param_regs)
+            self._regs[self._RETURN] = NativeVal(self._ctype, vn, tainted=is_t)
+            self._written.add(self._RETURN)
+            ann = " /* TAINTED */" if is_t else ""
+            return self._decl(self._ctype, vn, f"{callee}({args_str})", ann)
+
+        # Unconditional jump
+        if m in ("j", "b"):
+            tgt = insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else "goto *???;"
+
+        # Conditional branches — MIPS branches embed comparison registers
+        if m in self._JCC:
+            r0 = insn.reg(0)
+            r1 = insn.reg(1) if m not in ("beqz","bnez","bgtz","bltz","bgez","blez",
+                                           "bgtzl","bltzl","bgezl","blezl") else None
+            tgt = insn.imm(0) or insn.imm(1) or insn.imm(2)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            a = self._read(r0).expr if r0 else "???"
+            if r1:
+                b = self._read(r1).expr
+                op = {"beq":"==","bne":"!=","blt":"<","bge":">=",
+                      "bltu":"<u","bgeu":">=u","beql":"==","bnel":"!="}.get(m,"??")
+                if "u" in op:
+                    cond_str = f"(unsigned){a} {op[:-1]} (unsigned){b}"
+                else:
+                    cond_str = f"{a} {op} {b}"
+            else:
+                op = {"bgtz":">","bltz":"<","bgez":">=","blez":"<=",
+                      "bgtzl":">","bltzl":"<","bgezl":">=","blezl":"<=",
+                      "beqz":"==","bnez":"!="}.get(m,"??")
+                cond_str = f"{a} {op} 0"
+            return f"if ({cond_str}) goto {label};"
+
+        # Load
+        if m in self._LOAD_W:
+            dst = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if dst is None or mem is None:
+                return f"// {m} ???"
+            bits, signed = self._LOAD_W[m]
+            ctype = _ctype_from_bits(bits, signed)
+            addr = _ablation_mem_addr(mem, self._regs)
+            tainted = self._tainted(mem.base) if mem.base else False
+            expr = f"*({_ptr_cast(ctype)}{addr})"
+            vn = self._write(dst, NativeVal(ctype, expr, tainted=tainted))
+            return self._decl(ctype, vn, expr, " /* TAINTED */" if tainted else "")
+
+        # Store
+        if m in self._STORE_W:
+            src = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if src is None or mem is None:
+                return f"// {m} ???"
+            ctype = _ctype_from_bits(self._STORE_W[m])
+            addr = _ablation_mem_addr(mem, self._regs)
+            return f"*({_ptr_cast(ctype)}{addr}) = {self._read(src).expr};{' /* TAINTED */' if self._tainted(src) else ''}"
+
+        # Move pseudos
+        if m in ("move", "dmove"):
+            dst, src = insn.reg(0), insn.reg(1) or "$0"
+            if dst:
+                nv_src = self._read(src)
+                vn = self._write(dst, NativeVal(self._ctype, nv_src.expr, tainted=nv_src.tainted))
+                return self._decl(self._ctype, vn, nv_src.expr, " /* TAINTED */" if nv_src.tainted else "")
+
+        # Load immediate
+        if m in ("li", "dli", "li32"):
+            dst, imm = insn.reg(0), insn.imm(1) or insn.imm(2)
+            if dst and imm is not None:
+                vn = self._write(dst, NativeVal(self._ctype, _imm_expr(imm)))
+                return self._decl(self._ctype, vn, _imm_expr(imm))
+
+        # Load upper (lui/dli high half)
+        if m in ("lui", "dlui", "aui"):
+            dst, imm = insn.reg(0), insn.imm(1)
+            if dst and imm is not None:
+                expr = _imm_expr(imm << 16)
+                vn = self._write(dst, NativeVal(self._ctype, expr))
+                return self._decl(self._ctype, vn, expr)
+
+        # Arithmetic
+        if m in self._ARITH:
+            dst = insn.reg(0)
+            if dst is None:
+                return f"// {m} ???"
+            r1 = insn.reg(1) or dst
+            a = self._read(r1).expr
+            op2 = insn.ops[2] if len(insn.ops) > 2 else (insn.ops[1] if len(insn.ops) > 1 else None)
+            if op2 is None:
+                b, b_t = "0", False
+            elif hasattr(op2, 'value'):
+                b, b_t = _imm_expr(op2.value), False
+            elif hasattr(op2, 'name'):
+                nv2 = self._read(op2.name); b, b_t = nv2.expr, nv2.tainted
+            else:
+                b, b_t = str(op2), False
+            tainted = self._tainted(r1) or b_t
+            op_sym = self._ARITH[m]
+            if op_sym == "|~":
+                expr = f"~({a} | {b})"  # NOR
+            elif op_sym.endswith("u"):
+                expr = f"(unsigned){a} {op_sym[:-1]} (unsigned){b}"
+            else:
+                expr = f"{a} {op_sym} {b}"
+            vn = self._write(dst, NativeVal(self._ctype, expr, tainted=tainted))
+            return self._decl(self._ctype, vn, expr, " /* TAINTED */" if tainted else "")
+
+        # NOP / sync
+        if m in ("nop", "ssnop", "ehb", "sync", "pause"):
+            return ""
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+
+# ── PPC32 / PPC64 full decompiler ─────────────────────────────────────────────
+
+class _PPCState:
+    """Per-function register-tracking state for PPC32/PPC64 (SysV/ELFv2).
+
+    Registers use ablation canonical rN form. Params: r3-r10. Return: r3.
+    """
+    _RETURN = "r3"
+    _SP = "r1"
+    _CALLS = frozenset({"bl","bla","bctrl","blrl","bcl","bcla","bclrl"})
+    _JCC = frozenset({"beq","bne","blt","bgt","ble","bge","bun","bnu","bso","bns",
+                      "beqlr","bnelr","bltlr","bgtlr","blelr","bgelr",
+                      "bdnz","bdz","bc","bca"})
+
+    _LOAD_W: Dict[str, tuple] = {
+        "lwz": (32, False), "lwzu": (32, False), "lwzx": (32, False), "lwzux": (32, False),
+        "lwa": (32, True),  "lwax": (32, True),
+        "lhz": (16, False), "lhzu": (16, False), "lhzx": (16, False),
+        "lha": (16, True),  "lhau": (16, True),  "lhax": (16, True),
+        "lbz": (8,  False), "lbzu": (8,  False),  "lbzx": (8,  False),
+        "ld":  (64, False), "ldu": (64, False), "ldx": (64, False),
+    }
+    _STORE_W: Dict[str, int] = {
+        "stw": 32, "stwu": 32, "stwx": 32,
+        "sth": 16, "sthu": 16, "sthx": 16,
+        "stb": 8,  "stbu": 8,  "stbx": 8,
+        "std": 64, "stdu": 64, "stdx": 64,
+    }
+    _ARITH: Dict[str, str] = {
+        "add": "+",   "addi": "+",   "addis": "+",  "addc": "+",  "adde": "+",
+        "addo": "+",  "addco": "+",
+        "sub": "-",   "subi": "-",   "subf": "-",   "subfc": "-", "subfe": "-",
+        "subfic": "-",
+        "mullw": "*", "mulhw": "*",  "mulhwu": "*",
+        "mulld": "*", "mulhd": "*",  "mulhdu": "*",
+        "and": "&",   "andi.": "&",  "andis.": "&",
+        "or":  "|",   "ori":  "|",   "oris":  "|",
+        "xor": "^",   "xori": "^",   "xoris": "^",
+        "slw": "<<",  "srw": ">>",   "sraw": ">>",
+        "sld": "<<",  "srd": ">>",   "srad": ">>",
+        "slwi": "<<", "srwi": ">>",  "srawi": ">>",
+        "sldi": "<<", "srdi": ">>",  "sradi": ">>",
+        "rlwinm": "<<", "rlwimi": "|",
+    }
+    _CMP = frozenset({"cmp","cmpi","cmpw","cmpwi","cmpl","cmpli","cmplw","cmplwi",
+                      "cmpd","cmpdi","cmpld","cmpldi"})
+
+    def __init__(self, bits: int, tainted_params: Set[str], name_fn, plt: Dict[int, str]):
+        self._bits = bits
+        self._ctype = f"uint{bits}_t"
+        self._param_regs = tuple(f"r{i}" for i in range(3, 11))
+        self._regs: Dict[str, NativeVal] = {}
+        self._written: Set[str] = set()
+        self._declared: Set[str] = set()
+        self._cmp: Optional[Tuple[str, str]] = None
+        self._cmp_signed = True
+        self._var_n = 0
+        self._name_fn = name_fn
+        self._plt = plt
+
+        for i, r in enumerate(self._param_regs):
+            nv = NativeVal(self._ctype, f"arg{i}", tainted=(r in tainted_params))
+            self._regs[r] = nv; self._written.add(r); self._declared.add(f"arg{i}")
+        self._regs[self._SP] = NativeVal(self._ctype, "sp", is_ptr=True)
+        self._written.add(self._SP); self._declared.add("sp")
+        for r in ("lr", "ctr"):
+            self._regs[r] = NativeVal(self._ctype, r)
+            self._written.add(r); self._declared.add(r)
+        for r in (f"r{i}" for i in range(13, 32)):
+            self._regs[r] = NativeVal(self._ctype, r)
+            self._written.add(r); self._declared.add(r)
+
+    def _alloc(self) -> str:
+        n = f"v{self._var_n}"; self._var_n += 1; return n
+
+    def _read(self, reg: str) -> NativeVal:
+        if reg not in self._written:
+            self._regs[reg] = NativeVal(self._ctype, reg)
+            self._written.add(reg)
+        return self._regs.get(reg, _UNKNOWN)
+
+    def _write(self, reg: str, nv: NativeVal) -> str:
+        old = self._regs.get(reg)
+        if old and reg in self._written:
+            e = old.expr
+            if (e.startswith("v") and e[1:].isdigit()) or (e.startswith("arg") and e[3:].isdigit()):
+                self._regs[reg] = NativeVal(nv.ctype, e, nv.is_ptr, nv.tainted); return e
+        vn = self._alloc()
+        self._regs[reg] = NativeVal(nv.ctype, vn, nv.is_ptr, nv.tainted)
+        self._written.add(reg); return vn
+
+    def _decl(self, ctype: str, vn: str, expr: str, ann: str = "") -> str:
+        if vn in self._declared:
+            return f"{vn} = {expr};{ann}"
+        self._declared.add(vn); return f"{ctype} {vn} = {expr};{ann}"
+
+    def _tainted(self, *regs: str) -> bool:
+        return any(self._regs.get(r, _UNKNOWN).tainted for r in regs)
+
+    def _cond_expr(self, m: str) -> str:
+        if self._cmp is None:
+            return f"/* {m} */"
+        a, b = self._cmp
+        op = {"beq": "==", "bne": "!=", "blt": "<", "bgt": ">", "ble": "<=", "bge": ">=",
+              "bun": "overflow", "bso": "overflow", "bnu": "no_overflow", "bns": "no_overflow"}.get(m, "??")
+        if not self._cmp_signed and op in ("<", ">", "<=", ">="):
+            return f"(unsigned){a} {op} (unsigned){b}"
+        return f"{a} {op} {b}"
+
+    def emit(self, insn) -> str:
+        m = insn.mnemonic.lower()
+
+        # Return
+        if m in ("blr", "blrl"):
+            return f"return {self._read(self._RETURN).expr};"
+
+        # Calls
+        if m in self._CALLS:
+            tgt = insn.imm(0)
+            if tgt is not None:
+                callee = self._name_fn(tgt)
+            elif "ctr" in m:
+                callee = f"*{self._read('ctr').expr}"
+            elif "lr" in m:
+                callee = f"*{self._read('lr').expr}"
+            else:
+                callee = "???"
+            args_str = ", ".join(self._read(r).expr for r in self._param_regs)
+            vn = self._alloc()
+            is_t = self._tainted(*self._param_regs)
+            self._regs[self._RETURN] = NativeVal(self._ctype, vn, tainted=is_t)
+            self._written.add(self._RETURN)
+            ann = " /* TAINTED */" if is_t else ""
+            return self._decl(self._ctype, vn, f"{callee}({args_str})", ann)
+
+        # Unconditional branch
+        if m in ("b", "ba"):
+            tgt = insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else "goto *???;"
+
+        # Conditional branches
+        if m in self._JCC or m.startswith("bdnz") or m.startswith("bdz"):
+            tgt = insn.imm(0) or insn.imm(1) or insn.imm(2)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            base_m = m.rstrip("+-")
+            cond_str = self._cond_expr(base_m)
+            if m.startswith("bdnz"):
+                cond_str = "--ctr != 0"
+            elif m.startswith("bdz"):
+                cond_str = "ctr == 0"
+            return f"if ({cond_str}) goto {label};"
+
+        # Compare
+        if m in self._CMP:
+            r1 = insn.reg(0) or insn.reg(1) or "r3"
+            op2 = insn.ops[-1] if insn.ops else None
+            a = self._read(r1).expr
+            b = (_imm_expr(op2.value) if hasattr(op2, 'value') else
+                 self._read(op2.name).expr if hasattr(op2, 'name') else "0") if op2 else "0"
+            self._cmp = (a, b)
+            self._cmp_signed = "l" not in m or m in ("cmpld","cmpldi","cmplw","cmplwi")
+            return f"// {m} {a}, {b}"
+
+        # Load
+        if m in self._LOAD_W:
+            dst = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if dst is None or mem is None:
+                return f"// {m} ???"
+            bits, signed = self._LOAD_W[m]
+            ctype = _ctype_from_bits(bits, signed)
+            addr = _ablation_mem_addr(mem, self._regs)
+            tainted = self._tainted(mem.base) if mem.base else False
+            expr = f"*({_ptr_cast(ctype)}{addr})"
+            vn = self._write(dst, NativeVal(ctype, expr, tainted=tainted))
+            result = self._decl(ctype, vn, expr, " /* TAINTED */" if tainted else "")
+            if m.endswith("u") and mem.base:
+                disp = getattr(mem, 'disp', 0)
+                if disp:
+                    bv = self._read(mem.base).expr
+                    wb_vn = self._write(mem.base, NativeVal(self._ctype, f"({bv} + {_imm_expr(disp)})", is_ptr=True))
+                    result += f"\n{wb_vn} = {bv} + {_imm_expr(disp)};"
+            return result
+
+        # Store
+        if m in self._STORE_W:
+            src = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if src is None or mem is None:
+                return f"// {m} ???"
+            ctype = _ctype_from_bits(self._STORE_W[m])
+            addr = _ablation_mem_addr(mem, self._regs)
+            result = f"*({_ptr_cast(ctype)}{addr}) = {self._read(src).expr};{' /* TAINTED */' if self._tainted(src) else ''}"
+            if m.endswith("u") and mem.base:
+                disp = getattr(mem, 'disp', 0)
+                if disp:
+                    bv = self._read(mem.base).expr
+                    wb_vn = self._write(mem.base, NativeVal(self._ctype, f"({bv} + {_imm_expr(disp)})", is_ptr=True))
+                    result += f"\n{wb_vn} = {bv} + {_imm_expr(disp)};"
+            return result
+
+        # Move register
+        if m in ("mr", "mr.", "fmr"):
+            dst, src = insn.reg(0), insn.reg(1)
+            if dst and src:
+                nv_src = self._read(src)
+                vn = self._write(dst, NativeVal(self._ctype, nv_src.expr, tainted=nv_src.tainted))
+                return self._decl(self._ctype, vn, nv_src.expr, " /* TAINTED */" if nv_src.tainted else "")
+
+        # Load immediate
+        if m == "li":
+            dst, imm = insn.reg(0), insn.imm(1)
+            if dst and imm is not None:
+                vn = self._write(dst, NativeVal(self._ctype, _imm_expr(imm)))
+                return self._decl(self._ctype, vn, _imm_expr(imm))
+
+        if m in ("lis", "addis") and insn.reg(1) in ("r0", None):
+            dst, imm = insn.reg(0), insn.imm(2) or insn.imm(1)
+            if dst and imm is not None:
+                expr = _imm_expr(imm << 16)
+                vn = self._write(dst, NativeVal(self._ctype, expr))
+                return self._decl(self._ctype, vn, expr)
+
+        # Arithmetic
+        if m in self._ARITH:
+            dst = insn.reg(0)
+            if dst is None:
+                return f"// {m} ???"
+            src1 = insn.reg(1) or dst
+            a = self._read(src1).expr
+            op3 = insn.ops[2] if len(insn.ops) > 2 else (insn.ops[1] if len(insn.ops) > 1 else None)
+            if op3 is None:
+                b, b_t = "0", False
+            elif hasattr(op3, 'value'):
+                b, b_t = _imm_expr(op3.value), False
+            elif hasattr(op3, 'name'):
+                nv3 = self._read(op3.name); b, b_t = nv3.expr, nv3.tainted
+            else:
+                b, b_t = str(op3), False
+            tainted = self._tainted(src1) or b_t
+            op_sym = self._ARITH[m]
+            expr = f"{a} {op_sym} {b}"
+            vn = self._write(dst, NativeVal(self._ctype, expr, tainted=tainted))
+            return self._decl(self._ctype, vn, expr, " /* TAINTED */" if tainted else "")
+
+        # NOP / sync
+        if m in ("nop", "ori", "sync", "lwsync", "isync", "eieio"):
+            if m == "ori" and insn.reg(0) == insn.reg(1) and insn.imm(2) == 0:
+                return ""  # ori rN, rN, 0 = nop
+        if m == "nop":
+            return ""
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+
+# ── RISC-V 32 / 64 full decompiler ────────────────────────────────────────────
+
+class _RISCVState:
+    """Per-function register-tracking state for RISC-V 32/64 (psABI).
+
+    Registers use ABI names: zero, ra, sp, a0-a7, t0-t6, s0-s11.
+    Mem objects use .offset field. Calls: jal ra / jalr ra.
+    """
+    _ZERO = frozenset({"zero", "x0"})
+    _RETURN = "a0"
+    _RA = "ra"
+    _SP = "sp"
+    _PARAM_REGS = ("a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7")
+
+    _LOAD_W: Dict[str, tuple] = {
+        "lw":  (32, True),  "lwu": (32, False),
+        "lh":  (16, True),  "lhu": (16, False),
+        "lb":  (8,  True),  "lbu": (8,  False),
+        "ld":  (64, False),
+        "c.lw":  (32, True), "c.ld": (64, False),
+    }
+    _STORE_W: Dict[str, int] = {
+        "sw": 32, "sh": 16, "sb": 8, "sd": 64,
+        "c.sw": 32, "c.sd": 64,
+    }
+    _ARITH: Dict[str, str] = {
+        "add": "+",   "addi": "+",   "addw": "+",  "addiw": "+",
+        "sub": "-",   "subw": "-",
+        "mul": "*",   "mulw": "*",   "mulh": "*",  "mulhu": "*",  "mulhsu": "*",
+        "div": "/",   "divu": "/",   "divw": "/",  "divuw": "/",
+        "rem": "%",   "remu": "%",   "remw": "%",  "remuw": "%",
+        "and": "&",   "andi": "&",
+        "or":  "|",   "ori":  "|",
+        "xor": "^",   "xori": "^",
+        "sll": "<<",  "slli": "<<",  "sllw": "<<", "slliw": "<<",
+        "srl": ">>",  "srli": ">>",  "srlw": ">>", "srliw": ">>",
+        "sra": ">>",  "srai": ">>",  "sraw": ">>", "sraiw": ">>",
+        "slt": "<",   "slti": "<",   "sltu": "<u", "sltiu": "<u",
+        "min": "<?",  "max": ">?",   "minu": "<?u","maxu": ">?u",
+    }
+    _JCC = frozenset({"beq","bne","blt","bge","bltu","bgeu","beqz","bnez"})
+    _JCC_OPS = {"beq":"==","bne":"!=","blt":"<","bge":">=","bltu":"<u","bgeu":">=u",
+                "beqz":"==","bnez":"!="}
+
+    def __init__(self, bits: int, tainted_params: Set[str], name_fn, plt: Dict[int, str]):
+        self._bits = bits
+        self._ctype = f"uint{bits}_t"
+        self._regs: Dict[str, NativeVal] = {}
+        self._written: Set[str] = set()
+        self._declared: Set[str] = set()
+        self._var_n = 0
+        self._name_fn = name_fn
+        self._plt = plt
+
+        for r in self._ZERO:
+            self._regs[r] = NativeVal(self._ctype, "0")
+            self._written.add(r)
+        for i, r in enumerate(self._PARAM_REGS):
+            nv = NativeVal(self._ctype, f"arg{i}", tainted=(r in tainted_params))
+            self._regs[r] = nv; self._written.add(r); self._declared.add(f"arg{i}")
+        self._regs[self._SP] = NativeVal(self._ctype, "sp", is_ptr=True)
+        self._written.add(self._SP); self._declared.add("sp")
+        for r in ("ra", "gp", "tp"):
+            self._regs[r] = NativeVal(self._ctype, r)
+            self._written.add(r); self._declared.add(r)
+        for r in (*(f"s{i}" for i in range(12)), *(f"t{i}" for i in range(7))):
+            self._regs[r] = NativeVal(self._ctype, r)
+            self._written.add(r); self._declared.add(r)
+
+    def _alloc(self) -> str:
+        n = f"v{self._var_n}"; self._var_n += 1; return n
+
+    def _read(self, reg: str) -> NativeVal:
+        if reg in self._ZERO:
+            return NativeVal(self._ctype, "0")
+        if reg not in self._written:
+            self._regs[reg] = NativeVal(self._ctype, reg)
+            self._written.add(reg)
+        return self._regs.get(reg, _UNKNOWN)
+
+    def _write(self, reg: str, nv: NativeVal) -> str:
+        if reg in self._ZERO:
+            return "0"
+        old = self._regs.get(reg)
+        if old and reg in self._written:
+            e = old.expr
+            if (e.startswith("v") and e[1:].isdigit()) or (e.startswith("arg") and e[3:].isdigit()):
+                self._regs[reg] = NativeVal(nv.ctype, e, nv.is_ptr, nv.tainted); return e
+        vn = self._alloc()
+        self._regs[reg] = NativeVal(nv.ctype, vn, nv.is_ptr, nv.tainted)
+        self._written.add(reg); return vn
+
+    def _decl(self, ctype: str, vn: str, expr: str, ann: str = "") -> str:
+        if vn in self._declared:
+            return f"{vn} = {expr};{ann}"
+        self._declared.add(vn); return f"{ctype} {vn} = {expr};{ann}"
+
+    def _tainted(self, *regs: str) -> bool:
+        return any(self._regs.get(r, _UNKNOWN).tainted for r in regs)
+
+    def _is_return(self, insn) -> bool:
+        m = insn.mnemonic.lower()
+        if m == "ret":
+            return True
+        if m == "jalr":
+            r0, r1 = insn.reg(0), insn.reg(1)
+            if r0 in self._ZERO and r1 == self._RA:
+                return True
+            if r0 == self._RA and r1 in self._ZERO:
+                return True
+        return False
+
+    def _is_call(self, insn) -> bool:
+        m = insn.mnemonic.lower()
+        if m in ("call", "tail"):
+            return True
+        if m == "jal" and insn.reg(0) == self._RA:
+            return True
+        if m == "jalr" and insn.reg(0) == self._RA:
+            return True
+        return False
+
+    def emit(self, insn) -> str:
+        m = insn.mnemonic.lower()
+
+        if self._is_return(insn):
+            return f"return {self._read(self._RETURN).expr};"
+
+        if self._is_call(insn):
+            tgt = insn.imm(0) or insn.imm(1)
+            if tgt is not None:
+                callee = self._name_fn(tgt)
+            elif insn.reg(1):
+                callee = f"*{self._read(insn.reg(1)).expr}"
+            else:
+                callee = "???"
+            args_str = ", ".join(self._read(r).expr for r in self._PARAM_REGS)
+            vn = self._alloc()
+            is_t = self._tainted(*self._PARAM_REGS)
+            self._regs[self._RETURN] = NativeVal(self._ctype, vn, tainted=is_t)
+            self._written.add(self._RETURN)
+            ann = " /* TAINTED */" if is_t else ""
+            return self._decl(self._ctype, vn, f"{callee}({args_str})", ann)
+
+        # Unconditional jump
+        if m in ("j", "c.j"):
+            tgt = insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else "goto *???;"
+
+        if m == "jal" and insn.reg(0) in self._ZERO:
+            tgt = insn.imm(1) or insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else "goto *???;"
+
+        # Conditional branches — RISC-V encodes comparison registers directly
+        if m in self._JCC:
+            r0 = insn.reg(0)
+            r1 = insn.reg(1) if m not in ("beqz", "bnez") else None
+            tgt = insn.imm(0) or insn.imm(1) or insn.imm(2)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            a = self._read(r0).expr if r0 else "???"
+            op = self._JCC_OPS.get(m, "??")
+            if r1:
+                b = self._read(r1).expr
+                if "u" in op:
+                    cond_str = f"(unsigned){a} {op[:-1]} (unsigned){b}"
+                else:
+                    cond_str = f"{a} {op} {b}"
+            else:
+                cond_str = f"{a} {op} 0"
+            return f"if ({cond_str}) goto {label};"
+
+        # Load
+        if m in self._LOAD_W:
+            dst = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if dst is None or mem is None:
+                return f"// {m} ???"
+            bits, signed = self._LOAD_W[m]
+            ctype = _ctype_from_bits(bits, signed)
+            addr = _ablation_mem_addr(mem, self._regs)
+            tainted = self._tainted(mem.base) if mem.base else False
+            expr = f"*({_ptr_cast(ctype)}{addr})"
+            vn = self._write(dst, NativeVal(ctype, expr, tainted=tainted))
+            return self._decl(ctype, vn, expr, " /* TAINTED */" if tainted else "")
+
+        # Store
+        if m in self._STORE_W:
+            src = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if src is None or mem is None:
+                return f"// {m} ???"
+            ctype = _ctype_from_bits(self._STORE_W[m])
+            addr = _ablation_mem_addr(mem, self._regs)
+            return f"*({_ptr_cast(ctype)}{addr}) = {self._read(src).expr};{' /* TAINTED */' if self._tainted(src) else ''}"
+
+        # Move pseudos
+        if m in ("mv", "c.mv"):
+            dst, src = insn.reg(0), insn.reg(1) or "zero"
+            if dst:
+                nv_src = self._read(src)
+                vn = self._write(dst, NativeVal(self._ctype, nv_src.expr, tainted=nv_src.tainted))
+                return self._decl(self._ctype, vn, nv_src.expr, " /* TAINTED */" if nv_src.tainted else "")
+
+        # Load immediate
+        if m in ("li", "c.li", "c.lui"):
+            dst, imm = insn.reg(0), insn.imm(1) or insn.imm(2)
+            if dst and imm is not None:
+                vn = self._write(dst, NativeVal(self._ctype, _imm_expr(imm)))
+                return self._decl(self._ctype, vn, _imm_expr(imm))
+
+        # Load address (auipc+addi pair)
+        if m in ("la", "lla"):
+            dst = insn.reg(0); tgt = insn.imm(1)
+            if dst and tgt is not None:
+                expr = f"(void *){tgt:#x}"
+                vn = self._write(dst, NativeVal("void *", expr, is_ptr=True))
+                return self._decl("void *", vn, expr)
+
+        # Arithmetic
+        if m in self._ARITH:
+            dst = insn.reg(0)
+            if dst is None:
+                return f"// {m} ???"
+            src1 = insn.reg(1) or dst
+            a = self._read(src1).expr
+            op2 = insn.ops[2] if len(insn.ops) > 2 else (insn.ops[1] if len(insn.ops) > 1 else None)
+            if op2 is None:
+                b, b_t = "0", False
+            elif hasattr(op2, 'value'):
+                b, b_t = _imm_expr(op2.value), False
+            elif hasattr(op2, 'name'):
+                nv2 = self._read(op2.name); b, b_t = nv2.expr, nv2.tainted
+            else:
+                b, b_t = str(op2), False
+            tainted = self._tainted(src1) or b_t
+            op_sym = self._ARITH[m]
+            ctype = self._ctype
+            if op_sym.endswith("u"):
+                expr = f"(unsigned){a} {op_sym[:-1]} (unsigned){b}"
+            elif op_sym.startswith("<?"):
+                expr = f"(({a}) < ({b}) ? ({a}) : ({b}))"
+            elif op_sym.startswith(">?"):
+                expr = f"(({a}) > ({b}) ? ({a}) : ({b}))"
+            else:
+                expr = f"{a} {op_sym} {b}"
+            vn = self._write(dst, NativeVal(ctype, expr, tainted=tainted))
+            return self._decl(ctype, vn, expr, " /* TAINTED */" if tainted else "")
+
+        # NOP / fence
+        if m in ("nop", "fence", "fence.i", "c.nop", "pause"):
+            return ""
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+
+# ── LoongArch64 full decompiler ───────────────────────────────────────────────
+
+class _LA64State:
+    """Per-function register-tracking state for LoongArch64 (lp64 ABI).
+
+    Registers: $zero, $ra, $sp, $a0-$a7, $t0-$t8, $fp, $s0-$s8.
+    Mem objects use .disp field.
+    """
+    _ZERO = frozenset({"$zero", "$r0"})
+    _RETURN = "$a0"
+    _RA = "$ra"
+    _SP = "$sp"
+    _PARAM_REGS = tuple(f"$a{i}" for i in range(8))
+
+    _LOAD_W: Dict[str, tuple] = {
+        "ld.b":  (8,  True),  "ld.bu": (8,  False),
+        "ld.h":  (16, True),  "ld.hu": (16, False),
+        "ld.w":  (32, True),  "ld.wu": (32, False),
+        "ld.d":  (64, False),
+        "ldx.b": (8,  True),  "ldx.bu":(8,  False),
+        "ldx.h": (16, True),  "ldx.hu":(16, False),
+        "ldx.w": (32, True),  "ldx.wu":(32, False),
+        "ldx.d": (64, False),
+        "ldptr.w":(32, True), "ldptr.d":(64, False),
+    }
+    _STORE_W: Dict[str, int] = {
+        "st.b": 8,  "st.h": 16,  "st.w": 32,  "st.d": 64,
+        "stx.b":8,  "stx.h":16,  "stx.w":32,  "stx.d":64,
+        "stptr.w":32, "stptr.d":64,
+    }
+    _ARITH: Dict[str, str] = {
+        "add.w": "+",  "add.d": "+",  "addi.w": "+",  "addi.d": "+",
+        "sub.w": "-",  "sub.d": "-",
+        "mul.w": "*",  "mul.d": "*",  "mulh.w": "*",  "mulh.wu": "*",
+        "mulh.d": "*", "mulh.du": "*",
+        "div.w": "/",  "div.wu": "/", "div.d": "/",  "div.du": "/",
+        "mod.w": "%",  "mod.wu": "%", "mod.d": "%",  "mod.du": "%",
+        "and":  "&",   "andi": "&",
+        "or":   "|",   "ori":  "|",
+        "xor":  "^",   "xori": "^",
+        "nor":  "|~",
+        "sll.w": "<<", "sll.d": "<<", "slli.w": "<<", "slli.d": "<<",
+        "srl.w": ">>", "srl.d": ">>", "srli.w": ">>", "srli.d": ">>",
+        "sra.w": ">>", "sra.d": ">>", "srai.w": ">>", "srai.d": ">>",
+        "slt":  "<",   "sltu":  "<u", "slti":  "<",   "sltui": "<u",
+    }
+    _JCC = frozenset({"beq","bne","blt","bge","bltu","bgeu","beqz","bnez","bceqz","bcnez"})
+    _JCC_OPS = {"beq":"==","bne":"!=","blt":"<","bge":">=","bltu":"<u","bgeu":">=u",
+                "beqz":"==","bnez":"!="}
+
+    def __init__(self, tainted_params: Set[str], name_fn, plt: Dict[int, str]):
+        self._regs: Dict[str, NativeVal] = {}
+        self._written: Set[str] = set()
+        self._declared: Set[str] = set()
+        self._var_n = 0
+        self._name_fn = name_fn
+        self._plt = plt
+
+        for r in self._ZERO:
+            self._regs[r] = NativeVal("uint64_t", "0"); self._written.add(r)
+        for i, r in enumerate(self._PARAM_REGS):
+            nv = NativeVal("uint64_t", f"arg{i}", tainted=(r in tainted_params))
+            self._regs[r] = nv; self._written.add(r); self._declared.add(f"arg{i}")
+        self._regs[self._SP] = NativeVal("uint64_t", "sp", is_ptr=True)
+        self._written.add(self._SP); self._declared.add("sp")
+        for r in ("$ra", "$fp", "$tp"):
+            self._regs[r] = NativeVal("uint64_t", r)
+            self._written.add(r); self._declared.add(r)
+        for r in (*(f"$t{i}" for i in range(9)), *(f"$s{i}" for i in range(9))):
+            self._regs[r] = NativeVal("uint64_t", r)
+            self._written.add(r); self._declared.add(r)
+
+    def _alloc(self) -> str:
+        n = f"v{self._var_n}"; self._var_n += 1; return n
+
+    def _read(self, reg: str) -> NativeVal:
+        if reg in self._ZERO:
+            return NativeVal("uint64_t", "0")
+        if reg not in self._written:
+            self._regs[reg] = NativeVal("uint64_t", reg); self._written.add(reg)
+        return self._regs.get(reg, _UNKNOWN)
+
+    def _write(self, reg: str, nv: NativeVal) -> str:
+        if reg in self._ZERO:
+            return "0"
+        old = self._regs.get(reg)
+        if old and reg in self._written:
+            e = old.expr
+            if (e.startswith("v") and e[1:].isdigit()) or (e.startswith("arg") and e[3:].isdigit()):
+                self._regs[reg] = NativeVal(nv.ctype, e, nv.is_ptr, nv.tainted); return e
+        vn = self._alloc()
+        self._regs[reg] = NativeVal(nv.ctype, vn, nv.is_ptr, nv.tainted)
+        self._written.add(reg); return vn
+
+    def _decl(self, ctype: str, vn: str, expr: str, ann: str = "") -> str:
+        if vn in self._declared:
+            return f"{vn} = {expr};{ann}"
+        self._declared.add(vn); return f"{ctype} {vn} = {expr};{ann}"
+
+    def _tainted(self, *regs: str) -> bool:
+        return any(self._regs.get(r, _UNKNOWN).tainted for r in regs)
+
+    def _is_return(self, insn) -> bool:
+        m = insn.mnemonic.lower()
+        if m != "jirl":
+            return False
+        r0 = insn.reg(0); r1 = insn.reg(1)
+        return r0 in self._ZERO and r1 in ("$ra", "$r1")
+
+    def _is_call(self, insn) -> bool:
+        m = insn.mnemonic.lower()
+        if m == "bl":
+            return True
+        if m == "jirl" and insn.reg(0) in ("$ra", "$r1"):
+            return True
+        return False
+
+    def emit(self, insn) -> str:
+        m = insn.mnemonic.lower()
+
+        if self._is_return(insn):
+            return f"return {self._read(self._RETURN).expr};"
+
+        if self._is_call(insn):
+            tgt = insn.imm(0) or insn.imm(1)
+            callee = (self._name_fn(tgt) if tgt is not None else
+                      f"*{self._read(insn.reg(1)).expr}" if m == "jirl" and insn.reg(1) else "???")
+            args_str = ", ".join(self._read(r).expr for r in self._PARAM_REGS)
+            vn = self._alloc()
+            is_t = self._tainted(*self._PARAM_REGS)
+            self._regs[self._RETURN] = NativeVal("uint64_t", vn, tainted=is_t)
+            self._written.add(self._RETURN)
+            ann = " /* TAINTED */" if is_t else ""
+            return self._decl("uint64_t", vn, f"{callee}({args_str})", ann)
+
+        # Unconditional branch
+        if m == "b":
+            tgt = insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else "goto *???;"
+
+        # Conditional branches
+        if m in self._JCC:
+            r0 = insn.reg(0)
+            r1 = insn.reg(1) if m not in ("beqz", "bnez", "bceqz", "bcnez") else None
+            tgt = insn.imm(0) or insn.imm(1) or insn.imm(2)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            a = self._read(r0).expr if r0 else "???"
+            op = self._JCC_OPS.get(m, "??")
+            if r1:
+                b = self._read(r1).expr
+                cond_str = (f"(unsigned){a} {op[:-1]} (unsigned){b}" if "u" in op
+                            else f"{a} {op} {b}")
+            else:
+                cond_str = f"{a} {op} 0"
+            return f"if ({cond_str}) goto {label};"
+
+        # Load
+        if m in self._LOAD_W:
+            dst = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if dst is None or mem is None:
+                return f"// {m} ???"
+            bits, signed = self._LOAD_W[m]
+            ctype = _ctype_from_bits(bits, signed)
+            addr = _ablation_mem_addr(mem, self._regs)
+            tainted = self._tainted(mem.base) if mem.base else False
+            expr = f"*({_ptr_cast(ctype)}{addr})"
+            vn = self._write(dst, NativeVal(ctype, expr, tainted=tainted))
+            return self._decl(ctype, vn, expr, " /* TAINTED */" if tainted else "")
+
+        # Store
+        if m in self._STORE_W:
+            src = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if src is None or mem is None:
+                return f"// {m} ???"
+            ctype = _ctype_from_bits(self._STORE_W[m])
+            addr = _ablation_mem_addr(mem, self._regs)
+            return f"*({_ptr_cast(ctype)}{addr}) = {self._read(src).expr};{' /* TAINTED */' if self._tainted(src) else ''}"
+
+        # Move / load immediate
+        if m in ("move", "ori") and (m == "move" or (insn.reg(1) in self._ZERO and insn.imm(2) == 0)):
+            dst, src = insn.reg(0), insn.reg(1) or "$zero"
+            if dst:
+                nv_src = self._read(src)
+                vn = self._write(dst, NativeVal("uint64_t", nv_src.expr, tainted=nv_src.tainted))
+                return self._decl("uint64_t", vn, nv_src.expr, " /* TAINTED */" if nv_src.tainted else "")
+
+        if m in ("lu12i.w", "lu32i.d", "lu52i.d", "addi.w", "addi.d") and insn.reg(1) in self._ZERO:
+            dst, imm = insn.reg(0), insn.imm(1) or insn.imm(2)
+            if dst and imm is not None:
+                expr = _imm_expr(imm << (12 if "lu12" in m or "lu32" in m or "lu52" in m else 0))
+                vn = self._write(dst, NativeVal("uint64_t", expr))
+                return self._decl("uint64_t", vn, expr)
+
+        # Arithmetic
+        if m in self._ARITH:
+            dst = insn.reg(0)
+            if dst is None:
+                return f"// {m} ???"
+            src1 = insn.reg(1) or dst
+            a = self._read(src1).expr
+            op2 = insn.ops[2] if len(insn.ops) > 2 else (insn.ops[1] if len(insn.ops) > 1 else None)
+            if op2 is None:
+                b, b_t = "0", False
+            elif hasattr(op2, 'value'):
+                b, b_t = _imm_expr(op2.value), False
+            elif hasattr(op2, 'name'):
+                nv2 = self._read(op2.name); b, b_t = nv2.expr, nv2.tainted
+            else:
+                b, b_t = str(op2), False
+            tainted = self._tainted(src1) or b_t
+            op_sym = self._ARITH[m]
+            if op_sym == "|~":
+                expr = f"~({a} | {b})"
+            elif op_sym.endswith("u"):
+                expr = f"(unsigned){a} {op_sym[:-1]} (unsigned){b}"
+            else:
+                expr = f"{a} {op_sym} {b}"
+            vn = self._write(dst, NativeVal("uint64_t", expr, tainted=tainted))
+            return self._decl("uint64_t", vn, expr, " /* TAINTED */" if tainted else "")
+
+        if m in ("nop",):
+            return ""
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+
+# ── ARC EM/HS full decompiler ─────────────────────────────────────────────────
+
+class _ARCState:
+    """Per-function register-tracking state for ARC EM/HS (ARC GNU ABI).
+
+    Registers: r0-r31, blink. Params: r0-r7. Return: r0. Mem: .disp.
+    """
+    _PARAM_REGS = tuple(f"r{i}" for i in range(8))
+    _RETURN = "r0"
+    _BLINK = "blink"
+
+    _CALLS = frozenset({"bl", "jl", "bl.d", "jl.d"})
+    _JCC = frozenset({"beq","bne","blt","bgt","ble","bge","blo","bhs","bhi","bls",
+                      "bbit0","bbit1","breq","brne","brlt","brge","brle","brge"})
+    _JCC_OPS = {"beq":"==","bne":"!=","blt":"<","bgt":">","ble":"<=","bge":">=",
+                "blo":"<u","bhs":">=u","bhi":">u","bls":"<=u",
+                "breq":"==","brne":"!=","brlt":"<","brge":">=","brle":"<=","brgt":">"}
+
+    _LOAD_W: Dict[str, tuple] = {
+        "ld":  (32, False), "ld.ab": (32, False), "ld.as": (32, False),
+        "ldb": (8,  False), "ldb.x": (8,  True),  "ldb.ab":(8,  False),
+        "ldh": (16, False), "ldh.x": (16, True),  "ldh.ab":(16, False),
+        "ldd": (64, False),
+    }
+    _STORE_W: Dict[str, int] = {
+        "st": 32, "st.ab": 32, "st.as": 32,
+        "stb": 8,  "stb.ab": 8,
+        "sth": 16, "sth.ab": 16,
+        "std": 64,
+    }
+    _ARITH: Dict[str, str] = {
+        "add": "+",  "add1": "+", "add2": "+", "add3": "+",
+        "sub": "-",  "sub1": "-", "sub2": "-", "sub3": "-",
+        "mul64": "*","mulu64": "*",
+        "and": "&",  "bic": "& ~",
+        "or":  "|",
+        "xor": "^",
+        "asl": "<<", "asr": ">>", "lsr": ">>",
+        "ror": ">>/*ror*/",
+        "min": "<?", "max": ">?",
+    }
+    _CMP = frozenset({"cmp", "cmpgt", "cmpge", "cmplt", "cmple", "tst"})
+
+    def __init__(self, tainted_params: Set[str], name_fn, plt: Dict[int, str]):
+        self._regs: Dict[str, NativeVal] = {}
+        self._written: Set[str] = set()
+        self._declared: Set[str] = set()
+        self._cmp: Optional[Tuple[str, str]] = None
+        self._var_n = 0
+        self._name_fn = name_fn
+        self._plt = plt
+
+        for i, r in enumerate(self._PARAM_REGS):
+            nv = NativeVal("uint32_t", f"arg{i}", tainted=(r in tainted_params))
+            self._regs[r] = nv; self._written.add(r); self._declared.add(f"arg{i}")
+        self._regs["sp"] = NativeVal("uint32_t", "sp", is_ptr=True)
+        self._written.add("sp"); self._declared.add("sp")
+        self._regs[self._BLINK] = NativeVal("uint32_t", "blink")
+        self._written.add(self._BLINK); self._declared.add("blink")
+        for r in (f"r{i}" for i in range(13, 26)):
+            self._regs[r] = NativeVal("uint32_t", r)
+            self._written.add(r); self._declared.add(r)
+
+    def _alloc(self) -> str:
+        n = f"v{self._var_n}"; self._var_n += 1; return n
+
+    def _read(self, reg: str) -> NativeVal:
+        if reg not in self._written:
+            self._regs[reg] = NativeVal("uint32_t", reg); self._written.add(reg)
+        return self._regs.get(reg, _UNKNOWN)
+
+    def _write(self, reg: str, nv: NativeVal) -> str:
+        old = self._regs.get(reg)
+        if old and reg in self._written:
+            e = old.expr
+            if (e.startswith("v") and e[1:].isdigit()) or (e.startswith("arg") and e[3:].isdigit()):
+                self._regs[reg] = NativeVal(nv.ctype, e, nv.is_ptr, nv.tainted); return e
+        vn = self._alloc()
+        self._regs[reg] = NativeVal(nv.ctype, vn, nv.is_ptr, nv.tainted)
+        self._written.add(reg); return vn
+
+    def _decl(self, ctype: str, vn: str, expr: str, ann: str = "") -> str:
+        if vn in self._declared:
+            return f"{vn} = {expr};{ann}"
+        self._declared.add(vn); return f"{ctype} {vn} = {expr};{ann}"
+
+    def _tainted(self, *regs: str) -> bool:
+        return any(self._regs.get(r, _UNKNOWN).tainted for r in regs)
+
+    def _cond_expr(self, m: str) -> str:
+        if self._cmp is None:
+            return f"/* {m} */"
+        a, b = self._cmp
+        op = {"beq":"==","bne":"!=","blt":"<","bgt":">","ble":"<=","bge":">=",
+              "blo":"<u","bhs":">=u","bhi":">u","bls":"<=u"}.get(m, "??")
+        if "u" in op:
+            return f"(unsigned){a} {op[:-1]} (unsigned){b}"
+        return f"{a} {op} {b}"
+
+    def emit(self, insn) -> str:
+        m = insn.mnemonic.lower()
+
+        # Return
+        if m in ("j", "j.d", "jl", "jl.d") and insn.reg(0) == self._BLINK:
+            return f"return {self._read(self._RETURN).expr};"
+
+        # Call
+        if m in self._CALLS:
+            tgt = insn.imm(0)
+            callee = (self._name_fn(tgt) if tgt is not None else
+                      f"*[{self._read(insn.reg(0)).expr}]" if insn.reg(0) else "???")
+            args_str = ", ".join(self._read(r).expr for r in self._PARAM_REGS)
+            vn = self._alloc()
+            is_t = self._tainted(*self._PARAM_REGS)
+            self._regs[self._RETURN] = NativeVal("uint32_t", vn, tainted=is_t)
+            self._written.add(self._RETURN)
+            ann = " /* TAINTED */" if is_t else ""
+            return self._decl("uint32_t", vn, f"{callee}({args_str})", ann)
+
+        # Unconditional branch
+        if m in ("b", "b.d"):
+            tgt = insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else f"goto *{self._read(insn.reg(0)).expr if insn.reg(0) else '???'};"
+
+        # Conditional branches
+        if m in self._JCC:
+            r0 = insn.reg(0); r1 = insn.reg(1)
+            tgt = insn.imm(0) or insn.imm(1)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            if m.startswith("br"):
+                a = self._read(r0).expr if r0 else "???"
+                b = self._read(r1).expr if r1 else "0"
+                op = self._JCC_OPS.get(m, "??")
+                cond_str = f"{a} {op} {b}"
+            else:
+                cond_str = self._cond_expr(m)
+            return f"if ({cond_str}) goto {label};"
+
+        # Compare
+        if m in self._CMP:
+            r0, r1 = insn.reg(0), insn.reg(1)
+            a = self._read(r0).expr if r0 else "???"
+            b = (self._read(r1).expr if r1 else
+                 _imm_expr(insn.imm(1)) if insn.imm(1) is not None else "0")
+            if m == "tst":
+                self._cmp = (f"({a} & {b})", "0")
+            else:
+                self._cmp = (a, b)
+            return f"// {m} {a}, {b}"
+
+        # Load
+        if m in self._LOAD_W:
+            dst = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if dst is None or mem is None:
+                return f"// {m} ???"
+            bits, signed = self._LOAD_W[m]
+            ctype = _ctype_from_bits(bits, signed)
+            addr = _ablation_mem_addr(mem, self._regs)
+            tainted = self._tainted(mem.base) if mem.base else False
+            expr = f"*({_ptr_cast(ctype)}{addr})"
+            vn = self._write(dst, NativeVal(ctype, expr, tainted=tainted))
+            return self._decl(ctype, vn, expr, " /* TAINTED */" if tainted else "")
+
+        # Store
+        if m in self._STORE_W:
+            src = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if src is None or mem is None:
+                return f"// {m} ???"
+            ctype = _ctype_from_bits(self._STORE_W[m])
+            addr = _ablation_mem_addr(mem, self._regs)
+            return f"*({_ptr_cast(ctype)}{addr}) = {self._read(src).expr};{' /* TAINTED */' if self._tainted(src) else ''}"
+
+        # Move
+        if m in ("mov", "mov_s"):
+            dst = insn.reg(0)
+            if dst and len(insn.ops) > 1:
+                op2 = insn.ops[1]
+                src_expr = (_imm_expr(op2.value) if hasattr(op2, 'value') else
+                            self._read(op2.name).expr if hasattr(op2, 'name') else str(op2))
+                tainted = self._tainted(op2.name) if hasattr(op2, 'name') else False
+                vn = self._write(dst, NativeVal("uint32_t", src_expr, tainted=tainted))
+                return self._decl("uint32_t", vn, src_expr, " /* TAINTED */" if tainted else "")
+
+        # Arithmetic
+        if m in self._ARITH:
+            dst = insn.reg(0)
+            if dst is None:
+                return f"// {m} ???"
+            src1 = insn.reg(1) or dst
+            a = self._read(src1).expr
+            op2 = insn.ops[2] if len(insn.ops) > 2 else (insn.ops[1] if len(insn.ops) > 1 else None)
+            if op2 is None:
+                b, b_t = "0", False
+            elif hasattr(op2, 'value'):
+                b, b_t = _imm_expr(op2.value), False
+            elif hasattr(op2, 'name'):
+                nv2 = self._read(op2.name); b, b_t = nv2.expr, nv2.tainted
+            else:
+                b, b_t = str(op2), False
+            tainted = self._tainted(src1) or b_t
+            op_sym = self._ARITH[m]
+            if op_sym == "& ~":
+                expr = f"{a} & ~({b})"
+            elif op_sym == "<?":
+                expr = f"(({a}) < ({b}) ? ({a}) : ({b}))"
+            elif op_sym == ">?":
+                expr = f"(({a}) > ({b}) ? ({a}) : ({b}))"
+            else:
+                expr = f"{a} {op_sym} {b}"
+            vn = self._write(dst, NativeVal("uint32_t", expr, tainted=tainted))
+            return self._decl("uint32_t", vn, expr, " /* TAINTED */" if tainted else "")
+
+        if m == "nop":
+            return ""
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+
+# ── V850 / RH850 full decompiler ──────────────────────────────────────────────
+
+class _V850State:
+    """Per-function register-tracking state for V850/RH850 (CC-RH ABI).
+
+    Registers: r0 (zero), r1 (asm temp), r3 (sp), r6-r9 (args), r10 (return),
+    r31 (lp). Mem objects use .offset field.
+    """
+    _ZERO = frozenset({"r0"})
+    _RETURN = "r10"
+    _LP = "r31"
+    _SP = "r3"
+    _PARAM_REGS = ("r6", "r7", "r8", "r9")
+
+    _CALLS = frozenset({"jarl", "call"})
+    _JCC = frozenset({"bv","bl","be","bnh","bn","br","blt","ble",
+                      "bnv","bnl","bnz","bh","bp","bsa","bge","bgt",
+                      "bc","bnc","bt","bf","bz","bvz"})
+    _JCC_OPS = {"be":"==","bz":"==","bne":"!=","bnz":"!=",
+                "blt":"<","bge":">=","bgt":">","ble":"<=",
+                "bl":"<u","bnh":"<=u","bh":">u","bnl":">=u",
+                "bn":"< 0","bp":">= 0","bv":"overflow","bnv":"no_overflow"}
+
+    _LOAD_W: Dict[str, tuple] = {
+        "ld.w":  (32, False), "ld.h":  (16, True),  "ld.hu": (16, False),
+        "ld.b":  (8,  True),  "ld.bu": (8,  False),
+        "ld.dw": (64, False),
+    }
+    _STORE_W: Dict[str, int] = {
+        "st.w": 32, "st.h": 16, "st.b": 8, "st.dw": 64,
+    }
+    _ARITH: Dict[str, str] = {
+        "add":  "+",  "addi": "+",  "sub": "-",  "subr": "-",
+        "mul":  "*",  "mulu": "*",  "mulh": "*", "mulhi": "*",
+        "and":  "&",  "andi": "&",
+        "or":   "|",  "ori":  "|",
+        "xor":  "^",  "xori": "^",
+        "not":  "~",
+        "shl":  "<<", "shr":  ">>", "sar":  ">>",
+        "shl2": "<<", "shr2": ">>",
+    }
+    _CMP = frozenset({"cmp", "cmov"})
+
+    def __init__(self, tainted_params: Set[str], name_fn, plt: Dict[int, str]):
+        self._regs: Dict[str, NativeVal] = {}
+        self._written: Set[str] = set()
+        self._declared: Set[str] = set()
+        self._cmp: Optional[Tuple[str, str]] = None
+        self._var_n = 0
+        self._name_fn = name_fn
+        self._plt = plt
+
+        self._regs["r0"] = NativeVal("uint32_t", "0"); self._written.add("r0")
+        for i, r in enumerate(self._PARAM_REGS):
+            nv = NativeVal("uint32_t", f"arg{i}", tainted=(r in tainted_params))
+            self._regs[r] = nv; self._written.add(r); self._declared.add(f"arg{i}")
+        self._regs[self._RETURN] = NativeVal("uint32_t", "retval")
+        self._written.add(self._RETURN); self._declared.add("retval")
+        self._regs[self._SP] = NativeVal("uint32_t", "sp", is_ptr=True)
+        self._written.add(self._SP); self._declared.add("sp")
+        self._regs[self._LP] = NativeVal("uint32_t", "lp")
+        self._written.add(self._LP); self._declared.add("lp")
+        for r in (f"r{i}" for i in range(20, 31)):
+            self._regs[r] = NativeVal("uint32_t", r)
+            self._written.add(r); self._declared.add(r)
+
+    def _alloc(self) -> str:
+        n = f"v{self._var_n}"; self._var_n += 1; return n
+
+    def _read(self, reg: str) -> NativeVal:
+        if reg in self._ZERO:
+            return NativeVal("uint32_t", "0")
+        if reg not in self._written:
+            self._regs[reg] = NativeVal("uint32_t", reg); self._written.add(reg)
+        return self._regs.get(reg, _UNKNOWN)
+
+    def _write(self, reg: str, nv: NativeVal) -> str:
+        if reg in self._ZERO:
+            return "0"
+        old = self._regs.get(reg)
+        if old and reg in self._written:
+            e = old.expr
+            if (e.startswith("v") and e[1:].isdigit()) or (e.startswith("arg") and e[3:].isdigit()):
+                self._regs[reg] = NativeVal(nv.ctype, e, nv.is_ptr, nv.tainted); return e
+        vn = self._alloc()
+        self._regs[reg] = NativeVal(nv.ctype, vn, nv.is_ptr, nv.tainted)
+        self._written.add(reg); return vn
+
+    def _decl(self, ctype: str, vn: str, expr: str, ann: str = "") -> str:
+        if vn in self._declared:
+            return f"{vn} = {expr};{ann}"
+        self._declared.add(vn); return f"{ctype} {vn} = {expr};{ann}"
+
+    def _tainted(self, *regs: str) -> bool:
+        return any(self._regs.get(r, _UNKNOWN).tainted for r in regs)
+
+    def _cond_expr(self, m: str) -> str:
+        if self._cmp is None:
+            return f"/* {m} */"
+        a, b = self._cmp
+        op = self._JCC_OPS.get(m, "??")
+        if "u" in op:
+            return f"(unsigned){a} {op[:-1]} (unsigned){b}"
+        if op in ("< 0", ">= 0", "overflow", "no_overflow"):
+            return f"{a} {op}"
+        return f"{a} {op} {b}"
+
+    def emit(self, insn) -> str:
+        m = insn.mnemonic.lower()
+
+        # Return
+        if m == "jmp" and insn.reg(0) == self._LP:
+            return f"return {self._read(self._RETURN).expr};"
+
+        # Call
+        if m in self._CALLS:
+            tgt = insn.imm(0) or insn.imm(1)
+            callee = (self._name_fn(tgt) if tgt is not None else
+                      f"*{self._read(insn.reg(0)).expr}" if insn.reg(0) else "???")
+            args_str = ", ".join(self._read(r).expr for r in self._PARAM_REGS)
+            vn = self._alloc()
+            is_t = self._tainted(*self._PARAM_REGS)
+            self._regs[self._RETURN] = NativeVal("uint32_t", vn, tainted=is_t)
+            self._written.add(self._RETURN)
+            ann = " /* TAINTED */" if is_t else ""
+            return self._decl("uint32_t", vn, f"{callee}({args_str})", ann)
+
+        # Unconditional jump
+        if m == "jr":
+            tgt = insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else f"goto *{self._read(insn.reg(0)).expr if insn.reg(0) else '???'};"
+
+        # Conditional branches
+        if m in self._JCC:
+            tgt = insn.imm(0)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            return f"if ({self._cond_expr(m)}) goto {label};"
+
+        # Compare
+        if m == "cmp":
+            r0, r1 = insn.reg(0), insn.reg(1)
+            a = self._read(r0).expr if r0 else "???"
+            op2 = insn.ops[1] if len(insn.ops) > 1 else None
+            b = (self._read(r1).expr if r1 else
+                 _imm_expr(op2.value) if op2 and hasattr(op2, 'value') else "0")
+            self._cmp = (a, b)
+            return f"// cmp {a}, {b}"
+
+        # Load
+        if m in self._LOAD_W:
+            dst = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if dst is None or mem is None:
+                return f"// {m} ???"
+            bits, signed = self._LOAD_W[m]
+            ctype = _ctype_from_bits(bits, signed)
+            addr = _ablation_mem_addr(mem, self._regs)
+            tainted = self._tainted(mem.base) if mem.base else False
+            expr = f"*({_ptr_cast(ctype)}{addr})"
+            vn = self._write(dst, NativeVal(ctype, expr, tainted=tainted))
+            return self._decl(ctype, vn, expr, " /* TAINTED */" if tainted else "")
+
+        # Store
+        if m in self._STORE_W:
+            src = insn.reg(0)
+            mem = insn.mem(1) if len(insn.ops) > 1 else insn.mem(0)
+            if src is None or mem is None:
+                return f"// {m} ???"
+            ctype = _ctype_from_bits(self._STORE_W[m])
+            addr = _ablation_mem_addr(mem, self._regs)
+            return f"*({_ptr_cast(ctype)}{addr}) = {self._read(src).expr};{' /* TAINTED */' if self._tainted(src) else ''}"
+
+        # Move
+        if m in ("mov", "movea", "movhi", "movzhi"):
+            dst = insn.reg(0)
+            if dst and len(insn.ops) > 1:
+                op2 = insn.ops[1] if m not in ("movea","movhi","movzhi") else (insn.ops[2] if len(insn.ops) > 2 else insn.ops[1])
+                src_expr = (_imm_expr(op2.value) if hasattr(op2, 'value') else
+                            self._read(op2.name).expr if hasattr(op2, 'name') else str(op2))
+                tainted = self._tainted(op2.name) if hasattr(op2, 'name') else False
+                if m == "movhi":
+                    src_expr = f"{src_expr} << 16"
+                vn = self._write(dst, NativeVal("uint32_t", src_expr, tainted=tainted))
+                return self._decl("uint32_t", vn, src_expr, " /* TAINTED */" if tainted else "")
+
+        # Arithmetic
+        if m in self._ARITH:
+            dst = insn.reg(0)
+            if dst is None:
+                return f"// {m} ???"
+            if m == "not":
+                src = insn.reg(1) or dst
+                nv_src = self._read(src)
+                expr = f"~{nv_src.expr}"
+                vn = self._write(dst, NativeVal("uint32_t", expr, tainted=nv_src.tainted))
+                return self._decl("uint32_t", vn, expr, " /* TAINTED */" if nv_src.tainted else "")
+            src1 = insn.reg(1) or dst
+            a = self._read(src1).expr
+            op2 = insn.ops[2] if len(insn.ops) > 2 else (insn.ops[1] if len(insn.ops) > 1 else None)
+            if op2 is None:
+                b, b_t = "0", False
+            elif hasattr(op2, 'value'):
+                b, b_t = _imm_expr(op2.value), False
+            elif hasattr(op2, 'name'):
+                nv2 = self._read(op2.name); b, b_t = nv2.expr, nv2.tainted
+            else:
+                b, b_t = str(op2), False
+            tainted = self._tainted(src1) or b_t
+            op_sym = self._ARITH[m]
+            expr = (f"{b} - {a}" if m == "subr" else f"{a} {op_sym} {b}")
+            vn = self._write(dst, NativeVal("uint32_t", expr, tainted=tainted))
+            return self._decl("uint32_t", vn, expr, " /* TAINTED */" if tainted else "")
+
+        if m == "nop":
+            return ""
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+
+# ── nanoMIPS full decompiler ──────────────────────────────────────────────────
+
+class _NanoMIPSState:
+    """Per-function register-tracking state for nanoMIPS (o32-compatible ABI).
+
+    NanoFrame objects only have .mnemonic and .op_str (no structured .ops),
+    so operands are extracted with regex. Params: $a0-$a3 (canonical: $4-$7).
+    Return: $v0 (canonical: $2).
+    """
+    _PARAM_REGS = ("$a0", "$a1", "$a2", "$a3")
+    _RETURN = "$v0"
+    _RA_ALIASES = frozenset({"$ra", "$31"})
+    _ZERO_ALIASES = frozenset({"$zero", "$0"})
+
+    # MIPS ABI name -> short display name
+    _ABI_DISPLAY = {
+        "$zero":"$0","$at":"$1","$v0":"$2","$v1":"$3",
+        "$a0":"$4","$a1":"$5","$a2":"$6","$a3":"$7",
+        "$t0":"$8","$t1":"$9","$t2":"$10","$t3":"$11",
+        "$t4":"$12","$t5":"$13","$t6":"$14","$t7":"$15",
+        "$s0":"$16","$s1":"$17","$s2":"$18","$s3":"$19",
+        "$s4":"$20","$s5":"$21","$s6":"$22","$s7":"$23",
+        "$t8":"$24","$t9":"$25","$k0":"$26","$k1":"$27",
+        "$gp":"$28","$sp":"$29","$fp":"$30","$ra":"$31",
+    }
+    # Reverse: numeric -> canonical ABI name for reads
+    _FROM_NUMERIC = {v: k for k, v in _ABI_DISPLAY.items()}
+
+    _CALLS = frozenset({"balc","jalrc","jal","bgezalc","bltzalc","jialc"})
+    _JCC = frozenset({"beqc","bnec","bltc","bltuc","bgec","bgeuc",
+                      "beqzc","bnezc","bltzc","bgezc","bgtzc","blezc",
+                      "beq","bne","bltz","bgez"})
+
+    _LOAD_W: Dict[str, tuple] = {
+        "lw": (32, False), "lh": (16, True), "lhu": (16, False),
+        "lb": (8, True),   "lbu":(8, False),  "ld":  (64, False),
+    }
+    _STORE_W: Dict[str, int] = {"sw": 32, "sh": 16, "sb": 8, "sd": 64}
+
+    _ARITH: Dict[str, str] = {
+        "addiu": "+", "addi": "+", "addu": "+", "add": "+",
+        "subu":  "-", "sub":  "-",
+        "and":   "&", "or":   "|", "xor":  "^",
+        "sll":   "<<","srl":  ">>","sra":  ">>",
+        "sllv":  "<<","srlv": ">>","srav": ">>",
+        "sltu":  "<u","slt":  "<",
+    }
+
+    def __init__(self, tainted_params: Set[str], name_fn, plt: Dict[int, str]):
+        self._regs: Dict[str, NativeVal] = {}
+        self._written: Set[str] = set()
+        self._declared: Set[str] = set()
+        self._var_n = 0
+        self._name_fn = name_fn
+        self._plt = plt
+
+        for r in self._ZERO_ALIASES:
+            self._regs[r] = NativeVal("uint32_t", "0"); self._written.add(r)
+        for i, r in enumerate(self._PARAM_REGS):
+            nv = NativeVal("uint32_t", f"arg{i}", tainted=(r in tainted_params))
+            self._regs[r] = nv; self._written.add(r); self._declared.add(f"arg{i}")
+        for r in ("$sp", "$29", "$gp", "$28", "$fp", "$30", "$ra", "$31"):
+            self._regs[r] = NativeVal("uint32_t", r)
+            self._written.add(r); self._declared.add(r)
+
+    def _alloc(self) -> str:
+        n = f"v{self._var_n}"; self._var_n += 1; return n
+
+    def _canon(self, reg: str) -> str:
+        reg = reg.strip()
+        return self._FROM_NUMERIC.get(reg, reg)
+
+    def _read(self, reg: str) -> NativeVal:
+        r = self._canon(reg)
+        if r in self._ZERO_ALIASES:
+            return NativeVal("uint32_t", "0")
+        if r not in self._written:
+            self._regs[r] = NativeVal("uint32_t", r); self._written.add(r)
+        return self._regs.get(r, _UNKNOWN)
+
+    def _write(self, reg: str, nv: NativeVal) -> str:
+        r = self._canon(reg)
+        if r in self._ZERO_ALIASES:
+            return "0"
+        old = self._regs.get(r)
+        if old and r in self._written:
+            e = old.expr
+            if (e.startswith("v") and e[1:].isdigit()) or (e.startswith("arg") and e[3:].isdigit()):
+                self._regs[r] = NativeVal(nv.ctype, e, nv.is_ptr, nv.tainted); return e
+        vn = self._alloc()
+        self._regs[r] = NativeVal(nv.ctype, vn, nv.is_ptr, nv.tainted)
+        self._written.add(r); return vn
+
+    def _decl(self, ctype: str, vn: str, expr: str, ann: str = "") -> str:
+        if vn in self._declared:
+            return f"{vn} = {expr};{ann}"
+        self._declared.add(vn); return f"{ctype} {vn} = {expr};{ann}"
+
+    def _tainted(self, *regs: str) -> bool:
+        return any(self._regs.get(self._canon(r), _UNKNOWN).tainted for r in regs)
+
+    @staticmethod
+    def _parse_ops(op_str: str) -> List[str]:
+        import re
+        return [t.strip() for t in re.split(r",\s*", op_str.strip()) if t.strip()]
+
+    @staticmethod
+    def _parse_mem(tok: str):
+        import re
+        m = re.match(r"(-?\d+|0x[0-9a-fA-F]+)\((\$\w+)\)$", tok.strip())
+        if m:
+            return m.group(2), int(m.group(1), 0)
+        return None, None
+
+    @staticmethod
+    def _find_hex_target(op_str: str) -> Optional[int]:
+        import re
+        hit = re.search(r"0x([0-9a-fA-F]+)", op_str)
+        return int(hit.group(1), 16) if hit else None
+
+    def emit(self, frame) -> str:
+        import re
+        m = frame.mnemonic.lower()
+        op = frame.op_str.strip()
+
+        # Return
+        if m in ("jrc", "jr", "jrc16") and any(a in op for a in ("$ra", "$31")):
+            return f"return {self._read(self._RETURN).expr};"
+
+        # Call
+        if m in self._CALLS:
+            tgt = self._find_hex_target(op)
+            callee = self._name_fn(tgt) if tgt is not None else op or "???"
+            args_str = ", ".join(self._read(r).expr for r in self._PARAM_REGS)
+            vn = self._alloc()
+            is_t = self._tainted(*self._PARAM_REGS)
+            self._regs[self._RETURN] = NativeVal("uint32_t", vn, tainted=is_t)
+            ret_canon = self._canon(self._RETURN)
+            self._written.add(ret_canon)
+            ann = " /* TAINTED */" if is_t else ""
+            return self._decl("uint32_t", vn, f"{callee}({args_str})", ann)
+
+        # Unconditional jump
+        if m in ("bc", "b"):
+            tgt = self._find_hex_target(op)
+            return f"goto loc_{tgt:x};" if tgt is not None else f"goto *{op};"
+
+        # Conditional branches
+        if m in self._JCC:
+            tgt = self._find_hex_target(op)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            parts = self._parse_ops(op)
+            if m.endswith("c") and len(parts) >= 2:
+                a = self._read(parts[0]).expr
+                try:
+                    b = self._read(parts[1]).expr if parts[1].startswith("$") else _imm_expr(int(parts[1], 0))
+                except (ValueError, IndexError):
+                    b = parts[1] if len(parts) > 1 else "0"
+                jop = {"beqc":"==","bnec":"!=","bltc":"<","bltuc":"<u",
+                       "bgec":">=","bgeuc":">=u","beqzc":"==","bnezc":"!=",
+                       "bltzc":"<","bgezc":">=","bgtzc":">","blezc":"<="}.get(m, "??")
+                if "u" in jop:
+                    cond_str = f"(unsigned){a} {jop[:-1]} (unsigned){b}"
+                elif m.endswith("zc"):
+                    cond_str = f"{a} {jop} 0"
+                else:
+                    cond_str = f"{a} {jop} {b}"
+            else:
+                r0 = parts[0] if parts and parts[0].startswith("$") else None
+                a = self._read(r0).expr if r0 else "???"
+                jop = {"beq":"==","bne":"!=","bltz":"<","bgez":">="}.get(m, "??")
+                cond_str = f"{a} {jop} 0"
+            return f"if ({cond_str}) goto {label};"
+
+        # Load
+        if m in self._LOAD_W:
+            parts = self._parse_ops(op)
+            if len(parts) >= 2:
+                dst = parts[0]
+                base, disp = self._parse_mem(parts[1])
+                if base is not None:
+                    bits, signed = self._LOAD_W[m]
+                    ctype = _ctype_from_bits(bits, signed)
+                    base_expr = self._read(base).expr
+                    addr = f"({base_expr} + {_imm_expr(disp)})" if disp else base_expr
+                    tainted = self._tainted(base)
+                    expr = f"*({_ptr_cast(ctype)}{addr})"
+                    vn = self._write(dst, NativeVal(ctype, expr, tainted=tainted))
+                    return self._decl(ctype, vn, expr, " /* TAINTED */" if tainted else "")
+
+        # Store
+        if m in self._STORE_W:
+            parts = self._parse_ops(op)
+            if len(parts) >= 2:
+                src = parts[0]
+                base, disp = self._parse_mem(parts[1])
+                if base is not None:
+                    ctype = _ctype_from_bits(self._STORE_W[m])
+                    base_expr = self._read(base).expr
+                    addr = f"({base_expr} + {_imm_expr(disp)})" if disp else base_expr
+                    return f"*({_ptr_cast(ctype)}{addr}) = {self._read(src).expr};{' /* TAINTED */' if self._tainted(src) else ''}"
+
+        # Move
+        if m in ("move", "mov"):
+            parts = self._parse_ops(op)
+            if len(parts) >= 2:
+                dst, src = parts[0], parts[1]
+                nv_src = self._read(src)
+                vn = self._write(dst, NativeVal("uint32_t", nv_src.expr, tainted=nv_src.tainted))
+                return self._decl("uint32_t", vn, nv_src.expr, " /* TAINTED */" if nv_src.tainted else "")
+
+        # Load immediate
+        if m in ("li", "li16"):
+            parts = self._parse_ops(op)
+            if len(parts) >= 2:
+                dst = parts[0]
+                try:
+                    imm = int(parts[1], 0)
+                    vn = self._write(dst, NativeVal("uint32_t", _imm_expr(imm)))
+                    return self._decl("uint32_t", vn, _imm_expr(imm))
+                except ValueError:
+                    pass
+
+        # Arithmetic
+        if m in self._ARITH:
+            parts = self._parse_ops(op)
+            if len(parts) >= 2:
+                dst = parts[0]
+                src1 = parts[1] if parts[1].startswith("$") else dst
+                a = self._read(src1).expr
+                raw_b = parts[2] if len(parts) > 2 else (parts[1] if not parts[1].startswith("$") else None)
+                if raw_b is None:
+                    b, b_t = "0", False
+                elif raw_b.startswith("$"):
+                    nv2 = self._read(raw_b); b, b_t = nv2.expr, nv2.tainted
+                else:
+                    try:
+                        b, b_t = _imm_expr(int(raw_b, 0)), False
+                    except ValueError:
+                        b, b_t = raw_b, False
+                tainted = self._tainted(src1) or b_t
+                op_sym = self._ARITH[m]
+                if op_sym.endswith("u"):
+                    expr = f"(unsigned){a} {op_sym[:-1]} (unsigned){b}"
+                else:
+                    expr = f"{a} {op_sym} {b}"
+                vn = self._write(dst, NativeVal("uint32_t", expr, tainted=tainted))
+                return self._decl("uint32_t", vn, expr, " /* TAINTED */" if tainted else "")
 
 
 def _make_arm32_emit(name_fn, plt: Dict[int, str]):
