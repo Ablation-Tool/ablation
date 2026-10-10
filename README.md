@@ -1,6 +1,6 @@
 <img src="assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
-![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
+![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![DoD Compliant](https://img.shields.io/badge/DoD-Compliant-grey)](docs/ABLATION-STANDARDS.md) [![NIST Compliant](https://img.shields.io/badge/NIST-Compliant-grey)](docs/ABLATION-STANDARDS.md) [![CISA Compliant](https://img.shields.io/badge/CISA-Compliant-grey)](docs/ABLATION-STANDARDS.md)
 
 
 Ablation is a self-contained reverse engineering framework.
