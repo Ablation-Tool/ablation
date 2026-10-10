@@ -309,6 +309,7 @@ class SemanticSearcher:
         self._vectors: Optional[np.ndarray]  = None
         self._meta: Optional[list[dict]]     = None
         self._live_addrs: 'set[int] | None'  = None
+        self._binary_id: Optional[int]       = None
 
     @classmethod
     def from_context(cls, ctx, cache_dir: Optional[Path] = None) -> 'SemanticSearcher':
@@ -331,9 +332,10 @@ class SemanticSearcher:
                     f'func_id.db; falling back to global scope (slow)',
                     stacklevel=2,
                 )
+                binary_id  = None
                 live_addrs = None
             else:
-                binary_id = row[0]
+                binary_id  = int(row[0])
                 live_addrs = {
                     int(r[0]) for r in con.execute(
                         "SELECT va FROM functions WHERE binary_id=? "
@@ -343,6 +345,7 @@ class SemanticSearcher:
                 }
         finally:
             con.close()
+        searcher._binary_id  = binary_id
         searcher._live_addrs = live_addrs
         searcher.build_corpus(live_addrs=live_addrs)
         return searcher
@@ -413,15 +416,22 @@ class SemanticSearcher:
                 return len(self._meta)
 
         con = sqlite3.connect(self._db_path)
-        rows = con.execute('''
-            SELECT va, name, role, confidence, call_targets, string_xrefs, notes
-              FROM functions
-             WHERE confidence IN ('CONFIRMED', 'ANGR_INFERRED')
-        ''').fetchall()
+        if self._binary_id is not None:
+            rows = con.execute('''
+                SELECT va, name, role, confidence, call_targets, string_xrefs, notes
+                  FROM functions
+                 WHERE binary_id = ?
+                   AND confidence IN ('CONFIRMED', 'ANGR_INFERRED')
+            ''', (self._binary_id,)).fetchall()
+        else:
+            rows = con.execute('''
+                SELECT va, name, role, confidence, call_targets, string_xrefs, notes
+                  FROM functions
+                 WHERE confidence IN ('CONFIRMED', 'ANGR_INFERRED')
+            ''').fetchall()
+            if live_addrs is not None:
+                rows = [r for r in rows if r[0] in live_addrs]
         con.close()
-
-        if live_addrs is not None:
-            rows = [r for r in rows if r[0] in live_addrs]
 
         if not rows:
             self._vectors = np.empty((0, 384), dtype=np.float32)
