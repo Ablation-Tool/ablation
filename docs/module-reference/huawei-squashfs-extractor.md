@@ -95,9 +95,11 @@ protect with an external lock.
 
 ## Limitations
 
-- XZ compression only. Other squashfs compression algorithms raise `ValueError` at open time.
-- Fragment table support is partial: regular file fragments are resolved; fragment-only
-  small files (no full data block) require `_read_frag_entry` to be called. This is handled
-  internally for `extract()`.
-- No symlink, device, FIFO, or socket inode types. Only regular files (type 2/9) and
-  directories (type 1/8) are traversed.
+XZ compression only. Other squashfs compression algorithms raise `ValueError` at open time.
+
+Fragment table support is partial. Regular file fragments are resolved; fragment-only small
+files (no full data block) require `_read_frag_entry` to be called. This is handled
+internally for `extract()`.
+
+Inode type coverage is limited to regular files (type 2/9) and directories (type 1/8).
+Symlinks, device nodes, FIFOs, and sockets are not traversed.
