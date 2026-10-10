@@ -219,15 +219,22 @@ def _scan_section_strings(pe, data: bytes, section_name: str) -> Dict[int, str]:
     """
     Scan one named PE section for printable null-terminated strings >= 5 chars.
     Returns {abs_va: string}.
+
+    Skips sections with offset=0 (virtual-only / memory-mapped with no file
+    backing) — reading at offset 0 would scan the MZ/PE header, not the section.
+    Slice truncation when offset+size > len(data) is silent; short files miss
+    tail strings but do not crash.
     """
     strings: Dict[int, str] = {}
     imagebase = pe.optional_header.imagebase
     for section in pe.sections:
         if section.name.strip("\x00").lower() != section_name:
             continue
-        va = imagebase + section.virtual_address
         offset = section.offset
+        if offset == 0:
+            continue  # virtual-only section; no file backing
         size = section.size
+        va = imagebase + section.virtual_address
         chunk = data[offset: offset + size]
         i = 0
         while i < len(chunk):
@@ -242,22 +249,23 @@ def _scan_section_strings(pe, data: bytes, section_name: str) -> Dict[int, str]:
 
 def _build_rdata_strings(pe, data: bytes) -> Dict[int, str]:
     """
-    Build {abs_va: string} from printable null-terminated strings in .rdata.
-    Only strings >= 5 characters are indexed.
+    Build {abs_va: string} from printable null-terminated strings.
+    Tries .rdata first; falls back to .data when .rdata yields nothing.
 
     GAP-016 (BorlandVCLStringIndex): Borland BCC32/VCL applications place string
     literals in .data rather than .rdata, so .rdata contains zero strings.  When
     .rdata yields nothing, fall back to .data.  The fallback is safe because
     .data noise (pointers, structs) produces runs shorter than 5 printable bytes
     or containing non-ASCII bytes that the scanner naturally rejects.
+    The fallback also fires for any other binary with an empty .rdata (e.g., a
+    stripped MSVC binary); the .data scan adds modest overhead but no false crashes.
     """
     strings = _scan_section_strings(pe, data, ".rdata")
     if strings:
         return strings
-    # BCC32/VCL fallback
     fallback = _scan_section_strings(pe, data, ".data")
     if fallback:
-        print(f"  [*] .rdata=0 strings — BCC32/VCL fallback: {len(fallback)} strings from .data")
+        print(f"  [*] .rdata=0 strings — falling back to .data: {len(fallback)} strings")
     return fallback
 
 
@@ -266,18 +274,18 @@ def _build_rdata_strings(pe, data: bytes) -> Dict[int, str]:
 # DLLs that export firmware-update APIs (matched against imported DLL names).
 _FIRMWARE_DLLS: frozenset = frozenset({"hiddapi.dll", "hidapi.dll", "egtouch.dll"})
 
-# Substrings in named IAT values that signal a firmware-update capability.
-_FIRMWARE_IAT_PATTERNS: tuple = (
-    "DevIAP", "IAPFlash", "IAPSet", "IAPGet", "FirmwareUpdate",
-    "FirmwareErase", "FirmwareWrite", "DevMCUReset",
+# Lowercase substrings matched against lowercased IAT values for firmware-update APIs.
+_FIRMWARE_IAT_SUBSTRINGS: tuple = (
+    "deviap", "iapflash", "iapset", "iapget", "firmwareupdate",
+    "firmwareerase", "firmwarewrite", "devmcureset",
 )
 
-# Named imports that indicate the binary performs code-signing or hash verification.
-_SIGNING_IMPORTS: frozenset = frozenset({
-    "WinVerifyTrust", "CryptVerifySignature", "CryptVerifyMessageSignature",
-    "CryptHashData", "CryptSignHash", "BCryptVerifySignature",
-    "NCryptVerifySignature", "CertVerifyCertificateChainPolicy",
-})
+# Lowercase substrings matched against lowercased IAT values for code-signing APIs.
+_SIGNING_IAT_SUBSTRINGS: tuple = (
+    "winverifytrust", "cryptverifysignature", "cryptverifymessagesignature",
+    "crypthashdata", "cryptsignhash", "bcryptverifysignature",
+    "ncryptverifysignature", "certverifycertificatechainpolicy",
+)
 
 
 def _check_firmware_auth_bypass(pe, iat: Dict[int, str]) -> Optional[dict]:
@@ -288,7 +296,7 @@ def _check_firmware_auth_bypass(pe, iat: Dict[int, str]) -> Optional[dict]:
     code-signing or hash-verification imports (CWE-347).
 
     Positive signals:
-      • Named IAT entry matches a firmware-update substring, OR
+      • Named IAT entry (lowercased) matches a firmware-update substring, OR
       • A firmware-update DLL (hiddapi.dll, hidapi.dll, …) is imported —
         this catches ordinal-only imports that _build_iat skips.
 
@@ -296,23 +304,29 @@ def _check_firmware_auth_bypass(pe, iat: Dict[int, str]) -> Optional[dict]:
 
     Returns a finding dict or None.
     """
-    # DLL names actually imported (includes ordinal-only imports)
+    # DLL names actually imported (includes ordinal-only imports).
+    # Logged on failure so the silent false-negative is visible in sweep output.
     imported_dlls: set = set()
     try:
         for lib in pe.imports:
             imported_dlls.add(lib.name.lower())
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  [!] _check_firmware_auth_bypass: pe.imports failed: {e}")
+
+    # All comparisons are lowercase to catch non-standard API casing.
+    iat_lower = [v.lower() for v in iat.values()]
 
     firmware_dlls_hit = sorted(imported_dlls & _FIRMWARE_DLLS)
     firmware_iat_hit = [
         v for v in iat.values()
-        if any(p in v for p in _FIRMWARE_IAT_PATTERNS)
+        if any(p in v.lower() for p in _FIRMWARE_IAT_SUBSTRINGS)
     ]
-    signing_hit = [v for v in iat.values() if any(s in v for s in _SIGNING_IMPORTS)]
+    has_signing = any(
+        any(s in vl for s in _SIGNING_IAT_SUBSTRINGS) for vl in iat_lower
+    )
 
     has_firmware = bool(firmware_dlls_hit) or bool(firmware_iat_hit)
-    if not has_firmware or signing_hit:
+    if not has_firmware or has_signing:
         return None
 
     evidence: List[str] = []
