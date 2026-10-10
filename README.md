@@ -77,7 +77,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 
 ---
 
-## 19 Decompilers
+## Decompilers
 
 | ISA / Runtime | Variants |
 |---|---|
