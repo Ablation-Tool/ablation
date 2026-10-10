@@ -10,6 +10,23 @@ Semantic firmware analysis for vulnerability researchers.
 |---|---|
 | [Getting Started](getting-started.md) | Install, first binary, first sweep -- 15 minutes |
 | [Understanding Ablation](understanding-ablation.md) | Architecture, analysis model, limitations, and Codex workflow |
+| [Ablation Standards](ABLATION-STANDARDS.md) | Tool qualification and security engineering standards (ISO 26262 TCL3, NIST SSDF, CISA SbD, MIL-HDBK-115C); compliance matrix and implementation roadmap |
+| [Known Anomalies — ARM32TaintTracker](known-anomalies/arm32-taint-tracker.md) | Thumb interworking, IT block conditions, indirect BLX, loop fixpoint, VFP/NEON |
+| [Known Anomalies — ARM64TaintTracker](known-anomalies/arm64-taint-tracker.md) | Stripped binary function discovery, indirect BLR, SVE/NEON, loop fixpoint, kernel module relocs |
+| [Known Anomalies — MIPS32TaintTracker](known-anomalies/mips32-taint-tracker.md) | O32 mandatory homing, delay slot edge case, indirect JALR, endian default, loop fixpoint |
+| [Known Anomalies — MIPS64TaintTracker](known-anomalies/mips64-taint-tracker.md) | N64 register aliasing, stack buffers, indirect JALR, endian default, loop fixpoint |
+| [Known Anomalies — NanoMIPSTaintTracker](known-anomalies/nanomips-taint-tracker.md) | Conservative fallback false positives (Capstone 5.x), P48 instructions, indirect JALRC, loop fixpoint |
+| [Known Anomalies — PPC32TaintTracker](known-anomalies/ppc32-taint-tracker.md) | Stack buffers, unresolved GOT2 entries, LIEF reloc bug, endian default, loop fixpoint |
+| [Known Anomalies — PPC64TaintTracker](known-anomalies/ppc64-taint-tracker.md) | ELFv1 OPD stripped, TOC not emulated, stack buffers, endian default, loop fixpoint |
+| [Known Anomalies — RH850TaintTracker](known-anomalies/rh850-taint-tracker.md) | Opcode gaps, CALLT/interrupt entry, vtable dispatch, loop fixpoint, flat ROM boundaries |
+| [Known Anomalies — TriCoreTaintTracker](known-anomalies/tricore-taint-tracker.md) | Return aliasing, loop fixpoint, stripped ELF boundaries, CSA memory taint, Capstone version |
+| [Known Anomalies — V850TaintTracker](known-anomalies/v850-taint-tracker.md) | GCC/GHS ABI mismatch, symbol mangling, flat ROM, decoder gaps, loop fixpoint |
+| [Known Anomalies — ARCTaintTracker](known-anomalies/arc-taint-tracker.md) | ARCDecoder coverage (has_full_decode), compact instructions, indirect JL/JLR, loop fixpoint |
+| [Known Anomalies — RISCV32TaintTracker](known-anomalies/riscv32-taint-tracker.md) | Capstone version, HiSilicon custom opcodes, ldmia/stmia memory, indirect JALR, loop fixpoint |
+| [Known Anomalies — RISCV64TaintTracker](known-anomalies/riscv64-taint-tracker.md) | Capstone version, RVC compact instruction coverage, indirect JALR, stack buffers, loop fixpoint |
+| [Known Anomalies — X86_32TaintTracker](known-anomalies/x86-32-taint-tracker.md) | Intraprocedural only, FPO functions, GOT-base not emulated, esp arithmetic, loop fixpoint |
+| [Known Anomalies — LoongArch64TaintTracker](known-anomalies/loongarch64-taint-tracker.md) | Stripped binary discovery, KASAN/KCOV false positives, LSX/LASX vectors, dynamic syscalls, loop fixpoint |
+| [Known Anomalies — WindowsPoolTaintTracker](known-anomalies/windows-pool-taint-tracker.md) | Register-identity false positives, 200-instruction window, dynamic-resolve zero-IAT, lief version |
 
 ---
 
