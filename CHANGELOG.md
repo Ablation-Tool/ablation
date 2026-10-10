@@ -2,6 +2,87 @@
 
 ---
 
+## v2.66.0
+
+**BinaryLifter: SH-2A backend upgraded to CFG + structured control flow.**
+Replaces the linear-walk lifter with a full decompiler pipeline.
+
+Changed:
+- `_lift_sh2a()` now builds a CFG (`cfg_sh2a.build_cfg`) and runs the
+  dominator-based structurizer (`structurizer.Structurizer`) before emitting
+  pseudo-C.  Output is now `if/while/for` structured code instead of `goto`
+  chains.  Falls back to linear block-ordered emit if the structurizer raises.
+- `_SH2aState.emit()` is unchanged — it remains the per-instruction emitter
+  callback, called by the structurizer via a lambda.
+
+---
+
+## v2.65.0
+
+**Structurizer: ISA-neutral dominator-based structured control-flow pass.**
+
+New module: `ablation/analyzers/structurizer.py`.
+
+3 things that were not possible before in Ablation:
+
+1. **No structured output for any ISA.**  Every CFG-backed lifter produced
+   goto-based IR.  Structural reconstruction (if/while/for) was absent.
+2. **No post-dominator tree.**  Post-dominators are needed to find the "join"
+   point after an if/else diamond.  `PostDomTree` fills this gap.
+3. **No ISA-neutral decompiler pass.**  The structurizer works on any CFG that
+   exposes `.blocks`, `.entry`, `.flow`, `.flow_r()` — the same interface as
+   `dataflow_engine.CFG`.  Any ISA CFG module can plug in.
+
+New:
+- `Structurizer(cfg)`: builds dominator tree + loop info + post-dominator tree,
+  then walks RPO to emit `WhileNode`, `IfNode`, `SequenceNode`, `ReturnNode`,
+  `BreakNode`, `ContinueNode`.
+- `Structurizer.structure() -> StructuredNode`: returns the tree.
+- `Structurizer.emit(insn_emitter, func_name) -> str`: renders to pseudo-C.
+- `PostDomTree(cfg)`: immediate post-dominator tree via reversed-CFG DomTree.
+  Used to find if/else join points.
+- All node types exported: `SequenceNode`, `InsnNode`, `IfNode`, `WhileNode`,
+  `BreakNode`, `ContinueNode`, `ReturnNode`.
+- Docs: `docs/module-reference/structurizer.md`.
+
+---
+
+## v2.64.0
+
+**cfg_sh2a: SH-2A control-flow graph builder.**
+
+New module: `ablation/analyzers/cfg_sh2a.py`.
+
+3 things that were not possible before in Ablation:
+
+1. **No CFG for SH-2A.**  Every other ISA with a lifter backend also had a CFG
+   module; SH-2A was the only exception.  Without a CFG, the structurizer and
+   DomTree cannot run on SH-2A firmware.
+2. **No delay-slot semantics in any CFG builder.**  SH-2A's delay-slot model
+   (one instruction always executes after a branch before the branch fires) is
+   architecturally distinct from all prior CFG modules (ARM, V850, ARC, x86).
+   `cfg_sh2a` correctly attaches the delay-slot instruction to the terminating
+   block so successor VAs are computed from after the delay slot, not from
+   after the branch.
+3. **No `.flow` / `.flow_r()` interface on SH-2A CFG.**  `dataflow_engine.DomTree`
+   and all backward-dataflow passes require these.  `cfg_sh2a.CFG` adds both
+   as computed properties.
+
+New:
+- `Block(start, insns, succs, preds)`: basic block for SH-2A.  Delay-slot
+  instruction is the last `insns` entry when the terminator has a delay slot.
+- `CFG(blocks, entry)` with `.flow` property and `.flow_r()` method for
+  duck-type compatibility with `dataflow_engine.CFG`.
+- `build_cfg(insns, entry=None) -> CFG`: three-pass construction
+  (leader scan → partition → edge fill).
+- Delay-slot semantics: WITH delay slot = {bra, bsr, jsr, bt/s, bf/s, rts, rte};
+  WITHOUT = {bt, bf, rts/n}.  BRAF/BSRF/JMP@Rn decode as MISC → open blocks
+  (documented limitation).
+- Compatible with `DomTree`, `LoopInfo` from `dataflow_engine` via duck typing.
+- Docs: `docs/module-reference/cfg-sh2a.md`.
+
+---
+
 ## v2.63.0
 
 **BinaryLifter: SH-2A backend (`_lift_sh2a` + `_SH2aState`).**  Adds Renesas SH-2A (SH7058/SH7059)
