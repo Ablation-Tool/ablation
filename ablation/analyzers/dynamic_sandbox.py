@@ -81,6 +81,58 @@ def _load_elf_segments(binary_path: str) -> tuple:
     return load_base or 0, segments, plt_range
 
 
+# ── PE segment loader ─────────────────────────────────────────────────────────
+
+def _load_pe_segments(binary_path: str) -> tuple:
+    """Return (load_base, segments, iat_range) from a PE/PE+ binary.
+
+    segments: list of (vaddr, data) tuples for each non-empty PE section
+    iat_range: (start, end) VA range of the IAT (abort hook for import stubs), or None
+
+    Closes MHB-DYNAMIC (ABLATION-STANDARDS.md §7.3): extends DynamicSandbox to support
+    PE binaries so that KernelDriverAnalyzer findings can be dynamically confirmed.
+    """
+    import lief
+
+    pe = lief.parse(binary_path)
+    if pe is None or not isinstance(pe, lief.PE.Binary):
+        raise ValueError(f"lief cannot parse {binary_path} as PE")
+
+    image_base: int = pe.optional_header.imagebase
+    segments = []
+
+    for section in pe.sections:
+        if section.virtual_size == 0:
+            continue
+        va = image_base + section.virtual_address
+        data = bytes(section.content)
+        vs = section.virtual_size
+        if len(data) < vs:
+            data = data + b'\x00' * (vs - len(data))
+        segments.append((va, data))
+
+    # IAT is the import hook range (equivalent of PLT in ELF)
+    iat_range = None
+    try:
+        iat_dir = pe.data_directory(lief.PE.DataDirectory.TYPES.IAT)
+        if iat_dir and iat_dir.size > 0:
+            iat_start = image_base + iat_dir.rva
+            iat_range = (iat_start, iat_start + iat_dir.size)
+    except Exception:
+        pass
+
+    return image_base, segments, iat_range
+
+
+def _is_pe(binary_path: str) -> bool:
+    """Return True if the file begins with the MZ magic byte sequence."""
+    try:
+        with open(binary_path, "rb") as f:
+            return f.read(2) == b"MZ"
+    except OSError:
+        return False
+
+
 # ── LeafFunctionChecker ───────────────────────────────────────────────────────
 
 class LeafFunctionChecker:
@@ -99,11 +151,10 @@ class LeafFunctionChecker:
         from .xref_graph import XRefGraph
         xg = XRefGraph.from_path(binary_path)
         xg.build()
-        _, _, plt_range = _load_elf_segments(binary_path)
-        # Build callees map from xref graph
-        callees_map: Dict[int, List[int]] = {}
-        for va in getattr(xg, "_plt", {}).keys():
-            pass  # plt stubs tracked via plt_range
+        if _is_pe(binary_path):
+            _, _, plt_range = _load_pe_segments(binary_path)
+        else:
+            _, _, plt_range = _load_elf_segments(binary_path)
         # XRefGraph doesn't expose full callees_map directly; proxy via callees_of
         return cls(callees_map={}, plt_range=plt_range)
 
@@ -205,7 +256,10 @@ class DynamicSandbox:
             raise RuntimeError("unicorn not installed: pip install unicorn")
         self._path = binary_path
         self._arch = arch
-        self._load_base, self._segments, self._plt_range = _load_elf_segments(binary_path)
+        if _is_pe(binary_path):
+            self._load_base, self._segments, self._plt_range = _load_pe_segments(binary_path)
+        else:
+            self._load_base, self._segments, self._plt_range = _load_elf_segments(binary_path)
         self._uc = self._init_unicorn(arch)
         self._map_segments()
         self._map_infrastructure()

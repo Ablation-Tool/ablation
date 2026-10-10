@@ -65,13 +65,14 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Workflow:</strong> version diffing, cross-target learning, module quality gate</summary>
+<summary><strong>Workflow:</strong> version diffing, cross-target learning, module quality gate, coverage gate</summary>
 
 | Capability | |
 |:---|:---|
 | [**Version Diffing**](docs/workflows/cross-version.md) | Checks whether the logic changed, not whether the file changed, so a cosmetic recompile cannot hide an unpatched vulnerability. |
 | [**Cross-Target Learning**](docs/module-reference/cross-target-learning.md) | Every confirmed finding seeds future semantic searches, so the tool gets sharper with each engagement. |
 | [**Module Quality Gate**](docs/module-reference/forge.md) | FORGE audits every user-written module before it can be stored, so local extensions meet the same standard as the modules that ship with Ablation. |
+| [**Coverage Gate**](docs/ABLATION-STANDARDS.md) | The taint engine requires 85% statement coverage on every commit, so a regression in taint logic fails the test suite before it reaches a firmware engagement. |
 
 </details>
 
