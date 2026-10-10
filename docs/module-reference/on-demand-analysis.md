@@ -1,228 +1,316 @@
 # On-Demand Analysis
 
-`BinaryContext` builds a lightweight index of a binary once and reloads it in under 200 milliseconds on every subsequent session. Ablation analyzes only the code being examined — no GUI, no autoanalysis, no license.
+Every session with a binary starts by loading `BinaryContext`. It builds a lightweight index of the binary once and reloads that index in under 200 milliseconds on every subsequent session. The cost of analyzing a new binary falls to a few seconds the first time and becomes nearly instant after that.
 
 ---
 
 ## Why this exists
 
-Two things were not possible before BinaryContext:
+### The startup time problem
 
-**1. Sub-second analysis startup on large binaries.**
-IDA Pro's autoanalysis on a 50 MB firmware binary runs for 5 to 20 minutes before the UI becomes interactive. Ghidra's analysis pipeline is similar. Every session restart pays that cost again. BinaryContext builds a lightweight index once, serializes it to JSON keyed on the binary's SHA-256 hash, and reloads in under 200 ms from cache. The second session on any binary is instant. The cache invalidates the moment any byte in the binary changes, so analysis always reflects the current file.
+IDA Pro's autoanalysis on a 50 MB firmware binary runs for 5 to 20 minutes before the UI is interactive. Ghidra's analysis pipeline is similar. Every session restart pays that full cost again. If you are iterating on a taint tracker or testing a new semantic query, that 10-minute wait becomes a serious obstacle to experimentation.
 
-**2. Caller/callee/string queries without a running GUI.**
-Getting "which functions call `strcpy`?" in IDA requires the GUI to be open and fully indexed. `ctx.callers_of('strcpy')` answers that question from the command line, in a script, or inside a taint tracker — with no GUI dependency and no license requirement. The call graph is a flat in-memory list, so filtering it is a single linear scan in Python.
+BinaryContext solves this by separating the expensive work from the repeatable work. The expensive part — parsing the binary, recovering function starts, building the call graph — runs once. The result is serialized to a JSON file keyed on the binary's SHA-256 hash. Every subsequent session deserializes that file directly. Python's JSON parser reads 10 MB of pre-parsed data in about 80 milliseconds. Add 50 milliseconds to compute the SHA-256, and the total reload time is roughly 130 milliseconds. The second session on any binary is instant.
+
+The SHA-256 key ensures the cache never goes stale. Any change to the binary produces a different hash and triggers a full rebuild. This is a deliberately simple design. There is no version tag, no timestamp, no partial invalidation. The binary itself is the truth, and the hash is the gate.
+
+### The GUI dependency problem
+
+Getting "which functions call `strcpy`?" in IDA requires the GUI to be open and fully analyzed. That means a license seat, a running process, and the 10-minute wait. `ctx.callers_of('strcpy')` answers the same question from the command line, in a script, or inside a taint tracker. No GUI. No license. The call graph lives in memory as a flat Python list.
+
+This matters most in automated pipelines. A taint tracker calling `callers_of` on 200 different sinks in sequence would be unusable against an IDA backend. Against an in-memory list, it runs in milliseconds.
 
 ---
 
 ## Build phase (runs once per binary)
 
-```
-  ELF / PE / Mach-O binary on disk
-  ══════════════════════════════════════════════════════════════
+The build phase has five steps. Understanding each step helps you understand what the index can and cannot tell you.
 
-  STEP 1 — Format parse via lief
+### Step 1 — Format parse and symbol extraction
+
+The first step uses `lief` to parse the binary format and extract three symbol tables.
+
+**PLT imports (ELF)**
+
+The PLT (Procedure Linkage Table) is ELF's mechanism for lazy binding of shared library calls. When you compile C code that calls `strcpy`, the compiler generates a call to a PLT stub rather than the actual `strcpy` address. The PLT stub is a small trampoline: on the first call, it invokes the dynamic linker to resolve the symbol and patch the GOT entry. On subsequent calls, the GOT entry already holds the resolved address, so the stub jumps directly to it.
+
+For reverse engineering, the PLT stub is the important artifact. The stub has a fixed VA in the binary. Every call to `strcpy` goes through the same stub VA. If you know that PLT stub at 0x3000 corresponds to `strcpy`, you can find every `strcpy` caller by scanning for calls to 0x3000.
+
+The ELF linker records the PLT-to-symbol mapping in `.rela.plt`. Each entry is a `Elf64_Rela` struct:
+
+```
+  struct Elf64_Rela {
+      Elf64_Addr   r_offset;   // VA of the GOT slot that will hold the resolved address
+      Elf64_Xword  r_info;     // upper 32 bits: .dynsym index; lower 32 bits: reloc type
+      Elf64_Sxword r_addend;   // always 0 for R_X86_64_JUMP_SLOT
+  };
+
+  To resolve a PLT entry:
+    sym_index   = r_info >> 32
+    sym_name    = dynsym[sym_index].st_name       // index into .dynstr
+    import_name = .dynstr[sym_name]               // null-terminated string
+    stub_va     = plt_section_va + 16 + (N * 16)  // N = entry position
+
+  The first 16 bytes of .plt are the resolver stub (PLT[0]).
+  Each subsequent import gets its own 16-byte stub:
+
+  PLT stub layout (x86-64, 16 bytes):
   ┌──────────────────────────────────────────────────────────────┐
+  │  offset  0: FF 25 XX XX XX XX   JMP  QWORD PTR [RIP + disp] │
+  │                                 → jumps into GOT slot        │
+  │  offset  6: 68 NN 00 00 00      PUSH N     (reloc index)     │
+  │  offset 11: E9 XX XX XX XX      JMP  PLT[0] (resolver)       │
+  │  (total: 16 bytes per import)                                │
+  └──────────────────────────────────────────────────────────────┘
+
+  After dynamic linking resolves the symbol, GOT[slot] holds the
+  real function address. The JMP at offset 0 now jumps directly
+  to the resolved function, bypassing the PUSH+JMP tail.
+```
+
+BinaryContext records `plt_map[stub_va] = import_name` for every PLT entry.
+
+**PLT imports (PE/COFF)**
+
+PE binaries use the IAT (Import Address Table) instead of a GOT. The mechanism is the same — a table of function pointers patched at load time — but the layout differs. BinaryContext reads the import directory's INT (Import Name Table) and IAT to build `iat_map[thunk_va] = 'module!function'`.
+
+**Exported symbols and string extraction**
+
+Exported symbols from `.dynsym`/`.symtab` (ELF) or the export directory (PE) populate `exports_map[name] = va`. The string extractor scans all readable, non-executable sections for printable ASCII runs of at least 4 characters and stores them in `strings_map[va] = content`.
+
+```
+  ┌──────────────────────────────────────────────────────────────┐
+  │  STEP 1 — Format parse and symbol extraction                 │
+  │                                                              │
   │  lief.parse(binary_path)                                     │
-  │                                                              │
-  │  PLT stub resolution (ELF):                                  │
-  │    .rela.plt section: array of Elf64_Rela entries            │
-  │      struct Elf64_Rela {                                     │
-  │        Elf64_Addr  r_offset;  // VA of GOT slot to patch     │
-  │        Elf64_Xword r_info;    // sym index | reloc type      │
-  │        Elf64_Sxword r_addend; // always 0 for JUMP_SLOT      │
-  │      }                                                       │
-  │    r_info >> 32 = symbol table index into .dynsym            │
-  │    .dynsym[index].st_name → string in .dynstr → import_name │
-  │                                                              │
-  │    PLT stubs (x86-64, 16 bytes each):                        │
-  │      push   QWORD PTR [GOT+8]     ; push link_map            │
-  │      jmp    QWORD PTR [GOT+16]    ; jmp to resolver          │
-  │      ──── first stub (resolver) ─────────────────────────    │
-  │      jmp    QWORD PTR [GOT+slot]  ; GOT slot for symbol N    │
-  │      push   N                     ; relocation index         │
-  │      jmp    PLT[0]                ; call resolver            │
-  │      ──── stub N (16 bytes, one per import) ─────────────    │
-  │                                                              │
-  │    stub_VA for import N:                                     │
-  │      = plt_section_VA + 16 + (N * 16)                       │
-  │    stored as: plt_map[stub_VA] = import_name                 │
-  │                                                              │
-  │  PLT stub resolution (PE, x86-64):                           │
-  │    IMAGE_IMPORT_DESCRIPTOR → module name                     │
-  │    INT (Import Name Table) entries → function name           │
-  │    IAT (Import Address Table) → thunk VAs                    │
-  │    iat_map[thunk_VA] = 'module!function'                     │
-  │                                                              │
-  │  Exported symbols:                                           │
-  │    ELF .dynsym / .symtab: STT_FUNC entries within .text      │
-  │    PE export directory: AddressOfNames[] + AddressOfFunctions[]│
-  │    exports_map[name] = VA                                    │
-  │                                                              │
-  │  .rodata string extraction:                                  │
-  │    for every readable, non-executable section:               │
-  │      scan for printable ASCII runs of length >= 4            │
-  │      include null-terminator as delimiter                    │
-  │      strings_map[VA] = content                               │
-  └──────────────────────────────┬───────────────────────────────┘
-                                 |
-                                 v
-  STEP 2 — Function start recovery (two-pass)
+  │     │                                                        │
+  │     ├── .rela.plt + .dynsym → plt_map  {stub_va: name}      │
+  │     │   (ELF) or IAT + INT  → iat_map  {thunk_va: name}     │
+  │     │                                                        │
+  │     ├── .dynsym/.symtab (ELF) or export dir (PE)            │
+  │     │          → exports_map  {name: va}                     │
+  │     │                                                        │
+  │     └── readable non-exec sections: scan for printable runs  │
+  │                → strings_map  {va: content}                  │
+  └──────────────────────────────────────────────────────────────┘
+```
+
+### Step 2 — Function start recovery
+
+Recovering function starts in a stripped binary is a two-pass process. The first pass reads the binary's own unwind data. The second pass fills in the gaps.
+
+**Why unwind tables contain function starts**
+
+C++ exception handling and signal delivery both need to unwind the call stack. To unwind a frame, the runtime needs to know which function owns a given PC value and what that function does to the stack. Compilers solve this by emitting one Frame Description Entry (FDE) per function in `.eh_frame`. The FDE records the function's start VA and byte length, along with instructions for restoring the previous frame.
+
+The critical insight for RE is that `strip(1)` cannot remove `.eh_frame`. The runtime linker reads it at program startup to register unwind information with the OS. Remove it and exception handling breaks. So in any binary compiled with GCC or Clang at default settings, `.eh_frame` contains the complete function start list, even when the symbol table is gone.
+
+```
+  .eh_frame record types:
+
+  CIE (Common Information Entry) — one per compilation unit:
   ┌──────────────────────────────────────────────────────────────┐
-  │  Pass 1a — .eh_frame FDE records (ELF)                       │
-  │                                                              │
-  │    .eh_frame is a sequence of CIE and FDE records:           │
-  │                                                              │
-  │    CIE (Common Information Entry):                           │
-  │      [length: 4B][id=0: 4B][version: 1B][augmentation: str] │
-  │      [code_align: uleb128][data_align: sleb128]              │
-  │      [return_addr_reg: uleb128][aug_data][initial_instrs]    │
-  │                                                              │
-  │    FDE (Frame Description Entry):                            │
-  │      [length: 4B][cie_ptr: 4B (offset back to parent CIE)]  │
-  │      [initial_location: ptr-size] ← THIS IS THE FUNCTION VA │
-  │      [address_range: ptr-size]   ← function byte length      │
-  │      [augmentation_data][call_frame_instructions]            │
-  │                                                              │
-  │    GCC emits one FDE per function by default (-fasynchronous-│
-  │    unwind-tables). Present even in stripped binaries because │
-  │    the runtime stack unwinder (libgcc, libunwind) needs it   │
-  │    to walk frames on exception or signal. Strip removes      │
-  │    .symtab but not .eh_frame.                               │
-  │                                                              │
-  │    initial_location encoding: pcrel (DW_EH_PE_pcrel=0x10)   │
-  │    or absolute (DW_EH_PE_absptr=0x00) — both handled.        │
-  │    Result: set of function start VAs from unwind tables.     │
-  │                                                              │
-  │  Pass 1b — .ARM.exidx (ARM32 ELF)                           │
-  │    Each entry is two 32-bit words:                           │
-  │      [prel31_offset_to_function][compact_unwind_or_lsda_ptr] │
-  │    prel31 → absolute VA = (entry_VA & ~1) + sign_extend31   │
-  │    Result: ARM32 function start VAs                          │
-  │                                                              │
-  │  Pass 1c — .pdata RUNTIME_FUNCTION (PE x86-64)              │
-  │    struct RUNTIME_FUNCTION {                                 │
-  │      DWORD BeginAddress;  // VA of function start            │
-  │      DWORD EndAddress;    // VA of function end (exclusive)  │
-  │      DWORD UnwindInfoAddress; // ptr to UNWIND_INFO          │
-  │    }                                                         │
-  │    BeginAddress → function start VA                          │
-  │                                                              │
-  │  Pass 2 — callee augmentation                                │
-  │                                                              │
-  │    Purpose: recover functions with no FDE / no .pdata entry. │
-  │    These are: hand-written assembly, early-return stubs,     │
-  │    cold-path functions split by compiler, tail-call targets. │
-  │                                                              │
-  │    Algorithm:                                                │
-  │      for each known function start VA in sorted order:       │
-  │        Capstone linear scan from start to next known start   │
-  │        for each decoded instruction:                         │
-  │          if instruction is CALL/BL/BLX/JAL/BALC:            │
-  │            extract target VA (direct only; indirect=skip)    │
-  │            if target_VA not in func_starts:                  │
-  │              if target_VA in .text range:                    │
-  │                func_starts.add(target_VA)                   │
-  │                                                              │
-  │    Termination: scan stops at next known func start, at RET/ │
-  │    return-class instruction, or at section boundary.         │
-  │                                                              │
-  │    Iteration: pass 2 runs once. Newly discovered starts are  │
-  │    added to func_starts but not rescanned in the same pass.  │
-  │    (A second pass would find their callees; current design   │
-  │    runs one augmentation pass for speed.)                    │
-  │                                                              │
-  │    Result: func_starts merged from passes 1a/1b/1c + pass 2  │
-  │    Sorted ascending, deduplicated.                           │
-  └──────────────────────────────┬───────────────────────────────┘
-                                 |
-                                 v
-  STEP 3 — Call graph construction
+  │  length         4 bytes  total CIE size minus length field   │
+  │  CIE_id         4 bytes  always 0 (distinguishes CIE vs FDE) │
+  │  version        1 byte   always 1 (DWARF 2) or 3 (DWARF 3)  │
+  │  augmentation   string   "zR" common; encodes pointer format │
+  │  code_align     uleb128  instruction size quantum (1 for x86)│
+  │  data_align     sleb128  stack slot size factor (-8 for x64) │
+  │  return_addr_reg uleb128 register number of return address   │
+  │  aug_data       variable pointer encoding (pcrel, abs, etc.) │
+  │  initial_insns  variable CFA baseline rules (push rbp, etc.) │
+  └──────────────────────────────────────────────────────────────┘
+
+  FDE (Frame Description Entry) — one per function:
   ┌──────────────────────────────────────────────────────────────┐
+  │  length          4 bytes  total FDE size minus length field  │
+  │  CIE_ptr         4 bytes  byte offset back to parent CIE     │
+  │  initial_location ptr     ← FUNCTION START VA                │
+  │  address_range   ptr      ← function byte length             │
+  │  aug_data_len    uleb128  length of augmentation data        │
+  │  aug_data        variable LSDA pointer for C++ (if any)      │
+  │  call_frame_insns variable how to unwind registers per offset │
+  └──────────────────────────────────────────────────────────────┘
+
+  The initial_location encoding varies by CIE augmentation:
+    DW_EH_PE_pcrel (0x10):  value = FDE_field_VA + encoded_value
+    DW_EH_PE_absptr (0x00): value = encoded_value directly
+  BinaryContext handles both encodings.
+```
+
+ARM32 binaries use `.ARM.exidx` instead of `.eh_frame`. Each entry is two 32-bit words. The first word encodes the function start as a prel31 offset: `abs_va = (entry_field_va & ~1) + sign_extend(value, 31)`. PE x86-64 binaries use `.pdata`, an array of `RUNTIME_FUNCTION` structs with `BeginAddress` fields pointing to function starts.
+
+**Callee augmentation: recovering what unwind tables miss**
+
+Unwind tables are comprehensive but not complete. Hand-written assembly functions, early-exit stubs, compiler-generated cold paths, and tail-call targets sometimes have no FDE. They do, however, get called from known functions. The callee augmentation pass recovers them.
+
+```
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Callee augmentation algorithm                               │
+  │                                                              │
+  │  Input:  func_starts (from unwind tables, pass 1)           │
+  │  Output: func_starts augmented with discovered callees       │
+  │                                                              │
+  │  for each known function start VA (sorted ascending):        │
+  │    end_va = next known func start  (or section end)          │
+  │    Capstone linear disassembly from start_va to end_va:      │
+  │      for each decoded instruction:                           │
+  │        if instruction.group has CS_GRP_CALL:                 │
+  │          target_va = instruction.operands[0].imm             │
+  │          (skip indirect calls: operands[0].type != IMM)      │
+  │          if target_va in .text range:                        │
+  │            if target_va not in func_starts:                  │
+  │              func_starts.add(target_va)   ← new discovery   │
+  │                                                              │
+  │  Termination conditions (stop scanning current function):    │
+  │    1. Reached end_va (next known function start)             │
+  │    2. Encountered RET / RETN / BX LR / JR $ra               │
+  │    3. Reached section boundary                               │
+  │                                                              │
+  │  One pass only. Newly discovered callees are not rescanned.  │
+  │  A second pass would recover their callees too. The design   │
+  │  accepts this limitation for build speed.                    │
+  └──────────────────────────────────────────────────────────────┘
+```
+
+What callee augmentation recovers in practice: functions whose body starts with a `push rbp` that the compiler inserted without a corresponding unwind entry (common in `-fno-unwind-tables` builds), trampolines and wrappers called from multiple sites, and inline assembly blocks that the compiler treats as a separate function boundary.
+
+After both passes, `func_starts` is a sorted, deduplicated list of all function entry VAs the index knows about.
+
+### Step 3 — Call graph construction
+
+With a function boundary list in hand, BinaryContext disassembles each function and extracts every direct call it makes. The result is a flat list of edges: `(caller_va, callee_va, label)`.
+
+```
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Call graph construction                                     │
+  │                                                              │
   │  for each func_start VA (in sorted order):                   │
-  │    end_VA = next func_start VA (or section end)              │
-  │    Capstone linear disassembly from start_VA to end_VA       │
+  │    end_va = next func_start  (or section end)                │
+  │    Capstone linear disassembly from start_va to end_va:      │
   │                                                              │
   │    for each decoded instruction:                             │
-  │      if instruction group contains CS_GRP_CALL:              │
-  │        target_VA = instruction.operands[0].imm               │
-  │        (direct calls only; indirect BLR/CALL [reg] skipped)  │
+  │      if CS_GRP_CALL in instruction.groups:                   │
+  │        if operands[0].type == CS_OP_IMM:    ← direct only   │
+  │          target_va = operands[0].imm                         │
   │                                                              │
-  │        label = plt_map.get(target_VA)        ← PLT import   │
-  │             or exports_rev.get(target_VA)    ← named export  │
-  │             or f"0x{target_VA:x}"            ← stripped VA   │
+  │          label resolution (priority order):                  │
+  │            plt_map.get(target_va)           ← PLT import    │
+  │         or exports_rev.get(target_va)       ← named export  │
+  │         or f"0x{target_va:x}"               ← stripped VA   │
   │                                                              │
-  │        call_edges.append((func_start_VA, target_VA, label)) │
+  │          call_edges.append(                                  │
+  │            (func_start_va, target_va, label)                 │
+  │          )                                                   │
   │                                                              │
-  │    Architecture-specific call detection:                     │
-  │      x86-64:  CALL rel32 / CALL r/m64                        │
-  │      ARM64:   BL imm26   (BLR = indirect, not recorded)      │
-  │      ARM32:   BL imm24 / BLX imm24 / BX Lr (return, skip)   │
-  │      MIPS32:  JAL imm26 / JALR $ra,$t9                       │
-  │      LA64:    BL offset26 / JIRL $ra,rj,0                    │
-  │      nanoMIPS: BALC P32/P16 (resolved from bitfield)         │
+  │  Architecture-specific call instructions detected:           │
+  │    x86-64:  CALL rel32 / CALL r/m64                          │
+  │    ARM64:   BL imm26   (BLR = indirect, label skipped)       │
+  │    ARM32:   BL imm24 / BLX imm24                             │
+  │    MIPS32:  JAL imm26 / JALR $ra,$t9                         │
+  │    LA64:    BL offset26 / JIRL $ra,rj,0                      │
+  │    nanoMIPS: BALC P32/P16 (resolved from bitfield)           │
   │                                                              │
-  │  Final: call_edges = flat list of (from_va, to_va, label)    │
-  │  Size: typically 50k–300k entries for firmware binaries      │
-  └──────────────────────────────┬───────────────────────────────┘
-                                 |
-                                 v
-  STEP 4 — String cross-reference index
+  │  Indirect calls (BLR, CALL [rax], JALR $t9) are skipped.    │
+  │  The callee address is not known statically without CFG      │
+  │  analysis. VtableResolver handles C++ virtual dispatch.      │
+  └──────────────────────────────────────────────────────────────┘
+```
+
+The final `call_edges` list for a large firmware binary typically holds 50,000 to 300,000 entries. It is loaded entirely into memory. There is no index structure because a linear scan over 200,000 entries takes about 2 milliseconds in CPython, which is fast enough for every query pattern Ablation uses.
+
+### Step 4 — String cross-reference index
+
+Strings in `.rodata` are inert until something loads their address. The cross-reference index connects function bodies to the strings they reference. This is what makes `ctx.strings_in_func(va)` possible without re-disassembling on every call.
+
+The architecture-specific challenge is that "loading a string address" looks different on every ISA. On x86-64, the compiler emits `LEA rX, [RIP + disp32]` because the binary is position-independent and the displacement is relative to the next instruction's PC. On ARM64, the same operation takes two instructions: `ADRP Xn, page_label` loads the page address of the target, and `ADD Xn, Xn, #offset` adds the within-page offset to get the final address. The indexer must track these two-instruction sequences across instruction boundaries.
+
+```
   ┌──────────────────────────────────────────────────────────────┐
-  │  Two data structures are built for string queries:           │
+  │  String cross-reference indexer                              │
   │                                                              │
-  │  strings_map: {string_VA → content}                          │
-  │    Built in Step 1 from .rodata scan.                        │
+  │  Two data structures:                                        │
+  │    strings_map:    {string_va → content}   (from Step 1)    │
+  │    str_xref_idx:   {func_va → [string_va, ...]}  (built now) │
   │                                                              │
-  │  str_xref_idx: {func_VA → [string_VA, ...]}                  │
-  │    Built during call graph construction:                     │
-  │      for each instruction in func body:                      │
-  │        if instruction loads an immediate or PC-relative addr: │
-  │          if addr in strings_map:                             │
-  │            str_xref_idx[func_VA].append(addr)               │
+  │  Built during call graph construction — same Capstone pass.  │
+  │  For each instruction in each function body:                 │
   │                                                              │
-  │  x86-64: string refs are LEA rX, [RIP + disp] or            │
-  │          MOV rX, abs64 — both are immediate-address loads.   │
-  │  ARM64:  ADRP + ADD pair; ADRP loads page, ADD adds offset.  │
-  │          Both instructions must be tracked together.         │
-  │  ARM32:  LDR rX, [PC, #N] from literal pool.                 │
-  │  MIPS32: LUI + ADDIU pair for absolute address load.         │
+  │  x86-64: RIP-relative load                                   │
+  │    LEA rX, [RIP + disp32]                                    │
+  │      target = insn_va + insn_length + sign_extend32(disp)    │
+  │      if target in strings_map → record(func_va, target)      │
+  │    MOV rX, imm64                                             │
+  │      if imm64 in strings_map → record(func_va, imm64)        │
   │                                                              │
-  │  ctx.strings_in_func(va) → reads str_xref_idx[va]           │
-  │  ctx.funcs_referencing_string(string_va) → inverse lookup    │
-  └──────────────────────────────┬───────────────────────────────┘
-                                 |
-                                 v
-  STEP 5 — Serialization and caching
+  │  ARM64: two-instruction ADRP+ADD pair                        │
+  │    ADRP Xn, label                                            │
+  │      page_va = (insn_va & ~0xFFF) + (imm21 << 12)           │
+  │      pending_adrp[Xn] = page_va   ← held until next insn     │
+  │    ADD Xn, Xn, #offset  (immediately follows ADRP)           │
+  │      if Xn in pending_adrp:                                  │
+  │        full_va = pending_adrp[Xn] + offset                   │
+  │        if full_va in strings_map → record(func_va, full_va)  │
+  │        del pending_adrp[Xn]                                  │
+  │                                                              │
+  │  ARM32: literal pool load                                     │
+  │    LDR Rd, [PC, #N]                                          │
+  │      pool_va = (insn_va + 8) & ~3 + N                        │
+  │      addr = read_u32(binary, pool_va - load_addr)            │
+  │      if addr in strings_map → record(func_va, addr)          │
+  │                                                              │
+  │  MIPS32: LUI+ADDIU pair                                      │
+  │    LUI $t0, hi16                                             │
+  │      pending_lui[$t0] = hi16 << 16  ← held until ADDIU      │
+  │    ADDIU $t0, $t0, lo16                                       │
+  │      if $t0 in pending_lui:                                   │
+  │        full_va = pending_lui[$t0] + sign_extend16(lo16)      │
+  │        if full_va in strings_map → record(func_va, full_va)  │
+  │        del pending_lui[$t0]                                   │
+  └──────────────────────────────────────────────────────────────┘
+```
+
+`ctx.funcs_referencing_string(string_va)` is the inverse: it scans `str_xref_idx.values()` for the given string VA. This answers "which functions reference this error message?" across the entire binary in one pass.
+
+### Step 5 — Serialization and the cache key
+
+```
   ┌──────────────────────────────────────────────────────────────┐
-  │  cache_key  = SHA-256(entire binary file bytes)              │
-  │  cache_path = ~/.ablation/cache/<sha256[:16]>_<basename>.json│
+  │  Cache key construction                                      │
   │                                                              │
-  │  SHA-256 properties used here:                               │
-  │    collision-resistant: two binaries with different bytes    │
-  │    always produce different keys (no accidental cache hit)   │
-  │    deterministic: same binary bytes → same key, forever      │
-  │    fast: SHA-256 on 50 MB takes ~50 ms on modern hardware    │
+  │  sha256_key  = SHA-256(entire binary file, all bytes)        │
+  │  cache_path  = ~/.ablation/cache/<sha256_key[:16]>_<name>.json│
   │                                                              │
-  │  Multiple versions of the same binary coexist in cache:      │
+  │  Two builds of the same firmware with different content:     │
   │    firmware_v1.so → a3f9b2c1d4e5f678_firmware_v1.json       │
   │    firmware_v2.so → b7c4d3e2f1a0b9c8_firmware_v2.json       │
-  │    (different SHA-256 prefix → different cache file)         │
+  │    (different hash prefix → different file → no collision)   │
   │                                                              │
   │  JSON schema:                                                │
-  │    {                                                         │
-  │      "sha256":       "a3f9b2c1...",  // full hash            │
-  │      "plt":          {"3000": "strcpy", "3010": "malloc"},   │
-  │      "exports":      {"init_handler": "4000"},               │
-  │      "strings":      {"6010": "Authorization: Bearer"},      │
-  │      "func_starts":  [4000, 4120, 4280, ...],                │
-  │      "call_edges":   [[4000, 3000, "strcpy"], ...],          │
-  │      "str_xref_idx": {"4000": [6010, 6050, ...]}             │
-  │    }                                                         │
+  │  {                                                           │
+  │    "sha256":       "a3f9b2c1d4e5f678...",   // full 64 hex  │
+  │    "plt":          {"12288": "strcpy", ...},  // VA as str   │
+  │    "exports":      {"init_handler": "16384"},                │
+  │    "strings":      {"24592": "Authorization: Bearer"},       │
+  │    "func_starts":  [16384, 16672, 16896, ...],               │
+  │    "call_edges":   [[16384, 12288, "strcpy"], ...],          │
+  │    "str_xref_idx": {"16384": [24592, 24632]}                 │
+  │  }                                                           │
   │                                                              │
-  │  Keys are decimal integers (JSON numbers); BinaryContext      │
-  │  converts them back to int on load.                          │
+  │  JSON uses decimal integers for VAs (not "0x..." strings).   │
+  │  BinaryContext converts them back to int on load.            │
+  │                                                              │
+  │  Timing for a 50 MB stripped ELF (19,000 functions):        │
+  │    lief parse:               ~80 ms                          │
+  │    .eh_frame FDE scan:       ~30 ms                          │
+  │    callee augmentation:      ~250 ms                         │
+  │    call graph (Capstone):    ~3.5 s   ← bottleneck           │
+  │    string xref indexing:     ~100 ms                         │
+  │    JSON serialize + write:   ~200 ms                         │
+  │    ────────────────────────────────                          │
+  │    First run total:          ~4.2 s                          │
+  │                                                              │
+  │    Reload (SHA-256 + JSON parse):  ~130 ms                   │
   └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -230,206 +318,171 @@ Getting "which functions call `strcpy`?" in IDA requires the GUI to be open and 
 
 ## Reload phase
 
+Every session after the first follows this path:
+
 ```
   BinaryContext.load_or_build(path)
   ═══════════════════════════════════════════════════════════════
 
-  1. Open binary, read all bytes into memory (mmap on large files)
+  1. Read binary bytes into memory
   2. Compute SHA-256 of bytes → sha256_key
+  3. expected_cache = ~/.ablation/cache/<sha256_key[:16]>_<name>.json
 
-  3. expected_cache = ~/.ablation/cache/<sha256_key[:16]>_<basename>.json
-     does expected_cache exist on disk?
-       YES → open JSON, read "sha256" field
-             does stored sha256 == sha256_key?
-               YES → deserialize in place
-                     convert JSON string keys to int (VA)
-                     load plt, exports, strings, func_starts,
-                     call_edges, str_xref_idx into memory
-                     done in < 200 ms  ← reload path
-               NO  → cache file is from a different binary
-                     (basename collision; different content)
-                     fall through to build phase
-       NO  → fall through to build phase
-
-  4. build phase: 0.5 to 5 seconds depending on binary size
-     → write cache to expected_cache path
-     → return populated BinaryContext
-
-  ───────────────────────────────────────────────────────────────
-  Why < 200 ms?
-
-  The JSON file for a 50 MB firmware binary with 19,000 functions
-  and 200,000 call edges is typically 8–12 MB. Python's json.loads
-  on 10 MB of pre-parsed string data runs in 40–80 ms. The SHA-256
-  of the binary itself costs ~50 ms. Total reload: ~120–150 ms.
-
-  The build phase cost breakdown for a 50 MB stripped ELF:
-    lief.parse():           ~80 ms
-    .eh_frame FDE scan:     ~30 ms
-    callee augmentation:    ~250 ms  (depends on function count)
-    call graph (Capstone):  ~3.5 s   (Capstone decode is the bottleneck)
-    string xref indexing:   ~100 ms
-    JSON serialization:     ~200 ms
-    Total first run:        ~4.2 s
+  does expected_cache exist?
+  │
+  ├── YES: open JSON, read stored "sha256" field
+  │     does stored sha256 match sha256_key?
+  │     │
+  │     ├── YES: deserialize into BinaryContext
+  │     │         convert string-keyed JSON dicts back to int
+  │     │         load plt, exports, strings, func_starts,
+  │     │         call_edges, str_xref_idx into memory
+  │     │         done in ~130 ms  ← normal reload path
+  │     │
+  │     └── NO:  basename collision, different content
+  │               fall through to build phase
+  │
+  └── NO: build phase (4-5 s), write cache, return
 ```
+
+A basename collision happens when two different binaries have the same filename — for example, two versions of `libssl.so`. The SHA-256 prefix in the cache filename prevents them from colliding because the prefixes differ, so both caches can coexist. The check inside the cache file catches the rare case where two files share the first 16 hex digits of their SHA-256, which is probabilistically negligible but handled correctly.
 
 ---
 
 ## What is indexed
 
-| Attribute | Type | Content | Example |
-|---|---|---|---|
-| `ctx.plt` | `{int: str}` | PLT stub VA → import name | `ctx.plt[0x3000]` → `'strcpy'` |
-| `ctx.exports` | `{str: int}` | Export name → VA | `ctx.exports['init_handler']` → `0x4000` |
-| `ctx.strings` | `{int: str}` | String VA → content | `ctx.strings[0x6010]` |
-| `ctx.func_starts` | `list[int]` | Sorted function entry VAs | `len(ctx.func_starts)` → `19432` |
-| `ctx.call_edges` | `list[tuple]` | `(from_va, to_va, label)` | Call graph |
-| `ctx.str_xref_idx` | `{int: list[int]}` | Func VA → referenced string VAs | `ctx.strings_in_func(0x4000)` |
+| Attribute | Type | Content |
+|---|---|---|
+| `ctx.plt` | `{int: str}` | PLT stub VA to import name |
+| `ctx.exports` | `{str: int}` | Export name to VA |
+| `ctx.strings` | `{int: str}` | String VA to content |
+| `ctx.func_starts` | `list[int]` | Sorted function entry VAs |
+| `ctx.call_edges` | `list[tuple]` | `(caller_va, callee_va, label)` |
+| `ctx.str_xref_idx` | `{int: list[int]}` | Func VA to referenced string VAs |
 
 ---
 
-## Name overlay: priority stack
+## The name overlay
 
-`ctx.name(va)` resolves through four layers in order:
+`ctx.name(va)` returns a human-readable name for any VA. This is the single most important rule in Ablation: always call `ctx.name(va)` rather than printing raw hex. The reason is that function names accumulate over time. A VA that is an opaque hex address in session one might have a confirmed name by session three. Using `ctx.name(va)` consistently means that improvement shows up everywhere automatically.
+
+The name resolution priority stack works like this:
 
 ```
   ctx.name(0x4000)
   ═══════════════════════════════════════════════════════════════
 
-  Layer 1 — NameRegistry (SQLite at ~/.ablation/names.db)
+  Layer 1 — NameRegistry
   ┌──────────────────────────────────────────────────────────────┐
-  │  Table: function_names                                       │
-  │    CREATE TABLE function_names (                             │
-  │      binary_sha256  TEXT,  -- ties name to specific binary   │
-  │      va             INTEGER,                                 │
-  │      name           TEXT,                                    │
-  │      source         TEXT,  -- 'confirmed' / 'pclntab' / etc  │
-  │      timestamp      INTEGER                                  │
-  │    )                                                         │
+  │  SQLite database at ~/.ablation/names.db                     │
   │                                                              │
-  │  ctx.set_name(0x4000, 'parse_radius_packet', 'confirmed')   │
-  │    → INSERT INTO function_names (sha256, 4000, ..., 'confirmed') │
+  │  CREATE TABLE function_names (                               │
+  │    binary_sha256  TEXT NOT NULL,   -- ties name to binary    │
+  │    va             INTEGER NOT NULL,                          │
+  │    name           TEXT NOT NULL,                             │
+  │    source         TEXT,    -- 'confirmed' / 'pclntab' / etc  │
+  │    timestamp      INTEGER                                    │
+  │  );                                                          │
   │                                                              │
-  │  Confirmed names persist across sessions because they are    │
-  │  stored by binary SHA-256, not by path. If you rename the   │
-  │  binary file, the name overlay still loads.                  │
+  │  Names are keyed on (binary_sha256, va), not on filename.    │
+  │  Renaming the binary file does not lose the name overlay.    │
+  │  Moving the binary between machines loses it only because    │
+  │  the SQLite file is local.                                   │
   └──────────────────────────────┬───────────────────────────────┘
-                                 |  (not found)
-                                 v
-  Layer 2 — exports dict (symbol table)
+                                 │ not found
+                                 ▼
+  Layer 2 — exports dict
   ┌──────────────────────────────────────────────────────────────┐
-  │  Populated from .dynsym / .symtab (ELF) or export directory  │
-  │  (PE). Only present for non-stripped exported symbols.       │
-  │  exports_rev[VA] = name for fast reverse lookup.             │
+  │  Populated from .dynsym / .symtab (ELF) or PE export dir.   │
+  │  Present only for non-stripped exported symbols.             │
   └──────────────────────────────┬───────────────────────────────┘
-                                 |  (not found)
-                                 v
-  Layer 3 — PLT dict (import names)
+                                 │ not found
+                                 ▼
+  Layer 3 — PLT dict
   ┌──────────────────────────────────────────────────────────────┐
   │  plt_map[VA] = import_name for PLT stub VAs.                 │
-  │  A call to 0x3000 that resolves to plt_map[0x3000]='strcpy'  │
-  │  means the call site calls the libc strcpy import.           │
+  │  Answers "this VA is the PLT stub for strcpy."               │
   └──────────────────────────────┬───────────────────────────────┘
-                                 |  (not found)
-                                 v
+                                 │ not found
+                                 ▼
   Layer 4 — hex fallback
   ┌──────────────────────────────────────────────────────────────┐
   │  return f"0x{va:x}"                                          │
-  │  Used for stripped internal functions with no confirmed name. │
-  │  RULE: ctx.name(va) everywhere. Never raw hex in display.    │
   └──────────────────────────────────────────────────────────────┘
 ```
 
+`ctx.set_name(va, name, source='confirmed')` inserts into the NameRegistry at Layer 1. Do this the moment you confirm a function's purpose. The name will appear in every future session, in every tool that calls `ctx.name(va)`, without any further action.
+
 ---
 
-## callers_of and callees_of internals
+## callers_of and callees_of
 
-Both methods operate on `ctx.call_edges`, which is a flat Python list of `(from_va, to_va, label)` tuples held in memory.
+Both methods walk `call_edges` in memory. The graph is a flat Python list, not a dict. This is intentional: the list is fast to serialize and fast to scan, and the query patterns Ablation needs — "all callers of X" and "all callees of function at VA" — are both linear scans.
 
 ```
   call_edges = [
-    (0x4000, 0x3000, 'strcpy'),    # func at 0x4000 calls strcpy PLT stub
-    (0x4000, 0x4280, '0x4280'),    # func at 0x4000 calls internal func
-    (0x4120, 0x3000, 'strcpy'),    # func at 0x4120 also calls strcpy
-    (0x4280, 0x3010, 'malloc'),    # func at 0x4280 calls malloc
+    (0x4000, 0x3000, 'strcpy'),   # func 0x4000 calls strcpy PLT stub
+    (0x4000, 0x4280, '0x4280'),   # func 0x4000 calls internal func
+    (0x4120, 0x3000, 'strcpy'),   # func 0x4120 also calls strcpy
+    (0x4280, 0x3010, 'malloc'),   # func 0x4280 calls malloc
     ...
   ]
 
-  ───────────────────────────────────────────────────────────────
-
   ctx.callers_of('strcpy'):
-    scan: [(f, t, l) for (f, t, l) in call_edges if l == 'strcpy']
-    result: [(0x4000, 'strcpy'), (0x4120, 'strcpy')]
-    → va=call_site_VA, label=callee_name
+    → [(f, l) for (f, t, l) in call_edges if l == 'strcpy']
+    → [(0x4000, 'strcpy'), (0x4120, 'strcpy')]
 
   ctx.callers_of(0x3000):
-    scan: [(f, t, l) for (f, t, l) in call_edges if t == 0x3000]
-    (same result — both the string name and the VA form work)
+    → [(f, l) for (f, t, l) in call_edges if t == 0x3000]
+    same result — label form and VA form both work
 
   ctx.callees_of(0x4000):
-    scan: [(t, l) for (f, t, l) in call_edges if f == 0x4000]
-    result: [(0x3000, 'strcpy'), (0x4280, '0x4280')]
-    → va=callee_VA, label=callee_name
+    → [(t, l) for (f, t, l) in call_edges if f == 0x4000]
+    → [(0x3000, 'strcpy'), (0x4280, '0x4280')]
 
-  ───────────────────────────────────────────────────────────────
+  Performance: O(N) scan over N entries.
+  N is typically 50,000 to 300,000.
+  Single callers_of() on a 200,000-edge graph: ~2 ms in CPython.
 
-  Performance: O(N) scan over N call_edges.
-  N is typically 50k–300k.
-  A single callers_of() call on a 200k-edge graph takes ~2 ms in CPython.
-  No index is needed — the list is scanned once per query.
-  For repeated queries in a loop, pre-build an inverted dict:
+  For repeated queries over the same graph, build an inverted dict:
+    from collections import defaultdict
     callers_idx = defaultdict(list)
     for (f, t, l) in ctx.call_edges:
-        callers_idx[l].append((f, t, l))
-    callers_idx['strcpy']  # O(1) from here
+        callers_idx[l].append((f, l))
+        callers_idx[t].append((f, l))
+    callers_idx['strcpy']   # O(1) after setup
 ```
 
 ---
 
-## strings_in_func and the xref index
+## Where BinaryContext fits in the pipeline
+
+Every other Ablation tool calls `BinaryContext` first. Understanding what it provides — and what it does not — tells you when you need to reach for a heavier tool.
 
 ```
-  ctx.strings_in_func(0x4000)
-  ═══════════════════════════════════════════════════════════════
+  BinaryContext provides:
+    func_starts    → taint trackers use this to find function boundaries
+    call_edges     → taint trackers use this for interprocedural BFS
+    plt_map        → taint trackers use this to identify sources and sinks
+    str_xref_idx   → FuncProfiler uses this to find format strings
+    name(va)       → every tool uses this for display
 
-  Returns the content of every string whose VA appears in
-  str_xref_idx[0x4000]. The index was built during the call graph
-  construction pass: any instruction that loads an address found
-  in strings_map gets that string's VA recorded under the
-  containing function.
+  BinaryContext does NOT provide:
+    register-level data flow  → use TaintTracker
+    control flow graph        → CFG built per-function by each tool
+    decompiled pseudocode     → use BinaryLifter
+    dynamic behavior          → use DynamicSandbox (Phase 3)
+    C++ vtable dispatch       → use VtableResolver
+    cross-version tracking    → use VersionDelta
 
-  Architecture-specific string reference detection:
-
-    x86-64:
-      LEA rX, [RIP + disp32]
-        target = insn_VA + insn_length + disp32
-        if target in strings_map → record
-      MOV rX, imm64
-        if imm64 in strings_map → record
-
-    ARM64:
-      ADRP Xn, page_label  (insn encodes PC-relative page offset)
-      ADD  Xn, Xn, #offset  (immediately following instruction)
-        full_VA = (ADRP_VA & ~0xfff) + (page_imm << 12) + offset
-        tracker maintains pending_adrp[Xn] between instructions
-        when ADD fires: compute full_VA, check strings_map
-
-    ARM32:
-      LDR Rd, [PC, #N]
-        target = (insn_VA + 8) & ~3 + N  (literal pool load)
-        read 4 bytes at target → read address from literal pool
-        if address in strings_map → record
-
-    MIPS32:
-      LUI  $t0, hi16   (load upper 16 bits)
-      ADDIU $t0, $t0, lo16  (add lower 16 bits, sign-extended)
-        full_VA = (hi16 << 16) + sign_extend16(lo16)
-        tracker maintains pending_lui[$t0] between instructions
-        when ADDIU fires: compute full_VA, check strings_map
-
-  ctx.funcs_referencing_string(string_va):
-    inverse of str_xref_idx — O(N) scan over all values.
-    result: list of func_VAs that reference the given string VA.
+  Tool dependency graph:
+    BinaryContext
+    ├── SemanticSearcher   needs func_starts + call_edges for corpus
+    ├── FuncProfiler       needs callers_of / callees_of for sink mapping
+    ├── TaintTracker       needs plt_map + func_starts + call_edges
+    ├── PatternLibrary     needs ctx.name for finding labels
+    ├── VersionDelta       loads ctx for v1 and v2 binaries
+    └── HypothesisEngine   ctx passed as accelerator for probe adapters
 ```
 
 ---
@@ -439,67 +492,30 @@ Both methods operate on `ctx.call_edges`, which is a flat Python list of `(from_
 ```python
 from ablation.analyzers.binary_context import BinaryContext
 
-# First run: builds and caches (0.5-5s)
+# First run: 0.5-5 s depending on binary size
 ctx = BinaryContext.load_or_build('/path/to/binary.so')
 print(ctx.summary())
 # BinaryContext: firmware_v2.so
 # Functions: 19432  Strings: 41206  Call edges: 198341
-# PLT imports: 89    Exports: 12
+# PLT imports: 89   Exports: 12
 
-# All callers of strcpy
+# Callers of strcpy (all call sites across the binary)
 for (va, label) in ctx.callers_of('strcpy'):
     print(f"  0x{va:x}  {ctx.name(va)}")
 
-# All callees of a function
+# Callees of a specific function
 for (va, label) in ctx.callees_of(0x4000):
     print(f"  -> 0x{va:x}  {label}")
 
-# Strings referenced by a specific function
+# Strings referenced by a function
 for (sva, content) in ctx.strings_in_func(0x4000):
     print(f"  0x{sva:x}  {content!r}")
 
-# Which functions reference a specific string VA?
+# Which functions reference a specific string?
 for fva in ctx.funcs_referencing_string(0x6010):
     print(f"  {ctx.name(fva)}")
 
-# Name a confirmed function — persists across sessions
+# Confirm a function name — persists across all future sessions
 ctx.set_name(0x4000, 'parse_radius_packet', source='confirmed')
-print(ctx.name(0x4000))   # -> 'parse_radius_packet'
-```
-
----
-
-## Where BinaryContext fits in the pipeline
-
-BinaryContext is the base layer. Every other Ablation tool calls it first:
-
-```
-  BinaryContext
-  ├── SemanticSearcher  — needs func_starts + call_edges for corpus
-  ├── FuncProfiler      — needs callers_of / callees_of for sink mapping
-  ├── TaintTracker      — needs plt_map for source/sink PLT resolution
-  │                       needs func_starts for function boundary scan
-  │                       needs call_edges for interprocedural BFS
-  ├── PatternLibrary    — needs names (ctx.name) for finding labels
-  ├── VersionDelta      — loads ctx for both v1 and v2 binaries
-  └── HypothesisEngine  — ctx passed as optional accelerator (step adapter)
-```
-
-BinaryContext does not replace a full decompiler for deep manual RE. It covers the analysis surface needed for automated vulnerability scanning: PLT imports, exported functions, string xrefs, and the call graph. That surface is enough for taint analysis, semantic search, and pattern matching — the three tools that find most vulnerabilities in stripped firmware without a GUI.
-
----
-
-## Comparison with commercial tools
-
-```
-                  IDA Pro / Ghidra          BinaryContext
-  ─────────────────────────────────────────────────────────────
-  Startup time    5-20 min (autoanalysis)   0.5s first / <200ms cached
-  GUI required    Yes (for scripting)       No — Python API only
-  License         $$$                       Open source
-  Function starts Symbol + heuristics       eh_frame FDE + callee augment
-  String xrefs    Full (with analysis)      Architecture-specific loaders
-  Call graph      Full (with decompiler)    PLT-resolved direct calls
-  Name persistence Project file             SQLite NameRegistry (by SHA-256)
-  Multi-version   Manual import             Coexist by SHA-256 cache key
+print(ctx.name(0x4000))   # 'parse_radius_packet'
 ```
