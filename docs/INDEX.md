@@ -89,6 +89,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [ECU RomRaider Parser](module-reference/ecu-romraider-parser.md) | EcuRomRaiderParser: RomRaider ECU definition XML parser; two-pass base+variant inheritance model; identify_rom() with ±32-byte window + hex-address fallback + false-positive table-count filter; 14 scaling expression forms; BMW Siemens MS43/MS45 (MPC555 PPC32) + Subaru SH705x; self-contained ROM support for Subaru 5EAT TCU M32R (273 tables, 160 MAP) |
 | [ECU Conescan Parser](module-reference/ecu-conescan-parser.md) | EcuConescanParser: ConnorRigby conescan XML parser for Mazda SH705x/SH7055 ECUs; single-ROM format with global named scaling dictionary; identify_rom() by internalidstring search; is_float propagation for float32 storagetype; 507 tables from MX5 LFG2EE |
 | [ECU A2L Parser](module-reference/ecu-a2l-parser.md) | EcuA2LParser: ASAM/ASAP2 A2L calibration definition parser; Latin-1 text; RAT_FUNC/LINEAR/IDENTICAL COMPU_METHOD coefficient reduction; RECORD_LAYOUT type resolution; A2ML and IF_DATA block stripping; 11,427 tables from Bosch EDC16U34; 26,016 tables from Bosch EDC17CP46; byte order auto-detected from BYTE_ORDER keyword |
+| [ECU Nissan Parser](module-reference/ecu-nissan-parser.md) | EcuNissanParser: Pytrex Nissan ECU definition parser; three-level inheritance (ScalingData.xml library + A2L.xml structure + variant address overlays); child-first chain resolution; tolerant XML parsing for truncated ScalingData.xml; 273 scalings, 188 variants (350Z/G35/Altima/Maxima/Sentra/Skyline + 12 more models); per-table X/Y Axis address overrides |
 
 ---
 
@@ -107,6 +108,7 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.54.0 | EcuNissanParser: Pytrex Nissan three-level ECU definition parser; ScalingData.xml (273 scalings) + A2L.xml structure + variant address overlays; child-first chain resolution; tolerant XML recovery for truncated ScalingData.xml; 188 variants across 18 models; per-table X/Y Axis address overrides from CD415-style variants |
 | v2.53.0 | EcuRomRaiderParser: self-contained ROM support via _maybe_synthesize_self_variant(); synthesizes a pseudo-variant from the base when all tables carry inline storageaddress; covers Subaru 5EAT TCU M32R (273 tables, 160 MAP, 42 CURVE); hex internalidaddress fix in _parse_variant() |
 | v2.52.0 | EcuA2LParser: ASAM/ASAP2 A2L parser for Bosch EDC16/EDC17 and any A2L-compliant definition file; RAT_FUNC COEFFS reduction to scale/bias; RECORD_LAYOUT type resolution; A2ML + IF_DATA block stripping; byte order from BYTE_ORDER keyword; 11,427 tables from EDC16U34, 26,016 from EDC17CP46 |
 | v2.51.0 | EcuConescanParser: single-ROM conescan XML parser for Mazda SH705x/SH7055 ECUs (507 tables, MX5 + RX8); global named scaling dictionary; identify_rom() by internalidstring; is_float propagation; FORGE hardening across all 5 ECU analyzers: eval() removed from eval_math_equation(), float struct format fix, stale relocated_address reset, skip counter in EcuXDFParser, axis_little_endian rename |
