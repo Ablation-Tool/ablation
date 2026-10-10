@@ -164,75 +164,83 @@ This project was greatly informed and inspired by several key literary works.
 <summary><strong>Target Binary:</strong> ELF · PE · firmware</summary>
 
 ```
-              ┌──────────────────────────────┐
-              │         Target Binary        │
-              │      ELF · PE · firmware     │
-              └──────────────────────────────┘
-                              │
-                            load
-                              ▼
+         ╔══════════════════════════════════════╗
+         ║             Target Binary            ║
+         ╠══════════════════════════════════════╣
+         ║    ELF  ·  PE / Driver  ·  firmware  ║
+         ╚══════════════════════════════════════╝
+                            │
+                          load
+                            ▼
 ```
 
 <details>
 <summary><strong>BinaryContext:</strong> PLT · Strings · Call Graph · XRefs</summary>
 
 ```
-              ┌──────────────────────────────┐
-              │         BinaryContext        │
-              │  PLT · Strings · Call Graph  │
-              │       XRefs · CFG · Funcs    │
-              └──────────────────────────────┘
-                              │
-                           context
-                              ▼
+         ╔══════════════════════════════════════╗
+         ║             BinaryContext            ║
+         ╠══════════════════════════════════════╣
+         ║  PLT  ·  Strings  ·  Call Graph      ║
+         ║  XRefs  ·  CFG  ·  Func boundaries   ║
+         ╚══════════════════════════════════════╝
+                            │
+                         context
+                            ▼
 ```
 
 <details>
 <summary><strong>Claude Code:</strong> Central Orchestrator</summary>
 
 ```
-         ┌────────────────────────────────────┐
-         │       Claude Code (Orchestrator)   │
-         └────────────────────────────────────┘
-    ┌─────┬──────┬───────┬──────┬───────┬──────┐
-    ▼     ▼      ▼       ▼      ▼       ▼      ▼
- Corpus Taint  Diffing FmtStr  Heap  Multi  Driver
-  · · · · · · · · · findings · · · · · · · · · ·▶
+         ╔══════════════════════════════════════╗
+         ║       Claude Code (Orchestrator)     ║
+         ╚══════════════════════════════════════╝
+                            │
+    ────────────────────────┴────────────────────────
+    │          │          │          │          │
+    ▼          ▼          ▼          ▼          ▼
+  Corpus    Taint     Diffing    FmtStr      Heap
+                               Multi-Arch  Driver
+                    ········ findings ········▶
 ```
 
 <details>
 <summary><strong>Analysis Engines:</strong> Semantic · Taint · Diffing · FmtStr · Heap · MultiArch · Driver</summary>
 
 ```
- ┌──────────────────┐     ┌────────────────────┐
- │   Corpus Builder │────▶│  Semantic Search   │
- │  embedding DB    │     │  BERT fingerprints │
- └──────────────────┘     └────────────────────┘
- ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
- │ Taint Engine │  │   Diffing    │  │ Format String│
- │ data flow    │  │  DTW · delta │  │  specifiers  │
- └──────────────┘  └──────────────┘  └──────────────┘
- ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
- │ Heap Scanner │  │  Multi-Arch  │  │ Driver Engine│
- │ chunk · UAF  │  │ MIPS·PPC·RV  │  │ IOCTL·BYOVD  │
- └──────────────┘  └──────────────┘  └──────────────┘
-                          │
-                     findings ──▶ Claude
+  ┌──────────────────┐  ┌──────────────────┐
+  │   Corpus Builder │─▶│  Semantic Search  │
+  │   embedding DB   │  │  BERT · < 1 sec  │
+  └──────────────────┘  └──────────────────┘
+
+  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+  │   Taint Engine   │  │     Diffing      │  │  Format String   │
+  │    data flow     │  │   DTW · delta    │  │   specifiers     │
+  └──────────────────┘  └──────────────────┘  └──────────────────┘
+
+  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+  │   Heap Scanner   │  │   Multi-Arch     │  │  Driver Engine   │
+  │   chunk · UAF    │  │  MIPS·PPC·RV·LA  │  │  IOCTL · BYOVD  │
+  └──────────────────┘  └──────────────────┘  └──────────────────┘
+                                  │
+                       ·· findings ··▶ Claude
 ```
 
 <details>
 <summary><strong>Finding Registry:</strong> cross-target corpus · seeds future sweeps</summary>
 
 ```
-  Claude ──▶ ┌──────────────────────────┐
-             │     Finding Registry     │
-             │    cross-target corpus   │
-             └──────────────────────────┘
-                           │
-                    seeds future sweeps
-                           │
-                           ▼
-                    Semantic Search
+  Claude ──▶ ╔══════════════════════════════╗
+             ║      Finding Registry        ║
+             ╠══════════════════════════════╣
+             ║     cross-target corpus      ║
+             ╚══════════════════════════════╝
+                            │
+                   seeds future sweeps
+                            │
+                            ▼
+                     Semantic Search
 ```
 
 Every confirmed finding enters the registry and seeds semantic search embeddings for every subsequent target.
@@ -267,15 +275,17 @@ Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads e
 <summary><strong>Extracted Binaries:</strong> inference_engine · controller · libcore.so · libruntime.so</summary>
 
 ```
-         platform/linux-x86_64/
-         ├── bin/inference_engine    stripped PIE · x86-64
-         ├── bin/controller          stripped PIE · x86-64
-         ├── lib/libcore.so
-         └── lib/libruntime.so
-                   │
-         ┌─────────┼─────────┐
-         ▼         ▼         ▼
-    [inference]  [libs]  [controller]
+  platform/linux-x86_64/
+  ├── bin/inference_engine    stripped PIE · x86-64
+  ├── bin/controller          stripped PIE · x86-64
+  ├── lib/libcore.so
+  └── lib/libruntime.so
+                │
+       ┌────────┴─────────┐
+       │                  │
+  ┌────┴────┐  ┌────┴────┐  ┌────┴────┐
+  │inference│  │  libs   │  │  ctrl   │
+  └─────────┘  └─────────┘  └─────────┘
 ```
 
 <details>
@@ -399,11 +409,12 @@ Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads e
 <summary><strong>Input Formats:</strong> ELF · PE · Firmware · .mpy · APK/DEX · BEAM/Erlang</summary>
 
 ```
-┌────────┐ ┌───────────┐ ┌──────────┐ ┌──────┐ ┌─────────┐ ┌────────────┐
-│  ELF   │ │ PE/Driver │ │ Firmware │ │ .mpy │ │ APK/DEX │ │BEAM/Erlang │
-└────────┘ └───────────┘ └──────────┘ └──────┘ └─────────┘ └────────────┘
-                                    │
-                                    ▼
+  ┌───────┐  ┌───────────┐  ┌──────────┐  ┌───────┐  ┌─────────┐  ┌─────────────┐
+  │  ELF  │  │ PE/Driver │  │ Firmware │  │  .mpy │  │ APK/DEX │  │ BEAM/Erlang │
+  └───────┘  └───────────┘  └──────────┘  └───────┘  └─────────┘  └─────────────┘
+                                        │
+                                      load
+                                        ▼
 ```
 
 Ablation loads native binaries, compiled bytecode, and firmware images. Each goes through the same loader before analysis begins.
@@ -412,14 +423,18 @@ Ablation loads native binaries, compiled bytecode, and firmware images. Each goe
 <summary><strong>BinaryContext:</strong> PLT · Strings · XRef · Call Graph · CFG</summary>
 
 ```
-                        ┌──────────────────────────┐
-                        │       BinaryContext       │
-                        │  PLT · XRef · Call Graph  │
-                        │    Strings · CFG · Func   │
-                        └──────────────────────────┘
-               ┌──────────────┼──────────────┐
-               ▼              ▼              ▼
-        Taint Engine      Analysis       Scanners
+               ╔══════════════════════════════╗
+               ║         BinaryContext        ║
+               ╠══════════════════════════════╣
+               ║  PLT  ·  XRef  ·  Call Graph ║
+               ║  Strings  ·  CFG  ·  Funcs   ║
+               ╚══════════════════════════════╝
+                              │
+            ┌─────────────────┼─────────────────┐
+            ▼                 ▼                 ▼
+    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+    │ Taint Engine │  │   Analysis   │  │   Scanners   │
+    └──────────────┘  └──────────────┘  └──────────────┘
 ```
 
 Every analyzer receives a BinaryContext. It resolves PLT stubs, indexes strings with cross-references, maps function boundaries, and builds the call graph on demand rather than up front.
@@ -428,18 +443,20 @@ Every analyzer receives a BinaryContext. It resolves PLT stubs, indexes strings 
 <summary><strong>Taint Engine:</strong> 16 ISAs</summary>
 
 ```
-        ┌──────────────────────────────────────────┐
-        │               Taint Engine               │
-        ├──────────┬───────────┬───────────────────┤
-        │ x86-32   │  ARM32    │  PPC32  │  MIPS32 │
-        │ x86-64   │  ARM64    │  PPC64  │ nanoMIPS│
-        ├──────────┼───────────┼─────────┴─────────┤
-        │ RISC-V32 │ RISC-V64  │  ARC EM/HS        │
-        │ LoongArch│  V850     │  TriCore · RH850   │
-        └──────────┴───────────┴───────────────────┘
-                              │
-                              ▼
-                         [ FORGE ]
+  ╔═══════════════════════════════════════════════════╗
+  ║                   Taint Engine                    ║
+  ╠═══════════════╦═══════════════╦═══════════════════╣
+  ║    x86-32     ║     ARM32     ║      PPC32        ║
+  ║    x86-64     ║     ARM64     ║      PPC64        ║
+  ╠═══════════════╬═══════════════╬═══════════════════╣
+  ║    MIPS32     ║    nanoMIPS   ║    RISC-V 32/64   ║
+  ╠═══════════════╬═══════════════╬═══════════════════╣
+  ║   ARC EM/HS   ║  LoongArch64  ║  TriCore · RH850  ║
+  ║     V850      ║               ║                   ║
+  ╚═══════════════╩═══════════════╩═══════════════════╝
+                            │
+                            ▼
+                       [ FORGE ]
 ```
 
 The taint engine follows network input through the call graph to security-sensitive sinks. Library call sites do not stop the trace because register-level tracking resolves shared library stubs.
@@ -508,15 +525,16 @@ The taint engine follows network input through the call graph to security-sensit
 
 ```
   Taint Engine ──┐
-  Analysis     ──┼──▶ ┌─────────────────┐     ┌──────────────────┐
-  Scanners     ──┘    │  FORGE Quality  │────▶ │ Finding Registry │
-                      │     Gate        │     │  cross-target    │
-                      └─────────────────┘     └────────┬─────────┘
-                                                        │
-                                              seeds future sweeps
-                                                        │
-                                                        ▼
-                                               Semantic Search
+  Analysis     ──┼──▶ ╔═══════════════════╗     ╔═══════════════════╗
+  Scanners     ──┘    ║   FORGE Quality   ║────▶║  Finding Registry ║
+                      ║       Gate        ║     ╠═══════════════════╣
+                      ╚═══════════════════╝     ║  cross-target     ║
+                                                ╚═════════╤═════════╝
+                                                          │
+                                                seeds future sweeps
+                                                          │
+                                                          ▼
+                                                  Semantic Search
 ```
 
 Every module passes a 10-section audit before storage. Confirmed findings enter the Finding Registry and seed semantic searches on every future target.
