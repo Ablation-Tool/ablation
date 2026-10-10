@@ -158,8 +158,8 @@ Return `{file_offset: label}` for all tables and axes in the variant. Pass entri
 
 ### `summary(variant_id=None) -> str`
 
-Return a text block showing base definition count, variant count, and — when `variant_id` is
-supplied — the resolved table count broken down by type.
+Return a text block showing base definition count, variant count, and (when `variant_id` is
+supplied) the resolved table count broken down by type.
 
 ---
 
@@ -194,7 +194,7 @@ values, but physical unit conversion is not applied.
 ```
 
 The `(x-65535)*0.0212` form triggered a sign error in an early version: the offset is negative
-(`-65535.0` after capture), so `bias = offset * k = -65535.0 * 0.0212 = -1389.14` — matching the
+(`-65535.0` after capture), so `bias = offset * k = -65535.0 * 0.0212 = -1389.14`, matching the
 physical range of -9.3 to 57.9 mg/stroke visible in the RomRaider GUI for E46 torque tables.
 
 ---
