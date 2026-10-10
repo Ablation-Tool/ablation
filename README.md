@@ -160,43 +160,88 @@ This project was greatly informed and inspired by several key literary works.
 
 ## Framework Architecture & Module Orchestration
 
-```mermaid
-flowchart TD
-    Binary(["<b>Target Binary</b><br/><i>ELF · PE · firmware</i>"])
-    Claude(["<b>Claude Code (Orchestrator)</b><br/><i>Central Agent Controller</i>"])
+<details>
+<summary><strong>Target Binary</strong> — ELF · PE · firmware</summary>
 
-    Binary -->|"load"| BCtx["<b>BinaryContext</b><br/><i>PLT · Strings · Call Graph · XRefs</i>"]
-    BCtx -->|"context"| Corpus["<b>Corpus Builder</b><br/><i>Semantic Embedding DB</i>"]
-    BCtx -->|"context"| Taint["<b>Taint Engine</b><br/><i>Data Flow / Sinks</i>"]
-    BCtx -->|"context"| Diffing["<b>Diffing Engine</b><br/><i>DTW / Version Delta</i>"]
-    BCtx -->|"context"| FmtStr["<b>Format String</b><br/><i>Specifier Scanner</i>"]
-    BCtx -->|"context"| Heap["<b>Heap Scanner</b><br/><i>Chunk / UAF Audit</i>"]
-    BCtx -->|"context"| MultiArch["<b>Multi-Arch Engine</b><br/><i>MIPS · PPC · RISC-V · ARC · V850 · LoongArch64</i>"]
-    BCtx -->|"context"| Driver["<b>Driver Engine</b><br/><i>Kernel IOCTL / BYOVD Audit</i>"]
-
-    Corpus -->|"embeddings"| Semantic["<b>Semantic Search</b><br/><i>BERT Behavioral Fingerprints</i>"]
-
-    Semantic -. "candidates" .-> Claude
-    Taint -. "findings" .-> Claude
-    Diffing -. "findings" .-> Claude
-    FmtStr -. "findings" .-> Claude
-    Heap -. "findings" .-> Claude
-    MultiArch -. "findings" .-> Claude
-    Driver -. "findings" .-> Claude
-
-    Claude -->|"confirmed finding"| Registry["<b>Finding Registry</b><br/><i>Cross-Target Corpus</i>"]
-    Registry -->|"seeds future sweeps"| Semantic
-
-    classDef primary fill:#2a1a4a,stroke:#7c3aed,stroke-width:2px,color:#fff
-    classDef foundation fill:#0d1117,stroke:#58a6ff,stroke-width:2px,color:#e5e7eb
-    classDef engine fill:#171717,stroke:#404040,stroke-width:1px,color:#e5e7eb
-    classDef feedback fill:#0d2818,stroke:#238636,stroke-width:2px,color:#e5e7eb
-
-    class Claude,Binary primary
-    class BCtx foundation
-    class Corpus,Semantic,Taint,Diffing,FmtStr,Heap,MultiArch,Driver engine
-    class Registry feedback
 ```
+              ┌──────────────────────────────┐
+              │         Target Binary        │
+              │      ELF · PE · firmware     │
+              └──────────────────────────────┘
+                              │
+                            load
+                              ▼
+```
+
+<details>
+<summary><strong>BinaryContext</strong> — PLT · Strings · Call Graph · XRefs</summary>
+
+```
+              ┌──────────────────────────────┐
+              │         BinaryContext        │
+              │  PLT · Strings · Call Graph  │
+              │       XRefs · CFG · Funcs    │
+              └──────────────────────────────┘
+                              │
+                           context
+                              ▼
+```
+
+<details>
+<summary><strong>Claude Code</strong> — Central Orchestrator</summary>
+
+```
+         ┌────────────────────────────────────┐
+         │       Claude Code (Orchestrator)   │
+         └────────────────────────────────────┘
+    ┌─────┬──────┬───────┬──────┬───────┬──────┐
+    ▼     ▼      ▼       ▼      ▼       ▼      ▼
+ Corpus Taint  Diffing FmtStr  Heap  Multi  Driver
+  · · · · · · · · · findings · · · · · · · · · ·▶
+```
+
+<details>
+<summary><strong>Analysis Engines</strong> — Semantic · Taint · Diffing · FmtStr · Heap · MultiArch · Driver</summary>
+
+```
+ ┌──────────────────┐     ┌────────────────────┐
+ │   Corpus Builder │────▶│  Semantic Search   │
+ │  embedding DB    │     │  BERT fingerprints │
+ └──────────────────┘     └────────────────────┘
+ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+ │ Taint Engine │  │   Diffing    │  │ Format String│
+ │ data flow    │  │  DTW · delta │  │  specifiers  │
+ └──────────────┘  └──────────────┘  └──────────────┘
+ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+ │ Heap Scanner │  │  Multi-Arch  │  │ Driver Engine│
+ │ chunk · UAF  │  │ MIPS·PPC·RV  │  │ IOCTL·BYOVD  │
+ └──────────────┘  └──────────────┘  └──────────────┘
+                          │
+                     findings ──▶ Claude
+```
+
+<details>
+<summary><strong>Finding Registry</strong> — cross-target corpus · seeds future sweeps</summary>
+
+```
+  Claude ──▶ ┌──────────────────────────┐
+             │     Finding Registry     │
+             │    cross-target corpus   │
+             └──────────────────────────┘
+                           │
+                    seeds future sweeps
+                           │
+                           ▼
+                    Semantic Search
+```
+
+Every confirmed finding enters the registry and sharpens the semantic search embeddings used on the next target. The tool improves with each engagement.
+
+</details>
+</details>
+</details>
+</details>
+</details>
 
 ---
 
@@ -204,65 +249,147 @@ flowchart TD
 
 End-to-end analysis of stripped binaries from an RPM bundle. Extraction through BinaryContext, string xrefs, and capstone disassembly to confirmed findings.
 
-```mermaid
-flowchart TD
-    RPM["target-package.rpm<br/>third-party bundle · x86-64"]
+<details>
+<summary><strong>target-package.rpm</strong> — third-party bundle · x86-64</summary>
 
-    RPM -->|rpm2cpio / cpio| EXTRACT["platform/linux-x86_64/"]
-
-    EXTRACT --> PI["bin/inference_engine<br/>stripped PIE · x86-64"]
-    EXTRACT --> CTRL["bin/controller<br/>stripped PIE · x86-64"]
-    EXTRACT --> LIBS["lib/libcore.so<br/>lib/libruntime.so"]
-
-    subgraph TRACK_PI ["inference engine track"]
-        direction TB
-        BCI["BinaryContext.load_or_build()<br/>32 func starts · 551 strings · PLT built"]
-        BCI --> SS["ctx.strings scan<br/>api_op_read VA 0x51560<br/>api_op_write VA 0x51570<br/>license_key_flag 0x52e08"]
-        SS --> XREF["ctx.string_xrefs()<br/>both ops xref → 0x17499, 0x174af<br/>ctx.func_containing() → init fn 0x10000"]
-        XREF --> DA1["capstone disasm 0x17450<br/>lea rsi → api_op_read · call set::insert<br/>lea rsi → api_op_write · call set::insert<br/>CONFIRMED: exactly 2 blocklist entries"]
-        DA1 --> DA2["capstone disasm 0x16511<br/>cmp qword ptr [r9], 0<br/>je → model loads · ne → handleFatal<br/>empty set = bypass confirmed"]
-    end
-
-    subgraph TRACK_LIBS ["library analysis"]
-        direction TB
-        NM["nm -D libcore.so<br/>spawn at 0xfdb20 · ctor at 0xfcfd0"]
-        NM --> DA3["capstone disasm libcore.so:0xfdbc7<br/>cmp entry length == exe_path length<br/>memcmp at 0xfdbdb<br/>proper equality check · no prefix bypass"]
-        LSCAN["re.findall api_op:: in libruntime.so<br/>2481 distinct ops found<br/>2 blocked · 2479 unblocked"]
-    end
-
-    subgraph TRACK_CTRL ["controller track"]
-        direction TB
-        BCC["BinaryContext.load_or_build()<br/>18 func starts · PLT · strings"]
-        BCC --> XREF2["ctx.string_xrefs() on 5 path strings<br/>./worker1 · ./worker2<br/>./worker3 · ./worker4<br/>./inference_engine<br/>all xref at 0x9a04-0x9a5e"]
-        XREF2 --> DA4["capstone disasm 0x99e9<br/>call CApp::progDir()<br/>call OsUtils::chdir()<br/>chdir to binary dir before spawn"]
-        DA4 --> DA5["capstone disasm 0x11500<br/>args vector from command pipe tokens<br/>passed raw to spawn() at 0x11699<br/>no validation"]
-    end
-
-    PI --> BCI
-    PI --> BCC
-    LIBS --> NM
-    LIBS --> LSCAN
-
-    DA2 --> F1
-    LSCAN --> F1["F1 · HIGH<br/>blocklist covers 2 of 2481 ops<br/>upload malicious model via API<br/>seccomp BPF not decoded — CIA open"]
-
-    DA3 --> F2
-    XREF2 --> F2["F2 · LOW<br/>controller spawn allowlist is sound<br/>but args vector unchecked<br/>requires service user pipe access"]
-
-    DA5 --> F2
-
-    SS --> F3["F3 · INFO<br/>license gate = JSON field only<br/>no cryptographic verification"]
-
-    classDef finding fill:#1a1a2e,stroke:#e94560,stroke-width:2px,color:#fff
-    classDef tool fill:#16213e,stroke:#0f3460,stroke-width:1px,color:#e5e7eb
-    classDef binary fill:#0f3460,stroke:#533483,stroke-width:2px,color:#fff
-    classDef input fill:#533483,stroke:#7c3aed,stroke-width:2px,color:#fff
-
-    class F1,F2,F3 finding
-    class BCI,BCC,NM,LSCAN,SS,XREF,XREF2,DA1,DA2,DA3,DA4,DA5 tool
-    class PI,CTRL,LIBS binary
-    class RPM,EXTRACT input
 ```
+              ┌──────────────────────────────┐
+              │      target-package.rpm      │
+              │   third-party bundle x86-64  │
+              └──────────────────────────────┘
+                              │
+                     rpm2cpio / cpio
+                              ▼
+                  platform/linux-x86_64/
+```
+
+<details>
+<summary><strong>Extracted Binaries</strong> — inference_engine · controller · libcore.so · libruntime.so</summary>
+
+```
+         platform/linux-x86_64/
+         ├── bin/inference_engine    stripped PIE · x86-64
+         ├── bin/controller          stripped PIE · x86-64
+         ├── lib/libcore.so
+         └── lib/libruntime.so
+                   │
+         ┌─────────┼─────────┐
+         ▼         ▼         ▼
+    [inference]  [libs]  [controller]
+```
+
+<details>
+<summary><strong>Inference Engine Track</strong> — BinaryContext · string xrefs · disasm</summary>
+
+```
+  BinaryContext.load_or_build()
+  32 func starts · 551 strings · PLT built
+                │
+                ▼
+  ctx.strings scan
+  ├── api_op_read      VA 0x51560
+  ├── api_op_write     VA 0x51570
+  └── license_key_flag VA 0x52e08
+                │
+                ▼
+  ctx.string_xrefs()
+  ├── both ops xref → 0x17499, 0x174af
+  └── ctx.func_containing() → init fn 0x10000
+                │
+                ▼
+  capstone disasm 0x17450
+  ├── lea rsi → api_op_read  · call set::insert
+  └── lea rsi → api_op_write · call set::insert
+      CONFIRMED: exactly 2 blocklist entries
+                │
+                ▼
+  capstone disasm 0x16511
+  ├── cmp qword ptr [r9], 0
+  ├── je  → model loads
+  └── ne  → handleFatal
+      empty set = bypass confirmed ──▶ F1
+```
+
+</details>
+
+<details>
+<summary><strong>Library Analysis Track</strong> — nm · disasm · op scan</summary>
+
+```
+  nm -D libcore.so
+  ├── spawn  0xfdb20
+  └── ctor   0xfcfd0
+                │
+                ▼
+  capstone disasm libcore.so:0xfdbc7
+  ├── cmp entry length == exe_path length
+  └── memcmp at 0xfdbdb
+      proper equality check · no prefix bypass ──▶ F2
+
+  re.findall api_op:: in libruntime.so
+  ├── 2481 distinct ops found
+  └── 2 blocked · 2479 unblocked ──▶ F1
+```
+
+</details>
+
+<details>
+<summary><strong>Controller Track</strong> — BinaryContext · spawn path · arg validation</summary>
+
+```
+  BinaryContext.load_or_build()
+  18 func starts · PLT · strings
+                │
+                ▼
+  ctx.string_xrefs() on 5 path strings
+  ├── ./worker1  ./worker2  ./worker3
+  ├── ./worker4  ./inference_engine
+  └── all xref at 0x9a04-0x9a5e
+                │
+                ▼
+  capstone disasm 0x99e9
+  ├── call CApp::progDir()
+  └── call OsUtils::chdir()
+      chdir to binary dir before spawn
+                │
+                ▼
+  capstone disasm 0x11500
+  ├── args vector from command pipe tokens
+  └── passed raw to spawn() at 0x11699
+      no validation ──▶ F2
+```
+
+</details>
+
+<details>
+<summary><strong>Findings</strong> — F1 HIGH · F2 LOW · F3 INFO</summary>
+
+```
+  ┌─────────────────────────────────────────────────────┐
+  │ F1 · HIGH                                           │
+  │ blocklist covers 2 of 2481 ops                      │
+  │ upload malicious model via API                      │
+  │ seccomp BPF not decoded — CIA open                  │
+  └─────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────┐
+  │ F2 · LOW                                            │
+  │ controller spawn allowlist is sound                 │
+  │ but args vector unchecked                           │
+  │ requires service user pipe access                   │
+  └─────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────┐
+  │ F3 · INFO                                           │
+  │ license gate = JSON field only                      │
+  │ no cryptographic verification                       │
+  └─────────────────────────────────────────────────────┘
+```
+
+</details>
+
+</details>
+</details>
 
 ---
 
@@ -286,26 +413,72 @@ pip install git+https://github.com/Ablation-Tool/ablation
 <details>
 <summary><strong>Input Formats</strong> — ELF · PE · Firmware · .mpy · APK/DEX · BEAM/Erlang</summary>
 
+```
+┌────────┐ ┌───────────┐ ┌──────────┐ ┌──────┐ ┌─────────┐ ┌────────────┐
+│  ELF   │ │ PE/Driver │ │ Firmware │ │ .mpy │ │ APK/DEX │ │BEAM/Erlang │
+└────────┘ └───────────┘ └──────────┘ └──────┘ └─────────┘ └────────────┘
+                                    │
+                                    ▼
+```
+
 Ablation accepts native binaries, compiled bytecode, and firmware images. Each format is normalized through a common loading interface before analysis begins.
 
 <details>
 <summary><strong>BinaryContext</strong> — PLT · Strings · XRef · Call Graph · CFG</summary>
 
-The foundation every analyzer builds on. BinaryContext resolves PLT stubs, indexes strings with cross-references, maps function boundaries, and builds the call graph — on demand, not up front.
+```
+                        ┌──────────────────────────┐
+                        │       BinaryContext       │
+                        │  PLT · XRef · Call Graph  │
+                        │    Strings · CFG · Func   │
+                        └──────────────────────────┘
+               ┌──────────────┼──────────────┐
+               ▼              ▼              ▼
+        Taint Engine      Analysis       Scanners
+```
+
+The foundation every analyzer builds on. Resolves PLT stubs, indexes strings with cross-references, maps function boundaries, and builds the call graph on demand rather than up front.
 
 <details>
 <summary><strong>Taint Engine</strong> — 16 ISAs</summary>
 
-Follows network input through the call graph to security-sensitive sinks. Library call sites do not stop the trace because register-level tracking resolves shared library stubs.
+```
+        ┌──────────────────────────────────────────┐
+        │               Taint Engine               │
+        ├──────────┬───────────┬───────────────────┤
+        │ x86-32   │  ARM32    │  PPC32  │  MIPS32 │
+        │ x86-64   │  ARM64    │  PPC64  │ nanoMIPS│
+        ├──────────┼───────────┼─────────┴─────────┤
+        │ RISC-V32 │ RISC-V64  │  ARC EM/HS        │
+        │ LoongArch│  V850     │  TriCore · RH850   │
+        └──────────┴───────────┴───────────────────┘
+                              │
+                              ▼
+                         [ FORGE ]
+```
 
-Architectures: x86-32 · x86-64 · ARM32 · ARM64 · PPC32 · PPC64 · MIPS32 · nanoMIPS · MIPS64 · RISC-V 32 · RISC-V 64 · ARC EM/HS · V850 · LoongArch64 · TriCore · RH850
+Follows network input through the call graph to security-sensitive sinks. Library call sites do not stop the trace because register-level tracking resolves shared library stubs.
 
 → [Taint Analysis](docs/module-reference/taint-analysis.md)
 
 </details>
 
 <details>
-<summary><strong>Analysis Modules</strong> — Semantic Search · Version Diffing · Hypothesis Engine · Vtable Recon · Cross-Target Learning</summary>
+<summary><strong>Analysis Modules</strong> — Semantic Search · Version Diffing · Hypothesis Engine · Vtable Recon</summary>
+
+```
+  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+  │ Semantic Search │  │ Version Diffing │  │Hypothesis Engine│
+  │  BERT · <1s     │  │ logic · not file│  │evidence scoring │
+  └─────────────────┘  └─────────────────┘  └─────────────────┘
+  ┌─────────────────┐  ┌─────────────────────────────────────┐
+  │  Vtable Recon   │  │       Cross-Target Learning         │
+  │ stripped C++ ELF│  │  confirmed findings seed all sweeps │
+  └─────────────────┘  └─────────────────────────────────────┘
+                                    │
+                                    ▼
+                               [ FORGE ]
+```
 
 | Module | What it does |
 |---|---|
@@ -319,6 +492,20 @@ Architectures: x86-32 · x86-64 · ARM32 · ARM64 · PPC32 · PPC64 · MIPS32 ·
 
 <details>
 <summary><strong>Security Scanners</strong> — Pre-Auth · Crypto · Heap · Format String · BYOVD · MpyLifter</summary>
+
+```
+  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+  │  Pre-Auth    │  │    Crypto    │  │     Heap     │
+  │  Exposure    │  │   Analysis   │  │   Scanner    │
+  └──────────────┘  └──────────────┘  └──────────────┘
+  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+  │Format String │  │BYOVD / Kernel│  │  MpyLifter   │
+  │   Scanner    │  │driver audit  │  │ .mpy v6 · RE │
+  └──────────────┘  └──────────────┘  └──────────────┘
+                              │
+                              ▼
+                         [ FORGE ]
+```
 
 | Scanner | What it does |
 |---|---|
@@ -334,7 +521,20 @@ Architectures: x86-32 · x86-64 · ARM32 · ARM64 · PPC32 · PPC64 · MIPS32 ·
 <details>
 <summary><strong>FORGE Quality Gate → Finding Registry</strong></summary>
 
-Every module and finding passes a 10-section audit before it can be stored. Confirmed findings enter the Finding Registry, which cross-references patterns across targets and seeds future semantic searches — each engagement sharpens the next.
+```
+  Taint Engine ──┐
+  Analysis     ──┼──▶ ┌─────────────────┐     ┌──────────────────┐
+  Scanners     ──┘    │  FORGE Quality  │────▶ │ Finding Registry │
+                      │     Gate        │     │  cross-target    │
+                      └─────────────────┘     └────────┬─────────┘
+                                                        │
+                                              seeds future sweeps
+                                                        │
+                                                        ▼
+                                               Semantic Search
+```
+
+Every module and finding passes a 10-section audit before it can be stored. Confirmed findings enter the Finding Registry, which cross-references patterns across targets and seeds future semantic searches.
 
 → [FORGE](docs/module-reference/forge.md)
 
