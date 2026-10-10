@@ -38,6 +38,35 @@ ablation-taint = "ablation.analyzers.taint_tracker_x86:_cli"
 ablation-cfg = "ablation.analyzers.cfg_builder:_cli"
 ablation-sigs = "ablation.analyzers.sig_library:_cli"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--tb=short",
+]
+
+[tool.coverage.run]
+# TCL3 qualification scope: labeled taint engine modules only
+# These are the safety-qualified modules per ABLATION-STANDARDS.md §2.1
+# Coverage is measured only against these files, not the full ablation/analyzers tree
+include = [
+    "*/taint_tracker_arc_labeled.py",
+    "*/taint_tracker_arm32_labeled.py",
+    "*/taint_tracker_mips_labeled.py",
+    "*/taint_tracker_ppc_labeled.py",
+    "*/taint_tracker_riscv.py",
+    "*/taint_tracker_x86_labeled.py",
+]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING",
+    "raise NotImplementedError",
+    "@abstractmethod",
+]
+
 [tool.setuptools.packages.find]
 include = ["ablation*", "sweeps*", "modules*"]
 

@@ -1,0 +1,14 @@
+# Development and qualification toolchain
+# Install: pip install -r requirements-dev.txt
+#
+# These packages support:
+#   - pytest-cov   ISO-TCL3-COV: 85% coverage gate on ablation/analyzers/
+#   - pip-licenses ESF-SBOM: SPDX-compatible component inventory
+#   - pip-audit    DPR-001: dependency vulnerability scanning
+#   - pip-tools    DPR-001: generate requirements-hashed.txt with --require-hashes
+
+pytest>=9.0.0
+pytest-cov>=5.0.0
+pip-licenses>=4.4.0
+pip-audit>=2.7.0
+pip-tools>=7.4.0
