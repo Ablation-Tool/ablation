@@ -161,39 +161,27 @@ This project was greatly informed and inspired by several key literary works.
 ## Framework Architecture & Module Orchestration
 
 <details>
-<summary><strong>Target Binary:</strong> ELF · PE · firmware</summary>
+<summary><img src="https://img.shields.io/badge/TARGET_BINARY-ELF_PE_firmware-7c3aed?style=for-the-badge" alt="Target Binary: ELF · PE · firmware"></summary>
 
 ```
-              ┌──────────────────────────────┐
-              │         Target Binary        │
-              │      ELF · PE · firmware     │
-              └──────────────────────────────┘
                               │
                             load
                               ▼
 ```
 
 <details>
-<summary><strong>BinaryContext:</strong> PLT · Strings · Call Graph · XRefs</summary>
+<summary><img src="https://img.shields.io/badge/BINARYCONTEXT-PLT_Strings_Call_Graph_XRefs-1d4ed8?style=for-the-badge" alt="BinaryContext: PLT · Strings · Call Graph · XRefs"></summary>
 
 ```
-              ┌──────────────────────────────┐
-              │         BinaryContext        │
-              │  PLT · Strings · Call Graph  │
-              │       XRefs · CFG · Funcs    │
-              └──────────────────────────────┘
                               │
                            context
                               ▼
 ```
 
 <details>
-<summary><strong>Claude Code:</strong> Central Orchestrator</summary>
+<summary><img src="https://img.shields.io/badge/CLAUDE_CODE-Central_Orchestrator-7c3aed?style=for-the-badge" alt="Claude Code: Central Orchestrator"></summary>
 
 ```
-         ┌────────────────────────────────────┐
-         │       Claude Code (Orchestrator)   │
-         └────────────────────────────────────┘
     ┌─────┬──────┬───────┬──────┬───────┬──────┐
     ▼     ▼      ▼       ▼      ▼       ▼      ▼
  Corpus Taint  Diffing FmtStr  Heap  Multi  Driver
@@ -201,27 +189,25 @@ This project was greatly informed and inspired by several key literary works.
 ```
 
 <details>
-<summary><strong>Analysis Engines:</strong> Semantic · Taint · Diffing · FmtStr · Heap · MultiArch · Driver</summary>
+<summary><img src="https://img.shields.io/badge/ANALYSIS_ENGINES-7_modules-374151?style=for-the-badge" alt="Analysis Engines"></summary>
+
+![Corpus Builder](https://img.shields.io/badge/Corpus_Builder-embedding_DB-0ea5e9?style=for-the-badge)
+![Semantic Search](https://img.shields.io/badge/Semantic_Search-BERT_fingerprints-0ea5e9?style=for-the-badge)
+
+![Taint Engine](https://img.shields.io/badge/Taint_Engine-data_flow-ea580c?style=for-the-badge)
+![Diffing](https://img.shields.io/badge/Diffing-DTW_delta-ea580c?style=for-the-badge)
+![Format String](https://img.shields.io/badge/Format_String-specifiers-ea580c?style=for-the-badge)
+![Heap Scanner](https://img.shields.io/badge/Heap_Scanner-chunk_UAF-ea580c?style=for-the-badge)
+![Multi-Arch](https://img.shields.io/badge/Multi--Arch-MIPS_PPC_RV-ea580c?style=for-the-badge)
+![Driver Engine](https://img.shields.io/badge/Driver_Engine-IOCTL_BYOVD-ea580c?style=for-the-badge)
 
 ```
- ┌──────────────────┐     ┌────────────────────┐
- │   Corpus Builder │────▶│  Semantic Search   │
- │  embedding DB    │     │  BERT fingerprints │
- └──────────────────┘     └────────────────────┘
- ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
- │ Taint Engine │  │   Diffing    │  │ Format String│
- │ data flow    │  │  DTW · delta │  │  specifiers  │
- └──────────────┘  └──────────────┘  └──────────────┘
- ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
- │ Heap Scanner │  │  Multi-Arch  │  │ Driver Engine│
- │ chunk · UAF  │  │ MIPS·PPC·RV  │  │ IOCTL·BYOVD  │
- └──────────────┘  └──────────────┘  └──────────────┘
                           │
                      findings ──▶ Claude
 ```
 
 <details>
-<summary><strong>Finding Registry:</strong> cross-target corpus · seeds future sweeps</summary>
+<summary><img src="https://img.shields.io/badge/FINDING_REGISTRY-cross--target_corpus-16a34a?style=for-the-badge" alt="Finding Registry: cross-target corpus · seeds future sweeps"></summary>
 
 ```
   Claude ──▶ ┌──────────────────────────┐
