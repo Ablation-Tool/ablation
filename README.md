@@ -11,37 +11,59 @@ Ablation is a reverse engineering framework built for AI-agent-driven analysis. 
 
 ## Capabilities
 
-**Semantic Code Search:** Searches code by meaning rather than exact symbol names. It maps behavioral intent instead of matching strings or patterns, so it finds the relevant function in a stripped binary where traditional tools return nothing.
+### Analysis
 
-**On-Demand Analysis:** Loads large binaries in seconds because it only analyzes the code being examined, rather than parsing the entire file into a database upfront. Ghidra and IDA Pro require that upfront step before analysis can begin.
+**Semantic Code Search:** Searches code by meaning rather than exact symbol names, so it finds the relevant function in a stripped binary where traditional tools return nothing.
 
-**Version Diffing:** Analyzes the behavioral difference between binary versions to verify vendor patches. A cosmetic recompile cannot hide an unpatched vulnerability because Ablation checks whether the logic changed, not whether the file changed.
+**On-Demand Analysis:** Loads large binaries in seconds because it only analyzes the code being examined. Ghidra and IDA Pro parse the entire file into a database before analysis can begin.
 
-**Module Quality Gate:** Ablation lets users build their own modules and add-ons. FORGE audits every module before it can be stored, so user-written code meets the same standard as the modules that ship with Ablation.
+**Binary Lifting:** Lifts native functions to pseudo-C IR across 17 instruction set variants. ARM64 and x86-64 receive register-level taint propagation; every other supported architecture gets resolved calls, lifted branches, and arithmetic annotations.
 
-**Taint-Based Vulnerability Detection:** Tracks attacker-controlled data from network entry points to dangerous sinks across 14 processor architectures, including LoongArch64, nanoMIPS, V850, ARC, and ARM Thumb. The interprocedural engine follows data through function calls, pointer aliases, and stack frames in stripped binaries. For multi-process firmware, it crosses executable boundaries to follow data between cooperating processes.
+**Hypothesis Engine:** Tracks competing RE hypotheses, scores evidence across four families from behavioral to semantic, and auto-executes analysis probes. Sessions persist across engagements so confidence state carries forward, and a dynamic sandbox runs leaf functions in Unicorn to generate behavioral evidence.
 
-**Cross-Target Learning:** Every confirmed finding is stored in a cross-target registry and used to seed future semantic searches. A vulnerability pattern confirmed in one binary becomes a behavioral fingerprint that Ablation applies when it analyzes the next one. The registry grows with each engagement, so each new target is analyzed with the accumulated knowledge of every binary that came before it.
+**C++ Vtable Reconstruction:** Reconstructs C++ vtable slots from any ELF on any architecture, names them using symbol data, string cross-references, and callee names, and emits an IDAPython script that injects the producer-to-consumer type chain into IDA. Dead method detection identifies which vtable slots are never dispatched.
 
-**Windows PE Security Analysis:** Seven analyzers cover the Windows PE attack surface in one pass. The suite identifies Control Flow Guard bypass exports, SafeSEH handler gaps, unauthenticated RPC registrations, COM CLSID hijacking candidates, and pool allocation overflows in kernel code. PDBSymbolIntegrator fetches public symbols from the Microsoft symbol server and injects them into the analysis context, so every other tool operates on named functions rather than raw addresses.
+**DAG Adapter Language:** The ISA description layer that makes multi-architecture analysis work without per-architecture exception cases. Each instruction form gets its own template, so vulnerability scanners run correctly on any supported architecture.
 
-**Windows Kernel Driver & BYOVD Analysis:** Scans kernel drivers for risky entry points to stop attackers from using vulnerable, signed drivers to bypass your security software.
+### Vulnerability Detection
 
-**Android / APK Analysis:** Maps out Android app attack surfaces without decompiling the code. It scans and ranks internal libraries by security risk so the highest-risk components are visible before any manual analysis begins.
+**Taint-Based Vulnerability Detection:** Tracks attacker-controlled data from network entry points to dangerous sinks across 14 processor architectures. The interprocedural engine follows data through function calls, pointer aliases, and stack frames, and crosses process boundaries in multi-process firmware.
+
+**Pre-Authentication Attack Surface:** Maps the code paths reachable before a client authenticates, so an unauthenticated attacker's reach is clear before any manual review begins.
+
+**Compiler Bug Detection:** Identifies vulnerabilities introduced by the compiler rather than the programmer. In TencentOS 4.6, a single GCC 12.3.1.7 codegen error produced 172 confirmed findings.
+
+**Cryptographic Analysis:** Strips away every layer that makes cryptography invisible in a compiled binary. A binary can hide its crypto from import tables and string search, but the eight-tool suite closes that gap so you know the algorithm, the key, and the ciphertext.
+
+### Hard Targets
+
+**LoongArch64:** The only public RE tool with a dedicated LoongArch64 toolchain: taint tracking from network entry points to dangerous sinks, an integer overflow scanner for heap allocations, GCC compiler bug detection, and pseudo-C IR decompilation. Every other tool stops at disassembly for this architecture.
+
+**nanoMIPS:** Traces attacker-controlled data through nanoMIPS binaries with an interprocedural taint engine, including P32/P16 BALC branch target resolution and 12-byte PLT stub unwrapping. No other public taint tracker handles nanoMIPS.
+
+**Windows PE Security Analysis:** Seven analyzers cover the Windows PE attack surface in one pass, identifying CFG bypass exports, SafeSEH handler gaps, unauthenticated RPC registrations, COM hijacking candidates, and kernel pool overflows.
+
+**Windows Kernel Driver & BYOVD Analysis:** Scans kernel drivers for risky entry points and detects eight BYOVD capability classes in signed drivers, including physical memory read/write, token stealing, and callback removal.
+
+**Android / APK Analysis:** Maps Android app attack surfaces and ranks internal libraries by security risk, so the highest-risk components are visible before any manual analysis begins.
 
 **Erlang / BEAM Analysis:** Scans Erlang BEAM bytecode for dangerous function calls and unexposed attack surfaces without executing the application.
 
-**Go Binary Reverse Engineering:** Recovers function names and string literals from stripped and obfuscated Go binaries. Most tools fail on Go because stripped Go binaries lack traditional symbols, and Go obfuscators like garble deliberately scramble what remains. Ablation reads the Go runtime metadata table to recover function boundaries regardless of obfuscation, so the result is a named, navigable binary rather than an opaque address space.
+**Go Binary Reverse Engineering:** Recovers function names from stripped and garble-obfuscated Go binaries by reading the Go runtime metadata table, so the result is a named, navigable binary rather than an opaque address space.
 
-**Compiler Bug Detection:** Identifies vulnerabilities introduced by the compiler rather than by the programmer. The LoongArch64 scanner detects a GCC 12.3.1.7 codegen error where a max comparison emits min logic, producing incorrect bounds checks in every function that uses the pattern. In TencentOS 4.6, this produced 172 confirmed findings from a single defect. The analysis runs across the entire binary, so a systemic toolchain error surfaces as a systemic finding rather than a one-off.
+**Game & Legacy RE:** Labels stripped game binaries by engine using three-pass semantic and pattern matching, covering UE4, id Tech, Unity, Source2, and CryEngine. PS3 Cell SPU and Mac OS 8/9 PEF binaries are also supported, targets no other public tool decodes.
 
-**Pre-Authentication Attack Surface:** Maps the code paths reachable before a client authenticates, so an unauthenticated attacker's reach is clear before any manual review begins. For network devices and embedded systems, this separates the immediate attack surface from the rest of the binary.
+**Firmware Extraction:** Decrypts proprietary firmware containers through a three-stage key recovery chain: outer XOR decryption using NAND flash byte distribution as signal, PKCS#1 v1.5 block scan for the embedded RC4 key, and known-plaintext attack against gzip magic to confirm. Huawei VRP squashfs images with ARM64 BCJ filter compression are handled in the same call.
 
-**DAG Adapter Language:** Decodes raw instruction bytes into a named-field bitfield layer before lifting them into a semantic operation graph. Every instruction form gets its own template with its own field positions, so a scanner reading the semantic layer gets the right register for every opcode without per-architecture exception cases. The resulting dataflow graph lets vulnerability detectors check producer-consumer relationships directly rather than walking backwards through raw bytes and guessing at basic block boundaries.
+**Firmware Key Corpus:** Maintains a cross-firmware key family table so a new scan classifies recovered keys against every family already discovered. FortiBuildTrackClassifier predicts expected key count from the firmware filename alone, so an anomalous key set surfaces before decryption begins.
 
-**Cryptographic Analysis**
+### Workflow
 
-Strips away every layer that makes cryptography invisible in a compiled binary. A binary can hide its crypto from import-table analysis, from symbol tables, and from string search. The eight tools in this suite collectively close that gap, so by the end you know the algorithm, the key, and the ciphertext.
+**Version Diffing:** Analyzes the behavioral difference between binary versions to verify vendor patches. A cosmetic recompile cannot hide an unpatched vulnerability because Ablation checks whether the logic changed, not whether the file changed.
+
+**Cross-Target Learning:** Every confirmed finding seeds future semantic searches. A vulnerability pattern confirmed in one binary becomes a behavioral fingerprint Ablation applies to the next, so the tool gets sharper with each engagement.
+
+**Module Quality Gate:** FORGE audits every user-written module before it can be stored, so local extensions meet the same standard as the modules that ship with Ablation.
 
 ---
 
