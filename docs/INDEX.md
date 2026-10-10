@@ -56,7 +56,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [Vulnerability Scanners](module-reference/vuln-scanners.md) | FormatStringScanner, HeapVulnScanner (INT_OVERFLOW, UAF, double-free, off-by-one), SqlSinkScanner (mysql_query/sqlite3 injection), GoSubprocessScanner (Go os/exec injection; x86-64 full / arm64 call-site detection) |
 | [Sink Arg Classifier](module-reference/sink-arg-classifier.md) | SinkArgClassifier: exec-sink argument provenance (RODATA_CONST/SNPRINTF_RODATA/ARG_PROPAGATED/UNKNOWN); x86-64 classification + ARM32/ARM64 batch_plt_intersect triage; GAP-002 GCC packed-string fix |
 | [CMDB Surface Mapper](module-reference/cmdb-surface-mapper.md) | CMDBSurfaceMapper: forward-taint CMDB table→exec-sink surface map for FortiWeb/FortiOS; Phase 0.5 of Fortinet RE methodology; co-location triage before TaintTracker |
-| [PE Sweep](module-reference/pe-sweep.md) | pe_sweep.py: Windows PE i386+AMD64 semantic vulnerability sweep; IAT call resolution; RIP-relative x64 resolution; QuickTime/Win32 profiles |
+| [PE Sweep](module-reference/pe-sweep.md) | pe_sweep.py: Windows PE i386+AMD64 semantic vulnerability sweep; IAT call resolution; RIP-relative x64 resolution; QuickTime/Win32 profiles; GAP-015 FirmwareAuthBypassProfile (unsigned-flasher CWE-347 detector); GAP-016 BorlandVCLStringIndex (.data fallback for BCC32/VCL targets) |
 | [Windows Kernel Drivers](module-reference/kernel-drivers.md) | KernelDriverAnalyzer, ByovdDetector: IOCTL surface, 8 capability classes |
 | [Erlang / BEAM](module-reference/beam.md) | BeamContext: exports, imports, atoms, literals, dangerous import sweep |
 | [Signature Matching](module-reference/sig-library.md) | SigLibrary, auto-naming fn_0x* functions |
