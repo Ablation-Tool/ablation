@@ -2,27 +2,64 @@
 
 **File:** `ablation/analyzers/beam_context.py`
 
-`BeamContext` extracts the full attack surface from a compiled Erlang `.beam` file.
-The model mirrors ELF binary RE: exports ≈ ELF exports, imports ≈ PLT, atoms ≈
-string table, literals ≈ `.rodata`. Once the surface is mapped, dangerous import
-patterns and atom/string signals drive the same triage flow as binary RE.
+`BeamContext` extracts the full attack surface from a compiled Erlang `.beam` file. The model mirrors ELF binary RE: exports approximate ELF exported symbols, imports approximate PLT entries, atoms approximate the string table, literals approximate `.rodata`. Once the surface is mapped, dangerous import patterns and atom signals drive the same triage flow as binary RE.
+
+---
+
+## Why this exists
+
+Two things blocked BEAM security analysis before this module:
+
+**1. No Erlang-native equivalent of PLT scanning.**
+In ELF binaries, the PLT is the authoritative list of external function calls. Finding `system` or `popen` in a C binary means scanning the import table. In BEAM, the equivalent is the ImpT (Import Table) chunk, but it encodes calls as `{Module, Function, Arity}` tuples in Erlang's External Term Format (ETF), not as symbol table entries. No tool exposed this as a queryable Python API. `BeamContext.imports` provides `dangerous_imports(min_severity=...)` with the same interface as a PLT scan.
+
+**2. Obfuscation detection required manual chunk inspection.**
+Erlang obfuscators strip or corrupt the `Dbgi` debug chunk and the `AtU8` atom table. Without these chunks, a BEAM file has no readable function names or source locations. `BeamContext.obfuscated` and `ctx.obfuscation_indicators` expose this as a flag rather than requiring the analyst to read the IFF chunk headers manually.
+
+---
+
+## How BEAM files are structured
+
+A BEAM file is an IFF (Interchange File Format) container. IFF was designed for structured binary data exchange. The BEAM format uses it to pack all module information into one file with self-describing chunk types.
+
+```
+  BEAM file IFF structure:
+  ┌────────────────────────────────────────────────────────────┐
+  │  IFF header:                                               │
+  │    "FOR1"  (4 bytes, IFF form marker)                      │
+  │    length  (4 bytes big-endian, total file size - 8)       │
+  │    "BEAM"  (4 bytes, form type identifier)                 │
+  └──────────────────────┬─────────────────────────────────────┘
+                         |
+                         v
+  ┌────────────────────────────────────────────────────────────┐
+  │  Chunk sequence (each chunk):                              │
+  │    chunk_id  (4 bytes, ASCII tag: "Atom", "Code", ...)     │
+  │    length    (4 bytes big-endian, payload size)            │
+  │    payload   (length bytes, 4-byte aligned)                │
+  └──────────────────────┬─────────────────────────────────────┘
+                         |
+                         v
+  Chunk IDs and their content:
+    AtU8 / Atom  →  atom table: count + (len + bytes) per atom
+    ExpT         →  exports: [(atom_idx, arity, label), ...]
+    ImpT         →  imports: [(module_idx, fn_idx, arity), ...]
+    Code         →  BEAM bytecode: header + opcode stream
+    LitT         →  literals: zlib-compressed ETF terms
+    StrT         →  string table: raw bytes (character lists)
+    Dbgi         →  debug info: AST in ETF (stripped by obfuscators)
+    Attr         →  module attributes: ETF proplist
+    CInf         →  compiler info: ETF with OTP version, flags
+    Line         →  line number table: (file_name, line_no) pairs
+```
+
+The atom table is the foundation of all other tables. Exports, imports, and literals all reference atoms by index. `AtU8` is the UTF-8 atom table (OTP 20+). `Atom` is the Latin-1 predecessor. BeamContext tries `AtU8` first and falls back to `Atom`.
+
+The ImpT entries encode calls as three atom indices: `(module_atom_idx, function_atom_idx, arity)`. BeamContext resolves these to readable `"os:cmd/1"` strings using the atom table.
 
 ---
 
 ## BeamContext
-
-Build a context from a `.beam` file and query every surface it exposes.
-
-### What gets extracted
-
-| Chunk | Field | Analog in ELF |
-|---|---|---|
-| ExpT | `exports` | ELF exported symbols |
-| ImpT | `imports` | PLT entries |
-| AtU8 / Atom | `atoms` | String table |
-| LitT | `literals` | `.rodata` constants (ETF-decoded) |
-| StrT | `strings` | Raw string table segments |
-| Dbgi | `ast_functions` | DWARF debug info: source file, function names, line numbers |
 
 ### Build and load
 
@@ -36,15 +73,24 @@ print(ctx.summary())
 # Debug info: yes (42 functions)
 ```
 
+### What gets extracted
+
+| Chunk | Field | Analog in ELF |
+|---|---|---|
+| ExpT | `exports` | ELF exported symbols |
+| ImpT | `imports` | PLT entries |
+| AtU8 / Atom | `atoms` | String table |
+| LitT | `literals` | `.rodata` constants (ETF-decoded) |
+| StrT | `strings` | Raw string table segments |
+| Dbgi | `ast_functions` | DWARF debug info: source file, function names, line numbers |
+
 ### Atom and string search
 
 ```python
-# Scan atoms for sensitive keywords
 for atom in ctx.atoms:
     if any(kw in atom for kw in ('password', 'secret', 'token', 'key', 'admin')):
         print(f"[atom] {atom}")
 
-# Scan string table segments
 for s in ctx.strings:
     if 'sql' in s.lower() or 'exec' in s.lower():
         print(f"[str]  {s}")
@@ -53,7 +99,6 @@ for s in ctx.strings:
 ### Dangerous import detection
 
 ```python
-# All dangerous imports at or above CODE_EVAL severity
 from ablation.analyzers.beam_context import BeamContext, SEVERITY_CODE_EVAL
 
 ctx = BeamContext.from_path('/path/to/module.beam')
@@ -66,11 +111,11 @@ for imp in dangerous:
 
 | Constant | Meaning |
 |---|---|
-| `SEVERITY_DISPATCH` | Dynamic dispatch (`erlang:apply`); low signal alone, extremely common in OTP |
-| `SEVERITY_NETWORK` | Outbound network connections (`ssl:connect`, `gen_tcp:connect`, `httpc:request`) |
+| `SEVERITY_DISPATCH` | Dynamic dispatch (`erlang:apply`); very common in OTP |
+| `SEVERITY_NETWORK` | Outbound connections (`ssl:connect`, `gen_tcp:connect`, `httpc:request`) |
 | `SEVERITY_INFO` | Local system enumeration (`inet:getifaddrs`) |
-| `SEVERITY_CODE_EVAL` | Runtime code loading / ETF AST evaluation (`erl_eval:exprs`, `code:load_binary`) |
-| `SEVERITY_CODE_EXEC` | OS-level process execution / port driver spawn (`os:cmd`, `erlang:open_port`) |
+| `SEVERITY_CODE_EVAL` | Runtime code loading or ETF AST evaluation (`erl_eval:exprs`, `code:load_binary`) |
+| `SEVERITY_CODE_EXEC` | OS-level process execution or port driver spawn (`os:cmd`, `erlang:open_port`) |
 
 ### High-risk import signatures
 
@@ -84,6 +129,10 @@ for imp in dangerous:
 | `gen_tcp` | `connect` | NETWORK | Outbound TCP connection |
 | `erlang` | `apply` | DISPATCH | Dynamic dispatch (high volume) |
 
+### Why `erlang:open_port` is dangerous
+
+`erlang:open_port({spawn, "ls -la"}, [])` executes an OS command in a subprocess and returns its output. It is Erlang's equivalent of `popen`. Unlike `os:cmd` (which shells through `/bin/sh`), `open_port` with `{spawn_executable, "/bin/sh"}` passes arguments directly. Both patterns are CODE_EXEC severity.
+
 ### Obfuscation detection
 
 ```python
@@ -92,14 +141,11 @@ if ctx.obfuscated:
     # e.g. ['missing Dbgi chunk', 'stripped atom table']
 ```
 
-Missing or stripped chunks (Dbgi, AtU8) indicate deliberate obfuscation. A missing
-Dbgi chunk means no source-level function names or line numbers. Triage falls back
-to export/import analysis only.
+Missing or stripped chunks indicate deliberate obfuscation. A missing Dbgi chunk means no source-level function names or line numbers. Triage falls back to export/import analysis only.
 
 ### Source-level function list
 
-When the Dbgi chunk is present, `ast_functions` gives AST-level function definitions
-with source file and line numbers:
+When the Dbgi chunk is present, `ast_functions` gives AST-level function definitions:
 
 ```python
 for fn in ctx.ast_functions:
@@ -110,8 +156,7 @@ for fn in ctx.ast_functions:
 
 ## Sweeping a release directory
 
-OTP applications compile to a directory of `.beam` files under `ebin/`. Sweep the
-whole directory at once:
+OTP applications compile to a directory of `.beam` files under `ebin/`. Sweep the whole directory at once:
 
 ```python
 from ablation.analyzers.beam_context import sweep_beam_dir, fmt_sweep, SEVERITY_CODE_EXEC
@@ -119,9 +164,6 @@ from ablation.analyzers.beam_context import sweep_beam_dir, fmt_sweep, SEVERITY_
 results = sweep_beam_dir('/path/to/app/ebin/')
 print(fmt_sweep(results, min_severity=SEVERITY_CODE_EXEC))
 ```
-
-Output groups modules by severity tier and lists the dangerous import signatures
-found in each, analogous to a SemanticSearcher sweep result.
 
 ### Diffing releases
 
