@@ -2,16 +2,19 @@
 
 **File:** `ablation/analyzers/encoding_dag.py`
 
-Generic bitfield-to-instruction encoding framework for fixed-width ISAs. Implements a three-layer model: raw bytes map to named bitfields, named bitfields map to semantic operations, and semantic operations link through dataflow edges into basic blocks.
+The EncodingDAG is a bitfield-to-instruction encoding framework for fixed-width ISAs. It implements a three-layer model: raw bytes map to named bitfields, named bitfields map to semantic operations, and semantic operations link through dataflow edges into basic blocks.
 
 ---
 
 ## Why this exists
 
-One architectural problem made adding new ISA support expensive:
+3 things that were not possible before in Ablation:
 
-**Without a shared encoding model, every ISA requires its own exception handler.**
-An ad-hoc ISA decoder embeds knowledge of bit layouts, field names, and semantic meanings in a single tightly-coupled function. Adding a new architecture means writing a new decoder from scratch. The EncodingDAG separates the three concerns: bit extraction (Layer 1), field composition (Layer 2), and semantic meaning (Layer 3). Each can be specified once and composed. A new ISA adds Templates and Bindings without touching any existing code.
+**1. No shared bit-extraction layer.** Every ISA decoder embedded its own field extraction logic: bit masks, shifts, and width calculations repeated across each architecture. Adding a new ISA meant writing those operations from scratch. `Field` and `Template` centralize this so each bit range is defined once and reused by every encoder, decoder, and disassembler that needs it.
+
+**2. No reusable encode/decode round-trip.** Taint trackers and lifters needed to reconstruct instruction encodings to verify byte sequences. Without a shared model, every tool that touched raw bytes had its own ad-hoc packing and unpacking, and they disagreed on edge cases (fixed-field mismatches, register numbering). `ISASpec.encode()` and `ISASpec.decode()` give every tool a single verified round-trip path.
+
+**3. No semantic-layer dataflow graph.** Before `SemanticBlock`, taint results were flat lists of (sink, source) pairs with no explicit producer-consumer links. Confirming that a LOAD result flows into an ADD that feeds a STORE required manual tracing. `DataflowEdge` records those links explicitly so any tool can walk the DAG without re-deriving it.
 
 ---
 
@@ -77,7 +80,7 @@ class Field:
 
 ### Template
 
-Named sequence of Fields, listed MSB-first, representing one instruction form.
+A Template is a named, MSB-first sequence of Fields representing one instruction form.
 
 ```python
 from ablation.analyzers.encoding_dag import Template, Field
@@ -97,7 +100,7 @@ tmpl.decode(0x130100)
 
 ### EncodingNode
 
-An instantiated Template: the DAG root.
+An `EncodingNode` is an instantiated `Template` and serves as the DAG root.
 
 ```python
 node = EncodingNode(tmpl, {"rA": 0, "rB": 1})
@@ -159,7 +162,7 @@ enode, sop = spec.decode(node.to_bytes())
 
 ## ISA-24 (bundled example)
 
-Pre-built `ISASpec` for a 24-bit toy ISA:
+`ISA24` is a pre-built `ISASpec` for a 24-bit toy ISA bundled with Ablation for testing and examples:
 
 ```
   [ opcode(6) | mode(2) | rA(4) | rB(4) | imm8(8) ] = 24 bits
@@ -206,7 +209,7 @@ flowchart LR
     D --> E["Build ISASpec\nwith template registry\nand binding list"]
 ```
 
-For variable-length ISAs (x86), build hierarchical templates: one for the opcode byte, one for ModRM, one for SIB, etc. The EncodingDAG composition nodes are Template references; the root template aggregates sub-templates by concatenating their encodings.
+Variable-length ISAs such as x86 need hierarchical templates: one for the opcode byte, one for ModRM, one for SIB, and so on. The EncodingDAG composition nodes are `Template` references; the root template aggregates sub-templates by concatenating their encodings.
 
 ---
 
