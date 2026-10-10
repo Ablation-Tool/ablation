@@ -258,7 +258,7 @@ Every confirmed finding enters the registry and seeds semantic search embeddings
 Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads each one, string xrefs find the target functions, and capstone disassembles to confirmed findings.
 
 <details>
-<summary><strong>target-package.rpm:</strong> third-party bundle · x86-64</summary>
+<summary><img src="https://img.shields.io/badge/target--package.rpm-c2410c?style=flat-square" alt="target-package.rpm"> third-party bundle · x86-64</summary>
 
 ```
               ┌──────────────────────────────┐
@@ -272,7 +272,7 @@ Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads e
 ```
 
 <details>
-<summary><strong>Extracted Binaries:</strong> inference_engine · controller · libcore.so · libruntime.so</summary>
+<summary><img src="https://img.shields.io/badge/Extracted_Binaries-0369a1?style=flat-square" alt="Extracted Binaries"> inference_engine · controller · libcore.so · libruntime.so</summary>
 
 ```
   platform/linux-x86_64/
@@ -289,7 +289,7 @@ Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads e
 ```
 
 <details>
-<summary><strong>Inference Engine Track:</strong> BinaryContext · string xrefs · disasm</summary>
+<summary><img src="https://img.shields.io/badge/Inference_Engine_Track-9333ea?style=flat-square" alt="Inference Engine Track"> BinaryContext · string xrefs · disasm</summary>
 
 ```
   BinaryContext.load_or_build()
@@ -323,7 +323,7 @@ Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads e
 </details>
 
 <details>
-<summary><strong>Library Analysis Track:</strong> nm · disasm · op scan</summary>
+<summary><img src="https://img.shields.io/badge/Library_Analysis_Track-0f766e?style=flat-square" alt="Library Analysis Track"> nm · disasm · op scan</summary>
 
 ```
   nm -D libcore.so
@@ -344,7 +344,7 @@ Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads e
 </details>
 
 <details>
-<summary><strong>Controller Track:</strong> BinaryContext · spawn path · arg validation</summary>
+<summary><img src="https://img.shields.io/badge/Controller_Track-b45309?style=flat-square" alt="Controller Track"> BinaryContext · spawn path · arg validation</summary>
 
 ```
   BinaryContext.load_or_build()
@@ -372,7 +372,7 @@ Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads e
 </details>
 
 <details>
-<summary><strong>Findings:</strong> F1 HIGH · F2 LOW · F3 INFO</summary>
+<summary><img src="https://img.shields.io/badge/Findings-15803d?style=flat-square" alt="Findings"> F1 HIGH · F2 LOW · F3 INFO</summary>
 
 ```
   ┌─────────────────────────────────────────────────────┐
@@ -406,7 +406,7 @@ Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads e
 ## Module Map
 
 <details>
-<summary><strong>Input Formats:</strong> ELF · PE · Firmware · .mpy · APK/DEX · BEAM/Erlang</summary>
+<summary><img src="https://img.shields.io/badge/Input_Formats-7c2d12?style=flat-square" alt="Input Formats"> ELF · PE · Firmware · .mpy · APK/DEX · BEAM/Erlang</summary>
 
 ```
   ┌───────┐  ┌───────────┐  ┌──────────┐  ┌───────┐  ┌─────────┐  ┌─────────────┐
@@ -420,7 +420,7 @@ Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads e
 Ablation loads native binaries, compiled bytecode, and firmware images. Each goes through the same loader before analysis begins.
 
 <details>
-<summary><strong>BinaryContext:</strong> PLT · Strings · XRef · Call Graph · CFG</summary>
+<summary><img src="https://img.shields.io/badge/BinaryContext-1d4ed8?style=flat-square" alt="BinaryContext"> PLT · Strings · XRef · Call Graph · CFG</summary>
 
 ```
                ╔══════════════════════════════╗
@@ -440,7 +440,7 @@ Ablation loads native binaries, compiled bytecode, and firmware images. Each goe
 Every analyzer receives a BinaryContext. It resolves PLT stubs, indexes strings with cross-references, maps function boundaries, and builds the call graph on demand rather than up front.
 
 <details>
-<summary><strong>Taint Engine:</strong> 16 ISAs</summary>
+<summary><img src="https://img.shields.io/badge/Taint_Engine-dc2626?style=flat-square" alt="Taint Engine"> 16 ISAs</summary>
 
 ```
   ╔═══════════════════════════════════════════════════╗
@@ -466,7 +466,7 @@ The taint engine follows network input through the call graph to security-sensit
 </details>
 
 <details>
-<summary><strong>Analysis Modules:</strong> Semantic Search · Version Diffing · Hypothesis Engine · Vtable Recon</summary>
+<summary><img src="https://img.shields.io/badge/Analysis_Modules-7e22ce?style=flat-square" alt="Analysis Modules"> Semantic Search · Version Diffing · Hypothesis Engine · Vtable Recon</summary>
 
 ```
   ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
@@ -493,7 +493,7 @@ The taint engine follows network input through the call graph to security-sensit
 </details>
 
 <details>
-<summary><strong>Security Scanners:</strong> Pre-Auth · Crypto · Heap · Format String · BYOVD · MpyLifter</summary>
+<summary><img src="https://img.shields.io/badge/Security_Scanners-be185d?style=flat-square" alt="Security Scanners"> Pre-Auth · Crypto · Heap · Format String · BYOVD · MpyLifter</summary>
 
 ```
   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
@@ -521,7 +521,7 @@ The taint engine follows network input through the call graph to security-sensit
 </details>
 
 <details>
-<summary><strong>FORGE Quality Gate → Finding Registry</strong></summary>
+<summary><img src="https://img.shields.io/badge/FORGE_Quality_Gate-065f46?style=flat-square" alt="FORGE Quality Gate"> → Finding Registry</summary>
 
 ```
   Taint Engine ──┐
