@@ -127,6 +127,14 @@ def decode_ioctl_code(value: int, site_va: int = 0) -> Optional['IoctlCode']:
     # Common false-positive: values < 0x10000 are just 16-bit quantities
     if value < 0x10000:
         return None
+    # Reject values where every byte is printable ASCII (0x20-0x7E).
+    # ASCII debug strings embedded in .text produce DWORD patterns that pass all
+    # other checks — e.g. "acid" (0x64696361) decodes as DevType=0x6469 Func=0x18D.
+    # A real CTL_CODE cannot have all four bytes in the printable range because the
+    # high word encodes a device-type constant (0x0001-0xFFFF) and the low word
+    # encodes method/access/function fields that routinely exceed 0x7E.
+    if all(0x20 <= (value >> (i * 8)) & 0xFF <= 0x7E for i in range(4)):
+        return None  # printable ASCII string literal, not a CTL_CODE
 
     return IoctlCode(
         raw=value,
@@ -680,6 +688,7 @@ class KernelDriverAnalyzer:
         report.callback_registrations = self._scan_callbacks()
         report.pool_operations        = self._scan_pool_operations()
         report.dangerous_patterns     = self._scan_dangerous_patterns()
+        report.dangerous_patterns    += self._check_neither_probe_absence(report.ioctl_codes)
         return report
 
     # -----------------------------------------------------------------------
@@ -1131,6 +1140,29 @@ class KernelDriverAnalyzer:
                         severity=severity, category=category,
                     ))
 
+        # Zero-IAT fallback: some WDM drivers (especially XP-era eGalaxTouch-style
+        # drivers) set import_directory_rva=0 and resolve every kernel API at runtime
+        # via MmGetSystemRoutineAddress(L"ApiName").  The import table is empty, so the
+        # IAT scan above returns nothing.  We recover the API surface by searching the
+        # binary for the UTF-16LE names of all known dangerous APIs — these must be
+        # present as string literals in .data or .rdata to be passed to MmGetSystemRoutineAddress.
+        #
+        # This fires only when no IAT findings were produced, avoiding double-reporting
+        # on normal drivers that happen to also contain a wide string for some reason.
+        if not findings:
+            for api_name, (severity, category) in KERNEL_APIS.items():
+                if api_name in seen:
+                    continue
+                wide = api_name.encode('utf-16-le')
+                if wide in self.data:
+                    seen.add(api_name)
+                    findings.append(KernelApiFinding(
+                        api=api_name,
+                        dll='[dynamic-resolve]',
+                        severity=severity,
+                        category=category,
+                    ))
+
         order = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3}
         findings.sort(key=lambda x: order.get(x.severity, 9))
         return findings
@@ -1524,7 +1556,151 @@ class KernelDriverAnalyzer:
                 severity='HIGH',
             ))
 
+        # Writable vtable scan: look for vtable candidates in writable PE sections.
+        #
+        # Normal C++ drivers store vtables in .rdata (read-only data).  A vtable in
+        # .data is mutable at runtime — any kernel write primitive that reaches .data
+        # can overwrite a vtable slot and redirect the next IRP dispatch call.  On x86
+        # drivers, dispatch runs at IRQL PASSIVE/APC level, so a vtable overwrite is a
+        # reliable privilege-escalation primitive.
+        #
+        # Detection: scan each writable PE section for runs of ≥3 consecutive
+        # pointer-size-aligned values that fall inside an executable section.
+        # This is the same heuristic CppVtableReconstructorAnalyzer uses for ELF.
+        findings.extend(self._scan_writable_vtables())
+
         return findings
+
+    def _scan_writable_vtables(self) -> list:
+        """
+        Scan writable PE sections for runs of code pointers (probable vtables).
+
+        Returns DangerousPattern entries for each run of ≥3 consecutive aligned
+        pointers into executable sections found inside a writable data section.
+        A vtable in .data is mutable at runtime; any kernel write primitive that
+        reaches it converts to an IRP dispatch hijack.
+        """
+        pe = self._pe
+        ptr_size = 8 if pe.is_64bit else 4
+
+        # Build executable VA ranges from all exec sections.
+        exec_ranges: list = []
+        for sec in pe.sections:
+            if sec['executable'] and sec['raw_size'] > 0:
+                base = pe.image_base + sec['vaddr']
+                exec_ranges.append((base, base + sec['vsize']))
+
+        if not exec_ranges:
+            return []
+
+        def _points_into_exec(va: int) -> bool:
+            return any(lo <= va < hi for lo, hi in exec_ranges)
+
+        findings = []
+        fmt = '<Q' if pe.is_64bit else '<I'
+
+        for sec in pe.sections:
+            if not sec['writable'] or sec['executable']:
+                continue  # skip .rdata and any W^X sections
+            if sec['raw_size'] < ptr_size * 3:
+                continue
+
+            raw_off = sec['raw_offset']
+            raw_end = raw_off + sec['raw_size']
+            sec_va  = pe.image_base + sec['vaddr']
+            data    = self.data[raw_off:raw_end]
+
+            run_start_off = None
+            run_count     = 0
+
+            i = 0
+            stride = ptr_size
+            while i + ptr_size <= len(data):
+                val = struct.unpack_from(fmt, data, i)[0]
+                if _points_into_exec(val):
+                    if run_start_off is None:
+                        run_start_off = i
+                    run_count += 1
+                else:
+                    if run_count >= 3:
+                        abs_off = raw_off + run_start_off
+                        vtable_va = sec_va + run_start_off
+                        findings.append(DangerousPattern(
+                            pattern='WRITABLE_VTABLE_IN_DATA',
+                            offset=abs_off,
+                            description=(
+                                f'vtable candidate @ VA 0x{vtable_va:08x} in writable section '
+                                f'"{sec.get("name","?")}" ({run_count} slots); '
+                                f'any kernel write primitive reaching .data converts to IRP dispatch hijack'
+                            ),
+                            severity='HIGH',
+                        ))
+                    run_start_off = None
+                    run_count = 0
+                i += stride
+
+            # Flush trailing run
+            if run_count >= 3:
+                abs_off = raw_off + run_start_off
+                vtable_va = sec_va + run_start_off
+                findings.append(DangerousPattern(
+                    pattern='WRITABLE_VTABLE_IN_DATA',
+                    offset=abs_off,
+                    description=(
+                        f'vtable candidate @ VA 0x{vtable_va:08x} in writable section '
+                        f'"{sec.get("name","?")}" ({run_count} slots); '
+                        f'any kernel write primitive reaching .data converts to IRP dispatch hijack'
+                    ),
+                    severity='HIGH',
+                ))
+
+        return findings
+
+    def _check_neither_probe_absence(self, ioctl_codes: list) -> list:
+        """
+        For each METHOD_NEITHER IOCTL, check whether ProbeForRead or ProbeForWrite
+        appear anywhere in the driver — either in the IAT or as UTF-16LE strings
+        passed to MmGetSystemRoutineAddress.
+
+        METHOD_NEITHER passes Type3InputBuffer (a raw user-mode pointer) directly
+        to the dispatch handler.  Safe drivers call ProbeForRead/ProbeForWrite before
+        any dereference.  A driver with METHOD_NEITHER IOCTLs that never mentions
+        ProbeForRead or ProbeForWrite anywhere in the binary has no probe at all:
+        every dereference of Type3InputBuffer is an unvalidated kernel read/write path.
+
+        Returns a DangerousPattern entry when METHOD_NEITHER IOCTLs exist and
+        ProbeForRead + ProbeForWrite are both absent from the entire binary.
+        """
+        neither_codes = [ic for ic in ioctl_codes if ic.method == 3]
+        if not neither_codes:
+            return []
+
+        all_imports: set = set()
+        for funcs in self._pe.imports.values():
+            all_imports.update(funcs)
+
+        def _probe_present(name: str) -> bool:
+            if name in all_imports:
+                return True
+            return name.encode('utf-16-le') in self.data
+
+        if _probe_present('ProbeForRead') or _probe_present('ProbeForWrite'):
+            return []
+
+        codes_fmt = ', '.join(f'0x{ic.raw:08x}' for ic in neither_codes[:6])
+        if len(neither_codes) > 6:
+            codes_fmt += f' ... (+{len(neither_codes) - 6} more)'
+
+        return [DangerousPattern(
+            pattern='NEITHER_IOCTL_NO_PROBE',
+            offset=0,
+            description=(
+                f'{len(neither_codes)} METHOD_NEITHER IOCTL(s) ({codes_fmt}) with no '
+                f'ProbeForRead or ProbeForWrite anywhere in the binary; '
+                f'Type3InputBuffer dereferences are unvalidated kernel arb-read primitives (CWE-822)'
+            ),
+            severity='HIGH',
+        )]
 
 
 # ---------------------------------------------------------------------------

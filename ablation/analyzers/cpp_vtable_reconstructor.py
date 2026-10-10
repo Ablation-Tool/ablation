@@ -37,6 +37,9 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import lief
 
+_SHF_WRITE    = 0x1   # ELF SHF_WRITE: section is writable at runtime
+_SHF_EXECINSTR = 0x4  # ELF SHF_EXECINSTR: section contains executable machine instructions
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Data classes
@@ -64,12 +67,21 @@ class VtableSpec:
 
     ctor_sites lists VAs where this vtable VA appears in the binary's data
     sections (vptr slots in subclass vtables or global objects).
+
+    section_name names the ELF section that contains this vtable.
+    writable is True when that section is writable at runtime — meaning any
+    kernel or process write primitive that reaches the vtable data can
+    overwrite a slot and redirect the next virtual dispatch call.
+    Normal vtables live in .rodata or .data.rel.ro (read-only after RELRO);
+    a vtable in .data is mutable for the entire lifetime of the process.
     """
     va: int
     slots: List[SlotSpec]
     type_name: str              # inferred; empty if unknown
     ctor_sites: List[int]       # VAs of vptr slots referencing this vtable
     has_itanium_header: bool = False
+    section_name: str = ''      # ELF section name, e.g. '.rodata' or '.data'
+    writable: bool = False      # True when section lacks SHF_WRITE protection
 
     def slot_by_index(self, idx: int) -> Optional[SlotSpec]:
         for s in self.slots:
@@ -216,6 +228,21 @@ class CppVtableReconstructorAnalyzer:
                 return sec
         return None
 
+    def _section_for_va(self, va: int) -> Tuple[str, bool]:
+        """Return (section_name, writable) for the ELF section that contains va.
+
+        writable is True when the section has SHF_WRITE (0x1) set — meaning the
+        section is writable at runtime and any kernel write primitive reaching
+        this vtable can overwrite dispatch slots.  Returns ('', False) when no
+        section covers the address.
+        """
+        for sec in self._binary().sections:
+            if sec.size == 0:
+                continue
+            if sec.virtual_address <= va < sec.virtual_address + sec.size:
+                return sec.name, bool(sec.flags & _SHF_WRITE)
+        return '', False
+
     def _text_range(self) -> Tuple[int, int]:
         """Return (text_va, text_end)."""
         sec = self._section('.text')
@@ -229,8 +256,7 @@ class CppVtableReconstructorAnalyzer:
         for sec in self._binary().sections:
             if sec.size == 0:
                 continue
-            # SHF_EXECINSTR = 0x4
-            if sec.flags & 0x4:
+            if sec.flags & _SHF_EXECINSTR:
                 lo = min(lo, sec.virtual_address)
                 hi = max(hi, sec.virtual_address + sec.size)
         return (lo, hi) if lo < hi else (0, 0)
@@ -322,12 +348,15 @@ class CppVtableReconstructorAnalyzer:
             for i, rva in enumerate(run)
         ]
         has_header = self._check_itanium_header(vtable_va)
+        sec_name, writable = self._section_for_va(vtable_va)
         return VtableSpec(
             va=vtable_va,
             slots=slots,
             type_name='',
             ctor_sites=[],
             has_itanium_header=has_header,
+            section_name=sec_name,
+            writable=writable,
         )
 
     def _check_itanium_header(self, vtable_va: int) -> bool:
@@ -396,6 +425,8 @@ class CppVtableReconstructorAnalyzer:
                             type_name='',
                             ctor_sites=[],
                             has_itanium_header=has_hdr,
+                            section_name=sec_name,
+                            writable=bool(sec.flags & _SHF_WRITE),
                         ))
                     run_start_i = None
                     run_ptrs = []
@@ -413,6 +444,8 @@ class CppVtableReconstructorAnalyzer:
                     type_name='',
                     ctor_sites=[],
                     has_itanium_header=has_hdr,
+                    section_name=sec_name,
+                    writable=bool(sec.flags & _SHF_WRITE),
                 ))
 
         return results
