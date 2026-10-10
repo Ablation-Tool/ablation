@@ -12,7 +12,7 @@ Ablation is a reverse engineering framework built for AI-agent-driven analysis. 
 ## Capabilities
 
 <details>
-<summary><strong>Analysis</strong> — semantic search, binary lifting, hypothesis engine, C++ vtable reconstruction, DAG adapter</summary>
+<summary><strong>Analysis:</strong> semantic search, binary lifting, hypothesis engine, C++ vtable reconstruction, DAG adapter</summary>
 
 | Capability | |
 |:---|:---|
@@ -26,7 +26,7 @@ Ablation is a reverse engineering framework built for AI-agent-driven analysis. 
 </details>
 
 <details>
-<summary><strong>Vulnerability Detection</strong> — taint tracking, pre-auth surface mapping, compiler bug detection, cryptographic analysis</summary>
+<summary><strong>Vulnerability Detection:</strong> taint tracking, pre-auth surface mapping, compiler bug detection, cryptographic analysis</summary>
 
 | Capability | |
 |:---|:---|
@@ -38,7 +38,7 @@ Ablation is a reverse engineering framework built for AI-agent-driven analysis. 
 </details>
 
 <details>
-<summary><strong>Hard Targets</strong> — LoongArch64, nanoMIPS, Windows PE, BYOVD drivers, Android, Erlang/BEAM, Go, game engines, firmware</summary>
+<summary><strong>Runtimes & Formats:</strong> LoongArch64, nanoMIPS, Windows PE, BYOVD drivers, Android, Erlang/BEAM, Go, game engines, firmware</summary>
 
 | Capability | |
 |:---|:---|
@@ -56,7 +56,7 @@ Ablation is a reverse engineering framework built for AI-agent-driven analysis. 
 </details>
 
 <details>
-<summary><strong>Workflow</strong> — version diffing, cross-target learning, module quality gate</summary>
+<summary><strong>Workflow:</strong> version diffing, cross-target learning, module quality gate</summary>
 
 | Capability | |
 |:---|:---|
