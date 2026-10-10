@@ -235,7 +235,7 @@ This project was greatly informed and inspired by several key literary works.
                     Semantic Search
 ```
 
-Every confirmed finding enters the registry and sharpens the semantic search embeddings used on the next target. The tool improves with each engagement.
+Every confirmed finding enters the registry. Searches on the next target start with those embeddings already seeded.
 
 </details>
 </details>
@@ -247,7 +247,7 @@ Every confirmed finding enters the registry and sharpens the semantic search emb
 
 ## Example RE Workflow
 
-End-to-end analysis of stripped binaries from an RPM bundle. Extraction through BinaryContext, string xrefs, and capstone disassembly to confirmed findings.
+End-to-end analysis of stripped binaries from an RPM bundle. BinaryContext loads each binary, string xrefs locate the functions of interest, capstone traces the code to confirmed findings.
 
 <details>
 <summary><strong>target-package.rpm</strong> — third-party bundle · x86-64</summary>
@@ -421,7 +421,7 @@ pip install git+https://github.com/Ablation-Tool/ablation
                                     ▼
 ```
 
-Ablation accepts native binaries, compiled bytecode, and firmware images. Each format is normalized through a common loading interface before analysis begins.
+Ablation loads native binaries, compiled bytecode, and firmware images. Each goes through the same loader before analysis begins.
 
 <details>
 <summary><strong>BinaryContext</strong> — PLT · Strings · XRef · Call Graph · CFG</summary>
@@ -437,7 +437,7 @@ Ablation accepts native binaries, compiled bytecode, and firmware images. Each f
         Taint Engine      Analysis       Scanners
 ```
 
-The foundation every analyzer builds on. Resolves PLT stubs, indexes strings with cross-references, maps function boundaries, and builds the call graph on demand rather than up front.
+Every analyzer receives a BinaryContext. It resolves PLT stubs, indexes strings with cross-references, maps function boundaries, and builds the call graph on demand rather than up front.
 
 <details>
 <summary><strong>Taint Engine</strong> — 16 ISAs</summary>
@@ -482,11 +482,11 @@ Follows network input through the call graph to security-sensitive sinks. Librar
 
 | Module | What it does |
 |---|---|
-| [Semantic Search](docs/module-reference/semantic-search.md) | Finds functions by describing what they do. Results in under a second because queries are scoped to the target binary. |
+| [Semantic Search](docs/module-reference/semantic-search.md) | Takes a plain-language description and returns matching functions. Queries scope to the target binary, so results land in under a second. |
 | [Version Diffing](docs/workflows/cross-version.md) | Checks whether logic changed, not whether the file changed. A cosmetic recompile cannot hide an unpatched vulnerability. |
 | [Hypothesis Engine](docs/module-reference/hypothesis-engine.md) | Tracks competing theories about what a function does and scores evidence against each one. Sessions persist across engagements. |
 | [Vtable Recon](docs/module-reference/cpp-vtable-reconstructor.md) | Recovers C++ virtual dispatch tables from stripped ELF. A generated annotation script propagates slot names through every call site. |
-| [Cross-Target Learning](docs/module-reference/cross-target-learning.md) | Every confirmed finding seeds future semantic searches. The tool gets sharper with each engagement. |
+| [Cross-Target Learning](docs/module-reference/cross-target-learning.md) | Every confirmed finding seeds semantic searches on every future target. |
 
 </details>
 
@@ -534,7 +534,7 @@ Follows network input through the call graph to security-sensitive sinks. Librar
                                                Semantic Search
 ```
 
-Every module and finding passes a 10-section audit before it can be stored. Confirmed findings enter the Finding Registry, which cross-references patterns across targets and seeds future semantic searches.
+Every module passes a 10-section audit before storage. Confirmed findings enter the Finding Registry and seed semantic searches on every future target.
 
 → [FORGE](docs/module-reference/forge.md)
 
