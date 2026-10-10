@@ -1,32 +1,38 @@
 """
 CppVtableReconstructorAnalyzer — standalone C++ virtual dispatch reconstruction.
 
-Three-layer pipeline (no IDA, no relocations required):
+Three-layer pipeline (no external tools required):
 
   Layer 1  scan_vtables()    — extract vtables from any ELF; uses
            RELA-based approach (dynamic ELF, any arch) with raw code-pointer
-           scan fallback (static/non-PIE binaries)
+           scan fallback (static/non-PIE binaries).  ET_DYN and ET_EXEC both
+           handled correctly via _va_to_file_offset().
 
   Layer 2  name_slots()      — name each slot via export symbols, BinaryContext
            string xrefs, and callee function names; no corpus build needed
 
   Layer 3  trace_consumers() — find call sites that dispatch through known
            vtable slots; groups by enclosing function when symbols are available
-           x86-64: full pattern coverage via VtableDispatchScanner
-           ARM64:  BLR site detection via vtable_resolver
+           x86-64:      full encoding coverage via VtableDispatchScanner
+           ARM64:       BLR site detection via vtable_resolver
+           Others:      vtable-pointer literal scan (_trace_generic); covers
+                        LoongArch64, MIPS, PPC32, PPC64, RISC-V, and any other
+                        arch where the compiler embeds the vtable VA as a
+                        pointer-sized literal in .text
 
 Output artifacts:
   report()          — human-readable annotated call graph
-  emit_ida_script() — IDAPython script: C struct typedef + idc.set_type()
-                      for producers + idc.set_cmt() at each call site
+  emit_ida_script() — type-annotation + comment script for the full
+                      producer-to-consumer chain
 
 Supports:  any ELF for vtable extraction and slot naming.
-Consumer tracing: x86-64 full, ARM64 full, other arches: extraction only.
+Consumer tracing: x86-64 and ARM64 full ISA coverage; all other arches via
+pointer literal scan (catches direct vtable loads; misses register-indirect).
 
 Relationship to existing modules:
   ELFVtableReconstructor   — x86-64 only, by class name or VA; no naming/script
   VtableResolver           — ARM64 BLR resolution; no naming/script
-  CppVtableReconstructorAnalyzer — arch-agnostic; naming + IDAPython output
+  CppVtableReconstructorAnalyzer — arch-agnostic; naming + annotation output
 """
 
 from __future__ import annotations
@@ -228,6 +234,22 @@ class CppVtableReconstructorAnalyzer:
                 return sec
         return None
 
+    def _va_to_file_offset(self, va: int) -> Optional[int]:
+        """Convert a virtual address to its file byte offset.
+
+        Walks section headers and returns ``sec.offset + (va - sec.virtual_address)``
+        for the section that contains *va*.  Returns ``None`` when no section covers
+        the address.  ET_DYN and ET_EXEC both work correctly: the answer is the
+        actual position to index into ``self._data``.
+        """
+        for sec in self._binary().sections:
+            if sec.size == 0:
+                continue
+            sec_va = sec.virtual_address
+            if sec_va <= va < sec_va + sec.size:
+                return int(sec.offset) + (va - sec_va)
+        return None
+
     def _section_for_va(self, va: int) -> Tuple[str, bool]:
         """Return (section_name, writable) for the ELF section that contains va.
 
@@ -364,19 +386,17 @@ class CppVtableReconstructorAnalyzer:
         Return True if the 16 bytes before vtable_va look like an Itanium
         vtable header: [offset_to_top=0][RTTI pointer into data section].
         """
+        # Convert vtable_va to a file offset so this works for both ET_DYN
+        # (PIE, VA≈file_offset) and ET_EXEC (non-PIE, VA >> file_offset).
+        hdr_va = vtable_va - 16
+        hdr_off = self._va_to_file_offset(hdr_va)
+        if hdr_off is None or hdr_off + 16 > len(self._data):
+            return False
         raw = self._data
-        if vtable_va < 16 or vtable_va > len(raw):
-            return False
-        ott_bytes = raw[vtable_va - 16: vtable_va - 8]
-        if len(ott_bytes) < 8:
-            return False
-        ott = struct.unpack_from('<q', ott_bytes)[0]
+        ott = struct.unpack_from('<q', raw, hdr_off)[0]
         if ott != 0:
             return False
-        rtti_bytes = raw[vtable_va - 8: vtable_va]
-        if len(rtti_bytes) < 8:
-            return False
-        rtti_ptr = struct.unpack_from('<Q', rtti_bytes)[0]
+        rtti_ptr = struct.unpack_from('<Q', raw, hdr_off + 8)[0]
         if rtti_ptr == 0:
             return False
         data_lo, data_hi = self._data_range()
@@ -611,13 +631,14 @@ class CppVtableReconstructorAnalyzer:
 
         x86-64: delegates to VtableDispatchScanner (full encoding coverage)
         ARM64:  delegates to vtable_resolver.detect_blr_sites (BLR pattern)
-        Others: returns [] — vtable extraction + naming work, call tracing does not.
+        Others (LA64, MIPS, PPC, …): _trace_generic scans .text for the
+                vtable VA packed as a pointer-sized literal (arch-agnostic).
         """
         if self._arch == 'x86_64':
             return self._trace_x86(spec)
         if self._arch == 'arm64':
             return self._trace_arm64(spec)
-        return []
+        return self._trace_generic(spec)
 
     def _func_starts_sorted(self) -> List[int]:
         """Return sorted function start VAs from symbol table (best-effort)."""
@@ -639,6 +660,66 @@ class CppVtableReconstructorAnalyzer:
         """Return the function start VA that encloses call_va, or call_va itself."""
         result = _binary_search_le(func_starts, call_va)
         return result if result else call_va
+
+    def _trace_generic(self, spec: VtableSpec) -> List[TypePropSite]:
+        """
+        Generic consumer tracer for LoongArch64, MIPS, PPC, and any other arch
+        not covered by the ISA-specific x86-64 and ARM64 tracers.
+
+        Strategy: scan .text bytes for the vtable VA packed as a pointer-sized
+        little-endian or big-endian literal.  This catches ``la.abs``/``movabs``-
+        style vtable pointer loads where the compiler embeds the absolute address
+        directly in the instruction stream — a reliable pattern for non-PIE
+        static binaries and a partial-coverage pattern for PIE (where ASLR means
+        the literal value is a relocation, not the final VA).
+
+        Returns at most 64 sites per vtable to bound cost on large binaries.
+        """
+        text_sec = self._section('.text')
+        if text_sec is None:
+            return []
+        text_va  = text_sec.virtual_address
+        text_off = int(text_sec.offset)
+        text_data = self._data[text_off: text_off + text_sec.size]
+
+        func_starts = self._func_starts_sorted()
+        consumers: Dict[int, TypePropSite] = {}
+
+        # Determine pointer width and byte order from arch token.
+        # _elf_arch() tokens: 'ppc32', 'ppc64', 'mips', 'loongarch64', 'riscv', …
+        ptr_width = 4 if self._arch == 'ppc32' else 8
+        if self._arch in ('ppc32', 'ppc64', 'mips'):
+            # PPC is always big-endian; MIPS default is BE (check EI_DATA byte for LE)
+            ei_data = self._data[5] if len(self._data) > 5 else 2
+            endian = '<' if ei_data == 1 else '>'
+        else:
+            endian = '<'  # x86_64, arm64, loongarch64, riscv, …
+        fmt = endian + ('I' if ptr_width == 4 else 'Q')
+
+        needle = struct.pack(fmt, spec.va)
+        pos = 0
+        hits = 0
+        while hits < 64:
+            idx = text_data.find(needle, pos)
+            if idx == -1:
+                break
+            site_va = text_va + idx
+            fn_va = self._enclosing_func(site_va, func_starts)
+            if fn_va not in consumers:
+                fn_name = (
+                    self._ctx.name(fn_va)
+                    if self._ctx else f'fn_0x{fn_va:x}'
+                )
+                consumers[fn_va] = TypePropSite(
+                    func_va=fn_va,
+                    func_name=fn_name,
+                    role='consumer',
+                )
+            consumers[fn_va].slot_calls.append((site_va, -1, 'vtable_load'))
+            pos = idx + ptr_width
+            hits += 1
+
+        return sorted(consumers.values(), key=lambda p: p.func_va)
 
     def _trace_x86(self, spec: VtableSpec) -> List[TypePropSite]:
         from ablation.analyzers.vtable_dispatch_scanner import VtableDispatchScanner
@@ -685,7 +766,8 @@ class CppVtableReconstructorAnalyzer:
         if text_sec is None:
             return []
         text_va = text_sec.virtual_address
-        text_data = self._data[text_va: text_va + text_sec.size]
+        text_off = int(text_sec.offset)   # file offset, not VA
+        text_data = self._data[text_off: text_off + text_sec.size]
 
         blr_sites = detect_blr_sites(text_data, text_va, text_sec.size)
         func_starts = self._func_starts_sorted()
