@@ -282,4 +282,4 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 ## Responsible Use
 
-Ablation is built for authorized security research. Use it only against systems you own or have explicit written permission to test. Running it against systems without authorization violates computer fraud laws in most jurisdictions. The authors are not responsible for misuse.
+Ablation is built for authorized security research. Use it only against systems you own or have explicit written permission to test. Running it against systems without authorization violates computer fraud laws in most jurisdictions. The author is not responsible for misuse.
