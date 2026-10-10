@@ -62,8 +62,7 @@ callers = elf.find_bl_callers(target_va)  # all BL→target in .text
 slot = elf.plt_slot('system')            # PLT slot VA for imported symbol
 ```
 
-`PPC32ELF.find_import_callers()` is the unverified predecessor — use
-`PPC32PLTTracer.find_callers()` instead.
+`PPC32ELF.find_import_callers()` is the unverified predecessor; use `PPC32PLTTracer.find_callers()` instead.
 
 ---
 
@@ -139,7 +138,7 @@ False positive reduction: libupdatelpu 9→2, libpythonvm 59→1 after r30 check
 
 ---
 
-## BSS PLT (SYSV PIC — IBM HPS, glibc .so files)
+## BSS PLT: SYSV PIC (IBM HPS, glibc .so files)
 
 SYSV ABI PPC32 `.so` files (glibc-linked, `ET_DYN`) use a different calling
 model: calls go directly via `BL stub_va` with no indirection through r30 or
@@ -156,7 +155,7 @@ and written by the dynamic linker at load time).
 3. `resolver_size = first_stub_va - plt_va` is computed empirically.
 4. All callers of each stub are returned via `find_bl_callers()`.
 
-No r30 verification is performed — a direct `BL stub_va` unambiguously names
+No r30 verification is performed. A direct `BL stub_va` unambiguously names
 the callee. The `bss_plt_stub_map()` result is cached per `PPC32PLTTracer`
 instance to avoid recomputing the `.text` scan on repeated `find_callers()`
 calls (e.g. inside `batch_scan()`).

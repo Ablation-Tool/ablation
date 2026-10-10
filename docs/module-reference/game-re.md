@@ -103,7 +103,7 @@ The PS3 Cell Broadband Engine has two distinct processor types on one die. Secur
 flowchart LR
     A["PS3 Cell BE"] --> B["PPU\nPower Processing Unit\nPPC64 + VMX/AltiVec SIMD\nDirect main memory access\nRuns OS and main game loop"]
 
-    A --> C["SPU × 6\nSynergistic Processing Unit\n128 × 128-bit registers (all SIMD)\n256 KB local store only — no cache, no TLB\nNo memory load instructions\nData arrives via DMA from main memory\n11 instruction formats, 4-byte big-endian\nAll ops treat registers as SIMD vectors"]
+    A --> C["SPU × 6\nSynergistic Processing Unit\n128 × 128-bit registers (all SIMD)\n256 KB local store only: no cache, no TLB\nNo memory load instructions\nData arrives via DMA from main memory\n11 instruction formats, 4-byte big-endian\nAll ops treat registers as SIMD vectors"]
 ```
 
 Every SPU instruction treats its register as a vector of four 32-bit integers, two 64-bit integers, or sixteen 8-bit integers depending on the instruction. There is no scalar 32-bit mode. A 32-bit add (`a` instruction) adds four pairs of 32-bit integers simultaneously. Data must be pre-staged in local store via DMA channels before any computation can begin.

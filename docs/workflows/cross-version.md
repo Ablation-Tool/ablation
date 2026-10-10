@@ -76,9 +76,9 @@ print(f"Stage resolved at: {result.stage}")   # structural / 4gram / bert
 | Confidence | Meaning |
 |---|---|
 | >= 0.90 | Near-certain match |
-| 0.70 - 0.90 | Likely match — verify with strings_in_func |
-| 0.50 - 0.70 | Possible match — manual verification recommended |
-| < 0.50 | Ambiguous — function may have been split, merged, or removed |
+| 0.70 - 0.90 | Likely match: verify with strings_in_func |
+| 0.50 - 0.70 | Possible match: verify manually |
+| < 0.50 | Ambiguous: function may have been split, merged, or removed |
 
 ---
 
@@ -131,7 +131,7 @@ print(ctx_v2.names_table())
 
 ## Step 5: Check for regression in v3+
 
-Once you have the v2 homolog VA, run VersionDelta again from v2 to v3. If the function diverges significantly (confidence below 0.70), the vendor may have refactored the parsing logic — which can introduce new bugs adjacent to the fix.
+Once you have the v2 homolog VA, run VersionDelta again from v2 to v3. If the function diverges significantly (confidence below 0.70), the vendor may have refactored the parsing logic. That refactor can introduce new bugs adjacent to the fix.
 
 ```python
 vd_23 = VersionDelta(
@@ -162,7 +162,7 @@ Functions with `change_score >= 0.20` had meaningful code changes. Combine with 
 
 ## Cross-vendor similarity with StructuralSim
 
-For fine-grained comparison of two specific functions across vendors (not just across versions), use StructuralSim directly. A composite score >= 0.70 across two vendors means the functions share a common ancestor — the same open-source library or standard protocol implementation.
+For fine-grained comparison of two specific functions across vendors (not just across versions), use StructuralSim directly. A composite score >= 0.70 across two vendors means the functions share a common ancestor: the same open-source library or standard protocol implementation.
 
 ```python
 from ablation.analyzers.structural_sim import StructuralSim

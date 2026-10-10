@@ -67,7 +67,7 @@ flowchart TD
     E --> F{"Call site\nfound?"}
     F -->|"callee in .plt range (ELF)"| G["Resolve import_name\nvia plt_map"]
     F -->|"direct call (PE32+)"| H["Sink name = direct/indirect\nNo import names available"]
-    F -->|No call within 20 insns| I["Discard — likely used\nfor non-allocation purpose"]
+    F -->|No call within 20 insns| I["Discard: likely used\nfor non-allocation purpose"]
 
     G --> J{"import_name\nin sink_table?"}
     J -->|"Yes (malloc/memcpy/...)"| K[/"Emit LA64MaxNotMinFinding\npattern_va · result_reg · sink_va · sink_name · sink_arg"/]

@@ -175,7 +175,7 @@ flowchart TD
     B --> C{"size_register used as\nsize arg to RtlCopyMemory?"}
     C -->|No| D["No finding"]
     C -->|Yes| E{"Bounds check\n(CMP + conditional branch)\nbetween them?"}
-    E -->|Yes — guarded| D
+    E -->|Yes: guarded| D
     E -->|No bounds check| F[/"HIGH: unvalidated propagation (CWE-122)"/]
 
     style F fill:#7f1d1d,stroke:#991b1b,color:#fecaca

@@ -16,7 +16,7 @@
 
 1. Builds an IAT map for `ExAllocatePool`, `ExAllocatePoolWithTag`, `ExAllocatePool2`, `ExAllocatePool3`, and five other pool allocation variants.
 2. Builds an IAT map for `RtlCopyMemory`, `memmove`, `memcpy`, `RtlMoveMemory`, `RtlCopyBytes`, `RtlCopyUnicodeString`, `ProbeAndReadBuffer`.
-3. Scans all code sections with Capstone. For each allocation call site, extracts the size argument (second argument — `RDX` in x64 fastcall). For each copy call site, extracts the size argument (third argument — `R8`).
+3. Scans all code sections with Capstone. For each allocation call site, extracts the size argument (second argument: `RDX` in x64 fastcall). For each copy call site, extracts the size argument (third argument: `R8`).
 4. Pairs allocation sites with copy sites where the same register carries the size to both calls, within a forward instruction window of ~200 instructions (same-function heuristic).
 5. Reports unvalidated pairs as HIGH findings with CWE-122.
 

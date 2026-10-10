@@ -68,8 +68,8 @@ print(ELFVtableReconstructor.report(vtable_map))
 | Attribute | Type | Description |
 |---|---|---|
 | `vtable_va` | int | VA of vtable start (offset-to-top word) |
-| `vtable_ptr` | int | `vtable_va + 0x10` — what the object's vptr holds |
-| `slots` | dict | `{slot_offset: VtableSlot}` — all reconstructed entries |
+| `vtable_ptr` | int | `vtable_va + 0x10`: what the object's vptr holds |
+| `slots` | dict | `{slot_offset: VtableSlot}`: all reconstructed entries |
 | `class_name` | str | Class name (set when using `reconstruct_class`) |
 | `live_slots()` | method | Filtered dict of function (non-RTTI) slots |
 | `get_slot(offset)` | method | Single slot lookup by offset from vtable_ptr |
@@ -180,5 +180,5 @@ for name, sites in report.live().items():
 - Scans only ELF sections marked `SHF_EXECINSTR`. Code in non-standard segments is missed.
 - Does not follow cross-library call chains; a vtable method called only from another `.so`
   appears dead when scanning a single library.
-- Does not handle `call [mem+reg*scale+disp]` (VSIB/complex SIB addressing) — rare in
+- Does not handle `call [mem+reg*scale+disp]` (VSIB/complex SIB addressing); rare in
   compiler-generated C++ vtable dispatch.
