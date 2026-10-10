@@ -2,6 +2,34 @@
 
 ---
 
+## v2.45.0
+
+**BinaryLifter: 13 new ISA decompiler backends.** `BinaryLifter` now supports all 17
+ISA variants shown in the README architecture table. ARM64 and x86-64 remain full
+(register-tracking state machines). 13 new structural backends emit call/return/branch
+as resolved pseudocode and arithmetic as comments.
+
+- `x86_32` / `i386`: Capstone CS_MODE_32, CDECL (stack args, eax return), `_X86_32State`
+- `arm32` / `arm`: insn_arm32 + cfg_arm32; AAPCS r0–r3
+- `thumb` / `thumb2`: insn_arm32 Thumb mode
+- `mips32`, `mips32el`: insn_mips + cfg_mips; o32 $a0–$a3; LE/BE variants
+- `mips64`, `mips64el`: insn_mips + cfg_mips; n64 $a0–$a7
+- `nanomips`: NanoMIPSDecoder linear walk; o32 ABI
+- `ppc32` / `ppc`: insn_ppc + cfg_ppc; SysV32 r3–r10
+- `ppc64`: insn_ppc + cfg_ppc; ELFv2 r3–r10
+- `rv32` / `riscv32`: insn_riscv + cfg_riscv; psABI a0–a7
+- `rv64` / `riscv64`: insn_riscv + cfg_riscv; psABI a0–a7
+- `arc` / `arcem` / `archs`: requires `arc-elf32-objdump` in PATH; degrades gracefully if absent
+- `v850` / `rh850`: requires `v850-elf-objdump` in PATH; degrades gracefully if absent
+- `la64` / `loongarch64`: LoongArchDecoder + cfg_loongarch64; lp64 $a0–$a7 (replaces stub)
+- `beam` / `erlang` / `elixir`: BeamContext module summary (exports, dangerous imports, atoms); no VA space
+
+Shared `_walk_ablation_cfg()` BFS helper eliminates code duplication across all 9
+CFG-backed backends. `_make_*_emit()` factory closures encapsulate per-ISA call/return/branch
+detection without full register state machines.
+
+---
+
 ## v2.44.0
 
 Windows PE security analysis suite. Seven new modules covering the full attack surface

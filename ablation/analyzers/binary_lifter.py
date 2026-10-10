@@ -1,13 +1,26 @@
 """
 binary_lifter.py — Lift native binary functions to annotated C pseudocode.
 
-Active Architecture Tomography Phase 1: static CFG-based IR emission for
-ARM64. DEXLifter (dex_lifter.py) is the structural template.
+Architecture Tomography: static CFG-based IR emission across 17 ISA variants.
+ARM64 and x86-64 are full (register-tracking state machines); all others emit
+structural pseudocode (call/return/branch resolved, arithmetic as comments).
 
 Architecture support:
-    arm64    — full; CFG + register state machine + calling convention
-    x86_64   — full; linear disasm + _X86_64State register tracking; PE + ELF
-    la64     — stub; planned Phase 1 extension
+    arm64       — full; CFG + register state machine + calling convention
+    x86_64      — full; linear disasm + _X86_64State register tracking; PE + ELF
+    x86_32      — structural; Capstone CS_MODE_32; CDECL (stack args, eax return)
+    arm32       — structural; insn_arm32 + cfg_arm32; AAPCS r0-r3
+    thumb/thumb2— structural; insn_arm32 Thumb mode
+    mips32      — structural; insn_mips + cfg_mips; o32 ($a0-$a3)
+    mips64      — structural; insn_mips + cfg_mips; n64 ($a0-$a7)
+    nanomips    — structural; NanoMIPSDecoder linear walk; o32 ABI
+    ppc32       — structural; insn_ppc + cfg_ppc; SysV32 (r3-r10)
+    ppc64       — structural; insn_ppc + cfg_ppc; ELFv2 (r3-r10)
+    rv32/rv64   — structural; insn_riscv + cfg_riscv; psABI (a0-a7)
+    arc/arcem   — structural; requires arc-elf32-objdump in PATH
+    v850/rh850  — structural; requires v850-elf-objdump in PATH
+    la64        — structural; LoongArchDecoder + cfg_loongarch64; lp64 ($a0-$a7)
+    beam        — module summary; BeamContext (no VA space in BEAM bytecode)
 
 Usage:
     from ablation.analyzers.binary_lifter import BinaryLifter
@@ -434,6 +447,374 @@ class BinaryLifter:
             if stmt:
                 for s in stmt.splitlines():
                     lines.append("  " + s)
+
+        lines.append("}")
+        return "\n".join(lines) + "\n"
+
+    # ── Shared CFG walker for ablation-native ISA backends ────────────────────
+
+    def _walk_ablation_cfg(self, cfg, func_va: int, emit_fn) -> str:
+        """BFS over an ablation CFG; emit_fn(insn) -> str for each instruction."""
+        fname = self._func_name(func_va)
+        lines: List[str] = [f"// {fname} @ {func_va:#x}", "{"]
+        visited: Set[int] = set()
+        queue: List[int] = [func_va]
+        while queue:
+            bva = queue.pop(0)
+            if bva in visited or bva not in cfg.blocks:
+                continue
+            visited.add(bva)
+            block = cfg.blocks[bva]
+            if bva != func_va:
+                lines.append(f"  loc_{bva:x}:")
+            for insn in block.insns:
+                try:
+                    stmt = emit_fn(insn)
+                except Exception:
+                    ops_str = ", ".join(str(o) for o in getattr(insn, "ops", []))
+                    stmt = f"// {insn.mnemonic} {ops_str}"
+                if stmt:
+                    for s in stmt.splitlines():
+                        lines.append("  " + s)
+            for succ in block.succs:
+                if succ not in visited:
+                    queue.append(succ)
+        lines.append("}")
+        return "\n".join(lines) + "\n"
+
+    # ── x86-32 lifter ─────────────────────────────────────────────────────────
+
+    def _lift_x86_32(self, func_va: int, max_insns: int) -> str:
+        import capstone
+
+        try:
+            code = self._read_va(func_va, max_insns * 7)
+        except ValueError as e:
+            return f"// {e}\n"
+
+        cs = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
+        cs.detail = True
+        insns = list(cs.disasm(code, func_va))[:max_insns]
+        if not insns:
+            return f"// no instructions decoded at {func_va:#x}\n"
+
+        fname = self._func_name(func_va)
+        state = _X86_32State(self._func_name, self._plt)
+        lines: List[str] = [f"// {fname} @ {func_va:#x}", "{"]
+
+        branch_targets: Set[int] = set()
+        for insn in insns:
+            mn = insn.mnemonic.lower()
+            if mn in _X86_JCCS or mn == "jmp":
+                if insn.operands and insn.operands[0].type == 2:
+                    branch_targets.add(insn.operands[0].imm)
+
+        for insn in insns:
+            if insn.address != func_va and insn.address in branch_targets:
+                lines.append(f"  loc_{insn.address:x}:")
+            try:
+                stmt = state.lift_insn(insn)
+            except Exception:
+                stmt = f"// {insn.mnemonic} {insn.op_str}"
+            if stmt:
+                for s in stmt.splitlines():
+                    lines.append("  " + s)
+
+        lines.append("}")
+        return "\n".join(lines) + "\n"
+
+    # ── ARM32 lifter ──────────────────────────────────────────────────────────
+
+    def _lift_arm32(self, func_va: int, max_insns: int, thumb: bool = False) -> str:
+        from .insn_arm32 import from_capstone as _arm32_cs, Mode as _ARM32Mode
+        from .cfg_arm32 import build_cfg as _arm32_cfg
+
+        mode = _ARM32Mode.THUMB if thumb else _ARM32Mode.ARM
+        insn_sz = 2 if thumb else 4
+        try:
+            code = self._read_va(func_va, max_insns * insn_sz)
+        except ValueError as e:
+            return f"// {e}\n"
+        try:
+            raw_insns = list(_arm32_cs(code, mode=mode, base=func_va))[:max_insns]
+        except Exception as e:
+            return f"// ARM32 decode failed: {e}\n"
+        if not raw_insns:
+            return f"// no instructions decoded at {func_va:#x}\n"
+        try:
+            cfg = _arm32_cfg(raw_insns, entry=func_va)
+        except Exception as e:
+            return f"// CFG build failed: {e}\n"
+        return self._walk_ablation_cfg(cfg, func_va, _make_arm32_emit(self._func_name, self._plt))
+
+    # ── MIPS lifter ───────────────────────────────────────────────────────────
+
+    def _lift_mips(self, func_va: int, max_insns: int, bits: int, little: bool) -> str:
+        from .insn_mips import from_capstone as _mips_cs, Mode as _MIPSMode
+        from .cfg_mips import build_cfg as _mips_cfg
+
+        mode = _MIPSMode.MIPS32 if bits == 32 else _MIPSMode.MIPS64
+        try:
+            code = self._read_va(func_va, max_insns * 4)
+        except ValueError as e:
+            return f"// {e}\n"
+        try:
+            raw_insns = list(_mips_cs(code, mode=mode, base=func_va, little=little))[:max_insns]
+        except Exception as e:
+            return f"// MIPS decode failed: {e}\n"
+        if not raw_insns:
+            return f"// no instructions decoded at {func_va:#x}\n"
+        try:
+            cfg = _mips_cfg(raw_insns, entry=func_va)
+        except Exception as e:
+            return f"// CFG build failed: {e}\n"
+        return self._walk_ablation_cfg(cfg, func_va, _make_mips_emit(bits, self._func_name, self._plt))
+
+    # ── PPC lifter ────────────────────────────────────────────────────────────
+
+    def _lift_ppc(self, func_va: int, max_insns: int, bits: int) -> str:
+        from .insn_ppc import from_capstone as _ppc_cs, Mode as _PPCMode
+        from .cfg_ppc import build_cfg as _ppc_cfg
+
+        mode = _PPCMode.PPC32 if bits == 32 else _PPCMode.PPC64
+        try:
+            code = self._read_va(func_va, max_insns * 4)
+        except ValueError as e:
+            return f"// {e}\n"
+        try:
+            raw_insns = list(_ppc_cs(code, mode=mode, base=func_va, little=False))[:max_insns]
+        except Exception as e:
+            return f"// PPC decode failed: {e}\n"
+        if not raw_insns:
+            return f"// no instructions decoded at {func_va:#x}\n"
+        try:
+            cfg = _ppc_cfg(raw_insns, entry=func_va)
+        except Exception as e:
+            return f"// CFG build failed: {e}\n"
+        return self._walk_ablation_cfg(cfg, func_va, _make_ppc_emit(self._func_name, self._plt))
+
+    # ── RISC-V lifter ─────────────────────────────────────────────────────────
+
+    def _lift_riscv(self, func_va: int, max_insns: int, bits: int) -> str:
+        from .insn_riscv import from_capstone as _rv_cs
+        from .cfg_riscv import build_cfg as _rv_cfg
+        from .isa_riscv import Width, isa_for
+
+        width = Width.RV32 if bits == 32 else Width.RV64
+        isa = isa_for(width)
+        try:
+            code = self._read_va(func_va, max_insns * 4)
+        except ValueError as e:
+            return f"// {e}\n"
+        try:
+            raw_insns = list(_rv_cs(code, base=func_va, width_bits=bits))[:max_insns]
+        except Exception as e:
+            return f"// RISC-V decode failed: {e}\n"
+        if not raw_insns:
+            return f"// no instructions decoded at {func_va:#x}\n"
+        try:
+            cfg = _rv_cfg(raw_insns, isa, entry=func_va)
+        except Exception as e:
+            return f"// CFG build failed: {e}\n"
+        return self._walk_ablation_cfg(cfg, func_va, _make_riscv_emit(self._func_name, self._plt))
+
+    # ── LoongArch64 lifter (replaces stub) ────────────────────────────────────
+
+    def _lift_loongarch64(self, func_va: int, max_insns: int) -> str:
+        try:
+            from .loongarch_decoder import LoongArchDecoder
+            from .insn_loongarch64 import from_loongarch_frames as _la64_from_frames
+            from .cfg_loongarch64 import build_cfg as _la64_cfg
+        except ImportError as e:
+            return f"// LoongArch64 decoder not available: {e}\n"
+
+        try:
+            code = self._read_va(func_va, max_insns * 4)
+        except ValueError as e:
+            return f"// {e}\n"
+
+        try:
+            decoder = LoongArchDecoder()
+            frames = list(decoder.decode_frames(code, func_va))[:max_insns]
+            raw_insns = list(_la64_from_frames(frames))
+        except Exception as e:
+            return f"// LA64 decode failed: {e}\n"
+
+        if not raw_insns:
+            return f"// no instructions decoded at {func_va:#x}\n"
+        try:
+            cfg = _la64_cfg(raw_insns, entry=func_va)
+        except Exception as e:
+            return f"// CFG build failed: {e}\n"
+        return self._walk_ablation_cfg(cfg, func_va, _make_la64_emit(self._func_name, self._plt))
+
+    # ── nanoMIPS lifter ───────────────────────────────────────────────────────
+
+    def _lift_nanomips(self, func_va: int, max_insns: int) -> str:
+        try:
+            from .nanomips_decoder import NanoMIPSDecoder
+        except ImportError as e:
+            return f"// nanoMIPS decoder not available: {e}\n"
+
+        try:
+            code = self._read_va(func_va, max_insns * 4)
+        except ValueError as e:
+            return f"// {e}\n"
+
+        try:
+            decoder = NanoMIPSDecoder()
+            frames = decoder.decode_frames(code, func_va)[:max_insns]
+        except Exception as e:
+            return f"// nanoMIPS decode failed: {e}\n"
+
+        if not frames:
+            return f"// no instructions decoded at {func_va:#x}\n"
+
+        fname = self._func_name(func_va)
+        lines: List[str] = [f"// {fname} @ {func_va:#x}", "{"]
+        emit_fn = _make_nanomips_emit(self._func_name, self._plt)
+        for frame in frames:
+            try:
+                stmt = emit_fn(frame)
+            except Exception:
+                stmt = f"// {frame.mnemonic} {frame.op_str}"
+            if stmt:
+                for s in stmt.splitlines():
+                    lines.append("  " + s)
+        lines.append("}")
+        return "\n".join(lines) + "\n"
+
+    # ── ARC lifter ────────────────────────────────────────────────────────────
+
+    def _lift_arc(self, func_va: int, max_insns: int) -> str:
+        import subprocess
+        import shutil
+
+        objdump = shutil.which("arc-elf32-objdump") or shutil.which("arc-linux-objdump") or shutil.which("arc-elf-objdump")
+        if objdump is None:
+            return (
+                f"// ARC lifter: no arc-elf32-objdump in PATH.\n"
+                f"// Install binutils-arc-linux-gnu or set PATH to include the ARC toolchain.\n"
+                f"// Partial: static disassembly requires an objdump capable of ARC.\n"
+            )
+
+        from .insn_arc import from_objdump as _arc_objdump
+        from .cfg_arc import build_cfg as _arc_cfg
+
+        try:
+            result = subprocess.run(
+                [objdump, "-d", "--start-address", hex(func_va),
+                 "--stop-address", hex(func_va + max_insns * 8),
+                 self.path],
+                capture_output=True, text=True, timeout=15,
+            )
+            text = result.stdout
+        except Exception as e:
+            return f"// objdump failed: {e}\n"
+
+        try:
+            raw_insns = list(_arc_objdump(text))[:max_insns]
+        except Exception as e:
+            return f"// ARC objdump parse failed: {e}\n"
+
+        if not raw_insns:
+            return f"// no instructions decoded at {func_va:#x} (check that VA is within the binary)\n"
+
+        try:
+            cfg = _arc_cfg(raw_insns, entry=func_va)
+        except Exception as e:
+            return f"// CFG build failed: {e}\n"
+
+        return self._walk_ablation_cfg(cfg, func_va, _make_arc_emit(self._func_name, self._plt))
+
+    # ── V850 lifter ───────────────────────────────────────────────────────────
+
+    def _lift_v850(self, func_va: int, max_insns: int) -> str:
+        import subprocess
+        import shutil
+
+        objdump = (
+            shutil.which("v850-elf-objdump") or
+            shutil.which("v850-unknown-elf-objdump") or
+            shutil.which("v850-linux-gnu-objdump")
+        )
+        if objdump is None:
+            return (
+                f"// V850 lifter: no v850-elf-objdump in PATH.\n"
+                f"// Install binutils-v850-elf or set PATH to include the V850 toolchain.\n"
+            )
+
+        from .insn_v850 import from_objdump as _v850_objdump
+        from .cfg_v850 import build_cfg as _v850_cfg
+
+        try:
+            result = subprocess.run(
+                [objdump, "-d", "--start-address", hex(func_va),
+                 "--stop-address", hex(func_va + max_insns * 6),
+                 self.path],
+                capture_output=True, text=True, timeout=15,
+            )
+            text = result.stdout
+        except Exception as e:
+            return f"// objdump failed: {e}\n"
+
+        try:
+            raw_insns = list(_v850_objdump(text))[:max_insns]
+        except Exception as e:
+            return f"// V850 objdump parse failed: {e}\n"
+
+        if not raw_insns:
+            return f"// no instructions decoded at {func_va:#x} (check that VA is within the binary)\n"
+
+        try:
+            cfg = _v850_cfg(raw_insns, entry=func_va)
+        except Exception as e:
+            return f"// CFG build failed: {e}\n"
+
+        return self._walk_ablation_cfg(cfg, func_va, _make_v850_emit(self._func_name, self._plt))
+
+    # ── BEAM lifter ───────────────────────────────────────────────────────────
+
+    def _lift_beam(self, func_va: int, max_insns: int) -> str:
+        """BEAM is a bytecode VM — there is no 'function at VA'.
+
+        lift_function() with arch='beam' returns a module-level summary:
+        exports, dangerous imports, atom inventory. Pass va=0 to request the
+        full module summary; any other va is ignored (BEAM bytecode has no
+        linear VA space accessible from the file path alone).
+        """
+        try:
+            from .beam_context import BeamContext
+        except ImportError as e:
+            return f"// BEAM context not available: {e}\n"
+
+        try:
+            ctx = BeamContext.from_path(self.path)
+        except Exception as e:
+            return f"// BEAM parse failed: {e}\n"
+
+        lines: List[str] = [
+            f"// BEAM module: {ctx.module_name}",
+            f"// OTP: {ctx.is_otp}",
+            "{",
+        ]
+
+        if ctx.exports:
+            lines.append("  // exports:")
+            for ex in ctx.exports:
+                lines.append(f"  //   {ex}")
+
+        dangerous = ctx.dangerous_imports()
+        if dangerous:
+            lines.append("  // dangerous imports:")
+            for imp in dangerous:
+                lines.append(f"  //   {imp}  /* TAINTED */")
+
+        if ctx.atoms:
+            sample = ctx.atoms[:16]
+            lines.append(f"  // atoms (first {len(sample)} of {len(ctx.atoms)}):")
+            for atom in sample:
+                lines.append(f"  //   {atom!r}")
 
         lines.append("}")
         return "\n".join(lines) + "\n"
@@ -1362,3 +1743,709 @@ class _X86_64State:
             ctype = _ctype_from_bits(size_bits)
             return (f"*({ctype}*)({addr})", False)
         return ("???", False)
+
+
+# ── x86-32 state (CDECL: stack args, return in eax) ──────────────────────────
+
+class _X86_32State:
+    """Per-function register state for x86-32 CDECL lifting.
+
+    CDECL passes all arguments on the stack, so we seed no param registers.
+    Return value lives in EAX.
+    """
+
+    # x86-32 canonical register map: sub-register -> 32-bit root
+    _CANON32: Dict[str, str] = {}
+    for _root32, _aliases32 in [
+        ("eax", ("ax", "al", "ah")),
+        ("ebx", ("bx", "bl", "bh")),
+        ("ecx", ("cx", "cl", "ch")),
+        ("edx", ("dx", "dl", "dh")),
+        ("esi", ("si",)), ("edi", ("di",)),
+        ("ebp", ("bp",)), ("esp", ("sp",)),
+    ]:
+        _CANON32[_root32] = _root32
+        for _a32 in _aliases32:
+            _CANON32[_a32] = _root32
+
+    _BITS32: Dict[str, int] = {}
+    for _r32 in ("eax","ebx","ecx","edx","esi","edi","ebp","esp","eip"):
+        _BITS32[_r32] = 32
+    for _r16 in ("ax","bx","cx","dx","si","di","bp","sp"):
+        _BITS32[_r16] = 16
+    for _r8 in ("al","bl","cl","dl","ah","bh","ch","dh","sil","dil","bpl","spl"):
+        _BITS32[_r8] = 8
+
+    def __init__(self, name_fn, plt: Dict[int, str]):
+        self._regs: Dict[str, NativeVal] = {}
+        self._written: Set[str] = set()
+        self._declared: Set[str] = set()
+        self._cmp_expr = ""
+        self._cmp_rhs = ""
+        self._var_n = 0
+        self._name_fn = name_fn
+        self._plt = plt
+        # Seed frame / stack pointers
+        for r, expr in (("ebp", "fp"), ("esp", "sp")):
+            self._regs[r] = NativeVal("uint32_t", expr, is_ptr=True)
+            self._written.add(r)
+            self._declared.add(expr)
+
+    def _canon(self, reg: str) -> str:
+        return self._CANON32.get(reg.lower(), reg.lower())
+
+    def _bits(self, reg: str) -> int:
+        return self._BITS32.get(reg.lower(), 32)
+
+    def _alloc(self) -> str:
+        n = f"v{self._var_n}"
+        self._var_n += 1
+        return n
+
+    def _read(self, reg: str) -> NativeVal:
+        c = self._canon(reg)
+        if c not in self._written:
+            nv = NativeVal(_ctype_from_bits(self._bits(reg)), c)
+            self._regs[c] = nv
+            self._written.add(c)
+        return self._regs.get(c, NativeVal("uint32_t", reg))
+
+    def _write(self, reg: str, nv: NativeVal) -> None:
+        c = self._canon(reg)
+        self._regs[c] = nv
+        self._written.add(c)
+
+    def _decl(self, ctype: str, vname: str, expr: str, ann: str = "") -> str:
+        if vname in self._declared:
+            return f"{vname} = {expr};{ann}"
+        self._declared.add(vname)
+        return f"{ctype} {vname} = {expr};{ann}"
+
+    def _mem_expr(self, insn, op) -> str:
+        import capstone.x86_const as x86c
+        m = op.mem
+        base_name = insn.reg_name(m.base) if m.base else ""
+        idx_name  = insn.reg_name(m.index) if m.index else ""
+        base_expr = self._read(self._canon(base_name)).expr if base_name else ""
+        idx_expr  = self._read(self._canon(idx_name)).expr  if idx_name  else ""
+        parts = []
+        if base_expr and base_expr not in ("0", ""):
+            parts.append(base_expr)
+        if idx_expr and idx_expr not in ("0", ""):
+            scale = m.scale if m.scale > 1 else 1
+            parts.append(f"{idx_expr}*{scale}" if scale > 1 else idx_expr)
+        if m.disp:
+            parts.append(_imm_expr(m.disp))
+        if not parts:
+            return "0"
+        addr = " + ".join(parts)
+        return f"({addr})" if len(parts) > 1 else addr
+
+    def lift_insn(self, insn) -> Optional[str]:
+        import capstone.x86_const as x86c
+
+        mn = insn.mnemonic.lower()
+        ops = insn.operands
+
+        if mn in ("mov", "movabs"):
+            if len(ops) < 2:
+                return None
+            dst, src = ops[0], ops[1]
+            src_expr, _ = self._operand_read(insn, src)
+            if dst.type == x86c.X86_OP_REG:
+                dn = insn.reg_name(dst.reg)
+                vname = self._alloc()
+                ctype = _ctype_from_bits(self._bits(dn))
+                nv = NativeVal(ctype, vname)
+                self._write(dn, nv)
+                return self._decl(ctype, vname, src_expr)
+            elif dst.type == x86c.X86_OP_MEM:
+                addr = self._mem_expr(insn, dst)
+                ctype = _ctype_from_bits(dst.size * 8 if dst.size else 32)
+                return f"*({ctype}*)({addr}) = {src_expr};"
+            return None
+
+        if mn in ("movzx", "movsx"):
+            if len(ops) < 2:
+                return None
+            dst, src = ops[0], ops[1]
+            src_expr, _ = self._operand_read(insn, src)
+            dn = insn.reg_name(dst.reg)
+            vname = self._alloc()
+            cast = "int32_t" if mn == "movsx" else "uint32_t"
+            nv = NativeVal(_ctype_from_bits(self._bits(dn)), vname)
+            self._write(dn, nv)
+            return self._decl(_ctype_from_bits(self._bits(dn)), vname, f"({cast})({src_expr})")
+
+        if mn == "lea":
+            if len(ops) < 2:
+                return None
+            dst, src = ops[0], ops[1]
+            addr = self._mem_expr(insn, src)
+            dn = insn.reg_name(dst.reg)
+            vname = self._alloc()
+            nv = NativeVal("void *", vname, is_ptr=True)
+            self._write(dn, nv)
+            return self._decl("void *", vname, f"(void *)({addr})")
+
+        if mn in ("add", "sub", "and", "or", "xor", "imul", "shl", "sal", "shr", "sar"):
+            if not ops or ops[0].type != x86c.X86_OP_REG:
+                return None
+            dn = insn.reg_name(ops[0].reg)
+            lv = self._read(self._canon(dn))
+            if len(ops) < 2:
+                return None
+            rhs_expr, _ = self._operand_read(insn, ops[1])
+            op_sym = {"add":"+","sub":"-","and":"&","or":"|","xor":"^",
+                      "shl":"<<","sal":"<<","shr":">>","sar":">>","imul":"*"}.get(mn, mn)
+            if mn == "xor" and ops[0].reg == ops[1].reg:
+                vname = self._alloc()
+                nv = NativeVal(_ctype_from_bits(self._bits(dn)), vname)
+                self._write(dn, nv)
+                return self._decl(_ctype_from_bits(self._bits(dn)), vname, "0")
+            vname = self._alloc()
+            ctype = _ctype_from_bits(self._bits(dn))
+            nv = NativeVal(ctype, vname)
+            self._write(dn, nv)
+            return self._decl(ctype, vname, f"{lv.expr} {op_sym} {rhs_expr}")
+
+        if mn in ("inc", "dec", "neg", "not"):
+            if not ops or ops[0].type != x86c.X86_OP_REG:
+                return None
+            dn = insn.reg_name(ops[0].reg)
+            lv = self._read(self._canon(dn))
+            vname = self._alloc()
+            expr = f"{lv.expr}+1" if mn=="inc" else (f"{lv.expr}-1" if mn=="dec" else
+                   f"-{lv.expr}" if mn=="neg" else f"~{lv.expr}")
+            nv = NativeVal(lv.ctype, vname)
+            self._write(dn, nv)
+            return self._decl(lv.ctype, vname, expr)
+
+        if mn == "push":
+            if ops and ops[0].type == x86c.X86_OP_REG:
+                return f"// push {insn.reg_name(ops[0].reg)}"
+            return None
+
+        if mn == "pop":
+            if ops and ops[0].type == x86c.X86_OP_REG:
+                dn = insn.reg_name(ops[0].reg)
+                vname = self._alloc()
+                nv = NativeVal("uint32_t", vname)
+                self._write(dn, nv)
+                return self._decl("uint32_t", vname, "stack_pop()")
+            return None
+
+        if mn in ("cmp", "test"):
+            if len(ops) < 2:
+                return None
+            lhs_expr, _ = self._operand_read(insn, ops[0])
+            rhs_expr, _ = self._operand_read(insn, ops[1])
+            self._cmp_expr = lhs_expr
+            self._cmp_rhs  = rhs_expr
+            if mn == "test":
+                self._cmp_expr = f"({lhs_expr} & {rhs_expr})"
+                self._cmp_rhs  = "0"
+            return None
+
+        if mn in _X86_JCCS:
+            target = ops[0].imm if ops and ops[0].type == x86c.X86_OP_IMM else 0
+            cond_op = _X86_JCC_OPS.get(mn, "?")
+            lhs = self._cmp_expr or "cond"
+            rhs = self._cmp_rhs  or "0"
+            return f"if ({lhs} {cond_op} {rhs}) goto {hex(target)};"
+
+        if mn == "jmp":
+            if ops and ops[0].type == x86c.X86_OP_IMM:
+                return f"goto {hex(ops[0].imm)};"
+            if ops and ops[0].type == x86c.X86_OP_REG:
+                return f"goto *{self._read(self._canon(insn.reg_name(ops[0].reg))).expr};"
+            return "goto *<indirect>;"
+
+        if mn == "call":
+            if not ops:
+                return "eax = <indirect_call>();"
+            if ops[0].type == x86c.X86_OP_IMM:
+                target_va = ops[0].imm
+                fname = self._plt.get(target_va) or self._name_fn(target_va)
+            elif ops[0].type == x86c.X86_OP_REG:
+                fname = self._read(self._canon(insn.reg_name(ops[0].reg))).expr
+            else:
+                fname = "<indirect>"
+            vname = self._alloc()
+            nv = NativeVal("uint32_t", vname)
+            self._write("eax", nv)
+            for r in ("ecx", "edx"):
+                self._write(r, NativeVal("uint32_t", "<clobber>"))
+            return self._decl("uint32_t", vname, f"{fname}(...)")
+
+        if mn in ("ret", "retn", "retf"):
+            rv = self._read("eax")
+            return f"return {rv.expr};"
+
+        if mn in ("nop", "endbr32", "prefetchnta", "prefetcht0", "lfence", "mfence", "sfence"):
+            return None
+
+        return f"// {mn} {insn.op_str}"
+
+    def _operand_read(self, insn, op) -> tuple:
+        import capstone.x86_const as x86c
+        if op.type == x86c.X86_OP_IMM:
+            return (_imm_expr(op.imm), False)
+        if op.type == x86c.X86_OP_REG:
+            reg_name = insn.reg_name(op.reg)
+            nv = self._read(self._canon(reg_name))
+            return (nv.expr, nv.tainted)
+        if op.type == x86c.X86_OP_MEM:
+            addr = self._mem_expr(insn, op)
+            size_bits = op.size * 8 if op.size else 32
+            ctype = _ctype_from_bits(size_bits)
+            return (f"*({ctype}*)({addr})", False)
+        return ("???", False)
+
+
+# ── Ablation ISA emit-function factories ──────────────────────────────────────
+
+def _ablation_ops_str(insn) -> str:
+    """Format insn.ops as a comma-separated string for fallback comments."""
+    return ", ".join(str(o) for o in getattr(insn, "ops", []))
+
+
+def _make_arm32_emit(name_fn, plt: Dict[int, str]):
+    """Return an emit closure for ARM32/Thumb-2 (AAPCS: r0-r3 args, r0 return)."""
+    _CALL = frozenset({"bl", "blx", "blxns"})
+    _var_n = [0]
+
+    def _alloc():
+        n = f"v{_var_n[0]}"
+        _var_n[0] += 1
+        return n
+
+    def emit(insn) -> str:
+        m = insn.mnemonic.lower()
+
+        # Return: bx lr
+        if m == "bx" and insn.reg(0) == "lr":
+            return "return r0;"
+        # pop {pc} — register list containing pc
+        if m == "pop":
+            rl = getattr(insn, "reglist", lambda i: None)(0)
+            if rl and "pc" in getattr(rl, "regs", []):
+                return "return r0;"
+
+        # Call
+        if m in _CALL:
+            tgt = insn.imm(0)
+            if tgt is not None:
+                callee = name_fn(tgt)
+            elif insn.reg(0):
+                callee = f"*{insn.reg(0)}"
+            else:
+                callee = "???"
+            vn = _alloc()
+            return f"uint32_t {vn} = {callee}(r0, r1, r2, r3);"
+
+        # Unconditional branch: b with no condition code (or al)
+        if m == "b":
+            cond = getattr(insn, "cond", None)
+            if cond is None or cond == "al":
+                tgt = insn.imm(0)
+                return f"goto loc_{tgt:x};" if tgt is not None else f"goto *{insn.reg(0) or '???'};"
+
+        # Conditional branch
+        if m == "b":
+            cond = getattr(insn, "cond", "??")
+            tgt = insn.imm(0)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            return f"if (/* {cond} */) goto {label};"
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+    return emit
+
+
+def _make_mips_emit(bits: int, name_fn, plt: Dict[int, str]):
+    """Return an emit closure for MIPS32 (o32) or MIPS64 (n64)."""
+    _CALL = frozenset({"jal", "jalr", "bal", "bltzal", "bgezal"})
+    _JCC = frozenset({"beq","bne","blt","bge","bltu","bgeu",
+                      "beqz","bnez","bgtz","bltz","bgez","blez",
+                      "beql","bnel","bgezl","bltzl"})
+    _param = ("$a0","$a1","$a2","$a3") if bits == 32 else tuple(f"${i}" for i in range(4, 12))
+    _ret = "$v0"
+    _var_n = [0]
+
+    def _alloc():
+        n = f"v{_var_n[0]}"
+        _var_n[0] += 1
+        return n
+
+    def emit(insn) -> str:
+        m = insn.mnemonic.lower()
+
+        # Return: jr $ra or jr $31
+        if m in ("jr", "jr.hb") and insn.reg(0) in ("$ra", "$31"):
+            return f"return {_ret};"
+
+        # Call
+        if m in _CALL:
+            tgt = insn.imm(0)
+            if tgt is not None:
+                callee = name_fn(tgt)
+            elif insn.reg(0):
+                callee = f"*{insn.reg(0)}"
+            else:
+                callee = "???"
+            vn = _alloc()
+            args = ", ".join(_param)
+            return f"uint64_t {vn} = {callee}({args});"
+
+        # Unconditional jump
+        if m in ("j", "b"):
+            tgt = insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else f"goto *{insn.reg(0) or '???'};"
+
+        # Conditional branches
+        if m in _JCC:
+            tgt = insn.imm(0) or insn.imm(1) or insn.imm(2)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            ops_str = _ablation_ops_str(insn)
+            return f"if (/* {m} {ops_str} */) goto {label};"
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+    return emit
+
+
+def _make_ppc_emit(name_fn, plt: Dict[int, str]):
+    """Return an emit closure for PPC32/PPC64 (SysV/ELFv2: r3-r10 args, r3 return)."""
+    _CALL = frozenset({"bl", "bla", "bctrl", "blrl", "bcl", "bcla"})
+    _JCC = frozenset({"bc","bca","bcl","bcla",
+                      "beq","bne","blt","bgt","ble","bge","bun","bnu",
+                      "beqlr","bnelr","bltlr","bgtlr","blelr","bgelr",
+                      "bdnz","bdz"})
+    _param = tuple(f"r{i}" for i in range(3, 11))
+    _var_n = [0]
+
+    def _alloc():
+        n = f"v{_var_n[0]}"
+        _var_n[0] += 1
+        return n
+
+    def emit(insn) -> str:
+        m = insn.mnemonic.lower()
+
+        # Return
+        if m in ("blr", "blrl"):
+            return "return r3;"
+
+        # Call
+        if m in _CALL:
+            tgt = insn.imm(0)
+            if tgt is not None:
+                callee = name_fn(tgt)
+            else:
+                callee = "*(ctr)" if "ctr" in m else "???"
+            vn = _alloc()
+            args = ", ".join(_param)
+            return f"uint64_t {vn} = {callee}({args});"
+
+        # Unconditional branch
+        if m in ("b", "ba"):
+            tgt = insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else "goto *???;"
+
+        # Conditional branches
+        if m in _JCC:
+            tgt = insn.imm(0) or insn.imm(1) or insn.imm(2)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            return f"if (/* {m} */) goto {label};"
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+    return emit
+
+
+def _make_riscv_emit(name_fn, plt: Dict[int, str]):
+    """Return an emit closure for RISC-V 32/64 (psABI: a0-a7 args, a0 return)."""
+    _CALL = frozenset({"call", "tail"})
+    _JCC = frozenset({"beq","bne","blt","bge","bltu","bgeu","beqz","bnez"})
+    _param = tuple(f"a{i}" for i in range(8))
+    _var_n = [0]
+
+    def _alloc():
+        n = f"v{_var_n[0]}"
+        _var_n[0] += 1
+        return n
+
+    def _is_call_jalr(insn) -> bool:
+        # jalr ra, rj, 0 — direct call through register
+        return (insn.mnemonic.lower() == "jalr"
+                and insn.reg(0) in ("ra", "x1"))
+
+    def _is_return(insn) -> bool:
+        m = insn.mnemonic.lower()
+        if m == "ret":
+            return True
+        # jalr zero/x0, ra/x1, 0 — canonical psABI return
+        if m == "jalr" and insn.reg(0) in ("zero", "x0") and insn.reg(1) in ("ra", "x1"):
+            return True
+        return False
+
+    def emit(insn) -> str:
+        m = insn.mnemonic.lower()
+
+        if _is_return(insn):
+            return "return a0;"
+
+        if m in _CALL:
+            tgt = insn.imm(0) or insn.imm(1)
+            callee = name_fn(tgt) if tgt is not None else "???"
+            vn = _alloc()
+            args = ", ".join(_param)
+            return f"uint64_t {vn} = {callee}({args});"
+
+        if _is_call_jalr(insn):
+            reg = insn.reg(1) or "???"
+            vn = _alloc()
+            args = ", ".join(_param)
+            return f"uint64_t {vn} = (*{reg})({args});"
+
+        # Unconditional jump: j pseudo (jal x0, offset)
+        if m in ("j",):
+            tgt = insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else "goto *???;"
+
+        if m == "jal" and insn.reg(0) in ("ra", "x1"):
+            tgt = insn.imm(1) or insn.imm(0)
+            callee = name_fn(tgt) if tgt is not None else "???"
+            vn = _alloc()
+            args = ", ".join(_param)
+            return f"uint64_t {vn} = {callee}({args});"
+
+        if m in _JCC:
+            tgt = insn.imm(0) or insn.imm(1) or insn.imm(2)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            ops_str = _ablation_ops_str(insn)
+            return f"if (/* {m} {ops_str} */) goto {label};"
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+    return emit
+
+
+def _make_la64_emit(name_fn, plt: Dict[int, str]):
+    """Return an emit closure for LoongArch64 (lp64: $a0-$a7 args, $a0 return)."""
+    _JCC = frozenset({"beqz","bnez","beq","bne","blt","bge","bltu","bgeu","bceqz","bcnez"})
+    _param = tuple(f"$a{i}" for i in range(8))
+    _var_n = [0]
+
+    def _alloc():
+        n = f"v{_var_n[0]}"
+        _var_n[0] += 1
+        return n
+
+    def _is_return(insn) -> bool:
+        if insn.mnemonic.lower() != "jirl":
+            return False
+        r0 = insn.reg(0)
+        r1 = insn.reg(1)
+        # jirl $zero, $ra, 0 — canonical return
+        return r0 in ("$zero", "$r0") and r1 in ("$ra", "$r1")
+
+    def _is_call(insn) -> bool:
+        m = insn.mnemonic.lower()
+        if m == "bl":
+            return True
+        if m == "jirl" and insn.reg(0) in ("$ra", "$r1"):
+            return True
+        return False
+
+    def emit(insn) -> str:
+        m = insn.mnemonic.lower()
+
+        if _is_return(insn):
+            return "return $a0;"
+
+        if _is_call(insn):
+            tgt = insn.imm(0) or insn.imm(1)
+            if tgt is not None:
+                callee = name_fn(tgt)
+            elif m == "jirl":
+                callee = f"*{insn.reg(1) or '???'}"
+            else:
+                callee = "???"
+            vn = _alloc()
+            args = ", ".join(_param)
+            return f"uint64_t {vn} = {callee}({args});"
+
+        if m == "b":
+            tgt = insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else "goto *???;"
+
+        if m in _JCC:
+            tgt = insn.imm(0) or insn.imm(1) or insn.imm(2)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            ops_str = _ablation_ops_str(insn)
+            return f"if (/* {m} {ops_str} */) goto {label};"
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+    return emit
+
+
+def _make_nanomips_emit(name_fn, plt: Dict[int, str]):
+    """Return an emit closure for nanoMIPS (o32-compatible: $a0-$a3 args, $v0 return).
+
+    NanoFrame has .va, .mnemonic, .op_str but no structured .ops.
+    """
+    _CALL = frozenset({"balc", "jalrc", "jal", "bgezalc", "bltzalc"})
+    _JCC = frozenset({"beqc","bnec","bltc","bltuc","bgec","bgeuc",
+                      "beqzc","bnezc","bltzc","bgezc","bgtzc","blezc",
+                      "beq","bne","bltz","bgez"})
+    _var_n = [0]
+
+    def _alloc():
+        n = f"v{_var_n[0]}"
+        _var_n[0] += 1
+        return n
+
+    def emit(frame) -> str:
+        m = frame.mnemonic.lower()
+        op = frame.op_str
+
+        # Return: jrc $ra or jr $ra
+        if m in ("jrc", "jr") and "$ra" in op:
+            return "return $v0;"
+
+        # Call
+        if m in _CALL:
+            # Try to extract target VA from op_str (decimal or hex)
+            import re
+            hit = re.search(r"0x([0-9a-fA-F]+)", op)
+            if hit:
+                tgt = int(hit.group(1), 16)
+                callee = name_fn(tgt)
+            else:
+                callee = op.strip() or "???"
+            vn = _alloc()
+            return f"uint32_t {vn} = {callee}($a0, $a1, $a2, $a3);"
+
+        # Unconditional jump
+        if m in ("bc", "b"):
+            import re
+            hit = re.search(r"0x([0-9a-fA-F]+)", op)
+            tgt = int(hit.group(1), 16) if hit else None
+            return f"goto loc_{tgt:x};" if tgt is not None else f"goto *{op.strip()};"
+
+        # Conditional branches
+        if m in _JCC:
+            import re
+            hit = re.search(r"0x([0-9a-fA-F]+)", op)
+            tgt = int(hit.group(1), 16) if hit else None
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            return f"if (/* {m} {op} */) goto {label};"
+
+        return f"// {frame.mnemonic} {op}"
+
+    return emit
+
+
+def _make_arc_emit(name_fn, plt: Dict[int, str]):
+    """Return an emit closure for ARC EM/HS (ARC GNU ABI: r0-r7 args, r0 return)."""
+    _CALL = frozenset({"bl", "jl", "bl.d"})
+    _JCC = frozenset({"beq","bne","blt","bgt","ble","bge","blo","bhs","bhi","bls",
+                      "brk","bbit0","bbit1","breq","brne","brlt","brge","brlte","brgte"})
+    _param = tuple(f"r{i}" for i in range(8))
+    _var_n = [0]
+
+    def _alloc():
+        n = f"v{_var_n[0]}"
+        _var_n[0] += 1
+        return n
+
+    def emit(insn) -> str:
+        m = insn.mnemonic.lower()
+
+        # Return: j [blink]
+        if m in ("j", "j.d") and insn.reg(0) == "blink":
+            return "return r0;"
+
+        # Call
+        if m in _CALL:
+            tgt = insn.imm(0)
+            if tgt is not None:
+                callee = name_fn(tgt)
+            elif insn.reg(0):
+                callee = f"*[{insn.reg(0)}]"
+            else:
+                callee = "???"
+            vn = _alloc()
+            args = ", ".join(_param)
+            return f"uint32_t {vn} = {callee}({args});"
+
+        # Unconditional branch
+        if m in ("b", "b.d"):
+            tgt = insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else f"goto *{insn.reg(0) or '???'};"
+
+        # Conditional branches
+        if m in _JCC:
+            tgt = insn.imm(0) or insn.imm(1)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            ops_str = _ablation_ops_str(insn)
+            return f"if (/* {m} {ops_str} */) goto {label};"
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+    return emit
+
+
+def _make_v850_emit(name_fn, plt: Dict[int, str]):
+    """Return an emit closure for V850/RH850 (CC-RH ABI: r6-r9 args, r10 return)."""
+    _CALL = frozenset({"jarl", "call"})
+    _JCC = frozenset({
+        "bv","bl","be","bnh","bn","br","blt","ble",
+        "bnv","bnl","bnz","bh","bp","bsa","bge","bgt",
+        "bc","bnc","bt","bf",
+    })
+    _param = ("r6", "r7", "r8", "r9")
+    _var_n = [0]
+
+    def _alloc():
+        n = f"v{_var_n[0]}"
+        _var_n[0] += 1
+        return n
+
+    def emit(insn) -> str:
+        m = insn.mnemonic.lower()
+
+        # Return: jmp [lp] — indirect jump through link pointer register
+        if m == "jmp" and insn.reg(0) == "lp":
+            return "return r10;"
+
+        # Call
+        if m in _CALL:
+            tgt = insn.imm(0) or insn.imm(1)
+            if tgt is not None:
+                callee = name_fn(tgt)
+            elif insn.reg(0):
+                callee = f"*{insn.reg(0)}"
+            else:
+                callee = "???"
+            vn = _alloc()
+            args = ", ".join(_param)
+            return f"uint32_t {vn} = {callee}({args});"
+
+        # Conditional branches
+        if m in _JCC:
+            tgt = insn.imm(0)
+            label = f"loc_{tgt:x}" if tgt is not None else "???"
+            return f"if (/* {m} */) goto {label};"
+
+        # Unconditional jump
+        if m == "jr":
+            tgt = insn.imm(0)
+            return f"goto loc_{tgt:x};" if tgt is not None else f"goto *{insn.reg(0) or '???'};"
+
+        return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
+
+    return emit
