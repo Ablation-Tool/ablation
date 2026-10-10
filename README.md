@@ -161,7 +161,7 @@ This project was greatly informed and inspired by several key literary works.
 ## Framework Architecture & Module Orchestration
 
 <details>
-<summary><img src="https://img.shields.io/badge/Target_Binary-475569?style=flat-square" alt="Target Binary"> ELF · PE · firmware</summary>
+<summary><img src="https://img.shields.io/badge/Target_Binary-dc2626?style=flat-square" alt="Target Binary"> ELF · PE · firmware</summary>
 
 ```
          ╔══════════════════════════════════════╗
@@ -406,7 +406,7 @@ Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads e
 ## Module Map
 
 <details>
-<summary><img src="https://img.shields.io/badge/Input_Formats-7c2d12?style=flat-square" alt="Input Formats"> ELF · PE · Firmware · .mpy · APK/DEX · BEAM/Erlang</summary>
+<summary><img src="https://img.shields.io/badge/Input_Formats-db2777?style=flat-square" alt="Input Formats"> ELF · PE · Firmware · .mpy · APK/DEX · BEAM/Erlang</summary>
 
 ```
   ┌───────┐  ┌───────────┐  ┌──────────┐  ┌───────┐  ┌─────────┐  ┌─────────────┐
