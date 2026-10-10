@@ -791,15 +791,19 @@ class BinaryLifter:
     # ── BEAM lifter ───────────────────────────────────────────────────────────
 
     def _lift_beam(self, func_va: int, max_insns: int) -> str:
-        """BEAM is a bytecode VM — there is no 'function at VA'.
+        """Lift BEAM bytecode to pseudo-IR.
 
-        lift_function() with arch='beam' returns a module-level summary:
-        exports, dangerous imports, atom inventory. Pass va=0 to request the
-        full module summary; any other va is ignored (BEAM bytecode has no
-        linear VA space accessible from the file path alone).
+        BEAM is a register VM — there is no linear VA space.  The lifter
+        decodes the Code chunk and emits function-level IR for every exported
+        and local function in the module.  Pass va=0 (the default) to get the
+        full module IR; any other va value is currently ignored.
+
+        Falls back to a module-level summary if the Code chunk cannot be
+        decoded (e.g. heavily obfuscated or very old OTP format).
         """
         try:
-            from .beam_context import BeamContext
+            from pathlib import Path as _Path
+            from .beam_context import BeamContext, BEAMLifter, _split_chunks
         except ImportError as e:
             return f"// BEAM context not available: {e}\n"
 
@@ -808,29 +812,37 @@ class BinaryLifter:
         except Exception as e:
             return f"// BEAM parse failed: {e}\n"
 
+        # Attempt function-level IR via BEAMLifter
+        try:
+            raw        = _Path(self.path).read_bytes()
+            chunks     = _split_chunks(raw)
+            code_bytes = chunks.get('Code', b'')
+            if code_bytes:
+                lifter = BEAMLifter.from_context(ctx, code_bytes)
+                return lifter.lift()
+        except Exception:
+            pass
+
+        # Module-summary fallback
         lines: List[str] = [
-            f"// BEAM module: {ctx.module_name}",
-            f"// OTP: {ctx.is_otp}",
+            f"% BEAM module: {ctx.module_name}  (Code chunk decode failed)",
+            f"% OTP: {ctx.is_otp}",
             "{",
         ]
-
         if ctx.exports:
-            lines.append("  // exports:")
+            lines.append("  % exports:")
             for ex in ctx.exports:
-                lines.append(f"  //   {ex}")
-
+                lines.append(f"  %   {ex}")
         dangerous = ctx.dangerous_imports()
         if dangerous:
-            lines.append("  // dangerous imports:")
+            lines.append("  % dangerous imports:")
             for imp in dangerous:
-                lines.append(f"  //   {imp}  /* TAINTED */")
-
+                lines.append(f"  %   {imp}  /* TAINTED */")
         if ctx.atoms:
             sample = ctx.atoms[:16]
-            lines.append(f"  // atoms (first {len(sample)} of {len(ctx.atoms)}):")
+            lines.append(f"  % atoms (first {len(sample)} of {len(ctx.atoms)}):")
             for atom in sample:
-                lines.append(f"  //   {atom!r}")
-
+                lines.append(f"  %   {atom!r}")
         lines.append("}")
         return "\n".join(lines) + "\n"
 
