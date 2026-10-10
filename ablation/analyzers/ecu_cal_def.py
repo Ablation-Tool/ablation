@@ -40,6 +40,7 @@ class CalibrationTable:
     y_axis: Optional[CalibrationAxis]
     relocated_address: Optional[int] = None   # set by fingerprint relocation
     source_file: str = ""
+    is_float: bool = False          # True when storagetype is float/float32
 
     @property
     def effective_address(self) -> int:
@@ -59,8 +60,10 @@ class CalibrationTable:
         """
         Extract the raw data values from rom at effective_address.
 
-        Returns a list of rows x cols integers (pre-scaling). Raises IndexError
-        when the slice falls outside rom. Does not apply scaling.
+        Returns a list of rows x cols numbers (pre-scaling). For float tables
+        (is_float=True), values are Python floats. For integer tables, values
+        are ints. Raises IndexError when the slice falls outside rom. Does not
+        apply scaling.
         """
         addr = self.effective_address
         n = self.rows * self.cols
@@ -71,7 +74,10 @@ class CalibrationTable:
                 f"{self.name}: address 0x{addr:X} + {n}*{elem_bytes} = 0x{end:X} "
                 f"exceeds ROM size 0x{len(rom):X}"
             )
-        fmt_char = {8: "B", 16: "H", 32: "I"}[self.element_bits]
+        if self.is_float:
+            fmt_char = "f"
+        else:
+            fmt_char = {8: "B", 16: "H", 32: "I"}.get(self.element_bits, "B")
         endian = "<" if self.little_endian else ">"
         raw = struct.unpack(f"{endian}{n}{fmt_char}", rom[addr:end])
         if self.rows == 1:
@@ -83,15 +89,29 @@ def eval_math_equation(equation: str, raw: float) -> float:
     """
     Evaluate a TunerPro MATH equation string against one raw value X.
 
-    Supports: basic arithmetic, parentheses, and the variable X.
-    Returns the raw value unchanged on parse failure.
+    Supports linear forms: X, X*k, k*X, X/k, X*k+b, (X*k)+b, (X*k)-b, X+b, X-b.
+    Returns the raw value unchanged on parse failure or unrecognised form.
+    No eval() is used.
     """
-    try:
-        # Replace X with the actual value
-        safe = re.sub(r"\bX\b", str(float(raw)), equation)
-        # Allow only digits, operators, parens, dots, e/E for scientific notation
-        if not re.match(r"^[\d\s\+\-\*/\(\)\.\eE]+$", safe):
-            return float(raw)
-        return float(eval(safe))          # nosec: safe subset validated above
-    except Exception:
+    _F  = r"([0-9]*\.?[0-9]+(?:[eE][+\-]?[0-9]+)?)"
+    _FB = r"([+\-][0-9]*\.?[0-9]+(?:[eE][+\-]?[0-9]+)?)"
+    eq = equation.replace(" ", "")
+    if eq in ("X", "(X)"):
         return float(raw)
+    m = re.match(rf"^X\*{_F}$", eq, re.IGNORECASE)
+    if m:
+        return float(raw) * float(m.group(1))
+    m = re.match(rf"^{_F}\*X$", eq, re.IGNORECASE)
+    if m:
+        return float(raw) * float(m.group(1))
+    m = re.match(rf"^X/{_F}$", eq, re.IGNORECASE)
+    if m:
+        k = float(m.group(1))
+        return float(raw) / k if k != 0 else float(raw)
+    m = re.match(rf"^\(?X\*{_F}\)?{_FB}$", eq, re.IGNORECASE)
+    if m:
+        return float(raw) * float(m.group(1)) + float(m.group(2))
+    m = re.match(rf"^X{_FB}$", eq, re.IGNORECASE)
+    if m:
+        return float(raw) + float(m.group(1))
+    return float(raw)
