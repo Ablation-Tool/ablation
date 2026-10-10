@@ -15,8 +15,8 @@ patterns.  The length discrimination rule (from Renesas SH2A Hardware Manual Rev
     32-bit SH-2A instructions start with these first-halfword patterns:
       (hw & 0xF00F) == 0x3001    MOV.B @(disp12,Rm), R0  family
       (hw & 0xF00F) == 0x3009    BIT operation family
-      (hw & 0xF0FF) == 0x00E5    MOVI20
-      (hw & 0xF0FF) == 0x00E7    MOVI20S
+      (hw & 0xF00F) == 0x0005    MOVI20  (bits[7:4]=imm[19:16] varies; use 0xF00F)
+      (hw & 0xF00F) == 0x0007    MOVI20S (same reason)
     All other first halfwords → 16-bit SH-2 instruction.
 
 Function prologue detection
@@ -120,7 +120,8 @@ class EcuSH2aDecoder:
     def __init__(self, data: "str | Path | bytes", base_va: int = 0):
         if isinstance(data, (str, Path)):
             try:
-                self._data = open(data, "rb").read()
+                with open(data, "rb") as f:
+                    self._data = f.read()
             except FileNotFoundError as exc:
                 raise FileNotFoundError(
                     f"EcuSH2aDecoder: {data!r} not found"
@@ -263,7 +264,6 @@ class EcuSH2aDecoder:
         # MOV family with 12-bit displacement: (hw & 0xF00F) == 0x3001
         # Format: 0011 nnnn/mmmm dddd | dddd dddd xxxx x???
         if (hw & 0xF00F) == 0x3001:
-            rn_rm = (hw >> 8) & 0xF
             disp12_hi = (hw >> 4) & 0xF
             disp12_lo = (lo >> 8) & 0xFF
             disp12 = (disp12_hi << 8) | disp12_lo
