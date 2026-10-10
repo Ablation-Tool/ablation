@@ -41,7 +41,7 @@ import sys
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TypedDict
 
 import numpy as np
 
@@ -271,6 +271,15 @@ def _build_rdata_strings(pe, data: bytes) -> Dict[int, str]:
 
 # ── GAP-015: firmware-auth-bypass detector ───────────────────────────────────
 
+
+class FirmwareAuthBypassFinding(TypedDict):
+    id:       str
+    title:    str
+    severity: str
+    evidence: List[str]
+    note:     str
+
+
 # DLLs that export firmware-update APIs (matched against imported DLL names).
 _FIRMWARE_DLLS: frozenset = frozenset({"hiddapi.dll", "hidapi.dll", "egtouch.dll"})
 
@@ -288,7 +297,9 @@ _SIGNING_IAT_SUBSTRINGS: tuple = (
 )
 
 
-def _check_firmware_auth_bypass(pe, iat: Dict[int, str]) -> Optional[dict]:
+def _check_firmware_auth_bypass(
+    pe, iat: Dict[int, str]
+) -> Optional[FirmwareAuthBypassFinding]:
     """
     GAP-015 — FirmwareAuthBypassProfile.
 
@@ -302,31 +313,41 @@ def _check_firmware_auth_bypass(pe, iat: Dict[int, str]) -> Optional[dict]:
 
     Negative signal: no WinVerifyTrust / Crypt* / BCrypt* signing import.
 
-    Returns a finding dict or None.
+    Returns a FirmwareAuthBypassFinding dict or None.
     """
-    # DLL names actually imported (includes ordinal-only imports).
-    # Logged on failure so the silent false-negative is visible in sweep output.
+    # Collect imported DLL names (includes ordinal-only imports).
+    # Outer try guards against lief property access failure on the whole list;
+    # inner try/continue lets a single None lib.name skip that entry without
+    # stopping the rest of the import scan.
     imported_dlls: set = set()
     try:
         for lib in pe.imports:
-            imported_dlls.add(lib.name.lower())
+            try:
+                imported_dlls.add(lib.name.lower())
+            except (AttributeError, TypeError):
+                continue
     except Exception as e:
         print(f"  [!] _check_firmware_auth_bypass: pe.imports failed: {e}")
 
-    # All comparisons are lowercase to catch non-standard API casing.
-    iat_lower = [v.lower() for v in iat.values()]
+    # Single lowercase pass over IAT values; used for both firmware and signing
+    # checks to keep case-normalization consistent (F2/M1 fix).
+    iat_items = [(orig, orig.lower()) for orig in iat.values()]
 
     firmware_dlls_hit = sorted(imported_dlls & _FIRMWARE_DLLS)
     firmware_iat_hit = [
-        v for v in iat.values()
-        if any(p in v.lower() for p in _FIRMWARE_IAT_SUBSTRINGS)
+        orig for orig, low in iat_items
+        if any(p in low for p in _FIRMWARE_IAT_SUBSTRINGS)
     ]
-    has_signing = any(
-        any(s in vl for s in _SIGNING_IAT_SUBSTRINGS) for vl in iat_lower
-    )
 
     has_firmware = bool(firmware_dlls_hit) or bool(firmware_iat_hit)
-    if not has_firmware or has_signing:
+    if not has_firmware:
+        return None
+
+    has_signing = any(
+        any(s in low for s in _SIGNING_IAT_SUBSTRINGS)
+        for _, low in iat_items
+    )
+    if has_signing:
         return None
 
     evidence: List[str] = []
@@ -335,16 +356,16 @@ def _check_firmware_auth_bypass(pe, iat: Dict[int, str]) -> Optional[dict]:
     if firmware_iat_hit:
         evidence.append(f"named firmware imports: {', '.join(firmware_iat_hit[:6])}")
 
-    return {
-        "id": "FIRMWARE_AUTH_BYPASS",
-        "title": "Firmware flasher with no signature verification (CWE-347)",
-        "severity": "HIGH",
-        "evidence": evidence,
-        "note": (
+    return FirmwareAuthBypassFinding(
+        id="FIRMWARE_AUTH_BYPASS",
+        title="Firmware flasher with no signature verification (CWE-347)",
+        severity="HIGH",
+        evidence=evidence,
+        note=(
             "Binary imports firmware-update APIs but no WinVerifyTrust/Crypt* "
             "signing imports found — firmware blobs accepted without authenticity check."
         ),
-    }
+    )
 
 
 # ── i386 prologue detection ───────────────────────────────────────────────────
@@ -717,6 +738,7 @@ def _sweep_pe_one(
           'is_64': bool,
           'functions_found': int,
           'iat_size': int,
+          'firmware_auth_bypass': FirmwareAuthBypassFinding or None,
           'semantic': {profile: [(score, va, calls, desc)]},
           'error': str or None,
         }
