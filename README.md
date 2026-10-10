@@ -97,9 +97,9 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 ## Real-World Results
 Ablation has been used to analyze production firmware and kernel drivers from Cisco, Fortinet, TencentOS, Huawei, and more.
 
-Following coordinated disclosure the Cisco Product Security Incident Response Team (PSIRT) has temporarily adopted Ablation for internal vulnerability triage. 
+Following coordinated disclosure, the Cisco Product Security Incident Response Team (PSIRT) has temporarily adopted Ablation for internal vulnerability triage. 
 
-Cisco PSIRT is actively using it to triage ongoing disclosure reports. Cisco Adaptive Security Appliance (ASA) LINA has also been reverse engineered using Ablation, with findings currently under coordinated triage via CERT/CC VINCE.
+Cisco PSIRT is actively using it to triage ongoing disclosure reports produced by Ablation. Cisco Adaptive Security Appliance (ASA) LINA has also been reverse engineered using Ablation, with findings currently under coordinated triage via CERT/CC VINCE.
 
 | CVE | Product | Title | CVSS | Advisory |
 |---|---|---|---|---|
