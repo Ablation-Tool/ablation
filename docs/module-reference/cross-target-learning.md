@@ -18,90 +18,37 @@ After confirming a heap overflow in Fortinet firmware, the next engagement on a 
 
 ## How it works
 
-### Full flywheel pipeline
+### The flywheel pipeline
 
-```
-  Engagement N (e.g., Fortinet ASA, x86-64)
-          |
-          | TaintTracker confirms heap overflow in auth_radius_parse
-          v
-  ┌────────────────────────────────────────────────────────────┐
-  │  FindingRegistry.register(                                 │
-  │    vendor='fortinet', product='fortigate', version='7.4.1',│
-  │    title='RADIUS overflow in auth_radius_parse',           │
-  │    description='recv output used as memcpy size without    │
-  │                 upper bound check',                        │
-  │    cwe_class='CWE-122',                                    │
-  │    severity='CRITICAL',                                    │
-  │    embedding=model.encode(description),   <- BERT vector   │
-  │    func_addr=0x4000,                                       │
-  │    binary='/path/to/lina',                                 │
-  │  )                                                         │
-  └───────────────────────────┬────────────────────────────────┘
-                              |
-                              v
-  ~/.ablation/findings.db  (SQLite, persists forever)
-    table: findings
-      id, vendor, product, version, title, description,
-      cwe_class, severity, func_addr, binary,
-      embedding BLOB (768 float32 values, all-mpnet-base-v2)
+```mermaid
+flowchart TD
+    A["Engagement N\nTaintTracker confirms heap overflow\nin auth_radius_parse (Fortinet, x86-64)"] --> B["FindingRegistry.register()\nvendor='fortinet' · product='fortigate'\ncwe_class='CWE-122' · severity='CRITICAL'\nembedding = model.encode(description)\n← BERT vector, 768 dims"]
 
+    B --> C[("~/.ablation/findings.db\nSQLite — persists forever\nfields: vendor · product · title\ndescription · cwe_class · severity\nfunc_addr · binary · embedding BLOB")]
 
-  Engagement N+1 (e.g., Huawei VRP, different vendor, different arch)
-          |
-          v
-  ┌────────────────────────────────────────────────────────────┐
-  │  PatternLibrary.ingest_from_registry(reg)                  │
-  │                                                            │
-  │  reg.export_patterns():                                    │
-  │    for each row in findings.db:                            │
-  │      yield {query: title + '. ' + description,             │
-  │             tag: cwe_to_tag[cwe_class]}                    │
-  │                                                            │
-  │  CWE-to-tag mapping (auto-applied):                        │
-  │    CWE-122 → 'heap_overflow'                               │
-  │    CWE-77  → 'command_injection'                           │
-  │    CWE-134 → 'format_string'                               │
-  │    CWE-416 → 'use_after_free'                              │
-  │    CWE-120 → 'buffer_overflow'                             │
-  │                                                            │
-  │  idempotent: hashes each (query, tag) pair before adding   │
-  │  skips any pattern already in patterns.json                │
-  └───────────────────────────┬────────────────────────────────┘
-                              |
-                              v
-  ~/.ablation/patterns.json  (grows with every engagement)
-    [
-      {"query": "RADIUS overflow ...", "tag": "heap_overflow"},
-      {"query": "command injection via ...", "tag": "command_injection"},
-      ...
-    ]
-          |
-          v
-  ┌────────────────────────────────────────────────────────────┐
-  │  PatternLibrary.sweep(searcher, top_k=8, min_score=0.30)   │
-  │                                                            │
-  │  for each pattern in patterns.json:                        │
-  │    q_vec = model.encode(pattern.query)                     │
-  │    scores = corpus_matrix @ q_vec    (cosine similarity)   │
-  │    top_k  = np.argpartition(scores, -top_k)[-top_k:]       │
-  │    → candidates ranked by similarity to this pattern       │
-  │                                                            │
-  │  output: {pattern_tag: [(score, func_id, func_name), ...]} │
-  │    one ranked list per pattern                             │
-  └───────────────────────────┬────────────────────────────────┘
-                              |
-                              v
-  PatternLibrary.fmt_sweep(results, binary_name)
-    format ranked candidates per CVSS score
-    CVSS >= 7.0 → highlighted for immediate triage
+    C --> D["Engagement N+1\nNew vendor, different architecture\n(e.g., Huawei VRP, MIPS32)"]
+
+    D --> E["PatternLibrary.ingest_from_registry(reg)\nreg.export_patterns():\n  for each row → yield query + tag\nCWE-to-tag: CWE-122 → heap_overflow\nIdempotent: hashes (query, tag) pairs\nSkips patterns already present"]
+
+    E --> F[("~/.ablation/patterns.json\nGrows with every engagement\n[{query, tag}, ...]")]
+
+    F --> G["PatternLibrary.sweep(searcher, top_k=8, min_score=0.30)\nFor each pattern: q_vec = model.encode(query)\nscores = corpus_matrix @ q_vec  (cosine similarity)\ntop_k = argpartition(scores, -top_k)"]
+
+    G --> H[/"Output: {tag: [(score, func_id, name), ...]}\nCVSS ≥ 7.0 highlighted for immediate triage"/]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style C fill:#1e3a5f,stroke:#1d4ed8,color:#bfdbfe
+    style F fill:#1e3a5f,stroke:#1d4ed8,color:#bfdbfe
+    style H fill:#14532d,stroke:#166534,color:#dcfce7
 ```
 
 ### How embeddings enable cross-vendor matching
 
-The BERT embedding (all-mpnet-base-v2, 768 dimensions) encodes the semantic meaning of a function description rather than its literal text. Two descriptions that say the same thing in different words produce similar vectors. A Fortinet finding described as "recvfrom output length used as strcpy size argument without validation" and a Huawei finding described as "network read byte count flows to string copy operation as size parameter" produce vectors with cosine similarity above 0.80 after PCA whitening. The semantic sweep surfaces the Huawei function as a candidate because the underlying vulnerability pattern is the same, even though no word is shared between the two descriptions.
+The BERT embedding (all-mpnet-base-v2, 768 dimensions) encodes the semantic meaning of a function description rather than its literal text. Two descriptions that say the same thing in different words produce similar vectors.
 
-This is the core of cross-target pattern reuse: vulnerability classes map to regions of embedding space, and those regions are consistent across vendors because the description of a heap overflow in Fortinet firmware is semantically close to the description of a heap overflow in Huawei firmware.
+A Fortinet finding described as "recvfrom output length used as strcpy size argument without validation" and a Huawei finding described as "network read byte count flows to string copy operation as size parameter" produce vectors with cosine similarity above 0.80 after PCA whitening. The semantic sweep surfaces the Huawei function as a candidate because the underlying vulnerability pattern is the same, even though no word is shared between the two descriptions.
+
+This is the core of cross-target pattern reuse: vulnerability classes map to regions of embedding space. Those regions are consistent across vendors because the description of a heap overflow in Fortinet firmware is semantically close to the description of a heap overflow in Huawei firmware.
 
 ### FindingRegistry similarity search
 
@@ -109,17 +56,17 @@ This is the core of cross-target pattern reuse: vulnerability classes map to reg
 similar = reg.find_similar(new_embedding, top_k=8, min_sim=0.60)
 ```
 
-`find_similar` loads all embeddings from `findings.db`, computes cosine similarity against `new_embedding`, and returns the top-k rows above `min_sim`. This lets you ask: "What confirmed findings from prior engagements look like this new candidate?" The result guides manual triage: if the top match is a CWE-122 heap overflow confirmed in TencentOS, the candidate deserves the same level of scrutiny before ruling it out.
+`find_similar` loads all embeddings from `findings.db`, computes cosine similarity against `new_embedding`, and returns the top-k rows above `min_sim`. This lets you ask: "What confirmed findings from prior engagements look like this new candidate?" If the top match is a CWE-122 heap overflow confirmed in TencentOS, the candidate deserves the same scrutiny before ruling it out.
 
 ---
 
 ## Pattern storage
 
-```
-  ~/.ablation/patterns.json     user-local; not committed to git
-  ~/.ablation/findings.db       SQLite; all confirmed findings and embeddings
-  ablation/data/seed_corpus.json  ships with Ablation; published CVEs as seed patterns
-```
+| Path | Purpose |
+|---|---|
+| `~/.ablation/patterns.json` | User-local; not committed to git; grows with each engagement |
+| `~/.ablation/findings.db` | SQLite; all confirmed findings with embeddings |
+| `ablation/data/seed_corpus.json` | Ships with Ablation; published CVEs as seed patterns |
 
 The seed corpus provides signal on the first engagement against any binary class (network daemons, BMC firmware, kernel drivers). Engagement findings supplement and refine it over time.
 

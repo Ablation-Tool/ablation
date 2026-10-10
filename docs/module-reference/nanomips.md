@@ -24,15 +24,15 @@ nanoMIPS uses three instruction widths. The width is determined by bits[15:11] o
 
 ```
   nanoMIPS instruction widths
-  ──────────────────────────────────────────────────────────────
-  P16 (16-bit):  bits[15:11] in 0x10-0x17, 0x1A-0x1F
-  P32 (32-bit):  bits[15:11] < 0x10 or other specific ranges
-  P48 (48-bit):  bits[15:11] = 0x18 (LI48 load-immediate, ADDIU48)
+  ─────────────────────────────────────────────────
+  P16 (16-bit):  bits[15:11] in range 0x10-0x17, 0x1A-0x1F
+  P32 (32-bit):  bits[15:11] < 0x10 or other ranges
+  P48 (48-bit):  bits[15:11] = 0x18 (LI48, ADDIU48)
 
-  The 48-bit encoding is rare. Most code is P32 with P16 for
-  small operations (short branches, stack pointer adjustments).
+  The 48-bit encoding is rare. Most code is P32 with P16
+  for small operations (short branches, stack adjustments).
 
-  Call instructions (nanoMIPS has no branch delay slot):
+  Call instructions (no branch delay slot):
     BALC P32:  opcode[31:26] = 0x2a
                target = VA + 4 + sign_extend_26(insn[25:0]) << 1
                range: +/-64 MB from current PC
@@ -42,78 +42,60 @@ nanoMIPS uses three instruction widths. The width is determined by bits[15:11] o
                range: +/-1 KB from current PC
 
     JALRC P32: indirect call via register
-               target address in source register
 
-  Return instruction:
-    JRC $ra    (equivalent to MIPS32 JR $ra but no delay slot)
+  Return:
+    JRC $ra    (no delay slot; replaces MIPS32 JR $ra)
 
   ABI registers (O32-compatible subset):
     $a0-$a3   first four function arguments
     $v0/$v1   return values
-    $t0-$t9   caller-saved temporaries (cleared at call boundaries)
+    $t0-$t9   caller-saved temporaries
     $s0-$s7   callee-saved (preserved across calls)
     $ra ($31) return address
     $sp ($29) stack pointer
 ```
 
-MIPS32 delay slots required the instruction after a branch/call to execute before the branch took effect. nanoMIPS eliminates delay slots entirely, so the instruction immediately after a BALC is the first instruction of the fall-through path, not a delayed slot. The tracker accounts for this when walking the call graph.
+MIPS32 delay slots required the instruction after a branch or call to execute before the branch took effect. nanoMIPS eliminates delay slots entirely, so the instruction immediately after a BALC is the first instruction of the fall-through path. The tracker accounts for this when walking the call graph.
 
 ---
 
 ## Two execution paths
 
-```
-  NanoMIPSTaintTracker.from_path(elf)
-          |
-          v
-  ┌────────────────────────────────────────────────────────────┐
-  │  check capstone version at import time                     │
-  │    capstone.__version__ >= '6.0.0a1' ?                    │
-  └───────────────────────┬────────────────┬───────────────────┘
-                          |                |
-                    YES (6.x)         NO (5.x or absent)
-                          |                |
-                          v                v
-  ┌─────────────────────────┐   ┌──────────────────────────────┐
-  │  Full decode path       │   │  Conservative fallback path  │
-  │                         │   │                              │
-  │  Capstone 6.x added     │   │  BALC targets extracted via  │
-  │  nanoMIPS support.      │   │  manual bitfield parsing.    │
-  │                         │   │                              │
-  │  register-level taint   │   │  after any source call:      │
-  │  propagation identical   │   │  mark ALL $a0-$a3 tainted   │
-  │  to MIPS32 tracker:     │   │  on entry to next function.  │
-  │    operand-by-operand   │   │                              │
-  │    taint lattice        │   │  no false negatives:         │
-  │    XFER/ALU/CLR rules   │   │  every taint path is found.  │
-  │    stack slot tracking  │   │  possible false positives:   │
-  │                         │   │  non-tainted args appear     │
-  └─────────────────────────┘   │  tainted at call sites.      │
-                                └──────────────────────────────┘
-          |                              |
-          v                              v
-  tracker.has_full_decode = True   tracker.has_full_decode = False
+```mermaid
+flowchart TD
+    A["NanoMIPSTaintTracker.from_path(elf)"] --> B{"capstone.__version__\n>= '6.0.0a1'?"}
+
+    B -->|"YES (6.x — has nanoMIPS support)"| C["Full decode path\nCapstone 6.x decodes P16/P32/P48\noperand-by-operand taint propagation\nXFER / ALU / CLR / LEA rules\nstack slot tracking\nhas_full_decode = True"]
+
+    B -->|"NO (5.x or absent)"| D["Conservative fallback path\nBALC targets extracted via manual\nbitfield parsing of P32 and P16 forms\nAfter any source call:\nmark ALL $a0-$a3 tainted on entry\nto next function\nhas_full_decode = False"]
+
+    C --> E["tracker.run_interprocedural(depth=4)"]
+    D --> E
+
+    E --> F{"Finding\nemitted?"}
+    F -->|"Tainted arg reaches sink"| G[/"TaintFinding\nsink · source · chain · path"/]
+    F -->|No| H["Continue walk"]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style G fill:#7f1d1d,stroke:#991b1b,color:#fecaca
 ```
 
-The fallback is deliberately conservative. After any call to a known source (`recv`, `read`, etc.), all four argument registers are marked tainted on entry to the next function because it is impossible to know which register the callee stored the result in without per-operand decode. This avoids false negatives at the cost of more candidates to triage manually.
+The fallback is deliberately conservative. After any call to a known source (`recv`, `read`, etc.), all four argument registers are marked tainted on entry to the next function. This avoids false negatives at the cost of more candidates to triage manually. The full decode path is precise: only the actual register that receives the `recv` return value carries taint.
 
 ---
 
 ## PLT stub unwrapping
 
-nanoMIPS PLT stubs are 12 bytes. Each stub loads the GOT address and jumps through it. The tracker identifies .plt section boundaries and resolves PLT call targets to their import names before the interprocedural walk begins.
+nanoMIPS PLT stubs are 12 bytes. Each stub loads the GOT address and jumps through it. The tracker identifies `.plt` section boundaries and resolves PLT call targets to import names before the interprocedural walk begins.
 
-```
-  call site disassembly:
-    BALC 0x3210       (nanoMIPS P32 call to PLT stub at 0x3210)
-          |
-          v
-  is 0x3210 within .plt section range [0x3000, 0x3400)?
-          |
-    YES → look up import name in relocation table
-          plt[0x3210] = 'strcpy'
-          'strcpy' in sink_table?
-          YES → emit TaintFinding(sink='strcpy', arg=0, ...)
+```mermaid
+flowchart LR
+    A["BALC 0x3210"] --> B{"0x3210 within\n.plt range [0x3000, 0x3400)?"}
+    B -->|Yes| C["plt_map[0x3210] = 'strcpy'\nLook up import name via relocation table"]
+    B -->|No| D["Internal function\nPush callee_va to worklist"]
+    C --> E{"'strcpy' in\nsink_table?"}
+    E -->|Yes| F["Arg tainted?\n→ emit TaintFinding"]
+    E -->|No| G["Continue tracking\nthrough return value"]
 ```
 
 Without PLT unwrapping, every call to `strcpy` or `system` terminates the interprocedural trace at the stub VA. The trace stops before it can confirm the dangerous sink was reached.
@@ -128,7 +110,6 @@ from ablation.analyzers.taint_tracker_nanomips import NanoMIPSTaintTracker
 tracker = NanoMIPSTaintTracker.from_path('firmware.elf')
 print(f"Full decode: {tracker.has_full_decode}")
 
-# Interprocedural scan (recommended depth=4 for most firmware)
 findings = tracker.run_interprocedural(depth=4)
 print(tracker.report(findings))
 ```
