@@ -215,16 +215,15 @@ def _pe_text_range(pe) -> Tuple[int, int]:
     return 0, 0
 
 
-def _build_rdata_strings(pe, data: bytes) -> Dict[int, str]:
+def _scan_section_strings(pe, data: bytes, section_name: str) -> Dict[int, str]:
     """
-    Build {abs_va: string} from printable null-terminated strings in .rdata.
-    Only strings >= 5 characters are indexed. Restricted to .rdata only
-    (writable .data segment contains structs/pointers that produce noise).
+    Scan one named PE section for printable null-terminated strings >= 5 chars.
+    Returns {abs_va: string}.
     """
     strings: Dict[int, str] = {}
     imagebase = pe.optional_header.imagebase
     for section in pe.sections:
-        if section.name.strip("\x00").lower() != ".rdata":
+        if section.name.strip("\x00").lower() != section_name:
             continue
         va = imagebase + section.virtual_address
         offset = section.offset
@@ -239,6 +238,99 @@ def _build_rdata_strings(pe, data: bytes) -> Dict[int, str]:
                 strings[va + i] = chunk[i:j].decode("ascii", errors="replace")
             i = j + 1
     return strings
+
+
+def _build_rdata_strings(pe, data: bytes) -> Dict[int, str]:
+    """
+    Build {abs_va: string} from printable null-terminated strings in .rdata.
+    Only strings >= 5 characters are indexed.
+
+    GAP-016 (BorlandVCLStringIndex): Borland BCC32/VCL applications place string
+    literals in .data rather than .rdata, so .rdata contains zero strings.  When
+    .rdata yields nothing, fall back to .data.  The fallback is safe because
+    .data noise (pointers, structs) produces runs shorter than 5 printable bytes
+    or containing non-ASCII bytes that the scanner naturally rejects.
+    """
+    strings = _scan_section_strings(pe, data, ".rdata")
+    if strings:
+        return strings
+    # BCC32/VCL fallback
+    fallback = _scan_section_strings(pe, data, ".data")
+    if fallback:
+        print(f"  [*] .rdata=0 strings — BCC32/VCL fallback: {len(fallback)} strings from .data")
+    return fallback
+
+
+# ── GAP-015: firmware-auth-bypass detector ───────────────────────────────────
+
+# DLLs that export firmware-update APIs (matched against imported DLL names).
+_FIRMWARE_DLLS: frozenset = frozenset({"hiddapi.dll", "hidapi.dll", "egtouch.dll"})
+
+# Substrings in named IAT values that signal a firmware-update capability.
+_FIRMWARE_IAT_PATTERNS: tuple = (
+    "DevIAP", "IAPFlash", "IAPSet", "IAPGet", "FirmwareUpdate",
+    "FirmwareErase", "FirmwareWrite", "DevMCUReset",
+)
+
+# Named imports that indicate the binary performs code-signing or hash verification.
+_SIGNING_IMPORTS: frozenset = frozenset({
+    "WinVerifyTrust", "CryptVerifySignature", "CryptVerifyMessageSignature",
+    "CryptHashData", "CryptSignHash", "BCryptVerifySignature",
+    "NCryptVerifySignature", "CertVerifyCertificateChainPolicy",
+})
+
+
+def _check_firmware_auth_bypass(pe, iat: Dict[int, str]) -> Optional[dict]:
+    """
+    GAP-015 — FirmwareAuthBypassProfile.
+
+    Detect PE firmware flashers that import firmware-update APIs but no
+    code-signing or hash-verification imports (CWE-347).
+
+    Positive signals:
+      • Named IAT entry matches a firmware-update substring, OR
+      • A firmware-update DLL (hiddapi.dll, hidapi.dll, …) is imported —
+        this catches ordinal-only imports that _build_iat skips.
+
+    Negative signal: no WinVerifyTrust / Crypt* / BCrypt* signing import.
+
+    Returns a finding dict or None.
+    """
+    # DLL names actually imported (includes ordinal-only imports)
+    imported_dlls: set = set()
+    try:
+        for lib in pe.imports:
+            imported_dlls.add(lib.name.lower())
+    except Exception:
+        pass
+
+    firmware_dlls_hit = sorted(imported_dlls & _FIRMWARE_DLLS)
+    firmware_iat_hit = [
+        v for v in iat.values()
+        if any(p in v for p in _FIRMWARE_IAT_PATTERNS)
+    ]
+    signing_hit = [v for v in iat.values() if any(s in v for s in _SIGNING_IMPORTS)]
+
+    has_firmware = bool(firmware_dlls_hit) or bool(firmware_iat_hit)
+    if not has_firmware or signing_hit:
+        return None
+
+    evidence: List[str] = []
+    if firmware_dlls_hit:
+        evidence.append(f"firmware DLL imported: {', '.join(firmware_dlls_hit)}")
+    if firmware_iat_hit:
+        evidence.append(f"named firmware imports: {', '.join(firmware_iat_hit[:6])}")
+
+    return {
+        "id": "FIRMWARE_AUTH_BYPASS",
+        "title": "Firmware flasher with no signature verification (CWE-347)",
+        "severity": "HIGH",
+        "evidence": evidence,
+        "note": (
+            "Binary imports firmware-update APIs but no WinVerifyTrust/Crypt* "
+            "signing imports found — firmware blobs accepted without authenticity check."
+        ),
+    }
 
 
 # ── i386 prologue detection ───────────────────────────────────────────────────
@@ -627,6 +719,7 @@ def _sweep_pe_one(
         "is_64": is_64,
         "functions_found": 0,
         "iat_size": 0,
+        "firmware_auth_bypass": None,
         "semantic": {},
         "error": None,
     }
@@ -644,6 +737,12 @@ def _sweep_pe_one(
     iat = _build_iat(pe)
     result["iat_size"] = len(iat)
     print(f"  [*] IAT: {len(iat)} entries")
+
+    # GAP-015: firmware auth bypass (deterministic IAT check)
+    fwab = _check_firmware_auth_bypass(pe, iat)
+    if fwab:
+        result["firmware_auth_bypass"] = fwab
+        print(f"  [!] FIRMWARE_AUTH_BYPASS: {'; '.join(fwab['evidence'])}")
 
     # Read file once; pass bytes to both string indexer and function extractor
     data = Path(binary_path).read_bytes()
@@ -711,6 +810,18 @@ def _render_report(
         if r.get("error"):
             lines += [f"**ERROR:** {r['error']}", ""]
             continue
+
+        fwab = r.get("firmware_auth_bypass")
+        if fwab:
+            lines += [
+                "### Deterministic Finding",
+                "",
+                f"**{fwab['id']}** [{fwab['severity']}] — {fwab['title']}",
+                "",
+            ]
+            for ev in fwab["evidence"]:
+                lines.append(f"  - {ev}")
+            lines += [f"  - {fwab['note']}", ""]
 
         if r["semantic"]:
             lines += ["### Semantic Sweep", ""]
