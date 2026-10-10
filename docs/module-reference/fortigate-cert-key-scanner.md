@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-Three things Ablation could not do before this module:
+Four things Ablation could not do before this module:
 
 1. **No batch key fingerprinting for FortiGate firmware.** Extracting cert keys from a FortiGate OVF package required five manual steps: unzip the outer archive, unzip the inner OVF archive, convert the VMDK to a raw image, extract the P1 partition, and read the tar archive. Running that manually across 20+ versions took over an hour.
 
@@ -10,15 +10,27 @@ Three things Ablation could not do before this module:
 
 3. **No persistent scan cache.** VMDK conversion takes about 30 seconds per image. Repeated sweeps of the same directory re-ran the full pipeline every time. The scanner caches results by file size and modification time so a 20-image sweep runs in under a second on the second pass.
 
+4. **No coverage for bare disk formats.** KVM QCOW2, Hyper-V VHD, and Hyper-V VHDX images arrive without an outer OVF ZIP wrapper. The OVF pipeline did not apply to them. `from_disk()` covers every FortiGate virtual deployment format in a single interface.
+
 ---
 
 **File:** `ablation/analyzers/fortigate_cert_key_scanner.py`
 
-Extracts and fingerprints `fgt_512.key`, `fgt2.key`, and `fgt.key` from FortiGate OVF firmware packages. Compares each MD5 against the known Fortinet shared key family table and flags any unrecognised MD5 as a potential new finding. Each key also carries a SHA-256 fingerprint for cross-validation.
+Extracts and fingerprints `fgt_512.key`, `fgt2.key`, and `fgt.key` from FortiGate firmware packages. Compares each MD5 against the known Fortinet shared key family table and flags any unrecognised MD5 as a potential new finding. Each key also carries a SHA-256 fingerprint for cross-validation.
 
-**Supported format:** FGT_VM64 OVF ZIPs (VMware/ESXi deployments). The outer ZIP contains an inner `.out.ovf.zip` that holds `fortios.vmdk`. The module converts the VMDK to a raw image, reads the 256 MiB P1 partition at LBA 2048, and extracts `datafs.tar.gz` via debugfs.
+**Supported input formats:**
 
-**Not supported:** FortiGate KVM `.qcow2` images (already handled by `fortigate_7412_re.py` manual extraction) and hardware `.out` files (inner partitions encrypted; use `FirmwareContainerKeyExtractor` for those).
+| Method | Input | qemu-img flag |
+|---|---|---|
+| `from_path()` | OVF ZIP (`.out.zip`) | vmdk (via inner ZIP) |
+| `from_disk()` | KVM QCOW2 (`.qcow2`) | qcow2 |
+| `from_disk()` | Hyper-V VHD (`.vhd`) | vpc |
+| `from_disk()` | Hyper-V VHDX (`.vhdx`) | vhdx |
+| `from_disk()` | Bare VMDK (`.vmdk`) | vmdk |
+
+All FortiGate virtual disks place P1 at LBA 2048 (256 MiB ext4, contains `datafs.tar.gz`). FAZ and FMG KVM images use P1 at LBA 8193 and have no `datafs.tar.gz`; `from_disk()` returns an error result for those — this is correct behavior, not a scanner bug.
+
+**Not supported:** Hardware `.out` files (inner partitions encrypted; use `FirmwareContainerKeyExtractor` for those).
 
 **Requirements:** `qemu-img` and `debugfs` on PATH (install `qemu-utils` and `e2fsprogs`).
 
@@ -43,14 +55,24 @@ MD5 is used for family identification only. Each `KeyEntry` also carries `sha256
 ```python
 from ablation.analyzers.fortigate_cert_key_scanner import FortiGateCertKeyScanner
 
-# Single image
+# OVF ZIP (VMware/ESXi)
 result = FortiGateCertKeyScanner.from_path(
     '/media/research/Fortinet/FortiGate/Firmware/Virtual/FGT_VM64/'
     'FGT_VM64-v7.4.12.M-build2902-FORTINET.out.zip'
 )
 print(FortiGateCertKeyScanner.report([result]))
 
-# Batch scan a directory
+# Bare KVM QCOW2
+result = FortiGateCertKeyScanner.from_disk(
+    '/media/research/Fortinet/VM-KVM/FGT_VM64_KVM-v7.4.12.M-build2902-FORTINET.qcow2'
+)
+
+# Bare Hyper-V VHD
+result = FortiGateCertKeyScanner.from_disk(
+    '/media/research/Fortinet/VM-HV/FGT_VM64_HV-v7.4.12.M-build2902-FORTINET.vhd'
+)
+
+# Batch scan a directory (OVF ZIPs)
 results = FortiGateCertKeyScanner.batch_scan(
     '/media/research/Fortinet/FortiGate/Firmware/Virtual/FGT_VM64/'
 )
@@ -63,6 +85,7 @@ if unknowns:
 
 # Force re-scan after a transient failure (disk full, missing qemu-img)
 result = FortiGateCertKeyScanner.from_path('/path/to/firmware.zip', force_rescan=True)
+result = FortiGateCertKeyScanner.from_disk('/path/to/firmware.qcow2', force_rescan=True)
 ```
 
 ---

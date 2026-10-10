@@ -265,12 +265,12 @@ class CppVtableReconstructorAnalyzer:
         """
         try:
             specs = self._scan_via_relocations(min_slots)
-        except ValueError:
+        except (ValueError, struct.error):
             return []
         if not specs:
             try:
                 specs = self._scan_via_bytes(min_slots)
-            except ValueError:
+            except (ValueError, struct.error):
                 pass
         self._find_ctor_sites(specs)
         return specs
@@ -370,7 +370,7 @@ class CppVtableReconstructorAnalyzer:
             if sec is None or sec.size < 24:
                 continue
             sec_va = sec.virtual_address
-            sec_off = sec_va        # VA == file_offset for PIE ELF
+            sec_off = int(sec.offset)   # ELF file offset, not VA
             sec_size = sec.size
 
             run_start_i: Optional[int] = None
@@ -446,7 +446,8 @@ class CppVtableReconstructorAnalyzer:
             return
         raw = self._data
         text_va = text_sec.virtual_address
-        text_bytes = raw[text_va: text_va + text_sec.size]
+        text_off = int(text_sec.offset)   # ELF file offset, not VA
+        text_bytes = raw[text_off: text_off + text_sec.size]
 
         for va, spec in vtable_set.items():
             if spec.ctor_sites:

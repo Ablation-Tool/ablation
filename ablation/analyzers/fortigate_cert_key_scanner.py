@@ -1,29 +1,42 @@
 """
 fortigate_cert_key_scanner.py — FortiGateCertKeyScanner
 
-Batch-extracts and fingerprints cert keys from FortiGate firmware OVF/VMware packages.
+Batch-extracts and fingerprints cert keys from FortiGate firmware packages.
 Compares each extracted key MD5 against the known Fortinet shared key family table and
 flags any unrecognised key variant as a potential new finding.
 
-Three things that were not possible before this module:
+Four things that were not possible before this module:
   1. A single call to sweep a directory of FortiGate OVF ZIPs and report which known key
      families each version ships — previously required 5 manual steps per image.
   2. Automatic detection of an unrecognised key MD5 in a new firmware release, which
      would represent a new entry in the Fortinet shared-key corpus without manual comparison.
   3. Consistent, cache-aware batch processing: VMDK conversion takes ~30 seconds per image;
      cached results mean a sweep of 20+ versions runs in seconds after the first pass.
+  4. Direct scanning of bare KVM QCOW2, Hyper-V VHD/VHDX, and standalone VMDK images
+     without an outer OVF ZIP wrapper — covers every FortiGate virtual deployment format.
 
-Supports FGT_VM64 OVF format (VMware/ESXi) and compatible formats that use the same
-extraction pipeline: outer ZIP -> inner .out.ovf.zip -> fortios.vmdk -> qemu-img -> ext4 P1 ->
-datafs.tar.gz -> cert key files.
+Supported input formats:
+  OVF ZIP (.out.zip):  outer ZIP -> inner .out.ovf.zip -> fortios.vmdk -> qemu-img -> P1
+  QCOW2 (.qcow2):     qemu-img convert -f qcow2 -> raw -> P1 (FortiGate KVM)
+  VHD (.vhd):         qemu-img convert -f vpc   -> raw -> P1 (Hyper-V VHD Dynamic)
+  VHDX (.vhdx):       qemu-img convert -f vhdx  -> raw -> P1 (Hyper-V VHD v2)
+  VMDK (.vmdk):       qemu-img convert -f vmdk  -> raw -> P1 (bare VMDK, no ZIP wrapper)
+
+All FortiGate virtual disk formats use P1 at LBA 2048 (256 MiB ext4 containing datafs.tar.gz).
+FAZ and FMG KVM images use P1 at LBA 8193 and contain no datafs.tar.gz; from_disk() returns
+an error result for these — that is correct behavior, not a scanner bug.
 
 Requirements: qemu-img, debugfs (e2fsprogs). Both must be on PATH.
 
 Usage:
     from ablation.analyzers.fortigate_cert_key_scanner import FortiGateCertKeyScanner
 
-    # Single image
+    # OVF ZIP (VMware/ESXi)
     result = FortiGateCertKeyScanner.from_path('/path/to/FGT_VM64-v7.4.12.M.out.zip')
+    print(FortiGateCertKeyScanner.report([result]))
+
+    # Bare disk image (KVM QCOW2, Hyper-V VHD/VHDX)
+    result = FortiGateCertKeyScanner.from_disk('/path/to/FGT_VM64_KVM-v7.4.12.qcow2')
     print(FortiGateCertKeyScanner.report([result]))
 
     # Batch -- all OVF ZIPs in a directory
@@ -106,6 +119,14 @@ _MIN_DATAFS_SIZE = 1024
 _CACHE_PATH = Path.home() / ".ablation" / "cache" / "fortigate_cert_key_scanner.json"
 _CACHE_LOCK_PATH = _CACHE_PATH.with_suffix(".lock")
 
+# qemu-img format flag for each supported bare disk extension
+_DISK_FORMAT_MAP: Dict[str, str] = {
+    ".qcow2": "qcow2",
+    ".vhd":   "vpc",
+    ".vhdx":  "vhdx",
+    ".vmdk":  "vmdk",
+}
+
 
 # ─── Data structures ──────────────────────────────────────────────────────────
 
@@ -167,6 +188,64 @@ class FortiGateCertKeyScanner:
                 datafs_path = _extract_datafs(path, tmp)
                 if datafs_path is None:
                     result.error = "datafs.tar.gz not found in firmware"
+                    return result
+                keys = _extract_keys(datafs_path)
+                for name, (md5hex, sha256hex) in keys.items():
+                    family, severity, desc = KNOWN_KEY_FAMILIES.get(
+                        md5hex,
+                        ("UNKNOWN", "UNKNOWN", "Key not in known family table -- potential new finding")
+                    )
+                    result.keys[name] = KeyEntry(
+                        name=name, md5=md5hex, sha256=sha256hex,
+                        family=family, severity=severity, description=desc
+                    )
+        except Exception as exc:
+            result.error = str(exc)
+        result.scan_time_s = time.time() - t0
+        if result.error is None:
+            _save_to_cache(path, result)
+        return result
+
+    @staticmethod
+    def from_disk(disk_path: str, force_rescan: bool = False) -> CertKeyScanResult:
+        """Scan a bare FortiGate virtual disk image (QCOW2, VHD, VHDX, or VMDK).
+
+        Handles images that arrive without an outer OVF ZIP wrapper: KVM QCOW2,
+        Hyper-V VHD/VHDX, and standalone VMDK files. The disk format is inferred
+        from the file extension. Use from_path() for OVF ZIP packages.
+
+        FortiGate virtual disks place P1 at LBA 2048 (256 MiB ext4). FAZ and FMG
+        KVM images use LBA 8193 and have no datafs.tar.gz; from_disk() returns an
+        error result for those — that is expected, not a scanner bug.
+
+        force_rescan: bypass cache and re-run the full pipeline.
+        """
+        path = str(disk_path)
+        version = _parse_version(path)
+
+        if not force_rescan:
+            cached = _load_from_cache(path)
+            if cached is not None:
+                return cached
+
+        ext = Path(path).suffix.lower()
+        fmt = _DISK_FORMAT_MAP.get(ext)
+        if fmt is None:
+            return CertKeyScanResult(
+                path=path, version=version,
+                error=(
+                    f"Unsupported disk format: {ext!r}. "
+                    f"Supported extensions: {sorted(_DISK_FORMAT_MAP)}"
+                )
+            )
+
+        t0 = time.time()
+        result = CertKeyScanResult(path=path, version=version)
+        try:
+            with tempfile.TemporaryDirectory(prefix="fgt_disk_scan_") as tmp:
+                datafs_path = _extract_datafs_from_disk(path, fmt, tmp)
+                if datafs_path is None:
+                    result.error = "datafs.tar.gz not found in disk image"
                     return result
                 keys = _extract_keys(datafs_path)
                 for name, (md5hex, sha256hex) in keys.items():
@@ -340,6 +419,76 @@ def _extract_datafs(ovf_zip_path: str, workdir: str) -> Optional[str]:
             f"debugfs dump produced no output or undersized file "
             f"(size={os.path.getsize(datafs_path) if os.path.exists(datafs_path) else 0})"
         )
+    return datafs_path
+
+
+def _extract_datafs_from_disk(disk_path: str, qemu_format: str, workdir: str) -> Optional[str]:
+    """
+    Extract datafs.tar.gz from a bare FortiGate disk image (QCOW2, VHD, VHDX, VMDK).
+
+    Converts the disk to raw format using qemu-img, extracts P1 at LBA 2048 (256 MiB
+    ext4), and dumps datafs.tar.gz via debugfs. Returns path to the extracted file or
+    None if datafs.tar.gz is absent (e.g. FAZ/FMG images).
+    """
+    _check_tools()
+
+    raw_path = os.path.join(workdir, "disk.raw")
+    p1_path = os.path.join(workdir, "p1.ext4")
+    datafs_path = os.path.join(workdir, "datafs.tar.gz")
+
+    subprocess.run(
+        ["qemu-img", "convert", "-f", qemu_format, "-O", "raw", disk_path, raw_path],
+        check=True, capture_output=True
+    )
+
+    _dd_extract(raw_path, p1_path, skip=_P1_LBA_START, count=_P1_LBA_COUNT)
+    os.unlink(raw_path)
+
+    with open(p1_path, "rb") as f:
+        header = f.read(2048)
+    if header[1080:1082] != b"\x53\xef":
+        os.unlink(p1_path)
+        raise ValueError(
+            f"P1 superblock magic check failed "
+            f"(expected 53ef, got {header[1080:1082].hex()})"
+        )
+
+    ls_proc = subprocess.run(
+        ["debugfs", "-R", "ls -l /", p1_path],
+        capture_output=True, text=True
+    )
+    inode = None
+    for line in ls_proc.stdout.splitlines():
+        if "datafs.tar.gz" in line and ".bak" not in line:
+            parts = line.split()
+            if parts:
+                try:
+                    inode = int(parts[0])
+                    break
+                except ValueError:
+                    pass
+
+    if inode is None and "datafs.tar.gz" not in ls_proc.stdout:
+        os.unlink(p1_path)
+        return None
+
+    if inode is not None:
+        dump_cmd = f'dump <{inode}> "{datafs_path}"'
+    else:
+        dump_cmd = f'dump /datafs.tar.gz "{datafs_path}"'
+
+    dump_proc = subprocess.run(
+        ["debugfs", "-R", dump_cmd, p1_path],
+        capture_output=True
+    )
+    os.unlink(p1_path)
+
+    if dump_proc.returncode != 0:
+        stderr = dump_proc.stderr.decode(errors="replace").strip()
+        raise RuntimeError(f"debugfs dump failed (rc={dump_proc.returncode}): {stderr}")
+
+    if not os.path.exists(datafs_path) or os.path.getsize(datafs_path) < _MIN_DATAFS_SIZE:
+        return None
     return datafs_path
 
 
