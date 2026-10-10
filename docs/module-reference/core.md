@@ -183,6 +183,21 @@ rarely enough to be negligible in practice.
 
 **File:** `ablation/analyzers/i386_absolute_xref_scanner.py`
 
+### Why this exists
+
+2 things that weren't possible before in Ablation:
+
+1. **String context for stripped i386 ELF32** — `BinaryContext._str_xref_idx` used
+   RIP-relative displacement arithmetic (x86-64 only). On a 675KB statically linked i386
+   binary this yielded 21 coincidental hits where 548 were correct. `strings_in_func()` and
+   `funcs_referencing_string()` were effectively broken for every 32-bit static target,
+   making string-guided taint entry-point selection impossible on i386 firmware.
+
+2. **Function-level attribution of i386 string refs** — even when string VAs were known,
+   there was no way to ask "which function references this string?" on i386 because
+   `_func_str_idx` was empty. `inject()` populates both indexes in the same format as the
+   x86-64 scanner so all downstream `ctx` calls work identically regardless of bitness.
+
 ### Why the default xref index finds almost nothing in i386 code
 
 The default `BinaryContext` xref scanner is built for x86-64, where the compiler encodes
