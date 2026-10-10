@@ -1,12 +1,88 @@
 # LoongArch64 Analysis Stack
 
-Pure-Python LoongArch64 (LA64) decoder, CFG builder, and interprocedural
-taint tracker. Targets stripped ELF binaries compiled for the lp64 ABI —
-TencentOS 4.6 server packages, Loongson firmware, EDK2/GRUB2 EFI modules,
-and kernel drivers.
+Pure-Python LoongArch64 (LA64) decoder, CFG builder, and interprocedural taint tracker. Capstone 5.x has no LoongArch support, so the entire decode path is Python. Instruction table source: binutils 2.41 `opcodes/loongarch-opc.c`. Targets stripped ELF binaries compiled for the lp64 ABI: TencentOS 4.6 server packages, Loongson firmware, EDK2/GRUB2 EFI modules, and kernel drivers.
 
-Capstone 5.x has no LoongArch support. The entire decode path is pure Python.
-Instruction table source: binutils 2.41 `opcodes/loongarch-opc.c`.
+---
+
+## Why this exists
+
+Two gaps blocked LoongArch64 security analysis before this stack:
+
+**1. No disassembler for LA64 in any Python-accessible library.**
+Capstone 5.x does not support LoongArch. Radare2 supports it but has no Python API compatible with Ablation's pipeline. The only path was a pure-Python decoder built directly from the binutils opcode table. Every LA64 tool in Ablation depends on `loongarch_decoder` at the bottom.
+
+**2. KASAN/KCOV instrumentation inflated kernel function instruction counts by ~40%.**
+A kernel binary built with `CONFIG_KASAN=y` inserts a 4–6 instruction shadow-map-check preamble before virtually every memory access. Without stripping this noise, taint analysis on the debug kernel misattributes the instrumentation hooks as real program logic and produces thousands of false positive call edges. `loongarch_decoder_v2` tags and strips these ghosts.
+
+---
+
+## Module stack
+
+```
+  /path/to/binary.elf
+          |
+          v
+  ┌────────────────────────────────────────────────────────────┐
+  │  loongarch_decoder (V1)                                    │
+  │    Fixed-width 32-bit LE instruction decode                │
+  │    Covers: ALU, immediate, CSR/TLB/privilege, FP compare,  │
+  │    load/store, atomics, barriers, float load/store,        │
+  │    branch/call/return                                      │
+  │    LSX/LASX → .word (deferred)                             │
+  │    jirl polymorphism: $zero/$ra/$ra decodes to ret/call/br │
+  └──────────────────────────┬─────────────────────────────────┘
+                             |
+                             v
+  ┌────────────────────────────────────────────────────────────┐
+  │  loongarch_decoder_v2 (KASAN/KCOV-aware)                   │
+  │    Pass 1 — BL tagging:                                    │
+  │      every bl whose target VA is in KASAN_SYMBOL_PREFIXES  │
+  │      or KCOV_SYMBOL_PREFIXES → is_instrumentation=True     │
+  │                                                            │
+  │    Pass 2 — preamble walk:                                 │
+  │      from each tagged BL, walk backward up to 6 insns      │
+  │      tag: srli.d / lu12i.w / lu52i.d / addi.d / ld.b /    │
+  │           andi / slti / sltui / or / add.d                 │
+  │      stop: on call, branch, store, or function start       │
+  │                                                            │
+  │    decode_frames_clean() skips all is_instrumentation=True │
+  └──────────────────────────┬─────────────────────────────────┘
+                             |
+                             v
+  ┌────────────────────────────────────────────────────────────┐
+  │  isa_loongarch64 + insn_loongarch64                        │
+  │    Register model: $zero, $ra, $tp, $sp, $a0-$a7,          │
+  │      $t0-$t8, $fp, $s0-$s8                                 │
+  │    lp64 ABI: ARG_REGS=($a0..$a7), RET_REGS=($a0,$a1)      │
+  │    insn_loongarch64: typed Reg/Imm operands from op_str     │
+  └──────────────────────────┬─────────────────────────────────┘
+                             |
+                             v
+  ┌────────────────────────────────────────────────────────────┐
+  │  cfg_loongarch64                                           │
+  │    Leader set: entry VA + branch targets + fallthrough     │
+  │    Splits at terminators (branch, call, ret, ertn, break)  │
+  │    Calls treated as fall-through (callee abstracted)       │
+  │    Indirect branches → no successors                       │
+  └──────────────────────────┬─────────────────────────────────┘
+                             |
+                             v
+  ┌────────────────────────────────────────────────────────────┐
+  │  analysis_loongarch64                                      │
+  │    Flow-sensitive, path-insensitive fixpoint analysis      │
+  │    Loop widening: bounded-iteration then widen to top       │
+  │    State: taint_reg(name, label) / mem_taint(base, off)    │
+  └──────────────────────────┬─────────────────────────────────┘
+                             |
+                             v
+  ┌────────────────────────────────────────────────────────────┐
+  │  taint_tracker_loongarch64 / LoongArch64TaintTracker       │
+  │    Interprocedural BFS over call graph                     │
+  │    PLT/GOT stub resolution: .rela.plt + .dynsym            │
+  │    Function start: symbols + addi.d $sp,$sp,-N prologue     │
+  │    from_path_full() adds: eh_frame FDE / DWARF / BTF       │
+  └──────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -18,120 +94,48 @@ from ablation.analyzers.taint_tracker_loongarch64 import LoongArch64TaintTracker
 tt = LoongArch64TaintTracker.from_path("libc-2.38.so.loongarch64")
 findings = tt.run_interprocedural()
 print(tt.report(findings))
+
+# Stripped binary — use from_path_full for full function coverage
+tt = LoongArch64TaintTracker.from_path_full("libssl.so.3.0.loongarch64")
+findings = tt.run_interprocedural()
 ```
 
 ---
 
-## Modules
+## PLT/GOT stub format
 
-### `loongarch_decoder`
+LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes (same width as AArch64):
 
-Fixed-width 32-bit LE instruction decoder. Covers integer ALU, immediate,
-CSR/TLB/privilege, single/double float, FP compare, load/store, atomics,
-barriers, float load/store, and all branch/call/return instructions.
-LSX/LASX encodings decode as `.word` (Step 3 deferral).
+```
+  PLT stub (one external function):
+    pcalau12i  $t3, page_off    ; PC-relative page load — GOT page address
+    ld.d       $t3, $t3, off   ; load function pointer from GOT slot
+    jirl       $zero, $t3, 0   ; indirect branch — no link (rd=$zero)
+    nop                         ; alignment pad
 
-```python
-from ablation.analyzers.loongarch_decoder import LoongArchDecoder
+  Key: jirl $zero,$rj,0 is classified as is_branch=True (not a call) because
+  rd=$zero means no return address is saved. The decoder handles jirl polymorphism:
 
-dec = LoongArchDecoder()
-for frame in dec.decode_frames(section_bytes, base_addr=0x400000):
-    if frame.is_call:
-        print(f"call @ {frame.va:#x} -> {frame.target:#x}")
-    if frame.is_ret:
-        print(f"ret  @ {frame.va:#x}")
+  jirl rd  rj  offset  | rd=$zero, rj=$ra, offset=0  → is_ret=True
+  jirl rd  rj  offset  | rd=$ra,   rj=any, any        → is_call=True
+  jirl rd  rj  offset  | rd=$zero, rj≠$ra, any        → is_branch=True
 ```
 
-`LoongArchFrame` fields:
+`_load_elf()` merges all PLT stub addresses from `.rela.plt` + `.dynsym` into the symbol map. A `bl <plt_stub_va>` resolves to the exact imported name without requiring the ±16-byte tolerance scan in `_PLT_TOL`.
 
-| Field | Type | Description |
+### LoongArch relocation types
+
+| Constant | Value | Meaning |
 |---|---|---|
-| `va` | int | Virtual address |
-| `width` | int | Always 4 |
-| `insn` | int | Raw 32-bit word |
-| `mnemonic` | str | Instruction mnemonic |
-| `op_str` | str | Comma-separated ABI-named operands |
-| `is_branch` | bool | Conditional or unconditional branch |
-| `is_call` | bool | `bl` or `jirl $ra,rj,0` |
-| `is_ret` | bool | `jirl $zero,$ra,0` |
-| `target` | int | Resolved PC-relative target VA (0 = indirect/unknown) |
+| `R_LARCH_NONE` | 0 | No-op |
+| `R_LARCH_JUMP_SLOT` | 5 | GOT entry for lazy-bind PLT call |
+| `R_LARCH_RELATIVE` | 3 | Base-address-relative fixup |
+| `R_LARCH_IRELATIVE` | 12 | GNU IFUNC indirect relocation |
+| `R_LARCH_TLS_TPREL64` | 11 | Thread-local initial-exec offset |
 
-**`jirl` polymorphism:**
+---
 
-| rd | rj | offset | Classification |
-|---|---|---|---|
-| `$zero` | `$ra` | 0 | `is_ret = True` |
-| `$ra` | any | any | `is_call = True` |
-| `$zero` | any≠`$ra` | any | `is_branch = True` |
-
-### `loongarch_decoder_v2`
-
-KASAN/KCOV-aware decoder built on V1.  Adds a two-pass semantic layer
-(Cifuentes & Sendall 1998 SSL idiom recognition) that tags debug-kernel
-instrumentation ghost calls and strips them on demand.
-
-Relevant for any kernel built with `CONFIG_KASAN=y` or `CONFIG_KCOV=y` — the
-debug vmlinuz.elf inserts 4–6 ghost instructions before virtually every memory
-access; without stripping, ~40% of a kernel function's instructions are noise.
-
-```python
-from ablation.analyzers.loongarch_decoder_v2 import LoongArchDecoderV2
-
-# Load KASAN/KCOV target VAs from System.map (preferred)
-dec = LoongArchDecoderV2.from_system_map("/path/to/System.map")
-
-# Full decode with tags
-for frame in dec.decode_frames_v2(section_bytes, base_addr):
-    print(frame)   # [kasan_shadow] / [kasan] annotations visible
-
-# Noise-free view
-for frame in dec.decode_frames_clean(section_bytes, base_addr):
-    print(frame)   # only real program instructions
-
-# Coverage stats
-stats = dec.count_instrumentation(section_bytes, base_addr)
-print(stats)  # {"total": 208, "instrumentation": 84, "real": 124, "pct_instrumentation": 40.4}
-```
-
-`LoongArchFrameV2` extends `LoongArchFrame` with:
-
-| Field | Type | Description |
-|---|---|---|
-| `is_instrumentation` | bool | True if KASAN/KCOV ghost call or preamble |
-| `idiom` | str | `"kasan_shadow"`, `"kasan"`, `"kcov_trace_pc"`, `"kcov"`, or `""` |
-
-**Two-pass semantic analysis:**
-
-Pass 1 — BL tagging: every `bl` whose resolved target VA matches a symbol in
-`KASAN_SYMBOL_PREFIXES` or `KCOV_SYMBOL_PREFIXES` gets
-`is_instrumentation=True`.
-
-Pass 2 — preamble walk: from each tagged BL, walk backwards up to 6
-instructions.  Tag any instruction in `_KASAN_PREAMBLE_MNEMS` (srli.d,
-lu12i.w, lu52i.d, addi.d, ld.b, andi, slti, sltui, or, add.d) as
-`is_instrumentation=True, idiom="kasan_shadow"`.  Stop at calls, branches,
-stores, or the function start.
-
-**`from_system_map(path)`**: parses kernel `System.map` (format: `<va> <type>
-<name>`) and extracts all KASAN/KCOV VAs automatically.  Use this for any
-TencentOS or mainline kernel debug RPM.
-
-### `isa_loongarch64`
-
-Register model, lp64 ABI classification, and mnemonic sets.
-
-```python
-from ablation.analyzers.isa_loongarch64 import (
-    ARG_REGS, RET_REGS, CALLER_SAVED, CALLEE_SAVED,
-    LOAD_MNEMS, STORE_MNEMS, ALU3_MNEMS, ALUI_MNEMS,
-    canon_reg, reg_by_num,
-)
-
-print(ARG_REGS)      # ("$a0", "$a1", ..., "$a7")
-print(canon_reg("$r4"))  # "$a0"
-```
-
-lp64 register roles:
+## lp64 register roles
 
 | Range | ABI names | Role |
 |---|---|---|
@@ -139,80 +143,11 @@ lp64 register roles:
 | r1 | `$ra` | Return address (caller-saved) |
 | r2 | `$tp` | Thread pointer (OS-managed) |
 | r3 | `$sp` | Stack pointer |
-| r4–r11 | `$a0`–`$a7` | Arguments / return values |
+| r4–r11 | `$a0`–`$a7` | Arguments / return values (caller-saved) |
 | r12–r20 | `$t0`–`$t8` | Caller-saved temporaries |
 | r21 | `$r21` | Platform-reserved |
 | r22 | `$fp` | Frame pointer (callee-saved) |
 | r23–r31 | `$s0`–`$s8` | Callee-saved |
-
-### `insn_loongarch64`
-
-Instruction model and operand parser. Splits `op_str` from decoder frames into
-typed `Reg` / `Imm` operands.
-
-```python
-from ablation.analyzers.insn_loongarch64 import from_loongarch_frames
-
-insns = list(from_loongarch_frames(dec.decode_frames(data, base)))
-for insn in insns:
-    if insn.mnemonic == "addi.d":
-        rd, rj, imm = insn.reg(0), insn.reg(1), insn.imm(2)
-```
-
-### `cfg_loongarch64`
-
-CFG builder. Identifies leaders, splits at every terminator, links successors.
-Calls are treated as fall-through (callee abstracted). Indirect branches add
-no successors.
-
-```python
-from ablation.analyzers.cfg_loongarch64 import build_cfg
-
-cfg = build_cfg(insns, entry=func_va)
-for block in cfg:
-    print(block)
-```
-
-### `analysis_loongarch64`
-
-Flow-sensitive, path-insensitive fixpoint analysis over a CFG with loop widening.
-
-```python
-from ablation.analyzers.analysis_loongarch64 import analyze_cfg
-from ablation.analyzers.taint_tracker_loongarch64 import State
-
-init = State()
-init.taint_reg("$a0", "network")
-result = analyze_cfg(insns, initial=init, entry=func_va)
-for f in result.findings:
-    print(f)
-```
-
-### `taint_tracker_loongarch64`
-
-Interprocedural source-to-sink taint tracker.
-
-**Sources** (return value → `$a0`):
-`recv`, `recvfrom`, `recvmsg`, `read`, `fread`, `fgets`, `gets`, `getchar`, `fgetc`
-
-**Sinks** (check `$a0`–`$a7` on call):
-`system`, `execve`, `execl`, `execvp`, `popen`,
-`strcpy`, `strcat`, `sprintf`, `vsprintf`, `snprintf`, `vsnprintf`,
-`memcpy`, `memmove`, `gets`
-
-```python
-from ablation.analyzers.taint_tracker_loongarch64 import LoongArch64TaintTracker
-
-tt = LoongArch64TaintTracker.from_path(binary_path)
-
-# Intraprocedural (fast)
-findings = tt.run()
-
-# Interprocedural BFS depth 4 (recommended)
-findings = tt.run_interprocedural(depth=4)
-
-print(tt.report(findings))
-```
 
 ---
 
@@ -220,151 +155,108 @@ print(tt.report(findings))
 
 | Instruction class | Propagation |
 |---|---|
-| ALU 3-reg (`add.d`, `mul.d`, …) | `rd = taint(rj) ∪ taint(rk)` |
-| ALU reg-imm (`addi.d`, `ori`, …) | `rd = taint(rj)` |
-| `andi rd, rj, mask` | `rd = taint(rj)` with `bound = mask` if mask is 2ⁿ−1 |
-| Load (`ld.d`, `ldx.d`, …) | `rd = mem_taint(base, off)` |
-| Store (`st.d`, `stx.d`, …) | `mem(base, off) = taint(rd)` |
-| Atomic (`amadd.d`, …) | `rd = old_mem_taint; mem = taint(rk) ∪ old` |
-| `lu12i.w`, `pcaddi` | `rd = clean` (address constant) |
-| `addi.d $sp,$sp,-N` | stack frame allocation, rebases `$sp`-relative memory |
-| `addi.d $fp,$sp,N` | records `$fp = $sp + N` in frame-pointer map |
-| Float ops | not tracked at GPR level |
+| ALU 3-reg (`add.d`, `mul.d`, ...) | `rd = taint(rj) ∪ taint(rk)` |
+| ALU reg-imm (`addi.d`, `ori`, ...) | `rd = taint(rj)` |
+| `andi rd, rj, mask` | `rd = taint(rj)` with `bound = mask` if mask is 2^n-1 |
+| Load (`ld.d`, `ldx.d`, ...) | `rd = mem_taint(base, off)` |
+| Store (`st.d`, `stx.d`, ...) | `mem(base, off) = taint(rd)` |
+| Atomic (`amadd.d`, ...) | `rd = old_mem_taint; mem = taint(rk) ∪ old` |
+| `lu12i.w`, `pcaddi` | `rd = clean` (address constant — not tainted) |
+| `addi.d $sp,$sp,-N` | Frame allocation — rebases `$sp`-relative memory slots |
+| `addi.d $fp,$sp,N` | Records `$fp = $sp + N` in the frame-pointer map |
+| Float ops | Not tracked at GPR level |
 
 ---
 
 ## Syscall tracking
 
-`LoongArch64TaintTracker` tracks data flow through the `syscall 0` instruction.
+When the constant-folding path has a value for `$a7` (set by `ori $a7,$zero,N` or `addi.d $a7,$zero,N`), the syscall is classified from the 318-entry asm-generic unistd.h table (Linux 6.6).
 
 **ABI:** syscall number in `$a7`; args in `$a0`–`$a5`; return value in `$a0`.
 
-When the constant-folding path has a value for `$a7` (set by `ori $a7,$zero,N`
-or `addi.d $a7,$zero,N`), the syscall is classified from the 318-entry
-asm-generic unistd.h table (Linux 6.6). Three classification tracks:
-
 | Track | Examples | Effect |
 |---|---|---|
-| `source` | read(63), recvfrom(207), recvmsg(212), getrandom(278) | `$a0` tainted with `syscall:network` / `syscall:read` etc. |
+| `source` | read(63), recvfrom(207), recvmsg(212), getrandom(278) | `$a0` tainted with `syscall:network` |
 | `sink` | execve(221), execveat(281), bpf(280), ptrace(117), kexec_load(104) | Finding emitted if any `$a0`–`$a5` tainted |
-| `escalation` | setuid(146), setgid(144), setresuid(147), capset(91) | Finding emitted with `CRITICAL` severity |
+| `escalation` | setuid(146), setgid(144), setresuid(147), capset(91) | Finding emitted at CRITICAL severity |
 
-When `$a7` is unknown/tainted: caller-saved registers are conservatively clobbered.
+When `$a7` is unknown or tainted, caller-saved registers are conservatively clobbered.
 
 ```python
-from ablation.analyzers.syscall_loongarch64 import classify_syscall, SYSCALL_TABLE
+from ablation.analyzers.syscall_loongarch64 import classify_syscall
 
-# Check classification of a syscall number
-result = classify_syscall(207)   # ('recvfrom', 'source')
-result = classify_syscall(221)   # ('execve', 'sink')
-result = classify_syscall(146)   # ('setuid', 'escalation')
+classify_syscall(207)   # ('recvfrom', 'source')
+classify_syscall(221)   # ('execve', 'sink')
+classify_syscall(146)   # ('setuid', 'escalation')
 ```
-
-### Kernel module sources and sinks
-
-When analysing kernel modules, the `_SOURCE_NAMES`/`_SINK_NAMES` sets cover
-kernel-space function names in addition to libc names:
-
-| Function | Track | Notes |
-|---|---|---|
-| `copy_from_user`, `get_user`, `strncpy_from_user` | source | User→kernel memory copy |
-| `memdup_user`, `nla_get_string`, `nla_data` | source | Netlink / sysfs attribute reads |
-| `copy_to_user`, `put_user` | sink | Kernel→user copy |
-| `call_usermodehelper`, `kernel_execve` | sink (CRITICAL) | Exec from kernel |
-| `commit_creds`, `prepare_kernel_cred` | escalation (CRITICAL) | Privilege escalation |
-| `kmalloc`, `kzalloc`, `vmalloc` | sink (HIGH) | Size-controlled allocation |
-
-### Exception paths
-
-| Mnemonic | CFG treatment | Taint treatment |
-|---|---|---|
-| `ertn` | no successors (exception return) | terminates scan of exception handler |
-| `break N` | no successors (trap) | terminates scan |
-| `dbcl N` | no successors (debug call) | terminates scan |
-| `syscall 0` | fall-through | classify via `$a7`; source taints `$a0`, sink emits finding |
 
 ---
 
-## PLT/GOT resolution
+## Exception path CFG treatment
 
-`_load_elf()` merges PLT stub addresses into the symbol map before scanning.
-Each entry from `ELFParser.get_plt_got_table()` (reads `.rela.plt`, resolves
-via `.dynsym`) contributes `plt_stub_va → imported_function_name`.
-
-Result: every `bl <plt_stub_va>` call in the taint tracker resolves to the
-exact imported name (e.g. `recv`, `strcpy`) without the ±16-byte tolerance
-scan. The `_PLT_TOL` heuristic in `_name_at` remains as a fallback for
-stripped binaries with no `.rela.plt`.
-
-LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes (same as AArch64):
-```
-pcalau12i  $t3, page_off    ; PC-relative page load — GOT page addr
-ld.d       $t3, $t3, off    ; load function pointer from GOT slot
-jirl       $zero, $t3, 0    ; indirect branch — no return address saved
-nop                         ; alignment pad
-```
-The stub terminates with `jirl $zero,rj,0` (indirect branch, not call), so
-it is correctly classified as `is_branch=True` by the decoder, not as a call.
-
-LoongArch relocation types (psABI v2.30, `elf_parser.R_LARCH_*`):
-
-| Constant | Value | Meaning |
+| Mnemonic | CFG treatment | Taint treatment |
 |---|---|---|
-| `R_LARCH_NONE` | 0 | no-op |
-| `R_LARCH_JUMP_SLOT` | 5 | GOT entry for lazy-bind PLT call |
-| `R_LARCH_RELATIVE` | 3 | base-address-relative fixup |
-| `R_LARCH_IRELATIVE` | 12 | GNU IFUNC indirect relocation |
-| `R_LARCH_TLS_TPREL64` | 11 | thread-local initial-exec offset |
+| `ertn` | No successors (exception return) | Terminates scan of exception handler |
+| `break N` | No successors (trap) | Terminates scan |
+| `dbcl N` | No successors (debug call) | Terminates scan |
+| `syscall 0` | Fall-through | Classify via `$a7`; source taints `$a0`, sink emits finding |
+
+---
+
+## KASAN/KCOV stripping
+
+A TencentOS kernel built with `CONFIG_KASAN=y` has roughly 40% of its instructions as instrumentation ghosts. Without stripping, taint analysis on the debug kernel produces thousands of false edges into `__asan_load8_noabort` and similar.
+
+```python
+from ablation.analyzers.loongarch_decoder_v2 import LoongArchDecoderV2
+
+# Load symbol VAs from System.map (parses "<va> <type> <name>" format)
+dec = LoongArchDecoderV2.from_system_map("/path/to/System.map")
+
+# Full decode with instrumentation tags visible
+for frame in dec.decode_frames_v2(section_bytes, base_addr):
+    if frame.is_instrumentation:
+        print(f"  [ghost {frame.idiom}] {frame.va:#x}")
+
+# Clean decode — only real program instructions
+for frame in dec.decode_frames_clean(section_bytes, base_addr):
+    print(frame)
+
+# Coverage stats
+stats = dec.count_instrumentation(section_bytes, base_addr)
+print(stats)
+# {"total": 208, "instrumentation": 84, "real": 124, "pct_instrumentation": 40.4}
+```
 
 ---
 
 ## Function start detection
 
-`from_path()` uses two heuristics:
+`from_path()` uses two sources:
 1. Symbol table entries (`st_value` in `.symtab` / `.dynsym`) within `.text`.
-2. `addi.d $sp, $sp, -N` (N > 0) instruction pattern — standard GCC/Clang prologue.
+2. `addi.d $sp, $sp, -N` (N > 0) — standard GCC/Clang LA64 prologue.
 
-`from_path_full()` adds three DWARF/CFI data sources via `dwarf_loongarch64`:
+`from_path_full()` adds three DWARF/CFI sources:
 
-| Source | Section | Stripped? | Yields |
+| Source | Section | When present | Yields |
 |---|---|---|---|
-| `.eh_frame` FDE records | `.eh_frame` | Present (GCC default) | Function start VAs |
-| DWARF subprogram | `.debug_info` | Requires `-g` | Name + start + end VA |
+| `.eh_frame` FDE records | `.eh_frame` | GCC default (stripped OK) | Function start VAs |
+| DWARF subprogram entries | `.debug_info` | Requires `-g` build | Name + start + end VA |
 | BTF func_info | `.BTF` + `.BTF.ext` | Kernel modules | Name + VA |
 
-**Use `from_path_full()` for stripped TencentOS binaries** — `.eh_frame` recovers
-leaf functions and tail-call-optimised bodies that have no `addi.d $sp` prologue.
-
-```python
-# Stripped binary — use from_path_full for complete function coverage
-tt = LoongArch64TaintTracker.from_path_full("libssl.so.3.0.loongarch64")
-findings = tt.run_interprocedural()
-```
-
-When `.debug_info` is present (debug packages), `high_pc` values are stored in
-`tt._dwarf_ends` and used by `run()`/`run_interprocedural()` for precise function
-end VAs instead of the next-function-start approximation.
-
-### `dwarf_loongarch64` module
-
-```python
-from ablation.analyzers.dwarf_loongarch64 import (
-    extract_eh_frame_starts,  # Set[int] — FDE initial_locations
-    extract_debug_funcs,      # Dict[int, Tuple[str, int]] — va -> (name, end_va)
-    extract_btf_funcs,        # Dict[int, str] — va -> name (kernel modules)
-)
-```
-
-All three functions are best-effort: any missing section or parse error returns
-an empty result without raising.
+Use `from_path_full()` for stripped TencentOS binaries. `.eh_frame` recovers leaf functions and tail-call-optimised bodies that have no `addi.d $sp` prologue. When `.debug_info` is present, `high_pc` values are stored in `tt._dwarf_ends` for precise function end VAs.
 
 ---
 
-## Corpus
+## Kernel module sources and sinks
 
-Development corpus: `/media/cowboy/research/TencentOS/LoongArch-RE/`
-Primary validation targets (DWARF ground truth):
-- `glibc-debuginfo` — standard library function boundaries and types
-- `openssl-debuginfo` — crypto dispatch and TLS state machine
-- `qemu-loongarch64-static-debuginfo` — user-mode emulator
-- `kernel-debuginfo` (6.6.x) — privileged code, CSR instructions, atomics
+For kernel modules, `_SOURCE_NAMES` and `_SINK_NAMES` extend to kernel-space names:
+
+| Function | Track | Notes |
+|---|---|---|
+| `copy_from_user`, `get_user`, `strncpy_from_user` | source | User-to-kernel memory copy |
+| `memdup_user`, `nla_get_string`, `nla_data` | source | Netlink / sysfs attribute reads |
+| `copy_to_user`, `put_user` | sink | Kernel-to-user memory copy |
+| `call_usermodehelper`, `kernel_execve` | sink (CRITICAL) | Exec from kernel space |
+| `commit_creds`, `prepare_kernel_cred` | escalation (CRITICAL) | Privilege escalation |
+| `kmalloc`, `kzalloc`, `vmalloc` | sink (HIGH) | Size-controlled allocation |
