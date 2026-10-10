@@ -29,6 +29,7 @@ delete — it will be rebuilt on next use.
 from __future__ import annotations
 
 import dataclasses
+import fcntl
 import hashlib
 import inspect
 import json
@@ -139,20 +140,41 @@ class ScanResultVersionCache:
             return
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self._cache_path.with_suffix(".tmp")
+        lock_path = self._cache_path.with_suffix(".lock")
         try:
-            with open(tmp, "w") as fh:
-                json.dump(self._cache, fh, indent=2)
-            tmp.replace(self._cache_path)
-            self._dirty = False
+            with open(lock_path, "w") as lock_fh:
+                fcntl.flock(lock_fh, fcntl.LOCK_EX)
+                # Re-read the on-disk state under the lock and merge. A concurrent
+                # writer may have added entries since we loaded at __init__ time.
+                try:
+                    on_disk = json.loads(
+                        self._cache_path.read_text(encoding="utf-8")
+                    )
+                    merged = {**on_disk, **self._cache} if isinstance(on_disk, dict) else dict(self._cache)
+                except Exception:
+                    merged = dict(self._cache)
+                try:
+                    with open(tmp, "w") as fh:
+                        json.dump(merged, fh, indent=2)
+                    tmp.replace(self._cache_path)
+                    self._cache = merged
+                    self._prefix_index = {k.rsplit('|', 1)[0] + '|': k for k in merged}
+                    self._dirty = False
+                except Exception as e:
+                    warnings.warn(
+                        f"ScanResultVersionCache: failed to write cache to "
+                        f"{self._cache_path}: {e}",
+                        stacklevel=2,
+                    )
+                    try:
+                        tmp.unlink(missing_ok=True)
+                    except Exception:
+                        pass
         except Exception as e:
             warnings.warn(
-                f"ScanResultVersionCache: failed to write cache to {self._cache_path}: {e}",
+                f"ScanResultVersionCache: failed to acquire lock {lock_path}: {e}",
                 stacklevel=2,
             )
-            try:
-                tmp.unlink(missing_ok=True)
-            except Exception:
-                pass
 
     def get_or_scan(self, file_path: str, force: bool = False, **scanner_kwargs) -> List[dict]:
         """Return cached results if valid; otherwise scan and cache.
