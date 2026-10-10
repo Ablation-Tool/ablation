@@ -70,6 +70,9 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [HarmonyOS / ArkTS](module-reference/harmonyos.md) | ABCParser (Ark Bytecode v9–v13+): header, class walk, method iteration, CodeItem (ULEB128), native/string queries; ARKDisasm: 324-opcode ISA, smali output, call/string-load queries; ABCDecompiler: JS-like pseudocode, accumulator tracking, property/global name resolution via method_idx |
 | [LLM Analyst](module-reference/llm.md) | LlmAnalyst ReAct agent loop |
 | [LoongArch64](module-reference/loongarch64.md) | LoongArch64TaintTracker (`from_path` / `from_path_full`), LoongArchDecoder, ISA model, CFG builder, DWARF/BTF enrichment, syscall tracking, kernel escalation — TencentOS 4.6 / Loongson 3A5000 |
+| [Scan Result Version Cache](module-reference/scan-result-version-cache.md) | ScanResultVersionCache: wraps any scanner with `from_path(path).scan()`; caches results by (scanner source hash, file mtime, size, sha256 prefix); cache hit uses stat only, no file read; invalidates automatically on scanner or file change |
+| [Kernel Module Subsystem Classifier](module-reference/kernel-module-subsystem-classifier.md) | KernelModuleSubsystemClassifier: infers attack surface from .ko file path in standard `lib/modules/<version>/kernel/` layout; returns PROXIMITY/NETWORK/NETWORK-cluster/LOCAL-USB/LOCAL-HARDWARE-*/LOCAL-DEV-ACCESS; 26 rules, most-specific first |
+| [FORGE](module-reference/forge.md) | FORGE.audit_module(path): cache hit returns ForgeReport instantly; cache miss raises ForgeAuditRequired — perform 10-section SAFE CODE audit inline as Claude Code, then call FORGE.record_result() to cache; no subprocess, no API key; gate_passed=False blocks on any HIGH/CRITICAL |
 
 ---
 
@@ -88,6 +91,8 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.43.0 | FORGE: result cache (sha256-keyed, ~/.ablation/forge_cache.json, instant hit); ForgeAuditRequired exception replaces subprocess — audits run inline as Claude Code, no subprocess, no API key; FORGE.record_result() stores inline results; removed dead Anthropic SDK path |
+| v2.42.0 | ScanResultVersionCache: scanner result cache keyed on source hash + file fingerprint; fast stat-only hit path; KernelModuleSubsystemClassifier: attack surface from .ko path (26 rules: PROXIMITY/NETWORK-cluster/LOCAL-USB/etc.) |
 | v2.41.0 | CppVtableReconstructorAnalyzer: any-arch vtable extraction (RELA + byte scan), slot naming (export/string-xref/callee), x86-64 + ARM64 call-site tracing, IDAPython set_type script emitter |
 | v2.39.0 | WindowAnalyzer: PPC32/PPC64 big-endian support — `_elf_arch()` respects EI_DATA byte order; `_cs()` emits Capstone PPC decoder; `_build_plt_ppc32_bss()` recovers BSS PLT stub→symbol map via BL scan + `.rela.plt` index correlation |
 | v2.38.0 | PPC32PLTTracer: SYSV PIC BSS PLT support — `_is_bss_plt()` detection, `bss_plt_stub_map()` with cached stub map, `_find_callers_bss_plt()` direct BL scan path; GOT2-PIC path unchanged |
