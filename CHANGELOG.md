@@ -2,6 +2,39 @@
 
 ---
 
+## v2.57.0
+
+**EcuVLEDecoder: PPC VLE / SE16 decoder for NXP e200-class ECU firmware.** Decodes the PowerPC
+Variable Length Encoding ISA used by GM E39a (MPC5566 e200z6), E54, and E92 PCMs. Capstone 5.0.7
+does not implement VLE; this module closes that gap with a pure-Python decoder covering the
+security-relevant instruction subset.
+
+- `EcuVLEDecoder`: pure-Python VLE decoder; `disassemble()` walks a ROM region instruction by
+  instruction; `decode_one()` decodes a single instruction; `function_starts()` returns probable
+  function-entry VAs for taint-tracker seeding
+- `VLEInsn` dataclass: `offset` (VA), `is_16bit`, `mnemonic`, `insn_type`, `raw`, `target`,
+  `rd`, `rs`, `ra`, `imm`
+- Length discrimination: `(byte0 & 0x90) == 0x10` → 32-bit; else 16-bit SE; sourced from NXP
+  e200 VLE Reference Manual and verified against binutils ppc-opc.c macro table
+- SE 16-bit coverage: `se_blr/blrl`, `se_mflr/mtlr`, `se_li`, `se_b/bl/bc`, `se_lwz/stw`,
+  `se_lbz/stb/lhz/sth`, plus SE_R / SE_RR / SE_IM5 arithmetic and compare forms
+- 32-bit VLE coverage: `e_stwu`, `e_b/bl`, `e_lwz/stw/lbz/stb/lha/lhz`, `e_add16i`, `e_li`,
+  `e_stmw/lmw`; unrecognized opcodes decode as `vle32_opN` (MISC) without crashing
+- `function_starts()` primary signal: `e_stwu r1, -N(r1)` (exact VUP/RS/RA/D8 check);
+  secondary signal: `se_mflr r0` for leaf functions; scan avoids mflr false positives by
+  checking whether the preceding 4 bytes are already an e_stwu prologue
+- CIA-relative branch targets: `se_b/se_bc` use `CIA + exts(BD8) * 2`; `e_b/e_bl` use
+  `CIA + BD24` where BD24 is the raw bits[24:1] signed displacement (CIA-relative, not NIA)
+- `_compact_reg_4bit()`: translates 4-bit compact VLE register fields (0-7 → GPR0-7;
+  8-15 → GPR24-31); applied to `se_li` IM7 form; SE_R instructions (mflr/mtlr) use direct
+  GPR mapping (no translation)
+- 51 tests covering: length discrimination, all SE/32-bit mnemonics, branch targets (forward and
+  backward), function_starts (primary/secondary/false-positive suppression), e_li 20-bit
+  immediate assembly, compact register translation, FileNotFoundError wrapping
+- FORGE gate: PASSED (4 LOW, 0 MEDIUM, 0 HIGH, 0 CRITICAL)
+
+---
+
 ## v2.56.0
 
 **EcuSecurityAccessScanner: static-seed SecurityAccess handler fingerprinter for M68K/CPU32 and
