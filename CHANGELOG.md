@@ -2,6 +2,36 @@
 
 ---
 
+## v2.48.0
+
+**BEAMLifter: function-level BEAM bytecode decompiler.** Upgrades `_lift_beam()`
+from a module-level summary to a full pseudo-IR decompiler that decodes every
+function in the BEAM Code chunk.
+
+- `_ct_read()`: compact-term decoder covering all seven standard tags (u/i/a/x/y/f/h)
+  and all six Z-extended subtypes (float, list, float-register, allocation-list,
+  literal, typed-register)
+- `_BEAM_OPS`: opcode dispatch table covering 80 entries; opcodes 1–78 are stable
+  across OTP 18–26; entries above 78 cover R7B–OTP 26 additions with OTP 18/19
+  numbering
+- `_BEAMTerm.fmt()`: resolves atom indices against the AtU8/Atom table, literal
+  indices against the LitT table, and renders X/Y registers, labels, characters,
+  and Z-extended floats into readable form
+- `BEAMLifter._decode()`: scans the instruction stream for `label/1` + `func_info/3`
+  pairs to build the function table without requiring LocT; sets `_partial=True`
+  when an unknown opcode halts decode
+- `BEAMLifter._emit()`: 60-opcode dispatch: call/tailcall with resolved import
+  names, gc_bif1/2/3 arithmetic with resolved BIF names, move/swap, list/tuple
+  constructors, comparison tests with goto targets, exception handling
+  (try/catch/raise), send, loop_rec, and select_val with branch tables
+- `put_tuple + put...` sequences are collapsed into a single tuple literal in `lift()`
+- Falls back to module-level summary if Code chunk is absent or decode fails
+- `_BEAM_ARITH`, `_BEAM_CMP`, `_BEAM_TYPES`: module-level constants (hoisted from
+  per-call dict literals per FORGE audit finding)
+- FORGE: gate_passed=True, 3 LOW findings
+
+---
+
 ## v2.47.0
 
 **BinaryLifter: full decompiler parity across all native ISAs.** Replaces the
