@@ -304,8 +304,38 @@ class BinaryLifter:
             return self._lift_arm64(va, max_insns)
         if self.arch in ("x86_64", "x86-64", "amd64", "x86"):
             return self._lift_x86_64(va, max_insns)
-        if self.arch in ("la64", "loongarch64", "loongarch_64"):
-            return f"// LoongArch64 lifter not yet implemented — use BinaryLifter.arch='arm64'\n"
+        if self.arch in ("x86_32", "x86-32", "i386", "i686"):
+            return self._lift_x86_32(va, max_insns)
+        if self.arch in ("arm32", "arm", "arm-32"):
+            return self._lift_arm32(va, max_insns, thumb=False)
+        if self.arch in ("thumb", "thumb2", "arm-thumb"):
+            return self._lift_arm32(va, max_insns, thumb=True)
+        if self.arch in ("mips32", "mips", "mips-32", "mipsbe"):
+            return self._lift_mips(va, max_insns, bits=32, little=False)
+        if self.arch in ("mips32el", "mipsel", "mips-32-el"):
+            return self._lift_mips(va, max_insns, bits=32, little=True)
+        if self.arch in ("mips64", "mips-64", "mipsn64"):
+            return self._lift_mips(va, max_insns, bits=64, little=False)
+        if self.arch in ("mips64el",):
+            return self._lift_mips(va, max_insns, bits=64, little=True)
+        if self.arch in ("nanomips",):
+            return self._lift_nanomips(va, max_insns)
+        if self.arch in ("ppc32", "ppc", "powerpc", "ppc-32"):
+            return self._lift_ppc(va, max_insns, bits=32)
+        if self.arch in ("ppc64", "powerpc64", "ppc-64"):
+            return self._lift_ppc(va, max_insns, bits=64)
+        if self.arch in ("rv32", "riscv32", "riscv-32"):
+            return self._lift_riscv(va, max_insns, bits=32)
+        if self.arch in ("rv64", "riscv64", "riscv-64"):
+            return self._lift_riscv(va, max_insns, bits=64)
+        if self.arch in ("arc", "archs", "arcem", "arc-32"):
+            return self._lift_arc(va, max_insns)
+        if self.arch in ("v850", "rh850", "v850e2"):
+            return self._lift_v850(va, max_insns)
+        if self.arch in ("la64", "loongarch64", "loongarch_64", "loongarch-64"):
+            return self._lift_loongarch64(va, max_insns)
+        if self.arch in ("beam", "erlang", "elixir"):
+            return self._lift_beam(va, max_insns)
         return f"// unsupported arch: {self.arch}\n"
 
     @classmethod
