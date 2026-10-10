@@ -29,8 +29,9 @@ from typing import Optional
 
 import numpy as np
 
-_MODEL_NAME = 'sentence-transformers/all-mpnet-base-v2'
-_CACHE_DIR  = Path.home() / '.ablation'
+_MODEL_NAME  = 'sentence-transformers/all-mpnet-base-v2'
+_CACHE_DIR   = Path.home() / '.ablation'
+_DEFAULT_DB  = _CACHE_DIR / 'func_id.db'
 
 # ── register / address / immediate patterns ──────────────────────────────────
 
@@ -301,12 +302,50 @@ class SemanticSearcher:
     """
 
     def __init__(self, db_path: str, cache_dir: Optional[Path] = None):
-        self._db_path  = Path(db_path).expanduser()
+        self._db_path   = Path(db_path).expanduser()
         self._cache_dir = cache_dir or _CACHE_DIR
         self._cache_dir.mkdir(parents=True, exist_ok=True)
-        self._model = None
-        self._vectors: Optional[np.ndarray] = None
-        self._meta: Optional[list[dict]]    = None
+        self._model     = None
+        self._vectors: Optional[np.ndarray]  = None
+        self._meta: Optional[list[dict]]     = None
+        self._live_addrs: 'set[int] | None'  = None
+
+    @classmethod
+    def from_context(cls, ctx, cache_dir: Optional[Path] = None) -> 'SemanticSearcher':
+        """Create a SemanticSearcher scoped to the binary described by ctx.
+
+        Resolves binary_id via ctx.sha256, collects CONFIRMED/ANGR_INFERRED
+        VAs for that binary, and pre-builds the corpus.  Falls back to global
+        scope (with a warning) if the binary is not in func_id.db.
+        """
+        import sqlite3, warnings as _w
+        searcher = cls(str(_DEFAULT_DB), cache_dir)
+        con = sqlite3.connect(_DEFAULT_DB)
+        try:
+            row = con.execute(
+                'SELECT id FROM binaries WHERE sha256=?', (ctx.sha256,)
+            ).fetchone()
+            if row is None:
+                _w.warn(
+                    f'SemanticSearcher.from_context: sha256={ctx.sha256[:16]} not in '
+                    f'func_id.db; falling back to global scope (slow)',
+                    stacklevel=2,
+                )
+                live_addrs = None
+            else:
+                binary_id = row[0]
+                live_addrs = {
+                    int(r[0]) for r in con.execute(
+                        "SELECT va FROM functions WHERE binary_id=? "
+                        "AND confidence IN ('CONFIRMED','ANGR_INFERRED')",
+                        (binary_id,),
+                    ).fetchall()
+                }
+        finally:
+            con.close()
+        searcher._live_addrs = live_addrs
+        searcher.build_corpus(live_addrs=live_addrs)
+        return searcher
 
     # ── model lazy-load ──────────────────────────────────────────────────────
 
@@ -339,13 +378,22 @@ class SemanticSearcher:
     def build_corpus(self, force: bool = False, live_addrs: 'set[int] | None' = None) -> int:
         """Load or rebuild the embedding corpus from func_id_db.
 
-        When *live_addrs* is provided only functions whose VA appears in the set
-        are encoded. This eliminates dead-code false positives (e.g. protobuf
-        template stubs with 0 callers) that score highest on structural queries.
+        When *live_addrs* is provided (or set via from_context) only functions
+        whose VA appears in the set are encoded.  Eliminates dead-code false
+        positives (e.g. protobuf template stubs with 0 callers) that score
+        highest on structural queries.
 
         Returns the number of functions indexed.
         """
-        import sqlite3
+        import sqlite3, warnings as _w
+        if live_addrs is None:
+            live_addrs = self._live_addrs
+        if live_addrs is None:
+            _w.warn(
+                'SemanticSearcher.build_corpus: no live_addrs scope — encoding ALL '
+                'functions in func_id.db. Use from_context(ctx) to scope to a binary.',
+                stacklevel=2,
+            )
 
         live_hash = ''
         if live_addrs is not None:
@@ -406,7 +454,7 @@ class SemanticSearcher:
 
     def _ensure(self):
         if self._vectors is None:
-            self.build_corpus()
+            self.build_corpus(live_addrs=self._live_addrs)
 
     # ── query API ────────────────────────────────────────────────────────────
 
