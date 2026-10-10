@@ -59,7 +59,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | [**Erlang / BEAM Analysis**](docs/module-reference/beam.md) | Decodes BEAM bytecode to readable pseudo-IR so Erlang and Elixir applications can be analyzed without source. Dangerous import patterns and obfuscation indicators surface without executing the application. |
 | [**Go Binary Reverse Engineering**](docs/workflows/go-binaries.md) | Recovers function names from stripped Go binaries because the runtime embeds a metadata table that survives stripping. |
 | [**Game & Legacy RE**](docs/module-reference/game-re.md) | Labels stripped game binary functions by engine so analysis starts at the game logic layer instead of the engine layer. Also handles PS3 Cell SPU and classic Mac OS PEF binaries. |
-| [**Firmware Extraction**](docs/module-reference/firmware-analysis.md) | Decrypts vendor-encrypted firmware without a key, recovering it through outer XOR analysis and known-plaintext attacks against inner partitions. Handles vendor-modified squashfs images including ARM64 BCJ-filtered variants. |
+| [**Firmware Extraction**](docs/module-reference/firmware-analysis.md) | Decrypts vendor-encrypted firmware without a key by exploiting predictable structure in inner partitions. Handles vendor-modified squashfs images including ARM64 BCJ-filtered variants. |
 | [**Firmware Key Corpus**](docs/module-reference/firmware-analysis.md) | Classifies recovered firmware keys against a cross-image family table. An anomalous key count flags a potential finding before decryption begins. |
 
 </details>
