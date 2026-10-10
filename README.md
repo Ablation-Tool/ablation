@@ -3,9 +3,7 @@
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
 
-Ablation is a reverse engineering framework that provides the exact same core disassembly, decompilation, and binary analysis capabilities as industry-standard tools like Ghidra, IDA Pro, and Binary Ninja. 
-
-Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous reverse engineering tool.
+Ablation is a reverse engineering framework built for AI-agent-driven analysis. Where most tools expect a human at a graphical interface, every capability in Ablation ships as a programmatic API. Combined with Claude Code or OpenAI Codex, it runs as an autonomous reverse engineering agent.
 
 ---
 
@@ -13,39 +11,37 @@ Combined with Claude Code or OpenAI Codex, it transforms into a fully autonomous
 
 ## Capabilities
 
-**Semantic Search via BERT:** Searches code by concept instead of exact words. By mapping the actual meaning of the text, it cuts through the heaviest bottleneck of reverse engineering to help you pinpoint vulnerabilities faster.
+**Semantic Code Search:** Searches code by meaning rather than exact symbol names. It maps behavioral intent instead of matching strings or patterns, so it finds the relevant function in a stripped binary where traditional tools return nothing.
 
-**Extreme Performance:** Loads massive binaries in seconds rather than hours. By only analyzing the code you are actively looking at, it skips the heavy upfront processing of traditional tools so you can start reverse engineering immediately.
+**On-Demand Analysis:** Loads large binaries in seconds because it only analyzes the code being examined, rather than parsing the entire file into a database upfront. Ghidra and IDA Pro require that upfront step before analysis can begin.
 
-**Version Diffing:** Analyzes the actual behavior of updated software to verify vendor patches. It cuts through superficial repackaging to confirm if a vulnerability was genuinely fixed or just hidden.
+**Version Diffing:** Analyzes the behavioral difference between binary versions to verify vendor patches. A cosmetic recompile cannot hide an unpatched vulnerability because Ablation checks whether the logic changed, not whether the file changed.
 
-**FORGE:** Ablation lets users build their own modules and add-ons. FORGE automatically audits that code before it gets stored, so every local module meets the same standard as the ones that ship with Ablation.
+**FORGE: Module Quality Gate:** Ablation lets users build their own modules and add-ons. FORGE audits every module before it can be stored, so user-written code meets the same standard as the modules that ship with Ablation.
 
-**Taint-Based Vulnerability Detection:** Tracks attacker-controlled data from network entry points to dangerous sinks across 14 processor architectures, including LoongArch64, nanoMIPS, V850, ARC, and ARM Thumb. The interprocedural engine follows data through function calls, pointer aliases, and stack frames in stripped binaries with no symbols or debug information. For multi-process firmware, it crosses executable boundaries to follow data between cooperating processes.
+**Taint-Based Vulnerability Detection:** Tracks attacker-controlled data from network entry points to dangerous sinks across 14 processor architectures, including LoongArch64, nanoMIPS, V850, ARC, and ARM Thumb. The interprocedural engine follows data through function calls, pointer aliases, and stack frames in stripped binaries. For multi-process firmware, it crosses executable boundaries to follow data between cooperating processes.
 
-**Cross-Target Learning:** Every confirmed finding is stored in a cross-target registry and used to seed future semantic searches. A vulnerability pattern confirmed in one binary becomes a behavioral fingerprint that Ablation applies automatically when it analyzes the next one. The registry grows with each engagement, so each new target benefits from every prior finding rather than starting from scratch.
+**Cross-Target Learning:** Every confirmed finding is stored in a cross-target registry and used to seed future semantic searches. A vulnerability pattern confirmed in one binary becomes a behavioral fingerprint that Ablation applies when it analyzes the next one. The registry grows with each engagement, so each new target is analyzed with the accumulated knowledge of every binary that came before it.
 
-**Windows PE Security Analysis:** Seven analyzers cover the full attack surface of a Windows binary in one pass. The suite identifies Control Flow Guard bypass exports, SafeSEH handler gaps, unauthenticated RPC registrations, COM CLSID hijacking candidates, and pool allocation overflows in kernel code. PDBSymbolIntegrator fetches public symbols from the Microsoft symbol server and injects them directly into the analysis context, so every other tool operates on named functions rather than raw addresses.
+**Windows PE Security Analysis:** Seven analyzers cover the Windows PE attack surface in one pass. The suite identifies Control Flow Guard bypass exports, SafeSEH handler gaps, unauthenticated RPC registrations, COM CLSID hijacking candidates, and pool allocation overflows in kernel code. PDBSymbolIntegrator fetches public symbols from the Microsoft symbol server and injects them into the analysis context, so every other tool operates on named functions rather than raw addresses.
 
 **Windows Kernel Driver & BYOVD Analysis:** Scans kernel drivers for risky entry points to stop attackers from using vulnerable, signed drivers to bypass your security software.
 
-**Android / APK Analysis:** Maps out Android app attack surfaces without needing to decompile the code. It automatically scans and ranks internal libraries by security risk, allowing you to immediately target the most vulnerable components.
+**Android / APK Analysis:** Maps out Android app attack surfaces without decompiling the code. It scans and ranks internal libraries by security risk so the highest-risk components are visible before any manual analysis begins.
 
-**Erlang / BEAM Analysis:** Safely scans Erlang bytecode to instantly highlight dangerous functions and hidden attack surfaces without running the application.
+**Erlang / BEAM Analysis:** Scans Erlang BEAM bytecode for dangerous function calls and unexposed attack surfaces without executing the application.
 
-**Go Binary Reverse Engineering:** Recovers function names and string literals from stripped and obfuscated Go binaries. Most tools fail on Go because stripped Go binaries lack traditional symbols, and obfuscated Go deliberately scrambles the names and constants that remain. Ablation reads the Go runtime metadata table to recover function boundaries, and separately handles the garble obfuscator, which is designed specifically to defeat this. The result is a named, navigable binary instead of an opaque address space.
+**Go Binary Reverse Engineering:** Recovers function names and string literals from stripped and obfuscated Go binaries. Most tools fail on Go because stripped Go binaries lack traditional symbols, and Go obfuscators like garble deliberately scramble what remains. Ablation reads the Go runtime metadata table to recover function boundaries regardless of obfuscation, so the result is a named, navigable binary rather than an opaque address space.
 
-**Compiler Bug Detection:** Identifies vulnerabilities introduced by the compiler rather than by the programmer. The LoongArch64 scanner detects a GCC 12.3.1.7 codegen error where a max comparison emits min logic, producing incorrect bounds checks across every function in the release that uses the pattern. In TencentOS 4.6 this produced 172 confirmed findings from a single compiler defect. The analysis runs across the entire binary, so a systemic toolchain error surfaces as a systemic finding rather than a one-off.
+**Compiler Bug Detection:** Identifies vulnerabilities introduced by the compiler rather than by the programmer. The LoongArch64 scanner detects a GCC 12.3.1.7 codegen error where a max comparison emits min logic, producing incorrect bounds checks in every function that uses the pattern. In TencentOS 4.6, this produced 172 confirmed findings from a single defect. The analysis runs across the entire binary, so a systemic toolchain error surfaces as a systemic finding rather than a one-off.
 
-**Pre-Authentication Attack Surface:** Maps the code paths reachable before a client authenticates, identifying what an unauthenticated attacker can reach without manual review of every entry point. For network devices and embedded systems, this separates the high-priority attack surface from everything else before any deep analysis begins.
+**Pre-Authentication Attack Surface:** Maps the code paths reachable before a client authenticates, so an unauthenticated attacker's reach is clear before any manual review begins. For network devices and embedded systems, this separates the immediate attack surface from the rest of the binary.
 
 **DAG Adapter Language:** Decodes raw instruction bytes into a named-field bitfield layer before lifting them into a semantic operation graph. Every instruction form gets its own template with its own field positions, so a scanner reading the semantic layer gets the right register for every opcode without per-architecture exception cases. The resulting dataflow graph lets vulnerability detectors check producer-consumer relationships directly rather than walking backwards through raw bytes and guessing at basic block boundaries.
 
 **Cryptographic Analysis**
 
-Ablation strips away every layer that makes cryptography invisible in a compiled binary. Entropy Mapper locates the encrypted region. Crypto Audit and HashAlgoDiscriminator identify the algorithm. XorSolver, BmpKeyExtractor, and CustomCBCDetector break the encryption or recover the key. ELFVtableReconstructor and VtableDispatchScanner reconstruct what the runtime does with the result.
-
-A binary can hide its crypto from import-table analysis, from symbol tables, and from string search. These eight tools collectively close that gap, so by the end you know the algorithm, the key, and the ciphertext.
+Strips away every layer that makes cryptography invisible in a compiled binary. A binary can hide its crypto from import-table analysis, from symbol tables, and from string search. The eight tools in this suite collectively close that gap, so by the end you know the algorithm, the key, and the ciphertext.
 
 ---
 
