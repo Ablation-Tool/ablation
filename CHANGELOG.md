@@ -2,6 +2,65 @@
 
 ---
 
+## v2.44.0
+
+Windows PE security analysis suite. Seven new modules covering the full attack surface
+of Windows PE binaries from control flow integrity to kernel pool allocation.
+
+- **CFGBypassDetector** (`ablation/analyzers/cfg_bypass_detector.py`): Control Flow Guard
+  bypass analysis. Reads `IMAGE_LOAD_CONFIG.GuardFlags` for CFG enabled/disabled, function
+  table presence, and export suppression flag. Reads the CFG function table (entry stride =
+  `4 + (GuardFlags >> 28)` bytes). Cross-references the PE export table against the CFG table
+  when export suppression is enabled to find exports that slip through as valid indirect call
+  targets. Counts indirect call/jmp sites in code sections. Flags: cfg_disabled (HIGH),
+  cfg_table_absent (HIGH), no_export_suppression (MEDIUM), export_not_in_table (MEDIUM).
+
+- **SEHChainAnalyzer** (`ablation/analyzers/seh_chain_analyzer.py`): x86-32 Structured
+  Exception Handler chain analysis. Reads `IMAGE_LOAD_CONFIG.SEHandlerTable` and
+  `SEHandlerCount` for SafeSEH status and handler RVAs. Scans code sections for SEH frame
+  installation sequences (`push handler; push FS:[0]; mov FS:[0], esp`) using Capstone.
+  Cross-references discovered handlers against the SafeSEH table. Rejects x64 PE input
+  (table-based EH applies there; SafeSEH does not). Flags: safesh_disabled (HIGH),
+  handler_not_in_table (MEDIUM).
+
+- **ETWProviderExtractor** (`ablation/analyzers/etw_provider_extractor.py`): ETW provider
+  and event extraction. Builds IAT map for `EventRegister`, `EventWrite*`, `EventUnregister`.
+  Finds `EventRegister` call sites and extracts provider GUIDs from the first argument (RCX
+  via LEA/MOV for x64; first push for x86). Cross-references GUIDs against 15 known Windows
+  security providers including Security-Auditing, PowerShell, Antimalware-Engine, RPC, DCOM.
+  Counts `EventWrite*` call sites. Flags a detection gap when providers register but never
+  write events.
+
+- **RPCServerAnalyzer** (`ablation/analyzers/rpc_server_analyzer.py`): Windows RPC server
+  endpoint analysis. Finds `RpcServerRegisterIf*` call sites. Reads `RPC_SERVER_INTERFACE`
+  struct at the first argument to extract interface UUID and transfer syntax UUID. Extracts
+  auth level from `RpcServerRegisterIfEx` second argument. Finds `RpcServerUseProtseqEp*`
+  call sites and reads endpoint strings (UTF-16LE + ASCII). Flags unauthenticated interfaces
+  (RPC_C_AUTHN_LEVEL_NONE) as HIGH with CWE-306.
+
+- **COMAttackSurfaceMapper** (`ablation/analyzers/com_attack_surface_mapper.py`): COM attack
+  surface analysis. Detects COM server DLLs via `DllGetClassObject` export. Scans `.rdata`
+  and `.data` for GUID strings in `{...}` format. Finds `CoCreateInstance*` call sites and
+  extracts CLSID arguments. Detects COM marshaling imports (`CoMarshalInterface*`) and
+  IDispatch automation (`Invoke`/`GetIDsOfNames`). Flags COM servers with CLSID references
+  as hijacking surface (MEDIUM, CWE-426); marshaling as deserialization risk (MEDIUM, CWE-502).
+
+- **PDBSymbolIntegrator** (`ablation/analyzers/pdb_symbol_integrator.py`): PDB symbol file
+  parser and NameRegistry integrator. Reads `IMAGE_DEBUG_TYPE_CODEVIEW` entry to extract
+  RSDS record (PDB GUID, age, filename). Builds Microsoft symbol server URL. Fetches PDB via
+  `urllib.request` with caching. Parses MSF 7.0 container: superblock, stream directory
+  reconstruction, DBI stream for public symbols stream index, `S_PUB32` CodeView records for
+  `{offset: name}` mappings. `inject_into_context(ctx)` calls `ctx.set_name(va, name, source='pdb')`.
+
+- **WindowsPoolTaintTracker** (`ablation/analyzers/windows_pool_taint_tracker.py`): kernel
+  pool allocation taint tracking. Finds `ExAllocatePool*` call sites (8 variants including
+  `ExAllocatePool2`/`ExAllocatePool3`). Extracts size argument (RDX in x64 fastcall).
+  Finds `RtlCopyMemory`, `memmove`, `memcpy`, `RtlMoveMemory` copy sinks. Pairs allocation
+  sites with copy sites where the same register carries the size to both without an intervening
+  comparison. Flags unvalidated pairs as HIGH with CWE-122.
+
+---
+
 ## v2.43.0
 
 - **FORGE** (`ablation/analyzers/forge.py`): redesigned audit gate — no subprocess, no API key.
