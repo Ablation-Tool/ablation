@@ -86,6 +86,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [BinaryContext](module-reference/binary-context.md) | BinaryContext: pre-computed context cache (PLT/IAT, exports, strings, func_starts, call_edges) for ELF and Windows PE; load_or_build() auto-detects format; every Ablation tool works on PE/.sys without code changes; callers_of()/callees_of()/strings_in_func() all populated for PE |
 | [ECU Calibration Parsers](module-reference/ecu-cal-parsers.md) | EcuXDFParser (TunerPro XDF XML), EcuOpenDamosParser (open_damos.json with fingerprint relocation), CalibrationTable/CalibrationAxis shared dataclasses; label_map() for BinaryContext injection; tested on BMW N54 MSD80 (755 tables) and Bosch EDC16C34 PSA diesel |
 | [ECU ROM Layout Analyzer](module-reference/ecu-rom-layout-analyzer.md) | EcuROMLayoutAnalyzer: entropy-based arch-agnostic ROM region classifier; four-variable decision (entropy + fill ratio + entropy floor + PPC density); ERASED/CODE/CALIBRATION/MIXED/PADDING; validated on GM E38 PCM (PPC32) and Bosch EDC16C34 (calibration-only) |
+| [ECU RomRaider Parser](module-reference/ecu-romraider-parser.md) | EcuRomRaiderParser: RomRaider ECU definition XML parser; two-pass base+variant inheritance model; identify_rom() with ±32-byte window + hex-address fallback + false-positive table-count filter; 14 scaling expression forms; BMW Siemens MS43/MS45 (MPC555 PPC32) + Subaru SH705x |
 
 ---
 
@@ -104,6 +105,7 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.50.0 | EcuRomRaiderParser: two-pass RomRaider XML parser; identify_rom() with hex-address fallback + table-count false-positive filter; 14 scaling expression forms; BMW MS43/MS45 + Subaru SH705x; `Optional` import fix in EcuROMLayoutAnalyzer |
 | v2.49.0 | ECU calibration analysis: EcuXDFParser (TunerPro XDF), EcuOpenDamosParser (open_damos.json + fingerprint relocation), EcuROMLayoutAnalyzer (entropy+fill+PPC-density four-variable ROM classifier), CalibrationTable/CalibrationAxis shared dataclasses |
 | v2.46.0 | BinaryContext PE support: load_or_build() works on .exe/.dll/.sys; _build_pe() + _detect_arch_pe() + 7 helper methods; IAT as PLT; prologue scan for func_starts; vectorized 0xe8 call graph; RIP-relative xref index; ELF path unchanged |
 | v2.45.0 | BinaryLifter: 13 new ISA decompiler backends (x86_32, arm32, mips32/64, nanomips, ppc32/64, rv32/64, arc, v850, la64, beam); _walk_ablation_cfg() shared BFS helper |
