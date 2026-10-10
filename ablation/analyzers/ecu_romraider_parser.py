@@ -443,6 +443,12 @@ class EcuRomRaiderParser:
             defn = self._parse_base_table(tbl_el)
             if defn is not None:
                 self._base_defs[defn.name] = defn
+        # Self-contained ROM (all addresses inline): synthesize a variant so
+        # calibration_tables(base_xmlid) and identify_rom() work without a
+        # separate variant overlay file.
+        v = self._maybe_synthesize_self_variant(rom_el)
+        if v is not None:
+            self._variants.append(v)
 
     def _parse_base_table(self, tbl_el: ET.Element) -> Optional[_TableDef]:
         name = tbl_el.get("name", "").strip()
@@ -525,6 +531,73 @@ class EcuRomRaiderParser:
             y_axis=y_axis,
         )
 
+    def _maybe_synthesize_self_variant(
+        self, rom_el: ET.Element
+    ) -> Optional[_VariantInfo]:
+        """
+        When the base <rom> carries inline storageaddress on its table elements
+        (self-contained format), synthesize a _VariantInfo from the base so that
+        calibration_tables(base_xmlid) and identify_rom() work without a separate
+        variant overlay file.
+
+        Returns None when no table has a storageaddress (structure-only base).
+        """
+        addrs: dict[str, _VariantAddr] = {}
+        for tbl_el in rom_el.findall("table"):
+            name = tbl_el.get("name", "").strip()
+            if not name:
+                continue
+            data_addr = self._hex_or_none(tbl_el.get("storageaddress"))
+            if data_addr is None:
+                continue
+            x_addr: Optional[int] = None
+            y_addr: Optional[int] = None
+            for child in tbl_el.findall("table"):
+                ax_type = child.get("type", "")
+                ax_addr = self._hex_or_none(child.get("storageaddress"))
+                if ax_type == "X Axis":
+                    x_addr = ax_addr
+                elif ax_type == "Y Axis":
+                    y_addr = ax_addr
+            addrs[name] = _VariantAddr(
+                data_addr=data_addr, x_addr=x_addr, y_addr=y_addr
+            )
+        if not addrs:
+            return None
+
+        rid = rom_el.find("romid")
+        xmlid = rid.findtext("xmlid", self.base_xmlid) if rid is not None else self.base_xmlid
+        ecuid = rid.findtext("ecuid", "") if rid is not None else ""
+        year  = rid.findtext("year", "") if rid is not None else ""
+        make  = rid.findtext("make", "") if rid is not None else ""
+        model = rid.findtext("model", "") if rid is not None else ""
+        filesize_str = (
+            rid.findtext("filesize", "0kb").lower().replace("kb", "").strip()
+            if rid is not None else "0"
+        )
+        try:
+            filesize_kb = int(filesize_str)
+        except ValueError:
+            filesize_kb = 0
+        idaddr_str = rid.findtext("internalidaddress", "0") if rid is not None else "0"
+        idstr = rid.findtext("internalidstring", "") if rid is not None else ""
+        try:
+            internalidaddress = int(idaddr_str, 0)
+        except (ValueError, TypeError):
+            internalidaddress = 0
+        return _VariantInfo(
+            xmlid=xmlid,
+            base_xmlid=xmlid,
+            ecuid=ecuid,
+            year=year,
+            make=make,
+            model=model,
+            filesize_kb=filesize_kb,
+            internalidaddress=internalidaddress,
+            internalidstring=idstr,
+            addrs=addrs,
+        )
+
     def _parse_variant(self, rom_el: ET.Element) -> Optional[_VariantInfo]:
         base_ref = rom_el.get("base", "")
         if not base_ref:
@@ -548,8 +621,8 @@ class EcuRomRaiderParser:
         idaddr_str = rid.findtext("internalidaddress", "0")
         idstr = rid.findtext("internalidstring", "")
         try:
-            internalidaddress = int(idaddr_str)
-        except ValueError:
+            internalidaddress = int(idaddr_str, 0)
+        except (ValueError, TypeError):
             internalidaddress = 0
 
         # Parse address overrides
