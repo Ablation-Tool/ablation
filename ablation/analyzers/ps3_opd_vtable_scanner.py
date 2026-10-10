@@ -56,7 +56,7 @@ class OPDVtable:
     va: int              # data segment VA of first vtable slot (past RTTI header)
     slots: int           # number of virtual method slots
     method_vas: List[int] = field(default_factory=list)  # resolved code VAs per slot
-    null_slots: List[int] = field(default_factory=list)  # slot indices pointing to null stub
+    null_slots: List[int] = field(default_factory=list)  # slot INDICES (not code VAs) of null-stub slots
     rtti_offset: int = 0  # bytes before `va` where RTTI header starts
     class_hint: str = ""  # nearest string evidence, if any
 
@@ -82,11 +82,6 @@ class PS3OPDVtableScanner:
     entry point.  Pass `toc=` to override.
     """
 
-    # Dual-TOC note: PS3 binaries statically linking multiple C++ modules (e.g. GoldenEye
-    # with r2_game and r2_BD) have two distinct TOC values. scan() uses a single toc= argument
-    # and will only find vtables for that module. Call scan() twice with each TOC to get full
-    # coverage. _detect_toc() returns the majority TOC from the first 64 OPD entries.
-
     def __init__(
         self,
         data: bytes,
@@ -97,15 +92,21 @@ class PS3OPDVtableScanner:
         toc: int,
         null_stub: Optional[int] = None,
         strings: Optional[Dict[int, str]] = None,
+        toc_set: Optional[set] = None,
     ) -> None:
-        self._data     = data
-        self._text_lo  = text_lo
-        self._text_hi  = text_hi
-        self._data_lo  = data_lo
-        self._data_hi  = data_hi
-        self._toc      = toc
+        self._data      = data
+        self._text_lo   = text_lo
+        self._text_hi   = text_hi
+        self._data_lo   = data_lo
+        self._data_hi   = data_hi
+        self._toc       = toc
+        # toc_set allows accepting OPDs from multiple modules in one scan pass.
+        # Dual-TOC binaries (e.g. GoldenEye: r2_game=0xAD49B8, r2_BD=0xAE4894)
+        # store vtables for each module; without toc_set the BD vtables are silently
+        # dropped because their toc_va != r2_game.
+        self._toc_set   = toc_set if toc_set is not None else {toc}
         self._null_stub = null_stub
-        self._strings  = strings or {}  # va -> str for class_hint lookup
+        self._strings   = strings or {}  # va -> str for class_hint lookup
 
     # ── Construction ─────────────────────────────────────────────────────────
 
@@ -126,7 +127,12 @@ class PS3OPDVtableScanner:
         detected_toc = toc or _detect_toc(data, text_lo, text_hi, data_lo, data_hi)
         null_stub    = _detect_null_stub(data, text_lo, text_hi, data_lo, data_hi, detected_toc)
         strings      = dict(ctx.strings) if hasattr(ctx, "strings") else {}
-        return cls(data, text_lo, text_hi, data_lo, data_hi, detected_toc, null_stub, strings)
+        # Inherit all discovered TOC values from a multi-r2 BinaryContext so that
+        # vtables from every statically-linked module are found in a single scan.
+        r2_all   = getattr(ctx, "_r2_all", None)
+        toc_set  = set(r2_all) if r2_all else {detected_toc}
+        return cls(data, text_lo, text_hi, data_lo, data_hi, detected_toc, null_stub, strings,
+                   toc_set=toc_set)
 
     @classmethod
     def from_path(cls, elf_path: str, toc: Optional[int] = None) -> "PS3OPDVtableScanner":
@@ -233,7 +239,7 @@ class PS3OPDVtableScanner:
         toc_va  = _u32(data, ptr + 4)
         if not (text_lo <= code_va < text_hi):
             return None
-        if toc_va != toc:
+        if toc_va not in self._toc_set:
             return None
         return code_va
 
@@ -330,6 +336,7 @@ class PS3OPDVtableScanner:
         lines.append("  " + "-" * 100)
 
         for vtbl in filtered[:top_n]:
+            # null_slots stores slot indices; compare against enumerate index, not code VA.
             null_idx_set = set(vtbl.null_slots)
             first = "  ".join(
                 name_fn(va)
