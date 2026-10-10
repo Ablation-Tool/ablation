@@ -2,6 +2,27 @@
 
 ---
 
+## v2.62.0
+
+**CppVtableReconstructorAnalyzer: ET_EXEC fix + generic consumer tracing for LoongArch64/MIPS/PPC.**
+
+Bug fixes:
+- `_check_itanium_header`: was using `vtable_va` as a raw file byte index; correct only for ET_DYN
+  (PIE, VA≈0) — always returned False for ET_EXEC (non-PIE, VA=0x400000+). Fixed: new
+  `_va_to_file_offset(va)` helper converts VA → file offset via section headers.
+- `_trace_arm64`: `self._data[text_va:]` sliced by VA not file offset; empty on ET_EXEC. Fixed:
+  `self._data[text_off:]` using `text_sec.offset`.
+
+Enhancements:
+- `_trace_generic`: arch-agnostic consumer tracer that scans `.text` for the vtable VA as a
+  pointer-sized literal (LE/BE from EI_DATA; width 4 for ppc32, 8 otherwise). Runs on
+  LoongArch64, MIPS, PPC32, PPC64, RISC-V, and any future arch.  x86-64 and ARM64 still use
+  full ISA-specific tracers.
+- Removed "IDAPython" / "IDA" references from module docstring; `emit_ida_script()` generates a
+  type-annotation + comment script with no external tool dependency.
+
+---
+
 ## v2.61.0
 
 **FlatBinaryFuncStartScanner: arch-agnostic function-start scanner for flat ECU ROMs.**  Combines
