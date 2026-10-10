@@ -99,6 +99,8 @@ Each `VtableSpec` records:
   RTTI pointer (standard Itanium ABI vtable layout)
 - `ctor_sites` — VAs in the binary that reference this vtable VA (from relocations or
   literal byte scan)
+- `section_name` — the ELF section name containing this vtable, e.g. `.rodata` or `.data`
+- `writable` — True when the containing section has `SHF_WRITE` set (mutable at runtime)
 
 ### Layer 2 — `name_slots(specs)`
 
@@ -163,6 +165,8 @@ class VtableSpec:
     type_name: str          # inferred, e.g. 'rsa_alg_vtable'
     ctor_sites: List[int]   # VAs referencing this vtable in the binary
     has_itanium_header: bool
+    section_name: str       # ELF section containing this vtable, e.g. '.rodata'
+    writable: bool          # True when section has SHF_WRITE (vtable is mutable at runtime)
 
 @dataclass
 class SlotSpec:
@@ -225,4 +229,8 @@ Call Sites:
 
 ## Release notes
 
-Added in v2.41.0.
+Added in v2.41.0. v2.49.0 adds `VtableSpec.section_name` and `VtableSpec.writable` fields
+populated by all three scan paths (RELA-based, byte-scan, and the `_make_spec_from_run` helper).
+A vtable in `.data` with `writable=True` means any kernel or process write primitive reaching
+the vtable data can redirect virtual dispatch. Normal vtables live in `.rodata` or `.data.rel.ro`
+(read-only after RELRO).

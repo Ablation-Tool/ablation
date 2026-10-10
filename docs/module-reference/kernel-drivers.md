@@ -94,6 +94,12 @@ print(ic.fmt())
 # 0x00222003  DevType=0x0022  Func=0x800  METHOD_NEITHER          FILE_ANY_ACCESS *** NEITHER (raw user ptr)
 ```
 
+`decode_ioctl_code` rejects 32-bit values where every byte falls in the printable ASCII range
+(0x20-0x7E). MSVC embeds 4-byte ASCII debug strings such as pool tags and format strings in
+`.text`; without this filter, strings like `"acid"` (0x64696361) decode as plausible IOCTLs.
+Real `CTL_CODE` values cannot have all four bytes printable because the high word encodes a
+device-type constant whose upper byte is almost always zero or 0x80.
+
 ### IOCTL CTL_CODE layout
 
 | Bits | Field | Notes |
@@ -118,6 +124,34 @@ user-mode pointer is passed directly into the dispatch handler.
 | Callback removal | `PsRemoveLoadImageNotifyRoutine`, `ObUnRegisterCallbacks` |
 | DKOM | `ObReferenceObjectByHandle`, `KeStackAttachProcess` |
 | APC injection | `KeInitializeApc`, `KeInsertQueueApc` |
+
+### Zero-IAT drivers
+
+Some WDM drivers (notably XP-era touchscreen controllers such as eGalaxTouch) set
+`ImportDirectory.VirtualAddress = 0` and resolve every kernel API at runtime by calling
+`MmGetSystemRoutineAddress(L"ApiName")`. The import table is empty, so the normal IAT scan
+produces no API findings.
+
+`KernelDriverAnalyzer` detects this class by falling back to a UTF-16LE string search of
+the entire binary when the IAT scan returns zero findings. Every API in `KERNEL_APIS` that
+appears as a wide string literal in the driver shows up in the report tagged `[dynamic-resolve]`
+instead of a DLL name.
+
+### Dangerous patterns
+
+In addition to the MSR-write and CR-register patterns, `analyze()` reports two new pattern
+codes:
+
+**`WRITABLE_VTABLE_IN_DATA`** — the analyzer scans writable, non-executable PE sections for
+runs of three or more consecutive aligned pointers into executable sections. A vtable stored
+in `.data` is mutable at runtime. Any kernel write primitive that reaches the vtable converts
+to an IRP dispatch hijack: overwrite one function pointer slot and every IRP that hits that
+handler executes attacker code.
+
+**`NEITHER_IOCTL_NO_PROBE`** — the analyzer checks every `METHOD_NEITHER` IOCTL code against
+the driver's IAT and its UTF-16LE string table. When neither `ProbeForRead` nor `ProbeForWrite`
+appears anywhere in the binary, every dereference of `Type3InputBuffer` is an unvalidated
+kernel read or write path (CWE-822). The finding lists all METHOD_NEITHER IOCTL codes found.
 
 ---
 
