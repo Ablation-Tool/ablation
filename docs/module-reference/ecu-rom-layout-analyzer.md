@@ -224,6 +224,11 @@ Offset              Type          Size   Entropy
 Zero CODE regions. Correct: the EDC16C34 PSA image is a calibration-only dump with no application
 firmware.
 
+```python
+cal_only, reason = layout.is_calibration_only()
+# (True, "OBD cal-only dump, program flash absent")
+```
+
 ### GM E38 PCM (E38_2048KiB_12607218.bin, 2 MB, PPC32 full flash)
 
 ```
