@@ -2,6 +2,23 @@
 
 ---
 
+## v2.68.0
+
+**MicroPython .mpy v6 bytecode lifter.**
+
+`MpyLifter` decodes compiled MicroPython and CircuitPython modules to
+pseudo-Python and scans for dangerous patterns: exec/eval calls, os/machine
+imports, socket access, and direct hardware writes via machine.mem32.
+
+Parses the full .mpy v6 format: 4-byte header, global qstr and object tables,
+recursive code objects with the interleaved-bit prelude (MP_BC_PRELUDE_SIG +
+MP_BC_PRELUDE_SIZE from py/bc.h). Supports MicroPython 1.19 through 1.23+.
+
+New files: `ablation/analyzers/mpy_lifter.py`,
+`docs/module-reference/mpy-lifter.md`.
+
+---
+
 ## v2.67.0
 
 **ISO 26262 TCL3 coverage gate and compliance artifacts.**
