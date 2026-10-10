@@ -211,9 +211,10 @@ cb = CorpusBuilder()
 n = cb.build('/path/to/binary.so', product='my-product', version='1.0')
 print(f"  {n} functions described")
 
-# Step 2: build BERT embeddings from the DB
-searcher = SemanticSearcher('~/.ablation/func_id.db')
-searcher.build_corpus()   # ~35s for 19,000 functions on CPU; cached after first run
+# Step 2: build BERT embeddings, scoped to this binary
+# from_context resolves binary_id via ctx.sha256, encodes only this
+# binary's functions, and pre-builds the corpus.
+searcher = SemanticSearcher.from_context(ctx)
 
 # Step 3: query
 results = searcher.query(
@@ -225,7 +226,15 @@ for r in results:
     print(f"  0x{r.va:x}  score={r.score:.3f}  {r.name or hex(r.va)}")
 ```
 
-Build takes about 35 seconds for 19,000 functions on CPU. Queries run in under 1 second once the corpus is built.
+First build encodes this binary's functions with all-mpnet-base-v2 on CPU. On an 11k-function binary that takes about 9 minutes. Subsequent runs load the cached pickle in 0.1s. Queries run in under 1 second once the corpus is loaded.
+
+Use the bare constructor only when you need cross-binary search across all functions in func_id.db. That path warns and can take several hours depending on how many binaries are in the database.
+
+```python
+# cross-binary search (uncommon; warns on unscoped build)
+searcher = SemanticSearcher(str(Path.home() / '.ablation/func_id.db'))
+searcher.build_corpus()
+```
 
 ### Writing effective queries
 
