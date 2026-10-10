@@ -25,6 +25,7 @@ Step-by-step guides for common research tasks.
 | [Crypto Analysis](workflows/crypto.md) | Encrypted firmware, XOR key recovery, JWT cracking |
 | [Source Code Audit](workflows/source-code-audit.md) | Compress a repo → rank files → confirm findings; full worked example |
 | [KASAN-Oracle](workflows/kasan-oracle.md) | Scan KASAN debug build first; verify candidates in stripped production build |
+| [Fortinet Firmware](workflows/fortinet-firmware.md) | Two-layer decryption, shared key corpus, and semantic sweep for Fortinet `.out` images |
 
 ---
 
