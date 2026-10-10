@@ -125,10 +125,26 @@ user-mode pointer is passed directly into the dispatch handler.
 
 **File:** `ablation/analyzers/byovd_detector.py`
 
-Identifies signed kernel drivers that carry exploitable capabilities across 8 BYOVD
-capability classes. Used to determine whether a driver is a viable BYOVD candidate:
-a legitimate Authenticode-signed binary that an attacker can abuse to bypass EDR
-controls, manipulate kernel objects, or escalate to ring-0.
+### Why this exists
+
+3 things that weren't possible before in Ablation:
+
+1. **Capability taxonomy for BYOVD triage** — `KernelDriverAnalyzer` flags dangerous API
+   imports but returns a flat list with no BYOVD classification. Deciding whether a driver
+   is a viable BYOVD candidate (vs. just a driver that happens to call `ZwTerminateProcess`)
+   required a manual cross-reference against loldrivers.io and the 8 capability classes.
+   Now it's a single `detect()` call with `report.is_byovd_capable`.
+
+2. **Known-vulnerable driver string matching** — strip a driver's import table and
+   `KernelDriverAnalyzer` loses most of its signal. Strings like `\\Device\\PhysicalMemory`,
+   `MHYPROT`, `dbutil`, `RTCore64` survive stripping; checking for them was a per-engagement
+   manual step. `ByovdDetector` folds this into the same pass and elevates confidence even
+   when imports are absent.
+
+3. **Composition without re-parsing** — running `KernelDriverAnalyzer` then `ByovdDetector`
+   on the same `.sys` parsed the PE twice, doubling I/O on large driver batches. The
+   `kda_report=` constructor argument passes an existing `KernelDriverReport` directly,
+   eliminating the second parse.
 
 ### What BYOVD is
 
