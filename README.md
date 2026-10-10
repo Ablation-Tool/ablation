@@ -3,7 +3,9 @@
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey)
 
 
-Ablation is a reverse engineering framework built for AI-agent-driven analysis. Where most tools expect a human at a graphical interface, every capability in Ablation ships as a programmatic API.
+Ablation is a reverse engineering framework built for AI-agent-driven analysis. It requires no Ghidra, IDA Pro, Binary Ninja, or MCP server.
+
+Where most tools expect a human at a graphical interface, every capability in Ablation ships as a programmatic API.
 
 Combined with Claude Code or OpenAI Codex, it runs as an autonomous reverse engineering agent.
 
