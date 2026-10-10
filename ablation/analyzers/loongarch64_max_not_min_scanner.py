@@ -646,6 +646,14 @@ class LA64MaxNotMinScanner:
         if {_rj(w2), _rj(w3)} != {ra, rb}:
             return None
 
+        # GCC bug orientation check: masknez must have rj == rb (the BOUND register).
+        # The GCC bug inverts min(a,b) to max(a,b) by keeping the BOUND when a<b.
+        # masknez(Rb,cond) does this (keeps Rb=bound when cond!=0 i.e. a<b).
+        # Correct min code has masknez(Ra,cond) instead — skip that as a false positive.
+        masknez_w = w2 if (w2 & _MASK_3R) == _MATCH_MASKNEZ else w3
+        if _rj(masknez_w) != rb:
+            return None
+
         # Scan for the combining `or` up to _SLTUI_OR_LOOKAHEAD instructions past [3].
         target_pair = frozenset({rtmp1, rtmp2})
         or_va: Optional[int] = None
