@@ -4,7 +4,7 @@
 
 Binary RE toolkit for stripped firmware. No symbols. No source.
 
-**Version:** 2.56.0 — `pip install -e ~/ablation/` (editable install, already done)
+**Version:** 2.57.0 — `pip install -e ~/ablation/` (editable install, already done)
 **GitHub:** `Ablation-Tool/ablation` — all repo ops via `gh` CLI. `mcp__github` is BANNED.
 
 ---
@@ -112,6 +112,7 @@ SESSION.md convention: root index at `~/ablation/SESSION.md`; per-target state a
 | "RISC-V 32 with HiSilicon WS63/Hi3863/BS21 riscv31 custom opcodes (0x0b/0x1b/0x1f/0x3b/0x5b/0x7b + uxtb/uxth)" | `HiSiliconRV32ExtDecoder` — `hisi_rv32_ext`; handles all 6 HiSilicon opcode spaces + 2 16-bit extensions; `ldmia`/`stmia` (0x0b) = multi-reg load/store, clears taint (memory not tracked); do NOT gate 0x0b dispatch on `(b0 & 0x80)==0` — bit7 is ra bitmap slot, not rd lsb; `uxtb`/`uxth` = 16-bit `(insn & 0xFC5F)==0x9C01`, clears taint (bounds value); `l.li` (0x1f) = 6 bytes (not 4); `muliadd` (0x5b) propagates taint from rs1+rs2; `addshf` (0x1b) propagates taint from rs1+rs2; `beqi/bnei` (0x3b) = branch, no data taint; `scan_all_custom(code, base_va)` for full inventory; pass as `ext_decoder=` to `RISCV32TaintTracker.from_path()` |
 | "RISC-V 64: trace recv (VisionFive 2, SiFive Unmatched)" | `RISCV64TaintTracker.from_path(elf).run_interprocedural()` |
 | "V850: trace recv (RH850/G3M ECU)" | `V850TaintTracker.from_path(elf).run_interprocedural()` |
+| "RH850 GHS/IAR ABI: trace taint through CAN handler / SecurityAccess (flat ROM or ELF, Denso/Bosch)" | `RH850TaintTracker.from_bytes(data, base_va=0x0).scan_function(func_va, func_end, init_labels={'can_payload'})` — ELF: `.from_path(elf).run_interprocedural(depth=4)`; GHS CC-RH ABI (R6-R9 args, R10 return, R31=LP); `double_is_32bit=True` (GHS default, §2.7); GHS old-style mangling resolved (`__ct`/`__dt`/`__vtbl`/`_foo`); BFS uses deque; see `rh850-taint-tracker` |
 | "TriCore AURIX: trace taint through SecurityAccess / CAN handler (flat ROM)" | `TriCoreTaintTracker.from_bytes(data, base_va=0x80000000).scan_function(func_va, func_end, init_labels={'sa_seed'})` — ELF path: `.from_path(elf).run_interprocedural()`; CSA-aware (upper context preserved across CALL; lower context d0-d7/a2-a7/a11 clobbered); FCALL/FRET leaf pattern handled; mode default = TC1.6.2 (AURIX); see `tricore-taint-tracker` |
 | "x86-32/i386: trace recv to system/execv/snprintf (asamba, product.bin, Acronis rescue env, legacy x86 IoT)" | `X86_32TaintTracker.from_path(elf).run_interprocedural()` — CDECL32 stack args; PIC+non-PIC PLT; `from_context(ctx)` to inherit func_starts; `custom_sinks={'wrapper': {0: 0}}` for logging wrappers |
 | "LoongArch64: trace recv (TencentOS 4.6, Loongson 3A5000/3C5000)" | `LoongArch64TaintTracker.from_path(elf).run_interprocedural()` |
