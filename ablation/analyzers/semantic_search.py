@@ -309,7 +309,7 @@ class SemanticSearcher:
     On a cache hit (db unchanged since last build): 0.1s regardless of scope.
     On a cache miss: encoding time dominates (~549s for 11k functions on CPU).
       The SQL binary_id filter and Python VA post-filter each save ~150ms
-      combined — under 0.1% of the cache-miss time.  The memory saving is
+      combined, under 0.1% of the cache-miss time.  The memory saving is
       more meaningful: ~86MB less peak heap (296k row objects vs 11k).
     """
 
