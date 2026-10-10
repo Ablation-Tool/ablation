@@ -1117,13 +1117,17 @@ class BinaryContext:
           Near: LWZ rD, N(r2)                [|N| < 32768]
         where N = toc_entry_va - r2 and mem[r2 + N] = string_va.
 
-        r2 is read from the first .opd function descriptor (ELF e_entry in data seg:
-        bytes[0:4] = code ptr, bytes[4:8] = TOC ptr == r2 runtime value).
+        r2 is read from the entry-point .opd descriptor (ELF e_entry in data seg).
+        Statically-linked binaries embed multiple modules (e.g. game engine + Demonware
+        BD SDK), each with its own TOC.  All distinct TOC values are discovered by
+        counting toc_ptr frequency across every OPD entry in the data segment; the top
+        candidates (min 10 OPD entries, max 4 values) are used so all modules' string
+        xrefs are found — not just the entry-point module's.
         """
         if not _NUMPY_OK or not self.strings or not self.func_starts:
             return
         import struct
-        from collections import defaultdict
+        from collections import defaultdict, Counter
 
         # Parse LOAD segments: find executable (X|R) code seg and writable (W) data seg.
         try:
@@ -1160,9 +1164,8 @@ class BinaryContext:
         code_data = data[code_off : code_off + code_fsz]
         ds_data   = data[ds_off   : ds_off  + ds_fsz]
 
-        # Discover r2 (TOC pointer) from .opd function descriptor.
+        # Discover primary r2 (TOC pointer) from entry-point .opd descriptor.
         # PS3 Cell uses 32-bit EA mode: each descriptor = [4B code_ptr][4B toc_ptr].
-        # ELF e_entry points into the data segment at the first descriptor.
         e_entry = struct.unpack_from('>Q', data, 0x18)[0]
         r2 = 0
         if ds_va <= e_entry < ds_va + ds_fsz:
@@ -1177,27 +1180,54 @@ class BinaryContext:
 
         if not r2:
             return
-        self._r2 = r2  # expose for _augment_xrefs_ppc64_arrays
+        self._r2 = r2  # primary r2; backward compat for callers
+
+        # Discover all distinct TOC values by counting toc_ptr frequency across
+        # every 8-byte OPD entry in the data segment.  Statically-linked binaries
+        # embed multiple modules (e.g. game engine + Demonware BD SDK) each with
+        # its own r2; the entry-point r2 alone misses all other modules' xrefs.
+        _toc_freq: Counter = Counter()
+        for _i in range(0, ds_fsz - 7, 8):
+            try:
+                _cp = struct.unpack_from('>I', ds_data, _i)[0]
+                _tc = struct.unpack_from('>I', ds_data, _i + 4)[0]
+            except Exception:
+                break
+            if code_va <= _cp < code_va + code_fsz and ds_va <= _tc < ds_va + ds_fsz:
+                _toc_freq[_tc] += 1
+
+        _MIN_OPD = 10   # ignore TOC values with fewer OPD entries (noise threshold)
+        _MAX_R2  = 4    # cap to avoid pathological binaries
+        all_r2: List[int] = [r2]
+        for _tv, _cnt in _toc_freq.most_common(_MAX_R2 + 1):
+            if _tv == r2 or _cnt < _MIN_OPD:
+                continue
+            if len(all_r2) >= _MAX_R2:
+                break
+            all_r2.append(_tv)
+        self._r2_all = all_r2  # all discovered TOC values; used by augment passes
 
         # Scan data segment for 4-byte values that are known string VAs.
-        # Build two lookup tables keyed by TOC offset components:
+        # Accumulate ha16/near maps across ALL r2 values so every module's
+        # TOC-relative string references are captured in a single code scan.
         #   ha16_map[ha16] -> [(lo16, string_va)]   for ADDIS rD, r2, ha16 + LWZ rD, lo16(rD)
         #   near_map[lo16] -> [string_va]            for direct LWZ rD, N(r2) when |N|<32768
         str_vas = set(self.strings.keys())
         ha16_map: Dict[int, list] = defaultdict(list)
         near_map: Dict[int, list] = defaultdict(list)
 
-        for i in range(0, len(ds_data) - 3, 4):
-            val = struct.unpack_from('>I', ds_data, i)[0]
-            if val not in str_vas:
-                continue
-            toc_va     = ds_va + i
-            toc_offset = toc_va - r2            # signed Python int
-            lo16 = toc_offset & 0xFFFF          # 16-bit displacement for LWZ
-            ha16 = ((toc_offset + 0x8000) >> 16) & 0xFFFF  # high-adjusted for ADDIS
-            ha16_map[ha16].append((lo16, val))
-            if -32768 <= toc_offset <= 32767:
-                near_map[lo16].append(val)
+        for r2_i in all_r2:
+            for i in range(0, len(ds_data) - 3, 4):
+                val = struct.unpack_from('>I', ds_data, i)[0]
+                if val not in str_vas:
+                    continue
+                toc_va_i   = ds_va + i
+                toc_offset = toc_va_i - r2_i        # signed Python int
+                lo16 = toc_offset & 0xFFFF          # 16-bit displacement for LWZ
+                ha16 = ((toc_offset + 0x8000) >> 16) & 0xFFFF  # high-adjusted for ADDIS
+                ha16_map[ha16].append((lo16, val))
+                if -32768 <= toc_offset <= 32767:
+                    near_map[lo16].append(val)
 
         if not ha16_map and not near_map:
             return
@@ -1392,11 +1422,11 @@ class BinaryContext:
         import struct as _st
 
         str_vas  = set(self.strings.keys())
-        r2       = getattr(self, '_r2', 0)
-        if not r2:
+        all_r2   = getattr(self, '_r2_all', None) or ([getattr(self, '_r2', 0)] if getattr(self, '_r2', 0) else [])
+        if not all_r2:
             return
 
-        # Step 1 — detect string-pointer arrays
+        # Step 1 — detect string-pointer arrays (r2-independent)
         n_slots = len(ds_data) // 4
         arrays: List[Tuple[int, List[int]]] = []  # [(array_base_va, [str_va, ...])]
         i = 0
@@ -1424,82 +1454,85 @@ class BinaryContext:
 
         buf = code_data
         M   = len(buf)
-        near_lo = r2 - 0x8000
-        near_hi = r2 + 0x7FFF
 
-        # Step 2 — batch-index all arrays by TOC key
-        # near: {(lo_b2, lo_b3): [str_list, ...]}  — LWZ rX, lo16(r2)
-        # far:  {(ha_b2, ha_b3, lo_b2, lo_b3): merged_str_list}  — ADDIS+LWZ
-        near_idx: Dict[Tuple[int, int], List[List[int]]] = {}
-        far_lo_idx: Dict[Tuple[int, int, int, int], List[int]] = {}
+        # Steps 2-4 run once per r2 value so arrays near each module's TOC are found.
+        for r2 in all_r2:
+            near_lo = r2 - 0x8000
+            near_hi = r2 + 0x7FFF
 
-        for arr_va, str_list in arrays:
-            if near_lo <= arr_va <= near_hi:
-                toc_off = arr_va - r2
-                lo16    = toc_off & 0xFFFF
-                key     = ((lo16 >> 8) & 0xFF, lo16 & 0xFF)
-                near_idx.setdefault(key, []).append(str_list)
-            else:
-                toc_off = (arr_va - r2) & 0xFFFFFFFF
-                if toc_off > 0x7FFFFFFF:
-                    toc_off -= 0x100000000
-                ha16   = ((toc_off + 0x8000) >> 16) & 0xFFFF
-                lo16   = toc_off & 0xFFFF
-                full_k = (
-                    (ha16 >> 8) & 0xFF, ha16 & 0xFF,
-                    (lo16 >> 8) & 0xFF, lo16 & 0xFF,
-                )
-                far_lo_idx.setdefault(full_k, []).extend(str_list)
+            # Step 2 — batch-index all arrays by TOC key
+            # near: {(lo_b2, lo_b3): [str_list, ...]}  — LWZ rX, lo16(r2)
+            # far:  {(ha_b2, ha_b3, lo_b2, lo_b3): merged_str_list}  — ADDIS+LWZ
+            near_idx: Dict[Tuple[int, int], List[List[int]]] = {}
+            far_lo_idx: Dict[Tuple[int, int, int, int], List[int]] = {}
 
-        # Step 3 — near-TOC: single O(M) scan for all near arrays
-        if near_idx:
-            for k in range(0, M - 3, 4):
-                kb0 = buf[k]; kb1 = buf[k + 1]; kb2 = buf[k + 2]; kb3 = buf[k + 3]
-                if kb0 < 0x80 or kb0 > 0x83:
-                    continue
-                if (kb1 & 0x1F) != 2:
-                    continue
-                entries = near_idx.get((kb2, kb3))
-                if not entries:
-                    continue
-                site_va = code_va + k
-                idx     = int(np.searchsorted(func_arr, site_va, side='right')) - 1
-                if idx < 0:
-                    continue
-                fva = int(func_arr[idx])
-                for sl in entries:
-                    for sv in sl:
-                        str_xref.setdefault(sv, []).append(fva)
-                        func_str.setdefault(fva, []).append(sv)
+            for arr_va, str_list in arrays:
+                if near_lo <= arr_va <= near_hi:
+                    toc_off = arr_va - r2
+                    lo16    = toc_off & 0xFFFF
+                    key     = ((lo16 >> 8) & 0xFF, lo16 & 0xFF)
+                    near_idx.setdefault(key, []).append(str_list)
+                else:
+                    toc_off = (arr_va - r2) & 0xFFFFFFFF
+                    if toc_off > 0x7FFFFFFF:
+                        toc_off -= 0x100000000
+                    ha16   = ((toc_off + 0x8000) >> 16) & 0xFFFF
+                    lo16   = toc_off & 0xFFFF
+                    full_k = (
+                        (ha16 >> 8) & 0xFF, ha16 & 0xFF,
+                        (lo16 >> 8) & 0xFF, lo16 & 0xFF,
+                    )
+                    far_lo_idx.setdefault(full_k, []).extend(str_list)
 
-        # Step 4 — far-TOC: single O(M×16) batched scan for all far arrays
-        if far_lo_idx:
-            ha_set = {(k[0], k[1]) for k in far_lo_idx}
-            for k in range(0, M - 7, 4):
-                kb0 = buf[k]; kb1 = buf[k + 1]; kb2 = buf[k + 2]; kb3 = buf[k + 3]
-                if kb0 < 0x3C or kb0 > 0x3F:
-                    continue
-                if (kb1 & 0x1F) != 2:
-                    continue
-                if (kb2, kb3) not in ha_set:
-                    continue
-                rD    = ((kb0 & 0x03) << 3) | (kb1 >> 5)
-                ha_b2 = kb2; ha_b3 = kb3
-                for fwd in range(k + 4, min(k + 64, M - 4), 4):
-                    fb0 = buf[fwd]; fb1 = buf[fwd + 1]; fb2 = buf[fwd + 2]; fb3 = buf[fwd + 3]
-                    if fb0 < 0x80 or fb0 > 0x83:
+            # Step 3 — near-TOC: single O(M) scan for all near arrays
+            if near_idx:
+                for k in range(0, M - 3, 4):
+                    kb0 = buf[k]; kb1 = buf[k + 1]; kb2 = buf[k + 2]; kb3 = buf[k + 3]
+                    if kb0 < 0x80 or kb0 > 0x83:
                         continue
-                    if (fb1 & 0x1F) != rD:
+                    if (kb1 & 0x1F) != 2:
                         continue
-                    sl = far_lo_idx.get((ha_b2, ha_b3, fb2, fb3))
-                    if sl:
-                        site_va = code_va + k
-                        idx     = int(np.searchsorted(func_arr, site_va, side='right')) - 1
-                        if idx >= 0:
-                            fva = int(func_arr[idx])
-                            for sv in sl:
-                                str_xref.setdefault(sv, []).append(fva)
-                                func_str.setdefault(fva, []).append(sv)
+                    entries = near_idx.get((kb2, kb3))
+                    if not entries:
+                        continue
+                    site_va = code_va + k
+                    idx     = int(np.searchsorted(func_arr, site_va, side='right')) - 1
+                    if idx < 0:
+                        continue
+                    fva = int(func_arr[idx])
+                    for sl in entries:
+                        for sv in sl:
+                            str_xref.setdefault(sv, []).append(fva)
+                            func_str.setdefault(fva, []).append(sv)
+
+            # Step 4 — far-TOC: single O(M×16) batched scan for all far arrays
+            if far_lo_idx:
+                ha_set = {(k[0], k[1]) for k in far_lo_idx}
+                for k in range(0, M - 7, 4):
+                    kb0 = buf[k]; kb1 = buf[k + 1]; kb2 = buf[k + 2]; kb3 = buf[k + 3]
+                    if kb0 < 0x3C or kb0 > 0x3F:
+                        continue
+                    if (kb1 & 0x1F) != 2:
+                        continue
+                    if (kb2, kb3) not in ha_set:
+                        continue
+                    rD    = ((kb0 & 0x03) << 3) | (kb1 >> 5)
+                    ha_b2 = kb2; ha_b3 = kb3
+                    for fwd in range(k + 4, min(k + 64, M - 4), 4):
+                        fb0 = buf[fwd]; fb1 = buf[fwd + 1]; fb2 = buf[fwd + 2]; fb3 = buf[fwd + 3]
+                        if fb0 < 0x80 or fb0 > 0x83:
+                            continue
+                        if (fb1 & 0x1F) != rD:
+                            continue
+                        sl = far_lo_idx.get((ha_b2, ha_b3, fb2, fb3))
+                        if sl:
+                            site_va = code_va + k
+                            idx     = int(np.searchsorted(func_arr, site_va, side='right')) - 1
+                            if idx >= 0:
+                                fva = int(func_arr[idx])
+                                for sv in sl:
+                                    str_xref.setdefault(sv, []).append(fva)
+                                    func_str.setdefault(fva, []).append(sv)
 
     def _augment_xrefs_ppc64_twohop(
         self,
@@ -1534,8 +1567,8 @@ class BinaryContext:
         """
         import struct as _st
 
-        r2 = getattr(self, '_r2', 0)
-        if not r2:
+        all_r2 = getattr(self, '_r2_all', None) or ([getattr(self, '_r2', 0)] if getattr(self, '_r2', 0) else [])
+        if not all_r2:
             return
 
         # Target segment: where the string arrays live (default: data seg).
@@ -1543,64 +1576,66 @@ class BinaryContext:
         tgt_va   = target_va   if target_va   is not None else ds_va
         tgt_end  = tgt_va + len(tgt_data)
 
-        near_lo = r2 - 0x8000
-        near_hi = r2 + 0x7FFF
         str_vas = set(self.strings.keys())
-
-        # Step 1: scan near-TOC window (always in ds_data — TOC is in data seg)
-        # for entries pointing to dense string arrays in tgt_data.
-        lo_off        = max(0, near_lo - ds_va)
-        hi_off        = min(len(ds_data), near_hi - ds_va + 4)
-        near_toc_data = ds_data[lo_off:hi_off]
-        n             = len(near_toc_data) // 4
-
-        imm_to_strs: Dict[Tuple[int, int], List[int]] = {}
-        for i in range(n):
-            v = _st.unpack_from('>I', near_toc_data, i * 4)[0]
-            if not (tgt_va <= v < tgt_end):
-                continue
-            t_off    = v - tgt_va
-            str_list: List[int] = []
-            for j in range(200):
-                if t_off + j * 4 + 3 >= len(tgt_data):
-                    break
-                kv = _st.unpack_from('>I', tgt_data, t_off + j * 4)[0]
-                if kv in str_vas:
-                    str_list.append(kv)
-                elif j > 0:
-                    break
-            if len(str_list) >= 3:
-                toc_va  = near_lo + i * 4
-                toc_off = (toc_va - r2) & 0xFFFF
-                key     = (toc_off >> 8, toc_off & 0xFF)
-                if key in imm_to_strs:
-                    imm_to_strs[key].extend(str_list)
-                else:
-                    imm_to_strs[key] = list(str_list)
-
-        if not imm_to_strs:
-            return
-
-        # Step 2: single linear pass — LWZ rX, off(r2) matching array-base TOC keys
         buf = code_data
         M   = len(buf)
-        for k in range(0, M - 3, 4):
-            kb0 = buf[k]; kb1 = buf[k + 1]; kb2 = buf[k + 2]; kb3 = buf[k + 3]
-            if not (0x80 <= kb0 <= 0x83):
+
+        for r2 in all_r2:
+            near_lo = r2 - 0x8000
+            near_hi = r2 + 0x7FFF
+
+            # Step 1: scan near-TOC window (always in ds_data — TOC is in data seg)
+            # for entries pointing to dense string arrays in tgt_data.
+            lo_off        = max(0, near_lo - ds_va)
+            hi_off        = min(len(ds_data), near_hi - ds_va + 4)
+            near_toc_data = ds_data[lo_off:hi_off]
+            n             = len(near_toc_data) // 4
+
+            imm_to_strs: Dict[Tuple[int, int], List[int]] = {}
+            for i in range(n):
+                v = _st.unpack_from('>I', near_toc_data, i * 4)[0]
+                if not (tgt_va <= v < tgt_end):
+                    continue
+                t_off    = v - tgt_va
+                str_list: List[int] = []
+                for j in range(200):
+                    if t_off + j * 4 + 3 >= len(tgt_data):
+                        break
+                    kv = _st.unpack_from('>I', tgt_data, t_off + j * 4)[0]
+                    if kv in str_vas:
+                        str_list.append(kv)
+                    elif j > 0:
+                        break
+                if len(str_list) >= 3:
+                    toc_va  = near_lo + i * 4
+                    toc_off = (toc_va - r2) & 0xFFFF
+                    key     = (toc_off >> 8, toc_off & 0xFF)
+                    if key in imm_to_strs:
+                        imm_to_strs[key].extend(str_list)
+                    else:
+                        imm_to_strs[key] = list(str_list)
+
+            if not imm_to_strs:
                 continue
-            if (kb1 & 0x1F) != 2:
-                continue
-            key = (kb2, kb3)
-            if key not in imm_to_strs:
-                continue
-            site_va = code_va + k
-            idx     = int(np.searchsorted(func_arr, site_va, side='right')) - 1
-            if idx < 0:
-                continue
-            fva = int(func_arr[idx])
-            for sv in imm_to_strs[key]:
-                str_xref.setdefault(sv, []).append(fva)
-                func_str.setdefault(fva, []).append(sv)
+
+            # Step 2: single linear pass — LWZ rX, off(r2) matching array-base TOC keys
+            for k in range(0, M - 3, 4):
+                kb0 = buf[k]; kb1 = buf[k + 1]; kb2 = buf[k + 2]; kb3 = buf[k + 3]
+                if not (0x80 <= kb0 <= 0x83):
+                    continue
+                if (kb1 & 0x1F) != 2:
+                    continue
+                key = (kb2, kb3)
+                if key not in imm_to_strs:
+                    continue
+                site_va = code_va + k
+                idx     = int(np.searchsorted(func_arr, site_va, side='right')) - 1
+                if idx < 0:
+                    continue
+                fva = int(func_arr[idx])
+                for sv in imm_to_strs[key]:
+                    str_xref.setdefault(sv, []).append(fva)
+                    func_str.setdefault(fva, []).append(sv)
 
     # ── PE support ────────────────────────────────────────────────────────────
 
@@ -1940,6 +1975,7 @@ class BinaryContext:
 
     def _save_json(self, path: Path) -> None:
         payload = {
+            "cache_version": 2,
             "path": self.path,
             "sha256": self.sha256,
             "base_va": self.base_va,
@@ -1958,6 +1994,8 @@ class BinaryContext:
     @classmethod
     def _load_json(cls, path: Path, orig_path: str) -> "BinaryContext":
         payload = json.loads(path.read_text())
+        if payload.get("cache_version", 1) < 2:
+            raise ValueError("stale cache: cache_version < 2 (pre-multi-r2); rebuild required")
         ctx = cls()
         ctx.path = orig_path or payload.get("path", "")
         ctx.sha256 = payload["sha256"]
