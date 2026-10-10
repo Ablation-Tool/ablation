@@ -2,9 +2,7 @@
 
 Engine code labeling for PC game reverse engineering.
 
-Labels functions in a stripped game binary as known engine code —
-UE4/UE5, id Tech 6/7, Unity il2cpp, Source 2, CryEngine — using
-three passes of increasing cost and decreasing precision.
+Labels functions in a stripped game binary as known engine code: UE4/UE5, id Tech 6/7, Unity il2cpp, Source 2, and CryEngine. The labeling uses three passes of increasing cost and decreasing precision.
 
 **Goal:** Label 60–80% of a AAA game binary automatically, leaving
 only game-specific code for human reverse engineering.
@@ -74,8 +72,7 @@ print(f"{len(targets)} functions remaining for manual RE")
 | String pattern | Regex match against string xrefs of each function | Base confidence | Medium: per-function string walk |
 | Semantic | SemanticSearcher description match | Base × score | Expensive: embedding inference |
 
-Passes run in order. The first match wins — a weak semantic match
-cannot shadow a confirmed string marker match.
+Passes run in order. The first match wins, so a weak semantic match cannot shadow a confirmed string marker match.
 
 ### String marker pass
 
@@ -259,8 +256,7 @@ and converges to CONFIRMED/REJECTED states without manual triage.
 ## Design notes
 
 The three-pass pipeline is ordered by signal quality, not by cost.
-String markers are the ground truth — when a function contains
-`"EnsureFailed"`, it is `FDebug::EnsureFailed`, full stop. Semantic
+String markers are the ground truth. When a function contains `"EnsureFailed"`, it is `FDebug::EnsureFailed`. Semantic
 similarity is the weakest signal; it is useful for prioritization but
 insufficient for confirmation. The architecture mirrors the evidence
 family hierarchy in `evidence_scorer.py`: exact match → structural →
@@ -268,8 +264,7 @@ semantic.
 
 The `il2cpp` confidence advantage (0.80 vs. 0.72) reflects a real
 property of the target code, not an arbitrary choice. Unity's il2cpp
-is a C# IL → native code transpiler — the output is deterministic and
-the patterns are stable across Unity versions. UE4 hand-written C++
+is a C# IL → native code transpiler. The output is deterministic and the patterns are stable across Unity versions. UE4 hand-written C++
 varies by editor version, studio customization, and build configuration,
 so the same function can look different across games even when the
 behavior is identical.

@@ -51,7 +51,7 @@ result = resolver.resolve()
 
 Two optional parameters improve precision in stripped binaries:
 
-**`fn_starts` (Fix 1 — per-function r30 floor):**
+**`fn_starts` (Fix 1: per-function r30 floor):**
 
 Pass a sorted list of function entry VAs (e.g. from `lief.parse(p).exported_functions`).
 When provided, a BCL setup site that precedes the current function's entry VA is
@@ -65,21 +65,21 @@ fn_starts = sorted(f.address for f in elf.exported_functions if f.address)
 result = resolver.resolve(fn_starts=fn_starts)
 ```
 
-**`got2_va` / `got2_size` (Fix 2 — GOT2 range validation):**
+**`got2_va` / `got2_size` (Fix 2: GOT2 range validation):**
 
 Supplied to `__init__` / `from_path` / `from_sections`.  When present, any computed
 `entry_va = r30 + disp` that falls outside `[got2_va, got2_va + got2_size)` is
 rejected with reason `entry_va_outside_got2`.  `from_path` extracts `.got2`
 automatically via lief.
 
-**Fix 3 — generalised r30 setup detection (automatic):**
+**Fix 3: generalised r30 setup detection (automatic):**
 
 `_find_r30_setups` now uses a sliding-window scan: up to 16 instructions after the BCL
 for `MFLR r30`, up to 6 more for `ADDIS r30,r30,hi`, up to 6 more for `ADDI r30,r30,lo`.
 Any instruction that writes to r30 (other than the three target instructions) aborts the
 search.  This handles a third compiler variant found in Huawei CE6810 e500mc `.so` files
 where up to 8 frame spill instructions appear between BCL and MFLR r30.  No parameters
-needed — this is always-on.
+needed; this is always-on.
 
 ---
 
@@ -150,13 +150,13 @@ classify the load:
 
 ### `GOT2ResolveResult`
 
-- `.resolved` — `List[GOT2ResolvedCall]`
-- `.unresolved` — `List[GOT2UnresolvedCall]`
-- `.stats` — dict: total_bctrl, resolved, got2, direct, unresolved, dynamic
-- `.targets_for(va)` — look up callee for a BCTRL VA
-- `.by_target()` — dict mapping callee VA → list of callers
-- `.report()` — one-line summary string
-- `resolver.export_jsonl(result, out_path)` — write resolved calls as JSONL
+- `.resolved`: `List[GOT2ResolvedCall]`
+- `.unresolved`: `List[GOT2UnresolvedCall]`
+- `.stats`: dict: total_bctrl, resolved, got2, direct, unresolved, dynamic
+- `.targets_for(va)`: look up callee for a BCTRL VA
+- `.by_target()`: dict mapping callee VA → list of callers
+- `.report()`: one-line summary string
+- `resolver.export_jsonl(result, out_path)`: write resolved calls as JSONL
 
 ---
 

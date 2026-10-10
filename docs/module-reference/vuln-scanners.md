@@ -170,7 +170,7 @@ For each call site to a SQL sink (`mysql_query`, `mysql_real_query`, `sqlite3_ex
    - **`MOV reg, rbp/rsp+N`** (stack-local buffer): look further back for the
      `snprintf`/`sprintf` that filled it. Inspect *its* format string for `%s`.
    - **`MOV reg, rax`** after a call: consider the call's return value as the SQL
-     string — mark `RETURN_VALUE` (requires caller trace; verdict = `UNKNOWN`).
+     string; mark `RETURN_VALUE` (requires caller trace; verdict = `UNKNOWN`).
    - **Entry register** (`rdi/rsi/rdx/rcx/r8/r9` unchanged since function entry):
      mark `ARG_PROPAGATED`.
 3. For `snprintf`/`sprintf`-built buffers: extract the format string (should be a
@@ -185,7 +185,7 @@ For each call site to a SQL sink (`mysql_query`, `mysql_real_query`, `sqlite3_ex
 | `INJECTABLE` | Format string has `%s`; arg is not RODATA. High-confidence SQL injection candidate. |
 | `INJECTABLE_LITERAL` | SQL literal in RODATA already contains `%s`. Should not happen in safe code. |
 | `RODATA_CONST` | SQL string is a RODATA literal with no `%s`. Safe. |
-| `SAFE_NUMERIC` | Format string has only `%d`/`%u`/`%x` — no string interpolation. Safe. |
+| `SAFE_NUMERIC` | Format string has only `%d`/`%u`/`%x`; no string interpolation. Safe. |
 | `ARG_PROPAGATED` | SQL string arrived from an entry-argument register. Caller controls it; needs caller trace. |
 | `UNKNOWN` | Provenance not resolved within look-back window. |
 
@@ -337,7 +337,7 @@ findings = scanner.scan()
 print(scanner.report(findings))
 ```
 
-PE32+ (UEFI DXE/PEIM) binaries have no PLT/GOT — external functions such as
+PE32+ (UEFI DXE/PEIM) binaries have no PLT/GOT; external functions such as
 `AllocatePool` and `CopyMem` are called via EFI Boot Services Table pointers
 through `jirl $ra, rj, 0` indirect calls.  The scanner cannot resolve sink names
 automatically.  Instead, in PE32+ mode the scanner flags any `bl` or `jirl` call
@@ -354,7 +354,7 @@ the section into a new buffer.
 Validation corpus: TencentOS Server 4.6 EDK2 UEFI (QEMU_EFI.fd, LoongArch64).
 87 DXE modules, 63 sink-proximate findings, 26 affected modules.
 Highest-risk module: TlsDxe (GUID 3aceb0c0-3c72-11e4-9a56-74d435052646, 13
-findings) — network-reachable in PXE/HTTP-boot context, no ASLR.
+findings); network-reachable in PXE/HTTP-boot context, no ASLR.
 
 ### Known false positives
 
@@ -371,7 +371,7 @@ hit this false-positive class.
 **File:** `ablation/analyzers/la64_heap_vuln_scanner.py`
 
 Detects integer overflow before heap allocation on LoongArch64 (CWE-190 → CWE-122).
-Finds overflow-prone arithmetic — `mul.w`, `sll.w`, `add.w`, `addi.w` — whose
+Finds overflow-prone arithmetic (`mul.w`, `sll.w`, `add.w`, `addi.w`) whose
 result flows into an allocation sink without an intervening bounds check.
 
 The critical class is `mul.w`: LoongArch64 `mul.w rd, rj, rk` computes the low 32
@@ -392,9 +392,9 @@ No capstone dependency. Uses the same pure-Python 32-bit opcode matching as
    instructions (`or rd, rj, r0`).
 4. Find the instruction that last defined the size register.
 5. **Filter:** if that instruction is `addi.w rd, r0, const` (constant load) or any
-   arithmetic with a zero-register operand, skip — not overflow.
+   arithmetic with a zero-register operand, skip; not overflow.
 6. **Filter:** if any `BLT/BGE/BLTU/BGEU/BEQ/BNE` between the definer and the `BL`
-   uses the size register, skip — bounds check present.
+   uses the size register, skip; bounds check present.
 7. Surviving candidates are findings.
 
 ### Severity
@@ -474,7 +474,7 @@ a socket or a config file. This discriminator fixes that.
 
 `fgets` appears in `_SOURCE_NAMES` and any data flowing from it to a sink is
 flagged HIGH. In practice, AArch64 binaries frequently use `fgets` only for
-config-file parsing (`fopen` → `fgets`) — these are false positives at HIGH
+config-file parsing (`fopen` → `fgets`); these are false positives at HIGH
 severity. Network-origin `fgets` (rare: `fdopen(accept(...))` → `fgets`) is
 genuinely HIGH.
 
@@ -525,11 +525,11 @@ for f in classified:
 
 ### False positive classes
 
-**Global FILE* (stdin/stdout/stderr)**: These are CLEAN registers at call sites — classified as `file`. Correct; they are not network-tainted.
+**Global FILE* (stdin/stdout/stderr)**: These are CLEAN registers at call sites; classified as `file`. They are not network-tainted.
 
 **fdopen with untracked fd**: If the fd argument to `fdopen` came from outside the current function (e.g., as a parameter), the discriminator can't trace its origin and emits `unknown`. Conservative HIGH is correct here; interprocedural analysis is needed to resolve.
 
-**Inlined fopen**: Compiler-inlined file-open sequences won't be recognized as `fopen` calls — the FILE* will be `unknown`. Conservative HIGH. Run `from_path_full` (PLT resolution) to minimize this.
+**Inlined fopen**: Compiler-inlined file-open sequences won't be recognized as `fopen` calls; the FILE* will be `unknown`. Conservative HIGH. Run `from_path_full` (PLT resolution) to minimize this.
 
 ### Validation
 
@@ -553,7 +553,7 @@ resolves the static command-path argument where possible, and classifies each si
 | Architecture | Call detection | String resolution |
 |---|---|---|
 | x86-64 | `CALL imm32` via capstone x86 | GoStringResolver (LEA/MOV lookback) |
-| arm64 | `BL imm26` via capstone arm64 | Not implemented — all sites marked DYNAMIC |
+| arm64 | `BL imm26` via capstone arm64 | Not implemented: all sites marked DYNAMIC |
 
 Architecture is detected automatically from the ELF `e_machine` field (EM_AARCH64 = 0xb7).
 
@@ -561,9 +561,9 @@ Architecture is detected automatically from the ELF `e_machine` field (EM_AARCH6
 
 | Type | Severity | Condition |
 |---|---|---|
-| `relative` | HIGH | Command starts with `./` or `../` — exploitable if CWD is attacker-writable |
-| `path` | MEDIUM | Bare name with no slash — resolved via PATH; hijackable via PATH injection |
-| `absolute` | INFO | Starts with `/` — not directly injectable via CWD/PATH |
+| `relative` | HIGH | Command starts with `./` or `../`; exploitable if CWD is attacker-writable |
+| `path` | MEDIUM | Bare name with no slash; resolved via PATH, hijackable via PATH injection |
+| `absolute` | INFO | Starts with `/`; not directly injectable via CWD/PATH |
 | `dynamic` | MEDIUM | Command not statically resolvable; manual trace required |
 
 Format string arguments (`%s`, `%v`, etc.) and strings longer than 80 chars are
@@ -624,5 +624,5 @@ scanner skips functions whose names start with known stdlib prefixes
 
 Corpus: FortiClientEMS 8.0.0 `emsworkers_linux_arm64` (84,530 functions, arm64),
 `emscli` (27,447 functions, arm64). Three psql format strings found and traced to
-HA admin operations — all ELIMINATED as non-exploitable (inputs from
+HA admin operations; all ELIMINATED as non-exploitable (inputs from
 `GetPostgresqlPassword()`, not user-controlled).

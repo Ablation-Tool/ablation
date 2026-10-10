@@ -73,7 +73,7 @@ print(frequency_report(text, base))
 | RI10   | bits 31-24 (8-bit) | I10 = signed `(w>>14)&0x3FF`, rA = `(w>>7)&0x7F`, rT = `w&0x7F` |
 | RR/RI7 | bits 31-21 (11-bit) | rB = `(w>>14)&0x7F`, rA = `(w>>7)&0x7F`, rT = `w&0x7F` |
 
-RI16 is checked before RI10 — this matters because lqr/stqr/il/ilhu/iohl use 9-bit opcodes that overlap with 8-bit RI10 space.
+RI16 is checked before RI10. This matters because lqr/stqr/il/ilhu/iohl use 9-bit opcodes that overlap with 8-bit RI10 space.
 
 ## Confirmed Opcode Coverage
 
@@ -110,7 +110,7 @@ Key confirmations:
 | op9=0x07F  | `lqr rt, s16`  | large-neg PC-relative offsets to static data |
 | op9=0x098  | `stqr rt, s16` | alt encoding (0x4c002b60 confirmed) |
 
-## Coverage (Crysis 2 SPU0 — 38,556 instructions)
+## Coverage: Crysis 2 SPU0 (38,556 instructions)
 
 | Version | Known | Coverage |
 |---------|-------|----------|

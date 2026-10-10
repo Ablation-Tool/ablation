@@ -10,9 +10,9 @@ Discovers function entry points in PowerPC 32-bit big-endian binaries, including
 
 Three-pass discovery:
 
-1. **Entry point** — from ELF header
-2. **Branch targets** — scan for `bl` (branch-and-link) and `bla` (branch-and-link-absolute) instructions
-3. **Prologue patterns** — standard PowerPC function prologues:
+1. **Entry point**: from ELF header
+2. **Branch targets**: scan for `bl` (branch-and-link) and `bla` (branch-and-link-absolute) instructions
+3. **Prologue patterns**: standard PowerPC function prologues:
    - `mflr r0; stw r0, X(r1); stwu r1, -Y(r1)` (full prologue)
    - `stwu r1, -<frame>(r1)` (leaf/frameless functions)
 
@@ -55,13 +55,13 @@ Generates human-readable discovery report.
 
 ### Function: `discover_ppc32_functions(elf_path: str) -> Set[int]`
 
-Convenience wrapper — one-call discovery.
+One-call convenience wrapper for function discovery.
 
 ## Limitations
 
-- **Big-endian only** — little-endian PPC (PlayStation 3) not tested
-- **32-bit only** — use `taint_tracker_ppc64.py` prologue patterns for 64-bit
-- **ELF only** — XCOFF (AIX native format) requires separate parser
+- **Big-endian only**: little-endian PPC (PlayStation 3) not tested
+- **32-bit only**: use `taint_tracker_ppc64.py` prologue patterns for 64-bit
+- **ELF only**: XCOFF (AIX native format) requires separate parser
 
 ## Tested on
 
@@ -71,8 +71,8 @@ Convenience wrapper — one-call discovery.
 ## Integration with other ablation tools
 
 Pass discovered function starts to:
-- `PPC32TaintTracker.from_path()` — already has built-in prologue discovery
-- `XRefGraph.build(func_starts=...)` — when PPC32 support is added
+- `PPC32TaintTracker.from_path()`: already has built-in prologue discovery
+- `XRefGraph.build(func_starts=...)`: when PPC32 support is added
 
 ## Future work
 

@@ -113,8 +113,8 @@ LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes (same width as AArc
 | Load (`ld.d`, `ldx.d`, ...) | `rd = mem_taint(base, off)` |
 | Store (`st.d`, `stx.d`, ...) | `mem(base, off) = taint(rd)` |
 | Atomic (`amadd.d`, ...) | `rd = old_mem_taint; mem = taint(rk) ∪ old` |
-| `lu12i.w`, `pcaddi` | `rd = clean` (address constant — not tainted) |
-| `addi.d $sp,$sp,-N` | Frame allocation — rebases `$sp`-relative memory slots |
+| `lu12i.w`, `pcaddi` | `rd = clean` (address constant; not tainted) |
+| `addi.d $sp,$sp,-N` | Frame allocation: rebases `$sp`-relative memory slots |
 | `addi.d $fp,$sp,N` | Records `$fp = $sp + N` in the frame-pointer map |
 | Float ops | Not tracked at GPR level |
 
@@ -186,7 +186,7 @@ print(stats)
 
 `from_path()` uses two sources:
 1. Symbol table entries (`st_value` in `.symtab` / `.dynsym`) within `.text`.
-2. `addi.d $sp, $sp, -N` (N > 0) — standard GCC/Clang LA64 prologue.
+2. `addi.d $sp, $sp, -N` (N > 0): standard GCC/Clang LA64 prologue.
 
 `from_path_full()` adds three DWARF/CFI sources:
 

@@ -1,6 +1,6 @@
 # Go Binary RE Workflow
 
-The Go compiler always embeds the full function name table (`pclntab`) in the binary for runtime stack traces — even after `strip(1)`. Ablation extracts this table before BERT encoding, lifting semantic search accuracy from roughly 0.20 to 0.70+ on stripped Go binaries.
+The Go compiler always embeds the full function name table (`pclntab`) in the binary for runtime stack traces, even after `strip(1)`. Ablation extracts this table before BERT encoding, lifting semantic search accuracy from roughly 0.20 to 0.70+ on stripped Go binaries.
 
 ---
 
@@ -12,7 +12,7 @@ Two gaps blocked Go binary RE:
 Go's runtime stack unwinder reads function names, start VAs, and end VAs from the `pclntab` section at every `panic()`, `runtime.Caller()`, and `goroutine` stack dump. The linker cannot strip it. This is a design feature of the Go runtime that becomes a RE gift: every stripped Go binary contains a complete function name table.
 
 **2. Garble replaces pclntab names with content-addressed hashes.**
-`mvdan/garble` replaces function names with hashes derived from the function's content. `GoFuncTable` returns names like `a.b` or `$1a2b3c4d` — not useful for semantic search. `GoGarbleRe` recovers structure by finding `runtime.morestack` as a ground-truth anchor and tracing HTTP handler registration patterns.
+`mvdan/garble` replaces function names with hashes derived from the function's content. `GoFuncTable` returns names like `a.b` or `$1a2b3c4d`. Those names are not useful for semantic search. `GoGarbleRe` recovers structure by finding `runtime.morestack` as a ground-truth anchor and tracing HTTP handler registration patterns.
 
 ---
 
@@ -130,7 +130,7 @@ Scans for: `os/exec.Command`, `exec.CommandContext`, `syscall.Exec`, `os.StartPr
 
 ## Garble-obfuscated builds
 
-`mvdan/garble` replaces pclntab function names with content-addressed hashes. `GoFuncTable` returns names like `$1a2b3c4d` — not useful for semantic search. Use `GoGarbleRe` instead:
+`mvdan/garble` replaces pclntab function names with content-addressed hashes. `GoFuncTable` returns names like `$1a2b3c4d`. Those names are not useful for semantic search. Use `GoGarbleRe` instead:
 
 ### How GoGarbleRe works
 

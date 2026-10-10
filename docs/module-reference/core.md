@@ -91,7 +91,7 @@ binary-searches the result against the known string VA array.
 This builds `_str_xref_idx` (string_va -> [code_vas]) and `_func_str_idx`
 (func_va -> [string_vas]) in one O(N) pass over the binary.
 
-### PPC64 string xref — 5-pass system (Cell PPU / CryEngine PS3)
+### PPC64 string xref: 5-pass system (Cell PPU / CryEngine PS3)
 
 PowerPC64 big-endian binaries use an ABI-defined Table of Contents (r2) for all global
 data access.  Direct RIP-relative displacement scanning finds nothing because PPC64 never
@@ -105,10 +105,10 @@ path runs five passes against the binary to build equivalent `_str_xref_idx` /
 | 2 | same | TOC near-load: `LWZ rX, off(r2)` within ±32KB of r2 | Near-TOC string loads |
 | 3 | `_augment_xrefs_ppc64_precall` | Backward scan from BL: `LIS rX, hi + ADDI rX, lo` pre-call pattern | Inline arg-reg loads before calls |
 | 4 | `_augment_xrefs_ppc64_arrays` | Dense string-pointer array in data seg → batch-indexed by (ha16,lo16) key; single O(M×16) scan replaces O(arrays×M) | String pointer arrays via TOC |
-| 5 | `_augment_xrefs_ppc64_twohop` | Near-TOC entry → far string-pointer array (2-hop: load array base from TOC, then index into array) — target segment: writable data | **Dominant CryEngine PS3 pattern** |
-| 6 | `_augment_xrefs_ppc64_twohop` (Pass 6) | Same 2-hop mechanism; target segment: X\|R LOAD (code/rodata) — covers arrays that LIEF places in the executable segment | NanoSuit display strings and other rodata arrays |
+| 5 | `_augment_xrefs_ppc64_twohop` | Near-TOC entry → far string-pointer array (2-hop: load array base from TOC, then index into array); target segment: writable data | **Dominant CryEngine PS3 pattern** |
+| 6 | `_augment_xrefs_ppc64_twohop` (Pass 6) | Same 2-hop mechanism; target segment: X\|R LOAD (code/rodata). Covers arrays that LIEF places in the executable segment | NanoSuit display strings and other rodata arrays |
 
-**Pass 5/6 detail — the 2-hop pattern:**
+**Pass 5/6 detail: the 2-hop pattern:**
 
 CryEngine PS3 packs string VAs into dense arrays far from r2.  The access pattern is:
 ```
@@ -152,8 +152,7 @@ TaintTracker have no function boundaries and cannot run.
 
 `BinaryContext` automatically calls `StaticELF32FuncStartScanner` for `x86_32` binaries when
 `func_starts` would otherwise be empty.  The scanner scans every PT_LOAD+PF_X segment for the
-3-byte i386 function prologue pattern `55 89 e5` (`push ebp; mov ebp, esp`) — the canonical
-CDECL frame setup emitted by GCC for every non-leaf function.  Secondary patterns (`55 57 56`,
+3-byte i386 function prologue pattern `55 89 e5` (`push ebp; mov ebp, esp`), the canonical CDECL frame setup emitted by GCC for every non-leaf function.  Secondary patterns (`55 57 56`,
 `55 53`) are tried only when the primary count is under ten, indicating a non-CDECL binary.
 
 The scanner is also available standalone when you want to augment a context from outside:
@@ -174,8 +173,7 @@ scanner.inject(ctx)
 ```
 
 False-positive rate on GCC i386 code is low.  The ModRM byte 0xe5 in `89 e5` encodes
-(mod=11, reg=ESP, rm=EBP) — a combination that occurs inside other instruction operands
-rarely enough to be negligible in practice.
+(mod=11, reg=ESP, rm=EBP), a combination that occurs inside other instruction operands rarely enough to be negligible in practice.
 
 ---
 
@@ -187,13 +185,13 @@ rarely enough to be negligible in practice.
 
 2 things that weren't possible before in Ablation:
 
-1. **String context for stripped i386 ELF32** — `BinaryContext._str_xref_idx` used
+1. **String context for stripped i386 ELF32**: `BinaryContext._str_xref_idx` used
    RIP-relative displacement arithmetic (x86-64 only). On a 675KB statically linked i386
    binary this yielded 21 coincidental hits where 548 were correct. `strings_in_func()` and
    `funcs_referencing_string()` were effectively broken for every 32-bit static target,
    making string-guided taint entry-point selection impossible on i386 firmware.
 
-2. **Function-level attribution of i386 string refs** — even when string VAs were known,
+2. **Function-level attribution of i386 string refs**: even when string VAs were known,
    there was no way to ask "which function references this string?" on i386 because
    `_func_str_idx` was empty. `inject()` populates both indexes in the same format as the
    x86-64 scanner so all downstream `ctx` calls work identically regardless of bitness.
@@ -210,7 +208,7 @@ x86-64 scanner (coincidental false hits) instead of the correct 548.
 
 ### How it works
 
-1. Read every 4-byte LE window at every byte offset in `.text` — identical stride-trick
+1. Read every 4-byte LE window at every byte offset in `.text`: same stride-trick
    approach to the x86-64 scanner, but no displacement arithmetic.
 2. Binary-search each window value against the sorted list of known string VAs.
 3. Attribute each hit to the enclosing function via `func_containing()`.
@@ -235,7 +233,7 @@ print(result.report())
 scanner.inject(ctx)
 ```
 
-**ELF32 only.** PE32 (i386 DLL/EXE) is not supported — too many false positives from vtable
+**ELF32 only.** PE32 (i386 DLL/EXE) is not supported. Too many false positives from vtable
 and jump-table entries that accidentally fall in `.rdata` ranges.
 
 ---

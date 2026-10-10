@@ -3,10 +3,10 @@
 Structured competing-hypothesis orchestration for binary reverse engineering. Seeds candidate explanations, scores evidence from every analyzer family, ranks probes by expected information gain, and transitions hypotheses to CONFIRMED or REJECTED via deterministic rules.
 
 **Modules:**
-- `ablation.analyzers.hypothesis_models` — data model + JSON persistence
-- `ablation.analyzers.evidence_scorer` — confidence scoring + state transitions
-- `ablation.analyzers.probe_ranker` — probe candidate generation + EIG ranking
-- `ablation.analyzers.hypothesis_engine` — session lifecycle + orchestration
+- `ablation.analyzers.hypothesis_models`: data model + JSON persistence
+- `ablation.analyzers.evidence_scorer`: confidence scoring + state transitions
+- `ablation.analyzers.probe_ranker`: probe candidate generation + EIG ranking
+- `ablation.analyzers.hypothesis_engine`: session lifecycle + orchestration
 
 ---
 
@@ -25,7 +25,7 @@ A taint tracker returns a list of findings. A semantic searcher returns ranked V
 flowchart TD
     A["Seed: N competing claims for the same subject\nsubject = {call_site_va: '0x401920'}\nclaim A = {target_va: '0x4026c0'}  prior=0.5\nclaim B = {target_va: '0x403110'}  prior=0.5\n\nHypothesisRecord: uuid · kind · subject · claim\nstatus · prior · confidence\nsupport_score · contradiction_score · evidence_ids[]"] --> B["add_evidence() from any analyzer"]
 
-    B --> C["EvidenceScorer — deterministic scoring per family\nRaw strength: provided by caller (0.5 – 1.0)\n\nFamily weights:\n  behavioral  1.00  runtime traces, emulator output\n  data_flow   0.90  taint paths, use-def chains\n  structure   0.75  CFG, instruction boundaries\n  cross_ref   0.65  strings, PLT, callers/callees\n  version     0.60  DTW, Jaccard, structural homologs\n  manual      0.50  analyst observation with provenance\n  semantic    0.25  embeddings, function similarity\n\nDiminishing returns (same family):\n  weight × 1/(1+ln(count))\n  count=1 → 1.00×  count=2 → 0.59×  count=5 → 0.38×\n\ncontribution = strength × reliability × independence"]
+    B --> C["EvidenceScorer: deterministic scoring per family\nRaw strength: provided by caller (0.5 – 1.0)\n\nFamily weights:\n  behavioral  1.00  runtime traces, emulator output\n  data_flow   0.90  taint paths, use-def chains\n  structure   0.75  CFG, instruction boundaries\n  cross_ref   0.65  strings, PLT, callers/callees\n  version     0.60  DTW, Jaccard, structural homologs\n  manual      0.50  analyst observation with provenance\n  semantic    0.25  embeddings, function similarity\n\nDiminishing returns (same family):\n  weight × 1/(1+ln(count))\n  count=1 → 1.00×  count=2 → 0.59×  count=5 → 0.38×\n\ncontribution = strength × reliability × independence"]
 
     C --> D["score() → confidence, status"]
 

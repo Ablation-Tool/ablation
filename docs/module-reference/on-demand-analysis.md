@@ -38,7 +38,7 @@ flowchart TD
 
 ---
 
-### Step 1 — Format parse and symbol extraction
+### Step 1: Format parse and symbol extraction
 
 The first step uses `lief` to parse the binary format and extract three symbol tables: PLT imports, exported symbols, and `.rodata` strings.
 
@@ -72,7 +72,7 @@ PE binaries use the IAT (Import Address Table) with the same concept: a table of
 
 ---
 
-### Step 2 — Function start recovery
+### Step 2: Function start recovery
 
 Recovering function starts in a stripped binary is a two-pass process. The first pass reads the binary's own unwind data. The second pass fills the gaps.
 
@@ -80,7 +80,7 @@ Recovering function starts in a stripped binary is a two-pass process. The first
 
 C++ exception handling and signal delivery both need to unwind the call stack. GCC solves this by emitting one Frame Description Entry (FDE) per function in `.eh_frame`. The FDE records the function's start VA and byte length. `strip(1)` cannot remove `.eh_frame` because the runtime linker reads it at startup to register unwind information with the OS. Remove it and exception handling breaks. In any binary compiled with GCC or Clang at default settings, `.eh_frame` contains a complete function start list even when the symbol table is gone. This is a design feature of the C++ ABI that becomes a gift for reverse engineering.
 
-**CIE (Common Information Entry)** — one per compilation unit:
+**CIE (Common Information Entry)**: one per compilation unit:
 
 | Field | Type | Description |
 |---|---|---|
@@ -94,7 +94,7 @@ C++ exception handling and signal delivery both need to unwind the call stack. G
 | `aug_data` | variable | Pointer encoding byte (pcrel / absolute) |
 | `initial_insns` | variable | CFA baseline rules (e.g., `push rbp`) |
 
-**FDE (Frame Description Entry)** — one per function, contains the function start VA:
+**FDE (Frame Description Entry)**: one per function, contains the function start VA:
 
 | Field | Type | Description |
 |---|---|---|
@@ -136,14 +136,14 @@ The pass runs once. Newly discovered callees are added to `func_starts` but thei
 
 ---
 
-### Step 3 — Call graph construction
+### Step 3: Call graph construction
 
 With function boundaries established, BinaryContext disassembles each function body and extracts every direct call it makes. The result is a flat list of `(caller_va, callee_va, label)` tuples. Indirect calls are skipped because the callee address is not statically determinable. VtableResolver handles C++ virtual dispatch separately.
 
 | Architecture | Direct call instructions detected |
 |---|---|
 | x86-64 | `CALL rel32` / `CALL r/m64` |
-| ARM64 | `BL imm26` (`BLR` is indirect — skipped) |
+| ARM64 | `BL imm26` (`BLR` is indirect; skipped) |
 | ARM32 | `BL imm24` / `BLX imm24` |
 | MIPS32 | `JAL imm26` / `JALR $ra,$t9` |
 | LA64 | `BL offset26` / `JIRL $ra,rj,0` |
@@ -151,7 +151,7 @@ With function boundaries established, BinaryContext disassembles each function b
 
 ---
 
-### Step 4 — String cross-reference index
+### Step 4: String cross-reference index
 
 Strings in `.rodata` are inert until something loads their address. The cross-reference index connects function bodies to the strings they reference, so `ctx.strings_in_func(va)` is a simple dict lookup rather than a full rescan.
 
@@ -179,7 +179,7 @@ If the resolved address falls in `strings_map`, it is recorded as `str_xref_idx[
 
 ---
 
-### Step 5 — Serialization
+### Step 5: Serialization
 
 | Field | JSON type | Content |
 |---|---|---|
