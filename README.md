@@ -17,7 +17,7 @@ Ablation is a reverse engineering framework built for AI-agent-driven analysis. 
 
 **Version Diffing:** Analyzes the behavioral difference between binary versions to verify vendor patches. A cosmetic recompile cannot hide an unpatched vulnerability because Ablation checks whether the logic changed, not whether the file changed.
 
-**FORGE: Module Quality Gate:** Ablation lets users build their own modules and add-ons. FORGE audits every module before it can be stored, so user-written code meets the same standard as the modules that ship with Ablation.
+**Module Quality Gate:** Ablation lets users build their own modules and add-ons. FORGE audits every module before it can be stored, so user-written code meets the same standard as the modules that ship with Ablation.
 
 **Taint-Based Vulnerability Detection:** Tracks attacker-controlled data from network entry points to dangerous sinks across 14 processor architectures, including LoongArch64, nanoMIPS, V850, ARC, and ARM Thumb. The interprocedural engine follows data through function calls, pointer aliases, and stack frames in stripped binaries. For multi-process firmware, it crosses executable boundaries to follow data between cooperating processes.
 
