@@ -63,6 +63,7 @@ class EcuXDFParser:
         self._root: ET.Element = ET.parse(str(path)).getroot()
         self._header: XDFHeader = self._parse_header()
         self._categories: dict[int, str] = self._parse_categories()
+        self._skipped_count: int = 0
         self._tables: list[CalibrationTable] = self._parse_tables()
 
     @classmethod
@@ -87,11 +88,13 @@ class EcuXDFParser:
         n_map = sum(1 for t in self._tables if t.table_type == "MAP")
         n_curve = sum(1 for t in self._tables if t.table_type == "CURVE")
         n_val = sum(1 for t in self._tables if t.table_type == "VALUE")
+        skipped = f"  skipped    : {self._skipped_count} malformed\n" if self._skipped_count else ""
         return (
             f"XDF  {self._path.name}\n"
             f"  title      : {self._header.title}\n"
             f"  tables     : {len(self._tables)} total "
             f"({n_map} MAP  {n_curve} CURVE  {n_val} VALUE)\n"
+            f"{skipped}"
             f"  base_offset: 0x{self._header.base_offset:X}"
             f"{'  (subtract)' if self._header.base_subtract else ''}\n"
             f"  endian     : {'little' if self._header.little_endian else 'big'}"
@@ -107,8 +110,18 @@ class EcuXDFParser:
             return XDFHeader("", 0, False, 16, False, False, 0x200000)
 
         bo = hdr.find("BASEOFFSET")
-        base_off = int(bo.get("offset", "0"), 0) if bo is not None else 0
-        base_sub = bool(int(bo.get("subtract", "0"))) if bo is not None else False
+        if bo is not None:
+            try:
+                base_off = int(bo.get("offset", "0"), 0)
+            except (ValueError, TypeError):
+                base_off = 0
+            try:
+                base_sub = bool(int(bo.get("subtract", "0")))
+            except (ValueError, TypeError):
+                base_sub = False
+        else:
+            base_off = 0
+            base_sub = False
 
         defaults = hdr.find("DEFAULTS")
         def_bits = int(defaults.get("datasizeinbits", "16")) if defaults is not None else 16
@@ -148,7 +161,7 @@ class EcuXDFParser:
             try:
                 tables.append(self._parse_one_table(tbl_el, idx, all_tables_xml))
             except Exception:
-                # Skip malformed entries silently; the rest of the file is still useful
+                self._skipped_count += 1
                 continue
 
         return tables
