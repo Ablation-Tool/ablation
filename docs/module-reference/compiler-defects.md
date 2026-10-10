@@ -9,7 +9,7 @@ Finds security vulnerabilities the compiler introduced through miscompilation. T
 One class of vulnerability was completely invisible before this module:
 
 **Compiler bugs are not detectable by code review or manual RE.**
-A developer writes correct C++: `size_t n = std::max(input_len, min_len)`. The compiler emits a four-instruction sequence that produces the opposite result. The source code is correct. The disassembly looks like a bounds check is present. Only a scanner that knows the specific buggy instruction pattern can detect it. Auditing TencentOS 4.6 without `LA64MaxNotMinScanner` would not surface these 172 findings because there is nothing wrong with the source — the defect exists only in the binary.
+A developer writes correct C++: `size_t n = std::max(input_len, min_len)`. The compiler emits a four-instruction sequence that produces the opposite result. The source code is correct. The disassembly looks like a bounds check is present. Only a scanner that knows the specific buggy instruction pattern can detect it. Auditing TencentOS 4.6 without `LA64MaxNotMinScanner` would not surface these 172 findings because there is nothing wrong with the source. The defect exists only in the binary.
 
 ---
 
@@ -33,7 +33,7 @@ GCC 12.3.1.7 for LoongArch64 miscompiles comparison operations that feed into si
   Expected: rd = MAX(a, b)   Actual: rd = MIN(a, b)   <-- WRONG
 ```
 
-The LA64 `masknez` and `maskeqz` instructions are branchless select primitives: `masknez dst, src, cond` writes `src` to `dst` if `cond != 0`, otherwise writes zero. The correct `max` implementation would use `masknez` to select the LARGER operand (the one that is NOT less-than). GCC inverts the selection: it uses `masknez` on `a` when `a < b` is true, producing `a` (the smaller value). The `or` then combines the two conditional slots, delivering the minimum.
+The LA64 `masknez` and `maskeqz` instructions are branchless select primitives: `masknez dst, src, cond` writes `src` to `dst` if `cond != 0`, otherwise writes zero. The correct `max` implementation uses `masknez` to select the LARGER operand. GCC inverts the selection: it uses `masknez` on `a` when `a < b` is true, so it selects `a` (the smaller value). The `or` then combines the two conditional slots and delivers the minimum.
 
 ### Security impact
 
@@ -54,63 +54,33 @@ When `rd` flows into a `malloc` size argument, the allocation is smaller than th
 
 ## How the scanner works
 
-```
-  binary (ELF or UEFI PE32+ module)
-          |
-          v
-  ┌────────────────────────────────────────────────────────────┐
-  │  LA64MaxNotMinScanner.scan()                               │
-  │                                                            │
-  │  Step 1: disassemble all .text bytes (pure Python decoder) │
-  │    each instruction: (va, mnemonic, rd, ra, rb)            │
-  └───────────────────────────┬────────────────────────────────┘
-                              |
-                              v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Step 2: sliding 4-instruction window                      │
-  │                                                            │
-  │  for each consecutive (i0, i1, i2, i3):                    │
-  │    does i0 match: sltu t0, ?, ?                            │
-  │    does i1 match: masknez t1, ?, t0                        │
-  │    does i2 match: maskeqz t2, ?, t0                        │
-  │    does i3 match: or rd, t1, t2   OR  or rd, t2, t1        │
-  │                                                            │
-  │  both OR operand orderings are checked because             │
-  │  GCC may commute the masknez/maskeqz results               │
-  └───────────────────────────┬────────────────────────────────┘
-                              |
-                              | pattern matched at pattern_va
-                              v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Step 3: forward track result register rd                  │
-  │                                                            │
-  │  scan up to 20 instructions forward from i3                │
-  │  does rd appear as a source operand at a call site?        │
-  │                                                            │
-  │  ELF mode:                                                 │
-  │    callee_va in plt_range?                                 │
-  │      yes → import_name = plt[callee_va]                    │
-  │      sink table: malloc/kmalloc/memcpy/memmove/...         │
-  │      if import_name in sinks → emit finding                │
-  │                                                            │
-  │  PE32+ mode:                                               │
-  │    direct call site reported (import names unavailable)    │
-  │    sink_name = "<direct>" or "<indirect>"                  │
-  └────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[/"Binary (ELF or UEFI PE32+ module)"/] --> B["Step 1 · Disassemble all .text bytes\nPure Python LA64 decoder\nEach instruction: (va, mnemonic, rd, ra, rb)"]
 
-  LA64MaxNotMinFinding fields:
-    pattern_va:  VA of the first instruction (sltu)
-    result_reg:  register holding the wrong min/max result
-    sink_va:     VA of the call site that consumes the result
-    sink_name:   'malloc' / 'kmalloc' / 'memcpy' / ... (ELF)
-                 or '<direct>' (PE32+)
-    sink_arg:    which argument register carries the result
-                 ('a0' / 'a1' / 'a2' depending on call convention)
+    B --> C["Step 2 · Sliding 4-instruction window\nFor each consecutive (i0, i1, i2, i3):\n  i0 = sltu t0, ?, ?\n  i1 = masknez t1, ?, t0\n  i2 = maskeqz t2, ?, t0\n  i3 = or rd, t1, t2  (or or rd, t2, t1)"]
+
+    C --> D{"Pattern\nmatched?"}
+    D -->|No, advance window| C
+    D -->|Yes, pattern_va recorded| E["Step 3 · Forward track result register rd\nScan up to 20 instructions forward\nDoes rd appear as source at a call site?"]
+
+    E --> F{"Call site\nfound?"}
+    F -->|"callee in .plt range (ELF)"| G["Resolve import_name\nvia plt_map"]
+    F -->|"direct call (PE32+)"| H["Sink name = direct/indirect\nNo import names available"]
+    F -->|No call within 20 insns| I["Discard — likely used\nfor non-allocation purpose"]
+
+    G --> J{"import_name\nin sink_table?"}
+    J -->|"Yes (malloc/memcpy/...)"| K[/"Emit LA64MaxNotMinFinding\npattern_va · result_reg · sink_va · sink_name · sink_arg"/]
+    J -->|No| I
+    H --> K
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style K fill:#7f1d1d,stroke:#991b1b,color:#fecaca
 ```
 
 ### Why forward tracking stops at 20 instructions
 
-The GCC-generated code puts the size calculation immediately before the allocation call. Twenty instructions is enough to cover any intervening register moves or address computations while keeping the false-positive rate low. A result register that travels more than 20 instructions before reaching a sink is almost certainly consumed for a different purpose in between.
+GCC places the size calculation immediately before the allocation call. Twenty instructions covers any intervening register moves or address computations while keeping the false-positive rate low. A result register that travels more than 20 instructions before reaching a sink is almost certainly consumed for a different purpose in between.
 
 ---
 

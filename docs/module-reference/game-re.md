@@ -20,68 +20,24 @@ PS3 game binaries split logic between the main PPU core and up to six SPU coproc
 
 ### How three-pass labeling works
 
-```
-  stripped game binary (ELF or PE, 50k-200k functions)
-          |
-          v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Pass 1: String-marker sweep (fastest)                     │
-  │                                                            │
-  │  game engines embed unique string constants in their code. │
-  │  "UE4 LogCore Fatal:" → Unreal Engine 4 infrastructure     │
-  │  "Com_Error" → id Tech engine error handler                │
-  │  "IVEngineServer" → Source 2 server interface              │
-  │                                                            │
-  │  for each engine signature's string_markers:               │
-  │    find all VAs of that string in .rodata                  │
-  │    find all functions that xref that string                │
-  │    label those functions: engine='UE4', category='crash'   │
-  │                                                            │
-  │  precision: zero false positives on confirmed markers      │
-  │  coverage:  high for string-heavy engine subsystems        │
-  └───────────────────────────┬────────────────────────────────┘
-                              |
-                              v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Pass 2: Semantic sweep (medium speed)                     │
-  │                                                            │
-  │  each engine signature has a description field.            │
-  │  SemanticSearcher encodes all descriptions as BERT vectors. │
-  │  for each UNLABELED function after pass 1:                 │
-  │    build behavioral description from callee names +        │
-  │    string references + assembly category sequence          │
-  │    encode description → BERT vector                        │
-  │    cosine similarity against all engine signature vectors  │
-  │                                                            │
-  │  threshold: 0.45 for engine labeling                       │
-  │    (higher than the 0.30 used for vuln hunting because     │
-  │     engine code false positives cost analyst time)         │
-  │                                                            │
-  │  coverage: catches engine utility functions with unique    │
-  │  callees but no unique strings                             │
-  └───────────────────────────┬────────────────────────────────┘
-                              |
-                              v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Pass 3: SAX structural sweep (slowest, run last)          │
-  │                                                            │
-  │  SAXIndex: Symbolic Aggregate approXimation of             │
-  │  opcode-category sequences (BinFuse 11-category encoding). │
-  │                                                            │
-  │  for each STILL UNLABELED function after passes 1 and 2:  │
-  │    encode opcode sequence as SAX string                    │
-  │    approximate nearest-neighbor search against             │
-  │    pre-computed SAX strings of engine functions            │
-  │                                                            │
-  │  catches engine utility functions with no strings and      │
-  │  no unique callees — pure algorithmic code (sort, hash,    │
-  │  memory layout routines)                                   │
-  └───────────────────────────┬────────────────────────────────┘
-                              |
-                              v
-  coverage report:
-    N% engine-labeled (skip in manual RE)
-    (100-N)% unlabeled (analyst targets)
+```mermaid
+flowchart TD
+    A[/"Stripped game binary (ELF or PE, 50k-200k functions)"/] --> B["Pass 1 · String-marker sweep (fastest)\nGame engines embed unique string constants.\n'UE4 LogCore Fatal:' → Unreal Engine 4\n'Com_Error' → id Tech engine\n'IVEngineServer' → Source 2\n\nFor each engine's string_markers:\n  Find all VAs of that string in .rodata\n  Find all functions that xref it\n  Label: engine='UE4', category='crash'"]
+
+    B --> C{"Labeled\nall functions?"}
+    C -->|Unlabeled remain| D["Pass 2 · Semantic sweep (medium speed)\nFor each UNLABELED function:\n  Build behavioral description:\n    callee names + string refs + asm category sequence\n  Encode → BERT vector (768 dims)\n  Cosine similarity vs engine signature vectors\n  Threshold: 0.45 (higher than 0.30 vuln hunting\n  because engine false positives cost analyst time)"]
+
+    C -->|All labeled| G
+
+    D --> E{"Unlabeled\nremain?"}
+    E -->|Unlabeled remain| F["Pass 3 · SAX structural sweep (slowest, run last)\nFor each STILL UNLABELED function:\n  Encode opcode sequence as SAX string\n  (Symbolic Aggregate approXimation,\n  BinFuse 11-category encoding)\n  Approximate nearest-neighbor search\n  vs pre-computed SAX strings of engine functions\n\nCatches pure algorithmic code:\n  sort · hash · memory layout routines"]
+
+    E -->|All labeled| G
+
+    F --> G[/"Coverage report\nN% engine-labeled → skip in manual RE\n(100-N)% unlabeled → analyst targets"/]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style G fill:#14532d,stroke:#166534,color:#dcfce7
 ```
 
 ### Why three passes instead of one
@@ -113,7 +69,6 @@ xg.build()
 labels = lib.label_binary(ctx, xg)
 print(lib.strip_report(labels, len(ctx.func_starts)))
 
-# Get only unlabeled functions for manual RE
 unlabeled = lib.unlabeled(ctx.func_starts, labels)
 print(f"{len(unlabeled)} functions to analyze")
 ```
@@ -142,26 +97,16 @@ lib.save()
 
 ### Architecture context
 
-The PS3 Cell Broadband Engine has two distinct processor types on one die:
+The PS3 Cell Broadband Engine has two distinct processor types on one die. Security analysis of PS3 game code requires working at both levels.
 
-```
-  PS3 Cell Broadband Engine
-  ─────────────────────────────────────────────────────────────
-  PPU (Power Processing Unit):
-    PPC64 core with VMX/AltiVec SIMD
-    accesses main memory directly
-    runs the OS and main game loop
+```mermaid
+flowchart LR
+    A["PS3 Cell BE"] --> B["PPU\nPower Processing Unit\nPPC64 + VMX/AltiVec SIMD\nDirect main memory access\nRuns OS and main game loop"]
 
-  SPU (Synergistic Processing Unit, x6):
-    128 128-bit registers, all SIMD vectors
-    no memory hierarchy — no cache, no TLB
-    256 KB local store only (no main memory access)
-    data must arrive via DMA transfer from main memory
-    11 instruction formats, 4-byte big-endian instructions
-    all instructions operate on the full 128-bit register
+    A --> C["SPU × 6\nSynergistic Processing Unit\n128 × 128-bit registers (all SIMD)\n256 KB local store only — no cache, no TLB\nNo memory load instructions\nData arrives via DMA from main memory\n11 instruction formats, 4-byte big-endian\nAll ops treat registers as SIMD vectors"]
 ```
 
-Every SPU instruction treats its register as a vector of four 32-bit integers, two 64-bit integers, or sixteen 8-bit integers depending on the instruction. There is no scalar 32-bit mode. A 32-bit add (`a` instruction) adds four pairs of 32-bit integers simultaneously. The SPU has no memory load instruction in the traditional sense — data arrives pre-staged in local store via DMA channels.
+Every SPU instruction treats its register as a vector of four 32-bit integers, two 64-bit integers, or sixteen 8-bit integers depending on the instruction. There is no scalar 32-bit mode. A 32-bit add (`a` instruction) adds four pairs of 32-bit integers simultaneously. Data must be pre-staged in local store via DMA channels before any computation can begin.
 
 ### Usage
 
@@ -178,7 +123,7 @@ SPUDisassembler.frequency_report('/path/to/spu.elf', base=0x0)
 data = SPUDisassembler.extract_spu_text_from_elf(open(path, 'rb').read())
 ```
 
-`frequency_report` shows instruction frequency distribution. High branch count indicates loops. High XOR/AND/shift count indicates crypto. High `wrch`/`rdch` count indicates DMA-heavy sections (channel writes/reads are how the SPU communicates with the rest of the system).
+`frequency_report` shows instruction frequency distribution. High branch count indicates loops. High XOR/AND/shift count indicates crypto. High `wrch`/`rdch` count indicates DMA-heavy sections: channel writes and reads are how the SPU communicates with the rest of the system.
 
 ---
 
@@ -186,7 +131,7 @@ data = SPUDisassembler.extract_spu_text_from_elf(open(path, 'rb').read())
 
 PEF (Preferred Executable Format) was the executable format for Mac OS 8 and 9 CFM (Code Fragment Manager) binaries on PowerPC. Two differences from modern Mach-O matter for security analysis:
 
-**TOC-based indirect calls.** All function calls go through a Table of Contents pointer in r2. Each function entry point is actually a two-word descriptor: word 0 is the code address, word 1 is the TOC base for that function. Calling a function requires loading both words and setting r2 before branching. This means `bl` instructions that look like direct calls in the disassembly are actually TOC-mediated and the analysis must account for the r2 setup.
+**TOC-based indirect calls.** All function calls go through a Table of Contents pointer in r2. Each function entry point is a two-word descriptor: word 0 is the code address, word 1 is the TOC base for that function. Calling a function requires loading both words and setting r2 before branching. This means `bl` instructions that look like direct calls in the disassembly are TOC-mediated. The analysis must account for the r2 setup.
 
 **OT string function register-clobber hazard.** The Open Transport API (`OTStrCat`, `OTStrCopy`, `OTMemcpy`) clobbers caller-saved registers at call sites beyond the standard PPC32 ABI convention. A caller that does not reload a clobbered register after an OT call can use a stale value in a subsequent operation.
 
@@ -205,4 +150,4 @@ findings = scanner.scan(
 )
 ```
 
-Built on the EncodingDAG template system. Handles `ori` RA-field encoding, `addic` opcode 12, and branch boundary detection — all sources of false positives in a naive scanner that applies MIPS-style analysis to PPC32.
+Built on the EncodingDAG template system. Handles `ori` RA-field encoding, `addic` opcode 12, and branch boundary detection. These are all sources of false positives in a naive scanner that applies MIPS-style analysis to PPC32.
