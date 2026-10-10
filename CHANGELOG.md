@@ -2,6 +2,24 @@
 
 ---
 
+## v2.58.0
+
+**EcuM68kDecoder: M68K/CPU32 decoder for GM P-series ECU firmware.** Wraps Capstone
+(CS_ARCH_M68K / CS_MODE_M68K_020) with ECU-specific prologue scanning and pipeline-compatible
+M68kInsn dataclass.  CPU32 is a 68020 derivative; Capstone 5.0.7 has no CS_MODE_M68K_CPU32 but
+020 mode decodes the GM P-series instruction set correctly.
+
+- `EcuM68kDecoder`: `disassemble()` (Capstone-backed), `decode_one()`, `function_starts()` (pure scan), `insn_length()`
+- `M68kInsn`: `offset`, `mnemonic`, `op_str`, `insn_type`, `raw`, `size`, `target`
+- `function_starts()` primary signal: `LINK.W A6, #-N` (`0x4E56` + negative 16-bit displacement); secondary: `MOVEM.L regs, -(SP)` (`0x48E7`) when not immediately after a LINK
+- `insn_type`: RETURN (rts/rtd/rte/rtr), BRANCH (bra/b*/jmp), CALL (jsr/bsr), PROLOGUE (link.w A6 neg), MISC
+- Branch targets strip Capstone `.w`/`.l` size suffix from `$addr.w` format
+- `disassemble()`/`decode_one()` raise `ImportError` with install instructions when Capstone missing; `function_starts()` and `insn_length()` are pure-Python (no Capstone)
+- Cs() constructed at `__init__` time (not lazily) to eliminate thread-safety race
+- 26 tests; FORGE gate: PASSED (0 findings)
+
+---
+
 ## v2.57.0
 
 **EcuVLEDecoder: PPC VLE / SE16 decoder for NXP e200-class ECU firmware.** Decodes the PowerPC
