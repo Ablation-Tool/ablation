@@ -35,12 +35,12 @@ Combined with any coding agent, it runs as an autonomous reverse engineering too
 
 | Capability | |
 |:---|:---|
-| **Taint Analysis** | Traces externally-supplied data from entry points to security-sensitive operations across 14 architectures, interprocedurally, across shared library boundaries. |
-| **Pre-Authentication Exposure** | Maps code paths that execute before authentication completes, so the pre-authentication boundary is understood before manual review begins. |
-| **Finding Validation** | Produces minimal curl-based reproducers for confirmed findings, suitable for inclusion in vendor disclosure reports. |
-| **Source Code Auditing** | Scans a codebase for security defects without an LLM; a 40x read-reduction compressor buckets files by security profile so only the highest-risk files get individual attention. |
-| **Compiler Defect Detection** | Identifies security defects introduced by compiler code generation errors; a single GCC 12.3.1.7 codegen error produced 172 confirmed findings in TencentOS 4.6. |
-| **Cryptographic Analysis** | Eight tools that make cryptographic primitives, key material, and protocol implementations visible and auditable inside compiled binaries. |
+| **Taint Analysis** | Follows data from network entry points to security-sensitive operations across 14 architectures and library boundaries. |
+| **Pre-Authentication Exposure** | Maps code paths that run before authentication completes, so the exposure is clear before manual review starts. |
+| **Finding Validation** | Produces a minimal curl-based reproducer for each confirmed finding, so the disclosure report contains working proof. |
+| **Source Code Auditing** | Scans source for security defects without an LLM. A 40x read-reduction compressor ranks files by risk so only the highest-risk files need individual attention. |
+| **Compiler Defect Detection** | Finds security defects the compiler introduced. A single GCC 12.3.1.7 codegen error produced 172 confirmed findings in TencentOS 4.6. |
+| **Cryptographic Analysis** | Eight tools expose cryptographic primitives, key material, and protocol implementations inside compiled binaries. |
 
 </details>
 
