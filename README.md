@@ -21,12 +21,12 @@ Combined with any coding agent, it runs as an autonomous reverse engineering too
 | Capability | |
 |:---|:---|
 | [**Semantic Code Search**](docs/module-reference/semantic-search.md) | Uses a BERT-family encoder to find functions by meaning in stripped binaries without symbols. |
-| **On-Demand Analysis** | Loads in seconds because it only analyzes the code being examined; Ghidra and IDA Pro parse the entire file upfront. |
-| **Binary Lifting** | Pseudo-C IR across 17 ISAs; ARM64 and x86-64 receive register-level taint propagation. |
-| **Hypothesis Engine** | Tracks competing RE hypotheses, scores evidence across four families, and auto-executes probes; sessions persist across engagements. |
-| **C++ Vtable Reconstruction** | Reconstructs vtable slots from any ELF on any architecture and emits an IDAPython script that injects the producer-to-consumer type chain into IDA. |
-| **Cross-Library Analysis** | Traces an argument across up to three shared library hops, so taint paths that cross library boundaries reach their sink rather than stopping at the first boundary. |
-| **DAG Adapter Language** | Describes instruction set encodings as directed acyclic graphs so every architecture shares the same analysis code path. Without it, each ISA requires its own exception handler and the analyzer count scales with the architecture count. |
+| [**On-Demand Analysis**](docs/module-reference/on-demand-analysis.md) | Loads in seconds because it only analyzes the code being examined; Ghidra and IDA Pro parse the entire file upfront. |
+| [**Binary Lifting**](docs/module-reference/binary-lifter.md) | Pseudo-C IR across 17 ISAs; ARM64 and x86-64 receive register-level taint propagation. |
+| [**Hypothesis Engine**](docs/module-reference/hypothesis-engine.md) | Tracks competing RE hypotheses, scores evidence across four families, and auto-executes probes; sessions persist across engagements. |
+| [**C++ Vtable Reconstruction**](docs/module-reference/cpp-vtable-reconstructor.md) | Reconstructs vtable slots from any ELF on any architecture and emits an IDAPython script that injects the producer-to-consumer type chain into IDA. |
+| [**Cross-Library Analysis**](docs/module-reference/taint-analysis.md) | Traces an argument across up to three shared library hops, so taint paths that cross library boundaries reach their sink rather than stopping at the first boundary. |
+| [**DAG Adapter Language**](docs/module-reference/encoding-dag.md) | Describes instruction set encodings as directed acyclic graphs so every architecture shares the same analysis code path. Without it, each ISA requires its own exception handler and the analyzer count scales with the architecture count. |
 
 </details>
 
@@ -35,12 +35,12 @@ Combined with any coding agent, it runs as an autonomous reverse engineering too
 
 | Capability | |
 |:---|:---|
-| **Taint Analysis** | Follows data from network-facing entry points through the call graph to security-sensitive sinks across 14 architectures, interprocedurally and across shared library boundaries. Register-level tracking resolves PLT stubs so the trace does not stop at library call sites. |
-| **Pre-Authentication Exposure** | Traverses the control flow graph from the network entry point and identifies every code path that reaches a security-sensitive operation before an authentication gate. Produces a reachability map so manual review starts at the authentication boundary, not before it. |
-| **Finding Validation** | Generates a minimal curl-based HTTP request that reproduces each confirmed finding at the protocol level. Output includes the expected response delta and CWE classification so the PSIRT submission contains working proof. |
-| **Source Code Auditing** | Runs a source-level sink and source scanner without an LLM. A profile compressor assigns each file a 5-bit security profile based on sink density, data flow indicators, and import surface, then batches low-risk files so only the highest-risk files need individual reads. |
-| **Compiler Defect Detection** | Finds security defects the compiler introduced through miscompilation. The GCC 12.3.1.7 max-not-min defect, a four-instruction sltu/masknez/maskeqz/or sequence that selects the wrong comparison operand, produced 172 confirmed findings in TencentOS 4.6. |
-| **Cryptographic Analysis** | Eight tools make the cryptographic layer of a compiled binary readable. They recover XOR keys by known-plaintext attack, locate embedded PKCS#1 v1.5 key blocks, reconstruct Lagrange-shared secrets from LSB-steganographic channels, and audit TLS and JWT configurations. |
+| [**Taint Analysis**](docs/module-reference/taint-analysis.md) | Follows data from network-facing entry points through the call graph to security-sensitive sinks across 14 architectures, interprocedurally and across shared library boundaries. Register-level tracking resolves PLT stubs so the trace does not stop at library call sites. |
+| [**Pre-Authentication Exposure**](docs/module-reference/preauth-exposure.md) | Traverses the control flow graph from the network entry point and identifies every code path that reaches a security-sensitive operation before an authentication gate. Produces a reachability map so manual review starts at the authentication boundary, not before it. |
+| [**Finding Validation**](docs/module-reference/preauth-exposure.md) | Generates a minimal curl-based HTTP request that reproduces each confirmed finding at the protocol level. Output includes the expected response delta and CWE classification so the PSIRT submission contains working proof. |
+| [**Source Code Auditing**](docs/module-reference/source-audit.md) | Runs a source-level sink and source scanner without an LLM. A profile compressor assigns each file a 5-bit security profile based on sink density, data flow indicators, and import surface, then batches low-risk files so only the highest-risk files need individual reads. |
+| [**Compiler Defect Detection**](docs/module-reference/compiler-defects.md) | Finds security defects the compiler introduced through miscompilation. The GCC 12.3.1.7 max-not-min defect, a four-instruction sltu/masknez/maskeqz/or sequence that selects the wrong comparison operand, produced 172 confirmed findings in TencentOS 4.6. |
+| [**Cryptographic Analysis**](docs/module-reference/crypto.md) | Eight tools make the cryptographic layer of a compiled binary readable. They recover XOR keys by known-plaintext attack, locate embedded PKCS#1 v1.5 key blocks, reconstruct Lagrange-shared secrets from LSB-steganographic channels, and audit TLS and JWT configurations. |
 
 </details>
 
@@ -49,16 +49,16 @@ Combined with any coding agent, it runs as an autonomous reverse engineering too
 
 | Capability | |
 |:---|:---|
-| **LoongArch64** | The only public RE tool with a dedicated LoongArch64 toolchain: taint tracking, heap overflow scanning, compiler bug detection, and pseudo-C decompilation. |
-| **nanoMIPS** | Interprocedural taint tracker with P32/P16 BALC branch target resolution and 12-byte PLT stub unwrapping; no other public tool does this. |
-| **Windows PE Security Analysis** | Seven analyzers in one pass: CFG bypass exports, SafeSEH gaps, unauthenticated RPC, COM hijacking candidates, and kernel pool overflows. |
-| **Windows Kernel Driver & BYOVD** | Detects eight BYOVD capability classes in signed drivers, including physical memory read/write, token stealing, and callback removal. |
-| **Android / APK Analysis** | Maps APK attack surfaces and ranks internal libraries by security risk before any manual analysis begins. |
-| **Erlang / BEAM Analysis** | Scans BEAM bytecode for dangerous function calls and unexposed attack surfaces without executing the application. |
-| **Go Binary Reverse Engineering** | Recovers function names from stripped and garble-obfuscated Go binaries by reading the Go runtime metadata table. |
-| **Game & Legacy RE** | Labels stripped game binaries by engine, covering UE4, id Tech, Unity, Source2, and CryEngine; also decodes PS3 Cell SPU and Mac OS 8/9 PEF binaries. |
-| **Firmware Extraction** | Decrypts proprietary firmware through outer XOR, PKCS#1 v1.5 key block scan, and RC4 known-plaintext attack; Huawei VRP squashfs with ARM64 BCJ filter also supported. |
-| **Firmware Key Corpus** | Classifies recovered keys against a cross-firmware family table; flags anomalous key counts from the firmware filename before decryption begins. |
+| [**LoongArch64**](docs/module-reference/loongarch64.md) | The only public RE tool with a dedicated LoongArch64 toolchain: taint tracking, heap overflow scanning, compiler bug detection, and pseudo-C decompilation. |
+| [**nanoMIPS**](docs/module-reference/nanomips.md) | Interprocedural taint tracker with P32/P16 BALC branch target resolution and 12-byte PLT stub unwrapping; no other public tool does this. |
+| [**Windows PE Security Analysis**](docs/module-reference/windows-pe.md) | Seven analyzers in one pass: CFG bypass exports, SafeSEH gaps, unauthenticated RPC, COM hijacking candidates, and kernel pool overflows. |
+| [**Windows Kernel Driver & BYOVD**](docs/module-reference/kernel-drivers.md) | Detects eight BYOVD capability classes in signed drivers, including physical memory read/write, token stealing, and callback removal. |
+| [**Android / APK Analysis**](docs/module-reference/android.md) | Maps APK attack surfaces and ranks internal libraries by security risk before any manual analysis begins. |
+| [**Erlang / BEAM Analysis**](docs/module-reference/beam.md) | Scans BEAM bytecode for dangerous function calls and unexposed attack surfaces without executing the application. |
+| [**Go Binary Reverse Engineering**](docs/workflows/go-binaries.md) | Recovers function names from stripped and garble-obfuscated Go binaries by reading the Go runtime metadata table. |
+| [**Game & Legacy RE**](docs/module-reference/game-re.md) | Labels stripped game binaries by engine, covering UE4, id Tech, Unity, Source2, and CryEngine; also decodes PS3 Cell SPU and Mac OS 8/9 PEF binaries. |
+| [**Firmware Extraction**](docs/module-reference/firmware-analysis.md) | Decrypts proprietary firmware through outer XOR, PKCS#1 v1.5 key block scan, and RC4 known-plaintext attack; Huawei VRP squashfs with ARM64 BCJ filter also supported. |
+| [**Firmware Key Corpus**](docs/module-reference/firmware-analysis.md) | Classifies recovered keys against a cross-firmware family table; flags anomalous key counts from the firmware filename before decryption begins. |
 
 </details>
 
@@ -67,9 +67,9 @@ Combined with any coding agent, it runs as an autonomous reverse engineering too
 
 | Capability | |
 |:---|:---|
-| **Version Diffing** | Checks whether the logic changed, not whether the file changed, so a cosmetic recompile cannot hide an unpatched vulnerability. |
-| **Cross-Target Learning** | Every confirmed finding seeds future semantic searches, so the tool gets sharper with each engagement. |
-| **Module Quality Gate** | FORGE audits every user-written module before it can be stored, so local extensions meet the same standard as the modules that ship with Ablation. |
+| [**Version Diffing**](docs/workflows/cross-version.md) | Checks whether the logic changed, not whether the file changed, so a cosmetic recompile cannot hide an unpatched vulnerability. |
+| [**Cross-Target Learning**](docs/module-reference/cross-target-learning.md) | Every confirmed finding seeds future semantic searches, so the tool gets sharper with each engagement. |
+| [**Module Quality Gate**](docs/module-reference/forge.md) | FORGE audits every user-written module before it can be stored, so local extensions meet the same standard as the modules that ship with Ablation. |
 
 </details>
 
