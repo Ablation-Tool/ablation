@@ -427,8 +427,8 @@ class CppVtableReconstructorAnalyzer:
         in subclass vtable structs or static object initializers).
         Method 2: raw 8-byte little-endian byte search in .text
         (covers static binaries where vtable VA is embedded as movabs literal).
-        VA is computed as text_sec.virtual_address + byte_offset, which is
-        correct for PIE ELF where VA == file_offset for all sections.
+        VA is computed as text_sec.virtual_address + byte_offset, converting
+        the intra-section byte offset to virtual address space.
         """
         b = self._binary()
         vtable_set: Dict[int, VtableSpec] = {s.va: s for s in specs}
