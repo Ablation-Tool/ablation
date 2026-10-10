@@ -46,6 +46,7 @@ from .taint_tracker_riscv32 import RISCV32TaintTracker, TaintFindingRISCV32
 from .taint_tracker_riscv64 import RISCV64TaintTracker, TaintFindingRISCV64
 from .v850_decoder import V850Decoder, V850Disasm, V850Frame
 from .taint_tracker_v850 import V850TaintTracker, TaintFindingV850
+from .taint_tracker_tricore import TriCoreTaintTracker, TaintFindingTriCore
 from .loongarch_decoder import LoongArchDecoder, LoongArchFrame
 from .loongarch_decoder_v2 import (
     LoongArchDecoderV2, LoongArchFrameV2, LoongArchDisasmV2,
@@ -180,6 +181,7 @@ __all__ = [
     "RISCV64TaintTracker", "TaintFindingRISCV64",
     "V850Decoder", "V850Disasm", "V850Frame",
     "V850TaintTracker", "TaintFindingV850",
+    "TriCoreTaintTracker", "TaintFindingTriCore",
     "LoongArchDecoder", "LoongArchFrame",
     "LoongArchDecoderV2", "LoongArchFrameV2", "LoongArchDisasmV2",
     "KASAN_SYMBOL_PREFIXES", "KCOV_SYMBOL_PREFIXES",
