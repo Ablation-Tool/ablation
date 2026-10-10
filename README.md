@@ -208,23 +208,15 @@ This project was greatly informed and inspired by several key literary works.
 <details>
 <summary><strong>Analysis Engines:</strong> Semantic · Taint · Diffing · FmtStr · Heap · MultiArch · Driver</summary>
 
+![Corpus Builder](https://img.shields.io/badge/Corpus_Builder-0284c7?style=flat-square) ![Semantic Search](https://img.shields.io/badge/Semantic_Search-0284c7?style=flat-square)
+
+![Taint Engine](https://img.shields.io/badge/Taint_Engine-b91c1c?style=flat-square) ![Diffing](https://img.shields.io/badge/Diffing-7c3aed?style=flat-square) ![Format String](https://img.shields.io/badge/Format_String-b91c1c?style=flat-square)
+
+![Heap Scanner](https://img.shields.io/badge/Heap_Scanner-b91c1c?style=flat-square) ![Multi-Arch](https://img.shields.io/badge/Multi--Arch-374151?style=flat-square) ![Driver Engine](https://img.shields.io/badge/Driver_Engine-b91c1c?style=flat-square)
+
 ```
-  ┌──────────────────┐  ┌──────────────────┐
-  │   Corpus Builder │─▶│  Semantic Search  │
-  │   embedding DB   │  │  BERT · < 1 sec  │
-  └──────────────────┘  └──────────────────┘
-
-  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-  │   Taint Engine   │  │     Diffing      │  │  Format String   │
-  │    data flow     │  │   DTW · delta    │  │   specifiers     │
-  └──────────────────┘  └──────────────────┘  └──────────────────┘
-
-  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-  │   Heap Scanner   │  │   Multi-Arch     │  │  Driver Engine   │
-  │   chunk · UAF    │  │  MIPS·PPC·RV·LA  │  │  IOCTL · BYOVD  │
-  └──────────────────┘  └──────────────────┘  └──────────────────┘
-                                  │
-                       ·· findings ··▶ Claude
+                    │
+         ·· findings ··▶ Claude
 ```
 
 <details>
