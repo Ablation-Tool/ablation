@@ -150,6 +150,8 @@ class EcuOpenDamosParser:
         offsets from the JSON are used as-is (suitable only for the baseline ROM).
         """
         if rom is not None:
+            for tbl in self._tables:
+                tbl.relocated_address = None
             located = self.locate_in_rom(rom)
             for tbl in self._tables:
                 if tbl.name in located:
@@ -296,7 +298,7 @@ class EcuOpenDamosParser:
         rl_name = char.get("recordLayout", "")
         rl = self._layouts.get(rl_name)
         header_bytes = rl.header_bytes if rl else 0
-        axis_be  = (not rl.axis_big_endian) if rl else False  # little_endian flag
+        axis_little_endian = (not rl.axis_big_endian) if rl else False
         axis_sgn = rl.axis_signed if rl else True
 
         # Encode fingerprint as the raw integer array the ECU stores
@@ -304,7 +306,7 @@ class EcuOpenDamosParser:
         if raw_fp is None:
             return None
 
-        endian_char = ">" if not axis_be else "<"
+        endian_char = ">" if not axis_little_endian else "<"
         fmt_char = "h" if axis_sgn else "H"
         try:
             fp_bytes = struct.pack(f"{endian_char}{count}{fmt_char}", *raw_fp)
