@@ -2,6 +2,35 @@
 
 ---
 
+## v2.67.0
+
+**ISO 26262 TCL3 coverage gate and compliance artifacts.**
+
+Taint engine reaches 85.29% statement coverage. The gate is enforced at
+`fail_under = 85` in `pyproject.toml` so a regression in taint logic fails
+the test suite before it reaches a firmware engagement.
+
+New:
+- `tests/test_taint_labeled_coverage.py`: 73 targeted tests covering
+  `TaintState.join()` lattice paths, `invalidate_base()`, ARC atomic
+  instructions, x86 `_const` instructions, MIPS/PPC FP handlers, and
+  `record_trace=True` paths across all 6 qualified taint engine modules.
+- `docs/ABLATION-STANDARDS.md`: compliance matrix v1.3.0 — 29 MET, 0 PARTIAL,
+  against NIST SP 800-218 (SSDF), CISA Secure by Design, ISO 26262 TCL3,
+  MIL-HDBK-115C, and DoWI 8430.01.
+- `docs/safety-manual.md`: ISO 26262 Part 8 Clause 11 safety manual.
+- `docs/known-anomalies/`: 16 known-anomaly files, one per taint tracker.
+- `docs/sbom/ablation-sbom.json`: software bill of materials (pip-licenses).
+- `requirements-hashed.txt`: hash-pinned dependency lockfile (pip-compile).
+- `scripts/monitor-supply-chain.sh`: weekly pip-audit CVE scan.
+- `scripts/verify-account.sh`: pre-push account verification gate.
+- `tests/conformance/`: 43 ABI conformance tests for RH850 and TriCore.
+- README compliance badges: NIST SP 800-218, CISA Secure by Design,
+  MIL-HDBK-115C.
+- `SECURITY.md`: Security Practices section documenting all controls.
+
+---
+
 ## v2.66.0
 
 **BinaryLifter: SH-2A backend upgraded to CFG + structured control flow.**
