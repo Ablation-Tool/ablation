@@ -22,7 +22,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 
 | Capability | |
 |:---|:---|
-| [**Semantic Code Search**](docs/module-reference/semantic-search.md) | Uses a BERT-family encoder to find functions by meaning in stripped binaries without symbols. |
+| [**Semantic Code Search**](docs/module-reference/semantic-search.md) | Uses a BERT-family encoder to find functions by meaning in stripped binaries without symbols. A binary-scoped constructor takes a loaded binary context and builds a searcher configured for that binary, encoding only its functions rather than everything in the database. |
 | [**On-Demand Analysis**](docs/module-reference/on-demand-analysis.md) | Loads in seconds because it only analyzes the code being examined; Ghidra and IDA Pro parse the entire file upfront. |
 | [**Binary Lifting**](docs/module-reference/binary-lifter.md) | Pseudo-C IR across 19 ISA targets and runtimes; ARM64 and x86-64 receive register-level taint propagation. |
 | [**Hypothesis Engine**](docs/module-reference/hypothesis-engine.md) | Tracks competing RE hypotheses, scores evidence across four families, and auto-executes probes; sessions persist across engagements. |
