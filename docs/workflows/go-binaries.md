@@ -1,40 +1,87 @@
 # Go Binary RE Workflow
 
-The Go compiler always embeds the full function name table (`pclntab`) in the binary for
-runtime stack traces -- even after `strip(1)`. Ablation extracts this table before BERT
-encoding, lifting semantic search accuracy from roughly 0.20 to 0.70+ on stripped Go binaries.
+The Go compiler always embeds the full function name table (`pclntab`) in the binary for runtime stack traces — even after `strip(1)`. Ablation extracts this table before BERT encoding, lifting semantic search accuracy from roughly 0.20 to 0.70+ on stripped Go binaries.
 
 ---
 
-## Overview
+## Why this exists
+
+Two gaps blocked Go binary RE:
+
+**1. `strip(1)` removes symbols, but the Go runtime requires `pclntab` for stack unwinding.**
+Go's runtime stack unwinder reads function names, start VAs, and end VAs from the `pclntab` section at every `panic()`, `runtime.Caller()`, and `goroutine` stack dump. The linker cannot strip it. This is a design feature of the Go runtime that becomes a RE gift: every stripped Go binary contains a complete function name table.
+
+**2. Garble replaces pclntab names with content-addressed hashes.**
+`mvdan/garble` replaces function names with hashes derived from the function's content. `GoFuncTable` returns names like `a.b` or `$1a2b3c4d` — not useful for semantic search. `GoGarbleRe` recovers structure by finding `runtime.morestack` as a ground-truth anchor and tracing HTTP handler registration patterns.
+
+---
+
+## pclntab format
+
+The pclntab section begins with a 4-byte magic that identifies the Go version:
 
 ```
-Go binary (stripped ELF)
-        |
-        v
-[GoPclntab]      -- extract pclntab: VA -> function name (all Go versions)
-        |
-        v
-[NameRegistry]   -- register all function names as overlay
-        |
-        v
-[BinaryContext]  -- names appear in callee/caller output automatically
-        |
-        v
-[SemanticSearcher] -- BERT sweep with named functions: accuracy ~0.70+
+  pclntab header layout:
+    offset 0: magic (4 bytes) — identifies format version
+    offset 4: padding (2 bytes)
+    offset 6: instruction size quantum (1 byte)
+    offset 7: pointer size in bytes (1 byte, 4 or 8)
+
+  Magic values:
+    0xFFFFFFF1  Go 1.20+  64-bit with separate funcnametab section
+    0xFFFFFFFA  Go 1.16-1.19  64-bit function table
+    0xFFFFFFFB  Go 1.12-1.15  32-bit function table
+
+  Function table entry (Go 1.16+):
+    [func_VA: 8 bytes][func_offset_in_nametab: 4 bytes]
+
+  Name resolution:
+    1.20+: funcnametab is a separate rodata section; entry gives offset into it
+    pre-1.20: name offset is relative to pclntab itself
+    In both cases: GoFuncTable resolves to {VA: name_string}
 ```
 
-For garble-obfuscated builds where function names are hashed, use a different path:
+The format is architecture-independent. x86-64, arm64, mips, and riscv64 Go binaries all use the same pclntab structure.
+
+---
+
+## Workflow
 
 ```
-Garble binary
-        |
-        v
-[GoGarbleRe]     -- trace runtime bootstrap, find HTTP handler registration
-                    via runtime.morestack / text section anchor patterns
-        |
-        v
-[SemanticSearcher] -- query by behavioral description without name hints
+  Go binary (stripped ELF)
+          |
+          v
+  ┌────────────────────────────────────────────────────────────┐
+  │  GoPclntab / GoFuncTable                                   │
+  │    Locate pclntab by magic scan or section header          │
+  │    Parse function table: VA → name string                  │
+  │    All function names extracted without symbol table       │
+  └──────────────────────────┬─────────────────────────────────┘
+                             |
+                             v
+  ┌────────────────────────────────────────────────────────────┐
+  │  NameRegistry (via ctx.set_name)                           │
+  │    Register all pclntab names with source='pclntab'        │
+  │    Names appear in callee/caller output automatically      │
+  └──────────────────────────┬─────────────────────────────────┘
+                             |
+                             v
+  ┌────────────────────────────────────────────────────────────┐
+  │  BinaryContext                                             │
+  │    Names visible in ctx.name(va), ctx.names_table()        │
+  │    ctx.callers_of('main.handleWebsocketUpgrade') works      │
+  └──────────────────────────┬─────────────────────────────────┘
+                             |
+                             v
+  ┌────────────────────────────────────────────────────────────┐
+  │  SemanticSearcher                                          │
+  │    BERT corpus descriptions change from:                   │
+  │      "func_0xABCD calls: runtime_memmove"                  │
+  │    to:                                                     │
+  │      "main.handleWebsocketUpgrade calls: runtime_memmove,  │
+  │       net_http_ServeHTTP"                                  │
+  │    Accuracy: ~0.20 unnamed → ~0.70+ named                  │
+  └──────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -47,7 +94,7 @@ from ablation.analyzers.binary_context import BinaryContext
 
 data = open('/path/to/go_binary', 'rb').read()
 
-# Returns None if the binary is not a Go binary or pclntab is absent
+# Returns None if the binary is not Go or pclntab is absent
 ft = GoFuncTable.from_binary(data)
 
 if ft:
@@ -62,26 +109,9 @@ if ft:
     print(ctx.names_table(limit=20))
 ```
 
-### Supported pclntab formats
-
-| Go version | Magic | Notes |
-|---|---|---|
-| 1.20+ | `0xFFFFFFF1` | 64-bit with separate `funcnametab` section |
-| 1.16 - 1.19 | `0xFFFFFFFA` | 64-bit function table |
-| 1.12 - 1.15 | `0xFFFFFFFB` | 32-bit function table |
-
-Architecture-independent: works on x86-64, arm64, mips, and riscv64. All architectures use
-the same pclntab structure.
-
 ---
 
-## Step 2: Run semantic sweep (with names)
-
-With function names registered, the BERT corpus descriptions change from generic
-`func_0xABCD calls: runtime_memmove, runtime_mapassign` to
-`main.handleWebsocketUpgrade calls: runtime_memmove, net_http_ServeHTTP`.
-
-That change dramatically improves semantic search precision:
+## Step 2: Semantic sweep with named functions
 
 ```python
 from ablation.analyzers.corpus_builder import CorpusBuilder
@@ -106,8 +136,7 @@ results = searcher.query(
 
 ## Step 3: Dangerous callers scan
 
-Go binaries frequently use `exec.Command` and `os/exec` for shell operations. Use
-GoSubprocessScanner to find all call sites:
+Go binaries frequently use `os/exec` for shell operations. `GoSubprocessScanner` finds all call sites:
 
 ```python
 from ablation.analyzers.go_subprocess_scanner import GoSubprocessScanner
@@ -115,50 +144,70 @@ from ablation.analyzers.go_subprocess_scanner import GoSubprocessScanner
 scanner = GoSubprocessScanner('/path/to/go_binary')
 hits = scanner.scan()
 for h in hits:
-    print(f"  0x{h.va:x}  {ctx.name(h.va)}: {h.call_type}  arg={h.arg_summary}")
+    print(f"0x{h.va:x}  {ctx.name(h.va)}: {h.call_type}  arg={h.arg_summary}")
 ```
 
-**Scans for:** `os/exec.Command`, `exec.CommandContext`, `syscall.Exec`,
-`os.StartProcess`, `syscall.RawSyscall` with SYS_EXECVE.
+Scans for: `os/exec.Command`, `exec.CommandContext`, `syscall.Exec`, `os.StartProcess`, `syscall.RawSyscall` with `SYS_EXECVE`.
 
 ---
 
 ## Garble-obfuscated builds
 
-[`mvdan/garble`](https://github.com/mvdan/garble) replaces pclntab function names with
-hashes. GoFuncTable returns names like `a.b` or `$1a2b3c4d` -- not useful for semantic
-search.
+`mvdan/garble` replaces pclntab function names with content-addressed hashes. `GoFuncTable` returns names like `$1a2b3c4d` — not useful for semantic search. Use `GoGarbleRe` instead:
 
-For garble builds, use GoGarbleRe to find handler registration:
+### How GoGarbleRe works
+
+```
+  Garble binary
+          |
+          v
+  ┌────────────────────────────────────────────────────────────┐
+  │  runtime.morestack anchor                                  │
+  │    morestack is always present (stack growth is required)  │
+  │    recognized by its prologue pattern (architecture-specific)│
+  │    provides ground-truth VA-to-file-offset mapping          │
+  └──────────────────────────┬─────────────────────────────────┘
+                             |
+                             v
+  ┌────────────────────────────────────────────────────────────┐
+  │  Entry point tracing                                       │
+  │    Garble disrupts standard ELF layout                     │
+  │    entry_point = Go runtime bootstrap VA                   │
+  │    Trace bootstrap → goroutine spawn → main.main           │
+  └──────────────────────────┬─────────────────────────────────┘
+                             |
+                             v
+  ┌────────────────────────────────────────────────────────────┐
+  │  HTTP handler registration                                 │
+  │    mux.HandleFunc pattern: string literal (route) +        │
+  │    function pointer (handler VA)                           │
+  │    Routes visible even when handler names are hashed        │
+  └──────────────────────────────────────────────────────────────┘
+```
 
 ```python
 from ablation.analyzers.go_garble_re import GoGarbleRe
 
 garble_re = GoGarbleRe('/path/to/garbled_binary')
 
-# Trace Go runtime bootstrap to find the entry point
+# Entry point
 entry = garble_re.find_entry_point()
 print(f"Entry: 0x{entry:x}")
 
-# Find HTTP handler registration patterns (mux.HandleFunc)
+# HTTP handler registration patterns (mux.HandleFunc)
 handlers = garble_re.find_http_handlers()
 for h in handlers:
     print(f"  route={h.route!r}  handler=0x{h.handler_va:x}")
 
-# Find text section by VA-to-file-offset mapping
-# (garble disrupts standard ELF layout)
+# VA-to-file-offset mapping from morestack anchor
 text_va, text_offset = garble_re.find_text_section()
 ```
-
-GoGarbleRe finds `runtime.morestack` -- always present and recognizable by its prologue
-pattern -- as a ground-truth VA anchor, then maps VA to file offset from that anchor.
 
 ---
 
 ## Go string resolver
 
-Go binaries use `runtime.concatstrings` for string concatenation rather than `.rodata`
-references. GoStringResolver reconstructs string constants from `concatstrings` call sites:
+Go binaries use `runtime.concatstrings` for string concatenation rather than `.rodata` references. `GoStringResolver` reconstructs string constants from `concatstrings` call sites:
 
 ```python
 from ablation.analyzers.go_string_resolver import GoStringResolver
@@ -167,7 +216,7 @@ resolver = GoStringResolver('/path/to/go_binary')
 strings = resolver.resolve()
 
 for va, s in strings.items():
-    print(f"  0x{va:x}: {s!r}")
+    print(f"0x{va:x}: {s!r}")
 ```
 
-This populates string context that BinaryContext's `.rodata` scan misses for Go binaries.
+This populates string context that `BinaryContext`'s `.rodata` scan misses for Go binaries, so `ctx.strings_in_func(va)` returns meaningful results after resolver injection.
