@@ -1,7 +1,7 @@
 """
 binary_lifter.py — Lift native binary functions to annotated C pseudocode.
 
-Architecture Tomography: static CFG-based IR emission across 17 ISA variants.
+Architecture Tomography: static CFG-based IR emission across 18 ISA variants.
 ARM64 and x86-64 are full (register-tracking state machines); all others emit
 structural pseudocode (call/return/branch resolved, arithmetic as comments).
 
@@ -20,6 +20,7 @@ Architecture support:
     arc/arcem   — structural; requires arc-elf32-objdump in PATH
     v850/rh850  — structural; requires v850-elf-objdump in PATH
     la64        — structural; LoongArchDecoder + cfg_loongarch64; lp64 ($a0-$a7)
+    sh2a/sh2    — structural; EcuSH2aDecoder linear walk; Renesas SuperH ABI (R4-R7 args)
     beam        — module summary; BeamContext (no VA space in BEAM bytecode)
 
 Usage:
@@ -347,6 +348,8 @@ class BinaryLifter:
             return self._lift_v850(va, max_insns)
         if self.arch in ("la64", "loongarch64", "loongarch_64", "loongarch-64"):
             return self._lift_loongarch64(va, max_insns)
+        if self.arch in ("sh2a", "sh-2a", "sh2"):
+            return self._lift_sh2a(va, max_insns)
         if self.arch in ("beam", "erlang", "elixir"):
             return self._lift_beam(va, max_insns)
         return f"// unsupported arch: {self.arch}\n"
@@ -689,6 +692,57 @@ class BinaryLifter:
                 stmt = state.emit(frame)
             except Exception:
                 stmt = f"// {frame.mnemonic} {frame.op_str}"
+            if stmt:
+                for s in stmt.splitlines():
+                    lines.append("  " + s)
+        lines.append("}")
+        return "\n".join(lines) + "\n"
+
+    # ── SH-2A lifter ──────────────────────────────────────────────────────────
+
+    def _lift_sh2a(self, func_va: int, max_insns: int) -> str:
+        try:
+            from .ecu_sh2a_decoder import EcuSH2aDecoder
+        except ImportError as e:
+            return f"// SH-2A decoder not available: {e}\n"
+
+        # Flat ECU ROMs have no ELF section map: VA == file offset (base_va=0)
+        if self._sections:
+            try:
+                code = self._read_va(func_va, max_insns * 4)
+            except ValueError as e:
+                return f"// {e}\n"
+        else:
+            off = func_va
+            code = self.data[off: off + max_insns * 4]
+
+        if not code:
+            return f"// no bytes at {func_va:#x}\n"
+
+        try:
+            decoder = EcuSH2aDecoder(code, base_va=func_va)
+            insns = decoder.disassemble(0, len(code))[:max_insns]
+        except Exception as e:
+            return f"// SH-2A decode failed: {e}\n"
+
+        if not insns:
+            return f"// no instructions decoded at {func_va:#x}\n"
+
+        # Truncate at first RETURN + 1 delay-slot instruction
+        for stop_i, _insn in enumerate(insns):
+            if _insn.insn_type == "RETURN":
+                insns = insns[:min(stop_i + 2, len(insns))]
+                break
+
+        tainted_params = self._taint_map.get(func_va, set())
+        state = _SH2aState(tainted_params, self._func_name, self._plt)
+        fname = self._func_name(func_va)
+        lines: List[str] = [f"// {fname} @ {func_va:#x}", "{"]
+        for insn in insns:
+            try:
+                stmt = state.emit(insn)
+            except Exception:
+                stmt = f"// {insn.mnemonic}"
             if stmt:
                 for s in stmt.splitlines():
                     lines.append("  " + s)
@@ -4359,3 +4413,161 @@ def _make_v850_emit(name_fn, plt: Dict[int, str]):
         return f"// {insn.mnemonic} {_ablation_ops_str(insn)}"
 
     return emit
+
+
+# ── _SH2aState ─────────────────────────────────────────────────────────────────
+
+
+class _SH2aState:
+    """Per-function register-tracking state for SH-2A (Renesas SuperH ABI).
+
+    Params: R4-R7 (arg0-arg3). Return: R0. Stack: R15. Link register: PR.
+    SH2aInsn has pre-decoded .rd, .rs, .imm, .target, .insn_type fields so
+    no regex operand parsing is needed — dispatch is on insn_type directly.
+    """
+
+    _PARAM_REGS = ("r4", "r5", "r6", "r7")
+    _RETURN = "r0"
+    _SP = "r15"
+
+    def __init__(self, tainted_params: Set[str], name_fn, plt: Dict[int, str]):
+        self._regs: Dict[str, NativeVal] = {}
+        self._written: Set[str] = set()
+        self._declared: Set[str] = set()
+        self._var_n = 0
+        self._name_fn = name_fn
+        self._plt = plt
+
+        for i in range(16):
+            r = f"r{i}"
+            self._regs[r] = NativeVal("uint32_t", r)
+            self._written.add(r); self._declared.add(r)
+
+        for i, r in enumerate(self._PARAM_REGS):
+            nv = NativeVal("uint32_t", f"arg{i}", tainted=(r in tainted_params))
+            self._regs[r] = nv
+            self._declared.discard(r); self._declared.add(f"arg{i}")
+
+        self._regs[self._SP] = NativeVal("uint32_t", "sp", is_ptr=True)
+        self._declared.add("sp"); self._declared.discard(self._SP)
+
+    def _alloc(self) -> str:
+        n = f"v{self._var_n}"; self._var_n += 1; return n
+
+    def _rname(self, n: Optional[int]) -> str:
+        return f"r{n}" if n is not None else "???"
+
+    def _read(self, r: str) -> NativeVal:
+        return self._regs.get(r, NativeVal("uint32_t", r))
+
+    def _write(self, r: str, nv: NativeVal) -> str:
+        old = self._regs.get(r)
+        if old:
+            e = old.expr
+            if (e.startswith("v") and e[1:].isdigit()) or \
+               (e.startswith("arg") and e[3:].isdigit()):
+                self._regs[r] = NativeVal(nv.ctype, e, nv.is_ptr, nv.tainted)
+                return e
+        vn = self._alloc()
+        self._regs[r] = NativeVal(nv.ctype, vn, nv.is_ptr, nv.tainted)
+        self._written.add(r)
+        return vn
+
+    def _decl(self, ctype: str, vn: str, expr: str, ann: str = "") -> str:
+        if vn in self._declared:
+            return f"{vn} = {expr};{ann}"
+        self._declared.add(vn); return f"{ctype} {vn} = {expr};{ann}"
+
+    def _tainted(self, *rs: str) -> bool:
+        return any(self._regs.get(r, _UNKNOWN).tainted for r in rs)
+
+    def _bits_from_mnem(self, mnemonic: str) -> int:
+        if mnemonic.endswith(".b"):
+            return 8
+        if mnemonic.endswith(".w"):
+            return 16
+        return 32
+
+    def emit(self, insn: object) -> str:
+        itype = insn.insn_type  # type: ignore[attr-defined]
+        m = insn.mnemonic.lower()  # type: ignore[attr-defined]
+
+        if itype in ("LR_SAVE", "LR_RESTORE"):
+            return f"// {m}"
+
+        if itype == "RETURN":
+            return f"return {self._read(self._RETURN).expr};"
+
+        if itype == "CALL":
+            tgt = insn.target  # type: ignore[attr-defined]
+            rs = insn.rs  # type: ignore[attr-defined]
+            if tgt is not None:
+                callee = self._name_fn(tgt)
+            elif rs is not None:
+                callee = f"*{self._read(self._rname(rs)).expr}"
+            else:
+                callee = "???"
+            args_str = ", ".join(self._read(r).expr for r in self._PARAM_REGS)
+            vn = self._alloc()
+            is_t = self._tainted(*self._PARAM_REGS)
+            self._regs[self._RETURN] = NativeVal("uint32_t", vn, tainted=is_t)
+            self._written.add(self._RETURN)
+            ann = " /* TAINTED */" if is_t else ""
+            return self._decl("uint32_t", vn, f"{callee}({args_str})", ann)
+
+        if itype == "BRANCH":
+            tgt = insn.target  # type: ignore[attr-defined]
+            rs = insn.rs  # type: ignore[attr-defined]
+            if tgt is not None:
+                if m in ("bra", "braf"):
+                    return f"goto loc_{tgt:x};"
+                cond = "T" if m.startswith("bt") else "!T"
+                return f"if ({cond}) goto loc_{tgt:x};"
+            if rs is not None:
+                return f"goto *{self._read(self._rname(rs)).expr};"
+            return "goto *???;"
+
+        if itype == "LOAD":
+            rd = insn.rd  # type: ignore[attr-defined]
+            rs = insn.rs  # type: ignore[attr-defined]
+            imm = insn.imm  # type: ignore[attr-defined]
+            if rd is None or rs is None:
+                return f"// {m} ???"
+            bits = self._bits_from_mnem(m)
+            ctype = _ctype_from_bits(bits, signed=False)
+            base_expr = self._read(self._rname(rs)).expr
+            addr = f"{base_expr} + {imm:#x}" if imm else base_expr
+            tainted = self._tainted(self._rname(rs))
+            expr = f"*({_ptr_cast(ctype)}{addr})"
+            vn = self._write(self._rname(rd), NativeVal(ctype, expr, tainted=tainted))
+            return self._decl(ctype, vn, expr, " /* TAINTED */" if tainted else "")
+
+        if itype == "STORE":
+            rd = insn.rd  # type: ignore[attr-defined]
+            rs = insn.rs  # type: ignore[attr-defined]
+            imm = insn.imm  # type: ignore[attr-defined]
+            if rd is None or rs is None:
+                return f"// {m} ???"
+            bits = self._bits_from_mnem(m)
+            ctype = _ctype_from_bits(bits, signed=False)
+            base_expr = self._read(self._rname(rd)).expr
+            addr = f"{base_expr} + {imm:#x}" if imm else base_expr
+            src_expr = self._read(self._rname(rs)).expr
+            ann = " /* TAINTED */" if self._tainted(self._rname(rs)) else ""
+            return f"*({_ptr_cast(ctype)}{addr}) = {src_expr};{ann}"
+
+        # MISC — emit assignment when operands are present
+        rd = insn.rd  # type: ignore[attr-defined]
+        rs = insn.rs  # type: ignore[attr-defined]
+        imm = insn.imm  # type: ignore[attr-defined]
+        if rd is not None and imm is not None and rs is None:
+            rn = self._rname(rd)
+            vn = self._write(rn, NativeVal("uint32_t", _imm_expr(imm)))
+            return self._decl("uint32_t", vn, _imm_expr(imm))
+        if rd is not None and rs is not None:
+            rn, sn = self._rname(rd), self._rname(rs)
+            src_nv = self._read(sn)
+            vn = self._write(rn, NativeVal("uint32_t", src_nv.expr, tainted=src_nv.tainted))
+            ann = " /* TAINTED */" if src_nv.tainted else ""
+            return self._decl("uint32_t", vn, src_nv.expr, ann)
+        return f"// {m}"

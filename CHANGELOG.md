@@ -2,6 +2,28 @@
 
 ---
 
+## v2.63.0
+
+**BinaryLifter: SH-2A backend (`_lift_sh2a` + `_SH2aState`).**  Adds Renesas SH-2A (SH7058/SH7059)
+as the 18th ISA supported by `BinaryLifter.lift_function()`.
+
+New:
+- `_lift_sh2a(func_va, max_insns)`: lifts an SH-2A function to pseudo-C IR.  Uses `EcuSH2aDecoder`
+  directly (no Capstone, no subprocess).  Flat ECU ROM fallback: when `_sections` is empty (no ELF
+  header), treats `func_va` as a direct file offset (base_va=0).  Truncates at first RETURN +
+  delay-slot instruction to prevent running into zero-padded ROM space.
+- `_SH2aState`: register-tracking state machine for SH-2A (Renesas SuperH calling convention).
+  R4-R7 = arg0-arg3; R0 = return value; R15 = stack pointer.  Dispatches on `SH2aInsn.insn_type`
+  directly (no regex) — clean because `EcuSH2aDecoder` pre-categorizes every instruction.  Handles
+  LR_SAVE/LR_RESTORE (prologue comment), RETURN, CALL (direct + indirect JSR), BRANCH (conditional
+  BT/BF + unconditional BRA + indirect JMP), LOAD (MOV.L/W/B with displacement), STORE, and MISC.
+  Taint propagation from tainted args through call results and loads.
+- Arch dispatch: `sh2a`, `sh-2a`, `sh2` all dispatch to `_lift_sh2a`.
+- 46 tests in `tests/test_binary_lifter_sh2a.py`.
+- Docs: `docs/module-reference/binary-lifter-sh2a.md`.
+
+---
+
 ## v2.62.0
 
 **CppVtableReconstructorAnalyzer: ET_EXEC fix + generic consumer tracing for LoongArch64/MIPS/PPC.**
