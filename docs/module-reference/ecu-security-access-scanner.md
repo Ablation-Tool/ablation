@@ -29,10 +29,10 @@ A UDS/KWP2000 SecurityAccess implementation is required to return a cryptographi
 (seed) that changes on every invocation. If the seed is static, the challenge is fixed and
 an attacker can precompute the key offline, replay it, and bypass SecurityAccess entirely.
 
-In the GM corpus, the static seed is the SA subfunction code `0x67` followed by zero bytes.
-This is not a coincidence: the seed response buffer is filled with the request header byte
-rather than a random value. The pattern is consistent across all P-series CPU32 variants and
-the E38 PPC32 region.
+In the GM corpus, the static seed is `0x67` followed by zero bytes because the requestSeed
+handler copies the SA subfunction code into the seed response buffer instead of generating a
+random value. The pattern is identical across all P-series CPU32 variants and the E38 PPC32
+region.
 
 ---
 
@@ -163,9 +163,9 @@ reflash chain over OBD-II DLC pin 2.
   stb   r3, 2(r4)
 ```
 
-Confirmed at VA 0x6114. Second SA handler found at 0x6404 (mapped to an internal CAN command,
-not UDS SecurityAccess). The SA handler at 0x6114 feeds a state machine via SRAM variable
-0x3FFFE98E; see `auto_ecu_corpus_re.py` for the full state machine analysis.
+Confirmed at VA 0x6114. A second service 0x27 handler exists at 0x6404 but maps to an internal
+SWCAN command index, not UDS SecurityAccess. The SA handler at 0x6114 feeds a state machine
+via SRAM variable 0x3FFFE98E; see `auto_ecu_corpus_re.py` for the full state machine analysis.
 
 ---
 
