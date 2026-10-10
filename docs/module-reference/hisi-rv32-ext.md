@@ -4,20 +4,20 @@ Correct-size disassembly for HiSilicon WS63 / Hi3863 / BS21 (Hi2821) NearLink So
 firmware and all other HiSilicon bare-metal RISC-V targets using the proprietary
 `riscv31` core with HCC (Huawei Custom C) ISA extensions.
 
-## The problem — six custom opcode spaces
+## The problem: six custom opcode spaces
 
 HiSilicon's `riscv31` core extends base RV32GC with six custom opcode spaces plus
 two 16-bit compressed extensions:
 
 | Opcode | Space     | Instructions | Size |
 |--------|-----------|--------------|------|
-| `0x0b` | custom-0  | `ldmia`, `stmia` — multi-register load/store | 4 B |
+| `0x0b` | custom-0  | `ldmia`, `stmia`: multi-register load/store | 4 B |
 | `0x1b` | OP-IMM-32 | `addshf`, `subshf`, `orshf`, `xorshf`, `andshf` | 4 B |
-| `0x1f` | reserved  | `l.li` — 48-bit long load-immediate | **6 B** |
+| `0x1f` | reserved  | `l.li`: 48-bit long load-immediate | **6 B** |
 | `0x3b` | OP-32     | `beqi`, `bnei`, `bgei`, `blti`, `bgeui`, `bltui` | 4 B |
 | `0x5b` | custom-2  | `muliadd` | 4 B |
 | `0x7b` | custom-3  | R-type dispatch/context (broad multi-op) | 4 B |
-| (16-bit) | RVC Q1 | `uxtb`, `uxth` — zero-extend to 8/16 bits | 2 B |
+| (16-bit) | RVC Q1 | `uxtb`, `uxth`: zero-extend to 8/16 bits | 2 B |
 
 Capstone 5.x mishandles all six:
 
@@ -39,14 +39,14 @@ the decoder 2 bytes behind the true instruction stream for the rest of the funct
 same `disasm_lite()` signature. It detects all five custom opcode bytes before
 forwarding to Capstone, consuming the correct number of bytes for each.
 
-Push/pop/popret are **not** handled here — they are 16-bit RVC instructions in
+Push/pop/popret are **not** handled here; they are 16-bit RVC instructions in
 Quadrant-0 custom slots (bits[15:13]=100, bits[1:0]=00) per
 `riscv_push_pop_extension.rst`. Capstone's skipdata mode handles them adequately
 for taint purposes.
 
 ## Instruction encodings
 
-### 0x0b — `ldmia` / `stmia` (4 bytes, multi-register)
+### 0x0b: `ldmia` / `stmia` (4 bytes, multi-register)
 
 Multi-register load/store with banked register lists. HiSilicon equivalent of ARM's
 `ldmia`/`stmia` prologue/epilogue patterns.
@@ -83,7 +83,7 @@ bits[30:7]  = register bitmap  (slot positions → actual registers via table be
 
 **Critical decoder rule:** bit7 (`_LDMSTM_SLOT_BIT[15]` = ra slot) is a valid register
 bitmap bit, not the `rd` lsb used by standard 32-bit R-type encoding. Do **not**
-gate dispatch on `(b0 & 0x80) == 0` — any ldmia/stmia saving ra will have bit7 set.
+gate dispatch on `(b0 & 0x80) == 0`; any ldmia/stmia saving ra will have bit7 set.
 Example: `ldmia {ra},(sp)` = `0x0001008b` → b0=0x8b, bit7=1.
 
 **Taint semantics:** `ldmia` loads from untracked memory → each loaded register is
@@ -92,7 +92,7 @@ untainted. `stmia` stores registers to memory; destination memory not tracked.
 Verified from `trans_xlinx.c.inc` (QEMU xlinx extension implementation,
 `/media/cowboy/research/hisilicon-ws63-re/online/zip_extract/`).
 
-### 16-bit — `uxtb rd', imm` / `uxth rd'` (2 bytes)
+### 16-bit: `uxtb rd', imm` / `uxth rd'` (2 bytes)
 
 Zero-extend-to-8 and zero-extend-to-16 in the compressed instruction space.
 
@@ -113,11 +113,11 @@ them as float load/store on RV32 targets without the D extension; they must be
 intercepted before Capstone sees them.
 
 **Taint semantics:** Both `uxtb` and `uxth` bound the register to ≤255 / ≤65535
-respectively — a bounding operation that clears taint, equivalent to `andi rd, rd, 0xFF`.
+respectively, a bounding operation that clears taint, equivalent to `andi rd, rd, 0xFF`.
 
 Verified from `trans_xlinx.c.inc` mask `(insn & 0xFC5F) == 0x9C01`.
 
-### 0x1f — `l.li rd, imm32` (6 bytes)
+### 0x1f: `l.li rd, imm32` (6 bytes)
 
 ```
 bytes[0:4] (LE uint32):  { imm[15:0] :: funct3=0 :: rd[4:0] :: 0x1f }
@@ -128,7 +128,7 @@ Verified: `l.li a0, 0x12345678` → `1f 05 78 56 34 12`
 - Word = 0x5678051F: bits[11:7]=10(a0), bits[31:16]=0x5678
 - HWord = 0x1234: imm[31:16]=0x1234 → full imm=0x12345678 ✓
 
-### 0x1b — `addshf/subshf/orshf/xorshf/andshf` (4 bytes)
+### 0x1b: `addshf/subshf/orshf/xorshf/andshf` (4 bytes)
 
 ```
 bits[31:25] = {shift_type[1:0], shamt[4:0]}   (sll=00, srl=01, sra=10, ror=11)
@@ -144,7 +144,7 @@ Verified: `addshf a0,a1,a2,sll,3` → `0x06C5851B` (rd=a0, rs1=a1, rs2=a2, shamt
 
 Source: `riscv_preshifted_arithmetic.rst` (riscvarchive/riscv-code-size-reduction)
 
-### 0x5b — `muliadd rd, rs1, rs2, uimm` (4 bytes)
+### 0x5b: `muliadd rd, rs1, rs2, uimm` (4 bytes)
 
 ```
 bits[31:25] = uimm[7:1]   (uimm[0]=0 always; unsigned 7-bit × 2)
@@ -162,7 +162,7 @@ Note: spec (`riscv_muladd_extension.rst`) assigns this to custom-1 (0x2b), but
 HiSilicon silicon uses custom-2 (0x5b). `ldmia`/`stmia` were incorrectly attributed
 to `0x5b` in prior versions; ground truth from `trans_xlinx.c.inc` places them at `0x0b`.
 
-### 0x3b — `beqi/bnei/bgei/blti/bgeui/bltui` (4 bytes)
+### 0x3b: `beqi/bnei/bgei/blti/bgeui/bltui` (4 bytes)
 
 ```
 bits[31:24] = cmpimm[7:0]    (8-bit signed comparison immediate)
@@ -177,7 +177,7 @@ Verified: `beqi a0,7,.` → `0x0705003B` (cmpimm=7, rs1=a0, offset=0) ✓
 
 Note: spec assigns to custom-0 (0x0b); HiSilicon silicon uses `0x3b` for branches and `0x0b` for ldmia/stmia.
 
-### 0x7b — custom-3 R-type (4 bytes)
+### 0x7b: custom-3 R-type (4 bytes)
 
 ```
 image  = {funct7[6:0]} :: {rs2[4:0]} :: {rs1[4:0]} :: {funct3[2:0]} :: {rd[4:0]} :: 0x7b
@@ -230,11 +230,11 @@ findings = tracker.run_interprocedural()
 - `riscv-code-size-reduction/existing_extensions/Huawei Custom Extension/` (GitHub)
 - Perotti et al., CARRV 2020: "HW/SW approaches for RISC-V code size reduction"
 - `tools_isa/poc_hisi_asm_map.py` + HiSilicon-patched GCC 7.3.0 (empirical ground truth)
-- RI5CY User Manual (PULP Platform, April 2019) — base Xpulp encoding reference
-- `trans_xlinx.c.inc` — QEMU xlinx extension RISC-V translator; canonical ground truth
+- RI5CY User Manual (PULP Platform, April 2019): base Xpulp encoding reference
+- `trans_xlinx.c.inc`: QEMU xlinx extension RISC-V translator; canonical ground truth
   for `0x0b` ldmia/stmia slot_bit/slot_reg tables and uxtb/uxth 16-bit mask;
   archived at `/media/cowboy/research/hisilicon-ws63-re/online/zip_extract/`
-- `HiMCUGenInstrInfo.td` — vendor LLVM fork (Apache-2.0, © HiSilicon 2024); defines
+- `HiMCUGenInstrInfo.td`: vendor LLVM fork (Apache-2.0, © HiSilicon 2024); defines
   GROUP1 16-bit compressed: `c.neg/c.sbz/c.shz/c.swz/c.xori`; does NOT define
   ldmia/stmia/uxtb/uxth (those are in the QEMU C back-end only)
 

@@ -4,9 +4,9 @@
 
 2 things that weren't possible before in Ablation:
 
-1. **No SafeSEH table inspection.** Ablation had no module that read `IMAGE_LOAD_CONFIG.SEHandlerTable` and `SEHandlerCount` from an x86 PE. `pe_sweep.py` detected `/GS` cookie presence via the `__security_cookie` import, but SafeSEH is a separate mechanism — a binary can have `__security_cookie` and still lack SafeSEH entirely. Without reading the handler table, there was no way to tell whether an x86 binary compiled without `/SAFESEH` was vulnerable to SEH overwrite exploitation.
+1. **No SafeSEH table inspection.** Ablation had no module that read `IMAGE_LOAD_CONFIG.SEHandlerTable` and `SEHandlerCount` from an x86 PE. `pe_sweep.py` detected `/GS` cookie presence via the `__security_cookie` import, but SafeSEH is a separate mechanism; a binary can have `__security_cookie` and still lack SafeSEH entirely. Without reading the handler table, there was no way to tell whether an x86 binary compiled without `/SAFESEH` was vulnerable to SEH overwrite exploitation.
 
-2. **No runtime SEH frame scanning.** Even when SafeSEH is enabled, individual functions install SEH frames dynamically with `push handler; push FS:[0]; mov FS:[0], esp`. If the handler address used in the push is not in the SafeSEH table — for example because it was computed dynamically or was added by a third-party library linked without `/SAFESEH` — that handler is a bypass target. Before this module, finding those mis-registered frames required manual disassembly of each function.
+2. **No runtime SEH frame scanning.** Even when SafeSEH is enabled, individual functions install SEH frames dynamically with `push handler; push FS:[0]; mov FS:[0], esp`. If the handler address used in the push is not in the SafeSEH table (for example because it was computed dynamically or was added by a third-party library linked without `/SAFESEH`), that handler is a bypass target. Before this module, finding those mis-registered frames required manual disassembly of each function.
 
 ---
 

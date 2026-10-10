@@ -14,22 +14,22 @@ was ARM64 only. Neither ran on LoongArch64, PPC64, MIPS, RISC-V, or any other ar
 firmware RE on a non-x86/ARM target had no vtable discovery at all.
 
 **2. Slot naming.** Even on supported arches, the existing modules returned a numbered
-array — `slot_3 → 0x13450`. No names. The Hex-Rays decompiler then showed
+array: `slot_3 → 0x13450`. No names. The Hex-Rays decompiler then showed
 `(alg_vtbl[3])(...)` with no indication that slot 3 is `modexp`. You had to manually trace
 every slot to figure out what it did before you could start analysis.
 
 **3. Type propagation friction.** Even after naming slots by hand, setting the struct type
 in IDA required calling `set_type` on the producer function return and then hunting down
-every consumer local in every caller — one variable at a time — to propagate the type
+every consumer local in every caller (one variable at a time) to propagate the type
 through the decompiler. There was no batch automation for this.
 
 `CppVtableReconstructorAnalyzer` resolves all three with a single Python call:
 
-1. **VtableScanner** — finds vtables in any ELF using RELA relocations (dynamic) or
+1. **VtableScanner**: finds vtables in any ELF using RELA relocations (dynamic) or
    code-pointer scanning (static)
-2. **VtableNamer** — names each slot from export symbols, BinaryContext function names,
+2. **VtableNamer**: names each slot from export symbols, BinaryContext function names,
    string literals, and callee patterns
-3. **CppTypeTracker** — finds every call site that dispatches through any named slot;
+3. **CppTypeTracker**: finds every call site that dispatches through any named slot;
    groups by enclosing function
 
 Output: a JSON-serialisable result object **and** an IDAPython script that emits
@@ -75,14 +75,14 @@ result   = analyzer.scan()
 
 ## Three-layer pipeline
 
-### Layer 1 — `scan_vtables(min_slots=3)`
+### Layer 1: `scan_vtables(min_slots=3)`
 
 Extracts vtable specs from the binary.
 
 **Primary method (RELA-based):** iterates all ELF relocations and collects entries whose
 addend points into an executable section (a virtual function) and whose address is in a
 data section (a vtable slot). Groups consecutive 8-byte-aligned entries into runs of
-`min_slots` or more — each run is one vtable.
+`min_slots` or more; each run is one vtable.
 
 This approach works for all dynamic ELFs regardless of architecture: x86-64, ARM64,
 LoongArch64, PPC64, etc. It requires no knowledge of the relocation type.
@@ -93,41 +93,41 @@ point into `.text`. Correct for PIE ELF where `virtual_address == file_offset` f
 sections.
 
 Each `VtableSpec` records:
-- `va` — the vtable pointer address (vfunc[0], what's stored in objects)
-- `slots` — ordered `SlotSpec` list with index, byte offset, function VA, name
-- `has_itanium_header` — True when the 16 bytes before `va` look like offset-to-top=0 +
+- `va`: the vtable pointer address (vfunc[0], what's stored in objects)
+- `slots`: ordered `SlotSpec` list with index, byte offset, function VA, name
+- `has_itanium_header`: True when the 16 bytes before `va` look like offset-to-top=0 +
   RTTI pointer (standard Itanium ABI vtable layout)
-- `ctor_sites` — VAs in the binary that reference this vtable VA (from relocations or
+- `ctor_sites`: VAs in the binary that reference this vtable VA (from relocations or
   literal byte scan)
-- `section_name` — the ELF section name containing this vtable, e.g. `.rodata` or `.data`
-- `writable` — True when the containing section has `SHF_WRITE` set (mutable at runtime)
+- `section_name`: the ELF section name containing this vtable, e.g. `.rodata` or `.data`
+- `writable`: True when the containing section has `SHF_WRITE` set (mutable at runtime)
 
-### Layer 2 — `name_slots(specs)`
+### Layer 2: `name_slots(specs)`
 
 Names each slot in place. Attempts in order:
 
-1. **Export / symtab symbol** — direct match on `func_va`
-2. **BinaryContext confirmed name** — from prior RE session `ctx.set_name()` calls
-3. **String literal xref** — if the function body references a string like `"modexp"`,
+1. **Export / symtab symbol**: direct match on `func_va`
+2. **BinaryContext confirmed name**: from prior RE session `ctx.set_name()` calls
+3. **String literal xref**: if the function body references a string like `"modexp"`,
    the slot is named `"modexp"` (filtered: no spaces, no `%`, 3–32 chars)
-4. **Named callee** — if the function calls e.g. `BN_mod_exp`, the slot is named
+4. **Named callee**: if the function calls e.g. `BN_mod_exp`, the slot is named
    `"mod_exp"` after stripping the `BN_` prefix
 
 The vtable type name is inferred from the longest common prefix of all named slots,
 e.g., `rsa_init` / `rsa_free` / `rsa_compute` → `rsa_vtable`.
 
-### Layer 3 — `trace_consumers(spec)`
+### Layer 3: `trace_consumers(spec)`
 
 Finds call sites that dispatch through any slot of `spec`.
 
-**x86-64:** delegates to `VtableDispatchScanner` — pattern-matches all
+**x86-64:** delegates to `VtableDispatchScanner`; pattern-matches all
 `call [reg+slot_offset]` encodings (REX prefix variants, disp8/disp32, SIB r12/rsp).
 Groups call sites by enclosing function using the binary's symbol table.
 
-**ARM64:** delegates to `vtable_resolver.detect_blr_sites()` — finds
+**ARM64:** delegates to `vtable_resolver.detect_blr_sites()`; finds
 `LDR vptr / LDR slot / BLR` instruction windows.
 
-**Other architectures:** `trace_consumers()` returns `[]` — vtable extraction and naming
+**Other architectures:** `trace_consumers()` returns `[]`; vtable extraction and naming
 work, call-site tracing is not yet implemented.
 
 ---

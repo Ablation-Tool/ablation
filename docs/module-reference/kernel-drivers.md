@@ -142,13 +142,13 @@ instead of a DLL name.
 In addition to the MSR-write and CR-register patterns, `analyze()` reports two new pattern
 codes:
 
-**`WRITABLE_VTABLE_IN_DATA`** — the analyzer scans writable, non-executable PE sections for
+**`WRITABLE_VTABLE_IN_DATA`**: the analyzer scans writable, non-executable PE sections for
 runs of three or more consecutive aligned pointers into executable sections. A vtable stored
 in `.data` is mutable at runtime. Any kernel write primitive that reaches the vtable converts
 to an IRP dispatch hijack: overwrite one function pointer slot and every IRP that hits that
 handler executes attacker code.
 
-**`NEITHER_IOCTL_NO_PROBE`** — the analyzer checks every `METHOD_NEITHER` IOCTL code against
+**`NEITHER_IOCTL_NO_PROBE`**: the analyzer checks every `METHOD_NEITHER` IOCTL code against
 the driver's IAT and its UTF-16LE string table. When neither `ProbeForRead` nor `ProbeForWrite`
 appears anywhere in the binary, every dereference of `Type3InputBuffer` is an unvalidated
 kernel read or write path (CWE-822). The finding lists all METHOD_NEITHER IOCTL codes found.
@@ -163,19 +163,19 @@ kernel read or write path (CWE-822). The finding lists all METHOD_NEITHER IOCTL 
 
 3 things that weren't possible before in Ablation:
 
-1. **Capability taxonomy for BYOVD triage** — `KernelDriverAnalyzer` flags dangerous API
+1. **Capability taxonomy for BYOVD triage**: `KernelDriverAnalyzer` flags dangerous API
    imports but returns a flat list with no BYOVD classification. Deciding whether a driver
    is a viable BYOVD candidate (vs. just a driver that happens to call `ZwTerminateProcess`)
    required a manual cross-reference against loldrivers.io and the 8 capability classes.
    Now it's a single `detect()` call with `report.is_byovd_capable`.
 
-2. **Known-vulnerable driver string matching** — strip a driver's import table and
+2. **Known-vulnerable driver string matching**: strip a driver's import table and
    `KernelDriverAnalyzer` loses most of its signal. Strings like `\\Device\\PhysicalMemory`,
    `MHYPROT`, `dbutil`, `RTCore64` survive stripping; checking for them was a per-engagement
    manual step. `ByovdDetector` folds this into the same pass and elevates confidence even
    when imports are absent.
 
-3. **Composition without re-parsing** — running `KernelDriverAnalyzer` then `ByovdDetector`
+3. **Composition without re-parsing**: running `KernelDriverAnalyzer` then `ByovdDetector`
    on the same `.sys` parsed the PE twice, doubling I/O on large driver batches. The
    `kda_report=` constructor argument passes an existing `KernelDriverReport` directly,
    eliminating the second parse.

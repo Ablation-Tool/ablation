@@ -8,7 +8,7 @@ between the last write and the sink call.
 
 Built on `encoding_dag.Template` / `Field` for correct bitfield extraction.
 The three bugs that affected the hand-written OpenTransport scanner are
-structurally impossible here — see **Design notes** below.
+structurally impossible here; see **Design notes** below.
 
 ---
 
@@ -128,7 +128,7 @@ its own `Template`; no shared field extractor assumes a fixed position.
 | 18 | LK=0 | b / ba | PLAUSIBLE (uncond_branch) |
 | 19 | XO=16, BO=20 | blr | PLAUSIBLE (return) |
 
-Conditional branches (opcode 16) are transparent — the walk continues through
+Conditional branches (opcode 16) are transparent; the walk continues through
 them.  This is conservative: it may find a write that is only on one branch of
 a conditional, which a full CFG analysis would flag.
 
@@ -179,6 +179,6 @@ seeing `_UNCOND`.
   the register has a defined value; it does not certify that value is safe.
 - **Update-form RA writes**: `lwzu` (opcode 33), `lhzu` (41), `lhau` (43),
   `lbzu` (35) also write RA (base register update).  These update writes are not
-  currently tracked — only RT is tracked for these opcodes.  This is a
+  currently tracked; only RT is tracked for these opcodes.  This is a
   conservative under-approximation (may produce PLAUSIBLE when RA was in fact
   written).  Add RA tracking for update-form opcodes if this causes false positives.

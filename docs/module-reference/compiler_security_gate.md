@@ -1,14 +1,14 @@
 # compiler_security_gate
 
 Post-linker binary security gate. Runs Ablation's full vulnerability detector
-suite on a freshly compiled binary — the output of `ld` — before it ships.
+suite on a freshly compiled binary (the output of `ld`) before it ships.
 
 ## Why post-linker matters
 
 Traditional compiler security tools (LLVM sanitizers, `-fstack-protector`) run
 **before** optimization on the IR. Optimization passes can then remove bounds
 checks the sanitizer already approved, or introduce new unsafe code paths. The
-gate runs on the final binary — after all optimization passes — so it sees what
+gate runs on the final binary, after all optimization passes, so it sees what
 actually ships, not what the compiler intended to ship.
 
 ## Architecture support

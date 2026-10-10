@@ -16,7 +16,7 @@ This module handles any firmware container with the following structure:
 
 - 8-byte magic prefix identifying the container version
 - Fixed-width header fields: firmware version, vendor string, product string, language
-- Partition table starting at offset 0x54 — fixed 296-byte records
+- Partition table starting at offset 0x54: fixed 296-byte records
 
 ### Partition record layout
 
@@ -47,7 +47,7 @@ Each partition's payload type is detected from its leading bytes:
 | `ext2/3/4` | superblock magic `\x53\xef` at offset 0x438 |
 | `unknown` | none of the above matched |
 
-Note: bzImage kernels match `pe` (MZ setup stub at offset 0) — this is expected.
+Note: bzImage kernels match `pe` (MZ setup stub at offset 0); this is expected.
 
 ### Usage
 
@@ -115,23 +115,23 @@ to exploit media parsers.
 
 ### Checks performed
 
-**Polyglot detection** — scans the first 8 bytes for multiple valid magic signatures
+**Polyglot detection**: scans the first 8 bytes for multiple valid magic signatures
 (e.g., ZIP + MP4, ELF + MP4). A dual-magic file is a polyglot and warrants manual
 inspection.
 
-**Trailer data (appended payload)** — computes the declared container end from the
+**Trailer data (appended payload)**: computes the declared container end from the
 top-level atom/chunk structure and compares against the file size. Bytes after the
 declared end are reported with their length and a hex preview.
 
-**Atom/box size overflow (MP4/MOV)** — checks each top-level atom for declared sizes
+**Atom/box size overflow (MP4/MOV)**: checks each top-level atom for declared sizes
 that exceed the remaining file. An overflowing atom typically crashes or exploits a
 vulnerable media parser.
 
-**EBML length abuse (MKV/WebM)** — checks for EBML unknown-length elements outside of
+**EBML length abuse (MKV/WebM)**: checks for EBML unknown-length elements outside of
 `Cluster` scope, where they are not valid. Parsers that accept them may process
 attacker-controlled data.
 
-**RIFF chunk miscount (AVI)** — verifies that the sum of chunk sizes in the LIST/movi
+**RIFF chunk miscount (AVI)**: verifies that the sum of chunk sizes in the LIST/movi
 hierarchy matches the declared `movi` size.
 
 ### Usage
@@ -176,7 +176,7 @@ Magic: `AA 55 AA 55` (4 bytes, big-endian mnemonic).
 
 Two distinct variants observed:
 
-**Variant A — Ascend 910 (HI1980)**
+**Variant A: Ascend 910 (HI1980)**
 
 ```
 0x00  4   Magic: AA55AA55
@@ -194,7 +194,7 @@ Two distinct variants observed:
 EOF-12    Footer magic: 56 43 48 53 ("VCHS")
 ```
 
-**Variant B — Ascend 910b / Atlas A3**
+**Variant B: Ascend 910b / Atlas A3**
 
 ```
 0x00  4   Magic: AA55AA55
@@ -221,8 +221,8 @@ EOF-12    Footer magic: 56 43 48 53 ("VCHS")
 
 | Type | Description |
 |---|---|
-| 11 | HBOOT1_a — XLOADER stage1 (EL3 secure boot entry) |
-| 12 | HBOOT1_b — XLOADER stage2 (EL3 init; contains "turing" build path) |
+| 11 | HBOOT1_a: XLOADER stage1 (EL3 secure boot entry) |
+| 12 | HBOOT1_b: XLOADER stage2 (EL3 init; contains "turing" build path) |
 | 18 | HiLink32 SerDes firmware (32 Gbps) |
 | 27 | HiLink60 SerDes firmware (60 Gbps) |
 
@@ -239,7 +239,7 @@ the RSA-2048 + SHA-256 scheme used in Variant A.
 
 ### Embedded build artifacts (910b HBOOT1_b)
 
-- Build path leak: `/usr1/turing/open_source/newlib-install/` — Huawei internal
+- Build path leak: `/usr1/turing/open_source/newlib-install/`; Huawei internal
   codename for Ascend 910 is **"turing"**
 - XLink die-to-die interconnect string: `XLink` (Huawei proprietary multi-die fabric)
 
@@ -261,7 +261,7 @@ dd if=package.run bs=1 skip=$(awk "NR<=$skip{c+=length(\$0)+1} END{print c}" pac
    | tar xzf - -C /tmp/out/
 ```
 
-Never execute `.run` files — the embedded `upgrade-tool` writes to NPU hardware
+Never execute `.run` files; the embedded `upgrade-tool` writes to NPU hardware
 via `/dev/davinciN` ioctls.
 
 ### Mate60Pro partition table (ALN-AL00, HarmonyOS 4.x, 206.0.0.108 SP6)
@@ -336,9 +336,9 @@ HUAWEI PRODUCT BINARY FILE container.
 - **Build path**: `/usr1/CloudTools/cross_tools/RTOS_Saturn_201706/V100R005C00/armA15le_3.10_ek/`
 - **Dual architecture**: MPU = ARM Cortex-A15 (armA15le); LPU = x86-i386 (data plane)
 - **535 VRP modules** including AAA, RADIUS, HWTACACS, SSH, SNMP v3, vsftpd 3.0.2.8
-- `libtpmagent.so` — TPM-based PCR attestation and file integrity measurement
-- `libli.so` — Lawful Intercept module (carrier regulatory requirement)
-- `libdbg_server.so` / `libdbg_agent.so` — debug server/agent **in production** (component types 50/51)
+- `libtpmagent.so`: TPM-based PCR attestation and file integrity measurement
+- `libli.so`: Lawful Intercept module (carrier regulatory requirement)
+- `libdbg_server.so` / `libdbg_agent.so`: debug server/agent **in production** (component types 50/51)
 - `minios` and `monitor` binaries: **with debug_info, NOT stripped** (unusual for production)
 
 ### Security findings
@@ -387,7 +387,7 @@ Three device generations:
 
 U-Boot image header (magic `0x27051956`) encodes the kernel version string at +32 bytes
 (big-endian `img_size` at +12). Both newer ONT generations share Linux 3.10.53-HULK2
-with the MA5800 OLT — same Huawei embedded Linux platform across OLT and ONT.
+with the MA5800 OLT; same Huawei embedded Linux platform across OLT and ONT.
 
 Upgrade validation path embedded in HS8145C5: `file:/var/UpgradeCheck.xml`.
 
@@ -412,10 +412,10 @@ Magic prefix: `"RPG_"` followed by platform codename and version string.
 
 The NE8000 uses two nested codenames:
 
-- **YUNSHAN** — outer container (`RPG_YUNSHANV800R023C00SPC500B697`)
-- **PNF** — inner platform package (`RPG_PNF`, `PKG_PNFV800R023C00SPC500B697`)
+- **YUNSHAN**: outer container (`RPG_YUNSHANV800R023C00SPC500B697`)
+- **PNF**: inner platform package (`RPG_PNF`, `PKG_PNFV800R023C00SPC500B697`)
 
-"PNF" = Physical Network Function — Huawei's NFV architecture term for hardware
+"PNF" = Physical Network Function; Huawei's NFV architecture term for hardware
 appliances (counterpart is VNF = Virtual Network Function for VM-based NE deployment).
 
 `.cc` container version byte for NE8000: `0x00000002` (older VRP series used `0x00000001`).
@@ -472,8 +472,8 @@ CAdES+RSA-PSS algorithms with inline CRL distribution).
 | Finding | Severity | Detail |
 |---|---|---|
 | Dual CAdES+PSS signatures + CRL on filelists | INFO | Both .cms (7814B) and .pss.cms per HWTYPE; explicit CRL (4975B) distributed inline |
-| "verona" group (GID 2001) — third codename | INFO | Alongside YUNSHAN/PNF; controls VRP module file access |
-| COLD patch — all 120 patches require reboot | INFO | Carrier operator deferral risk amplifies exposure window |
+| "verona" group (GID 2001); third codename | INFO | Alongside YUNSHAN/PNF; controls VRP module file access |
+| COLD patch; all 120 patches require reboot | INFO | Carrier operator deferral risk amplifies exposure window |
 | swm-owned modules with perms 777 | LOW | Group-writable if group membership misconfigured post-auth |
 
 ---
@@ -500,7 +500,7 @@ build path in bootloader binary: `/usr1/Codes/R12/V200R012C00/build/linux/kernel
 
 ### Broadcom BDE modules
 
-`linux-kernel-bde.ko` + `linux-user-bde.ko` — Broadcom Device Environment, standard
+`linux-kernel-bde.ko` + `linux-user-bde.ko`: Broadcom Device Environment, standard
 SDK components shipped with BCM switch ASICs. The iProc reference
 (`shbde_pci_iproc_version_get`) confirms a Trident2/Tomahawk-class ASIC with embedded
 ARM Cortex-A9 management core.
@@ -511,7 +511,7 @@ accessible to non-root processes.
 
 ### Dopra RTOS
 
-`taskDopra.ko` — Huawei's proprietary real-time scheduler loaded as an LKM on top of
+`taskDopra.ko`: Huawei's proprietary real-time scheduler loaded as an LKM on top of
 Wind River Linux. Author: HUAWEI. License: GPL (declaration required for kernel module
 loading; Dopra code itself is proprietary). Exports `callstack_kernel_version_get`.
 
@@ -521,8 +521,8 @@ Two different Dopra kernel generations confirmed across the Huawei carrier portf
 ### Flash partitions
 
 Dual-redundancy flash scheme:
-- `/mnt/nsysmain/` — primary system flash (bootloader, kernel, Hi1215 firmware)
-- `/mnt/nsysback/` — backup system flash (same structure)
+- `/mnt/nsysmain/`: primary system flash (bootloader, kernel, Hi1215 firmware)
+- `/mnt/nsysback/`: backup system flash (same structure)
 
 HiSilicon Hi1215 firmware blob path: `/mnt/nsysmain/hi1215_bootloader.bin`
 
@@ -541,9 +541,9 @@ HiSilicon Hi1215 firmware blob path: `/mnt/nsysmain/hi1215_bootloader.bin`
 **File:** `targets/huawei/ce6810_switch_re.py`
 
 257MB datacenter switch firmware with three distinct CPU/SoC boot stacks packed into one
-.cc image (VRP V200R019C10, codename DCTOR — Datacenter TOR).
+.cc image (VRP V200R019C10, codename DCTOR: Datacenter TOR).
 
-### Container format (CE6810EI .cc — distinct from NE8000/MA5800)
+### Container format (CE6810EI .cc, distinct from NE8000/MA5800)
 
 ```
 0x00  4   Magic: 5A 00 00 03  (unique to CE series)
@@ -553,7 +553,7 @@ HiSilicon Hi1215 firmware blob path: `/mnt/nsysmain/hi1215_bootloader.bin`
 0x02F3EEF4  SquashFS (xz, 206 MB, 19757 inodes, 489 modules)
 ```
 
-No ELF files are present at the .cc top level — all code is nested inside the SquashFS.
+No ELF files are present at the .cc top level; all code is nested inside the SquashFS.
 
 ### Multi-SoC hardware architecture (`hard-to-cpu.txt`)
 
@@ -574,16 +574,16 @@ HWTYPE prefix `0x12xxxxxx` = CE6810 chassis board (vs `0x4xxxxxxx` = ARM in MA58
 
 **P2020 LPU stack** (e500v2, configs 0x12000608/09):
 - `uboot_ppc2020.bin` → `dc2020_5810_uImage.bin` (4.4MB) + `rootfs_2020_5810.sqfs` (8.8MB) + `rootfs_2020_vrp.img` (22MB)
-- `TOR_CE5810_48T4S_EI_CPLD.bin` (156KB CE5810 ToR CPLD firmware — **no .cms signature**)
+- `TOR_CE5810_48T4S_EI_CPLD.bin` (156KB CE5810 ToR CPLD firmware; **no .cms signature**)
 
 **CR55/CR56 stack** (string HWTYPE):
-- `DE51FCMA.bin` (4.5KB NPU/FPGA — **no .cms signature**)
+- `DE51FCMA.bin` (4.5KB NPU/FPGA; **no .cms signature**)
 
 ### Security findings
 
 | Finding | Severity | Detail |
 |---|---|---|
-| `dbg_server` + `dbg_agent` in production CPT (SYSTEMIC — 2nd platform) | MEDIUM | Cross-confirmed with MA5800 OLT V100R018; intentional across all VRP production builds |
+| `dbg_server` + `dbg_agent` in production CPT (SYSTEMIC; 2nd platform) | MEDIUM | Cross-confirmed with MA5800 OLT V100R018; intentional across all VRP production builds |
 | Python VM + gRPC in production | INFO | `pythonvm`, `python_pack`, `grpc` all in production CPT |
 | CE5810 CPLD firmware without CMS signature | INFO | 156KB CPLD binary controls port electrical config; no adjacent .cms/.crl |
 | DE51FCMA.bin (CR55/56) without CMS signature | INFO | Unlike NE8000 patch files which carry dual .cms+.pss.cms |
@@ -633,8 +633,8 @@ Permissive) not determinable from static analysis.
 
 | Finding | Severity | Detail |
 |---|---|---|
-| SELinux present (V600 first) — mode unknown | INFO | First VRP campus switch with MAC; enforcing mode unconfirmed |
-| libsqlite3.so.0.8.6 — SQLite 3.8.6 known CVEs | LOW | CVE-2017-10989 + others in 3.8.x; requires SQL injection path |
+| SELinux present (V600 first); mode unknown | INFO | First VRP campus switch with MAC; enforcing mode unconfirmed |
+| libsqlite3.so.0.8.6; SQLite 3.8.6 known CVEs | LOW | CVE-2017-10989 + others in 3.8.x; requires SQL injection path |
 | HiSilicon NSE drivers opaque (no public SDK) | INFO | SD5981/Hi1213 replace publicly-documented Broadcom BDE |
 
 ---
@@ -645,13 +645,13 @@ Permissive) not determinable from static analysis.
 
 Kamchia HG231f (2011 MIPS) + Ufanet ISP-customized builds (WS319/WS880/HG232f/WS325).
 
-### HG231f — U-Boot uImage (Kamchia, 2011)
+### HG231f: U-Boot uImage (Kamchia, 2011)
 
 Magic: `0x27051956` (U-Boot legacy uImage). Architecture: MIPS 32-bit big-endian, Linux
 kernel, LZMA compressed. Build date: 2011-10-10. Load address: `0x80000000`. This is
 the oldest device in the corpus (2011 MIPS) with no ASLR/SSP/PIE mitigations.
 
-### WS319/WS880 — Huawei AP firmware format
+### WS319/WS880: Huawei AP firmware format
 
 Magic: `0x76543210` LE32 (bytes `10 32 54 76`). Header:
 
@@ -664,7 +664,7 @@ Magic: `0x76543210` LE32 (bytes `10 32 54 76`). Header:
 
 `C199` = Ufanet Russian ISP custom build.
 
-### HG232f/WS325 — encrypted firmware (analysis blocked)
+### HG232f/WS325: encrypted firmware (analysis blocked)
 
 Entropy 7.94/8.0 from byte 0 = encrypted. No recognizable magic. Static analysis
 blocked without the encryption key (stored in production bootloader).
@@ -721,7 +721,7 @@ Pre-pended manifest block:
 
 ## Huawei NE40E / NE20E Core Router VRP V800 (.cc and .PAT)
 
-Source: `/media/cowboy/research/Huawei-Firmware/OpenX/Routers/` — NE40E-M2K-B V800R023/V800R024, NE20E V800R022, SPH122 patch.
+Source: `/media/cowboy/research/Huawei-Firmware/OpenX/Routers/`; NE40E-M2K-B V800R023/V800R024, NE20E V800R022, SPH122 patch.
 
 Platform codename "M2": all packages named `M2V800R02{2,3,4}CxxSPCxxxBxxx.rpg`.
 
@@ -790,14 +790,14 @@ Entry [14], HWTYPE 0x005638, offset 0x018BA72C, size 332MB:
 - Inodes: 47,146 | Compression: LZMA | Block size: 128KB | Version: 4.0
 - Build date: 2023-09-04
 
-### CX68M NPU (NE20E V800R022 — last PPC generation)
+### CX68M NPU (NE20E V800R022, last PPC generation)
 
 Huawei-custom network processor. No public documentation. Two configurations:
 - 80-core: `bootargs_p40xx_cx68mnpu80.bin`
 - 160-core: `bootargs_p40xx_cx68mnpu160.bin`
 - Reset Config Word: `p30xx_cx68mnpu_rcw.bin`
 
-Absent from V800R023+ — Hi1610 platform integrates or relocates forwarding plane.
+Absent from V800R023+; Hi1610 platform integrates or relocates forwarding plane.
 
 ### PAT patch format (SPH122)
 
@@ -823,7 +823,7 @@ Body:     SQFS catalog (0x2CA6) + multiple GZIP patch blobs + dual CMS signature
 
 ## Huawei NearLink / SparkLink IoT SoC Firmware (HiBurn .fwpkg)
 
-Source: `/media/cowboy/research/Huawei-Firmware/NearLink/` — 18 `.fwpkg` packages for HiSilicon NearLink/SparkLink development boards (BS21/Hi2821, WS63/Hi3863, WS63E, Hi3863).
+Source: `/media/cowboy/research/Huawei-Firmware/NearLink/`; 18 `.fwpkg` packages for HiSilicon NearLink/SparkLink development boards (BS21/Hi2821, WS63/Hi3863, WS63E, Hi3863).
 
 ### HiBurn fwpkg format
 
@@ -878,7 +878,7 @@ Flash base: 0x200000 (QSPI NOR flash)
 **BS21:** loaderboot → partition.bin → flashboot (A/B) → application  
 **WS63:** root_loaderboot → root_params → SSB → flashboot (A/B) → LiteOS app
 
-WS63 adds an explicit SSB (Secure Secondary Boot) stage and A/B NV redundancy that BS21 lacks. Every component ends in `_sign.bin` — per-partition signing before packaging. The fwpkg container has no CMS/PKCS#7 wrapper (unlike VRP, iBMC, HPM); package integrity relies on individual partition signatures.
+WS63 adds an explicit SSB (Secure Secondary Boot) stage and A/B NV redundancy that BS21 lacks. Every component ends in `_sign.bin`; per-partition signing before packaging. The fwpkg container has no CMS/PKCS#7 wrapper (unlike VRP, iBMC, HPM); package integrity relies on individual partition signatures.
 
 ### Security findings
 
@@ -946,7 +946,7 @@ a10xbin/A0104_FW_V12_00_00_release.hdr   (dedicated AI accelerator chip firmware
 
 A dedicated Atlas 100-series NPU is embedded in the switch hardware, separate from the forwarding ASIC. `A0104` is a board variant code. The `.hdr` extension matches Huawei's signed firmware header format. The A10x handles traffic classification in hardware so the main CPU is not in the forwarding path.
 
-**NTID (Network Traffic Intelligence Detection) — on-device ML inference:**
+**NTID (Network Traffic Intelligence Detection): on-device ML inference:**
 
 | File | Role |
 |---|---|
@@ -1006,7 +1006,7 @@ Python 3.9 NETCONF management plane with Redis-backed internal store:
 | Python 3.9 | `usr/bin/python3.9` |
 | NETCONF plugins | `netconf_remote_plugin.py`, `netconf_ctrl.py`, `netconf_notification.py`, `netconf_patterns.py`, `netconf_pylibconf.py` |
 | YANG models | 40+ protocols: AAA, BGP, BGP-L3VPN, BFD, Capture (!), EVPN, Interfaces, IP, L2VPN, LLDP, Free-Mobility, etc. |
-| libhiredis.so | Redis C client — internal management-plane KV store |
+| libhiredis.so | Redis C client: internal management-plane KV store |
 | libredisapi.so | Redis API wrapper |
 | libconf.so | Huawei configuration management library |
 | libxml2.so.2.9.13 | XML parsing (2022-05-03 release) |
@@ -1029,8 +1029,8 @@ Embedded version strings in the body: `V200R019C00SPC200B319` (from build) and `
 | Finding | ID | Severity | Detail |
 |---|---|---|---|
 | On-switch TLS/IP decryption (decpt_ip.out + libdecpt_adp.so) | GOTREX_SEC_001 | MEDIUM | Inline DPI decryption; key storage requires binary analysis; compromise → all TLS sessions decryptable |
-| YANG capture plugin — NETCONF packet capture API | GOTREX_SEC_002 | MEDIUM | `yang_huawei_capture.py` exposes NETCONF capture; plaintext plugins expose full API schema pre-auth |
-| libxml2 2.9.13 — post-release CVE exposure | GOTREX_SEC_003 | LOW | CVE-2022-40303/40304, CVE-2023-28484/29469 may apply; Huawei patch level unconfirmed |
+| YANG capture plugin: NETCONF packet capture API | GOTREX_SEC_002 | MEDIUM | `yang_huawei_capture.py` exposes NETCONF capture; plaintext plugins expose full API schema pre-auth |
+| libxml2 2.9.13; post-release CVE exposure | GOTREX_SEC_003 | LOW | CVE-2022-40303/40304, CVE-2023-28484/29469 may apply; Huawei patch level unconfirmed |
 | All YANG plugins are plaintext Python in firmware | GOTREX_SEC_004 | INFO | Full NETCONF surface exposed via SquashFS 3 extraction |
 | Atlas A10x AI chip embedded (A0104 V12.00.00) | GOTREX_SEC_005 | INFO | Dedicated AI NPU; opaque firmware; management CPU compromise → NPU reflash risk |
 | Redis internal management store (libhiredis) | GOTREX_SEC_006 | INFO | Default Redis = no auth; NETCONF plugin RCE → Redis config store accessible |
@@ -1043,8 +1043,8 @@ Embedded version strings in the body: `V200R019C00SPC200B319` (from build) and `
 
 Pure-Python squashfs v4 reader for Huawei VRP firmware images that use XZ compression with
 per-block ARM64 BCJ filtering. Standard tools (unsquashfs 4.7.5, 7z 26.00) fail on files
-spanning multiple squashfs blocks because Python's `lzma` C extension — when compiled against
-pre-5.4.0 liblzma headers — does not expose XZ filter ID 0x0A (ARM64 BCJ). This module
+spanning multiple squashfs blocks because Python's `lzma` C extension (when compiled against
+pre-5.4.0 liblzma headers) does not expose XZ filter ID 0x0A (ARM64 BCJ). This module
 bypasses the filter by extracting the raw LZMA2 payload from each XZ block and decompressing
 it with `FORMAT_RAW`. Non-branch bytes (arithmetic instructions, data) are BCJ-invariant and
 byte-verify correctly; branch targets in BCJ-filtered blocks are modified.
