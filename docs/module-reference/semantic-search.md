@@ -22,6 +22,119 @@ Build the corpus once. Every `query()` call after that addresses all three gaps.
 
 The pipeline has five stages.
 
+```
+  binary.so  (stripped, no symbols)
+          |
+          v
+  ┌────────────────────────────────────────────────┐
+  │  CorpusBuilder.build()                         │
+  │    PLT imports   → call targets                │
+  │    .rodata xrefs → string references           │
+  │    call graph    → neighbor functions          │
+  └──────────────────────┬─────────────────────────┘
+                         |
+                         v
+                func_id.db  (SQLite)
+                one row per function
+                CONFIRMED or ANGR_INFERRED only
+                         |
+        ─────────────────┼──────────────────────────
+        |                |                |
+        v                v                v
+   disassembly       PLT calls       string xrefs
+   normalize:        malloc          "auth failed"
+    addrs → <ADDR>   strcpy          "invalid len"
+    imm   → <IMM>    syslog
+    reg   → <REG>
+        |
+        v
+   BinFuse 11-category opcode mapping
+   ┌────────────────────────────────────┐
+   │  add  → ARITHMETIC_OP              │
+   │  ldr  → DATA_TRANSFER_OP           │
+   │  cmp  → COMPARISON_OP              │
+   │  beq  → CONDITIONAL_OP             │
+   │  bl   → UNCONDITIONAL_OP           │
+   │  ... (11 categories total)         │
+   └────────────────────────────────────┘
+        |
+        v
+   Markov transition counts (top 5 adjacent pairs)
+   DATA_TRANSFER_OP → ARITHMETIC_OP   (12)
+   ARITHMETIC_OP    → COMPARISON_OP    (7)
+   COMPARISON_OP    → CONDITIONAL_OP   (5)
+                         |
+                         v
+  ┌─────────────────────────────────────────────────────┐
+  │  description string  (one per function)             │
+  │                                                     │
+  │  "parse_input role=tlv_advance |                    │
+  │   calls: malloc memcpy syslog |                     │
+  │   strings: 'auth failed' 'invalid len' |            │
+  │   asm: DATA_TRANSFER_OP ARITHMETIC_OP               │
+  │        COMPARISON_OP CONDITIONAL_OP ... |           │
+  │   trans: DATA_TRANSFER_OP→ARITHMETIC_OP(12) ..."    │
+  └──────────────────────┬──────────────────────────────┘
+                         |
+                         v
+  ┌─────────────────────────────────────────────────────┐
+  │  all-mpnet-base-v2  (12-layer MPNet transformer)    │
+  │                                                     │
+  │  tokenize  →  [CLS] parse_input role=... [SEP]      │
+  │      |                                              │
+  │      v                                              │
+  │  12x self-attention  (768 hidden dim, 12 heads)     │
+  │      |                                              │
+  │      v                                              │
+  │  mean pool token vectors  →  (768,) vector          │
+  │      |                                              │
+  │      v                                              │
+  │  L2 normalize  →  unit sphere                       │
+  └──────────────────────┬──────────────────────────────┘
+                         |
+                         v   raw (768-dim), anisotropic
+                  unrelated pairs score 0.6 - 0.9
+                         |
+                         v
+  ┌─────────────────────────────────────────────────────┐
+  │  WhiteningTransform  (PCA, Su et al. 2021)          │
+  │                                                     │
+  │  centered = embedding - corpus_mean                 │
+  │  whitened = centered  @ W                           │
+  │  W        = eigenvectors / sqrt(eigenvalues)        │
+  │  re-normalize to unit sphere                        │
+  └──────────────────────┬──────────────────────────────┘
+                         |
+                         v   whitened (768-dim), isotropic
+                  unrelated pairs  →  0.4 - 0.6
+                  true matches     →  above 0.8
+                         |
+                         v
+              N × 768 corpus matrix cached
+         ~/.ablation/func_semantic_cache_{sha}.pkl
+                         |
+  ════════════════ build complete ═════════════════════
+  ──────────────────── query time ─────────────────────
+                         |
+  query: "TLV parser, length field copied to stack buffer"
+                         |
+              same pipeline: tokenize → MPNet
+              → mean pool → L2 normalize → whiten
+                         |
+                         v   query vector (768-dim)
+
+  scores = corpus_matrix @ query_vector  (N dot products)
+  idx    = argpartition(scores, -top_k)  (O(N), no full sort)
+  ranked = argsort(scores[idx])[::-1]    (sort k items only)
+                         |
+                         v
+  0x1a4f00  score=0.83  parse_radius_packet
+  0x1b2c40  score=0.71  <unnamed>
+  0x0d8800  score=0.68  handle_auth_request
+```
+
+---
+
 ### Stage 1: The function database
 
 The corpus starts in a SQLite database at `~/.ablation/func_id.db`. Each row covers one function: virtual address, name if any, role, PLT calls made, string xrefs, and struct accesses. `CorpusBuilder` populates it. Only rows with `confidence IN ('CONFIRMED', 'ANGR_INFERRED')` enter the search corpus because dead-code stubs and linker padding would pollute results.
