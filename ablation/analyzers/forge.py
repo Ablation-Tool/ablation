@@ -2,15 +2,17 @@
 forge.py — FORGE: module development, validation, and local storage for Ablation.
 
 FORGE is the quality gate for any Python module built on Ablation — native or local.
-Before code commits or registers to the local store, FORGE runs the full
-Ablation-SAFE CODE.md 10-section production readiness audit via Claude and produces
-a DEV & TEST ORCHESTRATION PLAN from the findings.
+Before code commits or registers to the local store, FORGE requires the full
+Ablation-SAFE CODE.md 10-section production readiness audit with a DEV & TEST
+ORCHESTRATION PLAN. The audit is performed inline by Claude Code reading the file
+directly — no subprocess, no Anthropic API key.
 
 Three entry points:
 
-    FORGE.audit_module(path)     — 10-section LLM audit on a single .py file.
-                                    Returns ForgeReport; gate_passed=False on
-                                    any HIGH or CRITICAL finding.
+    FORGE.audit_module(path)     — check cache for a prior SAFE CODE audit result.
+                                    Returns ForgeReport on hit; raises
+                                    ForgeAuditRequired on miss. Perform the audit
+                                    inline, then call FORGE.record_result().
 
     FORGE.audit_source(path)     — source security audit on any codebase.
                                     SourceContext → SourceEntryClassifier →
@@ -57,22 +59,14 @@ CLI:
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
-import re
 import shutil
-import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 import warnings
-
-try:
-    import anthropic as _anthropic
-    _ANTHROPIC_AVAILABLE = True
-except ImportError:
-    _anthropic = None       # type: ignore
-    _ANTHROPIC_AVAILABLE = False
 
 try:
     from .source_ingestion import SourceContext
@@ -85,8 +79,6 @@ except ImportError:
     from source_sink_scanner import SourceSinkScanner              # type: ignore
     from source_audit_compressor import SourceAuditCompressor      # type: ignore
 
-
-_DEFAULT_MODEL = 'claude-sonnet-5'
 
 _LOCAL_MODULES_DIR = Path.home() / '.ablation' / 'local_modules'
 
@@ -115,6 +107,86 @@ After section 10 append:
 FORGE_JSON: [{"severity":"HIGH","category":"...","title":"...","location":"...",
 "description":"...","recommendation":"...","cwe":""}]
 """
+
+
+# ── Result cache ─────────────────────────────────────────────────────────────
+
+_CACHE_PATH = Path.home() / '.ablation' / 'forge_cache.json'
+
+
+class _ForgeCache:
+    """
+    Persistent cache for FORGE module audit results.
+
+    Key: sha256(system_prompt)[:16] + ":" + sha256(file_bytes)[:16]
+    Any change to the SOP file or the module source invalidates the entry.
+    raw_text is not cached (too large); all other ForgeReport fields are.
+    """
+
+    def __init__(self) -> None:
+        self._data: dict[str, dict] = {}
+        self._loaded = False
+
+    def _ensure_loaded(self) -> None:
+        if self._loaded:
+            return
+        self._loaded = True
+        try:
+            if _CACHE_PATH.exists():
+                self._data = json.loads(_CACHE_PATH.read_text(encoding='utf-8'))
+        except Exception:
+            self._data = {}
+
+    @staticmethod
+    def _key(system: str, file_path: str) -> str:
+        sys_h = hashlib.sha256(system.encode()).hexdigest()[:16]
+        file_h = hashlib.sha256(Path(file_path).read_bytes()).hexdigest()[:16]
+        return f"{sys_h}:{file_h}"
+
+    def get(self, system: str, file_path: str) -> 'ForgeReport | None':
+        self._ensure_loaded()
+        entry = self._data.get(self._key(system, file_path))
+        if not entry:
+            return None
+        try:
+            findings = [ForgeFinding(**f) for f in entry['findings']]
+            return ForgeReport(
+                path=entry['path'],
+                mode=entry['mode'],
+                findings=findings,
+                summary=entry.get('summary', ''),
+                raw_text='',
+            )
+        except Exception:
+            return None
+
+    def put(self, system: str, report: 'ForgeReport') -> None:
+        self._ensure_loaded()
+        key = self._key(system, report.path)
+        self._data[key] = {
+            'path': report.path,
+            'mode': report.mode,
+            'findings': [
+                {
+                    'severity': f.severity, 'category': f.category,
+                    'title': f.title, 'location': f.location,
+                    'description': f.description, 'recommendation': f.recommendation,
+                    'source': f.source, 'cwe': f.cwe,
+                }
+                for f in report.findings
+            ],
+            'summary': report.summary,
+        }
+        _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _CACHE_PATH.with_suffix('.tmp')
+        try:
+            tmp.write_text(json.dumps(self._data, indent=2), encoding='utf-8')
+            tmp.replace(_CACHE_PATH)
+        except Exception:
+            pass
+
+
+_forge_cache = _ForgeCache()
 
 
 # ── Data types ────────────────────────────────────────────────────────────────
@@ -192,87 +264,16 @@ def _load_system_prompt() -> str:
     return _PROMPT_FALLBACK
 
 
-def _parse_json_findings(raw: str, source: str) -> list[ForgeFinding]:
-    m = re.search(r'FORGE_JSON:\s*(\[.*?\])\s*$', raw, re.DOTALL | re.MULTILINE)
-    if not m:
-        return _parse_prose_findings(raw, source)
-    try:
-        items = json.loads(m.group(1))
-        findings = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            findings.append(ForgeFinding(
-                severity=str(item.get('severity', 'INFO')).upper(),
-                category=str(item.get('category', 'module_audit')),
-                title=str(item.get('title', '')),
-                location=str(item.get('location', '')),
-                description=str(item.get('description', '')),
-                recommendation=str(item.get('recommendation', '')),
-                source=source,
-                cwe=str(item.get('cwe', '')),
-            ))
-        return findings
-    except (json.JSONDecodeError, TypeError):
-        return _parse_prose_findings(raw, source)
 
+# ── Exceptions ───────────────────────────────────────────────────────────────
 
-def _parse_prose_findings(raw: str, source: str) -> list[ForgeFinding]:
-    findings: list[ForgeFinding] = []
-    block_re = re.compile(
-        r'\*{0,2}(?P<title>[^\n*]{5,80}?)\*{0,2}\n'
-        r'(?:.*?\n){0,6}'
-        r'[*\s]*(?:Severity|Type)\s*:\s*(?P<sev>Critical|High|Medium|Low|Issue|Risk)\b',
-        re.IGNORECASE,
-    )
-    sev_map = {'ISSUE': 'MEDIUM', 'RISK': 'MEDIUM'}
-    seen: set[str] = set()
-    for m in block_re.finditer(raw):
-        title = m.group('title').strip(' .*')
-        if not title or title in seen:
-            continue
-        seen.add(title)
-        sev_raw = m.group('sev').upper()
-        findings.append(ForgeFinding(
-            severity=sev_map.get(sev_raw, sev_raw),
-            category='module_audit',
-            title=title,
-            location='',
-            description='',
-            recommendation='',
-            source=source,
-        ))
-    return findings
+class ForgeAuditRequired(Exception):
+    """Raised by audit_module() when no cached result exists.
 
-
-def _extract_summary(raw: str) -> str:
-    m = re.search(
-        r'10\.\s+Residual Risk[^\n]*\n((?:.|\n){20,300}?)(?:\n\n|\Z)',
-        raw, re.IGNORECASE,
-    )
-    if m:
-        return m.group(1).strip()[:300]
-    return ""
-
-
-def _run_via_claude_cli(system: str, user_msg: str, timeout: int = 600) -> str:
-    """Run the audit via the `claude --print` CLI.
-
-    Used as a fallback when no ANTHROPIC_API_KEY is configured — Claude Code
-    is already authenticated, so `claude --print` works without a separate key.
+    Perform the SAFE CODE 10-section audit inline as Claude Code, then call
+    FORGE.record_result() to store it. Future audit_module() calls will
+    return the cached result instantly.
     """
-    result = subprocess.run(
-        ['claude', '--print', '--system-prompt', system, '--output-format', 'text'],
-        input=user_msg,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
-    if result.returncode != 0 and not result.stdout.strip():
-        raise RuntimeError(
-            f"claude --print failed (exit {result.returncode}): {result.stderr[:300]}"
-        )
-    return result.stdout
 
 
 # ── Main class ────────────────────────────────────────────────────────────────
@@ -287,72 +288,80 @@ class FORGE:
     # ── Audit ─────────────────────────────────────────────────────────────────
 
     @classmethod
-    def audit_module(
-        cls,
-        path: str,
-        model: str = _DEFAULT_MODEL,
-    ) -> ForgeReport:
+    def audit_module(cls, path: str) -> ForgeReport:
         """
-        Run the Ablation-SAFE CODE.md 10-section production audit on a single file.
+        Return a cached FORGE audit for a module, or raise ForgeAuditRequired.
 
-        Required before git add on any new or modified Ablation module.
-        Required before FORGE.register() on any local module.
-        Returns ForgeReport; gate_passed=False blocks on any HIGH/CRITICAL finding.
-        Requires ablation[llm] (pip install 'ablation[llm]').
+        On a cache hit, returns the ForgeReport immediately — no subprocess, no LLM call.
+        On a cache miss, raises ForgeAuditRequired with instructions.
+
+        The audit is always done inline: read the file in the Claude Code session,
+        apply the SAFE CODE 10-section review, then call FORGE.record_result() to
+        cache the result. Future calls return instantly from cache.
         """
         source_path = Path(path).expanduser().resolve()
         if not source_path.exists():
             raise FileNotFoundError(f"FORGE.audit_module: file not found: {path}")
 
-        code = source_path.read_text(encoding='utf-8', errors='replace')
         system = _load_system_prompt()
+        cached = _forge_cache.get(system, str(source_path))
+        if cached is not None:
+            return cached
 
-        user_msg = (
-            f"Audit this file: {source_path.name}\n\n"
-            f"```\n{code}\n```\n\n"
-            "After completing all 10 sections and the DEV & TEST ORCHESTRATION PLAN, "
-            "append exactly one final line in this format (no line break inside the JSON):\n"
-            "FORGE_JSON: [{\"severity\": \"HIGH\", \"category\": \"functional_correctness\", "
-            "\"title\": \"...\", \"location\": \"...\", \"description\": \"...\", "
-            "\"recommendation\": \"...\", \"cwe\": \"\"}]\n"
-            "Include one object per finding from sections 2, 3, 4, and 7. "
-            "Severity must be one of: CRITICAL, HIGH, MEDIUM, LOW, INFO."
+        raise ForgeAuditRequired(
+            f"No cached audit for {source_path.name}. "
+            f"Read the file and perform the SAFE CODE 10-section audit inline as Claude Code, "
+            f"then call:\n"
+            f"  FORGE.record_result('{source_path}', findings, summary)"
         )
 
-        raw = ""
-        # Primary path: direct Anthropic SDK call (requires ANTHROPIC_API_KEY).
-        # Fallback: claude --print CLI, which uses Claude Code's existing auth.
-        _sdk_error: Exception | None = None
-        if _ANTHROPIC_AVAILABLE:
-            try:
-                client = _anthropic.Anthropic(timeout=120.0)
-                resp = client.messages.create(
-                    model=model,
-                    max_tokens=16384,
-                    system=system,
-                    messages=[{"role": "user", "content": user_msg}],
-                )
-                raw = resp.content[0].text if resp.content else ""
-            except Exception as exc:
-                _sdk_error = exc
+    @classmethod
+    def record_result(
+        cls,
+        path: str,
+        findings: 'list[ForgeFinding] | list[dict]',
+        summary: str = '',
+        raw_text: str = '',
+    ) -> ForgeReport:
+        """
+        Store the result of an inline SAFE CODE audit performed by Claude Code.
 
-        if not raw:
-            raw = _run_via_claude_cli(system, user_msg)
-        if not raw:
-            warnings.warn(
-                "FORGE.audit_module: LLM returned empty content — audit incomplete, "
-                "gate result may be unreliable. Check model availability and token limits.",
-                stacklevel=2,
-            )
-        findings = _parse_json_findings(raw, source="module_audit")
+        Call this after reading a module and completing the 10-section review inline.
+        Populates the cache so future audit_module() calls return instantly.
 
-        return ForgeReport(
+        findings can be a list of ForgeFinding objects or a list of dicts with keys:
+        severity, category, title, location, description, recommendation, source, cwe.
+        """
+        source_path = Path(path).expanduser().resolve()
+        if not source_path.exists():
+            raise FileNotFoundError(f"FORGE.record_result: file not found: {path}")
+
+        system = _load_system_prompt()
+        normalized: list[ForgeFinding] = []
+        for f in findings:
+            if isinstance(f, ForgeFinding):
+                normalized.append(f)
+            elif isinstance(f, dict):
+                normalized.append(ForgeFinding(
+                    severity=str(f.get('severity', 'INFO')).upper(),
+                    category=str(f.get('category', 'module_audit')),
+                    title=str(f.get('title', '')),
+                    location=str(f.get('location', '')),
+                    description=str(f.get('description', '')),
+                    recommendation=str(f.get('recommendation', '')),
+                    source=str(f.get('source', 'module_audit')),
+                    cwe=str(f.get('cwe', '')),
+                ))
+
+        report = ForgeReport(
             path=str(source_path),
-            mode="module",
-            findings=findings,
-            summary=_extract_summary(raw),
-            raw_text=raw,
+            mode='module',
+            findings=normalized,
+            summary=summary,
+            raw_text=raw_text,
         )
+        _forge_cache.put(system, report)
+        return report
 
     @classmethod
     def audit_source(cls, path: str) -> ForgeReport:
@@ -447,12 +456,7 @@ class FORGE:
     # ── Local module store ────────────────────────────────────────────────────
 
     @classmethod
-    def register(
-        cls,
-        path: str,
-        model: str = _DEFAULT_MODEL,
-        force: bool = False,
-    ) -> ForgeReport:
+    def register(cls, path: str, force: bool = False) -> ForgeReport:
         """
         Validate a module with audit_module, then copy it to ~/.ablation/local_modules/.
 
@@ -467,7 +471,14 @@ class FORGE:
         if not source_path.suffix == '.py':
             raise ValueError(f"FORGE.register: only .py files can be registered: {path}")
 
-        report = cls.audit_module(str(source_path), model=model)
+        try:
+            report = cls.audit_module(str(source_path))
+        except ForgeAuditRequired as e:
+            raise ForgeAuditRequired(
+                f"FORGE.register: no cached audit for {source_path.name}. "
+                f"Run FORGE.audit_module() inline first, then call FORGE.record_result() "
+                f"to cache the result before registering.\n{e}"
+            ) from None
 
         if not report.gate_passed and not force:
             raise RuntimeError(
@@ -546,16 +557,14 @@ def _cli() -> None:
     )
     sub = parser.add_subparsers(dest='cmd', required=True)
 
-    m = sub.add_parser('module', help='audit a single .py file (LLM)')
+    m = sub.add_parser('module', help='audit a single .py file')
     m.add_argument('path', help='path to the .py file to audit')
-    m.add_argument('--model', default=_DEFAULT_MODEL)
 
     s = sub.add_parser('source', help='audit a source codebase (pipeline, no LLM)')
     s.add_argument('path', help='path to the repository root')
 
     r = sub.add_parser('register', help='validate and register a local module')
     r.add_argument('path', help='path to the .py file to register')
-    r.add_argument('--model', default=_DEFAULT_MODEL)
     r.add_argument('--force', action='store_true',
                    help='register even if gate fails (not recommended)')
 
@@ -564,7 +573,19 @@ def _cli() -> None:
     args = parser.parse_args()
 
     if args.cmd == 'module':
-        report = FORGE.audit_module(args.path, model=args.model)
+        try:
+            report = FORGE.audit_module(args.path)
+        except ForgeAuditRequired as e:
+            print(f"FORGE: audit required\n{e}", file=sys.stderr)
+            print(
+                "\nHow to proceed:\n"
+                "  1. Open this file in your Claude Code session.\n"
+                "  2. Read it and perform the SAFE CODE 10-section audit inline.\n"
+                "  3. Call FORGE.record_result(path, findings, summary) to cache.\n"
+                "  4. Re-run this command — it will return instantly from cache.",
+                file=sys.stderr,
+            )
+            sys.exit(2)
         print(report.report())
         sys.exit(0 if report.gate_passed else 1)
 
@@ -574,10 +595,13 @@ def _cli() -> None:
 
     elif args.cmd == 'register':
         try:
-            report = FORGE.register(args.path, model=args.model, force=args.force)
+            report = FORGE.register(args.path, force=args.force)
             print(report.report())
             dest = _LOCAL_MODULES_DIR / Path(args.path).name
             print(f"\nRegistered: {dest}")
+        except ForgeAuditRequired as e:
+            print(f"FORGE: {e}", file=sys.stderr)
+            sys.exit(2)
         except RuntimeError as e:
             print(f"FORGE: {e}", file=sys.stderr)
             sys.exit(1)
