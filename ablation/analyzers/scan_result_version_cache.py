@@ -33,7 +33,7 @@ import hashlib
 import inspect
 import json
 import os
-import time
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
@@ -80,14 +80,16 @@ def _key_prefix_for_fast_stat(scanner_version: str, abs_path: str, stat: tuple) 
 
 
 def _serialize_finding(obj: Any) -> Any:
-    """Convert a dataclass finding (or any object) to a JSON-safe dict."""
+    """Convert a dataclass finding (or any object) to a JSON-safe value."""
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return dataclasses.asdict(obj)
     if isinstance(obj, (list, tuple)):
         return [_serialize_finding(x) for x in obj]
     if isinstance(obj, dict):
         return {k: _serialize_finding(v) for k, v in obj.items()}
-    return obj
+    if isinstance(obj, (str, int, float, bool, type(None))):
+        return obj
+    return str(obj)
 
 
 class ScanResultVersionCache:
@@ -106,6 +108,12 @@ class ScanResultVersionCache:
             cache_path = _CACHE_ROOT / f"{scanner_class.__name__}.json"
         self._cache_path = Path(cache_path)
         self._cache: Dict[str, Any] = self._load()
+        # prefix_index maps key-without-sha_suffix → full key for O(1) fast-path lookup.
+        # Key format: {scanner_version}|{abspath}|{mtime_ns}|{size}|{sha_prefix}
+        # Prefix = everything up to and including the 4th "|", i.e. rsplit("|",1)[0]+"|".
+        self._prefix_index: Dict[str, str] = {
+            k.rsplit('|', 1)[0] + '|': k for k in self._cache
+        }
         self._dirty = False
 
     @classmethod
@@ -151,13 +159,15 @@ class ScanResultVersionCache:
         abs_path = os.path.abspath(file_path)
 
         if not force:
-            # Fast path: stat only, no file read
+            # Fast path: stat only, no file read — O(1) via prefix index
             stat = _fast_stat(file_path)
             if stat is not None:
                 prefix = _key_prefix_for_fast_stat(self._version_hash, abs_path, stat)
-                for key, value in self._cache.items():
-                    if key.startswith(prefix):
-                        return value
+                full_key = self._prefix_index.get(prefix)
+                if full_key is not None:
+                    cached = self._cache.get(full_key)
+                    if cached is not None:
+                        return cached
 
         # Slow path: compute full fingerprint (reads file for SHA-256)
         fingerprint = _file_fingerprint(file_path)
@@ -174,11 +184,17 @@ class ScanResultVersionCache:
         try:
             scanner = self._scanner_class.from_path(file_path, **scanner_kwargs)
             raw_findings = scanner.scan()
-        except Exception:
+        except Exception as e:
+            warnings.warn(
+                f"ScanResultVersionCache: {self._scanner_class.__name__} raised on "
+                f"{file_path}: {e}",
+                stacklevel=2,
+            )
             return []
 
         serialized = [_serialize_finding(f) for f in raw_findings]
         self._cache[cache_key] = serialized
+        self._prefix_index[cache_key.rsplit('|', 1)[0] + '|'] = cache_key
         self._dirty = True
         return serialized
 
@@ -207,14 +223,18 @@ class ScanResultVersionCache:
         if stat is None:
             return False
         prefix = _key_prefix_for_fast_stat(self._version_hash, abs_path, stat)
-        return any(k.startswith(prefix) for k in self._cache)
+        return prefix in self._prefix_index
 
     def evict(self, file_path: str) -> bool:
         """Remove all cache entries for this file path. Returns True if anything was removed."""
         abs_path = os.path.abspath(str(file_path))
-        evicted = [k for k in self._cache if f"|{abs_path}|" in k]
+        # scanner_version is always 16 hex chars with no pipes, so split at the first "|"
+        # gives (scanner_version, rest). rest starts with abs_path + "|" for matching entries.
+        needle = abs_path + '|'
+        evicted = [k for k in self._cache if k.split('|', 1)[1].startswith(needle)]
         for k in evicted:
             del self._cache[k]
+            self._prefix_index.pop(k.rsplit('|', 1)[0] + '|', None)
         if evicted:
             self._dirty = True
         return bool(evicted)
