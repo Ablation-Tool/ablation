@@ -393,21 +393,6 @@ Stripped binaries from an RPM bundle, analyzed end-to-end. BinaryContext loads e
 
 ---
 
-## Install
-
-```bash
-pip install git+https://github.com/Ablation-Tool/ablation
-```
-
----
-
-## Requirements
-
-- Python >= 3.10
-- `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
-
----
-
 ## Module Map
 
 <details>
@@ -542,6 +527,21 @@ Every module passes a 10-section audit before storage. Confirmed findings enter 
 
 </details>
 </details>
+
+---
+
+## Install
+
+```bash
+pip install git+https://github.com/Ablation-Tool/ablation
+```
+
+---
+
+## Requirements
+
+- Python >= 3.10
+- `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
 
 ---
 
