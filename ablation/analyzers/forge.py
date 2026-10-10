@@ -149,7 +149,19 @@ class _ForgeCache:
         if not entry:
             return None
         try:
-            findings = [ForgeFinding(**f) for f in entry['findings']]
+            findings = [
+                ForgeFinding(
+                    severity=str(f.get('severity', 'INFO')),
+                    category=str(f.get('category', '')),
+                    title=str(f.get('title', '')),
+                    location=str(f.get('location', '')),
+                    description=str(f.get('description', '')),
+                    recommendation=str(f.get('recommendation', '')),
+                    source=str(f.get('source', 'module_audit')),
+                    cwe=str(f.get('cwe', '')),
+                )
+                for f in entry['findings']
+            ]
             return ForgeReport(
                 path=entry['path'],
                 mode=entry['mode'],
@@ -182,8 +194,11 @@ class _ForgeCache:
         try:
             tmp.write_text(json.dumps(self._data, indent=2), encoding='utf-8')
             tmp.replace(_CACHE_PATH)
-        except Exception:
-            pass
+        except Exception as e:
+            warnings.warn(
+                f"FORGE: failed to write cache to {_CACHE_PATH}: {e}",
+                stacklevel=3,
+            )
 
 
 _forge_cache = _ForgeCache()
