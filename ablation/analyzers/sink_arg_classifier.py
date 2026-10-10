@@ -156,6 +156,86 @@ def _extract_plt_x86(binary, data: bytes) -> Dict[int, str]:
     return plt
 
 
+def _extract_plt_arm32(binary) -> Dict[int, str]:
+    """Return {plt_stub_va: symbol_name} for ARM32 LE binaries.
+
+    ARM32 uses .rel.plt (8-byte REL entries, no addend).
+    R_ARM_JUMP_SLOT = 22; PLT header = 20 bytes; stub size = 12 bytes.
+    Sizes assume standard ARM ABI (GNU LD); Thumb2-only PLT uses 8-byte stubs
+    and would produce wrong stub_va — not encountered in target firmware.
+    Slot index in .rel.plt maps directly to PLT stub index — verified on
+    Huawei VRP S6730 V200R024 ARM32 LE firmware (ntid.o, nge.out, libssp.so).
+    GAP-ARM32-REL-PLT: _extract_plt_x86 reads .rela.plt (24-byte RELA) which
+    ARM32 binaries do not have — this function fills that gap.
+    """
+    if not _LIEF_OK or binary is None:
+        return {}
+    R_ARM_JUMP_SLOT = 22
+    plt_sec = binary.get_section('.plt')
+    rel_sec = binary.get_section('.rel.plt')
+    if not plt_sec or not rel_sec:
+        return {}
+    plt_base = plt_sec.virtual_address
+    rel_data = bytes(rel_sec.content)
+    entry_sz = 8
+    n = len(rel_data) // entry_sz
+    result: Dict[int, str] = {}
+    for i in range(n):
+        off = i * entry_sz
+        _r_offset, r_info = struct.unpack_from('<II', rel_data, off)
+        if (r_info & 0xff) != R_ARM_JUMP_SLOT:
+            continue
+        sym_idx = r_info >> 8
+        try:
+            sym = binary.dynamic_symbols[sym_idx]
+            if sym.name:
+                stub_va = plt_base + 20 + i * 12
+                result[stub_va] = sym.name
+        except Exception:
+            pass
+    return result
+
+
+def _extract_plt_arm64(binary) -> Dict[int, str]:
+    """Return {plt_stub_va: symbol_name} for ARM64 LE binaries.
+
+    ARM64 uses .rela.plt (24-byte RELA entries) with LE-packed r_info.
+    R_AARCH64_JUMP_SLOT = 0x402; PLT header = 32 bytes; stub size = 16 bytes.
+    Sizes assume standard AArch64 ABI (GNU LD); custom PLT layouts would need
+    per-binary verification — not encountered in target firmware.
+    GAP-ARM64-PLT-RELA-ENDIAN: _extract_plt_x86 decodes r_info with '>Q'
+    (big-endian), giving sym_idx = 0 for all entries in LE binaries.
+    This function fixes that by using '<Q' and the ARM64 reloc type.
+    Confirmed on NE40E V800R023/V800R024 ARM64 LE HiSilicon Hi1280 firmware.
+    """
+    if not _LIEF_OK or binary is None:
+        return {}
+    R_AARCH64_JUMP_SLOT = 0x402
+    plt_sec = binary.get_section('.plt')
+    rela_sec = binary.get_section('.rela.plt')
+    if not plt_sec or not rela_sec:
+        return {}
+    plt_base = plt_sec.virtual_address
+    rela_data = bytes(rela_sec.content)
+    entry_sz = 24
+    n = len(rela_data) // entry_sz
+    result: Dict[int, str] = {}
+    for i in range(n):
+        off = i * entry_sz
+        _r_offset, r_info, _r_addend = struct.unpack_from('<QQq', rela_data, off)
+        if (r_info & 0xffffffff) != R_AARCH64_JUMP_SLOT:
+            continue
+        sym_idx = r_info >> 32
+        try:
+            sym = binary.dynamic_symbols[sym_idx]
+            if sym.name:
+                stub_va = plt_base + 32 + i * 16
+                result[stub_va] = sym.name
+        except Exception:
+            pass
+    return result
+
+
 def _count_plt_callers(binary, data: bytes) -> Dict[int, int]:
     """
     Return {plt_va: caller_count} for all direct `call imm` targets in binary.
@@ -1001,7 +1081,13 @@ def batch_plt_intersect(
             binary = _lief.parse(fpath)
             if binary is None:
                 continue
-            plt = _extract_plt_x86(binary, data)
+            machine = str(getattr(binary.header, 'machine_type', ''))
+            if 'AARCH64' in machine:
+                plt = _extract_plt_arm64(binary)
+            elif 'ARM' in machine:
+                plt = _extract_plt_arm32(binary)
+            else:
+                plt = _extract_plt_x86(binary, data)
         except Exception:
             continue
         matches = [name for _va, name in plt.items() if name in sink_set]
