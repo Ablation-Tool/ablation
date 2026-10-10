@@ -2,6 +2,37 @@
 
 ---
 
+## v2.47.0
+
+**BinaryLifter: full decompiler parity across all native ISAs.** Replaces the
+v2.45.0 structural skeleton emitters with full NativeVal register-tracking state
+machines. Every native ISA now produces the same quality of pseudo-C IR as ARM64
+and x86-64: typed variable declarations, resolved load/store dereferences with
+pointer casts, call sites with per-ISA argument lists, taint propagation, and
+branch conditions with inlined comparison operands.
+
+- `_ARM32State`: AAPCS r0–r3 params; `.cond` attribute threading for conditional
+  execution; writeback load/store (`ldr r0, [r1], #4`)
+- `_MIPSState`: o32 `$4`–`$7` / n64 `$4`–`$11` params; $0 zero guard; branch
+  comparison operands embedded per-instruction (beq/bne/blt/bltz/etc.)
+- `_PPCState`: SysV/ELFv2 r3–r10 params; update-form load/store writeback;
+  signed vs. unsigned compare flag for blt/bgt branch generation
+- `_RISCVState`: psABI a0–a7 params; ret / jalr ra, 0 return detection;
+  C-extension compressed insns (c.lw, c.sw, c.mv, c.j, c.li)
+- `_LA64State`: lp64 $a0–$a7 params; jirl $zero, $ra, 0 return detection;
+  bl call detection; lu12i.w/lu32i.d immediate reconstruction
+- `_ARCState`: r0–r7 params; blink return; br-form branches with embedded
+  register comparison operands
+- `_V850State`: CC-RH r6–r9 params; r10 return; jmp lp return detection;
+  subr (reverse-subtract) operand ordering
+- `_NanoMIPSState`: regex operand parsing (NanoFrame has no structured .ops);
+  ABI name → canonical numeric mapping; beqc/bnec two-register branches
+- `_ablation_mem_addr()`: shared helper that resolves `.disp` or `.offset`
+  transparently across all ISA Mem object styles
+- `_taint_map` now threads taint into all 8 new state machines, not ARM64 only
+
+---
+
 ## v2.46.0
 
 **BinaryContext: full Windows PE support.** `BinaryContext.load_or_build()` now works on `.exe`, `.dll`, and `.sys` files. Every Ablation analysis tool that depends on `BinaryContext` — `SemanticSearcher`, `TaintTracker`, `WindowAnalyzer`, `FuncProfiler`, `callers_of()`, `callees_of()`, `strings_in_func()` — now functions on Windows PE binaries with no changes to calling code.
