@@ -257,13 +257,6 @@ flowchart TD
     class RPM,EXTRACT input
 ```
 
-## LLM Compatibility
-
-| Provider | Models |
-|---|---|
-| **Claude Code** | /model claude-sonnet-4-6 |
-| **OpenAI Codex** | All models |
-
 ---
 
 ## Install
