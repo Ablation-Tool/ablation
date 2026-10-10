@@ -8,33 +8,30 @@
 
 4 things that were not possible before in Ablation:
 
-**1. No CAN DBC database parsing.** The Vector DBC format is the universal interchange format
-for CAN signal databases. Every major CAN analysis tool uses it: CANdb++, SavvyCAN, Wireshark,
-BUSMASTER, cantools. DBC files carry all message IDs, signal bit layouts, physical conversion
-factors, and enumerated state names for a CAN network. Without a parser, ECU calibration work
-had no signal-level context. Table addresses from XDF or A2L parsers were available, but the
-CAN bus signals those tables feed were invisible.
+**1. No CAN DBC database parsing.** CANdb++, SavvyCAN, Wireshark, BUSMASTER, and cantools all
+use the Vector DBC format as their CAN signal database file. A DBC file defines every message
+ID, signal bit layout, scale factor, and offset for a CAN network. Without a DBC parser, ECU
+analysis had table addresses from XDF and A2L parsers but no signal layout. There was no way to
+look up which CAN signal a ROM calibration table feeds.
 
-**2. No 29-bit extended frame ID decoding.** The DBC format encodes extended CAN frames by
-setting bit 31 of the raw message ID field. J1939 industrial and agricultural ECUs use 29-bit
-extended frames (e.g., raw ID 0x0CF004FE for EEC1 Engine Speed). Without explicit bit-31
-detection and masking, a DBC parser assigns wrong IDs to every J1939 message and all extended
-messages appear absent when searched by canonical CAN ID. This parser detects
-`raw_id & 0x80000000` at parse time and strips bit 31 to produce the 29-bit canonical ID.
+**2. No 29-bit extended frame ID decoding.** DBC files mark 29-bit extended CAN frames by
+setting bit 31 in the raw message ID field. J1939 ECUs use extended frames for every
+PGN-addressed message (e.g., EEC1 Engine Speed at raw ID 0x0CF004FE). Without bit-31
+detection, a parser stores the wrong canonical ID and every extended message is unreachable by
+`message()` lookup. This parser masks bit 31 at parse time and stores the 29-bit ID in
+`msg_id`.
 
-**3. No value table resolution.** DBC `VAL_` records map raw integer signal values to
-human-readable state names: gear positions, fault codes, operating modes, switch positions.
-These names are the primary source of signal intent documentation in production automotive DBC
-files. Without a second-pass `VAL_` parser, signal objects had only a name and a scale factor.
-Enumerated state meanings were inaccessible. This parser resolves value tables per signal and
-stores them as `CANSignal.value_table`.
+**3. No value table resolution.** DBC `VAL_` records map raw signal integers to state names:
+gear positions, fault codes, mode flags. Without a second pass over the file to read `VAL_`
+entries, a signal object has a name and a scale factor but no state names. This parser reads
+`VAL_` records in a second pass and stores the result in `CANSignal.value_table`.
 
-**4. No manufacturer signal comment recovery.** DBC `CM_` records carry the manufacturer's
-own descriptions of signal and message semantics. These comments survive DBC export from CANdb++
-and, when present, are the richest source of signal intent available outside the OEM data
-dictionary. `CM_` records trail all `BO_`/`SG_` blocks in the file and can span multiple lines.
-Without a second-pass `DOTALL` regex over the full text, comment content was unreachable. This
-parser recovers both signal and message comments.
+**4. No signal comment recovery.** DBC `CM_` records carry the manufacturer's description of
+each signal and message. These descriptions survive DBC export from CANdb++ and often say what
+a signal controls or which ECU subsystem produces it. `CM_` records appear after all `BO_`/`SG_`
+blocks in the file and can span multiple lines. Without a second pass with `re.DOTALL` over the
+full file text, all comment content was missing. This parser recovers both signal and message
+comments in the second pass.
 
 ---
 
