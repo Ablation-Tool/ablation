@@ -20,7 +20,7 @@ Combined with any coding agent, it runs as an autonomous reverse engineering too
 
 | Capability | |
 |:---|:---|
-| **Semantic Code Search** | Uses a BERT-family encoder to find functions by meaning in stripped binaries without symbols. |
+| [**Semantic Code Search**](docs/module-reference/semantic-search.md) | Uses a BERT-family encoder to find functions by meaning in stripped binaries without symbols. |
 | **On-Demand Analysis** | Loads in seconds because it only analyzes the code being examined; Ghidra and IDA Pro parse the entire file upfront. |
 | **Binary Lifting** | Pseudo-C IR across 17 ISAs; ARM64 and x86-64 receive register-level taint propagation. |
 | **Hypothesis Engine** | Tracks competing RE hypotheses, scores evidence across four families, and auto-executes probes; sessions persist across engagements. |
