@@ -5,7 +5,7 @@
 
 Ablation is a reverse engineering framework. 
 
-It carries no dependency on legacy tools such as Ghidra, IDA Pro, and Binary Ninja, or any MCP server. 
+It carries no dependency on legacy tools or any MCP server. 
 
 Combined with Codex or Claude Code, it runs as an autonomous reverse engineering tool.
 
