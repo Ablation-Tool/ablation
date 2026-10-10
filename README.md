@@ -281,6 +281,79 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 ---
 
+## Module Map
+
+```mermaid
+flowchart LR
+    subgraph IN ["Input Formats"]
+        ELF["ELF"]
+        PE["PE / Driver"]
+        FW["Firmware"]
+        MPY[".mpy Bytecode"]
+        DEX["APK / DEX"]
+        BM["BEAM / Erlang"]
+    end
+
+    subgraph CORE ["Foundation"]
+        BC["BinaryContext\nPLT · Strings · XRef · CFG"]
+    end
+
+    subgraph TAINT ["Taint Engine · 16 ISAs"]
+        TX["x86-32 / x86-64"]
+        TA["ARM32 / ARM64"]
+        TP["PPC32 / PPC64"]
+        TM["MIPS32 / nanoMIPS"]
+        TR["RISC-V 32 / 64"]
+        TL["ARC · V850 · LoongArch64"]
+    end
+
+    subgraph ANALYSIS ["Analysis"]
+        SEM["Semantic Search"]
+        DIFF["Version Diffing"]
+        HYPO["Hypothesis Engine"]
+        VTBL["Vtable Recon"]
+        CTL["Cross-Target Learning"]
+    end
+
+    subgraph SCANNERS ["Security Scanners"]
+        PRE["Pre-Auth Exposure"]
+        CRY["Crypto Analysis"]
+        HP["Heap Scanner"]
+        FMT["Format String"]
+        DRV["BYOVD / Kernel"]
+        MPYL["MpyLifter"]
+    end
+
+    subgraph OUT ["Output"]
+        FORGE["FORGE\nQuality Gate"]
+        REG["Finding Registry"]
+    end
+
+    IN --> BC
+    BC --> TAINT
+    BC --> ANALYSIS
+    BC --> SCANNERS
+    TAINT --> FORGE
+    ANALYSIS --> FORGE
+    SCANNERS --> FORGE
+    FORGE --> REG
+    REG -->|"seeds future sweeps"| SEM
+
+    classDef input fill:#1a0533,stroke:#7c3aed,stroke-width:2px,color:#e5e7eb
+    classDef core fill:#0d1117,stroke:#58a6ff,stroke-width:2px,color:#e5e7eb
+    classDef engine fill:#111827,stroke:#374151,stroke-width:1px,color:#d1d5db
+    classDef scanner fill:#111827,stroke:#374151,stroke-width:1px,color:#d1d5db
+    classDef output fill:#0d2818,stroke:#238636,stroke-width:2px,color:#e5e7eb
+
+    class ELF,PE,FW,MPY,DEX,BM input
+    class BC core
+    class TX,TA,TP,TM,TR,TL,SEM,DIFF,HYPO,VTBL,CTL engine
+    class PRE,CRY,HP,FMT,DRV,MPYL scanner
+    class FORGE,REG output
+```
+
+---
+
 ## Responsible Use
 
 Ablation is built for authorized security research. Use it only against systems you own or have explicit written permission to test. Running it against systems without authorization violates computer fraud laws in most jurisdictions. The author is not responsible for misuse.
