@@ -26,7 +26,7 @@ Combined with any coding agent, it runs as an autonomous reverse engineering too
 | **Hypothesis Engine** | Tracks competing RE hypotheses, scores evidence across four families, and auto-executes probes; sessions persist across engagements. |
 | **C++ Vtable Reconstruction** | Reconstructs vtable slots from any ELF on any architecture and emits an IDAPython script that injects the producer-to-consumer type chain into IDA. |
 | **Cross-Library Analysis** | Traces an argument across up to three shared library hops, so taint paths that cross library boundaries reach their sink rather than stopping at the first boundary. |
-| **DAG Adapter Language** | The ISA description layer that makes multi-architecture analysis work without per-architecture exception cases. |
+| **DAG Adapter Language** | Describes instruction set encodings as directed acyclic graphs so every architecture shares the same analysis code path. Without it, each ISA requires its own exception handler and the analyzer count scales with the architecture count. |
 
 </details>
 
