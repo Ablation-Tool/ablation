@@ -161,7 +161,7 @@ This project was greatly informed and inspired by several key literary works.
 ## Framework Architecture & Module Orchestration
 
 <details>
-<summary><strong>Target Binary:</strong> ELF · PE · firmware</summary>
+<summary><img src="https://img.shields.io/badge/Target_Binary-475569?style=flat-square" alt="Target Binary"> ELF · PE · firmware</summary>
 
 ```
          ╔══════════════════════════════════════╗
@@ -175,7 +175,7 @@ This project was greatly informed and inspired by several key literary works.
 ```
 
 <details>
-<summary><strong>BinaryContext:</strong> PLT · Strings · Call Graph · XRefs</summary>
+<summary><img src="https://img.shields.io/badge/BinaryContext-0284c7?style=flat-square" alt="BinaryContext"> PLT · Strings · Call Graph · XRefs</summary>
 
 ```
          ╔══════════════════════════════════════╗
@@ -190,7 +190,7 @@ This project was greatly informed and inspired by several key literary works.
 ```
 
 <details>
-<summary><strong>Claude Code:</strong> Central Orchestrator</summary>
+<summary><img src="https://img.shields.io/badge/Claude_Code-7c3aed?style=flat-square" alt="Claude Code"> Central Orchestrator</summary>
 
 ```
          ╔══════════════════════════════════════╗
@@ -206,7 +206,7 @@ This project was greatly informed and inspired by several key literary works.
 ```
 
 <details>
-<summary><strong>Analysis Engines:</strong> <img src="https://img.shields.io/badge/Semantic-0284c7?style=flat-square" alt="Semantic"> <img src="https://img.shields.io/badge/Taint-b91c1c?style=flat-square" alt="Taint"> <img src="https://img.shields.io/badge/Diffing-7c3aed?style=flat-square" alt="Diffing"> <img src="https://img.shields.io/badge/FmtStr-b91c1c?style=flat-square" alt="FmtStr"> <img src="https://img.shields.io/badge/Heap-b91c1c?style=flat-square" alt="Heap"> <img src="https://img.shields.io/badge/MultiArch-374151?style=flat-square" alt="MultiArch"> <img src="https://img.shields.io/badge/Driver-b91c1c?style=flat-square" alt="Driver"></summary>
+<summary><img src="https://img.shields.io/badge/Analysis_Engines-ea580c?style=flat-square" alt="Analysis Engines"> Semantic · Taint · Diffing · FmtStr · Heap · MultiArch · Driver</summary>
 
 ```
   ┌──────────────────┐  ┌──────────────────┐
@@ -228,7 +228,7 @@ This project was greatly informed and inspired by several key literary works.
 ```
 
 <details>
-<summary><strong>Finding Registry:</strong> cross-target corpus · seeds future sweeps</summary>
+<summary><img src="https://img.shields.io/badge/Finding_Registry-16a34a?style=flat-square" alt="Finding Registry"> cross-target corpus · seeds future sweeps</summary>
 
 ```
   Claude ──▶ ╔══════════════════════════════╗
