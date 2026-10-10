@@ -47,41 +47,18 @@ The format is architecture-independent. x86-64, arm64, mips, and riscv64 Go bina
 
 ## Workflow
 
-```
-  Go binary (stripped ELF)
-          |
-          v
-  ┌────────────────────────────────────────────────────────────┐
-  │  GoPclntab / GoFuncTable                                   │
-  │    Locate pclntab by magic scan or section header          │
-  │    Parse function table: VA → name string                  │
-  │    All function names extracted without symbol table       │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  NameRegistry (via ctx.set_name)                           │
-  │    Register all pclntab names with source='pclntab'        │
-  │    Names appear in callee/caller output automatically      │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  BinaryContext                                             │
-  │    Names visible in ctx.name(va), ctx.names_table()        │
-  │    ctx.callers_of('main.handleWebsocketUpgrade') works      │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  SemanticSearcher                                          │
-  │    BERT corpus descriptions change from:                   │
-  │      "func_0xABCD calls: runtime_memmove"                  │
-  │    to:                                                     │
-  │      "main.handleWebsocketUpgrade calls: runtime_memmove,  │
-  │       net_http_ServeHTTP"                                  │
-  │    Accuracy: ~0.20 unnamed → ~0.70+ named                  │
-  └──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[/"Go binary (stripped ELF)"/] --> B["GoPclntab / GoFuncTable\nLocate pclntab by magic scan or section header\nParse function table: VA → name string\nAll function names extracted without symbol table"]
+
+    B --> C["NameRegistry (via ctx.set_name)\nRegister all pclntab names with source='pclntab'\nNames appear in callee/caller output automatically"]
+
+    C --> D["BinaryContext\nNames visible in ctx.name(va), ctx.names_table()\nctx.callers_of('main.handleWebsocketUpgrade') works"]
+
+    D --> E[/"SemanticSearcher\nBERT corpus descriptions change from:\n  'func_0xABCD calls: runtime_memmove'\nto:\n  'main.handleWebsocketUpgrade calls:\n   runtime_memmove, net_http_ServeHTTP'\nAccuracy: ~0.20 unnamed → ~0.70+ named"/]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style E fill:#14532d,stroke:#166534,color:#dcfce7
 ```
 
 ---
@@ -157,32 +134,16 @@ Scans for: `os/exec.Command`, `exec.CommandContext`, `syscall.Exec`, `os.StartPr
 
 ### How GoGarbleRe works
 
-```
-  Garble binary
-          |
-          v
-  ┌────────────────────────────────────────────────────────────┐
-  │  runtime.morestack anchor                                  │
-  │    morestack is always present (stack growth is required)  │
-  │    recognized by its prologue pattern (architecture-specific)│
-  │    provides ground-truth VA-to-file-offset mapping          │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  Entry point tracing                                       │
-  │    Garble disrupts standard ELF layout                     │
-  │    entry_point = Go runtime bootstrap VA                   │
-  │    Trace bootstrap → goroutine spawn → main.main           │
-  └──────────────────────────┬─────────────────────────────────┘
-                             |
-                             v
-  ┌────────────────────────────────────────────────────────────┐
-  │  HTTP handler registration                                 │
-  │    mux.HandleFunc pattern: string literal (route) +        │
-  │    function pointer (handler VA)                           │
-  │    Routes visible even when handler names are hashed        │
-  └──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[/"Garble binary"/] --> B["runtime.morestack anchor\nmorestack is always present (stack growth is required)\nRecognized by its prologue pattern (architecture-specific)\nProvides ground-truth VA-to-file-offset mapping"]
+
+    B --> C["Entry point tracing\nGarble disrupts standard ELF layout\nentry_point = Go runtime bootstrap VA\nTrace bootstrap → goroutine spawn → main.main"]
+
+    C --> D[/"HTTP handler registration\nmux.HandleFunc pattern:\n  string literal (route) + function pointer (handler VA)\nRoutes visible even when handler names are hashed"/]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style D fill:#14532d,stroke:#166534,color:#dcfce7
 ```
 
 ```python
