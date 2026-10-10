@@ -37,7 +37,7 @@ Combined with any coding agent, it runs as an autonomous reverse engineering too
 |:---|:---|
 | **Taint-Based Vulnerability Detection** | Tracks attacker-controlled data from network entry points to dangerous sinks across 14 architectures, interprocedurally, across process boundaries. |
 | **Pre-Authentication Attack Surface** | Maps code paths reachable before authentication so an unauthenticated attacker's reach is clear before any manual review. |
-| **PoC Generation** | Finds pre-auth attack routes and generates working curl exploit scripts for each one. |
+| **PoC Generation** |  Generates curl-based proof-of-concept scripts. |
 | **Source Code Auditing** | Scans a codebase for vulnerabilities without an LLM; a 40x read-reduction compressor buckets files by security profile so only the highest-risk files get individual attention. |
 | **Compiler Bug Detection** | Identifies compiler-introduced vulnerabilities; a single GCC 12.3.1.7 codegen error produced 172 confirmed findings in TencentOS 4.6. |
 | **Cryptographic Analysis** | Eight tools that collectively strip away every layer that makes cryptography invisible in a compiled binary. |
