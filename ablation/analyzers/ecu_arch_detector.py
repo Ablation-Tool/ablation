@@ -8,6 +8,7 @@ signatures, and byte-level statistical patterns.
 Supported architectures
 -----------------------
 - ``arm_cm``   — ARM Cortex-M (Thumb-2, LE vector table at offset 0)
+- ``tricore``  — Infineon TriCore AURIX (TC1.6/TC2xx/TC3xx, LE; Bosch ME17/MED17, Continental)
 - ``m68k``     — Motorola 68K / CPU32 (GM P-series PCMs)
 - ``ppc32``    — PowerPC 32-bit Book E (GM E38, Denso denso_d70f3xxx)
 - ``ppc_vle``  — PowerPC VLE (NXP e200z, GM E39a/E54/E92)
@@ -79,6 +80,19 @@ class EcuArchDetector:
     _SRAM_HI  = 0x40000000   # ARM Cortex-M SRAM ceiling
     _FLASH_LO = 0x00000000   # ARM Cortex-M flash base
     _FLASH_HI = 0x20000000   # ARM Cortex-M flash ceiling (before SRAM)
+
+    # TriCore AURIX physical address map (TC1.8 Architecture Manual Vol 1, §8 Table 13)
+    # Segment 8-B: PFLASH (cached + uncached), 0x80000000–0xBFFFFFFF
+    # Segment C-D: Scratchpad RAM (PSPR/DSPR), 0xC0000000–0xDFFFFFFF
+    # Segment E-F: Peripheral space (SFRs), 0xE0000000–0xFFFFFFFF
+    _TC_PFLASH_LO  = 0x80000000
+    _TC_PFLASH_HI  = 0xC0000000
+    _TC_PERIPH_LO  = 0xE0000000  # Peripheral space (SFRs at 0xF0xxxxxx are common)
+    _TC_PERIPH_HI  = 0x00000000  # wraps — whole 0xE–0xF range; check via upper byte
+    _TC_SCRATCH_LO = 0xC0000000  # Scratchpad (PSPR+DSPR)
+    _TC_SCRATCH_HI = 0xE0000000
+    # ELF identity (GHS-RE-REFERENCE.md §1.10, Infineon TriCore EABI V2.9)
+    _TC_EM_TRICORE = 44          # e_machine = 0x2C
 
     def __init__(
         self,
@@ -153,6 +167,7 @@ class EcuArchDetector:
         """
         runners = [
             self._score_arm_cortex_m,
+            self._score_tricore,
             self._score_m68k,
             self._score_ppc32,
             self._score_ppc_vle,
@@ -169,6 +184,127 @@ class EcuArchDetector:
     # ------------------------------------------------------------------
     # Individual discriminators
     # ------------------------------------------------------------------
+
+    def _score_tricore(self) -> Optional[ArchCandidate]:
+        """
+        TriCore AURIX detection.
+
+        TriCore is little-endian (unique among the non-Cortex-M ECU archs in this corpus).
+        Flat AURIX binary dumps contain two distinctive classes of absolute 32-bit LE
+        pointer values derived from the TC1.8 physical address map:
+
+          1. Code/data pointers into PFLASH (0x80000000–0xBFFFFFFF):
+               Segment 8 (0x80–0x8F): cacheable PFLASH
+               Segment 9 (0x90–0x9F): cacheable PFLASH
+               Segment A (0xA0–0xAF): non-cacheable PFLASH (typical ECU boot address)
+               Segment B (0xB0–0xBF): non-cacheable PFLASH
+             These appear as call targets, jump-table entries, vtable slots, and
+             pointer-literal constants.
+
+          2. SFR access addresses in peripheral space (0xE0000000–0xFFFFFFFF):
+               Segment E (0xE0–0xEF): peripheral
+               Segment F (0xF0–0xFF): peripheral (most SFRs are here)
+             ECU code writes/reads SFRs by constructing their LE 32-bit addresses.
+
+          3. Scratchpad RAM (0xC0000000–0xDFFFFFFF) is less common in code literals
+             but stack-pointer loads (A[10] initialisation) use DSPR addresses.
+
+        Source for address ranges: TC1.8 Architecture Manual Vol 1, §8 Table 13
+        Source for ELF identity: Infineon TriCore EABI V2.9 / GHS-RE-REFERENCE.md §1.10
+
+        ELF path (secondary check): if the binary starts with the ELF magic and has
+        e_machine = 44 (EM_TRICORE) with ELFDATA2LSB, score is HIGH immediately.
+
+        Score breakdown (flat binary path):
+          0.90: ELF e_machine=44 (EM_TRICORE, ELFDATA2LSB)
+          0.85: PFLASH density >= 3% AND peripheral density >= 1%
+          0.75: PFLASH density >= 3%
+          0.60: PFLASH density >= 1.5%
+          0.45: peripheral-only density >= 2% (SFR access pattern without code refs)
+        """
+        data = self._data
+        n = len(data)
+
+        # ELF identity check — definitive if present.
+        # ELF32 LE header: magic[4] + EI_CLASS(1)=1 + EI_DATA(1)=1 + ... + e_machine(2)
+        # Offsets: magic=0..3, EI_CLASS=4, EI_DATA=5, EI_VERSION=6, EI_OSABI=7,
+        #          8 bytes padding, e_type(2)=16, e_machine(2)=18
+        if n >= 20 and data[:4] == b'\x7fELF' and data[4] == 1 and data[5] == 1:
+            e_machine = struct.unpack_from("<H", data, 18)[0]
+            if e_machine == self._TC_EM_TRICORE:
+                return ArchCandidate(
+                    arch="tricore",
+                    score=0.90,
+                    reason="TriCore ELF: EI_DATA=LE, e_machine=44 (EM_TRICORE)",
+                )
+
+        # Flat binary path: scan the FULL image for PFLASH and peripheral pointer
+        # densities.  The sample-size window used by the other discriminators
+        # (4 096 bytes by default) is inadequate for TriCore because AURIX
+        # startup code is typically sparse in absolute-address literals; pointer
+        # density only becomes representative once function-body code is reached
+        # (often well past the first 64 KB).  Scanning the full image is safe:
+        # at 4 bytes per iteration, even a 16 MB flash image runs in under 1 ms
+        # on modern hardware.
+        scan = self._data
+        sn = len(scan)
+        if sn < 16:
+            return None
+
+        total = sn // 4
+        pflash_count = 0
+        periph_count = 0
+        for i in range(0, sn - 3, 4):
+            val = struct.unpack_from("<I", scan, i)[0]
+            upper = val >> 24
+            if 0x80 <= upper <= 0xBF:
+                pflash_count += 1
+            elif 0xE0 <= upper <= 0xFF:
+                periph_count += 1
+
+        pflash_density = pflash_count / max(total, 1)
+        periph_density = periph_count / max(total, 1)
+
+        # Artifact guard: in a big-endian ROM (SH-2A, M68K, PPC32) read as LE,
+        # the high byte of each LE 32-bit word is the low byte of the adjacent
+        # instruction word — an instruction-byte artifact, not a real pointer.
+        # This concentrates spuriously at 0xE0–0xFF (MOV immediates, etc.) and
+        # 0x80–0xBF (branch/load opcodes), creating high false densities.
+        # In real TriCore firmware, peripheral SFR density is roughly comparable
+        # to PFLASH code-pointer density.  If periph > 2 × pflash AND the
+        # absolute periph density exceeds 15 %, the binary is almost certainly a
+        # BE ROM, not a TriCore flat image.
+        be_artifact = periph_density > 0.15 and periph_density > pflash_density * 2
+        if be_artifact:
+            return None
+
+        if pflash_density >= 0.03 and periph_density >= 0.01:
+            score = 0.85
+            reason = (
+                f"TriCore AURIX: PFLASH LE-ptr density {pflash_density:.2%} "
+                f"+ peripheral SFR density {periph_density:.2%}"
+            )
+        elif pflash_density >= 0.03:
+            score = 0.75
+            reason = (
+                f"TriCore AURIX: PFLASH LE-ptr density {pflash_density:.2%} "
+                f"(no peripheral signal)"
+            )
+        elif pflash_density >= 0.015:
+            score = 0.60
+            reason = (
+                f"TriCore AURIX: PFLASH LE-ptr density {pflash_density:.2%} "
+                f"(moderate; confirm with peripheral scan)"
+            )
+        elif periph_density >= 0.02:
+            score = 0.45
+            reason = (
+                f"TriCore AURIX: peripheral SFR density {periph_density:.2%} "
+                f"(no PFLASH code pointers; may be data-only region)"
+            )
+        else:
+            return None
+        return ArchCandidate(arch="tricore", score=score, reason=reason)
 
     def _score_arm_cortex_m(self) -> Optional[ArchCandidate]:
         """

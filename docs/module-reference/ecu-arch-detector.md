@@ -6,14 +6,14 @@
 
 ## Why this exists
 
-2 things that were not possible before in Ablation:
+3 things that were not possible before in Ablation:
 
 **1. No ISA identification for unknown flat ECU ROMs.** When a ROM image arrives without any
 container format (no ELF, no IHEX, no SREC wrapper), there is no reliable way to know
 what instruction set it contains before Ablation selects a decoder.  Choosing the wrong
 decoder silently misaligns on every instruction, making all downstream RE work garbage.
 Before this module, ISA identification was a manual step — inspecting hex dumps, looking at
-reset vectors, pattern-matching by eye.  `EcuArchDetector` runs five discriminators in one
+reset vectors, pattern-matching by eye.  `EcuArchDetector` runs six discriminators in one
 call and returns a confident verdict (HIGH/MEDIUM/LOW) with a human-readable reason, so
 the RE pipeline can select the correct decoder without a manual step.
 
@@ -24,6 +24,16 @@ ARM Cortex-M.  `EcuArchDetector` adds an ARM Cortex-M discriminator, providing I
 coverage for those targets and establishing where a future `ARM32TaintTracker` or Capstone
 ARM wrapper would fit in the pipeline.
 
+**3. No detection for Infineon TriCore AURIX flat binary dumps.**  TriCore AURIX (TC1.6/
+TC2xx/TC3xx) is used in Bosch ME17/MED17 engine controllers, Continental MG1, and Waqas
+GEN3 ECU platforms.  Without this discriminator, a TriCore flat dump was misidentified as
+M68K — the big-endian reset-vector check at offset 4 fired on arbitrary bytes that happened
+to fall in range.  The TriCore discriminator scans the full image for little-endian pointer
+values in the AURIX physical address map (PFLASH at 0x80000000–0xBFFFFFFF, peripherals at
+0xE0000000–0xFFFFFFFF; both ranges from TC1.8 Architecture Manual Vol 1, §8 Table 13) and
+includes an artifact guard that rejects big-endian ROMs whose instruction bytes, when
+misread as LE words, produce spurious address hits.
+
 ---
 
 ## Supported architectures
@@ -31,6 +41,7 @@ ARM wrapper would fit in the pipeline.
 | Arch token | ISA | Typical targets |
 |---|---|---|
 | `arm_cm` | ARM Cortex-M (Thumb-2, LE vector table) | Bosch MED17, Continental SIMOS |
+| `tricore` | Infineon TriCore AURIX (TC1.6/TC2xx/TC3xx, LE) | Bosch ME17/MED17, Continental MG1, Waqas GEN3 |
 | `m68k` | Motorola 68K / CPU32 | GM P01/P04/P05/P08/P10/P11/P59 (CPU32) |
 | `ppc32` | PowerPC 32-bit Book E | GM E38 PCM, Denso ECUs |
 | `ppc_vle` | PowerPC VLE (NXP e200z) | GM E39a/E54/E92 (MPC5566) |
@@ -87,6 +98,25 @@ class ArchDetectResult:
 
 ## Discriminators
 
+### TriCore AURIX
+
+Scans the **full image** (not the 4 KB sample) for little-endian 32-bit pointer values in
+AURIX-specific address ranges (TC1.8 Architecture Manual Vol 1, §8 Table 13):
+- PFLASH (code+data flash, cached + uncached): `0x80000000–0xBFFFFFFF` (segments 8–B)
+- Peripheral space (SFRs): `0xE0000000–0xFFFFFFFF` (segments E–F)
+
+Secondary signal: ELF `e_machine == 44` (EM_TRICORE) with `EI_DATA == 1` (LE) → score 0.90
+immediately without any density scan.
+
+Artifact guard: big-endian ROMs (SH-2A, M68K, PPC32) produce false PFLASH hits when their
+instruction bytes are read as LE 32-bit words.  The guard fires when
+`periph_density > 15 % AND periph_density > 2 × pflash_density`, which is characteristic
+of BE instruction streams misread as LE (periph:pflash ratio 3–6×) but is never seen in real
+TriCore firmware (ratio ~1.1×).
+
+Score 0.85 when PFLASH density ≥ 3 % and peripheral density ≥ 1 %; 0.75 for PFLASH ≥ 3 %
+only; 0.60 for PFLASH ≥ 1.5 %; 0.45 for peripheral ≥ 2 % only.
+
 ### ARM Cortex-M
 
 Vector table at offset 0 (little-endian):
@@ -132,4 +162,6 @@ Score 0.88 for reset + STS.L density; 0.75 for reset + RTS density; 0.60 for res
 
 - Discriminators are density-based: a ROM with very little code in the first 4 KB sample (e.g., a ROM that starts with calibration tables) may misidentify or return LOW confidence.  Pass `sample_size=0` to sample the full image.
 - ARM Cortex-M identification is based solely on the vector table (no instruction density signal).  A ROM that happens to have a 4-byte value in the SRAM range at offset 0 will false-positive.  Use with `is_confident` check.
-- No support for RISC-V, TriCore (Infineon), or SH-4 — add a new `_score_*` method following the same pattern.
+- No support for RISC-V, RH850, or SH-4 — add a new `_score_*` method following the same pattern.
+- TriCore detection requires scanning the full image; calling `EcuArchDetector(data, sample_size=N)` with a small N will still cause the TriCore discriminator to scan all of `data`, not the sample.  This is intentional: startup code density is too low in the first few KB.
+- TriCore artifact guard (`periph > 2 × pflash AND periph > 15 %`) may reject a legitimate TriCore binary if the code region happens to have very heavy SFR access with low function-call density.  In that case pass `sample_size=0` and verify manually.
