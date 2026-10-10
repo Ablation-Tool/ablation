@@ -2,6 +2,22 @@
 
 ---
 
+## v2.46.0
+
+**BinaryContext: full Windows PE support.** `BinaryContext.load_or_build()` now works on `.exe`, `.dll`, and `.sys` files. Every Ablation analysis tool that depends on `BinaryContext` — `SemanticSearcher`, `TaintTracker`, `WindowAnalyzer`, `FuncProfiler`, `callers_of()`, `callees_of()`, `strings_in_func()` — now functions on Windows PE binaries with no changes to calling code.
+
+- `_detect_arch_pe()` maps PE `MACHINE_TYPES` to Ablation arch strings (`x86_64`, `x86_32`, `arm64`, `arm32`)
+- `_extract_plt_pe()` builds `{absolute_va: import_name}` from the IAT (the PE equivalent of ELF PLT stubs)
+- `_extract_exports_pe()` populates `exports` from the PE export directory
+- `_extract_strings_pe()` scans `.rdata` and `.data` sections
+- `_extract_func_starts_pe()` seeds from exports, then prologue-scans executable sections (x86_64: `sub rsp`, `push rbx`, `endbr64`; x86_32: `push ebp; mov ebp, esp`)
+- `_build_call_graph_pe()` vectorized numpy `0xe8` scan on all `IMAGE_SCN_MEM_EXECUTE` sections; Capstone fallback when numpy is unavailable
+- `_build_string_xref_index_pe()` RIP-relative scan (x86_64) or absolute scan (x86_32) to populate `strings_in_func()` and `funcs_referencing_string()`
+- `BinaryContext` doc added: `docs/module-reference/binary-context.md`
+- MZ magic removed from `_NON_ELF` warn list (PE files now build a real context instead of warning and returning empty)
+
+---
+
 ## v2.45.0
 
 **BinaryLifter: 13 new ISA decompiler backends.** `BinaryLifter` now supports all 17

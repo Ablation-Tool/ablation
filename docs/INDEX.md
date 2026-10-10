@@ -82,6 +82,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [COM Attack Surface Mapper](module-reference/com-attack-surface-mapper.md) | COMAttackSurfaceMapper: detects COM server exports (DllGetClassObject); scans data sections for CLSID GUIDs; finds CoCreateInstance call sites with resolved CLSIDs; flags COM hijacking risk (MEDIUM, CWE-426); detects marshaling + IDispatch |
 | [PDB Symbol Integrator](module-reference/pdb-symbol-integrator.md) | PDBSymbolIntegrator: reads CodeView RSDS debug entry for PDB GUID+age; fetches PDB from Microsoft symbol server; parses MSF 7.0 container + public symbols stream (S_PUB32); injects names into BinaryContext via set_name(source='pdb') |
 | [Windows Pool Taint Tracker](module-reference/windows-pool-taint-tracker.md) | WindowsPoolTaintTracker: finds ExAllocatePool* call sites; extracts size arg (RDX in x64 fastcall); finds RtlCopyMemory/memmove copy sinks; pairs alloc+copy sites sharing same size register; flags unvalidated propagation as HIGH (CWE-122) |
+| [BinaryContext](module-reference/binary-context.md) | BinaryContext: pre-computed context cache (PLT/IAT, exports, strings, func_starts, call_edges) for ELF and Windows PE; load_or_build() auto-detects format; every Ablation tool works on PE/.sys without code changes; callers_of()/callees_of()/strings_in_func() all populated for PE |
 
 ---
 
@@ -100,6 +101,8 @@ See [CHANGELOG.md](../CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|
+| v2.46.0 | BinaryContext PE support: load_or_build() works on .exe/.dll/.sys; _build_pe() + _detect_arch_pe() + 7 helper methods; IAT as PLT; prologue scan for func_starts; vectorized 0xe8 call graph; RIP-relative xref index; ELF path unchanged |
+| v2.45.0 | BinaryLifter: 13 new ISA decompiler backends (x86_32, arm32, mips32/64, nanomips, ppc32/64, rv32/64, arc, v850, la64, beam); _walk_ablation_cfg() shared BFS helper |
 | v2.44.0 | Windows PE security suite: CFGBypassDetector (GuardFlags + export table cross-reference), SEHChainAnalyzer (x86 SafeSEH table + frame scan), ETWProviderExtractor (provider GUIDs + detection gap), RPCServerAnalyzer (interface UUID + auth level + endpoint strings), COMAttackSurfaceMapper (server detection + CLSID scan + hijack risk), PDBSymbolIntegrator (MSF parser + msdl fetch + NameRegistry injection), WindowsPoolTaintTracker (ExAllocatePool size → RtlCopyMemory taint) |
 | v2.43.0 | FORGE: result cache (sha256-keyed, ~/.ablation/forge_cache.json, instant hit); ForgeAuditRequired exception replaces subprocess — audits run inline as Claude Code, no subprocess, no API key; FORGE.record_result() stores inline results; removed dead Anthropic SDK path |
 | v2.42.0 | ScanResultVersionCache: scanner result cache keyed on source hash + file fingerprint; fast stat-only hit path; KernelModuleSubsystemClassifier: attack surface from .ko path (26 rules: PROXIMITY/NETWORK-cluster/LOCAL-USB/etc.) |

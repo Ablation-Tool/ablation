@@ -143,11 +143,29 @@ def _detect_arch(binary) -> str:
     return 'x86_64'
 
 
+def _detect_arch_pe(binary) -> str:
+    """Detect arch from PE MACHINE_TYPES header field."""
+    try:
+        m = binary.header.machine
+        if m == lief.PE.MACHINE_TYPES.AMD64:
+            return 'x86_64'
+        if m == lief.PE.MACHINE_TYPES.I386:
+            return 'x86_32'
+        if m == lief.PE.MACHINE_TYPES.ARM64:
+            return 'arm64'
+        if m == lief.PE.MACHINE_TYPES.ARMNT:
+            return 'arm32'
+    except Exception:
+        pass
+    return 'x86_64'
+
+
 class BinaryContext:
     """
     Pre-computed binary context. One object = complete working context for a
-    stripped ELF binary: symbols, strings, function starts, call graph.
-    Supports x86_64, x86_32, arm64, arm32, loongarch64, mips32, mips64, ppc32, ppc64, riscv32, riscv64 ELF binaries.
+    stripped binary: symbols, strings, function starts, call graph.
+    Supports ELF (x86_64, x86_32, arm64, arm32, loongarch64, mips32, mips64, ppc32, ppc64, riscv32, riscv64)
+    and Windows PE / .sys (x86_64, x86_32).
     """
 
     def __init__(self):
@@ -184,7 +202,6 @@ class BinaryContext:
         _NON_ELF = {
             b'FOR1': 'Erlang BEAM bytecode',
             b'PK\x03\x04': 'ZIP/JAR/APK archive',
-            b'MZ': 'Windows PE executable',
             b'\xca\xfe\xba\xbe': 'Mach-O fat binary',
             b'\xce\xfa\xed\xfe': 'Mach-O 32-bit',
             b'\xcf\xfa\xed\xfe': 'Mach-O 64-bit',
@@ -192,18 +209,10 @@ class BinaryContext:
         for magic, label in _NON_ELF.items():
             if data[:len(magic)] == magic:
                 import warnings
-                hints = {
-                    'Windows PE executable': (
-                        'Use CFGBypassDetector, SEHChainAnalyzer, ETWProviderExtractor, '
-                        'RPCServerAnalyzer, COMAttackSurfaceMapper, PDBSymbolIntegrator, '
-                        'WindowsPoolTaintTracker, KernelDriverAnalyzer, or ByovdDetector.'
-                    ),
-                }
-                hint = hints.get(label, 'Use the appropriate format-specific analyzer instead.')
                 warnings.warn(
                     f"BinaryContext: {Path(path).name!r} appears to be {label}, "
                     f"not an ELF binary -- context will be empty. "
-                    f"{hint}",
+                    f"Use the appropriate format-specific analyzer instead.",
                     stacklevel=2,
                 )
                 break
@@ -445,6 +454,8 @@ class BinaryContext:
             binary = lief.parse(data)
         except Exception:
             return ctx
+        if isinstance(binary, lief.PE.Binary):
+            return cls._build_pe(data, path, sha, binary)
         if not isinstance(binary, lief.ELF.Binary):
             return ctx
 
@@ -1590,6 +1601,314 @@ class BinaryContext:
             for sv in imm_to_strs[key]:
                 str_xref.setdefault(sv, []).append(fva)
                 func_str.setdefault(fva, []).append(sv)
+
+    # ── PE support ────────────────────────────────────────────────────────────
+
+    @classmethod
+    def _build_pe(cls, data: bytes, path: str, sha: str, binary) -> "BinaryContext":
+        ctx = cls()
+        ctx.path = path
+        ctx.sha256 = sha
+        ctx.base_va = binary.optional_header.imagebase
+        ctx.arch = _detect_arch_pe(binary)
+        ctx._extract_plt_pe(binary)
+        ctx._extract_exports_pe(binary)
+        ctx._extract_strings_pe(binary)
+        ctx._extract_func_starts_pe(binary)
+        ctx._build_call_graph_pe(data, binary)
+        ctx._build_indices()
+        ctx._build_string_xref_index_pe(data, binary)
+        return ctx
+
+    def _extract_plt_pe(self, binary) -> None:
+        """IAT map: {absolute_va: import_name}."""
+        base = self.base_va
+        try:
+            for imp in binary.imports:
+                for entry in imp.entries:
+                    if entry.iat_address and entry.name:
+                        self.plt[base + entry.iat_address] = entry.name
+        except Exception:
+            pass
+
+    def _extract_exports_pe(self, binary) -> None:
+        """Export map: {name: absolute_va}."""
+        base = self.base_va
+        try:
+            exp = binary.get_export()
+            if exp is None:
+                return
+            for entry in exp.entries:
+                if entry.name and entry.address:
+                    self.exports[entry.name] = base + entry.address
+        except Exception:
+            pass
+
+    def _extract_strings_pe(self, binary) -> None:
+        """Printable strings from .rdata and .data PE sections."""
+        base = self.base_va
+        for sec_name in (".rdata", ".data"):
+            try:
+                sec = binary.get_section(sec_name)
+            except Exception:
+                sec = None
+            if not sec:
+                continue
+            _extract_strings_into(bytes(sec.content), base + sec.virtual_address, self.strings)
+
+    def _extract_func_starts_pe(self, binary) -> None:
+        """Function starts: exported VAs + prologue scan on executable sections."""
+        starts: Set[int] = set()
+        base = self.base_va
+
+        for va in self.exports.values():
+            if va:
+                starts.add(va)
+
+        _PROLOGUES: Dict[str, List[bytes]] = {
+            'x86_64': [
+                b'\x48\x83\xec',       # sub rsp, N  (MSVC x64 stack reserve)
+                b'\x48\x89\x5c\x24',   # mov [rsp+N], rbx  (callee-save opener)
+                b'\x40\x53',           # push rbx
+                b'\x55\x48\x89\xec',   # push rbp; mov rbp, rsp  (gcc -O0)
+                b'\xf3\x0f\x1e\xfa',   # endbr64
+            ],
+            'x86_32': [
+                b'\x55\x8b\xec',       # push ebp; mov ebp, esp  (MSVC)
+                b'\x55\x89\xe5',       # push ebp; mov ebp, esp  (GCC)
+            ],
+        }
+
+        patterns = _PROLOGUES.get(self.arch, [])
+        if patterns:
+            try:
+                for sec in binary.sections:
+                    if not (sec.characteristics & 0x20000000):  # IMAGE_SCN_MEM_EXECUTE
+                        continue
+                    sec_data = bytes(sec.content)
+                    sec_va = base + sec.virtual_address
+                    for pat in patterns:
+                        pos = 0
+                        while True:
+                            idx = sec_data.find(pat, pos)
+                            if idx < 0:
+                                break
+                            starts.add(sec_va + idx)
+                            pos = idx + 1
+            except Exception:
+                pass
+
+        self.func_starts = sorted(starts)
+
+    def _build_call_graph_pe(self, data: bytes, binary) -> None:
+        """Call graph for PE x86_64/x86_32: vectorized 0xe8 scan on executable sections."""
+        if self.arch not in ('x86_64', 'x86_32'):
+            return
+        if not _NUMPY_OK:
+            self._build_call_graph_pe_sequential(data, binary)
+            return
+
+        base = self.base_va
+        plt_arr  = _va_arr_to_i64(sorted(self.plt.keys())) if self.plt else np.empty(0, np.int64)
+        func_arr = _va_arr_to_i64(self.func_starts) if self.func_starts else np.empty(0, np.int64)
+        va_to_export: Dict[int, str] = {va: nm for nm, va in self.exports.items()}
+        edges: List[Tuple[int, int, str]] = []
+
+        try:
+            code_secs = [s for s in binary.sections if s.characteristics & 0x20000000]
+        except Exception:
+            code_secs = []
+
+        for sec in code_secs:
+            sec_data = bytes(sec.content)
+            sec_va = base + int(sec.virtual_address)
+            N = len(sec_data)
+            if N < 5:
+                continue
+
+            buf = np.frombuffer(sec_data, dtype=np.uint8)
+            cand_pos = np.where(buf[:-4] == 0xe8)[0]
+            if len(cand_pos) == 0:
+                continue
+
+            idx = cand_pos[:, None] + np.array([1, 2, 3, 4], dtype=np.intp)
+            disp_bytes = buf[idx]
+            disp_u32 = (disp_bytes[:, 0].astype(np.uint32)
+                        | (disp_bytes[:, 1].astype(np.uint32) << 8)
+                        | (disp_bytes[:, 2].astype(np.uint32) << 16)
+                        | (disp_bytes[:, 3].astype(np.uint32) << 24))
+            disp_i32 = disp_u32.view(np.int32)
+
+            site_vas   = _va_to_i64(sec_va) + cand_pos.astype(np.int64)
+            target_vas = site_vas + np.int64(5) + disp_i32.astype(np.int64)
+
+            valid = np.zeros(len(target_vas), dtype=bool)
+            if len(plt_arr):
+                hi = np.searchsorted(plt_arr, target_vas)
+                hi = np.minimum(hi, len(plt_arr) - 1)
+                valid |= plt_arr[hi] == target_vas
+            if len(func_arr):
+                hi = np.searchsorted(func_arr, target_vas)
+                hi = np.minimum(hi, len(func_arr) - 1)
+                valid |= func_arr[hi] == target_vas
+
+            site_vas   = site_vas[valid]
+            target_vas = target_vas[valid]
+
+            if len(func_arr) and len(site_vas):
+                owner_idx = np.searchsorted(func_arr, site_vas, side='right') - 1
+                owner_idx = np.maximum(owner_idx, 0)
+                owner_vas = func_arr[owner_idx]
+            else:
+                owner_vas = site_vas
+
+            for owner_va, target_va in zip(owner_vas.tolist(), target_vas.tolist()):
+                label = self.plt.get(target_va, "") or va_to_export.get(target_va, "")
+                edges.append((int(owner_va), int(target_va), label))
+
+        self.call_edges = edges
+
+    def _build_call_graph_pe_sequential(self, data: bytes, binary) -> None:
+        """Sequential Capstone fallback for PE call graph (NumPy unavailable)."""
+        import capstone
+
+        base = self.base_va
+        cs_mode = capstone.CS_MODE_64 if self.arch == 'x86_64' else capstone.CS_MODE_32
+        cs = capstone.Cs(capstone.CS_ARCH_X86, cs_mode)
+        cs.detail = False
+
+        va_to_export: Dict[int, str] = {va: nm for nm, va in self.exports.items()}
+        edges: List[Tuple[int, int, str]] = []
+
+        try:
+            for sec in binary.sections:
+                if not (sec.characteristics & 0x20000000):
+                    continue
+                sec_data = bytes(sec.content)
+                sec_va = base + int(sec.virtual_address)
+                for insn in cs.disasm(sec_data, sec_va):
+                    if insn.mnemonic.lower() != 'call':
+                        continue
+                    try:
+                        target = int(insn.op_str.strip(), 16)
+                    except ValueError:
+                        continue
+                    label = self.plt.get(target, "") or va_to_export.get(target, "")
+                    owner = self.func_containing(insn.address) or insn.address
+                    edges.append((owner, target, label))
+        except Exception:
+            pass
+
+        self.call_edges = edges
+
+    def _build_string_xref_index_pe(self, data: bytes, binary) -> None:
+        """String xref for PE: RIP-relative scan (x86_64) or absolute scan (x86_32)."""
+        if not self.strings:
+            return
+        if self.arch == 'x86_32':
+            self._build_string_xref_index_pe_x86_32(data, binary)
+            return
+        if not _NUMPY_OK or self.arch != 'x86_64':
+            return
+
+        from numpy.lib.stride_tricks import as_strided
+
+        base = self.base_va
+        str_va_arr = _va_arr_to_i64(sorted(self.strings.keys()))
+        str_xref: Dict[int, List[int]] = {}
+        func_str: Dict[int, List[int]] = {}
+
+        try:
+            for sec in binary.sections:
+                if not (sec.characteristics & 0x20000000):
+                    continue
+                sec_data = bytes(sec.content)
+                sec_va = base + int(sec.virtual_address)
+                N = len(sec_data)
+                if N < 4:
+                    continue
+
+                buf_u8 = np.frombuffer(sec_data, dtype=np.uint8)
+                end = N - 3
+                windows = as_strided(buf_u8, shape=(end, 4), strides=(1, 1))
+                disp_u32 = (windows[:, 0].astype(np.uint32)
+                            | (windows[:, 1].astype(np.uint32) << 8)
+                            | (windows[:, 2].astype(np.uint32) << 16)
+                            | (windows[:, 3].astype(np.uint32) << 24))
+                disp_i32 = disp_u32.view(np.int32)
+
+                positions = np.arange(end, dtype=np.int64)
+                target_vas = _va_to_i64(sec_va) + positions + np.int64(4) + disp_i32.astype(np.int64)
+
+                hits = np.searchsorted(str_va_arr, target_vas)
+                clipped = np.minimum(hits, len(str_va_arr) - 1)
+                valid = str_va_arr[clipped] == target_vas
+
+                for pos, sva in zip(positions[valid].tolist(), target_vas[valid].tolist()):
+                    code_va = sec_va + int(pos)
+                    sva = int(sva)
+                    fva = self.func_containing(code_va)
+                    if fva is None:
+                        continue
+                    str_xref.setdefault(sva, []).append(code_va)
+                    func_str.setdefault(fva, []).append(sva)
+        except Exception:
+            pass
+
+        self._str_xref_idx = str_xref
+        self._func_str_idx = {k: list(dict.fromkeys(v)) for k, v in func_str.items()}
+
+    def _build_string_xref_index_pe_x86_32(self, data: bytes, binary) -> None:
+        """x86_32 PE string xref: scan code sections for 4-byte LE absolute addresses."""
+        if not _NUMPY_OK:
+            return
+        from numpy.lib.stride_tricks import as_strided
+
+        base = self.base_va
+        str_va_arr = _va_arr_to_i64(sorted(self.strings.keys()))
+        str_xref: Dict[int, List[int]] = {}
+        func_str: Dict[int, List[int]] = {}
+
+        try:
+            for sec in binary.sections:
+                if not (sec.characteristics & 0x20000000):
+                    continue
+                sec_data = bytes(sec.content)
+                sec_va = base + int(sec.virtual_address)
+                N = len(sec_data)
+                if N < 4:
+                    continue
+
+                buf_u8 = np.frombuffer(sec_data, dtype=np.uint8)
+                end = N - 3
+                windows = as_strided(buf_u8, shape=(end, 4), strides=(1, 1))
+                abs_u32 = (windows[:, 0].astype(np.uint32)
+                           | (windows[:, 1].astype(np.uint32) << 8)
+                           | (windows[:, 2].astype(np.uint32) << 16)
+                           | (windows[:, 3].astype(np.uint32) << 24))
+
+                positions = np.arange(end, dtype=np.int64)
+                candidate_vas = abs_u32.astype(np.int64)
+
+                hits = np.searchsorted(str_va_arr, candidate_vas)
+                clipped = np.minimum(hits, len(str_va_arr) - 1)
+                valid = str_va_arr[clipped] == candidate_vas
+
+                for pos, sva in zip(positions[valid].tolist(), candidate_vas[valid].tolist()):
+                    code_va = sec_va + int(pos)
+                    sva = int(sva)
+                    fva = self.func_containing(code_va)
+                    if fva is None:
+                        continue
+                    str_xref.setdefault(sva, []).append(code_va)
+                    func_str.setdefault(fva, []).append(sva)
+        except Exception:
+            pass
+
+        self._str_xref_idx = str_xref
+        self._func_str_idx = {k: list(dict.fromkeys(v)) for k, v in func_str.items()}
+
+    # ── indices ────────────────────────────────────────────────────────────────
 
     def _build_indices(self) -> None:
         # Rebuild callers_idx: sym_name -> [(caller_va, label)]
