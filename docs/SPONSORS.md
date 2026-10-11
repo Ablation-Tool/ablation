@@ -2,13 +2,15 @@
 
 Nicholas Michael Kloster is an independent security researcher focused on AI/LLM infrastructure security and reverse engineering.
 
-He is the author of five CVEs across CISA-coordinated ICS disclosure and Cisco enterprise platforms, with additional accepted findings at Amazon, Google, and Anthropic.
+He is the author of five CVEs across CISA-coordinated ICS disclosure and Cisco enterprise platforms, with additional accepted findings at Amazon, Google, and Anthropic, Fortinet, TencentOS, DocketWise, and others.
 
 He builds and maintains Ablation, an open-source reverse engineering framework.
 
 He has built over 130 open-source tools for AI and ML infrastructure security, including aimap (218 service fingerprints across the AI stack), the Visor tool family (14 tools for AI infrastructure assessment and red teaming), and four purpose-built vector database scanners. His public research corpus, AI-LLM-Infrastructure-OSINT, covers 376 case studies and 88 methodology insights across 33 platform categories.
 
-He served from 2015 to 2023 on active duty in the Infantry, separating as a Staff Sergeant with two deployments to Afghanistan. He holds Instructor and Mountaineering certifications from the Northern Warfare Training Center in Alaska, completed SOF-adjacent schools, and is a Master Resilience Trainer.
+He served from 2015 to 2023 on active duty in the Infantry, separating as a Staff Sergeant with two deployments to Afghanistan. 
+
+He holds Instructor and Mountaineering qualifications from the Northern Warfare Training Center in Alaska earning him a SQI "E", completed SOF-adjacent schools, and is a certified Master Resilience Trainer earning him the Skill Identifier (ASI) "8R"
 
 During that time he completed reverse engineering courses through the Department of Defense Cyber Crime Center and volunteered with ITDRC. He trained with the President's Hundred while stationed in Fairbanks, but never got his EIB.
 
