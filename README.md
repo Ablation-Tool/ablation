@@ -22,7 +22,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 
 | Capability | |
 |:---|:---|
-| [**The Flywheel**](docs/module-reference/registry.md) | No other tool does this. When you confirm a finding, it is stored. At the start of the next engagement on a completely different vendor's firmware, every prior confirmed finding replays as a semantic search pattern against the new binary. |
+| [**The Flywheel**](docs/module-reference/flywheel.md) | Every confirmed finding replays as a search pattern on every future binary. A vulnerability confirmed in Fortinet firmware surfaces automatically when sweeping Huawei because confirmed findings are stored and replayed at engagement start. |
 | [**Semantic Code Search**](docs/module-reference/semantic-search.md) | Finds functions by describing what they do because stripped binaries have no symbols to search. Queries are scoped to the target binary so results return in under a second. |
 | [**On-Demand Analysis**](docs/module-reference/on-demand-analysis.md) | Loads in seconds because it only analyzes the code being examined. Traditional disassemblers parse the entire file into a database before you can do anything. |
 | [**Binary Lifting**](docs/module-reference/binary-lifter.md) | Translates machine code to readable pseudo-C across 19 architectures. ARM64 and x86-64 get register-level taint tracking so data flow is visible in the lifted output. |

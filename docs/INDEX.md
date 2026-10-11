@@ -78,6 +78,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 | [Erlang / BEAM](module-reference/beam.md) | BeamContext: exports, imports, atoms, literals, dangerous import sweep |
 | [Signature Matching](module-reference/sig-library.md) | SigLibrary, auto-naming fn_0x* functions |
 | [Export Formats](module-reference/export.md) | SARIF 2.1.0, JSON, GitHub Code Scanning |
+| [The Flywheel](module-reference/flywheel.md) | Cross-engagement pattern reuse: confirmed findings seed future sweeps via FindingRegistry + PatternLibrary; BinFuse normalization enables cross-architecture replay |
 | [Registry](module-reference/registry.md) | NameRegistry, FindingRegistry, `export_patterns()`, `ingest_from_registry()` flywheel |
 | [Crypto](module-reference/crypto.md) | CryptoAudit, XorSolver, EntropyMapper, HashAlgoDiscriminator, CustomCBCDetector |
 | [Structural](module-reference/structural.md) | VtableResolver (ARM64), VersionDelta, StructuralSim |
