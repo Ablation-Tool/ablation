@@ -11,7 +11,7 @@ That stubbornness led to two things: reverse engineering Cisco ASA LINA source, 
 
 I have completely fallen in love with reverse engineering. 
 
-It gives me the same pull hacking did: the adrenaline, the deep curiosity, the feeling that there's always one more layer. The difference is hacking got me a felony for unauthorized access to a protected computer. RE keeps me out of trouble and produces something real.
+It gives me the same pull hacking did: the adrenaline, the deep curiosity, the feeling that there's always one more laye and it keeps me out of trouble.
 
 I do this for free, the way most people on GitHub do.
 
