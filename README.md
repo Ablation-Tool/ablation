@@ -205,50 +205,46 @@ Ablation is built for authorized security research. Use it only against systems 
 
 ## Standards
 
-[NIST SP 800-218](https://csrc.nist.gov/pubs/sp/800/218/final)  
+### [NIST SP 800-218](https://csrc.nist.gov/pubs/sp/800/218/final)
 
-It defines how software should be built, organized around four practice areas: preparing the development environment, protecting the codebase from unauthorized changes, writing software with security built into every layer, and responding when vulnerabilities surface after release. 
+This defines how software should be built, organized around four practice areas: preparing the development environment, protecting the codebase from unauthorized changes, writing software with security built into every layer, and responding when vulnerabilities surface after release.
 
-What this means for Ablation in practice is a mandatory ten-section security audit on every module before it touches the repository. 
+What this means for Ablation in practice is a mandatory ten-section security audit on every module before it touches the repository.
 
-The audit covers input validation, memory handling, integer safety, error handling, concurrency, dependency security, injection prevention, secrets handling, logging, and residual risks. 
+The audit covers input validation, memory handling, integer safety, error handling, concurrency, dependency security, injection prevention, secrets handling, logging, and residual risks.
 
-No module is committed without passing it. 
+No module is committed without passing it.
 
-Taint trackers, which are the modules that matter most if they get something wrong, carry an additional requirement: 85% statement coverage enforced by a hard gate in the test suite, verified against byte-exact synthetic instruction sequences that test ABI register behavior, not just whether the code runs without crashing. 
+Taint trackers, which are the modules that matter most if they get something wrong, carry an additional requirement: 85% statement coverage enforced by a hard gate in the test suite, verified against byte-exact synthetic instruction sequences that test ABI register behavior, not just whether the code runs without crashing.
 
 Dependencies are pinned with exact hashes and scanned weekly for known CVEs.
 
+### [CISA Secure by Design](https://www.cisa.gov/securebydesign)
 
+It asks software manufacturers to commit to three things: take ownership of the security outcomes of the people who rely on the software, be transparent about its limitations, and treat security as a requirement rather than a recommendation.
 
-[CISA Secure by Design](https://www.cisa.gov/securebydesign)
+For a RE framework, taking ownership of security outcomes has a specific meaning.
 
-It asks software manufacturers to commit to three things: take ownership of the security outcomes of the people who rely on the software, be transparent about its limitations, and treat security as a requirement rather than a recommendation. 
+A taint tracker that misses a vulnerability does not just produce a wrong answer.
 
-For a RE framework, taking ownership of security outcomes has a specific meaning. 
+It produces a result someone may act on as evidence the binary is clean.
 
-A taint tracker that misses a vulnerability does not just produce a wrong answer. 
+That is why a false negative in any Ablation taint tracker is classified as a CRITICAL defect.
 
-It produces a result someone may act on as evidence the binary is clean. 
-
-That is why a false negative in any Ablation taint tracker is classified as a CRITICAL defect. 
-
-Every tracker ships with a documented known-anomalies file describing the exact conditions under which it can produce false negatives, so a researcher knows when to apply manual verification on top of the automated result. 
+Every tracker ships with a documented known-anomalies file describing the exact conditions under which it can produce false negatives, so a researcher knows when to apply manual verification on top of the automated result.
 
 The precommit gate is not advisory. No code enters the repository without passing it.
 
+### [MIL-HDBK-115C](https://quicksearch.dla.mil/)
 
+The US Department of Defense handbook for reverse engineering methodology. It defines four phases: planning before analysis begins, static analysis, dynamic confirmation of findings, and documentation of results.
 
-[MIL-HDBK-115C](https://quicksearch.dla.mil/) the US Department of Defense handbook for reverse engineering methodology.
+**Phase 1.** Every engagement starts with a session file recording the target description, artifact hash, tool selection, and documentation plan before any analysis runs. The rule that semantic search runs before manual disassembly maps to the following phase.
 
-It defines four phases: planning before analysis begins, static analysis, dynamic confirmation of findings, and documentation of results. 
+**Phase 2** requires characterizing a binary at the function level before doing detailed trace work. The DynamicSandbox covers the following.
 
-Phase 1. Every engagement starts with a session file recording the target description, artifact hash, tool selection, and documentation plan before any analysis runs. The rule that semantic search runs before manual disassembly maps to the following phase.
+**Phase 3.** The structured retrospective written at the close of every completed project maps to the final phase.
 
-Phase 2, which requires characterizing a binary at the function level before doing detailed trace work. The DynamicSandbox covers the following.
-
-Phase 3. The structured retrospective written at the close of every completed project maps to the final phase.
-
-Phase 4. The standards document tracks 29 specific requirements drawn from all three frameworks. All 29 are met.
+**Phase 4.** The standards document tracks 29 specific requirements drawn from all three frameworks. All 29 are met.
 
 ---
