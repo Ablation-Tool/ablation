@@ -15,7 +15,7 @@ Scans the `.text` section of an ARM32 ELF for three PUSH-with-lr prologue patter
 | Pattern | Mode | Bytes (LE) | Alignment |
 |---|---|---|---|
 | `STMFD r13!, {rN.., lr}` | ARM32 | `?? [4x..Cx] 2D E9` | 4-byte |
-| `STMDB SP!, {rN.., lr}` | Thumb-2 32-bit | `E9 2D ?? [4x..Cx]` | 2-byte |
+| `STMDB SP!, {rN.., lr}` | Thumb-2 32-bit | `2D E9 ?? [4x..Cx]` | 2-byte |
 | `PUSH {rN.., lr}` | Thumb-1 16-bit | `[rlist] B5` | 2-byte |
 
 ARM32 mode (`entry & 1 == 0`): ARM32 + Thumb-2 patterns only.
