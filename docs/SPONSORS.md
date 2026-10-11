@@ -1,3 +1,5 @@
+Thanks for checking out the tool.
+
 A few months ago I was working through a security assessment and kept hitting the same wall. Claude kept defaulting to password spraying every single time. That drove me insane. Too slow, too noisy.
 
 So I asked the obvious question: what's actually blocking us? Claude said Cisco ASA. I'd never touched Cisco anything, so I said fine, let's just reverse engineer it.
