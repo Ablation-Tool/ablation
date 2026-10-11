@@ -52,7 +52,7 @@ across 42 non-M32R ECU ROMs and scores 0.96: above the PPC32 false-positive ceil
 |---|---|---|
 | `arm_cm` | ARM Cortex-M (Thumb-2, LE vector table) | Bosch MED17, Continental SIMOS |
 | `tricore` | Infineon TriCore AURIX (TC1.6/TC2xx/TC3xx, LE) | Bosch ME17/MED17, Continental MG1, Waqas GEN3 |
-| `m68k` | Motorola 68K / CPU32 | GM P01/P04/P05/P08/P10/P11/P59 (CPU32) |
+| `m68k` | Motorola 68K / CPU32 | GM P01/P04/P05/P08/P10/P11/P12/P12b/P59 (CPU32) |
 | `m32r` | Renesas M32R (M32174/M32176-series, BE RISC) | Hitachi 5EAT TCU (M32174F3, M32176F4V) |
 | `ppc32` | PowerPC 32-bit Book E | GM E38 PCM, Denso ECUs |
 | `ppc_vle` | PowerPC VLE (NXP e200z) | GM E39a/E54/E92 (MPC5566) |
@@ -127,6 +127,12 @@ TriCore firmware (ratio ~1.1×).
 
 Score 0.85 when PFLASH density ≥ 3 % and peripheral density ≥ 1 %; 0.75 for PFLASH ≥ 3 %
 only; 0.60 for PFLASH ≥ 1.5 %; 0.45 for peripheral ≥ 2 % only.
+
+BMHD gate (v2.74.0): even if density scoring would fire, the discriminator returns no
+candidate when the LE uint32 at file offset 0 is `0x00000000`.  Valid AURIX flat ROMs begin
+with a Boot Mode Header Description (BMHD) whose STAD (Startup Address) is always a non-zero
+PFLASH address.  `0x00000000` at offset 0 indicates a CPU32/M68K ROM whose big-endian
+supervisor stack pointer (SSP) happens to be zero — the pattern for all known GM P-series ROMs.
 
 ### ARM Cortex-M
 

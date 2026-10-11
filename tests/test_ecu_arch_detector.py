@@ -341,6 +341,78 @@ class TestM32RDetection:
         assert m32r[0].score == 0.70
 
 
+def _tricore_flat_rom(size: int = 4096) -> bytes:
+    """Synthetic TriCore flat ROM: non-zero STAD at offset 0 + PFLASH LE pointer density."""
+    buf = bytearray(size)
+    # BMHD STAD = 0xA0000400 (non-cached PFLASH, valid AURIX startup address)
+    struct.pack_into("<I", buf, 0, 0xA0000400)
+    # Fill rest with LE PFLASH pointers (upper byte 0x80–0xBF)
+    for off in range(4, size, 4):
+        struct.pack_into("<I", buf, off, 0x80001000 + off)
+    return bytes(buf)
+
+
+def _cpu32_with_dense_le_rom(size: int = 4096) -> bytes:
+    """CPU32 ROM that would trigger the old TriCore false positive.
+
+    SSP=0 at offset 0 (BE), valid BE reset PC at offset 4, LINK.W prologues
+    in sample window, and high LE PFLASH pointer density throughout image.
+    """
+    buf = bytearray(size)
+    struct.pack_into(">I", buf, 0, 0x00000000)  # CPU32 SSP = 0
+    struct.pack_into(">I", buf, 4, 0x00000400)  # CPU32 reset PC = 0x400 (in-range)
+    off = 8
+    for _ in range(20):
+        if off + 4 <= size:
+            struct.pack_into(">H", buf, off, 0x4E56)      # LINK.W A6 opcode
+            struct.pack_into(">H", buf, off + 2, 0xFFE0)  # #-0x20 (negative displacement)
+            off += 4
+    # Dense LE PFLASH pointer fill
+    for off in range(0x100, size, 4):
+        struct.pack_into("<I", buf, off, 0x80001000 + off)
+    return bytes(buf)
+
+
+# ---------------------------------------------------------------------------
+# TriCore AURIX detection
+# ---------------------------------------------------------------------------
+
+class TestTriCoreDetection:
+    def test_tricore_flat_rom_detected(self):
+        """Synthetic TriCore ROM with non-zero STAD at offset 0 fires as tricore."""
+        rom = _tricore_flat_rom()
+        cands = EcuArchDetector(rom).candidates()
+        tc = [c for c in cands if c.arch == "tricore"]
+        assert len(tc) == 1
+        assert tc[0].score >= 0.60
+
+    def test_tricore_nonzero_first_word_passes_bmhd_gate(self):
+        """BMHD gate must NOT suppress a TriCore ROM whose first LE word is non-zero."""
+        buf = bytearray(4096)
+        struct.pack_into("<I", buf, 0, 0xA0000400)  # non-zero STAD
+        for off in range(4, 4096, 4):
+            struct.pack_into("<I", buf, off, 0x80001000 + off)
+        cands = EcuArchDetector(bytes(buf)).candidates()
+        tc = [c for c in cands if c.arch == "tricore"]
+        assert len(tc) == 1
+
+    def test_tricore_cpu32_zero_ssp_suppressed(self):
+        """BMHD gate must suppress a ROM with SSP=0 at offset 0, even with high PFLASH density."""
+        rom = _cpu32_with_dense_le_rom()
+        cands = EcuArchDetector(rom).candidates()
+        tc = [c for c in cands if c.arch == "tricore"]
+        assert len(tc) == 0
+
+    def test_m68k_wins_over_dense_le_cpu32_rom(self):
+        """Full CPU32 pattern ROM must detect as m68k, not tricore."""
+        rom = _cpu32_with_dense_le_rom(size=8192)
+        result = EcuArchDetector(rom).detect()
+        assert result.arch == "m68k"
+        cands = EcuArchDetector(rom).candidates()
+        tc = [c for c in cands if c.arch == "tricore"]
+        assert len(tc) == 0
+
+
 # ---------------------------------------------------------------------------
 # Unknown / ambiguous ROMs
 # ---------------------------------------------------------------------------

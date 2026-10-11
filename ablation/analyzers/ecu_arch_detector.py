@@ -15,6 +15,13 @@ Supported architectures
 - ``sh2a``     — Renesas SH-2A / SH-2 (Honda SH7058/SH7059, Subaru)
 - ``unknown``  — no discriminator fired above threshold
 
+Gap fixes
+---------
+- Gap 9 (2026-10-11): TriCore discriminator false-positive on GM P12/P12b (CPU32 1–2 MB).
+  Root cause: PFLASH LE-pointer density heuristic fired on M68K ROM data read as LE.
+  Fix: BMHD gate — if LE uint32 at file offset 0 is 0x00000000 (CPU32 SSP=0 pattern),
+  no TriCore candidate is returned.  Valid AURIX ROMs never have STAD = 0x00000000.
+
 Usage::
 
     from ablation.analyzers.ecu_arch_detector import EcuArchDetector
@@ -305,6 +312,19 @@ class EcuArchDetector:
             )
         else:
             return None
+
+        # BMHD gate: valid AURIX flat ROMs start with a Boot Mode Header Description (BMHD)
+        # whose first field (STAD, Startup Address) is a non-zero address — always in PFLASH
+        # range (0x80000000–0xBFFFFFFF) for normal boot configurations.  A CPU32/M68K ROM
+        # places the supervisor stack pointer at file_off 0 as a big-endian word; for GM
+        # P-series PCMs this is 0x00000000.  Read as LE, that is also 0x00000000 — a value
+        # that can never be a valid AURIX STAD.  Returning None here prevents the PFLASH
+        # LE-pointer density heuristic from misclassifying CPU32 ROMs as TriCore.
+        # Safe: sn >= 16 (checked above) guarantees n >= 4 for the unpack at offset 0.
+        first_le = struct.unpack_from("<I", data, 0)[0]
+        if first_le == 0x00000000:
+            return None
+
         return ArchCandidate(arch="tricore", score=score, reason=reason)
 
     def _score_arm_cortex_m(self) -> Optional[ArchCandidate]:
