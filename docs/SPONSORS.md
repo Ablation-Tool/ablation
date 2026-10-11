@@ -98,8 +98,7 @@ During that time he completed reverse engineering courses through the Department
 - Vulnerability Management
 - Vulnerability Scanning with Tenable Nessus
 - Windows Forensic Artifacts: Evidence of Program Execution
-- Windows Log Analysis with Splunk
-- Windows Log Analysis with Splunk Part 1 (B-W-CI-21)
+- Windows Log Analysis with Splunk (B-W-CI-21)
 - Windows Management Instrumentation Command-line
 - Windows PowerShell Essentials (B-W-PA-21)
 - Zeek Integration into ELK (B-CR-NP-21a)
