@@ -10,6 +10,11 @@ from .apk_parser import (
     APKParser, ManifestInfo, ComponentInfo,
     DEXFile, MethodRef, FieldRef, ClassDef, NativeMethod,
 )
+from .render import (
+    MODE, RESET, BOLD, DIM,
+    RED, ORANGE, YELLOW, GREEN, BLUE, PURPLE, GRAY, WHITE,
+    box, sbox, section, arrow, arrowdown, strip,
+)
 
 __all__ = [
     "ELFParser", "BinaryParser",
@@ -19,4 +24,7 @@ __all__ = [
     "scan_firmware_file", "analyze_firmware_entropy",
     "APKParser", "ManifestInfo", "ComponentInfo",
     "DEXFile", "MethodRef", "FieldRef", "ClassDef", "NativeMethod",
+    "MODE", "RESET", "BOLD", "DIM",
+    "RED", "ORANGE", "YELLOW", "GREEN", "BLUE", "PURPLE", "GRAY", "WHITE",
+    "box", "sbox", "section", "arrow", "arrowdown", "strip",
 ]
