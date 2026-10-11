@@ -65,3 +65,12 @@ ext.extract_all('/tmp/bmc_root/', progress=print)
 - QTECH BMC (ASPEED AST2xxx, SPX Redfish) — confirmed
 - Supermicro BMC (same AMI SPX stack) — expected to work
 - Lenovo BMC (AMI SPX) — expected to work
+
+## Block-0 prefix handling
+
+Some AMI firmware images prefix block 0 with a raw (uncompressed) data section — typically
+a pre-relocated GOT table — before the zlib-compressed file content. When initial decompression
+of a block fails, `_decompress_file` scans for the first valid zlib CMF byte (0x78 followed by
+a valid FLG byte: 0x01, 0x5e, 0x9c, or 0xda) and decompresses from that offset. Prefix bytes
+before the zlib header are discarded as storage overhead. Confirmed on psme-rest-server
+(QTECH G4DCL, 16 384-byte GOT prefix in block 0).
