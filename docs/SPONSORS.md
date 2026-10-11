@@ -20,7 +20,7 @@ So I'm like "lets just reverse engineer it"
 
 CC wanted to use Ghidra, I was like no I want to learn about reverse engineering not how to use a tool that reverse engineers.
 
-That led me to collectively, hack into macstadium, reverse engineer Cisco ASA LINA source code, and build the first layer of Ablation, about three months ago.
+That led me to collectively, bypass MacStadium (proper disclosure was performed I'm not a maniac), reverse engineer Cisco ASA LINA source code, and build the first layer of Ablation, about three months ago.
 
 So I appreciate the love.
 I have fallen in love with reverse engineering.
