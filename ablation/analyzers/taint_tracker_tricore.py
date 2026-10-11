@@ -123,6 +123,9 @@ _ALU_PREFIXES = (
     'dv', 'dvadj', 'dvstep',
     'ixmax', 'ixmin',
     'sel',
+    # DSP MAC rounding/accumulator variants not caught by the standard suffix checks:
+    'maddr', 'msubr', 'maddrs', 'msubrs',
+    'mulm', 'mulms', 'mulr',
 )
 
 
@@ -321,6 +324,12 @@ class _Engine:
         # Indirect jump (tainted jump-target detection)
         elif m == 'ji':
             self._indirect_jump(insn)
+        # LOOP/LOOPU: decrements A_reg in-place; taint on A_reg survives, bound drops
+        elif m in ('loop', 'loopu'):
+            if ops and ops[0].type == _OP_REG:
+                reg = self._cs.reg_name(ops[0].reg)
+                t = self.state.get(reg)
+                self.state.set(reg, Taint(t.labels, None))
         # Calls / returns: handled by caller to access symbol table
         elif m in _CALL_MNEMS or m in _RET_MNEMS:
             pass  # caller handles these
