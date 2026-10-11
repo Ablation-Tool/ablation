@@ -2,6 +2,34 @@
 
 ---
 
+## v2.73.0
+
+**EcuArchDetector — Renesas M32R discriminator (Gap 8).**
+
+`EcuArchDetector` now correctly identifies Renesas M32R flat ECU ROMs. The M32R
+architecture (chip markings M32174F3/M32176F4V) is used in Hitachi 5EAT TCU ROMs and
+was previously misidentified as ppc32 HIGH (score ≈ 0.93) because M32R's fixed-width
+big-endian instruction bytes coincidentally match PPC32 primary-opcode density ranges.
+Capstone has no CS_ARCH_M32R, so instruction-density scoring is unavailable.
+
+`_score_m32r()` uses a structural discriminator based on the M32R exception vector
+table layout: every M32R flat ROM begins with ``FF 00 00 NN`` entries at 16-byte-aligned
+offsets 0x00–0x80 (9 slots) and at 4-byte-aligned offsets in the dense vector region
+0x40–0x7F (16 slots). Score 0.96 when both conditions match fully, 0.88 for a partial
+match, 0.70 for a weak match.
+
+Validated: 17 Hitachi M32R 5EAT TCU ROMs (384 KB and 512 KB) all return m32r HIGH 0.96.
+Zero false positives across 9 SH-2A, 18 PPC32, and 1 TriCore ROMs. The 0.96 score
+exceeds the PPC32 false-positive ceiling on the same ROM files.
+
+6 new test cases in `tests/test_ecu_arch_detector.py`.
+
+Updated files: `ablation/analyzers/ecu_arch_detector.py`,
+`tests/test_ecu_arch_detector.py`,
+`docs/module-reference/ecu-arch-detector.md`.
+
+---
+
 ## v2.72.0
 
 **EcuROMLayoutAnalyzer — TriCore AURIX layout classification (Gap 5a/5b).**
