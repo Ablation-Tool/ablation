@@ -31,7 +31,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | [**Cross-Library Analysis**](docs/module-reference/taint-analysis.md) | Traces an argument across up to three shared library hops so taint paths that cross library boundaries reach their sink rather than stopping at the first call. |
 | [**DAG Adapter Language**](docs/module-reference/encoding-dag.md) | Describes instruction set encodings as directed acyclic graphs so every architecture shares the same analysis code path. Without it, each ISA requires its own exception handler and the analyzer count scales with the architecture count. |
 | [**PPC32 GOT2 Resolver**](docs/module-reference/ppc32-got2-resolver.md) | Resolves indirect calls in stripped GOT2-PIC PPC32 binaries at 98.6% coverage so taint paths through BCTRL stubs do not dead-end at the first unresolved call. |
-| **Dynamic Sandbox** | Executes leaf functions in an emulated sandbox to fingerprint behavior where static analysis alone cannot distinguish branches. |
+| [**Dynamic Sandbox**](docs/module-reference/dynamic-sandbox.md) | Executes leaf functions in an emulated sandbox to fingerprint behavior where static analysis alone cannot distinguish branches. |
 
 </details>
 
