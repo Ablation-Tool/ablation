@@ -51,7 +51,8 @@ class ARM32FunctionScanner:
         """Build from an ARM32 ELF file path."""
         if not _LIEF_OK:
             raise ImportError("lief is required for ARM32FunctionScanner.from_path()")
-        data = open(path, "rb").read()
+        with open(path, "rb") as _f:
+            data = _f.read()
         binary = _lief.parse(data)
         if not isinstance(binary, _lief.ELF.Binary):
             raise ValueError(f"Not an ELF binary: {path}")
@@ -164,7 +165,7 @@ class ARM32FunctionScanner:
             insn_start = pos - 1
             if insn_start >= 0 and insn_start % 2 == 0:
                 out.add(self._text_va + insn_start)
-            pos += 2
+            pos += 1
 
     # -------------------------------------------------------------------------
     # Reporting
