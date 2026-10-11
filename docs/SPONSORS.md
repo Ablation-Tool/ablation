@@ -2,7 +2,7 @@ Thanks for checking out the tool.
 
 A few months ago I was working through a security assessment and kept hitting the same wall. Claude kept defaulting to password spraying every single time. That drove me insane. Too slow, too noisy.
 
-So I asked CC "what's main thing in ourway?
+So I asked CC "what's main thing in ourway?"
 CC said Cisco ASA.
 I'd never touched Cisco anything, I had to google what ASA meant. 
 Running out of resources and not wanting to give up on the elusive problem to be solved. I thought to myself, why don't we just reverse engineer it and like seep through the cracks.
