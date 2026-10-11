@@ -2,6 +2,30 @@
 
 ---
 
+## v2.69.0
+
+**TI NNC inference artifact scanner.**
+
+`TiNNCScanner` detects Apache TVM / TI Neural Network Compiler (NNC v2.x)
+inference artifacts in ARM ELF firmware for TI MCU targets: F28P55x (C28x),
+MSPM0 (Cortex-M0+), CC2745/AM13x (Cortex-M33), CC1352 (Cortex-M4),
+AM26x (Cortex-R5), F29H85x (C29x).
+
+The scanner operates from the ELF symbol table only — no disassembly required.
+Primary finding class: `tvmgen_*_bias_data`, `tvmgen_*_scale_data`, and
+`tvmgen_*_shift_data` are declared `__attribute__((weak))` per the NNC spec.
+Any object linked after `mod.a` that provides a strong symbol of the same name
+silently overrides the quantization normalization parameters.
+
+Four finding classes: TINCC-001 (HIGH, weak norm override), TINCC-002 (MEDIUM,
+NPU async ordering hazard), TINCC-003 (MEDIUM, multi-model NPU contention),
+TINCC-004 (INFO, skip-normalize mode active).
+
+New files: `ablation/analyzers/ti_nnc_scanner.py`,
+`docs/module-reference/ti-nnc-scanner.md`.
+
+---
+
 ## v2.68.0
 
 **MicroPython .mpy v6 bytecode lifter.**
