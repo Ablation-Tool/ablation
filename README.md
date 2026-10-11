@@ -1,6 +1,6 @@
 <img src="assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
-![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/ABLATION-STANDARDS.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/ABLATION-STANDARDS.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/ABLATION-STANDARDS.md) [![Cash App](https://img.shields.io/badge/Cash_App-%24nicholaskloster2-grey)](https://cash.app/$nicholaskloster2) [![Bitcoin](https://img.shields.io/badge/Bitcoin-Donate-grey)](./SPONSORS.md#bitcoin)
+![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/ABLATION-STANDARDS.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/ABLATION-STANDARDS.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/ABLATION-STANDARDS.md) [![Bitcoin](https://img.shields.io/badge/Bitcoin-Donate-grey)](./SPONSORS.md#bitcoin)
 
 
 Ablation is a self-contained reverse engineering framework.
