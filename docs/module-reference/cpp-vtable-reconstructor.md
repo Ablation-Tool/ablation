@@ -65,7 +65,7 @@ print(CppVtableReconstructorAnalyzer.report(result))
 print(CppVtableReconstructorAnalyzer.emit_ida_script(
           result.vtables, result.propagation))
 
-# Full — with BinaryContext for slot naming
+# Full: with BinaryContext for slot naming
 ctx      = BinaryContext.load_or_build('/path/to/lib.so')
 analyzer = CppVtableReconstructorAnalyzer.from_context(ctx)
 result   = analyzer.scan()

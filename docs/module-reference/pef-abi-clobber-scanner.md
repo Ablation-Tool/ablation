@@ -25,7 +25,7 @@ findings = scanner.scan(
     check_regs=[4],
 )
 print(scanner.report(findings))
-# PEFABIClobberScanner: 2 site(s) — PLAUSIBLE=2  SAFE=0
+# PEFABIClobberScanner: 2 site(s): PLAUSIBLE=2  SAFE=0
 #
 # [PLAUSIBLE] 0x001690  r4  call_clobber @ 0x001684
 # [PLAUSIBLE] 0x001774  r4  call_clobber @ 0x001768
@@ -143,7 +143,7 @@ Three bugs in the hand-written OpenTransport scanner are structurally fixed.
 ```
 addi r4, r3, 0    → opcode 14  D-arith  dest=RT=bits[25:21]=4   ✓ write detected
 ori  r4, r3, 0    → opcode 24  D-logical dest=RA=bits[20:16]=4  ✓ write detected
-ori  r3, r4, 0    → opcode 24  D-logical dest=RA=bits[20:16]=3  ✓ not r4 — SAFE preserved
+ori  r3, r4, 0    → opcode 24  D-logical dest=RA=bits[20:16]=3  ✓ not r4: SAFE preserved
 ```
 
 The old scanner used `(word >> 21) & 0x1f` for all opcodes.  For `ori r4, r3, 0`

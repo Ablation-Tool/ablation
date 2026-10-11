@@ -123,17 +123,17 @@ A `disassembly` probe at cost=0.5 with high disagreement beats a `taint` probe a
 ## Hypothesis kinds
 
 ```
-code_region          — is this byte range code or data?
-data_region          — is this struct/array?
-function_entry       — is this VA a function start?
-function_boundary    — where does this function end?
-indirect_call_target — what does BLR/BLX at VA dispatch to?
-memory_region        — what object does this address belong to?
-input_source         — is this the network recv entry point?
-security_sink        — is this a security-relevant sink?
-source_to_sink_path  — does taint reach from source to sink?
-version_homolog      — is this the same function across two builds?
-architecture_mode    — ARM (A32) or Thumb (T32) at this VA?
+code_region         : is this byte range code or data?
+data_region         : is this struct/array?
+function_entry      : is this VA a function start?
+function_boundary   : where does this function end?
+indirect_call_target: what does BLR/BLX at VA dispatch to?
+memory_region       : what object does this address belong to?
+input_source        : is this the network recv entry point?
+security_sink       : is this a security-relevant sink?
+source_to_sink_path : does taint reach from source to sink?
+version_homolog     : is this the same function across two builds?
+architecture_mode   : ARM (A32) or Thumb (T32) at this VA?
 ```
 
 ---
@@ -176,7 +176,7 @@ ev = engine.add_hard_contradiction(
     hypothesis_ids, explanation
 )
 
-# Planning (dry-run — selects probe, does not execute it)
+# Planning (dry-run: selects probe, does not execute it)
 plan_str = engine.plan(top_n=5)
 probe    = engine.next_probe()
 

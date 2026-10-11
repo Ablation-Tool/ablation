@@ -16,7 +16,7 @@ raise on a bare binary.  `RH850TaintTracker.from_bytes(data, base_va)` +
 workflow as `TriCoreTaintTracker`.
 
 **2. GHS CC-RH / IAR `double=32-bit` default not modelled.**  In the IAR RH850 ABI
-(§2.7 of GHS-RE-REFERENCE.md), `double` is 32 bits by default — identical to
+(§2.7 of GHS-RE-REFERENCE.md), `double` is 32 bits by default: identical to
 `float`.  `V850TaintTracker` uses the GCC V850 ABI where `double=64-bit` consumes
 a register pair (R6:R7 for the first `double` parameter).  In GHS-compiled firmware,
 that same parameter fits in R6 alone, leaving R7 free for the next argument.
@@ -90,7 +90,7 @@ tracker = RH850TaintTracker.from_path('fw64.elf', double_is_32bit=False)
 
 | Parameter | Default | Description |
 |---|---|---|
-| `data` | — | Raw binary bytes |
+| `data` |: | Raw binary bytes |
 | `base_va` | `0x0` | Load address of first byte (flat ROM) |
 | `double_is_32bit` | `True` | GHS/IAR default: `double` = 32-bit |
 

@@ -24,13 +24,13 @@ A BEAM file is an IFF (Interchange File Format) container. IFF was designed for 
 
 ```
   IFF header (12 bytes):
-    "FOR1"   4 bytes — IFF form marker
-    length   4 bytes BE — total file size minus 8
-    "BEAM"   4 bytes — form type identifier
+    "FOR1"   4 bytes: IFF form marker
+    length   4 bytes BE: total file size minus 8
+    "BEAM"   4 bytes: form type identifier
 
   Each chunk that follows:
     chunk_id  4 bytes ASCII tag (e.g. "AtU8", "Code")
-    length    4 bytes BE — payload size
+    length    4 bytes BE: payload size
     payload   length bytes, padded to 4-byte alignment
 ```
 

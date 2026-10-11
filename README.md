@@ -55,9 +55,9 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 
 | Capability | |
 |:---|:---|
-| [**LoongArch64**](docs/module-reference/loongarch64.md) | The only public reverse engineering toolkit built specifically for LoongArch64. It covers the full analysis pipeline so no architecture-specific workarounds are needed. |
+| [**LoongArch64**](docs/module-reference/loongarch64.md) | The only public reverse engineering toolkit built specifically for LoongArch64. Every analysis phase works without architecture-specific workarounds. |
 | [**nanoMIPS**](docs/module-reference/nanomips.md) | Follows tainted data through nanoMIPS binaries interprocedurally, resolving branch targets and PLT stubs that no other public tool handles. |
-| [**Windows PE Security Analysis**](docs/module-reference/windows-pe.md) | Audits a Windows PE binary for security weaknesses in a single pass. It checks CFG bypass exports, SafeSEH gaps, unauthenticated RPC endpoints, COM registration gaps, and kernel pool overflows so the full attack surface is visible before manual review begins. |
+| [**Windows PE Security Analysis**](docs/module-reference/windows-pe.md) | Audits a Windows PE binary for security weaknesses in a single pass. It checks CFG bypass exports, SafeSEH gaps, unauthenticated RPC endpoints, COM registration gaps, and kernel pool overflows so the attack surface is visible before manual review begins. |
 | [**Windows Kernel Driver & BYOVD**](docs/module-reference/kernel-drivers.md) | Classifies signed kernel drivers for BYOVD capability before they are deployed. Physical memory access, privilege token manipulation, and callback removal each trigger a finding. |
 | [**Android / APK Analysis**](docs/module-reference/android.md) | Maps the APK attack surface and ranks native libraries by risk before manual analysis begins. |
 | [**Erlang / BEAM Analysis**](docs/module-reference/beam.md) | Decodes BEAM bytecode to readable pseudo-IR so Erlang and Elixir applications can be analyzed without source. High-risk import patterns and obfuscation indicators surface without executing the application. |
@@ -122,12 +122,12 @@ Ablation has been used to analyze production firmware and kernel drivers from Ci
 
 Following coordinated disclosure, the Cisco Product Security Incident Response Team (PSIRT) adopted Ablation for internal vulnerability triage and continues to use it to evaluate ongoing disclosure reports. Cisco Adaptive Security Appliance (ASA) LINA is among the artifacts analyzed, with findings submitted through CERT/CC VINCE.
 
-| CVE | Product | Title | CVSS | Advisory |
-|---|---|---|---|---|
-| CVE-2026-76420 | Secure Firewall Management Center (FMC) | Peer Impersonation | 9.0 Critical | [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) |
-| CVE-2026-76412 | Secure Firewall Management Center (FMC) | Privilege Escalation to root | 8.5 High | [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) |
-| CVE-2026-76413 | Secure Firewall Management Center (FMC) | Single Sign-On Token Forgery | 8.5 High | [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) |
-| CVE-2026-76447 | Identity Services Engine (ISE) | OCSP Responder Authentication Bypass | 5.3 Medium | [cisco-sa-ise-multiauth-bypass-sgD2HbL4](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4) 
+| CVE | Product | Title | CVSS |
+|---|---|---|---|
+| [CVE-2026-76420](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Peer Impersonation | 9.0 Critical |
+| [CVE-2026-76412](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Privilege Escalation to root | 8.5 High |
+| [CVE-2026-76413](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Single Sign-On Token Forgery | 8.5 High |
+| [CVE-2026-76447](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4) | Identity Services Engine (ISE) | OCSP Responder Authentication Bypass | 5.3 Medium |
 
 
 

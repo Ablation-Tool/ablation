@@ -22,7 +22,7 @@ A kernel binary built with `CONFIG_KASAN=y` inserts a 4–6 instruction shadow-m
 flowchart TD
     A[/"/path/to/binary.elf"/] --> B["loongarch_decoder (V1)\nFixed-width 32-bit LE instruction decode\nALU · immediate · CSR/TLB/privilege · FP compare\nload/store · atomics · barriers · float load/store\nbranch/call/return\nLSX/LASX → .word (deferred)\njirl polymorphism: $zero/$ra/$ra → ret/call/br"]
 
-    B --> C["loongarch_decoder_v2 (KASAN/KCOV-aware)\nPass 1 — BL tagging:\n  every bl targeting KASAN_SYMBOL_PREFIXES\n  or KCOV_SYMBOL_PREFIXES → is_instrumentation=True\nPass 2 — preamble walk:\n  from each tagged BL, walk backward up to 6 insns\n  tag: srli.d / lu12i.w / addi.d / ld.b / andi / add.d\n  stop: on call, branch, store, or function start\ndecode_frames_clean() skips all instrumentation"]
+    B --> C["loongarch_decoder_v2 (KASAN/KCOV-aware)\nPass 1: BL tagging:\n  every bl targeting KASAN_SYMBOL_PREFIXES\n  or KCOV_SYMBOL_PREFIXES → is_instrumentation=True\nPass 2: preamble walk:\n  from each tagged BL, walk backward up to 6 insns\n  tag: srli.d / lu12i.w / addi.d / ld.b / andi / add.d\n  stop: on call, branch, store, or function start\ndecode_frames_clean() skips all instrumentation"]
 
     C --> D["isa_loongarch64 + insn_loongarch64\nRegister model: $zero · $ra · $tp · $sp\n  $a0-$a7 · $t0-$t8 · $fp · $s0-$s8\nlp64 ABI: ARG_REGS=($a0..$a7), RET_REGS=($a0,$a1)\ninsn_loongarch64: typed Reg/Imm operands from op_str"]
 
@@ -47,7 +47,7 @@ tt = LoongArch64TaintTracker.from_path("libc-2.38.so.loongarch64")
 findings = tt.run_interprocedural()
 print(tt.report(findings))
 
-# Stripped binary — use from_path_full for full function coverage
+# Stripped binary: use from_path_full for full function coverage
 tt = LoongArch64TaintTracker.from_path_full("libssl.so.3.0.loongarch64")
 findings = tt.run_interprocedural()
 ```
@@ -60,9 +60,9 @@ LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes (same width as AArc
 
 ```
   PLT stub (one external function):
-    pcalau12i  $t3, page_off    ; PC-relative page load — GOT page address
+    pcalau12i  $t3, page_off    ; PC-relative page load: GOT page address
     ld.d       $t3, $t3, off   ; load function pointer from GOT slot
-    jirl       $zero, $t3, 0   ; indirect branch — no link (rd=$zero)
+    jirl       $zero, $t3, 0   ; indirect branch: no link (rd=$zero)
     nop                         ; alignment pad
 
   Key: jirl $zero,$rj,0 is classified as is_branch=True (not a call) because
@@ -170,7 +170,7 @@ for frame in dec.decode_frames_v2(section_bytes, base_addr):
     if frame.is_instrumentation:
         print(f"  [ghost {frame.idiom}] {frame.va:#x}")
 
-# Clean decode — only real program instructions
+# Clean decode: only real program instructions
 for frame in dec.decode_frames_clean(section_bytes, base_addr):
     print(frame)
 

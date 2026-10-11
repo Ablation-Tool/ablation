@@ -1,16 +1,16 @@
-# Known Anomalies — ARM32TaintTracker
+# Known Anomalies: ARM32TaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_arm32.py`  
 **Tracker version:** v2.57.0  
 **Format:** ISO 26262 Part 8 / TASKING qualification kit (see `ABLATION-STANDARDS.md` §2.3)
 
 An anomaly is a condition under which `ARM32TaintTracker` is known to produce an incorrect
-result — either a false negative (missed finding) or a false positive (spurious finding).
+result: either a false negative (missed finding) or a false positive (spurious finding).
 Each entry documents the triggering condition, the impact, and the recommended workaround.
 
 ---
 
-## ARM32-KA-001 — Thumb/ARM interworking false negatives when thumb_funcs is incomplete
+## ARM32-KA-001: Thumb/ARM interworking false negatives when thumb_funcs is incomplete
 
 **Description:**  
 `ARM32TaintTracker` disassembles each function using either ARM or Thumb mode. The mode is
@@ -31,7 +31,7 @@ Thumb instructions are not recognised. The entire taint chain through a misident
 function is lost.
 
 **Workaround:**  
-1. Use `from_path_full()` or pass a `BinaryContext` built with `from_context()` — both
+1. Use `from_path_full()` or pass a `BinaryContext` built with `from_context()`: both
    populate `thumb_funcs` from `.eh_frame` and all available symbol sources.
 2. If the binary is fully Thumb, pass `thumb=True` at construction:
    `ARM32TaintTracker(path, thumb=True)`.
@@ -43,7 +43,7 @@ metadata. Tracked as a future gap.
 
 ---
 
-## ARM32-KA-002 — IT block condition codes not modelled; conditional sink calls not suppressed
+## ARM32-KA-002: IT block condition codes not modelled; conditional sink calls not suppressed
 
 **Description:**  
 Thumb-2 IT (If-Then) blocks encode up to four conditionally executed instructions. The
@@ -68,7 +68,7 @@ the input fails the validation test.
 
 ---
 
-## ARM32-KA-003 — Indirect BLX register calls not followed interprocedurally
+## ARM32-KA-003: Indirect BLX register calls not followed interprocedurally
 
 **Description:**  
 `ARM32TaintTracker` resolves direct `BL <imm>` calls interprocedurally. Indirect calls via
@@ -94,7 +94,7 @@ with `scan_function()`.
 
 ---
 
-## ARM32-KA-004 — Loop fixpoint not computed; second-iteration taint not propagated
+## ARM32-KA-004: Loop fixpoint not computed; second-iteration taint not propagated
 
 **Description:**  
 `ARM32TaintTracker` performs a linear forward trace and does not compute a loop fixpoint.
@@ -118,7 +118,7 @@ source.
 
 ---
 
-## ARM32-KA-005 — VFP/NEON floating-point registers not tracked
+## ARM32-KA-005: VFP/NEON floating-point registers not tracked
 
 **Description:**  
 The taint model covers integer registers (r0–r15) and the CPSR. VFP/NEON registers (s0–s31,

@@ -1,4 +1,4 @@
-# EcuC28xDecoder — FORGE Audit + DEV & TEST ORCHESTRATION PLAN
+# EcuC28xDecoder: FORGE Audit + DEV & TEST ORCHESTRATION PLAN
 
 **Module:** `ablation/analyzers/ecu_c28x_decoder.py`  
 **Version:** v2.71.0  
@@ -11,7 +11,7 @@
 
 ### §1 Input Validation
 - `__init__` with path argument: opens the file via `open(data, 'rb')` and catches
-  `FileNotFoundError`. `PermissionError` and `OSError` propagate — the caller is responsible.
+  `FileNotFoundError`. `PermissionError` and `OSError` propagate: the caller is responsible.
   This is documented in the module docstring. **PASS**
 - `decode_one(byte_off)`: `byte_off + 2 > len(data)` guard before any `unpack_from`.
   For 32-bit instructions an additional `byte_off + 4 > len(data)` check is applied
@@ -39,11 +39,11 @@ extraction `((w1 & 0x3F) << 16) | w2` is bounded to [0, 0x3FFFFF]. **PASS**
 
 ### §6 Memory Safety
 Pure Python. No ctypes, no C extensions, no mmap. `struct.unpack_from()` raises
-`struct.error` on truncated input — guarded by the length checks in §1. **PASS**
+`struct.error` on truncated input: guarded by the length checks in §1. **PASS**
 
 ### §7 Error Handling
 - `FileNotFoundError` caught for path-based construction and re-raised with context.
-- `PermissionError` / `OSError` propagate to the caller — documented, not a gap.
+- `PermissionError` / `OSError` propagate to the caller: documented, not a gap.
 - No `struct.error` can escape because all `unpack_from` calls are preceded by length
   guards that ensure sufficient bytes. **PASS**
 
@@ -51,7 +51,7 @@ Pure Python. No ctypes, no C extensions, no mmap. `struct.unpack_from()` raises
 No network calls, no file writes, no logging. **PASS**
 
 ### §9 Dependencies
-`struct`, `dataclasses`, `pathlib`, `typing` — stdlib only. No new dependencies. **PASS**
+`struct`, `dataclasses`, `pathlib`, `typing`: stdlib only. No new dependencies. **PASS**
 
 ### §10 Logic Correctness
 - `_is_32bit()` patterns: verified against SPRU430F per-instruction encoding pages. The
@@ -69,19 +69,19 @@ No network calls, no file writes, no logging. **PASS**
 - Condition code extraction: `cond = w1 & 0xF` for B and BF; the 4-bit COND occupies
   bits [3:0] in both encodings, confirmed from SPRU430F. **PASS**
 
-**gate_passed: True** — 0 HIGH, 0 CRITICAL findings.
+**gate_passed: True**: 0 HIGH, 0 CRITICAL findings.
 
 ---
 
 ## DEV & TEST ORCHESTRATION PLAN
 
-### Test 1 — Import smoke test
+### Test 1: Import smoke test
 ```python
 from ablation.analyzers.ecu_c28x_decoder import EcuC28xDecoder, C28xInsn
 ```
 Expected: no ImportError.
 
-### Test 2 — from_path on missing file raises FileNotFoundError
+### Test 2: from_path on missing file raises FileNotFoundError
 ```python
 try:
     EcuC28xDecoder.from_path('/nonexistent_c28x.bin')
@@ -90,7 +90,7 @@ except FileNotFoundError:
     pass
 ```
 
-### Test 3 — insn_length returns 0 at EOF
+### Test 3: insn_length returns 0 at EOF
 ```python
 dec = EcuC28xDecoder.from_bytes(b'\x14\x76')  # LRET (0x7614)
 assert dec.insn_length(0) == 2
@@ -98,7 +98,7 @@ assert dec.insn_length(1) == 0   # only 1 byte left
 assert dec.insn_length(2) == 0   # past end
 ```
 
-### Test 4 — LRET decoded as RETURN (16-bit)
+### Test 4: LRET decoded as RETURN (16-bit)
 ```python
 import struct
 data = struct.pack('<H', 0x7614)
@@ -111,7 +111,7 @@ assert not insn.is_32bit
 assert insn.word_va == 0
 ```
 
-### Test 5 — LRETR decoded as RETURN (16-bit)
+### Test 5: LRETR decoded as RETURN (16-bit)
 ```python
 data = struct.pack('<H', 0x0006)
 dec = EcuC28xDecoder.from_bytes(data)
@@ -120,7 +120,7 @@ assert insn.mnemonic == 'LRETR'
 assert insn.insn_type == 'RETURN'
 ```
 
-### Test 6 — B UNC (unconditional branch) decoded as BRANCH (32-bit)
+### Test 6: B UNC (unconditional branch) decoded as BRANCH (32-bit)
 ```python
 # B UNC, +5  →  w1=0xFFEF (COND=UNC=0xF), w2=0x0005
 data = struct.pack('<HH', 0xFFEF, 0x0005)
@@ -134,7 +134,7 @@ assert insn.word_va == 0x100      # base_va
 assert insn.target == 0x100 + 2 + 5   # word_va + 2 + offset
 ```
 
-### Test 7 — LC 22bit decoded as CALL with correct target
+### Test 7: LC 22bit decoded as CALL with correct target
 ```python
 # LC to 0x003F8000:  addr22=0x03F800
 # upper6 = (0x03F800 >> 16) & 0x3F = 0x03
@@ -148,7 +148,7 @@ assert insn.insn_type == 'CALL'
 assert insn.target == 0x03F800
 ```
 
-### Test 8 — LCR #22bit decoded as CALL with correct target
+### Test 8: LCR #22bit decoded as CALL with correct target
 ```python
 # LCR to 0x001000:  w1 = 0x7640 | 0x00 = 0x7640, w2 = 0x1000
 data = struct.pack('<HH', 0x7640, 0x1000)
@@ -159,7 +159,7 @@ assert insn.insn_type == 'CALL'
 assert insn.target == 0x1000
 ```
 
-### Test 9 — function_starts collects LC and LCR targets
+### Test 9: function_starts collects LC and LCR targets
 ```python
 buf = b''
 buf += struct.pack('<HH', 0x0080, 0x0200)   # LC to 0x000200
@@ -171,7 +171,7 @@ starts = dec.function_starts()
 assert starts == [0x000200, 0x000400, 0x000600]
 ```
 
-### Test 10 — BF EQ with negative offset
+### Test 10: BF EQ with negative offset
 ```python
 # BF EQ, -3  →  w1=0x56C1 (COND=EQ=0x1), w2=0xFFFD (-3)
 data = struct.pack('<HH', 0x56C1, 0xFFFD)

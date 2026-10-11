@@ -1,21 +1,21 @@
-# Known Anomalies — V850TaintTracker
+# Known Anomalies: V850TaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_v850.py`  
 **Tracker version:** v2.57.0  
 **Format:** ISO 26262 Part 8 / TASKING qualification kit (see `ABLATION-STANDARDS.md` §2.3)
 
 An anomaly is a condition under which `V850TaintTracker` is known to produce an incorrect
-result — either a false negative (missed finding) or a false positive (spurious finding).
+result: either a false negative (missed finding) or a false positive (spurious finding).
 Each entry documents the triggering condition, the impact, and the recommended workaround.
 
 `V850TaintTracker` is the base tracker for V850/RH850 ELF binaries using the GCC V850 ABI.
 For GHS-compiled or IAR-compiled RH850 firmware (the majority of automotive ECU binaries),
-use `RH850TaintTracker` instead — it corrects the ABI defaults and symbol normalisation
+use `RH850TaintTracker` instead: it corrects the ABI defaults and symbol normalisation
 issues documented in V850-KA-001 and V850-KA-002 below.
 
 ---
 
-## V850-KA-001 — GCC double=64-bit ABI mismatches GHS/IAR firmware (false positives)
+## V850-KA-001: GCC double=64-bit ABI mismatches GHS/IAR firmware (false positives)
 
 **Description:**  
 `V850TaintTracker` models the GCC V850 ABI where `double` is 64 bits, consuming a register
@@ -44,7 +44,7 @@ module for GHS/IAR firmware.
 
 ---
 
-## V850-KA-002 — GHS symbol mangling not normalised; sources and sinks not matched
+## V850-KA-002: GHS symbol mangling not normalised; sources and sinks not matched
 
 **Description:**  
 `V850TaintTracker` compares ELF symbol names directly against source/sink name sets.
@@ -69,7 +69,7 @@ before checking source/sink membership.
 
 ---
 
-## V850-KA-003 — No flat ROM support; raises on bare binary input
+## V850-KA-003: No flat ROM support; raises on bare binary input
 
 **Description:**  
 `V850TaintTracker` requires an ELF binary with valid section headers for function boundary
@@ -81,7 +81,7 @@ header) raises `lief.bad_file` or equivalent. Unlike `RH850TaintTracker` and
 - Flat ROM images extracted from automotive ECU flash dumps
 - Binary images without an ELF header
 
-**Impact:** Analysis abort. Not a silent miss — the error surfaces immediately at load time.
+**Impact:** Analysis abort. Not a silent miss: the error surfaces immediately at load time.
 
 **Workaround:**  
 Use `RH850TaintTracker.from_bytes(data, base_va)` for flat ROM inputs, which was built to
@@ -91,7 +91,7 @@ fill this gap.
 
 ---
 
-## V850-KA-004 — Custom decoder opcode gaps produce false negatives
+## V850-KA-004: Custom decoder opcode gaps produce false negatives
 
 **Description:**  
 Capstone does not support V850/RH850. `V850TaintTracker` uses the same custom byte-level
@@ -115,7 +115,7 @@ bytes before tracing, and verify those instruction sites manually.
 
 ---
 
-## V850-KA-005 — Loop fixpoint not computed; second-iteration taint not propagated
+## V850-KA-005: Loop fixpoint not computed; second-iteration taint not propagated
 
 **Description:**  
 `V850TaintTracker` performs a linear forward trace and does not compute a fixpoint over loops.

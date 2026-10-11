@@ -1,4 +1,4 @@
-# Structurizer — Dominator-Based Structured Control Flow
+# Structurizer: Dominator-Based Structured Control Flow
 
 **File:** `ablation/analyzers/structurizer.py`  
 **Added:** v2.65.0
@@ -10,7 +10,7 @@
 3 things that were not possible before in Ablation:
 
 **1. No structured output for any ISA.**  Every CFG-backed lifter in Ablation produced
-goto-based IR — `if (T) goto loc_1a20;`.  The structurizer converts that to `if/while/for`
+goto-based IR: `if (T) goto loc_1a20;`.  The structurizer converts that to `if/while/for`
 pseudo-C, making function logic readable without manually tracing goto chains across the
 decompiler output.
 
@@ -20,7 +20,7 @@ No existing Ablation module computed post-dominators.  `PostDomTree` fills that 
 reversing the CFG and running the standard `DomTree` algorithm on the reversed graph.
 
 **3. No ISA-neutral decompiler pass.**  The structurizer works on any CFG that exposes
-`.blocks`, `.entry`, `.flow`, `.flow_r()` — the same interface as `dataflow_engine.CFG`.
+`.blocks`, `.entry`, `.flow`, `.flow_r()`: the same interface as `dataflow_engine.CFG`.
 `cfg_sh2a`, `cfg_v850`, and any future ECU-family CFG module can plug straight in
 without writing an ISA-specific structurizer.
 
@@ -29,7 +29,7 @@ without writing an ISA-specific structurizer.
 ## Algorithm
 
 All compiled automotive firmware (AUTOSAR classic, bare-metal ECU C) produces reducible
-CFGs — every back edge has a unique dominating header.  The structurizer exploits this:
+CFGs: every back edge has a unique dominating header.  The structurizer exploits this:
 
 1. **Compute**: DomTree (Cooper-Harvey-Kennedy), LoopInfo (natural loops from back edges),
    PostDomTree (reversed-CFG DomTree).
@@ -77,7 +77,7 @@ def my_emitter(insn):
 print(s.emit(my_emitter, func_name="can_rx_handler"))
 ```
 
-Example output (before — linear lifter, after — structurizer):
+Example output (before: linear lifter, after: structurizer):
 
 **Before (v2.63.0, goto-based):**
 ```
@@ -132,8 +132,8 @@ Example output (before — linear lifter, after — structurizer):
 | `ReturnNode` | `block_start: int`, `insns: list` | Function return block |
 | `WhileNode` | `header_block: int`, `body: StructuredNode`, `exit_block: int` | `while` loop |
 | `IfNode` | `cond_block: int`, `then_body`, `else_body`, `join_block` | `if/else` |
-| `BreakNode` | — | Loop `break` |
-| `ContinueNode` | — | Loop `continue` |
+| `BreakNode` |: | Loop `break` |
+| `ContinueNode` |: | Loop `continue` |
 
 ### `PostDomTree(cfg)`
 

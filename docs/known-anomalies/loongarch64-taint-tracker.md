@@ -1,4 +1,4 @@
-# Known Anomalies — LoongArch64TaintTracker
+# Known Anomalies: LoongArch64TaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_loongarch64.py`  
 **Tracker version:** v2.57.0  
@@ -10,7 +10,7 @@ recommended workaround.
 
 ---
 
-## LA64-KA-001 — from_path misses functions in stripped binaries without eh_frame
+## LA64-KA-001: from_path misses functions in stripped binaries without eh_frame
 
 **Description:**  
 `LoongArch64TaintTracker.from_path()` finds function starts from the ELF symbol table and
@@ -35,7 +35,7 @@ of missed functions. When `.debug_info` is present, `high_pc` values are stored 
 
 ---
 
-## LA64-KA-002 — KASAN/KCOV instrumentation produces false edges without stripping
+## LA64-KA-002: KASAN/KCOV instrumentation produces false edges without stripping
 
 **Description:**  
 TencentOS kernel binaries built with `CONFIG_KASAN=y` insert a 4-6 instruction shadow-map
@@ -62,7 +62,7 @@ worked. Expect ~40% instrumentation on KASAN kernels.
 
 ---
 
-## LA64-KA-003 — LSX/LASX vector instructions decoded as .word; taint through vectors lost
+## LA64-KA-003: LSX/LASX vector instructions decoded as .word; taint through vectors lost
 
 **Description:**  
 The pure-Python decoder decodes LSX (128-bit SIMD) and LASX (256-bit SIMD) instructions
@@ -83,7 +83,7 @@ manually to confirm whether vector outputs flow to exec or memory-corruption sin
 
 ---
 
-## LA64-KA-004 — Syscall classification requires known $a7 value; indirect syscalls not classified
+## LA64-KA-004: Syscall classification requires known $a7 value; indirect syscalls not classified
 
 **Description:**  
 The syscall source/sink classification fires only when the constant-folding path has
@@ -108,7 +108,7 @@ wrapper patterns. Trace the dispatch function manually using `WindowAnalyzer.dum
 
 ---
 
-## LA64-KA-005 — Loop fixpoint not computed; second-iteration taint not propagated
+## LA64-KA-005: Loop fixpoint not computed; second-iteration taint not propagated
 
 **Description:**  
 `LoongArch64TaintTracker` uses a flow-sensitive, path-insensitive fixpoint analysis with

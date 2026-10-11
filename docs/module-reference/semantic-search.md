@@ -182,7 +182,7 @@ The whitened vectors are cached at `~/.ablation/func_semantic_cache_{hash}.pkl`,
 def query(self, description: str, top_k: int = 5):
     q = model.encode(description, normalize_embeddings=True)
     scores = self._vectors @ q                         # matrix-vector dot product
-    idx = np.argpartition(scores, -top_k)[-top_k:]    # O(N) — no full sort needed
+    idx = np.argpartition(scores, -top_k)[-top_k:]    # O(N): no full sort needed
     idx = idx[np.argsort(scores[idx])[::-1]]           # sort only the top-k slice
     return [SimilarFunction(...) for i in idx]
 ```
@@ -348,7 +348,7 @@ from ablation.analyzers.pattern_library import PatternLibrary
 reg = FindingRegistry()
 pl  = PatternLibrary()
 
-n = pl.ingest_from_registry(reg)  # idempotent — only adds findings not already present
+n = pl.ingest_from_registry(reg)  # idempotent: only adds findings not already present
 print(f"{n} new patterns ingested")
 
 pl_results = pl.sweep(searcher, top_k=8, min_score=0.30)

@@ -22,7 +22,7 @@ The pclntab section begins with a 4-byte magic that identifies the Go version:
 
 ```
   pclntab header layout:
-    offset 0: magic (4 bytes) — identifies format version
+    offset 0: magic (4 bytes): identifies format version
     offset 4: padding (2 bytes)
     offset 6: instruction size quantum (1 byte)
     offset 7: pointer size in bytes (1 byte, 4 or 8)

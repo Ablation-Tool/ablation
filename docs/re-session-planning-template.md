@@ -37,7 +37,7 @@ Copy this file to `re/<vendor>/SESSION_<target>.md`. Fill in all fields before r
 **Artifact collection:**
 
 - [ ] Binary downloaded and hash verified
-- [ ] PDF documentation read (`<product>/docs/` — CLI Reference first, then Release Notes)
+- [ ] PDF documentation read (`<product>/docs/`: CLI Reference first, then Release Notes)
 - [ ] README.md Download Status checked (no `.aria2` present)
 - [ ] Binary copied to working directory
 
@@ -64,9 +64,9 @@ Copy this file to `re/<vendor>/SESSION_<target>.md`. Fill in all fields before r
 | `SemanticSearcher` | Always second: semantic sweep before any manual disasm |
 | *(add tools as selected)* | |
 
-**Taint tracker selected:** (e.g., `RH850TaintTracker`) — **why:** (e.g., GHS CC-RH ABI, `double_is_32bit=True` default matches firmware compiler)
+**Taint tracker selected:** (e.g., `RH850TaintTracker`): **why:** (e.g., GHS CC-RH ABI, `double_is_32bit=True` default matches firmware compiler)
 
-**Known anomalies consulted:** `docs/known-anomalies/<tracker>.md` — **relevant anomalies:** (list any whose triggering conditions match this target)
+**Known anomalies consulted:** `docs/known-anomalies/<tracker>.md`: **relevant anomalies:** (list any whose triggering conditions match this target)
 
 ---
 

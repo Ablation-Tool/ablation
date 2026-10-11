@@ -1,4 +1,4 @@
-# Known Anomalies — PPC64TaintTracker
+# Known Anomalies: PPC64TaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_ppc64.py`  
 **Tracker version:** v2.57.0  
@@ -10,7 +10,7 @@ workaround.
 
 ---
 
-## PPC64-KA-001 — ELFv1 function descriptors (.opd) require symbol-table resolution
+## PPC64-KA-001: ELFv1 function descriptors (.opd) require symbol-table resolution
 
 **Description:**  
 PPC64 ELFv1 (AIX, old Linux PPC64 big-endian) stores function descriptors in the `.opd`
@@ -37,7 +37,7 @@ and use their targets as candidate function starts. Pass the augmented set via
 
 ---
 
-## PPC64-KA-002 — TOC pointer (r2) not emulated; GOT-relative sink resolution limited
+## PPC64-KA-002: TOC pointer (r2) not emulated; GOT-relative sink resolution limited
 
 **Description:**  
 PPC64 ELFv2 uses r2 as the TOC pointer. External function calls load the callee address
@@ -61,7 +61,7 @@ offset to the target VA. Add resolved callees as custom sinks.
 
 ---
 
-## PPC64-KA-003 — Stack taint not tracked; buffer-passing flows produce false negatives
+## PPC64-KA-003: Stack taint not tracked; buffer-passing flows produce false negatives
 
 **Description:**  
 The tracker models register taint. It does not track taint stored to stack memory and later
@@ -81,7 +81,7 @@ Run `SinkArgClassifier.from_path(elf).classify_all()` when the tracker returns n
 
 ---
 
-## PPC64-KA-004 — Endian mismatch defaults produce wrong results on little-endian targets
+## PPC64-KA-004: Endian mismatch defaults produce wrong results on little-endian targets
 
 **Description:**  
 `PPC64TaintTracker.from_path()` defaults to big-endian (`endian='big'`). OpenPOWER Linux
@@ -100,7 +100,7 @@ Check `e_ident[EI_DATA]`. Pass `endian='little'` for modern OpenPOWER Linux targ
 
 ---
 
-## PPC64-KA-005 — Loop fixpoint not computed; second-iteration taint not propagated
+## PPC64-KA-005: Loop fixpoint not computed; second-iteration taint not propagated
 
 **Description:**  
 `PPC64TaintTracker` performs a linear forward trace without loop fixpoint computation.

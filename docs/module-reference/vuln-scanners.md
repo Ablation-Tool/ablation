@@ -153,8 +153,8 @@ snprintf(buf, sizeof(buf), "SELECT ... WHERE login='%s'", username);
 mysql_query(conn, buf);              // username flows unsanitized into SQL
 ```
 
-`FormatStringScanner` cannot catch this because `snprintf` is safe by itself —
-the danger is in what the formatted buffer is *then used for*. `SqlSinkScanner`
+`FormatStringScanner` cannot catch this because `snprintf` is safe by itself.
+The danger is in what the formatted buffer is *then used for*. `SqlSinkScanner`
 specifically follows the data flow from format-string builder to SQL execution sink.
 
 ### Detection algorithm
@@ -455,7 +455,7 @@ string length. If `$s0` is bounded upstream this is safe. The scanner emits MEDI
 byte-verify the upstream bounds check before promoting to CONFIRMED.
 
 **Struct-size add**: `addi.w $a0, $t0, sizeof(hdr)` where `t0` is a user-provided
-payload size. Genuine vulnerability if payload size is unbounded — confirms as HIGH
+payload size. Genuine vulnerability if payload size is unbounded: confirms as HIGH
 after source-level verification.
 ```
 

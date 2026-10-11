@@ -114,7 +114,7 @@ if result.key:
     print(f"Key: {result.key.hex()}")
     decrypted = result.decrypt(open('/path/to/encrypted_firmware.raw', 'rb').read())
 
-# KPA only (fastest — use when the plaintext magic is known)
+# KPA only (fastest: use when the plaintext magic is known)
 result = solver.kpa_attack(max_probe=64)
 ```
 

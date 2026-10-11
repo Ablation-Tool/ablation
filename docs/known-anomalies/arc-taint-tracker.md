@@ -1,4 +1,4 @@
-# Known Anomalies — ARCTaintTracker
+# Known Anomalies: ARCTaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_arc.py`  
 **Tracker version:** v2.57.0  
@@ -10,7 +10,7 @@ workaround.
 
 ---
 
-## ARC-KA-001 — Partial ARCDecoder coverage; has_full_decode flag must be checked
+## ARC-KA-001: Partial ARCDecoder coverage; has_full_decode flag must be checked
 
 **Description:**  
 `ARCTaintTracker` uses `ARCDecoder` for instruction decode. `ARCDecoder` covers the ARC HS
@@ -41,7 +41,7 @@ fallback propagation is incorrect.
 
 ---
 
-## ARC-KA-002 — 16-bit compact instruction handling limited
+## ARC-KA-002: 16-bit compact instruction handling limited
 
 **Description:**  
 ARC HS supports a compact instruction set (16-bit instructions) for code density. The
@@ -64,7 +64,7 @@ through to the fallback, and verify them manually.
 
 ---
 
-## ARC-KA-003 — Indirect JL/JLR calls not followed interprocedurally
+## ARC-KA-003: Indirect JL/JLR calls not followed interprocedurally
 
 **Description:**  
 `ARCTaintTracker` resolves direct `BL <imm>` calls and PLT stubs. Indirect calls via
@@ -84,7 +84,7 @@ Resolve the callee VA manually and add it as a custom sink, or trace it with
 
 ---
 
-## ARC-KA-004 — Loop fixpoint not computed; second-iteration taint not propagated
+## ARC-KA-004: Loop fixpoint not computed; second-iteration taint not propagated
 
 **Description:**  
 `ARCTaintTracker` performs a linear forward trace without loop fixpoint computation. Taint

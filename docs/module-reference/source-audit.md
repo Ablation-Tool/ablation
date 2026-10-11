@@ -200,12 +200,12 @@ shared module is imported everywhere.
 
 | Profile range | Binary form | Present signals | Audit action |
 |---|---|---|---|
-| 16-31 | `1xxxx` | unsafe rendering | **Individual read** — every file |
-| 8-15 | `01xxx` | href binding only | **Individual read** — every file |
-| 4-7 | `001xx` | URL assignment only | **Spot-check** — read a sample |
-| 2-3 | `0001x` | user-data rendering only | **Spot-check** — read a sample |
-| 1 | `00001` | shared module, no sinks | **Batch** — one representative |
-| 0 | `00000` | no signals | **Batch-CLEAN** — one representative |
+| 16-31 | `1xxxx` | unsafe rendering | **Individual read**: every file |
+| 8-15 | `01xxx` | href binding only | **Individual read**: every file |
+| 4-7 | `001xx` | URL assignment only | **Spot-check**: read a sample |
+| 2-3 | `0001x` | user-data rendering only | **Spot-check**: read a sample |
+| 1 | `00001` | shared module, no sinks | **Batch**: one representative |
+| 0 | `00000` | no signals | **Batch-CLEAN**: one representative |
 
 The audit decision follows directly from the profile: if bit 4 is set, the file goes in
 the individual-read pile regardless of the other bits. You never need to read the file to
@@ -247,7 +247,7 @@ for bucket in compressor.spot_checks(buckets):
 
 # Batch-CLEAN candidates (profile 0)
 batch = compressor.batch_clean(buckets)
-print(f"Batch-CLEAN: {len(batch)} files — read one representative")
+print(f"Batch-CLEAN: {len(batch)} files: read one representative")
 
 # Estimated reads saved
 ratio = compressor.compression_ratio(buckets)
@@ -356,7 +356,7 @@ clf = SourceEntryClassifier.from_context(ctx)
 results = clf.classify()
 print(clf.report(results))
 
-# Unauthenticated endpoints — highest priority
+# Unauthenticated endpoints: highest priority
 unauth = [r for r in results if r.auth_level == "NONE"]
 for r in unauth:
     print(f"  {r.rel_path}  [{', '.join(r.methods)}]")
@@ -417,13 +417,13 @@ dispatcher pattern) is not exploitable by an unauthenticated attacker. The scann
 for env-var guards, feature flags, and conditional blocks within 10 lines of a sink. A
 guarded find is reported as MEDIUM instead of HIGH with the guard condition shown.
 
-Example — guarded eval (MEDIUM):
+Example: guarded eval (MEDIUM):
 ```python
 if os.getenv("LANGFUSE_CODE_EVAL_DISPATCHER") == "insecure-local":
     vm.runInContext(code, sandbox)   # guarded: LANGFUSE_CODE_EVAL_DISPATCHER
 ```
 
-Example — unguarded eval (HIGH):
+Example: unguarded eval (HIGH):
 ```python
 result = vm.runInContext(userScript, ctx)
 ```
@@ -711,14 +711,14 @@ from ablation.analyzers.source_taint_tracker import SourceTaintTracker
 
 ctx = SourceContext.from_path("/tmp/target")
 
-# 1. Build ranked read list — start here for any repo
+# 1. Build ranked read list: start here for any repo
 buckets = SourceAuditCompressor.from_context(ctx).compress()
 
-# 2. Map exposed entry points — unauthenticated routes first
+# 2. Map exposed entry points: unauthenticated routes first
 entry_results = SourceEntryClassifier.from_context(ctx).classify()
 unauth = [r for r in entry_results if r.auth_level == "NONE"]
 
-# 3. Flag dangerous sinks — HIGH findings need taint confirmation
+# 3. Flag dangerous sinks: HIGH findings need taint confirmation
 sink_findings = SourceSinkScanner.from_context(ctx).scan()
 
 # 4. Find tenant isolation gaps

@@ -97,8 +97,8 @@ ADDI  r30, r30, lo   # r30 += lo16(const)
 ```
 
 The linker computes `hi`/`lo` so that `r30 = GOT2_section_address + bias`.
-The resolver captures the computed value directly from the instruction stream —
-no knowledge of the bias offset is required.
+The resolver captures the computed value directly from the instruction stream,
+so no knowledge of the bias offset is required.
 
 The resolver finds 2242 such setup sites in the S6720EI bootload and builds a
 sorted lookup. For any BCTRL VA, the live r30 = the setup with the largest

@@ -25,9 +25,9 @@ A function with zero or one external PLT call has no meaningful PLT-overlap scor
 
 ```mermaid
 flowchart TD
-    A["func_va_v1 in binary_v1"] --> B["Stage 1 · Structural pre-filter\nCriteria: basic_block_count ±2\n          edge_count ±30%\nPurpose: reduce N=thousands to N~tens\nNo instruction decode needed — CFG header only"]
+    A["func_va_v1 in binary_v1"] --> B["Stage 1 · Structural pre-filter\nCriteria: basic_block_count ±2\n          edge_count ±30%\nPurpose: reduce N=thousands to N~tens\nNo instruction decode needed: CFG header only"]
 
-    B --> C["Stage 2 · Mnemonic 4-gram Jaccard\nNormalize: strip addresses, normalize immediates to 0\nBuild set of 4-grams from mnemonic sequence\nJaccard(A,B) = |A ∩ B| / |A ∪ B|\nKeep top-10 by Jaccard score\nStable across recompilation — only structural rewrites\nshift the 4-gram set significantly"]
+    B --> C["Stage 2 · Mnemonic 4-gram Jaccard\nNormalize: strip addresses, normalize immediates to 0\nBuild set of 4-grams from mnemonic sequence\nJaccard(A,B) = |A ∩ B| / |A ∪ B|\nKeep top-10 by Jaccard score\nStable across recompilation: only structural rewrites\nshift the 4-gram set significantly"]
 
     C --> D{"Top-2 within\n0.05 Jaccard?"}
     D -->|No, clear winner| E["Patch localization\ndifflib.SequenceMatcher\nAddresses and RIP-relative immediates stripped\nOutput: unified diff showing logic changes only"]

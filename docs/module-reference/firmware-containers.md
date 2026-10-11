@@ -605,8 +605,8 @@ using HiSilicon silicon exclusively (no Freescale, no Broadcom).
 0x00  4   Format version: 0x00000002 (shared with NE8000 V800)
 0x04  4   Entry count: 0x4C = 76
 0x08    Version string: "V600R024C00SPC500"
-0x1984  SquashFS 1 — 264MB xz — AArch64 VRP V8 application FS
-0x10A69AE4  SquashFS 2 — 1.2MB xz — signed board filelists + SELinux labels
+0x1984  SquashFS 1: 264MB xz: AArch64 VRP V8 application FS
+0x10A69AE4  SquashFS 2: 1.2MB xz: signed board filelists + SELinux labels
 ```
 
 ### AArch64 HiSilicon silicon (V600 transition)
@@ -750,8 +750,8 @@ Per-entry (24 bytes):
 ```
 [0:1]   1   Marker byte (encodes entry type; 0xFF=standard, 0xFE-0xFB=MPU boot stages, etc.)
 [1:4]   3   HWTYPE (BE)
-[4:8]   4   File offset (BE32) — absolute byte offset in .cc
-[8:12]  4   Entry size (BE32) — includes 0x160-byte sub-header
+[4:8]   4   File offset (BE32): absolute byte offset in .cc
+[8:12]  4   Entry size (BE32): includes 0x160-byte sub-header
 [12:16] 4   Field C (unknown, possibly CRC)
 [16:20] 4   Flags (BE32)
 [20:24] 4   Padding
@@ -806,7 +806,7 @@ Absent from V800R023+; Hi1610 platform integrates or relocates forwarding plane.
 0x20  32  Patch name (null-padded): "SPH122"
 0x40  ..  Binary fields (CRC, size)
 Body:     SQFS catalog (0x2CA6) + multiple GZIP patch blobs + dual CMS signatures
-          (0x17354A, 0x371BA9 — CAdES+PSS, same CA as corpus)
+          (0x17354A, 0x371BA9: CAdES+PSS, same CA as corpus)
 ```
 
 ### Security findings
@@ -829,7 +829,7 @@ Source: `/media/cowboy/research/Huawei-Firmware/NearLink/`; 18 `.fwpkg` packages
 
 ```
 Offset  Size  Field
-0x00     4    Magic: 0xEFBEADDF LE32 (bytes DF AD BE EF — "DEADBEEF" in little-endian)
+0x00     4    Magic: 0xEFBEADDF LE32 (bytes DF AD BE EF: "DEADBEEF" in little-endian)
 0x04     4    Field 1 LE32 (partition table total length or CRC)
 0x08     4    Field 2 LE32 (total payload size ≈ file size)
 0x0C     N    Partition table (52-byte entries, terminated by empty name)
@@ -851,7 +851,7 @@ Flash base: 0x90100000 (AHB/AXI-mapped NOR flash)
 
 | Partition | Flash addr | Size | Notes |
 |---|---|---|---|
-| loaderboot_sign.bin | — | 24KB | Programmer loader; not directly flashed (flags=0) |
+| loaderboot_sign.bin |: | 24KB | Programmer loader; not directly flashed (flags=0) |
 | partition.bin | 0x90100000 | 1KB | Flash partition table |
 | flashboot_sign_a.bin | 0x90101000 | 36KB | A copy flashboot (A/B redundancy) |
 | flashboot_sign_b.bin | 0x9010B000 | 36KB | B copy flashboot (A/B redundancy) |
@@ -864,7 +864,7 @@ Flash base: 0x200000 (QSPI NOR flash)
 
 | Partition | Flash addr | Size | Notes |
 |---|---|---|---|
-| root_loaderboot_sign.bin | — | — | Root programmer loader; not directly flashed |
+| root_loaderboot_sign.bin |: |: | Root programmer loader; not directly flashed |
 | root_params_sign.bin | 0x200000 | 1.8KB | Root parameters |
 | ssb_sign.bin | 0x202000 | 21KB | Secure Secondary Boot (absent in BS21) |
 | flashboot_sign.bin | 0x220000 | 49KB | Primary flashboot |
@@ -992,8 +992,8 @@ Kernel modules for physical switch hardware. Mixed-vendor silicon:
 | `ko/cbb/hisi_fpga_load_drv.ko` | HiSilicon | FPGA loader (alongside Altera) |
 | `ko/cbb/bcm54219_phy_drv.ko` | Broadcom | BCM54219 1GbE PHY driver |
 | `ko/cbb/ina220_power_drv.ko` | Texas Instruments | INA220 power monitor |
-| `ko/cbb/can_bus.ko` | — | CAN bus (atypical for switch; likely inter-board management) |
-| `etc/bootload_step1.sh`, `step2.sh` | — | Two-stage bootloader shell scripts |
+| `ko/cbb/can_bus.ko` |: | CAN bus (atypical for switch; likely inter-board management) |
+| `etc/bootload_step1.sh`, `step2.sh` |: | Two-stage bootloader shell scripts |
 
 14 CPLD driver variants total. `can_bus.ko` is unusual for a campus switch, likely for inter-board management on modular chassis variants.
 
