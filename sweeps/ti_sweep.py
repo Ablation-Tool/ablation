@@ -34,6 +34,7 @@ import sys
 import tempfile
 import traceback
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -294,12 +295,11 @@ def _phase1_nnc(paths: List[str]) -> List[dict]:
                     continue
             expanded.append(p)
 
-        for p in expanded:
+        def _scan_one(p: str) -> List[dict]:
             try:
-                scanner = TiNNCScanner.from_path(p)
-                result = scanner.scan()
-                for f in result.findings:
-                    findings.append({
+                result = TiNNCScanner.from_path(p).scan()
+                return [
+                    {
                         'binary': os.path.basename(p),
                         'binary_path': p,
                         'finding_id': f.finding_id,
@@ -310,9 +310,16 @@ def _phase1_nnc(paths: List[str]) -> List[dict]:
                         'symbol': f.symbol,
                         'description': f.description,
                         'phase': 'nnc',
-                    })
+                    }
+                    for f in result.findings
+                ]
             except Exception:
-                pass
+                return []
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures = {pool.submit(_scan_one, p): p for p in expanded}
+            for fut in as_completed(futures):
+                findings.extend(fut.result())
     finally:
         shutil.rmtree(tmp_elf_dir, ignore_errors=True)
     return findings
