@@ -243,7 +243,7 @@ It defines four phases:
 
 **Phase 1.** Every engagement starts with a session file recording the target description, artifact hash, tool selection, and documentation plan before any analysis runs. The rule that semantic search runs before manual disassembly maps to the following phase.
 
-**Phase 2** requires characterizing a binary at the function level before doing detailed trace work. The DynamicSandbox covers the following.
+**Phase 2** Requires characterizing a binary at the function level before doing detailed trace work. The DynamicSandbox covers the following.
 
 **Phase 3.** The structured retrospective written at the close of every completed project maps to the final phase.
 
