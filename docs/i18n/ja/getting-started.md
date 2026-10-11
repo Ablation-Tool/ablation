@@ -179,4 +179,4 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 
 - [脆弱性ハンティングワークフロー](../../workflows/vuln-hunting.md) -- スイープから開示準備完了の発見までの完全なループ
 - [モジュールリファレンス](../../module-reference/) -- 50以上のアナライザーとパラメータおよび例
-- [CONTRIBUTING.md](../../../CONTRIBUTING.md) -- パターン、スイープ、アナライザーモジュールの追加方法
+- [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- パターン、スイープ、アナライザーモジュールの追加方法

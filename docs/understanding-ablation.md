@@ -31,7 +31,7 @@ The tools use bounded static approximations and heuristics. A hit is a lead, a s
 | `modules/` | Standalone and target-oriented research scripts. This is not one uniform public API. |
 | `targets/` | Product/vendor-specific reverse-engineering scripts and evolving session notes. These are research artifacts built using Ablation, rather than generic framework components. |
 | `tests/`, `test/` | Unit tests and workflow notes. |
-| `docs/`, `updates/` | User guides, module references, integration notes, and release/update notes. |
+| `docs/` | User guides, module references, integration notes, release notes, and update notes. |
 
 The checkout may also contain firmware, extracted filesystems, generated reports, vendor reference material, and other research artifacts. Such inputs are not all framework source, and their presence does not mean Ablation automatically analyzes them as one unified target.
 
@@ -130,4 +130,4 @@ Static analysis can miss code, infer incorrect boundaries, and produce false pos
 
 Some existing docs contain aging examples or claims that no longer line up with the current code. Examples include stale command inventories, optimistic claims about semantic-search inputs, version summaries that stop at 2.5.0, and old contributor layout/API descriptions. The implementation and CLI parser are the source of truth for current command behavior. This page records the architecture and limitations visible in this checkout; it does not certify every old code comment, target-specific note, or third-party file in the working tree.
 
-For installation and command examples see [Getting Started](getting-started.md). For the existing workflow and module guides see the [documentation index](INDEX.md). For changes by release see [CHANGELOG](../CHANGELOG.md) and [updates](../updates/).
+For installation and command examples see [Getting Started](getting-started.md). For the existing workflow and module guides see the [documentation index](INDEX.md). For changes by release see [CHANGELOG](CHANGELOG.md) and [updates](updates/).

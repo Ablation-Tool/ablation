@@ -179,4 +179,4 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 
 - [سير عمل صيد الثغرات](../../workflows/vuln-hunting.md) -- الحلقة الكاملة من المسح إلى الاكتشاف الجاهز للإفصاح
 - [مرجع الوحدات](../../module-reference/) -- أكثر من 50 محللاً مع المعاملات والأمثلة
-- [CONTRIBUTING.md](../../../CONTRIBUTING.md) -- كيفية إضافة الأنماط والمسوحات ووحدات المحللين
+- [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- كيفية إضافة الأنماط والمسوحات ووحدات المحللين
