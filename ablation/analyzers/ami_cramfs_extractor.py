@@ -127,7 +127,19 @@ def _decompress_file(cramfs: bytes, data_off: int, size: int) -> bytes:
         try:
             chunk = zlib.decompress(compressed)
         except zlib.error:
-            chunk = compressed  # uncompressed block (rare edge case)
+            # AMI occasionally prefixes a block with raw data (e.g. a pre-relocated
+            # GOT table) before the actual zlib stream.  Scan for the first valid
+            # zlib CMF byte and retry from there.
+            chunk = None
+            for scan in range(len(compressed) - 1):
+                if compressed[scan] == 0x78 and compressed[scan + 1] in (0x01, 0x5e, 0x9c, 0xda):
+                    try:
+                        chunk = zlib.decompress(compressed[scan:])
+                        break
+                    except zlib.error:
+                        pass
+            if chunk is None:
+                chunk = compressed  # genuinely uncompressed block
         result.extend(chunk)
     return bytes(result[:size])
 
