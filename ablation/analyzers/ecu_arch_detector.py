@@ -254,16 +254,14 @@ class EcuArchDetector:
         # (often well past the first 64 KB).  Scanning the full image is safe:
         # at 4 bytes per iteration, even a 16 MB flash image runs in under 1 ms
         # on modern hardware.
-        scan = self._data
-        sn = len(scan)
-        if sn < 16:
+        if n < 16:
             return None
 
-        total = sn // 4
+        total = n // 4
         pflash_count = 0
         periph_count = 0
-        for i in range(0, sn - 3, 4):
-            val = struct.unpack_from("<I", scan, i)[0]
+        for i in range(0, n - 3, 4):
+            val = struct.unpack_from("<I", data, i)[0]
             upper = val >> 24
             if 0x80 <= upper <= 0xBF:
                 pflash_count += 1

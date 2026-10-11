@@ -412,6 +412,18 @@ class TestTriCoreDetection:
         tc = [c for c in cands if c.arch == "tricore"]
         assert len(tc) == 0
 
+    def test_tricore_elf_path_bypasses_bmhd_gate(self):
+        """TriCore ELF ROM must still score 0.90; ELF path returns before BMHD gate fires."""
+        buf = bytearray(256)
+        buf[0:4] = b'\x7fELF'
+        buf[4] = 1   # EI_CLASS = ELFCLASS32
+        buf[5] = 1   # EI_DATA = ELFDATA2LSB
+        struct.pack_into("<H", buf, 18, 44)  # e_machine = EM_TRICORE
+        cands = EcuArchDetector(bytes(buf)).candidates()
+        tc = [c for c in cands if c.arch == "tricore"]
+        assert len(tc) == 1
+        assert tc[0].score == 0.90
+
 
 # ---------------------------------------------------------------------------
 # Unknown / ambiguous ROMs
