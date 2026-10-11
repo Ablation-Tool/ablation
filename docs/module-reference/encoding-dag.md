@@ -6,6 +6,26 @@ The EncodingDAG is a bitfield-to-instruction encoding framework for fixed-width 
 
 ---
 
+Every RE tool that supports multiple architectures uses a bespoke decoder per architecture. Each has its own bit mask arithmetic, field extraction, and opcode dispatch. When you add a new ISA, you write all of that from scratch. A bug in one decoder gives no signal about the same bug silently present in the others.
+
+Ablation had the same problem before the Encoding DAG. The `PEFABIClobberScanner` was a concrete casualty. The PPC32 `ori` instruction places its RA field at bits [20:16], not [25:21]. That error was invisible until it produced wrong encodings on live binaries, because there was no structural layer to catch it at write time.
+
+**Layer 1** packs any fixed-width instruction as an integer. The packing is identical to RGB color packing: `I = (B0 × 65536) + (B1 × 256) + B2`. The opcode occupies the high bits, so all `ADD` variants produce the same R value regardless of operands. A range scan over the integer corpus finds all `ADD` variants without a hash lookup.
+
+**Layer 2** is the Encoding DAG. A `Field` is a named bit range with an optional fixed value. A `Template` is an MSB-first sequence of Fields for one instruction form. `Template.decode()` raises `DecodingError` when any fixed field mismatches, so opcode dispatch happens by template matching rather than a manual switch. The `PEFABIClobberScanner` fix was to define `Field("RA", 5)` at bits [20:16] explicitly. The wrong-offset bug became an `EncodingError` at encode time instead of silent wrong output.
+
+**Layer 3** is the semantic DAG. A `SemanticOp` names what an instruction does and carries typed operands: register names, immediates, and memory references. A `DataflowEdge` records explicit producer-consumer links between ops. Before `SemanticBlock`, taint results were flat `(sink, source)` pairs. Confirming that a `LOAD` result fed an `ADD` that fed a `STORE` required re-deriving register liveness by hand. `DataflowEdge` records those links so any tool can walk the chain without re-analysis.
+
+Any tool that works on `SemanticBlock` and `DataflowEdge` works on every ISA that has an `ISASpec`. The `PEFABIClobberScanner` uses `dag_nodes()` to check whether r4 and r5 are live at a PPC32 call site. The same traversal logic works on any ISA. Ghidra requires ISA-specific p-code analysis for the same operation.
+
+`ISASpec.encode(op).to_bytes()` followed by `ISASpec.decode(bytes)` must reconstruct the original `SemanticOp`. This round-trip is a property test: if it fails, the `Template` has a field layout bug. No other RE tool exposes this because no other tool has a structural layer between raw bytes and their IR.
+
+`EncodingNode.to_rgb_int()` is used as the key in `SAXIndex`. Instructions with the same opcode sort into a contiguous integer band, so finding all LOAD variants in a function is a bounded range scan rather than a full disassembly pass. This is the mechanism behind sweep-scale pattern matching over large binaries.
+
+When you define a new `Template`, wrong bit assignments raise `EncodingError` during the first `encode()` call, before the module touches a real binary. Every other tool's ISA decoders fail silently and produce wrong results on live targets.
+
+---
+
 ## Why this exists
 
 3 things that were not possible before in Ablation:
