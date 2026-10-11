@@ -18,6 +18,15 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 ## Capabilities
 
 <details>
+<summary><strong>The Flywheel:</strong> confirmed findings compound across engagements</summary>
+
+No other tool does this. When you confirm a finding in Ablation, `FindingRegistry` stores it. At the start of the next engagement on a completely different vendor's firmware, `PatternLibrary.ingest_from_registry()` replays every prior confirmed finding as a semantic search pattern against the new binary.
+
+This works because Ablation normalizes function behavior via BinFuse opcode categorization. A heap overflow in an ARM32 router maps to the same category sequence as the same class in x86-64 BMC firmware. The embedding space for "heap overflow handler" is consistent across vendors and ISAs, so a pattern confirmed on Fortinet runs productively on Huawei without any manual re-authoring.
+
+</details>
+
+<details>
 <summary><strong>Analysis:</strong> semantic search, binary lifting, hypothesis engine, C++ vtable reconstruction, cross-library tracing, DAG adapter</summary>
 
 | Capability | |
