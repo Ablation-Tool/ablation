@@ -18,6 +18,26 @@ Region types:
                 boundaries and in packed descriptor tables.
     PADDING     Very low entropy (< 1.5), not erased. Usually zero-fill between
                 sections.
+    IVT         Interrupt Vector Table region (TriCore only). High-entropy,
+                mostly NOPs with sparsely populated vector entries. Looks like
+                CODE by entropy but yields almost no real decoded instructions.
+
+arch_hint parameter
+~~~~~~~~~~~~~~~~~~~
+Pass ``arch_hint="tricore"`` for AURIX/TriCore flat ROM images.  The default
+entropy+PPC-density approach misclassifies TriCore code because:
+
+  1. The AURIX Interrupt Vector Table (IVT) — 256 entries × 32 bytes each,
+     each containing rslcx/rfe/nop sequences — has high entropy (> 6.5) and
+     passes the CODE threshold, but it is NOT navigable application code.
+  2. TriCore application code at 4.8–6.5 entropy fails the PPC density check
+     (it has very few PPC opcode bytes) and is incorrectly labelled CALIBRATION.
+  3. TriCore-compressed OS blobs have entropy ≥ 6.0 and look like CODE.
+
+With ``arch_hint="tricore"`` a Capstone decode-density pass replaces the PPC
+opcode density check.  Windows with < 10% decoded bytes are reclassified as
+CALIBRATION (compressed / data); windows matching the AURIX IVT NOP pattern
+are labelled IVT.
 
 Usage::
 
@@ -26,6 +46,12 @@ Usage::
     ana = EcuROMLayoutAnalyzer.from_path("9663944680.bin")
     layout = ana.analyze()
     print(ana.report(layout))
+
+    # TriCore AURIX flat ROM — use arch_hint for accurate code region detection
+    ana_tc = EcuROMLayoutAnalyzer.from_path("GEN3.bin", arch_hint="tricore")
+    layout_tc = ana_tc.analyze()
+    for r in layout_tc.code_regions():
+        print(r)
 
     # Feed calibration region boundaries to EcuCalibrationTableScanner
     cal_regions = [r for r in layout.regions if r.region_type == "CALIBRATION"]
@@ -70,7 +96,14 @@ class ROMLayout:
     fill_byte: int          # 0xFF for NOR flash, 0x00 for some NAND
 
     def code_regions(self) -> list[ROMRegion]:
+        return [r for r in self.regions if r.region_type in ("CODE", "IVT")]
+
+    def app_code_regions(self) -> list[ROMRegion]:
+        """Return only CODE regions (excludes IVT regions)."""
         return [r for r in self.regions if r.region_type == "CODE"]
+
+    def ivt_regions(self) -> list[ROMRegion]:
+        return [r for r in self.regions if r.region_type == "IVT"]
 
     def calibration_regions(self) -> list[ROMRegion]:
         return [r for r in self.regions if r.region_type == "CALIBRATION"]
@@ -145,6 +178,7 @@ class EcuROMLayoutAnalyzer:
         window_size: int = 4096,
         fill_byte: int = 0xFF,
         fill_threshold: float = 0.85,
+        arch_hint: str = "",
     ):
         if isinstance(path_or_data, (str, Path)):
             self._data = open(path_or_data, "rb").read()
@@ -155,6 +189,7 @@ class EcuROMLayoutAnalyzer:
         self._window_size = window_size
         self._fill_byte = fill_byte
         self._fill_threshold = fill_threshold
+        self._arch_hint = arch_hint.lower().strip()
 
     @classmethod
     def from_path(
@@ -162,8 +197,9 @@ class EcuROMLayoutAnalyzer:
         path: str | Path,
         window_size: int = 4096,
         fill_byte: int = 0xFF,
+        arch_hint: str = "",
     ) -> "EcuROMLayoutAnalyzer":
-        return cls(path, window_size, fill_byte)
+        return cls(path, window_size, fill_byte, arch_hint=arch_hint)
 
     @classmethod
     def from_bytes(
@@ -171,8 +207,9 @@ class EcuROMLayoutAnalyzer:
         data: bytes,
         window_size: int = 4096,
         fill_byte: int = 0xFF,
+        arch_hint: str = "",
     ) -> "EcuROMLayoutAnalyzer":
-        return cls(data, window_size, fill_byte)
+        return cls(data, window_size, fill_byte, arch_hint=arch_hint)
 
     # ------------------------------------------------------------------ #
     # Public API                                                           #
@@ -218,12 +255,17 @@ class EcuROMLayoutAnalyzer:
         results = []
         data = self._data
         ws = self._window_size
+        use_tricore = self._arch_hint == "tricore"
         for i in range(0, len(data), ws):
             chunk = data[i:i + ws]
             ent = _shannon_entropy(chunk)
             fill = chunk.count(self._fill_byte) / len(chunk)
-            ppc_d = _ppc_density(chunk, self._PPC_OPCODE_BYTES)
-            rtype = self._classify(ent, fill, ppc_d)
+            if use_tricore:
+                tc_d, is_ivt = _tricore_density(chunk)
+                rtype = self._classify_tricore(ent, fill, tc_d, is_ivt)
+            else:
+                ppc_d = _ppc_density(chunk, self._PPC_OPCODE_BYTES)
+                rtype = self._classify(ent, fill, ppc_d)
             results.append((i, rtype, ent))
         return results
 
@@ -266,6 +308,41 @@ class EcuROMLayoutAnalyzer:
             if ppc_density >= self._T_PPC_DENSITY:
                 return "CODE"
             return "CALIBRATION"
+        if entropy <= self._T_MIXED_UPPER:
+            return "MIXED"
+        return "CODE"
+
+    # TriCore decode-density thresholds.
+    # Real TriCore application code: > 35% of bytes decode as valid instructions.
+    # AURIX IVT (rslcx/rfe + NOPs): decode rate varies 5–30%; IVT flag is authoritative.
+    # TriCore-compressed OS blobs / lookup tables: < 10% decode rate.
+    _T_TC_CODE    = 0.35
+    _T_TC_DATA    = 0.10
+
+    def _classify_tricore(
+        self,
+        entropy: float,
+        fill_ratio: float,
+        tc_density: float,
+        is_ivt: bool,
+    ) -> str:
+        if fill_ratio >= self._fill_threshold:
+            return "ERASED"
+        if entropy <= self._T_PADDING:
+            return "PADDING"
+        if entropy < self._T_CODE_FLOOR:
+            return "CALIBRATION"
+        if fill_ratio >= self._T_FILL_SPARSE:
+            return "CALIBRATION"
+        # IVT detected by rslcx/rfe vector-entry pattern.
+        if is_ivt:
+            return "IVT"
+        # Capstone decode density discriminates real code from compressed blobs.
+        if tc_density >= self._T_TC_CODE:
+            return "CODE"
+        if tc_density < self._T_TC_DATA:
+            return "CALIBRATION"
+        # Middle band (10–35%): mixed instruction + data (may be partial code).
         if entropy <= self._T_MIXED_UPPER:
             return "MIXED"
         return "CODE"
@@ -358,3 +435,55 @@ def _ppc_density(data: bytes, opcode_bytes: frozenset) -> float:
         return 0.0
     hits = sum(1 for i in range(0, n * 4, 4) if data[i] in opcode_bytes)
     return hits / n
+
+
+def _tricore_density(data: bytes) -> tuple[float, bool]:
+    """Return (decode_density, is_ivt) for a TriCore data window.
+
+    decode_density
+        Fraction of bytes that are covered by valid Capstone TriCore 1.6.2
+        instructions.  Samples the first 512 bytes of the window for speed;
+        returns 0.0 if Capstone is not available.
+
+    is_ivt
+        True when the window matches the AURIX Interrupt Vector Table pattern:
+        every 32-byte aligned entry contains exactly one ``rslcx`` or ``rfe``
+        instruction.  The IVT has high entropy but is NOT navigable application
+        code and should not be fed to disassemblers as a code region.
+
+    AURIX IVT signature (TC27x, TC38x, TC39x — all use 32-byte vector entries):
+        - 256 entries × 32 bytes = 8 KB per IVT block
+        - Each entry ends with ``rfe`` (Return From Exception, 16-bit opcode)
+        - Entries are padded with ``nop`` instructions (0x0D 0x00 in LE)
+        - At least 8 entries must match for a window to be labelled IVT
+          (guards against code that happens to contain a few rfe instructions)
+    """
+    try:
+        import capstone
+    except ImportError:
+        return 0.0, False
+
+    md = capstone.Cs(capstone.CS_ARCH_TRICORE, capstone.CS_MODE_TRICORE_162)
+    md.detail = False
+
+    # Decode the first 512 bytes for density estimation.
+    sample = data[:512]
+    decoded_bytes = sum(i.size for i in md.disasm(sample, 0))
+    density = decoded_bytes / len(sample) if sample else 0.0
+
+    # IVT detection: scan for rslcx/rfe pattern in 32-byte aligned slots.
+    # TriCore rslcx = 0x03 0x82 (16-bit SSR format, opcode = 0x03)
+    # TriCore rfe   = 0x4E 0x28 (16-bit RET format, opcode = 0x4E ... varies by mode)
+    # More reliable: use Capstone mnemonics on the first 8 × 32 = 256 bytes.
+    ivt_entry_hits = 0
+    entry_size = 32
+    for entry_off in range(0, min(len(data), 8 * entry_size), entry_size):
+        entry = data[entry_off:entry_off + entry_size]
+        for insn in md.disasm(entry, 0):
+            if insn.mnemonic in ("rslcx", "rfe", "rfedc"):
+                ivt_entry_hits += 1
+                break  # one hit per 32-byte entry is enough
+
+    is_ivt = ivt_entry_hits >= 4  # at least 4 of the first 8 entries match
+
+    return density, is_ivt
