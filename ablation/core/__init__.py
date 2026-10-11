@@ -15,6 +15,7 @@ from .render import (
     RED, ORANGE, YELLOW, GREEN, BLUE, PURPLE, GRAY, WHITE,
     box, sbox, section, arrow, arrowdown, strip,
 )
+from .prose import check, check_file, report as prose_report, ProseIssue
 
 __all__ = [
     "ELFParser", "BinaryParser",

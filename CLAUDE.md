@@ -139,6 +139,8 @@ SESSION.md convention: root index at `~/ablation/SESSION.md`; per-target state a
 | "Audit a new ablation module before committing (SAFE CODE 10-section + DEV & TEST PLAN)" | `FORGE.audit_module('/path/to/module.py')` — returns cached ForgeReport instantly on hit; raises ForgeAuditRequired on miss (do audit inline, call FORGE.record_result() to cache); no subprocess, no API key; gate_passed=False on any HIGH/CRITICAL |
 | "Audit any source codebase for vulnerabilities (no LLM)" | `FORGE.audit_source('/path/to/repo')` — runs SourceEntryClassifier+SourceSinkScanner+SourceAuditCompressor; returns ForgeReport with sink findings + priority read list |
 | "Pre-commit gate on staged .py files" | Run `FORGE.audit_module(path)` for each staged .py; gate_passed=False blocks commit |
+| "Check README, commit message, or doc text for white-bronco prose violations (em dashes, filler, parenthetical lists, AI copy)" | `from ablation.core.prose import check, report; print(report(check(text)))` or `python3 -m ablation.core.prose README.md`; exits 1 if violations found |
+| "Colored terminal output in any Ablation module or script (auto-detects truecolor/256/16/plain)" | `from ablation.core.render import RED, GREEN, box, sbox, section, arrow, RESET` |
 | "Trace an arg across 3 library hops" | `IPRegAnnotator.annotate_chain(va, max_hops=3)` |
 | "Which library exports this symbol?" | `LibGraph.defined_in('symbol')` |
 | "Is this the same function as in v7.4?" | `DTWMatcher.score_functions(va_a, va_b)` |
