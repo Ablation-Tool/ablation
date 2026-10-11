@@ -2,6 +2,35 @@
 
 ---
 
+## v2.71.0
+
+**TMS320C28x ISA decoder — Gap 1b; C28x control-flow analysis.**
+
+`EcuC28xDecoder` decodes TMS320C28x instructions from raw byte buffers using
+the encodings in SPRU430F (TMS320C28x CPU and Instruction Set Reference Guide,
+April 2015). Capstone 5.x has no C28x support; this module fills that gap in
+pure Python.
+
+The decoder handles both instruction widths (16-bit single-word, 32-bit two-word)
+via a 15-condition `_is_32bit()` discriminator, covering: B/BF conditional
+branches, BANZ, BAR, LB/LC/LCR/FFC 22-bit long-branch/call forms, their
+indirect variants (*XAR7, *XARn), LRET/LRETE/LRETR/IRET returns, LOOPNZ/LOOPZ
+loop primitives, and INTR/IACK.
+
+`function_starts()` collects 22-bit absolute call targets from LC/LCR/FFC
+instructions, returning sorted candidate function entry points as word-addresses.
+
+Three calling conventions are decoded: `LC/LRET` (return addr on software stack,
+8-cycle return), `LCR/LRETR` (return addr in RPC register, 4-cycle return), and
+`FFC` (return addr in XAR7 register, fast inner-loop calls).
+
+New files: `ablation/analyzers/ecu_c28x_decoder.py`,
+`docs/module-reference/ecu-c28x-decoder.md`.
+
+Reference: SPRU430F — TMS320C28x CPU and Instruction Set Reference Guide, April 2015.
+
+---
+
 ## v2.70.0
 
 **TI COFF2/AR loader — C28x firmware coverage for TiNNCScanner.**
