@@ -15,4 +15,6 @@ I do this for free, the way most people on GitHub do.
 If you want to keep the work going, the target machine is a System76 Pangolin Pro at $3,873.
 
 **Cash App:** $nicholaskloster2
+
+
 **Bitcoin (BTC):** bc1qu3s92ff3s2d72cugyrne6n73khlsumf2sxhpex
