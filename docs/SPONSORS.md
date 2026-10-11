@@ -33,6 +33,8 @@ But yeah, buy me that laptop or i'll reverse engineer you
 
 
 Cash App: $nicholaskloster2
+
+
 Bitcoin (BTC): bc1qu3s92ff3s2d72cugyrne6n73khlsumf2sxhpex
 
 
