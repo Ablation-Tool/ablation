@@ -276,9 +276,15 @@ def _phase1_nnc(paths: List[str]) -> List[dict]:
     findings = []
     tmp_elf_dir = tempfile.mkdtemp(prefix='ti_elf_ar_')
     try:
-        # Expand ELF AR archives into individual ELF members
+        # Expand ELF AR archives into individual ELF members.
+        # Skip expansion for large archives (>5 MB) — these are typically
+        # full SDK runtime libraries, not small model.a NNC artifacts.
+        _MAX_ELF_AR_SIZE = 5 * 1024 * 1024  # 5 MB
         expanded: List[str] = []
         for p in paths:
+            if Path(p).stat().st_size > _MAX_ELF_AR_SIZE:
+                expanded.append(p)
+                continue
             with open(p, 'rb') as f:
                 magic8 = f.read(8)
             if magic8 == _AR_MAGIC:
@@ -456,8 +462,14 @@ def _phase3_c28x(coff_paths: List[str], flat_paths: List[str]) -> List[dict]:
 
 # ── Phase 4: Crypto pattern ────────────────────────────────────────────────────
 
+_CRYPTO_MAX_BYTES = 1 * 1024 * 1024  # 1 MB: enough to cover .text in most MCU ELFs
+
+
 def _phase4_crypto(elf_paths: List[str]) -> List[dict]:
-    """HashAlgoDiscriminator scan on ARM Thumb ELF binaries."""
+    """HashAlgoDiscriminator scan on ARM Thumb ELF binaries.
+
+    Scans only the first 1 MB of each binary to bound runtime on large ELFs.
+    """
     from ablation.analyzers.crypto_pattern_detector import HashAlgoDiscriminator
     findings = []
     for path in elf_paths:
@@ -465,11 +477,11 @@ def _phase4_crypto(elf_paths: List[str]) -> List[dict]:
         if arch is None or _ARCH_ARM32 not in arch:
             continue
         try:
-            data = Path(path).read_bytes()
+            with open(path, 'rb') as f:
+                data = f.read(_CRYPTO_MAX_BYTES)
             if len(data) < 256:
                 continue
             disc = HashAlgoDiscriminator(data, load_addr=0)
-            # Scan entire binary for crypto constants
             matches = disc.scan_function(0, len(data))
             if matches and matches.algo:
                 findings.append({
@@ -635,9 +647,13 @@ def sweep_package(
 
         all_findings: List[dict] = []
 
-        # Phase 1: NNC (all binary types)
+        # Phase 1: NNC (all binary types). Cap at 500 files per package to
+        # avoid multi-minute scans on large SDK runtime libraries.
         nnc_targets = binaries['ti_coff'] + binaries['elf']
         if nnc_targets:
+            # Prioritize small files first (model.a files are typically <1 MB)
+            nnc_targets.sort(key=lambda p: Path(p).stat().st_size)
+            nnc_targets = nnc_targets[:500]
             print(f'  Phase 1: NNC scan ({len(nnc_targets)} files) ...')
             all_findings.extend(_phase1_nnc(nnc_targets))
 
