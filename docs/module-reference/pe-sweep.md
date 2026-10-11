@@ -160,7 +160,7 @@ encoding is identical in both modes.
 
 3 things that weren't possible before in Ablation:
 
-1. No cross-vendor detection of unsigned firmware flashers — the gap was found across 8 binaries from a single vendor in the AUO eGalax engagement, any of which would have been caught automatically by this check.
+1. No cross-vendor detection of unsigned firmware flashers: the gap was found across 8 binaries from a single vendor in the AUO eGalax engagement, any of which would have been caught automatically by this check.
 2. Semantic profiles can only detect what IS present; detecting the *absence* of signing imports (WinVerifyTrust, Crypt*) required a separate deterministic IAT inspector that runs outside the semantic loop.
 3. Ordinal-only imports (the eGalaxUpdate2 → HIDdAPI.dll pattern) are invisible to the named-import IAT check; the new detector also inspects imported DLL names to catch firmware-update libraries regardless of whether they're imported by name or ordinal.
 
@@ -182,9 +182,9 @@ The result appears as `firmware_auth_bypass` in the per-binary result dict and a
 2 things that weren't possible before in Ablation:
 
 1. Borland BCC32/VCL applications (RADStudio, C++ Builder) place string literals in `.data` rather than `.rdata`.  The prior `.rdata`-only scan returned 0 strings for these targets and misclassified them as out-of-scope (no debug strings = nothing to correlate against).
-2. A blind `.data` fallback would add noise from live pointers and struct padding, but those sequences are reliably short or non-ASCII — the same 5-printable-byte minimum filter that protects `.rdata` scanning also works for `.data`, making the fallback safe.
+2. A blind `.data` fallback would add noise from live pointers and struct padding, but those sequences are reliably short or non-ASCII: the same 5-printable-byte minimum filter that protects `.rdata` scanning also works for `.data`, making the fallback safe.
 
-`_build_rdata_strings` now calls `_scan_section_strings(pe, data, ".rdata")` first.  When that returns zero strings it retries with `".data"` and prints a `[*] .rdata=0 strings — BCC32/VCL fallback` diagnostic.  The underlying `_scan_section_strings` helper is shared between both calls.
+`_build_rdata_strings` now calls `_scan_section_strings(pe, data, ".rdata")` first.  When that returns zero strings it retries with `".data"` and prints a `[*] .rdata=0 strings: BCC32/VCL fallback` diagnostic.  The underlying `_scan_section_strings` helper is shared between both calls.
 
 ---
 

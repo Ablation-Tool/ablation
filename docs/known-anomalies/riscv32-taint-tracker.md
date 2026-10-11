@@ -1,4 +1,4 @@
-# Known Anomalies — RISCV32TaintTracker
+# Known Anomalies: RISCV32TaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_riscv32.py`  
 **Tracker version:** v2.57.0  
@@ -10,7 +10,7 @@ workaround.
 
 ---
 
-## RISCV32-KA-001 — Capstone 5.x required; silent decode failure on older versions
+## RISCV32-KA-001: Capstone 5.x required; silent decode failure on older versions
 
 **Description:**  
 `RISCV32TaintTracker` requires Capstone with `CS_ARCH_RISCV`. Capstone 4.x does not include
@@ -34,7 +34,7 @@ Verify `import capstone; print(capstone.__version__)` returns 5.0+. The pinned v
 
 ---
 
-## RISCV32-KA-002 — HiSilicon custom opcodes require ext_decoder; missed without it
+## RISCV32-KA-002: HiSilicon custom opcodes require ext_decoder; missed without it
 
 **Description:**  
 HiSilicon WS63/Hi3863/BS21 RISC-V SoC firmware uses six custom opcode spaces (0x0b, 0x1b,
@@ -65,7 +65,7 @@ HiSilicon custom opcodes before running.
 
 ---
 
-## RISCV32-KA-003 — RVC compressed instructions supported but ldmia/stmia multi-reg not tracked through memory
+## RISCV32-KA-003: RVC compressed instructions supported but ldmia/stmia multi-reg not tracked through memory
 
 **Description:**  
 HiSilicon `ldmia` (opcode 0x0b) is a multi-register load-from-memory instruction. The
@@ -89,7 +89,7 @@ tainted memory region, manually confirm whether the loaded registers are passed 
 
 ---
 
-## RISCV32-KA-004 — Indirect JALR calls not followed interprocedurally
+## RISCV32-KA-004: Indirect JALR calls not followed interprocedurally
 
 **Description:**  
 Direct `JAL ra, target` and `c.jal target` calls are resolved interprocedurally. Indirect
@@ -109,7 +109,7 @@ Resolve the callee VA manually and add it as a custom sink, or trace it with
 
 ---
 
-## RISCV32-KA-005 — Loop fixpoint not computed; second-iteration taint not propagated
+## RISCV32-KA-005: Loop fixpoint not computed; second-iteration taint not propagated
 
 **Description:**  
 `RISCV32TaintTracker` performs a linear forward trace without loop fixpoint computation.

@@ -101,5 +101,5 @@ Formats findings as an ASCII table. Returns `'No dangerous patterns found.'` whe
 
 - **Static qstrs**: Built-in MicroPython qstrs (stored as odd-valued indices) are reported as `<qstr:N>` rather than resolved to names. Security-relevant names (exec, eval, socket, etc.) are always dynamic qstrs and are resolved correctly.
 - **Local variable names**: Lifted pseudo-Python uses `_v0`, `_v1`, ... for locals instead of original names. The variable name table in the prelude is skipped, not decoded.
-- **Native/viper code objects**: Code objects of kind 1 (native) or 2 (viper) emit `# <native/viper code — not lifted>`. Only kind 0 (bytecode) is lifted.
+- **Native/viper code objects**: Code objects of kind 1 (native) or 2 (viper) emit `# <native/viper code: not lifted>`. Only kind 0 (bytecode) is lifted.
 - **v5 format**: Not supported. MicroPython 1.12–1.18 use v5. Raise `ValueError`.

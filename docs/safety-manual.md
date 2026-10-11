@@ -1,6 +1,6 @@
 # Ablation Safety Manual
 
-**Version:** 1.0.0 — 2026-10-10  
+**Version:** 1.0.0: 2026-10-10  
 **Standard:** ISO 26262 Part 8 Clause 11 (TCL3 tool qualification requirement)  
 **Scope:** All taint trackers and all scanners that produce CRITICAL findings
 
@@ -67,11 +67,11 @@ The following constraints must be satisfied before a taint tracker result is tre
 
 These categories of false negatives are shared across all trackers. They are documented in the known-anomaly files for each tracker and summarised here for cross-reference.
 
-1. **Loop fixpoint** — taint accumulated on the second and subsequent loop iterations is not propagated (all trackers)
-2. **Indirect calls** — callee not entered when the callee address is in a register at the call site (all trackers)
-3. **Stack taint** — data routed through a local stack buffer before the sink is not tracked (all trackers except LoongArch64 which uses `mem_taint`)
-4. **Vector registers** — NEON (ARM32/ARM64), LSX/LASX (LoongArch64), VFP, SIMD — taint through vector registers is lost
-5. **Architecture-specific opcode gaps** — unrecognised opcodes fall to conservative fallback; may miss taint at those instructions
+1. **Loop fixpoint**: taint accumulated on the second and subsequent loop iterations is not propagated (all trackers)
+2. **Indirect calls**: callee not entered when the callee address is in a register at the call site (all trackers)
+3. **Stack taint**: data routed through a local stack buffer before the sink is not tracked (all trackers except LoongArch64 which uses `mem_taint`)
+4. **Vector registers**: NEON (ARM32/ARM64), LSX/LASX (LoongArch64), VFP, SIMD: taint through vector registers is lost
+5. **Architecture-specific opcode gaps**: unrecognised opcodes fall to conservative fallback; may miss taint at those instructions
 
 ---
 

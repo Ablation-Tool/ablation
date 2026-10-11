@@ -44,12 +44,12 @@ Ablation is gebruikt voor de analyse van productiefirmware en kernelstuurprogram
 
 Na gecoördineerde openbaarmaking over Cisco FMC en ISE heeft het Cisco Product Security Incident Response Team (PSIRT) Ablation geadopteerd voor interne kwetsbaarheids-triage. Cisco PSIRT gebruikt het actief om lopende openbaarmakingsrapporten over Firepower Threat Defense (FTD), Cisco Secure Client (AnyConnect), Catalyst te triageren. Cisco Adaptive Security Appliance (ASA) LINA is ook reverse engineered met Ablation, met bevindingen die momenteel onder gecoördineerde triage zijn via CERT/CC VINCE.
 
-| CVE | Product | Titel | CVSS | Beveiligingsbulletin |
-|---|---|---|---|---|
-| CVE-2026-76420 | Secure Firewall Management Center (FMC) | Peer Impersonation | 9.0 Critical | [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) |
-| CVE-2026-76412 | Secure Firewall Management Center (FMC) | Privilege Escalation to root | 8.5 High | [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) |
-| CVE-2026-76413 | Secure Firewall Management Center (FMC) | Single Sign-On Token Forgery | 8.5 High | [cisco-sa-fmc2-multivulns-HXgcqRG](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) |
-| CVE-2026-76447 | Identity Services Engine (ISE) | OCSP Responder Authentication Bypass | 5.3 Medium | [cisco-sa-ise-multiauth-bypass-sgD2HbL4](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4) |
+| CVE | Product | Titel | CVSS |
+|---|---|---|---|
+| [CVE-2026-76420](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Peer Impersonation | 9.0 Critical |
+| [CVE-2026-76412](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Privilege Escalation to root | 8.5 High |
+| [CVE-2026-76413](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Single Sign-On Token Forgery | 8.5 High |
+| [CVE-2026-76447](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4) | Identity Services Engine (ISE) | OCSP Responder Authentication Bypass | 5.3 Medium |
 
 ---
 

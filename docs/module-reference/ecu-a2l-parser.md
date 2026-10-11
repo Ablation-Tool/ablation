@@ -164,7 +164,7 @@ detected byte order.
 
 ## Validated results
 
-### Bosch EDC16U34 — VW/Audi 1.9 TDI
+### Bosch EDC16U34: VW/Audi 1.9 TDI
 
 ```
 A2L  03G906021KE_9970_501409_P447_HAXN_EDC16U34_3.41.a2l
@@ -175,9 +175,9 @@ A2L  03G906021KE_9970_501409_P447_HAXN_EDC16U34_3.41.a2l
   byte_order: big
 ```
 
-Sample MAP: `ACCCD_facEnv_MAP` — 6x6 table at `0x1C22AE`, scale=8192.0, unit=`[-]`.
+Sample MAP: `ACCCD_facEnv_MAP`: 6x6 table at `0x1C22AE`, scale=8192.0, unit=`[-]`.
 
-### Bosch EDC17CP46 — VW/Audi 2.0 TDI
+### Bosch EDC17CP46: VW/Audi 2.0 TDI
 
 ```
 A2L  03L906018CG_5152_504704_P643_X5F5_EDC17CP46_2.7.a2l
@@ -189,7 +189,7 @@ A2L  03L906018CG_5152_504704_P643_X5F5_EDC17CP46_2.7.a2l
 ```
 
 The EDC17CP46 runs on an Infineon TriCore TC1766 (little-endian, `MSB_LAST`). Virtual addresses
-start at `0x80000000` — the TriCore PFLASH segment base. Pass this as `base_address=0x80000000`
+start at `0x80000000`: the TriCore PFLASH segment base. Pass this as `base_address=0x80000000`
 to shift addresses down to ROM file offsets when needed.
 
 ### ASAP2 Demo V1.61
@@ -218,7 +218,7 @@ Covers all ASAP2 v1.61 CHARACTERISTIC types including CUBOID (treated as MAP).
 | Byte order source | `BYTE_ORDER` keyword | `DEFAULTS lsbfirst` | endian= attribute |
 | Address format | Hex literal `0xADDR` | Hex in mmedaddress | Hex without 0x |
 
-A2L files do not carry ROM identification strings — the file's filename and header comment are
+A2L files do not carry ROM identification strings: the file's filename and header comment are
 the only link to a specific ROM image. Use `EcuRomRaiderParser.identify_rom()` or
 `EcuConescanParser.identify_rom()` when the ROM variant is unknown.
 

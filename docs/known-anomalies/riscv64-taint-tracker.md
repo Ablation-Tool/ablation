@@ -1,4 +1,4 @@
-# Known Anomalies — RISCV64TaintTracker
+# Known Anomalies: RISCV64TaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_riscv64.py`  
 **Tracker version:** v2.57.0  
@@ -10,7 +10,7 @@ workaround.
 
 ---
 
-## RISCV64-KA-001 — Capstone 5.x required; silent decode failure on older versions
+## RISCV64-KA-001: Capstone 5.x required; silent decode failure on older versions
 
 **Description:**  
 `RISCV64TaintTracker` requires Capstone with `CS_ARCH_RISCV`. Capstone 4.x does not include
@@ -31,7 +31,7 @@ Verify `import capstone; print(capstone.__version__)` returns 5.0+.
 
 ---
 
-## RISCV64-KA-002 — RVC compressed instruction coverage is best-effort for RV64C variants
+## RISCV64-KA-002: RVC compressed instruction coverage is best-effort for RV64C variants
 
 **Description:**  
 RV64GC includes the C extension (RVC). The tracker handles the standard RVC instruction set
@@ -57,7 +57,7 @@ as new cases are encountered (flywheel principle).
 
 ---
 
-## RISCV64-KA-003 — Indirect JALR calls not followed interprocedurally
+## RISCV64-KA-003: Indirect JALR calls not followed interprocedurally
 
 **Description:**  
 Direct `JAL ra, target` calls and PLT stubs are resolved interprocedurally. Indirect calls
@@ -76,7 +76,7 @@ Resolve the callee VA manually and add it as a custom sink, or trace it with
 
 ---
 
-## RISCV64-KA-004 — Stack taint not tracked; buffer-passing flows produce false negatives
+## RISCV64-KA-004: Stack taint not tracked; buffer-passing flows produce false negatives
 
 **Description:**  
 The tracker models register taint. It does not track taint stored to stack memory and later
@@ -94,7 +94,7 @@ Run `SinkArgClassifier.from_path(elf).classify_all()` when the tracker returns n
 
 ---
 
-## RISCV64-KA-005 — Loop fixpoint not computed; second-iteration taint not propagated
+## RISCV64-KA-005: Loop fixpoint not computed; second-iteration taint not propagated
 
 **Description:**  
 `RISCV64TaintTracker` performs a linear forward trace without loop fixpoint computation.

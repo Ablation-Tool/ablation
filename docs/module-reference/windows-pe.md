@@ -50,9 +50,9 @@ Microsoft Control Flow Guard (CFG) records all valid indirect call targets in a 
 
 ```
   GuardFlags bit layout (IMAGE_LOAD_CONFIG_DIRECTORY):
-    bit 8  (0x100):  CF_INSTRUMENTED — CFG enabled
-    bit 9  (0x200):  CFW_INSTRUMENTED — export suppression enabled
-    bits 28-31:      CF_FUNCTION_TABLE_SIZE_MASK — entry stride extra bytes
+    bit 8  (0x100):  CF_INSTRUMENTED: CFG enabled
+    bit 9  (0x200):  CFW_INSTRUMENTED: export suppression enabled
+    bits 28-31:      CF_FUNCTION_TABLE_SIZE_MASK: entry stride extra bytes
 
   CFG function table entry stride:
     base  = 4 bytes (VA offset, 4-byte aligned relative to image base)
@@ -128,7 +128,7 @@ RPC server interfaces registered without authentication expose every operation t
     RpcServerRegisterIf2
 
   RPC_C_AUTHN_LEVEL values:
-    0x01  RPC_C_AUTHN_LEVEL_NONE     (NO authentication — HIGH severity)
+    0x01  RPC_C_AUTHN_LEVEL_NONE     (NO authentication: HIGH severity)
     0x02  RPC_C_AUTHN_LEVEL_CONNECT  (connection-level only)
     0x04  RPC_C_AUTHN_LEVEL_PKT      (per-packet)
     0x06  RPC_C_AUTHN_LEVEL_PKT_INTEGRITY

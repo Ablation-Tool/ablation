@@ -28,7 +28,7 @@ ctx = BinaryContext.load_or_build('/path/to/asamba')
 tracker = X86_32TaintTracker.from_context(ctx)
 findings = tracker.run_interprocedural()
 
-# With custom sinks — {name: {arg_index: min_len}}
+# With custom sinks: {name: {arg_index: min_len}}
 tracker = X86_32TaintTracker.from_path(
     path,
     custom_sinks={'asamba_system_wrapper': {0: 0}}

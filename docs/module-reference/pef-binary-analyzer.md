@@ -12,7 +12,7 @@ Three things that were not possible before in Ablation:
 
 ## What it does
 
-Parses the PowerPC PEF (Preferred Executable Format / CFM) container. PEF is the native binary format for Mac OS 8/9 PowerPC executables — it is not ELF and has no dynamic linker. Imports are resolved via CFM TVect stubs in the code section that load function pointers from the TOC (r2-relative).
+Parses the PowerPC PEF (Preferred Executable Format / CFM) container. PEF is the native binary format for Mac OS 8/9 PowerPC executables: it is not ELF and has no dynamic linker. Imports are resolved via CFM TVect stubs in the code section that load function pointers from the TOC (r2-relative).
 
 PEF container structure:
 ```

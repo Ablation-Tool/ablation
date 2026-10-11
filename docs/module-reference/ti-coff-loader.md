@@ -6,8 +6,8 @@
 
 1. **No parser could read TI COFF2 object files or AR archives.** The TI Code Generation
    Tools (cl2000, c29clang) produce COFF, not ELF. All existing Ablation binary loaders
-   rely on lief, which does not support TI COFF. The C28x DSP target — used in F28P55x
-   MCUs and compiled by the TI NNC for EdgeAI Studio deployments — was entirely opaque.
+   rely on lief, which does not support TI COFF. The C28x DSP target: used in F28P55x
+   MCUs and compiled by the TI NNC for EdgeAI Studio deployments: was entirely opaque.
 
 2. **The weak-symbol risk in NNC-generated C28x firmware was undetectable.** TI COFF
    has no `STB_WEAK` binding (ELF concept); instead, `__attribute__((weak))` maps to
@@ -29,7 +29,7 @@
 members are COFF2 objects. It extracts symbol table entries for all members, exposing
 the name, value (address), section binding, and storage class of each symbol.
 
-Primary consumer: `TiNNCScanner` — which uses `TiCoffLoader` to detect NNC inference
+Primary consumer: `TiNNCScanner`: which uses `TiCoffLoader` to detect NNC inference
 artifacts and normalization override risk in C28x firmware (TINCC-001 through TINCC-004).
 
 **Supported formats:**
@@ -47,7 +47,7 @@ artifacts and normalization override risk in C28x firmware (TINCC-001 through TI
 | `C_EXT` | 2 | Strong global definition | `STB_GLOBAL` |
 | `C_STAT` | 3 | Static (local) symbol | `STB_LOCAL` |
 | `C_EXTREF` | 5 | Undefined external reference | `STB_GLOBAL` (undefined) |
-| `C_UEXT` | 19 | Tentative external — overrideable at link time | `STB_WEAK` |
+| `C_UEXT` | 19 | Tentative external: overrideable at link time | `STB_WEAK` |
 
 There is no `C_WEAKEXT` in TI COFF. The cl2000 compiler maps `__attribute__((weak))`
 to `C_UEXT` (confirmed from SPRAAO8 Table 18).
@@ -115,10 +115,10 @@ prefix + 4-byte string table offset.
 
 | `f_target_id` | Target |
 |---|---|
-| `0x009D` | TMS320C2800 (C28x — NNC F28x target) |
+| `0x009D` | TMS320C2800 (C28x: NNC F28x target) |
 | `0x0099` | TMS320C6000 |
 | `0x009C` | TMS320C5500 |
 | `0x00A1` | TMS320C5500+ |
 | `0x00A0` | MSP430 |
 
-Reference: SPRAAO8 — TI Common Object File Format (April 2009).
+Reference: SPRAAO8: TI Common Object File Format (April 2009).

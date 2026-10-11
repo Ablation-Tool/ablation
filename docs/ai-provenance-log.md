@@ -1,7 +1,7 @@
 # AI Code Provenance Log
 
-**Version:** 1.0.0 — 2026-10-10  
-**Standard:** DoWI 8430.01 §3.6.c — Security validation requirements for AI-generated code  
+**Version:** 1.0.0: 2026-10-10  
+**Standard:** DoWI 8430.01 §3.6.c: Security validation requirements for AI-generated code  
 **Scope:** All Ablation modules where AI assistance was used in code generation
 
 This document satisfies DOWI-AI-SEC in the Ablation compliance matrix. DoWI 8430.01 §3.6.c requires that AI-generated code be identified, tracked, and validated through the same assurance chain as human-written code.
@@ -10,7 +10,7 @@ This document satisfies DOWI-AI-SEC in the Ablation compliance matrix. DoWI 8430
 
 ## 1. Policy
 
-All Ablation modules — whether human-written or AI-assisted — must pass:
+All Ablation modules: whether human-written or AI-assisted: must pass:
 1. SAFE CODE 10-section audit (manual review, documented in module reference docs)
 2. FORGE gate (`FORGE.audit_module(path)` with `gate_passed=True`)
 3. Peer review equivalent: maintainer verification of all FORGE findings before commit
@@ -63,8 +63,8 @@ The following modules had significant AI-assisted development. All have passed F
 
 For each entry in Section 4, the validation chain is:
 
-1. **Static analysis:** FORGE `audit_module()` — `gate_passed=True` required
-2. **SAFE CODE audit:** 10-section manual review — residual risks documented in module reference
+1. **Static analysis:** FORGE `audit_module()`: `gate_passed=True` required
+2. **SAFE CODE audit:** 10-section manual review: residual risks documented in module reference
 3. **Functional tests:** module-specific tests in `tests/` verify behavior against known inputs
 4. **ABI invariant tests:** for taint trackers, conformance tests verify register model matches spec
 5. **Integration:** module is not committed until all gates pass

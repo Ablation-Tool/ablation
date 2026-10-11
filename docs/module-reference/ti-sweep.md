@@ -4,7 +4,7 @@
 
 5 things that weren't possible before in Ablation:
 
-1. **No sweep path for TI COFF2/AR archives.** All prior sweeps assumed ELF input to `BinaryContext`. C28x `.lib` and `.a` files (cl2000/tiarmclang output) are COFF2 or AR-of-COFF2 — `lief.parse()` returns `None`, `capstone` has no C28x support. The sweep routes these through `TiCoffLoader` + `EcuC28xDecoder` directly, bypassing the ELF path entirely.
+1. **No sweep path for TI COFF2/AR archives.** All prior sweeps assumed ELF input to `BinaryContext`. C28x `.lib` and `.a` files (cl2000/tiarmclang output) are COFF2 or AR-of-COFF2; `lief.parse()` returns `None` and `capstone` has no C28x support. The sweep routes these through `TiCoffLoader` + `EcuC28xDecoder` directly, bypassing the ELF path entirely.
 
 2. **No batch extraction from TI TIREX package zips.** TI distributes SDKs as zip archives with nested directories and sometimes double-nested inner zips. Walking 138 packages (23 GB) with `unzip -l` + per-binary type dispatch was not scriptable without a dedicated sweep entry point.
 
@@ -31,11 +31,11 @@ Batch vulnerability sweep over a TI TIREX SDK package directory (or a single zip
 
 Phase order per package:
 
-1. **Phase 0 – Triage**: extract zip, classify binaries by magic/extension, filter ELFs with no PLT exec-class sinks (via `batch_plt_intersect`).
-2. **Phase 1 – NNC scan**: run `TiNNCScanner` on every COFF/AR and ELF binary. Fast (symbol table only).
-3. **Phase 2 – ELF taint**: arch-routed `ARM32TaintTracker` / `ARM64TaintTracker` on PLT-passing ELFs.
-4. **Phase 3 – C28x disasm**: `EcuC28xDecoder.function_starts()` on COFF archives, then `EcuSecurityAccessScanner` on flat ROM `.bin` images.
-5. **Phase 4 – Crypto**: `CryptoPatternDetector` on all binary types.
+1. **Phase 0 (Triage)**: extract zip, classify binaries by magic/extension, filter ELFs with no PLT exec-class sinks (via `batch_plt_intersect`).
+2. **Phase 1 (NNC scan)**: run `TiNNCScanner` on every COFF/AR and ELF binary. Fast (symbol table only).
+3. **Phase 2 (ELF taint)**: arch-routed `ARM32TaintTracker` / `ARM64TaintTracker` on PLT-passing ELFs.
+4. **Phase 3 (C28x disasm)**: `EcuC28xDecoder.function_starts()` on COFF archives, then `EcuSecurityAccessScanner` on flat ROM `.bin` images.
+5. **Phase 4 (Crypto)**: `HashAlgoDiscriminator` on ARM32 ELFs (first 1 MB).
 
 Results are written to `reports/sweep_ti_<package>_<ts>.md` and a master summary to `reports/sweep_ti_master_<ts>.md`.
 
@@ -53,7 +53,7 @@ python3 sweeps/ti_sweep.py /media/cowboy/research/TI-RE/tirex/MSPM0-SDK__2.11.00
 # Already-extracted directory
 python3 sweeps/ti_sweep.py /tmp/mspm0_sdk/ --product MSPM0-SDK --version 2.11.00.07
 
-# Skip taint analysis (NNC + crypto only — much faster)
+# Skip taint analysis (NNC + crypto only: much faster)
 python3 sweeps/ti_sweep.py /media/cowboy/research/TI-RE/tirex/ --no-taint
 
 # Limit to specific package name patterns
@@ -62,8 +62,8 @@ python3 sweeps/ti_sweep.py /media/cowboy/research/TI-RE/tirex/ --filter simpleli
 
 ## Output
 
-- `reports/sweep_ti_<slug>_<ts>.md` — per-package report with findings table
-- `reports/sweep_ti_master_<ts>.md` — cross-package summary (all findings, ranked by severity)
+- `reports/sweep_ti_<slug>_<ts>.md`: per-package report with findings table
+- `reports/sweep_ti_master_<ts>.md`: cross-package summary, all findings ranked by severity
 
 ---
 

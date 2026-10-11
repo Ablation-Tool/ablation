@@ -1,4 +1,4 @@
-# Known Anomalies — ARM64TaintTracker
+# Known Anomalies: ARM64TaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_arm64.py`  
 **Tracker version:** v2.57.0  
@@ -10,7 +10,7 @@ workaround.
 
 ---
 
-## ARM64-KA-001 — from_path misses functions in stripped binaries
+## ARM64-KA-001: from_path misses functions in stripped binaries
 
 **Description:**  
 `ARM64TaintTracker.from_path()` finds function starts from the ELF symbol table. Stripped
@@ -35,7 +35,7 @@ no `.eh_frame` entry and never called by a BL-discovered site remain unseen.
 
 ---
 
-## ARM64-KA-002 — Indirect BLR calls not followed interprocedurally
+## ARM64-KA-002: Indirect BLR calls not followed interprocedurally
 
 **Description:**  
 The tracker resolves direct `BL <imm>` calls and PLT stubs. Indirect calls via `BLR Xn`
@@ -62,7 +62,7 @@ so you know to investigate the callees.
 
 ---
 
-## ARM64-KA-003 — SVE / NEON vector registers not tracked
+## ARM64-KA-003: SVE / NEON vector registers not tracked
 
 **Description:**  
 The taint model covers 64-bit general-purpose registers (X0-X30, SP, XZR). NEON/AdvSIMD
@@ -85,7 +85,7 @@ them manually to check whether vector outputs flow to exec or memory-corruption 
 
 ---
 
-## ARM64-KA-004 — Loop fixpoint not computed; second-iteration taint not propagated
+## ARM64-KA-004: Loop fixpoint not computed; second-iteration taint not propagated
 
 **Description:**  
 `ARM64TaintTracker` performs a linear forward trace and does not compute a loop fixpoint.
@@ -108,7 +108,7 @@ bodies manually even when the tracker reports no findings.
 
 ---
 
-## ARM64-KA-005 — Kernel module relocation patch-up required before analysis
+## ARM64-KA-005: Kernel module relocation patch-up required before analysis
 
 **Description:**  
 ARM64 kernel modules (`.ko`) are relocatable ELF objects. The `BL` instructions targeting

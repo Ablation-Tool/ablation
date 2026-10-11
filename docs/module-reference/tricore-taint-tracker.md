@@ -40,8 +40,8 @@ FRET as call/return boundaries with the same calling-convention semantics as CAL
 | Pointer return | A[2] | `a2` |
 | Stack pointer | A[10] | `sp` |
 | Link register | A[11] | `a11` |
-| Caller-saved (lower context) | D[0]–D[7], A[2]–A[7], A[11], D[15], A[15] | — |
-| Callee-saved (upper context, HW-enforced) | D[8]–D[15], A[0], A[1], sp, A[12]–A[15] | — |
+| Caller-saved (lower context) | D[0]–D[7], A[2]–A[7], A[11], D[15], A[15] |: |
+| Callee-saved (upper context, HW-enforced) | D[8]–D[15], A[0], A[1], sp, A[12]–A[15] |: |
 
 ---
 
@@ -75,7 +75,7 @@ print(tracker.report(chains))
 
 | Parameter | Default | Description |
 |---|---|---|
-| `data` | — | `bytes` of the binary image |
+| `data` |: | `bytes` of the binary image |
 | `base_va` | `0x80000000` | PFLASH base VA for flat ROMs (from TC1.8 §8 Table 13) |
 | `tc_mode` | `CS_MODE_TRICORE_162` | Capstone TC ISA mode (162 = AURIX TC1.6x) |
 
@@ -108,7 +108,7 @@ class TaintFindingTriCore:
 | `st.w / st.h / st.b` | mem[base,disp] ← taint(src_reg); tainted base = FINDING |
 | `mov / mov.a / mov.d` | Dest ← taint(src_reg); immediate = clean |
 | `movh / movh.a` | Dest = clean (constant high half load) |
-| ALU 2-operand (`add d4, d5`) | Dest ← taint(dest) ∪ taint(src) — in-place |
+| ALU 2-operand (`add d4, d5`) | Dest ← taint(dest) ∪ taint(src): in-place |
 | ALU 3-operand (`add d4, d5, d6`) | Dest ← taint(src1) ∪ taint(src2) |
 | `and` with immediate | Dest bound = imm & 0xFFFF |
 | `extr.u` | Dest bound = (1 << width) - 1 |

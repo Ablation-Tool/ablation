@@ -16,12 +16,12 @@ actually ships, not what the compiler intended to ship.
 | Architecture | Taint tracker | Extra scanners |
 |---|---|---|
 | x86_64 | ✓ | format string, heap, length underflow |
-| arm32 | ✓ | — |
-| arm64 | ✓ | — |
-| mips32 / mips64 | ✓ | — |
-| ppc32 / ppc64 | ✓ | — |
-| riscv32 / riscv64 | ✓ | — |
-| loongarch64 | ✓ | — |
+| arm32 | ✓ |: |
+| arm64 | ✓ |: |
+| mips32 / mips64 | ✓ |: |
+| ppc32 / ppc64 | ✓ |: |
+| riscv32 / riscv64 | ✓ |: |
+| loongarch64 | ✓ |: |
 
 ## DAG Adapter integration
 
@@ -119,7 +119,7 @@ gate = CompilerSecurityGate.from_context(ctx)
 
 findings = gate.scan()          # List[GateFinding], sorted by severity
 report   = gate.report()        # str, human-readable
-exit_code = gate.check()        # int — 0=clean, 1=HIGH/CRITICAL found
+exit_code = gate.check()        # int: 0=clean, 1=HIGH/CRITICAL found
 exit_code = gate.check(strict=True)  # 1 on any finding
 ```
 

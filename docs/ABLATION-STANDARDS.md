@@ -1,6 +1,6 @@
 # Ablation Tool Quality and Security Standards
 
-**Version:** 1.3.0 — 2026-10-10  
+**Version:** 1.3.0: 2026-10-10  
 **Scope:** All modules in `ablation/analyzers/`, all taint trackers, FORGE gate, and the RE workflow
 
 Ablation is mapped against eight external standards frameworks. Each section states what the
