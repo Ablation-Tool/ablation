@@ -205,7 +205,7 @@ Ablation is built for authorized security research. Use it only against systems 
 
 ## Standards
 
-### [NIST SP 800-218](https://csrc.nist.gov/pubs/sp/800/218/final)
+**[NIST SP 800-218](https://csrc.nist.gov/pubs/sp/800/218/final)**
 
 This defines how software should be built, organized around four practice areas: preparing the development environment, protecting the codebase from unauthorized changes, writing software with security built into every layer, and responding when vulnerabilities surface after release.
 
@@ -219,7 +219,7 @@ Taint trackers, which are the modules that matter most if they get something wro
 
 Dependencies are pinned with exact hashes and scanned weekly for known CVEs.
 
-### [CISA Secure by Design](https://www.cisa.gov/securebydesign)
+**[CISA Secure by Design](https://www.cisa.gov/securebydesign)**
 
 It asks software manufacturers to commit to three things: take ownership of the security outcomes of the people who rely on the software, be transparent about its limitations, and treat security as a requirement rather than a recommendation.
 
@@ -235,7 +235,7 @@ Every tracker ships with a documented known-anomalies file describing the exact 
 
 The precommit gate is not advisory. No code enters the repository without passing it.
 
-### [MIL-HDBK-115C](https://quicksearch.dla.mil/)
+**[MIL-HDBK-115C](https://quicksearch.dla.mil/)**
 
 The US Department of Defense handbook for reverse engineering methodology. It defines four phases: planning before analysis begins, static analysis, dynamic confirmation of findings, and documentation of results.
 
