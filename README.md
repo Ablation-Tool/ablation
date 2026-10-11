@@ -18,7 +18,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 ## Capabilities
 
 <details>
-<summary><strong>Analysis:</strong> the flywheel, semantic search, binary lifting, hypothesis engine, C++ vtable reconstruction, cross-library tracing, DAG adapter</summary>
+<summary><strong>Analysis:</strong> the flywheel, semantic search, binary lifting, hypothesis engine, C++ vtable reconstruction, cross-library tracing, DAG adapter, PPC32 GOT2 resolver, dynamic sandbox</summary>
 
 | Capability | |
 |:---|:---|
@@ -30,11 +30,13 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | [**C++ Vtable Reconstruction**](docs/module-reference/cpp-vtable-reconstructor.md) | Recovers C++ virtual dispatch tables from stripped ELF binaries on any architecture and names each slot. A generated type-annotation script propagates slot names through every call site so the decompiler shows method names instead of function pointer offsets. |
 | [**Cross-Library Analysis**](docs/module-reference/taint-analysis.md) | Traces an argument across up to three shared library hops so taint paths that cross library boundaries reach their sink rather than stopping at the first call. |
 | [**DAG Adapter Language**](docs/module-reference/encoding-dag.md) | Describes instruction set encodings as directed acyclic graphs so every architecture shares the same analysis code path. Without it, each ISA requires its own exception handler and the analyzer count scales with the architecture count. |
+| [**PPC32 GOT2 Resolver**](docs/module-reference/ppc32-got2-resolver.md) | Resolves indirect calls in stripped GOT2-PIC PPC32 binaries at 98.6% coverage so taint paths through BCTRL stubs do not dead-end at the first unresolved call. |
+| **Dynamic Sandbox** | Executes leaf functions in an emulated sandbox to fingerprint behavior where static analysis alone cannot distinguish branches. |
 
 </details>
 
 <details>
-<summary><strong>Security Analysis:</strong> taint analysis, exposure mapping, finding validation, source code auditing, compiler defect detection, cryptographic analysis</summary>
+<summary><strong>Security Analysis:</strong> taint analysis, exposure mapping, finding validation, source code auditing, compiler defect detection, cryptographic analysis, sink arg classifier</summary>
 
 | Capability | |
 |:---|:---|
@@ -44,11 +46,12 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | [**Source Code Auditing**](docs/module-reference/source-audit.md) | Scores every source file by risk and batches the low-risk ones so manual review covers only the files most likely to contain vulnerabilities. |
 | [**Compiler Defect Detection**](docs/module-reference/compiler-defects.md) | Finds security defects that the compiler introduced through miscompilation. Optimizer defects that silently select the wrong comparison operand can produce hundreds of confirmed vulnerabilities across a single firmware image. |
 | [**Cryptographic Analysis**](docs/module-reference/crypto.md) | Recovers cryptographic key material directly from compiled firmware and audits TLS and JWT configurations, so cryptographic findings do not require source access or a decryption oracle. |
+| [**Sink Arg Classifier**](docs/module-reference/sink-arg-classifier.md) | Classifies what value reaches each exec-class sink so a taint hit is either confirmed as externally controlled or eliminated as a constant before manual review begins. |
 
 </details>
 
 <details>
-<summary><strong>Runtimes & Formats:</strong> LoongArch64, nanoMIPS, Windows PE, BYOVD drivers, Android, Erlang/BEAM, Go, game engines, firmware</summary>
+<summary><strong>Runtimes & Formats:</strong> LoongArch64, nanoMIPS, Windows PE, BYOVD drivers, Android, Erlang/BEAM, Go, game engines, firmware, HarmonyOS/ArkTS, PS3 SELF, MicroPython .mpy</summary>
 
 | Capability | |
 |:---|:---|
@@ -62,11 +65,14 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | [**Game & Legacy RE**](docs/module-reference/game-re.md) | Labels stripped game binary functions by engine so analysis starts at the game logic layer instead of the engine layer. Also handles PS3 Cell SPU and classic Mac OS PEF binaries. |
 | [**Firmware Extraction**](docs/module-reference/firmware-analysis.md) | Decrypts vendor-encrypted firmware without a key because predictable patterns in inner partitions reveal it. Handles vendor-modified squashfs images including ARM64 BCJ-filtered variants. |
 | [**Firmware Key Corpus**](docs/module-reference/firmware-analysis.md) | Classifies recovered firmware keys against a cross-image family table. An anomalous key count flags a potential finding before decryption begins. |
+| [**HarmonyOS / ArkTS Analysis**](docs/module-reference/harmonyos.md) | Analyzes HarmonyOS HAP packages and ArkTS bytecode so OpenHarmony targets can be assessed without source access. Surfaces exported abilities, permission grants, and native library attack surface before manual review begins. |
+| [**PS3 SELF Decryptor**](docs/module-reference/ps3-self-decryptor.md) | Decrypts PS3 SELF (Signed ELF) files to plain ELF because lief and BinaryContext reject SCE-format magic. Keyset detection is automatic from the key_rev field so no manual key lookup is needed. |
+| [**MicroPython .mpy Lifter**](docs/module-reference/mpy-lifter.md) | Lifts .mpy v6 bytecode to readable pseudo-Python so MicroPython firmware on ESP32, STM32, and CC13xx targets can be analyzed without source. Flags dangerous imports and machine-level memory access calls in the lifted output. |
 
 </details>
 
 <details>
-<summary><strong>Workflow:</strong> version diffing, cross-target learning, KASAN-oracle, module quality gate, coverage gate</summary>
+<summary><strong>Workflow:</strong> version diffing, cross-target learning, KASAN-oracle, module quality gate, coverage gate, kernel module classifier</summary>
 
 | Capability | |
 |:---|:---|
@@ -75,11 +81,12 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | [**KASAN-Oracle**](docs/workflows/kasan-oracle.md) | Scans a KASAN debug build first because debug builds expose control flow that stripping removes. Confirmed candidates from the debug build then validate against the stripped production binary, so the debug image acts as a ground-truth oracle rather than a secondary target. |
 | [**Module Quality Gate**](docs/module-reference/forge.md) | FORGE audits every user-written module before it can be stored, so local extensions meet the same standard as the modules that ship with Ablation. |
 | [**Coverage Gate**](docs/ABLATION-STANDARDS.md) | The taint engine requires 85% statement coverage on every commit, so a regression in taint logic fails the test suite before it reaches a firmware engagement. |
+| [**Kernel Module Subsystem Classifier**](docs/module-reference/kernel-module-subsystem-classifier.md) | Classifies a Linux kernel module by its source tree path to determine attack surface before analysis begins. Network-reachable modules surface first so manual review starts at the highest-risk code. |
 
 </details>
 
 <details>
-<summary><strong>Automotive RE:</strong> architecture detection, ROM layout, calibration parsers, CAN DBC</summary>
+<summary><strong>Automotive RE:</strong> architecture detection, ROM layout, calibration parsers, CAN DBC, ECU security access scanner</summary>
 
 | Capability | |
 |:---|:---|
@@ -87,6 +94,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | [**ROM Layout Analyzer**](docs/module-reference/ecu-rom-layout-analyzer.md) | Splits a flat ROM into CODE, CALIBRATION, and IVT regions before analysis begins. The interrupt vector table is excluded from function discovery so taint trackers start from clean application code boundaries. |
 | [**Calibration Parsers**](docs/module-reference/ecu-cal-parsers.md) | Reads TunerPro XDF, ASAM A2L, RomRaider XML, open_damos, and ConesCAN definition files and injects human-readable table labels into BinaryContext. Every array in the ROM has a name when the taint tracker reaches it. |
 | [**CAN DBC Parser**](docs/module-reference/can-dbc-parser.md) | Reads CAN signal database files and makes message and signal definitions available during binary analysis. No other RE tool brings CAN signal context into the taint analysis pipeline. |
+| [**ECU Security Access Scanner**](docs/module-reference/ecu-security-access-scanner.md) | Audits UDS SecurityAccess implementations for weak seed generation, static keys, and bypassable challenge-response logic. Runs before taint analysis so weak authentication findings are confirmed before deeper code tracing begins. |
 
 </details>
 
