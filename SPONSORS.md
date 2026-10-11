@@ -8,7 +8,7 @@ Ablation is maintained by one researcher. It runs on real firmware from real ven
 
 | Amount | Purpose |
 |--------|---------|
-| $5,000 | Hardware upgrade needed to maintain Ablation and properly sustain reverse engineering development |
+| $1,000 | Hardware upgrade needed to maintain Ablation and properly sustain reverse engineering development |
 
 ---
 
