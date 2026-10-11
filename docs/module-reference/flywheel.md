@@ -20,7 +20,7 @@ The flywheel has two halves: storage and replay.
 
 **Storage** happens when you confirm a finding. `FindingRegistry.register()` writes the finding to a local SQLite database at `~/.ablation/findings.db`. Each record carries the vendor, product, version, title, description, CWE class, severity, function address, and an optional BERT embedding vector.
 
-**Replay** happens at the start of each new engagement. `PatternLibrary.ingest_from_registry()` reads every confirmed finding from the database and adds it as a semantic search pattern. `sweep()` then runs all patterns against the new binary. Confirmed findings from Fortinet run against Huawei. Confirmed findings from x86-64 run against ARM32. The tool gets sharper with each engagement.
+**Replay** happens at the start of each new engagement. `PatternLibrary.ingest_from_registry()` reads every confirmed finding from the database and adds it as a semantic search pattern. `sweep()` then runs all patterns against the new binary. Confirmed findings from one vendor run against a completely different vendor's binary. Confirmed findings from x86-64 run against ARM32. The tool gets sharper with each engagement.
 
 ```mermaid
 flowchart LR
@@ -43,9 +43,9 @@ from ablation.analyzers.finding_registry import FindingRegistry
 reg = FindingRegistry()
 
 reg.register(
-    vendor='fortinet',
-    product='FortiWeb',
-    version='7.4.2',
+    vendor='example_vendor',
+    product='example_product',
+    version='1.0.0',
     binary='httpd',
     title='Pre-auth SQL injection via Bearer token',
     description='PROTOCOL_PARSER | role=bearer_token_handler | calls: sqlite3_exec | '
