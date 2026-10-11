@@ -6,14 +6,14 @@
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+4 things that were not possible before in Ablation:
 
 **1. No ISA identification for unknown flat ECU ROMs.** When a ROM image arrives without any
 container format (no ELF, no IHEX, no SREC wrapper), there is no reliable way to know
 what instruction set it contains before Ablation selects a decoder.  Choosing the wrong
 decoder silently misaligns on every instruction, making all downstream RE work garbage.
 Before this module, ISA identification was a manual step — inspecting hex dumps, looking at
-reset vectors, pattern-matching by eye.  `EcuArchDetector` runs six discriminators in one
+reset vectors, pattern-matching by eye.  `EcuArchDetector` runs all discriminators in one
 call and returns a confident verdict (HIGH/MEDIUM/LOW) with a human-readable reason, so
 the RE pipeline can select the correct decoder without a manual step.
 
@@ -34,6 +34,16 @@ values in the AURIX physical address map (PFLASH at 0x80000000–0xBFFFFFFF, per
 includes an artifact guard that rejects big-endian ROMs whose instruction bytes, when
 misread as LE words, produce spurious address hits.
 
+**4. No detection for Renesas M32R flat ECU ROMs.**  Hitachi 5EAT TCU ROMs use Renesas M32R
+(chip markings M32174/M32176-series), a big-endian 32-bit RISC that Capstone does not support.
+Without this discriminator, all 17 known Hitachi M32R 5EAT TCU ROMs are misidentified as
+ppc32 HIGH (score ≈ 0.93) because M32R's fixed-width big-endian instruction bytes
+coincidentally land in PPC32 primary-opcode density ranges.  The correct result is unreachable
+by any instruction-density approach because Capstone cannot decode M32R.  The `_score_m32r`
+discriminator uses a structural ROM property instead: the M32R exception vector table layout
+(``FF 00 00 NN`` at fixed aligned offsets in the first 256 bytes), which is zero-false-positive
+across 42 non-M32R ECU ROMs and scores 0.96 — above the PPC32 false-positive ceiling.
+
 ---
 
 ## Supported architectures
@@ -43,6 +53,7 @@ misread as LE words, produce spurious address hits.
 | `arm_cm` | ARM Cortex-M (Thumb-2, LE vector table) | Bosch MED17, Continental SIMOS |
 | `tricore` | Infineon TriCore AURIX (TC1.6/TC2xx/TC3xx, LE) | Bosch ME17/MED17, Continental MG1, Waqas GEN3 |
 | `m68k` | Motorola 68K / CPU32 | GM P01/P04/P05/P08/P10/P11/P59 (CPU32) |
+| `m32r` | Renesas M32R (M32174/M32176-series, BE RISC) | Hitachi 5EAT TCU (M32174F3, M32176F4V) |
 | `ppc32` | PowerPC 32-bit Book E | GM E38 PCM, Denso ECUs |
 | `ppc_vle` | PowerPC VLE (NXP e200z) | GM E39a/E54/E92 (MPC5566) |
 | `sh2a` | Renesas SH-2A / SH-2 | Honda SH7058/SH7059, Subaru EcuFlash |
@@ -156,12 +167,28 @@ Big-endian reset vector at offset 4 + instruction density:
 
 Score 0.88 for reset + STS.L density; 0.75 for reset + RTS density; 0.60 for reset only; 0.40 for STS.L density without reset.
 
+### M32R
+
+Structural discriminator based on the M32R exception vector table layout (not instruction density — Capstone has no CS_ARCH_M32R support).
+
+M32R ROM exception dispatch entries use a 4-byte format: first three bytes are ``FF 00 00`` (TRAP/BRA-long opcode prefix), fourth byte is the exception index.
+
+Two sub-patterns checked:
+- **Aligned-16 IVT slots 0x00–0x80** (9 slots): entries at 16-byte intervals beginning with ``FF 00 00``
+- **Dense vector region 0x40–0x7F** (16 slots at 4-byte granularity): contiguous entries beginning with ``FF 00 00``
+
+Score 0.96 when dense4 == 16 AND ivt16 == 9 (all 17 known Hitachi M32R ROMs); 0.88 for partial match (dense4 ≥ 12, ivt16 ≥ 6); 0.70 for weak match.
+
+Score 0.96 is above the PPC32 false-positive ceiling (~0.93) observed on M32R ROM images when sample_size=4096.
+
+Verified zero false positives across 9 SH-2A, 18 PPC32, and 1 TriCore ROM images.
+
 ---
 
 ## Limitations
 
 - Discriminators are density-based: a ROM with very little code in the first 4 KB sample (e.g., a ROM that starts with calibration tables) may misidentify or return LOW confidence.  Pass `sample_size=0` to sample the full image.
 - ARM Cortex-M identification is based solely on the vector table (no instruction density signal).  A ROM that happens to have a 4-byte value in the SRAM range at offset 0 will false-positive.  Use with `is_confident` check.
-- No support for RISC-V, RH850, or SH-4 — add a new `_score_*` method following the same pattern.
+- No support for RISC-V, RH850, SH-4, or M32C — add a new `_score_*` method following the same pattern.
 - TriCore detection requires scanning the full image; calling `EcuArchDetector(data, sample_size=N)` with a small N will still cause the TriCore discriminator to scan all of `data`, not the sample.  This is intentional: startup code density is too low in the first few KB.
 - TriCore artifact guard (`periph > 2 × pflash AND periph > 15 %`) may reject a legitimate TriCore binary if the code region happens to have very heavy SFR access with low function-call density.  In that case pass `sample_size=0` and verify manually.

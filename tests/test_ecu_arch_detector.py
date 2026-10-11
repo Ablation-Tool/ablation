@@ -85,6 +85,22 @@ def _ppc32_rom(size: int = 256) -> bytes:
     return bytes(buf)
 
 
+def _m32r_rom(size: int = 512) -> bytes:
+    """M32R: exception vector table with FF-00-00-NN at IVT and dense-vector slots."""
+    buf = bytearray(size)
+    # Aligned-16 IVT slots 0x00-0x30 and 0x80 (outside dense region)
+    for idx, off in enumerate([0x00, 0x10, 0x20, 0x30, 0x80]):
+        if off + 4 <= size:
+            buf[off] = 0xFF; buf[off + 1] = 0x00; buf[off + 2] = 0x00
+            buf[off + 3] = 0x5E - idx
+    # Dense vector region 0x40-0x7F (16 four-byte-aligned entries)
+    for idx, off in enumerate(range(0x40, 0x80, 4)):
+        if off + 4 <= size:
+            buf[off] = 0xFF; buf[off + 1] = 0x00; buf[off + 2] = 0x00
+            buf[off + 3] = 0x4D - idx
+    return bytes(buf)
+
+
 def _unknown_rom(size: int = 256) -> bytes:
     """Random-looking data that shouldn't match any ISA."""
     # Use a PRNG-like pattern without any real ISA signatures
@@ -235,6 +251,94 @@ class TestSH2aDetection:
     def test_sh2a_not_top_for_arm_rom(self):
         result = EcuArchDetector(_arm_cm_rom()).detect()
         assert result.arch != "sh2a"
+
+
+# ---------------------------------------------------------------------------
+# M32R detection
+# ---------------------------------------------------------------------------
+
+class TestM32RDetection:
+    def test_detects_m32r_high_confidence(self):
+        rom = _m32r_rom(size=512)
+        result = EcuArchDetector(rom).detect()
+        assert result.arch == "m32r"
+        assert result.confidence == "HIGH"
+
+    def test_m32r_score_is_096(self):
+        cands = EcuArchDetector(_m32r_rom()).candidates()
+        m32r = [c for c in cands if c.arch == "m32r"]
+        assert len(m32r) == 1
+        assert m32r[0].score == 0.96
+
+    def test_m32r_beats_ppc32_false_positive(self):
+        """M32R (0.96) must beat PPC32 false-positive when code region looks PPC32."""
+        buf = bytearray(_m32r_rom(size=4096))
+        # Fill code region beyond IVT with PPC32-looking lwz instructions
+        for off in range(0x100, len(buf), 4):
+            struct.pack_into(">I", buf, off, 0x80640000)
+        det = EcuArchDetector(bytes(buf))
+        cands = det.candidates()
+        m32r = [c for c in cands if c.arch == "m32r"]
+        ppc32 = [c for c in cands if c.arch == "ppc32"]
+        assert len(m32r) == 1
+        if ppc32:
+            assert m32r[0].score > ppc32[0].score
+
+    def test_no_m32r_for_ppc32_rom(self):
+        rom = _ppc32_rom(size=512)
+        cands = EcuArchDetector(rom).candidates()
+        m32r = [c for c in cands if c.arch == "m32r"]
+        assert len(m32r) == 0
+
+    def test_no_m32r_for_sh2a_rom(self):
+        rom = _sh2a_rom_with_prologue(size=512)
+        cands = EcuArchDetector(rom).candidates()
+        m32r = [c for c in cands if c.arch == "m32r"]
+        assert len(m32r) == 0
+
+    def test_m32r_below_threshold_returns_none(self):
+        """ROM with only 2 IVT slots matching should not fire."""
+        buf = bytearray(512)
+        buf[0x00] = 0xFF; buf[0x01] = 0x00; buf[0x02] = 0x00; buf[0x03] = 0x5E
+        buf[0x10] = 0xFF; buf[0x11] = 0x00; buf[0x12] = 0x00; buf[0x13] = 0x56
+        cands = EcuArchDetector(bytes(buf)).candidates()
+        m32r = [c for c in cands if c.arch == "m32r"]
+        assert len(m32r) == 0
+
+    def test_m32r_too_small_returns_none(self):
+        """ROM < 256 bytes must not fire — guard path."""
+        tiny = b"\xFF\x00\x00\x01" * 60  # 240 bytes < 256
+        cands = EcuArchDetector(tiny).candidates()
+        m32r = [c for c in cands if c.arch == "m32r"]
+        assert len(m32r) == 0
+
+    def test_m32r_partial_match_scores_088(self):
+        """dense4>=12 AND ivt16>=6 → score 0.88."""
+        buf = bytearray(512)
+        # 6 aligned-16 IVT slots
+        for idx, off in enumerate([0x00, 0x10, 0x20, 0x30, 0x40, 0x80]):
+            buf[off] = 0xFF; buf[off + 1] = 0x00; buf[off + 2] = 0x00; buf[off + 3] = idx
+        # 12 dense-4 slots (0x40-0x6F only, not 0x70-0x7F)
+        for off in range(0x40, 0x70, 4):
+            buf[off] = 0xFF; buf[off + 1] = 0x00; buf[off + 2] = 0x00; buf[off + 3] = 0x10
+        cands = EcuArchDetector(bytes(buf)).candidates()
+        m32r = [c for c in cands if c.arch == "m32r"]
+        assert len(m32r) == 1
+        assert m32r[0].score == 0.88
+
+    def test_m32r_weak_match_scores_070(self):
+        """dense4>=8 AND ivt16>=3 → score 0.70."""
+        buf = bytearray(512)
+        # 3 aligned-16 IVT slots
+        for off in [0x00, 0x10, 0x20]:
+            buf[off] = 0xFF; buf[off + 1] = 0x00; buf[off + 2] = 0x00; buf[off + 3] = 0x10
+        # 8 dense-4 slots (0x40-0x5F only)
+        for off in range(0x40, 0x60, 4):
+            buf[off] = 0xFF; buf[off + 1] = 0x00; buf[off + 2] = 0x00; buf[off + 3] = 0x10
+        cands = EcuArchDetector(bytes(buf)).candidates()
+        m32r = [c for c in cands if c.arch == "m32r"]
+        assert len(m32r) == 1
+        assert m32r[0].score == 0.70
 
 
 # ---------------------------------------------------------------------------
