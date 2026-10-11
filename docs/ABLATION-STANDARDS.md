@@ -157,7 +157,7 @@ NIST SP 800-218 defines four practice groups. Each maps directly to Ablation's d
 Ablation's development infrastructure requirements:
 - Python 3.11+ with type annotations on all new modules
 - No external network calls in analyzer code (static analysis only)
-- `pip install -e ~/ablation/` editable install; all deps pinned in `requirements.txt`
+- `pip install -e ~/ablation/` editable install; all deps pinned in `requirements/base.txt`
 - No Ghidra. No proprietary disassemblers with licensing restrictions.
 
 **PO.2: Implement Roles and Responsibilities**
@@ -272,7 +272,7 @@ Ablation's own vulnerability surface is primarily:
 
 For (1): all parsers handle malformed input via `try/except` at ELF/PE load time, not mid-analysis. Add fuzz inputs to the test suite for critical parsers.
 
-For (2): dependencies are pinned in `requirements.txt`. Version bumps require a SAFE CODE review of the delta.
+For (2): dependencies are pinned in `requirements/base.txt`. Version bumps require a SAFE CODE review of the delta.
 
 **RV.2: Assess, Prioritize, and Remediate Vulnerabilities**
 
@@ -359,7 +359,7 @@ The ESF developer guide defines ten categories. Ablation's implementation:
 
 **Build reproducibility:** `pip install -e ~/ablation/` is the canonical install. All tests run against the editable install, not a built wheel. No compiled extensions; pure Python.
 
-**Dependency verification:** Dependencies pinned in `requirements.txt`. Capstone, lief, unicorn, and pyelftools are the only non-standard dependencies for analysis modules. MiniLM is the only ML model dependency (sole encoder since ZIM-BERT removal at commit ad6af9e).
+**Dependency verification:** Dependencies pinned in `requirements/base.txt`. Capstone, lief, unicorn, and pyelftools are the only non-standard dependencies for analysis modules. MiniLM is the only ML model dependency (sole encoder since ZIM-BERT removal at commit ad6af9e).
 
 **Secure development environments:** `re/<vendor>/` (findings) is local-only and gitignored. No API keys, credentials, or target-identifying information in any committed file.
 
@@ -386,7 +386,7 @@ All Ablation dependencies are open source. The OSS management checklist:
 - unicorn: LGPL-2+; active maintenance; used only for leaf-function sandboxing
 - sentence-transformers / MiniLM: Apache-2.0; model weights pinned by cached embedding model; no network calls at analysis time
 
-All dependency versions are pinned with exact hashes in `requirements.txt`. Use `pip install --require-hashes` in CI.
+All dependency versions are pinned with exact hashes in `requirements/base.txt`. Use `pip install --require-hashes` in CI.
 
 ---
 
@@ -474,7 +474,7 @@ Every taint tracker must have a corresponding `docs/known-anomalies/<module>.md`
 ### 8.2 Development Process Requirements (DPR)
 
 **DPR-001** (NIST SSDF PO.3)  
-Dependencies must be pinned with exact versions and hashes in `requirements.txt`. Use `pip install --require-hashes` to enforce integrity.
+Dependencies must be pinned with exact versions and hashes in `requirements/base.txt`. Use `pip install --require-hashes` to enforce integrity.
 
 **DPR-002** (NSA/CISA SBOM)  
 Generate an SBOM at each version release using `pip-licenses --format=json`. Save to `ablation-sbom-<version>.json` in the repo root. Not committed to GitHub; generated on demand.
@@ -483,7 +483,7 @@ Generate an SBOM at each version release using `pip-licenses --format=json`. Sav
 Before every push: verify active gh account is `Ablation-Tool`. Command: `gh api user --jq .login` must return `Ablation-Tool` before `git push`.
 
 **DPR-004** (NIST SSDF RV.1)  
-New dependency versions: run `pip-audit` against `requirements.txt` before any dependency bump. Block if any known CVE exists for the proposed version.
+New dependency versions: run `pip-audit` against `requirements/base.txt` before any dependency bump. Block if any known CVE exists for the proposed version.
 
 ### 8.3 RE Workflow Requirements (RWR)
 
@@ -523,11 +523,11 @@ Ordered by priority and dependency.
 
 2. **ABI Conformance Tests:** Create `tests/conformance/` directory. Write `rh850_abi_invariants.py` and `tricore_abi_invariants.py` as the first two entries. Each tests register set accuracy against the ABI spec.
 
-3. **Coverage Gate:** Add `pytest-cov` to `requirements.txt`. Add coverage configuration to `pytest.ini` or `pyproject.toml`. Target: 85% for taint trackers, measured per-module.
+3. **Coverage Gate:** Add `pytest-cov` to `requirements/base.txt`. Add coverage configuration to `pytest.ini` or `pyproject.toml`. Target: 85% for taint trackers, measured per-module.
 
 ### Phase 2: Short Term (next major version)
 
-4. **Dependency Hashing:** Pin all dependencies with hashes in `requirements.txt`. Add `pip-audit` to the pre-commit check sequence in CLAUDE.md.
+4. **Dependency Hashing:** Pin all dependencies with hashes in `requirements/base.txt`. Add `pip-audit` to the pre-commit check sequence in CLAUDE.md.
 
 5. **SBOM Generation:** Add `pip-licenses` to requirements. Document SBOM generation in CLAUDE.md as a release step.
 
@@ -567,7 +567,7 @@ Ordered by priority and dependency.
 | CISA-SBD2 | Transparency | [CISA Secure by Design](https://www.cisa.gov/securebydesign) | FORGE cache + `docs/ai-provenance-log.md` committed; version log in CHANGELOG | MET |
 | CISA-SBD3 | Leadership | [CISA Secure by Design](https://www.cisa.gov/securebydesign) | SAFE CODE is mandatory, not advisory | MET |
 | ESF-DEV-SRC | Source integrity | [NSA/CISA ESF](https://www.cisa.gov/resources-tools/resources/nsa-cisa-enduring-security-framework) | Single-account; local-only findings | MET |
-| ESF-DEV-DEP | Dependency verification | [NSA/CISA ESF](https://www.cisa.gov/resources-tools/resources/nsa-cisa-enduring-security-framework) | `requirements-hashed.txt` committed (pip-compile --generate-hashes); `scripts/generate-lockfile.sh` for refresh | MET |
+| ESF-DEV-DEP | Dependency verification | [NSA/CISA ESF](https://www.cisa.gov/resources-tools/resources/nsa-cisa-enduring-security-framework) | `requirements/hashed.txt` committed (pip-compile --generate-hashes); `scripts/generate-lockfile.sh` for refresh | MET |
 | ESF-SBOM | Software bill of materials | [NSA/CISA SBOM](https://www.cisa.gov/sbom) | `docs/sbom/ablation-sbom.json` committed; `scripts/generate-sbom.sh` for refresh | MET |
 | MHB-PLAN | RE planning | [MIL-HDBK-115C Sec 4](https://quicksearch.dla.mil/) | Session files (`SESSION.md` + per-target `SESSION_<target>.md`) per CLAUDE.md workflow | MET |
 | MHB-STATIC | Static analysis ordering | [MIL-HDBK-115C Sec 5](https://quicksearch.dla.mil/) | SemanticSearcher first rule | MET |
@@ -575,7 +575,7 @@ Ordered by priority and dependency.
 | MHB-DOC | RE documentation | [MIL-HDBK-115C Sec 7](https://quicksearch.dla.mil/) | Session files + retrospective | MET |
 | MHB-ANOMALY | Anomaly documentation | [MIL-HDBK-115C Sec 7](https://quicksearch.dla.mil/) | `docs/known-anomalies/`: 16 tracker files; conformance tests cover documented anomalies | MET |
 | ACT-001 | ABI conformance tests | ISO 26262 / ACT | 43 tests in `tests/conformance/` (RH850 and TriCore ABIs verified) | MET |
-| DPR-001 | Dependency hashing | [NSA/CISA SBOM](https://www.cisa.gov/sbom) | `requirements-hashed.txt` committed; `scripts/generate-lockfile.sh` for refresh | MET |
+| DPR-001 | Dependency hashing | [NSA/CISA SBOM](https://www.cisa.gov/sbom) | `requirements/hashed.txt` committed; `scripts/generate-lockfile.sh` for refresh | MET |
 | DPR-003 | Account verification | [NIST SSDF PS.1](https://csrc.nist.gov/pubs/sp/800/218/final) | `scripts/verify-account.sh` (checks active gh account = Ablation-Tool before push) | MET |
 | DOWI-AI-SEC | Security validation of AI-generated code | [DoWI 8430.01](https://www.dau.edu) | FORGE gate validates AI-written modules; `docs/ai-provenance-log.md` committed | MET |
 | DOWI-SUPPLY | Supply chain monitoring and disclosure | [DoWI 8430.01](https://www.dau.edu) | `scripts/monitor-supply-chain.sh` (pip-audit; weekly cron; JSON report to `docs/supply-chain-reports/`) | MET |
@@ -591,11 +591,11 @@ Ordered by priority and dependency.
 - ISO-TCL3-SM: `docs/safety-manual.md` committed v1.0.0
 - SSDF-RV1: `scripts/monitor-supply-chain.sh` (pip-audit, JSON report)
 - CISA-SBD2: `docs/ai-provenance-log.md` committed
-- ESF-DEV-DEP: `requirements-hashed.txt` committed
+- ESF-DEV-DEP: `requirements/hashed.txt` committed
 - ESF-SBOM: `docs/sbom/ablation-sbom.json` committed
 - MHB-PLAN: session files (`SESSION.md` pattern in CLAUDE.md) satisfy Sec 4 planning
 - MHB-ANOMALY: 16 tracker files + conformance tests
-- DPR-001: `requirements-hashed.txt` committed
+- DPR-001: `requirements/hashed.txt` committed
 - DPR-003: `scripts/verify-account.sh` automates account check
 - DOWI-AI-SEC: `docs/ai-provenance-log.md` committed; FORGE gate active
 - DOWI-SUPPLY: `scripts/monitor-supply-chain.sh` (pip-audit)

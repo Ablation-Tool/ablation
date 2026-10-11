@@ -4,7 +4,7 @@
 # Closes ESF-SBOM (ABLATION-STANDARDS.md §4) and satisfies DoWI 8430.01 §2.8.k
 # (SBOM mandatory for custom and COTS software).
 #
-# Requires: pip install pip-licenses (included in requirements-dev.txt)
+# Requires: pip install pip-licenses (included in requirements/dev.txt)
 #
 # Usage:
 #   scripts/generate-sbom.sh              # writes docs/sbom/ablation-sbom.json
