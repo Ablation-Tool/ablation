@@ -445,14 +445,22 @@ def _sweep_one(
         print(f"  [!] XRefGraph failed ({e}), continuing without")
         xref = None
 
-    try:
-        print(f"  [*] Semantic sweep ({len(profiles)} profiles) ...")
-        result["semantic"] = _semantic_sweep(
-            binary_path, model, profiles, top_k=top_k, xref=xref
-        )
-    except Exception as e:
-        result["error"] = f"semantic: {e}\n{traceback.format_exc()}"
-        print(f"  [!] Semantic sweep failed: {e}")
+    max_funcs = getattr(args, "max_funcs", 0) or 0
+    _func_count = xref.stats()["functions"] if xref is not None else 0
+    _skip_semantic = max_funcs > 0 and _func_count > max_funcs
+    if _skip_semantic:
+        print(f"  [~] Skipping semantic sweep ({_func_count} funcs > --max-funcs {max_funcs}); "
+              f"falling back to taint + batch_plt_intersect only")
+
+    if not _skip_semantic:
+        try:
+            print(f"  [*] Semantic sweep ({len(profiles)} profiles) ...")
+            result["semantic"] = _semantic_sweep(
+                binary_path, model, profiles, top_k=top_k, xref=xref
+            )
+        except Exception as e:
+            result["error"] = f"semantic: {e}\n{traceback.format_exc()}"
+            print(f"  [!] Semantic sweep failed: {e}")
 
     # Phase 2 — Taint analysis (arch-routed)
     try:
@@ -628,6 +636,10 @@ def main() -> None:
     ap.add_argument("--version",  default="",         help="Firmware version (e.g. 7.4.3)")
     ap.add_argument("--top",      type=int, default=5,
                     help="Candidates per semantic profile (default 5)")
+    ap.add_argument("--max-funcs", type=int, default=0, dest="max_funcs",
+                    help="Skip semantic sweep for binaries with more functions than this "
+                         "(0 = no limit). Taint + batch_plt_intersect still run. "
+                         "Recommended: 30000 for large FortiOS/confighandler targets.")
     ap.add_argument("--report",   default="",
                     help="Write report to this .md path (default: auto-named in reports/)")
     ap.add_argument("--no-vendor-profile", action="store_true",
