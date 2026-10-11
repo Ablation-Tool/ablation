@@ -14,6 +14,22 @@ He holds Instructor and Mountaineering qualifications from the Northern Warfare 
 
 During that time he completed reverse engineering courses through the Department of Defense Cyber Crime Center and volunteered with ITDRC. He trained with the President's Hundred while stationed in Fairbanks, but never got his EIB.
 
+<details>
+<summary>DC3 Courses</summary>
+
+- Advanced Regular Expressions (A-SC-PA-14)
+- Anatomy and Static Analysis of a Windows Portable Executable (I-W-MD-13)
+- Analyzing Commercial Spyware on Android Devices
+- Analyzing Malware With Cuckoo
+- Basic YARA (B-CR-MD-20)
+- Detecting Anti-Forensic Techniques
+- Detecting Zero-day Attacks with Sysinternals (I-CR-MD-14a)
+- Managing Digital Footprints
+- Network Defense With Honeypots (I-CR-TE-18b)
+- Vulnerability Scanning with Tenable Nessus
+
+</details>
+
 
 # Sponsors
 
