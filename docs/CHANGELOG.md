@@ -2,6 +2,43 @@
 
 ---
 
+## v2.74.0
+
+**EcuArchDetector — TriCore BMHD gate (Gap 9).**
+
+`EcuArchDetector` no longer misidentifies GM P12 and P12b CPU32 ROMs as TriCore AURIX.
+
+Root cause: the PFLASH LE-pointer density heuristic in `_score_tricore()` fired on
+M68K/CPU32 ROM data when the full image was scanned as little-endian. The existing
+artifact guard (`periph > 0.15 AND periph > pflash * 2`) catches SH-2A and other
+big-endian ROMs whose peripheral-SFR density is disproportionately high, but CPU32
+ROMs produce a periph:pflash ratio of ~1.35× — below the guard threshold.
+
+Fix: a BMHD gate added immediately before the `return ArchCandidate(...)` in the flat
+binary scoring path. Valid Infineon AURIX ROMs begin with a Boot Mode Header Description
+(BMHD) whose first field (STAD, Startup Address) is always a non-zero address in PFLASH
+range 0x80000000–0xBFFFFFFF. GM P-series CPU32 ROMs place the supervisor stack pointer
+at offset 0 as a big-endian word; for all P-series ROMs examined, this value is
+0x00000000. Read as LE uint32, this is also 0x00000000 — a value incompatible with a
+valid AURIX STAD. When the first LE word at file offset 0 is 0x00000000, the TriCore
+discriminator returns no candidate.
+
+Before: P12 (1 MB CPU32) → tricore HIGH 0.850
+After:  P12 (1 MB CPU32) → m68k MEDIUM 0.700 ✓
+
+GEN3 (Waqas TriCore 2 MB) unaffected: first LE word = 0x00004806 (non-zero) → tricore HIGH 0.850 ✓
+
+4 new test cases in `tests/test_ecu_arch_detector.py` (class `TestTriCoreDetection`):
+two helper ROM builders (`_tricore_flat_rom`, `_cpu32_with_dense_le_rom`) and four
+tests covering the gate-passed, gate-suppressed, and M68K-wins-over-false-positive
+cases.
+
+Updated files: `ablation/analyzers/ecu_arch_detector.py`,
+`tests/test_ecu_arch_detector.py`,
+`docs/CHANGELOG.md`.
+
+---
+
 ## v2.73.0
 
 **EcuArchDetector — Renesas M32R discriminator (Gap 8).**
