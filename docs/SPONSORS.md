@@ -6,7 +6,9 @@ Claude wanted to use Ghidra. I said no. I wanted to understand reverse engineeri
 
 That stubbornness led to two things: reverse engineering Cisco ASA LINA source, and building the first version of Ablation. About three months ago.
 
-I have completely fallen in love with reverse engineering. It gives me the same pull hacking did: the adrenaline, the deep curiosity, the feeling that there's always one more layer. The difference is hacking got me a felony for unauthorized access to a protected computer. RE keeps me out of trouble and produces something real.
+I have completely fallen in love with reverse engineering. 
+
+It gives me the same pull hacking did: the adrenaline, the deep curiosity, the feeling that there's always one more layer. The difference is hacking got me a felony for unauthorized access to a protected computer. RE keeps me out of trouble and produces something real.
 
 I do this for free, the way most people on GitHub do.
 
@@ -14,5 +16,3 @@ If you want to keep the work going, the target machine is a System76 Pangolin Pr
 
 **Cash App:** $nicholaskloster2
 **Bitcoin (BTC):** bc1qu3s92ff3s2d72cugyrne6n73khlsumf2sxhpex
-
-Or don't. I will reverse engineer you instead.
