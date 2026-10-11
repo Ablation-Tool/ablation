@@ -7,7 +7,7 @@ But reverse engineering is already really complex, and a complex GUI just adds o
 
 Anyway.
 
-That stubbornness led to two things: reverse engineering Cisco ASA LINA source, and contributing the first layer of Ablation.
+My huberous led to two cool things: reverse engineering Cisco ASA LINA source, and contributing the first layer of Ablation.
 
 I have completely fallen in love with reverse engineering. 
 
