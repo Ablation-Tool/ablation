@@ -235,7 +235,7 @@ Every tracker ships with a documented known-anomalies file describing the exact 
 
 The precommit gate is not advisory. No code enters the repository without passing it.
 
-**[MIL-HDBK-115C](https://quicksearch.dla.mil/)**
+**[MIL-HDBK-115C](https://www.nsa.gov)**
 
 The US Department of Defense handbook for reverse engineering methodology. It defines four phases: planning before analysis begins, static analysis, dynamic confirmation of findings, and documentation of results.
 
