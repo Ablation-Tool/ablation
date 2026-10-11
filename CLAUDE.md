@@ -190,6 +190,7 @@ SESSION.md convention: root index at `~/ablation/SESSION.md`; per-target state a
 | "Parse and extract partitions from a partitioned firmware container image" | `FirmwareContainer.from_path(fw).dump_partitions()` |
 | "Extract a specific firmware partition by name" | `FirmwareContainer.from_path(fw).extract('bin', out_path)` |
 | "Extract files from Huawei VRP squashfs v4 XZ image (ARM64 BCJ filter, V600R024+)" | `HuaweiSquashfsExtractor(sqfs_path).extract(inner_path)` → bytes; `ext.list_files()` to enumerate; use `with` for auto-close; see `huawei-squashfs-extractor` doc |
+| "Extract files from AMI BMC CramFS firmware (ASPEED AST2xxx / SPX Redfish — AmiCramFSExtractor, 16-byte inode, namelen@bits[8:13], data_off in w3)" | `AmiCramFSExtractor.from_image(ima_path, offset).extract_file('/usr/local/bin/spx_restservice')` → bytes; `.list_files()` → all paths; `.extract_all(out_dir)` for full rootfs; `.from_path(cramfs_path)` for raw CramFS file; see `ami-cramfs-extractor` doc |
 | "Scan MP4/MKV/AVI for forensic anomalies (polyglot, trailer data, atom overflow)" | `VideoContainerAnalyzer.from_path(path).scan()` |
 | "Find JNI bridge surface in Android APK (RegisterNatives vs canonical, opaque peer)" | `JniBridgeScanner.from_path(apk).scan()` — HIGH=dynamic reg or opaque peer; MEDIUM=Java_* canonical |
 | "Map exported Binder service surface in Android APK (Services, Stubs, onTransact)" | `BinderScanner.from_path(apk).scan()` — HIGH=exported service or raw onTransact; MEDIUM=AIDL Stub |
