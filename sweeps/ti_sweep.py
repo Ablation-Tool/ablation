@@ -476,31 +476,38 @@ def _phase4_crypto(elf_paths: List[str]) -> List[dict]:
     """HashAlgoDiscriminator scan on ARM Thumb ELF binaries.
 
     Scans only the first 1 MB of each binary to bound runtime on large ELFs.
+    Parallelized with ThreadPoolExecutor — arch detection + file I/O overlap.
     """
     from ablation.analyzers.crypto_pattern_detector import HashAlgoDiscriminator
-    findings = []
-    for path in elf_paths:
+
+    def _scan_one_crypto(path: str) -> List[dict]:
         arch = _detect_elf_arch(path)
         if arch is None or _ARCH_ARM32 not in arch:
-            continue
+            return []
         try:
             with open(path, 'rb') as f:
                 data = f.read(_CRYPTO_MAX_BYTES)
             if len(data) < 256:
-                continue
-            disc = HashAlgoDiscriminator(data, load_addr=0)
-            matches = disc.scan_function(0, len(data))
+                return []
+            matches = HashAlgoDiscriminator(data, load_addr=0).scan_function(0, len(data))
             if matches and matches.algo:
-                findings.append({
+                return [{
                     'binary': os.path.basename(path),
                     'binary_path': path,
                     'finding_id': f'CRYPTO-{matches.algo}',
                     'severity': 'INFO',
                     'title': f'Hash implementation detected: {matches.algo} (confidence={matches.confidence})',
                     'phase': 'crypto',
-                })
+                }]
         except Exception:
             pass
+        return []
+
+    findings = []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(_scan_one_crypto, p): p for p in elf_paths}
+        for fut in as_completed(futures):
+            findings.extend(fut.result())
     return findings
 
 
@@ -654,13 +661,11 @@ def sweep_package(
 
         all_findings: List[dict] = []
 
-        # Phase 1: NNC (all binary types). Cap at 500 files per package to
-        # avoid multi-minute scans on large SDK runtime libraries.
+        # Phase 1: NNC (all binary types). Sort small files first so model.a
+        # NNC artifacts (typically <1 MB) are processed before large runtime libs.
         nnc_targets = binaries['ti_coff'] + binaries['elf']
         if nnc_targets:
-            # Prioritize small files first (model.a files are typically <1 MB)
             nnc_targets.sort(key=lambda p: Path(p).stat().st_size)
-            nnc_targets = nnc_targets[:500]
             print(f'  Phase 1: NNC scan ({len(nnc_targets)} files) ...')
             all_findings.extend(_phase1_nnc(nnc_targets))
 
