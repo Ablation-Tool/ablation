@@ -235,6 +235,16 @@ Every tracker ships with a documented known-anomalies file describing the exact 
 
 The precommit gate is not advisory. No code enters the repository without passing it.
 
-[MIL-HDBK-115C](https://quicksearch.dla.mil/) is the US Department of Defense handbook for reverse engineering methodology, current revision from 2016. It defines four phases: planning before analysis begins, static analysis, dynamic confirmation of findings, and documentation of results. The session-file system in Ablation maps to Phase 1. Every engagement starts with a session file recording the target description, artifact hash, tool selection, and documentation plan before any analysis runs. The rule that semantic search runs before manual disassembly maps to Phase 2, which requires characterizing a binary at the function level before doing detailed trace work. The DynamicSandbox covers Phase 3. The structured retrospective written at the close of every completed project maps to Phase 4. The standards document tracks 29 specific requirements drawn from all three frameworks. All 29 are met.
+[MIL-HDBK-115C](https://quicksearch.dla.mil/) the US Department of Defense handbook for reverse engineering methodology.
+
+It defines four phases: planning before analysis begins, static analysis, dynamic confirmation of findings, and documentation of results. 
+
+Phase 1. Every engagement starts with a session file recording the target description, artifact hash, tool selection, and documentation plan before any analysis runs. The rule that semantic search runs before manual disassembly maps to the following phase.
+
+Phase 2, which requires characterizing a binary at the function level before doing detailed trace work. The DynamicSandbox covers the following.
+
+Phase 3. The structured retrospective written at the close of every completed project maps to the final phase.
+
+Phase 4. The standards document tracks 29 specific requirements drawn from all three frameworks. All 29 are met.
 
 ---
