@@ -2,7 +2,10 @@ A few months ago I was working through a security assessment and kept hitting th
 
 So I asked the obvious question: what's actually blocking us? Claude said Cisco ASA. I'd never touched Cisco anything, so I said fine, let's just reverse engineer it.
 
-Claude wanted to use Ghidra. I said no. I wanted to understand reverse engineering, not outsource it to a decompiler GUI.
+Claude wanted to use Ghidra. I said no. I wanted to understand reverse engineering, not outsource it to a decompiler GUI. Not that it isnt a reliable tool. (Hello NSA)
+But reverse engineering is already really complex, and a complex GUI just adds one more layer of murky understanding. And ORreilly Media only has like 4 books on reverse engineering and two of them are Ghidra and IDA PRO. Luckily I signed up for an account with them when I was still in the Army and they provided me with a free membership. So respect to them.
+
+Anyway.
 
 That stubbornness led to two things: reverse engineering Cisco ASA LINA source, and contributing the first layer of Ablation.
 
