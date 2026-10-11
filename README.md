@@ -219,6 +219,8 @@ Taint trackers, which are the modules that matter most if they get something wro
 
 Dependencies are pinned with exact hashes and scanned weekly for known CVEs.
 
+
+
 [CISA Secure by Design](https://www.cisa.gov/securebydesign)
 
 It asks software manufacturers to commit to three things: take ownership of the security outcomes of the people who rely on the software, be transparent about its limitations, and treat security as a requirement rather than a recommendation. 
@@ -234,6 +236,8 @@ That is why a false negative in any Ablation taint tracker is classified as a CR
 Every tracker ships with a documented known-anomalies file describing the exact conditions under which it can produce false negatives, so a researcher knows when to apply manual verification on top of the automated result. 
 
 The precommit gate is not advisory. No code enters the repository without passing it.
+
+
 
 [MIL-HDBK-115C](https://quicksearch.dla.mil/) the US Department of Defense handbook for reverse engineering methodology.
 
