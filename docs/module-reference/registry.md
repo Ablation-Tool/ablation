@@ -149,7 +149,7 @@ ablation-commit
 
 ### Export patterns for PatternLibrary (flywheel)
 
-`export_patterns()` returns all confirmed findings as `{'query': str, 'tag': str}` dicts —
+`export_patterns()` returns all confirmed findings as `{'query': str, 'tag': str}` dicts,
 one per unique (title, description) pair, tagged by CWE class. Unlike `prior_queries()` which
 returns one entry per CWE class, `export_patterns()` returns every confirmed finding so the
 full history feeds future sweeps.
@@ -165,7 +165,7 @@ pl  = PatternLibrary()
 
 n = pl.ingest_from_registry(reg)
 print(f"{n} new patterns added from confirmed findings")
-# Call pl.sweep(searcher) — confirmed findings from all past engagements now run automatically
+# Call pl.sweep(searcher): confirmed findings from all past engagements now run automatically
 ```
 
 `ingest_from_registry()` is idempotent: calling it again adds only findings registered since

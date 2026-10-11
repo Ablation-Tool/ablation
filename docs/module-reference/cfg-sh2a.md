@@ -1,4 +1,4 @@
-# cfg_sh2a — SH-2A Control-Flow Graph Builder
+# cfg_sh2a: SH-2A Control-Flow Graph Builder
 
 **File:** `ablation/analyzers/cfg_sh2a.py`  
 **Added:** v2.64.0
@@ -14,7 +14,7 @@ module.  Without a CFG, the `Structurizer` and `DomTree` cannot run on SH-2A (Bo
 Denso, Siemens) ECU firmware.  The SH-2A lifter could only produce a linear goto-chain.
 
 **2. No delay-slot semantics in any CFG module.**  SH-2A executes one instruction after a
-branch fires — the delay slot.  Every prior CFG module (ARM, V850, ARC, x86) works on
+branch fires: the delay slot.  Every prior CFG module (ARM, V850, ARC, x86) works on
 architectures without delay slots.  `cfg_sh2a` attaches the delay-slot instruction to the
 terminating block so that successor VAs are computed from after the delay slot, not from
 after the branch opcode.
@@ -66,8 +66,8 @@ print("is reducible:", loops.is_reducible())
 | `bf/s` | YES | [target, fall-through after DS] |
 | `bt` | **NO** | [target, fall-through] |
 | `bf` | **NO** | [target, fall-through] |
-| `braf Rn` | indirect — decoded MISC | open block (limitation) |
-| `jmp @Rn` | indirect — decoded MISC | open block (limitation) |
+| `braf Rn` | indirect: decoded MISC | open block (limitation) |
+| `jmp @Rn` | indirect: decoded MISC | open block (limitation) |
 
 When the terminator has a delay slot, the delay-slot instruction is the last entry in
 `block.insns`.  Successors are set based on the VA after the delay slot.
@@ -80,12 +80,12 @@ When the terminator has a delay slot, the delay-slot instruction is the last ent
 
 Three-pass construction:
 
-1. **Leader scan** — discovers all block-start VAs: entry, all branch targets, all
+1. **Leader scan**: discovers all block-start VAs: entry, all branch targets, all
    fall-through-after-terminator addresses.  Delay-slot instructions are not leaders;
    the instruction two steps after the branch is the next-block leader.
-2. **Partition** — assigns each instruction to a block.  Delay-slot instructions are
+2. **Partition**: assigns each instruction to a block.  Delay-slot instructions are
    appended to the terminating block, consuming two steps in a single pass iteration.
-3. **Edge fill** — for each block, computes `succs` from the block's terminator type.
+3. **Edge fill**: for each block, computes `succs` from the block's terminator type.
    Sets `preds` from the inverse.
 
 ### `Block`
@@ -109,7 +109,7 @@ Three-pass construction:
 | `flow` | property → `List[(int,int)]` | Forward edges for DomTree |
 | `flow_r()` | method → `List[(int,int)]` | Reversed edges for backward passes |
 | `block_at(addr)` | method | Returns block at VA, or None |
-| `__iter__` | — | Iterates blocks sorted by start VA |
+| `__iter__` |: | Iterates blocks sorted by start VA |
 
 ---
 
@@ -122,4 +122,4 @@ Three-pass construction:
   tables) will have open blocks where the jump is; the structurizer will emit the
   instructions before the jump as a plain sequence.
 - The module does not resolve cross-function CFG edges (calls are treated as
-  fall-through after the delay slot — the callee is abstracted away).
+  fall-through after the delay slot: the callee is abstracted away).

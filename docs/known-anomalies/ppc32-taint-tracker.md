@@ -1,4 +1,4 @@
-# Known Anomalies — PPC32TaintTracker
+# Known Anomalies: PPC32TaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_ppc32.py`  
 **Tracker version:** v2.57.0  
@@ -10,7 +10,7 @@ workaround.
 
 ---
 
-## PPC32-KA-001 — Stack buffer taint not tracked; buffer-passing flows produce false negatives
+## PPC32-KA-001: Stack buffer taint not tracked; buffer-passing flows produce false negatives
 
 **Description:**  
 The tracker models register taint. It does not track taint stored to stack memory via
@@ -37,7 +37,7 @@ into a buffer argument (r4 before the call), not into the return value (r3). Use
 
 ---
 
-## PPC32-KA-002 — Unresolved GOT2 internal function pointers treated as clobbering calls
+## PPC32-KA-002: Unresolved GOT2 internal function pointers treated as clobbering calls
 
 **Description:**  
 `PPC32TaintTracker` resolves GOT2 entries that point to PLT stubs (imported functions).
@@ -61,7 +61,7 @@ internal VAs. Add those VAs as custom sinks or trace them separately.
 
 ---
 
-## PPC32-KA-003 — LIEF relocation bug silently drops PLT entries on Huawei-specific binaries
+## PPC32-KA-003: LIEF relocation bug silently drops PLT entries on Huawei-specific binaries
 
 **Description:**  
 Huawei bootloaders use a vendor-specific ELF relocation type (0x40000054) that LIEF reports
@@ -92,7 +92,7 @@ a theoretical risk.
 
 ---
 
-## PPC32-KA-004 — Endian mismatch defaults produce wrong results on little-endian targets
+## PPC32-KA-004: Endian mismatch defaults produce wrong results on little-endian targets
 
 **Description:**  
 `PPC32TaintTracker.from_path()` defaults to big-endian (`endian='big'`). POWER LE Linux
@@ -110,7 +110,7 @@ Pass `endian='little'` for POWER LE targets. Check `e_ident[EI_DATA]`.
 
 ---
 
-## PPC32-KA-005 — Loop fixpoint not computed; second-iteration taint not propagated
+## PPC32-KA-005: Loop fixpoint not computed; second-iteration taint not propagated
 
 **Description:**  
 `PPC32TaintTracker` performs a linear forward trace without loop fixpoint computation.

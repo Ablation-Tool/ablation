@@ -1,4 +1,4 @@
-# Known Anomalies — NanoMIPSTaintTracker
+# Known Anomalies: NanoMIPSTaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_nanomips.py`  
 **Tracker version:** v2.57.0  
@@ -10,7 +10,7 @@ workaround.
 
 ---
 
-## NANOMIPS-KA-001 — Conservative fallback path marks all $a0-$a3 tainted; produces false positives
+## NANOMIPS-KA-001: Conservative fallback path marks all $a0-$a3 tainted; produces false positives
 
 **Description:**  
 When Capstone 5.x or older is installed, `NanoMIPSTaintTracker` cannot decode nanoMIPS
@@ -39,7 +39,7 @@ positives in a security scanner.
 
 ---
 
-## NANOMIPS-KA-002 — P48 (48-bit) instruction encoding not fully modelled
+## NANOMIPS-KA-002: P48 (48-bit) instruction encoding not fully modelled
 
 **Description:**  
 nanoMIPS has 16-bit (P16), 32-bit (P32), and 48-bit (P48) instruction widths. The P48
@@ -65,7 +65,7 @@ nothing. The P48 prefix is bits [15:11] = `0x18` in the first halfword.
 
 ---
 
-## NANOMIPS-KA-003 — Indirect JALRC calls not followed interprocedurally
+## NANOMIPS-KA-003: Indirect JALRC calls not followed interprocedurally
 
 **Description:**  
 `BALC` (direct call) and PLT stubs are resolved interprocedurally. Indirect calls via
@@ -85,7 +85,7 @@ Resolve the callee VA manually and add it as a custom sink, or trace it with
 
 ---
 
-## NANOMIPS-KA-004 — Loop fixpoint not computed; second-iteration taint not propagated
+## NANOMIPS-KA-004: Loop fixpoint not computed; second-iteration taint not propagated
 
 **Description:**  
 `NanoMIPSTaintTracker` performs a linear forward trace. It does not compute a loop fixpoint.

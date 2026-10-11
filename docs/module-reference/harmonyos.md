@@ -150,7 +150,7 @@ p.summary()
 
 ```python
 # Resolve an lda.str operand index to the actual string value.
-# N is the 16-bit operand from the instruction — it is an INDEX
+# N is the 16-bit operand from the instruction: it is an INDEX
 # into IndexHeader.class_idx[], not a raw file offset.
 s = p.resolve_class_idx(n, region=0)    # returns "" if out of range
 
@@ -219,7 +219,7 @@ if the instruction is `lda.str`, else `None`.
 ### Disassembly text
 
 ```python
-# Single method — smali-style with inline string annotations
+# Single method: smali-style with inline string annotations
 text = dis.disasm_method(method, code)
 # Example output:
 # func_main_0  (10 regs, 3 args, 129 bytes)
@@ -243,7 +243,7 @@ for text in dis.disasm_all():
 for insn in dis.find_calls(code):
     print(f'+{insn.offset:04x}  {insn.mnemonic}')
 
-# String loads — resolved to actual string value
+# String loads: resolved to actual string value
 for insn, s in dis.find_string_loads(code):
     print(f'+{insn.offset:04x}  {repr(s)}')
 ```
@@ -263,7 +263,7 @@ Four prefix groups:
 | `deprecated` | `0xfc` | `deprecated.lda.str` |
 | `wide` | `0xfd` | `wide.createobjectwithexcludedkeys` |
 | `throw` | `0xfe` | `throw.ifdefinednotundefined` |
-| (none) | — | everything else |
+| (none) |: | everything else |
 
 The ISA uses parallel arrays: `opcode_idx[i] ↔ format[i]`. Iterating format
 strings naively against all opcodes creates 138 false collisions (e.g.

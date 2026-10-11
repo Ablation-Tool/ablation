@@ -1,4 +1,4 @@
-# Known Anomalies — X86_32TaintTracker
+# Known Anomalies: X86_32TaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_x86_32.py`  
 **Tracker version:** v2.57.0  
@@ -10,7 +10,7 @@ workaround.
 
 ---
 
-## X8632-KA-001 — Intraprocedural only; interprocedural taint not followed into callees
+## X8632-KA-001: Intraprocedural only; interprocedural taint not followed into callees
 
 **Description:**  
 `X86_32TaintTracker` is an intraprocedural analyser. It does not follow taint into callees
@@ -38,7 +38,7 @@ and interprocedural i386 analysis is a low-priority gap.
 
 ---
 
-## X8632-KA-002 — FPO functions not found by prologue scan; use from_context
+## X8632-KA-002: FPO functions not found by prologue scan; use from_context
 
 **Description:**  
 `X86_32TaintTracker.from_path()` finds function starts by scanning for the `55 89 e5`
@@ -62,7 +62,7 @@ cross-reference analysis, which covers FPO functions when symbols exist.
 
 ---
 
-## X8632-KA-003 — GOT-base (ebx in PIC binaries) not emulated
+## X8632-KA-003: GOT-base (ebx in PIC binaries) not emulated
 
 **Description:**  
 In PIC i386 binaries, the GOT base is held in `ebx`, set by the `__x86.get_pc_thunk.bx`
@@ -86,7 +86,7 @@ GOT-relative access patterns as candidates for manual verification.
 
 ---
 
-## X8632-KA-004 — esp arithmetic limited to push/pop and call cleanup
+## X8632-KA-004: esp arithmetic limited to push/pop and call cleanup
 
 **Description:**  
 The stack frame model tracks `esp_delta` via explicit `push`, `pop`, and `add esp, N`
@@ -109,7 +109,7 @@ Identify stack-manipulation patterns manually using `WindowAnalyzer.dump_text()`
 
 ---
 
-## X8632-KA-005 — Loop fixpoint not computed; second-iteration taint not propagated
+## X8632-KA-005: Loop fixpoint not computed; second-iteration taint not propagated
 
 **Description:**  
 `X86_32TaintTracker` performs a single linear pass. It does not compute a loop fixpoint.

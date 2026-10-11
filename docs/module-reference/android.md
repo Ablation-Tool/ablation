@@ -58,7 +58,7 @@ flowchart TD
 ```python
 from ablation.core.apk_parser import APKParser
 
-# Context manager (preferred — closes the ZIP automatically)
+# Context manager (preferred: closes the ZIP automatically)
 with APKParser.from_path('/path/to/app.apk') as apk:
     mf = apk.parse_manifest()
     print(mf.package, mf.version_name, mf.version_code)
@@ -240,7 +240,7 @@ Maps the exported Binder service surface from DEX class definitions and the mani
         // write to reply Parcel
 
   AIDL-generated $Stub.onTransact handles this dispatch automatically.
-  Raw Binder subclasses write it manually — missing auth checks here are CRITICAL.
+  Raw Binder subclasses write it manually: missing auth checks here are CRITICAL.
 ```
 
 ### Usage

@@ -11,7 +11,7 @@
 **1. No function-start discovery for flat ROM images without a known ISA.**  Every per-ISA decoder
 (`EcuSH2aDecoder`, `EcuVLEDecoder`, `EcuM68kDecoder`) exposes its own `function_starts()` method,
 but all of them require you to already know the ISA before you call them.  For a ROM that arrives
-without metadata — no ELF header, no debug info, unknown vendor — there was no path from "raw
+without metadata: no ELF header, no debug info, unknown vendor: there was no path from "raw
 bytes" to "set of function entry addresses" without a manual identification step first.
 `FlatBinaryFuncStartScanner` bridges that gap: it calls `EcuArchDetector` internally, selects the
 right prologue catalog automatically, and returns a combined function-start set without requiring
@@ -50,7 +50,7 @@ print(result.prologue_hits)
 
 | Parameter | Default | Description |
 |---|---|---|
-| `data` | — | `bytes`, file path (`str`/`Path`), or buffer |
+| `data` |: | `bytes`, file path (`str`/`Path`), or buffer |
 | `base_va` | 0 | Load address of byte 0 in the target address space |
 | `max_call_depth` | 64 | Maximum BFS depth for call-target harvesting |
 
@@ -73,7 +73,7 @@ class FuncStartResult:
 
 ## How it works
 
-### Step 1 — ISA identification
+### Step 1: ISA identification
 
 `EcuArchDetector` runs five discriminators and returns HIGH/MEDIUM/LOW confidence.
 
@@ -83,7 +83,7 @@ When confidence is LOW (or arch is `unknown`), all five catalogs run and the res
 unioned.  This handles pathological ROMs where the first 4 KB is dominated by calibration
 tables, which can suppress the confidence level.
 
-### Step 2 — Call-target harvesting
+### Step 2: Call-target harvesting
 
 Starting from the reset entry point (decoded from the ISA-specific reset vector location):
 
@@ -92,10 +92,10 @@ Starting from the reset entry point (decoded from the ISA-specific reset vector 
 - Each new target is pushed to the BFS queue
 - The scan stops at the first return instruction per function, or after 512 instructions
 
-Indirect calls (JSR / BLR / BX LR / SH-2A JSR) are not resolved — they require a taint
+Indirect calls (JSR / BLR / BX LR / SH-2A JSR) are not resolved: they require a taint
 trace.  Direct calls only.
 
-### Step 3 — Prologue pattern scan
+### Step 3: Prologue pattern scan
 
 Full image scan for ISA-specific prologue byte sequences:
 

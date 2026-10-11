@@ -1,16 +1,16 @@
-# Known Anomalies — TriCoreTaintTracker
+# Known Anomalies: TriCoreTaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_tricore.py`  
 **Tracker version:** v2.56.0  
 **Format:** ISO 26262 Part 8 / TASKING qualification kit (see `ABLATION-STANDARDS.md` §2.3)
 
 An anomaly is a condition under which `TriCoreTaintTracker` is known to produce an incorrect
-result — either a false negative (missed finding) or a false positive (spurious finding).
+result: either a false negative (missed finding) or a false positive (spurious finding).
 Each entry documents the triggering condition, the impact, and the recommended workaround.
 
 ---
 
-## TRICORE-KA-001 — Return-value aliasing across call chains not modelled
+## TRICORE-KA-001: Return-value aliasing across call chains not modelled
 
 **Description:**  
 `TriCoreTaintTracker` propagates taint into callees via the argument registers
@@ -42,7 +42,7 @@ using `scan_function()` with `init_labels` set to the specific source register o
 
 ---
 
-## TRICORE-KA-002 — No loop fixpoint; second-iteration taint not propagated
+## TRICORE-KA-002: No loop fixpoint; second-iteration taint not propagated
 
 **Description:**  
 `TriCoreTaintTracker` performs a linear forward trace. It does not compute a loop fixpoint.
@@ -69,7 +69,7 @@ treat the loop body's output as tainted regardless of tracker output.
 
 ---
 
-## TRICORE-KA-003 — ELF mode requires symbols; flat ROM interprocedural uses caller-supplied boundaries
+## TRICORE-KA-003: ELF mode requires symbols; flat ROM interprocedural uses caller-supplied boundaries
 
 **Description:**  
 `TriCoreTaintTracker.run()` and `run_interprocedural()` in ELF mode require ELF symbols for
@@ -97,7 +97,7 @@ the scanner estimate and re-run if a finding is suspected but not appearing.
 
 ---
 
-## TRICORE-KA-004 — CSA memory-dump taint (STLCX / LDLCX) not modelled
+## TRICORE-KA-004: CSA memory-dump taint (STLCX / LDLCX) not modelled
 
 **Description:**  
 TriCore's hardware CSA (Context Save Area) mechanism uses the `STLCX` / `LDLCX` instructions
@@ -126,7 +126,7 @@ held in FCX/PCX; the number of CSA frames needed is bounded by the call depth.
 
 ---
 
-## TRICORE-KA-005 — Capstone 5.0+ required; silent decode failure on older versions
+## TRICORE-KA-005: Capstone 5.0+ required; silent decode failure on older versions
 
 **Description:**  
 `CS_ARCH_TRICORE` is absent from Capstone 4.x and earlier. If `TriCoreTaintTracker` is

@@ -69,17 +69,17 @@ dec = EcuM68kDecoder.from_path("P01_rom.bin", base_va=0)
 # From raw bytes
 dec = EcuM68kDecoder.from_bytes(rom_bytes, base_va=0)
 
-# function_starts() — pure pattern scan, no Capstone required
+# function_starts(): pure pattern scan, no Capstone required
 starts = dec.function_starts()
 print(f"{len(starts)} probable functions")
 
-# disassemble() — requires Capstone; raises ImportError if not installed
+# disassemble(): requires Capstone; raises ImportError if not installed
 insns = dec.disassemble(start=0xB00, end=0x2000)
 for i in insns:
     if i.insn_type in ("CALL", "RETURN", "PROLOGUE"):
         print(i)
 
-# insn_length() — uses Capstone; falls back to 2 if unavailable
+# insn_length(): uses Capstone; falls back to 2 if unavailable
 length = dec.insn_length(offset=0x42C)
 ```
 
@@ -87,7 +87,7 @@ length = dec.insn_length(offset=0x42C)
 
 | Parameter | Default | Description |
 |---|---|---|
-| `data` | — | `bytes`, file path (`str`/`Path`), or raw bytes buffer |
+| `data` |: | `bytes`, file path (`str`/`Path`), or raw bytes buffer |
 | `base_va` | 0 | Virtual address of the first byte in `data`. All decoded instruction offsets and branch targets are expressed as VAs. |
 
 ---
@@ -102,7 +102,7 @@ class M68kInsn:
     op_str:    str         # Capstone operand string, e.g., "a6, #$fff0"
     insn_type: str         # "RETURN", "BRANCH", "CALL", "PROLOGUE", "MISC"
     raw:       bytes       # raw instruction bytes (2, 4, 6, or 8)
-    size:      int         # len(raw) — convenience alias
+    size:      int         # len(raw): convenience alias
     target:    int | None  # branch/call target VA when statically resolvable
 ```
 

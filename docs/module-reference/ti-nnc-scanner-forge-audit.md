@@ -1,4 +1,4 @@
-# TI NNC Scanner — FORGE Audit + DEV & TEST ORCHESTRATION PLAN
+# TI NNC Scanner: FORGE Audit + DEV & TEST ORCHESTRATION PLAN
 
 **Module:** `ablation/analyzers/ti_nnc_scanner.py`  
 **Version:** v2.69.0  
@@ -25,7 +25,7 @@ Path is passed only to `lief.parse()`. No `open()` calls on user-supplied path. 
 No credentials, API keys, or secrets in the module. **PASS**
 
 ### §5 Integer Overflow / Underflow
-`count = size // 4` — floor division, always non-negative. `content[:count * 4]` — safe slice. **PASS**
+`count = size // 4`: floor division, always non-negative. `content[:count * 4]`: safe slice. **PASS**
 
 ### §6 Memory Safety
 Pure Python. No ctypes, no C extensions invoked directly by this module. **PASS**
@@ -41,30 +41,30 @@ Pure Python. No ctypes, no C extensions invoked directly by this module. **PASS*
 No network calls, no file writes, no logging statements. **PASS**
 
 ### §9 Dependencies
-- `lief>=0.14.0` — already in `pyproject.toml`. No new dependency introduced. **PASS**
-- `struct`, `re`, `dataclasses`, `pathlib`, `typing` — stdlib. **PASS**
+- `lief>=0.14.0`: already in `pyproject.toml`. No new dependency introduced. **PASS**
+- `struct`, `re`, `dataclasses`, `pathlib`, `typing`: stdlib. **PASS**
 
 ### §10 Logic Correctness
 - Symbol iteration: `binary.symbols` may include both `.symtab` and `.dynsym` entries in lief.
-  Duplicates would overwrite `run_syms[model]` with the same `(va, sym)` — no semantic issue.
-- `_infer_mode`: uses `finished_syms` membership to detect NPU HW mode — correct per NNC spec §3.5.
+  Duplicates would overwrite `run_syms[model]` with the same `(va, sym)`: no semantic issue.
+- `_infer_mode`: uses `finished_syms` membership to detect NPU HW mode: correct per NNC spec §3.5.
 - Float extraction uses `'<f'` (little-endian). All TI MCU NNC targets are LE. **PASS**
 - Minor: big-endian ARM builds would misparse floats. Not a practical risk (no TI MCU NNC target is BE).
 - **PASS**
 
-**gate_passed: True** — 0 HIGH, 0 CRITICAL findings.
+**gate_passed: True**: 0 HIGH, 0 CRITICAL findings.
 
 ---
 
 ## DEV & TEST ORCHESTRATION PLAN
 
-### Test 1 — Import smoke test
+### Test 1: Import smoke test
 ```python
 from ablation.analyzers.ti_nnc_scanner import TiNNCScanner, TiNNCScanResult
 ```
 Expected: no ImportError.
 
-### Test 2 — Missing file graceful handling
+### Test 2: Missing file graceful handling
 ```python
 scanner = TiNNCScanner.from_path('/nonexistent.elf')
 result = scanner.scan()
@@ -73,13 +73,13 @@ assert result.findings == []
 ```
 Expected: empty result, lief warning to stderr, no exception.
 
-### Test 3 — Non-ELF input (COFF/PE)
+### Test 3: Non-ELF input (COFF/PE)
 Build or find a PE binary. Expected: `isinstance` guard returns empty result.
 
-### Test 4 — ARM ELF with no tvmgen symbols
+### Test 4: ARM ELF with no tvmgen symbols
 Any standard ARM ELF firmware without NNC content. Expected: empty result.
 
-### Test 5 — Synthetic ELF with tvmgen symbols (positive test)
+### Test 5: Synthetic ELF with tvmgen symbols (positive test)
 Craft an ELF with:
 - `tvmgen_default_run` (GLOBAL binding)
 - `tvmgen_default_bias_data` (WEAK binding, size=12, 3 floats in .rodata)
@@ -94,15 +94,15 @@ Expected findings:
 - 1x TINCC-004 (skip-normalize)
 Module: name='default', execution_mode='npu_hw', has_finished_flag=True
 
-### Test 6 — Multi-model NPU contention
+### Test 6: Multi-model NPU contention
 Craft ELF with `tvmgen_a_run`, `tvmgen_a_finished`, `tvmgen_b_run`, `tvmgen_b_finished`.
 Expected: TINCC-003 fires once for models [a, b].
 
-### Test 7 — Soft-mode model (no finished flag)
+### Test 7: Soft-mode model (no finished flag)
 Craft ELF with `tvmgen_default_run` only, no `finished` flag, no `TI_NPU_init`.
 Expected: execution_mode='npu_soft', no TINCC-002.
 
-### Test 8 — Report formatting
+### Test 8: Report formatting
 `TiNNCScanner.report(result)` on a populated result.
 Expected: ASCII table with all findings, sorted HIGH→MEDIUM→INFO.
 

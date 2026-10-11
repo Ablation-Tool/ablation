@@ -105,7 +105,7 @@ finally:
 Fortinet hardware firmware containers include an RSA-2048 signature block in PKCS#1 v1.5 format. The FGT7K-2 finding established that a 32-byte RC4 key is embedded in the padding string (PS) of that block rather than using the standard 0xFF fill.
 
 ```
-[0x00][0x01][PS bytes — should be 0xFF, but Fortinet stores key material here][0x00][DigestInfo][Hash]
+[0x00][0x01][PS bytes: should be 0xFF, but Fortinet stores key material here][0x00][DigestInfo][Hash]
 ```
 
 The scanner locates blocks where at least 80% of the PS bytes are 0xFF (real PKCS#1 padding). It extracts the non-0xFF bytes from the padding string as a candidate key. Requiring the 80% threshold prevents the 2-byte `0x00 0x01` pattern from generating false-positive candidates across the full binary.

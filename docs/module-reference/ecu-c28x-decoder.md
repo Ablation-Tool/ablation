@@ -16,7 +16,7 @@
    decoder, Ablation could not decide which convention a given function uses, making CFG
    construction impossible.
 
-3. **`FFC XAR7, 22bit` — a third calling convention — was unknown to Ablation.** FFC
+3. **`FFC XAR7, 22bit`: a third calling convention: was unknown to Ablation.** FFC
    (Fast Function Call) stores the return address in the XAR7 register rather than the
    stack or RPC. It is used in performance-sensitive inner loops and is not identified by
    any stack-frame analysis tool that assumes only CALL/RET pairs.
@@ -156,7 +156,7 @@ into the raw data buffer (not word addresses). Conversion: `byte_off = (word_va 
 
 ## Reference
 
-SPRU430F — TMS320C28x CPU and Instruction Set Reference Guide, April 2015.
+SPRU430F: TMS320C28x CPU and Instruction Set Reference Guide, April 2015.
 Per-instruction encoding pages used: 163 (B), 167 (BF), 162 (BANZ), 162 (BAR),
 197 (FFC), 217 (LB 22bit), 216 (LB *XAR7), 219 (LC 22bit), 218 (LC *XAR7),
 220 (LCR #22bit), 221 (LCR *XARn), 213 (INTR), 207 (IACK), 227 (LRET),

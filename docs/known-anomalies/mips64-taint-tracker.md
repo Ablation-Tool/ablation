@@ -1,4 +1,4 @@
-# Known Anomalies — MIPS64TaintTracker
+# Known Anomalies: MIPS64TaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_mips64.py`  
 **Tracker version:** v2.57.0  
@@ -10,7 +10,7 @@ workaround.
 
 ---
 
-## MIPS64-KA-001 — N64 extended argument registers alias to Capstone t-register names
+## MIPS64-KA-001: N64 extended argument registers alias to Capstone t-register names
 
 **Description:**  
 The MIPS64 N64 ABI uses eight argument registers: $a0-$a3 ($4-$7) and four additional
@@ -38,7 +38,7 @@ implemented.
 
 ---
 
-## MIPS64-KA-002 — Stack taint not tracked; buffer-passing flows produce false negatives
+## MIPS64-KA-002: Stack taint not tracked; buffer-passing flows produce false negatives
 
 **Description:**  
 The tracker models register taint. It does not track taint that passes through stack memory.
@@ -61,7 +61,7 @@ ARG_PROPAGATED sink calls that the register-level model misses.
 
 ---
 
-## MIPS64-KA-003 — Indirect JALR calls not followed interprocedurally
+## MIPS64-KA-003: Indirect JALR calls not followed interprocedurally
 
 **Description:**  
 Direct `JAL` and PLT-resolved indirect calls are handled interprocedurally. Indirect calls
@@ -82,7 +82,7 @@ Identify the callee VA manually and add it as a custom sink, or trace it with
 
 ---
 
-## MIPS64-KA-004 — Endian mismatch defaults produce wrong results on little-endian targets
+## MIPS64-KA-004: Endian mismatch defaults produce wrong results on little-endian targets
 
 **Description:**  
 `MIPS64TaintTracker.from_path()` defaults to big-endian (`endian='big'`). Little-endian
@@ -103,7 +103,7 @@ RouterOS 64 and other LE MIPS64 targets.
 
 ---
 
-## MIPS64-KA-005 — Loop fixpoint not computed; second-iteration taint not propagated
+## MIPS64-KA-005: Loop fixpoint not computed; second-iteration taint not propagated
 
 **Description:**  
 `MIPS64TaintTracker` performs a linear forward trace. It does not compute a loop fixpoint.

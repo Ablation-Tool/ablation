@@ -12,7 +12,7 @@
 container format (no ELF, no IHEX, no SREC wrapper), there is no reliable way to know
 what instruction set it contains before Ablation selects a decoder.  Choosing the wrong
 decoder silently misaligns on every instruction, making all downstream RE work garbage.
-Before this module, ISA identification was a manual step — inspecting hex dumps, looking at
+Before this module, ISA identification was a manual step: inspecting hex dumps, looking at
 reset vectors, pattern-matching by eye.  `EcuArchDetector` runs all discriminators in one
 call and returns a confident verdict (HIGH/MEDIUM/LOW) with a human-readable reason, so
 the RE pipeline can select the correct decoder without a manual step.
@@ -27,7 +27,7 @@ ARM wrapper would fit in the pipeline.
 **3. No detection for Infineon TriCore AURIX flat binary dumps.**  TriCore AURIX (TC1.6/
 TC2xx/TC3xx) is used in Bosch ME17/MED17 engine controllers, Continental MG1, and Waqas
 GEN3 ECU platforms.  Without this discriminator, a TriCore flat dump was misidentified as
-M68K — the big-endian reset-vector check at offset 4 fired on arbitrary bytes that happened
+M68K: the big-endian reset-vector check at offset 4 fired on arbitrary bytes that happened
 to fall in range.  The TriCore discriminator scans the full image for little-endian pointer
 values in the AURIX physical address map (PFLASH at 0x80000000–0xBFFFFFFF, peripherals at
 0xE0000000–0xFFFFFFFF; both ranges from TC1.8 Architecture Manual Vol 1, §8 Table 13) and
@@ -42,7 +42,7 @@ coincidentally land in PPC32 primary-opcode density ranges.  The correct result 
 by any instruction-density approach because Capstone cannot decode M32R.  The `_score_m32r`
 discriminator uses a structural ROM property instead: the M32R exception vector table layout
 (``FF 00 00 NN`` at fixed aligned offsets in the first 256 bytes), which is zero-false-positive
-across 42 non-M32R ECU ROMs and scores 0.96 — above the PPC32 false-positive ceiling.
+across 42 non-M32R ECU ROMs and scores 0.96: above the PPC32 false-positive ceiling.
 
 ---
 
@@ -57,7 +57,7 @@ across 42 non-M32R ECU ROMs and scores 0.96 — above the PPC32 false-positive c
 | `ppc32` | PowerPC 32-bit Book E | GM E38 PCM, Denso ECUs |
 | `ppc_vle` | PowerPC VLE (NXP e200z) | GM E39a/E54/E92 (MPC5566) |
 | `sh2a` | Renesas SH-2A / SH-2 | Honda SH7058/SH7059, Subaru EcuFlash |
-| `unknown` | No discriminator above threshold | — |
+| `unknown` | No discriminator above threshold |: |
 
 ---
 
@@ -85,7 +85,7 @@ for cand in det.candidates():
 
 | Parameter | Default | Description |
 |---|---|---|
-| `data` | — | `bytes`, file path (`str`/`Path`), or buffer |
+| `data` |: | `bytes`, file path (`str`/`Path`), or buffer |
 | `sample_size` | 4096 | Bytes from start of image to use for density sampling. Pass 0 to sample the full image. |
 
 ---
@@ -131,15 +131,15 @@ only; 0.60 for PFLASH ≥ 1.5 %; 0.45 for peripheral ≥ 2 % only.
 ### ARM Cortex-M
 
 Vector table at offset 0 (little-endian):
-- Word at offset 0: initial MSP — must be in SRAM range `0x20000000–0x3FFFFFFF`
-- Word at offset 4: reset handler — must have Thumb bit set (LSB=1) and point into flash (`< 0x20000000`)
+- Word at offset 0: initial MSP: must be in SRAM range `0x20000000–0x3FFFFFFF`
+- Word at offset 4: reset handler: must have Thumb bit set (LSB=1) and point into flash (`< 0x20000000`)
 
 Score 0.90 when both hold; 0.55 when only MSP is in SRAM.
 
 ### M68K / CPU32
 
 Big-endian reset vector:
-- Word at offset 4: initial PC — must be within the image size
+- Word at offset 4: initial PC: must be within the image size
 
 Secondary signal: LINK.W A6, #-N prologue density (`0x4E56` + negative 16-bit displacement).
 
@@ -162,14 +162,14 @@ Score = `min(density * 2.5, 0.92)`; fires at ≥ 15% VLE-halfword density.
 ### SH-2A / SH-2
 
 Big-endian reset vector at offset 4 + instruction density:
-- `0x4F22` (STS.L PR, @-R15) — primary prologue: density ≥ 0.1%
-- `0x000B` (RTS) — return instruction: density ≥ 0.2%
+- `0x4F22` (STS.L PR, @-R15): primary prologue: density ≥ 0.1%
+- `0x000B` (RTS): return instruction: density ≥ 0.2%
 
 Score 0.88 for reset + STS.L density; 0.75 for reset + RTS density; 0.60 for reset only; 0.40 for STS.L density without reset.
 
 ### M32R
 
-Structural discriminator based on the M32R exception vector table layout (not instruction density — Capstone has no CS_ARCH_M32R support).
+Structural discriminator based on the M32R exception vector table layout (not instruction density: Capstone has no CS_ARCH_M32R support).
 
 M32R ROM exception dispatch entries use a 4-byte format: first three bytes are ``FF 00 00`` (TRAP/BRA-long opcode prefix), fourth byte is the exception index.
 
@@ -189,6 +189,6 @@ Verified zero false positives across 9 SH-2A, 18 PPC32, and 1 TriCore ROM images
 
 - Discriminators are density-based: a ROM with very little code in the first 4 KB sample (e.g., a ROM that starts with calibration tables) may misidentify or return LOW confidence.  Pass `sample_size=0` to sample the full image.
 - ARM Cortex-M identification is based solely on the vector table (no instruction density signal).  A ROM that happens to have a 4-byte value in the SRAM range at offset 0 will false-positive.  Use with `is_confident` check.
-- No support for RISC-V, RH850, SH-4, or M32C — add a new `_score_*` method following the same pattern.
+- No support for RISC-V, RH850, SH-4, or M32C: add a new `_score_*` method following the same pattern.
 - TriCore detection requires scanning the full image; calling `EcuArchDetector(data, sample_size=N)` with a small N will still cause the TriCore discriminator to scan all of `data`, not the sample.  This is intentional: startup code density is too low in the first few KB.
 - TriCore artifact guard (`periph > 2 × pflash AND periph > 15 %`) may reject a legitimate TriCore binary if the code region happens to have very heavy SFR access with low function-call density.  In that case pass `sample_size=0` and verify manually.
