@@ -230,12 +230,50 @@ def cmd_cfg(args):
 
 
 def cmd_crypto(args):
-    from ablation.analyzers.crypto_audit import CryptoAudit
+    from ablation.core.firmware_analyzer import scan_firmware_file
+    from ablation.core.render import (
+        RED, ORANGE, YELLOW, GREEN, GRAY, BOLD, DIM, RESET,
+        box, sbox, section,
+    )
 
     p = str(_require_binary(args.binary))
-    audit = CryptoAudit(p)
-    report = audit.run()
-    print(report)
+    result = scan_firmware_file(p)
+
+    _SEV_COLOR = {'CRITICAL': RED, 'HIGH': RED, 'MEDIUM': ORANGE, 'LOW': YELLOW}
+
+    print(box([
+        BOLD + f"crypto  {result['filepath']}" + RESET,
+        DIM + (f"size: {result['size']:,} bytes  "
+               f"entropy sections: {len(result['entropy_sections'])}  "
+               f"signatures: {len(result['signatures'])}") + RESET,
+    ]))
+    print()
+
+    findings = result['findings']
+    if findings:
+        print(section('FINDINGS', RED))
+        print()
+        for f in findings:
+            c = _SEV_COLOR.get(f['severity'], GRAY)
+            print(sbox([
+                c + f"[{f['severity']}]  {f['category']}" + RESET,
+                DIM + str(f['detail']) + RESET,
+            ], c))
+            print()
+    else:
+        print(GREEN + 'No findings.' + RESET)
+        print()
+
+    if result['entropy_sections']:
+        print(section('ENTROPY TRANSITIONS', GRAY))
+        print()
+        _ETYPE_COLOR = {'encrypted': RED, 'compressed': YELLOW}
+        for sec in result['entropy_sections']:
+            ec = _ETYPE_COLOR.get(sec['type'], GRAY)
+            print(f"  {ec}{sec['type']:<14}{RESET}"
+                  f"  {DIM}offset 0x{sec['offset']:08x}  "
+                  f"entropy {sec['entropy']:.2f}{RESET}")
+        print()
 
 
 def cmd_corpus(args):
