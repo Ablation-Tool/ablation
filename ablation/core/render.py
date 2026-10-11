@@ -15,7 +15,11 @@ import sys
 # ── Mode detection ─────────────────────────────────────────────────────────────
 
 def _detect_mode() -> str:
-    if not sys.stdout.isatty():
+    try:
+        tty = sys.stdout.isatty()
+    except Exception:
+        return 'plain'
+    if not tty:
         return 'plain'
     if os.environ.get('NO_COLOR'):
         return 'plain'
@@ -102,8 +106,8 @@ def sbox(lines: list[str], color: str = '', width: int = _DEFAULT_WIDTH) -> str:
 def section(title: str, color: str = '', width: int = _DEFAULT_WIDTH) -> str:
     """Horizontal rule with a title. Use for layer and section headers."""
     c = color or GRAY
-    bar = '─' * (width - len(strip(title)) - 2)
-    return c + title + ' ' + bar + RESET
+    bar = '─' * max(0, width - len(strip(title)) - 2)
+    return c + title + (' ' + bar if bar else '') + RESET
 
 
 def arrow(label: str = '', color: str = '') -> str:
