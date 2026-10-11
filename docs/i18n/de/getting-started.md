@@ -179,4 +179,4 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 
 - [Workflow zur Schwachstellensuche](../../workflows/vuln-hunting.md) -- vollständige Schleife vom Sweep bis zur offenlegungsbereiten Erkenntnis
 - [Modulreferenz](../../module-reference/) -- über 50 Analysatoren mit Parametern und Beispielen
-- [CONTRIBUTING.md](../../../CONTRIBUTING.md) -- wie man Muster, Sweeps und Analysatormodule hinzufügt
+- [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- wie man Muster, Sweeps und Analysatormodule hinzufügt

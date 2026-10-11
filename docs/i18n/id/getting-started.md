@@ -179,4 +179,4 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 
 - [Alur kerja perburuan kerentanan](../../workflows/vuln-hunting.md) -- loop lengkap dari pemindaian ke temuan siap pengungkapan
 - [Referensi modul](../../module-reference/) -- lebih dari 50 analyzer dengan parameter dan contoh
-- [CONTRIBUTING.md](../../../CONTRIBUTING.md) -- cara menambahkan pola, pemindaian, dan modul analyzer
+- [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- cara menambahkan pola, pemindaian, dan modul analyzer
