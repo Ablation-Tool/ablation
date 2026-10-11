@@ -34,7 +34,7 @@ Acknowledgment within 72 hours. Bugs are remediated as fast as possible. Coordin
 
 Ablation meets all mapped requirements from NIST SP 800-218 (SSDF), CISA Secure by Design, and DoD MIL-HDBK-115C. The full compliance matrix is in [`docs/ABLATION-STANDARDS.md`](docs/ABLATION-STANDARDS.md).
 
-**Supply chain.** Dependencies are pinned with hashes in `requirements-hashed.txt`. `scripts/monitor-supply-chain.sh` runs pip-audit against all dependencies and writes a dated JSON report to `docs/supply-chain-reports/` so new CVEs surface before the next engagement. A software bill of materials is at `docs/sbom/ablation-sbom.json`.
+**Supply chain.** Dependencies are pinned with hashes in `requirements/hashed.txt`. `scripts/monitor-supply-chain.sh` runs pip-audit against all dependencies and writes a dated JSON report to `docs/supply-chain-reports/` so new CVEs surface before the next engagement. A software bill of materials is at `docs/sbom/ablation-sbom.json`.
 
 **Taint engine.** The six labeled taint tracker modules require 85% statement coverage on every commit. The gate is enforced by `fail_under = 85` in `pyproject.toml` so a regression in taint logic fails the test suite. Known anomalies for each tracker are documented in `docs/known-anomalies/`.
 
