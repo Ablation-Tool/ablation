@@ -36,7 +36,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Security Analysis:</strong> taint analysis, exposure mapping, finding validation, source code auditing, compiler defect detection, cryptographic analysis, sink arg classifier</summary>
+<summary><strong>Security Analysis</strong> </summary>
 
 | Capability | |
 |:---|:---|
@@ -51,7 +51,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Runtimes & Formats:</strong> LoongArch64, nanoMIPS, Windows PE, BYOVD drivers, Android, Erlang/BEAM, Go, game engines, firmware, HarmonyOS/ArkTS, PS3 SELF, MicroPython .mpy</summary>
+<summary><strong>Runtimes & Formats</strong> </summary>
 
 | Capability | |
 |:---|:---|
@@ -72,7 +72,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Workflow:</strong> version diffing, cross-target learning, KASAN-oracle, module quality gate, coverage gate, kernel module classifier</summary>
+<summary><strong>Workflow</strong> </summary>
 
 | Capability | |
 |:---|:---|
@@ -86,7 +86,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Automotive RE:</strong> architecture detection, ROM layout, calibration parsers, CAN DBC, ECU security access scanner</summary>
+<summary><strong>Automotive RE</strong> </summary>
 
 | Capability | |
 |:---|:---|
