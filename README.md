@@ -221,7 +221,7 @@ Dependencies are pinned with exact hashes and scanned weekly for known CVEs.
 
 **[CISA Secure by Design](https://www.cisa.gov/securebydesign)**
 
-It asks software manufacturers to commit to three things: take ownership of the security outcomes of the people who rely on the software, be transparent about its limitations, and treat security as a requirement rather than a recommendation.
+CISA asks software manufacturers to commit to three things: take ownership of the security outcomes of the people who rely on the software, be transparent about its limitations, and treat security as a requirement rather than a recommendation.
 
 For a RE framework, taking ownership of security outcomes has a specific meaning.
 
@@ -237,7 +237,9 @@ The precommit gate is not advisory. No code enters the repository without passin
 
 **[MIL-HDBK-115C](https://www.nsa.gov)**
 
-The US Department of Defense handbook for reverse engineering methodology. It defines four phases: planning before analysis begins, static analysis, dynamic confirmation of findings, and documentation of results.
+The US Department of Defense handbook for reverse engineering methodology. 
+
+It defines four phases:
 
 **Phase 1.** Every engagement starts with a session file recording the target description, artifact hash, tool selection, and documentation plan before any analysis runs. The rule that semantic search runs before manual disassembly maps to the following phase.
 
