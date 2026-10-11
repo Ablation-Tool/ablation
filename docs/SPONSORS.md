@@ -11,7 +11,7 @@ That stubbornness led to two things: reverse engineering Cisco ASA LINA source, 
 
 I have completely fallen in love with reverse engineering. 
 
-It gives me the same pull hacking did: the adrenaline, the deep curiosity, the feeling that there's always one more layer and it keeps me out of trouble.
+It gives me the same euphoric jaw clenching problem solving task completion that hacking did and it keeps me out of trouble.
 
 
 If you want to keep the work going, the target machine is a System76 Pangolin Pro at $3,873.
