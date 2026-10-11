@@ -179,4 +179,4 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 
 - [취약점 탐색 워크플로](../../workflows/vuln-hunting.md) -- 스윕부터 공개 준비 결과까지의 전체 루프
 - [모듈 레퍼런스](../../module-reference/) -- 매개변수와 예시가 포함된 50개 이상의 분석기
-- [CONTRIBUTING.md](../../../CONTRIBUTING.md) -- 패턴, 스윕, 분석기 모듈 추가 방법
+- [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- 패턴, 스윕, 분석기 모듈 추가 방법

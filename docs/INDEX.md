@@ -133,7 +133,7 @@ Audit any large codebase for security vulnerabilities, faster than reading it li
 
 ## Release Notes
 
-See [CHANGELOG.md](../CHANGELOG.md) for full version history.
+See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
 | Version | Summary |
 |---|---|

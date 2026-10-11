@@ -20,7 +20,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/Ablation-Tool/ablation"
 Issues = "https://github.com/Ablation-Tool/ablation/issues"
-Changelog = "https://github.com/Ablation-Tool/ablation/blob/main/CHANGELOG.md"
+Changelog = "https://github.com/Ablation-Tool/ablation/blob/main/docs/CHANGELOG.md"
 Source = "https://github.com/Ablation-Tool/ablation"
 
 [project.optional-dependencies]

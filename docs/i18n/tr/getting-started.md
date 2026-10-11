@@ -179,4 +179,4 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 
 - [Güvenlik açığı avlama iş akışı](../../workflows/vuln-hunting.md) -- taramadan açıklamaya hazır bulguya tam döngü
 - [Modül referansı](../../module-reference/) -- parametreler ve örneklerle 50'den fazla analizör
-- [CONTRIBUTING.md](../../../CONTRIBUTING.md) -- kalıplar, taramalar ve analizör modülleri nasıl eklenir
+- [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- kalıplar, taramalar ve analizör modülleri nasıl eklenir

@@ -179,4 +179,4 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 
 - [Fluxo de trabalho de caça a vulnerabilidades](../../workflows/vuln-hunting.md) -- ciclo completo da varredura até a descoberta pronta para divulgação
 - [Referência de módulos](../../module-reference/) -- mais de 50 analisadores com parâmetros e exemplos
-- [CONTRIBUTING.md](../../../CONTRIBUTING.md) -- como adicionar padrões, varreduras e módulos de analisadores
+- [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- como adicionar padrões, varreduras e módulos de analisadores
