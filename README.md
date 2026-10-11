@@ -18,7 +18,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 ## Capabilities
 
 <details>
-<summary><strong>Analysis:</strong> the flywheel, semantic search, binary lifting, hypothesis engine, C++ vtable reconstruction, cross-library tracing, DAG adapter, PPC32 GOT2 resolver, dynamic sandbox</summary>
+<summary><strong>Analysis</strong> </summary>
 
 | Capability | |
 |:---|:---|
