@@ -18,8 +18,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 ## Capabilities
 
 <details>
-<summary><strong>Analysis</strong> </summary>
-
+<summary><strong>Analysis:</strong> the flywheel, semantic search, binary lifting, hypothesis engine, C++ vtable reconstruction, cross-library tracing, DAG adapter, PPC32 GOT2 resolver, dynamic sandbox</summary>
 
 |:---|:---|
 | [**The Flywheel**](docs/module-reference/flywheel.md) | Every confirmed finding replays as a search pattern on every future binary. A vulnerability confirmed on one vendor's firmware surfaces automatically when sweeping a different vendor's binary because confirmed findings are stored and replayed at engagement start. |
@@ -36,8 +35,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Security Analysis</strong> </summary>
-
+<summary><strong>Security Analysis:</strong> taint analysis, exposure mapping, finding validation, source code auditing, compiler defect detection, cryptographic analysis, sink arg classifier</summary>
 
 |:---|:---|
 | [**Taint Analysis**](docs/module-reference/taint-analysis.md) | Follows network input through the call graph to security-sensitive sinks across 14 architectures. Library call sites do not stop the trace because register-level tracking resolves shared library stubs. |
@@ -51,8 +49,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Runtimes & Formats</strong> </summary>
-
+<summary><strong>Runtimes & Formats:</strong> LoongArch64, nanoMIPS, Windows PE, BYOVD drivers, Android, Erlang/BEAM, Go, game engines, firmware, HarmonyOS/ArkTS, PS3 SELF, MicroPython .mpy</summary>
 
 |:---|:---|
 | [**LoongArch64**](docs/module-reference/loongarch64.md) | The only public reverse engineering toolkit built specifically for LoongArch64. It covers the full analysis pipeline so no architecture-specific workarounds are needed. |
@@ -72,8 +69,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Workflow</strong> </summary>
-
+<summary><strong>Workflow:</strong> version diffing, cross-target learning, KASAN-oracle, module quality gate, coverage gate, kernel module classifier</summary>
 
 |:---|:---|
 | [**Version Diffing**](docs/workflows/cross-version.md) | Checks whether the logic changed, not whether the file changed, so a cosmetic recompile cannot hide an unpatched vulnerability. |
@@ -86,8 +82,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Automotive RE</strong> </summary>
-
+<summary><strong>Automotive RE:</strong> architecture detection, ROM layout, calibration parsers, CAN DBC, ECU security access scanner</summary>
 
 |:---|:---|
 | [**ECU Architecture Detector**](docs/module-reference/ecu-arch-detector.md) | Identifies the ISA of a flat ECU ROM from raw bytes alone. PPC32, SH-2A, TriCore, RH850, V850, M68K, C28x, and M32R all produce recognizable structural signatures without symbols or file headers. |
