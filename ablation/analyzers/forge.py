@@ -216,6 +216,11 @@ class ForgeFinding:
     recommendation: str
     source: str         # "module_audit" or "source_audit"
     cwe: str = ""
+    detection_stage: str = "deploy"
+    # develop — mypy/arity/import check catches it immediately (baseline cost)
+    # debug   — first manual test run exposes it (~2-3x develop)
+    # test    — integration or system test required (~8x develop)
+    # deploy  — only surfaces in production; users hit it first (~18x develop)
 
 
 @dataclass
@@ -240,14 +245,30 @@ class ForgeReport:
         n_low    = sum(1 for f in self.findings if f.severity == "LOW")
         n_info   = sum(1 for f in self.findings if f.severity == "INFO")
 
+        _STAGE_COST = {"develop": "free", "debug": "$", "test": "$$", "deploy": "$$$"}
+        _STAGE_ORDER = ["develop", "debug", "test", "deploy"]
+
+        highs = [f for f in self.findings if f.severity in ("CRITICAL", "HIGH")]
+        stage_counts: dict[str, int] = {}
+        for f in highs:
+            s = f.detection_stage.lower()
+            stage_counts[s] = stage_counts.get(s, 0) + 1
+
         lines = [
             f"FORGE [{self.mode.upper()}] — {self.path}",
             f"Gate: {'PASSED' if self.gate_passed else 'BLOCKED'}",
             f"Findings: {len(self.findings)}  "
             f"({n_crit} CRITICAL  {n_high} HIGH  {n_medium} MEDIUM  "
             f"{n_low} LOW  {n_info} INFO)",
-            "",
         ]
+        if stage_counts:
+            parts = [
+                f"{s.upper()} ×{stage_counts[s]} ({_STAGE_COST.get(s, '?')})"
+                for s in _STAGE_ORDER if s in stage_counts
+            ]
+            lines.append(f"Stage risk (HIGH/CRIT): {' | '.join(parts)}")
+        lines.append("")
+
         for f in self.findings:
             lines.append(f"  [{f.severity}] {f.title}")
             lines.append(f"    location   : {f.location}")
@@ -257,6 +278,11 @@ class ForgeReport:
             lines.append(f"    description: {f.description}")
             if f.recommendation:
                 lines.append(f"    action     : {f.recommendation}")
+            stage = f.detection_stage.lower()
+            lines.append(
+                f"    stage      : {stage.upper()} — surfaces at {stage} without this audit "
+                f"({_STAGE_COST.get(stage, '?')})"
+            )
             lines.append("")
         if self.summary:
             lines += ["", "Summary:", f"  {self.summary}"]
@@ -366,6 +392,7 @@ class FORGE:
                     recommendation=str(f.get('recommendation', '')),
                     source=str(f.get('source', 'module_audit')),
                     cwe=str(f.get('cwe', '')),
+                    detection_stage=str(f.get('detection_stage', 'deploy')).lower(),
                 ))
 
         report = ForgeReport(
