@@ -29,7 +29,7 @@ try:
     import angr as _angr
     import angr.knowledge_plugins.xrefs.xref as _xref_mod
     HAS_ANGR = True
-except ImportError:
+except Exception:
     HAS_ANGR = False
 
 
