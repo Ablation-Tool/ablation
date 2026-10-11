@@ -18,7 +18,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 ## Capabilities
 
 <details>
-<summary><strong>Analysis:</strong> </summary>
+<summary><strong>Analysis</strong> </summary>
 
 | Capability | |
 |:---|:---|
@@ -36,7 +36,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Security Analysis:</strong> </summary>
+<summary><strong>Security Analysis</strong> </summary>
 
 | Capability | |
 |:---|:---|
@@ -51,7 +51,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Runtimes & Formats:</strong> </summary>
+<summary><strong>Runtimes & Formats</strong> </summary>
 
 | Capability | |
 |:---|:---|
@@ -72,7 +72,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Workflow:</strong> </summary>
+<summary><strong>Workflow</strong> </summary>
 
 | Capability | |
 |:---|:---|
@@ -86,7 +86,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Automotive RE:</strong> </summary>
+<summary><strong>Automotive RE</strong> </summary>
 
 | Capability | |
 |:---|:---|
