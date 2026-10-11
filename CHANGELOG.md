@@ -2,6 +2,27 @@
 
 ---
 
+## v2.70.0
+
+**TI COFF2/AR loader — C28x firmware coverage for TiNNCScanner.**
+
+`TiCoffLoader` parses Texas Instruments COFF2 object files and Unix AR archives
+produced by the TI Code Generation Tools (cl2000). Extracts symbol table entries
+including storage class: `C_UEXT = 19` (tentative external definition) is the TI
+COFF equivalent of `__attribute__((weak))` — there is no `C_WEAKEXT` in TI COFF.
+
+`TiNNCScanner` now calls `TiCoffLoader` before the lief ELF path. C28x firmware
+compiled by the TI NNC for F28P55x targets (cl2000 → COFF, not ELF) is now fully
+covered for all four finding classes, including TINCC-001 weak normalization
+symbol override risk.
+
+New files: `ablation/analyzers/ti_coff_loader.py`,
+`docs/module-reference/ti-coff-loader.md`.
+
+Reference: SPRAAO8 — TI Common Object File Format (April 2009).
+
+---
+
 ## v2.69.0
 
 **TI NNC inference artifact scanner.**

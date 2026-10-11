@@ -1,10 +1,16 @@
 """
 TI Neural Network Compiler (NNC) inference artifact scanner.
 
-Detects TVM-generated `tvmgen_*` symbols in ARM ELF firmware compiled by the TI
-NNC (ti_mcu_nnc, v2.x).  The NNC is built on Apache TVM and produces libraries for
+Detects TVM-generated `tvmgen_*` symbols in firmware compiled by the TI NNC
+(ti_mcu_nnc, v2.x).  The NNC is built on Apache TVM and produces libraries for
 TI MCU targets: F28P55x (C28x), MSPM0 (Cortex-M0+), CC2745/AM13x (Cortex-M33),
 CC1352 (Cortex-M4), AM26x (Cortex-R5), F29H85x (C29x).
+
+Supported binary formats:
+    ELF (ARM Cortex-M33/M4/R5/M0+, C29x):  parsed via lief
+    TI COFF2 / AR archive (C28x F28P55x):  parsed via TiCoffLoader
+        cl2000 emits COFF, not ELF.  In TI COFF, the weak-symbol equivalent
+        is storage class C_UEXT (19) = tentative external definition.
 
 Security surface:
     NNC-generated headers declare normalization arrays as __attribute__((weak)):
@@ -14,6 +20,7 @@ Security surface:
     Any object linked after mod.a that provides a strong symbol of the same name
     silently overrides the normalization parameters, changing the float->int8
     quantization boundary without any compile-time or run-time warning.
+    In TI COFF, the same risk applies via C_UEXT (tentative external) symbols.
 
 Finding classes:
     TINCC-001  HIGH    Weak normalization symbol override risk
@@ -21,15 +28,12 @@ Finding classes:
     TINCC-003  MEDIUM  Multi-model NPU contention (sequential enforcement required)
     TINCC-004  INFO    Skip-normalize mode active — manual normalization required
 
-C28x (F28P55x) note:
-    cl2000 emits COFF, not ELF.  This scanner requires ELF.  C28x firmware is
-    not supported until Gap 1 (C28x ISA decoder with COFF loader) ships.
-
 Usage::
 
     from ablation.analyzers.ti_nnc_scanner import TiNNCScanner
 
-    scanner = TiNNCScanner.from_path('/path/to/firmware.elf')
+    scanner = TiNNCScanner.from_path('/path/to/firmware.elf')   # ARM ELF
+    scanner = TiNNCScanner.from_path('/path/to/mod.a')          # C28x COFF AR
     result  = scanner.scan()
     print(TiNNCScanner.report(result))
 """
@@ -47,6 +51,11 @@ try:
     _LIEF_OK = True
 except ImportError:
     _LIEF_OK = False
+
+from ablation.analyzers.ti_coff_loader import (
+    TiCoffLoader, CoffSymbol,
+    C_EXT, C_UEXT, C_STAT, C_EXTREF,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +167,17 @@ class TiNNCScanner:
     def scan(self) -> TiNNCScanResult:
         result = TiNNCScanResult(binary_path=self._path)
 
+        # Try COFF first (C28x AR archive or standalone .obj)
+        try:
+            loader = TiCoffLoader.from_path(self._path)
+            if loader.is_ar() or loader.is_coff():
+                return self._scan_coff(loader)
+        except (FileNotFoundError, OSError, PermissionError):
+            return result
+
+        if not _LIEF_OK:
+            return result
+
         binary = lief.parse(self._path)
         if binary is None:
             return result
@@ -241,6 +261,86 @@ class TiNNCScanner:
         # Generate findings
         result.findings.extend(self._generate_findings(result))
         return result
+
+    # ------------------------------------------------------------------
+    # COFF path (C28x AR archive / COFF2 object)
+    # ------------------------------------------------------------------
+
+    def _scan_coff(self, loader: TiCoffLoader) -> TiNNCScanResult:
+        result = TiNNCScanResult(binary_path=self._path)
+        loader.parse()
+
+        run_syms: Dict[str, int] = {}
+        finished_syms: Set[str] = set()
+        norm_by_model: Dict[str, List[NormSymbol]] = {}
+        has_npu_init = False
+
+        for sym in loader.symbols():
+            name = sym.name
+            if not name:
+                continue
+
+            if name in _NPU_INIT_NAMES:
+                has_npu_init = True
+                continue
+
+            m = _RE_RUN.match(name)
+            if m:
+                model = m.group(1)
+                run_syms[model] = sym.value
+                continue
+
+            m = _RE_FINISHED.match(name)
+            if m:
+                finished_syms.add(m.group(1))
+                continue
+
+            m = _RE_NPU_NORM.match(name)
+            if not m:
+                m = _RE_QDQ_NORM.match(name)
+            if m:
+                model = m.group(1)
+                suffix = m.group(2)
+                binding_str = self._coff_binding_str(sym)
+                ns = NormSymbol(
+                    symbol_name=name,
+                    suffix=suffix,
+                    binding=binding_str,
+                    va=sym.value,
+                    size=0,
+                    values=None,
+                )
+                norm_by_model.setdefault(model, []).append(ns)
+
+        result.has_npu_init = has_npu_init
+
+        for model_name, run_va in run_syms.items():
+            norms = norm_by_model.get(model_name, [])
+            weak_norms = [ns.symbol_name for ns in norms if ns.binding == 'WEAK']
+            mode = self._infer_mode(model_name, finished_syms, has_npu_init)
+            mod = TiNNCModule(
+                name=model_name,
+                run_va=run_va,
+                execution_mode=mode,
+                has_finished_flag=model_name in finished_syms,
+                norm_symbols=norms,
+                weak_norm_symbols=weak_norms,
+            )
+            result.modules.append(mod)
+
+        result.modules.sort(key=lambda m: m.run_va)
+        result.findings.extend(self._generate_findings(result))
+        return result
+
+    @staticmethod
+    def _coff_binding_str(sym: CoffSymbol) -> str:
+        if sym.storage_class == C_UEXT:
+            return 'WEAK'     # tentative external = weak in TI COFF
+        if sym.storage_class == C_EXT:
+            return 'GLOBAL'
+        if sym.storage_class == C_STAT:
+            return 'LOCAL'
+        return 'OTHER'
 
     # ------------------------------------------------------------------
     # Finding generation
