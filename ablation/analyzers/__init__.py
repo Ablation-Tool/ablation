@@ -49,6 +49,7 @@ from .v850_decoder import V850Decoder, V850Disasm, V850Frame
 from .taint_tracker_v850 import V850TaintTracker, TaintFindingV850
 from .taint_tracker_rh850 import RH850TaintTracker, TaintFindingRH850
 from .taint_tracker_tricore import TriCoreTaintTracker, TaintFindingTriCore
+from .epilogue_share_scanner import EpilogueShareScanner, EpilogueShareHit
 from .loongarch_decoder import LoongArchDecoder, LoongArchFrame
 from .loongarch_decoder_v2 import (
     LoongArchDecoderV2, LoongArchFrameV2, LoongArchDisasmV2,
@@ -188,6 +189,7 @@ __all__ = [
     "V850TaintTracker", "TaintFindingV850",
     "RH850TaintTracker", "TaintFindingRH850",
     "TriCoreTaintTracker", "TaintFindingTriCore",
+    "EpilogueShareScanner", "EpilogueShareHit",
     "LoongArchDecoder", "LoongArchFrame",
     "LoongArchDecoderV2", "LoongArchFrameV2", "LoongArchDisasmV2",
     "KASAN_SYMBOL_PREFIXES", "KCOV_SYMBOL_PREFIXES",
