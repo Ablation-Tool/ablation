@@ -28,6 +28,7 @@ llm = ["anthropic>=0.30.0"]
 full = [
     "anthropic>=0.30.0",
     "angr>=9.2.90",
+    "bitstring<4.0",
 ]
 
 [project.scripts]
