@@ -179,4 +179,4 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 
 - [Przepływ pracy polowania na podatności](../../workflows/vuln-hunting.md) -- pełna pętla od skanowania do wyniku gotowego do ujawnienia
 - [Dokumentacja modułów](../../module-reference/) -- ponad 50 analizatorów z parametrami i przykładami
-- [CONTRIBUTING.md](../../../CONTRIBUTING.md) -- jak dodawać wzorce, skanowania i moduły analizatorów
+- [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- jak dodawać wzorce, skanowania i moduły analizatorów

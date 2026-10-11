@@ -179,4 +179,4 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 
 - [Quy trình làm việc săn lỗ hổng](../../workflows/vuln-hunting.md) -- vòng lặp đầy đủ từ quét đến phát hiện sẵn sàng công khai
 - [Tham chiếu mô-đun](../../module-reference/) -- hơn 50 bộ phân tích với tham số và ví dụ
-- [CONTRIBUTING.md](../../../CONTRIBUTING.md) -- cách thêm mẫu, quét và mô-đun bộ phân tích
+- [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- cách thêm mẫu, quét và mô-đun bộ phân tích
