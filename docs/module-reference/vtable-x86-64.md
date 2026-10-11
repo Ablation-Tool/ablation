@@ -156,11 +156,11 @@ scanner = VtableDispatchScanner.from_path('/path/to/lib.so')
 vtable = rec.reconstruct_class('MyDBClass')
 report = scanner.scan(vtable)
 
-# Dead methods — exist in vtable but never dispatched in this binary
+# Dead methods: exist in vtable but never dispatched in this binary
 for name in report.dead():
     print(f'dead: {name}')
 
-# Live methods — find all call sites
+# Live methods: find all call sites
 for name, sites in report.live().items():
     for site in sites:
         print(f'{name}  called from {site.call_va:#010x} via [{site.register}+{site.slot_offset:#x}]')

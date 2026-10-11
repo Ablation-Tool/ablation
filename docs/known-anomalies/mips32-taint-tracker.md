@@ -1,4 +1,4 @@
-# Known Anomalies — MIPS32TaintTracker
+# Known Anomalies: MIPS32TaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_mips.py`  
 **Tracker version:** v2.57.0  
@@ -10,7 +10,7 @@ workaround.
 
 ---
 
-## MIPS32-KA-001 — O32 mandatory argument homing produces false negatives when stack taint is not tracked
+## MIPS32-KA-001: O32 mandatory argument homing produces false negatives when stack taint is not tracked
 
 **Description:**  
 The MIPS O32 ABI requires every function to home its four argument registers ($a0-$a3) to
@@ -37,7 +37,7 @@ the register-level taint model misses.
 
 ---
 
-## MIPS32-KA-002 — Branch delay slots handled but only for the direct path
+## MIPS32-KA-002: Branch delay slots handled but only for the direct path
 
 **Description:**  
 MIPS32 branch and jump instructions execute the instruction in the delay slot before the
@@ -60,7 +60,7 @@ when a suspicious call site is flagged by `SemanticSearcher`.
 
 ---
 
-## MIPS32-KA-003 — Indirect JR/JALR calls not followed interprocedurally
+## MIPS32-KA-003: Indirect JR/JALR calls not followed interprocedurally
 
 **Description:**  
 The tracker resolves direct `JAL <target>` calls and PLT stubs. Indirect calls via `JALR $t9`
@@ -83,7 +83,7 @@ Add resolved callees as custom sinks or trace them with `scan_function()`.
 
 ---
 
-## MIPS32-KA-004 — Endian mismatch defaults produce wrong results on big-endian targets
+## MIPS32-KA-004: Endian mismatch defaults produce wrong results on big-endian targets
 
 **Description:**  
 `MIPS32TaintTracker.from_path()` defaults to little-endian (`endian='little'`). RouterOS,
@@ -107,7 +107,7 @@ Always pass `endian='big'` for embedded enterprise and router targets. Check the
 
 ---
 
-## MIPS32-KA-005 — Loop fixpoint not computed; second-iteration taint not propagated
+## MIPS32-KA-005: Loop fixpoint not computed; second-iteration taint not propagated
 
 **Description:**  
 `MIPS32TaintTracker` performs a linear forward trace. It does not compute a loop fixpoint.

@@ -88,7 +88,7 @@ table class:
 | `1D` | `VALUE` | 1 | 1 |
 | `2D` | `CURVE` | 1 | sizex |
 | `3D` | `MAP` | sizey | sizex |
-| `BitwiseSwitch` | skipped | — | — |
+| `BitwiseSwitch` | skipped |: |: |
 
 Child `<table>` elements describe axes:
 
@@ -210,11 +210,11 @@ Nissan Pytrex definitions
 
 | Variant | Model | Tables | Axis addresses |
 |---|---|---|---|
-| CD515 | 350Z 2003 AT USDM | 55 | — |
-| CD001 | 350Z 2003 MT USDM (inherits CD515) | 55 | — |
+| CD515 | 350Z 2003 AT USDM | 55 |: |
+| CD001 | 350Z 2003 MT USDM (inherits CD515) | 55 |: |
 | CD415 | 350Z | 39 | X Axis + Y Axis per MAP |
 | CF42A | 350Z (largest) | 132 | mixed |
-| CF92A | G35 | 79 | — |
+| CF92A | G35 | 79 |: |
 
 Sample MAP table from CD415: `Fuel Compensation Map (16x16)` at data=0x6C09,
 x_axis=0x836D, y_axis=0x8311, scale=0.78125, unit=`Compensation (%)`.

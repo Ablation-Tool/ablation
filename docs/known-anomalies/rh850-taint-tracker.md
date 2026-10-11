@@ -1,16 +1,16 @@
-# Known Anomalies — RH850TaintTracker
+# Known Anomalies: RH850TaintTracker
 
 **Module:** `ablation/analyzers/taint_tracker_rh850.py`  
 **Tracker version:** v2.57.0  
 **Format:** ISO 26262 Part 8 / TASKING qualification kit (see `ABLATION-STANDARDS.md` §2.3)
 
 An anomaly is a condition under which `RH850TaintTracker` is known to produce an incorrect
-result — either a false negative (missed finding) or a false positive (spurious finding).
+result: either a false negative (missed finding) or a false positive (spurious finding).
 Each entry documents the triggering condition, the impact, and the recommended workaround.
 
 ---
 
-## RH850-KA-001 — Custom decoder opcode gaps produce false negatives
+## RH850-KA-001: Custom decoder opcode gaps produce false negatives
 
 **Description:**  
 Capstone does not support V850/RH850. `RH850TaintTracker` uses a custom byte-level decoder
@@ -29,7 +29,7 @@ operand encoding, taint propagation at that instruction is incorrect.
 causing the tracker to miss a real sink reach.
 
 **Workaround:**  
-1. Run `V850Decoder.scan_unknown_opcodes(data, base_va)` on the function before tracing — it
+1. Run `V850Decoder.scan_unknown_opcodes(data, base_va)` on the function before tracing: it
    reports instruction bytes that fell through to the unknown fallback.
 2. For each unknown opcode, manually confirm whether it modifies a tainted register.
 3. If a new opcode pattern is encountered repeatedly, add it to `V850Decoder` as a new module
@@ -39,7 +39,7 @@ causing the tracker to miss a real sink reach.
 
 ---
 
-## RH850-KA-002 — CALLT / interrupt / trap entry points break taint chains
+## RH850-KA-002: CALLT / interrupt / trap entry points break taint chains
 
 **Description:**  
 `__callt`, `__interrupt`, and `__trap` function types (GHS CC-RH §2.11) use non-standard
@@ -69,7 +69,7 @@ that global will not be tainted.
 
 ---
 
-## RH850-KA-003 — Vtable dispatch (indirect call through vtable pointer) not tracked
+## RH850-KA-003: Vtable dispatch (indirect call through vtable pointer) not tracked
 
 **Description:**  
 `RH850TaintTracker` resolves direct calls and CALLT entries but does not follow indirect
@@ -98,7 +98,7 @@ VA. Add the callee to the taint tracker as a custom sink or trace it separately 
 
 ---
 
-## RH850-KA-004 — Loop fixpoint not computed; second-iteration taint is not propagated
+## RH850-KA-004: Loop fixpoint not computed; second-iteration taint is not propagated
 
 **Description:**  
 `RH850TaintTracker` performs a linear forward trace through the function body. It does not
@@ -126,12 +126,12 @@ CFG). Tracked as a future ablation gap.
 
 ---
 
-## RH850-KA-005 — scan_function requires caller-supplied function boundaries
+## RH850-KA-005: scan_function requires caller-supplied function boundaries
 
 **Description:**  
 In flat ROM mode (`from_bytes`), `RH850TaintTracker.scan_function()` requires the caller to
-supply `func_va` and `func_end`. If the supplied boundaries are incorrect — in particular, if
-`func_end` is too short — the trace terminates early and may miss sink calls that appear
+supply `func_va` and `func_end`. If the supplied boundaries are incorrect: in particular, if
+`func_end` is too short: the trace terminates early and may miss sink calls that appear
 after the truncation point.
 
 **Triggering conditions:**  

@@ -229,8 +229,8 @@ Identification results on the BMW MS45 corpus:
 | `29bl802c Flash ms45.1 ZHP.bin` | `4570LO00` | 218 | 67 | E46 ZHP 116 KB cal |
 | `520ir.bin` | `4560BN00` | 155 | 57 | E60 525i 116 KB cal |
 | `KM04699_0044570.bin` | `4570LO00` | 218 | 67 | E46 ZHP 116 KB cal |
-| `07541335_flash.bin` | NOT IDENTIFIED | — | — | 1024 KB full flash |
-| `MS45.1 325i manual.bin` | NOT IDENTIFIED | — | — | variant absent in XML |
+| `07541335_flash.bin` | NOT IDENTIFIED |: |: | 1024 KB full flash |
+| `MS45.1 325i manual.bin` | NOT IDENTIFIED |: |: | variant absent in XML |
 
 The 116 KB calibration-only partials (the ROM region a flash tool reads without erasing the full
 chip) identify reliably and produce 155 to 218 tables. The 1024 KB full flash ROMs do not identify

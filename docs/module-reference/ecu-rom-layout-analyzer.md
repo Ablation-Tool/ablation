@@ -34,7 +34,7 @@ so callers can skip code analysis entirely.
 
 **5. No TriCore AURIX layout classification.** The AURIX Interrupt Vector Table (IVT) is 256 entries
 × 32 bytes each, each containing `rslcx`/`rfe`/`nop` sequences. It has entropy above 6.5 bits/byte
-and passes the CODE threshold, but it is not navigable application code — feeding it to a disassembler
+and passes the CODE threshold, but it is not navigable application code: feeding it to a disassembler
 or `TriCoreTaintTracker` produces noise. Similarly, TriCore application code at 4.8–6.5 bits/byte
 entropy fails the PPC density check (no PPC opcodes) and is mislabelled CALIBRATION. And
 TriCore-compressed OS blobs have entropy ≥ 6.0 and pass as CODE. Before this addition, running the
@@ -350,7 +350,7 @@ for r in layout.ivt_regions():
 
 ## Limitations
 
-- `arch_hint` must be set explicitly for TriCore ROMs. There is no auto-detection fallback — the
+- `arch_hint` must be set explicitly for TriCore ROMs. There is no auto-detection fallback: the
   default entropy+PPC path is wrong for AURIX images.
 - Window size matters on small ROMs. A 256 KB SH705x ROM with the default 4 KB window gives only
   64 windows; use `window_size=1024` for finer resolution.

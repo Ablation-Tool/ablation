@@ -1,4 +1,4 @@
-# BinaryLifter — SH-2A backend
+# BinaryLifter: SH-2A backend
 
 **File:** `ablation/analyzers/binary_lifter.py`  
 **Arch token:** `sh2a` (aliases: `sh-2a`, `sh2`)
@@ -12,7 +12,7 @@
 **1. No pseudo-C IR for Renesas SH-2A MCU firmware.**  `BinaryLifter` covered 17 ISAs but had no
 SH-2A backend.  SH-2A is the dominant MCU inside Bosch EDC, Denso, and Siemens automotive ECUs
 (SH7058/SH7059 on-chip flash).  Without a lifter, security sweeps on ECU firmware produced raw
-disassembly only — no call-chain analysis, no taint annotations, no caller-resolved pseudo-C.
+disassembly only: no call-chain analysis, no taint annotations, no caller-resolved pseudo-C.
 
 **2. No lifter designed for headerless flat ROM files.**  All 17 prior ISA backends assumed an ELF
 section map to translate VAs to file offsets.  Flat ECU ROMs have no ELF header; the MCU flash is
@@ -68,7 +68,7 @@ Example output:
 
 `_lift_sh2a()` uses `EcuSH2aDecoder` (the pre-existing SH-2A decoder) to produce `SH2aInsn`
 objects.  Each instruction already carries a pre-decoded `insn_type` field, so `_SH2aState.emit()`
-dispatches on that string directly — no mnemonic regex parsing.
+dispatches on that string directly: no mnemonic regex parsing.
 
 **Instruction type dispatch:**
 
@@ -113,11 +113,11 @@ rather than crashing.
 
 ## Limitations
 
-- Conditional branches emit `if (T)` / `if (!T)` — the T-bit value is not tracked across
+- Conditional branches emit `if (T)` / `if (!T)`: the T-bit value is not tracked across
   instructions.  This is a structural limitation of the linear-walk approach (no CFG).
-- Indirect call targets (JSR @Rn) are not resolved — they appear as `(*rN)(...)`.  Use
+- Indirect call targets (JSR @Rn) are not resolved: they appear as `(*rN)(...)`.  Use
   `FlatBinaryFuncStartScanner` to harvest indirect call targets separately.
 - 32-bit SH-2A extension instructions (MOVI20, MOV12, BIT ops) decode as `MISC` and emit
   as comments.  The state machine does not model their register effects.
-- No CFG — each function is a linear walk from entry to first RETURN.  Back-edges from loops
+- No CFG: each function is a linear walk from entry to first RETURN.  Back-edges from loops
   appear in the output but the loop body may be partially repeated.

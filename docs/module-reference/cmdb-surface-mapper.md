@@ -60,7 +60,7 @@ mapper = CMDBSurfaceMapper.from_path(
 )
 surface = mapper.map()
 
-# Exec-reach tables only — these are the triage targets for SinkArgClassifier
+# Exec-reach tables only: these are the triage targets for SinkArgClassifier
 for tid, entry in surface.items():
     if entry.reaches_exec:
         print(f"Table {hex(tid)} ({entry.name}): {entry.exec_sink_name}() "

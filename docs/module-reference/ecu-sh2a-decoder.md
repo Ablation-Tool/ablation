@@ -38,8 +38,8 @@ SH-2A first-halfword patterns that indicate a **32-bit** instruction:
 |---|---|
 | `(hw & 0xF00F) == 0x3001` | MOV.B/W/L with 12-bit displacement |
 | `(hw & 0xF00F) == 0x3009` | BCLR.B/BSET.B/BST.B/BLD.B bit operations |
-| `(hw & 0xF00F) == 0x0005` | MOVI20 — `0000 nnnn iiii 0101 \| imm16` |
-| `(hw & 0xF00F) == 0x0007` | MOVI20S — `0000 nnnn iiii 0111 \| imm16` |
+| `(hw & 0xF00F) == 0x0005` | MOVI20: `0000 nnnn iiii 0101 \| imm16` |
+| `(hw & 0xF00F) == 0x0007` | MOVI20S: `0000 nnnn iiii 0111 \| imm16` |
 
 All other first halfwords → 16-bit SH-2 instruction.
 
@@ -71,7 +71,7 @@ STS PR, Rn    =  (hw & 0xF0FF) == 0x002A  (any Rn in 0-15)
 ```
 
 Saves PR to a GPR instead of the stack; common in leaf functions with short call chains.
-A `STS PR, Rn` immediately following `STS.L PR, @-R15` is suppressed — it is the second
+A `STS PR, Rn` immediately following `STS.L PR, @-R15` is suppressed: it is the second
 instruction of a non-leaf function, not a new function start.
 
 ---
@@ -87,11 +87,11 @@ dec = EcuSH2aDecoder.from_path("subaru_sh7058s.bin", base_va=0)
 # From raw bytes
 dec = EcuSH2aDecoder.from_bytes(rom_bytes, base_va=0)
 
-# function_starts() — pure pattern scan, no Capstone required
+# function_starts(): pure pattern scan, no Capstone required
 starts = dec.function_starts()
 print(f"{len(starts)} probable functions")
 
-# disassemble() — pure Python, no Capstone required
+# disassemble(): pure Python, no Capstone required
 insns = dec.disassemble(start=0x400, end=0x2000)
 for i in insns:
     if i.insn_type in ("CALL", "RETURN"):
@@ -109,7 +109,7 @@ length = dec.insn_length(0x400)  # 2 or 4
 
 | Parameter | Default | Description |
 |---|---|---|
-| `data` | — | `bytes`, file path (`str`/`Path`), or raw bytes buffer |
+| `data` |: | `bytes`, file path (`str`/`Path`), or raw bytes buffer |
 | `base_va` | 0 | Virtual address of the first byte in `data`. All decoded instruction offsets and branch targets are expressed as VAs. |
 
 ---
@@ -156,7 +156,7 @@ BSR/BRA disp12:  target = VA + 4 + sign_extend(disp12) * 2
 BT/BF/BT.S/BF.S disp8:  target = VA + 4 + sign_extend(disp8) * 2
 ```
 
-`JSR @Rn` and `JMP @Rn` are indirect — target is a runtime register value, returned
+`JSR @Rn` and `JMP @Rn` are indirect: target is a runtime register value, returned
 as `target = None`.
 
 ---
@@ -178,7 +178,7 @@ as `target = None`.
 - No SH-2A FPU instructions decoded (not present in ECU firmware; decoded as MISC).
 - `BRAF Rn` / `BSRF Rn` (indirect relative branch/subroutine): decoded as MISC with no
   target (register-indirect, not statically resolvable).
-- Unvalidated on real Honda or Subaru ROM — all encoding derived from Renesas SH2A Hardware
+- Unvalidated on real Honda or Subaru ROM: all encoding derived from Renesas SH2A Hardware
   Manual Rev.2.00.  A real corpus run is required before treating function_starts() output
   as ground truth for these targets.
 - `function_starts()` does not walk call graph from reset vector.

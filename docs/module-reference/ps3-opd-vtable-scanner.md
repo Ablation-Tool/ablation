@@ -13,7 +13,7 @@ Three things weren't possible before in Ablation:
 scans for RELA relocations and direct 8-byte text pointers. PS3 Cell PPU binaries use
 PPC64 ELF ABI v1 function descriptors (OPDs): every vtable slot is a 4-byte pointer
 into the data segment that resolves to an 8-byte `{code_va, toc_va}` OPD entry. No
-RELA section, no direct text pointers — zero vtables returned.
+RELA section, no direct text pointers: zero vtables returned.
 
 **2. Locating Demonware BD and other inline-linked C++ class dispatch tables in stripped
 PS3 game binaries.** Without vtables there is no way to find `processPacket` or
@@ -91,10 +91,10 @@ scan both modules, pass `toc=` explicitly for each and merge the results.
 
 ### `PS3OPDVtableScanner`
 
-**`from_context(ctx, toc=None)`** — preferred constructor. Reads path from ctx, detects
+**`from_context(ctx, toc=None)`**: preferred constructor. Reads path from ctx, detects
 text/data layout, detects TOC and null stub automatically.
 
-**`from_path(elf_path, toc=None)`** — build from raw path without BinaryContext.
+**`from_path(elf_path, toc=None)`**: build from raw path without BinaryContext.
 
 **`scan(min_slots=3)`** → `List[OPDVtable]` sorted by VA. Lower `min_slots` catches more
 single-method base classes at the cost of more false positives.
@@ -102,11 +102,10 @@ single-method base classes at the cost of more false positives.
 **`report(vtables, ctx=None, top_n=50, min_slots=0)`** → ASCII table sorted by slot count
 descending.
 
-**`inject_into_context(vtables, ctx)`** → `int` — injects `vtbl_<va>_s<N>` names for all
+**`inject_into_context(vtables, ctx)`** → `int`: injects `vtbl_<va>_s<N>` names for all
 non-null, unnamed slots. Returns count of new names added.
 
-**`find_by_method_name(vtables, name, ctx)`** → `List[(vtable, slot_idx, code_va)]` —
-locate which vtables contain a named method.
+**`find_by_method_name(vtables, name, ctx)`** → `List[(vtable, slot_idx, code_va)]`: locate which vtables contain a named method.
 
 ### `OPDVtable` dataclass
 
@@ -123,7 +122,7 @@ locate which vtables contain a named method.
 
 ## Validated on
 
-- GoldenEye 007: Reloaded (BLUS30755) — 3185 vtables found; processPacket dispatch
+- GoldenEye 007: Reloaded (BLUS30755): 3185 vtables found; processPacket dispatch
   located via `find_by_method_name`; Demonware BD class hierarchy mapped
 
 ---
@@ -133,5 +132,5 @@ locate which vtables contain a named method.
 - Single `toc=` per scan: dual-TOC binaries require two separate scan calls
 - Class hint is proximity-based (nearest string ≤256 bytes); accurate for well-laid-out
   data segments, unreliable when strings and vtables are interleaved
-- RTTI header detection requires `offset-to-top == 0 or 0xFFFFFFFF` — non-standard
+- RTTI header detection requires `offset-to-top == 0 or 0xFFFFFFFF`: non-standard
   compilers may use other values

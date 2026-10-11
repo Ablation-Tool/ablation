@@ -158,19 +158,19 @@ Strings in `.rodata` are inert until something loads their address. The cross-re
 "Load a string address" looks different on every ISA. BinaryContext tracks arch-specific patterns across instruction boundaries:
 
 ```python
-# x86-64 — RIP-relative load
+# x86-64: RIP-relative load
 # LEA rX, [RIP + disp32]
 target = insn_va + insn_length + sign_extend32(disp)
 
-# ARM64 — two-instruction ADRP + ADD pair
+# ARM64: two-instruction ADRP + ADD pair
 # ADRP Xn, label  →  pending_adrp[Xn] = (insn_va & ~0xFFF) + (imm21 << 12)
 # ADD  Xn, Xn, #offset  →  full_va = pending_adrp[Xn] + offset
 
-# ARM32 — literal pool
+# ARM32: literal pool
 # LDR Rd, [PC, #N]  →  pool_va = (insn_va + 8) & ~3 + N
 #                       addr = read_u32(binary, pool_va - load_addr)
 
-# MIPS32 — LUI + ADDIU pair
+# MIPS32: LUI + ADDIU pair
 # LUI   $t0, hi16   →  pending_lui[$t0] = hi16 << 16
 # ADDIU $t0, $t0, lo16  →  full_va = pending_lui[$t0] + sign_extend16(lo16)
 ```
@@ -290,7 +290,7 @@ call_edges = [
 ]
 
 ctx.callers_of('strcpy')    # → [(0x4000, 'strcpy'), (0x4120, 'strcpy')]
-ctx.callers_of(0x3000)      # same result — VA form also works
+ctx.callers_of(0x3000)      # same result: VA form also works
 ctx.callees_of(0x4000)      # → [(0x3000, 'strcpy'), (0x4280, '0x4280')]
 ```
 
@@ -352,6 +352,6 @@ for (sva, content) in ctx.strings_in_func(0x4000):
 for fva in ctx.funcs_referencing_string(0x6010):
     print(f"  {ctx.name(fva)}")
 
-# Confirm a name — persists across all future sessions
+# Confirm a name: persists across all future sessions
 ctx.set_name(0x4000, 'parse_radius_packet', source='confirmed')
 ```

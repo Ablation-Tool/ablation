@@ -1,4 +1,4 @@
-# Known Anomalies — WindowsPoolTaintTracker
+# Known Anomalies: WindowsPoolTaintTracker
 
 **Module:** `ablation/analyzers/windows_pool_taint_tracker.py`  
 **Tracker version:** v2.57.0  
@@ -10,7 +10,7 @@ recommended workaround.
 
 ---
 
-## WINPOOL-KA-001 — Register-identity heuristic produces false positives when size register is reused
+## WINPOOL-KA-001: Register-identity heuristic produces false positives when size register is reused
 
 **Description:**  
 `WindowsPoolTaintTracker` pairs allocation sites with copy sites where the same register
@@ -40,7 +40,7 @@ clobbered between the two call sites, eliminate the finding.
 
 ---
 
-## WINPOOL-KA-002 — 200-instruction forward window may miss allocation-to-copy pairs in large functions
+## WINPOOL-KA-002: 200-instruction forward window may miss allocation-to-copy pairs in large functions
 
 **Description:**  
 The tracker pairs allocation and copy call sites within a forward instruction window of
@@ -67,7 +67,7 @@ a larger `window_insns` parameter if it becomes available.
 
 ---
 
-## WINPOOL-KA-003 — Dynamic-resolve drivers with zero IAT produce no findings
+## WINPOOL-KA-003: Dynamic-resolve drivers with zero IAT produce no findings
 
 **Description:**  
 `WindowsPoolTaintTracker` builds its allocation and copy call site maps from the IAT
@@ -91,7 +91,7 @@ zero-IAT drivers, fall back to `WindowAnalyzer.dump_text()` and search for the
 
 ---
 
-## WINPOOL-KA-004 — lief 0.14.0+ required; older versions may fail PE parsing
+## WINPOOL-KA-004: lief 0.14.0+ required; older versions may fail PE parsing
 
 **Description:**  
 `WindowsPoolTaintTracker` uses lief for PE parsing (IAT, section headers). lief versions

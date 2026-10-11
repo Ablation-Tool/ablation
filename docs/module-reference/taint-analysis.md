@@ -171,7 +171,7 @@ All trackers share the same constructor and entry point:
 ```python
 from ablation.analyzers.taint_tracker_arm64 import ARM64TaintTracker
 
-# Stripped binary — use from_path_full for complete function coverage
+# Stripped binary: use from_path_full for complete function coverage
 findings = ARM64TaintTracker.from_path_full('/path/to/firmware').run_interprocedural()
 for f in findings:
     print(f)

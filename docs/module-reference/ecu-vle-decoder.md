@@ -160,7 +160,7 @@ for va in starts[:10]:
 
 | Parameter | Default | Description |
 |---|---|---|
-| `data` | — | `bytes`, file path (str/Path), or raw bytes buffer |
+| `data` |: | `bytes`, file path (str/Path), or raw bytes buffer |
 | `base_va` | 0 | Virtual address of the first byte in `data`. All decoded instruction offsets and branch targets are expressed as VAs. |
 
 ---
