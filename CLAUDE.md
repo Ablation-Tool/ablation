@@ -94,6 +94,7 @@ SESSION.md convention: root index at `~/ablation/SESSION.md`; per-target state a
 | "What values are passed to this sink?" | `FuncProfiler.profile(va).fmt()` |
 | "Trace taint from network recv to sink" | `TaintTracker.run_interprocedural()` |
 | "ARM32: trace recv to malloc/strcpy/system" | `ARM32TaintTracker.from_context(ctx).run_interprocedural()` |
+| "ARM32: find function starts in stripped ELF without .eh_frame (AMI SPX, embedded Linux)" | `ARM32FunctionScanner.from_path(elf).inject_into_context(ctx)` — scans for `PUSH {rN.., lr}` prologues; ARM32 mode: byte pattern `?? [4x..Cx] 2D E9` at 4-byte alignment; Thumb mode: `2D E9 ?? [4x..Cx]` + `?? B5`; inject before `ARM32TaintTracker(path, ctx=ctx)` for best coverage; ~61% more functions on stripped AMI SPX binaries (633 → 1,021) |
 | "ARM32: find MUL before malloc without bounds check" | `ARM32IntOverflowScanner.from_context(ctx).scan()` |
 | "ARM64: trace recv to malloc/strcpy/system (Dahua, HiSilicon)" | `ARM64TaintTracker.from_path_full(elf).run_interprocedural()` — use `from_path_full` for stripped binaries (injects eh_frame func starts + PLT stub VAs); `from_path` only works when binary has symbols |
 | "MIPS32: trace recv to system/strcpy/sprintf" | `MIPS32TaintTracker.from_path(elf).run_interprocedural()` |
