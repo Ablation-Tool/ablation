@@ -2,6 +2,41 @@
 
 ---
 
+## v2.72.0
+
+**EcuROMLayoutAnalyzer — TriCore AURIX layout classification (Gap 5a/5b).**
+
+`EcuROMLayoutAnalyzer` now accepts `arch_hint="tricore"` to correctly classify Infineon AURIX
+TC-series flat ROM images. The default entropy+PPC-density path produces wrong results for AURIX
+because three overlapping problems cause complete layout misclassification: the AURIX Interrupt
+Vector Table (256 entries × 32 bytes, rslcx/rfe/nop sequences) has entropy above 6.5 and passes
+the CODE threshold; TriCore application code at 4.8–6.5 entropy fails the PPC density check and
+is labelled CALIBRATION; and TriCore-compressed OS blobs at entropy ≥ 6.0 pass as CODE.
+
+With `arch_hint="tricore"`, a Capstone TriCore 1.6.2 decode-density pass replaces the PPC opcode
+check. Windows where fewer than 10% of bytes decode as valid TriCore instructions are classified
+CALIBRATION; windows above 35% are CODE. A separate AURIX IVT pattern detector scans 32-byte
+aligned entries for `rslcx`/`rfe`/`rfedc` mnemonics; windows with ≥ 4 matching entries are
+labelled IVT.
+
+New region type: `"IVT"` — Interrupt Vector Table region (TriCore only). Not navigable application
+code; excluded from `app_code_regions()` but included in `code_regions()` for backward compatibility.
+
+`ROMLayout` gains two new methods:
+- `app_code_regions()` — CODE only (excludes IVT); the correct feed for `TriCoreTaintTracker`
+- `ivt_regions()` — IVT regions only
+
+Validated: Waqas GEN3 AURIX TC-series 2 MB flat ROM. Previous result: one large CODE region at
+0x044000 (misidentified IVT block + compressed blobs). New result: 1 IVT region at 0x036000
+(4 KB), 39 CODE regions totaling ~624 KB of genuine application code, CALIBRATION covering
+BMHD + boot configuration at the ROM base.
+
+Updated files: `ablation/analyzers/ecu_rom_layout_analyzer.py`,
+`docs/module-reference/ecu-rom-layout-analyzer.md`,
+`docs/module-reference/ecu-rom-layout-analyzer-tricore-forge-audit.md`.
+
+---
+
 ## v2.71.0
 
 **TMS320C28x ISA decoder — Gap 1b; C28x control-flow analysis.**
