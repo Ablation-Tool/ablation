@@ -10,8 +10,14 @@ I noticed that after a few rounds of trying different techniques and alternative
 After a few hours of trying everything known to man and woman, I said fuck it let's try reverse engineering the thing that's getting in our way, "whats the main bottleneck here dude?"
 
 CC tells me that its a Cisco ASA.
+
+
 Too easy,  (i've never hacked a cisco anything)
+
+
 So I'm like "lets just reverse engineer it"
+
+
 CC wanted to use Ghidra, I was like no I want to learn about reverse engineering not how to use a tool that reverse engineers.
 
 That led me to collectively, hack into macstadium, reverse engineer Cisco ASA LINA source code, and build the first layer of Ablation, about three months ago.
