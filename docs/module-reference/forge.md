@@ -70,18 +70,31 @@ The audit itself runs inline: read the file in Claude Code, apply the 10-section
 
 ---
 
-## result_result()
+## Detection stage
 
-`FORGE.record_result(path, findings, summary, raw_text)` stores an inline audit result in the cache. `findings` can be a list of `ForgeFinding` objects or a list of dicts with keys `severity`, `category`, `title`, `location`, `description`, `recommendation`, `source`, `cwe`.
+Every `ForgeFinding` carries a `detection_stage` field. It answers one question: at what point in the pipeline would this bug surface without this audit?
+
+Four values: `develop`, `debug`, `test`, `deploy`. A `develop` finding is one that `mypy` or a basic arity check catches immediately. A `deploy` finding only surfaces in production under specific conditions. The default is `deploy` because that is the worst case, and a finding should earn a lower stage explicitly.
+
+`ForgeReport.report()` prints a stage-risk summary for every HIGH or CRITICAL finding and a cost marker next to each stage: free for DEVELOP, $ for DEBUG, $$ for TEST, $$$ for DEPLOY. The multiples come from software defect cost-of-change research: a DEPLOY-stage bug costs roughly 18 times as much to fix as the same bug caught at DEVELOP.
+
+The FORGE audit plan (Section F of the DEV & TEST ORCHESTRATION PLAN) requires a stage classification for every HIGH and CRITICAL finding. A finding with no stage is treated as DEPLOY.
+
+---
+
+## record_result()
+
+`FORGE.record_result(path, findings, summary, raw_text)` stores an inline audit result in the cache. `findings` can be a list of `ForgeFinding` objects or a list of dicts with keys `severity`, `category`, `title`, `location`, `description`, `recommendation`, `source`, `cwe`, `detection_stage`.
 
 ```python
 report = FORGE.record_result(
     '/absolute/path/to/module.py',
     findings=[
-        {'severity': 'LOW', 'category': 'reliability', 'title': '...', 'location': '...',
-         'description': '...', 'recommendation': '...', 'source': 'module_audit', 'cwe': ''},
+        {'severity': 'CRITICAL', 'category': 'wiring', 'title': '...', 'location': '...',
+         'description': '...', 'recommendation': '...', 'source': 'module_audit',
+         'cwe': '', 'detection_stage': 'develop'},
     ],
-    summary='gate_passed=True. 1 LOW: ...'
+    summary='gate_passed=False. 1 CRITICAL: ...'
 )
 ```
 
@@ -112,7 +125,7 @@ report.raw_text        # full audit text (not cached)
 report.report()        # formatted human-readable summary
 ```
 
-`ForgeFinding` fields: `severity`, `category`, `title`, `location`, `description`, `recommendation`, `source`, `cwe`.
+`ForgeFinding` fields: `severity`, `category`, `title`, `location`, `description`, `recommendation`, `source`, `cwe`, `detection_stage`.
 
 ---
 
