@@ -1,6 +1,6 @@
 <img src="assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
-![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/ABLATION-STANDARDS.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/ABLATION-STANDARDS.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/ABLATION-STANDARDS.md) [![Sponsor Ablation](https://img.shields.io/badge/Sponsor-Ablation-EA4AAA?logo=githubsponsors&logoColor=white)](SPONSORS.md)
+![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/ABLATION-STANDARDS.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/ABLATION-STANDARDS.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/ABLATION-STANDARDS.md)
 
 
 Ablation is a self-contained reverse engineering framework.
@@ -205,4 +205,6 @@ Ablation is built for authorized security research. Use it only against systems 
 
 ## Support
 
-See [SPONSORS.md](SPONSORS.md) for tiers and payment details.
+BTC `bc1qu3s92ff3s2d72cugyrne6n73khlsumf2sxhpex`
+
+Cash App `$nicholaskloster2`
