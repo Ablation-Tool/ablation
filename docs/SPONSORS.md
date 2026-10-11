@@ -24,21 +24,6 @@ I have completely fallen in love with reverse engineering.
 
 It gives me the same euphoric jaw clenching problem solving task completion that hacking did and it keeps me out of trouble.
 
----
-
-## Tiers
-
-### Researcher — $20/month
-Your name in SPONSORS.md. You get a monthly digest of what shipped — new modules, confirmed findings patterns, ISA coverage added. No fluff, just the work.
-
-### Senior Analyst — $100/month
-Everything in Researcher, plus priority issue response within 48 hours and direct access for questions. If you are using Ablation professionally and hit a wall, I will help you get through it.
-
-### Corporate — $500/month
-Everything above, plus your logo in the README, quarterly input on the roadmap, and an acknowledgment of commercial use. If your firm is building on top of this or running it at scale, this is the right tier.
-
----
-
 ## Goal
 
 The target machine is a System76 Pangolin Pro at $3,873. Every sponsorship goes directly toward hardware that makes the work faster and the tool better.
