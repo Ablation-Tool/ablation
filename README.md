@@ -20,7 +20,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 <details>
 <summary><strong>Analysis</strong> </summary>
 
-| Capability | |
+|| |
 |:---|:---|
 | [**The Flywheel**](docs/module-reference/flywheel.md) | Every confirmed finding replays as a search pattern on every future binary. A vulnerability confirmed on one vendor's firmware surfaces automatically when sweeping a different vendor's binary because confirmed findings are stored and replayed at engagement start. |
 | [**Semantic Code Search**](docs/module-reference/semantic-search.md) | Finds functions by describing what they do because stripped binaries have no symbols to search. Queries are scoped to the target binary so results return in under a second. |
@@ -38,7 +38,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 <details>
 <summary><strong>Security Analysis</strong> </summary>
 
-| Capability | |
+|| |
 |:---|:---|
 | [**Taint Analysis**](docs/module-reference/taint-analysis.md) | Follows network input through the call graph to security-sensitive sinks across 14 architectures. Library call sites do not stop the trace because register-level tracking resolves shared library stubs. |
 | [**Pre-Authentication Exposure**](docs/module-reference/preauth-exposure.md) | Finds every code path from the network entry point to a security-sensitive operation that runs before authentication. Manual review starts at the authentication boundary because the output is a reachability map, not a raw disassembly. |
@@ -53,7 +53,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 <details>
 <summary><strong>Runtimes & Formats</strong> </summary>
 
-| Capability | |
+|| |
 |:---|:---|
 | [**LoongArch64**](docs/module-reference/loongarch64.md) | The only public reverse engineering toolkit built specifically for LoongArch64. It covers the full analysis pipeline so no architecture-specific workarounds are needed. |
 | [**nanoMIPS**](docs/module-reference/nanomips.md) | Follows tainted data through nanoMIPS binaries interprocedurally, resolving branch targets and PLT stubs that no other public tool handles. |
@@ -74,7 +74,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 <details>
 <summary><strong>Workflow</strong> </summary>
 
-| Capability | |
+|| |
 |:---|:---|
 | [**Version Diffing**](docs/workflows/cross-version.md) | Checks whether the logic changed, not whether the file changed, so a cosmetic recompile cannot hide an unpatched vulnerability. |
 | [**Cross-Target Learning**](docs/module-reference/cross-target-learning.md) | Every confirmed finding seeds future semantic searches, so the tool gets sharper with each engagement. |
@@ -88,7 +88,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 <details>
 <summary><strong>Automotive RE</strong> </summary>
 
-| Capability | |
+|| |
 |:---|:---|
 | [**ECU Architecture Detector**](docs/module-reference/ecu-arch-detector.md) | Identifies the ISA of a flat ECU ROM from raw bytes alone. PPC32, SH-2A, TriCore, RH850, V850, M68K, C28x, and M32R all produce recognizable structural signatures without symbols or file headers. |
 | [**ROM Layout Analyzer**](docs/module-reference/ecu-rom-layout-analyzer.md) | Splits a flat ROM into CODE, CALIBRATION, and IVT regions before analysis begins. The interrupt vector table is excluded from function discovery so taint trackers start from clean application code boundaries. |
