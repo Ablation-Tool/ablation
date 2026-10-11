@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-4 things that were not possible before in Ablation:
+5 things that were not possible before in Ablation:
 
 **1. No region map for ECU ROMs.** Before this module, applying any ECU scanner to a firmware dump
 required knowing which address range held code and which held calibration data. For a 2 MB GM E38
@@ -31,6 +31,16 @@ because the byte patterns it recognizes as M68K or PPC32 instructions do not app
 there was no way to detect this condition programmatically. `ROMLayout.is_calibration_only()` returns
 `(True, reason)` when the layout has zero CODE regions and at least one active (non-erased) region,
 so callers can skip code analysis entirely.
+
+**5. No TriCore AURIX layout classification.** The AURIX Interrupt Vector Table (IVT) is 256 entries
+× 32 bytes each, each containing `rslcx`/`rfe`/`nop` sequences. It has entropy above 6.5 bits/byte
+and passes the CODE threshold, but it is not navigable application code — feeding it to a disassembler
+or `TriCoreTaintTracker` produces noise. Similarly, TriCore application code at 4.8–6.5 bits/byte
+entropy fails the PPC density check (no PPC opcodes) and is mislabelled CALIBRATION. And
+TriCore-compressed OS blobs have entropy ≥ 6.0 and pass as CODE. Before this addition, running the
+analyzer on any AURIX flat ROM image gave a completely wrong layout map. The `arch_hint="tricore"`
+path adds a Capstone decode-density classifier and an IVT pattern detector to correctly distinguish
+all four TriCore region classes.
 
 ---
 
@@ -142,6 +152,7 @@ layout = ana.analyze()
 | `window_size` | 4096 | Window size in bytes. Use 1024 for ROMs smaller than 256 KB. |
 | `fill_byte` | 0xFF | Erased flash fill byte. NOR flash erases to 0xFF; some NAND to 0x00. |
 | `fill_threshold` | 0.85 | Fill-byte proportion above which a window is ERASED. |
+| `arch_hint` | `""` | Architecture hint. Pass `"tricore"` for Infineon AURIX TC-series flat ROM images to enable TriCore-aware classification (Capstone decode density + IVT pattern detection). Leave empty for all other architectures. |
 
 ---
 
@@ -157,13 +168,17 @@ class ROMLayout:
     window_size: int
     fill_byte: int
 
-    def code_regions(self) -> list[ROMRegion]
+    def code_regions(self) -> list[ROMRegion]     # CODE + IVT regions
+    def app_code_regions(self) -> list[ROMRegion] # CODE only (excludes IVT)
+    def ivt_regions(self) -> list[ROMRegion]       # IVT only (TriCore arch_hint)
     def calibration_regions(self) -> list[ROMRegion]
     def erased_regions(self) -> list[ROMRegion]
     def active_start(self) -> int    # first non-ERASED/PADDING offset
     def active_end(self) -> int      # last non-ERASED/PADDING offset
     def is_calibration_only(self) -> tuple[bool, str]
 ```
+
+**Note on `code_regions()` vs `app_code_regions()`:** `code_regions()` includes IVT regions for backward compatibility with callers that already consume its output. When using `arch_hint="tricore"`, callers that feed regions to a disassembler or `TriCoreTaintTracker` should use `app_code_regions()` to exclude the Interrupt Vector Table from disassembly input.
 
 ### `is_calibration_only() -> tuple[bool, str]`
 
@@ -262,15 +277,87 @@ that walks the interrupt vector table to confirm the architecture.
 
 ---
 
+## TriCore AURIX classification (`arch_hint="tricore"`)
+
+Pass `arch_hint="tricore"` for Infineon AURIX TC-series flat ROM images. This activates a
+Capstone-based decode density pass that replaces the PPC32 opcode density check.
+
+### TriCore decode density
+
+For each window, Capstone TriCore 1.6.2 decodes the first 512 bytes. The fraction of those bytes
+covered by valid TriCore instructions is the decode density:
+
+| Region | Decode density | Reason |
+|---|---|---|
+| Real application code | > 35% | Dense instruction stream, variable 16/32-bit encoding |
+| AURIX IVT | 5–30% | Mostly NOPs; rslcx/rfe are real but sparse |
+| Compressed OS blobs | < 10% | Capstone cannot decode compressed data |
+| Calibration tables | < 10% | Not instructions |
+
+Thresholds: `_T_TC_CODE = 0.35` (below = not confirmed as code), `_T_TC_DATA = 0.10` (below = CALIBRATION).
+The band 10–35% maps to MIXED (boundary or partial code window).
+
+### AURIX IVT detection
+
+The AURIX Interrupt Vector Table signature is checked before the density test. IVT detection
+scans the first 8 × 32-byte entries for `rslcx` or `rfe` mnemonics. A window is labelled IVT
+when at least 4 of the first 8 entries contain one of these mnemonics.
+
+AURIX IVT properties:
+- 256 entries × 32 bytes per entry = 8 KB per IVT block
+- Each entry ends with `rfe` (Return From Exception)
+- Entries are padded with `nop` (0x0D 0x00 LE)
+- High entropy (> 6.5) because of opcode diversity, but Capstone decode density is 5–30%
+
+### Validated result: Waqas GEN3 AURIX TC-series (2 MB)
+
+```
+IVT regions (1):
+  0x00036000-0x00037000  IVT          4 KB  entropy=5.42
+
+CODE regions (39 total, first 4):
+  0x00044000-0x0004D000  CODE        36 KB  entropy=5.93
+  0x0004E000-0x00053000  CODE        20 KB  entropy=5.88
+  0x00054000-0x00056000  CODE         8 KB  entropy=5.94
+  0x00057000-0x0005E000  CODE        28 KB  entropy=6.04
+  ...
+
+CALIBRATION (first 3):
+  0x00000000-0x00008000  CALIBRATION 32 KB  entropy=3.37  (BMHD + boot config)
+  0x00020000-0x00021000  CALIBRATION  4 KB  entropy=1.85
+  0x00022000-0x00035000  CALIBRATION 76 KB  entropy=4.18  (startup + data)
+```
+
+Without `arch_hint="tricore"`, the analyzer classifies the IVT block as CODE (entropy 5.42,
+no PPC opcodes → falls through to entropy band). With `arch_hint="tricore"`, the IVT is
+correctly labelled and excluded from the code region feed.
+
+```python
+# TriCore AURIX flat ROM
+ana = EcuROMLayoutAnalyzer.from_path("GEN3.bin", arch_hint="tricore")
+layout = ana.analyze()
+
+# Feed only app code to TriCoreTaintTracker
+for r in layout.app_code_regions():
+    tracker.add_code_region(r.start, r.end)
+
+# IVT available separately if needed
+for r in layout.ivt_regions():
+    print(f"IVT at 0x{r.start:X}")
+```
+
+---
+
 ## Limitations
 
-- PPC32 instruction density fires only on PPC32 ROMs. For TriCore, M68k, SH705x, or ARM Cortex-M
-  ROMs where the ambiguous entropy band contains both code and calibration data, the classifier
-  defaults to CALIBRATION on uncertain windows. This is conservative: false CALIBRATION is safer
-  than false CODE because calibration scanners ignore non-table byte patterns.
+- `arch_hint` must be set explicitly for TriCore ROMs. There is no auto-detection fallback — the
+  default entropy+PPC path is wrong for AURIX images.
 - Window size matters on small ROMs. A 256 KB SH705x ROM with the default 4 KB window gives only
   64 windows; use `window_size=1024` for finer resolution.
 - The MIXED category is a placeholder. No scanner currently consumes MIXED regions. Most MIXED
   windows are at code/calibration boundaries and span less than one window.
 - `detect_reset_vector()` cannot distinguish TriCore from SH705x when both patterns are present.
   Use `EcuXDFParser` to check for an architecture-specific definition file first.
+- On systems without Capstone installed, `_tricore_density` returns `(0.0, False)`, which causes
+  all TriCore windows to be classified as CALIBRATION. The `arch_hint="tricore"` path requires
+  `capstone >= 5.0.1` with TriCore support.
