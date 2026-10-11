@@ -2,7 +2,14 @@ Thanks for checking out the tool.
 
 A few months ago I was working through a security assessment and kept hitting the same wall. Claude kept defaulting to password spraying every single time. That drove me insane. Too slow, too noisy.
 
-So I asked the obvious question: what's actually blocking us? Claude said Cisco ASA. I'd never touched Cisco anything, so I said fine, let's just reverse engineer it.
+So I asked CC "what's main thing in ourway?
+CC said Cisco ASA.
+I'd never touched Cisco anything, I had to google what ASA meant. 
+Running out of resources and not wanting to give up on the elusive problem to be solved. I thought to myself, why don't we just reverse engineer it and like seep through the cracks.
+
+Which led me to thinly peeling back each layer. Reading tons of reverse engineering books, research papers, books on regression theory, looking into Microsoft Excels reverse engineering algorithm. Pretty cool. Which then led me to practically putting on the hat of a Cisco Engineer (metaphorically) and studying Cisco books and how everything works. I don't even remember the whole thing it was like a week long madman's Charlie from Always Sunny in Philadelphia meme thing going on as my girlfriend just smiled and supported because she's a genius and is super pretty. 
+
+But anyway. Fast forward to a structured story telling architecture:
 
 Claude wanted to use Ghidra. I didn't want to learn a rubix cube of nonsense. I wanted to understand reverse engineering, I was in a rush and Ghidra looked overwhleming. Not that it isnt a reliable tool. (Hello NSA)
 But reverse engineering is already really complex, and a complex GUI just adds one more layer of murky understanding. And ORreilly Media only has like 4 books on reverse engineering and two of them are Ghidra and IDA PRO. Luckily I signed up for an account with them when I was still in the Army and they provided me with a free membership. So respect to them.
