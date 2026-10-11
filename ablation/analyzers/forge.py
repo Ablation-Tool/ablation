@@ -239,14 +239,20 @@ class ForgeReport:
         return [f for f in self.findings if f.severity in ("CRITICAL", "HIGH")]
 
     def report(self) -> str:
+        from ablation.core.render import (
+            RED, ORANGE, YELLOW, GREEN, GRAY, WHITE, BOLD, DIM, RESET,
+            box, sbox, section, strip,
+        )
+
+        _STAGE_COST  = {"develop": "free", "debug": "$", "test": "$$", "deploy": "$$$"}
+        _STAGE_COLOR = {"develop": GREEN, "debug": YELLOW, "test": ORANGE, "deploy": RED}
+        _STAGE_ORDER = ["develop", "debug", "test", "deploy"]
+
         n_crit   = sum(1 for f in self.findings if f.severity == "CRITICAL")
         n_high   = sum(1 for f in self.findings if f.severity == "HIGH")
         n_medium = sum(1 for f in self.findings if f.severity == "MEDIUM")
         n_low    = sum(1 for f in self.findings if f.severity == "LOW")
         n_info   = sum(1 for f in self.findings if f.severity == "INFO")
-
-        _STAGE_COST = {"develop": "free", "debug": "$", "test": "$$", "deploy": "$$$"}
-        _STAGE_ORDER = ["develop", "debug", "test", "deploy"]
 
         highs = [f for f in self.findings if f.severity in ("CRITICAL", "HIGH")]
         stage_counts: dict[str, int] = {}
@@ -254,39 +260,49 @@ class ForgeReport:
             s = f.detection_stage.lower()
             stage_counts[s] = stage_counts.get(s, 0) + 1
 
-        lines = [
-            f"FORGE [{self.mode.upper()}] — {self.path}",
-            f"Gate: {'PASSED' if self.gate_passed else 'BLOCKED'}",
-            f"Findings: {len(self.findings)}  "
+        gate_color = GREEN if self.gate_passed else RED
+        gate_label = gate_color + ('PASSED' if self.gate_passed else 'BLOCKED') + RESET
+
+        header_lines = [
+            BOLD + f"FORGE [{self.mode.upper()}]" + RESET + DIM + f"  {self.path}" + RESET,
+            f"Gate: {gate_label}   "
+            + DIM + f"Findings: {len(self.findings)}  "
             f"({n_crit} CRITICAL  {n_high} HIGH  {n_medium} MEDIUM  "
-            f"{n_low} LOW  {n_info} INFO)",
+            f"{n_low} LOW  {n_info} INFO)" + RESET,
         ]
         if stage_counts:
             parts = [
-                f"{s.upper()} ×{stage_counts[s]} ({_STAGE_COST.get(s, '?')})"
+                _STAGE_COLOR.get(s, GRAY) + f"{s.upper()} ×{stage_counts[s]} ({_STAGE_COST.get(s, '?')})" + RESET
                 for s in _STAGE_ORDER if s in stage_counts
             ]
-            lines.append(f"Stage risk (HIGH/CRIT): {' | '.join(parts)}")
-        lines.append("")
+            header_lines.append(DIM + "Stage risk (HIGH/CRIT): " + RESET + "  |  ".join(parts))
+
+        out = [box(header_lines, WHITE), ""]
 
         for f in self.findings:
-            lines.append(f"  [{f.severity}] {f.title}")
-            lines.append(f"    location   : {f.location}")
-            lines.append(f"    category   : {f.category}")
-            if f.cwe:
-                lines.append(f"    cwe        : {f.cwe}")
-            lines.append(f"    description: {f.description}")
-            if f.recommendation:
-                lines.append(f"    action     : {f.recommendation}")
+            sev_color = RED if f.severity in ("CRITICAL", "HIGH") else (ORANGE if f.severity == "MEDIUM" else GRAY)
             stage = f.detection_stage.lower()
-            lines.append(
-                f"    stage      : {stage.upper()} — surfaces at {stage} without this audit "
-                f"({_STAGE_COST.get(stage, '?')})"
+            sc = _STAGE_COLOR.get(stage, GRAY)
+            finding_lines = [
+                sev_color + f"[{f.severity}]" + RESET + f"  {f.title}",
+                DIM + f"  location : {f.location}" + RESET,
+                DIM + f"  category : {f.category}" + RESET,
+            ]
+            if f.cwe:
+                finding_lines.append(DIM + f"  cwe      : {f.cwe}" + RESET)
+            finding_lines.append(DIM + f"  detail   : {f.description}" + RESET)
+            if f.recommendation:
+                finding_lines.append(DIM + f"  action   : {f.recommendation}" + RESET)
+            finding_lines.append(
+                DIM + "  stage    : " + RESET
+                + sc + stage.upper() + RESET
+                + DIM + f" — surfaces at {stage} without this audit ({_STAGE_COST.get(stage, '?')})" + RESET
             )
-            lines.append("")
+            out.append(sbox(finding_lines, sev_color))
+            out.append("")
         if self.summary:
-            lines += ["", "Summary:", f"  {self.summary}"]
-        return "\n".join(lines)
+            out += ["", DIM + f"Summary: {self.summary}" + RESET]
+        return "\n".join(out)
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
