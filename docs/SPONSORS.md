@@ -39,4 +39,6 @@ Bitcoin (BTC): bc1qu3s92ff3s2d72cugyrne6n73khlsumf2sxhpex
 
 
 The target machine: System76 Pangolin Pro
-Target: $3,873 (as configured, 1-year warranty)
+
+
+Target: $3,873
