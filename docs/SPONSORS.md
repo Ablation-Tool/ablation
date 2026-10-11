@@ -4,7 +4,7 @@ So I asked the obvious question: what's actually blocking us? Claude said Cisco 
 
 Claude wanted to use Ghidra. I said no. I wanted to understand reverse engineering, not outsource it to a decompiler GUI.
 
-That stubbornness led to two things: reverse engineering Cisco ASA LINA source, and building the first version of Ablation.
+That stubbornness led to two things: reverse engineering Cisco ASA LINA source, and contributing the first layer of Ablation.
 
 I have completely fallen in love with reverse engineering. 
 
