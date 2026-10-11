@@ -14,8 +14,8 @@ Each entry documents the triggering condition, the impact, and the recommended w
 
 **Description:**  
 `TriCoreTaintTracker` propagates taint into callees via the argument registers
-(D[4]–D[7], A[4]–A[7]). If a callee is tainted and returns a value, the return registers
-(D[2], A[2]) are marked tainted in the caller. However, the tracker does not model aliasing
+D[4]–D[7] and A[4]–A[7]. If a callee is tainted and returns a value, the return registers
+D[2] and A[2] are marked tainted in the caller. However, the tracker does not model aliasing
 between what the callee returns and which specific input it was derived from. In a call chain
 where function A returns a value derived from its second argument (D[5]), but the tracker
 only knows "D[2] in caller is tainted because D[5] was tainted", any subsequent operation
@@ -25,7 +25,7 @@ correctly attributed.
 **Triggering conditions:**  
 - Multi-hop call chains where a function transforms one specific tainted argument into its
   return value
-- Functions with selective output based on input argument (e.g., `get_field(msg, field_id)`)
+- Functions with selective output based on input argument, for example a `get_field` helper that looks up a named field from a message struct
 - SecurityAccess handlers that compute a seed from a received CAN frame field
 
 **Impact:** False negative (label over-approximation). The tracker may report tainted output
@@ -50,6 +50,11 @@ On the second and subsequent passes through a loop body, taint accumulated from 
 header or a previous iteration is not fed back to re-evaluate earlier instructions. A
 loop-carried accumulator that becomes tainted on iteration N will not be reflected in
 the taint state for iteration N+1 instructions that were already traced.
+
+Note: the `LOOP`/`LOOPU` mnemonic (hardware loop decrement instruction) is handled
+correctly and is not an anomaly. Taint on A_reg propagates through the decrement; the range
+bound is cleared. This anomaly refers to loop body fixpoint convergence, not the `LOOP`
+mnemonic.
 
 **Triggering conditions:**  
 - Any function containing a loop that builds up a result incrementally from tainted input
@@ -80,8 +85,8 @@ the trace terminates early; if too large, it may decode data or padding as instr
 produce spurious results.
 
 **Triggering conditions:**  
-- Stripped TriCore ELF binaries (no `.symtab`, no DWARF)
-- Flat ROM images from automotive ECU flash dumps (Bosch ME17, Continental MG1)
+- Stripped TriCore ELF binaries: no `.symtab` and no DWARF
+- Flat ROM images from automotive ECU flash dumps
 - Functions with non-standard epilogues or tail-call fall-through
 
 **Impact:** False negative (boundary too small) or false positive (boundary too large, spurious
@@ -104,13 +109,14 @@ TriCore's hardware CSA (Context Save Area) mechanism uses the `STLCX` / `LDLCX` 
 to save and restore the full upper context to/from memory. `TriCoreTaintTracker` models the
 register-level effects of CSA (upper context preserved across CALL; lower context clobbered)
 but does not track taint flowing through the memory CSA area itself. If attacker-controlled
-data is stored into the CSA via `STLCX` (e.g., a corrupted upper context during an overflow)
-and then reloaded into a register by `LDLCX`, the tracker will not propagate that taint.
+data is stored into the CSA via `STLCX`, for example via a corrupted upper context during
+an overflow, and then reloaded into a register by `LDLCX`, the tracker will not propagate
+that taint.
 
 **Triggering conditions:**  
 - Interrupt handlers that save/restore context using STLCX/LDLCX
 - Deeply nested call stacks where CSA save areas may overlap or be corrupted
-- Findings involving upper context registers (D[8]–D[15], A[12]–A[15]) after interrupt
+- Findings involving upper context registers D[8]–D[15] and A[12]–A[15] after interrupt
   return or context switch
 
 **Impact:** False negative. Taint originating from a corrupted CSA area will not appear in
@@ -130,8 +136,7 @@ held in FCX/PCX; the number of CSA frames needed is bounded by the call depth.
 
 **Description:**  
 `CS_ARCH_TRICORE` is absent from Capstone 4.x and earlier. If `TriCoreTaintTracker` is
-imported in an environment with Capstone ≤ 4.x, the `cs.Cs(CS_ARCH_TRICORE, ...)` call will
-raise `CsError`. This is an environment error, not a decode error, and it surfaces at
+imported in an environment with Capstone ≤ 4.x, the `cs.Cs` constructor call with `CS_ARCH_TRICORE` will raise `CsError`. This is an environment error, not a decode error, and it surfaces at
 `__init__` time rather than at decode time. The anomaly is listed here because older
 environments may silently fall through to a catch-all handler that masks the error.
 

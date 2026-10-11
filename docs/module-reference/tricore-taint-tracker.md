@@ -15,22 +15,21 @@ data from a SecurityAccess response or CAN frame through the cipher function to 
 dangerous sink.  `TriCoreTaintTracker` fills this gap.
 
 **2. No TriCore calling-convention model in Ablation.**  TriCore uses a hardware-enforced
-CSA (Context Save Area) mechanism where CALL automatically saves the upper context
-(D[8]–D[15], A[10]–A[15]) to a dedicated memory area, and RET restores it.  No software
+CSA (Context Save Area) mechanism where CALL automatically saves the upper context registers D[8]–D[15] and A[10]–A[15] to a dedicated memory area, and RET restores it.  No software
 push/pop is generated.  Without a model of this, a taint tracker either over-clears
 (treats all registers as clobbered) or under-clears (doesn't clobber anything), producing
 false negatives or false positives at every call site.  This module implements the
 Infineon TriCore EABI V2.9 / GHS EABI calling convention (GHS-RE-REFERENCE.md §1.2–1.3):
 D[4]–D[7] / A[4]–A[7] in; D[2] / A[2] out; lower context clobbered on CALL.
 
-**3. No FCALL/FRET leaf-function support.**  GHS-compiled TriCore firmware uses FCALL
-(saves A[11] only, no CSA) for leaf functions, and FRET to return from them.  These
-mnemonics are absent from all other Ablation trackers.  This module recognises FCALL and
+**3. No FCALL/FRET leaf-function support.**  GHS-compiled TriCore firmware uses FCALL for leaf functions. FCALL saves A[11] only;
+no CSA is allocated. FRET returns from them.  These mnemonics are absent from all
+other Ablation trackers.  This module recognises FCALL and
 FRET as call/return boundaries with the same calling-convention semantics as CALL/RET.
 
 ---
 
-## ABI summary (Infineon TriCore EABI V2.9, GHS-RE-REFERENCE.md §1.2–1.3)
+## ABI summary: Infineon TriCore EABI V2.9 / GHS-RE-REFERENCE.md §1.2–1.3
 
 | Role | Registers | Capstone names |
 |---|---|---|
@@ -41,7 +40,7 @@ FRET as call/return boundaries with the same calling-convention semantics as CAL
 | Stack pointer | A[10] | `sp` |
 | Link register | A[11] | `a11` |
 | Caller-saved (lower context) | D[0]–D[7], A[2]–A[7], A[11], D[15], A[15] |: |
-| Callee-saved (upper context, HW-enforced) | D[8]–D[15], A[0], A[1], sp, A[12]–A[15] |: |
+| Callee-saved: upper context, HW-enforced | D[8]–D[15], A[0], A[1], sp, A[12]–A[15] |: |
 
 ---
 
@@ -51,8 +50,11 @@ FRET as call/return boundaries with the same calling-convention semantics as CAL
 from ablation.analyzers.taint_tracker_tricore import TriCoreTaintTracker
 
 # --- Flat ROM dump (EcuArchDetector returned 'tricore') ---
-data = open('waqas_gen3.bin', 'rb').read()
-tracker = TriCoreTaintTracker.from_bytes(data, base_va=0x80000000)
+import pathlib
+data = pathlib.Path('waqas_gen3.bin').read_bytes()
+tracker = TriCoreTaintTracker.from_bytes(
+    data, base_va=0x80000000
+)
 
 # Scan one function (caller must supply boundaries from EcuArchDetector/FlatBinaryFuncStartScanner)
 findings = tracker.scan_function(
@@ -103,15 +105,17 @@ class TaintFindingTriCore:
 
 | Instruction class | Rule |
 |---|---|
-| `ld.w / ld.h / ld.b` | Dest ← taint(base_reg) ∪ taint(mem[base,disp]) |
-| `ld.bu / ld.hu` | Same as above; bound = 0xFF / 0xFFFF (zero-extending) |
-| `st.w / st.h / st.b` | mem[base,disp] ← taint(src_reg); tainted base = FINDING |
-| `mov / mov.a / mov.d` | Dest ← taint(src_reg); immediate = clean |
-| `movh / movh.a` | Dest = clean (constant high half load) |
-| ALU 2-operand (`add d4, d5`) | Dest ← taint(dest) ∪ taint(src): in-place |
-| ALU 3-operand (`add d4, d5, d6`) | Dest ← taint(src1) ∪ taint(src2) |
+| `ld.w / ld.h / ld.b` | Dest ← taint[base_reg] ∪ taint[mem[base,disp]] |
+| `ld.bu / ld.hu` | Same as above; bound = 0xFF / 0xFFFF, zero-extending |
+| `st.w / st.h / st.b` | mem[base,disp] ← taint[src_reg]; tainted base = FINDING |
+| `mov / mov.a / mov.d` | Dest ← taint[src_reg]; immediate = clean |
+| `movh / movh.a` | Dest = clean; constant high-half load |
+| ALU 2-operand, example: `add d4, d5` | Dest ← taint[dest] ∪ taint[src]: in-place |
+| ALU 3-operand, example: `add d4, d5, d6` | Dest ← taint[src1] ∪ taint[src2] |
+| DSP MAC variants: `maddr`, `msubr`, `maddrs`, `msubrs`, `mulm`, `mulms`, `mulr` | Route via ALU dispatch; source registers propagate to dest |
 | `and` with immediate | Dest bound = imm & 0xFFFF |
 | `extr.u` | Dest bound = (1 << width) - 1 |
+| `LOOP / LOOPU` | A_reg: labels preserved, bound cleared (decrement removes range constraint) |
 | `ji Aa` with tainted Aa | CRITICAL finding: tainted-indirect-call target |
 | `call / calla / calli / fcall` | Apply calling-convention effects |
 | `ret / rfe / fret` | End of function trace |
@@ -122,7 +126,8 @@ class TaintFindingTriCore:
 ## Calling convention effects at call site
 
 ```
-arg_labels = union(taint[r] for r in {d4,d5,d6,d7,a4,a5,a6,a7})
+for r in {d4,d5,d6,d7,a4,a5,a6,a7}:
+    arg_labels |= taint[r]
 clobber caller-saved: {d0-d7, a2-a7, a11, d15, a15}
 if arg_labels:
     taint[d2] = taint[a2] = arg_labels   # return value tainted
@@ -135,8 +140,8 @@ Sink function (e.g. `memcpy`): records finding if any arg reg is tainted.
 
 ## FCALL / FRET (GHS-RE-REFERENCE.md §1.7)
 
-GHS-compiled leaf functions use FCALL (saves A[11] only, no CSA save).  The tracker
-treats FCALL identically to CALL at the call site, and FRET identically to RET.  The
+GHS-compiled leaf functions use FCALL. FCALL saves A[11] only; no CSA save is performed.
+The tracker treats FCALL identically to CALL at the call site, and FRET identically to RET.  The
 mnemonic set `{'call', 'calla', 'calli', 'fcall'}` covers all call forms;
 `{'ret', 'rfe', 'fret'}` covers all return forms.
 
