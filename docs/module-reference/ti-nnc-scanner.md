@@ -14,9 +14,13 @@
 
 ## What it does
 
-`TiNNCScannerr` parses ARM ELF firmware for TI Neural Network Compiler (NNC) v2.x inference artifacts. The NNC is built on Apache TVM and compiles ONNX models into C libraries for TI MCU targets: F28P55x (C28x DSP), MSPM0 (Cortex-M0+), CC2745/AM13x (Cortex-M33), CC1352 (Cortex-M4), AM26x (Cortex-R5), and F29H85x (C29x).
+`TiNNCScanner` parses firmware compiled by the TI Neural Network Compiler (NNC) v2.x and finds inference artifacts. The NNC is built on Apache TVM and compiles ONNX models into C libraries for TI MCU targets: F28P55x (C28x DSP), MSPM0 (Cortex-M0+), CC2745/AM13x (Cortex-M33), CC1352 (Cortex-M4), AM26x (Cortex-R5), and F29H85x (C29x).
 
-The scanner operates entirely from ELF symbol tables — no disassembly required for its primary findings.
+Two binary formats are supported:
+- **ARM ELF** (Cortex-M33/M4/R5/M0+, C29x): parsed via lief. Weak symbols detected via ELF `STB_WEAK` binding.
+- **TI COFF2 / AR archive** (C28x F28P55x): parsed via `TiCoffLoader`. cl2000 emits COFF, not ELF. In TI COFF, `__attribute__((weak))` maps to storage class `C_UEXT = 19` (tentative external definition), which can be overridden by a `C_EXT` strong definition at link time.
+
+The scanner operates entirely from symbol tables — no disassembly required for its primary findings.
 
 **What it detects:**
 
@@ -84,7 +88,7 @@ input_int = clip(round(input_float * reciprocal_scale) + zero_point, min, max)
 | ARM Cortex-M33/M4/R5 | `--target-c-mcpu=cortex-m33/m4/r5` | Full (ELF) |
 | ARM Cortex-M0+ (MSPM0) | `--target-c-mcpu=cortex-m0plus` | Full (ELF) |
 | C29x (F29H85x) | `--target-c-mcpu=c29` | Full (ELF — c29clang emits ELF) |
-| C28x (F28P55x) | `--target-c-mcpu=c28` | Not supported — cl2000 emits COFF; requires Gap 1 (C28x decoder) |
+| C28x (F28P55x) | `--target-c-mcpu=c28` | Full (TI COFF2/AR via TiCoffLoader; C_UEXT=weak) |
 
 ---
 
