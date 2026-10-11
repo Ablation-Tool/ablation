@@ -159,17 +159,38 @@ def _extract_plt_x86(binary, data: bytes) -> Dict[int, str]:
 def _extract_plt_arm32(binary) -> Dict[int, str]:
     """Return {plt_stub_va: symbol_name} for ARM32 LE binaries.
 
-    ARM32 uses .rel.plt (8-byte REL entries, no addend).
+    Primary path: LIEF pltgot_relocations API — returns {got_va: sym_name}.
+    got_va is used as the dict key (not a PLT stub VA). batch_plt_intersect
+    only checks symbol names, so this is sufficient for all current ARM32 callers.
+    SinkArgClassifier (which needs real stub VAs) is x86-64 only and never calls
+    this function.
+
+    Fallback path (LIEF API empty): manual .rel.plt parse.
     R_ARM_JUMP_SLOT = 22; PLT header = 20 bytes; stub size = 12 bytes.
-    Sizes assume standard ARM ABI (GNU LD); Thumb2-only PLT uses 8-byte stubs
-    and would produce wrong stub_va — not encountered in target firmware.
-    Slot index in .rel.plt maps directly to PLT stub index — verified on
-    Huawei VRP S6730 V200R024 ARM32 LE firmware (ntid.o, nge.out, libssp.so).
-    GAP-ARM32-REL-PLT: _extract_plt_x86 reads .rela.plt (24-byte RELA) which
-    ARM32 binaries do not have — this function fills that gap.
+    Sizes assume GNU LD ARM EABI; Thumb2-only PLT uses 8-byte stubs.
+    Verified on Huawei VRP S6730 V200R024 ARM32 LE firmware.
+
+    TG-ARM32-PLT-1 root cause: pre-linked firmware images can have zeroed
+    .rel.plt r_info fields (VA=0 before dynamic linking), causing r_info & 0xff
+    to not match R_ARM_JUMP_SLOT. pltgot_relocations bypasses that by reading
+    LIEF's normalized relocation view, which handles both REL and RELA formats
+    and does not depend on raw section bytes.
     """
     if not _LIEF_OK or binary is None:
         return {}
+
+    # Primary: LIEF pltgot_relocations (architecture-independent, handles VA=0 entries)
+    result: Dict[int, str] = {}
+    try:
+        for rel in binary.pltgot_relocations:
+            if rel.has_symbol and rel.symbol.name:
+                result[rel.address] = rel.symbol.name
+    except Exception:
+        pass
+    if result:
+        return result
+
+    # Fallback: manual .rel.plt parse (original approach, Huawei VRP verified)
     R_ARM_JUMP_SLOT = 22
     plt_sec = binary.get_section('.plt')
     rel_sec = binary.get_section('.rel.plt')
@@ -179,7 +200,6 @@ def _extract_plt_arm32(binary) -> Dict[int, str]:
     rel_data = bytes(rel_sec.content)
     entry_sz = 8
     n = len(rel_data) // entry_sz
-    result: Dict[int, str] = {}
     for i in range(n):
         off = i * entry_sz
         _r_offset, r_info = struct.unpack_from('<II', rel_data, off)
@@ -199,17 +219,29 @@ def _extract_plt_arm32(binary) -> Dict[int, str]:
 def _extract_plt_arm64(binary) -> Dict[int, str]:
     """Return {plt_stub_va: symbol_name} for ARM64 LE binaries.
 
+    Primary path: LIEF pltgot_relocations (same rationale as _extract_plt_arm32).
+
+    Fallback path: manual .rela.plt parse.
     ARM64 uses .rela.plt (24-byte RELA entries) with LE-packed r_info.
     R_AARCH64_JUMP_SLOT = 0x402; PLT header = 32 bytes; stub size = 16 bytes.
-    Sizes assume standard AArch64 ABI (GNU LD); custom PLT layouts would need
-    per-binary verification — not encountered in target firmware.
-    GAP-ARM64-PLT-RELA-ENDIAN: _extract_plt_x86 decodes r_info with '>Q'
-    (big-endian), giving sym_idx = 0 for all entries in LE binaries.
-    This function fixes that by using '<Q' and the ARM64 reloc type.
+    GAP-ARM64-PLT-RELA-ENDIAN fixed: uses '<Q' not '>Q' for r_info.
     Confirmed on NE40E V800R023/V800R024 ARM64 LE HiSilicon Hi1280 firmware.
     """
     if not _LIEF_OK or binary is None:
         return {}
+
+    # Primary: LIEF pltgot_relocations
+    result: Dict[int, str] = {}
+    try:
+        for rel in binary.pltgot_relocations:
+            if rel.has_symbol and rel.symbol.name:
+                result[rel.address] = rel.symbol.name
+    except Exception:
+        pass
+    if result:
+        return result
+
+    # Fallback: manual .rela.plt parse
     R_AARCH64_JUMP_SLOT = 0x402
     plt_sec = binary.get_section('.plt')
     rela_sec = binary.get_section('.rela.plt')
@@ -219,7 +251,6 @@ def _extract_plt_arm64(binary) -> Dict[int, str]:
     rela_data = bytes(rela_sec.content)
     entry_sz = 24
     n = len(rela_data) // entry_sz
-    result: Dict[int, str] = {}
     for i in range(n):
         off = i * entry_sz
         _r_offset, r_info, _r_addend = struct.unpack_from('<QQq', rela_data, off)
