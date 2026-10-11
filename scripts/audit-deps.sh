@@ -4,32 +4,32 @@
 # Closes SSDF-RV1 (ABLATION-STANDARDS.md §3.4, NIST SP 800-218 RV.1):
 # automated dependency vulnerability identification.
 #
-# Requires: pip install pip-audit (included in requirements-dev.txt)
+# Requires: pip install pip-audit (included in requirements/dev.txt)
 #
 # Usage:
-#   scripts/audit-deps.sh                         # scan requirements.txt
+#   scripts/audit-deps.sh                         # scan requirements/base.txt
 #   scripts/audit-deps.sh --json                  # emit JSON report
 #   AUDIT_OUTPUT=report.json scripts/audit-deps.sh --json
 #
 # Exit codes:
 #   0 = no vulnerabilities found
 #   1 = vulnerabilities found (details printed to stdout)
-#   2 = pip-audit not installed or requirements.txt missing
+#   2 = pip-audit not installed or requirements/base.txt missing
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-REQUIREMENTS="${REPO_ROOT}/requirements.txt"
+REQUIREMENTS="${REPO_ROOT}/requirements/base.txt"
 
 if ! command -v pip-audit &>/dev/null; then
     echo "[audit-deps] ERROR: pip-audit not installed"
-    echo "[audit-deps] Install with: pip install -r ${REPO_ROOT}/requirements-dev.txt"
+    echo "[audit-deps] Install with: pip install -r ${REPO_ROOT}/requirements/dev.txt"
     exit 2
 fi
 
 if [[ ! -f "$REQUIREMENTS" ]]; then
-    echo "[audit-deps] ERROR: requirements.txt not found at $REQUIREMENTS"
+    echo "[audit-deps] ERROR: requirements/base.txt not found at $REQUIREMENTS"
     exit 2
 fi
 
