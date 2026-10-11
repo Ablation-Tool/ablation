@@ -1,5 +1,9 @@
 Thanks for checking out the tool.
+
+
 I was hacking into MacStadium a few months ago (allegedly) and by "I was hacking" I mean I jailbroke Claude 4.6 and made it hack into MacStadium.
+
+
 
 I noticed that after a few rounds of trying different techniques and alternative angles that CC always tried doing password spraying and it really annoyed because its such a low level method, and I'm just impatient.
 
