@@ -13,7 +13,6 @@ I have completely fallen in love with reverse engineering.
 
 It gives me the same pull hacking did: the adrenaline, the deep curiosity, the feeling that there's always one more layer and it keeps me out of trouble.
 
-I do this for free, the way most people on GitHub do.
 
 If you want to keep the work going, the target machine is a System76 Pangolin Pro at $3,873.
 
