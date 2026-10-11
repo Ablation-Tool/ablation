@@ -66,14 +66,27 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Workflow:</strong> version diffing, cross-target learning, module quality gate, coverage gate</summary>
+<summary><strong>Workflow:</strong> version diffing, cross-target learning, KASAN-oracle, module quality gate, coverage gate</summary>
 
 | Capability | |
 |:---|:---|
 | [**Version Diffing**](docs/workflows/cross-version.md) | Checks whether the logic changed, not whether the file changed, so a cosmetic recompile cannot hide an unpatched vulnerability. |
 | [**Cross-Target Learning**](docs/module-reference/cross-target-learning.md) | Every confirmed finding seeds future semantic searches, so the tool gets sharper with each engagement. |
+| [**KASAN-Oracle**](docs/workflows/kasan-oracle.md) | Scans a KASAN debug build first because debug builds expose control flow that stripping removes. Confirmed candidates from the debug build then validate against the stripped production binary, so the debug image acts as a ground-truth oracle rather than a secondary target. |
 | [**Module Quality Gate**](docs/module-reference/forge.md) | FORGE audits every user-written module before it can be stored, so local extensions meet the same standard as the modules that ship with Ablation. |
 | [**Coverage Gate**](docs/ABLATION-STANDARDS.md) | The taint engine requires 85% statement coverage on every commit, so a regression in taint logic fails the test suite before it reaches a firmware engagement. |
+
+</details>
+
+<details>
+<summary><strong>Automotive RE:</strong> architecture detection, ROM layout, calibration parsers, CAN DBC</summary>
+
+| Capability | |
+|:---|:---|
+| [**ECU Architecture Detector**](docs/module-reference/ecu-arch-detector.md) | Identifies the ISA of a flat ECU ROM from raw bytes alone. PPC32, SH-2A, TriCore, RH850, V850, M68K, C28x, and M32R all produce recognizable structural signatures without symbols or file headers. |
+| [**ROM Layout Analyzer**](docs/module-reference/ecu-rom-layout-analyzer.md) | Splits a flat ROM into CODE, CALIBRATION, and IVT regions before analysis begins. The interrupt vector table is excluded from function discovery so taint trackers start from clean application code boundaries. |
+| [**Calibration Parsers**](docs/module-reference/ecu-cal-parsers.md) | Reads TunerPro XDF, ASAM A2L, RomRaider XML, open_damos, and ConesCAN definition files and injects human-readable table labels into BinaryContext. Every array in the ROM has a name when the taint tracker reaches it. |
+| [**CAN DBC Parser**](docs/module-reference/can-dbc-parser.md) | Reads CAN signal database files and makes message and signal definitions available during binary analysis. No other RE tool brings CAN signal context into the taint analysis pipeline. |
 
 </details>
 
