@@ -4,7 +4,7 @@ Nicholas Michael Kloster is an independent security researcher focused on AI/LLM
 
 He is the author of five CVEs across CISA-coordinated ICS disclosure and Cisco enterprise platforms, with additional accepted findings at Amazon, Google, and Anthropic.
 
-He builds and maintains Ablation, an open-source reverse engineering framework with 640+ modules covering eight CPU architectures. Every confirmed finding from a live engagement feeds back into the cross-target pattern corpus, making it self-improving over time.
+He builds and maintains Ablation, an open-source reverse engineering framework with 640+ modules covering 19 CPU architectures. Every confirmed finding from a live engagement feeds back into the cross-target pattern corpus, making it self-improving over time.
 
 He has built over 130 open-source tools for AI and ML infrastructure security, including aimap (218 service fingerprints across the AI stack), the Visor tool family (14 tools for AI infrastructure assessment and red teaming), and four purpose-built vector database scanners. His public research corpus, AI-LLM-Infrastructure-OSINT, covers 376 case studies and 88 methodology insights across 33 platform categories.
 
