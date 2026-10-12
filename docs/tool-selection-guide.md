@@ -1,0 +1,181 @@
+# Ablation — Tool Selection Guide
+
+Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-reference/`.
+
+**Ordering:** BinaryContext → SemanticSearcher (new binary/vuln class) → FuncProfiler (candidate) → TaintTracker (sinks known) → PathSolver (confirm feasibility). Manual capstone only when TaintTracker has no configured sink.
+
+---
+
+## Core context + search
+
+| Task | First reach |
+|---|---|
+| "What does this function call?" | `ctx.callees_of(va)` |
+| "What calls this symbol?" | `ctx.callers_of('symbol')` or `ctx.callers_of(va)` |
+| "What strings does this function reference?" | `ctx.strings_in_func(va)` |
+| "Which functions reference this string?" | `ctx.funcs_referencing_string(string_va)` |
+| "strings_in_func() returns almost nothing on a stripped i386 ELF32" | `I386AbsoluteXrefScanner.from_context(ctx).inject(ctx)` |
+| "What is this function?" | `ctx.name(va)` |
+| "Show disassembly around address" | `WindowAnalyzer.dump_text(va, window=1536)` |
+| "Find functions matching vulnerability pattern" | `SemanticSearcher.query(description)` (ALWAYS first on new binary) |
+| "What values are passed to this sink?" | `FuncProfiler.profile(va).fmt()` |
+| "Trace taint from network recv to sink" | `TaintTracker.run_interprocedural()` |
+
+---
+
+## Arch-specific taint trackers
+
+| Task | First reach |
+|---|---|
+| "ARM32: trace recv to malloc/strcpy/system" | `ARM32TaintTracker.from_context(ctx).run_interprocedural()` |
+| "ARM32: find function starts in stripped ELF without .eh_frame" | `ARM32FunctionScanner.from_path(elf).inject_into_context(ctx)` |
+| "ARM32: find MUL before malloc without bounds check" | `ARM32IntOverflowScanner.from_context(ctx).scan()` |
+| "ARM64: trace recv to malloc/strcpy/system" | `ARM64TaintTracker.from_path_full(elf).run_interprocedural()` |
+| "MIPS32: trace recv to system/strcpy/sprintf" | `MIPS32TaintTracker.from_path(elf).run_interprocedural()` |
+| "MIPS32: big-endian RouterOS or little-endian CPE" | `MIPS32TaintTracker.from_path(elf, endian='big')` |
+| "MIPS64: trace recv (Cisco IOS/OCTEON big-endian)" | `MIPS64TaintTracker.from_path(elf, endian='big').run_interprocedural()` |
+| "MIPS64: little-endian RouterOS 64" | `MIPS64TaintTracker.from_path(elf, endian='little').run_interprocedural()` |
+| "nanoMIPS: trace recv to system/popen/sprintf" | `NanoMIPSTaintTracker.from_path(elf, endian='little').run_interprocedural(depth=4)` |
+| "PPC32: trace recv (Cisco IOS 7200, VxWorks)" | `PPC32TaintTracker.from_path(elf, endian='big').run_interprocedural()` |
+| "PPC32 PEF: detect ABI register clobber at OTStrCat/OTMemcpy call sites" | `PEFABIClobberScanner.from_bytes(code, base_va).scan(sink_vas, check_regs=[4])` |
+| "PPC32: resolve indirect BCTRL calls in GOT2-PIC stripped binary" | `PPC32GOT2Resolver.from_path(elf).resolve()` |
+| "PPC32 .so: find every BL call site calling an imported symbol" | `PPC32PLTTracer.from_path(elf).find_callers('system')` |
+| "PPC64: trace recv (IBM POWER, AIX)" | `PPC64TaintTracker.from_path(elf, endian='big').run_interprocedural()` |
+| "ARC: trace recv (ARC HS IoT, Marvell, Seagate)" | `ARCTaintTracker.from_path(elf).run_interprocedural()` |
+| "RISC-V 32: trace recv" | `RISCV32TaintTracker.from_path(elf).run_interprocedural()` |
+| "RISC-V 32 with HiSilicon WS63/Hi3863 riscv31 custom opcodes" | `HiSiliconRV32ExtDecoder` — pass as `ext_decoder=` to `RISCV32TaintTracker.from_path()` |
+| "RISC-V 64: trace recv" | `RISCV64TaintTracker.from_path(elf).run_interprocedural()` |
+| "V850: trace recv (RH850/G3M ECU)" | `V850TaintTracker.from_path(elf).run_interprocedural()` |
+| "RH850 GHS/IAR ABI: trace taint through CAN/SecurityAccess" | `RH850TaintTracker.from_bytes(data, base_va).scan_function(func_va, func_end, init_labels={'can_payload'})` |
+| "TriCore AURIX: trace taint through SecurityAccess / CAN handler" | `TriCoreTaintTracker.from_bytes(data, base_va).scan_function(func_va, func_end, init_labels={'sa_seed'})` |
+| "TriCore: find shared epilogue blocks creating phantom taint paths" | `EpilogueShareScanner.from_context(ctx).scan()` |
+| "x86-32/i386: trace recv to system/execv/snprintf" | `X86_32TaintTracker.from_path(elf).run_interprocedural()` |
+| "LoongArch64: trace recv (TencentOS 4.6)" | `LoongArch64TaintTracker.from_path(elf).run_interprocedural()` |
+| "LoongArch64: find GCC 12.3.1.7 max-not-min bug in ELF" | `LA64MaxNotMinScanner.from_path(elf).scan()` |
+| "LoongArch64: find GCC 12.3.1.7 max-not-min bug in UEFI PE32+" | `LA64MaxNotMinScanner.from_pe32plus(data).scan()` |
+| "LoongArch64: find integer overflow before malloc" | `LA64HeapVulnScanner.from_path(elf).scan()` |
+
+---
+
+## Scanners
+
+| Task | First reach |
+|---|---|
+| "Find printf/syslog with non-literal format string" | `FormatStringScanner.from_context(ctx).scan()` |
+| "Scan for heap integer overflow / UAF / double-free" | `HeapVulnScanner.from_context(ctx).scan()` |
+| "Where did this command string come from?" | `SinkArgClassifier.from_path(elf).classify_all()` |
+| "Register vendor-specific sinks + known-safe patterns" | `VendorProfile.from_vendor('fortinet').apply_to(clf)` |
+| "Map CMDB table IDs to exec-sink reach (FortiWeb/FortiOS)" | `CMDBSurfaceMapper.from_path(elf).map()` |
+| "Batch triage all .so files in a dir" | `LibraryInventory.from_dir('/tmp/target/lib/').scan()` |
+| "Which libs in a rootfs dir have exec-class PLT imports?" | `batch_plt_intersect('/tmp/fad_root/lib/')` |
+| "Detect allowlist byte-validators in stripped binary" | `SanitizerDetector.from_path(elf).detect()` |
+| "Classify fork() callers as worker/exec/exit" | `ForkExecClassifier.from_path(elf).classify()` |
+| "Find pre-auth routes in flatui firmware" | `PreAuthRouteAuditor.run(route_init_va, factory_va)` |
+| "Find encrypted/packed sections in binary" | `EntropyMapper.scan()` |
+| "Find CFG bypass targets in a Windows PE" | `CFGBypassDetector.from_path(pe).scan()` |
+| "Check SafeSEH status and SEH frame installations in x86 PE" | `SEHChainAnalyzer.from_path(x86_pe).scan()` |
+| "Extract ETW provider GUIDs and detect detection gaps" | `ETWProviderExtractor.from_path(pe).scan()` |
+| "Find RPC server interfaces and check auth levels" | `RPCServerAnalyzer.from_path(pe).scan()` |
+| "Map COM attack surface" | `COMAttackSurfaceMapper.from_path(pe).scan()` |
+| "Load PDB symbols into BinaryContext" | `PDBSymbolIntegrator.from_path(pe).inject_into_context(ctx)` |
+| "Find unvalidated ExAllocatePool size → RtlCopyMemory taint in kernel driver" | `WindowsPoolTaintTracker.from_path(driver_sys).scan()` |
+| "Detect BYOVD capability classes in a signed Windows kernel driver" | `ByovdDetector.from_path(driver_path).detect()` |
+| "Analyze a Windows kernel .sys driver" | `KernelDriverAnalyzer.from_path(path).analyze()` |
+| "Decode a Windows IOCTL CTL_CODE value" | `decode_ioctl_code(value)` |
+| "Find JNI bridge surface in Android APK" | `JniBridgeScanner.from_path(apk).scan()` |
+| "Map Binder service surface in Android APK" | `BinderScanner.from_path(apk).scan()` |
+| "Find 'safe now catastrophic later' rendering architecture risk" | `SourceArchRiskScanner.from_context(ctx).scan()` |
+| "Detect Python→Lua code injection" | `LuaInjectionAnalyzer.from_path(root).scan()` |
+| "Scan MCP server code for BIND_WIDE / EXEC_IN_ALLOWED / NO_AUTH" | `MCPToolTaintScanner.from_path(root).scan()` |
+| "Detect TI NNC (Apache TVM) inference artifacts" | `TiNNCScanner.from_path(path).scan()` |
+| "Scan MP4/MKV/AVI for forensic anomalies" | `VideoContainerAnalyzer.from_path(path).scan()` |
+| "Post-linker security gate on compiled binary" | `CompilerSecurityGate.from_path(elf).scan()` |
+| "Pre-commit gate on staged .py files" | `FORGE.audit_module(path)` — gate_passed=False blocks commit |
+| "Check README/doc text for white-bronco prose violations" | `python3 -m ablation.core.prose README.md` |
+| "Scan a flat ECU ROM for function starts (arch-agnostic)" | `FlatBinaryFuncStartScanner(rom, base_va=0).scan()` |
+| "Fingerprint ISA of unknown flat ECU ROM" | `EcuArchDetector(rom_bytes).detect()` |
+| "Classify ECU ROM into CODE/CALIBRATION/IVT/PADDING regions" | `EcuROMLayoutAnalyzer.from_path(rom).analyze()` |
+| "Label stripped PC game binary as engine code" | `EnginePatternLibrary.default().label_binary(ctx, xg)` |
+| "Find math/physics/renderer functions on PPC64 Cell PPU" | `VMXDensityScanner.from_context(ctx).scan(threshold=5)` |
+| "Classify PPC64 Cell PPU functions as dynamic data structure traversal" | `DynDSClassifier.from_context(ctx).classify()` |
+| "Cache any scanner's results across sessions" | `ScanResultVersionCache.for_scanner(ScannerClass).get_or_scan(path)` |
+| "Classify Linux .ko attack surface from kernel source tree path" | `KernelModuleSubsystemClassifier().classify(ko_path)` |
+
+---
+
+## Decoders / lifters / parsers
+
+| Task | First reach |
+|---|---|
+| "nanoMIPS: walk frame boundaries" | `NanoMIPSDecoder(endian='little').decode_frames(data, base_addr)` |
+| "Decode Renesas SH-2A ECU firmware" | `EcuSH2aDecoder(rom, base_va=0x400000).disassemble(start, end)` |
+| "Decode TMS320C28x firmware" | `EcuC28xDecoder(data, base_va=0).disassemble(start, end)` |
+| "Parse Go pclntab and enumerate functions" | `GoBinaryRE.parse_pclntab()` |
+| "Find Go subprocess/exec injection sites" | `GoSubprocessScanner.scan()` |
+| "Lift a native function to pseudo-C IR (18 ISA variants)" | `BinaryLifter.from_path(elf, arch='arm64').lift_function(va)` |
+| "Lift a SH-2A ECU function from flat ROM to pseudo-C IR" | `BinaryLifter.from_path(rom, arch='sh2a').lift_function(va)` |
+| "Disassemble a DEX method to smali" | `DEXDisasm(dex).disasm_method('Lcom/foo/Bar;', 'methodName')` |
+| "Lift a DEX method to pseudo-Java" | `DEXLifter(dex).lift_method('Lcom/foo/Bar;', 'methodName')` |
+| "Lift a MicroPython .mpy v6 module to pseudo-Python" | `MpyLifter.from_path(mpy).lift_module()` |
+| "Decode a Cell SPU ELF (PS3 co-processor)" | `SPUDisassembler.dump_spu_elf(path, start_va, limit)` |
+| "Decrypt a PS3 SELF (Signed ELF) to plain ELF" | `PS3SELFDecryptor.from_path(eboot_bin).decrypt_to_tmp(eboot_bin)` |
+| "Find C++ vtables in PS3 Cell PPU (PPC64 ABI v1) binary" | `PS3OPDVtableScanner.from_context(ctx).scan(min_slots=3)` |
+| "Resolve C++ vtable indirect calls (ARM64)" | `VtableResolver.extract_vtable_regions()` + `resolve_blr_sites()` |
+| "Reconstruct ET_DYN vtable slots from .rela.dyn (x86-64)" | `ELFVtableReconstructor.from_path(elf).reconstruct_class('ClassName')` |
+| "Extract C++ vtables from any ELF" | `CppVtableReconstructorAnalyzer.from_path(elf).scan()` |
+| "Parse a PowerPC PEF (CFM) binary" | `PEFBinaryAnalyzer.from_path(pef).stubs()` |
+| "Extract key material from BMP LSB steganography" | `BmpKeyExtractor('/path/to/keys.bmp').extract('seed')` |
+| "Parse TunerPro XDF calibration file" | `EcuXDFParser.from_file(xdf_path)` |
+| "Parse open_damos.json and locate calibration tables" | `EcuOpenDamosParser.from_file(json_path)` |
+| "Parse RomRaider ECU definition XML" | `EcuRomRaiderParser.from_file(xml_path)` |
+| "Parse conescan ECU definition XML (Mazda SH705x)" | `EcuConescanParser.from_file(xml_path)` |
+| "Parse ASAM/ASAP2 A2L ECU calibration definition" | `EcuA2LParser.from_file(a2l_path)` |
+| "Parse Pytrex NissanDefinitions" | `EcuNissanParser.from_dir(defs_dir)` |
+| "Parse CAN DBC signal database file" | `CanDbcParser.from_file(path)` |
+| "Parse AppleDouble wrapper from unar-extracted .rsrc file" | `AppleDoubleExtractor.from_path(rsrc_path).resource_fork()` |
+| "Parse TI COFF2 object files and AR archives" | `TiCoffLoader.from_path(path)` |
+
+---
+
+## Firmware extraction
+
+| Task | First reach |
+|---|---|
+| "Extract a specific firmware partition by name" | `FirmwareContainer.from_path(fw).extract('bin', out_path)` |
+| "Extract files from Huawei VRP squashfs v4 XZ image" | `HuaweiSquashfsExtractor(sqfs_path).extract(inner_path)` |
+| "Extract files from AMI BMC CramFS firmware" | `AmiCramFSExtractor.from_image(ima_path, offset).extract_file('/path')` |
+| "Extract FortiOS hardware firmware (.out file)" | `FortiOSHardwareExtractor.from_path(fw).extract_to(outdir)` |
+| "Recover inner partition key from FortiOS hardware .out firmware" | `FirmwareContainerKeyExtractor.from_path(fw)` |
+| "Batch-fingerprint cert keys in FortiGate OVF firmware ZIPs" | `FortiGateCertKeyScanner.batch_scan(dir)` |
+| "Scan bare FortiGate QCOW2/VHD disk image for cert keys" | `FortiGateCertKeyScanner.from_disk(path)` |
+| "Predict cert key set from firmware filename alone" | `FortiBuildTrackClassifier.classify(filename)` |
+| "Crack XOR-encrypted firmware section" | `XorSolver.solve(ciphertext_path)` |
+
+---
+
+## Hypothesis engine / dynamics
+
+| Task | First reach |
+|---|---|
+| "Seed and score competing RE hypotheses" | `HypothesisEngine.from_binary(elf, arch='arm64', ctx=ctx)` |
+| "Auto-execute a probe and feed evidence back" | `engine.with_context(ctx).step(approved=True)` |
+| "Execute a leaf function in Unicorn sandbox" | `DynamicSandbox.from_context(ctx).run_function(va, args={'x0': 0x10})` |
+| "Check if function is safe to run in sandbox" | `LeafFunctionChecker.from_path(elf).is_leaf(va, ctx)` |
+| "Score evidence for a hypothesis" | `EvidenceScorer().score(hypothesis, evidence_items)` |
+| "Rank analysis probes by expected information gain" | `ProbeRanker().plan_report(hypotheses, top_n=5)` |
+| "Confirm taint path is reachable" | `PathSolver.solve_path(func_va, target_va)` |
+| "Trace an arg across 3 library hops" | `IPRegAnnotator.annotate_chain(va, max_hops=3)` |
+| "Which library exports this symbol?" | `LibGraph.defined_in('symbol')` |
+| "Is this the same function as in v7.4?" | `DTWMatcher.score_functions(va_a, va_b)` |
+| "Where did this function change across versions?" | `MatrixProfileDiff.diff_functions(va_v1, va_v2)` |
+| "Find confirmed similar findings from past engagements" | `FindingRegistry.find_similar(embedding)` |
+| "Sync confirmed findings into PatternLibrary (flywheel)" | `PatternLibrary.ingest_from_registry(reg)` |
+| "Auto-name stripped functions via LLM" | `LlmAnalyst.FunctionNamer(ctx).run(va)` |
+| "Compress N-file source audit to M profile buckets" | `SourceAuditCompressor.from_context(ctx).compress()` |
+| "Generate PoC curl commands" | `PocGenerator.generate_all(preauth_routes)` |
+| "Analyze JWT token" | `CryptoAudit.analyze_jwt(token)` |
+| "Sweep a Windows PE for vulns" | `python3 sweeps/pe_sweep.py <target.exe> --vendor <v>` |
+| "Build engine signature corpus for a new engine" | `lib.add_signature(EngineSignature(...))` then `lib.save()` |
+| "Feed game RE findings back into engine library (flywheel)" | `lib.ingest_from_findings(registry.confirmed(), engine='unreal')` |
+| "Track RE session state across stages with schema validation" | `WorkflowDocument.for_re_session(vendor, target)` |
+| "Audit finding provenance and detect cross-session tampering" | `StageCommitment.verify(stage_name, instance)` |

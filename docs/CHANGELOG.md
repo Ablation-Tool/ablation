@@ -2,6 +2,18 @@
 
 ---
 
+## v2.75.0
+
+**WorkflowDocument + StageCommitment — schema-validated RE session pipeline.**
+
+`WorkflowDocument` replaces flat `SESSION.md` stage tracking with a typed pipeline. Each stage has a required-field schema; `advance()` validates the instance before committing and records a timestamped `StageTransition`. `for_re_session()` creates the standard six-stage pipeline: `triage → semantic_sweep → candidate_profile → taint_trace → finding_confirmation → registration`. `dirty_since_commit()` detects post-commit mutation. Full JSON round-trip for persistence across sessions.
+
+`StageCommitment` implements the No-Lock/Approving pattern. The producer commits a `sha256` content hash without freezing the instance. The reviewer countersigns with `approve()`, binding the approving hash to both the original content hash and the final accepted content. `verify()` detects any out-of-band mutation at any later point, enabling tamper-evident multi-session review chains. `audit_trail()` renders a human-readable chain status table.
+
+FORGE gate passed on both modules: 0 findings.
+
+---
+
 ## v2.74.0
 
 **EcuArchDetector — TriCore BMHD gate (Gap 9).**
