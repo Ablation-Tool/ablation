@@ -44,6 +44,9 @@ testpaths = ["tests"]
 addopts = [
     "--tb=short",
 ]
+markers = [
+    "integration: marks tests that require external binary fixtures (skip with -m 'not integration')",
+]
 
 [tool.coverage.run]
 # TCL3 qualification scope: labeled taint engine modules only
