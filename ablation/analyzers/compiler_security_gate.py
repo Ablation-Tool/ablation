@@ -9,7 +9,7 @@ Each taint finding is documented as a ``SemanticBlock`` using the DAG Adapter's
 producer-consumer model, making the exact dataflow path traversable and
 machine-readable at build time.
 
-Architecture support: x86_64, arm32, arm64, mips32, mips64, ppc32, ppc64,
+Architecture support: x86_64, x86_32, arm32, arm64, mips32, mips64, ppc32, ppc64,
                       riscv32, riscv64, loongarch64.
 
 Additional scanners (x86_64 only): format string, heap corruption,
@@ -192,6 +192,10 @@ def _run_taint(path: str, arch: str) -> List[Any]:
         if arch == "loongarch64":
             from ablation.analyzers.taint_tracker_loongarch64 import LoongArch64TaintTracker
             return LoongArch64TaintTracker.from_path(path).run_interprocedural()
+
+        if arch == "x86_32":
+            from ablation.analyzers.taint_tracker_x86_32 import X86_32TaintTracker
+            return X86_32TaintTracker.from_path(path).run_interprocedural()
 
     except ImportError as exc:
         import warnings
