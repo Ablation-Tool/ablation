@@ -15,7 +15,7 @@ He holds Instructor and Mountaineering qualifications from the Northern Warfare 
 During that time he completed reverse engineering courses through the Department of Defense Cyber Crime Center and volunteered with ITDRC. He trained with the President's Hundred while stationed in Fairbanks, but never got his EIB.
 
 <details>
-<summary>DC3 Certifications</summary>
+<summary>The Department of Defense Cyber Crime Center Certifications</summary>
 
 - A Brief History of Cryptography (B-CR-CE-14)
 - Advanced NTFS Analysis
