@@ -377,6 +377,80 @@ class ByovdDetector:
 
         return accesses
 
+    def _check_mmmap_user_mode(self, iat_va: int) -> bool:
+        """
+        Returns True only when a call site to MmMapLockedPagesSpecifyCache
+        passes AccessMode=UserMode(1) as the second argument (RDX on x64 ABI).
+
+        Scans code sections for CALL [RIP+N] where RIP+N == iat_va, then checks
+        up to 24 preceding instructions for MOV EDX/RDX, 1 (UserMode).
+
+        Returns False when disassembly unavailable, no call sites found, or all
+        traced sites pass AccessMode=KernelMode(0) (XOR EDX,EDX or MOV EDX,0).
+        A False result downgrades MmMapLockedPagesSpecifyCache from PHYS_MEM_RW
+        CRITICAL to MEDIUM — the API is then treated as legitimate MDL I/O.
+        """
+        if not _HAS_CAPSTONE or self._md is None or self._pe is None:
+            return False
+
+        try:
+            from capstone.x86_const import X86_REG_RDX, X86_REG_EDX
+        except ImportError:
+            return False
+
+        try:
+            image_base = self._pe.optional_header.imagebase
+        except Exception:
+            return False
+
+        try:
+            for sec in self._pe.sections:
+                if not (sec.characteristics & 0x20):
+                    continue
+                sec_data = bytes(sec.content)
+                sec_va = image_base + sec.virtual_address
+                insns = list(self._md.disasm(sec_data, sec_va))
+
+                for i, insn in enumerate(insns):
+                    if insn.id != X86_INS_CALL:
+                        continue
+                    try:
+                        ops = insn.operands
+                        if not ops or ops[0].type != X86_OP_MEM:
+                            continue
+                        # RIP-relative CALL [RIP+disp] — target_ptr is the IAT slot VA
+                        target_ptr = insn.address + insn.size + ops[0].mem.disp
+                        if target_ptr != iat_va:
+                            continue
+                    except (AttributeError, IndexError):
+                        continue
+
+                    # Found a call site — look back for the RDX/EDX assignment
+                    for j in range(i - 1, max(i - 24, -1), -1):
+                        prev = insns[j]
+                        try:
+                            prev_ops = prev.operands
+                            if not prev_ops:
+                                continue
+                            dst = prev_ops[0]
+                            if dst.type != X86_OP_REG:
+                                continue
+                            if dst.reg not in (X86_REG_RDX, X86_REG_EDX):
+                                continue
+                            # First write to RDX/EDX found before this call site
+                            if (prev.mnemonic == 'mov'
+                                    and len(prev_ops) >= 2
+                                    and prev_ops[1].type == X86_OP_IMM
+                                    and prev_ops[1].imm == 1):
+                                return True  # AccessMode = UserMode(1)
+                            break  # KernelMode or unresolvable; check next call site
+                        except (AttributeError, IndexError):
+                            continue
+        except Exception:
+            return False
+
+        return False  # no UserMode call sites found
+
     def detect(self) -> ByovdReport:
         """Run full BYOVD detection on the driver."""
         # Parse with KernelDriverAnalyzer if not pre-supplied
@@ -402,15 +476,27 @@ class ByovdDetector:
 
         for api_name, iat_va in imports.items():
             cap_class = CAPABILITY_MAP.get(api_name)
-            if cap_class:
-                risk = CAPABILITY_RISK.get(cap_class, "MEDIUM")
-                capabilities.append(ByovdCapability(
-                    api_name=api_name,
-                    capability_class=cap_class,
-                    risk=risk,
-                    evidence=f"IAT import at 0x{iat_va:x}",
-                    file_offset=iat_va,
-                ))
+            if not cap_class:
+                continue
+            risk = CAPABILITY_RISK.get(cap_class, "MEDIUM")
+            if (api_name == "MmMapLockedPagesSpecifyCache"
+                    and not self._check_mmmap_user_mode(iat_va)):
+                # All reachable call sites pass KernelMode(0): legitimate MDL I/O.
+                # UserMode(1) at any call site would restore CRITICAL classification.
+                risk = "MEDIUM"
+                evidence = (
+                    f"IAT import at 0x{iat_va:x} — call sites use KernelMode "
+                    f"(MDL I/O mapping, not UserMode physical memory exposure)"
+                )
+            else:
+                evidence = f"IAT import at 0x{iat_va:x}"
+            capabilities.append(ByovdCapability(
+                api_name=api_name,
+                capability_class=cap_class,
+                risk=risk,
+                evidence=evidence,
+                file_offset=iat_va,
+            ))
 
         # Also check KDA API findings if available
         if self._kda_report is not None:
