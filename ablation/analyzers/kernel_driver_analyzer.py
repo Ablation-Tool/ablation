@@ -121,8 +121,10 @@ def decode_ioctl_code(value: int, site_va: int = 0) -> Optional['IoctlCode']:
 
     if device_type == 0:
         return None
-    # Reject suspiciously high or obviously-data values
-    if value in (0xFFFFFFFF, 0x80000000, 0x00000000):
+    # Reject suspiciously high or obviously-data values.
+    # 0x7FFFFFFF = INT_MAX: used as C bounds-check sentinel (if ioctl < INT_MAX),
+    # not a real CTL_CODE. Decodes spuriously as METHOD_NEITHER / device_type=0x7FFF.
+    if value in (0xFFFFFFFF, 0x7FFFFFFF, 0x80000000, 0x00000000):
         return None
     # Common false-positive: values < 0x10000 are just 16-bit quantities
     if value < 0x10000:
