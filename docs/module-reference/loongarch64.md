@@ -4,6 +4,37 @@ Pure-Python LoongArch64 (LA64) decoder, CFG builder, and interprocedural taint t
 
 ---
 
+## What this is
+
+LoongArch is a RISC ISA designed by Loongson Technology for Chinese-market server and desktop CPUs. TencentOS, Kylin, and UOS all ship LoongArch64 packages. Production servers from Loongson use this ISA exclusively. Capstone 5.x has no LoongArch support, so any RE tool that depends on Capstone is blind to this architecture.
+
+This stack is the only public RE toolkit built specifically for LA64. It covers the full analysis pipeline: instruction decode, CFG construction, interprocedural taint tracking, PLT/GOT stub resolution, KASAN/KCOV ghost stripping on debug kernels, and kernel module source and sink tracking.
+
+---
+
+## Where it's used
+
+- **TencentOS 4.6** — server packages and kernel modules distributed as stripped ELF
+- **Loongson 3A5000 / 3A6000 firmware** — EDK2 and GRUB2 EFI modules
+- **Linux kernel modules** — built for LA64 with BTF and `.eh_frame` present
+- Any stripped LoongArch64 ELF binary where `e_machine == 0x102`
+
+---
+
+## Safe usage
+
+**Verify the architecture before constructing.** Passing an ARM64 or x86-64 ELF to `LoongArch64TaintTracker` produces wrong function starts with no error. Check `e_machine == 0x102` in the ELF header first.
+
+**Use `from_path_full()` for stripped binaries.** `from_path()` seeds function starts from symbol tables and `addi.d $sp,$sp,-N` prologues. Leaf functions and tail-call-optimised bodies have no stack frame prologue and no symbol entries, so `from_path()` misses them. `from_path_full()` adds `.eh_frame`, DWARF, and BTF sources and recovers them.
+
+**Strip KASAN/KCOV ghosts before taint analysis on kernel targets.** A TencentOS kernel built with `CONFIG_KASAN=y` has roughly 40% of its instructions as instrumentation. Running the taint tracker directly against a KASAN build produces thousands of false call edges into `__asan_load8_noabort` and similar. Run `LoongArchDecoderV2.from_system_map()` first and use `decode_frames_clean()`.
+
+**Check PLT resolution before reporting zero findings.** If `run_interprocedural()` returns no findings on a dynamically linked binary, confirm that PLT stubs resolved. A failed `.rela.plt` parse leaves every `bl` to an external function as an unknown edge so taint paths through the network stack are silently dropped. Inspect `tt._plt_map` — it should be non-empty for a dynamically linked binary.
+
+**Byte-verify every finding VA before reporting.** Confirm `data[va - base : va - base + 4]` matches the expected bytes at the sink instruction. A wrong function start can produce a finding at an address that is data, not code.
+
+---
+
 ## Why this exists
 
 Two gaps blocked LoongArch64 security analysis before this stack:
