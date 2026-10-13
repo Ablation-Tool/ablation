@@ -481,6 +481,15 @@ class BinaryContext:
             self._extract_plt_arm32(binary)
             return
 
+        # PPC64le ELF V2: stubs inside .text — std r2,24(r1); ld r12,N(r2); mtctr r12; bctr
+        if self.arch == 'ppc64':
+            try:
+                if binary.header.identity[5] == 1:  # ELFDATA2LSB
+                    self._extract_plt_ppc64le(binary)
+                    return
+            except Exception:
+                pass
+
         # Build GOT -> symbol name from .rela.plt (x86_64 / arm64)
         got_to_sym: Dict[int, str] = {}
         try:
@@ -586,6 +595,100 @@ class BinaryContext:
                     self.plt[rel.address] = rel.symbol.name
         except Exception:
             pass
+
+    def _extract_plt_ppc64le(self, binary) -> None:
+        # PPC64le ELF V2: PLT stubs live in .text (not a separate .plt section).
+        # Each stub is 16 bytes:
+        #   std  r2, 24(r1)   0xF8410018  -- saves caller TOC
+        #   ld   r12, N(r2)   0xE9820000|(N&0xFFFF)  -- loads GOT slot
+        #   mtctr r12          0x7D8903A6
+        #   bctr               0x4E800420
+        # where GOT slot VA = r2 + sign_extend_16(N), and r2 is the ELF-wide TOC pointer.
+        #
+        # r2 is found from any function prologue: addis r2,r12,HI; addi r2,r2,LO
+        # => r2 = prologue_VA + sign_extend_16(HI)*0x10000 + sign_extend_16(LO)
+
+        got_to_sym: Dict[int, str] = {}
+        try:
+            rela_plt = binary.get_section('.rela.plt')
+            if rela_plt:
+                rela_data = bytes(rela_plt.content)
+                for off in range(0, len(rela_data) - 23, 24):
+                    r_offset, r_info = struct.unpack_from('<QQ', rela_data, off)
+                    sym_idx = r_info >> 32
+                    try:
+                        sym = binary.dynamic_symbols[sym_idx]
+                        if sym.name:
+                            got_to_sym[r_offset] = sym.name
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        if not got_to_sym:
+            return
+
+        # Find r2 from a function prologue.
+        r2: Optional[int] = None
+        for sec_name in ('.text', '.init'):
+            try:
+                sec = binary.get_section(sec_name)
+            except Exception:
+                sec = None
+            if not sec:
+                continue
+            sec_bytes = bytes(sec.content)
+            sec_va = int(sec.virtual_address)
+            for off in range(0, len(sec_bytes) - 7, 4):
+                w0 = struct.unpack_from('<I', sec_bytes, off)[0]
+                w1 = struct.unpack_from('<I', sec_bytes, off + 4)[0]
+                # addis r2, r12, HI  (opcode=15, rD=2, rA=12)
+                # addi  r2, r2,  LO  (opcode=14, rD=2, rA=2)
+                if (w0 & 0xFFFF0000) == 0x3C4C0000 and (w1 & 0xFFFF0000) == 0x38420000:
+                    hi = w0 & 0xFFFF
+                    lo = w1 & 0xFFFF
+                    if hi & 0x8000:
+                        hi -= 0x10000
+                    if lo & 0x8000:
+                        lo -= 0x10000
+                    cand = (sec_va + off) + (hi << 16) + lo
+                    if any(-(1 << 15) <= (gva - cand) < (1 << 15) for gva in got_to_sym):
+                        r2 = cand
+                        break
+            if r2 is not None:
+                break
+
+        if r2 is None:
+            return
+
+        # Decode stubs: scan .text and .init for the 4-word PLT pattern.
+        _STD   = 0xF8410018
+        _MTCTR = 0x7D8903A6
+        _BCTR  = 0x4E800420
+
+        for sec_name in ('.text', '.init'):
+            try:
+                sec = binary.get_section(sec_name)
+            except Exception:
+                sec = None
+            if not sec:
+                continue
+            sec_bytes = bytes(sec.content)
+            sec_va = int(sec.virtual_address)
+            for off in range(0, len(sec_bytes) - 15, 4):
+                w0 = struct.unpack_from('<I', sec_bytes, off)[0]
+                if w0 != _STD:
+                    continue
+                w1 = struct.unpack_from('<I', sec_bytes, off + 4)[0]
+                w2 = struct.unpack_from('<I', sec_bytes, off + 8)[0]
+                w3 = struct.unpack_from('<I', sec_bytes, off + 12)[0]
+                if (w1 & 0xFFFF0000) == 0xE9820000 and w2 == _MTCTR and w3 == _BCTR:
+                    n = w1 & 0xFFFF
+                    if n & 0x8000:
+                        n -= 0x10000
+                    sym = got_to_sym.get(r2 + n)
+                    if sym:
+                        self.plt[sec_va + off] = sym
 
     def _extract_exports(self, binary) -> None:
         try:

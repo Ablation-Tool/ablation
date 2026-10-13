@@ -40,6 +40,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "PPC32 PEF: detect ABI register clobber at OTStrCat/OTMemcpy call sites" | `PEFABIClobberScanner.from_bytes(code, base_va).scan(sink_vas, check_regs=[4])` |
 | "PPC32: resolve indirect BCTRL calls in GOT2-PIC stripped binary" | `PPC32GOT2Resolver.from_path(elf).resolve()` |
 | "PPC32 .so: find every BL call site calling an imported symbol" | `PPC32PLTTracer.from_path(elf).find_callers('system')` |
+| "PPC64le ELF V2: get PLT stub VAs and symbol names" | `BinaryContext.load_or_build(elf).plt` (auto-decoded via `_extract_plt_ppc64le`; clear `~/.ablation/ctx_*` if binary was previously cached) |
 | "PPC64: trace recv (IBM POWER, AIX)" | `PPC64TaintTracker.from_path(elf, endian='big').run_interprocedural()` |
 | "ARC: trace recv (ARC HS IoT, Marvell, Seagate)" | `ARCTaintTracker.from_path(elf).run_interprocedural()` |
 | "RISC-V 32: trace recv" | `RISCV32TaintTracker.from_path(elf).run_interprocedural()` |
