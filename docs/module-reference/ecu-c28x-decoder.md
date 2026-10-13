@@ -1,5 +1,31 @@
 # ecu-c28x-decoder
 
+## What this is
+
+TI TMS320C28x MCUs power EV/HEV traction-inverter controllers and motor-drive ECUs. Capstone has no C28x support. C28x uses three distinct calling conventions and word-addressed program memory where PC-relative branch offsets are word counts, not byte counts. `EcuC28xDecoder` decodes C28x instructions from raw bytes, handles all three call/return forms, and computes branch targets correctly in word addresses.
+
+---
+
+## Where it's used
+
+- **EV/HEV traction inverters** — TI F28x-series motor-drive ECUs
+- **TMS320F2803x / F2806x / F2833x** — TI Piccolo and Delfino controller firmware
+- Any TI COFF-extracted or flat binary image from F28x-series hardware
+
+---
+
+## Safe usage
+
+**Pass `base_va` as a word address.** C28x program memory is word-addressed. Passing a byte address doubles every computed branch target and function start address.
+
+**Detect the calling convention before tracing call chains.** Each function uses one of three call/return forms: LC/LRET, LCR/LRETR, or FFC/XAR7. Use `insn.call_type` to determine which form a function uses before building a call graph. Assuming LC/LRET throughout produces wrong return-address tracking for LCR/LRETR and FFC functions.
+
+**Run `TiCoffLoader` to extract the code section before passing bytes to the decoder.** The decoder expects raw code bytes. A raw COFF binary includes headers that the decoder misinterprets as instructions.
+
+**Check `function_starts()` coverage before taint analysis.** C28x function starts come from direct call targets, not prologues. If `function_starts()` returns few entries, indirect calls via FFC XAR7 may be missed. Add those targets manually if known from COFF symbol tables.
+
+---
+
 ## Why this exists
 
 4 things that weren't possible before in Ablation:

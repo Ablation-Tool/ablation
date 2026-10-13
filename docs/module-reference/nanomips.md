@@ -6,6 +6,32 @@ Targets: Ingenic X-series SoCs (JZ4780, X1000, X2000), MediaTek Helio embedded, 
 
 ---
 
+## What this is
+
+nanoMIPS is a variable-width MIPS extension with 16-bit, 32-bit, and 48-bit instructions and no branch delay slots. Ingenic X-series and MediaTek Helio embedded targets use it. No public taint tool handled nanoMIPS before this tracker. `NanoMIPSTaintTracker` runs full register-level decode on Capstone 6.x and falls back to a conservative BFS walk on Capstone 5.x so analysis works on both environments.
+
+---
+
+## Where it's used
+
+- **Ingenic JZ4780 / X1000 / X2000** — SoC firmware from Ingenic SDK releases
+- **MediaTek Helio embedded** — nanoMIPS targets in MediaTek embedded product lines
+- **MIPS32r6 microcontrollers** — any bare-metal target using the nanoMIPS ISA extension
+
+---
+
+## Safe usage
+
+**Check `tracker.has_full_decode` before reporting.** The Capstone 5.x fallback marks all `$a0`-`$a3` tainted after any source call. This generates more candidates to triage manually. If `has_full_decode=False`, treat all findings as over-approximate.
+
+**Add custom sinks for vendor exec wrappers.** Default sinks cover standard C library calls. Vendor firmware wraps `system()` in local functions. Pass these as `custom_sinks={'vendor_exec': {0: 0}}` or the interprocedural walk stops at the wrapper boundary.
+
+**Verify PLT resolution before reporting zero findings.** Check `tracker._plt_map` is non-empty for a dynamically linked ELF. A failed `.rel.plt` parse leaves every PLT call as an unknown edge so taint paths through standard library sinks are silently dropped.
+
+**Use `depth=4` for standard firmware.** The default depth finds paths through four call frames. Firmware that wraps network input through many layers may need `depth=6` but produces more candidates to triage.
+
+---
+
 ## Why this exists
 
 Two things were not possible before `NanoMIPSTaintTracker`:
