@@ -51,9 +51,10 @@ from .isa_m88k import (
 )
 
 try:
-    from ablation.core.coff_m88k_parser import M88kCoffBinary
+    from ablation.core.coff_m88k_parser import M88kCoffBinary, Section
 except ImportError:
     M88kCoffBinary = None  # type: ignore
+    Section = None  # type: ignore
 
 
 @dataclass
@@ -84,9 +85,10 @@ class M88kDecoder:
 
     def __init__(self, binary: "M88kCoffBinary") -> None:
         self._bin = binary
-        self._text = binary.text
-        if self._text is None:
+        text = binary.text
+        if text is None:
             raise ValueError("binary has no .text section")
+        self._text: "Section" = text
 
     # ------------------------------------------------------------------
     # Single instruction decode
