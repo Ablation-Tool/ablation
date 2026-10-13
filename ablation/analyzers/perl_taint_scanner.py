@@ -54,8 +54,7 @@ CLI::
 from __future__ import annotations
 
 import re
-import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -68,11 +67,7 @@ _RE_BACKTICK = re.compile(
     r'(?:^|[^\'\\])`([^`]*\$[^`]*)`',
     re.MULTILINE,
 )
-_RE_QX = re.compile(
-    r'\bqx\s*(?P<delim>[/{!|#])(?P<cmd>[^]*?)\$[^]*?)(?P=delim)',
-    re.MULTILINE,
-)
-# Simpler qx// scanner: find any qx with a $ inside
+# qx// scanner: find any qx with a $ inside
 _RE_QX_SIMPLE = re.compile(
     r'\bqx\s*\{([^}]*\$[^}]*)\}|\bqx\s*/([^/]*\$[^/]*)/'
     r'|\bqx\s*!([^!]*\$[^!]*)!'
@@ -241,7 +236,9 @@ class PerlTaintScanner:
 
         for m in _RE_BACKTICK.finditer(text):
             cmd = m.group(1)
-            line_no = text[:m.start()].count('\n')
+            # m.start(1) is first char inside backticks; -1 gives the backtick position.
+            # Using m.start() would land on the preceding \n when a line starts with `.
+            line_no = text[:m.start(1) - 1].count('\n')
             for var in _RE_VARS.findall(cmd):
                 sinks.append((line_no, var, 'backtick', cmd))
 
@@ -338,6 +335,11 @@ class PerlTaintScanner:
                 source_desc = f"stdin read (\\${var} = <STDIN>)"
                 break
 
+        # shift at file scope (func_name is None) means shift @ARGV — treat as CLI
+        if source_verdict == 'PARAM' and func_name is None:
+            source_verdict = 'CLI_ARG'
+            source_desc = "file-scope shift (shift @ARGV)"
+
         # Resolve PARAM → check callers in other files
         caller_file: Optional[str] = None
         if source_verdict == 'PARAM' and func_name:
@@ -433,8 +435,9 @@ class PerlTaintScanner:
                     if re.search(
                         r'(?:my\s+)?\$' + re.escape(call_var) + r'\s*=\s*shift', cline
                     ):
-                        # shift in caller = came from caller's @ARGV or another param
-                        pass
+                        # shift at file scope or shift @ARGV = CLI arg
+                        if func_at_call is None or '@ARGV' in cline:
+                            return ('CLI_ARG', filepath)
                     if _RE_GETOPT_VAR.search(cline):
                         m2 = _RE_GETOPT_VAR.search(cline)
                         if m2 and m2.group(1) == call_var:
