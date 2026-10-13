@@ -3,9 +3,9 @@
 Parse and disassemble Motorola MC88100 BCS COFF executables.
 
 **Modules:**  
-- `ablation.core.coff_m88k_parser` — file parser  
-- `ablation.analyzers.isa_m88k` — ISA + ABI constants  
-- `ablation.analyzers.insn_m88k` — instruction decoder  
+- `ablation.core.coff_m88k_parser` (file parser)  
+- `ablation.analyzers.isa_m88k` (ISA + ABI constants)  
+- `ablation.analyzers.insn_m88k` (instruction decoder)  
 
 ---
 
@@ -30,12 +30,12 @@ Parse and disassemble Motorola MC88100 BCS COFF executables.
 
 3. **Function start detection on a dead ISA with no symbols**: the BCS COFF
    symbol table is typically stripped.  `function_starts()` recovers function
-   boundaries by scanning all BSR/BSR.N call sites in .text — validated at 126
+   boundaries by scanning all BSR/BSR.N call sites in .text, validated at 126
    unique function entries on the moto_gen binary.
 
 4. **Data reference recovery without Capstone**: `string_refs()` scans for
    consecutive OR.U + OR instruction pairs (the canonical 88K 32-bit constant
-   load idiom) where the computed VA falls in .data — validated at 73 string
+   load idiom) where the computed VA falls in .data, validated at 73 string
    and format-string references on the same binary.
 
 ---
@@ -60,7 +60,7 @@ extension point.
 
 ---
 
-## ABI (BCS — Binary Compatibility Standard)
+## ABI (BCS / Binary Compatibility Standard)
 
 | Register | Role |
 |---|---|
@@ -106,7 +106,7 @@ The modules were developed against and validated on:
 - **Binary**: Lotus 1-2-3 `moto_gen` license key generator (54,608 bytes,
   88K BCS COFF, January 1993, for DG AViiON / DG/UX Unix systems)
 - **Architecture gap discovered**: section headers are 44 bytes in 88K BCS
-  COFF (not 40) — `s_nreloc` and `s_nlnno` are `unsigned long` (4 bytes each)
+  COFF, not 40, because `s_nreloc` and `s_nlnno` are `unsigned long` (4 bytes each)
 - **Results**: 73 data refs, 126 function entries, complete key generation
   algorithm reversed (XOR encoding with ASCII offsets 0x30/0x37/0x57/0x61,
   three `%02x%02x` pairs → 12-char activation key)
@@ -122,7 +122,7 @@ See `re/lotus/moto_gen_re.py` for the full findings module.
 2. **DataExplorer AViiON corpus**: larger 88K target set for validating coverage
    of additional instruction encodings
 3. **CFG builder** (`cfg_m88k.py`): block-level control flow graph using the
-   existing `function_starts()` + branch target detection — follow `cfg_ppc.py`
+   existing `function_starts()` + branch target detection; follow `cfg_ppc.py`
    as the template
 4. **BinaryLifter integration**: add `arch='m88k'` to `BinaryLifter`'s ISA
    dispatch table once a CFG builder exists
