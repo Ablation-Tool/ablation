@@ -8,7 +8,7 @@ section data and metadata for disassembly.
 COFF file layout:
   File header    (20 bytes)
   Optional header (f_opthdr bytes, typically 28 for 88K BCS)
-  Section headers (f_nscns × 40 bytes each)
+  Section headers (f_nscns × 44 bytes each)
   Section data    (at file offsets given in section headers)
   Symbol table    (at f_symptr, f_nsyms entries × 18 bytes)
 
