@@ -134,6 +134,8 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "Parse CAN DBC signal database file" | `CanDbcParser.from_file(path)` |
 | "Parse AppleDouble wrapper from unar-extracted .rsrc file" | `AppleDoubleExtractor.from_path(rsrc_path).resource_fork()` |
 | "Parse TI COFF2 object files and AR archives" | `TiCoffLoader.from_path(path)` |
+| "Parse Motorola 88K BCS COFF executable (magic 0x016D, DG AViiON / DG/UX)" | `from ablation.core.coff_m88k_parser import parse; b = parse(path)` |
+| "Disassemble MC88100 instructions / find function starts on 88K binary" | `M88kDecoder(b).disassemble_va(va)` / `.function_starts()` / `.string_refs()` |
 
 ---
 
