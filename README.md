@@ -107,20 +107,20 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 |---|---|
 | x86 | x86-32 · x86-64 |
 | ARM | ARM-32 · ARM-64 · Thumb |
-| MIPS | MIPS-32 BE · MIPS-32 LE · nanoMIPS · MIPS-64 BE · MIPS-64 LE |
+| MIPS | MIPS-32 · nanoMIPS · MIPS-64 |
 | PowerPC | PPC-32 · PPC-64 · VLE |
-| RISC-V | RV32 · RV64 · HiSilicon RV32 ext |
+| RISC-V | RV32 · RV64 · HiSilicon ext |
 | ARC | ARC EM/HS |
 | V850 / RH850 | V850-32 |
 | LoongArch | LoongArch64 |
 | Renesas SH | SH-2A |
+| Motorola | M68K / CPU32 |
+| TI DSP | TMS320C28x |
+| Intel MCS | 8051 |
 | DEX | Dalvik · ART |
 | ARK | ArkTS |
 | BEAM | Erlang · Elixir |
 | MicroPython | .mpy v6 |
-| TI DSP | TMS320C28x |
-| Motorola | M68K / CPU32 |
-| Intel MCS | 8051 |
 
 ---
 ## Real-World Results
