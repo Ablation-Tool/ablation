@@ -7,6 +7,30 @@ Lift native binary functions to annotated C pseudocode.
 
 ---
 
+## What this is
+
+BinaryLifter is the single lift entry point for all 17 ISAs in Ablation. It accepts any supported binary, an arch token, and a function VA and returns annotated pseudo-C. ARM64 and x86-64 use register-tracked full IR with type annotations and calling-convention-aware call signatures. All other ISAs produce structural pseudocode that resolves calls, branches, and returns but emits other instructions as comments. BEAM files lift to module summaries through the same interface.
+
+---
+
+## Where it's used
+
+After `SemanticSearcher` and `TaintTracker` identify candidates, BinaryLifter makes a flagged function readable. Use it to understand what a function does before writing a finding.
+
+---
+
+## Safe usage
+
+**Specify `arch=` for non-ARM64 binaries.** The default is `arm64`. An SH-2A, MIPS, or RISC-V binary passed without `arch=` produces misidentified instructions with no error.
+
+**Use `from_context()` when a `BinaryContext` already exists.** `from_path()` re-parses the ELF. `from_context()` reuses the section map already in memory and avoids a redundant file read.
+
+**Call `with_taint(findings)` after a TaintTracker run.** Without taint annotations, the lifted output shows call structure but not which paths carry attacker-controlled data. Taint annotations mark the calls worth tracing.
+
+**Check the ISA backend tier before expecting register-level IR.** ARM64 and x86-64 produce typed register IR. All other ISAs produce structural output where most instructions appear as comments. Structural output is useful for call graph analysis, not for data-flow analysis.
+
+---
+
 ## Why this exists
 
 3 things that weren't possible before in Ablation:
