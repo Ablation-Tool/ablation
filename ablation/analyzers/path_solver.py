@@ -435,7 +435,7 @@ class PathSolver:
 
             # Cap at the last instruction VA in this block: avoids spilling into
             # successor blocks when block.end is a short distance from the next boundary.
-            last_insn_va = block.insns[-1][0] if block.insns else block_va
+            last_insn_va = block.insns[-1].address if block.insns else block_va
 
             for insn in self.md.disasm(chunk, block_va):
                 if insn.address > last_insn_va:
