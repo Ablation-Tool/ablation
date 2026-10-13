@@ -93,14 +93,9 @@ _RE_STDIN      = re.compile(r'(?:my\s+)?\$(\w+)\s*=\s*<STDIN>')
 _RE_GETOPTS    = re.compile(r'\b(?:getopts|GetOptions)\b')
 
 # Sanitization patterns
-_RE_QUOTEMETA  = re.compile(r'\$(\w+)\s*=\s*quotemeta\s*\(\s*\$(\w+)\s*\)')
 _RE_SQUOTE_WRAP = re.compile(
     # "'" . join("' '", @args) . "'" — single-quote wrapping idiom
     r"""["']\s*\.\s*join\s*\(\s*["']'\s+'["']\s*,"""
-)
-_RE_STRIP_SQUOTE = re.compile(
-    # $var =~ s/'/ /g or $var =~ s/['"...]//g
-    r"""\$(\w+)\s*=~\s*s/['"]"""
 )
 
 
@@ -179,11 +174,12 @@ class PerlTaintScanner:
     def __init__(self, files: List[Path]):
         self._files = files
         self._analyses: Dict[str, _FileAnalysis] = {}
+        self.failed_paths: List[str] = []  # files that could not be loaded
         for f in files:
             try:
                 self._analyses[str(f)] = _FileAnalysis(f)
-            except Exception:
-                pass
+            except Exception as exc:
+                self.failed_paths.append(f"{f}: {exc}")
 
     @classmethod
     def from_path(cls, path: str | Path) -> 'PerlTaintScanner':
@@ -213,9 +209,11 @@ class PerlTaintScanner:
     def report(self, hits: Optional[List[SinkHit]] = None) -> str:
         if hits is None:
             hits = self.scan()
+        warn_lines = [f"  WARNING: could not load: {p}" for p in self.failed_paths]
         if not hits:
-            return "PerlTaintScanner: no shell sinks with variable interpolation found."
-        lines = ["PerlTaintScanner results:", ""]
+            msg = "PerlTaintScanner: no shell sinks with variable interpolation found."
+            return (msg + "\n" + "\n".join(warn_lines)) if warn_lines else msg
+        lines = ["PerlTaintScanner results:", ""] + warn_lines + ([""] if warn_lines else [])
         counts: Dict[str, int] = {}
         for h in hits:
             lines.append(h.fmt())
@@ -383,8 +381,10 @@ class PerlTaintScanner:
             # quotemeta($var) or $var = quotemeta(...)
             if re.search(r'quotemeta\s*\(\s*\$' + re.escape(var), line):
                 return "quotemeta()"
-            # Single-quote wrapping idiom
-            if _RE_SQUOTE_WRAP.search(line):
+            # Single-quote wrapping idiom — only if this var is involved in the join.
+            # Without the var check, any unrelated join() before the sink would
+            # cause a false SANITIZED for the actual injectable variable.
+            if _RE_SQUOTE_WRAP.search(line) and ('$' + var) in line:
                 return "single-quote wrap (join idiom)"
             # s/'/ /g applied to the var
             if re.search(r'\$' + re.escape(var) + r'\s*=~\s*s/', line):
