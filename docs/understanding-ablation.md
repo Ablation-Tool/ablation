@@ -253,9 +253,41 @@ flowchart TD
 
 The x86 taint family includes intraprocedural and interprocedural modes, with a flow-sensitive CFG/MFP mode exposed by the CLI. Other ISA implementations have their own ABI assumptions, sink/source sets, and analysis limits. The CLI currently routes generic `taint` to ARM32 when detected and otherwise to its x86 tracker; other architectures have explicit commands. Always consult `ablation --help` and the command's implementation for routing and coverage.
 
+## Cross-version diffing
+
+Firmware vendors patch vulnerabilities without publishing diffs. The patched function moves to a new VA, loses its symbol, and may gain or lose basic blocks. Porting a name overlay or confirmed finding from build N to build N+1 requires matching functions by structure, not address.
+
+Three tools answer three distinct questions. DTWMatcher answers whether two functions are from the same implementation era. MatrixProfileDiff identifies the most changed region when the answer is "patched." VersionDelta produces the unified diff and locates where the function moved.
+
+```mermaid
+flowchart TD
+    A["confirmed function\nva=0x4000 in v1"] --> B["DTWMatcher.find_homologs(va_v1)\npre-filter by opcode histogram\nrun DTW on top 200 candidates"]
+    B -->|"same_era ≥ 0.85\nrecompiled, no logic change"| C["port name overlay directly\nctx.set_name(va_v2, name)"]
+    B -->|"patched 0.45-0.85\nlogic changed"| D["MatrixProfileDiff.compare_functions()\nSTOMP: find most changed subsequence\nanomaly region = new bounds check / removed block"]
+    D --> E["VersionDelta.track(va_v1)\nstage 1: structural pre-filter\nstage 2: 4-gram Jaccard\nstage 3: BERT tiebreaker if tie\noutput: unified diff"]
+    B -->|"rewritten < 0.45\nstructural rewrite"| F["VersionDelta.changed_functions()\nrank all changed functions\nchange_score ≥ 0.20 = meaningful change"]
+    B -->|"different < 0.20\nunrelated"| G["function may be split · merged · removed\ncheck VersionDelta.changed_functions()"]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style C fill:#14532d,stroke:#166534,color:#dcfce7
+    style E fill:#14532d,stroke:#166534,color:#dcfce7
+```
+
+**DTWMatcher.** DTWMatcher uses Dynamic Time Warping over opcode category sequences. Opcode categories are a 12-bucket classification (DATA, ARITH, BIT, CMP, BRANCH, CALL, RET, FRAME, MEMOP, FLOAT, SIMD, OTHER) that normalizes away ISA-specific encoding differences. DTW is warp-invariant so it handles insertions and deletions of basic blocks that Jaccard penalizes unfairly. A function that gained one bounds-check block between firmware versions scores ~0.91 DTW versus ~0.65 4-gram Jaccard because DTW stretches the alignment to absorb the inserted block and scores the structural remainder as a match. The Sakoe-Chiba band (default 20% of sequence length) prevents pathological alignments where a 5-instruction stub matches a 200-instruction function.
+
+`find_homologs()` pre-filters all functions in the target binary by opcode histogram L1 distance, then runs full DTW only on the top 200 candidates. Verdict thresholds are `same_era` (≥0.85), `patched` (0.45–0.85), `rewritten` (0.20–0.45), `different` (<0.20).
+
+**VersionDelta.** VersionDelta localizes the change after a homolog is found. Stage 1 eliminates candidates whose basic block count or edge count differ by more than ±2 or ±30%. Stage 2 ranks survivors by mnemonic 4-gram Jaccard with addresses and immediates normalized to zero. Stage 3 applies SemanticSearcher BERT embeddings to break ties when the top two candidates are within 0.05 Jaccard. The output is a `difflib`-style unified diff with addresses and RIP-relative immediates stripped, so the diff shows only logic changes.
+
+`changed_functions()` scores all functions between two builds and ranks by `change_score`. Functions with `change_score ≥ 0.20` had meaningful code changes, not just recompilation address shifts. This is the entry point for finding what a vendor actually fixed in a firmware update.
+
+**MatrixProfileDiff.** When the change is a multi-instruction insertion or deletion, the inserted region appears as a subsequence in v2 with no close neighbor in v1. MatrixProfileDiff runs STOMP (O(n log n)) to find the region of T1 whose nearest match in T2 is most distant. That region is what changed. STOMP is better than VersionDelta's difflib output for inserted bounds checks (3–5 new instructions in a loop body) or removed authentication blocks.
+
+**StructuralSim.** StructuralSim computes a five-signal composite score (opcode histogram, immediate value Jaccard, PLT overlap, branch density, size proximity) for cross-vendor comparison. Immediate value Jaccard is the key signal because struct field offsets, magic constants, and buffer sizes survive recompilation and optimization. A composite score ≥ 0.70 across two vendors' binaries predicts a shared codebase ancestor. When one vendor's version has a confirmed vulnerability, that score predicts whether the other vendor carries the same flaw.
+
 ## Additional analysis families
 
-- **Version and structural comparison:** `VersionDelta`, `StructuralSim`, opcode/subsequence helpers, and related modules compare functions or binaries using structural features and normalized instruction representations. Similarity and diff outputs prioritize review; they do not independently prove shared vulnerable logic or a complete patch.
+- **Version and structural comparison:** `VersionDelta`, `StructuralSim`, `DTWMatcher`, `MatrixProfileDiff`, and related modules are described in the Cross-version diffing section above. Similarity and diff outputs prioritize review; they do not independently prove shared vulnerable logic or a complete patch.
 - **Crypto and firmware:** entropy mapping, XOR solving, crypto auditing, and firmware extraction helpers help identify regions and candidate key/format behavior. Entropy is a heuristic and cannot by itself distinguish encryption from compression or other high-entropy data.
 - **Go binaries:** pclntab recovery, Go-specific string resolution, garble-oriented analysis, and subprocess scanning address Go runtime conventions. These are specialized heuristics and should be checked against binary/version details.
 - **Kernel and memory-safety scanners:** driver/IOCTL, BYOVD, heap, format-string, integer-overflow, source/sink, and related modules look for selected patterns. Each scanner has a defined target/API surface; a clean result is not a general proof of safety.
