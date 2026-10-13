@@ -4,11 +4,11 @@
 
 4 things that weren't possible before in Ablation:
 
-1. **Extract files from Tandem Guardian PAK archives.** Guardian PAK is not a ZIP file despite the `.ZIP` extension used by IBM for patch distribution. `unzip`, `file`, `binwalk`, and every other standard archive tool reject these files. The only documented extractor (`UNPAK`) requires a live Tandem NSK system. Without this module, every Guardian PAK is a sealed black box.
+1. **Extract files from Tandem Guardian PAK archives.** Guardian PAK is not a ZIP file despite the `.ZIP` extension used for patch distribution. `unzip`, `file`, `binwalk`, and every other standard archive tool reject these files. The only documented extractor (`UNPAK`) requires a live Tandem NSK system. Without this module, every Guardian PAK is a sealed black box.
 
-2. **Provide the prerequisite for any RE work on Guardian-native code.** Guardian PAK archives distributed by IBM and HP are the only publicly accessible corpus of Tandem NonStop binaries. The platform's source code, ABI, and file-format specs are covered by NDA; no public documentation or disassembler plugin exists for any of the common RE tools. This extractor is the unlocking step for all Guardian RE in Ablation.
+2. **Provide the prerequisite for any RE work on Guardian-native code.** Guardian PAK archives are the only publicly accessible corpus of Tandem NonStop binaries. The platform's source code, ABI, and file-format specs are covered by NDA; no public documentation or disassembler plugin exists for any of the common RE tools. This extractor is the unlocking step for all Guardian RE in Ablation.
 
-3. **Handle content-based record detection.** The Guardian BACKUP tape format (which wraps the PAK contents) uses 2-byte type codes per record, but these codes are NOT stable across archive runs — confirmed: the tape-label code is `0x6891` in PTF U452253 and `0x1F1A` in PTF U454165. Any type-code-based parser silently misidentifies records on the second archive it encounters. This module detects record class by content signature and record size, making it correct across archive variants.
+3. **Handle content-based record detection.** The Guardian BACKUP tape format (which wraps the PAK contents) uses 2-byte type codes per record, but these codes are NOT stable across archive runs — confirmed: the tape-label code is `0x6891` in one PTF archive and `0x1F1A` in another for the same logical record class. Any type-code-based parser silently misidentifies records on the second archive it encounters. This module detects record class by content signature and record size, making it correct across archive variants.
 
 4. **Preserve Guardian three-component filenames.** Guardian files live in a `$VOLUME.SUBVOLUME.FILENAME` three-field namespace (each component up to 8 characters) with no POSIX equivalent. No standard tool maps these to a safe filesystem path without truncation or silent collision. This module parses the 24-byte padded-field structure at offset `0x2E` in file header records and maps it to a clean directory hierarchy.
 
@@ -47,7 +47,7 @@ bytes[8:16]  subvolume space-padded, e.g. b'ZMQP001E'
 bytes[16:24] filename  space-padded, e.g. b'ALTMQFLS'
 ```
 
-**Confirmed architecture:** Tandem Himalaya K-series = MIPS32 big-endian. Verified by Capstone decode of extracted binaries from both PTF archives (U452253, U454165).
+**Confirmed architecture:** Tandem Himalaya K-series = MIPS32 big-endian. Verified by Capstone decode of extracted binaries from two NSK PTF archives.
 
 ## Usage
 
@@ -56,7 +56,7 @@ from ablation.core.guardian_pak_extractor import iter_files, extract_to, Guardia
 from pathlib import Path
 
 # Iterate files without writing to disk
-data = Path('U452253.ZIP').read_bytes()
+data = Path('patch.zip').read_bytes()
 for f in iter_files(data):
     print(f'{f.path}  {len(f.data)} bytes  arch={f.arch}')
 
@@ -90,4 +90,4 @@ Gate: **PASSED** (0 HIGH, 0 CRITICAL).
 - 1 LOW (FORGE §6): the docstring listed specific record type code values (`0x6891`, `0xDF3B`, `0x0F02`) as if they were authoritative. Fixed before commit: docstring now explicitly states codes are not stable and documents the content-detection approach instead.
 - 1 LOW (FORGE §2): the `< 4` chunk size guard in `iter_files` discarded legitimate small data chunks (e.g., 3-byte or 1-byte payloads). Fixed before commit: guard changed to skip only truly empty blocks (`if not chunk`).
 
-Confirmed on: U452253.ZIP (66 files, ~130 MB decompressed) and U454165.ZIP (83 files, ~139 MB decompressed).
+Confirmed on two NSK middleware PTF archives (66 files / ~130 MB and 83 files / ~139 MB decompressed).
