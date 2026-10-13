@@ -133,7 +133,9 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 
 ## 31 Decompilers
 
-| ISA / Runtime | Variants |
+**Native CPUs**
+
+| ISA | Variants |
 |---|---|
 | x86 | x86-32 · x86-64 |
 | ARM | ARM-32 · ARM-64 · Thumb |
@@ -141,13 +143,23 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | PowerPC | PPC-32 · PPC-64 · VLE |
 | RISC-V | RV32 · RV64 · HiSilicon ext |
 | ARC | ARC EM/HS |
-| V850 / RH850 | V850-32 · RH850 |
 | LoongArch | LoongArch64 |
+| Intel MCS | 8051 |
+
+**Automotive ECUs**
+
+| ISA | Variants |
+|---|---|
+| V850 / RH850 | V850-32 · RH850 |
 | Renesas SH | SH-2A |
 | Motorola | M68K / CPU32 · MC88100 |
 | Infineon | TriCore TC1.6x |
 | TI DSP | TMS320C28x |
-| Intel MCS | 8051 |
+
+**VMs & Runtimes**
+
+| ISA | Variants |
+|---|---|
 | DEX | Dalvik · ART |
 | ARK | ArkTS |
 | BEAM | Erlang · Elixir |
