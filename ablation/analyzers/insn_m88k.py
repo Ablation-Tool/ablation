@@ -189,9 +189,8 @@ class M88kDecoder:
             yield insn
             va += 4
             count += 1
-            if insn.is_return and not insn.is_branch:
-                # past the JMP instruction (next is dead code)
-                yield from self.disassemble_va(va, 2)  # peek at delay slots
+            if insn.is_return:
+                # M88K has no delay slots for JMP; stop the linear sweep here
                 break
 
     def disassemble_bytes(self, data: bytes, base_va: int) -> Iterator[M88kInsn]:
