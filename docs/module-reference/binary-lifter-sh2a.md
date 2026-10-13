@@ -5,6 +5,34 @@
 
 ---
 
+## What this is
+
+Renesas SH-2A MCUs power Bosch EDC17, Denso, and Siemens automotive ECUs. Firmware ships as a headerless flat ROM image where virtual address equals file offset. Standard `BinaryLifter` backends require an ELF section map to translate addresses to bytes. The SH-2A backend adds explicit flat-ROM support and lifts functions to annotated pseudo-C so call chains, taint annotations, and caller-resolved pseudocode are available for ECU firmware with no ELF header.
+
+---
+
+## Where it's used
+
+- **Bosch EDC17** — SH7058/SH7059 flat ROM images from automotive ECUs
+- **Denso and Siemens ECUs** — SH-2A core firmware distributed as raw flash images
+- Any flat binary where the MCU maps flash at VA 0x00000000 so offset equals address
+
+---
+
+## Safe usage
+
+**Specify `arch="sh2a"` explicitly.** `BinaryLifter.from_path()` defaults to arm64. Passing an SH-2A binary without the arch token produces misidentified instructions with no error.
+
+**Confirm VA == file offset before constructing.** SH-2A ECU ROMs map flash at 0x00000000, so file offset 0x1000 is always VA 0x1000. A binary that remaps flash to a non-zero base produces wrong byte slices at every function address.
+
+**Supply known function names via `lifter._names[va] = name` before lifting.** Without names, callee calls appear as hex addresses. Run `FlatBinaryFuncStartScanner` first and feed its results into `_names` so the lifted pseudo-C is readable.
+
+**Treat conditional branches as approximate.** The lifter emits `if (T)` and `if (!T)` because the T-bit is not tracked across instructions. These indicate control flow but not the condition that sets T.
+
+**Resolve indirect calls separately.** `(*rN)(...)` in the output marks a JSR target that was not resolved at lift time. Use `FlatBinaryFuncStartScanner` to harvest indirect call targets and lift each resolved callee separately.
+
+---
+
 ## Why this exists
 
 2 things that were not possible before in Ablation:

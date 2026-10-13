@@ -4,6 +4,32 @@
 
 ---
 
+## What this is
+
+Infineon TriCore is the dominant MCU in modern automotive ADAS and powertrain ECUs. TriCore uses a hardware-enforced Context Save Area (CSA) mechanism where CALL automatically saves upper-context registers to a dedicated memory region. No software push/pop is generated. Standard taint trackers treat all registers as clobbered at every call, which misses paths through TriCore's callee-saved registers. `TriCoreTaintTracker` implements the full Infineon EABI V2.9 calling convention including FCALL/FRET leaf functions so taint paths through SecurityAccess and CAN frame handlers trace correctly.
+
+---
+
+## Where it's used
+
+- **Bosch ME17 ECUs** — AURIX TC2xx/TC3xx powertrain firmware
+- **Continental MG1 ECUs** — TriCore-based engine and transmission controllers
+- Any flat ROM dump where `EcuArchDetector` returns `tricore`
+
+---
+
+## Safe usage
+
+**Pass the correct `base_va` for flash-mapped binaries.** AURIX maps flash at 0x80000000 or 0xA0000000. A wrong `base_va` shifts every function address so findings report incorrect VAs and byte-verification fails.
+
+**Use `from_bytes()` for flat ROM dumps.** `from_path()` requires an ELF header. Raw ECU ROM images have no ELF header so `from_path()` raises.
+
+**Supply `func_va` and `func_end` boundaries from `EcuArchDetector`.** `scan_function()` requires explicit boundaries. Without them, the tracker walks past the function end and produces findings in adjacent code.
+
+**Flag FCALL/FRET findings for separate review.** FCALL functions save only A[11] and allocate no CSA. A finding in an FCALL function means the full call chain from the caller is needed to confirm exploitability, because the saved register state differs from a normal CALL/RET frame.
+
+---
+
 ## Why this exists
 
 3 things that were not possible before in Ablation:

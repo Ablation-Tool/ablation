@@ -4,6 +4,32 @@
 
 ---
 
+## What this is
+
+Renesas RH850 is the dominant MCU family in automotive ECUs from Denso, Continental, and Bosch suppliers. Firmware ships as both flat ROM dumps and ELF binaries. GHS MULTI compiles most production RH850 firmware with a different ABI than GCC's V850 ABI: `double` is 32 bits by default and every C symbol carries a leading underscore prefix. `RH850TaintTracker` handles flat ROM images and ELF binaries, models the GHS ABI correctly, and normalizes GHS symbol mangling so CAN-controlled taint paths trace correctly through production automotive firmware.
+
+---
+
+## Where it's used
+
+- **Denso and Continental ECUs** — RH850 firmware compiled with GHS MULTI
+- **Bosch supplier ECUs** — RH850 ELF and flat ROM images from automotive vendors
+- Any binary where `EcuArchDetector` returns `rh850`
+
+---
+
+## Safe usage
+
+**Use `from_bytes(data, base_va)` for flat ROM dumps.** `from_path()` requires an ELF header. Raw ECU firmware images have no ELF header so `from_path()` raises. Pass the raw bytes and a base address instead.
+
+**Set `double_is_32bit=False` only if the ECU was compiled with `--double=64`.** The default GHS RH850 ABI uses 32-bit doubles. Mismatching the flag shifts argument registers and produces wrong taint assignments for any function taking a `double` parameter.
+
+**Use C-level names without leading underscores for custom sinks.** GHS renames `recv` to `_recv` in ELF symbol tables. The tracker normalizes this automatically. Custom sinks passed as strings need the C-level name, not the mangled form.
+
+**Supply function boundaries from `EcuArchDetector` or `FlatBinaryFuncStartScanner` before calling `scan_function()`.** Passing wrong boundaries causes the tracker to walk past the function end and produce findings at wrong addresses.
+
+---
+
 ## Why this exists
 
 3 things that were not possible before in Ablation:

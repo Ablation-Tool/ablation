@@ -11,6 +11,34 @@ Linux userspace (little-endian), older Fortinet hardware (big-endian).
 
 ---
 
+## What this is
+
+32-bit PowerPC firmware appears across router IOS images, embedded bootloaders, and VxWorks targets. These binaries use GOT2 position-independent code where r30 holds a per-function GOT2 anchor computed at runtime. Standard PLT resolution fails on these because LIEF discards Huawei vendor relocation types. `PPC32TaintTracker` resolves PLT stubs directly from raw ELF dynamic symbol entries when LIEF returns zero relocations, so taint paths through the network stack resolve correctly on both standard and vendor ELF formats.
+
+---
+
+## Where it's used
+
+- **Cisco IOS 7200 / 3700** — big-endian PPC32 router firmware
+- **Huawei S6720 / S6720EI** — big-endian GOT2 PIC bootloaders
+- **MikroTik RB600** — big-endian embedded Linux on PPC32
+- **VxWorks embedded** — big-endian PPC32 RTOS firmware
+- **POWER LE Linux userspace** — little-endian PPC32 shared libraries
+
+---
+
+## Safe usage
+
+**Pass `endian='little'` for POWER LE Linux binaries.** The default is big-endian. A wrong endian setting decodes every instruction incorrectly with no error.
+
+**Verify GOT2 resolution if r30-relative calls are not matching sinks.** For GOT2 PIC binaries, check `tracker._func_r30` is populated. If `_func_r30` is empty, the `bcl`/`mflr r30` prologue was not found and external calls will not resolve.
+
+**Check `tracker._plt` after construction for Huawei targets.** LIEF discards Huawei vendor relocation type `0x40000054` and returns zero PLT entries. The tracker falls back to raw dynsym loading, but confirm `_plt` is non-empty before analyzing a Huawei binary.
+
+**Expect taint on r3 only for buffer-based sources.** `read(fd, buf, n)` writes data into the buffer argument and returns a byte count in r3. The tracker taints r3 from the return value, not the buffer contents. A finding requires the byte count to reach a sink register. Use `SinkArgClassifier` when taint returns no findings on a binary you expect to be vulnerable.
+
+---
+
 ## Usage
 
 ```python
