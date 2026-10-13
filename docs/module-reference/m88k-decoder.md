@@ -9,6 +9,32 @@ Parse and disassemble Motorola MC88100 BCS COFF executables.
 
 ---
 
+## What this is
+
+Motorola MC88100 is a RISC processor from the late 1980s used in Motorola 88000 workstations and legacy industrial systems. MC88100 BCS COFF executables are still in the wild. Capstone 5.x removed its incomplete 88K stub. GNU binutils dropped 88K support around 2020. `M88kDecoder` and `coff_m88k_parser` are the only current Python tools for this ISA. They parse the 88K BCS COFF format correctly where standard parsers corrupt section headers, decode all MC88100 instruction classes, and recover function boundaries from call sites in stripped binaries.
+
+---
+
+## Where it's used
+
+- Motorola 88000 workstation binaries
+- Legacy industrial systems running MC88100 firmware
+- Any BCS COFF binary with magic number `0x016D`
+
+---
+
+## Safe usage
+
+**Parse with `coff_m88k_parser.parse()` before passing to `M88kDecoder`.** Standard COFF parsers use 40-byte section headers. The 88K BCS COFF uses 44-byte section headers with 4-byte `nreloc` and `nlnno` fields. A standard parser corrupts all section names and virtual addresses from the first section onward.
+
+**Seed analysis from `function_starts()`.** The BCS COFF is typically stripped. `function_starts()` recovers function boundaries from BSR/BSR.N call sites in `.text`. Without seeds, the taint tracker has no entry points.
+
+**Do not interpret triadic op placeholder output as findings.** Triadic ops (0x3A-0x3C) decode as placeholder mnemonics because the shift, rotate, multiply, and divide function codes are not fully decoded. A triadic placeholder in a taint path is not a confirmed finding.
+
+**Use `string_refs()` separately from taint analysis.** `string_refs()` scans for `OR.U + OR` constant-load pairs that point into `.data`. These are format string and constant references, not taint sources.
+
+---
+
 ## Why this exists
 
 4 things that weren't possible before in Ablation:

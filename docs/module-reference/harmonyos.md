@@ -6,6 +6,32 @@ literal-array header boundary.
 
 ---
 
+## What this is
+
+HarmonyOS applications compile ArkTS source to ABC (Ark Bytecode) files packed inside HAP packages. ABC is a binary format defined by ArkCompiler's `libpandafile`. No Python tool could parse ABC before this stack. `ABCParser` reads the binary format and exposes class names, method metadata, code items, and string references. `ARKDisasm` disassembles the 324-opcode ARK ISA so bytecode is readable. The stack covers ABC versions v9 through v13+ and handles the v12.0.6.0 literal-array header boundary that breaks naive parsers.
+
+---
+
+## Where it's used
+
+- **HarmonyOS HAP packages** — `modules.abc` inside any HAP application bundle
+- **Obfuscated HAP bundles** — WeChat HarmonyOS port and other commercial apps
+- Any `.abc` file where `ABCParser.is_valid()` returns True
+
+---
+
+## Safe usage
+
+**Use `has_literal_in_header()` to detect the v12 boundary.** ABC versions through 12.0.6.0 store literal array counts in the header. v13+ moves them to the index region. Parsing a v13 file as v12 produces a wrong `num_literalarrays` count and corrupts literal-array walks.
+
+**Use `resolve_class_idx()` for `lda.str` operands and `resolve_method_idx()` for property access.** Two separate index tables exist per region. Mixing them returns wrong string values for property-access instructions.
+
+**Check `has_code` before calling `get_code(method)`.** Abstract and interface methods have `code_off=0`. Calling `get_code()` on a method with `has_code=False` returns `None`. Do not interpret a `None` return as a finding.
+
+**Enumerate anonymous functions via literal arrays, not `iter_methods()`.** `iter_methods()` covers class-body methods only. Anonymous functions and closures stored in literal arrays require a separate literal-array walk to find.
+
+---
+
 ## ABCParser
 
 **File:** `ablation/analyzers/abc_parser.py`
