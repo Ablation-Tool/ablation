@@ -6,6 +6,32 @@ Four analysis layers: **APKParser** reads the ZIP/AXML/DEX structure; **DexAnaly
 
 ---
 
+## What this is
+
+Android APK files are ZIP containers with binary XML manifests, DEX bytecode, and native libraries. Static analysis tools like androguard and jadx require installation and do not run headlessly in scripts. This stack analyzes APKs with zero external dependencies. `APKParser` reads the ZIP, binary AXML manifest, and DEX structure. `DexAnalyzer` scans DEX bytecode for dangerous API patterns. `JniBridgeScanner` traces bridges between Java and native code. `BinderScanner` maps exported Binder service endpoints.
+
+---
+
+## Where it's used
+
+- Android APK files from Google Play or direct device extraction
+- APKPure XAPK containers
+- Any APK where the goal is identifying dangerous API usage, JNI bridges, or exported Binder surface
+
+---
+
+## Safe usage
+
+**Use the context manager form `APKParser.from_path()`.** The context manager closes the ZIP handle automatically. Without it, the ZIP file descriptor leaks on exception paths.
+
+**Run DEX analysis on all `classes*.dex` files.** `APKParser.dex_files()` returns every DEX in a multidex APK. Analyzing `classes.dex` only misses code split across secondary DEX files, including security-relevant classes in large apps.
+
+**Distinguish JNI canonical naming from dynamic registration.** `JniBridgeScanner` flags `JNI_OnLoad` exports as dynamic registration. Dynamic registration means the bridge is not visible from symbol names alone and requires loading the native library to resolve.
+
+**Expect name-based search to fail on obfuscated APKs.** Obfuscated APKs use single-letter class and method names. String pool scanning and dangerous-import detection remain effective on obfuscated APKs because they target bytecode patterns, not identifiers.
+
+---
+
 ## Why this exists
 
 Three things made APK security analysis slow before this stack:
