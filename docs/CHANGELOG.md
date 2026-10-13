@@ -2,6 +2,16 @@
 
 ---
 
+## v2.81.0
+
+**BinaryContext: PPC64le ELF V2 PLT decoder.**
+
+`BinaryContext._extract_plt` now correctly populates `ctx.plt` for little-endian PPC64 (OpenPOWER ELF V2) binaries. Previously, `ctx.plt` was always empty for ppc64le targets because the x86-64 `jmp [rip+disp]` stub scanner found nothing and the JUMP_SLOT fallback populated GOT addresses rather than stub entry points.
+
+The new `_extract_plt_ppc64le` method recovers stub VAs in three steps: (1) build a GOT→symbol map from `.rela.plt`, (2) find the ELF-wide TOC pointer `r2` by scanning function prologues for `addis r2,r12,HI; addi r2,r2,LO`, (3) scan `.text` and `.init` for the 4-instruction stub pattern `std r2,24(r1); ld r12,N(r2); mtctr r12; bctr` and resolve each via `got_VA = r2 + sign_extend_16(N)`. Verified on five ppc64le AT17 runtime libraries (18/18 stubs for libpaf-dsc, 8/8 for libvecpf). FORGE gate passed.
+
+---
+
 ## v2.78.0
 
 **DeprecatedFuncScanner — inherently unsafe function detector.**

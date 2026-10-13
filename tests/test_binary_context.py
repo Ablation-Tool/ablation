@@ -50,6 +50,24 @@ def test_sha256_is_hex():
     int(ctx.sha256[:8], 16)  # must be valid hex
 
 
+@pytest.mark.integration
+def test_ppc64le_plt_stubs():
+    """_extract_plt_ppc64le decodes stub VAs and symbol names from a ppc64le ELF V2."""
+    import os
+    lib = '/tmp/at_rpms/runtime/opt/at17.0/lib64/libpaf-dsc.so.0.0.3'
+    if not os.path.exists(lib):
+        pytest.skip('AT17 runtime fixture not extracted at /tmp/at_rpms/')
+    from ablation.analyzers.binary_context import BinaryContext
+    ctx = BinaryContext.load_or_build(lib)
+    syms = set(ctx.plt.values())
+    # 18 PLT entries known from manual analysis; spot-check 5 key ones
+    for expected in ('strncpy', 'open', 'read', 'malloc', 'pthread_once'):
+        assert expected in syms, f'Expected {expected!r} in ppc64le PLT, got {sorted(syms)}'
+    # All stub VAs must be plausible code addresses (non-zero, within .text/.init range)
+    for va in ctx.plt:
+        assert 0xa00 <= va < 0x2000, f'PLT stub VA {va:#x} outside plausible code range'
+
+
 def test_cache_hit_is_fast(tmp_path):
     """Second load_or_build call should use cache and be much faster."""
     import time
