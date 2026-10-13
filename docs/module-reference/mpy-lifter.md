@@ -4,6 +4,62 @@ Zero-dependency lifter for compiled MicroPython `.mpy` v6 files. Decodes bytecod
 
 ---
 
+## What this is
+
+MicroPython compiles Python source to `.mpy` bytecode files for deployment on microcontrollers. IoT firmware images on ESP32, STM32, and CC13xx targets embed `.mpy` modules alongside the native C runtime. The application logic — network clients, protocol parsers, command handlers — lives in those `.mpy` files, not in the native binary.
+
+Standard RE tools stop at the native ELF or flat ROM. The MicroPython runtime executing inside it is opaque to Capstone and BinaryContext, so an analysis of the native binary describes how the device starts, not what it does. `MpyLifter` covers the application layer so both halves of the firmware are visible.
+
+---
+
+## Where it's used
+
+- **ESP32 firmware** — application modules embedded in the MicroPython partition
+- **STM32 firmware** — `.mpy` files stored in internal flash alongside the native runtime
+- **TI CC13xx / CC26xx** — MicroPython IoT devices with embedded bytecode modules
+- **CircuitPython devices** — every precompiled library uses the identical v6 format
+- Any IoT firmware image where `binwalk` or a grep for `M\x06` reveals embedded `.mpy` sections
+
+---
+
+## Pipeline
+
+```mermaid
+flowchart TD
+    A["IoT firmware image\nESP32 / STM32 / CC13xx"] --> B["BinaryContext\nnative runtime analysis"]
+    A --> C["Extract .mpy files\ngrep for M\\x06 magic in firmware"]
+    C --> D{"Version check\nheader byte 1 == 6?"}
+    D -->|"v6\nMicroPython 1.19+\nCircuitPython"| E["MpyLifter.from_bytes(data)"]
+    D -->|"v5 or unknown\nraises ValueError"| F["Unsupported\ncheck MicroPython version"]
+    E --> G["lift_module()\npseudo-Python output"]
+    E --> H["dangerous_calls()\nsecurity findings"]
+    E --> I["imports()\nmodule dependency map"]
+    H --> J[/"Finding\ntype · severity · function"/]
+    B --> K["TaintTracker findings\nnative C layer"]
+    J --> L["Combined report\nnative and application layers"]
+    K --> L
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style J fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    style F fill:#92400e,stroke:#b45309,color:#fef3c7
+```
+
+---
+
+## Safe usage
+
+**Extract before lifting.** `.mpy` files are embedded inside firmware images. Search the raw image for the magic bytes `0x4D 0x06` (`M\x06`) to locate them before passing to `MpyLifter`. A wrong offset produces a `ValueError` or a corrupted lift.
+
+**Check the version byte.** `MpyLifter` only handles v6. Read `data[1]` before constructing — if it is not `0x06`, the file is v5 (MicroPython 1.12–1.18) and raises `ValueError`. Do not pass v5 files and interpret the error as a finding.
+
+**Run both layers.** Memory corruption lives in the native C runtime. The attack surface — socket opens, command parsing, eval calls — lives in the `.mpy` layer. Run `TaintTracker` on the native binary and `MpyLifter` on the embedded modules. A `dangerous_calls()` finding is only exploitable if the native layer exposes the input.
+
+**Check for native/viper code objects.** If `dangerous_calls()` returns nothing but the module does network IO, run `lift_module()` and look for `# <native/viper code: not lifted>` sections. Those code objects run as compiled C and are invisible to this lifter. Analyze them with `BinaryContext` against the native runtime instead.
+
+**Verify the finding function name.** `dangerous_calls()` reports the code object name where the pattern appears. `<module>` means the pattern is at module scope, not inside a function. Module-scope `import socket` fires at import time, so it is always reachable.
+
+---
+
 ## Why this exists
 
 Three things made MicroPython firmware analysis blind before this module:
