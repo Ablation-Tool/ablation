@@ -47,6 +47,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | [**Compiler Defect Detection**](docs/module-reference/compiler-defects.md) | Finds security defects that the compiler introduced through miscompilation. Optimizer defects that silently select the wrong comparison operand can produce hundreds of confirmed vulnerabilities across a single firmware image. |
 | [**Cryptographic Analysis**](docs/module-reference/crypto.md) | Recovers cryptographic key material directly from compiled firmware and audits TLS and JWT configurations, so cryptographic findings do not require source access or a decryption oracle. |
 | [**Sink Arg Classifier**](docs/module-reference/sink-arg-classifier.md) | Classifies what value reaches each exec-class sink so a taint hit is either confirmed as externally controlled or eliminated as a constant before manual review begins. |
+| [**MCP Server Security Scanner**](docs/module-reference/mcp-tool-taint-scanner.md) | Scans MCP server source for unauthenticated endpoints, exec-class methods in allowed tool lists, and network-wide socket bindings. All three issue classes appeared in production MCP servers where no other scanner detected them. |
 
 </details>
 
