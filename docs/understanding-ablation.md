@@ -16,6 +16,17 @@ Most workflows follow this sequence:
 
 Ablation is a static analysis toolkit: it reads binaries without executing them. Static analysis can examine all code paths in principle, including error paths and rarely-triggered branches, but it cannot observe actual runtime values, heap layout, or dynamically loaded libraries. The complement is dynamic analysis (fuzzing, debugger tracing, instrumentation): it observes only paths that a given input triggers, but produces exact values and no false positives on executed paths. Ablation's pipeline ends at PathSolver, which is still static. Dynamic confirmation requires running the binary under instrumentation with a crafted input. That is the step that turns a PathSolver result into an observed crash.
 
+```mermaid
+flowchart LR
+    A[/"binary.elf"/] --> B["Static analysis\nAblation\nall code paths visible\nbinary never executes"]
+    B --> C["TaintTracker\ncandidates"]
+    C --> D["PathSolver\nfeasibility check"]
+    D --> E["Dynamic confirmation\nfuzzing · instrumentation\nconcrete input triggers crash"]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style E fill:#14532d,stroke:#166534,color:#dcfce7
+```
+
 The tools use bounded static approximations and heuristics. A hit is a lead, a score is a ranking signal, and an apparent taint path is a model result. None should be presented as a confirmed vulnerability without validating reachability, input control, checks, sink behavior, and impact.
 
 ## Repository map
@@ -59,6 +70,20 @@ This is semantic similarity over the description corpus, not a direct semantic u
 
 Two consequences follow from this. First, a function with no symbols, no recognizable strings, and no known callees produces a thin description and matches poorly regardless of what the function actually does. Second, a function named `copy_data` that calls `memcpy` ranks high for "buffer copy" even if it is safe. Semantic search narrows the candidate list. `FuncProfiler` and `TaintTracker` determine what the candidates actually do.
 
+```mermaid
+flowchart TD
+    A[/"stripped binary"/] --> B["CorpusBuilder\nnames · callees · strings · inferred role\none description per function"]
+    B --> C["sentence-transformers\nall-mpnet-base-v2\ndescription → 768-dim vector"]
+    C --> D[("~/.ablation/func_id.db\nvector index")]
+    E["query: 'network-controlled length\nreaches allocation or copy'"] --> F["embed query\nsame model"]
+    F --> G["cosine similarity\nagainst index"]
+    D --> G
+    G --> H["ranked candidates\nfn_0x1234 · copy_field · parse_pkt"]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style H fill:#14532d,stroke:#166534,color:#dcfce7
+```
+
 `PatternLibrary` stores reusable textual search patterns and hit metadata in a local JSON file under `~/.ablation`. A sweep applies patterns and reports candidates. A separate legacy `sweeps/base_sweep.py` path has its own extraction and embedding behavior, including a different model; do not assume it is interchangeable with `ablation sweep` without checking which entry point is being run.
 
 ### Names, identities, and findings
@@ -91,20 +116,56 @@ Firmware wraps standard library functions in vendor-specific wrappers. A binary 
 
 `SinkArgClassifier` classifies each sink argument before the interprocedural pass. `RODATA_CONST` means the argument is a hardcoded string and the sink is not dangerous at that call site. `ARG_PROPAGATED` means the argument comes from a function parameter and is worth tracing. Running `SinkArgClassifier` before `TaintTracker` eliminates call sites where the dangerous argument is provably constant, so the interprocedural pass only runs on sites where the value is actually attacker-influenced.
 
+```mermaid
+flowchart TD
+    A["recv · recvfrom · read\nfgets · gets"] -->|"return value tainted"| B["TaintTracker\nforward slice"]
+    B --> C["SinkPropagator\ndiscover vendor wrappers\nadd to sink table"]
+    C --> D["SinkArgClassifier\nclassify each sink call site"]
+    D -->|"RODATA_CONST\nhardcoded string"| E["skip\nnot attacker-controlled"]
+    D -->|"ARG_PROPAGATED"| F["run_interprocedural()\nfollow taint across call graph"]
+    D -->|"UNKNOWN"| F
+    F -->|"taint reaches sink"| G[/"Finding\nsource · chain · sink · arg"/]
+    F -->|"no path found"| H["no finding\ncheck SinkPropagator coverage"]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style G fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    style E fill:#14532d,stroke:#166534,color:#dcfce7
+```
+
 **Control flow and data flow.** The `cfg` command builds a Control Flow Graph (CFG): nodes are basic blocks, edges are possible branches. This is control flow analysis. It answers whether one instruction can execute after another. It says nothing about what values the registers hold. Taint analysis is data flow analysis built on top of a CFG: it propagates facts (tainted or clean) along CFG edges through each instruction's transfer function. `dataflow_engine.py` provides the shared CFG worklist and fixed-point machinery; architecture modules define the transfer functions. Correctness depends on the modeled instruction subset, the calling convention model, and CFG recovery quality.
 
 The data flow analysis runs to a fixed point: it propagates facts around the CFG until the taint sets stop changing. For straight-line code this converges in one pass. For loops, the analysis revisits the loop body each time new taint facts appear. When a loop's taint state changes at each iteration, the analysis widens the taint state after a fixed number of passes and forces convergence by treating everything as tainted. The known-anomalies docs refer to this as the "loop fixpoint" limitation. It is conservative: the analysis terminates but may report taint in a register that is only tainted on some loop iterations.
+
+```mermaid
+flowchart TD
+    A["Block A\nr3 = recv()\nr3 = TAINTED"] -->|"r3 = TAINTED"| B{"Block B\nbranch on r3 > 0"}
+    B -->|"yes · TAINTED"| C["Block C\nprocess(r3)"]
+    B -->|"no · TAINTED"| D["Block D\nreturn -1"]
+    C -->|"r3 = TAINTED"| E["Block E\nstrcpy(dst, r3)\nFINDING"]
+
+    note["Control flow: are B→C and B→D reachable?\nData flow: is r3 tainted at Block E?\nBoth answers come from the same CFG.\nThe CFG provides the paths; the taint facts travel the edges."]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style E fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    style note fill:#0f172a,stroke:#334155,color:#94a3b8
+```
 
 **Flow sensitivity vs path sensitivity.** Flow-sensitive analysis tracks the order of operations: `r3 = recv(); r3 = 0; system(r3)` produces no finding because the clean assignment came after the taint. Flow-insensitive analysis ignores order and flags a finding regardless of sequence.
 
 Path-insensitive analysis merges facts from all branches when they join:
 
-```
-if (x > 0):
-    r3 = recv()    # r3 tainted on this branch
-else:
-    r3 = 0         # r3 clean on this branch
-system(r3)         # path-insensitive: r3 = TAINTED (merge of both branches)
+```mermaid
+flowchart TD
+    A["entry"] --> B{"x > 0?"}
+    B -->|"yes"| C["r3 = recv()\nr3 = TAINTED"]
+    B -->|"no"| D["r3 = 0\nr3 = CLEAN"]
+    C --> E["merge point\npath-insensitive: r3 = TAINTED\npath-sensitive: TAINTED on yes-path only"]
+    D --> E
+    E --> F["system(r3)\npath-insensitive: FINDING\npath-sensitive: PathSolver filters this"]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style E fill:#92400e,stroke:#b45309,color:#fef3c7
+    style F fill:#7f1d1d,stroke:#991b1b,color:#fecaca
 ```
 
 A path-sensitive analysis would track each branch separately and know `r3` is only tainted on the `x > 0` path. Tracking separate facts per path costs exponential time in the number of branches, so it does not scale to firmware binaries.
@@ -113,11 +174,50 @@ Ablation's trackers are flow-sensitive and path-insensitive. Findings at branch 
 
 **Intraprocedural vs interprocedural.** Intraprocedural analysis stays within one function and treats every callee as a black box. It misses paths where taint passes through a callee before reaching a sink in the caller. `run_interprocedural(depth=N)` follows taint across call boundaries with a BFS over the call graph. At the default `depth=4` it traces chains like `recv → parse_header → copy_field → strcpy`. Ablation's interprocedural analysis is context-insensitive: it computes one taint summary per function and reuses it at every call site. This is the correct tradeoff for stripped firmware where the call graph is uncertain. Intraprocedural mode (`run()` or `scan_function()`) is appropriate when a bounded scan of a confirmed candidate function is enough.
 
+```mermaid
+flowchart TD
+    subgraph "Intraprocedural (run)"
+        I1["process_input(data)\nr3 = data\nr3 = TAINTED"] --> I2["sanitize(r3)\ncallee treated as black box\nreturn value: CLEAN (assumed)"]
+        I2 --> I3["strcpy(dst, r0)\nr0 = CLEAN\nno finding"]
+    end
+    subgraph "Interprocedural (run_interprocedural depth=4)"
+        P1["process_input(data)\nr3 = data\nr3 = TAINTED"] --> P2["sanitize(r3)\ndescend into callee"]
+        P2 --> P3["sanitize body:\nreturn r3\nreturn value: TAINTED"]
+        P3 --> P4["strcpy(dst, r0)\nr0 = TAINTED\nFINDING"]
+    end
+
+    style I3 fill:#14532d,stroke:#166534,color:#dcfce7
+    style P4 fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+```
+
 **Calling conventions and ABI.** A calling convention defines which registers hold function arguments, which holds the return value, which the callee must preserve (callee-saved), and which the callee may freely clobber (caller-saved). Every taint tracker embeds a calling convention model. When `run_interprocedural()` reaches a call site, it uses the convention to determine which registers carry tainted arguments into the callee, which register holds the return value, and which caller-saved registers the callee may have clobbered.
 
 Getting this wrong produces silent incorrect results. A big-endian MIPS32 binary analyzed with `endian='little'` decodes every instruction's register fields incorrectly. An RH850 binary compiled with GHS `double=32-bit` default analyzed with the GCC `double=64-bit` model shifts argument registers for any function with a `double` parameter. The `arch=`, `endian=`, and `double_is_32bit=` parameters control which registers the ABI model assigns to argument positions. For stripped binaries with no symbol information, calling-convention mismatches produce findings at wrong VAs with wrong argument registers cited, which fail byte-verification.
 
+```mermaid
+flowchart LR
+    A["call site:\nstrcpy(r0, r1)"] --> B["ABI model:\nwhich register is arg0 (dest)?\nwhich is arg1 (src)?"]
+    B -->|"ARM32 AAPCS\nr0=dest · r1=src"| C["check r1 for taint\ncorrect finding"]
+    B -->|"MIPS32 O32\na0=dest · a1=src\n(r4 · r5)"| D["check r5 for taint\ncorrect finding"]
+    B -->|"wrong endian\nor wrong ISA set"| E["wrong register decoded\nsilent incorrect result\nfails byte-verification"]
+
+    style C fill:#14532d,stroke:#166534,color:#dcfce7
+    style D fill:#14532d,stroke:#166534,color:#dcfce7
+    style E fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+```
+
 **Slicing and copy propagation.** A taint tracker computes a forward slice from a source: it tracks which registers and memory locations are reachable from `recv` and checks whether any path reaches a sink. Copy propagation makes register renaming transparent. Every `mov rd, rs` propagates taint from `rs` to `rd`. Without it, a tracker watching only the original source register misses the sink the moment the value is renamed. Some instructions clear taint because they bound the value to a fixed range. `uxtb`/`uxth` on HiSilicon RV32 bound a register to ≤255 or ≤65535. `andi rd, rj, mask` on LoongArch64 records the bound so PathSolver can check whether overflow is still possible past the mask. Address constants are not tainted because they load instruction addresses, not attacker-controlled data.
+
+```mermaid
+flowchart LR
+    A["r3 = recv()\nr3 = TAINTED"] --> B["r5 = r3\nr5 = TAINTED\ncopy propagation"]
+    B --> C["r6 = r5 + 1\nr6 = TAINTED\narithmetic"]
+    C --> D["r7 = r6 & 0xFF\nr7 = TAINTED\nbound ≤ 255 recorded"]
+    D --> E["strcpy(dst, r7)\nFINDING\nbounds check needed"]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style E fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+```
 
 **Alias analysis.** Register taint is precise: each register is a distinct name and the tracker follows renames exactly. Memory taint is harder because two pointers can reference the same address. A store through one pointer taints a memory location; a load through a different pointer that holds the same address should recover that taint. Determining whether two pointer expressions alias requires alias analysis.
 
@@ -125,7 +225,31 @@ Ablation's trackers track memory taint at the level of base-register and offset 
 
 This is why `read(fd, buf, n)` taints `r3` (the byte count returned) but not the buffer. The buffer is written through a pointer in `r4`. Tracking taint into the buffer requires following all loads from any pointer that might alias `r4`. The return-value taint model instead finds paths where the byte count reaches a size argument of `malloc` or `memcpy`, which is a distinct and common vulnerability class.
 
+```mermaid
+flowchart TD
+    A["st.d r5, r3+8\ntaints slot (r3, 8)"] --> B{"load from where?"}
+    B -->|"ld.d r6, r3+8\nsame base+offset"| C["r6 = TAINTED\ntaint recovered"]
+    B -->|"ld.d r6, r5+0\nr5 may alias r3+8\nbut tracker does not know"| D["r6 = CLEAN\nalias not tracked\nmissed taint"]
+
+    style C fill:#14532d,stroke:#166534,color:#dcfce7
+    style D fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+```
+
 **Taint analysis vs symbolic execution.** Taint analysis answers whether attacker data can reach a sink. It does not answer whether the attacker can trigger that path or what value would be needed. `PathSolver` is symbolic execution: it assigns symbolic variables to source values, accumulates path constraints at each branch, and asks a constraint solver whether any concrete input satisfies all constraints. Taint produces candidates with false positives. PathSolver confirms one candidate with no false positives. PathSolver does not scale to a whole binary because branches multiply the paths that must be explored exponentially. The correct order is `TaintTracker.run_interprocedural()` on the whole binary to build the candidate list, then `PathSolver.solve_path()` on one candidate.
+
+```mermaid
+flowchart TD
+    A[/"binary.elf"/] --> B["TaintTracker.run_interprocedural()\nforward slice from all sources\npath-insensitive · scales to whole binary"]
+    B --> C["candidate list\ne.g. 30 functions · 12 source-sink paths\nmay include false positives"]
+    C --> D{"for each candidate"}
+    D --> E["PathSolver.solve_path()\nsymbolic execution on one function\nZ3 constraint solver"]
+    E -->|"satisfiable"| F[/"confirmed path\nconcrete input exists"/]
+    E -->|"unsatisfiable"| G["false positive\nbranch guards block path"]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style F fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    style G fill:#14532d,stroke:#166534,color:#dcfce7
+```
 
 The x86 taint family includes intraprocedural and interprocedural modes, with a flow-sensitive CFG/MFP mode exposed by the CLI. Other ISA implementations have their own ABI assumptions, sink/source sets, and analysis limits. The CLI currently routes generic `taint` to ARM32 when detected and otherwise to its x86 tracker; other architectures have explicit commands. Always consult `ablation --help` and the command's implementation for routing and coverage.
 
