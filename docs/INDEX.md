@@ -9,8 +9,7 @@ Semantic firmware analysis for vulnerability researchers.
 | Document | Description |
 |---|---|
 | [Getting Started](getting-started.md) | Install, first binary, first sweep -- 15 minutes |
-| [Understanding Ablation](understanding-ablation.md) | Architecture, analysis model, limitations, and Codex workflow |
-| [Program Analysis Concepts](concepts.md) | Slicing, copy propagation, taint vs symbolic execution, data flow vs control flow, intraprocedural vs interprocedural, static vs dynamic |
+| [Understanding Ablation](understanding-ablation.md) | Architecture, analysis model, static vs dynamic, CFG vs taint, intraprocedural vs interprocedural, slicing, taint vs PathSolver |
 | [Ablation Standards](ABLATION-STANDARDS.md) | Tool qualification and security engineering standards: ISO 26262 TCL3, NIST SSDF, CISA SbD, MIL-HDBK-115C; compliance matrix and implementation roadmap |
 | [Known Anomalies: ARM32TaintTracker](known-anomalies/arm32-taint-tracker.md) | Thumb interworking, IT block conditions, indirect BLX, loop fixpoint, VFP/NEON |
 | [Known Anomalies: ARM64TaintTracker](known-anomalies/arm64-taint-tracker.md) | Stripped binary function discovery, indirect BLR, SVE/NEON, loop fixpoint, kernel module relocs |
