@@ -25,7 +25,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | [**The Flywheel**](docs/module-reference/flywheel.md) | Every confirmed finding replays as a search pattern on every future binary. A vulnerability confirmed on one vendor's firmware surfaces automatically when sweeping a different vendor's binary because confirmed findings are stored and replayed at engagement start. |
 | [**Semantic Code Search**](docs/module-reference/semantic-search.md) | Finds functions by describing what they do because stripped binaries have no symbols to search. Queries are scoped to the target binary so results return in under a second. |
 | [**On-Demand Analysis**](docs/module-reference/on-demand-analysis.md) | Loads in seconds because it only analyzes the code being examined. A 2 GB firmware image opens as fast as a small one because nothing is parsed until it is needed. |
-| [**Binary Lifting**](docs/module-reference/binary-lifter.md) | Translates machine code to readable pseudo-C across 28 architectures. ARM64 and x86-64 get register-level taint tracking so data flow is visible in the lifted output. |
+| [**Binary Lifting**](docs/module-reference/binary-lifter.md) | Translates machine code to readable pseudo-C across 31 architectures. ARM64 and x86-64 get register-level taint tracking so data flow is visible in the lifted output. |
 | [**Hypothesis Engine**](docs/module-reference/hypothesis-engine.md) | Tracks competing theories about what a function does and scores evidence against each one. Sessions persist across engagements so analysis resumes where it left off. |
 | [**C++ Vtable Reconstruction**](docs/module-reference/cpp-vtable-reconstructor.md) | Recovers C++ virtual dispatch tables from stripped ELF binaries on any architecture and names each slot. A generated type-annotation script propagates slot names through every call site so the decompiler shows method names instead of function pointer offsets. |
 | [**Cross-Library Analysis**](docs/module-reference/taint-analysis.md) | Traces an argument across up to three shared library hops so taint paths that cross library boundaries reach their sink rather than stopping at the first call. |
@@ -96,7 +96,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary><strong>Automotive RE</strong> </summary>
+<summary><strong>Automotive ECU Analysis</strong> </summary>
 
 | Capability | |
 |:---|:---|
