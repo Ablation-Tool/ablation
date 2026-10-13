@@ -24,14 +24,16 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 |:---|:---|
 | [**The Flywheel**](docs/module-reference/flywheel.md) | Every confirmed finding replays as a search pattern on every future binary. A vulnerability confirmed on one vendor's firmware surfaces automatically when sweeping a different vendor's binary because confirmed findings are stored and replayed at engagement start. |
 | [**Semantic Code Search**](docs/module-reference/semantic-search.md) | Finds functions by describing what they do because stripped binaries have no symbols to search. Queries are scoped to the target binary so results return in under a second. |
-| [**On-Demand Analysis**](docs/module-reference/on-demand-analysis.md) | Loads in seconds because it only analyzes the code being examined. Traditional disassemblers parse the entire file into a database before you can do anything. |
+| [**On-Demand Analysis**](docs/module-reference/on-demand-analysis.md) | Loads in seconds because it only analyzes the code being examined. A 2 GB firmware image opens as fast as a small one because nothing is parsed until it is needed. |
 | [**Binary Lifting**](docs/module-reference/binary-lifter.md) | Translates machine code to readable pseudo-C across 28 architectures. ARM64 and x86-64 get register-level taint tracking so data flow is visible in the lifted output. |
 | [**Hypothesis Engine**](docs/module-reference/hypothesis-engine.md) | Tracks competing theories about what a function does and scores evidence against each one. Sessions persist across engagements so analysis resumes where it left off. |
 | [**C++ Vtable Reconstruction**](docs/module-reference/cpp-vtable-reconstructor.md) | Recovers C++ virtual dispatch tables from stripped ELF binaries on any architecture and names each slot. A generated type-annotation script propagates slot names through every call site so the decompiler shows method names instead of function pointer offsets. |
 | [**Cross-Library Analysis**](docs/module-reference/taint-analysis.md) | Traces an argument across up to three shared library hops so taint paths that cross library boundaries reach their sink rather than stopping at the first call. |
-| [**DAG Adapter Language**](docs/module-reference/encoding-dag.md) | Describes instruction set encodings as directed acyclic graphs so every architecture shares the same analysis code path. Without it, each ISA requires its own exception handler and the analyzer count scales with the architecture count. |
+| [**DAG Adapter Language**](docs/module-reference/encoding-dag.md) | Every architecture shares the same analysis code path because each ISA compiles to a directed acyclic graph. Adding a new ISA takes one grammar file, so the architecture count grows without multiplying the codebase. |
 | [**PPC32 GOT2 Resolver**](docs/module-reference/ppc32-got2-resolver.md) | Resolves indirect calls in stripped GOT2-PIC PPC32 binaries at 98.6% coverage so taint paths through BCTRL stubs do not dead-end at the first unresolved call. |
 | [**Dynamic Sandbox**](docs/module-reference/dynamic-sandbox.md) | Executes leaf functions in an emulated sandbox to fingerprint behavior where static analysis alone cannot distinguish branches. |
+| [**Kernel Module Subsystem Classifier**](docs/module-reference/kernel-module-subsystem-classifier.md) | Classifies a Linux kernel module by its source tree path to determine attack surface before analysis begins. Network-reachable modules surface first so manual review starts at the highest-risk code. |
+| [**Entropy Mapper**](docs/module-reference/entropy-mapper.md) | Maps binary sections by Shannon entropy to classify encrypted, compressed, and plaintext regions before analysis begins. Sections approaching H=8.0 indicate AES or compressed data so analysis effort concentrates on decrypted plaintext regions first. |
 
 </details>
 
@@ -42,12 +44,22 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 |:---|:---|
 | [**Taint Analysis**](docs/module-reference/taint-analysis.md) | Follows network input through the call graph to security-sensitive sinks across 16 architectures. Library call sites do not stop the trace because register-level tracking resolves shared library stubs. |
 | [**Pre-Authentication Exposure**](docs/module-reference/preauth-exposure.md) | Finds every code path from the network entry point to a security-sensitive operation that runs before authentication. Manual review starts at the authentication boundary because the output is a reachability map, not a raw disassembly. |
-| [**Finding Validation**](docs/module-reference/preauth-exposure.md) | Generates a working HTTP request that reproduces each confirmed finding at the protocol level. The request includes the expected response delta and CWE classification so a PSIRT submission arrives with working proof. |
+| [**Finding Validation**](docs/module-reference/finding-validation.md) | Generates a working HTTP request that reproduces each confirmed finding at the protocol level. The request includes the expected response delta and CWE classification so a PSIRT submission arrives with working proof. |
 | [**Source Code Auditing**](docs/module-reference/source-audit.md) | Scores every source file by risk and batches the low-risk ones so manual review covers only the files most likely to contain vulnerabilities. |
 | [**Compiler Defect Detection**](docs/module-reference/compiler-defects.md) | Finds security defects that the compiler introduced through miscompilation. Optimizer defects that silently select the wrong comparison operand can produce hundreds of confirmed vulnerabilities across a single firmware image. |
 | [**Cryptographic Analysis**](docs/module-reference/crypto.md) | Recovers cryptographic key material directly from compiled firmware and audits TLS and JWT configurations, so cryptographic findings do not require source access or a decryption oracle. |
 | [**Sink Arg Classifier**](docs/module-reference/sink-arg-classifier.md) | Classifies what value reaches each exec-class sink so a taint hit is either confirmed as externally controlled or eliminated as a constant before manual review begins. |
 | [**MCP Server Security Scanner**](docs/module-reference/mcp-tool-taint-scanner.md) | Scans MCP server source for unauthenticated endpoints, exec-class methods in allowed tool lists, and network-wide socket bindings. All three issue classes appeared in production MCP servers where no other scanner detected them. |
+| [**Protocol FSM Extractor**](docs/module-reference/proto-fsm.md) | Extracts the handshake state machine from network protocols in stripped ARM64 binaries using static loop and BSS state-variable analysis. Authentication state transitions become explicit without a running server or traffic capture. |
+| [**BMP LSB Key Extractor**](docs/module-reference/lsb-stego-extractor.md) | Recovers cryptographic key material hidden in BMP pixel LSBs using a Shamir-style Lagrange polynomial secret-sharing scheme. Firmware and APK packages that conceal keys in image assets are handled without prior knowledge of the encoding. |
+| [**Format String Scanner**](docs/module-reference/vuln-scanners.md) | Identifies format string vulnerabilities across the full printf family, syslog, and custom logging functions by tracing format argument provenance in x86-64 ELF binaries. Every call site where the format argument is not a .rodata string literal is a finding. |
+| [**Heap Vulnerability Scanner**](docs/module-reference/vuln-scanners.md) | Detects heap use-after-free, double-free, and overflow patterns in x86-64 and LoongArch64 binaries using a forward symbolic pass tracking pointer state across allocation and free operations. Static analysis produces heap findings in firmware that cannot be fuzz-tested. |
+| [**SQL Injection Scanner**](docs/module-reference/vuln-scanners.md) | Detects raw SQL injection in C/C++ binaries that call the MySQL C API or SQLite3 directly without a prepared-statement layer. Chains format-string builder analysis to SQL sink tracing so snprintf-to-mysql_query patterns surface that a format string scanner alone would miss. |
+| [**RPC Server Analyzer**](docs/module-reference/rpc-server-analyzer.md) | Enumerates Windows RPC server interfaces and flags those registered with RPC_C_AUTHN_LEVEL_NONE, allowing any caller to reach the interface without credentials. Pairs with Windows PE Security Analysis for complete RPC attack surface coverage. |
+| [**IOCTL Attack Surface**](docs/module-reference/ioctl-attack-surface.md) | Maps the complete IOCTL dispatch surface of a Windows kernel driver, including METHOD_NEITHER codes that pass raw user pointers and downstream kernel allocation calls reachable from user-controlled buffer lengths. Drivers with integer-overflow paths from user input to kernel allocation are flagged before manual review begins. |
+| [**Length Underflow Scanner**](docs/module-reference/length-underflow.md) | Detects integer underflow in protocol parsers where a user-supplied length field has a fixed header size subtracted, wraps on truncation, and reaches a downstream allocation or copy without a prior bounds check. |
+| [**Setuid Auth Oracle**](docs/module-reference/setuid-auth-oracle-scanner.md) | Identifies setuid binaries that call getspnam and crypt without PAM mediation, exposing a brute-force oracle because exit-code-based result disclosure bypasses rate limiting that pam_tally2 and faillock enforce. Absence of pam_start in the PLT surfaces candidates without a taint run. |
+| [**Lua Injection Analyzer**](docs/module-reference/lua-injection-analyzer.md) | Detects unsanitized user-controlled strings embedded in Lua source via Python format operations before execution through lupa, lunatic-python, or cffi Lua bindings. Built from two critical findings in FortiAnalyzer and FortiManager where no other scanner detected the injection class. |
 
 </details>
 
@@ -65,7 +77,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | [**Go Binary Reverse Engineering**](docs/workflows/go-binaries.md) | Recovers function names from stripped Go binaries because the runtime embeds a metadata table that survives stripping. |
 | [**Game & Legacy RE**](docs/module-reference/game-re.md) | Labels stripped game binary functions by engine so analysis starts at the game logic layer instead of the engine layer. Also handles PS3 Cell SPU and classic Mac OS PEF binaries. |
 | [**Firmware Extraction**](docs/module-reference/firmware-analysis.md) | Decrypts vendor-encrypted firmware without a key because predictable patterns in inner partitions reveal it. Handles vendor-modified squashfs images including ARM64 BCJ-filtered variants. |
-| [**Firmware Key Corpus**](docs/module-reference/firmware-analysis.md) | Classifies recovered firmware keys against a cross-image family table. An anomalous key count flags a potential finding before decryption begins. |
+| [**Firmware Key Corpus**](docs/module-reference/firmware-key-corpus.md) | Classifies recovered firmware keys against a cross-image family table. An anomalous key count flags a potential finding before decryption begins. |
 | [**HarmonyOS / ArkTS Analysis**](docs/module-reference/harmonyos.md) | Analyzes HarmonyOS HAP packages and ArkTS bytecode so OpenHarmony targets can be assessed without source access. Surfaces exported abilities, permission grants, and native library attack surface before manual review begins. |
 | [**PS3 SELF Decryptor**](docs/module-reference/ps3-self-decryptor.md) | Decrypts PS3 SELF (Signed ELF) files to plain ELF because lief and BinaryContext reject SCE-format magic. Keyset detection is automatic from the key_rev field so no manual key lookup is needed. |
 | [**MicroPython .mpy Lifter**](docs/module-reference/mpy-lifter.md) | Lifts .mpy v6 bytecode to readable pseudo-Python so MicroPython firmware on ESP32, STM32, and CC13xx targets can be analyzed without source. Flags dangerous imports and machine-level memory access calls in the lifted output. |
@@ -78,11 +90,8 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | Capability | |
 |:---|:---|
 | [**Version Diffing**](docs/workflows/cross-version.md) | Checks whether the logic changed, not whether the file changed, so a cosmetic recompile cannot hide an unpatched vulnerability. |
-| [**Cross-Target Learning**](docs/module-reference/cross-target-learning.md) | Every confirmed finding seeds future semantic searches, so the tool gets sharper with each engagement. |
 | [**KASAN-Oracle**](docs/workflows/kasan-oracle.md) | Scans a KASAN debug build first because debug builds expose control flow that stripping removes. Confirmed candidates from the debug build then validate against the stripped production binary, so the debug image acts as a ground-truth oracle rather than a secondary target. |
-| [**Module Quality Gate**](docs/module-reference/forge.md) | FORGE audits every user-written module before it can be stored, so local extensions meet the same standard as the modules that ship with Ablation. Every HIGH and CRITICAL finding is tagged with the pipeline stage where it would surface without the audit, from a free static-check catch at develop time to an 18x-cost find in production. |
-| [**Coverage Gate**](docs/ABLATION-STANDARDS.md) | The taint engine requires 85% statement coverage on every commit, so a regression in taint logic fails the test suite before it reaches a firmware engagement. |
-| [**Kernel Module Subsystem Classifier**](docs/module-reference/kernel-module-subsystem-classifier.md) | Classifies a Linux kernel module by its source tree path to determine attack surface before analysis begins. Network-reachable modules surface first so manual review starts at the highest-risk code. |
+| [**YARA Rule Generation**](docs/module-reference/yara-generator.md) | Synthesizes YARA detection rules from PE and ELF scanner findings so confirmed vulnerability signatures are immediately deployable in detection pipelines without manual rule authoring. |
 
 </details>
 
@@ -93,15 +102,17 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 |:---|:---|
 | [**ECU Architecture Detector**](docs/module-reference/ecu-arch-detector.md) | Identifies the ISA of a flat ECU ROM from raw bytes alone. PPC32, SH-2A, TriCore, RH850, V850, M68K, C28x, and M32R all produce recognizable structural signatures without symbols or file headers. |
 | [**ROM Layout Analyzer**](docs/module-reference/ecu-rom-layout-analyzer.md) | Splits a flat ROM into CODE, CALIBRATION, and IVT regions before analysis begins. The interrupt vector table is excluded from function discovery so taint trackers start from clean application code boundaries. |
-| [**Calibration Parsers**](docs/module-reference/ecu-cal-parsers.md) | Reads TunerPro XDF, ASAM A2L, RomRaider XML, open_damos, and ConesCAN definition files and injects human-readable table labels into BinaryContext. Every array in the ROM has a name when the taint tracker reaches it. |
+| [**Calibration Parsers**](docs/module-reference/ecu-cal-parsers.md) | Reads TunerPro XDF, ASAM A2L, RomRaider XML, open_damos, ConesCAN, and Nissan Pytrex definition files and injects human-readable table labels into BinaryContext. Every array in the ROM has a name when the taint tracker reaches it. |
 | [**CAN DBC Parser**](docs/module-reference/can-dbc-parser.md) | Reads CAN signal database files and makes message and signal definitions available during binary analysis. No other RE tool brings CAN signal context into the taint analysis pipeline. |
 | [**ECU Security Access Scanner**](docs/module-reference/ecu-security-access-scanner.md) | Audits UDS SecurityAccess implementations for weak seed generation, static keys, and bypassable challenge-response logic. Runs before taint analysis so weak authentication findings are confirmed before deeper code tracing begins. |
+| [**TriCore Taint Analysis**](docs/module-reference/tricore-taint-tracker.md) | Follows attacker-controlled data to security-sensitive sinks in Infineon TriCore AURIX TC1.6x ECU firmware using the GHS EABI and IAR EABI calling conventions. Automotive targets on TriCore receive the same interprocedural taint coverage as ARM64 and x86-64. |
+| [**RH850 Taint Analysis**](docs/module-reference/rh850-taint-tracker.md) | Follows attacker-controlled data through Renesas RH850 ECU firmware using the GHS CC-RH and IAR RH850 ABIs, including flat ROM support for images shipped without ELF headers. The GHS double=32-bit ABI fix prevents incorrect register consumption for ECUs compiled with GHS MULTI. |
 
 </details>
 
 ---
 
-## 28 Decompilers
+## 31 Decompilers
 
 | ISA / Runtime | Variants |
 |---|---|
@@ -111,10 +122,11 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | PowerPC | PPC-32 · PPC-64 · VLE |
 | RISC-V | RV32 · RV64 · HiSilicon ext |
 | ARC | ARC EM/HS |
-| V850 / RH850 | V850-32 |
+| V850 / RH850 | V850-32 · RH850 |
 | LoongArch | LoongArch64 |
 | Renesas SH | SH-2A |
-| Motorola | M68K / CPU32 |
+| Motorola | M68K / CPU32 · MC88100 |
+| Infineon | TriCore TC1.6x |
 | TI DSP | TMS320C28x |
 | Intel MCS | 8051 |
 | DEX | Dalvik · ART |
