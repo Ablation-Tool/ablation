@@ -138,14 +138,14 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 
 | ISA | Variants |
 |---|---|
-| x86 | x86-32 · x86-64 |
-| ARM | ARM-32 · ARM-64 · Thumb |
-| MIPS | MIPS-32 · nanoMIPS · MIPS-64 |
-| PowerPC | PPC-32 · PPC-64 · VLE |
-| RISC-V | RV32 · RV64 · HiSilicon ext |
-| ARC | ARC EM/HS |
-| LoongArch | LoongArch64 |
-| Intel MCS | 8051 |
+| [**x86**](docs/module-reference/binary-lifter.md) | x86-32 · x86-64 |
+| [**ARM**](docs/module-reference/binary-lifter.md) | ARM-32 · ARM-64 · Thumb |
+| [**MIPS**](docs/module-reference/binary-lifter.md) | MIPS-32 · [nanoMIPS](docs/module-reference/nanomips.md) · MIPS-64 |
+| [**PowerPC**](docs/module-reference/ppc32-taint-tracker.md) | PPC-32 · PPC-64 · [VLE](docs/module-reference/ecu-vle-decoder.md) |
+| [**RISC-V**](docs/module-reference/binary-lifter.md) | RV32 · RV64 · [HiSilicon ext](docs/module-reference/hisi-rv32-ext.md) |
+| [**ARC**](docs/module-reference/binary-lifter.md) | ARC EM/HS |
+| [**LoongArch**](docs/module-reference/loongarch64.md) | LoongArch64 |
+| [**Intel MCS**](docs/module-reference/isa-8051.md) | 8051 |
 
 </details>
 
@@ -154,11 +154,11 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 
 | ISA | Variants |
 |---|---|
-| V850 / RH850 | V850-32 · RH850 |
-| Renesas SH | SH-2A |
-| Motorola | M68K / CPU32 · MC88100 |
-| Infineon | TriCore TC1.6x |
-| TI DSP | TMS320C28x |
+| [**V850 / RH850**](docs/module-reference/rh850-taint-tracker.md) | V850-32 · RH850 |
+| [**Renesas SH**](docs/module-reference/binary-lifter-sh2a.md) | SH-2A |
+| [**Motorola**](docs/module-reference/ecu-m68k-decoder.md) | M68K / CPU32 · [MC88100](docs/module-reference/m88k-decoder.md) |
+| [**Infineon**](docs/module-reference/tricore-taint-tracker.md) | TriCore TC1.6x |
+| [**TI DSP**](docs/module-reference/ecu-c28x-decoder.md) | TMS320C28x |
 
 </details>
 
@@ -167,10 +167,10 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 
 | ISA | Variants |
 |---|---|
-| DEX | Dalvik · ART |
-| ARK | ArkTS |
-| BEAM | Erlang · Elixir |
-| MicroPython | .mpy v6 |
+| [**DEX**](docs/module-reference/android.md) | Dalvik · ART |
+| [**ARK**](docs/module-reference/harmonyos.md) | ArkTS |
+| [**BEAM**](docs/module-reference/beam.md) | Erlang · Elixir |
+| [**MicroPython**](docs/module-reference/mpy-lifter.md) | .mpy v6 |
 
 </details>
 
