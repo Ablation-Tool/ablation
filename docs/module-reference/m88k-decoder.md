@@ -1,0 +1,128 @@
+# M88K BCS COFF Support (MC88100 / Motorola 88000)
+
+Parse and disassemble Motorola MC88100 BCS COFF executables.
+
+**Modules:**  
+- `ablation.core.coff_m88k_parser` — file parser  
+- `ablation.analyzers.isa_m88k` — ISA + ABI constants  
+- `ablation.analyzers.insn_m88k` — instruction decoder  
+
+---
+
+## Why this exists
+
+4 things that weren't possible before in Ablation:
+
+1. **M88K BCS COFF files were completely unreadable**: LIEF does not support
+   COFF and does not recognise magic 0x016D; all existing COFF parsers assume
+   2-byte `s_nreloc`/`s_nlnno` fields (standard), but the 88K BCS variant
+   promotes those fields to 4-byte longs, making every section header 44 bytes
+   instead of 40.  Parsing with the wrong stride corrupts all section names and
+   virtual addresses from section 1 onwards.  `coff_m88k_parser.parse()` is the
+   first Python parser that handles this correctly.
+
+2. **No M88K disassembler survives in the Python ecosystem**: Capstone 5.x
+   removed its incomplete 88K stub.  GNU binutils dropped 88K support circa
+   2020.  Radare2 has no M88K plugin.  `M88kDecoder` provides a complete
+   pure-Python decoder for all MC88100 instruction classes: immediate (OR.U/OR,
+   ADDU, LDA.W, …), load/store (LD/ST word/byte/half), branch (BSR 26-bit),
+   conditional branch (BCND 16-bit), JMP/JSR/MOV, and triadic register ops.
+
+3. **Function start detection on a dead ISA with no symbols**: the BCS COFF
+   symbol table is typically stripped.  `function_starts()` recovers function
+   boundaries by scanning all BSR/BSR.N call sites in .text — validated at 126
+   unique function entries on the moto_gen binary.
+
+4. **Data reference recovery without Capstone**: `string_refs()` scans for
+   consecutive OR.U + OR instruction pairs (the canonical 88K 32-bit constant
+   load idiom) where the computed VA falls in .data — validated at 73 string
+   and format-string references on the same binary.
+
+---
+
+## Supported ISA subset
+
+All MC88100 instruction classes decoded:
+
+| Class | Opcodes | Notes |
+|---|---|---|
+| Immediate | 0x10–0x1F | ADDU, OR, OR.U, AND, XOR, LDA.H, LDA.W |
+| Load/store | 0x00–0x0F, 0x20–0x2F, 0x34–0x38 | All width/signedness variants |
+| Branch | 0x30–0x33 | BR, BR.N, BSR (26-bit PC-relative × 4), BSR.N |
+| Conditional | 0x25, 0x29, 0x2D | BCND / BCND.N (16-bit PC-relative × 4) |
+| CTL (JMP/JSR/MOV) | 0x3D | bits 15:14 select JMP (11), JSR (10), MOV (00/01) |
+| Triadic integer | 0x3A–0x3C | partial: function code field not fully decoded |
+| Unknown | all others | decoded as `???XX`, no exception |
+
+Triadic ops (0x3A–0x3C) emit placeholder mnemonics; the full MC88100 PRM
+function-code table (shift, rotate, multiply, divide, …) is the next
+extension point.
+
+---
+
+## ABI (BCS — Binary Compatibility Standard)
+
+| Register | Role |
+|---|---|
+| r0 | Zero (hardwired) |
+| r1 | Link register (BSR saves PC+4 here) |
+| r2–r9 | Arguments / return values (caller-saved) |
+| r10–r13 | Additional return / scratch (caller-saved) |
+| r14–r25 | Callee-saved |
+| r26–r29 | Caller-saved temporaries |
+| r30 | Frame pointer (callee-saved) |
+| r31 | Stack pointer |
+
+---
+
+## Quick start
+
+```python
+from ablation.core.coff_m88k_parser import parse
+from ablation.analyzers.insn_m88k import M88kDecoder
+
+binary = parse('/path/to/target.coff')
+dec = M88kDecoder(binary)
+
+# Disassemble from entry point
+for insn in dec.disassemble_va(binary.entry, max_insns=40):
+    print(insn)
+
+# Find all callable functions (BSR targets)
+for va in sorted(dec.function_starts()):
+    print(f'func_{va:08x}')
+
+# Find all 32-bit constant loads pointing into .data
+for code_va, data_va in sorted(dec.string_refs().items()):
+    print(f'{code_va:#010x} -> {data_va:#010x}')
+```
+
+---
+
+## Key findings from first target
+
+The modules were developed against and validated on:
+
+- **Binary**: Lotus 1-2-3 `moto_gen` license key generator (54,608 bytes,
+  88K BCS COFF, January 1993, for DG AViiON / DG/UX Unix systems)
+- **Architecture gap discovered**: section headers are 44 bytes in 88K BCS
+  COFF (not 40) — `s_nreloc` and `s_nlnno` are `unsigned long` (4 bytes each)
+- **Results**: 73 data refs, 126 function entries, complete key generation
+  algorithm reversed (XOR encoding with ASCII offsets 0x30/0x37/0x57/0x61,
+  three `%02x%02x` pairs → 12-char activation key)
+
+See `re/lotus/moto_gen_re.py` for the full findings module.
+
+---
+
+## Extension points
+
+1. **Triadic ops (0x3A–0x3C)**: expand `TRIADIC_OPS` in `isa_m88k.py` with
+   the full function-code table from the MC88100 PRM (shift, rotate, cmp, …)
+2. **DataExplorer AViiON corpus**: larger 88K target set for validating coverage
+   of additional instruction encodings
+3. **CFG builder** (`cfg_m88k.py`): block-level control flow graph using the
+   existing `function_starts()` + branch target detection — follow `cfg_ppc.py`
+   as the template
+4. **BinaryLifter integration**: add `arch='m88k'` to `BinaryLifter`'s ISA
+   dispatch table once a CFG builder exists
