@@ -9,8 +9,7 @@
 3 things that were not possible before in Ablation:
 
 **1. No flat-ROM / `from_bytes` support for RH850 ECU firmware.**  Automotive RH850
-ECU images (Denso GS327, Bosch RH850/G3M) are frequently shipped as raw binary
-dumps with no ELF header.  `V850TaintTracker` requires `from_path(elf)` and will
+ECU images are frequently shipped as raw binary dumps with no ELF header.  `V850TaintTracker` requires `from_path(elf)` and will
 raise on a bare binary.  `RH850TaintTracker.from_bytes(data, base_va)` +
 `scan_function(func_va, func_end, init_labels)` gives the same flat-ROM scanning
 workflow as `TriCoreTaintTracker`.
@@ -28,8 +27,7 @@ and propagates it into every `TaintFindingRH850` and the `report()` output.
 **3. GHS old-style symbol mangling (`__ct`, `__dt`, `__vtbl`) not handled.**
 GHS MULTI uses GCC 2.9.x / ARM libiberty mangling (not Itanium ABI `_Z...`).
 Constructors appear as `Foo__ct`, destructors as `Foo__dt`, vtable symbols as
-`__vtblFoo`.  Renesas assembler additionally prepends a leading `_` to every C
-symbol (`_recv`, `_memcpy`).  `V850TaintTracker`'s source/sink resolver compares
+`__vtblFoo`.  Renesas assembler additionally prepends a leading `_` to every C symbol, so `recv` appears as `_recv` in ELF exports.  `V850TaintTracker`'s source/sink resolver compares
 raw ELF symbol names against C-level source/sink sets, so `_recv` is not matched
 as `recv` and `Foo__ct` is not matched at all.  `RH850TaintTracker` applies
 `_ghs_c_name()` normalisation at every call site before checking source/sink

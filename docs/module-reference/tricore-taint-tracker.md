@@ -9,8 +9,7 @@
 3 things that were not possible before in Ablation:
 
 **1. No source-to-sink taint analysis for TriCore AURIX ECU firmware.**  After
-`EcuArchDetector` correctly identifies a flat ROM dump as TriCore (e.g., Bosch ME17,
-Continental MG1, Waqas GEN3), there was no taint tracker to follow attacker-controlled
+`EcuArchDetector` correctly identifies a flat ROM dump as TriCore, there was no taint tracker to follow attacker-controlled
 data from a SecurityAccess response or CAN frame through the cipher function to any
 dangerous sink.  `TriCoreTaintTracker` fills this gap.
 
