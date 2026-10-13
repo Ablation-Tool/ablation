@@ -8,7 +8,7 @@
 
 VLE (Variable Length Encoding) is a PowerPC instruction set extension that NXP added to the e200z4, e200z6, and e200z7 cores found in automotive ECUs. It lets compilers mix 16-bit and 32-bit instructions in the same binary so firmware fits in smaller flash. Flash is a hard cost constraint on every ECU, so NXP e200 cores use VLE by default in production firmware.
 
-Standard Capstone decodes PowerPC Book E but not VLE. Pointing Capstone at a VLE region produces plausible-looking garbage because 16-bit VLE halfwords satisfy Book E opcode patterns by coincidence. There is no error — just wrong disassembly.
+Standard Capstone decodes PowerPC Book E but not VLE. Pointing Capstone at a VLE region produces plausible-looking garbage because 16-bit VLE halfwords satisfy Book E opcode patterns by coincidence. There is no error. The disassembly is just wrong.
 
 `EcuVLEDecoder` is a pure-Python VLE decoder that handles both 16-bit SE (Short Encoding) and 32-bit VLE instructions, identifies function entry points from VLE prologues, and tells the taint tracker whether a code region is VLE or Book E before analysis begins.
 
@@ -41,7 +41,7 @@ flowchart TD
     style I fill:#7f1d1d,stroke:#991b1b,color:#fecaca
 ```
 
-Without `EcuVLEDecoder`, the function-start scan on a VLE binary returns empty because Capstone produces garbage. An empty function-start list means the taint tracker runs zero interprocedural passes and produces zero findings — with no error to indicate why.
+Without `EcuVLEDecoder`, the function-start scan on a VLE binary returns empty because Capstone produces garbage. An empty function-start list means the taint tracker runs zero interprocedural passes and produces zero findings, with no indication why.
 
 ---
 
