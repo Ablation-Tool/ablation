@@ -6,13 +6,10 @@
 
 1. **No C28x disassembler existed in any supported toolchain.** Capstone 5.x has no
    TMS320C28x support. Ghidra and Radare2 support C28x, but Ablation cannot invoke them
-   from Python without a subprocess dependency. The F28x-series MCUs (F28335, F28P55x,
-   F2837x, F2838x) used in EV/HEV traction-inverter controllers and motor-drive ECUs were
+   from Python without a subprocess dependency. The F28x-series MCUs used in EV/HEV traction-inverter controllers and motor-drive ECUs were
    entirely opaque to Ablation's control-flow passes.
 
-2. **The two C28x calling conventions could not be distinguished.** `LC/LRET` (return
-   address on the software stack, 8-cycle return) and `LCR/LRETR` (return address in the
-   RPC register, 4-cycle return) each require different stack-unwinding logic. Without a
+2. **The two C28x calling conventions could not be distinguished.** `LC/LRET` stores the return address on the software stack with an 8-cycle return. `LCR/LRETR` stores it in the RPC register with a 4-cycle return. Each requires different stack-unwinding logic. Without a
    decoder, Ablation could not decide which convention a given function uses, making CFG
    construction impossible.
 
@@ -31,7 +28,7 @@
 
 `EcuC28xDecoder` decodes TMS320C28x instructions from a raw byte buffer using the
 encodings in SPRU430F (TMS320C28x CPU and Instruction Set Reference Guide, April 2015).
-It identifies control-flow instructions (branches, calls, returns), computes branch targets
+It identifies control-flow instructions, computes branch targets
 in word-addresses, and provides a `function_starts()` method that returns probable function
 entry points from direct call targets.
 

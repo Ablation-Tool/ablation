@@ -19,8 +19,7 @@ complete function-start list from a single pass over the binary.
 
 **2. No M68K instruction-type classification for the pipeline.** Capstone returns raw mnemonic
 strings. Pipeline stages that route instructions by type (branch, call, return, prologue) had no
-M68K adapter. ``M68kInsn`` wraps Capstone output with the same typed fields (``insn_type``,
-``target``, ``offset``) used by ``VLEInsn``, making M68K and PPC VLE firmware interchangeable
+M68K adapter. ``M68kInsn`` wraps Capstone output with the same typed fields used by ``VLEInsn``, making M68K and PPC VLE firmware interchangeable
 at all pipeline stages downstream of the decoder.
 
 ---

@@ -3,8 +3,7 @@
 **File:** `ablation/analyzers/taint_tracker_ppc32.py`
 
 Interprocedural taint analysis for 32-bit PowerPC (big-endian and little-endian).
-Traces network-sourced data from read/recv/pread/fgets to command-execution sinks
-(system, execl, popen) and memory-corruption sinks (strcpy, sprintf, memcpy).
+Traces network-sourced data from read/recv/pread/fgets to command-execution sinks and memory-corruption sinks.
 
 Targets: Cisco 7200/3700 IOS (big-endian), Huawei S6720/S6720EI boot ROM (big-endian
 GOT2 PIC), MikroTik RB600 (big-endian), VxWorks embedded (big-endian), POWER LE
@@ -135,9 +134,7 @@ broader argument-provenance classification when taint finds nothing.
 
 ## Taint propagation
 
-Register taint propagates through arithmetic (`add`/`addi`/`subf`/`mullw`/`divw`),
-logic (`and`/`or`/`xor`/`rlwinm`), moves (`mr`), and pointer dereferences (`lwz`
-from a tainted base register). `li`/`lis` (immediate loads) and `mflr` clear
+Register taint propagates through arithmetic ops, logic ops, register moves, and `lwz` pointer dereferences from tainted base registers. `li`/`lis` (immediate loads) and `mflr` clear
 destination taint. Loads from a non-tainted base register also clear destination
 taint (the destination is being overwritten with an untainted value; prior taint
 does not survive the overwrite).
