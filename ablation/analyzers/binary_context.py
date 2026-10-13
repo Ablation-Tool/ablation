@@ -457,6 +457,9 @@ class BinaryContext:
         if isinstance(binary, lief.PE.Binary):
             return cls._build_pe(data, path, sha, binary)
         if not isinstance(binary, lief.ELF.Binary):
+            # Attempt XCOFF detection before giving up
+            if data[:2] in (b'\x01\xdf', b'\x01\xef'):
+                return cls._build_xcoff(data, path, sha)
             return ctx
 
         ctx.base_va = binary.imagebase
@@ -1636,6 +1639,96 @@ class BinaryContext:
                 for sv in imm_to_strs[key]:
                     str_xref.setdefault(sv, []).append(fva)
                     func_str.setdefault(fva, []).append(sv)
+
+    # ── XCOFF support ─────────────────────────────────────────────────────────
+
+    @classmethod
+    def _build_xcoff(cls, data: bytes, path: str, sha: str) -> "BinaryContext":
+        """Build BinaryContext from an XCOFF32 or XCOFF64 binary (IBM AIX PowerPC).
+
+        Uses xcoff_parser to extract sections and loader-section symbols, then
+        runs a BL scan on .text to discover function starts and call edges.
+        XCOFF imports have no resolved VA (link-time patching), so ctx.plt is
+        intentionally left empty; import names appear only in ctx.summary().
+        """
+        import bisect
+        from ablation.core.xcoff_parser import parse as xcoff_parse
+
+        ctx = cls()
+        ctx.path = path
+        ctx.sha256 = sha
+        try:
+            xb = xcoff_parse(path, data)
+        except Exception:
+            return ctx
+
+        ctx.arch = xb.arch
+        ctx.base_va = 0
+
+        # Exports: code_va (descriptor-resolved) preferred; fall back to descriptor VA.
+        # Kernel extension exports that are zero-filled (patched by kload at runtime)
+        # end up with code_va=0 and va>0; we use the descriptor VA as the best proxy.
+        for sym in xb.exports:
+            va = sym.code_va if sym.code_va else sym.va
+            if va and sym.name:
+                ctx.exports[sym.name] = va
+
+        # Strings from .data (XCOFF has no .rodata; constants live in .data)
+        dsec = xb.data
+        if dsec is not None and dsec.data:
+            _extract_strings_into(dsec.data, dsec.vaddr, ctx.strings)
+
+        # func_starts: export VAs + BL-target scan on .text
+        starts: Set[int] = {v for v in ctx.exports.values() if v}
+        tsec = xb.text
+        if tsec is not None and tsec.data:
+            text_data = tsec.data
+            text_va   = tsec.vaddr
+            n_words   = len(text_data) // 4
+            for i in range(n_words):
+                word = struct.unpack_from('>I', text_data, i * 4)[0]
+                if (word & 0xFC000003) != 0x48000001:   # BL AA=0 LK=1
+                    continue
+                pc     = text_va + i * 4
+                li24   = (word >> 2) & 0xFFFFFF
+                disp26 = li24 << 2
+                if disp26 & 0x2000000:
+                    disp26 -= 0x4000000
+                target = pc + disp26
+                if tsec.contains_va(target):
+                    starts.add(target)
+
+        ctx.func_starts = sorted(starts)
+        func_arr = ctx.func_starts
+
+        # Call graph: second BL pass, now that func_arr is sorted for owner lookup
+        va_to_export: Dict[int, str] = {va: nm for nm, va in ctx.exports.items()}
+        edges: List[Tuple[int, int, str]] = []
+        if tsec is not None and tsec.data:
+            text_data = tsec.data
+            text_va   = tsec.vaddr
+            n_words   = len(text_data) // 4
+            for i in range(n_words):
+                word = struct.unpack_from('>I', text_data, i * 4)[0]
+                if (word & 0xFC000003) != 0x48000001:
+                    continue
+                pc     = text_va + i * 4
+                li24   = (word >> 2) & 0xFFFFFF
+                disp26 = li24 << 2
+                if disp26 & 0x2000000:
+                    disp26 -= 0x4000000
+                target = pc + disp26
+                label  = va_to_export.get(target, "")
+                owner  = pc
+                if func_arr:
+                    idx = bisect.bisect_right(func_arr, pc) - 1
+                    if idx >= 0:
+                        owner = func_arr[idx]
+                edges.append((owner, target, label))
+
+        ctx.call_edges = edges
+        ctx._build_indices()
+        return ctx
 
     # ── PE support ────────────────────────────────────────────────────────────
 
