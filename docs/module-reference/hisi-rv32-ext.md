@@ -4,6 +4,36 @@ Correct-size disassembly for HiSilicon WS63 / Hi3863 / BS21 (Hi2821) NearLink So
 firmware and all other HiSilicon bare-metal RISC-V targets using the proprietary
 `riscv31` core with HCC (Huawei Custom C) ISA extensions.
 
+---
+
+## What this is
+
+HiSilicon's WS63, Hi3863, and BS21 NearLink SoCs use an RV32GC core with six proprietary opcode spaces. Capstone 5.x does not recognize any of them. When Capstone encounters a HiSilicon custom instruction, it reads the wrong number of bytes and misaligns every decode that follows in the function. The 48-bit `l.li` instruction is the most dangerous case: a single occurrence shifts all subsequent decodes by two bytes with no error or warning.
+
+`HiSiliconRV32ExtDecoder` intercepts all six custom opcode spaces before Capstone processes them, so instruction boundaries stay correct through the full function.
+
+---
+
+## Where it's used
+
+- **HiSilicon WS63 / Hi3863** — NearLink WS63E development kit firmware, BearPi-HH-NB3 LiteOS images
+- **HiSilicon BS21 / Hi2821** — NearLink BS21E firmware, BearPi-HH-NB3 SLE images
+- Any HiSilicon bare-metal RV32GC firmware compiled for the `riscv31` + HCC extension core
+
+---
+
+## Safe usage
+
+**Pass `ext_decoder=dec` to `RISCV32TaintTracker.from_path()`.** Constructing the tracker without the ext_decoder falls back to plain Capstone. Every custom instruction then misaligns subsequent decodes and the taint analysis runs on wrong instruction boundaries.
+
+**Use `conservative=True` for any binary with unknown `0x7b` (custom-3) semantics.** The decoder knows the encoding but not the semantics of the roughly 9,000 custom-3 variants in WS63 firmware. Conservative mode propagates taint from rs1 and rs2 to rd so no taint path is silently dropped.
+
+**Run `dec.opcode_report()` before taint analysis.** If the report shows `l.li` instances, confirm the lifter walks past them correctly. Each `l.li` is 6 bytes and a plain Capstone pass produces wrong boundaries at every occurrence.
+
+**Verify the target is a HiSilicon RV32 binary.** A standard RISC-V binary works correctly with this decoder but wastes the interception logic. An ARM or x86 binary produces nonsense and no error.
+
+---
+
 ## The problem: six custom opcode spaces
 
 HiSilicon's `riscv31` core extends base RV32GC with six custom opcode spaces plus

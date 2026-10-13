@@ -6,6 +6,33 @@
 
 ---
 
+## What this is
+
+Erlang applications compile to `.beam` files, one per module, using the IFF container format. Standard RE tools built for ELF or PE cannot read this format, so Erlang services are opaque to the normal Ablation pipeline. `BeamContext` maps BEAM structure to ELF-equivalent concepts: exports become symbols, imports become PLT entries, atoms become the string table. The same triage workflow then applies to OTP applications, Elixir services, and any BEAM-platform infrastructure.
+
+---
+
+## Where it's used
+
+- **OTP applications** — `ebin/` directories from compiled Erlang/OTP releases
+- **Elixir Mix releases** — precompiled BEAM files in Mix release directories
+- **BEAM-platform services** — RabbitMQ, ejabberd, Riak, and similar infrastructure
+- Any file starting with the `FOR1` IFF magic where the form type is `BEAM`
+
+---
+
+## Safe usage
+
+**Check `ctx.obfuscated` before relying on function names.** An obfuscated BEAM file has its `Dbgi` chunk stripped so `ast_functions` is empty and export/import analysis is the only available path. Reporting zero dangerous imports on an obfuscated module without flagging the obfuscation is a false negative.
+
+**Filter `erlang:apply` separately from code-execution findings.** `erlang:apply` (DISPATCH severity) appears in almost every OTP application as a routing mechanism. Mixing DISPATCH findings with CODE_EXEC findings hides the actual high-risk imports.
+
+**Use `sweep_beam_dir()` for OTP applications.** An OTP release has dozens of `.beam` files. Analyzing one module in isolation misses import chains that cross module boundaries.
+
+**Verify magic bytes before constructing.** `BeamContext.from_path()` raises `ValueError` for non-BEAM files. Filter a sweep directory for `b'FOR1'` at offset 0 before passing paths so the error does not terminate the sweep.
+
+---
+
 ## Why this exists
 
 Two things blocked BEAM security analysis before this module:
