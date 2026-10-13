@@ -23,10 +23,7 @@ Parse and disassemble Motorola MC88100 BCS COFF executables.
 
 2. **No M88K disassembler survives in the Python ecosystem**: Capstone 5.x
    removed its incomplete 88K stub.  GNU binutils dropped 88K support circa
-   2020.  Radare2 has no M88K plugin.  `M88kDecoder` provides a complete
-   pure-Python decoder for all MC88100 instruction classes: immediate (OR.U/OR,
-   ADDU, LDA.W, …), load/store (LD/ST word/byte/half), branch (BSR 26-bit),
-   conditional branch (BCND 16-bit), JMP/JSR/MOV, and triadic register ops.
+   2020.  Radare2 has no M88K plugin.  `M88kDecoder` provides a pure-Python decoder for all MC88100 instruction classes: immediate, load/store, branch, conditional branch, register-to-register, and triadic ops.
 
 3. **Function start detection on a dead ISA with no symbols**: the BCS COFF
    symbol table is typically stripped.  `function_starts()` recovers function
