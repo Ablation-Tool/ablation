@@ -2,7 +2,7 @@
 
 Zero-dependency analysis for Android APK files. No androguard, no apktool, no jadx. Pure Python stdlib only. Works on raw `.apk` files and APKPure `.xapk` containers.
 
-Four analysis layers: **APKParser** (ZIP + AXML + DEX format), **DexAnalyzer** (security scanner over DEX bytecode), **JniBridgeScanner** (JNI bridge RE), **BinderScanner** (exported Binder service surface).
+Four analysis layers: **APKParser** reads the ZIP/AXML/DEX structure; **DexAnalyzer** scans DEX bytecode for security issues; **JniBridgeScanner** traces JNI bridges; **BinderScanner** maps the exported Binder service surface.
 
 ---
 
@@ -269,7 +269,7 @@ print(BinderScanner.report(findings))
 
 **File:** `sweeps/android_sweep.py`
 
-Orchestration script that runs the full APK RE pass in one call: manifest analysis, DexAnalyzer, JniBridgeScanner, BinderScanner, and native lib ELF security properties.
+Orchestration script that runs the APK RE pass in one call: manifest analysis, DexAnalyzer, JniBridgeScanner, BinderScanner, and native lib ELF security properties.
 
 ```python
 from sweeps.android_sweep import run_sweep
@@ -382,7 +382,7 @@ Batch triage scanner for directories of native ELF `.so` files. Returns a scored
 
 ### ARM64 internal function count
 
-`internal` is the count of BL-call targets inside `.text` that are not in the dynamic export table. This measures implementation depth. A library with `internal=0` is a pure passthrough stub. One with `internal=4553` contains a full protocol engine. Computed via single-pass opcode scan: `(w >> 26) == 0x25` identifies BL instructions; sign-extend the 26-bit immediate; targets in `.text` range but absent from dynsym are internal.
+`internal` is the count of BL-call targets inside `.text` that are not in the dynamic export table. This measures implementation depth. A library with `internal=0` is a pure passthrough stub. One with `internal=4553` contains a protocol engine. Computed via single-pass opcode scan: `(w >> 26) == 0x25` identifies BL instructions; sign-extend the 26-bit immediate; targets in `.text` range but absent from dynsym are internal.
 
 ### Security scoring
 

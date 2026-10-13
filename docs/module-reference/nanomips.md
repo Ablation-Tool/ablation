@@ -1,6 +1,6 @@
 # nanoMIPS Taint Analysis
 
-Interprocedural taint tracker for nanoMIPS binaries. Two-path execution: full register-level decode via Capstone 6.x, or conservative frame-walk fallback on Capstone 5.x.
+Interprocedural taint tracker for nanoMIPS binaries. Two-path execution: register-level decode via Capstone 6.x, or conservative frame-walk fallback on Capstone 5.x.
 
 Targets: Ingenic X-series SoCs (JZ4780, X1000, X2000), MediaTek Helio embedded, MIPS32r6 microcontrollers.
 
@@ -11,7 +11,7 @@ Targets: Ingenic X-series SoCs (JZ4780, X1000, X2000), MediaTek Helio embedded, 
 Two things were not possible before `NanoMIPSTaintTracker`:
 
 **1. Any automated taint analysis on nanoMIPS at all.**
-nanoMIPS is a variable-width ISA (16, 32, and 48-bit instructions) with no branch delay slots and different call instructions than MIPS32. BALC replaces JAL/JALR; JRC $ra replaces JR $ra. No public taint tool handled this before Ablation. The tracker was built from the binutils 2.41 nanoMIPS opcode table and the Ingenic X1000 SDK firmware as the reference binary.
+nanoMIPS is a variable-width ISA with 16-bit, 32-bit, and 48-bit instruction widths and no branch delay slots and different call instructions than MIPS32. BALC replaces JAL/JALR; JRC $ra replaces JR $ra. No public taint tool handled this before Ablation. The tracker was built from the binutils 2.41 nanoMIPS opcode table and the Ingenic X1000 SDK firmware as the reference binary.
 
 **2. Reliable BALC call target resolution.**
 The two BALC forms (P32 and P16) encode call targets as signed PC-relative offsets in non-obvious bitfield layouts. Getting the target wrong means the interprocedural walk misses the callee entirely. The tracker extracts both forms exactly: P32 BALC target = VA + 4 + sign_extend_26(bits[25:0]) shifted left 1. P16 BALC target = VA + 2 + sign_extend_10(bits[9:0]) shifted left 1.
@@ -80,7 +80,7 @@ flowchart TD
     style G fill:#7f1d1d,stroke:#991b1b,color:#fecaca
 ```
 
-The fallback is deliberately conservative. After any call to a known source (`recv`, `read`, etc.), all four argument registers are marked tainted on entry to the next function. This avoids false negatives at the cost of more candidates to triage manually. The full decode path is precise: only the actual register that receives the `recv` return value carries taint.
+The fallback is deliberately conservative. After any call to a known source (`recv`, `read`, etc.), all four argument registers are marked tainted on entry to the next function. This avoids false negatives at the cost of more candidates to triage manually. The decode path is precise: only the actual register that receives the `recv` return value carries taint.
 
 ---
 

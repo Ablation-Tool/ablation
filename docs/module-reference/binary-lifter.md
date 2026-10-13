@@ -11,7 +11,7 @@ Lift native binary functions to annotated C pseudocode.
 
 3 things that weren't possible before in Ablation:
 
-1. **A single lifting entry point for 17 ISA variants**: the ISA infrastructure (decoders, CFG builders, taint trackers) existed for MIPS, PPC, RISC-V, LoongArch64, ARC, V850, nanoMIPS, and BEAM, but there was no way to get readable pseudocode from any of them. Reviewing a PPC32 function required manual Capstone loops and ad-hoc register tracking per engagement. Now `BinaryLifter.from_path(binary, arch='ppc32').lift_function(va)` produces a structural skeleton for any of the 17 supported ISAs in one call.
+1. **A single lifting entry point for 17 ISA variants**: the ISA infrastructure existed for MIPS, PPC, RISC-V, LoongArch64, ARC, V850, nanoMIPS, and BEAM, but there was no way to get readable pseudocode from any of them. Reviewing a PPC32 function required manual Capstone loops and ad-hoc register tracking per engagement. Now `BinaryLifter.from_path(binary, arch='ppc32').lift_function(va)` produces a structural skeleton for any of the 17 supported ISAs in one call.
 
 2. **Structural pseudocode for all ablation-native decoders**: the CFG walk infrastructure (block-level BFS over `cfg_*.blocks`) was identical across ISAs but had never been connected to an IR emitter. `_walk_ablation_cfg` closes that gap: one shared BFS walker, ISA-specific emit closures, no code duplication.
 
@@ -185,7 +185,7 @@ class NativeVal:
 
 **Full backends (ARM64, x86-64):** read bytes at VA → `insn_*.from_capstone` → `cfg_*.build_cfg` → per-register state machine (`_ARM64State`, `_X86_64State`, `_X86_32State`) walks blocks and emits typed C expressions with taint annotations.
 
-**Structural backends (all others):** read bytes at VA → ISA-specific decoder (Capstone, ablation native, or objdump) → `_walk_ablation_cfg` BFS walks blocks → `_make_*_emit` closure emits: calls with resolved PLT names, returns with ABI return register, branches as `if (/* cond */) goto label;`, everything else as `// mnemonic ops`.
+**Structural backends (all others):** read bytes at VA → ISA-specific decoder, either Capstone, an ablation native decoder, or objdump → `_walk_ablation_cfg` BFS walks blocks → `_make_*_emit` closure emits: calls with resolved PLT names, returns with ABI return register, branches as `if (/* cond */) goto label;`, everything else as `// mnemonic ops`.
 
 **BEAM:** `BeamContext.from_path` parses the BEAM module chunk format → module name, exports, imports, atoms extracted → formatted as a comment block.
 
