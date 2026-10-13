@@ -63,6 +63,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 |---|---|
 | "Find printf/syslog with non-literal format string" | `FormatStringScanner.from_context(ctx).scan()` |
 | "Scan for heap integer overflow / UAF / double-free" | `HeapVulnScanner.from_context(ctx).scan()` |
+| "Find gets/mktemp/tmpnam/getwd in PLT (CWE-242/121/377)" | `DeprecatedFuncScanner.from_context(ctx).scan()` |
 | "Where did this command string come from?" | `SinkArgClassifier.from_path(elf).classify_all()` |
 | "Register vendor-specific sinks + known-safe patterns" | `VendorProfile.from_vendor('fortinet').apply_to(clf)` |
 | "Map CMDB table IDs to exec-sink reach (FortiWeb/FortiOS)" | `CMDBSurfaceMapper.from_path(elf).map()` |

@@ -2,6 +2,18 @@
 
 ---
 
+## v2.78.0
+
+**DeprecatedFuncScanner — inherently unsafe function detector.**
+
+`DeprecatedFuncScanner` finds calls to `gets()`, `mktemp()`, `tmpnam()`, and `getwd()` in any x86-64 ELF binary. These functions have no safe use regardless of context, so their presence in PLT is a confirmed CWE-242 finding without taint analysis.
+
+For `gets()` and `getwd()`, the module extracts the destination buffer size from the `lea [rbp-N]` instruction before each call site and calculates the exact byte count to overwrite the saved RIP. The reachability chain is populated from `call_edges`, so triagers see which external functions can trigger each dangerous call without manually walking the call graph.
+
+Two CWE classes are reported: CWE-242/CWE-121 for stack overflow functions, CWE-242/CWE-377 for predictable temp-file functions. Duplicate call VAs across overlapping function ranges are deduplicated. FORGE gate passed. 22 tests.
+
+---
+
 ## v2.76.0
 
 **GuardianPakExtractor — Tandem NonStop Guardian PAK archive extractor.**
