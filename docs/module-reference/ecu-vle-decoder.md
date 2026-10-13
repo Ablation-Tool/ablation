@@ -4,6 +4,47 @@
 
 ---
 
+## What this is
+
+VLE (Variable Length Encoding) is a PowerPC instruction set extension that NXP added to the e200z4, e200z6, and e200z7 cores found in automotive ECUs. It lets compilers mix 16-bit and 32-bit instructions in the same binary so firmware fits in smaller flash. Flash is a hard cost constraint on every ECU, so NXP e200 cores use VLE by default in production firmware.
+
+Standard Capstone decodes PowerPC Book E but not VLE. Pointing Capstone at a VLE region produces plausible-looking garbage because 16-bit VLE halfwords satisfy Book E opcode patterns by coincidence. There is no error — just wrong disassembly.
+
+`EcuVLEDecoder` is a pure-Python VLE decoder that handles both 16-bit SE (Short Encoding) and 32-bit VLE instructions, identifies function entry points from VLE prologues, and tells the taint tracker whether a code region is VLE or Book E before analysis begins.
+
+---
+
+## Where it's used
+
+- **GM E39a PCM** (NXP MPC5566, e200z6 core) — VLE regions at `0x2A000` and `0x034000`
+- **GM E54 and E92 ECUs** — factory firmware compiled for NXP e200z cores
+- Any **NXP MPC55xx family** target where `EcuArchDetector` identifies a PPC32 VLE core
+- The `EcuROMLayoutAnalyzer` integration pipeline — called automatically when a CODE region scores above the VLE probe threshold
+
+---
+
+## Pipeline
+
+```mermaid
+flowchart TD
+    A["Raw ECU ROM (.bin)"] --> B["EcuROMLayoutAnalyzer\nidentifies CODE regions"]
+    B --> C{"VLE probe\n(byte0 & 0x90) == 0x10\non first 64 instructions"}
+    C -->|"SE count > 33%\nof probe = VLE"| D["EcuVLEDecoder\n16-bit SE + 32-bit VLE"]
+    C -->|"No SE instructions\n= Book E"| E["Capstone PPC32\nBook E decoder"]
+    D --> F["function_starts()\ne_stwu r1, -N(r1) prologue scan\nse_mflr r0 leaf scan"]
+    E --> G["function_starts()\nstwu r1, -N(r1) prologue scan"]
+    F --> H["PPC32TaintTracker\n(seeded with VLE function starts)"]
+    G --> H
+    H --> I[/"TaintFinding\nsink · source · chain"/]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style I fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+```
+
+Without `EcuVLEDecoder`, the function-start scan on a VLE binary returns empty because Capstone produces garbage. An empty function-start list means the taint tracker runs zero interprocedural passes and produces zero findings — with no error to indicate why.
+
+---
+
 ## Why this exists
 
 3 things that were not possible before in Ablation:
