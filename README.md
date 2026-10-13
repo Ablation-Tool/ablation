@@ -133,7 +133,8 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 
 ## 31 Decompilers
 
-**Native CPUs**
+<details>
+<summary><strong>Native CPUs</strong> </summary>
 
 | ISA | Variants |
 |---|---|
@@ -146,7 +147,10 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | LoongArch | LoongArch64 |
 | Intel MCS | 8051 |
 
-**Automotive ECUs**
+</details>
+
+<details>
+<summary><strong>Automotive ECUs</strong> </summary>
 
 | ISA | Variants |
 |---|---|
@@ -156,7 +160,10 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | Infineon | TriCore TC1.6x |
 | TI DSP | TMS320C28x |
 
-**VMs & Runtimes**
+</details>
+
+<details>
+<summary><strong>VMs & Runtimes</strong> </summary>
 
 | ISA | Variants |
 |---|---|
@@ -164,6 +171,8 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | ARK | ArkTS |
 | BEAM | Erlang · Elixir |
 | MicroPython | .mpy v6 |
+
+</details>
 
 ---
 ## Real-World Results
