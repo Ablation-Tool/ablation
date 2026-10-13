@@ -2,7 +2,7 @@
 
 Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-reference/`.
 
-**Ordering:** BinaryContext → SemanticSearcher (new binary/vuln class) → FuncProfiler (candidate) → TaintTracker (sinks known) → PathSolver (confirm feasibility). Manual capstone only when TaintTracker has no configured sink.
+**Ordering:** BinaryContext → SemanticSearcher (new binary/vuln class) → FuncProfiler (candidate) → **SinkArgClassifier** (eliminate RODATA_CONST first) → TaintTracker (ARG_PROPAGATED/UNKNOWN sinks only) → PathSolver (confirm feasibility). Manual capstone only when TaintTracker has no configured sink. For targets with a Perl scripting layer, run `PerlTaintScanner` in parallel with TaintTracker — it is independent of BinaryContext.
 
 ---
 
@@ -90,6 +90,8 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "Map Binder service surface in Android APK" | `BinderScanner.from_path(apk).scan()` |
 | "Find 'safe now catastrophic later' rendering architecture risk" | `SourceArchRiskScanner.from_context(ctx).scan()` |
 | "Detect Python→Lua code injection" | `LuaInjectionAnalyzer.from_path(root).scan()` |
+| "Find shell injection in Perl .pm/.pl (qx//, backtick, system with $var)" | `PerlTaintScanner.from_path(dir).scan()` |
+| "Confirm Perl sink is sanitized vs. injectable (quotemeta, single-quote wrap)" | `PerlTaintScanner.from_files([pm, pl]).scan()` → check `hit.verdict` |
 | "Scan MCP server code for BIND_WIDE / EXEC_IN_ALLOWED / NO_AUTH" | `MCPToolTaintScanner.from_path(root).scan()` |
 | "Detect TI NNC (Apache TVM) inference artifacts" | `TiNNCScanner.from_path(path).scan()` |
 | "Scan MP4/MKV/AVI for forensic anomalies" | `VideoContainerAnalyzer.from_path(path).scan()` |

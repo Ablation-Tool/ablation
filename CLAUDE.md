@@ -43,7 +43,7 @@ if ctx.names_count():
 
 See `docs/tool-selection-guide.md` for the full task→tool lookup table.
 
-**Ordering:** BinaryContext → SemanticSearcher (new binary/vuln class) → FuncProfiler (candidate) → TaintTracker (sinks known) → PathSolver (confirm feasibility). Manual capstone only when TaintTracker has no configured sink.
+**Ordering:** BinaryContext → SemanticSearcher (new binary/vuln class) → FuncProfiler (candidate) → **SinkArgClassifier** (eliminate RODATA_CONST first) → TaintTracker (ARG_PROPAGATED/UNKNOWN sinks only) → PathSolver (confirm feasibility). Manual capstone only when TaintTracker has no configured sink.
 
 ---
 
@@ -63,7 +63,8 @@ See `docs/module-reference/` for per-module constructor patterns and key methods
 4. `SemanticSearcher.query()`: sweep ALL vuln classes before touching disasm
 5. `PatternLibrary.sweep()`: replay confirmed patterns from prior engagements
 6. `FuncProfiler.profile()` on top candidates
-7. `TaintTracker` if sinks are standard
+6.5. `SinkArgClassifier.from_path(elf).classify_all()`: classify ALL shell sink call sites as RODATA_CONST / SNPRINTF_RODATA / ARG_PROPAGATED / UNKNOWN — **eliminate RODATA_CONST and parameterless SNPRINTF_RODATA before TaintTracker runs**
+7. `TaintTracker` on ARG_PROPAGATED / UNKNOWN sinks only (not RODATA_CONST)
 8. `IPRegAnnotator` for cross-library call chains
 9. `WindowAnalyzer.dump_text()` for manual disasm only when automated tools don't have the sink
 
