@@ -4,6 +4,31 @@
 
 ---
 
+## What this is
+
+GM P-series PCMs use a Motorola CPU32 core, a 68000-family processor in automotive engine control modules. These ROMs have no ELF headers and no symbol tables. Capstone decodes M68K instructions but provides no way to find function boundaries in a flat image. `EcuM68kDecoder` scans the ROM for CPU32 frame-allocation prologues in one pass and produces a function-start list without calling Capstone. It also wraps Capstone output with the same typed instruction fields used throughout the Ablation pipeline, so M68K firmware is interchangeable with PPC VLE firmware downstream of the decoder.
+
+---
+
+## Where it's used
+
+- **GM P-series PCMs** — P01, P04, P05, P08, P10, P11, P59 engine control modules
+- Any CPU32 flat ROM image from Motorola 68000-family automotive ECUs
+
+---
+
+## Safe usage
+
+**Call `function_starts()` before constructing a taint tracker.** Without known entry points, a taint tracker has no seeds and returns no findings. `EcuM68kDecoder` produces these seeds by scanning for `LINK.W A6` and `MOVEM.L` prologues.
+
+**Verify `base_va` matches the ROM mapping.** CPU32 ECU ROMs map flash at MCU-specific addresses. A wrong `base_va` shifts every function address so findings report incorrect VAs.
+
+**Do not suppress MOVEM.L at even offsets unconditionally.** The decoder suppresses `MOVEM.L` entries that appear two words after a `LINK.W` because those are the callee-save instruction inside the prologue, not a new function start. Disabling this filter produces duplicate function starts inside existing prologues.
+
+**Use `M68kInsn.insn_type` instead of raw mnemonics in downstream stages.** The pipeline routes instructions by `insn_type`, not mnemonic string. Comparing mnemonic strings for M68K breaks when Capstone uses alternate forms for the same instruction.
+
+---
+
 ## Why this exists
 
 2 things that were not possible before in Ablation:
