@@ -7,7 +7,7 @@ format.
 
 Why this exists
 ---------------
-1. Guardian PAK is not a ZIP file despite the ``.ZIP`` extension IBM used for
+1. Guardian PAK is not a ZIP file despite the ``.ZIP`` extension used for
    patch distribution.  ``unzip``, ``file``, ``binwalk``, and every other
    standard archive tool reject these files.  The only documented extractor
    (``UNPAK``) requires a live Tandem NSK system.
@@ -43,7 +43,7 @@ record carries a 2-byte type code followed by a 2-byte big-endian size.
 
 IMPORTANT: the 2-byte type codes are NOT stable across archive runs — the
 same record class carries different codes in different PTF archives
-(confirmed: tape-label code is 0x6891 in U452253, 0x1F1A in U454165).
+(confirmed: tape-label code is 0x6891 in one archive, 0x1F1A in another).
 All record detection in this module is therefore content-based:
 
     Tape label     200-byte record containing b'Tandem Archive Tape'
@@ -56,15 +56,14 @@ Usage::
     from ablation.core.guardian_pak_extractor import iter_files, GuardianFile
     from pathlib import Path
 
-    data = Path('U452253.ZIP').read_bytes()
+    data = Path('patch.zip').read_bytes()
     for f in iter_files(data):
         print(f'{f.path}  {len(f.data)} bytes  arch={f.arch}')
 
 References
 ----------
-Empirical analysis of IBM MQSeries for Tandem NSK V2.2 PAK archives;
-Tandem Guardian BACKUP utility tape format (reverse-engineered);
-``readme.doc`` distributed with IBM MQSeries NSK corrective service PTFs.
+Empirical analysis of NSK corrective service PTF archives;
+Tandem Guardian BACKUP utility tape format (reverse-engineered).
 """
 from __future__ import annotations
 
