@@ -217,7 +217,8 @@ Messages from your other sessions        accept
 
 ---
 
-## 31 Decompilers
+<details>
+<summary><strong>31 Decompilers</strong></summary>
 
 <details>
 <summary><strong>Native CPUs</strong> </summary>
@@ -260,7 +261,13 @@ Messages from your other sessions        accept
 
 </details>
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Real-World Results</strong></summary>
+
 ## Real-World Results
 Ablation has been used to analyze production firmware and kernel drivers from Cisco, Fortinet, TencentOS, Huawei, and more.
 
@@ -276,6 +283,11 @@ Following coordinated disclosure, the Cisco Product Security Incident Response T
 
 
 ---
+
+</details>
+
+<details>
+<summary><strong>Acknowledgments</strong></summary>
 
 ## Acknowledgments
 This project was greatly informed and inspired by several key literary works.
@@ -324,7 +336,10 @@ This project was greatly informed and inspired by several key literary works.
 
 ---
 
+</details>
 
+<details>
+<summary><strong>Install</strong></summary>
 
 ## Install
 
@@ -334,6 +349,11 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 ---
 
+</details>
+
+<details>
+<summary><strong>Requirements</strong></summary>
+
 ## Requirements
 
 - Python >= 3.10
@@ -341,11 +361,21 @@ pip install git+https://github.com/Ablation-Tool/ablation
 
 ---
 
+</details>
+
+<details>
+<summary><strong>Responsible Use</strong></summary>
+
 ## Responsible Use
 
 Ablation is built for authorized security research. Use it only against systems you own or have explicit written permission to test. Running it against systems without authorization violates computer fraud laws in most jurisdictions. The author is not responsible for misuse.
 
 ---
+
+</details>
+
+<details>
+<summary><strong>Standards</strong></summary>
 
 ## Standards
 
@@ -392,5 +422,7 @@ It defines four phases:
 **Phase 3.** The structured retrospective written at the close of every completed project maps to the final phase.
 
 **Phase 4.** The standards document tracks 29 specific requirements drawn from all three frameworks. All 29 are met.
+
+</details>
 
 ---
