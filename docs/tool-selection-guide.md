@@ -78,6 +78,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "Which libs in a rootfs dir have exec-class PLT imports?" | `batch_plt_intersect('/tmp/fad_root/lib/')` |
 | "Detect allowlist byte-validators in stripped binary (x86-64 loop pattern)" | `SanitizerDetector.from_path(elf).detect()` |
 | "Audit a specific function for shell metacharacter coverage (any arch incl. PPC64)" | `audit_coverage(elf, va, CS_ARCH_PPC, CS_MODE_64\|CS_MODE_BIG_ENDIAN)` → `SanitizerCoverageReport` |
+| "Post-process ARG_PROPAGATED results: downgrade sanitizer-gated exec sinks to SANITIZER_VALIDATED" | `SinkSanitizerFilter.from_path(elf).apply(clf.classify_all())` — run after `SinkArgClassifier.classify_all()`; eliminates manual disasm for structurally safe ARG_PROPAGATED sites |
 | "Classify fork() callers as worker/exec/exit" | `ForkExecClassifier.from_path(elf).classify()` |
 | "Find pre-auth routes in flatui firmware" | `PreAuthRouteAuditor.run(route_init_va, factory_va)` |
 | "Find encrypted/packed sections in binary" | `EntropyMapper.scan()` |

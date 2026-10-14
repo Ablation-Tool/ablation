@@ -98,6 +98,7 @@ from .sink_arg_classifier import (
     _count_plt_callers, batch_plt_intersect,
 )
 from .sanitizer_detector import SanitizerDetector, SanitizerProfile, SHELL_METACHARACTERS
+from .sink_sanitizer_filter import SinkSanitizerFilter, SANITIZER_VALIDATED
 from .fork_exec_classifier import (
     ForkExecClassifier, ForkCallerResult,
     WORKER, EXEC_AFTER_FORK, EXIT_IN_CHILD, UNKNOWN as FORK_UNKNOWN,
@@ -217,6 +218,7 @@ __all__ = [
     "RODATA_CONST", "SNPRINTF_RODATA", "ARG_PROPAGATED", "SINK_UNKNOWN",
     "_count_plt_callers", "batch_plt_intersect",
     "SanitizerDetector", "SanitizerProfile", "SHELL_METACHARACTERS",
+    "SinkSanitizerFilter", "SANITIZER_VALIDATED",
     "ForkExecClassifier", "ForkCallerResult",
     "WORKER", "EXEC_AFTER_FORK", "EXIT_IN_CHILD", "FORK_UNKNOWN",
     "VendorProfile",
