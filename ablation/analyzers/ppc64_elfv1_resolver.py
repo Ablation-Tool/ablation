@@ -289,17 +289,47 @@ class Ppc64ElfV1Resolver:
                 if r_type == 21 and sym_idx in dynsym:
                     jmp_slots.append((r_offset, dynsym[sym_idx]))
 
-        # Sort by GOT VA — order matches stub index in .text
         jmp_slots.sort(key=lambda x: x[0])
         info.jmp_slots = jmp_slots
         info.n_stubs = len(jmp_slots)
 
-        # Build glink stub map: stub_N = text_va + N * STUB_SIZE
-        # ELFv1 glink stubs are 28 bytes each.
+        # Build glink stub map.
+        # Each stub is 28 bytes. The third instruction (offset +8) is
+        # 'ld r11, DELTA(r12)' where r12=TOC and TOC+DELTA = the GOT entry VA.
+        # Decoding DELTA from the raw instruction gives the correct stub->name
+        # mapping regardless of the order the linker placed stubs in .text.
+        # This matters: at least one IBM LoadLeveler binary (llstepnotify) has
+        # stubs in an order that differs from ascending GOT VA order, causing
+        # the old index-equals-GOT-VA-rank assumption to misidentify every stub.
         GLINK_STUB_SIZE = 28
-        for idx, (got_va, sym_name) in enumerate(jmp_slots):
-            stub_va = info.text_va + idx * GLINK_STUB_SIZE
-            info.stub_map[stub_va] = sym_name
+        if info.toc and jmp_slots and info.text_file_off:
+            got_va_to_name = {gv: sn for gv, sn in jmp_slots}
+            for idx in range(info.n_stubs):
+                stub_va = info.text_va + idx * GLINK_STUB_SIZE
+                ld_off = info.text_file_off + idx * GLINK_STUB_SIZE + 8
+                if ld_off + 4 > len(data):
+                    break
+                word = struct.unpack_from('>I', data, ld_off)[0]
+                # DS-form: bits[16:29] = DS (14-bit signed), bits[30:31] = XO.
+                # displacement = sign_extend(DS) * 4  (= sign_extend(raw16 & 0xFFFC))
+                raw16 = word & 0xFFFF
+                ds_raw = (raw16 >> 2) & 0x3FFF
+                if ds_raw & 0x2000:
+                    ds_raw -= 0x4000
+                got_va = info.toc + ds_raw * 4
+                name = got_va_to_name.get(got_va)
+                if name is not None:
+                    info.stub_map[stub_va] = name
+            # Fall back to index=GOT-VA-rank if TOC decoding found nothing
+            # (e.g. TOC was wrong or the binary has no OPD section).
+            if not info.stub_map:
+                for idx, (got_va, sym_name) in enumerate(jmp_slots):
+                    stub_va = info.text_va + idx * GLINK_STUB_SIZE
+                    info.stub_map[stub_va] = sym_name
+        else:
+            for idx, (got_va, sym_name) in enumerate(jmp_slots):
+                stub_va = info.text_va + idx * GLINK_STUB_SIZE
+                info.stub_map[stub_va] = sym_name
 
         self._info = info
         return info
