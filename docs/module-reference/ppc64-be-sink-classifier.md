@@ -89,9 +89,16 @@ clf.add_sink('IBM_sprintf', dest_pos=1, src_pos=2)
 
 ## Architecture notes
 
-**Lookback window:** 12 instructions before the BL (48 bytes).  Sufficient for IBM
-LoadLeveler patterns where argv-derived loads are typically 2-5 instructions before strcpyx.
-Increase via `_WINDOW` if deeper chains are needed.
+**Lookback window:** 12 instructions before the BL (48 bytes) for r3/r4 register tracing.
+Sufficient for IBM LoadLeveler patterns where argv-derived loads are 2-5 instructions
+before strcpyx.  Increase `_WINDOW` if deeper chains are needed.
+
+**Prologue scan for NONVOL_DEREF demotion:** When a base register is a non-volatile
+(r14-r31), the classifier scans the enclosing function's prologue to determine whether
+that non-volatile was saved from a function argument.  Function entry is found by
+scanning raw bytes backward for `mflr r0` (7c 08 02 a6), bounded to 512 instructions.
+`ld r4, 0(r25)` where `mr r25, r3` appears before `stdu` classifies ARG_PROPAGATED.
+`ld r4, 0x250(r9)` from a C++ exception-object non-volatile classifies UNKNOWN.
 
 **mr chain following:** When r3 or r4 is set by `mr rD, rS`, the classifier automatically
 traces backward to find how rS was set.  This handles the `addi r31,r1,0x70; mr r3,r31`
