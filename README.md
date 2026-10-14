@@ -263,8 +263,7 @@ Messages from your other sessions        accept
 
 ---
 
-<details>
-<summary><strong>Project Background</strong></summary>
+## Project Background
 
 <details>
 <summary><strong>Real-World Results</strong></summary>
@@ -356,12 +355,9 @@ The code couldn't exist without their ideas. Though no code was written by these
 
 </details>
 
-</details>
-
 ---
 
-<details>
-<summary><strong>Getting Started</strong></summary>
+## Getting Started
 
 <details>
 <summary><strong>Install</strong></summary>
@@ -459,8 +455,6 @@ Feel free to contact me if you have any questions, ideas, complaints or bugs.
 
 📧 ablation@nuclide-research.com  
 𝕏 [@showxlate](https://x.com/showxlate)
-
-</details>
 
 </details>
 
