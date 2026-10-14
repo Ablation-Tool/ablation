@@ -2,21 +2,24 @@
 FortiOS hardware firmware extraction pipeline.
 
 Handles the full chain for FortiGate/FortiWiFi physical appliance firmware:
-  1. First-gzip-member decompression (multi-stream .out files)
-  2. 64-byte XOR key recovery via IC + frequency analysis (NAND 0xFF assumption)
-  3. Partition boundary detection in the decrypted image
-  4. Extraction of detected partitions to disk
+  1. ZIP unwrapping (v8.0.0+ hardware firmware ZIPs use STORE compression)
+  2. First-gzip-member decompression (multi-stream .out files)
+  3. 64-byte XOR key recovery via IC + frequency analysis (NAND 0xFF assumption)
+  4. Partition boundary detection in the decrypted image
+  5. Extraction of detected partitions to disk
 
 Generalises across ARM (FortiWiFi IPQ4019) and x86-64 (FortiGate hardware) targets.
 All key recovery is delegated to XorSolver: no reimplementation.
 
 Cipher characteristics (confirmed across FortiWiFi 60E v5.0.9 through v7.2.4.F,
-supported FortiGate hardware, and all intermediate versions):
-  - Outer: gzip wrapper (first member only; trailing members are noise/padding)
+FortiGate 100F v6.2.2 through v8.0.0.F, and all intermediate versions):
+  - Outer wrapper (v8.0.0+): STORE-compressed ZIP containing a single .out file
+  - Outer wrapper (v6.x/v7.x): bare gzip (no ZIP)
   - Inner: 64-byte repeating pure XOR applied to a NAND flash partition image
-  - NAND plaintext: 0xFF-dominant (erased cells), ~80-86% null bytes
+  - NAND plaintext: 0xFF-dominant in erased regions; v8.0.0 images are more densely
+    written (~1% raw 0xFF vs ~80-86% in v6/v7), but IC still locks at shift=64
   - IC at shift=64 is 192x-244x above random baseline: unambiguous key length signal
-  - Key is device-family-specific, not version-specific (same key across versions)
+  - Key is device-family-specific, not version-specific (same key across v6/v7/v8)
 """
 
 from __future__ import annotations
@@ -131,8 +134,37 @@ class FortiOSHardwareExtractor:
     @classmethod
     def from_path(cls, fw_path: str) -> "FortiOSHardwareExtractor":
         ex = cls(fw_path)
-        ex._inner = ex._decompress_first_gzip_member(Path(fw_path).read_bytes())
+        raw = Path(fw_path).read_bytes()
+        if raw[:4] == b'PK\x03\x04':
+            raw = cls._extract_from_zip_raw(raw)
+        ex._inner = ex._decompress_first_gzip_member(raw)
         return ex
+
+    @staticmethod
+    def _extract_from_zip_raw(raw: bytes) -> bytes:
+        """
+        Extract the firmware .out data from a ZIP local file header (v8.0.0+ wrapping).
+
+        FortiOS v8.0.0 hardware firmware ZIPs use STORE compression (method=0):
+        the .out file is stored verbatim inside the ZIP, so extracting the bytes
+        starting at the local file data offset gives the raw gzip stream.
+        Raises ValueError if the ZIP uses non-STORE compression.
+        """
+        if len(raw) < 30:
+            raise ValueError(f"FortiOS hardware ZIP: header too short ({len(raw)} bytes)")
+        compression = struct.unpack_from('<H', raw, 8)[0]
+        if compression != 0:
+            raise ValueError(
+                f"FortiOS hardware ZIP: expected STORE compression (0), got {compression}"
+            )
+        fname_len = struct.unpack_from('<H', raw, 26)[0]
+        extra_len = struct.unpack_from('<H', raw, 28)[0]
+        data_off = 30 + fname_len + extra_len
+        if data_off >= len(raw):
+            raise ValueError(
+                f"FortiOS hardware ZIP: data offset {data_off} beyond file size {len(raw)}"
+            )
+        return raw[data_off:]
 
     # ------------------------------------------------------------------
     # Step 1: gzip decompression (first member only)
