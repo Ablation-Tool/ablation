@@ -339,6 +339,29 @@ This project was greatly informed and inspired by several key literary works.
 </details>
 
 <details>
+<summary><strong>Demonstrations</strong></summary>
+
+### Ablation in Action
+
+![Ablation in Action](demos/Ablation-In-Action-01.gif)
+
+### How to Use Ablation
+
+![How to Use Ablation](demos/How-To-Use-Ablation.gif)
+
+### Learn as You RE
+
+![Learn as You RE](demos/Learn-As-You-RE.gif)
+
+### Earlier Screencast
+
+![Earlier Screencast](demos/screencast-2026-09-30.gif)
+
+</details>
+
+---
+
+<details>
 <summary><strong>Install</strong></summary>
 
 ## Install
