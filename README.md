@@ -21,6 +21,90 @@ cd ~/ablation && claude
 
 The `CLAUDE.md` at the repo root auto-loads, giving Claude Code the full operational reference for every session.
 
+<details>
+<summary><strong>Claude Code Setup & Configuration</strong></summary>
+
+### Quick Start
+
+#### 1. Launch Session
+```bash
+cd ~/ablation && claude
+```
+
+#### 2. Set Model
+```text
+/model claude-sonnet-4-6
+```
+or
+```text
+/model claude-sonnet-4-5
+```
+
+#### 3. Define Objective
+```text
+/goal reverse engineer [whatever you want]
+```
+
+#### 4. Check Effort Level
+Not sure what effort level to be set on? Ask inline without interrupting the main context:
+```text
+/btw What effort level should we be set on right now?
+```
+
+---
+
+### Recommended Configuration (`/config`)
+
+```text
+Auto-compact                             true
+Continue automatically at usage limit    true
+Switch models when a message is flagged  Switch automatically
+Show tips                                false
+Claude-drafted feedback                  off
+Reduce motion                            false
+Thinking mode                            true
+Fast mode (Opus 5.5)                     false
+Prompt suggestions                       true
+Session recap                            true
+Rewind code (checkpoints)                true
+Dynamic workflows                        true
+Ultracode keyword trigger                false
+Dynamic workflow size                    unrestricted
+Artifacts                                false
+Verbose output                           true
+Terminal progress bar                    true
+Show turn duration                       true
+Time format                              auto
+Default permission mode                  Manual
+Worktree base ref                        fresh
+Use auto mode during plan                true
+Respect .gitignore in file picker        true
+Skip the /copy picker                    false
+Copy on select                           true
+Auto-scroll                              true
+Open agents view by default              false
+← opens agents                           false
+Auto-update channel                      disabled (config)
+Theme                                    Dark mode (colorblind-friendly)
+Local notifications                      Auto
+Push when actions required               true
+Push when Claude decides                 true
+Output style                             Explanatory
+Language                                 Default (English)
+Editor mode                              normal
+Question auto-continue timeout           never
+Show last response in external editor    true
+Show PR status footer                    true
+Model                                    claude-sonnet-4-6
+Auto-connect to IDE (external terminal)  true
+Claude in Chrome enabled by default      true
+Enable Remote Control for all sessions   false
+Dialog expiry                            never
+Messages from your other sessions        accept
+```
+
+</details>
+
 ---
 
 ![demo](assets/screencast-2026-09-30.gif)
