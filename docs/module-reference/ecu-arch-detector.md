@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-4 things that were not possible before in Ablation:
+Four things were not possible before in Ablation:
 
 **1. No ISA identification for unknown flat ECU ROMs.** When a ROM image arrives without any
 container format (no ELF, no IHEX, no SREC wrapper), there is no reliable way to know

@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **No 16-bit real-mode MS-DOS executable could be loaded.** MZ (Mark Zbikowski) is the original DOS executable format used by all real-mode DOS programs. Before this module, any binary with a two-byte `MZ` magic was opaque to Ablation: no header parser, no function-start recovery, no disassembly pipeline. TCP/IP-32 3.11a ships seven DOS network utilities (ARP, PING, TRACERT, NBTSTAT, NETSTAT, IPCONFIG, ROUTE) in this format; they were the only unsweepable binaries in the collection.
 

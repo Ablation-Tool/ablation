@@ -33,7 +33,7 @@ After `SemanticSearcher` and `TaintTracker` identify candidates, BinaryLifter ma
 
 ## Why this exists
 
-3 things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **A single lifting entry point for 17 ISA variants**: the ISA infrastructure existed for MIPS, PPC, RISC-V, LoongArch64, ARC, V850, nanoMIPS, and BEAM, but there was no way to get readable pseudocode from any of them. Reviewing a PPC32 function required manual Capstone loops and ad-hoc register tracking per engagement. Now `BinaryLifter.from_path(binary, arch='ppc32').lift_function(va)` produces a structural skeleton for any of the 17 supported ISAs in one call.
 

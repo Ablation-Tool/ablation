@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-4 things that weren't possible before in Ablation:
+Four things were not possible before in Ablation:
 
 1. **Extract files from Tandem Guardian PAK archives.** Guardian PAK is not a ZIP file despite the `.ZIP` extension used for patch distribution. `unzip`, `file`, `binwalk`, and every other standard archive tool reject these files. The only documented extractor (`UNPAK`) requires a live Tandem NSK system. Without this module, every Guardian PAK is a sealed black box.
 

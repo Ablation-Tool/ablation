@@ -32,7 +32,7 @@ Infineon TriCore is the dominant MCU in modern automotive ADAS and powertrain EC
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 **1. No source-to-sink taint analysis for TriCore AURIX ECU firmware.**  After
 `EcuArchDetector` correctly identifies a flat ROM dump as TriCore, there was no taint tracker to follow attacker-controlled

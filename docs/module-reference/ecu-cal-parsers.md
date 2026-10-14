@@ -9,7 +9,7 @@
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 **1. No calibration map label source for ECU ROMs.** Binary RE on a stripped ECU firmware meant every
 array of uint16 values was anonymous. The 293 XDF files and 40+ open_damos definitions in the Auto-ECU-RE

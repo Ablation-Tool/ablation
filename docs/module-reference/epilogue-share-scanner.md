@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-2 things that were not possible before in Ablation:
+Two things were not possible before in Ablation:
 
 **1. Phantom interprocedural taint paths on compiler-optimized automotive ECU firmware.** When
 a compiler merges the epilogue of several functions into one shared block and uses an

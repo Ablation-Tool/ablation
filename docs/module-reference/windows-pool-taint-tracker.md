@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-2 things that weren't possible before in Ablation:
+Two things were not possible before in Ablation:
 
 1. **No kernel pool allocation tracking.** `ExAllocatePool*` is the Windows kernel heap. A driver that allocates a pool buffer and then copies user-supplied data into it using `RtlCopyMemory` is the template for a kernel pool overflow. Before this module, Ablation's `HeapVulnScanner` tracked `malloc`/`calloc` on userland ELF binaries. It had no IAT-based path for Windows kernel PE drivers, no understanding of `ExAllocatePool*` vs `ExAllocatePool2`/`ExAllocatePool3`, and no concept of `RtlCopyMemory` as a copy sink.
 

@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-2 things that weren't possible before in Ablation:
+Two things were not possible before in Ablation:
 
 1. **No SafeSEH table inspection.** Ablation had no module that read `IMAGE_LOAD_CONFIG.SEHandlerTable` and `SEHandlerCount` from an x86 PE. `pe_sweep.py` detected `/GS` cookie presence via the `__security_cookie` import, but SafeSEH is a separate mechanism; a binary can have `__security_cookie` and still lack SafeSEH entirely. Without reading the handler table, there was no way to tell whether an x86 binary compiled without `/SAFESEH` was vulnerable to SEH overwrite exploitation.
 

@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-4 things that weren't possible before in Ablation:
+Four things were not possible before in Ablation:
 
 1. **Extract files from AIX backup-by-name (BFF) archives.** GNU `tar`, `ar`, `file`, and `binwalk` all fail on BFF: `tar` does not recognise the format, `ar` errors on the magic bytes, and `binwalk` extracts raw byte-offset slices that are not the actual archived files. Before this module, every AIX OS package was opaque to the analysis chain.
 

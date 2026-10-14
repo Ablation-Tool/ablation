@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-4 things that weren't possible before in Ablation:
+Four things were not possible before in Ablation:
 
 1. **Detect CWE-307 (no rate limiting) in setuid validators without taint analysis.** A setuid binary that calls `getspnam`/`crypt`/`strcmp` and returns the result via exit code is a brute-force oracle. This module flags the pattern from PLT imports alone — no taint run required. Before this module, the pattern had to be found by manual PLT inspection on each new binary.
 

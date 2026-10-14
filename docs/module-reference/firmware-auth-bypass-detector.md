@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-3 things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **Detect unsigned firmware flashers in a single function call.** Before this module, identifying CWE-347 in a PE firmware programmer required manually checking the IAT for WinVerifyTrust and correlating it against HID/USB/serial imports. This module automates the entire decision tree: device imports are matched against a tiered pattern set, signing imports are checked, firmware strings corroborate the classification, and a CRITICAL/HIGH/MEDIUM/CLEAN verdict is returned in one pass.
 

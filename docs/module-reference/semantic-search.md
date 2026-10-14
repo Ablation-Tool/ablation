@@ -6,7 +6,7 @@ Each function gets a behavioral fingerprint. You search by describing what the f
 
 ## Why this exists
 
-Three things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 **1. Triage without symbols.** On a stripped 19,000-function binary, there are no names to grep, no type information, and no call-graph labels. Triage meant reading disassembly for every function that might be relevant, so on a binary that size it became the entire job. Describe the vulnerability in English. `SemanticSearcher` returns the 5-10 functions most structurally similar to that description before any disassembly.
 

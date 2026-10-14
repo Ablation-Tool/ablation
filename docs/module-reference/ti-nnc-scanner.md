@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-3 things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **No scanner could identify TI NNC inference artifacts in compiled firmware.** TVM's `tvmgen_*` naming convention: `tvmgen_default_run`, `tvmgen_default_inputs`, `tvmgen_default_outputs`: had no detection path. Ablation would see these as unnamed functions with two pointer arguments and no useful pattern match.
 

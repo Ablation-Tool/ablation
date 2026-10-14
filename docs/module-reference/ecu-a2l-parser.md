@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-4 things that were not possible before in Ablation:
+Four things were not possible before in Ablation:
 
 **1. No A2L format support.** ASAM/ASAP2 A2L is the industry-standard ECU calibration description
 format. Every major OEM and supplier uses it: Bosch (EDC16, EDC17, MED17), Continental, Delphi,

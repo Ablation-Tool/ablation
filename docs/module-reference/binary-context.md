@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-3 things that weren't possible before in Ablation without this module:
+Three things were not possible before this module:
 
 1. **No per-session symbol resolution.** Before `BinaryContext`, every analysis tool had to re-parse the ELF, rebuild the PLT map, re-extract strings, and re-compute the call graph from scratch. On a 15MB firmware binary that overhead ran 4–6 seconds per session. `BinaryContext` builds once (~2–5 seconds), serializes to `~/.ablation/cache/`, and reloads in under 100ms on every subsequent session.
 

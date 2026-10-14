@@ -8,7 +8,7 @@ Executes leaf functions in a Unicorn emulator with controlled register inputs an
 
 ## Why this exists
 
-Two things that were not possible in Ablation before this module:
+Two things were not possible before this module:
 
 1. Distinguish branches in leaf functions without a running device. Static analysis produces a list of possible outcomes for a branchy leaf function but cannot say which one the binary selects for a given input. The sandbox executes the function directly so the real output is observed, not inferred.
 

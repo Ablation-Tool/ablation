@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-5 things that weren't possible before in Ablation:
+Five things were not possible before in Ablation:
 
 1. **No sweep path for TI COFF2/AR archives.** All prior sweeps assumed ELF input to `BinaryContext`. C28x `.lib` and `.a` files (cl2000/tiarmclang output) are COFF2 or AR-of-COFF2; `lief.parse()` returns `None` and `capstone` has no C28x support. The sweep routes these through `TiCoffLoader` + `EcuC28xDecoder` directly, bypassing the ELF path entirely.
 

@@ -40,7 +40,7 @@ The key property: before the SemanticDAG, taint results were flat (sink, source)
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 **1. No shared bit-extraction layer.** Every ISA decoder embedded its own field extraction logic: bit masks, shifts, and width calculations repeated across each architecture. Adding a new ISA meant writing those operations from scratch. `Field` and `Template` centralize this so each bit range is defined once and reused by every encoder, decoder, and disassembler that needs it.
 

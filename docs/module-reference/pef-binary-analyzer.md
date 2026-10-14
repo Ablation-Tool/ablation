@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-Three things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **PPC32TaintTracker cannot load PEF files.** It requires ELF. All PEF CFM PPC32 Mac Classic binaries (PGPuam, PGPuam Server, Tool_Chest networking utilities) required manual analysis because there was no PEF-aware loader in ablation.
 

@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-3 things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **No parser could read TI COFF2 object files or AR archives.** The TI Code Generation
    Tools (cl2000, c29clang) produce COFF, not ELF. All existing Ablation binary loaders
