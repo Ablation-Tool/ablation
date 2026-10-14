@@ -115,8 +115,6 @@ The arch is detected from the ELF header: `e_machine == 21` (EM_PPC64) with `EI_
 
 ## FORGE status
 
-Gate: **PASS**. No CRITICAL or HIGH findings. Three open items tracked for follow-up:
+Gate: **PASS**. No CRITICAL or HIGH findings. One open item tracked for follow-up:
 
-1. Move `_STD_R2_SAVE` to module level alongside `_ENDBR64`.
-2. Add `bctrl` to `call_mnems` for `ppc64le` in `dump()`.
-3. Add a `_MAX_TEXT_SCAN_WORDS` guard to `_build_plt_ppc64le_elfv2`.
+1. `calls_in_window()` uses the string marker `": bl"` rather than `call_mnems`, so `bctrl` indirect calls do not appear in its output even though `bctrl` is now in `call_mnems`.
