@@ -217,54 +217,126 @@ class Ppc64BeSinkClassifier:
         dest_class, dest_detail = 'UNKNOWN', ''
         src_class, src_detail = 'UNKNOWN', ''
 
-        # Walk instructions in reverse (closest to BL first)
-        # Track which registers have been "set" so we can trace mr chains
-        r3_src: Optional[Tuple[str, str]] = None   # (class, detail) for r3
-        r4_src: Optional[Tuple[str, str]] = None   # (class, detail) for r4
-        # Also track r3/r4 prior assignment register for mr-chain following
-        r3_alias: Optional[int] = None  # if r3 = mr r3, rX, track rX
-        r4_alias: Optional[int] = None
+        # Build pre-BL instruction list for two-pass lookup
+        pre_bl = [i for i in insns if i.address < bl_va]
 
-        for ins in reversed(insns):
-            if ins.address >= bl_va:
-                continue
-            m = ins.mnemonic.lower()
-            op = ins.op_str
+        def _last_setter(target_va: int, reg: int) -> Optional[object]:
+            """Return the last instruction before target_va that writes to reg."""
+            for ins in reversed(pre_bl):
+                if ins.address >= target_va:
+                    continue
+                if _dest_reg(ins) == reg:
+                    return ins
+            return None
 
-            # Parse destination register of this instruction
-            dest_reg = _dest_reg(ins)
+        # Build an extended prologue window: scan backward up to 512 instructions
+        # from the BL to find the function's stdu and prologue mr-from-arg instructions.
+        # The 12-insn lookback window is too small to reach prologues of large functions.
+        _PROLOGUE_SCAN = 512
+        prologue_start_va = max(bl_va - _PROLOGUE_SCAN * 4, file_base)
+        _pro_off = prologue_start_va - file_base
+        _pro_raw = self._data[_pro_off: _pro_off + (bl_va - prologue_start_va)]
+        _pro_insns = list(self._md.disasm(_pro_raw, prologue_start_va))
 
-            # r3 tracking
-            if r3_src is None:
-                if dest_reg == 3:
-                    r3_src = _classify_reg_set(ins, file_base, m, op, _ARG_REGS)
-                    if r3_src and r3_src[0] == 'MR_FROM':
-                        # mr r3, rX — record the source reg for further tracing
-                        r3_alias = _mr_src_reg(op)
-                        r3_src = None  # continue backward to find rX's source
+        # Find the LAST stdu before the BL (= closest function prologue boundary)
+        prologue_end_va = prologue_start_va
+        for _ins in _pro_insns:
+            if _ins.mnemonic.lower() == 'stdu' and 'r1' in _ins.op_str:
+                prologue_end_va = _ins.address
 
-                elif r3_alias is not None and dest_reg == r3_alias:
-                    r3_src = _classify_reg_set(ins, file_base, m, op, _ARG_REGS)
-                    r3_alias = None
+        def _nonvol_from_arg_in_prologue(reg: int) -> bool:
+            """True if reg was set by 'mr reg, rARG' BEFORE the stdu (in function prologue)."""
+            for ins in _pro_insns:
+                if ins.address >= prologue_end_va:
+                    break
+                if _dest_reg(ins) != reg:
+                    continue
+                m = ins.mnemonic.lower()
+                if m not in ('mr', 'mr.'):
+                    continue
+                parts = [p.strip() for p in ins.op_str.split(',')]
+                if len(parts) >= 2:
+                    try:
+                        src = int(parts[1].lstrip('r'))
+                        if src in _ARG_REGS:
+                            return True
+                    except ValueError:
+                        pass
+            return False
 
-            # r4 tracking
-            if r4_src is None:
-                if dest_reg == 4:
-                    r4_src = _classify_reg_set(ins, file_base, m, op, _ARG_REGS)
-                    if r4_src and r4_src[0] == 'MR_FROM':
-                        r4_alias = _mr_src_reg(op)
-                        r4_src = None
-                elif r4_alias is not None and dest_reg == r4_alias:
-                    r4_src = _classify_reg_set(ins, file_base, m, op, _ARG_REGS)
-                    r4_alias = None
+        def _classify_with_base_trace(setter_ins) -> Tuple[str, str]:
+            """Classify register source with one-level base-register origin check.
 
-            if r3_src is not None and r4_src is not None:
-                break
+            Demotions applied when the initial classification is ARG_PROPAGATED:
+            - base_reg was loaded from TOC → RODATA_TOC (static global, not argv)
+            - base_reg's last setter is a load from a non-volatile that was NOT
+              initialized from an arg in the prologue → UNKNOWN (exception object /
+              internal struct, not confirmed argv)
+            """
+            m = setter_ins.mnemonic.lower()
+            op = setter_ins.op_str
+            result = _classify_reg_set(setter_ins, file_base, m, op, _ARG_REGS)
+            if result is None:
+                return ('UNKNOWN', '')
+            cls, detail = result
+            if cls == 'MR_FROM':
+                # mr rD, rS — trace rS one level
+                try:
+                    src_reg = int(op.split(',')[1].strip().lstrip('r'))
+                    src_setter = _last_setter(setter_ins.address, src_reg)
+                    if src_setter:
+                        return _classify_reg_set(src_setter, file_base,
+                                                 src_setter.mnemonic.lower(),
+                                                 src_setter.op_str, _ARG_REGS) or ('UNKNOWN', '')
+                except (ValueError, IndexError):
+                    pass
+                return ('UNKNOWN', detail)
+            if cls == 'ARG_PROPAGATED':
+                # ld rD, N(rX) where rX ∈ arg_regs. Check rX's actual origin.
+                try:
+                    parts = [p.strip() for p in op.split(',')]
+                    src_part = parts[1] if len(parts) >= 2 else ''
+                    base_reg = int(src_part.split('(')[1].rstrip(')').lstrip('r'))
+                    base_setter = _last_setter(setter_ins.address, base_reg)
+                    if base_setter is not None:
+                        bm = base_setter.mnemonic.lower()
+                        bop = base_setter.op_str
+                        if bm in ('ld', 'lwz', 'lhz', 'lbz'):
+                            bparts = [p.strip() for p in bop.split(',')]
+                            bsrc = bparts[1] if len(bparts) >= 2 else ''
+                            # Direct TOC load → RODATA_TOC
+                            if '(r2)' in bsrc or '(2)' in bsrc:
+                                return ('RODATA_TOC', f'{m} {src_part} [via r{base_reg}←TOC]')
+                            # Load via a non-volatile base register
+                            try:
+                                bb_str = bsrc.split('(')[1].rstrip(')').lstrip('r')
+                                bb_reg = int(bb_str)
+                                if bb_reg in _NONVOL_REGS:
+                                    # Only UNKNOWN if that non-vol was NOT a prologue-saved arg
+                                    if not _nonvol_from_arg_in_prologue(bb_reg):
+                                        return ('UNKNOWN', f'{m} {src_part} [via r{base_reg}←nonvol r{bb_reg}]')
+                            except (ValueError, IndexError):
+                                pass
+                except (ValueError, IndexError):
+                    pass
+            return (cls, detail)
+
+        # Classify r3 (dest) and r4 (src)
+        r3_src: Optional[Tuple[str, str]] = None
+        r4_src: Optional[Tuple[str, str]] = None
+
+        setter3 = _last_setter(bl_va, 3)
+        if setter3:
+            r3_src = _classify_with_base_trace(setter3)
+
+        setter4 = _last_setter(bl_va, 4)
+        if setter4:
+            r4_src = _classify_with_base_trace(setter4)
 
         if r3_src:
-            dest_class, dest_detail = r3_src
+            dest_class, dest_detail = r3_src[0], (r3_src[1] or '')
         if r4_src:
-            src_class, src_detail = r4_src
+            src_class, src_detail = r4_src[0], (r4_src[1] or '')
 
         interesting = (dest_class == 'STACK_DEST' and src_class == 'ARG_PROPAGATED')
         return Ppc64SinkSite(
@@ -334,18 +406,83 @@ def _mr_src_reg(op_str: str) -> Optional[int]:
         return None
 
 
+def _reg_origin_class(reg: int, insns_before: list, arg_regs: set) -> str:
+    """
+    Quick one-level origin check for a register seen as a base in a load instruction.
+
+    Returns: 'TOC' if reg was set from r2 (TOC), 'NONVOL' if from r14-r31,
+             'ARG' if from an arg register or load of arg-reg, 'UNKNOWN' otherwise.
+
+    Only scans the already-reversed insns_before list (closest-first).
+    """
+    for ins in insns_before:
+        m = ins.mnemonic.lower()
+        op = ins.op_str
+        parts = [p.strip() for p in op.split(',')]
+        if not parts:
+            continue
+        dest = parts[0].lstrip('r')
+        try:
+            dest_reg = int(dest)
+        except ValueError:
+            continue
+        if dest_reg != reg:
+            continue
+        # Found instruction that sets reg
+        # ld reg, N(r2) → TOC
+        if m in ('ld', 'lwz', 'lhz', 'lbz') and len(parts) >= 2:
+            src = parts[1]
+            if '(r2)' in src or '(2)' in src:
+                return 'TOC'
+            # ld reg, N(rX) — check rX
+            try:
+                base_str = src.split('(')[1].rstrip(')').lstrip('r')
+                base = int(base_str)
+                if base == 2:
+                    return 'TOC'
+                if base in _NONVOL_REGS:
+                    return 'NONVOL'
+                if base in arg_regs:
+                    return 'ARG'
+            except (ValueError, IndexError):
+                pass
+        # mr reg, rS
+        if m in ('mr', 'mr.') and len(parts) >= 2:
+            try:
+                src_reg = int(parts[1].lstrip('r'))
+                if src_reg in _NONVOL_REGS:
+                    return 'NONVOL'
+                if src_reg in arg_regs:
+                    return 'ARG'
+            except ValueError:
+                pass
+        # addi reg, r1, N → stack address
+        if m == 'addi' and len(parts) >= 3:
+            try:
+                if int(parts[1].lstrip('r')) == 1:
+                    return 'STACK'
+            except ValueError:
+                pass
+        return 'UNKNOWN'
+    return 'UNKNOWN'
+
+
 def _classify_reg_set(
     ins,
     file_base: int,
     mnemonic: str,
     op_str: str,
     arg_regs: set,
+    insns_before: Optional[list] = None,
 ) -> Optional[Tuple[str, str]]:
     """
     Classify how a register is set by this instruction.
 
     Returns (class_str, detail_str) or None if this instruction doesn't
     set a register in a classifiable way.
+
+    insns_before: reversed list of instructions already seen in lookback (closest first).
+    Used to resolve the origin of base registers in load instructions.
     """
     parts = [p.strip() for p in op_str.split(',')]
     if not parts:
@@ -379,26 +516,33 @@ def _classify_reg_set(
         src_part = parts[1]
         if '(r2)' in src_part or '(2)' in src_part:
             return ('RODATA_TOC', f'{mnemonic} {src_part}')
-        # ld rD, 0(rX)  where rX is an arg register → ARG_PROPAGATED
-        if src_part.startswith('0(') or src_part.startswith('0x0('):
-            reg_part = src_part.split('(')[1].rstrip(')').lstrip('r')
-            try:
-                base_reg = int(reg_part)
-                if base_reg in arg_regs:
-                    return ('ARG_PROPAGATED', f'{mnemonic} 0(r{base_reg}) [arg reg]')
-                elif base_reg in _NONVOL_REGS:
-                    return ('ARG_PROPAGATED', f'{mnemonic} 0(r{base_reg}) [saved-nonvol, check caller]')
-            except ValueError:
-                pass
-        # ld rD, N(rX) non-zero offset from arg reg
+        # ld rD, 0(rX) or ld rD, N(rX)
+        # For a direct arg register deref (rX ∈ r3-r10), classify ARG_PROPAGATED
+        # UNLESS that arg register itself was loaded from TOC or a non-volatile —
+        # in which case the source is not user-controlled.
         try:
             off_str = src_part.split('(')[0]
             reg_str = src_part.split('(')[1].rstrip(')').lstrip('r')
             base_reg = int(reg_str)
-            if base_reg in arg_regs:
-                return ('ARG_PROPAGATED', f'{mnemonic} {off_str}(r{base_reg}) [arg reg field]')
         except (ValueError, IndexError):
-            pass
+            base_reg = None
+
+        if base_reg is not None and base_reg in arg_regs:
+            # Check base register's origin in the lookback window
+            base_origin = _reg_origin_class(base_reg, insns_before or [], arg_regs)
+            if base_origin == 'TOC':
+                # base was loaded from TOC → source is a TOC-derived pointer, not raw argv
+                return ('RODATA_TOC', f'{mnemonic} {src_part} [via r{base_reg}←TOC]')
+            elif base_origin == 'NONVOL':
+                # base was loaded from a non-volatile → caller-defined, not confirmed argv
+                return ('UNKNOWN', f'{mnemonic} {src_part} [via r{base_reg}←nonvol]')
+            elif base_origin == 'STACK':
+                return ('STACK_DEST', f'{mnemonic} {src_part} [via r{base_reg}←sp]')
+            else:
+                # ARG or UNKNOWN: treat as ARG_PROPAGATED
+                offset_str = off_str if off_str else '0'
+                return ('ARG_PROPAGATED', f'{mnemonic} {offset_str}(r{base_reg}) [arg reg]' if offset_str == '0'
+                        else f'{mnemonic} {offset_str}(r{base_reg}) [arg reg field]')
 
     # mr rD, rS  → pass-through (mark for further tracing)
     if mnemonic in ('mr', 'mr.') and len(parts) >= 2:
