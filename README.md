@@ -285,10 +285,10 @@ Following coordinated disclosure, the Cisco Product Security Incident Response T
 </details>
 
 <details>
-<summary><strong>Acknowledgments</strong></summary>
+<summary><strong>Contributors</strong></summary>
 
-## Acknowledgments
-This project was greatly informed and inspired by several key literary works.
+## Contributors
+The code couldn't exist without their ideas. Though no code was written by these authors, doctors, and engineers their work has direct influence on the production of code that makes Ablation what it is.
 
 **Research Papers**
 
