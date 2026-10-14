@@ -28,7 +28,7 @@ TI TMS320C28x MCUs power EV/HEV traction-inverter controllers and motor-drive EC
 
 ## Why this exists
 
-4 things that weren't possible before in Ablation:
+Four things were not possible before in Ablation:
 
 1. **No C28x disassembler existed in any supported toolchain.** Capstone 5.x has no
    TMS320C28x support. Ghidra and Radare2 support C28x, but Ablation cannot invoke them

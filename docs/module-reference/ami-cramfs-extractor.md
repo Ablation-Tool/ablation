@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-3 things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **Extract files from AMI BMC firmware.** Standard CramFS tools (`cramfsck`, `unsquashfs`, binwalk's cramfs handler) all fail on AMI-modified CramFS because the directory inode structure changed. Before this module, analyzing the Redfish REST service (`spx_restservice`) inside an AMI SPX BMC image required guessing file offsets manually.
 

@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-Three things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **Tool_Chest compiled Mac Classic binaries were unreadable.** `unar -forks visible` extracts `.rsrc` files in AppleDouble format: the 26-byte AppleDouble header is prepended to the resource fork data. Every attempt to parse these `.rsrc` files as raw resource forks produced garbage. 533 of 894 Tool_Chest archives contain compiled Mac Classic binaries; all were blocked.
 

@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-2 things that weren't possible before in Ablation:
+Two things were not possible before in Ablation:
 
 1. **Stale scanner results were undetectable.** When `LA64MaxNotMinScanner` gained the sltui variant and OR commutativity fix across sessions S28-S32, previously cached JSON sweep results became silently wrong. Nothing in the result said which scanner version produced it. In S35, re-discovering 23 kernel modules that the original sweep missed cost an entire session because there was no signal that the results were stale.
 

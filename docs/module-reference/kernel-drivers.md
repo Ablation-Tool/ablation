@@ -161,7 +161,7 @@ kernel read or write path (CWE-822). The finding lists all METHOD_NEITHER IOCTL 
 
 ### Why this exists
 
-3 things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **Capability taxonomy for BYOVD triage**: `KernelDriverAnalyzer` flags dangerous API
    imports but returns a flat list with no BYOVD classification. Deciding whether a driver

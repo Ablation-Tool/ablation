@@ -37,7 +37,7 @@ Motorola MC88100 is a RISC processor from the late 1980s used in Motorola 88000 
 
 ## Why this exists
 
-4 things that weren't possible before in Ablation:
+Four things were not possible before in Ablation:
 
 1. **M88K BCS COFF files were completely unreadable**: LIEF does not support
    COFF and does not recognise magic 0x016D; all existing COFF parsers assume

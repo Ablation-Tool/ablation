@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-2 things that weren't possible before in Ablation:
+Two things were not possible before in Ablation:
 
 1. **No PDB fetch or parse path.** Windows system binaries (ntdll, kernel32, lsass components) ship with matching PDB files on Microsoft's public symbol server. The GUID identifying the correct PDB is embedded in the PE's CodeView debug directory (`RSDS` record). Before this module, getting symbol names for a Windows binary in Ablation required an external tool (WinDbg, `symchk.exe`, or `llvm-pdbutil`) and then manually feeding names in. There was no automated path from a PE file on disk to a name-populated `BinaryContext`.
 

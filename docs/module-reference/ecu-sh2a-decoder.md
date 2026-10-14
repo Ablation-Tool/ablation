@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 **1. No SH-2A instruction decoding.** Capstone 5.0.7 does not support the Renesas SH-2A ISA
 (SH7058/SH7059), used in Honda and Subaru ECUs.  Before this module, any attempt to

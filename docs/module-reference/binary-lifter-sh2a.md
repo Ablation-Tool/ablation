@@ -35,7 +35,7 @@ Renesas SH-2A MCUs power Bosch EDC17, Denso, and Siemens automotive ECUs. Firmwa
 
 ## Why this exists
 
-2 things that were not possible before in Ablation:
+Two things were not possible before in Ablation:
 
 **1. No pseudo-C IR for Renesas SH-2A MCU firmware.**  `BinaryLifter` covered 17 ISAs but had no
 SH-2A backend.  SH-2A is the dominant MCU inside Bosch EDC, Denso, and Siemens automotive ECUs

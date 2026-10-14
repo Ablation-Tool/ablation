@@ -10,7 +10,7 @@ misreadings that cause silent truncation when parsing directory tables.
 
 ## Why this exists
 
-Three things that were not possible in Ablation before this module:
+Three things were not possible before this module:
 
 1. Extract files from Huawei VRP squashfs images at all. `unsquashfs` and `7z` both reject
    V600R024+ images with "Corrupt input data" because the XZ blocks carry the ARM64 BCJ

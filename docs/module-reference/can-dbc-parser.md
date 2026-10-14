@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-4 things that were not possible before in Ablation:
+Four things were not possible before in Ablation:
 
 **1. No CAN DBC database parsing.** CANdb++, SavvyCAN, Wireshark, BUSMASTER, and cantools all
 use the Vector DBC format as their CAN signal database file. A DBC file defines every message

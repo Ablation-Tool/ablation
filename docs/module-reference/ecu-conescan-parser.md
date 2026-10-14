@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 **1. No conescan format support.** The ConnorRigby conescan project carries ECU definitions for
 Mazda Renesis and L8 engines on SH705x and SH7055 MCUs. The MX5 definition file alone covers 507
