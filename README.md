@@ -445,3 +445,17 @@ It defines four phases:
 </details>
 
 ---
+
+<details>
+<summary><strong>Contact</strong></summary>
+
+## Contact
+
+Feel free to contact me if you have any questions, ideas, complaints or bugs.
+
+**Email:** ablation@nuclide-research.com  
+**Twitter:** [@showxlate](https://twitter.com/showxlate)
+
+</details>
+
+---
