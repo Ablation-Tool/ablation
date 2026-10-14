@@ -229,24 +229,46 @@ class Ppc64BeSinkClassifier:
                     return ins
             return None
 
-        # Build an extended prologue window: scan backward up to 512 instructions
-        # from the BL to find the function's stdu and prologue mr-from-arg instructions.
-        # The 12-insn lookback window is too small to reach prologues of large functions.
-        _PROLOGUE_SCAN = 512
-        prologue_start_va = max(bl_va - _PROLOGUE_SCAN * 4, file_base)
-        _pro_off = prologue_start_va - file_base
-        _pro_raw = self._data[_pro_off: _pro_off + (bl_va - prologue_start_va)]
-        _pro_insns = list(self._md.disasm(_pro_raw, prologue_start_va))
+        # Find the function entry by scanning backward for 'mflr r0' (7c 08 02 a6).
+        # PPC64 functions always open with mflr r0 to save the link register.
+        # OPD only covers exported functions, so code VAs from opd_to_code are incomplete.
+        # Raw-byte scan avoids crossing data sections that break capstone disassembly.
+        _MFLR_R0 = b'\x7c\x08\x02\xa6'
+        _MAX_FN_BYTES = 512 * 4  # max function size to scan backward
+        fn_start_va: int = max(bl_va - _MAX_FN_BYTES, file_base)
+        for _delta in range(4, min(_MAX_FN_BYTES, bl_va - file_base) + 4, 4):
+            _cva = bl_va - _delta
+            _coff = _cva - file_base
+            if self._data[_coff: _coff + 4] == _MFLR_R0:
+                fn_start_va = _cva
+                break
+
+        # Disassemble from function start to bl_va for prologue detection.
+        _pro_off = fn_start_va - file_base
+        _pro_len = bl_va - fn_start_va
+        _pro_raw = self._data[_pro_off: _pro_off + _pro_len]
+        _pro_insns = list(self._md.disasm(_pro_raw, fn_start_va))
 
         # Find the LAST stdu before the BL (= closest function prologue boundary)
-        prologue_end_va = prologue_start_va
+        prologue_end_va = fn_start_va
         for _ins in _pro_insns:
             if _ins.mnemonic.lower() == 'stdu' and 'r1' in _ins.op_str:
                 prologue_end_va = _ins.address
 
+        # Find the nearest mflr BEFORE the stdu — that is the function entry point.
+        # We already start from fn_start_va (OPD-anchored), so this is typically
+        # the very first instruction, but confirm by searching.
+        fn_entry_va = fn_start_va
+        for _ins in reversed([i for i in _pro_insns if i.address < prologue_end_va]):
+            if _ins.mnemonic.lower() == 'mflr':
+                fn_entry_va = _ins.address
+                break
+
         def _nonvol_from_arg_in_prologue(reg: int) -> bool:
-            """True if reg was set by 'mr reg, rARG' BEFORE the stdu (in function prologue)."""
+            """True if reg was set by 'mr reg, rARG' in THIS function's prologue [mflr, stdu)."""
             for ins in _pro_insns:
+                if ins.address < fn_entry_va:
+                    continue
                 if ins.address >= prologue_end_va:
                     break
                 if _dest_reg(ins) != reg:
