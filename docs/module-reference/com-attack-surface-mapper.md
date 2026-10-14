@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-3 things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **No COM server detection.** A DLL that exports `DllGetClassObject` is a COM server; any registered CLSID it provides is an activation target. If that CLSID is registered under `HKCU\Software\Classes\CLSID` (user-writable) rather than `HKLM`, any process running as the same user can hijack it by writing their own in-process server path. Before this module, finding COM server DLLs and their CLSID references required manual export inspection plus string search.
 

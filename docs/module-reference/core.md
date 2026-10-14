@@ -183,7 +183,7 @@ False-positive rate on GCC i386 code is low.  The ModRM byte 0xe5 in `89 e5` enc
 
 ### Why this exists
 
-2 things that weren't possible before in Ablation:
+Two things were not possible before in Ablation:
 
 1. **String context for stripped i386 ELF32**: `BinaryContext._str_xref_idx` used
    RIP-relative displacement arithmetic (x86-64 only). On a 675KB statically linked i386

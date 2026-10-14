@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-4 things that were not possible before in Ablation:
+Four things were not possible before in Ablation:
 
 **1. No RomRaider XML support.** The Auto-ECU-RE corpus contains 6 community definition files in
 RomRaider XML format covering BMW Siemens MS43, MS45, MS48, and Subaru Denso SH705x. No Ablation

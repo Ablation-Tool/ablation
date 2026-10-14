@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **No Win16 NE binary could be loaded.** LIEF does not support the NE (New Executable) format used by Windows 3.x .EXE and .DLL files. Without a loader, the 16-bit TCP/IP stack, FTP clients, Winsock layer, and all WfW 3.11 networking binaries were invisible to every sweep.
 

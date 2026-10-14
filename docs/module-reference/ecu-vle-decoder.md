@@ -47,7 +47,7 @@ Without `EcuVLEDecoder`, the function-start scan on a VLE binary returns empty b
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 **1. No PPC VLE instruction decoder.** Capstone 5.0.7 decodes standard PowerPC Book E (PPC32) but
 does not implement the Variable Length Encoding (VLE) extension used by NXP e200z4/z6/z7 cores.

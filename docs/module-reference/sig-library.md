@@ -8,7 +8,7 @@ model already loaded for semantic search.
 
 ## Why it exists
 
-Two things that weren't possible before in Ablation:
+Two things were not possible before in Ablation:
 
 **1. Identifying standard library functions without reading disassembly.**
 Stripped firmware routinely contains hundreds of functions named `fn_0x1d700`. Most

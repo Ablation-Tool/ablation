@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-4 things that weren't possible before in Ablation:
+Four things were not possible before in Ablation:
 
 1. **Parse XCOFF32/XCOFF64 binaries.** LIEF returns `None` for XCOFF inputs. Calling `BinaryContext.load_or_build()` on any AIX binary produced a default `x86_64` context with no sections, no symbols, and no function starts. Every AIX analysis session was silently broken before this module.
 

@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-4 things that weren't possible before in Ablation:
+Four things were not possible before in Ablation:
 
 1. **Find injection paths hidden behind custom string-passing wrappers.** TaintTracker
    searches for calls to known PLT sinks (system, popen, etc.). When a binary wraps

@@ -7,7 +7,7 @@
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 **1. No CFG for SH-2A firmware.**  Every other ISA with a lifter backend also had a CFG
 module.  Without a CFG, the `Structurizer` and `DomTree` cannot run on SH-2A (Bosch EDC,

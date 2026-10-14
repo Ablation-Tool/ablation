@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-5 things that were not possible before in Ablation:
+Five things were not possible before in Ablation:
 
 **1. No region map for ECU ROMs.** Before this module, applying any ECU scanner to a firmware dump
 required knowing which address range held code and which held calibration data. For a 2 MB GM E38

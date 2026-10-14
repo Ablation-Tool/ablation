@@ -6,7 +6,7 @@ Decrypt a PS3 SELF (Signed ELF) into a plain ELF that BinaryContext and Capstone
 
 ## Why this exists
 
-Three things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 **1. Decrypting PS3 SELF files inside a Python analysis pipeline.** `lief`, `capstone`,
 and `BinaryContext.load_or_build()` all fail silently on encrypted SELF format: the

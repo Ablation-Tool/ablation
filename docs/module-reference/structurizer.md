@@ -7,7 +7,7 @@
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 **1. No structured output for any ISA.**  Every CFG-backed lifter in Ablation produced
 goto-based IR: `if (T) goto loc_1a20;`.  The structurizer converts that to `if/while/for`

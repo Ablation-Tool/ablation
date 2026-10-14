@@ -11,7 +11,7 @@ only game-specific code for human reverse engineering.
 
 ## Why this module exists
 
-Three things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 **1. Separating engine code from game code automatically.**
 A stripped AAA game binary contains 30,000 to 80,000 functions. 60 to
