@@ -1,0 +1,52 @@
+# Ablation release integrity — SHA-256 of source archive (tar.gz)
+#
+# Each hash matches the GitHub release tarball served at:
+#   https://github.com/Ablation-Tool/ablation/archive/refs/tags/<tag>.tar.gz
+#
+# Verify a downloaded archive:
+#   sha256sum ablation-X.Y.Z.tar.gz
+# or stream directly:
+#   curl -sL https://github.com/Ablation-Tool/ablation/archive/refs/tags/vX.Y.Z.tar.gz \
+#        | sha256sum
+#
+# Regenerate locally at any commit:
+#   git archive HEAD --prefix=ablation-<version>/ | sha256sum
+#
+# For reproducible pip installs, pin to a commit SHA:
+#   pip install "git+https://github.com/Ablation-Tool/ablation.git@<full-commit-sha>"
+
+# ─── Historical releases ──────────────────────────────────────────────────────
+1370fb2fcef76656c2b17424a1b0132285a01963754730293f2aee342c088f87  ablation-1.1.0.tar.gz
+fe31970f54c8c3546dc9096dc2c462acaf6c84eaa3232562ccffba7d5b5d5a17  ablation-1.2.0.tar.gz
+f61ce2ab9f67c5ef15d4d68a1388ad27bcba1a8ca3f5e2c64b292909fb18b4d7  ablation-1.3.0.tar.gz
+d568e5eafa831250639d782b373f65d7b18abb5b88dacdb68bf5acf6ff1c10b8  ablation-1.8.0.tar.gz
+b5e58feba6d0bcc1c3b091953e9166a988b237ad3bb7ac56e11eb489a6f71f61  ablation-1.9.0.tar.gz
+4587b4803edbedf6342a84909ffecc4f6ba146a1798c0384b5a58e35dfaeea2d  ablation-1.9.1.tar.gz
+213413be1dc130d1881c7c1198d65309dba6929916f248abd8df3e70509e3cd6  ablation-2.0.0.tar.gz
+20a86722abc808d53855b19ca6ac16b162ea434367b2c522fbd696fc458d14c6  ablation-2.4.0.tar.gz
+10d487b04b207ee5dc9de5d41b32e3bc959fe472e47d622957f7774b91102331  ablation-2.5.0.tar.gz
+19904ea9c8bb0459001f49033c98591a6961f5a0f3088ec9873d3779e6b1aed0  ablation-2.6.0.tar.gz
+215e2e708f60e47e6c75854e56f6549f91f733ca50398f95b2bbaf7453bdcc41  ablation-2.11.0.tar.gz
+a6f4b2d58380c3132ac61e3bcc3ebeefdf8c6017b561053446647f4edecec8a9  ablation-2.40.0.tar.gz
+f8382211aec8f952d68321951da0222e9b3784b8e7477235254838b71d28cbb2  ablation-2.43.0.tar.gz
+e2092307311ad41e38373f7ad9d4f189633a65ccf59a0d7743e9632ee0aad14f  ablation-2.44.0.tar.gz
+b1291b9cda8fee7d494a64036907410df18c95cea2681fbd74108bf7b1feaad6  ablation-2.45.0.tar.gz
+c070b725a2e4c7f15a1d3fc2be45a09a201e902438e74bf0f9ef82921156728d  ablation-2.46.0.tar.gz
+52683bc2c467ed30aff57690b53fd84d8ab11a7cb496f549f7aef2266b638a2b  ablation-2.47.0.tar.gz
+6ab433cfd2301aab02a719691eab96cc313346de22c2643e1db1e7b387091408  ablation-2.48.0.tar.gz
+0372bbc1be2ed9558ddb089d654db1ff9aaa5a16c15d74cabafaf907f027a08c  ablation-2.56.0.tar.gz
+8cfd53e5a118092a8aec8f5135d209098f4fe824a8a9da9799742955ecb98c1c  ablation-2.57.0.tar.gz
+9486f10bad89566c4e467e0f3c10eb24bc4f6abc01505e95c3acf3f11c70ae95  ablation-2.58.0.tar.gz
+b2524808a871af86fc8e3b2a95a20f57b06b969af97ea9fbd832a3c2b6331f69  ablation-2.59.0.tar.gz
+15a3a0481b0f039e1420d0785cfff69198c050ba3d017c4ced167691efe9fda1  ablation-2.60.0.tar.gz
+63ee6c186daba7b988022b2ae38d05e83047c905a04645e7c1055150a4d79483  ablation-2.61.0.tar.gz
+3f838093605915162d8681a7f35813d2732f16efa98bbffa928e1bcb4877d76c  ablation-2.62.0.tar.gz
+ce322adeecda860bfda4de412cc002f93a5ef844b9e211b0aaccfe32ec27f8d1  ablation-2.63.0.tar.gz
+cd2b126ee7c9e04be816c637bc56d5694d06515d493abf5ccfe8c975b18ec4b8  ablation-2.64.0.tar.gz
+12d2ee301920c7cc585c76861269167560a64fc58e38e13e9f46c25f0aa66b6a  ablation-2.65.0.tar.gz
+4fd25850cdde26bf1ee5252ef13fd5c92c4060c5cbd7cfc3ea2d0e61e1fedf52  ablation-2.66.0.tar.gz
+a3bcad41d030dc41563ed088b200767c7628722ac627ac090755a9eaf9776fc2  ablation-2.67.0.tar.gz
+
+# ─── Current main (untagged) ─────────────────────────────────────────────────
+# commit 310aea76f8b78f93b2e2100b59832635db3dae34  (2.81.0-dev)
+466ca3cfdf56d3ec27d4613cc0b820ace6e8c65ec8025db9a4c9ae50874b8d1d  ablation-2.81.0.tar.gz

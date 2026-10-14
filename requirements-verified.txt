@@ -1,0 +1,29 @@
+# Ablation — verified install
+#
+# Pins to a specific commit so pip refuses to install anything else.
+# The commit SHA is the immutable identifier — independent of tags and branches.
+#
+# Usage:
+#   pip install -r requirements-verified.txt
+#
+# To verify after install:
+#   python -c "import ablation; print(ablation.__version__)"
+#   python -c "from ablation.analyzers.binary_context import BinaryContext; print('ok')"
+#
+# To regenerate this file at any commit:
+#   COMMIT=$(git -C /path/to/ablation rev-parse HEAD)
+#   echo "git+https://github.com/Ablation-Tool/ablation.git@${COMMIT}#egg=ablation" \
+#        > requirements-verified.txt
+#
+# Cross-check the source archive against CHECKSUMS.txt:
+#   curl -sL https://github.com/Ablation-Tool/ablation/archive/${COMMIT}.tar.gz \
+#        | sha256sum
+
+# ─── Current verified commit ──────────────────────────────────────────────────
+# version: 2.81.0-dev
+# date:    2026-10-14
+git+https://github.com/Ablation-Tool/ablation.git@310aea76f8b78f93b2e2100b59832635db3dae34#egg=ablation
+
+# ─── With LLM features ────────────────────────────────────────────────────────
+# Uncomment to install with optional Anthropic-backed analysis:
+# ablation[llm] @ git+https://github.com/Ablation-Tool/ablation.git@310aea76f8b78f93b2e2100b59832635db3dae34
