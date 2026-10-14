@@ -454,7 +454,7 @@ It defines four phases:
 Feel free to contact me if you have any questions, ideas, complaints or bugs.
 
 📧 ablation@nuclide-research.com  
-🐦 [@showxlate](https://twitter.com/showxlate)
+𝕏 [@showxlate](https://x.com/showxlate)
 
 </details>
 
