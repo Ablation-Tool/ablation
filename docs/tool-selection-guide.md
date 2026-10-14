@@ -44,6 +44,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "PPC64 BE ELFv1: ctx.plt empty, func_starts are OPD VAs (IBM POWER Linux, LoadLeveler)" | `Ppc64ElfV1Resolver.from_path(elf).resolve()` then `res.patch_context(ctx)` — fixes plt stub map and resolves OPD entry VAs to code VAs |
 | "PPC64 BE ELFv1: decode a BL instruction target" | `info.bl_target(src_va, file_data)` from a resolved `Ppc64ElfV1Info` |
 | "PPC64 BE ELFv1: find all callers of an imported symbol" | `Ppc64ElfV1Resolver.from_path(elf).find_all_bl_callers()` → `{'strcpyx': [va, ...], ...}` |
+| "PPC64 BE ELFv1: classify r3/r4 sources at every BL-to-sink site (IBM POWER Linux)" | `Ppc64BeSinkClassifier.from_path(elf).classify_all()` → `List[Ppc64SinkSite]`; filter `s.interesting` for ARG_PROPAGATED+STACK_DEST pairs — the cross-arch replacement for `SinkArgClassifier` on ELFv1 targets |
 | "PPC64: trace recv (IBM POWER, AIX)" | `PPC64TaintTracker.from_path(elf, endian='big').run_interprocedural()` |
 | "ARC: trace recv (ARC HS IoT, Marvell, Seagate)" | `ARCTaintTracker.from_path(elf).run_interprocedural()` |
 | "RISC-V 32: trace recv" | `RISCV32TaintTracker.from_path(elf).run_interprocedural()` |
