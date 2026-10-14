@@ -13,6 +13,16 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 
 ---
 
+## Start
+
+```bash
+cd ~/ablation && claude
+```
+
+The `CLAUDE.md` at the repo root auto-loads, giving Claude Code the full operational reference for every session.
+
+---
+
 ![demo](assets/screencast-2026-09-30.gif)
 
 ## Capabilities
