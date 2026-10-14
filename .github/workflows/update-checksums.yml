@@ -1,0 +1,116 @@
+name: Update checksums on release tag
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*.[0-9]*.[0-9]*'
+
+jobs:
+  update-checksums:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main        # commit goes to main, not the detached tag HEAD
+          fetch-depth: 0   # full history so git archive can reach the tag
+
+      - name: Compute archive SHA-256 for tag
+        id: info
+        run: |
+          TAG="${GITHUB_REF_NAME}"           # e.g. v2.68.0
+          VERSION="${TAG#v}"                  # e.g. 2.68.0
+          SHA=$(git archive "${TAG}" --prefix="ablation-${VERSION}/" \
+                | sha256sum | cut -d' ' -f1)
+          COMMIT=$(git rev-parse "${TAG}")
+          DATE=$(date -u '+%Y-%m-%d')
+          echo "tag=${TAG}"         >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sha=${SHA}"         >> "$GITHUB_OUTPUT"
+          echo "commit=${COMMIT}"   >> "$GITHUB_OUTPUT"
+          echo "date=${DATE}"       >> "$GITHUB_OUTPUT"
+
+      - name: Update CHECKSUMS.txt and requirements-verified.txt
+        env:
+          TAG:     ${{ steps.info.outputs.tag }}
+          VERSION: ${{ steps.info.outputs.version }}
+          SHA:     ${{ steps.info.outputs.sha }}
+          COMMIT:  ${{ steps.info.outputs.commit }}
+          DATE:    ${{ steps.info.outputs.date }}
+        run: |
+          python3 << 'PYEOF'
+          import os, re
+
+          tag     = os.environ['TAG']
+          version = os.environ['VERSION']
+          sha     = os.environ['SHA']
+          commit  = os.environ['COMMIT']
+          date    = os.environ['DATE']
+
+          # ── CHECKSUMS.txt ────────────────────────────────────────────────────
+          with open('CHECKSUMS.txt') as f:
+              text = f.read()
+
+          SPLIT = '# ─── Current main'
+          historical, current_main_tail = text.split(SPLIT, 1)
+
+          # Remove any pre-existing entry for this version (idempotent re-runs)
+          historical = re.sub(
+              rf'^[0-9a-f]{{64}}  ablation-{re.escape(version)}\.tar\.gz\n',
+              '', historical, flags=re.MULTILINE
+          )
+
+          # Append the new entry at the end of the historical block
+          historical = historical.rstrip('\n') + f'\n{sha}  ablation-{version}.tar.gz\n\n'
+
+          # Update commit reference in the current-main block
+          current_main_tail = re.sub(
+              r'^# commit [0-9a-f]{40}.*$',
+              f'# commit {commit}  ({version})',
+              current_main_tail, flags=re.MULTILINE
+          )
+
+          # Update the hash line in the current-main block
+          current_main_tail = re.sub(
+              r'^[0-9a-f]{64}  ablation-.*\.tar\.gz$',
+              f'{sha}  ablation-{version}.tar.gz',
+              current_main_tail, flags=re.MULTILINE
+          )
+
+          with open('CHECKSUMS.txt', 'w') as f:
+              f.write(historical + SPLIT + current_main_tail)
+
+          # ── requirements-verified.txt ────────────────────────────────────────
+          with open('requirements-verified.txt') as f:
+              req = f.read()
+
+          req = re.sub(r'^# version:.*$', f'# version: {version}',
+                       req, flags=re.MULTILINE)
+          req = re.sub(r'^# date:.*$',    f'# date:    {date}',
+                       req, flags=re.MULTILINE)
+          # Replace every commit SHA after ablation.git@ (covers main line + llm comment)
+          req = re.sub(
+              r'(Ablation-Tool/ablation\.git@)[0-9a-f]{40}',
+              rf'\g<1>{commit}',
+              req
+          )
+
+          with open('requirements-verified.txt', 'w') as f:
+              f.write(req)
+
+          print(f'Updated: {tag}  sha={sha[:16]}…  commit={commit[:12]}…')
+          PYEOF
+
+      - name: Commit and push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHECKSUMS.txt requirements-verified.txt
+          if git diff --cached --quiet; then
+            echo "Nothing changed — skipping commit"
+          else
+            git commit -m "chore: update checksums for ${{ steps.info.outputs.tag }} [skip ci]"
+            git push origin main
+          fi
