@@ -215,8 +215,6 @@ Messages from your other sessions        accept
 
 </details>
 
----
-
 <details>
 <summary><strong>31 Decompilers</strong></summary>
 
