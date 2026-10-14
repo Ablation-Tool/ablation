@@ -60,7 +60,7 @@ def _elf_arch(data: bytes) -> str:
     if e_machine == 20:    # EM_PPC
         return 'ppc32'
     if e_machine == 21:    # EM_PPC64
-        return 'ppc64'
+        return 'ppc64le' if ei_data == 1 else 'ppc64'
     return 'x86_64'
 
 
@@ -127,6 +127,9 @@ class WindowAnalyzer:
         self._build_strings(binary)
 
     def _build_plt(self, binary) -> None:
+        if self.arch == 'ppc64le':
+            self._build_plt_ppc64le_elfv2(binary)
+            return
         if self.arch in ('ppc32', 'ppc64'):
             self._build_plt_ppc32_bss(binary)
             return
@@ -361,6 +364,73 @@ class WindowAnalyzer:
             if sym_name:
                 self.plt[plt_va + resolver_size + idx * stub_size] = sym_name
 
+    def _build_plt_ppc64le_elfv2(self, binary) -> None:
+        """PLT stub resolver for ppc64le ELFv2 (OpenPOWER Linux, POWER8+).
+
+        ELFv2 places PLT stubs in .text, not in .plt (which is NOBITS at runtime).
+        Each stub is four instructions:
+            std  r2, 0x18(r1)   ; save TOC
+            ld   r12, OFF(r2)   ; load function pointer from GOT via TOC offset
+            mtctr r12           ; move to CTR
+            bctr                ; branch
+
+        TOC_BASE = .got_va + 0x8000 (ppc64le ELFv2 ABI convention).
+        Stubs are identified by the ld r12, OFF(r2) pattern; the stub VA is
+        the preceding std r2 instruction (which callers branch to).
+        """
+        got_to_sym: Dict[int, str] = {}
+        try:
+            for rel in binary.relocations:
+                if rel.symbol and rel.symbol.name:
+                    got_to_sym[rel.address] = rel.symbol.name.split('@')[0]
+        except Exception:
+            return
+        if not got_to_sym:
+            return
+
+        got_sec = binary.get_section('.got')
+        if got_sec is None:
+            return
+        toc_base = got_sec.virtual_address + 0x8000
+
+        text_sec = binary.get_section('.text')
+        if text_sec is None:
+            return
+        text_data = bytes(text_sec.content)
+        if not text_data:
+            return
+        text_va = text_sec.virtual_address
+        n = len(text_data) // 4
+
+        # std r2, 0x18(r1) in LE storage = 0xF8410018
+        _STD_R2_SAVE = 0xF8410018
+
+        for i in range(1, n):
+            word = struct.unpack_from('<I', text_data, i * 4)[0]
+            # ld r12, OFF(r2): opcode 58 (0x3A), RS=12, RA=2, DS-form, XO=0
+            if (word >> 26) != 58:
+                continue
+            if ((word >> 21) & 0x1F) != 12:
+                continue
+            if ((word >> 16) & 0x1F) != 2:
+                continue
+            if (word & 0x3) != 0:
+                continue
+            # Verify preceding instruction is std r2, 0x18(r1)
+            prev = struct.unpack_from('<I', text_data, (i - 1) * 4)[0]
+            if prev != _STD_R2_SAVE:
+                continue
+            # Compute GOT VA from TOC-relative signed displacement
+            ds_raw = (word >> 2) & 0x3FFF
+            if ds_raw & 0x2000:
+                ds_raw -= 0x4000
+            disp = ds_raw * 4
+            got_va = toc_base + disp
+            sym = got_to_sym.get(got_va)
+            if sym:
+                stub_va = text_va + (i - 1) * 4
+                self.plt[stub_va] = sym
+
     def _build_strings(self, binary) -> None:
         for sec_name in (".rodata", ".data.rel.ro", ".data"):
             try:
@@ -390,6 +460,9 @@ class WindowAnalyzer:
                 self._md = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
             elif self.arch == 'x86_32':
                 self._md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
+            elif self.arch == 'ppc64le':
+                self._md = capstone.Cs(capstone.CS_ARCH_PPC,
+                                       capstone.CS_MODE_64 | capstone.CS_MODE_LITTLE_ENDIAN)
             elif self.arch in ('ppc32', 'ppc64'):
                 ppc_mode = capstone.CS_MODE_32 if self.arch == 'ppc32' else capstone.CS_MODE_64
                 self._md = capstone.Cs(capstone.CS_ARCH_PPC, ppc_mode | capstone.CS_MODE_BIG_ENDIAN)
