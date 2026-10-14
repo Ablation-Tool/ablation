@@ -90,33 +90,101 @@ _PKCS1_FF_MIN_RATIO = 0.80
 _DECRYPT_CHUNK = 4 * 1024 * 1024   # 4 MiB
 
 
-# ─── Gzip validation ─────────────────────────────────────────────────────────
+# ─── Partition header validators ─────────────────────────────────────────────
 
 def _gzip_valid_header(data: bytes) -> bool:
-    """True if data starts with a valid 10-byte gzip header."""
+    """True if data starts with a valid gzip header (magic correct, FLG reserved bits clear)."""
     if len(data) < 10:
         return False
     if data[:3] != _GZIP_MAGIC:
         return False
-    if data[3] != _GZIP_CM_DEFLATE:
-        return False
-    flg = data[4]
+    flg = data[3]  # byte 3 is FLG (byte 4 onward is MTIME — not a flag byte)
     if flg & 0b11100000:  # reserved bits 5-7 must be 0
         return False
     return True
+
+
+_SQUASHFS_VALID_BLOCK_SIZES = frozenset(1 << n for n in range(12, 21))  # 4096–1048576
+
+
+def _squashfs_le_valid_header(data: bytes) -> bool:
+    """True if data starts with a valid little-endian squashfs superblock."""
+    if len(data) < 16:
+        return False
+    if data[:4] != b'sqsh':
+        return False
+    block_size = struct.unpack_from('<I', data, 12)[0]
+    return block_size in _SQUASHFS_VALID_BLOCK_SIZES
+
+
+def _squashfs_be_valid_header(data: bytes) -> bool:
+    """True if data starts with a valid big-endian squashfs superblock."""
+    if len(data) < 16:
+        return False
+    if data[:4] != b'hsqs':
+        return False
+    block_size = struct.unpack_from('>I', data, 12)[0]
+    return block_size in _SQUASHFS_VALID_BLOCK_SIZES
+
+
+def _jffs2_le_valid_header(data: bytes) -> bool:
+    """True if data starts with a valid JFFS2 little-endian node header."""
+    if len(data) < 8:
+        return False
+    if data[:2] != b'\x85\x19':
+        return False
+    totlen = struct.unpack_from('<I', data, 4)[0]
+    return 12 <= totlen <= 65536
+
+
+def _jffs2_be_valid_header(data: bytes) -> bool:
+    """True if data starts with a valid JFFS2 big-endian node header."""
+    if len(data) < 8:
+        return False
+    if data[:2] != b'\x19\x85':
+        return False
+    totlen = struct.unpack_from('>I', data, 4)[0]
+    return 12 <= totlen <= 65536
+
+
+def _uboot_fit_valid_header(data: bytes) -> bool:
+    """True if data starts with a valid U-Boot FIT image header (< 50 MB total_size)."""
+    if len(data) < 8:
+        return False
+    if data[:4] != b'\xd0\x0d\xfe\xed':
+        return False
+    total_size = struct.unpack_from('>I', data, 4)[0]
+    return total_size < 50 * 1024 * 1024
+
+
+def _header_valid(data: bytes, kind: str) -> bool:
+    """Dispatch to the correct header validator for a given partition kind."""
+    if kind == "gzip":
+        return _gzip_valid_header(data)
+    if kind == "squashfs-le":
+        return _squashfs_le_valid_header(data)
+    if kind in ("squashfs-be", "squashfs-v3"):
+        return _squashfs_be_valid_header(data)
+    if kind.startswith("jffs2-le"):
+        return _jffs2_le_valid_header(data)
+    if kind.startswith("jffs2-be"):
+        return _jffs2_be_valid_header(data)
+    if kind == "uboot-fit":
+        return _uboot_fit_valid_header(data)
+    return False
 
 
 # ─── Data structures ──────────────────────────────────────────────────────────
 
 @dataclass
 class PartitionResult:
-    kind: str                   # "gzip", "unknown"
+    kind: str                   # PARTITION_MAGICS kind: "gzip", "squashfs-le", "jffs2-be-node", etc.
     offset: int                 # offset in decrypted_full.bin
     encrypted_path: str         # raw encrypted partition bytes file
     decrypted_path: Optional[str] = None    # decrypted partition, if recovered
     key_used: Optional[bytes] = None        # encryption key that worked
     cipher: Optional[str] = None            # "rc4", "xor", "none"
-    valid_gzip: bool = False
+    valid_header: bool = False              # True when header validator passed for this kind
 
 
 @dataclass
@@ -326,8 +394,9 @@ class FirmwareContainerKeyExtractor:
 
     def _attempt_inner_decryption(self, result: ExtractionResult, workdir: str) -> None:
         """
-        Try to decrypt each inner partition. Probes first 32 bytes per key
-        (10-byte gzip header validation) before streaming the full partition.
+        Try to decrypt each inner partition. Probes first 32 bytes per key using
+        a per-format header validator (_header_valid) before streaming the full partition.
+        Supports: gzip, squashfs-le/be, jffs2-le/be, uboot-fit.
         Keys tried in order:
           1. override_key dispatched to override_cipher
           2. PKCS#1 candidate keys via RC4
@@ -364,7 +433,7 @@ class FirmwareContainerKeyExtractor:
                 else:
                     continue
 
-                if not _gzip_valid_header(probe_dec):
+                if not _header_valid(probe_dec, pr.kind):
                     continue
 
                 # Phase 2: key confirmed — stream-decrypt the full partition
@@ -377,7 +446,7 @@ class FirmwareContainerKeyExtractor:
                 pr.decrypted_path = out_path
                 pr.key_used = key_bytes
                 pr.cipher = cipher_name
-                pr.valid_gzip = True
+                pr.valid_header = True
                 break
 
     def _identify_datafs(self, result: ExtractionResult) -> None:
@@ -387,7 +456,7 @@ class FirmwareContainerKeyExtractor:
         """
         import tarfile
         for pr in result.partitions:
-            if not pr.decrypted_path or not pr.valid_gzip:
+            if not pr.decrypted_path or not pr.valid_header or pr.kind != "gzip":
                 continue
             try:
                 with tarfile.open(pr.decrypted_path, "r:gz") as tf:
