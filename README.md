@@ -453,8 +453,8 @@ It defines four phases:
 
 Feel free to contact me if you have any questions, ideas, complaints or bugs.
 
-**Email:** ablation@nuclide-research.com  
-**Twitter:** [@showxlate](https://twitter.com/showxlate)
+📧 ablation@nuclide-research.com  
+🐦 [@showxlate](https://twitter.com/showxlate)
 
 </details>
 
