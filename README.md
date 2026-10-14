@@ -353,10 +353,6 @@ This project was greatly informed and inspired by several key literary works.
 
 ![Learn as You RE](demos/Learn-As-You-RE.gif)
 
-### Earlier Screencast
-
-![Earlier Screencast](demos/screencast-2026-09-30.gif)
-
 </details>
 
 ---
