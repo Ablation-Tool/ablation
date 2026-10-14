@@ -261,8 +261,6 @@ Messages from your other sessions        accept
 
 </details>
 
----
-
 ## Project Background
 
 <details>
@@ -354,8 +352,6 @@ The code couldn't exist without their ideas. Though no code was written by these
 ![Learn as You RE](demos/Learn-As-You-RE.gif)
 
 </details>
-
----
 
 ## Getting Started
 
