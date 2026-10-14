@@ -545,9 +545,9 @@ class WindowAnalyzer:
 
             # Annotate RIP-relative LEA/MOV with string content (x86_64 only)
             if self.arch == 'x86_64' and mnemonic in ("lea", "mov") and "[rip" in op_str:
-                target = _parse_rip_target(addr, insn.size, op_str)
-                if target is not None and target in self.strings:
-                    s = self.strings[target]
+                rip_target = _parse_rip_target(addr, insn.size, op_str)
+                if rip_target is not None and rip_target in self.strings:
+                    s = self.strings[rip_target]
                     snippet = s[:64] + "..." if len(s) > 64 else s
                     annotations.append(f'"{snippet}"')
 
