@@ -444,8 +444,6 @@ It defines four phases:
 
 </details>
 
----
-
 <details>
 <summary><strong>Contact</strong></summary>
 
