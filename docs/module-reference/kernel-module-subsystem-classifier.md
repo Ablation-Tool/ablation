@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-2 things that weren't possible before in Ablation:
+Two things were not possible before in Ablation:
 
 1. **Every kernel module finding required manual attack surface annotation.** When `LA64MaxNotMinScanner` ran across 1096 `.ko` files and found 35 modules with findings, the output gave only `pattern_va` and `sink_name`. Nothing indicated whether `mac80211.ko` is PROXIMITY (any nearby WiFi AP) or LOCAL. In S35 every finding's `attack_surface` field was filled in by hand, one module at a time, by mentally navigating the kernel source tree. For a systematic 1096-module sweep this is the bottleneck.
 

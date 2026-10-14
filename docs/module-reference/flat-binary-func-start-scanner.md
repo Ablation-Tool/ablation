@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-2 things that were not possible before in Ablation:
+Two things were not possible before in Ablation:
 
 **1. No function-start discovery for flat ROM images without a known ISA.**  Every per-ISA decoder
 (`EcuSH2aDecoder`, `EcuVLEDecoder`, `EcuM68kDecoder`) exposes its own `function_starts()` method,

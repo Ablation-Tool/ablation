@@ -31,7 +31,7 @@ GM P-series PCMs use a Motorola CPU32 core, a 68000-family processor in automoti
 
 ## Why this exists
 
-2 things that were not possible before in Ablation:
+Two things were not possible before in Ablation:
 
 **1. No function_starts() for M68K/CPU32 firmware.** Capstone decodes M68K instructions
 but provides no mechanism to locate function entry points in a flat ROM image. The GM P-series

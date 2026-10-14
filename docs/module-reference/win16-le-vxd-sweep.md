@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **No LE binary could be loaded.** The LE (Linear Executable) format — used by every Windows 3.x VxD — was invisible to Ablation. LIEF rejects it (wrong magic). `pe_sweep.py` reads MZ then checks for `PE\x00\x00`; LE files have `LE` instead and are silently skipped. All ring-0 network stack components (`VIP.386`, `VTCP.386`, `VNBT.386`, `VUDP.386`, `VDHCP.386`, `VTDI.386`, `WSOCK.386`, `WSTCP.386`) were zero-coverage targets.
 

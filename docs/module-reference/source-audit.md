@@ -8,7 +8,7 @@ files that actually matter.
 
 ## Why this exists
 
-5 things that were not possible before in Ablation:
+Five things were not possible before in Ablation:
 
 **1. No codebase-scale triage.** Binary RE has SemanticSearcher to reduce thousands of
 functions to a shortlist. Source audits had no equivalent. Reading a 2000-file TypeScript

@@ -10,7 +10,7 @@ built from a RODATA format string, a propagated function argument, or an unresol
 
 ## Why this exists
 
-Three things that were not possible in Ablation before this module:
+Three things were not possible before this module:
 
 1. Triage an entire firmware rootfs for exec-sink exposure in one call, without loading each binary
    individually. Before `batch_plt_intersect`, identifying which files even imported system/popen

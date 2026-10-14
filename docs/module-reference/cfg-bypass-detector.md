@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-3 things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **No CFG table inspection.** Before this module, Ablation had no way to read `IMAGE_LOAD_CONFIG.GuardFlags` or the CFG protected function table from a Windows PE. The only CFG-related path was `pe_sweep.py`, which flagged missing CFG at a coarse level but could not identify *which specific exports* slip through when export suppression is enabled; these are the precise bypass targets an attacker needs.
 

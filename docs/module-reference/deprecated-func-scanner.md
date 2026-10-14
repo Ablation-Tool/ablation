@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-4 things that weren't possible before in Ablation:
+Four things were not possible before in Ablation:
 
 1. **Detect CWE-242 without taint analysis.** `gets()`, `mktemp()`, `tmpnam()`, and `getwd()` have no safe use. Their presence in PLT is a confirmed finding regardless of call context — no path analysis or data-flow tracing needed. Before this module, these functions would only surface if a TaintTracker happened to sweep the same binary.
 

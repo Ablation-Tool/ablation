@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-4 things that were not possible before in Ablation:
+Four things were not possible before in Ablation:
 
 **1. No Pytrex Nissan format support.** Pytrex NissanDefinitions is the primary open-source
 calibration definition set for Nissan SH705x ECUs, covering the 350Z, G35, Altima, Maxima,

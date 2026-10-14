@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-3 things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **Taint tracing Perl script layers that sit above setuid ELFs** — every prior engagement analysis ended at the ELF boundary. RSCT (IBM HMC V11), FortiOS diagnostic scripts, and dozens of embedded Linux targets ship thick Perl layers that call privileged binaries. TaintTracker and SinkArgClassifier are ELF-only; they never see `.pm`/`.pl`. The HMC engagement confirmed a real CWE-78 (ERRM_cli_utils.pm → rmcondition → unsanitized `$resource_name` in qx//) that required manual Perl analysis because no ablation tool could flag it. PerlTaintScanner closes that gap.
 

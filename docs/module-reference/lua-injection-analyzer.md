@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-4 things that weren't possible before in Ablation:
+Four things were not possible before in Ablation:
 
 1. **Detecting Python→Lua injection** — before this module, no scanner could find unsanitized format() calls feeding into `LuaRuntime.execute()`. FAZ-SIEM-001 (CRITICAL RCE) required full manual reading of compiler.py and rule.py to trace the path.
 

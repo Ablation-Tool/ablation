@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-2 things that weren't possible before in Ablation:
+Two things were not possible before in Ablation:
 
 1. **No ETW provider inventory.** ETW (Event Tracing for Windows) is the primary telemetry layer that EDR products and Windows security features depend on. A binary that imports `EventRegister` but whose provider GUID you don't know is invisible to any GUID-based filtering or suppression tool. Before this module, Ablation had no way to extract provider GUIDs from `EventRegister` call sites or cross-reference them against the table of known security-relevant providers. `pe_sweep.py` flagged ETW imports at the IAT level but did nothing with the GUIDs.
 

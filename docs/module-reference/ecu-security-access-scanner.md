@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-2 things that were not possible before in Ablation:
+Two things were not possible before in Ablation:
 
 **1. No SecurityAccess static-seed fingerprinter for M68K/CPU32 ECUs.** The GM P-series PCM
 family (P01, P04, P05, P08, P10, P11, P59) runs on Motorola CPU32, which is a M68K derivative.

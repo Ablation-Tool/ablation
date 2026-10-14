@@ -158,7 +158,7 @@ encoding is identical in both modes.
 
 ### Why this exists
 
-3 things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. No cross-vendor detection of unsigned firmware flashers: the gap was found across 8 binaries from a single vendor in the AUO eGalax engagement, any of which would have been caught automatically by this check.
 2. Semantic profiles can only detect what IS present; detecting the *absence* of signing imports (WinVerifyTrust, Crypt*) required a separate deterministic IAT inspector that runs outside the semantic loop.
@@ -179,7 +179,7 @@ The result appears as `firmware_auth_bypass` in the per-binary result dict and a
 
 ### Why this exists
 
-2 things that weren't possible before in Ablation:
+Two things were not possible before in Ablation:
 
 1. Borland BCC32/VCL applications (RADStudio, C++ Builder) place string literals in `.data` rather than `.rdata`.  The prior `.rdata`-only scan returned 0 strings for these targets and misclassified them as out-of-scope (no debug strings = nothing to correlate against).
 2. A blind `.data` fallback would add noise from live pointers and struct padding, but those sequences are reliably short or non-ASCII: the same 5-printable-byte minimum filter that protects `.rdata` scanning also works for `.data`, making the fallback safe.

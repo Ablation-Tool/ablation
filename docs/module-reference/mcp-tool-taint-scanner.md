@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-3 things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **Detecting BIND_WIDE in MCP HTTP transports** — FMGMCP-1 (HIGH: unauthenticated code execution via FortiManager admin token) required manually reading `transport.ts` to find `httpServer.listen(config.mcpHttpPort)` with no host argument. Node.js defaults a no-host `listen(port)` call to 0.0.0.0. No scanner detected this; this module automates it for both JS/TS and Python.
 

@@ -32,7 +32,7 @@ Renesas RH850 is the dominant MCU family in automotive ECUs from Denso, Continen
 
 ## Why this exists
 
-3 things that were not possible before in Ablation:
+Three things were not possible before in Ablation:
 
 **1. No flat-ROM / `from_bytes` support for RH850 ECU firmware.**  Automotive RH850
 ECU images are frequently shipped as raw binary dumps with no ELF header.  `V850TaintTracker` requires `from_path(elf)` and will

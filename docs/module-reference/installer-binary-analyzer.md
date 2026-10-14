@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-3 things that weren't possible before in Ablation:
+Three things were not possible before in Ablation:
 
 1. **Enumerate PE binaries embedded in self-extracting installers.** BitRock/Bitnami, NSIS, and Inno Setup installers compress their payload into a single EXE stub. Before this module, finding the actual flasher DLLs and drivers inside an installer required extracting it externally with 7z or innounp and guessing which output files mattered. This module automates that step in-process, returning `CarvedBinary` objects ready for pe_sweep or taint analysis.
 
