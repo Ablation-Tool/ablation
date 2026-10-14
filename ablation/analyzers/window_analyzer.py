@@ -40,6 +40,8 @@ except ImportError:
 
 _RIP_RE = re.compile(r'\[rip [+-] (0x[0-9a-f]+)\]')
 _ENDBR64 = bytes([0xf3, 0x0f, 0x1e, 0xfa])
+_STD_R2_SAVE = 0xF8410018  # std r2, 0x18(r1) in LE storage — ppc64le ELFv2 TOC save
+_MAX_TEXT_SCAN_WORDS = 4_000_000  # ~16 MB .text; guard against adversarially large sections
 
 
 def _elf_arch(data: bytes) -> str:
@@ -402,8 +404,7 @@ class WindowAnalyzer:
         text_va = text_sec.virtual_address
         n = len(text_data) // 4
 
-        # std r2, 0x18(r1) in LE storage = 0xF8410018
-        _STD_R2_SAVE = 0xF8410018
+        n = min(n, _MAX_TEXT_SCAN_WORDS)
 
         for i in range(1, n):
             word = struct.unpack_from('<I', text_data, i * 4)[0]
@@ -526,7 +527,12 @@ class WindowAnalyzer:
                     annotations.append("[FUNC_START?]")
 
             # Annotate calls with PLT symbol name
-            call_mnems = {'call'} if self.arch == 'x86_64' else {'bl', 'blx', 'blr'}
+            if self.arch == 'x86_64':
+                call_mnems = {'call'}
+            elif self.arch == 'ppc64le':
+                call_mnems = {'bl', 'bctrl'}
+            else:
+                call_mnems = {'bl', 'blx', 'blr'}
             if mnemonic.lower().split('.')[0] in call_mnems:
                 try:
                     target = int(op_str.strip().lstrip('#'), 16)
