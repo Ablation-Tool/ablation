@@ -416,6 +416,25 @@ The ARK ISA is accumulator-centric: most instructions read from or write to
 `_acc`. The decompiler tracks `_acc` as a named slot alongside the numbered
 virtual registers.
 
+```mermaid
+flowchart TD
+    A[/"modules.abc\nARK Bytecode"/] --> B["ARKDisasm.iter_insns()\nyields ARKInstruction objects"]
+    B --> C["_lift(insn, state)\ntranslate each insn → pseudocode statement\n_acc + numbered vregs tracked in state dict"]
+    C --> D["flat statement list\n_acc = EXPR · return _acc · if cond goto L"]
+
+    D --> E["Pass 1: Accumulator copy-propagation\n_propagate_acc · Cifuentes §5.4.6\n_acc = EXPR; X uses _acc once → X = EXPR (inline)\ndead _acc assignment → drop"]
+    E --> F["_parse_blocks()\nbuild _BB basic blocks · label→index map"]
+    F --> G["Pass 2.5: Short-circuit merging\n_merge_short_circuit · Cifuentes 1995 Fig.7\ntwo consecutive cond jumps · same target\n→ cond1 || cond2 (iterate until stable)"]
+    G --> H["Pass 2: CFG structuring\n_structure_cfg · Cifuentes §6.6.1/§6.6.2\nwhile / if-else / simple-if\nconditions negated (ARK = jump-if-false)"]
+    H --> I[/"structured pseudo-JS\nwhile (!exit) { ... }\nif (a || b) { ... } else { ... }"/]
+    H -.->|"unrecognized CFG\nnon-reducible / exception handler"| J["raw label+goto fallback"]
+    J --> I
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style I fill:#14532d,stroke:#166534,color:#dcfce7
+    style J fill:#92400e,stroke:#b45309,color:#fef3c7
+```
+
 After all instructions are lifted, three post-processing passes run in order:
 
 **Pass 1: accumulator copy-propagation** (`_propagate_acc`, Cifuentes §5.4.6).

@@ -94,6 +94,31 @@ Example output:
 
 ## How it works
 
+```mermaid
+flowchart TD
+    A[/"flat ROM\nsh7058_ecu.bin\nVA == file offset (base 0x00000000)"/] --> B["BinaryLifter.from_path(arch='sh2a')\nLIEF fails to parse ELF/PE header\n_sections = [] — flat ROM path active"]
+    B --> C["EcuSH2aDecoder\nSH-2A ISA decode\nyields SH2aInsn with insn_type field"]
+    C --> D["_SH2aState.emit(insn)\ndispatch on insn_type — no mnemonic regex"]
+    D --> E{"insn_type"}
+    E -->|"CALL (BSR · resolved)"| F["uint32_t vN = name(arg0..arg3);"]
+    E -->|"CALL (JSR · unresolved)"| G["uint32_t vN = (*rM)(arg0..arg3);"]
+    E -->|"BRANCH BT/BF"| H["if (T) / if (!T) goto loc_X;\n+ delay-slot insn"]
+    E -->|"LOAD / STORE"| I["*(uint32_t*)rM = rN;"]
+    E -->|"RETURN"| J["return rX;\n+ delay-slot · then stop"]
+    E -->|"MISC"| K["// mnemonic"]
+    F --> L[/"pseudo-C output"/]
+    G --> L
+    H --> L
+    I --> L
+    J --> L
+    K --> L
+    M["_taint_map[func_va] = {r4}"] -.->|"/* TAINTED */ on\ntainted-arg calls"| F
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style M fill:#92400e,stroke:#b45309,color:#fef3c7
+    style L fill:#14532d,stroke:#166534,color:#dcfce7
+```
+
 `_lift_sh2a()` uses `EcuSH2aDecoder` (the pre-existing SH-2A decoder) to produce `SH2aInsn`
 objects.  Each instruction already carries a pre-decoded `insn_type` field, so `_SH2aState.emit()`
 dispatches on that string directly: no mnemonic regex parsing.
