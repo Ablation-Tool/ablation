@@ -56,7 +56,7 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, FrozenSet, List, Optional, Set, Tuple
+from typing import Dict, FrozenSet, List, Optional, Set, Tuple, Union
 
 _CS_OK = False
 try:
@@ -111,6 +111,266 @@ SHELL_METACHARACTERS: FrozenSet[int] = frozenset([
     0x5b,  # [  (glob)
     0x7e,  # ~  (tilde expansion)
 ])
+
+# Call-instruction mnemonics per architecture (lowercase).
+# Used by audit_coverage to identify call sites for the load-immediate pattern.
+_CALL_MNEMS_PPC   = frozenset({'bl', 'bla', 'bctrl', 'bctr'})
+_CALL_MNEMS_X86   = frozenset({'call', 'callq', 'calll'})
+_CALL_MNEMS_ARM   = frozenset({'bl', 'blx', 'blxr'})        # ARM32
+_CALL_MNEMS_ARM64 = frozenset({'bl', 'blr'})                 # ARM64 (blr = indirect call)
+_CALL_MNEMS_MIPS  = frozenset({'jal', 'jalr', 'bal'})
+_CALL_MNEMS_RISCV = frozenset({'jal', 'jalr'})
+
+# Compare-instruction mnemonic prefixes — catches cmpwi, cmpdi, cmplwi, cmpb, etc.
+_CMP_MNEM_PREFIXES = ('cmp', 'test', 'tst', 'teq')
+
+# Load-immediate mnemonics that pass a character value to the next call.
+_LI_MNEM_PREFIXES = ('li', 'mov', 'movz', 'ldi', 'ori', 'addi')
+
+
+def _call_mnems_for_arch(arch_cs: int) -> FrozenSet[str]:
+    """Return the set of call-instruction mnemonics for a given capstone arch constant."""
+    try:
+        from capstone import CS_ARCH_PPC, CS_ARCH_X86, CS_ARCH_ARM, CS_ARCH_ARM64, CS_ARCH_MIPS
+        CS_ARCH_RISCV = getattr(__import__('capstone'), 'CS_ARCH_RISCV', -1)
+    except ImportError:
+        return frozenset()
+    if arch_cs == CS_ARCH_PPC:
+        return _CALL_MNEMS_PPC
+    if arch_cs == CS_ARCH_X86:
+        return _CALL_MNEMS_X86
+    if arch_cs == CS_ARCH_ARM:
+        return _CALL_MNEMS_ARM
+    if arch_cs == CS_ARCH_ARM64:
+        return _CALL_MNEMS_ARM64
+    if arch_cs == CS_ARCH_MIPS:
+        return _CALL_MNEMS_MIPS
+    if arch_cs == CS_ARCH_RISCV:
+        return _CALL_MNEMS_RISCV
+    # Generic fallback: anything starting with 'bl' or 'call' or 'jal'
+    return frozenset()
+
+
+# ── SanitizerCoverageReport ───────────────────────────────────────────────────
+
+@dataclass
+class SanitizerCoverageReport:
+    """
+    Result of an arch-agnostic shell metacharacter coverage audit.
+
+    Captures which ASCII characters a function explicitly checks against, and
+    which SHELL_METACHARACTERS are not covered (and could therefore be injected).
+
+    Verdict values:
+      SHELL_SAFE   — every SHELL_METACHARACTER is explicitly checked (blocked)
+      PARTIAL      — some metachars checked, others missing
+      SPACE_ONLY   — only 0x20 (space) checked; all other metachars can bypass
+      NO_CHECKS    — no ASCII character checks found in the function at all
+      UNKNOWN      — disassembly failed or function not found
+    """
+    func_va:          int
+    chars_checked:    FrozenSet[int]   # every ASCII IMM value found (from CMP + call-args)
+    missing_metachars: FrozenSet[int]  # SHELL_METACHARACTERS not in chars_checked
+    verdict:          str
+    n_cmp_sources:    int              # how many ASCII IMMs came from compare instructions
+    n_callarg_sources: int             # how many ASCII IMMs came from call-arg loads
+    detail:           str
+
+    @property
+    def shell_safe(self) -> bool:
+        return self.verdict == 'SHELL_SAFE'
+
+    def fmt(self) -> str:
+        checked = sorted(repr(chr(c)) for c in self.chars_checked if 0x20 <= c < 0x7f)
+        missing = sorted(
+            repr(chr(c)) for c in self.missing_metachars if 0x20 <= c < 0x7f
+        )
+        return (
+            f"  0x{self.func_va:x}  {self.verdict:12s}  "
+            f"checked={checked}  missing_shell={missing}  {self.detail}"
+        )
+
+    def as_dict(self) -> dict:
+        return {
+            'func_va':          hex(self.func_va),
+            'verdict':          self.verdict,
+            'shell_safe':       self.shell_safe,
+            'chars_checked':    sorted(repr(chr(c)) for c in self.chars_checked if 0x20 <= c < 0x7f),
+            'missing_metachars': sorted(repr(chr(c)) for c in self.missing_metachars if 0x20 <= c < 0x7f),
+            'detail':           self.detail,
+        }
+
+
+def audit_coverage(
+    binary_path: str,
+    func_va: int,
+    arch_cs: int,
+    mode_cs: int,
+    base: int = 0,
+    max_insns: int = 512,
+    call_window: int = 6,
+) -> SanitizerCoverageReport:
+    """
+    Arch-agnostic shell metacharacter coverage audit for a specific function.
+
+    Extracts ASCII character values (0x09–0x7e) from two sources:
+      1. **Call-arg pattern**: a load-immediate instruction whose value is in ASCII
+         range and which appears within CALL_WINDOW instructions before a call/branch.
+         Captures IBM LoadLeveler-style: ``li r3, 0x20; bl string::find()``
+      2. **Inline-compare pattern**: a compare/test instruction whose immediate
+         operand is in ASCII range.  Captures tight loops like Fortinet's
+         ``cmp cl, 0x1a; jbe ok``.
+
+    The union of both sources gives ``chars_checked``.  The function then reports
+    which SHELL_METACHARACTERS are absent from ``chars_checked``.
+
+    This approach is architecture-agnostic: it works on PPC64, x86, ARM, MIPS, etc.
+    because it relies only on capstone's generic instruction text, not arch-specific
+    register or operand constants.
+
+    Args:
+        binary_path: path to the ELF binary or shared library
+        func_va:     virtual address of the function to audit
+        arch_cs:     capstone CS_ARCH_* constant (e.g. CS_ARCH_PPC)
+        mode_cs:     capstone CS_MODE_* flags (e.g. CS_MODE_64|CS_MODE_BIG_ENDIAN)
+        base:        load base subtracted from func_va to get file offset
+                     (0 for PIC libraries where VA == file offset)
+        max_insns:   instruction limit; prevents runaway on large functions
+        call_window: look-back window size for the call-arg pattern
+
+    Returns:
+        SanitizerCoverageReport with verdict and detailed character coverage.
+
+    Example (IBM LoadLeveler PPC64)::
+
+        from capstone import CS_ARCH_PPC, CS_MODE_64, CS_MODE_BIG_ENDIAN
+        from ablation.analyzers.sanitizer_detector import audit_coverage
+
+        r = audit_coverage(
+            '/path/to/libllapi.so',
+            0x39dca0,   # Step::verify_content
+            CS_ARCH_PPC, CS_MODE_64 | CS_MODE_BIG_ENDIAN,
+        )
+        print(r.fmt())
+        # → 0x39dca0  SPACE_ONLY    checked=[' ']  missing_shell=['"', '$', '&', ...]
+    """
+    try:
+        from capstone import Cs
+    except ImportError:
+        return SanitizerCoverageReport(
+            func_va=func_va, chars_checked=frozenset(), missing_metachars=SHELL_METACHARACTERS,
+            verdict='UNKNOWN', n_cmp_sources=0, n_callarg_sources=0,
+            detail='capstone not available',
+        )
+
+    data = Path(binary_path).read_bytes()
+    file_off = func_va - base
+    if file_off < 0 or file_off >= len(data):
+        return SanitizerCoverageReport(
+            func_va=func_va, chars_checked=frozenset(), missing_metachars=SHELL_METACHARACTERS,
+            verdict='UNKNOWN', n_cmp_sources=0, n_callarg_sources=0,
+            detail=f'file_off {file_off:#x} out of range (file size {len(data):#x})',
+        )
+
+    md = Cs(arch_cs, mode_cs)
+    md.detail = False  # text-only; we parse op_str manually for arch-agnosticism
+
+    chunk = data[file_off: file_off + max_insns * 8]
+    insns = list(md.disasm(chunk, func_va))
+    if not insns:
+        return SanitizerCoverageReport(
+            func_va=func_va, chars_checked=frozenset(), missing_metachars=SHELL_METACHARACTERS,
+            verdict='UNKNOWN', n_cmp_sources=0, n_callarg_sources=0,
+            detail='disassembly produced no instructions',
+        )
+    # Truncate at max_insns
+    insns = insns[:max_insns]
+
+    call_mnems = _call_mnems_for_arch(arch_cs)
+
+    cmp_chars:     Set[int] = set()   # from compare instructions
+    callarg_chars: Set[int] = set()   # from load-imm before calls
+
+    def _extract_ascii_imms(op_str: str) -> List[int]:
+        """Parse all hex (0x..) or decimal integer tokens from op_str.
+
+        Returns values in the printable ASCII range 0x20–0x7e only.
+        We deliberately exclude the control-char range (0x00–0x1f) because small
+        integers in that range (8, 9, 16, 30…) are overwhelmingly struct offsets,
+        loop counts, or shift amounts in compiled code — not character comparisons.
+        Values below 0x20 would produce noisy false positives (e.g. 0x17 from an
+        argument count check being misread as an ETB character check).
+        Tab (0x09) and newline (0x0a) from SHELL_METACHARACTERS are therefore not
+        detectable by this method; that is an accepted limitation.
+        """
+        result = []
+        import re as _re
+        for tok in _re.findall(r'0x[0-9a-fA-F]+|-?\d+', op_str):
+            try:
+                v = int(tok, 0) if tok.startswith('0x') or tok.startswith('-') else int(tok)
+                if 0x20 <= v <= 0x7e:
+                    result.append(v)
+            except ValueError:
+                pass
+        return result
+
+    for idx, insn in enumerate(insns):
+        mnem = insn.mnemonic.lower()
+
+        # ── compare pattern ───────────────────────────────────────────────────
+        if any(mnem.startswith(p) for p in _CMP_MNEM_PREFIXES):
+            for v in _extract_ascii_imms(insn.op_str):
+                cmp_chars.add(v)
+
+        # ── call-arg pattern ──────────────────────────────────────────────────
+        # The current instruction is a call: look back CALL_WINDOW instructions
+        # for any load-immediate with an ASCII-range value.
+        is_call = (mnem in call_mnems) if call_mnems else (
+            any(mnem.startswith(p) for p in ('bl', 'call', 'jal'))
+            and mnem not in ('blr', 'blrl', 'ret', 'retq')
+        )
+        if is_call:
+            lo = max(0, idx - call_window)
+            for prev in insns[lo:idx]:
+                pmnem = prev.mnemonic.lower()
+                if any(pmnem.startswith(p) for p in _LI_MNEM_PREFIXES):
+                    for v in _extract_ascii_imms(prev.op_str):
+                        callarg_chars.add(v)
+
+    chars_checked = frozenset(cmp_chars | callarg_chars)
+    missing = SHELL_METACHARACTERS - chars_checked
+
+    # Verdict is based on which SHELL_METACHARACTERS are explicitly tested,
+    # not on all ASCII values found.  Non-metachar values (e.g. 0x70 = 'p')
+    # can appear in chars_checked as false positives but do not affect verdict.
+    meta_found = chars_checked & SHELL_METACHARACTERS
+
+    if not meta_found:
+        verdict = 'NO_CHECKS'
+    elif not missing:
+        verdict = 'SHELL_SAFE'
+    elif meta_found <= frozenset({0x20, 0x09, 0x0a}):
+        # Only whitespace variants of the metachar set — not useful for shell safety
+        verdict = 'SPACE_ONLY'
+    else:
+        verdict = 'PARTIAL'
+
+    detail = (
+        f'insns={len(insns)} cmp_sources={len(cmp_chars)} '
+        f'callarg_sources={len(callarg_chars)} '
+        f'checked_hex={sorted(hex(c) for c in chars_checked)}'
+    )
+
+    return SanitizerCoverageReport(
+        func_va=func_va,
+        chars_checked=chars_checked,
+        missing_metachars=missing,
+        verdict=verdict,
+        n_cmp_sources=len(cmp_chars),
+        n_callarg_sources=len(callarg_chars),
+        detail=detail,
+    )
+
 
 # Bytes that are explicitly safe (common in [A-Za-z0-9_-] allowlists)
 _ALPHANUM_HYPHEN_UNDERSCORE: FrozenSet[int] = frozenset(
@@ -264,6 +524,38 @@ class SanitizerDetector:
         if not _CS_OK or self._md is None:
             return None
         return self._analyze_function(func_va)
+
+    @staticmethod
+    def coverage(
+        func_va: int,
+        arch_cs: int,
+        mode_cs: int,
+        binary_path: Optional[str] = None,
+        base: int = 0,
+        max_insns: int = 512,
+        call_window: int = 6,
+    ) -> 'SanitizerCoverageReport':
+        """
+        Arch-agnostic shell metacharacter coverage audit for a specific function.
+
+        Convenience wrapper around the module-level ``audit_coverage`` function.
+        Works on PPC64, x86, ARM64, MIPS — any architecture capstone supports.
+
+        Typical PPC64 usage::
+
+            from capstone import CS_ARCH_PPC, CS_MODE_64, CS_MODE_BIG_ENDIAN
+            r = SanitizerDetector.coverage(
+                0x39dca0, CS_ARCH_PPC, CS_MODE_64 | CS_MODE_BIG_ENDIAN,
+                binary_path='/path/to/libllapi.so',
+            )
+            print(r.fmt())
+        """
+        if binary_path is None:
+            raise ValueError('binary_path is required for SanitizerDetector.coverage()')
+        return audit_coverage(
+            binary_path, func_va, arch_cs, mode_cs,
+            base=base, max_insns=max_insns, call_window=call_window,
+        )
 
     def _analyze_function(self, func_va: int) -> Optional[SanitizerProfile]:
         # Disassemble up to _MAX_VALIDATOR_INSNS * 6 bytes (avg 4 bytes/insn + margin)

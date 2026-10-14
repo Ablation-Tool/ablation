@@ -72,7 +72,8 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "Map CMDB table IDs to exec-sink reach (FortiWeb/FortiOS)" | `CMDBSurfaceMapper.from_path(elf).map()` |
 | "Batch triage all .so files in a dir" | `LibraryInventory.from_dir('/tmp/target/lib/').scan()` |
 | "Which libs in a rootfs dir have exec-class PLT imports?" | `batch_plt_intersect('/tmp/fad_root/lib/')` |
-| "Detect allowlist byte-validators in stripped binary" | `SanitizerDetector.from_path(elf).detect()` |
+| "Detect allowlist byte-validators in stripped binary (x86-64 loop pattern)" | `SanitizerDetector.from_path(elf).detect()` |
+| "Audit a specific function for shell metacharacter coverage (any arch incl. PPC64)" | `audit_coverage(elf, va, CS_ARCH_PPC, CS_MODE_64\|CS_MODE_BIG_ENDIAN)` → `SanitizerCoverageReport` |
 | "Classify fork() callers as worker/exec/exit" | `ForkExecClassifier.from_path(elf).classify()` |
 | "Find pre-auth routes in flatui firmware" | `PreAuthRouteAuditor.run(route_init_va, factory_va)` |
 | "Find encrypted/packed sections in binary" | `EntropyMapper.scan()` |
