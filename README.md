@@ -13,11 +13,6 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 
 ---
 
-
-```
-
-The `CLAUDE.md` at the repo root auto-loads, giving Claude Code the full operational reference for every session.
-
 <details>
 <summary><strong>Claude Code Setup & Configuration</strong></summary>
 
