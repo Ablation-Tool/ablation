@@ -51,21 +51,21 @@ from capstone import CS_ARCH_PPC, CS_MODE_64, CS_MODE_BIG_ENDIAN
 from ablation.analyzers.sanitizer_detector import audit_coverage
 
 r = audit_coverage(
-    '/path/to/libllapi.so',
-    0x39dca0,                              # Step::verify_content
+    '/path/to/target.so',
+    0x1234f0,
     CS_ARCH_PPC,
     CS_MODE_64 | CS_MODE_BIG_ENDIAN,
 )
 print(r.fmt())
-# → 0x39dca0  SPACE_ONLY  checked=["' '"]  missing_shell=[...17 metachars...]
+# → 0x1234f0  SPACE_ONLY  checked=["' '"]  missing_shell=['"', '$', '&', ';', ...]
 ```
 
 Or via the classmethod:
 
 ```python
 r = SanitizerDetector.coverage(
-    0x39dca0, CS_ARCH_PPC, CS_MODE_64 | CS_MODE_BIG_ENDIAN,
-    binary_path='/path/to/libllapi.so',
+    0x1234f0, CS_ARCH_PPC, CS_MODE_64 | CS_MODE_BIG_ENDIAN,
+    binary_path='/path/to/target.so',
 )
 ```
 
@@ -75,17 +75,9 @@ r = SanitizerDetector.coverage(
 |--------------|---------|
 | `SHELL_SAFE` | Every `SHELL_METACHARACTERS` entry is explicitly tested — injection structurally blocked |
 | `PARTIAL`    | Some metachars tested, others missing (e.g. rejects `|` but allows `;`) |
-| `SPACE_ONLY` | Only space (0x20) found in the metachar intersection — IBM verify_content pattern; all other metachars bypass |
+| `SPACE_ONLY` | Only space (0x20) found in the metachar intersection — common in class-method validators that check for spaces but not injection chars; all other metachars bypass |
 | `NO_CHECKS`  | No shell metacharacter appears anywhere in the function — no sanitization at all |
 | `UNKNOWN`    | Disassembly failed or function not found |
-
-## IBM LoadLeveler case study (2026-10-14)
-
-| Function | VA | Verdict | Detail |
-|----------|----|---------|--------|
-| `Step::verify_content` | `libllapi.so:0x39dca0` | `SPACE_ONLY` | 280 insns, 6× `li r3, 0x20; bl string::find()`. All 17 other metachars (`;`,`\|`,`$`,`` ` ``,...) bypass. |
-| `LlStripedAdapter::verify_content` | `libllapi.so:0x4c8f70` | `NO_CHECKS` | 192 insns, zero char checks. Confirmed LL-003. |
-| `LlAsymmetricStripedAdapter::verify_content` | `libllapi.so:0x4ca330` | `NO_CHECKS` | 192 insns, zero char checks. Confirmed LL-003. |
 
 ## Integration with SinkArgClassifier workflow
 
