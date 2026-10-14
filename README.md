@@ -1,4 +1,4 @@
-<img src="assets/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
+<img src="branding/ablation-1b-riveted-plate-wordmark-transparent-2560.png" width="520" alt="ABLATION">
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/ABLATION-STANDARDS.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/ABLATION-STANDARDS.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/ABLATION-STANDARDS.md)
 
@@ -99,7 +99,7 @@ Messages from your other sessions        accept
 
 ---
 
-![demo](assets/screencast-2026-09-30.gif)
+![demo](demos/claude-code-demo.gif)
 
 ## Capabilities
 
