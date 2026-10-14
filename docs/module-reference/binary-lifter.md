@@ -66,6 +66,25 @@ Three things were not possible before in Ablation:
 
 **Full** backends emit register-tracked pseudo-C IR with type annotations. **Structural** backends resolve call/return/branch and emit all other instructions as `// mnemonic ops` comments. ARC and V850 require a GNU cross-toolchain in PATH; they return a comment explaining the requirement if the toolchain is absent.
 
+```mermaid
+flowchart TD
+    A[/"binary (ELF · PE · flat ROM)"/] --> B["BinaryLifter.from_path(arch=?)"]
+    B --> C{"arch="}
+    C -->|"arm64 (default)\nx86_64 / amd64"| D["Full backend\nCFG + per-register state machine\ntyped NativeVal IR + calling convention\ntaint annotations via .with_taint()"]
+    C -->|"arm32 · thumb · mips32 · mips64\nnanomips · ppc32 · ppc64\nrv32 · rv64 · la64 · x86_32 · sh2a"| E["Structural backend\n_walk_ablation_cfg BFS\ncall / return / branch resolved\nall other insns as // comments"]
+    C -->|"arc / v850 / rh850"| F["Structural backend\nrequires GNU cross-toolchain in PATH\narc-elf32-objdump / v850-elf-objdump"]
+    C -->|"beam / erlang / elixir"| G["BEAM module summary\nBeamContext — no VA space\nexports · imports · atoms · dangerous calls"]
+    D --> H["lift_function(va)"]
+    E --> H
+    F --> H
+    G --> H
+    H --> I[/"pseudo-C string\nfull: typed register IR\nstructural: call skeleton + comments\nbeam: module summary block"/]
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style D fill:#1e3a5f,stroke:#1d4ed8,color:#bfdbfe
+    style I fill:#14532d,stroke:#166534,color:#dcfce7
+```
+
 ---
 
 ## Usage

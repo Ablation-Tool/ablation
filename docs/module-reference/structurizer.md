@@ -45,6 +45,32 @@ CFGs: every back edge has a unique dominating header.  The structurizer exploits
 This is O(n) in the number of basic blocks.  It converges in one pass because RPO
 guarantees dominators are visited before dominated nodes.
 
+```mermaid
+flowchart TD
+    A["CFG\n.blocks · .entry · .flow · .flow_r()"] --> B["DomTree\nCooper-Harvey-Kennedy\nA dominates B if every path from entry to B passes through A"]
+    A --> C["PostDomTree\nreversed CFG → DomTree\nX post-dominates Y if every path from Y to exit passes through X"]
+    B --> D["LoopInfo\nback edges identify loop headers\nbody = all blocks dominated by header"]
+    B --> E["Structurizer\nRPO walk — dominators before dominated"]
+    C --> E
+    D --> E
+    E --> F{"block type?"}
+    F -->|"loop header"| G["WhileNode\nrecurse body\nskip to exit_block"]
+    F -->|"two successors\n(if/else)"| H["IfNode\nthen/else sub-trees\njoin = closest_common_post_dominator()"]
+    F -->|"no successors"| I["ReturnNode"]
+    F -->|"back-edge tail\ninside loop"| J["ContinueNode"]
+    F -->|"only exit successors"| K["BreakNode"]
+    F -->|"sequential"| L["InsnNode"]
+    G --> M[/"structured pseudo-C\nif / while / for — no goto chains"/]
+    H --> M
+    I --> M
+    J --> M
+    K --> M
+    L --> M
+
+    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style M fill:#14532d,stroke:#166534,color:#dcfce7
+```
+
 ---
 
 ## Usage
