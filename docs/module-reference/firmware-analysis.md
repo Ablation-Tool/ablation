@@ -20,7 +20,11 @@ Standard `unsquashfs` cannot extract Huawei VRP v600R024+ squashfs images becaus
 
 ```mermaid
 flowchart TD
-    A[/"Raw encrypted firmware (.out / .bin)"/] --> B["Stage 1 · Outer XOR layer\nFortiOSHardwareExtractor\nKPA against ELF magic 0x7f454c46\nor gzip magic 0x1f8b0800\n64-byte repeating key (NAND page boundary)"]
+    A[/"Raw encrypted firmware (.out / .zip)"/] --> Z{"ZIP wrapper?\n(PK\\x03\\x04 magic)"}
+    Z -->|Yes: v8.0.0+| ZA["Unwrap: parse STORE-ZIP local header\nExtract .out from data offset\n30 + fname_len + extra_len"]
+    Z -->|No: v6.x / v7.x| B
+    ZA --> B
+    B["Stage 1 · Outer XOR layer\nFortiOSHardwareExtractor\nKPA against ELF magic 0x7f454c46\nor gzip magic 0x1f8b0800\n64-byte repeating key (NAND page boundary)"]
 
     B --> C["Partially decrypted binary"]
 
@@ -35,6 +39,8 @@ flowchart TD
 ```
 
 ### Stage 1: Outer XOR layer
+
+FortiOS v8.0.0 hardware firmware ships as a STORE-compressed ZIP containing a single `.out` file. `from_path()` detects the `PK\x03\x04` magic and unwraps it before decompression, so the same call works on both bare `.out` and ZIP-wrapped `.out` inputs.
 
 FortiWiFi/FortiGate appliances use NAND flash. Unprogrammed NAND cells read as 0xFF. The XOR key is derived by XOR-ing the encrypted bytes against the known plaintext: ELF magic `0x7f 0x45 0x4c 0x46` or gzip magic `0x1f 0x8b 0x08` at the payload start.
 
