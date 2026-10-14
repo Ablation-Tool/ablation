@@ -241,18 +241,18 @@ def audit_coverage(
     Returns:
         SanitizerCoverageReport with verdict and detailed character coverage.
 
-    Example (IBM LoadLeveler PPC64)::
+    Example (PPC64 big-endian shared library)::
 
         from capstone import CS_ARCH_PPC, CS_MODE_64, CS_MODE_BIG_ENDIAN
         from ablation.analyzers.sanitizer_detector import audit_coverage
 
         r = audit_coverage(
-            '/path/to/libllapi.so',
-            0x39dca0,   # Step::verify_content
+            '/path/to/target.so',
+            0x1234f0,
             CS_ARCH_PPC, CS_MODE_64 | CS_MODE_BIG_ENDIAN,
         )
         print(r.fmt())
-        # → 0x39dca0  SPACE_ONLY    checked=[' ']  missing_shell=['"', '$', '&', ...]
+        # → 0x1234f0  SPACE_ONLY    checked=["' '"]  missing_shell=['"', '$', ...]
     """
     try:
         from capstone import Cs
@@ -545,8 +545,8 @@ class SanitizerDetector:
 
             from capstone import CS_ARCH_PPC, CS_MODE_64, CS_MODE_BIG_ENDIAN
             r = SanitizerDetector.coverage(
-                0x39dca0, CS_ARCH_PPC, CS_MODE_64 | CS_MODE_BIG_ENDIAN,
-                binary_path='/path/to/libllapi.so',
+                0x1234f0, CS_ARCH_PPC, CS_MODE_64 | CS_MODE_BIG_ENDIAN,
+                binary_path='/path/to/target.so',
             )
             print(r.fmt())
         """
