@@ -172,6 +172,11 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "Scan bare FortiGate QCOW2/VHD disk image for cert keys" | `FortiGateCertKeyScanner.from_disk(path)` |
 | "Predict cert key set from firmware filename alone" | `FortiBuildTrackClassifier.classify(filename)` |
 | "Crack XOR-encrypted firmware section" | `XorSolver.solve(ciphertext_path)` |
+| "Decode an IBM W-Code binary builtin record" | `WCodeParser.decode_record(data, offset)` |
+| "Hash an IBM builtin name for WCB table lookup" | `WCodeParser.name_hash(name)` |
+| "Load WCB builtin catalog from xlCentry binary" | `WCodeBuiltinCatalog.from_binary(xlcentry_path)` |
+| "Scan a byte stream for W-Code IR records" | `WCodeParser(xlcentry_path).scan(data)` |
+| "Identify POWER generation required by a W-Code builtin" | `catalog.arch_mask_to_name(entry.arch_mask)` |
 
 ---
 
