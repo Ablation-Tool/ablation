@@ -48,7 +48,7 @@ import re
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 # Loader symbol names must be valid C/XCOFF identifiers; the loader strtab in
 # XCOFF64 shared libraries often starts with a VPD metadata string whose bytes
@@ -430,6 +430,71 @@ def _parse_symtab32(
     return result
 
 
+def _parse_symtab32_exe(
+    data: bytes, symptr: int, nsyms: int, text_sections: Set[int]
+) -> List[XcoffSymbol]:
+    """Parse XCOFF32 main symbol table for executables (absolute VA semantics).
+
+    AIX executables store absolute VAs in n_value (unlike relocatable .o files
+    where values are section-relative).  Only C_EXT/C_HIDEXT dotted-name entries
+    in text sections are returned — these are the real code entry points.
+
+    Returns one XcoffSymbol per function; caller merges into binary.exports.
+    """
+    if symptr == 0 or nsyms == 0:
+        return []
+
+    strtab_off = symptr + nsyms * _SYMENT32_SZ
+    strtab: bytes = b''
+    if strtab_off + 4 <= len(data):
+        stlen = struct.unpack_from('>I', data, strtab_off)[0]
+        strtab = data[strtab_off: strtab_off + stlen]
+
+    result: List[XcoffSymbol] = []
+    seen: set = set()
+    i = 0
+    while i < nsyms:
+        off = symptr + i * _SYMENT32_SZ
+        if off + _SYMENT32_SZ > len(data):
+            break
+
+        name_bytes, value, scnum, _, sclass, numaux = struct.unpack_from(
+            _SYMENT32_FMT, data, off
+        )
+
+        if name_bytes[:4] == b'\x00\x00\x00\x00':
+            stoff = struct.unpack_from('>I', name_bytes, 4)[0]
+            raw = strtab[stoff: stoff + 64].split(b'\x00')[0] if stoff < len(strtab) else b''
+        else:
+            raw = name_bytes.rstrip(b'\x00')
+        sym_name = raw.decode('ascii', errors='replace')
+
+        # n_value is absolute VA in executables; scnum=1-based section index
+        if sclass in (_C_EXT, _C_HIDEXT) and scnum in text_sections and sym_name.startswith('.'):
+            clean = sym_name[1:]
+            if clean and (clean, value) not in seen:
+                seen.add((clean, value))
+                result.append(XcoffSymbol(name=clean, va=value, lib='', smclas=XMC_PR, code_va=value))
+
+        i += 1 + numaux
+
+    return result
+
+
+def _merge_symtab32_exe(
+    loader_exports: List[XcoffSymbol], syms32: List[XcoffSymbol]
+) -> None:
+    """Merge ppc32 executable symtab names into the loader export list in-place.
+
+    Appends any code VA not already covered by the loader section (which for
+    executables exports only __start and a few other entry points).
+    """
+    covered: set = {sym.va for sym in loader_exports}
+    for sym in syms32:
+        if sym.va not in covered:
+            loader_exports.append(sym)
+
+
 _XCOFF64_SENTINEL_VA = 0x1D4C   # n_value used by C_HIDEXT XTY_SD entries with no resolved code VA
 
 
@@ -655,5 +720,18 @@ def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
                 _merge_symtab64(binary.exports, syms64)
             else:
                 binary.exports = syms64
+
+    # Supplement ppc32 executables with main symbol table names.
+    # AIX ppc32 executables export only __start from the loader section; the
+    # main symtab holds all real function names with absolute code VAs.
+    # This path is skipped for relocatable .o files (handled by the elif above).
+    if arch == 'ppc32' and loader_data and symptr > 0 and nsyms > 0:
+        text_scnums: Set[int] = {i + 1 for i, s in enumerate(sections) if s.flags & STYP_TEXT}
+        syms32 = _parse_symtab32_exe(data, symptr, nsyms, text_scnums)
+        if syms32:
+            if binary.exports:
+                _merge_symtab32_exe(binary.exports, syms32)
+            else:
+                binary.exports = syms32
 
     return binary
