@@ -20,10 +20,10 @@
 #        | sha256sum
 
 # ─── Current verified commit ──────────────────────────────────────────────────
-# version: 2.81.0-dev
-# date:    2026-10-14
-git+https://github.com/Ablation-Tool/ablation.git@310aea76f8b78f93b2e2100b59832635db3dae34#egg=ablation
+# version: 2.81.0
+# date:    2026-10-15
+git+https://github.com/Ablation-Tool/ablation.git@e98d68b906dfc54527653546d038b6c82335c6a1#egg=ablation-tool
 
 # ─── With LLM features ────────────────────────────────────────────────────────
 # Uncomment to install with optional Anthropic-backed analysis:
-# ablation[llm] @ git+https://github.com/Ablation-Tool/ablation.git@310aea76f8b78f93b2e2100b59832635db3dae34
+# ablation-tool[llm] @ git+https://github.com/Ablation-Tool/ablation.git@e98d68b906dfc54527653546d038b6c82335c6a1
