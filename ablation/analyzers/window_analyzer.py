@@ -45,9 +45,13 @@ _MAX_TEXT_SCAN_WORDS = 4_000_000  # ~16 MB .text; guard against adversarially la
 
 
 def _elf_arch(data: bytes) -> str:
-    """Return arch string from ELF e_machine, respecting EI_DATA byte order."""
+    """Return arch string from ELF e_machine or XCOFF magic, respecting byte order."""
     if len(data) < 20:
         return 'x86_64'
+    if data[:2] == b'\x01\xdf':   # XCOFF32
+        return 'ppc32'
+    if data[:2] == b'\x01\xf7':   # XCOFF64
+        return 'ppc64'
     if data[:4] != b'\x7fELF':
         return 'x86_64'
     ei_data = data[5]  # ELFDATA2LSB=1, ELFDATA2MSB=2
@@ -105,6 +109,11 @@ class WindowAnalyzer:
         return inst
 
     def _load_lief(self) -> None:
+        # XCOFF: use xcoff_parser directly (LIEF does not support XCOFF)
+        if self.data[:2] in (b'\x01\xdf', b'\x01\xf7'):
+            self._load_xcoff()
+            return
+
         try:
             binary = lief.parse(self.data)
         except Exception:
@@ -127,6 +136,60 @@ class WindowAnalyzer:
 
         # Build .rodata string map
         self._build_strings(binary)
+
+    def _load_xcoff(self) -> None:
+        """Populate text bounds, plt, and strings from an XCOFF binary.
+
+        XCOFF .o files are relocatable: .text lives at vaddr=0 but at a
+        non-zero file offset.  Remap self.data to a VA-image so that
+        dump_text(va=0, ...) reads real .text bytes rather than the file header.
+        """
+        try:
+            from ablation.core.xcoff_parser import parse as xcoff_parse
+            xb = xcoff_parse(self.path or '<mem>', self.data)
+        except Exception:
+            return
+
+        # Build a VA-mapped image from XCOFF sections
+        if xb.sections:
+            max_va = max(s.vaddr + s.size for s in xb.sections if s.size > 0)
+            if max_va > 0:
+                image = bytearray(max_va)
+                for sec in xb.sections:
+                    if sec.data and sec.size > 0:
+                        image[sec.vaddr: sec.vaddr + len(sec.data)] = sec.data
+                self.data = bytes(image)
+                self.base_va = 0
+
+        tsec = xb.text
+        if tsec:
+            self._text_start = tsec.vaddr
+            self._text_end   = tsec.vaddr + tsec.size
+
+        # Export VA → name for annotation
+        for sym in xb.exports:
+            va = sym.code_va if sym.code_va else sym.va
+            if sym.name:
+                self.plt[va] = sym.name
+
+        # Strings from .data
+        dsec = xb.data
+        if dsec and dsec.data:
+            start = 0
+            buf = dsec.data
+            while start < len(buf):
+                end = buf.find(b'\x00', start)
+                if end < 0:
+                    break
+                chunk = buf[start:end]
+                try:
+                    s = chunk.decode('ascii')
+                except (UnicodeDecodeError, ValueError):
+                    start = end + 1
+                    continue
+                if len(s) >= 4 and s.isprintable():
+                    self.strings[dsec.vaddr + start] = s
+                start = end + 1
 
     def _build_plt(self, binary) -> None:
         if self.arch == 'ppc64le':
