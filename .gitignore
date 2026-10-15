@@ -47,3 +47,4 @@ PLAN.md
 CLAUDE.md
 test/
 models/
+*.bff
