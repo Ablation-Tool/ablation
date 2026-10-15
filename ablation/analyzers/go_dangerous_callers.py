@@ -70,12 +70,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import capstone
 import capstone.x86
-try:
-    import lief
-    _LIEF_OK = True
-except ImportError:
-    lief = None  # type: ignore[assignment]
-    _LIEF_OK = False
+import lief
 
 from ablation.analyzers.go_pclntab import GoFuncTable
 
@@ -162,8 +157,6 @@ class GoDangerousCallerScanner:
                     # Migrate to SQLite on next forced rebuild
                     return self
 
-        if not _LIEF_OK:
-            raise ImportError("lief is required for go_dangerous_callers. Install with: pip install 'ablation-tool[binary]'")
         self._lb = lief.parse(self.binary_path)
         self._build_section_map()
         self._ft = GoFuncTable.from_binary(self._data)

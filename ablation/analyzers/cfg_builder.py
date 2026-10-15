@@ -49,12 +49,7 @@ from capstone.x86_const import (
     X86_INS_JMP, X86_INS_LJMP,
     X86_OP_IMM,
 )
-try:
-    import lief
-    _LIEF_OK = True
-except ImportError:
-    lief = None  # type: ignore[assignment]
-    _LIEF_OK = False
+import lief
 
 # ── Capstone group IDs ────────────────────────────────────────────────────────
 _GRP_JUMP = 1    # CS_GRP_JUMP

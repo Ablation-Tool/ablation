@@ -39,12 +39,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-try:
-    import lief
-    _LIEF_OK = True
-except ImportError:
-    lief = None  # type: ignore[assignment]
-    _LIEF_OK = False
+import lief
 
 try:
     import capstone
@@ -282,8 +277,6 @@ class ByovdDetector:
         driver_path: str,
         kda_report: Optional["KernelDriverReport"] = None,
     ):
-        if not _LIEF_OK:
-            raise ImportError("lief is required for byovd_detector. Install with: pip install 'ablation-tool[binary]'")
         self.driver_path = driver_path
         self._kda_report = kda_report
         self._data = Path(driver_path).read_bytes()
