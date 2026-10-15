@@ -17,9 +17,9 @@
 #
 # ─── Current verified commit ──────────────────────────────────────────────────
 # version: 2.81.0
-# date:    2026-10-15
-git+https://github.com/Ablation-Tool/ablation.git@e98d68b906dfc54527653546d038b6c82335c6a1#egg=ablation-tool
+# date:    2026-10-14
+git+https://github.com/Ablation-Tool/ablation.git@986ad4db75ed5e590ecbf759beb3880fb6841b99#egg=ablation-tool
 
 # ─── With LLM features ────────────────────────────────────────────────────────
 # Uncomment to install with optional Anthropic-backed analysis:
-# ablation-tool[llm] @ git+https://github.com/Ablation-Tool/ablation.git@e98d68b906dfc54527653546d038b6c82335c6a1
+# ablation-tool[llm] @ git+https://github.com/Ablation-Tool/ablation.git@986ad4db75ed5e590ecbf759beb3880fb6841b99
