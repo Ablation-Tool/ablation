@@ -10,21 +10,13 @@ works.
 **Requirements:** Python 3.10+, pip
 
 ```bash
-pip install git+https://github.com/Ablation-Tool/ablation
+pip install ablation-tool
 ```
 
-With LLM features:
+**macOS (pipx):**
 
 ```bash
-pip install "git+https://github.com/Ablation-Tool/ablation#egg=ablation[llm]"
-```
-
-From source:
-
-```bash
-git clone https://github.com/Ablation-Tool/ablation
-cd ablation
-pip install -e .
+pipx install ablation-tool
 ```
 
 Verify the install:
@@ -32,51 +24,6 @@ Verify the install:
 ```bash
 python -c "from ablation.analyzers.binary_context import BinaryContext; print('ok')"
 ```
-
----
-
-## Verify you have the official repo
-
-Ablation is not on PyPI. The install URL points directly to `github.com/Ablation-Tool/ablation`. Two verification approaches:
-
-### Option A — pin to a known commit (recommended)
-
-Replace the bare `pip install` with a commit-SHA-pinned URL. pip refuses to install anything that does not resolve to that exact commit:
-
-```bash
-pip install "git+https://github.com/Ablation-Tool/ablation.git@310aea76f8b78f93b2e2100b59832635db3dae34"
-```
-
-Or use the pre-written pinned requirements file from the repo:
-
-```bash
-pip install -r requirements-verified.txt
-```
-
-The current verified commit is `310aea76` (v2.81.0-dev, 2026-10-14).
-
-### Option B — verify a downloaded archive
-
-Download the source tarball for any release and compare its SHA256 against `CHECKSUMS.txt` at the repo root:
-
-```bash
-# Download the v2.67.0 release archive
-curl -sL https://github.com/Ablation-Tool/ablation/archive/refs/tags/v2.67.0.tar.gz \
-     | sha256sum
-# Expected: a3bcad41d030dc41563ed088b200767c7628722ac627ac090755a9eaf9776fc2
-
-# Check against CHECKSUMS.txt
-grep 2.67.0 CHECKSUMS.txt
-```
-
-To regenerate a hash yourself at any commit:
-
-```bash
-cd ablation
-git archive HEAD --prefix=ablation-2.81.0/ | sha256sum
-```
-
-`CHECKSUMS.txt` lists SHA256 for every tagged release back to v1.1.0.
 
 ---
 
