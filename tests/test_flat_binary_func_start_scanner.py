@@ -15,13 +15,15 @@ from ablation.analyzers.flat_binary_func_start_scanner import (
 def _sh2a_rom_with_prologues_and_bsr(base_va: int = 0) -> bytes:
     """
     256-byte SH-2A ROM:
-    - Reset vector at offset 4 pointing to offset 0x10 (VA = base_va + 0x10)
+    - Reset PC at offset 0 pointing to offset 0x10 (VA = base_va + 0x10)
+    - Init SP at offset 4 (high RAM address, not a code pointer)
     - A BSR instruction at offset 0x10 targeting offset 0x40 (VA = base_va + 0x40)
     - STS.L PR prologues at offsets 0x10, 0x40, 0x80
     """
     buf = bytearray(256)
-    # SH-2A BE reset vector at offset 4
-    struct.pack_into(">I", buf, 4, base_va + 0x10)
+    # SH-2A BE reset PC at offset 0; init SP at offset 4 (on-chip RAM)
+    struct.pack_into(">I", buf, 0, base_va + 0x10)
+    struct.pack_into(">I", buf, 4, 0xFFFF0000)
     # Function at 0x10: STS.L PR, @-R15 = 0x4F22
     struct.pack_into(">H", buf, 0x10, 0x4F22)
     # BSR to 0x40: BSR disp12, target = PC+4 + disp*2 where PC=0x10
