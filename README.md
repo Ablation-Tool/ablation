@@ -364,12 +364,6 @@ The code couldn't exist without their ideas. Though no code was written by these
 pip install ablation-tool
 ```
 
-**macOS (pipx):**
-
-```bash
-pipx install ablation-tool
-```
-
 ---
 
 </details>
