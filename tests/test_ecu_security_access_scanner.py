@@ -1,4 +1,4 @@
-"""Tests for EcuSecurityAccessScanner (M68K and PPC32 static-seed fingerprints)."""
+"""Tests for EcuSecurityAccessScanner (M68K, PPC32, and VLE static-seed fingerprints)."""
 
 import struct
 
@@ -334,3 +334,181 @@ def test_from_path_matches_from_bytes(tmp_path):
         assert fp.offset == fb.offset
         assert fp.arch == fb.arch
         assert fp.pattern == fb.pattern
+
+
+# ------------------------------------------------------------------ #
+# VLE helpers                                                         #
+# ------------------------------------------------------------------ #
+
+def _vle_se_li(rx: int, imm7: int) -> bytes:
+    """se_li Rx, imm7 (SE16, 4-bit compact register, 7-bit unsigned immediate).
+
+    Compact register encoding: rx < 8 → raw=rx; rx >= 24 → raw=rx-16.
+    """
+    assert 0 <= imm7 <= 127, f"imm7 {imm7} out of range"
+    rx_raw = rx if rx < 8 else rx - 16
+    assert 0 <= rx_raw <= 15, f"rx {rx} not representable in se_li"
+    hw = 0x4800 | (rx_raw << 7) | imm7
+    return struct.pack(">H", hw)
+
+
+def _vle_se_stb(rz: int, rx: int, disp: int) -> bytes:
+    """se_stb Rz, Rx, disp (SE16 SD4, 3-bit regs r0-r7, byte-scale displacement 0-15)."""
+    assert 0 <= rz <= 7 and 0 <= rx <= 7, f"se_stb: registers {rz},{rx} out of 3-bit range"
+    assert 0 <= disp <= 15, f"se_stb: disp {disp} exceeds SD4 range"
+    hw = 0x9000 | (rz << 9) | (disp << 5) | (rx << 2)
+    return struct.pack(">H", hw)
+
+
+def _vle_e_stb(rs: int, ra: int, disp: int) -> bytes:
+    """e_stb rs, disp(ra) (VLE32, op6=13, full 5-bit register fields)."""
+    word = (13 << 26) | (rs << 21) | (ra << 16) | (disp & 0xFFFF)
+    return struct.pack(">I", word)
+
+
+def _vle_se_blr() -> bytes:
+    """se_blr — return from leaf function (SE16)."""
+    return struct.pack(">H", 0x0004)
+
+
+def _vle_se_nop() -> bytes:
+    """se_or r0, r0 — SE16 NOP-equivalent for padding."""
+    # se_or: 0x4400 | (rx << 4) | ry
+    return struct.pack(">H", 0x4400)
+
+
+# ------------------------------------------------------------------ #
+# VLE — positive cases                                               #
+# ------------------------------------------------------------------ #
+
+def test_vle_se_li_se_stb_r0():
+    """se_li r0,0x67 + se_stb r0,r4,3 → 1 VLE finding."""
+    body = _vle_se_li(0, 0x67) + _vle_se_stb(0, 4, 3)
+    findings = EcuSecurityAccessScanner(body).scan()
+    vle = [f for f in findings if f.arch == "VLE"]
+    assert len(vle) == 1
+    assert vle[0].offset == 0
+    assert vle[0].pattern == "static-seed-requestSeed"
+    assert vle[0].arch == "VLE"
+
+
+def test_vle_se_li_e_stb_r5():
+    """se_li r5,0x67 + e_stb r5,r31,8 → 1 VLE finding (e_stb full 5-bit register)."""
+    body = _vle_se_li(5, 0x67) + _vle_e_stb(5, 31, 8)
+    findings = EcuSecurityAccessScanner(body).scan()
+    vle = [f for f in findings if f.arch == "VLE"]
+    assert len(vle) == 1
+    assert vle[0].offset == 0
+
+
+def test_vle_se_li_r24_e_stb_r24():
+    """se_li r24,0x67 + e_stb r24,r1,0 — compact register 8 → r24, stored via e_stb."""
+    # rx_raw = 24 - 16 = 8 → hw = 0x4800 | (8<<7) | 0x67 = 0x4C67
+    body = _vle_se_li(24, 0x67) + _vle_e_stb(24, 1, 0)
+    findings = EcuSecurityAccessScanner(body).scan()
+    vle = [f for f in findings if f.arch == "VLE"]
+    assert len(vle) == 1
+    assert vle[0].offset == 0
+
+
+def test_vle_offset_nonzero():
+    """Pattern at non-zero offset is reported at the correct offset."""
+    prefix = bytes(12)  # 12 zero bytes of padding
+    body = prefix + _vle_se_li(0, 0x67) + _vle_se_stb(0, 4, 3)
+    findings = EcuSecurityAccessScanner(body).scan()
+    vle = [f for f in findings if f.arch == "VLE"]
+    assert any(f.offset == 12 for f in vle)
+
+
+def test_vle_evidence_contains_trigger_bytes():
+    """Finding evidence starts with the se_li + se_stb bytes."""
+    li_bytes = _vle_se_li(0, 0x67)
+    stb_bytes = _vle_se_stb(0, 4, 3)
+    body = li_bytes + stb_bytes
+    findings = EcuSecurityAccessScanner(body).scan()
+    vle = [f for f in findings if f.arch == "VLE"]
+    assert len(vle) == 1
+    assert vle[0].evidence[:4] == li_bytes + stb_bytes
+
+
+# ------------------------------------------------------------------ #
+# VLE — negative cases                                               #
+# ------------------------------------------------------------------ #
+
+def test_vle_wrong_immediate_no_match():
+    """se_li r0,0x68 + se_stb r0,r4,3 — wrong immediate, no VLE finding."""
+    body = _vle_se_li(0, 0x68) + _vle_se_stb(0, 4, 3)
+    findings = EcuSecurityAccessScanner(body).scan()
+    vle = [f for f in findings if f.arch == "VLE"]
+    assert vle == []
+
+
+def test_vle_different_register_se_stb_no_match():
+    """se_li r0,0x67 + se_stb r1,r4,3 — different stored register, no VLE finding."""
+    body = _vle_se_li(0, 0x67) + _vle_se_stb(1, 4, 3)
+    findings = EcuSecurityAccessScanner(body).scan()
+    vle = [f for f in findings if f.arch == "VLE"]
+    assert vle == []
+
+
+def test_vle_different_register_e_stb_no_match():
+    """se_li r3,0x67 + e_stb r4,r31,0 — different stored register, no VLE finding."""
+    body = _vle_se_li(3, 0x67) + _vle_e_stb(4, 31, 0)
+    findings = EcuSecurityAccessScanner(body).scan()
+    vle = [f for f in findings if f.arch == "VLE"]
+    assert vle == []
+
+
+def test_vle_se_li_without_stb_no_match():
+    """se_li r0,0x67 + se_blr — no stb, no VLE finding."""
+    body = _vle_se_li(0, 0x67) + _vle_se_blr()
+    findings = EcuSecurityAccessScanner(body).scan()
+    vle = [f for f in findings if f.arch == "VLE"]
+    assert vle == []
+
+
+def test_vle_truncated_at_se_li_no_crash():
+    """Buffer ending mid-se_li does not crash."""
+    li_bytes = _vle_se_li(0, 0x67)
+    findings = EcuSecurityAccessScanner(li_bytes).scan()
+    # May or may not find anything — must not raise
+    assert isinstance(findings, list)
+
+
+# ------------------------------------------------------------------ #
+# VLE — mixed ROM (VLE + M68K in same buffer)                        #
+# ------------------------------------------------------------------ #
+
+def test_vle_and_m68k_both_found():
+    """VLE and M68K patterns in one buffer are independently reported."""
+    m68k_part = (
+        _m68k_moveb_67_d16_a5()
+        + _m68k_clrb_d16_a5(0x35)
+        + _m68k_clrb_d16_a5(0x36)
+    )
+    vle_part = _vle_se_li(0, 0x67) + _vle_se_stb(0, 4, 3)
+    body = m68k_part + vle_part
+
+    findings = EcuSecurityAccessScanner(body).scan()
+    arches = {f.arch for f in findings}
+    assert "M68K" in arches
+    assert "VLE" in arches
+
+
+# ------------------------------------------------------------------ #
+# Window default regression: from_path/from_bytes default is 256     #
+# ------------------------------------------------------------------ #
+
+def test_from_path_default_window_256_finds_m68k_with_gap():
+    """from_path default window (256) covers CLR.B pairs >32 bytes past MOVE.B #$67."""
+    # Build a buffer where the 2x CLR.B are 40 bytes past the trigger
+    gap = _pad(40)
+    body = _m68k_moveb_67_d16_a5() + gap + _m68k_clrb_d16_a5(0x35) + _m68k_clrb_d16_a5(0x36)
+
+    findings_default = EcuSecurityAccessScanner.from_bytes(body).scan()
+    findings_narrow = EcuSecurityAccessScanner.from_bytes(body, window=32).scan()
+    m68k_default = [f for f in findings_default if f.arch == "M68K"]
+    m68k_narrow = [f for f in findings_narrow if f.arch == "M68K"]
+
+    assert len(m68k_default) == 1, "default window=256 should reach CLR.B at +40"
+    assert len(m68k_narrow) == 0, "window=32 is too narrow to reach CLR.B at +40"

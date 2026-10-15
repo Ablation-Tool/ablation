@@ -6,7 +6,7 @@ SecurityAccess service always returns a static (non-random) seed. When the seed
 is static, any seed/key pair computed from a known algorithm can be replayed
 offline, granting unauthenticated access to protected diagnostic services.
 
-Two architectures are supported:
+Three architectures are supported:
 
 M68K / CPU32 (GM P-series PCMs: P01, P04, P05, P08, P10, P11, P59)
     requestSeed handler stores 0x67 (SA subfunction code) into the seed
@@ -32,7 +32,23 @@ PPC32 (GM E38 PCM: PPC e200 region)
         li      rZ, 0
         stb     rZ, N+2(rA)
 
-Both patterns were confirmed across the full GM ECU corpus in:
+PPC VLE (GM E92 PCM: NXP e200z VLE region)
+    The equivalent pattern in 16-bit VLE short-encoding:
+
+        se_li   rX, 0x67        ; seed byte = subfunction code (SE16)
+        se_stb  rX, N(rA)       ; store to seed buffer (SE16, 3-bit compact reg)
+
+    Or using 32-bit VLE store for registers outside r0–r7:
+
+        se_li   rX, 0x67        ; (SE16)
+        e_stb   rX, N(rA)       ; (VLE32, op6=13, full 5-bit register field)
+
+    ``se_li`` uses 4-bit compact register encoding (0–7 → r0–r7, 8–15 → r24–r31);
+    ``se_stb`` uses 3-bit compact (0–7 → r0–r7 only).  A same-register match
+    therefore fires when the se_li target is r0–r7 and se_stb immediately follows,
+    or when e_stb follows with a matching full register field.
+
+All patterns were confirmed across the full GM ECU corpus in:
     targets/automotive/auto_ecu_corpus_re.py (gitignored)
 
 Usage::
@@ -101,11 +117,11 @@ class EcuSecurityAccessScanner:
         self._window = window
 
     @classmethod
-    def from_path(cls, path: "str | Path", window: int = 32) -> "EcuSecurityAccessScanner":
+    def from_path(cls, path: "str | Path", window: int = 256) -> "EcuSecurityAccessScanner":
         return cls(path, window)
 
     @classmethod
-    def from_bytes(cls, data: bytes, window: int = 32) -> "EcuSecurityAccessScanner":
+    def from_bytes(cls, data: bytes, window: int = 256) -> "EcuSecurityAccessScanner":
         return cls(data, window)
 
     # ------------------------------------------------------------------ #
@@ -117,6 +133,7 @@ class EcuSecurityAccessScanner:
         findings: list[SecurityAccessFinding] = []
         findings.extend(self._scan_m68k())
         findings.extend(self._scan_ppc32())
+        findings.extend(self._scan_vle())
         return findings
 
     # ------------------------------------------------------------------ #
@@ -243,3 +260,72 @@ class EcuSecurityAccessScanner:
                     continue
             j += 4
         return count
+
+    # ------------------------------------------------------------------ #
+    # PPC VLE scanner                                                     #
+    # ------------------------------------------------------------------ #
+
+    def _scan_vle(self) -> list[SecurityAccessFinding]:
+        """Scan for VLE se_li Rx,0x67 immediately followed by se_stb/e_stb of Rx.
+
+        VLE se_li uses 4-bit compact register encoding (0-7 → r0-r7,
+        8-15 → r24-r31).  se_stb uses 3-bit compact (r0-r7 only), so the
+        same-register constraint fires for Rx in r0-r7.  For Rx in r24-r31
+        the confirming store must be a 4-byte e_stb (op6=13) with a matching
+        full 5-bit register field.
+        """
+        data = self._data
+        n = len(data)
+        findings: list[SecurityAccessFinding] = []
+        window = self._window
+
+        i = 0
+        while i + 2 <= n:
+            hw = struct.unpack_from(">H", data, i)[0]
+
+            # se_li Rx, 0x67: mask 0xF87F == 0x4867
+            # Format: bits[15:11]=0b01001, bits[10:7]=Rx(4-bit compact), bits[6:0]=UI7
+            if (hw & 0xF87F) != 0x4867:
+                i += 2
+                continue
+
+            # Decode 4-bit compact register
+            rx_raw = (hw >> 7) & 0xF
+            rx = rx_raw if rx_raw < 8 else rx_raw + 16
+
+            j = i + 2
+            if j >= n:
+                break
+
+            b0 = data[j]
+            stb_len = 0
+
+            if (b0 & 0x90) != 0x10:
+                # 16-bit SE next — se_stb: top nibble 0x9, Rz=(nhw>>9)&0x7 (3-bit, r0-r7)
+                if j + 2 <= n:
+                    nhw = struct.unpack_from(">H", data, j)[0]
+                    if (nhw & 0xF000) == 0x9000 and ((nhw >> 9) & 0x7) == rx:
+                        stb_len = 2
+            else:
+                # 32-bit VLE next — e_stb: op6=13, rs=(word>>21)&0x1F
+                if j + 4 <= n:
+                    nw = struct.unpack_from(">I", data, j)[0]
+                    if (nw >> 26) == 13 and ((nw >> 21) & 0x1F) == rx:
+                        stb_len = 4
+
+            if stb_len:
+                end = min(j + stb_len + window, n)
+                findings.append(SecurityAccessFinding(
+                    offset=i,
+                    arch="VLE",
+                    pattern="static-seed-requestSeed",
+                    evidence=data[i:end],
+                    note=(
+                        "se_li Rx,0x67 + stb Rx: requestSeed positive-response SID "
+                        "store; no seed content follows — static or absent seed"
+                    ),
+                ))
+
+            i += 2
+
+        return findings
