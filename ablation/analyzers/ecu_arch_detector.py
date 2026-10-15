@@ -180,6 +180,7 @@ class EcuArchDetector:
             self._score_ppc_vle,
             self._score_sh2a,
             self._score_m32r,
+            self._score_c166,
         ]
         cands: list[ArchCandidate] = []
         for fn in runners:
@@ -666,3 +667,46 @@ class EcuArchDetector:
         else:
             return None
         return ArchCandidate(arch="m32r", score=score, reason=reason)
+
+    def _score_c166(self) -> Optional[ArchCandidate]:
+        """
+        Infineon/Siemens C166/C167 detection via JMPS IVT density.
+
+        C166/C167 MCUs (used in BMW MS43/MS41/MS42, Bosch Motronic M3.x/KW1,
+        VW Motronic variants) map a 256-byte interrupt vector table at PA 0x000000.
+        The table has exactly 64 entries × 4 bytes. Every entry is a JMPS instruction:
+          FA seg lo hi  (opcode 0xFA = JMPS seg, caddr)
+        where lo+hi form the target address in segment `seg` (each segment = 16KB).
+
+        This IVT structure is unique: 64 consecutive 4-byte slots at offset 0,
+        every one beginning with opcode 0xFA. No other supported architecture
+        produces this pattern in the first 256 bytes.
+
+        Physical address encoding: PA = seg * 0x4000 + (hi << 8 | lo).
+        Reset vector at IVT[0] (offset 0x00). UART/serial ISRs typically in
+        segments 0x0E–0x0F; engine ISRs in segment 0x00.
+
+        Score breakdown:
+          0.97: jmps64 == 64  (all IVT slots are JMPS — definitive C166/C167)
+          0.88: jmps64 >= 56  (≥87.5% — partial ROM or short read; HIGH confidence)
+          0.70: jmps64 >= 40  (≥62.5% — MEDIUM; possible C166 with non-JMPS traps)
+        """
+        data = self._data
+        if len(data) < 256:
+            return None
+
+        # Count IVT entries (4-byte stride, 64 total) whose opcode byte is 0xFA (JMPS)
+        jmps64 = sum(1 for off in range(0, 256, 4) if data[off] == 0xFA)
+
+        if jmps64 == 64:
+            score = 0.97
+            reason = "C166/C167: 64/64 IVT slots begin with JMPS opcode 0xFA (definitive)"
+        elif jmps64 >= 56:
+            score = 0.88
+            reason = f"C166/C167: {jmps64}/64 IVT slots begin with JMPS 0xFA (partial ROM)"
+        elif jmps64 >= 40:
+            score = 0.70
+            reason = f"C166/C167: {jmps64}/64 IVT slots begin with JMPS 0xFA (weak)"
+        else:
+            return None
+        return ArchCandidate(arch="c166", score=score, reason=reason)
