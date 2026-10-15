@@ -323,6 +323,8 @@ class BinaryContext:
             binary = lief.parse(data)
         except Exception:
             return 0
+        if binary is None:
+            return 0
         self._build_string_xref_index(data, binary)
         return sum(len(v) for v in self._str_xref_idx.values())
 
