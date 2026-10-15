@@ -2048,24 +2048,34 @@ class BinaryContext:
     def _build_m88k(cls, data: bytes, path: str, sha: str) -> "BinaryContext":
         """Build BinaryContext from an m88k BCS COFF binary (Motorola 88000).
 
-        Uses m88k_coff_parser to extract sections and detect function starts
-        via 'st r1, r31, imm16' prologue scan and BSR target analysis.
-        No symbol table in stripped binaries; exports left empty.
-        Capstone has no m88k backend — WindowAnalyzer cannot disassemble;
-        use the raw text section bytes for pattern analysis instead.
+        Uses coff_m88k_parser + M88kDecoder to extract sections, function
+        starts (BSR/BSR.N scan → 126 unique entries on moto_gen), and call
+        edges.  No symbol table in stripped binaries; exports left empty.
+        Capstone has no m88k backend; M88kDecoder is the only Python decoder.
         """
         import bisect
-        from ablation.core.m88k_coff_parser import parse as m88k_parse
+        import tempfile, os
+        from ablation.core.coff_m88k_parser import parse as m88k_parse
+        from ablation.analyzers.insn_m88k import M88kDecoder
 
         ctx = cls()
         ctx.path = path
         ctx.sha256 = sha
         try:
-            mb = m88k_parse(path, data)
+            # coff_m88k_parser.parse() takes a path, not raw bytes; write to tmp
+            tmp = None
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.coff') as f:
+                    f.write(data)
+                    tmp = f.name
+                mb = m88k_parse(tmp)
+            finally:
+                if tmp and os.path.exists(tmp):
+                    os.unlink(tmp)
         except Exception:
             return ctx
 
-        ctx.arch = mb.arch
+        ctx.arch = 'm88k'
         ctx.base_va = mb.text_start
 
         # Strings from .data section
@@ -2073,34 +2083,41 @@ class BinaryContext:
         if dsec is not None and dsec.data:
             _extract_strings_into(dsec.data, dsec.vaddr, ctx.strings)
 
-        ctx.func_starts = mb.func_starts
+        # Function starts: BSR + BSR.N scan via M88kDecoder
+        try:
+            dec = M88kDecoder(mb)
+            func_set = dec.function_starts()
+        except Exception:
+            func_set = set()
+        ctx.func_starts = sorted(func_set)
 
-        # Call graph: BSR scan (op=0x32, signed 16-bit word displacement)
+        # Call graph: re-scan BSR/BSR.N, resolve owner and label
         tsec = mb.text
-        if tsec is not None and tsec.data:
-            text_data = tsec.data
-            text_va = tsec.vaddr
-            n_words = len(text_data) // 4
+        if tsec is not None and tsec.data and ctx.func_starts:
+            import bisect as _bisect
             func_arr = ctx.func_starts
             va_to_export: Dict[int, str] = {va: nm for nm, va in ctx.exports.items()}
             edges: List[Tuple[int, int, str]] = []
+            text_data = tsec.data
+            text_va = tsec.vaddr
+            n_words = len(text_data) // 4
             for i in range(n_words):
                 word = struct.unpack_from('>I', text_data, i * 4)[0]
-                if (word >> 26) != 0x32:
+                op = word >> 26
+                if op not in (0x32, 0x33):   # BSR, BSR.N
                     continue
                 pc = text_va + i * 4
-                disp = word & 0xFFFF
-                if disp & 0x8000:
-                    disp -= 0x10000
-                target = pc + 4 + disp * 4
+                off26 = word & 0x3FFFFFF
+                if off26 & (1 << 25):
+                    off26 -= (1 << 26)
+                target = pc + 4 + off26 * 4
                 if not tsec.contains_va(target) or (target & 3) != 0:
                     continue
                 label = va_to_export.get(target, "")
                 owner = pc
-                if func_arr:
-                    idx = bisect.bisect_right(func_arr, pc) - 1
-                    if idx >= 0:
-                        owner = func_arr[idx]
+                idx = _bisect.bisect_right(func_arr, pc) - 1
+                if idx >= 0:
+                    owner = func_arr[idx]
                 edges.append((owner, target, label))
             ctx.call_edges = edges
 
