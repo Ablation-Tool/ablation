@@ -150,8 +150,23 @@ class WindowAnalyzer:
         except Exception:
             return
 
-        # Build a VA-mapped image from XCOFF sections
+        # Build a VA-mapped image from XCOFF sections.
+        # AIX shared library members store vaddr=0 for all sections; the actual
+        # load addresses come from the optional header.  When all vaddrs are 0,
+        # fall back to sequential physical layout: sections sorted by their file
+        # offset (scnptr), placed end-to-end starting at VA 0.
         if xb.sections:
+            data_sections = [s for s in xb.sections if s.size > 0 and s.data]
+            all_zero_vaddr = all(s.vaddr == 0 for s in data_sections)
+
+            if all_zero_vaddr and data_sections:
+                # Assign VAs sequentially by scnptr order (physical file order)
+                ordered = sorted(data_sections, key=lambda s: s.offset)
+                va = 0
+                for sec in ordered:
+                    sec.vaddr = va
+                    va += sec.size
+
             max_va = max(s.vaddr + s.size for s in xb.sections if s.size > 0)
             if max_va > 0:
                 image = bytearray(max_va)
