@@ -5,15 +5,24 @@ Motivation: lief populates func_starts only from .symtab / .dynsym entries.
 Statically linked stripped i386 ELF binaries have neither table populated.
 Without func_starts, SemanticSearcher and TaintTracker cannot run.
 
-Solution: scan every PT_LOAD+PF_X segment for i386 function prologue byte patterns.
+Solution: scan every PT_LOAD+PF_X segment for i386 function prologue byte patterns,
+with a call-target fallback for binaries compiled with -fomit-frame-pointer (FPO).
 
-    Primary:   55 89 e5        push ebp; mov ebp, esp    (CDECL, ~95% of GCC functions)
-    Secondary: 55 57 56        push ebp; push edi; push esi  (callee-save variant)
-               55 53           push ebp; push ebx            (small function variant)
+    Primary:        55 89 e5      push ebp; mov ebp, esp    (CDECL, ~95% of GCC functions)
+    Secondary:      55 57 56      push ebp; push edi; push esi  (callee-save variant)
+                    55 53         push ebp; push ebx            (small function variant)
+    FPO fallback:   E8 XX XX XX XX  call rel32 target collection
+                    Activates when primary+secondary find < 10 starts.
+                    All CALL rel32 targets within the exec segment are function entries.
+                    GCC -fomit-frame-pointer omits push ebp entirely; call-targets are the
+                    only reliable recovery method for these binaries.
 
 False-positive rate for GCC i386 code: low. The 3-byte primary pattern is highly
 discriminating — ModRM 0xe5 encodes (mod=11, reg=4/ESP, rm=5/EBP), a combination
 that appears inside other instructions only coincidentally.
+
+The FPO fallback has a higher false-positive rate (indirect call targets may be
+decoded as direct calls), but is far better than zero functions for large FPO binaries.
 
 Usage:
 
@@ -25,7 +34,7 @@ Usage:
 
 Integration note:
     BinaryContext._extract_func_starts() calls this scanner automatically for
-    x86_32 binaries when starts would otherwise be empty (no eh_frame, no exports).
+    x86_32 binaries when starts < 50 (no eh_frame, no exports, or FPO binary).
 """
 
 import struct
@@ -194,6 +203,37 @@ class StaticELF32FuncStartScanner:
                 if pat_starts:
                     starts.update(pat_starts)
                     result.patterns_used.append(f'secondary ({pat.hex()})')
+
+        # FPO fallback: collect call rel32 targets when prologue patterns find nothing.
+        # -fomit-frame-pointer eliminates all push-ebp prologues; call targets are the
+        # only reliable function-start source for these binaries.
+        if len(starts) < 10:
+            fpo_starts: set = set()
+            exec_segs = []
+            for i in range(e_phnum):
+                ph = e_phoff + i * e_phentsize
+                if ph + _PHDR32_SIZE > len(raw):
+                    break
+                p_type   = struct.unpack_from('<I', raw, ph + _PHDR32_TYPE)[0]
+                p_flags  = struct.unpack_from('<I', raw, ph + _PHDR32_FLAGS)[0]
+                p_offset = struct.unpack_from('<I', raw, ph + _PHDR32_OFFSET)[0]
+                p_vaddr  = struct.unpack_from('<I', raw, ph + _PHDR32_VADDR)[0]
+                p_filesz = struct.unpack_from('<I', raw, ph + _PHDR32_FILESZ)[0]
+                if p_type == _PT_LOAD and (p_flags & _PF_X) and p_filesz > 0:
+                    exec_segs.append((p_offset, p_vaddr, p_filesz))
+            for p_offset, p_vaddr, p_filesz in exec_segs:
+                seg = raw[p_offset: p_offset + p_filesz]
+                for i in range(len(seg) - 4):
+                    if seg[i] == 0xE8:  # CALL rel32
+                        rel = struct.unpack_from('<i', seg, i + 1)[0]
+                        target = p_vaddr + i + 5 + rel
+                        for t_off, t_va, t_sz in exec_segs:
+                            if t_va <= target < t_va + t_sz:
+                                fpo_starts.add(target)
+                                break
+            if fpo_starts:
+                starts.update(fpo_starts)
+                result.patterns_used.append('fpo_call_target (E8 rel32)')
 
         result.starts = sorted(starts)
         return result

@@ -894,9 +894,11 @@ class BinaryContext:
                             pos = idx + 4
             except Exception:
                 pass
-        # x86_32: scan for i386 function prologues (push ebp; mov ebp, esp)
-        # when eh_frame and exports both produce zero starts (static stripped binaries).
-        if self.arch == 'x86_32' and not starts and path:
+        # x86_32: scan for i386 function prologues (push ebp; mov ebp, esp) and,
+        # as a fallback for -fomit-frame-pointer binaries, call-target analysis.
+        # Runs when eh_frame+exports produce fewer than 50 starts, matching the
+        # ppc32/ppc64 threshold above (where < 100 triggers the MFLR scan).
+        if self.arch == 'x86_32' and path and (not starts or len(starts) < 50):
             try:
                 from ablation.analyzers.static_elf32_func_start_scanner import StaticELF32FuncStartScanner
                 scanner = StaticELF32FuncStartScanner.from_path(path)
