@@ -88,8 +88,19 @@ _JMPS     = 'JMPS'       # JMPS seg, caddr
 _CALLS    = 'CALLS'      # CALLS seg, caddr
 _MOV_LD   = 'MOV_LD'    # load from direct/indirect memory address
 _MOV_ST   = 'MOV_ST'    # store to direct/indirect memory address
+_MOV_REG  = 'MOV_REG'   # MOV Rwdst, Rwsrc — register-to-register (2-byte, F0)
+_PUSH     = 'PUSH'       # PUSH Rwn — push register onto stack (2-byte, 88 n0)
+_POP      = 'POP'        # POP Rwn — pop register from stack (2-byte, 98 n0)
+_RET      = 'RET'        # RET — return from subroutine (2-byte, DB 00)
+_JMPR     = 'JMPR'       # JMPR cc, rel8 — relative conditional branch (2-byte, nD rel)
 _UNKNOWN2 = 'UNKNOWN_2B'
 _UNKNOWN4 = 'UNKNOWN_4B'
+
+# Condition code names for JMPR (index = cc nibble 0–F)
+_JMPR_CC = (
+    'UC', 'Z', 'NZ', 'V', 'NV', 'N', 'NN', 'C',
+    'NC', 'UGT', 'ULE', 'SGT', 'SLE', 'SLT', 'SGE', 'NET',
+)
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +122,7 @@ class C166Insn:
 
     @property
     def is_branch(self) -> bool:
-        return self.insn_type == _JMPS
+        return self.insn_type in (_JMPS, _JMPR)
 
     @property
     def is_call(self) -> bool:
@@ -119,7 +130,7 @@ class C166Insn:
 
     @property
     def is_load(self) -> bool:
-        return self.insn_type in (_MOV_IMM, _MOV_LD)
+        return self.insn_type in (_MOV_IMM, _MOV_LD, _MOV_REG)
 
     @property
     def is_store(self) -> bool:
@@ -226,11 +237,7 @@ class EcuC166Decoder:
             return self._decode4(pa, raw)
         else:
             raw = data[byte_off: byte_off + 2]
-            return C166Insn(
-                pa=pa, raw=raw,
-                mnemonic=f'db {raw.hex(" ")}',
-                insn_type=_UNKNOWN2,
-            )
+            return self._decode2(pa, raw)
 
     def disassemble(
         self,
@@ -462,4 +469,74 @@ class EcuC166Decoder:
             pa=pa, raw=raw,
             mnemonic=f'db {raw.hex(" ")}',
             insn_type=_UNKNOWN4,
+        )
+
+    def _decode2(self, pa: int, raw: bytes) -> C166Insn:
+        """Decode a 2-byte instruction.
+
+        Encodings are empirically confirmed from MS43 ROM analysis
+        (prologue/epilogue mirroring, post-CMP branch target arithmetic).
+        """
+        op = raw[0]
+        b1 = raw[1]
+
+        # PUSH Rwn: opcode 0x88, register in high nibble of byte1, low nibble = 0.
+        # Confirmed: 88 90/80/70/60/E0/D0/C0 = PUSH R9/R8/R7/R6/R14/R13/R12
+        if op == 0x88 and (b1 & 0x0F) == 0x00:
+            reg = (b1 >> 4) & 0xF
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'PUSH R{reg:X}',
+                insn_type=_PUSH,
+                reg=reg,
+            )
+
+        # POP Rwn: opcode 0x98, register in high nibble of byte1, low nibble = 0.
+        # Confirmed: 98 60/70/80/90 = POP R6/R7/R8/R9 (reverse PUSH order)
+        if op == 0x98 and (b1 & 0x0F) == 0x00:
+            reg = (b1 >> 4) & 0xF
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'POP R{reg:X}',
+                insn_type=_POP,
+                reg=reg,
+            )
+
+        # RET: opcode 0xDB, operand 0x00.
+        # Confirmed: DB 00 = RET (appears after POP epilogue in seed_fetch/init_ds2_sa_ctx)
+        if op == 0xDB and b1 == 0x00:
+            return C166Insn(pa=pa, raw=raw, mnemonic='RET', insn_type=_RET)
+
+        # JMPR cc, rel8: low nibble of byte0 = 0xD, high nibble = condition code.
+        # Confirmed: 0D 06 = JMPR UC +12, 2D 10 = JMPR NZ +32, 3D 61 = JMPR V +194
+        # Displacement is signed 8-bit in words (2 bytes each).
+        # Target = pa + 2 + rel*2
+        if (op & 0x0F) == 0x0D:
+            cc = (op >> 4) & 0xF
+            rel = struct.unpack_from('b', raw, 1)[0]  # signed byte
+            target = pa + 2 + rel * 2
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'JMPR {_JMPR_CC[cc]}, 0x{target:06X}',
+                insn_type=_JMPR,
+                target=target,
+                imm=rel,
+            )
+
+        # MOV Rwdst, Rwsrc: opcode 0xF0, byte1 = (dst<<4)|src.
+        # Confirmed: F0 8D = MOV R8,RD / F0 9C = MOV R9,RC (seed_fetch prologue arg-save)
+        if op == 0xF0:
+            dst = (b1 >> 4) & 0xF
+            src = b1 & 0xF
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'MOV R{dst:X}, R{src:X}',
+                insn_type=_MOV_REG,
+                reg=dst,
+            )
+
+        return C166Insn(
+            pa=pa, raw=raw,
+            mnemonic=f'db {raw.hex(" ")}',
+            insn_type=_UNKNOWN2,
         )

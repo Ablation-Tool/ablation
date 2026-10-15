@@ -298,8 +298,8 @@ def test_decode_st_indirect():
 # ---------------------------------------------------------------------------
 
 def test_decode_unknown_2b():
-    """Non-table opcode 0x0D is decoded as UNKNOWN_2B and takes 2 bytes."""
-    data = _make_rom(bytes([0x0D, 0x07, 0xE6, 0xF4, 0x20, 0x00]))
+    """Opcode 0xEA has no defined decoding and is returned as UNKNOWN_2B."""
+    data = _make_rom(bytes([0xEA, 0x07, 0xE6, 0xF4, 0x20, 0x00]))
     dec = EcuC166Decoder(data)
     insn = dec.decode_one(0)
     assert insn is not None
@@ -579,3 +579,208 @@ def test_insn_str_format():
     s = str(insn)
     assert '0x000000' in s
     assert 'MOV' in s
+
+
+# ---------------------------------------------------------------------------
+# Section 17 — decode_one(): 2-byte confirmed encodings
+# ---------------------------------------------------------------------------
+
+def _push(reg: int) -> bytes:
+    """PUSH Rwn: 0x88 (reg<<4) — confirmed from MS43 prologue."""
+    return bytes([0x88, (reg & 0xF) << 4])
+
+
+def _pop(reg: int) -> bytes:
+    """POP Rwn: 0x98 (reg<<4) — confirmed from MS43 epilogue."""
+    return bytes([0x98, (reg & 0xF) << 4])
+
+
+def _ret() -> bytes:
+    """RET: 0xDB 0x00 — confirmed from MS43 function return sites."""
+    return bytes([0xDB, 0x00])
+
+
+def _jmpr(cc: int, rel: int) -> bytes:
+    """JMPR cc, rel8: (cc<<4)|0x0D, signed rel — confirmed post-CMP branches."""
+    return bytes([(cc & 0xF) << 4 | 0x0D, rel & 0xFF])
+
+
+def _mov_reg(dst: int, src: int) -> bytes:
+    """MOV Rdst, Rsrc: 0xF0 (dst<<4)|src — confirmed from seed_fetch prologue."""
+    return bytes([0xF0, ((dst & 0xF) << 4) | (src & 0xF)])
+
+
+def test_decode_push_r9():
+    """PUSH R9: 0x88 0x90 — confirmed MS43 prologue byte pattern."""
+    raw = _push(9)  # 88 90
+    dec = EcuC166Decoder(_make_rom(raw))
+    insn = dec.decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == 'PUSH'
+    assert insn.reg == 9
+    assert 'PUSH' in insn.mnemonic and 'R9' in insn.mnemonic
+
+
+def test_decode_push_r14():
+    """PUSH R14: 0x88 0xE0 — confirmed from CALLS 0x03D7B0 prologue."""
+    raw = _push(14)  # 88 e0
+    dec = EcuC166Decoder(_make_rom(raw))
+    insn = dec.decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == 'PUSH'
+    assert insn.reg == 14
+
+
+def test_decode_push_all_registers():
+    """PUSH encodes all R0–R15 correctly."""
+    for r in range(16):
+        raw = _push(r)
+        dec = EcuC166Decoder(_make_rom(raw))
+        insn = dec.decode_one(0)
+        assert insn is not None and insn.insn_type == 'PUSH' and insn.reg == r
+
+
+def test_decode_pop_r8():
+    """POP R8: 0x98 0x80 — confirmed MS43 epilogue."""
+    raw = _pop(8)  # 98 80
+    dec = EcuC166Decoder(_make_rom(raw))
+    insn = dec.decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == 'POP'
+    assert insn.reg == 8
+
+
+def test_decode_pop_all_registers():
+    """POP encodes all R0–R15 correctly."""
+    for r in range(16):
+        raw = _pop(r)
+        dec = EcuC166Decoder(_make_rom(raw))
+        insn = dec.decode_one(0)
+        assert insn is not None and insn.insn_type == 'POP' and insn.reg == r
+
+
+def test_decode_ret():
+    """RET: 0xDB 0x00 — confirmed function return pattern."""
+    raw = _ret()
+    dec = EcuC166Decoder(_make_rom(raw))
+    insn = dec.decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == 'RET'
+    assert insn.mnemonic == 'RET'
+
+
+def test_decode_ret_is_not_branch_or_call():
+    raw = _ret()
+    dec = EcuC166Decoder(_make_rom(raw))
+    insn = dec.decode_one(0)
+    assert insn.is_branch is False
+    assert insn.is_call is False
+
+
+def test_decode_jmpr_uc_forward():
+    """JMPR UC, +6: 0x0D 0x06 — confirmed unconditional branch."""
+    raw = _jmpr(cc=0, rel=6)  # 0D 06
+    dec = EcuC166Decoder(_make_rom(raw))
+    insn = dec.decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == 'JMPR'
+    assert insn.is_branch is True
+    # target = 0 + 2 + 6*2 = 14 = 0x00000E
+    assert insn.target == 14
+    assert insn.imm == 6
+    assert 'UC' in insn.mnemonic
+
+
+def test_decode_jmpr_nz_condition():
+    """JMPR NZ, +16: 0x2D 0x10 — confirmed post-CMP branch in init_ds2_sa_ctx."""
+    raw = _jmpr(cc=2, rel=16)  # 2D 10
+    dec = EcuC166Decoder(_make_rom(raw))
+    insn = dec.decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == 'JMPR'
+    assert insn.target == 2 + 32  # 0 + 2 + 16*2
+    assert 'NZ' in insn.mnemonic
+
+
+def test_decode_jmpr_backward_branch():
+    """JMPR with negative rel — backward loop-back branch."""
+    # cd ed: cc=C=SLE, rel=0xED=-19 (signed) → target = 0 + 2 + (-19)*2 = -36
+    raw = bytes([0xCD, 0xED])
+    dec = EcuC166Decoder(_make_rom(raw))
+    insn = dec.decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == 'JMPR'
+    # target = 0 + 2 + (-19)*2 = -36 (wraps in 32-bit, fine for a 24-bit addr space)
+    assert insn.imm == -19
+    assert 'SLE' in insn.mnemonic
+
+
+def test_decode_jmpr_all_conditions():
+    """JMPR decodes all 16 condition codes without error."""
+    cc_names = ['UC','Z','NZ','V','NV','N','NN','C','NC','UGT','ULE','SGT','SLE','SLT','SGE','NET']
+    for cc, name in enumerate(cc_names):
+        raw = _jmpr(cc=cc, rel=1)
+        dec = EcuC166Decoder(_make_rom(raw))
+        insn = dec.decode_one(0)
+        assert insn is not None and insn.insn_type == 'JMPR'
+        assert name in insn.mnemonic
+
+
+def test_decode_mov_reg_r8_rd():
+    """MOV R8, RD: 0xF0 0x8D — confirmed seed_fetch prologue (save arg RD)."""
+    raw = _mov_reg(dst=8, src=13)  # F0 8D
+    dec = EcuC166Decoder(_make_rom(raw))
+    insn = dec.decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == 'MOV_REG'
+    assert insn.reg == 8
+    assert 'MOV' in insn.mnemonic and 'R8' in insn.mnemonic and 'RD' in insn.mnemonic
+
+
+def test_decode_mov_reg_r9_rc():
+    """MOV R9, RC: 0xF0 0x9C — confirmed seed_fetch prologue (save arg RC)."""
+    raw = _mov_reg(dst=9, src=12)  # F0 9C
+    dec = EcuC166Decoder(_make_rom(raw))
+    insn = dec.decode_one(0)
+    assert insn is not None
+    assert insn.insn_type == 'MOV_REG'
+    assert insn.reg == 9
+
+
+def test_decode_mov_reg_all_pairs():
+    """MOV_REG decodes all 256 register pair combinations without error."""
+    for dst in range(16):
+        for src in range(16):
+            raw = _mov_reg(dst, src)
+            dec = EcuC166Decoder(_make_rom(raw))
+            insn = dec.decode_one(0)
+            assert insn is not None
+            assert insn.insn_type == 'MOV_REG'
+            assert insn.reg == dst
+
+
+def test_mov_reg_is_load_property():
+    """MOV_REG is classified as a load (register ← register)."""
+    raw = _mov_reg(dst=4, src=9)
+    dec = EcuC166Decoder(_make_rom(raw))
+    insn = dec.decode_one(0)
+    assert insn.is_load is True
+    assert insn.is_store is False
+
+
+def test_disassemble_with_2byte_decoded():
+    """disassemble() correctly steps through a mix with decoded 2-byte ops."""
+    body = (
+        _push(9)                    # 88 90
+        + _push(8)                  # 88 80
+        + _mov_reg(dst=8, src=13)   # F0 8D (MOV R8, RD)
+        + _mov_imm(4, 0x1234)       # E6 F4 34 12
+        + _jmpr(cc=2, rel=1)        # 2D 01 (JMPR NZ, +1 word)
+        + _pop(8)                   # 98 80
+        + _pop(9)                   # 98 90
+        + _ret()                    # DB 00
+    )
+    dec = EcuC166Decoder(_make_rom(body))
+    insns = dec.disassemble(0, len(body))
+    types = [i.insn_type for i in insns]
+    assert types == ['PUSH', 'PUSH', 'MOV_REG', 'MOV_IMM', 'JMPR', 'POP', 'POP', 'RET']
