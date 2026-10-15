@@ -15,9 +15,10 @@ Three gaps this closes:
    alongside an OVF descriptor. `from_zip()` identifies and extracts the disk image.
 2. **VMDK → raw → P2**: `qemu-img convert` flattens the streamOptimized VMDK to
    a raw byte-addressable image; MBR parsing locates P2's byte offset dynamically.
-3. **Root-free ext4 access**: `debugfs -o offset=<bytes>` addresses the ext4 FS
-   at the partition boundary inside the raw image, extracting `datafs.tar.gz`
-   without a loop mount.
+3. **Root-free ext4 access**: `dd` extracts the P2 partition to a flat image
+   (`p2.img`), then `debugfs p2.img` dumps `datafs.tar.gz` without a loop
+   mount. (`debugfs -o offset=` was removed in 1.47.x; the dd approach works
+   on all versions.)
 
 ## Entry points
 
