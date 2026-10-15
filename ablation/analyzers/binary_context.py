@@ -805,6 +805,12 @@ class BinaryContext:
                                     # pyelftools can return Python ints > 2^64 for PPC64
                                     # ELF V1 eh_frame pcrel entries; mask to 64 bits.
                                     va = int(e["initial_location"]) & 0xFFFFFFFFFFFFFFFF
+                                    # ELF32 (ppc32, x86_32): pyelftools computes pcrel
+                                    # in full Python int arithmetic and can produce values
+                                    # like 0x1000497c0 (correct 32-bit VA + 0x100000000)
+                                    # for ppc32 BE binaries. Clamp to 32-bit address space.
+                                    if self.arch in ('ppc32', 'x86_32'):
+                                        va &= 0xFFFFFFFF
                                     if self.arch == 'arm32' and (va & 1):
                                         va &= ~1
                                         thumb.add(va)
@@ -841,17 +847,35 @@ class BinaryContext:
                 _fmt = '<' if _elf_le else '>'
                 # mflr r0 = 0x7C0802A6; stored LE as a6 02 08 7c, BE as 7c 08 02 a6
                 MFLR_R0 = b'\xa6\x02\x08\x7c' if _elf_le else b'\x7c\x08\x02\xa6'
-                # ELF64: e_phoff at 0x20, e_phentsize at 0x36, e_phnum at 0x38
-                e_phoff = struct.unpack_from(_fmt + 'Q', raw, 0x20)[0]
-                e_phentsize = struct.unpack_from(_fmt + 'H', raw, 0x36)[0]
-                e_phnum = struct.unpack_from(_fmt + 'H', raw, 0x38)[0]
+                # EI_CLASS at offset 4: 1=ELF32, 2=ELF64 — struct layouts differ completely
+                _elf32 = len(raw) > 4 and raw[4] == 1
+                if _elf32:
+                    # ELF32 Ehdr: e_phoff(4B)@0x1C, e_phentsize(2B)@0x2A, e_phnum(2B)@0x2C
+                    e_phoff = struct.unpack_from(_fmt + 'I', raw, 0x1C)[0]
+                    e_phentsize = struct.unpack_from(_fmt + 'H', raw, 0x2A)[0]
+                    e_phnum = struct.unpack_from(_fmt + 'H', raw, 0x2C)[0]
+                else:
+                    # ELF64 Ehdr: e_phoff(8B)@0x20, e_phentsize(2B)@0x36, e_phnum(2B)@0x38
+                    e_phoff = struct.unpack_from(_fmt + 'Q', raw, 0x20)[0]
+                    e_phentsize = struct.unpack_from(_fmt + 'H', raw, 0x36)[0]
+                    e_phnum = struct.unpack_from(_fmt + 'H', raw, 0x38)[0]
                 for i in range(e_phnum):
                     ph_off = e_phoff + i * e_phentsize
                     p_type = struct.unpack_from(_fmt + 'I', raw, ph_off)[0]
-                    p_flags = struct.unpack_from(_fmt + 'I', raw, ph_off + 0x04)[0]
-                    p_offset = struct.unpack_from(_fmt + 'Q', raw, ph_off + 0x08)[0]
-                    p_vaddr = struct.unpack_from(_fmt + 'Q', raw, ph_off + 0x10)[0]
-                    p_filesz = struct.unpack_from(_fmt + 'Q', raw, ph_off + 0x20)[0]
+                    if _elf32:
+                        # ELF32 Phdr layout: type(4) offset(4) vaddr(4) paddr(4)
+                        #                    filesz(4) memsz(4) flags(4) align(4)
+                        p_offset = struct.unpack_from(_fmt + 'I', raw, ph_off + 0x04)[0]
+                        p_vaddr  = struct.unpack_from(_fmt + 'I', raw, ph_off + 0x08)[0]
+                        p_filesz = struct.unpack_from(_fmt + 'I', raw, ph_off + 0x10)[0]
+                        p_flags  = struct.unpack_from(_fmt + 'I', raw, ph_off + 0x18)[0]
+                    else:
+                        # ELF64 Phdr layout: type(4) flags(4) offset(8) vaddr(8)
+                        #                    paddr(8) filesz(8) memsz(8) align(8)
+                        p_flags  = struct.unpack_from(_fmt + 'I', raw, ph_off + 0x04)[0]
+                        p_offset = struct.unpack_from(_fmt + 'Q', raw, ph_off + 0x08)[0]
+                        p_vaddr  = struct.unpack_from(_fmt + 'Q', raw, ph_off + 0x10)[0]
+                        p_filesz = struct.unpack_from(_fmt + 'Q', raw, ph_off + 0x20)[0]
                     PT_LOAD = 1
                     PF_X = 0x1
                     if p_type == PT_LOAD and (p_flags & PF_X) and p_filesz > 0:
@@ -884,8 +908,14 @@ class BinaryContext:
 
         x86_64: scan .text for 0xe8 (CALL rel32); target = site+5+disp32.
         arm32:  scan .text for BL words (byte[3]==0xEB); target = site+8+imm24*4.
+        ppc32/ppc64: scan .text for BL words (opcode=18,AA=0,LK=1); target = site+sign_ext26.
         Falls back to sequential capstone if NumPy is unavailable.
         """
+        if self.arch in ('ppc32', 'ppc64'):
+            if _NUMPY_OK:
+                self._build_call_graph_ppc(data, binary)
+            return
+
         if self.arch == 'arm32':
             if _NUMPY_OK:
                 self._build_call_graph_arm32(data, binary)
@@ -956,6 +986,77 @@ class BinaryContext:
         # Label targets with PLT name or export name
         va_to_export: Dict[int, str] = {va: nm for nm, va in self.exports.items()}
 
+        edges: List[Tuple[int, int, str]] = []
+        for owner_va, target_va in zip(owner_vas.tolist(), target_vas.tolist()):
+            label = self.plt.get(target_va, "") or va_to_export.get(target_va, "")
+            edges.append((int(owner_va), int(target_va), label))
+
+        self.call_edges = edges
+
+    def _build_call_graph_ppc(self, data: bytes, binary) -> None:
+        """PPC32 BE / PPC64le call graph via numpy BL scan.
+
+        BL encoding (both BE and LE): bits[31:26]=18, AA=0 (bit1), LK=1 (bit0).
+        For ppc32 BE: words stored big-endian; use byteswap to decode.
+        For ppc64le: words stored little-endian; '<u4' decodes directly.
+        Target: insn_va + sign_extend_26(word & 0x03FFFFFC)
+        """
+        text_sec = binary.get_section(".text")
+        if not text_sec:
+            return
+        sec_data = bytes(text_sec.content)
+        sec_va = int(text_sec.virtual_address)
+        N = len(sec_data)
+        if N < 4:
+            return
+
+        word_count = N // 4
+        if self.arch == 'ppc32':
+            # Big-endian: each 4-byte chunk read as big-endian uint32
+            words = np.frombuffer(sec_data[:word_count * 4], dtype=np.dtype('>u4')).astype(np.uint32)
+        else:
+            # ppc64le: little-endian uint32
+            words = np.frombuffer(sec_data[:word_count * 4], dtype=np.dtype('<u4'))
+
+        # BL: opcode=18 (bits 31:26), AA=0 (bit 1), LK=1 (bit 0)
+        bl_idx = np.where(((words >> 26) == 18) & ((words & 3) == 1))[0]
+        if len(bl_idx) == 0:
+            self.call_edges = []
+            return
+
+        insn_vas = _va_to_i64(sec_va) + bl_idx.astype(np.int64) * 4
+
+        # Extract 26-bit signed branch offset: bits [25:2] of instruction word
+        # Sign-extend from bit 25: shift to bit 31 then arithmetic-right-shift back
+        raw26 = (words[bl_idx] & np.uint32(0x03FFFFFC)).astype(np.int32)
+        signed_offset = (raw26 << 6) >> 6
+
+        target_vas = insn_vas + signed_offset.astype(np.int64)
+
+        plt_arr  = _va_arr_to_i64(sorted(self.plt.keys())) if self.plt         else np.empty(0, np.int64)
+        func_arr = _va_arr_to_i64(self.func_starts)         if self.func_starts else np.empty(0, np.int64)
+
+        valid = np.zeros(len(target_vas), dtype=bool)
+        if len(plt_arr):
+            hi = np.searchsorted(plt_arr, target_vas)
+            hi = np.minimum(hi, len(plt_arr) - 1)
+            valid |= plt_arr[hi] == target_vas
+        if len(func_arr):
+            hi = np.searchsorted(func_arr, target_vas)
+            hi = np.minimum(hi, len(func_arr) - 1)
+            valid |= func_arr[hi] == target_vas
+
+        insn_vas   = insn_vas[valid]
+        target_vas = target_vas[valid]
+
+        if len(func_arr) and len(insn_vas):
+            owner_idx = np.searchsorted(func_arr, insn_vas, side='right') - 1
+            owner_idx = np.maximum(owner_idx, 0)
+            owner_vas = func_arr[owner_idx]
+        else:
+            owner_vas = insn_vas
+
+        va_to_export: Dict[int, str] = {va: nm for nm, va in self.exports.items()}
         edges: List[Tuple[int, int, str]] = []
         for owner_va, target_va in zip(owner_vas.tolist(), target_vas.tolist()):
             label = self.plt.get(target_va, "") or va_to_export.get(target_va, "")
