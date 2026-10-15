@@ -166,6 +166,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "Extract files from AMI BMC CramFS firmware" | `AmiCramFSExtractor.from_image(ima_path, offset).extract_file('/path')` |
 | "Extract FortiOS hardware firmware (.out file)" | `FortiOSHardwareExtractor.from_path(fw).extract_to(outdir)` |
 | "Recover inner partition key from FortiOS hardware .out firmware" | `FirmwareContainerKeyExtractor.from_path(fw)` |
+| "Extract PKI keys from FortiMail VM OVF zip or VMDK image" | `FortiMailVmdkExtractor.from_zip(zip_path)` or `.from_vmdk(vmdk_path)` |
 | "Batch-fingerprint cert keys in FortiGate OVF firmware ZIPs" | `FortiGateCertKeyScanner.batch_scan(dir)` |
 | "Scan bare FortiGate QCOW2/VHD disk image for cert keys" | `FortiGateCertKeyScanner.from_disk(path)` |
 | "Predict cert key set from firmware filename alone" | `FortiBuildTrackClassifier.classify(filename)` |
