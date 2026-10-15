@@ -30,6 +30,15 @@ Classification output (mirrors SinkArgClassifier taxonomy):
   STACK_DEST       r3 = addi r1, N — stack buffer as destination. INTERESTING.
   ARG_PROPAGATED   r4 from function argument via deref (ld rx, 0(param_reg)).
                    DANGEROUS when combined with STACK_DEST.
+  GLOBAL_DEREF     r4/r3 reached via double-dereference of a TOC global:
+                   ld rX, TOC_off(r2) → ld rY, 0(rX) → ld rD, N(rY).
+                   Source is program state (global pointer), not a direct
+                   function argument. Not treated as ARG_PROPAGATED.
+  CATGETS_RETURN   r4 for sprintf/snprintf came from a catgets() return
+                   (mr r4, r3 after bl catgets_stub in the call window).
+                   Format string is from NLS message catalog — not
+                   user-controllable. Clears interesting even when
+                   dest=STACK_DEST and src=ARG_PROPAGATED.
   IBM_OBJECT       r3 via mr from a non-stack saved register (IBM string object
                    pass — r4 may come from anywhere). Context-dependent.
   UNKNOWN          Cannot determine within the 12-instruction lookback window.
@@ -108,7 +117,11 @@ class Ppc64SinkSite:
     src_class: str                 # r4 classification (RODATA_TOC / ARG_PROPAGATED / IMM / UNKNOWN / …)
     dest_detail: str = ''          # human-readable r3 context (e.g. 'sp+0x70')
     src_detail: str = ''           # human-readable r4 context (e.g. 'ld 0(r25) [arg r3]')
-    interesting: bool = False      # True if dest=STACK_DEST and src=ARG_PROPAGATED
+    fmt_class: str = ''            # format string classification for sprintf/snprintf only
+                                   # (CATGETS_RETURN when r4←catgets return; otherwise empty)
+    fmt_detail: str = ''           # human-readable format string source context
+    interesting: bool = False      # True if dest=STACK_DEST, src=ARG_PROPAGATED, and
+                                   # fmt_class != CATGETS_RETURN
 
 
 # ── classifier ────────────────────────────────────────────────────────────────
@@ -326,17 +339,29 @@ class Ppc64BeSinkClassifier:
                         if bm in ('ld', 'lwz', 'lhz', 'lbz'):
                             bparts = [p.strip() for p in bop.split(',')]
                             bsrc = bparts[1] if len(bparts) >= 2 else ''
-                            # Direct TOC load → RODATA_TOC
+                            # Direct TOC load → RODATA_TOC (single-deref global, not argv)
                             if '(r2)' in bsrc or '(2)' in bsrc:
                                 return ('RODATA_TOC', f'{m} {src_part} [via r{base_reg}←TOC]')
-                            # Load via a non-volatile base register
                             try:
-                                bb_str = bsrc.split('(')[1].rstrip(')').lstrip('r')
-                                bb_reg = int(bb_str)
+                                bb_reg = int(bsrc.split('(')[1].rstrip(')').lstrip('r'))
                                 if bb_reg in _NONVOL_REGS:
-                                    # Only UNKNOWN if that non-vol was NOT a prologue-saved arg
+                                    # Non-volatile base: UNKNOWN unless set from a prologue arg
                                     if not _nonvol_from_arg_in_prologue(bb_reg):
                                         return ('UNKNOWN', f'{m} {src_part} [via r{base_reg}←nonvol r{bb_reg}]')
+                                elif bb_reg != 2:
+                                    # Second-level trace: ld r{base_reg}, M(r{bb_reg}) — check r{bb_reg}←TOC.
+                                    # Detects double-deref: ld rX,TOC(r2); ld rY,0(rX); ld rD,N(rY).
+                                    # FORGE MEDIUM: uses pre_bl (12-insn window); TOC-load farther than
+                                    # 12 instructions from BL is not found → falls through as ARG_PROPAGATED.
+                                    bb2_setter = _last_setter(base_setter.address, bb_reg)
+                                    if bb2_setter is not None:
+                                        bb2m = bb2_setter.mnemonic.lower()
+                                        if bb2m in ('ld', 'lwz', 'lhz', 'lbz'):
+                                            bb2parts = [p.strip() for p in bb2_setter.op_str.split(',')]
+                                            bb2src = bb2parts[1] if len(bb2parts) >= 2 else ''
+                                            if '(r2)' in bb2src or '(2)' in bb2src:
+                                                return ('GLOBAL_DEREF',
+                                                        f'{m} {src_part} [via r{base_reg}←*(*(TOC r{bb_reg}))]')
                             except (ValueError, IndexError):
                                 pass
                 except (ValueError, IndexError):
@@ -360,7 +385,48 @@ class Ppc64BeSinkClassifier:
         if r4_src:
             src_class, src_detail = r4_src[0], (r4_src[1] or '')
 
-        interesting = (dest_class == 'STACK_DEST' and src_class == 'ARG_PROPAGATED')
+        # For sprintf/snprintf: detect CATGETS_RETURN for the format string (r4).
+        # Pattern: bl catgets_stub → mr r4, r3 → bl sprintf_stub.
+        # When the format string comes from a catgets NLS catalog call, it is not
+        # user-controllable regardless of the src_class classification of r4.
+        fmt_class = ''
+        fmt_detail = ''
+        if sink_name in ('sprintf', 'snprintf'):
+            catgets_va = next(
+                (sv for sv, sn in self._info.stub_map.items() if sn == 'catgets'), None
+            )
+            if catgets_va is not None:
+                for cat_insn in pre_bl:
+                    if cat_insn.mnemonic.lower() != 'bl':
+                        continue
+                    try:
+                        target = int(cat_insn.op_str.strip(), 16)
+                    except ValueError:
+                        continue
+                    if target != catgets_va:
+                        continue
+                    # Found bl catgets — check for mr r4, r3 between catgets and sprintf
+                    for post_insn in pre_bl:
+                        if post_insn.address <= cat_insn.address:
+                            continue
+                        pm = post_insn.mnemonic.lower()
+                        if pm not in ('mr', 'mr.'):
+                            continue
+                        pparts = [p.strip() for p in post_insn.op_str.split(',')]
+                        try:
+                            if (int(pparts[0].lstrip('r')) == 4
+                                    and int(pparts[1].lstrip('r')) == 3):
+                                fmt_class = 'CATGETS_RETURN'
+                                fmt_detail = f'catgets@0x{catgets_va:x}→r3→r4'
+                                break
+                        except (ValueError, IndexError):
+                            pass
+                    if fmt_class:
+                        break
+
+        interesting = (dest_class == 'STACK_DEST'
+                       and src_class == 'ARG_PROPAGATED'
+                       and fmt_class != 'CATGETS_RETURN')
         return Ppc64SinkSite(
             va=bl_va,
             sink_name=sink_name,
@@ -369,6 +435,8 @@ class Ppc64BeSinkClassifier:
             src_class=src_class,
             dest_detail=dest_detail,
             src_detail=src_detail,
+            fmt_class=fmt_class,
+            fmt_detail=fmt_detail,
             interesting=interesting,
         )
 
@@ -391,9 +459,10 @@ class Ppc64BeSinkClassifier:
         lines.append('  All results:')
         for r in results:
             flag = ' ***' if r.interesting else ''
+            fmt_note = f'  fmt={r.fmt_class}' if r.fmt_class else ''
             lines.append(
                 f'    0x{r.va:x}  {r.sink_name:<12}  '
-                f'{r.dest_class:<16} {r.src_class:<18}{flag}'
+                f'{r.dest_class:<16} {r.src_class:<18}{fmt_note}{flag}'
             )
         return '\n'.join(lines)
 
