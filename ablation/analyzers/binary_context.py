@@ -658,6 +658,10 @@ class BinaryContext:
                 # lis r2, HI (= addis r2, r0, HI, rA=0) — absolute-address form used by position-dependent
                 # IBM XLC-compiled binaries (non-PIE with fixed load address, e.g. base_va != 0).
                 # addi r2, r2, LO  (opcode=14, rD=2, rA=2)
+                # No proximity check needed: lis+addi into r2 is unambiguous (rA=0 makes it a
+                # constant load, not a relative adjustment), so any match is the real TOC setup.
+                # A tight ±32KB GOT check would falsely reject large binaries where PLT GOT slots
+                # are >32KB from the TOC (addis+ld stubs used instead of plain ld).
                 elif (w0 & 0xFFFF0000) == 0x3C400000 and (w1 & 0xFFFF0000) == 0x38420000:
                     hi = w0 & 0xFFFF
                     lo = w1 & 0xFFFF
@@ -665,17 +669,29 @@ class BinaryContext:
                         hi -= 0x10000
                     if lo & 0x8000:
                         lo -= 0x10000
-                    cand = (hi << 16) + lo
-                    if any(-(1 << 15) <= (gva - cand) < (1 << 15) for gva in got_to_sym):
-                        r2 = cand
-                        break
+                    r2 = (hi << 16) + lo
+                    break
             if r2 is not None:
                 break
 
         if r2 is None:
             return
 
-        # Decode stubs: scan .text and .init for the 4-word PLT pattern.
+        # Decode stubs: scan .text and .init for 4-word and 5-word PLT stub patterns.
+        #
+        # 4-word form (small binary, GOT offset fits in signed 16 bits):
+        #   std  r2, 0x18(r1)        0xF8410018
+        #   ld   r12, N(r2)          0xE9820000|(N&0xFFFF)   direct TOC-relative
+        #   mtctr r12                0x7D8903A6
+        #   bctr                     0x4E800420
+        #
+        # 5-word form (large binary, GOT offset needs addis+ld pair, >32KB from TOC):
+        #   std  r2, 0x18(r1)        0xF8410018
+        #   addis r12, r2, HI        0x3D820000|(HI&0xFFFF)
+        #   ld   r12, LO(r12)        0xE98C0000|(LO&0xFFFF)
+        #   mtctr r12                0x7D8903A6
+        #   bctr                     0x4E800420
+        #   GOT slot VA = r2 + sign_extend_16(HI)<<16 + sign_extend_16(LO)
         _STD   = 0xF8410018
         _MTCTR = 0x7D8903A6
         _BCTR  = 0x4E800420
@@ -696,6 +712,7 @@ class BinaryContext:
                 w1 = struct.unpack_from('<I', sec_bytes, off + 4)[0]
                 w2 = struct.unpack_from('<I', sec_bytes, off + 8)[0]
                 w3 = struct.unpack_from('<I', sec_bytes, off + 12)[0]
+                # 4-word: std; ld r12,N(r2); mtctr; bctr
                 if (w1 & 0xFFFF0000) == 0xE9820000 and w2 == _MTCTR and w3 == _BCTR:
                     n = w1 & 0xFFFF
                     if n & 0x8000:
@@ -703,6 +720,22 @@ class BinaryContext:
                     sym = got_to_sym.get(r2 + n)
                     if sym:
                         self.plt[sec_va + off] = sym
+                # 5-word: std; addis r12,r2,HI; ld r12,LO(r12); mtctr; bctr
+                elif (off + 19 < len(sec_bytes) and
+                      (w1 & 0xFFFF0000) == 0x3D820000 and
+                      (w2 & 0xFFFF0000) == 0xE98C0000 and
+                      w3 == _MTCTR):
+                    w4 = struct.unpack_from('<I', sec_bytes, off + 16)[0]
+                    if w4 == _BCTR:
+                        hi = w1 & 0xFFFF
+                        lo = w2 & 0xFFFF
+                        if hi & 0x8000:
+                            hi -= 0x10000
+                        if lo & 0x8000:
+                            lo -= 0x10000
+                        sym = got_to_sym.get(r2 + (hi << 16) + lo)
+                        if sym:
+                            self.plt[sec_va + off] = sym
 
     def _extract_exports(self, binary) -> None:
         try:
