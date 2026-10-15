@@ -12,6 +12,7 @@ license = { file = "LICENSE" }
 dependencies = [
     "capstone>=5.0.1",
     "numpy>=1.26.0",
+    "lief>=0.16.0",
     "fastembed>=0.3.0",
     "pyelftools>=0.29",
 ]
