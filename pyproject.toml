@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 dependencies = [
     "capstone>=5.0.1",
     "numpy>=1.26.0",
-    "lief>=0.14.0",
+    "lief>=0.16.0",
     "sentence-transformers>=2.7.0",
     "pyelftools>=0.29",
 ]
