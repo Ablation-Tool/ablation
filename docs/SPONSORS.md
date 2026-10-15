@@ -1,6 +1,6 @@
 # My Bio
 
-Nicholas Michael Kloster is an independent security researcher focused on AI/LLM infrastructure security and reverse engineering.
+Nicholas Michael Kloster is an independent security researcher focused on LLM security and reverse engineering.
 
 He is the author of five CVEs across CISA-coordinated ICS disclosure and Cisco enterprise platforms, with additional accepted findings at Amazon, Google, Anthropic, Fortinet, TencentOS, DocketWise, and others.
 
