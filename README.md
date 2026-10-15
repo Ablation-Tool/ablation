@@ -360,8 +360,38 @@ The code couldn't exist without their ideas. Though no code was written by these
 
 ## Install
 
+> **Do not run `pip install ablation`.** An unrelated package occupies that name on PyPI. You will install the wrong thing and see no error.
+
+**From PyPI:**
+
 ```bash
-pip install git+https://github.com/Ablation-Tool/ablation
+pip install ablation-tool
+```
+
+**With LLM features** (`anthropic` client):
+
+```bash
+pip install "ablation-tool[llm]"
+```
+
+**Verified install (pinned commit SHA)** — pip rejects any substitution:
+
+```bash
+pip install -r requirements-verified.txt
+```
+
+**Local / development:**
+
+```bash
+git clone https://github.com/Ablation-Tool/ablation.git ~/ablation
+pip install -e ~/ablation/
+```
+
+**Verify the install:**
+
+```bash
+python -c "import ablation; print(ablation.__version__)"
+python -c "from ablation.analyzers.binary_context import BinaryContext; print('ok')"
 ```
 
 ---
