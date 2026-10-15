@@ -22,11 +22,7 @@ as a negative. Batch of 32 pairs provides 31 negatives per anchor automatically.
 import os
 import random
 import numpy as np
-from typing import NamedTuple
-
-from sentence_transformers import SentenceTransformer, InputExample, losses
-from sentence_transformers.evaluation import EmbeddingSimilarityEvaluator
-from torch.utils.data import DataLoader
+from typing import Any, NamedTuple
 
 
 class FunctionMeta(NamedTuple):
@@ -72,6 +68,8 @@ def generate_structural_pairs(
     Single-call functions use a tighter size constraint (±15%) to reduce
     false positives from generic single-import functions (e.g., malloc-only).
     """
+    from sentence_transformers import InputExample  # requires ablation-tool[finetune]
+
     random.seed(seed)
 
     # Build lookup: bucket -> list of indices in corpus_b
@@ -143,11 +141,16 @@ def finetune_model(
     batch_size: int = 16,
     warmup_frac: float = 0.1,
     device: str = "cpu",
-) -> SentenceTransformer:
+) -> Any:
     """
     Fine-tune base_model on train_pairs with MultipleNegativesRankingLoss.
     Evaluates on eval_pairs after each epoch. Returns fine-tuned model.
+    Requires: pip install ablation-tool[finetune]
     """
+    from sentence_transformers import SentenceTransformer, losses  # requires ablation-tool[finetune]
+    from sentence_transformers.evaluation import EmbeddingSimilarityEvaluator
+    from torch.utils.data import DataLoader
+
     if output_path is None:
         output_path = os.path.expanduser("~/ablation/models/cross_version_v1")
 
@@ -188,7 +191,7 @@ def finetune_model(
 
 
 def evaluate_separation(
-    model: SentenceTransformer,
+    model: Any,
     homolog_pairs: list,   # list of (desc_a, desc_b) confirmed homologs
     nonhomolog_pairs: list,  # list of (desc_a, desc_b) confirmed non-homologs
     batch_size: int = 64,

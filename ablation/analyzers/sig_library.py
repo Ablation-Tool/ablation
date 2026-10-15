@@ -38,7 +38,7 @@ import numpy as np
 
 _SIGS_JSON = Path(__file__).parent.parent / 'data' / 'sigs.json'
 _CACHE_DIR = Path('~/.ablation/sig_cache').expanduser()
-_MODEL_NAME = 'sentence-transformers/all-mpnet-base-v2'
+_MODEL_NAME = 'BAAI/bge-small-en-v1.5'
 _DEFAULT_THRESHOLD = 0.62
 
 
@@ -81,17 +81,18 @@ class SigLibrary:
         self._sigs = data.get('signatures', [])
 
     def load_model(self):
-        """Load the sentence-transformers model (shared with SemanticSearcher)."""
+        """Load the fastembed model (shared with SemanticSearcher). Downloads on first use."""
         if self._model is None:
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer(_MODEL_NAME, device='cpu')
+            from fastembed import TextEmbedding
+            self._model = TextEmbedding(_MODEL_NAME)
         self._ensure_vectors()
 
     def _cache_path(self) -> Path:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
         import hashlib
         h = hashlib.sha256(self._sigs_path.read_bytes()).hexdigest()[:12]
-        return _CACHE_DIR / f'sig_vectors_{h}.pkl'
+        model_slug = _MODEL_NAME.replace('/', '_').replace('-', '_')
+        return _CACHE_DIR / f'sig_vectors_{model_slug}_{h}.pkl'
 
     def _ensure_vectors(self):
         if self._vectors is not None:
@@ -104,12 +105,7 @@ class SigLibrary:
             return
 
         descriptions = [s['description'] for s in self._sigs]
-        self._vectors = self._model.encode(
-            descriptions,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-            batch_size=64,
-        ).astype(np.float32)
+        self._vectors = np.array(list(self._model.embed(descriptions)), dtype=np.float32)
 
         with open(cache, 'wb') as f:
             pickle.dump(self._vectors, f)
@@ -124,11 +120,7 @@ class SigLibrary:
         if not description.strip():
             return None
 
-        q = self._model.encode(
-            description,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-        ).astype(np.float32)
+        q = np.array(next(self._model.embed([description])), dtype=np.float32)
 
         scores = self._vectors @ q
         best_idx = int(np.argmax(scores))
