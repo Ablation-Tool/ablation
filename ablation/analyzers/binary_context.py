@@ -458,7 +458,7 @@ class BinaryContext:
             return cls._build_pe(data, path, sha, binary)
         if not isinstance(binary, lief.ELF.Binary):
             # Attempt XCOFF detection before giving up
-            if data[:2] in (b'\x01\xdf', b'\x01\xef'):
+            if data[:2] in (b'\x01\xdf', b'\x01\xf7'):
                 return cls._build_xcoff(data, path, sha)
             return ctx
 
@@ -1971,9 +1971,14 @@ class BinaryContext:
         # Exports: code_va (descriptor-resolved) preferred; fall back to descriptor VA.
         # Kernel extension exports that are zero-filled (patched by kload at runtime)
         # end up with code_va=0 and va>0; we use the descriptor VA as the best proxy.
+        # Symbol-table exports (.o files) use va=code_va=0 for the first function — accept
+        # va=0 for non-imports (imports have lib set; exports have lib='').
         for sym in xb.exports:
+            if not sym.name:
+                continue
             va = sym.code_va if sym.code_va else sym.va
-            if va and sym.name:
+            # Accept VA=0 only for non-imports (symbol-table exports in .o files)
+            if va or not sym.lib:
                 ctx.exports[sym.name] = va
 
         # Strings from .data (XCOFF has no .rodata; constants live in .data)
@@ -1982,7 +1987,7 @@ class BinaryContext:
             _extract_strings_into(dsec.data, dsec.vaddr, ctx.strings)
 
         # func_starts: export VAs + BL-target scan on .text
-        starts: Set[int] = {v for v in ctx.exports.values() if v}
+        starts: Set[int] = set(ctx.exports.values())
         tsec = xb.text
         if tsec is not None and tsec.data:
             text_data = tsec.data

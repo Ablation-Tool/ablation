@@ -4,7 +4,7 @@ Parses the eXtended Common Object File Format (XCOFF) used by IBM AIX on
 PowerPC (RS/6000, POWER) systems.  Supported variants:
 
 - XCOFF32  magic 0x01DF  (AIX 4.x / 5.x 32-bit, PPC32, big-endian)
-- XCOFF64  magic 0x01EF  (AIX 5.x / 6.x 64-bit, PPC64, big-endian)
+- XCOFF64  magic 0x01F7  (AIX 5.x / 6.x 64-bit, PPC64, big-endian)
 
 Why this exists
 ---------------
@@ -49,7 +49,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 XCOFF32_MAGIC = 0x01DF
-XCOFF64_MAGIC = 0x01EF
+XCOFF64_MAGIC = 0x01F7
 
 # XCOFF section flags (s_flags)
 STYP_TEXT   = 0x0020
@@ -76,8 +76,10 @@ XTY_SD = 0x01   # section definition
 XTY_LD = 0x02   # label definition
 XTY_CM = 0x03   # common (BSS) definition
 
-_FILE_HDR_FMT32 = '>HHIIIHH'   # magic, nscns, timdat, symptr, nsyms, opthdr, flags
+_FILE_HDR_FMT32 = '>HHIIIHH'   # magic, nscns, timdat, symptr(4), nsyms, opthdr, flags
 _FILE_HDR_SZ    = 20
+_FILE_HDR_FMT64 = '>HHIQIHH'   # magic, nscns, timdat, symptr(8), nsyms, opthdr, flags
+_FILE_HDR_SZ64  = 24
 
 # XCOFF32 optional header: 72 bytes (only first 48 parsed here)
 _OPT_HDR32_FMT = '>HHIIIIII'   # magic, vstamp, tsize, dsize, bsize, entry, text_start, data_start
@@ -98,6 +100,13 @@ _LDHDR32_FMT = '>IIIIIIII'   # version, nsyms, nreloc, istlen, nimpid, impoff, s
 # [name(8) OR zeroes(4)+offset(4)] + value(4) + scnum(H) + smtype(B) + smclas(B) + ifile(I) + parm(I)
 _LDSYM32_TAIL_FMT = '>IHBBI'   # value, scnum, smtype, smclas, ifile
 _LDSYM32_SZ = 24
+
+# XCOFF32 symbol table entry: 18 bytes
+_SYMENT32_FMT = '>8sIhHBB'   # name(8B), value(4B), scnum(2B sn), type(2B), sclass(1B), numaux(1B)
+_SYMENT32_SZ  = 18
+# Storage classes for function code entry points
+_C_EXT    = 2    # exported function descriptor
+_C_HIDEXT = 107  # hidden external (code entry — dotted name)
 
 
 @dataclass
@@ -284,6 +293,67 @@ def _resolve_descriptors(binary: XcoffBinary) -> None:
             sym.code_va = code_va
 
 
+def _parse_symtab32(
+    data: bytes, symptr: int, nsyms: int, sections: List[XcoffSection]
+) -> List[XcoffSymbol]:
+    """Parse XCOFF32 symbol table for C_HIDEXT code-entry symbols.
+
+    Used as a fallback when no .loader section is present (e.g. relocatable .o
+    files from AIX ar archives).  C_HIDEXT symbols in .text are the actual
+    function code entry points; their name is the user-visible name with a
+    leading '.' (e.g. '.frexp' for the frexp function).  Returns one
+    XcoffSymbol per code entry with code_va == va == section_vaddr + sym_value.
+    """
+    if symptr == 0 or nsyms == 0:
+        return []
+
+    # String table immediately follows the symbol table entries
+    strtab_off = symptr + nsyms * _SYMENT32_SZ
+    strtab: bytes = b''
+    if strtab_off + 4 <= len(data):
+        stlen = struct.unpack_from('>I', data, strtab_off)[0]
+        strtab = data[strtab_off: strtab_off + stlen]
+
+    # 1-based section number → vaddr; only for .text sections (code entry points only)
+    sec_va: Dict[int, int] = {
+        i + 1: s.vaddr for i, s in enumerate(sections) if s.flags & STYP_TEXT
+    }
+
+    result: List[XcoffSymbol] = []
+    seen: set = set()   # (name, va) dedup — both C_EXT and C_HIDEXT can emit the same dotted name
+    i = 0
+    while i < nsyms:
+        off = symptr + i * _SYMENT32_SZ
+        if off + _SYMENT32_SZ > len(data):
+            break
+
+        name_bytes, value, scnum, _, sclass, numaux = struct.unpack_from(
+            _SYMENT32_FMT, data, off
+        )
+
+        # Decode name (inline or string-table offset)
+        if name_bytes[:4] == b'\x00\x00\x00\x00':
+            stoff = struct.unpack_from('>I', name_bytes, 4)[0]
+            raw = strtab[stoff: stoff + 64].split(b'\x00')[0] if stoff < len(strtab) else b''
+        else:
+            raw = name_bytes.rstrip(b'\x00')
+        sym_name = raw.decode('ascii', errors='replace')
+
+        if sclass in (_C_EXT, _C_HIDEXT) and scnum > 0 and scnum in sec_va and sym_name.startswith('.'):
+            # Code entry in .text: dotted-name convention (.frexp → frexp)
+            clean = sym_name[1:]   # strip leading '.' only
+            if clean:
+                va = sec_va[scnum] + value
+                key = (clean, va)
+                if key not in seen:
+                    seen.add(key)
+                    result.append(XcoffSymbol(name=clean, va=va, lib='', smclas=XMC_PR, code_va=va))
+
+        i += 1 + numaux   # skip auxiliary entries
+
+    return result
+
+
 def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
     """Parse an XCOFF32 or XCOFF64 binary.
 
@@ -292,7 +362,7 @@ def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
         data : raw bytes if already read; if None, the file is read from path
 
     Raises:
-        ValueError: if the magic bytes are not 0x01DF or 0x01EF
+        ValueError: if the magic bytes are not 0x01DF or 0x01F7
         struct.error: if the file is truncated
     """
     if data is None:
@@ -301,30 +371,38 @@ def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
     if len(data) < _FILE_HDR_SZ:
         raise ValueError(f"file too short ({len(data)} bytes) for XCOFF header")
 
-    magic, nscns, timdat, symptr, nsyms, opthdr_sz, flags = struct.unpack_from(
-        _FILE_HDR_FMT32, data, 0
-    )
+    magic_raw = struct.unpack_from('>H', data, 0)[0]
 
-    if magic == XCOFF32_MAGIC:
+    if magic_raw == XCOFF32_MAGIC:
         arch = 'ppc32'
         scnhdr_fmt, scnhdr_sz = _SCNHDR32_FMT, _SCNHDR32_SZ
-    elif magic == XCOFF64_MAGIC:
+        file_hdr_sz = _FILE_HDR_SZ
+        magic, nscns, timdat, symptr, nsyms, opthdr_sz, flags = struct.unpack_from(
+            _FILE_HDR_FMT32, data, 0
+        )
+    elif magic_raw == XCOFF64_MAGIC:
         arch = 'ppc64'
         scnhdr_fmt, scnhdr_sz = _SCNHDR64_FMT, _SCNHDR64_SZ
-    else:
-        raise ValueError(f"not an XCOFF binary: magic={magic:#06x} (expected 0x01df or 0x01ef)")
-
-    # Optional header — parse entry, text_start, data_start, toc
-    entry = text_start = data_start = toc_va = 0
-    if opthdr_sz >= 28 and len(data) >= _FILE_HDR_SZ + 28:
-        _, _, _, _, _, entry, text_start, data_start = struct.unpack_from(
-            _OPT_HDR32_FMT, data, _FILE_HDR_SZ
+        file_hdr_sz = _FILE_HDR_SZ64
+        if len(data) < _FILE_HDR_SZ64:
+            raise ValueError(f"XCOFF64 file too short ({len(data)} bytes)")
+        magic, nscns, timdat, symptr, nsyms, opthdr_sz, flags = struct.unpack_from(
+            _FILE_HDR_FMT64, data, 0
         )
-    if opthdr_sz >= 32 and len(data) >= _FILE_HDR_SZ + 32:
-        toc_va = struct.unpack_from('>I', data, _FILE_HDR_SZ + _OPT_HDR32_TOC_OFF)[0]
+    else:
+        raise ValueError(f"not an XCOFF binary: magic={magic_raw:#06x} (expected 0x01df or 0x01f7)")
+
+    # Optional header — parse entry, text_start, data_start, toc (XCOFF32 only; .o files skip)
+    entry = text_start = data_start = toc_va = 0
+    if opthdr_sz >= 28 and len(data) >= file_hdr_sz + 28:
+        _, _, _, _, _, entry, text_start, data_start = struct.unpack_from(
+            _OPT_HDR32_FMT, data, file_hdr_sz
+        )
+    if opthdr_sz >= 32 and len(data) >= file_hdr_sz + 32:
+        toc_va = struct.unpack_from('>I', data, file_hdr_sz + _OPT_HDR32_TOC_OFF)[0]
 
     # Section headers
-    scn_base = _FILE_HDR_SZ + opthdr_sz
+    scn_base = file_hdr_sz + opthdr_sz
     sections: List[XcoffSection] = []
     sec_map: Dict[str, XcoffSection] = {}
     loader_data: bytes = b''
@@ -375,5 +453,9 @@ def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
         binary.exports = exports
         binary.imports = imports
         _resolve_descriptors(binary)
+    elif arch == 'ppc32' and symptr > 0 and nsyms > 0:
+        # Relocatable .o files have no .loader section; fall back to symbol table.
+        # C_HIDEXT symbols in .text are code entry points (dotted-name convention).
+        binary.exports = _parse_symtab32(data, symptr, nsyms, sections)
 
     return binary
