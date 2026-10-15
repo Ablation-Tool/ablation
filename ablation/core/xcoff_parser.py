@@ -428,6 +428,113 @@ def _parse_symtab32(
     return result
 
 
+_XCOFF64_SENTINEL_VA = 0x1D4C   # n_value used by C_HIDEXT XTY_SD entries with no resolved code VA
+
+
+def _parse_symtab64(
+    data: bytes, symptr: int, nsyms: int, sections: List[XcoffSection]
+) -> List[XcoffSymbol]:
+    """Parse XCOFF64 main symbol table for named code-entry symbols.
+
+    Despite being 64-bit, XCOFF64 uses 18-byte syment entries (same layout as
+    XCOFF32; n_value stays 4 bytes holding a section-relative offset).  C_EXT
+    (sclass=2) symbols with scnum=1 (.text) carry direct code VAs for shared-
+    library exports, while C_HIDEXT (sclass=107) entries mostly hold a sentinel
+    value 0x1D4C and are skipped.
+
+    The strtab uses AIX suffix-compression: n_offset may point into the MIDDLE
+    of a longer existing string, so a forward position-map is built first to
+    recover the full containing string for any given offset.
+    """
+    if symptr == 0 or nsyms == 0:
+        return []
+
+    strtab_off = symptr + nsyms * _SYMENT32_SZ
+    strtab: bytes = b''
+    if strtab_off + 4 <= len(data):
+        stlen = struct.unpack_from('>I', data, strtab_off)[0]
+        strtab = data[strtab_off: strtab_off + stlen]
+
+    # Forward-scan strtab to build offset → string_start map.
+    # Every byte of each null-terminated string maps back to that string's start.
+    # This recovers full names when n_offset lands in the middle of a suffix-
+    # compressed entry (AIX linker reuses string tails rather than duplicating them).
+    string_start: Dict[int, int] = {}
+    pos = 4   # skip 4-byte length prefix
+    while pos < len(strtab):
+        start = pos
+        end = strtab.find(b'\x00', pos)
+        if end < 0:
+            end = len(strtab)
+        for p in range(start, end + 1):
+            string_start[p] = start
+        pos = end + 1
+
+    def _full_name(n_offset: int) -> str:
+        s = string_start.get(n_offset)
+        if s is None:
+            return ''
+        end = strtab.find(b'\x00', s)
+        raw = strtab[s: end if end >= 0 else len(strtab)]
+        return raw.decode('utf-8', errors='replace')
+
+    text_scnums: set = {i + 1 for i, s in enumerate(sections) if s.flags & STYP_TEXT}
+
+    result: List[XcoffSymbol] = []
+    seen: set = set()
+    i = 0
+    while i < nsyms:
+        off = symptr + i * _SYMENT32_SZ
+        if off + _SYMENT32_SZ > len(data):
+            break
+
+        name_bytes, value, scnum, _, sclass, numaux = struct.unpack_from(
+            _SYMENT32_FMT, data, off
+        )
+
+        if sclass in (_C_EXT, _C_HIDEXT) and scnum in text_scnums and value != _XCOFF64_SENTINEL_VA and value != 0:
+            if name_bytes[:4] == b'\x00\x00\x00\x00':
+                n_offset = struct.unpack_from('>I', name_bytes, 4)[0]
+                sym_name = _full_name(n_offset) if n_offset >= 4 else ''
+            else:
+                sym_name = name_bytes.rstrip(b'\x00').decode('ascii', errors='replace')
+
+            if sym_name and _VALID_LDSYM_NAME.match(sym_name):
+                sec_va = sections[scnum - 1].vaddr if scnum - 1 < len(sections) else 0
+                code_va = sec_va + value
+                key = (sym_name, code_va)
+                if key not in seen:
+                    seen.add(key)
+                    result.append(XcoffSymbol(
+                        name=sym_name, va=code_va, lib='', smclas=XMC_PR, code_va=code_va
+                    ))
+
+        i += 1 + numaux
+
+    return result
+
+
+def _merge_symtab64(
+    loader_exports: List[XcoffSymbol], syms64: List[XcoffSymbol]
+) -> None:
+    """Merge main-symtab names into loader-section export list in-place.
+
+    Matches by code_va.  Renames anonymous _sym_N loader entries when a
+    matching symtab entry is found.  Appends symtab entries for code VAs
+    not tracked by the loader section (internal non-exported functions).
+    """
+    smap: Dict[int, str] = {s.code_va: s.name for s in syms64 if s.code_va != 0}
+    covered: set = {sym.code_va for sym in loader_exports if sym.code_va != 0}
+
+    for sym in loader_exports:
+        if sym.code_va != 0 and sym.name.startswith('_sym_') and sym.code_va in smap:
+            sym.name = smap[sym.code_va]
+
+    for sym in syms64:
+        if sym.code_va not in covered:
+            loader_exports.append(sym)
+
+
 def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
     """Parse an XCOFF32 or XCOFF64 binary.
 
@@ -534,5 +641,17 @@ def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
         # Relocatable .o files have no .loader section; fall back to symbol table.
         # C_HIDEXT symbols in .text are code entry points (dotted-name convention).
         binary.exports = _parse_symtab32(data, symptr, nsyms, sections)
+
+    # Supplement XCOFF64 exports with main symbol table names.
+    # The loader section names most exports anonymously (_sym_N); C_EXT scnum=1
+    # entries in the main symtab carry the real names with direct .text code VAs.
+    # After _resolve_descriptors we can match loader exports by code_va.
+    if arch == 'ppc64' and symptr > 0 and nsyms > 0:
+        syms64 = _parse_symtab64(data, symptr, nsyms, sections)
+        if syms64:
+            if binary.exports:
+                _merge_symtab64(binary.exports, syms64)
+            else:
+                binary.exports = syms64
 
     return binary
