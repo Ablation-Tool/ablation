@@ -12,7 +12,7 @@ He served from 2015 to 2023 on active duty in the Infantry, separating as a Staf
 
 He holds Instructor and Mountaineering qualifications from the Northern Warfare Training Center in Alaska earning him a SQI "E", completed SOF-adjacent schools, and is a certified Master Resilience Trainer earning him the Skill Identifier (ASI) "8R".
 
-During that time he completed reverse engineering courses through the Department of Defense Cyber Crime Center and volunteered with ITDRC. He trained with the President's Hundred while stationed in Fairbanks, but never got his EIB.
+During that time he completed reverse engineering courses through the Department of Defense Cyber Crime Center and volunteered with ITDRC. He trained with the President's Hundred while stationed in Fairbanks and was certified in their long-range marksmanship course
 
 <details>
 <summary>The Department of Defense Cyber Crime Center Certifications</summary>
