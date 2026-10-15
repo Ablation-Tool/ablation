@@ -32,12 +32,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 import capstone
-try:
-    import lief
-    _LIEF_OK = True
-except ImportError:
-    lief = None  # type: ignore[assignment]
-    _LIEF_OK = False
+import lief
 import numpy as np
 
 _RIP_RE = re.compile(r'\[rip [+-] (0x[0-9a-f]+)\]')

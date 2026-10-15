@@ -60,12 +60,7 @@ from capstone.mips_const import (
     MIPS_INS_DIV, MIPS_INS_DIVU,
     MIPS_INS_MFHI, MIPS_INS_MFLO,
 )
-try:
-    import lief
-    _LIEF_OK = True
-except ImportError:
-    lief = None  # type: ignore[assignment]
-    _LIEF_OK = False
+import lief
 
 # MIPS register name -> canonical name
 _REG_FAMILY: Dict[str, str] = {}

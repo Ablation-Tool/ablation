@@ -41,12 +41,7 @@ import struct
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
-try:
-    import lief
-    _LIEF_OK = True
-except ImportError:
-    lief = None  # type: ignore[assignment]
-    _LIEF_OK = False
+import lief
 
 _SHF_WRITE    = 0x1   # ELF SHF_WRITE: section is writable at runtime
 _SHF_EXECINSTR = 0x4  # ELF SHF_EXECINSTR: section contains executable machine instructions
@@ -226,8 +221,6 @@ class CppVtableReconstructorAnalyzer:
     # ── LIEF access ──────────────────────────────────────────────────────────
 
     def _binary(self):
-        if not _LIEF_OK:
-            raise ImportError("lief is required for cpp_vtable_reconstructor. Install with: pip install 'ablation-tool[binary]'")
         if self._lief is None:
             parsed = lief.parse(self._path)
             if parsed is None:
