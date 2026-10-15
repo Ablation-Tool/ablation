@@ -15,10 +15,6 @@
 #   echo "git+https://github.com/Ablation-Tool/ablation.git@${COMMIT}#egg=ablation" \
 #        > requirements-verified.txt
 #
-# Cross-check the source archive against CHECKSUMS.txt:
-#   curl -sL https://github.com/Ablation-Tool/ablation/archive/${COMMIT}.tar.gz \
-#        | sha256sum
-
 # ─── Current verified commit ──────────────────────────────────────────────────
 # version: 2.81.0
 # date:    2026-10-15
