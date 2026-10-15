@@ -27,7 +27,12 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-import lief
+try:
+    import lief
+    _LIEF_OK = True
+except ImportError:
+    lief = None  # type: ignore[assignment]
+    _LIEF_OK = False
 import capstone
 from capstone import arm64 as A64
 
@@ -83,6 +88,8 @@ _GOT: Dict[Tuple[int, int], Global] = {
 # ─── binary helpers ───────────────────────────────────────────────────────────
 
 def _load(so_path: str):
+    if not _LIEF_OK:
+        raise ImportError("lief is required for callsite_tracer. Install with: pip install 'ablation-tool[binary]'")
     binary = lief.parse(so_path)
     raw = Path(so_path).read_bytes()
     return binary, raw

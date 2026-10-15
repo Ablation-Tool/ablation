@@ -15,7 +15,12 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 import capstone
-import lief
+try:
+    import lief
+    _LIEF_OK = True
+except ImportError:
+    lief = None  # type: ignore[assignment]
+    _LIEF_OK = False
 
 DANGEROUS_SINKS: Set[str] = {'system', 'popen', 'execl', 'execve', 'execvp', 'execvpe'}
 
@@ -44,6 +49,8 @@ class PPC32ELF:
     """
 
     def __init__(self, path: str):
+        if not _LIEF_OK:
+            raise ImportError("lief is required for ppc32_plt_tracer. Install with: pip install 'ablation-tool[binary]'")
         self.path = path
         self.data = Path(path).read_bytes()
         self.elf = lief.parse(path)

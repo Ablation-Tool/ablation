@@ -20,7 +20,12 @@ Prologue patterns (big-endian):
 
 from typing import Set
 import struct
-import lief
+try:
+    import lief
+    _LIEF_OK = True
+except ImportError:
+    lief = None  # type: ignore[assignment]
+    _LIEF_OK = False
 
 class PPC32FuncDiscovery:
     """Discover function entry points in PowerPC 32-bit big-endian binaries."""
@@ -33,6 +38,8 @@ class PPC32FuncDiscovery:
     @classmethod
     def from_path(cls, path: str) -> "PPC32FuncDiscovery":
         """Load from ELF file - reads main LOAD segment directly."""
+        if not _LIEF_OK:
+            raise ImportError("lief is required for ppc32_func_discovery. Install with: pip install 'ablation-tool[binary]'")
         elf = lief.parse(path)
         if not elf:
             raise ValueError(f"Failed to parse ELF: {path}")
