@@ -11,9 +11,9 @@ Four things this module adds:
   1. OVF zip extraction: unwraps FortiMail .zip → finds the embedded VMDK.
   2. VMDK → raw conversion: calls qemu-img convert to produce a flat raw image
      so MBR partition tables and ext4 filesystems are byte-addressable.
-  3. Root-free ext4 access: uses debugfs(8) with the -o offset flag to address
-     the P2 ext4 filesystem at its MBR-parsed byte offset, without needing a
-     loop mount or root privileges.
+  3. Root-free ext4 access: uses dd to extract the P2 partition as a flat
+     image, then runs debugfs on that image to dump datafs.tar.gz without
+     needing a loop mount or root privileges.
   4. Key blob extraction: reads etc/fgt_512.key, etc/fgt_2048.key (and the
      matching .crt files) from datafs.tar.gz, returning them as ExtractedKey
      objects with metadata for downstream PEM/DER analysis.
@@ -170,9 +170,9 @@ class FortiMailVmdkExtractor:
     Extracts PKI keys from FortiMail VM firmware (OVF zip or bare VMDK).
 
     Pipeline: OVF zip → VMDK → raw image → MBR parse → P2 offset →
-              debugfs dump datafs.tar.gz → extract key/cert files.
+              dd P2 → debugfs dump datafs.tar.gz → extract key/cert files.
 
-    Does not require root privileges (uses qemu-img + debugfs -o offset).
+    Does not require root privileges (uses qemu-img + dd + debugfs).
     """
 
     # ── Public entry points ──────────────────────────────────────────────────
@@ -396,68 +396,79 @@ class FortiMailVmdkExtractor:
     ) -> Optional[str]:
         """
         Dump /datafs.tar.gz from the P2 ext4 filesystem using debugfs.
-        Uses -o offset= so the raw image is addressed at the partition boundary
-        without a loop mount (no root required).
+
+        Strategy: extract the P2 partition to a separate file via dd (so the
+        partition boundary is at offset 0), then run debugfs on the extracted
+        partition image.  The debugfs -o offset= flag was removed in 1.47.x;
+        using dd + plain debugfs works on all installed versions.
         """
         debugfs = shutil.which("debugfs")
         if debugfs is None:
             result.errors.append(
-                "debugfs not found in PATH (install e2fsprogs); "
-                "fallback: mount -o loop,offset=" + str(p2_byte_offset)
+                "debugfs not found in PATH (install e2fsprogs)"
             )
             return None
 
-        out_path = os.path.join(workdir, "datafs.tar.gz")
-        cmd = [
-            debugfs,
-            f"-o", f"offset={p2_byte_offset}",
-            raw_path,
-            "-R", f"dump /datafs.tar.gz {out_path}",
-        ]
+        # Step 1: extract P2 partition with dd
+        p2_img = os.path.join(workdir, "p2.img")
+        lba_start = p2_byte_offset // _SECTOR_SIZE
         try:
             proc = subprocess.run(
-                cmd, capture_output=True, timeout=120,
+                ["dd", f"if={raw_path}", f"of={p2_img}",
+                 f"bs={_SECTOR_SIZE}", f"skip={lba_start}", "status=none"],
+                capture_output=True, timeout=300,
             )
-            # debugfs exits 0 even on errors; check output file
-            if not os.path.isfile(out_path) or os.path.getsize(out_path) < 512:
-                stderr = proc.stderr.decode(errors="replace")
-                # Try the alt path (some builds store it at /datafs.tar.gz.gz or no leading /)
+            if proc.returncode != 0 or not os.path.isfile(p2_img):
                 result.errors.append(
-                    f"debugfs dump at offset {p2_byte_offset} produced no output "
-                    f"(rc={proc.returncode}, stderr={stderr[:200]})"
+                    f"dd P2 extraction failed (rc={proc.returncode}): "
+                    f"{proc.stderr.decode(errors='replace')[:200]}"
                 )
-                return cls._dump_datafs_alt_paths(
-                    debugfs, raw_path, p2_byte_offset, workdir, out_path, result
-                )
+                return None
+        except subprocess.TimeoutExpired:
+            result.errors.append("dd P2 extraction timed out (>300s)")
+            return None
+
+        # Step 2: dump datafs.tar.gz from the extracted P2 image
+        out_path = os.path.join(workdir, "datafs.tar.gz")
+        return cls._debugfs_dump(debugfs, p2_img, out_path, workdir, result)
+
+    @classmethod
+    def _debugfs_dump(
+        cls,
+        debugfs: str,
+        p2_img: str,
+        out_path: str,
+        workdir: str,
+        result: VmdkExtractionResult,
+    ) -> Optional[str]:
+        """Run debugfs dump on the already-extracted P2 image."""
+        try:
+            proc = subprocess.run(
+                [debugfs, p2_img, "-R", f"dump /datafs.tar.gz {out_path}"],
+                capture_output=True, timeout=120,
+            )
+            if os.path.isfile(out_path) and os.path.getsize(out_path) >= 512:
+                return out_path
+            result.errors.append(
+                f"debugfs dump /datafs.tar.gz produced no output "
+                f"(rc={proc.returncode}, stderr={proc.stderr.decode(errors='replace')[:200]})"
+            )
         except subprocess.TimeoutExpired:
             result.errors.append("debugfs timed out (>120s)")
             return None
-        return out_path
 
-    @classmethod
-    def _dump_datafs_alt_paths(
-        cls,
-        debugfs: str,
-        raw_path: str,
-        p2_byte_offset: int,
-        workdir: str,
-        out_path: str,
-        result: VmdkExtractionResult,
-    ) -> Optional[str]:
-        """Try alternate paths for datafs — some builds use different names."""
-        candidates = ["datafs.tar.gz", "datafs.tar", "datafs.tgz"]
+        # Try alternate names used by some FortiMail builds
+        candidates = ["datafs.tar", "datafs.tgz"]
         for name in candidates:
             candidate_out = os.path.join(workdir, f"datafs_alt_{name}")
-            proc = subprocess.run(
-                [debugfs, f"-o", f"offset={p2_byte_offset}", raw_path,
-                 "-R", f"dump /{name} {candidate_out}"],
+            subprocess.run(
+                [debugfs, p2_img, "-R", f"dump /{name} {candidate_out}"],
                 capture_output=True, timeout=120,
             )
             if os.path.isfile(candidate_out) and os.path.getsize(candidate_out) >= 512:
-                result.errors.append(
-                    f"Note: datafs found at /{name} (not /datafs.tar.gz)"
-                )
+                result.errors.append(f"Note: datafs found at /{name} (not /datafs.tar.gz)")
                 return candidate_out
+
         result.errors.append("datafs not found under any known path on P2")
         return None
 
