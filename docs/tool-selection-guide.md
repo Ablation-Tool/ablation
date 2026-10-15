@@ -71,6 +71,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "Find gets/mktemp/tmpnam/getwd in PLT (CWE-242/121/377)" | `DeprecatedFuncScanner.from_context(ctx).scan()` |
 | "Find setuid shadow password oracle (CWE-307) + weak PRNG OTP (CWE-338)" | `SetuidAuthOracleScanner.from_path(elf).scan()` |
 | "Where did this command string come from?" | `SinkArgClassifier.from_path(elf).classify_all()` |
+| "Does sscanf/scanf/fscanf format string have unbounded %s?" | `SscanfSinkClassifier.from_path(elf).classify_all()` — RODATA_SAFE=eliminated, RODATA_UNSAFE=HIGH, DYNAMIC_FMT=verify snprintf template manually |
 | "Find wrappers around system/popen/exec* (multi-level injection chains)" | `SinkPropagator.from_context(ctx).propagate()` |
 | "Register vendor-specific sinks + known-safe patterns" | `VendorProfile.from_vendor('fortinet').apply_to(clf)` |
 | "Map CMDB table IDs to exec-sink reach (FortiWeb/FortiOS)" | `CMDBSurfaceMapper.from_path(elf).map()` |
