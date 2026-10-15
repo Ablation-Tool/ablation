@@ -235,6 +235,7 @@ class GoX86StripScanner:
         nfunc       = struct.unpack_from('<q', data, off + 8)[0]
         text_start  = struct.unpack_from('<Q', data, off + 24)[0]
         fname_off   = struct.unpack_from('<Q', data, off + 32)[0]   # funcnameOffset
+        cu_off      = struct.unpack_from('<Q', data, off + 40)[0]   # cuOffset = funcnametab end
         pcln_off    = struct.unpack_from('<Q', data, off + 64)[0]   # pclnOffset (function table)
 
         result.nfunc = nfunc
@@ -246,15 +247,24 @@ class GoX86StripScanner:
         if ftab_base + (nfunc + 1) * 8 > len(data):
             return
 
-        # Build offset→name map from funcnametab (null-terminated strings)
-        offset_to_name = self._build_name_map(data, fname_base, off + fname_off + 1_500_000)
+        # Build offset→name map from funcnametab (null-terminated strings).
+        # Scan through cuOffset (the funcnametab/cutab boundary) to cover the full name space.
+        offset_to_name = self._build_name_map(data, fname_base, off + cu_off)
 
-        # Extract function VAs from the function table
-        # Each entry: entryOff uint32 (relative to textStart), funcoff uint32
+        # Extract function VAs and names from the function table.
+        # Each functab entry: {entryOff uint32, funcoff uint32}
+        # funcoff is an offset within ftab_base to the _Func struct.
+        # _Func layout (Go 1.20+): [0:4] entryOff uint32, [4:8] nameOff int32, ...
+        # nameOff is an offset into funcnametab (fname_base).
         for i in range(nfunc):
             entry_rel, funcoff = _FUNCTAB_ENT.unpack_from(data, ftab_base + i * 8)
             va = text_start + entry_rel
-            name = offset_to_name.get(funcoff, '')
+            name = ''
+            func_file_off = ftab_base + funcoff
+            if func_file_off + 8 <= len(data):
+                name_off = struct.unpack_from('<i', data, func_file_off + 4)[0]
+                if name_off >= 0:
+                    name = offset_to_name.get(name_off, '')
             result.funcs[va] = name
 
     # ------------------------------------------------------------------
