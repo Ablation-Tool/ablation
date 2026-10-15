@@ -277,10 +277,13 @@ class EcuArchDetector:
         # This concentrates spuriously at 0xE0–0xFF (MOV immediates, etc.) and
         # 0x80–0xBF (branch/load opcodes), creating high false densities.
         # In real TriCore firmware, peripheral SFR density is roughly comparable
-        # to PFLASH code-pointer density.  If periph > 2 × pflash AND the
-        # absolute periph density exceeds 15 %, the binary is almost certainly a
-        # BE ROM, not a TriCore flat image.
-        be_artifact = periph_density > 0.15 and periph_density > pflash_density * 2
+        # to PFLASH code-pointer density.  For BE artifacts, periph tends to
+        # exceed pflash (high-range opcode bytes outnumber mid-range ones) by a
+        # detectable margin.  Empirical threshold (corpus): ratio 1.2× with an
+        # absolute floor of 15 % catches all confirmed BE false-positives (M68K
+        # CPU32 P01, PPC32 E38) without touching genuine TriCore (GEN3: pflash
+        # 5.15 %, periph 5.86 %).
+        be_artifact = periph_density > 0.15 and periph_density > pflash_density * 1.2
         if be_artifact:
             return None
 
@@ -322,6 +325,22 @@ class EcuArchDetector:
         first_le = struct.unpack_from("<I", data, 0)[0]
         if first_le == 0x00000000:
             return None
+
+        # SH-2 / SH-2A vector table gate: big-endian exception vector tables place
+        # the reset PC (offset 0) and initial SP (offset 4) as BE uint32 words.
+        # SH-2 ROM reset PCs are always ≤ 0x00100000 (ROM mapped at 0x00000000);
+        # initial SPs are 0xFFFFxxxx (on-chip RAM at 0xFFFFE000–0xFFFFFFFF).
+        # Reading the SH-2 vector table as LE produces:
+        #   first_le = reset_pc_BE read backwards → always has 0x00 high byte
+        # An actual AURIX BMHD STAD (offset 0) is always 0x80xxxxxx–0xBFxxxxxx.
+        # Additionally check: BE uint32 at offset 4 starts with 0xFF (SH-2 init SP).
+        if n >= 8:
+            reset_pc_be = struct.unpack_from(">I", data, 0)[0]
+            init_sp_be  = struct.unpack_from(">I", data, 4)[0]
+            sh2_reset_ok = reset_pc_be <= 0x00100000
+            sh2_sp_ok    = (init_sp_be >> 24) == 0xFF
+            if sh2_reset_ok and sh2_sp_ok:
+                return None
 
         return ArchCandidate(arch="tricore", score=score, reason=reason)
 
@@ -504,11 +523,11 @@ class EcuArchDetector:
 
         The SH-2 ISA is 16-bit big-endian instructions.  Key signatures:
 
-        1. Reset vector: SH-2 ROM reset vectors are at a fixed offset depending
-           on the MCU.  For SH7058 (Subaru SH7058S) and SH7059, the power-on
-           reset vector is at offset 4 (as a 32-bit BE word), PC register initial
-           value.  For SH7052 (Honda CBR), the reset vector is similarly at
-           offset 4.  The value must be plausibly in the ROM.
+        1. Reset vector: SH-2 power-on reset PC is stored as a 32-bit BE word at
+           offset 0 of the ROM image.  Offset 4 holds the initial SP (always a
+           high on-chip RAM address, 0xFFFFxxxx) which is NOT a code pointer.
+           Confirmed on SH7058S (Subaru), SH7052 (Honda CBR), SH7059 (Mazda).
+           The reset PC must be plausibly in-range (0 < va < image_size).
 
         2. RTS density: ``0x000B`` (RTS) is the standard return instruction.
            A ROM with > 0.2% RTS density almost certainly uses SH-2 or SH-2A.
@@ -527,8 +546,9 @@ class EcuArchDetector:
         if n < 8:
             return None
 
-        # SH-2 reset vector at offset 4 (big-endian 32-bit word)
-        reset_va = struct.unpack_from(">I", data, 4)[0]
+        # SH-2 reset vector (power-on reset PC) at offset 0, big-endian 32-bit word.
+        # Offset 4 is the initial SP (0xFFFFxxxx on-chip RAM) — not a code address.
+        reset_va = struct.unpack_from(">I", data, 0)[0]
         reset_in_range = 0 < reset_va < n
 
         sample = self._sample
