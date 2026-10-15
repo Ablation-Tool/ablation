@@ -99,7 +99,7 @@ class ProfiledCall:
             # Skip ret() values for non-sink calls: they add noise without insight
             if v.kind == 'ret' and not self.is_sink:
                 continue
-            parts.append(f"{reg}={v.display()}")
+            parts.append(f"{reg}={v.display(arg_regs=regs)}")
         args_str = ', '.join(parts)
         name = self.site.target_name or f"0x{self.site.target_va:x}"
         line = f"  0x{self.site.site_va:x}  {name}({args_str})"
@@ -116,6 +116,7 @@ class FuncProfile:
     strings: List[Tuple[int, str]]
     calls: List[ProfiledCall]
     binary_name: str = ""
+    arg_regs: List[str] = field(default_factory=lambda: list(_ARG_REGS))
 
     @property
     def sink_calls(self) -> List[ProfiledCall]:
@@ -147,8 +148,7 @@ class FuncProfile:
             lines.append("")
             lines.append("  CALLS:")
             for pc in self.calls:
-                # Filter: show all args if sink, otherwise show only non-unknown
-                lines.append(pc.fmt())
+                lines.append(pc.fmt(arg_regs=self.arg_regs))
 
         return "\n".join(lines)
 
@@ -235,6 +235,7 @@ class FuncProfiler:
             strings=strings,
             calls=calls,
             binary_name=binary_name,
+            arg_regs=list(self._ra._arg_regs),
         )
 
     def profile_many(

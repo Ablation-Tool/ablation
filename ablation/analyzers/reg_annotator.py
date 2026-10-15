@@ -30,11 +30,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from capstone import CS_ARCH_X86, CS_MODE_64, Cs
+from capstone import CS_ARCH_PPC, CS_ARCH_X86, CS_MODE_64, CS_MODE_LITTLE_ENDIAN, Cs
 from capstone.x86 import (
     X86_OP_IMM, X86_OP_MEM, X86_OP_REG,
     X86_REG_RIP,
 )
+from capstone.ppc import PPC_OP_IMM, PPC_OP_MEM, PPC_OP_REG as PPC_OP_REG
 
 # ── canonical register name normalizer ────────────────────────────────────────
 
@@ -65,6 +66,10 @@ _ARG_REGS = ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']
 # Caller-saved (clobbered at call sites)
 _CALLER_SAVED = {'rax', 'rcx', 'rdx', 'rsi', 'rdi', 'r8', 'r9', 'r10', 'r11'}
 
+# POWER ELFv2 ABI (ppc64le): r3-r10 integer args, r0/r3-r12 volatile
+_PPC64LE_ARG_REGS = ['r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10']
+_PPC64LE_CALLER_SAVED = {'r0', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12'}
+
 
 def _norm(reg_name: str) -> str:
     return _REG_ALIASES.get(reg_name.lower(), reg_name.lower())
@@ -92,11 +97,12 @@ class RegVal:
     str_val: str = ""
     chain: Optional["RegVal"] = None  # source val if kind == 'copy'
 
-    def display(self, depth: int = 0) -> str:
+    def display(self, depth: int = 0, arg_regs=None) -> str:
         if depth > 4:
             return "..."
+        regs = arg_regs or _ARG_REGS
         if self.kind == 'arg':
-            reg = _ARG_REGS[self.int_val] if self.int_val < len(_ARG_REGS) else f"arg{self.int_val}"
+            reg = regs[self.int_val] if self.int_val < len(regs) else f"arg{self.int_val}"
             return f"arg{self.int_val}_entry ({reg}@entry)"
         if self.kind == 'const':
             return f"0x{self.int_val:x}"
@@ -105,7 +111,7 @@ class RegVal:
             return f"'{preview}'"
         if self.kind == 'copy':
             if self.chain and self.chain.kind not in ('unknown',):
-                return f"{self.chain.display(depth + 1)}  (via {self.str_val})"
+                return f"{self.chain.display(depth + 1, arg_regs=arg_regs)}  (via {self.str_val})"
             return f"copy of {self.str_val}"
         if self.kind == 'ret':
             return f"ret({self.str_val})"
@@ -157,13 +163,14 @@ class CallSite:
     target_name: str
     args: Dict[str, RegVal] = field(default_factory=dict)
 
-    def fmt(self) -> str:
+    def fmt(self, arg_regs=None) -> str:
+        regs = arg_regs or _ARG_REGS
         tname = self.target_name or f"0x{self.target_va:x}"
         lines = [f"  0x{self.site_va:x}: call {tname}"]
-        for reg in ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']:
+        for reg in regs:
             v = self.args.get(reg)
             if v and v.kind != 'unknown':
-                lines.append(f"    {reg} = {v.display()}")
+                lines.append(f"    {reg} = {v.display(arg_regs=regs)}")
         return "\n".join(lines)
 
 
@@ -174,10 +181,10 @@ class AnnotationResult:
     calls: List[CallSite] = field(default_factory=list)
     reg_trace: List[Tuple[int, str, RegVal]] = field(default_factory=list)
 
-    def fmt(self) -> str:
+    def fmt(self, arg_regs=None) -> str:
         lines = [f"RegAnnotator: 0x{self.func_va:x}..0x{self.func_end_va:x}  ({len(self.calls)} calls)"]
         for cs in self.calls:
-            lines.append(cs.fmt())
+            lines.append(cs.fmt(arg_regs=arg_regs))
         return "\n".join(lines)
 
     def call_at(self, va: int) -> Optional[CallSite]:
@@ -225,7 +232,19 @@ class RegAnnotator:
     def __init__(self, binary_path: str):
         self.path = binary_path
         self._data = Path(binary_path).read_bytes()
-        self._md = Cs(CS_ARCH_X86, CS_MODE_64)
+
+        # Detect arch from ELF e_machine (offset 0x12, 2 bytes LE)
+        # EM_PPC64 = 21 (0x15); EM_X86_64 = 62 (0x3e)
+        data = self._data
+        e_machine = struct.unpack_from('<H', data, 0x12)[0] if len(data) >= 20 else 0
+        self._arch = 'ppc64le' if e_machine == 21 else 'x86_64'
+        self._arg_regs = _PPC64LE_ARG_REGS if self._arch == 'ppc64le' else _ARG_REGS
+        self._caller_saved = _PPC64LE_CALLER_SAVED if self._arch == 'ppc64le' else _CALLER_SAVED
+
+        if self._arch == 'ppc64le':
+            self._md = Cs(CS_ARCH_PPC, CS_MODE_64 | CS_MODE_LITTLE_ENDIAN)
+        else:
+            self._md = Cs(CS_ARCH_X86, CS_MODE_64)
         self._md.detail = True
 
         self._plt: Dict[int, str] = {}    # va -> symbol name
@@ -264,15 +283,16 @@ class RegAnnotator:
 
         regs: Dict[str, RegVal] = {}
         if seed_args:
-            for i, reg in enumerate(_ARG_REGS):
+            for i, reg in enumerate(self._arg_regs):
                 regs[reg] = RegVal.arg(i)
 
         result = AnnotationResult(func_va=func_va, func_end_va=func_end_va)
+        step_fn = self._step_ppc64le if self._arch == 'ppc64le' else self._step
 
         for insn in self._md.disasm(code, func_va):
             if insn.address >= func_end_va:
                 break
-            self._step(insn, regs, result)
+            step_fn(insn, regs, result)
 
         return result
 
@@ -282,7 +302,7 @@ class RegAnnotator:
         func_end_va: int = 0,
         window: int = 2048,
     ) -> str:
-        return self.annotate_calls(func_va, func_end_va, window).fmt()
+        return self.annotate_calls(func_va, func_end_va, window).fmt(arg_regs=self._arg_regs)
 
     # ── forward pass step ─────────────────────────────────────────────────────
 
@@ -363,17 +383,133 @@ class RegAnnotator:
                 site_va=insn.address,
                 target_va=target_va,
                 target_name=target_name,
-                args={reg: regs.get(reg, RegVal.unknown()) for reg in _ARG_REGS},
+                args={reg: regs.get(reg, RegVal.unknown()) for reg in self._arg_regs},
             )
             result.calls.append(cs)
 
             # Clobber caller-saved, preserve callee-saved
-            for reg in _CALLER_SAVED:
+            for reg in self._caller_saved:
                 regs[reg] = RegVal.ret(target_name)
 
         # ── ret: stop ─────────────────────────────────────────────────────────
         elif mn == 'ret':
             pass  # single forward pass; ret is natural terminator
+
+    # ── ppc64le forward pass step ─────────────────────────────────────────────
+
+    def _step_ppc64le(
+        self,
+        insn,
+        regs: Dict[str, RegVal],
+        result: AnnotationResult,
+    ) -> None:
+        mn = insn.mnemonic.lower()
+        ops = insn.operands
+
+        # ── li rD, IMM (addi rD, r0, IMM) — constant load ────────────────────
+        if mn == 'li':
+            if len(ops) == 2 and ops[0].type == PPC_OP_REG and ops[1].type == PPC_OP_IMM:
+                dst = insn.reg_name(ops[0].reg)
+                imm = ops[1].imm
+                s = self._strings.get(imm)
+                val = RegVal.string(s) if s else (RegVal.zero() if imm == 0 else RegVal.const(imm))
+                regs[dst] = val
+                result.reg_trace.append((insn.address, dst, val))
+
+        # ── lis rD, IMM (addis rD, r0, IMM) — high half constant ─────────────
+        elif mn == 'lis':
+            if len(ops) == 2 and ops[0].type == PPC_OP_REG and ops[1].type == PPC_OP_IMM:
+                dst = insn.reg_name(ops[0].reg)
+                val = RegVal.const((ops[1].imm & 0xFFFF) << 16)
+                regs[dst] = val
+                result.reg_trace.append((insn.address, dst, val))
+
+        # ── mr rD, rS — register copy ─────────────────────────────────────────
+        elif mn == 'mr':
+            if len(ops) == 2 and ops[0].type == PPC_OP_REG and ops[1].type == PPC_OP_REG:
+                dst = insn.reg_name(ops[0].reg)
+                src = insn.reg_name(ops[1].reg)
+                src_val = regs.get(src)
+                if src_val is None:
+                    val = RegVal.unknown()
+                elif src_val.kind in ('arg', 'string', 'const', 'zero'):
+                    val = src_val
+                else:
+                    val = RegVal.copy(src, src_val)
+                regs[dst] = val
+                result.reg_trace.append((insn.address, dst, val))
+
+        # ── addi rD, rA, IMM ─────────────────────────────────────────────────
+        elif mn == 'addi':
+            if (len(ops) == 3 and ops[0].type == PPC_OP_REG
+                    and ops[1].type == PPC_OP_REG and ops[2].type == PPC_OP_IMM):
+                dst = insn.reg_name(ops[0].reg)
+                src = insn.reg_name(ops[1].reg)
+                imm = ops[2].imm
+                src_val = regs.get(src)
+                if src_val and src_val.kind == 'const':
+                    new_v = (src_val.int_val + imm) & 0xFFFFFFFFFFFFFFFF
+                    s = self._strings.get(new_v)
+                    val = RegVal.string(s) if s else RegVal.const(new_v)
+                elif src_val and src_val.kind == 'zero':
+                    val = RegVal.const(imm & 0xFFFFFFFFFFFFFFFF)
+                elif imm == 0 and src_val:
+                    val = RegVal.copy(src, src_val) if src_val.kind not in ('arg', 'string', 'const', 'zero') else src_val
+                else:
+                    disp = f"+0x{imm:x}" if imm >= 0 else f"-0x{-imm:x}"
+                    val = RegVal.mem(f"{src}{disp}")
+                regs[dst] = val
+                result.reg_trace.append((insn.address, dst, val))
+
+        # ── addis rD, rA, IMM — high 16-bit add (TOC-relative address) ───────
+        elif mn == 'addis':
+            if (len(ops) == 3 and ops[0].type == PPC_OP_REG
+                    and ops[1].type == PPC_OP_REG and ops[2].type == PPC_OP_IMM):
+                dst = insn.reg_name(ops[0].reg)
+                src = insn.reg_name(ops[1].reg)
+                imm = ops[2].imm  # signed 16-bit
+                src_val = regs.get(src)
+                if src_val and src_val.kind == 'const':
+                    val = RegVal.const((src_val.int_val + (imm << 16)) & 0xFFFFFFFFFFFFFFFF)
+                else:
+                    label = f"toc{imm:+d}<<16" if src == 'r2' else f"{src}{imm:+d}<<16"
+                    val = RegVal.mem(label)
+                regs[dst] = val
+                result.reg_trace.append((insn.address, dst, val))
+
+        # ── ld/lwz/lbz rD, D(rA) — memory load ──────────────────────────────
+        elif mn in ('ld', 'lwz', 'lbz', 'lhz', 'lwa'):
+            if len(ops) >= 2 and ops[0].type == PPC_OP_REG and ops[1].type == PPC_OP_MEM:
+                dst = insn.reg_name(ops[0].reg)
+                base = insn.reg_name(ops[1].mem.base)
+                disp = ops[1].mem.disp
+                base_val = regs.get(base)
+                if base_val and base_val.kind == 'arg':
+                    val = RegVal.mem(f"[{base}{disp:+d}] (from {base_val.display(arg_regs=self._arg_regs)})")
+                else:
+                    val = RegVal.mem(f"{base}{disp:+d}")
+                regs[dst] = val
+
+        # ── bl TARGET — branch and link (call) ────────────────────────────────
+        elif mn == 'bl':
+            if ops and ops[0].type == PPC_OP_IMM:
+                target_va = ops[0].imm
+                target_name = self._plt.get(target_va, '')
+                if not target_name and target_va:
+                    target_name = f"0x{target_va:x}"
+                cs = CallSite(
+                    site_va=insn.address,
+                    target_va=target_va,
+                    target_name=target_name,
+                    args={reg: regs.get(reg, RegVal.unknown()) for reg in self._arg_regs},
+                )
+                result.calls.append(cs)
+                for reg in self._caller_saved:
+                    regs[reg] = RegVal.ret(target_name)
+
+        # ── blr/bctr — return/indirect branch (natural exit) ─────────────────
+        elif mn in ('blr', 'bctr'):
+            pass
 
     # ── src operand evaluator ─────────────────────────────────────────────────
 
