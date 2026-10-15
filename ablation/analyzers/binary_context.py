@@ -1018,6 +1018,51 @@ class BinaryContext:
             # ppc64le: little-endian uint32
             words = np.frombuffer(sec_data[:word_count * 4], dtype=np.dtype('<u4'))
 
+        # ppc64le far-call stub detection (XLC-GAP-007).
+        # The linker emits far-call stubs for calls whose TOC offset exceeds 16-bit range.
+        # These stubs don't start with mflr so they're absent from func_starts, but BL
+        # instructions target them. Two patterns — detect both, add their VAs to the
+        # valid-target set so those BL edges aren't silently dropped.
+        stub_vas: List[int] = []
+        if self.arch == 'ppc64' and word_count >= 4:
+            MTCTR_R12 = np.uint32(0x7D8903A6)
+            BCTR      = np.uint32(0x4E800420)
+            mtctr_pos = np.where(words == MTCTR_R12)[0]
+            # Keep only mtctr positions where bctr follows immediately
+            valid_bctr = (mtctr_pos + 1 < word_count) & (words[mtctr_pos + 1] == BCTR)
+            bp = mtctr_pos[valid_bctr]  # bctr_pairs: indices where mtctr,bctr appear
+
+            # Pattern A: addis r12,r2,HI | ld r12,LO(r12) | mtctr r12 | bctr
+            #   addis r12,r2: opcode=15, RT=r12, RA=r2 → upper16=0x3D82
+            #   ld r12,X(r12): opcode=58, RT=r12, RA=r12 → upper16=0xE98C
+            a_sel = (bp >= 2) & \
+                    ((words[bp - 2] & np.uint32(0xFFFF0000)) == np.uint32(0x3D820000)) & \
+                    ((words[bp - 1] & np.uint32(0xFFFF0000)) == np.uint32(0xE98C0000))
+            stub_a = bp[a_sel] - 2  # stub starts at addis instruction
+
+            # Pattern B: addi r2,r2,X | addis r2,r2,X | ld r12,Y(r2) | addi/addic r3,r3,X | mtctr | bctr
+            # C++ vtable thunks that also restore the caller's TOC and adjust `this` (r3).
+            #   addi r2,r2: opcode=14, RT=r2, RA=r2 → upper16=0x3842
+            #   addis r2,r2: opcode=15, RT=r2, RA=r2 → upper16=0x3C42
+            #   ld r12,X(r2): opcode=58, RT=r12, RA=r2 → upper16=0xE982
+            #   addi/addic r3,r3: upper16 in {0x3863, 0x3063}
+            b_mask_addi_r3 = (
+                ((words[np.maximum(bp - 1, 0)] & np.uint32(0xFFFF0000)) == np.uint32(0x38630000)) |
+                ((words[np.maximum(bp - 1, 0)] & np.uint32(0xFFFF0000)) == np.uint32(0x30630000))
+            )
+            b_sel = (bp >= 4) & \
+                    ((words[bp - 4] & np.uint32(0xFFFF0000)) == np.uint32(0x38420000)) & \
+                    ((words[bp - 3] & np.uint32(0xFFFF0000)) == np.uint32(0x3C420000)) & \
+                    ((words[bp - 2] & np.uint32(0xFFFF0000)) == np.uint32(0xE9820000)) & \
+                    b_mask_addi_r3
+            stub_b = bp[b_sel] - 4  # stub starts at addi r2 instruction
+
+            # Collect all stub start VAs (deduplicated, sorted)
+            if len(stub_a) or len(stub_b):
+                all_stubs = np.unique(np.concatenate([stub_a, stub_b]) if len(stub_a) and len(stub_b)
+                                      else (stub_a if len(stub_a) else stub_b))
+                stub_vas = (_va_to_i64(sec_va) + all_stubs.astype(np.int64)).tolist()
+
         # BL: opcode=18 (bits 31:26), AA=0 (bit 1), LK=1 (bit 0)
         bl_idx = np.where(((words >> 26) == 18) & ((words & 3) == 1))[0]
         if len(bl_idx) == 0:
@@ -1035,6 +1080,7 @@ class BinaryContext:
 
         plt_arr  = _va_arr_to_i64(sorted(self.plt.keys())) if self.plt         else np.empty(0, np.int64)
         func_arr = _va_arr_to_i64(self.func_starts)         if self.func_starts else np.empty(0, np.int64)
+        stub_arr = np.array(sorted(stub_vas), dtype=np.int64) if stub_vas else np.empty(0, np.int64)
 
         valid = np.zeros(len(target_vas), dtype=bool)
         if len(plt_arr):
@@ -1045,6 +1091,10 @@ class BinaryContext:
             hi = np.searchsorted(func_arr, target_vas)
             hi = np.minimum(hi, len(func_arr) - 1)
             valid |= func_arr[hi] == target_vas
+        if len(stub_arr):
+            hi = np.searchsorted(stub_arr, target_vas)
+            hi = np.minimum(hi, len(stub_arr) - 1)
+            valid |= stub_arr[hi] == target_vas
 
         insn_vas   = insn_vas[valid]
         target_vas = target_vas[valid]
