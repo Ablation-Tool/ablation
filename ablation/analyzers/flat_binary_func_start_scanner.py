@@ -202,7 +202,14 @@ class FlatBinaryFuncStartScanner:
             off = entry - self._base_va
             return entry if 0 <= off < n else None
 
-        if arch in ("m68k", "sh2a", "ppc32", "ppc_vle"):
+        if arch == "sh2a":
+            # SH-2 power-on reset PC is at offset 0 (BE uint32).
+            # Offset 4 is the initial SP (0xFFFFxxxx), not a code address.
+            reset_va = struct.unpack_from(">I", data, 0)[0]
+            off = reset_va - self._base_va
+            return reset_va if 0 < off < n else None
+
+        if arch in ("m68k", "ppc32", "ppc_vle"):
             reset_va = struct.unpack_from(">I", data, 4)[0]
             off = reset_va - self._base_va
             return reset_va if 0 <= off < n else None
