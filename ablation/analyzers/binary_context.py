@@ -462,6 +462,8 @@ class BinaryContext:
             # Attempt XCOFF detection before giving up
             if data[:2] in (b'\x01\xdf', b'\x01\xf7'):
                 return cls._build_xcoff(data, path, sha)
+            if data[:2] == b'\x01\x6d':
+                return cls._build_m88k(data, path, sha)
             return ctx
 
         ctx.base_va = binary.imagebase
@@ -2037,6 +2039,71 @@ class BinaryContext:
                 edges.append((owner, target, label))
 
         ctx.call_edges = edges
+        ctx._build_indices()
+        return ctx
+
+    # ── m88k BCS COFF support ─────────────────────────────────────────────────
+
+    @classmethod
+    def _build_m88k(cls, data: bytes, path: str, sha: str) -> "BinaryContext":
+        """Build BinaryContext from an m88k BCS COFF binary (Motorola 88000).
+
+        Uses m88k_coff_parser to extract sections and detect function starts
+        via 'st r1, r31, imm16' prologue scan and BSR target analysis.
+        No symbol table in stripped binaries; exports left empty.
+        Capstone has no m88k backend — WindowAnalyzer cannot disassemble;
+        use the raw text section bytes for pattern analysis instead.
+        """
+        import bisect
+        from ablation.core.m88k_coff_parser import parse as m88k_parse
+
+        ctx = cls()
+        ctx.path = path
+        ctx.sha256 = sha
+        try:
+            mb = m88k_parse(path, data)
+        except Exception:
+            return ctx
+
+        ctx.arch = mb.arch
+        ctx.base_va = mb.text_start
+
+        # Strings from .data section
+        dsec = mb.data
+        if dsec is not None and dsec.data:
+            _extract_strings_into(dsec.data, dsec.vaddr, ctx.strings)
+
+        ctx.func_starts = mb.func_starts
+
+        # Call graph: BSR scan (op=0x32, signed 16-bit word displacement)
+        tsec = mb.text
+        if tsec is not None and tsec.data:
+            text_data = tsec.data
+            text_va = tsec.vaddr
+            n_words = len(text_data) // 4
+            func_arr = ctx.func_starts
+            va_to_export: Dict[int, str] = {va: nm for nm, va in ctx.exports.items()}
+            edges: List[Tuple[int, int, str]] = []
+            for i in range(n_words):
+                word = struct.unpack_from('>I', text_data, i * 4)[0]
+                if (word >> 26) != 0x32:
+                    continue
+                pc = text_va + i * 4
+                disp = word & 0xFFFF
+                if disp & 0x8000:
+                    disp -= 0x10000
+                target = pc + 4 + disp * 4
+                if not tsec.contains_va(target) or (target & 3) != 0:
+                    continue
+                label = va_to_export.get(target, "")
+                owner = pc
+                if func_arr:
+                    idx = bisect.bisect_right(func_arr, pc) - 1
+                    if idx >= 0:
+                        owner = func_arr[idx]
+                edges.append((owner, target, label))
+            ctx.call_edges = edges
+
         ctx._build_indices()
         return ctx
 
