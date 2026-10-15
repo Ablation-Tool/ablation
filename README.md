@@ -285,9 +285,9 @@ Following coordinated disclosure, the Cisco Product Security Incident Response T
 </details>
 
 <details>
-<summary><strong>Contributors</strong></summary>
+<summary><strong>Acknowledgments</strong></summary>
 
-## Contributors
+## Acknowledgments
 The code couldn't exist without their ideas. Though no code was written by these authors, doctors, and engineers their work has direct influence on the production of code that makes Ablation what it is.
 
 **Research Papers**
