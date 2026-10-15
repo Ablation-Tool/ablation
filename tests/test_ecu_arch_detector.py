@@ -519,3 +519,113 @@ class TestCandidateSorting:
         result = EcuArchDetector(bytes(buf)).detect()
         if result.arch == "arm_cm" and 0.40 <= result.score < 0.75:
             assert result.confidence == "MEDIUM"
+
+
+# ---------------------------------------------------------------------------
+# C166/C167 detection tests
+# ---------------------------------------------------------------------------
+
+def _c166_rom(size: int = 512, jmps_count: int = 64) -> bytes:
+    """C166/C167: IVT at offset 0 with `jmps_count` JMPS (0xFA) entries."""
+    buf = bytearray(max(size, 256))
+    for i in range(jmps_count):
+        off = i * 4
+        if off + 4 <= len(buf):
+            buf[off] = 0xFA        # JMPS opcode
+            buf[off + 1] = 0x00   # segment 0
+            buf[off + 2] = 0x00   # caddr lo
+            buf[off + 3] = 0x00   # caddr hi
+    return bytes(buf)
+
+
+def _c166_rom_realistic() -> bytes:
+    """
+    C166/C167 ROM matching the real MS43 IVT structure:
+    even entries → JMPS #0x00, addr (segment 0, code ROM bank)
+    odd entries  → JMPS #0x0E, addr (segment 0x0E, UART handlers)
+    """
+    buf = bytearray(512)
+    for i in range(64):
+        off = i * 4
+        seg = 0x00 if (i % 2 == 0) else 0x0E
+        buf[off + 0] = 0xFA
+        buf[off + 1] = seg
+        buf[off + 2] = i * 4 & 0xFF
+        buf[off + 3] = (i * 4 >> 8) & 0xFF
+    return bytes(buf)
+
+
+class TestC166Detection:
+    def test_detects_c166_full_ivt(self):
+        rom = _c166_rom(jmps_count=64)
+        result = EcuArchDetector(rom).detect()
+        assert result.arch == "c166"
+        assert result.confidence == "HIGH"
+
+    def test_c166_score_is_097_for_64_jmps(self):
+        rom = _c166_rom(jmps_count=64)
+        cands = EcuArchDetector(rom).candidates()
+        c166 = next(c for c in cands if c.arch == "c166")
+        assert c166.score == pytest.approx(0.97)
+
+    def test_c166_realistic_ivt_detected(self):
+        rom = _c166_rom_realistic()
+        result = EcuArchDetector(rom).detect()
+        assert result.arch == "c166"
+        assert result.score == pytest.approx(0.97)
+
+    def test_c166_partial_ivt_scores_088(self):
+        # 56/64 JMPS entries → score 0.88, HIGH confidence
+        rom = _c166_rom(jmps_count=56)
+        cands = EcuArchDetector(rom).candidates()
+        c166 = next((c for c in cands if c.arch == "c166"), None)
+        assert c166 is not None
+        assert c166.score == pytest.approx(0.88)
+
+    def test_c166_weak_match_scores_070(self):
+        # 40/64 JMPS entries → score 0.70, MEDIUM confidence
+        rom = _c166_rom(jmps_count=40)
+        cands = EcuArchDetector(rom).candidates()
+        c166 = next((c for c in cands if c.arch == "c166"), None)
+        assert c166 is not None
+        assert c166.score == pytest.approx(0.70)
+
+    def test_c166_below_threshold_returns_none(self):
+        # 39/64 JMPS entries → below threshold, scorer returns None
+        rom = _c166_rom(jmps_count=39)
+        cands = EcuArchDetector(rom).candidates()
+        c166_cands = [c for c in cands if c.arch == "c166"]
+        assert c166_cands == []
+
+    def test_c166_too_small_returns_none(self):
+        rom = bytes(128)  # < 256 bytes
+        cands = EcuArchDetector(rom).candidates()
+        c166_cands = [c for c in cands if c.arch == "c166"]
+        assert c166_cands == []
+
+    def test_no_c166_for_sh2a_rom(self):
+        # SH-2A ROM has big-endian 32-bit reset PC at offset 0, NOT JMPS pattern
+        rom = _sh2a_rom()
+        cands = EcuArchDetector(rom).candidates()
+        c166_cands = [c for c in cands if c.arch == "c166"]
+        assert c166_cands == []
+
+    def test_no_c166_for_m68k_rom(self):
+        rom = _m68k_rom()
+        cands = EcuArchDetector(rom).candidates()
+        c166_cands = [c for c in cands if c.arch == "c166"]
+        assert c166_cands == []
+
+    def test_c166_scores_high_on_ms43_like_rom(self):
+        # Simulate MS43 IVT region: full JMPS IVT + varied non-PPC32 code body
+        # Use 0xE6 (C166 MOV Rn,#imm) as body to avoid 100% PPC32 opcode density
+        buf = bytearray(512)
+        for i in range(64):
+            buf[i * 4] = 0xFA
+        # Body filled with C166 MOV Rn,#imm (0xE6 ...) to avoid inflating PPC32 score
+        for i in range(256, 512, 4):
+            buf[i] = 0xE6
+        rom = bytes(buf)
+        cands = EcuArchDetector(rom).candidates()
+        c166 = next(c for c in cands if c.arch == "c166")
+        assert c166.score > 0.90
