@@ -57,7 +57,12 @@ from capstone.x86_const import (
     X86_INS_NOP, X86_INS_HLT,
     X86_INS_CDQE, X86_INS_CDQ, X86_INS_CQO, X86_INS_CBW,
 )
-import lief
+try:
+    import lief
+    _LIEF_OK = True
+except ImportError:
+    lief = None  # type: ignore[assignment]
+    _LIEF_OK = False
 
 # ── canonical register names ──────────────────────────────────────────────────
 

@@ -24,7 +24,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import lief
+try:
+    import lief
+    _LIEF_OK = True
+except ImportError:
+    lief = None  # type: ignore[assignment]
+    _LIEF_OK = False
 import capstone
 import capstone.aarch64 as _aarch64
 
@@ -135,6 +140,8 @@ def _rname(insn, reg_id: int) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _load(so_path: str):
+    if not _LIEF_OK:
+        raise ImportError("lief is required for libfunc_db. Install with: pip install 'ablation-tool[binary]'")
     binary = lief.parse(so_path)
     text = binary.get_section('.text')
     text_data = bytes(text.content)

@@ -55,7 +55,12 @@ try:
 except ImportError:
     _HAS_CAPSTONE = False
 
-import lief
+try:
+    import lief
+    _LIEF_OK = True
+except ImportError:
+    lief = None  # type: ignore[assignment]
+    _LIEF_OK = False
 
 # IO_STACK_LOCATION.Parameters.DeviceIoControl offsets from stack location base
 _OFFSET_OUTPUT_BUFFER_LEN = 0x08
@@ -288,6 +293,8 @@ class IoctlAttackSurfaceGenerator:
         driver_path: str,
         kda_report: Optional["KernelDriverReport"] = None,
     ):
+        if not _LIEF_OK:
+            raise ImportError("lief is required for ioctl_attack_surface. Install with: pip install 'ablation-tool[binary]'")
         self.driver_path = driver_path
         self._kda_report = kda_report
         self._data = Path(driver_path).read_bytes()
