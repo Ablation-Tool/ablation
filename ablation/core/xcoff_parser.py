@@ -43,10 +43,16 @@ Usage::
 """
 from __future__ import annotations
 
+import re
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
+
+# Loader symbol names must be valid C/XCOFF identifiers; the loader strtab in
+# XCOFF64 shared libraries often starts with a VPD metadata string whose bytes
+# can appear as short garbled "names" when l_noff happens to land in that region.
+_VALID_LDSYM_NAME = re.compile(r'^[A-Za-z_.@$][A-Za-z0-9_.@$]*$')
 
 XCOFF32_MAGIC = 0x01DF
 XCOFF64_MAGIC = 0x01F7
@@ -78,7 +84,7 @@ XTY_CM = 0x03   # common (BSS) definition
 
 _FILE_HDR_FMT32 = '>HHIIIHH'   # magic, nscns, timdat, symptr(4), nsyms, opthdr, flags
 _FILE_HDR_SZ    = 20
-_FILE_HDR_FMT64 = '>HHIQIHH'   # magic, nscns, timdat, symptr(8), nsyms, opthdr, flags
+_FILE_HDR_FMT64 = '>HHIQHHI'   # magic, nscns, timdat, symptr(8), opthdr, flags, nsyms
 _FILE_HDR_SZ64  = 24
 
 # XCOFF32 optional header: 72 bytes (only first 48 parsed here)
@@ -100,6 +106,13 @@ _LDHDR32_FMT = '>IIIIIIII'   # version, nsyms, nreloc, istlen, nimpid, impoff, s
 # [name(8) OR zeroes(4)+offset(4)] + value(4) + scnum(H) + smtype(B) + smclas(B) + ifile(I) + parm(I)
 _LDSYM32_TAIL_FMT = '>IHBBI'   # value, scnum, smtype, smclas, ifile
 _LDSYM32_SZ = 24
+
+# XCOFF64 .loader section header: 56 bytes (version=2)
+# l_version(4) l_nsyms(4) l_nreloc(4) l_istlen(4) l_nimpid(4) l_impoff(4)
+# l_stlen(8) l_stoff(8) l_symoff(8) l_rldoff(8)
+_LDHDR64_FMT = '>IIIIIIQQQQ'
+_LDHDR64_SZ  = 56
+
 
 # XCOFF32 symbol table entry: 18 bytes
 _SYMENT32_FMT = '>8sIhHBB'   # name(8B), value(4B), scnum(2B sn), type(2B), sclass(1B), numaux(1B)
@@ -267,10 +280,68 @@ def _parse_loader32(ldr: bytes, sections: List[XcoffSection]) -> tuple:
     return exports, imports
 
 
-def _resolve_descriptors(binary: XcoffBinary) -> None:
-    """For PPC32 function descriptors in .data, resolve to code VAs.
+def _parse_loader64(ldr: bytes, sections: List[XcoffSection]) -> tuple:
+    """Parse XCOFF64 .loader section (56-byte LDHDR64, version 1 or 2); return (exports, imports).
 
-    A descriptor at .data[va] is an 8-byte struct ``{code_va (4), toc_va (4)}``.
+    LDHDR64 field layout (empirically verified against AIX 5.x shr_64.o):
+      I×6: l_version, l_nsyms, l_nreloc, l_istlen, l_nimpid, l_stlen(compat-4B)
+      Q×4: l_impoff(import-IDs start), l_stoff(sym-name-strtab start), l_symoff, l_rldoff
+    Symbols remain 24 bytes (XCOFF32 ldsym format); only LDHDR addresses are widened.
+    """
+    if len(ldr) < _LDHDR64_SZ:
+        return [], []
+
+    (l_version, l_nsyms, l_nreloc, l_istlen,
+     l_nimpid, l_stlen, l_impoff, l_stoff,
+     l_symoff, l_rldoff) = struct.unpack_from(_LDHDR64_FMT, ldr, 0)
+
+    stab = ldr[l_stoff:l_stoff + l_stlen] if l_stoff + l_stlen <= len(ldr) else ldr[l_stoff:]
+    imp_ids = _parse_import_table(ldr, l_impoff, l_nimpid)
+
+    exports: List[XcoffSymbol] = []
+    imports: List[XcoffSymbol] = []
+
+    sym_base = l_symoff
+    for i in range(l_nsyms):
+        off = sym_base + i * _LDSYM32_SZ
+        if off + _LDSYM32_SZ > len(ldr):
+            break
+
+        name8    = ldr[off:off + 8]
+        l_zeroes = struct.unpack_from('>I', name8, 0)[0]
+        l_noff   = struct.unpack_from('>I', name8, 4)[0]
+
+        if l_zeroes != 0:
+            sym_name = name8.rstrip(b'\x00').decode('ascii', errors='replace')
+        elif l_noff < len(stab):
+            try:
+                null_pos = stab.index(b'\x00', l_noff)
+                sym_name = stab[l_noff:null_pos].decode('utf-8', errors='replace')
+            except ValueError:
+                sym_name = stab[l_noff:].decode('utf-8', errors='replace')
+            if not _VALID_LDSYM_NAME.match(sym_name):
+                sym_name = f'_sym_{i}'
+        else:
+            sym_name = f'_sym_{i}'
+
+        l_value, l_scnum, l_smtype, l_smclas, l_ifile = struct.unpack_from(
+            _LDSYM32_TAIL_FMT, ldr, off + 8
+        )
+
+        if l_ifile > 0:
+            lib = imp_ids[l_ifile] if l_ifile < len(imp_ids) else f'ifile_{l_ifile}'
+            imports.append(XcoffSymbol(name=sym_name, va=0, lib=lib, smclas=l_smclas))
+        else:
+            exports.append(XcoffSymbol(name=sym_name, va=l_value, lib='', smclas=l_smclas))
+
+    return exports, imports
+
+
+def _resolve_descriptors(binary: XcoffBinary) -> None:
+    """For PPC32/PPC64 function descriptors in .data, resolve to code VAs.
+
+    PPC32: descriptor = {code_va(4), toc_va(4)} → 8-byte, read as '>I'
+    PPC64: descriptor = {code_va(8), toc_va(8)} → 16-byte, read as '>Q'
     Sets ``sym.code_va`` on each export symbol that has a descriptor.
     """
     dsec = binary.data
@@ -280,15 +351,18 @@ def _resolve_descriptors(binary: XcoffBinary) -> None:
     if tsec is None:
         return
 
+    is64 = binary.arch == 'ppc64'
+    va_fmt, va_sz = ('>Q', 8) if is64 else ('>I', 4)
+
     for sym in binary.exports:
         if sym.va == 0:
             continue
         if not dsec.contains_va(sym.va):
             continue
         off = sym.va - dsec.vaddr
-        if off + 4 > len(dsec.data):
+        if off + va_sz > len(dsec.data):
             continue
-        code_va = struct.unpack_from('>I', dsec.data, off)[0]
+        code_va = struct.unpack_from(va_fmt, dsec.data, off)[0]
         if code_va != 0 and tsec.contains_va(code_va):
             sym.code_va = code_va
 
@@ -386,7 +460,7 @@ def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
         file_hdr_sz = _FILE_HDR_SZ64
         if len(data) < _FILE_HDR_SZ64:
             raise ValueError(f"XCOFF64 file too short ({len(data)} bytes)")
-        magic, nscns, timdat, symptr, nsyms, opthdr_sz, flags = struct.unpack_from(
+        magic, nscns, timdat, symptr, opthdr_sz, flags, nsyms = struct.unpack_from(
             _FILE_HDR_FMT64, data, 0
         )
     else:
@@ -449,7 +523,10 @@ def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
 
     # Parse .loader section
     if loader_data:
-        exports, imports = _parse_loader32(loader_data, sections)
+        if arch == 'ppc64':
+            exports, imports = _parse_loader64(loader_data, sections)
+        else:
+            exports, imports = _parse_loader32(loader_data, sections)
         binary.exports = exports
         binary.imports = imports
         _resolve_descriptors(binary)
