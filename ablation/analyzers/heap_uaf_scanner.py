@@ -43,12 +43,7 @@ from capstone.x86_const import (
     X86_INS_NOP, X86_INS_TEST, X86_INS_CMP,
     X86_INS_IMUL, X86_INS_MUL,
 )
-try:
-    import lief
-    _LIEF_OK = True
-except ImportError:
-    lief = None  # type: ignore[assignment]
-    _LIEF_OK = False
+import lief
 
 # Pointer state kinds
 _STATE_ALLOC   = "alloc"    # returned from malloc family

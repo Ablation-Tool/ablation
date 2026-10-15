@@ -33,12 +33,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
-try:
-    import lief
-    _LIEF_OK = True
-except ImportError:
-    lief = None  # type: ignore[assignment]
-    _LIEF_OK = False
+import lief
 import capstone
 from capstone import arm64 as A64
 
@@ -83,8 +78,6 @@ class FSMTransition:
 # ─── binary helpers ───────────────────────────────────────────────────────────
 
 def _load(so_path: str):
-    if not _LIEF_OK:
-        raise ImportError("lief is required for proto_fsm. Install with: pip install 'ablation-tool[binary]'")
     binary = lief.parse(so_path)
     load_addr = 0
     for seg in binary.segments:
