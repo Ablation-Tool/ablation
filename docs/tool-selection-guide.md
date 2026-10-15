@@ -18,6 +18,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "What is this function?" | `ctx.name(va)` |
 | "Show disassembly around address" | `WindowAnalyzer.dump_text(va, window=1536)` |
 | "Find functions matching vulnerability pattern" | `SemanticSearcher.query(description)` (ALWAYS first on new binary) |
+| "Binary not in func_id.db (SemanticSearcher slow/global fallback)" | `SemanticSearcher.ingest_binary(ctx)` — auto-called by `from_context` on miss; or call manually with `product=`, `arch=`, `version=` metadata |
 | "What values are passed to this sink?" | `FuncProfiler.profile(va).fmt()` |
 | "Trace taint from network recv to sink" | `TaintTracker.run_interprocedural()` |
 

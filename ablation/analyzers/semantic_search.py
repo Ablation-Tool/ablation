@@ -327,27 +327,24 @@ class SemanticSearcher:
     def from_context(cls, ctx, cache_dir: Optional[Path] = None) -> 'SemanticSearcher':
         """Create a SemanticSearcher scoped to the binary described by ctx.
 
-        Resolves binary_id via ctx.sha256, collects CONFIRMED/ANGR_INFERRED
-        VAs for that binary, and pre-builds the corpus.  Falls back to global
-        scope (with a warning) if the binary is not in func_id.db.
+        Resolves binary_id via ctx.sha256 and collects CONFIRMED/ANGR_INFERRED
+        VAs for that binary.  If the sha256 is not yet in func_id.db the binary
+        is ingested automatically via ingest_binary(ctx) before building the
+        corpus — no global fallback.
         """
-        import sqlite3, warnings as _w
+        import sqlite3
         searcher = cls(str(_DEFAULT_DB), cache_dir)
-        con = sqlite3.connect(_DEFAULT_DB)
-        try:
+
+        with sqlite3.connect(_DEFAULT_DB) as con:
             row = con.execute(
                 'SELECT id FROM binaries WHERE sha256=?', (ctx.sha256,)
             ).fetchone()
-            if row is None:
-                _w.warn(
-                    f'SemanticSearcher.from_context: sha256={ctx.sha256[:16]} not in '
-                    f'func_id.db; falling back to global scope (slow)',
-                    stacklevel=2,
-                )
-                binary_id  = None
-                live_addrs = None
-            else:
-                binary_id  = int(row[0])
+
+        if row is None:
+            binary_id, live_addrs = cls.ingest_binary(ctx)
+        else:
+            binary_id = int(row[0])
+            with sqlite3.connect(_DEFAULT_DB) as con:
                 live_addrs = {
                     int(r[0]) for r in con.execute(
                         "SELECT va FROM functions WHERE binary_id=? "
@@ -355,12 +352,72 @@ class SemanticSearcher:
                         (binary_id,),
                     ).fetchall()
                 }
-        finally:
-            con.close()
+
         searcher._binary_id  = binary_id
         searcher._live_addrs = live_addrs
         searcher.build_corpus(live_addrs=live_addrs)
         return searcher
+
+    @classmethod
+    def ingest_binary(
+        cls,
+        ctx,
+        product: str = '',
+        arch: str = '',
+        version: str = '',
+        path_hint: str = '',
+    ) -> 'tuple[int, set[int]]':
+        """Register ctx's named functions in func_id.db and return (binary_id, live_addrs).
+
+        Uses BinaryContext.names_map() to populate name and call_targets for
+        each function (confidence=CONFIRMED, role=UNKNOWN).  Idempotent —
+        re-running on an already-registered binary is a no-op.  Called
+        automatically by from_context() on a cache miss.
+
+        Returns (binary_id, live_addrs) where live_addrs is the set of VAs
+        for which a row was found or inserted.
+        """
+        import sqlite3, json as _json, warnings as _w
+
+        resolved_arch = arch or getattr(ctx, 'arch', '') or 'x86-64'
+        names = ctx.names_map()  # {va: name}
+
+        if not names:
+            _w.warn(
+                f'SemanticSearcher.ingest_binary: sha256={ctx.sha256[:16]} has no named '
+                f'functions — SemanticSearcher queries will return no results.',
+                stacklevel=2,
+            )
+
+        with sqlite3.connect(_DEFAULT_DB) as con:
+            con.execute(
+                '''INSERT INTO binaries (sha256, path_hint, product, arch, version)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(sha256) DO NOTHING''',
+                (ctx.sha256, path_hint, product, resolved_arch, version),
+            )
+            binary_id = int(con.execute(
+                'SELECT id FROM binaries WHERE sha256=?', (ctx.sha256,)
+            ).fetchone()[0])
+
+            rows = [
+                (
+                    binary_id,
+                    va,
+                    name,
+                    _json.dumps([tva for tva, _ in ctx.callees_of(va)[:32]]),
+                )
+                for va, name in names.items()
+            ]
+            con.executemany(
+                '''INSERT OR IGNORE INTO functions
+                       (binary_id, va, name, confidence, call_targets)
+                   VALUES (?, ?, ?, 'CONFIRMED', ?)''',
+                rows,
+            )
+
+        live_addrs: set[int] = {va for va in names}
+        return binary_id, live_addrs
 
     # ── model lazy-load ──────────────────────────────────────────────────────
 
