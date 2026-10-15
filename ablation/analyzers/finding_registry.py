@@ -139,19 +139,23 @@ class FindingRegistry:
             )
         self._con.commit()
 
-    def build_embeddings(self, model) -> int:
-        """Compute and store embeddings for all entries that lack them.
+    def build_embeddings(self, model, force: bool = False) -> int:
+        """Compute and store embeddings for entries that lack them.
 
-        Call this once after the SentenceTransformer model is loaded.
+        Pass force=True to NULL all existing embeddings and rebuild — required
+        when switching embedding models to avoid mixing incompatible vector spaces.
         Returns the count of entries updated.
         """
+        if force:
+            self._con.execute("UPDATE findings SET embedding=NULL")
+            self._con.commit()
         rows = self._con.execute(
             "SELECT id, title, description FROM findings WHERE embedding IS NULL AND description IS NOT NULL"
         ).fetchall()
         if not rows:
             return 0
         texts = [f"{r[1]} | {r[2]}" for r in rows]
-        vecs = model.encode(texts, normalize_embeddings=True, batch_size=64, show_progress_bar=False)
+        vecs = np.array(list(model.embed(texts)), dtype=np.float32)
         for (row_id, _, _), vec in zip(rows, vecs):
             self._con.execute(
                 "UPDATE findings SET embedding=? WHERE id=?",
@@ -345,7 +349,7 @@ class FindingRegistry:
 
     def search(self, query: str, model, top_k: int = 10, min_sim: float = 0.60) -> list:
         """Semantic search: encode query string, return similar findings from corpus."""
-        qvec = model.encode(query, normalize_embeddings=True)
+        qvec = np.array(next(model.embed([query])), dtype=np.float32)
         return self.find_similar(qvec, top_k=top_k, min_sim=min_sim)
 
     def unsynced_findings(self) -> list:
@@ -498,9 +502,9 @@ def _cli():
         _interactive_register(reg)
 
     elif args.cmd == "search":
-        from sentence_transformers import SentenceTransformer
+        from fastembed import TextEmbedding
         print(f"Loading model for semantic search ...")
-        model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
+        model = TextEmbedding("BAAI/bge-small-en-v1.5")
         reg.build_embeddings(model)
         hits = reg.search(args.query, model, top_k=args.top, min_sim=args.min_sim)
         if not hits:

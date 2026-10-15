@@ -1,5 +1,5 @@
 """
-Semantic function similarity using BERT (all-MiniLM-L6-v2).
+Semantic function similarity using fastembed (BAAI/bge-small-en-v1.5).
 
 Assembly normalization strips build-specific artifacts (addresses, register names,
 large immediates) so the encoder focuses on structural behavior.
@@ -29,7 +29,7 @@ from typing import Optional
 
 import numpy as np
 
-_MODEL_NAME  = 'sentence-transformers/all-mpnet-base-v2'
+_MODEL_NAME  = 'BAAI/bge-small-en-v1.5'
 _CACHE_DIR   = Path.home() / '.ablation'
 _DEFAULT_DB  = _CACHE_DIR / 'func_id.db'
 
@@ -366,15 +366,16 @@ class SemanticSearcher:
 
     def _get_model(self):
         if self._model is None:
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer(_MODEL_NAME, device='cpu')
+            from fastembed import TextEmbedding
+            self._model = TextEmbedding(_MODEL_NAME)
         return self._model
 
     # ── corpus management ────────────────────────────────────────────────────
 
     def _cache_file(self, live_hash: str = '') -> Path:
+        model_slug = _MODEL_NAME.replace('/', '_').replace('-', '_')
         suffix = f'_{live_hash}' if live_hash else ''
-        return self._cache_dir / f'func_semantic_cache{suffix}.pkl'
+        return self._cache_dir / f'func_semantic_cache_{model_slug}{suffix}.pkl'
 
     def _db_hash(self) -> str:
         return hashlib.sha256(self._db_path.read_bytes()).hexdigest()[:16]
@@ -455,12 +456,7 @@ class SemanticSearcher:
             for r in rows
         ]
         model = self._get_model()
-        vectors = model.encode(
-            descriptions,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-            batch_size=64,
-        ).astype(np.float32)
+        vectors = np.array(list(model.embed(descriptions)), dtype=np.float32)
 
         meta = [
             {'va': r[0], 'name': r[1], 'role': r[2], 'confidence': r[3]}
@@ -486,9 +482,7 @@ class SemanticSearcher:
         if self._vectors is None or self._vectors.shape[0] == 0:
             return []
 
-        q = self._get_model().encode(
-            description, normalize_embeddings=True, show_progress_bar=False
-        ).astype(np.float32)
+        q = np.array(next(self._get_model().embed([description])), dtype=np.float32)
 
         scores = self._vectors @ q          # cosine sim (both L2-normalized)
         top_k  = min(top_k, len(scores))
