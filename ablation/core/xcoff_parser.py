@@ -5,6 +5,7 @@ PowerPC (RS/6000, POWER) systems.  Supported variants:
 
 - XCOFF32  magic 0x01DF  (AIX 4.x / 5.x 32-bit, PPC32, big-endian)
 - XCOFF64  magic 0x01F7  (AIX 5.x / 6.x 64-bit, PPC64, big-endian)
+- XCOFF64  magic 0x01EF  (AIX 3.x era 64-bit prototype; same struct as 0x01F7)
 
 Why this exists
 ---------------
@@ -54,8 +55,9 @@ from typing import Dict, List, Optional
 # can appear as short garbled "names" when l_noff happens to land in that region.
 _VALID_LDSYM_NAME = re.compile(r'^[A-Za-z_.@$][A-Za-z0-9_.@$]*$')
 
-XCOFF32_MAGIC = 0x01DF
-XCOFF64_MAGIC = 0x01F7
+XCOFF32_MAGIC     = 0x01DF
+XCOFF64_MAGIC     = 0x01F7
+XCOFF64_MAGIC_ALT = 0x01EF  # AIX 3.x era; identical struct to 0x01F7
 
 # XCOFF section flags (s_flags)
 STYP_TEXT   = 0x0020
@@ -543,7 +545,7 @@ def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
         data : raw bytes if already read; if None, the file is read from path
 
     Raises:
-        ValueError: if the magic bytes are not 0x01DF or 0x01F7
+        ValueError: if the magic bytes are not 0x01DF, 0x01F7, or 0x01EF
         struct.error: if the file is truncated
     """
     if data is None:
@@ -561,7 +563,7 @@ def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
         magic, nscns, timdat, symptr, nsyms, opthdr_sz, flags = struct.unpack_from(
             _FILE_HDR_FMT32, data, 0
         )
-    elif magic_raw == XCOFF64_MAGIC:
+    elif magic_raw in (XCOFF64_MAGIC, XCOFF64_MAGIC_ALT):
         arch = 'ppc64'
         scnhdr_fmt, scnhdr_sz = _SCNHDR64_FMT, _SCNHDR64_SZ
         file_hdr_sz = _FILE_HDR_SZ64
@@ -571,7 +573,7 @@ def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
             _FILE_HDR_FMT64, data, 0
         )
     else:
-        raise ValueError(f"not an XCOFF binary: magic={magic_raw:#06x} (expected 0x01df or 0x01f7)")
+        raise ValueError(f"not an XCOFF binary: magic={magic_raw:#06x} (expected 0x01df, 0x01f7, or 0x01ef)")
 
     # Optional header — parse entry, text_start, data_start, toc (XCOFF32 only; .o files skip)
     entry = text_start = data_start = toc_va = 0
