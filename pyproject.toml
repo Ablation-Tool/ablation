@@ -13,7 +13,7 @@ dependencies = [
     "capstone>=5.0.1",
     "numpy>=1.26.0",
     "lief>=0.16.0",
-    "sentence-transformers>=2.7.0",
+    "fastembed>=0.3.0",
     "pyelftools>=0.29",
 ]
 
@@ -25,10 +25,12 @@ Source = "https://github.com/Ablation-Tool/ablation"
 
 [project.optional-dependencies]
 llm = ["anthropic>=0.30.0"]
+finetune = ["sentence-transformers>=2.7.0"]
 full = [
     "anthropic>=0.30.0",
     "angr>=9.2.90",
     "bitstring<4.0",
+    "sentence-transformers>=2.7.0",
 ]
 
 [project.scripts]
