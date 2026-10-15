@@ -642,7 +642,7 @@ class BinaryContext:
             for off in range(0, len(sec_bytes) - 7, 4):
                 w0 = struct.unpack_from('<I', sec_bytes, off)[0]
                 w1 = struct.unpack_from('<I', sec_bytes, off + 4)[0]
-                # addis r2, r12, HI  (opcode=15, rD=2, rA=12)
+                # addis r2, r12, HI  (opcode=15, rD=2, rA=12) — PIC/PIE form; TOC relative to entry VA
                 # addi  r2, r2,  LO  (opcode=14, rD=2, rA=2)
                 if (w0 & 0xFFFF0000) == 0x3C4C0000 and (w1 & 0xFFFF0000) == 0x38420000:
                     hi = w0 & 0xFFFF
@@ -652,6 +652,20 @@ class BinaryContext:
                     if lo & 0x8000:
                         lo -= 0x10000
                     cand = (sec_va + off) + (hi << 16) + lo
+                    if any(-(1 << 15) <= (gva - cand) < (1 << 15) for gva in got_to_sym):
+                        r2 = cand
+                        break
+                # lis r2, HI (= addis r2, r0, HI, rA=0) — absolute-address form used by position-dependent
+                # IBM XLC-compiled binaries (non-PIE with fixed load address, e.g. base_va != 0).
+                # addi r2, r2, LO  (opcode=14, rD=2, rA=2)
+                elif (w0 & 0xFFFF0000) == 0x3C400000 and (w1 & 0xFFFF0000) == 0x38420000:
+                    hi = w0 & 0xFFFF
+                    lo = w1 & 0xFFFF
+                    if hi & 0x8000:
+                        hi -= 0x10000
+                    if lo & 0x8000:
+                        lo -= 0x10000
+                    cand = (hi << 16) + lo
                     if any(-(1 << 15) <= (gva - cand) < (1 << 15) for gva in got_to_sym):
                         r2 = cand
                         break
