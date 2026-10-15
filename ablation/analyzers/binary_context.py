@@ -827,30 +827,33 @@ class BinaryContext:
                         starts.add(va)
             except Exception:
                 pass
-        # PPC64: scan code segment for MFLR r0 (7C 08 02 A6, big-endian) function prologues.
-        # Every non-leaf Cell PPU function opens with MFLR r0 to save the link register.
-        # This is the single reliable prologue discriminator for stripped PPC64 Cell binaries.
-        if self.arch in ('ppc64', 'ppc32') and not starts and path:
+        # PPC64/PPC32: scan code segment for MFLR r0 function prologues.
+        # Every non-leaf function opens with MFLR r0 to save the link register before calling out.
+        # Runs as primary fallback (no starts) OR supplementary when starts<100 for ppc64le
+        # binaries that use IBM .except instead of standard DWARF EH (IPA, large XLC binaries).
+        if self.arch in ('ppc64', 'ppc32') and path and (not starts or len(starts) < 100):
             try:
                 import struct
-                MFLR_R0 = b'\x7c\x08\x02\xa6'  # big-endian
                 with open(path, 'rb') as fh:
                     raw = fh.read()
-                # Find the executable LOAD segment via ELF program headers
-                # ELF64 big-endian: e_phoff at 0x20 (NOT 0x28 which is e_shoff!)
-                # e_phentsize at 0x36, e_phnum at 0x38
-                e_phoff = struct.unpack_from('>Q', raw, 0x20)[0]
-                e_phentsize = struct.unpack_from('>H', raw, 0x36)[0]
-                e_phnum = struct.unpack_from('>H', raw, 0x38)[0]
+                # EI_DATA at offset 5: 1=ELFDATA2LSB (LE), 2=ELFDATA2MSB (BE)
+                _elf_le = len(raw) > 5 and raw[5] == 1
+                _fmt = '<' if _elf_le else '>'
+                # mflr r0 = 0x7C0802A6; stored LE as a6 02 08 7c, BE as 7c 08 02 a6
+                MFLR_R0 = b'\xa6\x02\x08\x7c' if _elf_le else b'\x7c\x08\x02\xa6'
+                # ELF64: e_phoff at 0x20, e_phentsize at 0x36, e_phnum at 0x38
+                e_phoff = struct.unpack_from(_fmt + 'Q', raw, 0x20)[0]
+                e_phentsize = struct.unpack_from(_fmt + 'H', raw, 0x36)[0]
+                e_phnum = struct.unpack_from(_fmt + 'H', raw, 0x38)[0]
                 for i in range(e_phnum):
                     ph_off = e_phoff + i * e_phentsize
-                    p_type = struct.unpack_from('>I', raw, ph_off)[0]
-                    p_flags = struct.unpack_from('>I', raw, ph_off + 0x04)[0]
-                    p_offset = struct.unpack_from('>Q', raw, ph_off + 0x08)[0]
-                    p_vaddr = struct.unpack_from('>Q', raw, ph_off + 0x10)[0]
-                    p_filesz = struct.unpack_from('>Q', raw, ph_off + 0x20)[0]
+                    p_type = struct.unpack_from(_fmt + 'I', raw, ph_off)[0]
+                    p_flags = struct.unpack_from(_fmt + 'I', raw, ph_off + 0x04)[0]
+                    p_offset = struct.unpack_from(_fmt + 'Q', raw, ph_off + 0x08)[0]
+                    p_vaddr = struct.unpack_from(_fmt + 'Q', raw, ph_off + 0x10)[0]
+                    p_filesz = struct.unpack_from(_fmt + 'Q', raw, ph_off + 0x20)[0]
                     PT_LOAD = 1
-                    PF_X = 0x1  # execute flag
+                    PF_X = 0x1
                     if p_type == PT_LOAD and (p_flags & PF_X) and p_filesz > 0:
                         seg = raw[p_offset: p_offset + p_filesz]
                         pos = 0
@@ -858,7 +861,6 @@ class BinaryContext:
                             idx = seg.find(MFLR_R0, pos)
                             if idx < 0:
                                 break
-                            # Must be 4-byte aligned
                             if idx % 4 == 0:
                                 starts.add(p_vaddr + idx)
                             pos = idx + 4
