@@ -352,6 +352,10 @@ class SemanticSearcher:
                         (binary_id,),
                     ).fetchall()
                 }
+            # Re-ingest if the binary was registered with 0 functions (prior empty ingestion)
+            # and new names are now available via ctx.exports or overlay.
+            if not live_addrs:
+                _, live_addrs = cls.ingest_binary(ctx)
 
         searcher._binary_id  = binary_id
         searcher._live_addrs = live_addrs
@@ -381,6 +385,16 @@ class SemanticSearcher:
 
         resolved_arch = arch or getattr(ctx, 'arch', '') or 'x86-64'
         names = ctx.names_map()  # {va: name}
+
+        # Fall back to ctx.exports for binaries whose names come from the loader/symtab
+        # (e.g. XCOFF32 ppc32 executables) rather than from analyst overlay.
+        # Exclude anonymous _sym_N placeholders that add noise without semantic value.
+        if not names and hasattr(ctx, 'exports') and ctx.exports:
+            names = {
+                va: nm
+                for nm, va in ctx.exports.items()
+                if va and nm and not nm.startswith('_sym_')
+            }
 
         if not names:
             _w.warn(
