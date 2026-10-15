@@ -34,9 +34,9 @@ def _m68k_rom(size: int = 256, link_count: int = 5) -> bytes:
 
 
 def _sh2a_rom(size: int = 256, rts_count: int = 10) -> bytes:
-    """SH-2A: reset vector at offset 4 + RTS instructions."""
+    """SH-2A: reset PC at offset 0 + RTS instructions."""
     buf = bytearray(size)
-    struct.pack_into(">I", buf, 4, 0x00000080)  # reset vector in range (0x80 < 256)
+    struct.pack_into(">I", buf, 0, 0x00000080)  # reset PC at offset 0 (0x80 < 256)
     # Inject RTS and STS.L PR instructions
     off = 8
     for i in range(rts_count):
@@ -47,9 +47,9 @@ def _sh2a_rom(size: int = 256, rts_count: int = 10) -> bytes:
 
 
 def _sh2a_rom_with_prologue(size: int = 256) -> bytes:
-    """SH-2A: reset vector + STS.L PR prologues."""
+    """SH-2A: reset PC at offset 0 + STS.L PR prologues."""
     buf = bytearray(size)
-    struct.pack_into(">I", buf, 4, 0x00000080)  # reset vector in range (0x80 < 256)
+    struct.pack_into(">I", buf, 0, 0x00000080)  # reset PC at offset 0 (0x80 < 256)
     off = 8
     for _ in range(10):
         if off + 2 <= size:
