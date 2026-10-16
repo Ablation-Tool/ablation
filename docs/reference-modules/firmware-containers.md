@@ -240,7 +240,7 @@ the RSA-2048 + SHA-256 scheme used in Variant A.
 ### Embedded build artifacts (910b HBOOT1_b)
 
 - Build path leak: `/usr1/turing/open_source/newlib-install/`; Huawei internal
-  codename for Ascend 910 is **"turing"**
+ codename for Ascend 910 is **"turing"**
 - XLink die-to-die interconnect string: `XLink` (Huawei proprietary multi-die fabric)
 
 ### SerDes firmware versions
@@ -471,7 +471,7 @@ CAdES+RSA-PSS algorithms with inline CRL distribution).
 
 | Finding | Severity | Detail |
 |---|---|---|
-| Dual CAdES+PSS signatures + CRL on filelists | INFO | Both .cms (7814B) and .pss.cms per HWTYPE; explicit CRL (4975B) distributed inline |
+| Dual CAdES+PSS signatures + CRL on filelists | INFO | Both.cms (7814B) and.pss.cms per HWTYPE; explicit CRL (4975B) distributed inline |
 | "verona" group (GID 2001); third codename | INFO | Alongside YUNSHAN/PNF; controls VRP module file access |
 | COLD patch; all 120 patches require reboot | INFO | Carrier operator deferral risk amplifies exposure window |
 | swm-owned modules with perms 777 | LOW | Group-writable if group membership misconfigured post-auth |
@@ -543,7 +543,7 @@ HiSilicon Hi1215 firmware blob path: `/mnt/nsysmain/hi1215_bootloader.bin`
 257MB datacenter switch firmware with three distinct CPU/SoC boot stacks packed into one
 .cc image (VRP V200R019C10, codename DCTOR: Datacenter TOR).
 
-### Container format (CE6810EI .cc, distinct from NE8000/MA5800)
+### Container format (CE6810EI.cc, distinct from NE8000/MA5800)
 
 ```
 0x00  4   Magic: 5A 00 00 03  (unique to CE series)
@@ -553,7 +553,7 @@ HiSilicon Hi1215 firmware blob path: `/mnt/nsysmain/hi1215_bootloader.bin`
 0x02F3EEF4  SquashFS (xz, 206 MB, 19757 inodes, 489 modules)
 ```
 
-No ELF files are present at the .cc top level; all code is nested inside the SquashFS.
+No ELF files are present at the.cc top level; all code is nested inside the SquashFS.
 
 ### Multi-SoC hardware architecture (`hard-to-cpu.txt`)
 
@@ -574,10 +574,10 @@ HWTYPE prefix `0x12xxxxxx` = CE6810 chassis board (vs `0x4xxxxxxx` = ARM in MA58
 
 **P2020 LPU stack** (e500v2, configs 0x12000608/09):
 - `uboot_ppc2020.bin` → `dc2020_5810_uImage.bin` (4.4MB) + `rootfs_2020_5810.sqfs` (8.8MB) + `rootfs_2020_vrp.img` (22MB)
-- `TOR_CE5810_48T4S_EI_CPLD.bin` (156KB CE5810 ToR CPLD firmware; **no .cms signature**)
+- `TOR_CE5810_48T4S_EI_CPLD.bin` (156KB CE5810 ToR CPLD firmware; **no.cms signature**)
 
 **CR55/CR56 stack** (string HWTYPE):
-- `DE51FCMA.bin` (4.5KB NPU/FPGA; **no .cms signature**)
+- `DE51FCMA.bin` (4.5KB NPU/FPGA; **no.cms signature**)
 
 ### Security findings
 
@@ -585,8 +585,8 @@ HWTYPE prefix `0x12xxxxxx` = CE6810 chassis board (vs `0x4xxxxxxx` = ARM in MA58
 |---|---|---|
 | `dbg_server` + `dbg_agent` in production CPT (SYSTEMIC; 2nd platform) | MEDIUM | Cross-confirmed with MA5800 OLT V100R018; intentional across all VRP production builds |
 | Python VM + gRPC in production | INFO | `pythonvm`, `python_pack`, `grpc` all in production CPT |
-| CE5810 CPLD firmware without CMS signature | INFO | 156KB CPLD binary controls port electrical config; no adjacent .cms/.crl |
-| DE51FCMA.bin (CR55/56) without CMS signature | INFO | Unlike NE8000 patch files which carry dual .cms+.pss.cms |
+| CE5810 CPLD firmware without CMS signature | INFO | 156KB CPLD binary controls port electrical config; no adjacent.cms/.crl |
+| DE51FCMA.bin (CR55/56) without CMS signature | INFO | Unlike NE8000 patch files which carry dual.cms+.pss.cms |
 | 4-CPU-architecture attack surface | INFO | P3041/P2020/ARM/CR-card boot independently; LPU compromise may be invisible to MPU |
 
 ---
@@ -596,7 +596,7 @@ HWTYPE prefix `0x12xxxxxx` = CE6810 chassis board (vs `0x4xxxxxxx` = ARM in MA58
 **File:** `targets/huawei/s6750_v600_re.py`
 
 366MB campus switch firmware (S6750-H/S7400/S7500/S6800 family), VRP V600R024.
-Same .cc format version as NE8000 (0x00000002). First VRP campus switch generation
+Same.cc format version as NE8000 (0x00000002). First VRP campus switch generation
 using HiSilicon silicon exclusively (no Freescale, no Broadcom).
 
 ### Container structure
@@ -715,11 +715,11 @@ Pre-pended manifest block:
 |---|---|---|
 | Standard HPM.1 (V3 gen) no payload signature | MEDIUM | Pure HPM.1 = checksum only; arbitrary BMC flash via IPMI if HPM update reachable |
 | V5 gen CMS uses same corpus-wide CA | INFO | Single Huawei CA covers all product lines |
-| RH1288V3 CPLD binaries not individually signed | INFO | 3 CPLDs in ZIP without .cms/.crl |
+| RH1288V3 CPLD binaries not individually signed | INFO | 3 CPLDs in ZIP without.cms/.crl |
 
 ---
 
-## Huawei NE40E / NE20E Core Router VRP V800 (.cc and .PAT)
+## Huawei NE40E / NE20E Core Router VRP V800 (.cc and.PAT)
 
 Source: `/media/cowboy/research/Huawei-Firmware/OpenX/Routers/`; NE40E-M2K-B V800R023/V800R024, NE20E V800R022, SPH122 patch.
 
@@ -821,7 +821,7 @@ Body:     SQFS catalog (0x2CA6) + multiple GZIP patch blobs + dual CMS signature
 
 ---
 
-## Huawei NearLink / SparkLink IoT SoC Firmware (HiBurn .fwpkg)
+## Huawei NearLink / SparkLink IoT SoC Firmware (HiBurn.fwpkg)
 
 Source: `/media/cowboy/research/Huawei-Firmware/NearLink/`; 18 `.fwpkg` packages for HiSilicon NearLink/SparkLink development boards (BS21/Hi2821, WS63/Hi3863, WS63E, Hi3863).
 
@@ -875,7 +875,7 @@ Flash base: 0x200000 (QSPI NOR flash)
 
 ### SoC boot chain comparison
 
-**BS21:** loaderboot → partition.bin → flashboot (A/B) → application  
+**BS21:** loaderboot → partition.bin → flashboot (A/B) → application 
 **WS63:** root_loaderboot → root_params → SSB → flashboot (A/B) → LiteOS app
 
 WS63 adds an explicit SSB (Secure Secondary Boot) stage and A/B NV redundancy that BS21 lacks. Every component ends in `_sign.bin`; per-partition signing before packaging. The fwpkg container has no CMS/PKCS#7 wrapper (unlike VRP, iBMC, HPM); package integrity relies on individual partition signatures.
@@ -893,10 +893,10 @@ WS63 adds an explicit SSB (Secure Secondary Boot) stage and A/B NV redundancy th
 
 ## Huawei Go-Trex Campus Switch VRP V200R022 (.cc three-SquashFS format)
 
-**Analyzed:** S5732-H_V200R022C00SPC500.cc (161MB), S6730-H_V200R022C00SPC500.cc (159MB), S5720EI-V200R019SPH3b0.pat (4.7MB)  
+**Analyzed:** S5732-H_V200R022C00SPC500.cc (161MB), S6730-H_V200R022C00SPC500.cc (159MB), S5720EI-V200R019SPH3b0.pat (4.7MB) 
 **Source module:** `targets/huawei/gotrex_switch_re.py`
 
-### VRP V200R022 .cc format
+### VRP V200R022.cc format
 
 This format is distinct from both the RPG v2 (.cc for NE40E/NE20E) and the CE6810EI format:
 
@@ -1094,8 +1094,8 @@ Return a sorted list of `(name, inode_ref, type)` tuples for all entries in `dir
 ### Implementation notes
 
 - `MetaStream`: lazy cache of decompressed metadata blocks with block-boundary crossing.
-  When `within_off >= block_size`, advances to the next block recursively. Earlier versions
-  that did not handle this caused infinite recursion when reading large directory listings.
+ When `within_off >= block_size`, advances to the next block recursively. Earlier versions
+ that did not handle this caused infinite recursion when reading large directory listings.
 - `_extract_lzma2_payload(block_bytes)`: parses XZ stream header (12 bytes) + block header
-  to find the LZMA2 compressed data start and length. Returns `(payload, has_arm64_bcj)`.
+ to find the LZMA2 compressed data start and length. Returns `(payload, has_arm64_bcj)`.
 - Per-file data blocks: each is an independent XZ stream. Decompress individually; concatenate outputs.

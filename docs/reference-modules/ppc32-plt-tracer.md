@@ -68,7 +68,7 @@ slot = elf.plt_slot('system')            # PLT slot VA for imported symbol
 
 ## How it works
 
-### PPC32 BE .so calling model
+### PPC32 BE.so calling model
 
 In a PPC32 BE `.so`, imported symbol calls go through per-compilation-unit
 thunks:
@@ -115,7 +115,7 @@ positive "system()" call sites from one real system() caller.
 `PPC32PLTTracer.find_callers()` adds a per-caller verification step:
 
 1. For each `BL caller_va → thunk_va`, scan backward from `caller_va` to
-   find the nearest preceding BCL preamble and compute the r30 it establishes.
+ find the nearest preceding BCL preamble and compute the r30 it establishes.
 2. Accept the call site only if `actual_r30 == implied_r30 = plt_slot - d`.
 
 This eliminates all cross-compilation-unit false positives without any
@@ -138,20 +138,20 @@ False positive reduction: libupdatelpu 9→2, libpythonvm 59→1 after r30 check
 
 ---
 
-## BSS PLT: SYSV PIC (IBM HPS, glibc .so files)
+## BSS PLT: SYSV PIC (IBM HPS, glibc.so files)
 
 SYSV ABI PPC32 `.so` files (glibc-linked, `ET_DYN`) use a different calling
 model: calls go directly via `BL stub_va` with no indirection through r30 or
-a GOT2 thunk.  The `.plt` section has no file content (it is allocated in BSS
+a GOT2 thunk. The `.plt` section has no file content (it is allocated in BSS
 and written by the dynamic linker at load time).
 
 `find_callers()` detects this case via `_is_bss_plt()` and dispatches to
 `_find_callers_bss_plt()`:
 
 1. `bss_plt_stub_map()` correlates `.rela.plt` entry order with `BL` targets
-   in `.text` that land in the `.plt` VA range.
+ in `.text` that land in the `.plt` VA range.
 2. Stub index 0 is identified as the smallest BL target T where T+8 is also
-   a BL target (stub size = 8 bytes, standard for glibc SYSV PPC32 BSS PLT).
+ a BL target (stub size = 8 bytes, standard for glibc SYSV PPC32 BSS PLT).
 3. `resolver_size = first_stub_va - plt_va` is computed empirically.
 4. All callers of each stub are returned via `find_bl_callers()`.
 
@@ -173,7 +173,7 @@ and is always called in firmware with many imports.
 using r29 or another register will not match (GOT2-PIC path only).
 
 **BCL preamble within 8 KB.** Scan window is 8 KB backward from each BL.
-Very large compilation units (unusual in firmware .so files) could exceed this.
+Very large compilation units (unusual in firmware.so files) could exceed this.
 Increase `max_scan` parameter to `_get_caller_r30` if needed.
 
 **Thunk pattern = LWZ+MTCTR+BCTR.** Some compilers emit `BCTRL` (link bit set)

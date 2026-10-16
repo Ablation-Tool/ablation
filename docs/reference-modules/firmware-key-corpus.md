@@ -2,7 +2,7 @@
 
 **File:** `ablation/analyzers/fortigate_cert_key_scanner.py`
 
-Classifies recovered firmware keys against a cross-image family table and flags any unrecognized key variant as a potential finding. An anomalous key count — a version shipping more key files than its family table entry predicts — surfaces before decryption begins.
+Classifies recovered firmware keys against a cross-image family table and flags any unrecognized key variant as a potential finding. An anomalous key count, a version shipping more key files than its family table entry predicts: it surfaces before decryption begins.
 
 Built from the Fortinet firmware RE corpus across 22+ engagement sessions. Covers every FortiGate virtual deployment format: OVF ZIP, KVM QCOW2, Hyper-V VHD/VHDX, and bare VMDK.
 
@@ -14,7 +14,7 @@ Three things were not possible before this module:
 
 1. **Batch key comparison was manual.** Confirming that a new firmware release ships the same shared key family as prior versions required extracting keys from each image individually and comparing MD5s by hand. A 20-version sweep took days.
 
-2. **Unknown key variants had no automatic detection.** A new Fortinet firmware release that introduces a previously unseen key variant — representing a change in the shared-key corpus — produced no alert. The module flags any `UNKNOWN` family entry immediately.
+2. **Unknown key variants had no automatic detection.** A new Fortinet firmware release that introduces a previously unseen key variant, representing a change in the shared-key corpus. It produced no alert. The module flags any `UNKNOWN` family entry immediately.
 
 3. **Formats beyond OVF ZIP required separate tooling.** KVM QCOW2, Hyper-V VHD, and VHDX images each needed different extraction commands. `FortiGateCertKeyScanner` handles all four formats through a single `from_path()` or `from_disk()` call.
 
@@ -30,7 +30,7 @@ The module maintains a corpus of known Fortinet key families keyed by MD5:
 | `fgt_512.key Gen2` | HIGH | 512-bit RSA; second generation; still below 768-bit minimum |
 | Additional families | varies | Extended corpus from sessions 1–22 |
 
-An extracted key with MD5 matching a known entry gets classified with its family name and severity. An extracted key with no matching entry gets `family='UNKNOWN'` — a potential new finding.
+An extracted key with MD5 matching a known entry gets classified with its family name and severity. An extracted key with no matching entry gets `family='UNKNOWN'`, a potential new finding.
 
 ---
 
@@ -44,7 +44,7 @@ An extracted key with MD5 matching a known entry gets classified with its family
 | VHDX (`.vhdx`) | `from_disk()` | Hyper-V v2; `qemu-img convert -f vhdx` |
 | VMDK (`.vmdk`) | `from_path()` or `from_disk()` | Bare VMDK without outer ZIP wrapper |
 
-All FortiGate virtual disk formats use P1 at LBA 2048 (256 MiB ext4 containing `datafs.tar.gz`). FAZ and FMG KVM images use P1 at LBA 8193 and contain no `datafs.tar.gz`; `from_disk()` returns an error result for these — that is correct behavior.
+All FortiGate virtual disk formats use P1 at LBA 2048 (256 MiB ext4 containing `datafs.tar.gz`). FAZ and FMG KVM images use P1 at LBA 8193 and contain no `datafs.tar.gz`; `from_disk()` returns an error result for these, that is correct behavior.
 
 **Requirements:** `qemu-img` and `debugfs` (e2fsprogs) must be on PATH.
 
@@ -86,7 +86,7 @@ result = FortiGateCertKeyScanner.from_path('/path/to/firmware.zip', force_rescan
 |---|---|
 | `firmware_path` | Path to the analyzed image |
 | `version` | Firmware version string extracted from the image |
-| `keys` | `dict[filename, KeyEntry]` — one entry per cert/key file found |
+| `keys` | `dict[filename, KeyEntry]`: one entry per cert/key file found |
 | `error` | Error message if extraction failed; `None` on success |
 
 ### `KeyEntry`

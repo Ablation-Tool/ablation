@@ -220,11 +220,11 @@ MatrixProfileDiff complements VersionDelta when the changed region is a long ins
 
 ---
 
-## FORGE audit — structural_sim.py
+## FORGE audit: structural_sim.py
 
 Gate: **PASSED**. No HIGH or CRITICAL findings. No code changes needed.
 
-- No file I/O — `extract_fingerprint()` and `fingerprint_sim()` operate on in-memory disassembly instruction lists and numpy arrays. `find_structural_orphans()` and `score_distribution()` iterate over lists of `FunctionFingerprint` NamedTuples.
-- No bare `except:`. No `try/except` blocks in the module at all — pure computation.
+- No file I/O: `extract_fingerprint()` and `fingerprint_sim()` operate on in-memory disassembly instruction lists and numpy arrays. `find_structural_orphans()` and `score_distribution()` iterate over lists of `FunctionFingerprint` NamedTuples.
+- No bare `except:`. No `try/except` blocks in the module at all: pure computation.
 - No lief.parse(). No subprocess. No HTTP reads.
 - Division-by-zero guards: `max(fp_a.n_insns, 1)` (size ratio), `if na > 0 and nb > 0` (cosine sim), `max(len(named_a | named_b), 1)` (PLT Jaccard), `if total_w == 0` (weight normalization).

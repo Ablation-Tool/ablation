@@ -1,6 +1,6 @@
 # Structurizer: Dominator-Based Structured Control Flow
 
-**File:** `ablation/analyzers/structurizer.py`  
+**File:** `ablation/analyzers/structurizer.py` 
 **Added:** v2.65.0
 
 ---
@@ -9,17 +9,17 @@
 
 Three things were not possible before in Ablation:
 
-**1. No structured output for any ISA.**  Every CFG-backed lifter in Ablation produced
-goto-based IR: `if (T) goto loc_1a20;`.  The structurizer converts that to `if/while/for`
+**1. No structured output for any ISA.** Every CFG-backed lifter in Ablation produced
+goto-based IR: `if (T) goto loc_1a20;`. The structurizer converts that to `if/while/for`
 pseudo-C, making function logic readable without manually tracing goto chains across the
 decompiler output.
 
-**2. No post-dominator tree.**  Finding the "join" block after an if/else diamond requires
-knowing which block every branch path converges on.  That is the immediate post-dominator.
-No existing Ablation module computed post-dominators.  `PostDomTree` fills that gap by
+**2. No post-dominator tree.** Finding the "join" block after an if/else diamond requires
+knowing which block every branch path converges on. That is the immediate post-dominator.
+No existing Ablation module computed post-dominators. `PostDomTree` fills that gap by
 reversing the CFG and running the standard `DomTree` algorithm on the reversed graph.
 
-**3. No ISA-neutral decompiler pass.**  The structurizer works on any CFG that exposes
+**3. No ISA-neutral decompiler pass.** The structurizer works on any CFG that exposes
 `.blocks`, `.entry`, `.flow`, `.flow_r()`: the same interface as `dataflow_engine.CFG`.
 `cfg_sh2a`, `cfg_v850`, and any future ECU-family CFG module can plug straight in
 without writing an ISA-specific structurizer.
@@ -29,20 +29,20 @@ without writing an ISA-specific structurizer.
 ## Algorithm
 
 All compiled automotive firmware (AUTOSAR classic, bare-metal ECU C) produces reducible
-CFGs: every back edge has a unique dominating header.  The structurizer exploits this:
+CFGs: every back edge has a unique dominating header. The structurizer exploits this:
 
 1. **Compute**: DomTree (Cooper-Harvey-Kennedy), LoopInfo (natural loops from back edges),
-   PostDomTree (reversed-CFG DomTree).
+ PostDomTree (reversed-CFG DomTree).
 2. **Walk RPO** (dominators before dominated nodes):
-   - Block is a loop header → emit `WhileNode`, recurse into loop body, skip past exit.
-   - Block has two successors (if/else) → find join via `PostDomTree`, emit `IfNode`
-     with then/else sub-trees, continue from join block.
-   - Block has no successors → emit `ReturnNode`.
-   - Otherwise → emit `InsnNode` (sequential), continue.
+ - Block is a loop header → emit `WhileNode`, recurse into loop body, skip past exit.
+ - Block has two successors (if/else) → find join via `PostDomTree`, emit `IfNode`
+ with then/else sub-trees, continue from join block.
+ - Block has no successors → emit `ReturnNode`.
+ - Otherwise → emit `InsnNode` (sequential), continue.
 3. Back-edge-tail blocks inside a loop body become `ContinueNode`; blocks whose only
-   successors are outside the loop become `BreakNode`.
+ successors are outside the loop become `BreakNode`.
 
-This is O(n) in the number of basic blocks.  It converges in one pass because RPO
+This is O(n) in the number of basic blocks. It converges in one pass because RPO
 guarantees dominators are visited before dominated nodes.
 
 ```mermaid
@@ -174,12 +174,12 @@ Example output (before: linear lifter, after: structurizer):
 ## Limitations
 
 - **Irreducible CFGs**: the structurizer assumes the CFG is reducible (all compiled
-  automotive C firmware is reducible).  Obfuscated firmware or hand-written assembly
-  with multiple-entry loops may produce incorrect output.  Use `LoopInfo.is_reducible()`
-  to check before running the structurizer.
+ automotive C firmware is reducible). Obfuscated firmware or hand-written assembly
+ with multiple-entry loops may produce incorrect output. Use `LoopInfo.is_reducible()`
+ to check before running the structurizer.
 - **Condition expressions**: `IfNode.cond_block` and `WhileNode.header_block` are
-  annotated as `/* cond @ 0x... */` in the emitted pseudo-C.  The T-bit value is not
-  tracked across instructions.  A future pass (`SH2aCondTracker`) can fill this in.
+ annotated as `/* cond @ 0x... */` in the emitted pseudo-C. The T-bit value is not
+ tracked across instructions. A future pass (`SH2aCondTracker`) can fill this in.
 - **Switch/jump table dispatch**: indirect jumps decoded as MISC produce open blocks
-  that appear in the structurizer as a plain `InsnNode` sequence without any branch
-  annotation.
+ that appear in the structurizer as a plain `InsnNode` sequence without any branch
+ annotation.

@@ -1,4 +1,4 @@
-# LibFuncDB — PLT Slot Classifier
+# LibFuncDB: PLT Slot Classifier
 
 **File:** `modules/libfunc_db.py`
 

@@ -8,8 +8,8 @@ TI TMS320C28x MCUs power EV/HEV traction-inverter controllers and motor-drive EC
 
 ## Where it's used
 
-- **EV/HEV traction inverters** — TI F28x-series motor-drive ECUs
-- **TMS320F2803x / F2806x / F2833x** — TI Piccolo and Delfino controller firmware
+- **EV/HEV traction inverters**: TI F28x-series motor-drive ECUs
+- **TMS320F2803x / F2806x / F2833x**: TI Piccolo and Delfino controller firmware
 - Any TI COFF-extracted or flat binary image from F28x-series hardware
 
 ---
@@ -31,22 +31,22 @@ TI TMS320C28x MCUs power EV/HEV traction-inverter controllers and motor-drive EC
 Four things were not possible before in Ablation:
 
 1. **No C28x disassembler existed in any supported toolchain.** Capstone 5.x has no
-   TMS320C28x support. Ghidra and Radare2 support C28x, but Ablation cannot invoke them
-   from Python without a subprocess dependency. The F28x-series MCUs used in EV/HEV traction-inverter controllers and motor-drive ECUs were
-   entirely opaque to Ablation's control-flow passes.
+ TMS320C28x support. Ghidra and Radare2 support C28x, but Ablation cannot invoke them
+ from Python without a subprocess dependency. The F28x-series MCUs used in EV/HEV traction-inverter controllers and motor-drive ECUs were
+ entirely opaque to Ablation's control-flow passes.
 
 2. **The two C28x calling conventions could not be distinguished.** `LC/LRET` stores the return address on the software stack with an 8-cycle return. `LCR/LRETR` stores it in the RPC register with a 4-cycle return. Each requires different stack-unwinding logic. Without a
-   decoder, Ablation could not decide which convention a given function uses, making CFG
-   construction impossible.
+ decoder, Ablation could not decide which convention a given function uses, making CFG
+ construction impossible.
 
 3. **`FFC XAR7, 22bit`: a third calling convention: was unknown to Ablation.** FFC
-   (Fast Function Call) stores the return address in the XAR7 register rather than the
-   stack or RPC. It is used in performance-sensitive inner loops and is not identified by
-   any stack-frame analysis tool that assumes only CALL/RET pairs.
+ (Fast Function Call) stores the return address in the XAR7 register rather than the
+ stack or RPC. It is used in performance-sensitive inner loops and is not identified by
+ any stack-frame analysis tool that assumes only CALL/RET pairs.
 
 4. **Word-addressed branching could not be modeled.** C28x program memory is word-addressed.
-   PC-relative branch offsets are signed 16-bit word counts, not byte counts. Applying
-   byte-count displacement arithmetic produces wrong target addresses for every C28x branch.
+ PC-relative branch offsets are signed 16-bit word counts, not byte counts. Applying
+ byte-count displacement arithmetic produces wrong target addresses for every C28x branch.
 
 ---
 

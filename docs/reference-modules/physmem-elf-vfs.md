@@ -1,4 +1,4 @@
-# PhysmemElfVfs — Physical Memory ELF Extractor
+# PhysmemElfVfs: Physical Memory ELF Extractor
 
 **File:** `modules/physmem_elf_vfs.py`
 

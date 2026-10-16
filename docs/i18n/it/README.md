@@ -192,7 +192,7 @@ flowchart TD
 
 ## Esempio di flusso di lavoro RE
 
-Analisi end-to-end di binari stripped da un bundle RPM. Estrazione tramite BinaryContext, xref di stringhe e disassemblaggio capstone fino ai risultati confermati.
+Analisi di binari stripped da un bundle RPM. Estrazione tramite BinaryContext, xref di stringhe e disassemblaggio capstone fino ai risultati confermati.
 
 ```mermaid
 flowchart TD

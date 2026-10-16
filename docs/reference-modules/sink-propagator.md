@@ -5,26 +5,26 @@
 Four things were not possible before in Ablation:
 
 1. **Find injection paths hidden behind custom string-passing wrappers.** TaintTracker
-   searches for calls to known PLT sinks (system, popen, etc.). When a binary wraps
-   system() behind doSystem(string) and systemLog(char*) — three levels deep — TaintTracker
-   finds zero injection sites while the vulnerability is fully reachable. SinkPropagator
-   computes the transitive closure of passthrough wrappers so TaintTracker gets the complete
-   sink list.
+ searches for calls to known PLT sinks (system, popen, etc.). When a binary wraps
+ system() behind doSystem(string) and systemLog(char*), three levels deep; TaintTracker
+ finds zero injection sites while the vulnerability is fully reachable. SinkPropagator
+ computes the transitive closure of passthrough wrappers so TaintTracker gets the complete
+ sink list.
 
 2. **Detect the entire wrapper chain, not just level-one wrappers.** Propagation iterates
-   to a fixed point: if addUser() passes its arg to doSystem(), and doSystem() passes its
-   arg to systemLog(), and systemLog() calls system() — all three are returned as
-   SinkWrapper findings with their full lineage. A single TaintTracker run using the
-   expanded sink list will then trace injection all the way from the entry point.
+ to a fixed point: if addUser() passes its arg to doSystem(), and doSystem() passes its
+ arg to systemLog(), and systemLog() calls system(), all three are returned as
+ SinkWrapper findings with their full lineage. A single TaintTracker run using the
+ expanded sink list will then trace injection all the way from the entry point.
 
 3. **Report multi-parameter wrappers correctly.** Some wrappers pass argument 1 (rsi)
-   rather than argument 0 (rdi). The scanner tracks which parameter index is propagated
-   and emits the correct arg_pos for each wrapper, so TaintTracker traces the right
-   source register.
+ rather than argument 0 (rdi). The scanner tracks which parameter index is propagated
+ and emits the correct arg_pos for each wrapper, so TaintTracker traces the right
+ source register.
 
 4. **Give a human-readable chain report.** Each SinkWrapper record carries the full
-   ancestor chain so a reviewer can follow the injection path without re-running capstone
-   by hand.
+ ancestor chain so a reviewer can follow the injection path without re-running capstone
+ by hand.
 
 ## Usage
 
@@ -83,7 +83,7 @@ not simple wrappers, and are excluded to avoid false positives.
 
 **Arg0 passthrough only.** The current implementation traces `rdi` (arg0) backward
 from the call site. Wrappers that transform `string&` → `char*` via `c_str()` break
-the register chain and are not recognized — this is intentional. Those intermediate
+the register chain and are not recognized, this is intentional. Those intermediate
 functions are still found because their callee (`systemLog(char*)`) IS recognized as
 a wrapper, and TaintTracker will traverse to them from the other direction.
 

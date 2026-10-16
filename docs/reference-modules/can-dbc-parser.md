@@ -237,19 +237,19 @@ Signal decode at raw=2000: 2000 * 0.125 + 0 = 250.0 rpm.
 ## Limitations
 
 - **Motorola byte order not decoded.** `CANSignal.little_endian = False` is stored correctly,
-  but `decode()` applies the same linear formula regardless of byte order. Callers that need
-  Motorola bit extraction must implement it separately using `start_bit` and `length`.
+ but `decode()` applies the same linear formula regardless of byte order. Callers that need
+ Motorola bit extraction must implement it separately using `start_bit` and `length`.
 
 - **Multiplexed signals stored but not grouped.** The `M`/`m<n>` multiplexor indicator is
-  detected and skipped. All signals are stored flat under the message; multiplexor ID grouping
-  is not provided.
+ detected and skipped. All signals are stored flat under the message; multiplexor ID grouping
+ is not provided.
 
 - **`ENVVAR_` and `SIGGROUP_` records not parsed.** Environment variable declarations and
-  signal groups are not extracted. Most RE use cases do not need them.
+ signal groups are not extracted. Most RE use cases do not need them.
 
 - **`DEFINE_` attribute records not parsed.** Extended attribute definitions (`DEFINE_`,
   `ATTRIBUTE_`, `BA_`) are not extracted. Signal-level attribute data (e.g. `SystemSignalLongSymbol`
-  for names longer than 128 characters) is not available.
+ for names longer than 128 characters) is not available.
 
 ## FORGE audit
 

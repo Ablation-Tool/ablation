@@ -47,7 +47,7 @@ print(ctx.summary())
 
 **Eerste keer:** 0,5 tot 5 seconden afhankelijk van de grootte van het binaire bestand. Ablation bouwt en slaat op in cache naar `~/.ablation/cache/<sha256>_<name>.json`.
 
-**Elke volgende keer:** 110 ms. De cache is SHA256-gesleuteld — een andere build met dezelfde binaire bestandsnaam wordt automatisch opnieuw gebouwd.
+**Elke volgende keer:** 110 ms. De cache is SHA256-gesleuteld, een andere build met dezelfde binaire bestandsnaam wordt automatisch opnieuw gebouwd.
 
 Voorbeelduitvoer:
 
@@ -93,7 +93,7 @@ for r in results:
     print(f"  0x{r.va:x}  {r.name or hex(r.va):<50s}  score={r.score:.3f}")
 ```
 
-**Verwachte uitvoeringstijd:** 35 tot 60 seconden voor 19.000 functies op CPU. Volgende queries op hetzelfde corpus draaien in minder dan een seconde — embeddings zijn gecached.
+**Verwachte uitvoeringstijd:** 35 tot 60 seconden voor 19.000 functies op CPU. Volgende queries op hetzelfde corpus draaien in minder dan een seconde, embeddings zijn gecached.
 
 ---
 
@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Op elke toekomstige scan — andere firmwareversie, andere leverancier — voert `pl.sweep(searcher)` automatisch alle bevestigde patronen uit.
+Op elke toekomstige scan, andere firmwareversie, andere leverancier — voert `pl.sweep(searcher)` automatisch alle bevestigde patronen uit.
 
 ---
 

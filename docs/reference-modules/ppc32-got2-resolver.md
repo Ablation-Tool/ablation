@@ -55,7 +55,7 @@ Two optional parameters improve precision in stripped binaries:
 
 Pass a sorted list of function entry VAs (e.g. from `lief.parse(p).exported_functions`).
 When provided, a BCL setup site that precedes the current function's entry VA is
-rejected instead of inherited.  Useful when a small leaf function has no BCL preamble
+rejected instead of inherited. Useful when a small leaf function has no BCL preamble
 of its own and sits immediately after a function from a different CU with a different r30.
 
 ```python
@@ -67,9 +67,9 @@ result = resolver.resolve(fn_starts=fn_starts)
 
 **`got2_va` / `got2_size` (Fix 2: GOT2 range validation):**
 
-Supplied to `__init__` / `from_path` / `from_sections`.  When present, any computed
+Supplied to `__init__` / `from_path` / `from_sections`. When present, any computed
 `entry_va = r30 + disp` that falls outside `[got2_va, got2_va + got2_size)` is
-rejected with reason `entry_va_outside_got2`.  `from_path` extracts `.got2`
+rejected with reason `entry_va_outside_got2`. `from_path` extracts `.got2`
 automatically via lief.
 
 **Fix 3: generalised r30 setup detection (automatic):**
@@ -77,15 +77,15 @@ automatically via lief.
 `_find_r30_setups` now uses a sliding-window scan: up to 16 instructions after the BCL
 for `MFLR r30`, up to 6 more for `ADDIS r30,r30,hi`, up to 6 more for `ADDI r30,r30,lo`.
 Any instruction that writes to r30 (other than the three target instructions) aborts the
-search.  This handles a third compiler variant found in Huawei CE6810 e500mc `.so` files
-where up to 8 frame spill instructions appear between BCL and MFLR r30.  No parameters
+search. This handles a third compiler variant found in Huawei CE6810 e500mc `.so` files
+where up to 8 frame spill instructions appear between BCL and MFLR r30. No parameters
 needed; this is always-on.
 
 ## Error conditions
 
 - `from_path()` raises `ValueError` if the file exceeds `_MAX_BINARY_BYTES` (256 MB) or if
   `lief.parse()` returns `None` (corrupt or unsupported ELF). The `None` case is checked
-  explicitly after the parse call to prevent `AttributeError` in callers.
+ explicitly after the parse call to prevent `AttributeError` in callers.
 
 ---
 
@@ -140,8 +140,8 @@ classify the load:
 | `bctrl_va` | `int` | VA of the BCTRL instruction |
 | `kind` | `str` | `"got2"` or `"direct"` |
 | `target` | `int` | Resolved callee VA |
-| `name` | `Optional[str]` | Symbol name from .dynsym, if matched |
-| `in_text` | `bool` | Whether target is within .text |
+| `name` | `Optional[str]` | Symbol name from.dynsym, if matched |
+| `in_text` | `bool` | Whether target is within.text |
 | `r30_source` | `Optional[int]` | VA of the BCL that established r30 |
 | `r30` | `Optional[int]` | r30 value at call site |
 | `disp` | `Optional[int]` | Signed GOT2 displacement |
@@ -200,4 +200,4 @@ Confirmed against two manual RE entries from `targets/huawei/s6720_switch_re.py`
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. `from_path()` reads the ELF directly: `_MAX_BINARY_BYTES=256MB`; `Path.stat().st_size` guard before `read_bytes()`; `lief.parse()` in `try/except Exception` + explicit `elf is None` check. `from_sections()` accepts pre-loaded bytes — size is the caller's responsibility.
+Gate: **PASSED**. No HIGH or CRITICAL findings. `from_path()` reads the ELF directly: `_MAX_BINARY_BYTES=256MB`; `Path.stat().st_size` guard before `read_bytes()`; `lief.parse()` in `try/except Exception` + explicit `elf is None` check. `from_sections()` accepts pre-loaded bytes, size is the caller's responsibility.

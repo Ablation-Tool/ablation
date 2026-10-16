@@ -20,9 +20,9 @@ Three things were not possible before this module:
 
 | Rule | Example | Suggestion |
 |------|---------|------------|
-| `em_dash` | `FORGE — the audit gate` | Use a period or "because" |
+| `em_dash` | `FORGE: the audit gate` | Use a period or "because" |
 | `parenthetical` | `(parse, scan, detect)` | Inline the items or use a list |
-| `filler` | `comprehensive`, `robust`, `fully automated` | Drop it |
+| `filler` | ``, ``, `` | Drop it |
 | `ai_copy` | `delve into`, `in the realm of` | Say what it does |
 
 ---

@@ -41,7 +41,7 @@ or produce wrong extraction boundaries for the ones immediately after an A2ML bl
 ## Format overview
 
 A2L is an ASCII text format encoded in Latin-1 (ISO 8859-1). C-style block comments
-(`/* ... */`) are valid anywhere. The structure is:
+(`/*... */`) are valid anywhere. The structure is:
 
 ```
 /begin PROJECT name "description"
@@ -227,16 +227,16 @@ the only link to a specific ROM image. Use `EcuRomRaiderParser.identify_rom()` o
 ## Limitations
 
 - **No ROM identification.** A2L files contain no `internalidstring` or checksum field.
-  Matching an A2L to a specific ROM image requires external tooling or filename correlation.
+ Matching an A2L to a specific ROM image requires external tooling or filename correlation.
 
 - **max_axis_pts used for dimensions.** For `STD_AXIS` tables, the actual axis count lives in
-  the ROM at a fixed position before the data. The parser uses `max_axis_pts` from the
-  AXIS_DESCR block as the upper bound. Tables with variable-length axes will have columns or
-  rows set to the maximum possible, not the actual runtime count.
+ the ROM at a fixed position before the data. The parser uses `max_axis_pts` from the
+ AXIS_DESCR block as the upper bound. Tables with variable-length axes will have columns or
+ rows set to the maximum possible, not the actual runtime count.
 
 - **A2ML and IF_DATA stripped.** The parser does not parse transport-layer or tool-private
-  metadata. All `A2ML` and `IF_DATA` blocks are removed before the calibration pass.
+ metadata. All `A2ML` and `IF_DATA` blocks are removed before the calibration pass.
 
 - **Non-linear COMPU_METHOD produces scale=0.0.** `TAB_VERB`, `TAB_NOINTP`, `FORMULA`, and
-  non-linear RAT_FUNC methods produce `scale=0.0` as a sentinel. The table is still returned
-  with all address and dimension information intact.
+ non-linear RAT_FUNC methods produce `scale=0.0` as a sentinel. The table is still returned
+ with all address and dimension information intact.

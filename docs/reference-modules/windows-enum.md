@@ -8,7 +8,7 @@ Three gaps existed before this module:
 
 1. **Live Windows enumeration was session-scripted.** COM hijack candidates, RPC endpoints, ETW sessions, named pipes, and UAC/Credential Guard status each required separate reg.exe queries or PowerShell one-liners per session. WindowsEnumerator wraps all nine sections into one `enumerate_all()` call with structured output.
 
-2. **COM hijack detection required manual HKCU vs. HKLM comparison.** The module compares HKCU\\Software\\Classes\\CLSID against HKLM\\SOFTWARE\\Classes\\CLSID, identifying CLSIDs where a user-controlled HKCU registration shadows a machine-level one — an active COM hijack if InprocServer32 differs.
+2. **COM hijack detection required manual HKCU vs. HKLM comparison.** The module compares HKCU\\Software\\Classes\\CLSID against HKLM\\SOFTWARE\\Classes\\CLSID, identifying CLSIDs where a user-controlled HKCU registration shadows a machine-level one, an active COM hijack if InprocServer32 differs.
 
 3. **Security feature state (UAC, Secure Boot, Credential Guard, PPL) was not enumerable from one place.** `system_security_features()` reads EnableLUA, DeviceGuard, RunAsPPL, and DisableAntiSpyware in a single pass, producing HIGH/MEDIUM findings for disabled controls.
 
@@ -33,7 +33,7 @@ results = w.enumerate_all(sections=['com', 'token', 'secfeatures'])
 
 | Section | Method | Description |
 |---|---|---|
-| `com` | `com_hijack_candidates()` | HKCU/HKLM CLSID delta — COM hijack surface |
+| `com` | `com_hijack_candidates()` | HKCU/HKLM CLSID delta: COM hijack surface |
 | `rpc` | `rpc_endpoints()` | Active RPC endpoints via netstat |
 | `etw` | `etw_sessions()` | Active ETW sessions and consumers |
 | `pipes` | `named_pipes()` | `\\.\pipe\*` named pipe surface |
@@ -47,8 +47,8 @@ results = w.enumerate_all(sections=['com', 'token', 'secfeatures'])
 
 Gate: **PASSED**. No code changes needed.
 
-- No file reads — all data from subprocess stdout. No CWE-770 concerns.
-- No bare `except:` — `_run()` uses `except FileNotFoundError:`, `except subprocess.TimeoutExpired:`, `except Exception as e:`; `enumerate_all()` uses `except Exception as e:` for section isolation.
+- No file reads: all data from subprocess stdout. No CWE-770 concerns.
+- No bare `except:`: `_run()` uses `except FileNotFoundError:`, `except subprocess.TimeoutExpired:`, `except Exception as e:`; `enumerate_all()` uses `except Exception as e:` for section isolation.
 - No lief.parse(). No HTTP reads. No network I/O.
 - All subprocess calls use `_run()` which enforces `timeout=15` (default) and catches all exceptions.
 - All PowerShell calls use `_ps()` which wraps `_run()` with `timeout=20`.

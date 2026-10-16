@@ -6,9 +6,9 @@
 
 Three things were not possible before in Ablation:
 
-1. **No LE binary could be loaded.** The LE (Linear Executable) format — used by every Windows 3.x VxD — was invisible to Ablation. LIEF rejects it (wrong magic). `pe_sweep.py` reads MZ then checks for `PE\x00\x00`; LE files have `LE` instead and are silently skipped. All ring-0 network stack components (`VIP.386`, `VTCP.386`, `VNBT.386`, `VUDP.386`, `VDHCP.386`, `VTDI.386`, `WSOCK.386`, `WSTCP.386`) were zero-coverage targets.
+1. **No LE binary could be loaded.** The LE (Linear Executable) format, used by every Windows 3.x VxD, was invisible to Ablation. LIEF rejects it (wrong magic). `pe_sweep.py` reads MZ then checks for `PE\x00\x00`; LE files have `LE` instead and are silently skipped. All ring-0 network stack components (`VIP.386`, `VTCP.386`, `VNBT.386`, `VUDP.386`, `VDHCP.386`, `VTDI.386`, `WSOCK.386`, `WSTCP.386`) were zero-coverage targets.
 
-2. **VMM INT-20h service calls were unresolvable.** VxDs have no IAT. All kernel service calls go through `INT 20h` followed by a 4-byte service ID DWORD. Without knowing this convention, every call site in a VxD looked like a non-calling function to the semantic encoder — no call targets, no import names, systematically low scores on every network-sink profile. This module decodes INT-20h + DWORD sequences into named VMM services (`VMM!HeapAllocate`, `VMM!PageLock`, etc.) that the semantic profiles can match.
+2. **VMM INT-20h service calls were unresolvable.** VxDs have no IAT. All kernel service calls go through `INT 20h` followed by a 4-byte service ID DWORD. Without knowing this convention, every call site in a VxD looked like a non-calling function to the semantic encoder, no call targets, no import names, systematically low scores on every network-sink profile. This module decodes INT-20h + DWORD sequences into named VMM services (`VMM!HeapAllocate`, `VMM!PageLock`, etc.) that the semantic profiles can match.
 
 3. **VxD ring-0 vulnerability profiles did not exist.** The generic `heap_overflow` and `recv_overflow` profiles expect libc-style sinks (`malloc`, `recv`). VxD code uses `VMM!HeapAllocate` + `rep movsd` for the same operations. Without VxD-specific profiles, a kernel-heap overflow in `VTCP.386` would score lower than a false-positive wrapper in a Win32 GUI app.
 
@@ -86,11 +86,11 @@ Output goes to `reports/sweep_le_<vendor>_<product>_<version>_<ts>.md`.
 
 ## What to look for in results
 
-**DDB entry points** (`ctrl_proc`, `v86_api_proc`, `pm_api_proc`): these are the VxD's public API surface. Functions appearing in results that ARE a DDB entry point handle calls from user-mode Win16 apps or DOS VMs — direct network attack surface.
+**DDB entry points** (`ctrl_proc`, `v86_api_proc`, `pm_api_proc`): these are the VxD's public API surface. Functions appearing in results that ARE a DDB entry point handle calls from user-mode Win16 apps or DOS VMs, direct network attack surface.
 
 **`VMM!HeapAllocate` + `rep movsd/movsb`** in the same function: potential heap overflow if the `HeapAllocate` size and the `rep` count are both derived from a network packet field.
 
-**`VMM!lstrcpy` / `VMM!lstrcat`**: ring-0 string copies without bounds — same class as Win16 `lstrcpy` but in kernel address space.
+**`VMM!lstrcpy` / `VMM!lstrcat`**: ring-0 string copies without bounds, same class as Win16 `lstrcpy` but in kernel address space.
 
 **Score threshold**: 0.30 (same as other sweeps). Ring-0 code tends to be tighter and more uniform than user-mode code, so false-positive rates are lower but true-positive scores are also lower.
 
@@ -100,8 +100,8 @@ Output goes to `reports/sweep_le_<vendor>_<product>_<version>_<ts>.md`.
 
 5 VxD-specific profiles beyond the standard base + Win16 NE profiles:
 
-- `vxd_ring0_recv_overflow` — heap alloc then rep movsd from network buffer
-- `vxd_netbios_name_overflow` — NetBIOS/DHCP hostname into fixed ring-0 buffer
-- `vxd_heap_alloc_intovf` — 32-bit overflow before VMM!HeapAllocate
-- `vxd_v86_param_nocopy` — V86 pointer dereference without private-buffer copy
-- `vxd_format_string_ring0` — wsprintf with network-derived format string in ring-0
+- `vxd_ring0_recv_overflow`: heap alloc then rep movsd from network buffer
+- `vxd_netbios_name_overflow`: NetBIOS/DHCP hostname into fixed ring-0 buffer
+- `vxd_heap_alloc_intovf`: 32-bit overflow before VMM!HeapAllocate
+- `vxd_v86_param_nocopy`: V86 pointer dereference without private-buffer copy
+- `vxd_format_string_ring0`: wsprintf with network-derived format string in ring-0

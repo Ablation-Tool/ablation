@@ -26,9 +26,9 @@ Gap closed: 2026-10-16. All confirmed FAZ-CVE22572 findings detected automatical
 ## AUTH_BYPASS_SURFACE composite
 
 The CRITICAL `AUTH_BYPASS_SURFACE` finding fires when three conditions hold in the same request handler function:
-1. `apr_table_get(r->..., "Cookie")` — attacker-controlled session input
-2. `decrypt_and_auth()` or `session_from_string()` — session is decrypted/parsed  
-3. `session_get_adminuser_skip()` or equivalent — skip flag is read
+1. `apr_table_get(r->..., "Cookie")`, attacker-controlled session input
+2. `decrypt_and_auth()` or `session_from_string()`, session is decrypted/parsed 
+3. `session_get_adminuser_skip()` or equivalent, skip flag is read
 
 No single condition is critical alone. The combination means a forged or RC4-decrypted cookie can set the skip flag, bypassing MFA.
 
@@ -49,12 +49,12 @@ findings = ApacheModuleAnalyzer.from_context(ctx).analyze()
 
 ## Analysis phases
 
-1. **Build PLT** — maps stub VAs to symbol names from `.rela.plt`
-2. **Build rodata index** — maps VAs to string literals (for header key identification)
-3. **Find register_hooks** — scans `.text` for `jmp`/`call` to any `ap_hook_*` PLT stub; walks backwards to function start
-4. **Extract handler registrations** — disassembles register_hooks to find `lea rdi, [rip+N]` before the hook call; resolves handler function VA
-5. **Analyze handler** — tracks `rsi` string loads before `apr_table_get` calls; detects session/auth symbols; fires composite finding
-6. **Fallback scan** — if handler discovery fails, scans all of `.text` for session skip flag calls directly
+1. **Build PLT**, maps stub VAs to symbol names from `.rela.plt`
+2. **Build rodata index**, maps VAs to string literals (for header key identification)
+3. **Find register_hooks**, scans `.text` for `jmp`/`call` to any `ap_hook_*` PLT stub; walks backwards to function start
+4. **Extract handler registrations**, disassembles register_hooks to find `lea rdi, [rip+N]` before the hook call; resolves handler function VA
+5. **Analyze handler**, tracks `rsi` string loads before `apr_table_get` calls; detects session/auth symbols; fires composite finding
+6. **Fallback scan**, if handler discovery fails, scans all of `.text` for session skip flag calls directly
 
 ## Architecture support
 

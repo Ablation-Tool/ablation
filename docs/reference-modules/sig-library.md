@@ -84,14 +84,14 @@ ablation sigs firmware.so --dry-run
 ## How matching works
 
 1. On first call, `load_model()` encodes all 40 signature descriptions into a 768-dim
-   embedding matrix. This is cached to `~/.ablation/sig_cache/` -- subsequent loads
-   take ~2ms.
+ embedding matrix. This is cached to `~/.ablation/sig_cache/` -- subsequent loads
+ take ~2ms.
 2. Each incoming description is encoded as a single vector, then cosine similarity is
-   computed against the matrix (one matrix multiply: ~1ms for 40 sigs).
+ computed against the matrix (one matrix multiply: ~1ms for 40 sigs).
 3. The best match is returned if its score exceeds `threshold` (default 0.62).
 4. `auto_name()` iterates over all `ANGR_INFERRED` functions in the corpus DB that
-   still have placeholder names (`fn_0x*`), builds a description from call targets and
-   string references, and renames matches.
+ still have placeholder names (`fn_0x*`), builds a description from call targets and
+ string references, and renames matches.
 
 ---
 

@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Detects use-after-free and double-free patterns in stripped binaries via taint-tracking of heap allocation return values (malloc/jemalloc/tcmalloc). Tracks object lifetimes across function boundaries to identify sites where a freed pointer is used after its free — the primary primitive class for modern heap exploitation.
+Detects use-after-free and double-free patterns in stripped binaries via taint-tracking of heap allocation return values (malloc/jemalloc/tcmalloc). Tracks object lifetimes across function boundaries to identify sites where a freed pointer is used after its free, the primary primitive class for modern heap exploitation.
 
 ## Key constants
 

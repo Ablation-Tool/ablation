@@ -135,8 +135,8 @@ unguarded = [f for f in findings if f.severity == 'HIGH']
 
 ### Allocator coverage
 
-User-space: `malloc`, `calloc`, `realloc`, `xmalloc`, `xcalloc`, `asprintf` variants, `g_malloc`, `BUF_MEM_grow` (OpenSSL).  
-Kernel: `kmalloc`, `kzalloc`, `kcalloc`, `vmalloc`, `kvmalloc`.  
+User-space: `malloc`, `calloc`, `realloc`, `xmalloc`, `xcalloc`, `asprintf` variants, `g_malloc`, `BUF_MEM_grow` (OpenSSL). 
+Kernel: `kmalloc`, `kzalloc`, `kcalloc`, `vmalloc`, `kvmalloc`. 
 Windows: `ExAllocatePool`, `ExAllocatePoolWithTag`, `ExAllocatePool2`, `HeapAlloc`, `LocalAlloc`.
 
 ---
@@ -165,17 +165,17 @@ For each call site to a SQL sink (`mysql_query`, `mysql_real_query`, `sqlite3_ex
 1. Identify the SQL string register for the callee (`RSI` for `mysql_query`/`mysql_real_query`,
    `RDX` for `sqlite3_exec`/`sqlite3_prepare_v2`).
 2. Walk backward up to 40 instructions looking for how that register was populated:
-   - **`LEA reg, [rip+off]`** pointing to `.rodata` → `RODATA_CONST`.  
-     Inspect the literal for `%s`: if present, mark `INJECTABLE_LITERAL` (rare but real).
-   - **`MOV reg, rbp/rsp+N`** (stack-local buffer): look further back for the
+ - **`LEA reg, [rip+off]`** pointing to `.rodata` → `RODATA_CONST`. 
+ Inspect the literal for `%s`: if present, mark `INJECTABLE_LITERAL` (rare but real).
+ - **`MOV reg, rbp/rsp+N`** (stack-local buffer): look further back for the
      `snprintf`/`sprintf` that filled it. Inspect *its* format string for `%s`.
-   - **`MOV reg, rax`** after a call: consider the call's return value as the SQL
-     string; mark `RETURN_VALUE` (requires caller trace; verdict = `UNKNOWN`).
-   - **Entry register** (`rdi/rsi/rdx/rcx/r8/r9` unchanged since function entry):
-     mark `ARG_PROPAGATED`.
+ - **`MOV reg, rax`** after a call: consider the call's return value as the SQL
+ string; mark `RETURN_VALUE` (requires caller trace; verdict = `UNKNOWN`).
+ - **Entry register** (`rdi/rsi/rdx/rcx/r8/r9` unchanged since function entry):
+ mark `ARG_PROPAGATED`.
 3. For `snprintf`/`sprintf`-built buffers: extract the format string (should be a
    `LEA`/`MOVQ` from `.rodata`). Scan for `%s` (string interpolation). A `%s`
-   specifier with a non-RODATA argument → `INJECTABLE`.
+ specifier with a non-RODATA argument → `INJECTABLE`.
 4. `%d`, `%u`, `%ld`, `%llu`, `%x` etc. → numeric only → `SAFE_NUMERIC`.
 
 ### Verdict values
@@ -195,9 +195,9 @@ For each call site to a SQL sink (`mysql_query`, `mysql_real_query`, `sqlite3_ex
 |---|---|---|
 | `mysql_query(conn, sql)` | `RSI` | arg1 |
 | `mysql_real_query(conn, sql, len)` | `RSI` | arg1 |
-| `sqlite3_exec(db, sql, ...)` | `RSI` | arg1 |
-| `sqlite3_prepare_v2(db, sql, ...)` | `RSI` | arg1 |
-| `sqlite3_prepare(db, sql, ...)` | `RSI` | arg1 |
+| `sqlite3_exec(db, sql,...)` | `RSI` | arg1 |
+| `sqlite3_prepare_v2(db, sql,...)` | `RSI` | arg1 |
+| `sqlite3_prepare(db, sql,...)` | `RSI` | arg1 |
 
 ### Usage
 
@@ -226,7 +226,7 @@ injections = [f for f in findings if f.verdict == 'INJECTABLE']
 | `call_va` | VA of the sink call instruction |
 | `func_va` | VA of the enclosing function |
 | `verdict` | `INJECTABLE` / `INJECTABLE_LITERAL` / `RODATA_CONST` / `SAFE_NUMERIC` / `ARG_PROPAGATED` / `UNKNOWN` |
-| `fmt_string` | Format string literal if resolved (e.g. `"SELECT ... WHERE x='%s'"`) |
+| `fmt_string` | Format string literal if resolved (e.g. `"SELECT... WHERE x='%s'"`) |
 | `fmt_va` | VA of the format string in RODATA (if resolved) |
 | `description` | Human-readable summary |
 
@@ -263,10 +263,10 @@ into a memory-sizing sink.
 The compiler uses four instructions for branchless min/max:
 
 ```
-sltu   Rcond, Ra, Rb       # Rcond = (Ra < Rb) unsigned
-masknez Rtmp1, Rb, Rcond   # Rtmp1 = Rcond ? Rb : 0
-maskeqz Rtmp2, Ra, Rcond   # Rtmp2 = !Rcond ? Ra : 0
-or     Rout, Rtmp2, Rtmp1  # Rout = Rtmp1 | Rtmp2
+sltu Rcond, Ra, Rb # Rcond = (Ra < Rb) unsigned
+masknez Rtmp1, Rb, Rcond # Rtmp1 = Rcond ? Rb: 0
+maskeqz Rtmp2, Ra, Rcond # Rtmp2 = !Rcond ? Ra: 0
+or Rout, Rtmp2, Rtmp1 # Rout = Rtmp1 | Rtmp2
 ```
 
 That sequence is `max(Ra, Rb)`. Correct `min(Ra, Rb)` swaps the masknez/maskeqz
@@ -311,7 +311,7 @@ print(scanner.report(findings))
 
 # Sink-proximate findings only (already filtered by scan())
 for f in findings:
-    print(f"0x{f.pattern_va:x}  {f.result_name} -> {f.sink_name}({f.sink_arg})@0x{f.sink_va:x}")
+ print(f"0x{f.pattern_va:x} {f.result_name} -> {f.sink_name}({f.sink_arg})@0x{f.sink_va:x}")
 ```
 
 ### Finding fields
@@ -428,7 +428,7 @@ findings = scanner.scan()
 print(LA64HeapVulnScanner.report(findings))
 
 for f in findings:
-    print(f"[{f.severity}] {f.overflow_op} overflow@0x{f.overflow_va:x} → {f.sink_name}@0x{f.sink_va:x}")
+ print(f"[{f.severity}] {f.overflow_op} overflow@0x{f.overflow_va:x} → {f.sink_name}@0x{f.sink_va:x}")
 ```
 
 ### Finding fields
@@ -485,17 +485,17 @@ For each `TaintFindingARM64` where `"fgets"` is in the source labels:
 1. Re-disassemble the function from `func_va` to `sink_va` (the `bl fgets` site)
 2. Track a lightweight provenance state `{reg: class}` where class ∈ `{file, socket, unknown}`
 3. At each `bl` call site:
-   - `fopen`/`fopen64`/`freopen`/`tmpfile` → x0 result = `file`
-   - `socket`/`accept`/`accept4` → x0 result = `socket`
-   - `open`/`openat`/`creat`/`open64` → x0 result = `file_fd` (raw fd, not FILE*)
-   - `fdopen` → x0 result = class of x0 input: `file_fd` → `file`; `socket` → `socket`; else `unknown`
-   - All other calls: clobber x0–x7 → `unknown`
+ - `fopen`/`fopen64`/`freopen`/`tmpfile` → x0 result = `file`
+ - `socket`/`accept`/`accept4` → x0 result = `socket`
+ - `open`/`openat`/`creat`/`open64` → x0 result = `file_fd` (raw fd, not FILE*)
+ - `fdopen` → x0 result = class of x0 input: `file_fd` → `file`; `socket` → `socket`; else `unknown`
+ - All other calls: clobber x0–x7 → `unknown`
 4. Track `mov`/`ldr`/`str` for register and stack propagation
 5. At the `bl fgets` site: return class of x0
-   - CLEAN (no tracked class): conservatively `file` (static/global FILE* from init)
-   - `file` or `file_fd`: `fd_class = "file"`, severity downgraded to `LOW`
-   - `socket`: `fd_class = "network"`, severity stays `HIGH`
-   - `unknown`: `fd_class = "unknown"`, severity stays `HIGH` (conservative)
+ - CLEAN (no tracked class): conservatively `file` (static/global FILE* from init)
+ - `file` or `file_fd`: `fd_class = "file"`, severity downgraded to `LOW`
+ - `socket`: `fd_class = "network"`, severity stays `HIGH`
+ - `unknown`: `fd_class = "unknown"`, severity stays `HIGH` (conservative)
 
 ### Usage
 

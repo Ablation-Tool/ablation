@@ -53,7 +53,7 @@ FortiWiFi/FortiGate appliances use NAND flash. Unprogrammed NAND cells read as 0
 
 ### Stage 2: PKCS#1 v1.5 block scan
 
-PKCS#1 v1.5 encryption padding has a fixed structure: `0x00 0x02 [8+ non-zero random bytes] 0x00 [message]`. The scanner finds `0x00 0x02 ... 0x00` sequences in the partially-decrypted binary and extracts candidate RSA-encrypted RC4 session key blocks. The typical key block size is 256 bytes (RSA-2048), positioned 128 bytes from the start of the cert partition.
+PKCS#1 v1.5 encryption padding has a fixed structure: `0x00 0x02 [8+ non-zero random bytes] 0x00 [message]`. The scanner finds `0x00 0x02... 0x00` sequences in the partially-decrypted binary and extracts candidate RSA-encrypted RC4 session key blocks. The typical key block size is 256 bytes (RSA-2048), positioned 128 bytes from the start of the cert partition.
 
 ### Stage 3: RC4 known-plaintext attack
 

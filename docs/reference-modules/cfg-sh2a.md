@@ -1,6 +1,6 @@
 # cfg_sh2a: SH-2A Control-Flow Graph Builder
 
-**File:** `ablation/analyzers/cfg_sh2a.py`  
+**File:** `ablation/analyzers/cfg_sh2a.py` 
 **Added:** v2.64.0
 
 ---
@@ -9,17 +9,17 @@
 
 Three things were not possible before in Ablation:
 
-**1. No CFG for SH-2A firmware.**  Every other ISA with a lifter backend also had a CFG
-module.  Without a CFG, the `Structurizer` and `DomTree` cannot run on SH-2A (Bosch EDC,
-Denso, Siemens) ECU firmware.  The SH-2A lifter could only produce a linear goto-chain.
+**1. No CFG for SH-2A firmware.** Every other ISA with a lifter backend also had a CFG
+module. Without a CFG, the `Structurizer` and `DomTree` cannot run on SH-2A (Bosch EDC,
+Denso, Siemens) ECU firmware. The SH-2A lifter could only produce a linear goto-chain.
 
-**2. No delay-slot semantics in any CFG module.**  SH-2A executes one instruction after a
-branch fires: the delay slot.  Every prior CFG module (ARM, V850, ARC, x86) works on
-architectures without delay slots.  `cfg_sh2a` attaches the delay-slot instruction to the
+**2. No delay-slot semantics in any CFG module.** SH-2A executes one instruction after a
+branch fires: the delay slot. Every prior CFG module (ARM, V850, ARC, x86) works on
+architectures without delay slots. `cfg_sh2a` attaches the delay-slot instruction to the
 terminating block so that successor VAs are computed from after the delay slot, not from
 after the branch opcode.
 
-**3. No `.flow` / `.flow_r()` interface on any ECU-family CFG.**  `dataflow_engine.DomTree`
+**3. No `.flow` / `.flow_r()` interface on any ECU-family CFG.** `dataflow_engine.DomTree`
 and all backward-dataflow passes iterate `cfg.flow` as a list of `(src, dst)` edge tuples.
 `cfg_sh2a.CFG` adds `.flow` (property) and `.flow_r()` (method) so DomTree and LoopInfo
 from `dataflow_engine` work without any adaptation.
@@ -81,12 +81,12 @@ When the terminator has a delay slot, the delay-slot instruction is the last ent
 Three-pass construction:
 
 1. **Leader scan**: discovers all block-start VAs: entry, all branch targets, all
-   fall-through-after-terminator addresses.  Delay-slot instructions are not leaders;
-   the instruction two steps after the branch is the next-block leader.
-2. **Partition**: assigns each instruction to a block.  Delay-slot instructions are
-   appended to the terminating block, consuming two steps in a single pass iteration.
+ fall-through-after-terminator addresses. Delay-slot instructions are not leaders;
+ the instruction two steps after the branch is the next-block leader.
+2. **Partition**: assigns each instruction to a block. Delay-slot instructions are
+ appended to the terminating block, consuming two steps in a single pass iteration.
 3. **Edge fill**: for each block, computes `succs` from the block's terminator type.
-   Sets `preds` from the inverse.
+ Sets `preds` from the inverse.
 
 ### `Block`
 
@@ -116,10 +116,10 @@ Three-pass construction:
 ## Limitations
 
 - **`braf`, `bsrf`, `jmp @Rn`**: the `EcuSH2aDecoder` classifies these as `MISC` (no
-  explicit decode branch).  They are treated as fall-through in the CFG, creating open
-  blocks with no successors.  Functions that use only `bra`, `bt`, `bf`, `bsr`, `jsr`,
+ explicit decode branch). They are treated as fall-through in the CFG, creating open
+ blocks with no successors. Functions that use only `bra`, `bt`, `bf`, `bsr`, `jsr`,
   `rts`, and `rts/n` are fully correct.  Indirect indirect-jump functions (dispatch
-  tables) will have open blocks where the jump is; the structurizer will emit the
-  instructions before the jump as a plain sequence.
+ tables) will have open blocks where the jump is; the structurizer will emit the
+ instructions before the jump as a plain sequence.
 - The module does not resolve cross-function CFG edges (calls are treated as
-  fall-through after the delay slot: the callee is abstracted away).
+ fall-through after the delay slot: the callee is abstracted away).

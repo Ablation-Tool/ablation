@@ -1,7 +1,7 @@
 # Ppc32Lifter: IBM PPC476 backend
 
-**File:** `ablation/analyzers/ppc32_lifter.py`  
-**Class:** `Ppc32Lifter`  
+**File:** `ablation/analyzers/ppc32_lifter.py` 
+**Class:** `Ppc32Lifter` 
 **Architecture:** IBM PowerPC 476, 32-bit big-endian, Book E
 
 ---
@@ -19,7 +19,7 @@ names with argument values, and emits C-like pseudo-code tagged with instruction
 
 ## Where it's used
 
-- **IBM PPC476 sysroot binaries** — glibc 2.15 targets built with `ppc476-tools-cross-1.0`
+- **IBM PPC476 sysroot binaries**: glibc 2.15 targets built with `ppc476-tools-cross-1.0`
 - **IBM embedded appliance firmware** that ships PPC32 BE ELF binaries against a glibc-2.15 base
 - Any PPC32 BE ELF where the call stub format is `lis r11, HI; lwz r11, LO(r11); mtctr r11; bctr`
 
@@ -44,7 +44,7 @@ a larger `n_insn` and read the branch comments to reconstruct the paths manually
 Global Offset Table. The lifter annotates these as `*(toc+N)` rather than as arbitrary loads.
 Do not treat a TOC load as tainted input unless you have traced a write to that GOT slot.
 
-**PPC476 Book E extensions — `wait`, `tlbwe`, `tlbre`, `dcbt` — appear as `// mnemonic`.** These
+**PPC476 Book E extensions, `wait`, `tlbwe`, `tlbre`, `dcbt`: these appear as `// mnemonic`.** These
 instructions modify TLB entries and cache state, not GPRs. The register state after them is
 unchanged from the lifter's perspective. This is correct for vulnerability analysis because Book E
 privileged instructions do not carry attacker data.
@@ -55,14 +55,14 @@ privileged instructions do not carry attacker data.
 
 Three things were not possible before this module:
 
-**1. No register-tracked PPC32 BE lifter in any open toolkit.**  
+**1. No register-tracked PPC32 BE lifter in any open toolkit.** 
 `BinaryLifter`'s ppc32 backend emits structural pseudo-C where most instructions appear as
 comments. That is adequate for call graph analysis but not for argument tracing. Determining what
 value is in `r3` when a function calls `execv` requires tracking every `lis`, `addi`, `lwz`, and
 `mr` from function entry. `Ppc32Lifter` maintains a per-register abstract value map and updates it
 on every assignment instruction, so call sites show the resolved argument values.
 
-**2. No PLT stub extractor for PPC32 BE ELF.**  
+**2. No PLT stub extractor for PPC32 BE ELF.** 
 PPC32 BE ELF links external calls through a `lis r11, HI; lwz r11, LO(r11); mtctr r11; bctr`
 stub pattern in `.text`. The existing `_extract_plt` dispatcher had no PPC32 case and fell
 through to a little-endian 64-bit `.rela.plt` reader that produced zero entries silently. This
@@ -71,7 +71,7 @@ on any PPC32 BE ELF. The `_extract_plt_ppc32be` function (added in `binary_conte
 commit `03bd8a5`) fixes the root cause: it parses `.rela.plt` with big-endian 32-bit RELA
 entries and then scans `.text` for the 4-instruction stub pattern to build `stub_va → sym_name`.
 
-**3. No decompiler for IBM PPC476 firmware targets.**  
+**3. No decompiler for IBM PPC476 firmware targets.** 
 IBM PPC476 uses `glibc 2.15` with the `ppc476-tools-cross-1.0-1.1` toolchain. Ghidra has PPC
 support but is not available in this toolkit. `Ppc32Lifter` fills that role for the specific goal
 of vulnerability analysis: identifying what attacker-controlled data reaches which dangerous
@@ -139,12 +139,12 @@ correctly under `CS_ARCH_PPC | CS_MODE_32 | CS_MODE_BIG_ENDIAN`.
 
 | Instruction | Class | Lifter output |
 |---|---|---|
-| `tlbwe`, `tlbre`, `tlbivax` | TLB management (privileged) | `// tlbwe ...` |
-| `dcbt`, `dcbst`, `icbi`, `dcbf` | Cache management | `// dcbt ...` |
+| `tlbwe`, `tlbre`, `tlbivax` | TLB management (privileged) | `// tlbwe...` |
+| `dcbt`, `dcbst`, `icbi`, `dcbf` | Cache management | `// dcbt...` |
 | `wait` | Wait-for-interrupt | `// wait` |
-| `mfmsr`, `mtmsr` | Machine state register | `// mfmsr ...` |
-| `mtspr`, `mfspr` (SPRs 256–767) | Special-purpose registers | `// mtspr ...` |
-| `evlddx`, `evstddx` (SPE) | Signal Processing Engine | `// evlddx ...` — SPE is absent on PPC476; encountering these indicates a misidentified binary |
+| `mfmsr`, `mtmsr` | Machine state register | `// mfmsr...` |
+| `mtspr`, `mfspr` (SPRs 256–767) | Special-purpose registers | `// mtspr...` |
+| `evlddx`, `evstddx` (SPE) | Signal Processing Engine | `// evlddx...`: SPE is absent on PPC476; encountering these indicates a misidentified binary |
 
 ---
 
@@ -223,12 +223,12 @@ falls back to `ctx.exports`. An unresolved `bl` appears as `0x1000xxxx()`.
 4. For each matching quad, computes `got_va = (HI << 16) + sign_ext16(LO)`.
 5. If `got_va` is in `got_va → sym_name`, records `stub_va → sym_name` in `self.plt`.
 
-**Why the glink entries are not the call targets:**  
+**Why the glink entries are not the call targets:** 
 The `.plt` section in a PPC32 ELF contains 4-byte initial GOT slot values pointing to
 `b <resolver>` one-word glink entries in `.text`. These glink entries are used by `ld.so` during
 lazy binding, not by direct caller `bl` instructions. The actual call stubs (lis/lwz/mtctr/bctr)
 sit earlier in `.text` and are what callers `bl` to. An extractor that reads the glink entry
-addresses from `.plt` slot values maps the wrong VAs — call-graph edges never reach them.
+addresses from `.plt` slot values maps the wrong VAs, call-graph edges never reach them.
 
 **Verification (rpcgen, glibc 2.15, PPC476 sysroot):**
 
@@ -245,22 +245,22 @@ assert ctx.plt[0x1000f320] == 'fork'
 ## Limitations
 
 - **Linear walk, not CFG.** The lifter does not follow branches. Functions with early-exit paths
-  show incomplete register state at later instructions. Use `n_insn` to limit output to the path
-  of interest.
+ show incomplete register state at later instructions. Use `n_insn` to limit output to the path
+ of interest.
 
 - **No inter-procedural tracking.** When a callee returns a value, `r3` is set to the symbol
-  string `"sym()"`. The actual value is unknown. To trace through a call boundary, lift the
-  callee separately and inspect its return path.
+ string `"sym()"`. The actual value is unknown. To trace through a call boundary, lift the
+ callee separately and inspect its return path.
 
 - **Callee-saved registers may show stale values in the prologue.** `r14`–`r31` are initialised
-  to `_Val.unknown(N)` until the first write. Prologue `stw rX, N(r1)` instructions store these
-  unknown values, producing `*(sp-F+N) = <rX?>` in the output. This is correct — the registers
-  have not been assigned yet at prologue time.
+ to `_Val.unknown(N)` until the first write. Prologue `stw rX, N(r1)` instructions store these
+ unknown values, producing `*(sp-F+N) = <rX?>` in the output. This is correct, the registers
+ have not been assigned yet at prologue time.
 
 - **Unresolved PLT calls appear as hex.** If `BinaryContext.plt` is empty (old cache, before the
   `_extract_plt_ppc32be` fix), every external call appears as `0x1000fXXX()`. Clear the cache and
-  rebuild.
+ rebuild.
 
 - **SPE instructions indicate a wrong binary.** PPC476 does not implement the Signal Processing
-  Engine (SPE). If `evlddx` / `evstddx` instructions appear in the output, the binary is from a
-  different PPC32 core (e500, e500v2) and not a PPC476 target.
+ Engine (SPE). If `evlddx` / `evstddx` instructions appear in the output, the binary is from a
+ different PPC32 core (e500, e500v2) and not a PPC476 target.

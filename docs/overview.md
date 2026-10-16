@@ -390,7 +390,7 @@ flowchart TD
     style G fill:#92400e,stroke:#b45309,color:#fef3c7
 ```
 
-**FormatStringScanner.** FormatStringScanner identifies format string vulnerabilities by tracing the fmt argument register backward from each printf-family call site. The fmt register varies by function: RDI for `printf`, RSI for `fprintf` and `syslog`, RDX for `snprintf`. A load from `.rodata` means the argument is a string literal and the call is safe. Any other provenance — function argument, stack variable, or register populated by a prior `recv` or `read` — is a finding. Severity is HIGH when the fmt register holds a function entry argument, because the caller controls the format string directly.
+**FormatStringScanner.** FormatStringScanner identifies format string vulnerabilities by tracing the fmt argument register backward from each printf-family call site. The fmt register varies by function: RDI for `printf`, RSI for `fprintf` and `syslog`, RDX for `snprintf`. A load from `.rodata` means the argument is a string literal and the call is safe. Any other provenance, function argument, stack variable, or register populated by a prior `recv` or `read`: it is a finding. Severity is HIGH when the fmt register holds a function entry argument, because the caller controls the format string directly.
 
 **DeprecatedFuncScanner.** DeprecatedFuncScanner scans the PLT for functions deprecated because of memory safety problems: `gets` (no length limit), `strcpy`/`strcat`/`sprintf` (no size argument), `mktemp` (predictable temp file), `rand` (weak random in security context). Each hit produces a finding with the call site VA and a recommended replacement.
 
@@ -398,7 +398,7 @@ flowchart TD
 
 ## Windows and PE analysis
 
-Windows PE binaries use mechanisms — Control Flow Guard, SafeSEH, RPC server registration, COM dispatch, kernel pool allocation — that require Windows-aware analysis separate from ELF taint tracking. Seven analyzers cover the full Windows PE attack surface in one session.
+Windows PE binaries use mechanisms, Control Flow Guard, SafeSEH, RPC server registration, COM dispatch, kernel pool allocation, all requiring Windows-aware analysis separate from ELF taint tracking. Seven analyzers cover the full Windows PE attack surface in one session.
 
 ```mermaid
 flowchart TD
@@ -504,7 +504,7 @@ Structurizer works on any CFG that exposes `.blocks`, `.entry`, `.flow`, and `.f
 
 ## LLM analyst
 
-TaintTracker produces candidates. PathSolver confirms feasibility. The remaining work — understanding what the function does, what caller controls which argument, and what a concrete exploit input looks like — is currently done by reading disassembly manually. AgentLoop automates that for one candidate function by running Claude in a tool-calling loop against the binary.
+TaintTracker produces candidates. PathSolver confirms feasibility. The remaining work, understanding what the function does, what caller controls which argument, and what a concrete exploit input looks like. That work is currently done by reading disassembly manually. AgentLoop automates that for one candidate function by running Claude in a tool-calling loop against the binary.
 
 ```mermaid
 flowchart TD
@@ -553,15 +553,15 @@ flowchart LR
 
 The sections above cover every major capability. The following entries point to the relevant sections for quick reference.
 
-- **Cross-version diffing:** `VersionDelta`, `DTWMatcher`, `MatrixProfileDiff`, `StructuralSim` — see the Cross-version diffing section.
-- **Crypto and entropy:** `EntropyMapper`, `XorKeyRecoverer`, `CryptoAuditor`, `HashAlgoDiscriminator` — see Crypto and entropy analysis.
-- **Firmware extraction:** `FirmwareContainerKeyExtractor`, `HuaweiSquashfsExtractor`, container extractors — see Firmware extraction.
-- **Vulnerability scanners:** `FormatStringScanner`, `DeprecatedFuncScanner`, heap and integer overflow scanners — see Specialized vulnerability scanners.
-- **Windows and PE:** `KernelDriverAnalyzer`, `ByovdDetector`, `CFGBypassDetector`, `ETWProviderExtractor`, `RPCServerAnalyzer`, `COMAttackSurfaceMapper`, `WindowsPoolTaintTracker` — see Windows and PE analysis.
-- **Go binaries:** `GoFuncTable`, `GoStringResolver`, `GoSubprocessScanner`, `go_garble_re` — see Go binary analysis.
-- **ECU and automotive:** `EcuArchDetector`, ISA decoders, `ECUSecurityAccessScanner`, `ECURomLayoutAnalyzer`, `Structurizer` — see ECU and automotive analysis.
-- **LLM analyst:** `AgentLoop`, `RAGRetriever`, `ToolRegistry` — see LLM analyst.
-- **Exports:** SARIF, JSON, Binary Ninja plugin — see Exports and integrations.
+- **Cross-version diffing:** `VersionDelta`, `DTWMatcher`, `MatrixProfileDiff`, `StructuralSim`: see the Cross-version diffing section.
+- **Crypto and entropy:** `EntropyMapper`, `XorKeyRecoverer`, `CryptoAuditor`, `HashAlgoDiscriminator`: see Crypto and entropy analysis.
+- **Firmware extraction:** `FirmwareContainerKeyExtractor`, `HuaweiSquashfsExtractor`, container extractors: see Firmware extraction.
+- **Vulnerability scanners:** `FormatStringScanner`, `DeprecatedFuncScanner`, heap and integer overflow scanners: see Specialized vulnerability scanners.
+- **Windows and PE:** `KernelDriverAnalyzer`, `ByovdDetector`, `CFGBypassDetector`, `ETWProviderExtractor`, `RPCServerAnalyzer`, `COMAttackSurfaceMapper`, `WindowsPoolTaintTracker`: see Windows and PE analysis.
+- **Go binaries:** `GoFuncTable`, `GoStringResolver`, `GoSubprocessScanner`, `go_garble_re`: see Go binary analysis.
+- **ECU and automotive:** `EcuArchDetector`, ISA decoders, `ECUSecurityAccessScanner`, `ECURomLayoutAnalyzer`, `Structurizer`: see ECU and automotive analysis.
+- **LLM analyst:** `AgentLoop`, `RAGRetriever`, `ToolRegistry`: see LLM analyst.
+- **Exports:** SARIF, JSON, Binary Ninja plugin: see Exports and integrations.
 
 ## Using Ablation with Codex
 
@@ -611,5 +611,5 @@ For installation and command examples see [Getting Started](getting-started.md).
 
 - New to Ablation? Start with the [Getting Started guide](./getting-started.md).
 - To understand the underlying analysis concepts, read [Decompiler Concepts](./concepts-decompiler.md).
-- To see an end-to-end reverse engineering engagement, read the [RE Workflow guide](./guide-re-workflow.md).
+- To see an reverse engineering engagement, read the [RE Workflow guide](./guide-re-workflow.md).
 - For a full task → tool lookup table, see the [Tool and Mode Selection guide](./guide-tool-selection.md).

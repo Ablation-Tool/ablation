@@ -19,18 +19,18 @@ Three gaps existed before this module:
 2653-line module covering:
 
 **Syscall tracing (live processes):**
-- `SyscallTracer`: strace (Linux) / dtruss (macOS) wrapper — trace, filter, report
+- `SyscallTracer`: strace (Linux) / dtruss (macOS) wrapper: trace, filter, report
 - File access / network / process operations convenience wrappers
 
 **Live system detection (procfs):**
-- `detect_raw_socket_creation`: `/proc/net/raw`, `/proc/net/packet`, `/sys/class/net/*/flags`, `/proc/{pid}/status CapEff` — raw socket and promiscuous mode
+- `detect_raw_socket_creation`: `/proc/net/raw`, `/proc/net/packet`, `/sys/class/net/*/flags`, `/proc/{pid}/status CapEff`: raw socket and promiscuous mode
 - `detect_ptrace_abuse`: TracerPid scan, ptrace_scope, seccomp status across all PIDs
 - `detect_socket_abuse_patterns`: TCP LISTEN from non-root on unprivileged ports, connected UDP, world-accessible UNIX sockets
 - `check_network_sniffing_indicators`: `ip link show PROMISC`, RX/TX ratio, known sniffer process names
 - `detect_heap_spray_artifacts`: ASLR/kptr_restrict/dmesg_restrict/mmap_min_addr/suid_dumpable sysctl checks; large anonymous rwx mappings; VmPeak > 90% RAM
 - `detect_kernel_exploit_surface`: ptrace_scope, zero-size/tainted modules, unprivileged BPF, io_uring, user namespaces, huge pages, vsyscall mapping, kallsyms readability
 
-**Binary analysis (bytes input — no file I/O):**
+**Binary analysis (bytes input, no file I/O):**
 - `detect_dylib_hijacking_surface`: Mach-O LC_RPATH writability, LC_LOAD_DYLIB from /tmp, bundled framework injection, DYLD_INSERT_LIBRARIES
 - `detect_macos_task_port_abuse`: task_for_pid, mach_vm_read/write, bootstrap_look_up/register, IOKit
 - `detect_shellcode_patterns`: CALL/POP PIC, FPU FSTENV GetPC, NOP sled, egg hunter, null-free candidate
@@ -118,11 +118,11 @@ Gate: **PASSED**. 10 CWE-770 fixes applied (9 unbounded procfs reads + 1 unbound
 | `/proc/kallsyms` io_uring check | `detect_kernel_exploit_surface` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
 | `/proc/self/maps` vsyscall | `detect_kernel_exploit_surface` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
 | `/proc/kallsyms` symbol count | `detect_kernel_exploit_surface` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
-| SMB NetBIOS response accumulation | `probe_smb_exposure` | `nb_len` from 3-byte NetBIOS field (max ~16MB, attacker-controlled) | `nb_len = min(struct.unpack(...)[0], 65536)` — CWE-770 |
+| SMB NetBIOS response accumulation | `probe_smb_exposure` | `nb_len` from 3-byte NetBIOS field (max ~16MB, attacker-controlled) | `nb_len = min(struct.unpack(...)[0], 65536)`: CWE-770 |
 
 **Additional checks:**
-- No bare `except:` — all handlers use `except Exception:`, `except (PermissionError, FileNotFoundError, OSError):`, or `except (socket.timeout, ConnectionRefusedError, OSError):`.
+- No bare `except:`: all handlers use `except Exception:`, `except (PermissionError, FileNotFoundError, OSError):`, or `except (socket.timeout, ConnectionRefusedError, OSError):`.
 - No lief.parse(). No HTTP reads.
 - All subprocess calls use `timeout=` parameter.
-- Binary analysis functions take `bytes` parameter — no file I/O inside.
+- Binary analysis functions take `bytes` parameter: no file I/O inside.
 - Network probe sockets use `settimeout()` or `timeout=` in create_connection.

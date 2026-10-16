@@ -1,20 +1,20 @@
-# sanitizer_detector — Shell Sanitization Auditor
+# sanitizer_detector: Shell Sanitization Auditor
 
 ## Why this exists
 
 1. **Gap: SanitizerDetector was x86-64 only.** The existing auto-detection relied on
    `movzx`-in-loop + inline `cmp` patterns — valid for Fortinet-style pure byte-validator
-   functions but completely missed IBM LoadLeveler's pattern: a 280-instruction class
-   method that calls `string::find(0x20)` via `li r3, 0x20; bl string_func` on PPC64.
+ functions but completely missed IBM LoadLeveler's pattern: a 280-instruction class
+ method that calls `string::find(0x20)` via `li r3, 0x20; bl string_func` on PPC64.
 
 2. **Gap: no targeted function-level audit.** The detector scanned entire binaries for
-   validator-shaped functions. There was no way to ask "given I know this function is
-   called before a popen(), does it actually check for shell metacharacters?"
+ validator-shaped functions. There was no way to ask "given I know this function is
+ called before a popen(), does it actually check for shell metacharacters?"
 
 3. **Gap: indirect validators weren't covered.** When a validator calls `strchr` or
    `string::find` with an ASCII immediate as the char argument, the character is checked
-   indirectly. The original detector's hard gate (`n_calls > 0 → None`) rejected all
-   such functions.
+ indirectly. The original detector's hard gate (`n_calls > 0 → None`) rejected all
+ such functions.
 
 ## Two tools in one module
 
@@ -40,9 +40,9 @@ for p in profiles:
 Given a *specific* function VA, extracts all ASCII character values from:
 1. **Call-arg pattern**: `li`/`mov`-immediate with ASCII value appearing within
    `call_window` instructions before a call/branch.
-   *Covers:* `li r3, 0x20; bl string::find()` — IBM LoadLeveler style.
+ *Covers:* `li r3, 0x20; bl string::find()`, IBM LoadLeveler style.
 2. **Inline-compare pattern**: any compare/test instruction with an ASCII immediate.
-   *Covers:* `cmpwi r0, 0x2d; bne` — both PPC64 and x86.
+ *Covers:* `cmpwi r0, 0x2d; bne`, both PPC64 and x86.
 
 Reports `chars_checked ∩ SHELL_METACHARACTERS` and which metachars are missing.
 
@@ -71,13 +71,13 @@ r = SanitizerDetector.coverage(
 
 ## `SanitizerCoverageReport` verdicts
 
-| Verdict      | Meaning |
+| Verdict | Meaning |
 |--------------|---------|
-| `SHELL_SAFE` | Every `SHELL_METACHARACTERS` entry is explicitly tested — injection structurally blocked |
-| `PARTIAL`    | Some metachars tested, others missing (e.g. rejects `|` but allows `;`) |
-| `SPACE_ONLY` | Only space (0x20) found in the metachar intersection — common in class-method validators that check for spaces but not injection chars; all other metachars bypass |
-| `NO_CHECKS`  | No shell metacharacter appears anywhere in the function — no sanitization at all |
-| `UNKNOWN`    | Disassembly failed or function not found |
+| `SHELL_SAFE` | Every `SHELL_METACHARACTERS` entry is explicitly tested: injection structurally blocked |
+| `PARTIAL` | Some metachars tested, others missing (e.g. rejects `|` but allows `;`) |
+| `SPACE_ONLY` | Only space (0x20) found in the metachar intersection: common in class-method validators that check for spaces but not injection chars; all other metachars bypass |
+| `NO_CHECKS` | No shell metacharacter appears anywhere in the function: no sanitization at all |
+| `UNKNOWN` | Disassembly failed or function not found |
 
 ## Integration with SinkArgClassifier workflow
 
@@ -98,9 +98,9 @@ elif r.verdict == 'PARTIAL':
 ## Limitations
 
 - Tab (0x09) and newline (0x0a) are not detected: values below 0x20 are excluded
-  from the scan range to avoid false positives from numeric constants (offsets,
-  counts, shift amounts that happen to be < 0x20).
+ from the scan range to avoid false positives from numeric constants (offsets,
+ counts, shift amounts that happen to be < 0x20).
 - Functions that sanitize via table lookup (`ldrb + tbl` on ARM, `movzx + test [rbx+rax]`
-  on x86) are not detected by this method — use `SanitizerDetector.detect()` instead.
+ on x86) are not detected by this method, use `SanitizerDetector.detect()` instead.
 - Only `call_window=6` instructions before each call are inspected; deeply pipelined
-  character argument setup may be missed.
+ character argument setup may be missed.

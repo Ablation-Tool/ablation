@@ -14,9 +14,9 @@ Erlang applications compile to `.beam` files, one per module, using the IFF cont
 
 ## Where it's used
 
-- **OTP applications** — `ebin/` directories from compiled Erlang/OTP releases
-- **Elixir Mix releases** — precompiled BEAM files in Mix release directories
-- **BEAM-platform services** — RabbitMQ, ejabberd, Riak, and similar infrastructure
+- **OTP applications**: `ebin/` directories from compiled Erlang/OTP releases
+- **Elixir Mix releases**: precompiled BEAM files in Mix release directories
+- **BEAM-platform services**: RabbitMQ, ejabberd, Riak, and similar infrastructure
 - Any file starting with the `FOR1` IFF magic where the form type is `BEAM`
 
 ---

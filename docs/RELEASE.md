@@ -284,7 +284,7 @@ library boundaries and identifies dangerous sink reachability without symbols.
 
 `ablation/analyzers/lib_graph.py`: cross-binary import/export matrix.
 
-Load all .so files in a firmware directory once, build a unified index over every
+Load all.so files in a firmware directory once, build a unified index over every
 library, then query callers/exporters/imports across the entire set in a single call.
 Backed by BinaryContext per binary (cache benefits fully apply).
 
@@ -338,7 +338,7 @@ Example output for stress handler (libplugin.so 0x1000):
 
 Handles:
 - mov/lea register-to-register transfers (follows chains: r12 = rsi@entry -> rdx = r12 shows rdx = arg1_entry)
-- RIP-relative .rodata string loads
+- RIP-relative.rodata string loads
 - xor reg, reg zeroing
 - Callee-saved register preservation across calls (r12-r15, rbx, rbp survive)
 - Caller-saved clobber (rax, rcx, rdx, rsi, rdi, r8-r11 cleared at call sites)
@@ -355,7 +355,7 @@ Does NOT handle branches (single path), loops, or complex stack frame indexing.
 `ablation/analyzers/binary_context.py`: pre-computed binary context cache.
 
 Build once (~0.5s for a 24MB ELF), cache to `~/.ablation/cache/`, reload in <110ms.
-Captures: PLT symbol map, exported functions, .rodata strings, function start VAs,
+Captures: PLT symbol map, exported functions,.rodata strings, function start VAs,
 full call graph as (from_va, to_va, label) edges.
 
 ```python

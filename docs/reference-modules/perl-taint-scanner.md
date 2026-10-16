@@ -4,11 +4,11 @@
 
 Three things were not possible before in Ablation:
 
-1. **Taint tracing Perl script layers that sit above setuid ELFs** — every prior engagement analysis ended at the ELF boundary. RSCT (IBM HMC V11), FortiOS diagnostic scripts, and dozens of embedded Linux targets ship thick Perl layers that call privileged binaries. TaintTracker and SinkArgClassifier are ELF-only; they never see `.pm`/`.pl`. The HMC engagement confirmed a real CWE-78 (ERRM_cli_utils.pm → rmcondition → unsanitized `$resource_name` in qx//) that required manual Perl analysis because no ablation tool could flag it. PerlTaintScanner closes that gap.
+1. **Taint tracing Perl script layers that sit above setuid ELFs**, every prior engagement analysis ended at the ELF boundary. RSCT (IBM HMC V11), FortiOS diagnostic scripts, and dozens of embedded Linux targets ship thick Perl layers that call privileged binaries. TaintTracker and SinkArgClassifier are ELF-only; they never see `.pm`/`.pl`. The HMC engagement confirmed a real CWE-78 (ERRM_cli_utils.pm → rmcondition → unsanitized `$resource_name` in qx//) that required manual Perl analysis because no ablation tool could flag it. PerlTaintScanner closes that gap.
 
-2. **Detecting Perl-specific sanitization patterns** — shell injection mitigations in Perl don't look like C. `quotemeta()` is the explicit safe function, but most mature RSCT/IBM Perl uses the single-quote wrapping idiom: `s/'/ /g` stripping followed by `"'" . join("' '", @args) . "'"`. A generic grep for `system(` or qx// cannot distinguish unsanitized from sanitized; it floods findings with false positives. PerlTaintScanner recognizes all three idioms and reports SANITIZED so true positives stand out.
+2. **Detecting Perl-specific sanitization patterns**, shell injection mitigations in Perl don't look like C. `quotemeta()` is the explicit safe function, but most mature RSCT/IBM Perl uses the single-quote wrapping idiom: `s/'/ /g` stripping followed by `"'". join("' '", @args). "'"`. A generic grep for `system(` or qx// cannot distinguish unsanitized from sanitized; it floods findings with false positives. PerlTaintScanner recognizes all three idioms and reports SANITIZED so true positives stand out.
 
-3. **Cross-file parameter origin tracing** — Perl codebases split CLI scripts from utility `.pm` libraries. The injection point is in the `.pm` (`shift(@_)` receives tainted data), the source is in the calling `.pl` script (`$resource = shift @ARGV`). TaintTracker cannot cross this file boundary. PerlTaintScanner does one-hop caller resolution: when a sink variable comes from a function parameter, it scans all other loaded files for callers of that function and traces whether the call-site argument came from `@ARGV` or a Getopt variable.
+3. **Cross-file parameter origin tracing**, Perl codebases split CLI scripts from utility `.pm` libraries. The injection point is in the `.pm` (`shift(@_)` receives tainted data), the source is in the calling `.pl` script (`$resource = shift @ARGV`). TaintTracker cannot cross this file boundary. PerlTaintScanner does one-hop caller resolution: when a sink variable comes from a function parameter, it scans all other loaded files for callers of that function and traces whether the call-site argument came from `@ARGV` or a Getopt variable.
 
 ## What it does
 
@@ -28,12 +28,12 @@ Verdict classes:
 | `INJECTABLE` | CLI arg (`@ARGV` / Getopt) → no sanitization → shell sink |
 | `SANITIZED` | CLI arg source confirmed but sanitization detected before sink |
 | `PARAM_UNKNOWN` | Function parameter source; callers not in scan set or unresolvable |
-| `INTERNAL` | Source is internal state — no user-controlled path confirmed |
+| `INTERNAL` | Source is internal state: no user-controlled path confirmed |
 | `UNKNOWN` | Origin not resolved within look-back window |
 
 Sanitization recognized:
-- `quotemeta($var)` — explicit safe quoting
-- `"'" . join("' '", @args) . "'"` — single-quote wrapping idiom
+- `quotemeta($var)`: explicit safe quoting
+- `"'". join("' '", @args). "'"`: single-quote wrapping idiom
 - `$var =~ s/'/ /g` + similar metachar substitutions
 
 ## Usage
@@ -80,7 +80,7 @@ $resource = shift @ARGV;                # CLI arg
 find_resource_name($resource, ...);
 ```
 
-Scanner detects: `INJECTABLE` — `$resource_name` via `shift(@_)` in `find_resource_name`, resolved to `$ARGV` in `rmcondition`. Verdict: **INJECTABLE** (CWE-78).
+Scanner detects: `INJECTABLE`, `$resource_name` via `shift(@_)` in `find_resource_name`, resolved to `$ARGV` in `rmcondition`. Verdict: **INJECTABLE** (CWE-78).
 
 ## LPRM_cli_utils.pm SANITIZED detection
 
@@ -93,7 +93,7 @@ $optargs = "'" . join("' '", @optargs) . "'";  # single-quote wrap
 @msgtext = `$main::LSMSG $main::PROGNAME $main::MSGCAT $msg $optargs`;
 ```
 
-Scanner detects: `SANITIZED` — `$optargs` regex substitution present before backtick sink.
+Scanner detects: `SANITIZED`, `$optargs` regex substitution present before backtick sink.
 
 ## Workflow placement
 
@@ -103,7 +103,7 @@ Run **before** TaintTracker when a target has a Perl scripting layer:
 BinaryContext → SemanticSearcher → SinkArgClassifier → PerlTaintScanner (Perl layer) → TaintTracker (ELF sinks)
 ```
 
-PerlTaintScanner is independent of BinaryContext — it works entirely on text files.
+PerlTaintScanner is independent of BinaryContext, it works entirely on text files.
 
 ## Known limitations
 

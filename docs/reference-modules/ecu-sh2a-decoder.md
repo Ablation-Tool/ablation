@@ -9,22 +9,22 @@
 Three things were not possible before in Ablation:
 
 **1. No SH-2A instruction decoding.** Capstone 5.0.7 does not support the Renesas SH-2A ISA
-(SH7058/SH7059), used in Honda and Subaru ECUs.  Before this module, any attempt to
+(SH7058/SH7059), used in Honda and Subaru ECUs. Before this module, any attempt to
 `BinaryContext.load_or_build()` on a Subaru SH7058S or Honda CBR250RR ROM had no way to
 identify instruction boundaries, preventing WindowAnalyzer, SemanticSearcher, or manual
-capstone trace from working at all.  `EcuSH2aDecoder` implements the full SH-2A decoder in
+capstone trace from working at all. `EcuSH2aDecoder` implements the full SH-2A decoder in
 pure Python, giving Ablation complete instruction-level access to those binaries.
 
 **2. No 32-bit SH-2A instruction length discrimination.** SH-2A introduces a set of 32-bit
-instructions into a base ISA where all instructions are 16-bit.  Without knowing the exact
+instructions into a base ISA where all instructions are 16-bit. Without knowing the exact
 first-halfword patterns that indicate a 32-bit instruction, any linear sweep will misalign
-and all downstream analysis is garbage.  The module encodes the four correct discriminator
+and all downstream analysis is garbage. The module encodes the four correct discriminator
 masks from the Renesas SH2A Hardware Manual Rev.2.00 and applies them in `insn_length()` so
 every caller gets 2 or 4, never wrong.
 
 **3. No function_starts() for SH-2A flat ROM.** SH-2A ECU ROMs have no ELF headers and no
-symbol tables.  Seeding BinaryContext, TaintTracker, or the manual RE workflow requires a
-list of function entry points.  `function_starts()` scans the entire ROM for the two SH-2A
+symbol tables. Seeding BinaryContext, TaintTracker, or the manual RE workflow requires a
+list of function entry points. `function_starts()` scans the entire ROM for the two SH-2A
 prologue conventions (stack-saving and register-saving leaf functions) in a single O(N) pass
 and returns all probable entry VAs without requiring a prior disassembly walk.
 
@@ -45,8 +45,8 @@ All other first halfwords → 16-bit SH-2 instruction.
 
 **Why `0xF00F` not `0xF0FF` for MOVI20/MOWI20S:** MOVI20 encodes as
 `0000 nnnn iiii 0101` where `nnnn` = Rn (varies, bits 11:8) and `iiii` = imm[19:16]
-(varies, bits 7:4).  Using `0xF0FF` as the mask keeps bits[7:4] and would only match
-MOWI20 instructions where `imm[19:16] == 0xE`, missing all other immediates.  The correct
+(varies, bits 7:4). Using `0xF0FF` as the mask keeps bits[7:4] and would only match
+MOWI20 instructions where `imm[19:16] == 0xE`, missing all other immediates. The correct
 mask `0xF00F` keeps only bits[15:12] (must be 0x0) and bits[3:0] (must be 0x5), which is
 the actual fixed discriminator.
 
@@ -60,8 +60,8 @@ the actual fixed discriminator.
 STS.L PR, @-R15    =  0x4F22
 ```
 
-Saves the procedure register (return address) to the stack.  This is the universal
-SH-2/SH-2A prologue for any non-leaf function.  `function_starts()` detects this at every
+Saves the procedure register (return address) to the stack. This is the universal
+SH-2/SH-2A prologue for any non-leaf function. `function_starts()` detects this at every
 even offset.
 
 ### Register-saving leaf functions (secondary)
@@ -148,7 +148,7 @@ class SH2aInsn:
 ## Branch target computation
 
 SH-2/SH-2A has a **delay slot** (one instruction after every branch executes before
-the branch takes effect).  The PC seen by the branch displacement computation is
+the branch takes effect). The PC seen by the branch displacement computation is
 `instruction_VA + 4` (not +2):
 
 ```
@@ -177,9 +177,9 @@ as `target = None`.
 
 - No SH-2A FPU instructions decoded (not present in ECU firmware; decoded as MISC).
 - `BRAF Rn` / `BSRF Rn` (indirect relative branch/subroutine): decoded as MISC with no
-  target (register-indirect, not statically resolvable).
+ target (register-indirect, not statically resolvable).
 - Unvalidated on real Honda or Subaru ROM: all encoding derived from Renesas SH2A Hardware
-  Manual Rev.2.00.  A real corpus run is required before treating function_starts() output
-  as ground truth for these targets.
+ Manual Rev.2.00. A real corpus run is required before treating function_starts() output
+ as ground truth for these targets.
 - `function_starts()` does not walk call graph from reset vector.
   `FlatBinaryFuncStartScanner` adds that capability once built.

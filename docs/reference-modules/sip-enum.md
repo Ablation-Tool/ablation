@@ -6,7 +6,7 @@
 
 Four gaps existed before this module:
 
-1. **SIP infrastructure had no full-coverage attack surface enumeration.** VoIP-specific probes — authentication bypass, extension enumeration, header injection, registration hijacking, DTMF exfiltration, covert channels — required manual scripting and were not part of the Ablation pipeline.
+1. **SIP infrastructure had no full-coverage attack surface enumeration.** VoIP-specific probes, authentication bypass, extension enumeration, header injection, registration hijacking, DTMF exfiltration, covert channels: all required manual scripting and were not part of the Ablation pipeline.
 
 2. **H.323, SCCP (Skinny), and MGCP inspection surfaces were unprobed.** Legacy and Cisco VoIP protocols (H.323/Q.931, Cisco SCCP, MGCP) require exact packet framing not covered by generic scanners.
 
@@ -107,9 +107,9 @@ Gate: **PASSED**. One dead-code fix applied.
 | Duplicate `return findings` | `probe_rtp_covert_channel` (line 4567) | Removed unreachable second `return findings` at end of function |
 
 **Security checks:**
-- No file I/O anywhere in the module — no CWE-770 concerns.
-- No `lief.parse()` — no CWE-755 (lief null return) concerns.
-- No bare `except:` — all exception handlers use `except Exception:`, `except OSError:`, or `except (socket.timeout, OSError):`.
+- No file I/O anywhere in the module: no CWE-770 concerns.
+- No `lief.parse()`: no CWE-755 (lief null return) concerns.
+- No bare `except:`: all exception handlers use `except Exception:`, `except OSError:`, or `except (socket.timeout, OSError):`.
 - All socket receives are bounded: `recvfrom(2048)`, `recvfrom(4096)`, `recvfrom(8192)`, `recvfrom(65535)` are UDP network buffers, not file reads.
 - HTTP reads in `probe_webrtc_signaling_exposure._http_get()` bounded at `resp.read(65536)` (64 KB).
 - All sockets use `settimeout()` before any send/receive operation.
@@ -117,4 +117,4 @@ Gate: **PASSED**. One dead-code fix applied.
 
 **Known residual:**
 - `probe_rtp_dtmf_digit_theft._port_unreachable()` uses raw ICMP socket requiring `CAP_NET_RAW`. On systems without the capability, it silently returns `False` (port assumed open). This is the correct safe fallback.
-- `probe_webrtc_signaling_exposure` uses `ssl.CERT_NONE` — intentional for probing self-signed TLS on management ports.
+- `probe_webrtc_signaling_exposure` uses `ssl.CERT_NONE`: intentional for probing self-signed TLS on management ports.

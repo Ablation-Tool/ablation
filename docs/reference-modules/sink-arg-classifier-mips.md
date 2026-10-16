@@ -14,20 +14,20 @@ function argument, or an unresolved unknown.
 Two gaps prevented MIPS32 firmware analysis. Both are now resolved.
 
 1. **MIPS-GAP-001: Call graph silent.** `BinaryContext._build_call_graph_mips()` scanned only for
-   JAL (opcode 3). ET_EXEC O32 PIC firmware uses zero JAL instructions. All calls go through
+ JAL (opcode 3). ET_EXEC O32 PIC firmware uses zero JAL instructions. All calls go through
    `LW $t9, N($gp)` + `JALR $t9`. `callers_of('system')` returned `[]` on every MIPS32 target.
-   Fixed in `BinaryContext` v2.55 (commit bad68e8). See `binary-context.md` MIPS-GAP-001.
+ Fixed in `BinaryContext` v2.55 (commit bad68e8). See `binary-context.md` MIPS-GAP-001.
 
 2. **MIPS-GAP-002: No MIPS32 argument classifier.** `SinkArgClassifier.classify_all()` traces
-   x86-64 argument registers `rdi`, `rsi`, `rdx`. MIPS32 O32 ABI uses `$a0`–`$a3` for the first
-   four arguments. There was no equivalent register path. Every MIPS32 sink call site returned 0
-   results. Fixed here.
+ x86-64 argument registers `rdi`, `rsi`, `rdx`. MIPS32 O32 ABI uses `$a0`–`$a3` for the first
+ four arguments. There was no equivalent register path. Every MIPS32 sink call site returned 0
+ results. Fixed here.
 
-   Manual analysis of `cwWtpd` (FortiAP MIPS32 Gen1, `/sbin/cwWtpd`) required tracing CAPWAP
-   message dispatch tables by hand to confirm FAP-CWMIPS-1. That work identified the specific
-   trace pattern: `LW $vX, N($gp)` to load section base from the GOT, followed by
+ Manual analysis of `cwWtpd` (FortiAP MIPS32 Gen1, `/sbin/cwWtpd`) required tracing CAPWAP
+ message dispatch tables by hand to confirm FAP-CWMIPS-1. That work identified the specific
+ trace pattern: `LW $vX, N($gp)` to load section base from the GOT, followed by
    `ADDIU $aY, $vX, M` to add an offset. Without this module, every shell sink call site on every
-   MIPS32 Fortinet firmware image required that level of manual effort.
+ MIPS32 Fortinet firmware image required that level of manual effort.
 
 ---
 

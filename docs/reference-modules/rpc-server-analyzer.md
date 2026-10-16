@@ -4,7 +4,7 @@
 
 Enumerates Windows RPC server interfaces and flags those registered with `RPC_C_AUTHN_LEVEL_NONE` so any network caller reaches the interface without credentials. Pairs with Windows PE Security Analysis for complete RPC attack surface coverage.
 
-Works on x86 and x64 PE binaries without a running server — no Ghidra required.
+Works on x86 and x64 PE binaries without a running server, no Ghidra required.
 
 ---
 
@@ -14,7 +14,7 @@ Three things were not possible before this module:
 
 1. **RPC interface UUID extraction required Ghidra.** Windows RPC servers register interfaces by passing an `RPC_SERVER_INTERFACE*` to `RpcServerRegisterIf*`. The struct contains the interface UUID and transfer syntax UUID. Ablation had no automated path from the call site to those values without Ghidra's RPC parser or manual struct reading.
 
-2. **Authentication level analysis was a manual trace.** `RpcServerRegisterIfEx` takes an auth level argument. `RPC_C_AUTHN_LEVEL_NONE` (value 1) means any network caller can invoke the interface with no credentials — a direct lateral movement path. Confirming whether a binary registered an unauthenticated interface required tracing the argument at each call site by hand.
+2. **Authentication level analysis was a manual trace.** `RpcServerRegisterIfEx` takes an auth level argument. `RPC_C_AUTHN_LEVEL_NONE` (value 1) means any network caller can invoke the interface with no credentials, a direct lateral movement path. Confirming whether a binary registered an unauthenticated interface required tracing the argument at each call site by hand.
 
 3. **Endpoint strings had no systematic extraction.** `RpcServerUseProtseqEp*` binds the server to a named pipe, TCP port, or ALPC port. That string is the network address of the attack surface. Before this module, enumerating those strings required manual cross-referencing of string search results to verify they reached an endpoint registration function.
 
@@ -72,7 +72,7 @@ for f in highs:
 
 | Level | Value | Meaning |
 |---|---|---|
-| `RPC_C_AUTHN_LEVEL_NONE` | 1 | No authentication — any network caller accepted |
+| `RPC_C_AUTHN_LEVEL_NONE` | 1 | No authentication: any network caller accepted |
 | `RPC_C_AUTHN_LEVEL_CONNECT` | 2 | Authentication on connect only |
 | `RPC_C_AUTHN_LEVEL_CALL` | 3 | Authentication on each call |
 | `RPC_C_AUTHN_LEVEL_PKT` | 4 | Authentication with packet integrity |
@@ -100,5 +100,5 @@ When `RpcServerRegisterIf` (not `IfEx`) is called, no auth level argument is pas
 
 ## Dependencies
 
-- `lief >= 0.14.0` — PE parsing, IAT map, section headers
-- `capstone >= 5.0` — call site scanning and argument extraction
+- `lief >= 0.14.0`: PE parsing, IAT map, section headers
+- `capstone >= 5.0`: call site scanning and argument extraction

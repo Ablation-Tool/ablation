@@ -58,15 +58,15 @@ Follow this process when adding a new scanner to Ablation:
 1. **Confirm SemanticSearcher has no existing pattern.** Run a query over the target binary first. If a pattern exists, replay it rather than writing a new scanner.
 
 2. **Create `ablation/analyzers/<scanner_name>.py`.** Use `length_underflow.py` as a template. Wire three entry points:
-   - `from_context(ctx)` — classmethod constructor
-   - `scan()` → list of findings
-   - `report(findings)` → formatted string
+ - `from_context(ctx)`: classmethod constructor
+ - `scan()` → list of findings
+ - `report(findings)` → formatted string
 
 3. **Run on a known-positive binary.** Analyze false positives: cross-BB register clobber? Trusted source? Callee reads the register before the sink?
 
 4. **Add to `docs/guide-tool-selection.md`** under the appropriate category.
 
-5. **Write `docs/reference-modules/<module>.md`** — open with "Why this exists" as a numbered list of gaps the module fills.
+5. **Write `docs/reference-modules/<module>.md`**, open with "Why this exists" as a numbered list of gaps the module fills.
 
 6. **Run FORGE before committing.** See [FORGE gate](#forge-gate) below.
 
@@ -104,11 +104,11 @@ env HOME=/home/cowboy GIT_LFS_SKIP_SMUDGE=1 git push origin main
 New ISA backends go into `ablation/analyzers/binary_lifter.py` as a new `_<ISA>State` class and a corresponding dispatch branch in `BinaryLifter._lift_structural()`.
 
 Follow the existing pattern:
-- `_regs: dict[str, NativeVal]` — per-register state
-- `_written: set[str]` — registers written this function
-- `_declared: set[str]` — variable names emitted
-- `_alloc()` — counter for fresh variable names
-- `emit(insn)` — dispatch on mnemonic; emit C expression or `// comment`
+- `_regs: dict[str, NativeVal]`: per-register state
+- `_written: set[str]`: registers written this function
+- `_declared: set[str]`: variable names emitted
+- `_alloc()`: counter for fresh variable names
+- `emit(insn)`: dispatch on mnemonic; emit C expression or `// comment`
 
 Seed `_regs` with the ISA's calling convention argument registers and return register. Use `_walk_ablation_cfg()` as the shared BFS walker.
 

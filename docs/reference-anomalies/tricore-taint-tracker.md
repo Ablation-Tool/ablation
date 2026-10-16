@@ -1,7 +1,7 @@
 # Known Anomalies: TriCoreTaintTracker
 
-**Module:** `ablation/analyzers/taint_tracker_tricore.py`  
-**Tracker version:** v2.56.0  
+**Module:** `ablation/analyzers/taint_tracker_tricore.py` 
+**Tracker version:** v2.56.0 
 **Format:** ISO 26262 Part 8 / TASKING qualification kit (see `standards-ablation.md` §2.3)
 
 An anomaly is a condition under which `TriCoreTaintTracker` is known to produce an incorrect
@@ -12,7 +12,7 @@ Each entry documents the triggering condition, the impact, and the recommended w
 
 ## TRICORE-KA-001: Return-value aliasing across call chains not modelled
 
-**Description:**  
+**Description:** 
 `TriCoreTaintTracker` propagates taint into callees via the argument registers
 D[4]–D[7] and A[4]–A[7]. If a callee is tainted and returns a value, the return registers
 D[2] and A[2] are marked tainted in the caller. However, the tracker does not model aliasing
@@ -22,9 +22,9 @@ only knows "D[2] in caller is tainted because D[5] was tainted", any subsequent 
 that conditionally depends on the specific source label (`D[5]` vs. `D[4]`) will not be
 correctly attributed.
 
-**Triggering conditions:**  
+**Triggering conditions:** 
 - Multi-hop call chains where a function transforms one specific tainted argument into its
-  return value
+ return value
 - Functions with selective output based on input argument, for example a `get_field` helper that looks up a named field from a message struct
 - SecurityAccess handlers that compute a seed from a received CAN frame field
 
@@ -34,7 +34,7 @@ is a conservatism that could miss cases where a specific sanitiser on one path p
 In most security analysis scenarios this is acceptable, but in cases where the sanitizer
 on D[4] is the only one that matters, the tracker may miss that the flow through D[5] bypasses it.
 
-**Workaround:**  
+**Workaround:** 
 For high-criticality findings involving multi-hop call chains, trace each hop individually
 using `scan_function()` with `init_labels` set to the specific source register of interest.
 
@@ -44,7 +44,7 @@ using `scan_function()` with `init_labels` set to the specific source register o
 
 ## TRICORE-KA-002: No loop fixpoint; second-iteration taint not propagated
 
-**Description:**  
+**Description:** 
 `TriCoreTaintTracker` performs a linear forward trace. It does not compute a loop fixpoint.
 On the second and subsequent passes through a loop body, taint accumulated from the loop
 header or a previous iteration is not fed back to re-evaluate earlier instructions. A
@@ -56,7 +56,7 @@ correctly and is not an anomaly. Taint on A_reg propagates through the decrement
 bound is cleared. This anomaly refers to loop body fixpoint convergence, not the `LOOP`
 mnemonic.
 
-**Triggering conditions:**  
+**Triggering conditions:** 
 - Any function containing a loop that builds up a result incrementally from tainted input
 - Buffer-fill loops reading from a tainted source buffer
 - CRC or hash computation loops processing received CAN frame bytes
@@ -65,7 +65,7 @@ mnemonic.
 **Impact:** False negative. Taint that accumulates across loop iterations may not reach the
 tracker's final taint state, causing a missed finding at a sink reached after the loop exits.
 
-**Workaround:**  
+**Workaround:** 
 Manually inspect loop bodies in any function flagged by `SemanticSearcher` as a
 copy/hash/crypto pattern. If the function processes attacker-controlled data in a loop,
 treat the loop body's output as tainted regardless of tracker output.
@@ -76,7 +76,7 @@ treat the loop body's output as tainted regardless of tracker output.
 
 ## TRICORE-KA-003: ELF mode requires symbols; flat ROM interprocedural uses caller-supplied boundaries
 
-**Description:**  
+**Description:** 
 `TriCoreTaintTracker.run()` and `run_interprocedural()` in ELF mode require ELF symbols for
 function boundary detection. In stripped ELF binaries or flat ROM images used via
 `from_bytes()`, function boundaries must be supplied by the caller (from
@@ -84,7 +84,7 @@ function boundary detection. In stripped ELF binaries or flat ROM images used vi
 the trace terminates early; if too large, it may decode data or padding as instructions and
 produce spurious results.
 
-**Triggering conditions:**  
+**Triggering conditions:** 
 - Stripped TriCore ELF binaries: no `.symtab` and no DWARF
 - Flat ROM images from automotive ECU flash dumps
 - Functions with non-standard epilogues or tail-call fall-through
@@ -92,7 +92,7 @@ produce spurious results.
 **Impact:** False negative (boundary too small) or false positive (boundary too large, spurious
 instruction decode). The more common failure is false negative from early termination.
 
-**Workaround:**  
+**Workaround:** 
 Use `FlatBinaryFuncStartScanner` to obtain candidate boundaries, then verify the true function
 end by locating the RET/FRET instruction in the region. Extend boundaries by 32 bytes past
 the scanner estimate and re-run if a finding is suspected but not appearing.
@@ -104,7 +104,7 @@ the scanner estimate and re-run if a finding is suspected but not appearing.
 
 ## TRICORE-KA-004: CSA memory-dump taint (STLCX / LDLCX) not modelled
 
-**Description:**  
+**Description:** 
 TriCore's hardware CSA (Context Save Area) mechanism uses the `STLCX` / `LDLCX` instructions
 to save and restore the full upper context to/from memory. `TriCoreTaintTracker` models the
 register-level effects of CSA (upper context preserved across CALL; lower context clobbered)
@@ -113,17 +113,17 @@ data is stored into the CSA via `STLCX`, for example via a corrupted upper conte
 an overflow, and then reloaded into a register by `LDLCX`, the tracker will not propagate
 that taint.
 
-**Triggering conditions:**  
+**Triggering conditions:** 
 - Interrupt handlers that save/restore context using STLCX/LDLCX
 - Deeply nested call stacks where CSA save areas may overlap or be corrupted
 - Findings involving upper context registers D[8]–D[15] and A[12]–A[15] after interrupt
-  return or context switch
+ return or context switch
 
 **Impact:** False negative. Taint originating from a corrupted CSA area will not appear in
 tracker output. This primarily affects interrupt-context overflow scenarios, which are rare
 in standard PSIRT analysis but relevant to stack-corruption findings.
 
-**Workaround:**  
+**Workaround:** 
 If a finding involves potential CSA corruption (e.g., a stack overflow that could reach the
 CSA save area), analyse the CSA layout manually. The CSA is a linked list at the address
 held in FCX/PCX; the number of CSA frames needed is bounded by the call depth.
@@ -134,21 +134,21 @@ held in FCX/PCX; the number of CSA frames needed is bounded by the call depth.
 
 ## TRICORE-KA-005: Capstone 5.0+ required; silent decode failure on older versions
 
-**Description:**  
+**Description:** 
 `CS_ARCH_TRICORE` is absent from Capstone 4.x and earlier. If `TriCoreTaintTracker` is
 imported in an environment with Capstone ≤ 4.x, the `cs.Cs` constructor call with `CS_ARCH_TRICORE` will raise `CsError`. This is an environment error, not a decode error, and it surfaces at
 `__init__` time rather than at decode time. The anomaly is listed here because older
 environments may silently fall through to a catch-all handler that masks the error.
 
-**Triggering conditions:**  
+**Triggering conditions:** 
 - Ablation installed in a virtualenv where `capstone` was pinned to 4.x before the TriCore
-  tracker was added
+ tracker was added
 - CI environments that install the system `capstone` package rather than the pinned version
 
 **Impact:** Analysis abort. No findings produced. This is a hard error, not a silent miss,
 but it may be masked by environment-level error suppression.
 
-**Workaround:**  
+**Workaround:** 
 Verify `import capstone; print(capstone.__version__)` returns 5.0+ before running. The
 pinned version in `requirements.txt` covers this for standard installs; the risk is only
 in non-standard environments.

@@ -105,7 +105,7 @@ The arch is detected from the ELF header: `e_machine == 21` (EM_PPC64) with `EI_
 
 **Assumption: lief is installed.** Without lief, PLT and string maps are empty so instructions disassemble without annotations. Capstone is still used for disassembly.
 
-**Assumption: ELFv2 TOC_BASE follows the ABI convention.** `TOC_BASE = .got_va + 0x8000`. Vendor-modified firmware that deviates from the ABI will produce incorrect GOT slot addresses and miss PLT entries.
+**Assumption: ELFv2 TOC_BASE follows the ABI convention.** `TOC_BASE =.got_va + 0x8000`. Vendor-modified firmware that deviates from the ABI will produce incorrect GOT slot addresses and miss PLT entries.
 
 **Assumption: `.rela.plt` or relocation entries are present.** Stripped binaries with no dynamic symbol information produce empty PLT maps.
 

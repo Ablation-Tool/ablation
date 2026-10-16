@@ -18,12 +18,12 @@ BFF layout:
 - Magic: `0x09 0x00` at byte 0 of the archive
 - Volume header: 72 bytes (fixed)
 - Per-entry block (variable):
-  - Extended stat: 56 bytes (timestamps, device/inode; all LE)
-  - File size: 4 bytes LE (0 for directories)
-  - Zero field: 4 bytes
-  - Name: null-terminated, padded to next 8-byte boundary
-  - Stat summary: 40 bytes (uid at +0, gid at +4, mode at +12; all LE)
-  - Data: `<size>` bytes, padded to next 8-byte boundary
+ - Extended stat: 56 bytes (timestamps, device/inode; all LE)
+ - File size: 4 bytes LE (0 for directories)
+ - Zero field: 4 bytes
+ - Name: null-terminated, padded to next 8-byte boundary
+ - Stat summary: 40 bytes (uid at +0, gid at +4, mode at +12; all LE)
+ - Data: `<size>` bytes, padded to next 8-byte boundary
 
 The name and data fields both use `_pad8(n) = (n + 7) & ~7` padding.
 

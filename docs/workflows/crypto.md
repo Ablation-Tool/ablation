@@ -175,6 +175,6 @@ TLS: internal-api.example.com:443
 |---|---|---|
 | 7.2 - 8.0 | ENCRYPTED | AES ciphertext, XOR keystream, LZMA, squashfs |
 | 6.0 - 7.2 | CODE/DATA | Compressed code, crypto keys, packed binaries |
-| 4.5 - 6.0 | CODE/DATA | x86-64/ARM64 .text, instruction and data mix |
+| 4.5 - 6.0 | CODE/DATA | x86-64/ARM64.text, instruction and data mix |
 | 1.5 - 4.5 | SPARSE | ASCII strings, null-heavy headers, config data |
-| 0.0 - 1.5 | PADDING | Null fill, zero-padding, .bss sections |
+| 0.0 - 1.5 | PADDING | Null fill, zero-padding,.bss sections |
