@@ -136,6 +136,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "Find Go subprocess/exec injection sites" | `GoSubprocessScanner.scan()` |
 | "Stripped x86-64 Go binary: BinaryContext has only 3 func_starts — recover all from pclntab" | `GoX86StripScanner.from_context(ctx).patch_context(ctx)` — recovers function VAs (and partial names) from .gopclntab embedded in .rodata; works for Go 1.2+ incl. stripped -ldflags=-s -w binaries |
 | "Stripped x86-64 Go binary: detect and get pclntab scan result" | `GoX86StripScanner.from_path(elf).scan()` → `GoScanResult` with `.funcs` dict (VA→name), `.func_starts` list, `.go_version` |
+| "Lift a PPC32 BE function to pseudo-C IR (IBM PPC476, glibc targets)" | `Ppc32Lifter.from_context(ctx).lift(func_va, n_insn=150)` — tracks r3-r10 args, PLT calls, GOT loads, stack stores; handles lis/addi/lwz/bctr patterns |
 | "Lift a native function to pseudo-C IR (18 ISA variants)" | `BinaryLifter.from_path(elf, arch='arm64').lift_function(va)` |
 | "Lift a SH-2A ECU function from flat ROM to pseudo-C IR" | `BinaryLifter.from_path(rom, arch='sh2a').lift_function(va)` |
 | "Disassemble a DEX method to smali" | `DEXDisasm(dex).disasm_method('Lcom/foo/Bar;', 'methodName')` |
