@@ -1280,7 +1280,7 @@ def probe_smb_exposure(host: str, timeout: float = 10.0) -> list:
                     break
                 response += chunk
             if len(response) >= 4:
-                nb_len = struct.unpack('>I', b'\x00' + response[1:4])[0]
+                nb_len = min(struct.unpack('>I', b'\x00' + response[1:4])[0], 65536)
                 while len(response) < 4 + nb_len:
                     chunk = s.recv(4096)
                     if not chunk:
