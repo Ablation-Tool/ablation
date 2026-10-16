@@ -118,6 +118,14 @@ For other ARM64 targets, supply seed VAs from semantic search results for handsh
 
 ---
 
+## Error conditions
+
+`extract_fsm()` and `_load()` raise `ValueError` if:
+- The `.so` file exceeds `_MAX_BINARY_BYTES` (256 MB).
+- `lief.parse()` raises an exception (corrupt/unsupported ELF).
+- `lief.parse()` returns `None` — checked explicitly to prevent `AttributeError` on the
+  subsequent `.segments` access.
+
 ## Known limitations
 
 - Requires at least one known seed VA; the cluster-expansion phase cannot start from zero.

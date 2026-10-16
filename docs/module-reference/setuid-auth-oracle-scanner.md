@@ -44,7 +44,7 @@ scanner = SetuidAuthOracleScanner.from_path('/usr/sbin/authlite', is_privileged=
 | Symbol | Description |
 |--------|-------------|
 | `SetuidAuthOracleScanner.from_context(ctx, is_privileged=False)` | Constructor from existing `BinaryContext` |
-| `SetuidAuthOracleScanner.from_path(path, is_privileged=False)` | Constructor from binary path |
+| `SetuidAuthOracleScanner.from_path(path, is_privileged=False)` | Constructor from binary path. Raises `ValueError` for files > 256 MB. |
 | `scan()` | Returns `list[OracleHit]`, one per oracle function found |
 | `report(hits)` | Returns formatted string report |
 | `OracleHit.binary_path` | Path of the binary |

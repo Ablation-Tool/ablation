@@ -36,6 +36,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
+
 _REG_FAMILIES: dict = {}
 
 def _build_reg_families() -> dict:
@@ -265,6 +267,11 @@ class ChunkWalkerValidator:
             return []
 
         try:
+            bin_size = Path(self.binary_path).stat().st_size
+            if bin_size > _MAX_BINARY_BYTES:
+                raise ValueError(
+                    f'{self.binary_path}: file size {bin_size} exceeds {_MAX_BINARY_BYTES} byte limit'
+                )
             binary = lief.parse(self.binary_path)
         except Exception:
             return []

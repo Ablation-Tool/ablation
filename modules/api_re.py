@@ -82,25 +82,43 @@ SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": "Mozilla/5.0 (compatible; api-re/1.0)"})
 TIMEOUT = 10
 VERBOSE = False
+_MAX_HTTP_BYTES = 4 * 1024 * 1024  # 4 MB cap on response body
+
+
+def _safe_read(r):
+    """Cap response body at _MAX_HTTP_BYTES using streaming read."""
+    if r is None:
+        return r
+    try:
+        content = b''
+        for chunk in r.iter_content(chunk_size=65536):
+            content += chunk
+            if len(content) >= _MAX_HTTP_BYTES:
+                r.close()
+                break
+        r._content = content
+    except Exception:
+        pass
+    return r
 
 
 def get(url, **kw):
     try:
-        return SESSION.get(url, timeout=TIMEOUT, **kw)
+        return _safe_read(SESSION.get(url, timeout=TIMEOUT, stream=True, **kw))
     except Exception:
         return None
 
 
 def post(url, **kw):
     try:
-        return SESSION.post(url, timeout=TIMEOUT, **kw)
+        return _safe_read(SESSION.post(url, timeout=TIMEOUT, stream=True, **kw))
     except Exception:
         return None
 
 
 def req(method, url, **kw):
     try:
-        return SESSION.request(method, url, timeout=TIMEOUT, **kw)
+        return _safe_read(SESSION.request(method, url, timeout=TIMEOUT, stream=True, **kw))
     except Exception:
         return None
 

@@ -81,7 +81,7 @@ def _http_raw(host: str, path: str, method: str = "GET",
             return (r.status, r.read(4 * 1024 * 1024))
     except urllib.error.HTTPError as e:
         try:
-            return (e.code, e.read())
+            return (e.code, e.read(4 * 1024 * 1024))
         except Exception:
             return (e.code, b"")
     except Exception:

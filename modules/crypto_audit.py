@@ -1814,11 +1814,24 @@ def check_key_management_weakness(config_text: str) -> list:
     return findings
 
 
+_MAX_CRYPTO_SCAN_BYTES = 32 * 1024 * 1024
+
+
 def scan_for_crypto_anti_patterns(filepath: str) -> list:
     """File-level anti-pattern scanner: runs RNG, hash, and key management checks."""
     import os
 
     findings = []
+
+    file_size = os.path.getsize(filepath)
+    if file_size > _MAX_CRYPTO_SCAN_BYTES:
+        return [{
+            "severity": "INFO",
+            "title": "FILE_TOO_LARGE",
+            "detail": f"{filepath}: file size {file_size} exceeds {_MAX_CRYPTO_SCAN_BYTES} byte limit",
+            "host": "localhost",
+            "port": 0,
+        }]
 
     try:
         with open(filepath, "rb") as fh:

@@ -20,6 +20,9 @@ from pathlib import Path
 _IS_MACOS = _platform.system() == 'Darwin'
 _IS_LINUX = _platform.system() == 'Linux'
 
+_MAX_HTTP_BYTES = 4 * 1024 * 1024
+_MAX_FILE_BYTES = 65536
+
 class DockerEnumerator:
     """Enumerate Docker environment"""
     
@@ -399,7 +402,7 @@ class DockerEnumerator:
             with urllib.request.urlopen(req, timeout=3) as resp:
                 if resp.status == 200:
                     try:
-                        data = json.loads(resp.read().decode('utf-8', errors='replace'))
+                        data = json.loads(resp.read(_MAX_HTTP_BYTES).decode('utf-8', errors='replace'))
                     except Exception:
                         data = {}
                     detail_parts = []
@@ -833,7 +836,7 @@ def check_container_isolation(host: str = "localhost", timeout: float = 5.0) -> 
     def _read(path: str) -> str:
         try:
             with open(path, "r", errors="replace") as fh:
-                return fh.read()
+                return fh.read(_MAX_FILE_BYTES)
         except Exception:
             return ""
 
@@ -918,7 +921,7 @@ def check_image_security(registry_host: str, port: int = 443,
         try:
             with urllib.request.urlopen(req, timeout=timeout,
                                         context=ctx if use_tls else None) as resp:
-                return resp.status, resp.read()
+                return resp.status, resp.read(_MAX_HTTP_BYTES)
         except urllib.error.HTTPError as e:
             return e.code, b""
         except Exception:
@@ -1005,7 +1008,7 @@ def check_resource_quota_bypass(host: str, port: int = 443,
         try:
             with urllib.request.urlopen(req, timeout=timeout,
                                         context=ctx if use_tls else None) as resp:
-                return resp.status, json.loads(resp.read())
+                return resp.status, json.loads(resp.read(_MAX_HTTP_BYTES))
         except urllib.error.HTTPError as e:
             return e.code, {}
         except Exception:
@@ -1088,7 +1091,7 @@ def check_dependency_confusion_indicators(registry_host: str, port: int = 443,
         try:
             with urllib.request.urlopen(req, timeout=timeout,
                                         context=ctx if use_tls else None) as resp:
-                return resp.status, resp.read()
+                return resp.status, resp.read(_MAX_HTTP_BYTES)
         except urllib.error.HTTPError as e:
             return e.code, b""
         except Exception:
@@ -1169,7 +1172,7 @@ def check_k8s_network_policy_gaps(host: str, port: int = 8001,
                 req, timeout=timeout,
                 context=ctx if use_tls else None
             ) as resp:
-                return resp.status, json.loads(resp.read())
+                return resp.status, json.loads(resp.read(_MAX_HTTP_BYTES))
         except urllib.error.HTTPError as e:
             return e.code, {}
         except Exception:
@@ -1261,7 +1264,7 @@ def check_pod_security_admission(host: str, port: int = 8001,
                 req, timeout=timeout,
                 context=ctx if use_tls else None
             ) as resp:
-                return resp.status, json.loads(resp.read())
+                return resp.status, json.loads(resp.read(_MAX_HTTP_BYTES))
         except urllib.error.HTTPError as e:
             return e.code, {}
         except Exception:
@@ -1369,10 +1372,10 @@ def check_service_account_token_exposure(host: str, port: int = 8001,
                 req, timeout=timeout,
                 context=ctx if use_tls else None
             ) as resp:
-                return resp.status, json.loads(resp.read())
+                return resp.status, json.loads(resp.read(_MAX_HTTP_BYTES))
         except urllib.error.HTTPError as e:
             try:
-                body = json.loads(e.read())
+                body = json.loads(e.read(_MAX_HTTP_BYTES))
             except Exception:
                 body = {}
             return e.code, body
@@ -1490,10 +1493,10 @@ def check_opa_gatekeeper_policy_gaps(host: str, port: int = 8001,
                 req, timeout=timeout,
                 context=ctx if use_tls else None
             ) as resp:
-                return resp.status, json.loads(resp.read())
+                return resp.status, json.loads(resp.read(_MAX_HTTP_BYTES))
         except urllib.error.HTTPError as e:
             try:
-                body = json.loads(e.read())
+                body = json.loads(e.read(_MAX_HTTP_BYTES))
             except Exception:
                 body = {}
             return e.code, body
@@ -1657,7 +1660,7 @@ def check_k8s_secret_exposure(host: str, port: int = 8001, timeout: float = 5.0)
         try:
             with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
                 if resp.status == 200:
-                    raw = resp.read()
+                    raw = resp.read(_MAX_HTTP_BYTES)
                     try:
                         return 200, json.loads(raw)
                     except Exception:
@@ -1757,7 +1760,7 @@ def check_k8s_storage_class_risks(host: str, port: int = 8001, timeout: float = 
         try:
             with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
                 if resp.status == 200:
-                    raw = resp.read()
+                    raw = resp.read(_MAX_HTTP_BYTES)
                     try:
                         return 200, json.loads(raw)
                     except Exception:

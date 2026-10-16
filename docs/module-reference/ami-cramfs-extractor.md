@@ -66,6 +66,12 @@ ext.extract_all('/tmp/bmc_root/', progress=print)
 - Supermicro BMC (same AMI SPX stack) — expected to work
 - Lenovo BMC (AMI SPX) — expected to work
 
+## Size limits
+
+`from_path()` and `from_image()` raise `ValueError` when the file or the image slice exceeds
+`_MAX_IMAGE_BYTES` (512 MB). This guards against loading an inadvertent full-disk image as a
+CramFS partition. The limit is enforced via `os.path.getsize()` before any `read()` call.
+
 ## Block-0 prefix handling
 
 Some AMI firmware images prefix block 0 with a raw (uncompressed) data section — typically

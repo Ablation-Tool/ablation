@@ -153,6 +153,8 @@ class PPC32GOT2Resolver:
             elf = lief.parse(elf_path)
         except Exception:
             elf = None
+        if elf is None:
+            raise ValueError(f'lief.parse returned None for {elf_path}')
         text = elf.get_section(".text")
         data_sec = elf.get_section(".data")
         dynsym = elf.get_section(".dynsym")
