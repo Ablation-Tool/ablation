@@ -42,6 +42,8 @@ import struct
 from pathlib import Path
 from typing import Iterator, Optional
 
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
+
 try:
     import capstone
     HAS_CAPSTONE = True
@@ -572,7 +574,7 @@ def main():
                 out = os.path.join(args.out, name)
                 sz = vfs.extract_binary(cand, out)
                 with open(out, 'rb') as _fh:
-                    digest = hashlib.sha256(_fh.read()).hexdigest()[:12]
+                    digest = hashlib.sha256(_fh.read(_MAX_BINARY_BYTES)).hexdigest()[:12]
                 manifest[name] = {'size': sz, 'digest': digest, 'dump_offset': hex(cand.dump_offset)}
             mpath = os.path.join(args.out, 'manifest.json')
             with open(mpath, 'w') as f:

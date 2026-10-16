@@ -37,6 +37,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 _IS_LINUX = _platform.system() == 'Linux'
 _IS_MACOS = _platform.system() == 'Darwin'
 
+_MAX_PROC_BYTES = 4 * 1024 * 1024    # 4 MB cap for /proc/pid/environ and /proc/pid/cmdline
+_MAX_SYSFS_BYTES = 64                 # sysfs counter files are always < 64 bytes
+
 # Ports that tend to surface AI/ML infra, SSH, web, and databases
 SCAN_PORTS = [22, 80, 443, 2375, 2376, 5432, 6379, 8080, 8443, 9200, 9300, 27017]
 
@@ -426,7 +429,8 @@ class CredentialHarvester:
                     continue
                 env_file = pid_dir / 'environ'
                 try:
-                    raw = env_file.read_bytes()
+                    with open(env_file, 'rb') as _ef:
+                        raw = _ef.read(_MAX_PROC_BYTES)
                     env_str = raw.replace(b'\x00', b'\n').decode(errors='replace')
                     for line in env_str.splitlines():
                         if '=' in line:
@@ -458,7 +462,8 @@ class CredentialHarvester:
                     continue
                 cmd_file = pid_dir / 'cmdline'
                 try:
-                    raw = cmd_file.read_bytes()
+                    with open(cmd_file, 'rb') as _cf:
+                        raw = _cf.read(_MAX_PROC_BYTES)
                     cmdline = raw.replace(b'\x00', b' ').decode(errors='replace').strip()
                     if _SECRET_RE.search(cmdline):
                         hits.append({'pid': pid_dir.name, 'cmdline': cmdline[:300]})
@@ -945,7 +950,8 @@ class APITokenDetector:
                 if not pid_dir.name.isdigit():
                     continue
                 try:
-                    raw = (pid_dir / 'environ').read_bytes()
+                    with open(pid_dir / 'environ', 'rb') as _ef2:
+                        raw = _ef2.read(_MAX_PROC_BYTES)
                     env_str = raw.replace(b'\x00', b'\n').decode(errors='replace')
                     for line in env_str.splitlines():
                         if '=' in line:
@@ -4426,9 +4432,9 @@ def detect_network_traffic_anomalies(interface: str = 'eth0', timeout: float = 5
     try:
         if os.path.isfile(rx_path) and os.path.isfile(tx_path):
             with open(rx_path) as fh:
-                rx = int(fh.read().strip())
+                rx = int(fh.read(_MAX_SYSFS_BYTES).strip())
             with open(tx_path) as fh:
-                tx = int(fh.read().strip())
+                tx = int(fh.read(_MAX_SYSFS_BYTES).strip())
             if rx > 0 and tx / rx > 10:
                 findings.append({
                     'severity': 'HIGH',

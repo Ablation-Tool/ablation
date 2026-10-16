@@ -109,7 +109,7 @@ class DockerEnumerator:
         # Linux: check cgroup
         try:
             with open('/proc/1/cgroup') as f:
-                content = f.read()
+                content = f.read(_MAX_FILE_BYTES)
                 if 'docker' in content or 'kubepods' in content:
                     self.in_container = True
                     return True
@@ -363,7 +363,7 @@ class DockerEnumerator:
         if _IS_LINUX:
             try:
                 with open('/proc/1/cgroup') as f:
-                    if 'docker' not in f.read():
+                    if 'docker' not in f.read(_MAX_FILE_BYTES):
                         self.escape_vectors.append({
                             'type': 'Host PID Namespace',
                             'severity': 'HIGH',

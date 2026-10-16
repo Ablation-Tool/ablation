@@ -51,11 +51,14 @@ Usage::
 """
 from __future__ import annotations
 
+import os
 import re
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
 
 
 @dataclass
@@ -233,6 +236,10 @@ class CVEScanner:
 
         Returns one CVEScanResult per CVE ID checked.
         """
+        bin_size = os.path.getsize(self.binary_path)
+        if bin_size > _MAX_BINARY_BYTES:
+            raise ValueError(
+                f'{self.binary_path}: file size {bin_size} exceeds {_MAX_BINARY_BYTES} byte limit')
         with open(self.binary_path, 'rb') as fh:
             data = fh.read()
 
