@@ -41,6 +41,9 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "PPC32 PEF: detect ABI register clobber at OTStrCat/OTMemcpy call sites" | `PEFABIClobberScanner.from_bytes(code, base_va).scan(sink_vas, check_regs=[4])` |
 | "PPC32: resolve indirect BCTRL calls in GOT2-PIC stripped binary" | `PPC32GOT2Resolver.from_path(elf).resolve()` |
 | "PPC32 .so: find every BL call site calling an imported symbol" | `PPC32PLTTracer.from_path(elf).find_callers('system')` |
+| "PPC32 XCOFF/ELF: detect heap slot overflow (mulli+malloc+strcpy, no size check)" | `PPC32HeapSlotScanner(binary_path).scan()` |
+| "VxWorks static archive: scan all .o files for stack-frame strcpy patterns" | `VxWorksArchiveScanner(archive_path).scan_strcpy_in_frame()` |
+| "Scan binary for unpatched CVE byte patterns (bundled libxml2, etc.)" | `CVEScanner(binary_path).scan()` |
 | "PPC64le ELF V2: get PLT stub VAs and symbol names" | `BinaryContext.load_or_build(elf).plt` (auto-decoded via `_extract_plt_ppc64le`; clear `~/.ablation/ctx_*` if binary was previously cached) |
 | "PPC64 BE ELFv1: ctx.plt empty, func_starts are OPD VAs (IBM POWER Linux, LoadLeveler)" | `Ppc64ElfV1Resolver.from_path(elf).resolve()` then `res.patch_context(ctx)` — fixes plt stub map and resolves OPD entry VAs to code VAs |
 | "PPC64 BE ELFv1: decode a BL instruction target" | `info.bl_target(src_va, file_data)` from a resolved `Ppc64ElfV1Info` |
@@ -161,8 +164,13 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 |---|---|
 | "Extract a specific firmware partition by name" | `FirmwareContainer.from_path(fw).extract('bin', out_path)` |
 | "Extract files from AIX backup-by-name (BFF) archive" | `from ablation.core.bff_extractor import iter_entries; [e for e in iter_entries(data)]` |
+| "Open a BFF archive that may be compressed (Huffman 0x0C or LZW 0x0E)" | `BFFDecompressor.open(path)` — raises `BFFCompressedError` with remediation text |
+| "Detect BFF compression type before parsing" | `from ablation.analyzers.bff_decompressor import detect; detect(data)` |
 | "Extract XCOFF members from AIX big archive (<bigaf>: libc.a, libm.a, libpthreads.a)" | `from ablation.analyzers.aix_big_ar_extractor import AixBigArExtractor; members = AixBigArExtractor.from_path(path)` |
 | "Parse an AIX XCOFF32/XCOFF64 binary" | `from ablation.core.xcoff_parser import parse; parse(path)` |
+| "XCOFF32/64 exports, imports, function starts, section lookup (analyzer interface)" | `XCOFFExecutableAnalyzer.from_path(path).exports_table()` |
+| "XCOFF loader symbol quick lookup without full parse" | `from ablation.analyzers.xcoff_loader_symbols import loader_symbols; loader_symbols(data)` |
+| "XCOFF loader import table" | `from ablation.analyzers.xcoff_loader_symbols import loader_imports; loader_imports(data)` |
 | "Extract files from a Tandem NonStop Guardian PAK archive" | `from ablation.core.guardian_pak_extractor import iter_files; list(iter_files(Path('patch.zip').read_bytes()))` |
 | "Build BinaryContext from an AIX XCOFF binary" | `BinaryContext.load_or_build(path)` (auto-detects XCOFF magic 0x01DF/0x01EF) |
 | "Extract files from Huawei VRP squashfs v4 XZ image" | `HuaweiSquashfsExtractor(sqfs_path).extract(inner_path)` |
