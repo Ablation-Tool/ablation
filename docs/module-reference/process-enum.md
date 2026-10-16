@@ -77,7 +77,7 @@ findings += detect_ptrace_instrumentation(pe_bytes)
 
 ## FORGE audit
 
-Gate: **PASSED**. 13 CWE-770 fixes applied (12 unbounded reads + 1 new constant):
+Gate: **PASSED**. 14 CWE-770 fixes applied (13 unbounded reads + 1 new constant):
 
 | Fix | Function | Old pattern | New pattern |
 |---|---|---|---|
@@ -92,5 +92,6 @@ Gate: **PASSED**. 13 CWE-770 fixes applied (12 unbounded reads + 1 new constant)
 | `/proc/{pid}/maps` | `detect_process_injection_surface` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
 | `/proc/{pid}/status` | `detect_process_injection_surface` | `for line in f:` | `f.read(_MAX_FILE_BYTES).splitlines()` |
 | bash_history | `detect_bash_history_artifacts` | `fh.readlines()` | `fh.read(_MAX_FILE_BYTES).splitlines()` |
+| `/proc/{pid}/status` | `enumerate_volatile_forensics` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
 
 No lief.parse(). No HTTP reads. No bare `except:`. All binary-analysis functions operate on passed `bytes` — no file I/O. Non-Linux paths return `_not_linux_finding()` stubs.
