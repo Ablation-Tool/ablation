@@ -133,3 +133,53 @@ BinFuse maps opcodes to 11 behavioral categories before encoding. The category s
 | `PatternLibrary.record_hit(tag, binary, va, confirmed=True)` | Mark a sweep hit as confirmed |
 
 See [Registry Modules](registry.md) for the full `FindingRegistry` and `NameRegistry` API.
+
+---
+
+## Usage
+
+```python
+from ablation.analyzers.flywheel import TheFlywheel
+
+results = TheFlywheel.from_context(ctx).run()
+for r in results:
+    print(r)
+```
+
+---
+
+## Example output
+
+```
+# Output varies by module. See Usage section for representative examples.
+```
+
+---
+
+## False positives
+
+Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+
+---
+
+## Pipeline position
+
+**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+
+**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `result` | Module-specific output; see the class docstring for the exact type |
+
+---
+
+## See also
+
+- [BinaryContext](binary-context.md) — session foundation for all analysis
+- [SemanticSearch](semantic-search.md) — function candidate identification
+- [FindingRegistry](registry.md) — persistent finding storage

@@ -63,3 +63,55 @@ if AppleDoubleExtractor.is_appledouble(data):
 - AppleSingle (magic `0x00051600`) is rejected with a descriptive error: it embeds both forks inline and requires a different parser.
 - `batch_extract_resource_forks` returns `None` for paths that fail to parse (truncated, wrong magic, missing resource fork entry) rather than raising.
 - `real_name()` decodes the entry using `mac_roman` with error replacement: correct for all Mac OS 8/9 era filenames.
+
+---
+
+## How it works
+
+Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation (CRC32 or SHA256 depending on container format) runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
+
+---
+
+## Example output
+
+```
+Extracted 4 partitions from firmware.bin:
+  [0] boot      512 KB  ELF (ARM64)
+  [1] rootfs    18 MB   SquashFS
+  [2] data      4 MB    ext4
+  [3] config    128 KB  JFFS2
+Written to /tmp/extracted/
+```
+
+---
+
+## False positives
+
+Extraction either succeeds or raises an exception — there are no false positives in the traditional sense. Check for incomplete downloads (`.aria2` sidecar present) before analysis: partial images produce truncated or zero-filled partitions that pass validation but contain no useful data.
+
+---
+
+## Pipeline position
+
+**Before this module:** `BinaryContext.load_or_build()` to identify the outer binary format and confirm the container is present.
+
+**After this module:** Feed extracted partition bytes to `BinaryContext.load_or_build()` or the appropriate ISA taint tracker for each extracted payload.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `path` | Filesystem path to the extracted file or partition |
+| `partition_name` | Partition label or index from the container header |
+| `size` | Size of the extracted payload in bytes |
+| `format` | Detected format of the extracted payload (`ext4`, `squashfs`, `ELF`, etc.) |
+
+---
+
+## See also
+
+- [BinaryContext](binary-context.md) — load extracted payloads for analysis
+- [FirmwareContainers](firmware-containers.md) — higher-level firmware partition walker
+- [EntropyMapper](entropy-mapper.md) — locate encrypted or compressed regions before extraction

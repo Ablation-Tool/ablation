@@ -142,3 +142,57 @@ Error results are never written to cache. If a scan fails (missing tool, disk fu
 - `FortiOSHardwareExtractor` (`fortios_firmware_extractor.py`) -- outer XOR decryption for hardware `.out` files
 - `FirmwareContainerKeyExtractor` (`firmware_container_key_extractor.py`) -- recovers keys from hardware firmware inner partitions
 - `FirmwareContainer` (`firmware_container.py`) -- partition-table firmware container parser
+
+---
+
+## How it works
+
+Loads the firmware image, maps entropy across the file using a sliding window, and classifies regions as encrypted, compressed, or plaintext. Known cryptographic constants and key derivation patterns are matched against the corpus. Partition boundaries are recovered from format signatures in the plaintext regions. Each finding includes the byte offset, the matched pattern, and the confidence level.
+
+---
+
+## Example output
+
+```
+[CRITICAL] HARDCODED_KEY   offset=0x1A40C0  len=32
+  detail: AES-256 key matches family corpus entry FGT-SHARED-2022
+  evidence: 8b3f...e1c4 (first 4 / last 4 bytes shown)
+
+[HIGH] WEAK_ALGO   offset=0x3B200
+  detail: MD5 constant detected in hash init sequence
+```
+
+---
+
+## False positives
+
+Version-mismatch findings appear when a known key or certificate is present in a build where it was intentionally removed. Cross-reference against the family table in `FirmwareKeyCorpus` and the product release notes before escalating. Development-only debug keys (identifiable by subject CN matching vendor dev lab naming conventions) are not production findings.
+
+---
+
+## Pipeline position
+
+**Before this module:** Download the firmware image and confirm the file is complete (no `.aria2` sidecar). Read the product CLI Reference and Release Notes in `docs/` before analysis.
+
+**After this module:** Feed extracted filesystems or ELF binaries to `SemanticSearcher`, `TaintTracker`, and `FirmwareAuthBypassDetector`.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
+| `finding_type` | Category of the finding (e.g., `HARDCODED_KEY`, `WEAK_ALGO`, `AUTH_BYPASS`) |
+| `va` | Virtual address in the binary, if applicable |
+| `detail` | Human-readable description of what was found |
+| `evidence` | Byte offset or string excerpt that triggered the finding |
+
+---
+
+## See also
+
+- [FirmwareContainers](firmware-containers.md) — partition extraction from container images
+- [FirmwareContainerKeyExtractor](firmware-container-key-extractor.md) — recover embedded key material
+- [TaintAnalysis](taint-analysis.md) — trace network input to sinks in extracted binaries
+- [SemanticSearch](semantic-search.md) — find vulnerability candidates in extracted ELFs
