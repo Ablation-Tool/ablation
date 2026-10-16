@@ -8,4 +8,4 @@ Atheris-based grammar fuzzer targeting prompt injection via poisoned MCP tool sc
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. No file reads. No HTTP reads. No lief.parse(). Subprocess usage is for launching the MCP target under test — uses `subprocess.Popen` with explicit argument list (no shell=True).
+Gate: **PASSED**. No HIGH or CRITICAL findings. No unbounded file reads. No HTTP reads. No lief.parse(). No subprocess calls (`subprocess` is imported at L19 but never used — dead import). Writes mutated JSON schemas to `tempfile.NamedTemporaryFile` (L210) — bounded by fuzzer input size. Uses `atheris` for mutation-based fuzzing when available; falls back to manual seed iteration.
