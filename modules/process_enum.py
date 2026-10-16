@@ -37,9 +37,9 @@ class ProcessEnumerator:
                 pid = int(entry.name)
                 try:
                     with open(entry / "comm") as f:
-                        name = f.read().strip()
+                        name = f.read(16).strip()
                     with open(entry / "cmdline") as f:
-                        cmdline = f.read().replace('\x00', ' ').strip()
+                        cmdline = f.read(_MAX_PROC_BYTES).replace('\x00', ' ').strip()
                     procs.append({'pid': pid, 'name': name, 'cmdline': cmdline or name})
                 except Exception:
                     pass
@@ -257,9 +257,9 @@ class ProcessEnumerator:
         else:
             try:
                 with open(self.proc_path / "comm") as f:
-                    lines.append(f"Name: {f.read().strip()}")
+                    lines.append(f"Name: {f.read(16).strip()}")
                 with open(self.proc_path / "cmdline") as f:
-                    cmdline = f.read().replace('\x00', ' ').strip()
+                    cmdline = f.read(_MAX_PROC_BYTES).replace('\x00', ' ').strip()
                     lines.append(f"Command: {cmdline}")
             except Exception:
                 pass
@@ -545,7 +545,7 @@ def _inode_to_pid_name() -> dict:
                 comm = ''
                 try:
                     with open(f'/proc/{pid}/comm') as f:
-                        comm = f.read().strip()
+                        comm = f.read(16).strip()
                 except OSError:
                     pass
                 for fd_entry in os.scandir(fd_dir):
@@ -774,7 +774,7 @@ def enumerate_volatile_forensics(output_dir: str = None) -> dict:
 
             try:
                 with open(f'{proc_base}/comm') as f:
-                    info['name'] = f.read().strip()
+                    info['name'] = f.read(16).strip()
             except OSError:
                 pass
 
@@ -1122,7 +1122,7 @@ def detect_persistence_artifacts() -> list:
         size = os.path.getsize(preload_path)
         if size > 0:
             try:
-                content = open(preload_path, 'r', errors='replace').read().strip()
+                content = open(preload_path, 'r', errors='replace').read(_MAX_PROC_BYTES).strip()
             except OSError:
                 content = '<unreadable>'
             findings.append({
@@ -1175,7 +1175,7 @@ def detect_persistence_artifacts() -> list:
         'snd_', 'sound', 'ac97', 'hda_',
     )
     try:
-        disabled_val = open(modules_disabled_path).read().strip()
+        disabled_val = open(modules_disabled_path).read(64).strip()
         if disabled_val == '0':
             # Module loading enabled; enumerate loaded modules for unknowns
             unknown_modules = []
@@ -3152,7 +3152,7 @@ def detect_sandbox_environment_indicators() -> list:
     ):
         try:
             with open(dmi_path, 'r', errors='replace') as f:
-                val = f.read().strip()
+                val = f.read(_MAX_PROC_BYTES).strip()
             for vs in _VM_ID_STRINGS:
                 if vs.lower() in val.lower():
                     findings.append(_make_finding(
@@ -3258,7 +3258,7 @@ def detect_sandbox_environment_indicators() -> list:
     # Uptime: /proc/uptime — sandboxes boot fresh per sample
     try:
         with open('/proc/uptime', 'r') as f:
-            uptime_sec = float(f.read().split()[0])
+            uptime_sec = float(f.read(64).split()[0])
         if uptime_sec < 120.0:
             findings.append(_make_finding(
                 'HIGH',
@@ -3325,7 +3325,7 @@ def detect_process_injection_surface() -> list:
     # ptrace_scope=0: any process can ptrace any other same-uid process
     try:
         with open('/proc/sys/kernel/yama/ptrace_scope', 'r') as f:
-            scope = f.read().strip()
+            scope = f.read(64).strip()
         if scope == '0':
             findings.append(_make_finding(
                 'HIGH',
@@ -3341,7 +3341,7 @@ def detect_process_injection_surface() -> list:
     # core_pattern pipe prefix: kernel execs the handler as root on crash
     try:
         with open('/proc/sys/kernel/core_pattern', 'r') as f:
-            core_pat = f.read().strip()
+            core_pat = f.read(_MAX_PROC_BYTES).strip()
         if core_pat.startswith('|'):
             findings.append(_make_finding(
                 'HIGH',

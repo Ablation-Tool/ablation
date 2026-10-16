@@ -282,7 +282,7 @@ class PrivescEnumerator:
                 kernel_version = f'Darwin {result.stdout.strip()}'
             else:
                 with open('/proc/version') as f:
-                    kernel_version = f.read().strip()
+                    kernel_version = f.read(_MAX_FILE_BYTES).strip()
         except Exception:
             try:
                 result = subprocess.run(['uname', '-r'], capture_output=True, text=True, timeout=2)
@@ -1273,7 +1273,7 @@ def check_network_namespace_escape() -> list:
     # Check if_inet6 for host-like interface names
     try:
         with open("/proc/self/net/if_inet6") as fh:
-            content = fh.read()
+            content = fh.read(_MAX_FILE_BYTES)
         host_iface_pattern = re.compile(r'\b(eth\d+|ens\d+|enp\d+s\d+)\b')
         matches = host_iface_pattern.findall(content)
         if matches:
@@ -2115,7 +2115,7 @@ def check_kernel_network_parameters() -> list:
     def _read_proc(path):
         try:
             with open(path, "r") as fh:
-                return fh.read().strip()
+                return fh.read(_MAX_FILE_BYTES).strip()
         except (PermissionError, FileNotFoundError, OSError):
             return None
 
@@ -2225,7 +2225,7 @@ def check_ipv6_misconfiguration() -> list:
     def _read_proc(path):
         try:
             with open(path, "r") as fh:
-                return fh.read().strip()
+                return fh.read(_MAX_FILE_BYTES).strip()
         except (PermissionError, FileNotFoundError, OSError):
             return None
 
@@ -2438,7 +2438,7 @@ def check_firewall_rules() -> list:
     ct_max_path = "/proc/sys/net/netfilter/nf_conntrack_max"
     try:
         with open(ct_max_path, "r") as fh:
-            ct_max = int(fh.read().strip())
+            ct_max = int(fh.read(64).strip())
         if ct_max < 1000:
             findings.append({
                 "severity": "MEDIUM",
@@ -3175,7 +3175,7 @@ def check_log_deletion_patterns() -> list:
                     continue
                 try:
                     with open(conf_path, "r", errors="replace") as fh:
-                        content = fh.read()
+                        content = fh.read(_MAX_FILE_BYTES)
                     if secure_rotate_pattern.search(content):
                         findings.append({
                             "severity": "MEDIUM",
@@ -4058,7 +4058,7 @@ def detect_linux_capability_abuse() -> list:
         status_path = f"/proc/{pid}/status"
         try:
             with open(status_path, "r", errors="replace") as fh:
-                status_text = fh.read()
+                status_text = fh.read(_MAX_FILE_BYTES)
         except OSError:
             continue
 
@@ -4173,7 +4173,7 @@ def detect_linux_capability_abuse() -> list:
     # --- Unprivileged user namespace policy ---
     try:
         with open("/proc/sys/kernel/unprivileged_userns_clone", "r") as fh:
-            val = fh.read().strip()
+            val = fh.read(64).strip()
         if val == "1":
             findings.append({
                 "severity": "HIGH",
@@ -4286,7 +4286,7 @@ def detect_cron_and_path_hijacking() -> list:
     for cron_file in cron_files:
         try:
             with open(cron_file, "r", errors="replace") as fh:
-                content = fh.read()
+                content = fh.read(_MAX_FILE_BYTES)
         except OSError:
             continue
 
@@ -4361,7 +4361,7 @@ def detect_cron_and_path_hijacking() -> list:
     for cfg_file in PATH_CONFIG_FILES:
         try:
             with open(cfg_file, "r", errors="replace") as fh:
-                cfg_text = fh.read()
+                cfg_text = fh.read(_MAX_FILE_BYTES)
         except OSError:
             continue
 
@@ -4496,7 +4496,7 @@ def detect_cron_and_path_hijacking() -> list:
     for sudoers_file in sudoers_paths:
         try:
             with open(sudoers_file, "r", errors="replace") as fh:
-                sudoers_text = fh.read()
+                sudoers_text = fh.read(_MAX_FILE_BYTES)
         except OSError:
             continue
         if RE_ENVKEEP_PATH.search(sudoers_text):
