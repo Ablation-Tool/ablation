@@ -320,7 +320,7 @@ def detect_raw_socket_creation(pid=None) -> list:
         status_path = f'/proc/{p}/status'
         try:
             with open(status_path, 'r') as f:
-                for line in f:
+                for line in f.read(_MAX_PROC_BYTES).splitlines():
                     if line.startswith('CapEff:'):
                         cap_eff = int(line.split(':')[1].strip(), 16)
                         if cap_eff & (1 << 13):
@@ -368,7 +368,7 @@ def detect_ptrace_abuse() -> list:
             with open(status_path, 'r') as f:
                 tracer_pid = None
                 seccomp_val = None
-                for line in f:
+                for line in f.read(_MAX_PROC_BYTES).splitlines():
                     if line.startswith('TracerPid:'):
                         tracer_pid = int(line.split(':')[1].strip())
                     elif line.startswith('Seccomp:'):
@@ -2263,7 +2263,7 @@ def detect_heap_spray_artifacts() -> list:
     total_ram_kb = 0
     try:
         with open('/proc/meminfo', 'r') as f:
-            for line in f:
+            for line in f.read(_MAX_PROC_BYTES).splitlines():
                 if line.startswith('MemTotal:'):
                     parts = line.split()
                     if len(parts) >= 2:
@@ -2284,7 +2284,7 @@ def detect_heap_spray_artifacts() -> list:
 
             try:
                 with open(maps_path, 'r') as f:
-                    for line in f:
+                    for line in f.read(_MAX_PROC_BYTES).splitlines():
                         parts = line.split()
                         if len(parts) < 2:
                             continue
@@ -2340,7 +2340,7 @@ def detect_heap_spray_artifacts() -> list:
             if total_ram_kb > 0:
                 try:
                     with open(status_path, 'r') as f:
-                        for line in f:
+                        for line in f.read(_MAX_PROC_BYTES).splitlines():
                             if line.startswith('VmPeak:'):
                                 parts = line.split()
                                 if len(parts) >= 2:
@@ -2429,7 +2429,7 @@ def detect_kernel_exploit_surface() -> list:
     # --- /proc/modules: size-0 and tainted entries ---
     try:
         with open('/proc/modules', 'r') as f:
-            module_lines = f.readlines()
+            module_lines = f.read(_MAX_PROC_BYTES).splitlines()
 
         zero_size_modules = []
         tainted_modules = []
@@ -2513,7 +2513,7 @@ def detect_kernel_exploit_surface() -> list:
     uring_in_kallsyms = False
     try:
         with open('/proc/kallsyms', 'r') as f:
-            for line in f:
+            for line in f.read(_MAX_PROC_BYTES).splitlines():
                 if 'io_uring' in line:
                     uring_in_kallsyms = True
                     break
@@ -2584,7 +2584,7 @@ def detect_kernel_exploit_surface() -> list:
     # --- vsyscall region in /proc/self/maps ---
     try:
         with open('/proc/self/maps', 'r') as f:
-            for line in f:
+            for line in f.read(_MAX_PROC_BYTES).splitlines():
                 if 'vsyscall' in line:
                     findings.append({
                         'severity': 'INFO',
@@ -2608,7 +2608,7 @@ def detect_kernel_exploit_surface() -> list:
     symbol_count = 0
     try:
         with open('/proc/kallsyms', 'r') as f:
-            for line in f:
+            for line in f.read(_MAX_PROC_BYTES).splitlines():
                 if line.strip():
                     symbol_count += 1
                 if symbol_count >= 10000:

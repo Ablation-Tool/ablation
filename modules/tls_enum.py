@@ -835,6 +835,8 @@ def probe_tls_downgrade_attack(host: str, port: int = 443,
     except Exception:
         pass
 
+    return findings
+
 
 # ---------------------------------------------------------------------------
 # 8. ACME endpoint exposure
@@ -1079,8 +1081,6 @@ def probe_certificate_transparency_monitor(host: str, port: int = 443,
             "single private key covers {san_count} distinct hostnames, "
             "increasing blast radius of key compromise",
             host, port))
-
-    return findings
 
     return findings
 

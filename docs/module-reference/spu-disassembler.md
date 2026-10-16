@@ -189,4 +189,4 @@ def find_spu_elfs(ppu_elf_data):
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_SPU_ELF_BYTES=256MB`; `os.path.getsize()` guard in `load_spu_elf()` before `f.read()`.
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_SPU_ELF_BYTES=256MB`; `os.path.getsize()` guard in `dump_spu_elf()` before `f.read()`. No bare `except:`, no lief, no HTTP reads, no subprocess.
