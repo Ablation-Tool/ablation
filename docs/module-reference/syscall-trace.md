@@ -105,7 +105,7 @@ All probe/detect functions return `list[dict]` with keys: `severity`, `title`, `
 
 ## FORGE audit
 
-Gate: **PASSED**. 9 CWE-770 fixes applied this session (unbounded procfs reads):
+Gate: **PASSED**. 10 CWE-770 fixes applied (9 unbounded procfs reads + 1 unbounded SMB network read):
 
 | Fix | Function | Old pattern | New pattern |
 |---|---|---|---|
@@ -118,6 +118,7 @@ Gate: **PASSED**. 9 CWE-770 fixes applied this session (unbounded procfs reads):
 | `/proc/kallsyms` io_uring check | `detect_kernel_exploit_surface` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
 | `/proc/self/maps` vsyscall | `detect_kernel_exploit_surface` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
 | `/proc/kallsyms` symbol count | `detect_kernel_exploit_surface` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
+| SMB NetBIOS response accumulation | `probe_smb_exposure` | `nb_len` from 3-byte NetBIOS field (max ~16MB, attacker-controlled) | `nb_len = min(struct.unpack(...)[0], 65536)` — CWE-770 |
 
 **Additional checks:**
 - No bare `except:` — all handlers use `except Exception:`, `except (PermissionError, FileNotFoundError, OSError):`, or `except (socket.timeout, ConnectionRefusedError, OSError):`.
