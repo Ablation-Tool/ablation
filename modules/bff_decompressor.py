@@ -45,11 +45,14 @@ Usage::
 """
 from __future__ import annotations
 
+import os
 import struct
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Iterator, List, Optional
+
+_MAX_BFF_BYTES = 256 * 1024 * 1024
 
 
 class BFFCompressedError(Exception):
@@ -151,6 +154,10 @@ class BFFDecompressor:
         """
         from ablation.core.bff_extractor import iter_entries, BFF_MAGIC
 
+        arc_size = os.path.getsize(str(path))
+        if arc_size > _MAX_BFF_BYTES:
+            raise ValueError(
+                f'{path}: file size {arc_size} exceeds {_MAX_BFF_BYTES} byte limit')
         with open(str(path), 'rb') as f:
             data = f.read()
 

@@ -14,6 +14,10 @@ from pathlib import Path
 _IS_MACOS = _platform.system() == 'Darwin'
 _IS_LINUX = _platform.system() == 'Linux'
 
+_MAX_BINARY_BYTES = 256 * 1024 * 1024   # binary file read cap
+_MAX_PROC_BYTES   = 4 * 1024 * 1024     # /proc/pid/cmdline, /proc/pid/environ
+_MAX_SYSCTL_BYTES = 256                  # /proc/sys/* sysctl values
+
 class SyscallTracer:
     """Trace and analyze system calls"""
     
@@ -604,7 +608,8 @@ def check_network_sniffing_indicators() -> list:
             continue
         cmdline_path = pid_dir / 'cmdline'
         try:
-            cmdline = cmdline_path.read_bytes().replace(b'\x00', b' ').decode(errors='replace').strip()
+            with open(cmdline_path, 'rb') as _cl:
+                cmdline = _cl.read(_MAX_PROC_BYTES).replace(b'\x00', b' ').decode(errors='replace').strip()
             for sniffer in sniffer_names:
                 if sniffer in cmdline:
                     found_sniffers.append((pid_dir.name, sniffer, cmdline[:120]))
@@ -648,8 +653,11 @@ def detect_dylib_hijacking_surface(binary_path=None, binary_data=None) -> list:
         if binary_path is None:
             return findings
         try:
+            import os as _os
+            if _os.path.getsize(binary_path) > _MAX_BINARY_BYTES:
+                return findings
             with open(binary_path, 'rb') as _f:
-                binary_data = _f.read()
+                binary_data = _f.read(_MAX_BINARY_BYTES)
         except Exception:
             return findings
 
@@ -2112,7 +2120,7 @@ def detect_heap_spray_artifacts() -> list:
     def _read_sysctl(path):
         try:
             with open(path, 'r') as f:
-                return f.read().strip()
+                return f.read(_MAX_SYSCTL_BYTES).strip()
         except Exception:
             return None
 
@@ -2388,7 +2396,7 @@ def detect_kernel_exploit_surface() -> list:
     def _read_sysctl(path):
         try:
             with open(path, 'r') as f:
-                return f.read().strip()
+                return f.read(_MAX_SYSCTL_BYTES).strip()
         except Exception:
             return None
 

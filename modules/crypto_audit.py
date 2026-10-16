@@ -174,10 +174,15 @@ def forge_jwt(payload: dict, secret: str = "", alg: str = "HS256") -> str:
     raise ValueError(f"Unsupported alg: {alg}")
 
 
+_MAX_PROC_BYTES = 4 * 1024 * 1024   # 4 MB cap for /proc/pid/environ
+
+
 def _read_proc_environ(pid_dir: Path) -> str:
     """Read /proc/<pid>/environ for a given process directory."""
     try:
-        data = (pid_dir / "environ").read_bytes()
+        environ_path = pid_dir / "environ"
+        with open(environ_path, 'rb') as _fh:
+            data = _fh.read(_MAX_PROC_BYTES)
         return data.replace(b"\x00", b"\n").decode("utf-8", errors="replace")
     except Exception:
         return ""
