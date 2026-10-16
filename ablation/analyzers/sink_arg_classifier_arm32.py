@@ -337,6 +337,50 @@ class SinkArgClassifierARM32:
                     return (UNKNOWN,
                             f'LDR {_rname(arg_reg)}, [{_rname(base)}, #{disp:#x}]')
 
+            # ── ADD rX, pc, rX (ARM32 PIC shared-library string load) ───────
+            # Two-instruction PIC pair:
+            #   LDR rX, [pc, #N]  → loads a delta from the literal pool
+            #   ADD rX, pc, rX    → rX = (add_addr + 8) + delta = string VA
+            # libcapwap.so and other ARM32 shared objects use this form exclusively
+            # for .rodata string references (absolute VAs would need runtime relocs).
+            elif mnem in ('add', 'add.w') and len(insn.operands) >= 3:
+                op0 = insn.operands[0]
+                op1 = insn.operands[1]
+                op2 = insn.operands[2]
+                if (op0.type == ARM_OP_REG and op0.reg == arg_reg
+                        and op1.type == ARM_OP_REG and op1.reg == ARM_REG_PC
+                        and op2.type == ARM_OP_REG and op2.reg == arg_reg):
+                    # Look backward for LDR arg_reg, [pc, #M] that loaded the delta.
+                    for k in range(j - 1, max(j - 10, -1), -1):
+                        prev = insns[k]
+                        if not self._writes_reg(prev, arg_reg):
+                            continue
+                        if prev.mnemonic not in ('ldr', 'ldr.w'):
+                            break
+                        if len(prev.operands) < 2:
+                            break
+                        psrc = prev.operands[1]
+                        if psrc.type != ARM_OP_MEM or psrc.mem.base != ARM_REG_PC:
+                            break
+                        if is_thumb:
+                            pool_va = (prev.address & ~3) + 4 + psrc.mem.disp
+                        else:
+                            pool_va = prev.address + 8 + psrc.mem.disp
+                        delta = self._read_u32_le(pool_va)
+                        if delta is None:
+                            return (UNKNOWN,
+                                    f'PIC ADD [pc+r0]: pool 0x{pool_va:x} unreadable')
+                        add_pc = ((insn.address & ~3) + 4) if is_thumb else (insn.address + 8)
+                        string_va = add_pc + delta
+                        if self._is_rodata(string_va):
+                            return (RODATA_CONST,
+                                    f'PIC LDR+ADD 0x{prev.address:x}/0x{insn.address:x}'
+                                    f' delta=0x{delta:x} → 0x{string_va:x} in .rodata')
+                        return (UNKNOWN,
+                                f'PIC LDR+ADD → 0x{string_va:x} not .rodata')
+                    # ADD r0, pc, r0 without a preceding LDR — treat as UNKNOWN
+                    return (UNKNOWN, f'ADD {_rname(arg_reg)}, pc, {_rname(arg_reg)}: no LDR found')
+
             # ── ADR rX, #N ────────────────────────────────────────────────────
             elif mnem in ('adr', 'adr.w') and len(insn.operands) >= 2:
                 op = insn.operands[1]
