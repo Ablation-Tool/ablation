@@ -173,7 +173,10 @@ class FirmwareAuthBypassDetector:
             if bin_size > _MAX_PE_BYTES:
                 raise ValueError(
                     f'{self.path}: file size {bin_size} exceeds {_MAX_PE_BYTES} byte limit')
-            self._pe = lief.parse(self.path)
+            try:
+                self._pe = lief.parse(self.path)
+            except Exception as exc:
+                raise ValueError(f"lief.parse() failed for {self.path}: {exc}") from exc
             if self._pe is None:
                 raise ValueError(f"lief.parse() returned None for {self.path}")
             self._data = Path(self.path).read_bytes()
