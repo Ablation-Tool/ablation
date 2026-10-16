@@ -788,7 +788,7 @@ def enumerate_volatile_forensics(output_dir: str = None) -> dict:
 
             try:
                 with open(f'{proc_base}/status') as f:
-                    for line in f:
+                    for line in f.read(_MAX_PROC_BYTES).splitlines():
                         if line.startswith('PPid:'):
                             info['ppid'] = int(line.split(':', 1)[1].strip())
                             break
