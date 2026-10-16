@@ -106,454 +106,454 @@ Messages from your other sessions        accept
 <details>
 <summary><strong>Core analysis engine</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**On-Demand&nbsp;Analysis**](docs/reference-modules/on-demand-analysis.md) | [code](ablation/analyzers/binary_context.py) | Cached binary context and targeted function analysis; retain symbols, imports, cross-references and analyst names between sessions. |
-| [**Binary&nbsp;Lifting**](docs/reference-modules/binary-lifter.md) | [code](ablation/analyzers/binary_lifter.py) | Native instructions to pseudo-C using architecture-specific register state and calling conventions; support varies by backend. |
-| [**Semantic&nbsp;Code&nbsp;Search**](docs/reference-modules/semantic-search.md) | [code](ablation/analyzers/semantic_search.py) | Search functions by behavioral descriptions; normalize assembly, embed descriptions and rank semantic similarity. |
-| [**Hypothesis&nbsp;Engine**](docs/reference-modules/hypothesis-engine.md) | [code](ablation/analyzers/hypothesis_engine.py) | Persist competing explanations, collect evidence, rank probes and update confidence. |
-| [**DAG&nbsp;Adapter&nbsp;Language**](docs/reference-modules/encoding-dag.md) | [code](ablation/analyzers/encoding_dag.py) | Define fixed-width instruction bitfields, round-trip encodings, semantic operations and dataflow edges through EncodingDAG. |
-| [**Entropy&nbsp;Mapper**](docs/reference-modules/entropy-mapper.md) | [code](ablation/analyzers/entropy_mapper.py) | Sliding-window Shannon entropy, region classification and transition detection to guide unpacking and analysis. |
+| [**On-Demand&nbsp;Analysis**](docs/reference-modules/on-demand-analysis.md) | [1](ablation/analyzers/binary_context.py) | Cached binary context and targeted function analysis; retain symbols, imports, cross-references and analyst names between sessions. |
+| [**Binary&nbsp;Lifting**](docs/reference-modules/binary-lifter.md) | [1](ablation/analyzers/binary_lifter.py) | Native instructions to pseudo-C using architecture-specific register state and calling conventions; support varies by backend. |
+| [**Semantic&nbsp;Code&nbsp;Search**](docs/reference-modules/semantic-search.md) | [1](ablation/analyzers/semantic_search.py) | Search functions by behavioral descriptions; normalize assembly, embed descriptions and rank semantic similarity. |
+| [**Hypothesis&nbsp;Engine**](docs/reference-modules/hypothesis-engine.md) | [1](ablation/analyzers/hypothesis_engine.py) | Persist competing explanations, collect evidence, rank probes and update confidence. |
+| [**DAG&nbsp;Adapter&nbsp;Language**](docs/reference-modules/encoding-dag.md) | [1](ablation/analyzers/encoding_dag.py) | Define fixed-width instruction bitfields, round-trip encodings, semantic operations and dataflow edges through EncodingDAG. |
+| [**Entropy&nbsp;Mapper**](docs/reference-modules/entropy-mapper.md) | [1](ablation/analyzers/entropy_mapper.py) | Sliding-window Shannon entropy, region classification and transition detection to guide unpacking and analysis. |
 
 </details>
 
 <details>
 <summary><strong>Learning and continuity</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**The&nbsp;Flywheel**](docs/reference-modules/flywheel.md) | [code](ablation/analyzers/pattern_library.py)&nbsp;·&nbsp;[code](ablation/analyzers/finding_registry.py) | Replay stored confirmed finding descriptions and successful semantic queries against later binaries. |
-| [**Cross-Target&nbsp;Learning**](docs/reference-modules/cross-target-learning.md) | [code](ablation/analyzers/pattern_library.py)&nbsp;·&nbsp;[code](ablation/analyzers/finding_registry.py) | Persist transferable finding descriptions, embeddings and search patterns for reuse across products and vendors. |
-| [**KASAN-Oracle**](docs/workflows/kasan-oracle.md) | [code](ablation/analyzers/loongarch_decoder_v2.py) | Workflow for deriving candidates from instrumented/debug builds and checking corresponding production code; includes instrumentation-aware decoding. |
+| [**The&nbsp;Flywheel**](docs/reference-modules/flywheel.md) | [1](ablation/analyzers/pattern_library.py)&nbsp;·&nbsp;[2](ablation/analyzers/finding_registry.py) | Replay stored confirmed finding descriptions and successful semantic queries against later binaries. |
+| [**Cross-Target&nbsp;Learning**](docs/reference-modules/cross-target-learning.md) | [1](ablation/analyzers/pattern_library.py)&nbsp;·&nbsp;[2](ablation/analyzers/finding_registry.py) | Persist transferable finding descriptions, embeddings and search patterns for reuse across products and vendors. |
+| [**KASAN-Oracle**](docs/workflows/kasan-oracle.md) | [1](ablation/analyzers/loongarch_decoder_v2.py) | Workflow for deriving candidates from instrumented/debug builds and checking corresponding production code; includes instrumentation-aware decoding. |
 
 </details>
 
 <details>
 <summary><strong>Vulnerability discovery and validation</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Taint&nbsp;Analysis**](docs/reference-modules/taint-analysis.md) | [code](ablation/analyzers/taint_tracker.py)&nbsp;·&nbsp;[code](ablation/analyzers/taint_tracker_arm64.py) | Source-to-sink register/dataflow tracking, with architecture-specific intraprocedural, interprocedural and flow-sensitive implementations. |
-| [**Cross-Library&nbsp;Analysis**](docs/reference-modules/taint-analysis.md) | [code](ablation/analyzers/cross_binary_taint.py)&nbsp;·&nbsp;[code](ablation/analyzers/lib_graph.py) | Resolve imports and exports across a firmware library set and propagate supported argument taint across library boundaries. |
-| [**Pre-Authentication&nbsp;Exposure**](docs/reference-modules/preauth-exposure.md) | [code](ablation/analyzers/preauth_route_auditor.py) | Recover supported Flatui route/auth-wrapper structures, associate handlers and identify pre-authentication handlers with sensitive sinks. |
-| [**Sink&nbsp;Arg&nbsp;Classifier**](docs/reference-modules/sink-arg-classifier.md) | [code](ablation/analyzers/sink_arg_classifier.py) | Classify command arguments as constant, formatted constant, argument-propagated or unknown before deeper tracing. |
-| [**Finding&nbsp;Validation**](docs/reference-modules/finding-validation.md) | [code](modules/path_solver.py)&nbsp;·&nbsp;[code](ablation/analyzers/finding_registry.py) | Bounded x86-64 symbolic path solving produces entry-register constraints/models; a registry stores findings and submission metadata. It does not establish automatic HTTP reproduction for every find... |
-| [**Compiler&nbsp;Defect&nbsp;Detection**](docs/reference-modules/compiler-defects.md) | [code](ablation/analyzers/loongarch64_max_not_min_scanner.py)&nbsp;·&nbsp;[code](ablation/analyzers/compiler_security_gate.py) | Detect the implemented LoongArch64 min/max miscompilation pattern and run supported security scans on compiler output. |
-| [**Source&nbsp;Code&nbsp;Auditing**](docs/reference-modules/source-audit.md) | [code](ablation/analyzers/source_audit_compressor.py)&nbsp;·&nbsp;[code](ablation/analyzers/source_taint_tracker.py) | Ingest repositories, profile/rank files, map entry points and sinks, trace source paths and support review coverage accounting. |
-| [**Cryptographic&nbsp;Analysis**](docs/reference-modules/crypto.md) | [code](modules/crypto_audit.py)&nbsp;·&nbsp;[code](ablation/analyzers/xor_solver.py) | Key/secret discovery, repeating-XOR recovery, crypto implementation fingerprinting and JWT/SAML/TLS posture checks. |
-| [**Protocol&nbsp;FSM&nbsp;Extractor**](docs/reference-modules/proto-fsm.md) | [code](modules/proto_fsm.py) | Infer an ARM64 protocol state graph from BSS state accesses and a selected handshake-function cluster; includes MMTLS-oriented assumptions. |
-| [**BMP&nbsp;LSB&nbsp;Key&nbsp;Extractor**](docs/reference-modules/lsb-stego-extractor.md) | [code](ablation/analyzers/lsb_stego_extractor.py) | Read BMP pixel least-significant bits and reconstruct keys for the implemented seed/polynomial encoding scheme. |
-| [**Format&nbsp;String&nbsp;Scanner**](docs/reference-modules/vuln-scanners.md) | [code](ablation/analyzers/format_string_scanner.py) | Flag supported printf-family, syslog and logging call sites with potentially unsafe format-argument provenance in x86-64 ELF. |
-| [**Heap&nbsp;Vulnerability&nbsp;Scanner**](docs/reference-modules/vuln-scanners.md) | [code](ablation/analyzers/heap_vuln_scanner.py)&nbsp;·&nbsp;[code](modules/heap_uaf_scanner.py) | x86-64 allocation-overflow, use-after-free, double-free and off-by-one/pointer-state heuristics; LoongArch64 allocation-arithmetic overflow scanning. |
-| [**SQL&nbsp;Injection&nbsp;Scanner**](docs/reference-modules/vuln-scanners.md) | [code](ablation/analyzers/sql_sink_scanner.py) | Trace formatted query construction into supported MySQL C API and SQLite sinks in native binaries. |
-| [**RPC&nbsp;Server&nbsp;Analyzer**](docs/reference-modules/rpc-server-analyzer.md) | [code](ablation/analyzers/rpc_server_analyzer.py) | Recover Windows RPC interface/endpoint indicators and examine supported registration/authentication patterns. |
-| [**IOCTL&nbsp;Attack&nbsp;Surface**](docs/reference-modules/ioctl-attack-surface.md) | [code](modules/ioctl_attack_surface.py) | Decode driver IOCTLs and inspect METHOD_NEITHER, buffer-length handling, probe APIs and allocation/copy patterns. |
-| [**Length&nbsp;Underflow&nbsp;Scanner**](docs/reference-modules/length-underflow.md) | [code](ablation/analyzers/length_underflow.py) | Find supported x86-64 parser patterns where subtracting a header size from a narrow length can wrap before allocation or copying. |
-| [**Setuid&nbsp;Auth&nbsp;Oracle**](docs/reference-modules/setuid-auth-oracle-scanner.md) | [code](modules/setuid_auth_oracle_scanner.py) | Identify raw shadow-password validation/import patterns without PAM mediation as authentication-oracle candidates. |
-| [**Lua&nbsp;Injection&nbsp;Analyzer**](docs/reference-modules/lua-injection-analyzer.md) | [code](ablation/analyzers/lua_injection_analyzer.py) | Detect Python strings formatted into Lua source before execution through supported Lua interfaces. |
+| [**Taint&nbsp;Analysis**](docs/reference-modules/taint-analysis.md) | [1](ablation/analyzers/taint_tracker.py)&nbsp;·&nbsp;[2](ablation/analyzers/taint_tracker_arm64.py) | Source-to-sink register/dataflow tracking, with architecture-specific intraprocedural, interprocedural and flow-sensitive implementations. |
+| [**Cross-Library&nbsp;Analysis**](docs/reference-modules/taint-analysis.md) | [1](ablation/analyzers/cross_binary_taint.py)&nbsp;·&nbsp;[2](ablation/analyzers/lib_graph.py) | Resolve imports and exports across a firmware library set and propagate supported argument taint across library boundaries. |
+| [**Pre-Authentication&nbsp;Exposure**](docs/reference-modules/preauth-exposure.md) | [1](ablation/analyzers/preauth_route_auditor.py) | Recover supported Flatui route/auth-wrapper structures, associate handlers and identify pre-authentication handlers with sensitive sinks. |
+| [**Sink&nbsp;Arg&nbsp;Classifier**](docs/reference-modules/sink-arg-classifier.md) | [1](ablation/analyzers/sink_arg_classifier.py) | Classify command arguments as constant, formatted constant, argument-propagated or unknown before deeper tracing. |
+| [**Finding&nbsp;Validation**](docs/reference-modules/finding-validation.md) | [1](modules/path_solver.py)&nbsp;·&nbsp;[2](ablation/analyzers/finding_registry.py) | Bounded x86-64 symbolic path solving produces entry-register constraints/models; a registry stores findings and submission metadata. It does not establish automatic HTTP reproduction for every find... |
+| [**Compiler&nbsp;Defect&nbsp;Detection**](docs/reference-modules/compiler-defects.md) | [1](ablation/analyzers/loongarch64_max_not_min_scanner.py)&nbsp;·&nbsp;[2](ablation/analyzers/compiler_security_gate.py) | Detect the implemented LoongArch64 min/max miscompilation pattern and run supported security scans on compiler output. |
+| [**Source&nbsp;Code&nbsp;Auditing**](docs/reference-modules/source-audit.md) | [1](ablation/analyzers/source_audit_compressor.py)&nbsp;·&nbsp;[2](ablation/analyzers/source_taint_tracker.py) | Ingest repositories, profile/rank files, map entry points and sinks, trace source paths and support review coverage accounting. |
+| [**Cryptographic&nbsp;Analysis**](docs/reference-modules/crypto.md) | [1](modules/crypto_audit.py)&nbsp;·&nbsp;[2](ablation/analyzers/xor_solver.py) | Key/secret discovery, repeating-XOR recovery, crypto implementation fingerprinting and JWT/SAML/TLS posture checks. |
+| [**Protocol&nbsp;FSM&nbsp;Extractor**](docs/reference-modules/proto-fsm.md) | [1](modules/proto_fsm.py) | Infer an ARM64 protocol state graph from BSS state accesses and a selected handshake-function cluster; includes MMTLS-oriented assumptions. |
+| [**BMP&nbsp;LSB&nbsp;Key&nbsp;Extractor**](docs/reference-modules/lsb-stego-extractor.md) | [1](ablation/analyzers/lsb_stego_extractor.py) | Read BMP pixel least-significant bits and reconstruct keys for the implemented seed/polynomial encoding scheme. |
+| [**Format&nbsp;String&nbsp;Scanner**](docs/reference-modules/vuln-scanners.md) | [1](ablation/analyzers/format_string_scanner.py) | Flag supported printf-family, syslog and logging call sites with potentially unsafe format-argument provenance in x86-64 ELF. |
+| [**Heap&nbsp;Vulnerability&nbsp;Scanner**](docs/reference-modules/vuln-scanners.md) | [1](ablation/analyzers/heap_vuln_scanner.py)&nbsp;·&nbsp;[2](modules/heap_uaf_scanner.py) | x86-64 allocation-overflow, use-after-free, double-free and off-by-one/pointer-state heuristics; LoongArch64 allocation-arithmetic overflow scanning. |
+| [**SQL&nbsp;Injection&nbsp;Scanner**](docs/reference-modules/vuln-scanners.md) | [1](ablation/analyzers/sql_sink_scanner.py) | Trace formatted query construction into supported MySQL C API and SQLite sinks in native binaries. |
+| [**RPC&nbsp;Server&nbsp;Analyzer**](docs/reference-modules/rpc-server-analyzer.md) | [1](ablation/analyzers/rpc_server_analyzer.py) | Recover Windows RPC interface/endpoint indicators and examine supported registration/authentication patterns. |
+| [**IOCTL&nbsp;Attack&nbsp;Surface**](docs/reference-modules/ioctl-attack-surface.md) | [1](modules/ioctl_attack_surface.py) | Decode driver IOCTLs and inspect METHOD_NEITHER, buffer-length handling, probe APIs and allocation/copy patterns. |
+| [**Length&nbsp;Underflow&nbsp;Scanner**](docs/reference-modules/length-underflow.md) | [1](ablation/analyzers/length_underflow.py) | Find supported x86-64 parser patterns where subtracting a header size from a narrow length can wrap before allocation or copying. |
+| [**Setuid&nbsp;Auth&nbsp;Oracle**](docs/reference-modules/setuid-auth-oracle-scanner.md) | [1](modules/setuid_auth_oracle_scanner.py) | Identify raw shadow-password validation/import patterns without PAM mediation as authentication-oracle candidates. |
+| [**Lua&nbsp;Injection&nbsp;Analyzer**](docs/reference-modules/lua-injection-analyzer.md) | [1](ablation/analyzers/lua_injection_analyzer.py) | Detect Python strings formatted into Lua source before execution through supported Lua interfaces. |
 
 </details>
 
 <details>
 <summary><strong>Specialized recovery</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**C++&nbsp;Vtable&nbsp;Reconstruction**](docs/reference-modules/cpp-vtable-reconstructor.md) | [code](modules/cpp_vtable_reconstructor.py) | Recover ELF virtual tables, name slots from available evidence and generate annotations for virtual dispatch analysis. |
-| [**PPC32&nbsp;GOT2&nbsp;Resolver**](docs/reference-modules/ppc32-got2-resolver.md) | [code](modules/ppc32_got2_resolver.py) | Recover GOT2 bases and resolve supported indirect BCTRL targets in stripped PPC32 big-endian PIC binaries. |
-| [**Dynamic&nbsp;Sandbox**](docs/reference-modules/dynamic-sandbox.md) | [code](ablation/analyzers/dynamic_sandbox.py) | Probe ARM64 or x86-64 leaf functions in Unicorn, capture return/register state and writes, and compare behavioral signatures. |
-| [**Firmware&nbsp;Extraction**](docs/reference-modules/firmware-analysis.md) | [code](ablation/analyzers/fortios_firmware_extractor.py)&nbsp;·&nbsp;[code](ablation/analyzers/firmware_container_key_extractor.py) | Format/vendor-specific container parsing, supported Fortinet XOR/key recovery and inner-partition decryption, plus selected filesystem extraction. |
-| [**Firmware&nbsp;Key&nbsp;Corpus**](docs/reference-modules/firmware-key-corpus.md) | [code](ablation/analyzers/fortigate_cert_key_scanner.py)&nbsp;·&nbsp;[code](ablation/analyzers/fortibuild_track_classifier.py) | Fingerprint recovered Fortinet certificate keys, compare known key families and classify expected keys by firmware build track. |
+| [**C++&nbsp;Vtable&nbsp;Reconstruction**](docs/reference-modules/cpp-vtable-reconstructor.md) | [1](modules/cpp_vtable_reconstructor.py) | Recover ELF virtual tables, name slots from available evidence and generate annotations for virtual dispatch analysis. |
+| [**PPC32&nbsp;GOT2&nbsp;Resolver**](docs/reference-modules/ppc32-got2-resolver.md) | [1](modules/ppc32_got2_resolver.py) | Recover GOT2 bases and resolve supported indirect BCTRL targets in stripped PPC32 big-endian PIC binaries. |
+| [**Dynamic&nbsp;Sandbox**](docs/reference-modules/dynamic-sandbox.md) | [1](ablation/analyzers/dynamic_sandbox.py) | Probe ARM64 or x86-64 leaf functions in Unicorn, capture return/register state and writes, and compare behavioral signatures. |
+| [**Firmware&nbsp;Extraction**](docs/reference-modules/firmware-analysis.md) | [1](ablation/analyzers/fortios_firmware_extractor.py)&nbsp;·&nbsp;[2](ablation/analyzers/firmware_container_key_extractor.py) | Format/vendor-specific container parsing, supported Fortinet XOR/key recovery and inner-partition decryption, plus selected filesystem extraction. |
+| [**Firmware&nbsp;Key&nbsp;Corpus**](docs/reference-modules/firmware-key-corpus.md) | [1](ablation/analyzers/fortigate_cert_key_scanner.py)&nbsp;·&nbsp;[2](ablation/analyzers/fortibuild_track_classifier.py) | Fingerprint recovered Fortinet certificate keys, compare known key families and classify expected keys by firmware build track. |
 
 </details>
 
 <details>
 <summary><strong>Platform and runtime support</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Windows&nbsp;PE&nbsp;Security&nbsp;Analysis**](docs/reference-modules/windows-pe.md) | [code](sweeps/pe_sweep.py)&nbsp;·&nbsp;[code](ablation/analyzers/cfg_bypass_detector.py) | PE sweeps and dedicated CFG, SEH, RPC, COM, ETW, symbol and pool-allocation analyses. |
-| [**Windows&nbsp;Kernel&nbsp;Driver&nbsp;&&nbsp;BYOVD**](docs/reference-modules/kernel-drivers.md) | [code](ablation/analyzers/kernel_driver_analyzer.py)&nbsp;·&nbsp;[code](ablation/analyzers/byovd_detector.py) | Inspect driver imports, IOCTLs, callbacks, pool operations and dangerous primitives; rank BYOVD-related capability indicators. |
-| [**Android&nbsp;/&nbsp;APK&nbsp;Analysis**](docs/reference-modules/android.md) | [code](ablation/core/apk_parser.py)&nbsp;·&nbsp;[code](ablation/analyzers/dex_analyzer.py) | Parse APK/AXML/DEX, review manifest exposure and dangerous APIs, inventory native libraries and prioritize findings. |
-| [**HarmonyOS&nbsp;/&nbsp;ArkTS&nbsp;Analysis**](docs/reference-modules/harmonyos.md) | [code](ablation/analyzers/abc_parser.py)&nbsp;·&nbsp;[code](ablation/analyzers/abc_disasm.py) | Parse extracted Ark ABC bytecode, enumerate classes/methods/strings, disassemble and produce JavaScript-like pseudocode. |
-| [**Go&nbsp;Binary&nbsp;Reverse&nbsp;Engineering**](docs/workflows/go-binaries.md) | [code](ablation/analyzers/go_pclntab.py)&nbsp;·&nbsp;[code](modules/go_binary_re.py) | Recover supported pclntab function metadata, analyze stripped Go ELF/Mach-O binaries and inspect garble-obfuscated layouts. |
-| [**Erlang&nbsp;/&nbsp;BEAM&nbsp;Analysis**](docs/reference-modules/beam.md) | [code](ablation/analyzers/beam_context.py) | Read BEAM module/export/import/atom data, lift supported bytecode, scan risky imports and compare module sets. |
-| [**MicroPython&nbsp;.mpy&nbsp;Lifter**](docs/reference-modules/mpy-lifter.md) | [code](modules/mpy_lifter.py) | Parse supported .mpy v6 files, lift bytecode to pseudo-Python and flag dangerous imports/calls and direct memory access. |
-| [**Game&nbsp;&&nbsp;Legacy&nbsp;RE**](docs/reference-modules/game-re.md) | [code](ablation/analyzers/engine_pattern_library.py)&nbsp;·&nbsp;[code](modules/spu_disassembler.py) | Label known game-engine code and provide selected PS3/Cell, classic Mac, old Windows/DOS and other legacy-format tools. |
-| [**PS3&nbsp;SELF&nbsp;Decryptor**](docs/reference-modules/ps3-self-decryptor.md) | [code](ablation/analyzers/ps3_self_decryptor.py) | Decrypt supported Signed ELF containers using registered keysets, detect key revision and emit a loadable ELF. |
-| [**MCP&nbsp;Server&nbsp;Security&nbsp;Scanner**](docs/reference-modules/mcp-tool-taint-scanner.md) | [code](ablation/analyzers/mcp_tool_taint_scanner.py) | Scan Python/JavaScript/TypeScript MCP source for exposed bindings, missing-authentication patterns and dangerous tool methods. |
-| [**LoongArch64**](docs/reference-modules/loongarch64.md) | [code](ablation/analyzers/loongarch_decoder.py)&nbsp;·&nbsp;[code](ablation/analyzers/taint_tracker_loongarch64.py) | Dedicated decoding, CFG/dataflow, lifting, taint, syscall classification and DWARF/CFI/BTF function-boundary recovery. |
-| [**nanoMIPS**](docs/reference-modules/nanomips.md) | [code](ablation/analyzers/nanomips_decoder.py)&nbsp;·&nbsp;[code](ablation/analyzers/taint_tracker_nanomips.py) | Variable-width decoding, function/frame discovery and supported intra/interprocedural taint analysis. |
+| [**Windows&nbsp;PE&nbsp;Security&nbsp;Analysis**](docs/reference-modules/windows-pe.md) | [1](sweeps/pe_sweep.py)&nbsp;·&nbsp;[2](ablation/analyzers/cfg_bypass_detector.py) | PE sweeps and dedicated CFG, SEH, RPC, COM, ETW, symbol and pool-allocation analyses. |
+| [**Windows&nbsp;Kernel&nbsp;Driver&nbsp;&&nbsp;BYOVD**](docs/reference-modules/kernel-drivers.md) | [1](ablation/analyzers/kernel_driver_analyzer.py)&nbsp;·&nbsp;[2](ablation/analyzers/byovd_detector.py) | Inspect driver imports, IOCTLs, callbacks, pool operations and dangerous primitives; rank BYOVD-related capability indicators. |
+| [**Android&nbsp;/&nbsp;APK&nbsp;Analysis**](docs/reference-modules/android.md) | [1](ablation/core/apk_parser.py)&nbsp;·&nbsp;[2](ablation/analyzers/dex_analyzer.py) | Parse APK/AXML/DEX, review manifest exposure and dangerous APIs, inventory native libraries and prioritize findings. |
+| [**HarmonyOS&nbsp;/&nbsp;ArkTS&nbsp;Analysis**](docs/reference-modules/harmonyos.md) | [1](ablation/analyzers/abc_parser.py)&nbsp;·&nbsp;[2](ablation/analyzers/abc_disasm.py) | Parse extracted Ark ABC bytecode, enumerate classes/methods/strings, disassemble and produce JavaScript-like pseudocode. |
+| [**Go&nbsp;Binary&nbsp;Reverse&nbsp;Engineering**](docs/workflows/go-binaries.md) | [1](ablation/analyzers/go_pclntab.py)&nbsp;·&nbsp;[2](modules/go_binary_re.py) | Recover supported pclntab function metadata, analyze stripped Go ELF/Mach-O binaries and inspect garble-obfuscated layouts. |
+| [**Erlang&nbsp;/&nbsp;BEAM&nbsp;Analysis**](docs/reference-modules/beam.md) | [1](ablation/analyzers/beam_context.py) | Read BEAM module/export/import/atom data, lift supported bytecode, scan risky imports and compare module sets. |
+| [**MicroPython&nbsp;.mpy&nbsp;Lifter**](docs/reference-modules/mpy-lifter.md) | [1](modules/mpy_lifter.py) | Parse supported .mpy v6 files, lift bytecode to pseudo-Python and flag dangerous imports/calls and direct memory access. |
+| [**Game&nbsp;&&nbsp;Legacy&nbsp;RE**](docs/reference-modules/game-re.md) | [1](ablation/analyzers/engine_pattern_library.py)&nbsp;·&nbsp;[2](modules/spu_disassembler.py) | Label known game-engine code and provide selected PS3/Cell, classic Mac, old Windows/DOS and other legacy-format tools. |
+| [**PS3&nbsp;SELF&nbsp;Decryptor**](docs/reference-modules/ps3-self-decryptor.md) | [1](ablation/analyzers/ps3_self_decryptor.py) | Decrypt supported Signed ELF containers using registered keysets, detect key revision and emit a loadable ELF. |
+| [**MCP&nbsp;Server&nbsp;Security&nbsp;Scanner**](docs/reference-modules/mcp-tool-taint-scanner.md) | [1](ablation/analyzers/mcp_tool_taint_scanner.py) | Scan Python/JavaScript/TypeScript MCP source for exposed bindings, missing-authentication patterns and dangerous tool methods. |
+| [**LoongArch64**](docs/reference-modules/loongarch64.md) | [1](ablation/analyzers/loongarch_decoder.py)&nbsp;·&nbsp;[2](ablation/analyzers/taint_tracker_loongarch64.py) | Dedicated decoding, CFG/dataflow, lifting, taint, syscall classification and DWARF/CFI/BTF function-boundary recovery. |
+| [**nanoMIPS**](docs/reference-modules/nanomips.md) | [1](ablation/analyzers/nanomips_decoder.py)&nbsp;·&nbsp;[2](ablation/analyzers/taint_tracker_nanomips.py) | Variable-width decoding, function/frame discovery and supported intra/interprocedural taint analysis. |
 
 </details>
 
 <details>
 <summary><strong>Automotive ECU analysis</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**ECU&nbsp;Architecture&nbsp;Detector**](docs/reference-modules/ecu-arch-detector.md) | [code](ablation/analyzers/ecu_arch_detector.py) | Rank candidate instruction sets for raw ECU ROMs using reset vectors, signatures and structural heuristics. |
-| [**ROM&nbsp;Layout&nbsp;Analyzer**](docs/reference-modules/ecu-rom-layout-analyzer.md) | [code](ablation/analyzers/ecu_rom_layout_analyzer.py) | Classify raw-ROM regions as code, calibration, interrupt vectors or erased data and identify application-code regions. |
-| [**Calibration&nbsp;Parsers**](docs/reference-modules/ecu-cal-parsers.md) | [code](ablation/analyzers/ecu_xdf_parser.py)&nbsp;·&nbsp;[code](ablation/analyzers/ecu_a2l_parser.py) | Parse TunerPro XDF, ASAM A2L, RomRaider XML, open_damos, Conescan and Nissan/Pytrex definitions into calibration tables and labels. |
-| [**CAN&nbsp;DBC&nbsp;Parser**](docs/reference-modules/can-dbc-parser.md) | [code](modules/can_dbc_parser.py) | Parse CAN message/signal definitions, bit layouts, value tables and comments for analysis context. |
-| [**ECU&nbsp;Security&nbsp;Access&nbsp;Scanner**](docs/reference-modules/ecu-security-access-scanner.md) | [code](ablation/analyzers/ecu_security_access_scanner.py) | Fingerprint the implemented static-seed UDS/KWP2000 SecurityAccess patterns in M68K/CPU32 and PPC32 ROMs. |
-| [**TriCore&nbsp;Taint&nbsp;Analysis**](docs/reference-modules/tricore-taint-tracker.md) | [code](ablation/analyzers/taint_tracker_tricore.py) | TriCore ECU source-to-sink analysis with supported GHS/IAR ABI and flat-image handling. |
-| [**RH850&nbsp;Taint&nbsp;Analysis**](docs/reference-modules/rh850-taint-tracker.md) | [code](ablation/analyzers/taint_tracker_rh850.py) | RH850 ECU register/argument taint tracking with supported ABI and flat-ROM analysis paths. |
+| [**ECU&nbsp;Architecture&nbsp;Detector**](docs/reference-modules/ecu-arch-detector.md) | [1](ablation/analyzers/ecu_arch_detector.py) | Rank candidate instruction sets for raw ECU ROMs using reset vectors, signatures and structural heuristics. |
+| [**ROM&nbsp;Layout&nbsp;Analyzer**](docs/reference-modules/ecu-rom-layout-analyzer.md) | [1](ablation/analyzers/ecu_rom_layout_analyzer.py) | Classify raw-ROM regions as code, calibration, interrupt vectors or erased data and identify application-code regions. |
+| [**Calibration&nbsp;Parsers**](docs/reference-modules/ecu-cal-parsers.md) | [1](ablation/analyzers/ecu_xdf_parser.py)&nbsp;·&nbsp;[2](ablation/analyzers/ecu_a2l_parser.py) | Parse TunerPro XDF, ASAM A2L, RomRaider XML, open_damos, Conescan and Nissan/Pytrex definitions into calibration tables and labels. |
+| [**CAN&nbsp;DBC&nbsp;Parser**](docs/reference-modules/can-dbc-parser.md) | [1](modules/can_dbc_parser.py) | Parse CAN message/signal definitions, bit layouts, value tables and comments for analysis context. |
+| [**ECU&nbsp;Security&nbsp;Access&nbsp;Scanner**](docs/reference-modules/ecu-security-access-scanner.md) | [1](ablation/analyzers/ecu_security_access_scanner.py) | Fingerprint the implemented static-seed UDS/KWP2000 SecurityAccess patterns in M68K/CPU32 and PPC32 ROMs. |
+| [**TriCore&nbsp;Taint&nbsp;Analysis**](docs/reference-modules/tricore-taint-tracker.md) | [1](ablation/analyzers/taint_tracker_tricore.py) | TriCore ECU source-to-sink analysis with supported GHS/IAR ABI and flat-image handling. |
+| [**RH850&nbsp;Taint&nbsp;Analysis**](docs/reference-modules/rh850-taint-tracker.md) | [1](ablation/analyzers/taint_tracker_rh850.py) | RH850 ECU register/argument taint tracking with supported ABI and flat-ROM analysis paths. |
 
 </details>
 
 <details>
 <summary><strong>Workflow and quality gates</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Version&nbsp;Diffing**](docs/workflows/cross-version.md) | [code](ablation/analyzers/version_delta.py)&nbsp;·&nbsp;[code](ablation/analyzers/dtw_matcher.py) | Match corresponding functions, follow identities across releases and localize instruction-category changes. |
-| [**Kernel&nbsp;Module&nbsp;Subsystem&nbsp;Classifier**](docs/reference-modules/kernel-module-subsystem-classifier.md) | [code](ablation/analyzers/kernel_module_subsystem_classifier.py) | Infer a Linux module's subsystem and attack-surface priority from its source-tree/install path. |
-| [**Module&nbsp;Quality&nbsp;Gate**](docs/reference-modules/forge.md) | [code](ablation/analyzers/forge.py) | FORGE audit records, severity-based gates and local-module registration/loading; audit behavior depends on configured analysis. |
-| [**Coverage&nbsp;Gate**](docs/standards-ablation.md) | [code](pyproject.toml)&nbsp;·&nbsp;[code](.github/workflows/ci.yml) | Configured 85% statement-coverage threshold for the selected labeled taint-engine modules; not a whole-repository coverage guarantee. |
-| [**YARA&nbsp;Rule&nbsp;Generation**](docs/reference-modules/yara-generator.md) | [code](ablation/core/yara_generator.py) | Generate YARA text from supported findings/strings and supplied technique templates. |
+| [**Version&nbsp;Diffing**](docs/workflows/cross-version.md) | [1](ablation/analyzers/version_delta.py)&nbsp;·&nbsp;[2](ablation/analyzers/dtw_matcher.py) | Match corresponding functions, follow identities across releases and localize instruction-category changes. |
+| [**Kernel&nbsp;Module&nbsp;Subsystem&nbsp;Classifier**](docs/reference-modules/kernel-module-subsystem-classifier.md) | [1](ablation/analyzers/kernel_module_subsystem_classifier.py) | Infer a Linux module's subsystem and attack-surface priority from its source-tree/install path. |
+| [**Module&nbsp;Quality&nbsp;Gate**](docs/reference-modules/forge.md) | [1](ablation/analyzers/forge.py) | FORGE audit records, severity-based gates and local-module registration/loading; audit behavior depends on configured analysis. |
+| [**Coverage&nbsp;Gate**](docs/standards-ablation.md) | [1](pyproject.toml)&nbsp;·&nbsp;[2](.github/workflows/ci.yml) | Configured 85% statement-coverage threshold for the selected labeled taint-engine modules; not a whole-repository coverage guarantee. |
+| [**YARA&nbsp;Rule&nbsp;Generation**](docs/reference-modules/yara-generator.md) | [1](ablation/core/yara_generator.py) | Generate YARA text from supported findings/strings and supplied technique templates. |
 
 </details>
 
 <details>
 <summary><strong>Binary loading, discovery and navigation</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Binary&nbsp;format&nbsp;and&nbsp;platform&nbsp;identification**](docs/INDEX.md) | [code](ablation/core/binary_parser.py)&nbsp;·&nbsp;[code](ablation/core/elf_parser.py) | Detect ELF/PE/Mach-O and inspect file/OS/architecture metadata through the appropriate parser. |
-| [**ELF&nbsp;internals&nbsp;and&nbsp;hardening**](docs/INDEX.md) | [code](ablation/core/binary_parser.py)&nbsp;·&nbsp;[code](ablation/core/elf_parser.py) | Parse ELF32/64 program/section headers, symbols, dependencies, RPATH/RUNPATH and GOT/PLT; inspect NX, PIE, RELRO and canary indicators. |
-| [**PE&nbsp;internals&nbsp;and&nbsp;indicators**](docs/INDEX.md) | [code](ablation/core/binary_parser.py)&nbsp;·&nbsp;[code](ablation/core/elf_parser.py) | Inspect sections, imports, strings, resources and selected malware/anti-debug/IOC patterns. |
-| [**Mach-O&nbsp;internals**](docs/INDEX.md) | [code](ablation/core/binary_parser.py)&nbsp;·&nbsp;[code](ablation/core/elf_parser.py) | Inspect load commands, segments, dylib dependencies and code-signing information. |
-| [**Call&nbsp;and&nbsp;string&nbsp;cross-references**](docs/INDEX.md) | [code](ablation/analyzers/binary_context.py)&nbsp;·&nbsp;[code](ablation/analyzers/xref_graph.py) | Find callers, callees, referenced strings, functions referencing strings, containing functions, exports and import names. |
-| [**Persistent&nbsp;analysis&nbsp;context**](docs/INDEX.md) | [code](ablation/analyzers/binary_context.py)&nbsp;·&nbsp;[code](ablation/analyzers/xref_graph.py) | Cache binary metadata and cross-reference structures and reload analyst naming overlays. |
-| [**Native-library&nbsp;inventory**](docs/INDEX.md) | [code](ablation/analyzers/binary_context.py)&nbsp;·&nbsp;[code](ablation/analyzers/xref_graph.py) | Rank a directory of ELF libraries by architecture, functions, exports, JNI presence and security-relevant strings. |
-| [**Stripped&nbsp;function&nbsp;discovery**](docs/INDEX.md) | [code](ablation/analyzers/arm32_function_scanner.py)&nbsp;·&nbsp;[code](ablation/analyzers/static_elf32_func_start_scanner.py) | Recover candidate entries from architecture-specific prologues, calls, reset vectors and available metadata. |
-| [**Flat-ROM&nbsp;function&nbsp;discovery**](docs/INDEX.md) | [code](ablation/analyzers/arm32_function_scanner.py)&nbsp;·&nbsp;[code](ablation/analyzers/static_elf32_func_start_scanner.py) | Harvest call targets and prologues without ELF headers, using the supported ECU decoder/layout paths. |
-| [**i386&nbsp;absolute&nbsp;cross-references**](docs/INDEX.md) | [code](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;·&nbsp;[code](ablation/analyzers/dwarf_loongarch64.py) | Find x86-32 string/data references encoded as absolute immediates. |
-| [**Debug&nbsp;metadata&nbsp;recovery**](docs/INDEX.md) | [code](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;·&nbsp;[code](ablation/analyzers/dwarf_loongarch64.py) | Recover LoongArch function boundaries from .eh_frame, DWARF and BTF where available. |
-| [**Swift&nbsp;symbol&nbsp;demangling**](docs/INDEX.md) | [code](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;·&nbsp;[code](ablation/analyzers/dwarf_loongarch64.py) | Best-effort Swift symbol decoding with an optional swift-demangle fallback. |
+| [**Binary&nbsp;format&nbsp;and&nbsp;platform&nbsp;identification**](docs/INDEX.md) | [1](ablation/core/binary_parser.py)&nbsp;·&nbsp;[2](ablation/core/elf_parser.py) | Detect ELF/PE/Mach-O and inspect file/OS/architecture metadata through the appropriate parser. |
+| [**ELF&nbsp;internals&nbsp;and&nbsp;hardening**](docs/INDEX.md) | [1](ablation/core/binary_parser.py)&nbsp;·&nbsp;[2](ablation/core/elf_parser.py) | Parse ELF32/64 program/section headers, symbols, dependencies, RPATH/RUNPATH and GOT/PLT; inspect NX, PIE, RELRO and canary indicators. |
+| [**PE&nbsp;internals&nbsp;and&nbsp;indicators**](docs/INDEX.md) | [1](ablation/core/binary_parser.py)&nbsp;·&nbsp;[2](ablation/core/elf_parser.py) | Inspect sections, imports, strings, resources and selected malware/anti-debug/IOC patterns. |
+| [**Mach-O&nbsp;internals**](docs/INDEX.md) | [1](ablation/core/binary_parser.py)&nbsp;·&nbsp;[2](ablation/core/elf_parser.py) | Inspect load commands, segments, dylib dependencies and code-signing information. |
+| [**Call&nbsp;and&nbsp;string&nbsp;cross-references**](docs/INDEX.md) | [1](ablation/analyzers/binary_context.py)&nbsp;·&nbsp;[2](ablation/analyzers/xref_graph.py) | Find callers, callees, referenced strings, functions referencing strings, containing functions, exports and import names. |
+| [**Persistent&nbsp;analysis&nbsp;context**](docs/INDEX.md) | [1](ablation/analyzers/binary_context.py)&nbsp;·&nbsp;[2](ablation/analyzers/xref_graph.py) | Cache binary metadata and cross-reference structures and reload analyst naming overlays. |
+| [**Native-library&nbsp;inventory**](docs/INDEX.md) | [1](ablation/analyzers/binary_context.py)&nbsp;·&nbsp;[2](ablation/analyzers/xref_graph.py) | Rank a directory of ELF libraries by architecture, functions, exports, JNI presence and security-relevant strings. |
+| [**Stripped&nbsp;function&nbsp;discovery**](docs/INDEX.md) | [1](ablation/analyzers/arm32_function_scanner.py)&nbsp;·&nbsp;[2](ablation/analyzers/static_elf32_func_start_scanner.py) | Recover candidate entries from architecture-specific prologues, calls, reset vectors and available metadata. |
+| [**Flat-ROM&nbsp;function&nbsp;discovery**](docs/INDEX.md) | [1](ablation/analyzers/arm32_function_scanner.py)&nbsp;·&nbsp;[2](ablation/analyzers/static_elf32_func_start_scanner.py) | Harvest call targets and prologues without ELF headers, using the supported ECU decoder/layout paths. |
+| [**i386&nbsp;absolute&nbsp;cross-references**](docs/INDEX.md) | [1](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;·&nbsp;[2](ablation/analyzers/dwarf_loongarch64.py) | Find x86-32 string/data references encoded as absolute immediates. |
+| [**Debug&nbsp;metadata&nbsp;recovery**](docs/INDEX.md) | [1](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;·&nbsp;[2](ablation/analyzers/dwarf_loongarch64.py) | Recover LoongArch function boundaries from .eh_frame, DWARF and BTF where available. |
+| [**Swift&nbsp;symbol&nbsp;demangling**](docs/INDEX.md) | [1](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;·&nbsp;[2](ablation/analyzers/dwarf_loongarch64.py) | Best-effort Swift symbol decoding with an optional swift-demangle fallback. |
 
 </details>
 
 <details>
 <summary><strong>Disassembly, graphs and symbolic analysis</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Streaming&nbsp;and&nbsp;windowed&nbsp;disassembly**](docs/INDEX.md) | [code](ablation/core/disasm_engine.py)&nbsp;·&nbsp;[code](ablation/analyzers/window_analyzer.py) | Produce instruction streams or annotated address windows with calls, strings and function boundaries. |
-| [**Single-function&nbsp;profiling**](docs/INDEX.md) | [code](ablation/core/disasm_engine.py)&nbsp;·&nbsp;[code](ablation/analyzers/window_analyzer.py) | Combine callee names, strings, argument values and sink flags in one function report. |
-| [**Optional&nbsp;angr-backed&nbsp;analysis**](docs/INDEX.md) | [code](ablation/core/disasm_engine.py)&nbsp;·&nbsp;[code](ablation/analyzers/window_analyzer.py) | Extended disassembly engine supports caller/xref resolution and register/block dataflow via angr. |
-| [**Control-flow&nbsp;graph&nbsp;construction**](docs/INDEX.md) | [code](ablation/analyzers/dataflow_engine.py)&nbsp;·&nbsp;[code](ablation/analyzers/structurizer.py) | Architecture-specific block/edge construction, branch targets, return handling and selected delay-slot semantics. |
-| [**Generic&nbsp;dataflow&nbsp;worklist**](docs/INDEX.md) | [code](ablation/analyzers/dataflow_engine.py)&nbsp;·&nbsp;[code](ablation/analyzers/structurizer.py) | Monotone-framework propagation with supported lattice/state joins across a CFG. |
-| [**Constant&nbsp;propagation&nbsp;and&nbsp;reaching&nbsp;definitions**](docs/INDEX.md) | [code](ablation/analyzers/dataflow_engine.py)&nbsp;·&nbsp;[code](ablation/analyzers/structurizer.py) | Track definitions/constants and perform sparse conditional constant propagation. |
-| [**Dominators&nbsp;and&nbsp;loop&nbsp;analysis**](docs/INDEX.md) | [code](ablation/analyzers/dataflow_engine.py)&nbsp;·&nbsp;[code](ablation/analyzers/structurizer.py) | Build dominator/post-dominator information and identify natural loops. |
-| [**Structured&nbsp;control-flow&nbsp;recovery**](docs/INDEX.md) | [code](ablation/analyzers/dataflow_engine.py)&nbsp;·&nbsp;[code](ablation/analyzers/structurizer.py) | Render supported CFG regions as sequences, conditions, loops, breaks, continues and returns. |
-| [**Call-argument&nbsp;annotation**](docs/INDEX.md) | [code](ablation/analyzers/reg_annotator.py)&nbsp;·&nbsp;[code](ablation/analyzers/arm32_reg_annotator.py) | Forward symbolic register propagation for supported x86-64/ARM32 call sites. |
-| [**Interprocedural&nbsp;argument&nbsp;provenance**](docs/INDEX.md) | [code](ablation/analyzers/reg_annotator.py)&nbsp;·&nbsp;[code](ablation/analyzers/arm32_reg_annotator.py) | Seed callees with caller values and follow supported argument chains across functions. |
-| [**Lightweight&nbsp;ARM32&nbsp;symbolic&nbsp;execution**](docs/INDEX.md) | [code](ablation/analyzers/reg_annotator.py)&nbsp;·&nbsp;[code](ablation/analyzers/arm32_reg_annotator.py) | Track argument/buffer relationships and protocol field writes without an SMT solver. |
-| [**ARM64&nbsp;symbolic&nbsp;slicing**](docs/reference-modules/core.md) | [code](modules/sse_slicer.py)&nbsp;·&nbsp;[code](modules/arm64_global_tracker.py) | Backward/forward structured-expression slicing for memory addresses and stores. |
-| [**Global-symbol&nbsp;and&nbsp;BSS&nbsp;tracking**](docs/reference-modules/core.md) | [code](modules/sse_slicer.py)&nbsp;·&nbsp;[code](modules/arm64_global_tracker.py) | Resolve named global/GOT relationships and find state, buffer or decrypt-loop accesses. |
-| [**Call-site&nbsp;backward&nbsp;slicing**](docs/reference-modules/core.md) | [code](modules/sse_slicer.py)&nbsp;·&nbsp;[code](modules/arm64_global_tracker.py) | Recover x0-x7 symbolic values at selected ARM64 calls. |
-| [**Interprocedural&nbsp;field-writer&nbsp;discovery**](docs/reference-modules/core.md) | [code](modules/sse_slicer.py)&nbsp;·&nbsp;[code](modules/arm64_global_tracker.py) | Locate functions writing a selected field when its structure pointer crosses call boundaries. |
+| [**Streaming&nbsp;and&nbsp;windowed&nbsp;disassembly**](docs/INDEX.md) | [1](ablation/core/disasm_engine.py)&nbsp;·&nbsp;[2](ablation/analyzers/window_analyzer.py) | Produce instruction streams or annotated address windows with calls, strings and function boundaries. |
+| [**Single-function&nbsp;profiling**](docs/INDEX.md) | [1](ablation/core/disasm_engine.py)&nbsp;·&nbsp;[2](ablation/analyzers/window_analyzer.py) | Combine callee names, strings, argument values and sink flags in one function report. |
+| [**Optional&nbsp;angr-backed&nbsp;analysis**](docs/INDEX.md) | [1](ablation/core/disasm_engine.py)&nbsp;·&nbsp;[2](ablation/analyzers/window_analyzer.py) | Extended disassembly engine supports caller/xref resolution and register/block dataflow via angr. |
+| [**Control-flow&nbsp;graph&nbsp;construction**](docs/INDEX.md) | [1](ablation/analyzers/dataflow_engine.py)&nbsp;·&nbsp;[2](ablation/analyzers/structurizer.py) | Architecture-specific block/edge construction, branch targets, return handling and selected delay-slot semantics. |
+| [**Generic&nbsp;dataflow&nbsp;worklist**](docs/INDEX.md) | [1](ablation/analyzers/dataflow_engine.py)&nbsp;·&nbsp;[2](ablation/analyzers/structurizer.py) | Monotone-framework propagation with supported lattice/state joins across a CFG. |
+| [**Constant&nbsp;propagation&nbsp;and&nbsp;reaching&nbsp;definitions**](docs/INDEX.md) | [1](ablation/analyzers/dataflow_engine.py)&nbsp;·&nbsp;[2](ablation/analyzers/structurizer.py) | Track definitions/constants and perform sparse conditional constant propagation. |
+| [**Dominators&nbsp;and&nbsp;loop&nbsp;analysis**](docs/INDEX.md) | [1](ablation/analyzers/dataflow_engine.py)&nbsp;·&nbsp;[2](ablation/analyzers/structurizer.py) | Build dominator/post-dominator information and identify natural loops. |
+| [**Structured&nbsp;control-flow&nbsp;recovery**](docs/INDEX.md) | [1](ablation/analyzers/dataflow_engine.py)&nbsp;·&nbsp;[2](ablation/analyzers/structurizer.py) | Render supported CFG regions as sequences, conditions, loops, breaks, continues and returns. |
+| [**Call-argument&nbsp;annotation**](docs/INDEX.md) | [1](ablation/analyzers/reg_annotator.py)&nbsp;·&nbsp;[2](ablation/analyzers/arm32_reg_annotator.py) | Forward symbolic register propagation for supported x86-64/ARM32 call sites. |
+| [**Interprocedural&nbsp;argument&nbsp;provenance**](docs/INDEX.md) | [1](ablation/analyzers/reg_annotator.py)&nbsp;·&nbsp;[2](ablation/analyzers/arm32_reg_annotator.py) | Seed callees with caller values and follow supported argument chains across functions. |
+| [**Lightweight&nbsp;ARM32&nbsp;symbolic&nbsp;execution**](docs/INDEX.md) | [1](ablation/analyzers/reg_annotator.py)&nbsp;·&nbsp;[2](ablation/analyzers/arm32_reg_annotator.py) | Track argument/buffer relationships and protocol field writes without an SMT solver. |
+| [**ARM64&nbsp;symbolic&nbsp;slicing**](docs/reference-modules/core.md) | [1](modules/sse_slicer.py)&nbsp;·&nbsp;[2](modules/arm64_global_tracker.py) | Backward/forward structured-expression slicing for memory addresses and stores. |
+| [**Global-symbol&nbsp;and&nbsp;BSS&nbsp;tracking**](docs/reference-modules/core.md) | [1](modules/sse_slicer.py)&nbsp;·&nbsp;[2](modules/arm64_global_tracker.py) | Resolve named global/GOT relationships and find state, buffer or decrypt-loop accesses. |
+| [**Call-site&nbsp;backward&nbsp;slicing**](docs/reference-modules/core.md) | [1](modules/sse_slicer.py)&nbsp;·&nbsp;[2](modules/arm64_global_tracker.py) | Recover x0-x7 symbolic values at selected ARM64 calls. |
+| [**Interprocedural&nbsp;field-writer&nbsp;discovery**](docs/reference-modules/core.md) | [1](modules/sse_slicer.py)&nbsp;·&nbsp;[2](modules/arm64_global_tracker.py) | Locate functions writing a selected field when its structure pointer crosses call boundaries. |
 
 </details>
 
 <details>
 <summary><strong>Instruction, ABI and labeled-taint APIs</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Instruction-stream&nbsp;import&nbsp;and&nbsp;normalization**](docs/INDEX.md) | [code](ablation/analyzers/insn_x86.py)&nbsp;·&nbsp;[code](ablation/analyzers/insn_arm32.py) | Convert supported Capstone, objdump or hand-written listings into common per-ISA instruction/operand objects; normalize aliases and x86 syntax. |
-| [**Calling-convention&nbsp;and&nbsp;syscall&nbsp;models**](docs/INDEX.md) | [code](ablation/analyzers/isa_x86.py)&nbsp;·&nbsp;[code](ablation/analyzers/isa_arm32.py) | Encode supported register aliases, argument/return registers, caller/callee saves and syscall conventions separately from decoders. |
-| [**Named&nbsp;taint&nbsp;sources&nbsp;and&nbsp;bounds**](docs/INDEX.md) | [code](ablation/analyzers/taint_tracker_x86_labeled.py)&nbsp;·&nbsp;[code](ablation/analyzers/taint_tracker_arm32_labeled.py) | Preserve source labels and supported bounds on attacker-controlled contributions rather than a single boolean taint flag. |
-| [**Frame,&nbsp;pointer&nbsp;and&nbsp;memory-range&nbsp;state**](docs/INDEX.md) | [code](ablation/analyzers/taint_tracker_x86_labeled.py)&nbsp;·&nbsp;[code](ablation/analyzers/taint_tracker_arm32_labeled.py) | Track supported frame slots, spilled pointers, constants, memory ranges and register aliases across instruction streams. |
-| [**Configurable&nbsp;taint&nbsp;reporting**](docs/INDEX.md) | [code](ablation/analyzers/taint_tracker_x86_labeled.py)&nbsp;·&nbsp;[code](ablation/analyzers/taint_tracker_arm32_labeled.py) | Policies control supported branch, memory-address, return-address, syscall-argument and bounded-index findings. |
-| [**CFG&nbsp;fixpoint&nbsp;dataflow**](docs/INDEX.md) | [code](ablation/analyzers/analysis_x86.py)&nbsp;·&nbsp;[code](ablation/analyzers/analysis_arm32.py) | Iterate supported per-architecture state joins across blocks and loops; separate from the binary-path scanners' linear/BFS modes. |
-| [**Instrumentation-noise&nbsp;removal**](docs/INDEX.md) | [code](ablation/analyzers/loongarch_decoder_v2.py)&nbsp;·&nbsp;[code](ablation/analyzers/syscall_loongarch64.py) | Tag/filter supported LoongArch KASAN/KCOV call and shadow-address idioms using instrumentation symbols or addresses. |
-| [**LoongArch&nbsp;syscall&nbsp;labeling**](docs/INDEX.md) | [code](ablation/analyzers/loongarch_decoder_v2.py)&nbsp;·&nbsp;[code](ablation/analyzers/syscall_loongarch64.py) | Classify supported Linux syscall numbers, labels and security-relevant categories. |
+| [**Instruction-stream&nbsp;import&nbsp;and&nbsp;normalization**](docs/INDEX.md) | [1](ablation/analyzers/insn_x86.py)&nbsp;·&nbsp;[2](ablation/analyzers/insn_arm32.py) | Convert supported Capstone, objdump or hand-written listings into common per-ISA instruction/operand objects; normalize aliases and x86 syntax. |
+| [**Calling-convention&nbsp;and&nbsp;syscall&nbsp;models**](docs/INDEX.md) | [1](ablation/analyzers/isa_x86.py)&nbsp;·&nbsp;[2](ablation/analyzers/isa_arm32.py) | Encode supported register aliases, argument/return registers, caller/callee saves and syscall conventions separately from decoders. |
+| [**Named&nbsp;taint&nbsp;sources&nbsp;and&nbsp;bounds**](docs/INDEX.md) | [1](ablation/analyzers/taint_tracker_x86_labeled.py)&nbsp;·&nbsp;[2](ablation/analyzers/taint_tracker_arm32_labeled.py) | Preserve source labels and supported bounds on attacker-controlled contributions rather than a single boolean taint flag. |
+| [**Frame,&nbsp;pointer&nbsp;and&nbsp;memory-range&nbsp;state**](docs/INDEX.md) | [1](ablation/analyzers/taint_tracker_x86_labeled.py)&nbsp;·&nbsp;[2](ablation/analyzers/taint_tracker_arm32_labeled.py) | Track supported frame slots, spilled pointers, constants, memory ranges and register aliases across instruction streams. |
+| [**Configurable&nbsp;taint&nbsp;reporting**](docs/INDEX.md) | [1](ablation/analyzers/taint_tracker_x86_labeled.py)&nbsp;·&nbsp;[2](ablation/analyzers/taint_tracker_arm32_labeled.py) | Policies control supported branch, memory-address, return-address, syscall-argument and bounded-index findings. |
+| [**CFG&nbsp;fixpoint&nbsp;dataflow**](docs/INDEX.md) | [1](ablation/analyzers/analysis_x86.py)&nbsp;·&nbsp;[2](ablation/analyzers/analysis_arm32.py) | Iterate supported per-architecture state joins across blocks and loops; separate from the binary-path scanners' linear/BFS modes. |
+| [**Instrumentation-noise&nbsp;removal**](docs/INDEX.md) | [1](ablation/analyzers/loongarch_decoder_v2.py)&nbsp;·&nbsp;[2](ablation/analyzers/syscall_loongarch64.py) | Tag/filter supported LoongArch KASAN/KCOV call and shadow-address idioms using instrumentation symbols or addresses. |
+| [**LoongArch&nbsp;syscall&nbsp;labeling**](docs/INDEX.md) | [1](ablation/analyzers/loongarch_decoder_v2.py)&nbsp;·&nbsp;[2](ablation/analyzers/syscall_loongarch64.py) | Classify supported Linux syscall numbers, labels and security-relevant categories. |
 
 </details>
 
 <details>
 <summary><strong>Semantic matching and retained knowledge</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Single/multi-binary&nbsp;corpus&nbsp;building**](docs/INDEX.md) | [code](ablation/analyzers/corpus_builder.py)&nbsp;·&nbsp;[code](ablation/analyzers/func_id_db.py) | Populate a function-identity database with descriptions, product/version metadata and inferred records. |
-| [**Function&nbsp;identity&nbsp;database**](docs/INDEX.md) | [code](ablation/analyzers/corpus_builder.py)&nbsp;·&nbsp;[code](ablation/analyzers/func_id_db.py) | Store function names, roles, signatures, structures and call chains across binary versions. |
-| [**Analyst&nbsp;naming&nbsp;registry**](docs/INDEX.md) | [code](ablation/analyzers/corpus_builder.py)&nbsp;·&nbsp;[code](ablation/analyzers/func_id_db.py) | Persist, bulk-update and reload confirmed function names per binary. |
-| [**Signature-based&nbsp;auto-naming**](docs/INDEX.md) | [code](ablation/analyzers/corpus_builder.py)&nbsp;·&nbsp;[code](ablation/analyzers/func_id_db.py) | Match unknown functions against behavioral signatures with thresholds and dry-run support. |
-| [**SAX&nbsp;approximate&nbsp;indexing**](docs/INDEX.md) | [code](ablation/analyzers/sax_index.py)&nbsp;·&nbsp;[code](ablation/analyzers/subsequence_searcher.py) | Index opcode-category sequences for fast structural candidate lookup. |
-| [**Behavioral&nbsp;subsequence&nbsp;search**](docs/INDEX.md) | [code](ablation/analyzers/sax_index.py)&nbsp;·&nbsp;[code](ablation/analyzers/subsequence_searcher.py) | Find exact or approximate opcode-category subpatterns within functions. |
-| [**Structural&nbsp;similarity&nbsp;and&nbsp;orphan&nbsp;detection**](docs/reference-modules/structural.md) | [code](ablation/analyzers/sax_index.py)&nbsp;·&nbsp;[code](ablation/analyzers/subsequence_searcher.py) | Compare opcode histograms, constants, calls and other structural signals to identify unmatched functions. |
-| [**Embedding&nbsp;fine-tuning**](docs/INDEX.md) | [code](ablation/analyzers/sax_index.py)&nbsp;·&nbsp;[code](ablation/analyzers/subsequence_searcher.py) | Generate structural homolog pairs, fine-tune similarity models and evaluate homolog/non-homolog separation. |
-| [**Finding-corpus&nbsp;mining**](docs/INDEX.md) | [code](sweeps/corpus_miner.py)&nbsp;·&nbsp;[code](modules/cve_byte_patterns.py) | Extract confirmed local findings, summarize CWE frequency and identify repeated cross-target patterns or scanner gaps. |
-| [**CVE&nbsp;byte-signature&nbsp;checks**](docs/INDEX.md) | [code](sweeps/corpus_miner.py)&nbsp;·&nbsp;[code](modules/cve_byte_patterns.py) | Match implemented architecture-specific vulnerable-byte signatures for selected patch-verification tasks. |
-| [**Version-aware&nbsp;scan&nbsp;caching**](docs/INDEX.md) | [code](sweeps/corpus_miner.py)&nbsp;·&nbsp;[code](modules/cve_byte_patterns.py) | Invalidate persisted scanner results when either target bytes or scanner source changes. |
-| [**Vendor&nbsp;sink&nbsp;profiles**](docs/INDEX.md) | [code](sweeps/corpus_miner.py)&nbsp;·&nbsp;[code](modules/cve_byte_patterns.py) | Load vendor-specific sinks and known-safe command patterns from profiles. |
+| [**Single/multi-binary&nbsp;corpus&nbsp;building**](docs/INDEX.md) | [1](ablation/analyzers/corpus_builder.py)&nbsp;·&nbsp;[2](ablation/analyzers/func_id_db.py) | Populate a function-identity database with descriptions, product/version metadata and inferred records. |
+| [**Function&nbsp;identity&nbsp;database**](docs/INDEX.md) | [1](ablation/analyzers/corpus_builder.py)&nbsp;·&nbsp;[2](ablation/analyzers/func_id_db.py) | Store function names, roles, signatures, structures and call chains across binary versions. |
+| [**Analyst&nbsp;naming&nbsp;registry**](docs/INDEX.md) | [1](ablation/analyzers/corpus_builder.py)&nbsp;·&nbsp;[2](ablation/analyzers/func_id_db.py) | Persist, bulk-update and reload confirmed function names per binary. |
+| [**Signature-based&nbsp;auto-naming**](docs/INDEX.md) | [1](ablation/analyzers/corpus_builder.py)&nbsp;·&nbsp;[2](ablation/analyzers/func_id_db.py) | Match unknown functions against behavioral signatures with thresholds and dry-run support. |
+| [**SAX&nbsp;approximate&nbsp;indexing**](docs/INDEX.md) | [1](ablation/analyzers/sax_index.py)&nbsp;·&nbsp;[2](ablation/analyzers/subsequence_searcher.py) | Index opcode-category sequences for fast structural candidate lookup. |
+| [**Behavioral&nbsp;subsequence&nbsp;search**](docs/INDEX.md) | [1](ablation/analyzers/sax_index.py)&nbsp;·&nbsp;[2](ablation/analyzers/subsequence_searcher.py) | Find exact or approximate opcode-category subpatterns within functions. |
+| [**Structural&nbsp;similarity&nbsp;and&nbsp;orphan&nbsp;detection**](docs/reference-modules/structural.md) | [1](ablation/analyzers/sax_index.py)&nbsp;·&nbsp;[2](ablation/analyzers/subsequence_searcher.py) | Compare opcode histograms, constants, calls and other structural signals to identify unmatched functions. |
+| [**Embedding&nbsp;fine-tuning**](docs/INDEX.md) | [1](ablation/analyzers/sax_index.py)&nbsp;·&nbsp;[2](ablation/analyzers/subsequence_searcher.py) | Generate structural homolog pairs, fine-tune similarity models and evaluate homolog/non-homolog separation. |
+| [**Finding-corpus&nbsp;mining**](docs/INDEX.md) | [1](sweeps/corpus_miner.py)&nbsp;·&nbsp;[2](modules/cve_byte_patterns.py) | Extract confirmed local findings, summarize CWE frequency and identify repeated cross-target patterns or scanner gaps. |
+| [**CVE&nbsp;byte-signature&nbsp;checks**](docs/INDEX.md) | [1](sweeps/corpus_miner.py)&nbsp;·&nbsp;[2](modules/cve_byte_patterns.py) | Match implemented architecture-specific vulnerable-byte signatures for selected patch-verification tasks. |
+| [**Version-aware&nbsp;scan&nbsp;caching**](docs/INDEX.md) | [1](sweeps/corpus_miner.py)&nbsp;·&nbsp;[2](modules/cve_byte_patterns.py) | Invalidate persisted scanner results when either target bytes or scanner source changes. |
+| [**Vendor&nbsp;sink&nbsp;profiles**](docs/INDEX.md) | [1](sweeps/corpus_miner.py)&nbsp;·&nbsp;[2](modules/cve_byte_patterns.py) | Load vendor-specific sinks and known-safe command patterns from profiles. |
 
 </details>
 
 <details>
 <summary><strong>Additional vulnerability scanners and triage</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Architecture-specific&nbsp;sink&nbsp;provenance**](docs/INDEX.md) | [code](ablation/analyzers/sink_arg_classifier_arm32.py)&nbsp;·&nbsp;[code](ablation/analyzers/sink_arg_classifier_mips.py) | Separate classifiers for ARM32, MIPS32, PPC32, i386 and PPC64 big-endian calling conventions. |
-| [**Transitive&nbsp;sink-wrapper&nbsp;discovery**](docs/INDEX.md) | [code](ablation/analyzers/sink_propagator.py)&nbsp;·&nbsp;[code](ablation/analyzers/sanitizer_detector.py) | Find supported wrappers around dangerous x86-64 string/exec sinks. |
-| [**Sanitizer&nbsp;recognition**](docs/INDEX.md) | [code](ablation/analyzers/sink_propagator.py)&nbsp;·&nbsp;[code](ablation/analyzers/sanitizer_detector.py) | Identify allowlist-style validators and assess coverage of shell metacharacters. |
-| [**Sanitizer-gated&nbsp;sink&nbsp;filtering**](docs/INDEX.md) | [code](ablation/analyzers/sink_propagator.py)&nbsp;·&nbsp;[code](ablation/analyzers/sanitizer_detector.py) | Reclassify supported argument-propagated sites whose paths include recognized validation. |
-| [**File-versus-socket&nbsp;input&nbsp;discrimination**](docs/INDEX.md) | [code](ablation/analyzers/sink_propagator.py)&nbsp;·&nbsp;[code](ablation/analyzers/sanitizer_detector.py) | Classify ARM64 fgets sources using FILE-pointer provenance to reduce configuration-file false positives. |
-| [**scanf-family&nbsp;overflow&nbsp;candidates**](docs/INDEX.md) | [code](ablation/analyzers/sscanf_sink_classifier.py)&nbsp;·&nbsp;[code](ablation/analyzers/deprecated_func_scanner.py) | Identify unbounded string conversion specifications at supported formatted-input call sites. |
-| [**Deprecated&nbsp;unsafe-function&nbsp;scanning**](docs/INDEX.md) | [code](ablation/analyzers/sscanf_sink_classifier.py)&nbsp;·&nbsp;[code](ablation/analyzers/deprecated_func_scanner.py) | Flag imported inherently unsafe functions such as gets/mktemp/tmpnam/getwd as review candidates. |
-| [**ARM32&nbsp;allocation&nbsp;arithmetic&nbsp;overflow**](docs/INDEX.md) | [code](ablation/analyzers/sscanf_sink_classifier.py)&nbsp;·&nbsp;[code](ablation/analyzers/deprecated_func_scanner.py) | Trace supported multiply operations with input-derived operands into allocation sizes. |
-| [**PPC32&nbsp;heap-slot&nbsp;overflow**](docs/INDEX.md) | [code](ablation/analyzers/sscanf_sink_classifier.py)&nbsp;·&nbsp;[code](ablation/analyzers/deprecated_func_scanner.py) | Detect fixed-slot allocation followed by supported unbounded string-copy patterns. |
-| [**TLV/chunk&nbsp;alignment&nbsp;checks**](docs/INDEX.md) | [code](modules/chunk_walker_validator.py)&nbsp;·&nbsp;[code](ablation/analyzers/epilogue_share_scanner.py) | Identify supported parser pointer advances that omit expected alignment rounding. |
-| [**Shared-epilogue&nbsp;detection**](docs/INDEX.md) | [code](modules/chunk_walker_validator.py)&nbsp;·&nbsp;[code](ablation/analyzers/epilogue_share_scanner.py) | Detect tail blocks shared through jumps so analysis can account for compiler-merged epilogues. |
-| [**Fork/exec&nbsp;classification**](docs/INDEX.md) | [code](modules/chunk_walker_validator.py)&nbsp;·&nbsp;[code](ablation/analyzers/epilogue_share_scanner.py) | Distinguish worker-child, exec-after-fork and exit-in-child patterns in supported x86-64 functions. |
-| [**Apache&nbsp;module&nbsp;analysis**](docs/INDEX.md) | [code](ablation/analyzers/apache_module_analyzer.py)&nbsp;·&nbsp;[code](ablation/analyzers/cmdb_surface_mapper.py) | Inspect supported APR/Apache binary module hooks and security-relevant authentication/session patterns. |
-| [**CMDB-to-sink&nbsp;mapping**](docs/INDEX.md) | [code](ablation/analyzers/apache_module_analyzer.py)&nbsp;·&nbsp;[code](ablation/analyzers/cmdb_surface_mapper.py) | Associate supported Fortinet database-table accesses with functions that also invoke execution sinks. |
-| [**HTTP&nbsp;method-enum&nbsp;recovery**](docs/INDEX.md) | [code](ablation/analyzers/apache_module_analyzer.py)&nbsp;·&nbsp;[code](ablation/analyzers/cmdb_surface_mapper.py) | Infer supported Flatui route method identifiers from route-registration evidence. |
-| [**Firmware-flasher&nbsp;trust&nbsp;checks**](docs/INDEX.md) | [code](ablation/analyzers/apache_module_analyzer.py)&nbsp;·&nbsp;[code](ablation/analyzers/cmdb_surface_mapper.py) | Flag PE firmware-update capability lacking recognized signature-verification imports as a review candidate. |
-| [**VxWorks&nbsp;static-archive&nbsp;scanning**](docs/INDEX.md) | [code](modules/vxworks_archive_scanner.py)&nbsp;·&nbsp;[code](ablation/analyzers/compiler_security_gate.py) | Inspect PPC32 archive members for unbounded copies within selected stack-frame sizes. |
-| [**Post-link&nbsp;compiler&nbsp;security&nbsp;gate**](docs/reference-modules/compiler_security_gate.md) | [code](modules/vxworks_archive_scanner.py)&nbsp;·&nbsp;[code](ablation/analyzers/compiler_security_gate.py) | Run supported binary scanners against newly compiled artifacts and aggregate findings. |
+| [**Architecture-specific&nbsp;sink&nbsp;provenance**](docs/INDEX.md) | [1](ablation/analyzers/sink_arg_classifier_arm32.py)&nbsp;·&nbsp;[2](ablation/analyzers/sink_arg_classifier_mips.py) | Separate classifiers for ARM32, MIPS32, PPC32, i386 and PPC64 big-endian calling conventions. |
+| [**Transitive&nbsp;sink-wrapper&nbsp;discovery**](docs/INDEX.md) | [1](ablation/analyzers/sink_propagator.py)&nbsp;·&nbsp;[2](ablation/analyzers/sanitizer_detector.py) | Find supported wrappers around dangerous x86-64 string/exec sinks. |
+| [**Sanitizer&nbsp;recognition**](docs/INDEX.md) | [1](ablation/analyzers/sink_propagator.py)&nbsp;·&nbsp;[2](ablation/analyzers/sanitizer_detector.py) | Identify allowlist-style validators and assess coverage of shell metacharacters. |
+| [**Sanitizer-gated&nbsp;sink&nbsp;filtering**](docs/INDEX.md) | [1](ablation/analyzers/sink_propagator.py)&nbsp;·&nbsp;[2](ablation/analyzers/sanitizer_detector.py) | Reclassify supported argument-propagated sites whose paths include recognized validation. |
+| [**File-versus-socket&nbsp;input&nbsp;discrimination**](docs/INDEX.md) | [1](ablation/analyzers/sink_propagator.py)&nbsp;·&nbsp;[2](ablation/analyzers/sanitizer_detector.py) | Classify ARM64 fgets sources using FILE-pointer provenance to reduce configuration-file false positives. |
+| [**scanf-family&nbsp;overflow&nbsp;candidates**](docs/INDEX.md) | [1](ablation/analyzers/sscanf_sink_classifier.py)&nbsp;·&nbsp;[2](ablation/analyzers/deprecated_func_scanner.py) | Identify unbounded string conversion specifications at supported formatted-input call sites. |
+| [**Deprecated&nbsp;unsafe-function&nbsp;scanning**](docs/INDEX.md) | [1](ablation/analyzers/sscanf_sink_classifier.py)&nbsp;·&nbsp;[2](ablation/analyzers/deprecated_func_scanner.py) | Flag imported inherently unsafe functions such as gets/mktemp/tmpnam/getwd as review candidates. |
+| [**ARM32&nbsp;allocation&nbsp;arithmetic&nbsp;overflow**](docs/INDEX.md) | [1](ablation/analyzers/sscanf_sink_classifier.py)&nbsp;·&nbsp;[2](ablation/analyzers/deprecated_func_scanner.py) | Trace supported multiply operations with input-derived operands into allocation sizes. |
+| [**PPC32&nbsp;heap-slot&nbsp;overflow**](docs/INDEX.md) | [1](ablation/analyzers/sscanf_sink_classifier.py)&nbsp;·&nbsp;[2](ablation/analyzers/deprecated_func_scanner.py) | Detect fixed-slot allocation followed by supported unbounded string-copy patterns. |
+| [**TLV/chunk&nbsp;alignment&nbsp;checks**](docs/INDEX.md) | [1](modules/chunk_walker_validator.py)&nbsp;·&nbsp;[2](ablation/analyzers/epilogue_share_scanner.py) | Identify supported parser pointer advances that omit expected alignment rounding. |
+| [**Shared-epilogue&nbsp;detection**](docs/INDEX.md) | [1](modules/chunk_walker_validator.py)&nbsp;·&nbsp;[2](ablation/analyzers/epilogue_share_scanner.py) | Detect tail blocks shared through jumps so analysis can account for compiler-merged epilogues. |
+| [**Fork/exec&nbsp;classification**](docs/INDEX.md) | [1](modules/chunk_walker_validator.py)&nbsp;·&nbsp;[2](ablation/analyzers/epilogue_share_scanner.py) | Distinguish worker-child, exec-after-fork and exit-in-child patterns in supported x86-64 functions. |
+| [**Apache&nbsp;module&nbsp;analysis**](docs/INDEX.md) | [1](ablation/analyzers/apache_module_analyzer.py)&nbsp;·&nbsp;[2](ablation/analyzers/cmdb_surface_mapper.py) | Inspect supported APR/Apache binary module hooks and security-relevant authentication/session patterns. |
+| [**CMDB-to-sink&nbsp;mapping**](docs/INDEX.md) | [1](ablation/analyzers/apache_module_analyzer.py)&nbsp;·&nbsp;[2](ablation/analyzers/cmdb_surface_mapper.py) | Associate supported Fortinet database-table accesses with functions that also invoke execution sinks. |
+| [**HTTP&nbsp;method-enum&nbsp;recovery**](docs/INDEX.md) | [1](ablation/analyzers/apache_module_analyzer.py)&nbsp;·&nbsp;[2](ablation/analyzers/cmdb_surface_mapper.py) | Infer supported Flatui route method identifiers from route-registration evidence. |
+| [**Firmware-flasher&nbsp;trust&nbsp;checks**](docs/INDEX.md) | [1](ablation/analyzers/apache_module_analyzer.py)&nbsp;·&nbsp;[2](ablation/analyzers/cmdb_surface_mapper.py) | Flag PE firmware-update capability lacking recognized signature-verification imports as a review candidate. |
+| [**VxWorks&nbsp;static-archive&nbsp;scanning**](docs/INDEX.md) | [1](modules/vxworks_archive_scanner.py)&nbsp;·&nbsp;[2](ablation/analyzers/compiler_security_gate.py) | Inspect PPC32 archive members for unbounded copies within selected stack-frame sizes. |
+| [**Post-link&nbsp;compiler&nbsp;security&nbsp;gate**](docs/reference-modules/compiler_security_gate.md) | [1](modules/vxworks_archive_scanner.py)&nbsp;·&nbsp;[2](ablation/analyzers/compiler_security_gate.py) | Run supported binary scanners against newly compiled artifacts and aggregate findings. |
 
 </details>
 
 <details>
 <summary><strong>C++ and architecture-specific recovery</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**ARM64&nbsp;virtual-call&nbsp;resolution**](docs/INDEX.md) | [code](ablation/analyzers/vtable_resolver.py)&nbsp;·&nbsp;[code](modules/elf_vtable_reconstructor.py) | Infer vtables, constructor vptr writes and supported BLR targets. |
-| [**x86-64&nbsp;relocation-based&nbsp;vtables**](docs/INDEX.md) | [code](ablation/analyzers/vtable_resolver.py)&nbsp;·&nbsp;[code](modules/elf_vtable_reconstructor.py) | Reconstruct virtual table slots from ELF RELA entries. |
-| [**Live&nbsp;virtual-dispatch&nbsp;slots**](docs/INDEX.md) | [code](ablation/analyzers/vtable_resolver.py)&nbsp;·&nbsp;[code](modules/elf_vtable_reconstructor.py) | Find x86-64 indirect-call slot uses and distinguish referenced slots from unobserved ones. |
-| [**PS3&nbsp;OPD&nbsp;virtual&nbsp;tables**](docs/INDEX.md) | [code](ablation/analyzers/vtable_resolver.py)&nbsp;·&nbsp;[code](modules/elf_vtable_reconstructor.py) | Recover PPC64 Cell PPU virtual tables through function descriptors. |
-| [**Verified&nbsp;PPC32&nbsp;import&nbsp;callers**](docs/INDEX.md) | [code](ablation/analyzers/ppc32_plt_tracer.py)&nbsp;·&nbsp;[code](ablation/analyzers/ppc64_elfv1_resolver.py) | Trace PLT thunk calls while checking the caller's active GOT2 base. |
-| [**PPC64&nbsp;ELFv1&nbsp;resolution**](docs/INDEX.md) | [code](ablation/analyzers/ppc32_plt_tracer.py)&nbsp;·&nbsp;[code](ablation/analyzers/ppc64_elfv1_resolver.py) | Resolve OPD function descriptors, TOC-related metadata and glink import stubs. |
-| [**Unnamed&nbsp;ARM64&nbsp;library-call&nbsp;classification**](docs/INDEX.md) | [code](ablation/analyzers/ppc32_plt_tracer.py)&nbsp;·&nbsp;[code](ablation/analyzers/ppc64_elfv1_resolver.py) | Classify PLT entries using argument/return behavior and a library-function summary database. |
-| [**Classic&nbsp;Mac&nbsp;ABI&nbsp;clobber&nbsp;scanning**](docs/INDEX.md) | [code](ablation/analyzers/ppc32_plt_tracer.py)&nbsp;·&nbsp;[code](ablation/analyzers/ppc64_elfv1_resolver.py) | Detect supported PPC32 PEF argument-register clobbers across intervening calls. |
-| [**Data-structure&nbsp;pattern&nbsp;classification**](docs/INDEX.md) | [code](ablation/analyzers/ppc64_dynds_classifier.py)&nbsp;·&nbsp;[code](ablation/analyzers/ppc64_vmx_density.py) | Identify supported PPC64/Cell list/tree/traversal patterns from structural signals. |
-| [**VMX/AltiVec&nbsp;density&nbsp;ranking**](docs/INDEX.md) | [code](ablation/analyzers/ppc64_dynds_classifier.py)&nbsp;·&nbsp;[code](ablation/analyzers/ppc64_vmx_density.py) | Locate vector-heavy PPC64 functions as candidates for math, physics or rendering code. |
-| [**PPC32/PPC476&nbsp;dedicated&nbsp;lifting**](docs/INDEX.md) | [code](ablation/analyzers/ppc64_dynds_classifier.py)&nbsp;·&nbsp;[code](ablation/analyzers/ppc64_vmx_density.py) | Additional pseudo-code/decompiler entry points for PowerPC and IBM Book E binaries. |
+| [**ARM64&nbsp;virtual-call&nbsp;resolution**](docs/INDEX.md) | [1](ablation/analyzers/vtable_resolver.py)&nbsp;·&nbsp;[2](modules/elf_vtable_reconstructor.py) | Infer vtables, constructor vptr writes and supported BLR targets. |
+| [**x86-64&nbsp;relocation-based&nbsp;vtables**](docs/INDEX.md) | [1](ablation/analyzers/vtable_resolver.py)&nbsp;·&nbsp;[2](modules/elf_vtable_reconstructor.py) | Reconstruct virtual table slots from ELF RELA entries. |
+| [**Live&nbsp;virtual-dispatch&nbsp;slots**](docs/INDEX.md) | [1](ablation/analyzers/vtable_resolver.py)&nbsp;·&nbsp;[2](modules/elf_vtable_reconstructor.py) | Find x86-64 indirect-call slot uses and distinguish referenced slots from unobserved ones. |
+| [**PS3&nbsp;OPD&nbsp;virtual&nbsp;tables**](docs/INDEX.md) | [1](ablation/analyzers/vtable_resolver.py)&nbsp;·&nbsp;[2](modules/elf_vtable_reconstructor.py) | Recover PPC64 Cell PPU virtual tables through function descriptors. |
+| [**Verified&nbsp;PPC32&nbsp;import&nbsp;callers**](docs/INDEX.md) | [1](ablation/analyzers/ppc32_plt_tracer.py)&nbsp;·&nbsp;[2](ablation/analyzers/ppc64_elfv1_resolver.py) | Trace PLT thunk calls while checking the caller's active GOT2 base. |
+| [**PPC64&nbsp;ELFv1&nbsp;resolution**](docs/INDEX.md) | [1](ablation/analyzers/ppc32_plt_tracer.py)&nbsp;·&nbsp;[2](ablation/analyzers/ppc64_elfv1_resolver.py) | Resolve OPD function descriptors, TOC-related metadata and glink import stubs. |
+| [**Unnamed&nbsp;ARM64&nbsp;library-call&nbsp;classification**](docs/INDEX.md) | [1](ablation/analyzers/ppc32_plt_tracer.py)&nbsp;·&nbsp;[2](ablation/analyzers/ppc64_elfv1_resolver.py) | Classify PLT entries using argument/return behavior and a library-function summary database. |
+| [**Classic&nbsp;Mac&nbsp;ABI&nbsp;clobber&nbsp;scanning**](docs/INDEX.md) | [1](ablation/analyzers/ppc32_plt_tracer.py)&nbsp;·&nbsp;[2](ablation/analyzers/ppc64_elfv1_resolver.py) | Detect supported PPC32 PEF argument-register clobbers across intervening calls. |
+| [**Data-structure&nbsp;pattern&nbsp;classification**](docs/INDEX.md) | [1](ablation/analyzers/ppc64_dynds_classifier.py)&nbsp;·&nbsp;[2](ablation/analyzers/ppc64_vmx_density.py) | Identify supported PPC64/Cell list/tree/traversal patterns from structural signals. |
+| [**VMX/AltiVec&nbsp;density&nbsp;ranking**](docs/INDEX.md) | [1](ablation/analyzers/ppc64_dynds_classifier.py)&nbsp;·&nbsp;[2](ablation/analyzers/ppc64_vmx_density.py) | Locate vector-heavy PPC64 functions as candidates for math, physics or rendering code. |
+| [**PPC32/PPC476&nbsp;dedicated&nbsp;lifting**](docs/INDEX.md) | [1](ablation/analyzers/ppc64_dynds_classifier.py)&nbsp;·&nbsp;[2](ablation/analyzers/ppc64_vmx_density.py) | Additional pseudo-code/decompiler entry points for PowerPC and IBM Book E binaries. |
 
 </details>
 
 <details>
 <summary><strong>Firmware, containers and legacy formats</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Firmware&nbsp;signature&nbsp;and&nbsp;secret&nbsp;triage**](docs/INDEX.md) | [code](ablation/core/firmware_analyzer.py)&nbsp;·&nbsp;[code](ablation/analyzers/firmware_container.py) | Locate embedded format signatures, security-relevant strings, version indicators and entropy changes. |
-| [**Partition-table&nbsp;extraction**](docs/INDEX.md) | [code](ablation/core/firmware_analyzer.py)&nbsp;·&nbsp;[code](ablation/analyzers/firmware_container.py) | Enumerate and extract supported fixed-record firmware container partitions. |
-| [**Hardware-root&nbsp;discovery**](docs/INDEX.md) | [code](ablation/core/firmware_analyzer.py)&nbsp;·&nbsp;[code](ablation/analyzers/firmware_container.py) | Identify MMIO load/store references to known peripheral address ranges. |
-| [**AMI&nbsp;modified&nbsp;CramFS**](docs/INDEX.md) | [code](modules/ami_cramfs_extractor.py)&nbsp;·&nbsp;[code](modules/huawei_squashfs_extractor.py) | Extract supported BMC filesystems with AMI-specific extended inode layouts. |
-| [**Huawei&nbsp;modified&nbsp;SquashFS**](docs/INDEX.md) | [code](modules/ami_cramfs_extractor.py)&nbsp;·&nbsp;[code](modules/huawei_squashfs_extractor.py) | Extract supported vendor SquashFS/XZ layouts, including handling of ARM64 BCJ-filtered blocks. |
-| [**Apple&nbsp;bv41&nbsp;decompression**](docs/INDEX.md) | [code](modules/ami_cramfs_extractor.py)&nbsp;·&nbsp;[code](modules/huawei_squashfs_extractor.py) | Probe, iterate and stream-decode Apple's proprietary chunked LZ4 framing. |
-| [**FortiMail&nbsp;VM&nbsp;key&nbsp;extraction**](docs/INDEX.md) | [code](ablation/analyzers/fortimail_vmdk_extractor.py)&nbsp;·&nbsp;[code](ablation/analyzers/fortibuild_track_classifier.py) | Extract supported key files from OVF/VMDK firmware layouts and their filesystem partitions. |
-| [**Fortinet&nbsp;build-track&nbsp;classification**](docs/INDEX.md) | [code](ablation/analyzers/fortimail_vmdk_extractor.py)&nbsp;·&nbsp;[code](ablation/analyzers/fortibuild_track_classifier.py) | Parse product/version/build-track names and predict the known certificate-key family. |
-| [**AIX&nbsp;plain&nbsp;BFF&nbsp;extraction**](docs/INDEX.md) | [code](ablation/core/bff_extractor.py)&nbsp;·&nbsp;[code](modules/bff_decompressor.py) | Parse backup-by-name archives and extract contained files/directories. |
-| [**Compressed&nbsp;BFF&nbsp;detection&nbsp;and&nbsp;LZW&nbsp;attempt**](docs/INDEX.md) | [code](ablation/core/bff_extractor.py)&nbsp;·&nbsp;[code](modules/bff_decompressor.py) | Identify compression variants and attempt supported LZW decompression through uncompress; Huffman variants report that AIX tooling is required. |
-| [**AIX&nbsp;big&nbsp;archive&nbsp;extraction**](docs/INDEX.md) | [code](ablation/core/bff_extractor.py)&nbsp;·&nbsp;[code](modules/bff_decompressor.py) | Extract members from the AIX <bigaf> library/archive format. |
-| [**AIX&nbsp;XCOFF32/64&nbsp;analysis**](docs/INDEX.md) | [code](ablation/core/xcoff_parser.py)&nbsp;·&nbsp;[code](modules/xcoff_executable_analyzer.py) | Parse executable sections and loader symbols; enumerate imports/exports and candidate function entries. |
-| [**Standalone&nbsp;XCOFF&nbsp;symbol&nbsp;resolution**](docs/INDEX.md) | [code](ablation/core/xcoff_parser.py)&nbsp;·&nbsp;[code](modules/xcoff_executable_analyzer.py) | Recover library imports and exported code addresses without a full BinaryContext session. |
-| [**IBM&nbsp;W-Code&nbsp;parsing**](docs/INDEX.md) | [code](ablation/core/xcoff_parser.py)&nbsp;·&nbsp;[code](modules/xcoff_executable_analyzer.py) | Parse supported XLC intermediate records and builtin-catalog references. |
-| [**Motorola&nbsp;88000&nbsp;BCS&nbsp;COFF**](docs/INDEX.md) | [code](ablation/core/coff_m88k_parser.py)&nbsp;·&nbsp;[code](ablation/core/guardian_pak_extractor.py) | Parse legacy executable sections and feed the dedicated M88K decoder/context path. |
-| [**Tandem&nbsp;Guardian&nbsp;PAK**](docs/INDEX.md) | [code](ablation/core/coff_m88k_parser.py)&nbsp;·&nbsp;[code](ablation/core/guardian_pak_extractor.py) | Decompress supported Guardian BACKUP records and extract NonStop files. |
-| [**AppleDouble&nbsp;resource&nbsp;forks**](docs/INDEX.md) | [code](ablation/core/coff_m88k_parser.py)&nbsp;·&nbsp;[code](ablation/core/guardian_pak_extractor.py) | Parse classic Mac resource-fork and metadata containers. |
-| [**PowerPC&nbsp;PEF/CFM**](docs/INDEX.md) | [code](ablation/core/coff_m88k_parser.py)&nbsp;·&nbsp;[code](ablation/core/guardian_pak_extractor.py) | Parse classic Mac code/data sections, imports and supported container metadata. |
-| [**Installer&nbsp;payload&nbsp;analysis**](docs/INDEX.md) | [code](modules/installer_binary_analyzer.py)&nbsp;·&nbsp;[code](sweeps/win16_ne_sweep.py) | Extract supported BitRock LZMA payloads, carve PE candidates and optionally unpack UPX; recognize NSIS/Inno signatures. |
-| [**Windows&nbsp;16-bit&nbsp;NE**](docs/INDEX.md) | [code](modules/installer_binary_analyzer.py)&nbsp;·&nbsp;[code](sweeps/win16_ne_sweep.py) | Parse segmented New Executable binaries and sweep supported imports/calls/security patterns. |
-| [**Windows&nbsp;LE/VxD**](docs/INDEX.md) | [code](modules/installer_binary_analyzer.py)&nbsp;·&nbsp;[code](sweeps/win16_ne_sweep.py) | Parse Linear Executable drivers, inspect device-descriptor data and sweep supported ring-0 code patterns. |
-| [**MS-DOS&nbsp;MZ**](docs/INDEX.md) | [code](modules/installer_binary_analyzer.py)&nbsp;·&nbsp;[code](sweeps/win16_ne_sweep.py) | Parse real-mode headers/relocations and analyze supported multi-segment 16-bit code. |
+| [**Firmware&nbsp;signature&nbsp;and&nbsp;secret&nbsp;triage**](docs/INDEX.md) | [1](ablation/core/firmware_analyzer.py)&nbsp;·&nbsp;[2](ablation/analyzers/firmware_container.py) | Locate embedded format signatures, security-relevant strings, version indicators and entropy changes. |
+| [**Partition-table&nbsp;extraction**](docs/INDEX.md) | [1](ablation/core/firmware_analyzer.py)&nbsp;·&nbsp;[2](ablation/analyzers/firmware_container.py) | Enumerate and extract supported fixed-record firmware container partitions. |
+| [**Hardware-root&nbsp;discovery**](docs/INDEX.md) | [1](ablation/core/firmware_analyzer.py)&nbsp;·&nbsp;[2](ablation/analyzers/firmware_container.py) | Identify MMIO load/store references to known peripheral address ranges. |
+| [**AMI&nbsp;modified&nbsp;CramFS**](docs/INDEX.md) | [1](modules/ami_cramfs_extractor.py)&nbsp;·&nbsp;[2](modules/huawei_squashfs_extractor.py) | Extract supported BMC filesystems with AMI-specific extended inode layouts. |
+| [**Huawei&nbsp;modified&nbsp;SquashFS**](docs/INDEX.md) | [1](modules/ami_cramfs_extractor.py)&nbsp;·&nbsp;[2](modules/huawei_squashfs_extractor.py) | Extract supported vendor SquashFS/XZ layouts, including handling of ARM64 BCJ-filtered blocks. |
+| [**Apple&nbsp;bv41&nbsp;decompression**](docs/INDEX.md) | [1](modules/ami_cramfs_extractor.py)&nbsp;·&nbsp;[2](modules/huawei_squashfs_extractor.py) | Probe, iterate and stream-decode Apple's proprietary chunked LZ4 framing. |
+| [**FortiMail&nbsp;VM&nbsp;key&nbsp;extraction**](docs/INDEX.md) | [1](ablation/analyzers/fortimail_vmdk_extractor.py)&nbsp;·&nbsp;[2](ablation/analyzers/fortibuild_track_classifier.py) | Extract supported key files from OVF/VMDK firmware layouts and their filesystem partitions. |
+| [**Fortinet&nbsp;build-track&nbsp;classification**](docs/INDEX.md) | [1](ablation/analyzers/fortimail_vmdk_extractor.py)&nbsp;·&nbsp;[2](ablation/analyzers/fortibuild_track_classifier.py) | Parse product/version/build-track names and predict the known certificate-key family. |
+| [**AIX&nbsp;plain&nbsp;BFF&nbsp;extraction**](docs/INDEX.md) | [1](ablation/core/bff_extractor.py)&nbsp;·&nbsp;[2](modules/bff_decompressor.py) | Parse backup-by-name archives and extract contained files/directories. |
+| [**Compressed&nbsp;BFF&nbsp;detection&nbsp;and&nbsp;LZW&nbsp;attempt**](docs/INDEX.md) | [1](ablation/core/bff_extractor.py)&nbsp;·&nbsp;[2](modules/bff_decompressor.py) | Identify compression variants and attempt supported LZW decompression through uncompress; Huffman variants report that AIX tooling is required. |
+| [**AIX&nbsp;big&nbsp;archive&nbsp;extraction**](docs/INDEX.md) | [1](ablation/core/bff_extractor.py)&nbsp;·&nbsp;[2](modules/bff_decompressor.py) | Extract members from the AIX <bigaf> library/archive format. |
+| [**AIX&nbsp;XCOFF32/64&nbsp;analysis**](docs/INDEX.md) | [1](ablation/core/xcoff_parser.py)&nbsp;·&nbsp;[2](modules/xcoff_executable_analyzer.py) | Parse executable sections and loader symbols; enumerate imports/exports and candidate function entries. |
+| [**Standalone&nbsp;XCOFF&nbsp;symbol&nbsp;resolution**](docs/INDEX.md) | [1](ablation/core/xcoff_parser.py)&nbsp;·&nbsp;[2](modules/xcoff_executable_analyzer.py) | Recover library imports and exported code addresses without a full BinaryContext session. |
+| [**IBM&nbsp;W-Code&nbsp;parsing**](docs/INDEX.md) | [1](ablation/core/xcoff_parser.py)&nbsp;·&nbsp;[2](modules/xcoff_executable_analyzer.py) | Parse supported XLC intermediate records and builtin-catalog references. |
+| [**Motorola&nbsp;88000&nbsp;BCS&nbsp;COFF**](docs/INDEX.md) | [1](ablation/core/coff_m88k_parser.py)&nbsp;·&nbsp;[2](ablation/core/guardian_pak_extractor.py) | Parse legacy executable sections and feed the dedicated M88K decoder/context path. |
+| [**Tandem&nbsp;Guardian&nbsp;PAK**](docs/INDEX.md) | [1](ablation/core/coff_m88k_parser.py)&nbsp;·&nbsp;[2](ablation/core/guardian_pak_extractor.py) | Decompress supported Guardian BACKUP records and extract NonStop files. |
+| [**AppleDouble&nbsp;resource&nbsp;forks**](docs/INDEX.md) | [1](ablation/core/coff_m88k_parser.py)&nbsp;·&nbsp;[2](ablation/core/guardian_pak_extractor.py) | Parse classic Mac resource-fork and metadata containers. |
+| [**PowerPC&nbsp;PEF/CFM**](docs/INDEX.md) | [1](ablation/core/coff_m88k_parser.py)&nbsp;·&nbsp;[2](ablation/core/guardian_pak_extractor.py) | Parse classic Mac code/data sections, imports and supported container metadata. |
+| [**Installer&nbsp;payload&nbsp;analysis**](docs/INDEX.md) | [1](modules/installer_binary_analyzer.py)&nbsp;·&nbsp;[2](sweeps/win16_ne_sweep.py) | Extract supported BitRock LZMA payloads, carve PE candidates and optionally unpack UPX; recognize NSIS/Inno signatures. |
+| [**Windows&nbsp;16-bit&nbsp;NE**](docs/INDEX.md) | [1](modules/installer_binary_analyzer.py)&nbsp;·&nbsp;[2](sweeps/win16_ne_sweep.py) | Parse segmented New Executable binaries and sweep supported imports/calls/security patterns. |
+| [**Windows&nbsp;LE/VxD**](docs/INDEX.md) | [1](modules/installer_binary_analyzer.py)&nbsp;·&nbsp;[2](sweeps/win16_ne_sweep.py) | Parse Linear Executable drivers, inspect device-descriptor data and sweep supported ring-0 code patterns. |
+| [**MS-DOS&nbsp;MZ**](docs/INDEX.md) | [1](modules/installer_binary_analyzer.py)&nbsp;·&nbsp;[2](sweeps/win16_ne_sweep.py) | Parse real-mode headers/relocations and analyze supported multi-segment 16-bit code. |
 
 </details>
 
 <details>
 <summary><strong>Language and application runtimes</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**DEX&nbsp;disassembly&nbsp;and&nbsp;lifting**](docs/INDEX.md) | [code](ablation/analyzers/dex_disasm.py)&nbsp;·&nbsp;[code](ablation/analyzers/dex_lifter.py) | Decode instructions to annotated smali and supported pseudo-Java. |
-| [**Android&nbsp;Binder&nbsp;surface**](docs/INDEX.md) | [code](ablation/analyzers/dex_disasm.py)&nbsp;·&nbsp;[code](ablation/analyzers/dex_lifter.py) | Correlate exported services and DEX classes to identify Binder IPC exposure. |
-| [**JNI&nbsp;bridge&nbsp;reconstruction**](docs/INDEX.md) | [code](ablation/analyzers/dex_disasm.py)&nbsp;·&nbsp;[code](ablation/analyzers/dex_lifter.py) | Associate native declarations, loadLibrary uses, peer-pointer fields and native exports. |
-| [**Specialized&nbsp;JNI&nbsp;protocol&nbsp;analysis**](docs/INDEX.md) | [code](modules/deep_jni_analysis.py)&nbsp;·&nbsp;[code](modules/analyze_all_jni.py) | Scripts for deeper vtable, field-write and protocol analysis, including libhijoyptt-specific assumptions. |
-| [**Go&nbsp;string&nbsp;recovery**](docs/INDEX.md) | [code](ablation/analyzers/go_string_resolver.py)&nbsp;·&nbsp;[code](ablation/analyzers/go_subprocess_scanner.py) | Resolve length-delimited strings under the supported AMD64 Go register ABI. |
-| [**Go&nbsp;subprocess&nbsp;surface**](docs/INDEX.md) | [code](ablation/analyzers/go_string_resolver.py)&nbsp;·&nbsp;[code](ablation/analyzers/go_subprocess_scanner.py) | Find os/exec call sites and recover static command-path arguments where possible. |
-| [**Go&nbsp;dangerous-call&nbsp;graph**](docs/INDEX.md) | [code](ablation/analyzers/go_string_resolver.py)&nbsp;·&nbsp;[code](ablation/analyzers/go_subprocess_scanner.py) | Build/cache caller maps, filter application namespaces and resolve supported interface tables. |
-| [**Stripped&nbsp;Go&nbsp;x86-64&nbsp;boundaries**](docs/INDEX.md) | [code](ablation/analyzers/go_string_resolver.py)&nbsp;·&nbsp;[code](ablation/analyzers/go_subprocess_scanner.py) | Recover function entries from pclntab when conventional symbols/debug info are absent. |
-| [**Java&nbsp;class/JAR&nbsp;parsing**](docs/INDEX.md) | [code](modules/java_re.py)&nbsp;·&nbsp;[code](modules/java_decompiler.py) | Read constant pools, methods, fields, descriptors, manifests and archives. |
-| [**Java&nbsp;security&nbsp;pattern&nbsp;scans**](docs/INDEX.md) | [code](modules/java_re.py)&nbsp;·&nbsp;[code](modules/java_decompiler.py) | Flag supported reflection, serialization, class-loading, Runtime.exec, SSRF, XXE, JNDI, weak randomness and hardcoded-secret patterns. |
-| [**JVM/Spring&nbsp;exposure&nbsp;inspection**](docs/INDEX.md) | [code](modules/java_re.py)&nbsp;·&nbsp;[code](modules/java_decompiler.py) | Inspect JVM flags/debug endpoints, agents and supported Spring Actuator/application-context surfaces. |
-| [**Python&nbsp;.pyc&nbsp;scanning**](docs/INDEX.md) | [code](ablation/analyzers/pyc_bytecode_scanner.py)&nbsp;·&nbsp;[code](ablation/analyzers/perl_taint_scanner.py) | Inspect supported code objects for dangerous bytecode/name/constant patterns without source files. |
-| [**Perl&nbsp;shell-injection&nbsp;scanning**](docs/INDEX.md) | [code](ablation/analyzers/pyc_bytecode_scanner.py)&nbsp;·&nbsp;[code](ablation/analyzers/perl_taint_scanner.py) | Trace supported Perl input sources into system/exec/qx/backtick-style sinks. |
-| [**Electron&nbsp;application&nbsp;auditing**](docs/INDEX.md) | [code](ablation/analyzers/pyc_bytecode_scanner.py)&nbsp;·&nbsp;[code](ablation/analyzers/perl_taint_scanner.py) | Scan extracted JavaScript for unsafe Electron settings, IPC and execution patterns. |
-| [**Browser-extension&nbsp;auditing**](docs/INDEX.md) | [code](ablation/analyzers/pyc_bytecode_scanner.py)&nbsp;·&nbsp;[code](ablation/analyzers/perl_taint_scanner.py) | Inspect extension manifests, permissions, external messaging and privileged JavaScript patterns. |
+| [**DEX&nbsp;disassembly&nbsp;and&nbsp;lifting**](docs/INDEX.md) | [1](ablation/analyzers/dex_disasm.py)&nbsp;·&nbsp;[2](ablation/analyzers/dex_lifter.py) | Decode instructions to annotated smali and supported pseudo-Java. |
+| [**Android&nbsp;Binder&nbsp;surface**](docs/INDEX.md) | [1](ablation/analyzers/dex_disasm.py)&nbsp;·&nbsp;[2](ablation/analyzers/dex_lifter.py) | Correlate exported services and DEX classes to identify Binder IPC exposure. |
+| [**JNI&nbsp;bridge&nbsp;reconstruction**](docs/INDEX.md) | [1](ablation/analyzers/dex_disasm.py)&nbsp;·&nbsp;[2](ablation/analyzers/dex_lifter.py) | Associate native declarations, loadLibrary uses, peer-pointer fields and native exports. |
+| [**Specialized&nbsp;JNI&nbsp;protocol&nbsp;analysis**](docs/INDEX.md) | [1](modules/deep_jni_analysis.py)&nbsp;·&nbsp;[2](modules/analyze_all_jni.py) | Scripts for deeper vtable, field-write and protocol analysis, including libhijoyptt-specific assumptions. |
+| [**Go&nbsp;string&nbsp;recovery**](docs/INDEX.md) | [1](ablation/analyzers/go_string_resolver.py)&nbsp;·&nbsp;[2](ablation/analyzers/go_subprocess_scanner.py) | Resolve length-delimited strings under the supported AMD64 Go register ABI. |
+| [**Go&nbsp;subprocess&nbsp;surface**](docs/INDEX.md) | [1](ablation/analyzers/go_string_resolver.py)&nbsp;·&nbsp;[2](ablation/analyzers/go_subprocess_scanner.py) | Find os/exec call sites and recover static command-path arguments where possible. |
+| [**Go&nbsp;dangerous-call&nbsp;graph**](docs/INDEX.md) | [1](ablation/analyzers/go_string_resolver.py)&nbsp;·&nbsp;[2](ablation/analyzers/go_subprocess_scanner.py) | Build/cache caller maps, filter application namespaces and resolve supported interface tables. |
+| [**Stripped&nbsp;Go&nbsp;x86-64&nbsp;boundaries**](docs/INDEX.md) | [1](ablation/analyzers/go_string_resolver.py)&nbsp;·&nbsp;[2](ablation/analyzers/go_subprocess_scanner.py) | Recover function entries from pclntab when conventional symbols/debug info are absent. |
+| [**Java&nbsp;class/JAR&nbsp;parsing**](docs/INDEX.md) | [1](modules/java_re.py)&nbsp;·&nbsp;[2](modules/java_decompiler.py) | Read constant pools, methods, fields, descriptors, manifests and archives. |
+| [**Java&nbsp;security&nbsp;pattern&nbsp;scans**](docs/INDEX.md) | [1](modules/java_re.py)&nbsp;·&nbsp;[2](modules/java_decompiler.py) | Flag supported reflection, serialization, class-loading, Runtime.exec, SSRF, XXE, JNDI, weak randomness and hardcoded-secret patterns. |
+| [**JVM/Spring&nbsp;exposure&nbsp;inspection**](docs/INDEX.md) | [1](modules/java_re.py)&nbsp;·&nbsp;[2](modules/java_decompiler.py) | Inspect JVM flags/debug endpoints, agents and supported Spring Actuator/application-context surfaces. |
+| [**Python&nbsp;.pyc&nbsp;scanning**](docs/INDEX.md) | [1](ablation/analyzers/pyc_bytecode_scanner.py)&nbsp;·&nbsp;[2](ablation/analyzers/perl_taint_scanner.py) | Inspect supported code objects for dangerous bytecode/name/constant patterns without source files. |
+| [**Perl&nbsp;shell-injection&nbsp;scanning**](docs/INDEX.md) | [1](ablation/analyzers/pyc_bytecode_scanner.py)&nbsp;·&nbsp;[2](ablation/analyzers/perl_taint_scanner.py) | Trace supported Perl input sources into system/exec/qx/backtick-style sinks. |
+| [**Electron&nbsp;application&nbsp;auditing**](docs/INDEX.md) | [1](ablation/analyzers/pyc_bytecode_scanner.py)&nbsp;·&nbsp;[2](ablation/analyzers/perl_taint_scanner.py) | Scan extracted JavaScript for unsafe Electron settings, IPC and execution patterns. |
+| [**Browser-extension&nbsp;auditing**](docs/INDEX.md) | [1](ablation/analyzers/pyc_bytecode_scanner.py)&nbsp;·&nbsp;[2](ablation/analyzers/perl_taint_scanner.py) | Inspect extension manifests, permissions, external messaging and privileged JavaScript patterns. |
 
 </details>
 
 <details>
 <summary><strong>Source repository auditing</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Repository&nbsp;ingestion&nbsp;and&nbsp;search**](docs/INDEX.md) | [code](ablation/analyzers/source_ingestion.py)&nbsp;·&nbsp;[code](ablation/analyzers/source_entry_classifier.py) | Build a local/remote source index, categorize languages and retrieve matching text/context. |
-| [**Route&nbsp;authentication&nbsp;classification**](docs/INDEX.md) | [code](ablation/analyzers/source_ingestion.py)&nbsp;·&nbsp;[code](ablation/analyzers/source_entry_classifier.py) | Map supported source HTTP routes to authentication-wrapper levels. |
-| [**Source&nbsp;dangerous-sink&nbsp;detection**](docs/INDEX.md) | [code](ablation/analyzers/source_ingestion.py)&nbsp;·&nbsp;[code](ablation/analyzers/source_entry_classifier.py) | Scan supported eval, subprocess, SSRF, path traversal and internal-endpoint patterns. |
-| [**Tenant-isolation&nbsp;checks**](docs/INDEX.md) | [code](ablation/analyzers/source_ingestion.py)&nbsp;·&nbsp;[code](ablation/analyzers/source_entry_classifier.py) | Identify supported database accesses without expected user/project/organization scoping. |
-| [**Architectural-risk&nbsp;detection**](docs/INDEX.md) | [code](ablation/analyzers/source_ingestion.py)&nbsp;·&nbsp;[code](ablation/analyzers/source_entry_classifier.py) | Flag unsafe rendering combined with extensible dispatch or shared context that may increase future exposure. |
+| [**Repository&nbsp;ingestion&nbsp;and&nbsp;search**](docs/INDEX.md) | [1](ablation/analyzers/source_ingestion.py)&nbsp;·&nbsp;[2](ablation/analyzers/source_entry_classifier.py) | Build a local/remote source index, categorize languages and retrieve matching text/context. |
+| [**Route&nbsp;authentication&nbsp;classification**](docs/INDEX.md) | [1](ablation/analyzers/source_ingestion.py)&nbsp;·&nbsp;[2](ablation/analyzers/source_entry_classifier.py) | Map supported source HTTP routes to authentication-wrapper levels. |
+| [**Source&nbsp;dangerous-sink&nbsp;detection**](docs/INDEX.md) | [1](ablation/analyzers/source_ingestion.py)&nbsp;·&nbsp;[2](ablation/analyzers/source_entry_classifier.py) | Scan supported eval, subprocess, SSRF, path traversal and internal-endpoint patterns. |
+| [**Tenant-isolation&nbsp;checks**](docs/INDEX.md) | [1](ablation/analyzers/source_ingestion.py)&nbsp;·&nbsp;[2](ablation/analyzers/source_entry_classifier.py) | Identify supported database accesses without expected user/project/organization scoping. |
+| [**Architectural-risk&nbsp;detection**](docs/INDEX.md) | [1](ablation/analyzers/source_ingestion.py)&nbsp;·&nbsp;[2](ablation/analyzers/source_entry_classifier.py) | Flag unsafe rendering combined with extensible dispatch or shared context that may increase future exposure. |
 
 </details>
 
 <details>
 <summary><strong>Automotive and embedded details</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**C166/C167&nbsp;decoding**](docs/INDEX.md) | [code](ablation/analyzers/ecu_c166_decoder.py)&nbsp;·&nbsp;[code](ablation/analyzers/ecu_c28x_decoder.py) | Decode supported instructions, find functions, inspect XRAM accesses and parse interrupt vectors. |
-| [**TI&nbsp;C28x&nbsp;decoding**](docs/INDEX.md) | [code](ablation/analyzers/ecu_c166_decoder.py)&nbsp;·&nbsp;[code](ablation/analyzers/ecu_c28x_decoder.py) | Decode supported DSP instructions and recover candidate function starts. |
-| [**M68K/CPU32&nbsp;decoding**](docs/INDEX.md) | [code](ablation/analyzers/ecu_c166_decoder.py)&nbsp;·&nbsp;[code](ablation/analyzers/ecu_c28x_decoder.py) | Decode supported ECU instructions and discover function entries. |
-| [**Renesas&nbsp;SH-2A&nbsp;decoding**](docs/INDEX.md) | [code](ablation/analyzers/ecu_c166_decoder.py)&nbsp;·&nbsp;[code](ablation/analyzers/ecu_c28x_decoder.py) | Handle supported instruction widths, calls, functions and delay-slot-aware CFG/lifting. |
-| [**PowerPC&nbsp;VLE&nbsp;decoding**](docs/INDEX.md) | [code](ablation/analyzers/ecu_c166_decoder.py)&nbsp;·&nbsp;[code](ablation/analyzers/ecu_c28x_decoder.py) | Handle supported mixed 16/32-bit e200 ECU instructions and function discovery. |
-| [**HiSilicon&nbsp;RISC-V&nbsp;extensions**](docs/INDEX.md) | [code](ablation/analyzers/hisi_rv32_ext.py)&nbsp;·&nbsp;[code](modules/isa_8051.py) | Decode supported proprietary riscv31 opcodes, widths and multi-register memory operations. |
-| [**8051&nbsp;ISA&nbsp;modeling**](docs/INDEX.md) | [code](ablation/analyzers/hisi_rv32_ext.py)&nbsp;·&nbsp;[code](modules/isa_8051.py) | Model MCS-51 registers, separate memory spaces, instruction semantics and selected security-analysis facts. |
-| [**TI&nbsp;COFF/archive&nbsp;loading**](docs/INDEX.md) | [code](ablation/analyzers/hisi_rv32_ext.py)&nbsp;·&nbsp;[code](modules/isa_8051.py) | Parse supported TI COFF2 objects and archive symbols/sections. |
-| [**TI&nbsp;neural-network&nbsp;artifacts**](docs/INDEX.md) | [code](ablation/analyzers/hisi_rv32_ext.py)&nbsp;·&nbsp;[code](modules/isa_8051.py) | Identify supported TVM/NNC-generated symbols and inspect inference-artifact metadata/patterns. |
-| [**TI&nbsp;SDK&nbsp;package&nbsp;sweeping**](docs/INDEX.md) | [code](ablation/analyzers/hisi_rv32_ext.py)&nbsp;·&nbsp;[code](modules/isa_8051.py) | Dispatch supported COFF, ARM, ARM64 and flat-ROM artifacts across package directories/archives. |
-| [**Calibration&nbsp;table&nbsp;interpretation**](docs/INDEX.md) | [code](ablation/analyzers/ecu_cal_def.py)&nbsp;·&nbsp;[code](ablation/analyzers/ecu_open_damos_parser.py) | Represent axes, scaling and table metadata; read supported calibration values and produce address labels. |
-| [**Calibration&nbsp;variant/relocation&nbsp;support**](docs/INDEX.md) | [code](ablation/analyzers/ecu_cal_def.py)&nbsp;·&nbsp;[code](ablation/analyzers/ecu_open_damos_parser.py) | Resolve supported inherited definition variants, identify ROMs and locate fingerprint-relocated open_damos tables. |
+| [**C166/C167&nbsp;decoding**](docs/INDEX.md) | [1](ablation/analyzers/ecu_c166_decoder.py)&nbsp;·&nbsp;[2](ablation/analyzers/ecu_c28x_decoder.py) | Decode supported instructions, find functions, inspect XRAM accesses and parse interrupt vectors. |
+| [**TI&nbsp;C28x&nbsp;decoding**](docs/INDEX.md) | [1](ablation/analyzers/ecu_c166_decoder.py)&nbsp;·&nbsp;[2](ablation/analyzers/ecu_c28x_decoder.py) | Decode supported DSP instructions and recover candidate function starts. |
+| [**M68K/CPU32&nbsp;decoding**](docs/INDEX.md) | [1](ablation/analyzers/ecu_c166_decoder.py)&nbsp;·&nbsp;[2](ablation/analyzers/ecu_c28x_decoder.py) | Decode supported ECU instructions and discover function entries. |
+| [**Renesas&nbsp;SH-2A&nbsp;decoding**](docs/INDEX.md) | [1](ablation/analyzers/ecu_c166_decoder.py)&nbsp;·&nbsp;[2](ablation/analyzers/ecu_c28x_decoder.py) | Handle supported instruction widths, calls, functions and delay-slot-aware CFG/lifting. |
+| [**PowerPC&nbsp;VLE&nbsp;decoding**](docs/INDEX.md) | [1](ablation/analyzers/ecu_c166_decoder.py)&nbsp;·&nbsp;[2](ablation/analyzers/ecu_c28x_decoder.py) | Handle supported mixed 16/32-bit e200 ECU instructions and function discovery. |
+| [**HiSilicon&nbsp;RISC-V&nbsp;extensions**](docs/INDEX.md) | [1](ablation/analyzers/hisi_rv32_ext.py)&nbsp;·&nbsp;[2](modules/isa_8051.py) | Decode supported proprietary riscv31 opcodes, widths and multi-register memory operations. |
+| [**8051&nbsp;ISA&nbsp;modeling**](docs/INDEX.md) | [1](ablation/analyzers/hisi_rv32_ext.py)&nbsp;·&nbsp;[2](modules/isa_8051.py) | Model MCS-51 registers, separate memory spaces, instruction semantics and selected security-analysis facts. |
+| [**TI&nbsp;COFF/archive&nbsp;loading**](docs/INDEX.md) | [1](ablation/analyzers/hisi_rv32_ext.py)&nbsp;·&nbsp;[2](modules/isa_8051.py) | Parse supported TI COFF2 objects and archive symbols/sections. |
+| [**TI&nbsp;neural-network&nbsp;artifacts**](docs/INDEX.md) | [1](ablation/analyzers/hisi_rv32_ext.py)&nbsp;·&nbsp;[2](modules/isa_8051.py) | Identify supported TVM/NNC-generated symbols and inspect inference-artifact metadata/patterns. |
+| [**TI&nbsp;SDK&nbsp;package&nbsp;sweeping**](docs/INDEX.md) | [1](ablation/analyzers/hisi_rv32_ext.py)&nbsp;·&nbsp;[2](modules/isa_8051.py) | Dispatch supported COFF, ARM, ARM64 and flat-ROM artifacts across package directories/archives. |
+| [**Calibration&nbsp;table&nbsp;interpretation**](docs/INDEX.md) | [1](ablation/analyzers/ecu_cal_def.py)&nbsp;·&nbsp;[2](ablation/analyzers/ecu_open_damos_parser.py) | Represent axes, scaling and table metadata; read supported calibration values and produce address labels. |
+| [**Calibration&nbsp;variant/relocation&nbsp;support**](docs/INDEX.md) | [1](ablation/analyzers/ecu_cal_def.py)&nbsp;·&nbsp;[2](ablation/analyzers/ecu_open_damos_parser.py) | Resolve supported inherited definition variants, identify ROMs and locate fingerprint-relocated open_damos tables. |
 
 </details>
 
 <details>
 <summary><strong>Windows security details</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Control&nbsp;Flow&nbsp;Guard&nbsp;review**](docs/INDEX.md) | [code](ablation/analyzers/cfg_bypass_detector.py)&nbsp;·&nbsp;[code](ablation/analyzers/seh_chain_analyzer.py) | Inspect CFG metadata and supported exported-target/bypass opportunity patterns. |
-| [**SEH&nbsp;and&nbsp;SafeSEH&nbsp;review**](docs/INDEX.md) | [code](ablation/analyzers/cfg_bypass_detector.py)&nbsp;·&nbsp;[code](ablation/analyzers/seh_chain_analyzer.py) | Inspect x86 handler registration/chains, protections and suspicious handler patterns. |
-| [**COM&nbsp;attack-surface&nbsp;mapping**](docs/INDEX.md) | [code](ablation/analyzers/cfg_bypass_detector.py)&nbsp;·&nbsp;[code](ablation/analyzers/seh_chain_analyzer.py) | Find supported COM registrations and privilege-boundary/hijacking indicators. |
-| [**ETW&nbsp;provider&nbsp;extraction**](docs/INDEX.md) | [code](ablation/analyzers/cfg_bypass_detector.py)&nbsp;·&nbsp;[code](ablation/analyzers/seh_chain_analyzer.py) | Recover provider/event indicators and assess supported telemetry patterns. |
-| [**Kernel&nbsp;pool&nbsp;flow&nbsp;checks**](docs/INDEX.md) | [code](ablation/analyzers/cfg_bypass_detector.py)&nbsp;·&nbsp;[code](ablation/analyzers/seh_chain_analyzer.py) | Track supported pool allocations toward copies/writes using bounded instruction-window heuristics. |
-| [**PDB&nbsp;integration**](docs/INDEX.md) | [code](ablation/analyzers/cfg_bypass_detector.py)&nbsp;·&nbsp;[code](ablation/analyzers/seh_chain_analyzer.py) | Read PE debug references, fetch/load supported PDB information and inject recovered names into context. |
+| [**Control&nbsp;Flow&nbsp;Guard&nbsp;review**](docs/INDEX.md) | [1](ablation/analyzers/cfg_bypass_detector.py)&nbsp;·&nbsp;[2](ablation/analyzers/seh_chain_analyzer.py) | Inspect CFG metadata and supported exported-target/bypass opportunity patterns. |
+| [**SEH&nbsp;and&nbsp;SafeSEH&nbsp;review**](docs/INDEX.md) | [1](ablation/analyzers/cfg_bypass_detector.py)&nbsp;·&nbsp;[2](ablation/analyzers/seh_chain_analyzer.py) | Inspect x86 handler registration/chains, protections and suspicious handler patterns. |
+| [**COM&nbsp;attack-surface&nbsp;mapping**](docs/INDEX.md) | [1](ablation/analyzers/cfg_bypass_detector.py)&nbsp;·&nbsp;[2](ablation/analyzers/seh_chain_analyzer.py) | Find supported COM registrations and privilege-boundary/hijacking indicators. |
+| [**ETW&nbsp;provider&nbsp;extraction**](docs/INDEX.md) | [1](ablation/analyzers/cfg_bypass_detector.py)&nbsp;·&nbsp;[2](ablation/analyzers/seh_chain_analyzer.py) | Recover provider/event indicators and assess supported telemetry patterns. |
+| [**Kernel&nbsp;pool&nbsp;flow&nbsp;checks**](docs/INDEX.md) | [1](ablation/analyzers/cfg_bypass_detector.py)&nbsp;·&nbsp;[2](ablation/analyzers/seh_chain_analyzer.py) | Track supported pool allocations toward copies/writes using bounded instruction-window heuristics. |
+| [**PDB&nbsp;integration**](docs/INDEX.md) | [1](ablation/analyzers/cfg_bypass_detector.py)&nbsp;·&nbsp;[2](ablation/analyzers/seh_chain_analyzer.py) | Read PE debug references, fetch/load supported PDB information and inject recovered names into context. |
 
 </details>
 
 <details>
 <summary><strong>Cryptography and authentication details</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Repeating-XOR&nbsp;key&nbsp;recovery**](docs/INDEX.md) | [code](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[code](ablation/analyzers/crypto_pattern_detector.py) | Use known plaintext, key-length scoring and frequency/transposition methods. |
-| [**Affine&nbsp;mapping&nbsp;analysis**](docs/INDEX.md) | [code](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[code](ablation/analyzers/crypto_pattern_detector.py) | Inspect supported affine byte mappings as a helper for encoded data recovery. |
-| [**Hash/AES&nbsp;implementation&nbsp;recognition**](docs/INDEX.md) | [code](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[code](ablation/analyzers/crypto_pattern_detector.py) | Detect hash constants and supported custom ARM32/Thumb AES-CBC patterns. |
-| [**JWT&nbsp;analysis&nbsp;and&nbsp;weak-secret&nbsp;testing**](docs/INDEX.md) | [code](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[code](ablation/analyzers/crypto_pattern_detector.py) | Decode tokens, inspect algorithms and test candidate weak signing secrets; token-construction helpers are present. |
-| [**SAML&nbsp;and&nbsp;key-material&nbsp;review**](docs/INDEX.md) | [code](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[code](ablation/analyzers/crypto_pattern_detector.py) | Inspect assertion structure/wrapping indicators and search for embedded key material. |
-| [**RSA/ECDSA&nbsp;and&nbsp;randomness&nbsp;checks**](docs/INDEX.md) | [code](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[code](ablation/analyzers/crypto_pattern_detector.py) | Helpers inspect RSA/prime properties, ECDSA nonce reuse, RNG/hash/key-management weaknesses and selected timing/nonce risks. |
-| [**Crypto/C2&nbsp;encoding&nbsp;indicators**](docs/INDEX.md) | [code](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[code](ablation/analyzers/crypto_pattern_detector.py) | Recognize selected XOR, RC4, Base64, Salsa/ChaCha, AES and arithmetic-encoding patterns. |
+| [**Repeating-XOR&nbsp;key&nbsp;recovery**](docs/INDEX.md) | [1](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[2](ablation/analyzers/crypto_pattern_detector.py) | Use known plaintext, key-length scoring and frequency/transposition methods. |
+| [**Affine&nbsp;mapping&nbsp;analysis**](docs/INDEX.md) | [1](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[2](ablation/analyzers/crypto_pattern_detector.py) | Inspect supported affine byte mappings as a helper for encoded data recovery. |
+| [**Hash/AES&nbsp;implementation&nbsp;recognition**](docs/INDEX.md) | [1](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[2](ablation/analyzers/crypto_pattern_detector.py) | Detect hash constants and supported custom ARM32/Thumb AES-CBC patterns. |
+| [**JWT&nbsp;analysis&nbsp;and&nbsp;weak-secret&nbsp;testing**](docs/INDEX.md) | [1](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[2](ablation/analyzers/crypto_pattern_detector.py) | Decode tokens, inspect algorithms and test candidate weak signing secrets; token-construction helpers are present. |
+| [**SAML&nbsp;and&nbsp;key-material&nbsp;review**](docs/INDEX.md) | [1](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[2](ablation/analyzers/crypto_pattern_detector.py) | Inspect assertion structure/wrapping indicators and search for embedded key material. |
+| [**RSA/ECDSA&nbsp;and&nbsp;randomness&nbsp;checks**](docs/INDEX.md) | [1](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[2](ablation/analyzers/crypto_pattern_detector.py) | Helpers inspect RSA/prime properties, ECDSA nonce reuse, RNG/hash/key-management weaknesses and selected timing/nonce risks. |
+| [**Crypto/C2&nbsp;encoding&nbsp;indicators**](docs/INDEX.md) | [1](ablation/analyzers/xor_solver.py)&nbsp;·&nbsp;[2](ablation/analyzers/crypto_pattern_detector.py) | Recognize selected XOR, RC4, Base64, Salsa/ChaCha, AES and arithmetic-encoding patterns. |
 
 </details>
 
 <details>
 <summary><strong>TLS and web/API analysis</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**TLS&nbsp;certificate&nbsp;and&nbsp;protocol&nbsp;probing**](docs/INDEX.md) | [code](ablation/core/tls_analyzer.py)&nbsp;·&nbsp;[code](modules/tls_enum.py) | Inspect certificates, key strength, legacy versions/ciphers, DH-related properties and handshake behavior. |
-| [**TLS&nbsp;policy&nbsp;checks**](docs/INDEX.md) | [code](ablation/core/tls_analyzer.py)&nbsp;·&nbsp;[code](modules/tls_enum.py) | Probe HSTS, redirects, mTLS, pinning-related headers, SCT/CT indicators and ACME-related exposure. |
-| [**TLS&nbsp;session/downgrade&nbsp;surfaces**](docs/INDEX.md) | [code](ablation/core/tls_analyzer.py)&nbsp;·&nbsp;[code](modules/tls_enum.py) | Probe supported resumption, downgrade, inspection/proxy and zero-trust gateway configurations. |
-| [**Unknown&nbsp;HTTP&nbsp;API&nbsp;mapping**](docs/INDEX.md) | [code](modules/api_re.py) | Discover paths/versions/methods, harvest OpenAPI and infer parameter/schema/error/state behavior. |
-| [**API&nbsp;authorization&nbsp;checks**](docs/INDEX.md) | [code](modules/api_re.py) | Probe supported object/function-level authorization, mass assignment and excessive-data exposure cases. |
-| [**API&nbsp;injection&nbsp;and&nbsp;validation&nbsp;checks**](docs/INDEX.md) | [code](modules/api_re.py) | Probe supported parameter pollution, content-type switching, SSRF, NoSQL, host-header and other input-handling surfaces. |
-| [**API&nbsp;authentication&nbsp;and&nbsp;token&nbsp;checks**](docs/INDEX.md) | [code](modules/api_re.py) | Inspect JWT/OAuth flows, state/PKCE, default credentials, rate limiting and timing behavior. |
-| [**Additional&nbsp;API&nbsp;protocols**](docs/INDEX.md) | [code](modules/api_re.py) | Discovery/probes for GraphQL, gRPC reflection, SOAP/WSDL, JSON-RPC and WebSocket interfaces. |
-| [**Business-logic&nbsp;and&nbsp;version&nbsp;exposure**](docs/INDEX.md) | [code](modules/api_re.py) | Probe state changes, pagination, hidden parameters, shadow versions and webhook behaviors. |
-| [**Nginx&nbsp;fingerprinting&nbsp;and&nbsp;exposure**](docs/INDEX.md) | [code](modules/nginx_enum.py) | Inspect server/version disclosure, status/debug endpoints, autoindex and sensitive paths. |
-| [**Nginx&nbsp;configuration&nbsp;probes**](docs/INDEX.md) | [code](modules/nginx_enum.py) | Check supported alias traversal, proxy SSRF, host-header, smuggling, authentication, ingress and rate-limit surfaces. |
-| [**Version-linked&nbsp;web&nbsp;checks**](docs/INDEX.md) | [code](modules/nginx_enum.py) | Identify selected historical nginx CVE indicators; matches still require target-specific verification. |
+| [**TLS&nbsp;certificate&nbsp;and&nbsp;protocol&nbsp;probing**](docs/INDEX.md) | [1](ablation/core/tls_analyzer.py)&nbsp;·&nbsp;[2](modules/tls_enum.py) | Inspect certificates, key strength, legacy versions/ciphers, DH-related properties and handshake behavior. |
+| [**TLS&nbsp;policy&nbsp;checks**](docs/INDEX.md) | [1](ablation/core/tls_analyzer.py)&nbsp;·&nbsp;[2](modules/tls_enum.py) | Probe HSTS, redirects, mTLS, pinning-related headers, SCT/CT indicators and ACME-related exposure. |
+| [**TLS&nbsp;session/downgrade&nbsp;surfaces**](docs/INDEX.md) | [1](ablation/core/tls_analyzer.py)&nbsp;·&nbsp;[2](modules/tls_enum.py) | Probe supported resumption, downgrade, inspection/proxy and zero-trust gateway configurations. |
+| [**Unknown&nbsp;HTTP&nbsp;API&nbsp;mapping**](docs/INDEX.md) | [1](modules/api_re.py) | Discover paths/versions/methods, harvest OpenAPI and infer parameter/schema/error/state behavior. |
+| [**API&nbsp;authorization&nbsp;checks**](docs/INDEX.md) | [1](modules/api_re.py) | Probe supported object/function-level authorization, mass assignment and excessive-data exposure cases. |
+| [**API&nbsp;injection&nbsp;and&nbsp;validation&nbsp;checks**](docs/INDEX.md) | [1](modules/api_re.py) | Probe supported parameter pollution, content-type switching, SSRF, NoSQL, host-header and other input-handling surfaces. |
+| [**API&nbsp;authentication&nbsp;and&nbsp;token&nbsp;checks**](docs/INDEX.md) | [1](modules/api_re.py) | Inspect JWT/OAuth flows, state/PKCE, default credentials, rate limiting and timing behavior. |
+| [**Additional&nbsp;API&nbsp;protocols**](docs/INDEX.md) | [1](modules/api_re.py) | Discovery/probes for GraphQL, gRPC reflection, SOAP/WSDL, JSON-RPC and WebSocket interfaces. |
+| [**Business-logic&nbsp;and&nbsp;version&nbsp;exposure**](docs/INDEX.md) | [1](modules/api_re.py) | Probe state changes, pagination, hidden parameters, shadow versions and webhook behaviors. |
+| [**Nginx&nbsp;fingerprinting&nbsp;and&nbsp;exposure**](docs/INDEX.md) | [1](modules/nginx_enum.py) | Inspect server/version disclosure, status/debug endpoints, autoindex and sensitive paths. |
+| [**Nginx&nbsp;configuration&nbsp;probes**](docs/INDEX.md) | [1](modules/nginx_enum.py) | Check supported alias traversal, proxy SSRF, host-header, smuggling, authentication, ingress and rate-limit surfaces. |
+| [**Version-linked&nbsp;web&nbsp;checks**](docs/INDEX.md) | [1](modules/nginx_enum.py) | Identify selected historical nginx CVE indicators; matches still require target-specific verification. |
 
 </details>
 
 <details>
 <summary><strong>Host, process and privilege enumeration</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Host&nbsp;platform&nbsp;inventory**](docs/INDEX.md) | [code](modules/process_enum.py)&nbsp;·&nbsp;[code](modules/syscall_trace.py) | Detect OS, architecture, kernel/libc and selected security/capability settings. |
-| [**Process&nbsp;and&nbsp;memory-map&nbsp;inventory**](docs/INDEX.md) | [code](modules/process_enum.py)&nbsp;·&nbsp;[code](modules/syscall_trace.py) | Enumerate processes, loaded modules, executable/RWX regions, open files and environment data. |
-| [**System-call&nbsp;tracing**](docs/INDEX.md) | [code](modules/process_enum.py)&nbsp;·&nbsp;[code](modules/syscall_trace.py) | Invoke supported strace/ptrace-based tracing and summarize file, network and process operations. |
-| [**Injection&nbsp;and&nbsp;persistence&nbsp;indicators**](docs/INDEX.md) | [code](modules/process_enum.py)&nbsp;·&nbsp;[code](modules/syscall_trace.py) | Inspect supported process-hollowing, preload/library-hijack, ptrace, cron, services and named-pipe patterns. |
-| [**Linux&nbsp;privilege-escalation&nbsp;triage**](docs/INDEX.md) | [code](modules/privesc_enum.py)&nbsp;·&nbsp;[code](modules/windows_enum.py) | Enumerate SUID, sudo, capabilities, writable paths/cron, credential-file exposure, Docker access and kernel/namespace conditions. |
-| [**Windows&nbsp;live&nbsp;enumeration**](docs/INDEX.md) | [code](modules/privesc_enum.py)&nbsp;·&nbsp;[code](modules/windows_enum.py) | Inspect COM registration differences, RPC endpoints, ETW sessions, pipes, policies, services, autoruns, privileges and loaded modules. |
-| [**Windows&nbsp;escalation&nbsp;indicators**](docs/INDEX.md) | [code](modules/privesc_enum.py)&nbsp;·&nbsp;[code](modules/windows_enum.py) | Check supported unquoted-service, installer-policy, token, scheduled-task and UAC/driver indicators. |
+| [**Host&nbsp;platform&nbsp;inventory**](docs/INDEX.md) | [1](modules/process_enum.py)&nbsp;·&nbsp;[2](modules/syscall_trace.py) | Detect OS, architecture, kernel/libc and selected security/capability settings. |
+| [**Process&nbsp;and&nbsp;memory-map&nbsp;inventory**](docs/INDEX.md) | [1](modules/process_enum.py)&nbsp;·&nbsp;[2](modules/syscall_trace.py) | Enumerate processes, loaded modules, executable/RWX regions, open files and environment data. |
+| [**System-call&nbsp;tracing**](docs/INDEX.md) | [1](modules/process_enum.py)&nbsp;·&nbsp;[2](modules/syscall_trace.py) | Invoke supported strace/ptrace-based tracing and summarize file, network and process operations. |
+| [**Injection&nbsp;and&nbsp;persistence&nbsp;indicators**](docs/INDEX.md) | [1](modules/process_enum.py)&nbsp;·&nbsp;[2](modules/syscall_trace.py) | Inspect supported process-hollowing, preload/library-hijack, ptrace, cron, services and named-pipe patterns. |
+| [**Linux&nbsp;privilege-escalation&nbsp;triage**](docs/INDEX.md) | [1](modules/privesc_enum.py)&nbsp;·&nbsp;[2](modules/windows_enum.py) | Enumerate SUID, sudo, capabilities, writable paths/cron, credential-file exposure, Docker access and kernel/namespace conditions. |
+| [**Windows&nbsp;live&nbsp;enumeration**](docs/INDEX.md) | [1](modules/privesc_enum.py)&nbsp;·&nbsp;[2](modules/windows_enum.py) | Inspect COM registration differences, RPC endpoints, ETW sessions, pipes, policies, services, autoruns, privileges and loaded modules. |
+| [**Windows&nbsp;escalation&nbsp;indicators**](docs/INDEX.md) | [1](modules/privesc_enum.py)&nbsp;·&nbsp;[2](modules/windows_enum.py) | Check supported unquoted-service, installer-policy, token, scheduled-task and UAC/driver indicators. |
 
 </details>
 
 <details>
 <summary><strong>Forensics and malware triage</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Windows&nbsp;artifact&nbsp;discovery**](docs/INDEX.md) | [code](modules/forensics_enum.py)&nbsp;·&nbsp;[code](modules/process_enum.py) | Locate MFT/LNK/Prefetch/EVTX-related artifacts and markers; this is not full decoding of those formats. |
-| [**Volatile&nbsp;and&nbsp;Linux&nbsp;artifact&nbsp;triage**](docs/INDEX.md) | [code](modules/forensics_enum.py)&nbsp;·&nbsp;[code](modules/process_enum.py) | Inspect process/procfs/memory-access indicators, histories, deleted executables and selected volatile evidence. |
-| [**Timestamp/log&nbsp;anomaly&nbsp;checks**](docs/INDEX.md) | [code](modules/forensics_enum.py)&nbsp;·&nbsp;[code](modules/process_enum.py) | Identify selected timestomping, empty/deleted log and related metadata indicators. |
-| [**Rootkit/bootkit&nbsp;indicators**](docs/INDEX.md) | [code](modules/forensics_enum.py)&nbsp;·&nbsp;[code](modules/process_enum.py) | Match supported SSDT/callback/hiding, DPC/timer, raw-disk and boot-sector patterns. |
-| [**Malware&nbsp;behavior&nbsp;indicators**](docs/INDEX.md) | [code](modules/forensics_enum.py)&nbsp;·&nbsp;[code](modules/process_enum.py) | Inspect keylogger, clipboard, mutex, downloader/backdoor, fileless and reflective-loading API/string combinations. |
-| [**Packing&nbsp;and&nbsp;anti-analysis&nbsp;indicators**](docs/INDEX.md) | [code](modules/forensics_enum.py)&nbsp;·&nbsp;[code](modules/process_enum.py) | Detect selected packed-section, PEB/debugger, opaque/junk-code, anti-disassembly and sandbox-environment patterns. |
-| [**Office/PDF&nbsp;triage**](docs/INDEX.md) | [code](modules/forensics_enum.py)&nbsp;·&nbsp;[code](modules/process_enum.py) | Scan raw document markers for macro and exploit indicators without full document interpretation. |
-| [**ELF&nbsp;recovery&nbsp;from&nbsp;physical-memory&nbsp;dumps**](docs/INDEX.md) | [code](modules/physmem_elf_vfs.py)&nbsp;·&nbsp;[code](modules/video_container.py) | Find supported ELF64 images and reconstruct candidates using contiguous mappings and proximity heuristics. |
-| [**Video-container&nbsp;forensics**](docs/INDEX.md) | [code](modules/physmem_elf_vfs.py)&nbsp;·&nbsp;[code](modules/video_container.py) | Parse MP4/MOV, MKV/WebM and AVI structures for appended payloads, suspicious metadata, malformed sizes and encrypted-track markers. |
-| [**IOC&nbsp;candidate&nbsp;extraction**](docs/INDEX.md) | [code](modules/physmem_elf_vfs.py)&nbsp;·&nbsp;[code](modules/video_container.py) | Extract supported URL/address/path/key/certificate and other suspicious-string candidates. |
-| [**ATT&CK&nbsp;labeling**](docs/INDEX.md) | [code](modules/physmem_elf_vfs.py)&nbsp;·&nbsp;[code](modules/video_container.py) | Map recognized finding categories to configured ATT&CK technique labels. |
+| [**Windows&nbsp;artifact&nbsp;discovery**](docs/INDEX.md) | [1](modules/forensics_enum.py)&nbsp;·&nbsp;[2](modules/process_enum.py) | Locate MFT/LNK/Prefetch/EVTX-related artifacts and markers; this is not full decoding of those formats. |
+| [**Volatile&nbsp;and&nbsp;Linux&nbsp;artifact&nbsp;triage**](docs/INDEX.md) | [1](modules/forensics_enum.py)&nbsp;·&nbsp;[2](modules/process_enum.py) | Inspect process/procfs/memory-access indicators, histories, deleted executables and selected volatile evidence. |
+| [**Timestamp/log&nbsp;anomaly&nbsp;checks**](docs/INDEX.md) | [1](modules/forensics_enum.py)&nbsp;·&nbsp;[2](modules/process_enum.py) | Identify selected timestomping, empty/deleted log and related metadata indicators. |
+| [**Rootkit/bootkit&nbsp;indicators**](docs/INDEX.md) | [1](modules/forensics_enum.py)&nbsp;·&nbsp;[2](modules/process_enum.py) | Match supported SSDT/callback/hiding, DPC/timer, raw-disk and boot-sector patterns. |
+| [**Malware&nbsp;behavior&nbsp;indicators**](docs/INDEX.md) | [1](modules/forensics_enum.py)&nbsp;·&nbsp;[2](modules/process_enum.py) | Inspect keylogger, clipboard, mutex, downloader/backdoor, fileless and reflective-loading API/string combinations. |
+| [**Packing&nbsp;and&nbsp;anti-analysis&nbsp;indicators**](docs/INDEX.md) | [1](modules/forensics_enum.py)&nbsp;·&nbsp;[2](modules/process_enum.py) | Detect selected packed-section, PEB/debugger, opaque/junk-code, anti-disassembly and sandbox-environment patterns. |
+| [**Office/PDF&nbsp;triage**](docs/INDEX.md) | [1](modules/forensics_enum.py)&nbsp;·&nbsp;[2](modules/process_enum.py) | Scan raw document markers for macro and exploit indicators without full document interpretation. |
+| [**ELF&nbsp;recovery&nbsp;from&nbsp;physical-memory&nbsp;dumps**](docs/INDEX.md) | [1](modules/physmem_elf_vfs.py)&nbsp;·&nbsp;[2](modules/video_container.py) | Find supported ELF64 images and reconstruct candidates using contiguous mappings and proximity heuristics. |
+| [**Video-container&nbsp;forensics**](docs/INDEX.md) | [1](modules/physmem_elf_vfs.py)&nbsp;·&nbsp;[2](modules/video_container.py) | Parse MP4/MOV, MKV/WebM and AVI structures for appended payloads, suspicious metadata, malformed sizes and encrypted-track markers. |
+| [**IOC&nbsp;candidate&nbsp;extraction**](docs/INDEX.md) | [1](modules/physmem_elf_vfs.py)&nbsp;·&nbsp;[2](modules/video_container.py) | Extract supported URL/address/path/key/certificate and other suspicious-string candidates. |
+| [**ATT&CK&nbsp;labeling**](docs/INDEX.md) | [1](modules/physmem_elf_vfs.py)&nbsp;·&nbsp;[2](modules/video_container.py) | Map recognized finding categories to configured ATT&CK technique labels. |
 
 </details>
 
 <details>
 <summary><strong>Network discovery and traffic inspection</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Local&nbsp;network&nbsp;inventory**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/net_sniffer.py) | Enumerate interfaces, connections, listening ports and firewall rules. |
-| [**Raw&nbsp;packet&nbsp;capture**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/net_sniffer.py) | Capture supported traffic and parse selected IPv4/TCP/UDP headers. |
-| [**PCAP&nbsp;inspection**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/net_sniffer.py) | Packet-level DNS queries, HTTP metadata and selected cleartext credential extraction. |
-| [**Host/service&nbsp;discovery**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/net_sniffer.py) | ICMP/TCP discovery, banners, mDNS, SSDP, ARP observations and basic TTL/application fingerprinting. |
-| [**Web-path&nbsp;enumeration**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/net_sniffer.py) | Discover directories, listings and other supported web paths. |
-| [**Industrial/IoT&nbsp;probes**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/net_sniffer.py) | Exposure checks for supported Modbus, MQTT, CoAP, SNMP, NTP and NetFlow/IPFIX services. |
-| [**Additional&nbsp;industrial/debug&nbsp;probes**](docs/INDEX.md) | [code](modules/syscall_trace.py)&nbsp;·&nbsp;[code](modules/lateral_movement.py) | Probe BACnet, EtherNet/IP and supported debugger interfaces. |
-| [**Internal-network&nbsp;reconnaissance**](docs/INDEX.md) | [code](modules/syscall_trace.py)&nbsp;·&nbsp;[code](modules/lateral_movement.py) | Parse ARP/routes, discover subnets/names and inspect remote-management/database surfaces. |
-| [**Credential/token/key&nbsp;discovery**](docs/INDEX.md) | [code](modules/syscall_trace.py)&nbsp;·&nbsp;[code](modules/lateral_movement.py) | Enumerate accessible configuration credentials, API tokens, SSH keys and cloud-metadata surfaces. |
-| [**Remote-management&nbsp;and&nbsp;identity&nbsp;probes**](docs/INDEX.md) | [code](modules/syscall_trace.py)&nbsp;·&nbsp;[code](modules/lateral_movement.py) | Supported SMB/NTLM, RPC, WinRM, RDP, WMI, SSH and Active Directory-related surface checks. |
-| [**Credential-testing&nbsp;helpers**](docs/INDEX.md) | [code](modules/syscall_trace.py)&nbsp;·&nbsp;[code](modules/lateral_movement.py) | Explicit SSH/FTP credential-spray and related authentication-testing helpers exist as callable functions. |
-| [**C2/exfiltration&nbsp;indicators**](docs/INDEX.md) | [code](modules/syscall_trace.py)&nbsp;·&nbsp;[code](modules/lateral_movement.py) | Inspect supported beaconing, DNS/HTTP/IRC/ICMP/covert-channel, tunneling, cloud-storage and ransomware-precursor patterns. |
-| [**IOS/IOS-XE&nbsp;appliance&nbsp;enumeration**](docs/INDEX.md) | [code](modules/ios_enum.py)&nbsp;·&nbsp;[code](modules/nxos_enum.py) | HTTP/API, SNMP, CDP/LLDP, Telnet/TFTP, configuration parsing and supported AAA/network/security-management checks. |
-| [**Appliance&nbsp;configuration&nbsp;secret&nbsp;helpers**](docs/INDEX.md) | [code](modules/ios_enum.py)&nbsp;·&nbsp;[code](modules/nxos_enum.py) | Type-7 decoding and selected SNMP-community/enable-secret credential-testing helpers. |
-| [**SD-WAN/Meraki&nbsp;management&nbsp;probes**](docs/INDEX.md) | [code](modules/hyperflex_enum.py)&nbsp;·&nbsp;[code](modules/nexus_dashboard_enum.py) | Management-API exposure probes for supported SD-WAN and cloud-managed network products. |
+| [**Local&nbsp;network&nbsp;inventory**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/net_sniffer.py) | Enumerate interfaces, connections, listening ports and firewall rules. |
+| [**Raw&nbsp;packet&nbsp;capture**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/net_sniffer.py) | Capture supported traffic and parse selected IPv4/TCP/UDP headers. |
+| [**PCAP&nbsp;inspection**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/net_sniffer.py) | Packet-level DNS queries, HTTP metadata and selected cleartext credential extraction. |
+| [**Host/service&nbsp;discovery**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/net_sniffer.py) | ICMP/TCP discovery, banners, mDNS, SSDP, ARP observations and basic TTL/application fingerprinting. |
+| [**Web-path&nbsp;enumeration**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/net_sniffer.py) | Discover directories, listings and other supported web paths. |
+| [**Industrial/IoT&nbsp;probes**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/net_sniffer.py) | Exposure checks for supported Modbus, MQTT, CoAP, SNMP, NTP and NetFlow/IPFIX services. |
+| [**Additional&nbsp;industrial/debug&nbsp;probes**](docs/INDEX.md) | [1](modules/syscall_trace.py)&nbsp;·&nbsp;[2](modules/lateral_movement.py) | Probe BACnet, EtherNet/IP and supported debugger interfaces. |
+| [**Internal-network&nbsp;reconnaissance**](docs/INDEX.md) | [1](modules/syscall_trace.py)&nbsp;·&nbsp;[2](modules/lateral_movement.py) | Parse ARP/routes, discover subnets/names and inspect remote-management/database surfaces. |
+| [**Credential/token/key&nbsp;discovery**](docs/INDEX.md) | [1](modules/syscall_trace.py)&nbsp;·&nbsp;[2](modules/lateral_movement.py) | Enumerate accessible configuration credentials, API tokens, SSH keys and cloud-metadata surfaces. |
+| [**Remote-management&nbsp;and&nbsp;identity&nbsp;probes**](docs/INDEX.md) | [1](modules/syscall_trace.py)&nbsp;·&nbsp;[2](modules/lateral_movement.py) | Supported SMB/NTLM, RPC, WinRM, RDP, WMI, SSH and Active Directory-related surface checks. |
+| [**Credential-testing&nbsp;helpers**](docs/INDEX.md) | [1](modules/syscall_trace.py)&nbsp;·&nbsp;[2](modules/lateral_movement.py) | Explicit SSH/FTP credential-spray and related authentication-testing helpers exist as callable functions. |
+| [**C2/exfiltration&nbsp;indicators**](docs/INDEX.md) | [1](modules/syscall_trace.py)&nbsp;·&nbsp;[2](modules/lateral_movement.py) | Inspect supported beaconing, DNS/HTTP/IRC/ICMP/covert-channel, tunneling, cloud-storage and ransomware-precursor patterns. |
+| [**IOS/IOS-XE&nbsp;appliance&nbsp;enumeration**](docs/INDEX.md) | [1](modules/ios_enum.py)&nbsp;·&nbsp;[2](modules/nxos_enum.py) | HTTP/API, SNMP, CDP/LLDP, Telnet/TFTP, configuration parsing and supported AAA/network/security-management checks. |
+| [**Appliance&nbsp;configuration&nbsp;secret&nbsp;helpers**](docs/INDEX.md) | [1](modules/ios_enum.py)&nbsp;·&nbsp;[2](modules/nxos_enum.py) | Type-7 decoding and selected SNMP-community/enable-secret credential-testing helpers. |
+| [**SD-WAN/Meraki&nbsp;management&nbsp;probes**](docs/INDEX.md) | [1](modules/hyperflex_enum.py)&nbsp;·&nbsp;[2](modules/nexus_dashboard_enum.py) | Management-API exposure probes for supported SD-WAN and cloud-managed network products. |
 
 </details>
 
 <details>
 <summary><strong>Containers, cloud infrastructure and services</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Docker&nbsp;inventory&nbsp;and&nbsp;posture**](docs/INDEX.md) | [code](modules/docker_enum.py)&nbsp;·&nbsp;[code](modules/k8s_enum.py) | Enumerate containers, images, volumes, networks, mounts, capabilities, privileged modes, sockets, ports and environment secrets. |
-| [**Container&nbsp;isolation/escape&nbsp;surface**](docs/INDEX.md) | [code](modules/docker_enum.py)&nbsp;·&nbsp;[code](modules/k8s_enum.py) | Inspect supported host mounts, namespace/capability, resource and image-layer risks. |
-| [**Kubernetes&nbsp;inventory**](docs/INDEX.md) | [code](modules/docker_enum.py)&nbsp;·&nbsp;[code](modules/k8s_enum.py) | Enumerate pods, services, namespaces, secrets and ConfigMaps through kubectl or supported direct API calls. |
-| [**Kubernetes&nbsp;identity&nbsp;and&nbsp;RBAC**](docs/INDEX.md) | [code](modules/docker_enum.py)&nbsp;·&nbsp;[code](modules/k8s_enum.py) | Inspect service-account bundles, SelfSubjectAccessReview permissions and cluster-admin/role bindings. |
-| [**Kubernetes&nbsp;policy/posture**](docs/INDEX.md) | [code](modules/docker_enum.py)&nbsp;·&nbsp;[code](modules/k8s_enum.py) | Review network policies, admission/webhooks, pod security, hostPath/projected storage, ingress, mesh mTLS and resource settings. |
-| [**Cluster&nbsp;management&nbsp;exposure**](docs/INDEX.md) | [code](modules/docker_enum.py)&nbsp;·&nbsp;[code](modules/k8s_enum.py) | Probe supported etcd, kubelet, dashboards, node services, cloud metadata and Orka endpoints. |
-| [**Messaging/streaming&nbsp;enumeration**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/streaming_enum.py) | Inspect supported Kafka, Flink, NiFi, schema registries, RabbitMQ, NATS, Pulsar and event-store/registry surfaces. |
-| [**Streaming&nbsp;operational&nbsp;helpers**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/streaming_enum.py) | Kafka topic/sample consumption and Flink JAR-submission helpers are present, alongside enumeration. |
-| [**Database/storage&nbsp;exposure**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/streaming_enum.py) | Probe supported Redis, Elasticsearch, MinIO, InfluxDB and database endpoints. |
-| [**Observability&nbsp;exposure**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/streaming_enum.py) | Probe Prometheus, Grafana, Jaeger, Loki, OpenTelemetry, Alertmanager, Thanos and related collectors. |
-| [**Orchestration/management&nbsp;exposure**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/streaming_enum.py) | Probe supported vCenter, Rancher, Consul, Linkerd, Kong, Traefik, Temporal, Argo, Nomad and AWX/NSO surfaces. |
-| [**CI/CD&nbsp;and&nbsp;artifact&nbsp;services**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/streaming_enum.py) | Probe supported Jenkins, GitLab, Tekton, Argo CD, Flux, Crossplane, SonarQube, Artifactory and Nexus endpoints. |
-| [**Secrets/access&nbsp;infrastructure**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/streaming_enum.py) | Probe supported Vault and Boundary management exposure. |
-| [**DNS&nbsp;service&nbsp;posture**](docs/INDEX.md) | [code](modules/network_analyze.py)&nbsp;·&nbsp;[code](modules/streaming_enum.py) | Probe zone transfer, recursion, dynamic-update and DoT/DoH-related surfaces. |
-| [**NX-OS/ACI/APIC&nbsp;fabric&nbsp;enumeration**](docs/INDEX.md) | [code](modules/ios_enum.py)&nbsp;·&nbsp;[code](modules/nxos_enum.py) | NX-API, fabric nodes/endpoints, tenants/contracts, L3Out, VMM, audit/config data and selected management probes. |
-| [**VXLAN/DCNM&nbsp;exposure**](docs/INDEX.md) | [code](modules/ios_enum.py)&nbsp;·&nbsp;[code](modules/nxos_enum.py) | Inspect supported VTEP and management exposure and retrieve firmware/license/version details. |
-| [**HyperFlex/UCS/Intersight**](docs/INDEX.md) | [code](modules/hyperflex_enum.py)&nbsp;·&nbsp;[code](modules/nexus_dashboard_enum.py) | Inspect Connect APIs, cluster/storage interfaces, iSCSI-related exposure and selected management endpoints. |
-| [**Nexus&nbsp;Dashboard**](docs/INDEX.md) | [code](modules/hyperflex_enum.py)&nbsp;·&nbsp;[code](modules/nexus_dashboard_enum.py) | Enumerate supported dashboard, NDI/NDFC/NDO, telemetry and provisioning surfaces. |
+| [**Docker&nbsp;inventory&nbsp;and&nbsp;posture**](docs/INDEX.md) | [1](modules/docker_enum.py)&nbsp;·&nbsp;[2](modules/k8s_enum.py) | Enumerate containers, images, volumes, networks, mounts, capabilities, privileged modes, sockets, ports and environment secrets. |
+| [**Container&nbsp;isolation/escape&nbsp;surface**](docs/INDEX.md) | [1](modules/docker_enum.py)&nbsp;·&nbsp;[2](modules/k8s_enum.py) | Inspect supported host mounts, namespace/capability, resource and image-layer risks. |
+| [**Kubernetes&nbsp;inventory**](docs/INDEX.md) | [1](modules/docker_enum.py)&nbsp;·&nbsp;[2](modules/k8s_enum.py) | Enumerate pods, services, namespaces, secrets and ConfigMaps through kubectl or supported direct API calls. |
+| [**Kubernetes&nbsp;identity&nbsp;and&nbsp;RBAC**](docs/INDEX.md) | [1](modules/docker_enum.py)&nbsp;·&nbsp;[2](modules/k8s_enum.py) | Inspect service-account bundles, SelfSubjectAccessReview permissions and cluster-admin/role bindings. |
+| [**Kubernetes&nbsp;policy/posture**](docs/INDEX.md) | [1](modules/docker_enum.py)&nbsp;·&nbsp;[2](modules/k8s_enum.py) | Review network policies, admission/webhooks, pod security, hostPath/projected storage, ingress, mesh mTLS and resource settings. |
+| [**Cluster&nbsp;management&nbsp;exposure**](docs/INDEX.md) | [1](modules/docker_enum.py)&nbsp;·&nbsp;[2](modules/k8s_enum.py) | Probe supported etcd, kubelet, dashboards, node services, cloud metadata and Orka endpoints. |
+| [**Messaging/streaming&nbsp;enumeration**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/streaming_enum.py) | Inspect supported Kafka, Flink, NiFi, schema registries, RabbitMQ, NATS, Pulsar and event-store/registry surfaces. |
+| [**Streaming&nbsp;operational&nbsp;helpers**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/streaming_enum.py) | Kafka topic/sample consumption and Flink JAR-submission helpers are present, alongside enumeration. |
+| [**Database/storage&nbsp;exposure**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/streaming_enum.py) | Probe supported Redis, Elasticsearch, MinIO, InfluxDB and database endpoints. |
+| [**Observability&nbsp;exposure**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/streaming_enum.py) | Probe Prometheus, Grafana, Jaeger, Loki, OpenTelemetry, Alertmanager, Thanos and related collectors. |
+| [**Orchestration/management&nbsp;exposure**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/streaming_enum.py) | Probe supported vCenter, Rancher, Consul, Linkerd, Kong, Traefik, Temporal, Argo, Nomad and AWX/NSO surfaces. |
+| [**CI/CD&nbsp;and&nbsp;artifact&nbsp;services**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/streaming_enum.py) | Probe supported Jenkins, GitLab, Tekton, Argo CD, Flux, Crossplane, SonarQube, Artifactory and Nexus endpoints. |
+| [**Secrets/access&nbsp;infrastructure**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/streaming_enum.py) | Probe supported Vault and Boundary management exposure. |
+| [**DNS&nbsp;service&nbsp;posture**](docs/INDEX.md) | [1](modules/network_analyze.py)&nbsp;·&nbsp;[2](modules/streaming_enum.py) | Probe zone transfer, recursion, dynamic-update and DoT/DoH-related surfaces. |
+| [**NX-OS/ACI/APIC&nbsp;fabric&nbsp;enumeration**](docs/INDEX.md) | [1](modules/ios_enum.py)&nbsp;·&nbsp;[2](modules/nxos_enum.py) | NX-API, fabric nodes/endpoints, tenants/contracts, L3Out, VMM, audit/config data and selected management probes. |
+| [**VXLAN/DCNM&nbsp;exposure**](docs/INDEX.md) | [1](modules/ios_enum.py)&nbsp;·&nbsp;[2](modules/nxos_enum.py) | Inspect supported VTEP and management exposure and retrieve firmware/license/version details. |
+| [**HyperFlex/UCS/Intersight**](docs/INDEX.md) | [1](modules/hyperflex_enum.py)&nbsp;·&nbsp;[2](modules/nexus_dashboard_enum.py) | Inspect Connect APIs, cluster/storage interfaces, iSCSI-related exposure and selected management endpoints. |
+| [**Nexus&nbsp;Dashboard**](docs/INDEX.md) | [1](modules/hyperflex_enum.py)&nbsp;·&nbsp;[2](modules/nexus_dashboard_enum.py) | Enumerate supported dashboard, NDI/NDFC/NDO, telemetry and provisioning surfaces. |
 
 </details>
 
@@ -561,74 +561,74 @@ Messages from your other sessions        accept
 <details>
 <summary><strong>VoIP and real-time communications</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**SIP&nbsp;service&nbsp;and&nbsp;extension&nbsp;discovery**](docs/INDEX.md) | [code](modules/sip_enum.py) | Probe OPTIONS/REGISTER behavior, enumerate extensions and examine supported authentication/registration patterns. |
-| [**Media&nbsp;and&nbsp;signaling&nbsp;posture**](docs/INDEX.md) | [code](modules/sip_enum.py) | Parse SDP, inspect RTP/SRTP expectations, AMI, WebRTC and selected media/interception indicators. |
-| [**Legacy&nbsp;voice&nbsp;protocols**](docs/INDEX.md) | [code](modules/sip_enum.py) | Probe supported H.323, SCCP/Skinny, MGCP and media-gateway surfaces. |
-| [**Voice&nbsp;abuse&nbsp;indicators**](docs/INDEX.md) | [code](modules/sip_enum.py) | Heuristics/probes for signaling manipulation, DTMF exposure, covert channels, flooding and denial-of-service susceptibility. |
+| [**SIP&nbsp;service&nbsp;and&nbsp;extension&nbsp;discovery**](docs/INDEX.md) | [1](modules/sip_enum.py) | Probe OPTIONS/REGISTER behavior, enumerate extensions and examine supported authentication/registration patterns. |
+| [**Media&nbsp;and&nbsp;signaling&nbsp;posture**](docs/INDEX.md) | [1](modules/sip_enum.py) | Parse SDP, inspect RTP/SRTP expectations, AMI, WebRTC and selected media/interception indicators. |
+| [**Legacy&nbsp;voice&nbsp;protocols**](docs/INDEX.md) | [1](modules/sip_enum.py) | Probe supported H.323, SCCP/Skinny, MGCP and media-gateway surfaces. |
+| [**Voice&nbsp;abuse&nbsp;indicators**](docs/INDEX.md) | [1](modules/sip_enum.py) | Heuristics/probes for signaling manipulation, DTMF exposure, covert channels, flooding and denial-of-service susceptibility. |
 
 </details>
 
 <details>
 <summary><strong>AI, agent and MCP security</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Inference&nbsp;endpoint&nbsp;enumeration**](docs/INDEX.md) | [code](modules/llm_enum.py) | Probe supported Ollama, LM Studio, LocalAI, Hugging Face and OpenAI-compatible services. |
-| [**LLM&nbsp;behavior/security&nbsp;probes**](docs/INDEX.md) | [code](modules/llm_enum.py) | Test supported prompt-disclosure/injection, unsafe-output, excessive-agency and sensitive-information surfaces. |
-| [**Model/data&nbsp;pipeline&nbsp;exposure**](docs/INDEX.md) | [code](modules/llm_enum.py) | Inspect model metadata, upload/fine-tune endpoints, RAG/vector-store/knowledge-graph and memory-poisoning surfaces. |
-| [**Agent&nbsp;protocol&nbsp;exposure**](docs/INDEX.md) | [code](modules/llm_enum.py) | Probe supported MCP/A2A authentication, tool-schema, trust-boundary and orchestration interfaces. |
-| [**AI&nbsp;control&nbsp;indicators**](docs/INDEX.md) | [code](modules/llm_enum.py) | Gather selected OWASP LLM, ATLAS and incident-response/posture indicators through implemented probes. |
-| [**MCP&nbsp;manifest&nbsp;grammar&nbsp;fuzzing**](docs/INDEX.md) | [code](modules/mcp_grammar_fuzzer.py) | Atheris harness and seed validation for tool names, descriptions and schemas with prompt-injection indicators. |
+| [**Inference&nbsp;endpoint&nbsp;enumeration**](docs/INDEX.md) | [1](modules/llm_enum.py) | Probe supported Ollama, LM Studio, LocalAI, Hugging Face and OpenAI-compatible services. |
+| [**LLM&nbsp;behavior/security&nbsp;probes**](docs/INDEX.md) | [1](modules/llm_enum.py) | Test supported prompt-disclosure/injection, unsafe-output, excessive-agency and sensitive-information surfaces. |
+| [**Model/data&nbsp;pipeline&nbsp;exposure**](docs/INDEX.md) | [1](modules/llm_enum.py) | Inspect model metadata, upload/fine-tune endpoints, RAG/vector-store/knowledge-graph and memory-poisoning surfaces. |
+| [**Agent&nbsp;protocol&nbsp;exposure**](docs/INDEX.md) | [1](modules/llm_enum.py) | Probe supported MCP/A2A authentication, tool-schema, trust-boundary and orchestration interfaces. |
+| [**AI&nbsp;control&nbsp;indicators**](docs/INDEX.md) | [1](modules/llm_enum.py) | Gather selected OWASP LLM, ATLAS and incident-response/posture indicators through implemented probes. |
+| [**MCP&nbsp;manifest&nbsp;grammar&nbsp;fuzzing**](docs/INDEX.md) | [1](modules/mcp_grammar_fuzzer.py) | Atheris harness and seed validation for tool names, descriptions and schemas with prompt-injection indicators. |
 
 </details>
 
 <details>
 <summary><strong>Research and payload-development helpers</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**Shellcode&nbsp;templates**](docs/INDEX.md) | [code](ablation/core/shellcode_utils.py)&nbsp;·&nbsp;[code](modules/bare_adapter.py) | Supplied x86/x86-64/ARM64 shell and staged-loader construction helpers. |
-| [**Payload&nbsp;formatting**](docs/INDEX.md) | [code](ablation/core/shellcode_utils.py)&nbsp;·&nbsp;[code](modules/bare_adapter.py) | Bad-byte checks, XOR/ADD encoding, NOP generation and buffer assembly helpers. |
-| [**Crash-offset&nbsp;and&nbsp;ROP&nbsp;helpers**](docs/INDEX.md) | [code](ablation/core/shellcode_utils.py)&nbsp;·&nbsp;[code](modules/bare_adapter.py) | Cyclic patterns/offset lookup, common gadget detection and a minimal x86-64 chain-construction helper. |
-| [**Exploitability-context&nbsp;checks**](docs/INDEX.md) | [code](ablation/core/shellcode_utils.py)&nbsp;·&nbsp;[code](modules/bare_adapter.py) | Helpers inspect canary, NX/ASLR and selected format-string indicators. |
-| [**BARE&nbsp;integration**](docs/INDEX.md) | [code](ablation/core/shellcode_utils.py)&nbsp;·&nbsp;[code](modules/bare_adapter.py) | Convert supported findings for the external BARE tool to rank related Metasploit modules. |
+| [**Shellcode&nbsp;templates**](docs/INDEX.md) | [1](ablation/core/shellcode_utils.py)&nbsp;·&nbsp;[2](modules/bare_adapter.py) | Supplied x86/x86-64/ARM64 shell and staged-loader construction helpers. |
+| [**Payload&nbsp;formatting**](docs/INDEX.md) | [1](ablation/core/shellcode_utils.py)&nbsp;·&nbsp;[2](modules/bare_adapter.py) | Bad-byte checks, XOR/ADD encoding, NOP generation and buffer assembly helpers. |
+| [**Crash-offset&nbsp;and&nbsp;ROP&nbsp;helpers**](docs/INDEX.md) | [1](ablation/core/shellcode_utils.py)&nbsp;·&nbsp;[2](modules/bare_adapter.py) | Cyclic patterns/offset lookup, common gadget detection and a minimal x86-64 chain-construction helper. |
+| [**Exploitability-context&nbsp;checks**](docs/INDEX.md) | [1](ablation/core/shellcode_utils.py)&nbsp;·&nbsp;[2](modules/bare_adapter.py) | Helpers inspect canary, NX/ASLR and selected format-string indicators. |
+| [**BARE&nbsp;integration**](docs/INDEX.md) | [1](ablation/core/shellcode_utils.py)&nbsp;·&nbsp;[2](modules/bare_adapter.py) | Convert supported findings for the external BARE tool to rank related Metasploit modules. |
 
 </details>
 
 <details>
 <summary><strong>Assistant integration and workflow machinery</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**LLM&nbsp;analyst&nbsp;loop**](docs/reference-modules/llm.md) | [code](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;·&nbsp;[code](ablation/analyzers/llm_analyst/rag_retriever.py) | Optional Claude tool-calling analysis loop with bounded iterations and stored results. |
-| [**Prior-finding&nbsp;retrieval**](docs/INDEX.md) | [code](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;·&nbsp;[code](ablation/analyzers/llm_analyst/rag_retriever.py) | Supply related function identities/findings as context for subsequent analysis. |
-| [**Assisted&nbsp;function&nbsp;naming**](docs/INDEX.md) | [code](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;·&nbsp;[code](ablation/analyzers/llm_analyst/rag_retriever.py) | Propose and batch-process names from strings, callees and prior evidence. |
-| [**Assisted&nbsp;structure&nbsp;reconstruction**](docs/INDEX.md) | [code](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;·&nbsp;[code](ablation/analyzers/llm_analyst/rag_retriever.py) | Extract memory-access offsets/widths and propose structure layouts. |
-| [**Assisted&nbsp;vulnerability&nbsp;hypotheses**](docs/INDEX.md) | [code](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;·&nbsp;[code](ablation/analyzers/llm_analyst/rag_retriever.py) | Generate candidate explanations of suspicious function behavior for later validation. |
-| [**Evidence&nbsp;scoring&nbsp;and&nbsp;probe&nbsp;ranking**](docs/INDEX.md) | [code](ablation/analyzers/probe_ranker.py)&nbsp;·&nbsp;[code](ablation/analyzers/probe_adapters.py) | Weight evidence families, track contradictions/uncertainty and rank useful next analyses. |
-| [**Analyzer&nbsp;probe&nbsp;adapters**](docs/INDEX.md) | [code](ablation/analyzers/probe_ranker.py)&nbsp;·&nbsp;[code](ablation/analyzers/probe_adapters.py) | Dispatch supported disassembly, CFG, xref, lifting, semantic, version, taint and manual evidence probes. |
-| [**Stage&nbsp;commitments&nbsp;and&nbsp;audit&nbsp;trail**](docs/reference-modules/stage-commitment.md) | [code](ablation/analyzers/probe_ranker.py)&nbsp;·&nbsp;[code](ablation/analyzers/probe_adapters.py) | Hash stage artifacts, record approval states and verify persisted commitments. |
-| [**Structured&nbsp;workflow&nbsp;documents**](docs/reference-modules/workflow-document.md) | [code](ablation/analyzers/probe_ranker.py)&nbsp;·&nbsp;[code](ablation/analyzers/probe_adapters.py) | Validate stage outputs, advance through configured transitions and serialize/reload sessions. |
+| [**LLM&nbsp;analyst&nbsp;loop**](docs/reference-modules/llm.md) | [1](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;·&nbsp;[2](ablation/analyzers/llm_analyst/rag_retriever.py) | Optional Claude tool-calling analysis loop with bounded iterations and stored results. |
+| [**Prior-finding&nbsp;retrieval**](docs/INDEX.md) | [1](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;·&nbsp;[2](ablation/analyzers/llm_analyst/rag_retriever.py) | Supply related function identities/findings as context for subsequent analysis. |
+| [**Assisted&nbsp;function&nbsp;naming**](docs/INDEX.md) | [1](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;·&nbsp;[2](ablation/analyzers/llm_analyst/rag_retriever.py) | Propose and batch-process names from strings, callees and prior evidence. |
+| [**Assisted&nbsp;structure&nbsp;reconstruction**](docs/INDEX.md) | [1](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;·&nbsp;[2](ablation/analyzers/llm_analyst/rag_retriever.py) | Extract memory-access offsets/widths and propose structure layouts. |
+| [**Assisted&nbsp;vulnerability&nbsp;hypotheses**](docs/INDEX.md) | [1](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;·&nbsp;[2](ablation/analyzers/llm_analyst/rag_retriever.py) | Generate candidate explanations of suspicious function behavior for later validation. |
+| [**Evidence&nbsp;scoring&nbsp;and&nbsp;probe&nbsp;ranking**](docs/INDEX.md) | [1](ablation/analyzers/probe_ranker.py)&nbsp;·&nbsp;[2](ablation/analyzers/probe_adapters.py) | Weight evidence families, track contradictions/uncertainty and rank useful next analyses. |
+| [**Analyzer&nbsp;probe&nbsp;adapters**](docs/INDEX.md) | [1](ablation/analyzers/probe_ranker.py)&nbsp;·&nbsp;[2](ablation/analyzers/probe_adapters.py) | Dispatch supported disassembly, CFG, xref, lifting, semantic, version, taint and manual evidence probes. |
+| [**Stage&nbsp;commitments&nbsp;and&nbsp;audit&nbsp;trail**](docs/reference-modules/stage-commitment.md) | [1](ablation/analyzers/probe_ranker.py)&nbsp;·&nbsp;[2](ablation/analyzers/probe_adapters.py) | Hash stage artifacts, record approval states and verify persisted commitments. |
+| [**Structured&nbsp;workflow&nbsp;documents**](docs/reference-modules/workflow-document.md) | [1](ablation/analyzers/probe_ranker.py)&nbsp;·&nbsp;[2](ablation/analyzers/probe_adapters.py) | Validate stage outputs, advance through configured transitions and serialize/reload sessions. |
 
 </details>
 
 <details>
 <summary><strong>Outputs, integration and project tooling</strong></summary>
 
-| Capability | Source | |
+| Capability | Code | |
 |:---|:---|:---|
-| [**JSON&nbsp;and&nbsp;SARIF&nbsp;export**](docs/INDEX.md) | [code](ablation/export/json_export.py)&nbsp;·&nbsp;[code](ablation/export/sarif.py) | Export supported sweep/finding records to structured JSON or SARIF 2.1.0. |
-| [**Markdown&nbsp;research&nbsp;reports**](docs/INDEX.md) | [code](ablation/export/json_export.py)&nbsp;·&nbsp;[code](ablation/export/sarif.py) | Render ranked sweep results, prior-finding correlations and verification notes. |
-| [**Binary&nbsp;Ninja&nbsp;plugin**](docs/INDEX.md) | [code](ablation/export/json_export.py)&nbsp;·&nbsp;[code](ablation/export/sarif.py) | Apply corpus names, launch semantic search/sweeps and show stored findings inside Binary Ninja. |
-| [**Terminal&nbsp;presentation**](docs/INDEX.md) | [code](ablation/export/json_export.py)&nbsp;·&nbsp;[code](ablation/export/sarif.py) | Colored/plain output, boxes and structured terminal reports. |
-| [**Documentation&nbsp;prose&nbsp;checks**](docs/INDEX.md) | [code](ablation/export/json_export.py)&nbsp;·&nbsp;[code](ablation/export/sarif.py) | Lint documentation against configured writing-style patterns. |
-| [**Generic&nbsp;vulnerability-profile&nbsp;sweeps**](docs/INDEX.md) | [code](sweeps/base_sweep.py)&nbsp;·&nbsp;[code](sweeps/fortinet_sweep.py) | Encode discovered functions and rank candidates against configured vulnerability profiles plus prior findings. |
-| [**Fortinet&nbsp;multi-phase&nbsp;directory&nbsp;sweeps**](docs/INDEX.md) | [code](sweeps/base_sweep.py)&nbsp;·&nbsp;[code](sweeps/fortinet_sweep.py) | Prefilter ELF files by relevant imports and run the supported semantic, sink and follow-on analysis stages. |
-| [**Bundled&nbsp;finding/signature&nbsp;seeds**](docs/INDEX.md) | [code](sweeps/base_sweep.py)&nbsp;·&nbsp;[code](sweeps/fortinet_sweep.py) | Ship initial finding and function-signature data to populate or bootstrap local analysis libraries. |
-| [**Dependency&nbsp;and&nbsp;supply-chain&nbsp;tooling**](docs/INDEX.md) | [code](scripts/audit-deps.sh)&nbsp;·&nbsp;[code](scripts/generate-lockfile.sh) | Scripts for dependency auditing, hash-pinned requirements, SBOM generation and monitoring. |
-| [**CI&nbsp;and&nbsp;release&nbsp;automation**](docs/INDEX.md) | [code](scripts/audit-deps.sh)&nbsp;·&nbsp;[code](scripts/generate-lockfile.sh) | Repository workflows for configured checks, coverage and package publishing. |
+| [**JSON&nbsp;and&nbsp;SARIF&nbsp;export**](docs/INDEX.md) | [1](ablation/export/json_export.py)&nbsp;·&nbsp;[2](ablation/export/sarif.py) | Export supported sweep/finding records to structured JSON or SARIF 2.1.0. |
+| [**Markdown&nbsp;research&nbsp;reports**](docs/INDEX.md) | [1](ablation/export/json_export.py)&nbsp;·&nbsp;[2](ablation/export/sarif.py) | Render ranked sweep results, prior-finding correlations and verification notes. |
+| [**Binary&nbsp;Ninja&nbsp;plugin**](docs/INDEX.md) | [1](ablation/export/json_export.py)&nbsp;·&nbsp;[2](ablation/export/sarif.py) | Apply corpus names, launch semantic search/sweeps and show stored findings inside Binary Ninja. |
+| [**Terminal&nbsp;presentation**](docs/INDEX.md) | [1](ablation/export/json_export.py)&nbsp;·&nbsp;[2](ablation/export/sarif.py) | Colored/plain output, boxes and structured terminal reports. |
+| [**Documentation&nbsp;prose&nbsp;checks**](docs/INDEX.md) | [1](ablation/export/json_export.py)&nbsp;·&nbsp;[2](ablation/export/sarif.py) | Lint documentation against configured writing-style patterns. |
+| [**Generic&nbsp;vulnerability-profile&nbsp;sweeps**](docs/INDEX.md) | [1](sweeps/base_sweep.py)&nbsp;·&nbsp;[2](sweeps/fortinet_sweep.py) | Encode discovered functions and rank candidates against configured vulnerability profiles plus prior findings. |
+| [**Fortinet&nbsp;multi-phase&nbsp;directory&nbsp;sweeps**](docs/INDEX.md) | [1](sweeps/base_sweep.py)&nbsp;·&nbsp;[2](sweeps/fortinet_sweep.py) | Prefilter ELF files by relevant imports and run the supported semantic, sink and follow-on analysis stages. |
+| [**Bundled&nbsp;finding/signature&nbsp;seeds**](docs/INDEX.md) | [1](sweeps/base_sweep.py)&nbsp;·&nbsp;[2](sweeps/fortinet_sweep.py) | Ship initial finding and function-signature data to populate or bootstrap local analysis libraries. |
+| [**Dependency&nbsp;and&nbsp;supply-chain&nbsp;tooling**](docs/INDEX.md) | [1](scripts/audit-deps.sh)&nbsp;·&nbsp;[2](scripts/generate-lockfile.sh) | Scripts for dependency auditing, hash-pinned requirements, SBOM generation and monitoring. |
+| [**CI&nbsp;and&nbsp;release&nbsp;automation**](docs/INDEX.md) | [1](scripts/audit-deps.sh)&nbsp;·&nbsp;[2](scripts/generate-lockfile.sh) | Repository workflows for configured checks, coverage and package publishing. |
 
 </details>
 
