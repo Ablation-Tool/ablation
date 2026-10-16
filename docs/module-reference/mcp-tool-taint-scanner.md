@@ -1,63 +1,58 @@
-# MCPToolTaintScanner
+# MCP Tool Taint Scanner
+
+**File:** `ablation/analyzers/mcp_tool_taint_scanner.py`
 
 ## Why this exists
 
-Three things were not possible before in Ablation:
+FortiManager v8.0.0 ships an AI/MCP stack (`ai/agent/agent_framework/`). Two confirmed findings required manual source analysis because no automated scanner existed:
 
-1. **Detecting BIND_WIDE in MCP HTTP transports** — FMGMCP-1 (HIGH: unauthenticated code execution via FortiManager admin token) required manually reading `transport.ts` to find `httpServer.listen(config.mcpHttpPort)` with no host argument. Node.js defaults a no-host `listen(port)` call to 0.0.0.0. No scanner detected this; this module automates it for both JS/TS and Python.
+1. **FMG-AI-1 (CWE-214, MEDIUM)** — `mcp.py` serializes `request.COOKIES` to JSON and passes it as `--cookies` CLI argument to `/usr/bin/webmcpserver`. The session token is visible in `/proc/<pid>/cmdline` for the subprocess lifetime — world-readable on Linux by default.
 
-2. **Detecting exec-class methods in ALLOWED_METHODS** — FMGMCP-2 (CRITICAL: prompt injection → FortiGate device control) required manually reading `code-executor.ts` to find `'exec'` in the `ALLOWED_METHODS` Set. Any LLM receiving a server-controlled response can call `fortimanager.request('exec', ...)` to run scripts on managed devices. This module catches the pattern regardless of how the set is defined (TypeScript `new Set([])`, Python `set()` or `{}`).
+2. **FMG-AI-2 (CWE-77, MEDIUM)** — `agent_views.py` places a user-supplied FortiGate CLI script as the system-role content to an LLM security analyzer, enabling prompt injection into the AI's trust context.
 
-3. **Detecting missing auth on /mcp endpoints** — MCP server frameworks (Express, FastAPI, FastMCP) have no built-in auth requirement on HTTP transports. The `/mcp` endpoint in fortimanager-code-mode-mcp has only rate limiting (60 req/min). This module flags route definitions without visible auth middleware in a 15-line window.
+Gap closed: 2026-10-16. Both FMG findings re-detected automatically in validation run.
 
-## What it does
+---
 
-Scans TypeScript, JavaScript, and Python source files for three issue types:
+## Finding classes
 
-| Type | Pattern | Severity | CWE |
+| Class | CWE | Severity | Pattern |
 |---|---|---|---|
-| BIND_WIDE | `.listen(port)` without host (Node.js defaults to 0.0.0.0), or `host='0.0.0.0'` | HIGH | CWE-668 |
-| EXEC_IN_ALLOWED | `ALLOWED_METHODS` contains exec-class method (`exec`, `execute`, `run`, `shell`, `eval`, `spawn`) | CRITICAL | CWE-284 |
-| NO_AUTH | `/mcp` route or MCP HTTP transport defined without auth middleware nearby | HIGH | CWE-306 |
+| `CREDENTIAL_EXPOSURE` | CWE-214 | MEDIUM | `json.dumps(request.COOKIES/headers)` → CLI arg within 30 lines |
+| `PROMPT_INJECTION` | CWE-77 | HIGH/MEDIUM | User-input variable near system-role message assignment |
+| `TRANSPORT_EXPOSURE` | CWE-284 | MEDIUM/LOW | `host="0.0.0.0"` in MCP server config without auth context |
+| `AUTH_BYPASS` | CWE-306 | MEDIUM | `/mcp` route without recognized auth decorator in preceding 8 lines |
 
-## Usage
+## Key API
 
 ```python
-from ablation.analyzers.mcp_tool_taint_scanner import MCPToolTaintScanner
+from ablation.analyzers.mcp_tool_taint_scanner import McpToolTaintScanner
 
-results = MCPToolTaintScanner.from_path('/path/to/mcp-server').scan()
-print(MCPToolTaintScanner.report(results))
+# Directory tree
+findings = McpToolTaintScanner.from_path('/tmp/fortimanager/ai/').scan()
+print(McpToolTaintScanner.report(findings))
+
+# Single file
+findings = McpToolTaintScanner.scan_file('/tmp/app/mcp.py')
+
+# Filter by severity
+highs = [f for f in findings if f.severity in ('HIGH', 'CRITICAL')]
 ```
 
-CLI:
-```
-python3 -m ablation.analyzers.mcp_tool_taint_scanner /path/to/mcp-server
-python3 -m ablation.analyzers.mcp_tool_taint_scanner /path/to/mcp-server --severity HIGH
-```
+## Severity escalation
 
-## FMGMCP-1 reproduction
+`PROMPT_INJECTION` starts at MEDIUM, escalates to HIGH when the user-input variable is directly assigned as the `content=` field of a system-role message (direct assignment = higher exploitability).
 
-```typescript
-// transport.ts:214
-httpServer.listen(config.mcpHttpPort, () => {
-    console.log(`MCP server listening`);
-});
-```
+`TRANSPORT_EXPOSURE` starts at MEDIUM, drops to LOW when auth-related keywords (`auth`, `middleware`, `jwt`, `bearer`) appear in the surrounding ±10-line context.
 
-Scanner detects: BIND_WIDE (no host arg → 0.0.0.0). Severity HIGH.
+## Detection limitations
 
-## FMGMCP-2 reproduction
+- **CREDENTIAL_EXPOSURE** uses a 30-line window to track `json.dumps(COOKIES)` → launch site. Two-hop taint via an intermediate list variable (e.g., `all_cli_args = ['--cookies', cookies]`) is the maximum tracked depth.
+- **PROMPT_INJECTION** uses a ±20-line window around the system-role assignment; it does not perform full dataflow analysis.
+- **AUTH_BYPASS** only checks decorators in the 8 lines before the route registration; middleware registered at app-init level is not detected.
 
-```typescript
-// code-executor.ts
-const ALLOWED_METHODS = new Set(['get', 'set', 'add', 'update', 'delete', 'exec', ...])
-```
+## FORGE audit
 
-Scanner detects: EXEC_IN_ALLOWED (`'exec'` in ALLOWED_METHODS). Severity CRITICAL.
+Gate: **PASSED**. No HIGH or CRITICAL findings. No subprocess, eval, shell=True, or network I/O. All file reads use `errors="replace"` encoding guard. OSError handled. Taint window bounded at 30 lines. Regex patterns compiled at module level.
 
-## Known limitations
-
-- **BIND_WIDE false negatives**: multi-line `.listen(...)` calls where the closing `)` is on a different line than the opening `(` are not detected by the regex (the `[^)]` pattern doesn't cross newlines).
-- **NO_AUTH proximity heuristic**: auth middleware 16+ lines away from the route won't be detected. Cross-file middleware registration (e.g., `app.use(authMiddleware)` in a separate module) won't be detected.
-- **FastMCP multiline run()**: `mcp.run(\n    transport='http',\n)` with transport on a different line is not detected as HTTP.
-- **LLM_PROXY not implemented**: detecting which MCP tools receive LLM output and proxy it to privileged API calls requires cross-function/cross-file taint analysis not implemented here.
+Validated on FortiManager v8.0.0 AI stack: FMG-AI-1 (CREDENTIAL_EXPOSURE) and FMG-AI-2 (PROMPT_INJECTION) re-detected automatically.
