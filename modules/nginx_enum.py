@@ -2279,7 +2279,7 @@ if __name__ == '__main__':
     import sys
     import json
 
-    host = sys.argv[1] if len(sys.argv) > 1 else NginxEnumerator.MACSTADIUM_HOST
+    host = sys.argv[1] if len(sys.argv) > 1 else 'localhost'
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 443
     use_tls = '--no-tls' not in sys.argv
     as_json = '--json' in sys.argv

@@ -952,6 +952,8 @@ def apic_get_fabric_nodes(apic_host: str, token: str) -> list:
         "&rsp-subtree-class=firmwareRunning,topSystem"
     )
     data = _apic_get(apic_host, path, token)
+    if not data:
+        return []
     nodes = []
     for item in data.get("imdata", []):
         attrs = item.get("fabricNode", {}).get("attributes", {})
@@ -988,6 +990,8 @@ def apic_get_vmm_providers(apic_host: str, token: str) -> list:
         "&target-subtree-class=vmmCtrlrP,vmmUsrAccP,vmmVSwitchPolicyCont"
     )
     data = _apic_get(apic_host, path, token)
+    if not data:
+        return []
     providers = []
     for item in data.get("imdata", []):
         cls = next(iter(item), None)
@@ -1025,6 +1029,8 @@ def apic_get_service_graphs(apic_host: str, token: str) -> list:
         "&target-subtree-class=vnsLIf,vnsCDev,vnsCif"
     )
     data = _apic_get(apic_host, path, token)
+    if not data:
+        return []
     graphs = []
     for item in data.get("imdata", []):
         cls = next(iter(item), None)
@@ -1059,6 +1065,8 @@ def apic_get_tenants(apic_host: str, token: str) -> list:
         "?rsp-subtree-include=health"
     )
     data = _apic_get(apic_host, path, token)
+    if not data:
+        return []
     tenants = []
     for item in data.get("imdata", []):
         attrs = item.get("fvTenant", {}).get("attributes", {})
@@ -1095,6 +1103,8 @@ def apic_get_contracts(apic_host: str, token: str) -> list:
         "&target-subtree-class=vzSubj,vzRsSubjFiltAtt,vzFilter,vzEntry"
     )
     data = _apic_get(apic_host, path, token)
+    if not data:
+        return []
     contracts = []
     for item in data.get("imdata", []):
         cls = next(iter(item), None)
@@ -1207,6 +1217,8 @@ def apic_get_out_of_band_mgmt(apic_host: str, token: str) -> list:
     results = []
     for path in paths:
         data = _apic_get(apic_host, path, token)
+        if not data:
+            continue
         for item in data.get("imdata", []):
             cls = next(iter(item), None)
             if not cls:

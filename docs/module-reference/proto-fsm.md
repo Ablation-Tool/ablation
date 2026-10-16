@@ -1,6 +1,6 @@
 # Protocol FSM Extractor
 
-**File:** `ablation/analyzers/proto_fsm.py`
+**File:** `modules/proto_fsm.py`
 
 Extracts the handshake state machine from network protocols in stripped ARM64 binaries using static loop and BSS state-variable analysis. Authentication state transitions become explicit without a running server or traffic capture.
 
@@ -41,12 +41,24 @@ Builds `FSMState` and `FSMTransition` objects and exports a Graphviz DOT graph.
 ## Usage
 
 ```python
-from modules.proto_fsm import extract_fsm, FSMState, FSMTransition
+from modules.proto_fsm import (
+    _load, _text_bounds, _bss_bounds, build_cluster,
+    identify_state_vars, analyze_fn, extract_transitions, build_fsm, emit_dot,
+    DEFAULT_SEEDS, FnProps, FSMState, FSMTransition,
+)
 
-# Extract with default WeChat seeds
-states, transitions, dot = extract_fsm('/path/to/libwechatnetwork.so')
+binary, raw, _ = _load('/path/to/libwechatnetwork.so')
+text_va, text_size, _ = _text_bounds(binary)
+bss_va, bss_size = _bss_bounds(binary)
 
-# Print state graph
+state_vars = identify_state_vars(raw, binary, text_va, text_size, bss_va, bss_size)
+cluster = build_cluster(raw, binary, DEFAULT_SEEDS, hop_depth=2)
+fn_props = {va: analyze_fn(raw, binary, va, state_vars) for va in cluster}
+transitions = extract_transitions(raw, binary, cluster, state_vars, fn_props)
+states, transitions = build_fsm(state_vars, transitions, cluster, fn_props)
+dot = emit_dot(states, transitions, state_vars)
+
+# Print transitions
 for t in transitions:
     print(f"state {t.from_state} --[0x{t.trigger_pc:x}]--> state {t.to_state}")
 
@@ -54,14 +66,6 @@ for t in transitions:
 with open('fsm.dot', 'w') as f:
     f.write(dot)
 # Render: dot -Tpng fsm.dot -o fsm.png
-
-# Custom seeds (for a different target)
-from modules.proto_fsm import extract_fsm
-states, transitions, dot = extract_fsm(
-    '/path/to/target.so',
-    seed_vas=[0x111f98, 0x305020],
-    hop_depth=3,
-)
 ```
 
 **CLI:**
@@ -120,7 +124,7 @@ For other ARM64 targets, supply seed VAs from semantic search results for handsh
 
 ## Error conditions
 
-`extract_fsm()` and `_load()` raise `ValueError` if:
+`_load()` raises `ValueError` if:
 - The `.so` file exceeds `_MAX_BINARY_BYTES` (256 MB).
 - `lief.parse()` raises an exception (corrupt/unsupported ELF).
 - `lief.parse()` returns `None` — checked explicitly to prevent `AttributeError` on the
