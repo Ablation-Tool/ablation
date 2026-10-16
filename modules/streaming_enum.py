@@ -13,6 +13,8 @@ import ssl
 import io
 from typing import Optional
 
+_MAX_HTTP_BYTES = 4 * 1024 * 1024
+
 # ─── Kafka ─────────────────────────────────────────────────────────────────
 
 KAFKA_PORT = 9092
@@ -156,7 +158,7 @@ def _http_get(url: str, timeout: int = 8) -> Optional[dict]:
         req = urllib.request.Request(url)
         req.add_header("Accept", "application/json")
         with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=timeout) as r:
-            return json.loads(r.read())
+            return json.loads(r.read(_MAX_HTTP_BYTES))
     except urllib.error.HTTPError as e:
         return {"__http_error": e.code}
     except Exception:
@@ -179,7 +181,7 @@ def _http_post_file(url: str, filename: str, data: bytes,
                    f"multipart/form-data; boundary={boundary.decode()}")
     try:
         with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=timeout) as r:
-            return json.loads(r.read())
+            return json.loads(r.read(_MAX_HTTP_BYTES))
     except urllib.error.HTTPError as e:
         return {"__http_error": e.code}
     except Exception:
@@ -247,7 +249,7 @@ def flink_submit_jar_rce(host: str, jar_bytes: bytes,
     req.add_header("Content-Type", "application/json")
     try:
         with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=timeout) as r:
-            result["run_response"] = json.loads(r.read())
+            result["run_response"] = json.loads(r.read(_MAX_HTTP_BYTES))
     except urllib.error.HTTPError as e:
         result["run_response"] = {"__http_error": e.code}
     except Exception as e:
@@ -551,7 +553,7 @@ def _rabbitmq_get(url: str, username: str = "guest", password: str = "guest",
         req.add_header("Authorization", f"Basic {token}")
         req.add_header("Accept", "application/json")
         with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=timeout) as r:
-            return json.loads(r.read())
+            return json.loads(r.read(_MAX_HTTP_BYTES))
     except urllib.error.HTTPError as e:
         return {"__http_error": e.code}
     except Exception:
@@ -568,7 +570,7 @@ def _rabbitmq_post(url: str, payload: dict, username: str = "guest",
         req.add_header("Content-Type", "application/json")
         req.add_header("Accept", "application/json")
         with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=timeout) as r:
-            return json.loads(r.read())
+            return json.loads(r.read(_MAX_HTTP_BYTES))
     except urllib.error.HTTPError as e:
         return {"__http_error": e.code}
     except Exception:
@@ -1152,7 +1154,7 @@ def probe_dns_dot_doh(host: str, port: int = 853,
             req = urllib.request.Request(url)
             req.add_header("Accept", "application/dns-message, application/dns-json")
             with urllib.request.urlopen(req, context=doh_ctx, timeout=timeout) as r:
-                body = r.read()
+                body = r.read(_MAX_HTTP_BYTES)
                 ct = r.headers.get("Content-Type", "")
                 findings.append({
                     "severity": "HIGH",

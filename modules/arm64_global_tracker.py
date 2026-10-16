@@ -48,9 +48,12 @@ Output:
   Per-global table of (pc, instruction, field_offset, size) write records.
 """
 
+import os
 import struct, sys, argparse
 from pathlib import Path
 from typing import Optional, Tuple, Dict, List, Any
+
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
 
 # ─────────────────────────────────────────────────────────────────────────────
 # GOT catalogue: (GOT_VA, symbol_name, base_offset)
@@ -370,6 +373,9 @@ def _extract_global_write(sse: SSE, field_off: int) -> Optional[Tuple[str, int]]
 
 def scan(binary: Path, text_start: int, text_size: int, verbose: bool = False
          ) -> List[WriteRecord]:
+    bin_size = binary.stat().st_size
+    if bin_size > _MAX_BINARY_BYTES:
+        raise ValueError(f'{binary}: file size {bin_size} exceeds {_MAX_BINARY_BYTES} byte limit')
     data      = binary.read_bytes()
     text_end  = text_start + text_size
     records: List[WriteRecord] = []
@@ -395,8 +401,7 @@ def scan(binary: Path, text_start: int, text_size: int, verbose: bool = False
             _rt, rn, simm = res
             if rn == 31: continue
             sse = backward_sse(data, rn, off, text_start, text_end)
-            imm = simm if simm >= 0 else simm  # signed
-            hit = _extract_global_write(sse, imm)
+            hit = _extract_global_write(sse, simm)
             if hit:
                 sym, foff = hit
                 records.append(WriteRecord(off, f"STUR x{_rt},[x{rn},#0x{simm:x}]", sym, foff, 8, sse))

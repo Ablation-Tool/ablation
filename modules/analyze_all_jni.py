@@ -15,10 +15,13 @@ Output:
   - Complete surface report
 """
 
+import os
 import sys
 from pathlib import Path
 from arm_symbolic import ARMSymbolicAnalyzer, FuncSummary
 from ptt_protocol_re import PTTProtocolAnalyzer
+
+_MAX_LIB_BYTES = 256 * 1024 * 1024
 
 # JNI function table from hijoy_ptt_re.py
 JNI_FUNCTIONS = {
@@ -39,6 +42,9 @@ def analyze_all_functions(lib_path: Path) -> dict:
     """Analyze all JNI functions"""
 
     # Load binary
+    lib_size = os.path.getsize(lib_path)
+    if lib_size > _MAX_LIB_BYTES:
+        raise ValueError(f'{lib_path}: file size {lib_size} exceeds {_MAX_LIB_BYTES} byte limit')
     with open(lib_path, 'rb') as f:
         data = f.read()
 
