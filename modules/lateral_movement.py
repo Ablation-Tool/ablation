@@ -40,6 +40,7 @@ _IS_MACOS = _platform.system() == 'Darwin'
 _MAX_PROC_BYTES = 4 * 1024 * 1024    # 4 MB cap for /proc/pid/environ and /proc/pid/cmdline
 _MAX_SYSFS_BYTES = 64                 # sysfs counter files are always < 64 bytes
 _MAX_LOG_BYTES = 64 * 1024 * 1024    # 64 MB cap for auth log reads
+_MAX_SSH_FILE_BYTES = 1 * 1024 * 1024  # 1 MB cap for ~/.ssh/authorized_keys and known_hosts
 
 # Ports that tend to surface AI/ML infra, SSH, web, and databases
 SCAN_PORTS = [22, 80, 443, 2375, 2376, 5432, 6379, 8080, 8443, 9200, 9300, 27017]
@@ -89,7 +90,7 @@ class NetworkDiscovery:
         if _IS_LINUX:
             try:
                 with open('/proc/net/arp') as f:
-                    for line in f.readlines()[1:]:
+                    for line in f.read(_MAX_PROC_BYTES).splitlines()[1:]:
                         parts = line.split()
                         if len(parts) >= 4:
                             ip, hw_type, flags, mac = parts[0], parts[1], parts[2], parts[3]
@@ -120,7 +121,7 @@ class NetworkDiscovery:
         if _IS_LINUX:
             try:
                 with open('/proc/net/route') as f:
-                    for line in f.readlines()[1:]:
+                    for line in f.read(_MAX_PROC_BYTES).splitlines()[1:]:
                         parts = line.split()
                         if len(parts) < 8:
                             continue
@@ -4921,7 +4922,7 @@ def detect_ssh_key_reuse(scan_path="/home") -> list:
             pass
         try:
             with open(ak_path, 'r', errors='replace') as fh:
-                for line in fh:
+                for line in fh.read(_MAX_SSH_FILE_BYTES).splitlines():
                     line = line.strip()
                     if not line or line.startswith('#'):
                         continue
@@ -4971,7 +4972,7 @@ def detect_ssh_key_reuse(scan_path="/home") -> list:
     for username, kh_path in kh_paths:
         try:
             with open(kh_path, 'r', errors='replace') as fh:
-                for line in fh:
+                for line in fh.read(_MAX_SSH_FILE_BYTES).splitlines():
                     line = line.strip()
                     if not line or line.startswith('#'):
                         continue
