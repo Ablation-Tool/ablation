@@ -1352,7 +1352,8 @@ class BinaryContext:
     def _build_string_xref_index(self, data: bytes, binary) -> None:
         """Build string xref index.
 
-        x86_64/arm64: vectorized RIP/PC-relative displacement scan.
+        x86_64: vectorized RIP-relative 32-bit displacement scan.
+        arm64:  vectorized ADRP+ADD instruction-pair scan.
         x86_32 (i386): vectorized absolute 4-byte LE immediate scan.
         arm32: capstone LDR [PC, #off] literal pool scan per function.
         """
@@ -1361,6 +1362,10 @@ class BinaryContext:
             return
         if self.arch == 'x86_32':
             self._build_string_xref_index_x86_32()
+            return
+        if self.arch == 'arm64':
+            if _NUMPY_OK:
+                self._build_string_xref_index_arm64(data, binary)
             return
         if not _NUMPY_OK:
             return
@@ -1418,6 +1423,106 @@ class BinaryContext:
             func_str.setdefault(fva, []).append(sva)
 
         # Deduplicate per-func string lists
+        self._str_xref_idx = str_xref
+        self._func_str_idx = {k: list(dict.fromkeys(v)) for k, v in func_str.items()}
+
+    def _build_string_xref_index_arm64(self, data: bytes, binary) -> None:
+        """AArch64 string xref index via vectorized ADRP+ADD pair scan.
+
+        ARM64 materialises PC-relative addresses as a two-instruction pair:
+          ADRP X_d, #page_imm   — byte[3] & 0x9F == 0x90; loads 4KB-aligned page.
+          ADD  X_d, X_d, #off12 — byte[3] == 0x91 (64-bit, shift=0); adds page offset.
+        Combined: target = (PC & ~0xFFF) + sign_extend(imm21,21)<<12 + imm12.
+        Only consecutive (i, i+1) pairs with matching Rd/Rn are matched.
+        """
+        text_sec = binary.get_section(".text")
+        if not text_sec or not self.strings:
+            return
+        sec_data = bytes(text_sec.content)
+        sec_va = int(text_sec.virtual_address)
+        N = len(sec_data)
+        if N < 8:
+            return
+
+        buf = np.frombuffer(sec_data, dtype=np.uint8)
+        word_count = N // 4
+        msb = buf[3: word_count * 4: 4]
+
+        # ADRP: bits 31:29=100, bits 28:24=10000 → byte[3] & 0x9F == 0x90
+        adrp_idx = np.where((msb & np.uint8(0x9F)) == np.uint8(0x90))[0]
+        if len(adrp_idx) == 0:
+            return
+
+        # Guard: next word must be in bounds
+        in_bounds = adrp_idx + 1 < word_count
+        adrp_idx = adrp_idx[in_bounds]
+        if len(adrp_idx) == 0:
+            return
+
+        byte_off = adrp_idx * 4
+        b0 = buf[byte_off    ].astype(np.uint32)
+        b1 = buf[byte_off + 1].astype(np.uint32)
+        b2 = buf[byte_off + 2].astype(np.uint32)
+        b3 = msb[adrp_idx].astype(np.uint32)
+        words_adrp = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+
+        # Decode ADRP fields
+        rd_adrp = words_adrp & np.uint32(0x1F)
+        immlo   = (words_adrp >> 29) & np.uint32(0x3)
+        immhi   = (words_adrp >> 5)  & np.uint32(0x7FFFF)
+        imm21   = (immhi << 2) | immlo
+        # Sign-extend 21-bit → int32
+        sign21 = np.uint32(0x100000)
+        fill21 = np.uint32(0xFFE00000)
+        imm21_i32 = np.where(
+            imm21 & sign21,
+            (imm21 | fill21).view(np.int32),
+            imm21.astype(np.int32),
+        )
+
+        insn_vas = _va_to_i64(sec_va) + byte_off.astype(np.int64)
+        # page_base = (insn_va >> 12 + imm21_signed) << 12
+        page_num  = (insn_vas >> 12) + imm21_i32.astype(np.int64)
+        page_base = page_num << 12
+
+        # Decode next instruction (potential ADD)
+        nxt_byte_off = (adrp_idx + 1) * 4
+        nb0 = buf[nxt_byte_off    ].astype(np.uint32)
+        nb1 = buf[nxt_byte_off + 1].astype(np.uint32)
+        nb2 = buf[nxt_byte_off + 2].astype(np.uint32)
+        nb3 = buf[nxt_byte_off + 3].astype(np.uint32)
+        next_words = nb0 | (nb1 << 8) | (nb2 << 16) | (nb3 << 24)
+
+        # ADD (immediate, 64-bit, shift=0): bits 31:22 = 1001000100 = 0x244
+        is_add    = ((next_words >> 22) & np.uint32(0x3FF)) == np.uint32(0x244)
+        add_rn    = (next_words >> 5) & np.uint32(0x1F)
+        imm12     = (next_words >> 10) & np.uint32(0xFFF)
+        reg_match = add_rn == rd_adrp
+
+        valid = is_add & reg_match
+        if not np.any(valid):
+            return
+
+        target_vas   = page_base[valid] + imm12[valid].astype(np.int64)
+        insn_vas_hit = insn_vas[valid]
+
+        str_va_arr = _va_arr_to_i64(sorted(self.strings.keys()))
+        hits    = np.searchsorted(str_va_arr, target_vas)
+        clipped = np.minimum(hits, len(str_va_arr) - 1)
+        str_valid = str_va_arr[clipped] == target_vas
+
+        str_xref: Dict[int, List[int]] = {}
+        func_str: Dict[int, List[int]] = {}
+        for code_va, sva in zip(insn_vas_hit[str_valid].tolist(),
+                                target_vas[str_valid].tolist()):
+            code_va = int(code_va)
+            sva     = int(sva)
+            fva     = self.func_containing(code_va)
+            if fva is None:
+                continue
+            str_xref.setdefault(sva, []).append(code_va)
+            func_str.setdefault(fva, []).append(sva)
+
         self._str_xref_idx = str_xref
         self._func_str_idx = {k: list(dict.fromkeys(v)) for k, v in func_str.items()}
 
@@ -2591,4 +2696,15 @@ class BinaryContext:
         ctx._build_indices()
         ctx._str_xref_idx = {int(k): v for k, v in payload.get("str_xref_idx", {}).items()}
         ctx._func_str_idx = {int(k): v for k, v in payload.get("func_str_idx", {}).items()}
+        # Rebuild string xref index if absent (e.g. cache predates arm64 support)
+        if not ctx._str_xref_idx and ctx.strings and ctx.func_starts:
+            orig = orig_path or ctx.path
+            if orig and Path(orig).exists():
+                try:
+                    import lief as _lief
+                    _data = Path(orig).read_bytes()
+                    _bin  = _lief.parse(orig)
+                    ctx._build_string_xref_index(_data, _bin)
+                except Exception:
+                    pass
         return ctx
