@@ -735,7 +735,7 @@ class PrivescEnumerator:
         for af in apt_files:
             try:
                 with open(af) as fh:
-                    for lineno, line in enumerate(fh, 1):
+                    for lineno, line in enumerate(fh.read(_MAX_FILE_BYTES).splitlines(), 1):
                         stripped = line.strip()
                         if stripped.startswith('#') or not stripped:
                             continue
@@ -1156,7 +1156,7 @@ def check_loaded_kernel_modules() -> list:
 
     try:
         with open("/proc/modules") as fh:
-            lines = fh.readlines()
+            lines = fh.read(_MAX_FILE_BYTES).splitlines()
     except (PermissionError, FileNotFoundError):
         return findings
 
@@ -1244,7 +1244,7 @@ def check_network_namespace_escape() -> list:
     def _read_dev_interfaces(path: str) -> set:
         try:
             with open(path) as fh:
-                lines = fh.readlines()
+                lines = fh.read(_MAX_FILE_BYTES).splitlines()
             ifaces = set()
             for line in lines[2:]:  # skip two header lines
                 iface = line.split(":")[0].strip()
