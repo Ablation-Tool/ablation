@@ -4,14 +4,26 @@
 
 ## Why this exists
 
-Automated JNI (Java Native Interface) attack surface mapping for Android shared libraries. Identifies all native methods registered via `RegisterNatives` or exported with `Java_` prefixes, maps them to their Java class/method counterparts, and flags dangerous parameter patterns (string buffers without length bounds, direct `ByteBuffer` access).
+Analyzes the 10 JNI functions in `libhijoyptt.so` (HiJoy PTT Android SO) using ARM32 symbolic execution. Generates a per-function summary of argument writes, protocol buffer reads, call graph edges, and vtable calls. Produces a Markdown surface report with an attack surface section.
 
 ## Key API
 
 | Symbol | Description |
 |---|---|
-| `analyze_all_jni(so_path)` | Full JNI surface analysis — returns list of `JNIMethod` findings |
-| `JNIMethod` | dataclass: `va`, `java_class`, `method_name`, `signature`, `risk_level` |
+| `analyze_all_functions(lib_path)` | Load SO, run symbolic analysis on all 10 hardcoded JNI VAs, return results dict |
+| `classify_function(name, summary)` | Name + behavior heuristic classification → dict with type/complexity/has_io |
+| `generate_report(results, output_path)` | Write Markdown surface report to output_path |
+| `JNI_FUNCTIONS` | Dict of 10 hardcoded function names → VAs for libhijoyptt.so |
+
+`analyze_all_functions()` returns:
+```python
+{
+  'functions': {name: {'addr': str, 'summary': FuncSummary, 'classification': dict}},
+  'call_graph': [{'caller': str, 'target': str, 'args_symbolic': str}],
+  'protocol_ops': [],
+  'io_operations': [],
+}
+```
 
 ## FORGE audit
 
