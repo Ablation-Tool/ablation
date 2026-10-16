@@ -17,7 +17,8 @@ _IS_MACOS = _platform.system() == 'Darwin'
 _IS_LINUX = _platform.system() == 'Linux'
 
 _MAX_LOG_BYTES = 64 * 1024 * 1024
-_MAX_FILE_BYTES = 65536  # cap for procfs / config / sudoers reads
+_MAX_FILE_BYTES = 65536   # cap for procfs / config / sudoers reads
+_MAX_PROC_BYTES = 4 * 1024 * 1024  # cap for /proc/pid/maps and large proc files
 
 class PrivescEnumerator:
     """Enumerate privilege escalation paths"""
@@ -796,7 +797,7 @@ class PrivescEnumerator:
                     fp = os.path.join(yum_d, fname)
                     try:
                         with open(fp) as fh:
-                            for lineno, line in enumerate(fh, 1):
+                            for lineno, line in enumerate(fh.read(_MAX_FILE_BYTES).splitlines(), 1):
                                 stripped = line.strip()
                                 if re.match(r'gpgcheck\s*=\s*0', stripped, re.IGNORECASE):
                                     results.append({
@@ -817,7 +818,7 @@ class PrivescEnumerator:
         if os.path.isfile(npmrc):
             try:
                 with open(npmrc) as fh:
-                    for lineno, line in enumerate(fh, 1):
+                    for lineno, line in enumerate(fh.read(_MAX_FILE_BYTES).splitlines(), 1):
                         stripped = line.strip()
                         if re.search(r'registry\s*=\s*http://', stripped, re.IGNORECASE):
                             results.append({
@@ -1335,7 +1336,7 @@ def check_ipc_namespace_exposure() -> list:
     # --- Shared Memory ---
     try:
         with open("/proc/sysvipc/shm") as fh:
-            lines = fh.readlines()
+            lines = fh.read(_MAX_FILE_BYTES).splitlines()
         for line in lines[1:]:  # skip header
             parts = line.split()
             if len(parts) < 4:
@@ -1364,7 +1365,7 @@ def check_ipc_namespace_exposure() -> list:
     # --- Message Queues ---
     try:
         with open("/proc/sysvipc/msg") as fh:
-            lines = fh.readlines()
+            lines = fh.read(_MAX_FILE_BYTES).splitlines()
         for line in lines[1:]:
             parts = line.split()
             if len(parts) < 3:
@@ -1392,7 +1393,7 @@ def check_ipc_namespace_exposure() -> list:
     # --- Semaphore Arrays ---
     try:
         with open("/proc/sysvipc/sem") as fh:
-            lines = fh.readlines()
+            lines = fh.read(_MAX_FILE_BYTES).splitlines()
         sem_count = max(0, len(lines) - 1)  # subtract header
         if sem_count > 0:
             findings.append({
@@ -2466,7 +2467,7 @@ def check_network_interface_exposure() -> list:
     # --- Multiple global unicast IPv6 prefixes ---
     try:
         with open("/proc/net/if_inet6", "r") as fh:
-            lines = fh.readlines()
+            lines = fh.read(_MAX_FILE_BYTES).splitlines()
         # Format: addr iface_idx prefix_len scope flags ifname
         # scope 00 = global unicast
         global_prefixes = set()
@@ -2502,7 +2503,7 @@ def check_network_interface_exposure() -> list:
     # --- ARP cache incomplete entries ---
     try:
         with open("/proc/net/arp", "r") as fh:
-            lines = fh.readlines()
+            lines = fh.read(_MAX_FILE_BYTES).splitlines()
         # Header: IP address, HW type, Flags, HW address, Mask, Device
         # HW type 0x0 in the Flags column = 0x0 = incomplete (no reply received)
         incomplete = 0
@@ -2565,7 +2566,7 @@ def check_network_interface_exposure() -> list:
     # --- Interface TX errors ---
     try:
         with open("/proc/net/dev", "r") as fh:
-            lines = fh.readlines()
+            lines = fh.read(_MAX_FILE_BYTES).splitlines()
         # Format (after two header lines):
         # iface: rx_bytes rx_packets rx_errs rx_drop ... tx_bytes tx_packets tx_errs ...
         for line in lines[2:]:
@@ -2712,7 +2713,7 @@ def check_heap_injection_surface(pid=None) -> list:
         maps_path = f"/proc/{p}/maps"
         try:
             with open(maps_path, "r") as fh:
-                map_lines = fh.readlines()
+                map_lines = fh.read(_MAX_PROC_BYTES).splitlines()
         except (PermissionError, FileNotFoundError, OSError):
             continue
 
@@ -3140,7 +3141,7 @@ def check_log_deletion_patterns() -> list:
     for hist_path in history_candidates:
         try:
             with open(hist_path, "r", errors="replace") as fh:
-                for lineno, line in enumerate(fh, 1):
+                for lineno, line in enumerate(fh.read(_MAX_FILE_BYTES).splitlines(), 1):
                     if log_deletion_pattern.search(line):
                         findings.append({
                             "severity": "HIGH",
@@ -4449,7 +4450,7 @@ def detect_cron_and_path_hijacking() -> list:
     for conf_file in ld_conf_files:
         try:
             with open(conf_file, "r", errors="replace") as fh:
-                for line in fh:
+                for line in fh.read(_MAX_FILE_BYTES).splitlines():
                     line = line.strip()
                     if not line or line.startswith(("#", "include")):
                         continue

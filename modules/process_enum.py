@@ -16,6 +16,7 @@ _IS_MACOS = _platform.system() == 'Darwin'
 _IS_LINUX = _platform.system() == 'Linux'
 
 _MAX_PROC_BYTES = 4 * 1024 * 1024   # cap for procfs reads (/proc/pid/environ, cmdline, etc.)
+_MAX_FILE_BYTES = 65536              # cap for config/cron/status files (64 KB)
 
 class ProcessEnumerator:
     """Enumerate and analyze processes"""
@@ -74,7 +75,7 @@ class ProcessEnumerator:
         maps = []
         try:
             with open(self.proc_path / "maps") as f:
-                for line in f:
+                for line in f.read(_MAX_PROC_BYTES).splitlines():
                     parts = line.strip().split()
                     if len(parts) >= 5:
                         addr_range = parts[0]
@@ -336,7 +337,7 @@ def detect_hollow_process(pid: int) -> dict:
     tracer_pid = 0
     try:
         with open(f'{proc_base}/status') as f:
-            for line in f:
+            for line in f.read(_MAX_FILE_BYTES).splitlines():
                 if line.startswith('TracerPid:'):
                     tracer_pid = int(line.split(':', 1)[1].strip())
                     break
@@ -491,7 +492,7 @@ def scan_dll_hijacking_candidates(proc_path: str = "/proc") -> list:
         # --- /proc/{pid}/maps world-writable path check ---
         try:
             with open(f'{proc_base}/maps') as f:
-                for line in f:
+                for line in f.read(_MAX_PROC_BYTES).splitlines():
                     parts = line.strip().split()
                     if len(parts) < 6:
                         continue
@@ -724,7 +725,7 @@ def detect_cron_persistence(paths: list = None) -> list:
         # Content checks
         try:
             with open(str(cron_file), errors='replace') as f:
-                for lineno, line in enumerate(f, 1):
+                for lineno, line in enumerate(f.read(_MAX_FILE_BYTES).splitlines(), 1):
                     stripped = line.strip()
                     if not stripped or stripped.startswith('#'):
                         continue
@@ -1181,7 +1182,7 @@ def detect_persistence_artifacts() -> list:
             unknown_modules = []
             try:
                 with open(modules_path) as f:
-                    for line in f:
+                    for line in f.read(_MAX_FILE_BYTES).splitlines():
                         mod_name = line.split()[0] if line.split() else ''
                         if mod_name and not any(mod_name.startswith(p) for p in known_module_prefixes):
                             unknown_modules.append(mod_name)
@@ -1710,7 +1711,7 @@ def detect_ptrace_instrumentation(pid=None) -> list:
         # TracerPid
         try:
             with open(proc_status) as fh:
-                for line in fh:
+                for line in fh.read(_MAX_FILE_BYTES).splitlines():
                     if line.startswith('TracerPid:'):
                         tracer = int(line.split(':', 1)[1].strip())
                         if tracer != 0:
@@ -1731,7 +1732,7 @@ def detect_ptrace_instrumentation(pid=None) -> list:
         # Maps scan
         try:
             with open(proc_maps) as fh:
-                for line in fh:
+                for line in fh.read(_MAX_PROC_BYTES).splitlines():
                     if _VALGRIND_PAT.search(line):
                         findings.append({
                             'severity': 'HIGH',
@@ -1749,7 +1750,7 @@ def detect_ptrace_instrumentation(pid=None) -> list:
 
         try:
             with open(proc_maps) as fh:
-                for line in fh:
+                for line in fh.read(_MAX_PROC_BYTES).splitlines():
                     if _PIN_PAT.search(line):
                         findings.append({
                             'severity': 'HIGH',
@@ -1767,7 +1768,7 @@ def detect_ptrace_instrumentation(pid=None) -> list:
 
         try:
             with open(proc_maps) as fh:
-                for line in fh:
+                for line in fh.read(_MAX_PROC_BYTES).splitlines():
                     if _SANITIZER_PAT.search(line):
                         findings.append({
                             'severity': 'MEDIUM',
@@ -3239,7 +3240,7 @@ def detect_sandbox_environment_indicators() -> list:
     # Memory: /proc/meminfo MemTotal < 1 GiB
     try:
         with open('/proc/meminfo', 'r', errors='replace') as f:
-            for line in f:
+            for line in f.read(_MAX_FILE_BYTES).splitlines():
                 if line.startswith('MemTotal:'):
                     mem_kb = int(line.split()[1])
                     if mem_kb < 1024 * 1024:  # < 1 GiB
@@ -3387,7 +3388,7 @@ def detect_process_injection_surface() -> list:
             # /proc/<pid>/maps: collect rwx regions
             try:
                 with open(f'/proc/{pid}/maps', 'r', errors='replace') as f:
-                    for line in f:
+                    for line in f.read(_MAX_PROC_BYTES).splitlines():
                         parts = line.split()
                         if len(parts) < 2:
                             continue
@@ -3456,7 +3457,7 @@ def detect_process_injection_surface() -> list:
             try:
                 proc_uid = None
                 with open(f'/proc/{pid}/status', 'r') as f:
-                    for line in f:
+                    for line in f.read(_MAX_FILE_BYTES).splitlines():
                         if line.startswith('Uid:'):
                             proc_uid = int(line.split()[1])
                             break
@@ -3622,7 +3623,7 @@ def detect_bash_history_artifacts() -> list:
     for hist_path in history_paths:
         try:
             with open(hist_path, 'r', errors='replace') as fh:
-                lines = fh.readlines()
+                lines = fh.read(_MAX_FILE_BYTES).splitlines()
         except OSError:
             continue
 

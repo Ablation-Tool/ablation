@@ -4,8 +4,36 @@
 
 ## Why this exists
 
-Bounded symbolic execution with Z3 path constraint solving for x86-64. Pipeline position: `cfg_builder → taint_tracker (finds sink VA) → path_solver (finds input)`. Enumerates all simple CFG paths from entry block to target block, symbolically executes each path, and asks Z3 to produce concrete register values at function entry that satisfy all constraints.
+Bounded symbolic execution with Z3 path constraint solving for x86-64. Pipeline position: `cfg_builder → taint_tracker (finds sink VA) → path_solver (finds input)`. Enumerates all simple CFG paths from entry block to target block (DFS, bounded by `max_path_blocks`), symbolically executes each path (register expressions as Z3 BitVec), and asks Z3 to produce concrete register values at function entry that satisfy all constraints. Supports struct-aware memory seeding (`MemoryConstraint`) for constraining field-offset reads on a known struct pointer.
+
+## Key API
+
+```python
+from modules.path_solver import PathSolver, PathResult, MemoryConstraint, solve_for_sink
+
+# Full run: returns all paths solved (up to max_paths)
+ps = PathSolver(data, func_va, func_end_va, plt, cfg, md,
+                max_path_blocks=40, max_paths=50, z3_timeout_ms=5000)
+results = ps.solve(target_va=0x5747a)
+for r in results:
+    if r.sat:
+        print(r.model)  # {reg_name: int}
+
+# Quick first-SAT
+first = ps.solve_first_sat(target_va=0x5747a)
+
+# One-call wrapper
+first = solve_for_sink(data, func_va, func_end_va, plt, cfg, md, target_va=0x5747a)
+
+# Struct seeding: constrain memory reads at (base_reg, byte_offset)
+seed = {
+    ("rbx", 0x2b): MemoryConstraint("attr_type", width=8, lo=0, hi=255),
+    ("rbx", 0x2c): MemoryConstraint("attr_len",  width=8, lo=4, hi=255),
+    ("rbx", 0x2e): MemoryConstraint("vendor_id", width=32, exact=311),
+}
+ps = PathSolver(data, func_va, func_end_va, plt, cfg, md, struct_seed=seed)
+```
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. No file reads. No HTTP reads. No subprocess. No lief.parse(). Operates entirely on in-memory CFG and register state.
+Gate: **PASSED**. No file reads. No network I/O. No subprocess. No lief.parse(). No bare `except:`. Z3 solver bounded by `z3_timeout_ms` (default 5000 ms). Path enumeration bounded by `max_path_blocks` (40) and `max_paths` (50). Operates entirely on in-memory CFG and register state.
