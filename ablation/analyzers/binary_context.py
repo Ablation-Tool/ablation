@@ -530,6 +530,11 @@ class BinaryContext:
             self._extract_plt_arm32(binary)
             return
 
+        # i386: .rel.plt (8-byte REL, no addend), stubs in .plt with FF 25 [abs32]
+        if self.arch == 'x86_32':
+            self._extract_plt_x86_32(binary)
+            return
+
         # PPC64le ELF V2: stubs inside .text — std r2,24(r1); ld r12,N(r2); mtctr r12; bctr
         if self.arch == 'ppc64':
             try:
@@ -604,6 +609,54 @@ class BinaryContext:
                     got_va = stub_va + start + 6 + disp
                     if got_va in got_to_sym:
                         self.plt[stub_va] = got_to_sym[got_va]
+
+    def _extract_plt_x86_32(self, binary) -> None:
+        """i386 ELF PLT extraction.
+
+        Each PLT stub (16 bytes) has the form:
+          ff 25 XX XX XX XX  jmp dword ptr [abs_GOT_va]  <- absolute 32-bit GOT entry addr
+          68 YY YY YY YY     push reloc_offset
+          e9 ZZ ZZ ZZ ZZ     jmp PLT_resolver
+        PLT[0] is the resolver stub (push/jmp to the dynamic linker) — not a real call target.
+        .rel.plt entries (8-byte REL, no addend): r_offset=GOT_entry_va, r_info=(sym_idx<<8)|7
+        """
+        got_to_sym: Dict[int, str] = {}
+        try:
+            rel_plt = binary.get_section('.rel.plt')
+            if rel_plt:
+                rel_data = bytes(rel_plt.content)
+                for off in range(0, len(rel_data) - 7, 8):
+                    r_offset, r_info = struct.unpack_from('<II', rel_data, off)
+                    sym_idx = r_info >> 8
+                    try:
+                        sym = binary.dynamic_symbols[sym_idx]
+                        if sym.name:
+                            got_to_sym[r_offset] = sym.name
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        if not got_to_sym:
+            return
+
+        for sec_name in ('.plt', '.plt.got'):
+            try:
+                sec = binary.get_section(sec_name)
+            except Exception:
+                sec = None
+            if not sec:
+                continue
+            sec_data = bytes(sec.content)
+            sec_va = int(sec.virtual_address)
+            for off in range(0, len(sec_data) - 5, 16):
+                chunk = sec_data[off:off + 6]
+                if len(chunk) < 6:
+                    break
+                if chunk[0:2] == b'\xff\x25':
+                    got_va = struct.unpack_from('<I', chunk, 2)[0]
+                    if got_va in got_to_sym:
+                        self.plt[sec_va + off] = got_to_sym[got_va]
 
     def _extract_plt_arm32(self, binary) -> None:
         # Parse .rel.plt (8-byte entries: r_offset:u32 + r_info:u32)
