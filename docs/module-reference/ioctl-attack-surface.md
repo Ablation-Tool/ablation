@@ -121,4 +121,4 @@ surface = gen.analyze()
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_DRIVER_BYTES=64MB`; `Path.stat().st_size` guard before `read_bytes()` in `_load()`.
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_DRIVER_BYTES=64MB`; `Path.stat().st_size` guard in `__init__()` before `read_bytes()`. `lief.parse()` in `try/except Exception`. No HTTP reads.
