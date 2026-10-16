@@ -269,4 +269,4 @@ x_axis=0x836D, y_axis=0x8311, scale=0.78125, unit=`Compensation (%)`.
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_XML_BYTES=4MB`; `path.stat().st_size` guard before each `read_bytes()` call; `_MAX_WALK_DEPTH=4` caps directory recursion.
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_XML_BYTES=4MB`; `path.stat().st_size > _MAX_XML_BYTES` guard before every XML read: `_parse_scalings()` (L268), `_parse_structure()` (L305), and `_load_variant()` (L411 — added this session; previously missing). `_MAX_WALK_DEPTH=4` caps directory recursion.

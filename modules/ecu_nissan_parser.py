@@ -409,6 +409,8 @@ class EcuNissanParser:
 
     def _load_variant(self, path: Path) -> None:
         try:
+            if path.stat().st_size > _MAX_XML_BYTES:
+                return
             tree = ET.parse(str(path))
         except (ET.ParseError, OSError):
             return
