@@ -35,7 +35,6 @@ Usage:
   print(f"Arg field writes: {summary.arg_field_writes}")
   print(f"Input reads: {summary.inputbuf_reads}")
 
-Author: NuClide Research (2026-08-16)
 License: Internal research use only
 """
 
@@ -148,6 +147,9 @@ class ARMSymbolicAnalyzer:
         # Function summaries cache
         self.summaries: Dict[int, FuncSummary] = {}
 
+        # In-progress set prevents mutual recursion cycle (CWE-674)
+        self._analyzing: set = set()
+
         # Vtable slot mapping (slot_idx → [function_addrs])
         self.vtable_slots: Dict[int, List[int]] = {}
 
@@ -164,6 +166,11 @@ class ARMSymbolicAnalyzer:
         # Check cache
         if addr in self.summaries:
             return self.summaries[addr]
+
+        # Guard against mutual recursion (VtableSlotAnalyzer ↔ analyze_function cycle)
+        if addr in self._analyzing:
+            return FuncSummary(addr=addr)
+        self._analyzing.add(addr)
 
         summary = FuncSummary(addr=addr)
 
@@ -183,6 +190,7 @@ class ARMSymbolicAnalyzer:
             self._execute_insn(insn, state, summary)
 
         # Cache and return
+        self._analyzing.discard(addr)
         self.summaries[addr] = summary
         return summary
 

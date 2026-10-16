@@ -28,6 +28,9 @@ from pathlib import Path
 # ── Class file constants ──────────────────────────────────────────────────────
 CAFEBABE = b'\xca\xfe\xba\xbe'
 
+_MAX_FILE_BYTES  = 64 * 1024 * 1024   # 64 MB per .class/.jar file
+_MAX_ENTRY_BYTES = 16 * 1024 * 1024   # 16 MB per ZIP entry
+
 # Constant pool tags
 CP_Utf8              = 1
 CP_Integer           = 3
@@ -995,6 +998,8 @@ def analyze_jar(jar_path):
 
             for cname in class_entries[:200]:  # cap at 200 to avoid OOM
                 try:
+                    if zf.getinfo(cname).file_size > _MAX_ENTRY_BYTES:
+                        continue
                     class_data = zf.read(cname)
                     parsed     = parse_class_file(class_data)
                     if 'error' in parsed:
@@ -1585,7 +1590,11 @@ class JavaREAnalyzer:
 
         Returns: findings dict including all new detection fields.
         """
-        p    = Path(path or self.target_path)
+        p = Path(path or self.target_path)
+        file_size = p.stat().st_size
+        if file_size > _MAX_FILE_BYTES:
+            raise ValueError(
+                f'{p}: file size {file_size} exceeds {_MAX_FILE_BYTES} byte limit')
         data = p.read_bytes()
 
         if data[:4] == CAFEBABE:
@@ -1633,6 +1642,8 @@ class JavaREAnalyzer:
 
         for p in artifacts[:100]:  # cap at 100 artifacts
             try:
+                if p.stat().st_size > _MAX_FILE_BYTES:
+                    continue
                 data = p.read_bytes()
                 if data[:4] == CAFEBABE:
                     r = parse_class_file(data)

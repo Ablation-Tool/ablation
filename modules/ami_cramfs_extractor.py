@@ -116,6 +116,8 @@ def _decompress_file(cramfs: bytes, data_off: int, size: int) -> bytes:
         return b''
     nblocks  = (size + PAGE_SIZE - 1) // PAGE_SIZE
     ptr_base = data_off * 4
+    if ptr_base + nblocks * 4 > len(cramfs):
+        return b''
     ptrs     = list(struct.unpack_from(f'<{nblocks}I', cramfs, ptr_base))
     result   = bytearray()
     for i in range(nblocks):
@@ -182,6 +184,8 @@ class AmiCramFSExtractor:
         with open(path, 'rb') as f:
             return cls(f.read())
 
+    _MAX_IMAGE_BYTES = 256 * 1024 * 1024  # 256 MB guard against malformed total_size
+
     @classmethod
     def from_image(cls, image_path: str, offset: int) -> 'AmiCramFSExtractor':
         """Extract a CramFS partition from inside a larger firmware image."""
@@ -192,6 +196,10 @@ class AmiCramFSExtractor:
             magic, total_size = struct.unpack_from('<II', header, 0)
             if magic != CRAMFS_MAGIC:
                 raise ValueError(f"No CramFS at offset 0x{offset:x} (magic=0x{magic:08x})")
+            if total_size > cls._MAX_IMAGE_BYTES:
+                raise ValueError(
+                    f"CramFS total_size={total_size} exceeds {cls._MAX_IMAGE_BYTES} byte limit"
+                )
             if offset + total_size > file_size:
                 raise ValueError(
                     f"CramFS total_size={total_size} extends past image "
@@ -258,9 +266,19 @@ class AmiCramFSExtractor:
             elif entry.is_lnk:
                 if '/' in entry.name or entry.name in ('..', '.'):
                     continue  # skip unsafe filename
-                target = _decompress_file(self._cramfs, entry.data_off, entry.size)
+                target_raw = _decompress_file(self._cramfs, entry.data_off, entry.size)
+                target_str = target_raw.decode('ascii', errors='replace').rstrip('\x00')
+                # Resolve symlink target relative to its parent dir and verify it
+                # stays inside out_dir (prevents ../../etc/passwd-style escapes)
+                link_parent = os.path.dirname(child_abs)
+                resolved = os.path.realpath(os.path.join(link_parent, target_str))
+                real_out = os.path.realpath(out_dir)
+                if not resolved.startswith(real_out + os.sep) and resolved != real_out:
+                    if progress:
+                        progress(f'SKIP unsafe symlink {child_rel} -> {target_str}')
+                    continue
                 try:
-                    os.symlink(target.decode('ascii', errors='replace'), child_abs)
+                    os.symlink(target_str, child_abs)
                 except FileExistsError:
                     pass
                 if progress:

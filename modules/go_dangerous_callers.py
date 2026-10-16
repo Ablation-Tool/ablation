@@ -77,6 +77,7 @@ from ablation.analyzers.go_pclntab import GoFuncTable
 _SKIP_SUFFIX = re.compile(r'\.(deferwrap\d*|gowrap\d*|func\d+)$')
 _CACHE_DIR = os.path.expanduser('~/.cache/ablation/go_re')
 _CACHE_VERSION = 3  # increment when cache schema changes
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
 
 
 @dataclass
@@ -142,7 +143,12 @@ class GoDangerousCallerScanner:
     # ------------------------------------------------------------------ build
 
     def build(self, force: bool = False) -> 'GoDangerousCallerScanner':
-        self._data = open(self.binary_path, 'rb').read()
+        size = os.path.getsize(self.binary_path)
+        if size > _MAX_BINARY_BYTES:
+            raise ValueError(
+                f'{self.binary_path}: file size {size} exceeds {_MAX_BINARY_BYTES} byte limit')
+        with open(self.binary_path, 'rb') as f:
+            self._data = f.read()
         sha = hashlib.sha256(self._data).hexdigest()[:16]
 
         db_path = os.path.join(self.cache_dir, f'{sha}.db')
@@ -376,6 +382,9 @@ class GoDangerousCallerScanner:
 
     def _load_pickle(self, path: str) -> bool:
         try:
+            # Reject stale pickle: if binary was modified after cache was written, rebuild.
+            if os.path.getmtime(path) < os.path.getmtime(self.binary_path):
+                return False
             with open(path, 'rb') as f:
                 state = pickle.load(f)
             if state.get('_version', 0) != _CACHE_VERSION:

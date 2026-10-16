@@ -62,6 +62,8 @@ from capstone.mips_const import (
 )
 import lief
 
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
+
 # MIPS register name -> canonical name
 _REG_FAMILY: Dict[str, str] = {}
 _MIPS_REG_NAMES = [
@@ -245,7 +247,14 @@ class MIPS32TaintTracker:
         if custom_sinks:
             self._sinks.update(custom_sinks)
 
-        self._binary = lief.parse(binary_path)
+        bin_size = Path(binary_path).stat().st_size
+        if bin_size > _MAX_BINARY_BYTES:
+            raise ValueError(
+                f'{binary_path}: file size {bin_size} exceeds {_MAX_BINARY_BYTES} byte limit')
+        try:
+            self._binary = lief.parse(binary_path)
+        except Exception:
+            self._binary = None
         self._data = Path(binary_path).read_bytes()
         self._plt = self._build_plt()
         self._strings: Dict[int, str] = {}

@@ -7,11 +7,15 @@ structure file, and per-variant XML overlays carrying ROM addresses.
 
 from __future__ import annotations
 
+import os
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+
+_MAX_XML_BYTES = 4 * 1024 * 1024  # 4 MB per XML file
+_MAX_WALK_DEPTH = 4                # max subdirectory depth in definitions_dir
 
 from ablation.analyzers.ecu_cal_def import CalibrationAxis, CalibrationTable
 
@@ -147,9 +151,18 @@ class EcuNissanParser:
         parser = cls()
         parser._parse_scalings(root / "ScalingData.xml")
         parser._parse_structure(root / "A2L.xml")
-        for xml_path in sorted(root.rglob("*.xml")):
-            if xml_path.name in ("ScalingData.xml", "A2L.xml"):
+        root_str = str(root)
+        root_depth = root_str.count(os.sep)
+        xml_paths: list[Path] = []
+        for dirpath, dirs, files in os.walk(str(root), followlinks=False):
+            depth = dirpath.count(os.sep) - root_depth
+            if depth >= _MAX_WALK_DEPTH:
+                dirs.clear()
                 continue
+            for fname in files:
+                if fname.endswith(".xml") and fname not in ("ScalingData.xml", "A2L.xml"):
+                    xml_paths.append(Path(dirpath) / fname)
+        for xml_path in sorted(xml_paths):
             try:
                 parser._load_variant(xml_path)
             except Exception:
@@ -252,6 +265,8 @@ class EcuNissanParser:
 
     def _parse_scalings(self, path: Path) -> None:
         try:
+            if path.stat().st_size > _MAX_XML_BYTES:
+                return
             raw = path.read_bytes()
         except (FileNotFoundError, OSError):
             return
@@ -287,6 +302,8 @@ class EcuNissanParser:
 
     def _parse_structure(self, path: Path) -> None:
         try:
+            if path.stat().st_size > _MAX_XML_BYTES:
+                return
             raw = path.read_bytes()
         except (FileNotFoundError, OSError):
             return

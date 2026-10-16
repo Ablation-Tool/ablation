@@ -1102,8 +1102,6 @@ def detect_rootkit_hiding_indicators(binary_data: bytes) -> list:
     NtEnumerateValueKey together form the registry enumeration pair targeted by
     kernel registry-hiding hooks.
     """
-    import re
-
     findings = []
 
     # ---- PROCESS_HIDING_API: NtQuerySystemInformation + SystemProcessInformation ----
@@ -1228,9 +1226,6 @@ def detect_bootkit_indicators(binary_data: bytes) -> list:
     patterns used for MBR analysis, and VBR-like JMP-short opcode clusters at
     file start consistent with boot sector code headers.
     """
-    import re
-    import struct
-
     findings = []
 
     # ---- RAW_DISK_ACCESS: PhysicalDrive0 or GLOBALROOT HarddiskVolume paths ----
@@ -3676,7 +3671,8 @@ def detect_linux_memory_artifacts() -> list:
             continue
         if '(deleted)' in target:
             try:
-                comm = open(f'/proc/{pid}/comm', 'r').read().strip()
+                with open(f'/proc/{pid}/comm', 'r') as fh:
+                    comm = fh.read().strip()
             except OSError:
                 comm = pid
             findings.append({
@@ -3737,7 +3733,8 @@ def detect_linux_memory_artifacts() -> list:
     interpreters = {'python', 'python3', 'ruby', 'perl', 'php', 'node', 'java', 'bash', 'sh'}
     for pid in pids:
         try:
-            comm = open(f'/proc/{pid}/comm', 'r').read().strip().lower()
+            with open(f'/proc/{pid}/comm', 'r') as fh:
+                comm = fh.read().strip().lower()
         except OSError:
             continue
         if not any(interp in comm for interp in interpreters):

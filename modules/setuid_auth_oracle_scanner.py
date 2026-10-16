@@ -136,7 +136,14 @@ class SetuidAuthOracleScanner:
                 "Only x86-64 ELF binaries are supported."
             )
         self._ctx = ctx
-        self._data = Path(ctx.path).read_bytes() if ctx.path else b''
+        if ctx.path:
+            _bin_size = Path(ctx.path).stat().st_size
+            if _bin_size > 256 * 1024 * 1024:
+                raise ValueError(
+                    f'{ctx.path}: file size {_bin_size} exceeds 256MB byte limit')
+            self._data = Path(ctx.path).read_bytes()
+        else:
+            self._data = b''
         self._base = ctx.base_va
         # PLT: va → name
         self._plt: Dict[int, str] = {va: name for va, name in ctx.plt.items()}

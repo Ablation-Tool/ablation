@@ -110,7 +110,7 @@ class DockerEnumerator:
                 if 'docker' in content or 'kubepods' in content:
                     self.in_container = True
                     return True
-        except:
+        except Exception:
             pass
 
         try:
@@ -118,7 +118,7 @@ class DockerEnumerator:
             if len(hostname) == 12 and all(c in '0123456789abcdef' for c in hostname):
                 self.in_container = True
                 return True
-        except:
+        except Exception:
             pass
 
         return False
@@ -143,7 +143,7 @@ class DockerEnumerator:
                     if result.returncode == 0:
                         self.socket_access = True
                         return True
-                except:
+                except Exception:
                     pass
         
         return False
@@ -170,9 +170,9 @@ class DockerEnumerator:
                                 'status': container.get('Status', ''),
                                 'ports': container.get('Ports', '')
                             })
-                        except:
+                        except Exception:
                             pass
-        except:
+        except Exception:
             pass
         
         return self.containers
@@ -198,9 +198,9 @@ class DockerEnumerator:
                                 'id': image.get('ID', ''),
                                 'size': image.get('Size', '')
                             })
-                        except:
+                        except Exception:
                             pass
-        except:
+        except Exception:
             pass
         
         return self.images
@@ -224,9 +224,9 @@ class DockerEnumerator:
                                 'name': volume.get('Name', ''),
                                 'driver': volume.get('Driver', '')
                             })
-                        except:
+                        except Exception:
                             pass
-        except:
+        except Exception:
             pass
         
         return self.volumes
@@ -251,9 +251,9 @@ class DockerEnumerator:
                                 'name': network.get('Name', ''),
                                 'driver': network.get('Driver', '')
                             })
-                        except:
+                        except Exception:
                             pass
-        except:
+        except Exception:
             pass
         
         return self.networks
@@ -270,7 +270,7 @@ class DockerEnumerator:
                         if cap_eff == 0x3fffffffff or cap_eff == 0x1ffffffffff:
                             self.privileged = True
                             return True
-        except:
+        except Exception:
             pass
         return False
     
@@ -288,14 +288,14 @@ class DockerEnumerator:
                     if 'Current:' in line:
                         caps = line.split('Current:')[1].strip()
                         self.capabilities = caps.split(',')
-        except:
+        except Exception:
             try:
                 with open('/proc/self/status') as f:
                     for line in f:
                         if line.startswith('CapEff:'):
                             cap_hex = line.split()[1]
                             self.capabilities.append(f'CapEff: 0x{cap_hex}')
-            except:
+            except Exception:
                 pass
         return self.capabilities
     
@@ -316,7 +316,7 @@ class DockerEnumerator:
                                 'target': mount_point,
                                 'interesting': True
                             })
-        except:
+        except Exception:
             pass
         return self.mounts
 
@@ -330,7 +330,7 @@ class DockerEnumerator:
                     parts = line.split()
                     mount_point = parts[2] if len(parts) >= 3 else line
                     self.mounts.append({'source': parts[0] if parts else '', 'target': mount_point, 'interesting': True})
-        except:
+        except Exception:
             pass
         return self.mounts
     
@@ -367,7 +367,7 @@ class DockerEnumerator:
                             'description': 'Sharing host PID namespace',
                             'exploit': 'Can see and interact with host processes'
                         })
-            except:
+            except Exception:
                 pass
         
         # CAP_SYS_ADMIN

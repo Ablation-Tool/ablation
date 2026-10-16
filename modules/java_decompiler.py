@@ -24,6 +24,8 @@ import io
 from pathlib import Path
 from typing import Optional
 
+_MAX_CLASS_BYTES = 64 * 1024 * 1024    # 64 MB per .class/.jar file
+_MAX_ENTRY_BYTES = 16 * 1024 * 1024    # 16 MB per ZIP entry
 
 # ── Constant Pool tags (JVM spec §4.4) ────────────────────────────────────────
 
@@ -373,11 +375,19 @@ class JavaAnalyzer:
     def analyze(self) -> dict:
         suffix = self.path.suffix.lower()
         if suffix == '.class':
+            file_size = self.path.stat().st_size
+            if file_size > _MAX_CLASS_BYTES:
+                raise ValueError(
+                    f'{self.path}: file size {file_size} exceeds {_MAX_CLASS_BYTES} byte limit')
             self._analyze_class_file(self.path.read_bytes(), str(self.path))
         elif suffix in ('.jar', '.war', '.ear', '.zip'):
             self._analyze_jar(str(self.path))
         else:
             try:
+                file_size = self.path.stat().st_size
+                if file_size > _MAX_CLASS_BYTES:
+                    raise ValueError(
+                        f'{self.path}: file size {file_size} exceeds {_MAX_CLASS_BYTES} byte limit')
                 data = self.path.read_bytes()
                 if data[:4] == b'\xca\xfe\xba\xbe':
                     self._analyze_class_file(data, str(self.path))
@@ -412,6 +422,8 @@ class JavaAnalyzer:
                 for name in zf.namelist():
                     if name.endswith('.class'):
                         try:
+                            if zf.getinfo(name).file_size > _MAX_ENTRY_BYTES:
+                                continue
                             data = zf.read(name)
                             self._analyze_class_file(data, f"{jar_path}!{name}")
                         except Exception:

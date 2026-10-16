@@ -41,6 +41,8 @@ import struct, sys, argparse
 from pathlib import Path
 from typing import Optional, Tuple, Dict, List
 
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
+
 # ── SSE node types ────────────────────────────────────────────────────────────
 
 class SSE:
@@ -302,6 +304,10 @@ def backward_sse(data: bytes, target_reg: int, from_pc: int,
 def scan(binary: Path, target: int, target_size: int,
          text_start: int, text_size: int,
          verbose: bool = False):
+    bin_size = binary.stat().st_size
+    if bin_size > _MAX_BINARY_BYTES:
+        raise ValueError(
+            f'{binary}: file size {bin_size} exceeds {_MAX_BINARY_BYTES} byte limit')
     data = binary.read_bytes()
     text_end = text_start + text_size
 

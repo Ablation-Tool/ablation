@@ -43,10 +43,13 @@ Usage::
 """
 from __future__ import annotations
 
+import os
 import struct
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Set
+
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
 
 
 @dataclass
@@ -80,6 +83,10 @@ def _get_text_and_syms(path: str):
       syms  = list of (name, va, size)
       relas = {va: callee_name}
     """
+    file_size = os.path.getsize(path)
+    if file_size > _MAX_BINARY_BYTES:
+        raise ValueError(
+            f'{path}: file size {file_size} exceeds {_MAX_BINARY_BYTES} byte limit')
     with open(path, 'rb') as f:
         raw = f.read()
 
@@ -244,6 +251,10 @@ class PPC32HeapSlotScanner:
 
         text_data, text_va_base, syms, relas = parsed
 
+        bin_size = os.path.getsize(self.binary_path)
+        if bin_size > _MAX_BINARY_BYTES:
+            raise ValueError(
+                f'{self.binary_path}: file size {bin_size} exceeds {_MAX_BINARY_BYTES} byte limit')
         with open(self.binary_path, 'rb') as fh:
             raw_full = fh.read()
 

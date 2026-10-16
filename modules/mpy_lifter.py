@@ -10,9 +10,12 @@ CircuitPython uses the same v6 format and is fully supported.
 """
 from __future__ import annotations
 
+import os
 import struct
 from dataclasses import dataclass, field
 from typing import Iterator, NamedTuple
+
+_MAX_MPY_BYTES = 4 * 1024 * 1024    # 4 MB max for a .mpy file
 
 # ── Format constants ──────────────────────────────────────────────────────────
 
@@ -387,7 +390,12 @@ class MpyLifter:
 
     @classmethod
     def from_path(cls, path: str) -> 'MpyLifter':
-        return cls(open(path, 'rb').read())
+        file_size = os.path.getsize(path)
+        if file_size > _MAX_MPY_BYTES:
+            raise ValueError(
+                f'{path}: file size {file_size} exceeds {_MAX_MPY_BYTES} byte limit')
+        with open(path, 'rb') as f:
+            return cls(f.read())
 
     @classmethod
     def from_bytes(cls, data: bytes) -> 'MpyLifter':

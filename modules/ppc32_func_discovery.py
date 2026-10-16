@@ -33,7 +33,10 @@ class PPC32FuncDiscovery:
     @classmethod
     def from_path(cls, path: str) -> "PPC32FuncDiscovery":
         """Load from ELF file - reads main LOAD segment directly."""
-        elf = lief.parse(path)
+        try:
+            elf = lief.parse(path)
+        except Exception:
+            elf = None
         if not elf:
             raise ValueError(f"Failed to parse ELF: {path}")
 

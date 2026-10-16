@@ -73,6 +73,9 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Optional
 
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
+_MAX_RESP_BYTES = 16 * 1024 * 1024
+
 try:
     import capstone
     HAVE_CAPSTONE = True
@@ -141,6 +144,9 @@ class AnalysisResult:
 # ---------------------------------------------------------------------------
 
 def load_binary(path: str) -> bytes:
+    size = os.path.getsize(path)
+    if size > _MAX_BINARY_BYTES:
+        raise ValueError(f'{path}: file size {size} exceeds {_MAX_BINARY_BYTES} byte limit')
     with open(path, "rb") as f:
         return f.read()
 
@@ -1000,6 +1006,8 @@ def docker_socket_exec(sock_path: str, container_id: str,
                 if not chunk:
                     break
                 resp += chunk
+                if len(resp) >= _MAX_RESP_BYTES:
+                    break
         except Exception:
             pass
         s.close()
@@ -1058,6 +1066,8 @@ def docker_list_containers(sock_path: str, timeout: float = 5.0) -> list:
             if not chunk:
                 break
             resp += chunk
+            if len(resp) >= _MAX_RESP_BYTES:
+                break
     except Exception:
         pass
     s.close()

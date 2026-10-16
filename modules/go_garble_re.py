@@ -13,6 +13,8 @@ import re
 import sys
 from pathlib import Path
 
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
+
 try:
     from capstone import *
     HAS_CAPSTONE = True
@@ -437,8 +439,14 @@ def analyze_go_garble_binary(binary_path: str) -> dict:
     Returns structured findings dict.
     """
     path = Path(binary_path)
+    file_size = path.stat().st_size
+    if file_size > _MAX_BINARY_BYTES:
+        return {
+            "binary": str(path),
+            "file_size": f"0x{file_size:x} ({file_size // 1024 // 1024}MB)",
+            "errors": [f"file size {file_size} exceeds {_MAX_BINARY_BYTES} byte limit"],
+        }
     data = path.read_bytes()
-    file_size = len(data)
 
     result = {
         "binary": str(path),

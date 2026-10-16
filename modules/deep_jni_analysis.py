@@ -32,11 +32,8 @@ JNI_FUNCTIONS = {
 }
 
 
-def analyze_structure_accesses(lib_path: Path):
+def analyze_structure_accesses(data: bytes):
     """Extract structure field access patterns"""
-
-    with open(lib_path, 'rb') as f:
-        data = f.read()
 
     disasm = ARMDisassembler(data, base_addr=0)
 
@@ -74,7 +71,7 @@ def analyze_structure_accesses(lib_path: Path):
                                 if 0 < offset < 0x200:  # Reasonable structure size
                                     offsets_seen.add(offset)
                                     all_offsets[offset].append(name)
-                            except:
+                            except (ValueError, IndexError):
                                 pass
 
         if offsets_seen:
@@ -94,11 +91,8 @@ def analyze_structure_accesses(lib_path: Path):
                 print(f"       ... and {len(funcs) - 5} more")
 
 
-def analyze_immediate_constants(lib_path: Path):
+def analyze_immediate_constants(data: bytes):
     """Extract immediate constants that may be protocol-relevant"""
-
-    with open(lib_path, 'rb') as f:
-        data = f.read()
 
     disasm = ARMDisassembler(data, base_addr=0)
 
@@ -131,7 +125,7 @@ def analyze_immediate_constants(lib_path: Path):
                                 # Filter for protocol-relevant constants
                                 if 0 < imm < 256 or imm in [1000, 5000, 32000]:
                                     all_constants[imm].append((name, f'0x{insn.address:x}'))
-                            except:
+                            except (ValueError, IndexError):
                                 pass
 
     # Show common constants
@@ -143,11 +137,8 @@ def analyze_immediate_constants(lib_path: Path):
                 print(f"    - {func} @ {loc}")
 
 
-def analyze_call_targets(lib_path: Path):
+def analyze_call_targets(data: bytes):
     """Identify common call targets and their semantic roles"""
-
-    with open(lib_path, 'rb') as f:
-        data = f.read()
 
     disasm = ARMDisassembler(data, base_addr=0)
 
@@ -172,7 +163,7 @@ def analyze_call_targets(lib_path: Path):
                         target = int(target_str)
 
                     call_targets[target].append(name)
-                except:
+                except (ValueError, IndexError):
                     pass
 
     # Show common targets
@@ -186,11 +177,8 @@ def analyze_call_targets(lib_path: Path):
                 print(f"    - ... and {len(callers) - 7} more")
 
 
-def analyze_vtable_patterns(lib_path: Path):
+def analyze_vtable_patterns(data: bytes):
     """Identify vtable dispatch patterns"""
-
-    with open(lib_path, 'rb') as f:
-        data = f.read()
 
     disasm = ARMDisassembler(data, base_addr=0)
 
@@ -228,18 +216,26 @@ def analyze_vtable_patterns(lib_path: Path):
                 print(f"    Context: {vc['context']}")
 
 
+_MAX_LIB_BYTES = 256 * 1024 * 1024
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: deep_jni_analysis.py <libhijoyptt.so>")
         sys.exit(1)
 
     lib_path = Path(sys.argv[1])
+    file_size = lib_path.stat().st_size
+    if file_size > _MAX_LIB_BYTES:
+        print(f"Error: {lib_path} ({file_size} bytes) exceeds {_MAX_LIB_BYTES} byte limit")
+        sys.exit(1)
+    with open(lib_path, 'rb') as f:
+        data = f.read()
 
-    # Run all analyses
-    analyze_structure_accesses(lib_path)
-    analyze_immediate_constants(lib_path)
-    analyze_call_targets(lib_path)
-    analyze_vtable_patterns(lib_path)
+    # Run all analyses on the same data buffer
+    analyze_structure_accesses(data)
+    analyze_immediate_constants(data)
+    analyze_call_targets(data)
+    analyze_vtable_patterns(data)
 
     print("\n" + "="*80)
     print("DEEP ANALYSIS COMPLETE")

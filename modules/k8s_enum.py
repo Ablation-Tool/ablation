@@ -302,7 +302,7 @@ class K8sEnumerator:
             req.add_header('Accept', 'application/json')
 
             with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
-                return json.loads(resp.read().decode())
+                return json.loads(resp.read(4 * 1024 * 1024).decode())
         except Exception:
             return None
 
@@ -334,7 +334,7 @@ class K8sEnumerator:
             req.add_header('Accept', 'application/json')
 
             with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
-                return json.loads(resp.read().decode())
+                return json.loads(resp.read(4 * 1024 * 1024).decode())
         except Exception:
             return None
 
@@ -2986,7 +2986,7 @@ class K8sEnumerator:
                 try:
                     url = f'http://{host}:2379/version'
                     with urllib.request.urlopen(url, timeout=2) as r:
-                        body = r.read().decode()
+                        body = r.read(4 * 1024 * 1024).decode()
                         if 'etcdcluster' in body.lower() or 'etcdserver' in body.lower():
                             finding['confirmed'] = True
                             finding['version_response'] = body[:300]
@@ -3026,7 +3026,7 @@ class K8sEnumerator:
                 try:
                     req = urllib.request.Request(pods_url)
                     with urllib.request.urlopen(req, context=ctx, timeout=4) as r:
-                        body = r.read().decode()
+                        body = r.read(4 * 1024 * 1024).decode()
                         self.kubelet_findings.append({
                             'host': host,
                             'port': 10250,
@@ -3061,7 +3061,7 @@ class K8sEnumerator:
                 try:
                     url = f'http://{host}:10255/pods'
                     with urllib.request.urlopen(url, timeout=3) as r:
-                        body = r.read().decode()
+                        body = r.read(4 * 1024 * 1024).decode()
                         self.kubelet_findings.append({
                             'host': host,
                             'port': 10255,
@@ -3129,7 +3129,7 @@ class K8sEnumerator:
                             with urllib.request.urlopen(
                                 urllib.request.Request(skip_url), context=ctx, timeout=3
                             ) as sr:
-                                skip_body = sr.read().decode()
+                                skip_body = sr.read(4 * 1024 * 1024).decode()
                                 skippable = 'true' in skip_body.lower()
                         except Exception:
                             pass
@@ -3407,7 +3407,7 @@ def _k8s_get(host: str, port: int, path: str, timeout: float) -> dict | None:
             req = urllib.request.Request(url)
             req.add_header('Accept', 'application/json')
             with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
-                return json.loads(resp.read().decode())
+                return json.loads(resp.read(4 * 1024 * 1024).decode())
         except Exception:
             continue
     return None
@@ -3739,7 +3739,7 @@ def check_kubelet_api_exposure(
         req = urllib.request.Request(pods_url)
         with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
             if resp.status == 200:
-                raw = resp.read().decode('utf-8', errors='replace')
+                raw = resp.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
                 pods_data: dict = {}
                 try:
                     pods_data = json.loads(raw)
@@ -3788,7 +3788,7 @@ def check_kubelet_api_exposure(
                             exec_req, context=ctx, timeout=timeout
                         ) as exec_resp:
                             if exec_resp.status == 200:
-                                output = exec_resp.read().decode(
+                                output = exec_resp.read(4 * 1024 * 1024).decode(
                                     'utf-8', errors='replace'
                                 )[:256]
                                 findings.append({
@@ -3816,7 +3816,7 @@ def check_kubelet_api_exposure(
         req = urllib.request.Request(f'http://{host}:10255/pods')
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             if resp.status == 200:
-                raw = resp.read().decode('utf-8', errors='replace')
+                raw = resp.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
                 item_count = 0
                 try:
                     item_count = len(json.loads(raw).get('items', []))
@@ -4330,7 +4330,7 @@ def check_k8s_rbac_exposure(
                 req.add_header("Accept", "application/json")
                 with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
                     if resp.status == 200:
-                        return json.loads(resp.read().decode(errors="replace"))
+                        return json.loads(resp.read(4 * 1024 * 1024).decode(errors="replace"))
             except Exception:
                 continue
         return None
@@ -4514,7 +4514,7 @@ def check_k8s_admission_webhook_posture(
                 req.add_header("Accept", "application/json")
                 with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
                     if resp.status == 200:
-                        return json.loads(resp.read().decode(errors="replace"))
+                        return json.loads(resp.read(4 * 1024 * 1024).decode(errors="replace"))
             except Exception:
                 continue
         return None
@@ -4911,7 +4911,7 @@ def check_k8s_node_and_kubelet_exposure(
         req = urllib.request.Request(f'https://{host}:{port}/pods')
         with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
             if resp.status == 200:
-                raw = resp.read().decode('utf-8', errors='replace')
+                raw = resp.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
                 try:
                     pods_data = json.loads(raw)
                     pod_items = pods_data.get('items') or []
@@ -4938,7 +4938,7 @@ def check_k8s_node_and_kubelet_exposure(
         req = urllib.request.Request(f'https://{host}:{port}/stats/summary')
         with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
             if resp.status == 200:
-                raw = resp.read().decode('utf-8', errors='replace')
+                raw = resp.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
                 node_name = ''
                 try:
                     stats = json.loads(raw)
@@ -5008,7 +5008,7 @@ def check_k8s_node_and_kubelet_exposure(
                     exec_req, context=ctx, timeout=timeout
                 ) as exec_resp:
                     if exec_resp.status == 200:
-                        output = exec_resp.read().decode(
+                        output = exec_resp.read(4 * 1024 * 1024).decode(
                             'utf-8', errors='replace'
                         )[:256]
                         findings.append({
@@ -5038,7 +5038,7 @@ def check_k8s_node_and_kubelet_exposure(
         req = urllib.request.Request(f'http://{host}:10255/pods')
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             if resp.status == 200:
-                raw = resp.read().decode('utf-8', errors='replace')
+                raw = resp.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
                 item_count = 0
                 try:
                     item_count = len((json.loads(raw).get('items') or []))
@@ -5066,7 +5066,7 @@ def check_k8s_node_and_kubelet_exposure(
         req = urllib.request.Request(f'http://{host}:10255/spec')
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             if resp.status == 200:
-                raw = resp.read().decode('utf-8', errors='replace')
+                raw = resp.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
                 cpu_count = None
                 try:
                     spec = json.loads(raw)
