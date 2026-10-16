@@ -1976,8 +1976,6 @@ def probe_smtp_exposure(host: str, port: int = 25, timeout: float = 5.0) -> list
 
     return findings
 
-    return findings
-
 
 def probe_ssh_configuration(host: str, port: int = 22, timeout: float = 5.0) -> list:
     """
