@@ -676,6 +676,7 @@ Messages from your other sessions        accept
 </details>
 
 </details>
+
 ## Project Background
 
 <details>
