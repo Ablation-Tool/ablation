@@ -132,7 +132,7 @@ Axis address children are optional. When absent, dynamic axes are returned with 
 ## Usage
 
 ```python
-from ablation.analyzers.ecu_nissan_parser import EcuNissanParser
+from modules.ecu_nissan_parser import EcuNissanParser
 
 # Load the full definitions directory
 parser = EcuNissanParser.from_dir("/path/to/Nissan Definitions")

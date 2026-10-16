@@ -5,7 +5,7 @@ Cell BE Synergistic Processing Unit (SPU) instruction decoder. Handles all confi
 ## Import
 
 ```python
-from ablation.analyzers.spu_disassembler import (
+from modules.spu_disassembler import (
     decode_spu_word,
     disassemble_spu_text,
     extract_spu_text_from_elf,

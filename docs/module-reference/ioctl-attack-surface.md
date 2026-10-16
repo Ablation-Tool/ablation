@@ -48,7 +48,7 @@ Three gaps existed before this module:
 ## Usage
 
 ```python
-from ablation.analyzers.ioctl_attack_surface import IoctlAttackSurfaceGenerator
+from modules.ioctl_attack_surface import IoctlAttackSurfaceGenerator
 
 # Full surface map
 gen = IoctlAttackSurfaceGenerator('/path/to/driver.sys')

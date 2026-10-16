@@ -21,7 +21,7 @@ For each object file in the archive:
 ## Usage
 
 ```python
-from ablation.analyzers.vxworks_archive_scanner import VxWorksArchiveScanner
+from modules.vxworks_archive_scanner import VxWorksArchiveScanner
 
 scanner = VxWorksArchiveScanner('/path/to/libwmNet.a')
 findings = scanner.scan_strcpy_in_frame(frame_min=0x80, frame_max=0x300)

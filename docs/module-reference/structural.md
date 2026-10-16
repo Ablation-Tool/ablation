@@ -103,7 +103,7 @@ Masked byte-pattern anchors classify the implementation variant. Useful for larg
 Why immediates unlock cross-version matching: struct field offsets, magic constants, and buffer sizes survive recompilation. `cmp rax, 0x1000` (4KB limit check) is a stable fingerprint across optimization levels. PLT-only matching fails on functions that call no external symbols; immediate-value overlap works on all of them.
 
 ```python
-from ablation.analyzers.structural_sim import StructuralSim
+from modules.structural_sim import StructuralSim
 
 sim = StructuralSim('/path/to/binary_v1.so', '/path/to/binary_v2.so')
 score = sim.compare(func_va_v1=0x1000, func_va_v2=0x1200)
