@@ -137,6 +137,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "Disassemble a DEX method to smali" | `DEXDisasm(dex).disasm_method('Lcom/foo/Bar;', 'methodName')` |
 | "Lift a DEX method to pseudo-Java" | `DEXLifter(dex).lift_method('Lcom/foo/Bar;', 'methodName')` |
 | "Lift a MicroPython .mpy v6 module to pseudo-Python" | `MpyLifter.from_path(mpy).lift_module()` |
+| "Scan Python .pyc bytecode in firmware for dangerous shell/eval calls (no source needed)" | `PycBytecodeScanner().scan_raw(raw, magic=PYC_MAGICS['3.4'])` |
 | "Decode a Cell SPU ELF (PS3 co-processor)" | `SPUDisassembler.dump_spu_elf(path, start_va, limit)` |
 | "Decrypt a PS3 SELF (Signed ELF) to plain ELF" | `PS3SELFDecryptor.from_path(eboot_bin).decrypt_to_tmp(eboot_bin)` |
 | "Find C++ vtables in PS3 Cell PPU (PPC64 ABI v1) binary" | `PS3OPDVtableScanner.from_context(ctx).scan(min_slots=3)` |
