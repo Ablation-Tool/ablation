@@ -914,6 +914,7 @@ class BinaryContext:
 
         x86_64: scan .text for 0xe8 (CALL rel32); target = site+5+disp32.
         arm32:  scan .text for BL words (byte[3]==0xEB); target = site+8+imm24*4.
+        arm64:  scan .text for BL words (byte[3]∈{0x94..0x97}); target = site+sign_ext26*4.
         ppc32/ppc64: scan .text for BL words (opcode=18,AA=0,LK=1); target = site+sign_ext26.
         Falls back to sequential capstone if NumPy is unavailable.
         """
@@ -925,6 +926,13 @@ class BinaryContext:
         if self.arch == 'arm32':
             if _NUMPY_OK:
                 self._build_call_graph_arm32(data, binary)
+            else:
+                self._build_call_graph_sequential(data, binary)
+            return
+
+        if self.arch == 'arm64':
+            if _NUMPY_OK:
+                self._build_call_graph_arm64(data, binary)
             else:
                 self._build_call_graph_sequential(data, binary)
             return
@@ -1222,6 +1230,87 @@ class BinaryContext:
 
         self.call_edges = edges
 
+    def _build_call_graph_arm64(self, data: bytes, binary) -> None:
+        """AArch64 call graph via vectorized BL scan.
+
+        BL encoding (AArch64, little-endian):
+          bits 31:26 = 100101; byte[3] of 4-byte LE word ∈ {0x94, 0x95, 0x96, 0x97}.
+          imm26 = word[25:0]; target = insn_va + sign_extend(imm26, 26) * 4.
+          No pipeline PC adjustment (ARM32 uses +8; ARM64 does not).
+        All instructions are 4-byte aligned — word boundaries only.
+        """
+        text_sec = binary.get_section(".text")
+        if not text_sec:
+            return
+        sec_data = bytes(text_sec.content)
+        sec_va = int(text_sec.virtual_address)
+        N = len(sec_data)
+        if N < 4:
+            return
+
+        buf = np.frombuffer(sec_data, dtype=np.uint8)
+        word_count = N // 4
+        # MSByte of each 4-byte-aligned word (index 3, 7, 11, ...)
+        msb = buf[3: word_count * 4: 4]
+        # BL top 6 bits = 100101 → byte[3] ∈ {0x94, 0x95, 0x96, 0x97}
+        bl_word_idx = np.where(
+            (msb == 0x94) | (msb == 0x95) | (msb == 0x96) | (msb == 0x97)
+        )[0]
+        if len(bl_word_idx) == 0:
+            self.call_edges = []
+            return
+
+        byte_off = bl_word_idx * 4
+        b0 = buf[byte_off    ].astype(np.uint32)
+        b1 = buf[byte_off + 1].astype(np.uint32)
+        b2 = buf[byte_off + 2].astype(np.uint32)
+        words = b0 | (b1 << 8) | (b2 << 16) | (msb[bl_word_idx].astype(np.uint32) << 24)
+
+        imm26 = words & np.uint32(0x3FFFFFF)
+        # Sign-extend 26-bit to 32-bit signed
+        sign_bit = np.uint32(0x2000000)
+        fill = np.uint32(0xFC000000)
+        imm_i32 = np.where(
+            imm26 & sign_bit,
+            (imm26 | fill).view(np.int32),
+            imm26.astype(np.int32),
+        )
+
+        insn_vas = _va_to_i64(sec_va) + byte_off.astype(np.int64)
+        # ARM64: target = insn_va + imm26_signed * 4 (no +8 pipeline adjustment)
+        target_vas = insn_vas + imm_i32.astype(np.int64) * 4
+
+        plt_arr  = _va_arr_to_i64(sorted(self.plt.keys())) if self.plt         else np.empty(0, np.int64)
+        func_arr = _va_arr_to_i64(self.func_starts)         if self.func_starts else np.empty(0, np.int64)
+
+        valid = np.zeros(len(target_vas), dtype=bool)
+        if len(plt_arr):
+            hi = np.searchsorted(plt_arr, target_vas)
+            hi = np.minimum(hi, len(plt_arr) - 1)
+            valid |= plt_arr[hi] == target_vas
+        if len(func_arr):
+            hi = np.searchsorted(func_arr, target_vas)
+            hi = np.minimum(hi, len(func_arr) - 1)
+            valid |= func_arr[hi] == target_vas
+
+        insn_vas   = insn_vas[valid]
+        target_vas = target_vas[valid]
+
+        if len(func_arr) and len(insn_vas):
+            owner_idx = np.searchsorted(func_arr, insn_vas, side='right') - 1
+            owner_idx = np.maximum(owner_idx, 0)
+            owner_vas = func_arr[owner_idx]
+        else:
+            owner_vas = insn_vas
+
+        va_to_export: Dict[int, str] = {va: nm for nm, va in self.exports.items()}
+        edges: List[Tuple[int, int, str]] = []
+        for owner_va, target_va in zip(owner_vas.tolist(), target_vas.tolist()):
+            label = self.plt.get(target_va, "") or va_to_export.get(target_va, "")
+            edges.append((int(owner_va), int(target_va), label))
+
+        self.call_edges = edges
+
     def _build_call_graph_sequential(self, data: bytes, binary) -> None:
         """Sequential capstone fallback for _build_call_graph (NumPy unavailable)."""
         import capstone
@@ -1236,6 +1325,9 @@ class BinaryContext:
         if self.arch == 'arm32':
             cs = capstone.Cs(capstone.CS_ARCH_ARM, capstone.CS_MODE_ARM)
             call_mnems = {'bl', 'blx'}
+        elif self.arch == 'arm64':
+            cs = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
+            call_mnems = {'bl'}
         else:
             cs = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
             call_mnems = {'call'}
