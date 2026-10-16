@@ -971,8 +971,8 @@ class SinkArgClassifier:
         if not sink_plts:
             return []
         results: List[SinkClassification] = []
-        for func_va in self._func_starts:
-            results.extend(self._classify_function(func_va, sink_plts))
+        for func_va, max_bytes in self._func_bounds():
+            results.extend(self._classify_function(func_va, sink_plts, max_bytes))
         return results
 
     def classify_sink(self, sink_name: str, arg_pos: Optional[int] = None) -> List[SinkClassification]:
@@ -982,16 +982,32 @@ class SinkArgClassifier:
         self._sinks[sink_name] = arg_pos
         sink_plts = self._find_sink_plts()
         results: List[SinkClassification] = []
-        for func_va in self._func_starts:
-            results.extend(self._classify_function(func_va, sink_plts))
+        for func_va, max_bytes in self._func_bounds():
+            results.extend(self._classify_function(func_va, sink_plts, max_bytes))
         return [r for r in results if r.sink_name == sink_name]
+
+    def _func_bounds(self) -> List[Tuple[int, int]]:
+        """Return (func_va, max_bytes) pairs capped at the next known function start.
+
+        Prevents a function's disassembly window from bleeding into adjacent functions,
+        which would cause each call site to be reported once per preceding function
+        start within _MAX_FUNC_BYTES of the call site.
+        """
+        starts = sorted(self._func_starts)
+        out: List[Tuple[int, int]] = []
+        for i, va in enumerate(starts):
+            next_va = starts[i + 1] if i + 1 < len(starts) else va + _MAX_FUNC_BYTES
+            max_bytes = min(_MAX_FUNC_BYTES, next_va - va)
+            out.append((va, max_bytes))
+        return out
 
     def _classify_function(
         self,
         func_va: int,
         sink_plts: Dict[int, Tuple[str, int]],
+        max_bytes: int = _MAX_FUNC_BYTES,
     ) -> List[SinkClassification]:
-        raw = self._read_va(func_va, _MAX_FUNC_BYTES)
+        raw = self._read_va(func_va, max_bytes)
         if not raw:
             return []
         insns = list(self._md.disasm(raw, func_va))
