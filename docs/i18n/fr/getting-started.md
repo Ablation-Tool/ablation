@@ -178,5 +178,5 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 ## Prochaines étapes
 
 - [Flux de travail de chasse aux vulnérabilités](../../workflows/vuln-hunting.md) -- boucle complète de l'analyse à la découverte prête pour la divulgation
-- [Référence des modules](../../module-reference/) -- plus de 50 analyseurs avec paramètres et exemples
+- [Référence des modules](../../reference-modules/) -- plus de 50 analyseurs avec paramètres et exemples
 - [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- comment ajouter des motifs, des analyses et des modules d'analyseurs

@@ -3,6 +3,8 @@
 **Version:** 1.3.0: 2026-10-10  
 **Scope:** All modules in `ablation/analyzers/`, all taint trackers, FORGE gate, and the RE workflow
 
+> For examples of module documentation in practice, see the [Module Reference](./reference-modules/). For workflow documentation patterns, see the [workflows](./workflows/) directory.
+
 Ablation is mapped against eight external standards frameworks. Each section states what the standard requires and what Ablation does to meet it. Section 10 is the compliance matrix: 29 requirements, all MET.
 
 ---
@@ -68,7 +70,7 @@ ISO 26262 Part 8 Table 4 specifies five qualification methods for TCL3.
 |---|---|---|---|
 | **Test suite** | Exhaustive functional tests against the tool's intended behavior | `tests/`: 408+ tests; 85.29% statement coverage on TCL3 taint engine; `fail_under=85` gate in pyproject.toml | MET |
 | **Regression test suite** | Tests that catch regressions when tool is modified | Every module has tests; CI runs full suite | MET |
-| **Known anomalies list** | Documented list of known erroneous results the tool may produce | `docs/known-anomalies/`: 16 tracker files; per-anomaly regression tests in `tests/conformance/` | MET |
+| **Known anomalies list** | Documented list of known erroneous results the tool may produce | `docs/reference-anomalies/`: 16 tracker files; per-anomaly regression tests in `tests/conformance/` | MET |
 | **Safety manual** | Document describing how to use the tool safely | `docs/safety-manual.md` (committed v1.0.0) + Section 2.5 of this document | MET |
 | **Tool qualification plan** | Documented plan for meeting TCL3 | This document | MET |
 
@@ -83,7 +85,7 @@ The TASKING qualification kit and LDRA materials define the format. Each known a
 5. **Workaround:** how to detect or manually verify when this anomaly may apply
 6. **Resolved in version:** if fixed, which version closed it; if not, leave open
 
-Known anomalies for all 16 taint trackers are in `docs/known-anomalies/`, one file per tracker. Format follows Section 2.3 above.
+Known anomalies for all 16 taint trackers are in `docs/reference-anomalies/`, one file per tracker. Format follows Section 2.3 above.
 
 ### 2.4 Coverage Gate
 
@@ -114,10 +116,10 @@ The following constraints must be satisfied before a taint tracker result is tre
 | Constraint | Requirement |
 |---|---|
 | **Binary format** | ELF with valid section headers, or flat ROM with caller-supplied function boundaries |
-| **Architecture** | One of the 16 supported architectures; see `docs/module-reference/taint-analysis.md` |
+| **Architecture** | One of the 16 supported architectures; see `docs/reference-modules/taint-analysis.md` |
 | **Endian** | Pass `endian='big'` or `endian='little'` explicitly; do not rely on defaults for cross-endian targets |
 | **Stripped binaries** | Use `from_path_full()` for ARM64 and LoongArch64; use `from_path()` only when symbols exist |
-| **Known anomalies** | Consult `docs/known-anomalies/<tracker>.md` before treating a zero-findings result as clean |
+| **Known anomalies** | Consult `docs/reference-anomalies/<tracker>.md` before treating a zero-findings result as clean |
 | **Loop bodies** | Manually inspect loop bodies for copy/fill patterns in functions with high SemanticSearcher match scores |
 | **Indirect calls** | Findings for indirect call targets require `VtableResolver` or manual callee resolution |
 | **Stack buffers** | If the tracker returns no findings, run `SinkArgClassifier` to check for stack-buffered flows |
@@ -278,7 +280,7 @@ For (2): dependencies are pinned in `requirements/base.txt`. Version bumps requi
 
 When a vulnerability is found in Ablation itself:
 - Fix in the same session; do not defer critical self-vulnerabilities
-- Document in the module's known anomalies list (`docs/known-anomalies/<module>.md`)
+- Document in the module's known anomalies list (`docs/reference-anomalies/<module>.md`)
 - Bump the minor version on the module's next commit
 - If a CVE is issued, track it in the module doc header
 
@@ -302,7 +304,7 @@ A taint tracker that is correct by construction is more secure than one that pas
 - Every instruction that could clobber a register is handled explicitly; the default is propagate, not clear (conservative by default)
 - Caller-saved vs. callee-saved register sets are modeled exactly from the ABI spec
 
-Ablation's taint trackers satisfy this: each tracker's register maps are documented in the corresponding `docs/module-reference/<module>.md` with explicit citations to the ABI spec.
+Ablation's taint trackers satisfy this: each tracker's register maps are documented in the corresponding `docs/reference-modules/<module>.md` with explicit citations to the ABI spec.
 
 ### 4.2 Trustworthy System Decomposition
 
@@ -317,7 +319,7 @@ SP 800-160 requires assurance evidence for each security claim. Ablation's assur
 
 | Claim | Evidence |
 |---|---|
-| "This taint tracker correctly models RH850 GHS ABI" | 26 tests in `tests/test_taint_rh850.py`; ABI spec citations in `docs/module-reference/rh850-taint-tracker.md` |
+| "This taint tracker correctly models RH850 GHS ABI" | 26 tests in `tests/test_taint_rh850.py`; ABI spec citations in `docs/reference-modules/rh850-taint-tracker.md` |
 | "This finding is a real vulnerability" | Byte-verification of every VA; `PathSolver.solve_path()` feasibility check; `PatternLibrary.record_hit(confirmed=True)` |
 | "This module has no critical security defects" | FORGE audit `gate_passed=True`; SAFE CODE residual risk section documents open issues |
 
@@ -338,10 +340,10 @@ Ownership means:
 
 ### 5.2 Embrace Radical Transparency and Accountability
 
-- All module limitations are documented in `docs/known-anomalies/<module>.md` and in the module's `Why this exists` section
+- All module limitations are documented in `docs/reference-anomalies/<module>.md` and in the module's `Why this exists` section
 - FORGE gate results are cached and reproducible; any commit that fails FORGE is blocked
 - Version history is public in the GitHub commit log; no silent changes
-- The SAFE CODE audit is preserved in `docs/module-reference/` alongside the module docs
+- The SAFE CODE audit is preserved in `docs/reference-modules/` alongside the module docs
 
 ### 5.3 Lead from the Top
 
@@ -469,7 +471,7 @@ Every taint tracker must have tests that verify ABI register invariants using by
 `pytest-cov` is in the test suite. Taint trackers require 85% statement coverage. CRITICAL-producing scanners require 80% statement coverage. Coverage report generated on every commit; gate on taint trackers and critical scanners.
 
 **MQG-004** (ISO 26262 TCL3 known anomalies)  
-Every taint tracker must have a corresponding `docs/known-anomalies/<module>.md` file documenting all known false negative and false positive conditions. Format per Section 2.3. Initial content sourced from SAFE CODE residual risk sections and FORGE audit reports.
+Every taint tracker must have a corresponding `docs/reference-anomalies/<module>.md` file documenting all known false negative and false positive conditions. Format per Section 2.3. Initial content sourced from SAFE CODE residual risk sections and FORGE audit reports.
 
 ### 8.2 Development Process Requirements (DPR)
 
@@ -519,7 +521,7 @@ Ordered by priority and dependency.
 
 ### Phase 1: Immediate (next 1-3 modules)
 
-1. **Known Anomalies Lists:** Create `docs/known-anomalies/` directory. Write initial entries for `RH850TaintTracker`, `TriCoreTaintTracker`, and `V850TaintTracker` sourced from their SAFE CODE residual risk sections. Format per Section 2.3.
+1. **Known Anomalies Lists:** Create `docs/reference-anomalies/` directory. Write initial entries for `RH850TaintTracker`, `TriCoreTaintTracker`, and `V850TaintTracker` sourced from their SAFE CODE residual risk sections. Format per Section 2.3.
 
 2. **ABI Conformance Tests:** Create `tests/conformance/` directory. Write `rh850_abi_invariants.py` and `tricore_abi_invariants.py` as the first two entries. Each tests register set accuracy against the ABI spec.
 
@@ -549,7 +551,7 @@ Ordered by priority and dependency.
 |---|---|---|---|---|
 | ISO-TCL3-TEST | Exhaustive test suite | ISO 26262 Part 8 | `tests/`: 408+ tests; 85.29% TCL3-scope coverage; `fail_under=85` gate active | MET |
 | ISO-TCL3-REG | Regression test suite | ISO 26262 Part 8 | All tests run on every commit | MET |
-| ISO-TCL3-KA | Known anomalies list | ISO 26262 Part 8 | `docs/known-anomalies/`: 16 tracker files; conformance tests cover documented anomalies | MET |
+| ISO-TCL3-KA | Known anomalies list | ISO 26262 Part 8 | `docs/reference-anomalies/`: 16 tracker files; conformance tests cover documented anomalies | MET |
 | ISO-TCL3-SM | Safety manual | ISO 26262 Part 8 | `docs/safety-manual.md` v1.0.0 committed; Section 2.5 of this document | MET |
 | ISO-TCL3-PLAN | Qualification plan | ISO 26262 Part 8 | This document | MET |
 | ISO-COV-STMT | 85% statement coverage (taint) | ISO 26262 Part 6 | `[tool.coverage]` fail_under=85 in pyproject.toml; 85.29% achieved (`tests/test_taint_labeled_coverage.py`) | MET |
@@ -573,7 +575,7 @@ Ordered by priority and dependency.
 | MHB-STATIC | Static analysis ordering | [MIL-HDBK-115C Sec 5](https://quicksearch.dla.mil/) | SemanticSearcher first rule | MET |
 | MHB-DYNAMIC | Dynamic confirmation | [MIL-HDBK-115C Sec 6](https://quicksearch.dla.mil/) | DynamicSandbox (ELF only); PE support deferred | MET (ELF scope) |
 | MHB-DOC | RE documentation | [MIL-HDBK-115C Sec 7](https://quicksearch.dla.mil/) | Session files + retrospective | MET |
-| MHB-ANOMALY | Anomaly documentation | [MIL-HDBK-115C Sec 7](https://quicksearch.dla.mil/) | `docs/known-anomalies/`: 16 tracker files; conformance tests cover documented anomalies | MET |
+| MHB-ANOMALY | Anomaly documentation | [MIL-HDBK-115C Sec 7](https://quicksearch.dla.mil/) | `docs/reference-anomalies/`: 16 tracker files; conformance tests cover documented anomalies | MET |
 | ACT-001 | ABI conformance tests | ISO 26262 / ACT | 43 tests in `tests/conformance/` (RH850 and TriCore ABIs verified) | MET |
 | DPR-001 | Dependency hashing | [NSA/CISA SBOM](https://www.cisa.gov/sbom) | `requirements/hashed.txt` committed; `scripts/generate-lockfile.sh` for refresh | MET |
 | DPR-003 | Account verification | [NIST SSDF PS.1](https://csrc.nist.gov/pubs/sp/800/218/final) | `scripts/verify-account.sh` (checks active gh account = Ablation-Tool before push) | MET |

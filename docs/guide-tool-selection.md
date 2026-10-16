@@ -1,6 +1,6 @@
 # Ablation — Tool Selection Guide
 
-Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-reference/`.
+Task-to-tool lookup. For constructor patterns and key methods, see `docs/reference-modules/`.
 
 **Ordering:** BinaryContext → SemanticSearcher (new binary/vuln class) → FuncProfiler (candidate) → **SinkArgClassifier** (eliminate RODATA_CONST first) → TaintTracker (ARG_PROPAGATED/UNKNOWN sinks only) → PathSolver (confirm feasibility). Manual capstone only when TaintTracker has no configured sink. For targets with a Perl scripting layer, run `PerlTaintScanner` in parallel with TaintTracker — it is independent of BinaryContext.
 
@@ -136,7 +136,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "Find Go subprocess/exec injection sites" | `GoSubprocessScanner.scan()` |
 | "Stripped x86-64 Go binary: BinaryContext has only 3 func_starts — recover all from pclntab" | `GoX86StripScanner.from_context(ctx).patch_context(ctx)` — recovers function VAs (and partial names) from .gopclntab embedded in .rodata; works for Go 1.2+ incl. stripped -ldflags=-s -w binaries |
 | "Stripped x86-64 Go binary: detect and get pclntab scan result" | `GoX86StripScanner.from_path(elf).scan()` → `GoScanResult` with `.funcs` dict (VA→name), `.func_starts` list, `.go_version` |
-| "Lift a PPC476 function to pseudo-C IR (IBM PPC476 Book E, glibc-2.15 sysroot)" | `Ppc32Lifter.from_context(ctx).lift(func_va, n_insn=150)` — tracks r3-r10 args, resolves PLT stubs (requires _extract_plt_ppc32be fix), decodes lis/addi/lwz GOT loads, annotates bctr indirect calls; see docs/module-reference/ppc476-lifter.md |
+| "Lift a PPC476 function to pseudo-C IR (IBM PPC476 Book E, glibc-2.15 sysroot)" | `Ppc32Lifter.from_context(ctx).lift(func_va, n_insn=150)` — tracks r3-r10 args, resolves PLT stubs (requires _extract_plt_ppc32be fix), decodes lis/addi/lwz GOT loads, annotates bctr indirect calls; see docs/reference-modules/ppc476-lifter.md |
 | "Lift a native function to pseudo-C IR (18 ISA variants)" | `BinaryLifter.from_path(elf, arch='arm64').lift_function(va)` |
 | "Lift a SH-2A ECU function from flat ROM to pseudo-C IR" | `BinaryLifter.from_path(rom, arch='sh2a').lift_function(va)` |
 | "Disassemble a DEX method to smali" | `DEXDisasm(dex).disasm_method('Lcom/foo/Bar;', 'methodName')` |

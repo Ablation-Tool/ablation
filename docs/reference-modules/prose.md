@@ -43,7 +43,7 @@ CLI:
 
 ```
 python3 -m ablation.core.prose README.md
-python3 -m ablation.core.prose docs/module-reference/forge.md
+python3 -m ablation.core.prose docs/reference-modules/forge.md
 cat commit_message.txt | python3 -m ablation.core.prose -
 ```
 

@@ -52,10 +52,10 @@ The following modules had significant AI-assisted development. All have passed F
 | PS3OPDVtableScanner | `ablation/analyzers/ps3_opd_vtable_scanner.py` | YES | PASS | 2026-10-10 | v2.58.0; PS3 Cell PPC64 OPD vtable resolution |
 | ABI conformance tests | `tests/conformance/test_rh850_abi_invariants.py` | YES | N/A (tests) | 2026-10-10 | 25 ABI invariant tests; ISO 26262 TCL3 requirement |
 | ABI conformance tests | `tests/conformance/test_tricore_abi_invariants.py` | YES | N/A (tests) | 2026-10-10 | 20 ABI invariant tests; ISO 26262 TCL3 requirement |
-| Known anomaly docs | `docs/known-anomalies/*.md` (16 files) | YES | N/A (docs) | 2026-10-10 | ISO 26262 TCL3 known anomalies list requirement |
+| Known anomaly docs | `docs/reference-anomalies/*.md` (16 files) | YES | N/A (docs) | 2026-10-10 | ISO 26262 TCL3 known anomalies list requirement |
 | Safety manual | `docs/safety-manual.md` | YES | N/A (docs) | 2026-10-10 | ISO 26262 Part 8 Clause 11 standalone artifact |
 | Per-anomaly regression tests | `tests/conformance/test_known_anomalies_regression.py` | YES | N/A (tests) | 2026-10-10 | Per-anomaly behavioral tracking |
-| Qualification documentation | `docs/ABLATION-STANDARDS.md` | YES | N/A (docs) | 2026-10-10 | 8-framework compliance matrix |
+| Qualification documentation | `docs/standards-ablation.md` | YES | N/A (docs) | 2026-10-10 | 8-framework compliance matrix |
 
 ---
 

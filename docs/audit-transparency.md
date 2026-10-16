@@ -12,7 +12,7 @@ This document satisfies CISA-SBD2 (Transparency) in the Ablation compliance matr
 
 ### 1.1 Module Limitations
 
-Every taint tracker and CRITICAL-producing scanner has a corresponding file at `docs/known-anomalies/<module>.md`. Each file documents:
+Every taint tracker and CRITICAL-producing scanner has a corresponding file at `docs/reference-anomalies/<module>.md`. Each file documents:
 - All known false negative conditions with triggering inputs
 - All known false positive conditions
 - Workarounds for each anomaly
@@ -23,10 +23,10 @@ These files are committed to the public repository and are visible in every rele
 ### 1.2 FORGE Audit Results
 
 Every module committed to Ablation has passed the SAFE CODE 10-section audit and FORGE gate (`gate_passed=True`). The FORGE cache is stored at `~/.ablation/forge_cache.json` (a single JSON file keyed by blake2b content hash). The following is committed per module:
-- `docs/module-reference/<module>.md`: public-facing module reference including "Why this exists" gap list and usage constraints
+- `docs/reference-modules/<module>.md`: public-facing module reference including "Why this exists" gap list and usage constraints
 - SAFE CODE residual risk section: documents any findings that were ACCEPTED rather than fixed, with justification
 
-When a module has an ACCEPTED risk, that risk appears in the module's `docs/known-anomalies/` file.
+When a module has an ACCEPTED risk, that risk appears in the module's `docs/reference-anomalies/` file.
 
 ### 1.3 Version History
 
@@ -39,7 +39,7 @@ Silent changes to shipped behavior are not permitted.
 
 ### 1.4 Qualification Status
 
-The compliance matrix in `docs/ABLATION-STANDARDS.md` §10 is the single authoritative record of Ablation's qualification status against eight external standards frameworks. It is updated in every release that changes the qualification posture.
+The compliance matrix in `docs/standards-ablation.md` §10 is the single authoritative record of Ablation's qualification status against eight external standards frameworks. It is updated in every release that changes the qualification posture.
 
 ---
 
@@ -61,7 +61,7 @@ Exclusion of findings and session state is a deliberate OPSEC decision, not a tr
 ## 3. How Limitations Are Communicated
 
 When Ablation is used to produce findings for a PSIRT disclosure or safety case:
-1. The analyst consults `docs/known-anomalies/<tracker>.md` for the architecture used
+1. The analyst consults `docs/reference-anomalies/<tracker>.md` for the architecture used
 2. Any anomaly whose triggering condition matches the target is noted in the finding report
 3. Manual verification supplements the tracker for any function whose analysis falls within a known anomaly
 4. The word "Ablation" is not cited as the sole evidence for any CONFIRMED finding; the finding always includes byte-verified evidence

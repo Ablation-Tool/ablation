@@ -158,4 +158,4 @@ Cross-basic-block argument clobbers are not detected. If `$a0` is written after 
 before the JALR in a different branch, the verdict will be wrong.
 
 `TaintTracker` is the correct tool for `UNKNOWN` and `ARG_PROPAGATED` sites. See
-`docs/module-reference/taint-tracker-mips.md`.
+`docs/reference-modules/taint-tracker-mips.md`.
