@@ -598,6 +598,90 @@ Ghidra's decompiler is a full Stage 1 → Stage 3 pipeline and would produce hig
 
 ---
 
+## Complete tool and ISA reference
+
+### Named entry-point tools
+
+These are imported and called directly. They are not `arch=` strings passed to `BinaryLifter`.
+
+| Tool | Import | Stage | Input | Notes |
+|---|---|---|---|---|
+| `BinaryLifter` | `ablation.analyzers.binary_lifter` | 2 → ~3 | Native binary or bytecode | Multi-ISA dispatch via `arch=`; see table below |
+| `Ppc476Decompiler` | `ablation.analyzers.ppc476_lifter` | 2 → 3 | PPC476 Book E flat ROM or ELF | Full loop structuring, type annotations, named locals; closest to a full decompiler |
+| `ABCDecompiler` | `ablation.analyzers.abc_decompiler` | 2 → 3 | ActionScript bytecode (.abc) | Source-like output from Flash/AIR bytecode |
+| `BEAMLifter` | `ablation.analyzers.beam_context` | 2 | Erlang/Elixir .beam | IR-level pseudo output; also exposed via `BinaryLifter(arch='beam')` |
+| `DEXLifter` | (via `android.md`) | 2 → ~3 | Dalvik/ART .dex | Source-like output for Android native analysis |
+| `MpyLifter` | `ablation.analyzers.mpy_lifter` | 2 → ~3 | MicroPython .mpy v6 | Lifts ESP32/STM32/CC13xx firmware; flags dangerous imports |
+
+---
+
+### BinaryLifter: `arch=` strings and completeness tiers
+
+Pass `arch=` to `BinaryLifter.from_path()` or `BinaryLifter.from_context()`.
+
+**Tier definitions:**
+- **Full** — CFG construction, per-register NativeVal state machine, taint annotations, typed expressions
+- **Structural** — per-register state machine seeded from ABI; calls/returns/branches emitted as C; other instructions emitted as `// mnemonic` comments
+- **Structural + Structurizer** — same as structural, then Structurizer converts the goto-CFG to if/while/for pseudo-C
+- **Tool-dependent** — structural output, but requires a GNU cross-toolchain objdump in PATH; returns an explanatory comment if the tool is absent
+- **Module summary** — no VA space; returns exports, dangerous imports, and atoms
+
+#### Native CPUs
+
+| ISA | `arch=` strings | Tier | ABI / return reg |
+|---|---|---|---|
+| ARM64 | `arm64` | Full | AAPCS64; x0 |
+| x86-64 | `x86_64`, `x86-64`, `amd64` | Full | SysV AMD64; rax |
+| x86-32 | `x86_32`, `i386`, `i686` | Structural | CDECL (stack args); eax |
+| ARM32 | `arm32`, `arm` | Structural | AAPCS; r0-r3 args, r0 return |
+| Thumb / Thumb-2 | `thumb`, `thumb2` | Structural | AAPCS Thumb mode |
+| MIPS-32 BE | `mips32`, `mips`, `mipsbe` | Structural | o32; $a0-$a3, $v0 return |
+| MIPS-32 LE | `mips32el`, `mipsel` | Structural | o32 little-endian |
+| MIPS-64 BE | `mips64`, `mipsn64` | Structural | n64; $a0-$a7, $v0 return |
+| MIPS-64 LE | `mips64el` | Structural | n64 little-endian |
+| nanoMIPS | `nanomips` | Structural (linear walk, no CFG) | o32 ABI |
+| PPC-32 | `ppc32`, `ppc`, `powerpc` | Structural | SysV32; r3-r10 args, r3 return |
+| PPC-64 | `ppc64`, `powerpc64` | Structural | ELFv2; r3-r10 args, r3 return |
+| RISC-V 32 | `rv32`, `riscv32` | Structural | psABI; a0-a7 args, a0 return |
+| RISC-V 64 | `rv64`, `riscv64` | Structural | psABI; a0-a7 args, a0 return |
+| ARC EM/HS | `arc`, `arcem`, `archs` | Tool-dependent | requires `arc-elf32-objdump` in PATH |
+| LoongArch64 | `la64`, `loongarch64` | Structural | lp64; $a0-$a7, $a0 return |
+| BEAM (Erlang/Elixir) | `beam`, `erlang`, `elixir` | Module summary | no VA space; pass `va=0` |
+
+#### Automotive ECUs (via BinaryLifter)
+
+| ISA | `arch=` strings | Tier | Notes |
+|---|---|---|---|
+| SH-2A | `sh2a`, `sh2` | Structural + Structurizer | Flat ROM support (VA == file offset when no ELF section map); linear fallback on structurizer failure |
+| V850-32 | `v850`, `v850e2` | Tool-dependent | requires `v850-elf-objdump` in PATH |
+| RH850 | `rh850` | Tool-dependent | requires `v850-elf-objdump` in PATH |
+
+#### Automotive ECUs (dedicated decoder classes, not BinaryLifter `arch=` strings)
+
+These ISAs have their own decoder and taint tracker. They do not go through `BinaryLifter`.
+
+| ISA | Decoder / entry point | Notes |
+|---|---|---|
+| PPC476 Book E | `Ppc476Decompiler` | Full decompiler; loops, types, named locals |
+| PowerPC VLE | `VLEDecoder` / `ecu_vle_decoder` | Mixed 16/32-bit NXP automotive instructions |
+| M68K / CPU32 | `EcuM68kDecoder` / `ecu_m68k_decoder` | GM/Motorola ECUs |
+| MC88100 | `M88kDecoder` / `m88k_decoder` | Motorola 88000 |
+| TriCore TC1.6x | `TaintTrackerTricore` | GHS EABI + IAR EABI; used via taint tracker |
+| TMS320C28x | `EcuC28xDecoder` / `ecu_c28x_decoder` | TI DSP; word-addressed |
+| Intel 8051 | (via `isa-8051.md`) | MCS-51 microcontrollers |
+| HiSilicon RV32 | (via `hisi-rv32-ext.md`) | RV32 with custom bound-clearing instructions |
+
+#### VM runtimes (standalone tools, not BinaryLifter `arch=` strings)
+
+| Runtime | Entry-point tool | `arch=` in BinaryLifter |
+|---|---|---|
+| Dalvik / ART | `DEXLifter` | — |
+| ArkTS (HarmonyOS) | (via `harmonyos.md`) | — |
+| MicroPython .mpy v6 | `MpyLifter` | — |
+| Erlang / Elixir BEAM | `BEAMLifter` | also `beam`, `erlang`, `elixir` |
+
+---
+
 ## Further reading
 
 - `docs/re-workflow.md` — how these stages map to the analysis pipeline
