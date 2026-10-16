@@ -221,10 +221,9 @@ class PrivescEnumerator:
         """Check for binaries with dangerous capabilities"""
         try:
             result = subprocess.run(
-                ['getcap', '-r', '/', '2>/dev/null'],
+                ['getcap', '-r', '/'],
                 capture_output=True,
                 text=True,
-                shell=True,
                 timeout=10
             )
             
