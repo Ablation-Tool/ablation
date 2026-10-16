@@ -382,7 +382,7 @@ def detect_hollow_process(pid: int) -> dict:
     # --- Check maps for rwx or suspicious .text region ---
     try:
         with open(f'{proc_base}/maps') as f:
-            map_lines = f.readlines()
+            map_lines = f.read(_MAX_PROC_BYTES).splitlines()
     except OSError:
         map_lines = []
 
@@ -603,7 +603,7 @@ def detect_suspicious_network_sockets(timeout: float = 3.0) -> list:
         is_v6 = tcp_file.endswith('6')
         try:
             with open(tcp_file) as f:
-                lines = f.readlines()[1:]  # skip header
+                lines = f.read(_MAX_PROC_BYTES).splitlines()[1:]  # skip header
         except OSError:
             continue
 
@@ -1018,7 +1018,7 @@ def detect_memory_artifact_indicators() -> list:
 
             try:
                 with open(maps_path, 'r', errors='replace') as f:
-                    lines = f.readlines()
+                    lines = f.read(_MAX_PROC_BYTES).splitlines()
             except OSError:
                 continue
 
