@@ -15,4 +15,4 @@ Automated JNI (Java Native Interface) attack surface mapping for Android shared 
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_BINARY_BYTES=256MB`; `os.path.getsize()` guard before `lief.parse()`; `lief.parse()` wrapped in `try/except Exception` + `if binary is None` check.
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_LIB_BYTES=256MB`; `os.path.getsize()` guard before `open().read()` (L45-47). No lief — binary loaded as raw bytes via `open(lib_path, 'rb').read()` and passed to `ARMSymbolicAnalyzer`. No HTTP reads. No subprocess.
