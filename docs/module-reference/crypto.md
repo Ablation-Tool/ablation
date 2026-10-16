@@ -332,3 +332,9 @@ for p in patterns:
 ```
 
 The EOR-register detection works for byte-by-byte CBC implementations. If the compiler vectorizes the XOR into NEON VEOR only, the chaining register cannot be derived from LDRB bases and maximum confidence is 70.
+
+---
+
+## FORGE audit — crypto_audit.py
+
+Gate: **PASSED**. No HIGH or CRITICAL findings. `scan_for_crypto_anti_patterns()` enforces `_MAX_CRYPTO_SCAN_BYTES=32MB` before reading any file; files exceeding the limit return `INFO/FILE_TOO_LARGE` instead of being skipped silently. JWT cracking operates on in-memory strings. No lief.parse().

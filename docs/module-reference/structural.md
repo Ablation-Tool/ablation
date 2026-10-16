@@ -196,3 +196,9 @@ print(result.change_score)     # 0.0 = identical, 1.0 = completely different
 ```
 
 MatrixProfileDiff complements VersionDelta when the changed region is a long insertion or deletion rather than a point substitution. VersionDelta's `difflib` output is better for single-instruction substitutions. STOMP is better for finding inserted bounds checks (3-5 new instructions in a loop body) or removed authentication blocks.
+
+---
+
+## FORGE audit — structural_sim.py
+
+Gate: **PASSED**. No HIGH or CRITICAL findings. No file I/O — `extract_fingerprint()` and `fingerprint_sim()` operate on in-memory disassembly instruction lists and numpy arrays; no file reads, no subprocess, no lief.parse(). Size bounds are the caller's responsibility through BinaryContext.
