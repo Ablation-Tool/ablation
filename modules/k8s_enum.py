@@ -212,7 +212,7 @@ class K8sEnumerator:
         if _IS_LINUX:
             try:
                 with open('/proc/1/cgroup') as f:
-                    if 'kubepods' in f.read():
+                    if 'kubepods' in f.read(_MAX_FILE_BYTES):
                         self.in_k8s = True
                         return True
             except Exception:
@@ -2857,7 +2857,7 @@ class K8sEnumerator:
         try:
             # If we can see PID 1 and it's not a container init, we have hostPID
             with open('/proc/1/comm') as f:
-                comm = f.read().strip()
+                comm = f.read(16).strip()
             # In a normal pod, PID 1 is the container entrypoint.
             # With hostPID it's the host init (systemd, init, etc.)
             host_inits = {'systemd', 'init', 'launchd', 'upstart'}
@@ -4172,7 +4172,7 @@ def check_k8s_service_account_token_abuse(
     if os.path.isfile(token_path):
         try:
             with open(token_path, "r") as fh:
-                sa_token = fh.read().strip()
+                sa_token = fh.read(_MAX_FILE_BYTES).strip()
             findings.append({
                 "severity": "HIGH",
                 "title": "SA_TOKEN_MOUNTED",
@@ -4195,7 +4195,7 @@ def check_k8s_service_account_token_abuse(
     if os.path.isfile(ns_path):
         try:
             with open(ns_path, "r") as fh:
-                ns_value = fh.read().strip()
+                ns_value = fh.read(_MAX_FILE_BYTES).strip()
             findings.append({
                 "severity": "INFO",
                 "title": "SA_NAMESPACE_DISCLOSED",
