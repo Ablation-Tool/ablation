@@ -832,7 +832,10 @@ def scan_jar_for_vulnerabilities(jar_path: str) -> list:
                 })
             else:
                 try:
-                    manifest_data = zf.read(manifest_names[0])
+                    if zf.getinfo(manifest_names[0]).file_size > _MAX_ENTRY_BYTES:
+                        manifest_data = b''
+                    else:
+                        manifest_data = zf.read(manifest_names[0])
                     if not manifest_data.strip():
                         findings.append({
                             'severity': 'MEDIUM',
