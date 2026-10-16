@@ -31,6 +31,7 @@ _IS_LINUX = _platform.system() == 'Linux'
 
 _MAX_PCAP_BYTES = 512 * 1024 * 1024
 _MAX_HTTP_BYTES = 4 * 1024 * 1024
+_MAX_PROC_BYTES = 4 * 1024 * 1024   # cap for /proc/net/* reads
 
 class NetworkAnalyzer:
     """Analyze network configuration and connections"""
@@ -62,7 +63,7 @@ class NetworkAnalyzer:
         # Linux: read from /proc/net/dev
         try:
             with open('/proc/net/dev') as f:
-                lines = f.readlines()[2:]
+                lines = f.read(_MAX_PROC_BYTES).splitlines()[2:]
                 for line in lines:
                     parts = line.split(':')
                     if len(parts) >= 2:
@@ -110,7 +111,7 @@ class NetworkAnalyzer:
         for proto_file, proto in [('/proc/net/tcp', 'tcp'), ('/proc/net/tcp6', 'tcp6')]:
             try:
                 with open(proto_file) as f:
-                    lines = f.readlines()[1:]
+                    lines = f.read(_MAX_PROC_BYTES).splitlines()[1:]
                     for line in lines:
                         parts = line.split()
                         if len(parts) >= 10:
