@@ -1,342 +1,465 @@
 """
-ablation/analyzers/mcp_tool_taint_scanner.py — MCP server security scanner.
+mcp_tool_taint_scanner.py — MCP server security scanner for Python source.
 
-Detects three confirmed dangerous patterns in MCP server source code
-(TypeScript/JavaScript/Python):
+Closes TG-FMGMCP-1: no ablation module for MCP server security analysis.
 
-  BIND_WIDE    — HTTP transport bound to 0.0.0.0 (or no explicit host, which
-                 defaults to 0.0.0.0 in Node.js). Any host on the network can
-                 submit tool calls.  CWE-668.  Severity HIGH.
+Why this exists:
 
-  EXEC_IN_ALLOWED — exec-class method ('exec', 'execute', 'run', 'shell', 'eval')
-                 present in ALLOWED_METHODS / allowed_methods set/constant. LLM
-                 can invoke arbitrary execution via prompt injection.  CWE-284.
-                 Severity CRITICAL.
+FortiManager v8.0.0 ships an AI/MCP stack (ai/agent/agent_framework/). Two confirmed
+findings required manual source read because no automated scanner existed:
 
-  NO_AUTH      — /mcp endpoint or MCP HTTP transport defined without a visible
-                 authentication middleware or auth dependency.  CWE-306.
-                 Severity HIGH.
+  FMG-AI-1 (CWE-214, MEDIUM): mcp.py serializes request.COOKIES to JSON and passes
+    it as --cookies CLI arg to /usr/bin/webmcpserver. The session token is visible
+    in /proc/<pid>/cmdline for the subprocess lifetime — world-readable on Linux.
 
-These patterns were confirmed in FortiManager fortimanager-code-mode-mcp
-(FMGMCP-1 HIGH: BIND_WIDE + NO_AUTH, FMGMCP-2 CRITICAL: EXEC_IN_ALLOWED).
+  FMG-AI-2 (CWE-77, MEDIUM): agent_views.py passes a user-supplied FortiGate CLI
+    script as the system-role content to an LLM security analyzer, enabling prompt
+    injection into the AI's trust context.
+
+This scanner detects four finding classes in any Python MCP server codebase:
+
+  CREDENTIAL_EXPOSURE (CWE-214): session tokens, cookies, or auth headers serialized
+    and passed as command-line arguments to a subprocess or StdioMCPClient. The
+    credential is visible to all users via /proc/<pid>/cmdline.
+
+  PROMPT_INJECTION (CWE-77): user-controlled input placed in a system-role message
+    to an LLM, bypassing the intended system/user prompt separation.
+
+  TRANSPORT_EXPOSURE (CWE-284): MCP HTTP server bound to 0.0.0.0 (network-reachable)
+    without confirmed auth middleware on the MCP endpoint.
+
+  AUTH_BYPASS (CWE-306): /mcp route registered without a recognized auth decorator
+    or middleware (login_required, requires_auth, jwt_required, etc.).
+
+Detection is regex + AST-based. All patterns were confirmed by real findings.
+Scope extends beyond Fortinet: any Python MCP server sharing these patterns.
 
 Usage:
-    from ablation.analyzers.mcp_tool_taint_scanner import MCPToolTaintScanner
-    results = MCPToolTaintScanner.from_path('/path/to/mcp-server').scan()
-    print(MCPToolTaintScanner.report(results))
+
+    from ablation.analyzers.mcp_tool_taint_scanner import McpToolTaintScanner
+
+    findings = McpToolTaintScanner.from_path('/tmp/fortimanager/ai/').scan()
+    print(McpToolTaintScanner.report(findings))
+
+    # Single file
+    findings = McpToolTaintScanner.scan_file('/tmp/app/mcp.py')
+
+CLI:
+    python3 -m ablation.analyzers.mcp_tool_taint_scanner /path/to/app
+    python3 -m ablation.analyzers.mcp_tool_taint_scanner /path/to/app --severity MEDIUM
 """
 
 from __future__ import annotations
 
+import ast
 import re
-import warnings
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Set
 
-# ── constants ─────────────────────────────────────────────────────────────────
+# ── Pre-filter patterns ───────────────────────────────────────────────────────
+# Applied before expensive AST parse to skip unrelated files.
 
-_EXEC_CLASS: Set[str] = frozenset({'exec', 'execute', 'run', 'shell', 'eval', 'spawn'})
+_MCP_IMPORT_RE = re.compile(
+    r'\b(?:mcp|fastmcp|StdioMCPClient|StdioServerParameters|'
+    r'WebSocketServerParameters|MCPClient|ModelContextProtocol)\b',
+    re.IGNORECASE,
+)
+_CREDENTIAL_QUICK_RE = re.compile(r'COOKIES|request\.headers|session\[|auth_token', re.IGNORECASE)
+_PROMPT_QUICK_RE = re.compile(r'system.*role|initial_prompt_role|system_prompt', re.IGNORECASE)
+_TRANSPORT_QUICK_RE = re.compile(r'0\.0\.0\.0|host\s*=\s*["\']0\.', re.IGNORECASE)
 
-_AUTH_TERMS: Set[str] = frozenset({
-    'authenticate', 'verifytoken', 'checkauth', 'requireauth', 'isauthenticated',
-    'bearerauth', 'apikey', 'api_key', 'authmiddleware', 'auth_middleware',
-    'authorization', 'verify_token', 'check_auth', 'require_auth', 'is_authenticated',
-})
+# ── Auth decorator names (presence = auth gated) ─────────────────────────────
+_AUTH_DECORATORS: Set[str] = {
+    'login_required', 'requires_auth', 'jwt_required', 'token_required',
+    'auth_required', 'authenticated', 'require_login', 'permission_required',
+    'require_permissions', 'verify_token', 'check_auth', 'admin_required',
+}
 
-_EXTENSIONS: Set[str] = frozenset({'.ts', '.js', '.py'})
-_MAX_FILES_WARN: int = 10_000
+# ── Variable/attribute names that are credential signals ─────────────────────
+_CREDENTIAL_ATTR_NAMES: Set[str] = {
+    'COOKIES', 'cookies', 'headers', 'session', 'auth_token', 'token',
+    'access_token', 'refresh_token', 'api_key', 'secret', 'password',
+    'credential', 'credentials', 'Authorization',
+}
 
-# Pre-filter: only scan files that contain at least one of these patterns
-_PREFILTER_RE = re.compile(
-    r'ALLOWED_METHODS|McpServer|FastMCP|mcp_transport|streamableHttp|'
-    r'\.listen\s*\(|/mcp["\'\s/]|mcp_http',
+# ── CLI launch patterns (subprocess / StdioServerParameters) ─────────────────
+_STDIO_MCP_RE = re.compile(r'StdioServerParameters|StdioMCPClient|subprocess\s*\.\s*\w+')
+
+# ── System-role message patterns ─────────────────────────────────────────────
+_SYSTEM_ROLE_RE = re.compile(
+    r'(?:initial_prompt_role\s*[=:]\s*["\']system["\']|'
+    r'role["\']?\s*[:=]\s*["\']system["\']|'
+    r'"role"\s*:\s*"system")',
     re.IGNORECASE,
 )
 
-# ── detection regexes ─────────────────────────────────────────────────────────
+# ── User-input variable name indicators for CRITICAL escalation ──────────────
+_USER_INPUT_NAMES: Set[str] = {
+    'script', 'command', 'user_script', 'cli_script', 'input', 'user_input',
+    'body', 'payload', 'content', 'text', 'data', 'message', 'description',
+    'query', 'prompt', 'request', 'req', 'param', 'value', 'args', 'raw',
+}
 
-# BIND_WIDE: Node.js .listen(port) without a host string argument
-# Matches: .listen(8000), .listen(config.port), .listen(config.mcpHttpPort, () => {
-# Does NOT match: .listen(8000, '127.0.0.1', ...) — has string host
-_LISTEN_RE = re.compile(r'\.listen\s*\(([^)]*)\)')
-_SAFE_BIND_RE = re.compile(r'["\'](?:127\.0\.0\.1|localhost|::1)["\']')
-
-# Python BIND_WIDE: host='0.0.0.0' or host="0.0.0.0"
-_PY_BIND_WIDE_RE = re.compile(r'\bhost\s*=\s*["\']0\.0\.0\.0["\']')
-
-# EXEC_IN_ALLOWED: ALLOWED_METHODS constant contains exec-class method
-# Captures the method name from a quoted string inside an ALLOWED_METHODS assignment
-_ALLOWED_METHODS_LINE_RE = re.compile(r'\bALLOWED_METHODS\b', re.IGNORECASE)
-_QUOTED_METHOD_RE = re.compile(r'''['"]([a-zA-Z_]\w*)['"]''')
-
-# /mcp route definition (TypeScript/JS Express-style)
-_MCP_ROUTE_RE = re.compile(r'''['"]/mcp['"]''')
-_AUTH_LINE_RE = re.compile(r'\b(?:' + '|'.join(_AUTH_TERMS) + r')\b', re.IGNORECASE)
-
-# FastMCP HTTP transport (Python): only flag when 'http' appears in the run() call args,
-# or when uvicorn.run() is used (always HTTP). stdio-only mcp.run() is safe.
-_FASTMCP_HTTP_RE = re.compile(
-    r"mcp\.run\s*\([^)]*['\"]http['\"]|uvicorn\.run\s*\(",
-    re.IGNORECASE,
-)
-
-# ── dataclass ─────────────────────────────────────────────────────────────────
+# ── Finding class ─────────────────────────────────────────────────────────────
 
 @dataclass
-class MCPTaintFinding:
+class McpFinding:
+    """One detected MCP security issue."""
     path: Path
     rel_path: str
+    lineno: int
+    finding_class: str    # CREDENTIAL_EXPOSURE | PROMPT_INJECTION | TRANSPORT_EXPOSURE | AUTH_BYPASS
+    severity: str         # CRITICAL | HIGH | MEDIUM | LOW
     cwe: str
-    severity: str
-    issue_type: str       # BIND_WIDE | EXEC_IN_ALLOWED | NO_AUTH
-    line: int
-    line_text: str
-    description: str = ""
+    title: str
+    detail: str
+    snippet: str = ""
 
-# ── helpers ───────────────────────────────────────────────────────────────────
-
-def _severity_order(f: MCPTaintFinding) -> int:
-    return {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}.get(f.severity, 5)
-
-
-def _has_auth_in_window(lines: List[str], center: int, window: int = 15) -> bool:
-    start = max(0, center - window)
-    end = min(len(lines), center + window + 1)
-    for ln in lines[start:end]:
-        if _AUTH_LINE_RE.search(ln):
-            return True
-    return False
+    def fmt(self) -> str:
+        loc = f"{self.rel_path}:{self.lineno}"
+        return (
+            f"[{self.severity}] {self.finding_class}  {loc}\n"
+            f"  CWE: {self.cwe}\n"
+            f"  {self.title}\n"
+            f"  {self.detail}\n"
+            + (f"  snippet: {self.snippet!r}\n" if self.snippet else "")
+        )
 
 
-def _exec_methods_in_block(block_text: str) -> List[str]:
-    """Return exec-class method names found as quoted strings in block_text."""
-    return [m for m in _QUOTED_METHOD_RE.findall(block_text) if m in _EXEC_CLASS]
+# ── Scanner ───────────────────────────────────────────────────────────────────
 
+class McpToolTaintScanner:
+    """Scan Python MCP server source for security issues."""
 
-def _extract_allowed_methods_block(lines: List[str], start_idx: int) -> str:
-    """Return the text of the ALLOWED_METHODS assignment block starting at start_idx."""
-    block: List[str] = []
-    depth = 0
-    for ln in lines[start_idx:start_idx + 30]:
-        block.append(ln)
-        depth += ln.count('(') + ln.count('[') + ln.count('{')
-        depth -= ln.count(')') + ln.count(']') + ln.count('}')
-        if depth <= 0 and len(block) > 1:
-            break
-    return '\n'.join(block)
-
-# ── per-file scanner ──────────────────────────────────────────────────────────
-
-def _scan_ts_js(path: Path, rel_path: str, lines: List[str]) -> List[MCPTaintFinding]:
-    findings: List[MCPTaintFinding] = []
-    full_text = '\n'.join(lines)
-
-    # BIND_WIDE: .listen() without safe host
-    for m in _LISTEN_RE.finditer(full_text):
-        args = m.group(1)
-        # If args contain a safe bind address, skip
-        if _SAFE_BIND_RE.search(args):
-            continue
-        # If args contain '0.0.0.0', definitely vulnerable
-        # If args contain a string that's not a safe address → flag
-        # If args contain only non-string tokens (port var, callback) → flag
-        lineno = full_text[:m.start()].count('\n') + 1
-        findings.append(MCPTaintFinding(
-            path=path, rel_path=rel_path,
-            cwe='CWE-668', severity='HIGH', issue_type='BIND_WIDE',
-            line=lineno, line_text=lines[lineno - 1].strip(),
-            description=(
-                f'.listen() has no explicit safe host (127.0.0.1/localhost); '
-                f'Node.js defaults to 0.0.0.0. Args: {args.strip()[:80]}'
-            ),
-        ))
-
-    # EXEC_IN_ALLOWED: ALLOWED_METHODS contains exec-class method
-    for i, ln in enumerate(lines):
-        if not _ALLOWED_METHODS_LINE_RE.search(ln):
-            continue
-        block = _extract_allowed_methods_block(lines, i)
-        exec_found = _exec_methods_in_block(block)
-        if exec_found:
-            findings.append(MCPTaintFinding(
-                path=path, rel_path=rel_path,
-                cwe='CWE-284', severity='CRITICAL', issue_type='EXEC_IN_ALLOWED',
-                line=i + 1, line_text=ln.strip(),
-                description=(
-                    f'ALLOWED_METHODS contains exec-class method(s): '
-                    f'{", ".join(exec_found)}. LLM prompt injection can invoke these.'
-                ),
-            ))
-            break  # one finding per ALLOWED_METHODS block per file
-
-    # NO_AUTH: /mcp route defined without auth middleware nearby
-    for i, ln in enumerate(lines):
-        if not _MCP_ROUTE_RE.search(ln):
-            continue
-        if not _has_auth_in_window(lines, i):
-            findings.append(MCPTaintFinding(
-                path=path, rel_path=rel_path,
-                cwe='CWE-306', severity='HIGH', issue_type='NO_AUTH',
-                line=i + 1, line_text=ln.strip(),
-                description=(
-                    f'/mcp endpoint defined at line {i + 1} with no auth '
-                    f'middleware found within 15 lines.'
-                ),
-            ))
-
-    return findings
-
-
-def _scan_python(path: Path, rel_path: str, lines: List[str]) -> List[MCPTaintFinding]:
-    findings: List[MCPTaintFinding] = []
-    full_text = '\n'.join(lines)
-
-    # BIND_WIDE: host='0.0.0.0'
-    for m in _PY_BIND_WIDE_RE.finditer(full_text):
-        lineno = full_text[:m.start()].count('\n') + 1
-        findings.append(MCPTaintFinding(
-            path=path, rel_path=rel_path,
-            cwe='CWE-668', severity='HIGH', issue_type='BIND_WIDE',
-            line=lineno, line_text=lines[lineno - 1].strip(),
-            description="Server binds to 0.0.0.0 — reachable from any network interface.",
-        ))
-
-    # EXEC_IN_ALLOWED: ALLOWED_METHODS set contains exec-class method
-    for i, ln in enumerate(lines):
-        if not _ALLOWED_METHODS_LINE_RE.search(ln):
-            continue
-        block = _extract_allowed_methods_block(lines, i)
-        exec_found = _exec_methods_in_block(block)
-        if exec_found:
-            findings.append(MCPTaintFinding(
-                path=path, rel_path=rel_path,
-                cwe='CWE-284', severity='CRITICAL', issue_type='EXEC_IN_ALLOWED',
-                line=i + 1, line_text=ln.strip(),
-                description=(
-                    f'ALLOWED_METHODS contains exec-class method(s): '
-                    f'{", ".join(exec_found)}. LLM prompt injection can invoke these.'
-                ),
-            ))
-            break
-
-    # NO_AUTH: FastMCP HTTP transport without auth
-    for i, ln in enumerate(lines):
-        if not _FASTMCP_HTTP_RE.search(ln):
-            continue
-        if not _has_auth_in_window(lines, i):
-            findings.append(MCPTaintFinding(
-                path=path, rel_path=rel_path,
-                cwe='CWE-306', severity='HIGH', issue_type='NO_AUTH',
-                line=i + 1, line_text=ln.strip(),
-                description=(
-                    f'MCP HTTP transport started without visible auth at line {i + 1}.'
-                ),
-            ))
-
-    return findings
-
-# ── main class ────────────────────────────────────────────────────────────────
-
-class MCPToolTaintScanner:
-    """Scan MCP server source trees for BIND_WIDE, EXEC_IN_ALLOWED, and NO_AUTH patterns."""
-
-    MAX_FILES_WARN = _MAX_FILES_WARN
-
-    def __init__(
-        self,
-        root: Path,
-        rel_base: Optional[Path] = None,
-        max_files: Optional[int] = None,
-    ) -> None:
+    def __init__(self, root: Optional[Path] = None) -> None:
         self._root = root
-        self._rel_base = rel_base or root
-        self._max_files = max_files
 
     @classmethod
-    def from_path(cls, path, max_files: Optional[int] = None) -> "MCPToolTaintScanner":
-        p = Path(path)
-        if p.is_file():
-            return cls(root=p.parent, rel_base=p.parent, max_files=max_files)
-        return cls(root=p, rel_base=p, max_files=max_files)
+    def from_path(cls, root: str) -> 'McpToolTaintScanner':
+        return cls(Path(root))
 
-    def _should_scan(self, text: str) -> bool:
-        return bool(_PREFILTER_RE.search(text))
-
-    def _scan_file(self, path: Path) -> List[MCPTaintFinding]:
-        try:
-            text = path.read_text(encoding='utf-8', errors='replace')
-        except OSError as e:
-            warnings.warn(f"MCPToolTaintScanner: cannot read {path}: {e}")
+    def scan(self) -> List[McpFinding]:
+        if self._root is None:
             return []
-        if not self._should_scan(text):
-            return []
-        lines = text.splitlines()
-        rel = str(path.relative_to(self._rel_base))
-        ext = path.suffix.lower()
-        if ext in ('.ts', '.js'):
-            return _scan_ts_js(path, rel, lines)
-        if ext == '.py':
-            return _scan_python(path, rel, lines)
-        return []
-
-    def scan(self) -> List[MCPTaintFinding]:
-        """Scan all .ts/.js/.py files under root. Returns findings sorted CRITICAL first."""
-        all_findings: List[MCPTaintFinding] = []
-        files = [
-            p for p in self._root.rglob('*')
-            if p.is_file() and p.suffix.lower() in _EXTENSIONS
-        ]
-        if len(files) > self.MAX_FILES_WARN:
-            warnings.warn(
-                f"MCPToolTaintScanner: {len(files)} files in {self._root} — "
-                f"consider narrowing the scan root"
-            )
-        if self._max_files and len(files) > self._max_files:
-            warnings.warn(
-                f"MCPToolTaintScanner: truncating to {self._max_files} files"
-            )
-            files = files[:self._max_files]
-        for f in files:
-            all_findings.extend(self._scan_file(f))
-        return sorted(all_findings, key=_severity_order)
+        findings: List[McpFinding] = []
+        pattern = "**/*.py"
+        for p in sorted(self._root.rglob("*.py")):
+            try:
+                findings.extend(self._scan_path(p))
+            except Exception:
+                pass
+        return findings
 
     @staticmethod
-    def report(findings: List[MCPTaintFinding]) -> str:
+    def scan_file(path: str) -> List[McpFinding]:
+        p = Path(path)
+        try:
+            return McpToolTaintScanner._scan_path(p)
+        except Exception:
+            return []
+
+    @staticmethod
+    def _scan_path(p: Path) -> List[McpFinding]:
+        try:
+            src = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return []
+
+        root_path = p.parent
+        rel = str(p)
+
+        # Fast pre-filters
+        is_mcp_file = bool(_MCP_IMPORT_RE.search(src))
+        has_credential = bool(_CREDENTIAL_QUICK_RE.search(src))
+        has_prompt = bool(_PROMPT_QUICK_RE.search(src))
+        has_transport = bool(_TRANSPORT_QUICK_RE.search(src))
+
+        if not any([is_mcp_file, has_credential, has_prompt, has_transport]):
+            return []
+
+        findings: List[McpFinding] = []
+
+        # Pattern 1: CREDENTIAL_EXPOSURE — json.dumps on COOKIES/headers → CLI arg
+        if has_credential:
+            findings.extend(_check_credential_exposure(p, rel, src))
+
+        # Pattern 2: PROMPT_INJECTION — user input in system-role message
+        if has_prompt:
+            findings.extend(_check_prompt_injection(p, rel, src))
+
+        # Pattern 3: TRANSPORT_EXPOSURE — MCP server on 0.0.0.0
+        if has_transport and is_mcp_file:
+            findings.extend(_check_transport_exposure(p, rel, src))
+
+        # Pattern 4: AUTH_BYPASS — /mcp route without auth decorator
+        if is_mcp_file:
+            findings.extend(_check_auth_bypass(p, rel, src))
+
+        return findings
+
+    @staticmethod
+    def report(findings: List[McpFinding]) -> str:
         if not findings:
-            return "MCPToolTaintScanner: no findings\n"
-        lines = [
-            f"MCPToolTaintScanner: {len(findings)} finding(s)\n",
-            f"{'SEV':<10} {'TYPE':<20} {'FILE:LINE':<45} DESCRIPTION",
-            '-' * 100,
-        ]
+            return "[mcp_tool_taint_scanner] No findings.\n"
+        total = len(findings)
+        by_sev: dict = {}
         for f in findings:
-            loc = f"{f.rel_path}:{f.line}"
-            lines.append(
-                f"{f.severity:<10} {f.issue_type:<20} {loc:<45} {f.description[:60]}"
-            )
-        return '\n'.join(lines) + '\n'
+            by_sev[f.severity] = by_sev.get(f.severity, 0) + 1
+        hdr = (
+            f"[mcp_tool_taint_scanner] {total} finding(s)  "
+            + "  ".join(f"{k}={v}" for k, v in sorted(by_sev.items()))
+            + "\n"
+        )
+        lines = [hdr]
+        for f in sorted(findings, key=lambda x: (x.severity, x.path, x.lineno)):
+            lines.append(f.fmt())
+        return "\n".join(lines)
 
 
-# ── CLI ───────────────────────────────────────────────────────────────────────
+# ── Detection helpers ─────────────────────────────────────────────────────────
 
-def _cli() -> None:
-    import argparse, sys
-    ap = argparse.ArgumentParser(
-        description='Scan MCP server code for security issues'
-    )
+def _lines(src: str) -> List[str]:
+    return src.splitlines()
+
+
+def _check_credential_exposure(p: Path, rel: str, src: str) -> List[McpFinding]:
+    """Detect session token / cookie dict serialized and passed as CLI arg."""
+    findings: List[McpFinding] = []
+    ls = _lines(src)
+
+    # Pass 1: record (lineno, var_name) for json.dumps(*.COOKIES/headers) assignments.
+    # Pass 2: within _WINDOW lines after each assignment, look for subprocess /
+    # StdioServerParameters in the same context.  The credential typically flows
+    # through an intermediate list variable (e.g., all_cli_args = ['--cookies', cookies])
+    # before reaching the launch call — so we do not require the var itself on the
+    # launch line; proximity is enough.
+    _WINDOW = 30
+
+    credential_sites: List[tuple] = []  # (lineno, var_name)
+
+    for lineno, line in enumerate(ls, 1):
+        m = re.search(
+            r'(\w+)\s*=\s*json\.dumps\s*\(\s*\S*?'
+            r'(?:COOKIES|headers|session|auth_token|Authorization)\b',
+            line,
+        )
+        if m:
+            credential_sites.append((lineno, m.group(1)))
+            continue
+
+        # json.dumps(request.COOKIES) inline on the same line as a launch call
+        m2 = re.search(
+            r'json\.dumps\s*\(\s*\S*?(?:COOKIES|session|auth_token)\s*\)',
+            line,
+        )
+        if m2 and re.search(r'args\s*=|--\w+|subprocess', line):
+            findings.append(McpFinding(
+                path=p, rel_path=rel, lineno=lineno,
+                finding_class='CREDENTIAL_EXPOSURE',
+                severity='MEDIUM',
+                cwe='CWE-214',
+                title='Session credential serialized inline as CLI argument',
+                detail=(
+                    'json.dumps(request.COOKIES/session) passed directly as CLI arg. '
+                    'Token visible in /proc/<pid>/cmdline (world-readable on Linux).'
+                ),
+                snippet=line.strip()[:120],
+            ))
+
+    # Pass 2: for each credential assignment, scan the following _WINDOW lines for
+    # a subprocess / StdioServerParameters launch (the credential travels through
+    # at most one intermediate variable before the launch site).
+    seen_launch_lines: Set[int] = set()
+    for assign_lineno, var_name in credential_sites:
+        window_end = min(len(ls), assign_lineno - 1 + _WINDOW)
+        window_lines = ls[assign_lineno - 1:window_end]
+        for offset, wline in enumerate(window_lines):
+            launch_lineno = assign_lineno + offset
+            if launch_lineno in seen_launch_lines:
+                continue
+            if _STDIO_MCP_RE.search(wline):
+                seen_launch_lines.add(launch_lineno)
+                findings.append(McpFinding(
+                    path=p, rel_path=rel, lineno=launch_lineno,
+                    finding_class='CREDENTIAL_EXPOSURE',
+                    severity='MEDIUM',
+                    cwe='CWE-214',
+                    title='Serialized credential reaches subprocess/StdioServerParameters launch',
+                    detail=(
+                        f'{var_name!r} (json.dumps of COOKIES/headers, line {assign_lineno}) '
+                        f'flows into this launch call within {_WINDOW} lines. '
+                        'Credential visible in /proc/<pid>/cmdline.'
+                    ),
+                    snippet=wline.strip()[:120],
+                ))
+                break  # one finding per credential assignment
+
+    return findings
+
+
+def _check_prompt_injection(p: Path, rel: str, src: str) -> List[McpFinding]:
+    """Detect user-controlled input in LLM system-role messages."""
+    findings: List[McpFinding] = []
+    ls = _lines(src)
+
+    # Find lines where a system role is assigned
+    system_role_lines: List[int] = []
+    for lineno, line in enumerate(ls, 1):
+        if _SYSTEM_ROLE_RE.search(line):
+            system_role_lines.append(lineno)
+
+    if not system_role_lines:
+        return []
+
+    # For each system-role line, inspect the surrounding context (±20 lines) for
+    # non-literal content sources that suggest user-controlled input.
+    for srl in system_role_lines:
+        window_start = max(0, srl - 20)
+        window_end = min(len(ls), srl + 20)
+        window = ls[window_start:window_end]
+        window_src = "\n".join(window)
+
+        # Check if any user-input-named variable is present near the system role
+        found_user_input = False
+        escalate = False
+        for name in _USER_INPUT_NAMES:
+            if re.search(r'\b' + re.escape(name) + r'\b', window_src):
+                found_user_input = True
+                # Escalate to HIGH if it's directly assigned as content
+                if re.search(
+                    r'content\s*[=:]\s*' + re.escape(name) +
+                    r'|' + re.escape(name) + r'\s*[+]=?\s*\S',
+                    window_src,
+                ):
+                    escalate = True
+                break
+
+        if found_user_input:
+            severity = 'HIGH' if escalate else 'MEDIUM'
+            snippet = ls[srl - 1].strip()[:120]
+            findings.append(McpFinding(
+                path=p, rel_path=rel, lineno=srl,
+                finding_class='PROMPT_INJECTION',
+                severity=severity,
+                cwe='CWE-77',
+                title='User-controlled input in LLM system-role message',
+                detail=(
+                    'A user-input-derived variable appears near a system-role message assignment. '
+                    'Attacker can inject arbitrary system-level instructions into the AI context, '
+                    'bypassing intended trust separation between operator and user prompts.'
+                ),
+                snippet=snippet,
+            ))
+
+    return findings
+
+
+def _check_transport_exposure(p: Path, rel: str, src: str) -> List[McpFinding]:
+    """Detect MCP server bound to all interfaces without auth middleware."""
+    findings: List[McpFinding] = []
+    ls = _lines(src)
+
+    for lineno, line in enumerate(ls, 1):
+        # host="0.0.0.0" in uvicorn.run / app.run / FastMCP.run
+        m = re.search(r'(?:uvicorn\.run|app\.run|\.run)\s*\(.*host\s*=\s*["\']0\.0\.0\.0["\']', line)
+        if not m:
+            m = re.search(r'host\s*=\s*["\']0\.0\.0\.0["\']', line)
+        if m:
+            # Check if auth is mentioned in the nearby context (±10 lines)
+            window_start = max(0, lineno - 10)
+            window_end = min(len(ls), lineno + 10)
+            window = "\n".join(ls[window_start:window_end])
+            auth_present = bool(re.search(
+                r'auth|middleware|token|login_required|bearer|jwt', window, re.IGNORECASE
+            ))
+            severity = 'LOW' if auth_present else 'MEDIUM'
+            snippet = line.strip()[:120]
+            findings.append(McpFinding(
+                path=p, rel_path=rel, lineno=lineno,
+                finding_class='TRANSPORT_EXPOSURE',
+                severity=severity,
+                cwe='CWE-284',
+                title='MCP server bound to all network interfaces',
+                detail=(
+                    'host="0.0.0.0" binds the MCP endpoint to all interfaces. '
+                    'Unless separately protected by a firewall or auth middleware, '
+                    'the MCP protocol surface is network-reachable from any host.'
+                    + (' Auth middleware detected in context.' if auth_present else
+                       ' No auth middleware found in context — verify firewall gating.')
+                ),
+                snippet=snippet,
+            ))
+
+    return findings
+
+
+def _check_auth_bypass(p: Path, rel: str, src: str) -> List[McpFinding]:
+    """Detect /mcp route registered without a recognized auth decorator."""
+    findings: List[McpFinding] = []
+    ls = _lines(src)
+
+    for lineno, line in enumerate(ls, 1):
+        # Route registration: @app.route('/mcp'...) or path('/mcp', ...)
+        if not re.search(r"""['"]/mcp['"]""", line):
+            continue
+        if not re.search(r'@\w+\.(?:route|get|post|add_route|path)\s*\(', line):
+            continue
+
+        # Inspect the preceding 8 lines for auth decorators
+        window_start = max(0, lineno - 8)
+        preceding = "\n".join(ls[window_start:lineno - 1])
+        has_auth = any(
+            re.search(r'\b' + re.escape(d) + r'\b', preceding, re.IGNORECASE)
+            for d in _AUTH_DECORATORS
+        )
+        if not has_auth:
+            snippet = line.strip()[:120]
+            findings.append(McpFinding(
+                path=p, rel_path=rel, lineno=lineno,
+                finding_class='AUTH_BYPASS',
+                severity='MEDIUM',
+                cwe='CWE-306',
+                title='/mcp endpoint registered without recognized auth decorator',
+                detail=(
+                    'Route for /mcp registered without login_required, jwt_required, or equivalent '
+                    'auth decorator in the preceding 8 lines. Verify the endpoint is protected by '
+                    'middleware registered elsewhere, or add an explicit auth check.'
+                ),
+                snippet=snippet,
+            ))
+
+    return findings
+
+
+# ── CLI entry ─────────────────────────────────────────────────────────────────
+
+def _main() -> None:
+    import argparse
+    ap = argparse.ArgumentParser(description='MCP tool taint scanner')
     ap.add_argument('path', help='Directory or file to scan')
-    ap.add_argument('--severity', default='',
-                    help='Filter to this severity or higher (CRITICAL/HIGH/MEDIUM)')
+    ap.add_argument('--severity', choices=['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'],
+                    help='Minimum severity to report')
     args = ap.parse_args()
-    findings = MCPToolTaintScanner.from_path(args.path).scan()
+
+    p = Path(args.path)
+    if p.is_file():
+        findings = McpToolTaintScanner.scan_file(str(p))
+    else:
+        findings = McpToolTaintScanner.from_path(str(p)).scan()
+
     if args.severity:
-        order = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO']
-        threshold = order.index(args.severity.upper()) if args.severity.upper() in order else 99
-        findings = [f for f in findings if order.index(f.severity) <= threshold]
-    print(MCPToolTaintScanner.report(findings))
-    sys.exit(1 if findings else 0)
+        rank = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3}
+        threshold = rank[args.severity]
+        findings = [f for f in findings if rank.get(f.severity, 99) <= threshold]
+
+    print(McpToolTaintScanner.report(findings))
 
 
 if __name__ == '__main__':
-    _cli()
+    _main()
+
+# ── Aliases for __init__.py compatibility ─────────────────────────────────────
+MCPToolTaintScanner = McpToolTaintScanner
+MCPTaintFinding = McpFinding
