@@ -45,9 +45,13 @@ results = w.enumerate_all(sections=['com', 'token', 'secfeatures'])
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings.
+Gate: **PASSED**. No code changes needed.
 
-- No file reads. No HTTP reads. No lief.parse().
+- No file reads — all data from subprocess stdout. No CWE-770 concerns.
+- No bare `except:` — `_run()` uses `except FileNotFoundError:`, `except subprocess.TimeoutExpired:`, `except Exception as e:`; `enumerate_all()` uses `except Exception as e:` for section isolation.
+- No lief.parse(). No HTTP reads. No network I/O.
 - All subprocess calls use `_run()` which enforces `timeout=15` (default) and catches all exceptions.
 - All PowerShell calls use `_ps()` which wraps `_run()` with `timeout=20`.
+- PowerShell invoked with `-NoProfile -NonInteractive`.
+- COM CLSID per-GUID InprocServer32 queries capped at 30 (prevents timeout on large registries).
 - Degrades gracefully on non-Windows hosts: each section returns an INFO finding instead of raising.
