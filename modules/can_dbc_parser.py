@@ -15,8 +15,6 @@ from typing import Optional
 
 _MAX_DBC_BYTES = 16 * 1024 * 1024  # 16 MB — DBC files are text; cap prevents OOM on adversarial input
 
-_MAX_DBC_BYTES = 16 * 1024 * 1024
-
 
 # ── compiled patterns ─────────────────────────────────────────────────────────
 
