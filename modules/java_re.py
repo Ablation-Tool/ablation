@@ -965,7 +965,8 @@ def analyze_jar(jar_path):
             # ── MANIFEST.MF ───────────────────────────────────────────────────
             if 'META-INF/MANIFEST.MF' in entries:
                 try:
-                    result['manifest'] = _parse_manifest(zf.read('META-INF/MANIFEST.MF'))
+                    if zf.getinfo('META-INF/MANIFEST.MF').file_size <= _MAX_ENTRY_BYTES:
+                        result['manifest'] = _parse_manifest(zf.read('META-INF/MANIFEST.MF'))
                 except Exception:
                     pass
 
@@ -973,6 +974,8 @@ def analyze_jar(jar_path):
             for entry in entries:
                 if entry.endswith('pom.properties') and 'META-INF/maven/' in entry:
                     try:
+                        if zf.getinfo(entry).file_size > _MAX_ENTRY_BYTES:
+                            continue
                         dep = _parse_pom_properties(zf.read(entry))
                         if dep.get('groupId') and dep.get('artifactId'):
                             result['maven_deps'].append({
