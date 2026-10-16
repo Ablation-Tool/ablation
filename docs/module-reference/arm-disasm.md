@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Capstone-based ARM32/ARM64 disassembler wrapper with function boundary detection, branch target resolution, and PLT call identification. Provides the disassembly layer used by semantic search and taint trackers.
+Pure-Python ARM32 disassembler. Decodes the fixed 4-byte ARM instruction set (data processing, load/store, branch, multiply, coprocessor) with no external library dependency. Used as the disassembly layer by `arm_symbolic.py` for path-insensitive symbolic execution on ARM32 targets where Capstone is unavailable or where a lightweight dependency-free decoder is required.
 
 ## Key constants
 
