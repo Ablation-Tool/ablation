@@ -454,3 +454,78 @@ Feel free to contact me if you have any questions, ideas, complaints or bugs.
 </details>
 
 ---
+
+## Documentation
+
+<details>
+<summary><strong>Concepts & Guides</strong></summary>
+
+| | |
+|---|---|
+| [Getting Started](docs/getting-started.md) | Install, first run, session setup |
+| [Understanding Ablation](docs/understanding-ablation.md) | Analysis model, tool pipeline, static analysis fundamentals |
+| [Decompiler and IR Lifter Concepts](docs/decompiler-concepts.md) | Lifter vs. decompiler, completeness tiers, full `arch=` string reference for every backend |
+| [RE Workflow](docs/re-workflow.md) | End-to-end engagement workflow |
+| [Tool Selection Guide](docs/tool-selection-guide.md) | Task → tool lookup table |
+| [RE Session Planning Template](docs/re-session-planning-template.md) | Session file template for new engagements |
+| [Safety Manual](docs/safety-manual.md) | Responsible use and handling sensitive findings |
+| [Claude Code](docs/integrations/claude-code.md) | Claude Code session setup and RE workflow |
+
+---
+
+</details>
+
+<details>
+<summary><strong>Workflows</strong></summary>
+
+| | |
+|---|---|
+| [Vulnerability Hunting](docs/workflows/vuln-hunting.md) | Full taint-to-finding pipeline |
+| [Cross-Version Patch Analysis](docs/workflows/cross-version.md) | DTWMatcher, MatrixProfileDiff, VersionDelta |
+| [KASAN Oracle](docs/workflows/kasan-oracle.md) | Debug build as ground-truth oracle for stripped production binaries |
+| [Go Binaries](docs/workflows/go-binaries.md) | pclntab name recovery, garble RE |
+| [Fortinet Firmware](docs/workflows/fortinet-firmware.md) | Extraction, semantic sweep, taint |
+| [Source Code Audit](docs/workflows/source-code-audit.md) | Risk-scored source file review |
+| [Cryptographic Analysis](docs/workflows/crypto.md) | Key recovery, algorithm identification |
+
+---
+
+</details>
+
+<details>
+<summary><strong>Module Reference</strong></summary>
+
+Full per-module constructor patterns, key methods, and output formats.
+
+- [Module Index](docs/INDEX.md)
+- [Known Anomalies](docs/known-anomalies/) — per-ISA taint tracker false-negative conditions and workarounds
+
+---
+
+</details>
+
+<details>
+<summary><strong>Standards & Compliance</strong></summary>
+
+| | |
+|---|---|
+| [Ablation Standards](docs/ABLATION-STANDARDS.md) | NIST SP 800-218, CISA Secure by Design, MIL-HDBK-115C requirements |
+| [Audit Transparency](docs/audit-transparency.md) | Module audit records |
+
+---
+
+</details>
+
+<details>
+<summary><strong>Release Notes</strong></summary>
+
+| | |
+|---|---|
+| [Changelog](docs/CHANGELOG.md) | Full version history |
+| [v2.5.0](docs/updates/v2.5.0.md) · [v2.4.0](docs/updates/v2.4.0.md) · [v2.0.0](docs/updates/v2.0.0.md) | Recent update notes |
+
+---
+
+</details>
+
+---
