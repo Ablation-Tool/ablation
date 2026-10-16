@@ -406,4 +406,8 @@ class GoX86StripScanner:
 
         ctx.func_starts.extend(new_vas)
         ctx.func_starts.sort()
+
+        if new_vas and hasattr(ctx, 'save_cache'):
+            ctx.save_cache()
+
         return len(new_vas)

@@ -372,6 +372,18 @@ class BinaryContext:
             return plt_sym
         return f"0x{va:x}"
 
+    def save_cache(self) -> None:
+        """Persist the current in-memory state (including func_starts) to the cache file.
+
+        Call this after any in-memory update to func_starts or call_edges that
+        should survive across sessions — for example, after patch_context() adds
+        pclntab-recovered function starts to the binary context.
+        """
+        if not self.sha256 or not self.path:
+            return
+        cache_file = _cache_path(self.sha256, self.path)
+        self._save_json(cache_file)
+
     def set_name(self, va: int, name: str, source: str = "manual") -> None:
         """Register a discovered name for va. Persists across sessions immediately."""
         get_registry().set_name(self.sha256, va, name, source=source)
