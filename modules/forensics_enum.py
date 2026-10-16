@@ -17,6 +17,7 @@ import os
 from typing import List, Dict
 
 _MAX_PROC_BYTES = 4 * 1024 * 1024  # 4 MB cap for procfs reads (/proc/pid/*)
+_MAX_WALK_DEPTH = 8                 # max directory recursion depth for os.walk scans
 
 
 # ---------------------------------------------------------------------------
@@ -363,8 +364,13 @@ def detect_windows_forensic_artifacts(scan_path: str = "/") -> List[Dict]:
     prefetch_hits:  List[str] = []
     evtx_hits:      List[str] = []
 
+    base_depth = scan_path.rstrip(os.sep).count(os.sep)
     try:
         for dirpath, dirnames, filenames in os.walk(scan_path, followlinks=False):
+            cur_depth = dirpath.rstrip(os.sep).count(os.sep) - base_depth
+            if cur_depth >= _MAX_WALK_DEPTH:
+                dirnames.clear()
+                continue
             # Skip known-legitimate LNK locations
             low_dir = dirpath.lower()
             in_appdata = "appdata" in low_dir or "application data" in low_dir
@@ -3630,7 +3636,7 @@ def detect_linux_memory_artifacts() -> list:
         maps_path = f'/proc/{pid}/maps'
         try:
             with open(maps_path, 'r', errors='replace') as fh:
-                for line in fh:
+                for line in fh.read(_MAX_PROC_BYTES).splitlines():
                     parts = line.split()
                     if len(parts) < 5:
                         continue
@@ -3702,7 +3708,7 @@ def detect_linux_memory_artifacts() -> list:
         maps_path = f'/proc/{pid}/maps'
         try:
             with open(maps_path, 'r', errors='replace') as fh:
-                for line in fh:
+                for line in fh.read(_MAX_PROC_BYTES).splitlines():
                     parts = line.split()
                     if len(parts) < 6:
                         continue
@@ -3744,7 +3750,7 @@ def detect_linux_memory_artifacts() -> list:
         maps_path = f'/proc/{pid}/maps'
         try:
             with open(maps_path, 'r', errors='replace') as fh:
-                for line in fh:
+                for line in fh.read(_MAX_PROC_BYTES).splitlines():
                     parts = line.split()
                     if len(parts) < 5:
                         continue

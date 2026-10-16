@@ -15,4 +15,4 @@ Docker API and container attack surface enumeration: exposed Docker sockets, con
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. All HTTP reads use `resp.read(_MAX_HTTP_BYTES)`. All `/proc/1/cgroup` reads use `f.read(_MAX_FILE_BYTES)`. No lief.parse().
+Gate: **PASSED**. No HIGH or CRITICAL findings. All HTTP reads use `resp.read(_MAX_HTTP_BYTES)`. Five procfs reads all capped with `f.read(_MAX_FILE_BYTES)` or `f.read(_MAX_FILE_BYTES).splitlines()`: `/proc/1/cgroup` (L112, L366), `/proc/self/status` in `check_privileged()` (L270) and `get_capabilities()` (L297), `/proc/self/mountinfo` in `get_mounts()` (L311). No lief.parse().
