@@ -51,6 +51,9 @@ from pathlib import Path
 from typing import Dict, FrozenSet, List, Optional, Set
 
 
+_MAX_PYC_BYTES = 1 * 1024 * 1024   # 1 MB: pyc files are always small; cap prevents OOM on adversarial input
+_MAX_RAW_HITS = 4096                # max pyc entries extracted from a single raw firmware image scan
+
 # ---------------------------------------------------------------------------
 # Python version magic numbers (first 4 bytes of a .pyc file, little-endian)
 # ---------------------------------------------------------------------------
@@ -221,7 +224,11 @@ class PycBytecodeScanner:
             magic: 4-byte pyc magic override. Auto-detected from file if None.
         """
         try:
-            data = Path(path).read_bytes()
+            p = Path(path)
+            if p.stat().st_size > _MAX_PYC_BYTES:
+                return PycScanResult(path=path, filename="", python_version="unknown",
+                                     error=f"file exceeds {_MAX_PYC_BYTES} byte limit")
+            data = p.read_bytes()
         except OSError as exc:
             return PycScanResult(path=path, filename="", python_version="unknown", error=str(exc))
 
@@ -296,6 +303,7 @@ class PycBytecodeScanner:
             offsets.append(idx)
 
         offsets.sort()
+        offsets = offsets[:_MAX_RAW_HITS]
         results: List[PycScanResult] = []
         for i, off in enumerate(offsets):
             next_off = offsets[i + 1] if i + 1 < len(offsets) else min(off + 65536, len(data))
