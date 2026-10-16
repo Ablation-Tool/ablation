@@ -74,7 +74,8 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "Scan for heap integer overflow / UAF / double-free" | `HeapVulnScanner.from_context(ctx).scan()` |
 | "Find gets/mktemp/tmpnam/getwd in PLT (CWE-242/121/377)" | `DeprecatedFuncScanner.from_context(ctx).scan()` |
 | "Find setuid shadow password oracle (CWE-307) + weak PRNG OTP (CWE-338)" | `SetuidAuthOracleScanner.from_path(elf).scan()` |
-| "Where did this command string come from?" | `SinkArgClassifier.from_path(elf).classify_all()` |
+| "Where did this command string come from?" | `SinkArgClassifier.from_path(elf).classify_all()` (x86-64/ARM32/ARM64) |
+| "MIPS32 O32: classify exec-sink arguments on BE or LE MIPS firmware" | `SinkArgClassifierMIPS.from_context(ctx).classify_all()` — add vendor sinks with `clf.add_sink(name, arg_pos)` |
 | "Does sscanf/scanf/fscanf format string have unbounded %s?" | `SscanfSinkClassifier.from_path(elf).classify_all()` — RODATA_SAFE=eliminated, RODATA_UNSAFE=HIGH, DYNAMIC_FMT=verify snprintf template manually |
 | "Find wrappers around system/popen/exec* (multi-level injection chains)" | `SinkPropagator.from_context(ctx).propagate()` |
 | "Register vendor-specific sinks + known-safe patterns" | `VendorProfile.from_vendor('fortinet').apply_to(clf)` |

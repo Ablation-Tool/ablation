@@ -192,16 +192,21 @@ Validated on FortiAP cwWtpd, a 3.3MB MIPS32 BE binary with 1,170 exports: **0 to
 `callers_of('system')` and `callers_of('popen')` became functional. This led directly to
 CAPWAP VSP shell injection finding FAP-CWMIPS-1. See `re/fortinet/fortiap_re.py`.
 
-### MIPS-GAP-002: SinkArgClassifier and TaintTracker do not support MIPS32 (open)
+### MIPS-GAP-002: SinkArgClassifier does not support MIPS32 (fixed 2026-10-15)
 
 **Symptom:** `SinkArgClassifier.classify_all()` returns 0 results on MIPS32 ELFs.
 
-**Root cause:** Both tools hardcode x86-64 register names `rdi`, `rsi`, and `rdx` for
-argument tracking. MIPS32 uses `a0` through `a3` for the first four arguments. There is no
+**Root cause:** `SinkArgClassifier` hardcodes x86-64 register names `rdi`, `rsi`, and `rdx` for
+argument tracking. MIPS32 uses `$a0` through `$a3` for the first four arguments. There is no
 equivalent register path.
 
-**Workaround:** Use manual capstone disassembly for sink classification on MIPS32 targets.
-Annotate GOT offsets to resolve `LW $t9, N($gp)` call targets by hand.
+**Fix:** `SinkArgClassifierMIPS` implements the full MIPS32 O32 ABI argument trace path.
+It reads `$gp` from `.reginfo` at byte offset 20, builds a GOT VA→value map, and traces each
+sink argument backward through the three dominant patterns: direct `LW $aX, N($gp)` from GOT,
+two-instruction `LW $vX, N($gp)` + `ADDIU $aX, $vX, M`, and snprintf stack buffer fill.
 
-**Future fix:** Add a MIPS calling convention path to both analyzers. MIPS registers
-`a0` through `a3` map to argument positions 0 through 3. Stack slots cover arguments 5 and up.
+Validated on FortiAP cwWtpd (MIPS32 BE ET_EXEC, 1,170 exports): **104 call sites classified**
+(86 RODATA_CONST, 2 SNPRINTF_RODATA, 1 ARG_PROPAGATED, 15 UNKNOWN). Confirmed FAP-CWMIPS-1
+(root RCE via CAPWAP VSP password injection). See `re/fortinet/fortiap_re.py`.
+
+See `docs/module-reference/sink-arg-classifier-mips.md` for full usage and design notes.
