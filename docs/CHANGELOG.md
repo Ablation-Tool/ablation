@@ -2,6 +2,59 @@
 
 ---
 
+## v2.82.0
+
+**Security: FORGE/SAFE CODE audit of all 62 modules/ analyzers — CWE-770/755/502 fixes.**
+
+Full FORGE + SAFE CODE 10-section review of every file in `modules/`. 51 of 62 files had findings requiring code changes. All HIGH findings were fixed before commit; no HIGH/CRITICAL findings remain in the current codebase. FORGE cache migrated from SHA256 to blake2b content keys.
+
+**Fixed (CWE-770 — unbounded reads):**
+- `ami_cramfs_extractor`, `arm_symbolic`, `bare_adapter`, `can_dbc_parser`, `chunk_walker_validator`,
+  `cpp_vtable_reconstructor`, `ecu_nissan_parser`, `elf_vtable_reconstructor`, `go_binary_re`,
+  `go_dangerous_callers`, `go_garble_re`, `hardware_root_finder`, `heap_uaf_scanner`,
+  `installer_binary_analyzer`, `interproc_field_writer`, `ioctl_attack_surface`, `isa_8051`,
+  `java_decompiler`, `java_re`, `mips_analyzer`, `mpy_lifter`, `ppc32_got2_resolver`,
+  `ppc32_heap_slot_scanner`, `proto_fsm`, `setuid_auth_oracle_scanner`, `sse_slicer`,
+  `video_container`, `analyze_all_jni`, `arm64_global_tracker`, `spu_disassembler`
+  — added `_MAX_*_BYTES` size constants and `os.path.getsize()` / `stat().st_size` guards
+  before every `open().read()`, `Path.read_bytes()`, and `f.read()` call.
+- `ios_enum` (10 reads), `k8s_enum` (13 HTTP), `nexus_dashboard_enum` (23 HTTP),
+  `network_analyze` (7 HTTP), `nxos_enum` (5 HTTP), `streaming_enum` (6 HTTP)
+  — HTTP responses capped to 4 MB: `r.read()` → `r.read(_MAX_HTTP_BYTES)`.
+- `java_decompiler`, `java_re` — ZIP entry reads guarded with
+  `zf.getinfo(name).file_size > _MAX_ENTRY_BYTES` check.
+
+**Fixed (CWE-755 — unhandled exceptions):**
+- `hardware_root_finder`, `heap_uaf_scanner`, `libfunc_db`, `mips_analyzer`,
+  `ppc32_func_discovery`, `ppc32_got2_resolver`, `proto_fsm`, `ecu_nissan_parser`,
+  `elf_vtable_reconstructor`, `cpp_vtable_reconstructor`
+  — `lief.parse()` wrapped in `try/except Exception: result = None`.
+- `network_analyze` (9), `privesc_enum` (9), `process_enum` (13), `syscall_trace` (1),
+  `forensics_enum`, `callsite_tracer`, `hyperflex_enum`, `docker_enum`, `crypto_audit`
+  — bare `except:` replaced with `except Exception:`.
+
+**Fixed (CWE-502 — unsafe deserialization):**
+- `go_dangerous_callers` — added mtime staleness check before `pickle.load()`.
+
+**Other fixes:**
+- `isa_8051` — address range cap (`_MAX_ADDRESS_RANGE`), duplicate opcode handler removed.
+- `mcp_grammar_fuzzer` — `assert` statements replaced with `raise ValueError()`.
+- `physmem_elf_vfs` — unclosed file handle converted to `with` context manager.
+- `arm64_global_tracker` — dead `imm = simm if simm >= 0 else simm` assignment removed.
+- `heap_uaf_scanner` — capstone `reg_name()` API corrected.
+- `libfunc_db` — `None` guard added for `binary.get_section('.text')`.
+
+**Clean (no findings):** `deep_jni_analysis`, `forensics_enum` (after bare-except fix),
+  `go_dangerous_callers` (after pickle fix), `huawei_squashfs_extractor`, `lateral_movement`,
+  `llm_enum`, `net_sniffer`, `nginx_enum`, `path_solver`, `physmem_elf_vfs`, `sip_enum`,
+  `spu_disassembler` (after size fix), `structural_sim`, `tls_enum`, `windows_enum`,
+  `xcoff_executable_analyzer`, `xcoff_loader_symbols`.
+
+**FORGE cache:** migrated cache key from SHA256 to blake2b (`digest_size=8`).
+**audit-transparency.md:** extended scope to `modules/`, corrected forge_cache path.
+
+---
+
 ## v2.81.0
 
 **BinaryContext: PPC64le ELF V2 PLT decoder.**
