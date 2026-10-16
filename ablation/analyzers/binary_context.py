@@ -376,6 +376,16 @@ class BinaryContext:
         """Register a discovered name for va. Persists across sessions immediately."""
         get_registry().set_name(self.sha256, va, name, source=source)
 
+    def set_names_bulk(self, names: Dict[int, Tuple[str, str]]) -> int:
+        """Register many (va → name, source) pairs in one disk write.
+
+        names: {va: (name, source)}
+        Returns the number of new VAs added (existing VAs are updated silently).
+        Use this instead of repeated set_name() when registering more than ~10 names
+        at once — set_name() saves to disk on every call, making bulk use O(N²).
+        """
+        return get_registry().set_names_bulk(self.sha256, names)
+
     def delete_name(self, va: int) -> bool:
         """Remove a previously set name. Returns True if it existed."""
         return get_registry().delete_name(self.sha256, va)

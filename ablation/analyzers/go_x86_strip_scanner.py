@@ -382,6 +382,10 @@ class GoX86StripScanner:
     def patch_context(self, ctx) -> int:
         """Add recovered function starts to ctx.func_starts and set names.
 
+        Uses ctx.set_names_bulk() to register all pclntab names in a single
+        disk write instead of one write per name.  For binaries with tens of
+        thousands of Go functions this is the difference between seconds and hours.
+
         Returns the number of new VAs added to ctx.func_starts.
         """
         result = self.scan()
@@ -390,11 +394,15 @@ class GoX86StripScanner:
 
         existing = set(ctx.func_starts)
         new_vas = []
+        bulk: dict = {}
         for va, name in result.funcs.items():
             if va not in existing:
                 new_vas.append(va)
             if name:
-                ctx.set_name(va, name, source='pclntab')
+                bulk[va] = (name, 'pclntab')
+
+        if bulk:
+            ctx.set_names_bulk(bulk)
 
         ctx.func_starts.extend(new_vas)
         ctx.func_starts.sort()
