@@ -192,13 +192,13 @@ via SRAM variable 0x3FFFE98E; see `auto_ecu_corpus_re.py` for the full state mac
 ## Limitations
 
 - The scanner does not disassemble. It applies fixed byte masks. A compressed or encrypted
-  code region will not match even if the underlying code contains the pattern.
+ code region will not match even if the underlying code contains the pattern.
 - PPC32 VLE (Variable Length Encoding) instructions used in the GM E38 upper address region
-  are not decoded. VLE opcodes do not match the fixed-width masks, so VLE regions produce no
-  false positives but also no detections. Use `EcuROMLayoutAnalyzer.code_regions()` to check
-  whether the ROM has VLE content before concluding a negative result is definitive.
+ are not decoded. VLE opcodes do not match the fixed-width masks, so VLE regions produce no
+ false positives but also no detections. Use `EcuROMLayoutAnalyzer.code_regions()` to check
+ whether the ROM has VLE content before concluding a negative result is definitive.
 - No M32R, SH-2A, or TriCore patterns are implemented. These ISAs are present in the corpus
-  (Subaru SH7058S, Honda CBR250RR) but their SA handlers were not analyzed.
+ (Subaru SH7058S, Honda CBR250RR) but their SA handlers were not analyzed.
 - The `window` parameter applies to both architectures. For a heavily optimized ROM where the
-  compiler reorders instructions extensively, increasing `window` may be needed, at the cost of
-  more false positives on images with accidental 0x67 byte occurrences.
+ compiler reorders instructions extensively, increasing `window` may be needed, at the cost of
+ more false positives on images with accidental 0x67 byte occurrences.

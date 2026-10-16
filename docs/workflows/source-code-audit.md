@@ -64,7 +64,7 @@ for r in unauth:
     print(r.path, r.auth_level, r.note)
 ```
 
-Unauthenticated routes are the highest-leverage starting point. Any input reaching
+Unauthenticated routes are the highest-uses starting point. Any input reaching
 a dangerous sink from an unauth route is a full-chain finding with no prerequisite
 access. On Python/Django stacks the classifier maps REST API endpoints to their
 `@permission_classes` decorators.

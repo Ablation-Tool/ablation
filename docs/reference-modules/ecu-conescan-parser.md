@@ -183,15 +183,15 @@ The ROM `SW-N3K1EU00013SN020.bin` (512 KB) identifies correctly. A second RX8 RO
 ## Limitations
 
 - **Identification by string only.** When a ROM variant carries the same `internalidstring` at a
-  different offset, `identify_rom()` returns `False` even for a genuine match. No fallback address
-  search is implemented for the single-ROM format.
+ different offset, `identify_rom()` returns `False` even for a genuine match. No fallback address
+ search is implemented for the single-ROM format.
 
 - **Minimal RX8 definition.** The community RX8 XML covers only 1 CURVE table. Most RX8 calibration
-  analysis still requires an XDF file or manual address lookup.
+ analysis still requires an XDF file or manual address lookup.
 
 - **Non-linear `toexpr` expressions.** Expressions not matching the linear forms in `_expr_to_linear()`
-  return `scale=0.0` as a sentinel. The table is still parsed and returned; only scaling is absent.
+ return `scale=0.0` as a sentinel. The table is still parsed and returned; only scaling is absent.
 
 - **3D table with missing axis child.** A `type="3D"` table whose XML is missing either the
   `<table type="X Axis">` or `<table type="Y Axis">` child is silently skipped. Degenerate MAP
-  entries in community definition files are discarded rather than returned with incorrect dimensions.
+ entries in community definition files are discarded rather than returned with incorrect dimensions.

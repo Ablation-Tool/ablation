@@ -12,7 +12,7 @@ Developed from the MMTLS handshake implementation in WeChat's `libwechatnetwork.
 
 Three gaps existed before this module:
 
-1. **Handshake FSM recovery required live traffic.** Tools like NEMETYL operate on PCAPs. Stripped ARM64 libraries with no symbols produce no traffic until they run. This module recovers the FSM entirely from static analysis — no emulation, no network capture.
+1. **Handshake FSM recovery required live traffic.** Tools like NEMETYL operate on PCAPs. Stripped ARM64 libraries with no symbols produce no traffic until they run. This module recovers the FSM entirely from static analysis, no emulation, no network capture.
 
 2. **BSS state variables were invisible to generic analysis.** The handshake state machine writes integer state values to fixed BSS addresses and branches on them. No existing static tool identified those addresses as state variables or built a graph from the (read → branch → write) pattern.
 
@@ -24,16 +24,16 @@ Three gaps existed before this module:
 
 The extractor runs four phases against the target shared object:
 
-**Phase 1 — State variable identification**  
+**Phase 1, State variable identification** 
 Scans the handshake function cluster for BSS addresses written with small integer immediates and read before conditional branches. These are the state variables.
 
-**Phase 2 — Handshake function cluster**  
+**Phase 2, Handshake function cluster** 
 Builds a BL-reachable subgraph from user-supplied seed VAs, bounded by `hop_depth` (default 2 hops). The cluster contains the complete handshake implementation without manual identification.
 
-**Phase 3 — Transition extraction**  
+**Phase 3, Transition extraction** 
 Finds `(state_read → branch → BL call → state_write)` quads within the cluster. Each quad is an FSM transition.
 
-**Phase 4 — Graph output**  
+**Phase 4, Graph output** 
 Builds `FSMState` and `FSMTransition` objects and exports a Graphviz DOT graph.
 
 ---
@@ -127,8 +127,8 @@ For other ARM64 targets, supply seed VAs from semantic search results for handsh
 `_load()` raises `ValueError` if:
 - The `.so` file exceeds `_MAX_BINARY_BYTES` (256 MB).
 - `lief.parse()` raises an exception (corrupt/unsupported ELF).
-- `lief.parse()` returns `None` — checked explicitly to prevent `AttributeError` on the
-  subsequent `.segments` access.
+- `lief.parse()` returns `None`: checked explicitly to prevent `AttributeError` on the
+ subsequent `.segments` access.
 
 ## Known limitations
 

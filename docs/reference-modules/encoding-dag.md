@@ -434,10 +434,10 @@ spec = ISASpec(
 
 1. Calls `Template.decode(I)` on the integer.
 2. If all fixed fields match, decode succeeds; a `SemanticOp` is reconstructed by
-   reversing the `FieldBinding` mappings (integers → register names via `reg_table`
-   inversion, immediates passed through).
+ reversing the `FieldBinding` mappings (integers → register names via `reg_table`
+ inversion, immediates passed through).
 3. If any fixed field mismatches, a `DecodingError` is caught internally and the next
-   Template is tried.
+ Template is tried.
 4. If no Template matches, `ISASpec.decode()` raises `DecodingError`.
 
 The `opcode_field` parameter names the field used as the primary dispatch key. When

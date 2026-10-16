@@ -1,9 +1,9 @@
 # EcuC28xDecoder: FORGE Audit + DEV & TEST ORCHESTRATION PLAN
 
-**Module:** `ablation/analyzers/ecu_c28x_decoder.py`  
-**Version:** v2.71.0  
-**Date:** 2026-10-10  
-**Auditor:** Claude Sonnet 4.6  
+**Module:** `ablation/analyzers/ecu_c28x_decoder.py` 
+**Version:** v2.71.0 
+**Date:** 2026-10-10 
+**Auditor:** Claude Sonnet 4.6 
 
 ---
 
@@ -12,15 +12,15 @@
 ### §1 Input Validation
 - `__init__` with path argument: opens the file via `open(data, 'rb')` and catches
   `FileNotFoundError`. `PermissionError` and `OSError` propagate: the caller is responsible.
-  This is documented in the module docstring. **PASS**
+ This is documented in the module docstring. **PASS**
 - `decode_one(byte_off)`: `byte_off + 2 > len(data)` guard before any `unpack_from`.
-  For 32-bit instructions an additional `byte_off + 4 > len(data)` check is applied
-  before reading w2. **PASS**
+ For 32-bit instructions an additional `byte_off + 4 > len(data)` check is applied
+ before reading w2. **PASS**
 - `insn_length(byte_off)`: same `byte_off + 2 > len(data)` guard; returns 0 at EOF. **PASS**
 - `disassemble(start, end)`: clamps `end = min(end, len(self._data))`. Loop terminates
-  on `decode_one` returning None. **PASS**
+ on `decode_one` returning None. **PASS**
 - `function_starts()`: `off + 2 <= n` and `off + 4 <= n` guards before all unpack calls.
-  Both branches correctly advance `off` (by 4 for 32-bit, by 2 for 16-bit). **PASS**
+ Both branches correctly advance `off` (by 4 for 32-bit, by 2 for 16-bit). **PASS**
 
 ### §2 Command Injection
 No subprocess, os.system, Popen, eval, or exec calls. **PASS**
@@ -45,7 +45,7 @@ Pure Python. No ctypes, no C extensions, no mmap. `struct.unpack_from()` raises
 - `FileNotFoundError` caught for path-based construction and re-raised with context.
 - `PermissionError` / `OSError` propagate to the caller: documented, not a gap.
 - No `struct.error` can escape because all `unpack_from` calls are preceded by length
-  guards that ensure sufficient bytes. **PASS**
+ guards that ensure sufficient bytes. **PASS**
 
 ### §8 Data Leakage
 No network calls, no file writes, no logging. **PASS**
@@ -55,19 +55,19 @@ No network calls, no file writes, no logging. **PASS**
 
 ### §10 Logic Correctness
 - `_is_32bit()` patterns: verified against SPRU430F per-instruction encoding pages. The
-  16-bit specials in the 0x76xx range (LRET=0x7614, LC *XAR7=0x7604, etc.) all have
+ 16-bit specials in the 0x76xx range (LRET=0x7614, LC *XAR7=0x7604, etc.) all have
   `w1 & 0xFFC0 == 0x7600`, which is distinct from the LCR #22bit test (0x7640). No
-  overlap exists among the 15 `_is_32bit` conditions. **PASS**
+ overlap exists among the 15 `_is_32bit` conditions. **PASS**
 - Branch target computation: `target = word_va + 2 + off16` correctly models C28x
-  post-instruction PC (word_va + 2 for a 32-bit instruction) plus the signed offset. **PASS**
+ post-instruction PC (word_va + 2 for a 32-bit instruction) plus the signed offset. **PASS**
 - `addr22 = ((w1 & 0x3F) << 16) | w2`: correct for all LB/LC/LCR/FFC 22-bit
-  instructions. The upper 6 bits are in w1[5:0]; the lower 16 bits are w2. **PASS**
+ instructions. The upper 6 bits are in w1[5:0]; the lower 16 bits are w2. **PASS**
 - `function_starts()` correctly skips indirect call forms (LC *XAR7, LCR *XARn) since
-  their target is runtime-determined. Only direct-address LC/LCR/FFC are included. **PASS**
+ their target is runtime-determined. Only direct-address LC/LCR/FFC are included. **PASS**
 - `word_va = self._base_va + byte_off // 2`: correct conversion from byte offset to word
-  address. Integer division is exact since byte_off is always even (instruction-aligned). **PASS**
+ address. Integer division is exact since byte_off is always even (instruction-aligned). **PASS**
 - Condition code extraction: `cond = w1 & 0xF` for B and BF; the 4-bit COND occupies
-  bits [3:0] in both encodings, confirmed from SPRU430F. **PASS**
+ bits [3:0] in both encodings, confirmed from SPRU430F. **PASS**
 
 **gate_passed: True**: 0 HIGH, 0 CRITICAL findings.
 

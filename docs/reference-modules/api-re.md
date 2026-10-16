@@ -47,18 +47,18 @@ CLI: `python api_re.py http://target:port [--depth deep] [--focus jwt] [--output
 | 4d | `probe_param_pollution` | HPP |
 | 4e | `probe_mass_assignment` | API3 Mass Assignment |
 | 4f | `probe_bola` | API1 BOLA/IDOR |
-| 4g | `analyze_tokens_in_response` | API2 JWT — alg=none, weak secret, kid, jku/x5u SSRF |
+| 4g | `analyze_tokens_in_response` | API2 JWT: alg=none, weak secret, kid, jku/x5u SSRF |
 | 5 | `extract_info_from_errors` | Error leakage, stack traces, path disclosure |
 | 6 | `map_state_changes` | Side-effect detection |
 | 7 | `probe_rate_limiting` | API4 Rate limit absence |
-| 8 | `probe_oauth2` | OAuth2/OIDC — redirect_uri, default creds, JWKS |
+| 8 | `probe_oauth2` | OAuth2/OIDC: redirect_uri, default creds, JWKS |
 | 9 | `probe_grpc` | gRPC server reflection |
 | 10 | `probe_graphql_advanced` | Batching, alias flooding, depth bombing, field suggestion |
 | 11 | `probe_rate_limit_bypass` | IP header spoofing, path variation |
 | 12 | `probe_wsdl_soap` | WSDL discovery, XXE in SOAP body |
 | 13 | `probe_jsonrpc` | JSON-RPC method enumeration, batching |
 | 14 | `probe_business_logic` | Numeric boundary, privilege escalation |
-| 15 | `probe_webhook_ssrf` | Webhook SSRF — cloud metadata |
+| 15 | `probe_webhook_ssrf` | Webhook SSRF: cloud metadata |
 | 16 | `probe_default_creds` | Default credentials, user enumeration |
 | 17 | `probe_cors` | CORS misconfiguration |
 | 18 | `probe_jwt_alg_confusion` | RS256→HS256 confusion |
@@ -75,7 +75,7 @@ CLI: `python api_re.py http://target:port [--depth deep] [--focus jwt] [--output
 | 29 | `probe_shadow_versions` | Deprecated/shadow API versions |
 | 30 | `probe_oauth_state_pkce` | OAuth state CSRF, PKCE downgrade |
 
-Phases 17–30 run via `ThreadPoolExecutor(max_workers=6)` with per-phase stdout capture. Due to the global `redirect_stdout` lock, they serialize in practice — runtime for deep scans is additive, not parallel.
+Phases 17–30 run via `ThreadPoolExecutor(max_workers=6)` with per-phase stdout capture. Due to the global `redirect_stdout` lock, they serialize in practice, runtime for deep scans is additive, not parallel.
 
 ---
 
@@ -92,7 +92,7 @@ Phases 17–30 run via `ThreadPoolExecutor(max_workers=6)` with per-phase stdout
 
 Gate: **PASSED**. No HIGH or CRITICAL findings.
 
-- All HTTP responses capped at `_MAX_HTTP_BYTES` (4 MB) via `_safe_read()` streaming helper — no CWE-770.
+- All HTTP responses capped at `_MAX_HTTP_BYTES` (4 MB) via `_safe_read()` streaming helper: no CWE-770.
 - No bare `except:`. All handlers use `except Exception:` or more specific.
 - No file reads. No lief. No subprocess.
 - Network socket reads go through `requests` with `stream=True` and the cap enforced before `_content` is set.

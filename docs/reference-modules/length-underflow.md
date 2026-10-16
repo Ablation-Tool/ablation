@@ -10,7 +10,7 @@ Detects integer underflow in protocol parsers where a user-supplied length field
 
 Three gaps existed before this module:
 
-1. **Protocol parser underflow was a blind spot for taint trackers.** Standard taint analysis follows input data to sinks. The underflow pattern involves arithmetic on a *length value* — a secondary data flow that taint trackers miss when they only trace the buffer content.
+1. **Protocol parser underflow was a blind spot for taint trackers.** Standard taint analysis follows input data to sinks. The underflow pattern involves arithmetic on a *length value*, a secondary data flow that taint trackers miss when they only trace the buffer content.
 
 2. **Generic integer overflow scanners miss the truncation step.** The C12-class bug requires three specific steps in sequence: subtract a fixed constant, truncate to uint16, then call a function with the result. Scanners that look for overflow arithmetic alone generate too many false positives to be actionable.
 
@@ -89,7 +89,7 @@ for f in findings:
 
 ## Guard detection
 
-The scanner looks back 25 instructions from the subtraction site for any `cmp` or `test` instruction that references the subtraction result register. A guard present marks `guarded=True` — these findings require manual confirmation that the guard covers the right range before the subtraction.
+The scanner looks back 25 instructions from the subtraction site for any `cmp` or `test` instruction that references the subtraction result register. A guard present marks `guarded=True`, these findings require manual confirmation that the guard covers the right range before the subtraction.
 
 Unguarded findings require no manual confirmation of guard presence: the path to the sink runs without any length check.
 

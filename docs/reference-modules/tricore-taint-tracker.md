@@ -12,8 +12,8 @@ Infineon TriCore is the dominant MCU in modern automotive ADAS and powertrain EC
 
 ## Where it's used
 
-- **Bosch ME17 ECUs** — AURIX TC2xx/TC3xx powertrain firmware
-- **Continental MG1 ECUs** — TriCore-based engine and transmission controllers
+- **Bosch ME17 ECUs**: AURIX TC2xx/TC3xx powertrain firmware
+- **Continental MG1 ECUs**: TriCore-based engine and transmission controllers
 - Any flat ROM dump where `EcuArchDetector` returns `tricore`
 
 ---
@@ -34,22 +34,22 @@ Infineon TriCore is the dominant MCU in modern automotive ADAS and powertrain EC
 
 Three things were not possible before in Ablation:
 
-**1. No source-to-sink taint analysis for TriCore AURIX ECU firmware.**  After
+**1. No source-to-sink taint analysis for TriCore AURIX ECU firmware.** After
 `EcuArchDetector` correctly identifies a flat ROM dump as TriCore, there was no taint tracker to follow attacker-controlled
 data from a SecurityAccess response or CAN frame through the cipher function to any
-dangerous sink.  `TriCoreTaintTracker` fills this gap.
+dangerous sink. `TriCoreTaintTracker` fills this gap.
 
-**2. No TriCore calling-convention model in Ablation.**  TriCore uses a hardware-enforced
-CSA (Context Save Area) mechanism where CALL automatically saves the upper context registers D[8]–D[15] and A[10]–A[15] to a dedicated memory area, and RET restores it.  No software
-push/pop is generated.  Without a model of this, a taint tracker either over-clears
+**2. No TriCore calling-convention model in Ablation.** TriCore uses a hardware-enforced
+CSA (Context Save Area) mechanism where CALL automatically saves the upper context registers D[8]–D[15] and A[10]–A[15] to a dedicated memory area, and RET restores it. No software
+push/pop is generated. Without a model of this, a taint tracker either over-clears
 (treats all registers as clobbered) or under-clears (doesn't clobber anything), producing
-false negatives or false positives at every call site.  This module implements the
+false negatives or false positives at every call site. This module implements the
 Infineon TriCore EABI V2.9 / GHS EABI calling convention (GHS-RE-REFERENCE.md §1.2–1.3):
 D[4]–D[7] / A[4]–A[7] in; D[2] / A[2] out; lower context clobbered on CALL.
 
-**3. No FCALL/FRET leaf-function support.**  GHS-compiled TriCore firmware uses FCALL for leaf functions. FCALL saves A[11] only;
-no CSA is allocated. FRET returns from them.  These mnemonics are absent from all
-other Ablation trackers.  This module recognises FCALL and
+**3. No FCALL/FRET leaf-function support.** GHS-compiled TriCore firmware uses FCALL for leaf functions. FCALL saves A[11] only;
+no CSA is allocated. FRET returns from them. These mnemonics are absent from all
+other Ablation trackers. This module recognises FCALL and
 FRET as call/return boundaries with the same calling-convention semantics as CALL/RET.
 
 ---
@@ -166,7 +166,7 @@ Sink function (e.g. `memcpy`): records finding if any arg reg is tainted.
 ## FCALL / FRET (GHS-RE-REFERENCE.md §1.7)
 
 GHS-compiled leaf functions use FCALL. FCALL saves A[11] only; no CSA save is performed.
-The tracker treats FCALL identically to CALL at the call site, and FRET identically to RET.  The
+The tracker treats FCALL identically to CALL at the call site, and FRET identically to RET. The
 mnemonic set `{'call', 'calla', 'calli', 'fcall'}` covers all call forms;
 `{'ret', 'rfe', 'fret'}` covers all return forms.
 
@@ -174,12 +174,12 @@ mnemonic set `{'call', 'calla', 'calli', 'fcall'}` covers all call forms;
 
 ## Limitations
 
-- Intra-procedural by default.  `run_interprocedural(depth=N)` follows tainted D[4]–D[7]
-  / A[4]–A[7] into callees but does not model return-value aliasing across call chains.
-- No loop fixpoint: linear forward trace only.  A function with a loop may produce
-  inconsistent taint after the second iteration.
-- `run()` requires ELF symbols for function boundaries.  Flat ROM users must supply
+- Intra-procedural by default. `run_interprocedural(depth=N)` follows tainted D[4]–D[7]
+ / A[4]–A[7] into callees but does not model return-value aliasing across call chains.
+- No loop fixpoint: linear forward trace only. A function with a loop may produce
+ inconsistent taint after the second iteration.
+- `run()` requires ELF symbols for function boundaries. Flat ROM users must supply
   `func_va` and `func_end` from `FlatBinaryFuncStartScanner`.
 - Capstone 5.0+ required (`CS_ARCH_TRICORE` absent in Capstone ≤ 4.x).
 - CSA memory-dump taint (STLCX/LDLCX) is not modelled; these are rare in normal firmware
-  flow outside interrupt handlers.
+ flow outside interrupt handlers.

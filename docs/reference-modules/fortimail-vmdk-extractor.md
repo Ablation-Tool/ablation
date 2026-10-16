@@ -6,19 +6,19 @@
 
 FortiMail VM firmware ships as an OVF/VMDK package rather than a `.out` file.
 Its PKI keys (`fgt_512.key`, `fgt_2048.key`) live in `datafs.tar.gz` on the P2
-ext4 partition of the virtual disk — a layout that `FortiOSHardwareExtractor`
+ext4 partition of the virtual disk, a layout that `FortiOSHardwareExtractor`
 and `FirmwareContainerKeyExtractor` do not handle.
 
 Three gaps this closes:
 
 1. **OVF zip → VMDK**: FortiMail distribution zips contain a `.vmdk` disk image
-   alongside an OVF descriptor. `from_zip()` identifies and extracts the disk image.
+ alongside an OVF descriptor. `from_zip()` identifies and extracts the disk image.
 2. **VMDK → raw → P2**: `qemu-img convert` flattens the streamOptimized VMDK to
-   a raw byte-addressable image; MBR parsing locates P2's byte offset dynamically.
+ a raw byte-addressable image; MBR parsing locates P2's byte offset dynamically.
 3. **Root-free ext4 access**: `dd` extracts the P2 partition to a flat image
-   (`p2.img`), then `debugfs p2.img` dumps `datafs.tar.gz` without a loop
-   mount. (`debugfs -o offset=` was removed in 1.47.x; the dd approach works
-   on all versions.)
+ (`p2.img`), then `debugfs p2.img` dumps `datafs.tar.gz` without a loop
+ mount. (`debugfs -o offset=` was removed in 1.47.x; the dd approach works
+ on all versions.)
 
 ## Entry points
 
@@ -68,9 +68,9 @@ result = FortiMailVmdkExtractor.from_zip(zip_path, output_dir='/tmp/fml_work/')
 
 ## Prerequisites
 
-- `qemu-img` (qemu-utils package) — VMDK → raw conversion
-- `debugfs` (e2fsprogs package) — root-free ext4 access
-- `openssl` — RSA key validation and cert parsing
+- `qemu-img` (qemu-utils package): VMDK → raw conversion
+- `debugfs` (e2fsprogs package): root-free ext4 access
+- `openssl`: RSA key validation and cert parsing
 
 If `qemu-img` or `debugfs` is missing, `result.errors` records a diagnostic and
 the affected step returns `None` (partial results may still be available).
@@ -81,15 +81,15 @@ FortiMail VM64 v6.4.3 through v8.0.0 (nine versions byte-verified):
 
 | Version | `fgt_512.key` MD5 | `fgt_2048.key` MD5 |
 |---------|-------------------|--------------------|
-| v6.4.3  | `8bc7c230...` | `4aa49c78...` |
-| v7.0.0  | `8bc7c230...` | `4aa49c78...` |
-| v7.2.0  | `8bc7c230...` | `4aa49c78...` |
-| v7.4.0  | `8bc7c230...` | `4aa49c78...` |
-| v7.6.1  | `8bc7c230...` | `4aa49c78...` |
-| v7.6.3  | `8bc7c230...` | `4aa49c78...` |
-| v7.6.4  | `8bc7c230...` | `4aa49c78...` |
-| v7.6.5  | `8bc7c230...` | `4aa49c78...` |
-| v8.0.0  | absent          | `4aa49c78...` |
+| v6.4.3 | `8bc7c230...` | `4aa49c78...` |
+| v7.0.0 | `8bc7c230...` | `4aa49c78...` |
+| v7.2.0 | `8bc7c230...` | `4aa49c78...` |
+| v7.4.0 | `8bc7c230...` | `4aa49c78...` |
+| v7.6.1 | `8bc7c230...` | `4aa49c78...` |
+| v7.6.3 | `8bc7c230...` | `4aa49c78...` |
+| v7.6.4 | `8bc7c230...` | `4aa49c78...` |
+| v7.6.5 | `8bc7c230...` | `4aa49c78...` |
+| v8.0.0 | absent | `4aa49c78...` |
 
 `fgt_512.key` was removed in v8.0.0. `fgt_2048.key` is present and MD5-identical
 in every version from v6.4.3 through v8.0.0.

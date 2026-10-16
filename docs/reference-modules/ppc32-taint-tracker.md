@@ -19,11 +19,11 @@ Linux userspace (little-endian), older Fortinet hardware (big-endian).
 
 ## Where it's used
 
-- **Cisco IOS 7200 / 3700** — big-endian PPC32 router firmware
-- **Huawei S6720 / S6720EI** — big-endian GOT2 PIC bootloaders
-- **MikroTik RB600** — big-endian embedded Linux on PPC32
-- **VxWorks embedded** — big-endian PPC32 RTOS firmware
-- **POWER LE Linux userspace** — little-endian PPC32 shared libraries
+- **Cisco IOS 7200 / 3700**: big-endian PPC32 router firmware
+- **Huawei S6720 / S6720EI**: big-endian GOT2 PIC bootloaders
+- **MikroTik RB600**: big-endian embedded Linux on PPC32
+- **VxWorks embedded**: big-endian PPC32 RTOS firmware
+- **POWER LE Linux userspace**: little-endian PPC32 shared libraries
 
 ---
 
@@ -100,12 +100,12 @@ relocations.
 
 The tracker calls `_load_plt_from_dynsym_raw()` to load SHN_UNDEF dynamic
 symbols with non-zero `st_value` directly from the raw ELF section headers.
-These are the true PLT stub VAs.  This fallback runs **only when LIEF populated
+These are the true PLT stub VAs. This fallback runs **only when LIEF populated
 zero PLT entries** (`if not self._plt:`), which is always the case for Huawei
 binaries with the vendor reloc type.
 
 On SYSV PIC binaries (IBM HPS, glibc `.so`), LIEF correctly populates `_plt`
-from `.rela.plt` R_PPC_JMP_SLOT entries.  The guard prevents
+from `.rela.plt` R_PPC_JMP_SLOT entries. The guard prevents
 `_load_plt_from_dynsym_raw()` from running on these binaries; undefined
 symbols in SYSV PIC have `st_value=0` and adding them would corrupt the PLT map.
 
@@ -185,14 +185,14 @@ treated as clobbering r3–r10.
 ## Known limitations
 
 1. **Memory taint**: stack buffers are not modelled. Any flow that routes tainted
-   data through a local buffer before the sink call is invisible to the tracker.
+ data through a local buffer before the sink call is invisible to the tracker.
 
 2. **Unresolved GOT2 entries**: only PLT stubs (SHN_UNDEF dynsym entries) are
-   in `_got2_va_to_name`. GOT2 entries pointing to internal function pointers or
-   data constants appear as `??` and clobber r3.
+ in `_got2_va_to_name`. GOT2 entries pointing to internal function pointers or
+ data constants appear as `??` and clobber r3.
 
 3. **LIEF relocation bug (Huawei-specific)**: LIEF silently discards relocations
-   with vendor-specific types. `_load_plt_from_dynsym_raw()` works around this
-   for Huawei GOT2-PIC binaries (triggered by `if not self._plt:` guard).
-   SYSV PIC binaries (glibc `.so`) are not affected; LIEF handles their
-   standard R_PPC_JMP_SLOT relocations correctly.
+ with vendor-specific types. `_load_plt_from_dynsym_raw()` works around this
+ for Huawei GOT2-PIC binaries (triggered by `if not self._plt:` guard).
+ SYSV PIC binaries (glibc `.so`) are not affected; LIEF handles their
+ standard R_PPC_JMP_SLOT relocations correctly.

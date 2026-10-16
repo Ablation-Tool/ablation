@@ -22,7 +22,7 @@ inline and pipe the output directly into the conversation:
 Claude reads the output and can immediately follow up:
 
 - "The sweep returned `fn_0x1fa00` at score 0.71 for `strcpy with user-controlled src`.
-  Run `ablation cfg /path/to/firmware.so 0x1fa00 --insns` to get the CFG."
+ Run `ablation cfg /path/to/firmware.so 0x1fa00 --insns` to get the CFG."
 - "I see `fn_0x2200c` calling into `fn_0x1fa00`. That call chain is worth tracing."
 
 ---
@@ -127,7 +127,7 @@ call, traces argument provenance, and estimates reach from network input.
 
 - Pass `--top-k 20` to `ablation search` to give Claude more candidates to reason over.
 - Pipe long outputs to a file and then `Read` it: `! ablation sweep fw.so > /tmp/sweep.txt`
-  then ask Claude to analyze `/tmp/sweep.txt`.
+ then ask Claude to analyze `/tmp/sweep.txt`.
 - After Claude identifies a likely finding, confirm it with
   `ablation cfg <binary> <va> --insns` and paste the output back.
 - Use `ablation sigs firmware.so --dry-run` to preview function naming before committing.

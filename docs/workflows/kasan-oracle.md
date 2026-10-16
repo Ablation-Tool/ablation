@@ -77,7 +77,7 @@ Record all hit function names and their file offsets. These are the candidates.
 For each candidate function name from Step 2:
 
 1. Locate the corresponding function in the production binary by name (System.map or
-   exported symbol) or by structural similarity if stripped.
+ exported symbol) or by structural similarity if stripped.
 2. Scan or trace the production function manually.
 3. Classify each hit against the KASAN-build hit:
 
@@ -115,7 +115,7 @@ Production:        11 confirmed, 3 ELIMINATED
 - Kernel module analysis where the production `.ko` is stripped and short (< 200 functions)
 - Any target where a debug build with KASAN is available alongside the production build
 - When a production-only scan yields zero hits despite known-buggy code patterns (KASAN
-  build can confirm whether optimizer folded the sequence)
+ build can confirm whether optimizer folded the sequence)
 
 Do not use this workflow when only one build is available. In that case, scan the available
 build directly and note the optimization level in the finding.

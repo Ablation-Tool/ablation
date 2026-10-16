@@ -14,9 +14,9 @@ nanoMIPS is a variable-width MIPS extension with 16-bit, 32-bit, and 48-bit inst
 
 ## Where it's used
 
-- **Ingenic JZ4780 / X1000 / X2000** — SoC firmware from Ingenic SDK releases
-- **MediaTek Helio embedded** — nanoMIPS targets in MediaTek embedded product lines
-- **MIPS32r6 microcontrollers** — any bare-metal target using the nanoMIPS ISA extension
+- **Ingenic JZ4780 / X1000 / X2000**: SoC firmware from Ingenic SDK releases
+- **MediaTek Helio embedded**: nanoMIPS targets in MediaTek embedded product lines
+- **MIPS32r6 microcontrollers**: any bare-metal target using the nanoMIPS ISA extension
 
 ---
 

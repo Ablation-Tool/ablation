@@ -4,11 +4,11 @@
 
 ## v2.82.0
 
-**Security: FORGE/SAFE CODE audit of all 62 modules/ analyzers — CWE-770/755/502 fixes.**
+**Security: FORGE/SAFE CODE audit of all 62 modules/ analyzers, CWE-770/755/502 fixes.**
 
 Full FORGE + SAFE CODE 10-section review of every file in `modules/`. 51 of 62 files had findings requiring code changes. All HIGH findings were fixed before commit; no HIGH/CRITICAL findings remain in the current codebase. FORGE cache migrated from SHA256 to blake2b content keys.
 
-**Fixed (CWE-770 — unbounded reads):**
+**Fixed (CWE-770, unbounded reads):**
 - `ami_cramfs_extractor`, `arm_symbolic`, `bare_adapter`, `can_dbc_parser`, `chunk_walker_validator`,
   `cpp_vtable_reconstructor`, `ecu_nissan_parser`, `elf_vtable_reconstructor`, `go_binary_re`,
   `go_dangerous_callers`, `go_garble_re`, `hardware_root_finder`, `heap_uaf_scanner`,
@@ -16,33 +16,33 @@ Full FORGE + SAFE CODE 10-section review of every file in `modules/`. 51 of 62 f
   `java_decompiler`, `java_re`, `mips_analyzer`, `mpy_lifter`, `ppc32_got2_resolver`,
   `ppc32_heap_slot_scanner`, `proto_fsm`, `setuid_auth_oracle_scanner`, `sse_slicer`,
   `video_container`, `analyze_all_jni`, `arm64_global_tracker`, `spu_disassembler`
-  — added `_MAX_*_BYTES` size constants and `os.path.getsize()` / `stat().st_size` guards
-  before every `open().read()`, `Path.read_bytes()`, and `f.read()` call.
+, added `_MAX_*_BYTES` size constants and `os.path.getsize()` / `stat().st_size` guards
+ before every `open().read()`, `Path.read_bytes()`, and `f.read()` call.
 - `ios_enum` (10 reads), `k8s_enum` (13 HTTP), `nexus_dashboard_enum` (23 HTTP),
   `network_analyze` (7 HTTP), `nxos_enum` (5 HTTP), `streaming_enum` (6 HTTP)
-  — HTTP responses capped to 4 MB: `r.read()` → `r.read(_MAX_HTTP_BYTES)`.
-- `java_decompiler`, `java_re` — ZIP entry reads guarded with
+, HTTP responses capped to 4 MB: `r.read()` → `r.read(_MAX_HTTP_BYTES)`.
+- `java_decompiler`, `java_re`: ZIP entry reads guarded with
   `zf.getinfo(name).file_size > _MAX_ENTRY_BYTES` check.
 
-**Fixed (CWE-755 — unhandled exceptions):**
+**Fixed (CWE-755, unhandled exceptions):**
 - `hardware_root_finder`, `heap_uaf_scanner`, `libfunc_db`, `mips_analyzer`,
   `ppc32_func_discovery`, `ppc32_got2_resolver`, `proto_fsm`, `ecu_nissan_parser`,
   `elf_vtable_reconstructor`, `cpp_vtable_reconstructor`
-  — `lief.parse()` wrapped in `try/except Exception: result = None`.
+, `lief.parse()` wrapped in `try/except Exception: result = None`.
 - `network_analyze` (9), `privesc_enum` (9), `process_enum` (13), `syscall_trace` (1),
   `forensics_enum`, `callsite_tracer`, `hyperflex_enum`, `docker_enum`, `crypto_audit`
-  — bare `except:` replaced with `except Exception:`.
+, bare `except:` replaced with `except Exception:`.
 
-**Fixed (CWE-502 — unsafe deserialization):**
-- `go_dangerous_callers` — added mtime staleness check before `pickle.load()`.
+**Fixed (CWE-502, unsafe deserialization):**
+- `go_dangerous_callers`: added mtime staleness check before `pickle.load()`.
 
 **Other fixes:**
-- `isa_8051` — address range cap (`_MAX_ADDRESS_RANGE`), duplicate opcode handler removed.
-- `mcp_grammar_fuzzer` — `assert` statements replaced with `raise ValueError()`.
-- `physmem_elf_vfs` — unclosed file handle converted to `with` context manager.
-- `arm64_global_tracker` — dead `imm = simm if simm >= 0 else simm` assignment removed.
-- `heap_uaf_scanner` — capstone `reg_name()` API corrected.
-- `libfunc_db` — `None` guard added for `binary.get_section('.text')`.
+- `isa_8051`: address range cap (`_MAX_ADDRESS_RANGE`), duplicate opcode handler removed.
+- `mcp_grammar_fuzzer`: `assert` statements replaced with `raise ValueError()`.
+- `physmem_elf_vfs`: unclosed file handle converted to `with` context manager.
+- `arm64_global_tracker`: dead `imm = simm if simm >= 0 else simm` assignment removed.
+- `heap_uaf_scanner`: capstone `reg_name()` API corrected.
+- `libfunc_db`: `None` guard added for `binary.get_section('.text')`.
 
 **Clean (no findings):** `deep_jni_analysis`, `forensics_enum` (after bare-except fix),
   `go_dangerous_callers` (after pickle fix), `huawei_squashfs_extractor`, `lateral_movement`,
@@ -67,7 +67,7 @@ The new `_extract_plt_ppc64le` method recovers stub VAs in three steps: (1) buil
 
 ## v2.78.0
 
-**DeprecatedFuncScanner — inherently unsafe function detector.**
+**DeprecatedFuncScanner, inherently unsafe function detector.**
 
 `DeprecatedFuncScanner` finds calls to `gets()`, `mktemp()`, `tmpnam()`, and `getwd()` in any x86-64 ELF binary. These functions have no safe use regardless of context, so their presence in PLT is a confirmed CWE-242 finding without taint analysis.
 
@@ -79,11 +79,11 @@ Two CWE classes are reported: CWE-242/CWE-121 for stack overflow functions, CWE-
 
 ## v2.76.0
 
-**GuardianPakExtractor — Tandem NonStop Guardian PAK archive extractor.**
+**GuardianPakExtractor, Tandem NonStop Guardian PAK archive extractor.**
 
-`GuardianPakExtractor` provides the first Python parser for Tandem NonStop Guardian PAK archives — the distribution format used for NSK corrective service PTFs. Guardian PAK files carry `.ZIP` extensions but are not ZIP archives; every standard tool rejects them. These archives are the only publicly accessible corpus of Tandem NonStop binaries (source, ABI, and format specs are all under NDA).
+`GuardianPakExtractor` provides the first Python parser for Tandem NonStop Guardian PAK archives, the distribution format used for NSK corrective service PTFs. Guardian PAK files carry `.ZIP` extensions but are not ZIP archives; every standard tool rejects them. These archives are the only publicly accessible corpus of Tandem NonStop binaries (source, ABI, and format specs are all under NDA).
 
-Key design decisions: (1) Content-based record detection rather than type codes — the 2-byte type field in Guardian BACKUP tape records is not stable across archive runs (tape-label code differs between two NSK PTF archives tested; the same logical record class carries different codes). (2) Guardian `$VOLUME.SUBVOLUME.FILENAME` path parsing from a 24-byte space-padded field at offset `0x2E` in 358-byte file header records. (3) Arch tagged as `mips32be` — Tandem Himalaya K-series hardware is MIPS32 big-endian, confirmed by Capstone decode of extracted binaries.
+Key design decisions: (1) Content-based record detection rather than type codes, the 2-byte type field in Guardian BACKUP tape records is not stable across archive runs (tape-label code differs between two NSK PTF archives tested; the same logical record class carries different codes). (2) Guardian `$VOLUME.SUBVOLUME.FILENAME` path parsing from a 24-byte space-padded field at offset `0x2E` in 358-byte file header records. (3) Arch tagged as `mips32be`. Tandem Himalaya K-series hardware is MIPS32 big-endian, confirmed by Capstone decode of extracted binaries.
 
 API: `iter_chunks(data)` decompresses and yields raw records; `iter_files(data)` yields `GuardianFile` dataclasses per Guardian file; `extract_to(data, dest)` writes a `$VOL/SUBVOL/FILENAME` directory hierarchy. Confirmed on two NSK middleware PTF archives (66 files / ~130 MB and 83 files / ~139 MB decompressed).
 
@@ -93,7 +93,7 @@ FORGE gate passed. 3 issues found and fixed before commit: MEDIUM zlib-bomb risk
 
 ## v2.75.0
 
-**WorkflowDocument + StageCommitment — schema-validated RE session pipeline.**
+**WorkflowDocument + StageCommitment, schema-validated RE session pipeline.**
 
 `WorkflowDocument` replaces flat `SESSION.md` stage tracking with a typed pipeline. Each stage has a required-field schema; `advance()` validates the instance before committing and records a timestamped `StageTransition`. `for_re_session()` creates the standard six-stage pipeline: `triage → semantic_sweep → candidate_profile → taint_trace → finding_confirmation → registration`. `dirty_since_commit()` detects post-commit mutation. Full JSON round-trip for persistence across sessions.
 
@@ -105,7 +105,7 @@ FORGE gate passed on both modules: 0 findings.
 
 ## v2.74.0
 
-**EcuArchDetector — TriCore BMHD gate (Gap 9).**
+**EcuArchDetector, TriCore BMHD gate (Gap 9).**
 
 `EcuArchDetector` no longer misidentifies GM P12 and P12b CPU32 ROMs as TriCore AURIX.
 
@@ -113,19 +113,19 @@ Root cause: the PFLASH LE-pointer density heuristic in `_score_tricore()` fired 
 M68K/CPU32 ROM data when the full image was scanned as little-endian. The existing
 artifact guard (`periph > 0.15 AND periph > pflash * 2`) catches SH-2A and other
 big-endian ROMs whose peripheral-SFR density is disproportionately high, but CPU32
-ROMs produce a periph:pflash ratio of ~1.35× — below the guard threshold.
+ROMs produce a periph:pflash ratio of ~1.35×, below the guard threshold.
 
 Fix: a BMHD gate added immediately before the `return ArchCandidate(...)` in the flat
 binary scoring path. Valid Infineon AURIX ROMs begin with a Boot Mode Header Description
 (BMHD) whose first field (STAD, Startup Address) is always a non-zero address in PFLASH
 range 0x80000000–0xBFFFFFFF. GM P-series CPU32 ROMs place the supervisor stack pointer
 at offset 0 as a big-endian word; for all P-series ROMs examined, this value is
-0x00000000. Read as LE uint32, this is also 0x00000000 — a value incompatible with a
+0x00000000. Read as LE uint32, this is also 0x00000000, a value incompatible with a
 valid AURIX STAD. When the first LE word at file offset 0 is 0x00000000, the TriCore
 discriminator returns no candidate.
 
 Before: P12 (1 MB CPU32) → tricore HIGH 0.850
-After:  P12 (1 MB CPU32) → m68k MEDIUM 0.700 ✓
+After: P12 (1 MB CPU32) → m68k MEDIUM 0.700 ✓
 
 GEN3 (Waqas TriCore 2 MB) unaffected: first LE word = 0x00004806 (non-zero) → tricore HIGH 0.850 ✓
 
@@ -142,7 +142,7 @@ Updated files: `ablation/analyzers/ecu_arch_detector.py`,
 
 ## v2.73.0
 
-**EcuArchDetector — Renesas M32R discriminator (Gap 8).**
+**EcuArchDetector, Renesas M32R discriminator (Gap 8).**
 
 `EcuArchDetector` now correctly identifies Renesas M32R flat ECU ROMs. The M32R
 architecture (chip markings M32174F3/M32176F4V) is used in Hitachi 5EAT TCU ROMs and
@@ -170,7 +170,7 @@ Updated files: `ablation/analyzers/ecu_arch_detector.py`,
 
 ## v2.72.0
 
-**EcuROMLayoutAnalyzer — TriCore AURIX layout classification (Gap 5a/5b).**
+**EcuROMLayoutAnalyzer, TriCore AURIX layout classification (Gap 5a/5b).**
 
 `EcuROMLayoutAnalyzer` now accepts `arch_hint="tricore"` to correctly classify Infineon AURIX
 TC-series flat ROM images. The default entropy+PPC-density path produces wrong results for AURIX
@@ -185,12 +185,12 @@ CALIBRATION; windows above 35% are CODE. A separate AURIX IVT pattern detector s
 aligned entries for `rslcx`/`rfe`/`rfedc` mnemonics; windows with ≥ 4 matching entries are
 labelled IVT.
 
-New region type: `"IVT"` — Interrupt Vector Table region (TriCore only). Not navigable application
+New region type: `"IVT"`, Interrupt Vector Table region (TriCore only). Not navigable application
 code; excluded from `app_code_regions()` but included in `code_regions()` for backward compatibility.
 
 `ROMLayout` gains two new methods:
-- `app_code_regions()` — CODE only (excludes IVT); the correct feed for `TriCoreTaintTracker`
-- `ivt_regions()` — IVT regions only
+- `app_code_regions()`: CODE only (excludes IVT); the correct feed for `TriCoreTaintTracker`
+- `ivt_regions()`: IVT regions only
 
 Validated: Waqas GEN3 AURIX TC-series 2 MB flat ROM. Previous result: one large CODE region at
 0x044000 (misidentified IVT block + compressed blobs). New result: 1 IVT region at 0x036000
@@ -205,7 +205,7 @@ Updated files: `ablation/analyzers/ecu_rom_layout_analyzer.py`,
 
 ## v2.71.0
 
-**TMS320C28x ISA decoder — Gap 1b; C28x control-flow analysis.**
+**TMS320C28x ISA decoder, Gap 1b; C28x control-flow analysis.**
 
 `EcuC28xDecoder` decodes TMS320C28x instructions from raw byte buffers using
 the encodings in SPRU430F (TMS320C28x CPU and Instruction Set Reference Guide,
@@ -228,18 +228,18 @@ Three calling conventions are decoded: `LC/LRET` (return addr on software stack,
 New files: `ablation/analyzers/ecu_c28x_decoder.py`,
 `docs/reference-modules/ecu-c28x-decoder.md`.
 
-Reference: SPRU430F — TMS320C28x CPU and Instruction Set Reference Guide, April 2015.
+Reference: SPRU430F, TMS320C28x CPU and Instruction Set Reference Guide, April 2015.
 
 ---
 
 ## v2.70.0
 
-**TI COFF2/AR loader — C28x firmware coverage for TiNNCScanner.**
+**TI COFF2/AR loader, C28x firmware coverage for TiNNCScanner.**
 
 `TiCoffLoader` parses Texas Instruments COFF2 object files and Unix AR archives
 produced by the TI Code Generation Tools (cl2000). Extracts symbol table entries
 including storage class: `C_UEXT = 19` (tentative external definition) is the TI
-COFF equivalent of `__attribute__((weak))` — there is no `C_WEAKEXT` in TI COFF.
+COFF equivalent of `__attribute__((weak))`, there is no `C_WEAKEXT` in TI COFF.
 
 `TiNNCScanner` now calls `TiCoffLoader` before the lief ELF path. C28x firmware
 compiled by the TI NNC for F28P55x targets (cl2000 → COFF, not ELF) is now fully
@@ -249,7 +249,7 @@ symbol override risk.
 New files: `ablation/analyzers/ti_coff_loader.py`,
 `docs/reference-modules/ti-coff-loader.md`.
 
-Reference: SPRAAO8 — TI Common Object File Format (April 2009).
+Reference: SPRAAO8, TI Common Object File Format (April 2009).
 
 ---
 
@@ -262,7 +262,7 @@ inference artifacts in ARM ELF firmware for TI MCU targets: F28P55x (C28x),
 MSPM0 (Cortex-M0+), CC2745/AM13x (Cortex-M33), CC1352 (Cortex-M4),
 AM26x (Cortex-R5), F29H85x (C29x).
 
-The scanner operates from the ELF symbol table only — no disassembly required.
+The scanner operates from the ELF symbol table only, no disassembly required.
 Primary finding class: `tvmgen_*_bias_data`, `tvmgen_*_scale_data`, and
 `tvmgen_*_shift_data` are declared `__attribute__((weak))` per the NNC spec.
 Any object linked after `mod.a` that provides a strong symbol of the same name
@@ -279,13 +279,13 @@ New files: `ablation/analyzers/ti_nnc_scanner.py`,
 
 ## v2.68.0
 
-**MicroPython .mpy v6 bytecode lifter.**
+**MicroPython.mpy v6 bytecode lifter.**
 
 `MpyLifter` decodes compiled MicroPython and CircuitPython modules to
 pseudo-Python and scans for dangerous patterns: exec/eval calls, os/machine
 imports, socket access, and direct hardware writes via machine.mem32.
 
-Parses the full .mpy v6 format: 4-byte header, global qstr and object tables,
+Parses the full.mpy v6 format: 4-byte header, global qstr and object tables,
 recursive code objects with the interleaved-bit prelude (MP_BC_PRELUDE_SIG +
 MP_BC_PRELUDE_SIZE from py/bc.h). Supports MicroPython 1.19 through 1.23+.
 
@@ -305,11 +305,11 @@ the test suite before it reaches a firmware engagement.
 New:
 - `tests/test_taint_labeled_coverage.py`: 73 targeted tests covering
   `TaintState.join()` lattice paths, `invalidate_base()`, ARC atomic
-  instructions, x86 `_const` instructions, MIPS/PPC FP handlers, and
+ instructions, x86 `_const` instructions, MIPS/PPC FP handlers, and
   `record_trace=True` paths across all 6 qualified taint engine modules.
-- `docs/standards-ablation.md`: compliance matrix v1.3.0 — 29 MET, 0 PARTIAL,
-  against NIST SP 800-218 (SSDF), CISA Secure by Design, ISO 26262 TCL3,
-  MIL-HDBK-115C, and DoWI 8430.01.
+- `docs/standards-ablation.md`: compliance matrix v1.3.0: 29 MET, 0 PARTIAL,
+ against NIST SP 800-218 (SSDF), CISA Secure by Design, ISO 26262 TCL3,
+ MIL-HDBK-115C, and DoWI 8430.01.
 - `docs/safety-manual.md`: ISO 26262 Part 8 Clause 11 safety manual.
 - `docs/reference-anomalies/`: 16 known-anomaly files, one per taint tracker.
 - `docs/sbom/ablation-sbom.json`: software bill of materials (pip-licenses).
@@ -318,7 +318,7 @@ New:
 - `scripts/verify-account.sh`: pre-push account verification gate.
 - `tests/conformance/`: 43 ABI conformance tests for RH850 and TriCore.
 - README compliance badges: NIST SP 800-218, CISA Secure by Design,
-  MIL-HDBK-115C.
+ MIL-HDBK-115C.
 - `SECURITY.md`: Security Practices section documenting all controls.
 
 ---
@@ -330,11 +330,11 @@ Replaces the linear-walk lifter with a full decompiler pipeline.
 
 Changed:
 - `_lift_sh2a()` now builds a CFG (`cfg_sh2a.build_cfg`) and runs the
-  dominator-based structurizer (`structurizer.Structurizer`) before emitting
-  pseudo-C.  Output is now `if/while/for` structured code instead of `goto`
-  chains.  Falls back to linear block-ordered emit if the structurizer raises.
-- `_SH2aState.emit()` is unchanged — it remains the per-instruction emitter
-  callback, called by the structurizer via a lambda.
+ dominator-based structurizer (`structurizer.Structurizer`) before emitting
+ pseudo-C. Output is now `if/while/for` structured code instead of `goto`
+ chains. Falls back to linear block-ordered emit if the structurizer raises.
+- `_SH2aState.emit()` is unchanged: it remains the per-instruction emitter
+ callback, called by the structurizer via a lambda.
 
 ---
 
@@ -346,22 +346,22 @@ New module: `ablation/analyzers/structurizer.py`.
 
 3 things that were not possible before in Ablation:
 
-1. **No structured output for any ISA.**  Every CFG-backed lifter produced
-   goto-based IR.  Structural reconstruction (if/while/for) was absent.
-2. **No post-dominator tree.**  Post-dominators are needed to find the "join"
-   point after an if/else diamond.  `PostDomTree` fills this gap.
-3. **No ISA-neutral decompiler pass.**  The structurizer works on any CFG that
-   exposes `.blocks`, `.entry`, `.flow`, `.flow_r()` — the same interface as
+1. **No structured output for any ISA.** Every CFG-backed lifter produced
+ goto-based IR. Structural reconstruction (if/while/for) was absent.
+2. **No post-dominator tree.** Post-dominators are needed to find the "join"
+ point after an if/else diamond. `PostDomTree` fills this gap.
+3. **No ISA-neutral decompiler pass.** The structurizer works on any CFG that
+ exposes `.blocks`, `.entry`, `.flow`, `.flow_r()`, the same interface as
    `dataflow_engine.CFG`.  Any ISA CFG module can plug in.
 
 New:
 - `Structurizer(cfg)`: builds dominator tree + loop info + post-dominator tree,
-  then walks RPO to emit `WhileNode`, `IfNode`, `SequenceNode`, `ReturnNode`,
+ then walks RPO to emit `WhileNode`, `IfNode`, `SequenceNode`, `ReturnNode`,
   `BreakNode`, `ContinueNode`.
 - `Structurizer.structure() -> StructuredNode`: returns the tree.
 - `Structurizer.emit(insn_emitter, func_name) -> str`: renders to pseudo-C.
 - `PostDomTree(cfg)`: immediate post-dominator tree via reversed-CFG DomTree.
-  Used to find if/else join points.
+ Used to find if/else join points.
 - All node types exported: `SequenceNode`, `InsnNode`, `IfNode`, `WhileNode`,
   `BreakNode`, `ContinueNode`, `ReturnNode`.
 - Docs: `docs/reference-modules/structurizer.md`.
@@ -376,29 +376,29 @@ New module: `ablation/analyzers/cfg_sh2a.py`.
 
 3 things that were not possible before in Ablation:
 
-1. **No CFG for SH-2A.**  Every other ISA with a lifter backend also had a CFG
-   module; SH-2A was the only exception.  Without a CFG, the structurizer and
-   DomTree cannot run on SH-2A firmware.
-2. **No delay-slot semantics in any CFG builder.**  SH-2A's delay-slot model
-   (one instruction always executes after a branch before the branch fires) is
-   architecturally distinct from all prior CFG modules (ARM, V850, ARC, x86).
+1. **No CFG for SH-2A.** Every other ISA with a lifter backend also had a CFG
+ module; SH-2A was the only exception. Without a CFG, the structurizer and
+ DomTree cannot run on SH-2A firmware.
+2. **No delay-slot semantics in any CFG builder.** SH-2A's delay-slot model
+ (one instruction always executes after a branch before the branch fires) is
+ architecturally distinct from all prior CFG modules (ARM, V850, ARC, x86).
    `cfg_sh2a` correctly attaches the delay-slot instruction to the terminating
-   block so successor VAs are computed from after the delay slot, not from
-   after the branch.
-3. **No `.flow` / `.flow_r()` interface on SH-2A CFG.**  `dataflow_engine.DomTree`
-   and all backward-dataflow passes require these.  `cfg_sh2a.CFG` adds both
-   as computed properties.
+ block so successor VAs are computed from after the delay slot, not from
+ after the branch.
+3. **No `.flow` / `.flow_r()` interface on SH-2A CFG.** `dataflow_engine.DomTree`
+ and all backward-dataflow passes require these. `cfg_sh2a.CFG` adds both
+ as computed properties.
 
 New:
-- `Block(start, insns, succs, preds)`: basic block for SH-2A.  Delay-slot
-  instruction is the last `insns` entry when the terminator has a delay slot.
+- `Block(start, insns, succs, preds)`: basic block for SH-2A. Delay-slot
+ instruction is the last `insns` entry when the terminator has a delay slot.
 - `CFG(blocks, entry)` with `.flow` property and `.flow_r()` method for
-  duck-type compatibility with `dataflow_engine.CFG`.
+ duck-type compatibility with `dataflow_engine.CFG`.
 - `build_cfg(insns, entry=None) -> CFG`: three-pass construction
-  (leader scan → partition → edge fill).
+ (leader scan → partition → edge fill).
 - Delay-slot semantics: WITH delay slot = {bra, bsr, jsr, bt/s, bf/s, rts, rte};
-  WITHOUT = {bt, bf, rts/n}.  BRAF/BSRF/JMP@Rn decode as MISC → open blocks
-  (documented limitation).
+ WITHOUT = {bt, bf, rts/n}. BRAF/BSRF/JMP@Rn decode as MISC → open blocks
+ (documented limitation).
 - Compatible with `DomTree`, `LoopInfo` from `dataflow_engine` via duck typing.
 - Docs: `docs/reference-modules/cfg-sh2a.md`.
 
@@ -406,20 +406,20 @@ New:
 
 ## v2.63.0
 
-**BinaryLifter: SH-2A backend (`_lift_sh2a` + `_SH2aState`).**  Adds Renesas SH-2A (SH7058/SH7059)
+**BinaryLifter: SH-2A backend (`_lift_sh2a` + `_SH2aState`).** Adds Renesas SH-2A (SH7058/SH7059)
 as the 18th ISA supported by `BinaryLifter.lift_function()`.
 
 New:
-- `_lift_sh2a(func_va, max_insns)`: lifts an SH-2A function to pseudo-C IR.  Uses `EcuSH2aDecoder`
-  directly (no Capstone, no subprocess).  Flat ECU ROM fallback: when `_sections` is empty (no ELF
-  header), treats `func_va` as a direct file offset (base_va=0).  Truncates at first RETURN +
-  delay-slot instruction to prevent running into zero-padded ROM space.
+- `_lift_sh2a(func_va, max_insns)`: lifts an SH-2A function to pseudo-C IR. Uses `EcuSH2aDecoder`
+ directly (no Capstone, no subprocess). Flat ECU ROM fallback: when `_sections` is empty (no ELF
+ header), treats `func_va` as a direct file offset (base_va=0). Truncates at first RETURN +
+ delay-slot instruction to prevent running into zero-padded ROM space.
 - `_SH2aState`: register-tracking state machine for SH-2A (Renesas SuperH calling convention).
-  R4-R7 = arg0-arg3; R0 = return value; R15 = stack pointer.  Dispatches on `SH2aInsn.insn_type`
-  directly (no regex) — clean because `EcuSH2aDecoder` pre-categorizes every instruction.  Handles
-  LR_SAVE/LR_RESTORE (prologue comment), RETURN, CALL (direct + indirect JSR), BRANCH (conditional
-  BT/BF + unconditional BRA + indirect JMP), LOAD (MOV.L/W/B with displacement), STORE, and MISC.
-  Taint propagation from tainted args through call results and loads.
+ R4-R7 = arg0-arg3; R0 = return value; R15 = stack pointer. Dispatches on `SH2aInsn.insn_type`
+ directly (no regex), clean because `EcuSH2aDecoder` pre-categorizes every instruction. Handles
+ LR_SAVE/LR_RESTORE (prologue comment), RETURN, CALL (direct + indirect JSR), BRANCH (conditional
+ BT/BF + unconditional BRA + indirect JMP), LOAD (MOV.L/W/B with displacement), STORE, and MISC.
+ Taint propagation from tainted args through call results and loads.
 - Arch dispatch: `sh2a`, `sh-2a`, `sh2` all dispatch to `_lift_sh2a`.
 - 46 tests in `tests/test_binary_lifter_sh2a.py`.
 - Docs: `docs/reference-modules/binary-lifter-sh2a.md`.
@@ -432,26 +432,26 @@ New:
 
 Bug fixes:
 - `_check_itanium_header`: was using `vtable_va` as a raw file byte index; correct only for ET_DYN
-  (PIE, VA≈0) — always returned False for ET_EXEC (non-PIE, VA=0x400000+). Fixed: new
+ (PIE, VA≈0), always returned False for ET_EXEC (non-PIE, VA=0x400000+). Fixed: new
   `_va_to_file_offset(va)` helper converts VA → file offset via section headers.
 - `_trace_arm64`: `self._data[text_va:]` sliced by VA not file offset; empty on ET_EXEC. Fixed:
   `self._data[text_off:]` using `text_sec.offset`.
 
 Enhancements:
 - `_trace_generic`: arch-agnostic consumer tracer that scans `.text` for the vtable VA as a
-  pointer-sized literal (LE/BE from EI_DATA; width 4 for ppc32, 8 otherwise). Runs on
-  LoongArch64, MIPS, PPC32, PPC64, RISC-V, and any future arch.  x86-64 and ARM64 still use
-  full ISA-specific tracers.
+ pointer-sized literal (LE/BE from EI_DATA; width 4 for ppc32, 8 otherwise). Runs on
+ LoongArch64, MIPS, PPC32, PPC64, RISC-V, and any future arch. x86-64 and ARM64 still use
+ full ISA-specific tracers.
 - Removed "IDAPython" / "IDA" references from module docstring; `emit_ida_script()` generates a
-  type-annotation + comment script with no external tool dependency.
+ type-annotation + comment script with no external tool dependency.
 
 ---
 
 ## v2.61.0
 
-**FlatBinaryFuncStartScanner: arch-agnostic function-start scanner for flat ECU ROMs.**  Combines
+**FlatBinaryFuncStartScanner: arch-agnostic function-start scanner for flat ECU ROMs.** Combines
 call-target harvesting (BFS from the reset vector following direct call instructions) and ISA-specific
-prologue pattern scanning.  Uses `EcuArchDetector` internally — HIGH/MEDIUM confidence selects one ISA
+prologue pattern scanning. Uses `EcuArchDetector` internally, HIGH/MEDIUM confidence selects one ISA
 catalog, LOW confidence unions all five.
 
 - `FlatBinaryFuncStartScanner`: `scan(arch=None)` → `FuncStartResult`; `arch` override skips detection
@@ -473,7 +473,7 @@ disassembly step.
 - `EcuArchDetector`: `detect()` → `ArchDetectResult`; `candidates()` → `list[ArchCandidate]` sorted by score
 - `ArchDetectResult`: `arch`, `confidence` (HIGH/MEDIUM/LOW), `score`, `reason`, `candidates`, `is_confident`
 - `ArchCandidate`: `arch`, `score`, `reason`
-- ARM Cortex-M: LE vector table — MSP in SRAM `0x20000000–0x3FFFFFFF` + Thumb reset handler; score 0.90 (both) / 0.55 (MSP only)
+- ARM Cortex-M: LE vector table: MSP in SRAM `0x20000000–0x3FFFFFFF` + Thumb reset handler; score 0.90 (both) / 0.55 (MSP only)
 - M68K/CPU32: BE reset vector in-range + LINK.W A6, #-N prologue density; score 0.85 / 0.70 / 0.35
 - PPC32 Book E: primary opcode density (0x08-0x0F, 0x38-0x3F, 0x80-0x9F ranges); fires at ≥ 35% density
 - PPC VLE: `(byte0 & 0x90) == 0x10` halfword density; score = `min(density * 2.5, 0.92)` at ≥ 15% density
@@ -486,7 +486,7 @@ disassembly step.
 ## v2.59.0
 
 **EcuSH2aDecoder: Renesas SH-2A decoder for Honda/Subaru ECU firmware.** Pure-Python decoder
-for the SH-2A ISA (Renesas SH7058/SH7059).  Capstone 5.0.7 has no SH-2A support; this module
+for the SH-2A ISA (Renesas SH7058/SH7059). Capstone 5.0.7 has no SH-2A support; this module
 closes the gap and enables BinaryContext, WindowAnalyzer, and manual RE on Honda CBR250RR and
 Subaru (SH7058S, EcuFlash corpus) ECU ROMs.
 
@@ -506,7 +506,7 @@ Subaru (SH7058S, EcuFlash corpus) ECU ROMs.
 
 **EcuM68kDecoder: M68K/CPU32 decoder for GM P-series ECU firmware.** Wraps Capstone
 (CS_ARCH_M68K / CS_MODE_M68K_020) with ECU-specific prologue scanning and pipeline-compatible
-M68kInsn dataclass.  CPU32 is a 68020 derivative; Capstone 5.0.7 has no CS_MODE_M68K_CPU32 but
+M68kInsn dataclass. CPU32 is a 68020 derivative; Capstone 5.0.7 has no CS_MODE_M68K_CPU32 but
 020 mode decodes the GM P-series instruction set correctly.
 
 - `EcuM68kDecoder`: `disassemble()` (Capstone-backed), `decode_one()`, `function_starts()` (pure scan), `insn_length()`
@@ -528,27 +528,27 @@ does not implement VLE; this module closes that gap with a pure-Python decoder c
 security-relevant instruction subset.
 
 - `EcuVLEDecoder`: pure-Python VLE decoder; `disassemble()` walks a ROM region instruction by
-  instruction; `decode_one()` decodes a single instruction; `function_starts()` returns probable
-  function-entry VAs for taint-tracker seeding
+ instruction; `decode_one()` decodes a single instruction; `function_starts()` returns probable
+ function-entry VAs for taint-tracker seeding
 - `VLEInsn` dataclass: `offset` (VA), `is_16bit`, `mnemonic`, `insn_type`, `raw`, `target`,
   `rd`, `rs`, `ra`, `imm`
 - Length discrimination: `(byte0 & 0x90) == 0x10` → 32-bit; else 16-bit SE; sourced from NXP
-  e200 VLE Reference Manual and verified against binutils ppc-opc.c macro table
+ e200 VLE Reference Manual and verified against binutils ppc-opc.c macro table
 - SE 16-bit coverage: `se_blr/blrl`, `se_mflr/mtlr`, `se_li`, `se_b/bl/bc`, `se_lwz/stw`,
   `se_lbz/stb/lhz/sth`, plus SE_R / SE_RR / SE_IM5 arithmetic and compare forms
 - 32-bit VLE coverage: `e_stwu`, `e_b/bl`, `e_lwz/stw/lbz/stb/lha/lhz`, `e_add16i`, `e_li`,
   `e_stmw/lmw`; unrecognized opcodes decode as `vle32_opN` (MISC) without crashing
 - `function_starts()` primary signal: `e_stwu r1, -N(r1)` (exact VUP/RS/RA/D8 check);
-  secondary signal: `se_mflr r0` for leaf functions; scan avoids mflr false positives by
-  checking whether the preceding 4 bytes are already an e_stwu prologue
+ secondary signal: `se_mflr r0` for leaf functions; scan avoids mflr false positives by
+ checking whether the preceding 4 bytes are already an e_stwu prologue
 - CIA-relative branch targets: `se_b/se_bc` use `CIA + exts(BD8) * 2`; `e_b/e_bl` use
   `CIA + BD24` where BD24 is the raw bits[24:1] signed displacement (CIA-relative, not NIA)
 - `_compact_reg_4bit()`: translates 4-bit compact VLE register fields (0-7 → GPR0-7;
-  8-15 → GPR24-31); applied to `se_li` IM7 form; SE_R instructions (mflr/mtlr) use direct
-  GPR mapping (no translation)
+ 8-15 → GPR24-31); applied to `se_li` IM7 form; SE_R instructions (mflr/mtlr) use direct
+ GPR mapping (no translation)
 - 51 tests covering: length discrimination, all SE/32-bit mnemonics, branch targets (forward and
-  backward), function_starts (primary/secondary/false-positive suppression), e_li 20-bit
-  immediate assembly, compact register translation, FileNotFoundError wrapping
+ backward), function_starts (primary/secondary/false-positive suppression), e_li 20-bit
+ immediate assembly, compact register translation, FileNotFoundError wrapping
 - FORGE gate: PASSED (4 LOW, 0 MEDIUM, 0 HIGH, 0 CRITICAL)
 
 ---
@@ -564,9 +564,9 @@ CPU32 family (P01/P04/P05/P08/P10/P11/P59) and the GM E38 PCM PPC32 region.
 - M68K fingerprint: `(byte[0] & 0xF0) == 0x10` and `(byte[1] & 0x3F) == 0x3C` and
   `byte[2:4] == 0x00 0x67`; covers all M68K destination addressing modes in one mask
 - PPC32 fingerprint: `(word & 0xFC1FFFFF) == 0x38000067` for `li rX, 0x67`; `(word >> 26) == 38`
-  for `stb`; same masks for the confirming zero pairs
+ for `stb`; same masks for the confirming zero pairs
 - `window` parameter (default 256) applies uniformly to both architectures; eliminates earlier
-  inconsistency where M68K and PPC32 used separate hidden constants
+ inconsistency where M68K and PPC32 used separate hidden constants
 - `SecurityAccessFinding`: offset, arch, pattern, evidence bytes, note; `__str__` for CLI output
 - 30 tests (21 for scanner, 9 for `is_calibration_only`)
 
@@ -585,25 +585,25 @@ from a module-level summary to a full pseudo-IR decompiler that decodes every
 function in the BEAM Code chunk.
 
 - `_ct_read()`: compact-term decoder covering all seven standard tags (u/i/a/x/y/f/h)
-  and all six Z-extended subtypes (float, list, float-register, allocation-list,
-  literal, typed-register)
+ and all six Z-extended subtypes (float, list, float-register, allocation-list,
+ literal, typed-register)
 - `_BEAM_OPS`: opcode dispatch table covering 80 entries; opcodes 1–78 are stable
-  across OTP 18–26; entries above 78 cover R7B–OTP 26 additions with OTP 18/19
-  numbering
+ across OTP 18–26; entries above 78 cover R7B–OTP 26 additions with OTP 18/19
+ numbering
 - `_BEAMTerm.fmt()`: resolves atom indices against the AtU8/Atom table, literal
-  indices against the LitT table, and renders X/Y registers, labels, characters,
-  and Z-extended floats into readable form
+ indices against the LitT table, and renders X/Y registers, labels, characters,
+ and Z-extended floats into readable form
 - `BEAMLifter._decode()`: scans the instruction stream for `label/1` + `func_info/3`
-  pairs to build the function table without requiring LocT; sets `_partial=True`
-  when an unknown opcode halts decode
+ pairs to build the function table without requiring LocT; sets `_partial=True`
+ when an unknown opcode halts decode
 - `BEAMLifter._emit()`: 60-opcode dispatch: call/tailcall with resolved import
-  names, gc_bif1/2/3 arithmetic with resolved BIF names, move/swap, list/tuple
-  constructors, comparison tests with goto targets, exception handling
-  (try/catch/raise), send, loop_rec, and select_val with branch tables
+ names, gc_bif1/2/3 arithmetic with resolved BIF names, move/swap, list/tuple
+ constructors, comparison tests with goto targets, exception handling
+ (try/catch/raise), send, loop_rec, and select_val with branch tables
 - `put_tuple + put...` sequences are collapsed into a single tuple literal in `lift()`
 - Falls back to module-level summary if Code chunk is absent or decode fails
 - `_BEAM_ARITH`, `_BEAM_CMP`, `_BEAM_TYPES`: module-level constants (hoisted from
-  per-call dict literals per FORGE audit finding)
+ per-call dict literals per FORGE audit finding)
 - FORGE: gate_passed=True, 3 LOW findings
 
 ---
@@ -618,30 +618,30 @@ pointer casts, call sites with per-ISA argument lists, taint propagation, and
 branch conditions with inlined comparison operands.
 
 - `_ARM32State`: AAPCS r0–r3 params; `.cond` attribute threading for conditional
-  execution; writeback load/store (`ldr r0, [r1], #4`)
+ execution; writeback load/store (`ldr r0, [r1], #4`)
 - `_MIPSState`: o32 `$4`–`$7` / n64 `$4`–`$11` params; $0 zero guard; branch
-  comparison operands embedded per-instruction (beq/bne/blt/bltz/etc.)
+ comparison operands embedded per-instruction (beq/bne/blt/bltz/etc.)
 - `_PPCState`: SysV/ELFv2 r3–r10 params; update-form load/store writeback;
-  signed vs. unsigned compare flag for blt/bgt branch generation
+ signed vs. unsigned compare flag for blt/bgt branch generation
 - `_RISCVState`: psABI a0–a7 params; ret / jalr ra, 0 return detection;
-  C-extension compressed insns (c.lw, c.sw, c.mv, c.j, c.li)
+ C-extension compressed insns (c.lw, c.sw, c.mv, c.j, c.li)
 - `_LA64State`: lp64 $a0–$a7 params; jirl $zero, $ra, 0 return detection;
-  bl call detection; lu12i.w/lu32i.d immediate reconstruction
+ bl call detection; lu12i.w/lu32i.d immediate reconstruction
 - `_ARCState`: r0–r7 params; blink return; br-form branches with embedded
-  register comparison operands
+ register comparison operands
 - `_V850State`: CC-RH r6–r9 params; r10 return; jmp lp return detection;
-  subr (reverse-subtract) operand ordering
-- `_NanoMIPSState`: regex operand parsing (NanoFrame has no structured .ops);
-  ABI name → canonical numeric mapping; beqc/bnec two-register branches
+ subr (reverse-subtract) operand ordering
+- `_NanoMIPSState`: regex operand parsing (NanoFrame has no structured.ops);
+ ABI name → canonical numeric mapping; beqc/bnec two-register branches
 - `_ablation_mem_addr()`: shared helper that resolves `.disp` or `.offset`
-  transparently across all ISA Mem object styles
+ transparently across all ISA Mem object styles
 - `_taint_map` now threads taint into all 8 new state machines, not ARM64 only
 
 ---
 
 ## v2.46.0
 
-**BinaryContext: full Windows PE support.** `BinaryContext.load_or_build()` now works on `.exe`, `.dll`, and `.sys` files. Every Ablation analysis tool that depends on `BinaryContext` — `SemanticSearcher`, `TaintTracker`, `WindowAnalyzer`, `FuncProfiler`, `callers_of()`, `callees_of()`, `strings_in_func()` — now functions on Windows PE binaries with no changes to calling code.
+**BinaryContext: full Windows PE support.** `BinaryContext.load_or_build()` now works on `.exe`, `.dll`, and `.sys` files. Every Ablation analysis tool that depends on `BinaryContext`, `SemanticSearcher`, `TaintTracker`, `WindowAnalyzer`, `FuncProfiler`, `callers_of()`, `callees_of()`, `strings_in_func()`: all now work on Windows PE binaries with no changes to calling code.
 
 - `_detect_arch_pe()` maps PE `MACHINE_TYPES` to Ablation arch strings (`x86_64`, `x86_32`, `arm64`, `arm32`)
 - `_extract_plt_pe()` builds `{absolute_va: import_name}` from the IAT (the PE equivalent of ELF PLT stubs)
@@ -689,80 +689,80 @@ Windows PE security analysis suite. Seven new modules covering the full attack s
 of Windows PE binaries from control flow integrity to kernel pool allocation.
 
 - **CFGBypassDetector** (`ablation/analyzers/cfg_bypass_detector.py`): Control Flow Guard
-  bypass analysis. Reads `IMAGE_LOAD_CONFIG.GuardFlags` for CFG enabled/disabled, function
-  table presence, and export suppression flag. Reads the CFG function table (entry stride =
+ bypass analysis. Reads `IMAGE_LOAD_CONFIG.GuardFlags` for CFG enabled/disabled, function
+ table presence, and export suppression flag. Reads the CFG function table (entry stride =
   `4 + (GuardFlags >> 28)` bytes). Cross-references the PE export table against the CFG table
-  when export suppression is enabled to find exports that slip through as valid indirect call
-  targets. Counts indirect call/jmp sites in code sections. Flags: cfg_disabled (HIGH),
-  cfg_table_absent (HIGH), no_export_suppression (MEDIUM), export_not_in_table (MEDIUM).
+ when export suppression is enabled to find exports that slip through as valid indirect call
+ targets. Counts indirect call/jmp sites in code sections. Flags: cfg_disabled (HIGH),
+ cfg_table_absent (HIGH), no_export_suppression (MEDIUM), export_not_in_table (MEDIUM).
 
 - **SEHChainAnalyzer** (`ablation/analyzers/seh_chain_analyzer.py`): x86-32 Structured
-  Exception Handler chain analysis. Reads `IMAGE_LOAD_CONFIG.SEHandlerTable` and
+ Exception Handler chain analysis. Reads `IMAGE_LOAD_CONFIG.SEHandlerTable` and
   `SEHandlerCount` for SafeSEH status and handler RVAs. Scans code sections for SEH frame
-  installation sequences (`push handler; push FS:[0]; mov FS:[0], esp`) using Capstone.
-  Cross-references discovered handlers against the SafeSEH table. Rejects x64 PE input
-  (table-based EH applies there; SafeSEH does not). Flags: safesh_disabled (HIGH),
-  handler_not_in_table (MEDIUM).
+ installation sequences (`push handler; push FS:[0]; mov FS:[0], esp`) using Capstone.
+ Cross-references discovered handlers against the SafeSEH table. Rejects x64 PE input
+ (table-based EH applies there; SafeSEH does not). Flags: safesh_disabled (HIGH),
+ handler_not_in_table (MEDIUM).
 
 - **ETWProviderExtractor** (`ablation/analyzers/etw_provider_extractor.py`): ETW provider
-  and event extraction. Builds IAT map for `EventRegister`, `EventWrite*`, `EventUnregister`.
-  Finds `EventRegister` call sites and extracts provider GUIDs from the first argument (RCX
-  via LEA/MOV for x64; first push for x86). Cross-references GUIDs against 15 known Windows
-  security providers including Security-Auditing, PowerShell, Antimalware-Engine, RPC, DCOM.
-  Counts `EventWrite*` call sites. Flags a detection gap when providers register but never
-  write events.
+ and event extraction. Builds IAT map for `EventRegister`, `EventWrite*`, `EventUnregister`.
+ Finds `EventRegister` call sites and extracts provider GUIDs from the first argument (RCX
+ via LEA/MOV for x64; first push for x86). Cross-references GUIDs against 15 known Windows
+ security providers including Security-Auditing, PowerShell, Antimalware-Engine, RPC, DCOM.
+ Counts `EventWrite*` call sites. Flags a detection gap when providers register but never
+ write events.
 
 - **RPCServerAnalyzer** (`ablation/analyzers/rpc_server_analyzer.py`): Windows RPC server
-  endpoint analysis. Finds `RpcServerRegisterIf*` call sites. Reads `RPC_SERVER_INTERFACE`
-  struct at the first argument to extract interface UUID and transfer syntax UUID. Extracts
-  auth level from `RpcServerRegisterIfEx` second argument. Finds `RpcServerUseProtseqEp*`
-  call sites and reads endpoint strings (UTF-16LE + ASCII). Flags unauthenticated interfaces
-  (RPC_C_AUTHN_LEVEL_NONE) as HIGH with CWE-306.
+ endpoint analysis. Finds `RpcServerRegisterIf*` call sites. Reads `RPC_SERVER_INTERFACE`
+ struct at the first argument to extract interface UUID and transfer syntax UUID. Extracts
+ auth level from `RpcServerRegisterIfEx` second argument. Finds `RpcServerUseProtseqEp*`
+ call sites and reads endpoint strings (UTF-16LE + ASCII). Flags unauthenticated interfaces
+ (RPC_C_AUTHN_LEVEL_NONE) as HIGH with CWE-306.
 
 - **COMAttackSurfaceMapper** (`ablation/analyzers/com_attack_surface_mapper.py`): COM attack
-  surface analysis. Detects COM server DLLs via `DllGetClassObject` export. Scans `.rdata`
-  and `.data` for GUID strings in `{...}` format. Finds `CoCreateInstance*` call sites and
-  extracts CLSID arguments. Detects COM marshaling imports (`CoMarshalInterface*`) and
-  IDispatch automation (`Invoke`/`GetIDsOfNames`). Flags COM servers with CLSID references
-  as hijacking surface (MEDIUM, CWE-426); marshaling as deserialization risk (MEDIUM, CWE-502).
+ surface analysis. Detects COM server DLLs via `DllGetClassObject` export. Scans `.rdata`
+ and `.data` for GUID strings in `{...}` format. Finds `CoCreateInstance*` call sites and
+ extracts CLSID arguments. Detects COM marshaling imports (`CoMarshalInterface*`) and
+ IDispatch automation (`Invoke`/`GetIDsOfNames`). Flags COM servers with CLSID references
+ as hijacking surface (MEDIUM, CWE-426); marshaling as deserialization risk (MEDIUM, CWE-502).
 
 - **PDBSymbolIntegrator** (`ablation/analyzers/pdb_symbol_integrator.py`): PDB symbol file
-  parser and NameRegistry integrator. Reads `IMAGE_DEBUG_TYPE_CODEVIEW` entry to extract
-  RSDS record (PDB GUID, age, filename). Builds Microsoft symbol server URL. Fetches PDB via
+ parser and NameRegistry integrator. Reads `IMAGE_DEBUG_TYPE_CODEVIEW` entry to extract
+ RSDS record (PDB GUID, age, filename). Builds Microsoft symbol server URL. Fetches PDB via
   `urllib.request` with caching. Parses MSF 7.0 container: superblock, stream directory
-  reconstruction, DBI stream for public symbols stream index, `S_PUB32` CodeView records for
+ reconstruction, DBI stream for public symbols stream index, `S_PUB32` CodeView records for
   `{offset: name}` mappings. `inject_into_context(ctx)` calls `ctx.set_name(va, name, source='pdb')`.
 
 - **WindowsPoolTaintTracker** (`ablation/analyzers/windows_pool_taint_tracker.py`): kernel
-  pool allocation taint tracking. Finds `ExAllocatePool*` call sites (8 variants including
+ pool allocation taint tracking. Finds `ExAllocatePool*` call sites (8 variants including
   `ExAllocatePool2`/`ExAllocatePool3`). Extracts size argument (RDX in x64 fastcall).
-  Finds `RtlCopyMemory`, `memmove`, `memcpy`, `RtlMoveMemory` copy sinks. Pairs allocation
-  sites with copy sites where the same register carries the size to both without an intervening
-  comparison. Flags unvalidated pairs as HIGH with CWE-122.
+ Finds `RtlCopyMemory`, `memmove`, `memcpy`, `RtlMoveMemory` copy sinks. Pairs allocation
+ sites with copy sites where the same register carries the size to both without an intervening
+ comparison. Flags unvalidated pairs as HIGH with CWE-122.
 
 ---
 
 ## v2.43.0
 
-- **FORGE** (`ablation/analyzers/forge.py`): redesigned audit gate — no subprocess, no API key.
-  - **Result cache** (`_ForgeCache`): persists audit results to `~/.ablation/forge_cache.json`.
-    Key is `sha256(system_prompt)[:16] + ":" + sha256(file_bytes)[:16]`. Cache hit on an
-    unchanged module returns the `ForgeReport` instantly. Any change to the SOP file or the
-    module source invalidates the entry. Lazy load on first use. Atomic writes via `.tmp` rename.
-  - **ForgeAuditRequired exception**: `audit_module()` raises this on cache miss instead of
-    calling `claude --print` in a subprocess. The audit runs inline in the Claude Code session —
-    read the file, apply the 10-section SAFE CODE review, call `FORGE.record_result()` to cache.
-    No subprocess, no backgrounding, no Anthropic API key.
-  - **FORGE.record_result(path, findings, summary)**: new classmethod. Stores the result of an
-    inline audit in the cache. `findings` accepts `list[ForgeFinding]` or `list[dict]`. Future
+- **FORGE** (`ablation/analyzers/forge.py`): redesigned audit gate: no subprocess, no API key.
+ - **Result cache** (`_ForgeCache`): persists audit results to `~/.ablation/forge_cache.json`.
+ Key is `sha256(system_prompt)[:16] + ":" + sha256(file_bytes)[:16]`. Cache hit on an
+ unchanged module returns the `ForgeReport` instantly. Any change to the SOP file or the
+ module source invalidates the entry. Lazy load on first use. Atomic writes via `.tmp` rename.
+ - **ForgeAuditRequired exception**: `audit_module()` raises this on cache miss instead of
+ calling `claude --print` in a subprocess. The audit runs inline in the Claude Code session, 
+ read the file, apply the 10-section SAFE CODE review, call `FORGE.record_result()` to cache.
+ No subprocess, no backgrounding, no Anthropic API key.
+ - **FORGE.record_result(path, findings, summary)**: new classmethod. Stores the result of an
+ inline audit in the cache. `findings` accepts `list[ForgeFinding]` or `list[dict]`. Future
     `audit_module()` calls return the cached result instantly.
-  - **Removed dead SDK path and streaming path**: the `anthropic` SDK branch, `subprocess` import,
+ - **Removed dead SDK path and streaming path**: the `anthropic` SDK branch, `subprocess` import,
     `_STREAM_PATH`, and `_run_via_claude_cli` are gone. Removed dead helper functions
     `_parse_json_findings`, `_parse_prose_findings`, `_extract_summary` (no callers after redesign).
-  - CLI `module` and `register` commands now print a clear how-to message on `ForgeAuditRequired`
-    (exit code 2) instead of an unformatted traceback.
-  - `_extract_subsystem_path` in `kernel_module_subsystem_classifier.py`: fixed first-vs-last
-    "kernel" component bug — now uses `indices[-1]` instead of `next(...)` so paths like
+ - CLI `module` and `register` commands now print a clear how-to message on `ForgeAuditRequired`
+ (exit code 2) instead of an unformatted traceback.
+ - `_extract_subsystem_path` in `kernel_module_subsystem_classifier.py`: fixed first-vs-last
+ "kernel" component bug, now uses `indices[-1]` instead of `next(...)` so paths like
     `/home/kernel/linux/.../kernel/net/mac80211/mac80211.ko` classify correctly.
 
 ---
@@ -770,358 +770,358 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
 ## v2.42.0
 
 - **ScanResultVersionCache** (`ablation/analyzers/scan_result_version_cache.py`): version-aware
-  persistent cache for any ablation scanner that implements `from_path(path).scan()`.
-  - Cache key: (scanner source SHA-256[:16], file abspath, mtime_ns, size, sha256 prefix[:16]).
-    Invalidates automatically when the scanner source changes or the target file changes.
-    No manual version bumping required.
-  - Fast path on cache hit uses stat only (mtime_ns + size prefix scan). A batch of 1096
-    cached `.ko` files costs 1096 stat calls, not 1096 file reads.
-  - Atomic writes via `.tmp` rename. Cache file at
+ persistent cache for any ablation scanner that implements `from_path(path).scan()`.
+ - Cache key: (scanner source SHA-256[:16], file abspath, mtime_ns, size, sha256 prefix[:16]).
+ Invalidates automatically when the scanner source changes or the target file changes.
+ No manual version bumping required.
+ - Fast path on cache hit uses stat only (mtime_ns + size prefix scan). A batch of 1096
+ cached `.ko` files costs 1096 stat calls, not 1096 file reads.
+ - Atomic writes via `.tmp` rename. Cache file at
     `~/.ablation/cache/scan_results/<ClassName>.json`.
-  - `get_or_scan(path, force=False)`, `scan_batch(paths)`, `is_cached(path)`, `evict(path)`,
+ - `get_or_scan(path, force=False)`, `scan_batch(paths)`, `is_cached(path)`, `evict(path)`,
     `cache_stats()`, `report(stats)`. Works with any scanner.
-  - Fixes the stale-result class: kernel module sweeps produced silently wrong results after
-    scanner updates (S35 discovery — 23 modules missed because sweep_kernel_modules_results.json
-    predated the sltui variant and OR commutativity fix).
+ - Fixes the stale-result class: kernel module sweeps produced silently wrong results after
+ scanner updates (S35 discovery, 23 modules missed because sweep_kernel_modules_results.json
+ predated the sltui variant and OR commutativity fix).
 
 - **KernelModuleSubsystemClassifier** (`ablation/analyzers/kernel_module_subsystem_classifier.py`):
-  infers attack surface from a Linux kernel module's path in the standard
+ infers attack surface from a Linux kernel module's path in the standard
   `lib/modules/<version>/kernel/` layout.
-  - 26 rules, most-specific first. Returns `KernelModuleClassification` with `attack_surface`,
+ - 26 rules, most-specific first. Returns `KernelModuleClassification` with `attack_surface`,
     `subsystem`, `network_reachable`, `confidence`, and `rule_matched`.
-  - Surfaces: PROXIMITY (mac80211, wireless), NETWORK-cluster (dlm), NETWORK (net/), LOCAL-USB,
-    LOCAL-HARDWARE-ISDN, LOCAL-HARDWARE-MEDIA, LOCAL-HARDWARE-SAS, LOCAL-HARDWARE-SCSI,
-    LOCAL-DRM, LOCAL-DEV-ACCESS (sound/), LOCAL-HARDWARE, LOCAL.
-  - `classify(path)`, `classify_batch(paths)`, `report(results)`.
-  - Fixes manual attack surface annotation for every kernel module finding. Before this module,
-    every `.ko` finding required looking up the kernel source tree manually (S35: 28 findings
-    across 20 modules, all annotated by hand).
+ - Surfaces: PROXIMITY (mac80211, wireless), NETWORK-cluster (dlm), NETWORK (net/), LOCAL-USB,
+ LOCAL-HARDWARE-ISDN, LOCAL-HARDWARE-MEDIA, LOCAL-HARDWARE-SAS, LOCAL-HARDWARE-SCSI,
+ LOCAL-DRM, LOCAL-DEV-ACCESS (sound/), LOCAL-HARDWARE, LOCAL.
+ - `classify(path)`, `classify_batch(paths)`, `report(results)`.
+ - Fixes manual attack surface annotation for every kernel module finding. Before this module,
+ every `.ko` finding required looking up the kernel source tree manually (S35: 28 findings
+ across 20 modules, all annotated by hand).
 
 ## v2.40.0
 
 - **CMDBSurfaceMapper** (`ablation/analyzers/cmdb_surface_mapper.py`): forward-taint
-  CMDB attack surface mapper for x86-64 FortiWeb/FortiOS binaries.
-  - Phase 0.5 of the Fortinet RE methodology: enumerate `cmf_query_create()` call sites,
-    extract table_id from rdi (supports `mov edi/rdi, imm` and `xor edi, edi`),
-    then flag functions that co-locate CMDB access and exec-sink calls.
-  - Correct VA→file-offset mapping via lief section table; validates x86-64 `e_machine`
-    at entry; fails fast on non-CMDB binaries (cmf_query_create absent from PLT).
-  - Single-pass disassembly per function (create + field reads + exec sinks collected
-    simultaneously); window bounded by next function start, capped at 8192 bytes.
-  - `from_path(elf, extra_sinks=, extra_tables=, verbose=)` and
+ CMDB attack surface mapper for x86-64 FortiWeb/FortiOS binaries.
+ - Phase 0.5 of the Fortinet RE methodology: enumerate `cmf_query_create()` call sites,
+ extract table_id from rdi (supports `mov edi/rdi, imm` and `xor edi, edi`),
+ then flag functions that co-locate CMDB access and exec-sink calls.
+ - Correct VA→file-offset mapping via lief section table; validates x86-64 `e_machine`
+ at entry; fails fast on non-CMDB binaries (cmf_query_create absent from PLT).
+ - Single-pass disassembly per function (create + field reads + exec sinks collected
+ simultaneously); window bounded by next function start, capped at 8192 bytes.
+ - `from_path(elf, extra_sinks=, extra_tables=, verbose=)` and
     `from_context(ctx)` constructors.
-  - Report explicitly marks all exec-reach flags as co-location only; directs analyst
-    to SinkArgClassifier + TaintTracker for confirmed data-flow verification.
-  - 19 unit + integration tests; integration baseline: cmdbsvr 7.4.3 → 19 tables,
-    libcmdb_plugin.so 7.4.3 → exec-reach present (FWB-KRB-1 origin signal).
-  - Origin: FWB-KRB-1 CONFIRMED (FortiWeb 7.4.3, CVSS 7.2) — backward TaintTracker
-    missed this because the CMDB abstraction blocked the trace; forward mapper found
-    the exec-reach table in the first run.
+ - Report explicitly marks all exec-reach flags as co-location only; directs analyst
+ to SinkArgClassifier + TaintTracker for confirmed data-flow verification.
+ - 19 unit + integration tests; integration baseline: cmdbsvr 7.4.3 → 19 tables,
+ libcmdb_plugin.so 7.4.3 → exec-reach present (FWB-KRB-1 origin signal).
+ - Origin: FWB-KRB-1 CONFIRMED (FortiWeb 7.4.3, CVSS 7.2): backward TaintTracker
+ missed this because the CMDB abstraction blocked the trace; forward mapper found
+ the exec-reach table in the first run.
 
 ## v2.39.0
 
 - **I386AbsoluteXrefScanner** (`ablation/analyzers/i386_absolute_xref_scanner.py`): i386
-  absolute-address string xref scanner for ELF32 binaries.
-  - x86-32 encodes data references as 4-byte LE absolute immediates; the existing RIP-relative
-    scanner produces near-zero results on i386 (21 pairs on a 675KB binary vs 548 correct).
-  - Same numpy stride-trick window scan as the x86-64 scanner; target VA = raw u32 value
-    (no displacement arithmetic).
-  - `from_path(path)` / `from_context(ctx)` construction; `scan_full()` → `XrefResult`;
+ absolute-address string xref scanner for ELF32 binaries.
+ - x86-32 encodes data references as 4-byte LE absolute immediates; the existing RIP-relative
+ scanner produces near-zero results on i386 (21 pairs on a 675KB binary vs 548 correct).
+ - Same numpy stride-trick window scan as the x86-64 scanner; target VA = raw u32 value
+ (no displacement arithmetic).
+ - `from_path(path)` / `from_context(ctx)` construction; `scan_full()` → `XrefResult`;
     `inject(ctx)` populates `ctx._str_xref_idx` and `ctx._func_str_idx` in-place.
-  - `BinaryContext._build_string_xref_index` now dispatches to this scanner for `x86_32` arch.
-  - Pure-Python fallback when NumPy is unavailable.
-  - ELF32 only (PE32 excluded — too many false positives from vtable/jump-table entries).
-  - Validated on wsconv (AlphaSmart Dana): 934 string VAs, 548 xref pairs, 153 unique functions.
-  - Docs: `docs/reference-modules/core.md` (new I386AbsoluteXrefScanner section).
+ - `BinaryContext._build_string_xref_index` now dispatches to this scanner for `x86_32` arch.
+ - Pure-Python fallback when NumPy is unavailable.
+ - ELF32 only (PE32 excluded: too many false positives from vtable/jump-table entries).
+ - Validated on wsconv (AlphaSmart Dana): 934 string VAs, 548 xref pairs, 153 unique functions.
+ - Docs: `docs/reference-modules/core.md` (new I386AbsoluteXrefScanner section).
 
 ## v2.38.0
 
 - **pe_sweep.py** (`sweeps/pe_sweep.py`): Windows PE32 (i386) semantic vulnerability sweep.
-  - IAT extraction via lief PE parser as PLT equivalent (`_build_iat`).
-  - x86-32 prologue detection: MSVC `55 8B EC` and GCC `55 89 E5` patterns.
-  - Capstone `CS_MODE_32` function extraction with per-function string and call lists.
-  - `.rdata`-only string index (prevents noise from writable `.data` segment).
-  - Regex handles both `dword ptr [0xXXXX]` and `dword ptr ds:[0xXXXX]` IAT call forms.
-  - 8 Windows/QuickTime-specific vulnerability profiles: `qt_heap_atom_parse`,
+ - IAT extraction via lief PE parser as PLT equivalent (`_build_iat`).
+ - x86-32 prologue detection: MSVC `55 8B EC` and GCC `55 89 E5` patterns.
+ - Capstone `CS_MODE_32` function extraction with per-function string and call lists.
+ - `.rdata`-only string index (prevents noise from writable `.data` segment).
+ - Regex handles both `dword ptr [0xXXXX]` and `dword ptr ds:[0xXXXX]` IAT call forms.
+ - 8 Windows/QuickTime-specific vulnerability profiles: `qt_heap_atom_parse`,
     `qt_rtsp_recv_overflow`, `qt_registry_plugin_load`, `qt_path_string_overflow`,
     `win_cmd_exec`, `win_format_string`, `qt_codec_intovf`, `qt_com_stream_overflow`.
-  - CLI: single binary or directory scan; outputs `reports/sweep_pe_*.md`.
-  - Docs: `docs/reference-modules/pe-sweep.md`.
-  - Validated on `PlugInHelper.exe` (Apple QuickTime, 2002): 23 functions, 94 IAT entries,
-    9 profiles hit above 0.30 including integer overflow and path string candidates.
+ - CLI: single binary or directory scan; outputs `reports/sweep_pe_*.md`.
+ - Docs: `docs/reference-modules/pe-sweep.md`.
+ - Validated on `PlugInHelper.exe` (Apple QuickTime, 2002): 23 functions, 94 IAT entries,
+ 9 profiles hit above 0.30 including integer overflow and path string candidates.
 
 ## v2.37.0
 
 - **PPC32PLTTracer** (`ppc32_plt_tracer.py`): verified import caller finder
-  for PPC32 BE `.so` files.
-  - `PPC32PLTTracer.find_callers(sym)` returns only call sites whose active
-    r30 matches the `implied_r30 = plt_slot(sym) - thunk_disp` — eliminates
-    the cross-compilation-unit false positive class where shared thunk VAs
-    route to different PLT slots from different r30 contexts.
-  - `batch_scan(directory, sinks)` runs the verified scan over every ELF in
-    a directory; returns `{filename: {sym: [PLTCallSite]}}`.
-  - `batch_sweep(directory, sinks)` quick import-surface scan (no call-site
-    detail) — compatible with `SinkArgClassifier.batch_plt_intersect` results.
-  - `PPC32ELF` helper: thin lief + capstone wrapper with `disasm`,
+ for PPC32 BE `.so` files.
+ - `PPC32PLTTracer.find_callers(sym)` returns only call sites whose active
+ r30 matches the `implied_r30 = plt_slot(sym) - thunk_disp`, eliminates
+ the cross-compilation-unit false positive class where shared thunk VAs
+ route to different PLT slots from different r30 contexts.
+ - `batch_scan(directory, sinks)` runs the verified scan over every ELF in
+ a directory; returns `{filename: {sym: [PLTCallSite]}}`.
+ - `batch_sweep(directory, sinks)` quick import-surface scan (no call-site
+ detail), compatible with `SinkArgClassifier.batch_plt_intersect` results.
+ - `PPC32ELF` helper: thin lief + capstone wrapper with `disasm`,
     `print_disasm`, `plt_slot`, `find_bl_callers` for workspace use.
-  - Validated against CE6810 sessions 28–31: 184 apparent dangerous call
-    sites across 7 modules reduced to 8 confirmed by r30 check; all four
-    SESSION_28/29 ground-truth entries confirmed exact match.
+ - Validated against CE6810 sessions 28–31: 184 apparent dangerous call
+ sites across 7 modules reduced to 8 confirmed by r30 check; all four
+ SESSION_28/29 ground-truth entries confirmed exact match.
 
 ---
 
 ## v2.36.0
 
 - **PPC32GOT2Resolver: three hardening improvements** (`ppc32_got2_resolver.py`)
-  - **Fix 1 — per-function r30 floor:** `resolve()` now accepts an optional
+ - **Fix 1: per-function r30 floor:** `resolve()` now accepts an optional
     `fn_starts: List[int]` parameter (sorted function entry VAs, e.g. from the
-    ELF export table).  When provided, `_r30_at` rejects any BCL setup site
-    whose VA precedes the calling function's entry VA, preventing cross-CU r30
-    inheritance at function boundaries in stripped binaries.
-  - **Fix 2 — GOT2 range validation:** `__init__`, `from_path`, and
+ ELF export table). When provided, `_r30_at` rejects any BCL setup site
+ whose VA precedes the calling function's entry VA, preventing cross-CU r30
+ inheritance at function boundaries in stripped binaries.
+ - **Fix 2: GOT2 range validation:** `__init__`, `from_path`, and
     `from_sections` now accept optional `got2_va` / `got2_size` parameters.
     `from_path` extracts `.got2` automatically via lief.  Any resolved
     `entry_va = r30 + disp` that falls outside `[got2_va, got2_va + got2_size)`
-    is rejected with reason `entry_va_outside_got2` rather than silently reading
-    whatever happens to be at that address.
-  - **Fix 3 — generalised r30 setup detection:** `_find_r30_setups` now uses a
-    sliding-window scan (up to 16 instructions for MFLR r30, up to 6 more for
-    ADDIS, up to 6 more for ADDI) instead of checking fixed offsets.  Handles a
-    third compiler-generated variant found in Huawei CE6810 e500mc modules where
-    up to 8 frame spills appear between BCL and MFLR r30.  `_is_stw_r1` helper
-    removed (superseded by the general `_clobbers_r30` check).
-  - All three fixes are backward-compatible.
+ is rejected with reason `entry_va_outside_got2` rather than silently reading
+ whatever happens to be at that address.
+ - **Fix 3: generalised r30 setup detection:** `_find_r30_setups` now uses a
+ sliding-window scan (up to 16 instructions for MFLR r30, up to 6 more for
+ ADDIS, up to 6 more for ADDI) instead of checking fixed offsets. Handles a
+ third compiler-generated variant found in Huawei CE6810 e500mc modules where
+ up to 8 frame spills appear between BCL and MFLR r30. `_is_stw_r1` helper
+ removed (superseded by the general `_clobbers_r30` check).
+ - All three fixes are backward-compatible.
 
 ---
 
 ## v2.35.0
 
 - **PPC32TaintTracker: multi-segment `_va_to_slice` fix** (`taint_tracker_ppc32.py`)
-  - **Bug**: `_va_to_slice` used a single-segment linear formula
-    (`file_off = text_off + (va - text_va)`) which gave file offsets 0x10000 bytes
-    too high for any VA in the second LOAD segment (rw-, `.got2`/`.data`). The
-    S6720EI binary has two PT_LOAD segments where segment[1] (VA `0x1014b000`,
-    file `0x13b000`) has a different VA→file gap than segment[0]. Reads via
+ - **Bug**: `_va_to_slice` used a single-segment linear formula
+ (`file_off = text_off + (va - text_va)`) which gave file offsets 0x10000 bytes
+ too high for any VA in the second LOAD segment (rw-, `.got2`/`.data`). The
+ S6720EI binary has two PT_LOAD segments where segment[1] (VA `0x1014b000`,
+ file `0x13b000`) has a different VA→file gap than segment[0]. Reads via
     `_va_to_slice(got2_va, 4)` returned garbage from `.data` instead of the
     `.got2` contents.
-  - **Fix**: new `_load_segments_raw()` method reads all PT_LOAD entries from raw
-    ELF program headers and populates `self._load_segs` as a `[(va, foff, filesz)]`
-    list. `_va_to_slice` now searches this list; falls back to the legacy single-
-    segment path only when segment parsing fails. Called from `_load_elf()` before
+ - **Fix**: new `_load_segments_raw()` method reads all PT_LOAD entries from raw
+ ELF program headers and populates `self._load_segs` as a `[(va, foff, filesz)]`
+ list. `_va_to_slice` now searches this list; falls back to the legacy single-
+ segment path only when segment parsing fails. Called from `_load_elf()` before
     `_build_got2_resolver()`.
-  - **Impact**: `_build_got2_resolver()` was already correct (uses `got2_foff`
-    from section headers directly); function disassembly was always correct (all
-    code in segment[0]). The bug only affected callers that read GOT2/data VAs
-    through `_va_to_slice` — e.g., resolving internal function pointers from the
-    second LOAD segment. Internal function targets in `fn@0x10031800` now resolve
-    to `0x100540d0`, `0x100526c4`, `0x10052cd0` (previously read as `0x03030000`
-    etc.).
+ - **Impact**: `_build_got2_resolver()` was already correct (uses `got2_foff`
+ from section headers directly); function disassembly was always correct (all
+ code in segment[0]). The bug only affected callers that read GOT2/data VAs
+ through `_va_to_slice`, e.g., resolving internal function pointers from the
+ second LOAD segment. Internal function targets in `fn@0x10031800` now resolve
+ to `0x100540d0`, `0x100526c4`, `0x10052cd0` (previously read as `0x03030000`
+ etc.).
 
 ## v2.34.0
 
 - **PPC32TaintTracker: GOT2 PIC support for Huawei/embedded Linux** (`taint_tracker_ppc32.py`)
-  - **LIEF vendor-reloc bypass**: LIEF discards Huawei relocation type `0x40000054` and
-    maps `_plt` to `.plt section` VAs (wrong range). `_load_plt_from_dynsym_raw()` now runs
-    unconditionally, loading SHN_UNDEF dynamic symbols directly from raw ELF headers to get
-    the correct PLT stub VAs. SHN_UNDEF filter added to exclude internal symbols.
-  - **Per-function r30 map**: pre-computes GOT2 PIC base register for all 2241 functions.
-    Two bugs fixed: `lr_val` was `mflr_addr + 4` (off-by-4 from bcl mechanics); prologue
-    window was 32 bytes (8 instructions), extended to 64 bytes (16 instructions) to cover
-    prologues with `stmw`/`stw r30`/`stw r31` before the `bcl`.
-  - **677 GOT2 VA→name entries** populated for S6720EI bootloader (previously 0).
-  - **`crclr cr1eq` transparent handling**: GCC PPC32 emits this varargs indicator between
+ - **LIEF vendor-reloc bypass**: LIEF discards Huawei relocation type `0x40000054` and
+ maps `_plt` to `.plt section` VAs (wrong range). `_load_plt_from_dynsym_raw()` now runs
+ unconditionally, loading SHN_UNDEF dynamic symbols directly from raw ELF headers to get
+ the correct PLT stub VAs. SHN_UNDEF filter added to exclude internal symbols.
+ - **Per-function r30 map**: pre-computes GOT2 PIC base register for all 2241 functions.
+ Two bugs fixed: `lr_val` was `mflr_addr + 4` (off-by-4 from bcl mechanics); prologue
+ window was 32 bytes (8 instructions), extended to 64 bytes (16 instructions) to cover
+ prologues with `stmw`/`stw r30`/`stw r31` before the `bcl`.
+ - **677 GOT2 VA→name entries** populated for S6720EI bootloader (previously 0).
+ - **`crclr cr1eq` transparent handling**: GCC PPC32 emits this varargs indicator between
     `mtctr` and `bctrl`. The 2-instruction look-back now uses `prev3` to recover the
     `lwz+mtctr` pair when `prev1` is a CR instruction; raises resolved calls from 12/59
-    to 45/59 in test function.
-  - **LWZ stale-taint fix**: load from a non-tainted base register now explicitly clears
-    the destination's taint (was silently preserving prior taint, causing false positives
-    when a GOT2 pointer load followed a source call).
-  - **New sinks**: `execl`, `execle`, `execlp`, `strcpy_s`, `strcat_s`, `sprintf_s`,
+ to 45/59 in test function.
+ - **LWZ stale-taint fix**: load from a non-tainted base register now explicitly clears
+ the destination's taint (was silently preserving prior taint, causing false positives
+ when a GOT2 pointer load followed a source call).
+ - **New sinks**: `execl`, `execle`, `execlp`, `strcpy_s`, `strcat_s`, `sprintf_s`,
     `snprintf_s`, `memcpy_s` (Huawei secure-string variants, heavily used in Huawei boot ROM).
-  - **New doc**: `docs/reference-modules/ppc32-taint-tracker.md`
+ - **New doc**: `docs/reference-modules/ppc32-taint-tracker.md`
 
 ## v2.33.0
 
-- **TencentOS kernel modules sweep: 14 findings across 1096 .ko files** (targets, not in repo)
-  - Swept all 1096 kernel modules from `kernel-modules-6.6.119-52.9.tl4` with LA64MaxNotMinScanner + LA64HeapVulnScanner
-  - **6 CONFIRMED HIGH** (F-037..F-042): `mlx5_ib_post_send` ×2 (RDMA), `hidp_raw_request` (BT proximity), `tcmu_copy_data` (remote iSCSI), `qedi_ll2_recv_thread` (remote iSCSI), `brcmf_cfg80211_join_ibss` (WiFi + 3× memcpy)
-  - **2 PLAUSIBLE** (F-043..F-044): `rds_info_copy` (LOCAL getsockopt), `btusb_setup_qca_download_fw` (USB BT firmware)
-  - **3 PLAUSIBLE_LOW** (F-045..F-047): ntb_tool debug ×2, mpt3sas hardware event
-  - **3 ELIMINATED** (F-048..F-050): hso_resume (power mgmt), qla2xx sysfs stats, snd-cs46xx audio
-  - All 14 patterns byte-verified; all memcpy sinks confirmed via `.rela.text` R_LARCH_B26 entries
-  - Fixed ET_REL VA bug: `pattern_va = text_file_off + section_offset`; rela lookup uses section-relative `r_offset`
-  - Root cause: same GCC 12.3.1.7-1.tl4 max-not-min codegen bug as F-029..F-034; ring-0 context elevates severity
-  - RE module docstring updated to reflect extended status
+- **TencentOS kernel modules sweep: 14 findings across 1096.ko files** (targets, not in repo)
+ - Swept all 1096 kernel modules from `kernel-modules-6.6.119-52.9.tl4` with LA64MaxNotMinScanner + LA64HeapVulnScanner
+ - **6 CONFIRMED HIGH** (F-037..F-042): `mlx5_ib_post_send` ×2 (RDMA), `hidp_raw_request` (BT proximity), `tcmu_copy_data` (remote iSCSI), `qedi_ll2_recv_thread` (remote iSCSI), `brcmf_cfg80211_join_ibss` (WiFi + 3× memcpy)
+ - **2 PLAUSIBLE** (F-043..F-044): `rds_info_copy` (LOCAL getsockopt), `btusb_setup_qca_download_fw` (USB BT firmware)
+ - **3 PLAUSIBLE_LOW** (F-045..F-047): ntb_tool debug ×2, mpt3sas hardware event
+ - **3 ELIMINATED** (F-048..F-050): hso_resume (power mgmt), qla2xx sysfs stats, snd-cs46xx audio
+ - All 14 patterns byte-verified; all memcpy sinks confirmed via `.rela.text` R_LARCH_B26 entries
+ - Fixed ET_REL VA bug: `pattern_va = text_file_off + section_offset`; rela lookup uses section-relative `r_offset`
+ - Root cause: same GCC 12.3.1.7-1.tl4 max-not-min codegen bug as F-029..F-034; ring-0 context elevates severity
+ - RE module docstring updated to reflect extended status
 
 ## v2.32.0
 
 - **TencentOS LoongArch64 RE: full corpus survey complete** (targets, not in repo)
-  - `GNU_EFI_ANALYSIS` block added to RE module for gnu-efi-3.0.17-5.tl4 (26 PE32+ EFI app binaries)
-  - Classification: PLAUSIBLE_LOW — GCC 12.3.1.7-1.tl4 max-not-min pattern confirmed (same libgnuefi.a CU in all 26 apps); BL target at VA 0xb8763c is an unresolved PE32+ relocation placeholder (outside text section); sink identity unverifiable without runtime relocation; dev-only package (not deployed on production servers)
-  - Language-Toolchains survey complete: golang-bin/libgccjit/cargo/rust all swept; clang-analyzer is Python/shell only; libatomic-static 65 object files → 0 findings on both scanners
-  - Firmware directory excluded: all packages are peripheral firmware blobs (WiFi, GPU, audio DSP) in non-LoongArch64 ISAs
-  - RE module docstring updated: "9 CONFIRMED | 27 ELIMINATED | 1 PLAUSIBLE_LOW"
+ - `GNU_EFI_ANALYSIS` block added to RE module for gnu-efi-3.0.17-5.tl4 (26 PE32+ EFI app binaries)
+ - Classification: PLAUSIBLE_LOW: GCC 12.3.1.7-1.tl4 max-not-min pattern confirmed (same libgnuefi.a CU in all 26 apps); BL target at VA 0xb8763c is an unresolved PE32+ relocation placeholder (outside text section); sink identity unverifiable without runtime relocation; dev-only package (not deployed on production servers)
+ - Language-Toolchains survey complete: golang-bin/libgccjit/cargo/rust all swept; clang-analyzer is Python/shell only; libatomic-static 65 object files → 0 findings on both scanners
+ - Firmware directory excluded: all packages are peripheral firmware blobs (WiFi, GPU, audio DSP) in non-LoongArch64 ISAs
+ - RE module docstring updated: "9 CONFIRMED | 27 ELIMINATED | 1 PLAUSIBLE_LOW"
 
 ## v2.31.0
 
 - **`ARM64FgetsFdDiscriminator`: FILE* provenance post-processor for ARM64TaintTracker** (`analyzers/arm64_fgets_fd_discriminator.py`, new)
-  - Post-processes `TaintFindingARM64` results to classify `fgets`-sourced findings by whether the FILE* argument (x0) came from a file-open call (`fopen`/`fopen64`/`freopen`/`tmpfile`) or a socket call (`socket`/`accept`/`accept4`).
-  - Detection algorithm: lightweight backward slice from func_va to the `bl fgets` site; tracks x0 provenance state through `bl` calls (file-open → `"file"`, socket → `"socket"`, `fdopen` → propagates fd class), `mov` propagation, and SP-relative `ldr`/`str` stack spills. At the fgets call site, resolves x0 class: `"file"` → severity downgraded to `"LOW"`; `"socket"` stays `"HIGH"`; `"unknown"` stays `"HIGH"` (conservative); CLEAN (not modified) → `"file"` (static/global FILE* from init).
-  - Returns `FgetsClassifiedFinding` wrapper with `fd_class` and computed `severity` fields; original finding unchanged.
-  - Also exports `ARM64TaintTracker` and `TaintFindingARM64` from the analyzers package (were previously only accessible via direct module import).
-  - Gap origin: TencentOS ARM64 config-parsing daemons produced 47 fgets findings at HIGH; 41 are file-class FPs. Discriminator recovers true-positive signal.
-  - Validation corpus: 94 AArch64 binaries; 41/41 file-class findings confirmed as config-file parsing via manual trace; 0 false network classifications.
-  - Docs: `docs/reference-modules/vuln-scanners.md` ARM64FgetsFdDiscriminator section added.
+ - Post-processes `TaintFindingARM64` results to classify `fgets`-sourced findings by whether the FILE* argument (x0) came from a file-open call (`fopen`/`fopen64`/`freopen`/`tmpfile`) or a socket call (`socket`/`accept`/`accept4`).
+ - Detection algorithm: lightweight backward slice from func_va to the `bl fgets` site; tracks x0 provenance state through `bl` calls (file-open → `"file"`, socket → `"socket"`, `fdopen` → propagates fd class), `mov` propagation, and SP-relative `ldr`/`str` stack spills. At the fgets call site, resolves x0 class: `"file"` → severity downgraded to `"LOW"`; `"socket"` stays `"HIGH"`; `"unknown"` stays `"HIGH"` (conservative); CLEAN (not modified) → `"file"` (static/global FILE* from init).
+ - Returns `FgetsClassifiedFinding` wrapper with `fd_class` and computed `severity` fields; original finding unchanged.
+ - Also exports `ARM64TaintTracker` and `TaintFindingARM64` from the analyzers package (were previously only accessible via direct module import).
+ - Gap origin: TencentOS ARM64 config-parsing daemons produced 47 fgets findings at HIGH; 41 are file-class FPs. Discriminator recovers true-positive signal.
+ - Validation corpus: 94 AArch64 binaries; 41/41 file-class findings confirmed as config-file parsing via manual trace; 0 false network classifications.
+ - Docs: `docs/reference-modules/vuln-scanners.md` ARM64FgetsFdDiscriminator section added.
 
 ## v2.30.0
 
 - **`LA64MaxNotMinScanner`: PE32+ mode and OR commutativity fix** (`analyzers/loongarch64_max_not_min_scanner.py`)
-  - `from_pe32plus(data, image_base=0)` classmethod: loads a UEFI PE32+ DXE/PEIM module directly. Parses the PE32+ section table to find the first code section, computes a file-offset bias so the existing `_words_at()` address machinery works without copying section data. No lief dependency for PE32+ path.
-  - PE32+ has no PLT/GOT. `_check_lookahead()` enters arg-register feed mode when `self._pe32plus` is True: any `bl` or `jirl $ra,...` call where the max-not-min result is live in `$a0`–`$a7` produces a finding with `sink_name="<direct>"` or `"<indirect>"` and `sink_arg` set to the ABI register name. Confirm callee manually (AllocatePool/CopyMem arrive via EFI Boot Services Table pointers through `jirl`).
-  - **OR commutativity fix**: the four-instruction sequence check previously required `or Rout, Rtmp2, Rtmp1` exactly. GCC may also emit `or Rout, Rtmp1, Rtmp2` (commuted). Both encode the same `max(Ra,Rb)`. Changed the check to `{rj, rk} == {rtmp1, rtmp2}` (set equality). This was a silent miss on every binary where GCC chose the commuted ordering — validated on TencentOS EDK2 PE32+ modules.
-  - Validation: 87 DXE modules from `edk2-loongarch64-fw` (TencentOS Server 4.6, `QEMU_EFI.fd`). 63 sink-proximate findings across 26 modules. Highest-risk module: TlsDxe (13 findings, network-reachable in PXE/HTTP-boot, no ASLR). ELF regression clean (existing libstd findings unaffected).
-  - Docs: `docs/reference-modules/vuln-scanners.md` PE32+ mode section added; `CLAUDE.md` tool table and quick-reference updated.
+ - `from_pe32plus(data, image_base=0)` classmethod: loads a UEFI PE32+ DXE/PEIM module directly. Parses the PE32+ section table to find the first code section, computes a file-offset bias so the existing `_words_at()` address machinery works without copying section data. No lief dependency for PE32+ path.
+ - PE32+ has no PLT/GOT. `_check_lookahead()` enters arg-register feed mode when `self._pe32plus` is True: any `bl` or `jirl $ra,...` call where the max-not-min result is live in `$a0`–`$a7` produces a finding with `sink_name="<direct>"` or `"<indirect>"` and `sink_arg` set to the ABI register name. Confirm callee manually (AllocatePool/CopyMem arrive via EFI Boot Services Table pointers through `jirl`).
+ - **OR commutativity fix**: the four-instruction sequence check previously required `or Rout, Rtmp2, Rtmp1` exactly. GCC may also emit `or Rout, Rtmp1, Rtmp2` (commuted). Both encode the same `max(Ra,Rb)`. Changed the check to `{rj, rk} == {rtmp1, rtmp2}` (set equality). This was a silent miss on every binary where GCC chose the commuted ordering: validated on TencentOS EDK2 PE32+ modules.
+ - Validation: 87 DXE modules from `edk2-loongarch64-fw` (TencentOS Server 4.6, `QEMU_EFI.fd`). 63 sink-proximate findings across 26 modules. Highest-risk module: TlsDxe (13 findings, network-reachable in PXE/HTTP-boot, no ASLR). ELF regression clean (existing libstd findings unaffected).
+ - Docs: `docs/reference-modules/vuln-scanners.md` PE32+ mode section added; `CLAUDE.md` tool table and quick-reference updated.
 
 ## v2.29.0
 
 - **`loongarch_decoder_v2`: KASAN/KCOV-aware LoongArch64 decoder** (`analyzers/loongarch_decoder_v2.py`, new)
-  - `LoongArchDecoderV2` extends `LoongArchDecoder` (V1) with a two-pass semantic layer modeled on the Cifuentes & Sendall 1998 SSL (Semantic Specification Language) idiom-recognition architecture.
-  - **Pass 1 — BL tagging**: every `bl` whose resolved target VA appears in the instrumentation VA set gets `is_instrumentation=True`.  The VA set is extracted from kernel `System.map` via `from_system_map(path)`, matching any symbol with prefix `__asan_`, `__kasan_`, or `__sanitizer_cov_`.
-  - **Pass 2 — preamble walk**: from each tagged BL, walk backwards up to 6 instructions and tag KASAN shadow-address computation instructions (`srli.d`, `lu12i.w`, `lu52i.d`, `addi.d`, `ld.b`, `andi`, `slti`, `sltui`, `add.d`) as `idiom="kasan_shadow"`.  Stops at calls, branches, stores, or function start.  Recovers the 4–6 instruction KASAN check idiom observed in TencentOS 4.6 kernel 6.6.119-52.9.tl4+debug.
-  - `LoongArchFrameV2` extends `LoongArchFrame` with `is_instrumentation: bool` and `idiom: str` fields.
-  - `decode_frames_v2()` returns a list (random-access required for pass 2).  `decode_frames_clean()` is the iterator interface that filters `is_instrumentation=True` frames.
-  - `count_instrumentation()` returns `{total, instrumentation, real, pct_instrumentation}` — measured ~40% overhead on `kvm_eiointc_write` (208 instructions, 84 ghost calls).
-  - Theoretical basis: the V1/V2 split maps onto the UQBT paper (Cifuentes & Van Emmerik 2000): V1 is the SLED pass (instruction encoding → boundary + operands), V2 is the SSL pass (instruction windows → named semantic units).
+ - `LoongArchDecoderV2` extends `LoongArchDecoder` (V1) with a two-pass semantic layer modeled on the Cifuentes & Sendall 1998 SSL (Semantic Specification Language) idiom-recognition architecture.
+ - **Pass 1: BL tagging**: every `bl` whose resolved target VA appears in the instrumentation VA set gets `is_instrumentation=True`. The VA set is extracted from kernel `System.map` via `from_system_map(path)`, matching any symbol with prefix `__asan_`, `__kasan_`, or `__sanitizer_cov_`.
+ - **Pass 2: preamble walk**: from each tagged BL, walk backwards up to 6 instructions and tag KASAN shadow-address computation instructions (`srli.d`, `lu12i.w`, `lu52i.d`, `addi.d`, `ld.b`, `andi`, `slti`, `sltui`, `add.d`) as `idiom="kasan_shadow"`. Stops at calls, branches, stores, or function start. Recovers the 4–6 instruction KASAN check idiom observed in TencentOS 4.6 kernel 6.6.119-52.9.tl4+debug.
+ - `LoongArchFrameV2` extends `LoongArchFrame` with `is_instrumentation: bool` and `idiom: str` fields.
+ - `decode_frames_v2()` returns a list (random-access required for pass 2). `decode_frames_clean()` is the iterator interface that filters `is_instrumentation=True` frames.
+ - `count_instrumentation()` returns `{total, instrumentation, real, pct_instrumentation}`: measured ~40% overhead on `kvm_eiointc_write` (208 instructions, 84 ghost calls).
+ - Theoretical basis: the V1/V2 split maps onto the UQBT paper (Cifuentes & Van Emmerik 2000): V1 is the SLED pass (instruction encoding → boundary + operands), V2 is the SSL pass (instruction windows → named semantic units).
 
 ## v2.28.0
 
 - **`abc_decompiler`: short-circuit evaluation merging** (`_merge_short_circuit`, Cifuentes 1995 Figure 7; Cifuentes/Simon 1998 §5.2)
-  - Pre-structuring pass that runs between `_parse_blocks` and `_cfg_emit` inside `_structure_cfg`. Collapses consecutive conditional basic blocks that share the same `goto_tgt` into a single block with a `||`-merged condition.
-  - Pattern: `bb[i].term_type == 'cond'` AND `bb[i+1].term_type == 'cond'` AND same `goto_tgt` AND `bb[i+1].label is None` AND `bb[i+1].stmts == []`. The second block must have no label (no external entry) and no stmts (no side effects between the two branch points).
-  - Runs iteratively to handle chains of three or more consecutive conditions (e.g. `if(a) goto L; if(b) goto L; if(c) goto L` → single block with `((a) || (b)) || (c)`).
-  - After merging, all block indices are recomputed and `lidx` is rebuilt so the existing `_try_while`/`_try_if` patterns receive a clean block list.
-  - `_negate` fixed: compound conditions containing `||` or `&&` are now always wrapped in `!()` rather than operator-flipping a sub-expression inside the compound (which produced semantically incorrect negations).
-  - Cifuentes/Simon 1998 §5.2 explicitly names short-circuit recovery as a known gap that produces excess `goto` statements; this pass closes that gap for the common same-target pattern generated by ArkTS `&&`/`||`.
+ - Pre-structuring pass that runs between `_parse_blocks` and `_cfg_emit` inside `_structure_cfg`. Collapses consecutive conditional basic blocks that share the same `goto_tgt` into a single block with a `||`-merged condition.
+ - Pattern: `bb[i].term_type == 'cond'` AND `bb[i+1].term_type == 'cond'` AND same `goto_tgt` AND `bb[i+1].label is None` AND `bb[i+1].stmts == []`. The second block must have no label (no external entry) and no stmts (no side effects between the two branch points).
+ - Runs iteratively to handle chains of three or more consecutive conditions (e.g. `if(a) goto L; if(b) goto L; if(c) goto L` → single block with `((a) || (b)) || (c)`).
+ - After merging, all block indices are recomputed and `lidx` is rebuilt so the existing `_try_while`/`_try_if` patterns receive a clean block list.
+ - `_negate` fixed: compound conditions containing `||` or `&&` are now always wrapped in `!()` rather than operator-flipping a sub-expression inside the compound (which produced semantically incorrect negations).
+ - Cifuentes/Simon 1998 §5.2 explicitly names short-circuit recovery as a known gap that produces excess `goto` statements; this pass closes that gap for the common same-target pattern generated by ArkTS `&&`/`||`.
 
 ## v2.27.0
 
 - **`abc_decompiler`: control flow structuring pass** (`_structure_cfg`, `_BB`, Cifuentes §6.6.1/§6.6.2)
-  - Runs after `_propagate_acc` on the flat `label+goto` statement list. Parses the list into `_BB` basic blocks at label and branch boundaries, builds a `label → block_index` map, then applies three structural patterns recursively.
-  - **While loop** (§6.6.1): header block has a label, ends with `if (exit_cond) goto L_after`, and some later block ends with `goto L_head` (back-edge detected by position: `label_idx[target] <= source_idx`). The exit condition is negated to produce `while (loop_cond) { body }`. The latching block's terminal goto is suppressed.
-  - **If/else** (§6.6.2, Pattern A): conditional block ends with `if (cond) goto L_else`; last then-block ends with `goto L_end`. Emitted as `if (!cond) { then } else { else }`.
-  - **Simple if** (§6.6.2, Pattern B): `if (cond) goto L_skip`; fall-through is the then-body. Emitted as `if (!cond) { body }`.
-  - `_negate(cond)` flips the operator (`==↔!=`, `<↔>=`, `>↔<=`, strict variants) rather than wrapping in `!(...)` when possible.
-  - Condition negation is required because ARK bytecode encodes branches as "jump-if-false" exits: the fall-through path is the then-branch, so the emitted condition is the negation of the jump condition.
-  - Unrecognized patterns (exception-handler targets, multi-exit loops, cross-region gotos) fall back to raw `label+goto` output unchanged.
-  - Verified on wechat.abc: 867/867 methods OK, 0 errors; 2 while loops structured, 227 if-bodies structured, 154 if/else pairs; 45 residual raw conditional gotos (exception paths and non-reducible patterns).
+ - Runs after `_propagate_acc` on the flat `label+goto` statement list. Parses the list into `_BB` basic blocks at label and branch boundaries, builds a `label → block_index` map, then applies three structural patterns recursively.
+ - **While loop** (§6.6.1): header block has a label, ends with `if (exit_cond) goto L_after`, and some later block ends with `goto L_head` (back-edge detected by position: `label_idx[target] <= source_idx`). The exit condition is negated to produce `while (loop_cond) { body }`. The latching block's terminal goto is suppressed.
+ - **If/else** (§6.6.2, Pattern A): conditional block ends with `if (cond) goto L_else`; last then-block ends with `goto L_end`. Emitted as `if (!cond) { then } else { else }`.
+ - **Simple if** (§6.6.2, Pattern B): `if (cond) goto L_skip`; fall-through is the then-body. Emitted as `if (!cond) { body }`.
+ - `_negate(cond)` flips the operator (`==↔!=`, `<↔>=`, `>↔<=`, strict variants) rather than wrapping in `!(...)` when possible.
+ - Condition negation is required because ARK bytecode encodes branches as "jump-if-false" exits: the fall-through path is the then-branch, so the emitted condition is the negation of the jump condition.
+ - Unrecognized patterns (exception-handler targets, multi-exit loops, cross-region gotos) fall back to raw `label+goto` output unchanged.
+ - Verified on wechat.abc: 867/867 methods OK, 0 errors; 2 while loops structured, 227 if-bodies structured, 154 if/else pairs; 45 residual raw conditional gotos (exception paths and non-reducible patterns).
 
 ## v2.26.0
 
 - **`abc_decompiler`: accumulator copy-propagation pass** (`_propagate_acc`, Cifuentes §5.4.6)
-  - Post-lift pass over the flat statement list. For each `_acc = EXPR` line: if the next substantive line's rhs does not contain `_acc` (dead assignment), drop the line; if it contains `_acc` exactly once, substitute EXPR inline and drop the line; if it contains `_acc` multiple times, leave both lines.
-  - Labels, blank lines, and comment-only lines are transparent for look-ahead purposes.
-  - `_paren(expr)` adds parentheses when EXPR contains a binary operator, preserving precedence after inlining.
-  - Removed the redundant `// = X` comment from `return _acc` emission — propagation now produces clean `return EXPR` directly.
-  - Verified on wechat.abc: `_acc = Row  // global; v6 = _acc` → `v6 = Row  // global`; `_acc = Row.create; v6 = _acc` → `v6 = Row.create`; dead intermediate accumulator assignments eliminated across all 867 methods.
-  - Sound within a single basic block. Cross-block propagation requires full ud-chain / liveness analysis (future pass).
+ - Post-lift pass over the flat statement list. For each `_acc = EXPR` line: if the next substantive line's rhs does not contain `_acc` (dead assignment), drop the line; if it contains `_acc` exactly once, substitute EXPR inline and drop the line; if it contains `_acc` multiple times, leave both lines.
+ - Labels, blank lines, and comment-only lines are transparent for look-ahead purposes.
+ - `_paren(expr)` adds parentheses when EXPR contains a binary operator, preserving precedence after inlining.
+ - Removed the redundant `// = X` comment from `return _acc` emission: propagation now produces clean `return EXPR` directly.
+ - Verified on wechat.abc: `_acc = Row // global; v6 = _acc` → `v6 = Row // global`; `_acc = Row.create; v6 = _acc` → `v6 = Row.create`; dead intermediate accumulator assignments eliminated across all 867 methods.
+ - Sound within a single basic block. Cross-block propagation requires full ud-chain / liveness analysis (future pass).
 
 ## v2.25.0
 
 - **`abc_decompiler`: ARK Bytecode to JavaScript-like pseudocode decompiler** (`analyzers/abc_decompiler.py`, new)
-  - `ABCDecompiler.decompile_method(method, code)`: lifts a `CodeItem` to readable JS-like pseudocode via register-state accumulator tracking (Durfina 2012 front-end/IR/back-end pipeline).
-  - `decompile_class(class_name)`: decompiles all methods whose class name contains the substring.
-  - `decompile_all()`: iterator over every method with code in the file.
-  - Register-state machine tracks `_acc` (ARK accumulator) and all virtual registers as expression strings; argument registers seeded as `a0..aN`.
-  - Semantic tables covering ~40 instruction categories: binary ops (`add2/sub2/mul2/...`), unary ops (`neg/not/typeof/...`), property access (`ldobjbyname/stobjbyname/...`), global vars (`tryldglobalbyname/stglobalvar/...`), call instructions (`callarg0..callthis3/callrange/...`), object construction, function/class definition, conditional branches, lexical scope, module vars, iterators, generators, async.
-  - Branch labels: `_branch_targets()` pre-scans all jumps and inserts `L_XXXX:` labels at target offsets.
-  - `ABCParser.resolve_method_idx(n, region=0)` added: resolves property/global name `d`-kind operands through `IndexHeader.method_idx[]`. Property-access instructions (`ldobjbyname`, `stobjbyname`, `tryldglobalbyname`, `stglobalvar`, etc.) encode their operand as an INDEX into `method_idx`, not `class_idx` and not a raw file offset. Prior `_resolve_entity()` called `get_string(val)` directly, which returned "" for any index < 60 (header size). Fix: route all property/global name operands through `resolve_method_idx(val)`.
-  - Verified on wechat.abc: string loads resolve correctly (`"L@system.curves;"`); property names (`AudioCapturerManager`, `prototype`) resolve via method_idx.
+ - `ABCDecompiler.decompile_method(method, code)`: lifts a `CodeItem` to readable JS-like pseudocode via register-state accumulator tracking (Durfina 2012 front-end/IR/back-end pipeline).
+ - `decompile_class(class_name)`: decompiles all methods whose class name contains the substring.
+ - `decompile_all()`: iterator over every method with code in the file.
+ - Register-state machine tracks `_acc` (ARK accumulator) and all virtual registers as expression strings; argument registers seeded as `a0..aN`.
+ - Semantic tables covering ~40 instruction categories: binary ops (`add2/sub2/mul2/...`), unary ops (`neg/not/typeof/...`), property access (`ldobjbyname/stobjbyname/...`), global vars (`tryldglobalbyname/stglobalvar/...`), call instructions (`callarg0..callthis3/callrange/...`), object construction, function/class definition, conditional branches, lexical scope, module vars, iterators, generators, async.
+ - Branch labels: `_branch_targets()` pre-scans all jumps and inserts `L_XXXX:` labels at target offsets.
+ - `ABCParser.resolve_method_idx(n, region=0)` added: resolves property/global name `d`-kind operands through `IndexHeader.method_idx[]`. Property-access instructions (`ldobjbyname`, `stobjbyname`, `tryldglobalbyname`, `stglobalvar`, etc.) encode their operand as an INDEX into `method_idx`, not `class_idx` and not a raw file offset. Prior `_resolve_entity()` called `get_string(val)` directly, which returned "" for any index < 60 (header size). Fix: route all property/global name operands through `resolve_method_idx(val)`.
+ - Verified on wechat.abc: string loads resolve correctly (`"L@system.curves;"`); property names (`AudioCapturerManager`, `prototype`) resolve via method_idx.
 
 ## v2.24.0
 
 - **`abc_disasm`: ARK Bytecode disassembler** (`analyzers/abc_disasm.py`, new)
-  - Full 324-opcode ISA table embedded from ArkCompiler v13.0.0.0 `isa.json` (4 prefix groups: callruntime/deprecated/wide/throw).
-  - `ARKDisasm.iter_insns(code)`: yields `ARKInstruction` per instruction; unknown opcodes emitted as single-byte `.data` to preserve alignment.
-  - `disasm_method(method, code)`: smali-style text with inline string annotations.
-  - `find_calls(code)`: yields all call-site instructions.
-  - `find_string_loads(code)`: returns `[(insn, resolved_string), ...]`. Resolves `lda.str N` via `ABCParser.resolve_class_idx(N)` — the 16-bit ID is an INDEX into `IndexHeader.class_idx`, not a raw file offset. Added `ABCParser.resolve_class_idx()` to `abc_parser.py`.
-  - Key finding: dual-size opcodes (e.g. `getiterator` at 0x67 vs 0xab) use parallel `opcode_idx[i] ↔ format[i]` arrays in `isa.json`; naive iteration caused 138 false collisions, fixed by pairing arrays.
-  - Verified: `func_main_0` in wechat.abc resolves `lda.str 0x21 → "L@system.curves;"` correctly.
+ - Full 324-opcode ISA table embedded from ArkCompiler v13.0.0.0 `isa.json` (4 prefix groups: callruntime/deprecated/wide/throw).
+ - `ARKDisasm.iter_insns(code)`: yields `ARKInstruction` per instruction; unknown opcodes emitted as single-byte `.data` to preserve alignment.
+ - `disasm_method(method, code)`: smali-style text with inline string annotations.
+ - `find_calls(code)`: yields all call-site instructions.
+ - `find_string_loads(code)`: returns `[(insn, resolved_string),...]`. Resolves `lda.str N` via `ABCParser.resolve_class_idx(N)`: the 16-bit ID is an INDEX into `IndexHeader.class_idx`, not a raw file offset. Added `ABCParser.resolve_class_idx()` to `abc_parser.py`.
+ - Key finding: dual-size opcodes (e.g. `getiterator` at 0x67 vs 0xab) use parallel `opcode_idx[i] ↔ format[i]` arrays in `isa.json`; naive iteration caused 138 false collisions, fixed by pairing arrays.
+ - Verified: `func_main_0` in wechat.abc resolves `lda.str 0x21 → "L@system.curves;"` correctly.
 
 ## v2.23.0
 
-- **`abc_parser`: HarmonyOS Ark Bytecode (ABC) parser — foundation of the HarmonyOS analysis layer** (`analyzers/abc_parser.py`, new)
-  - Parses ABC binary format (ArkCompiler `libpandafile`) for versions v9–v13+, covering both dynamic (ECMAScript/ArkTS runtime) and static dialects.
-  - 60-byte header with version-aware literal-array detection: `has_literal_in_header()` returns True for versions ≤ `[12,0,6,0]`.
-  - Class body walker: reads MUTF-8 inline name strings, ULEB128 access/field/method counts, `ClassTaggedValues`, `Field12` items, and `MethodItem` records. Entity IDs are absolute file offsets.
-  - `get_code(method)`: CodeItem parsing with all-ULEB128 prologue (`register_count + parameter_count + code_size + exception_handler_count`); confirmed from ArkCompiler `ark-rs/src/lowlevel/bytecode.rs`. The fixed u16/u32 layout (often cited in docs) is the static dialect only.
-  - Security API: `find_native_methods()`, `find_methods_by_name()`, `find_methods_in_class()`, `find_string_refs_in_code()`, `iter_class_info()`, `summary()`.
-  - Verified on wechat.abc v12.0.6.0 (356 KB): 39 classes, 867 methods, all `get_code()` calls succeed.
-  - Docs: `docs/reference-modules/harmonyos.md` (new); `docs/INDEX.md` updated.
+- **`abc_parser`: HarmonyOS Ark Bytecode (ABC) parser: foundation of the HarmonyOS analysis layer** (`analyzers/abc_parser.py`, new)
+ - Parses ABC binary format (ArkCompiler `libpandafile`) for versions v9–v13+, covering both dynamic (ECMAScript/ArkTS runtime) and static dialects.
+ - 60-byte header with version-aware literal-array detection: `has_literal_in_header()` returns True for versions ≤ `[12,0,6,0]`.
+ - Class body walker: reads MUTF-8 inline name strings, ULEB128 access/field/method counts, `ClassTaggedValues`, `Field12` items, and `MethodItem` records. Entity IDs are absolute file offsets.
+ - `get_code(method)`: CodeItem parsing with all-ULEB128 prologue (`register_count + parameter_count + code_size + exception_handler_count`); confirmed from ArkCompiler `ark-rs/src/lowlevel/bytecode.rs`. The fixed u16/u32 layout (often cited in docs) is the static dialect only.
+ - Security API: `find_native_methods()`, `find_methods_by_name()`, `find_methods_in_class()`, `find_string_refs_in_code()`, `iter_class_info()`, `summary()`.
+ - Verified on wechat.abc v12.0.6.0 (356 KB): 39 classes, 867 methods, all `get_code()` calls succeed.
+ - Docs: `docs/reference-modules/harmonyos.md` (new); `docs/INDEX.md` updated.
 
 ---
 
 ## v2.22.0
 
 - **`dwarf_loongarch64`: follow `DW_AT_abstract_origin` / `DW_AT_specification` for LTO-compiled binaries**
-  - `extract_debug_funcs()` now builds a flat `{offset: DIE}` map for each ELF and resolves names via `_resolve_name()`, which walks `DW_AT_abstract_origin` and `DW_AT_specification` chains before giving up. GCC LTO emits concrete function instances with no `DW_AT_name`; the name lives in the abstract definition DIE. Without this fix, all LTO-compiled functions returned empty-string names. With fix: all 431 functions in `libtss2-fapi.so.1.0.0` (TencentOS 4.6) now resolve correctly (0 unnamed). Surface exposed by sweeping the TencentOS corpus.
+ - `extract_debug_funcs()` now builds a flat `{offset: DIE}` map for each ELF and resolves names via `_resolve_name()`, which walks `DW_AT_abstract_origin` and `DW_AT_specification` chains before giving up. GCC LTO emits concrete function instances with no `DW_AT_name`; the name lives in the abstract definition DIE. Without this fix, all LTO-compiled functions returned empty-string names. With fix: all 431 functions in `libtss2-fapi.so.1.0.0` (TencentOS 4.6) now resolve correctly (0 unnamed). Surface exposed by sweeping the TencentOS corpus.
 
 - **LoongArch64 PLT header size fix (`elf_parser.py`, `taint_tracker_loongarch64.py`)**
-  - LoongArch64 emits a 2-slot (32-byte) PLT header; `elf_parser.py` and the tracker's pyelftools path both assumed a 1-slot (16-byte) header. This shifted every PLT symbol assignment one position early, causing systematic sink mislabeling (e.g., `fclose` reported as `strcpy`, `__stack_chk_fail` as `execvp`).
-  - Fix: `elf_parser.py` `get_plt_got_table()` now starts `plt_idx=2` when `e_machine == EM_LOONGARCH`; tracker pyelftools path changed from `enumerate(start=1)` to `enumerate(start=2)`.
-  - Verified via `pcaddu12i` GOT cross-check: `PLT@0x220` → `GOT@0xef2a0` → `rela[0]=fcntl` for all 38 stubs checked. All prior LoongArch64 findings (F-001 through F-006) were false positives from this bug and have been updated to ELIMINATED.
+ - LoongArch64 emits a 2-slot (32-byte) PLT header; `elf_parser.py` and the tracker's pyelftools path both assumed a 1-slot (16-byte) header. This shifted every PLT symbol assignment one position early, causing systematic sink mislabeling (e.g., `fclose` reported as `strcpy`, `__stack_chk_fail` as `execvp`).
+ - Fix: `elf_parser.py` `get_plt_got_table()` now starts `plt_idx=2` when `e_machine == EM_LOONGARCH`; tracker pyelftools path changed from `enumerate(start=1)` to `enumerate(start=2)`.
+ - Verified via `pcaddu12i` GOT cross-check: `PLT@0x220` → `GOT@0xef2a0` → `rela[0]=fcntl` for all 38 stubs checked. All prior LoongArch64 findings (F-001 through F-006) were false positives from this bug and have been updated to ELIMINATED.
 
 ---
 
 ## v2.21.0
 
 - **LoongArch64 Steps 8–10: tests, CLI, and package exports**
-  - `tests/test_taint_loongarch64.py`: unit tests covering ALU propagation, `andi` bound semantics, `$sp` rebase + load/store roundtrip, syscall source/sink/escalation, `ertn`/`break` termination, two-label union, and callee-saved preservation.
-  - `cli.py`: `ablation loongarch64 [--interprocedural] [--depth N] [--full]` and `ablation loongarch64-decode [--frames] [--base N] [--limit N]` subcommands. `--full` selects `from_path_full()` with `.eh_frame`/DWARF/BTF enrichment.
-  - `analyzers/__init__.py`: exports `LoongArchDecoder`, `LoongArchFrame`, `LoongArch64TaintTracker`, `TaintFindingLA64`, `LOONGARCH_ESCALATION_NAMES`, `LOONGARCH_SYSCALL_TABLE`, `loongarch_classify_syscall`, `extract_eh_frame_starts`, `extract_debug_funcs`, `extract_btf_funcs`.
-  - `docs/INDEX.md`: updated LoongArch64 row description.
+ - `tests/test_taint_loongarch64.py`: unit tests covering ALU propagation, `andi` bound semantics, `$sp` rebase + load/store roundtrip, syscall source/sink/escalation, `ertn`/`break` termination, two-label union, and callee-saved preservation.
+ - `cli.py`: `ablation loongarch64 [--interprocedural] [--depth N] [--full]` and `ablation loongarch64-decode [--frames] [--base N] [--limit N]` subcommands. `--full` selects `from_path_full()` with `.eh_frame`/DWARF/BTF enrichment.
+ - `analyzers/__init__.py`: exports `LoongArchDecoder`, `LoongArchFrame`, `LoongArch64TaintTracker`, `TaintFindingLA64`, `LOONGARCH_ESCALATION_NAMES`, `LOONGARCH_SYSCALL_TABLE`, `loongarch_classify_syscall`, `extract_eh_frame_starts`, `extract_debug_funcs`, `extract_btf_funcs`.
+ - `docs/INDEX.md`: updated LoongArch64 row description.
 
 ---
 
 ## v2.20.0
 
 - **LoongArch64 Step 7: syscalls, kernel traps, and exception paths** (`analyzers/syscall_loongarch64.py`, new; `cfg_loongarch64.py`, `taint_tracker_loongarch64.py` updated)
-  - `syscall_loongarch64.py`: full asm-generic/unistd.h syscall table (318 entries, Linux 6.6). Three classification tracks: `SYSCALL_SOURCES` (taint `$a0` on return — read/recvfrom/recvmsg/getrandom/etc.), `SYSCALL_SINKS` (CRITICAL/HIGH — execve/execveat/bpf/ptrace/kexec etc.), `SYSCALL_ESCALATION` (setuid/setgid family). Kernel-space function counterparts: `KERNEL_SOURCES` (copy_from_user family), `KERNEL_SINKS`, `KERNEL_ESCALATION` (commit_creds/prepare_kernel_cred).
-  - `cfg_loongarch64.py`: `ertn` and `break`/`dbcl` added as no-successor terminators.
-  - `taint_tracker_loongarch64.py`: `_SOURCE_NAMES`/`_SINK_NAMES` expanded with kernel-space counterparts; `_ESCALATION_NAMES` frozenset added. `_handle_syscall_frame()` reads `$a7` from constant-folding table for precise source/sink/escalation classification; unknown `$a7` conservatively clobbers caller-saved. Both `_scan_func_binary()` and `run_interprocedural()` handle `syscall`, `ertn`, and `break`/`dbcl` frames.
+ - `syscall_loongarch64.py`: full asm-generic/unistd.h syscall table (318 entries, Linux 6.6). Three classification tracks: `SYSCALL_SOURCES` (taint `$a0` on return: read/recvfrom/recvmsg/getrandom/etc.), `SYSCALL_SINKS` (CRITICAL/HIGH: execve/execveat/bpf/ptrace/kexec etc.), `SYSCALL_ESCALATION` (setuid/setgid family). Kernel-space function counterparts: `KERNEL_SOURCES` (copy_from_user family), `KERNEL_SINKS`, `KERNEL_ESCALATION` (commit_creds/prepare_kernel_cred).
+ - `cfg_loongarch64.py`: `ertn` and `break`/`dbcl` added as no-successor terminators.
+ - `taint_tracker_loongarch64.py`: `_SOURCE_NAMES`/`_SINK_NAMES` expanded with kernel-space counterparts; `_ESCALATION_NAMES` frozenset added. `_handle_syscall_frame()` reads `$a7` from constant-folding table for precise source/sink/escalation classification; unknown `$a7` conservatively clobbers caller-saved. Both `_scan_func_binary()` and `run_interprocedural()` handle `syscall`, `ertn`, and `break`/`dbcl` frames.
 
 ---
 
 ## v2.19.0
 
 - **LoongArch64 Step 6: DWARF, CFI, and BTF function-boundary enrichment** (`analyzers/dwarf_loongarch64.py`, new)
-  - `extract_eh_frame_starts(path)` — FDE `initial_location` from `.eh_frame`; present in all GCC-compiled stripped binaries. Recovers leaf functions and tail-call-optimised bodies missed by the `addi.d $sp` prologue heuristic.
-  - `extract_debug_funcs(path)` — DW_TAG_subprogram `low_pc`/`high_pc` from `.debug_info`; handles both absolute and relative (byte-count) `high_pc` forms. Returns `{va: (name, end_va)}`.
-  - `extract_btf_funcs(path)` — `.BTF` type records + `.BTF.ext` `func_info` section; gives function name→VA for Linux kernel modules that lack `.symtab`.
-  - `LoongArch64TaintTracker.from_path_full()` — merges all three sources into `_syms` and stores DWARF end VAs in `tt._dwarf_ends`. Both `run()` and `run_interprocedural()` prefer DWARF `high_pc` over the next-function-start approximation when available.
+ - `extract_eh_frame_starts(path)`: FDE `initial_location` from `.eh_frame`; present in all GCC-compiled stripped binaries. Recovers leaf functions and tail-call-optimised bodies missed by the `addi.d $sp` prologue heuristic.
+ - `extract_debug_funcs(path)`: DW_TAG_subprogram `low_pc`/`high_pc` from `.debug_info`; handles both absolute and relative (byte-count) `high_pc` forms. Returns `{va: (name, end_va)}`.
+ - `extract_btf_funcs(path)`: `.BTF` type records + `.BTF.ext` `func_info` section; gives function name→VA for Linux kernel modules that lack `.symtab`.
+ - `LoongArch64TaintTracker.from_path_full()`: merges all three sources into `_syms` and stores DWARF end VAs in `tt._dwarf_ends`. Both `run()` and `run_interprocedural()` prefer DWARF `high_pc` over the next-function-start approximation when available.
 
 ---
 
 ## v2.18.0
 
 - **LoongArch64 Step 5: PLT/GOT resolution + R_LARCH_\* constants**
-  - `elf_parser.py`: added `R_LARCH_NONE/32/64/RELATIVE/COPY/JUMP_SLOT/TLS_DTPMOD32/64/TLS_DTPREL32/64/TLS_TPREL32/64/IRELATIVE` constants (psABI v2.30 / binutils loongarch.h).
-  - `taint_tracker_loongarch64.py` — `_load_elf()`: fixed three broken attribute accesses in the `ELFParser` branch (`little_endian`→`endian=="<"`, `section_by_name`→`get_section`, `sym.name/value`→`sym["name"]/sym["st_value"]`); the branch now actually runs instead of silently falling through to pyelftools. Both branches now merge PLT stub addresses (VA→imported symbol name) into `syms` from `get_plt_got_table()` / `.rela.plt`, so every `bl <plt_stub>` call resolves to the exact imported function name rather than the ±16-byte `_PLT_TOL` heuristic.
+ - `elf_parser.py`: added `R_LARCH_NONE/32/64/RELATIVE/COPY/JUMP_SLOT/TLS_DTPMOD32/64/TLS_DTPREL32/64/TLS_TPREL32/64/IRELATIVE` constants (psABI v2.30 / binutils loongarch.h).
+ - `taint_tracker_loongarch64.py`: `_load_elf()`: fixed three broken attribute accesses in the `ELFParser` branch (`little_endian`→`endian=="<"`, `section_by_name`→`get_section`, `sym.name/value`→`sym["name"]/sym["st_value"]`); the branch now actually runs instead of silently falling through to pyelftools. Both branches now merge PLT stub addresses (VA→imported symbol name) into `syms` from `get_plt_got_table()` / `.rela.plt`, so every `bl <plt_stub>` call resolves to the exact imported function name rather than the ±16-byte `_PLT_TOL` heuristic.
 
 ---
 
 ## v2.17.1
 
 - **`LibraryInventory` bug fixes** (`analyzers/library_inventory.py`): seven correctness bugs fixed after code review.
-  - **`.plt.sec` support**: `classify_internals()` now scans both `.plt` and `.plt.sec`. Android NDK r23+ with BTI places real PLT stubs in `.plt.sec`; previously, `plt_map` was always empty on modern NDK targets and every function clustered as `(pure-internal)` silently.
-  - **Wrong delta for same-label symbols**: the scoring loop previously looked up the delta of the first `_PLT_CRITICAL_IMPORTS` entry whose label matched — so `ssl_log_secret` (delta=2) was scored as +3 because `SSL_CTX_set_keylog_callback` (delta=3) shares the `[TLS-KEYLOG]` label. Score bonus is now computed per matched needle during detection and carried forward as `plt_score_bonus`, not re-derived at scoring time.
-  - **Multi-symbol additive scoring**: the label deduplication that prevented `SSL_CTX_set_keylog_callback` (+3) and `ssl_log_secret` (+2) from both contributing is replaced by per-needle deduplication. Each distinct matched needle contributes its delta once.
-  - **Separated try/except**: the JNI loop and PLT detection loop now each have their own try/except. A None-named symbol causing AttributeError in the JNI loop no longer silently zeroes out `plt_hooks`.
-  - **struct bounds guard in BL scan**: `range(0, len(traw), 4)` replaced with `range(0, len(traw) - 3, 4)` to avoid `struct.error` on non-4-byte-aligned content.
-  - **IRELATIVE skip in RELA parsing**: entries with `sym_idx == 0` (ifunc resolvers with no symbol) are now skipped; previously, an empty string was written into `got_to_sym`, which could corrupt PLT cluster labels.
-  - **text_end clamped to actual content**: `text_end = tv0 + text.size` replaced with `min(text.size, len(traw))` to prevent phantom VAs when `text.size > len(text.content)`.
-  - **Exact symbol match**: `needle in sym_name` substring check replaced with `sym_name == needle or sym_name.startswith(needle + '@')` to avoid false positives from wrapper names (e.g., `frida_ssl_log_secret_interceptor`).
-  - **Consistent `plt_hooks` formatting** in `report()` high-risk summary: was rendering as Python list repr; now uses `' '.join()` matching the table column format.
+ - **`.plt.sec` support**: `classify_internals()` now scans both `.plt` and `.plt.sec`. Android NDK r23+ with BTI places real PLT stubs in `.plt.sec`; previously, `plt_map` was always empty on modern NDK targets and every function clustered as `(pure-internal)` silently.
+ - **Wrong delta for same-label symbols**: the scoring loop previously looked up the delta of the first `_PLT_CRITICAL_IMPORTS` entry whose label matched: so `ssl_log_secret` (delta=2) was scored as +3 because `SSL_CTX_set_keylog_callback` (delta=3) shares the `[TLS-KEYLOG]` label. Score bonus is now computed per matched needle during detection and carried forward as `plt_score_bonus`, not re-derived at scoring time.
+ - **Multi-symbol additive scoring**: the label deduplication that prevented `SSL_CTX_set_keylog_callback` (+3) and `ssl_log_secret` (+2) from both contributing is replaced by per-needle deduplication. Each distinct matched needle contributes its delta once.
+ - **Separated try/except**: the JNI loop and PLT detection loop now each have their own try/except. A None-named symbol causing AttributeError in the JNI loop no longer silently zeroes out `plt_hooks`.
+ - **struct bounds guard in BL scan**: `range(0, len(traw), 4)` replaced with `range(0, len(traw) - 3, 4)` to avoid `struct.error` on non-4-byte-aligned content.
+ - **IRELATIVE skip in RELA parsing**: entries with `sym_idx == 0` (ifunc resolvers with no symbol) are now skipped; previously, an empty string was written into `got_to_sym`, which could corrupt PLT cluster labels.
+ - **text_end clamped to actual content**: `text_end = tv0 + text.size` replaced with `min(text.size, len(traw))` to prevent phantom VAs when `text.size > len(text.content)`.
+ - **Exact symbol match**: `needle in sym_name` substring check replaced with `sym_name == needle or sym_name.startswith(needle + '@')` to avoid false positives from wrapper names (e.g., `frida_ssl_log_secret_interceptor`).
+ - **Consistent `plt_hooks` formatting** in `report()` high-risk summary: was rendering as Python list repr; now uses `' '.join()` matching the table column format.
 - **`docs/INDEX.md`**: added `LibraryInventory` to the Android/APK module row (was missing since v2.16.0).
 
 ---
@@ -1130,7 +1130,7 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
 
 - **`LibraryInventory` PLT hook and TLS keylog detection** (`analyzers/library_inventory.py`): adds `plt_hooks: List[str]` field to `LibInventoryEntry`. Six critical symbol patterns are now detected in both dynamic imports and statically-linked re-exports: `SSL_CTX_set_keylog_callback` (`[TLS-KEYLOG]`, +3), `ssl_log_secret` (`[TLS-KEYLOG]`, +2), `ssl_log_rsa_client_key_exchange` (`[TLS-KEYLOG]`, +2), `bytehook_hook_all` (`[PLT-HOOK]`, +2), `bytehook_hook_single` (`[PLT-HOOK]`, +2), `shadowhook_hook_sym_name` (`[PLT-HOOK]`, +2). The score delta from each matching import is added to the security score (capped at 10). `report()` shows detected labels inline per row; the high-risk summary also lists hook labels.
 
-- **`LibraryInventory.classify_internals()`** (`analyzers/library_inventory.py`): new static method. Groups ARM64 internal functions by their PLT call signature (first 6 distinct PLT symbols called, joined with `+`). Returns `{label: [va, ...]}`. Functions with no PLT calls cluster as `(pure-internal)`. Requires `capstone`. Replaces the per-session `defaultdict` cluster scripts written during engagements.
+- **`LibraryInventory.classify_internals()`** (`analyzers/library_inventory.py`): new static method. Groups ARM64 internal functions by their PLT call signature (first 6 distinct PLT symbols called, joined with `+`). Returns `{label: [va,...]}`. Functions with no PLT calls cluster as `(pure-internal)`. Requires `capstone`. Replaces the per-session `defaultdict` cluster scripts written during engagements.
 
 ---
 
@@ -1170,185 +1170,185 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
 ## v2.14.2
 
 - **Flywheel hardening continued** (3 additional bugs fixed):
-  - `PatternLibrary._merge_new_defaults()`: fixed double `save()`. The redundant `if added: self.save()` before the unconditional call caused two disk writes when new defaults were added. Reduced to one unconditional call, which also handles the schema_version bump-only case.
-  - `PatternLibrary.list()`: `if tag:` replaced with `if tag is not None:`. Same class of bug as Bug 11 in `sweep()`. `list(tag="")` now filters to untagged patterns instead of showing all.
-  - `PatternLibrary.sweep()`: Bug 11 fix verified across 4 scenarios (empty list, None, real tag, nonexistent tag). Concurrent `add()` is GIL-safe in CPython. Lock is released correctly after an `AttributeError` from a duck-typed non-registry.
+ - `PatternLibrary._merge_new_defaults()`: fixed double `save()`. The redundant `if added: self.save()` before the unconditional call caused two disk writes when new defaults were added. Reduced to one unconditional call, which also handles the schema_version bump-only case.
+ - `PatternLibrary.list()`: `if tag:` replaced with `if tag is not None:`. Same class of bug as Bug 11 in `sweep()`. `list(tag="")` now filters to untagged patterns instead of showing all.
+ - `PatternLibrary.sweep()`: Bug 11 fix verified across 4 scenarios (empty list, None, real tag, nonexistent tag). Concurrent `add()` is GIL-safe in CPython. Lock is released correctly after an `AttributeError` from a duck-typed non-registry.
 
 ## v2.14.1
 
 - **Flywheel hardening** (10 bugs fixed via adversarial test suite):
-  - `export_patterns()`: whitespace-only title no longer produces a leading `': '` in the query. Title is stripped before building the query string.
-  - `export_patterns()`: descriptions made entirely of non-printing Unicode (e.g. zero-width spaces `U+200B`) are rejected. They pass SQLite `TRIM()` and Python `str.strip()` but fail `isprintable()`.
-  - `export_patterns()`: `TRIM()` guard added to the WHERE clause so whitespace-only descriptions are excluded at the SQL level.
-  - `export_patterns()`: query string is stripped of leading and trailing whitespace.
-  - `PatternLibrary._load()`: a non-list `patterns` field no longer crashes on load. It falls back to defaults.
-  - `PatternLibrary.save()`: acquires `self._lock`. Without it, an external save call could race with `ingest_from_registry()` and overwrite its in-progress results.
-  - `PatternLibrary._lock`: upgraded from `threading.Lock` to `threading.RLock`. `ingest_from_registry()` holds the lock and calls `save()` internally. A plain Lock deadlocks on that path.
-  - `FindingRegistry.__init__`: `check_same_thread=False` added to the SQLite connection. `export_patterns()` can now be called from a thread other than the one that created the registry.
-  - `PatternLibrary._load()`: one broken pattern entry no longer wipes all valid patterns. Broken entries are skipped one at a time instead of triggering a full reset to defaults.
-  - `Pattern.from_dict()`: extra fields in stored `PatternHit` dicts are filtered before construction. An unknown field from a newer version caused an uncaught `TypeError`.
-  - `Pattern.from_dict()`: `PatternHit` entries with no `binary` field are skipped instead of crashing the parent `Pattern` load.
+ - `export_patterns()`: whitespace-only title no longer produces a leading `': '` in the query. Title is stripped before building the query string.
+ - `export_patterns()`: descriptions made entirely of non-printing Unicode (e.g. zero-width spaces `U+200B`) are rejected. They pass SQLite `TRIM()` and Python `str.strip()` but fail `isprintable()`.
+ - `export_patterns()`: `TRIM()` guard added to the WHERE clause so whitespace-only descriptions are excluded at the SQL level.
+ - `export_patterns()`: query string is stripped of leading and trailing whitespace.
+ - `PatternLibrary._load()`: a non-list `patterns` field no longer crashes on load. It falls back to defaults.
+ - `PatternLibrary.save()`: acquires `self._lock`. Without it, an external save call could race with `ingest_from_registry()` and overwrite its in-progress results.
+ - `PatternLibrary._lock`: upgraded from `threading.Lock` to `threading.RLock`. `ingest_from_registry()` holds the lock and calls `save()` internally. A plain Lock deadlocks on that path.
+ - `FindingRegistry.__init__`: `check_same_thread=False` added to the SQLite connection. `export_patterns()` can now be called from a thread other than the one that created the registry.
+ - `PatternLibrary._load()`: one broken pattern entry no longer wipes all valid patterns. Broken entries are skipped one at a time instead of triggering a full reset to defaults.
+ - `Pattern.from_dict()`: extra fields in stored `PatternHit` dicts are filtered before construction. An unknown field from a newer version caused an uncaught `TypeError`.
+ - `Pattern.from_dict()`: `PatternHit` entries with no `binary` field are skipped instead of crashing the parent `Pattern` load.
 
 ## v2.14.0
 
 - **FindingRegistry flywheel** (`analyzers/finding_registry.py`, `analyzers/pattern_library.py`):
-  Confirmed findings now feed future sweeps automatically. `FindingRegistry.export_patterns()`
-  returns all confirmed findings as `{query, tag}` dicts tagged by CWE class.
+ Confirmed findings now feed future sweeps automatically. `FindingRegistry.export_patterns()`
+ returns all confirmed findings as `{query, tag}` dicts tagged by CWE class.
   `PatternLibrary.ingest_from_registry(reg)` consumes them, deduplicates, and saves. Call it
-  once at engagement start before `sweep()`. Idempotent: subsequent calls only add findings
-  registered since the last ingest. No hard coupling between modules; `PatternLibrary` accepts
-  any object with `export_patterns()`.
+ once at engagement start before `sweep()`. Idempotent: subsequent calls only add findings
+ registered since the last ingest. No hard coupling between modules; `PatternLibrary` accepts
+ any object with `export_patterns()`.
 
 ---
 
 ## v2.13.0
 
 - **ZIM-BERT distillation** (`analyzers/version_delta_finetune.py`): Teacher-student training
-  for cross-version binary similarity. `zimbert_finetune()` uses `all-mpnet-base-v2` as teacher
-  and `all-MiniLM-L6-v2` as student. Two auxiliary losses on top of MultipleNegativesRankingLoss:
-  L_KL_output (KL divergence on batch pairwise similarity distributions) forces the student's
-  similarity structure to match the teacher's; L_value (MSE on value projection vectors across
-  paired encoder layers) transfers the teacher's attention routing. Architecture-aware value
-  hooks handle both BERT and MPNet attention layouts. Standard fine-tuning entry point
-  (`finetune_model()`, `generate_structural_pairs()`) unchanged.
+ for cross-version binary similarity. `zimbert_finetune()` uses `all-mpnet-base-v2` as teacher
+ and `all-MiniLM-L6-v2` as student. Two auxiliary losses on top of MultipleNegativesRankingLoss:
+ L_KL_output (KL divergence on batch pairwise similarity distributions) forces the student's
+ similarity structure to match the teacher's; L_value (MSE on value projection vectors across
+ paired encoder layers) transfers the teacher's attention routing. Architecture-aware value
+ hooks handle both BERT and MPNet attention layouts. Standard fine-tuning entry point
+ (`finetune_model()`, `generate_structural_pairs()`) unchanged.
 
 ---
 
 ## v2.12.0
 
 - **ELFVtableReconstructor** (`analyzers/elf_vtable_reconstructor.py`): Static C++ vtable
-  reconstruction for x86-64 ET_DYN ELF files without executing the binary. Reads `.rela.dyn`
-  and resolves both R_X86_64_RELATIVE (type 8, in-library function pointers) and R_X86_64_64
-  (type 1, exported symbol references) to produce a complete slot→function map. Accepts a
-  vtable VA directly or looks up `_ZTV<N><name>` from the symbol table. Returns a `VtableMap`
-  with `live_slots()`, `function_at(offset)`, `slot_for_va(fn_va)`, and
+ reconstruction for x86-64 ET_DYN ELF files without executing the binary. Reads `.rela.dyn`
+ and resolves both R_X86_64_RELATIVE (type 8, in-library function pointers) and R_X86_64_64
+ (type 1, exported symbol references) to produce a complete slot→function map. Accepts a
+ vtable VA directly or looks up `_ZTV<N><name>` from the symbol table. Returns a `VtableMap`
+ with `live_slots()`, `function_at(offset)`, `slot_for_va(fn_va)`, and
   `slot_offset_for_name(fragment)` helpers.
 
 - **VtableDispatchScanner** (`analyzers/vtable_dispatch_scanner.py`): Scans x86-64 ELF
-  executable sections for `call [reg+disp]` dispatch instructions. Covers all standard
-  encodings: bare register (rax–rdi), REX.B-extended (r8–r15), SIB-based (r12/rsp), and
-  both disp8 (0–127) and disp32 forms with full REX prefix variants. Accepts a name→offset
-  dict, a `VtableMap` directly, or a list of raw offsets. Returns a `DispatchReport` with
+ executable sections for `call [reg+disp]` dispatch instructions. Covers all standard
+ encodings: bare register (rax–rdi), REX.B-extended (r8–r15), SIB-based (r12/rsp), and
+ both disp8 (0–127) and disp32 forms with full REX prefix variants. Accepts a name→offset
+ dict, a `VtableMap` directly, or a list of raw offsets. Returns a `DispatchReport` with
   `.dead()` (zero call sites) and `.live()` (call site list) per slot. Composes with
   `ELFVtableReconstructor`: `scanner.scan(vtable_map)` identifies unreachable virtual methods
-  in one call.
+ in one call.
 
 ---
 
 ## v2.11.0
 
 - **BmpKeyExtractor / LSBStegoReader / LagrangeKeyExtractor**
-  (`analyzers/lsb_stego_extractor.py`): BMP LSB steganography reader and
-  Lagrange polynomial secret-sharing key extractor. Recovers key material
-  hidden in BMP pixel LSBs using a Shamir-style scheme over rational arithmetic.
+ (`analyzers/lsb_stego_extractor.py`): BMP LSB steganography reader and
+ Lagrange polynomial secret-sharing key extractor. Recovers key material
+ hidden in BMP pixel LSBs using a Shamir-style scheme over rational arithmetic.
   `LSBStegoReader` reads the per-seed pixel LSB channel (1 bit/pixel, 8 pixels/byte,
-  LE bit order, modular wrap-around). `LagrangeKeyExtractor` reconstructs P(0) via
-  Lagrange interpolation at x=0 using CRT over multiple 63-bit primes; matches the
-  imath `mp_int_to_binary` byte-order: little-endian output, reverse two's complement
-  for negative values (carry MSByte to LSByte), extra byte for bit-aligned integers.
+ LE bit order, modular wrap-around). `LagrangeKeyExtractor` reconstructs P(0) via
+ Lagrange interpolation at x=0 using CRT over multiple 63-bit primes; matches the
+ imath `mp_int_to_binary` byte-order: little-endian output, reverse two's complement
+ for negative values (carry MSByte to LSByte), extra byte for bit-aligned integers.
   `BmpKeyExtractor` is the high-level entry point: BMP path + seed -> `StegoKeyResult`
-  with per-component hex strings and concatenated `raw_key_hex`. Stdlib-only;
-  no sympy or scipy dependency.
+ with per-component hex strings and concatenated `raw_key_hex`. Stdlib-only;
+ no sympy or scipy dependency.
 
 ---
 
 ## v2.10.0
 
 - **DEXLifter** (`analyzers/dex_lifter.py`): pseudo-Java IR lifter for DEX bytecode.
-  Converts `DEXInstruction` streams to readable Java-like source without SSA
-  or external dependencies. Type inference propagates through move-result, iget,
-  sget, check-cast, and const opcodes. Renders field access as dot notation,
-  invoke-* as typed method calls, if-* as labelled conditionals, backward
-  gotos as loop markers. Pending-invoke state correctly handles move-result
-  (result assigned to typed variable on the invoke line, not a separate line).
-  Handles binary/unary arithmetic, array access, new-instance, instanceof,
-  monitor-enter/exit, switch, fill-array-data. Falls back to annotated smali
-  comment for any unrecognised opcode so output is always complete.
-  Verified on PetTech APK: reveals ByteDance `Tz.a()`/`Tz.b()` anti-tamper
-  wrapping pattern and `BWFlashData.c` as the device key storage field.
+ Converts `DEXInstruction` streams to readable Java-like source without SSA
+ or external dependencies. Type inference propagates through move-result, iget,
+ sget, check-cast, and const opcodes. Renders field access as dot notation,
+ invoke-* as typed method calls, if-* as labelled conditionals, backward
+ gotos as loop markers. Pending-invoke state correctly handles move-result
+ (result assigned to typed variable on the invoke line, not a separate line).
+ Handles binary/unary arithmetic, array access, new-instance, instanceof,
+ monitor-enter/exit, switch, fill-array-data. Falls back to annotated smali
+ comment for any unrecognised opcode so output is always complete.
+ Verified on PetTech APK: reveals ByteDance `Tz.a()`/`Tz.b()` anti-tamper
+ wrapping pattern and `BWFlashData.c` as the device key storage field.
 
 ---
 
 ## v2.9.0
 
 - **DEXDisasm** (`analyzers/dex_disasm.py`): DEX bytecode disassembler with
-  smali-style output. Covers all 17 instruction formats (`10x` through `51l`).
-  Annotates every reference with resolved descriptors from the DEX flat tables:
-  full method signatures (class, name, proto), field names and types,
-  type names, and string literals. Builds a code_off lookup map at init time
-  by walking all `class_data_item` entries. `disasm_method(class, method)`,
+ smali-style output. Covers all 17 instruction formats (`10x` through `51l`).
+ Annotates every reference with resolved descriptors from the DEX flat tables:
+ full method signatures (class, name, proto), field names and types,
+ type names, and string literals. Builds a code_off lookup map at init time
+ by walking all `class_data_item` entries. `disasm_method(class, method)`,
   `disasm_class(class)`, `list_methods(class)`, `decode_code_item(dex, off)`.
-  53,635 methods decoded in PetTech APK. No external dependencies.
+ 53,635 methods decoded in PetTech APK. No external dependencies.
 
 ---
 
 ## v2.8.0
 
 - **SqlSinkScanner** (`sql_sink_scanner.py`): detect raw SQL injection in C/C++
-  ELF binaries using the MySQL C API or SQLite3 directly. Covers
+ ELF binaries using the MySQL C API or SQLite3 directly. Covers
   `mysql_query`/`mysql_real_query`/`sqlite3_exec`/`sqlite3_prepare_v2`. For each
-  call site, traces the SQL string argument backward: RODATA literal with `%s` →
+ call site, traces the SQL string argument backward: RODATA literal with `%s` →
   `INJECTABLE_LITERAL`; `snprintf`-built buffer with `%s` format specifier →
   `INJECTABLE`; numeric-only format specifiers → `SAFE_NUMERIC`; entry-register
-  propagation → `ARG_PROPAGATED`. Reuses PLT extraction and function-start
-  helpers from `SinkArgClassifier`. Dead PLT imports (0 callers) are pre-filtered
-  and reported separately. CLI: `python3 -m ablation.analyzers.sql_sink_scanner
-  <binary>` exits 2 on HIGH findings.
+ propagation → `ARG_PROPAGATED`. Reuses PLT extraction and function-start
+ helpers from `SinkArgClassifier`. Dead PLT imports (0 callers) are pre-filtered
+ and reported separately. CLI: `python3 -m ablation.analyzers.sql_sink_scanner
+ <binary>` exits 2 on HIGH findings.
 
 ---
 
 ## v2.7.0
 
 - **APKParser** (`apk_parser.py`): zero-dependency APK/XAPK container parser. Binary
-  XML (AXML) decoder with `ResXMLTree_attrExt` offset fix. DEX flat-table iteration:
-  strings, method refs, field refs, class defs. Handles multi-dex APKs (`classes*.dex`)
-  and APKPure XAPK containers transparently. API: `from_path()`, `parse_manifest()`,
+ XML (AXML) decoder with `ResXMLTree_attrExt` offset fix. DEX flat-table iteration:
+ strings, method refs, field refs, class defs. Handles multi-dex APKs (`classes*.dex`)
+ and APKPure XAPK containers transparently. API: `from_path()`, `parse_manifest()`,
   `iter_dex()`, `native_libs()`, `extract_native_lib()`.
 
 - **DEXFile.iter_native_methods()** (`apk_parser.py`): streaming `class_data_item`
-  parser for authoritative ACC_NATIVE detection (`0x0100`). Walks `encoded_method`
-  ULEB128 arrays with correct running-index reset between `direct_methods` and
+ parser for authoritative ACC_NATIVE detection (`0x0100`). Walks `encoded_method`
+ ULEB128 arrays with correct running-index reset between `direct_methods` and
   `virtual_methods`. Returns `NativeMethod` dataclass with class name, method name,
-  proto shorty, and code_off. Combined with ELF dynsym scan: three-way classification
-  — confirmed native, stripped/dynamically registered, ELF-only helper.
+ proto shorty, and code_off. Combined with ELF dynsym scan: three-way classification
+, confirmed native, stripped/dynamically registered, ELF-only helper.
   `dump_class_methods()` debug dump produces ASCII table with kind/flags/code_off per
-  method.
+ method.
 
 - **JniBridgeScanner** (`jni_bridge_scanner.py`): JNI bridge RE from DEX + ELF dynsym.
-  DEX side: ACC_NATIVE methods via `iter_native_methods()`, opaque peer FieldRef
-  (type `J` + peer-like name), `loadLibrary` call sites. ELF side: `JNI_OnLoad` export
-  (HIGH — dynamic registration; `RegisterNatives` function pointers not in symbol table)
-  vs `Java_*` exports (MEDIUM — canonical naming directly recoverable). No androguard
-  dependency. API: `from_path()`, `scan()`, `report()`.
-  Docs: `docs/reference-modules/android.md`.
+ DEX side: ACC_NATIVE methods via `iter_native_methods()`, opaque peer FieldRef
+ (type `J` + peer-like name), `loadLibrary` call sites. ELF side: `JNI_OnLoad` export
+ (HIGH, dynamic registration; `RegisterNatives` function pointers not in symbol table)
+ vs `Java_*` exports (MEDIUM, canonical naming directly recoverable). No androguard
+ dependency. API: `from_path()`, `scan()`, `report()`.
+ Docs: `docs/reference-modules/android.md`.
 
 - **BinderScanner** (`binder_scanner.py`): Binder IPC surface map from DEX ClassDef
-  superclass scan, `onTransact` MethodRef, and manifest exported component cross-reference.
-  Detects exported Services (HIGH), raw `onTransact` overrides (HIGH), AIDL-generated
+ superclass scan, `onTransact` MethodRef, and manifest exported component cross-reference.
+ Detects exported Services (HIGH), raw `onTransact` overrides (HIGH), AIDL-generated
   `$Stub` inner classes (MEDIUM), unexported Service subclasses (MEDIUM), and Messenger
-  usage (INFO). AIDL Stub integer transaction code fuzzing noted per finding.
-  API: `from_path()`, `scan()`, `report()`.
-  Docs: `docs/reference-modules/android.md`.
+ usage (INFO). AIDL Stub integer transaction code fuzzing noted per finding.
+ API: `from_path()`, `scan()`, `report()`.
+ Docs: `docs/reference-modules/android.md`.
 
 - **android_sweep.py** (`sweeps/android_sweep.py`): orchestration sweep for full APK
-  RE pass. Runs manifest analysis, DexAnalyzer, JniBridgeScanner, BinderScanner, and
-  native lib ELF security properties in a single call. XAPK containers handled
-  transparently.
+ RE pass. Runs manifest analysis, DexAnalyzer, JniBridgeScanner, BinderScanner, and
+ native lib ELF security properties in a single call. XAPK containers handled
+ transparently.
 
 ---
 
 ## v2.6.0
 
 - **FirmwareContainer** (`firmware_container.py`): parser for partitioned firmware
-  images with a plaintext header and fixed 296-byte partition table records. Detects
-  payload type (gzip/xz/zstd/lz4/lzo/cpio/elf/pe/ext2/3/4) per partition. API:
+ images with a plaintext header and fixed 296-byte partition table records. Detects
+ payload type (gzip/xz/zstd/lz4/lzo/cpio/elf/pe/ext2/3/4) per partition. API:
   `from_path()`, `dump_partitions()`, `read_partition(name)`, `extract(name, path)`,
   `extract_all(outdir)`. CLI: `python3 -m ablation.analyzers.firmware_container`.
-  Docs: `docs/reference-modules/firmware-containers.md`.
+ Docs: `docs/reference-modules/firmware-containers.md`.
 
 - **VideoContainerAnalyzer** (`video_container.py`): forensic scanner for MP4/MOV,
-  MKV/WebM, and AVI files. Detects polyglot headers, appended trailer data, atom size
-  overflow, EBML unknown-length abuse, and RIFF chunk miscount. API: `from_path()`,
+ MKV/WebM, and AVI files. Detects polyglot headers, appended trailer data, atom size
+ overflow, EBML unknown-length abuse, and RIFF chunk miscount. API: `from_path()`,
   `scan()`, `report(findings)`. Docs: `docs/reference-modules/firmware-containers.md`.
 
 ---
@@ -1356,58 +1356,58 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
 ## v2.5.0
 
 - **FormatStringScanner** (`format_string_scanner.py`): x86-64 format string
-  vulnerability detector. TAOSSA Ch8-grounded. 28 format sinks: printf/fprintf/
-  sprintf/snprintf/syslog/err/warn/wprintf family. Backward trace per call site:
-  LEA [rip+offset] into .rodata = SAFE; register from function arg / stack slot /
-  recv return = VULNERABLE. `verdict` property returns SAFE / VULNERABLE / SUSPICIOUS.
-  CLI: `ablation fmtstr <binary> [--json FILE]`.
+ vulnerability detector. TAOSSA Ch8-grounded. 28 format sinks: printf/fprintf/
+ sprintf/snprintf/syslog/err/warn/wprintf family. Backward trace per call site:
+ LEA [rip+offset] into.rodata = SAFE; register from function arg / stack slot /
+ recv return = VULNERABLE. `verdict` property returns SAFE / VULNERABLE / SUSPICIOUS.
+ CLI: `ablation fmtstr <binary> [--json FILE]`.
 
 - **IoctlAttackSurfaceGenerator** (`ioctl_attack_surface.py`): per-IOCTL attack
-  surface report for Windows kernel drivers. Wraps KernelDriverAnalyzer output. For
-  each IoControlCode: METHOD_NEITHER without ProbeForRead = CRITICAL; allocation
-  before InputBufferLength read = HIGH; TYPE3_INPUT_BUFFER direct deref = HIGH.
-  Generates Markdown report via `report_markdown()`. CLI: `ablation ioctl-surface`.
+ surface report for Windows kernel drivers. Wraps KernelDriverAnalyzer output. For
+ each IoControlCode: METHOD_NEITHER without ProbeForRead = CRITICAL; allocation
+ before InputBufferLength read = HIGH; TYPE3_INPUT_BUFFER direct deref = HIGH.
+ Generates Markdown report via `report_markdown()`. CLI: `ablation ioctl-surface`.
 
 - **CrossBinaryTaintTracker** (`cross_binary_taint.py`): LibGraph-backed cross-library
-  taint BFS. Extends TaintTracker.run_interprocedural() to follow tainted arguments
-  through PLT entries into exporting shared libraries. Resolves PLT symbol to exporting
-  binary via LibGraph.defined_in(), spawns a seeded TaintTracker on that binary, and
-  continues BFS. Returns TaintChain with full cross-binary hop provenance.
+ taint BFS. Extends TaintTracker.run_interprocedural() to follow tainted arguments
+ through PLT entries into exporting shared libraries. Resolves PLT symbol to exporting
+ binary via LibGraph.defined_in(), spawns a seeded TaintTracker on that binary, and
+ continues BFS. Returns TaintChain with full cross-binary hop provenance.
 
 - **ByovdDetector / BYOVDDetector** (`byovd_detector.py`): BYOVD capability detector.
-  12 capability classes: PHYS_MEM_RW (MmMapIoSpace), TOKEN_STEAL (PsInitialSystemProcess),
-  DKOM (ObReferenceObjectByHandle), APC_INJECT (KeInitializeApc), DRIVER_LOAD,
-  CALLBACK_REMOVE, PROCESS_KILL, MSR_WRITE (WRMSR instruction scan), and more.
-  Known-driver PDB fingerprints (mhyprot, RTCore64, dbutil, PROCEXP, iqvw64e, cpuz).
-  CLI: `ablation byovd <driver.sys>`.
+ 12 capability classes: PHYS_MEM_RW (MmMapIoSpace), TOKEN_STEAL (PsInitialSystemProcess),
+ DKOM (ObReferenceObjectByHandle), APC_INJECT (KeInitializeApc), DRIVER_LOAD,
+ CALLBACK_REMOVE, PROCESS_KILL, MSR_WRITE (WRMSR instruction scan), and more.
+ Known-driver PDB fingerprints (mhyprot, RTCore64, dbutil, PROCEXP, iqvw64e, cpuz).
+ CLI: `ablation byovd <driver.sys>`.
 
 - **MIPS32FuncProfiler** (`mips_analyzer.py`): quick MIPS32 function profiler.
-  Complements MIPS32TaintTracker (taint_tracker_mips.py): single-call function
-  profile returning call sites + sink flags for MIPS32 binaries. Uses `MIPS32TaintTracker`
-  as backend; adds big-endian + little-endian O32 ABI support.
+ Complements MIPS32TaintTracker (taint_tracker_mips.py): single-call function
+ profile returning call sites + sink flags for MIPS32 binaries. Uses `MIPS32TaintTracker`
+ as backend; adds big-endian + little-endian O32 ABI support.
 
 - **HeapUAFScanner** (`heap_uaf_scanner.py`): forward register-state UAF/double-free
-  scanner. Complements HeapVulnScanner: simpler single-pass approach tracking ALLOC /
-  FREE / UNKNOWN state per register. Compatible with both SysV and Windows x64 ABI
-  (`windows_abi=True` flag uses RCX as free arg instead of RDI).
+ scanner. Complements HeapVulnScanner: simpler single-pass approach tracking ALLOC /
+ FREE / UNKNOWN state per register. Compatible with both SysV and Windows x64 ABI
+ (`windows_abi=True` flag uses RCX as free arg instead of RDI).
 
 ---
 
 ## v2.4.0
 
 - **MIPS32TaintTracker** (`taint_tracker_mips.py`): MIPS32 source-to-sink taint
-  analysis for embedded firmware (RouterOS, Broadcom CPE, MIPS-based routers).
-  O32 ABI register model: $a0-$a3 args, $v0 return, $t0-$t9 caller-saved, $s0-$s7
-  callee-saved. Sources: recv/recvfrom/read/fgets/gets/fread. Sinks:
-  system/execve/execl/execvp/popen/strcpy/sprintf/memcpy/strcat/snprintf. Load-delay
-  slot aware. Big-endian and little-endian support. Intraprocedural + interprocedural
-  BFS up to depth 4. CLI: `ablation mips <binary> [--le]`.
+ analysis for embedded firmware (RouterOS, Broadcom CPE, MIPS-based routers).
+ O32 ABI register model: $a0-$a3 args, $v0 return, $t0-$t9 caller-saved, $s0-$s7
+ callee-saved. Sources: recv/recvfrom/read/fgets/gets/fread. Sinks:
+ system/execve/execl/execvp/popen/strcpy/sprintf/memcpy/strcat/snprintf. Load-delay
+ slot aware. Big-endian and little-endian support. Intraprocedural + interprocedural
+ BFS up to depth 4. CLI: `ablation mips <binary> [--le]`.
 
 - **HeapVulnScanner** (`heap_vuln_scanner.py`): four heap memory corruption classes
-  for x86-64 ELF. Grounded in TAOSSA Ch5 (Memory Corruption) and Ch6 (C Language
-  Issues): `INT_OVERFLOW_BEFORE_ALLOC` (IMUL/MUL/SHL result fed to allocator without
-  overflow check, L6-2/L6-3 patterns); `USE_AFTER_FREE` (freed register dereferenced
-  in same function); `DOUBLE_FREE` (same register freed twice without reassignment);
+ for x86-64 ELF. Grounded in TAOSSA Ch5 (Memory Corruption) and Ch6 (C Language
+ Issues): `INT_OVERFLOW_BEFORE_ALLOC` (IMUL/MUL/SHL result fed to allocator without
+ overflow check, L6-2/L6-3 patterns); `USE_AFTER_FREE` (freed register dereferenced
+ in same function); `DOUBLE_FREE` (same register freed twice without reassignment);
   `OFF_BY_ONE_ALLOC` (strlen result to malloc without +1). CLI: `ablation heap <binary>`.
 
 ---
@@ -1415,87 +1415,87 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
 ## v2.3.0
 
 - **BYOVDDetector**: BYOVD (Bring Your Own Vulnerable Driver) risk assessment.
-  Wraps `KernelDriverAnalyzer` with BYOVD-specific scoring (0-100). Detects 8
-  attack paths: `PHYS_MEM_ARBITRARY_RW` (MmMapIoSpace with user-supplied physical
-  address), `MDL_KERNEL_WRITE` (IoAllocateMdl + MmProbeAndLockPages +
-  MmMapLockedPagesSpecifyCache SSDT-write chain, from PRE ch3 Sample A walk-through),
+ Wraps `KernelDriverAnalyzer` with BYOVD-specific scoring (0-100). Detects 8
+ attack paths: `PHYS_MEM_ARBITRARY_RW` (MmMapIoSpace with user-supplied physical
+ address), `MDL_KERNEL_WRITE` (IoAllocateMdl + MmProbeAndLockPages +
+ MmMapLockedPagesSpecifyCache SSDT-write chain, from PRE ch3 Sample A walk-through),
   `MSR_LSTAR_MANIPULATION` (RDMSR/WRMSR at 0xC0000082), `SSDT_HOOK` (CR0 WP-disable
-  combined sequence + KeServiceDescriptorTable), `TOKEN_STEALING_LPE`
-  (PsInitialSystemProcess + DKOM), `SMEP_BYPASS` (CR4 combined sequence),
+ combined sequence + KeServiceDescriptorTable), `TOKEN_STEALING_LPE`
+ (PsInitialSystemProcess + DKOM), `SMEP_BYPASS` (CR4 combined sequence),
   `APC_KERNEL_INJECTION` (KeInitializeApc/KeInsertQueueApc), `VIRTUAL_MEM_WRITE`
-  (ZwWriteVirtualMemory). Signed driver + METHOD_NEITHER IOCTL + attack path =
-  BYOVD_CONFIRMED. CLI: `ablation byovd <driver.sys>`.
-  Grounded in Practical Reverse Engineering (Dang et al.) ch3 IOCTL walk-throughs.
+ (ZwWriteVirtualMemory). Signed driver + METHOD_NEITHER IOCTL + attack path =
+ BYOVD_CONFIRMED. CLI: `ablation byovd <driver.sys>`.
+ Grounded in Practical Reverse Engineering (Dang et al.) ch3 IOCTL walk-throughs.
 
 ---
 
 ## v2.0.0
 
 - **KernelDriverAnalyzer**: first Windows `.sys` kernel driver RE module. Covers IRP/IOCTL
-  dispatch extraction (capstone DriverEntry disassembly), CTL_CODE decoder with METHOD_NEITHER
-  flagging, 40+ kernel API risk classifications across 12 classes, 20+ callback registrations
-  tagged by edr_like/rootkit_risk/info, pool tag extraction from `41 B8` byte pattern, and a
-  dangerous-instruction scanner: CR0/CR4 combined sequences, MSR_LSTAR targeted access,
-  SSDT hook combined byte pattern, UTF-16LE `L"KeServiceDescriptorTable"` wide-string scan,
-  SMEP-disable CR4 sequence, RDMSR/WRMSR, CLI/STI/HLT, SWAPGS, IRETQ, I/O ports.
-  Standalone `decode_ioctl_code()` function. WDM/KMDF/minifilter classification by import
-  profile. PDB path extraction (RSDS + NB10), Authenticode signature detection.
-  Grounded in Windows Internals Part 1 (Ch5 memory, Ch6 I/O), Windows Kernel Programming,
-  and Rootkits: Subverting the Windows Kernel.
+ dispatch extraction (capstone DriverEntry disassembly), CTL_CODE decoder with METHOD_NEITHER
+ flagging, 40+ kernel API risk classifications across 12 classes, 20+ callback registrations
+ tagged by edr_like/rootkit_risk/info, pool tag extraction from `41 B8` byte pattern, and a
+ dangerous-instruction scanner: CR0/CR4 combined sequences, MSR_LSTAR targeted access,
+ SSDT hook combined byte pattern, UTF-16LE `L"KeServiceDescriptorTable"` wide-string scan,
+ SMEP-disable CR4 sequence, RDMSR/WRMSR, CLI/STI/HLT, SWAPGS, IRETQ, I/O ports.
+ Standalone `decode_ioctl_code()` function. WDM/KMDF/minifilter classification by import
+ profile. PDB path extraction (RSDS + NB10), Authenticode signature detection.
+ Grounded in Windows Internals Part 1 (Ch5 memory, Ch6 I/O), Windows Kernel Programming,
+ and Rootkits: Subverting the Windows Kernel.
 
 ---
 
 ## v1.8.0
 
 - **NameRegistry**: persistent VA-to-name overlay at `~/.ablation/function_names.json`,
-  keyed by binary SHA256. Names auto-load in all sessions and appear in every callee, caller,
-  and display context.
+ keyed by binary SHA256. Names auto-load in all sessions and appear in every callee, caller,
+ and display context.
 - **FindingRegistry**: cross-target confirmed finding store at `~/.ablation/findings.db`.
-  BERT embeddings attached to findings seed future sweeps automatically.
+ BERT embeddings attached to findings seed future sweeps automatically.
 - **PatternLibrary**: self-improving pattern corpus. Every confirmed finding registers a
-  semantic query that replays on future binaries via `pl.sweep(searcher)`.
+ semantic query that replays on future binaries via `pl.sweep(searcher)`.
 - **BinaryContext: discovered-name overlay**: `ctx.name(va)` returns the overlay name when
-  set, cascading through export, PLT, and hex. `ctx.set_name()`, `ctx.names_table()`,
+ set, cascading through export, PLT, and hex. `ctx.set_name()`, `ctx.names_table()`,
   `ctx.names_map()`.
 - **Vectorized call graph**: `_build_call_graph` replaced with NumPy `0xe8` opcode scan.
-  One broadcast operation extracts all CALL rel32 displacements and resolves all targets.
-  Sequential capstone retained as fallback.
+ One broadcast operation extracts all CALL rel32 displacements and resolves all targets.
+ Sequential capstone retained as fallback.
 - **fortinet_sweep.py rewrite**: modernized to use current ablation.analyzers API; removed
-  manual ELF parsing and hardcoded session paths.
+ manual ELF parsing and hardcoded session paths.
 - **modules/ migration**: 611 vendor-specific RE modules moved from flat `modules/` to
   `targets/<vendor>/` directories. `modules/` now contains only general-purpose utilities.
 - **MCP server removed**: dead code; all functionality available directly via the Python API.
 - **Document library**: full external-facing docs: getting started, workflow guides, module
-  reference, target notes, pitch document.
+ reference, target notes, pitch document.
 
 ---
 
 ## v1.7.0
 
 - **LlmAnalyst**: ReAct agent loop (Claude Sonnet 5) for automated function naming and
-  vulnerability hypothesis generation. `AgentLoop`, `ToolRegistry`, `ContextBuilder`,
+ vulnerability hypothesis generation. `AgentLoop`, `ToolRegistry`, `ContextBuilder`,
   `RAGRetriever`.
 - **TaintTracker (x86-64)**: static intraprocedural taint analysis. libdft taint policy
-  adapted for static analysis. Full stack model (rbp-relative and rsp-relative slots).
+ adapted for static analysis. Full stack model (rbp-relative and rsp-relative slots).
 - **PathSolver**: constraint-based path feasibility. Eliminates TaintTracker false positives
-  where the tainted path is unreachable due to contradictory branch constraints.
+ where the tainted path is unreachable due to contradictory branch constraints.
 - **FuncProfiler**: lightweight triage: BB count, edge count, PLT calls, branch density
-  classification without full disassembly.
+ classification without full disassembly.
 
 ---
 
 ## v1.6.0
 
 - **VtableResolver**: ARM64 C++ vtable reconstruction and BLR indirect call resolution.
-  Four-phase: vtable extraction, constructor vptr detection, BLR site detection, resolution.
-  Primary target: WeChat `libwechatnetwork.so` gILinkKey dispatch.
+ Four-phase: vtable extraction, constructor vptr detection, BLR site detection, resolution.
+ Primary target: WeChat `libwechatnetwork.so` gILinkKey dispatch.
 - **VersionDelta**: cross-version function tracking. Three-stage pipeline: structural
-  pre-filter, mnemonic 4-gram Jaccard, BERT tiebreaker. Patch localization via
+ pre-filter, mnemonic 4-gram Jaccard, BERT tiebreaker. Patch localization via
   `difflib.SequenceMatcher`. Anchor scan for implementation variant classification (validated
-  against multiple binary versions).
+ against multiple binary versions).
 - **StructuralSim**: five-signal composite similarity (opcode histogram, immediate Jaccard,
-  PLT overlap, branch density, size proximity). Works on all functions, not just the ~12%
-  with two or more external PLT calls.
+ PLT overlap, branch density, size proximity). Works on all functions, not just the ~12%
+ with two or more external PLT calls.
 - **MatrixProfileDiff**: STOMP-based sequence anomaly detection for binary diffing.
 
 ---
@@ -1503,15 +1503,15 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
 ## v1.5.0
 
 - **SemanticSearcher**: BERT behavioral fingerprint search over all functions in a binary.
-  ~35s for 19,000 functions on CPU. Queries in plain English. Results cached.
+ ~35s for 19,000 functions on CPU. Queries in plain English. Results cached.
 - **CorpusBuilder**: builds `func_id.db` behavioral description database for BERT encoding.
-  Per-function: PLT calls, strings, exported name, call-graph neighbors, size.
+ Per-function: PLT calls, strings, exported name, call-graph neighbors, size.
 - **EntropyMapper**: sliding-window Shannon entropy scan. Classifies binary regions as
-  ENCRYPTED, CODE, SPARSE, or PADDING. Finds encrypted and plaintext transitions.
+ ENCRYPTED, CODE, SPARSE, or PADDING. Finds encrypted and plaintext transitions.
 - **XorSolver**: three-mode automated XOR decryption: KPA (known plaintext), Hamming
-  distance key length guesser, frequency analysis and transposition.
+ distance key length guesser, frequency analysis and transposition.
 - **CryptoAudit**: JWT weak-secret cracking (ordered by production frequency), hardcoded
-  key material scan, TLS posture assessment.
+ key material scan, TLS posture assessment.
 
 ---
 
@@ -1519,24 +1519,24 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
 
 - **XRefGraph**: full cross-reference graph with indirect call resolution.
 - **CFGBuilder**: per-function control flow graph via iterative recursive disassembly
-  (Andriesse PBA ch. 8.2.4). BasicBlock: start, end, succs, insns.
+ (Andriesse PBA ch. 8.2.4). BasicBlock: start, end, succs, insns.
 - **BinaryContext: RIP-relative xref index**: NumPy vectorized displacement scan in
   `_build_string_xref_index`. One O(N) pass over `.text` builds `_str_xref_idx`
-  (string_va -> [code_vas]) and `_func_str_idx` (func_va -> [string_vas]).
+ (string_va -> [code_vas]) and `_func_str_idx` (func_va -> [string_vas]).
 - **`ctx.strings_in_func(va)`**, **`ctx.string_xrefs(va)`**, **`ctx.funcs_referencing_string(va)`**.
 
 ---
 
 ## v1.3.0
 
-- **Installable package**: `ablation.analyzers.*` package structure. `pip install -e .`.
-  Shims in `modules/` preserve backward compatibility.
+- **Installable package**: `ablation.analyzers.*` package structure. `pip install -e.`.
+ Shims in `modules/` preserve backward compatibility.
 - **BinaryContext**: SHA256-keyed JSON cache at `~/.ablation/cache/`. Build once (0.5s),
-  reload in 110ms. Captures PLT, exports, strings, func_starts, call_edges.
+ reload in 110ms. Captures PLT, exports, strings, func_starts, call_edges.
 - **GoFuncTable (GoPclntab)**: pclntab parser. Go 1.12 - 1.20+. All architectures.
-  Lifts semantic search accuracy from ~0.20 to ~0.70+ on stripped Go binaries.
+ Lifts semantic search accuracy from ~0.20 to ~0.70+ on stripped Go binaries.
 - **GoGarbleRe**: garble-obfuscated Go binary RE. Runtime bootstrap tracing, HTTP handler
-  pattern detection, VA and file-offset mapping recovery.
+ pattern detection, VA and file-offset mapping recovery.
 - **GoStringResolver**: reconstructs Go string constants from `concatstrings` call sites.
 - **GoSubprocessScanner**: finds all `os/exec.Command`, `syscall.Exec`, SYS_EXECVE sites.
 - **GoDangerousCallers**: Go-specific dangerous caller sweep.

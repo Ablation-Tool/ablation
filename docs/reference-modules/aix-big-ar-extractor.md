@@ -16,16 +16,16 @@ Three things were not possible before in Ablation:
 
 - Magic: `<bigaf>\n` (8 bytes, `0x3c 0x62 0x69 0x67 0x61 0x66 0x3e 0x0a`)
 - Global header (128 bytes total): 8-byte magic + six 20-char text decimal fields
-  - `fl_fstmoff`: offset of first member (128 for non-empty archives)
-  - `fl_lstmoff`: offset of last member
-  - `fl_memoff`, `fl_gstoff`, `fl_gst64off`: member table + symbol tables
+ - `fl_fstmoff`: offset of first member (128 for non-empty archives)
+ - `fl_lstmoff`: offset of last member
+ - `fl_memoff`, `fl_gstoff`, `fl_gst64off`: member table + symbol tables
 - Member header at each member offset:
-  - 112-byte fixed section (6 text-decimal fields + 1 text-octal mode field + 4-char namlen)
-  - `ar_namlen` bytes of member name (not null-terminated)
-  - 1 null pad byte if `ar_namlen` is odd
-  - 2-byte `ar_fmag` = `` `\n `` (`0x60 0x0a`) consistency trailer
-  - `ar_size` bytes of member data
-  - 1 pad byte if `ar_size` is odd (to align next member to 2-byte boundary)
+ - 112-byte fixed section (6 text-decimal fields + 1 text-octal mode field + 4-char namlen)
+ - `ar_namlen` bytes of member name (not null-terminated)
+ - 1 null pad byte if `ar_namlen` is odd
+ - 2-byte `ar_fmag` = `` `\n `` (`0x60 0x0a`) consistency trailer
+ - `ar_size` bytes of member data
+ - 1 pad byte if `ar_size` is odd (to align next member to 2-byte boundary)
 
 Members are a doubly-linked list via `ar_nxtoff` / `ar_prvoff` (text-decimal file offsets).
 

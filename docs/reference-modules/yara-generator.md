@@ -14,7 +14,7 @@ Two gaps existed before this module:
 
 1. **Confirmed binary findings had no automatic detection artifact.** After confirming a vulnerability in a PE binary, producing a YARA rule required manually translating the PE scanner output into YARA string and condition syntax. The module generates the rule directly from `scan_pe_file()` or `scan_elf_file()` output.
 
-2. **Built-in detection templates were scattered.** Common malware behavior classes — process injection, ransomware, rootkit, downloader, RAT, keylogger, fileless PowerShell, and lateral movement — each required a separate authoring effort. The module ships eight ready-to-use rule generators.
+2. **Built-in detection templates were scattered.** Common malware behavior classes, process injection, ransomware, rootkit, downloader, RAT, keylogger, fileless PowerShell, and lateral movement; each required a separate authoring effort. The module ships eight ready-to-use rule generators.
 
 ---
 
@@ -78,8 +78,8 @@ from ablation.core.yara_generator import (
 | Field | Description |
 |---|---|
 | `name` | Rule identifier (YARA-safe: alphanumeric + underscore) |
-| `meta` | `dict[str, str]` — `description`, `author_type`, `date`, `technique`, `reference` |
-| `strings` | `list[(identifier, value, modifiers)]` — each string definition |
+| `meta` | `dict[str, str]`: `description`, `author_type`, `date`, `technique`, `reference` |
+| `strings` | `list[(identifier, value, modifiers)]`: each string definition |
 | `condition` | YARA condition expression |
 
 ```python
@@ -100,7 +100,7 @@ Builds a rule from `scan_pe_file()` output. Extracts strings from three finding 
 
 Condition: `any of them` (default). Override by setting `rule.condition` after generation.
 
-Rule name: `mal_<filename_base>_<sha256_prefix>` — deterministic from file path.
+Rule name: `mal_<filename_base>_<sha256_prefix>`, deterministic from file path.
 
 ---
 
@@ -108,14 +108,14 @@ Rule name: `mal_<filename_base>_<sha256_prefix>` — deterministic from file pat
 
 | Generator | ATT&CK techniques |
 |---|---|
-| `generate_process_injection_rule` | T1055 — VirtualAllocEx, WriteProcessMemory, CreateRemoteThread |
-| `generate_ransomware_rule` | T1486 — CryptEncrypt, DeleteShadowCopies, FindFirstFile loops |
-| `generate_rootkit_rule` | T1014 — SSDT hooks, DKOM, IRP dispatch manipulation |
-| `generate_downloader_rule` | T1105 — URLDownloadToFile, WinINet, Invoke-Expression |
-| `generate_rat_rule` | T1021 — reverse shell, keylogging, screenshot APIs |
-| `generate_keylogger_rule` | T1056.001 — SetWindowsHookEx, GetAsyncKeyState |
-| `generate_fileless_powershell_rule` | T1059.001 / T1566.001 — encoded commands, WMI, VBA Eval |
-| `generate_worm_rule` | T1021 / T1570 — WMI lateral movement, NetShareEnum, CopyFileEx |
+| `generate_process_injection_rule` | T1055: VirtualAllocEx, WriteProcessMemory, CreateRemoteThread |
+| `generate_ransomware_rule` | T1486: CryptEncrypt, DeleteShadowCopies, FindFirstFile loops |
+| `generate_rootkit_rule` | T1014: SSDT hooks, DKOM, IRP dispatch manipulation |
+| `generate_downloader_rule` | T1105: URLDownloadToFile, WinINet, Invoke-Expression |
+| `generate_rat_rule` | T1021: reverse shell, keylogging, screenshot APIs |
+| `generate_keylogger_rule` | T1056.001: SetWindowsHookEx, GetAsyncKeyState |
+| `generate_fileless_powershell_rule` | T1059.001 / T1566.001: encoded commands, WMI, VBA Eval |
+| `generate_worm_rule` | T1021 / T1570: WMI lateral movement, NetShareEnum, CopyFileEx |
 
 ---
 

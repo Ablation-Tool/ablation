@@ -3,17 +3,17 @@
 ## Why this exists
 
 1. FORGE is a point-in-time gate. It does not persist a hash of what passed.
-   When a finding is revised after confirmation there is no record of the original
-   committed content, which session produced it, or whether the revision was
-   reviewed by anyone.
+ When a finding is revised after confirmation there is no record of the original
+ committed content, which session produced it, or whether the revision was
+ reviewed by anyone.
 
 2. Multi-session review has no tamper-evidence. If two agents work on the same
-   target across sessions there is no machine-checkable way to detect whether a
-   finding was altered between sessions without manually diffing SESSION.md files.
+ target across sessions there is no machine-checkable way to detect whether a
+ finding was altered between sessions without manually diffing SESSION.md files.
 
 3. The connection between a confirmed finding and its originating workflow stage
-   is not recorded. `FindingRegistry.register()` captures the finding; it does
-   not record who produced it or whether a second agent reviewed and approved it.
+ is not recorded. `FindingRegistry.register()` captures the finding; it does
+ not record who produced it or whether a second agent reviewed and approved it.
 
 `StageCommitment` addresses all three gaps using the No-Lock/Approving pattern.
 The producer commits a content hash without freezing the instance. The reviewer
@@ -163,7 +163,7 @@ Returns a two-element tuple. First element is `True` when the chain is intact,
 | `"ok"` | current instance matches the committed hash |
 | `"ok (approved revision)"` | current matches revised hash and approving chain is valid |
 | `"no commitment for stage '...'"` | `commit()` was never called |
-| `"content mutated: ..."` | instance changed after commit with no approved revision |
+| `"content mutated:..."` | instance changed after commit with no approved revision |
 | `"approving hash mismatch"` | revised_content_hash matches but approving_hash is wrong |
 
 ---

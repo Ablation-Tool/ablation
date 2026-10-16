@@ -67,10 +67,10 @@ print(frequency_report(text, base))
 
 | Format | Opcode bits | Field extraction |
 |--------|-------------|-----------------|
-| RRR    | top 4 (0xA-0xF) | selb/shufb/fma/fnms/fms/mpya |
-| RI18   | bits 31-25 (7-bit) | I18 = `(w>>7)&0x3FFFF`, rT = `w&0x7F` |
-| RI16   | bits 31-23 (9-bit) | I16 = signed `(w>>7)&0xFFFF`, rT = `w&0x7F` |
-| RI10   | bits 31-24 (8-bit) | I10 = signed `(w>>14)&0x3FF`, rA = `(w>>7)&0x7F`, rT = `w&0x7F` |
+| RRR | top 4 (0xA-0xF) | selb/shufb/fma/fnms/fms/mpya |
+| RI18 | bits 31-25 (7-bit) | I18 = `(w>>7)&0x3FFFF`, rT = `w&0x7F` |
+| RI16 | bits 31-23 (9-bit) | I16 = signed `(w>>7)&0xFFFF`, rT = `w&0x7F` |
+| RI10 | bits 31-24 (8-bit) | I10 = signed `(w>>14)&0x3FF`, rA = `(w>>7)&0x7F`, rT = `w&0x7F` |
 | RR/RI7 | bits 31-21 (11-bit) | rB = `(w>>14)&0x7F`, rA = `(w>>7)&0x7F`, rT = `w&0x7F` |
 
 RI16 is checked before RI10. This matters because lqr/stqr/il/ilhu/iohl use 9-bit opcodes that overlap with 8-bit RI10 space.
@@ -89,26 +89,26 @@ Key confirmations:
 | op11=0x201 | `nop` | 1072 hits Crysis2, pipeline even-slot NOP |
 | op11=0x204 | `cbd` | 2467 hits Crysis2 (was top unknown) |
 | op11=0x209 | `cwx` | 0x413fff88 in addmat |
-| op11=0x1C0 | `fa`  | was "op8=0x38 (2167 hits)" top unknown |
+| op11=0x1C0 | `fa` | was "op8=0x38 (2167 hits)" top unknown |
 | op11=0x1DC | `csflt` | 1590 hits Crysis2 (was "op11=0x1dc" unknown) |
 | op11=0x1DD | `cuflt` | convert unsigned int to float (RI7 scale7; adjacent to csflt) |
 | op11=0x2AE | `cfltu` | convert float to unsigned int (RI7 scale7; 211 hits Crysis2) |
 | op11=0x2B6 | `cflts` | convert float to signed int (RI7 scale7; 244 hits Crysis2) |
-| op11=0x0A0 | `frds`  | float round double to single (tentative; after csflt, 282 hits) |
-| op11=0x0A1 | `fesd`  | float extend single to double (tentative; rA=rT-1 pattern, 192 hits) |
-| op11=0x0C1 | `addx`  | add extended with carry (tentative; tree-reduction, 344 hits) |
-| op11=0x0D3 | `mpys`  | multiply and shift right (tentative; in shufb sequences, 224 hits) |
+| op11=0x0A0 | `frds` | float round double to single (tentative; after csflt, 282 hits) |
+| op11=0x0A1 | `fesd` | float extend single to double (tentative; rA=rT-1 pattern, 192 hits) |
+| op11=0x0C1 | `addx` | add extended with carry (tentative; tree-reduction, 344 hits) |
+| op11=0x0D3 | `mpys` | multiply and shift right (tentative; in shufb sequences, 224 hits) |
 | op11=0x19D | `rotqbyx` | rotate quadword by bytes indexed (tentative; rB=$81 fixed, 402 hits) |
 | op11=0x1A8 | `fence` | data sync barrier (word=0x35000000, rT=rA=rB=$0 always, 210 hits) |
 | op11=0x1A9 | `fence2` | float-pipe drain/sync (rT=$0 always, follows csflt, 127 hits) |
-| op11=0x2C0 | `cg`   | carry generate (tentative; precedes cgx in multi-precision chain) |
-| op11=0x2E0 | `cgx`  | carry generate extended (tentative; cg→cgx→addx triple) |
-| op9=0x043  | `il rt, s16` | sequential immediates 0x4010→0x4015 in addmat |
-| op9=0x047  | `ilhu rt, u16` | address-formation pairs in addmat |
-| op9=0x067  | `stqr rt, s16` | 402 hits Crysis2, forward PC-relative offsets |
-| op9=0x07D  | `stqr rt, s16` | register saves in function prologues |
-| op9=0x07F  | `lqr rt, s16`  | large-neg PC-relative offsets to static data |
-| op9=0x098  | `stqr rt, s16` | alt encoding (0x4c002b60 confirmed) |
+| op11=0x2C0 | `cg` | carry generate (tentative; precedes cgx in multi-precision chain) |
+| op11=0x2E0 | `cgx` | carry generate extended (tentative; cg→cgx→addx triple) |
+| op9=0x043 | `il rt, s16` | sequential immediates 0x4010→0x4015 in addmat |
+| op9=0x047 | `ilhu rt, u16` | address-formation pairs in addmat |
+| op9=0x067 | `stqr rt, s16` | 402 hits Crysis2, forward PC-relative offsets |
+| op9=0x07D | `stqr rt, s16` | register saves in function prologues |
+| op9=0x07F | `lqr rt, s16` | large-neg PC-relative offsets to static data |
+| op9=0x098 | `stqr rt, s16` | alt encoding (0x4c002b60 confirmed) |
 
 ## Coverage: Crysis 2 SPU0 (38,556 instructions)
 
@@ -127,14 +127,14 @@ Key confirmations:
 | op9=0x09A | lqr | RI16; produces values consumed by addx (146 hits) |
 | op9=0x09B | lqr | RI16; parallel to 0x09A with large I16 (145 hits) |
 | op9=0x0FE | lqr | RI16; loads pointer into $0 before cbd (43 hits) |
-| op8=0x79  | ceqbi | RI10; fills gap between cgtbi(0x78)/cgthi(0x7A) in compare-byte chain (136 hits) |
+| op8=0x79 | ceqbi | RI10; fills gap between cgtbi(0x78)/cgthi(0x7A) in compare-byte chain (136 hits) |
 
 ## Added in v3
 
 | Op | Mnemonic | Evidence |
 |----|----------|----------|
 | op8=0x48 | clgtbi | RI10; unsigned byte compare; always same rA/I10 as preceding cgtbi (62 hits) |
-| op8=0x54 | clgti  | RI10; unsigned word compare; rB=$0 always, I10 multiples of 128 (90 hits) |
+| op8=0x54 | clgti | RI10; unsigned word compare; rB=$0 always, I10 multiples of 128 (90 hits) |
 | op8=0x83 | clgtbi | RI10; unsigned byte compare; byte_vals cluster at 24-26/153-155 (179 hits) |
 | op11=0x1d6 | dfcgt | RR; double float compare GT; always paired with fm on same rA/rB (108 hits) |
 | op11=0x197 | rotqmbybi | RR; rotate quadword and mask by bytes from bits; rA=rB=$127 always (38 hits); position between rotqmbyi(0x194) and shlqbyi(0x198) |

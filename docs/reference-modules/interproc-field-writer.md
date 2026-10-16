@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Demand-driven inter-procedural field-writer finder for stripped ARM64 binaries. Given a struct field offset, traces all functions that write to that field across call boundaries — used to identify all code paths that can corrupt a security-sensitive struct member.
+Demand-driven inter-procedural field-writer finder for stripped ARM64 binaries. Given a struct field offset, traces all functions that write to that field across call boundaries, used to identify all code paths that can corrupt a security-sensitive struct member.
 
 ## Key constants
 

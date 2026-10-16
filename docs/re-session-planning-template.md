@@ -1,6 +1,6 @@
 # RE Session Planning Template
 
-**Standard:** MIL-HDBK-115C Section 4 (Planning and Preparation)  
+**Standard:** MIL-HDBK-115C Section 4 (Planning and Preparation) 
 **Usage:** Copy to `re/<vendor>/SESSION_<target>.md` at the start of every engagement
 
 ---
@@ -13,11 +13,11 @@ Copy this file to `re/<vendor>/SESSION_<target>.md`. Fill in all fields before r
 
 # RE Session: `<TARGET>`
 
-**Vendor:** `<vendor>`  
-**Product:** `<product>`  
-**Version:** `<version>`  
-**Session start:** `YYYY-MM-DD`  
-**Last updated:** `YYYY-MM-DD`  
+**Vendor:** `<vendor>` 
+**Product:** `<product>` 
+**Version:** `<version>` 
+**Session start:** `YYYY-MM-DD` 
+**Last updated:** `YYYY-MM-DD` 
 
 ---
 
@@ -45,13 +45,13 @@ Copy this file to `re/<vendor>/SESSION_<target>.md`. Fill in all fields before r
 
 ## 2. Scope and Purpose (MIL-HDBK-115C §4.2)
 
-**Purpose of this RE effort:**  
+**Purpose of this RE effort:** 
 (e.g., PSIRT vulnerability research; safety case support; curriculum material)
 
-**Scope:**  
+**Scope:** 
 (e.g., all exported functions in `<binary>`; network-facing functions only; security-access handler only)
 
-**Out of scope:**  
+**Out of scope:** 
 (e.g., calibration data; bootloader; DRM)
 
 ---
@@ -129,8 +129,8 @@ Copy this file to `re/<vendor>/SESSION_<target>.md`. Fill in all fields before r
 
 *(filled at project close)*
 
-**Total sessions:** N  
-**Total findings:** N CONFIRMED (N CRITICAL, N HIGH, N MEDIUM)  
-**Won't-do-again:** (what would you skip next time)  
-**Reusable patterns:** (patterns that should go into `PatternLibrary`)  
+**Total sessions:** N 
+**Total findings:** N CONFIRMED (N CRITICAL, N HIGH, N MEDIUM) 
+**Won't-do-again:** (what would you skip next time) 
+**Reusable patterns:** (patterns that should go into `PatternLibrary`) 
 **Ablation gaps found:** (became which modules)

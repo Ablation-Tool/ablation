@@ -1,6 +1,6 @@
 # Decompiler and IR Lifter Concepts
 
-**Scope:** conceptual reference for all Ablation users  
+**Scope:** conceptual reference for all Ablation users 
 **Applies to:** `BinaryLifter`, `Ppc32Lifter`, `Ppc476Decompiler`, `ABCDecompiler`, `BEAMLifter`, `DEXLifter`, `MpyLifter`
 
 ---
@@ -18,13 +18,13 @@ Ablation spans three levels of abstraction for binary analysis. This document de
 **Goal:** Machine code → high-level source code (or source-like code).
 
 - **Input:** Native machine code (x86, ARM, PPC, etc.) in a binary or executable. Also applicable to bytecode (JVM, Dalvik, MicroPython).
-- **Output:** A high-level language representation — something that looks like C, C++, or pseudo-C.
+- **Output:** A high-level language representation: something that looks like C, C++, or pseudo-C.
 - **What it does:**
-  - Disassembles machine code to assembly.
-  - Recovers control flow (basic blocks, functions, loops, conditionals).
-  - Constructs an intermediate representation (IR) internally.
-  - Performs high-level analyses and transformations: data-flow analysis, type/variable recovery, control flow structuring.
-  - Pretty-prints the IR to C-like code.
+ - Disassembles machine code to assembly.
+ - Recovers control flow (basic blocks, functions, loops, conditionals).
+ - Constructs an intermediate representation (IR) internally.
+ - Performs high-level analyses and transformations: data-flow analysis, type/variable recovery, control flow structuring.
+ - Pretty-prints the IR to C-like code.
 
 A decompiler usually *includes* a lifter internally (to get to its IR), but its primary purpose is to give you readable high-level code, not just an IR.
 
@@ -37,10 +37,10 @@ A decompiler usually *includes* a lifter internally (to get to its IR), but its 
 - **Input:** Machine code or assembly for a specific architecture.
 - **Output:** Architecture-neutral IR (LLVM IR, VEX, BIL, REIL, or similar CFG of basic blocks).
 - **What it does:**
-  - Decodes instructions and translates each one's semantics into IR operations.
-  - Makes side-effects explicit: register updates, memory writes, flags, control flow.
-  - Builds a control-flow graph of IR basic blocks.
-  - Does *not* reconstruct `for`/`while`/`if` constructs, named variables, or types.
+ - Decodes instructions and translates each one's semantics into IR operations.
+ - Makes side-effects explicit: register updates, memory writes, flags, control flow.
+ - Builds a control-flow graph of IR basic blocks.
+ - Does *not* reconstruct `for`/`while`/`if` constructs, named variables, or types.
 
 An IR lifter is not a decompiler by itself. It is the bridge between "whatever CPU this binary runs on" and higher-level tools that want a uniform view of program behavior.
 
@@ -90,7 +90,7 @@ A decompiler is: **disassembler + IR lifter + analysis passes + pretty-printer**
 
 ---
 
-## Stage 1 — Machine Code / Assembly
+## Stage 1: Machine Code and Assembly
 
 What the binary contains. Raw bytes decoded as instructions.
 
@@ -127,7 +127,7 @@ At this stage: instructions, registers, raw stack offsets (`[rbp-4]`), unstructu
 
 ---
 
-## Stage 2 — Intermediate Representation (IR)
+## Stage 2: Intermediate Representation (IR)
 
 The IR lifter translates each machine instruction into IR operations organized into basic blocks with explicit control-flow edges. The result is architecture-neutral and explicit about every load, store, and branch.
 
@@ -190,7 +190,7 @@ IR CFG as a diagram:
                   [inc_i] ---+
 ```
 
-At this stage: values are explicit temporaries (`t0`, `t1`, …), memory is explicit (`LOAD`/`STORE`), control flow is a graph, but loops and conditionals are still *implicit* in the CFG — not yet `for`/`if` constructs.
+At this stage: values are explicit temporaries (`t0`, `t1`, …), memory is explicit (`LOAD`/`STORE`), control flow is a graph, but loops and conditionals are still *implicit* in the CFG, not yet `for`/`if` constructs.
 
 ### What the IR lifter produces (and stops at)
 
@@ -201,13 +201,13 @@ The lifter stops here. It does not:
 
 ### Core lifter responsibilities
 
-1. **Instruction semantics:** translate each opcode into IR ops — `add eax, ecx` → `t2 = t0 + t1`.
+1. **Instruction semantics:** translate each opcode into IR ops, `add eax, ecx` → `t2 = t0 + t1`.
 2. **Make side-effects explicit:** flags, register writes, memory writes all become IR statements.
-3. **Build CFG:** identify basic block boundaries at labels and jumps; connect blocks with IR branches (`IF ... GOTO`).
+3. **Build CFG:** identify basic block boundaries at labels and jumps; connect blocks with IR branches (`IF... GOTO`).
 
 ---
 
-## Stage 3 — Decompiled High-Level Code
+## Stage 3: Decompiled High-Level Code
 
 The decompiler takes the IR and:
 - Recognizes loops from back-edges in the CFG.
@@ -277,7 +277,7 @@ loop_end:
 
 A minimal function that adds x to a global y, shown at all three stages.
 
-**Stage 1 — Assembly (x86-64):**
+**Stage 1, Assembly (x86-64):**
 ```asm
 ; Raw bytes: 55 48 89 E5 89 7D FC 8B 45 FC 01 45 F8 8B 45 F8 5D C3
 push   rbp
@@ -290,7 +290,7 @@ pop    rbp
 ret
 ```
 
-**Stage 2 — IR (lifter output):**
+**Stage 2, IR (lifter output):**
 ```text
 func add_to_y(arg0: i32) -> i32 {
 entry:
@@ -303,7 +303,7 @@ entry:
 }
 ```
 
-**Stage 3 — Decompiled C:**
+**Stage 3, Decompiled C:**
 ```c
 int add_to_y(int x) {
     y = y + x;
@@ -342,7 +342,7 @@ Higher-level components don't need to know about x86's `EFLAGS` vs ARM's `CPSR`;
 - Splits lifted code into basic blocks (straight-line sequences with one entry, one exit).
 - Connects blocks based on direct jumps, conditional branches, calls, and returns.
 
-Output is not just linear IR — it is a **graph structure** that models all possible execution paths.
+Output is not just linear IR, it is a **graph structure** that models all possible execution paths.
 
 ### Example: instruction-level translation
 
@@ -388,27 +388,27 @@ IF (t8 <= 0) GOTO skip_add ELSE GOTO add_block
 
 ### Design goals
 
-1. **Semantically faithful** — accurately models what machine code does, instruction by instruction. Small inaccuracies break symbolic execution and taint analysis.
-2. **Architecture-neutral** — the same IR framework is usable for x86, ARM, MIPS, PPC. Only the lifting rules differ; consumers of IR remain unchanged.
-3. **Explicit and analyzable** — hidden side effects (implicit flag updates, implicit stack pointer changes) become explicit IR operations; control flow is explicit in branches and block edges.
-4. **Amenable to further transformation** — easy to convert to SSA form; easy to apply standard compiler analyses (data-flow, taint tracking, symbolic execution, binary rewriting).
+1. **Semantically faithful**, accurately models what machine code does, instruction by instruction. Small inaccuracies break symbolic execution and taint analysis.
+2. **Architecture-neutral**, the same IR framework is usable for x86, ARM, MIPS, PPC. Only the lifting rules differ; consumers of IR remain unchanged.
+3. **Explicit and analyzable**, hidden side effects (implicit flag updates, implicit stack pointer changes) become explicit IR operations; control flow is explicit in branches and block edges.
+4. **Amenable to further transformation**, easy to convert to SSA form; easy to apply standard compiler analyses (data-flow, taint tracking, symbolic execution, binary rewriting).
 
 ### What an IR lifter is NOT
 
 - **Not a decompiler.** It does not produce human-readable C/C++ code. It does not infer types, structure loops, or rename variables.
 - **Not a disassembler.** A disassembler maps bytes → assembly mnemonics. A lifter maps assembly → IR semantics.
-- **Not visible to end-users** of GUI tools like IDA or Ghidra — it is an internal engine component.
+- **Not visible to end-users** of GUI tools like IDA or Ghidra: it is an internal engine component.
 
 ### Typical use cases
 
-1. **Program analysis frameworks** — angr (VEX IR), BAP (BIL), Binary Ninja (BNIL/LLIL/MLIL), Miasm, REIL.
-2. **Decompilers** — most decompilers use IR as a stepping stone; the decompiler front end is disassembler + IR lifter.
-3. **Binary rewriting / instrumentation** — insert logging or security checks by reasoning about IR structure.
-4. **Verification and security analysis** — symbolic execution, taint analysis, and model checking all operate on IR graphs rather than CPU-specific artifacts.
+1. **Program analysis frameworks**, angr (VEX IR), BAP (BIL), Binary Ninja (BNIL/LLIL/MLIL), Miasm, REIL.
+2. **Decompilers**, most decompilers use IR as a stepping stone; the decompiler front end is disassembler + IR lifter.
+3. **Binary rewriting / instrumentation**, insert logging or security checks by reasoning about IR structure.
+4. **Verification and security analysis**, symbolic execution, taint analysis, and model checking all operate on IR graphs rather than CPU-specific artifacts.
 
 ### Intuitive analogy
 
-An IR lifter is a **universal translator**: different CPUs "speak" different machine languages (x86, ARM, PPC, RISC-V). The IR is a common language. The lifter translates each CPU's dialect into that common language, preserving all meaning. Higher-level tools (analyzers, decompilers, optimizers) only need to know the IR — not every CPU dialect.
+An IR lifter is a **universal translator**: different CPUs "speak" different machine languages (x86, ARM, PPC, RISC-V). The IR is a common language. The lifter translates each CPU's dialect into that common language, preserving all meaning. Higher-level tools (analyzers, decompilers, optimizers) only need to know the IR, not every CPU dialect.
 
 ---
 
@@ -421,7 +421,7 @@ An IR lifter is a **universal translator**: different CPUs "speak" different mac
 
 ## Zoom-in: from IR to decompiled output, step by step
 
-This walks the exact transition from IR lifter output to final C code. Each step is strictly decompiler work — the lifter is done.
+This walks the exact transition from IR lifter output to final C code. Each step is strictly decompiler work, the lifter is done.
 
 ### Starting point: IR lifter output
 
@@ -547,7 +547,7 @@ loop_cond:                              while (i < n) {
   ELSE GOTO loop_body
 ```
 
-Below the line: `LOAD`, `IF`, `GOTO`, raw memory slots.  
+Below the line: `LOAD`, `IF`, `GOTO`, raw memory slots. 
 Above the line: `while (i < n)` with a declared `int i`.
 
 ---
@@ -564,7 +564,7 @@ Above the line: `while (i < n)` with a declared `int i`.
 | `BEAMLifter` | 2 | IR-level pseudo output | Erlang BEAM bytecode; stays at IR, no structuring |
 | `DEXLifter` | 2 → ~3 | Source-like output | Dalvik bytecode |
 | `MpyLifter` | 2 → ~3 | Source-like output | MicroPython bytecode |
-| `JavaModuleAnalyzer` | — | Parser/scanner | Not a lifter or decompiler; operates on class metadata |
+| `JavaModuleAnalyzer` |: | Parser/scanner | Not a lifter or decompiler; operates on class metadata |
 
 **Key nuance:** "Register-tracked pseudo-C" from `BinaryLifter` backends is not the same as full decompilation. The backends produce output closer to Stage 2 with some Stage 3 features (resolved calls, constant folding) but without loop structuring, phi-node elimination, or type inference across call boundaries. Presence of `NativeVal` register tracking is a prerequisite for decompiler-quality output, not proof of it.
 
@@ -572,7 +572,7 @@ Above the line: `while (i < n)` with a declared `int i`.
 
 ## Encyclopedia comparison: IR Lifter vs Decompiler (indirect calls)
 
-Focusing on indirect calls — the clearest case where the pipeline cut-line matters:
+Focusing on indirect calls, the clearest case where the pipeline cut-line matters:
 
 | Aspect | IR Lifter | Decompiler |
 |---|---|---|
@@ -592,7 +592,7 @@ Focusing on indirect calls — the clearest case where the pipeline cut-line mat
 ## Why Ablation does not use Ghidra
 
 Ghidra's decompiler is a full Stage 1 → Stage 3 pipeline and would produce higher-quality structuring for complex functions. Ablation excludes it because:
-1. The RE workflow targets automated, reproducible pipeline runs — Ghidra requires a GUI or headless scripting setup that couples poorly with the `BinaryContext` + `SemanticSearcher` + `SinkArgClassifier` pipeline.
+1. The RE workflow targets automated, reproducible pipeline runs, Ghidra requires a GUI or headless scripting setup that couples poorly with the `BinaryContext` + `SemanticSearcher` + `SinkArgClassifier` pipeline.
 2. Ablation's goal is vulnerability analysis, not reverse engineering for comprehension. For that goal, knowing that `system(arg0)` is called with a propagated function argument is more actionable than a pretty-printed for loop.
 3. The `Ppc476Decompiler` and similar modules close the gap for the specific ISAs where automated sink tracing needs full argument recovery.
 
@@ -609,9 +609,9 @@ These are imported and called directly. They are not `arch=` strings passed to `
 | `BinaryLifter` | `ablation.analyzers.binary_lifter` | 2 → ~3 | Native binary or bytecode | Multi-ISA dispatch via `arch=`; see table below |
 | `Ppc476Decompiler` | `ablation.analyzers.ppc476_lifter` | 2 → 3 | PPC476 Book E flat ROM or ELF | Full loop structuring, type annotations, named locals; closest to a full decompiler |
 | `ABCDecompiler` | `ablation.analyzers.abc_decompiler` | 2 → 3 | ActionScript bytecode (.abc) | Source-like output from Flash/AIR bytecode |
-| `BEAMLifter` | `ablation.analyzers.beam_context` | 2 | Erlang/Elixir .beam | IR-level pseudo output; also exposed via `BinaryLifter(arch='beam')` |
-| `DEXLifter` | (via `android.md`) | 2 → ~3 | Dalvik/ART .dex | Source-like output for Android native analysis |
-| `MpyLifter` | `ablation.analyzers.mpy_lifter` | 2 → ~3 | MicroPython .mpy v6 | Lifts ESP32/STM32/CC13xx firmware; flags dangerous imports |
+| `BEAMLifter` | `ablation.analyzers.beam_context` | 2 | Erlang/Elixir.beam | IR-level pseudo output; also exposed via `BinaryLifter(arch='beam')` |
+| `DEXLifter` | (via `android.md`) | 2 → ~3 | Dalvik/ART.dex | Source-like output for Android native analysis |
+| `MpyLifter` | `ablation.analyzers.mpy_lifter` | 2 → ~3 | MicroPython.mpy v6 | Lifts ESP32/STM32/CC13xx firmware; flags dangerous imports |
 
 ---
 
@@ -620,11 +620,11 @@ These are imported and called directly. They are not `arch=` strings passed to `
 Pass `arch=` to `BinaryLifter.from_path()` or `BinaryLifter.from_context()`.
 
 **Tier definitions:**
-- **Full** — CFG construction, per-register NativeVal state machine, taint annotations, typed expressions
-- **Structural** — per-register state machine seeded from ABI; calls/returns/branches emitted as C; other instructions emitted as `// mnemonic` comments
-- **Structural + Structurizer** — same as structural, then Structurizer converts the goto-CFG to if/while/for pseudo-C
-- **Tool-dependent** — structural output, but requires a GNU cross-toolchain objdump in PATH; returns an explanatory comment if the tool is absent
-- **Module summary** — no VA space; returns exports, dangerous imports, and atoms
+- **Full**: CFG construction, per-register NativeVal state machine, taint annotations, typed expressions
+- **Structural**: per-register state machine seeded from ABI; calls/returns/branches emitted as C; other instructions emitted as `// mnemonic` comments
+- **Structural + Structurizer**: same as structural, then Structurizer converts the goto-CFG to if/while/for pseudo-C
+- **Tool-dependent**: structural output, but requires a GNU cross-toolchain objdump in PATH; returns an explanatory comment if the tool is absent
+- **Module summary**: no VA space; returns exports, dangerous imports, and atoms
 
 #### Native CPUs
 
@@ -675,16 +675,16 @@ These ISAs have their own decoder and taint tracker. They do not go through `Bin
 
 | Runtime | Entry-point tool | `arch=` in BinaryLifter |
 |---|---|---|
-| Dalvik / ART | `DEXLifter` | — |
-| ArkTS (HarmonyOS) | (via `harmonyos.md`) | — |
-| MicroPython .mpy v6 | `MpyLifter` | — |
+| Dalvik / ART | `DEXLifter` |: |
+| ArkTS (HarmonyOS) | (via `harmonyos.md`) |: |
+| MicroPython.mpy v6 | `MpyLifter` |: |
 | Erlang / Elixir BEAM | `BEAMLifter` | also `beam`, `erlang`, `elixir` |
 
 ---
 
 ## Further reading
 
-- `docs/guide-re-workflow.md` — how these stages map to the analysis pipeline
-- `docs/guide-tool-selection.md` — which tool to use for which task
-- `docs/reference-modules/binary-lifter.md` — BinaryLifter ISA backend reference
-- `docs/reference-modules/ppc476-lifter.md` — Ppc32Lifter for IBM PPC476 targets
+- `docs/guide-re-workflow.md`: how these stages map to the analysis pipeline
+- `docs/guide-tool-selection.md`: which tool to use for which task
+- `docs/reference-modules/binary-lifter.md`: BinaryLifter ISA backend reference
+- `docs/reference-modules/ppc476-lifter.md`: Ppc32Lifter for IBM PPC476 targets

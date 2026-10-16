@@ -47,7 +47,7 @@ print(ctx.summary())
 
 **Pierwsze uruchomienie:** od 0,5 do 5 sekund w zależności od rozmiaru pliku binarnego. Ablation buduje i zapisuje w pamięci podręcznej w `~/.ablation/cache/<sha256>_<name>.json`.
 
-**Każde kolejne uruchomienie:** 110 ms. Pamięć podręczna jest kluczowana SHA256 — inna kompilacja o tej samej nazwie pliku binarnego jest automatycznie przebudowywana.
+**Każde kolejne uruchomienie:** 110 ms. Pamięć podręczna jest kluczowana SHA256, inna kompilacja o tej samej nazwie pliku binarnego jest automatycznie przebudowywana.
 
 Przykładowe wyjście:
 
@@ -93,7 +93,7 @@ for r in results:
     print(f"  0x{r.va:x}  {r.name or hex(r.va):<50s}  score={r.score:.3f}")
 ```
 
-**Oczekiwany czas wykonania:** od 35 do 60 sekund dla 19 000 funkcji na CPU. Kolejne zapytania dotyczące tego samego korpusu działają w czasie poniżej jednej sekundy — embeddingi są w pamięci podręcznej.
+**Oczekiwany czas wykonania:** od 35 do 60 sekund dla 19 000 funkcji na CPU. Kolejne zapytania dotyczące tego samego korpusu działają w czasie poniżej jednej sekundy, embeddingi są w pamięci podręcznej.
 
 ---
 
@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Przy każdym przyszłym skanowaniu — innej wersji oprogramowania sprzętowego, innego dostawcy — `pl.sweep(searcher)` automatycznie uruchamia wszystkie potwierdzone wzorce.
+Przy każdym przyszłym skanowaniu, innej wersji oprogramowania sprzętowego, innego dostawcy — `pl.sweep(searcher)` automatycznie uruchamia wszystkie potwierdzone wzorce.
 
 ---
 

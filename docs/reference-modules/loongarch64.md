@@ -14,9 +14,9 @@ This stack is the only public RE toolkit built specifically for LA64. It covers 
 
 ## Where it's used
 
-- **TencentOS 4.6** — server packages and kernel modules distributed as stripped ELF
-- **Loongson 3A5000 / 3A6000 firmware** — EDK2 and GRUB2 EFI modules
-- **Linux kernel modules** — built for LA64 with BTF and `.eh_frame` present
+- **TencentOS 4.6**: server packages and kernel modules distributed as stripped ELF
+- **Loongson 3A5000 / 3A6000 firmware**: EDK2 and GRUB2 EFI modules
+- **Linux kernel modules**: built for LA64 with BTF and `.eh_frame` present
 - Any stripped LoongArch64 ELF binary where `e_machine == 0x102`
 
 ---
@@ -29,9 +29,9 @@ This stack is the only public RE toolkit built specifically for LA64. It covers 
 
 **Strip KASAN/KCOV ghosts before taint analysis on kernel targets.** A TencentOS kernel built with `CONFIG_KASAN=y` has roughly 40% of its instructions as instrumentation. Running the taint tracker directly against a KASAN build produces thousands of false call edges into `__asan_load8_noabort` and similar. Run `LoongArchDecoderV2.from_system_map()` first and use `decode_frames_clean()`.
 
-**Check PLT resolution before reporting zero findings.** If `run_interprocedural()` returns no findings on a dynamically linked binary, confirm that PLT stubs resolved. A failed `.rela.plt` parse leaves every `bl` to an external function as an unknown edge so taint paths through the network stack are silently dropped. Inspect `tt._plt_map` — it should be non-empty for a dynamically linked binary.
+**Check PLT resolution before reporting zero findings.** If `run_interprocedural()` returns no findings on a dynamically linked binary, confirm that PLT stubs resolved. A failed `.rela.plt` parse leaves every `bl` to an external function as an unknown edge so taint paths through the network stack are silently dropped. Inspect `tt._plt_map`, it should be non-empty for a dynamically linked binary.
 
-**Byte-verify every finding VA before reporting.** Confirm `data[va - base : va - base + 4]` matches the expected bytes at the sink instruction. A wrong function start can produce a finding at an address that is data, not code.
+**Byte-verify every finding VA before reporting.** Confirm `data[va - base: va - base + 4]` matches the expected bytes at the sink instruction. A wrong function start can produce a finding at an address that is data, not code.
 
 ---
 
@@ -138,12 +138,12 @@ LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes (same width as AArc
 
 | Instruction class | Propagation |
 |---|---|
-| ALU 3-reg (`add.d`, `mul.d`, ...) | `rd = taint(rj) ∪ taint(rk)` |
-| ALU reg-imm (`addi.d`, `ori`, ...) | `rd = taint(rj)` |
+| ALU 3-reg (`add.d`, `mul.d`,...) | `rd = taint(rj) ∪ taint(rk)` |
+| ALU reg-imm (`addi.d`, `ori`,...) | `rd = taint(rj)` |
 | `andi rd, rj, mask` | `rd = taint(rj)` with `bound = mask` if mask is 2^n-1 |
-| Load (`ld.d`, `ldx.d`, ...) | `rd = mem_taint(base, off)` |
-| Store (`st.d`, `stx.d`, ...) | `mem(base, off) = taint(rd)` |
-| Atomic (`amadd.d`, ...) | `rd = old_mem_taint; mem = taint(rk) ∪ old` |
+| Load (`ld.d`, `ldx.d`,...) | `rd = mem_taint(base, off)` |
+| Store (`st.d`, `stx.d`,...) | `mem(base, off) = taint(rd)` |
+| Atomic (`amadd.d`,...) | `rd = old_mem_taint; mem = taint(rk) ∪ old` |
 | `lu12i.w`, `pcaddi` | `rd = clean` (address constant; not tainted) |
 | `addi.d $sp,$sp,-N` | Frame allocation: rebases `$sp`-relative memory slots |
 | `addi.d $fp,$sp,N` | Records `$fp = $sp + N` in the frame-pointer map |

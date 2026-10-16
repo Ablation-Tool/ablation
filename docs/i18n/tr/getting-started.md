@@ -47,7 +47,7 @@ print(ctx.summary())
 
 **İlk çalıştırma:** İkili dosya boyutuna bağlı olarak 0,5 ila 5 saniye. Ablation `~/.ablation/cache/<sha256>_<name>.json` adresine önbelleğe alır.
 
-**Sonraki çalıştırmalar:** 110 ms. Önbellek SHA256 ile anahtarlanır — aynı ikili dosya adının farklı bir derlemesi otomatik olarak yeniden oluşturulur.
+**Sonraki çalıştırmalar:** 110 ms. Önbellek SHA256 ile anahtarlanır, aynı ikili dosya adının farklı bir derlemesi otomatik olarak yeniden oluşturulur.
 
 Örnek çıktı:
 
@@ -93,7 +93,7 @@ for r in results:
     print(f"  0x{r.va:x}  {r.name or hex(r.va):<50s}  score={r.score:.3f}")
 ```
 
-**Beklenen çalışma süresi:** CPU'da 19.000 işlev için 35 ila 60 saniye. Aynı korpusa karşı sonraki sorgular bir saniyenin altında çalışır — gömmeler önbelleğe alınmıştır.
+**Beklenen çalışma süresi:** CPU'da 19.000 işlev için 35 ila 60 saniye. Aynı korpusa karşı sonraki sorgular bir saniyenin altında çalışır, gömmeler önbelleğe alınmıştır.
 
 ---
 

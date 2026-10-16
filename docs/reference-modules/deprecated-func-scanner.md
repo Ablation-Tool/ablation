@@ -4,7 +4,7 @@
 
 Four things were not possible before in Ablation:
 
-1. **Detect CWE-242 without taint analysis.** `gets()`, `mktemp()`, `tmpnam()`, and `getwd()` have no safe use. Their presence in PLT is a confirmed finding regardless of call context — no path analysis or data-flow tracing needed. Before this module, these functions would only surface if a TaintTracker happened to sweep the same binary.
+1. **Detect CWE-242 without taint analysis.** `gets()`, `mktemp()`, `tmpnam()`, and `getwd()` have no safe use. Their presence in PLT is a confirmed finding regardless of call context, no path analysis or data-flow tracing needed. Before this module, these functions would only surface if a TaintTracker happened to sweep the same binary.
 
 2. **Calculate overflow offset at each `gets()` call site.** For call sites where the destination buffer is at `[rbp-N]`, the module extracts N from the preceding LEA instruction and computes the exact byte count to overwrite the saved RIP. Finding a `gets()` used to mean "there's an overflow somewhere"; now it means "the saved RIP is at offset 8232 bytes."
 
@@ -14,12 +14,12 @@ Four things were not possible before in Ablation:
 
 ## Dangerous functions detected
 
-| Function  | CWE               | Overflow calc | Reason |
+| Function | CWE | Overflow calc | Reason |
 |-----------|-------------------|:---:|------|
-| `gets`    | CWE-242 / CWE-121 | ✓  | reads stdin with no bounds check |
-| `getwd`   | CWE-242 / CWE-121 | ✓  | unbounded `getcwd` alternative |
-| `mktemp`  | CWE-242 / CWE-377 | ✗  | predictable temp filename (race condition) |
-| `tmpnam`  | CWE-242 / CWE-377 | ✗  | predictable temp filename (race condition) |
+| `gets` | CWE-242 / CWE-121 | ✓ | reads stdin with no bounds check |
+| `getwd` | CWE-242 / CWE-121 | ✓ | unbounded `getcwd` alternative |
+| `mktemp` | CWE-242 / CWE-377 | ✗ | predictable temp filename (race condition) |
+| `tmpnam` | CWE-242 / CWE-377 | ✗ | predictable temp filename (race condition) |
 
 ## Usage
 
@@ -55,7 +55,7 @@ for hit in scanner.scan():
 ## Limitations
 
 - **x86-64 only.** Buffer size calculation uses `[rbp-N]` frame convention. No ARM/MIPS support.
-- **One-level caller walk.** `callers` shows direct callers only — not the full reachability chain.
+- **One-level caller walk.** `callers` shows direct callers only: not the full reachability chain.
 - **Buffer size is -1 for wrapper functions.** If `gets(rdi)` where rdi is a parameter (e.g., `readStdin(char* buf)`), the buffer is allocated in the caller. The scanner reports the buffer in the caller only if the caller directly calls `gets`.
 
 ## FORGE audit
@@ -63,7 +63,7 @@ for hit in scanner.scan():
 Gate: **PASSED** (0 CRITICAL, 0 HIGH).
 
 - 1 MEDIUM (§2): `_gets_buf_size` only extracts buffer size from `lea [rbp-N]` patterns. RSP-relative buffers and indirect pointer loads return -1. Documented as a known limitation.
-- 1 LOW (§3): `FileNotFoundError` guard added — raises `ValueError` if `ctx.path` is empty.
+- 1 LOW (§3): `FileNotFoundError` guard added: raises `ValueError` if `ctx.path` is empty.
 - 1 LOW (§5): `_find_func_start` changed from O(n) linear scan to `bisect.bisect_right` O(log n).
 
 Confirmed on: `commandcontrol` (setuid, 1 confirmed `gets()` hit, 3 callers correctly attributed).

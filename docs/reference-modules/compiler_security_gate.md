@@ -133,7 +133,7 @@ exit_code = gate.check(strict=True)  # 1 on any finding
 ## Notes
 
 - The gate shares BinaryContext's cache (`~/.ablation/cache/`). If the binary
-  was already analyzed in the same session, rebuilding takes ~100ms.
+ was already analyzed in the same session, rebuilding takes ~100ms.
 - x86_64 only: `FormatStringScanner`, `HeapVulnScanner`, `LengthUnderflowScanner`.
-  For other architectures, only the taint tracker runs.
+ For other architectures, only the taint tracker runs.
 - The `taint_dag` field is `None` for non-taint findings (format string, heap, underflow).

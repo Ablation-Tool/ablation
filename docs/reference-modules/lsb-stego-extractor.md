@@ -12,7 +12,7 @@ Built from two confirmed findings where FortiAnalyzer and FortiManager embedded 
 
 Three things were not possible before this module:
 
-1. **LSB steganography in firmware was undetected.** Binaries that load a BMP asset and recover key material from its pixel stream left no obvious string or API footprint. The pattern — seed hash → pixel offset → LSB channel → Lagrange reconstruction — appeared in stripped ARM32 `.so` libraries with no prior public analysis.
+1. **LSB steganography in firmware was undetected.** Binaries that load a BMP asset and recover key material from its pixel stream left no obvious string or API footprint. The pattern, seed hash → pixel offset → LSB channel → Lagrange reconstruction: the pattern appeared in stripped ARM32 `.so` libraries with no prior public analysis.
 
 2. **Lagrange interpolation over multi-prime CRT was manual.** Reconstructing the secret required identifying the coordinate pairs in the LSB channel, building the polynomial, and running exact rational arithmetic. This module automates the full pipeline with a stdlib-only implementation (no sympy).
 
@@ -58,10 +58,10 @@ assert result.raw_key_hex == expected_hex, "Key extraction mismatch"
 | Field | Description |
 |---|---|
 | `raw_key_hex` | Concatenated hex string of all key components |
-| `components` | `list[str]` — individual key component hex strings |
+| `components` | `list[str]`: individual key component hex strings |
 | `type_count` | Number of key components encoded |
 | `n_groups` | Number of coordinate-pair groups |
-| `coord_pairs` | `list[CoordPair]` — raw (x, y) coordinate pairs read from the LSB channel |
+| `coord_pairs` | `list[CoordPair]`: raw (x, y) coordinate pairs read from the LSB channel |
 | `seed` | Seed string used to locate the pixel offset |
 | `pixel_offset` | Byte offset in the BMP pixel data where the encoding begins |
 
@@ -85,14 +85,14 @@ The interpolation runs over exact rational arithmetic using multi-prime CRT to a
 
 ### Output encoding
 
-Positive polynomial values encode as standard little-endian bytes.  
+Positive polynomial values encode as standard little-endian bytes. 
 Negative values apply a reverse two's-complement transformation matching the `imath mp_int_to_binary` path in the producing library.
 
 ---
 
 ## Known targets
 
-- FortiAnalyzer 7.x (ARM32 management daemon) — two CRITICAL findings
-- FortiManager 7.x (ARM32 policy daemon) — one CRITICAL finding
+- FortiAnalyzer 7.x (ARM32 management daemon): two CRITICAL findings
+- FortiManager 7.x (ARM32 policy daemon): one CRITICAL finding
 
 Key material recovered: per-session encryption keys stored in BMP assets bundled with the application package. No other scanner in the Ablation corpus detected this class before this module was built.

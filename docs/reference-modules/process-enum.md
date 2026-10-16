@@ -94,4 +94,4 @@ Gate: **PASSED**. 14 CWE-770 fixes applied (13 unbounded reads + 1 new constant)
 | bash_history | `detect_bash_history_artifacts` | `fh.readlines()` | `fh.read(_MAX_FILE_BYTES).splitlines()` |
 | `/proc/{pid}/status` | `enumerate_volatile_forensics` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
 
-No lief.parse(). No HTTP reads. No bare `except:`. All binary-analysis functions operate on passed `bytes` — no file I/O. Non-Linux paths return `_not_linux_finding()` stubs.
+No lief.parse(). No HTTP reads. No bare `except:`. All binary-analysis functions operate on passed `bytes`, no file I/O. Non-Linux paths return `_not_linux_finding()` stubs.

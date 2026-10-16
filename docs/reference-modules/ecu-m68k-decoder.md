@@ -12,7 +12,7 @@ GM P-series PCMs use a Motorola CPU32 core, a 68000-family processor in automoti
 
 ## Where it's used
 
-- **GM P-series PCMs** — P01, P04, P05, P08, P10, P11, P59 engine control modules
+- **GM P-series PCMs**: P01, P04, P05, P08, P10, P11, P59 engine control modules
 - Any CPU32 flat ROM image from Motorola 68000-family automotive ECUs
 
 ---
@@ -59,7 +59,7 @@ LINK.W A6, #-N
 
 Encodes as two big-endian 16-bit words: ``0x4E56`` (LINK.W A6 opcode) followed by a signed
 16-bit displacement with bit 15 set (negative, indicating stack frame allocation downward).
-This is the standard CPU32 call frame setup in the GM P-series ABI.  The frame pointer is A6.
+This is the standard CPU32 call frame setup in the GM P-series ABI. The frame pointer is A6.
 
 Detection:
 ```python
@@ -72,7 +72,7 @@ hw == 0x4E56   and   (next_word & 0x8000) != 0
 MOVEM.L regs, -(SP)
 ```
 
-Encodes as ``0x48E7`` followed by a 16-bit register mask.  When this is the first instruction
+Encodes as ``0x48E7`` followed by a 16-bit register mask. When this is the first instruction
 of a function (not the second instruction of a frame-allocating function), it marks a leaf
 function that saves callee-saved registers without allocating a full frame.
 
@@ -162,10 +162,10 @@ known.
 ## Capstone dependency
 
 `function_starts()` and `insn_length()` (fallback) do not require Capstone and work with the
-pure-Python pattern scan.  `disassemble()` and `decode_one()` require Capstone and raise
+pure-Python pattern scan. `disassemble()` and `decode_one()` require Capstone and raise
 ``ImportError`` with install instructions if it is not available.
 
-Capstone 5.0.7 (`CS_ARCH_M68K`, `CS_MODE_M68K_020`) is used.  CPU32 is a 68020 derivative;
+Capstone 5.0.7 (`CS_ARCH_M68K`, `CS_MODE_M68K_020`) is used. CPU32 is a 68020 derivative;
 no 68020-specific instructions appear in GM P-series firmware that CPU32 does not also support.
 
 ---
@@ -186,13 +186,13 @@ is a frame-allocating function whose start ``function_starts()`` correctly ident
 ## Limitations
 
 - CPU32-specific instructions (``TBLS``, ``TBLSN``, ``DIVS.L``, ``DIVU.L`` with 32-bit
-  operands) may not decode identically between ``CS_MODE_M68K_020`` and a hypothetical
+ operands) may not decode identically between ``CS_MODE_M68K_020`` and a hypothetical
   ``CS_MODE_M68K_CPU32`` (which Capstone 5.0.7 does not implement).  In the GM P-series corpus
-  these instructions are absent from SA-handler analysis paths.
-- ``insn_length()`` falls back to 2 when Capstone is unavailable.  A caller that iterates
-  instructions using ``insn_length()`` without Capstone will advance in 2-byte steps and may
-  misalign on 4-byte or 6-byte instructions.  Callers that need accurate lengths must have
-  Capstone installed.
+ these instructions are absent from SA-handler analysis paths.
+- ``insn_length()`` falls back to 2 when Capstone is unavailable. A caller that iterates
+ instructions using ``insn_length()`` without Capstone will advance in 2-byte steps and may
+ misalign on 4-byte or 6-byte instructions. Callers that need accurate lengths must have
+ Capstone installed.
 - ``function_starts()`` does not detect LINK.L (32-bit displacement variant, opcode ``0x4808``).
-  LINK.L is used for functions with local variable space exceeding 32 KB; this is uncommon in
-  embedded firmware but possible.
+ LINK.L is used for functions with local variable space exceeding 32 KB; this is uncommon in
+ embedded firmware but possible.

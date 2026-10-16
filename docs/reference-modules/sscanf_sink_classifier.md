@@ -6,7 +6,7 @@
 
 Three gaps in the existing x86-64 sink analysis chain:
 
-1. **SinkArgClassifier does not analyze sscanf-family sinks.** It classifies the command string argument at exec-class sinks (system/popen/execve). It does not classify the format string at sscanf/scanf/fscanf — the vuln class where `sscanf(input, "%s", buf)` overflows `buf` when `input` is attacker-controlled.
+1. **SinkArgClassifier does not analyze sscanf-family sinks.** It classifies the command string argument at exec-class sinks (system/popen/execve). It does not classify the format string at sscanf/scanf/fscanf, the vuln class where `sscanf(input, "%s", buf)` overflows `buf` when `input` is attacker-controlled.
 
 2. **sscanf format strings require a different analysis target.** For exec-class sinks, the question is "where did the command string come from?" For sscanf, the question is "does the format string allow writing past the destination buffer?" These require tracing different argument registers and a second-pass scan of the resolved bytes.
 
@@ -43,13 +43,13 @@ clf = SscanfSinkClassifier.from_context(ctx)
 
 | Sink | Format arg |
 |------|-----------|
-| `sscanf(str, fmt, ...)` | rsi (arg 1) |
+| `sscanf(str, fmt,...)` | rsi (arg 1) |
 | `vsscanf(str, fmt, ap)` | rsi (arg 1) |
-| `__isoc99_sscanf(str, fmt, ...)` | rsi (arg 1) |
-| `scanf(fmt, ...)` | rdi (arg 0) |
-| `__isoc99_scanf(fmt, ...)` | rdi (arg 0) |
-| `fscanf(file, fmt, ...)` | rsi (arg 1) |
-| `__isoc99_fscanf(file, fmt, ...)` | rsi (arg 1) |
+| `__isoc99_sscanf(str, fmt,...)` | rsi (arg 1) |
+| `scanf(fmt,...)` | rdi (arg 0) |
+| `__isoc99_scanf(fmt,...)` | rdi (arg 0) |
+| `fscanf(file, fmt,...)` | rsi (arg 1) |
+| `__isoc99_fscanf(file, fmt,...)` | rsi (arg 1) |
 
 ## Format string analysis (`_has_unbounded_s`)
 
@@ -58,7 +58,7 @@ Parses the resolved `.rodata` format string byte-by-byte to detect `%s` without 
 - `%s` → UNSAFE (no width)
 - `%20s` → SAFE (explicit width 20)
 - `%05s` → SAFE (`0` consumed as flag, `5` is width)
-- `%*s` → SAFE (assignment-suppressed — no buffer write)
+- `%*s` → SAFE (assignment-suppressed: no buffer write)
 - `%%` → SAFE (escaped percent, not a specifier)
 - `%ls`, `%hs` → UNSAFE (length modifier, no width)
 
@@ -92,4 +92,4 @@ flagged_fmt = [r for r in fmt_results if r.needs_investigation]
 
 ## FORGE audit
 
-gate_passed=True. 1 MEDIUM finding (dead-sink filter when `_plt_caller_counts` empty — fixed before recording).
+gate_passed=True. 1 MEDIUM finding (dead-sink filter when `_plt_caller_counts` empty, fixed before recording).

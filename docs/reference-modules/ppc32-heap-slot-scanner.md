@@ -4,7 +4,7 @@
 
 Three things were not possible before in Ablation:
 
-1. **Detect the heap slot overflow class systematically on PPC32 XCOFF binaries.** The VIOS ioscli IZ22147 analysis (VIOS-VTD-001) found a heap overflow in `getBackingDevices()` where `mulli r3,r3,0x44` computes a 68-byte slot size, then `bl .strcpy` copies a 2048-byte `fgets` buffer into each slot with no bounds check. `TaintTracker` and `SinkArgClassifier` do not detect this class because the slot boundary is arithmetic. The overflow condition is slot\_N vs. fgets\_max, where slot\_N requires interpreting the `mulli` immediate.
+1. **Detect the heap slot overflow class systematically on PPC32 XCOFF binaries.** The VIOS ioscli IZ22147 analysis (VIOS-VTD-001) found a heap overflow in `getBackingDevices()` where `mulli r3,r3,0x44` computes a 68-byte slot size, then `bl.strcpy` copies a 2048-byte `fgets` buffer into each slot with no bounds check. `TaintTracker` and `SinkArgClassifier` do not detect this class because the slot boundary is arithmetic. The overflow condition is slot\_N vs. fgets\_max, where slot\_N requires interpreting the `mulli` immediate.
 
 2. **Avoid per-target manual disassembly for a known pattern.** AIX ioscli, VIOS utilities, and IBM network daemons share this pattern in ODM attribute reader code. A dedicated scanner runs in under 60 seconds and produces byte-verifiable findings with exact VAs and instruction encodings.
 

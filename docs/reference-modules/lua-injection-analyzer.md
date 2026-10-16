@@ -4,13 +4,13 @@
 
 Four things were not possible before in Ablation:
 
-1. **Detecting Python→Lua injection** — before this module, no scanner could find unsanitized format() calls feeding into `LuaRuntime.execute()`. FAZ-SIEM-001 (CRITICAL RCE) required full manual reading of compiler.py and rule.py to trace the path.
+1. **Detecting Python→Lua injection**, before this module, no scanner could find unsanitized format() calls feeding into `LuaRuntime.execute()`. FAZ-SIEM-001 (CRITICAL RCE) required full manual reading of compiler.py and rule.py to trace the path.
 
-2. **Automating cross-product transfer** — FortiManager v8.0.0 was byte-identical to FortiAnalyzer for all 5 SIEM files. Without this scanner, verifying the FAZ findings transferred to FMG required reading the same code twice. The scanner confirms in under 1 second.
+2. **Automating cross-product transfer**, FortiManager v8.0.0 was byte-identical to FortiAnalyzer for all 5 SIEM files. Without this scanner, verifying the FAZ findings transferred to FMG required reading the same code twice. The scanner confirms in under 1 second.
 
-3. **Detecting assignment-mediated injection** — the FAZ-SIEM-002 pattern assigned a format result to a variable (`code = "record[\"{}\"]=...".format(key, val)`) and then passed that variable to the execute call. SourceSinkScanner regex matching cannot track variable assignments across statements; this module's AST scope visitor does.
+3. **Detecting assignment-mediated injection**, the FAZ-SIEM-002 pattern assigned a format result to a variable (`code = "record[\"{}\"]=...".format(key, val)`) and then passed that variable to the execute call. SourceSinkScanner regex matching cannot track variable assignments across statements; this module's AST scope visitor does.
 
-4. **Subprocess lua injection** — `subprocess.run(['lua', '-e', formatted_code])` and `subprocess.run(['/usr/bin/env', 'lua', ...])` patterns weren't detectable at all previously.
+4. **Subprocess lua injection**, `subprocess.run(['lua', '-e', formatted_code])` and `subprocess.run(['/usr/bin/env', 'lua',...])` patterns weren't detectable at all previously.
 
 ## What it does
 
@@ -81,7 +81,7 @@ Detected as INDIRECT. Variable `value` is in `_USER_INPUT_NAMES` → CRITICAL.
 
 ## Known limitations
 
-- **Module-level code not scanned** — `lua.execute()` outside any function body is not detected. Django apps never do this.
-- **Intra-function taint only** — if a format result is returned from one function and passed to lua.execute in another, it won't be detected.
-- **Severity uses name heuristics** — a local variable named `description` triggers CRITICAL even if it doesn't come from user input. False-positive risk is low in practice.
-- **No cross-file tracking** — import chains (function A formats in file X, result passed to function B with execute in file Y) are not tracked.
+- **Module-level code not scanned**: `lua.execute()` outside any function body is not detected. Django apps never do this.
+- **Intra-function taint only**: if a format result is returned from one function and passed to lua.execute in another, it won't be detected.
+- **Severity uses name heuristics**: a local variable named `description` triggers CRITICAL even if it doesn't come from user input. False-positive risk is low in practice.
+- **No cross-file tracking**: import chains (function A formats in file X, result passed to function B with execute in file Y) are not tracked.

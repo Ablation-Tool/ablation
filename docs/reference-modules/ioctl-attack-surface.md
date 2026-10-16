@@ -12,7 +12,7 @@ Grounded in TAOSSA Chapter 12 (Windows IPC, DeviceIoControl, IRP dispatch model)
 
 Three gaps existed before this module:
 
-1. **METHOD_NEITHER codes required manual identification.** Drivers with METHOD_NEITHER IOCTL handlers pass raw user-mode pointers directly to kernel code — no buffer copy, no length check. Locating these codes across a dispatch table required pattern-matching each handler by hand.
+1. **METHOD_NEITHER codes required manual identification.** Drivers with METHOD_NEITHER IOCTL handlers pass raw user-mode pointers directly to kernel code, no buffer copy, no length check. Locating these codes across a dispatch table required pattern-matching each handler by hand.
 
 2. **ProbeForRead/ProbeForWrite coverage was untracked.** METHOD_NEITHER handlers that call ProbeForRead before dereferencing are protected; those that do not are immediately exploitable. The module classifies each handler so manual review starts at the unprotected ones.
 
@@ -29,7 +29,7 @@ Three gaps existed before this module:
 | `METHOD_OUT_DIRECT` | 2 | MDL locked; write access |
 | `METHOD_NEITHER` | 3 | Raw user pointer; **no kernel copy, no probe by default** |
 
-`METHOD_NEITHER` handlers receive `Type3InputBuffer` directly — a raw user-mode address the kernel does not validate. Any dereference without a prior `ProbeForRead`/`ProbeForWrite` is a CRITICAL finding.
+`METHOD_NEITHER` handlers receive `Type3InputBuffer` directly: a raw user-mode address the kernel does not validate. Any dereference without a prior `ProbeForRead`/`ProbeForWrite` is a CRITICAL finding.
 
 ---
 
@@ -87,7 +87,7 @@ surface = gen.analyze()
 | `function_code` | Bits [13:2] of IOCTL code |
 | `access` | Bits [15:14] of IOCTL code |
 | `handler_va` | VA of the dispatch handler function |
-| `patterns` | `list[IoctlHandlerPattern]` — security-relevant patterns found in the handler |
+| `patterns` | `list[IoctlHandlerPattern]`: security-relevant patterns found in the handler |
 | `has_probe` | `True` if `ProbeForRead`/`ProbeForWrite` appears in the handler |
 | `risk_level` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
 

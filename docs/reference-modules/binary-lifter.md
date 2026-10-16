@@ -2,7 +2,7 @@
 
 Lift native binary functions to annotated C pseudocode.
 
-**Module:** `ablation.analyzers.binary_lifter`  
+**Module:** `ablation.analyzers.binary_lifter` 
 **Exports:** `BinaryLifter`, `NativeVal`
 
 ---
@@ -27,7 +27,7 @@ After `SemanticSearcher` and `TaintTracker` identify candidates, BinaryLifter ma
 
 **Call `with_taint(findings)` after a TaintTracker run.** Without taint annotations, the lifted output shows call structure but not which paths carry attacker-controlled data. Taint annotations mark the calls worth tracing.
 
-**Check ISA backend completeness before relying on data-flow output.** All backends track register state; completeness varies — higher-completeness backends resolve CFG edges, emit typed expressions, and annotate taint. Lower-completeness backends resolve calls/returns/branches and emit remaining instructions as `// mnemonic ops`. For full decompiler output on PPC476, use `Ppc476Decompiler` directly.
+**Check ISA backend completeness before relying on data-flow output.** All backends track register state; completeness varies, higher-completeness backends resolve CFG edges, emit typed expressions, and annotate taint. Lower-completeness backends resolve calls/returns/branches and emit remaining instructions as `// mnemonic ops`. For full decompiler output on PPC476, use `Ppc476Decompiler` directly.
 
 ---
 

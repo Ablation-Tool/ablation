@@ -1,9 +1,9 @@
 # TI NNC Scanner: FORGE Audit + DEV & TEST ORCHESTRATION PLAN
 
-**Module:** `ablation/analyzers/ti_nnc_scanner.py`  
-**Version:** v2.69.0  
-**Date:** 2026-10-10  
-**Auditor:** Claude Sonnet 4.6  
+**Module:** `ablation/analyzers/ti_nnc_scanner.py` 
+**Version:** v2.69.0 
+**Date:** 2026-10-10 
+**Auditor:** Claude Sonnet 4.6 
 
 ---
 
@@ -11,7 +11,7 @@
 
 ### §1 Input Validation
 - `from_path(path)`: accepts `str | Path`, stores as `str(path)`, passes to `lief.parse()`.
-  lief handles corrupt/missing files gracefully (returns `None`, warns to stderr). **PASS**
+ lief handles corrupt/missing files gracefully (returns `None`, warns to stderr). **PASS**
 - `_extract_floats/_extract_int32s`: guard `va == 0`, `size < 4`, content length before unpack. **PASS**
 - Symbol name access: guarded with `if not name: continue`. **PASS**
 
@@ -46,7 +46,7 @@ No network calls, no file writes, no logging statements. **PASS**
 
 ### §10 Logic Correctness
 - Symbol iteration: `binary.symbols` may include both `.symtab` and `.dynsym` entries in lief.
-  Duplicates would overwrite `run_syms[model]` with the same `(va, sym)`: no semantic issue.
+ Duplicates would overwrite `run_syms[model]` with the same `(va, sym)`: no semantic issue.
 - `_infer_mode`: uses `finished_syms` membership to detect NPU HW mode: correct per NNC spec §3.5.
 - Float extraction uses `'<f'` (little-endian). All TI MCU NNC targets are LE. **PASS**
 - Minor: big-endian ARM builds would misparse floats. Not a practical risk (no TI MCU NNC target is BE).
@@ -82,7 +82,7 @@ Any standard ARM ELF firmware without NNC content. Expected: empty result.
 ### Test 5: Synthetic ELF with tvmgen symbols (positive test)
 Craft an ELF with:
 - `tvmgen_default_run` (GLOBAL binding)
-- `tvmgen_default_bias_data` (WEAK binding, size=12, 3 floats in .rodata)
+- `tvmgen_default_bias_data` (WEAK binding, size=12, 3 floats in.rodata)
 - `tvmgen_default_scale_data` (WEAK binding, size=4, 1 float)
 - `tvmgen_default_shift_data` (WEAK binding, size=4, 1 int32)
 - `tvmgen_default_finished` (GLOBAL)
@@ -112,4 +112,4 @@ Expected: ASCII table with all findings, sorted HIGH→MEDIUM→INFO.
 
 - C28x firmware: cl2000 emits COFF, not ELF. Scanner returns empty result. Requires Gap 1.
 - BNORM sequence detection in disassembled code: not implemented. Future work.
-- Tensor shape extraction: not implemented (would require parsing the .h header or .rodata structs).
+- Tensor shape extraction: not implemented (would require parsing the.h header or.rodata structs).

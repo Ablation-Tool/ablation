@@ -14,8 +14,8 @@ HarmonyOS applications compile ArkTS source to ABC (Ark Bytecode) files packed i
 
 ## Where it's used
 
-- **HarmonyOS HAP packages** — `modules.abc` inside any HAP application bundle
-- **Obfuscated HAP bundles** — WeChat HarmonyOS port and other commercial apps
+- **HarmonyOS HAP packages**: `modules.abc` inside any HAP application bundle
+- **Obfuscated HAP bundles**: WeChat HarmonyOS port and other commercial apps
 - Any `.abc` file where `ABCParser.is_valid()` returns True
 
 ---
@@ -308,7 +308,7 @@ Two dialects exist:
 - **Dynamic** (ECMAScript/ArkTS runtime): `access_flags` is ULEB128;
   `code_size` is ULEB128. Used in all HAP/APP bundles.
 - **Static** (older compiler): `access_flags` is u32. The parser assumes
-  dynamic dialect, which is backwards-compatible for flags ≤ 0x7F.
+ dynamic dialect, which is backwards-compatible for flags ≤ 0x7F.
 
 ### Version Boundary
 
@@ -408,9 +408,9 @@ The lifter follows the Durfina 2012 three-phase pipeline:
 
 1. **Front-end**: `ARKDisasm.iter_insns()` yields `ARKInstruction` objects.
 2. **IR lift**: `_lift(insn, state)` translates each instruction to a
-   pseudocode statement, updating a register-state dict (`Dict[str, _Reg]`).
+ pseudocode statement, updating a register-state dict (`Dict[str, _Reg]`).
 3. **Back-end**: Statements assembled into labelled blocks with `if/goto`
-   control flow.
+ control flow.
 
 The ARK ISA is accumulator-centric: most instructions read from or write to
 `_acc`. The decompiler tracks `_acc` as a named slot alongside the numbered
@@ -450,11 +450,11 @@ Parses the flat `label+goto` statement list into `_BB` basic blocks, builds a
 patterns:
 
 - **While loop**: header block ends with `if (exit_cond) goto L_after`; a later
-  block ends with `goto L_head` (back-edge). Emitted as `while (!exit_cond) { body }`.
+ block ends with `goto L_head` (back-edge). Emitted as `while (!exit_cond) { body }`.
 - **If/else**: `if (cond) goto L_else`; last then-block ends with `goto L_end`.
-  Emitted as `if (!cond) { then } else { else }`.
+ Emitted as `if (!cond) { then } else { else }`.
 - **Simple if**: `if (cond) goto L_skip`; fall-through is the then-body.
-  Emitted as `if (!cond) { body }`.
+ Emitted as `if (!cond) { body }`.
 
 Condition negation is required in all three cases because ARK bytecode encodes
 conditionals as jump-if-false exits: the fall-through path is always the
