@@ -51,6 +51,12 @@ a = XCOFFExecutableAnalyzer.from_context(ctx)
 
 - VIOS ioscli XCOFF32 ppc32: `arch=ppc32`, 613 exports, 2758 imports, `.text` va=0x10000128.
 
+## Limits
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `_MAX_XCOFF_BYTES` | 256 MB | `os.path.getsize()` guard in `_load()` before `xcoff_parser.parse()` |
+
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings.
+Gate: **PASSED**. CWE-770 (unbounded `Path.read_bytes()` in `xcoff_parser.parse()`) fixed in `_load()` via `_MAX_XCOFF_BYTES=256MB` + `getsize()` check. No HIGH or CRITICAL findings remain.

@@ -234,3 +234,7 @@ populated by all three scan paths (RELA-based, byte-scan, and the `_make_spec_fr
 A vtable in `.data` with `writable=True` means any kernel or process write primitive reaching
 the vtable data can redirect virtual dispatch. Normal vtables live in `.rodata` or `.data.rel.ro`
 (read-only after RELRO).
+
+## FORGE audit
+
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_ELF_BYTES=256MB` + `os.path.getsize()` guard in `__init__()`; `lief.parse()` in `try/except Exception` + `if parsed is None` check.

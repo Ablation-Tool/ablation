@@ -85,3 +85,7 @@ Serial (touch controllers): `SetCommState`, `SetCommTimeouts`, `PurgeComm`, `Esc
 - Ordinal-only HID imports (HIDdAPI.dll imported by ordinal) are not detected by IAT name matching. Use `pe_sweep.py`'s `_check_firmware_auth_bypass` function instead, which checks imported DLL names.
 - Signing verification implemented in non-standard crypto libraries (custom TLV/ASN.1 parsers) is not detected.
 - The MEDIUM tier requires manual follow-up. `DeviceIoControl` + firmware strings is common in legitimate utilities that are not flashers.
+
+## FORGE audit
+
+Gate: **PASSED**. CWE-770 fixed: added `_MAX_PE_BYTES=256MB` + `os.path.getsize()` guard in `_load()` before `lief.parse()` and `Path.read_bytes()`. No HIGH or CRITICAL findings remain.

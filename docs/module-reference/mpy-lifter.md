@@ -159,3 +159,7 @@ Formats findings as an ASCII table. Returns `'No dangerous patterns found.'` whe
 - **Local variable names**: Lifted pseudo-Python uses `_v0`, `_v1`, ... for locals instead of original names. The variable name table in the prelude is skipped, not decoded.
 - **Native/viper code objects**: Code objects of kind 1 (native) or 2 (viper) emit `# <native/viper code: not lifted>`. Only kind 0 (bytecode) is lifted.
 - **v5 format**: Not supported. MicroPython 1.12–1.18 use v5. Raise `ValueError`.
+
+## FORGE audit
+
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_MPY_BYTES=4MB`; all read operations use the bounded `read(length)` method derived from the .mpy format length fields.

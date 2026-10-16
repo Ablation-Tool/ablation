@@ -15,6 +15,8 @@ from pathlib import Path
 _IS_MACOS = _platform.system() == 'Darwin'
 _IS_LINUX = _platform.system() == 'Linux'
 
+_MAX_PROC_BYTES = 4 * 1024 * 1024   # cap for procfs reads (/proc/pid/environ, cmdline, etc.)
+
 class ProcessEnumerator:
     """Enumerate and analyze processes"""
     
@@ -205,7 +207,7 @@ class ProcessEnumerator:
         env = {}
         try:
             with open(self.proc_path / "environ", 'rb') as f:
-                data = f.read().decode('utf-8', errors='ignore')
+                data = f.read(_MAX_PROC_BYTES).decode('utf-8', errors='ignore')
                 for item in data.split('\x00'):
                     if '=' in item:
                         key, value = item.split('=', 1)
@@ -357,7 +359,7 @@ def detect_hollow_process(pid: int) -> dict:
         pass
     try:
         with open(f'{proc_base}/cmdline', 'rb') as f:
-            raw = f.read()
+            raw = f.read(_MAX_PROC_BYTES)
         args = raw.split(b'\x00')
         if args:
             cmdline_exe = args[0].decode('utf-8', errors='replace')
@@ -457,7 +459,7 @@ def scan_dll_hijacking_candidates(proc_path: str = "/proc") -> list:
         # --- LD_PRELOAD check ---
         try:
             with open(f'{proc_base}/environ', 'rb') as f:
-                raw_env = f.read().decode('utf-8', errors='replace')
+                raw_env = f.read(_MAX_PROC_BYTES).decode('utf-8', errors='replace')
             env_vars = {}
             for item in raw_env.split('\x00'):
                 if '=' in item:
@@ -778,7 +780,7 @@ def enumerate_volatile_forensics(output_dir: str = None) -> dict:
 
             try:
                 with open(f'{proc_base}/cmdline', 'rb') as f:
-                    raw = f.read().decode('utf-8', errors='replace')
+                    raw = f.read(_MAX_PROC_BYTES).decode('utf-8', errors='replace')
                 info['cmdline'] = raw.replace('\x00', ' ').strip()
             except OSError:
                 pass
@@ -3111,7 +3113,7 @@ def detect_sandbox_environment_indicators() -> list:
     # /proc/cpuinfo: hypervisor flag and VM CPU identity strings
     try:
         with open('/proc/cpuinfo', 'r', errors='replace') as f:
-            cpuinfo = f.read()
+            cpuinfo = f.read(_MAX_PROC_BYTES)
         for line in cpuinfo.splitlines():
             if line.startswith('flags') and 'hypervisor' in line:
                 findings.append(_make_finding(
@@ -3176,7 +3178,7 @@ def detect_sandbox_environment_indicators() -> list:
                 continue
             try:
                 with open(f'/proc/{entry.name}/cmdline', 'rb') as f:
-                    cmdline = f.read().decode('utf-8', errors='replace').lower()
+                    cmdline = f.read(_MAX_PROC_BYTES).decode('utf-8', errors='replace').lower()
                 for tool in _ANALYSIS_TOOLS:
                     if tool in cmdline:
                         findings.append(_make_finding(
@@ -3400,7 +3402,7 @@ def detect_process_injection_surface() -> list:
             # /proc/<pid>/environ: LD_PRELOAD set in process environment
             try:
                 with open(f'/proc/{pid}/environ', 'rb') as f:
-                    raw_env = f.read().decode('utf-8', errors='replace')
+                    raw_env = f.read(_MAX_PROC_BYTES).decode('utf-8', errors='replace')
                 for item in raw_env.split('\x00'):
                     if item.startswith('LD_PRELOAD='):
                         ld_preload_hits.append((pid, item[len('LD_PRELOAD='):]))

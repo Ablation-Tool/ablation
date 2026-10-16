@@ -16,6 +16,8 @@ import struct
 import os
 from typing import List, Dict
 
+_MAX_PROC_BYTES = 4 * 1024 * 1024  # 4 MB cap for procfs reads (/proc/pid/*)
+
 
 # ---------------------------------------------------------------------------
 # 1. SEH chain corruption / exploit patterns
@@ -3811,7 +3813,7 @@ def detect_linux_memory_artifacts() -> list:
         cmdline_path = f'/proc/{pid}/cmdline'
         try:
             with open(cmdline_path, 'rb') as _fh:
-                raw = _fh.read()
+                raw = _fh.read(_MAX_PROC_BYTES)
         except (OSError, PermissionError):
             continue
         for m in b64_pat.finditer(raw):

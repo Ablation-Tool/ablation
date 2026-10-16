@@ -80,3 +80,7 @@ of a block fails, `_decompress_file` scans for the first valid zlib CMF byte (0x
 a valid FLG byte: 0x01, 0x5e, 0x9c, or 0xda) and decompresses from that offset. Prefix bytes
 before the zlib header are discarded as storage overhead. Confirmed on psme-rest-server
 (QTECH G4DCL, 16 384-byte GOT prefix in block 0).
+
+## FORGE audit
+
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_CRAMFS_BYTES=256MB` + `os.path.getsize()` guard before `open().read()`.
