@@ -100,106 +100,108 @@ Cache predating ARM64 gap fixes (AARCH64-GAP-001/002) will have empty `str_xref_
 
 Two gaps prevented ARM64 binary analysis. Both are now resolved.
 
-### AARCH64-GAP-001 — Call graph (fixed 2026-10-15)
+### AARCH64-GAP-001: Call graph (fixed 2026-10-15)
 
 **Symptom:** `ctx.call_edges` contained ~1 edge on ARM64 ELFs.
 
-**Root cause:** `_build_call_graph()` fell through to the x86 `0xe8` opcode scanner
-for `arch='arm64'`. ARM64 has no `0xe8` call instruction.
+**Root cause:** `_build_call_graph()` fell through to the x86 `0xe8` opcode scanner for
+`arch='arm64'`. ARM64 has no `0xe8` call instruction.
 
-**Fix:** `_build_call_graph_arm64()` — vectorized NumPy scan for BL instructions.
+**Fix:** `_build_call_graph_arm64()` does a vectorized NumPy scan for BL instructions.
 
-AArch64 BL encoding (little-endian):
+AArch64 BL encoding in little-endian:
 
 ```
-bits 31:26 = 100101  →  byte[3] ∈ {0x94, 0x95, 0x96, 0x97}
+bits 31:26 = 100101  ->  byte[3] in {0x94, 0x95, 0x96, 0x97}
 imm26 = word[25:0]
-target = insn_va + SignExtend(imm26, 26) × 4
+target = insn_va + sign_ext26(imm26) x 4
 ```
 
-No +8 pipeline adjustment (ARM32 adds +8; ARM64 does not). All instructions are
-4-byte aligned — only word-aligned positions are scanned.
+ARM64 adds no +8 pipeline adjustment. ARM32 adds +8; ARM64 does not. All instructions
+are 4-byte aligned so only word-aligned positions are scanned.
 
-Validated on emsworkers_linux_arm64 v8.0.0 (78 MB Go binary): **1 → 69,344 call edges**.
+Validated on emsworkers_linux_arm64 v8.0.0, a 78 MB Go binary: **1 to 69,344 call edges**.
 
-### AARCH64-GAP-002 — String xref index (fixed 2026-10-15)
+### AARCH64-GAP-002: String xref index (fixed 2026-10-15)
 
 **Symptom:** `ctx.string_xrefs(va)` always returned `[]` on ARM64 binaries.
 
-**Root cause:** `_build_string_xref_index()` docstring claimed "x86_64/arm64" but the
-implementation applied the x86-64 RIP-relative 32-bit displacement formula to ARM64 code,
-which uses a completely different addressing mode.
+**Root cause:** `_build_string_xref_index()` claimed to support arm64 in its docstring.
+The implementation applied the x86-64 RIP-relative 32-bit displacement formula to ARM64
+code. ARM64 uses a different addressing mode.
 
-**Fix:** `_build_string_xref_index_arm64()` — vectorized NumPy scan for ADRP+ADD pairs.
+**Fix:** `_build_string_xref_index_arm64()` does a vectorized NumPy scan for ADRP+ADD pairs.
 
-ARM64 materialises PC-relative string addresses as a two-instruction sequence:
+ARM64 materialises a PC-relative string address as a two-instruction sequence:
 
 ```
-ADRP X_d, #page_imm    — byte[3] & 0x9F == 0x90; loads 4KB-aligned base page.
-ADD  X_d, X_d, #off12  — bits[31:22] == 0x244 (64-bit, shift=0); adds 12-bit offset.
+ADRP X_d, #page_imm    byte[3] & 0x9F == 0x90; loads 4KB-aligned base page
+ADD  X_d, X_d, #off12  bits[31:22] == 0x244, 64-bit, shift=0; adds 12-bit offset
 ```
 
-Page address computation: `page_base = (insn_va & ~0xFFF) + SignExtend(imm21, 21) << 12`
+Page address: `page_base = (insn_va & ~0xFFF) + SignExtend(imm21) << 12`
 
 Full address: `page_base + imm12`
 
-Only consecutive (i, i+1) pairs where `ADD.Rn == ADRP.Rd` (same register) are matched.
+Only consecutive instruction pairs where `ADD.Rn == ADRP.Rd` are matched.
+That check filters to pairs using the same destination register.
 
-Validated on emsworkers_linux_arm64 v8.0.0 (78 MB Go binary): **0 → 13,962 string xref pairs**.
+Validated on emsworkers_linux_arm64 v8.0.0, a 78 MB Go binary: **0 to 13,962 string xref pairs**.
 
 ---
 
 ## MIPS32/64 support gap fixed
 
-One gap prevented MIPS32 firmware analysis. Now resolved.
+One gap prevented MIPS32 firmware analysis. It is now resolved.
 
-### MIPS-GAP-001 — Call graph: JAL-only scanner missed all PLT calls (fixed 2026-10-15)
+### MIPS-GAP-001: Call graph, JAL-only scanner missed all PLT calls (fixed 2026-10-15)
 
 **Symptom:** `ctx.call_edges` was empty on MIPS32 ET_EXEC firmware binaries.
 
-**Root cause:** `_build_call_graph_mips()` scanned only for JAL (opcode=3, bits 31:26). The
-O32 ABI PIC calling convention used by ET_EXEC firmware (e.g., FortiAP cwWtpd) routes all
-PLT and cross-function calls through `LW $t9, N($gp)` + `JALR $t9` — zero JAL instructions.
+**Root cause:** `_build_call_graph_mips()` scanned only for JAL, opcode 3, bits 31:26.
+The O32 ABI PIC calling convention routes all PLT and cross-function calls through
+`LW $t9, N($gp)` + `JALR $t9`. ET_EXEC firmware uses zero JAL instructions.
 
-**Fix:** `_build_call_graph_mips()` now handles both patterns:
+**Fix:** `_build_call_graph_mips()` now handles two patterns.
 
-1. **JAL** (unchanged): `bits 31:26 == 3`, target = `(DS_PC & 0xF0000000) | (imm26 << 2)`.
+Pattern 1: **JAL** (unchanged). `bits 31:26 == 3`, target = `(DS_PC & 0xF0000000) | (imm26 << 2)`.
 
-2. **LW $t9, N($gp) + JALR $t9** (new):
-   - Encoding: bits 31:16 = `0x8F99` (opcode=LW=0x23, rs=$gp=28, rt=$t9=25).
-   - `$gp` is fixed for ET_EXEC binaries; read from `.reginfo` section at offset 20.
-   - GOT entry at `($gp + sign_ext(imm16))` holds the callee VA.
-   - GOT contents read from `.got` section; entries matched against `plt` and `func_starts`.
+Pattern 2: **LW $t9, N($gp) + JALR $t9** (new).
+- Encoding: bits 31:16 = `0x8F99`. That is opcode LW at `0x23`, rs `$gp` at 28, rt `$t9` at 25.
+- `$gp` is fixed for ET_EXEC binaries. Read it from `.reginfo` at offset 20.
+- The GOT entry at `($gp + sign_ext(imm16))` holds the callee VA.
+- GOT contents are read from `.got`. Each entry is matched against `plt` and `func_starts`.
 
 ```
 # BE: LW $t9, N($gp) opcode breakdown
 # bits 31:26 = LW = 0x23 = 0b100011
 # bits 25:21 = rs = $gp = 28 = 0x1C
 # bits 20:16 = rt = $t9 = 25 = 0x19
-# → upper halfword = (0x23<<10)|(0x1C<<5)|0x19 = 0x8F99
+# upper halfword = (0x23<<10)|(0x1C<<5)|0x19 = 0x8F99
 ```
 
-`$gp` is from `.reginfo` layout:
+`$gp` comes from `.reginfo` at byte offsets:
+
 ```
-ri_gprmask   (4 bytes, offset  0)
-ri_cprmask   (16 bytes, offset 4)
-ri_gp_value  (4 bytes, offset 20)  ← gp
+ri_gprmask   4 bytes at offset  0
+ri_cprmask  16 bytes at offset  4
+ri_gp_value  4 bytes at offset 20   <- gp
 ```
 
-Validated on FortiAP cwWtpd (MIPS32 BE, 3.3MB, 1,170 exports): **0 → 23,617 call edges**.
-`callers_of('system')` and `callers_of('popen')` became functional, directly identifying
-CAPWAP VSP shell injection (FAP-CWMIPS-1, see `re/fortinet/fortiap_re.py`).
+Validated on FortiAP cwWtpd, a 3.3MB MIPS32 BE binary with 1,170 exports: **0 to 23,617 call edges**.
+`callers_of('system')` and `callers_of('popen')` became functional. This led directly to
+CAPWAP VSP shell injection finding FAP-CWMIPS-1. See `re/fortinet/fortiap_re.py`.
 
-### MIPS-GAP-002 — SinkArgClassifier / TaintTracker: MIPS32 not supported (open)
+### MIPS-GAP-002: SinkArgClassifier and TaintTracker do not support MIPS32 (open)
 
 **Symptom:** `SinkArgClassifier.classify_all()` returns 0 results on MIPS32 ELFs.
 
-**Root cause:** Both tools hardcode x86-64 register names (`rdi`, `rsi`, `rdx`) and x86-64
-calling convention for argument tracking. MIPS32 uses `a0`–`a3` for the first four
-arguments, with no register file equivalent.
+**Root cause:** Both tools hardcode x86-64 register names `rdi`, `rsi`, and `rdx` for
+argument tracking. MIPS32 uses `a0` through `a3` for the first four arguments. There is no
+equivalent register path.
 
-**Workaround:** Manual capstone disassembly for sink classification and taint tracing on
-MIPS32 targets. Annotate GOT offsets to resolve `LW $t9, N($gp)` call targets manually.
+**Workaround:** Use manual capstone disassembly for sink classification on MIPS32 targets.
+Annotate GOT offsets to resolve `LW $t9, N($gp)` call targets by hand.
 
-**Future fix:** Add MIPS calling convention path to both analyzers (MIPS registers a0–a3
-map to argument positions 0–3; stack slots used for arguments 5+).
+**Future fix:** Add a MIPS calling convention path to both analyzers. MIPS registers
+`a0` through `a3` map to argument positions 0 through 3. Stack slots cover arguments 5 and up.
