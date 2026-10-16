@@ -75,9 +75,9 @@ class NetworkAnalyzer:
                                     ip_addr = l.split()[1].split('/')[0]
                                     break
                             self.interfaces.append({'name': iface, 'ip': ip_addr})
-                        except:
+                        except Exception:
                             self.interfaces.append({'name': iface})
-        except:
+        except Exception:
             pass
         return self.interfaces
 
@@ -95,7 +95,7 @@ class NetworkAnalyzer:
                     ip = parts[1] if len(parts) >= 2 else None
                     self.interfaces.append({'name': current, 'ip': ip})
                     current = None
-        except:
+        except Exception:
             pass
         return self.interfaces
     
@@ -134,7 +134,7 @@ class NetworkAnalyzer:
                                 self.listening.append(conn)
                             else:
                                 self.connections.append(conn)
-            except:
+            except Exception:
                 pass
         return self.connections
 
@@ -165,11 +165,11 @@ class NetworkAnalyzer:
                 remote_ip, remote_port = _split(remote_str)
                 try:
                     local_port = int(local_port)
-                except:
+                except Exception:
                     local_port = 0
                 try:
                     remote_port = int(remote_port)
-                except:
+                except Exception:
                     remote_port = 0
                 conn = {
                     'protocol': parts[7].lower() if len(parts) > 7 else 'tcp',
@@ -181,7 +181,7 @@ class NetworkAnalyzer:
                     self.listening.append(conn)
                 else:
                     self.connections.append(conn)
-        except:
+        except Exception:
             pass
         return self.connections
 
@@ -204,7 +204,7 @@ class NetworkAnalyzer:
                     'type': 'iptables',
                     'output': result.stdout
                 })
-        except:
+        except Exception:
             pass
         
         # Check if firewalld is running
@@ -221,7 +221,7 @@ class NetworkAnalyzer:
                     'type': 'firewalld',
                     'output': result.stdout
                 })
-        except:
+        except Exception:
             pass
         
         return self.firewall_rules
@@ -884,7 +884,7 @@ class WebDirBrute:
         try:
             with self._opener.open(req, timeout=self.timeout) as resp:
                 status = resp.status
-                length = len(resp.read())
+                length = len(resp.read(4 * 1024 * 1024))
         except urllib.error.HTTPError as exc:
             status = exc.code
             try:
@@ -1172,7 +1172,7 @@ def probe_rabbitmq_management(host, port=15672, timeout=5.0) -> list:
         req = urllib.request.Request(url, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return resp.status, resp.read()
+                return resp.status, resp.read(4 * 1024 * 1024)
         except urllib.error.HTTPError as exc:
             return exc.code, b""
         except Exception:
@@ -1436,7 +1436,7 @@ def detect_event_injection_surface(host, port=443, timeout=5.0) -> list:
         )
         try:
             with _opener.open(req, timeout=timeout) as resp:
-                return resp.status, resp.read()
+                return resp.status, resp.read(4 * 1024 * 1024)
         except urllib.error.HTTPError as exc:
             return exc.code, b""
         except Exception:
@@ -1562,7 +1562,7 @@ def probe_agent_registry(host, port=443, timeout=5.0) -> list:
         )
         try:
             with _opener.open(req, timeout=timeout) as resp:
-                return resp.status, resp.read()
+                return resp.status, resp.read(4 * 1024 * 1024)
         except urllib.error.HTTPError as exc:
             return exc.code, b""
         except Exception:
@@ -1734,7 +1734,7 @@ def probe_tool_registry(host, port=443, timeout=5.0) -> list:
         )
         try:
             with _opener.open(req, timeout=timeout) as resp:
-                return resp.status, resp.read()
+                return resp.status, resp.read(4 * 1024 * 1024)
         except urllib.error.HTTPError as exc:
             return exc.code, b""
         except Exception:
@@ -1896,7 +1896,7 @@ def probe_event_store(host: str, port: int = 2113, timeout: float = 10.0) -> lis
         )
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return resp.status, resp.read()
+                return resp.status, resp.read(4 * 1024 * 1024)
         except urllib.error.HTTPError as exc:
             return exc.code, b""
         except Exception:
@@ -2006,7 +2006,7 @@ def probe_kafka_schema_registry(host: str, port: int = 8081, timeout: float = 10
         )
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return resp.status, resp.read()
+                return resp.status, resp.read(4 * 1024 * 1024)
         except urllib.error.HTTPError as exc:
             return exc.code, b""
         except Exception:

@@ -59,7 +59,7 @@ def _hx_request(host: str, path: str, method: str = "GET",
         req.add_header("hx-auth-token", token)
     try:
         with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=timeout) as r:
-            raw = r.read()
+            raw = r.read(4 * 1024 * 1024)
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as e:
         return {"__http_error": e.code, "__reason": str(e.reason)}
@@ -78,7 +78,7 @@ def _http_raw(host: str, path: str, method: str = "GET",
     req.add_header("Accept", "*/*")
     try:
         with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=timeout) as r:
-            return (r.status, r.read())
+            return (r.status, r.read(4 * 1024 * 1024))
     except urllib.error.HTTPError as e:
         try:
             return (e.code, e.read())
@@ -1297,7 +1297,5 @@ def probe_hyperflex_replication(host: str, port: int = 443, timeout: float = 10.
                     f"GET /rest/vms response contains 'powerState' -- {running_count}"
                     f" running VMs enumerated without auth on {host}:{port}.",
                 ))
-
-    return findings
 
     return findings

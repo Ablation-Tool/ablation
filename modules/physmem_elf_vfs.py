@@ -571,7 +571,8 @@ def main():
                 name = cand.name or f'elf_0x{cand.dump_offset:x}'
                 out = os.path.join(args.out, name)
                 sz = vfs.extract_binary(cand, out)
-                digest = hashlib.sha256(open(out, 'rb').read()).hexdigest()[:12]
+                with open(out, 'rb') as _fh:
+                    digest = hashlib.sha256(_fh.read()).hexdigest()[:12]
                 manifest[name] = {'size': sz, 'digest': digest, 'dump_offset': hex(cand.dump_offset)}
             mpath = os.path.join(args.out, 'manifest.json')
             with open(mpath, 'w') as f:

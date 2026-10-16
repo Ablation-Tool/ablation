@@ -255,7 +255,7 @@ def probe_http_api(host: str, port: int = 443, username: str = '',
             req.add_header('Authorization', auth)
         try:
             with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
-                body = r.read().decode('utf-8', errors='replace')
+                body = r.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
                 results[path] = {'status': r.status, 'body': body[:500]}
         except urllib.error.HTTPError as e:
             results[path] = {'status': e.code}
@@ -1371,7 +1371,7 @@ def probe_cisco_threat_detection(host: str, port: int = 443, timeout: float = 10
                          'User-Agent': 'Mozilla/5.0'},
             )
             with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
-                return r.status, r.read().decode('utf-8', errors='replace')
+                return r.status, r.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
         except Exception:
             return None, ''
 
@@ -1483,7 +1483,7 @@ def probe_cisco_dynamic_access_policy(host: str, port: int = 443, timeout: float
                          'User-Agent': 'Mozilla/5.0'},
             )
             with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
-                return r.status, r.read().decode('utf-8', errors='replace')
+                return r.status, r.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
         except Exception:
             return None, ''
 
@@ -1582,7 +1582,7 @@ def probe_cisco_anyconnect_profile(host: str, port: int = 443, timeout: float = 
         try:
             req = urllib.request.Request(url, headers={'User-Agent': 'AnyConnect'})
             with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-                return resp.status, resp.read().decode('utf-8', errors='replace')
+                return resp.status, resp.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
         except Exception:
             return None, ''
 
@@ -1713,7 +1713,7 @@ def probe_cisco_clientless_vpn_bookmarks(host: str, port: int = 443, timeout: fl
                 headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html'}
             )
             with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-                return resp.status, resp.read().decode('utf-8', errors='replace')
+                return resp.status, resp.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
         except Exception:
             return None, ''
 
@@ -2320,7 +2320,7 @@ def probe_cisco_yang_model_exposure(host: str, port: int = 443, timeout: float =
         try:
             req = _urllib_req.Request(url, headers=headers)
             with _urllib_req.urlopen(req, timeout=timeout, context=ctx) as resp:
-                body = resp.read().decode('utf-8', errors='replace')
+                body = resp.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
                 return resp.status, body
         except _urllib_err.HTTPError as e:
             return e.code, ''
@@ -3388,11 +3388,11 @@ def probe_cisco_ios_xe_guestshell_exposure(host: str, port: int = 443,
         try:
             req = _urllib_req.Request(url, headers=headers)
             with _urllib_req.urlopen(req, timeout=timeout, context=ctx) as resp:
-                body = resp.read().decode('utf-8', errors='replace')
+                body = resp.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
                 return resp.status, body
         except _urllib_err.HTTPError as e:
             try:
-                body = e.read().decode('utf-8', errors='replace')
+                body = e.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
             except Exception:
                 body = ''
             return e.code, body
@@ -3712,11 +3712,11 @@ def probe_cisco_ios_acl_nat_config_extraction(host: str, port: int = 443,
         try:
             req = _urllib_req.Request(url, headers=headers)
             with _urllib_req.urlopen(req, timeout=timeout, context=ctx) as resp:
-                body = resp.read().decode('utf-8', errors='replace')
+                body = resp.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
                 return resp.status, body
         except _urllib_err.HTTPError as e:
             try:
-                body = e.read().decode('utf-8', errors='replace')
+                body = e.read(4 * 1024 * 1024).decode('utf-8', errors='replace')
             except Exception:
                 body = ''
             return e.code, body

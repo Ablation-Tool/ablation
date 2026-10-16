@@ -241,10 +241,16 @@ class CanDbcParser:
             unit = m.group(10)
             recv_str = m.group(11).strip()
             receivers = [r for r in recv_str.split(",") if r.strip()]
+            import math
             factor = float(factor_s) if factor_s else 1.0
             offset = float(offset_s) if offset_s else 0.0
             min_val = float(min_s) if min_s else 0.0
             max_val = float(max_s) if max_s else 0.0
+            for _name, _val in (('factor', factor), ('offset', offset), ('min', min_val), ('max', max_val)):
+                if not math.isfinite(_val):
+                    raise ValueError(f"non-finite {_name} value: {_val!r}")
+            if factor == 0.0:
+                raise ValueError("factor must be non-zero")
         except (ValueError, IndexError):
             return None
         return CANSignal(

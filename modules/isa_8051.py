@@ -26,10 +26,14 @@ Module reference: ablation/docs/module-reference/isa-8051.md
 """
 from __future__ import annotations
 
+import os
 import struct
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, Iterator, List, Optional, Tuple
+
+_MAX_HEX_FILE_BYTES  = 4 * 1024 * 1024    # 4 MB source text limit
+_MAX_ADDRESS_RANGE   = 512 * 1024           # 512 KB dense buffer limit (CC254x max)
 
 
 # ---------------------------------------------------------------------------
@@ -283,8 +287,6 @@ class Mcs51Decoder:
             return Mcs51Insn(offset, _raw(2), "MOV", f"R{b0-0xA8},{s(b1())}")
         if 0x78 <= b0 <= 0x7F:
             return Mcs51Insn(offset, _raw(2), "MOV", f"R{b0-0x78},#0x{b1():02X}")
-        if 0x58 <= b0 <= 0x5F:
-            return Mcs51Insn(offset, _raw(1), "ANL", f"A,R{b0-0x58}")
         if 0xB8 <= b0 <= 0xBF:
             r = b2(); t = offset + 3 + (r if r < 128 else r - 256)
             return Mcs51Insn(offset, _raw(3), "CJNE",
@@ -488,6 +490,10 @@ class IntelHexLoader:
 
     @classmethod
     def from_file(cls, path: str) -> "IntelHexLoader":
+        file_size = os.path.getsize(path)
+        if file_size > _MAX_HEX_FILE_BYTES:
+            raise ValueError(
+                f'{path}: HEX file size {file_size} exceeds {_MAX_HEX_FILE_BYTES} byte limit')
         loader = cls()
         base = 0
         with open(path, encoding="ascii", errors="replace") as fh:
@@ -550,6 +556,10 @@ class IntelHexLoader:
         if not self._data:
             return b""
         lo, hi = self.address_range()
+        if (hi - lo) > _MAX_ADDRESS_RANGE:
+            raise ValueError(
+                f'Address range 0x{lo:x}–0x{hi:x} ({hi - lo} bytes) exceeds '
+                f'{_MAX_ADDRESS_RANGE} byte limit')
         buf = bytearray(hi - lo)
         for addr, byte in self._data.items():
             buf[addr - lo] = byte

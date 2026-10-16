@@ -371,15 +371,19 @@ class CryptoAudit:
                 if p.is_file():
                     _scan_text(p.read_text(errors="replace"), str(p))
                     continue
-                for fp in p.rglob("*"):
-                    if not fp.is_file():
+                for root_dir, dirs, files in os.walk(str(p), followlinks=False):
+                    depth = str(root_dir).count(os.sep) - str(p).count(os.sep)
+                    if depth >= 6:
+                        dirs.clear()
                         continue
-                    if fp.stat().st_size > 5 * 1024 * 1024:  # skip >5MB
-                        continue
-                    try:
-                        _scan_text(fp.read_text(errors="replace"), str(fp))
-                    except (PermissionError, OSError):
-                        pass
+                    for fname in files:
+                        fp = Path(root_dir) / fname
+                        try:
+                            if fp.stat().st_size > 5 * 1024 * 1024:
+                                continue
+                            _scan_text(fp.read_text(errors="replace"), str(fp))
+                        except (PermissionError, OSError):
+                            pass
             except (PermissionError, OSError):
                 pass
 
@@ -417,6 +421,10 @@ class CryptoAudit:
         }
 
         # Parse; if invalid XML flag and return
+        # Size cap prevents Billion Laughs DoS via internal entity expansion (CWE-776)
+        if len(xml_str) > 1_000_000:
+            result["vulns"].append("PARSE_ERROR: XML input exceeds 1MB size limit")
+            return result
         try:
             root = ET.fromstring(xml_str)
         except ET.ParseError as e:
@@ -615,11 +623,13 @@ class CryptoAudit:
                 if base.is_file():
                     _check_file(base)
                     continue
-                # Walk: limit depth to avoid runaway scans
-                for fp in base.rglob("*"):
-                    if not fp.is_file():
+                for root_dir, dirs, files in os.walk(str(base), followlinks=False):
+                    depth = str(root_dir).count(os.sep) - str(base).count(os.sep)
+                    if depth >= 6:
+                        dirs.clear()
                         continue
-                    _check_file(fp)
+                    for fname in files:
+                        _check_file(Path(root_dir) / fname)
             except (PermissionError, OSError):
                 pass
 
@@ -1596,8 +1606,6 @@ class KeyCryptoAnalyzer:
 
 def check_rng_weakness(binary_data: bytes) -> list:
     """Detect random number generator weaknesses in binary data."""
-    import re
-
     findings = []
     text = binary_data.decode("ascii", errors="replace")
 

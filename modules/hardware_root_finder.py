@@ -183,12 +183,17 @@ class HardwareRootFinder:
         except ImportError:
             return []
 
-        binary = lief.parse(self.binary_path)
+        try:
+            binary = lief.parse(self.binary_path)
+        except Exception:
+            return []
         if not isinstance(binary, lief.ELF.Binary):
             return []
 
         text_sec = binary.get_section('.text')
         if not text_sec:
+            return []
+        if text_sec.size > 128 * 1024 * 1024:
             return []
 
         text_data = bytes(text_sec.content)

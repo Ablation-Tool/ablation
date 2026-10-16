@@ -71,7 +71,7 @@ def _nd_get(host: str, path: str, token: Optional[str] = None,
         req.add_header("Authorization", f"Bearer {token}")
     try:
         with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=timeout) as r:
-            raw = r.read()
+            raw = r.read(4 * 1024 * 1024)
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as e:
         return {"__http_error": e.code}
@@ -89,7 +89,7 @@ def _nd_login(host: str, user: str, passwd: str,
     req.add_header("Content-Type", "application/json")
     try:
         with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=timeout) as r:
-            data = json.loads(r.read())
+            data = json.loads(r.read(4 * 1024 * 1024))
             return data.get("token") or data.get("jwttoken")
     except Exception:
         return None
@@ -107,7 +107,7 @@ def _ndfc_login(host: str, user: str, passwd: str,
     req.add_header("Content-Type", "application/json")
     try:
         with urllib.request.urlopen(req, context=_ssl_ctx(), timeout=timeout) as r:
-            data = json.loads(r.read())
+            data = json.loads(r.read(4 * 1024 * 1024))
             return data.get("jwttoken") or data.get("token")
     except Exception:
         return None
@@ -204,7 +204,7 @@ def probe_nxapi_cli(host: str, port: int = 80, timeout: float = 5.0) -> list:
         try:
             ctx = _ssl_ctx() if use_ssl else None
             with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
-                return r.status, r.read()
+                return r.status, r.read(4 * 1024 * 1024)
         except urllib.error.HTTPError as e:
             try:
                 return e.code, e.read()
@@ -300,7 +300,7 @@ def probe_nxapi_rest(host: str, port: int = 443, timeout: float = 5.0) -> list:
         try:
             ctx = _ssl_ctx() if use_ssl else None
             with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
-                return r.status, r.read()
+                return r.status, r.read(4 * 1024 * 1024)
         except urllib.error.HTTPError as e:
             try:
                 return e.code, e.read()
@@ -476,7 +476,7 @@ def probe_guestshell(host: str, port: int = 443, timeout: float = 5.0) -> list:
         try:
             ctx = _ssl_ctx() if use_ssl else None
             with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
-                return r.status, r.read()
+                return r.status, r.read(4 * 1024 * 1024)
         except urllib.error.HTTPError as e:
             try:
                 return e.code, e.read()
@@ -539,7 +539,7 @@ def probe_guestshell(host: str, port: int = 443, timeout: float = 5.0) -> list:
     try:
         ctx = _ssl_ctx() if use_ssl_rest else None
         with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
-            resp_body = r.read()
+            resp_body = r.read(4 * 1024 * 1024)
             if b".ext4" in resp_body or b"bootflash" in resp_body:
                 findings.append({
                     "severity": "HIGH",
@@ -595,7 +595,7 @@ def probe_nexus_dashboard_api(host: str, port: int = 443, timeout: float = 5.0) 
         try:
             with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
                 if r.status == 200:
-                    body = r.read()
+                    body = r.read(4 * 1024 * 1024)
                     if body and body.strip() not in (b"null", b"[]", b"{}"):
                         findings.append({
                             "severity": severity,
@@ -614,7 +614,7 @@ def probe_nexus_dashboard_api(host: str, port: int = 443, timeout: float = 5.0) 
     try:
         with urllib.request.urlopen(req, context=None, timeout=timeout) as r:
             if r.status == 200:
-                body = r.read()
+                body = r.read(4 * 1024 * 1024)
                 if body and body.strip() not in (b"null", b"[]", b"{}"):
                     findings.append({
                         "severity": "HIGH",
@@ -649,7 +649,7 @@ def probe_nexus_dashboard_dcnm(host: str, port: int = 443, timeout: float = 5.0)
     try:
         with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
             if r.status == 200:
-                body = r.read()
+                body = r.read(4 * 1024 * 1024)
                 data = json.loads(body) if body else {}
                 if data.get("jwttoken") or data.get("token") or data.get("sessionId"):
                     findings.append({
@@ -685,7 +685,7 @@ def probe_nexus_dashboard_dcnm(host: str, port: int = 443, timeout: float = 5.0)
         try:
             with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
                 if r.status == 200:
-                    body = r.read()
+                    body = r.read(4 * 1024 * 1024)
                     if body and body.strip() not in (b"null", b"[]", b"{}"):
                         findings.append({
                             "severity": severity,
@@ -768,7 +768,7 @@ def probe_nxos_telemetry(host: str, port: int = 443, timeout: float = 10.0) -> l
     try:
         with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
             if r.status == 200:
-                body = r.read()
+                body = r.read(4 * 1024 * 1024)
                 if body and body.strip() not in (b"null", b"[]", b"{}"):
                     findings.append({
                         "severity": "HIGH",
@@ -788,7 +788,7 @@ def probe_nxos_telemetry(host: str, port: int = 443, timeout: float = 10.0) -> l
     try:
         with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
             if r.status == 200:
-                dst_body = r.read()
+                dst_body = r.read(4 * 1024 * 1024)
                 if dst_body and dst_body.strip() not in (b"null", b"[]", b"{}"):
                     findings.append({
                         "severity": "CRITICAL",
@@ -824,7 +824,7 @@ def probe_nxos_telemetry(host: str, port: int = 443, timeout: float = 10.0) -> l
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             if r.status == 200:
-                body = r.read()
+                body = r.read(4 * 1024 * 1024)
                 if body and body.strip() not in (b"null", b"[]", b"{}"):
                     findings.append({
                         "severity": "HIGH",
@@ -871,7 +871,7 @@ def probe_nxos_poap(host: str, port: int = 80, timeout: float = 10.0) -> list:
         try:
             with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
                 if r.status == 200:
-                    body = r.read()
+                    body = r.read(4 * 1024 * 1024)
                     if body and len(body.strip()) > 0:
                         findings.append({
                             "severity": "CRITICAL",
@@ -981,7 +981,7 @@ def probe_jenkins_exposure(host: str, port: int = 8080, timeout: float = 10.0) -
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 if r.status == 200:
-                    body = r.read()
+                    body = r.read(4 * 1024 * 1024)
                     if body and validator(body):
                         findings.append({
                             "severity": severity,
@@ -1037,7 +1037,7 @@ def probe_gitlab_exposure(host: str, port: int = 80, timeout: float = 10.0) -> l
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 if r.status == 200:
-                    body = r.read()
+                    body = r.read(4 * 1024 * 1024)
                     if body and validator(body):
                         findings.append({
                             "severity": severity,
@@ -1086,7 +1086,7 @@ def probe_tekton_pipeline_exposure(host: str, port: int = 80, timeout: float = 1
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 if r.status == 200:
-                    body = r.read()
+                    body = r.read(4 * 1024 * 1024)
                     if body and validator(body):
                         findings.append({
                             "severity": severity,
@@ -1146,7 +1146,7 @@ def probe_argocd_api(host: str, port: int = 443, timeout: float = 10.0) -> list:
         try:
             with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
                 if r.status == 200:
-                    body = r.read()
+                    body = r.read(4 * 1024 * 1024)
                     if body and validator(body):
                         findings.append({
                             "severity": severity,
@@ -1192,7 +1192,7 @@ def probe_flux_gitops_exposure(host: str, port: int = 80, timeout: float = 10.0)
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 if r.status == 200:
-                    body = r.read()
+                    body = r.read(4 * 1024 * 1024)
                     if body and (b'"items"' in body or b'"metadata"' in body or b'"kind"' in body):
                         findings.append({
                             "severity": severity,
@@ -1238,7 +1238,7 @@ def probe_crossplane_exposure(host: str, port: int = 80, timeout: float = 10.0) 
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 if r.status == 200:
-                    body = r.read()
+                    body = r.read(4 * 1024 * 1024)
                     if body and (b'"items"' in body or b'"metadata"' in body or b'"kind"' in body):
                         findings.append({
                             "severity": severity,
@@ -1278,7 +1278,7 @@ def probe_sonarqube_exposure(host: str, port: int = 9000, timeout: float = 10.0)
             try:
                 with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
                     if r.status == 200:
-                        return r.read()
+                        return r.read(4 * 1024 * 1024)
             except Exception:
                 pass
         return None
@@ -1391,7 +1391,7 @@ def probe_artifactory_nexus_registry(host: str, port: int = 8081, timeout: float
             try:
                 with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
                     if r.status == 200:
-                        return r.read()
+                        return r.read(4 * 1024 * 1024)
             except Exception:
                 pass
         return None

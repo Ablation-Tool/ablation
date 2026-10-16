@@ -41,9 +41,12 @@ Binary hardcoded: libwechatnetwork.so (WeChat 8.0.56 ARM64)
 import struct
 import sys
 import argparse
+from collections import defaultdict
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
 
 try:
     import capstone
@@ -167,6 +170,10 @@ class Binary:
     PLT_STUBS: Set[int] = {0x3bb780}
 
     def __init__(self, path: str):
+        size = Path(path).stat().st_size
+        if size > _MAX_BINARY_BYTES:
+            raise ValueError(
+                f'{path}: file size {size} exceeds {_MAX_BINARY_BYTES} byte limit')
         self.data = Path(path).read_bytes()
         self._md = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
         self._md.detail = True
@@ -659,7 +666,6 @@ def main():
         return
 
     # Group by field_offset
-    from collections import defaultdict
     by_off: Dict[int, list] = defaultdict(list)
     for f in findings:
         by_off[f['field_offset']].append(f)

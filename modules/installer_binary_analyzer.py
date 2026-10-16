@@ -35,6 +35,8 @@ from typing import Dict, List, Optional, Tuple
 # Format detection
 # ──────────────────────────────────────────────────────────────────────────────
 
+_MAX_INSTALLER_BYTES = 256 * 1024 * 1024
+
 BITROCK_MARKER  = b'bitrock-lzma-4.0'
 NSIS_MAGIC      = b'\xEF\xBE\xAD\xDE'        # NSIS block magic
 INNO_MAGIC      = b'Inno Setup Setup Data'
@@ -112,14 +114,20 @@ def _upx_unpack(data: bytes) -> Optional[bytes]:
             capture_output=True, timeout=60
         )
         if result.returncode == 0:
-            return open(tmp_out_path, 'rb').read()
+            out_size = os.path.getsize(tmp_out_path)
+            if out_size > _MAX_INSTALLER_BYTES:
+                return None
+            with open(tmp_out_path, 'rb') as f:
+                return f.read()
         return None
     except Exception:
         return None
     finally:
         for p in (tmp_in_path, tmp_out_path):
-            try: os.unlink(p)
-            except: pass
+            try:
+                os.unlink(p)
+            except Exception:
+                pass
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -288,7 +296,12 @@ class InstallerBinaryAnalyzer:
 
     def _load(self) -> bytes:
         if self._data is None:
-            self._data = open(self.path, 'rb').read()
+            size = os.path.getsize(self.path)
+            if size > _MAX_INSTALLER_BYTES:
+                raise ValueError(
+                    f'{self.path}: file size {size} exceeds {_MAX_INSTALLER_BYTES} byte limit')
+            with open(self.path, 'rb') as f:
+                self._data = f.read()
         return self._data
 
     def analyze(self) -> InstallerAnalysisResult:
@@ -352,7 +365,8 @@ class InstallerBinaryAnalyzer:
                 stem_base = os.path.splitext(stem)[0]
                 ext2      = os.path.splitext(stem)[1]
                 out = os.path.join(out_dir, f'{stem_base}_{i}{ext2}')
-            open(out, 'wb').write(b.data)
+            with open(out, 'wb') as fout:
+                fout.write(b.data)
             paths[stem] = out
         result.extracted_paths = paths
         return paths
