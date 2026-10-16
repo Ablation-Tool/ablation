@@ -2798,7 +2798,7 @@ class K8sEnumerator:
         """privileged: true → full host access via /dev, /proc, /sys."""
         try:
             with open('/proc/self/status') as f:
-                for line in f:
+                for line in f.read(_MAX_FILE_BYTES).splitlines():
                     if line.startswith('CapEff:'):
                         cap_eff = int(line.split()[1], 16)
                         # 0x3fffffffff == all caps set
