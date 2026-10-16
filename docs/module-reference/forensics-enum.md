@@ -15,4 +15,4 @@ SEH chain, SSDT hook, DPC/timer abuse, and Windows forensic artifact detection i
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. All procfs reads use `f.read(_MAX_PROC_BYTES).splitlines()`: three `/proc/{pid}/maps` reads (lines 3633, 3705, 3747 — anonymous rwx mmap, /dev/shm exec region, interpreter injection detection). MFT detection uses `os.path.getsize()` as a size probe (does not read file contents). `os.walk()` depth capped at `_MAX_WALK_DEPTH=8` via `dirnames.clear()`. No lief.parse(). No HTTP reads.
+Gate: **PASSED**. No HIGH or CRITICAL findings. All procfs reads use `f.read(_MAX_PROC_BYTES).splitlines()`: three `/proc/{pid}/maps` reads (lines 3639, 3711, 3753 — anonymous rwx mmap, /dev/shm exec region, interpreter injection detection). MFT detection uses `os.path.getsize()` as a size probe (does not read file contents). `os.walk()` depth capped at `_MAX_WALK_DEPTH=8` via `dirnames.clear()`. No lief.parse(). No HTTP reads.
