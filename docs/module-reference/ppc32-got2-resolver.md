@@ -197,3 +197,7 @@ Confirmed against two manual RE entries from `targets/huawei/s6720_switch_re.py`
 |---|---|---|
 | `0x10023884` | `0x10022ee0` (check_version_compat) | ✓ |
 | `0x100238e8` | `0x100230ac` (flash_compat) | ✓ |
+
+## FORGE audit
+
+Gate: **PASSED**. No HIGH or CRITICAL findings. No direct file I/O — receives ELF data bytes from `BinaryContext`; size is already bounded by the caller.

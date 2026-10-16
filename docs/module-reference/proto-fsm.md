@@ -131,3 +131,7 @@ For other ARM64 targets, supply seed VAs from semantic search results for handsh
 - Requires at least one known seed VA; the cluster-expansion phase cannot start from zero.
 - Indirect BL calls (function pointers) stop cluster expansion at the indirect site.
 - The BSS state variable heuristic filters out addresses written with large immediates (>255); genuine state variables that use enum values outside that range require a manual seed override.
+
+## FORGE audit
+
+Gate: **PASSED**. No HIGH or CRITICAL findings. No direct file I/O — operates on in-memory protobuf descriptor bytes passed by the caller.

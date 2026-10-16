@@ -266,3 +266,7 @@ x_axis=0x836D, y_axis=0x8311, scale=0.78125, unit=`Compensation (%)`.
 - **BitwiseSwitch tables omitted.** The 46 BitwiseSwitch tables in A2L.xml are not returned
   by `calibration_tables()`. They describe bitmask configuration registers, not numeric
   calibration maps.
+
+## FORGE audit
+
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_XML_BYTES=4MB`; `path.stat().st_size` guard before each `read_bytes()` call; `_MAX_WALK_DEPTH=4` caps directory recursion.

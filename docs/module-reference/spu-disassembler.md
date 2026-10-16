@@ -186,3 +186,7 @@ def find_spu_elfs(ppu_elf_data):
         off = idx + 1
     return results
 ```
+
+## FORGE audit
+
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_SPU_ELF_BYTES=256MB`; `os.path.getsize()` guard in `load_spu_elf()` before `f.read()`.

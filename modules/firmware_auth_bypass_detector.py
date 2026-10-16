@@ -30,10 +30,13 @@ Usage:
         print(f"CRITICAL: {result.summary}")
 """
 
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
+
+_MAX_PE_BYTES = 256 * 1024 * 1024
 
 try:
     import lief
@@ -166,6 +169,10 @@ class FirmwareAuthBypassDetector:
             raise RuntimeError("lief not available; run: pip install lief")
 
         if self._pe is None:
+            bin_size = os.path.getsize(self.path)
+            if bin_size > _MAX_PE_BYTES:
+                raise ValueError(
+                    f'{self.path}: file size {bin_size} exceeds {_MAX_PE_BYTES} byte limit')
             self._pe = lief.parse(self.path)
             if self._pe is None:
                 raise ValueError(f"lief.parse() returned None for {self.path}")

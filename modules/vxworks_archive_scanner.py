@@ -30,8 +30,12 @@ from __future__ import annotations
 import struct
 import subprocess
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
 from typing import List, Optional
+
+_MAX_ARCHIVE_BYTES = 128 * 1024 * 1024   # 128 MB cap for the .a archive itself
+_MAX_MEMBER_BYTES  =  16 * 1024 * 1024   # 16 MB cap per extracted .o member
 
 
 @dataclass
@@ -191,7 +195,12 @@ class VxWorksArchiveScanner:
         archive_path: str | Path,
         targets: Optional[frozenset] = None,
     ):
-        self.archive_path = str(archive_path)
+        archive_path = str(archive_path)
+        arc_size = os.path.getsize(archive_path)
+        if arc_size > _MAX_ARCHIVE_BYTES:
+            raise ValueError(
+                f'{archive_path}: archive size {arc_size} exceeds {_MAX_ARCHIVE_BYTES} byte limit')
+        self.archive_path = archive_path
         self._targets = targets if targets is not None else self._DEFAULT_TARGETS
 
     @classmethod
@@ -211,7 +220,10 @@ class VxWorksArchiveScanner:
             ['ar', 'p', self.archive_path, name],
             capture_output=True,
         )
-        return result.stdout
+        data = result.stdout
+        if len(data) > _MAX_MEMBER_BYTES:
+            return b''
+        return data
 
     def scan_strcpy_in_frame(
         self,

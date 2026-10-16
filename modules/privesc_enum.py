@@ -17,6 +17,7 @@ _IS_MACOS = _platform.system() == 'Darwin'
 _IS_LINUX = _platform.system() == 'Linux'
 
 _MAX_LOG_BYTES = 64 * 1024 * 1024
+_MAX_FILE_BYTES = 65536  # cap for procfs / config / sudoers reads
 
 class PrivescEnumerator:
     """Enumerate privilege escalation paths"""
@@ -420,7 +421,7 @@ class PrivescEnumerator:
             status_path = f'/proc/{pid}/status'
             try:
                 with open(status_path) as fh:
-                    content = fh.read()
+                    content = fh.read(_MAX_FILE_BYTES)
             except Exception:
                 continue
 
@@ -574,7 +575,7 @@ class PrivescEnumerator:
         for sf in sudoers_files:
             try:
                 with open(sf) as fh:
-                    content = fh.read()
+                    content = fh.read(_MAX_FILE_BYTES)
             except PermissionError:
                 continue
             except Exception:
@@ -761,7 +762,7 @@ class PrivescEnumerator:
                 continue
             try:
                 with open(pf) as fh:
-                    content = fh.read()
+                    content = fh.read(_MAX_FILE_BYTES)
                 for lineno, line in enumerate(content.splitlines(), 1):
                     stripped = line.strip()
                     if re.search(r'trusted-host', stripped, re.IGNORECASE):

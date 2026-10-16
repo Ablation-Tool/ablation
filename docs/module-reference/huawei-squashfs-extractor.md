@@ -103,3 +103,7 @@ internally for `extract()`.
 
 Inode type coverage is limited to regular files (type 2/9) and directories (type 1/8).
 Symlinks, device nodes, FIFOs, and sockets are not traversed.
+
+## FORGE audit
+
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_DECOMPRESS_BYTES=8MB` caps decompression output per block; `_MAX_EXTRACT_BYTES=512MB` caps total extraction size.
