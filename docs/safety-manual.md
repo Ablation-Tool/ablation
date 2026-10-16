@@ -6,7 +6,7 @@
 
 This document is the standalone safety manual required by ISO 26262 Part 8 Clause 11 for TCL3-qualified tools. It describes when each qualified module can be trusted, when it cannot, and what the user must do when confidence is insufficient.
 
-For full qualification context see `docs/ABLATION-STANDARDS.md`. For known anomaly detail see `docs/known-anomalies/<module>.md`.
+For full qualification context see `docs/standards-ablation.md`. For known anomaly detail see `docs/reference-anomalies/<module>.md`.
 
 ---
 
@@ -55,7 +55,7 @@ The following constraints must be satisfied before a taint tracker result is tre
 | **Architecture** | One of the 16 supported architectures listed in Section 1 above |
 | **Endian** | Pass `endian='big'` or `endian='little'` explicitly; do not rely on defaults for cross-endian targets |
 | **Stripped binaries** | Use `from_path_full()` for ARM64 and LoongArch64; use `from_path()` only when symbols exist |
-| **Known anomalies** | Consult `docs/known-anomalies/<tracker>.md` before treating a zero-findings result as clean |
+| **Known anomalies** | Consult `docs/reference-anomalies/<tracker>.md` before treating a zero-findings result as clean |
 | **Loop bodies** | Manually inspect loop bodies for copy/fill patterns in functions with high SemanticSearcher match scores |
 | **Indirect calls** | Findings for indirect call targets require `VtableResolver` or manual callee resolution |
 | **Stack buffers** | If the tracker returns no findings, run `SinkArgClassifier` to check for stack-buffered flows |
@@ -95,7 +95,7 @@ In these situations, supplement with `SemanticSearcher`, `SinkArgClassifier`, an
 | Register model matches ABI spec | ABI conformance tests in `tests/conformance/`; ABI spec citations in module docs |
 | Coverage gate met for qualified modules | `pytest --cov` run on labeled engine modules; see `pyproject.toml [tool.coverage]` |
 | No critical security defects in tool code | FORGE audit `gate_passed=True` for all modules; SAFE CODE 10-section residual risk documented |
-| Known anomalies tracked | `docs/known-anomalies/` per-module files; per-anomaly regression tests in `tests/conformance/` |
+| Known anomalies tracked | `docs/reference-anomalies/` per-module files; per-anomaly regression tests in `tests/conformance/` |
 | Byte-verification enforced | Hard rule in `CLAUDE.md`; per-finding byte check documented in session files |
 
 ---
@@ -108,6 +108,6 @@ This safety manual is maintained alongside the Ablation codebase. It is updated 
 - The ABI conformance test suite changes
 - A constraint in Section 3 is resolved or a new one is added
 
-**Source document:** `docs/ABLATION-STANDARDS.md` §2.5 (the section this file extracts)  
-**Known anomalies:** `docs/known-anomalies/`  
-**Qualification plan:** `docs/ABLATION-STANDARDS.md` §10 compliance matrix
+**Source document:** `docs/standards-ablation.md` §2.5 (the section this file extracts)  
+**Known anomalies:** `docs/reference-anomalies/`  
+**Qualification plan:** `docs/standards-ablation.md` §10 compliance matrix

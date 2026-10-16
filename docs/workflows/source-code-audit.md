@@ -272,4 +272,4 @@ Ruby, and PHP as well. For non-JS stacks:
 - Use `SourceIsolationChecker` for any Prisma, SQLAlchemy, or Mongoose codebase.
 - Extend `_PAT_UNSAFE_RENDER` in `source_audit_compressor.py` for framework-specific unsafe APIs (e.g., Jinja2 `Markup()`, Django `mark_safe()`).
 
-See [Source Analyzers](../module-reference/source-audit.md) for full API reference.
+See [Source Analyzers](../reference-modules/source-audit.md) for full API reference.

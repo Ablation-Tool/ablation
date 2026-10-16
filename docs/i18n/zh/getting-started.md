@@ -178,5 +178,5 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 ## 后续步骤
 
 - [漏洞挖掘工作流程](../../workflows/vuln-hunting.md) -- 从扫描到可披露发现的完整循环
-- [模块参考](../../module-reference/) -- 50 多个分析器的参数和示例
+- [模块参考](../../reference-modules/) -- 50 多个分析器的参数和示例
 - [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- 如何添加模式、扫描和分析器模块

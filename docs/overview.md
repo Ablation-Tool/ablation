@@ -605,3 +605,11 @@ Static analysis can miss code, infer incorrect boundaries, and produce false pos
 Some existing docs contain aging examples or claims that no longer line up with the current code. Examples include stale command inventories, optimistic claims about semantic-search inputs, version summaries that stop at 2.5.0, and old contributor layout/API descriptions. The implementation and CLI parser are the source of truth for current command behavior. This page records the architecture and limitations visible in this checkout; it does not certify every old code comment, target-specific note, or third-party file in the working tree.
 
 For installation and command examples see [Getting Started](getting-started.md). For the existing workflow and module guides see the [documentation index](INDEX.md). For changes by release see [CHANGELOG](CHANGELOG.md) and [updates](updates/).
+
+
+## Next Steps
+
+- New to Ablation? Start with the [Getting Started guide](./getting-started.md).
+- To understand the underlying analysis concepts, read [Decompiler Concepts](./concepts-decompiler.md).
+- To see an end-to-end reverse engineering engagement, read the [RE Workflow guide](./guide-re-workflow.md).
+- For a full task → tool lookup table, see the [Tool and Mode Selection guide](./guide-tool-selection.md).

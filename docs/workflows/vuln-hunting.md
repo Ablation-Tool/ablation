@@ -265,6 +265,6 @@ Write session state at the end of every session. Keep it close to the binary: th
 ## See also
 
 - [Getting Started](../getting-started.md)
-- [Module Reference: SemanticSearcher](../module-reference/semantic-search.md)
-- [Module Reference: TaintTracker](../module-reference/core.md)
-- [Module Reference: PatternLibrary](../module-reference/semantic-search.md)
+- [Module Reference: SemanticSearcher](../reference-modules/semantic-search.md)
+- [Module Reference: TaintTracker](../reference-modules/core.md)
+- [Module Reference: PatternLibrary](../reference-modules/semantic-search.md)

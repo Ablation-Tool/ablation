@@ -178,5 +178,5 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 ## Volgende stappen
 
 - [Workflow voor het opsporen van kwetsbaarheden](../../workflows/vuln-hunting.md) -- volledige lus van scan naar openbaarmakingsklare bevinding
-- [Modulereferentie](../../module-reference/) -- meer dan 50 analysatoren met parameters en voorbeelden
+- [Modulereferentie](../../reference-modules/) -- meer dan 50 analysatoren met parameters en voorbeelden
 - [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- patronen, scans en analysatormodules toevoegen

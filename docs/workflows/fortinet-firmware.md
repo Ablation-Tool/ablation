@@ -95,9 +95,9 @@ Ghidra and IDA give you an annotated disassembly of 885 functions with no priori
 
 ## Related modules
 
-- [FortiOSHardwareExtractor](../module-reference/firmware-containers.md)
-- [FirmwareContainerKeyExtractor](../module-reference/firmware-container-key-extractor.md)
-- [FortiGateCertKeyScanner](../module-reference/fortigate-cert-key-scanner.md)
-- [FortiBuildTrackClassifier](../module-reference/fortibuild-track-classifier.md)
-- [SinkArgClassifier](../module-reference/sink-arg-classifier.md)
-- [CppVtableReconstructorAnalyzer](../module-reference/cpp-vtable-reconstructor.md)
+- [FortiOSHardwareExtractor](../reference-modules/firmware-containers.md)
+- [FirmwareContainerKeyExtractor](../reference-modules/firmware-container-key-extractor.md)
+- [FortiGateCertKeyScanner](../reference-modules/fortigate-cert-key-scanner.md)
+- [FortiBuildTrackClassifier](../reference-modules/fortibuild-track-classifier.md)
+- [SinkArgClassifier](../reference-modules/sink-arg-classifier.md)
+- [CppVtableReconstructorAnalyzer](../reference-modules/cpp-vtable-reconstructor.md)

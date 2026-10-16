@@ -41,7 +41,7 @@ if ctx.names_count():
 
 ## Which tool?
 
-See `docs/tool-selection-guide.md` for the full task→tool lookup table.
+See `docs/guide-tool-selection.md` for the full task→tool lookup table.
 
 **Ordering:** BinaryContext → SemanticSearcher (new binary/vuln class) → FuncProfiler (candidate) → **SinkArgClassifier** (eliminate RODATA_CONST first) → TaintTracker (ARG_PROPAGATED/UNKNOWN sinks only) → PathSolver (confirm feasibility). Manual capstone only when TaintTracker has no configured sink.
 
@@ -49,7 +49,7 @@ See `docs/tool-selection-guide.md` for the full task→tool lookup table.
 
 ## Module quick-reference
 
-See `docs/module-reference/` for per-module constructor patterns and key methods. Also `docs/INDEX.md`.
+See `docs/reference-modules/` for per-module constructor patterns and key methods. Also `docs/INDEX.md`.
 
 ---
 
@@ -84,8 +84,8 @@ See `docs/module-reference/` for per-module constructor patterns and key methods
 2. Create `ablation/analyzers/<scanner_name>.py`; follow `length_underflow.py` as template
 3. Wire: `from_context(ctx)` classmethod, `scan()` → findings list, `report(findings)` → str
 4. Run on a known-positive binary first; analyze FPs (cross-BB clobber? trusted source? callee reads register?)
-5. Add to `docs/tool-selection-guide.md`
-6. Write `docs/module-reference/<module>.md` — open with "Why this exists" as numbered gaps
+5. Add to `docs/guide-tool-selection.md`
+6. Write `docs/reference-modules/<module>.md` — open with "Why this exists" as numbered gaps
 
 **Cross-version patch analysis:**
 

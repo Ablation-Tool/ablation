@@ -137,6 +137,6 @@ These appear in KASAN builds but are not real findings:
 
 ## Related
 
-- `docs/module-reference/loongarch64.md`: LoongArchDecoderV2 KASAN ghost-call suppression
-- `docs/module-reference/loongarch64.md`: LA64MaxNotMinScanner, including ET_REL mode and Vec-growth FP class
-- `docs/module-reference/kernel-drivers.md`: ET_REL `.ko` analysis, `.rela.text` relocations
+- `docs/reference-modules/loongarch64.md`: LoongArchDecoderV2 KASAN ghost-call suppression
+- `docs/reference-modules/loongarch64.md`: LA64MaxNotMinScanner, including ET_REL mode and Vec-growth FP class
+- `docs/reference-modules/kernel-drivers.md`: ET_REL `.ko` analysis, `.rela.text` relocations
