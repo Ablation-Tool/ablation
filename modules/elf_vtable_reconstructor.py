@@ -8,10 +8,13 @@ the binary. Handles R_X86_64_RELATIVE (type 8, in-library functions) and R_X86_6
 See docs/module-reference/vtable-x86-64.md for full documentation.
 """
 
+import os
 import struct
 import subprocess
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
+
+_MAX_ELF_BYTES = 256 * 1024 * 1024
 
 
 @dataclass
@@ -76,12 +79,16 @@ class ELFVtableReconstructor:
 
     def __init__(self, elf_path: str):
         self.elf_path = elf_path
+        size = os.path.getsize(elf_path)
+        if size > _MAX_ELF_BYTES:
+            raise ValueError(f'{elf_path}: file size {size} exceeds {_MAX_ELF_BYTES} byte limit')
         with open(elf_path, 'rb') as f:
             self._data = f.read()
         self._sections: Dict[str, dict] = {}
         self._dynsym: List[dict] = []
         self._symtab: List[dict] = []
         self._text_ranges: List[Tuple[int, int]] = []
+        self._demangle_cache: Dict[str, str] = {}
         self._parse_elf()
 
     @classmethod
@@ -108,7 +115,9 @@ class ELFVtableReconstructor:
         for i in range(e_shnum):
             sh = e_shoff + i * e_shentsize
             nameoff = struct.unpack_from('<I', data, sh)[0]
-            end = data.index(b'\x00', shstr_off + nameoff)
+            end = data.find(b'\x00', shstr_off + nameoff)
+            if end == -1:
+                end = len(data)
             name = data[shstr_off + nameoff:end].decode('utf-8', errors='replace')
 
             self._sections[name] = {
@@ -141,7 +150,9 @@ class ELFVtableReconstructor:
         for j in range(0, sym_sec['size'], entsize):
             off = sym_sec['off'] + j
             nameoff = struct.unpack_from('<I', data, off)[0]
-            end = data.index(b'\x00', str_off + nameoff)
+            end = data.find(b'\x00', str_off + nameoff)
+            if end == -1:
+                end = len(data)
             name = data[str_off + nameoff:end].decode('utf-8', errors='replace')
             symbols.append({
                 'name':   name,
@@ -174,11 +185,15 @@ class ELFVtableReconstructor:
     def _demangle(self, name: str) -> str:
         if not name.startswith('_Z'):
             return name
+        if name in self._demangle_cache:
+            return self._demangle_cache[name]
         try:
             r = subprocess.run(['c++filt', name], capture_output=True, text=True, timeout=2)
-            return r.stdout.strip() or name
+            result = r.stdout.strip() or name
         except Exception:
-            return name
+            result = name
+        self._demangle_cache[name] = result
+        return result
 
     def _is_function_va(self, va: int) -> bool:
         for start, end in self._text_ranges:

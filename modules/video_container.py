@@ -34,6 +34,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator, List, Optional, Tuple
 
+_MAX_CONTAINER_BYTES = 256 * 1024 * 1024
+
 
 # ---------------------------------------------------------------------------
 # Container magic — longest-match first
@@ -583,6 +585,10 @@ class VideoContainerAnalyzer:
     @classmethod
     def from_path(cls, path: str | Path) -> 'VideoContainerAnalyzer':
         p = Path(path)
+        file_size = p.stat().st_size
+        if file_size > _MAX_CONTAINER_BYTES:
+            raise ValueError(
+                f'{p}: file size {file_size} exceeds {_MAX_CONTAINER_BYTES} byte limit')
         data = p.read_bytes()
         fmt = detect_container_format(data)
         return cls(path=p, data=data, fmt=fmt)

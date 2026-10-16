@@ -42,9 +42,12 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
 import lief
+from collections import Counter
 
 _SHF_WRITE    = 0x1   # ELF SHF_WRITE: section is writable at runtime
 _SHF_EXECINSTR = 0x4  # ELF SHF_EXECINSTR: section contains executable machine instructions
+
+_MAX_ELF_BYTES = 256 * 1024 * 1024  # 256 MB guard
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -205,6 +208,9 @@ class CppVtableReconstructorAnalyzer:
     def __init__(self, elf_path: str, ctx=None):
         self._path = elf_path
         self._ctx = ctx
+        size = __import__('os').path.getsize(elf_path)
+        if size > _MAX_ELF_BYTES:
+            raise ValueError(f'{elf_path}: file size {size} exceeds {_MAX_ELF_BYTES} byte limit')
         with open(elf_path, 'rb') as fh:
             self._data = fh.read()
         self._arch = _elf_arch(self._data)
@@ -222,7 +228,10 @@ class CppVtableReconstructorAnalyzer:
 
     def _binary(self):
         if self._lief is None:
-            parsed = lief.parse(self._path)
+            try:
+                parsed = lief.parse(self._path)
+            except Exception as exc:
+                raise ValueError(f'lief could not parse {self._path}: {exc}') from exc
             if parsed is None:
                 raise ValueError(f'lief could not parse {self._path} as ELF')
             self._lief = parsed
@@ -613,7 +622,6 @@ class CppVtableReconstructorAnalyzer:
         if len(common) >= 3:
             return common + '_vtable'
         # Fallback: use the most-common word component
-        from collections import Counter
         words: List[str] = []
         for n in named:
             words.extend(n.split('_'))
@@ -722,7 +730,11 @@ class CppVtableReconstructorAnalyzer:
         return sorted(consumers.values(), key=lambda p: p.func_va)
 
     def _trace_x86(self, spec: VtableSpec) -> List[TypePropSite]:
-        from ablation.analyzers.vtable_dispatch_scanner import VtableDispatchScanner
+        try:
+            from ablation.analyzers.vtable_dispatch_scanner import VtableDispatchScanner
+        except ImportError:
+            print('cpp_vtable_reconstructor: VtableDispatchScanner not available; skipping x86 consumer trace')
+            return []
 
         scanner = VtableDispatchScanner.from_path(self._path)
         slot_map: Dict[str, int] = {
@@ -760,7 +772,11 @@ class CppVtableReconstructorAnalyzer:
         return sorted(consumers.values(), key=lambda p: p.func_va)
 
     def _trace_arm64(self, spec: VtableSpec) -> List[TypePropSite]:
-        from ablation.analyzers.vtable_resolver import detect_blr_sites
+        try:
+            from ablation.analyzers.vtable_resolver import detect_blr_sites
+        except ImportError:
+            print('cpp_vtable_reconstructor: vtable_resolver not available; skipping arm64 consumer trace')
+            return []
 
         text_sec = self._section('.text')
         if text_sec is None:

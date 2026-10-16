@@ -26,7 +26,6 @@ Usage:
   for addr, insn, decoded in disasm.disassemble(start=0x10000, count=100):
       print(f"0x{addr:08x}: {insn:08x}  {decoded}")
 
-Author: NuClide Research (2026-08-16)
 License: Internal research use only
 """
 
@@ -66,6 +65,8 @@ class ARMDisassembler:
     def disassemble(self, start: int, count: int = 100) -> List[ARMInstruction]:
         """Disassemble count instructions starting from start address"""
         results = []
+        if start < self.base_addr:
+            return results
         offset = start - self.base_addr
 
         for i in range(count):

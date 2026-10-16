@@ -231,7 +231,7 @@ def _apic_get(apic_host: str, path: str, token: Optional[str] = None,
     try:
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, context=_SSL_CTX, timeout=timeout) as r:
-            return json.loads(r.read().decode())
+            return json.loads(r.read(4 * 1024 * 1024).decode())
     except Exception:
         return None
 
@@ -246,7 +246,7 @@ def _apic_post(apic_host: str, path: str, body: dict,
     try:
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         with urllib.request.urlopen(req, context=_SSL_CTX, timeout=timeout) as r:
-            return json.loads(r.read().decode())
+            return json.loads(r.read(4 * 1024 * 1024).decode())
     except Exception:
         return None
 
@@ -925,7 +925,7 @@ def apic_cobra_bulk_extract(apic_host: str, token: str) -> dict:
     try:
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, context=_SSL_CTX, timeout=6) as r:
-            body = r.read().decode(errors="ignore")
+            body = r.read(4 * 1024 * 1024).decode(errors="ignore")
             result["packages_accessible"] = True
             # Parse .whl filenames from directory listing
             for m in re.finditer(r'href="([^"]*\.whl)"', body):
@@ -1358,7 +1358,7 @@ def probe_nxapi(host: str) -> dict:
         data = json.dumps(payload).encode()
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         with urllib.request.urlopen(req, context=_SSL_CTX, timeout=6) as r:
-            resp = json.loads(r.read().decode())
+            resp = json.loads(r.read(4 * 1024 * 1024).decode())
             result["reachable"] = True
             result["response"] = resp
     except urllib.error.HTTPError as e:
@@ -1431,7 +1431,7 @@ def probe_dcnm(host: str) -> dict:
         try:
             req = urllib.request.Request(url, headers={"Accept": "application/json"})
             with urllib.request.urlopen(req, context=_SSL_CTX, timeout=5) as r:
-                body = r.read().decode()
+                body = r.read(4 * 1024 * 1024).decode()
                 result["reachable"] = True
                 result["endpoints"][path] = {
                     "status": r.getcode(),

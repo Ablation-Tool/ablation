@@ -39,7 +39,7 @@ class ProcessEnumerator:
                     with open(entry / "cmdline") as f:
                         cmdline = f.read().replace('\x00', ' ').strip()
                     procs.append({'pid': pid, 'name': name, 'cmdline': cmdline or name})
-                except:
+                except Exception:
                     pass
         return sorted(procs, key=lambda x: x['pid'])
 
@@ -59,9 +59,9 @@ class ProcessEnumerator:
                             'name': parts[2].split('/')[-1],
                             'cmdline': parts[3] if len(parts) > 3 else parts[2]
                         })
-                    except:
+                    except Exception:
                         pass
-        except:
+        except Exception:
             pass
         return sorted(procs, key=lambda x: x['pid'])
     
@@ -93,7 +93,7 @@ class ProcessEnumerator:
                             'writable': 'w' in perms,
                             'executable': 'x' in perms
                         })
-        except:
+        except Exception:
             pass
         
         return maps
@@ -126,9 +126,9 @@ class ProcessEnumerator:
                                 'writable': 'w' in perms_str,
                                 'executable': 'x' in perms_str,
                             })
-                    except:
+                    except Exception:
                         pass
-        except:
+        except Exception:
             pass
         return maps
 
@@ -174,7 +174,7 @@ class ProcessEnumerator:
                 if fd.is_symlink():
                     target = os.readlink(str(fd))
                     fds.append({'fd': int(fd.name), 'target': target})
-        except:
+        except Exception:
             pass
         return sorted(fds, key=lambda x: x['fd'])
 
@@ -192,9 +192,9 @@ class ProcessEnumerator:
                 if len(parts) >= 9:
                     try:
                         fds.append({'fd': parts[3], 'target': parts[8]})
-                    except:
+                    except Exception:
                         pass
-        except:
+        except Exception:
             pass
         return fds
     
@@ -210,7 +210,7 @@ class ProcessEnumerator:
                     if '=' in item:
                         key, value = item.split('=', 1)
                         env[key] = value
-        except:
+        except Exception:
             pass
         return env
 
@@ -228,7 +228,7 @@ class ProcessEnumerator:
                     if '=' in token:
                         k, v = token.split('=', 1)
                         env[k] = v
-        except:
+        except Exception:
             pass
         return env
     
@@ -250,7 +250,7 @@ class ProcessEnumerator:
                         lines.append(f"Name: {parts[1].split('/')[-1]}")
                     if len(parts) >= 3:
                         lines.append(f"Command: {parts[2]}")
-            except:
+            except Exception:
                 pass
         else:
             try:
@@ -259,7 +259,7 @@ class ProcessEnumerator:
                 with open(self.proc_path / "cmdline") as f:
                     cmdline = f.read().replace('\x00', ' ').strip()
                     lines.append(f"Command: {cmdline}")
-            except:
+            except Exception:
                 pass
         
         # Memory maps

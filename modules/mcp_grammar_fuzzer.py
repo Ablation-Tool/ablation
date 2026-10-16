@@ -227,9 +227,12 @@ def _validate_manifest_file(path: str, parsed: dict[str, Any]) -> None:
     # Static checks — required fields per MCP spec
     for server_name, server_cfg in parsed.get('mcpServers', {}).items():
         for tool in server_cfg.get('tools', []):
-            assert 'name' in tool, f'tool missing name in {server_name}'
-            assert 'description' in tool, f'tool missing description in {server_name}'
-            assert 'inputSchema' in tool, f'tool missing inputSchema in {server_name}'
+            if 'name' not in tool:
+                raise ValueError(f'tool missing name in {server_name}')
+            if 'description' not in tool:
+                raise ValueError(f'tool missing description in {server_name}')
+            if 'inputSchema' not in tool:
+                raise ValueError(f'tool missing inputSchema in {server_name}')
 
     # Injection detection — flag if any seed payload survived JSON round-trip
     manifest_str = json.dumps(parsed)

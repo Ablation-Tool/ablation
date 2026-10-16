@@ -135,8 +135,13 @@ def _rname(insn, reg_id: int) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _load(so_path: str):
-    binary = lief.parse(so_path)
+    try:
+        binary = lief.parse(so_path)
+    except Exception:
+        raise ValueError(f'{so_path}: lief.parse() failed — not a valid ELF')
     text = binary.get_section('.text')
+    if text is None:
+        raise ValueError(f'{so_path}: no .text section found')
     text_data = bytes(text.content)
     text_va = text.virtual_address
 
@@ -490,7 +495,11 @@ def classify(profile: ObservedSlotProfile, min_score: int) -> Tuple[Optional[str
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run(so_path: str, min_score: int, show_profiles: bool, as_json: bool):
-    binary = lief.parse(so_path)
+    try:
+        binary = lief.parse(so_path)
+    except Exception:
+        print(f'ERROR: lief.parse() failed for {so_path}', file=sys.stderr)
+        return
     text_va, text_data = _text_bytes(binary)
 
     cs = capstone.Cs(capstone.CS_ARCH_AARCH64, capstone.CS_MODE_ARM)

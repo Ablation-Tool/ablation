@@ -106,6 +106,7 @@ _DANGEROUS_APIS: Set[str] = {
 }
 
 MAX_HANDLER_BYTES = 0x4000
+_MAX_DRIVER_BYTES = 64 * 1024 * 1024
 
 # x86-64 arg registers
 _ARG_REGS = ["rcx", "rdx", "r8", "r9"]
@@ -290,8 +291,15 @@ class IoctlAttackSurfaceGenerator:
     ):
         self.driver_path = driver_path
         self._kda_report = kda_report
+        drv_size = Path(driver_path).stat().st_size
+        if drv_size > _MAX_DRIVER_BYTES:
+            raise ValueError(
+                f'{driver_path}: file size {drv_size} exceeds {_MAX_DRIVER_BYTES} byte limit')
         self._data = Path(driver_path).read_bytes()
-        self._pe = lief.parse(driver_path)
+        try:
+            self._pe = lief.parse(driver_path)
+        except Exception:
+            self._pe = None
         self._plt: Dict[int, str] = self._build_import_map()
 
         if _HAS_CAPSTONE:

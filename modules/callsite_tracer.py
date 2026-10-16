@@ -115,6 +115,7 @@ def _fn_start(raw: bytes, binary, callsite_va: int, scan_back: int = 4096) -> in
     if off is None:
         return callsite_va - scan_back
     scan_start = max(0, off - scan_back)
+    last_prologue = None
     for i in range(0, off - scan_start, 4):
         file_off = scan_start + i
         w = struct.unpack_from('<I', raw, file_off)[0]
@@ -124,10 +125,7 @@ def _fn_start(raw: bytes, binary, callsite_va: int, scan_back: int = 4096) -> in
         rt1 = w & 0x1F
         if top in (0x2A6, 0x2A7) and rt1 == 29:
             last_prologue = va
-    try:
-        return last_prologue
-    except NameError:
-        return callsite_va - 0x200
+    return last_prologue if last_prologue is not None else callsite_va - 0x200
 
 # ─── backward slicer ─────────────────────────────────────────────────────────
 

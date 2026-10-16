@@ -96,7 +96,11 @@ def run_bare(findings: dict, timeout: int = 60) -> dict:
         stderr = result.stderr.decode(errors='replace')
         raise RuntimeError(f"bare exited {result.returncode}: {stderr}")
 
-    return json.loads(result.stdout)
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as e:
+        preview = result.stdout[:200].decode(errors='replace') if isinstance(result.stdout, bytes) else result.stdout[:200]
+        raise RuntimeError(f"bare output is not valid JSON: {e} — got: {preview!r}") from e
 
 
 def rank_modules(

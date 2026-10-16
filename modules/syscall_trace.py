@@ -162,7 +162,7 @@ class SyscallTracer:
                         
                         stats['total_calls'] += calls
                         stats['total_errors'] += errors
-                    except:
+                    except Exception:
                         pass
         
         # Sort by calls

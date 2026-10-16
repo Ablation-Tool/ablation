@@ -111,15 +111,15 @@ import threading
 _stdout_lock = threading.Lock()
 
 
+_stdout_lock = __import__('threading').Lock()
+
 def _run_phase_captured(fn, args):
     """Run fn(*args), capturing stdout. Returns (result, captured_str)."""
     buf = io.StringIO()
-    old = sys.stdout
-    sys.stdout = buf
-    try:
-        result = fn(*args)
-    finally:
-        sys.stdout = old
+    with _stdout_lock:
+        import contextlib
+        with contextlib.redirect_stdout(buf):
+            result = fn(*args)
     return result, buf.getvalue()
 
 
@@ -1164,8 +1164,7 @@ def probe_grpc(base):
         url = base.rstrip("/") + path
         try:
             r = requests.post(url, headers=grpc_headers,
-                              data=GRPC_REFLECTION_PAYLOAD, timeout=5,
-                              verify=False)
+                              data=GRPC_REFLECTION_PAYLOAD, timeout=5)
             ct = r.headers.get("content-type", "")
             if "grpc" in ct or r.status_code in (200, 400):
                 print(f"  [GRPC_DETECTED] {path}: {r.status_code} ct={ct}")

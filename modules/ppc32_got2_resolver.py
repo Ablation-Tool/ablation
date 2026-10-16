@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -142,8 +144,15 @@ class PPC32GOT2Resolver:
     def from_path(cls, elf_path: str) -> "PPC32GOT2Resolver":
         """Auto-parse section layout from ELF headers."""
         import lief
+        elf_size = Path(elf_path).stat().st_size
+        if elf_size > _MAX_BINARY_BYTES:
+            raise ValueError(
+                f'{elf_path}: file size {elf_size} exceeds {_MAX_BINARY_BYTES} byte limit')
         data = Path(elf_path).read_bytes()
-        elf = lief.parse(elf_path)
+        try:
+            elf = lief.parse(elf_path)
+        except Exception:
+            elf = None
         text = elf.get_section(".text")
         data_sec = elf.get_section(".data")
         dynsym = elf.get_section(".dynsym")

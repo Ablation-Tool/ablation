@@ -264,7 +264,10 @@ class ChunkWalkerValidator:
         except ImportError:
             return []
 
-        binary = lief.parse(self.binary_path)
+        try:
+            binary = lief.parse(self.binary_path)
+        except Exception:
+            return []
         if not isinstance(binary, lief.ELF.Binary):
             return []
 

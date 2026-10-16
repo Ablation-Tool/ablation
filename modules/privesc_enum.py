@@ -68,7 +68,7 @@ class PrivescEnumerator:
                                 'suid': bool(mode & stat.S_ISUID),
                                 'sgid': bool(mode & stat.S_ISGID)
                             })
-            except:
+            except Exception:
                 pass
         
         if suid_bins:
@@ -160,7 +160,7 @@ class PrivescEnumerator:
                     'description': f'User has sudo privileges',
                     'exploit': 'Execute privileged commands via sudo'
                 })
-        except:
+        except Exception:
             pass
     
     def check_cron_jobs(self):
@@ -176,7 +176,7 @@ class PrivescEnumerator:
                     'path': f'/var/spool/cron/crontabs/{self.user}',
                     'writable': True
                 })
-        except:
+        except Exception:
             pass
         
         # System cron directories
@@ -200,7 +200,7 @@ class PrivescEnumerator:
                                     'mode': oct(mode),
                                     'writable': True
                                 })
-                except:
+                except Exception:
                     pass
         
         if cron_files:
@@ -250,7 +250,7 @@ class PrivescEnumerator:
                         'description': f'Found {len(caps)} binaries with dangerous capabilities',
                         'exploit': 'Use capability-enabled binaries for privilege escalation'
                     })
-        except:
+        except Exception:
             pass
     
     def check_docker_group(self):
@@ -267,7 +267,7 @@ class PrivescEnumerator:
                     'exploit': 'Mount host filesystem in container: docker run -v /:/host -it alpine chroot /host',
                     'items': [{'group': 'docker', 'gid': grp.getgrnam('docker').gr_gid}]
                 })
-        except:
+        except Exception:
             pass
     
     def check_kernel_exploits(self):
@@ -280,11 +280,11 @@ class PrivescEnumerator:
             else:
                 with open('/proc/version') as f:
                     kernel_version = f.read().strip()
-        except:
+        except Exception:
             try:
                 result = subprocess.run(['uname', '-r'], capture_output=True, text=True, timeout=2)
                 kernel_version = result.stdout.strip()
-            except:
+            except Exception:
                 pass
 
         if not kernel_version:
@@ -314,7 +314,7 @@ class PrivescEnumerator:
                         'items': [{'version': version, 'exploit': exploit_name}],
                         'exploit': f'Search for {exploit_name} exploit code'
                     })
-        except:
+        except Exception:
             pass
     
     # GTFOBins SUID escape map — binary name -> technique summary

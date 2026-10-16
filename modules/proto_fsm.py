@@ -37,6 +37,8 @@ import lief
 import capstone
 from capstone import arm64 as A64
 
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
+
 # ─── capstone setup ──────────────────────────────────────────────────────────
 
 _MD = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
@@ -78,7 +80,14 @@ class FSMTransition:
 # ─── binary helpers ───────────────────────────────────────────────────────────
 
 def _load(so_path: str):
-    binary = lief.parse(so_path)
+    bin_size = Path(so_path).stat().st_size
+    if bin_size > _MAX_BINARY_BYTES:
+        raise ValueError(
+            f'{so_path}: file size {bin_size} exceeds {_MAX_BINARY_BYTES} byte limit')
+    try:
+        binary = lief.parse(so_path)
+    except Exception:
+        raise ValueError(f'{so_path}: lief.parse() failed')
     load_addr = 0
     for seg in binary.segments:
         if seg.type == lief.ELF.Segment.TYPE.LOAD and seg.virtual_address == 0:

@@ -97,6 +97,7 @@ def _canon(name: str) -> Optional[str]:
 
 
 MAX_FUNC_BYTES = 0x8000
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
 
 # x86-64 SysV first arg registers
 _ARG0 = "rdi"   # free(ptr): ptr is first arg
@@ -165,7 +166,14 @@ class HeapUAFScanner:
         # Windows x64: first arg in rcx (not rdi)
         self._free_arg = _WIN_ARG0 if windows_abi else _ARG0
 
-        self._binary = lief.parse(binary_path)
+        bin_size = Path(binary_path).stat().st_size
+        if bin_size > _MAX_BINARY_BYTES:
+            raise ValueError(
+                f'{binary_path}: file size {bin_size} exceeds {_MAX_BINARY_BYTES} byte limit')
+        try:
+            self._binary = lief.parse(binary_path)
+        except Exception:
+            self._binary = None
         self._data = Path(binary_path).read_bytes()
         self._plt = self._build_plt()
         self._strings: Dict[int, str] = {}
@@ -339,12 +347,12 @@ class HeapUAFScanner:
                 if insn.id in (X86_INS_MOV, X86_INS_MOVSX, X86_INS_MOVZX,
                                X86_INS_MOVSXD) and len(ops) == 2:
                     dst_op, src_op = ops[0], ops[1]
-                    dst_reg = _canon(dst_op.reg_name) if dst_op.type == X86_OP_REG else None
+                    dst_reg = _canon(insn.reg_name(dst_op.reg)) if dst_op.type == X86_OP_REG else None
                     if dst_reg is None:
                         continue
 
                     if src_op.type == X86_OP_REG:
-                        src_reg = _canon(src_op.reg_name)
+                        src_reg = _canon(insn.reg_name(src_op.reg))
                         if src_reg:
                             src_kind = reg_state.get(src_reg, _STATE_UNKNOWN)
                             reg_state[dst_reg] = src_kind
@@ -361,7 +369,7 @@ class HeapUAFScanner:
                     dst_op, src_op = ops[0], ops[1]
                     if (dst_op.type == X86_OP_REG and src_op.type == X86_OP_REG
                             and dst_op.reg == src_op.reg):
-                        dst_reg = _canon(dst_op.reg_name)
+                        dst_reg = _canon(insn.reg_name(dst_op.reg))
                         if dst_reg:
                             reg_state.pop(dst_reg, None)
 
