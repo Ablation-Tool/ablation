@@ -1,6 +1,6 @@
 # PPC32GOT2Resolver
 
-**File:** `ablation/analyzers/ppc32_got2_resolver.py`
+**File:** `modules/ppc32_got2_resolver.py`
 
 Resolves PPC32 indirect calls (`BCTRL` through CTR) to concrete function
 addresses in stripped binaries that use the GOT2 position-independent calling
