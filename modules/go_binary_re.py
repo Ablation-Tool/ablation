@@ -768,6 +768,8 @@ def vmnetd_send_cmd(sock_path: str, cmd_type: int,
                 chunk = s.recv(4096)
                 if not chunk:
                     break
+                if len(result) + len(chunk) > _MAX_RESP_BYTES:
+                    break
                 result += chunk
         except Exception:
             pass
