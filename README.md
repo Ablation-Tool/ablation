@@ -216,7 +216,7 @@ Messages from your other sessions        accept
 </details>
 
 <details>
-<summary><strong>29 Decompilers</strong></summary>
+<summary><strong>30 Decompilers</strong></summary>
 
 <details>
 <summary><strong>Native CPUs</strong> </summary>
@@ -226,7 +226,7 @@ Messages from your other sessions        accept
 | [**x86**](docs/module-reference/binary-lifter.md) | x86-32 · x86-64 |
 | [**ARM**](docs/module-reference/binary-lifter.md) | ARM-32 · ARM-64 · Thumb |
 | [**MIPS**](docs/module-reference/binary-lifter.md) | MIPS-32 · [nanoMIPS](docs/module-reference/nanomips.md) · MIPS-64 |
-| [**PowerPC**](docs/module-reference/ppc32-taint-tracker.md) | PPC-32 · PPC-64 · [VLE](docs/module-reference/ecu-vle-decoder.md) |
+| [**PowerPC**](docs/module-reference/ppc32-taint-tracker.md) | PPC-32 · PPC-64 · [VLE](docs/module-reference/ecu-vle-decoder.md) · [PPC476 Book E](docs/module-reference/ppc476-lifter.md) |
 | [**RISC-V**](docs/module-reference/binary-lifter.md) | RV32 · RV64 · [HiSilicon ext](docs/module-reference/hisi-rv32-ext.md) |
 | [**ARC**](docs/module-reference/binary-lifter.md) | ARC EM/HS |
 | [**LoongArch**](docs/module-reference/loongarch64.md) | LoongArch64 |
