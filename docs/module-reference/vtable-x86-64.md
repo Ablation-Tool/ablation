@@ -42,7 +42,7 @@ instructions are relative to this pointer, so `call [rax+0x10]` dispatches `vfun
 ### Usage
 
 ```python
-from ablation.analyzers.elf_vtable_reconstructor import ELFVtableReconstructor
+from modules.elf_vtable_reconstructor import ELFVtableReconstructor
 
 rec = ELFVtableReconstructor.from_path('/path/to/lib.so')
 
@@ -147,7 +147,7 @@ print(VtableDispatchScanner.report(report))
 ### Combined workflow
 
 ```python
-from ablation.analyzers.elf_vtable_reconstructor import ELFVtableReconstructor
+from modules.elf_vtable_reconstructor import ELFVtableReconstructor
 from ablation.analyzers.vtable_dispatch_scanner import VtableDispatchScanner
 
 rec = ELFVtableReconstructor.from_path('/path/to/lib.so')

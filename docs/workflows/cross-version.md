@@ -165,7 +165,7 @@ Functions with `change_score >= 0.20` had meaningful code changes. Combine with 
 For fine-grained comparison of two specific functions across vendors (not just across versions), use StructuralSim directly. A composite score >= 0.70 across two vendors means the functions share a common ancestor: the same open-source library or standard protocol implementation.
 
 ```python
-from ablation.analyzers.structural_sim import StructuralSim
+from modules.structural_sim import StructuralSim
 
 sim = StructuralSim(
     binary_a='/path/to/vendor_a.so',

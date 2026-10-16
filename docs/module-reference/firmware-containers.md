@@ -137,7 +137,7 @@ hierarchy matches the declared `movi` size.
 ### Usage
 
 ```python
-from ablation.analyzers.video_container import VideoContainerAnalyzer
+from modules.video_container import VideoContainerAnalyzer
 
 analyzer = VideoContainerAnalyzer.from_path('/path/to/sample.mp4')
 findings = analyzer.scan()
@@ -1070,7 +1070,7 @@ instructions in these blocks will have BCJ-modified targets; all other bytes are
 ### API
 
 ```python
-from ablation.analyzers.huawei_squashfs_extractor import HuaweiSquashfsExtractor
+from modules.huawei_squashfs_extractor import HuaweiSquashfsExtractor
 
 ext = HuaweiSquashfsExtractor(path)
 data = ext.extract("aarch64/0x10644_7500/usr/local/lib/libhttpstackcore.so")

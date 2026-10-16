@@ -33,7 +33,7 @@ Three things were not possible before this module:
 ## Usage
 
 ```python
-from ablation.analyzers.huawei_squashfs_extractor import HuaweiSquashfsExtractor
+from modules.huawei_squashfs_extractor import HuaweiSquashfsExtractor
 
 with HuaweiSquashfsExtractor("/path/to/sqfs_00_00001984.sqfs") as ext:
     data = ext.extract("aarch64/0x10644_7500/usr/local/lib/libhttpstackcore.so")

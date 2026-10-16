@@ -14,7 +14,7 @@ Tested: Huawei S6720EI bootload (V200R012C00, Freescale e500mc PPC32 BE).
 ## Usage
 
 ```python
-from ablation.analyzers.ppc32_got2_resolver import PPC32GOT2Resolver
+from modules.ppc32_got2_resolver import PPC32GOT2Resolver
 
 # Auto-parse section layout via lief
 resolver = PPC32GOT2Resolver.from_path('/path/to/bootload')

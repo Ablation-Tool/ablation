@@ -23,7 +23,7 @@ XRefGraph currently only supports x86-64, ARM32, and ARM64. PowerPC e_machine (2
 ## Usage
 
 ```python
-from ablation.analyzers.ppc32_func_discovery import PPC32FuncDiscovery
+from modules.ppc32_func_discovery import PPC32FuncDiscovery
 
 disc = PPC32FuncDiscovery.from_path('/path/to/ppc32.elf')
 func_starts = disc.discover()

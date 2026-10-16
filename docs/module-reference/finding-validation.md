@@ -25,7 +25,7 @@ Three things were not possible before these modules:
 ### Usage
 
 ```python
-from ablation.analyzers.path_solver import PathSolver, solve_for_sink
+from modules.path_solver import PathSolver, solve_for_sink
 from ablation.analyzers.binary_context import BinaryContext
 
 ctx = BinaryContext.load_or_build('/path/to/binary')

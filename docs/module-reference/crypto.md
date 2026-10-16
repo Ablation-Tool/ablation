@@ -154,7 +154,7 @@ Post-access cryptographic posture auditor. Finds JWTs with weak secrets, SAML as
 ```
 
 ```python
-from ablation.analyzers.crypto_audit import CryptoAudit
+from modules.crypto_audit import CryptoAudit
 
 auditor = CryptoAudit()
 result = auditor.crack_jwt(token_string)

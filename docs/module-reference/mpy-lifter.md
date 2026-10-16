@@ -92,7 +92,7 @@ Each bytecode code object begins with a **prelude** before the instruction strea
 ## Quick start
 
 ```python
-from ablation.analyzers.mpy_lifter import MpyLifter
+from modules.mpy_lifter import MpyLifter
 
 lifter = MpyLifter.from_path('network_client.mpy')
 

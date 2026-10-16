@@ -26,7 +26,7 @@ No compressed BFF samples are currently in the IBM research collection. The Huff
 ## Usage
 
 ```python
-from ablation.analyzers.bff_decompressor import BFFDecompressor, BFFCompressedError, detect
+from modules.bff_decompressor import BFFDecompressor, BFFCompressedError, detect
 
 # Detect format without opening
 with open('package.bff', 'rb') as f:

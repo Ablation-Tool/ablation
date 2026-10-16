@@ -55,7 +55,7 @@ Output: a JSON-serialisable result object **and** an IDAPython script that emits
 ## Usage
 
 ```python
-from ablation.analyzers.cpp_vtable_reconstructor import CppVtableReconstructorAnalyzer
+from modules.cpp_vtable_reconstructor import CppVtableReconstructorAnalyzer
 
 # Minimum viable (no BinaryContext)
 analyzer = CppVtableReconstructorAnalyzer.from_path('/path/to/lib.so')

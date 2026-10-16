@@ -147,7 +147,7 @@ flowchart TD
 ```
 
 ```python
-from ablation.analyzers.go_garble_re import GoGarbleRe
+from modules.go_garble_re import GoGarbleRe
 
 garble_re = GoGarbleRe('/path/to/garbled_binary')
 

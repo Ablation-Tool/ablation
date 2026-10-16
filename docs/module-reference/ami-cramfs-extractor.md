@@ -39,7 +39,7 @@ Confirmed on: QTECH BMC `G4DCL-UX-V3R29A-L01-C06087.ima`, CramFS at offset `0x16
 ## Usage
 
 ```python
-from ablation.analyzers.ami_cramfs_extractor import AmiCramFSExtractor
+from modules.ami_cramfs_extractor import AmiCramFSExtractor
 
 # From a raw CramFS image
 ext = AmiCramFSExtractor.from_path('/path/to/rootfs.cramfs')
