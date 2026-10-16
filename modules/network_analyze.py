@@ -1279,9 +1279,11 @@ def probe_rabbitmq_amqp(host, port=5672, timeout=5.0) -> list:
                     return None
                 hdr += chunk
             frame_type, channel, size = struct.unpack(">BHI", hdr)
+            if size > 4 * 1024 * 1024:
+                return None
             payload = b""
             while len(payload) < size:
-                chunk = sock.recv(size - len(payload))
+                chunk = sock.recv(min(size - len(payload), 65536))
                 if not chunk:
                     return None
                 payload += chunk
@@ -1514,6 +1516,8 @@ def detect_event_injection_surface(host, port=443, timeout=5.0) -> list:
             "host": host,
             "port": port,
         })
+
+    return findings
 
 
 def probe_agent_registry(host, port=443, timeout=5.0) -> list:
