@@ -134,4 +134,4 @@ For other ARM64 targets, supply seed VAs from semantic search results for handsh
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. No direct file I/O — operates on in-memory protobuf descriptor bytes passed by the caller.
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_load()` reads the ELF directly: `_MAX_BINARY_BYTES=256MB`; `Path.stat().st_size` guard before `lief.parse()`; `lief.parse()` in `try/except Exception` + explicit `binary is None` check.

@@ -200,4 +200,4 @@ Confirmed against two manual RE entries from `targets/huawei/s6720_switch_re.py`
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. No direct file I/O — receives ELF data bytes from `BinaryContext`; size is already bounded by the caller.
+Gate: **PASSED**. No HIGH or CRITICAL findings. `from_path()` reads the ELF directly: `_MAX_BINARY_BYTES=256MB`; `Path.stat().st_size` guard before `read_bytes()`; `lief.parse()` in `try/except Exception` + explicit `elf is None` check. `from_sections()` accepts pre-loaded bytes — size is the caller's responsibility.
