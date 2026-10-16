@@ -1,8 +1,8 @@
 # Audit Transparency Statement
 
-**Version:** 1.0.0: 2026-10-10  
+**Version:** 1.1.0: 2026-10-15  
 **Standard:** CISA Secure by Design: Principle 2: Embrace Radical Transparency and Accountability  
-**Scope:** All modules in `ablation/analyzers/`; all taint trackers; FORGE gate
+**Scope:** All modules in `ablation/analyzers/`; all modules in `modules/`; all taint trackers; FORGE gate
 
 This document satisfies CISA-SBD2 (Transparency) in the Ablation compliance matrix. It records how Ablation's limitations, quality gates, and audit results are disclosed to users and maintainers.
 
@@ -22,7 +22,7 @@ These files are committed to the public repository and are visible in every rele
 
 ### 1.2 FORGE Audit Results
 
-Every module committed to Ablation has passed the SAFE CODE 10-section audit and FORGE gate (`gate_passed=True`). The FORGE cache is stored at `~/.ablation/forge_cache/`. The following is committed per module:
+Every module committed to Ablation has passed the SAFE CODE 10-section audit and FORGE gate (`gate_passed=True`). The FORGE cache is stored at `~/.ablation/forge_cache.json` (a single JSON file keyed by blake2b content hash). The following is committed per module:
 - `docs/module-reference/<module>.md`: public-facing module reference including "Why this exists" gap list and usage constraints
 - SAFE CODE residual risk section: documents any findings that were ACCEPTED rather than fixed, with justification
 
@@ -52,7 +52,7 @@ The following are intentionally excluded from the public repository:
 | `re/<vendor>/<target>_re.py` | Contains target-identifying information; gitignored per OPSEC rule |
 | `re/<vendor>/SESSION_<target>.md` | Per-engagement session state; local only |
 | `~/.ablation/findings.db` | Cross-engagement finding database; contains target names |
-| `~/.ablation/forge_cache/` | FORGE audit cache; may contain target-specific context |
+| `~/.ablation/forge_cache.json` | FORGE audit cache; may contain target-specific context |
 
 Exclusion of findings and session state is a deliberate OPSEC decision, not a transparency gap. The *methodology* for all analysis is public; only target-identifying data is excluded.
 
@@ -73,3 +73,4 @@ When Ablation is used to produce findings for a PSIRT disclosure or safety case:
 | Date | Version | Change |
 |---|---|---|
 | 2026-10-10 | 1.0.0 | Initial committed artifact; closes CISA-SBD2 |
+| 2026-10-15 | 1.1.0 | Extend scope to `modules/`; correct forge_cache path to `forge_cache.json`; note blake2b cache key |
