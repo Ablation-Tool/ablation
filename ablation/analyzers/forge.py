@@ -118,7 +118,7 @@ class _ForgeCache:
     """
     Persistent cache for FORGE module audit results.
 
-    Key: sha256(system_prompt)[:16] + ":" + sha256(file_bytes)[:16]
+    Key: blake2b(system_prompt, digest_size=8) + ":" + blake2b(file_bytes, digest_size=8)
     Any change to the SOP file or the module source invalidates the entry.
     raw_text is not cached (too large); all other ForgeReport fields are.
     """
@@ -139,8 +139,8 @@ class _ForgeCache:
 
     @staticmethod
     def _key(system: str, file_path: str) -> str:
-        sys_h = hashlib.sha256(system.encode()).hexdigest()[:16]
-        file_h = hashlib.sha256(Path(file_path).read_bytes()).hexdigest()[:16]
+        sys_h = hashlib.blake2b(system.encode(), digest_size=8).hexdigest()
+        file_h = hashlib.blake2b(Path(file_path).read_bytes(), digest_size=8).hexdigest()
         return f"{sys_h}:{file_h}"
 
     def get(self, system: str, file_path: str) -> 'ForgeReport | None':
