@@ -128,9 +128,6 @@ import threading
 
 _stdout_lock = threading.Lock()
 
-
-_stdout_lock = __import__('threading').Lock()
-
 def _run_phase_captured(fn, args):
     """Run fn(*args), capturing stdout. Returns (result, captured_str)."""
     buf = io.StringIO()
