@@ -384,6 +384,29 @@ class BinaryContext:
         cache_file = _cache_path(self.sha256, self.path)
         self._save_json(cache_file)
 
+    def rebuild_call_graph(self) -> int:
+        """Rebuild the call graph using the current func_starts and persist the result.
+
+        Call after patch_context() has expanded func_starts with pclntab boundaries.
+        The cached call graph was built from a smaller func_starts set; BL edges to
+        pclntab-recovered functions are absent until this method runs.
+
+        Returns the new call_edges count.
+        """
+        if not _LIEF_OK or not self.path:
+            return len(self.call_edges)
+        data = open(self.path, "rb").read()
+        try:
+            binary = lief.parse(data)
+        except Exception:
+            return len(self.call_edges)
+        if not isinstance(binary, (lief.ELF.Binary, lief.PE.Binary)):
+            return len(self.call_edges)
+        self._build_call_graph(data, binary)
+        self._build_indices()
+        self.save_cache()
+        return len(self.call_edges)
+
     def set_name(self, va: int, name: str, source: str = "manual") -> None:
         """Register a discovered name for va. Persists across sessions immediately."""
         get_registry().set_name(self.sha256, va, name, source=source)

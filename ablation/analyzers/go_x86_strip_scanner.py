@@ -409,5 +409,7 @@ class GoX86StripScanner:
 
         if new_vas and hasattr(ctx, 'save_cache'):
             ctx.save_cache()
+            if hasattr(ctx, 'rebuild_call_graph'):
+                ctx.rebuild_call_graph()
 
         return len(new_vas)
