@@ -23,7 +23,7 @@ When all three conditions are true, any USB-accessible firmware blob is accepted
 ## Usage
 
 ```python
-from ablation.analyzers.firmware_auth_bypass_detector import FirmwareAuthBypassDetector
+from modules.firmware_auth_bypass_detector import FirmwareAuthBypassDetector
 
 # Single binary
 det = FirmwareAuthBypassDetector.from_path('/path/to/flasher.exe')

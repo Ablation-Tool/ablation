@@ -41,7 +41,7 @@ Carving walks the decompressed buffer for `MZ` at 2-byte boundaries, validates `
 ## Usage
 
 ```python
-from ablation.analyzers.installer_binary_analyzer import InstallerBinaryAnalyzer
+from modules.installer_binary_analyzer import InstallerBinaryAnalyzer
 
 # Analyze an installer
 result = InstallerBinaryAnalyzer.from_path('/path/to/setup.exe').analyze()

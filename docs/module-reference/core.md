@@ -350,7 +350,7 @@ memcpy call site), PathSolver determines whether a path exists from the function
 satisfies the branch conditions leading to that block.
 
 ```python
-from ablation.analyzers.path_solver import PathSolver
+from modules.path_solver import PathSolver
 from ablation.analyzers.cfg_builder import CFGBuilder
 
 builder = CFGBuilder('/path/to/binary.so', xref=xg)

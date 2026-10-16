@@ -165,12 +165,12 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/module-
 | "Extract a specific firmware partition by name" | `FirmwareContainer.from_path(fw).extract('bin', out_path)` |
 | "Extract files from AIX backup-by-name (BFF) archive" | `from ablation.core.bff_extractor import iter_entries; [e for e in iter_entries(data)]` |
 | "Open a BFF archive that may be compressed (Huffman 0x0C or LZW 0x0E)" | `BFFDecompressor.open(path)` — raises `BFFCompressedError` with remediation text |
-| "Detect BFF compression type before parsing" | `from ablation.analyzers.bff_decompressor import detect; detect(data)` |
+| "Detect BFF compression type before parsing" | `from modules.bff_decompressor import detect; detect(data)` |
 | "Extract XCOFF members from AIX big archive (<bigaf>: libc.a, libm.a, libpthreads.a)" | `from ablation.analyzers.aix_big_ar_extractor import AixBigArExtractor; members = AixBigArExtractor.from_path(path)` |
 | "Parse an AIX XCOFF32/XCOFF64 binary" | `from ablation.core.xcoff_parser import parse; parse(path)` |
 | "XCOFF32/64 exports, imports, function starts, section lookup (analyzer interface)" | `XCOFFExecutableAnalyzer.from_path(path).exports_table()` |
-| "XCOFF loader symbol quick lookup without full parse" | `from ablation.analyzers.xcoff_loader_symbols import loader_symbols; loader_symbols(data)` |
-| "XCOFF loader import table" | `from ablation.analyzers.xcoff_loader_symbols import loader_imports; loader_imports(data)` |
+| "XCOFF loader symbol quick lookup without full parse" | `from modules.xcoff_loader_symbols import loader_symbols; loader_symbols(data)` |
+| "XCOFF loader import table" | `from modules.xcoff_loader_symbols import loader_imports; loader_imports(data)` |
 | "Extract files from a Tandem NonStop Guardian PAK archive" | `from ablation.core.guardian_pak_extractor import iter_files; list(iter_files(Path('patch.zip').read_bytes()))` |
 | "Build BinaryContext from an AIX XCOFF binary" | `BinaryContext.load_or_build(path)` (auto-detects XCOFF magic 0x01DF/0x01EF) |
 | "Extract files from Huawei VRP squashfs v4 XZ image" | `HuaweiSquashfsExtractor(sqfs_path).extract(inner_path)` |

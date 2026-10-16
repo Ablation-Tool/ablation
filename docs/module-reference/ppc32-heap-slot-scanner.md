@@ -23,7 +23,7 @@ The `has_size_check` field is `True` when any `cmpwi`/`cmplwi` appears between `
 ## Usage
 
 ```python
-from ablation.analyzers.ppc32_heap_slot_scanner import PPC32HeapSlotScanner
+from modules.ppc32_heap_slot_scanner import PPC32HeapSlotScanner
 
 scanner = PPC32HeapSlotScanner('/path/to/ioscli')
 findings = scanner.scan()

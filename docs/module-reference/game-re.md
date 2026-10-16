@@ -111,7 +111,7 @@ Every SPU instruction treats its register as a vector of four 32-bit integers, t
 ### Usage
 
 ```python
-from ablation.analyzers.spu_disassembler import SPUDisassembler
+from modules.spu_disassembler import SPUDisassembler
 
 # Disassemble a range in a Cell SPU ELF
 SPUDisassembler.dump_spu_elf('/path/to/spu.elf', start_va=0x0, limit=200)

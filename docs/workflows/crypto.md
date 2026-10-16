@@ -92,7 +92,7 @@ for r in key_candidates:
 ### CryptoAudit binary scan
 
 ```python
-from ablation.analyzers.crypto_audit import CryptoAudit
+from modules.crypto_audit import CryptoAudit
 
 auditor = CryptoAudit()
 findings = auditor.scan_binary_keys('/path/to/binary.so')
@@ -109,7 +109,7 @@ for f in findings:
 Enterprise services frequently use weak JWT secrets. Container orchestration platforms, API gateways with default configurations, and services that derive secrets from hostname or build timestamp are common sources.
 
 ```python
-from ablation.analyzers.crypto_audit import CryptoAudit
+from modules.crypto_audit import CryptoAudit
 
 auditor = CryptoAudit()
 
@@ -149,7 +149,7 @@ print(f"Forged token: {forged}")
 ## Use case 4: TLS posture assessment
 
 ```python
-from ablation.analyzers.crypto_audit import CryptoAudit
+from modules.crypto_audit import CryptoAudit
 
 auditor = CryptoAudit()
 result = auditor.check_tls('internal-api.example.com', port=443)

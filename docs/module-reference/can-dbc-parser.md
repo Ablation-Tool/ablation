@@ -83,7 +83,7 @@ multiplexor indicator between the signal name and `:` is accepted and silently s
 ## Usage
 
 ```python
-from ablation.analyzers.can_dbc_parser import CanDbcParser
+from modules.can_dbc_parser import CanDbcParser
 
 # Load from file
 db = CanDbcParser.from_file("/path/to/network.dbc")

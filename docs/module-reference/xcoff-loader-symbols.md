@@ -26,7 +26,7 @@ XCOFF64 LDSYM (32 bytes):
 ## Usage
 
 ```python
-from ablation.analyzers.xcoff_loader_symbols import loader_symbols, loader_imports
+from modules.xcoff_loader_symbols import loader_symbols, loader_imports
 
 with open('/path/to/ioscli', 'rb') as f:
     data = f.read()

@@ -41,7 +41,7 @@ Builds `FSMState` and `FSMTransition` objects and exports a Graphviz DOT graph.
 ## Usage
 
 ```python
-from ablation.analyzers.proto_fsm import extract_fsm, FSMState, FSMTransition
+from modules.proto_fsm import extract_fsm, FSMState, FSMTransition
 
 # Extract with default WeChat seeds
 states, transitions, dot = extract_fsm('/path/to/libwechatnetwork.so')
@@ -56,7 +56,7 @@ with open('fsm.dot', 'w') as f:
 # Render: dot -Tpng fsm.dot -o fsm.png
 
 # Custom seeds (for a different target)
-from ablation.analyzers.proto_fsm import extract_fsm
+from modules.proto_fsm import extract_fsm
 states, transitions, dot = extract_fsm(
     '/path/to/target.so',
     seed_vas=[0x111f98, 0x305020],

@@ -13,7 +13,7 @@ Three things were not possible before in Ablation:
 ## Usage
 
 ```python
-from ablation.analyzers.xcoff_executable_analyzer import XCOFFExecutableAnalyzer
+from modules.xcoff_executable_analyzer import XCOFFExecutableAnalyzer
 
 a = XCOFFExecutableAnalyzer.from_path('/path/to/ioscli')
 print(a.summary())

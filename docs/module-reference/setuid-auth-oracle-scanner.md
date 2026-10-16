@@ -22,7 +22,7 @@ Four things were not possible before in Ablation:
 ## Usage
 
 ```python
-from ablation.analyzers.setuid_auth_oracle_scanner import SetuidAuthOracleScanner
+from modules.setuid_auth_oracle_scanner import SetuidAuthOracleScanner
 
 # From path (builds BinaryContext internally)
 scanner = SetuidAuthOracleScanner.from_path('/opt/hsc/bin/LoginMOMIssue')
