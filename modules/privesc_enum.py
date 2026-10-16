@@ -16,6 +16,8 @@ import stat
 _IS_MACOS = _platform.system() == 'Darwin'
 _IS_LINUX = _platform.system() == 'Linux'
 
+_MAX_LOG_BYTES = 64 * 1024 * 1024
+
 class PrivescEnumerator:
     """Enumerate privilege escalation paths"""
     
@@ -1055,6 +1057,9 @@ def check_wtmp_utmp_anomalies() -> list:
 
     for log_path in ("/var/log/wtmp", "/var/run/utmp"):
         try:
+            log_size = os.path.getsize(log_path)
+            if log_size > _MAX_LOG_BYTES:
+                continue
             with open(log_path, "rb") as fh:
                 data = fh.read()
         except (PermissionError, FileNotFoundError, OSError):

@@ -3810,7 +3810,8 @@ def detect_linux_memory_artifacts() -> list:
     for pid in pids:
         cmdline_path = f'/proc/{pid}/cmdline'
         try:
-            raw = open(cmdline_path, 'rb').read()
+            with open(cmdline_path, 'rb') as _fh:
+                raw = _fh.read()
         except (OSError, PermissionError):
             continue
         for m in b64_pat.finditer(raw):

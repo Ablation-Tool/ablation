@@ -163,7 +163,12 @@ class GoDangerousCallerScanner:
                     # Migrate to SQLite on next forced rebuild
                     return self
 
-        self._lb = lief.parse(self.binary_path)
+        try:
+            self._lb = lief.parse(self.binary_path)
+        except Exception as exc:
+            raise ValueError(f'lief.parse failed on {self.binary_path}: {exc}') from exc
+        if self._lb is None:
+            raise ValueError(f'lief.parse returned None for {self.binary_path}')
         self._build_section_map()
         self._ft = GoFuncTable.from_binary(self._data)
         self._extract_rodata_strings()

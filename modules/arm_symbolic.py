@@ -38,10 +38,13 @@ Usage:
 License: Internal research use only
 """
 
+import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Set, Union
 from pathlib import Path
 import struct
+
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
 
 # Import our custom ARM disassembler
 from arm_disasm import ARMDisassembler, ARMInstruction
@@ -317,7 +320,7 @@ class ARMSymbolicAnalyzer:
                     state[rd] = Add(base_val, offset)
                 else:
                     state[rd] = Unknown("add")
-            except:
+            except Exception:
                 state[rd] = Unknown("add_imm_parse_fail")
         else:
             # Register operand → Unknown
@@ -346,7 +349,7 @@ class ARMSymbolicAnalyzer:
                     try:
                         off_str = off_str.lstrip('+#')
                         offset = int(off_str, 16) if off_str.startswith('0x') else int(off_str)
-                    except:
+                    except Exception:
                         pass
 
             # Log read from symbolic pointer
@@ -385,7 +388,7 @@ class ARMSymbolicAnalyzer:
                     try:
                         off_str = off_str.lstrip('+#')
                         offset = int(off_str, 16) if off_str.startswith('0x') else int(off_str)
-                    except:
+                    except Exception:
                         pass
 
             # Log symbolic writes
@@ -415,7 +418,7 @@ class ARMSymbolicAnalyzer:
 
             # Return value in r0 is Unknown
             state['r0'] = Unknown("call_return")
-        except:
+        except Exception:
             state['r0'] = Unknown("bl_parse_fail")
 
     def _exec_blx(self, insn: ARMInstruction, state: Dict[str, SymVal], summary: FuncSummary):
@@ -529,6 +532,9 @@ def main():
     func_addr = int(sys.argv[2], 16) if len(sys.argv) > 2 else 0x2511c
 
     # Load binary
+    lib_size = os.path.getsize(lib_path)
+    if lib_size > _MAX_BINARY_BYTES:
+        raise ValueError(f'{lib_path}: file size {lib_size} exceeds {_MAX_BINARY_BYTES} byte limit')
     with open(lib_path, 'rb') as f:
         data = f.read()
 

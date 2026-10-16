@@ -7,10 +7,15 @@ definitions, signal layouts, value tables, and comments.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+_MAX_DBC_BYTES = 16 * 1024 * 1024  # 16 MB — DBC files are text; cap prevents OOM on adversarial input
+
+_MAX_DBC_BYTES = 16 * 1024 * 1024
 
 
 # ── compiled patterns ─────────────────────────────────────────────────────────
@@ -121,7 +126,16 @@ class CanDbcParser:
         Raises FileNotFoundError when the path does not exist.
         Malformed signal lines are silently skipped.
         """
-        text = Path(path).read_text(encoding="utf-8", errors="replace")
+        file_size = os.path.getsize(path)
+        if file_size > _MAX_DBC_BYTES:
+            raise ValueError(f'{path}: file size {file_size} exceeds {_MAX_DBC_BYTES} byte limit')
+        p = Path(path)
+        file_size = p.stat().st_size
+        if file_size > _MAX_DBC_BYTES:
+            raise ValueError(
+                f'{path}: file size {file_size} exceeds {_MAX_DBC_BYTES} byte limit'
+            )
+        text = p.read_text(encoding="utf-8", errors="replace")
         parser = cls()
         parser._parse(text)
         return parser

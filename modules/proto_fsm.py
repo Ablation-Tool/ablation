@@ -88,6 +88,8 @@ def _load(so_path: str):
         binary = lief.parse(so_path)
     except Exception:
         raise ValueError(f'{so_path}: lief.parse() failed')
+    if binary is None:
+        raise ValueError(f'{so_path}: lief.parse() returned None')
     load_addr = 0
     for seg in binary.segments:
         if seg.type == lief.ELF.Segment.TYPE.LOAD and seg.virtual_address == 0:

@@ -207,7 +207,7 @@ def probe_nxapi_cli(host: str, port: int = 80, timeout: float = 5.0) -> list:
                 return r.status, r.read(4 * 1024 * 1024)
         except urllib.error.HTTPError as e:
             try:
-                return e.code, e.read()
+                return e.code, e.read(4 * 1024 * 1024)
             except Exception:
                 return e.code, b""
         except Exception:
@@ -303,7 +303,7 @@ def probe_nxapi_rest(host: str, port: int = 443, timeout: float = 5.0) -> list:
                 return r.status, r.read(4 * 1024 * 1024)
         except urllib.error.HTTPError as e:
             try:
-                return e.code, e.read()
+                return e.code, e.read(4 * 1024 * 1024)
             except Exception:
                 return e.code, b""
         except Exception:
@@ -479,7 +479,7 @@ def probe_guestshell(host: str, port: int = 443, timeout: float = 5.0) -> list:
                 return r.status, r.read(4 * 1024 * 1024)
         except urllib.error.HTTPError as e:
             try:
-                return e.code, e.read()
+                return e.code, e.read(4 * 1024 * 1024)
             except Exception:
                 return e.code, b""
         except Exception:

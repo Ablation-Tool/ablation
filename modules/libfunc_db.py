@@ -139,6 +139,8 @@ def _load(so_path: str):
         binary = lief.parse(so_path)
     except Exception:
         raise ValueError(f'{so_path}: lief.parse() failed — not a valid ELF')
+    if binary is None:
+        raise ValueError(f'{so_path}: lief.parse() returned None — not a valid ELF')
     text = binary.get_section('.text')
     if text is None:
         raise ValueError(f'{so_path}: no .text section found')
@@ -499,6 +501,9 @@ def run(so_path: str, min_score: int, show_profiles: bool, as_json: bool):
         binary = lief.parse(so_path)
     except Exception:
         print(f'ERROR: lief.parse() failed for {so_path}', file=sys.stderr)
+        return
+    if binary is None:
+        print(f'ERROR: lief.parse() returned None for {so_path}', file=sys.stderr)
         return
     text_va, text_data = _text_bytes(binary)
 
