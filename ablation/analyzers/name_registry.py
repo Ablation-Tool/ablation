@@ -62,6 +62,26 @@ class NameRegistry:
         }
         self.save()
 
+    def set_names_bulk(self, sha256: str,
+                       names: Dict[int, Tuple[str, str]]) -> int:
+        """Register many names at once and save exactly once.
+
+        names: {va: (name, source)}
+        Returns the number of new entries added (existing entries updated silently).
+        Saves once after all updates, regardless of how many names are provided.
+        """
+        key = sha256[:16]
+        bucket = self._data.setdefault(key, {})
+        ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        added = 0
+        for va, (name, source) in names.items():
+            va_hex = f"0x{va:x}"
+            if va_hex not in bucket:
+                added += 1
+            bucket[va_hex] = {"name": name, "source": source, "ts": ts}
+        self.save()
+        return added
+
     def delete_name(self, sha256: str, va: int) -> bool:
         """Remove a name. Returns True if it existed."""
         key = sha256[:16]
