@@ -3674,7 +3674,7 @@ def detect_linux_memory_artifacts() -> list:
         if '(deleted)' in target:
             try:
                 with open(f'/proc/{pid}/comm', 'r') as fh:
-                    comm = fh.read().strip()
+                    comm = fh.read(16).strip()
             except OSError:
                 comm = pid
             findings.append({
@@ -3736,7 +3736,7 @@ def detect_linux_memory_artifacts() -> list:
     for pid in pids:
         try:
             with open(f'/proc/{pid}/comm', 'r') as fh:
-                comm = fh.read().strip().lower()
+                comm = fh.read(16).strip().lower()
         except OSError:
             continue
         if not any(interp in comm for interp in interpreters):
