@@ -43,6 +43,8 @@ from typing import Dict, List, Optional, Set
 
 import capstone
 
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
+
 from ablation.analyzers.binary_context import BinaryContext
 
 
@@ -138,9 +140,9 @@ class SetuidAuthOracleScanner:
         self._ctx = ctx
         if ctx.path:
             _bin_size = Path(ctx.path).stat().st_size
-            if _bin_size > 256 * 1024 * 1024:
+            if _bin_size > _MAX_BINARY_BYTES:
                 raise ValueError(
-                    f'{ctx.path}: file size {_bin_size} exceeds 256MB byte limit')
+                    f'{ctx.path}: file size {_bin_size} exceeds {_MAX_BINARY_BYTES} byte limit')
             self._data = Path(ctx.path).read_bytes()
         else:
             self._data = b''
