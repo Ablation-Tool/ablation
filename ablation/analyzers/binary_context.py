@@ -535,6 +535,11 @@ class BinaryContext:
             self._extract_plt_x86_32(binary)
             return
 
+        # PPC32 BE: .rela.plt (12-byte RELA, big-endian), glink stubs in .text (4 bytes each)
+        if self.arch == 'ppc32':
+            self._extract_plt_ppc32be(binary)
+            return
+
         # PPC64: dispatch on endianness.
         # ELFv2 LE (ELFDATA2LSB=1): stubs inside .text — std r2,24(r1); ld r12,N(r2); mtctr r12; bctr
         # ELFv1 BE (ELFDATA2MSB=2): glink stubs inside .text — same instruction words, BE byte order
@@ -663,6 +668,86 @@ class BinaryContext:
                     got_va = struct.unpack_from('<I', chunk, 2)[0]
                     if got_va in got_to_sym:
                         self.plt[sec_va + off] = got_to_sym[got_va]
+
+    def _extract_plt_ppc32be(self, binary) -> None:
+        """PPC32 BE ELF PLT extraction.
+
+        PPC32 uses .rela.plt (12-byte RELA entries, big-endian):
+          r_offset:u32  — GOT slot VA that ld.so will patch
+          r_info:u32    — (sym_idx << 8) | R_PPC_JMP_SLOT(21)
+          r_addend:u32  — addend (unused)
+
+        Callers use linker-inserted call stubs in .text with the pattern:
+          lis  r11, HI        ; 0x3D60xxxx
+          lwz  r11, LO(r11)   ; 0x816Bxxxx
+          mtctr r11            ; 0x7D6903A6
+          bctr                 ; 0x4E800420
+        where HI:LO form the absolute GOT slot address.  Each 4-instruction
+        stub corresponds to one external symbol.
+        """
+        got_to_sym: Dict[int, str] = {}
+        try:
+            rela_plt = binary.get_section('.rela.plt')
+            if rela_plt:
+                rela_data = bytes(rela_plt.content)
+                for off in range(0, len(rela_data) - 11, 12):
+                    r_offset, r_info, _r_addend = struct.unpack_from('>III', rela_data, off)
+                    sym_idx = r_info >> 8  # ELF32: sym in upper 24 bits
+                    try:
+                        sym = binary.dynamic_symbols[sym_idx]
+                        if sym.name:
+                            got_to_sym[r_offset] = sym.name
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        if not got_to_sym:
+            return
+
+        # Scan .text for 4-instruction call stub pattern:
+        #   lis  r11, HI    (0x3D60xxxx)
+        #   lwz  r11, LO(r11) (0x816Bxxxx)
+        #   mtctr r11       (0x7D6903A6)
+        #   bctr            (0x4E800420)
+        _MTCTR_R11 = 0x7D6903A6
+        _BCTR      = 0x4E800420
+        _LIS_R11   = 0x3D600000
+        _LIS_MASK  = 0xFFFF0000
+        _LWZ_R11   = 0x816B0000
+        _LWZ_MASK  = 0xFFFF0000
+        try:
+            text_sec = binary.get_section('.text')
+            if not text_sec:
+                return
+            text_data = bytes(text_sec.content)
+            text_va   = int(text_sec.virtual_address)
+            for i in range(0, len(text_data) - 15, 4):
+                w0 = struct.unpack_from('>I', text_data, i)[0]
+                if (w0 & _LIS_MASK) != _LIS_R11:
+                    continue
+                w1 = struct.unpack_from('>I', text_data, i + 4)[0]
+                if (w1 & _LWZ_MASK) != _LWZ_R11:
+                    continue
+                w2 = struct.unpack_from('>I', text_data, i + 8)[0]
+                if w2 != _MTCTR_R11:
+                    continue
+                w3 = struct.unpack_from('>I', text_data, i + 12)[0]
+                if w3 != _BCTR:
+                    continue
+                hi = w0 & 0xFFFF
+                lo = w1 & 0xFFFF
+                # Sign-extend 16-bit fields
+                if hi >= 0x8000:
+                    hi -= 0x10000
+                if lo >= 0x8000:
+                    lo -= 0x10000
+                got_va = (hi << 16) + lo
+                if got_va in got_to_sym:
+                    stub_va = text_va + i
+                    self.plt[stub_va] = got_to_sym[got_va]
+        except Exception:
+            pass
 
     def _extract_plt_arm32(self, binary) -> None:
         # Parse .rel.plt (8-byte entries: r_offset:u32 + r_info:u32)
