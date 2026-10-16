@@ -345,9 +345,16 @@ class GoX86StripScanner:
     def _find_pclntab(data: bytes) -> Tuple[Optional[int], Optional[int]]:
         """Scan data for a valid Go pclntab pcHeader.
 
-        Validation: magic match + pad bytes 0 + quantum==1 (x86) + ptrSize==8 (amd64).
+        Validation: magic match + pad bytes 0 + quantum in {1,2,4} + ptrSize in {4,8}.
+        quantum encodes the minimum instruction size for the target arch:
+          1 = x86, x86-64
+          2 = thumb/thumb2
+          4 = arm64, arm32, mips, ppc, riscv, s390x
+        Accepting all valid quantum values makes this scanner arch-agnostic.
         Returns (file_offset, magic) or (None, None).
         """
+        _VALID_QUANTUM = (1, 2, 4)
+        _VALID_PTRSIZE = (4, 8)
         search_magics = [_MAGIC_GO120, _MAGIC_GO118, _MAGIC_GO116, _MAGIC_GO12]
         for magic in search_magics:
             magic_bytes = struct.pack('<I', magic)
@@ -361,7 +368,9 @@ class GoX86StripScanner:
                     pad2 = data[idx + 5]
                     quantum = data[idx + 6]
                     ptr_sz  = data[idx + 7]
-                    if pad1 == 0 and pad2 == 0 and quantum == 1 and ptr_sz == 8:
+                    if (pad1 == 0 and pad2 == 0
+                            and quantum in _VALID_QUANTUM
+                            and ptr_sz in _VALID_PTRSIZE):
                         return idx, magic
                 pos = idx + 1
         return None, None
