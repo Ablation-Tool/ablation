@@ -89,3 +89,60 @@ To load without the original binary (e.g. `/tmp` was cleared):
 ```python
 ctx = BinaryContext.load_from_cache_file('~/.ablation/cache/abc123_target.json')
 ```
+
+Cache predating ARM64 gap fixes (AARCH64-GAP-001/002) will have empty `str_xref_idx`. On next
+`load_or_build()` the lazy-rebuild path in `_load_json()` detects the missing index and runs
+`_build_string_xref_index()` automatically if the original binary is accessible.
+
+---
+
+## ARM64 / AArch64 support gaps fixed
+
+Two gaps prevented ARM64 binary analysis. Both are now resolved.
+
+### AARCH64-GAP-001 — Call graph (fixed 2026-10-15)
+
+**Symptom:** `ctx.call_edges` contained ~1 edge on ARM64 ELFs.
+
+**Root cause:** `_build_call_graph()` fell through to the x86 `0xe8` opcode scanner
+for `arch='arm64'`. ARM64 has no `0xe8` call instruction.
+
+**Fix:** `_build_call_graph_arm64()` — vectorized NumPy scan for BL instructions.
+
+AArch64 BL encoding (little-endian):
+
+```
+bits 31:26 = 100101  →  byte[3] ∈ {0x94, 0x95, 0x96, 0x97}
+imm26 = word[25:0]
+target = insn_va + SignExtend(imm26, 26) × 4
+```
+
+No +8 pipeline adjustment (ARM32 adds +8; ARM64 does not). All instructions are
+4-byte aligned — only word-aligned positions are scanned.
+
+Validated on emsworkers_linux_arm64 v8.0.0 (78 MB Go binary): **1 → 69,344 call edges**.
+
+### AARCH64-GAP-002 — String xref index (fixed 2026-10-15)
+
+**Symptom:** `ctx.string_xrefs(va)` always returned `[]` on ARM64 binaries.
+
+**Root cause:** `_build_string_xref_index()` docstring claimed "x86_64/arm64" but the
+implementation applied the x86-64 RIP-relative 32-bit displacement formula to ARM64 code,
+which uses a completely different addressing mode.
+
+**Fix:** `_build_string_xref_index_arm64()` — vectorized NumPy scan for ADRP+ADD pairs.
+
+ARM64 materialises PC-relative string addresses as a two-instruction sequence:
+
+```
+ADRP X_d, #page_imm    — byte[3] & 0x9F == 0x90; loads 4KB-aligned base page.
+ADD  X_d, X_d, #off12  — bits[31:22] == 0x244 (64-bit, shift=0); adds 12-bit offset.
+```
+
+Page address computation: `page_base = (insn_va & ~0xFFF) + SignExtend(imm21, 21) << 12`
+
+Full address: `page_base + imm12`
+
+Only consecutive (i, i+1) pairs where `ADD.Rn == ADRP.Rd` (same register) are matched.
+
+Validated on emsworkers_linux_arm64 v8.0.0 (78 MB Go binary): **0 → 13,962 string xref pairs**.
