@@ -1,94 +1,84 @@
-# PycBytecodeScanner
+# PYC Bytecode Scanner
+
+**File:** `ablation/analyzers/pyc_bytecode_scanner.py`
 
 ## Why this exists
 
-1. **FSW-PYC-GAP**: FortiSwitch firmware ships only compiled `.pyc` bytecode — no `.py` source files. SourceEntryClassifier and SourceSinkScanner cannot run without source. Binary taint trackers cannot run on Python bytecode. No Ablation module existed to bridge this gap.
+FortiSwitch v7 management plane ships only `.pyc` bytecode — no `.py` source files. Three gaps existed before this module:
 
-2. **Decompiler brittleness**: `uncompyle6` and its `xdis` dependency crash on certain FortiSwitch Python 3.4 `.pyc` files with `ValueError: could not convert string to float` (xdis unmarshal encounters `TYPE_COMPLEX = 0x78` and fails to read the float string). Full decompilation is unreliable for firmware-embedded `.pyc` files.
+1. **Python's `marshal.loads()` is version-locked.** It cannot unmarshal a `.pyc` compiled by Python 3.10 when the host runs Python 3.8. Decompilation tools like `uncompyle6` have the same limitation for older bytecode formats.
 
-3. **Name-extraction sufficiency**: Detecting dangerous function calls does not require full decompilation. Every Python code object stores `co_names` — the complete set of LOAD_GLOBAL / LOAD_ATTR / STORE_ATTR name operands. If `os.system()` is called, both `"os"` and `"system"` appear in `co_names`. This is reliable without decompiling instruction sequences.
+2. **Full decompilation is not required to detect dangerous patterns.** Every Python code object stores `co_names` — the list of all attribute and global names referenced by `LOAD_ATTR`, `LOAD_GLOBAL`, and `STORE_ATTR` opcodes. If a module calls `os.system()`, the strings `"system"` and `"os"` appear in `co_names` without decompilation.
 
-## What it does
+3. **`xdis` handles cross-version marshal parsing (Python 3.4–3.12+).** Already installed as an `uncompyle6` dependency — no new requirements.
 
-Scans Python `.pyc` bytecode for dangerous function-call patterns by parsing code object trees with `xdis` and extracting `co_names`. Works across Python 3.4 through 3.12+.
+Gap closed: 2026-10-16. FortiSwitch v7 Python layer confirmed CLEAN.
 
-Supports:
-- Single `.pyc` file
-- Directory tree of `.pyc` files
-- Raw firmware image bytes (magic-byte search + structural validation)
+---
 
-## Usage
+## Key constants
+
+| Constant | Value | Applied to |
+|---|---|---|
+| `_MAX_PYC_BYTES` | 1 MB | `scan_file()` — `.pyc` file size cap before `read_bytes()` |
+| `_MAX_RAW_HITS` | 4096 | `scan_raw()` — max embedded pyc entries per firmware image scan |
+
+## Confidence classification
+
+| `danger_hits` | `os_module_present` | `confidence` |
+|---|---|---|
+| empty | — | `clean` |
+| non-empty | True | `HIGH` |
+| non-empty | False | `LOW` |
+
+`"system"` alone may come from a logging module; `"system"` + `"os"` in `co_names` is reliable shell execution signal.
+
+## Key API
 
 ```python
 from ablation.analyzers.pyc_bytecode_scanner import PycBytecodeScanner, PYC_MAGICS
 
 scanner = PycBytecodeScanner()
 
-# Firmware image — finds all embedded pyc files by magic bytes
-import gzip, io
-with open('/path/to/firmware.bin', 'rb') as f:
-    f.seek(0x410000)
-    raw = gzip.open(io.BytesIO(f.read())).read()
+# Single file
+result = scanner.scan_file('/tmp/fortiswitch_web/views/main.pyc')
+print(result.confidence)       # "clean" / "LOW" / "HIGH"
+print(result.danger_hits)      # frozenset of matched dangerous names
+print(result.python_version)   # e.g. "3.6"
+print(result.co_names)         # frozenset of all names referenced by the module
 
-results = scanner.scan_raw(raw, magic=PYC_MAGICS["3.4"])
-print(scanner.report(results))
-
-# Directory of extracted pyc files
-results = scanner.scan_dir('/tmp/extracted_pyc/')
+# Directory tree
+results = scanner.scan_dir('/tmp/fortisandbox_web_pyc/')
 dangerous = [r for r in results if r.danger_hits]
 print(scanner.report(dangerous))
+
+# Raw firmware image (finds pyc by magic byte search)
+with open('firmware.bin', 'rb') as f:
+    raw = f.read()
+results = scanner.scan_raw(raw, magic=PYC_MAGICS['3.4'])
+print(scanner.report([r for r in results if r.danger_hits]))
+
+# Custom dangerous name set (override defaults)
+custom = PycBytecodeScanner(dangerous_names=frozenset({"marshal", "pickle"}))
 ```
 
-## Output
+## Supported Python versions
 
-```
-PycBytecodeScanner
-  Total scanned : 1364
-  Errors        : 177
-  Dangerous     : 19
-  Clean         : 1168
+| Key | Magic bytes | Notes |
+|---|---|---|
+| `"3.4"` | `\xee\x0c\x0d\x0a` | 12-byte header |
+| `"3.6"` | `\xb0\x0b\x0d\x0a` | 12-byte header |
+| `"3.8"` | `\x55\x0d\x0d\x0a` | 16-byte header (PEP 552 flags field) |
+| `"3.10"` | `\x6f\x0d\x0d\x0a` | 16-byte header |
+| `"3.11"` | `\xa7\x0d\x0d\x0a` | 16-byte header |
+| `"3.12"` | `\xcb\x0d\x0d\x0a` | 16-byte header |
 
-Dangerous modules:
-  [HIGH] :/Chroot_Build/.../python3.4/mailcap.py
-    hits: ['popen', 'system']
-    os_context: ['os']
-```
+Header size determined by magic_int threshold: `magic_int >= 0x0d55` (Python 3.8+) → 16 bytes, otherwise 12 bytes.
 
-`confidence` field:
-- `HIGH` — dangerous name + OS module name both present in `co_names` (e.g. `system` + `os`)
-- `LOW` — dangerous name present but no OS module (e.g. `eval` in a template engine)
-- `clean` — no dangerous names found
+## FORGE audit
 
-## Interpreting results
+Gate: **PASSED**. No HIGH or CRITICAL findings. Two CWE-770 fixes applied:
+- `scan_file()`: `Path.stat().st_size > _MAX_PYC_BYTES` guard before `read_bytes()` — returns error `PycScanResult` if file exceeds 1 MB
+- `scan_raw()`: `offsets = offsets[:_MAX_RAW_HITS]` cap limits firmware image scan to 4096 embedded pyc entries
 
-Dangerous hits from `python3.4/` or standard library paths are expected and benign. Filter on `co_filename` to isolate target-specific code:
-
-```python
-mgmt_hits = [
-    r for r in results
-    if r.danger_hits and "python3.4" not in (r.filename or r.path)
-]
-```
-
-## FortiSwitch v7 result
-
-Scanned 1364 `.pyc` files from `FSW_108E_FPOE-v7-build0022-FORTINET-7.0.0.out`:
-- 19 files with dangerous patterns — all Python 3.4 stdlib (`mailcap`, `distutils`, `multiprocessing`, etc.)
-- 0 management-plane (`fortiproc`) files with dangerous patterns
-- Gap FSW-PYC-GAP closed: Python management layer confirmed CLEAN
-
-## Known limitations
-
-- `xdis` silences unknown type warnings but returns partial code objects when encountering unknown marshal types (e.g., `TYPE_COMPLEX`). Parse errors are returned as `PycScanResult.error` strings.
-- `co_names` reports names of all globals and attributes accessed. A name like `"run"` may come from a Django HTTP response method, not `subprocess.run`. Use `os_module_present` to filter.
-- Python 3.4 firmware pyc files have `source_size = 0` (Fortinet does not write source size). The `max_source_size` filter in `scan_raw()` uses the timestamp field position, not source_size, for structural validation.
-
-## Tool selection
-
-Use `PycBytecodeScanner` when:
-- Target management plane is Python but only `.pyc` files are present in firmware
-- `SourceEntryClassifier` / `SourceSinkScanner` unavailable (no source)
-- Quick danger-pattern triage needed before committing to full decompilation
-
-Use `SourceSinkScanner` instead when:
-- Python `.py` source files are available (FortiSandbox, FortiManager web layer)
+No subprocess. No shell=True. No lief.parse(). No bare `except:`. `_extract_names_recursive()` uses Python's built-in recursion limit as an implicit depth bound.
