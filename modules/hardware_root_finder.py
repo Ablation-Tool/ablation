@@ -35,9 +35,12 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
+
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
 
 
 # Known MMIO address ranges indexed by SoC family.
@@ -183,6 +186,9 @@ class HardwareRootFinder:
         except ImportError:
             return []
 
+        bin_size = os.path.getsize(self.binary_path)
+        if bin_size > _MAX_BINARY_BYTES:
+            return []
         try:
             binary = lief.parse(self.binary_path)
         except Exception:

@@ -54,6 +54,14 @@ except BFFCompressedError as e:
 | `BFFDecompressor.entries()` | Instance method; delegates to `open()` |
 | `BFFCompressedError` | Raised with remediation text when decompression is not possible |
 
+## Limits
+
+| Constant | Value | Applied to |
+|----------|-------|------------|
+| `_MAX_BFF_BYTES` | 256 MB | BFF archive file read in `BFFDecompressor.open()` |
+
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings.
+Gate: **PASSED**.
+
+- CWE-770 MEDIUM fixed: Added `os.path.getsize()` check against `_MAX_BFF_BYTES` before `open().read()` in `BFFDecompressor.open()`. Archives over 256 MB raise `ValueError`.
