@@ -916,11 +916,17 @@ class BinaryContext:
         arm32:  scan .text for BL words (byte[3]==0xEB); target = site+8+imm24*4.
         arm64:  scan .text for BL words (byte[3]∈{0x94..0x97}); target = site+sign_ext26*4.
         ppc32/ppc64: scan .text for BL words (opcode=18,AA=0,LK=1); target = site+sign_ext26.
+        mips32/mips64: scan .text for JAL words (opcode==3); target=(DS_addr&0xF0000000)|imm26<<2.
         Falls back to sequential capstone if NumPy is unavailable.
         """
         if self.arch in ('ppc32', 'ppc64'):
             if _NUMPY_OK:
                 self._build_call_graph_ppc(data, binary)
+            return
+
+        if self.arch in ('mips32', 'mips64'):
+            if _NUMPY_OK:
+                self._build_call_graph_mips(data, binary)
             return
 
         if self.arch == 'arm32':
@@ -1308,6 +1314,138 @@ class BinaryContext:
         for owner_va, target_va in zip(owner_vas.tolist(), target_vas.tolist()):
             label = self.plt.get(target_va, "") or va_to_export.get(target_va, "")
             edges.append((int(owner_va), int(target_va), label))
+
+        self.call_edges = edges
+
+    def _build_call_graph_mips(self, data: bytes, binary) -> None:
+        """MIPS32/64 call graph via JAL and LW-$t9/$gp + JALR-$t9 vectorized scan.
+
+        Two calling conventions:
+
+        1. JAL (opcode=3, bits 31:26): non-PIC direct call.
+           target = (DS_PC & 0xF0000000) | (imm26 << 2).
+
+        2. LW $t9, N($gp) + JALR $t9 (O32 ABI PIC, standard for ET_EXEC firmware):
+           Encoding: bits 31:16 = 0x8F99 (BE) — opcode=LW, rs=$gp(28), rt=$t9(25).
+           imm16 = signed offset from $gp; GOT entry at ($gp + imm16) holds callee VA.
+           $gp fixed for ET_EXEC binaries; read from .reginfo offset 20.
+
+        ELF identity byte 5 == 2 → big-endian (standard for MIPS32 firmware).
+
+        Gap: MIPS-GAP-001. Prior implementation was JAL-only; ET_EXEC O32 PIC binaries
+        use exclusively LW+JALR (0 JAL instructions), yielding 0 call edges.
+        """
+        text_sec = binary.get_section(".text")
+        if not text_sec:
+            return
+        sec_data = bytes(text_sec.content)
+        sec_va   = int(text_sec.virtual_address)
+        N = len(sec_data)
+        if N < 4:
+            return
+
+        big_endian = data[5] == 2 if len(data) > 5 else True
+        buf        = np.frombuffer(sec_data, dtype=np.uint8)
+        word_count = N // 4
+        idx4       = np.arange(word_count, dtype=np.int64) * 4
+
+        if big_endian:
+            words = (buf[idx4    ].astype(np.uint32) << 24
+                   | buf[idx4 + 1].astype(np.uint32) << 16
+                   | buf[idx4 + 2].astype(np.uint32) << 8
+                   | buf[idx4 + 3].astype(np.uint32))
+        else:
+            words = (buf[idx4    ].astype(np.uint32)
+                   | buf[idx4 + 1].astype(np.uint32) << 8
+                   | buf[idx4 + 2].astype(np.uint32) << 16
+                   | buf[idx4 + 3].astype(np.uint32) << 24)
+
+        plt_arr      = _va_arr_to_i64(sorted(self.plt.keys())) if self.plt         else np.empty(0, np.int64)
+        func_arr     = _va_arr_to_i64(self.func_starts)         if self.func_starts else np.empty(0, np.int64)
+        va_to_export: Dict[int, str] = {va: nm for nm, va in self.exports.items()}
+        edges: List[Tuple[int, int, str]] = []
+
+        def _valid_targets(tgt: np.ndarray) -> np.ndarray:
+            mask = np.zeros(len(tgt), dtype=bool)
+            if len(plt_arr):
+                hi = np.minimum(np.searchsorted(plt_arr, tgt), len(plt_arr) - 1)
+                mask |= plt_arr[hi] == tgt
+            if len(func_arr):
+                hi = np.minimum(np.searchsorted(func_arr, tgt), len(func_arr) - 1)
+                mask |= func_arr[hi] == tgt
+            return mask
+
+        def _attr_edges(insn_v: np.ndarray, tgt_v: np.ndarray) -> None:
+            if not len(insn_v):
+                return
+            if len(func_arr):
+                oi = np.maximum(np.searchsorted(func_arr, insn_v, side='right') - 1, 0)
+                owners = func_arr[oi]
+            else:
+                owners = insn_v
+            for owner_va, target_va in zip(owners.tolist(), tgt_v.tolist()):
+                label = self.plt.get(target_va, "") or va_to_export.get(target_va, "")
+                edges.append((int(owner_va), int(target_va), label))
+
+        # --- JAL scan ---
+        jal_idx = np.where((words >> 26) == np.uint32(3))[0]
+        if len(jal_idx):
+            instr_index = words[jal_idx] & np.uint32(0x03FFFFFF)
+            insn_v      = _va_to_i64(sec_va) + jal_idx.astype(np.int64) * 4
+            ds_addr     = insn_v + np.int64(4)
+            tgt_v       = (ds_addr & np.int64(0xF0000000)) | (instr_index.astype(np.int64) << 2)
+            valid       = _valid_targets(tgt_v)
+            _attr_edges(insn_v[valid], tgt_v[valid])
+
+        # --- LW $t9, N($gp) scan (O32 ABI PIC) ---
+        # LW $t9, N($gp): upper halfword bits 31:16 = (opcode=LW<<10)|(rs=$gp<<5)|(rt=$t9)
+        # = (0x23<<10)|(0x1C<<5)|0x19 = 0x8C00|0x0380|0x0019 = 0x8F99
+        got_sec  = binary.get_section(".got")
+        reginfo  = binary.get_section(".reginfo")
+        if got_sec and reginfo:
+            ri_data = bytes(reginfo.content)
+            if len(ri_data) >= 24:
+                gp_val = int(struct.unpack_from('>I' if big_endian else '<I', ri_data, 20)[0])
+            else:
+                gp_val = 0
+            if gp_val:
+                got_data  = bytes(got_sec.content)
+                got_va    = int(got_sec.virtual_address)
+                got_count = len(got_data) // 4
+                endian_ch = '>' if big_endian else '<'
+                got_entries = np.array(
+                    struct.unpack(endian_ch + 'I' * got_count, got_data[:got_count * 4]),
+                    dtype=np.int64,
+                )
+
+                if big_endian:
+                    # bytes 0,1 of each 4-byte word hold bits 31:16
+                    hi16 = (buf[idx4].astype(np.uint16) << 8
+                           | buf[idx4 + 1].astype(np.uint16))
+                    raw_imm_u = (buf[idx4 + 2].astype(np.uint16) << 8
+                                | buf[idx4 + 3].astype(np.uint16))
+                else:
+                    # bytes 3,2 hold bits 31:16; bytes 1,0 hold bits 15:0
+                    hi16 = (buf[idx4 + 3].astype(np.uint16) << 8
+                           | buf[idx4 + 2].astype(np.uint16))
+                    raw_imm_u = (buf[idx4 + 1].astype(np.uint16) << 8
+                                | buf[idx4    ].astype(np.uint16))
+
+                lw_t9_idx = np.where(hi16 == np.uint16(0x8F99))[0]
+                if len(lw_t9_idx):
+                    imm_u     = raw_imm_u[lw_t9_idx]
+                    # sign-extend uint16 → int64 via int16 view
+                    imm16     = imm_u.view(np.int16).astype(np.int64)
+                    got_e_vas = np.int64(gp_val) + imm16
+                    got_idx_a = (got_e_vas - np.int64(got_va)) // 4
+                    in_got    = (got_idx_a >= 0) & (got_idx_a < got_count)
+
+                    if np.any(in_got):
+                        sel       = np.where(in_got)[0]
+                        tgt_v_lw  = got_entries[got_idx_a[sel]]
+                        insn_v_lw = _va_to_i64(sec_va) + lw_t9_idx[sel].astype(np.int64) * 4
+                        valid_lw  = _valid_targets(tgt_v_lw)
+                        _attr_edges(insn_v_lw[valid_lw], tgt_v_lw[valid_lw])
 
         self.call_edges = edges
 

@@ -39,6 +39,7 @@ _IS_MACOS = _platform.system() == 'Darwin'
 
 _MAX_PROC_BYTES = 4 * 1024 * 1024    # 4 MB cap for /proc/pid/environ and /proc/pid/cmdline
 _MAX_SYSFS_BYTES = 64                 # sysfs counter files are always < 64 bytes
+_MAX_LOG_BYTES = 64 * 1024 * 1024    # 64 MB cap for auth log reads
 
 # Ports that tend to surface AI/ML infra, SSH, web, and databases
 SCAN_PORTS = [22, 80, 443, 2375, 2376, 5432, 6379, 8080, 8443, 9200, 9300, 27017]
@@ -5026,7 +5027,7 @@ def detect_bruteforce_indicators(log_path="/var/log") -> list:
     # --- Read last 1000 lines ---
     try:
         with open(auth_log, 'r', errors='replace') as fh:
-            lines = fh.readlines()
+            lines = fh.read(_MAX_LOG_BYTES).splitlines()
         lines = lines[-1000:]
     except Exception:
         return findings
