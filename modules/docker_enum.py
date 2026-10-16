@@ -267,7 +267,7 @@ class DockerEnumerator:
             return False  # macOS doesn't have Linux capability model
         try:
             with open('/proc/self/status') as f:
-                for line in f:
+                for line in f.read(_MAX_FILE_BYTES).splitlines():
                     if line.startswith('CapEff:'):
                         cap_eff = int(line.split()[1], 16)
                         if cap_eff == 0x3fffffffff or cap_eff == 0x1ffffffffff:
@@ -294,7 +294,7 @@ class DockerEnumerator:
         except Exception:
             try:
                 with open('/proc/self/status') as f:
-                    for line in f:
+                    for line in f.read(_MAX_FILE_BYTES).splitlines():
                         if line.startswith('CapEff:'):
                             cap_hex = line.split()[1]
                             self.capabilities.append(f'CapEff: 0x{cap_hex}')
@@ -308,7 +308,7 @@ class DockerEnumerator:
             return self._get_mounts_macos()
         try:
             with open('/proc/self/mountinfo') as f:
-                for line in f:
+                for line in f.read(_MAX_FILE_BYTES).splitlines():
                     parts = line.split()
                     if len(parts) >= 5:
                         mount_point = parts[4]
