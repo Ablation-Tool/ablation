@@ -1,6 +1,6 @@
 # CanDbcParser
 
-**File:** `ablation/analyzers/can_dbc_parser.py`
+**File:** `modules/can_dbc_parser.py`
 
 ---
 
