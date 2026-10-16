@@ -118,3 +118,7 @@ surface = gen.analyze()
 ## Pair with `KernelDriverAnalyzer`
 
 `IoctlAttackSurfaceGenerator` builds on `KernelDriverAnalyzer`. Run both on the same driver: `KernelDriverAnalyzer` provides CFG bypass exports, SafeSEH gaps, COM registration gaps, and pool overflow findings; `IoctlAttackSurfaceGenerator` maps the IOCTL dispatch surface. Together they cover the full Windows kernel driver attack surface before manual review begins.
+
+## FORGE audit
+
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_DRIVER_BYTES=64MB`; `Path.stat().st_size` guard before `read_bytes()` in `_load()`.

@@ -250,3 +250,7 @@ Signal decode at raw=2000: 2000 * 0.125 + 0 = 250.0 rpm.
 - **`DEFINE_` attribute records not parsed.** Extended attribute definitions (`DEFINE_`,
   `ATTRIBUTE_`, `BA_`) are not extracted. Signal-level attribute data (e.g. `SystemSignalLongSymbol`
   for names longer than 128 characters) is not available.
+
+## FORGE audit
+
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_DBC_BYTES=16MB` at declaration; `os.path.getsize()` + `p.stat().st_size` checks in `from_path()`.

@@ -52,6 +52,13 @@ scanner = VxWorksArchiveScanner('/path/to/libwmNet.a',
 - Resolves callee names via `.rela.text` R_PPC_REL24 relocations (type `0x0a`).
 - `_find_frame_size()` scans for `stwu r1, -N(r1)` encoded as opcode 37, rS=r1, rA=r1 in the first 20 instructions of the function.
 
+## Limits
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `_MAX_ARCHIVE_BYTES` | 128 MB | `os.path.getsize()` guard in `__init__` before archive scan |
+| `_MAX_MEMBER_BYTES` | 16 MB | Cap on bytes returned by `ar p` per extracted `.o` member |
+
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings.
+Gate: **PASSED**. CWE-770 (unbounded archive + member reads) fixed via `_MAX_ARCHIVE_BYTES=128MB` in `__init__` and `_MAX_MEMBER_BYTES=16MB` cap in `_extract_member()`. No HIGH or CRITICAL findings remain.

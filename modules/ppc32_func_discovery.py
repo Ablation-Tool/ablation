@@ -18,9 +18,12 @@ Prologue patterns (big-endian):
 - 0x9421xxxx: stwu r1, -<frame>(r1)
 """
 
+import os
 from typing import Set
 import struct
 import lief
+
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
 
 class PPC32FuncDiscovery:
     """Discover function entry points in PowerPC 32-bit big-endian binaries."""
@@ -33,6 +36,9 @@ class PPC32FuncDiscovery:
     @classmethod
     def from_path(cls, path: str) -> "PPC32FuncDiscovery":
         """Load from ELF file - reads main LOAD segment directly."""
+        bin_size = os.path.getsize(path)
+        if bin_size > _MAX_BINARY_BYTES:
+            raise ValueError(f'{path}: file size {bin_size} exceeds {_MAX_BINARY_BYTES} byte limit')
         try:
             elf = lief.parse(path)
         except Exception:

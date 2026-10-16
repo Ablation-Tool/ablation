@@ -24,9 +24,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import os
 import lief
 import capstone
 import capstone.aarch64 as _aarch64
+
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LibFuncSummary database
@@ -135,6 +138,9 @@ def _rname(insn, reg_id: int) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _load(so_path: str):
+    bin_size = os.path.getsize(so_path)
+    if bin_size > _MAX_BINARY_BYTES:
+        raise ValueError(f'{so_path}: file size {bin_size} exceeds {_MAX_BINARY_BYTES} byte limit')
     try:
         binary = lief.parse(so_path)
     except Exception:
@@ -497,6 +503,10 @@ def classify(profile: ObservedSlotProfile, min_score: int) -> Tuple[Optional[str
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run(so_path: str, min_score: int, show_profiles: bool, as_json: bool):
+    bin_size = os.path.getsize(so_path)
+    if bin_size > _MAX_BINARY_BYTES:
+        print(f'ERROR: {so_path}: file size {bin_size} exceeds {_MAX_BINARY_BYTES} byte limit', file=sys.stderr)
+        return
     try:
         binary = lief.parse(so_path)
     except Exception:

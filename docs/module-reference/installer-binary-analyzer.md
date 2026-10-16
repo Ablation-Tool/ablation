@@ -83,3 +83,7 @@ Each `CarvedBinary`:
 - BitRock payloads that use compression types other than `0xFF` (LZMA) are handled by the brute-force probe; exotic dict sizes may not be covered.
 - UPX unpacking requires `upx` on PATH. If absent, `result.errors` contains a message and the packed data is analyzed as-is.
 - `extract_to_dir` uses file size to choose `.exe` vs `.dll` extension when `name_hint` has no extension. This heuristic is imprecise.
+
+## FORGE audit
+
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_INSTALLER_BYTES=256MB`; `os.path.getsize()` guard in both the extraction path and the direct-read path.

@@ -32,6 +32,8 @@ from pathlib import Path
 _IS_MACOS = _platform.system() == 'Darwin'
 _IS_LINUX = _platform.system() == 'Linux'
 
+_MAX_FILE_BYTES = 65536  # cap for procfs / small config file reads
+
 # Credential-hunting patterns for ConfigMaps and env vars
 _CRED_KEYS = {
     'password', 'passwd', 'secret', 'token', 'api_key', 'apikey',
@@ -2819,7 +2821,7 @@ class K8sEnumerator:
         dangerous = ['/ ', '/etc', '/root', '/var', '/proc', '/sys']
         try:
             with open('/proc/self/mountinfo') as f:
-                content = f.read()
+                content = f.read(_MAX_FILE_BYTES)
         except Exception:
             return
 

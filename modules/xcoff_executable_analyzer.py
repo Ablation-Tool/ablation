@@ -32,8 +32,11 @@ Usage::
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+_MAX_XCOFF_BYTES = 256 * 1024 * 1024
 
 
 class XCOFFExecutableAnalyzer:
@@ -50,6 +53,10 @@ class XCOFFExecutableAnalyzer:
     def _load(self):
         if self._binary is not None:
             return
+        bin_size = os.path.getsize(self._path)
+        if bin_size > _MAX_XCOFF_BYTES:
+            raise ValueError(
+                f'{self._path}: file size {bin_size} exceeds {_MAX_XCOFF_BYTES} byte limit')
         from ablation.core.xcoff_parser import parse
         self._binary = parse(self._path)
 
