@@ -23,6 +23,9 @@ _PROTO_UDP  = 17
 # Ethernet header length (when in AF_PACKET mode)
 _ETH_HDR_LEN = 14
 
+# Max SSH KEXINIT packet size (SSH RFC allows up to 35000; 65536 is generous)
+_MAX_SSH_PKT_BYTES = 65536
+
 # Cleartext-credential port set
 CRED_PORTS = {21, 23, 25, 80, 110, 143, 8080}
 
@@ -2053,6 +2056,8 @@ def probe_ssh_configuration(host: str, port: int = 22, timeout: float = 5.0) -> 
             return findings
 
         pkt_len = struct.unpack(">I", _buf[:4])[0]
+        if pkt_len > _MAX_SSH_PKT_BYTES:
+            return findings
         pad_len = _buf[4]
         total_pkt = 4 + pkt_len           # full on-wire size including length field
         payload_len = pkt_len - 1 - pad_len
