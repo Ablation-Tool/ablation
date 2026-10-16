@@ -4565,8 +4565,6 @@ def probe_rtp_covert_channel(host, rtp_port=16384, timeout=5.0):
 
     return findings
 
-    return findings
-
 
 # ---------------------------------------------------------------------------
 # Authentication bypass surface (ch04 differential, ch13 default creds)

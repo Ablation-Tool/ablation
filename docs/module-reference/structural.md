@@ -88,29 +88,50 @@ Masked byte-pattern anchors classify the implementation variant. Useful for larg
 
 ## StructuralSim
 
-**File:** `ablation/analyzers/structural_sim.py`
+**File:** `modules/structural_sim.py`
 
 ### Five-signal composite
 
 | Signal | Weight | Details |
 |---|---|---|
-| Opcode category histogram | High | Cosine similarity on 12-category frequency vector: DATA, ARITH, BIT, CMP, BRANCH, CALL, RET, FRAME, MEMOP, FLOAT, SIMD, OTHER |
-| Immediate value Jaccard | High | Shared integer constants: struct offsets, magic bytes, buffer sizes. RIP-relative offsets filtered (position-dependent). |
-| PLT call overlap | Medium | Shared external function call set |
-| Branch density proximity | Low | Control flow shape: linear / switch / loop-heavy |
-| Size proximity | Low | Instruction count ratio |
+| Opcode category histogram | 0.35 | Cosine similarity on 15-category frequency vector: DATA, ARITH, BIT, CMP, BRANCH, CALL, RET, FRAME, MEMOP, FLOAT, SIMD, NOP, SYSCALL, MISC, OTHER |
+| Immediate value Jaccard | 0.30 | Shared integer constants `0x100–0xFFFFFFFF`: struct offsets, magic bytes, buffer sizes. RIP-relative offsets filtered (position-dependent). |
+| PLT call overlap | 0.20 | Shared external function call set (only when either function has named calls) |
+| Branch density proximity | 0.10 | Control flow shape: linear / switch / loop-heavy |
+| Size proximity | 0.05 | Instruction count ratio |
+
+Weights are normalized when a signal is absent (e.g., no named PLT calls → weight redistributed to remaining signals).
 
 Why immediates unlock cross-version matching: struct field offsets, magic constants, and buffer sizes survive recompilation. `cmp rax, 0x1000` (4KB limit check) is a stable fingerprint across optimization levels. PLT-only matching fails on functions that call no external symbols; immediate-value overlap works on all of them.
 
 ```python
-from modules.structural_sim import StructuralSim
+from modules.structural_sim import (
+    extract_fingerprint,
+    fingerprint_sim,
+    find_structural_orphans,
+    score_distribution,
+    FunctionFingerprint,
+)
 
-sim = StructuralSim('/path/to/binary_v1.so', '/path/to/binary_v2.so')
-score = sim.compare(func_va_v1=0x1000, func_va_v2=0x1200)
-print(f"Composite: {score.composite:.3f}")
-print(f"  opcode_hist  = {score.opcode_hist:.3f}")
-print(f"  imm_jaccard  = {score.imm_jaccard:.3f}")
-print(f"  plt_overlap  = {score.plt_overlap:.3f}")
+# Build fingerprints from pre-disassembled instruction lists
+fp_a = extract_fingerprint(
+    va=0x1000,
+    insns=["mov rdi, rsp", "call memset", "cmp rax, 0x1000"],
+    calls=["memset"],
+)
+fp_b = extract_fingerprint(va=0x1200, insns=[...], calls=[...])
+
+score = fingerprint_sim(fp_a, fp_b)
+print(f"Composite similarity: {score:.3f}")
+
+# Cross-version orphan detection (functions in B with no close match in A)
+orphans = find_structural_orphans(corpus_a, corpus_b, threshold=0.40)
+for o in orphans[:10]:
+    print(f"0x{o['va']:x}: best_score={o['best_score']} calls={o['calls']}")
+
+# Calibrate threshold from score distribution
+dist = score_distribution(corpus_a, corpus_b, sample_n=500)
+print(f"p10={dist['percentiles']['p10']}  p50={dist['percentiles']['p50']}")
 ```
 
 A composite score >= 0.70 across two different vendors' binaries means the functions share a common ancestor (same open-source library or standard protocol implementation). When one vendor's version has a confirmed vulnerability, that score predicts whether the other vendor carries the same flaw.
@@ -201,4 +222,9 @@ MatrixProfileDiff complements VersionDelta when the changed region is a long ins
 
 ## FORGE audit — structural_sim.py
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. No file I/O — `extract_fingerprint()` and `fingerprint_sim()` operate on in-memory disassembly instruction lists and numpy arrays; no file reads, no subprocess, no lief.parse(). Size bounds are the caller's responsibility through BinaryContext.
+Gate: **PASSED**. No HIGH or CRITICAL findings. No code changes needed.
+
+- No file I/O — `extract_fingerprint()` and `fingerprint_sim()` operate on in-memory disassembly instruction lists and numpy arrays. `find_structural_orphans()` and `score_distribution()` iterate over lists of `FunctionFingerprint` NamedTuples.
+- No bare `except:`. No `try/except` blocks in the module at all — pure computation.
+- No lief.parse(). No subprocess. No HTTP reads.
+- Division-by-zero guards: `max(fp_a.n_insns, 1)` (size ratio), `if na > 0 and nb > 0` (cosine sim), `max(len(named_a | named_b), 1)` (PLT Jaccard), `if total_w == 0` (weight normalization).
