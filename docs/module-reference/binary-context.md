@@ -8,7 +8,7 @@ Three things were not possible before this module:
 
 2. **No cross-tool caller/callee queries.** Individual tools like `TaintTracker` and `SemanticSearcher` operated in isolation. There was no shared index for "what calls this symbol" or "what does this function call." `BinaryContext` builds `_callers_idx` and `_callees_idx` once and exposes them via `callers_of()` and `callees_of()`, making cross-tool queries O(1) lookups instead of per-session linear scans.
 
-3. **No Windows PE support in the context layer.** All of Ablation's analysis tools (`SemanticSearcher`, `TaintTracker`, `WindowAnalyzer`, `FuncProfiler`) depend on `BinaryContext`. Before v2.45.0, loading a Windows PE or `.sys` driver silently returned an empty context, meaning every search and taint trace returned nothing. The v2.45.0 PE path populates all the same slots (IAT as PLT, exports, strings, func_starts, call_edges) so every tool works on PE files with no changes to calling code.
+3. **No Windows PE support in the context layer.** All of Ablation's analysis tools depend on `BinaryContext`: `SemanticSearcher`, `TaintTracker`, `WindowAnalyzer`, and `FuncProfiler`. Before v2.45.0, loading a Windows PE or `.sys` driver silently returned an empty context, so every search and taint trace returned nothing. The v2.45.0 PE path populates the same slots as ELF: IAT as PLT, exports, strings, func_starts, and call_edges. Every tool works on PE files with no changes to calling code.
 
 ---
 
@@ -20,9 +20,9 @@ Three things were not possible before this module:
 - `exports` (`{symbol_name: va}`): all globally exported functions
 - `strings` (`{va: content}`): printable ASCII sequences ≥ 4 chars from read-only sections
 - `func_starts`: sorted list of function entry VAs (DWARF `.eh_frame` for ELF; export VAs + prologue scan for PE)
-- `call_edges` (`[(from_va, to_va, label)]`): flat call graph, vectorized numpy scan
+- `call_edges`: flat call graph as a list of 3-tuples. Each tuple holds from-VA, to-VA, and label. Built by vectorized numpy scan.
 
-Named function VAs are tracked in the overlay (`ctx.set_name(va, name)`) and persisted via `NameRegistry` across sessions.
+Named function VAs are tracked in the overlay via `ctx.set_name()` and persisted via `NameRegistry` across sessions.
 
 ---
 
@@ -31,7 +31,7 @@ Named function VAs are tracked in the overlay (`ctx.set_name(va, name)`) and per
 | Format | Arch support | func_starts source |
 |---|---|---|
 | ELF | x86_64, x86_32, arm64, arm32, ppc64, ppc32, mips64, mips32, riscv64, riscv32, loongarch64 | DWARF `.eh_frame` + exports + dynamic symbols |
-| Windows PE / `.sys` | x86_64, x86_32 (arm64/arm32 no-op, safe) | Exports + prologue scan |
+| Windows PE / `.sys` | x86_64, x86_32; arm64/arm32 return empty context safely | Exports + prologue scan |
 
 ---
 
@@ -46,11 +46,11 @@ ctx = BinaryContext.load_or_build('/path/to/target.exe')
 print(ctx.summary())
 
 # Caller/callee queries (ELF and PE)
-ctx.callers_of('RpcServerRegisterIfEx')   # -> [(from_va, fn_name), ...]
-ctx.callees_of(0x140001234)               # -> [(to_va, label), ...]
+ctx.callers_of('RpcServerRegisterIfEx')   # -> list of from_va, fn_name pairs
+ctx.callees_of(0x140001234)               # -> list of to_va, label pairs
 
 # String xrefs (ELF and PE x86_64)
-ctx.strings_in_func(0x140001234)          # -> [(va, content), ...]
+ctx.strings_in_func(0x140001234)          # -> list of va, content pairs
 ctx.funcs_referencing_string(0x14000a000) # -> [va, ...]
 
 # Name overlay (persisted across sessions)
