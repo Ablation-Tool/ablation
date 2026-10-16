@@ -9,7 +9,7 @@ Lift native binary functions to annotated C pseudocode.
 
 ## What this is
 
-BinaryLifter is the single lift entry point for all 17 ISAs in Ablation. It accepts any supported binary, an arch token, and a function VA and returns annotated pseudo-C. ARM64 and x86-64 use register-tracked full IR with type annotations and calling-convention-aware call signatures. All other ISAs produce structural pseudocode that resolves calls, branches, and returns but emits other instructions as comments. BEAM files lift to module summaries through the same interface.
+BinaryLifter is the single lift entry point for all 17 ISAs in Ablation. It accepts any supported binary, an arch token, and a function VA and returns annotated pseudo-C. All ISA backends use per-register state machines and calling-convention-aware call signatures; output completeness varies by ISA (CFG depth, loop structuring, type recovery). BEAM files lift to module summaries through the same interface.
 
 ---
 
@@ -27,7 +27,7 @@ After `SemanticSearcher` and `TaintTracker` identify candidates, BinaryLifter ma
 
 **Call `with_taint(findings)` after a TaintTracker run.** Without taint annotations, the lifted output shows call structure but not which paths carry attacker-controlled data. Taint annotations mark the calls worth tracing.
 
-**Check the ISA backend tier before expecting register-level IR.** ARM64 and x86-64 produce typed register IR. All other ISAs produce structural output where most instructions appear as comments. Structural output is useful for call graph analysis, not for data-flow analysis.
+**Check ISA backend completeness before relying on data-flow output.** All backends track register state; completeness varies — higher-completeness backends resolve CFG edges, emit typed expressions, and annotate taint. Lower-completeness backends resolve calls/returns/branches and emit remaining instructions as `// mnemonic ops`. For full decompiler output on PPC476, use `Ppc476Decompiler` directly.
 
 ---
 
@@ -47,38 +47,40 @@ Three things were not possible before in Ablation:
 
 | Arch | `arch=` strings | Status |
 |---|---|---|
-| ARM64 | `arm64` | Full: CFG + register state machine + calling convention |
-| x86-64 | `x86_64`, `x86-64`, `amd64` | Full: linear disasm + register tracking; PE + ELF |
-| x86-32 | `x86_32`, `i386`, `i686` | Structural: Capstone CS_MODE_32; CDECL; eax return |
-| ARM32 | `arm32`, `arm` | Structural: insn_arm32 + cfg_arm32; AAPCS r0-r3 |
-| Thumb/Thumb-2 | `thumb`, `thumb2` | Structural: insn_arm32 Thumb mode |
-| MIPS-32 | `mips32`, `mips`, `mips32el` | Structural: insn_mips + cfg_mips; o32 $a0-$a3 |
-| MIPS-64 | `mips64`, `mips64el` | Structural: insn_mips + cfg_mips; n64 $a0-$a7 |
-| nanoMIPS | `nanomips` | Structural: NanoMIPSDecoder linear walk; o32 ABI |
-| PPC-32 | `ppc32`, `ppc`, `powerpc` | Structural: insn_ppc + cfg_ppc; SysV32 r3-r10 |
-| PPC-64 | `ppc64`, `powerpc64` | Structural: insn_ppc + cfg_ppc; ELFv2 r3-r10 |
-| RISC-V 32 | `rv32`, `riscv32` | Structural: insn_riscv + cfg_riscv; psABI a0-a7 |
-| RISC-V 64 | `rv64`, `riscv64` | Structural: insn_riscv + cfg_riscv; psABI a0-a7 |
-| ARC EM/HS | `arc`, `arcem`, `archs` | Structural: requires `arc-elf32-objdump` in PATH |
-| V850/RH850 | `v850`, `rh850`, `v850e2` | Structural: requires `v850-elf-objdump` in PATH |
-| LoongArch64 | `la64`, `loongarch64` | Structural: LoongArchDecoder + cfg_loongarch64; lp64 $a0-$a7 |
+| Arch | `arch=` strings | Backend / completeness |
+|---|---|---|
+| ARM64 | `arm64` | CFG + register state machine + calling convention + taint |
+| x86-64 | `x86_64`, `x86-64`, `amd64` | Linear disasm + register tracking + taint; PE + ELF |
+| x86-32 | `x86_32`, `i386`, `i686` | Register state machine (_X86_32State); CDECL; eax return |
+| ARM32 | `arm32`, `arm` | insn_arm32 + cfg_arm32; AAPCS r0-r3 |
+| Thumb/Thumb-2 | `thumb`, `thumb2` | insn_arm32 Thumb mode |
+| MIPS-32 | `mips32`, `mips`, `mips32el` | insn_mips + cfg_mips; o32 $a0-$a3 |
+| MIPS-64 | `mips64`, `mips64el` | insn_mips + cfg_mips; n64 $a0-$a7 |
+| nanoMIPS | `nanomips` | NanoMIPSDecoder linear walk; o32 ABI |
+| PPC-32 | `ppc32`, `ppc`, `powerpc` | insn_ppc + cfg_ppc; SysV32 r3-r10 |
+| PPC-64 | `ppc64`, `powerpc64` | insn_ppc + cfg_ppc; ELFv2 r3-r10 |
+| RISC-V 32 | `rv32`, `riscv32` | insn_riscv + cfg_riscv; psABI a0-a7 |
+| RISC-V 64 | `rv64`, `riscv64` | insn_riscv + cfg_riscv; psABI a0-a7 |
+| ARC EM/HS | `arc`, `arcem`, `archs` | requires `arc-elf32-objdump` in PATH |
+| V850/RH850 | `v850`, `rh850`, `v850e2` | requires `v850-elf-objdump` in PATH |
+| LoongArch64 | `la64`, `loongarch64` | LoongArchDecoder + cfg_loongarch64; lp64 $a0-$a7 |
 | BEAM (Erlang/Elixir) | `beam`, `erlang`, `elixir` | Module summary: BeamContext; no VA space |
 
-**Full** backends emit register-tracked pseudo-C IR with type annotations. **Structural** backends resolve call/return/branch and emit all other instructions as `// mnemonic ops` comments. ARC and V850 require a GNU cross-toolchain in PATH; they return a comment explaining the requirement if the toolchain is absent.
+All ISA backends track register state via per-ISA state machines seeded from calling conventions. Completeness varies: ARM64 and x86-64 include taint annotations and full CFG traversal; others resolve calls/returns/branches and emit remaining instructions as `// mnemonic ops`. For PPC476 with full loop structuring and type recovery, use `Ppc476Decompiler`. ARC and V850 require a GNU cross-toolchain in PATH; they return a comment explaining the requirement if the toolchain is absent.
 
 ```mermaid
 flowchart TD
     A[/"binary (ELF · PE · flat ROM)"/] --> B["BinaryLifter.from_path(arch=?)"]
     B --> C{"arch="}
-    C -->|"arm64 (default)\nx86_64 / amd64"| D["Full backend\nCFG + per-register state machine\ntyped NativeVal IR + calling convention\ntaint annotations via .with_taint()"]
-    C -->|"arm32 · thumb · mips32 · mips64\nnanomips · ppc32 · ppc64\nrv32 · rv64 · la64 · x86_32 · sh2a"| E["Structural backend\n_walk_ablation_cfg BFS\ncall / return / branch resolved\nall other insns as // comments"]
-    C -->|"arc / v850 / rh850"| F["Structural backend\nrequires GNU cross-toolchain in PATH\narc-elf32-objdump / v850-elf-objdump"]
+    C -->|"arm64 (default)\nx86_64 / amd64"| D["Register state machine\nCFG + calling convention\ntyped NativeVal IR\ntaint annotations via .with_taint()"]
+    C -->|"arm32 · thumb · mips32 · mips64\nnanomips · ppc32 · ppc64\nrv32 · rv64 · la64 · x86_32 · sh2a"| E["Register state machine\n_walk_ablation_cfg BFS\ncall / return / branch resolved\nother insns as // comments"]
+    C -->|"arc / v850 / rh850"| F["Register state machine\nrequires GNU cross-toolchain in PATH\narc-elf32-objdump / v850-elf-objdump"]
     C -->|"beam / erlang / elixir"| G["BEAM module summary\nBeamContext — no VA space\nexports · imports · atoms · dangerous calls"]
     D --> H["lift_function(va)"]
     E --> H
     F --> H
     G --> H
-    H --> I[/"pseudo-C string\nfull: typed register IR\nstructural: call skeleton + comments\nbeam: module summary block"/]
+    H --> I[/"pseudo-C string\nARM64/x86-64: typed register IR + taint\nother ISAs: calls + branches resolved; other insns as // comments\nbeam: module summary block"/]
 
     style A fill:#1e293b,stroke:#475569,color:#e2e8f0
     style D fill:#1e3a5f,stroke:#1d4ed8,color:#bfdbfe
@@ -220,15 +222,15 @@ class NativeVal:
     uses:    int    # incremented on each read
 ```
 
-`NativeVal` is only populated for the ARM64 and x86-64 full backends. Structural backends track register state implicitly via calling convention seeds, not via `NativeVal`.
+`NativeVal` is populated by backends that emit typed IR expressions. ARM64 and x86-64 produce the most complete `NativeVal` population (type-annotated per-register state). Other ISA backends track register state via calling convention seeds and state machines; their output completeness varies and `NativeVal` coverage is shallower.
 
 ---
 
 ## Design
 
-**Full backends (ARM64, x86-64):** read bytes at VA → `insn_*.from_capstone` → `cfg_*.build_cfg` → per-register state machine (`_ARM64State`, `_X86_64State`, `_X86_32State`) walks blocks and emits typed C expressions with taint annotations.
+**Higher-completeness backends (ARM64, x86-64):** read bytes at VA → `insn_*.from_capstone` → `cfg_*.build_cfg` → per-register state machine (`_ARM64State`, `_X86_64State`) walks blocks and emits typed C expressions with taint annotations.
 
-**Structural backends (all others):** read bytes at VA → ISA-specific decoder, either Capstone, an ablation native decoder, or objdump → `_walk_ablation_cfg` BFS walks blocks → `_make_*_emit` closure emits: calls with resolved PLT names, returns with ABI return register, branches as `if (/* cond */) goto label;`, everything else as `// mnemonic ops`.
+**Other ISA backends:** read bytes at VA → ISA-specific decoder (Capstone, ablation native decoder, or objdump) → per-register state machine (`_X86_32State`, `_PPC32State`, etc.) seeded with ABI → `_walk_ablation_cfg` BFS walks blocks → `_make_*_emit` closure emits: calls with resolved PLT names, returns with ABI return register, branches as `if (/* cond */) goto label;`, other instructions as `// mnemonic ops`.
 
 **BEAM:** `BeamContext.from_path` parses the BEAM module chunk format → module name, exports, imports, atoms extracted → formatted as a comment block.
 
