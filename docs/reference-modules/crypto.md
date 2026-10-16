@@ -338,3 +338,67 @@ The EOR-register detection works for byte-by-byte CBC implementations. If the co
 ## FORGE audit: crypto_audit.py
 
 Gate: **PASSED**. No HIGH or CRITICAL findings. `scan_for_crypto_anti_patterns()` enforces `_MAX_CRYPTO_SCAN_BYTES=32MB` before reading any file; files exceeding the limit return `INFO/FILE_TOO_LARGE` instead of being skipped silently. JWT cracking operates on in-memory strings. No lief.parse().
+
+---
+
+## Why this exists
+
+Prior to this module, crypto modules required manual work outside the Ablation pipeline. This module integrates the capability directly so findings feed the shared `PatternLibrary` and `FindingRegistry` without a separate toolchain.
+
+---
+
+## How it works
+
+Scans the binary for known cryptographic constants (S-boxes, round constants, magic numbers) using byte-pattern matching against a corpus of 200+ algorithm signatures. Entropy analysis identifies regions likely to contain key material. Key candidates are cross-referenced against the firmware family corpus. Weak algorithm usage is classified by the security property it violates: broken hash (MD5, SHA-1), unauthenticated mode (ECB, CTR without MAC), or short key length.
+
+---
+
+## Example output
+
+```
+[CRITICAL] HARDCODED_KEY   0x1A40C0  len=32
+  algorithm: AES-256
+  detail: key matches known firmware family corpus entry
+
+[HIGH] WEAK_ALGO   0x3B200
+  algorithm: MD5
+  detail: used in authentication token derivation
+
+[HIGH] ECB_MODE   0x4C100
+  algorithm: AES
+  detail: ECB mode used for data longer than one block; patterns preserved
+```
+
+---
+
+## False positives
+
+Hard-coded constants that share byte patterns with known keys but are not cryptographic material (e.g., protocol magic, alignment padding) are not findings. Confirm key candidates by verifying they decrypt a known-plaintext block before reporting. Algorithm detection based on constant patterns can misclassify hand-rolled arithmetic as a named cipher — verify the full key schedule before concluding.
+
+---
+
+## Pipeline position
+
+**Before this module:** `EntropyMapper` to locate high-entropy regions likely to contain key material or encrypted payloads.
+
+**After this module:** Recovered keys go to `FirmwareContainerKeyExtractor` for decryption. Weak algorithm findings go to `FindingRegistry`.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
+| `finding_type` | Category (e.g., `HARDCODED_KEY`, `WEAK_ALGO`, `REUSED_IV`, `ECB_MODE`) |
+| `va` | Virtual address of the key material or algorithm constant, if in a binary |
+| `algorithm` | Identified cipher or hash algorithm |
+| `detail` | What was found and the cryptographic weakness |
+
+---
+
+## See also
+
+- [EntropyMapper](entropy-mapper.md) — locate high-entropy regions before key extraction
+- [FirmwareContainerKeyExtractor](firmware-container-key-extractor.md) — extract and classify firmware keys
+- [TaintAnalysis](taint-analysis.md) — trace how recovered keys or weak configs are used

@@ -83,3 +83,59 @@ For deeper confirmation of a flagged pair, use `TaintTracker` or manual Capstone
 
 - `lief >= 0.14.0` (PE parsing, IAT, section headers)
 - `capstone >= 5.0` (x64 call site scanning, register argument extraction)
+
+---
+
+## How it works
+
+Seeds the worklist with every call site of each configured source function. For each seeded location, a linear Capstone disassembly pass applies the taint lattice rules instruction by instruction, propagating taint through register moves, arithmetic, and memory operations. When a call instruction targets a PLT stub that resolves to a sink function and the relevant argument register is tainted, a `TaintFinding` is emitted. Internal calls push a new entry onto the worklist so taint follows the call graph interprocedurally up to `max_depth` levels.
+
+---
+
+## Example output
+
+```
+[CRITICAL] system() at 0x4023A0
+  source:   recv() at 0x401F00
+  arg:      rdi (arg 0)
+  chain:    recv→rdi → strcpy buf → system rdi
+  path:     [0x401F00, 0x4020C0, 0x4023A0]
+  severity: CRITICAL (exec sink, externally controlled argument)
+```
+
+---
+
+## False positives
+
+The most common false positive is taint surviving a zero-clear instruction (`xor rax, rax`). The `CLR` rule in the taint lattice clears taint unconditionally on self-XOR, but some architectures use different clearing idioms. Use `SinkArgClassifier` to pre-filter `RODATA_CONST` call sites before running the taint tracker — these are not findings regardless of register state.
+
+---
+
+## Pipeline position
+
+**Before this module:** `BinaryContext.load_or_build()`, then `SinkArgClassifier.classify_all()` to eliminate `RODATA_CONST` call sites. Only pass `ARG_PROPAGATED` and `UNKNOWN` sinks to the taint tracker.
+
+**After this module:** `PathSolver` to confirm path feasibility. `FindingRegistry.register()` to record confirmed findings.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `sink_name` | Name of the dangerous function reached |
+| `sink_va` | Virtual address of the call site |
+| `source_name` | Name of the taint source (e.g., `recv`, `read`) |
+| `arg_index` | Which argument to the sink carries taint (0-indexed) |
+| `chain` | `[(va, register, operation)]` steps from source to sink |
+| `path` | `[caller_va, ...]` function VAs traversed interprocedurally |
+| `severity` | `CRITICAL` for exec sinks, `HIGH` for memory sinks |
+
+---
+
+## See also
+
+- [TaintAnalysis](taint-analysis.md) — multi-architecture taint tracking reference
+- [SinkArgClassifier](sink-arg-classifier.md) — pre-filter RODATA_CONST sinks before taint
+- [PathSolver](path-solver.md) — confirm path feasibility after a taint hit
+- [SinkPropagator](sink-propagator.md) — extend sink coverage across wrappers

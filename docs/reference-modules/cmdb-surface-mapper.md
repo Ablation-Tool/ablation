@@ -143,3 +143,63 @@ First used in the FortiWeb 7.4.3 engagement (2026-10-04, session 3) to discover
 `system()`) missed this because the CMDB abstraction layer blocked the trace. Forward
 mapping from `cmf_query_create` in libcmdb_plugin.so identified the exec-reach table
 immediately, and manual disassembly of the caller confirmed the unsanitized field.
+
+---
+
+## Why this exists
+
+Prior to this module, cmdb surface mapper required manual work outside the Ablation pipeline. This module integrates the capability directly so findings feed the shared `PatternLibrary` and `FindingRegistry` without a separate toolchain.
+
+---
+
+## How it works
+
+Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+
+---
+
+## Example output
+
+```
+[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
+  detail: unauthenticated GET returns full config including credentials
+  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+
+[MEDIUM]   INFO_DISCLOSURE   /status
+  detail: version string exposed without authentication
+  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+
+---
+
+## False positives
+
+Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+
+---
+
+## Pipeline position
+
+**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
+
+**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
+| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
+| `endpoint` | URI, port, or service address where the finding was observed |
+| `detail` | What was found and why it matters |
+| `evidence` | Response excerpt or protocol trace that confirms the finding |
+
+---
+
+## See also
+
+- [FindingRegistry](registry.md) — record confirmed findings from enumeration
+- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
+- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting

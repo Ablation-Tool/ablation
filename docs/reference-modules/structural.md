@@ -228,3 +228,47 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. No code changes needed.
 - No bare `except:`. No `try/except` blocks in the module at all: pure computation.
 - No lief.parse(). No subprocess. No HTTP reads.
 - Division-by-zero guards: `max(fp_a.n_insns, 1)` (size ratio), `if na > 0 and nb > 0` (cosine sim), `max(len(named_a | named_b), 1)` (PLT Jaccard), `if total_w == 0` (weight normalization).
+
+---
+
+## How it works
+
+Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+
+---
+
+## Example output
+
+```
+# Output varies by module. See Usage section for representative examples.
+```
+
+---
+
+## False positives
+
+Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+
+---
+
+## Pipeline position
+
+**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+
+**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `result` | Module-specific output; see the class docstring for the exact type |
+
+---
+
+## See also
+
+- [BinaryContext](binary-context.md) — session foundation for all analysis
+- [SemanticSearch](semantic-search.md) — function candidate identification
+- [FindingRegistry](registry.md) — persistent finding storage

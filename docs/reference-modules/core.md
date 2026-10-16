@@ -436,3 +436,41 @@ libservice.so:recv_wrapper [tainted: arg0]
 | `tainted_args` | Which arguments arrived tainted at the sink |
 | `source_name` | Entry-point function name where the taint was introduced |
 | `depth` | Number of hops in the chain |
+
+---
+
+## Example output
+
+```
+# Output varies by module. See Usage section for representative examples.
+```
+
+---
+
+## False positives
+
+Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+
+---
+
+## Pipeline position
+
+**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+
+**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `result` | Module-specific output; see the class docstring for the exact type |
+
+---
+
+## See also
+
+- [BinaryContext](binary-context.md) — session foundation for all analysis
+- [SemanticSearch](semantic-search.md) — function candidate identification
+- [FindingRegistry](registry.md) — persistent finding storage

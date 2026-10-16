@@ -355,3 +355,39 @@ for fva in ctx.funcs_referencing_string(0x6010):
 # Confirm a name: persists across all future sessions
 ctx.set_name(0x4000, 'parse_radius_packet', source='confirmed')
 ```
+
+---
+
+## How it works
+
+Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+
+---
+
+## Example output
+
+```
+# Output varies by module. See Usage section for representative examples.
+```
+
+---
+
+## False positives
+
+Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `result` | Module-specific output; see the class docstring for the exact type |
+
+---
+
+## See also
+
+- [BinaryContext](binary-context.md) — session foundation for all analysis
+- [SemanticSearch](semantic-search.md) — function candidate identification
+- [FindingRegistry](registry.md) — persistent finding storage

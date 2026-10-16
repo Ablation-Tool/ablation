@@ -204,3 +204,38 @@ Each `TaintFinding` includes:
 | `path` | `[caller_va,...]` function VAs traversed interprocedurally |
 
 A finding with `path=[0x1000, 0x2000, 0x3000]` means taint entered at `0x1000`, passed through `0x2000`, and reached the sink call in `0x3000`. The `chain` within each function shows exactly which registers carried the taint at each instruction.
+
+---
+
+## Example output
+
+```
+[CRITICAL] system() at 0x4023A0
+  source:   recv() at 0x401F00
+  arg:      rdi (arg 0)
+  chain:    recv→rdi → strcpy buf → system rdi
+  path:     [0x401F00, 0x4020C0, 0x4023A0]
+  severity: CRITICAL (exec sink, externally controlled argument)
+```
+
+---
+
+## False positives
+
+The most common false positive is taint surviving a zero-clear instruction (`xor rax, rax`). The `CLR` rule in the taint lattice clears taint unconditionally on self-XOR, but some architectures use different clearing idioms. Use `SinkArgClassifier` to pre-filter `RODATA_CONST` call sites before running the taint tracker — these are not findings regardless of register state.
+
+---
+
+## Pipeline position
+
+**Before this module:** `BinaryContext.load_or_build()`, then `SinkArgClassifier.classify_all()` to eliminate `RODATA_CONST` call sites. Only pass `ARG_PROPAGATED` and `UNKNOWN` sinks to the taint tracker.
+
+**After this module:** `PathSolver` to confirm path feasibility. `FindingRegistry.register()` to record confirmed findings.
+
+---
+
+## See also
+
+- [SinkArgClassifier](sink-arg-classifier.md) — pre-filter RODATA_CONST sinks before taint
+- [PathSolver](path-solver.md) — confirm path feasibility after a taint hit
+- [SinkPropagator](sink-propagator.md) — extend sink coverage across wrappers

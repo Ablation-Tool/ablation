@@ -101,3 +101,57 @@ Gate: **PASSED**. No HIGH or CRITICAL findings.
 |---|---|---|---|
 | Serialized "parallel" phases | MEDIUM | `_run_phase_captured` (line 131) | `redirect_stdout` requires global lock; phases 17–30 serialize despite 6-worker executor |
 | Double `r.json()` call | LOW | `probe_graphql_advanced` (line 1235/1238) | JSON parsed twice in batch detection check |
+
+---
+
+## How it works
+
+Discovers API endpoints through documentation scraping, response reflection, and path enumeration. For each discovered endpoint, a suite of probes tests for BOLA, mass assignment, injection, authentication bypass, and information disclosure. Probes are generated from the endpoint's parameter schema and sent with crafted payloads. Responses are analyzed for status code anomalies, data leakage, and error message disclosure.
+
+---
+
+## Example output
+
+```
+[CRITICAL] BOLA   GET /api/v1/users/{id}/profile
+  detail: id parameter accepts any integer; no ownership check
+  evidence: GET /api/v1/users/1337/profile → 200 OK (authenticated as user 9999)
+
+[HIGH] MASS_ASSIGN   POST /api/v1/users
+  detail: role field accepted and persisted in user creation request
+  evidence: {"name":"test","role":"admin"} → 201 Created
+```
+
+---
+
+## False positives
+
+Rate-limit and authentication findings from internal networks or behind authenticated sessions are not external attack surface. Confirm endpoint reachability from an unauthenticated external perspective. Mass-assignment findings require confirmation that the extra fields are actually persisted or acted on by the server.
+
+---
+
+## Pipeline position
+
+**Before this module:** Network access to the target API and basic authentication credentials or an unauthenticated endpoint map.
+
+**After this module:** Feed injection and auth bypass findings to `FindingRegistry`. Surface exposure findings feed `PreAuthExposure`.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
+| `finding_type` | API-specific category (e.g., `BOLA`, `MASS_ASSIGN`, `INJECTION`, `AUTH_BYPASS`) |
+| `endpoint` | HTTP method and path of the vulnerable endpoint |
+| `detail` | What was found and how to reproduce it |
+| `evidence` | Request/response excerpt that confirms the finding |
+
+---
+
+## See also
+
+- [NetworkAnalyze](network-analyze.md) — port and service discovery before API RE
+- [PreAuthExposure](preauth-exposure.md) — find unauthenticated code paths in the backend binary
+- [FindingRegistry](registry.md) — record confirmed API findings

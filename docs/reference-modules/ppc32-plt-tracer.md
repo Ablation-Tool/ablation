@@ -184,3 +184,56 @@ for PLT calls. This module handles `BCTR` only; extend `_find_thunks` if
 the loader patches them at runtime. This module uses symbol names from
 `.rela.plt` (already present in the unloaded image), so no runtime state
 is needed.
+
+---
+
+## Why this exists
+
+Prior to this module, ppc32plttracer required manual work outside the Ablation pipeline. This module integrates the capability directly so findings feed the shared `PatternLibrary` and `FindingRegistry` without a separate toolchain.
+
+---
+
+## Example output
+
+```
+Resolved 847 PLT entries
+Recovered 312 function starts from .eh_frame
+Named 28 functions from DWARF remnants
+
+va=0x401200  name=verify_admin_token  confidence=HIGH
+va=0x4015C0  name=process_http_request  confidence=HIGH
+va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+```
+
+---
+
+## False positives
+
+Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+
+---
+
+## Pipeline position
+
+**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+
+**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `va` | Virtual address of the resolved symbol, function, or instruction |
+| `name` | Recovered name if available, empty string if stripped |
+| `detail` | What was resolved or decoded |
+| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+
+---
+
+## See also
+
+- [BinaryContext](binary-context.md) — session state and function/import index
+- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
