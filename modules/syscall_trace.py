@@ -251,7 +251,7 @@ def detect_raw_socket_creation(pid=None) -> list:
     def _read_proc_net(path):
         try:
             with open(path, 'r') as f:
-                lines = f.readlines()
+                lines = f.read(_MAX_PROC_BYTES).splitlines()
             return [l.strip() for l in lines[1:] if l.strip()]
         except Exception:
             return []
@@ -440,7 +440,7 @@ def detect_socket_abuse_patterns() -> list:
         rows = []
         try:
             with open(path, 'r') as f:
-                for line in f.readlines()[1:]:
+                for line in f.read(_MAX_PROC_BYTES).splitlines()[1:]:
                     parts = line.split()
                     if parts:
                         rows.append(parts)
@@ -578,7 +578,7 @@ def check_network_sniffing_indicators() -> list:
     # RX/TX ratio from /proc/net/dev
     try:
         with open('/proc/net/dev', 'r') as f:
-            lines = f.readlines()
+            lines = f.read(_MAX_PROC_BYTES).splitlines()
         for line in lines[2:]:
             parts = line.split()
             if len(parts) < 10:
