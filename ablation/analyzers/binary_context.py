@@ -846,17 +846,21 @@ class BinaryContext:
                             self.plt[sec_va + off] = sym
 
     def _extract_plt_ppc64be(self, binary) -> None:
-        # PPC64 BE ELFv1 glink stubs: a contiguous block in .text immediately before .opd.
-        # Each stub is 8 bytes (2 instructions):
-        #   li r0, N        38 00 0N NN  (opcode=14, RT=r0, RA=r0)
-        #   b  <resolver>   4x xx xx x0  (opcode=18, AA=0, LK=0)
-        # Stub N maps to .rela.plt entry N (by position, not by r_offset order).
-        # Stub base = address of first stub (where N=0).
+        # PPC64 BE ELFv1: PLT calls use inline 7-instruction call stubs in .text.
+        # Each stub loads the PLT function descriptor via TOC-relative addressing:
         #
-        # .rela.plt entries are 24-byte big-endian Elf64_Rela records.
+        #   addis r12, r2, HI    3D 82 xx xx  (opcode=15, RT=12, RA=2)
+        #   std   r2, N(r1)      F8 41 xx xx  (save caller TOC)
+        #   ld    r11, LO(r12)   E9 6C xx xx  (load entry_point from PLT descriptor)
+        #   ld    r2, LO+8(r12)  E8 4C xx xx  (load callee TOC from PLT descriptor)
+        #   mtctr r11             7D 69 03 A6
+        #   ld    r11, LO+16(r12) E9 6C xx xx  (load env ptr; same upper-16 as w2)
+        #   bctr                  4E 80 04 20
+        #
+        # PLT descriptor VA = r2 + (sign_extend(HI) << 16) + sign_extend(LO)
+        # .rela.plt entries give us: descriptor_VA -> symbol_name
 
-        # Build ordered list of symbol names from .rela.plt (positional, not sorted by r_offset).
-        plt_syms: List[str] = []
+        got_to_sym: Dict[int, str] = {}
         try:
             rela_plt = binary.get_section('.rela.plt')
             if rela_plt:
@@ -866,40 +870,76 @@ class BinaryContext:
                     sym_idx = r_info >> 32
                     try:
                         sym = binary.dynamic_symbols[sym_idx]
-                        plt_syms.append(sym.name if sym.name else '')
+                        if sym.name:
+                            got_to_sym[r_offset] = sym.name
                     except Exception:
-                        plt_syms.append('')
+                        pass
         except Exception:
             pass
 
-        if not plt_syms:
+        if not got_to_sym:
             return
 
-        # Find glink stub base: scan .text for 'li r0,0' (0x38000000) followed by
-        # a 'b' instruction (opcode=18, AA=0, LK=0 → lower 2 bits = 00).
-        # li r0,0 = 0x38000000 exactly (opcode=14, RT=r0=0, RA=r0=0, D=0).
-        stub_base: Optional[int] = None
+        # Read TOC (r2) from .opd[0] — second 8-byte word of first function descriptor.
+        r2: Optional[int] = None
+        try:
+            opd = binary.get_section('.opd')
+            if opd and len(bytes(opd.content)) >= 16:
+                r2 = struct.unpack_from('>Q', bytes(opd.content), 8)[0]
+        except Exception:
+            pass
+
+        if r2 is None:
+            return
+
+        # Scan .text for the 7-word stub pattern.
         try:
             text = binary.get_section('.text')
-            if text:
-                text_data = bytes(text.content)
-                text_va = int(text.virtual_address)
-                for off in range(0, len(text_data) - 7, 4):
-                    w0 = struct.unpack_from('>I', text_data, off)[0]
-                    if w0 == 0x38000000:
-                        w1 = struct.unpack_from('>I', text_data, off + 4)[0]
-                        if (w1 & 0xFC000003) == 0x48000000:  # b (not bl, not ba)
-                            stub_base = text_va + off
-                            break
+            if not text:
+                return
+            text_data = bytes(text.content)
+            text_va = int(text.virtual_address)
         except Exception:
-            pass
-
-        if stub_base is None:
             return
 
-        for i, sym in enumerate(plt_syms):
+        for off in range(0, len(text_data) - 27, 4):
+            w0 = struct.unpack_from('>I', text_data, off)[0]
+            # w0: addis r12, r2, HI  — upper 16 bits = 0x3D82
+            if (w0 & 0xFFFF0000) != 0x3D820000:
+                continue
+            w1 = struct.unpack_from('>I', text_data, off + 4)[0]
+            # w1: std r2, N(r1)  — upper 16 bits = 0xF841
+            if (w1 & 0xFFFF0000) != 0xF8410000:
+                continue
+            w2 = struct.unpack_from('>I', text_data, off + 8)[0]
+            # w2: ld r11, LO(r12)  — upper 16 bits = 0xE96C
+            if (w2 & 0xFFFF0000) != 0xE96C0000:
+                continue
+            w3 = struct.unpack_from('>I', text_data, off + 12)[0]
+            # w3: ld r2, LO+8(r12) — upper 16 bits = 0xE84C
+            if (w3 & 0xFFFF0000) != 0xE84C0000:
+                continue
+            w4 = struct.unpack_from('>I', text_data, off + 16)[0]
+            if w4 != 0x7D6903A6:  # mtctr r11
+                continue
+            w5 = struct.unpack_from('>I', text_data, off + 20)[0]
+            # w5: ld r11, LO+16(r12) — upper 16 bits = 0xE96C
+            if (w5 & 0xFFFF0000) != 0xE96C0000:
+                continue
+            w6 = struct.unpack_from('>I', text_data, off + 24)[0]
+            if w6 != 0x4E800420:  # bctr
+                continue
+            # Compute PLT descriptor VA: r2 + (HI << 16) + LO
+            hi = w0 & 0xFFFF
+            lo = w2 & 0xFFFF
+            if hi & 0x8000:
+                hi -= 0x10000
+            if lo & 0x8000:
+                lo -= 0x10000
+            desc_va = r2 + (hi << 16) + lo
+            sym = got_to_sym.get(desc_va)
             if sym:
-                self.plt[stub_base + i * 8] = sym
+                self.plt[text_va + off] = sym
 
     def _extract_exports(self, binary) -> None:
         try:
