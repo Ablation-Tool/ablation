@@ -90,6 +90,7 @@ from .source_arch_risk import SourceArchRiskScanner, ArchRiskFinding
 from .lua_injection_analyzer import LuaInjectionAnalyzer, LuaInjectionFinding
 from .mcp_tool_taint_scanner import MCPToolTaintScanner, MCPTaintFinding
 from .electron_security_scanner import ElectronSecurityScanner, ElectronFinding
+from .apache_module_analyzer import ApacheModuleAnalyzer, ApacheFinding
 from .source_audit_compressor import SourceAuditCompressor, FileProfile, ProfileBucket
 from .source_isolation_checker import SourceIsolationChecker, IsolationFinding
 from .source_taint_tracker import SourceTaintTracker, TaintPath, TaintHop, CallGraph
@@ -213,6 +214,7 @@ __all__ = [
     "LuaInjectionAnalyzer", "LuaInjectionFinding",
     "MCPToolTaintScanner", "MCPTaintFinding",
     "ElectronSecurityScanner", "ElectronFinding",
+    "ApacheModuleAnalyzer", "ApacheFinding",
     "SourceAuditCompressor", "FileProfile", "ProfileBucket",
     "SourceIsolationChecker", "IsolationFinding",
     "SourceTaintTracker", "TaintPath", "TaintHop", "CallGraph",
