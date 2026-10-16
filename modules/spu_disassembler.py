@@ -27,9 +27,12 @@ csflt/cuflt/cflts/cfltu use a 10-bit opcode + 8-bit scale immediate (no rB).
 Two consecutive op11 slots per instruction cover the two possible MSB values of I8.
 """
 
+import os
 import struct
 from collections import Counter
 from typing import Optional
+
+_MAX_SPU_ELF_BYTES = 256 * 1024 * 1024
 
 __all__ = [
     "SPUInstruction",
@@ -587,6 +590,9 @@ def dump_spu_elf(path: str, start_va: Optional[int] = None,
     start_va / end_va filter to a VA range.
     limit caps the number of instructions printed.
     """
+    elf_size = os.path.getsize(path)
+    if elf_size > _MAX_SPU_ELF_BYTES:
+        raise ValueError(f'{path}: file size {elf_size} exceeds {_MAX_SPU_ELF_BYTES} byte limit')
     with open(path, "rb") as f:
         data = f.read()
     text, base_vaddr, entry = extract_spu_text_from_elf(data)
