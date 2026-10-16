@@ -17,6 +17,7 @@ _IS_LINUX = _platform.system() == 'Linux'
 _MAX_BINARY_BYTES = 256 * 1024 * 1024   # binary file read cap
 _MAX_PROC_BYTES   = 4 * 1024 * 1024     # /proc/pid/cmdline, /proc/pid/environ
 _MAX_SYSCTL_BYTES = 256                  # /proc/sys/* sysctl values
+_MAX_SYSFS_BYTES  = 64                   # /sys/class/net/*/flags and similar counters
 
 class SyscallTracer:
     """Trace and analyze system calls"""
@@ -295,7 +296,8 @@ def detect_raw_socket_creation(pid=None) -> list:
         for iface_path in net_class.iterdir():
             flags_file = iface_path / 'flags'
             try:
-                flags_val = int(flags_file.read_text().strip(), 16)
+                with flags_file.open() as _ff:
+                    flags_val = int(_ff.read(_MAX_SYSFS_BYTES).strip(), 16)
                 if flags_val & 0x100:
                     findings.append({
                         'severity': 'CRITICAL',
@@ -393,7 +395,8 @@ def detect_ptrace_abuse() -> list:
     # ptrace_scope
     ptrace_scope_path = '/proc/sys/kernel/yama/ptrace_scope'
     try:
-        scope_val = int(Path(ptrace_scope_path).read_text().strip())
+        with open(ptrace_scope_path, 'r') as _f:
+            scope_val = int(_f.read(_MAX_SYSCTL_BYTES).strip())
         if scope_val == 0:
             findings.append({
                 'severity': 'HIGH',
