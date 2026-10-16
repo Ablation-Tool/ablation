@@ -588,22 +588,50 @@ class SinkArgClassifierMIPS:
     ) -> bool:
         """
         True if, before the JALR at jalr_idx, $a0 is set to the address of
-        (base_reg, disp) via ADDIU $a0, base_reg, disp.
+        (base_reg, disp).
+
+        Handles two forms:
+          Direct:   ADDIU $a0, base_reg, disp
+          Via temp: ADDIU $rX, base_reg, disp  followed by  MOVE $a0, $rX
+        The via-temp form is common in O32 code when the compiler builds the
+        buffer address in a temporary before assigning it to $a0.
         """
         limit = max(jalr_idx - _LOOKBACK, -1)
         for j in range(jalr_idx - 1, limit, -1):
             insn = insns[j]
             if not self._writes_reg(insn, _R_A0):
                 continue
-            if insn.mnemonic != 'addiu':
+            mnem = insn.mnemonic
+
+            # Direct: ADDIU $a0, base_reg, disp
+            if mnem == 'addiu' and len(insn.operands) >= 3:
+                src_op = insn.operands[1]
+                imm_op = insn.operands[2]
+                if src_op.type != MIPS_OP_REG or imm_op.type != MIPS_OP_IMM:
+                    return False
+                return src_op.reg == base_reg and imm_op.imm == disp
+
+            # Via-temp: MOVE $a0, $rX — look back for ADDIU $rX, base_reg, disp
+            if mnem in ('move', 'or') and len(insn.operands) >= 2:
+                src_op = insn.operands[1]
+                if src_op.type != MIPS_OP_REG:
+                    return False
+                via_reg = src_op.reg
+                # For OR $a0, $rX, $zero the via_reg is operands[1]
+                for k in range(j - 1, max(j - _LOOKBACK, -1), -1):
+                    prev = insns[k]
+                    if not self._writes_reg(prev, via_reg):
+                        continue
+                    if prev.mnemonic != 'addiu' or len(prev.operands) < 3:
+                        return False
+                    ps = prev.operands[1]
+                    pi = prev.operands[2]
+                    if ps.type != MIPS_OP_REG or pi.type != MIPS_OP_IMM:
+                        return False
+                    return ps.reg == base_reg and pi.imm == disp
                 return False
-            if len(insn.operands) < 3:
-                return False
-            src_op = insn.operands[1]
-            imm_op = insn.operands[2]
-            if src_op.type != MIPS_OP_REG or imm_op.type != MIPS_OP_IMM:
-                return False
-            return src_op.reg == base_reg and imm_op.imm == disp
+
+            return False
         return False
 
     def _is_entry_arg_save(
