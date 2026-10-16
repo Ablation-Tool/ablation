@@ -535,11 +535,17 @@ class BinaryContext:
             self._extract_plt_x86_32(binary)
             return
 
-        # PPC64le ELF V2: stubs inside .text — std r2,24(r1); ld r12,N(r2); mtctr r12; bctr
+        # PPC64: dispatch on endianness.
+        # ELFv2 LE (ELFDATA2LSB=1): stubs inside .text — std r2,24(r1); ld r12,N(r2); mtctr r12; bctr
+        # ELFv1 BE (ELFDATA2MSB=2): glink stubs inside .text — same instruction words, BE byte order
         if self.arch == 'ppc64':
             try:
-                if binary.header.identity[5] == 1:  # ELFDATA2LSB
+                ei_data = binary.header.identity[5]
+                if ei_data == 1:  # ELFDATA2LSB — ppc64le ELFv2
                     self._extract_plt_ppc64le(binary)
+                    return
+                elif ei_data == 2:  # ELFDATA2MSB — ppc64 BE ELFv1
+                    self._extract_plt_ppc64be(binary)
                     return
             except Exception:
                 pass
@@ -839,6 +845,62 @@ class BinaryContext:
                         if sym:
                             self.plt[sec_va + off] = sym
 
+    def _extract_plt_ppc64be(self, binary) -> None:
+        # PPC64 BE ELFv1 glink stubs: a contiguous block in .text immediately before .opd.
+        # Each stub is 8 bytes (2 instructions):
+        #   li r0, N        38 00 0N NN  (opcode=14, RT=r0, RA=r0)
+        #   b  <resolver>   4x xx xx x0  (opcode=18, AA=0, LK=0)
+        # Stub N maps to .rela.plt entry N (by position, not by r_offset order).
+        # Stub base = address of first stub (where N=0).
+        #
+        # .rela.plt entries are 24-byte big-endian Elf64_Rela records.
+
+        # Build ordered list of symbol names from .rela.plt (positional, not sorted by r_offset).
+        plt_syms: List[str] = []
+        try:
+            rela_plt = binary.get_section('.rela.plt')
+            if rela_plt:
+                rela_data = bytes(rela_plt.content)
+                for off in range(0, len(rela_data) - 23, 24):
+                    r_offset, r_info = struct.unpack_from('>QQ', rela_data, off)
+                    sym_idx = r_info >> 32
+                    try:
+                        sym = binary.dynamic_symbols[sym_idx]
+                        plt_syms.append(sym.name if sym.name else '')
+                    except Exception:
+                        plt_syms.append('')
+        except Exception:
+            pass
+
+        if not plt_syms:
+            return
+
+        # Find glink stub base: scan .text for 'li r0,0' (0x38000000) followed by
+        # a 'b' instruction (opcode=18, AA=0, LK=0 → lower 2 bits = 00).
+        # li r0,0 = 0x38000000 exactly (opcode=14, RT=r0=0, RA=r0=0, D=0).
+        stub_base: Optional[int] = None
+        try:
+            text = binary.get_section('.text')
+            if text:
+                text_data = bytes(text.content)
+                text_va = int(text.virtual_address)
+                for off in range(0, len(text_data) - 7, 4):
+                    w0 = struct.unpack_from('>I', text_data, off)[0]
+                    if w0 == 0x38000000:
+                        w1 = struct.unpack_from('>I', text_data, off + 4)[0]
+                        if (w1 & 0xFC000003) == 0x48000000:  # b (not bl, not ba)
+                            stub_base = text_va + off
+                            break
+        except Exception:
+            pass
+
+        if stub_base is None:
+            return
+
+        for i, sym in enumerate(plt_syms):
+            if sym:
+                self.plt[stub_base + i * 8] = sym
+
     def _extract_exports(self, binary) -> None:
         try:
             for sym in binary.exported_functions:
@@ -1132,8 +1194,18 @@ class BinaryContext:
         if self.arch == 'ppc32':
             # Big-endian: each 4-byte chunk read as big-endian uint32
             words = np.frombuffer(sec_data[:word_count * 4], dtype=np.dtype('>u4')).astype(np.uint32)
+        elif self.arch == 'ppc64':
+            # ppc64 BE (ELFv1) stores words big-endian; ppc64le (ELFv2) stores little-endian.
+            # Detect from the ELF header (byte 5: 1=LE, 2=BE).
+            _ppc64_be = (hasattr(binary, 'header') and
+                         getattr(binary.header, 'identity', None) is not None and
+                         len(binary.header.identity) > 5 and
+                         binary.header.identity[5] == 2)
+            if _ppc64_be:
+                words = np.frombuffer(sec_data[:word_count * 4], dtype=np.dtype('>u4')).astype(np.uint32)
+            else:
+                words = np.frombuffer(sec_data[:word_count * 4], dtype=np.dtype('<u4'))
         else:
-            # ppc64le: little-endian uint32
             words = np.frombuffer(sec_data[:word_count * 4], dtype=np.dtype('<u4'))
 
         # ppc64le far-call stub detection (XLC-GAP-007).
