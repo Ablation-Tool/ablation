@@ -146,3 +146,60 @@ Full address: `page_base + imm12`
 Only consecutive (i, i+1) pairs where `ADD.Rn == ADRP.Rd` (same register) are matched.
 
 Validated on emsworkers_linux_arm64 v8.0.0 (78 MB Go binary): **0 → 13,962 string xref pairs**.
+
+---
+
+## MIPS32/64 support gap fixed
+
+One gap prevented MIPS32 firmware analysis. Now resolved.
+
+### MIPS-GAP-001 — Call graph: JAL-only scanner missed all PLT calls (fixed 2026-10-15)
+
+**Symptom:** `ctx.call_edges` was empty on MIPS32 ET_EXEC firmware binaries.
+
+**Root cause:** `_build_call_graph_mips()` scanned only for JAL (opcode=3, bits 31:26). The
+O32 ABI PIC calling convention used by ET_EXEC firmware (e.g., FortiAP cwWtpd) routes all
+PLT and cross-function calls through `LW $t9, N($gp)` + `JALR $t9` — zero JAL instructions.
+
+**Fix:** `_build_call_graph_mips()` now handles both patterns:
+
+1. **JAL** (unchanged): `bits 31:26 == 3`, target = `(DS_PC & 0xF0000000) | (imm26 << 2)`.
+
+2. **LW $t9, N($gp) + JALR $t9** (new):
+   - Encoding: bits 31:16 = `0x8F99` (opcode=LW=0x23, rs=$gp=28, rt=$t9=25).
+   - `$gp` is fixed for ET_EXEC binaries; read from `.reginfo` section at offset 20.
+   - GOT entry at `($gp + sign_ext(imm16))` holds the callee VA.
+   - GOT contents read from `.got` section; entries matched against `plt` and `func_starts`.
+
+```
+# BE: LW $t9, N($gp) opcode breakdown
+# bits 31:26 = LW = 0x23 = 0b100011
+# bits 25:21 = rs = $gp = 28 = 0x1C
+# bits 20:16 = rt = $t9 = 25 = 0x19
+# → upper halfword = (0x23<<10)|(0x1C<<5)|0x19 = 0x8F99
+```
+
+`$gp` is from `.reginfo` layout:
+```
+ri_gprmask   (4 bytes, offset  0)
+ri_cprmask   (16 bytes, offset 4)
+ri_gp_value  (4 bytes, offset 20)  ← gp
+```
+
+Validated on FortiAP cwWtpd (MIPS32 BE, 3.3MB, 1,170 exports): **0 → 23,617 call edges**.
+`callers_of('system')` and `callers_of('popen')` became functional, directly identifying
+CAPWAP VSP shell injection (FAP-CWMIPS-1, see `re/fortinet/fortiap_re.py`).
+
+### MIPS-GAP-002 — SinkArgClassifier / TaintTracker: MIPS32 not supported (open)
+
+**Symptom:** `SinkArgClassifier.classify_all()` returns 0 results on MIPS32 ELFs.
+
+**Root cause:** Both tools hardcode x86-64 register names (`rdi`, `rsi`, `rdx`) and x86-64
+calling convention for argument tracking. MIPS32 uses `a0`–`a3` for the first four
+arguments, with no register file equivalent.
+
+**Workaround:** Manual capstone disassembly for sink classification and taint tracing on
+MIPS32 targets. Annotate GOT offsets to resolve `LW $t9, N($gp)` call targets manually.
+
+**Future fix:** Add MIPS calling convention path to both analyzers (MIPS registers a0–a3
+map to argument positions 0–3; stack slots used for arguments 5+).
