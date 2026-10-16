@@ -570,6 +570,25 @@ Above the line: `while (i < n)` with a declared `int i`.
 
 ---
 
+## Encyclopedia comparison: IR Lifter vs Decompiler (indirect calls)
+
+Focusing on indirect calls — the clearest case where the pipeline cut-line matters:
+
+| Aspect | IR Lifter | Decompiler |
+|---|---|---|
+| Input | Decoded machine instructions (`mov`, `push`, `call eax`, …) | IR (lifter output): explicit `CALL_INDIRECT addr`, stack ops, etc. |
+| View of callee | **Address in a register/memory** (`t_fp`), opaque | **Function pointer variable** (`fp`), possibly typed (`int (*)(int)`) |
+| Representation of call | `CALL_INDIRECT t_fp` + explicit stack/PC manipulation | High-level call expression: `fp(y)` |
+| Argument handling | Explicit `STORE(MEM[esp - 4], arg)` + `CALL_INDIRECT` | Abstract arguments: list `[y]` in AST `Call(function=fp, args=[y])` |
+| Return value | Modeled as `eax` (or similar), then `STORE` to a local | Modeled as `RETVAL(fp)` → assigned to `z` in high-level code |
+| Control flow | Basic blocks with `CALL_INDIRECT` and `RETURN`/PC updates | Structured control flow: functions, returns, and call expressions |
+| Type information | None or minimal (raw word sizes) | Inferred types: `int (*fp)(int)`, `int y`, `int z`, `int return` |
+| Naming of entities | Temporaries: `t_fp`, `t_y`, `t_ret`, stack slots `[ebp+8]` | Symbolic names: `fp`, `y`, `z`, `call_through_ptr` |
+| Primary goal | Precisely encode instruction semantics in a common IR | Recover human-understandable program structure and source-like code |
+| Output example | See low-level IR listing above | `int z = fp(y);` |
+
+---
+
 ## Why Ablation does not use Ghidra
 
 Ghidra's decompiler is a full Stage 1 → Stage 3 pipeline and would produce higher-quality structuring for complex functions. Ablation excludes it because:
