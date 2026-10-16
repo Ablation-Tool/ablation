@@ -48,7 +48,7 @@ def _kafka_request(host: str, port: int, api_key: int, api_version: int,
         if len(raw_len) < 4:
             s.close()
             return None
-        resp_len = struct.unpack(">i", raw_len)[0]
+        resp_len = min(struct.unpack(">i", raw_len)[0], _MAX_HTTP_BYTES)
         resp = b""
         while len(resp) < resp_len:
             chunk = s.recv(resp_len - len(resp))
