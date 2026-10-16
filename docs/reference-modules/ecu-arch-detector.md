@@ -198,3 +198,55 @@ Verified zero false positives across 9 SH-2A, 18 PPC32, and 1 TriCore ROM images
 - No support for RISC-V, RH850, SH-4, or M32C: add a new `_score_*` method following the same pattern.
 - TriCore detection requires scanning the full image; calling `EcuArchDetector(data, sample_size=N)` with a small N will still cause the TriCore discriminator to scan all of `data`, not the sample. This is intentional: startup code density is too low in the first few KB.
 - TriCore artifact guard (`periph > 2 × pflash AND periph > 15 %`) may reject a legitimate TriCore binary if the code region happens to have very heavy SFR access with low function-call density. In that case pass `sample_size=0` and verify manually.
+
+---
+
+## How it works
+
+Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+
+---
+
+## Example output
+
+```
+[CRITICAL] WEAK_SEED   UDS 0x27 0x01 at ROM:0x8004A0
+  detail: seed is timestamp-derived (LSB of timer register)
+  algorithm: linear congruential; key derivable in < 2^16 guesses
+
+[HIGH] UNPROTECTED_WRITE   calibration region at ROM:0x810000
+  detail: no write-protect fuse check before accepting 0x34 WriteDataByIdentifier
+```
+
+---
+
+## False positives
+
+Calibration data regions contain byte sequences that decode as valid instructions in some ISAs. Confirm candidate function VAs against the ROM layout from `ECURomLayoutAnalyzer` before treating them as code. Security Access sequences in boot ROM are expected and not findings unless the seed/key algorithm is cryptographically weak.
+
+---
+
+## Pipeline position
+
+**Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
+
+**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
+| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
+| `address` | ROM address of the finding |
+| `detail` | What was found and the security impact |
+| `service_id` | UDS service identifier if the finding is protocol-level |
+
+---
+
+## See also
+
+- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md) — map ROM sections before decoding
+- [ECUSecurityAccessScanner](ecu-security-access-scanner.md) — find UDS 0x27 bypass vectors in decoded code

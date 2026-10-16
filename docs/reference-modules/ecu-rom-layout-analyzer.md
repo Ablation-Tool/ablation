@@ -361,3 +361,55 @@ for r in layout.ivt_regions():
 - On systems without Capstone installed, `_tricore_density` returns `(0.0, False)`, which causes
  all TriCore windows to be classified as CALIBRATION. The `arch_hint="tricore"` path requires
   `capstone >= 5.0.1` with TriCore support.
+
+---
+
+## How it works
+
+Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+
+---
+
+## Example output
+
+```
+[CRITICAL] WEAK_SEED   UDS 0x27 0x01 at ROM:0x8004A0
+  detail: seed is timestamp-derived (LSB of timer register)
+  algorithm: linear congruential; key derivable in < 2^16 guesses
+
+[HIGH] UNPROTECTED_WRITE   calibration region at ROM:0x810000
+  detail: no write-protect fuse check before accepting 0x34 WriteDataByIdentifier
+```
+
+---
+
+## False positives
+
+Calibration data regions contain byte sequences that decode as valid instructions in some ISAs. Confirm candidate function VAs against the ROM layout from `ECURomLayoutAnalyzer` before treating them as code. Security Access sequences in boot ROM are expected and not findings unless the seed/key algorithm is cryptographically weak.
+
+---
+
+## Pipeline position
+
+**Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
+
+**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
+| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
+| `address` | ROM address of the finding |
+| `detail` | What was found and the security impact |
+| `service_id` | UDS service identifier if the finding is protocol-level |
+
+---
+
+## See also
+
+- [ECUArchDetector](ecu-arch-detector.md) — identify processor family before choosing a decoder
+- [ECUSecurityAccessScanner](ecu-security-access-scanner.md) — find UDS 0x27 bypass vectors in decoded code

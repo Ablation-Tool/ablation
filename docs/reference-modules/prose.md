@@ -58,3 +58,47 @@ The rules come from writing that passed without feedback and writing that was fl
 The pattern that works: subject + verb + object. One sentence per idea. "because" for causation. "so" for consequence. One concrete number when possible.
 
 The pattern that does not work: em dashes where a period would do. Parenthetical lists that bury the point. Filler words that describe nothing. Sentences that read like they were generated.
+
+---
+
+## How it works
+
+Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+
+---
+
+## Example output
+
+```
+# Output varies by module. See Usage section for representative examples.
+```
+
+---
+
+## False positives
+
+Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+
+---
+
+## Pipeline position
+
+**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+
+**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `result` | Module-specific output; see the class docstring for the exact type |
+
+---
+
+## See also
+
+- [BinaryContext](binary-context.md) — session foundation for all analysis
+- [SemanticSearch](semantic-search.md) — function candidate identification
+- [FindingRegistry](registry.md) — persistent finding storage
