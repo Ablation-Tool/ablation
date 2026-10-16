@@ -14,4 +14,4 @@ Pre-built callgraph scanner for Go binaries: identifies dangerous call sites (un
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before `f.read()`; `_MAX_BINARY_BYTES=256MB`. No lief.parse(). No HTTP reads.
+Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before `f.read()`; `_MAX_BINARY_BYTES=256MB`. `lief.parse()` used in `_build_section_map()` (L167), wrapped in `try/except Exception` + `if self._lb is None` check. No HTTP reads.
