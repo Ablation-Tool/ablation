@@ -27,4 +27,4 @@ Analyzes the 10 JNI functions in `libhijoyptt.so` (HiJoy PTT Android SO) using A
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_LIB_BYTES=256MB`; `os.path.getsize()` guard before `open().read()` (L45-47). No lief — binary loaded as raw bytes via `open(lib_path, 'rb').read()` and passed to `ARMSymbolicAnalyzer`. No HTTP reads. No subprocess.
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_LIB_BYTES=256MB`; `os.path.getsize()` guard before `open().read()` (L45-47). No lief, binary loaded as raw bytes via `open(lib_path, 'rb').read()` and passed to `ARMSymbolicAnalyzer`. No HTTP reads. No subprocess.

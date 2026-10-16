@@ -192,7 +192,7 @@ flowchart TD
 
 ## Voorbeeld RE-workflow
 
-End-to-end analyse van stripped binaire bestanden uit een RPM-bundel. Extractie via BinaryContext, string-xrefs en capstone disassemblage tot bevestigde bevindingen.
+ analyse van stripped binaire bestanden uit een RPM-bundel. Extractie via BinaryContext, string-xrefs en capstone disassemblage tot bevestigde bevindingen.
 
 ```mermaid
 flowchart TD

@@ -1,7 +1,7 @@
 # AI Code Provenance Log
 
-**Version:** 1.0.0: 2026-10-10  
-**Standard:** DoWI 8430.01 §3.6.c: Security validation requirements for AI-generated code  
+**Version:** 1.0.0: 2026-10-10 
+**Standard:** DoWI 8430.01 §3.6.c: Security validation requirements for AI-generated code 
 **Scope:** All Ablation modules where AI assistance was used in code generation
 
 This document satisfies DOWI-AI-SEC in the Ablation compliance matrix. DoWI 8430.01 §3.6.c requires that AI-generated code be identified, tracked, and validated through the same assurance chain as human-written code.

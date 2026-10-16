@@ -252,10 +252,10 @@ Each hash algorithm uses unique round constants derived from mathematical functi
 
 | Algorithm | Discriminating constants | Notes |
 |---|---|---|
-| MD5 | K[0..7]: 0xd76aa478, 0xe8c7b756, 0x242070db, ... | K-table from `floor(abs(sin(i+1)) * 2^32)` |
+| MD5 | K[0..7]: 0xd76aa478, 0xe8c7b756, 0x242070db,... | K-table from `floor(abs(sin(i+1)) * 2^32)` |
 | SHA-1 | Round constants: 0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6 | 4 constants cover all 80 rounds |
-| SHA-256 | IV H[0..7] + K[0..7]: 0x6a09e667, 0x428a2f98, ... | Shared upper half with SHA-512 |
-| SHA-512 | Unique K[0..3] lower halves: 0xd728ae22, 0xf3bcc908, ... | These do not appear in SHA-256 |
+| SHA-256 | IV H[0..7] + K[0..7]: 0x6a09e667, 0x428a2f98,... | Shared upper half with SHA-512 |
+| SHA-512 | Unique K[0..3] lower halves: 0xd728ae22, 0xf3bcc908,... | These do not appear in SHA-256 |
 | CRC32 | Reflected polynomial: 0xedb88320 | |
 
 The shared SHA-256/SHA-512 ambiguity (first eight K-table upper-half words are identical) is resolved by checking for SHA-512-unique lower-half constants.
@@ -335,6 +335,6 @@ The EOR-register detection works for byte-by-byte CBC implementations. If the co
 
 ---
 
-## FORGE audit — crypto_audit.py
+## FORGE audit: crypto_audit.py
 
 Gate: **PASSED**. No HIGH or CRITICAL findings. `scan_for_crypto_anti_patterns()` enforces `_MAX_CRYPTO_SCAN_BYTES=32MB` before reading any file; files exceeding the limit return `INFO/FILE_TOO_LARGE` instead of being skipped silently. JWT cracking operates on in-memory strings. No lief.parse().

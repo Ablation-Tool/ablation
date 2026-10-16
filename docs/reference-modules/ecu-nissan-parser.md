@@ -252,21 +252,21 @@ x_axis=0x836D, y_axis=0x8311, scale=0.78125, unit=`Compensation (%)`.
 ## Limitations
 
 - **Static axis values not stored.** Static axis breakpoints (inline `<data>` elements in
-  A2L.xml) are counted for `CalibrationAxis.count` but not stored in the CalibrationAxis
-  object. The physical breakpoint values require reading A2L.xml separately.
+ A2L.xml) are counted for `CalibrationAxis.count` but not stored in the CalibrationAxis
+ object. The physical breakpoint values require reading A2L.xml separately.
 
 - **Dynamic axis addresses optional.** When a variant does not supply axis addresses (most
-  CD5xx entries), `CalibrationAxis.address` is None for dynamic axes. The table data address
-  is always present when the table itself appears in the merged chain.
+ CD5xx entries), `CalibrationAxis.address` is None for dynamic axes. The table data address
+ is always present when the table itself appears in the merged chain.
 
 - **Non-linear expressions produce scale=0.0.** Expressions like `1881.6/x` (reciprocal AFR
-  formula) are non-linear and produce scale=0.0 as a sentinel. The table is still returned
-  with address and dimension data intact.
+ formula) are non-linear and produce scale=0.0 as a sentinel. The table is still returned
+ with address and dimension data intact.
 
 - **BitwiseSwitch tables omitted.** The 46 BitwiseSwitch tables in A2L.xml are not returned
-  by `calibration_tables()`. They describe bitmask configuration registers, not numeric
-  calibration maps.
+ by `calibration_tables()`. They describe bitmask configuration registers, not numeric
+ calibration maps.
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_XML_BYTES=4MB`; `path.stat().st_size > _MAX_XML_BYTES` guard before every XML read: `_parse_scalings()` (L268), `_parse_structure()` (L305), and `_load_variant()` (L411 — added this session; previously missing). `_MAX_WALK_DEPTH=4` caps directory recursion.
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_XML_BYTES=4MB`; `path.stat().st_size > _MAX_XML_BYTES` guard before every XML read: `_parse_scalings()` (L268), `_parse_structure()` (L305), and `_load_variant()` (L411, added this session; previously missing). `_MAX_WALK_DEPTH=4` caps directory recursion.

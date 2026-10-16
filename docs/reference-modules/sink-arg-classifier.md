@@ -13,17 +13,17 @@ built from a RODATA format string, a propagated function argument, or an unresol
 Three things were not possible before this module:
 
 1. Triage an entire firmware rootfs for exec-sink exposure in one call, without loading each binary
-   individually. Before `batch_plt_intersect`, identifying which files even imported system/popen
-   required iterating every ELF and parsing its imports by hand.
+ individually. Before `batch_plt_intersect`, identifying which files even imported system/popen
+ required iterating every ELF and parsing its imports by hand.
 
 2. Know with confidence that a system() call is not injectable. Pattern-match alone cannot say "this
-   call is safe." RODATA_CONST and SNPRINTF_RODATA verdicts give that answer automatically and
-   eliminate the majority of call sites from manual review.
+ call is safe." RODATA_CONST and SNPRINTF_RODATA verdicts give that answer automatically and
+ eliminate the majority of call sites from manual review.
 
 3. Handle ARM32 LE and ARM64 LE firmware trees in batch triage. The initial x86-64-only
-   implementation returned empty results for all ARM-family binaries. Huawei VRP S6730
-   (ARM32 LE) and NE40E (ARM64 LE) firmware contained hundreds of exec-class imports that
-   batch_plt_intersect() silently dropped.
+ implementation returned empty results for all ARM-family binaries. Huawei VRP S6730
+ (ARM32 LE) and NE40E (ARM64 LE) firmware contained hundreds of exec-class imports that
+ batch_plt_intersect() silently dropped.
 
 ---
 
@@ -80,7 +80,7 @@ was confirmed on Huawei VRP S6730 V200R024 ARM32 LE firmware.
 **ARM64 LE** uses `.rela.plt` with 24-byte RELA entries, but r_info is packed little-endian: the
 low 32 bits hold the reloc type and the high 32 bits hold the symbol index. The x86-64 path read
 r_info as a big-endian uint64, which inverted the two halves and produced sym_idx = 0 for every
-entry. The fix uses `struct.unpack('<QQq', ...)` with `R_AARCH64_JUMP_SLOT = 0x402` and stub VA =
+entry. The fix uses `struct.unpack('<QQq',...)` with `R_AARCH64_JUMP_SLOT = 0x402` and stub VA =
 plt_base + 32 + slot_index * 16. Confirmed on Huawei VRP NE40E V800R023 and V800R024 ARM64 LE
 firmware (HiSilicon Hi1280 MPU).
 

@@ -48,7 +48,7 @@ PEFABIClobberScanner.from_bytes(code: bytes, base_va: int = 0)
 ```
 
 `code` is the raw bytes of the PEF code section.  `base_va` is the virtual
-address of the first byte (offset 0 in `code`).  All sink VAs and stop VAs in
+address of the first byte (offset 0 in `code`). All sink VAs and stop VAs in
 results are relative to `base_va`.
 
 ---
@@ -98,14 +98,14 @@ class ABIClobberFinding:
 PEFABIClobberScanner.report(findings: List[ABIClobberFinding]) -> str
 ```
 
-Static method.  Returns a multi-line string summary: count header followed by
+Static method. Returns a multi-line string summary: count header followed by
 one `fmt()` line per finding, sorted by (site_va, check_reg).
 
 ---
 
 ## PPC32 instruction coverage
 
-The scanner correctly classifies the following instruction forms.  Each uses
+The scanner correctly classifies the following instruction forms. Each uses
 its own `Template`; no shared field extractor assumes a fixed position.
 
 ### Register-write opcodes
@@ -129,7 +129,7 @@ its own `Template`; no shared field extractor assumes a fixed position.
 | 19 | XO=16, BO=20 | blr | PLAUSIBLE (return) |
 
 Conditional branches (opcode 16) are transparent; the walk continues through
-them.  This is conservative: it may find a write that is only on one branch of
+them. This is conservative: it may find a write that is only on one branch of
 a conditional, which a full CFG analysis would flag.
 
 ---
@@ -146,22 +146,22 @@ ori  r4, r3, 0    → opcode 24  D-logical dest=RA=bits[20:16]=4  ✓ write dete
 ori  r3, r4, 0    → opcode 24  D-logical dest=RA=bits[20:16]=3  ✓ not r4: SAFE preserved
 ```
 
-The old scanner used `(word >> 21) & 0x1f` for all opcodes.  For `ori r4, r3, 0`
+The old scanner used `(word >> 21) & 0x1f` for all opcodes. For `ori r4, r3, 0`
 it extracted RS=3 (the source) instead of RA=4 (the destination) and missed the
-write.  For `ori r3, r4, 0` it extracted RS=4 and falsely treated it as a write
-to r4.  Two separate `Template` objects with different field names resolve this
+write. For `ori r3, r4, 0` it extracted RS=4 and falsely treated it as a write
+to r4. Two separate `Template` objects with different field names resolve this
 at the structural level.
 
 **2. addic (opcode 12) not in detection list**
 
 The old scanner detected opcodes 14 and 15 but not 12 (addic) or 13 (addic.).
 `_PRIMARY_WRITE` is a dict keyed on primary opcode; opcodes 12 and 13 are
-explicit entries.  There is no implicit "other" path.
+explicit entries. There is no implicit "other" path.
 
 **3. Unconditional branch not treated as basic-block boundary**
 
 The old scanner's backward walk crossed `b target` (opcode 18, LK=0) without
-stopping, entering the preceding basic block or function.  `classify()` returns
+stopping, entering the preceding basic block or function. `classify()` returns
 `_UNCOND` for opcode 18 with LK=0; the scanner returns PLAUSIBLE immediately on
 seeing `_UNCOND`.
 
@@ -169,16 +169,16 @@ seeing `_UNCOND`.
 
 ## Limitations
 
-- **PEF only**: designed for Mac OS 8/9 CFM PEF code sections.  For ELF PPC32,
-  use `PPC32TaintTracker` (handles GOT2 PIC, import stubs, linked `.so` binaries).
-- **Intra-block only**: the backward walk does not build a CFG.  It stops at
-  any block-terminating instruction.  A full CFG pass (not yet implemented) would
-  handle paths where the register is set on all predecessor blocks.
+- **PEF only**: designed for Mac OS 8/9 CFM PEF code sections. For ELF PPC32,
+ use `PPC32TaintTracker` (handles GOT2 PIC, import stubs, linked `.so` binaries).
+- **Intra-block only**: the backward walk does not build a CFG. It stops at
+ any block-terminating instruction. A full CFG pass (not yet implemented) would
+ handle paths where the register is set on all predecessor blocks.
 - **No memory taint**: the scanner checks whether the register was *written*, not
-  whether the written value is tainted / network-controlled.  A SAFE verdict means
-  the register has a defined value; it does not certify that value is safe.
+ whether the written value is tainted / network-controlled. A SAFE verdict means
+ the register has a defined value; it does not certify that value is safe.
 - **Update-form RA writes**: `lwzu` (opcode 33), `lhzu` (41), `lhau` (43),
   `lbzu` (35) also write RA (base register update).  These update writes are not
-  currently tracked; only RT is tracked for these opcodes.  This is a
-  conservative under-approximation (may produce PLAUSIBLE when RA was in fact
-  written).  Add RA tracking for update-form opcodes if this causes false positives.
+ currently tracked; only RT is tracked for these opcodes. This is a
+ conservative under-approximation (may produce PLAUSIBLE when RA was in fact
+ written). Add RA tracking for update-form opcodes if this causes false positives.

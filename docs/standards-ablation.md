@@ -1,6 +1,6 @@
 # Ablation Tool Quality and Security Standards
 
-**Version:** 1.3.0: 2026-10-10  
+**Version:** 1.3.0: 2026-10-10 
 **Scope:** All modules in `ablation/analyzers/`, all taint trackers, FORGE gate, and the RE workflow
 
 > For examples of module documentation in practice, see the [Module Reference](./reference-modules/). For workflow documentation patterns, see the [workflows](./workflows/) directory.
@@ -461,56 +461,56 @@ This section lists the concrete requirements derived from all seven frameworks a
 
 ### 8.1 Module Qualification Gate (MQG)
 
-**MQG-001** (ISO 26262 TCL3, NIST SSDF PW.7)  
+**MQG-001** (ISO 26262 TCL3, NIST SSDF PW.7) 
 Every new analyzer module and every taint tracker must pass the SAFE CODE 10-section audit and FORGE gate (`gate_passed=True`) before any `git add`. No exceptions.
 
-**MQG-002** (ISO 26262 TCL3, NIST SSDF PW.8)  
+**MQG-002** (ISO 26262 TCL3, NIST SSDF PW.8) 
 Every taint tracker must have tests that verify ABI register invariants using byte-exact synthetic instruction sequences. Tests must assert specific findings at specific VAs, not just "no exception raised."
 
-**MQG-003** (ISO 26262 TCL3 coverage)  
+**MQG-003** (ISO 26262 TCL3 coverage) 
 `pytest-cov` is in the test suite. Taint trackers require 85% statement coverage. CRITICAL-producing scanners require 80% statement coverage. Coverage report generated on every commit; gate on taint trackers and critical scanners.
 
-**MQG-004** (ISO 26262 TCL3 known anomalies)  
+**MQG-004** (ISO 26262 TCL3 known anomalies) 
 Every taint tracker must have a corresponding `docs/reference-anomalies/<module>.md` file documenting all known false negative and false positive conditions. Format per Section 2.3. Initial content sourced from SAFE CODE residual risk sections and FORGE audit reports.
 
 ### 8.2 Development Process Requirements (DPR)
 
-**DPR-001** (NIST SSDF PO.3)  
+**DPR-001** (NIST SSDF PO.3) 
 Dependencies must be pinned with exact versions and hashes in `requirements/base.txt`. Use `pip install --require-hashes` to enforce integrity.
 
-**DPR-002** (NSA/CISA SBOM)  
+**DPR-002** (NSA/CISA SBOM) 
 Generate an SBOM at each version release using `pip-licenses --format=json`. Save to `ablation-sbom-<version>.json` in the repo root. Not committed to GitHub; generated on demand.
 
-**DPR-003** (NIST SSDF PS.1)  
-Before every push: verify active gh account is `Ablation-Tool`. Command: `gh api user --jq .login` must return `Ablation-Tool` before `git push`.
+**DPR-003** (NIST SSDF PS.1) 
+Before every push: verify active gh account is `Ablation-Tool`. Command: `gh api user --jq.login` must return `Ablation-Tool` before `git push`.
 
-**DPR-004** (NIST SSDF RV.1)  
+**DPR-004** (NIST SSDF RV.1) 
 New dependency versions: run `pip-audit` against `requirements/base.txt` before any dependency bump. Block if any known CVE exists for the proposed version.
 
 ### 8.3 RE Workflow Requirements (RWR)
 
-**RWR-001** (MIL-HDBK-115C Phase 1)  
+**RWR-001** (MIL-HDBK-115C Phase 1) 
 Every engagement starts with a session file (`re/<vendor>/SESSION_<target>.md`) that includes: target identification, artifact hash, tool selection rationale, and documentation plan.
 
-**RWR-002** (MIL-HDBK-115C Phase 2)  
+**RWR-002** (MIL-HDBK-115C Phase 2) 
 `SemanticSearcher.query()` must be run before any manual disassembly on a new binary or new vulnerability class. This is an existing hard rule; this document adds formal standard basis.
 
-**RWR-003** (NIST SP 800-160, byte-verify rule)  
+**RWR-003** (NIST SP 800-160, byte-verify rule) 
 No finding is CONFIRMED without byte-verification of every VA in the code trace. `data[offset:offset+n] == expected_bytes` at each documented address. This rule derives from SP 800-160's assurance evidence requirement.
 
-**RWR-004** (MIL-HDBK-115C Phase 4)  
+**RWR-004** (MIL-HDBK-115C Phase 4) 
 Session files must document the full function inventory for the target (all confirmed names), the tool list used, and all confirmed findings. At project close, a retrospective is written per the `feedback-re-project-retrospective` rule.
 
 ### 8.4 ABI Conformance Tests (ACT)
 
-**ACT-001** (ISO 26262 TCL3 test suite)  
+**ACT-001** (ISO 26262 TCL3 test suite) 
 For each taint tracker, add a `tests/conformance/<arch>_abi_invariants.py` file that tests:
 - Arg register set matches the ISA ABI spec exactly
 - Caller-saved register set matches the ABI spec exactly
 - Return register handling is correct (64-bit return uses correct register pair)
 - `double` type ABI (32-bit or 64-bit) is modeled correctly where applicable
 
-**ACT-002** (ISO 26262 TCL3 regression)  
+**ACT-002** (ISO 26262 TCL3 regression) 
 Each conformance test is a regression anchor. If a refactor changes the register maps, the conformance tests catch it immediately. These tests should be stable across versions unless a new ABI variant is explicitly added.
 
 ---
@@ -614,5 +614,5 @@ This document is updated when:
 
 The source PDFs at `~/Documents/functional-safety-standards/` are the authoritative reference. This document summarizes their requirements in Ablation terms; it does not replace them.
 
-**Last updated:** 2026-10-11 v1.4.0  
+**Last updated:** 2026-10-11 v1.4.0 
 **Next review:** On closure of MHB-ANOMALY formalization (structured anomaly template rollout)

@@ -178,7 +178,7 @@ Messages from your other sessions        accept
 | [**HarmonyOS&nbsp;/&nbsp;ArkTS&nbsp;Analysis**](docs/reference-modules/harmonyos.md) | [1](ablation/analyzers/abc_parser.py)&nbsp;[2](ablation/analyzers/abc_disasm.py) | Parse extracted Ark ABC bytecode, enumerate classes/methods/strings, disassemble and produce JavaScript-like pseudocode. |
 | [**Go&nbsp;Binary&nbsp;Reverse&nbsp;Engineering**](docs/workflows/go-binaries.md) | [1](ablation/analyzers/go_pclntab.py)&nbsp;[2](modules/go_binary_re.py) | Recover supported pclntab function metadata, analyze stripped Go ELF/Mach-O binaries and inspect garble-obfuscated layouts. |
 | [**Erlang&nbsp;/&nbsp;BEAM&nbsp;Analysis**](docs/reference-modules/beam.md) | [1](ablation/analyzers/beam_context.py) | Read BEAM module/export/import/atom data, lift supported bytecode, scan risky imports and compare module sets. |
-| [**MicroPython&nbsp;.mpy&nbsp;Lifter**](docs/reference-modules/mpy-lifter.md) | [1](modules/mpy_lifter.py) | Parse supported .mpy v6 files, lift bytecode to pseudo-Python and flag dangerous imports/calls and direct memory access. |
+| [**MicroPython&nbsp;.mpy&nbsp;Lifter**](docs/reference-modules/mpy-lifter.md) | [1](modules/mpy_lifter.py) | Parse supported.mpy v6 files, lift bytecode to pseudo-Python and flag dangerous imports/calls and direct memory access. |
 | [**Game&nbsp;&&nbsp;Legacy&nbsp;RE**](docs/reference-modules/game-re.md) | [1](ablation/analyzers/engine_pattern_library.py)&nbsp;[2](modules/spu_disassembler.py) | Label known game-engine code and provide selected PS3/Cell, classic Mac, old Windows/DOS and other legacy-format tools. |
 | [**PS3&nbsp;SELF&nbsp;Decryptor**](docs/reference-modules/ps3-self-decryptor.md) | [1](ablation/analyzers/ps3_self_decryptor.py) | Decrypt supported Signed ELF containers using registered keysets, detect key revision and emit a loadable ELF. |
 | [**MCP&nbsp;Server&nbsp;Security&nbsp;Scanner**](docs/reference-modules/mcp-tool-taint-scanner.md) | [1](ablation/analyzers/mcp_tool_taint_scanner.py) | Scan Python/JavaScript/TypeScript MCP source for exposed bindings, missing-authentication patterns and dangerous tool methods. |
@@ -230,7 +230,7 @@ Messages from your other sessions        accept
 | [**Stripped&nbsp;function&nbsp;discovery**](docs/reference-modules/core.md) | [1](ablation/analyzers/arm32_function_scanner.py)&nbsp;[2](ablation/analyzers/static_elf32_func_start_scanner.py) | Recover candidate entries from architecture-specific prologues, calls, reset vectors and available metadata. |
 | [**Flat-ROM&nbsp;function&nbsp;discovery**](docs/reference-modules/core.md) | [1](ablation/analyzers/arm32_function_scanner.py)&nbsp;[2](ablation/analyzers/static_elf32_func_start_scanner.py) | Harvest call targets and prologues without ELF headers, using the supported ECU decoder/layout paths. |
 | [**i386&nbsp;absolute&nbsp;cross-references**](docs/reference-modules/core.md) | [1](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;[2](ablation/analyzers/dwarf_loongarch64.py) | Find x86-32 string/data references encoded as absolute immediates. |
-| [**Debug&nbsp;metadata&nbsp;recovery**](docs/reference-modules/core.md) | [1](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;[2](ablation/analyzers/dwarf_loongarch64.py) | Recover LoongArch function boundaries from .eh_frame, DWARF and BTF where available. |
+| [**Debug&nbsp;metadata&nbsp;recovery**](docs/reference-modules/core.md) | [1](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;[2](ablation/analyzers/dwarf_loongarch64.py) | Recover LoongArch function boundaries from.eh_frame, DWARF and BTF where available. |
 | [**Swift&nbsp;symbol&nbsp;demangling**](docs/reference-modules/core.md) | [1](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;[2](ablation/analyzers/dwarf_loongarch64.py) | Best-effort Swift symbol decoding with an optional swift-demangle fallback. |
 
 </details>
@@ -671,7 +671,7 @@ Messages from your other sessions        accept
 |---|---|
 | [**DEX**](docs/reference-modules/android.md) | Dalvik · ART |
 | [**ARK**](docs/reference-modules/harmonyos.md) | ArkTS |
-| [**MicroPython**](docs/reference-modules/mpy-lifter.md) | .mpy v6 |
+| [**MicroPython**](docs/reference-modules/mpy-lifter.md) |.mpy v6 |
 
 </details>
 
@@ -865,7 +865,7 @@ It defines four phases:
 
 Feel free to contact me if you have any questions, ideas, complaints or bugs.
 
-📧 ablation@nuclide-research.com  
+📧 ablation@nuclide-research.com 
 𝕏 [@showxlate](https://x.com/showxlate)
 
 </details>

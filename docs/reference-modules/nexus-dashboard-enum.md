@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Cisco Nexus Dashboard, NDI, NDFC, NDO, and Data Broker enumeration. Single-SSO architecture means one credential set reaches APIC + NDFC + NDO + Data Broker. Kafka anomaly export is unauthenticated by default — this module checks for that exposure.
+Cisco Nexus Dashboard, NDI, NDFC, NDO, and Data Broker enumeration. Single-SSO architecture means one credential set reaches APIC + NDFC + NDO + Data Broker. Kafka anomaly export is unauthenticated by default, this module checks for that exposure.
 
 Also covers adjacent DevOps/CI-CD infrastructure commonly co-located with Nexus Dashboard environments: Jenkins, GitLab, Tekton, ArgoCD, Flux GitOps, Crossplane, SonarQube, JFrog Artifactory, and Sonatype Nexus Repository. Probe functions: `probe_jenkins_exposure`, `probe_gitlab_exposure`, `probe_tekton_pipeline_exposure`, `probe_argocd_api`, `probe_flux_gitops_exposure`, `probe_crossplane_exposure`, `probe_sonarqube_exposure`, `probe_artifactory_nexus_registry`.
 

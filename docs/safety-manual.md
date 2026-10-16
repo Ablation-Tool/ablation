@@ -1,7 +1,7 @@
 # Ablation Safety Manual
 
-**Version:** 1.0.0: 2026-10-10  
-**Standard:** ISO 26262 Part 8 Clause 11 (TCL3 tool qualification requirement)  
+**Version:** 1.0.0: 2026-10-10 
+**Standard:** ISO 26262 Part 8 Clause 11 (TCL3 tool qualification requirement) 
 **Scope:** All taint trackers and all scanners that produce CRITICAL findings
 
 This document is the standalone safety manual required by ISO 26262 Part 8 Clause 11 for TCL3-qualified tools. It describes when each qualified module can be trusted, when it cannot, and what the user must do when confidence is insufficient.
@@ -108,6 +108,6 @@ This safety manual is maintained alongside the Ablation codebase. It is updated 
 - The ABI conformance test suite changes
 - A constraint in Section 3 is resolved or a new one is added
 
-**Source document:** `docs/standards-ablation.md` §2.5 (the section this file extracts)  
-**Known anomalies:** `docs/reference-anomalies/`  
+**Source document:** `docs/standards-ablation.md` §2.5 (the section this file extracts) 
+**Known anomalies:** `docs/reference-anomalies/` 
 **Qualification plan:** `docs/standards-ablation.md` §10 compliance matrix

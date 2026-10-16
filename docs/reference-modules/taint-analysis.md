@@ -201,6 +201,6 @@ Each `TaintFinding` includes:
 | `source_name` | Name of the taint source (e.g., `recv`) |
 | `arg_index` | Which argument to the sink is tainted (0-indexed) |
 | `chain` | `[(va, register, operation)]` steps from source to sink |
-| `path` | `[caller_va, ...]` function VAs traversed interprocedurally |
+| `path` | `[caller_va,...]` function VAs traversed interprocedurally |
 
 A finding with `path=[0x1000, 0x2000, 0x3000]` means taint entered at `0x1000`, passed through `0x2000`, and reached the sink call in `0x3000`. The `chain` within each function shows exactly which registers carried the taint at each instruction.

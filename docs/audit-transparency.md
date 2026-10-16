@@ -1,7 +1,7 @@
 # Audit Transparency Statement
 
-**Version:** 1.1.0: 2026-10-15  
-**Standard:** CISA Secure by Design: Principle 2: Embrace Radical Transparency and Accountability  
+**Version:** 1.1.0: 2026-10-15 
+**Standard:** CISA Secure by Design: Principle 2: Embrace Radical Transparency and Accountability 
 **Scope:** All modules in `ablation/analyzers/`; all modules in `modules/`; all taint trackers; FORGE gate
 
 This document satisfies CISA-SBD2 (Transparency) in the Ablation compliance matrix. It records how Ablation's limitations, quality gates, and audit results are disclosed to users and maintainers.

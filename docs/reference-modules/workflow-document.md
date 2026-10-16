@@ -3,17 +3,17 @@
 ## Why this exists
 
 1. `SESSION.md` is human-maintained flat markdown with no schema validation on stage
-   outputs. A `finding_confirmation` missing `byte_proof` is not caught until FORGE
-   runs on the RE module, at which point the finding may already be registered.
+ outputs. A `finding_confirmation` missing `byte_proof` is not caught until FORGE
+ runs on the RE module, at which point the finding may already be registered.
 
 2. Stage routing is implicit in prose. There is no machine-checkable rule that
    `candidate_profile` must follow `semantic_sweep` or that `registration` requires
-   a passing `forge_gate_passed` field. Session context carries this knowledge; the
-   document does not.
+ a passing `forge_gate_passed` field. Session context carries this knowledge; the
+ document does not.
 
 3. Stage outputs are untyped. An integer virtual address stored as a string, a
-   missing required field, or a candidates list containing non-dict items produces
-   no error until a downstream tool tries to use the value.
+ missing required field, or a candidates list containing non-dict items produces
+ no error until a downstream tool tries to use the value.
 
 `WorkflowDocument` addresses all three gaps. Each pipeline stage has a schema;
 `advance()` validates the populated instance before committing and records a
@@ -111,7 +111,7 @@ a list of error strings; an empty list means the instance is valid.
 Checks:
 - All keys in `schema["required"]` are present.
 - Each key in `schema["properties"]` with a declared `"type"` matches the expected
-  Python type. Supported type names: `str`, `int`, `float`, `bool`, `list`, `dict`.
+ Python type. Supported type names: `str`, `int`, `float`, `bool`, `list`, `dict`.
 
 ---
 

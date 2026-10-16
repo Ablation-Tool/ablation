@@ -244,26 +244,26 @@ The false-positive filter eliminates low-table matches from the 1024 KB full fla
 ## Limitations
 
 - **1024 KB full flash identification.** The community MS45 XML was authored against 116 KB
-  calibration partials. The `internalidaddress` for full flash variants points to ERASED memory
-  (0xFF fill). `identify_rom()` returns `None` for full flash ROMs because no variant produces
-  enough table matches.
+ calibration partials. The `internalidaddress` for full flash variants points to ERASED memory
+ (0xFF fill). `identify_rom()` returns `None` for full flash ROMs because no variant produces
+ enough table matches.
 
 - **Variants absent from XML.** The corpus contains firmware files (e.g. `MS45.1 325i manual.bin`)
-  whose ECU variant is not in the XML file. The variant's `xmlid` was never contributed to the
-  community definition. `identify_rom()` returns `None`; use `variants()` to check coverage before
-  analysis.
+ whose ECU variant is not in the XML file. The variant's `xmlid` was never contributed to the
+ community definition. `identify_rom()` returns `None`; use `variants()` to check coverage before
+ analysis.
 
 - **Duplicate xmlid entries.** Some community XML files reuse the same `xmlid` for a 116 KB and
-  1024 KB variant of the same ECU (same firmware string appears in both partials). `_variant_by_id`
-  returns the first match, which is correct for calibration partials. To select the 1024 KB
-  variant explicitly, call `calibration_tables()` with the full xmlid and inspect the filesize in
+ 1024 KB variant of the same ECU (same firmware string appears in both partials). `_variant_by_id`
+ returns the first match, which is correct for calibration partials. To select the 1024 KB
+ variant explicitly, call `calibration_tables()` with the full xmlid and inspect the filesize in
   `variants()`.
 
 - **Switch and BitwiseSwitch tables.** These are present in the MS45 base definition but have no
-  meaningful scaling expression. They are parsed and returned by `calibration_tables()` as
+ meaningful scaling expression. They are parsed and returned by `calibration_tables()` as
   `table_type="Switch"` or `"BitwiseSwitch"` with `scale=1.0`, but `read_data()` on them returns
-  raw bit patterns rather than decoded switch states.
+ raw bit patterns rather than decoded switch states.
 
 - **Non-linear expressions.** Any expression not matched by `_expr_to_linear` returns `(0.0, 0.0)`
-  as a sentinel. This includes `1/(x*k)`, `log(x)`, `exp(x)`, and any multi-variable form. The
-  table is still parsed and returned; only the scaling is absent.
+ as a sentinel. This includes `1/(x*k)`, `log(x)`, `exp(x)`, and any multi-variable form. The
+ table is still parsed and returned; only the scaling is absent.

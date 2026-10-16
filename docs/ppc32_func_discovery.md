@@ -13,8 +13,8 @@ Three-pass discovery:
 1. **Entry point**: from ELF header
 2. **Branch targets**: scan for `bl` (branch-and-link) and `bla` (branch-and-link-absolute) instructions
 3. **Prologue patterns**: standard PowerPC function prologues:
-   - `mflr r0; stw r0, X(r1); stwu r1, -Y(r1)` (full prologue)
-   - `stwu r1, -<frame>(r1)` (leaf/frameless functions)
+ - `mflr r0; stw r0, X(r1); stwu r1, -Y(r1)` (full prologue)
+ - `stwu r1, -<frame>(r1)` (leaf/frameless functions)
 
 ## Why not XRefGraph?
 

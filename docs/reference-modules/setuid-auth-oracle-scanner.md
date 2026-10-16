@@ -4,11 +4,11 @@
 
 Four things were not possible before in Ablation:
 
-1. **Detect CWE-307 (no rate limiting) in setuid validators without taint analysis.** A setuid binary that calls `getspnam`/`crypt`/`strcmp` and returns the result via exit code is a brute-force oracle. This module flags the pattern from PLT imports alone — no taint run required. Before this module, the pattern had to be found by manual PLT inspection on each new binary.
+1. **Detect CWE-307 (no rate limiting) in setuid validators without taint analysis.** A setuid binary that calls `getspnam`/`crypt`/`strcmp` and returns the result via exit code is a brute-force oracle. This module flags the pattern from PLT imports alone, no taint run required. Before this module, the pattern had to be found by manual PLT inspection on each new binary.
 
-2. **Distinguish PAM-mediated auth from raw shadow validators.** PAM enforces rate limiting via `pam_tally2`, `faillock`, and audit hooks. A binary that calls `getspnam` directly (no `pam_start` in PLT) bypasses all of that. The module uses `pam_start` absence as a strong signal for missing controls, and checks rate-limiting indicators *per oracle function body only* — not binary-wide — so a `usleep` on a different path does not mask a real oracle.
+2. **Distinguish PAM-mediated auth from raw shadow validators.** PAM enforces rate limiting via `pam_tally2`, `faillock`, and audit hooks. A binary that calls `getspnam` directly (no `pam_start` in PLT) bypasses all of that. The module uses `pam_start` absence as a strong signal for missing controls, and checks rate-limiting indicators *per oracle function body only*, not binary-wide, so a `usleep` on a different path does not mask a real oracle.
 
-3. **Locate the validation function and its callers.** The module walks every function body to find which function(s) call both a shadow accessor and a crypt function, then walks one level up the call graph to show reachability from entry points — replacing the manual call trace needed to confirm exploitability.
+3. **Locate the validation function and its callers.** The module walks every function body to find which function(s) call both a shadow accessor and a crypt function, then walks one level up the call graph to show reachability from entry points, replacing the manual call trace needed to confirm exploitability.
 
 4. **Flag weak PRNG seeding alongside the oracle in one pass.** OTP generation seeded with `gettimeofday().tv_usec` (~20 bits of entropy) is a CWE-338 pattern that commonly co-occurs with the oracle pattern in the same binary. The module reports both findings together so neither is missed during triage.
 
@@ -67,9 +67,9 @@ x86-64 ELF only. The constructor raises `ValueError` for any other architecture.
 ## Limitations
 
 - **x86-64 only.** Capstone is initialized with `CS_ARCH_X86 / CS_MODE_64`. Passing any other architecture raises `ValueError` at construction time.
-- **One-level caller walk.** `callers` shows direct callers only — not the full reachability chain.
+- **One-level caller walk.** `callers` shows direct callers only: not the full reachability chain.
 - **CWE-338 is binary-wide, not per-function.** The weak PRNG check looks for `srandom`/`time`/`random` in PLT, which confirms the pattern exists in the binary but does not pinpoint which function seeds with time. Use `WindowAnalyzer.dump_text()` to trace the exact OTP generation site.
-- **Rate-limit check is per-oracle-function only.** A `usleep()` present in PLT but only on an unrelated code path does not suppress the finding. This is intentional — see the design note below.
+- **Rate-limit check is per-oracle-function only.** A `usleep()` present in PLT but only on an unrelated code path does not suppress the finding. This is intentional: see the design note below.
 
 ## Design note: per-function rate-limit check
 

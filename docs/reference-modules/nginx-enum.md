@@ -8,16 +8,16 @@ Nginx attack surface enumeration covering: server tokens / version disclosure, C
 
 ## Probe functions
 
-- `check_server_tokens(host, port)` — Server header version disclosure
-- `check_cve_2021_23017(host, port)` — DNS resolver off-by-one
-- `check_autoindex(host, port)` — directory listing exposure
-- `check_internal_endpoint_exposure(host, port)` — internal path probing
-- `probe_tls_configuration(host, port)` — TLS session tickets, SNI enforcement, self-signed cert, OCSP
-- `probe_lfi_surface(host, port)` — LFI and SSRF via include/page/file parameters
-- `probe_nginx_ingress_controller(host, port)` — ingress-nginx /healthz, :10254/metrics, stub_status, XFF injection
-- `probe_nginx_rate_limit_bypass(host, port)` — rate-limit absence and X-Real-IP bypass
-- `probe_nginx_error_log_exposure(host, port)` — alias traversal to log/config files and error body path disclosure
-- `probe_nginx_diagnostic_endpoint_exposure(host, port)` — stub_status, phpinfo, server-status, error redirects
+- `check_server_tokens(host, port)`: Server header version disclosure
+- `check_cve_2021_23017(host, port)`: DNS resolver off-by-one
+- `check_autoindex(host, port)`: directory listing exposure
+- `check_internal_endpoint_exposure(host, port)`: internal path probing
+- `probe_tls_configuration(host, port)`: TLS session tickets, SNI enforcement, self-signed cert, OCSP
+- `probe_lfi_surface(host, port)`: LFI and SSRF via include/page/file parameters
+- `probe_nginx_ingress_controller(host, port)`: ingress-nginx /healthz,:10254/metrics, stub_status, XFF injection
+- `probe_nginx_rate_limit_bypass(host, port)`: rate-limit absence and X-Real-IP bypass
+- `probe_nginx_error_log_exposure(host, port)`: alias traversal to log/config files and error body path disclosure
+- `probe_nginx_diagnostic_endpoint_exposure(host, port)`: stub_status, phpinfo, server-status, error redirects
 
 ## Constructor
 

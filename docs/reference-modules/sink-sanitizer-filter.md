@@ -6,21 +6,21 @@
 engagement (TG-FAD-2):
 
 1. **SinkArgClassifier and SanitizerDetector produced independent, unconnected
-   output.**  SinkArgClassifier identified exec-sink call sites where the argument
-   comes from a caller-supplied register (ARG_PROPAGATED).  SanitizerDetector
-   identified functions that enforce shell-safe allowlists.  Neither knew about
-   the other.  The analyst had to disassemble each ARG_PROPAGATED site manually,
-   find the sanitizer call, check that it gated the exec path, and confirm the
-   same variable was validated — 30–60 minutes per site on a stripped binary.
-   On FortiADC authd (221 functions) this was 5 sites to triage manually.
+ output.** SinkArgClassifier identified exec-sink call sites where the argument
+ comes from a caller-supplied register (ARG_PROPAGATED). SanitizerDetector
+ identified functions that enforce shell-safe allowlists. Neither knew about
+ the other. The analyst had to disassemble each ARG_PROPAGATED site manually,
+ find the sanitizer call, check that it gated the exec path, and confirm the
+ same variable was validated, 30–60 minutes per site on a stripped binary.
+ On FortiADC authd (221 functions) this was 5 sites to triage manually.
 
-2. **No automated guard verification.**  Even when a sanitizer was obviously
-   present in the function, confirming that a conditional branch on its return
-   value actually blocked the exec path (vs. the sanitizer being called for
-   logging only, with execution continuing unconditionally) required manual trace
-   through the control flow.
+2. **No automated guard verification.** Even when a sanitizer was obviously
+ present in the function, confirming that a conditional branch on its return
+ value actually blocked the exec path (vs. the sanitizer being called for
+ logging only, with execution continuing unconditionally) required manual trace
+ through the control flow.
 
-Both gaps are closed by this module.  It connects the two existing analyzers,
+Both gaps are closed by this module. It connects the two existing analyzers,
 disassembles each ARG_PROPAGATED function, verifies the sanitizer-and-guard
 pattern, and performs an arg-identity check (same register source at both call
 sites) to rule out coincidental rdi sharing.
@@ -36,11 +36,11 @@ three checks on the containing function's disassembly:
 | Check | What it verifies |
 |---|---|
 | **Sanitizer present** | A `SanitizerDetector`-identified `SHELL_SAFE` function is called within `_SANITIZER_SCAN_WINDOW` (256) instructions before the exec call |
-| **Guard present** | Within `_GUARD_SCAN_WINDOW` (12) instructions after the sanitizer call: `test eax, eax` (or `cmp`) followed by a conditional jump — execution is blocked when the sanitizer rejects |
+| **Guard present** | Within `_GUARD_SCAN_WINDOW` (12) instructions after the sanitizer call: `test eax, eax` (or `cmp`) followed by a conditional jump: execution is blocked when the sanitizer rejects |
 | **Arg identity** | `rdi` at the sanitizer call site and `rdi` at the exec call site both trace backward to the same source register (same variable, not coincidental rdi sharing) |
 
 Sites passing all three are reclassified to `SANITIZER_VALIDATED` (severity
-lowered from HIGH to LOW).  Partial matches are left `ARG_PROPAGATED`.
+lowered from HIGH to LOW). Partial matches are left `ARG_PROPAGATED`.
 
 ### Arg-identity trace
 
@@ -48,14 +48,14 @@ lowered from HIGH to LOW).  Partial matches are left `ARG_PROPAGATED`.
 to 80 instructions looking for the instruction that last wrote to `rdi`:
 
 - `mov rdi, rX` where `rX` is non-volatile (r12–r15, rbx, rbp): follows one
-  level backward to find what set rX.
+ level backward to find what set rX.
 - `mov rdi, [rX + N]`: returns `rX` as a proxy (struct-field load; matching
-  base register is sufficient for the typical firmware save-restore pattern).
+ base register is sufficient for the typical firmware save-restore pattern).
 - `lea rdi, [rsp/rbp + N]`: returns `'STACK'` (stack buffer address).
 - Call instruction encountered before a setter: returns `None` (rdi was
-  clobbered by the callee; source is unknown).
+ clobbered by the callee; source is unknown).
 - No setter found within window: returns the current target register (rdi if
-  never changed — the function's first argument passed through unchanged).
+ never changed, the function's first argument passed through unchanged).
 
 ---
 
@@ -92,7 +92,7 @@ results = flt.apply(clf.classify_all())
 ### `SinkSanitizerFilter.from_path(path: str) → SinkSanitizerFilter`
 
 Loads the binary, runs `SanitizerDetector.detect()`, builds the function-start
-list.  Run once; `apply()` is then cheap for any classification list.
+list. Run once; `apply()` is then cheap for any classification list.
 
 ### `SinkSanitizerFilter.from_context(ctx) → SinkSanitizerFilter`
 
@@ -101,9 +101,9 @@ starts; avoids rebuilding).
 
 ### `SinkSanitizerFilter.apply(classifications) → List[SinkClassification]`
 
-Main entry point.  Returns a new list.  `ARG_PROPAGATED` entries that pass all
+Main entry point. Returns a new list. `ARG_PROPAGATED` entries that pass all
 three checks are replaced with a copy whose `verdict = 'SANITIZER_VALIDATED'`
-and `severity = 'LOW'`.  Non-`ARG_PROPAGATED` entries are returned unchanged
+and `severity = 'LOW'`. Non-`ARG_PROPAGATED` entries are returned unchanged
 (no side effects on the input list).
 
 ### `SinkSanitizerFilter.report(classifications) → str`
@@ -119,18 +119,18 @@ Module-level constant for verdict comparisons.
 
 ## Limitations
 
-- **x86-64 only.**  Arg-identity trace uses x86-64 register families and
-  calling convention (rdi as arg0).  For PPC64, ARM64, or MIPS targets, use
-  architecture-specific taint trackers.
-- **Single-function scope.**  Only scans within the function containing the
-  exec call site.  Sanitizer calls in caller functions (interprocedural guards)
-  are not detected — use `TaintTracker.run_interprocedural()` for those.
-- **Linear scan, not CFG.**  The backward scan does not follow conditional
-  branches.  A sanitizer on an alternate path (not always executed before the
-  exec call) could produce a false negative — but that pattern is also
-  architecturally unsafe, so not downgrading it is the correct conservative choice.
-- **Memory-dereference identity.**  `mov rdi, [r14+0x10]` and `mov rdi, [r14+0x18]`
-  both trace to `'r14'` — different struct fields sharing the same base register
-  will match.  False positives from this are extremely rare in practice (different
-  string fields of the same struct would rarely both be passed to exec sinks in
-  the same function).
+- **x86-64 only.** Arg-identity trace uses x86-64 register families and
+ calling convention (rdi as arg0). For PPC64, ARM64, or MIPS targets, use
+ architecture-specific taint trackers.
+- **Single-function scope.** Only scans within the function containing the
+ exec call site. Sanitizer calls in caller functions (interprocedural guards)
+ are not detected, use `TaintTracker.run_interprocedural()` for those.
+- **Linear scan, not CFG.** The backward scan does not follow conditional
+ branches. A sanitizer on an alternate path (not always executed before the
+ exec call) could produce a false negative, but that pattern is also
+ architecturally unsafe, so not downgrading it is the correct conservative choice.
+- **Memory-dereference identity.** `mov rdi, [r14+0x10]` and `mov rdi, [r14+0x18]`
+ both trace to `'r14'`, different struct fields sharing the same base register
+ will match. False positives from this are extremely rare in practice (different
+ string fields of the same struct would rarely both be passed to exec sinks in
+ the same function).

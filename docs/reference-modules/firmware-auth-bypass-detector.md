@@ -90,5 +90,5 @@ Serial (touch controllers): `SetCommState`, `SetCommTimeouts`, `PurgeComm`, `Esc
 
 Gate: **PASSED**. Two fixes applied:
 - CWE-770: added `_MAX_PE_BYTES=256MB` + `os.path.getsize()` guard in `_load()` before `lief.parse()` and `Path.read_bytes()`.
-- CWE-755: wrapped `lief.parse()` in `try/except Exception` — lief can raise C++ exceptions that bypass the `is None` null check.
+- CWE-755: wrapped `lief.parse()` in `try/except Exception`: lief can raise C++ exceptions that bypass the `is None` null check.
 No HIGH or CRITICAL findings remain.

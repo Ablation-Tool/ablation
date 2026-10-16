@@ -59,17 +59,17 @@ These are suggestions, not rules. Use whatever color fits the output.
 from ablation.core.render import box, sbox, section, arrow, strip
 ```
 
-`box(lines, color=WHITE)` — double-border box. Use for top-level containers.
+`box(lines, color=WHITE)`: double-border box. Use for top-level containers.
 
-`sbox(lines, color=GRAY)` — single-border box. Use for data blocks and reports.
+`sbox(lines, color=GRAY)`: single-border box. Use for data blocks and reports.
 
-`section(title, color=GRAY)` — horizontal rule with a title. Use for layer headers.
+`section(title, color=GRAY)`: horizontal rule with a title. Use for layer headers.
 
-`arrow(label='', color=GRAY)` — a `│` with an optional inline label.
+`arrow(label='', color=GRAY)`: a `│` with an optional inline label.
 
-`strip(s)` — removes all ANSI escape sequences from a string. Use when computing display widths.
+`strip(s)`: removes all ANSI escape sequences from a string. Use when computing display widths.
 
-Each function respects `render.MODE` — in plain mode they emit no escape codes.
+Each function respects `render.MODE`, in plain mode they emit no escape codes.
 
 ---
 

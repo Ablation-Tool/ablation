@@ -75,10 +75,10 @@ BinaryLifter.report('/path/to/binary', 0x12340, arch='arm64')
 
 Ablation has no config file. Behaviour is controlled by:
 
-- **`arch=` strings** passed to `BinaryLifter`, `TaintTracker`, and related tools — see [Decompiler and IR Lifter Concepts](concepts-decompiler.md#complete-tool-and-isa-reference) for the full reference.
-- **`BinaryContext.set_name(va, name, source=)`** — name confirmed functions; names propagate to all tools in the session.
-- **`PatternLibrary` / `FindingRegistry`** — persist confirmed patterns and findings across sessions for flywheel replay.
-- **FORGE cache** — stored at `~/.ablation/forge_cache.json`; keyed by module source hash; cleared automatically on source change.
+- **`arch=` strings** passed to `BinaryLifter`, `TaintTracker`, and related tools: see [Decompiler and IR Lifter Concepts](concepts-decompiler.md#complete-tool-and-isa-reference) for the full reference.
+- **`BinaryContext.set_name(va, name, source=)`**: name confirmed functions; names propagate to all tools in the session.
+- **`PatternLibrary` / `FindingRegistry`**: persist confirmed patterns and findings across sessions for flywheel replay.
+- **FORGE cache**: stored at `~/.ablation/forge_cache.json`; keyed by module source hash; cleared automatically on source change.
 
 ---
 

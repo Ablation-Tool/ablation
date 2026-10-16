@@ -175,13 +175,13 @@ No additional items in this category based on the visible code.
 - Gate + FormatStringScanner: `from_path(fmt_vuln_elf).scan()` → FORMAT_STRING finding present.
 - Gate + HeapVulnScanner: `from_path(heap_vuln_elf).scan()` → HEAP finding present.
 
-**B.3 End-to-End Tests**
+**B.3 Tests**
 - Flow: Build a known-vulnerable binary, run gate, check exit code.
-  - Steps: compile test binary with known strcpy(recv()) pattern → run gate → verify exit 1 and TAINT_FLOW finding in output.
-  - Failure variant: pass a non-ELF file → verify exit 0 with no crash (silent failure path).
+ - Steps: compile test binary with known strcpy(recv()) pattern → run gate → verify exit 1 and TAINT_FLOW finding in output.
+ - Failure variant: pass a non-ELF file → verify exit 0 with no crash (silent failure path).
 - Flow: `--strict` mode.
-  - Steps: compile binary with MEDIUM-severity pattern → run gate with --strict → verify exit 1.
-  - Normal variant: run gate without --strict → verify exit 0.
+ - Steps: compile binary with MEDIUM-severity pattern → run gate with --strict → verify exit 1.
+ - Normal variant: run gate without --strict → verify exit 0.
 
 **B.4 Non-Functional Tests**
 - Stress: run gate on a large binary (10MB+ ELF, 50K+ functions). Validate scan() completes without OOM.

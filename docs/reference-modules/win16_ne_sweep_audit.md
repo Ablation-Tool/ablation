@@ -15,7 +15,7 @@
 Assumptions:
 - Called as `python3 sweeps/win16_ne_sweep.py <target.exe> --vendor V --product P --version V`
 - Target files are untrusted (attacker-supplied NE binaries).
-- ablation package is installed (`pip install -e .`) before invocation.
+- ablation package is installed (`pip install -e.`) before invocation.
 - `sweeps/base_sweep.py` exports `VULN_PROFILES` as a list of `(name, query)` tuples.
 - `ablation.analyzers.describe_function` and `FindingRegistry` are importable.
 - `sentence_transformers.SentenceTransformer` is available (ablation[ml] or full install).
@@ -28,7 +28,7 @@ Assumptions:
 **Positive: NE `align_shift=0` fallback is correct.**
 Type: Positive. Location: `NEBinary._parse()` line 537–538. The NE spec states that an `align_shift` of 0 means the default 512-byte alignment (2^9). The `if self.align_shift == 0: self.align_shift = 9` guard matches this. ✓
 
-**Positive: `file_size = ... or 65536` handles the NE size=0 convention.**
+**Positive: `file_size =... or 65536` handles the NE size=0 convention.**
 Type: Positive. Location: `NEBinary._parse()` line 556. NE spec: a segment file size of 0 means the segment occupies a full 64KB page. Defaulting to 65536 is correct. ✓
 
 **Risk: `_parse()` reads name at `ne_off + imp_names_off + name_off` without bounds check.**
@@ -54,7 +54,7 @@ Recommendation: Low priority. Acceptable for the sweep use case.
 Location: entire file. AST scan confirms zero uses of `subprocess`, `os.system`, `eval`, `exec`, `__import__`, `open(... 'w')` on attacker-supplied paths. ✓
 
 **Positive: Report output path is always `Path(__file__).parent.parent / "reports"`.**
-Location: `main()` lines 1007–1013. The output directory is derived from the script's own location, not from user-supplied arguments. The filename is constructed from `--vendor`, `--product`, `--version` arguments after regex sanitization (`re.sub(r'[^a-z0-9_\-]', '', ...)`). Path traversal via arguments is not possible. ✓
+Location: `main()` lines 1007–1013. The output directory is derived from the script's own location, not from user-supplied arguments. The filename is constructed from `--vendor`, `--product`, `--version` arguments after regex sanitization (`re.sub(r'[^a-z0-9_\-]', '',...)`). Path traversal via arguments is not possible. ✓
 
 **Low: `_semantic_sweep_ne` has no `try/except` wrapper.**
 Severity: Low. Location: `_sweep_ne_one()` lines 892–897. `_semantic_sweep_ne` calls `model.encode()` and `registry.prior_queries()`. If the model is missing or the registry is corrupt, the exception propagates to the caller's `try/except Exception as e:` which sets `result['error']` and returns; correct behavior. However, the reported error will include `traceback.format_exc()` which reveals internal paths.

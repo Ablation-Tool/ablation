@@ -5,21 +5,21 @@
 Three things were not possible before in Ablation:
 
 1. **No parser could read TI COFF2 object files or AR archives.** The TI Code Generation
-   Tools (cl2000, c29clang) produce COFF, not ELF. All existing Ablation binary loaders
-   rely on lief, which does not support TI COFF. The C28x DSP target: used in F28P55x
-   MCUs and compiled by the TI NNC for EdgeAI Studio deployments: was entirely opaque.
+ Tools (cl2000, c29clang) produce COFF, not ELF. All existing Ablation binary loaders
+ rely on lief, which does not support TI COFF. The C28x DSP target: used in F28P55x
+ MCUs and compiled by the TI NNC for EdgeAI Studio deployments: was entirely opaque.
 
 2. **The weak-symbol risk in NNC-generated C28x firmware was undetectable.** TI COFF
-   has no `STB_WEAK` binding (ELF concept); instead, `__attribute__((weak))` maps to
-   storage class `C_UEXT = 19` (tentative external definition). This storage class
-   appears in the COFF symbol table and allows a strong `C_EXT` symbol of the same name
-   to override it at link time. Without a COFF parser, `TiNNCScanner` could not surface
-   this risk for C28x targets.
+ has no `STB_WEAK` binding (ELF concept); instead, `__attribute__((weak))` maps to
+ storage class `C_UEXT = 19` (tentative external definition). This storage class
+ appears in the COFF symbol table and allows a strong `C_EXT` symbol of the same name
+ to override it at link time. Without a COFF parser, `TiNNCScanner` could not surface
+ this risk for C28x targets.
 
 3. **AR archive traversal for COFF members was not implemented.** The TI NNC emits `mod.a`
-   as a Unix AR archive containing COFF2 `.obj` members. Walking the archive, skipping
-   the AR symbol-table members (`/` and `//` names), and correctly aligning to even-byte
-   boundaries was not handled by any existing Ablation code path.
+ as a Unix AR archive containing COFF2 `.obj` members. Walking the archive, skipping
+ the AR symbol-table members (`/` and `//` names), and correctly aligning to even-byte
+ boundaries was not handled by any existing Ablation code path.
 
 ---
 

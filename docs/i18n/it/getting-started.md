@@ -47,7 +47,7 @@ print(ctx.summary())
 
 **Prima esecuzione:** da 0,5 a 5 secondi a seconda della dimensione del binario. Ablation costruisce e mette in cache in `~/.ablation/cache/<sha256>_<name>.json`.
 
-**Ogni esecuzione successiva:** 110 ms. La cache è indicizzata per SHA256 — una build diversa dello stesso nome binario si ricostruisce automaticamente.
+**Ogni esecuzione successiva:** 110 ms. La cache è indicizzata per SHA256, una build diversa dello stesso nome binario si ricostruisce automaticamente.
 
 Output di esempio:
 
@@ -93,7 +93,7 @@ for r in results:
     print(f"  0x{r.va:x}  {r.name or hex(r.va):<50s}  score={r.score:.3f}")
 ```
 
-**Tempo di esecuzione previsto:** da 35 a 60 secondi per 19.000 funzioni su CPU. Le query successive sullo stesso corpus vengono eseguite in meno di un secondo — gli embedding sono in cache.
+**Tempo di esecuzione previsto:** da 35 a 60 secondi per 19.000 funzioni su CPU. Le query successive sullo stesso corpus vengono eseguite in meno di un secondo, gli embedding sono in cache.
 
 ---
 
@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Su qualsiasi scansione futura — versione firmware diversa, vendor diverso — `pl.sweep(searcher)` esegue automaticamente tutti i pattern confermati.
+Su qualsiasi scansione futura, versione firmware diversa, vendor diverso — `pl.sweep(searcher)` esegue automaticamente tutti i pattern confermati.
 
 ---
 

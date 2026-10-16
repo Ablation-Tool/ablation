@@ -1,6 +1,6 @@
 # BinaryLifter: SH-2A backend
 
-**File:** `ablation/analyzers/binary_lifter.py`  
+**File:** `ablation/analyzers/binary_lifter.py` 
 **Arch token:** `sh2a` (aliases: `sh-2a`, `sh2`)
 
 ---
@@ -13,8 +13,8 @@ Renesas SH-2A MCUs power Bosch EDC17, Denso, and Siemens automotive ECUs. Firmwa
 
 ## Where it's used
 
-- **Bosch EDC17** — SH7058/SH7059 flat ROM images from automotive ECUs
-- **Denso and Siemens ECUs** — SH-2A core firmware distributed as raw flash images
+- **Bosch EDC17**: SH7058/SH7059 flat ROM images from automotive ECUs
+- **Denso and Siemens ECUs**: SH-2A core firmware distributed as raw flash images
 - Any flat binary where the MCU maps flash at VA 0x00000000 so offset equals address
 
 ---
@@ -37,14 +37,14 @@ Renesas SH-2A MCUs power Bosch EDC17, Denso, and Siemens automotive ECUs. Firmwa
 
 Two things were not possible before in Ablation:
 
-**1. No pseudo-C IR for Renesas SH-2A MCU firmware.**  `BinaryLifter` covered 17 ISAs but had no
-SH-2A backend.  SH-2A is the dominant MCU inside Bosch EDC, Denso, and Siemens automotive ECUs
-(SH7058/SH7059 on-chip flash).  Without a lifter, security sweeps on ECU firmware produced raw
+**1. No pseudo-C IR for Renesas SH-2A MCU firmware.** `BinaryLifter` covered 17 ISAs but had no
+SH-2A backend. SH-2A is the dominant MCU inside Bosch EDC, Denso, and Siemens automotive ECUs
+(SH7058/SH7059 on-chip flash). Without a lifter, security sweeps on ECU firmware produced raw
 disassembly only: no call-chain analysis, no taint annotations, no caller-resolved pseudo-C.
 
-**2. No lifter designed for headerless flat ROM files.**  All 17 prior ISA backends assumed an ELF
-section map to translate VAs to file offsets.  Flat ECU ROMs have no ELF header; the MCU flash is
-a raw byte image where VA == file offset.  The SH-2A backend adds an explicit flat-ROM fallback
+**2. No lifter designed for headerless flat ROM files.** All 17 prior ISA backends assumed an ELF
+section map to translate VAs to file offsets. Flat ECU ROMs have no ELF header; the MCU flash is
+a raw byte image where VA == file offset. The SH-2A backend adds an explicit flat-ROM fallback
 path that works correctly when `_sections` is empty.
 
 ---
@@ -120,7 +120,7 @@ flowchart TD
 ```
 
 `_lift_sh2a()` uses `EcuSH2aDecoder` (the pre-existing SH-2A decoder) to produce `SH2aInsn`
-objects.  Each instruction already carries a pre-decoded `insn_type` field, so `_SH2aState.emit()`
+objects. Each instruction already carries a pre-decoded `insn_type` field, so `_SH2aState.emit()`
 dispatches on that string directly: no mnemonic regex parsing.
 
 **Instruction type dispatch:**
@@ -130,8 +130,8 @@ dispatches on that string directly: no mnemonic regex parsing.
 | `LR_SAVE` | `// sts.l` (prologue comment, not in IR) |
 | `LR_RESTORE` | `// lds.l` (epilogue comment) |
 | `RETURN` | `return rX;` |
-| `CALL` (BSR, with target) | `uint32_t vN = name(arg0, ..., arg3);` |
-| `CALL` (JSR, no target) | `uint32_t vN = (*rM)(arg0, ..., arg3);` |
+| `CALL` (BSR, with target) | `uint32_t vN = name(arg0,..., arg3);` |
+| `CALL` (JSR, no target) | `uint32_t vN = (*rM)(arg0,..., arg3);` |
 | `BRANCH` (BRA/BRAF) | `goto loc_X;` |
 | `BRANCH` (BT/BT/S) | `if (T) goto loc_X;` |
 | `BRANCH` (BF/BF/S) | `if (!T) goto loc_X;` |
@@ -141,14 +141,14 @@ dispatches on that string directly: no mnemonic regex parsing.
 | `MISC` (other) | `// mnemonic` |
 
 **Delay slots:** SH-2A executes one instruction after BSR/BRA/RTS before the branch takes effect.
-The lifter emits both the branch statement and the delay-slot instruction.  The call statement and
+The lifter emits both the branch statement and the delay-slot instruction. The call statement and
 the return statement therefore appear in the correct logical order in the output.
 
 **Truncation:** The lifter stops at the first `RETURN` instruction plus one delay-slot instruction.
 Without this, flat ROM zero-padding would produce hundreds of spurious `// misc0` lines.
 
 **Taint propagation:** If a function's entry registers are in `_taint_map[func_va]`, taint
-propagates through loads and calls.  A call whose arguments include a tainted register emits
+propagates through loads and calls. A call whose arguments include a tainted register emits
 `/* TAINTED */` after the call statement.
 
 ---
@@ -156,7 +156,7 @@ propagates through loads and calls.  A call whose arguments include a tainted re
 ## Flat ROM path
 
 When `BinaryLifter._sections` is empty (lief could not parse an ELF/PE header), the lifter
-treats `func_va` as a direct byte offset into `self.data`.  This is correct for all SH-2A ECU
+treats `func_va` as a direct byte offset into `self.data`. This is correct for all SH-2A ECU
 ROM images, where the MCU flash is mapped at VA 0x00000000 and the raw binary starts at offset 0.
 
 If `func_va >= len(self.data)`, the slice returns empty bytes and the lifter returns a comment
@@ -167,10 +167,10 @@ rather than crashing.
 ## Limitations
 
 - Conditional branches emit `if (T)` / `if (!T)`: the T-bit value is not tracked across
-  instructions.  This is a structural limitation of the linear-walk approach (no CFG).
-- Indirect call targets (JSR @Rn) are not resolved: they appear as `(*rN)(...)`.  Use
+ instructions. This is a structural limitation of the linear-walk approach (no CFG).
+- Indirect call targets (JSR @Rn) are not resolved: they appear as `(*rN)(...)`. Use
   `FlatBinaryFuncStartScanner` to harvest indirect call targets separately.
 - 32-bit SH-2A extension instructions (MOVI20, MOV12, BIT ops) decode as `MISC` and emit
-  as comments.  The state machine does not model their register effects.
-- No CFG: each function is a linear walk from entry to first RETURN.  Back-edges from loops
-  appear in the output but the loop body may be partially repeated.
+ as comments. The state machine does not model their register effects.
+- No CFG: each function is a linear walk from entry to first RETURN. Back-edges from loops
+ appear in the output but the loop body may be partially repeated.

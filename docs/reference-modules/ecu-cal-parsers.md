@@ -20,7 +20,7 @@ labelled binary.
 **2. No ROM-variant relocation.** XDF files record a fixed file offset tied to one firmware version. A
 calibration table for `AccPed_trqEngHiGear_MAP` at offset `0x1C1448` in the baseline firmware moves to
 `0x1C1AB4` in a later service release. `EcuOpenDamosParser` carries a fingerprint array (the physical
-axis breakpoints such as `[400, 650, 750, 1000, ..., 5300]` RPM) on each axis entry. `locate_in_rom()`
+axis breakpoints such as `[400, 650, 750, 1000,..., 5300]` RPM) on each axis entry. `locate_in_rom()`
 encodes that fingerprint back to raw integer bytes and byte-searches the target ROM. The table address
 found this way is correct for any variant in the ECU family, not just the baseline.
 
@@ -156,12 +156,12 @@ for offset, name in parser.label_map(rom).items():
 
 For each `CHARACTERISTIC` entry:
 
-1. Take the first axis's `fingerprint` array (e.g. `[400, 650, 750, ..., 5300]` RPM).
+1. Take the first axis's `fingerprint` array (e.g. `[400, 650, 750,..., 5300]` RPM).
 2. Divide each value by `factor` and round to get the raw integer the ECU stores.
 3. Pack those integers as `SWORD_BE` (signed 16-bit big-endian) and byte-search the ROM.
 4. For each hit at position `idx`: compute `table_start = idx - header_bytes`.
 5. If the table header encodes the expected dimensions (`nx`, `ny`), accept `table_start` as the
-   relocated address.
+ relocated address.
 
 The EDC16C34 uses 4-byte headers encoding `(nx, ny)` as two `UWORD_BE` fields. A MAP with
 `dims: {nx: 16, ny: 10}` will have header bytes `00 10 00 0A` immediately before the x-axis data.
@@ -225,11 +225,11 @@ for offset, name in parser.label_map().items():
 ## Limitations
 
 - `EcuXDFParser` only parses linear MATH equations. Equations containing `log`, `exp`, or
-  multi-variable forms return `scale=0.0`; the raw data is still readable via `read_data()`.
+ multi-variable forms return `scale=0.0`; the raw data is still readable via `read_data()`.
 - `EcuOpenDamosParser` fingerprint relocation requires the ROM variant to use the same axis
-  breakpoints as the definition baseline. ECU variants with a different calibration team may
-  use different axis spacing.
+ breakpoints as the definition baseline. ECU variants with a different calibration team may
+ use different axis spacing.
 - VALUE (scalar) tables in open_damos have no axis fingerprint and are located by default address
-  only; they are correct for the baseline firmware but will be wrong on other variants.
+ only; they are correct for the baseline firmware but will be wrong on other variants.
 - XDF DALINK shared-axis resolution follows the index literally; entries with `DALINK index=0`
-  (the "no linked table" convention) produce `shared_from=None` with no address.
+ (the "no linked table" convention) produce `shared_from=None` with no address.

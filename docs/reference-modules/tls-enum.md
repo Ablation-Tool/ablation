@@ -8,7 +8,7 @@ Three gaps existed before this module:
 
 1. **Manual TLS weakness identification per target.** Checking TLS version support, weak ciphers, HSTS, HPKP, and certificate pinning required separate nmap/openssl invocations per check. This module consolidates all TLS/PKI probes into structured findings lists.
 
-2. **Certificate chain inspection without third-party tools.** The module inspects certificate expiry, self-signed certs, weak signature algorithms (SHA-1, MD5), RSA key size, EV OID presence, hostname mismatches, SCT embedding, and wildcard scope — using Python's `ssl` module alone, no openssl binary required.
+2. **Certificate chain inspection without third-party tools.** The module inspects certificate expiry, self-signed certs, weak signature algorithms (SHA-1, MD5), RSA key size, EV OID presence, hostname mismatches, SCT embedding, and wildcard scope, using Python's `ssl` module alone, no openssl binary required.
 
 3. **Raw TLS record probing for downgrade and DPI bypass detection.** Checking FALLBACK_SCSV, GREASE acceptance, fragmented ClientHello bypass, and JA3 fingerprint discrimination requires sending raw ClientHello bytes outside the ssl module's normal validation flow.
 
@@ -71,19 +71,19 @@ Gate: **PASSED** (after 2 fixes).
 
 | Fix | Location | Description |
 |---|---|---|
-| Missing `return findings` | `probe_tls_downgrade_attack` (line 836) | Function ended without returning findings — silently discarded FALLBACK_SCSV, TLS10, TLS11, HSTS findings |
+| Missing `return findings` | `probe_tls_downgrade_attack` (line 836) | Function ended without returning findings: silently discarded FALLBACK_SCSV, TLS10, TLS11, HSTS findings |
 | Duplicate `return findings` | `probe_certificate_transparency_monitor` (line 1085) | Unreachable dead code second return |
 
 **Security checks:**
-- No file I/O — no CWE-770 concerns.
-- No `lief.parse()` — no CWE-755 concerns.
-- No bare `except:` — all handlers use `except Exception:`, `except ssl.SSLError:`, `except (ssl.SSLError, OSError):`, `except urllib.error.HTTPError:`, or `except AttributeError:`.
+- No file I/O: no CWE-770 concerns.
+- No `lief.parse()`: no CWE-755 concerns.
+- No bare `except:`: all handlers use `except Exception:`, `except ssl.SSLError:`, `except (ssl.SSLError, OSError):`, `except urllib.error.HTTPError:`, or `except AttributeError:`.
 - All socket reads bounded: `recv(4096)` for raw TLS probes, `recv(1024)` for HTTP CONNECT response, `recvfrom(4096)` for QUIC UDP probe.
-- All `urllib.request.urlopen()` calls read only HTTP headers/status — no `resp.read()` on response bodies.
-- `ssl.CERT_NONE` intentional — probe mode against potentially misconfigured TLS endpoints.
+- All `urllib.request.urlopen()` calls read only HTTP headers/status: no `resp.read()` on response bodies.
+- `ssl.CERT_NONE` intentional: probe mode against potentially misconfigured TLS endpoints.
 - All sockets use `settimeout()` or `create_connection(timeout=)`.
 
 **Known residual:**
-- `probe_cloud_proxy_ssl_inspection_bypass` sends a QUIC Long Header Initial packet to UDP/443 — active out-of-band probe to a non-TCP port; may generate IDS alerts.
-- `probe_zero_trust_bypass_surface` sends a JWT-shaped token as a URL query parameter — may be logged by the target as an attempted auth bypass.
-- `probe_certificate_transparency_exposure` line 1079: f-string missing `f` prefix — detail text shows `{san_count}` as a literal string, not the value. Cosmetic error in finding detail, non-critical.
+- `probe_cloud_proxy_ssl_inspection_bypass` sends a QUIC Long Header Initial packet to UDP/443: active out-of-band probe to a non-TCP port; may generate IDS alerts.
+- `probe_zero_trust_bypass_surface` sends a JWT-shaped token as a URL query parameter: may be logged by the target as an attempted auth bypass.
+- `probe_certificate_transparency_exposure` line 1079: f-string missing `f` prefix: detail text shows `{san_count}` as a literal string, not the value. Cosmetic error in finding detail, non-critical.

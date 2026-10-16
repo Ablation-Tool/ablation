@@ -114,7 +114,7 @@ ARM32 binaries use `.ARM.exidx` instead. Each entry is two 32-bit words. The fir
 
 **Pass 2: Callee augmentation**
 
-Unwind tables are comprehensive but not complete. Hand-written assembly, early-exit stubs, and tail-call targets sometimes have no FDE. They do get called from known functions, so BinaryContext discovers them by scanning call targets.
+Unwind tables are but not complete. Hand-written assembly, early-exit stubs, and tail-call targets sometimes have no FDE. They do get called from known functions, so BinaryContext discovers them by scanning call targets.
 
 ```mermaid
 flowchart TD
@@ -189,7 +189,7 @@ If the resolved address falls in `strings_map`, it is recorded as `str_xref_idx[
 | `strings` | object | `{"va": "content"}` |
 | `func_starts` | array | Sorted integer VAs |
 | `call_edges` | array | `[caller_va, callee_va, label]` triples |
-| `str_xref_idx` | object | `{"func_va": [string_va, ...]}` |
+| `str_xref_idx` | object | `{"func_va": [string_va,...]}` |
 
 Cache path: `~/.ablation/cache/<sha256[:16]>_<basename>.json`. Multiple versions of the same binary coexist because different content produces a different SHA-256 prefix.
 

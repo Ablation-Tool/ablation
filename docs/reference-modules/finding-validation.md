@@ -2,7 +2,7 @@
 
 **Files:** `ablation/analyzers/path_solver.py` · `ablation/analyzers/finding_registry.py`
 
-Finding validation confirms that a taint-traced candidate is exploitable and structures the finding for PSIRT submission. `PathSolver` derives concrete register values that reach a target sink — the PoC inputs. `FindingRegistry` stores the confirmed finding with CWE classification, severity, and description so the submission arrives with working proof and no manual formatting.
+Finding validation confirms that a taint-traced candidate is exploitable and structures the finding for PSIRT submission. `PathSolver` derives concrete register values that reach a target sink, the PoC inputs. `FindingRegistry` stores the confirmed finding with CWE classification, severity, and description so the submission arrives with working proof and no manual formatting.
 
 ---
 
@@ -10,9 +10,9 @@ Finding validation confirms that a taint-traced candidate is exploitable and str
 
 Three things were not possible before these modules:
 
-1. **Taint hits required manual feasibility verification.** A taint path from network input to `memcpy` does not confirm exploitability — branches along the path may guard the sink. `PathSolver` enumerates all paths to the sink, encodes their constraints in Z3, and returns the concrete input values that satisfy a reachable path.
+1. **Taint hits required manual feasibility verification.** A taint path from network input to `memcpy` does not confirm exploitability, branches along the path may guard the sink. `PathSolver` enumerates all paths to the sink, encodes their constraints in Z3, and returns the concrete input values that satisfy a reachable path.
 
-2. **Confirmed findings had no persistent home.** Without a registry, each session re-derived the same finding from scratch. `FindingRegistry` stores every confirmed finding with its CWE, severity, binary, function address, and a sentence embedding — so the next sweep against a related binary replays it automatically.
+2. **Confirmed findings had no persistent home.** Without a registry, each session re-derived the same finding from scratch. `FindingRegistry` stores every confirmed finding with its CWE, severity, binary, function address, and a sentence embedding, so the next sweep against a related binary replays it automatically.
 
 3. **PSIRT submissions required manual compilation.** The registry exports findings in a format the Flywheel can replay and a researcher can hand directly to a PSIRT analyst: title, description, CWE class, severity, and the binary-specific address.
 
@@ -56,7 +56,7 @@ result = solve_for_sink(ctx, sink_va=0x1234abcd)
 | `target_va` | VA of the sink instruction |
 | `sat` | `True` if Z3 found a satisfying assignment |
 | `path` | Block VA sequence from entry to sink |
-| `model` | `dict[str, int]` — concrete register values at function entry that reach the sink |
+| `model` | `dict[str, int]`: concrete register values at function entry that reach the sink |
 | `constraints` | Z3 formula encoding all path and state constraints |
 
 ### Limitations
@@ -114,7 +114,7 @@ unsynced = reg.unsynced_findings()
 | `product` | Target product name |
 | `version` | Affected firmware/software version |
 | `title` | One-line finding description |
-| `description` | Free-text technical detail — taint path, call chain, vuln class |
+| `description` | Free-text technical detail: taint path, call chain, vuln class |
 | `cwe_class` | CWE identifier (e.g. `CWE-121`) |
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
 | `embedding` | Sentence vector for similarity search |

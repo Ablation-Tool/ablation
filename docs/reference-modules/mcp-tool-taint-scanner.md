@@ -6,9 +6,9 @@
 
 FortiManager v8.0.0 ships an AI/MCP stack (`ai/agent/agent_framework/`). Two confirmed findings required manual source analysis because no automated scanner existed:
 
-1. **FMG-AI-1 (CWE-214, MEDIUM)** — `mcp.py` serializes `request.COOKIES` to JSON and passes it as `--cookies` CLI argument to `/usr/bin/webmcpserver`. The session token is visible in `/proc/<pid>/cmdline` for the subprocess lifetime — world-readable on Linux by default.
+1. **FMG-AI-1 (CWE-214, MEDIUM)**, `mcp.py` serializes `request.COOKIES` to JSON and passes it as `--cookies` CLI argument to `/usr/bin/webmcpserver`. The session token is visible in `/proc/<pid>/cmdline` for the subprocess lifetime, world-readable on Linux by default.
 
-2. **FMG-AI-2 (CWE-77, MEDIUM)** — `agent_views.py` places a user-supplied FortiGate CLI script as the system-role content to an LLM security analyzer, enabling prompt injection into the AI's trust context.
+2. **FMG-AI-2 (CWE-77, MEDIUM)**, `agent_views.py` places a user-supplied FortiGate CLI script as the system-role content to an LLM security analyzer, enabling prompt injection into the AI's trust context.
 
 Gap closed: 2026-10-16. Both FMG findings re-detected automatically in validation run.
 

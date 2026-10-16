@@ -181,7 +181,7 @@ The result appears as `firmware_auth_bypass` in the per-binary result dict and a
 
 Two things were not possible before in Ablation:
 
-1. Borland BCC32/VCL applications (RADStudio, C++ Builder) place string literals in `.data` rather than `.rdata`.  The prior `.rdata`-only scan returned 0 strings for these targets and misclassified them as out-of-scope (no debug strings = nothing to correlate against).
+1. Borland BCC32/VCL applications (RADStudio, C++ Builder) place string literals in `.data` rather than `.rdata`. The prior `.rdata`-only scan returned 0 strings for these targets and misclassified them as out-of-scope (no debug strings = nothing to correlate against).
 2. A blind `.data` fallback would add noise from live pointers and struct padding, but those sequences are reliably short or non-ASCII: the same 5-printable-byte minimum filter that protects `.rdata` scanning also works for `.data`, making the fallback safe.
 
 `_build_rdata_strings` now calls `_scan_section_strings(pe, data, ".rdata")` first.  When that returns zero strings it retries with `".data"` and prints a `[*] .rdata=0 strings: BCC32/VCL fallback` diagnostic.  The underlying `_scan_section_strings` helper is shared between both calls.

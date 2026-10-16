@@ -121,9 +121,9 @@ Automotive flat ROM firmware, GCC-compiled at `-O2`. Any firmware where
 ## Limitations
 
 - ISA-specific. The scanner searches for the unconditional jump mnemonics of the supported
-  ISA: `j`, `ja`, `jl`, and `jla`. Other architectures are not currently supported.
+ ISA: `j`, `ja`, `jl`, and `jla`. Other architectures are not currently supported.
 - Function boundaries come from `ctx.func_starts` using next-start as end, so the last
-  function in the image uses a 512-byte default end. Jumps from that function to beyond its
-  estimated end may be missed.
+ function in the image uses a 512-byte default end. Jumps from that function to beyond its
+ estimated end may be missed.
 - Intra-function jumps that happen to land at an address also in `func_starts` are correctly
-  excluded because the target must be strictly inside another function, not at its entry point.
+ excluded because the target must be strictly inside another function, not at its entry point.

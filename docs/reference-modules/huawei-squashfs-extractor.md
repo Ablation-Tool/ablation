@@ -13,20 +13,20 @@ misreadings that cause silent truncation when parsing directory tables.
 Three things were not possible before this module:
 
 1. Extract files from Huawei VRP squashfs images at all. `unsquashfs` and `7z` both reject
-   V600R024+ images with "Corrupt input data" because the XZ blocks carry the ARM64 BCJ
-   branch-filter (filter ID 0x0A), and Python's `lzma` C extension compiled against pre-5.4.0
-   liblzma headers rejects any XZ stream that declares an unsupported filter in FORMAT_XZ mode.
-   No extraction means no triage, no `batch_plt_intersect`, no taint trace.
+ V600R024+ images with "Corrupt input data" because the XZ blocks carry the ARM64 BCJ
+ branch-filter (filter ID 0x0A), and Python's `lzma` C extension compiled against pre-5.4.0
+ liblzma headers rejects any XZ stream that declares an unsupported filter in FORMAT_XZ mode.
+ No extraction means no triage, no `batch_plt_intersect`, no taint trace.
 
 2. Parse Huawei squashfs directory entries correctly. The squashfs `dir_entry.size` field is
-   a `__le16` across the full 8-byte entry header, not an `__le8` as some third-party
-   implementations assume. Using `__le8` causes off-by-one misalignment on every directory
-   entry after the first in a multi-entry block, silently missing files.
+ a `__le16` across the full 8-byte entry header, not an `__le8` as some third-party
+ implementations assume. Using `__le8` causes off-by-one misalignment on every directory
+ entry after the first in a multi-entry block, silently missing files.
 
 3. Decode inode refs without the standard inode table. Huawei VRP images pack the inode ref
-   as `(block_byte_offset << 16) | within_decompressed_offset`, which differs from the
-   conventional field layout used by most squashfs parsers. Wrong inode ref decoding reads
-   the wrong metadata block and produces zero-byte files.
+ as `(block_byte_offset << 16) | within_decompressed_offset`, which differs from the
+ conventional field layout used by most squashfs parsers. Wrong inode ref decoding reads
+ the wrong metadata block and produces zero-byte files.
 
 ---
 

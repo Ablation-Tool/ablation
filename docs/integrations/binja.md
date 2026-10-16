@@ -10,11 +10,11 @@ in plain English without leaving Binary Ninja.
 
 1. Copy `ablation/integrations/binja_plugin.py` to your Binary Ninja plugins directory:
 
-   | Platform | Path |
-   |---|---|
-   | macOS | `~/Library/Application Support/Binary Ninja/plugins/` |
-   | Linux | `~/.binaryninja/plugins/` |
-   | Windows | `%APPDATA%\Binary Ninja\plugins\` |
+ | Platform | Path |
+ |---|---|
+ | macOS | `~/Library/Application Support/Binary Ninja/plugins/` |
+ | Linux | `~/.binaryninja/plugins/` |
+ | Windows | `%APPDATA%\Binary Ninja\plugins\` |
 
 2. Restart Binary Ninja.
 
@@ -24,7 +24,7 @@ in plain English without leaving Binary Ninja.
    print(ablation.__version__)
    ```
 
-   If that fails, install ablation into the same Python environment Binary Ninja uses:
+ If that fails, install ablation into the same Python environment Binary Ninja uses:
    ```bash
    /path/to/binaryninja/python3 -m pip install git+https://github.com/Ablation-Tool/ablation
    ```
@@ -106,7 +106,7 @@ The plugin creates two tag types:
 ## Notes
 
 - The plugin uses a temporary DB for sweeps (`/tmp/ablation_binja_<stem>.db`) so it
-  never pollutes your main research corpus.
+ never pollutes your main research corpus.
 - Sweep results are not written to `~/.ablation/func_id.db`. To persist them, run
   `ablation corpus` from the CLI.
 - The BERT model loads on first use (~3s). Subsequent sweeps are fast.

@@ -4,21 +4,21 @@
 
 ## Why this exists
 
-PLT-call Jaccard — the original cross-version matching signal — only works on functions with two or more external PLT calls. That covers roughly 12% of functions in typical stripped firmware. The other 88% had no automated matching mechanism.
+PLT-call Jaccard, the original cross-version matching signal. It only works on functions with two or more external PLT calls. That covers roughly 12% of functions in typical stripped firmware. The other 88% had no automated matching mechanism.
 
 `structural_sim.py` replaces that with a five-signal weighted composite that operates on all functions:
 
-1. **Opcode category histogram** — 12-category frequency vector (DATA/ARITH/BIT/CMP/BRANCH/CALL/RET/FLOAT/SIMD/MEMOP/FRAME/OTHER); cosine similarity. Always available.
-2. **Immediate value Jaccard** — shared integer constants ≥ 0x100 (struct offsets, magic bytes, buffer sizes). RIP-relative operands filtered (position-dependent). Available when either function has qualifying immediates.
-3. **PLT call overlap** — external call set match (the original signal, retained at lower weight). Available when either function has PLT calls.
-4. **Branch density proximity** — branch-insn fraction as a control-flow shape indicator. Always available.
-5. **Size proximity** — instruction count ratio clamped to [0,1]. Always available.
+1. **Opcode category histogram**, 12-category frequency vector (DATA/ARITH/BIT/CMP/BRANCH/CALL/RET/FLOAT/SIMD/MEMOP/FRAME/OTHER); cosine similarity. Always available.
+2. **Immediate value Jaccard**, shared integer constants ≥ 0x100 (struct offsets, magic bytes, buffer sizes). RIP-relative operands filtered (position-dependent). Available when either function has qualifying immediates.
+3. **PLT call overlap**, external call set match (the original signal, retained at lower weight). Available when either function has PLT calls.
+4. **Branch density proximity**, branch-insn fraction as a control-flow shape indicator. Always available.
+5. **Size proximity**, instruction count ratio clamped to [0,1]. Always available.
 
-Weights are normalized at pair time based on signal availability — the composite is always well-defined.
+Weights are normalized at pair time based on signal availability, the composite is always well-defined.
 
 ## Key constants
 
-None — operates entirely on pre-built `FunctionFingerprint` objects passed from the caller. No file I/O, no network.
+None, operates entirely on pre-built `FunctionFingerprint` objects passed from the caller. No file I/O, no network.
 
 ## Key API
 

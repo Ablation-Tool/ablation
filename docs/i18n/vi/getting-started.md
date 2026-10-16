@@ -47,7 +47,7 @@ print(ctx.summary())
 
 **Lần đầu chạy:** 0,5 đến 5 giây tùy thuộc vào kích thước tệp nhị phân. Ablation xây dựng và lưu cache vào `~/.ablation/cache/<sha256>_<name>.json`.
 
-**Các lần chạy tiếp theo:** 110 ms. Cache được đánh khóa theo SHA256 — một bản dựng khác có cùng tên tệp nhị phân sẽ tự động xây dựng lại.
+**Các lần chạy tiếp theo:** 110 ms. Cache được đánh khóa theo SHA256, một bản dựng khác có cùng tên tệp nhị phân sẽ tự động xây dựng lại.
 
 Ví dụ đầu ra:
 
@@ -93,7 +93,7 @@ for r in results:
     print(f"  0x{r.va:x}  {r.name or hex(r.va):<50s}  score={r.score:.3f}")
 ```
 
-**Thời gian chạy dự kiến:** 35 đến 60 giây cho 19.000 hàm trên CPU. Các truy vấn tiếp theo đối với cùng corpus chạy trong vòng dưới một giây — các embedding được lưu cache.
+**Thời gian chạy dự kiến:** 35 đến 60 giây cho 19.000 hàm trên CPU. Các truy vấn tiếp theo đối với cùng corpus chạy trong vòng dưới một giây, các embedding được lưu cache.
 
 ---
 
@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Trên bất kỳ lần quét nào trong tương lai — phiên bản firmware khác, nhà cung cấp khác — `pl.sweep(searcher)` tự động chạy tất cả các mẫu đã xác nhận.
+Trên bất kỳ lần quét nào trong tương lai, phiên bản firmware khác, nhà cung cấp khác — `pl.sweep(searcher)` tự động chạy tất cả các mẫu đã xác nhận.
 
 ---
 

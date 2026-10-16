@@ -4,13 +4,13 @@
 
 ## Why this exists
 
-FortiSwitch v7 management plane ships only `.pyc` bytecode — no `.py` source files. Three gaps existed before this module:
+FortiSwitch v7 management plane ships only `.pyc` bytecode, no `.py` source files. Three gaps existed before this module:
 
 1. **Python's `marshal.loads()` is version-locked.** It cannot unmarshal a `.pyc` compiled by Python 3.10 when the host runs Python 3.8. Decompilation tools like `uncompyle6` have the same limitation for older bytecode formats.
 
-2. **Full decompilation is not required to detect dangerous patterns.** Every Python code object stores `co_names` — the list of all attribute and global names referenced by `LOAD_ATTR`, `LOAD_GLOBAL`, and `STORE_ATTR` opcodes. If a module calls `os.system()`, the strings `"system"` and `"os"` appear in `co_names` without decompilation.
+2. **Full decompilation is not required to detect dangerous patterns.** Every Python code object stores `co_names`, the list of all attribute and global names referenced by `LOAD_ATTR`, `LOAD_GLOBAL`, and `STORE_ATTR` opcodes. If a module calls `os.system()`, the strings `"system"` and `"os"` appear in `co_names` without decompilation.
 
-3. **`xdis` handles cross-version marshal parsing (Python 3.4–3.12+).** Already installed as an `uncompyle6` dependency — no new requirements.
+3. **`xdis` handles cross-version marshal parsing (Python 3.4–3.12+).** Already installed as an `uncompyle6` dependency, no new requirements.
 
 Gap closed: 2026-10-16. FortiSwitch v7 Python layer confirmed CLEAN.
 
@@ -20,14 +20,14 @@ Gap closed: 2026-10-16. FortiSwitch v7 Python layer confirmed CLEAN.
 
 | Constant | Value | Applied to |
 |---|---|---|
-| `_MAX_PYC_BYTES` | 1 MB | `scan_file()` — `.pyc` file size cap before `read_bytes()` |
-| `_MAX_RAW_HITS` | 4096 | `scan_raw()` — max embedded pyc entries per firmware image scan |
+| `_MAX_PYC_BYTES` | 1 MB | `scan_file()`: `.pyc` file size cap before `read_bytes()` |
+| `_MAX_RAW_HITS` | 4096 | `scan_raw()`: max embedded pyc entries per firmware image scan |
 
 ## Confidence classification
 
 | `danger_hits` | `os_module_present` | `confidence` |
 |---|---|---|
-| empty | — | `clean` |
+| empty |: | `clean` |
 | non-empty | True | `HIGH` |
 | non-empty | False | `LOW` |
 
@@ -78,7 +78,7 @@ Header size determined by magic_int threshold: `magic_int >= 0x0d55` (Python 3.8
 ## FORGE audit
 
 Gate: **PASSED**. No HIGH or CRITICAL findings. Two CWE-770 fixes applied:
-- `scan_file()`: `Path.stat().st_size > _MAX_PYC_BYTES` guard before `read_bytes()` — returns error `PycScanResult` if file exceeds 1 MB
+- `scan_file()`: `Path.stat().st_size > _MAX_PYC_BYTES` guard before `read_bytes()`: returns error `PycScanResult` if file exceeds 1 MB
 - `scan_raw()`: `offsets = offsets[:_MAX_RAW_HITS]` cap limits firmware image scan to 4096 embedded pyc entries
 
 No subprocess. No shell=True. No lief.parse(). No bare `except:`. `_extract_names_recursive()` uses Python's built-in recursion limit as an implicit depth bound.

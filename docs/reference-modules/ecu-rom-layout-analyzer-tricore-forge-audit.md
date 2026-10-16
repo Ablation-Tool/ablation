@@ -67,7 +67,7 @@
 
 **Capstone import failure:** Returns `(0.0, False)`: safe fallback documented.
 **Empty chunk:** `if sample` check in density; `range(0, min(...))` guard in IVT loop: both safe.
-**Capstone decode errors:** `md.disasm()` is a generator; individual decode failures produce no insn, no exception: total decoded bytes simply decrements.
+**Capstone decode errors:** `md.disasm()` is a generator; individual decode failures produce no insn, no exception: total decoded bytes decrements.
 **`_merge_windows()` with IVT windows:** IVT is a new string constant; `_merge_windows()` merges by string equality: IVT windows merge with each other and are split from adjacent CODE/CALIBRATION windows. Tested: single 4 KB IVT region produced correctly.
 
 **Verdict:** PASS: no unhandled exception paths.

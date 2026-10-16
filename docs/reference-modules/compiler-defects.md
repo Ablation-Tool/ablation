@@ -117,4 +117,4 @@ findings = LA64MaxNotMinScanner.from_pe32plus(data).scan()
 
 ### False positive class
 
-Rust `Vec` append patterns use `bltu remaining_cap, ...` to guard the write. These have a conditional branch between the `or` instruction and the sink call that guards against the wrong result. The branch means the minimum is never actually used as an allocation size without first checking capacity. Verify manually before reporting any finding where a conditional branch on the result register appears within the 20-instruction tracking window.
+Rust `Vec` append patterns use `bltu remaining_cap,...` to guard the write. These have a conditional branch between the `or` instruction and the sink call that guards against the wrong result. The branch means the minimum is never actually used as an allocation size without first checking capacity. Verify manually before reporting any finding where a conditional branch on the result register appears within the 20-instruction tracking window.

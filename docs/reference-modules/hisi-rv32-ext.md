@@ -16,8 +16,8 @@ HiSilicon's WS63, Hi3863, and BS21 NearLink SoCs use an RV32GC core with six pro
 
 ## Where it's used
 
-- **HiSilicon WS63 / Hi3863** — NearLink WS63E development kit firmware, BearPi-HH-NB3 LiteOS images
-- **HiSilicon BS21 / Hi2821** — NearLink BS21E firmware, BearPi-HH-NB3 SLE images
+- **HiSilicon WS63 / Hi3863**: NearLink WS63E development kit firmware, BearPi-HH-NB3 LiteOS images
+- **HiSilicon BS21 / Hi2821**: NearLink BS21E firmware, BearPi-HH-NB3 SLE images
 - Any HiSilicon bare-metal RV32GC firmware compiled for the `riscv31` + HCC extension core
 
 ---
@@ -39,26 +39,26 @@ HiSilicon's WS63, Hi3863, and BS21 NearLink SoCs use an RV32GC core with six pro
 HiSilicon's `riscv31` core extends base RV32GC with six custom opcode spaces plus
 two 16-bit compressed extensions:
 
-| Opcode | Space     | Instructions | Size |
+| Opcode | Space | Instructions | Size |
 |--------|-----------|--------------|------|
-| `0x0b` | custom-0  | `ldmia`, `stmia`: multi-register load/store | 4 B |
+| `0x0b` | custom-0 | `ldmia`, `stmia`: multi-register load/store | 4 B |
 | `0x1b` | OP-IMM-32 | `addshf`, `subshf`, `orshf`, `xorshf`, `andshf` | 4 B |
-| `0x1f` | reserved  | `l.li`: 48-bit long load-immediate | **6 B** |
-| `0x3b` | OP-32     | `beqi`, `bnei`, `bgei`, `blti`, `bgeui`, `bltui` | 4 B |
-| `0x5b` | custom-2  | `muliadd` | 4 B |
-| `0x7b` | custom-3  | R-type dispatch/context (broad multi-op) | 4 B |
+| `0x1f` | reserved | `l.li`: 48-bit long load-immediate | **6 B** |
+| `0x3b` | OP-32 | `beqi`, `bnei`, `bgei`, `blti`, `bgeui`, `bltui` | 4 B |
+| `0x5b` | custom-2 | `muliadd` | 4 B |
+| `0x7b` | custom-3 | R-type dispatch/context (broad multi-op) | 4 B |
 | (16-bit) | RVC Q1 | `uxtb`, `uxth`: zero-extend to 8/16 bits | 2 B |
 
 Capstone 5.x mishandles all six:
 
 - `0x0b/0x5b/0x3b/0x1b`: decoded as a 2-byte `.byte` pair, then the trailing
-  2 bytes are misinterpreted as a valid RVC instruction. 2-byte cascade misalignment.
+ 2 bytes are misinterpreted as a valid RVC instruction. 2-byte cascade misalignment.
 - `0x7b`: same 2-byte misalignment (Capstone occasionally decodes `0x7b` R-type as
   `c.fsdsp`, consuming 2 bytes).
 - `0x1f`: decoded as a 4-byte instruction (bits[1:0]=11 is satisfied), leaving
-  2 unaccounted bytes that corrupt the next instruction boundary.
+ 2 unaccounted bytes that corrupt the next instruction boundary.
 - `uxtb`/`uxth`: occupy the RVC C.FLD/C.FSD compressed D-float space, which
-  Capstone would decode as float load/store on targets without the D extension.
+ Capstone would decode as float load/store on targets without the D extension.
 
 `l.li` is architecturally the most dangerous: every occurrence silently shifts
 the decoder 2 bytes behind the true instruction stream for the rest of the function.
@@ -94,22 +94,22 @@ bits[30:7]  = register bitmap  (slot positions → actual registers via table be
 
 | Slot | Bit | Bank-0 reg | Bank-1 reg |
 |------|-----|-----------|-----------|
-|  0   | 30  | x27 (s11) | x31 (t6)  |
-|  1   | 29  | x26 (s10) | x30 (t5)  |
-|  2   | 28  | x25 (s9)  | x29 (t4)  |
-|  3   | 27  | x24 (s8)  | x28 (t3)  |
-|  4   | 26  | x23 (s7)  | x17 (a7)  |
-|  5   | 25  | x22 (s6)  | x16 (a6)  |
-|  6   | 24  | x21 (s5)  | x15 (a5)  |
-|  7   | 23  | x20 (s4)  | x14 (a4)  |
-|  8   | 22  | x19 (s3)  | x13 (a3)  |
-|  9   | 21  | x18 (s2)  | x12 (a2)  |
-| 10   | 20  | x11 (a1)  | x11 (a1)  |
-| 11   | 11  | x10 (a0)  | x10 (a0)  |
-| 12   | 10  | x9  (s1)  | x7  (t2)  |
-| 13   |  9  | x8  (s0)  | x6  (t1)  |
-| 14   |  8  | x2  (sp)  | x5  (t0)  |
-| 15   |  7  | x1  (ra)  | x1  (ra)  |
+| 0 | 30 | x27 (s11) | x31 (t6) |
+| 1 | 29 | x26 (s10) | x30 (t5) |
+| 2 | 28 | x25 (s9) | x29 (t4) |
+| 3 | 27 | x24 (s8) | x28 (t3) |
+| 4 | 26 | x23 (s7) | x17 (a7) |
+| 5 | 25 | x22 (s6) | x16 (a6) |
+| 6 | 24 | x21 (s5) | x15 (a5) |
+| 7 | 23 | x20 (s4) | x14 (a4) |
+| 8 | 22 | x19 (s3) | x13 (a3) |
+| 9 | 21 | x18 (s2) | x12 (a2) |
+| 10 | 20 | x11 (a1) | x11 (a1) |
+| 11 | 11 | x10 (a0) | x10 (a0) |
+| 12 | 10 | x9 (s1) | x7 (t2) |
+| 13 | 9 | x8 (s0) | x6 (t1) |
+| 14 | 8 | x2 (sp) | x5 (t0) |
+| 15 | 7 | x1 (ra) | x1 (ra) |
 
 **Critical decoder rule:** bit7 (`_LDMSTM_SLOT_BIT[15]` = ra slot) is a valid register
 bitmap bit, not the `rd` lsb used by standard 32-bit R-type encoding. Do **not**
@@ -245,14 +245,14 @@ findings = tracker.run_interprocedural()
 
 | Space | Default taint | `conservative=True` |
 |-------|--------------|---------------------|
-| 0x0b (ldmia)    | clears taint on each loaded reg (memory not tracked) | same |
-| 0x0b (stmia)    | no taint propagation to memory | same |
-| 0x1b (addshf)   | rs1,rs2 → rd | same |
-| 0x1f (l.li)     | constant → rd (no reg src) | same |
+| 0x0b (ldmia) | clears taint on each loaded reg (memory not tracked) | same |
+| 0x0b (stmia) | no taint propagation to memory | same |
+| 0x1b (addshf) | rs1,rs2 → rd | same |
+| 0x1f (l.li) | constant → rd (no reg src) | same |
 | 0x3b (branches) | none (branch only) | same |
-| 0x5b (muliadd)  | rs1,rs2 → rd | same |
+| 0x5b (muliadd) | rs1,rs2 → rd | same |
 | 0x7b (custom-3) | opaque (no propagation) | rs1,rs2 → rd |
-| uxtb / uxth     | clears taint (bounds value ≤255/≤65535) | same |
+| uxtb / uxth | clears taint (bounds value ≤255/≤65535) | same |
 
 ## References
 
@@ -262,11 +262,11 @@ findings = tracker.run_interprocedural()
 - `tools_isa/poc_hisi_asm_map.py` + HiSilicon-patched GCC 7.3.0 (empirical ground truth)
 - RI5CY User Manual (PULP Platform, April 2019): base Xpulp encoding reference
 - `trans_xlinx.c.inc`: QEMU xlinx extension RISC-V translator; canonical ground truth
-  for `0x0b` ldmia/stmia slot_bit/slot_reg tables and uxtb/uxth 16-bit mask;
-  archived at `/media/cowboy/research/hisilicon-ws63-re/online/zip_extract/`
+ for `0x0b` ldmia/stmia slot_bit/slot_reg tables and uxtb/uxth 16-bit mask;
+ archived at `/media/cowboy/research/hisilicon-ws63-re/online/zip_extract/`
 - `HiMCUGenInstrInfo.td`: vendor LLVM fork (Apache-2.0, © HiSilicon 2024); defines
-  GROUP1 16-bit compressed: `c.neg/c.sbz/c.shz/c.swz/c.xori`; does NOT define
-  ldmia/stmia/uxtb/uxth (those are in the QEMU C back-end only)
+ GROUP1 16-bit compressed: `c.neg/c.sbz/c.shz/c.swz/c.xori`; does NOT define
+ ldmia/stmia/uxtb/uxth (those are in the QEMU C back-end only)
 
 ## Targets
 

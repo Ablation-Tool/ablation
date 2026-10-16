@@ -19,9 +19,9 @@ Position-independent shared libraries store vtable entries as zero in the `.data
 section. The dynamic linker fills them at load time using two relocation types:
 
 - **R_X86_64_RELATIVE (type 8)**: `*slot = load_base + addend`. Used for functions defined
-  in the same library. The addend in `.rela.dyn` is the function VA relative to load base.
+ in the same library. The addend in `.rela.dyn` is the function VA relative to load base.
 - **R_X86_64_64 (type 1)**: `*slot = sym_value + addend`. Used for exported symbols and
-  cross-library function pointers. The symbol index in `.rela.dyn` identifies the function.
+ cross-library function pointers. The symbol index in `.rela.dyn` identifies the function.
 
 `ELFVtableReconstructor` reads both types from `.rela.dyn` and produces a complete
 slot→function map without loading the library.
@@ -113,12 +113,12 @@ The scanner handles all standard x86-64 indirect call encodings:
 |---|---|---|
 | `call [rax+disp32]` | `FF 90 xx xx xx xx` | Yes |
 | `call [rcx+disp32]` | `FF 91 xx xx xx xx` | Yes |
-| ... (all base regs) | ... | Yes |
+|... (all base regs) |... | Yes |
 | `call [r8+disp32]` | `41 FF 90 xx xx xx xx` | Yes (REX.B) |
 | `call [r12+disp32]` | `41 FF 94 24 xx xx xx xx` | Yes (REX.B + SIB) |
 | `call [rax+disp8]` | `FF 50 xx` | Yes (for offsets 0–127) |
-| REX.W variants | `48 FF 90 ...` | Yes |
-| REX.RB variants | `45 FF 90 ...` | Yes |
+| REX.W variants | `48 FF 90...` | Yes |
+| REX.RB variants | `45 FF 90...` | Yes |
 
 ### Usage
 
@@ -179,6 +179,6 @@ for name, sites in report.live().items():
 
 - Scans only ELF sections marked `SHF_EXECINSTR`. Code in non-standard segments is missed.
 - Does not follow cross-library call chains; a vtable method called only from another `.so`
-  appears dead when scanning a single library.
+ appears dead when scanning a single library.
 - Does not handle `call [mem+reg*scale+disp]` (VSIB/complex SIB addressing); rare in
-  compiler-generated C++ vtable dispatch.
+ compiler-generated C++ vtable dispatch.

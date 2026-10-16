@@ -1,4 +1,4 @@
-# MicroPython .mpy Bytecode Lifter
+# MicroPython.mpy Bytecode Lifter
 
 Zero-dependency lifter for compiled MicroPython `.mpy` v6 files. Decodes bytecode to readable pseudo-Python and scans for dangerous call patterns. Supports MicroPython 1.19–1.23+ and CircuitPython (both use the same v6 format).
 
@@ -6,7 +6,7 @@ Zero-dependency lifter for compiled MicroPython `.mpy` v6 files. Decodes bytecod
 
 ## What this is
 
-MicroPython compiles Python source to `.mpy` bytecode files for deployment on microcontrollers. IoT firmware images on ESP32, STM32, and CC13xx targets embed `.mpy` modules alongside the native C runtime. The application logic — network clients, protocol parsers, command handlers — lives in those `.mpy` files, not in the native binary.
+MicroPython compiles Python source to `.mpy` bytecode files for deployment on microcontrollers. IoT firmware images on ESP32, STM32, and CC13xx targets embed `.mpy` modules alongside the native C runtime. The application logic, network clients, protocol parsers, command handlers: all of it lives in those `.mpy` files, not in the native binary.
 
 Standard RE tools stop at the native ELF or flat ROM. The MicroPython runtime executing inside it is opaque to Capstone and BinaryContext, so an analysis of the native binary describes how the device starts, not what it does. `MpyLifter` covers the application layer so both halves of the firmware are visible.
 
@@ -14,10 +14,10 @@ Standard RE tools stop at the native ELF or flat ROM. The MicroPython runtime ex
 
 ## Where it's used
 
-- **ESP32 firmware** — application modules embedded in the MicroPython partition
-- **STM32 firmware** — `.mpy` files stored in internal flash alongside the native runtime
-- **TI CC13xx / CC26xx** — MicroPython IoT devices with embedded bytecode modules
-- **CircuitPython devices** — every precompiled library uses the identical v6 format
+- **ESP32 firmware**: application modules embedded in the MicroPython partition
+- **STM32 firmware**: `.mpy` files stored in internal flash alongside the native runtime
+- **TI CC13xx / CC26xx**: MicroPython IoT devices with embedded bytecode modules
+- **CircuitPython devices**: every precompiled library uses the identical v6 format
 - Any IoT firmware image where `binwalk` or a grep for `M\x06` reveals embedded `.mpy` sections
 
 ---
@@ -50,9 +50,9 @@ flowchart TD
 
 **Extract before lifting.** `.mpy` files are embedded inside firmware images. Search the raw image for the magic bytes `0x4D 0x06` (`M\x06`) to locate them before passing to `MpyLifter`. A wrong offset produces a `ValueError` or a corrupted lift.
 
-**Check the version byte.** `MpyLifter` only handles v6. Read `data[1]` before constructing — if it is not `0x06`, the file is v5 (MicroPython 1.12–1.18) and raises `ValueError`. Do not pass v5 files and interpret the error as a finding.
+**Check the version byte.** `MpyLifter` only handles v6. Read `data[1]` before constructing, if it is not `0x06`, the file is v5 (MicroPython 1.12–1.18) and raises `ValueError`. Do not pass v5 files and interpret the error as a finding.
 
-**Run both layers.** Memory corruption lives in the native C runtime. The attack surface — socket opens, command parsing, eval calls — lives in the `.mpy` layer. Run `TaintTracker` on the native binary and `MpyLifter` on the embedded modules. A `dangerous_calls()` finding is only exploitable if the native layer exposes the input.
+**Run both layers.** Memory corruption lives in the native C runtime. The attack surface, socket opens, command parsing, eval calls: all of it lives in the `.mpy` layer. Run `TaintTracker` on the native binary and `MpyLifter` on the embedded modules. A `dangerous_calls()` finding is only exploitable if the native layer exposes the input.
 
 **Check for native/viper code objects.** If `dangerous_calls()` returns nothing but the module does network IO, run `lift_module()` and look for `# <native/viper code: not lifted>` sections. Those code objects run as compiled C and are invisible to this lifter. Analyze them with `BinaryContext` against the native runtime instead.
 
@@ -156,10 +156,10 @@ Formats findings as an ASCII table. Returns `'No dangerous patterns found.'` whe
 ## Known limitations
 
 - **Static qstrs**: Built-in MicroPython qstrs (stored as odd-valued indices) are reported as `<qstr:N>` rather than resolved to names. Security-relevant names (exec, eval, socket, etc.) are always dynamic qstrs and are resolved correctly.
-- **Local variable names**: Lifted pseudo-Python uses `_v0`, `_v1`, ... for locals instead of original names. The variable name table in the prelude is skipped, not decoded.
+- **Local variable names**: Lifted pseudo-Python uses `_v0`, `_v1`,... for locals instead of original names. The variable name table in the prelude is skipped, not decoded.
 - **Native/viper code objects**: Code objects of kind 1 (native) or 2 (viper) emit `# <native/viper code: not lifted>`. Only kind 0 (bytecode) is lifted.
 - **v5 format**: Not supported. MicroPython 1.12–1.18 use v5. Raise `ValueError`.
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_MPY_BYTES=4MB`; all read operations use the bounded `read(length)` method derived from the .mpy format length fields.
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_MPY_BYTES=4MB`; all read operations use the bounded `read(length)` method derived from the.mpy format length fields.

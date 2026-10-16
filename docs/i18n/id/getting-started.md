@@ -47,7 +47,7 @@ print(ctx.summary())
 
 **Pertama kali:** 0,5 hingga 5 detik tergantung ukuran binary. Ablation membangun dan menyimpan cache ke `~/.ablation/cache/<sha256>_<name>.json`.
 
-**Setiap kali setelahnya:** 110 ms. Cache diberi kunci SHA256 — build berbeda dengan nama binary yang sama dibangun ulang secara otomatis.
+**Setiap kali setelahnya:** 110 ms. Cache diberi kunci SHA256, build berbeda dengan nama binary yang sama dibangun ulang secara otomatis.
 
 Contoh output:
 
@@ -93,7 +93,7 @@ for r in results:
     print(f"  0x{r.va:x}  {r.name or hex(r.va):<50s}  score={r.score:.3f}")
 ```
 
-**Waktu berjalan yang diharapkan:** 35 hingga 60 detik untuk 19.000 fungsi di CPU. Kueri berikutnya terhadap korpus yang sama berjalan dalam waktu kurang dari satu detik — embedding disimpan dalam cache.
+**Waktu berjalan yang diharapkan:** 35 hingga 60 detik untuk 19.000 fungsi di CPU. Kueri berikutnya terhadap korpus yang sama berjalan dalam waktu kurang dari satu detik, embedding disimpan dalam cache.
 
 ---
 
@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Pada pemindaian di masa depan mana pun — versi firmware berbeda, vendor berbeda — `pl.sweep(searcher)` secara otomatis menjalankan semua pola yang dikonfirmasi.
+Pada pemindaian di masa depan mana pun, versi firmware berbeda, vendor berbeda — `pl.sweep(searcher)` secara otomatis menjalankan semua pola yang dikonfirmasi.
 
 ---
 

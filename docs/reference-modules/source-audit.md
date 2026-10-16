@@ -501,7 +501,7 @@ formatted across lines.
 | Prisma (TypeScript) | `.findUnique()`, `.findMany()`, `.findFirst()`, `.update()`, `.delete()` on any model |
 | Mongoose (JavaScript) | `.findById()`, `.find()`, `.findOne()`, `.updateOne()`, `.deleteOne()` |
 | SQLAlchemy (Python) | `.query().filter()`, `.filter_by()` without user/tenant field |
-| Raw SQL | `SELECT ... WHERE` without `user_id =`, `org_id =`, or `tenant_id =` |
+| Raw SQL | `SELECT... WHERE` without `user_id =`, `org_id =`, or `tenant_id =` |
 
 ### Scope fields
 

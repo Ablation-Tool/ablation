@@ -16,10 +16,10 @@ Standard Capstone decodes PowerPC Book E but not VLE. Pointing Capstone at a VLE
 
 ## Where it's used
 
-- **GM E39a PCM** (NXP MPC5566, e200z6 core) — VLE regions at `0x2A000` and `0x034000`
-- **GM E54 and E92 ECUs** — factory firmware compiled for NXP e200z cores
+- **GM E39a PCM** (NXP MPC5566, e200z6 core): VLE regions at `0x2A000` and `0x034000`
+- **GM E54 and E92 ECUs**: factory firmware compiled for NXP e200z cores
 - Any **NXP MPC55xx family** target where `EcuArchDetector` identifies a PPC32 VLE core
-- The `EcuROMLayoutAnalyzer` integration pipeline — called automatically when a CODE region scores above the VLE probe threshold
+- The `EcuROMLayoutAnalyzer` integration pipeline: called automatically when a CODE region scores above the VLE probe threshold
 
 ---
 
@@ -122,7 +122,7 @@ intentional encoding property of the e200 VLE ISA, not a heuristic.
 
 | Instruction | Op / Encoding | Type |
 |---|---|---|
-| `e_stwu rS, D8(rA)` | `OPVUP(6,6)` = `0x18000600 \| ...` | STORE / PROLOGUE |
+| `e_stwu rS, D8(rA)` | `OPVUP(6,6)` = `0x18000600 \|...` | STORE / PROLOGUE |
 | `e_stmw / e_lmw` | `OPVUP(6,9)` / `OPVUP(6,8)` | STORE / LOAD |
 | `e_add16i rD, rA, SI` | `OP(7)` = `0x1C000000` | MISC |
 | `e_lbz / e_stb / e_lha` | `OP(12/13/14)` | LOAD / STORE |
@@ -311,18 +311,18 @@ for region in layout.code_regions():
 ## Limitations
 
 - Compact register notation for SE instructions: SE_R and SE_RR formats use 3-bit or 4-bit
-  compact register fields that map to a subset of GPRs. The decoder stores the raw field value as
+ compact register fields that map to a subset of GPRs. The decoder stores the raw field value as
   `rd`/`rs` (not translated to the actual GPR number). For `se_li`, the 4-bit RX field encodes
-  GPR0-GPR7 as 0-7 and GPR24-GPR31 as 8-15. The current decoder does not perform this translation.
+ GPR0-GPR7 as 0-7 and GPR24-GPR31 as 8-15. The current decoder does not perform this translation.
 
 - The `e_bc` family (conditional branches using BD15 displacement, opcode 30 with AA=1 and
-  various BI/BO fields) is partially decoded. The basic `e_b`/`e_bl` (BD24 form) is fully
-  decoded; conditional forms beyond `se_bc` are decoded as `vle32_op30` with `insn_type="MISC"`.
+ various BI/BO fields) is partially decoded. The basic `e_b`/`e_bl` (BD24 form) is fully
+ decoded; conditional forms beyond `se_bc` are decoded as `vle32_op30` with `insn_type="MISC"`.
 
 - VLE MSR[VLE] mode switching is not tracked. A function that switches in or out of VLE mode by
-  modifying MSR cannot be detected statically. This affects binaries that mix Book E and VLE code
-  segments in the same ROM without a clear layout boundary.
+ modifying MSR cannot be detected statically. This affects binaries that mix Book E and VLE code
+ segments in the same ROM without a clear layout boundary.
 
 - Capstone is not invoked. The decoder is pure Python. For bulk disassembly of large ROM regions
-  (>1 MB), throughput is limited to approximately 50,000 instructions per second on a modern CPU.
-  For scanning only (function_starts), the inner loop is pure struct.unpack_from and runs faster.
+ (>1 MB), throughput is limited to approximately 50,000 instructions per second on a modern CPU.
+ For scanning only (function_starts), the inner loop is pure struct.unpack_from and runs faster.

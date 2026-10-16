@@ -38,10 +38,10 @@ ctx = BinaryContext.load_from_cache_file('~/.ablation/cache/<slug>.json', orig_p
 | `plt` | `{va: symbol_name}` | All PLT stubs resolved to symbol names |
 | `exports` | `{symbol_name: va}` | All globally exported functions |
 | `strings` | `{va: content}` | Printable strings in `.rodata` (>= 4 chars) |
-| `func_starts` | `[va, ...]` | Sorted function entry VAs (eh_frame + callee augmentation) |
+| `func_starts` | `[va,...]` | Sorted function entry VAs (eh_frame + callee augmentation) |
 | `call_edges` | `[(from_va, to_va, label)]` | Flat call graph |
-| `_str_xref_idx` | `{string_va: [code_va, ...]}` | NumPy-built RIP-relative xref index |
-| `_func_str_idx` | `{func_va: [string_va, ...]}` | Per-function string reference index |
+| `_str_xref_idx` | `{string_va: [code_va,...]}` | NumPy-built RIP-relative xref index |
+| `_func_str_idx` | `{func_va: [string_va,...]}` | Per-function string reference index |
 
 ### Query API
 
@@ -94,8 +94,8 @@ This builds `_str_xref_idx` (string_va -> [code_vas]) and `_func_str_idx`
 ### PPC64 string xref: 5-pass system (Cell PPU / CryEngine PS3)
 
 PowerPC64 big-endian binaries use an ABI-defined Table of Contents (r2) for all global
-data access.  Direct RIP-relative displacement scanning finds nothing because PPC64 never
-encodes absolute addresses as inline 4-byte fields in the instruction stream.  The PPC64
+data access. Direct RIP-relative displacement scanning finds nothing because PPC64 never
+encodes absolute addresses as inline 4-byte fields in the instruction stream. The PPC64
 path runs five passes against the binary to build equivalent `_str_xref_idx` /
 `_func_str_idx` coverage:
 
@@ -110,19 +110,19 @@ path runs five passes against the binary to build equivalent `_str_xref_idx` /
 
 **Pass 5/6 detail: the 2-hop pattern:**
 
-CryEngine PS3 packs string VAs into dense arrays far from r2.  The access pattern is:
+CryEngine PS3 packs string VAs into dense arrays far from r2. The access pattern is:
 ```
 LWZ r11, near_off(r2)    # load array BASE pointer from near-TOC slot
 LWZ r3,  N*4(r11)        # load individual string VA from the array
 ```
 
 Pass 5 scans the near-TOC window (r2±32KB) for slots whose target begins a run of ≥3
-consecutive string VAs.  It then does a single linear pass over `.text` matching any
+consecutive string VAs. It then does a single linear pass over `.text` matching any
 `LWZ rX, off(r2)` whose displacement bytes collide with a discovered slot offset, and
 attributes all strings in the pointed-to array to the enclosing function.
 
 Pass 6 is identical but the "target" segment is the X|R LOAD segment (code/rodata) rather
-than the writable data segment.  The two segments are passed separately because LIEF may
+than the writable data segment. The two segments are passed separately because LIEF may
 split them differently depending on whether `.rodata` is in the same PT_LOAD as `.text`.
 `_augment_xrefs_ppc64_twohop` accepts optional `target_data`/`target_va` parameters;
 Pass 5 omits them (defaults to ds_data/ds_va); Pass 6 passes `target_data=code_data`.
@@ -131,7 +131,7 @@ For the Crysis 2 PS3 binary (CryEngine 3, Cell PPU, ELFCLASS64), Pass 5 alone pr
 ~12,600 function → string xrefs from 51 array-base TOC slots.
 
 **ELFCLASS64 note:** The Crysis 2 PS3 ELF is ELFCLASS64 despite running in 32-bit
-effective-address mode.  The entry-point OPD descriptor (8 bytes: code-VA + TOC-VA) is
+effective-address mode. The entry-point OPD descriptor (8 bytes: code-VA + TOC-VA) is
 parsed at `e_entry` using 64-bit struct layout; r2 is extracted from offset 4.
 
 ### Vectorized call graph
@@ -146,13 +146,13 @@ uses one batched `searchsorted` call rather than per-site binary search.
 ### func_starts for stripped static ELF32 binaries
 
 ELF32 binaries that are both statically linked and stripped have no `.symtab` or `.dynsym`
-entries, so `_extract_func_starts` normally produces an empty list.  lief finds no function
-starts because it relies on symbol tables.  Without `func_starts`, SemanticSearcher and
+entries, so `_extract_func_starts` normally produces an empty list. lief finds no function
+starts because it relies on symbol tables. Without `func_starts`, SemanticSearcher and
 TaintTracker have no function boundaries and cannot run.
 
 `BinaryContext` automatically calls `StaticELF32FuncStartScanner` for `x86_32` binaries when
 `func_starts` would otherwise be empty.  The scanner scans every PT_LOAD+PF_X segment for the
-3-byte i386 function prologue pattern `55 89 e5` (`push ebp; mov ebp, esp`), the canonical CDECL frame setup emitted by GCC for every non-leaf function.  Secondary patterns (`55 57 56`,
+3-byte i386 function prologue pattern `55 89 e5` (`push ebp; mov ebp, esp`), the canonical CDECL frame setup emitted by GCC for every non-leaf function. Secondary patterns (`55 57 56`,
 `55 53`) are tried only when the primary count is under ten, indicating a non-CDECL binary.
 
 The scanner is also available standalone when you want to augment a context from outside:
@@ -172,7 +172,7 @@ print(result.report())
 scanner.inject(ctx)
 ```
 
-False-positive rate on GCC i386 code is low.  The ModRM byte 0xe5 in `89 e5` encodes
+False-positive rate on GCC i386 code is low. The ModRM byte 0xe5 in `89 e5` encodes
 (mod=11, reg=ESP, rm=EBP), a combination that occurs inside other instruction operands rarely enough to be negligible in practice.
 
 ---
@@ -186,15 +186,15 @@ False-positive rate on GCC i386 code is low.  The ModRM byte 0xe5 in `89 e5` enc
 Two things were not possible before in Ablation:
 
 1. **String context for stripped i386 ELF32**: `BinaryContext._str_xref_idx` used
-   RIP-relative displacement arithmetic (x86-64 only). On a 675KB statically linked i386
-   binary this yielded 21 coincidental hits where 548 were correct. `strings_in_func()` and
+ RIP-relative displacement arithmetic (x86-64 only). On a 675KB statically linked i386
+ binary this yielded 21 coincidental hits where 548 were correct. `strings_in_func()` and
    `funcs_referencing_string()` were effectively broken for every 32-bit static target,
-   making string-guided taint entry-point selection impossible on i386 firmware.
+ making string-guided taint entry-point selection impossible on i386 firmware.
 
 2. **Function-level attribution of i386 string refs**: even when string VAs were known,
-   there was no way to ask "which function references this string?" on i386 because
+ there was no way to ask "which function references this string?" on i386 because
    `_func_str_idx` was empty. `inject()` populates both indexes in the same format as the
-   x86-64 scanner so all downstream `ctx` calls work identically regardless of bitness.
+ x86-64 scanner so all downstream `ctx` calls work identically regardless of bitness.
 
 ### Why the default xref index finds almost nothing in i386 code
 
@@ -209,7 +209,7 @@ x86-64 scanner (coincidental false hits) instead of the correct 548.
 ### How it works
 
 1. Read every 4-byte LE window at every byte offset in `.text`: same stride-trick
-   approach to the x86-64 scanner, but no displacement arithmetic.
+ approach to the x86-64 scanner, but no displacement arithmetic.
 2. Binary-search each window value against the sorted list of known string VAs.
 3. Attribute each hit to the enclosing function via `func_containing()`.
 4. Populate `ctx._str_xref_idx` and `ctx._func_str_idx` in the same format as the x86-64 index.

@@ -77,8 +77,8 @@ Finding categories:
 Gate: **PASSED**. No code changes needed.
 
 - `from_path()`: `p.stat().st_size` check against `_MAX_CONTAINER_BYTES` before `p.read_bytes()`. Raises `ValueError` on oversized files (documented precondition).
-- No file reads inside `scan()` or any analysis method — all work on `self._data` loaded once.
-- No bare `except:`. No try/except inside any parser function — bounds checks prevent exceptions.
+- No file reads inside `scan()` or any analysis method: all work on `self._data` loaded once.
+- No bare `except:`. No try/except inside any parser function: bounds checks prevent exceptions.
 - Recursion bounded: `max_depth=8` (MP4), `max_depth=6` (EBML/RIFF).
 - Division guard: `return high / total if total else 0.0` in `_high_entropy_fraction`.
 - EBML element sizes: master element recursion only when `esize < 4 MB`; MP4 container atom recursion only when `data_size < 8 MB`.

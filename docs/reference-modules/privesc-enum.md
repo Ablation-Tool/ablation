@@ -18,7 +18,7 @@ Full Linux privilege escalation enumeration and binary analysis toolkit. Covers:
 - Memory forensics evasion indicators (kcore, kmem, /dev/mem, crash dumps)
 - Log deletion / anti-forensics patterns
 - Adversary tool indicators (C2 staging files, deleted process binaries, scripting shells with sockets)
-- Windows-on-Linux vectors (unquoted service paths in .reg, AlwaysInstallElevated, token manipulation, UAC bypass, kernel driver exploitation — operate on raw `bytes`)
+- Windows-on-Linux vectors (unquoted service paths in.reg, AlwaysInstallElevated, token manipulation, UAC bypass, kernel driver exploitation: operate on raw `bytes`)
 - ASLR bypass detection (info-leak patterns, heap spray, ret2libc, mprotect-after-write)
 - Scheduled task abuse (cron.d, anacrontab, systemd timers and service units)
 - Cron/PATH hijacking (relative-path cron commands, world-writable PATH dirs, ld.so lib dirs, sudo env_keep PATH)
@@ -91,9 +91,9 @@ Gate: **PASSED**. 11 CWE-770 fixes applied this session (plus 3 from prior commi
 | /proc/net/arp | `check_network_interface_exposure` | `readlines()` | `read(_MAX_FILE_BYTES).splitlines()` |
 | /proc/net/dev | `check_network_interface_exposure` | `readlines()` | `read(_MAX_FILE_BYTES).splitlines()` |
 | /proc/{pid}/maps | `check_heap_injection_surface` | `readlines()` | `read(_MAX_PROC_BYTES).splitlines()` |
-| YUM .repo files | `check_package_manager_attack_surface` | `for line in fh` | `read(_MAX_FILE_BYTES).splitlines()` |
+| YUM.repo files | `check_package_manager_attack_surface` | `for line in fh` | `read(_MAX_FILE_BYTES).splitlines()` |
 | ~/.npmrc | `check_package_manager_attack_surface` | `for line in fh` | `read(_MAX_FILE_BYTES).splitlines()` |
-| .bash_history | `check_log_deletion_patterns` | `for line in fh` | `read(_MAX_FILE_BYTES).splitlines()` |
+|.bash_history | `check_log_deletion_patterns` | `for line in fh` | `read(_MAX_FILE_BYTES).splitlines()` |
 | ld.so.conf files | `detect_cron_and_path_hijacking` | `for line in fh` | `read(_MAX_FILE_BYTES).splitlines()` |
 
 No lief.parse(). No HTTP reads. No bare `except:`. All subprocess calls timeout-bounded (3–10 s). No user-controlled data in `shell=True` paths.

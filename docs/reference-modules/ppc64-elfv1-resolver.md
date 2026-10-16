@@ -25,7 +25,7 @@
 
 ## Architecture notes
 
-**OPD section (ELFv1 only):** Each OPD entry is 24 bytes — `(code_va, TOC_ptr, env_ptr)`. `nm`/`readelf -s` report the OPD entry VA as the function address; the actual executable code is at `code_va`. OPD entries are fixed-size, so `opd_to_code[sym_va] = struct.unpack_from('>Q', opd_data, sym_va - opd_base)[0]`.
+**OPD section (ELFv1 only):** Each OPD entry is 24 bytes, `(code_va, TOC_ptr, env_ptr)`. `nm`/`readelf -s` report the OPD entry VA as the function address; the actual executable code is at `code_va`. OPD entries are fixed-size, so `opd_to_code[sym_va] = struct.unpack_from('>Q', opd_data, sym_va - opd_base)[0]`.
 
 **Glink stubs (ELFv1):** 28 bytes each (ELFv1; ELFv2 uses 16). Stubs are at `.text` start: `stub_N = text_va + N*28`. Stub index N corresponds to the Nth entry in `.rela.plt` sorted by GOT slot VA (ascending). The relocation type `R_PPC64_JMP_SLOT = 21` identifies PLT entries.
 
@@ -104,6 +104,6 @@ Ppc64ElfV1Resolver.is_ppc64_elfv1('/path/to/bin')  # -> bool
 ## When to use
 
 - Any binary identified as `ELF 64-bit MSB PowerPC64` (big-endian). IBM LoadLeveler, IBM GPFS, AIX POWER Linux binaries.
-- Before running `SinkArgClassifier`, `TaintTracker`, or `FuncProfiler` on a PPC64 BE binary — call `res.patch_context(ctx)` first.
-- When `BinaryContext.summary()` shows `plt_entries: 0` on a PPC64 BE binary — that is this gap.
-- When disassembly at a symbol VA produces garbage (8 bytes of a pointer) — the VA is an OPD entry, not code.
+- Before running `SinkArgClassifier`, `TaintTracker`, or `FuncProfiler` on a PPC64 BE binary: call `res.patch_context(ctx)` first.
+- When `BinaryContext.summary()` shows `plt_entries: 0` on a PPC64 BE binary: that is this gap.
+- When disassembly at a symbol VA produces garbage (8 bytes of a pointer): the VA is an OPD entry, not code.

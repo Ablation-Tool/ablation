@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-**Gap closed:** TG-FPAM-1 — no ablation module for browser extension security analysis.
+**Gap closed:** TG-FPAM-1, no ablation module for browser extension security analysis.
 
 FortiClient EMS ships the FPAM browser extension (Chrome/Edge). Manual analysis of its
 `manifest.json` and background service worker confirmed FPAM-EXT-1: `externally_connectable`
@@ -43,7 +43,7 @@ findings = BrowserExtensionAuditor.scan_file('/tmp/fpam-ext/background.js')
 | `EXT_CONN_MISSING` | MEDIUM | CWE-346 | `content_scripts` declared but no `externally_connectable`; window.postMessage relay path |
 | `MSG_HANDLER_PREAUTH` | HIGH | CWE-285 | `onMessage`/`onMessageExternal` handler uses request payload before `sender.id`/`sender.url` check |
 | `CONTENT_SCRIPT_DOM_HOOK` | MEDIUM | CWE-200 | Content script overwrites `window.fetch`, `XMLHttpRequest`, or `document.cookie` |
-| `WEBSOCKET_BUS` | HIGH | CWE-284 | Background creates or connects to `ws://` WebSocket — bypasses Chrome sender validation |
+| `WEBSOCKET_BUS` | HIGH | CWE-284 | Background creates or connects to `ws://` WebSocket: bypasses Chrome sender validation |
 | `NATIVE_MSG_NO_ALLOWLIST` | HIGH | CWE-284 | `sendNativeMessage`/`connectNative` without surrounding `sender.id` guard |
 | `PERSISTENT_DATA_CLEAR` | LOW | CWE-362 | `chrome.storage.*.clear()` inside message handler before sender check |
 
@@ -68,8 +68,8 @@ python3 -m ablation.analyzers.browser_extension_auditor /path/to/ext/ --severity
 
 - Manifest V2 and V3 both supported
 - Pre-filter: JS/TS files must contain a Chrome extension API signal to be scanned
-  (avoids false positives on third-party bundled JS)
-- Message handler pre-auth check uses a 50-line lookahead window — deeply nested handlers
-  may be missed
+ (avoids false positives on third-party bundled JS)
+- Message handler pre-auth check uses a 50-line lookahead window: deeply nested handlers
+ may be missed
 - Does not analyze compiled/minified bundles (no AST); source maps not followed
 - Does not validate native messaging host manifests (separate JSON on the OS install path)

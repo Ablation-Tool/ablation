@@ -6,7 +6,7 @@
 
 Three gaps existed before this module:
 
-1. **Streaming infrastructure (Kafka, Flink, NiFi, NATS, RabbitMQ, Pulsar) was not enumerated.** These components expose significant attack surface — unauthenticated topic listing, binary wire protocol probing, management APIs — not covered by any prior Ablation network module.
+1. **Streaming infrastructure (Kafka, Flink, NiFi, NATS, RabbitMQ, Pulsar) was not enumerated.** These components expose significant attack surface, unauthenticated topic listing, binary wire protocol probing, management APIs. None were covered by any prior Ablation network module.
 
 2. **Observability stack exposure (Prometheus, Grafana, Jaeger, Loki, Thanos) was unprobed.** These components ship with no authentication by default and expose full internal telemetry, trace data, service topology, and alert routing configurations.
 
@@ -134,16 +134,16 @@ Note: Inner probe functions (`probe_jaeger_tracing`, `probe_loki_log_aggregation
 Gate: **PASSED**. No code changes needed.
 
 **Security checks:**
-- No file I/O anywhere in the module — no CWE-770 file read concerns.
-- No `lief.parse()` — no CWE-755 (lief null return) concerns.
-- No bare `except:` — all handlers use `except Exception:`, `except urllib.error.HTTPError:`, `except socket.timeout:`, or `except struct.error:`.
+- No file I/O anywhere in the module: no CWE-770 file read concerns.
+- No `lief.parse()`: no CWE-755 (lief null return) concerns.
+- No bare `except:`: all handlers use `except Exception:`, `except urllib.error.HTTPError:`, `except socket.timeout:`, or `except struct.error:`.
 - All HTTP reads bounded: `_MAX_HTTP_BYTES` (4 MB) for Kafka-tier helpers; 128 KB, 64 KB, or 8 KB caps in per-probe inner functions; 512/256 byte preview reads in binary protocol probes.
-- All `recv()` calls use fixed buffer sizes (256–4096 bytes) — network socket buffers, not file reads.
+- All `recv()` calls use fixed buffer sizes (256–4096 bytes): network socket buffers, not file reads.
 - All sockets `settimeout()` bounded or use `timeout=` in `create_connection`.
 - No subprocess calls.
-- `ssl.CERT_NONE` intentional — probe mode against self-signed management TLS.
+- `ssl.CERT_NONE` intentional: probe mode against self-signed management TLS.
 
 **Known residual:**
-- `probe_ddns_abuse` sends a real DNS UPDATE (RFC 2136) — active write probe, not read-only. Injects `ablation-test.<zone> A 1.2.3.4`. Accepted by servers with unauthenticated DDNS enabled.
-- `probe_cisco_nso_exposure` can trigger a `sync-from` RPC that causes NSO to actively poll all managed network devices — use with caution in production environments.
-- `probe_ansible_tower_awx_exposure` attempts three default credential pairs (`admin:password`, `admin:Tower`, `admin:admin`) — generates authentication log entries.
+- `probe_ddns_abuse` sends a real DNS UPDATE (RFC 2136): active write probe, not read-only. Injects `ablation-test.<zone> A 1.2.3.4`. Accepted by servers with unauthenticated DDNS enabled.
+- `probe_cisco_nso_exposure` can trigger a `sync-from` RPC that causes NSO to actively poll all managed network devices: use with caution in production environments.
+- `probe_ansible_tower_awx_exposure` attempts three default credential pairs (`admin:password`, `admin:Tower`, `admin:admin`): generates authentication log entries.

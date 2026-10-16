@@ -395,8 +395,8 @@ print(pseudo_java)
 | `iget-object v0, v1, Lf/Bar;->mField:Ljava/lang/String;` | `String v0 = v1.mField;` |
 | `invoke-virtual {v0, v1}, Landroid/widget/TV;->setText(I)V` | `v0.setText(v1);` |
 | `invoke-static + move-result-object vA` | `RetType vA = ClassName.method(args);` |
-| `if-eqz v0, :L000a` | `if (v0 == null) goto :L000a;` |
-| backward `goto :L0000` | `// loop end → :L0000` |
+| `if-eqz v0,:L000a` | `if (v0 == null) goto:L000a;` |
+| backward `goto:L0000` | `// loop end →:L0000` |
 
 ---
 

@@ -123,7 +123,7 @@ non-null, unnamed slots. Returns count of new names added.
 ## Validated on
 
 - GoldenEye 007: Reloaded (BLUS30755): 3185 vtables found; processPacket dispatch
-  located via `find_by_method_name`; Demonware BD class hierarchy mapped
+ located via `find_by_method_name`; Demonware BD class hierarchy mapped
 
 ---
 
@@ -131,6 +131,6 @@ non-null, unnamed slots. Returns count of new names added.
 
 - Single `toc=` per scan: dual-TOC binaries require two separate scan calls
 - Class hint is proximity-based (nearest string ≤256 bytes); accurate for well-laid-out
-  data segments, unreliable when strings and vtables are interleaved
+ data segments, unreliable when strings and vtables are interleaved
 - RTTI header detection requires `offset-to-top == 0 or 0xFFFFFFFF`: non-standard
-  compilers may use other values
+ compilers may use other values

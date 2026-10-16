@@ -8,7 +8,7 @@ Four things were not possible before in Ablation:
 
 2. **Provide the prerequisite for any RE work on Guardian-native code.** Guardian PAK archives are the only publicly accessible corpus of Tandem NonStop binaries. The platform's source code, ABI, and file-format specs are covered by NDA; no public documentation or disassembler plugin exists for any of the common RE tools. This extractor is the unlocking step for all Guardian RE in Ablation.
 
-3. **Handle content-based record detection.** The Guardian BACKUP tape format (which wraps the PAK contents) uses 2-byte type codes per record, but these codes are NOT stable across archive runs — confirmed: the tape-label code is `0x6891` in one PTF archive and `0x1F1A` in another for the same logical record class. Any type-code-based parser silently misidentifies records on the second archive it encounters. This module detects record class by content signature and record size, making it correct across archive variants.
+3. **Handle content-based record detection.** The Guardian BACKUP tape format (which wraps the PAK contents) uses 2-byte type codes per record, but these codes are NOT stable across archive runs, confirmed: the tape-label code is `0x6891` in one PTF archive and `0x1F1A` in another for the same logical record class. Any type-code-based parser silently misidentifies records on the second archive it encounters. This module detects record class by content signature and record size, making it correct across archive variants.
 
 4. **Preserve Guardian three-component filenames.** Guardian files live in a `$VOLUME.SUBVOLUME.FILENAME` three-field namespace (each component up to 8 characters) with no POSIX equivalent. No standard tool maps these to a safe filesystem path without truncation or silent collision. This module parses the 24-byte padded-field structure at offset `0x2E` in file header records and maps it to a clean directory hierarchy.
 
@@ -31,7 +31,7 @@ Archive terminator: FF FF FF FF  (two consecutive group separators)
 **Guardian BACKUP tape records (decompressed chunk contents):**
 
 ```
-Record detection is content-based — type codes are not stable across archives:
+Record detection is content-based, because type codes are not stable across archives:
 
   Tape label    200-byte chunk containing b'Tandem Archive Tape'
   File catalog  222-byte chunk containing b'File Backup'
@@ -75,7 +75,7 @@ for f in iter_files(data):
 
 | Symbol | Description |
 |--------|-------------|
-| `GUARDIAN_PAK_MAGIC` | `b'PAK '` — first 4 bytes of any valid PAK archive |
+| `GUARDIAN_PAK_MAGIC` | `b'PAK '`: first 4 bytes of any valid PAK archive |
 | `GuardianFile` | Dataclass: `path`, `volume`, `subvolume`, `filename`, `data`, `arch` (`"mips32be"`) |
 | `iter_chunks(data)` | Decompress and yield raw Guardian BACKUP record bytes; raises `ValueError` on bad magic; skips corrupt chunks silently |
 | `iter_files(data)` | Yield `GuardianFile` per file; accumulates consecutive data chunks; flushes on tape_label/file_catalog boundaries |
@@ -86,7 +86,7 @@ for f in iter_files(data):
 
 Gate: **PASSED** (0 HIGH, 0 CRITICAL).
 
-- 1 MEDIUM (FORGE §3): `zlib.decompress()` has no `max_length` — a crafted PAK could cause OOM via zlib bomb. Acceptable for trusted RE corpus use; callers consuming untrusted PAK files should pre-screen decompressed size.
+- 1 MEDIUM (FORGE §3): `zlib.decompress()` has no `max_length`: a crafted PAK could cause OOM via zlib bomb. Acceptable for trusted RE corpus use; callers consuming untrusted PAK files should pre-screen decompressed size.
 - 1 LOW (FORGE §6): the docstring listed specific record type code values (`0x6891`, `0xDF3B`, `0x0F02`) as if they were authoritative. Fixed before commit: docstring now explicitly states codes are not stable and documents the content-detection approach instead.
 - 1 LOW (FORGE §2): the `< 4` chunk size guard in `iter_files` discarded legitimate small data chunks (e.g., 3-byte or 1-byte payloads). Fixed before commit: guard changed to skip only truly empty blocks (`if not chunk`).
 

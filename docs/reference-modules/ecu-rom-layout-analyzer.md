@@ -351,13 +351,13 @@ for r in layout.ivt_regions():
 ## Limitations
 
 - `arch_hint` must be set explicitly for TriCore ROMs. There is no auto-detection fallback: the
-  default entropy+PPC path is wrong for AURIX images.
+ default entropy+PPC path is wrong for AURIX images.
 - Window size matters on small ROMs. A 256 KB SH705x ROM with the default 4 KB window gives only
-  64 windows; use `window_size=1024` for finer resolution.
+ 64 windows; use `window_size=1024` for finer resolution.
 - The MIXED category is a placeholder. No scanner currently consumes MIXED regions. Most MIXED
-  windows are at code/calibration boundaries and span less than one window.
+ windows are at code/calibration boundaries and span less than one window.
 - `detect_reset_vector()` cannot distinguish TriCore from SH705x when both patterns are present.
-  Use `EcuXDFParser` to check for an architecture-specific definition file first.
+ Use `EcuXDFParser` to check for an architecture-specific definition file first.
 - On systems without Capstone installed, `_tricore_density` returns `(0.0, False)`, which causes
-  all TriCore windows to be classified as CALIBRATION. The `arch_hint="tricore"` path requires
+ all TriCore windows to be classified as CALIBRATION. The `arch_hint="tricore"` path requires
   `capstone >= 5.0.1` with TriCore support.

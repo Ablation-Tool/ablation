@@ -26,11 +26,11 @@ through the decompiler. There was no batch automation for this.
 `CppVtableReconstructorAnalyzer` resolves all three with a single Python call:
 
 1. **VtableScanner**: finds vtables in any ELF using RELA relocations (dynamic) or
-   code-pointer scanning (static)
+ code-pointer scanning (static)
 2. **VtableNamer**: names each slot from export symbols, BinaryContext function names,
-   string literals, and callee patterns
+ string literals, and callee patterns
 3. **CppTypeTracker**: finds every call site that dispatches through any named slot;
-   groups by enclosing function
+ groups by enclosing function
 
 Output: a JSON-serialisable result object **and** an IDAPython script that emits
 `idc.parse_decls()` + `idc.set_cmt()` for the full producer→consumer chain in one pass.
@@ -96,9 +96,9 @@ Each `VtableSpec` records:
 - `va`: the vtable pointer address (vfunc[0], what's stored in objects)
 - `slots`: ordered `SlotSpec` list with index, byte offset, function VA, name
 - `has_itanium_header`: True when the 16 bytes before `va` look like offset-to-top=0 +
-  RTTI pointer (standard Itanium ABI vtable layout)
+ RTTI pointer (standard Itanium ABI vtable layout)
 - `ctor_sites`: VAs in the binary that reference this vtable VA (from relocations or
-  literal byte scan)
+ literal byte scan)
 - `section_name`: the ELF section name containing this vtable, e.g. `.rodata` or `.data`
 - `writable`: True when the containing section has `SHF_WRITE` set (mutable at runtime)
 
@@ -109,7 +109,7 @@ Names each slot in place. Attempts in order:
 1. **Export / symtab symbol**: direct match on `func_va`
 2. **BinaryContext confirmed name**: from prior RE session `ctx.set_name()` calls
 3. **String literal xref**: if the function body references a string like `"modexp"`,
-   the slot is named `"modexp"` (filtered: no spaces, no `%`, 3–32 chars)
+ the slot is named `"modexp"` (filtered: no spaces, no `%`, 3–32 chars)
 4. **Named callee**: if the function calls e.g. `BN_mod_exp`, the slot is named
    `"mod_exp"` after stripping the `BN_` prefix
 
@@ -212,18 +212,18 @@ Call Sites:
 ## Limitations
 
 - **ET_EXEC (non-PIE) binaries**: the byte scan fallback assumes `virtual_address ==
-  file_offset`. For executables loaded at a high base (e.g., `0x400000`), the fallback
-  will produce incorrect file offsets. The RELA-based method works correctly regardless.
+ file_offset`. For executables loaded at a high base (e.g., `0x400000`), the fallback
+ will produce incorrect file offsets. The RELA-based method works correctly regardless.
 - **Slot naming without ctx**: only export/symtab symbols are used. Pass a `BinaryContext`
-  for string-xref and callee-name naming.
+ for string-xref and callee-name naming.
 - **Consumer tracing on non-x86-64/ARM64**: returns empty; call-site tracing is not
-  implemented for LoongArch64, MIPS, PPC, etc.
+ implemented for LoongArch64, MIPS, PPC, etc.
 - **High FP rate on wide scan**: when `min_slots=1` and many vtables are in scope, the
-  VtableDispatchScanner call-site count grows because offset 0x00 / 0x08 appear in many
-  unrelated indirect calls. Restrict to a single vtable with `trace_consumers(spec)`.
+ VtableDispatchScanner call-site count grows because offset 0x00 / 0x08 appear in many
+ unrelated indirect calls. Restrict to a single vtable with `trace_consumers(spec)`.
 - **Stripped anonymous vtables**: vtables without any context (no exports, no strings, no
-  BinaryContext) remain as `vtable_XXXXXXXX` with unnamed slots. Run `name_slots()` again
-  after accumulating confirmed function names via `ctx.set_name()`.
+ BinaryContext) remain as `vtable_XXXXXXXX` with unnamed slots. Run `name_slots()` again
+ after accumulating confirmed function names via `ctx.set_name()`.
 
 ---
 
