@@ -109,7 +109,7 @@ Messages from your other sessions        accept
 | Capability | |
 |:---|:---|
 | [**On-Demand Analysis**](docs/module-reference/on-demand-analysis.md) | Loads in seconds because it only analyzes the code being examined. A 2 GB firmware image opens as fast as a small one because nothing is parsed until it is needed. |
-| [**Binary Lifting**](docs/module-reference/binary-lifter.md) | Translates machine code to readable pseudo-C across 31 architectures. ARM64 and x86-64 get register-level taint tracking so data flow is visible in the lifted output. |
+| [**Binary Lifting**](docs/module-reference/binary-lifter.md) | Translates machine code to readable pseudo-C across 31 architectures. All backends use per-register state machines seeded from each ISA's calling convention; ARM64 and x86-64 additionally carry taint annotations so data flow is visible in the lifted output. |
 | [**Semantic Code Search**](docs/module-reference/semantic-search.md) | Finds functions by describing what they do because stripped binaries have no symbols to search. Queries are scoped to the target binary so results return in under a second. |
 | [**Hypothesis Engine**](docs/module-reference/hypothesis-engine.md) | Tracks competing theories about what a function does and scores evidence against each one. Sessions persist across engagements so analysis resumes where it left off. |
 | [**DAG Adapter Language**](docs/module-reference/encoding-dag.md) | Every architecture shares the same analysis code path because each ISA compiles to a directed acyclic graph. Adding a new ISA takes one grammar file, so the architecture count grows without multiplying the codebase. |
@@ -216,7 +216,7 @@ Messages from your other sessions        accept
 </details>
 
 <details>
-<summary><strong>31 Decompilers</strong></summary>
+<summary><strong>29 Decompilers</strong></summary>
 
 <details>
 <summary><strong>Native CPUs</strong> </summary>
@@ -254,7 +254,6 @@ Messages from your other sessions        accept
 |---|---|
 | [**DEX**](docs/module-reference/android.md) | Dalvik · ART |
 | [**ARK**](docs/module-reference/harmonyos.md) | ArkTS |
-| [**BEAM**](docs/module-reference/beam.md) | Erlang · Elixir |
 | [**MicroPython**](docs/module-reference/mpy-lifter.md) | .mpy v6 |
 
 </details>
