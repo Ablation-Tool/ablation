@@ -91,7 +91,10 @@ def _parse_elf32_ppc(raw: bytes):
     def sh_name(i: int) -> str:
         sh = e_shoff + i * e_shentsize
         name_off = _read_u32be(raw, sh)
-        end = shstrtab.index(b'\x00', name_off)
+        try:
+            end = shstrtab.index(b'\x00', name_off)
+        except (ValueError, IndexError):
+            return ''
         return shstrtab[name_off:end].decode('ascii', errors='replace')
 
     def sh_offset(i: int) -> int:

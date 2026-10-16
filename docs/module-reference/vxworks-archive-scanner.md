@@ -61,4 +61,12 @@ scanner = VxWorksArchiveScanner('/path/to/libwmNet.a',
 
 ## FORGE audit
 
-Gate: **PASSED**. CWE-770 (unbounded archive + member reads) fixed via `_MAX_ARCHIVE_BYTES=128MB` in `__init__` and `_MAX_MEMBER_BYTES=16MB` cap in `_extract_member()`. No HIGH or CRITICAL findings remain.
+Gate: **PASSED**. Two fixes applied:
+
+| Fix | Location | Description |
+|---|---|---|
+| CWE-770: unbounded archive read | `__init__` | `_MAX_ARCHIVE_BYTES=128MB` via `os.path.getsize()` guard before archive scan |
+| CWE-770: unbounded member read | `_extract_member` | `_MAX_MEMBER_BYTES=16MB` cap on bytes returned by `ar p` per `.o` member |
+| CWE-20: unguarded `shstrtab.index()` | `sh_name()` inner function in `_parse_elf32_ppc` | `shstrtab.index(b'\x00', name_off)` raised `ValueError` on malformed ELF; now wrapped in `try/except (ValueError, IndexError)` returning `''` — matches the identical guard in the `.symtab` str_data loop |
+
+No HIGH or CRITICAL findings remain.
