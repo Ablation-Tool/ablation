@@ -183,5 +183,5 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 
 - [Vulnerability hunting workflow](workflows/vuln-hunting.md) -- full loop from sweep to
   disclosure-ready finding
-- [Module reference](module-reference/) -- all 50+ analyzers with parameters and examples
+- [Module reference](reference-modules/) -- all 50+ analyzers with parameters and examples
 - [CONTRIBUTING.md](../.github/CONTRIBUTING.md) -- how to add patterns, sweeps, and analyzer modules

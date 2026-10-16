@@ -164,7 +164,7 @@ exceeds the PPC32 false-positive ceiling on the same ROM files.
 
 Updated files: `ablation/analyzers/ecu_arch_detector.py`,
 `tests/test_ecu_arch_detector.py`,
-`docs/module-reference/ecu-arch-detector.md`.
+`docs/reference-modules/ecu-arch-detector.md`.
 
 ---
 
@@ -198,8 +198,8 @@ Validated: Waqas GEN3 AURIX TC-series 2 MB flat ROM. Previous result: one large 
 BMHD + boot configuration at the ROM base.
 
 Updated files: `ablation/analyzers/ecu_rom_layout_analyzer.py`,
-`docs/module-reference/ecu-rom-layout-analyzer.md`,
-`docs/module-reference/ecu-rom-layout-analyzer-tricore-forge-audit.md`.
+`docs/reference-modules/ecu-rom-layout-analyzer.md`,
+`docs/reference-modules/ecu-rom-layout-analyzer-tricore-forge-audit.md`.
 
 ---
 
@@ -226,7 +226,7 @@ Three calling conventions are decoded: `LC/LRET` (return addr on software stack,
 `FFC` (return addr in XAR7 register, fast inner-loop calls).
 
 New files: `ablation/analyzers/ecu_c28x_decoder.py`,
-`docs/module-reference/ecu-c28x-decoder.md`.
+`docs/reference-modules/ecu-c28x-decoder.md`.
 
 Reference: SPRU430F — TMS320C28x CPU and Instruction Set Reference Guide, April 2015.
 
@@ -247,7 +247,7 @@ covered for all four finding classes, including TINCC-001 weak normalization
 symbol override risk.
 
 New files: `ablation/analyzers/ti_coff_loader.py`,
-`docs/module-reference/ti-coff-loader.md`.
+`docs/reference-modules/ti-coff-loader.md`.
 
 Reference: SPRAAO8 — TI Common Object File Format (April 2009).
 
@@ -273,7 +273,7 @@ NPU async ordering hazard), TINCC-003 (MEDIUM, multi-model NPU contention),
 TINCC-004 (INFO, skip-normalize mode active).
 
 New files: `ablation/analyzers/ti_nnc_scanner.py`,
-`docs/module-reference/ti-nnc-scanner.md`.
+`docs/reference-modules/ti-nnc-scanner.md`.
 
 ---
 
@@ -290,7 +290,7 @@ recursive code objects with the interleaved-bit prelude (MP_BC_PRELUDE_SIG +
 MP_BC_PRELUDE_SIZE from py/bc.h). Supports MicroPython 1.19 through 1.23+.
 
 New files: `ablation/analyzers/mpy_lifter.py`,
-`docs/module-reference/mpy-lifter.md`.
+`docs/reference-modules/mpy-lifter.md`.
 
 ---
 
@@ -307,11 +307,11 @@ New:
   `TaintState.join()` lattice paths, `invalidate_base()`, ARC atomic
   instructions, x86 `_const` instructions, MIPS/PPC FP handlers, and
   `record_trace=True` paths across all 6 qualified taint engine modules.
-- `docs/ABLATION-STANDARDS.md`: compliance matrix v1.3.0 — 29 MET, 0 PARTIAL,
+- `docs/standards-ablation.md`: compliance matrix v1.3.0 — 29 MET, 0 PARTIAL,
   against NIST SP 800-218 (SSDF), CISA Secure by Design, ISO 26262 TCL3,
   MIL-HDBK-115C, and DoWI 8430.01.
 - `docs/safety-manual.md`: ISO 26262 Part 8 Clause 11 safety manual.
-- `docs/known-anomalies/`: 16 known-anomaly files, one per taint tracker.
+- `docs/reference-anomalies/`: 16 known-anomaly files, one per taint tracker.
 - `docs/sbom/ablation-sbom.json`: software bill of materials (pip-licenses).
 - `requirements-hashed.txt`: hash-pinned dependency lockfile (pip-compile).
 - `scripts/monitor-supply-chain.sh`: weekly pip-audit CVE scan.
@@ -364,7 +364,7 @@ New:
   Used to find if/else join points.
 - All node types exported: `SequenceNode`, `InsnNode`, `IfNode`, `WhileNode`,
   `BreakNode`, `ContinueNode`, `ReturnNode`.
-- Docs: `docs/module-reference/structurizer.md`.
+- Docs: `docs/reference-modules/structurizer.md`.
 
 ---
 
@@ -400,7 +400,7 @@ New:
   WITHOUT = {bt, bf, rts/n}.  BRAF/BSRF/JMP@Rn decode as MISC → open blocks
   (documented limitation).
 - Compatible with `DomTree`, `LoopInfo` from `dataflow_engine` via duck typing.
-- Docs: `docs/module-reference/cfg-sh2a.md`.
+- Docs: `docs/reference-modules/cfg-sh2a.md`.
 
 ---
 
@@ -422,7 +422,7 @@ New:
   Taint propagation from tainted args through call results and loads.
 - Arch dispatch: `sh2a`, `sh-2a`, `sh2` all dispatch to `_lift_sh2a`.
 - 46 tests in `tests/test_binary_lifter_sh2a.py`.
-- Docs: `docs/module-reference/binary-lifter-sh2a.md`.
+- Docs: `docs/reference-modules/binary-lifter-sh2a.md`.
 
 ---
 
@@ -650,7 +650,7 @@ branch conditions with inlined comparison operands.
 - `_extract_func_starts_pe()` seeds from exports, then prologue-scans executable sections (x86_64: `sub rsp`, `push rbx`, `endbr64`; x86_32: `push ebp; mov ebp, esp`)
 - `_build_call_graph_pe()` vectorized numpy `0xe8` scan on all `IMAGE_SCN_MEM_EXECUTE` sections; Capstone fallback when numpy is unavailable
 - `_build_string_xref_index_pe()` RIP-relative scan (x86_64) or absolute scan (x86_32) to populate `strings_in_func()` and `funcs_referencing_string()`
-- `BinaryContext` doc added: `docs/module-reference/binary-context.md`
+- `BinaryContext` doc added: `docs/reference-modules/binary-context.md`
 - MZ magic removed from `_NON_ELF` warn list (PE files now build a real context instead of warning and returning empty)
 
 ---
@@ -832,7 +832,7 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
   - Pure-Python fallback when NumPy is unavailable.
   - ELF32 only (PE32 excluded — too many false positives from vtable/jump-table entries).
   - Validated on wsconv (AlphaSmart Dana): 934 string VAs, 548 xref pairs, 153 unique functions.
-  - Docs: `docs/module-reference/core.md` (new I386AbsoluteXrefScanner section).
+  - Docs: `docs/reference-modules/core.md` (new I386AbsoluteXrefScanner section).
 
 ## v2.38.0
 
@@ -846,7 +846,7 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
     `qt_rtsp_recv_overflow`, `qt_registry_plugin_load`, `qt_path_string_overflow`,
     `win_cmd_exec`, `win_format_string`, `qt_codec_intovf`, `qt_com_stream_overflow`.
   - CLI: single binary or directory scan; outputs `reports/sweep_pe_*.md`.
-  - Docs: `docs/module-reference/pe-sweep.md`.
+  - Docs: `docs/reference-modules/pe-sweep.md`.
   - Validated on `PlugInHelper.exe` (Apple QuickTime, 2002): 23 functions, 94 IAT entries,
     9 profiles hit above 0.30 including integer overflow and path string candidates.
 
@@ -938,7 +938,7 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
     when a GOT2 pointer load followed a source call).
   - **New sinks**: `execl`, `execle`, `execlp`, `strcpy_s`, `strcat_s`, `sprintf_s`,
     `snprintf_s`, `memcpy_s` (Huawei secure-string variants, heavily used in Huawei boot ROM).
-  - **New doc**: `docs/module-reference/ppc32-taint-tracker.md`
+  - **New doc**: `docs/reference-modules/ppc32-taint-tracker.md`
 
 ## v2.33.0
 
@@ -971,7 +971,7 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
   - Also exports `ARM64TaintTracker` and `TaintFindingARM64` from the analyzers package (were previously only accessible via direct module import).
   - Gap origin: TencentOS ARM64 config-parsing daemons produced 47 fgets findings at HIGH; 41 are file-class FPs. Discriminator recovers true-positive signal.
   - Validation corpus: 94 AArch64 binaries; 41/41 file-class findings confirmed as config-file parsing via manual trace; 0 false network classifications.
-  - Docs: `docs/module-reference/vuln-scanners.md` ARM64FgetsFdDiscriminator section added.
+  - Docs: `docs/reference-modules/vuln-scanners.md` ARM64FgetsFdDiscriminator section added.
 
 ## v2.30.0
 
@@ -980,7 +980,7 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
   - PE32+ has no PLT/GOT. `_check_lookahead()` enters arg-register feed mode when `self._pe32plus` is True: any `bl` or `jirl $ra,...` call where the max-not-min result is live in `$a0`–`$a7` produces a finding with `sink_name="<direct>"` or `"<indirect>"` and `sink_arg` set to the ABI register name. Confirm callee manually (AllocatePool/CopyMem arrive via EFI Boot Services Table pointers through `jirl`).
   - **OR commutativity fix**: the four-instruction sequence check previously required `or Rout, Rtmp2, Rtmp1` exactly. GCC may also emit `or Rout, Rtmp1, Rtmp2` (commuted). Both encode the same `max(Ra,Rb)`. Changed the check to `{rj, rk} == {rtmp1, rtmp2}` (set equality). This was a silent miss on every binary where GCC chose the commuted ordering — validated on TencentOS EDK2 PE32+ modules.
   - Validation: 87 DXE modules from `edk2-loongarch64-fw` (TencentOS Server 4.6, `QEMU_EFI.fd`). 63 sink-proximate findings across 26 modules. Highest-risk module: TlsDxe (13 findings, network-reachable in PXE/HTTP-boot, no ASLR). ELF regression clean (existing libstd findings unaffected).
-  - Docs: `docs/module-reference/vuln-scanners.md` PE32+ mode section added; `CLAUDE.md` tool table and quick-reference updated.
+  - Docs: `docs/reference-modules/vuln-scanners.md` PE32+ mode section added; `CLAUDE.md` tool table and quick-reference updated.
 
 ## v2.29.0
 
@@ -1057,7 +1057,7 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
   - `get_code(method)`: CodeItem parsing with all-ULEB128 prologue (`register_count + parameter_count + code_size + exception_handler_count`); confirmed from ArkCompiler `ark-rs/src/lowlevel/bytecode.rs`. The fixed u16/u32 layout (often cited in docs) is the static dialect only.
   - Security API: `find_native_methods()`, `find_methods_by_name()`, `find_methods_in_class()`, `find_string_refs_in_code()`, `iter_class_info()`, `summary()`.
   - Verified on wechat.abc v12.0.6.0 (356 KB): 39 classes, 867 methods, all `get_code()` calls succeed.
-  - Docs: `docs/module-reference/harmonyos.md` (new); `docs/INDEX.md` updated.
+  - Docs: `docs/reference-modules/harmonyos.md` (new); `docs/INDEX.md` updated.
 
 ---
 
@@ -1320,7 +1320,7 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
   (HIGH — dynamic registration; `RegisterNatives` function pointers not in symbol table)
   vs `Java_*` exports (MEDIUM — canonical naming directly recoverable). No androguard
   dependency. API: `from_path()`, `scan()`, `report()`.
-  Docs: `docs/module-reference/android.md`.
+  Docs: `docs/reference-modules/android.md`.
 
 - **BinderScanner** (`binder_scanner.py`): Binder IPC surface map from DEX ClassDef
   superclass scan, `onTransact` MethodRef, and manifest exported component cross-reference.
@@ -1328,7 +1328,7 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
   `$Stub` inner classes (MEDIUM), unexported Service subclasses (MEDIUM), and Messenger
   usage (INFO). AIDL Stub integer transaction code fuzzing noted per finding.
   API: `from_path()`, `scan()`, `report()`.
-  Docs: `docs/module-reference/android.md`.
+  Docs: `docs/reference-modules/android.md`.
 
 - **android_sweep.py** (`sweeps/android_sweep.py`): orchestration sweep for full APK
   RE pass. Runs manifest analysis, DexAnalyzer, JniBridgeScanner, BinderScanner, and
@@ -1344,12 +1344,12 @@ of Windows PE binaries from control flow integrity to kernel pool allocation.
   payload type (gzip/xz/zstd/lz4/lzo/cpio/elf/pe/ext2/3/4) per partition. API:
   `from_path()`, `dump_partitions()`, `read_partition(name)`, `extract(name, path)`,
   `extract_all(outdir)`. CLI: `python3 -m ablation.analyzers.firmware_container`.
-  Docs: `docs/module-reference/firmware-containers.md`.
+  Docs: `docs/reference-modules/firmware-containers.md`.
 
 - **VideoContainerAnalyzer** (`video_container.py`): forensic scanner for MP4/MOV,
   MKV/WebM, and AVI files. Detects polyglot headers, appended trailer data, atom size
   overflow, EBML unknown-length abuse, and RIFF chunk miscount. API: `from_path()`,
-  `scan()`, `report(findings)`. Docs: `docs/module-reference/firmware-containers.md`.
+  `scan()`, `report(findings)`. Docs: `docs/reference-modules/firmware-containers.md`.
 
 ---
 

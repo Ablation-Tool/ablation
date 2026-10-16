@@ -2,7 +2,7 @@
 
 **Module:** `ablation/analyzers/windows_pool_taint_tracker.py`  
 **Tracker version:** v2.57.0  
-**Format:** ISO 26262 Part 8 / TASKING qualification kit (see `ABLATION-STANDARDS.md` §2.3)
+**Format:** ISO 26262 Part 8 / TASKING qualification kit (see `standards-ablation.md` §2.3)
 
 An anomaly is a condition under which `WindowsPoolTaintTracker` is known to produce an
 incorrect result. Each entry documents the triggering condition, the impact, and the

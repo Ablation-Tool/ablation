@@ -209,4 +209,4 @@ Validated on FortiAP cwWtpd (MIPS32 BE ET_EXEC, 1,170 exports): **104 call sites
 (86 RODATA_CONST, 2 SNPRINTF_RODATA, 1 ARG_PROPAGATED, 15 UNKNOWN). Confirmed FAP-CWMIPS-1
 (root RCE via CAPWAP VSP password injection). See `re/fortinet/fortiap_re.py`.
 
-See `docs/module-reference/sink-arg-classifier-mips.md` for full usage and design notes.
+See `docs/reference-modules/sink-arg-classifier-mips.md` for full usage and design notes.

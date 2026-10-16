@@ -169,7 +169,7 @@ Tests 1–3 passed live. Test 4 verified via documentation review (0.0 density �
 ## Section 10: Documentation
 
 - `ecu_rom_layout_analyzer.py` docstring: updated to document `arch_hint`, IVT region type, and all three root causes for TriCore misclassification ✓
-- `docs/module-reference/ecu-rom-layout-analyzer.md`: updated "Why this exists" (5 items), constructor parameter table, ROMLayout API, new TriCore AURIX section, Limitations ✓
+- `docs/reference-modules/ecu-rom-layout-analyzer.md`: updated "Why this exists" (5 items), constructor parameter table, ROMLayout API, new TriCore AURIX section, Limitations ✓
 - `CLAUDE.md` `ecu_rom_layout_analyzer` row: updated to reflect `arch_hint` parameter ✓
 - `CHANGELOG.md`: v2.72.0 entry ✓
 

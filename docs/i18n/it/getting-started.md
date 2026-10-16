@@ -178,5 +178,5 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 ## Passi successivi
 
 - [Flusso di lavoro di caccia alle vulnerabilità](../../workflows/vuln-hunting.md) -- ciclo completo dalla scansione al risultato pronto per la divulgazione
-- [Riferimento moduli](../../module-reference/) -- oltre 50 analizzatori con parametri ed esempi
+- [Riferimento moduli](../../reference-modules/) -- oltre 50 analizzatori con parametri ed esempi
 - [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- come aggiungere pattern, scansioni e moduli analizzatori

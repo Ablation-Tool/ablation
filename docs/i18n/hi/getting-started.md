@@ -178,5 +178,5 @@ fr.list_findings(binary_sha=ctx.sha256[:16])
 ## अगले कदम
 
 - [कमजोरी खोज वर्कफ्लो](../../workflows/vuln-hunting.md) -- स्वीप से disclosure-ready finding तक पूरा लूप
-- [मॉड्यूल रेफरेंस](../../module-reference/) -- parameters और examples के साथ 50+ analyzers
+- [मॉड्यूल रेफरेंस](../../reference-modules/) -- parameters और examples के साथ 50+ analyzers
 - [CONTRIBUTING.md](../../../.github/CONTRIBUTING.md) -- patterns, sweeps और analyzer modules जोड़ने का तरीका

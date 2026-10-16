@@ -684,7 +684,7 @@ These ISAs have their own decoder and taint tracker. They do not go through `Bin
 
 ## Further reading
 
-- `docs/re-workflow.md` — how these stages map to the analysis pipeline
-- `docs/tool-selection-guide.md` — which tool to use for which task
-- `docs/module-reference/binary-lifter.md` — BinaryLifter ISA backend reference
-- `docs/module-reference/ppc476-lifter.md` — Ppc32Lifter for IBM PPC476 targets
+- `docs/guide-re-workflow.md` — how these stages map to the analysis pipeline
+- `docs/guide-tool-selection.md` — which tool to use for which task
+- `docs/reference-modules/binary-lifter.md` — BinaryLifter ISA backend reference
+- `docs/reference-modules/ppc476-lifter.md` — Ppc32Lifter for IBM PPC476 targets
