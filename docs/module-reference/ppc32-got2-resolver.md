@@ -81,6 +81,12 @@ search.  This handles a third compiler variant found in Huawei CE6810 e500mc `.s
 where up to 8 frame spill instructions appear between BCL and MFLR r30.  No parameters
 needed; this is always-on.
 
+## Error conditions
+
+- `from_path()` raises `ValueError` if the file exceeds `_MAX_BINARY_BYTES` (256 MB) or if
+  `lief.parse()` returns `None` (corrupt or unsupported ELF). The `None` case is checked
+  explicitly after the parse call to prevent `AttributeError` in callers.
+
 ---
 
 ## How it works

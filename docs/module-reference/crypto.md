@@ -136,6 +136,10 @@ result = solver.kpa_attack(max_probe=64)
 
 Post-access cryptographic posture auditor. Finds JWTs with weak secrets, SAML assertion wrapping risks, hardcoded key material, and TLS endpoint weaknesses.
 
+`scan_for_crypto_anti_patterns(filepath)` enforces a `_MAX_CRYPTO_SCAN_BYTES` (32 MB) limit
+before reading. Files that exceed the limit return an `INFO/FILE_TOO_LARGE` finding instead of
+being skipped silently.
+
 ### JWT structure and cracking
 
 ```

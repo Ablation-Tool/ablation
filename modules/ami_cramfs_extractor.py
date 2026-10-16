@@ -181,6 +181,11 @@ class AmiCramFSExtractor:
 
     @classmethod
     def from_path(cls, path: str) -> 'AmiCramFSExtractor':
+        file_size = os.path.getsize(path)
+        if file_size > cls._MAX_IMAGE_BYTES:
+            raise ValueError(
+                f'{path}: file size {file_size} exceeds {cls._MAX_IMAGE_BYTES} byte limit'
+            )
         with open(path, 'rb') as f:
             return cls(f.read())
 

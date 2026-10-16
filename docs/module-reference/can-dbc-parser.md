@@ -115,9 +115,10 @@ print(f"Standard: {len(db.standard_messages())}  Extended: {len(db.extended_mess
 
 ### `CanDbcParser.from_file(path)`
 
-Parse a DBC file. Raises `FileNotFoundError` when the path does not exist. Encoding is
-UTF-8 with `errors="replace"` to handle DBC files with Latin-1 comment text. Malformed signal
-lines are silently skipped.
+Parse a DBC file. Raises `FileNotFoundError` when the path does not exist, `ValueError` when
+the file exceeds the 16 MB size limit (`_MAX_DBC_BYTES`). Encoding is UTF-8 with
+`errors="replace"` to handle DBC files with Latin-1 comment text. Malformed signal lines are
+silently skipped.
 
 ### `CanDbcParser.from_string(text)`
 

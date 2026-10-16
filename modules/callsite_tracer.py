@@ -22,6 +22,7 @@ Usage:
       --callsite 0x2e90cc --callsite 0x2eac04
 """
 
+import os
 import struct, sys, argparse
 from pathlib import Path
 from dataclasses import dataclass
@@ -30,6 +31,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import lief
 import capstone
 from capstone import arm64 as A64
+
+_MAX_SO_BYTES = 256 * 1024 * 1024
 
 # ─── capstone ────────────────────────────────────────────────────────────────
 
@@ -83,7 +86,15 @@ _GOT: Dict[Tuple[int, int], Global] = {
 # ─── binary helpers ───────────────────────────────────────────────────────────
 
 def _load(so_path: str):
-    binary = lief.parse(so_path)
+    so_size = os.path.getsize(so_path)
+    if so_size > _MAX_SO_BYTES:
+        raise ValueError(f'{so_path}: file size {so_size} exceeds {_MAX_SO_BYTES} byte limit')
+    try:
+        binary = lief.parse(so_path)
+    except Exception as exc:
+        raise ValueError(f'lief.parse failed on {so_path}: {exc}') from exc
+    if binary is None:
+        raise ValueError(f'lief.parse returned None for {so_path}')
     raw = Path(so_path).read_bytes()
     return binary, raw
 

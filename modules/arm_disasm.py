@@ -29,9 +29,12 @@ Usage:
 License: Internal research use only
 """
 
+import os
 import struct
 from typing import List, Tuple, Optional, Dict
 from dataclasses import dataclass
+
+_MAX_BINARY_BYTES = 256 * 1024 * 1024
 
 @dataclass
 class ARMInstruction:
@@ -314,6 +317,9 @@ def main():
     start_offset = int(sys.argv[2], 16) if len(sys.argv) > 2 else 0
     count = int(sys.argv[3]) if len(sys.argv) > 3 else 100
 
+    bin_size = os.path.getsize(binary_path)
+    if bin_size > _MAX_BINARY_BYTES:
+        raise ValueError(f'{binary_path}: file size {bin_size} exceeds {_MAX_BINARY_BYTES} byte limit')
     with open(binary_path, 'rb') as f:
         data = f.read()
 

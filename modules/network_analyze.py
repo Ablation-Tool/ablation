@@ -29,6 +29,9 @@ from pathlib import Path
 _IS_MACOS = _platform.system() == 'Darwin'
 _IS_LINUX = _platform.system() == 'Linux'
 
+_MAX_PCAP_BYTES = 512 * 1024 * 1024
+_MAX_HTTP_BYTES = 4 * 1024 * 1024
+
 class NetworkAnalyzer:
     """Analyze network configuration and connections"""
     
@@ -320,6 +323,9 @@ class PCAPAnalyzer:
         Returns True on success.
         """
         try:
+            pcap_size = os.path.getsize(self.filepath)
+            if pcap_size > _MAX_PCAP_BYTES:
+                return False
             with open(self.filepath, 'rb') as f:
                 data = f.read()
         except OSError:
@@ -888,7 +894,7 @@ class WebDirBrute:
         except urllib.error.HTTPError as exc:
             status = exc.code
             try:
-                length = len(exc.read())
+                length = len(exc.read(_MAX_HTTP_BYTES))
             except Exception:
                 length = 0
         except urllib.error.URLError:
