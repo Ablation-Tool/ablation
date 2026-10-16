@@ -69,7 +69,7 @@ ext.extract_all('/tmp/bmc_root/', progress=print)
 ## Size limits
 
 `from_path()` and `from_image()` raise `ValueError` when the file or the image slice exceeds
-`_MAX_IMAGE_BYTES` (512 MB). This guards against loading an inadvertent full-disk image as a
+`_MAX_IMAGE_BYTES` (256 MB). This guards against loading an inadvertent full-disk image as a
 CramFS partition. The limit is enforced via `os.path.getsize()` before any `read()` call.
 
 ## Block-0 prefix handling
@@ -83,4 +83,4 @@ before the zlib header are discarded as storage overhead. Confirmed on psme-rest
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_CRAMFS_BYTES=256MB` + `os.path.getsize()` guard before `open().read()`.
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_IMAGE_BYTES=256MB`; `os.path.getsize()` guard in `from_path()` before `f.read()`; `from_image()` reads header (8 bytes) then validates `total_size` against `_MAX_IMAGE_BYTES` and file bounds before reading the partition. No lief.parse(). No HTTP reads. No subprocess.
