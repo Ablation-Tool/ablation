@@ -25,6 +25,7 @@ _ETH_HDR_LEN = 14
 
 # Max SSH KEXINIT packet size (SSH RFC allows up to 35000; 65536 is generous)
 _MAX_SSH_PKT_BYTES = 65536
+_MAX_PROC_BYTES = 4 * 1024 * 1024   # cap for /proc/net/* reads
 
 # Cleartext-credential port set
 CRED_PORTS = {21, 23, 25, 80, 110, 143, 8080}
@@ -400,7 +401,7 @@ class RawSniffer:
         arp_file = '/proc/net/arp'
         try:
             with open(arp_file, 'r') as fh:
-                lines = fh.readlines()
+                lines = fh.read(_MAX_PROC_BYTES).splitlines()
         except OSError:
             return entries
 
@@ -1342,7 +1343,7 @@ def detect_arp_spoofing(interface: str = "eth0") -> list:
     gw_ip: str = ''
     try:
         with open('/proc/net/route', 'r') as _fh:
-            for line in _fh.readlines()[1:]:
+            for line in _fh.read(_MAX_PROC_BYTES).splitlines()[1:]:
                 parts = line.split()
                 # Default route: Destination == 00000000, Gateway != 00000000
                 if (len(parts) >= 3
