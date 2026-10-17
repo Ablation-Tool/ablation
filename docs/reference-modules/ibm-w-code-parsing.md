@@ -83,6 +83,21 @@ Run `WCodeParser` on any IBM POWER object file compiled with XLC before building
 
 ---
 
+## Reading output
+
+`WCodeParser.parse()` returns a list of `WCodeRecord` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `record_id` | Integer record identifier |
+| `name` | Resolved builtin name (from `WCodeBuiltinCatalog`) or `None` |
+| `args` | Argument count |
+| `va` | Virtual address of the corresponding call site (if available) |
+
+`WCodeBuiltinCatalog.lookup(record_id)` returns the name string or `None`.
+
+---
+
 ## See also
 
 - [PPC64 ELFv1 Resolution](ppc64-elfv1-resolution.md) — PLT patching for POWER Linux binaries
