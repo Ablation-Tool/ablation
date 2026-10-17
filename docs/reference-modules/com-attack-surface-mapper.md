@@ -71,35 +71,51 @@ COM hijacking works when a DLL is loaded via a CLSID registered under `HKCU\Soft
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`COMAttackSurfaceMapper.from_path()` opens the PE with LIEF. The five analysis steps match the "What it does" section above:
+
+1. **Export scan** — checks the PE export table for `DllGetClassObject`, `DllRegisterServer`, `DllUnregisterServer`, `DllCanUnloadNow` using LIEF's `binary.exported_functions`. Any of these marks the DLL as a COM server.
+2. **GUID string scan** — walks `.rdata` and `.data` sections for the regex `{[0-9A-F]{8}-[0-9A-F]{4}-...}` to collect CLSID string references. Each unique GUID is stored in the CLSID inventory.
+3. **CoCreateInstance call site scan** — Capstone disassembles each code section; for each `call CoCreateInstance*` instruction, the preceding `lea` or `mov` loading the first argument (`rcx` on x64, stack push on x86) is backtracked to extract the CLSID binary value (16 bytes at the pointed-to address in `.rdata`).
+4. **IAT import scan** — checks the PE import table for `CoMarshalInterface`, `CoUnmarshalInterface`, `CoMarshalInterThreadInterfaceInStream`, `Invoke`, `GetIDsOfNames` using LIEF `binary.imports`.
+5. **Finding emission** — emits a `COMFinding` per category. `com_hijack_risk` is emitted only when both COM server exports AND CLSID references are found together.
 
 ---
 
 ## Example output
 
-```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+The following illustrates `report()` output format. Actual values are binary-specific.
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+```
+COMAttackSurfaceMapper: shdocvw.dll
+
+[MEDIUM] com_hijack_risk
+  COM server with 4 CLSID reference(s) — hijacking surface
+  location: shdocvw.dll
+  cwe: CWE-426
+  {E8CF3E55-F919-49D9-ABC0-948E6CB34B9F} registered under HKCU would be hijackable
+
+[INFO] com_server
+  COM server: exports DllGetClassObject, DllRegisterServer
+
+[INFO] clsid_inventory
+  4 CLSID references found in .rdata
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+**`com_hijack_risk` requires manual registry check** — the scanner identifies that the DLL is a COM server with CLSID references, but does not query the registry. Whether the CLSIDs are registered under `HKCU` (hijackable) vs `HKLM`-only (not directly hijackable) must be checked separately with `reg query HKCU\Software\Classes\CLSID\{...}`.
+
+**`CoCreateInstance` call site with unresolved CLSID** — when the CLSID pointer is computed at runtime (loaded from a global, allocated on the heap), the scanner cannot extract the binary GUID. These are reported as `com_create` findings with `va` set but `clsid=None` in `cocreate_sites()` output. Not all `CoCreateInstance` calls are hijackable.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** No `BinaryContext` required — `from_path()` uses LIEF directly. Use on any Windows PE that may be a COM server (DLLs exporting `DllGetClassObject`) or a COM client (binaries importing `CoCreateInstance`).
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For `com_hijack_risk` findings, check registry registration of each identified CLSID under `HKCU` on the target system. For `com_create` findings, verify whether the activated CLSID's server DLL path is writable by the target user.
 
 ---
 
@@ -121,8 +137,6 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [CFG Bypass Detector](cfg-bypass-detector.md) — companion Windows PE scanner for CFG bypass surface analysis
+- [PE Sweep](pe-sweep.md) — coarse Windows PE security feature check (DEP, ASLR, SafeSEH)
+- [FindingRegistry](registry.md) — register confirmed COM hijacking findings
