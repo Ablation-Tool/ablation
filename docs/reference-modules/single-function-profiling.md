@@ -96,6 +96,21 @@ Step 6 in the RE workflow (CLAUDE.md): `FuncProfiler.profile()` on top candidate
 
 ---
 
+## Reading output
+
+`FuncProfiler.profile(va)` returns a `FuncProfile` object:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | VA of the profiled function |
+| `size_bytes` | Function size in bytes |
+| `call_count` | Number of call sites in the function |
+| `string_refs` | `List[(va, string)]` — string references within the function |
+| `calls` | `List[CallAnnotation]` — annotated call sites with `RegAnnotation` per argument |
+| `sink_count` | Number of sink calls identified |
+
+---
+
 ## See also
 
 - [Call Argument Annotation](call-argument-annotation.md) — `RegAnnotator` underlying the CALLS section
