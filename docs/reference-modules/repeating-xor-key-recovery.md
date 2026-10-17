@@ -82,6 +82,22 @@ Run `XorSolver` on firmware images that extract as opaque binary blobs — when 
 
 ---
 
+## Reading output
+
+`XorSolver.solve()` returns an `XorSolverResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `key` | `bytes` — recovered XOR key |
+| `method` | `kpa` (known-plaintext) or `frequency` |
+| `confidence` | Float 0.0–1.0 |
+| `repeats` | Integer — number of times the key repeats in the ciphertext (verified) |
+| `fmt()` | Formatted string: `key=<hex> (<ascii>)` |
+
+Returns `None` if recovery fails.
+
+---
+
 ## See also
 
 - [Firmware Extraction](firmware-extraction.md) — extraction pipeline that precedes XOR solving
