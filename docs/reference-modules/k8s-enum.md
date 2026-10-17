@@ -20,59 +20,69 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. All procfs reads use `f.read(_MA
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+`K8sEnumerator()` (no constructor args — auto-detects token, CA cert, API server from environment). `enumerate_all()` runs `check_in_k8s()` first to confirm Kubernetes context, then runs RBAC, pod, secret, network policy, and admission controller checks. Escape vectors accumulate in `self.escape_vectors` as `{type, severity, description, exploit}` dicts. Other finding lists (e.g., `clusteradmin_findings`, `privileged_pod_findings`) use `{severity, ...resource-specific keys}`.
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.k8s_enum import KubernetesEnumeration
+from modules.k8s_enum import K8sEnumerator
 
-results = KubernetesEnumeration.from_context(ctx).run()
-for r in results:
-    print(r)
+enumerator = K8sEnumerator()
+enumerator.enumerate_all()
+
+# escape_vectors: [{type, severity, description, exploit}]
+for v in enumerator.escape_vectors:
+    print(f"  [{v['severity']}] {v['type']}: {v['description'][:80]}")
+    if v.get('exploit'):
+        print(f"    exploit: {v['exploit'][:80]}")
+
+# clusteradmin_findings: [{name, subject_kind, subject_name, subject_namespace, severity}]
+for f in enumerator.clusteradmin_findings:
+    print(f"  [{f['severity']}] cluster-admin: {f['subject_kind']} {f['subject_name']}")
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+K8sEnumerator.enumerate_all():
+  in_k8s: True  namespace: default  api_server: https://10.96.0.1:443
+
+escape_vectors:
+  [HIGH] CLUSTERADMIN_BINDING: ClusterRoleBinding 'ci-pipeline' binds
+         ServiceAccount default/ci-sa to cluster-admin
+         exploit: kubectl --token=<tok> get secrets -A
+
+privileged_pod_findings:
+  [HIGH] pod: monitoring/prometheus — securityContext.privileged: true
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`check_rbac_clusteradmin()` on CI/CD service accounts** — many CI/CD pipelines (ArgoCD, Tekton, Flux) legitimately bind their service accounts to `cluster-admin` for deployment automation. Confirm whether the binding is intentional by checking the bound service account's namespace and workload name before escalating.
+
+**`check_network_policies()` reports `NO_NETWORK_POLICY` per namespace** — a namespace without a NetworkPolicy allows all traffic by default. In single-tenant clusters or staging environments this is often intentional. The finding is accurate; intent must be verified separately.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run `K8sEnumerator` from inside a pod after gaining container-level shell access. `check_in_k8s()` detects the service account token at `/var/run/secrets/kubernetes.io/serviceaccount/token` — if the token has RBAC access, full cluster enumeration proceeds automatically.
 
 ---
 
 ## Reading findings
 
-| Field | Content |
-|:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
-| `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
+`escape_vectors` shape: `{type, severity, description, exploit}`
+
+Other finding lists (`clusteradmin_findings`, `network_policy_findings`, `privileged_pod_findings`) have resource-specific keys plus `severity`. Read `enumerator.report()` for a formatted summary.
 
 ---
 

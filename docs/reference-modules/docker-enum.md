@@ -21,64 +21,73 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. All HTTP reads use `resp.read(_M
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+`DockerEnumerator.enumerate_all()` runs in three paths based on environment: always runs `probe_docker_daemon_api()` (TCP port 2375 unauthenticated API probe), then conditionally runs socket-based checks if `/var/run/docker.sock` is accessible, and container-escape checks if running inside a container. Returns a single dict with all results.
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.docker_enum import DockerContainerEnumeration
+from modules.docker_enum import DockerEnumerator
 
-results = DockerContainerEnumeration.from_context(ctx).run()
-for r in results:
-    print(r)
+enum = DockerEnumerator()
+result = enum.enumerate_all()
+# Keys: in_container, socket_access, privileged, containers, images,
+#       volumes, networks, capabilities, mounts, escape_vectors,
+#       daemon_api_findings, privileged_container_findings,
+#       exposed_port_findings, env_secret_findings, image_layer_findings
+print(f"In container: {result['in_container']}  Socket: {result['socket_access']}")
+for f in result['daemon_api_findings'] + result['privileged_container_findings']:
+    print(f"  [{f['severity']}] {f['title']}: {f['detail'][:80]}")
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+DockerEnumerator.enumerate_all():
+  in_container: True  socket_access: True
+
+daemon_api_findings:
+  [CRITICAL] Docker daemon API unauthenticated on TCP port
+             TCP localhost:2375 responded without authentication. Version=24.0.5
+
+privileged_container_findings:
+  [HIGH] container nginx: CAP_SYS_ADMIN capability granted
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`probe_docker_daemon_api()` fires on non-Docker HTTP services on port 2375** — a TCP response to `GET /version` on port 2375 does not guarantee Docker. Verify `Content-Type: application/json` and the presence of `Version` and `APIVersion` fields in the response before treating this as a confirmed Docker daemon.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run `DockerEnumerator` after gaining shell access to a host or container. Use `daemon_api_findings` to identify escape primitives and `containers` + `images` for lateral movement target inventory.
 
 ---
 
 ## Reading findings
 
+Finding dicts in the result's `*_findings` keys use `{severity, title, detail, host, port}`.
+
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
+| `title` | Finding description (e.g., `Docker daemon API unauthenticated on TCP port`) |
 | `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
+| `host` | Target host where the finding was observed |
+| `port` | Target port where the finding was observed |
 
 ---
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [Docker Inventory and Posture](docker-inventory-and-posture.md) — `check_container_isolation()` for `/proc`-based escape surface
+- [Cluster Management Exposure](cluster-management-exposure.md) — combined Docker + Kubernetes management surface

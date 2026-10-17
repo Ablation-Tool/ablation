@@ -43,59 +43,77 @@ Gate: **PASSED**. Six None-dereference guards added (`if not data: return []` / 
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+`NXOSEnumerator(targets).run()` iterates target hosts: for each host it runs `classify_by_cert_ou()` (OU-based device type discrimination from the TLS certificate), `probe_nxos_ports()` (open port surface), and conditionally `probe_apic_unauthenticated()`, `probe_nxapi()`, `probe_dcnm()`, or `probe_vxlan_vteps()` based on device type and open ports. Standalone functions (`probe_apic_unauthenticated`, `probe_nxapi`, `probe_nxos_ports`) return plain dicts — not finding lists.
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.nxos_enum import NXOSACIVXLANEnumeration
+from modules.nxos_enum import (
+    NXOSEnumerator,
+    probe_apic_unauthenticated,
+    probe_nxapi,
+    probe_nxos_ports,
+)
 
-results = NXOSACIVXLANEnumeration.from_context(ctx).run()
-for r in results:
-    print(r)
+# Class-based multi-host scan
+targets = [{'ip': '10.0.0.1', 'role': 'apic'}, {'ip': '10.0.0.2', 'role': 'nxos'}]
+enumerator = NXOSEnumerator(targets)
+result = enumerator.run()
+# result keys: cert_classification, apic_unauthenticated, apic_credential_spray,
+#              apic_full_enum, nxos_port_surface, nxapi_probe, dcnm_probe, vxlan_vtep_probe, summary
+
+# Standalone: probe_apic_unauthenticated returns {host, reachable, aaa_domains, raw_domains_response}
+apic = probe_apic_unauthenticated('10.0.0.1')
+if apic['reachable']:
+    print(f"AAA domains: {apic['aaa_domains']}")
+
+# probe_nxapi returns {host, reachable, version, apis_accessible, error}
+nxapi = probe_nxapi('10.0.0.2')
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+NXOSEnumerator.run():
+  apic_unauthenticated: [{host: '10.0.0.1', reachable: True, aaa_domains: ['DefaultAuth', 'ldap']}]
+  nxapi_probe: [{host: '10.0.0.2', reachable: True, version: '9.3(10)', apis_accessible: True}]
+
+probe_nxos_ports:
+  {host: '10.0.0.2', open_ports: {22: 'ssh', 443: 'https', 830: 'netconf'}}
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`probe_apic_unauthenticated()` `aaa_domains` on non-APIC hosts** — the AAA domain list endpoint (`/api/aaaListDomains.json`) may be served by other Cisco web interfaces that share the same URL path. Verify `Content-Type: application/json` and the `imdata` key in the response before treating this as a confirmed APIC surface.
+
+**`classify_by_cert_ou()` misclassification on self-signed certs** — a self-signed certificate with a generic OU (e.g., `Engineering`) will classify as `UNKNOWN` device type. In this case all probe types run (APIC, NX-API, DCNM), which increases probe traffic.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run `NXOSEnumerator` after port scanning identifies Cisco ACI/NX-OS management ports (TCP/443, TCP/830, TCP/9443). Run `probe_apic_unauthenticated()` directly when targeting known APIC controllers.
 
 ---
 
 ## Reading findings
 
-| Field | Content |
+Standalone functions return plain data dicts (not finding lists):
+
+| Function | Return shape |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
-| `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
+| `probe_apic_unauthenticated(host)` | `{host, reachable, aaa_domains: List[str], raw_domains_response}` |
+| `probe_nxapi(host)` | `{host, reachable, version, apis_accessible, error}` |
+| `probe_nxos_ports(host)` | `{host, open_ports: {port: service_name}}` |
+| `probe_vxlan_vteps(local_host)` | `{host, vteps: List[str], error}` |
 
 ---
 
