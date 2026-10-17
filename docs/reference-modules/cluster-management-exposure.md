@@ -42,8 +42,9 @@ enumerator = K8sEnumerator(api_server, token, ca_cert)
 k8s_results = enumerator.enumerate_all()
 
 print("Cluster management exposure:")
+# Each finding: {severity, title, detail, host, port}
 for f in iso_findings + net_findings + quota_findings:
-    print(f"  {f}")
+    print(f"  [{f['severity']}] {f['title']}: {f['detail'][:80]}")
 ```
 
 ---
