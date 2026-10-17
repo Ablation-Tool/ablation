@@ -8,6 +8,18 @@ Covers `.exe`, `.dll`, `.ocx`, and `.ax` files compiled for x86-32 or x86-64.
 
 ---
 
+## Why this exists
+
+Three gaps made PE binary analysis slower before this sweep:
+
+1. **`fortinet_sweep.py` is ELF-only.** The base sweep resolves function calls through the ELF PLT and uses ELF section headers to locate `.rodata`. Applying it to a PE binary produces zero call resolutions — PE uses the Import Address Table (IAT) and `.rdata` for both imports and string constants, which ELF parsers do not read.
+
+2. **x86-32 and AMD64 PE binaries use distinct calling conventions that must be handled separately.** i386 PE binaries encode IAT calls as `CALL dword ptr [abs_addr]` and string references as `PUSH imm32`. AMD64 PE binaries use `CALL qword ptr [rip+offset]` and `LEA reg, [rip+offset]`. A single code path cannot handle both correctly. `pe_sweep.py` detects the machine type (`IMAGE_FILE_MACHINE_I386` vs `IMAGE_FILE_MACHINE_AMD64`) and routes to the correct resolution path.
+
+3. **Windows QuickTime/COM/codec binaries were entirely outside automated sweep coverage.** Research targets like QuickTime for Windows, DirectShow codecs (`.ax`), and ActiveX controls (`.ocx`) are PE binaries with x86 code. Without `pe_sweep.py`, every finding in those targets required manual disassembly from scratch. This sweep applies the same semantic query set used on ELF targets to PE binaries.
+
+---
+
 ## When to use
 
 Use `pe_sweep.py` when the research target is a Windows PE binary:

@@ -122,12 +122,24 @@ Extraction either succeeds or raises an exception — there are no false positiv
 
 ## Reading findings
 
-| Field | Content |
+`AmiCramFSExtractor.list_entries(dir_path='')` returns `List[AmiCramFSEntry]`:
+
+| Attribute | Content |
 |:---|:---|
-| `path` | Filesystem path to the extracted file or partition |
-| `partition_name` | Partition label or index from the container header |
-| `size` | Size of the extracted payload in bytes |
-| `format` | Detected format of the extracted payload (`ext4`, `squashfs`, `ELF`, etc.) |
+| `name` | Entry filename |
+| `mode` | Unix file mode integer (includes file type bits: `S_IFREG`, `S_IFDIR`, `S_IFLNK`) |
+| `uid` | Owner UID |
+| `gid` | Owner GID |
+| `size` | Uncompressed file size in bytes |
+| `data_off` | Data offset in 4-byte units from the start of the CramFS image |
+| `is_dir` | Property — `True` for directory entries |
+| `is_reg` | Property — `True` for regular files |
+| `is_lnk` | Property — `True` for symbolic links |
+| `byte_offset` | Property — `data_off × 4` in bytes |
+
+`AmiCramFSExtractor.list_files()` yields all file paths as strings (recursive walk).
+`AmiCramFSExtractor.extract_file(path)` returns `bytes` — decompressed content of a file at `path`.
+`AmiCramFSExtractor.extract_all(out_dir)` extracts all files to `out_dir`.
 
 ---
 

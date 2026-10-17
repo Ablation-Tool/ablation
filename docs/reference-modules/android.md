@@ -75,6 +75,46 @@ flowchart TD
 
 ---
 
+## Usage
+
+```python
+from ablation.core.apk_parser import APKParser
+from ablation.analyzers.dex_analyzer import DexAnalyzer
+from ablation.analyzers.jni_bridge_scanner import JniBridgeScanner
+from ablation.analyzers.binder_scanner import BinderScanner
+
+with APKParser.from_path('app.apk') as apk:
+    # Manifest: package name, SDK targets, permissions, exported components
+    mf = apk.parse_manifest()
+    print(mf.package, mf.min_sdk, mf.target_sdk)
+    print(mf.dangerous_permissions())
+    print(mf.exported_components())
+
+    # DEX: scan all dex files for dangerous API usage
+    findings = []
+    for dex in apk.iter_dex():
+        analyzer = DexAnalyzer(dex)
+        findings.extend(analyzer.scan())
+
+    # JNI bridges: find native method declarations and their .so implementations
+    bridges = JniBridgeScanner(apk).scan()
+    for b in bridges:
+        print(b.java_class, b.java_method, b.native_lib, b.registration_type)
+
+    # Binder surface: exported service endpoints
+    binder = BinderScanner(apk).scan()
+    for svc in binder:
+        print(svc.class_name, svc.transaction_codes)
+```
+
+Use `sweeps/android_sweep.py` for a single command that runs all four layers and writes a finding report:
+
+```bash
+python3 sweeps/android_sweep.py app.apk --vendor acme --product myapp --version 3.1
+```
+
+---
+
 ## APKParser
 
 **File:** `ablation/core/apk_parser.py`

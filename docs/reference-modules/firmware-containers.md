@@ -1114,6 +1114,43 @@ Loads the firmware image, maps entropy across the file using a sliding window, a
 
 ---
 
+## Usage
+
+```python
+from ablation.analyzers.firmware_container import FirmwareContainer
+
+fw = FirmwareContainer.from_path('/path/to/firmware.BIN')
+
+# Print partition table
+fw.dump_partitions()
+
+# Iterate over partitions
+for p in fw.partitions:
+    print(p.name, p.payload_type, hex(p.offset), p.size)
+
+# Read raw bytes for a specific partition
+kernel_bytes = fw.read_partition('kernel')
+
+# Extract individual partition to disk
+fw.extract('kernel', '/tmp/kernel.bin')
+
+# Extract all partitions
+fw.extract_all('/tmp/parts/')
+```
+
+For video firmware containers:
+
+```python
+from modules.video_container import VideoContainerAnalyzer
+
+analyzer = VideoContainerAnalyzer('/path/to/video_firmware.bin')
+findings = analyzer.analyze()
+for f in findings:
+    print(f['severity'], f['title'], f['detail'])
+```
+
+---
+
 ## Example output
 
 ```

@@ -439,6 +439,54 @@ libservice.so:recv_wrapper [tainted: arg0]
 
 ---
 
+## Why this exists
+
+Three problems with stripped firmware RE before these analyzers existed:
+
+1. **No function names, no entry points.** Stripped ELF binaries have no debug symbols and often no exports. `BinaryContext.func_starts` recovers function entry points from `.eh_frame` call-frame information and callee-augmented scanning, giving every function a virtual address even when the symbol table is empty.
+
+2. **Cross-function taint tracking required a call graph.** Knowing that `recv()` data flows to `memcpy()` in a different function required manual tracing through stripped call edges. `BinaryContext` builds the call graph and string xref index once; `TaintTracker` and `CrossBinaryTaintTracker` consume it for all subsequent analyses without re-disassembling.
+
+3. **i386 firmware lacked string xref coverage.** The default NumPy RIP-relative xref index is x86-64 only. `I386AbsoluteXrefScanner` extends string coverage to 32-bit x86 targets by scanning for `MOV reg, [abs_addr]` and `PUSH imm32` patterns that encode string VAs in i386 code.
+
+---
+
+## How it works
+
+`BinaryContext.load_or_build()` is the entry point for every analysis. On first call, it parses the ELF, resolves the PLT, extracts strings, builds `func_starts`, traces call edges, and persists everything to a SHA256-keyed JSON cache (`~/.ablation/cache/`). On subsequent calls with the same binary, it loads the cache in ~110ms.
+
+Higher-level analyzers (`TaintTracker`, `PathSolver`, `XRefGraph`, `CFGBuilder`) consume `BinaryContext` rather than re-parsing the binary. This means every analyzer shares the same function list, string table, and call graph, keeping analysis results consistent across tools.
+
+---
+
+## Usage
+
+```python
+from ablation.analyzers.binary_context import BinaryContext
+from ablation.analyzers.taint_tracker import TaintTracker
+
+# Build or reload binary context
+ctx = BinaryContext.load_or_build('/path/to/firmware.so')
+print(f"{len(ctx.func_starts)} functions  |  {len(ctx.plt)} PLT symbols")
+
+# Look up a known function
+print(ctx.name(0x1000))         # "proto_parse_message" (from overlay or PLT)
+
+# Find all functions containing a dangerous sink call
+memcpy_va = ctx.exports.get('memcpy') or next(
+    va for name, va in ctx.plt.items() if 'memcpy' in name
+)
+
+# Run taint tracker from all network input sources to memcpy
+tracker = TaintTracker.from_context(ctx)
+chains = tracker.trace_to(sink_va=memcpy_va)
+for chain in chains:
+    print(f"  {chain.source_name} -> {chain.sink_name}  depth={chain.depth}")
+    print(f"  tainted args: {chain.tainted_args}")
+```
+
+---
+
 ## Example output
 
 ```
