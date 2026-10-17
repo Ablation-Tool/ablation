@@ -28,11 +28,12 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 ## Usage
 
 ```python
-from ablation.analyzers.java_re import JavaRE
+from modules.java_re import JavaREAnalyzer
 
-results = JavaRE.from_context(ctx).run()
-for r in results:
-    print(r)
+analyzer = JavaREAnalyzer('/path/to/target.jar')
+findings = analyzer.analyze()
+for f in findings:
+    print(f)
 ```
 
 ---

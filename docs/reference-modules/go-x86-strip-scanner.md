@@ -88,10 +88,12 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 
 ```python
 from ablation.analyzers.go_x86_strip_scanner import GoX86StripScanner
+from ablation.analyzers.binary_context import BinaryContext
 
-results = GoX86StripScanner.from_context(ctx).run()
-for r in results:
-    print(r)
+ctx = BinaryContext.load_or_build('/path/to/go_binary.elf')
+scanner = GoX86StripScanner.from_context(ctx)
+result = scanner.scan()
+print(result)
 ```
 
 ---

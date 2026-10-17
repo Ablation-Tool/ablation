@@ -255,11 +255,12 @@ Reads the binary image and resolves the target-specific data structures (PLT, GO
 ## Usage
 
 ```python
-from ablation.analyzers.loongarch64 import LoongArch64AnalysisStack
+from ablation.analyzers.loongarch64_max_not_min_scanner import LA64MaxNotMinScanner
 
-results = LoongArch64AnalysisStack.from_context(ctx).run()
-for r in results:
-    print(r)
+scanner = LA64MaxNotMinScanner.from_path('/path/to/loongarch64_binary.elf')
+findings = scanner.scan()
+for f in findings:
+    print(f)
 ```
 
 ---

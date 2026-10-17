@@ -377,11 +377,12 @@ Extend `VULN_PROFILES` in `sweeps/base_sweep.py` before sweeping against a new v
 ## Usage
 
 ```python
-from ablation.analyzers.semantic_search import SemanticSearch
+from ablation.analyzers.semantic_search import SemanticSearcher
 
-results = SemanticSearch.from_context(ctx).run()
+searcher = SemanticSearcher.from_context(ctx)
+results = searcher.query("recv handler passes buffer to system()", top_k=5)
 for r in results:
-    print(r)
+    print(f"  {r.va:#x}  {r.name:40s}  score={r.score:.3f}")
 ```
 
 ---

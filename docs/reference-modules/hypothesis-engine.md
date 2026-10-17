@@ -230,10 +230,19 @@ Provides the session state, indexing, and utility functions that other Ablation 
 
 ```python
 from ablation.analyzers.hypothesis_engine import HypothesisEngine
+from ablation.analyzers.binary_context import BinaryContext
 
-results = HypothesisEngine.from_context(ctx).run()
-for r in results:
-    print(r)
+ctx = BinaryContext.load_or_build('/path/to/target.elf')
+engine = HypothesisEngine.from_binary('/path/to/target.elf', ctx=ctx)
+
+probe = engine.seed(
+    kind='command_injection',
+    subject={'va': 0x12340, 'name': 'handle_request'},
+    claims=[{'claim': 'user-controlled input reaches system()', 'confidence': 0.7}],
+    prior=0.5,
+)
+for p in engine.session.executed_probes():
+    print(f"[{p.kind}] {p.subject}  confirmed={p.confirmed}")
 ```
 
 ---

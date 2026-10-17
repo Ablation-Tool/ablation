@@ -142,11 +142,10 @@ Loads the firmware image, maps entropy across the file using a sliding window, a
 ## Usage
 
 ```python
-from ablation.analyzers.firmware_analysis import FirmwareAnalysis
+from ablation.analyzers.binary_context import BinaryContext
 
-results = FirmwareAnalysis.from_context(ctx).run()
-for r in results:
-    print(r)
+ctx = BinaryContext.load_or_build('/path/to/firmware.elf')
+print(ctx.summary())
 ```
 
 ---

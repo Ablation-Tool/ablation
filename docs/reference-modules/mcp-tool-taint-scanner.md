@@ -70,9 +70,9 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ```python
 from ablation.analyzers.mcp_tool_taint_scanner import MCPToolTaintScanner
 
-results = MCPToolTaintScanner.from_context(ctx).run()
-for r in results:
-    print(r)
+findings = MCPToolTaintScanner.from_path('/path/to/mcp_server_root/').scan()
+for f in findings:
+    print(f.fmt())
 ```
 
 ---

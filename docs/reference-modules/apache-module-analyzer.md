@@ -94,9 +94,10 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 ```python
 from ablation.analyzers.apache_module_analyzer import ApacheModuleAnalyzer
 
-results = ApacheModuleAnalyzer.from_context(ctx).run()
-for r in results:
-    print(r)
+analyzer = ApacheModuleAnalyzer.from_context(ctx)
+findings = analyzer.analyze()
+for f in findings:
+    print(f)
 ```
 
 ---

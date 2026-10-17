@@ -132,11 +132,13 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 ## Usage
 
 ```python
-from ablation.analyzers.llm import LLMAnalyst
+from modules.llm_enum import probe_rag_pipeline_exposure, probe_agent_tool_abuse
 
-results = LLMAnalyst.from_context(ctx).run()
-for r in results:
-    print(r)
+# Active network probes against an AI/LLM service endpoint
+findings = probe_rag_pipeline_exposure(host='target-llm.example.com', port=443)
+findings += probe_agent_tool_abuse(host='target-llm.example.com', port=443)
+for f in findings:
+    print(f)
 ```
 
 ---

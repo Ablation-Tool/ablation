@@ -27,11 +27,12 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ## Usage
 
 ```python
-from ablation.analyzers.heap_uaf_scanner import HeapUAFScanner
+from modules.heap_uaf_scanner import HeapUAFScanner
 
-results = HeapUAFScanner.from_context(ctx).run()
-for r in results:
-    print(r)
+scanner = HeapUAFScanner.from_context(ctx)
+findings = scanner.scan()
+for f in findings:
+    print(f)
 ```
 
 ---

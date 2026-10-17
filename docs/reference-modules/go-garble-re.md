@@ -27,11 +27,18 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 ## Usage
 
 ```python
-from ablation.analyzers.go_garble_re import GoGarbleRE
+from modules.go_garble_re import find_pclntab, parse_pclntab_header, find_garble_decrypt_stubs
+import lief
 
-results = GoGarbleRE.from_context(ctx).run()
-for r in results:
-    print(r)
+binary = lief.parse('/path/to/garbled_go_binary')
+data = bytes(binary.get_content_from_virtual_address(0, binary.virtual_size))
+load_segs = [(s.virtual_address, s.virtual_address + s.virtual_size) for s in binary.segments if s.physical_size]
+
+offset, size = find_pclntab(data)
+header = parse_pclntab_header(data, offset)
+stubs = find_garble_decrypt_stubs(data, load_segs)
+print(f"pclntab offset={offset:#x}  functions={header.get('n_funcs', 0)}")
+print(f"garble decrypt stubs: {len(stubs)}")
 ```
 
 ---
