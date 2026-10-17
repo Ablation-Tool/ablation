@@ -1,45 +1,81 @@
 # Length Underflow Scanner
 
-**File:** `ablation/analyzers/length_underflow.py`
-
-Detects integer underflow in protocol parsers where a user-supplied length field has a fixed header size subtracted, wraps on uint16 truncation, and reaches a downstream allocation or copy without a prior bounds check. Generalizes across DNS, GRE, PPTP, SCTP, and Diameter parsers.
+Detect protocol parser integer underflow in x86-64 firmware: the C12-class pattern where a fixed header size is subtracted from a user-supplied length field, the result is truncated to uint16 or uint8, and the wrapped value is passed to a callee without a prior bounds check.
 
 ---
 
 ## Why this exists
 
-Three gaps existed before this module:
+1. **Integer underflow in protocol parsers is a systematic vulnerability class across firmware.** The pattern is not specific to one protocol or one vendor — DNS, GRE, PPTP, SCTP, Diameter, and many proprietary protocols all parse variable-length fields by subtracting a fixed header size from a user-supplied total length to compute the payload size. When the user supplies a length smaller than the header size, the subtraction underflows, and the resulting negative value wraps to a large positive integer when truncated to uint16 or uint8. A scanner that looks for this pattern across an entire binary body identifies every instance systematically.
 
-1. **Protocol parser underflow was a blind spot for taint trackers.** Standard taint analysis follows input data to sinks. The underflow pattern involves arithmetic on a *length value*, a secondary data flow that taint trackers miss when they only trace the buffer content.
+2. **The pattern is invisible to import-list auditing.** The subtraction and truncation are ordinary arithmetic instructions, not calls to flagged library functions. There is no `DANGEROUS_SUBTRACT` import to search for. The vulnerability is entirely in the operand sequence: subtract → truncate → call, without a bounds guard in between. Only a pattern-matching disassembly scan can detect it at scale.
 
-2. **Generic integer overflow scanners miss the truncation step.** The C12-class bug requires three specific steps in sequence: subtract a fixed constant, truncate to uint16, then call a function with the result. Scanners that look for overflow arithmetic alone generate too many false positives to be actionable.
-
-3. **Cross-protocol applicability was unproven.** The pattern was known for specific protocols but not validated across an arbitrary x86-64 ELF corpus. The scanner confirms it applies to any parser that strips a fixed header from a user-supplied length field, regardless of protocol.
+3. **Guarded vs. unguarded instances must be distinguished to avoid overwhelming the analyst.** Many codebases subtract header sizes from lengths but correctly bounds-check the result before the truncation. A scanner that flags everything — guarded and unguarded — produces too much noise. This scanner includes a 25-instruction backwards guard scan: if a `CMP` or `TEST` involving the subtraction result register appears before the truncation, the finding is marked `guarded=True` and filtered from triage by default. Only `guarded=False` findings require immediate analyst attention.
 
 ---
 
-## Detected pattern
+## How it works
 
-The scanner finds this exact instruction sequence in x86-64 `.text`, without a preceding bounds check:
+The scanner operates in three phases per function: **subtraction detection**, **guard lookback**, and **truncation + call lookahead**.
 
+```mermaid
+flowchart TD
+    A["LengthUnderflowScanner.from_context(ctx)"] --> B["scan(): load .text, disassemble with Capstone"]
+    B --> C[iterate instructions]
+    C --> D{mnemonic == lea -N or sub $N?}
+    D -->|N in 4..256 and dest not stack-relative| E[record: sub_va, sub_const, sub_reg]
+    D -->|no, or stack-relative| C
+    E --> F["Guard lookback: scan up to 25 insns before sub_va\nLook for CMP/TEST involving sub_reg family"]
+    F --> G{guard found?}
+    G -->|yes| H[guarded = True]
+    G -->|no| I[guarded = False]
+    H & I --> J["Truncation lookahead: scan up to 10 insns after sub_va\nLook for movzwl/movzbl on sub_reg family (register-to-register only)"]
+    J --> K{truncation found?}
+    K -->|no| C
+    K -->|yes| L[record: truncate_va]
+    L --> M["Call lookahead: scan up to 10 insns after truncate_va\nLook for CALL with direct target"]
+    M --> N{call found?}
+    N -->|no| C
+    N -->|yes| O["record: call_va, call_target\nresolve PLT name if available\nEmit UnderflowFinding"]
+    O --> C
 ```
-lea  -N(%reg), %dest     ; subtract fixed header size N (4–256 bytes)
-  OR  sub $N, %reg
-movzwl %?x, %dest        ; truncate to uint16 (wraps if input_len < N)
-call <target>            ; pass wrapped value as function argument
-```
 
-**Without** an intervening `cmp`/`test` on the subtraction result in the prior 25 instructions.
+### Subtraction detection
 
-**Example from a confirmed protocol parser:**
-```
-0x1000: cmp  $0xf, %r12d         ; checks BUFFER SPACE, not chunk_length
-0x1010: lea  -0x10(%r9), %edx    ; chunk_length - 16
-0x1018: movzwl %dx, %edx         ; uint16 truncation: 3 - 16 = 65523
-0x101c: call proto_parse_field   ; called with rdx = 65523 → OOB read
-```
+Accepts two instruction forms:
+- `LEA dest, [base - N]` where `N` is in `[4, 256]` and `base` is not `rbp`/`rsp` (excluding stack frame accesses)
+- `SUB dest, N` where `N` is in `[4, 256]`
 
-Input lengths 1 through N-1 wrap to 65537-N through 65535 after the uint16 truncation.
+The constant range `[4, 256]` covers typical protocol header sizes: IPv4 (20), TCP (20), UDP (8), GRE (4), SCTP (12), PPTP (8), and custom protocol headers up to 256 bytes.
+
+### Guard lookback
+
+Scans the 25 instructions preceding the subtraction for any `CMP` or `TEST` instruction that uses the same register family as the subtraction destination. Register aliases are canonicalized (e.g., `edx` and `rdx` are the same family), so a `CMP r9d, 0x10` is recognized as a guard for a `LEA edx, [r9 - 0x10]`.
+
+### Truncation detection
+
+Looks for register-to-register `MOVZX`/`MOVZWL`/`MOVZBL` within 10 instructions after the subtraction, where the source register is in the same family as the subtraction destination. Memory-to-register `MOVZX` forms (e.g., `movzx edx, byte ptr [rdx+6]`) are excluded — those load a new value from memory, not the arithmetic result.
+
+---
+
+## LengthUnderflowScanner
+
+```python
+from ablation.analyzers.length_underflow import LengthUnderflowScanner
+from ablation.analyzers.binary_context import BinaryContext
+
+ctx = BinaryContext.load_or_build('/fw/fortigate/httpsd')
+scanner = LengthUnderflowScanner.from_context(ctx)
+findings = scanner.scan()
+
+# Filter to unguarded (immediately actionable)
+for f in findings:
+    if not f.guarded:
+        print(f.fmt())
+
+# All findings including guarded
+print(f"Total: {len(findings)}  Unguarded: {sum(1 for f in findings if not f.guarded)}")
+```
 
 ---
 
@@ -47,102 +83,68 @@ Input lengths 1 through N-1 wrap to 65537-N through 65535 after the uint16 trunc
 
 ```python
 from ablation.analyzers.length_underflow import LengthUnderflowScanner
-
-# From binary path
-scanner = LengthUnderflowScanner('/path/to/binary')
-findings = scanner.scan()
-
-# Unguarded findings only (likely true positives)
-for f in findings:
-    if not f.guarded:
-        print(f.fmt())
-
-# Reuse an existing BinaryContext (avoids LIEF rebuild)
 from ablation.analyzers.binary_context import BinaryContext
-ctx = BinaryContext.load_or_build('/path/to/binary')
+
+# Full scan
+ctx = BinaryContext.load_or_build('/fw/cisco/lina')
 scanner = LengthUnderflowScanner.from_context(ctx)
 findings = scanner.scan()
 
-# All findings including guarded (for manual triage)
-for f in findings:
-    guard_tag = "GUARDED" if f.guarded else "UNGUARDED"
-    print(f"[{guard_tag}] 0x{f.sub_va:x}  -0x{f.header_size:x}  trunc@0x{f.trunc_va:x}  call@0x{f.call_va:x}")
+# Triage: unguarded first
+unguarded = [f for f in findings if not f.guarded]
+guarded = [f for f in findings if f.guarded]
+
+print(f"[length_underflow] {len(findings)} findings: {len(unguarded)} UNGUARDED, {len(guarded)} GUARDED")
+for f in unguarded:
+    print(f.fmt())
+
+# Confirm with taint analysis: trace from network input to the subtraction site
+from ablation.analyzers.taint_tracker import TaintTracker
+tt = TaintTracker(ctx.path)
+for f in unguarded:
+    sinks = tt.trace_function(f.func_va, tainted_args=['rdi', 'rsi', 'rdx'])
+    alloc_or_copy = [s for s in sinks if s.sink_type in ('alloc_size', 'copy_len')]
+    if alloc_or_copy:
+        print(f"CONFIRMED: 0x{f.func_va:x} — tainted length reaches sink")
 ```
-
----
-
-## Finding fields (`UnderflowFinding`)
-
-| Field | Description |
-|---|---|
-| `sub_va` | VA of the `lea -N(%reg)` or `sub $N` instruction |
-| `header_size` | The subtracted constant N (4–256 bytes) |
-| `sub_reg` | Register holding the result after subtraction |
-| `trunc_va` | VA of the `movzwl`/`movzbl` truncation instruction |
-| `call_va` | VA of the `call` instruction that receives the wrapped value |
-| `callee` | Name of the called function (from PLT), if resolved |
-| `func_va` | VA of the enclosing function |
-| `guarded` | `True` if a `cmp`/`test` on the subtraction result appears within 25 prior instructions |
-| `description` | Human-readable summary of the wrapping path |
-
----
-
-## Guard detection
-
-The scanner looks back 25 instructions from the subtraction site for any `cmp` or `test` instruction that references the subtraction result register. A guard present marks `guarded=True`, these findings require manual confirmation that the guard covers the right range before the subtraction.
-
-Unguarded findings require no manual confirmation of guard presence: the path to the sink runs without any length check.
-
----
-
-## Protocol coverage
-
-The header size range [4, 256] covers:
-
-| Protocol | Fixed header |
-|---|---|
-| DNS | 12 bytes |
-| GRE | 4 bytes |
-| PPTP | 8 bytes |
-| SCTP | 12 bytes |
-| Diameter | 20 bytes |
-| Custom TLV | 4–16 bytes |
-
-Any protocol parser that reads a user-supplied length field and subtracts a fixed overhead falls within this detection range.
-
----
-
-## How it works
-
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
 
 ---
 
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+UnderflowFinding [UNGUARDED]
+  func    : 0x403200
+  sub     : 0x403218  rdx -= 0x10 (16)
+  truncate: 0x403228  movzwl/movzbl
+  call    : 0x403230  -> 0x401040 (proto_parse_field)
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+UnderflowFinding [UNGUARDED]
+  func    : 0x40a100
+  sub     : 0x40a140  r9 -= 0x8 (8)
+  truncate: 0x40a150  movzwl/movzbl
+  call    : 0x40a158  -> 0x401060 (parse_gre_options)
+
+[length_underflow] 12 findings: 3 UNGUARDED, 9 GUARDED
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+**Fixed-size structure offset arithmetic.** Code that computes an index into a fixed-size struct member (e.g., `lea rdi, [rbx - 8]` to access a struct field 8 bytes before a pointer) will match the subtraction check. The register destination then passed through a `MOVZX` for a different purpose could complete the pattern spuriously. Verify by examining the context: does the subtracted register actually hold a user-supplied length field?
+
+**Guarded instances that fail the lookback window.** A bounds check more than 25 instructions before the subtraction (e.g., the check is at the function entry and the arithmetic is deep in a loop) will not be seen by the guard lookback. The finding is marked `guarded=False` even though a real guard exists. These produce false positives in the unguarded set.
+
+**Stack frame accesses excluded by design.** `lea reg, [rbp - N]` and `lea reg, [rsp - N]` are deliberately excluded even when N is in the header size range. These are function frame slot accesses, not length subtraction. If firmware uses an unusual convention where the frame base pointer holds a data pointer rather than the stack frame base, this exclusion would produce false negatives — but this is extremely rare.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` to supply the PLT symbol map for call-target resolution.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Unguarded findings should be confirmed with `TaintTracker.trace_function()` to verify that the length field originates from attacker-controlled input. The canonical confirmation sequence: `func_va` → taint trace with all network-facing entry args → look for `alloc_size` or `copy_len` sinks near `sub_va`.
 
 ---
 
@@ -150,19 +152,21 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
 | `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `sub_va` | VA of the subtraction instruction (`lea -N` or `sub $N`) |
+| `sub_const` | The constant N subtracted (header size) |
+| `sub_reg` | Destination register family of the subtraction |
+| `truncate_va` | VA of the `movzwl`/`movzbl` truncation instruction |
+| `call_va` | VA of the `CALL` instruction that receives the truncated value |
+| `call_target` | VA of the called function |
+| `call_label` | PLT symbol name of the callee, if resolved |
+| `guarded` | `True` if a `CMP`/`TEST` on `sub_reg` was found within 25 instructions before the subtraction |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [Taint Analysis](taint-analysis.md) — confirm that the length field originates from user-controlled input
+- [Heap Vulnerability Scanner](heap-vulnerability-scanner.md) — detects integer overflows before allocation (multiplicative overflow class)
+- [Binary Context](binary-context.md) — provides `func_starts` and PLT; run first
+- [Path Solver](path-solver.md) — feasibility analysis for confirmed unguarded findings
