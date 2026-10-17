@@ -1,241 +1,230 @@
 # Taint Analysis
 
-Interprocedural data-flow tracking from network entry points to security-sensitive sinks. The tracker follows tainted data across function call boundaries, resolves PLT stubs to import names at every hop, and covers 14 architectures under one API.
+Forward-propagate attacker-controlled data through a function's instruction stream and report every instruction where tainted values reach security-sensitive sinks: allocation size arguments, copy length operands, memory write destinations, call arguments, and branch conditions.
 
 ---
 
 ## Why this exists
 
-Three things were not possible before the taint stack existed in Ablation:
+1. **A finding from a scanner is a hypothesis — taint analysis converts it to a verdict.** When the `HeapVulnScanner` reports an integer overflow before `malloc`, or the `FormatStringScanner` reports that a format register originates from a function argument, neither tool has answered the critical question: does that value come from attacker-controlled network input? `TaintTracker` takes those findings as starting points and traces the data forward through the function body, answering precisely which instruction paths are reachable from tainted data.
 
-**1. Cross-architecture vulnerability scanning without a commercial disassembler.**
-IDA Pro and Binary Ninja can taint-track x86-64 with plugins, but neither has first-class support for LoongArch64, nanoMIPS, V850, or ARC. Every target on a new architecture required writing a fresh one-off taint model in a disassembler scripting API, and that work was lost at the end of the engagement. Ablation's taint stack covers 14 architectures under one API. Every confirmed finding feeds back into the shared PatternLibrary.
+2. **Register aliasing defeats naive taint propagation.** The x86-64 instruction set allows code to write to `eax` (32-bit) and then read from `rax` (64-bit), or write to `al` (8-bit) and read from `rax`. A taint propagator that tracks registers by name only (not canonical form) will silently lose taint when the compiler emits a `movzx eax, byte ptr [rbp-8]` followed by `mov [rdi+rcx*4], rax`. This tracker normalizes every register reference to its 64-bit canonical form before any propagation operation — `al`, `ax`, `eax`, and `rax` are all tracked as `rax`.
 
-**2. Interprocedural traces that cross PLT boundaries.**
-Single-function taint analysis stops at every `call strcpy` or `call malloc`. The PLT entry is a stub, not real code, so a single-function analysis sees the call and stops. Ablation's interprocedural engine walks the call graph, resolves each PLT stub to its import name, and continues tracking through calling functions. A taint path that crosses three callers and reaches a `strcpy` in a helper function surfaces as one finding with the complete call trace.
-
-**3. Stack slot tracking across architecture ABI differences.**
-x86-64, ARM64, MIPS32, PPC32, and LoongArch64 pass arguments differently: register counts, callee-save conventions, stack frame layout. A generic tracker that ignores ABI details produces false positives on any architecture that does not match its assumptions. Each tracker models the target ABI precisely: register width, argument registers, caller-saved vs callee-saved sets, stack growth direction.
+3. **Intra-function taint analysis covers the highest-value vulnerability patterns without requiring symbolic execution.** The majority of remotely exploitable firmware vulnerabilities — heap overflows, format string bugs, and buffer overreads — are exploitable within a single function: attacker data arrives as a function argument and reaches a sink within that same function body. This tool provides that analysis in milliseconds, without SMT solvers, without symbolic path constraints, and without the operational overhead of a full binary analysis platform.
 
 ---
 
 ## How it works
 
-### Full pipeline
+The tracker executes a single forward pass through the disassembled function body, maintaining a live taint set of canonical register names and named stack slots.
 
 ```mermaid
 flowchart TD
-    A[/"Network-facing binary (ELF)"/] --> B["TrackerClass.from_path(elf)\nBinaryContext.load_or_build()\nplt_map · func_starts · call_edges"]
-
-    B --> C["run_interprocedural()\nFind all callers of each source\n(recv, read, fgets, ...)"]
-
-    C --> D["Seed worklist\n(caller_va, depth=0, taint_state={})"]
-
-    D --> E["Intra-function taint pass\nCapstone linear disassembly\napply taint policy per instruction"]
-
-    E --> F{"Call instruction\nencountered?"}
-
-    F -->|"callee in .plt"| G["PLT resolution\nlook up import_name\nin plt_map"]
-    F -->|"callee is internal"| H["Push (callee_va, depth+1)\nonto worklist"]
-
-    G --> I{"import_name\nin sink_table?"}
-    I -->|Yes, arg tainted| J[/"Emit TaintFinding\nsink + source + chain + path"/]
-    I -->|No| K["Propagate taint\nthrough return value"]
-    H --> E
-    K --> E
-
-    E --> L{"Taint escapes\nvia return / output ptr?"}
-    L -->|Yes| M["Caller propagation\nreturn reg carries taint\nback into caller frame"]
-    L -->|No| N{"Worklist\nexhausted?"}
-    M --> E
-    N -->|No| E
-    N -->|Yes| J
-
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style J fill:#7f1d1d,stroke:#991b1b,color:#fecaca
+    A["TaintTracker(binary_path)"] --> B[Load binary bytes, init Capstone CS_ARCH_X86/CS_MODE_64]
+    B --> C["_populate_known_funcs: resolve BinaryContext PLT\n→ ALLOC_FUNCS, COPY_FUNCS"]
+    C --> D["trace_function(func_va, tainted_args, max_insns=800)"]
+    D --> E["Initialize taint set from tainted_args\n(canonicalize: rdi, rsi, rdx → canonical names)"]
+    E --> F["Disassemble ≤max_func_size bytes from func_va"]
+    F --> G{iterate instructions up to max_insns}
+    G --> H{mnemonic?}
+    H -->|call| I{any ARG_REG in taint?}
+    I -->|yes| J[emit TaintSink: alloc_size / copy_len / call_arg]
+    I -->|no| K[kill caller-saved regs from taint]
+    H -->|mov/movzx/movsxd| L{src or src_mem tainted?}
+    L -->|yes| M[add dst_canon to taint]
+    L -->|no| N[discard dst_canon from taint]
+    H -->|lea| O{any tainted reg in src address expr?}
+    O -->|yes| M
+    O -->|no| N
+    H -->|add/sub/imul/shl/and/or/xor/cmov...| P{dst tainted OR src tainted?}
+    P -->|yes| M
+    P -->|no, but dst already tainted| M
+    H -->|xor dst, dst| Q[clear taint: idiom for zeroing]
+    H -->|cmp/test| R{either operand tainted?}
+    R -->|yes| S[emit TaintSink: branch_cond]
+    H -->|rep movs/stos| T{rcx or rdi or rsi tainted?}
+    T -->|yes| U[emit TaintSink: copy_len or mem_write]
+    H -->|mov mem dst + tainted src| V[emit TaintSink: mem_write]
+    J --> G
+    K --> G
+    M --> G
+    N --> G
+    S --> G
+    U --> G
+    V --> G
+    G -->|max_insns reached| W[return TaintSink list]
 ```
 
----
+### Register canonicalization
 
-### The taint lattice
+Every register reference in the instruction stream is normalized to its 64-bit canonical form before any taint operation:
 
-All trackers implement the libdft taint policy (Andriesse, *Practical Binary Analysis*, ch. 11), adapted for static analysis. The policy defines a two-element lattice over each register and memory location. A location is either clean (`{}`) or tainted with a source label (`{source_label}`). The label tracks which source the taint originated from, so multi-source binaries produce separate findings per source.
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    Clean : Clean\n{ }
-    Tainted : Tainted\n{source_label}
-
-    [*] --> Clean : initial state
-    Clean --> Tainted : CALL source_fn\nreturn_reg ← {source_label}
-    Tainted --> Tainted : XFER dst ← src\nALU dst ← op1 | op2\nLEA dst ← base | index
-    Tainted --> Clean : CLR (xor r, r)\nCallee clobbers caller-saved reg
-    Tainted --> [*] : CALL sink_fn,\narg tainted → emit finding
-```
-
-| Instruction class | Propagation rule |
+| Input forms | Canonical |
 |---|---|
-| `XFER` (mov / ldr / str) | `dst_taint = src_taint` |
-| `ALU` (add / sub / and) | `dst_taint = taint(op1) \| taint(op2)` |
-| `CLR` (xor r, r) | `dst_taint = {}`: clears unconditionally |
-| `LEA` | `dst_taint = taint(base) \| taint(index)` |
-| `CALL` (source fn) | Return register ← `{source_label}` |
-| `CALL` (sink fn) | If relevant arg register is tainted → emit finding |
-| `CALL` (other fn) | Caller-saved registers ← `{}`; callee-saved preserved |
+| `rax`, `eax`, `ax`, `al`, `ah` | `rax` |
+| `rcx`, `ecx`, `cx`, `cl`, `ch` | `rcx` |
+| `rdx`, `edx`, `dx`, `dl`, `dh` | `rdx` |
+| `rbx`, `ebx`, `bx`, `bl`, `bh` | `rbx` |
+| `rsi`, `esi`, `si`, `sil` | `rsi` |
+| `rdi`, `edi`, `di`, `dil` | `rdi` |
+| `r8`–`r15` and their 32/16/8-bit variants | `r8`–`r15` |
 
-The meet operator is set union: `{A} | {B} = {A, B}`. In a single-source binary this reduces to boolean OR. In a multi-source binary, `{recv, fgets}` on a single memory location means two independent code paths feed it. A sink finding with two labels means two separate attack vectors converge at the same dangerous call.
+This means `movzx eax, byte [rsp+8]; test rax, rax` is correctly handled: the `movzx` write to `eax` is tracked on `rax`, and the subsequent `test rax, rax` sees the correct taint state.
 
-The `CLR` rule is the most important false-positive filter. `xor rax, rax` on x86-64 zeroes `rax` unconditionally regardless of tainted state. Without this rule, taint survives zero-initialization sequences and produces false positives on every stack frame that homes a tainted register before clearing it.
+### Sink detection
 
----
+The five sink types and their detection conditions:
 
-### PLT resolution
-
-The PLT (Procedure Linkage Table) is a region of stub functions. The tracker identifies stubs by VA range and maps each to its symbol name via the relocation table. The actual GOT resolution that happens at runtime is irrelevant for static analysis.
-
-```mermaid
-flowchart LR
-    A["call 0x403020"] --> B{"VA in\n.plt range?"}
-    B -->|Yes| C["Look up plt_map[0x403020]\n→ 'strcpy'"]
-    B -->|No| D["Internal function call\npush to worklist"]
-    C --> E{"'strcpy' in\nsink_table?"}
-    E -->|Yes| F["Arg tainted?\n→ emit finding"]
-    E -->|No| G["Continue tracking\nthrough return value"]
-```
-
-On PPC32 with GOT2 PIC, call sequences go through a `.got2` trampoline. `PPC32GOT2Resolver` unwraps these before the interprocedural walk begins so every call edge in the call graph already points to an import name, not a trampoline VA.
-
----
-
-### Stack slot tracking by architecture
-
-Stack slot tracking extends the register taint model to memory. When a tainted register is stored to a stack-relative address, that address is added to the slot map. When any register is loaded from a tracked slot before a sink call, the taint transfers to the destination register.
-
-| Architecture | Frame pointer | Stack argument homing | Notes |
-|---|---|---|---|
-| x86-64 | `rbp` (optional) | Not required by SysV ABI | rsp-relative tracking; push/pop delta maintained |
-| ARM64 | `x29` (`fp`) | Not required by AAPCS64 | `sp+0` = x0 home slot when compiler chooses to home |
-| MIPS32 (O32) | `$fp` | **Required**: `$sp+0..+12` for `$a0`–`$a3` | Mandatory homing is why naive trackers fail on MIPS32 |
-| PPC32 | `r30` (GOT2 base) | `r1+24..+28` for `r3`–`r4` | `r30` carries no taint semantics in PIC code |
-| LoongArch64 (LP64) | `$fp` (`$r22`) | Not required | `$ra` (`$r1`) is callee-saved; cleared of taint on return |
-
-The MIPS32 mandatory homing deserves a detailed explanation because it is the most common source of false positives on that architecture. At every O32 function entry, the compiler stores all four argument registers (`$a0`–`$a3`) to `[$sp+0]` through `[$sp+12]` whether they are used or not. This is the "argument home area." The tracker must recognize the store-and-reload pair as the same data, not as a stack-to-stack taint path through a new variable.
-
----
-
-## Architecture coverage
-
-| Architecture | Tracker class | Module | Notes |
-|---|---|---|---|
-| x86-64 | `TaintTracker` | `taint_tracker_x86` | Full: RIP-relative strings, stack delta, SIMD clear |
-| x86-32 | `X86_32TaintTracker` | `taint_tracker_x86_32` | CDECL32; PIC and non-PIC PLT |
-| ARM64 | `ARM64TaintTracker` | `taint_tracker_arm64` | `from_path_full` injects `.eh_frame` func starts |
-| ARM32 | `ARM32TaintTracker` | `taint_tracker_arm32` | `thumb=True` for Thumb2 binaries |
-| MIPS32 | `MIPS32TaintTracker` | `taint_tracker_mips32` | `endian='big'` for RouterOS/Cisco |
-| MIPS64 | `MIPS64TaintTracker` | `taint_tracker_mips64` | `endian='big'` for IOS/OCTEON |
-| nanoMIPS | `NanoMIPSTaintTracker` | `taint_tracker_nanomips` | Two-path: Capstone 6.x or conservative fallback |
-| PPC32 | `PPC32TaintTracker` | `taint_tracker_ppc32` | `endian='big'`; GOT2-PIC call resolution |
-| PPC64 | `PPC64TaintTracker` | `taint_tracker_ppc64` | IBM POWER, AIX; `endian='big'` |
-| LoongArch64 | `LoongArch64TaintTracker` | `taint_tracker_loongarch64` | Pure Python; Capstone has no LA64 support |
-| RISC-V 32 | `RISCV32TaintTracker` | `taint_tracker_riscv32` | HiSilicon WS63 via `ext_decoder=HiSiliconRV32ExtDecoder` |
-| RISC-V 64 | `RISCV64TaintTracker` | `taint_tracker_riscv64` | SiFive, VisionFive 2 |
-| ARC | `ARCTaintTracker` | `taint_tracker_arc` | Check `ARCDecoder().has_full_decode` before running |
-| V850 | `V850TaintTracker` | `taint_tracker_v850` | RH850/G3M ECU; endian auto-detected via lief |
-
----
-
-## Sources and sinks
-
-| Category | Functions |
+| Sink type | Detection condition |
 |---|---|
-| Network sources | `recv`, `recvfrom`, `recvmsg`, `read`, `fread`, `fgets`, `gets`, `getchar`, `fgetc` |
-| Exec sinks | `system`, `popen`, `execve`, `execl`, `execvp`, `execvpe` |
-| Memory sinks | `strcpy`, `strcat`, `sprintf`, `snprintf`, `vsprintf`, `memcpy`, `memmove`, `bcopy` |
-| Scripting sinks | `Tcl_Eval`, `lua_dostring`, `fm_exec_cli` |
+| `alloc_size` | A tainted argument register is in `rdi`/`rsi`/`rdx` at `CALL malloc` / `calloc` / `realloc` |
+| `copy_len` | A tainted `rcx` at `rep movs`, or a tainted argument at `CALL memcpy` / `memmove` |
+| `mem_write` | Tainted source register in a `MOV [mem], reg` instruction |
+| `branch_cond` | Tainted operand in a `CMP` or `TEST` instruction (controls a conditional branch) |
+| `call_arg` | Any tainted argument register at any `CALL` not already classified as alloc/copy |
 
-Custom sinks are added per engagement via `custom_sinks={'my_exec': {0: 0}}` where the dict maps argument position (0-indexed) to minimum tainted length. Add vendor-specific sinks via `VendorProfile`:
+### Conservative propagation semantics
+
+The tracker is **path-insensitive**: it does not branch-fork the taint state at conditional jumps. Instead, it assumes all code paths execute (the union of all paths). This means:
+
+- Every `CMOV` instruction conservatively taints the destination if either operand is tainted.
+- A value that is tainted on one branch of a conditional is considered tainted after the merge point.
+- This prevents false negatives at the cost of some false positives on paths that are not actually reachable together.
+
+`setcc` instructions (e.g., `sete al`) are treated as always untainted — they produce a known 0/1 value derived from flags, not from tainted data, so they do not propagate taint.
+
+---
+
+## TaintTracker
 
 ```python
-from ablation.analyzers.vendor_profile import VendorProfile
-profile = VendorProfile.from_vendor('fortinet')
-profile.apply_to(tracker)
+from ablation.analyzers.taint_tracker import TaintTracker
+
+tt = TaintTracker('/path/to/binary')
+
+# Trace function at 0x22ccc0 with rdi, rsi tainted at entry
+sinks = tt.trace_function(
+    func_va=0x22ccc0,
+    tainted_args=['rdi', 'rsi'],
+    max_insns=500,
+)
+
+for sink in sinks:
+    print(sink)
+```
+
+### Integration with BinaryContext
+
+```python
+from ablation.analyzers.binary_context import BinaryContext
+from ablation.analyzers.taint_tracker import TaintTracker
+from ablation.analyzers.heap_vuln_scanner import HeapVulnScanner
+
+ctx = BinaryContext.load_or_build('/fw/fortigate/httpsd')
+heap_scanner = HeapVulnScanner.from_context(ctx)
+heap_findings = heap_scanner.scan()
+
+tt = TaintTracker('/fw/fortigate/httpsd')
+
+# Confirm that each HIGH finding's function receives tainted input
+for f in [x for x in heap_findings if x.severity == 'HIGH']:
+    sinks = tt.trace_function(
+        func_va=f.func_va,
+        tainted_args=['rdi', 'rsi', 'rdx'],  # assume first three args tainted
+    )
+    alloc_sinks = [s for s in sinks if s.sink_type == 'alloc_size']
+    if alloc_sinks:
+        print(f"CONFIRMED: 0x{f.func_va:x} — tainted size reaches allocator")
+        for s in alloc_sinks:
+            print(f"  {s}")
+```
+
+### Extending allocator and copy function sets
+
+```python
+from ablation.analyzers.taint_tracker import TaintTracker
+from ablation.analyzers.binary_context import BinaryContext
+
+ctx = BinaryContext.load_or_build('/fw/cisco/lina')
+tt = TaintTracker('/fw/cisco/lina')
+
+# Register custom allocator VAs from the PLT
+for va, name in ctx.plt.items():
+    if 'pool_alloc' in name or 'zone_alloc' in name:
+        tt.ALLOC_FUNCS.add(va)
 ```
 
 ---
 
 ## Usage
 
-All trackers share the same constructor and entry point:
-
 ```python
-from ablation.analyzers.taint_tracker_arm64 import ARM64TaintTracker
+from ablation.analyzers.taint_tracker import TaintTracker
 
-# Stripped binary: use from_path_full for complete function coverage
-findings = ARM64TaintTracker.from_path_full('/path/to/firmware').run_interprocedural()
-for f in findings:
-    print(f)
+tt = TaintTracker('/fw/fortigate/sslvpnd')
+sinks = tt.trace_function(
+    func_va=0x40a200,
+    tainted_args=['rdi'],        # attacker controls first argument
+    max_insns=1000,
+    max_func_size=0x4000,
+)
+
+for sink in sinks:
+    print(f"  [{sink.sink_type:12s}]  0x{sink.address:x}  {sink.instruction}")
+    if sink.note:
+        print(f"               NOTE: {sink.note}")
 ```
-
-For x86-64 with a pre-built context and custom sinks:
-
-```python
-from ablation.analyzers.xref_graph import XRefGraph
-from ablation.analyzers.taint_tracker_x86 import TaintTracker
-
-xg = XRefGraph.from_path(binary).build()
-tracker = TaintTracker(binary, xref=xg, custom_sinks={'my_sink': {0: 0}})
-findings = tracker.run_interprocedural()
-```
-
----
-
-## Reading findings
-
-Each `TaintFinding` includes:
-
-| Field | Content |
-|---|---|
-| `sink_name` | Name of the dangerous function reached |
-| `sink_va` | VA of the call site in the binary |
-| `source_name` | Name of the taint source (e.g., `recv`) |
-| `arg_index` | Which argument to the sink is tainted (0-indexed) |
-| `chain` | `[(va, register, operation)]` steps from source to sink |
-| `path` | `[caller_va,...]` function VAs traversed interprocedurally |
-
-A finding with `path=[0x1000, 0x2000, 0x3000]` means taint entered at `0x1000`, passed through `0x2000`, and reached the sink call in `0x3000`. The `chain` within each function shows exactly which registers carried the taint at each instruction.
 
 ---
 
 ## Example output
 
 ```
-[CRITICAL] system() at 0x4023A0
-  source:   recv() at 0x401F00
-  arg:      rdi (arg 0)
-  chain:    recv→rdi → strcpy buf → system rdi
-  path:     [0x401F00, 0x4020C0, 0x4023A0]
-  severity: CRITICAL (exec sink, externally controlled argument)
+0x40a214  [call_arg   ]  call 0x401050  (tainted: rdi): arg1 at call
+0x40a228  [branch_cond]  test rax, rax  (tainted: rax)
+0x40a250  [alloc_size ]  call 0x401030  (tainted: rdi): ALLOC SIZE ARG
+0x40a270  [mem_write  ]  mov qword ptr [rbx+0x10], rax  (tainted: rax)
+0x40a290  [copy_len   ]  call 0x401060  (tainted: rsi): COPY LEN/ADDR ARG
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is taint surviving a zero-clear instruction (`xor rax, rax`). The `CLR` rule in the taint lattice clears taint unconditionally on self-XOR, but some architectures use different clearing idioms. Use `SinkArgClassifier` to pre-filter `RODATA_CONST` call sites before running the taint tracker — these are not findings regardless of register state.
+**Path-insensitive analysis on guarded code.** A function that validates user input at the top and returns early on invalid input will still show taint reaching sinks on the guarded fast path — the tracker does not model the fact that the early return prevents the tainted value from ever reaching the allocation on the valid-input path. Manually verify that the branch at the `branch_cond` sink does not guard the `alloc_size` sink.
+
+**`xor reg, reg` tracking.** The tracker special-cases `xor dst, src` when `dst == src` as a zero-initializer (clears taint). However, some compilers use `xor eax, eax` as a NOP-substitute or pipeline filler without intent to zero. When `xor eax, eax` immediately precedes a `call` that returns a value into `rax`, the resulting `rax` write on return is from the call, not the xor — and the tracker correctly handles this because the call return kills all caller-saved taint.
+
+**Large functions with loops.** The `max_insns` limit (default 800) prevents runaway disassembly on pathological functions, but it means a function with a long loop prologue may not reach all sinks. If the function is of interest, increase `max_insns` or increase `max_func_size`.
+
+**Memory taint.** The tracker does not model memory taint — only register and stack-slot taint. If tainted data is stored to memory and later reloaded into a register, the reload is treated as untainted. This is a fundamental limitation of the intra-function, register-only model; full memory taint requires a different analysis tier.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()`, then `SinkArgClassifier.classify_all()` to eliminate `RODATA_CONST` call sites. Only pass `ARG_PROPAGATED` and `UNKNOWN` sinks to the taint tracker.
+**Before this module:** `HeapVulnScanner`, `FormatStringScanner`, or any other scanner that identifies candidate functions and initial tainted registers. `BinaryContext` supplies the PLT for allocator and copy function resolution.
 
-**After this module:** `PathSolver` to confirm path feasibility. `FindingRegistry.register()` to record confirmed findings.
+**After this module:** `branch_cond` sinks at `TaintSink.sink_type` with a subsequent `alloc_size` sink can be escalated to a `PathSolver` analysis to check whether a feasible execution path exists from function entry to the allocation. Confirmed `alloc_size` or `copy_len` sinks feed directly into vulnerability report generation.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `address` | Virtual address of the sink instruction |
+| `sink_type` | `alloc_size` / `copy_len` / `mem_write` / `branch_cond` / `call_arg` |
+| `instruction` | Full instruction text: `mnemonic op_str` |
+| `tainted_operand` | The register name that is tainted at this instruction |
+| `note` | Contextual annotation: `ALLOC SIZE ARG`, `COPY LEN/ADDR ARG`, `arg1 at call`, etc. |
 
 ---
 
 ## See also
 
-- [SinkArgClassifier](sink-arg-classifier.md) — pre-filter RODATA_CONST sinks before taint
-- [PathSolver](path-solver.md) — confirm path feasibility after a taint hit
-- [SinkPropagator](sink-propagator.md) — extend sink coverage across wrappers
+- [Heap Vulnerability Scanner](heap-vulnerability-scanner.md) — generates the function candidates that `TaintTracker` confirms
+- [Format String Scanner](format-string-scanner.md) — produces `arg_passthrough` candidates for taint confirmation
+- [Binary Context](binary-context.md) — required for PLT-based allocator and copy-function resolution
+- [Path Solver](path-solver.md) — feasibility analysis for confirmed taint paths
+- [Sink Arg Classifier](sink-arg-classifier.md) — pre-classify all sink arguments before full taint tracing
