@@ -134,6 +134,24 @@ Run `AgentLoop` as a targeted tool on `SemanticSearcher` top candidates that nee
 
 ## See also
 
+## Reading output
+
+`AgentLoop.run()` returns an `AnalysisResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | VA of the analyzed function |
+| `name` | Inferred function name |
+| `role` | Role tag (e.g., `network input handler`, `parser`) |
+| `confidence` | Float 0.0–1.0 |
+| `tool_calls` | Count of tool calls made during analysis |
+
+`AgentLoop.run_patch()` returns `{cve_hypothesis: str, affected_va: int, root_cause: str}`.
+
+---
+
+## See also
+
 - [Assisted Function Naming](assisted-function-naming.md) — higher-level interface wrapping `AgentLoop` for batch function naming
 - [Assisted Vulnerability Hypotheses](assisted-vulnerability-hypotheses.md) — `run_patch()` usage for patch-based CVE hypothesis
 - [Semantic Search](semantic-search.md) — identifies top candidates for `AgentLoop` deeper analysis

@@ -91,6 +91,22 @@ Export runs at the end of a sweep or confirmation session, never during triage. 
 
 ---
 
+## Reading output
+
+`SARIFExporter.export(findings)` returns a SARIF 2.1.0 JSON `dict`:
+
+| Key path | Content |
+|:---|:---|
+| `runs[0].tool.driver.name` | `ablation` |
+| `runs[0].results[*].ruleId` | Finding tag (e.g., `ABL-memory-safety`) |
+| `runs[0].results[*].level` | `error`, `warning`, or `note` |
+| `runs[0].results[*].message.text` | Finding detail string |
+| `runs[0].results[*].locations[*].uri` | File URI of the analyzed binary |
+
+`JSONExporter.export(findings)` returns a flat `List[dict]` — one dict per finding, all fields preserved.
+
+---
+
 ## See also
 
 - [Markdown Research Reports](markdown-research-reports.md) — `generate_report()` for human-readable markdown from sweep results

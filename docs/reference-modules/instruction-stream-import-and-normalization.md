@@ -84,6 +84,19 @@ Run `BinaryLifter.lift_function()` after `TaintTracker` confirms a finding to pr
 
 ---
 
+## Reading output
+
+`BinaryLifter.lift(va)` returns a `LiftedFunction` object:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | VA of the lifted function |
+| `pseudocode` | Lifted pseudocode string — human-readable IR with named parameters |
+| `taint_annotations` | `List[str]` — inline taint annotations for tainted operations |
+| `sink_calls` | `List[{sink_name, va, args}]` — sink calls identified in the lifted code |
+
+---
+
 ## See also
 
 - [Structured CFG Reconstruction](assisted-structure-reconstruction.md) — `Structurizer` for structured control flow from the same CFG

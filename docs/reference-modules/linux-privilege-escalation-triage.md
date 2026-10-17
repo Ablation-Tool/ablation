@@ -93,6 +93,20 @@ Run `PrivescEnumerator` immediately after establishing low-privilege shell acces
 
 ---
 
+## Reading findings
+
+`PrivescEnumerator.enumerate()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (GTFOBins SUID) / `HIGH` (sudo NOPASSWD) / `MEDIUM` (capability) |
+| `title` | Finding code (e.g., `SUID_GTFOBINS`, `SUDO_NOPASSWD`, `CAPABILITY_NET_RAW`) |
+| `detail` | Binary path, GTFOBins technique, or capability flag |
+| `path` | Filesystem path of the affected binary |
+| `gtfobins_technique` | GTFOBins technique name (for `SUID_GTFOBINS` findings) |
+
+---
+
 ## See also
 
 - [Process and Memory Map Inventory](process-and-memory-map-inventory.md) — DLL hijacking and anonymous RWX for injection-based escalation

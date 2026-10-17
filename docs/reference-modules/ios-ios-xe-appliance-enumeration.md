@@ -79,6 +79,20 @@ Run IOS/IOS-XE enumeration as part of initial network appliance triage. Recovere
 
 ---
 
+## Reading findings
+
+IOS/IOS-XE probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (plaintext credential) / `HIGH` (unauth access) / `MEDIUM` / `LOW` |
+| `title` | Finding code (e.g., `IOS_SNMP_PUBLIC_COMMUNITY`, `IOS_TYPE7_PASSWORD`, `IOS_RESTCONF_UNAUTH`) |
+| `detail` | Plaintext password, neighbor list, or OID response |
+| `host` | Target IP |
+| `port` | Protocol port (e.g., `161` for SNMP, `443` for RESTCONF) |
+
+---
+
 ## See also
 
 - [NX-OS/ACI/APIC Fabric Enumeration](nx-os-aci-apic-fabric-enumeration.md) — `nxos_enum.py` for NX-OS and ACI APIC fabric
