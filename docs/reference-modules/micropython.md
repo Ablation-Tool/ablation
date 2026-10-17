@@ -100,14 +100,10 @@ Run `MpyLifter` on every `.mpy` file extracted from firmware containers. Combine
 
 ## Reading output
 
-`MpyLifter.lift_module()` returns a `LiftedModule` object:
+`MpyLifter.lift_module()` returns a `str` — multi-line Python-like pseudocode for the entire `.mpy` module. Additional methods:
 
-| Attribute | Content |
-|:---|:---|
-| `source` | Lifted pseudocode string — Python-like source reconstruction |
-| `imports` | `List[str]` — imported module names |
-| `functions` | `List[str]` — defined function names |
-| `dangerous_calls` | `List[{func, va, args}]` — calls to `exec`, `eval`, `machine.mem32`, etc. |
+- `MpyLifter.imports()` → `List[str]` — all imported module names found in the bytecode
+- `MpyLifter.dangerous_calls()` → `List[dict]` — calls to `exec`, `eval`, `os`, `machine`, `uctypes`, etc.; each dict has `type`, `qstr`, `va`, `severity`
 
 ---
 

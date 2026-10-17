@@ -76,15 +76,24 @@ Run `TiCoffLoader` on any TI COFF2 `.obj` or `.a` file before `TiNNCScanner` or 
 
 ## Reading output
 
-`TiCoffLoader.load(path)` returns a `TiCoffModule` object:
+`TiCoffLoader.from_path(path).objects()` returns `List[TiCoffObject]`:
 
 | Attribute | Content |
 |:---|:---|
-| `target_id` | TI COFF target identifier (e.g., `28` for C28x) |
-| `symbols` | `List[TiCoffSymbol]` — all global defined symbols |
-| `function_starts()` | `List[int]` — VAs of all `C_EXT` / `C_WEAKEXT` symbols with code storage class |
+| `member_name` | AR archive member filename, or the `.obj` filename for standalone files |
+| `header` | `CoffFileHeader` — with `magic`, `n_sections`, `sym_ptr`, `n_syms`, `target_id` |
+| `symbols` | `List[CoffSymbol]` — all symbol table entries in this object |
 
-`TiCoffSymbol` has `name: str`, `va: int`, and `sym_class: str` (`C_EXT`, `C_WEAKEXT`, `C_STAT`).
+Each `CoffSymbol`:
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Symbol name string |
+| `value` | Symbol value (address for code/data symbols, `0` for undefined externals) |
+| `section_number` | `0` = undefined external, `-1` = absolute, `1+` = section index |
+| `storage_class` | Raw storage class integer |
+| `member_name` | AR member this symbol came from (empty for standalone objects) |
+| `is_weak` | Property — `True` if `storage_class == C_UEXT` (tentative external / weak) |
 
 ---
 

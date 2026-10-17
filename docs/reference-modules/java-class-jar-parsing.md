@@ -96,17 +96,21 @@ Run `ABCParser.from_path()` on any extracted HarmonyOS `.abc` file before securi
 
 ## Reading output
 
-`ABCParser.parse()` returns an `ABCModule` object:
+`ABCParser.get_all_methods()` returns `List[MethodInfo]` (also available as `iter_methods()` for memory-efficient iteration):
 
 | Attribute | Content |
 |:---|:---|
-| `version` | ABC format version string |
-| `dialect` | `STATIC` or `DYNAMIC` |
-| `methods` | `List[ABCMethod]` — all method records |
+| `entity_id` | File offset of the method item |
+| `class_name` | Decoded class name string |
+| `method_name` | Decoded method name string |
+| `class_idx` | `u16` class index |
+| `proto_idx` | `u16` prototype index (`0xffff` = no prototype) |
+| `access_flags` | Decoded ULEB128 access flags |
+| `code_off` | File offset of `CodeItem`; `0` = abstract or native method |
+| `source_lang` | `0` = ECMAScript/ArkTS, `1` = Java, `-1` = not present |
+| `fqn` | Property: `class_name.method_name` fully-qualified name |
 
-Each `ABCMethod`: `{name, has_code, native, instructions: List[ABCInstruction]}`.
-
-`ABCParser.disassemble(method_name)` returns `List[str]` — textual disassembly of the method body.
+`ABCParser.get_code(method)` returns the `CodeItem` for a given `MethodInfo` (or raw `code_off`), or `None` for abstract/native methods.
 
 ---
 

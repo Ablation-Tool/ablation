@@ -218,6 +218,7 @@ Tests 1â€“3 passed live. Test 4 verified via documentation review (0.0 density â
 | `end` | Last byte offset of the region (exclusive) |
 | `region_type` | `'CODE'` / `'CALIBRATION'` / `'ERASED'` / `'MIXED'` / `'PADDING'` / `'IVT'` |
 | `entropy` | Mean Shannon entropy across all windows in the region |
+| `window_count` | Number of analysis windows merged into this region |
 | `size` | Property: `end - start` |
 
 See [ecu-rom-layout-analyzer](ecu-rom-layout-analyzer.md) for the full module reference.
