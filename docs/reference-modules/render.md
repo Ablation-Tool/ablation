@@ -92,29 +92,49 @@ Color constants are empty strings in plain mode, so the same code works in every
 
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+At import time, `render.py` checks `sys.stdout.isatty()`, the `NO_COLOR` environment variable, and `COLORTERM` / `TERM` to set the module-level `MODE` constant. All color constants (`RED`, `GREEN`, etc.) are then set to the appropriate ANSI escape sequences for the detected mode, or to empty strings if `MODE='plain'`. This means callers can concatenate color constants with strings unconditionally — in plain mode the concatenation produces no escape codes and the string is unchanged. `box()`, `sbox()`, `section()`, and `arrow()` build framed output strings using Unicode box-drawing characters; in plain mode they fall back to ASCII borders. `strip(s)` uses a compiled regex to remove all ANSI escape sequences for computing display-width of a colored string.
 
 ---
 
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+┌─────────────────────────────────────────────┐
+│  FORGE  ·  Production Gate                  │
+└─────────────────────────────────────────────┘
+══ FINDINGS ════════════════════════════════════
+┌─────────────────────────────────────────────┐
+│  [CRITICAL] CryptoAudit arity mismatch      │
+│  stage: DEVELOP — mypy catches this in 0.1s │
+└─────────────────────────────────────────────┘
+```
+
+In `plain` mode (pipe/redirect), the same code prints:
+
+```
++---------------------------------------------+
+|  FORGE  ·  Production Gate                  |
++---------------------------------------------+
+== FINDINGS ====================================
++---------------------------------------------+
+|  [CRITICAL] CryptoAudit arity mismatch      |
+|  stage: DEVELOP                             |
++---------------------------------------------+
 ```
 
 ---
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+`render.py` does not emit security findings. The only failure mode is rendering: in rare terminal configurations where `COLORTERM` is not set but the terminal supports 256 colors, `MODE` may fall back to `ansi16`, producing less saturated colors than expected. Set `COLORTERM=truecolor` explicitly to force 24-bit mode.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** No prerequisites. Import at the top of any module that produces terminal output.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** Pass the formatted strings from `box()`, `sbox()`, and `section()` directly to `print()`. No further processing is required — all escape codes are embedded in the returned strings, and `strip()` is available if display-width calculation is needed.
 
 ---
 

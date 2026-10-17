@@ -263,7 +263,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. No code changes needed.
 
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+The four modules are independent but follow a common pattern: each module reads from disassembly (instruction lists, CFG edges, section bytes) and returns typed result objects. `VersionDelta.track()` runs a three-stage pipeline: structural pre-filter on CFG shape, mnemonic 4-gram Jaccard, and BERT semantic tiebreaker. `StructuralSim.fingerprint_sim()` computes a five-signal weighted composite over pre-built `FunctionFingerprint` NamedTuples. `VtableResolver` runs four static phases over raw binary bytes and builds a resolved call graph with no symbol information. `MatrixProfileDiff.compare_functions()` applies the STOMP algorithm to normalized mnemonic sequences and returns the highest-distance subsequence as the anomaly region. None of the four modules perform file I/O, network calls, or subprocess execution.
 
 ---
 
@@ -294,22 +294,38 @@ For ARM64 vtable resolution, see the `## VtableResolver` section above which use
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+# VersionDelta
+VersionDelta  firmware_v1.so → firmware_v2.so
+  track(0x1000)  homolog=0x10a0  confidence=0.87  stage=4gram
+  patch_diff:
+    - cmp rax, 0x1000
+    + cmp rax, 0x2000  (size limit increased: 4096 → 8192)
+
+# StructuralSim
+fingerprint_sim(fp_a, fp_b) → 0.847
+
+# MatrixProfileDiff
+compare_functions(insns_v1, insns_v2)
+  change_score=0.74  anomaly_region=(14, 22)  (8 instructions)
 ```
 
 ---
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+See the individual module pages for module-specific false positive scenarios:
+- **VersionDelta**: BERT tiebreaker may still produce confidence 0.50–0.65 when two functions are nearly structurally identical and differ only in semantic content. Manual patch diff verification is required in this range.
+- **StructuralSim**: Small wrapper functions (< 15 instructions, no PLT calls) frequently exceed the 0.70 threshold against unrelated functions due to opcode histogram alignment. Follow high-score pairs with a semantic check.
+- **VtableResolver**: Constructor vptr stores that use register-indirect `STR xN, [xM]` (field offset not a compile-time constant) are not detected by the `ADRP+ADD+STR` pattern. BLR sites served by these constructors remain unresolved.
+- **MatrixProfileDiff**: Functions shorter than the window size `m` cannot be profiled. `change_score=None` is returned for pairs where either function has fewer than `m` instructions.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** `BinaryContext.load_or_build()` for both firmware versions. Capstone disassembly of each function for `StructuralSim` and `MatrixProfileDiff`. Raw binary bytes and a parsed LIEF binary for `VtableResolver`.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** Homolog matches from `VersionDelta` feed `ctx.set_name()` to port confirmed names forward. Orphans from `StructuralSim.find_structural_orphans()` and changed regions from `MatrixProfileDiff` become candidates for `TaintTracker` and `FindingRegistry`. Resolved BLR targets from `VtableResolver` eliminate indirect call ambiguity for `SemanticSearcher` and taint analysis.
 
 ---
 
