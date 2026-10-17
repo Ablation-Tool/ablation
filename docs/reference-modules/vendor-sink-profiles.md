@@ -91,16 +91,16 @@ Apply `VendorProfile.apply_to(clf)` immediately after creating `SinkArgClassifie
 
 ## Reading output
 
-`VendorProfile.load(vendor_name)` returns a `VendorProfile` object:
+`VendorProfile.from_vendor(vendor_name)` returns a `VendorProfile` object:
 
 | Attribute | Content |
 |:---|:---|
-| `vendor` | Vendor name string (e.g., `fortinet`) |
-| `sinks` | `List[VendorSink]` — vendor-specific sink definitions |
-| `safe_patterns` | `List[str]` — regex patterns for known-safe argument strings |
-| `apply(classifier)` | Registers profile sinks and safe patterns into a `SinkArgClassifier` |
+| `vendor` | Vendor name string (e.g., `'fortinet'`) |
+| `sinks` | `List[dict]` — dicts with `name`, `arg_pos`, `note` |
+| `safe_patterns` | `List[dict]` — known-safe exec pattern records with `pattern` and `note` |
+| `sanitizers` | `List[dict]` — known sanitizer function records |
 
-`VendorSink` has `name: str`, `arg_pos: int`, and `description: str`.
+`VendorProfile.apply_to(classifier)` registers all profile sinks into a `SinkArgClassifier` and returns `None`.
 
 ---
 
