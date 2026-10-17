@@ -86,11 +86,11 @@ Route files (sample):
 
 | Attribute | Content |
 |:---|:---|
-| `all_files` | `List[str]` — all source file paths in the repository |
-| `route_files` | `List[str]` — files containing route definitions |
-| `package_roots` | `List[str]` — paths to `package.json`, `pom.xml`, or `pyproject.toml` files |
-| `search(pattern)` | `List[(file, line, text)]` — grep-style search across all indexed source files |
-| `read_file(path)` | `str` — content of a source file relative to the repository root |
+| `repo_root` | `Path` — root directory of the repository |
+| `all_files` | `List[Path]` — all source files, filtered by language extension |
+| `route_files` | `List[Path]` — files identified as HTTP route handlers |
+| `lang_map` | `Dict[str, List[Path]]` — language name → list of source files |
+| `package_roots` | `List[Path]` — monorepo workspace roots (directories with `package.json`) |
 
 ---
 
