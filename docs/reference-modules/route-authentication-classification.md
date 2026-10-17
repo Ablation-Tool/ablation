@@ -1,16 +1,16 @@
-# Route Authentication Classification
+# Pre-Authentication Route Auditing
 
-Automate the 4-step pre-authentication route discovery process for flatui-based firmware web frameworks — scanning route init functions for `WorkflowLockWithoutSessionPermit`-only registrations, extracting handler class names, cross-referencing handler factories to find GET/POST handler VAs, and running `FuncProfiler` on each handler to surface dangerous sinks.
+Automate the four-step process of identifying pre-authentication attack surface in firmware web frameworks — scanning the route initialization function for `WorkflowLockWithoutSessionPermit`-only routes, extracting handler class names, cross-referencing handler factories to resolve GET/POST handler VAs, and running `FuncProfiler` on each handler to surface exec-class sinks.
 
 ---
 
 ## Why this exists
 
-1. **Pre-authentication route auditing is a 4-step manual process in flatui-based frameworks: find routes registered without session permission checks, map them to handler classes, find each class's GET/POST handler VA, and profile the handler for sinks.** `PreAuthRouteAuditor` automates all four steps in a single call, reducing 4–8 hours of manual web framework RE to under 5 minutes on a new firmware version.
+1. **Pre-authentication routes are the highest-priority attack surface in firmware web interfaces** — they are reachable without any credential and represent the shortest path to unauthenticated RCE. The four-step manual process (route scan → handler class extraction → factory cross-reference → FuncProfiler) was performed by hand across multiple sessions before `PreAuthRouteAuditor` automated it.
 
-2. **`WorkflowLockWithoutSessionPermit` is the specific registration pattern that marks a route as pre-authentication reachable** — routes using `WorkflowLockWithSession` are only reachable after login. `PreAuthRouteAuditor` scans for the former and explicitly excludes the latter, producing a list of routes that any attacker (unauthenticated) can reach directly.
+2. **`WorkflowLockWithoutSessionPermit` is the specific route permission class used in flatui-based frameworks to mark routes that do not require an authenticated session.** Routes registered with only this permission class — without `WorkflowLock` or `RequireLogin` — are pre-auth. `PreAuthRouteAuditor.audit()` finds all such routes in the route initialization function and returns their handler VAs in one call.
 
-3. **`PreAuthAuditResult.preauth_with_sinks()` returns only routes that have dangerous sinks** — this is the final triage filter that separates interesting routes (reachable pre-auth AND contain exec/file/network sinks) from uninteresting ones (reachable pre-auth but only render static content). The result is a direct input to vulnerability hypothesis generation.
+3. **`PreAuthAuditResult.preauth_with_sinks()` returns only routes where the handler function contains a sink** — filtering out the majority of pre-auth routes that serve static resources, login pages, or health-check endpoints. This focuses the analyst's attention on the routes where a pre-auth finding is exploitable.
 
 ---
 
@@ -18,11 +18,10 @@ Automate the 4-step pre-authentication route discovery process for flatui-based 
 
 ```mermaid
 flowchart TD
-    A["PreAuthRouteAuditor(ctx, route_init_va)"] --> B["Step 1: Scan route_init_va function for:\n  WorkflowLockWithoutSessionPermit call sites\n  Extract: route_path, handler_class_name\n  → List[RouteEntry]: path, handler_class, lock_type"]
-    B --> C["Step 2: For each RouteEntry:\n  Find handler class factory function by class name\n  Class name resolved from string xrefs\n  → HandlerEntry: class_va, factory_va"]
-    C --> D["Step 3: Cross-reference factory to find GET/POST handlers:\n  Factory calls: ctor, get_handler, post_handler\n  → HandlerEntry.get_va, HandlerEntry.post_va"]
-    D --> E["Step 4: FuncProfiler on each handler VA:\n  Identify sinks in GET/POST handler\n  → HandlerEntry.sink_calls: List[ProfiledCall]"]
-    E --> F["PreAuthAuditResult:\n  routes: List[(RouteEntry, HandlerEntry)]\n  preauth_with_sinks() → routes where HandlerEntry has sink_calls\n  fmt() → formatted audit report"]
+    A["PreAuthRouteAuditor(ctx)"] --> B["audit() → PreAuthAuditResult\n  1. Scan route_init function:\n     Find register_route() call sites\n     Check permission class argument:\n       WorkflowLockWithoutSessionPermit only → pre-auth\n     → List[RouteEntry(path, handler_class)]"]
+    B --> C["  2. Resolve handler factory:\n     Find handler_class in PLT names\n     Trace factory to GET/POST handler VAs\n     → List[HandlerEntry(method, va)]"]
+    C --> D["  3. Profile each handler:\n     FuncProfiler.profile(handler_va)\n     Check for exec-class sinks in profile\n     → HandlerEntry.has_sink"]
+    D --> E["PreAuthAuditResult:\n  routes: List[RouteEntry]\n  handlers: List[HandlerEntry]\n  preauth_with_sinks() → List[Tuple[RouteEntry, HandlerEntry]]\n    Routes where handler has a sink\n  fmt() → str"]
 ```
 
 ---
@@ -33,59 +32,54 @@ flowchart TD
 from ablation.analyzers.preauth_route_auditor import PreAuthRouteAuditor
 from ablation.analyzers.binary_context import BinaryContext
 
-ctx = BinaryContext.load_or_build('/path/to/httpsd')
+ctx = BinaryContext.load_or_build('/path/to/httpd')
+auditor = PreAuthRouteAuditor(ctx)
 
-# Find route init function VA (via SemanticSearcher or manual identification)
-route_init_va = ctx.export_va('route_init') or 0x12340
-
-auditor = PreAuthRouteAuditor(ctx, route_init_va)
 result = auditor.audit()
 print(result.fmt())
 
-# Filter to only pre-auth routes with sinks
-dangerous = result.preauth_with_sinks()
-print(f"Pre-auth routes with sinks: {len(dangerous)}")
-for route, handler in dangerous:
-    print(f"  {route.path}  [{route.lock_type}]")
-    for sink in handler.sink_calls:
-        print(f"    sink: {sink.target_name} at {sink.site_va:#x}")
+# High-priority: pre-auth routes with sinks
+for route, handler in result.preauth_with_sinks():
+    print(f"PRE-AUTH SINK: {route.path}  {handler.method} at {handler.va:#x}")
 ```
 
 ---
 
 ## Example output
 
-The following illustrates the audit output format. Actual routes and handlers are binary-specific.
+The following illustrates pre-auth route audit output format. Actual routes and VAs are binary-specific.
 
 ```
-PreAuthRouteAuditor: httpsd
+PreAuthRouteAuditor: httpd
 
-Pre-authentication routes (WorkflowLockWithoutSessionPermit):
-  /api/v1/status         handler: StatusHandler     GET: <va>  POST: <va>
-  /api/v1/license/upload handler: LicenseHandler    GET: <va>  POST: <va>  [SINK: system at <va>]
-  /api/v1/config/import  handler: ConfigHandler     GET: <va>  POST: <va>  [SINK: popen at <va>]
+Pre-auth routes: <N>
+  /api/v2/login    handler_class=LoginHandler
+  /api/v2/status   handler_class=StatusHandler
+  /api/v2/upload   handler_class=UploadHandler
 
-preauth_with_sinks(): 2 routes (LicenseHandler, ConfigHandler)
+Handlers with sinks: <M>
+  /api/v2/upload  POST  handler_va=<va>
+    sink: system() at <va>  (ARG_PROPAGATED)
 ```
 
 ---
 
 ## False positives
 
-**Step 2 (handler class factory resolution) depends on string xref quality** — if `BinaryContext` lacks string xrefs for the binary (e.g., it was analyzed without `build_xref_index()`), handler class names will not be resolved and `HandlerEntry.factory_va` will be `None`. Run `ctx.build_xref_index(binary_path)` before running `PreAuthRouteAuditor` on a new binary.
+**`WorkflowLockWithoutSessionPermit` detection uses PLT name matching** — if the target uses a different permission class name or checks session validity via a different mechanism, pre-auth routes will not be detected. Verify the permission class name from the binary's string table before running the auditor.
 
-**`WorkflowLockWithoutSessionPermit` detection is pattern-based** — a custom lock type that does not match the known string will be missed. If the audit returns zero pre-auth routes for a binary known to have them, inspect the route init function manually to find the lock type string used.
+**`FuncProfiler` sink detection in handler functions may produce `RODATA_CONST` verdict** — a route with a `system()` call where the argument is a string literal is reported as `has_sink=True` but the finding is not exploitable. `preauth_with_sinks()` includes all sink verdicts; filter to `ARG_PROPAGATED` and `UNKNOWN` for exploitable pre-auth candidates.
 
 ---
 
 ## Pipeline position
 
-Run `PreAuthRouteAuditor` after `SemanticSearcher` has identified the web framework type and confirmed this is a flatui-based binary. The output feeds directly into `LLM Analyst Loop` hypothesis generation for the discovered pre-auth+sink routes.
+Run `PreAuthRouteAuditor` immediately after `BinaryContext.load_or_build()` for any firmware binary known to serve an HTTP interface (httpd, lighttpd, nginx-based). This is the Phase 0.5 triage step before `TaintTracker` runs on identified handler VAs.
 
 ---
 
 ## See also
 
-- [Single Function Profiling](single-function-profiling.md) — `FuncProfiler` used in Step 4 to find sinks in handler functions
-- [HTTP Method Enum Recovery](http-method-enum-recovery.md) — identifies HTTP method dispatch tables in the same binary
-- [CMDB to Sink Mapping](cmdb-to-sink-mapping.md) — FortiOS-specific CMDB route-to-exec-sink analysis
+- [Apache Module Analysis](http-method-enum-recovery.md) — `ApacheModuleAnalyzer` for Apache module auth hook analysis
+- [Single-Function Profiling](single-function-profiling.md) — `FuncProfiler` that `PreAuthRouteAuditor` calls per handler
+- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` for confirmed pre-auth handler dataflow
