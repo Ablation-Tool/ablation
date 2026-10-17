@@ -3,12 +3,11 @@
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/standards-ablation.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/standards-ablation.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/standards-ablation.md) [![Sponsor Me](https://img.shields.io/badge/Sponsor%20Me-grey)](docs/SPONSORS.md)
 
 
-
 Ablation is a self-contained reverse engineering framework.
 
 It depends on neither legacy tools nor an MCP server, which removes the attack surface associated with MCP.
 
-Paired with an AI coding agent, it operates as an autonomous reverse-engineering system.
+When used with Codex or Claude Code, it operates as an autonomous reverse engineering system.
 
 
 ---
