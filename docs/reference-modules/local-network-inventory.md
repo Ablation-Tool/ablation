@@ -29,19 +29,23 @@ flowchart TD
 ## Usage
 
 ```python
-from modules.network_analyze import NetworkAnalyzer, run_network_analysis
+from modules.network_analyze import NetworkAnalyzer
 
-# Quick run_network_analysis summary
-analysis = run_network_analysis(target='localhost')
-print(f"Interfaces: {[i['name'] for i in analysis['interfaces']]}")
-print(f"Listening ports: {[c['local_addr'] for c in analysis['listening_ports']]}")
-print(f"Subnets: {analysis['subnets']}")
-
-# Detailed per-connection
+# NetworkAnalyzer.analyze() returns {interfaces, connections, listening, firewall}
 analyzer = NetworkAnalyzer()
-for conn in analyzer.enumerate_connections():
+analysis = analyzer.analyze()
+
+print(f"Interfaces: {[i['name'] for i in analysis['interfaces']]}")
+
+# 'listening' contains LISTEN-state connections; 'connections' contains the rest
+# each connection: {protocol, local_ip, local_port, remote_ip, remote_port, state, uid}
+for conn in analysis['listening']:
+    print(f"  LISTEN {conn['protocol']} {conn['local_ip']}:{conn['local_port']}")
+
+for conn in analysis['connections']:
     if conn['state'] == 'ESTABLISHED':
-        print(f"  {conn['local_addr']} → {conn['remote_addr']}")
+        print(f"  {conn['local_ip']}:{conn['local_port']} → "
+              f"{conn['remote_ip']}:{conn['remote_port']}")
 ```
 
 ---
