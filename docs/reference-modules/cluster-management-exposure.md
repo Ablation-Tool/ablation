@@ -39,7 +39,7 @@ quota_findings = check_resource_quota_bypass(host)
 
 # Kubernetes side (if SA token available)
 enumerator = K8sEnumerator(api_server, token, ca_cert)
-k8s_results = enumerator.enumerate()
+k8s_results = enumerator.enumerate_all()
 
 print("Cluster management exposure:")
 for f in iso_findings + net_findings + quota_findings:
