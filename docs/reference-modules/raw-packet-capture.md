@@ -89,14 +89,16 @@ Run `RawSniffer` during post-compromise dwell operations to map internal network
 
 ## Reading output
 
-`RawSniffer.sniff(iface, duration)` returns a dict:
+`RawSniffer(interface).sniff(duration=10.0)` returns a plain `dict`:
 
 | Key | Content |
 |:---|:---|
-| `packet_count` | Integer — total packets captured |
-| `credentials` | `List[{proto, src, dst, cred}]` — cleartext credentials from cleartext protocols |
-| `mdns_services` | `List[{service, hostname, ip}]` — mDNS service announcements |
-| `pcap_path` | Path to the saved PCAP file for offline analysis |
+| `packets` | Integer — total packets captured |
+| `credentials` | `List[dict]` — cleartext credentials detected (protocol, source, credential fragment) |
+| `connections` | `List[tuple]` — unique `(src_ip, dst_ip, dst_port)` tuples observed |
+| `error` | Error string if the socket was unavailable; absent on success |
+
+For mDNS and SSDP service discovery, use `MDNSDiscovery` and `SSDPDiscovery` from the same `modules/net_sniffer.py` module — they are separate classes from `RawSniffer`. The convenience wrapper `sniff_network()` combines all three and also returns `mdns_services`, `ssdp_devices`, and `arp_findings`.
 
 ---
 

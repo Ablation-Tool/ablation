@@ -93,17 +93,18 @@ Use `SAXIndex` as the first filter in a corpus-scale similarity search: index al
 
 ## Reading output
 
-`SAXIndex.query(va)` returns `List[SAXMatch]`:
+`SAXIndex.query_va(ctx, func_va)` and `SAXIndex.query_seq(seq)` both return `List[SAXMatch]`:
 
 | Attribute | Content |
 |:---|:---|
 | `binary` | Path to the matched binary |
-| `va` | VA of the matched function |
-| `edit_dist` | Levenshtein edit distance between query word and match word (0 = exact) |
-| `seq_len_delta` | Difference in instruction sequence length between query and match |
+| `func_va` | VA of the matched function |
 | `sax_word` | The SAX word representation of the matched function |
+| `seq_len` | Length of the function's instruction sequence |
+| `mindist` | Minimum SAX distance score (lower = more similar) |
+| `edit_dist` | SAX word edit distance (0 = exact word match) |
 
-Results are ordered by ascending `edit_dist`.
+Results are ordered by ascending `mindist`. Use `str(match)` for a formatted one-line summary.
 
 ---
 

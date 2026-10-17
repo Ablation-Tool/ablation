@@ -79,6 +79,26 @@ Run `SourceSinkScanner` immediately after `SourceContext.from_path()` as the fir
 
 ---
 
+## Reading findings
+
+`SourceSinkScanner.from_context(ctx).scan()` returns `List[SinkHit]`:
+
+| Attribute | Content |
+|:---|:---|
+| `rel_path` | Source file path relative to the repository root |
+| `line` | Line number |
+| `category` | Sink category (e.g., `code-evaluation`, `subprocess`, `path-traversal`, `ssrf`) |
+| `cwe` | CWE identifier (e.g., `CWE-95`, `CWE-78`, `CWE-22`) |
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` (after guard reduction) |
+| `base_severity` | Severity before guard reduction |
+| `guarded` | `True` if an env-var or conditional gate was detected near the sink |
+| `description` | Human-readable description of the sink pattern |
+| `line_text` | Exact source line containing the sink |
+
+`SinkHit.as_dict()` returns a JSON-serializable dict for export.
+
+---
+
 ## See also
 
 - [Source Code Analysis Pipeline](bare-integration.md) — `SourceContext` that `SourceSinkScanner` consumes

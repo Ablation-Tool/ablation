@@ -92,6 +92,24 @@ Run `ElectronSecurityScanner` after extracting the `.asar` archive from the Elec
 
 ---
 
+## Reading findings
+
+`ElectronSecurityScanner.from_path(root).scan()` returns `List[ElectronFinding]`:
+
+| Attribute | Content |
+|:---|:---|
+| `rel_path` | Source file path relative to the app root |
+| `lineno` | Line number of the finding |
+| `finding_class` | Finding code (e.g., `node-integration-rce`, `tls-bypass`, `context-isolation-disabled`) |
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
+| `cwe` | CWE identifier (e.g., `CWE-78`, `CWE-295`) |
+| `title` | Short description of the misconfiguration |
+| `detail` | Explanation of the attack vector |
+
+`ElectronFinding.fmt()` returns a formatted multi-line string for direct display.
+
+---
+
 ## See also
 
 - [Source Dangerous Sink Detection](source-dangerous-sink-detection.md) — `SourceSinkScanner` for dangerous patterns in source-level JavaScript

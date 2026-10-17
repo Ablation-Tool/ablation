@@ -82,14 +82,18 @@ Run `extract_to()` on any Guardian PAK `.ZIP` file before all other analysis. Th
 
 ## Reading output
 
-`GuardianPakExtractor.extract(pak_path, out_dir)` returns a list of `GuardianEntry` objects:
+`extract_to(data: bytes, dest: Path)` is a module-level function in `ablation/core/guardian_pak_extractor.py`. It returns `List[GuardianFile]`:
 
 | Attribute | Content |
 |:---|:---|
-| `name` | Guardian file name (e.g., `$SYSTEM.ZFILE.TGTCP100`) |
-| `size` | Extracted file size in bytes |
-| `out_path` | Absolute path to the extracted file |
-| `is_mips_binary` | `True` if the entry appears to be a MIPS32 BE binary |
+| `path` | Full Guardian path string (e.g., `$DEV2.ZMQP00.1EALTMQF`) |
+| `volume` | Volume component (e.g., `$DEV2`) |
+| `subvolume` | Subvolume component (e.g., `ZMQP00`) |
+| `filename` | Filename component (e.g., `1EALTMQF`) |
+| `data` | Extracted file bytes |
+| `arch` | Always `"mips32be"` for Himalaya K-series targets |
+
+Load a `GuardianFile` for RE by calling `BinaryContext.load_or_build()` with the file content written to a temp path.
 
 ---
 

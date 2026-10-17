@@ -80,9 +80,15 @@ Run `swift_demangle` as part of initial context setup on any iOS, macOS, or tvOS
 
 ## Reading output
 
-`SwiftDemangler.demangle(mangled)` returns the demangled symbol string, or `None` if the input is not a Swift-mangled symbol.
+`ablation/core/swift_demangle.py` exposes module-level functions, not a class:
 
-`SwiftDemangler.demangle_all(ctx)` returns `Dict[int, str]` — VA → demangled name for all Swift symbols in `ctx`. After calling `demangle_all()`, use `ctx.set_name(va, name, source='swift_demangle')` to register the names.
+| Function | Return |
+|:---|:---|
+| `demangle(name: str) -> str` | Demangled symbol string. Returns the original name unchanged if demangling fails. Never returns `None`. |
+| `demangle_batch(names: list) -> dict` | `Dict[mangled_name, demangled_name]` — batch demangling optimized via the `swift-demangle` binary when available |
+| `is_swift_symbol(name: str) -> bool` | `True` if `name` begins with `$s`, `$S`, `_T`, or `_$` (Swift mangling prefixes) |
+
+Register results with `ctx.set_name(va, demangled, source='swift_demangle')` after calling `demangle_batch()`.
 
 ---
 

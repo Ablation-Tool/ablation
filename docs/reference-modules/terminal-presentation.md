@@ -77,15 +77,17 @@ The following illustrates terminal output format. Actual color sequences are ter
 
 ## Reading output
 
-`TerminalPresenter.render(findings)` writes directly to stdout and returns `None`. For programmatic access to the rendered content, use:
+`ablation/core/render.py` exposes module-level functions, not a class:
 
-| Method | Return |
+| Function | Return |
 |:---|:---|
-| `format_finding(finding)` | ANSI-escaped string for a single finding |
-| `format_table(findings)` | Full bordered table string for a finding list |
-| `strip_ansi(text)` | Plain text with ANSI escape sequences removed — for log capture |
+| `strip(s: str) -> str` | Plain text with all ANSI escape sequences removed |
+| `box(lines, color, width) -> str` | Multi-line bordered box (double-line border) |
+| `sbox(lines, color, width) -> str` | Single-line border variant of `box()` |
+| `section(title, color, width) -> str` | Section header bar with title and horizontal rule |
+| `arrow(label, color) -> str` | Right-pointing arrow with optional label |
 
-All formatting respects the `NO_COLOR` environment variable (RFC 5424): when set, all ANSI codes are omitted.
+All functions detect terminal color capability at import time (truecolor → ANSI-256 → ANSI-16 → plain text) and respect the `NO_COLOR` environment variable.
 
 ---
 

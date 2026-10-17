@@ -102,6 +102,25 @@ Run `BrowserExtensionAuditor` as a standalone step during assessment of any vend
 
 ---
 
+## Reading findings
+
+`BrowserExtensionAuditor.scan_dir(path)` returns `List[ExtFinding]`:
+
+| Attribute | Content |
+|:---|:---|
+| `rel_path` | Source file path relative to the extension root |
+| `lineno` | Line number of the finding |
+| `finding_class` | Finding code (e.g., `EXT_CONN_BROAD`, `MSG_HANDLER_PREAUTH`, `NATIVE_MSG_NO_ALLOWLIST`) |
+| `severity` | `HIGH` / `MEDIUM` |
+| `cwe` | CWE identifier (e.g., `CWE-346`, `CWE-285`) |
+| `title` | Short description of the vulnerability |
+| `detail` | Detailed explanation of the attack vector |
+| `snippet` | Code excerpt at the finding location (if available) |
+
+`ExtFinding.fmt()` returns a formatted multi-line string for direct display.
+
+---
+
 ## See also
 
 - [Source Code Auditing](source-code-auditing.md) — companion static analysis for broader JavaScript/TypeScript source

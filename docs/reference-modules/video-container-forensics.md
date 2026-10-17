@@ -74,14 +74,17 @@ Run `VideoForensicsAnalyzer` on any video file received from an untrusted source
 
 ## Reading findings
 
-`VideoForensicsAnalyzer.analyze(path)` returns a list of finding dicts:
+`VideoContainerAnalyzer(path).scan()` returns `List[VideoFinding]`:
 
-| Field | Content |
+| Attribute | Content |
 |:---|:---|
-| `severity` | `HIGH` (embedded payload, appended data) / `MEDIUM` (DRM track, suspicious atom) |
-| `title` | Finding code (e.g., `EMBEDDED_PAYLOAD`, `APPENDED_DATA`, `DRM_TRACK`, `HIGH_ENTROPY_ATOM`) |
-| `offset` | File offset of the suspicious atom or region |
-| `detail` | Atom type, entropy value, size in bytes, or magic bytes of appended content |
+| `offset` | File offset of the suspicious atom or appended region |
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
+| `category` | Finding category (e.g., `EMBEDDED_BINARY`, `POLYGLOT`, `DRM`, `ENTROPY_ANOMALY`, `ANOMALOUS_STRUCTURE`) |
+| `description` | Short summary of the finding |
+| `detail` | Extended detail: atom type, entropy value, size, or magic bytes |
+
+`VideoFinding.fmt()` returns a single formatted line suitable for report output.
 
 ---
 
