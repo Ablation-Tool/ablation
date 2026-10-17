@@ -156,10 +156,11 @@ print(analyzer.report(findings))
 
 | Field | Type | Description |
 |---|---|---|
-| `check` | str | Check name (e.g. `polyglot`, `trailer_data`) |
-| `severity` | str | `HIGH`, `MEDIUM`, or `INFO` |
-| `detail` | str | Human-readable description |
-| `offset` | int \| None | File offset where anomaly was found |
+| `offset` | int | File offset where anomaly was found |
+| `severity` | str | `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` |
+| `category` | str | `POLYGLOT` / `EMBEDDED_BINARY` / `ANOMALOUS_STRUCTURE` / `DRM` / `METADATA_ANOMALY` / `ENTROPY_ANOMALY` |
+| `description` | str | One-line summary of the finding |
+| `detail` | str | Extended detail, empty string if none |
 
 ---
 
@@ -1143,10 +1144,10 @@ For video firmware containers:
 ```python
 from modules.video_container import VideoContainerAnalyzer
 
-analyzer = VideoContainerAnalyzer('/path/to/video_firmware.bin')
-findings = analyzer.analyze()
+analyzer = VideoContainerAnalyzer.from_path('/path/to/video_firmware.bin')
+findings = analyzer.scan()
 for f in findings:
-    print(f['severity'], f['title'], f['detail'])
+    print(f.severity, f.category, f.description)
 ```
 
 ---
@@ -1182,9 +1183,11 @@ Version-mismatch findings appear when a known key or certificate is present in a
 
 This page covers multiple container-parsing modules. Output types by tool:
 
-- **FirmwareContainerKeyExtractor** — `ExtractionResult` with `outer_key`, `partitions` (`List[PartitionResult]`). See [firmware-container-key-extractor](firmware-container-key-extractor.md).
-- **InstallerBinaryAnalyzer** — `InstallerAnalysisResult` with `installer_type`, `binaries` (`List[CarvedBinary]`). See [installer-binary-analyzer](installer-binary-analyzer.md).
-- **FortiGateCertKeyScanner** — `CertKeyScanResult` with `keys` (`Dict[str, KeyEntry]`). See [fortigate-cert-key-scanner](fortigate-cert-key-scanner.md).
+| Module | Return type | Key fields |
+|---|---|---|
+| `FirmwareContainer` | `FirmwarePartition` list via `.partitions` | `name`, `version`, `offset`, `size`, `destpath`, `payload_type` |
+| `VideoContainerAnalyzer` | `List[VideoFinding]` from `.scan()` | `offset`, `severity`, `category`, `description`, `detail` |
+| `HuaweiSquashfsExtractor` | `bytes` from `.extract(path)` | raw decompressed file bytes |
 
 ---
 
