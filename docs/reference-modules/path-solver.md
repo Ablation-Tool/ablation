@@ -48,12 +48,31 @@ Provides the session state, indexing, and utility functions that other Ablation 
 
 ## Usage
 
-```python
-from ablation.analyzers.path_solver import PathSolver
+See **Key API** above. The full pipeline usage:
 
-results = PathSolver.from_context(ctx).run()
+```python
+from modules.path_solver import PathSolver, MemoryConstraint, solve_for_sink
+from ablation.analyzers.binary_context import BinaryContext
+import capstone, lief
+
+ctx = BinaryContext.load_or_build('/path/to/target.elf')
+
+# Get data + capstone handle for the function
+elf = lief.parse('/path/to/target.elf')
+text_sec = elf.get_section('.text')
+data = bytes(text_sec.content)
+
+md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+md.detail = True
+
+# Build CFG from taint tracker result, then solve
+# func_va and target_va come from TaintTracker findings
+ps = PathSolver(data, func_va=0x12000, func_end_va=0x12800,
+                plt={}, cfg=cfg, md=md)
+results = ps.solve(target_va=0x12340)
 for r in results:
-    print(r)
+    if r.sat:
+        print(r)   # [SAT] path=0x12000 -> 0x12200 -> 0x12340 model=(rdi=0x41414141)
 ```
 
 ---
@@ -61,33 +80,41 @@ for r in results:
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+[SAT] path=0x12000 -> 0x12200 -> 0x12340 clauses=37 model=(rdi=0x41414141, rsi=0x0)
+[UNSAT] path=0x12000 -> 0x12100 -> 0x12340 clauses=22
+[timeout] path=0x12000 -> 0x12180 -> 0x12340 clauses=51
 ```
 
 ---
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+**Z3 `UNSAT` on a real path** — the symbolic executor uses bounded BitVec arithmetic; path constraints from loop-carried values or indirect memory reads may be over-constrained, producing `UNSAT` on a path that is actually reachable. Increase `max_path_blocks` or add struct seeding for struct-pointer reads to give Z3 more context.
+
+**`sat=True` on an infeasible path** — under-constrained memory reads (fields Z3 leaves unconstrained) may produce concrete models that satisfy the formula but are not actually reachable in the program. Always confirm the `model` values make semantic sense for the vulnerability class (e.g., an overlong length field should be larger than the allocation size).
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** `TaintTracker` (provides `sink_va`) and `cfg_builder` or `analysis_arm64.build_cfg()` (provides `cfg`).
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** A `PathResult` with `sat=True` confirms the finding is reachable. Register the finding with `FindingRegistry.register()` and write to `re/<vendor>/<target>_re.py`.
 
 ---
 
 ## Reading output
 
-`PathSolver.from_context(ctx).solve_path(start_va, target_va)` returns a `PathResult`:
+`PathSolver.solve(target_va)` returns `List[PathResult]`:
 
 | Attribute | Content |
 |:---|:---|
-| `sat` | `True` if a satisfying path exists from `start_va` to `target_va` |
-| `path` | `List[int]` — block VAs on the found path (empty if `sat=False`) |
+| `sat` | `True` if Z3 found a satisfying assignment |
+| `path` | `List[int]` — basic block VAs on the solved path |
+| `model` | `Dict[str, int]` — concrete register values at function entry (only when `sat=True`) |
+| `clauses` | Number of Z3 clauses added during path constraint solving |
+| `note` | `'timeout'`, `'unsat'`, or empty string |
+| `seeded_fields` | `List[str]` — struct field names from `MemoryConstraint` that constrained this path |
 | `model` | `Dict[str, int]` — concrete register values at function entry that satisfy the path |
 | `clauses` | Number of Z3 clauses added during solving |
 | `note` | Reason string if `sat=False` (e.g., `'timeout'`, `'unsat'`) |
