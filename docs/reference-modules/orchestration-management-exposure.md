@@ -1,22 +1,94 @@
-# Orchestration/management exposure
+# Orchestration/Management Exposure
 
-Probe supported vCenter, Rancher, Consul, Linkerd, Kong, Traefik, Temporal, Argo, Nomad and AWX/NSO surfaces.
-
----
-
-## What it does
-
-Probe supported vCenter, Rancher, Consul, Linkerd, Kong, Traefik, Temporal, Argo, Nomad and AWX/NSO surfaces.
+Probe vCenter/vSphere management APIs, Rancher cluster management, Kong Gateway admin port, Traefik dashboard, Linkerd control plane, Consul service mesh, and CNI network configuration endpoints — detecting unauthenticated management access in orchestration infrastructure — via `modules/network_analyze.py`.
 
 ---
 
-## Implementation
+## Why this exists
 
-- [`network_analyze.py`](../../modules/network_analyze.py)
-- [`streaming_enum.py`](../../modules/streaming_enum.py)
+1. **`probe_vsphere_vcenter()` tests vSphere vCenter for authentication bypass surfaces** — vCenter's REST API (`/api/session`) and SOAP API (`/sdk`) are the management plane for the entire virtual infrastructure. `probe_vsphere_vcenter()` attempts the `POST /api/session` endpoint with empty credentials (testing for CVE-2021-22005 class vulnerabilities), fetches `/ui/` to detect version-specific management interface exposure, and checks whether the `/rest/com/vmware/cis/session` endpoint returns without credentials in older vSphere versions.
+
+2. **`probe_consul_service_mesh()` enumerates the Consul service catalog and ACL token list** — Consul's HTTP API (port 8500) returns a full service catalog at `/v1/catalog/services` without authentication in default deployments. This reveals every registered service, its health check status, and associated metadata (service tags, ports, node addresses). `probe_consul_service_mesh()` also requests `/v1/acl/tokens` (requires `management` token but often accessible in misconfigured deployments) to retrieve API tokens for other services.
+
+3. **`probe_kong_gateway_admin()` and `probe_traefik_dashboard()` test API gateway admin interfaces** — Kong's Admin API (port 8001) exposes full gateway configuration: upstream services, routes, plugins, and consumer credentials. Traefik's dashboard (port 8080) exposes route, middleware, and service configuration. Both are intended for localhost access only but are commonly exposed on all interfaces in container deployments. Access to the Kong Admin API allows adding routes to any backend or modifying authentication plugin configuration.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["probe_vsphere_vcenter(host, port=443) → list\n  GET https://host/ui/ → version string extraction\n  POST /api/session {} → check 200/401\n  GET /rest/com/vmware/cis/session → legacy auth bypass\n  → [{finding, vcenter_version, auth_bypass_surface}]"] --> B["probe_consul_service_mesh(host, port=8500) → list\n  GET http://host:8500/v1/catalog/services\n    → {service_name: [tag, ...]} (no auth needed in default)\n  GET /v1/acl/tokens\n    → list of ACL tokens if ACL bootstrap not complete\n  GET /v1/kv/?recurse → KV store keys\n  → [{finding, services, tokens_accessible, kv_keys}]"]
+    B --> C["probe_kong_gateway_admin(host, port=8001) → list\n  GET http://host:8001/ → {version, tagline}\n  GET /services → all upstream service definitions\n  GET /consumers → consumer list + key-auth credentials\n  → [{finding, services_count, consumers, plugins}]\n\nprobe_traefik_dashboard(host, port=8080) → list\n  GET http://host:8080/api/rawdata → full route/middleware config\n  GET /api/overview → entrypoints + enabled providers\n  → [{finding, routes_count, backends}]"]
+    C --> D["probe_linkerd_control_plane(host, port=8085) → list\n  GET http://host:8085/metrics → Prometheus metrics\n  GET /api/v1/version → Linkerd version\n  → [{finding, version, metrics_exposed}]\n\nprobe_rancher_management(host, port=443) → list\n  GET https://host/v3 → API version info\n  GET /v3/principals?me=true → current user\n  → [{finding, version, cluster_count}]"]
+```
+
+---
+
+## Usage
+
+```python
+from modules.network_analyze import (
+    probe_vsphere_vcenter,
+    probe_consul_service_mesh,
+    probe_kong_gateway_admin,
+    probe_traefik_dashboard,
+    probe_rancher_management,
+    probe_linkerd_control_plane
+)
+
+for host in discovered_hosts:
+    for probe, label in [
+        (probe_vsphere_vcenter, 'vCenter'),
+        (probe_consul_service_mesh, 'Consul'),
+        (probe_kong_gateway_admin, 'Kong Admin'),
+        (probe_traefik_dashboard, 'Traefik'),
+    ]:
+        findings = probe(host)
+        for f in findings:
+            print(f"  [{label}] [{f.get('severity','INFO')}] {f['finding']}")
+```
+
+---
+
+## Example output
+
+The following illustrates orchestration management exposure output format.
+
+```
+probe_vsphere_vcenter: 10.0.10.1:443
+
+  [HIGH] VCENTER_EXPOSED: version=vSphere 7.0.3  POST /api/session → 401 (auth enforced)
+  [INFO] version: VMware vCenter Server 7.0.3
+
+probe_consul_service_mesh: 10.0.10.5:8500
+
+  [CRITICAL] CONSUL_CATALOG_OPEN: /v1/catalog/services → 14 services (no auth)
+    Services: redis, postgres, api-gateway, auth-service ...
+  [HIGH] CONSUL_KV_OPEN: /v1/kv/?recurse → 38 keys accessible
+
+probe_kong_gateway_admin: 10.0.10.8:8001
+
+  [CRITICAL] KONG_ADMIN_OPEN: /services → 6 upstreams; /consumers → 12 consumers with key-auth
+```
+
+---
+
+## False positives
+
+**`probe_consul_service_mesh()` service catalog exposure** — exposing the Consul catalog on port 8500 without ACL bootstrap is the default Consul configuration in development mode. Production deployments should have ACL bootstrapped. Verify that the endpoint is not intentionally accessible (internal service mesh that trusts network perimeter) before treating this as a finding.
+
+**`probe_kong_gateway_admin()` port 8001 reachability** — Kong's Admin API should only be accessible from the management network. A reachable Admin API that requires authentication (returns HTTP 401) is not an open finding. `probe_kong_gateway_admin()` confirms unauthenticated access before reporting a finding.
+
+---
+
+## Pipeline position
+
+Run orchestration management probing after host/service discovery reveals management-plane port ranges (8001, 8080, 8085, 8500, 443). Consul service catalog access provides a complete internal service map superior to network scanning.
 
 ---
 
 ## See also
 
-- [Network Analyze](network-analyze.md) — module-level reference with constructor patterns and usage examples
+- [Secrets/Access Infrastructure](secrets-access-infrastructure.md) — Consul KV vault secrets and GraphQL API exposure
+- [Kubernetes Policy Posture](kubernetes-policy-posture.md) — Kubernetes control plane equivalent
