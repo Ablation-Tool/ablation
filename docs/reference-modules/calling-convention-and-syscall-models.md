@@ -85,6 +85,20 @@ annotate_calls(0x12340, 0x12500):
 
 ---
 
+## Reading output
+
+`ARM32RegAnnotator.annotate_calls(func_va)` returns a list of call annotation dicts (same shape as `RegAnnotator`):
+
+| Field | Content |
+|:---|:---|
+| `va` | Virtual address of the ARM32 call instruction |
+| `target` | Callee symbol or VA |
+| `args` | Dict of `r0`–`r3` → `RegValue` (one of `Const(v)`, `Tainted(label)`, `Arg(n)`, `Unknown`) |
+
+State resets: `r0`–`r3` are reset to `Unknown` at every `BL`/`BLX` call site (AAPCS caller-saved).
+
+---
+
 ## See also
 
 - [Call Argument Annotation](call-argument-annotation.md) — `RegAnnotator` x86-64 equivalent, full design reference

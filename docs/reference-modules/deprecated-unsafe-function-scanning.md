@@ -85,6 +85,20 @@ Run `DeprecatedFuncScanner` early in the analysis pipeline — before `SinkArgCl
 
 ---
 
+## Reading findings
+
+`DeprecatedFuncScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (gets, getwd) / `HIGH` (strcpy, strcat, sprintf) |
+| `func` | Deprecated function name (e.g., `gets`, `strcpy`) |
+| `call_va` | VA of the call instruction |
+| `buffer_offset` | Destination buffer offset from frame base (or `None` if not statically recoverable) |
+| `reachability_chain` | List of caller VAs from the entry point down to the deprecated function call |
+
+---
+
 ## See also
 
 - [Taint Analysis](taint-analysis.md) — for non-deprecated sinks where taint analysis is required

@@ -97,6 +97,22 @@ Run `COMAttackSurfaceMapper` on Windows PE binaries (DLLs and EXEs) during Windo
 
 ---
 
+## Reading findings
+
+`COMAttackSurfaceMapper.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` / `MEDIUM` |
+| `code` | Finding code (e.g., `COM_HIJACK_CANDIDATE`, `COM_DISPATCH_REMOTE`) |
+| `clsid` | CLSID string (e.g., `{00000000-...}`) or `None` if not statically recoverable |
+| `call_va` | VA of the `CoCreateInstance` or `IDispatch::Invoke` call |
+| `detail` | Explanation with specific CLSID, import usage, or flag name |
+
+`COMAttackSurfaceMapper.referenced_clsids()` returns `List[str]` — all statically recovered CLSID strings for registry cross-reference.
+
+---
+
 ## See also
 
 - [Windows Artifact Discovery](windows-artifact-discovery.md) — registry, scheduled tasks, and artifact triage

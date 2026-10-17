@@ -96,6 +96,22 @@ These analyses are internal to the `CFGBuilder` → `Structurizer` pipeline. The
 
 ---
 
+## Reading output
+
+`DomTree.idom(va)` returns the immediate dominator block VA (`int`) for block `va`, or `None` for the entry block.
+
+`LoopInfo` object returned by `cfg.loops()`:
+
+| Attribute | Content |
+|:---|:---|
+| `header` | Block VA of the loop header (the block that dominates all loop body blocks) |
+| `body` | `Set[int]` — block VAs in the loop body |
+| `back_edges` | List of `(tail, header)` back-edge tuples |
+
+`PostDomTree.ipdom(va)` returns the immediate post-dominator block VA, or `None` for exit blocks and infinite-loop blocks.
+
+---
+
 ## See also
 
 - [Control-Flow Graph Construction](control-flow-graph-construction.md) — `CFGBuilder` that produces the `CFG` input
