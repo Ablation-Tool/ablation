@@ -87,6 +87,20 @@ check(strict=False): 1  (gate FAILED — 1 CRITICAL finding)
 
 ---
 
+## Reading findings
+
+`CompilerSecurityGate.run()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
+| `category` | `taint` or `format_string` |
+| `va` | VA of the sink call |
+| `detail` | Sink name, taint source, and propagation path description |
+| `semantic_block` | Abbreviated taint chain (e.g., `recv[va] → strncpy[va] → system[va]`) |
+
+---
+
 ## See also
 
 - [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` that `CompilerSecurityGate` runs internally
