@@ -82,6 +82,21 @@ Run M88K analysis on any BCS COFF firmware binary confirmed to use the M88K arch
 
 ---
 
+## Reading output
+
+`ISAM88K.function_starts()` returns `List[int]` — VA list of M88K functions.
+
+`ISAM88K.disassemble(va, size)` returns a list of `M88KInstruction` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Virtual address |
+| `mnemonic` | M88K mnemonic (e.g., `subu`, `st`, `jsr`) |
+| `operands` | Operand string |
+| `comment` | Optional annotation (e.g., `; frame alloc`, `; LR save`) |
+
+---
+
 ## See also
 
 - [Flat ROM Function Discovery](flat-rom-function-discovery.md) — `EcuArchDetector` for architecture identification before M88K-specific analysis

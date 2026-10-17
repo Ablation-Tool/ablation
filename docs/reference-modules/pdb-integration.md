@@ -91,6 +91,21 @@ Run `PDBSymbolIntegrator` immediately after `BinaryContext.load_or_build()` for 
 
 ---
 
+## Reading output
+
+`PDBSymbolIntegrator.integrate()` returns a dict:
+
+| Key | Content |
+|:---|:---|
+| `symbols_integrated` | Integer — number of symbols added to `BinaryContext.NameRegistry` |
+| `pdb_filename` | PDB filename from the binary's debug directory |
+| `pdb_guid` | PDB GUID string |
+| `pdb_local_path` | Path to the downloaded PDB on disk |
+
+After `integrate()`, `ctx.name(va)` returns the PDB symbol name for any function that had one.
+
+---
+
 ## See also
 
 - [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext` whose `NameRegistry` is populated by `integrate()`

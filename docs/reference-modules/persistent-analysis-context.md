@@ -100,6 +100,23 @@ BinaryContext: /path/to/target.elf
 
 ---
 
+## Reading output
+
+`BinaryContext.summary()` returns a formatted summary string. Key attributes:
+
+| Attribute / Method | Content |
+|:---|:---|
+| `plt_entries` | Dict of PLT entry VA → symbol name |
+| `exports` | Dict of export VA → name |
+| `strings` | `List[(va, str)]` — `.rodata` strings |
+| `func_starts` | `List[int]` — function start VAs |
+| `call_edges` | `List[(caller_va, callee_va)]` |
+| `name(va)` | Named function at VA (or `None`) |
+| `set_name(va, name, source)` | Register a name with source tag |
+| `names_table()` | Formatted table of all named functions |
+
+---
+
 ## See also
 
 - [Control-Flow Graph Construction](control-flow-graph-construction.md) — `CFGBuilder(ctx)` uses the context for disassembly

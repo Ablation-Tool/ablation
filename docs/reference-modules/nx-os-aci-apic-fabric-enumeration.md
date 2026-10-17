@@ -85,6 +85,20 @@ Run APIC enumeration after network discovery identifies an APIC management IP. `
 
 ---
 
+## Reading findings
+
+NX-OS/ACI/APIC probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (credential success) / `HIGH` (unauthenticated info) / `MEDIUM` |
+| `title` | Finding code (e.g., `APIC_DEFAULT_CRED`, `APIC_UNAUTHENTICATED_INFO`, `NXOS_OSPF_AUTH_BYPASS`) |
+| `detail` | Version, tenant/node count, credential, or auth domain information |
+| `host` | Target APIC or NX-OS IP |
+| `port` | Service port (e.g., `443` for APIC REST API) |
+
+---
+
 ## See also
 
 - [IOS/IOS-XE Appliance Enumeration](ios-ios-xe-appliance-enumeration.md) — `ios_enum.py` for IOS/IOS-XE appliances

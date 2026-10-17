@@ -97,6 +97,19 @@ Step 2 of the cross-version patch analysis workflow: after `DTWMatcher.score_fun
 
 ---
 
+## Reading output
+
+`MatrixProfileDiff.diff_functions(va_v1, va_v2)` returns a `PatchDiffResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `change_regions` | `List[ChangeRegion]` — `{kind: CHANGED/UNCHANGED, v1_range, peak_distance}` |
+| `change_pct` | Float — percentage of the function that changed |
+| `is_likely_patched()` | `True` if `change_pct` exceeds the threshold |
+| `patch_offset_v1` | VA of the first `CHANGED` region start in version 1 |
+
+---
+
 ## See also
 
 - [DTW Function Homolog Matching](dtw-function-homolog-matching.md) — step 1: confirms homologs before diffing
