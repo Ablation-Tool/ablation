@@ -140,7 +140,7 @@ Rate-limit and authentication findings from internal networks or behind authenti
 
 ## Reading output
 
-`APIREAnalyzer.run()` returns an `APIMap` and optionally a list of `Endpoint` objects:
+`run_re(base_url)` (module-level function) returns an `APIMap` populated with discovered `Endpoint` objects:
 
 | Attribute | Content |
 |:---|:---|

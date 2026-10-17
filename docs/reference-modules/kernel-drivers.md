@@ -288,7 +288,7 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 This page covers two tools with different output types.
 
-`IoctlAttackSurface` (from `IoctlAttackSurfaceMapper.from_path(path).scan()`): see [ioctl-attack-surface](ioctl-attack-surface.md) for the `IoctlAttackSurface` / `IoctlHandlerProfile` field reference.
+`IoctlAttackSurface` (from `IoctlAttackSurfaceGenerator.from_path(path).scan()`): see [ioctl-attack-surface](ioctl-attack-surface.md) for the `IoctlAttackSurface` / `IoctlHandlerProfile` field reference.
 
 `KernelModuleSubsystemClassifier().classify(ko_path)` returns a `KernelModuleClassification`: see [kernel-module-subsystem-classifier](kernel-module-subsystem-classifier.md) for field reference.
 
