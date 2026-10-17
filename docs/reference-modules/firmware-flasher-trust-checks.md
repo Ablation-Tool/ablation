@@ -89,17 +89,22 @@ Run firmware flasher trust checks on any PE executable found in a firmware updat
 
 ---
 
-## Reading findings
+## Reading output
 
-`FlasherTrustChecker.scan()` returns a list of finding dicts:
+`KernelDriverAnalyzer.from_path(path).analyze()` returns a `KernelDriverReport`:
 
-| Field | Content |
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` (unsigned flasher with IOCTL write path) / `HIGH` (missing trust check before write) |
-| `code` | Finding code (e.g., `UNSIGNED_FLASHER`, `MISSING_WINVERIFYTRUST`, `IOCTL_WRITE_BEFORE_VERIFY`) |
-| `ioctl_va` | VA of the IOCTL call that writes firmware (if identified) |
-| `trust_va` | VA of the `WinVerifyTrust` call (or `None` if absent) |
-| `detail` | Human-readable description of the trust gap |
+| `path` | Path to the analyzed PE |
+| `driver_type` | `'WDM'` / `'KMDF'` / `'minifilter'` / `'unknown'` |
+| `is_signed` | `True` if the binary has a valid Authenticode signature |
+| `pdb_path` | PDB path embedded in the debug directory, or `None` |
+| `ioctl_codes` | `list[IoctlCode]` — parsed IOCTL control codes from dispatch tables |
+| `kernel_api_findings` | `list[KernelApiFinding]` — security-sensitive kernel API imports |
+| `dangerous_patterns` | `list` — patterns indicating firmware write without prior trust check |
+| `error` | `None` on success; error string on parse failure |
+
+`KernelApiFinding` fields: `api` (import name), `dll`, `severity`, `category`.
 
 ---
 

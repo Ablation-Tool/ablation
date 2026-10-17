@@ -93,17 +93,20 @@ Export runs at the end of a sweep or confirmation session, never during triage. 
 
 ## Reading output
 
-`SARIFExporter.export(findings)` returns a SARIF 2.1.0 JSON `dict`:
+`sweep_to_sarif(sweep_results, binary_path)` returns a SARIF 2.1.0 `dict`:
 
 | Key path | Content |
 |:---|:---|
-| `runs[0].tool.driver.name` | `ablation` |
-| `runs[0].results[*].ruleId` | Finding tag (e.g., `ABL-memory-safety`) |
-| `runs[0].results[*].level` | `error`, `warning`, or `note` |
+| `runs[0].tool.driver.name` | `'ablation'` |
+| `runs[0].tool.driver.rules[*].id` | Rule ID derived from finding tag and query |
+| `runs[0].results[*].ruleId` | Matching rule ID |
+| `runs[0].results[*].level` | `'error'` / `'warning'` / `'note'` |
 | `runs[0].results[*].message.text` | Finding detail string |
 | `runs[0].results[*].locations[*].uri` | File URI of the analyzed binary |
 
-`JSONExporter.export(findings)` returns a flat `List[dict]` — one dict per finding, all fields preserved.
+`findings_to_sarif(findings, binary_path)` — same SARIF format, input is a flat finding list.
+
+`sweep_to_json(sweep_results)` and `findings_to_json(findings)` return plain `dict` representations of the same data, suitable for `write_json(data, path)`.
 
 ---
 

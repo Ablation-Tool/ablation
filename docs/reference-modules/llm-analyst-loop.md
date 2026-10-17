@@ -132,21 +132,24 @@ Run `AgentLoop` as a targeted tool on `SemanticSearcher` top candidates that nee
 
 ---
 
-## See also
-
 ## Reading output
 
-`AgentLoop.run()` returns an `AnalysisResult` object:
+`AgentLoop(ctx, task).run(func_addr)` returns an `AnalysisResult`:
 
 | Attribute | Content |
 |:---|:---|
-| `va` | VA of the analyzed function |
+| `func_addr` | VA of the analyzed function |
 | `name` | Inferred function name |
-| `role` | Role tag (e.g., `network input handler`, `parser`) |
+| `role` | Role tag (e.g., `'network input handler'`, `'parser'`) |
 | `confidence` | Float 0.0–1.0 |
-| `tool_calls` | Count of tool calls made during analysis |
+| `rationale` | Plain-language explanation of the naming/role evidence |
+| `vuln_notes` | Vulnerability hypothesis notes, if requested |
+| `tool_calls` | Count of tool calls made during the loop |
+| `finished` | `True` if `done()` was called; `False` if the tool-call budget was exhausted |
+| `model` | Claude model ID used |
+| `task` | Task name (e.g., `'name_function'`, `'vulnerability_hypothesis'`) |
 
-`AgentLoop.run_patch()` returns `{cve_hypothesis: str, affected_va: int, root_cause: str}`.
+`AgentLoop.run_patch(func_addr_v1, func_addr_v2)` returns an `AnalysisResult` for patch diff analysis.
 
 ---
 

@@ -90,16 +90,19 @@ Run TLS certificate and protocol probing on all management interfaces discovered
 
 ## Reading output
 
-`TLSAnalyzer.analyze(host, port)` returns a `TLSResult` object:
+`TLSAnalyzer().analyze(host, port)` returns a dict:
 
-| Attribute | Content |
+| Key | Content |
 |:---|:---|
-| `chain` | `List[CertInfo]` — leaf, intermediate(s), root; each has `cn`, `key_bits`, `key_type`, `sig_alg`, `expiry` |
-| `cipher_suites` | `List[str]` — accepted cipher suites |
-| `protocol_versions` | `List[str]` — TLS versions accepted (e.g., `['TLSv1.2', 'TLSv1.3']`) |
-| `findings` | `List[{severity, title, detail, host, port}]` — policy violations (e.g., `WEAK_CIPHER`, `CERT_NEAR_EXPIRY`) |
+| `host` / `port` | Target host and port |
+| `tls_version` | Negotiated TLS version string, or `None` |
+| `cipher` | Negotiated cipher suite name, or `None` |
+| `cert_chain` | `list` — certificate chain dicts (leaf to root) |
+| `findings` | `List[{type, severity, host, port, detail, exploit}]` — policy violations |
+| `quantum_inventory` | Algorithm inventory for PQC readiness assessment |
+| `error` | `None` on success; error string if connection failed |
 
-`CipherSuiteProber.probe(host, port)` returns `List[{cipher, protocol, bits}]` — all accepted ciphers.
+`CipherSuiteProber(host, port).probe_version_support()` returns `Dict[str, bool]` — TLS version string → supported.
 
 ---
 

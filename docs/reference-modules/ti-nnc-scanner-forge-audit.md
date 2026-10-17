@@ -113,3 +113,37 @@ Expected: ASCII table with all findings, sorted HIGH→MEDIUM→INFO.
 - C28x firmware: cl2000 emits COFF, not ELF. Scanner returns empty result. Requires Gap 1.
 - BNORM sequence detection in disassembled code: not implemented. Future work.
 - Tensor shape extraction: not implemented (would require parsing the.h header or.rodata structs).
+
+---
+
+## Reading findings
+
+`TiNNCScanner(path).scan()` returns a `TiNNCScanResult`:
+
+| Attribute | Content |
+|:---|:---|
+| `binary_path` | Path to the scanned ELF binary |
+| `has_npu_init` | `True` if `TI_NPU_init` symbol is present (hardware NPU mode confirmed) |
+| `modules` | `List[TiNNCModule]` — one entry per detected `tvmgen_<name>_run` model |
+| `findings` | `List[TiNNCScanFinding]` — all security findings |
+
+`TiNNCScanFinding` fields:
+
+| Attribute | Content |
+|:---|:---|
+| `finding_id` | Finding code (e.g., `'TINCC-001'`) |
+| `severity` | `'HIGH'` / `'MEDIUM'` / `'INFO'` |
+| `title` | Short finding title |
+| `description` | Explanation of the risk |
+| `module_name` | Name of the TVM model this finding relates to |
+| `va` | VA of the relevant symbol (0 if not applicable) |
+| `symbol` | Symbol name, or `None` |
+
+See [ti-nnc-scanner](ti-nnc-scanner.md) for the full module reference.
+
+---
+
+## See also
+
+- [TI NNC Scanner](ti-nnc-scanner.md) — module reference page for `TiNNCScanner`
+- [TI COFF Loader](ti-coff-loader.md) — parses the COFF/AR archives that contain TVM models

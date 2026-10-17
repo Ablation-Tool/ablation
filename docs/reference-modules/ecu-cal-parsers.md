@@ -245,11 +245,18 @@ Reads the ROM image at the specified base address and applies the ISA decoder to
 ## Usage
 
 ```python
-from ablation.analyzers.ecu_cal_parsers import ECUCalibrationDefinitionParsers
+from ablation.analyzers.ecu_a2l_parser import EcuA2LParser
+from ablation.analyzers.ecu_conescan_parser import EcuConescanParser
+from ablation.analyzers.ecu_romraider_parser import EcuRomRaiderParser
 
-results = ECUCalibrationDefinitionParsers.from_context(ctx).run()
-for r in results:
-    print(r)
+# Load from A2L definition file
+parser = EcuA2LParser.from_file('ecu_definitions.a2l')
+for table in parser.tables():
+    print(f"{table.name}  {table.table_type}  addr={table.address:#x}")
+
+# Inject labels from parser into BinaryContext
+for offset, name in parser.label_map().items():
+    ctx.set_name(offset, name, source='a2l')
 ```
 
 ---
@@ -283,7 +290,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Reading output
 
-All four parsers (`EcuA2LParser`, `EcuConescanParser`, `EcuNissanParser`, `EcuRomRaiderParser`) expose the same output interface via `parser.tables()` which returns `List[CalibrationTable]`:
+`EcuA2LParser`, `EcuConescanParser`, and `EcuRomRaiderParser` all expose the same output interface via `parser.tables()` which returns `List[CalibrationTable]`:
 
 | Attribute | Content |
 |:---|:---|
@@ -296,8 +303,7 @@ All four parsers (`EcuA2LParser`, `EcuConescanParser`, `EcuNissanParser`, `EcuRo
 | `unit` | Engineering unit string |
 | `x_axis` / `y_axis` | `CalibrationAxis` for axis labels (None for scalar tables) |
 
-`parser.label_map()` returns `Dict[int, str]` for direct `ctx.set_name()` injection.
-| `service_id` | UDS service identifier if the finding is protocol-level |
+`parser.label_map()` returns `Dict[int, str]` — file offset → label string — for direct `ctx.set_name()` injection.
 
 ---
 

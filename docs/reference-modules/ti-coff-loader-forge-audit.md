@@ -165,3 +165,37 @@ Expected:
 ### Test 10: Corrupt AR member size field
 AR archive with a member whose file_size field contains non-numeric bytes.
 Expected: _parse_ar() catches ValueError, yields no objects, no exception.
+
+---
+
+## Reading output
+
+`TiCoffLoader.from_path(path).objects()` yields `TiCoffObject` instances:
+
+| Attribute | Content |
+|:---|:---|
+| `member_name` | AR archive member filename, or the `.obj` filename for standalone files |
+| `header` | `CoffFileHeader` with `magic`, `n_sections`, `sym_ptr`, `n_syms`, `target_id` |
+| `symbols` | `List[CoffSymbol]` — all symbol table entries in this object |
+
+`CoffSymbol` fields:
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Symbol name string |
+| `value` | Symbol value (address for code/data, 0 for undefined externals) |
+| `section_number` | `0` = undefined external, `-1` = absolute, `1+` = section index |
+| `storage_class` | Raw storage class integer |
+| `member_name` | AR member this symbol came from (empty for standalone objects) |
+| `is_weak` | Property — `True` if `storage_class == C_UEXT` (tentative external) |
+| `is_global` | Property — `True` if `storage_class == C_EXT` (strong global) |
+| `is_defined` | Property — `True` if `section_number > 0` |
+
+See [ti-coff-loader](ti-coff-loader.md) for the full module reference.
+
+---
+
+## See also
+
+- [TI COFF Loader](ti-coff-loader.md) — module reference page for `TiCoffLoader`
+- [TI NNC Scanner](ti-nnc-scanner.md) — NPU model extraction that consumes `TiCoffObject`

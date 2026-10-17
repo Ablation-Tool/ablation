@@ -196,3 +196,34 @@ Tests 1–3 passed live. Test 4 verified via documentation review (0.0 density �
 **Future work (not blocked):**
 - Gap 6: TriCore prologue patterns in `FlatBinaryFuncStartScanner._score_tricore_starts()`: needed to get function starts from TriCore code regions
 - E92 SA INCONCLUSIVE: requires dynamic analysis or deeper vtable trace; static analysis cannot confirm/eliminate
+
+---
+
+## Reading output
+
+`EcuRomLayoutAnalyzer(path, arch_hint).analyze()` returns a `ROMLayout`:
+
+| Attribute | Content |
+|:---|:---|
+| `file_size` | Total size of the ROM image in bytes |
+| `regions` | `list[ROMRegion]` — merged adjacent same-class regions |
+| `window_size` | Analysis window size in bytes |
+| `fill_byte` | Erase-state fill byte (`0xFF` for NOR flash, `0x00` for some NAND) |
+
+`ROMRegion` fields:
+
+| Attribute | Content |
+|:---|:---|
+| `start` | First byte offset of the region (inclusive) |
+| `end` | Last byte offset of the region (exclusive) |
+| `region_type` | `'CODE'` / `'CALIBRATION'` / `'ERASED'` / `'MIXED'` / `'PADDING'` / `'IVT'` |
+| `entropy` | Mean Shannon entropy across all windows in the region |
+| `size` | Property: `end - start` |
+
+See [ecu-rom-layout-analyzer](ecu-rom-layout-analyzer.md) for the full module reference.
+
+---
+
+## See also
+
+- [ECU ROM Layout Analyzer](ecu-rom-layout-analyzer.md) — module reference page for `EcuRomLayoutAnalyzer`

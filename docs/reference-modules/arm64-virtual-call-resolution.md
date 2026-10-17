@@ -98,16 +98,24 @@ Run `VtableResolver` after `XRefGraph` and before `TaintTracker` on C++ ARM64 bi
 
 ## Reading output
 
-`VtableResolver.resolve()` returns a `Dict[int, List[int]]` mapping each BLR VA to a list of resolved target VAs.
+`resolve_blr_sites(blr_sites, vtable_regions, ctor_inits)` populates `BLRSite.resolved_targets` in-place and returns the updated list.
 
-`VtableResolver.summary()` returns:
+`detect_blr_sites(text_data, text_va, text_size)` returns `List[BLRSite]`:
 
-| Field | Content |
+| Attribute | Content |
 |:---|:---|
-| `vtable_regions` | Count of vtable regions found in `.rodata` |
-| `constructor_vptr_assignments` | Count of confirmed constructor vtable assignments |
-| `blr_sites` | Total BLR instruction count |
-| `resolved` | Count of BLR sites with at least one resolved target |
+| `blr_pc` | VA of the `BLR xN` instruction |
+| `vptr_load_pc` | VA of the preceding `LDR xN, [xM, #k]` that loads the slot |
+| `slot_offset` | Byte offset `k` into the vtable |
+| `resolved_targets` | `List[int]` — resolved target VAs (empty until `resolve_blr_sites` runs) |
+| `narrowed` | `True` if narrowed by constructor type information |
+
+`extract_vtable_regions(binary, text_va, text_size)` returns `List[VtableRegion]`:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | VA of the vtable in `.rodata` |
+| `slots` | `List[int]` — code VAs at each slot index |
 
 ---
 

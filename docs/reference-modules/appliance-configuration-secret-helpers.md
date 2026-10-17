@@ -157,23 +157,22 @@ TFTP blocked: TFTP ERROR 1 — File not found
 
 ---
 
-## Reading findings
+## Reading output
 
-Each helper returns decoded strings or structured results, not finding dicts.
+Each function returns a string or dict — not finding objects.
 
-`CiscoType7Decoder.decode(hash)` returns the plaintext password string.
+`decode_type7(enc)` returns the plaintext password string directly (Cisco IOS Type 7 XOR is always reversible).
 
-`SNMPWalker.walk(host, community)` returns `{oid: value}` dict.
-
-`CiscoRunningConfigDecoder.decode(host)` returns `{host, config_text, decoded_secrets: List[{type, encoded, decoded}]}`.
-
-`decoded_secrets` item:
+`snmp_get(host, community, oid)` returns a dict:
 
 | Field | Content |
 |:---|:---|
-| `type` | Key type (e.g., `enable password 7`, `snmp-server community encrypted`) |
-| `encoded` | Original encoded/hashed value from config |
-| `decoded` | Plaintext credential |
+| `responsive` | `True` if the host responded to the SNMP GET |
+| `values` | Parsed OID values from the response, or `None` |
+| `raw` | First 200 hex chars of the raw UDP response |
+| `error` | Error string if `responsive == False` |
+
+`probe_tftp_config(host, filename)` returns a dict with `success: bool`, `data: bytes`, `error: str`.
 
 ---
 
