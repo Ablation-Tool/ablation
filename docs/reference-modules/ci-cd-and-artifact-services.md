@@ -88,6 +88,21 @@ Run `CompilerSecurityGate` as a post-link CI/CD step, before the release artifac
 
 ---
 
+## Reading findings
+
+`CompilerSecurityGate.check()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
+| `check` | Mitigation check name (e.g., `NX_DISABLED`, `STACK_CANARY_MISSING`, `RELRO_NONE`) |
+| `binary` | Path to the binary where the check failed |
+| `detail` | Explanation of the missing mitigation and exploitation implications |
+
+`CompilerSecurityGate.check()` also returns exit code `1` (via `sys.exit`) if any `HIGH` or `CRITICAL` findings are present.
+
+---
+
 ## See also
 
 - [Taint Analysis](taint-analysis.md) — underlying taint engine used by the gate

@@ -92,6 +92,21 @@ Step 1 of the three-step cross-version patch analysis workflow in `CLAUDE.md`: `
 
 ---
 
+## Reading output
+
+`DTWMatcher.score_functions(va_a, binary_b)` returns a list of match dicts sorted by score descending:
+
+| Field | Content |
+|:---|:---|
+| `va_b` | VA of the candidate homolog in `binary_b` |
+| `score` | DTW similarity score (0.0–1.0; ≥0.85 = HIGH confidence homolog) |
+| `seq_len_a` | Instruction count for function `va_a` |
+| `seq_len_b` | Instruction count for the candidate |
+
+`DTWMatcher.find_homolog(va, binary_b, threshold=0.85)` returns the highest-scoring match dict above the threshold, or `None` if no match exceeds the threshold.
+
+---
+
 ## See also
 
 - [Matrix Profile Patch Diff](matrix-profile-patch-diff.md) — instruction-level change localization within confirmed homologs
