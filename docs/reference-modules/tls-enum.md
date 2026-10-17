@@ -92,47 +92,60 @@ Gate: **PASSED** (after 2 fixes).
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+All functions are standalone network probes with signature `(host, port=443, timeout=5.0) → List[dict]`. Each sends raw TLS records or HTTP requests using `ssl.CERT_NONE` and returns `{severity, title, detail, host, port}` findings via `_finding()`. There is no class or constructor.
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.tls_enum import TLSEnumeration
+from modules.tls_enum import (
+    probe_tls_downgrade_attack,
+    probe_tls_version_support,
+    check_weak_cipher_suites,
+    probe_zero_trust_bypass_surface,
+)
 
-results = TLSEnumeration.from_context(ctx).run()
-for r in results:
-    print(r)
+# Each returns [{severity, title, detail, host, port}]
+findings = probe_tls_downgrade_attack('target.example.com', port=443)
+findings += probe_tls_version_support('target.example.com', port=443)
+findings += check_weak_cipher_suites('target.example.com', port=443)
+
+for f in findings:
+    print(f"  [{f['severity']}] {f['title']}: {f['detail'][:80]}")
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+probe_tls_downgrade_attack: target.example.com:443
+
+  [HIGH]   NO_FALLBACK_SCSV_PROTECTION
+           Server did not return inappropriate_fallback alert (RFC 7507) when
+           TLS_FALLBACK_SCSV was presented with a downgraded version
+  [HIGH]   TLS10_ACCEPTED
+           Server accepted a TLS 1.0 ClientHello (POODLE/BEAST risk)
+  [MEDIUM] SHORT_HSTS_MAX_AGE
+           HSTS max-age=2592000 (30 days) — below 31536000 recommended minimum
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`probe_cloud_proxy_ssl_inspection_bypass()` generates IDS alerts** — this probe sends a QUIC Long Header Initial packet to UDP/443 and a 3-fragment ClientHello. These are active out-of-band probes that may appear in IDS logs as malformed TLS or protocol violation events on the target.
+
+**`probe_zero_trust_bypass_surface()` logs appear as auth bypass attempts** — the probe sends a JWT-shaped token as a URL query parameter. The target may log this as an attempted authentication bypass attempt, which is visible in security event logs.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run TLS enumeration after confirming a listening HTTPS service. Run `probe_tls_downgrade_attack()` and `probe_tls_version_support()` first to confirm attack surface, then run cipher suite and certificate probes.
 
 ---
 
@@ -141,10 +154,10 @@ Findings from internal management interfaces, development endpoints, and lab-onl
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
+| `title` | Finding code (e.g., `NO_FALLBACK_SCSV_PROTECTION`, `TLS10_ACCEPTED`, `TLS11_ACCEPTED`, `SHORT_HSTS_MAX_AGE`) |
 | `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
+| `host` | Target host |
+| `port` | Target port |
 
 ---
 

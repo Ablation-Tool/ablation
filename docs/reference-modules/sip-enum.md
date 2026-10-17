@@ -123,47 +123,66 @@ Gate: **PASSED**. One dead-code fix applied.
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+`SIPEnumerator(host, port=5060, transport='UDP', timeout=5)` probes a SIP server over UDP or TCP. `enumerate_all()` runs five probes in sequence: `probe_sip_server()` (OPTIONS fingerprint), `check_unauthenticated_register()` (instant REGISTER bypass), `enumerate_extensions()` (extension differential sweep), `check_ami_interface()` (Asterisk AMI default credentials), and `check_srtp_required()` (RTP/SRTP posture via INVITE). Returns `{host, port, transport, findings: List[dict]}`. Each finding is a `{severity, title, detail, host, port}` dict built by `_finding()`.
+
+Standalone probe functions (`probe_h323_service`, `detect_sccp_skinny_surface`, `detect_mgcp_surface`, etc.) take `(host, port, timeout)` and return the same `List[{severity, title, detail, host, port}]` shape directly.
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.sip_enum import SIPEnumeration
+from modules.sip_enum import (
+    SIPEnumerator,
+    probe_h323_service,
+    detect_sccp_skinny_surface,
+    detect_sip_flood_surface,
+)
 
-results = SIPEnumeration.from_context(ctx).run()
-for r in results:
-    print(r)
+# Class-based SIP enumeration
+enumerator = SIPEnumerator('target.example.com', port=5060, transport='UDP')
+result = enumerator.enumerate_all()
+# result: {host, port, transport, findings: List[dict]}
+# Each finding: {severity, title, detail, host, port}
+for f in result['findings']:
+    print(f"  [{f['severity']}] {f['title']}: {f['detail'][:80]}")
+
+# Standalone probes (return same {severity, title, detail, host, port} shape)
+for f in probe_h323_service('target.example.com', port=1720):
+    print(f"  [{f['severity']}] {f['title']}")
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative. See [Voice Abuse Indicators](voice-abuse-indicators.md) and [Legacy Voice Protocols](legacy-voice-protocols.md) for full finding codes per probe.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+SIPEnumerator: target.example.com:5060 (UDP)
+
+findings:
+  [HIGH]    SIP_UNAUTH_REGISTER: REGISTER 200 OK received without auth challenge
+  [MEDIUM]  SIP_SERVER_DISCLOSURE: Server: Asterisk PBX 18.x.y
+  [CRITICAL] SIP_AUTH_BYPASS: INVITE accepted without authentication
+
+probe_h323_service:
+  [MEDIUM]  H323_CALL_SIGNALING_ACTIVE: RAS/H.225 response on TCP/1720
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`check_srtp_required()` on SIP trunks that use TLS transport** — `SIPEnumerator.check_srtp_required()` sends a plain-RTP SDP offer over UDP. A SIP trunk configured for TLS/SRTP will not respond to a plain-UDP INVITE, and the missing SRTP enforcement finding will not fire even though SRTP may be required on the TLS path. Verify by sending the INVITE over TLS (port 5061) to confirm SRTP enforcement on the protected transport.
+
+**`enumerate_extensions()` differential sweep generates SIP traffic** — the sweep sends REGISTER/INVITE requests to candidate extension numbers. On systems with aggressive SIP intrusion detection (Fail2Ban, Cisco UCM rate limiting), probing more than ~50 extensions per minute may trigger a source IP block. Reduce the extension range or add delays for production SIP infrastructure.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run `SIPEnumerator.enumerate_all()` after port scanning identifies TCP/UDP 5060. Run standalone probes (`detect_sccp_skinny_surface`, `detect_mgcp_surface`) when Cisco CUCM or MGCP gateway ports (2000, 2427) are also open.
 
 ---
 
@@ -172,10 +191,10 @@ Findings from internal management interfaces, development endpoints, and lab-onl
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
+| `title` | Finding code (see [Voice Abuse Indicators](voice-abuse-indicators.md) for full list) |
 | `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
+| `host` | Target host where the finding was observed |
+| `port` | Target port where the finding was observed |
 
 ---
 

@@ -1,84 +1,93 @@
 # Network Analysis
 
-**File:** `modules/network_analyze.py`
+Network traffic analysis and active enumeration — PCAP parsing for credential extraction and protocol identification, TCP/UDP port scanning with service fingerprinting, ICMP host discovery, and HTTP directory brute-force — via `modules/network_analyze.py`.
+
+---
 
 ## Why this exists
 
-Network traffic analysis and active enumeration: PCAP parsing for credential extraction and protocol identification, TCP/UDP port scan with service fingerprinting, ICMP host discovery, and HTTP directory brute-force. Synthesized from *Violent Python*, *Black Hat Python 2e*, and *Hacking: The Art of Exploitation*.
+1. **PCAP-based credential extraction without Wireshark** — `PcapAnalyzer.analyze()` parses a PCAP file and extracts: HTTP Basic Auth credentials (decoded from `Authorization:` headers), FTP `USER`/`PASS` sequences, Telnet command sequences, and DNS query names. This enables offline credential triage from captured traffic without requiring Wireshark or tshark.
+
+2. **Host network state enumeration from `/proc/net/`** — `NetworkAnalyzer.enumerate_all()` reads `/proc/net/tcp`, `/proc/net/tcp6`, `/proc/net/udp`, and `/proc/net/dev` directly. All reads are bounded by `_MAX_PROC_BYTES=4MB`. Returns `{interfaces, connections, listening, firewall}` with connection dicts as `{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}`.
+
+3. **Active scanning without nmap** — `run_network_analysis(target)` probes a target with ICMP and HTTP using `ICMPScanner.scan()` and `WebDirBrute.scan()`. Returns `{target, icmp, web, findings}`.
+
+---
 
 ## Key constants
 
 | Constant | Value | Applied to |
-|---|---|---|
-| `_MAX_PCAP_BYTES` | 512 MB | PCAP file read cap |
-| `_MAX_HTTP_BYTES` | 4 MB | HTTP response body cap |
-| `_MAX_PROC_BYTES` | 4 MB | `/proc/net/*` reads |
-
-## FORGE audit
-
-Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before PCAP `f.read()`; `_MAX_PCAP_BYTES=512MB`. HTTP reads capped at `_MAX_HTTP_BYTES=4MB`. Three CWE-770 procfs reads fixed: `/proc/net/dev`, `/proc/net/tcp`, `/proc/net/tcp6` changed from `readlines()` to `read(_MAX_PROC_BYTES).splitlines()`; `_MAX_PROC_BYTES=4MB` constant added. No lief.parse().
+|:---|:---|:---|
+| `_MAX_PCAP_BYTES` | 512 MB | PCAP file size guard before `f.read()` |
+| `_MAX_HTTP_BYTES` | 4 MB | HTTP response body cap in `WebDirBrute` |
+| `_MAX_PROC_BYTES` | 4 MB | `/proc/net/{tcp,tcp6,udp,dev}` reads |
 
 ---
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+```mermaid
+flowchart TD
+    A["NetworkAnalyzer()"] --> B["enumerate_all() → dict\n  {interfaces, connections, listening, firewall}\n  get_connections() reads /proc/net/tcp, tcp6\n    → [{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}]\n  LISTEN state → appended to 'listening' list\n  get_firewall_rules() → iptables -L -n / pfctl -sr"]
+    A --> C["run_network_analysis(target: str) → dict\n  ICMPScanner.scan(subnet)\n  WebDirBrute(url).scan()\n  → {target, icmp, web, findings}"]
+    A --> D["PcapAnalyzer(path).analyze() → dict\n  os.path.getsize() guard → f.read(_MAX_PCAP_BYTES)\n  Parse Ethernet/IP/TCP records\n  Extract HTTP auth, FTP creds, DNS queries\n  → {packets_parsed, credentials, dns_queries, protocols}"]
+```
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.network_analyze import NetworkAnalysis
+from modules.network_analyze import NetworkAnalyzer, run_network_analysis
 
-results = NetworkAnalysis.from_context(ctx).run()
-for r in results:
-    print(r)
+# Live host network state
+analyzer = NetworkAnalyzer()
+state = analyzer.enumerate_all()
+# state: {interfaces, connections, listening, firewall}
+# Each connection: {protocol, local_ip, local_port, remote_ip, remote_port, state, uid}
+for conn in state['listening']:
+    print(f"  LISTEN {conn['protocol']} {conn['local_ip']}:{conn['local_port']}")
+
+# Active scan: {target, icmp, web, findings}
+result = run_network_analysis('10.0.0.1')
+print(f"ICMP: {result['icmp']}  Web: {result['web']}")
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+NetworkAnalyzer.enumerate_all():
+
+interfaces: [{name: 'eth0', ip: '10.0.0.5'}]
+listening:
+  {protocol: 'tcp', local_ip: '0.0.0.0', local_port: 22, state: 'LISTEN', uid: 0}
+  {protocol: 'tcp', local_ip: '127.0.0.1', local_port: 5432, state: 'LISTEN', uid: 999}
+connections:
+  {protocol: 'tcp', local_ip: '10.0.0.5', local_port: 54321,
+   remote_ip: '10.0.0.1', remote_port: 443, state: 'ESTABLISHED', uid: 1000}
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`get_firewall_rules()` requires root** — on hosts without root access, `iptables -L -n` fails silently; the firewall rules list is empty. An empty result means "could not enumerate" not "no rules."
+
+**`/proc/net/tcp` port encoding** — ports are stored as hex in `/proc/net/tcp` (e.g., `0050` = port 80). `NetworkAnalyzer` converts these; verify conversion is correct for ports above `0x7FFF` on big-endian kernels.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
-
----
-
-## Reading findings
-
-| Field | Content |
-|:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
-| `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
+Run `NetworkAnalyzer.enumerate_all()` immediately after gaining shell access. The interface list seeds adjacent subnet ICMP sweeps. The listening port list reveals internal services not externally accessible.
 
 ---
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
+- [Local Network Inventory](local-network-inventory.md) — same module with more complete annotation of connection fields
+- [Host/Service Discovery](host-service-discovery.md) — `ICMPScanner` for adjacent subnet enumeration

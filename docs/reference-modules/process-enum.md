@@ -100,64 +100,74 @@ No lief.parse(). No HTTP reads. No bare `except:`. All binary-analysis functions
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+`ProcessEnumerator()` reads `/proc/<pid>/` entries (maps, status, cmdline, comm, environ, fds) for all processes. All reads are bounded by `_MAX_PROC_BYTES` (4 MB) or `_MAX_FILE_BYTES` (64 KB). Standalone functions like `detect_hollow_process()`, `detect_cron_persistence()`, and `detect_process_injection_surface()` each read specific `/proc/` entries and return findings independently. Binary analysis functions (`detect_heap_spray_patterns()`, `detect_rop_chain_indicators()`, etc.) accept raw `bytes` with no file I/O. All findings use `_make_finding()` which returns `{severity, title, detail, host: 'localhost', port: 0}`.
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.process_enum import ProcessEnumeration
+from modules.process_enum import ProcessEnumerator, detect_hollow_process, detect_cron_persistence
 
-results = ProcessEnumeration.from_context(ctx).run()
-for r in results:
-    print(r)
+# Class-based live-system scan
+enum = ProcessEnumerator()
+maps = enum.get_memory_maps()
+print(enum.report())
+
+# Standalone findings — [{severity, title, detail, host: 'localhost', port: 0}]
+findings = detect_hollow_process(pid=1234)
+findings += detect_cron_persistence()
+for f in findings:
+    print(f"  [{f['severity']}] {f['title']}: {f['detail'][:80]}")
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+detect_hollow_process(pid=1234):
+  [HIGH] HOLLOW_PROCESS: svchost.exe PID 1234 TracerPid=5678 — potential process injection
+
+detect_cron_persistence():
+  [CRITICAL] WRITABLE_CRON_FILE: /etc/cron.d/app-task is world-writable (mode 0666)
+  [HIGH]     CRON_REVERSE_SHELL: /etc/cron.d/app-task line 3: bash -i >& /dev/tcp/...
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`detect_sandbox_environment_indicators()` fires on cloud VM instances** — cloud providers use hypervisor flags in `/proc/cpuinfo` and DMI strings (`Google`, `Amazon`, `Microsoft Corporation`) that match the sandbox indicator signatures. On cloud hosts this is expected and not a sandbox finding. Filter by checking whether the hypervisor DMI string matches the known cloud provider for the deployment environment.
+
+**`detect_ptrace_instrumentation()` fires on CI/CD agents** — `Valgrind`, `AddressSanitizer`, and Intel PIN appear in process maps on testing hosts. If the host is a CI agent or developer workstation, instrumentation tool presence is expected. Confirm against the host's role before escalating.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run `detect_hollow_process()` and `detect_process_injection_surface()` immediately after gaining shell access. Run binary analysis functions (`detect_rop_chain_indicators()`, `detect_anti_disassembly_techniques()`) during static analysis of suspected malware samples from the host.
 
 ---
 
 ## Reading findings
 
+All standalone functions return `List[{severity, title, detail, host: 'localhost', port: 0}]`.
+
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
-| `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
+| `title` | Finding code (e.g., `HOLLOW_PROCESS`, `WRITABLE_CRON_FILE`, `CRON_REVERSE_SHELL`) |
+| `detail` | Explanation of what was found and why it matters |
+| `host` | Always `'localhost'` — these are local-system findings |
+| `port` | Always `0` — these are local-system findings |
 
 ---
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [Privilege Escalation Enumeration](privesc-enum.md) — SUID/sudo/capability escalation on the same host
+- [Volatile and Linux Artifact Triage](volatile-and-linux-artifact-triage.md) — `enumerate_volatile_forensics()` combining process and forensics analysis
+- [Forensics Enumeration](forensics-enum.md) — Windows/ELF binary rootkit detection

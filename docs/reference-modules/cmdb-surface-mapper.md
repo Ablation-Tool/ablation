@@ -154,7 +154,7 @@ Prior to this module, cmdb surface mapper required manual work outside the Ablat
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+`CMDBSurfaceMapper.from_path(path, sinks=None, verbose=False)` parses the ELF binary to extract the PLT and build a function start map. `map()` disassembles each function body with Capstone, collects call sites where `mov edi, <table_id>` precedes a CMDB API call (e.g., `cmf_query_create`), and flags each `CMDBTableEntry` as `reaches_exec=True` when the same caller function body also contains an exec-sink call (`system`, `popen`, `execv`). The output is a `Dict[int, CMDBTableEntry]` keyed by `table_id`. Co-location does not confirm a taint path — use `SinkArgClassifier` and `TaintTracker` to confirm.
 
 ---
 
