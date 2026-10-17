@@ -192,6 +192,7 @@ The most common false positive is a tainted argument that is immediately sanitiz
 | `category` | `TAINT_FLOW` / `FORMAT_STRING` / `HEAP` / `LENGTH_UNDERFLOW` |
 | `description` | One-line description of what was detected |
 | `detector` | Name of the sub-scanner that produced this finding |
+| `taint_dag` | `Optional[SemanticBlock]` — DAG adapter block for walking the taint path; `None` for non-taint findings (format string, heap, underflow) |
 
 ---
 

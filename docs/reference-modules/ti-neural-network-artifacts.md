@@ -80,14 +80,25 @@ Run `TiNNCScanner` on any TI MCU firmware as part of initial triage. ML inferenc
 
 ## Reading findings
 
-`TiNNCScanner.scan()` returns a `TiNNCScanResult` object:
+`TiNNCScanner.scan()` returns a `TiNNCScanResult`:
 
 | Attribute | Content |
 |:---|:---|
-| `modules` | `List[TvmModule]` — detected TVM inference modules |
-| `findings` | `List[{severity, title, detail}]` — security findings (e.g., `TVM_UNVALIDATED_INPUT_SHAPE`) |
+| `binary_path` | Path to the scanned binary |
+| `has_npu_init` | `True` if `TI_NPU_init` symbol is present — confirms hardware NPU mode |
+| `modules` | `List[TiNNCModule]` — one entry per detected `tvmgen_<name>_run` model |
+| `findings` | `List[TiNNCScanFinding]` — all security findings |
 
-`TvmModule` has `name: str`, `op: str` (e.g., `nn_dense`, `nn_conv2d`), and `dims: List[int]`.
+Each `TiNNCModule`:
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Model name extracted from symbol (e.g., `'default'`, `'a'`) |
+| `run_va` | VA of the `tvmgen_<name>_run` function |
+| `execution_mode` | `'npu_hw'` / `'npu_soft'` / `'unknown'` |
+| `has_finished_flag` | `True` if `tvmgen_<name>_finished` symbol is present |
+| `norm_symbols` | `List[NormSymbol]` — all normalization data symbols for this model |
+| `weak_norm_symbols` | `List[str]` — subset of `norm_symbols` with WEAK ELF binding |
 
 ---
 

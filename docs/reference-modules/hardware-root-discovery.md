@@ -90,17 +90,28 @@ Run firmware container parsing and entropy analysis as the first step on any fir
 
 ## Reading output
 
-`FirmwareContainer.parse()` returns a `ContainerResult` object:
+`FirmwareContainer(path)` (or `FirmwareContainer.from_path(path)`) parses in-place. Attributes after construction:
 
 | Attribute | Content |
 |:---|:---|
-| `vendor` | Detected vendor string (or `None`) |
-| `product` | Detected product string (or `None`) |
-| `partitions` | `List[PartitionEntry]` — `{name, magic, offset, size}` |
+| `magic` | Container magic string |
+| `fw_version` | Firmware version string |
+| `vendor` | Vendor name from container header |
+| `product` | Product name from container header |
+| `language` | Language code from header |
+| `partitions` | `List[FirmwarePartition]` — parsed partition entries |
 
-`scan_firmware_signatures(path)` returns `List[{sig_type, offset}]` — magic-based signature hits in the image.
+Each `FirmwarePartition`:
 
-`extract_firmware_strings(path, min_len)` returns `List[str]` — printable ASCII strings from the firmware image.
+| Attribute | Content |
+|:---|:---|
+| `index` | Partition index (0-based) |
+| `version` | Partition version string |
+| `name` | Partition name string |
+| `offset` | Byte offset within the firmware image |
+| `size` | Partition size in bytes |
+| `destpath` | Destination path string from the partition table |
+| `payload_type` | Detected payload type (e.g., `'elf'`, `'ext2'`, `'squashfs'`, `'gzip'`, `'unknown'`) |
 
 ---
 
