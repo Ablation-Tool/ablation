@@ -99,6 +99,20 @@ Run legacy voice protocol probes after host/service discovery confirms open port
 
 ---
 
+## Reading findings
+
+H.323/SCCP probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (unauthenticated gatekeeper confirm) / `MEDIUM` (active signaling port) |
+| `title` | Finding code (e.g., `H323_CALL_SIGNALING_ACTIVE`, `H323_GATEKEEPER_UNAUTH_CONFIRM`, `SCCP_UNAUTH`) |
+| `detail` | Protocol, response type, and response size |
+| `host` | Target host IP |
+| `port` | Protocol port (e.g., `1720` for H.323 call signaling, `1719` for gatekeeper, `2000` for SCCP) |
+
+---
+
 ## See also
 
 - [SIP Service and Extension Discovery](sip-service-and-extension-discovery.md) — SIP OPTIONS/REGISTER/INVITE probes, extension enumeration
