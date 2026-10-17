@@ -1,16 +1,16 @@
 # Credential Testing Helpers
 
-Test SSH and FTP service authentication with credential lists, probe SMB for null session access, detect SSH key reuse across multiple hosts, identify SSH weak authentication surface (keyboard-interactive acceptance, password auth enabled), and detect brute-force attempt indicators in system logs — via `modules/lateral_movement.py`.
+Test SSH and FTP service authentication with credential lists using parallel threads, probe SMB for null session access (via `LateralMovementEnumerator`), detect SSH legacy protocol versions and vulnerable implementations, and identify SSH weak authentication surface (keyboard-interactive, password auth acceptance) — via `modules/lateral_movement.py`.
 
 ---
 
 ## Why this exists
 
-1. **`ssh_credential_spray()` tests a list of hosts against a credential wordlist using parallel threads** — it connects to each SSH port, attempts each `(user, password)` pair, and records successes. It implements the pattern from Violent Python chapter 2: a thread pool where each thread manages one SSH connection attempt and reports via a queue. No external SSH client is required; connections are made with Python's `socket` and manual SSH handshake initiation.
+1. **`ssh_credential_spray()` performs banner-layer SSH surface probing against a list of targets and credentials** — it implements a thread pool where each worker connects to TCP/22, reads the SSH server banner, sends the client banner `SSH-2.0-OpenSSH_8.0`, and evaluates banner responses against a credential pair. Detection is banner-layer only (no full KEX or authentication exchange); a `CRITICAL SSH_SPRAY_CANDIDATE` finding indicates the banner exchange completed and the transport accepted the framing — upgrade to a full paramiko KEX session in a controlled lab for definitive authentication confirmation. All findings return `{severity, title, detail, host, port}`.
 
-2. **`probe_smb_null_session()` tests SMB for unauthenticated share enumeration** — it sends a raw `SMB_COM_NEGOTIATE` followed by `SMB_COM_SESSION_SETUP_ANDX` with empty ANSI and Unicode password fields. A successful null session (NT_STATUS 0x00) allows share enumeration, user list retrieval, and domain information disclosure without credentials. This is the legacy SMBv1 null session attack, still relevant against unpatched Windows Server or Samba installations.
+2. **`LateralMovementEnumerator.probe_smb_null_session()` tests SMB for unauthenticated IPC$ access** — it sends a raw `SMBv1 Negotiate` (dialects: LANMAN1.0, LM1.2X002, NT LM 0.12) followed by `Session Setup ANDX` with empty ANSI and Unicode password fields. A `STATUS_SUCCESS` (0x00000000) response confirms null session access. Returns `{'null_session': bool, 'dialect': str, 'os': str, 'security_mode': str, 'shares': list, 'error': str}` — not the standard `{severity, title, detail, host, port}` shape.
 
-3. **`detect_ssh_weak_auth_surface()` probes SSH authentication methods without attempting login** — it sends an `SSH_MSG_USERAUTH_REQUEST` with `auth_name="none"` and reads the `SSH_MSG_USERAUTH_FAILURE` response, which lists the authentication methods accepted by the server. Presence of `password` (cleartext password) and `keyboard-interactive` (challenge-response) in the accepted methods list indicates that credential spray is viable.
+3. **`detect_ssh_weak_auth_surface()` identifies legacy SSH implementations and vulnerable versions** — it connects to TCP/22, reads the server banner, and checks for: (1) SSHv1 banners (`SSH-1.x`) that indicate a legacy protocol version; (2) implementation strings matching known-vulnerable versions in `vuln_map` (e.g., old Dropbear, old OpenSSH with specific CVEs). Returns `[{severity, title, detail, host, port}]`. This is a passive banner-read operation — no authentication exchange, no log entries generated on the target.
 
 ---
 
@@ -18,9 +18,9 @@ Test SSH and FTP service authentication with credential lists, probe SMB for nul
 
 ```mermaid
 flowchart TD
-    A["ssh_credential_spray(hosts, credentials, port=22, threads=10) → dict\n  ThreadPoolExecutor(max_workers=threads)\n  Per (host, user, password):\n    TCP connect → port 22\n    SSH handshake: SSH_MSG_KEXINIT + key exchange\n    AUTH: SSH_MSG_USERAUTH_REQUEST password\n    Success: SSH_MSG_USERAUTH_SUCCESS\n  → {host: {user: password} for successful logins}"] --> B["ftp_credential_spray(hosts, credentials, port=21) → dict\n  TCP connect → port 21\n  Receive 220 banner\n  Send USER + PASS\n  230 login successful → record (host, user, password)\n  530 or 221 → fail / move on\n  → {host: {user: password}}"]
-    B --> C["probe_smb_null_session(host) → dict\n  TCP connect → port 445\n  _build_smb_negotiate() + send\n  _build_smb_session_setup_null(uid=0) + send\n  Parse NT status from response\n  0x00000000 → null session accepted\n  → {vulnerable: bool, dialect: str}"]
-    C --> D["detect_ssh_weak_auth_surface(host, port=22) → list\n  TCP + SSH handshake (no key exchange)\n  SSH_MSG_USERAUTH_REQUEST auth_name='none'\n  Parse SSH_MSG_USERAUTH_FAILURE auth_methods list\n  Flag: 'password' or 'keyboard-interactive' in list\n  → [{method, exploitable, recommendation}]"]
+    A["ssh_credential_spray(targets, usernames, passwords,\n    timeout=3.0, max_workers=20) → list\n  in: modules/lateral_movement.py\n  ThreadPoolExecutor(max_workers)\n  Per target:\n    TCP connect → port 22\n    Receive server banner (SSH-2.0-...)\n    Send client banner: SSH-2.0-OpenSSH_8.0\n    Banner accepted → SSH_SERVICE_EXPOSED (LOW)\n    Credential framing accepted → SSH_SPRAY_CANDIDATE (CRITICAL)\n  → [{severity, title, detail, host, port}]"] --> B["ftp_credential_spray(targets, usernames, passwords,\n    timeout=3.0) → list\n  in: modules/lateral_movement.py\n  TCP connect → port 21\n  Receive 220 banner\n  anonymous / x@x.com login attempt\n  Default pairs: admin/admin, ftp/ftp, admin/ftp, user/user\n  230 login successful → CRITICAL finding\n  → [{severity, title, detail, host, port}]"]
+    B --> C["LateralMovementEnumerator(host, port=445)\n  .probe_smb_null_session() → dict\n  in: modules/lateral_movement.py\n  SMBv1 Negotiate: dialects LANMAN1.0 / LM1.2X002 / NT LM 0.12\n  Session Setup ANDX: empty ANSI + Unicode passwords\n  NT Status 0x00000000 → null session accepted\n  → {null_session: bool, dialect: str, os: str,\n      security_mode: str, shares: list, error: str}"]
+    C --> D["detect_ssh_weak_auth_surface(host, port=22, timeout=10.0) → list\n  in: modules/lateral_movement.py\n  TCP connect → port 22\n  Read server banner\n  SSHv1 banner → SSH_LEGACY_VERSION (CRITICAL)\n  Known-vulnerable impl string → SSH_VULNERABLE_IMPLEMENTATION\n  → [{severity, title, detail, host, port}]"]
 ```
 
 ---
@@ -29,60 +29,74 @@ flowchart TD
 
 ```python
 from modules.lateral_movement import (
-    ssh_credential_spray, ftp_credential_spray,
-    detect_ssh_weak_auth_surface
+    ssh_credential_spray,
+    ftp_credential_spray,
+    detect_ssh_weak_auth_surface,
+    LateralMovementEnumerator
 )
 
-# SSH credential spray
-hosts = ['10.0.0.5', '10.0.0.11']
-creds = [('root', 'root'), ('admin', 'admin'), ('admin', 'C1sco12345')]
-ssh_results = ssh_credential_spray(hosts, creds)
-for host, logins in ssh_results.items():
-    for user, pw in logins.items():
-        print(f"  SSH {host}: {user}:{pw}")
+# SSH banner-layer spray
+targets = ['<target-a>', '<target-b>']
+usernames = ['root', 'admin', 'ubuntu']
+passwords = ['root', 'admin', 'password']
+for finding in ssh_credential_spray(targets, usernames, passwords, max_workers=10):
+    print(f"  [{finding['severity']}] {finding['host']}: {finding['title']}")
+    print(f"    {finding['detail'][:100]}")
 
-# Weak auth surface detection (no login attempt)
-for host in hosts:
-    surface = detect_ssh_weak_auth_surface(host)
-    for s in surface:
-        print(f"  {host}: {s['method']} → exploitable={s['exploitable']}")
+# Weak legacy version detection (no login attempt)
+for finding in detect_ssh_weak_auth_surface('<target-ip>'):
+    print(f"  [{finding['severity']}] {finding['title']}: {finding['detail'][:80]}")
+
+# SMB null session (class-based)
+enum = LateralMovementEnumerator('<target-ip>', port=445)
+result = enum.probe_smb_null_session()
+if result['null_session']:
+    print(f"  NULL SESSION: dialect={result['dialect']}  os={result['os']}")
 ```
 
 ---
 
 ## Example output
 
-The following illustrates credential testing output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
-ssh_credential_spray:
+ssh_credential_spray: <target-ip>:22
 
-  10.0.0.5: root:root  (SSH login successful)
-  10.0.0.11: admin:C1sco12345
+  [LOW]      SSH_SERVICE_EXPOSED
+               detail: host=<target-ip> port=22 banner='SSH-2.0-OpenSSH_8.2p1 Ubuntu'
 
-ftp_credential_spray:
+  [CRITICAL] SSH_SPRAY_CANDIDATE
+               detail: host=<target-ip> port=22 user=root pair accepted at transport layer
 
-  10.0.0.20: ftpuser:ftpuser
+ftp_credential_spray: <target-ip>:21
 
-detect_ssh_weak_auth_surface: 10.0.0.5:22
+  [CRITICAL] FTP_ANONYMOUS_LOGIN
+               detail: user=anonymous banner='220 FTP server ready'
 
-  password: exploitable=True  (cleartext auth accepted)
-  publickey: exploitable=False
+detect_ssh_weak_auth_surface: <target-ip>:22
+
+  [CRITICAL] SSH_LEGACY_VERSION
+               detail: host=<target-ip> port=22 banner='SSH-1.99-OpenSSH_...' version=1.99
+
+LateralMovementEnumerator.probe_smb_null_session: <target-ip>:445
+
+  null_session=True  dialect='NT LM 0.12'  os='Windows Server 2008'
 ```
 
 ---
 
 ## False positives
 
-**`ssh_credential_spray()` false failures** — network timeouts and connection resets from rate-limiting or fail2ban are treated as failed authentication attempts. A host that rejects all attempts after the first few may have active brute-force protection; the result `{}` for that host may be a false negative rather than confirmed that no credentials matched.
+**`ssh_credential_spray()` banner-layer limitation** — the spray function does not perform a full SSH key exchange or authentication. `SSH_SPRAY_CANDIDATE` indicates that the transport framing was accepted at the banner layer; it does not confirm that the credential pair authenticates successfully. Confirm with a full paramiko KEX in a controlled lab before treating the finding as a verified login.
 
-**`probe_smb_null_session()` SMBv1 dialect requirement** — null sessions require SMBv1. Hosts with SMBv1 disabled (Windows Server 2016+ and modern Samba) will reject the negotiate request or return `STATUS_NOT_SUPPORTED`. No null session vulnerability exists on these hosts.
+**`probe_smb_null_session()` SMBv1 dialect requirement** — null sessions require SMBv1. Hosts with SMBv1 disabled (Windows Server 2016+, modern Samba with `server min protocol = SMB2`) will return `STATUS_NOT_SUPPORTED` or close the connection at the negotiate step. A `null_session=False` result with an `error` field does not confirm that SMB authentication is hardened — only that the null session path is blocked.
 
 ---
 
 ## Pipeline position
 
-Run credential testing after discovering SSH and FTP services via `host-service-discovery`. `detect_ssh_weak_auth_surface()` is passive (no login attempt) and should run first to confirm credential spray is viable before submitting authentication requests that may generate log entries.
+Run `detect_ssh_weak_auth_surface()` first — it is entirely passive (no auth attempt, no log entry). Use results to determine which hosts are viable spray targets before running `ssh_credential_spray()`. SMB null session testing applies to any Windows host running SMBv1, particularly domain controllers and file servers on enterprise networks.
 
 ---
 
@@ -90,3 +104,4 @@ Run credential testing after discovering SSH and FTP services via `host-service-
 
 - [Internal Network Reconnaissance](internal-network-reconnaissance.md) — `CredentialHarvester` for filesystem credential extraction before spray
 - [Credential/Token/Key Discovery](credential-token-key-discovery.md) — credential and API token enumeration from the compromised host filesystem
+- [Remote Management and Identity Probes](remote-management-and-identity-probes.md) — `LateralMovementEnumerator` for WMI, RPC, WinRM, and RDP probing

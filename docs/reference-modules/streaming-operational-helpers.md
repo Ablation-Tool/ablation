@@ -54,22 +54,22 @@ for s in schemas:
 
 ## Example output
 
-The following illustrates streaming operational helper output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
-kafka_consume_sample: 10.0.5.10:9092  topic=iam-credentials  count=5
+kafka_consume_sample: <kafka-host>:9092  topic=iam-credentials  count=5
 
-  offset=0   {"user_id": "user_001", "api_key": "sk-prod-a1b2c3...", "role": "admin"}
-  offset=1   {"user_id": "user_002", "api_key": "sk-prod-d4e5f6...", "role": "viewer"}
+  offset=0   {"user_id": "<id>", "api_key": "<api-key>", "role": "admin"}
+  offset=1   {"user_id": "<id>", "api_key": "<api-key>", "role": "viewer"}
 
-schema_registry_enumerate: 10.0.5.10:8081
+schema_registry_enumerate: <kafka-host>:8081
 
   payments-value: Avro  SENSITIVE: credit_card_number, cvv, billing_address
   user-events-value: Avro  SENSITIVE: email, phone, ssn
 
-flink_submit_jar_rce: 10.0.5.11:8081
+flink_submit_jar_rce: <flink-host>:8081
 
-  job_id: abc-123-def  status: RUNNING
+  job_id: <job-id>  status: RUNNING
   (payload executing as flink TaskManager process)
 ```
 

@@ -45,18 +45,22 @@ for host in discovered_hosts:
 
 ## Example output
 
-The following illustrates SD-WAN/Meraki management probe output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
-probe_cisco_sdwan_vmanage_exposure: 10.0.100.1:8443
+probe_cisco_sdwan_vmanage_exposure: <target-ip>:8443
 
-  [MEDIUM] VMANAGE_PORTAL_FINGERPRINT: Cisco vManage web portal at https://10.0.100.1:8443/
-  [CRITICAL] VMANAGE_UNAUTH_API: /dataservice/device returned HTTP 200 (no auth required)
-    Device inventory: 12 edge routers, including site credentials in templates
+  [MEDIUM]   VMANAGE_PORTAL_FINGERPRINT
+               detail: Cisco vManage web portal fingerprinted at https://<target-ip>:8443/
 
-probe_cisco_meraki_api_exposure: 10.0.100.5:443
+  [CRITICAL] VMANAGE_UNAUTH_API
+               detail: /dataservice/device returned HTTP 200 without authentication;
+                       device inventory accessible including template credentials
 
-  [MEDIUM] MERAKI_STATUS_PAGE_EXPOSED: SSID=CorpWifi VLAN=10 uplink=203.0.113.5
+probe_cisco_meraki_api_exposure: <target-ip>:443
+
+  [MEDIUM] MERAKI_STATUS_PAGE_EXPOSED
+             detail: Organization status page accessible; SSID=<name> VLAN=<id>
 ```
 
 ---
