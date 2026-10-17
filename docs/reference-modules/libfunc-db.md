@@ -27,11 +27,22 @@ Provides the session state, indexing, and utility functions that other Ablation 
 ## Usage
 
 ```python
-from ablation.analyzers.libfunc_db import LibFuncDB:PLTSlotClassifier
+from modules.libfunc_db import classify, ObservedSlotProfile
 
-results = LibFuncDB:PLTSlotClassifier.from_context(ctx).run()
-for r in results:
-    print(r)
+# Build a profile from observed call behavior at one PLT slot
+profile = ObservedSlotProfile(
+    stub_va=0x401020,
+    name_hint='',
+    num_callsites=7,
+    arg_kinds={0: 'ptr', 1: 'int'},
+    max_args=2,
+    ret_kind='ptr',
+    null_on_fail=True,
+    neg_on_fail=False,
+    used_as_heap_base=True,
+)
+name, score, top3 = classify(profile, min_score=4)
+print(f"  {name}  score={score}  top3={top3}")
 ```
 
 ---
