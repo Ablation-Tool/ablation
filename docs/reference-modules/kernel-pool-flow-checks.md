@@ -80,6 +80,21 @@ Run `WindowsPoolTaintTracker` on any Windows kernel driver PE alongside `CFGBypa
 
 ---
 
+## Reading findings
+
+`WindowsPoolTaintTracker.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (unbounded user-controlled size) / `MEDIUM` (unchecked with indirect source) |
+| `title` | `POOL_OVERFLOW` |
+| `detail` | Allocation function, size source, IOCTL transfer type, and call path |
+| `alloc_va` | VA of the `ExAllocatePool*` call |
+| `size_source` | Name of the size source (e.g., `InputBufferLength`) |
+| `bounds_checked` | `False` if no bounds check was found on the size source |
+
+---
+
 ## See also
 
 - [BYOVD Capability Detection](byovd-capability-detection.md) — dangerous import detection for the same driver targets

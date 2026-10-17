@@ -96,6 +96,20 @@ Run remote management probes during lateral movement planning after internal net
 
 ---
 
+## Reading findings
+
+Remote management probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (auth bypass or relay target) / `MEDIUM` (enabled service) |
+| `title` | Finding code (e.g., `SMB_NULL_SESSION`, `SMB_NTLM_RELAY_TARGET`, `WINRM_ENABLED`) |
+| `detail` | Dialect, OS, NTLM challenge bytes, or auth method list |
+| `host` | Target host IP |
+| `port` | Protocol port (e.g., `445` for SMB, `5985` for WinRM) |
+
+---
+
 ## See also
 
 - [Credential Testing Helpers](credential-testing-helpers.md) — SSH/FTP credential spray for Linux hosts

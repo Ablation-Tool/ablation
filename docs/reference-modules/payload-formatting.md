@@ -100,6 +100,22 @@ Payload formatting is the final step before delivery. Run `detect_bad_bytes()` o
 
 ---
 
+## Reading output
+
+`build_exploit_buffer(padding, nop_sled, shellcode)` returns `bytes` — the assembled buffer.
+
+`detect_bad_bytes(shellcode, bad_bytes)` returns a dict:
+
+| Key | Content |
+|:---|:---|
+| `found` | `List[int]` — byte values from `bad_bytes` that appear in shellcode |
+| `clean` | `True` if no bad bytes found |
+| `offsets` | `Dict[int, List[int]]` — bad byte value → list of offsets within shellcode |
+
+`build_exploit_buffer` summary: `{total_size, sections: [{name, size}]}`.
+
+---
+
 ## See also
 
 - [Crash Offset and ROP Helpers](crash-offset-and-rop-helpers.md) — cyclic pattern offset calculation and ROP chain construction

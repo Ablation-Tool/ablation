@@ -87,6 +87,21 @@ Run `generate_report()` immediately after `PatternLibrary.sweep()` completes, be
 
 ---
 
+## Reading output
+
+`generate_report(results, binary_path)` returns a Markdown string. The rendered report structure:
+
+| Section | Content |
+|:---|:---|
+| Header | Binary path, date, sweep summary |
+| Per-category tables | `VA \| Score \| Name` — one table per vulnerability class with hits |
+| Registry Correlations | Matches between sweep hits and prior confirmed findings |
+| No-hit classes | Vulnerability classes with zero hits above threshold |
+
+The Markdown string can be written to disk with `report_writer.write(report, path)`.
+
+---
+
 ## See also
 
 - [JSON and SARIF Export](json-and-sarif-export.md) — structured export for CI/CD and Code Scanning upload
