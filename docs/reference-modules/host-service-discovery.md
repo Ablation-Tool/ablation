@@ -87,6 +87,22 @@ Run host/service discovery after `local-network-inventory` reveals subnets. Disc
 
 ---
 
+## Reading output
+
+`HostScanner.scan(subnet)` returns a list of `HostResult` dicts:
+
+| Field | Content |
+|:---|:---|
+| `host` | IP address |
+| `alive` | `True` if ICMP or TCP probe succeeded |
+| `os_hint` | OS guess from TTL heuristic (e.g., `Linux`, `Windows`, `Unknown`) |
+| `open_ports` | `Dict[int, str]` — port → service banner |
+| `banners` | `Dict[int, str]` — port → raw banner string |
+
+`MDNSDiscovery.query(service_type)` returns a list of `{host, name, port, txt_records}` dicts.
+
+---
+
 ## See also
 
 - [Local Network Inventory](local-network-inventory.md) — `NetworkAnalyzer` for interface and subnet discovery before host scanning

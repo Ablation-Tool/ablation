@@ -100,6 +100,25 @@ Run `detect_ssh_weak_auth_surface()` first — it is entirely passive (no auth a
 
 ---
 
+## Reading output
+
+`ssh_credential_spray()` returns a list of result dicts, one per credential attempt:
+
+| Field | Content |
+|:---|:---|
+| `host` | Target host |
+| `port` | SSH port |
+| `username` | Username tested |
+| `password` | Password tested |
+| `success` | `True` if authentication succeeded |
+| `error` | Error message if failed, else `None` |
+
+`probe_smb_null_session()` returns `{host, null_session: bool, error}`.
+
+`detect_ssh_weak_auth_surface()` returns a list of finding dicts `{severity, title, detail, host, port}` for banner and key exchange weaknesses detected without authentication.
+
+---
+
 ## See also
 
 - [Internal Network Reconnaissance](internal-network-reconnaissance.md) — `CredentialHarvester` for filesystem credential extraction before spray
