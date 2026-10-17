@@ -150,14 +150,30 @@ FORGE.list_local_modules()    # list registered modules
 
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+`FORGE.audit_module(path)` computes a two-part cache key: `sha256(system_prompt)[:16] + ":" + sha256(file_bytes)[:16]`. A hit returns the cached `ForgeReport` in under a millisecond with no LLM call. A miss raises `ForgeAuditRequired` — this is the signal to read the file in the current Claude Code session, apply the 10-section SAFE CODE review, and call `FORGE.record_result()` to write the result to `~/.ablation/forge_cache.json`. Changing either the SOP file or the module source invalidates the cache entry for that module only; changing the SOP invalidates all entries. `gate_passed` is the property checked before `git add`.
 
 ---
 
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+FORGE [MODULE]  ablation/analyzers/my_scanner.py
+Gate: PASSED   Findings: 3  (0 CRITICAL  0 HIGH  1 MEDIUM  2 LOW  0 INFO)
+
+  [MEDIUM]  path-traversal  unchecked user-supplied path  my_scanner.py:42
+    Path passed to open() without normalization or prefix check.
+    Recommendation: use pathlib.Path(p).resolve() and verify prefix before open()
+    CWE-22  stage: test ($$)
+
+  [LOW]  broad-exception  bare except: at top-level  my_scanner.py:88
+    Swallows all exceptions including KeyboardInterrupt and SystemExit.
+    Recommendation: except (ValueError, OSError) or log and re-raise
+
+  [LOW]  naming  ambiguous variable name 'l' at line 104  my_scanner.py:104
+    Single-letter variable in 30-line function reduces readability under review.
+    Recommendation: rename to 'length' or 'limit'
+
+Gate: PASSED — no CRITICAL or HIGH findings.
 ```
 
 ---
@@ -170,9 +186,9 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** Called before every `git add` on a new or changed `.py` file. Read the module source in Claude Code, apply the 10-section SAFE CODE review, then call `FORGE.record_result()` to cache the result.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** When `gate_passed=True`, proceed with `git add` and `git commit`. When `gate_passed=False`, fix every HIGH and CRITICAL finding and re-run `FORGE.audit_module()` to update the cache before committing.
 
 ---
 
