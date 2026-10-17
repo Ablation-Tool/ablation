@@ -99,6 +99,20 @@ dirty_since_commit(): True  (advance() not yet committed)
 
 ---
 
+## Reading output
+
+`WorkflowDocument` methods:
+
+| Method | Return |
+|:---|:---|
+| `current_stage()` | Current stage name string (e.g., `triage`, `sweep`, `taint`, `confirmation`) |
+| `history()` | `List[(from_stage, to_stage, status)]` — stage transition history |
+| `validate(stage, evidence_dict)` | `List[str]` — list of validation errors; empty if valid |
+| `dirty_since_commit()` | `True` if `advance()` has been called but not yet committed |
+| `advance(next_stage, evidence_dict)` | Moves to next stage; raises `ValidationError` if evidence is invalid |
+
+---
+
 ## See also
 
 - [Function Identity Database](function-identity-database.md) — `FindingRegistry` where confirmed findings are registered at the `registration` stage

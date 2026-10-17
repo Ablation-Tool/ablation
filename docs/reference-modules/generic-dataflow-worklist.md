@@ -88,6 +88,21 @@ Run `XorSolver.solve()` after `EntropyMapper` identifies an encrypted region (`H
 
 ---
 
+## Reading output
+
+`XorSolver.solve()` returns an `XorSolverResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `method` | `kpa` (known-plaintext attack) or `frequency` (byte frequency analysis) |
+| `key` | Recovered key as `bytes` |
+| `confidence` | Float 0.0–1.0 — key correctness confidence |
+| `decrypt_path` | Path to the decrypted output file written to disk |
+
+Returns `None` if no key was recovered.
+
+---
+
 ## See also
 
 - [Firmware Extraction](firmware-extraction.md) — `FortiOSHardwareExtractor` that calls XorSolver internally

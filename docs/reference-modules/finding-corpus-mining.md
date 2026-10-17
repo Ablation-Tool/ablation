@@ -81,6 +81,21 @@ Run `CMDBSurfaceMapper` as Phase 0.5 triage immediately after `BinaryContext.loa
 
 ---
 
+## Reading output
+
+`CMDBSurfaceMapper.map()` returns `Dict[int, CMDBTableEntry]` keyed by CMDB table ID:
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Table name string (if recovered from binary) or `None` |
+| `callers` | Count of functions that access this table |
+| `reaches_exec` | `True` if any caller reaches an exec-class sink |
+| `exec_sink_callers` | `List[int]` — VAs of callers that reach exec sinks |
+
+High-priority entries are those where `reaches_exec=True`.
+
+---
+
 ## See also
 
 - [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` for verification of CMDB-to-sink paths
