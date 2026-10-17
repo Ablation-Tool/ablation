@@ -306,7 +306,7 @@ See `stage-commitment.md` for the full API.
 
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+`WorkflowDocument` holds an ordered list of `Stage` objects. `_current_index` tracks which stage is active. `advance(instance)` calls `_validate_instance()` to check required fields and property types against the current stage's schema. On success it stamps the instance into `stage.instance`, marks `committed=True`, records a `StageTransition` in `self.log` for each routing target, and increments `_current_index`. `validate()` runs the same check without advancing — useful for pre-flight before committing a stage. `dirty_since_commit()` detects out-of-band writes by re-hashing all committed instances and comparing to cached values set at `advance()` time.
 
 ---
 
@@ -315,11 +315,25 @@ Provides the session state, indexing, and utility functions that other Ablation 
 ```python
 from ablation.analyzers.workflow_document import WorkflowDocument, Stage
 
-stages = [Stage(name="triage"), Stage(name="confirm"), Stage(name="report")]
+# Standard 6-stage RE pipeline (preferred)
+doc = WorkflowDocument.for_re_session('cisco', 'fmc_server')
+
+# Custom pipeline with explicit schemas
+stages = [
+    Stage(name="triage", schema={"required": ["va", "sink"]}),
+    Stage(name="confirm", schema={"required": ["va", "severity"]}, routing=["report"]),
+    Stage(name="report", schema={"required": ["title"]}),
+]
 doc = WorkflowDocument(stages=stages)
+
+# Validate before advancing
 errors = doc.validate("triage", {"va": 0x401000, "sink": "system"})
-if not errors:
-    doc.advance("triage")
+if errors:
+    raise ValueError(errors)
+
+# advance() takes the instance dict and producer id
+doc.advance({"va": 0x401000, "sink": "system"}, producer_id="session-42")
+print(doc.report())
 ```
 
 ---
@@ -327,7 +341,14 @@ if not errors:
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+WorkflowDocument id='cisco/fmc_server'
+  triage                   COMMITTED   fields=6
+  semantic_sweep           CURRENT     fields=0
+  candidate_profile        pending     fields=0
+  taint_trace              pending     fields=0
+  finding_confirmation     pending     fields=0
+  registration             pending     fields=0
+  transitions logged: 1
 ```
 
 ---
@@ -340,25 +361,25 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** Called at the start of a multi-session RE engagement, before any stage output is produced. For a new target, create with `for_re_session(vendor, target)` and serialize to `re/<vendor>/<target>_workflow.json` immediately so the document survives compaction.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** Each `advance()` call feeds the committed instance into `StageCommitment.commit()` for tamper-evidence, then into the next analysis stage. At `registration`, pass `finding_id` to `FindingRegistry` and set `forge_gate_passed=True` after FORGE passes.
 
 ---
 
 ## Reading output
 
-`WorkflowDocument.stages` returns `dict[str, Stage]` — stage name → stage instance:
+`WorkflowDocument.stages` is a `list[Stage]` — ordered pipeline stages:
 
 | Attribute | Content |
 |:---|:---|
 | `name` | Stage name string |
-| `schema` | `dict` — JSON Schema for the stage's output |
-| `instance` | `dict` — current stage output data (populated by `write()`) |
-| `routing` | `list[str]` — downstream stage names this stage can route to |
-| `committed` | `True` if the stage output has been committed via `StageCommitment` |
+| `schema` | `dict` — schema with `"required"` list and `"properties"` type map |
+| `instance` | `dict` — stage output data, populated by `advance()` |
+| `routing` | `list[str]` — downstream stage names to activate next |
+| `committed` | `True` if `advance()` has been called for this stage |
 
-`WorkflowDocument.transitions` returns `List[StageTransition]` — pipeline advancement history.
+`WorkflowDocument.log` is a `list[StageTransition]` — pipeline advancement history.
 
 ---
 
