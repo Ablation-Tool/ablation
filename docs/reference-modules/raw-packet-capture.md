@@ -51,7 +51,7 @@ print(f"Live hosts: {live_hosts}")
 
 ## Example output
 
-The following illustrates raw packet capture output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
 sniff_network: eth0 (10.0s)
@@ -59,14 +59,14 @@ sniff_network: eth0 (10.0s)
 Packets captured: <N>
 
 Credentials:
-  [HTTP Basic] 10.0.0.5:54321 → admin:C1sco12345
+  [HTTP Basic] <src-ip>:<port> → <user>:<password>
 
 mDNS services:
-  _http._tcp.local → DeviceA.local (10.0.0.11)
-  _ssh._tcp.local  → DeviceB.local (10.0.0.12)
+  _http._tcp.local → DeviceA.local (<host-1>)
+  _ssh._tcp.local  → DeviceB.local (<host-2>)
 
 SSDP devices:
-  MediaServer (10.0.0.20): urn:schemas-upnp-org:device:MediaServer:1
+  MediaServer (<host-3>): urn:schemas-upnp-org:device:MediaServer:1
 
 ARP spoofing: none detected
 ```

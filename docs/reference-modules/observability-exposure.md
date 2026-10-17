@@ -50,23 +50,23 @@ for host in discovered_hosts:
 
 ## Example output
 
-The following illustrates observability exposure output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
-probe_otel_collector: 10.0.5.10:4317
+probe_otel_collector: <target-ip>:4317
 
   [HIGH] OTLP_UNAUTHENTICATED: gRPC endpoint accepts trace submission without auth
-    Implication: inject arbitrary spans into distributed trace system
+    detail: inject arbitrary spans into distributed trace system
 
-probe_vector_aggregator: 10.0.5.11:8686
+probe_vector_aggregator: <target-ip>:8686
 
   [HIGH] VECTOR_API_OPEN: /graphql returns full pipeline topology
-    Sinks: elasticsearch @ https://es-cluster:9200 (credentials in config)
+    detail: sinks contain downstream service credentials in pipeline config
 
-probe_redis_exposure: 10.0.5.12:6379
+probe_redis_exposure: <target-ip>:6379
 
   [CRITICAL] REDIS_NO_AUTH: +PONG (no password required)
-    requirepass: (empty)
+    detail: requirepass unset; all keyspace readable/writable without credentials
 ```
 
 ---

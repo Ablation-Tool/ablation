@@ -54,20 +54,20 @@ if aws_creds:
 
 ## Example output
 
-The following illustrates internal reconnaissance output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
 NetworkDiscovery: routing table
 
-Subnets: [10.0.0.0/24, 172.16.0.0/16]
+Subnets: [<subnet-a>, <subnet-b>]
 
-Scan 10.0.0.0/24:
-  10.0.0.1  ports=[22, 443]
-  10.0.0.5  ports=[22, 80, 5432]
+Scan <subnet-a>:
+  <host-1>  ports=[22, 443]
+  <host-2>  ports=[22, 80, 5432]
 
 CloudMetadataProber:
-  AWS IAM role: ec2-instance-role
-  AccessKeyId: ASIA...  SecretAccessKey: <recovered>  Token: <recovered>
+  AWS IAM role: <iam-role>
+  AccessKeyId: <access-key-id>  SecretAccessKey: <secret>  Token: <session-token>
 
 SSHKeyEnumerator:
   /home/user/.ssh/id_rsa  → RSA 2048 (unencrypted)

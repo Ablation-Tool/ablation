@@ -54,21 +54,21 @@ devices = ssdp.discover(timeout=5.0)
 
 ## Example output
 
-The following illustrates host and service discovery output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
-icmp_host_discovery: 10.0.0.0/24
+icmp_host_discovery: <subnet>/24
 
-Live hosts: [10.0.0.1, 10.0.0.5, 10.0.0.11, 10.0.0.20]
+Live hosts: [<host-1>, <host-2>, <host-3>, <host-4>]
 
-10.0.0.1  OS=network_device (TTL=255)  SSH=
-10.0.0.5  OS=linux (TTL=64)  SSH=SSH-2.0-OpenSSH_8.9
+<host-1>  OS=network_device (TTL=255)  SSH=
+<host-2>  OS=linux (TTL=64)  SSH=SSH-2.0-OpenSSH_8.x
 
 mDNS services:
-  DeviceA._http._tcp.local → 10.0.0.11:80
+  DeviceA._http._tcp.local → <host-3>:80
 
 SSDP devices:
-  MediaServer (10.0.0.20): urn:schemas-upnp-org:device:MediaServer:1
+  MediaServer (<host-4>): urn:schemas-upnp-org:device:MediaServer:1
 ```
 
 ---

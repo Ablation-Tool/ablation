@@ -48,14 +48,14 @@ for conn in analyzer.enumerate_connections():
 
 ## Example output
 
-The following illustrates local network inventory output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
 NetworkAnalyzer: localhost
 
 Interfaces:
-  eth0:  10.0.0.5/24     MAC: 02:42:0a:00:00:05
-  eth1:  172.16.0.5/16   MAC: 02:42:ac:10:00:05
+  eth0:  <ip>/<prefix>   MAC: <mac>
+  eth1:  <ip>/<prefix>   MAC: <mac>
 
 Listening ports:
   0.0.0.0:22   (sshd)
@@ -63,7 +63,7 @@ Listening ports:
   127.0.0.1:5432 (postgres)
 
 Established connections: <N>
-Subnets: [10.0.0.0/24, 172.16.0.0/16]
+Subnets: [<subnet-a>, <subnet-b>]
 ```
 
 ---

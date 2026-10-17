@@ -53,27 +53,27 @@ print(f"Schema subjects: {subjects}")
 
 ## Example output
 
-The following illustrates messaging and streaming enumeration output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
-kafka_list_topics: 10.0.5.10:9092
+kafka_list_topics: <kafka-host>:9092
 
   Topics: [payments, user-events, iam-credentials, internal-telemetry, audit-log]
   (5 topics, no authentication required)
 
-flink_enumerate: 10.0.5.11:8081
+flink_enumerate: <flink-host>:8081
 
   Running jobs: 2
   JAR upload endpoint: accessible (RCE via flink_submit_jar_rce)
 
-nifi_enumerate: 10.0.5.12:8080
+nifi_enumerate: <nifi-host>:8080
 
   Processors: 14
-  Properties with credentials: database.password=Pr0d_P@ss, aws.access.key=AKIA...
+  Properties with credentials: database.password=<password>, aws.access.key=<access-key>
 
-check_nats_exposure: 10.0.5.13:4222
+check_nats_exposure: <nats-host>:4222
 
-  NATS v2.9.8  auth_required=False  (unauthenticated connection accepted)
+  NATS v2.x.x  auth_required=False  (unauthenticated connection accepted)
 ```
 
 ---
