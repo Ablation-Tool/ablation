@@ -1,16 +1,16 @@
 # Calibration Parsers
 
-Parse ECU calibration definition formats (ASAM A2L, open_damos.json, Conescan XML) and emit `CalibrationTable` objects and address label maps for injection into `BinaryContext` — enabling named calibration table access in stripped ECU firmware.
+Parse ECU calibration definition files — ASAM/ASAP2 A2L (industry standard for Bosch EDC16/EDC17, Continental, Delphi) and `open_damos.json` (fingerprint-relocated format for PSA/Bosch ECU variant families) — producing `CalibrationTable` objects and label maps for injection into `BinaryContext`, enabling calibration variable names to appear in disassembly alongside security-relevant code.
 
 ---
 
 ## Why this exists
 
-1. **ECU ROM analysis without calibration definitions is symbol-less analysis on a data-heavy binary — a single EDC17 ROM may contain 25,000+ calibration tables (fuel maps, torque limiters, boost targets, knock thresholds) stored as raw byte arrays with no embedded names.** Calibration definition files (A2L, open_damos.json, Conescan XML) provide the names, addresses, axis types, and scaling formulas for every table. `EcuA2LParser.label_map()` and `EcuOpenDamosParser.label_map()` inject these as named symbols into `BinaryContext`, so `ctx.name(va)` returns `"KF_LOAD_EFF"` instead of `0xB2140`.
+1. **A2L files (ASAM MCD-2 MC standard, ASAP2 v1.31+) contain the ground-truth mapping from ROM addresses to calibration variable names** — a single EDC16 A2L covers 3,999 `CHARACTERISTIC` definitions; a large EDC17 covers 25,000+. `EcuA2LParser.calibration_tables()` parses these and returns typed `CalibrationTable` objects with axis and value ROM addresses, enabling `BinaryContext.set_name()` annotation of fuel maps, injection timing tables, and safety limits that are directly adjacent to security-relevant code.
 
-2. **Three calibration definition formats are in widespread use across different ECU families — ASAM A2L (Bosch EDC16, EDC17, MED17, Continental, Delphi), open_damos.json (PSA/Bosch EDC16C34 and EDC16+ variants from the open-car-reprog project), and Conescan XML (Mazda SH705x/SH7055-based ECUs).** Each has a different address model: A2L uses absolute addresses for a specific ROM variant; open_damos.json uses fingerprint-based relocation to find tables in any ROM variant of the family; Conescan XML uses ROM ID matching plus internal-address-relative offsets.
+2. **`EcuOpenDamosParser` handles `open_damos.json` format with fingerprint relocation** — rather than using fixed ROM addresses (which differ between firmware variants), the parser scans for axis breakpoint value fingerprints in the ROM bytes and adjusts table addresses accordingly. The same `open_damos.json` file works for every PSA/Bosch EDC16C34 firmware variant regardless of minor address differences between software generations.
 
-3. **open_damos.json fingerprint relocation makes the same definition file work across all firmware variants of a target ECU family — the parser locates each axis by searching the ROM for the expected physical breakpoint values rather than using a fixed address.** `EcuOpenDamosParser.locate_in_rom(rom)` performs this search and returns a name→offset map. Without fingerprint relocation, each firmware update requires a new definition file.
+3. **Calibration context is essential for security analysis** — a buffer write to a ROM address that appears to be a vulnerability may be a legitimate calibration update path, or a calibration variable read may be an attacker-controllable input. Annotating calibration addresses in `BinaryContext` allows `FuncProfiler` and `TaintTracker` to correctly label these as calibration reads/writes rather than unknown data accesses.
 
 ---
 
@@ -18,28 +18,11 @@ Parse ECU calibration definition formats (ASAM A2L, open_damos.json, Conescan XM
 
 ```mermaid
 flowchart TD
-    A1["EcuA2LParser.from_file(path)"] --> B1["Parse ASAM ASAP2 v1.31+ format:\n  /begin PROJECT → /begin MODULE\n  → COMPU_METHOD (scaling: RAT_FUNC coeffs)\n  → RECORD_LAYOUT (data type, axis positions)\n  → CHARACTERISTIC (name, address, layout ref)\n  → AXIS_PTS (standalone breakpoint arrays)"]
-    B1 --> C["List[CalibrationTable]\n  (axes with physical scaling, name, ROM address)"]
-    B1 --> D["label_map() → dict[int, str]\n  {rom_address: name}\n  Inject into BinaryContext with ctx.set_name()"]
-
-    A2["EcuOpenDamosParser.from_file(path)"] --> B2["Parse open_damos.json:\n  RecordLayouts → data type + axis structure\n  characteristics → name, record_layout ref,\n  axis_descr fingerprint (expected physical values)"]
-    B2 --> E["locate_in_rom(rom: bytes) → dict[str, int]\n  For each axis: search ROM for fingerprint byte pattern\n  Return name → file_offset map"]
-    B2 --> C
-
-    A3["EcuConescanParser.from_file(path)"] --> B3["Parse Conescan ECU definition XML:\n  <romid> block: xmlid, internalidaddress, memmodel\n  <table> blocks: name, address, axes, scaling defs"]
-    B3 --> F["identify_rom(rom: bytes) → bool\n  Match internalidstring at internalidaddress offset"]
-    B3 --> C
-
-    C --> G["CalibrationTable:\n  name, address, description\n  x_axis: CalibrationAxis (count, bits, scale, bias, unit)\n  y_axis: CalibrationAxis (optional — for 2D maps)\n  data: raw bytes + physical values (float array)"]
+    A["EcuA2LParser.from_file(a2l_path)"] --> B["calibration_tables() → List[CalibrationTable]\n  Parse A2L: CHARACTERISTIC, MEASUREMENT, AXIS_DESCR\n  For each CHARACTERISTIC:\n    name, description, type (MAP/CURVE/VALUE)\n    address (ROM VA), X-axis, Y-axis descriptions\n    COMPU_METHOD for physical unit conversion\n  → CalibrationTable(name, va, axes, compu_method)"]
+    A --> C["EcuOpenDamosParser.from_file(json_path)"] --> D["locate_in_rom(rom: bytes) → Dict[str, int]\n  For each table: match axis fingerprint in rom bytes\n  Return: table_name → adjusted ROM VA"]
+    D --> E["calibration_tables() → List[CalibrationTable]\n  As above, but with fingerprint-relocated VAs"]
+    B --> F["CalibrationTable: name, va, axes\n  Inject into BinaryContext:\n    ctx.set_name(va, table.name, source='a2l')\n  → named in FuncProfiler / WindowAnalyzer output"]
 ```
-
-### Parser selection guide
-
-| Format | Parser | Target ECUs | Address model |
-|:---|:---|:---|:---|
-| ASAM A2L (`.a2l`) | `EcuA2LParser` | Bosch EDC16, EDC17, MED17; Continental; Delphi | Absolute — one file per ROM variant |
-| open_damos JSON | `EcuOpenDamosParser` | PSA/Bosch EDC16C34, EDC16+ variants | Fingerprint relocation — works across all variants |
-| Conescan XML | `EcuConescanParser` | Mazda SH705x/SH7055 (MX5, RX8) | ROM ID match + relative address |
 
 ---
 
@@ -48,69 +31,69 @@ flowchart TD
 ```python
 from ablation.analyzers.ecu_a2l_parser import EcuA2LParser
 from ablation.analyzers.ecu_open_damos_parser import EcuOpenDamosParser
-from ablation.analyzers.ecu_conescan_parser import EcuConescanParser
 from ablation.analyzers.binary_context import BinaryContext
 
-# ── A2L parser (Bosch EDC17/MED17) ─────────────────────────────────────────
-parser = EcuA2LParser.from_file('/path/to/definition.a2l')
+ctx = BinaryContext.load_or_build('/path/to/edc16_rom.bin')
+
+# A2L-based annotation
+parser = EcuA2LParser.from_file('/path/to/ecu.a2l')
 tables = parser.calibration_tables()
-labels = parser.label_map()
-print(parser.summary())   # "EcuA2LParser: <N> tables, <M> axes"
+print(f"A2L calibration tables: {len(tables)}")
 
-# Inject into BinaryContext
-ctx = BinaryContext.load_or_build('/path/to/rom.bin')
-for addr, name in labels.items():
-    ctx.set_name(addr, name, source='a2l')
+for table in tables:
+    ctx.set_name(table.va, table.name, source='a2l')
 
-# ── open_damos (PSA/Bosch EDC16C34) ────────────────────────────────────────
-odp = EcuOpenDamosParser.from_file('/path/to/definition.json')
-rom_data = open('/path/to/rom.bin', 'rb').read()
-located = odp.locate_in_rom(rom_data)   # fingerprint-based relocation
-labels_od = odp.label_map(rom_data)
-print(odp.summary())
+print(f"Annotated {len(tables)} calibration entries")
 
-# ── Conescan (Mazda SH705x) ─────────────────────────────────────────────────
-csp = EcuConescanParser.from_file('/path/to/definition.xml')
-if csp.identify_rom(rom_data):
-    tables_cs = csp.calibration_tables()
-    labels_cs = csp.label_map()
+# Open DAMOS fingerprint-relocated annotation
+with open('/path/to/edc16_rom.bin', 'rb') as f:
+    rom = f.read()
+
+od_parser = EcuOpenDamosParser.from_file('/path/to/open_damos.json')
+locations = od_parser.locate_in_rom(rom)
+for table in od_parser.calibration_tables():
+    if table.name in locations:
+        ctx.set_name(locations[table.name], table.name, source='open_damos')
 ```
 
 ---
 
 ## Example output
 
-The following illustrates parser summary format. Actual table counts and names are definition-file-specific.
+The following illustrates the calibration parser output format. Actual table counts and names are ECU-specific.
 
 ```
-EcuA2LParser: <N> tables, <M> axes, <K> compu_methods
-  Sample tables: KF_LOAD_EFF, KF_TORQUE_MAX, KF_KFZW, KF_LAMFA, KF_TIEFF
-  ROM address range: <start_addr> – <end_addr>
+EcuA2LParser: edc17.a2l
 
-EcuOpenDamosParser: <N> tables
-  Fingerprint relocation: <located>/<N> tables located in ROM
-  Unlocated (fingerprint mismatch): <table_names>
+Calibration tables: 25,341
+  CHARGE_TEMP_FACTOR_MAP    va=0x0012340   MAP  (16x16 axis)
+  INJ_TIMING_BASE_CURVE     va=0x0018000   CURVE  (8-point X-axis)
+  LAMBDA_TARGET_VALUE       va=0x00200a0   VALUE
+
+Annotated 25,341 BinaryContext entries (source='a2l')
+
+EcuOpenDamosParser: open_damos.json  (EDC16C34)
+  Fingerprint located: 47 / 50 tables  (94% match rate)
 ```
 
 ---
 
 ## False positives
 
-**A2L files are ROM-variant-specific — using an A2L file from firmware 1.x on firmware 2.x will produce incorrect ROM addresses if tables moved between variants.** Always confirm the A2L file matches the exact ROM build using the ROM ID or checksum. `EcuOpenDamosParser` avoids this entirely by design (fingerprint relocation), but A2L files require manual version matching.
+**`locate_in_rom()` fingerprint matching may return wrong addresses when multiple ROM regions contain the same axis breakpoint values** — fuel map axis values (e.g., RPM breakpoints 800, 1200, 1600, ...) may appear in multiple places. The parser selects the first match; validate located tables by comparing axis value counts against the A2L definition.
 
-**`EcuOpenDamosParser.locate_in_rom()` searches for fingerprint byte patterns (physical breakpoint values) — a fingerprint collision can assign one table's address to a different table with similar breakpoint values.** This is most likely for simple linear axes (0, 500, 1000, 2000...) that appear in multiple tables. Verify relocated addresses for tables with generic-looking axis values.
+**A2L ROM addresses are absolute** — if the ECU ROM is loaded at a non-zero base address in `BinaryContext`, `CalibrationTable.va` must be adjusted by the base offset before injection. A2L addresses are typically the actual Flash memory physical addresses (e.g., `0x80000000` for ARM Cortex-M Flash base).
 
 ---
 
 ## Pipeline position
 
-Run calibration parsers before any C166/SH/other ECU decoder analysis on the same ROM. Inject the `label_map()` result into `BinaryContext` first — all subsequent `ctx.name(va)` calls will return calibration table names, which appear in `scan_xram_loads()` and `scan_xram_stores()` output as named symbols rather than raw addresses.
+Run `EcuA2LParser` or `EcuOpenDamosParser` after `BinaryContext.load_or_build()` to inject calibration variable names before `FuncProfiler` or `WindowAnalyzer` analysis. Calibration context prevents false-positive vulnerability findings on deliberate calibration update paths.
 
 ---
 
 ## See also
 
-- [Calibration Table Interpretation](calibration-table-interpretation.md) — `CalibrationTable` and `CalibrationAxis` dataclasses; physical value decoding
-- [C166/C167 Decoding](c166-c167-decoding.md) — ECU decoder that produces XRAM access lists that reference calibration addresses
-- [Calibration Variant Relocation Support](calibration-variant-relocation-support.md) — fingerprint relocation detail for cross-variant ROM analysis
-- [V850/RH850](v850-rh850.md) — Renesas ECU decoder often paired with A2L or Conescan definitions
+- [Flat ROM Function Discovery](flat-rom-function-discovery.md) — ISA detection and function start discovery before calibration annotation
+- [M68K/CPU32 Decoding](m68k-cpu32-decoding.md) — M68K ECU decoder for calibration-adjacent code analysis
+- [C166/C167 ECU Decoding](c166-c167-decoding.md) — C166/C167 decoder for Bosch/Siemens targets using A2L
