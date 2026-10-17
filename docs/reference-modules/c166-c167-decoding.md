@@ -8,7 +8,7 @@ Decode Infineon/Siemens C166/C167 ECU firmware in pure Python — parsing 2/4-by
 
 1. **Capstone has no C166 support** — `CS_ARCH_*` has no entry for the C166/C167 ISA. Before this module, analyzing BMW MS43, Bosch KW1, Motronic M3.x, and other C167-based ECU firmware required external tools (PEMicro or IDA with a C166 plugin), neither of which is scriptable from Python. `EcuC166Decoder` implements the instruction decoder in pure Python from the Infineon C167CR V1.0 ISA reference.
 
-2. **Function boundary recovery uses the IVT (Interrupt Vector Table) at offset 0 and `CALLS`/`CALL` target scanning.** The C167 IVT at ROM offset 0 contains vectors for reset, NMI, and all 56 interrupt sources — each vector is a `JMPS`/`CALLS` instruction pointing to a handler entry point. `EcuC166Decoder.ivt_entries()` extracts these as `IVTEntry` objects, providing a seed function list for `function_starts()` without requiring symbol tables.
+2. **Function boundary recovery uses the IVT (Interrupt Vector Table) at offset 0 and `CALLS`/`CALL` target scanning.** The C167 IVT at ROM offset 0 contains vectors for reset, NMI, and all 56 interrupt sources — each vector is a `JMPS`/`CALLS` instruction pointing to a handler entry point. `EcuC166Decoder.parse_ivt()` extracts these as `IVTEntry` objects with `target_pa` resolved to a physical address, providing a seed function list for `function_starts()` without requiring symbol tables.
 
 3. **All instructions are 2 or 4 bytes, always at even addresses** — the opcode byte alone determines the length via a lookup table (`_FOUR_BYTE_OPS`). This makes the C166 decoder significantly simpler than variable-length ISAs like M68K, and `EcuC166Decoder.insn_length(byte_off)` is therefore O(1). `C166Insn.is_branch()`, `is_call()`, `is_load()`, `is_store()` enable CFG construction without full semantic decode.
 
@@ -18,10 +18,10 @@ Decode Infineon/Siemens C166/C167 ECU firmware in pure Python — parsing 2/4-by
 
 ```mermaid
 flowchart TD
-    A["EcuC166Decoder.from_path(path, base_va)\n  or .from_bytes(data, base_va)"] --> B["ivt_entries() → List[IVTEntry]\n  Read IVT at ROM offset 0\n  56 interrupt vectors: each JMPS/CALLS instruction\n  → IVTEntry(vector_num, handler_va, vector_name)"]
-    B --> C["function_starts() → List[int]\n  Seeds from IVT handler VAs\n  + CALLS/CALL target scan across full ROM\n  Return sorted unique start addresses"]
-    C --> D["decode_one(byte_off) → Optional[C166Insn]\n  _FOUR_BYTE_OPS lookup → 2 or 4 bytes\n  C166Insn:\n    address: int\n    mnemonic: str\n    size: int  (2 or 4)\n    is_branch(), is_call(), is_load(), is_store()"]
-    D --> E["disassemble(start_va, end_va) → Iterator[C166Insn]\n  Sequential decode from start_va to end_va"]
+    A["EcuC166Decoder.from_path(path, base_pa=0)\n  or .from_bytes(data, base_pa=0)"] --> B["parse_ivt(num_vectors=64) → list[IVTEntry]\n  Read IVT at ROM offset 0\n  → IVTEntry(index, pa, seg, addr, target_pa)"]
+    B --> C["function_starts() → list[int]\n  Seeds from IVT target_pa values\n  + CALLS target scan across full ROM\n  Return sorted unique start addresses"]
+    C --> D["decode_one(byte_off) → Optional[C166Insn]\n  _FOUR_BYTE_OPS lookup → 2 or 4 bytes\n  C166Insn:\n    pa: int\n    raw: bytes\n    mnemonic: str\n    insn_type: str\n    reg, imm, target, seg: Optional[int]\n    is_branch / is_call / is_load / is_store  (@property)"]
+    D --> E["disassemble(start_pa, end_pa) → Iterator[C166Insn]\n  Sequential decode from start_pa to end_pa"]
     D --> F["insn_length(byte_off) → int  (O(1) lookup)"]
 ```
 
@@ -32,24 +32,24 @@ flowchart TD
 ```python
 from ablation.analyzers.ecu_c166_decoder import EcuC166Decoder
 
-decoder = EcuC166Decoder.from_path('/path/to/bmw_ms43.bin', base_va=0x0000)
+decoder = EcuC166Decoder.from_path('/path/to/bmw_ms43.bin', base_pa=0x0000)
 
 # IVT function seeds
-ivt = decoder.ivt_entries()
+ivt = decoder.parse_ivt()
 print(f"IVT entries: {len(ivt)}")
 for entry in ivt[:5]:
-    print(f"  {entry.vector_name:20}  handler_va={entry.handler_va:#x}")
+    print(f"  vector={entry.index}  pa={entry.pa:#x}  target_pa={entry.target_pa:#x}")
 
 # All function starts
 starts = decoder.function_starts()
-print(f"Found {len(starts)} functions (IVT + CALLS/CALL scan)")
+print(f"Found {len(starts)} functions (IVT + CALLS scan)")
 
 # Disassemble a function
 for insn in decoder.disassemble(starts[0], starts[1]):
     flag = ''
-    if insn.is_call(): flag = ' [CALL]'
-    elif insn.is_branch(): flag = ' [BRANCH]'
-    print(f"  {insn.address:#x}: {insn.mnemonic}{flag}")
+    if insn.is_call: flag = ' [CALL]'
+    elif insn.is_branch: flag = ' [BRANCH]'
+    print(f"  {insn.pa:#x}: {insn.mnemonic}{flag}")
 ```
 
 ---
@@ -62,9 +62,9 @@ The following illustrates C166/C167 disassembly output format. Actual addresses 
 EcuC166Decoder: bmw_ms43.bin  (base_va=0x0000)
 
 IVT entries: 56
-  RESET              handler_va=0x0008
-  NMI                handler_va=0x0010
-  INT_T0             handler_va=<va>
+  vector=0  pa=0x0000  target_pa=0x0008
+  vector=1  pa=0x0004  target_pa=0x0010
+  vector=2  pa=0x0008  target_pa=<va>
 
 function_starts(): <N> functions found (IVT seeds + CALLS scan)
 
@@ -92,7 +92,7 @@ Run `EcuC166Decoder` after `EcuArchDetector` confirms `c166` or `c167` architect
 
 ## Reading output
 
-`EcuC166Decoder.disassemble(start_pa, end_pa)` returns a list of `C166Insn` objects. Omitting both bounds disassembles the entire ROM:
+`EcuC166Decoder.disassemble(start_pa=None, end_pa=None)` returns `list[C166Insn]`. Omitting both bounds disassembles the entire ROM:
 
 | Attribute | Content |
 |:---|:---|
@@ -107,7 +107,7 @@ Run `EcuC166Decoder` after `EcuArchDetector` confirms `c166` or `c167` architect
 
 `EcuC166Decoder.function_starts()` returns `list[int]` — physical addresses of identified function entry points.
 
-`EcuC166Decoder.parse_ivt(num_vectors=64)` returns `list[IVTEntry]` — one entry per interrupt vector:
+`EcuC166Decoder.parse_ivt(num_vectors=64)` returns `list[IVTEntry]` — one entry per interrupt vector (default 64 vectors, covering the full C167 IVT):
 
 | Attribute | Content |
 |:---|:---|
