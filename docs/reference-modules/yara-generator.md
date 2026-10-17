@@ -6,7 +6,7 @@ Generate deployment-ready YARA detection rules from Ablation scan findings — I
 
 ## Why this exists
 
-1. **Findings without detection rules have limited operational value.** An analyst who identifies a backdoor or malware sample in a firmware image needs to answer: "can I detect this at scale — across my environment, across ingested samples, across new firmware versions?" A YARA rule is the universal answer to that question. Without automatic rule generation, translating binary analysis findings into detection signatures is a manual step that is frequently skipped under time pressure.
+1. **Findings without detection rules have limited operational value.** An analyst who identifies a backdoor or malware sample in a firmware image needs to answer: "can I detect this at scale — across my environment, across ingested samples, across new firmware versions?" A YARA rule answers that question universally. Without automatic rule generation, analysts must manually translate findings into detection signatures — a step they skip under time pressure.
 
 2. **IOC strings, malware API imports, and byte patterns have different detection properties.** A domain name in a C2 callback requires case-insensitive ASCII/wide matching. A `VirtualAllocEx` import requires a simple string match against the IAT. An anti-debug byte sequence (`EB 04 74 02`) requires a hex pattern match. A single YARA rule format can represent all three, but the generation logic must be type-aware. This module handles each category with the appropriate YARA string type and modifier.
 
