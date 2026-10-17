@@ -1,155 +1,158 @@
-# SinkArgClassifier
+# Sink Arg Classifier
 
-**File:** `ablation/analyzers/sink_arg_classifier.py`
-
-Classifies what argument is passed to exec-class sinks (system, popen, execve, execl, execvp) and
-assigns a provenance verdict: the string is either a hardcoded RODATA literal, an snprintf output
-built from a RODATA format string, a propagated function argument, or an unresolved unknown.
+Classify the provenance of command-string arguments at every exec-class sink call site in an x86-64 binary — eliminating hardcoded-string callers from triage before `TaintTracker` runs, and automatically resolving the dominant `snprintf(buf, n, rodata_fmt, ...) → exec_sink(buf)` pattern without manual trace.
 
 ---
 
 ## Why this exists
 
-Three things were not possible before this module:
+1. **TaintTracker wastes effort on sinks that cannot be exploited.** A `system("/bin/ls")` call is a sink in name only — the argument originates from `.rodata`, not from user input. Passing every exec-class call site to `TaintTracker` means tracing dozens of unreachable sinks for every real one. `SinkArgClassifier` runs first and stamps `RODATA_CONST` on every hardcoded-literal sink, removing them from the taint queue entirely.
 
-1. Triage an entire firmware rootfs for exec-sink exposure in one call, without loading each binary
- individually. Before `batch_plt_intersect`, identifying which files even imported system/popen
- required iterating every ELF and parsing its imports by hand.
+2. **Most firmware shell invocations go through a snprintf buffer.** The dominant pattern in Fortinet, Aruba, and Cisco firmware builds a shell command with `snprintf(cmd, sizeof(cmd), '/bin/tool %s', user_param)` and passes `cmd` to a vendor exec function. A pure backward trace from the exec site sees a stack-buffer argument and returns `UNKNOWN` — the format string is never examined. This tool follows the stack buffer one level up to the `snprintf` call and classifies the `snprintf` format register: if that register also holds a `.rodata` literal, the verdict changes from `UNKNOWN` to `SNPRINTF_RODATA`, which carries only MEDIUM risk (format is fixed; injection requires controlling a `%s` argument).
 
-2. Know with confidence that a system() call is not injectable. Pattern-match alone cannot say "this
- call is safe." RODATA_CONST and SNPRINTF_RODATA verdicts give that answer automatically and
- eliminate the majority of call sites from manual review.
-
-3. Handle ARM32 LE and ARM64 LE firmware trees in batch triage. The initial x86-64-only
- implementation returned empty results for all ARM-family binaries. Huawei VRP S6730
- (ARM32 LE) and NE40E (ARM64 LE) firmware contained hundreds of exec-class imports that
- batch_plt_intersect() silently dropped.
-
----
-
-## Usage
-
-```python
-from ablation.analyzers.sink_arg_classifier import SinkArgClassifier, batch_plt_intersect
-
-# Batch triage: which files in this tree import exec sinks?
-# Works on x86-64, ARM32 LE, and ARM64 LE ELFs.
-hits = batch_plt_intersect('/path/to/firmware/rootfs/')
-for path, sinks in sorted(hits.items()):
-    print(path, sinks)
-
-# Full argument classification (x86-64 only)
-clf = SinkArgClassifier.from_path('/path/to/binary.so')
-for r in clf.classify_all():
-    print(r.fmt())
-
-# Vendor-specific sinks
-clf.add_sink('fadcsystem', arg_pos=1)
-clf.add_sink('sys_vdom_exec', arg_pos=1)
-results = clf.classify_all()
-```
-
----
-
-## Verdicts
-
-`RODATA_CONST` means the sink argument is a pointer directly into `.rodata`. No injection is
-possible regardless of caller context.
-
-`SNPRINTF_RODATA` means the sink argument is a stack buffer filled by snprintf with a `.rodata`
-format string. Injection requires controlling a `%s` argument in that format string. Integer-only
-formats (`%d`, `%u`) are safe.
-
-`ARG_PROPAGATED` means the argument arrived in an entry register. The caller controls it, so the
-question moves up one level.
-
-`UNKNOWN` means provenance was not resolved in the look-back window. Treat the same as
-ARG_PROPAGATED for severity purposes.
-
----
-
-## ARM PLT support
-
-`batch_plt_intersect` dispatches to an arch-appropriate PLT parser based on the ELF machine type.
-
-**ARM32 LE** uses `.rel.plt` with 8-byte REL entries (no addend). The reloc type for a PLT import
-is `R_ARM_JUMP_SLOT = 22`. Stub layout: 20-byte header followed by 12-byte stubs. The slot index
-in `.rel.plt` maps directly to the stub index, so stub VA = plt_base + 20 + slot_index * 12. This
-was confirmed on Huawei VRP S6730 V200R024 ARM32 LE firmware.
-
-**ARM64 LE** uses `.rela.plt` with 24-byte RELA entries, but r_info is packed little-endian: the
-low 32 bits hold the reloc type and the high 32 bits hold the symbol index. The x86-64 path read
-r_info as a big-endian uint64, which inverted the two halves and produced sym_idx = 0 for every
-entry. The fix uses `struct.unpack('<QQq',...)` with `R_AARCH64_JUMP_SLOT = 0x402` and stub VA =
-plt_base + 32 + slot_index * 16. Confirmed on Huawei VRP NE40E V800R023 and V800R024 ARM64 LE
-firmware (HiSilicon Hi1280 MPU).
-
-For full argument classification on ARM32 or ARM64, use the appropriate taint tracker
-(ARM32TaintTracker or ARM64TaintTracker) rather than SinkArgClassifier, which only classifies
-x86-64 argument registers.
-
----
-
-## batch_plt_intersect
-
-```python
-hits = batch_plt_intersect('/path/to/rootfs/', sinks=['system', 'popen'])
-```
-
-Returns a dict mapping ELF paths to the list of matching sink names. Files with no matches are
-omitted. Pass `recursive=False` to scan a flat directory. The function walks symlinks only if
-they resolve to files directly, not if they are symlinked directories.
-
-Any file whose PLT contains none of the target sinks is safe from exec-class injection through
-those sinks and needs no further analysis.
-
----
-
-## Limitations
-
-Argument classification is x86-64 only. ARM32 and ARM64 binaries are supported for triage
-(batch_plt_intersect) but not for provenance classification.
-
-The look-back window for argument tracing is bounded. A command string built more than one
-function hop before the sink will likely resolve as ARG_PROPAGATED or UNKNOWN rather than
-SNPRINTF_RODATA.
-
-Stack slots written by two separate 4-byte movabs pairs remain UNKNOWN. This is a known
-limitation of the GAP-002 fix for GCC packed-string optimization.
+3. **Vendor exec functions differ from the POSIX `system` API in argument position.** Fortinet's `fadcsystem` passes the command string in `rsi` (arg 1), not `rdi` (arg 0). Fortinet's `fadcsystem_envp` uses `rdi`. Cisco's `sys_vdom_exec` uses `rsi`. Without configurable argument position, a classifier built around `system(rdi)` misclassifies every vendor-specific sink. `add_sink(name, arg_pos)` registers these variants without modifying the module.
 
 ---
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+```mermaid
+flowchart TD
+    A["SinkArgClassifier.from_path(path)"] --> B["_init: parse PLT, .rodata ranges, func_starts\n_count_plt_callers: O(N) call-site count\nSkip dead sinks (0 callers)"]
+    B --> C["classify_all(): for each sink in plt"]
+    C --> D{sink PLT entry present?}
+    D -->|yes| E["_classify_sites(sink_name, plt_va, arg_pos)"]
+    E --> F["Find all call sites to plt_va via E8-rel32 scan"]
+    F --> G["For each call site VA: walk up to _LOOKBACK=40 insns backward"]
+    G --> H{Last write to arg_reg}
+    H -->|"LEA [rip+x] where x→.rodata range"| I[RODATA_CONST / LOW]
+    H -->|"MOV from entry-arg reg (rdi/rsi/rdx/rcx/r8/r9)"| J[ARG_PROPAGATED / HIGH]
+    H -->|"LEA/MOV reg, [rsp+x] or [rbp-x] (stack buffer)"| K["Snprintf recursion:\nsearch _SNPRINTF_SEARCH_WINDOW=60 insns before call for snprintf\nclassify snprintf format register (rdx for snprintf, r8 for __snprintf_chk)"]
+    K --> L{format reg provenance}
+    L -->|.rodata LEA| M[SNPRINTF_RODATA / MEDIUM]
+    L -->|entry-arg| N[ARG_PROPAGATED / HIGH]
+    L -->|not found| O[UNKNOWN / MEDIUM]
+    H -->|not resolved| O
+    I & J & M & N & O --> P[SinkClassification: sink_name, arg_pos, func_va, call_va, verdict, detail, severity]
+    P --> C
+```
+
+### The four verdicts
+
+| Verdict | Severity | Meaning | Action |
+|---|---|---|---|
+| `RODATA_CONST` | LOW | Argument LEA'd from `.rodata` — hardcoded literal | Skip: no injection path |
+| `SNPRINTF_RODATA` | MEDIUM | Buffer built by `snprintf` with `.rodata` format | Verify: injection requires `%s` argument control |
+| `ARG_PROPAGATED` | HIGH | Argument came from a caller-supplied entry register | Taint-trace: confirm caller-control depth |
+| `UNKNOWN` | MEDIUM | Backward trace exhausted lookback without resolving | Manual trace required |
+
+### Snprintf format positions by variant
+
+| Function | Arg position | Register |
+|---|---|---|
+| `snprintf` | 2 | `rdx` |
+| `vsnprintf` | 2 | `rdx` |
+| `__snprintf_chk` | 4 | `r8` |
+| `sprintf` | 1 | `rsi` |
+| `vsprintf` | 1 | `rsi` |
+| `asprintf` | 1 | `rsi` |
+
+---
+
+## SinkArgClassifier
+
+```python
+from ablation.analyzers.sink_arg_classifier import SinkArgClassifier
+
+# From path (standalone, no pre-built context required)
+clf = SinkArgClassifier.from_path('/fw/fortigate/httpsd')
+
+# Add vendor-specific sinks before calling classify_all
+clf.add_sink('fadcsystem',      arg_pos=1)   # rsi = command
+clf.add_sink('fadcsystem_envp', arg_pos=0)   # rdi = command
+clf.add_sink('sys_vdom_exec',   arg_pos=1)   # rsi = command
+clf.add_sink('exec_by_pipe',    arg_pos=0)
+
+# Classify all registered sinks
+results = clf.classify_all()
+
+# Triage: eliminate RODATA_CONST before further analysis
+actionable = [r for r in results if r.verdict != 'RODATA_CONST']
+for r in actionable:
+    print(r.fmt())
+
+print(f"Total: {len(results)}  "
+      f"RODATA_CONST: {sum(1 for r in results if r.verdict == 'RODATA_CONST')}  "
+      f"ARG_PROPAGATED: {sum(1 for r in results if r.verdict == 'ARG_PROPAGATED')}  "
+      f"SNPRINTF_RODATA: {sum(1 for r in results if r.verdict == 'SNPRINTF_RODATA')}  "
+      f"UNKNOWN: {sum(1 for r in results if r.verdict == 'UNKNOWN')}")
+
+# From context: share the BinaryContext PLT and func_starts
+from ablation.analyzers.binary_context import BinaryContext
+ctx = BinaryContext.load_or_build('/fw/fortigate/httpsd')
+clf = SinkArgClassifier.from_context(ctx)
+clf.add_sink('fadcsystem', arg_pos=1)
+results = clf.classify_all()
+```
+
+---
+
+## Integration in the RE workflow
+
+```python
+# Recommended sequence: SinkArgClassifier before TaintTracker
+from ablation.analyzers.sink_arg_classifier import SinkArgClassifier, ARG_PROPAGATED, UNKNOWN
+from ablation.analyzers.taint_tracker import TaintTracker
+from ablation.analyzers.binary_context import BinaryContext
+
+ctx = BinaryContext.load_or_build('/fw/cisco/lina')
+clf = SinkArgClassifier.from_context(ctx)
+clf.add_sink('fadcsystem', arg_pos=1)
+clf.add_sink('sys_vdom_exec', arg_pos=1)
+
+results = clf.classify_all()
+
+# TaintTracker runs only on HIGH/uncertain sites
+tt = TaintTracker('/fw/cisco/lina')
+for r in results:
+    if r.verdict in (ARG_PROPAGATED, UNKNOWN):
+        sinks = tt.trace_function(r.func_va, tainted_args=['rdi', 'rsi', 'rdx'])
+        if sinks:
+            print(f"CONFIRMED: 0x{r.func_va:x} {r.sink_name} — taint path confirmed")
+            for s in sinks:
+                print(f"  {s.sink_type} at 0x{s.address:x}: {s.instruction}")
+```
 
 ---
 
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+  HIGH    ARG_PROPAGATED       0x22ccc0  call@0x22d090  fadcsystem(arg1)  rsi <- rsi@entry (direct propagation)
+  MEDIUM  UNKNOWN              0x22d200  call@0x22d3a0  fadcsystem(arg1)  rsi <- [rbp-0x50]: snprintf not found in window
+  MEDIUM  SNPRINTF_RODATA      0x22d400  call@0x22d540  system(arg0)      rdi <- [rbp-0x40]: snprintf@0x22d4c0 fmt=rdx='/bin/sslctl %s'
+  LOW     RODATA_CONST         0x22d600  call@0x22d6c0  system(arg0)      rdi <- LEA .rodata:'/bin/ls -la'
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+Total: 47  RODATA_CONST: 31  ARG_PROPAGATED: 8  SNPRINTF_RODATA: 5  UNKNOWN: 3
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+**`RODATA_CONST` on pointer-chasing code.** When the argument register receives a `.rodata` address that is then further processed (e.g., the value is incremented past a prefix, then the incremented pointer reaches the sink), the classifier still returns `RODATA_CONST` because it saw a `.rodata` LEA in the backward trace. Verify by checking whether any arithmetic modifies the register between the LEA and the call.
+
+**`SNPRINTF_RODATA` with controllable `%s` arguments.** `SNPRINTF_RODATA` means the format string itself is a `.rodata` literal, but a `%s` slot in that format string can still receive attacker input. `snprintf(cmd, sz, '/bin/tool %s', user_param)` classifies as `SNPRINTF_RODATA` correctly — but injection still works through `user_param`. Treat `SNPRINTF_RODATA` as medium risk, not safe.
+
+**`ARG_PROPAGATED` on already-validated entry arguments.** An entry argument can be attacker-controlled or can be an internal pointer validated before the function was called. `ARG_PROPAGATED` is a necessary but not sufficient condition for exploitability. Confirm with `TaintTracker` and `PathSolver`.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` — PLT and func_starts accelerate classification. Register vendor sinks with `add_sink()` before calling `classify_all()`.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Discard `RODATA_CONST` results. Pass `ARG_PROPAGATED` and `UNKNOWN` sites to `TaintTracker.trace_function()`. `SNPRINTF_RODATA` sites warrant manual inspection of `%s` argument sources before taint tracing.
 
 ---
 
@@ -157,18 +160,19 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `sink_name` | Name of the called sink function (e.g., `fadcsystem`, `system`) |
+| `arg_pos` | 0-indexed argument position of the command string (0 = `rdi`, 1 = `rsi`, etc.) |
+| `func_va` | VA of the function containing the sink call |
+| `call_va` | VA of the `CALL` instruction |
+| `verdict` | `RODATA_CONST` / `SNPRINTF_RODATA` / `ARG_PROPAGATED` / `UNKNOWN` |
+| `detail` | Human-readable trace: register provenance chain |
+| `severity` | `LOW` / `MEDIUM` / `HIGH` derived automatically from verdict |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [Taint Analysis](taint-analysis.md) — run on `ARG_PROPAGATED` and `UNKNOWN` results
+- [Function Profiler](function-profiler.md) — integrates sink detection with argument annotation
+- [Binary Context](binary-context.md) — share PLT via `from_context()` to skip re-parsing
+- [Format String Scanner](format-string-scanner.md) — parallel scanner for printf-class sinks
