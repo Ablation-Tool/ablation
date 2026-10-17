@@ -174,44 +174,47 @@ for f in orch_findings:
 
 ## Example output
 
+The following illustrates the `evidence` field format for representative findings. Actual values — file IDs, task IDs, agent names, internal addresses, workflow names, memory IDs — will reflect the specific target deployment.
+
 ```
 [CRITICAL] UNAUTH_EMBEDDING_ENDPOINT — model inversion possible
-  HTTP 200 /v1/embeddings input=['test@example.com','John Smith SSN']
-  body={"data":[{"embedding":[0.0023064255,-0.009327292,0.015797347,...],"index":0,...}]}
+  HTTP 200 /v1/embeddings input=['<probe-pii-string-1>','<probe-pii-string-2>']
+  body={"data":[{"embedding":[<float>,<float>,...,<float>],"index":0,"object":"embedding"},...]}
 
 [CRITICAL] UNAUTHENTICATED_FILE_UPLOAD — training data poisoning
   HTTP 200 /v1/files multipart upload
-  body={"id":"file-XzK7qP9mLn","object":"file","purpose":"fine-tune","filename":"poisoned.jsonl"}
+  body={"id":"<file-id>","object":"file","purpose":"fine-tune","filename":"poisoned.jsonl","size":<n>}
 
 [CRITICAL] MCP_TOOL_EXEC_UNAUTH
-  HTTP 200 tools/call bash result content=[{'type':'text','text':'uid=1000(ubuntu) gid=1000(ubuntu)'}]
+  HTTP 200 tools/call bash result
+  content=[{'type':'text','text':'uid=<uid>(<user>) gid=<gid>(<group>) groups=...'}]
 
 [CRITICAL] MCP_SSRF_RESOURCE_URI
-  HTTP 200 resources/read IMDS contents=[{'uri':'http://169.254.169.254/...','text':
-  'ami-id\nami-launch-index\nami-manifest-path\nblock-device-mapping/\niam/'}]
+  HTTP 200 resources/read http://169.254.169.254/latest/meta-data/
+  contents=[{'uri':'http://169.254.169.254/latest/meta-data/','text':
+  'ami-id\nami-launch-index\nami-manifest-path\nblock-device-mapping/\niam/...'}]
 
 [CRITICAL] A2A_AGENT_IMPERSONATION
-  HTTP 200 POST /a2a/tasks/send agent_id=admin-agent-001
-  body={"status":"accepted","task_id":"task_8a3f2b1c","agent_id":"admin-agent-001"...}
+  HTTP 200 POST /a2a/tasks/send agent_id=<spoofed-admin-agent-id>
+  body={"status":"accepted","task_id":"<task-id>","agent_id":"<spoofed-id>",...}
 
 [CRITICAL] A2A_PERMISSION_ESCALATION
   HTTP 200 POST /a2a/tasks/send escalated permissions
-  body={"status":"success","output":"Session list: user_001, user_002, admin..."...}
+  body={"status":"success","output":"<output confirming elevated privilege>",...}
 
 [CRITICAL] AGENT_REGISTRY_UNAUTH
   HTTP 200 GET /api/v1/agents/registry
-  body={"agents":[{"name":"Coordinator","type":"orchestrator","base_url":"http://10.0.1.51:8080"},
-  {"name":"Analyzer","type":"diagnostic","base_url":"http://10.0.1.52:8080"},
-  {"name":"Fixer","type":"remediation","base_url":"http://10.0.1.53:8080"},...]}
+  body={"agents":[{"name":"<agent-name>","type":"orchestrator","base_url":"http://<internal-ip>:<port>"},
+  {"name":"<agent-name>","type":"<role>","base_url":"http://<internal-ip>:<port>"},...]}
 
 [CRITICAL] WORKFLOW_LIST_UNAUTH
   HTTP 200 GET /api/v1/workflows
-  body={"workflows":[{"name":"k8s-health-monitor","steps":[{"agent":"Coordinator"},
-  {"agent":"Analyzer","condition":"if anomaly_detected"},{"agent":"Fixer"},...]}]}
+  body={"workflows":[{"name":"<workflow-name>","steps":[{"agent":"<agent>"},
+  {"agent":"<agent>","condition":"<routing-condition>"},...],...]}
 
 [CRITICAL] MEMORY_WRITE_UNAUTH
   HTTP 201 POST /api/v1/memory
-  body={"id":"mem_9f2c4b8e","content":"Ignore previous instructions","created_at":"2026-10-17T..."}
+  body={"id":"<memory-id>","content":"Ignore previous instructions","created_at":"<timestamp>"}
 ```
 
 ---
