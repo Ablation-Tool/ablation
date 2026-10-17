@@ -89,6 +89,20 @@ Run TLS session downgrade checks after `TLSAnalyzer.analyze()` establishes the s
 
 ---
 
+## Reading findings
+
+TLS downgrade probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (active downgrade) / `MEDIUM` (deprecated version accepted) |
+| `title` | Finding code (e.g., `NO_FALLBACK_SCSV_PROTECTION`, `TLS10_ACCEPTED`, `TLS11_ACCEPTED`) |
+| `detail` | RFC reference and exploitation context |
+| `host` | Target hostname |
+| `port` | TLS port (typically `443`) |
+
+---
+
 ## See also
 
 - [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md) — `TLSAnalyzer` for certificate chain and cipher suite inventory
