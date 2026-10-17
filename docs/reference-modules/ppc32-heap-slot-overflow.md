@@ -73,6 +73,21 @@ Run `PEFABIClobberScanner` immediately after `PEFBinaryAnalyzer` provides the co
 
 ---
 
+## Reading findings
+
+`PEFABIClobberScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` |
+| `title` | `PEF_ABI_ARG_CLOBBER` |
+| `reg` | Clobbered register name (e.g., `r3`, `r4`) |
+| `write_va` | VA of the instruction that clobbers the register |
+| `clobber_va` | VA of the call that overwrites the register before the outer call |
+| `outer_call_va` | VA of the outer call that receives the clobbered value |
+
+---
+
 ## See also
 
 - [PowerPC PEF/CFM Binary Analysis](powerpc-pef-cfm.md) — `PEFBinaryAnalyzer` that provides the code section for scanning

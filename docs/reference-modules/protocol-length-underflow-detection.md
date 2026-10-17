@@ -79,6 +79,23 @@ Run `LengthUnderflowScanner` as part of the SemanticSearcher-guided sweep on pro
 
 ---
 
+## Reading findings
+
+`LengthUnderflowScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (unguarded) / `MEDIUM` (potentially guarded) |
+| `title` | `LENGTH_UNDERFLOW_UNGUARDED` or `LENGTH_UNDERFLOW_GUARDED` |
+| `narrow_load_va` | VA of the narrow load instruction (e.g., `movzwl`) |
+| `subtract_va` | VA of the header-size subtraction |
+| `truncate_va` | VA of the zero-extension that enables wraparound |
+| `call_va` | VA of the downstream call using the underflowed length |
+| `header_size` | Integer — the header size being subtracted |
+| `guarded` | `False` if no bounds check was found between subtract and call |
+
+---
+
 ## See also
 
 - [Taint Analysis](taint-analysis.md) — confirms that the narrow-loaded value is user-controlled

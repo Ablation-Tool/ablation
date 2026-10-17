@@ -78,6 +78,21 @@ Run `PreAuthRouteAuditor` immediately after `BinaryContext.load_or_build()` for 
 
 ---
 
+## Reading findings
+
+`PreAuthRouteAuditor.audit()` returns a list of `RouteFinding` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `severity` | `HIGH` (handler with exec/parse sink) / `MEDIUM` (pre-auth route, no sink) |
+| `route` | URL path string (e.g., `/api/v2/upload`) |
+| `method` | HTTP method |
+| `handler_class` | Handler class name |
+| `handler_va` | VA of the handler function |
+| `sink_va` | VA of the sink call in the handler (if severity is `HIGH`) |
+
+---
+
 ## See also
 
 - [Apache Module Analysis](http-method-enum-recovery.md) — `ApacheModuleAnalyzer` for Apache module auth hook analysis
