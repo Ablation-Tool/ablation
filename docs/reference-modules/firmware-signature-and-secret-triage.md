@@ -84,8 +84,24 @@ Run `LSBStegoReader` when a BMP file is found embedded in firmware or APK conten
 
 ---
 
+## Reading output
+
+`LSBStegoReader.read()` returns `{key_hex: str, n_groups: int, type_count: int, components: List[str]}`.
+
+`FirmwareSecretTriage.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (private key) / `HIGH` (password, API key) / `MEDIUM` (hash, certificate) |
+| `type` | Secret type (e.g., `PRIVATE_KEY`, `PASSWORD_HASH`, `TLS_CERT`, `API_KEY`) |
+| `path` | File path within the firmware filesystem |
+| `offset` | Byte offset within the file |
+| `snippet` | First 80 characters of the secret |
+
+---
+
 ## See also
 
 - [Firmware Extraction](firmware-extraction.md) — outer layer extraction pipeline
 - [Compressed BFF Detection / Entropy Mapping](compressed-bff-detection-and-lzw-attempt.md) — entropy analysis to locate encrypted regions before key recovery
-- [Firmware Signature and Secret Triage](firmware-signature-and-secret-triage.md) — broad key/credential discovery
+- [Credential/Token/Key Discovery](credential-token-key-discovery.md) — live host credential enumeration (complements static firmware triage)

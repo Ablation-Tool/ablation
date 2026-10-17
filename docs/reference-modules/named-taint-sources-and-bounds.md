@@ -78,6 +78,21 @@ Use labeled taint when the standard `TaintTracker` finding does not provide suff
 
 ---
 
+## Reading findings
+
+Labeled taint finding dicts extend the standard taint finding shape with source attribution:
+
+| Field | Content |
+|:---|:---|
+| `va` | VA of the sink call |
+| `sink` | Sink function name |
+| `tainted_args` | List of tainted argument registers at the call |
+| `sources` | List of named taint source labels that reach this sink |
+| `bound` | Register bound description (e.g., `rdi bound=0xff`) if a bound was declared |
+| `taint_path` | Register propagation chain |
+
+---
+
 ## See also
 
 - [Taint Analysis (x86)](x86.md) — base x86/x86-64 taint tracker with standard unlabeled taint
