@@ -96,17 +96,21 @@ Run `ConstPropAnalysis`/`SCCPAnalysis` before `TaintTracker` when a suspicious c
 
 ## Reading output
 
-`SCCPAnalysis.run()` returns a result object:
+`SCCPAnalysis(data, base_addr, arch).solve(func_addr)` returns `Tuple[cp_vals, exec_edges]`:
 
-| Attribute | Content |
+| Component | Content |
 |:---|:---|
-| `const_values` | `Dict[int, Dict[str, LatValue]]` — per block-VA, per-register constants |
-| `exec_edges` | `Set[Tuple[int, int]]` — `(src, dst)` edges determined reachable |
-| `unreachable_blocks` | `Set[int]` — block VAs determined unreachable |
+| `cp_vals` | `Dict[int, Any]` — block label → register state dict (`None` = unreachable / ⊥) |
+| `exec_edges` | `Set[Tuple[int, int]]` — `(src_label, dst_label)` edges proven executable |
 
-`LatValue` types: `Const(v)` (concrete), `TOP` (unknown), `BOTTOM` (unreachable).
+`ReachingDefsAnalysis(data, base_addr, arch).solve(func_addr)` returns `Tuple[in_sets, out_sets]`:
 
-`ReachingDefinitions.run()` returns `Dict[int, Dict[str, Set[int]]]` — for each block VA, for each register, the set of instruction VAs that can define it at that block entry.
+| Component | Content |
+|:---|:---|
+| `in_sets` | `Dict[int, FrozenSet]` — reaching definitions at block entry |
+| `out_sets` | `Dict[int, FrozenSet]` — reaching definitions at block exit |
+
+Each set element is a `(register_name, def_va)` tuple where `def_va=None` means the initial unknown definition.
 
 ---
 

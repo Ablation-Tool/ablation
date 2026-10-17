@@ -86,17 +86,16 @@ Run `LSBStegoReader` when a BMP file is found embedded in firmware or APK conten
 
 ## Reading output
 
-`LSBStegoReader.read()` returns `{key_hex: str, n_groups: int, type_count: int, components: List[str]}`.
+`LSBStegoReader(pixel_data, seed).extract()` returns a `StegoKeyResult`:
 
-`FirmwareSecretTriage.scan()` returns a list of finding dicts:
-
-| Field | Content |
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` (private key) / `HIGH` (password, API key) / `MEDIUM` (hash, certificate) |
-| `type` | Secret type (e.g., `PRIVATE_KEY`, `PASSWORD_HASH`, `TLS_CERT`, `API_KEY`) |
-| `path` | File path within the firmware filesystem |
-| `offset` | Byte offset within the file |
-| `snippet` | First 80 characters of the secret |
+| `seed` | Seed string used for coordinate generation |
+| `type_count` | Number of polynomial components in the key |
+| `n_groups` | Total number of coordinate groups encoded |
+| `n_pts` | Points per component used in Lagrange interpolation |
+| `components` | `List[str]` — hex string per recovered polynomial component |
+| `raw_key_hex` | All components concatenated as a single hex string |
 
 ---
 

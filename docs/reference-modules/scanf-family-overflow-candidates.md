@@ -93,16 +93,18 @@ Run `SscanfSinkClassifier.classify_all()` alongside `SinkArgClassifier.classify_
 
 ## Reading findings
 
-`ScanfOverflowScanner.scan()` returns a list of finding dicts:
+`SscanfSinkClassifier.from_context(ctx).classify_all()` returns `List[SscanfClassification]`. See [sscanf-sink-classifier](sscanf_sink_classifier.md) for the full field reference.
 
-| Field | Content |
+| Attribute | Content |
 |:---|:---|
-| `severity` | `HIGH` (`RODATA_UNSAFE`: static format with `%s`) / `MEDIUM` (`DYNAMIC_FMT`: format from snprintf) |
-| `title` | Finding code: `SCANF_UNBOUNDED_S` or `SCANF_DYNAMIC_FMT` |
-| `detail` | Format string, destination register, and overflow condition |
-| `fmt_reg` | Register holding the format string argument |
+| `sink_name` | Sink function name (e.g., `'sscanf'`, `'fscanf'`) |
+| `fmt_arg_pos` | Argument position of the format string |
+| `func_va` | VA of the function containing the sink call |
 | `call_va` | VA of the `sscanf`/`fscanf` call |
-| `fmt_string` | Resolved format string value (if RODATA) |
+| `verdict` | `'RODATA_UNSAFE'` / `'RODATA_SAFE'` / `'DYNAMIC_FMT'` / `'ARG_PROPAGATED'` / `'UNKNOWN'` |
+| `format_str` | Resolved format string (if `RODATA_SAFE` or `RODATA_UNSAFE`) |
+| `detail` | Human-readable classification explanation |
+| `severity` | `'HIGH'` for `RODATA_UNSAFE`; `'MEDIUM'` for `DYNAMIC_FMT`; `'LOW'` for safe |
 
 ---
 

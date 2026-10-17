@@ -673,7 +673,7 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 This page covers two scanners targeting x86-64 ELF binaries. Each returns its own typed list:
 
-- **HeapUAFScanner** — `List[HeapFinding]` with `func_va`, `site_va`, `kind` (`UAF`/`DOUBLE_FREE`/`HEAP_OVERFLOW`/`TYPE_CONFUSION`), `severity`, `description`. See [heap-uaf-scanner](heap-uaf-scanner.md).
+- **HeapUAFScanner** — `List[HeapFinding]` with `binary`, `func_va`, `func_name`, `site_va`, `kind` (`'UAF'`/`'DOUBLE_FREE'`/`'HEAP_OVERFLOW'`/`'TYPE_CONFUSION'`), `description`, `severity` (`'HIGH'`/`'MEDIUM'`). See [heap-uaf-scanner](heap-uaf-scanner.md).
 - **GateFinding** (CompilerSecurityGate) — `List[GateFinding]` with `func_va`, `site_va`, `category`, `severity`, `description`, `detector`. See [compiler-security-gate](compiler_security_gate.md).
 
 ---

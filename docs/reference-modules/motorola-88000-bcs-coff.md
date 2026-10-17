@@ -18,9 +18,9 @@ Decode Motorola 88000 (M88K) binaries — identifying `RISC.88000` architecture 
 
 ```mermaid
 flowchart TD
-    A["ISAM88K.from_path(path)  (BCS COFF loader)"] --> B["Parse COFF header:\n  machine = RISC.88000\n  Extract code sections (.text)\n  base_address from optional header\n  → code_bytes, base_va"]
-    B --> C["InsnM88K.decode(word) → Optional[InsnM88K]\n  Decode 32-bit big-endian instruction:\n    6-bit opcode field → mnemonic\n    Register fields: D, S1, S2\n    Immediate: 16-bit for loads/stores/branches\n  Security-relevant subset:\n    ld/st (loads/stores)\n    jsr/jsr.n (subroutine call)\n    jmp/jmp.n (indirect branch)\n    br/br.n (direct branch)\n    addu/subu/mulu (arithmetic)"]
-    C --> D["function_starts() → List[int]\n  Scan for M88K function prologue:\n    subu r31, r31, N  (frame allocation)\n    st r1, r31, N     (LR save)\n  Return sorted start addresses"]
+    A["coff_m88k_parser.parse(path) → M88kCoffBinary\n  Parse COFF header:\n    machine = RISC.88000\n  Extract sections (.text, .data)\n  entry, text_start, data_start from optional header"] --> B["M88kDecoder(binary)\n  binary.text → Section with .data and .base_va"]
+    B --> C["M88kDecoder.decode_word(word, va) → M88kInsn\n  Decode 32-bit big-endian instruction:\n    6-bit opcode field → mnemonic\n    Register fields: D, S1, S2\n    Immediate: 16-bit for loads/stores/branches\n  Security-relevant subset:\n    ld/st (loads/stores)\n    jsr/jsr.n (subroutine call)\n    jmp/jmp.n (indirect branch)\n    br/br.n (direct branch)\n    addu/subu/mulu (arithmetic)"]
+    C --> D["M88kDecoder.function_starts() → Set[int]\n  Scan for M88K function prologue:\n    subu r31, r31, N  (frame allocation)\n    st r1, r31, N     (LR save)\n  Return set of start VAs"]
 ```
 
 ---
@@ -28,22 +28,21 @@ flowchart TD
 ## Usage
 
 ```python
-from ablation.analyzers.isa_m88k import ISAM88K
-from ablation.analyzers.insn_m88k import InsnM88K
+from ablation.core.coff_m88k_parser import parse as parse_m88k
+from ablation.analyzers.insn_m88k import M88kDecoder
 
-isa = ISAM88K.from_path('/path/to/next_firmware.coff')
-code_bytes, base_va = isa.code_section()
+binary = parse_m88k('/path/to/next_firmware.coff')
+decoder = M88kDecoder(binary)
 
-starts = isa.function_starts()
+starts = sorted(decoder.function_starts())
 print(f"Found {len(starts)} M88K functions")
 
-# Decode a range
-offset = starts[0] - base_va
-for i in range(0, 40, 4):
-    word = int.from_bytes(code_bytes[offset+i:offset+i+4], 'big')
-    insn = InsnM88K.decode(word)
-    if insn:
-        print(f"  {base_va + offset + i:#x}: {insn.mnemonic} {insn.op_str}")
+# Decode a range starting at the first function
+text = binary.text
+for va in range(starts[0], starts[0] + 40, 4):
+    word = int.from_bytes(text.read_bytes(va, 4), 'big')
+    insn = decoder.decode_word(word, va)
+    print(f"  {va:#x}: {insn.mnemonic} {insn.op_str}")
 ```
 
 ---
@@ -53,12 +52,12 @@ for i in range(0, 40, 4):
 The following illustrates M88K decoding output format. Actual addresses are binary-specific.
 
 ```
-ISAM88K: next_firmware.coff
+parse_m88k('next_firmware.coff') → M88kCoffBinary
 
-Machine: RISC.88000
-Code section: <N> bytes at base_va=<va>
+arch: ppc32  machine: RISC.88000
+.text: <N> bytes at base_va=<va>
 
-function_starts(): <F> M88K functions
+M88kDecoder.function_starts(): <F> M88K functions
 
 Disassembly at <va>:
   <va>: subu  r31, r31, 0x20   ; frame alloc
@@ -72,7 +71,7 @@ Disassembly at <va>:
 
 **`function_starts()` heuristic is based on `subu r31, r31, N` + `st r1, r31, N` prologue** — leaf functions that do not save LR are not detected. The function start list is a lower bound; supplement with call-graph reachability from detected starts.
 
-**M88K `jsr.n` (delayed branch) includes a delay slot instruction** — the instruction following `jsr.n` executes before the branch takes effect. `InsnM88K` decodes `jsr.n` as a call but does not automatically consume the delay slot. Callers must skip one instruction after a `jsr.n` to maintain correct sequential decode.
+**M88K `jsr.n` (delayed branch) includes a delay slot instruction** — the instruction following `jsr.n` executes before the branch takes effect. `M88kInsn` has `is_call=True` for `jsr.n` but does not automatically consume the delay slot. Callers must skip one instruction after a `jsr.n` to maintain correct sequential decode.
 
 ---
 
@@ -84,16 +83,20 @@ Run M88K analysis on any BCS COFF firmware binary confirmed to use the M88K arch
 
 ## Reading output
 
-`ISAM88K.function_starts()` returns `List[int]` — VA list of M88K functions.
+`M88kDecoder(binary).function_starts()` returns `Set[int]` — VA set of identified M88K function entry points.
 
-`ISAM88K.disassemble(va, size)` returns a list of `M88KInstruction` objects:
+`M88kDecoder(binary).decode_word(word, va)` returns an `M88kInsn`:
 
 | Attribute | Content |
 |:---|:---|
-| `va` | Virtual address |
-| `mnemonic` | M88K mnemonic (e.g., `subu`, `st`, `jsr`) |
-| `operands` | Operand string |
-| `comment` | Optional annotation (e.g., `; frame alloc`, `; LR save`) |
+| `address` | Virtual address of the instruction |
+| `mnemonic` | M88100 mnemonic (e.g., `'subu'`, `'st'`, `'jsr'`) |
+| `op_str` | Operand string |
+| `raw` | 32-bit big-endian instruction word |
+| `is_branch` | `True` if this is a branch instruction |
+| `is_call` | `True` if this is a subroutine call (`jsr`/`bsr`) |
+| `is_return` | `True` if this is a return (`jmp r1`) |
+| `branch_target` | Target VA for branches/calls, or `None` |
 
 ---
 

@@ -276,9 +276,9 @@ Each of the seven analyzers returns its own typed finding list. For full field r
 | `RPCServerAnalyzer` | `List[RPCFinding]` | [rpc-server-analyzer](rpc-server-analyzer.md) |
 | `COMAttackSurfaceMapper` | `List[COMFinding]` | [com-attack-surface-mapper](com-attack-surface-mapper.md) |
 | `HeapUAFScanner` | `List[HeapFinding]` | [heap-uaf-scanner](heap-uaf-scanner.md) |
-| `IoctlAttackSurfaceMapper` | `IoctlAttackSurface` | [ioctl-attack-surface](ioctl-attack-surface.md) |
+| `IoctlAttackSurfaceGenerator` | `IoctlAttackSurface` | [ioctl-attack-surface](ioctl-attack-surface.md) |
 
-All finding types share `severity`, `category`, `title`, `location`, `description`, and `va` fields.
+`CFGBypassFinding`, `SEHFinding`, `ETWFinding`, `RPCFinding`, and `COMFinding` share `severity`, `category`, `title`, `location`, `description`, and `va` fields. `HeapFinding` uses `binary`, `func_va`, `func_name`, `site_va`, `kind`, `description`, `severity`. `IoctlAttackSurface` uses `binary_path`, `driver_type`, `is_signed`, `profiles`.
 
 ---
 

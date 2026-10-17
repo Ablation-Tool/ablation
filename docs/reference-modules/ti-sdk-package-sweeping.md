@@ -82,15 +82,9 @@ Run TI SDK sweeping on any TI SDK package directory or HiSilicon NearLink firmwa
 
 ## Reading output
 
-`Isa8051Scanner.scan()` and `HisiRv32ExtScanner.scan()` each return a `SdkSweepResult` object:
+**MCS-51 (8051 firmware):** `Mcs51Decoder(data, base_va).decode_range(offset, size)` yields `Mcs51Insn`. See [isa-8051](isa-8051.md) for the full `Mcs51Insn` field reference (`offset`, `raw`, `mnemonic`, `operands`, `insn_type`, `target`, `size`).
 
-| Attribute | Content |
-|:---|:---|
-| `isa` | ISA identifier (e.g., `isa_8051`, `hisi_rv32_ext`) |
-| `sfr_accesses` | `List[{va, insn, sfr_name, sfr_role}]` — SFR-mapped accesses (8051) |
-| `fixed_count` | Number of Capstone mis-decoded instructions corrected (HiSilicon) |
-| `custom3_count` | Number of HiSilicon Custom-3 extension dispatches found |
-| `findings` | `List[{severity, title, detail}]` — security findings |
+**HiSilicon WS63 (NearLink firmware):** `HiSiliconRV32ExtDecoder(binary, base_va).scan_custom3(code, base_va)` returns `List[HisiInsn]`. See [hisi-rv32-ext](hisi-rv32-ext.md) for the full `HisiInsn` field reference (`address`, `size`, `mnemonic`, `op_str`, `rd`, `rs1`, `rs2`, `funct3`, `funct7`).
 
 ---
 

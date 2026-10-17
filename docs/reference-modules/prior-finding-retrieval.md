@@ -89,18 +89,18 @@ Total: 6 records (budget 8, 2 remaining)
 
 ## Reading output
 
-`RAGRetriever.retrieve(func_addr, ctx)` returns a list of `RetrievalRecord` objects sorted by relevance:
+`RAGRetriever(func_db).retrieve(func_addr, binary_sha256, callees, role_hint, name_hint)` returns `list[dict]` — prior finding rows from `func_id.db`, trimmed to fit a token budget:
 
-| Attribute | Content |
+| Key | Content |
 |:---|:---|
-| `strategy` | Strategy used: `exact_va`, `callee_overlap`, `role`, or `name` |
-| `status` | `CONFIRMED`, `INFERRED`, or `SEED` |
-| `func_name` | Function name at retrieval time |
-| `role` | Role tag (e.g., `network`, `parser`, `crypto`) |
-| `overlap` | Float — callee overlap score (for `callee_overlap` strategy) |
-| `callees` | `List[str]` — callee names used for overlap calculation |
+| `id` | Database row ID |
+| `func_addr` | VA of the prior function |
+| `binary_sha256` | SHA256 of the binary this finding came from |
+| `func_name` | Function name at time of recording |
+| `role` | Role tag (e.g., `'network'`, `'parser'`, `'crypto'`) |
+| `callees` | Callee name list used for overlap scoring |
 
-Retrieval stops when the token budget is exhausted; remaining records are dropped.
+Results are ranked by strategy priority: exact VA match → callee-set overlap → role match → name fuzzy match. Stops when `_MAX_RESULTS` is reached.
 
 ---
 

@@ -95,15 +95,17 @@ Run PCAP inspection on any packet capture obtained from a post-compromise networ
 
 ## Reading output
 
-`PcapAnalyzer.analyze(path)` returns a dict:
+`PCAPAnalyzer(filepath).run_all()` returns a dict:
 
 | Key | Content |
 |:---|:---|
-| `packet_count` | Integer — total packets in the PCAP |
-| `credentials` | `List[{proto, src, dst, cred}]` — cleartext credentials extracted |
-| `dns_queries` | `List[{query, type, src, rcode, qr}]` — DNS queries and responses |
-| `http_requests` | `List[{method, host, path, src}]` — HTTP transactions |
-| `unusual_ports` | `List[{proto, port, count}]` — connections to non-standard ports |
+| `filepath` | Path to the PCAP file |
+| `packet_count` | Total packets parsed from the PCAP |
+| `credentials` | `list` — cleartext credentials extracted (FTP, Telnet, HTTP Basic Auth) |
+| `dns_queries` | `list` — DNS query records |
+| `http_requests` | `list` — HTTP request records |
+
+The module-level `analyze_pcap(filepath)` is a convenience wrapper that calls `PCAPAnalyzer(filepath).run_all()`.
 
 ---
 

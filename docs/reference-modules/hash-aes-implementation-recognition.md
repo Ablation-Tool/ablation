@@ -96,16 +96,26 @@ Run `HashAlgoDiscriminator` and `CustomCBCDetector` after `SemanticSearcher` ide
 
 ## Reading output
 
-`HashAlgoDetector.scan()` returns a list of `HashAlgoMatch` objects:
+`HashAlgoDiscriminator(binary, load_addr).scan(va, size)` returns `List[HashAlgoMatch]`:
 
 | Attribute | Content |
 |:---|:---|
-| `algorithm` | Algorithm name (e.g., `SHA-256`, `MD5`, `SHA-1`) |
-| `match_count` | Integer — number of K-table constants matched |
-| `confidence` | `HIGH`, `MEDIUM`, or `LOW` |
-| `first_match_va` | VA of the first constant match site |
+| `algo` | Algorithm name (e.g., `'SHA-256'`, `'MD5'`, `'SHA-1'`, `'CRC32'`) |
+| `confidence` | Integer 0–100 |
+| `matched` | `List[ConstMatch]` — constant match sites used for identification |
 
-`CBCPatternDetector.find()` returns a `CBCPattern` object with `{block_ptr_va, iv_va, xor_va, confidence}`, or `None`.
+`CustomCBCDetector(binary, load_addr).scan_range(va, size)` returns `List[CBCPattern]`:
+
+| Attribute | Content |
+|:---|:---|
+| `outer_func_va` | VA of the function or scan range containing the CBC loop |
+| `block_func_va` | VA of the single-block AES call target inside the loop |
+| `chaining_reg` | Register carrying the previous ciphertext / IV pointer |
+| `iv_va` | VA of the IV in `.rodata`, or `None` if not resolved |
+| `iv_bytes` | 16-byte IV value, or `None` if not resolved |
+| `xor_va` | VA of the first XOR instruction in the loop body |
+| `loop_va` | VA of the loop start (back-edge target) |
+| `confidence` | Integer 0–100 |
 
 ---
 

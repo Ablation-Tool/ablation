@@ -89,13 +89,14 @@ Run `NetworkAnalyzer.enumerate_all()` immediately after gaining shell access. Th
 
 ## Reading output
 
-`NetworkAnalyzer.enumerate_all()` returns a dict:
+`NetworkAnalyzer.enumerate_all()` returns a dict with four keys:
 
 | Key | Content |
 |:---|:---|
-| `interfaces` | `List[{name, ip}]` — network interface list |
-| `listening` | `List[{protocol, local_ip, local_port, state, uid}]` — listening services |
+| `interfaces` | `List[{name, ip}]` — network interface name and IP address |
+| `listening` | `List[{protocol, local_ip, local_port, uid}]` — listening services |
 | `connections` | `List[{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}]` — active connections |
+| `firewall` | Platform-specific firewall rule list |
 
 ---
 

@@ -100,17 +100,16 @@ Run `NginxEnumerator.check_cves()` after `fingerprint()` has successfully extrac
 
 ## Reading findings
 
-`NginxCVEChecker.check(host, port)` returns `List[{severity, title, detail, host, port}]`:
+`NginxEnumerator(host, port).check_cves()` returns `List[dict]` — CVE findings for the detected version:
 
 | Field | Content |
 |:---|:---|
-| `severity` | `HIGH` / `MEDIUM` |
-| `title` | `CVE: <CVE-ID>` — the applicable CVE identifier |
-| `detail` | Affected version range, description, and exploit path |
-| `host` | Target host |
-| `port` | HTTP/HTTPS port |
+| `id` | CVE identifier (e.g., `'CVE-2013-4547'`) |
+| `severity` | `'HIGH'` / `'MEDIUM'` |
+| `desc` | Affected version range, description, and exploit path |
+| `exploit` | Example exploit request string, or `None` |
 
-Results are only emitted for CVEs where the detected version falls within the affected range.
+Results are only emitted for CVEs where the detected nginx version falls within the affected range.
 
 ---
 
