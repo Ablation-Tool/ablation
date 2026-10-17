@@ -95,6 +95,25 @@ Run `ConstPropAnalysis` or `ReachingDefsAnalysis` when TaintTracker or SinkArgCl
 
 ---
 
+## Reading output
+
+`ConstPropAnalysis.run()` returns a `Dict[int, Dict[str, LatValue]]` keyed by block VA:
+
+| Type | Meaning |
+|:---|:---|
+| `Const(v)` | Register holds the constant value `v` at this block entry |
+| `Top` | Value not determinable (set by a non-constant write) |
+| `Bottom` | Block unreachable |
+
+`SCCPAnalysis.run()` returns:
+
+| Attribute | Content |
+|:---|:---|
+| `exec_edges` | `Set[Tuple[int, int]]` — edges determined reachable (`(src_va, dst_va)`) |
+| `const_values` | `Dict[int, Dict[str, Const]]` — same shape as `ConstPropAnalysis` for reachable blocks |
+
+---
+
 ## See also
 
 - [Control-Flow Graph Construction](control-flow-graph-construction.md) — CFG that dataflow analysis operates over

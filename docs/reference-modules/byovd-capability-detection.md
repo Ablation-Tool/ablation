@@ -81,6 +81,19 @@ Run `ByovdDetector` as a triage step on any signed Windows kernel driver file fo
 
 ---
 
+## Reading output
+
+`ByovdDetector` exposes summary methods and a `capabilities` list:
+
+| Method / Attribute | Content |
+|:---|:---|
+| `is_byovd_capable()` | `True` if any BYOVD-relevant capability was detected |
+| `risk_level()` | `HIGH` (IOCTL-reachable), `MEDIUM` (import only), or `LOW` (no match) |
+| `capabilities` | List of `{capability, import_sym, import_va, ioctl_reachable: bool}` dicts |
+| `string_evidence` | List of device path strings matching known vulnerable driver patterns |
+
+---
+
 ## See also
 
 - [Windows RPC Server Analysis](rpc-server-analysis.md) — unauthenticated RPC interface detection for Windows PE targets

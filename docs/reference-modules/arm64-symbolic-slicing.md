@@ -88,6 +88,26 @@ Run `analyze_cfg()` after `SemanticSearcher` identifies handler candidates and b
 
 ---
 
+## Reading findings
+
+`TaintAnalyzer.analyze_cfg()` returns a list of finding dicts and the `final_state`:
+
+```python
+{'findings': List[dict], 'final_state': TaintState}
+```
+
+Each finding in the list:
+
+| Field | Content |
+|:---|:---|
+| `va` | Virtual address of the sink call instruction |
+| `sink` | Sink function name (e.g., `system`, `popen`, `execv`) |
+| `tainted_args` | List of tainted argument registers at the call (e.g., `['x0']`) |
+| `sources` | List of taint source labels that contribute to the taint |
+| `taint_path` | Human-readable register propagation chain (e.g., `x0←x19←x0(recv)`) |
+
+---
+
 ## See also
 
 - [RISC-V](risc-v.md) — same `analyze_cfg()` API for RISC-V 32/64 targets

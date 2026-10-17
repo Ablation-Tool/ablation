@@ -95,6 +95,27 @@ SourceAuditCompressor: <N> files → <K> buckets
 
 ---
 
+## Reading output
+
+`SourceAuditCompressor.compress()` returns a list of `(file_path, action, profile_bits)` tuples:
+
+| Field | Content |
+|:---|:---|
+| `file_path` | Repo-relative path to the source file |
+| `action` | `READ` (review needed), `SKIM` (light review), `SKIP` (no dangerous sinks) |
+| `profile_bits` | Bitmask of detected patterns (subprocess, eval, open, SQL, etc.) shown in bracket notation |
+
+`SourceTaintTracker.paths()` returns a list of `TaintPath` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `source` | Source function name and file (user-controlled input) |
+| `sink` | Sink function name and VA where taint arrives |
+| `path` | Ordered list of `(file, line, function)` call chain from source to sink |
+| `sanitizers` | List of sanitizer functions found on the path (may be empty) |
+
+---
+
 ## See also
 
 - [Source Dangerous Sink Detection](source-dangerous-sink-detection.md) — `SourceSinkScanner` that produces `SinkHit` inputs to `SourceTaintTracker`

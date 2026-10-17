@@ -84,6 +84,27 @@ Run `RegAnnotator.annotate_calls()` immediately after `TaintTracker` identifies 
 
 ---
 
+## Reading output
+
+`RegAnnotator.annotate_calls()` returns a list of call annotation dicts, one per call site:
+
+| Field | Content |
+|:---|:---|
+| `va` | Virtual address of the call instruction |
+| `target` | Callee name or VA |
+| `args` | Dict mapping register name → `RegValue` (one of `Const(v)`, `Tainted(label)`, `Arg(n)`, `Unknown`) |
+
+`RegValue` types:
+
+| Type | Meaning |
+|:---|:---|
+| `Const(v)` | Compile-time constant `v` |
+| `Tainted(label)` | Register holds a value tainted by source `label` |
+| `Arg(n)` | Register holds the original `n`-th caller argument passed through |
+| `Unknown` | Value not determinable (clobbered by unresolved call or loop) |
+
+---
+
 ## See also
 
 - [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md) — `ConstPropAnalysis` for loop-body and fixpoint-accurate propagation
