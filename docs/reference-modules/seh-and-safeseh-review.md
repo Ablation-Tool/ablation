@@ -1,22 +1,88 @@
-# SEH and SafeSEH review
+# SEH and SafeSEH Review
 
-Inspect x86 handler registration/chains, protections and suspicious handler patterns.
-
----
-
-## What it does
-
-Inspect x86 handler registration/chains, protections and suspicious handler patterns.
+Analyze x86 (32-bit) Windows PE binaries for Structured Exception Handler (SEH) chain vulnerabilities — detecting whether SafeSEH is absent (every SEH overwrite redirects execution), enumerating SafeSEH handler tables, and finding SEH frame setup patterns in the binary's code.
 
 ---
 
-## Implementation
+## Why this exists
 
-- [`cfg_bypass_detector.py`](../../ablation/analyzers/cfg_bypass_detector.py)
-- [`seh_chain_analyzer.py`](../../ablation/analyzers/seh_chain_analyzer.py)
+1. **x86 Windows uses a stack-linked list of SEH frames — an attacker who overwrites a stack SEH frame can redirect execution to an arbitrary address when an exception fires.** `SEHChainAnalyzer.scan()` checks whether `SafeSEH` (`IMAGE_LOAD_CONFIG.SEHandlerTable`) is present in the binary, how many handlers are registered, and whether the registered handlers are appropriate subset of all exports — a SafeSEH table with zero entries is as bad as no SafeSEH at all.
+
+2. **SafeSEH only protects against SEH-based overwrites when the binary is loaded in a process where all loaded DLLs have SafeSEH tables.** If any DLL lacks a SafeSEH table, the entire protection collapses — `SEHChainAnalyzer` identifies which specific DLL is the weak link. `SEHFinding.severity = 'CRITICAL'` for SafeSEH absent, `'HIGH'` for partial (table present but small).
+
+3. **`SEHChainAnalyzer.seh_frames()` finds SEH frame setup code patterns** — `push handler; push FS:[0]; mov FS:[0], esp` — identifying which functions install SEH handlers and which handler VAs they register. This is the starting point for identifying whether a specific overflowable SEH frame is in a security-sensitive function.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["SEHChainAnalyzer.from_path(path)"] --> B["Parse IMAGE_LOAD_CONFIG_DIRECTORY:\n  SEHandlerTable: VA of handler list\n  SEHandlerCount: number of registered handlers\n  Presence check: is SEHandlerTable populated?"]
+    B --> C["safe_seh_handlers() → List[int]\n  Read handler VAs from SEHandlerTable\n  Returns [] if SafeSEH not present"]
+    B --> D["seh_frames() → List[SEHFrame]\n  Scan .text for push handler / push FS:[0] / mov FS:[0], esp\n  Each match: SEHFrame(setup_va, handler_va, func_va)"]
+    B --> E["scan() → List[SEHFinding]\n  Finding: SEH_NO_SAFESEH if not present\n  Finding: SEH_EMPTY_TABLE if SEHandlerCount == 0\n  Finding: SEH_HANDLER_NOT_IN_TABLE for handlers in seh_frames() not in safe_seh_handlers()"]
+    E --> F["SEHFinding:\n  finding_type: str\n  handler_va: Optional[int]\n  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM'\n  fmt() → single-line finding"]
+    F --> G["report(findings) → str"]
+```
+
+---
+
+## Usage
+
+```python
+from ablation.analyzers.seh_chain_analyzer import SEHChainAnalyzer
+
+analyzer = SEHChainAnalyzer.from_path('target32.dll')
+findings = analyzer.scan()
+print(SEHChainAnalyzer.report(findings))
+
+# Check SafeSEH table
+handlers = analyzer.safe_seh_handlers()
+print(f"SafeSEH handlers: {len(handlers)}")
+
+# Find SEH frame setup patterns
+frames = analyzer.seh_frames()
+for frame in frames:
+    print(f"  Setup: {frame.setup_va:#x}  Handler: {frame.handler_va:#x}")
+```
+
+---
+
+## Example output
+
+The following illustrates the SEH analysis output format. Actual findings are binary-specific.
+
+```
+SEHChainAnalyzer: target32.dll  (x86 PE)
+
+SafeSEH table: Present  (<N> handlers)
+SEH frames found in .text: <M>
+
+Findings:
+
+[HIGH] SEH_HANDLER_NOT_IN_TABLE
+  handler_va: <va>  (not in SafeSEH table)
+  setup_va:   <va>  (inside func: <name>)
+  Handler is reachable by stack overwrite but not protected by SafeSEH
+```
+
+---
+
+## False positives
+
+**`SEH_HANDLER_NOT_IN_TABLE` fires when a handler VA found in `seh_frames()` does not appear in `safe_seh_handlers()`** — this can occur when the frame was set up by injected code or by a DLL that was not compiled with `/safeseh`. Confirm by checking which module the `handler_va` belongs to before treating it as a finding.
+
+---
+
+## Pipeline position
+
+Run `SEHChainAnalyzer` on x86 (32-bit) Windows PE binaries identified as security-sensitive. It is x86-only — x86_64 Windows uses a different exception handling mechanism (table-based unwinding) that is not vulnerable to classic SEH overwrites. Use `CFGBypassDetector` for x86_64 Windows bypass analysis.
 
 ---
 
 ## See also
 
-- [Cfg Bypass Detector](cfg-bypass-detector.md) — module-level reference with constructor patterns and usage examples
+- [Control Flow Guard Review](control-flow-guard-review.md) — x86_64 Windows CFG bypass analysis
+- [Crash Offset and ROP Helpers](crash-offset-and-rop-helpers.md) — ROP chain construction using SEH handler target
+- [Windows Artifact Discovery](windows-artifact-discovery.md) — broader Windows binary analysis context
