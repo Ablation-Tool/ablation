@@ -20,25 +20,33 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`backward_slice` is a forward symbolic simulation that seeds the enclosing function's argument registers (`x0`–`x7`) as `Arg(0)`–`Arg(7)` symbolic values, then simulates instruction by instruction from the function prologue (located by scanning backward for `STP x29, x30, [sp, #-k]!`) to the target call site VA. At each instruction, the simulator updates register state: `ADRP`+`ADD`/`LDR` produces a `Global(name, delta)` if the GOT entry is in the catalogue, `MOV`+`immediate` produces `Const(v)`, register copies propagate the existing symbolic value, and `BL` to an internal function resets caller-saved registers (`x0`–`x18`) to `Unknown`. When the simulation reaches `callsite_va`, the current state of each requested `arg_regs` register is returned as the symbolic value that function will receive.
+
+GOT entries are resolved via a static `_GOT` dictionary mapping `(segment_base, got_offset)` → `Global(symbol_name)`. This catalogue is populated per-target and must be extended manually for new shared objects. Entries not in the catalogue resolve to `Unknown`.
 
 ---
 
 ## Usage
 
 ```python
-from modules.callsite_tracer import backward_slice
-import lief
+from modules.callsite_tracer import backward_slice, _load
 
-binary = lief.parse('/path/to/target.elf')
-text_sec = binary.get_section('.text')
-raw = bytes(text_sec.content)
+# Load binary (applies _MAX_SO_BYTES size guard)
+binary, raw = _load('/path/to/libwechatnetwork.so')
 
-# Backward slice from a specific call site VA
-callsite_va = 0x401234
-sliced = backward_slice(raw, binary, callsite_va, max_insns=64)
-for entry in sliced:
-    print(entry)
+# Slice x0 and x1 at a BL call site to confirm struct pointer arguments
+callsite_va = 0xC8F3A0
+sliced = backward_slice(raw, binary, callsite_va, arg_regs=['x0', 'x1'])
+for reg, val in sliced.items():
+    print(f"  {reg}: {val}")
+
+# Use isinstance checks to identify argument-derived values
+from modules.callsite_tracer import Arg, Global, Const, Unknown
+for reg, val in sliced.items():
+    if isinstance(val, Arg):
+        print(f"  {reg} carries caller arg {val.idx} (taintable)")
+    elif isinstance(val, Global):
+        print(f"  {reg} is GOT global {val.name!r} + {val.delta:#x}")
 ```
 
 ---
@@ -46,26 +54,29 @@ for entry in sliced:
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+backward_slice(callsite_va=0xC8F3A0, arg_regs=['x0', 'x1']):
+  x0: Global(mmtls::gILinkKey)
+  x1: Arg(1)
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+# x0 resolves to a known GOT global — struct pointer aliasing confirmed
+# x1 passes through from caller argument 1 — taintable path
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+**GOT entries not in the `_GOT` catalogue resolve to `Unknown`** — the catalogue is hardcoded to specific `(segment_base, got_offset)` pairs for WeChat libwechatnetwork.so. On any other binary, all GOT-derived values return `Unknown` unless you extend the catalogue. Check the `_GOT` dict at the top of `callsite_tracer.py` and add entries after inspecting GOT entries with `lief`.
+
+**Prologue detection is heuristic** — `_fn_start()` scans backward up to 4 KB for an `STP x29, x30, [sp, #-k]!` frame setup instruction. If the enclosing function has an unusual prologue (e.g., a tail-call optimized leaf), the simulation starts at the wrong address and may return `Unknown` for all registers.
+
+**`BL` to internal functions resets caller-saved registers** — any `x0`–`x18` value established before an intermediate function call is overwritten with `Unknown` at that `BL`. If the target call site is reached through a call chain, `backward_slice` may under-report `Arg(n)` provenance.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** Identify the target call site VA using `SemanticSearcher` or `FuncProfiler`. Use `SinkArgClassifier` to confirm the call site is `ARG_PROPAGATED` or `UNKNOWN` (not `RODATA_CONST`) before slicing — `RODATA_CONST` call sites cannot have argument-derived values in `x0`–`x7`.
 
 **After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
 
@@ -73,17 +84,17 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading output
 
-`backward_slice(raw, binary, callsite_va, arg_regs)` returns `Dict[str, SymbolicVal]` — a map from register name to symbolic value at `callsite_va`. The four symbolic value types:
+`backward_slice(raw, binary, callsite_va, arg_regs, max_depth=128)` returns `Dict[str, Any]` — a map from each register name in `arg_regs` to one of five symbolic value types at `callsite_va`:
 
-| Type | Meaning |
-|:---|:---|
-| `Const(v)` | Register holds an immediate constant `v` at the callsite |
-| `Global(name, delta)` | Register holds a known global symbol address + byte delta |
-| `Add(base, imm)` | Register holds `base` (Arg or Global) plus an immediate offset |
-| `Arg(idx, delta)` | Register holds the function's `idx`-th argument + delta |
-| `Unknown(reg, pc)` | Provenance not resolved within the look-back window |
+| Type | Fields | Meaning |
+|:---|:---|:---|
+| `Const(v)` | `v: int` | Register holds an immediate constant |
+| `Global(name, delta=0)` | `name: str`, `delta: int` | GOT-catalogue global symbol address + byte delta |
+| `Add(base, imm)` | `base: Any`, `imm: int` | `base` (any type) plus an immediate offset |
+| `Arg(idx, delta=0)` | `idx: int`, `delta: int` | Caller's `idx`-th argument, optionally shifted by `delta` |
+| `Unknown(reg, pc)` | `reg: str`, `pc: int` | Provenance not resolved before `pc` |
 
-Check `isinstance(v, Arg)` to identify argument-derived values before reporting as taintable.
+All five types are frozen dataclasses exported from `modules.callsite_tracer`. Use `isinstance(val, Arg)` to check for taintable argument-derived values. `str(val)` produces a human-readable string for all five types (e.g., `'Arg(1)'`, `'Global(mmtls::gILinkKey)'`, `'Unknown(x2@0xC8F3A0)'`).
 
 ---
 
