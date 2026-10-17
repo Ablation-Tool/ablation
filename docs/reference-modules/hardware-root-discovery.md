@@ -88,6 +88,22 @@ Run firmware container parsing and entropy analysis as the first step on any fir
 
 ---
 
+## Reading output
+
+`FirmwareContainer.parse()` returns a `ContainerResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `vendor` | Detected vendor string (or `None`) |
+| `product` | Detected product string (or `None`) |
+| `partitions` | `List[PartitionEntry]` — `{name, magic, offset, size}` |
+
+`scan_firmware_signatures(path)` returns `List[{sig_type, offset}]` — magic-based signature hits in the image.
+
+`extract_firmware_strings(path, min_len)` returns `List[str]` — printable ASCII strings from the firmware image.
+
+---
+
 ## See also
 
 - [Firmware Flasher Trust Checks](firmware-flasher-trust-checks.md) — Authenticode signature verification analysis for firmware update PE binaries

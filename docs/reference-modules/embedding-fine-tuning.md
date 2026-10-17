@@ -87,6 +87,21 @@ Run `SigLibrary.auto_name()` after `CorpusBuilder.build()` and before `SemanticS
 
 ---
 
+## Reading output
+
+`SigLibrary.auto_name(ctx)` returns a list of `NameMatch` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `func_va` | Virtual address of the unnamed function |
+| `likely_name` | Best candidate name (e.g., `memcpy`, `strlen`) |
+| `score` | Float 0.0–1.0 — embedding cosine similarity |
+| `renamed` | `True` if `ctx.set_name()` was called for this match |
+
+Below-threshold results are omitted from the list. The threshold is configurable via `SigLibrary(threshold=0.75)`.
+
+---
+
 ## See also
 
 - [Generic Vulnerability Profile Sweeps](generic-vulnerability-profile-sweeps.md) — `SemanticSearcher` that shares the same model

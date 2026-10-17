@@ -92,6 +92,21 @@ Run `GoStringResolver` as part of any Go binary analysis where string content is
 
 ---
 
+## Reading output
+
+`GoStringResolver.resolve(va)` returns a `GoStringResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Virtual address of the Go string load site |
+| `value` | Resolved string value (or `None` if unresolved) |
+| `cmd_type` | `PATH`, `ABSOLUTE`, `RELATIVE`, or `DYNAMIC` (for subprocess call sites) |
+| `confidence` | Float 0.0–1.0 |
+
+`GoStringResolver.resolve_all()` returns `Dict[int, GoStringResult]` — all resolvable string load sites in the binary.
+
+---
+
 ## See also
 
 - [Go Subprocess Surface](go-subprocess-surface.md) — `GoSubprocessScanner` higher-level summary page
