@@ -128,41 +128,56 @@ Three-pass construction:
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`build_cfg` is a three-pass algorithm over a flat `Sequence[SH2aInsn]` (already decoded by `EcuSH2aDecoder`):
+
+1. **Leader scan** — discovers all block-start VAs: the entry point, all branch targets extracted from `insn.target_va`, and the fall-through address immediately after each terminator (or two instructions after when the terminator has a delay slot). Delay-slot instructions are explicitly excluded from the leader set.
+2. **Partition** — assigns each instruction to the current block. When a terminator with a delay slot is encountered, the next instruction is consumed into the same block (as the delay slot); the block is then closed. Without a delay slot, the block closes at the terminator itself.
+3. **Edge fill** — iterates over all blocks; for each block's terminator type (`rts`, `bra`, `bt`/`bf`, `jsr`, etc.) the `succs` list is populated from the delay-slot-adjusted successor VA. `preds` is built as the inverse.
+
+Indirect branches (`braf`, `jmp @Rn`) cannot be resolved statically — these produce open blocks with no successors.
 
 ---
 
 ## Example output
 
-```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
+The following illustrates CFG construction output format. Actual addresses and block counts are ROM-specific.
 
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+```python
+>>> cfg = build_cfg(insns, entry=0x1000)
+>>> for block in cfg:
+...     print(f"block 0x{block.start:x}: {len(block.insns)} insns  succs={[hex(s) for s in block.succs]}")
+block 0x1000: 6 insns  succs=['0x1014', '0x1034']  # bt conditional
+block 0x1014: 4 insns  succs=['0x1034']             # fall-through
+block 0x1034: 3 insns  succs=[]                     # rts + delay slot
+
+>>> dom = DomTree(cfg)
+>>> dom.back_edges()
+[]
+>>> loops.is_reducible()
+True
 ```
 
 ---
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Open blocks from indirect branches:** `braf Rn`, `bsrf Rn`, and `jmp @Rn` produce blocks with no successors because the target VA cannot be resolved from a static instruction sequence. Functions with dispatch tables (switch statements compiled to `jmp @Rn`) will have unreachable blocks in the CFG. `DomTree` and `LoopInfo` handle open blocks gracefully (they are not reachable from the entry block).
+
+**Delay-slot instruction boundary errors:** If `EcuSH2aDecoder` returns a disassembly list with a gap (e.g., truncated ROM or bad start offset), the delay-slot consumer may assign the wrong instruction as the delay slot, shifting all subsequent block boundaries. Verify the input `insns` covers the entire function before building the CFG.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Decode the function with `EcuSH2aDecoder.disassemble(start_va, end_va)` to produce the instruction list. Identify function entry points using `EcuSH2aDecoder.function_starts()` or from IVT entries.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Pass `cfg` to `DomTree(cfg)` and `LoopInfo(cfg, dom)` from `dataflow_engine` for dominance and loop structure analysis. Use `cfg.flow` as the edge list for backward dataflow passes.
 
 ---
 
 ## Reading output
 
-`build_cfg(data, entry_va)` returns a `CFG`.
+`build_cfg(insns, entry=None)` returns a `CFG`. `entry` defaults to the VA of the first instruction in `insns`.
 
 | Field | Type | Content |
 |:---|:---|:---|
@@ -187,6 +202,6 @@ Each `Block`:
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [SH-2A Decoding](sh2a-decoding.md) — `EcuSH2aDecoder` that produces the `SH2aInsn` list consumed by `build_cfg`
+- [Dataflow Engine](dataflow-engine.md) — `DomTree` and `LoopInfo` that consume `CFG.flow` and `CFG.flow_r()`
+- [Flat ROM Function Discovery](flat-rom-function-discovery.md) — function start discovery for SH-2A ROMs before CFG construction
