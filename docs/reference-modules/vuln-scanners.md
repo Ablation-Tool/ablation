@@ -661,8 +661,8 @@ all_findings = fmt_findings + heap_findings + sql_findings
 highs = [f for f in all_findings if f.severity in ('HIGH', 'CRITICAL')]
 print(f"{len(highs)} HIGH/CRITICAL findings across all scanners")
 
-for f in sorted(highs, key=lambda x: x.va):
-    print(f.severity, f.title, hex(f.va))
+for f in sorted(highs, key=lambda x: getattr(x, 'call_va', getattr(x, 'site_va', 0))):
+    print(str(f))
 ```
 
 Run all scanners from the command line:

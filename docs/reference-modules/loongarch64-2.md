@@ -19,7 +19,7 @@ Detect the GCC 12.3.1.7 LoongArch64 `min`-to-`max` code generation bug — ident
 ```mermaid
 flowchart TD
     A["LA64MaxNotMinScanner.from_path(path)\n  or .from_pe32plus(data, image_base)"] --> B["scan() → List[LA64MaxNotMinFinding]\n  Pattern 1: register-compare variant\n    sltu  Rcond, Ra, Rb\n    masknez Rtmp1, Rb, Rcond   ← wrong order → max\n    maskeqz Rtmp2, Ra, Rcond\n    or Rout, Rtmp2, Rtmp1\n    (correct min would swap masknez/maskeqz)\n  Pattern 2: immediate-compare variant\n    sltui/slti Rcond, Ra, N\n    masknez Rtmp1, Rconst, Rcond\n    maskeqz Rtmp2, Ra, Rcond\n    or Rout, Rtmp2, Rtmp1\n  For each match: check if Rout flows to memory sink\n    → LA64MaxNotMinFinding"]
-    B --> C["LA64MaxNotMinFinding:\n  va: int\n  pattern: str  (register_compare | immediate_compare)\n  bound_value: Optional[int]  (N for immediate variant)\n  flows_to_sink: bool\n  sink_va: Optional[int]\n  sink_name: Optional[str]\n  severity: CRITICAL (flows_to_sink) | HIGH (no sink yet)"]
+    B --> C["LA64MaxNotMinFinding:\n  func_va: int\n  pattern_va: int  (VA of slt/sltu)\n  result_name: str  (ABI reg name)\n  sink_va: int\n  sink_name: str  (PLT symbol)\n  sink_arg: str\n  fp_class: str  ('' | 'vec_growth' | 'copy_limit')\n  compare_op: str  ('sltu' | 'slt')"]
     C --> D["report(findings) → str"]
 ```
 
@@ -34,11 +34,11 @@ scanner = LA64MaxNotMinScanner.from_path('/path/to/tencentos_kernel.elf')
 findings = scanner.scan()
 
 for f in findings:
-    print(f"  {f.va:#x}  {f.pattern}  flows_to_sink={f.flows_to_sink}")
-    if f.bound_value is not None:
-        print(f"    bound={f.bound_value:#x}  (wrong: uses max, should be min)")
-    if f.flows_to_sink:
-        print(f"    CRITICAL: wrong value reaches {f.sink_name} at {f.sink_va:#x}")
+    print(f"  {f.pattern_va:#x}  {f.result_name} → {f.sink_name} @ {f.sink_va:#x}")
+    if f.fp_class:
+        print(f"    ELIMINATED: {f.fp_class}")
+    else:
+        print(f"    REAL: {f.compare_op} integer truncation → {f.sink_name}({f.sink_arg})")
 
 print(scanner.report(findings))
 ```
@@ -54,14 +54,11 @@ LA64MaxNotMinScanner: tencentos_kernel.elf
 
 Findings: <N>
 
-  <va>  immediate_compare  bound=0x1000
-    Incorrect: max(input, 0x1000) instead of min(input, 0x1000)
-    flows_to_sink=True  memcpy at <va>
-    CRITICAL: max value used as copy length → heap overflow
+LA64_MAX_NOT_MIN  pattern@<pattern_va>  a0 -> memcpy(count)@<sink_va>  [sltu...]
+  REAL: sltu integer truncation → memcpy(count) — max used as copy length
 
-  <va>  register_compare
-    flows_to_sink=False
-    HIGH: inverted min/max — sink not yet identified
+LA64_MAX_NOT_MIN  pattern@<pattern_va>  a1 -> kmalloc(size)@<sink_va>
+  [vec_growth]: ELIMINATED
 ```
 
 ---
@@ -82,16 +79,20 @@ Run `LA64MaxNotMinScanner` on any LoongArch64 ELF or PE binary. Prioritize `CRIT
 
 ## Reading findings
 
-`LA64MaxNotMinScanner.scan()` returns a list of finding dicts:
+`LA64MaxNotMinScanner.scan()` returns `List[LA64MaxNotMinFinding]`:
 
-| Field | Content |
-|:---|:---|
-| `severity` | `CRITICAL` (flows to sink) / `HIGH` (pattern found, no confirmed sink) |
-| `va` | VA of the incorrect min/max comparison |
-| `pattern` | `immediate_compare` or `register_compare` |
-| `bound` | Immediate bound value (for `immediate_compare`) |
-| `flows_to_sink` | `True` if the value reaches a memory copy or allocation sink |
-| `sink_va` | VA of the downstream sink (if `flows_to_sink=True`) |
+| Attribute | Type | Content |
+|:---|:---|:---|
+| `func_va` | `int` | VA of the enclosing function (0 if unknown) |
+| `pattern_va` | `int` | VA of the `slt`/`sltu` instruction starting the 4-insn sequence |
+| `result_reg` | `int` | Register number of the incorrect result |
+| `result_name` | `str` | ABI name of `result_reg` (e.g., `a0`) |
+| `sink_va` | `int` | VA of the `bl` to the sink function |
+| `sink_name` | `str` | PLT symbol name of the sink (e.g., `memcpy`) |
+| `sink_arg` | `str` | Argument label showing which argument receives the wrong value |
+| `context` | `str` | Disassembly snippet (empty string if not available) |
+| `fp_class` | `str` | `""` = real finding; `"vec_growth"` = eliminated; `"copy_limit"` = plausible-low |
+| `compare_op` | `str` | `"sltu"` (unsigned) or `"slt"` (signed) |
 
 ---
 
