@@ -10,7 +10,7 @@ Identify a binary's format (ELF, PE, Mach-O), architecture (32/64-bit, endiannes
 
 2. **Identification must work in environments without LIEF or other libraries.** Deployment contexts for Ablation include CI pipelines, air-gapped analysis hosts, and minimal embedded Python environments. `BinaryParser` uses only Python standard library (`struct`, `pathlib`) to detect format and extract header metadata. LIEF is only required for the deeper parsing done by `BinaryContext`.
 
-3. **Mach-O, ELF, and PE detection must be definitive from 4 bytes.** The magic number at byte offset 0 unambiguously identifies the format: `\x7fELF` → ELF, `MZ` → PE, and the four Mach-O magic constants identify 32/64-bit and endianness simultaneously. This 4-byte dispatch is the correct architecture for a format detection layer.
+3. **Mach-O, ELF, and PE detection must be definitive from 4 bytes.** The magic number at byte offset 0 unambiguously identifies the format: `\x7fELF` → ELF, `MZ` → PE, and the four Mach-O magic constants identify 32/64-bit and endianness simultaneously. This 4-byte dispatch defines the correct architecture for a format detection layer.
 
 ---
 

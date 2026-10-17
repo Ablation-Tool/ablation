@@ -10,7 +10,7 @@ Recover function entry points and accurate string contents from stripped Go 1.17
 
 2. **Go strings are not NUL-terminated — they are length-prefixed.** In C, strings end with a NUL byte; `strlen()` and `BinaryContext`'s string extractor both rely on this convention. Go strings are Go runtime `string` structs: a `(data_ptr, length)` pair. The string bytes in `.rodata` have no NUL terminator, so the C-string extractor either truncates the string early (if the next string's first byte happens to be a word boundary) or reads into adjacent data. The correct reading requires finding the `mov ebx, N` length hint at the call site.
 
-3. **Go 1.17+ uses a register-based AMD64 ABI that changes argument passing.** Before Go 1.17, the Go ABI passed all arguments on the stack. From Go 1.17, Go adopted a register-based ABI for AMD64 where the first argument is in `rax` (pointer) and the second in `rbx` (length). A string argument is passed as the `(rax, rbx)` pair. Recognizing this pattern at call sites is the key to determining string lengths at analysis time.
+3. **Go 1.17+ uses a register-based AMD64 ABI that changes argument passing.** Before Go 1.17, the Go ABI passed all arguments on the stack. From Go 1.17, Go adopted a register-based ABI for AMD64 where the first argument is in `rax` (pointer) and the second in `rbx` (length). A string argument is passed as the `(rax, rbx)` pair. Recognizing this pattern at call sites lets Ablation determine accurate string lengths at analysis time.
 
 ---
 

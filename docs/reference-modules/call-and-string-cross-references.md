@@ -41,7 +41,7 @@ flowchart TD
 
 ### String cross-reference queries
 
-**`string_xrefs(string_va)`** — returns a list of instruction-level code VAs that RIP-relatively reference the given string VA. Multiple instructions in the same function may reference the same string.
+**`string_xrefs(string_va)`** — returns a list of instruction-level code VAs that RIP-relatively reference the given string VA. Multiple instructions in the same function can reference the same string.
 
 **`funcs_referencing_string(string_va)`** — maps each instruction VA from `string_xrefs()` to its containing function start using `func_containing()`, then deduplicates. Returns a sorted list of function start VAs. This is the primary way to go from "I know the log message" to "I know which function to analyze".
 
@@ -117,7 +117,7 @@ ctx.func_containing(0x40a240)
 
 **RIP-relative references in non-string contexts.** Not every RIP-relative reference is a string reference. References to other code sections (e.g., `lea rcx, [rip+_init_proc]`) or to function pointers in `.data` will not match any string VA and are silently excluded from the index. The index only records references whose target VA maps to a known entry in `ctx.strings`.
 
-**`strings_near()` radius granularity.** The proximity radius is a byte-distance heuristic — it does not respect function boundaries. A string from a completely unrelated nearby function may appear within the radius. Use `strings_in_func()` for function-scoped string discovery.
+**`strings_near()` radius granularity.** The proximity radius is a byte-distance heuristic — it does not respect function boundaries. A string from a completely unrelated nearby function can appear within the radius. Use `strings_in_func()` for function-scoped string discovery.
 
 ---
 
