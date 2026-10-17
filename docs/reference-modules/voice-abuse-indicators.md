@@ -1,16 +1,16 @@
 # Voice Abuse Indicators
 
-Detect telephony denial-of-service susceptibility, call eavesdropping surfaces, signaling manipulation vectors, SIP authentication bypass conditions, and DTMF credential exposure through a suite of active probe functions — identifying VoIP abuse surfaces that are invisible to standard port scanning — via `modules/sip_enum.py`.
+Detect telephony denial-of-service susceptibility, call eavesdropping surfaces, SIP authentication bypass conditions, and SRTP/RTCP cleartext exposure — each via a dedicated probe function that targets a specific VoIP abuse class — via `modules/sip_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **VoIP infrastructure exposes a set of attack primitives not present in HTTPS services** — SIP allows unauthenticated `INVITE` flood (Telephony DoS), DTMF-encoded credentials in RTP Information elements, REFER-based call hijacking, and media redirection via `re-INVITE`. Standard web vulnerability scanners do not model these attack classes. `detect_sip_flood_surface()` and `detect_tdos_indicators()` confirm whether a SIP registrar or proxy is vulnerable to registration exhaustion and caller-ID spoofing attacks.
+1. **SIP TDoS and registration exhaustion are not detected by standard port or vulnerability scanners** — `detect_sip_flood_surface()` confirms whether a SIP registrar or proxy enforces rate limits on INVITE floods by sending repeated INVITE messages and measuring response behavior. `detect_tdos_indicators()` tests whether the server accepts caller-ID spoofing via `P-Asserted-Identity` (which enables telephony DoS by impersonating emergency services) and whether REGISTER with rapid `Expires` cycling exhausts session state. Neither attack class appears in a CVE lookup.
 
-2. **SRTP enforcement is rarely complete in enterprise deployments** — SIP infrastructure often negotiates RTP (cleartext audio) alongside SRTP (encrypted). `detect_sip_eavesdropping_surface()` checks whether the SIP server accepts an SDP offer with `RTP/AVP` (no encryption) rather than `RTP/SAVP` (SRTP required), and whether RTCP flows are observable without authentication. A server that accepts cleartext RTP and exposes RTCP means an on-path attacker can capture full audio streams.
+2. **SRTP enforcement is optional in SIP and rarely complete in enterprise deployments** — a SIP server that accepts an SDP offer with `RTP/AVP` (cleartext audio) instead of requiring `RTP/SAVP` (SRTP) means an on-path attacker can capture the full audio stream. `detect_voip_eavesdrop_surface()` sends an SDP offer with `RTP/AVP` to test acceptance and probes the RTCP port (media port + 1) to determine whether session metadata is observable without authentication.
 
-3. **SIP authentication uses HTTP Digest — a challenge-response scheme vulnerable to nonce replay and offline dictionary attacks** — `probe_sip_authentication_bypass()` tests whether the server accepts repeated responses using a previously-issued nonce (replay), whether `nc` (nonce count) enforcement is missing (parallel replay), and whether weak credentials from a targeted wordlist succeed. Successful authentication bypass findings translate directly to unauthorized call placement.
+3. **SIP Digest authentication has known weaknesses that probe-based testing directly confirms** — `probe_sip_authentication_weaknesses()` tests nonce replay: it captures the `nonce` from a `401 Unauthorized` challenge and re-uses it in a second REGISTER without incrementing `nc`. Acceptance (`SIP_NONCE_REPLAY_ACCEPTED`) means the server does not enforce nonce count, enabling parallel credential replay. `probe_sip_authentication_bypass()` tests whether the server accepts an INVITE with no authentication header at all (`SIP_UNAUTH_INVITE`) or with a forged Digest response using a blank password (`SIP_DIGEST_BYPASS`, `SIP_AUTH_BYPASS`).
 
 ---
 
@@ -18,9 +18,11 @@ Detect telephony denial-of-service susceptibility, call eavesdropping surfaces, 
 
 ```mermaid
 flowchart TD
-    A["detect_sip_flood_surface(host, port=5060) → list\n  Send 100 rapid INVITE messages (distinct branch tags)\n  Check: 486 Busy Here vs 503 Service Unavailable flood\n  Check: REGISTER with Expires=0 (de-register storm)\n  → INVITE_FLOOD_SURFACE / REGISTER_EXHAUSTION findings"] --> B["detect_tdos_indicators(host, port=5060) → list\n  Send INVITE with P-Asserted-Identity: spoofed@victim.com\n  Accept or 403 → TDOS_CALLER_ID_SPOOF\n  Send INVITE with spoofed From header\n  Accept → FROM_HEADER_SPOOF_ACCEPTED\n  → [{severity, title, detail, host, port}]"]
-    B --> C["detect_sip_eavesdropping_surface(host, port=5060) → list\n  SDP offer: m=audio RTP/AVP → SRTP_NOT_ENFORCED if 200 OK\n  SUBSCRIBE presence (RFC 3856) → PRESENCE_SUBSCRIBE_OPEN\n  Check RTCP port (RTP+1) reachable → RTCP_EXPOSED\n  → [{severity, title, detail, host, port}]"]
-    C --> D["probe_sip_authentication_bypass(host, port=5060) → list\n  REGISTER → 401 (capture nonce)\n  Re-use nonce in second REGISTER → nonce replay test\n  Missing nc enforcement → NONCE_REPLAY_ACCEPTED\n  Wordlist credential test → SIP_AUTH_BYPASS if accepted\n  → [{severity, title, detail, host, port}]"]
+    A["detect_sip_flood_surface(host, port=5060) → list\n  Rapid INVITE burst: no rate limit → SIP_NO_RATE_LIMIT (MEDIUM)\n  Malformed SIP accepted → SIP_MALFORMED_ACCEPTED (MEDIUM)\n  Oversized URI accepted → SIP_OVERSIZED_URI_ACCEPTED (MEDIUM)\n  → [{severity, title, detail, host, port}]"] --> B["detect_tdos_indicators(host, port=5060) → list\n  INVITE with spoofed PAI header → SIP_CALLER_ID_SPOOFING_POSSIBLE (HIGH)\n  Rapid OPTIONS burst → SIP_OPTIONS_RATE_UNLIMITED (MEDIUM)\n  Rapid REGISTER Expires cycling → SIP_REGISTRATION_EXHAUSTION_POSSIBLE (HIGH)\n  → [{severity, title, detail, host, port}]"]
+    B --> C["detect_sip_eavesdropping_surface(host, port=5060) → list\n  SUBSCRIBE to presence (RFC 3856) → SIP_PRESENCE_SUBSCRIPTION_UNAUTH (HIGH)\n  Unsolicited NOTIFY → SIP_NOTIFY_REFLECTS_UNSOLICITED (MEDIUM)\n  INVITE with SDP offer → SIP_SDP_CODEC_DISCLOSURE (MEDIUM)\n  → [{severity, title, detail, host, port}]"]
+    C --> D["detect_voip_eavesdrop_surface(host, port=5060) → list\n  SDP RTP/AVP offer accepted → SRTP_NOT_REQUIRED (CRITICAL)\n  RTCP port reachable → RTCP_PORT_ACCESSIBLE (MEDIUM)\n  → [{severity, title, detail, host, port}]"]
+    D --> E["probe_sip_authentication_weaknesses(host, port=5060) → list\n  401 nonce captured; re-used without nc increment\n  → SIP_NONCE_REPLAY_ACCEPTED (CRITICAL) if accepted\n  → [{severity, title, detail, host, port}]"]
+    E --> F["probe_sip_authentication_bypass(host, port=5060) → list\n  INVITE with no Authorization header → SIP_UNAUTH_INVITE (HIGH)\n  Digest with blank password → SIP_AUTH_BYPASS (CRITICAL)\n  Digest with forged response → SIP_DIGEST_BYPASS (CRITICAL)\n  → [{severity, title, detail, host, port}]"]
 ```
 
 ---
@@ -32,8 +34,9 @@ from modules.sip_enum import (
     detect_sip_flood_surface,
     detect_tdos_indicators,
     detect_sip_eavesdropping_surface,
+    detect_voip_eavesdrop_surface,
+    probe_sip_authentication_weaknesses,
     probe_sip_authentication_bypass,
-    detect_sip_header_injection,
 )
 
 host = '<target-host>'
@@ -43,12 +46,14 @@ all_findings = (
     detect_sip_flood_surface(host)
     + detect_tdos_indicators(host)
     + detect_sip_eavesdropping_surface(host)
+    + detect_voip_eavesdrop_surface(host)
+    + probe_sip_authentication_weaknesses(host)
     + probe_sip_authentication_bypass(host)
-    + detect_sip_header_injection(host)
 )
 
-for finding in sorted(all_findings, key=lambda f: {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2}.get(f['severity'], 3)):
-    print(f"  [{finding['severity']}] {finding['title']}: {finding['detail'][:80]}")
+severity_order = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3, 'INFO': 4}
+for f in sorted(all_findings, key=lambda f: severity_order.get(f['severity'], 5)):
+    print(f"  [{f['severity']}] {f['title']}: {f['detail'][:80]}")
 ```
 
 ---
@@ -60,40 +65,53 @@ The following is a schematic example showing output structure and field names. V
 ```
 detect_sip_flood_surface: <target-host>:5060
 
-  [HIGH] INVITE_FLOOD_SURFACE
-         Server returned 486 Busy Here after <N> rapid INVITEs —
-         no rate limiting detected on INVITE flood path
+  [MEDIUM] SIP_NO_RATE_LIMIT — TDoS via INVITE flood possible
+           Server did not enforce rate limits on rapid INVITE burst
 
-detect_sip_eavesdropping_surface: <target-host>:5060
+detect_tdos_indicators: <target-host>:5060
 
-  [HIGH] SRTP_NOT_ENFORCED
-         SDP offer with RTP/AVP (cleartext) accepted —
-         server does not require SRTP for audio channels
+  [HIGH]   SIP_CALLER_ID_SPOOFING_POSSIBLE
+           Server accepted INVITE with spoofed P-Asserted-Identity header
+
+  [HIGH]   SIP_REGISTRATION_EXHAUSTION_POSSIBLE
+           Rapid REGISTER/Expires cycling accepted without rate limiting
+
+detect_voip_eavesdrop_surface: <target-host>:5060
+
+  [CRITICAL] SRTP_NOT_REQUIRED — call media in cleartext
+             SDP offer with RTP/AVP (cleartext) accepted — SRTP not enforced
+
+probe_sip_authentication_weaknesses: <target-host>:5060
+
+  [CRITICAL] SIP_NONCE_REPLAY_ACCEPTED
+             Re-used nonce accepted without nc enforcement
 
 probe_sip_authentication_bypass: <target-host>:5060
 
-  [CRITICAL] NONCE_REPLAY_ACCEPTED
-             Repeated nonce accepted without nc (nonce count) enforcement
+  [CRITICAL] SIP_AUTH_BYPASS
+             Digest authentication accepted with blank password
 ```
 
 ---
 
 ## False positives
 
-**`INVITE_FLOOD_SURFACE` on servers with network-layer rate limiting** — firewall or load balancer rate limiting upstream of the SIP server may absorb flood probes before they reach the application. The server returning `486 Busy Here` reflects normal resource constraints, not a TDoS vulnerability, if the rate limiting is verified in infrastructure configuration.
+**`SIP_NO_RATE_LIMIT` when rate limiting is applied upstream** — a firewall or load balancer rate-limiting SIP upstream of the application may absorb the INVITE burst before it reaches the registrar. The probe result reflects what the registrar sees, not the external boundary. Confirm the network path before reporting.
 
-**`SRTP_NOT_ENFORCED` on B2BUA deployments** — back-to-back user agents (B2BUAs) sometimes accept cleartext SDP offers on the internal leg while enforcing SRTP on the external leg. Confirm whether the probed interface is the internal or external SIP leg before reporting SRTP non-enforcement as an external-facing vulnerability.
+**`SRTP_NOT_REQUIRED` on internal SIP legs of B2BUAs** — back-to-back user agents (B2BUAs) often accept cleartext RTP on their internal SIP leg while enforcing SRTP on the external leg. Confirm which leg (internal or external) is being probed before escalating to CRITICAL. The `RTCP_PORT_ACCESSIBLE` finding from `detect_voip_eavesdrop_surface` has the same consideration.
+
+**`probe_sip_authentication_bypass` generates authentication log entries** — unlike passive probes, `probe_sip_authentication_bypass()` sends INVITE messages that will appear in the server's authentication audit log. Run only in authorized assessment contexts.
 
 ---
 
 ## Pipeline position
 
-Run voice abuse indicator probes after `probe_sip_options()` confirms a SIP server is present on the target. Run `detect_sip_flood_surface()` and `detect_sip_eavesdropping_surface()` first (passive/read-only), then `probe_sip_authentication_bypass()` only in authorized assessment contexts — credential testing generates authentication log entries.
+Run `detect_sip_flood_surface()` and `detect_sip_eavesdropping_surface()` first — they send passive/read-only requests. Run `detect_voip_eavesdrop_surface()` next (SDP negotiation). Run `probe_sip_authentication_weaknesses()` and `probe_sip_authentication_bypass()` last, after confirming assessment authorization, as they generate auth log entries. Precede all probes with `probe_sip_options()` to confirm a SIP server is present.
 
 ---
 
 ## See also
 
-- [SIP Attack Surface Detection](sip-attack-surface-detection.md) — full set of SIP attack surface functions including header injection and signaling manipulation
+- [SIP Attack Surface Detection](sip-attack-surface-detection.md) — signaling manipulation, header injection, interception indicators
 - [VoIP Protocol Inspection and Covert Channels](voip-protocol-and-covert-channels.md) — DTMF extraction, RTP covert channels, RTCP abuse
 - [Legacy Voice Protocols](legacy-voice-protocols.md) — H.323, SCCP/Skinny, MGCP probe coverage

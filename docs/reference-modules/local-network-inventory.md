@@ -18,10 +18,10 @@ Enumerate network interfaces, active connections, listening ports, firewall rule
 
 ```mermaid
 flowchart TD
-    A["NetworkAnalyzer(interface=None)"] --> B["enumerate_interfaces() → List[dict]\n  /proc/net/if_inet6 + ifconfig parsing\n  → [{name, ip, netmask, mac, mtu}]"]
-    B --> C["enumerate_connections() → List[dict]\n  /proc/net/tcp, tcp6, udp, udp6\n  State: LISTEN / ESTABLISHED / TIME_WAIT\n  → [{local_addr, remote_addr, state, pid}]"]
-    C --> D["enumerate_firewall_rules() → List[dict]\n  Linux: subprocess(['iptables', '-L', '-n', '-v'])\n  macOS: subprocess(['pfctl', '-sr'])\n  → [{chain, policy, rules: List[str]}]"]
-    D --> E["run_network_analysis(target) → dict\n  Combine interface + connection + firewall\n  For each subnet: queue icmp_host_discovery\n  → {interfaces, listening_ports, connections, firewall, subnets}"]
+    A["NetworkAnalyzer()"] --> B["get_interfaces() → self.interfaces\n  Linux: /proc/net/dev + ip addr show\n  macOS: ifconfig -a\n  → [{name, ip}]"]
+    B --> C["get_connections() → self.connections\n  /proc/net/tcp, tcp6 — state hex → string\n  LISTEN state → appended to self.listening instead\n  → [{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}]"]
+    C --> D["get_listening_ports() → self.listening (from get_connections state 0x0A)\n  get_firewall_rules() — iptables -L -n / pfctl -sr\n  → self.firewall_rules"]
+    D --> E["enumerate_all() → dict:\n  {interfaces, connections, listening, firewall}\n  run_network_analysis(target) → separate function:\n    ICMPScanner.scan(subnet) or WebDirBrute(url).scan()\n    → {target, icmp, web, findings}"]
 ```
 
 ---

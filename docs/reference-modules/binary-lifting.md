@@ -6,11 +6,11 @@ Lift native binary instructions from 18 ISA variants — ARM64, x86-64, x86-32, 
 
 ## Why this exists
 
-1. **Firmware targets span dozens of ISA variants that Ghidra and Binary Ninja do not support or support poorly** — nanoMIPS (MediaTek), BEAM (Erlang/OTP embedded nodes), SH-2A (Renesas automotive), ARC EM/HS (DesignWare embedded), and V850/RH850 (automotive ECUs) are second-tier targets in commercial tools. `BinaryLifter` provides a single dispatch interface across all 18 ISAs so that ablation analysis scripts do not branch on architecture.
+1. **Firmware targets span dozens of ISA variants that commercial tools support poorly** — nanoMIPS (MediaTek), BEAM (Erlang/OTP embedded nodes), SH-2A (Renesas automotive), ARC EM/HS (DesignWare embedded), and V850/RH850 (automotive ECUs) are second-tier targets in commercial disassemblers. `BinaryLifter` provides a single dispatch interface across all 18 ISAs so that ablation analysis scripts do not branch on architecture.
 
-2. **Two completeness tiers reflect the analysis depth available per architecture** — ARM64 and x86-64 implement full pseudocode lifting: typed `NativeVal` IR, register state machine, and taint propagation annotations. All other ISAs implement structural lifting: basic-block structure, call site resolution, and arithmetic as comments. This tier distinction is surfaced explicitly in the output so a reviewer knows at a glance how complete the pseudocode is.
+2. **ARM64 and x86-64 have full typed-register-state lifters; all other ISAs produce structured pseudocode** — the ARM64 backend (`_lift_arm64`) and x86-64 backend (`_lift_x86_64`) both maintain a typed register state machine: each instruction's output is modeled as a `NativeVal` with a C type, and taint annotations are propagated register-by-register. All other backends produce structured pseudocode — call sites are resolved to names, branch targets are labeled, and arithmetic appears as C-style expressions — but without a register state machine.
 
-3. **`BinaryLifter.lift_function(va)` takes a function VA and produces a complete pseudocode listing without requiring manual disassembly** — the caller does not select a decoder, manage register file state, or handle platform-specific calling conventions. `BinaryLifter.from_path()` reads the ELF header to dispatch the correct ISA backend automatically; `arch=` overrides the detection for unusual or stripped targets.
+3. **`with_taint(findings)` integrates TaintTracker output directly into lifted pseudocode** — `BinaryLifter.with_taint(findings)` accepts a list of `TaintFindingARM64` (or any object with `func_va`, `source_reg`, `sink_reg`, or `tainted_regs` attributes) and returns a new `BinaryLifter` instance that annotates affected instructions in the lifted output with taint markers. This connects the automated taint analysis to the human-readable pseudocode.
 
 ---
 
@@ -18,9 +18,10 @@ Lift native binary instructions from 18 ISA variants — ARM64, x86-64, x86-32, 
 
 ```mermaid
 flowchart TD
-    A["BinaryLifter.from_path(path, arch=None)\n  or .from_context(ctx, arch=None)"] --> B["ISA detection:\n  ELF e_machine → arch string (arch= overrides)\n  Full tier: arm64, x86_64\n  Structural tier: all others\n  → backend decoder selected"]
-    B --> C["lift_function(va) → str\n  Disassemble from VA to function end\n  Full tier:\n    NativeVal IR: typed register assignments\n    Taint annotations if .with_taint(tracker)\n    Resolved call names from ctx.name(target_va)\n  Structural tier:\n    Basic block layout: branch targets resolved\n    Call sites: function names inline\n    Arithmetic: C-style expression comments\n  → annotated pseudocode string"]
-    C --> D["report(path, va, arch=None) → str\n  One-liner: constructs lifter + calls lift_function(va)\n  Convenience wrapper — no ctx management needed"]
+    A["BinaryLifter.from_path(path, arch='arm64')\n  or .from_context(ctx, arch='arm64')"] --> B["ISA dispatch in lift_function(va):\n  'arm64' → _lift_arm64 (full: typed NativeVal state machine)\n  'x86_64'/'amd64' → _lift_x86_64 (full: typed x86_64 state)\n  all others → structural backend\n  Returns multi-line pseudo-C IR string"]
+    B --> C["ARM64 / x86-64 full backends:\n  Typed register assignments (NativeVal)\n  Resolved call names via ctx._names + _plt\n  Taint annotations if .with_taint() called\n  Branch target labels (loc_<va>)"]
+    C --> D["Structural backends (16 ISAs):\n  Capstone disassembly → C-style expression rendering\n  Call sites resolved to function names\n  Branch targets labeled (loc_<va>)\n  Arithmetic as C operators"]
+    D --> E["report(path, va, arch='arm64') → None\n  Convenience: constructs lifter, calls lift_function(va),\n  prints to stdout. Does not return a value."]
 ```
 
 ---
@@ -30,82 +31,101 @@ flowchart TD
 ```python
 from ablation.analyzers.binary_lifter import BinaryLifter
 
-# ARM64 (full — register state machine + taint-ready)
+# ARM64 — full typed register state machine
 lifter = BinaryLifter.from_path('/path/to/arm64.elf')
 print(lifter.lift_function(0x12340))
 
-# MIPS-32 (structural — calls resolved, arithmetic as comments)
+# MIPS-32 — structural pseudocode (calls resolved, arithmetic as C)
 lifter = BinaryLifter.from_path('/path/to/mips32.elf', arch='mips32')
 print(lifter.lift_function(0x10430))
 
-# Convenience one-liner
+# With taint annotations from a prior TaintTracker run
+from ablation.analyzers.taint_tracker_arm64 import ARM64TaintTracker
+tracker = ARM64TaintTracker.from_context(ctx)
+findings = tracker.run()
+annotated_lifter = BinaryLifter.from_context(ctx).with_taint(findings)
+print(annotated_lifter.lift_function(0x12340))
+
+# Convenience one-liner: prints to stdout, returns None
 BinaryLifter.report('/path/to/binary', 0x12340, arch='ppc32')
 ```
 
 **ISA → `arch=` string reference**
 
-| ISA | `arch=` |
+| ISA | `arch=` strings |
 |:---|:---|
-| ARM64 | `arm64` (default on AArch64 ELF) |
-| x86-64 | `x86_64`, `amd64` |
-| x86-32 | `x86_32`, `i386` |
-| ARM32/Thumb | `arm32`, `thumb`, `thumb2` |
-| MIPS-32 | `mips32`, `mips`, `mips32el` |
-| MIPS-64 | `mips64`, `mips64el` |
+| ARM64 | `arm64` (default) |
+| x86-64 | `x86_64`, `x86-64`, `amd64`, `x86` |
+| x86-32 | `x86_32`, `x86-32`, `i386`, `i686` |
+| ARM32 | `arm32`, `arm`, `arm-32` |
+| Thumb/Thumb2 | `thumb`, `thumb2`, `arm-thumb` |
+| MIPS-32 BE | `mips32`, `mips`, `mips-32`, `mipsbe` |
+| MIPS-32 LE | `mips32el`, `mipsel`, `mips-32-el` |
+| MIPS-64 BE | `mips64`, `mips-64`, `mipsn64` |
+| MIPS-64 LE | `mips64el` |
 | nanoMIPS | `nanomips` |
-| PPC-32 | `ppc32`, `ppc`, `powerpc` |
-| PPC-64 | `ppc64`, `powerpc64` |
-| RISC-V 32/64 | `rv32`, `rv64`, `riscv32`, `riscv64` |
-| LoongArch64 | `la64`, `loongarch64` |
-| SH-2A | `sh2a`, `sh2` |
-| ARC EM/HS | `arc`, `archs`, `arcem` |
+| PPC-32 | `ppc32`, `ppc`, `powerpc`, `ppc-32` |
+| PPC-64 | `ppc64`, `powerpc64`, `ppc-64` |
+| RISC-V 32 | `rv32`, `riscv32`, `riscv-32` |
+| RISC-V 64 | `rv64`, `riscv64`, `riscv-64` |
+| ARC EM/HS | `arc`, `archs`, `arcem`, `arc-32` |
 | V850/RH850 | `v850`, `rh850`, `v850e2` |
+| LoongArch64 | `la64`, `loongarch64`, `loongarch_64`, `loongarch-64` |
+| SH-2A | `sh2a`, `sh-2a`, `sh2` |
 | BEAM | `beam`, `erlang`, `elixir` |
 
 ---
 
 ## Example output
 
-The following is a schematic example showing output structure and field names. Values are illustrative.
+The following is a schematic example showing output structure. Values are illustrative.
 
 ```
-lift_function(0x22ccc0)   [arm64 — full tier]
+lift_function(0x22ccc0)   [arch=arm64, full backend]
 
-  // <func_name>
-  NativeVal x0 = recv(sockfd, buf, len, flags);   // tainted: x0
-  NativeVal x1 = x0 + 0x10;
+// fn_22ccc0 @ 0x22ccc0
+{
+  uint64_t x0 = recv(x0, x1, x2, x3);   // tainted: x0
+  uint64_t x1 = x0 + 0x10;
   if (x1 > x8) goto loc_22cd48;
-  NativeVal x2 = memcpy(dest, x0, x1);
-  system(x0);   // ★ TAINT: x0 reaches sink from recv()
+  memcpy(x0, x1, x1);
+  system(x0);   // ★ TAINT x0 (source: recv)
+  loc_22cd48:
+}
 
-lift_function(0x10430)   [mips32 — structural tier]
+lift_function(0x10430)   [arch=mips32, structural backend]
 
-  // <func_name>
-  /* a0 = recv(...) */
-  /* a0 += 0x10 */
-  if a0 > t0: goto 0x10458
-  /* memcpy(a1, a0, a0) */
-  /* system(a0) */   // sink
+// fn_10430 @ 0x10430
+{
+  /* a0 = recv(a0, a1, a2, a3) */
+  /* a1 = a0 + 0x10 */
+  if (a1 > t0) goto loc_10458;
+  /* memcpy(a1, a0, a1) */
+  system(a0);
+  loc_10458:
+}
 ```
 
 ---
 
 ## False positives
 
-**Structural tier pseudocode has incomplete register provenance** — on non-ARM64/x86-64 ISAs, `BinaryLifter` does not maintain a full typed register state machine. A call to `system(a0)` in MIPS structural pseudocode indicates `a0` is the first argument, but the lifter does not trace where `a0` was last written. Combine structural output with `SinkArgClassifier` and `TaintTracker` for ISAs that support them.
+**Structural backend pseudocode has no register provenance** — on non-ARM64/x86-64 ISAs, `BinaryLifter` does not maintain a typed register state machine. A call to `system(a0)` in MIPS structural pseudocode confirms `a0` is the first argument, but the lifter does not trace where `a0` was last written. Combine structural output with `SinkArgClassifier` and the relevant `TaintTracker` for ISAs that have one.
 
-**ELF `e_machine` detection fails on firmware blobs without ELF headers** — raw binary blobs extracted from flash images may lack an ELF header. `BinaryLifter.from_path()` raises `ValueError` if ISA detection fails and no `arch=` override is provided. Always pass `arch=` explicitly for non-ELF firmware images.
+**`report()` writes to stdout and returns `None`** — `BinaryLifter.report()` is a convenience printer, not a function that returns a string. Capturing its output requires redirecting stdout or calling `lift_function()` directly and formatting the result yourself.
+
+**ELF `e_machine` detection requires an ELF header** — raw binary blobs extracted from flash images may lack an ELF header. `BinaryLifter.from_path()` with no `arch=` defaults to `arm64`. Always pass `arch=` explicitly for non-ELF firmware images or when auto-detection may pick the wrong ISA.
 
 ---
 
 ## Pipeline position
 
-Use `BinaryLifter.lift_function(va)` after `FuncProfiler` identifies a candidate function and `SinkArgClassifier` classifies the sink as `ARG_PROPAGATED` or `UNKNOWN`. The pseudocode output serves as human-readable confirmation of the taint path before writing the finding to `re/<vendor>/<target>_re.py`.
+Use `BinaryLifter.lift_function(va)` after `FuncProfiler` identifies a candidate function and `SinkArgClassifier` classifies the sink as `ARG_PROPAGATED` or `UNKNOWN`. The pseudocode output serves as human-readable confirmation of the taint path before writing the finding to `re/<vendor>/<target>_re.py`. For ARM64 and x86-64 targets, chain `.with_taint(findings)` from a prior `TaintTracker` run to annotate taint flow directly in the pseudocode.
 
 ---
 
 ## See also
 
-- [Binary Lifter](binary-lifter.md) — complete `BinaryLifter` API, `NativeVal` dataclass, taint annotation integration
-- [BinaryContext](binary-context.md) — session state container; use `from_context()` to avoid re-parsing
+- [Binary Lifter](binary-lifter.md) — complete `BinaryLifter` API, `NativeVal` dataclass, `_X86_64State` detail
+- [BinaryContext](binary-context.md) — session state container; use `from_context()` to inherit PLT and name overlay
 - [Function Profiler](function-profiler.md) — identify candidate functions before lifting

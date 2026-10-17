@@ -1,16 +1,16 @@
 # Legacy Voice Protocols
 
-Probe H.323, SCCP/Skinny, and MGCP telephony infrastructure for unauthenticated call signaling access, registration without certificate-based authentication, and media-gateway misconfigurations that expose internal PBX topology — via `modules/sip_enum.py`.
+Probe H.323 Q.931/RAS, SCCP/Skinny, and MGCP telephony infrastructure for unauthenticated call-signaling response, gatekeeper registration without authentication, phone registration without CAPF, and unauthenticated call creation or endpoint audit on media gateways — via `modules/sip_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **H.323 deployments frequently lack TLS on the Q.931 signaling channel** — H.323 Q.931 (TCP/1720) carries call setup, teardown, and capability negotiation in cleartext by default. `probe_h323_service()` sends a minimal SETUP TPKT to confirm that the gatekeeper accepts call setup without TLS or authentication, exposing the internal dial plan to any network-adjacent attacker. The H.323 RAS (UDP/1719) Gatekeeper Request (GRQ) path is equally unprotected in default deployments.
+1. **H.323 Q.931 (TCP/1720) and RAS (UDP/1719) are cleartext by default** — `probe_h323_service()` sends a minimal SETUP TPKT to TCP/1720 to confirm the port accepts H.323 call setup without TLS, and sends a GatekeeperRequest (GRQ) to UDP/1719 to test whether the gatekeeper issues a GatekeeperConfirm (GCF) without H.235 authentication. A GCF without authentication (`H323_GATEKEEPER_UNAUTH_CONFIRM`) means an attacker can register, enumerate the dial plan, and bypass admission control.
 
-2. **SCCP/Skinny phone registration has an optional certificate-based authentication layer (CAPF) that is widely skipped** — Cisco Unified Communications Manager (CUCM) supports CAPF (Certificate Authority Proxy Function) for encrypted SCCP phone registration. When CAPF is not enforced, `probe_sccp_skinny()` receives a `RegisterAck` in response to a spoofed REGISTER message, confirming that an attacker on the same VLAN can impersonate a phone and receive calls. `detect_sccp_skinny_surface()` probes deeper: it requests the device pool and soft-key template lists, which expose PBX topology without authentication.
+2. **SCCP/Skinny registration has an optional CAPF certificate layer that is widely not enforced** — `probe_sccp_skinny()` sends a RegisterMessage (0x0001) to TCP/2000; a RegisterAck (0x0081) in response means CUCM/CME accepted registration from an unknown device without credentials (`SCCP_UNAUTH_REGISTER_ACCEPTED`). `detect_sccp_skinny_surface()` extends this: it probes the KeepAlive path (0x0000 → 0x0120 KeepAliveAck) and sends an unsolicited OpenReceiveChannelAck (0x0022) to test whether the call agent accepts an attacker-controlled RTP endpoint description without a preceding OpenReceiveChannel.
 
-3. **MGCP media gateways accept call control without IPsec in most enterprise deployments** — RFC 3435 §5 specifies IPsec for MGCP call agent to media gateway authentication, but IPsec is absent in the majority of enterprise deployments. `detect_mgcp_surface()` sends a CRCX (Create Connection) command via UDP/2427; an `200 OK` response from the media gateway confirms unauthenticated call creation, allowing an attacker to redirect media streams or create unauthorized calls.
+3. **MGCP media gateways accept call control commands without IPsec in most enterprise deployments** — RFC 3435 §5 specifies IPsec for call agent authentication, but it is absent in most deployments. `detect_mgcp_surface()` sends three MGCP commands (AUEP, RQNT, CRCX) to UDP/2427; a 200-class response to any of them without authentication represents a direct path to endpoint enumeration, event subscription hijack, or unauthenticated call creation.
 
 ---
 
@@ -18,9 +18,9 @@ Probe H.323, SCCP/Skinny, and MGCP telephony infrastructure for unauthenticated 
 
 ```mermaid
 flowchart TD
-    A["probe_h323_service(host, port=1720) → list\n  TCP connect to port 1720\n  Send minimal SETUP TPKT (TPKT header + Q.931 SETUP IE)\n  Response: CALL PROCEEDING or ALERTING → H323_CALL_SETUP_RESPONSIVE\n  UDP/1719: send GRQ → GRRJ or GCF → H323_GATEKEEPER_RESPONSIVE\n  → [{severity, title, detail, host, port}]"] --> B["probe_sccp_skinny(host, port=2000) → list\n  TCP connect to port 2000\n  Send SCCP RegisterMessage (deviceName, stationIpPort, deviceType)\n  Response KeepAliveAck or RegisterAck → SCCP_REGISTER_ACK\n  → [{severity, title, detail, host, port}]"]
-    B --> C["detect_sccp_skinny_surface(host, port=2000) → list\n  Send GetDevicePoolConfig request\n  Send GetSoftKeyTemplate request\n  Response with device pool data → SCCP_DEVICE_POOL_EXPOSED\n  → [{severity, title, detail, host, port}]"]
-    C --> D["detect_mgcp_surface(host, port=2427) → list\n  UDP sendto port 2427:\n    CRCX <txid> aaln/1@<host> MGCP 1.0\n    c=IN IP4 <host>  m=audio 0 RTP/AVP 0\n  Response 200 OK → MGCP_CRCX_UNAUTH\n  Response 401 → auth required (no finding)\n  → [{severity, title, detail, host, port}]"]
+    A["probe_h323_service(host, port=1720) → list\n  TCP/1720: TPKT SETUP → any response → H323_CALL_SIGNALING_ACTIVE (MEDIUM)\n  UDP/1719: GRQ → GCF (0x09) → H323_GATEKEEPER_UNAUTH_CONFIRM (HIGH)\n  UDP/1719: GRQ → other response → H323_GATEKEEPER_RESPONDS (MEDIUM)\n  → [{severity, title, detail, host, port}]"] --> B["probe_sccp_skinny(host, port=2000) → list\n  TCP/2000: RegisterMessage (0x0001)\n    → RegisterAck (0x0081) → SCCP_UNAUTH_REGISTER_ACCEPTED (CRITICAL)\n    → RegisterREJ (0x009D) or other → SCCP_PORT_OPEN (LOW)\n  TCP/2443: TLS handshake → SCCP_TLS_ACTIVE (LOW)\n  → [{severity, title, detail, host, port}]"]
+    B --> C["detect_sccp_skinny_surface(host, port=2000) → list\n  Probe 1: RegisterMessage (0x0001)\n    → 0x0081 → SCCP_REGISTER_ACCEPTED (CRITICAL)\n    → 0x009D → SCCP_REGISTER_REJECTED (MEDIUM)\n  Probe 2: KeepAliveMessage (0x0000)\n    → KeepAliveAck (0x0120) → SCCP_KEEPALIVE_RESPONSIVE (HIGH)\n  Probe 3: unsolicited OpenReceiveChannelAck (0x0022)\n    → any response → SCCP_UNSOLICITED_MEDIA_CHANNEL (HIGH)\n  → [{severity, title, detail, host, port}]"]
+    C --> D["detect_mgcp_surface(host, port=2427) → list\n  AUEP *@host → 200 → MGCP_ENDPOINT_AUDIT_UNAUTH (CRITICAL)\n             → other code → MGCP_SURFACE_OPEN (INFO)\n  RQNT *@host → 200 → MGCP_NOTIFY_ACCEPTED (HIGH)\n  CRCX *@host → 200 → MGCP_CALL_CREATED_UNAUTH (CRITICAL)\n  → [{severity, title, detail, host, port}]"]
 ```
 
 ---
@@ -33,16 +33,19 @@ from modules.sip_enum import (
     probe_sccp_skinny,
     detect_sccp_skinny_surface,
     detect_mgcp_surface,
-    probe_asa_sip_fixup_legacy,
 )
 
 host = '<target-host>'
 
 # All probes return [{severity, title, detail, host, port}]
-for finding in (probe_h323_service(host)
-                + probe_sccp_skinny(host)
-                + detect_sccp_skinny_surface(host)
-                + detect_mgcp_surface(host)):
+all_findings = (
+    probe_h323_service(host)
+    + probe_sccp_skinny(host)
+    + detect_sccp_skinny_surface(host)
+    + detect_mgcp_surface(host)
+)
+
+for finding in sorted(all_findings, key=lambda f: {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3, 'INFO': 4}.get(f['severity'], 5)):
     print(f"  [{finding['severity']}] {finding['title']}: {finding['detail'][:80]}")
 ```
 
@@ -55,34 +58,44 @@ The following is a schematic example showing output structure and field names. V
 ```
 probe_h323_service: <target-host>:1720
 
-  [HIGH] H323_CALL_SETUP_RESPONSIVE
-         SETUP TPKT accepted — H.323 Q.931 call signaling accessible without TLS
+  [MEDIUM] H323_CALL_SIGNALING_ACTIVE
+           TCP <target-host>:1720 responded to H.323 Setup TPKT frame
+           (<N> bytes). Active H.323 call-signaling port confirmed.
+
+  [HIGH]   H323_GATEKEEPER_UNAUTH_CONFIRM
+           UDP <target-host>:1719 returned GatekeeperConfirm (GCF) to
+           unauthenticated GRQ. Gatekeeper accepted endpoint without H.235.
 
 probe_sccp_skinny: <target-host>:2000
 
-  [HIGH] SCCP_REGISTER_ACK
-         RegisterAck received for spoofed device registration — CAPF not enforced
+  [CRITICAL] SCCP_UNAUTH_REGISTER_ACCEPTED
+             TCP <target-host>:2000 returned RegisterACK (0x0081) to
+             unauthenticated SCCP RegisterMessage.
 
 detect_mgcp_surface: <target-host>:2427
 
-  [CRITICAL] MGCP_CRCX_UNAUTH
-             CRCX accepted without IPsec authentication — media gateway allows
-             unauthenticated call creation
+  [CRITICAL] MGCP_ENDPOINT_AUDIT_UNAUTH
+             UDP <target-host>:2427 returned MGCP 200 to AUEP *@<host>
+             without CallAgent authentication.
+
+  [CRITICAL] MGCP_CALL_CREATED_UNAUTH
+             UDP <target-host>:2427 returned MGCP 200 to CRCX without
+             CallAgent authentication — call leg allocated.
 ```
 
 ---
 
 ## False positives
 
-**`H323_CALL_SETUP_RESPONSIVE` on H.323 proxies with TLS termination upstream** — some enterprise deployments use a TLS-terminating session border controller (SBC) in front of H.323 gateways. The probe reaches the internal gateway through the SBC without TLS, but the external signaling path is protected. Confirm whether port 1720 is reachable from external networks before treating this as an external-facing finding.
+**`H323_CALL_SIGNALING_ACTIVE` (MEDIUM) on H.323 proxies with upstream TLS termination** — some enterprise deployments terminate TLS at a session border controller (SBC) that forwards cleartext to internal H.323 gateways. Confirm whether TCP/1720 is reachable from the external network boundary before treating this as an externally exploitable finding. The `H323_GATEKEEPER_UNAUTH_CONFIRM` (HIGH) finding from UDP/1719 is more directly actionable since it confirms admission control bypass regardless of network position.
 
-**`SCCP_REGISTER_ACK` on test or development CUCM instances** — development CUCM deployments commonly disable CAPF for operational simplicity. Confirm whether the target is a production CUCM cluster (serving real phones) before escalating to CRITICAL.
+**`SCCP_KEEPALIVE_RESPONSIVE` on lab or development CUCM clusters** — development CUCM deployments commonly disable CAPF and accept any keepalive traffic for operational simplicity. Confirm whether the probed CUCM cluster serves production phones before escalating `SCCP_KEEPALIVE_RESPONSIVE` or `SCCP_REGISTER_ACCEPTED`.
 
 ---
 
 ## Pipeline position
 
-Run legacy voice protocol probes after host/service discovery identifies TCP/1720 (H.323), TCP/2000 (SCCP), or UDP/2427 (MGCP) open. Combine with `probe_sip_authentication_weaknesses()` and `detect_sip_eavesdropping_surface()` for full VoIP posture coverage.
+Run legacy voice protocol probes after host/service discovery confirms open ports: TCP/1720 (H.323 Q.931), UDP/1719 (H.323 RAS), TCP/2000 (SCCP), TCP/2443 (SCCP-TLS), UDP/2427 (MGCP). Combine with `probe_sip_authentication_weaknesses()` and `detect_voip_eavesdrop_surface()` for complete VoIP posture coverage across SIP, SCCP, and H.323.
 
 ---
 
