@@ -480,26 +480,45 @@ for e in LibraryInventory.security_entries(entries, min_score=3):
 
 ## How it works
 
-Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
+`APKParser` opens the APK as a `zipfile.ZipFile` and parses `AndroidManifest.xml` from the binary AXML chunk format (chunk type `0x0003`). DEX files are parsed via `DEXFile`: the 112-byte header yields offsets to seven flat ID tables (string_ids, type_ids, proto_ids, field_ids, method_ids, class_defs, data). `DexAnalyzer.scan()` iterates all `classes*.dex` files in the APK and matches the full string pool against 12 secret regex patterns and the method reference table against a dangerous class/method list. `JniBridgeScanner.scan()` cross-references DEX `ACC_NATIVE` flags with ELF dynsym exports from bundled `.so` files. `BinderScanner.scan()` identifies `android.os.Binder` subclasses, `$Stub` AIDL classes, and `onTransact()` overrides from class_defs and the manifest.
 
 ---
 
 ## Example output
 
 ```
-[HIGH] DANGEROUS_CALL   Runtime.exec() in com.example.CommandHandler:42
-  detail: argument constructed from user-supplied intent extra
-  evidence: exec(getIntent().getStringExtra("cmd"))
+DexAnalyzer report:
+[CRITICAL] manifest/debuggable: Application is debuggable
+  source:   manifest
+  detail:   android:debuggable=true allows ADB debugging on any device
 
-[MEDIUM] UNTRUSTED_INPUT   eval() in main.js:118
-  detail: JSON.parse result passed directly to eval
+[CRITICAL] secret/aws_key: AWS access key found in DEX string pool
+  source:   dex:classes.dex
+  evidence: AKIAIOSFODNN7EXAMPLE
+
+[HIGH    ] api/js_interface: addJavascriptInterface detected
+  source:   dex:classes2.dex
+  evidence: Landroid/webkit/WebView;->addJavascriptInterface(...)
+
+JniBridgeScanner report:
+[HIGH] jni/dynamic_registration
+  3 lib(s) use RegisterNatives (JNI_OnLoad present)
+  libnative.so libencode.so libauth.so
+
+BinderScanner report:
+[HIGH] binder/raw_transact
+  com.vendor.sdk.AdminService overrides onTransact without permission check
 ```
 
 ---
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs — findings from incomplete graphs carry lower confidence.
+**DEX string pool includes documentation strings and error messages.** `Runtime.exec`, `DES`, and `MD5` appear in diagnostic log strings and exception message templates compiled into DEX. `DexAnalyzer` flags these on the string match — use `iter_method_refs()` to confirm the corresponding `Runtime.exec()` or `Cipher.getInstance("DES")` call is present before escalating.
+
+**`generic_secret` matches template placeholder values.** Strings like `"secret=YOUR_SECRET_HERE"` or `"api_key=<replace>"` trigger the pattern. The `evidence` field exposes the raw string — discard matches under 16 characters or containing obvious placeholder text.
+
+**ProGuard-obfuscated APKs produce incomplete method reference graphs.** On heavily obfuscated APKs, class and method names are single letters. String pool scanning and dangerous API detection remain effective; class-name-based analysis (exported component names, Binder service class lookup) is unreliable. Cross-reference findings with `DexDisasm` output at the method level.
 
 ---
 
@@ -513,15 +532,18 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading findings
 
-Each layer returns its own finding type. `DexAnalyzer(dex_data).scan()` returns `List[DexFinding]`:
+Each layer returns typed finding objects. `DexAnalyzer(apk).scan()` returns `List[DexFinding]`:
 
 | Attribute | Content |
 |:---|:---|
-| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'INFO'` |
-| `category` | Finding category (e.g., `'jni_dangerous_call'`, `'dynamic_code_loading'`, `'crypto_weak'`) |
+| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` |
+| `category` | Finding category (e.g., `'manifest/debuggable'`, `'api/js_interface'`, `'secret/aws_key'`) |
 | `title` | Short description of the finding |
+| `detail` | Extended explanation |
+| `source` | `'manifest'`, `'dex:classes.dex'`, `'native'` |
+| `evidence` | Raw string or API call that triggered the finding |
 
-`JniBridgeScanner` and `BinderScanner` return `List[dict]` with `method`, `class`, `severity`, and `detail` keys. `APKParser` returns metadata (no findings).
+`JniBridgeScanner(apk).scan()` returns `List[JniBridgeFinding]`. `BinderScanner(apk).scan()` returns `List[BinderFinding]`. Both share the same field structure: `severity`, `category`, `title`, `detail`. `APKParser` returns metadata (no findings).
 
 ---
 
