@@ -92,18 +92,30 @@ Run `EcuC166Decoder` after `EcuArchDetector` confirms `c166` or `c167` architect
 
 ## Reading output
 
-`EcuC166Decoder.disassemble()` returns a list of `C166Instruction` objects. Key attributes:
+`EcuC166Decoder.disassemble(start_pa, end_pa)` returns a list of `C166Insn` objects. Omitting both bounds disassembles the entire ROM:
 
 | Attribute | Content |
 |:---|:---|
-| `va` | Virtual address of the instruction |
-| `mnemonic` | Instruction mnemonic (e.g., `MOV`, `CALLS`, `JMP`) |
-| `operands` | Decoded operand string |
-| `kind` | `CALL`, `JUMP`, `RETURN`, or `NORMAL` |
+| `pa` | Physical address (file offset for flat ROM) |
+| `raw` | `bytes` — 2 or 4 raw bytes of the encoded instruction |
+| `mnemonic` | Decoded mnemonic string (e.g., `'MOV'`, `'CALLS'`, `'JMPS'`) |
+| `insn_type` | Instruction category constant (`CALLS`, `JMPS`, `JMPR`, `MOV_IMM`, etc.) |
+| `reg` | Destination/source register number (0–15), or `None` |
+| `imm` | Immediate value or direct address, or `None` |
+| `target` | Resolved target PA for `JMPS`/`CALLS` instructions, or `None` |
+| `seg` | Segment byte for `JMPS`/`CALLS`, or `None` |
 
-`EcuC166Decoder.function_starts()` returns `List[int]` — VA list of identified function entry points.
+`EcuC166Decoder.function_starts()` returns `list[int]` — physical addresses of identified function entry points.
 
-`EcuC166Decoder.ivt_entries()` returns `List[IVTEntry]` with `{name, handler_va}` per interrupt vector.
+`EcuC166Decoder.parse_ivt(num_vectors=64)` returns `list[IVTEntry]` — one entry per interrupt vector:
+
+| Attribute | Content |
+|:---|:---|
+| `index` | Vector index (0 = reset, 4 = NMI, …) |
+| `pa` | Physical address of the IVT entry itself |
+| `seg` | Target code segment |
+| `addr` | Target code address |
+| `target_pa` | Resolved target physical address |
 
 ---
 

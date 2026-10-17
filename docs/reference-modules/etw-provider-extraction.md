@@ -101,7 +101,7 @@ Run `ETWProviderExtractor` as part of Windows PE initial triage alongside `RPCSe
 
 `ETWProviderExtractor.write_site_count()` returns `int` — total count of `EventWrite` call sites across all providers.
 
-`ETWProviderExtractor.scan_gaps()` returns a list of finding dicts `{severity, va, detail}` for security-relevant functions with no detected ETW coverage.
+`ETWProviderExtractor.scan()` returns `list[ETWFinding]` — one finding per uncovered security-relevant function. Fields: `severity`, `va`, `detail`.
 
 ---
 

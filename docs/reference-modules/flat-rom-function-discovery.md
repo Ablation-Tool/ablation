@@ -101,7 +101,7 @@ Confident: True  (top candidate margin 0.68)
 | `confidence` | `HIGH` / `MEDIUM` / `LOW` |
 | `evidence` | List of byte-pattern evidence items that drove the detection |
 
-`EcuArchDetector.best_decoder()` returns the constructor for the appropriate ISA decoder class (e.g., `EcuRh850Decoder`, `EcuTriCoreDecoder`).
+Select the decoder class from `result.isa` — `'RH850'` → `EcuRh850Decoder`, `'TRICORE'` → `EcuTriCoreDecoder`, `'C167'` → `EcuC166Decoder`. `EcuArchDetector` does not expose a decoder-factory method directly.
 
 ---
 

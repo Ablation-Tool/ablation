@@ -94,16 +94,11 @@ Run `GoStringResolver` as part of any Go binary analysis where string content is
 
 ## Reading output
 
-`GoStringResolver.resolve(va)` returns a `GoStringResult` object:
+`GoStringResolver.scan_functions(funcs)` returns `Dict[int, Tuple[str, int]]` — string load site VA → `(text, length)` for all resolvable string loads across the provided function list. Each function dict must have `'va'` and `'fileoff'` keys.
 
-| Attribute | Content |
-|:---|:---|
-| `va` | Virtual address of the Go string load site |
-| `value` | Resolved string value (or `None` if unresolved) |
-| `cmd_type` | `PATH`, `ABSOLUTE`, `RELATIVE`, or `DYNAMIC` (for subprocess call sites) |
-| `confidence` | Float 0.0–1.0 |
+`GoStringResolver.scan_function(func_va, func_file_offset, func_size)` returns the same dict format for a single function.
 
-`GoStringResolver.resolve_all()` returns `Dict[int, GoStringResult]` — all resolvable string load sites in the binary.
+`build_resolver_from_elf(binary_data, elf_parser)` constructs a `GoStringResolver` for ELF binaries without requiring a `BinaryContext`.
 
 ---
 

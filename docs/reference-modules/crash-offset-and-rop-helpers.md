@@ -97,7 +97,7 @@ Run crash offset and ROP helpers after `TaintTracker` confirms an ARG_PROPAGATED
 
 `find_cyclic_offset(crash_bytes)` returns `int` — the byte offset at which the de Bruijn pattern is overwritten, or raises `ValueError` if the crash bytes are not recognized as de Bruijn output.
 
-`scan_rop_gadgets(binary_path)` returns a list of `RopGadget` objects:
+`find_rop_gadgets(binary_data, base_addr=0)` accepts raw bytes and an optional base address, returning a list of `RopGadget` objects:
 
 | Attribute | Content |
 |:---|:---|
