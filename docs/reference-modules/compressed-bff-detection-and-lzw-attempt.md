@@ -89,6 +89,23 @@ Run `EntropyMapper` as the first analysis step on any unknown binary before `Ecu
 
 ---
 
+## Reading output
+
+`EntropyMapper.map()` returns a list of `EntropyRegion` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `start` | Start file offset |
+| `end` | End file offset |
+| `entropy` | Shannon entropy `H` (float, 0.0–8.0) |
+| `classification` | `code`, `data`, `encrypted`, `low_entropy`, or `padding` |
+
+`EntropyMapper.encrypted_ranges()` returns `List[Tuple[int, int]]` — `(start, end)` offset pairs for high-entropy (≥7.5) regions.
+
+`EntropyMapper.transitions()` returns the count of entropy classification transitions above `threshold`.
+
+---
+
 ## See also
 
 - [Firmware Extraction](firmware-extraction.md) — XOR key recovery pipeline for high-entropy FortiOS regions

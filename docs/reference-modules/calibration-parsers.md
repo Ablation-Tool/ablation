@@ -92,6 +92,23 @@ Run `EcuA2LParser` or `EcuOpenDamosParser` after `BinaryContext.load_or_build()`
 
 ---
 
+## Reading output
+
+`EcuA2LParser.parse()` returns `List[CalibrationTable]`:
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Table name from the A2L definition |
+| `va` | Virtual address (applied to BinaryContext entries) |
+| `table_type` | `MAP`, `CURVE`, or `VALUE` |
+| `data` | Numpy array of physical-unit values |
+| `x_axis` | X breakpoint array (for CURVE and MAP) |
+| `y_axis` | Y breakpoint array (for MAP only) |
+
+`EcuOpenDamosParser.fingerprint_match(ctx)` returns `{matched: int, total: int, match_rate: float}`.
+
+---
+
 ## See also
 
 - [Flat ROM Function Discovery](flat-rom-function-discovery.md) — ISA detection and function start discovery before calibration annotation

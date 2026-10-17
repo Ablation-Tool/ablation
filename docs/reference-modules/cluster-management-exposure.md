@@ -79,6 +79,20 @@ Run cluster management exposure as the first enumeration step after gaining any 
 
 ---
 
+## Reading findings
+
+Each probe function returns a list of finding dicts with `{severity, title, detail, host, port}`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
+| `title` | Finding code (e.g., `DOCKER_DAEMON_TCP_UNAUTH`, `K8S_CLUSTER_ADMIN_SA_PRESENT`) |
+| `detail` | Specific evidence: namespace names, endpoint URLs, policy gaps |
+| `host` | Target host |
+| `port` | Target port |
+
+---
+
 ## See also
 
 - [Docker Inventory and Posture](docker-inventory-and-posture.md) — `DockerEnumerator` detailed Docker surface

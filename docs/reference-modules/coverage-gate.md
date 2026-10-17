@@ -110,6 +110,21 @@ The coverage gate runs as part of the CI test job (`ci.yml`). It is the last ste
 
 ---
 
+## Reading output
+
+The coverage gate does not return a Python object. It outputs a `pytest-cov` coverage report to stdout and exits `0` if coverage meets the minimum threshold, non-zero otherwise.
+
+Relevant terminal fields:
+
+| Field | Content |
+|:---|:---|
+| `Cover` | Line coverage percentage for each module |
+| `Missing` | Line numbers with no test coverage |
+| `TOTAL` | Aggregate line coverage across all covered modules |
+| `Required test coverage of X%` | Gate pass/fail message with threshold |
+
+---
+
 ## See also
 
 - [CI and Release Automation](ci-and-release-automation.md) — full CI workflow description; coverage runs as part of the `test` job

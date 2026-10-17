@@ -79,6 +79,19 @@ Run `DynDSClassifier` after `BinaryContext.load_or_build()` and `SigLibrary` mat
 
 ---
 
+## Reading findings
+
+`DynDSClassifier.classify()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `va` | Virtual address of the classified function |
+| `classification` | Data structure class (e.g., `BST_TRAVERSAL`, `COROUTINE_ITER`, `LINKED_LIST`, `HASH_TABLE`) |
+| `features` | Dict of raw behavioral features used for classification (recursive_calls, blr_count, etc.) |
+| `detail` | Human-readable classification rationale |
+
+---
+
 ## See also
 
 - [Function Semantic Search](function-semantic-search.md) — `SemanticSearcher` for complementary semantic labeling
