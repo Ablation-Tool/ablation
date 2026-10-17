@@ -92,6 +92,21 @@ Run `PS3SELFDecryptor.from_path()` before any SELF file analysis. After successf
 
 ---
 
+## Reading output
+
+`PS3SELFDecryptor.decrypt()` returns the path to the decrypted ELF file (written to disk). No finding dict is returned. Call `BinaryContext.load_or_build(output_path)` immediately after decryption.
+
+`PS3SELFDecryptor.header()` returns an `SELFHeader` object:
+
+| Attribute | Content |
+|:---|:---|
+| `key_rev` | Key revision byte from the SELF header |
+| `program_type` | SELF program type (e.g., `PPU_EXEC`, `SPU_EXEC`) |
+| `app_version` | Application version field |
+| `sdk_type` | SDK type identifier |
+
+---
+
 ## See also
 
 - [PS3 OPD Virtual Tables](ps3-opd-virtual-tables.md) — PS3 Cell PPU vtable reconstruction after SELF decryption

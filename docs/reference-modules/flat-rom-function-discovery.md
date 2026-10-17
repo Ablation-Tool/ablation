@@ -91,6 +91,20 @@ Confident: True  (top candidate margin 0.68)
 
 ---
 
+## Reading output
+
+`EcuArchDetector.detect()` returns an `ArchResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `isa` | ISA string (e.g., `M68K`, `RH850`, `TRICORE`, `C167`) |
+| `confidence` | `HIGH` / `MEDIUM` / `LOW` |
+| `evidence` | List of byte-pattern evidence items that drove the detection |
+
+`EcuArchDetector.best_decoder()` returns the constructor for the appropriate ISA decoder class (e.g., `EcuRh850Decoder`, `EcuTriCoreDecoder`).
+
+---
+
 ## See also
 
 - [C166/C167 Decoding](c166-c167-decoding.md) — C166/C167 flat ROM decoder (not covered by EcuArchDetector)
