@@ -19,7 +19,7 @@ Decode Synopsys DesignWare ARC 700 / ARC HS variable-length firmware — discrim
 ```mermaid
 flowchart TD
     A["ARCDecoder.from_path(path)\n  or ARCDecoder(data, base_addr)"] --> B["has_full_decode() → bool\n  Check: capstone CS_ARCH_ARC available\n  True → full operand decode\n  False → frame-width + control-flow hints only"]
-    B --> C["decode_frames(data, base_addr) → List[ARCFrame]\n  For each instruction position:\n    hw0 = read 2 bytes (BE)\n    op5 = (hw0 >> 11) & 0x1f\n    op5 >= 24 → 16-bit ARCFrame\n    else → 32-bit ARCFrame\n  ARCFrame: va, size, is_branch, is_call, mnemonic(if full)"]
+    B --> C["decode_frames(data, base_addr) → List[ARCFrame]\n  For each instruction position:\n    hw0 = read 2 bytes (BE)\n    op5 = (hw0 >> 11) & 0x1f\n    op5 >= 24 → 16-bit ARCFrame\n    else → 32-bit ARCFrame\n  ARCFrame: va, width, is_branch, is_call, is_ret, target, mnemonic(if full)"]
     C --> D["ARCDisasm:\n  function_starts() → List[int]\n    Scan for 'push_s blink' prologue (16-bit compact)\n    Or ELF symbol table entries (if present)"]
 ```
 
@@ -35,7 +35,7 @@ print(f"Full decode available: {decoder.has_full_decode()}")
 
 frames = decoder.decode_frames(decoder.data, base_addr=0x10000)
 for f in frames:
-    print(f"  {f.va:#x} ({f.size}B) {'CALL' if f.is_call else 'BRANCH' if f.is_branch else ''}")
+    print(f"  {f.va:#x} ({f.width}B) {'CALL' if f.is_call else 'BRANCH' if f.is_branch else ''}")
 
 # Function starts
 disasm = ARCDisasm.from_path('/path/to/arc_firmware.bin')
