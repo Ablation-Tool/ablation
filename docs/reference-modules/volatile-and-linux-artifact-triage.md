@@ -18,8 +18,8 @@ Capture volatile host state (running processes, network connections, kernel modu
 
 ```mermaid
 flowchart TD
-    A["enumerate_volatile_forensics(output_dir) → dict\n  Process list: /proc/[pid]/cmdline, status, maps\n  Network: /proc/net/tcp, tcp6, udp\n  Kernel modules: /proc/modules → [(name, size, used_by)]\n  Loaded drivers with non-standard paths\n  ARP: /proc/net/arp\n  → write to output_dir/<timestamp>/ + return dict"] --> B["analyze_elf_binary_indicators(binary_data) → list\n  LD_PRELOAD injection strings\n  GOT overwrite: call [got+offset] + write sequence\n  dlopen('/tmp/...') or dlopen(getenv(...))\n  /etc/ld.so.preload write pattern\n  ptrace(PTRACE_ATTACH) in non-debugger binary\n  → [{va, technique, description, severity}]"]
-    B --> C["detect_elf_runtime_injection_techniques(binary_data) → list\n  ptrace PTRACE_POKETEXT sequence (code injection)\n  /proc/%d/mem write (memory injection)\n  memfd_create + fexecve (fileless ELF execution)\n  syscall() with raw NR_execve (syscall table obfuscation)\n  → [{va, injection_type, api_sequence, severity}]"]
+    A["enumerate_volatile_forensics(output_dir=None) → dict\n  Process list: /proc/[pid]/cmdline, status, maps\n  Network: /proc/net/tcp, tcp6, udp\n  Kernel modules: /proc/modules\n  Hollow process suspects, DLL hijack candidates\n  → {hollow_suspects, dll_hijacks, suspicious_sockets,\n      cron_persistence, process_list}"] --> B["analyze_elf_binary_indicators(binary_data, host, port) → list\n  LD_PRELOAD injection strings\n  GOT overwrite / PLT hook surface\n  dlopen('/tmp/...') or dlopen(getenv(...))\n  /etc/ld.so.preload write pattern\n  ptrace(PTRACE_ATTACH) in non-debugger binary\n  → [{severity, title, detail, host, port}]"]
+    B --> C["detect_elf_runtime_injection_techniques(binary_data, host, port) → list\n  ptrace PTRACE_POKETEXT sequence (code injection)\n  /proc/%d/mem write (memory injection)\n  memfd_create + fexecve (fileless ELF execution)\n  syscall() with raw NR_execve (syscall table obfuscation)\n  → [{severity, title, detail, host, port}]"]
     C --> D["Linux persistence artifacts:\n  Cron: /etc/cron.d/*, /var/spool/cron/*\n    World-writable entries, non-standard commands\n  Systemd: /etc/systemd/system/*.service override\n    ExecStart pointing to /tmp/ or /dev/shm/\n  SSH: /home/*/.ssh/authorized_keys\n    Added keys not matching user baseline"]
 ```
 
@@ -38,16 +38,18 @@ from modules.forensics_enum import (
 import tempfile
 output_dir = tempfile.mkdtemp(prefix='volatile_')
 snapshot = enumerate_volatile_forensics(output_dir)
-print(f"Snapshot: {output_dir}")
-print(f"Processes: {len(snapshot['processes'])}")
-print(f"Non-standard kernel modules: {snapshot.get('suspicious_modules', [])}")
+# Return keys: hollow_suspects, dll_hijacks, suspicious_sockets, cron_persistence, process_list
+print(f"Processes: {len(snapshot['process_list'])}")
+print(f"Hollow suspects: {snapshot['hollow_suspects']}")
+print(f"DLL hijack candidates: {snapshot['dll_hijacks']}")
 
 # ELF binary analysis
 data = open('suspicious_elf', 'rb').read()
 indicators = analyze_elf_binary_indicators(data)
 injection = detect_elf_runtime_injection_techniques(data)
 for i in indicators + injection:
-    print(f"  [{i['severity']}] {i['technique']}: {i['description']}")
+    # both functions return {severity, title, detail, host, port}
+    print(f"  [{i['severity']}] {i['title']}: {i['detail'][:80]}")
 ```
 
 ---
