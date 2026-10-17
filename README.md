@@ -504,7 +504,7 @@ Messages from your other sessions        accept
 | [**ELF&nbsp;recovery&nbsp;from&nbsp;physical-memory&nbsp;dumps**](docs/reference-modules/elf-recovery-from-physical-memory-dumps.md) | [1](modules/physmem_elf_vfs.py)&nbsp;[2](modules/video_container.py) | Find supported ELF64 images and reconstruct candidates using contiguous mappings and proximity heuristics. |
 | [**Video-container&nbsp;forensics**](docs/reference-modules/video-container-forensics.md) | [1](modules/physmem_elf_vfs.py)&nbsp;[2](modules/video_container.py) | Parse MP4/MOV, MKV/WebM and AVI structures for appended payloads, suspicious metadata, malformed sizes and encrypted-track markers. |
 | [**IOC&nbsp;candidate&nbsp;extraction**](docs/reference-modules/ioc-candidate-extraction.md) | [1](modules/physmem_elf_vfs.py)&nbsp;[2](modules/video_container.py) | Extract supported URL/address/path/key/certificate and other suspicious-string candidates. |
-| [**ATT&CK&nbsp;labeling**](docs/reference-modules/attandck-labeling.md) | [1](modules/physmem_elf_vfs.py)&nbsp;[2](modules/video_container.py) | Map recognized finding categories to configured ATT&CK technique labels. |
+| [**ATT&CK&nbsp;labeling**](docs/reference-modules/attandck-labeling.md) | [1](ablation/core/attck_tagger.py) | Map recognized finding categories to configured ATT&CK technique labels. |
 
 </details>
 
