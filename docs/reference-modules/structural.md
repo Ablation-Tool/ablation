@@ -237,6 +237,37 @@ Provides the session state, indexing, and utility functions that other Ablation 
 
 ---
 
+## Usage
+
+```python
+from ablation.analyzers.version_delta import VersionDelta
+from modules.structural_sim import extract_fingerprint, fingerprint_sim
+from ablation.analyzers.vtable_resolver import VtableResolver
+from ablation.analyzers.binary_context import BinaryContext
+
+# Track a function across firmware versions
+vd = VersionDelta(
+    binary_v1='/path/to/firmware_v1.so',
+    binary_v2='/path/to/firmware_v2.so',
+)
+result = vd.track(func_va_v1=0x1000)
+print(f"Homolog in v2: 0x{result.va_v2:x}  confidence={result.confidence:.2f}")
+
+# Rank all changed functions between versions
+changed = vd.changed_functions(top_n=50)
+for fn in changed:
+    print(f"0x{fn.va_v1:x} -> 0x{fn.va_v2:x}  change_score={fn.change_score:.3f}")
+
+# Resolve vtable virtual dispatch targets in a stripped ARM64 binary
+ctx = BinaryContext.load_or_build('/path/to/firmware.so')
+resolver = VtableResolver(ctx)
+vtable_map = resolver.resolve()
+for va, targets in vtable_map.items():
+    print(f"0x{va:x}: {[hex(t) for t in targets]}")
+```
+
+---
+
 ## Example output
 
 ```

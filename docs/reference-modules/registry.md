@@ -193,6 +193,41 @@ Provides the session state, indexing, and utility functions that other Ablation 
 
 ---
 
+## Usage
+
+```python
+from ablation.analyzers.name_registry import NameRegistry
+from ablation.analyzers.finding_registry import FindingRegistry
+from ablation.analyzers.binary_context import BinaryContext
+
+ctx = BinaryContext.load_or_build('/path/to/binary')
+
+# NameRegistry: persist confirmed function names across sessions
+names = NameRegistry()
+names.set(ctx.sha256, 0x1234, 'parse_http_request', source='confirmed')
+
+# Retrieve names in a later session
+ctx2 = BinaryContext.load_or_build('/path/to/binary')
+print(ctx2.name(0x1234))  # 'parse_http_request'
+
+# FindingRegistry: store and replay confirmed security findings
+reg = FindingRegistry()
+reg.register(
+    vendor='acme', product='firmware', version='1.0',
+    binary='libservice.so', func_va=0x1234,
+    cwe=121, severity='HIGH',
+    title='Stack overflow in HTTP parser',
+    description='Length field flows unvalidated to memcpy.',
+)
+
+# Replay hits on new binary (semantic search over confirmed findings)
+hits = reg.search('stack overflow http parse', top_k=5)
+for h in hits:
+    print(h.title, h.severity, h.binary)
+```
+
+---
+
 ## Example output
 
 ```

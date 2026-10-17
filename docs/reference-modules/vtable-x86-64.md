@@ -197,6 +197,29 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 
 ---
 
+## Usage
+
+```python
+from modules.elf_vtable_reconstructor import ELFVtableReconstructor
+from ablation.analyzers.vtable_dispatch_scanner import VtableDispatchScanner
+from ablation.analyzers.binary_context import BinaryContext
+
+# Reconstruct a vtable by class name
+rec = ELFVtableReconstructor.from_path('/path/to/lib.so')
+vtable_map = rec.reconstruct_class('RequestHandler')
+for slot_off, slot in vtable_map.live_slots().items():
+    print(f"+0x{slot_off:x}  {slot.name}")
+
+# Scan for dangerous virtual dispatch patterns (use-after-free, type confusion)
+ctx = BinaryContext.load_or_build('/path/to/lib.so')
+scanner = VtableDispatchScanner.from_context(ctx)
+findings = scanner.scan()
+for f in findings:
+    print(f.severity, f.title, hex(f.va))
+```
+
+---
+
 ## Example output
 
 ```
