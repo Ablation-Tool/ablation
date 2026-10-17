@@ -31,16 +31,23 @@ flowchart TD
 from ablation.analyzers.kernel_driver_analyzer import KernelDriverAnalyzer, analyze_driver
 
 # Analyze a firmware updater PE
+# KernelDriverReport fields: is_signed, ioctl_codes, dangerous_patterns, kernel_api_findings,
+#   driver_type, pdb_path, entry_point_rva, image_base
 report = analyze_driver('/path/to/FirmwareUpdate.exe')
 
-print(f"Signed (Authenticode): {report.signed}")
-print(f"WinVerifyTrust imported: {report.wintrust_imported}")
+print(f"Signed (Authenticode): {report.is_signed}")
+print(f"Driver type: {report.driver_type}")
 
+# IoctlCode fields: raw, device_type, function, method, access, site_va
 for ioctl in report.ioctl_codes:
-    print(f"  IOCTL: {ioctl.code:#010x}  fn={ioctl.function:#x}  access={ioctl.access}")
+    print(f"  IOCTL: {ioctl.raw:#010x}  fn={ioctl.function:#x}  method={ioctl.method}  site_va={ioctl.site_va:#x}")
 
-if not report.signed or not report.wintrust_imported:
-    print("FINDING: Firmware flasher lacks signature verification")
+# Dangerous patterns found
+for dp in report.dangerous_patterns:
+    print(f"  DANGEROUS: {dp}")
+
+if not report.is_signed:
+    print("FINDING: Unsigned firmware flasher — no Authenticode certificate")
 ```
 
 ---

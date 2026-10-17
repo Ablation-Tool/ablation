@@ -37,17 +37,15 @@ from modules.forensics_enum import (
 
 data = open('suspicious.sys', 'rb').read()
 
-hooks = detect_ssdt_hook_indicators(data)
-for h in hooks:
-    print(f"  [SSDT] {h['type']} at {h.get('va', 'N/A')}: {h['description']}")
+# All functions return [{severity, title, detail, host, port}]
+for h in detect_ssdt_hook_indicators(data):
+    print(f"  [{h['severity']}] {h['title']}: {h['detail'][:80]}")
 
-dpc = detect_dpc_timer_abuse(data)
-for d in dpc:
-    print(f"  [DPC] {d['api_ref']} period={d.get('period_ms')}ms")
+for d in detect_dpc_timer_abuse(data):
+    print(f"  [{d['severity']}] {d['title']}: {d['detail'][:80]}")
 
-boot = detect_bootkit_indicators(data)
-for b in boot:
-    print(f"  [BOOTKIT] {b['bootkit_type']}: {b['description']}")
+for b in detect_bootkit_indicators(data):
+    print(f"  [{b['severity']}] {b['title']}: {b['detail'][:80]}")
 ```
 
 ---

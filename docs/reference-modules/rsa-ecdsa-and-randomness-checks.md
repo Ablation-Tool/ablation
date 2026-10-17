@@ -31,24 +31,26 @@ flowchart TD
 from ablation.analyzers.crypto_pattern_detector import (
     HashAlgoDiscriminator, CustomCBCDetector
 )
-from modules.crypto_audit import check_rng_weakness, check_weak_prime
+from modules.crypto_audit import check_rng_weakness
 
-# Hash algorithm identification from firmware binary
+# Hash algorithm identification in a specific function
+# HashAlgoDiscriminator(binary, load_addr=0) — parameter is load_addr, not base_addr
 data = open('firmware.bin', 'rb').read()
-discriminator = HashAlgoDiscriminator(data, base_addr=0x08000000)
-for match in discriminator.scan():
-    print(f"  {match.algo}: confidence={match.confidence:.2f}  at {match.first_const_va:#x}")
+discriminator = HashAlgoDiscriminator(data, load_addr=0x08000000)
+# scan_function(va, size) → HashAlgoMatch (algo, confidence, matched)
+# Typically called from a BinaryContext sweep that provides candidate VAs
+match = discriminator.scan_function(va=0x080a2000, size=0x200)
+# HashAlgoMatch fields: algo (str), confidence (int 0-100), matched (List[ConstMatch])
+print(f"  {match.algo}: confidence={match.confidence}  matches={[m.name for m in match.matched[:4]]}")
 
-# Hand-rolled CBC detection
-# (requires Capstone disassembly handle)
-# cbc = CustomCBCDetector(data, base_addr=0x08000000, cs_md=CS_ARCH_ARM)
-# for pattern in cbc.scan():
-#     print(f"  Custom CBC: IV at {pattern.iv_va:#x}")
+# CustomCBCDetector.scan_range(va, size) → List[CBCPattern]
+cbc = CustomCBCDetector(data, load_addr=0x08000000)
+for pattern in cbc.scan_range(va=0x080a2000, size=0x1000):
+    print(f"  Custom CBC: loop_va={pattern.loop_va:#x}  confidence={pattern.confidence}")
 
-# Binary RNG weakness scan
-weaknesses = check_rng_weakness(data)
-for w in weaknesses:
-    print(f"  [{w['severity']}] {w['type']}")
+# Binary RNG weakness scan — returns [{severity, title, detail, host, port}]
+for w in check_rng_weakness(data):
+    print(f"  [{w['severity']}] {w['title']}: {w['detail'][:80]}")
 ```
 
 ---

@@ -35,15 +35,14 @@ from modules.forensics_enum import (
 )
 
 # Filesystem timeline analysis (run on mounted Windows volume)
-artifacts = detect_windows_forensic_artifacts('/mnt/windows')
-for a in artifacts:
-    print(f"  [{a['type']}] {a['path']}: {a['description']}")
+# Returns [{severity, title, detail, host, port}]
+for a in detect_windows_forensic_artifacts('/mnt/windows'):
+    print(f"  [{a['severity']}] {a['title']}: {a['detail'][:80]}")
 
-# Malware family attribution by mutex name
+# Mutex creation indicators from binary
 data = open('sample.exe', 'rb').read()
-mutexes = detect_mutex_artifacts(data)
-for m in mutexes:
-    print(f"  [{m['confidence']}] {m['mutex_name']} → {m['malware_family']}")
+for m in detect_mutex_artifacts(data):
+    print(f"  [{m['severity']}] {m['title']}: {m['detail'][:80]}")
 ```
 
 ---
