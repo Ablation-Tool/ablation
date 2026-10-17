@@ -86,6 +86,22 @@ Run `PycBytecodeScanner.scan_dir()` as the first pass on any firmware with a Pyt
 
 ---
 
+## Reading findings
+
+`PycBytecodeScanner.scan(path)` returns a list of `PycFinding` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `file` | Path to the `.pyc` file |
+| `python_version` | Python version detected from magic bytes |
+| `finding_type` | `DANGEROUS_CALL` (e.g., `os.system`) or `DANGEROUS_IMPORT` (e.g., `subprocess`) |
+| `detail` | Name found in `co_names` or import statement |
+| `module_name` | Top-level module name |
+
+`PycBytecodeScanner.report(findings)` returns a formatted scan summary string.
+
+---
+
 ## See also
 
 - [Source Code Auditing](source-code-auditing.md) — for `.py` source; complement to .pyc scanning
