@@ -39,7 +39,7 @@ flowchart TD
 
 ---
 
-## Type-7 decoder
+## Usage
 
 ```python
 from modules.ios_enum import decode_type7

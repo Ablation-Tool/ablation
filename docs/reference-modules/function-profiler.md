@@ -54,7 +54,7 @@ Each argument displayed in the profile carries a value kind from `RegAnnotator`:
 
 ---
 
-## FuncProfiler
+## Usage
 
 ```python
 from ablation.analyzers.func_profiler import FuncProfiler

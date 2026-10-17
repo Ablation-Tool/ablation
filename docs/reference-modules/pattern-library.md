@@ -57,7 +57,7 @@ The library seeds 30 patterns on first load, covering:
 
 ---
 
-## PatternLibrary
+## Usage
 
 ```python
 from ablation.analyzers.pattern_library import PatternLibrary

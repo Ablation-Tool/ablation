@@ -53,7 +53,7 @@ The registry automatically maps CWE codes to PatternLibrary-compatible tag strin
 
 ---
 
-## FindingRegistry
+## Usage
 
 ```python
 from ablation.analyzers.finding_registry import FindingRegistry

@@ -59,7 +59,7 @@ flowchart TD
 
 ---
 
-## SinkArgClassifier
+## Usage
 
 ```python
 from ablation.analyzers.sink_arg_classifier import SinkArgClassifier
