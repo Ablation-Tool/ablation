@@ -90,6 +90,20 @@ Run hash algorithm and CBC detection during firmware static analysis after `scan
 
 ---
 
+## Reading output
+
+`HashAlgoDiscriminator.scan()` returns a list of `HashAlgoMatch` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `algorithm` | Algorithm name (e.g., `SHA-256`, `MD5`) |
+| `confidence` | Float 0.0–1.0 |
+| `first_const_va` | VA of the first matching K-table constant |
+
+`CustomCBCDetector.detect()` returns `{iv_va, block_ptr, chain_xor_va}` or `None`.
+
+---
+
 ## See also
 
 - [SAML and Key Material Review](saml-and-key-material-review.md) — `KeyCryptoAnalyzer` for PEM-embedded key material extraction
