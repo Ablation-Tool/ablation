@@ -93,16 +93,13 @@ Run `PDBSymbolIntegrator` immediately after `BinaryContext.load_or_build()` for 
 
 ## Reading output
 
-`PDBSymbolIntegrator.integrate()` returns a dict:
+`PDBSymbolIntegrator.inject_into_context(ctx, pdb_path=None)` loads PDB symbols into `BinaryContext` via `ctx.set_name()` and returns `int` — the count of symbol names injected. When `pdb_path=None`, the method fetches the PDB from the Microsoft symbol server automatically.
 
-| Key | Content |
-|:---|:---|
-| `symbols_integrated` | Integer — number of symbols added to `BinaryContext.NameRegistry` |
-| `pdb_filename` | PDB filename from the binary's debug directory |
-| `pdb_guid` | PDB GUID string |
-| `pdb_local_path` | Path to the downloaded PDB on disk |
+`PDBSymbolIntegrator.load_pdb(pdb_path)` returns `Dict[int, str]` — `{rva: name}` for all public symbols in the PDB without touching `BinaryContext`.
 
-After `integrate()`, `ctx.name(va)` returns the PDB symbol name for any function that had one.
+`PDBSymbolIntegrator.fetch_pdb(out_dir=None)` downloads the PDB to `out_dir` (or a temp directory) and returns the local path as a string, or `None` on failure.
+
+After `inject_into_context()`, `ctx.name(va)` returns the PDB symbol name for any function that had one.
 
 ---
 

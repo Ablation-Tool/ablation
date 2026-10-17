@@ -105,7 +105,7 @@ Run `EcuA2LParser` or `EcuOpenDamosParser` after `BinaryContext.load_or_build()`
 | `x_axis` | X breakpoint array (for CURVE and MAP) |
 | `y_axis` | Y breakpoint array (for MAP only) |
 
-`EcuOpenDamosParser.fingerprint_match(ctx)` returns `{matched: int, total: int, match_rate: float}`.
+`EcuOpenDamosParser.locate_in_rom(rom)` accepts raw ROM bytes and returns `Dict[str, int]` — `{characteristic_name: file_offset}` for every characteristic table found in this ROM variant.
 
 ---
 

@@ -93,7 +93,7 @@ Run `NginxEnumerator.run()` after confirming an Nginx server via the `Server:` h
 
 ## Reading findings
 
-`NginxEnumerator.enumerate()` returns a list of finding dicts:
+`NginxEnumerator.run()` executes all probe methods and returns a dict with a `findings` key containing the accumulated list of finding dicts:
 
 | Field | Content |
 |:---|:---|

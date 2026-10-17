@@ -88,18 +88,19 @@ Run `Structurizer` on the CFG produced by `FuncProfiler.profile()` after taint a
 
 ## Reading output
 
-`Structurizer.structurize(cfg)` returns a tree of `StructNode` objects. All node types:
+`Structurizer.structure()` returns a `StructuredNode` root. All concrete node types:
 
-| Node Type | Description |
+| Node Type | Key Attributes |
 |:---|:---|
-| `SequenceNode` | Ordered list of child nodes (sequential code blocks) |
-| `IfNode` | Conditional with `cond`, `then_branch`, optional `else_branch` |
-| `WhileNode` | Loop with `cond` expression and `body` child |
-| `DoWhileNode` | Loop with `body` first, then `cond` |
-| `SwitchNode` | Switch with `expr` and `cases: List[(value, StructNode)]` |
-| `BreakNode` | Loop break statement |
-| `ContinueNode` | Loop continue statement |
-| `InsnNode` | Leaf node wrapping a single Capstone instruction |
+| `SequenceNode` | `children: List[StructuredNode]` — sequential code blocks |
+| `IfNode` | `cond_block`, `then_body`, `else_body` (optional), `join_block` |
+| `WhileNode` | `header_block`, `body: StructuredNode`, `exit_block` |
+| `BreakNode` | No attributes — unconditional loop exit |
+| `ContinueNode` | No attributes — unconditional loop continue |
+| `ReturnNode` | `block_start`, `insns` — leaf with return instructions |
+| `InsnNode` | `block_start`, `insns`, `is_loop_header` — leaf instruction block |
+
+`Structurizer.emit(insn_emitter)` walks the node tree and returns a pseudocode string. `insn_emitter` is a callable that formats a single instruction; use `lambda insn: str(insn)` for the default rendering.
 
 ---
 

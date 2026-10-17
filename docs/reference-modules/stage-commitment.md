@@ -359,7 +359,7 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ## Reading output
 
-`StageCommitment.records()` returns `dict[str, CommitmentRecord]` — stage name → commitment:
+`StageCommitment.audit_trail()` returns a formatted string of the full commitment chain. Access individual records via the `StageCommitment` object attributes. Each `CommitmentRecord` has:
 
 | Attribute | Content |
 |:---|:---|

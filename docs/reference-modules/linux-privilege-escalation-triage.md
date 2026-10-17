@@ -95,7 +95,7 @@ Run `PrivescEnumerator` immediately after establishing low-privilege shell acces
 
 ## Reading findings
 
-`PrivescEnumerator.enumerate()` returns a list of finding dicts:
+`PrivescEnumerator.enumerate_all()` runs all enumeration checks and returns a list of finding dicts:
 
 | Field | Content |
 |:---|:---|
