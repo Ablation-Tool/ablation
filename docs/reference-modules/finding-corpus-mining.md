@@ -1,22 +1,87 @@
-# Finding-corpus mining
+# CMDB Attack Surface Mapping
 
-Extract confirmed local findings, summarize CWE frequency and identify repeated cross-target patterns or scanner gaps.
-
----
-
-## What it does
-
-Extract confirmed local findings, summarize CWE frequency and identify repeated cross-target patterns or scanner gaps.
+Enumerate the FortiOS/FortiWeb CMDB attack surface — finding every `cmf_query_create()` call site, identifying the CMDB table being accessed, and determining which tables have callers that also call exec-class sinks in the same function — enabling targeted `TaintTracker` runs on only the CMDB-to-sink callers instead of the full binary.
 
 ---
 
-## Implementation
+## Why this exists
 
-- [`corpus_miner.py`](../../sweeps/corpus_miner.py)
-- [`cve_byte_patterns.py`](../../modules/cve_byte_patterns.py)
+1. **FortiOS and FortiWeb expose configuration through a CMDB (Configuration and Management Database) layer accessed via `cmf_query_create()`.** User-supplied configuration fields flow from CMDB reads to exec-class sinks (`system()`, `execv()`) in handler functions. Without `CMDBSurfaceMapper`, identifying which CMDB tables are attacker-reachable inputs requires manual search across hundreds of call sites.
+
+2. **Analysis direction is forward from CMDB field reads toward exec sinks** — `CMDBSurfaceMapper` complements backward `TaintTracker` analysis by identifying which table IDs have callers that co-locate with exec sinks in the same function body. A function that reads CMDB table 0x4A and then calls `system()` is a high-priority `TaintTracker` target; a function that reads CMDB but calls only logging functions is not.
+
+3. **`CMDBSurfaceMapper` is a Phase 0.5 triage tool — not a verified data-flow analyzer.** It identifies candidates: `CMDBTableEntry.has_exec_sink_caller` is `True` when a co-location is detected in the same function, but it does not verify that the CMDB-read value reaches the sink argument. Run `TaintTracker` on `has_exec_sink_caller=True` entries for verification.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["CMDBSurfaceMapper.from_path(path)\n  or .from_context(ctx)"] --> B["map() → Dict[int, CMDBTableEntry]\n  Find all cmf_query_create() PLT call sites\n  Extract table_id argument (r7 on ARM64, r2 on x86-64)\n  → table_id → CMDBTableEntry"]
+    B --> C["For each CMDBTableEntry:\n  Find all functions that call cmf_query_create(table_id)\n  For each caller function:\n    Check if function body also calls exec-class sink\n    (system/execv/execl/popen/shell_exec)\n  CMDBTableEntry.has_exec_sink_caller = True if any match\n  CMDBTableEntry.exec_sink_callers = List[func_va]"]
+    C --> D["CMDBTableEntry:\n  table_id: int\n  callers: List[int]  (func VAs)\n  has_exec_sink_caller: bool\n  exec_sink_callers: List[int]\n  report_line() → str"]
+    D --> E["report(surface) → str"]
+```
+
+---
+
+## Usage
+
+```python
+from ablation.analyzers.cmdb_surface_mapper import CMDBSurfaceMapper
+from ablation.analyzers.binary_context import BinaryContext
+
+ctx = BinaryContext.load_or_build('/path/to/httpd')
+mapper = CMDBSurfaceMapper.from_context(ctx)
+
+surface = mapper.map()
+print(f"CMDB tables accessed: {len(surface)}")
+
+# High-priority TaintTracker targets
+for table_id, entry in surface.items():
+    if entry.has_exec_sink_caller:
+        print(f"  table_id={table_id:#x}  exec_sink_callers={entry.exec_sink_callers}")
+
+print(CMDBSurfaceMapper.report(surface))
+```
+
+---
+
+## Example output
+
+The following illustrates CMDB attack surface mapping output format. Actual table IDs and VAs are binary-specific.
+
+```
+CMDBSurfaceMapper: httpd
+
+CMDB tables accessed: <N>
+
+High-priority (exec sink co-location):
+  table_id=0x4a  callers=<A>  exec_sink_callers=[<va>, <va>]
+  table_id=0x12  callers=<B>  exec_sink_callers=[<va>]
+
+No co-location (lower priority):
+  table_id=0x01  callers=<C>  (logging only)
+```
+
+---
+
+## False positives
+
+**Co-location detection requires exec sink and CMDB read in the same function body** — a wrapper function that calls a CMDB reader and then calls a sink via a helper function is not detected as a co-location. Run `TaintTracker` on all CMDB callers, not only `has_exec_sink_caller=True` entries, for complete coverage of indirect call chains.
+
+**`table_id` extraction uses register-state analysis at the `cmf_query_create()` call site** — if the table ID is computed dynamically (e.g., from a dispatch table), it may not be deterministic at static analysis time. Dynamic table IDs are reported as `table_id=None` and excluded from the surface map.
+
+---
+
+## Pipeline position
+
+Run `CMDBSurfaceMapper` as Phase 0.5 triage immediately after `BinaryContext.load_or_build()` for any FortiOS/FortiWeb binary. Use `exec_sink_callers` VAs as the starting set for `TaintTracker` analysis rather than running `TaintTracker` across the entire binary.
 
 ---
 
 ## See also
 
-- [Semantic Search](semantic-search.md) — module-level reference with constructor patterns and usage examples
+- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` for verification of CMDB-to-sink paths
+- [Pre-Authentication Route Auditing](route-authentication-classification.md) — `PreAuthRouteAuditor` for complementary pre-auth surface identification
