@@ -95,6 +95,22 @@ Run internal network reconnaissance after gaining shell access. ARP/routing pars
 
 ---
 
+## Reading findings
+
+Network recon functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (credential exposed) / `HIGH` (sensitive service) / `MEDIUM` / `LOW` |
+| `title` | Finding code (e.g., `CLOUD_IAM_CREDENTIAL_EXPOSED`, `OPEN_PORT_DB`, `SCAN_RESULT`) |
+| `detail` | Host, open ports, or credential/token excerpt |
+| `host` | Target host IP or hostname |
+| `port` | Port number or `None` for subnet-level findings |
+
+`CloudMetadataProber` findings additionally include `iam_role`, `access_key_id`, and `session_token` in `detail`.
+
+---
+
 ## See also
 
 - [Local Network Inventory](local-network-inventory.md) — `NetworkAnalyzer` for interface and firewall state

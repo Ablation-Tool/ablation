@@ -94,6 +94,23 @@ Run `HashAlgoDiscriminator` and `CustomCBCDetector` after `SemanticSearcher` ide
 
 ## See also
 
+## Reading output
+
+`HashAlgoDetector.scan()` returns a list of `HashAlgoMatch` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `algorithm` | Algorithm name (e.g., `SHA-256`, `MD5`, `SHA-1`) |
+| `match_count` | Integer — number of K-table constants matched |
+| `confidence` | `HIGH`, `MEDIUM`, or `LOW` |
+| `first_match_va` | VA of the first constant match site |
+
+`CBCPatternDetector.find()` returns a `CBCPattern` object with `{block_ptr_va, iv_va, xor_va, confidence}`, or `None`.
+
+---
+
+## See also
+
 - [Cryptographic Analysis](cryptographic-analysis.md) — RSA/ECDSA/RNG analysis complementary to hash/AES identification
 - [RSA, ECDSA, and Randomness Checks](rsa-ecdsa-and-randomness-checks.md) — public key crypto implementation review
 - [Source Code Auditing](source-code-auditing.md) — for OpenSSL/mbedTLS source-available targets
