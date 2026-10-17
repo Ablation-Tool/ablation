@@ -14,47 +14,50 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. All HTTP response bodies read wi
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+`HyperFlexEnumerator(host, timeout=8).enumerate_all()` runs six probes in sequence: `probe_hx_connect_api()` (HX Connect login surface), `probe_ucsm_api()` (UCSM XML API), `probe_apic_api()` (APIC REST API), `probe_iscsi_no_chap()` (iSCSI without CHAP), `probe_stctlvm_ssh()` (storage controller VM SSH), and `probe_cluster_discovery()` (cluster node enumeration). Returns a deduplicated `List[dict]` — all findings combined. Each finding uses `_finding()` returning `{severity, title, detail, host, port, evidence}`.
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.hyperflex_enum import HyperFlexEnumeration
+from modules.hyperflex_enum import HyperFlexEnumerator
 
-results = HyperFlexEnumeration.from_context(ctx).run()
-for r in results:
-    print(r)
+enum = HyperFlexEnumerator('10.0.0.1', timeout=8)
+findings = enum.enumerate_all()
+# findings: [{severity, title, detail, host, port, evidence}]
+for f in findings:
+    print(f"  [{f['severity']}] {f['title']}: {f['detail'][:80]}")
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+HyperFlexEnumerator.enumerate_all(): 10.0.0.1
+
+  [CRITICAL] HX Connect default credentials accepted
+             admin:admin login succeeded on HX Connect management interface
+  [HIGH]     UCSM XML API accessible
+             /nuova XMLl API returned aaaLogin without credential
+  [HIGH]     iSCSI no-CHAP target accessible
+             iSCSI target at 10.0.0.1:3260 accepted login without CHAP authentication
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`probe_hx_connect_api()` default credential finding on locked-down HX Connect** — HyperFlex clusters in hardened configurations disable the web UI and return 403 or redirect to a corporate SSO. The finding fires only on a successful login response (HTTP 200 + token). A 403 or redirect is not a finding.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run `HyperFlexEnumerator` after confirming a Cisco HyperFlex management IP via reverse DNS or certificate CN. Run `probe_iscsi_no_chap()` independently when storage traffic is visible on the network (TCP/3260).
 
 ---
 
@@ -63,10 +66,11 @@ Findings from internal management interfaces, development endpoints, and lab-onl
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
+| `title` | Finding name (e.g., `UCSM XML API accessible`, `iSCSI no-CHAP target accessible`) |
 | `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
+| `host` | Target host |
+| `port` | Target port |
+| `evidence` | Response excerpt confirming the finding |
 
 ---
 
