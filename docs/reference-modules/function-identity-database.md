@@ -1,22 +1,112 @@
-# Function identity database
+# Function Identity Database
 
-Store function names, roles, signatures, structures and call chains across binary versions.
-
----
-
-## What it does
-
-Store function names, roles, signatures, structures and call chains across binary versions.
+Persistent SQLite store of confirmed and inferred function records, prior RE findings, and semantic embeddings — the central shared state for `SemanticSearcher`, `CorpusBuilder`, `SigLibrary`, `RAGRetriever`, and `FindingRegistry` across all targets and engagements.
 
 ---
 
-## Implementation
+## Why this exists
 
-- [`corpus_builder.py`](../../ablation/analyzers/corpus_builder.py)
-- [`func_id_db.py`](../../ablation/analyzers/func_id_db.py)
+1. **RE work accumulates knowledge across engagements — a confirmed finding in one firmware image is evidence for the same function in all future images from the same vendor.** `func_id.db` persists function records (`name`, `role`, `call_targets`, `string_xrefs`, `confidence`) and finding records across sessions. Without a persistent store, each new binary starts from zero and the analyst re-discovers the same function patterns.
+
+2. **`FindingRegistry` stores every confirmed vulnerability with its embedding vector — `FindingRegistry.find_similar()` retrieves prior findings with semantic similarity to a new candidate, grounding LLM hypotheses and PatternLibrary queries in confirmed evidence rather than pattern speculation.** The seed corpus (`ablation/data/seed_corpus.json`) ships with embedding-ready records from published CVEs, giving the database useful signal before any engagement-specific findings are added.
+
+3. **`PatternLibrary` accumulates successful semantic search queries with hit rates per binary** — `pl.sweep(searcher)` auto-replays all confirmed patterns on new binaries in step 5 of the RE workflow, ensuring that patterns that found real vulnerabilities in past engagements are always tried on new targets.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["~/.ablation/findings.db\n  SQLite: user-local, never committed to git\nablation/data/seed_corpus.json\n  Shipped seed patterns from published CVEs"] --> B["FindingRegistry:\n  register(cve_id, description, func_va, binary, vendor, ...)\n  build_embeddings(model) → encode descriptions\n  find_similar(query, model, top_k, min_sim) → ranked findings\n  search(query, model, top_k) → full-text + vector search\n  prior_queries(top_n) → most common query strings\n  export_patterns(confirmed_only) → list of query strings\n  stats() → {'confirmed': N, 'inferred': M, 'seed': K}\n  list_findings(vendor, limit) → paginated finding list\n  unsynced_findings() → findings not yet in seed_corpus"]
+    B --> C["PatternLibrary (~/.ablation/patterns.json):\n  add(query, tag) → Pattern\n  record_hit(query, binary, va, confirmed) → PatternHit\n  sweep(searcher, top_k) → Dict[query, List[PatternHit]]\n  list() → all patterns with hit rates\n  save() → persist to patterns.json\n  confirmed_hit_count() → patterns with confirmed=True hits"]
+    B --> D["SigLibrary.known_signatures()\n  Reads func_id.db for CONFIRMED records\n  Returns as vector corpus for BERT matching"]
+```
+
+---
+
+## Usage
+
+```python
+from ablation.analyzers.finding_registry import FindingRegistry
+from ablation.analyzers.pattern_library import PatternLibrary
+from ablation.analyzers.sig_library import SigLibrary
+
+# ── FindingRegistry ──────────────────────────────────────────────────────────
+reg = FindingRegistry()
+print(reg.stats())
+
+# Register a confirmed finding after validation
+reg.register(
+    cve_id='VULN-TARGET-001',
+    description='command injection in HTTP handler via user-controlled path parameter',
+    func_va=0x12340,
+    binary='httpd',
+    vendor='acme',
+    severity='HIGH',
+    cwe='CWE-78'
+)
+
+# Build embeddings (required before semantic search)
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer('all-mpnet-base-v2')
+reg.build_embeddings(model)
+
+# Find similar prior findings
+similar = reg.find_similar('command injection in configuration handler', model, top_k=5)
+for s in similar:
+    print(f"  {s['cve_id']}  sim={s['similarity']:.2f}  {s['description'][:60]}")
+
+# ── PatternLibrary ───────────────────────────────────────────────────────────
+pl = PatternLibrary()
+pl.list()
+
+# Replay confirmed patterns on a new binary
+from ablation.analyzers.sax_index import SAXIndex
+# (assume searcher is a SemanticSearcher instance)
+results = pl.sweep(searcher, top_k=5)
+for pattern, hits in results.items():
+    if hits:
+        print(f"  '{pattern}': {len(hits)} hits")
+        pl.record_hit(pattern, binary='new_target.elf', va=hits[0].func_va, confirmed=False)
+pl.save()
+```
+
+---
+
+## Example output
+
+The following illustrates the database stats and finding output format.
+
+```
+FindingRegistry.stats():
+  confirmed: <N>
+  inferred: <M>
+  seed: <K>  (from seed_corpus.json)
+
+find_similar('command injection in parser'):
+  VULN-TARGET-001  sim=0.91  'command injection in HTTP handler via user-...'
+  CVE-20XX-XXXXX   sim=0.84  'shell metacharacter injection via filename ...'
+```
+
+---
+
+## False positives
+
+**`find_similar()` returns findings with similarity ≥ `min_sim` (default 0.60)** — a similarity of 0.65 means "semantically related" not "the same vulnerability." Use similarity scores for prioritization and hypothesis seeding only. Confirm findings independently.
+
+**`PatternLibrary.sweep()` returns hits based on semantic similarity to stored query strings** — a high-hit-rate pattern like "unsafe string copy from network input" will match many functions that copy strings from network input, most of which are correct implementations. Filter by `confirmed=True` hits to get patterns with the best precision.
+
+---
+
+## Pipeline position
+
+`func_id.db` is the central persistence layer used by `CorpusBuilder` (write), `SemanticSearcher` (read/write), `RAGRetriever` (read), `SigLibrary` (read), `FindingRegistry` (read/write), and `PatternLibrary` (read/write). It is always local (`~/.ablation/`), never committed to the ablation repo. Back up with `cp ~/.ablation/findings.db ~/findings_backup_$(date +%Y%m%d).db` before major schema migrations.
 
 ---
 
 ## See also
 
-- [Semantic Search](semantic-search.md) — module-level reference with constructor patterns and usage examples
+- [Function Corpus Builder](function-corpus-builder.md) — populates `func_id.db` with `ANGR_INFERRED` records
+- [Bundled Finding Signature Seeds](bundled-finding-signature-seeds.md) — `SigLibrary` reads `func_id.db` for BERT matching
+- [Prior Finding Retrieval](prior-finding-retrieval.md) — `RAGRetriever` SQLite-query retrieval strategy
