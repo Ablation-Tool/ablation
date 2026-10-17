@@ -160,41 +160,44 @@ for f in qdrant_findings:
 
 ## Example output
 
+The following illustrates the `evidence` field format for representative findings. Actual values — model names, digest hashes, peer addresses, collection names, artifact URIs — will reflect the specific target.
+
 ```
 [CRITICAL] Ollama unauth model list
-  HTTP 200 /api/tags models=[{'name': 'llama3:8b', 'size': 4661224960, 'digest': 'sha256:a0ff...'}]
+  HTTP 200 /api/tags models=[{'name': '<model>:<tag>', 'size': <bytes>, 'digest': 'sha256:<hash>...'}]
 
 [CRITICAL] Ollama unauth inference
-  HTTP 200 /api/generate model=llama3:8b response=PONG...
+  HTTP 200 /api/generate model=<model>:<tag> response=PONG
 
 [HIGH] Ollama running model processes exposed
-  HTTP 200 /api/ps body={"models":[{"name":"llama3:8b","size_vram":4661224960,"expires_at":"2026-10-17T23:42:00Z"}]}
+  HTTP 200 /api/ps body={"models":[{"name":"<model>","size_vram":<bytes>,"expires_at":"<timestamp>"}]}
 
 [HIGH] HuggingFace TGI server info exposed
-  HTTP 200 /info model_id=mistralai/Mistral-7B-Instruct-v0.2 body={"model_id":"mistralai/...","dtype":"float16",
-  "max_input_length":4096,"max_total_tokens":8192,"quantization":null,"version":"2.0.4"}
+  HTTP 200 /info model_id=<hf-org>/<model-name>
+  body={"model_id":"...","dtype":"float16","max_input_length":<n>,"max_total_tokens":<n>,"version":"<ver>"}
 
 [CRITICAL] HuggingFace TGI unauthenticated inference
-  HTTP 200 /generate body={"generated_text":"PONG","details":{"finish_reason":"length","tokens":[]}}
+  HTTP 200 /generate body={"generated_text":"PONG","details":{"finish_reason":"length",...}}
 
 [CRITICAL] TRITON_REPO_INDEX_UNAUTH
-  HTTP 200 GET /v2/repository/index body=[{"name":"bert-large","version":"1","state":"READY"},
-  {"name":"gpt2-fine-tuned-v3","version":"2","state":"UNAVAILABLE"},...]
+  HTTP 200 GET /v2/repository/index
+  body=[{"name":"<model-a>","version":"1","state":"READY"},{"name":"<model-b>","state":"UNAVAILABLE"},...]
 
 [CRITICAL] QDRANT_CLUSTER_UNAUTH
-  HTTP 200 GET /cluster body={"status":"ok","result":{"status":"enabled","peer_id":1248762354,
-  "peers":{"1248762354":{"uri":"http://10.0.1.51:6335"},"2301884712":{"uri":"http://10.0.1.52:6335"}}}}
+  HTTP 200 GET /cluster
+  body={"status":"ok","result":{"status":"enabled","peer_id":<id>,"peers":{<id>:{"uri":"http://<peer>:6335"}}}}
 
 [HIGH] QDRANT_SNAPSHOT_CREATE
-  HTTP 201 POST /collections/documents/snapshots body={"status":"ok","result":{"name":"documents-7321-2026-10-17.snapshot"}}
+  HTTP 201 POST /collections/<collection>/snapshots
+  body={"status":"ok","result":{"name":"<collection>-<id>-<date>.snapshot"}}
 
 [CRITICAL] CHROMA_BULK_READ
-  HTTP 200 GET /api/v1/collections/rag_docs/get body={"ids":["doc_001","doc_002",...],"embeddings":null,
-  "documents":["Confidential Q3 revenue projections...","System architecture diagram..."],...}
+  HTTP 200 GET /api/v1/collections/<collection>/get
+  body={"ids":["<id>",...],"documents":["<chunk text>",...],"metadatas":[{"source":"<filename>"},...],...}
 
 [HIGH] MLFLOW_MODELS_UNAUTH
-  HTTP 200 GET /api/2.0/mlflow/registered-models/list body={"registered_models":[{"name":"production-llm-v2",
-  "latest_versions":[{"version":"3","run_id":"8f3a2b1c","artifact_uri":"s3://corp-ml-artifacts/llm-prod/..."}]}]}
+  HTTP 200 GET /api/2.0/mlflow/registered-models/list
+  body={"registered_models":[{"name":"<model>","latest_versions":[{"run_id":"<id>","artifact_uri":"s3://<bucket>/..."}]}]}
 ```
 
 ---

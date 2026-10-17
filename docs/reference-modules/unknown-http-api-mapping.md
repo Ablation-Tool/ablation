@@ -128,31 +128,31 @@ open('api_map.json', 'w').write(json.dumps(report, indent=2))
 
 ## Example output
 
+The following illustrates the console output format and evidence structure for representative findings. Actual framework names, endpoint paths, parameter names, JWT claims, and OAuth metadata URLs will reflect the specific target.
+
 ```
 ============================================================
-API-RE: http://192.168.1.100:5000
+API-RE: http://<target>:<port>
 ============================================================
 
 [1] Framework detection...
-  FastAPI: 95% confidence
+  <Framework>: <confidence>% confidence
 
 [2] OpenAPI schema harvest...
-  Found OpenAPI spec: 6 endpoints
-  POST /api/v1/tts | params: ['text', 'speaker_id', 'speed']
-  GET /api/v1/models | params: []
-  POST /control | params: ['command']
-  GET /health | params: []
+  Found OpenAPI spec: <n> endpoints
+  POST <path> | params: ['<param>', '<param>', ...]
+  GET <path> | params: []
 
 [4] Injection probing...
-  [!] path_traversal CONFIRMED on param='text': ['FILE_READ'] | root:x:0:0:root:/root:/bin/bash
+  [!] path_traversal CONFIRMED on param='<param>': ['FILE_READ'] | root:x:0:0:root:/root:/bin/bash
 
 [4g] JWT analysis...
-  [JWT] Found at /api/v1/me: alg=none | payload_keys=['sub', 'email', 'role']
-  [JWT_ALG_NONE] alg=none accepted at /api/v1/me: 200
+  [JWT] Found at <path>: alg=<alg> | payload_keys=['<claim>', '<claim>', '<claim>']
+  [JWT_ALG_NONE] alg=none accepted at <path>: HTTP 200
 
 [8] OAuth2/OIDC attack surface...
   [OAUTH2_META] /.well-known/openid-configuration: ['issuer', 'authorization_endpoint', 'jwks_uri']
-  [JWKS] https://auth.target/oauth/keys: {"keys":[{"kty":"RSA","kid":"main","alg":"RS256"...}]}
+  [JWKS] <jwks_uri>: {"keys":[{"kty":"RSA","kid":"<kid>","alg":"RS256",...}]}
 ```
 
 ---

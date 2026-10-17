@@ -120,24 +120,28 @@ for f in timing:
 
 ## Example output
 
+The following illustrates the `evidence` field format for representative findings. Actual values — email addresses, API keys, JWT tokens, timing deltas, endpoint paths — will reflect the specific target.
+
 ```
 [CRITICAL] cors_reflect: origin='https://evil.com' creds='true'
   access-control-allow-origin: https://evil.com
   access-control-allow-credentials: true
-  → Cross-origin token/cookie theft via XHR from evil.com
+  → Cross-origin token/cookie theft via authenticated XHR from evil.com
 
-[bfla_admin_accessible] /api/admin: HTTP 200 (1842b) — admin path accessible!
-  sample: {"users":[{"id":1,"email":"admin@target.com","role":"admin",...}]}
+[bfla_admin_accessible] /api/admin: HTTP 200 (<n>b) — admin path accessible without privilege check
+  sample: {"<admin-data-fields>":...}
 
-[excessive_data_email] GET /api/v1/users: ['user1@corp.com','admin@corp.com',...] (47 matches)
-[excessive_data_api_key] GET /api/v1/config: 'api_key: sk-live-XxXxXxXxXxXxXxXxXxXx...'
+[excessive_data_email] GET /api/v1/users: ['<email>','<email>',...] (<n> matches)
+[excessive_data_api_key] GET /api/v1/config: '<api-key-pattern>: <key-value>...'
 
-[shadow_auth_bypass] /v0/api/v1/admin: returns 200 while /api/v1/admin requires auth
+[shadow_auth_bypass] <shadow-path>/admin: returns 200 while <current-path>/admin requires auth
+  (NOTE: requires ep.auth_required=True — see False positives section)
 
-[nosql_auth_bypass] /api/login: {"$ne":""} bypass: {"token":"eyJhbGciOiJIUzI1NiIs..."}
+[nosql_auth_bypass] /api/login: {"$ne":""} bypass
+  → HTTP 200 body={"token":"<jwt-token>","user":{"id":"<id>","role":"<role>"},...}
 
-[timing_oracle_user_enum] admin SLOWER by 312ms vs fake at /api/auth
-  (bcrypt lookup triggered for valid username 'admin' — user exists)
+[timing_oracle_user_enum] <username> SLOWER by <n>ms vs fake at <auth-path>
+  (bcrypt lookup triggered for valid username — user enumeration confirmed)
 ```
 
 ---
