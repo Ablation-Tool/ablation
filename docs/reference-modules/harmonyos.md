@@ -503,7 +503,8 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 from ablation.analyzers.abc_parser import ABCParser
 
 parser = ABCParser.from_path('/path/to/classes.abc')
-print(f"ABC version {parser.header.version_tuple()}, methods={parser.header}")
+ver = parser.header.version_tuple  # property, no parens
+print(f"ABC version {ver[0]}.{ver[1]}.{ver[2]}.{ver[3]}")
 
 native_methods = parser.find_native_methods()
 for m in native_methods:
