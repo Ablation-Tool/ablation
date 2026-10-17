@@ -4,12 +4,11 @@
 
 
 
-Ablation is an autonomous, evidence-driven research platform for difficult binaries, firmware, appliances, and security systems.
+Ablation is a self-contained reverse engineering framework.
 
-It is self-contained, requiring neither legacy tools nor an MCP server. 
+It depends on neither legacy tools nor an MCP server, which removes the attack surface associated with MCP.
 
 Paired with an AI coding agent, it operates as an autonomous reverse-engineering system.
-
 
 
 ---
