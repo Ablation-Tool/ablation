@@ -8,9 +8,9 @@ Track data flow through LoongArch64 binaries using a labeled taint model — pro
 
 1. **LoongArch64 uses the LP64 ABI with eight argument registers (`$a0`–`$a7`)** — significantly more than the four registers used by ARM64 AAPCS or x86-64 SystemV. Without a LoongArch64-specific taint tracker, sinks with more than four arguments (common in complex kernel call sites) cannot be analyzed: the standard tracker would not know which register holds the fifth argument.
 
-2. **`andi` on LoongArch64 zeroes the upper bits of the result** — if `$a0` holds a tainted value and `andi $t0, $a0, 0xff` is executed, the result is bounded to `[0, 255]`. `TaintTrackerLA64.Taint.bound` records this upper bound, enabling `SinkArgClassifier`-equivalent reasoning: a tainted byte that is bounded to `0xff` cannot cause a heap overflow via a size argument to `malloc`.
+2. **`andi` on LoongArch64 zeroes the upper bits of the result** — if `$a0` holds a tainted value and `andi $t0, $a0, 0xff` is executed, the result is bounded to `[0, 255]`. `LoongArch64TaintTracker` internal `Taint.bound` records this upper bound, enabling `SinkArgClassifier`-equivalent reasoning: a tainted byte that is bounded to `0xff` cannot cause a heap overflow via a size argument to `malloc`.
 
-3. **`addi.d $sp, $sp, -N` tracks frame-offset rebases** — stack allocations on LoongArch64 are expressed as subtractions from `$sp`. When `$sp` is used as a base for address computation, `TaintTrackerLA64` rebases taint labels to the new frame offset, maintaining correct stack-slot tracking across function prologues and mid-function allocations.
+3. **`addi.d $sp, $sp, -N` tracks frame-offset rebases** — stack allocations on LoongArch64 are expressed as subtractions from `$sp`. When `$sp` is used as a base for address computation, `LoongArch64TaintTracker` rebases taint labels to the new frame offset, maintaining correct stack-slot tracking across function prologues and mid-function allocations.
 
 ---
 
@@ -18,9 +18,9 @@ Track data flow through LoongArch64 binaries using a labeled taint model — pro
 
 ```mermaid
 flowchart TD
-    A["TaintTrackerLA64(ctx, sources, sinks)"] --> B["run() → List[TaintFindingLA64]\n  For each function in ctx.func_starts:\n    Initialize: $a0–$a7 untainted at entry\n    Source identification:\n      BL recv/recvfrom/fgets/read/gets/fread\n      Return value $a0 → Taint(labels={source_name}, bound=None)\n    Propagation rules:\n      mov: copy taint\n      andi Rd, Rs, N: Rd.bound = N (bit mask bound)\n      addi.d Rs, $sp, N: frame-offset rebase\n      Arithmetic: join labels, preserve bound if unchanged\n      BL callee: caller-saved $a0–$t8 clobbered\n    Sink detection:\n      BL sink: check tainted arg registers\n      → TaintFindingLA64"]
-    B --> C["Taint:\n  labels: frozenset  (source identifiers)\n  bound: Optional[int]  (upper bit-mask bound)\n  tainted() → bool\n  join(other) → Taint"]
-    C --> D["TaintFindingLA64:\n  sink_va: int\n  sink_name: str\n  arg_reg: str  ($a0/$a1/...)\n  taint: Taint\n  severity: str\n  Finding base class for report()"]
+    A["LoongArch64TaintTracker.from_path(path)"] --> B["run_interprocedural() → List[TaintFindingLA64]\n  For each function in text section:\n    Initialize: $a0–$a7 untainted at entry\n    Source identification:\n      BL recv/recvfrom/fgets/read/gets/fread\n      Return value $a0 → Taint(labels={source_name}, bound=None)\n    Propagation rules:\n      mov: copy taint\n      andi Rd, Rs, N: Rd.bound = N (bit mask bound)\n      addi.d Rs, $sp, N: frame-offset rebase\n      Arithmetic: join labels, preserve bound if unchanged\n      BL callee: caller-saved $a0–$t8 clobbered\n    Sink detection:\n      BL sink: check tainted arg registers\n      → TaintFindingLA64"]
+    B --> C["Internal Taint state:\n  labels: frozenset  (source identifiers)\n  bound: Optional[int]  (upper bit-mask bound)"]
+    C --> D["TaintFindingLA64:\n  func_va, func_name, sink_va, sink_name\n  tainted_args: List[str]  ($a0/$a1/...)\n  source_name: str\n  severity: str"]
 ```
 
 ---
@@ -28,22 +28,13 @@ flowchart TD
 ## Usage
 
 ```python
-from ablation.analyzers.taint_tracker_loongarch64 import TaintTrackerLA64
-from ablation.analyzers.binary_context import BinaryContext
+from ablation.analyzers.taint_tracker_loongarch64 import LoongArch64TaintTracker
 
-ctx = BinaryContext.load_or_build('/path/to/tencentos_target.elf')
+tracker = LoongArch64TaintTracker.from_path('/path/to/tencentos_target.elf')
 
-tracker = TaintTrackerLA64(
-    ctx,
-    sources=['recv', 'recvfrom', 'read', 'fgets'],
-    sinks=['memcpy', 'strcpy', 'system', 'execv']
-)
-
-findings = tracker.run()
+findings = tracker.run_interprocedural()
 for f in findings:
-    taint_info = f"bound={f.taint.bound:#x}" if f.taint.bound else "unbound"
-    print(f"  {f.sink_name}  arg={f.arg_reg}  {taint_info}")
-    print(f"  labels={f.taint.labels}")
+    print(f"  {f.sink_name}  args={f.tainted_args}  source={f.source_name}")
 ```
 
 ---
@@ -53,7 +44,7 @@ for f in findings:
 The following illustrates LoongArch64 taint analysis output format. Actual addresses and values are binary-specific.
 
 ```
-TaintTrackerLA64: tencentos_target.elf
+LoongArch64TaintTracker: tencentos_target.elf
 
 Sources: recv, recvfrom, read, fgets
 Sinks:   memcpy, strcpy, system, execv

@@ -6,7 +6,7 @@ Network traffic analysis and active enumeration — PCAP parsing for credential 
 
 ## Why this exists
 
-1. **PCAP-based credential extraction without Wireshark** — `PcapAnalyzer.analyze()` parses a PCAP file and extracts: HTTP Basic Auth credentials (decoded from `Authorization:` headers), FTP `USER`/`PASS` sequences, Telnet command sequences, and DNS query names. This enables offline credential triage from captured traffic without requiring Wireshark or tshark.
+1. **PCAP-based credential extraction without Wireshark** — `PCAPAnalyzer.parse()` then `extract_credentials()` parses a PCAP file and extracts: HTTP Basic Auth credentials (decoded from `Authorization:` headers), FTP `USER`/`PASS` sequences, Telnet command sequences, and DNS query names. This enables offline credential triage from captured traffic without requiring Wireshark or tshark.
 
 2. **Host network state enumeration from `/proc/net/`** — `NetworkAnalyzer.enumerate_all()` reads `/proc/net/tcp`, `/proc/net/tcp6`, `/proc/net/udp`, and `/proc/net/dev` directly. All reads are bounded by `_MAX_PROC_BYTES=4MB`. Returns `{interfaces, connections, listening, firewall}` with connection dicts as `{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}`.
 
@@ -30,7 +30,7 @@ Network traffic analysis and active enumeration — PCAP parsing for credential 
 flowchart TD
     A["NetworkAnalyzer()"] --> B["enumerate_all() → dict\n  {interfaces, connections, listening, firewall}\n  get_connections() reads /proc/net/tcp, tcp6\n    → [{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}]\n  LISTEN state → appended to 'listening' list\n  get_firewall_rules() → iptables -L -n / pfctl -sr"]
     A --> C["run_network_analysis(target: str) → dict\n  ICMPScanner.scan(subnet)\n  WebDirBrute(url).scan()\n  → {target, icmp, web, findings}"]
-    A --> D["PcapAnalyzer(path).analyze() → dict\n  os.path.getsize() guard → f.read(_MAX_PCAP_BYTES)\n  Parse Ethernet/IP/TCP records\n  Extract HTTP auth, FTP creds, DNS queries\n  → {packets_parsed, credentials, dns_queries, protocols}"]
+    A --> D["PCAPAnalyzer(path).parse() then extract_credentials() → dict\n  os.path.getsize() guard → f.read(_MAX_PCAP_BYTES)\n  Parse Ethernet/IP/TCP records\n  Extract HTTP auth, FTP creds, DNS queries\n  → {packets_parsed, credentials, dns_queries, protocols}"]
 ```
 
 ---
