@@ -84,6 +84,28 @@ Run `CrossBinaryTaintTracker` after single-binary `TaintTracker` has established
 
 ---
 
+## Reading output
+
+`CrossBinaryTaintTracker.trace()` returns a list of `TaintChain` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `hops` | Ordered list of `TaintHop` — one per binary crossed |
+| `source_binary` | Path to the binary where taint originates |
+| `sink_binary` | Path to the binary where taint arrives at the sink |
+| `sink_sym` | Sink function name |
+| `sink_va` | VA of the sink call in `sink_binary` |
+
+Each `TaintHop`:
+
+| Attribute | Content |
+|:---|:---|
+| `binary` | Path to the binary for this hop |
+| `export_sym` | Export symbol name through which taint crosses |
+| `import_sym` | Import symbol name in the receiving binary |
+
+---
+
 ## See also
 
 - [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — single-binary TaintTracker that cross-binary extends
