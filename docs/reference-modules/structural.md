@@ -259,11 +259,13 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+Each module returns its own typed result. See the module-specific pages for field details:
+
+- `VersionDeltaMatcher.find_homolog(va_v1, ctx_v1, ctx_v2)` → `Optional[int]` — VA in version 2, or `None`. See [Version Delta](version-delta.md).
+- `fingerprint_sim(fp_a, fp_b)` → `float [0.0, 1.0]`. See [Structural Sim](structural-sim.md).
+- `resolve_blr_sites(ctx)` → `List[BLRSite]`. See [ARM64 Virtual Call Resolution](arm64-virtual-call-resolution.md).
 
 ---
 

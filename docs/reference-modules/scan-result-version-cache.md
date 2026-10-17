@@ -96,11 +96,9 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+`ScanResultVersionCache(db_path, scanner_class).get_or_scan(file_path, force)` returns `List[dict]` — finding dicts converted from the scanner's dataclass findings via `dataclasses.asdict()`. The schema matches the wrapped scanner's finding class. Pass `force=True` to bypass the cache and always re-scan.
 
 ---
 

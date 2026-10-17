@@ -357,11 +357,20 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`StageCommitment.records()` returns `dict[str, CommitmentRecord]` — stage name → commitment:
+
+| Attribute | Content |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `stage_name` | Stage identifier (e.g., `'taint_analysis'`, `'path_solver'`) |
+| `producer` | Producer identity string |
+| `content_hash` | SHA-256 of the committed stage output |
+| `timestamp` | ISO 8601 commitment time |
+| `lock_mode` | `'soft'` (revisable by approver) or `'hard'` (immutable) |
+| `approver` | Approver identity string, or `None` if not yet approved |
+| `revised_content_hash` | SHA-256 of approved revision, or `None` |
+| `approving_hash` | SHA-256 of the approval record itself, or `None` |
 
 ---
 

@@ -189,11 +189,20 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+All export functions are module-level (no class instantiation). They return structured dicts or write files:
+
+| Function | Returns |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `sweep_to_sarif(results)` | `dict` — SARIF 2.1.0 document |
+| `findings_to_sarif(findings)` | `dict` — SARIF 2.1.0 document |
+| `sweep_to_json(results)` | `dict` — flat JSON with `findings` list |
+| `findings_to_json(findings)` | `dict` — flat JSON with `findings` list |
+| `write_sarif(results, path)` | Writes SARIF file; returns `None` |
+| `write_json(results, path)` | Writes JSON file; returns `None` |
+
+See [JSON and SARIF Export](json-and-sarif-export.md) for the full SARIF schema and field reference.
 
 ---
 

@@ -131,11 +131,19 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`EnginePatternLibrary.default().label_binary(ctx)` returns `Dict[int, EngineLabel]` — VA → matched engine-code label:
+
+| Attribute | Content |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `va` | Virtual address of the matched function |
+| `engine` | Engine name (e.g., `'openssl'`, `'mbedtls'`, `'lwip'`) |
+| `category` | Engine category (e.g., `'tls'`, `'crypto'`, `'network'`) |
+| `name` | Specific function name match |
+| `confidence` | Float 0.0–1.0 — match confidence |
+| `match_kind` | Match method: `'string_marker'` / `'string_pattern'` / `'semantic'` / `'sax'` |
+| `sig_id` | Signature ID from `EnginePatternLibrary` |
 
 ---
 
