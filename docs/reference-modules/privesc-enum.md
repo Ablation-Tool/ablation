@@ -1,28 +1,16 @@
 # Privilege Escalation Enumeration
 
-**File:** `modules/privesc_enum.py`
+Enumerate SUID/SGID binaries with GTFOBins cross-reference, sudo NOPASSWD policies, writable cron jobs and PATH directories, Linux capability misconfigurations, container namespace escape surfaces, kernel module rootkit indicators, and heap injection paths — providing a complete local privilege escalation picture from an unprivileged shell — via `modules/privesc_enum.py` `PrivescEnumerator`.
+
+---
 
 ## Why this exists
 
-Full Linux privilege escalation enumeration and binary analysis toolkit. Covers:
-- SUID/SGID binaries (GTFOBins cross-reference, writable SUID, SUID in writable dir)
-- World-writable cron, sudoers NOPASSWD, writable PATH / library directories
-- Linux capability sets (CAP_SYS_ADMIN, CAP_SETUID, CAP_PTRACE, CAP_NET_ADMIN, file capabilities)
-- Group membership, kernel parameter hardening, IPv4/IPv6 misconfiguration, firewall rules
-- IPC namespace exposure (sysvipc shm/msg/sem)
-- Network interface exposure (if_inet6, ARP cache, default routes, TX errors)
-- Process environment scanning (credential and debug flag detection in /proc/*/environ)
-- wtmp/utmp login anomalies, loaded kernel module rootkit indicators
-- Container escape indicators (network namespace, proc namespace inode comparison)
-- Heap injection surface (/proc/pid/maps RWX mappings, oversized heaps, spray indicators)
-- Memory forensics evasion indicators (kcore, kmem, /dev/mem, crash dumps)
-- Log deletion / anti-forensics patterns
-- Adversary tool indicators (C2 staging files, deleted process binaries, scripting shells with sockets)
-- Windows-on-Linux vectors (unquoted service paths in.reg, AlwaysInstallElevated, token manipulation, UAC bypass, kernel driver exploitation: operate on raw `bytes`)
-- ASLR bypass detection (info-leak patterns, heap spray, ret2libc, mprotect-after-write)
-- Scheduled task abuse (cron.d, anacrontab, systemd timers and service units)
-- Cron/PATH hijacking (relative-path cron commands, world-writable PATH dirs, ld.so lib dirs, sudo env_keep PATH)
-- Kernel memory exposure (kcore, kallsyms, System.map, kmem)
+1. **SUID binary enumeration requires GTFOBins cross-reference to separate actionable from benign** — `PrivescEnumerator.check_suid_binaries()` finds every SUID binary in standard PATH directories, but the set always includes expected system binaries (`sudo`, `su`, `ping`). Without cross-referencing against GTFOBins patterns, the finding list is unactionable noise. `PrivescEnumerator` cross-references against known-exploitable binaries and additionally checks for SUID binaries in world-writable directories and writable SUID binaries — both conditions that allow direct privilege escalation regardless of GTFOBins membership.
+
+2. **Standalone check functions cover runtime indicators that require live system access** — `check_loaded_kernel_modules()` compares loaded modules against rootkit signatures (`KNOWN_ROOTKIT_MODULE_LOADED`) and flags modules loaded from non-standard paths. `check_network_namespace_escape()` compares the container's network namespace inode against PID 1's namespace to detect container escape conditions. `check_heap_injection_surface()` scans `/proc/pid/maps` for RWX segments, oversized heaps, and spray indicators. These checks cannot be run from binary analysis alone.
+
+3. **Binary analysis functions operate on raw PE/ELF bytes** — `detect_token_manipulation()`, `detect_uac_bypass_indicators()`, and `detect_driver_exploitation()` take raw bytes and search for Windows privilege escalation patterns (token impersonation sequences, AlwaysInstallElevated registry checks, vulnerable driver signatures) without requiring a Windows execution environment. This enables Windows binary triage from a Linux analysis host.
 
 ## Key constants
 
@@ -102,59 +90,105 @@ No lief.parse(). No HTTP reads. No bare `except:`. All subprocess calls timeout-
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+`PrivescEnumerator.enumerate_all()` runs a suite of filesystem and system-state checks on the local host: SUID/SGID binary enumeration, sudo policy parsing, writable path and cron job scanning, Linux capability checks, package manager attack surface, and debug flag detection. Each check appends finding dicts to `self.findings` and the full list is returned. Standalone functions (`check_loaded_kernel_modules()`, `check_network_namespace_escape()`, etc.) are independent and return their own finding lists.
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.privesc_enum import PrivilegeEscalationEnumeration
+from modules.privesc_enum import (
+    PrivescEnumerator,
+    check_loaded_kernel_modules,
+    check_network_namespace_escape,
+    check_heap_injection_surface,
+    detect_token_manipulation,
+)
 
-results = PrivilegeEscalationEnumeration.from_context(ctx).run()
-for r in results:
-    print(r)
+# Class-based scan: PrivescEnumerator.findings shape:
+#   {severity, category, count, items, description, exploit}
+enum = PrivescEnumerator()
+findings = enum.enumerate_all()
+print(enum.report())
+
+# Standalone functions return [{severity, title, detail}]
+standalone = (
+    check_loaded_kernel_modules()
+    + check_network_namespace_escape()
+    + check_heap_injection_surface()
+)
+for f in standalone:
+    print(f"  [{f['severity']}] {f['title']}: {f['detail'][:80]}")
+
+# Binary analysis (pass raw bytes from PE/ELF for Windows vectors)
+pe_bytes = open('sample.exe', 'rb').read(64 * 1024 * 1024)
+for f in detect_token_manipulation(pe_bytes):
+    print(f"  [{f['severity']}] {f['title']}")
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+PrivescEnumerator.report():
+  ============================================================
+  PRIVILEGE ESCALATION ENUMERATION
+  ============================================================
+  User: www-data (UID 33)
+  Total findings: 5
+
+  [CRITICAL] Sudo Access
+    Password-less sudo configured for ALL commands
+    Exploit: sudo /bin/bash
+
+  [HIGH] SUID/SGID Binaries
+    4 binaries found including: /usr/bin/python3.10 /usr/bin/find
+    Exploit: /usr/bin/python3.10 -c 'import os; os.execv("/bin/sh", ["sh"])'
+
+check_loaded_kernel_modules():
+  [CRITICAL] KNOWN_ROOTKIT_MODULE_LOADED  (detail: module matches known rootkit signature)
+  [HIGH]     MODULE_LOADED_FROM_NONSTANDARD_PATH
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`SUID/SGID Binaries` findings include vendor-expected SUID binaries** — the SUID check flags all SUID binaries against a GTFOBins cross-reference. Some SUID binaries are intentionally installed (e.g., `sudo`, `su`, `ping`) and are not misconfiguration findings. Review `items` in the finding dict to identify unexpected binaries not part of the base distribution.
+
+**`UNREFERENCED_KERNEL_MODULE` from `check_loaded_kernel_modules()`** — custom vendor drivers and out-of-tree modules (VirtualBox guest additions, DKMS modules) appear as `UNREFERENCED` since they are not in the reference list. Confirm against the target's installed driver list before escalating.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run `PrivescEnumerator` on a live host after gaining a shell (unprivileged). Run standalone checks (`check_network_namespace_escape`, `check_heap_injection_surface`) when operating inside a container to confirm escape vectors. For binary analysis of PE files (Windows) on a Linux host, pass the PE bytes to `detect_token_manipulation()` and `detect_driver_exploitation()`.
 
 ---
 
 ## Reading findings
 
+**`PrivescEnumerator.findings` dict shape:**
+
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
-| `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
+| `category` | Descriptive name (e.g., `SUID/SGID Binaries`, `Sudo Access`, `Dangerous Capabilities`) |
+| `count` | Number of vulnerable items found |
+| `items` | List of specific items (paths, binaries, rules) |
+| `description` | Human-readable explanation of the finding |
+| `exploit` | Suggested exploitation command (present on CRITICAL/HIGH findings) |
+
+**Standalone function findings dict shape:**
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
+| `title` | Finding code (e.g., `KNOWN_ROOTKIT_MODULE_LOADED`, `SCCP_KEEPALIVE_RESPONSIVE`) |
+| `detail` | Explanation of what was found and why it matters |
 
 ---
 
