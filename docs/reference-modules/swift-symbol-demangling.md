@@ -78,6 +78,14 @@ Run `swift_demangle` as part of initial context setup on any iOS, macOS, or tvOS
 
 ---
 
+## Reading output
+
+`SwiftDemangler.demangle(mangled)` returns the demangled symbol string, or `None` if the input is not a Swift-mangled symbol.
+
+`SwiftDemangler.demangle_all(ctx)` returns `Dict[int, str]` — VA → demangled name for all Swift symbols in `ctx`. After calling `demangle_all()`, use `ctx.set_name(va, name, source='swift_demangle')` to register the names.
+
+---
+
 ## See also
 
 - [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext` that holds the symbol table fed to `swift_demangle`
