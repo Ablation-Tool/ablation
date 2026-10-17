@@ -46,7 +46,8 @@ for host in discovered_hosts:
     ]:
         findings = probe(host)
         for f in findings:
-            print(f"  [{label}] [{f.get('severity','INFO')}] {f['finding']}")
+            # findings: {severity, title, detail, host, port}
+            print(f"  [{label}] [{f['severity']}] {f['title']}: {f['detail'][:80]}")
 ```
 
 ---

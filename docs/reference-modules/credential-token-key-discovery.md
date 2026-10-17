@@ -33,25 +33,25 @@ from modules.lateral_movement import (
     detect_ssh_key_reuse
 )
 
-# SSH key enumeration
+# SSH key enumeration — enumerate_all() returns self; read .private_keys list
 enum = SSHKeyEnumerator()
-keys = enum.enumerate()
-for k in keys:
-    enc = 'ENCRYPTED' if k.encrypted else 'UNENCRYPTED'
-    print(f"  {k.path} ({k.algo}, {enc}) → {len(k.known_hosts)} hosts")
+enum.enumerate_all()
+for k in enum.private_keys:
+    # key dict: {path, mode, world_readable, group_readable, encrypted, fingerprint, type}
+    enc = 'ENCRYPTED' if k['encrypted'] else 'UNENCRYPTED'
+    print(f"  {k['path']} ({k['type']}, {enc})  fingerprint={k['fingerprint']}")
 
-# Cloud metadata credentials
+# Cloud metadata — probe_all() returns self.results dict
 cloud = CloudMetadataProber()
-for probe_fn, name in [(cloud.probe_aws, 'AWS'), (cloud.probe_gcp, 'GCP')]:
-    creds = probe_fn()
-    if creds:
-        print(f"  {name}: {list(creds.keys())[:3]}")
+results = cloud.probe_all()
+# keys: aws_imdsv1, aws_imdsv2, aws_iam_creds, gcp_metadata, azure_imds, oci_imds
+for provider, data in results.items():
+    if isinstance(data, dict) and data.get('status') != 'BLOCKED':
+        print(f"  {provider}: {list(data.keys())[:3]}")
 
-# Key reuse detection
-reuse = detect_ssh_key_reuse('/home')
-for r in reuse:
-    if r['reuse_count'] > 1:
-        print(f"  KEY REUSE: {r['pubkey_fingerprint']} in {r['reuse_count']} files")
+# Key reuse detection — returns [{severity, title, detail, host, port}]
+for finding in detect_ssh_key_reuse('/home'):
+    print(f"  [{finding['severity']}] {finding['title']}: {finding['detail'][:80]}")
 ```
 
 ---
