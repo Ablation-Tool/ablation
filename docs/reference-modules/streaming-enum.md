@@ -152,64 +152,72 @@ Gate: **PASSED**. No code changes needed.
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+All functions are standalone. Newer probe functions (DNS, gRPC, observability tools) return `{severity, title, detail, host, port}` finding lists. Older enumeration functions (Kafka, Flink, NiFi) return plain data dicts. `enumerate_all(host)` returns a keyed dict with per-service results. `enumerate_streaming_surface(hosts)` sweeps a host list.
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.streaming_enum import StreamingPipeline&ObservabilityEnumeration
+from modules.streaming_enum import (
+    enumerate_all,
+    probe_prometheus_metrics_endpoint,
+    probe_grafana_dashboard,
+    probe_elasticsearch_exposure,
+)
 
-results = StreamingPipeline&ObservabilityEnumeration.from_context(ctx).run()
-for r in results:
-    print(r)
+# Full single-host sweep
+result = enumerate_all('10.0.0.1')
+# result keys: kafka, flink, nifi, schema_registry, event_store, nats, dead_letter
+
+# Newer finding-list probes — [{severity, title, detail, host, port}]
+for f in probe_prometheus_metrics_endpoint('10.0.0.1', port=9090):
+    print(f"  [{f['severity']}] {f['title']}: {f['detail'][:80]}")
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+enumerate_all: 10.0.0.1
+
+  nats: [{severity: 'MEDIUM', title: 'NATS server client port exposed', detail: '...'}]
+  kafka: {host: '10.0.0.1', port: 9092, reachable: True, topics: ['payments', 'events']}
+
+probe_prometheus_metrics_endpoint:
+  [HIGH]    Prometheus metrics exposed unauthenticated
+            GET /metrics returned full metric dump without authentication
+  [MEDIUM]  Prometheus target credentials in metrics
+            service_account_token found in metric labels
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`probe_prometheus_metrics_endpoint()` on internal-only Prometheus** — Prometheus is commonly deployed with no authentication on internal networks where access control is at the network boundary. Confirm whether the endpoint is accessible from outside the trusted network before treating this as an exposure finding.
+
+**`kafka: {topics: [...]}` including internal `__consumer_offsets` topics** — Kafka always has internal topics prefixed with `__`. Report only non-internal topics as data exposure candidates.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run `enumerate_all()` after identifying open ports on Kafka (9092), Flink (8081), NiFi (8080/8443), RabbitMQ (15672), or NATS (4222). Run observability probes (`probe_prometheus_metrics_endpoint`, `probe_grafana_dashboard`) when port 9090 or 3000 are confirmed open.
 
 ---
 
 ## Reading findings
 
-| Field | Content |
+Newer probe functions return `{severity, title, detail, host, port}`. Older enumeration functions return plain data dicts.
+
+| Function | Return type |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
-| `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
-
----
-
-## See also
-
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+| `probe_prometheus_metrics_endpoint()` | `List[{severity, title, detail, host, port}]` |
+| `probe_grafana_dashboard()` | `List[{severity, title, detail, host, port}]` |
+| `kafka_list_topics()` | `{host, port, reachable, topics: List[str], error}` |
+| `flink_enumerate()` | `{jobs, taskmanagers, jars, config}` |
+| `check_nats_exposure()` | `List[{severity, title, detail, host, port}]` |

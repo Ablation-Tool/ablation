@@ -14,55 +14,67 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. All socket reads bounded: `recv(
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+`IOSEnumerator(host, timeout=8).run()` probes a Cisco IOS/IOS-XE device in sequence: `probe_telnet()` (banner and IOS version without auth), `brute_snmp_communities()` (common community strings), `probe_cdp_info()` (neighbor table via SNMP), `probe_tftp_config()` (TFTP config pull), and `probe_http_api()` (REST API credential probe). Returns `{host, telnet, snmp, cdp_neighbors, tftp_config, http_api, parsed_config, findings}`. `findings` is a list of `{severity, title, detail}` dicts.
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.ios_enum import IOSIOSXEEnumeration
+from modules.ios_enum import IOSEnumerator
 
-results = IOSIOSXEEnumeration.from_context(ctx).run()
-for r in results:
-    print(r)
+enum = IOSEnumerator('10.0.0.1', timeout=8)
+result = enum.run()
+# result keys: host, telnet, snmp, cdp_neighbors, tftp_config, http_api, findings
+
+# findings: [{severity, title, detail}]
+for f in result['findings']:
+    print(f"  [{f['severity']}] {f['title']}: {f['detail'][:80]}")
+
+# cdp_neighbors shows adjacent Cisco devices
+if result['cdp_neighbors'].get('neighbors'):
+    print(f"CDP neighbors: {result['cdp_neighbors']['neighbors']}")
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+IOSEnumerator.run(): 10.0.0.1
+
+findings:
+  [MEDIUM] IOS Telnet Open — Version Exposed: Cisco IOS Software, Version 15.6(3)M
+  [HIGH]   IOS SNMP Weak Community: public — sysDescr Cisco IOS ...
+
+cdp_neighbors: [{'label': '10.0.0.2'}, {'label': '10.0.0.3'}]
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`brute_snmp_communities()` with the `public` community string** — community string `public` is present on almost every unmodified Cisco device. The finding is accurate; escalation depends on whether SNMP v3 is also available. Cross-reference with the target's SNMP configuration to determine whether SNMP v1/v2c should have been disabled.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run `IOSEnumerator` after confirming a Cisco IOS device via SSH banner or HTTPS certificate CN. Run standalone probes (`probe_cisco_aaa_bypass`, `probe_cisco_snmp_extended`) for targeted AAA/SNMP surface analysis.
 
 ---
 
 ## Reading findings
 
+`IOSEnumerator.findings` shape: `{severity, title, detail}`
+
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
+| `severity` | `HIGH` / `MEDIUM` / `LOW` / `INFO` |
+| `title` | Short finding name (e.g., `IOS Telnet Open — Version Exposed`, `IOS SNMP Weak Community: public`) |
+| `detail` | Detail string (version string, SNMP sysDescr excerpt, etc.) |
 | `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
 | `endpoint` | URI, port, or service address where the finding was observed |
 | `detail` | What was found and why it matters |

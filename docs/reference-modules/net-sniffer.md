@@ -14,59 +14,70 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. HTTP XML body reads bounded at `
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+`RawSniffer(interface=None).sniff(duration=10.0)` opens a raw socket (`SOCK_RAW`) and captures for `duration` seconds. Returns `{packets: int, credentials: list, connections: list}`. `CredentialExtractor` inside the sniffer extracts HTTP Basic Auth, FTP `USER`/`PASS`, and Telnet sequence patterns from payload bytes. `MDNSDiscovery` and `SSDPDiscovery` listen for multicast announcements and return structured service inventory dicts. Requires root.
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.net_sniffer import NetSniffer
+from modules.net_sniffer import RawSniffer, MDNSDiscovery, SSDPDiscovery
 
-results = NetSniffer.from_context(ctx).run()
-for r in results:
-    print(r)
+# Packet capture — requires root
+sniffer = RawSniffer(interface='eth0')
+result = sniffer.sniff(duration=30.0)
+# result: {packets: int, credentials: list, connections: list}
+print(f"Captured {result['packets']} packets")
+for cred in result['credentials']:
+    print(f"  credential: {cred}")
+
+# mDNS service discovery
+mdns = MDNSDiscovery()
+services = mdns.discover(duration=10.0)
+
+# SSDP UPnP discovery
+ssdp = SSDPDiscovery()
+devices = ssdp.discover()
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+RawSniffer.sniff(duration=30):
+  packets: 847
+  credentials: [{'type': 'HTTP_BASIC', 'host': '10.0.0.1', 'auth': 'admin:password123'}]
+  connections: [('10.0.0.5', '10.0.0.1', 80), ('10.0.0.5', '10.0.0.2', 443)]
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`RawSniffer` requires a promiscuous-mode interface** — on a switched network without port mirroring, the raw socket only sees broadcast/multicast traffic and traffic to/from the host. Credentials extracted belong to the local host's connections only; the sniffer does not see other hosts' traffic without a SPAN port or mirror.
+
+**`CredentialExtractor` HTTP Basic Auth detection** — the extractor decodes base64 strings following `Authorization: Basic`. A false positive can occur if a non-auth base64 string happens to parse as UTF-8 text with a colon separator. Verify that the decoded string matches the `username:password` pattern.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run `RawSniffer` after gaining root shell access on a network switch or router with traffic mirroring. Run `MDNSDiscovery` and `SSDPDiscovery` for passive internal network service inventory without generating scan traffic.
 
 ---
 
 ## Reading findings
 
+`RawSniffer.sniff()` returns a plain data dict, not a findings list:
+
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
-| `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
+| `packets` | Total packets captured |
+| `credentials` | List of extracted credential dicts |
+| `connections` | List of `(src_ip, dst_ip, dst_port)` tuples |
 
 ---
 

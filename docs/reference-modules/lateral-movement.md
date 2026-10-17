@@ -23,63 +23,77 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. Four CWE-770 reads fixed this se
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+`CloudMetadataProber().probe_all()` returns `self.results` — a dict with keys `aws_imdsv1`, `aws_imdsv2`, `aws_iam_creds`, `gcp_metadata`, `azure_imds`, `oci_imds`. `CredentialHarvester()` scans local files (`~/.kube/config`, `~/.aws/credentials`, environment variables) and appends `{source, data, severity}` finding dicts. `LateralMovementEnumerator()` probes SMB null sessions and WMI unauthenticated access.
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.lateral_movement import LateralMovement
+from modules.lateral_movement import CloudMetadataProber, CredentialHarvester
 
-results = LateralMovement.from_context(ctx).run()
-for r in results:
-    print(r)
+# Cloud metadata
+prober = CloudMetadataProber()
+result = prober.probe_all()
+# result keys: aws_imdsv1, aws_imdsv2, aws_iam_creds, gcp_metadata, azure_imds, oci_imds
+aws_creds = result.get('aws_iam_creds', {})
+if aws_creds:
+    print(f"  role: {aws_creds.get('role')}  json: {aws_creds.get('credentials_json', '')[:80]}")
+
+# Credential harvester: findings shape {source, data, severity}
+harvester = CredentialHarvester()
+harvester.harvest()
+for f in harvester.findings:
+    print(f"  [{f['severity']}] {f['source']}: {str(f['data'])[:80]}")
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+CloudMetadataProber.probe_all():
+  aws_iam_creds: {role: 'ec2-role', credentials_json: '{"AccessKeyId": "ASIA..."}'}
+  gcp_metadata: {project_id: 'my-project', service_accounts: ['default@...iam.gserviceaccount.com']}
+  azure_imds: {subscription_id: '...', client_id: '...'}
+
+CredentialHarvester.findings:
+  [MEDIUM] ~/.aws/credentials: {'profile': 'default', 'key': 'AKIA...'}
+  [HIGH]   K8S_SA_TOKEN: eyJhbGciOiJSUzI1NiIsImtpZCI6...
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`CloudMetadataProber.probe_all()` fires on non-cloud hosts with IMDS-like HTTP services** — any HTTP service on 169.254.169.254:80 will be probed. Corporate DHCP servers or virtual machine management agents sometimes listen on this address. Verify the response body structure matches the expected IMDS JSON format before treating as a confirmed cloud environment.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run `CloudMetadataProber` immediately after gaining shell access to any host. A successful IMDS response establishes cloud credentials in seconds. Run `CredentialHarvester` to enumerate locally stored credentials before running privilege escalation.
 
 ---
 
 ## Reading findings
 
-| Field | Content |
+`CredentialHarvester.findings` shape: `{source, data, severity}`
+
+`CloudMetadataProber.probe_all()` returns a plain data dict (not a findings list):
+
+| Key | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
-| `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
+| `aws_iam_creds` | `{role: str, credentials_json: str}` (raw JSON string from IMDS) |
+| `gcp_metadata` | GCP instance metadata dict |
+| `azure_imds` | Azure IMDS response dict |
+| `aws_imdsv1` / `aws_imdsv2` | IMDSv1 and IMDSv2 probe results |
 
 ---
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [Credential Token Key Discovery](credential-token-key-discovery.md) — full credential surface including IMDS keys
+- [Internal Network Reconnaissance](internal-network-reconnaissance.md) — cloud network pivot planning
