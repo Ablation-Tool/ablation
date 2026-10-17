@@ -260,11 +260,23 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`HypothesisEngine.from_binary(path, ctx=ctx).session.hypotheses` returns `List[HypothesisRecord]`:
+
+| Attribute | Content |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `id` | Unique hypothesis identifier string |
+| `kind` | Hypothesis kind (e.g., `'buffer_overflow'`, `'use_after_free'`, `'format_string'`) |
+| `subject` | `dict` — what the hypothesis is about (e.g., `{"va": "0x401920"}`) |
+| `claim` | `dict` — the specific machine-readable claim |
+| `status` | `ConfidenceState`: `'UNTESTED'` / `'SUPPORTED'` / `'CONTRADICTED'` / `'CONFIRMED'` |
+| `prior` | Float — Bayesian prior probability (default 0.5) |
+| `confidence` | Float — posterior confidence after evidence scoring |
+| `support_score` | Float — cumulative support evidence score |
+| `contradiction_score` | Float — cumulative contradiction evidence score |
+| `evidence_ids` | `List[str]` — IDs of `EvidenceRecord` objects supporting this hypothesis |
+| `notes` | Free-text analyst notes |
 
 ---
 

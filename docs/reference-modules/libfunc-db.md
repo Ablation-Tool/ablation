@@ -58,11 +58,19 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`classify(profile, min_score)` returns `Tuple[Optional[str], int, List[Tuple[str, int]]]` — matched function name (or `None`), confidence score, and list of `(candidate_name, score)` alternatives.
+
+`LIB_DB` entries are `LibFuncSummary`:
+
+| Attribute | Content |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `name` | Standard function name (e.g., `'malloc'`, `'memcpy'`) |
+| `min_args` / `max_args` | Argument count range |
+| `arg_roles` | Tuple of `ArgRole` — role tag and direction per argument position |
+| `ret_role` | `RetRole` — return value role (pointer, size, status, etc.) |
+| `effect` | Effect category: `'alloc'` / `'dealloc'` / `'copy'` / `'compare'` / `'lock'` / `'unlock'` / `'zero'` / `'misc'` |
 
 ---
 

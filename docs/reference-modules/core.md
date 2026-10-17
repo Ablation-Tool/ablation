@@ -461,11 +461,19 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`BinaryContext.load_or_build(path).summary()` returns a formatted string — not a structured object. For programmatic access:
+
+| Method | Returns |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `ctx.name(va)` | `str` — best known name for VA, or `hex(va)` |
+| `ctx.names_count()` | `int` — number of named functions |
+| `ctx.func_starts()` | `List[int]` — sorted function start VAs |
+| `ctx.strings_near(va)` | `List[str]` — string references near VA |
+| `ctx.callees_of(va)` | `List[str]` — PLT-resolved callee names |
+
+See [BinaryContext](binary-context.md) for the full API.
 
 ---
 

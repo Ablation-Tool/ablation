@@ -178,9 +178,29 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ## Reading findings
 
-| Field | Content |
+`FORGE.audit_module(path)` returns a `ForgeReport`:
+
+| Attribute | Content |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `path` | Path to the audited module |
+| `mode` | `'module'` (LLM audit) or `'source'` (static compressor audit) |
+| `findings` | `list[ForgeFinding]` — individual findings sorted by severity |
+| `summary` | Short summary string |
+| `gate_passed` | Property — `True` if no CRITICAL or HIGH findings |
+
+Each `ForgeFinding`:
+
+| Attribute | Content |
+|:---|:---|
+| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` / `'INFO'` |
+| `category` | Section name or sink category that triggered the finding |
+| `title` | Short finding title |
+| `location` | `file:line` or function name |
+| `description` | Detailed explanation |
+| `recommendation` | Remediation guidance |
+| `source` | `'module_audit'` or `'source_audit'` |
+| `cwe` | CWE identifier string, or empty |
+| `detection_stage` | Effort tier: `'develop'` / `'debug'` / `'test'` / `'deploy'` |
 
 ---
 

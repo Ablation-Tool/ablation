@@ -170,11 +170,15 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+The flywheel has no single output type — it is an operational loop between three modules:
+
+1. `EnginePatternLibrary.label_binary(ctx)` → `Dict[int, EngineLabel]` — engine-code labels stripped from the target
+2. `PatternLibrary.sweep(ctx)` → confirmed and unconfirmed finding candidates from prior session patterns
+3. `FindingRegistry.register(...)` → persists confirmed findings as new search patterns
+
+See [Cross-Target Learning](cross-target-learning.md) for `EngineLabel` field details and [Finding Validation](finding-validation.md) for `PathResult` details.
 
 ---
 

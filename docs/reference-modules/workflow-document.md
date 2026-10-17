@@ -344,11 +344,19 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`WorkflowDocument.stages` returns `dict[str, Stage]` — stage name → stage instance:
+
+| Attribute | Content |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `name` | Stage name string |
+| `schema` | `dict` — JSON Schema for the stage's output |
+| `instance` | `dict` — current stage output data (populated by `write()`) |
+| `routing` | `list[str]` — downstream stage names this stage can route to |
+| `committed` | `True` if the stage output has been committed via `StageCommitment` |
+
+`WorkflowDocument.transitions` returns `List[StageTransition]` — pipeline advancement history.
 
 ---
 

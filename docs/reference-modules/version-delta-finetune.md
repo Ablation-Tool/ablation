@@ -52,11 +52,11 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+`finetune_model(train_pairs, eval_pairs, base_model_name, output_path, epochs, batch_size)` returns a fine-tuned `SentenceTransformer` model (from the `sentence-transformers` package). The trained model is saved to `output_path` and returned directly for immediate use.
+
+`create_training_pairs(fps_a, fps_b, threshold)` returns `(train_pairs, eval_pairs)` — lists of `(description_a, description_b, score)` tuples used by `finetune_model()`.
 
 ---
 
