@@ -335,15 +335,15 @@ A file that imports no auth utility and appears in no middleware chain is classi
 `AUTH_NONE`. The classifier errs on the side of under-reporting auth: a false `NONE`
 triggers a manual review; a false `SESSION` would silently drop a finding.
 
-### EntryClassification fields
+### RouteClassification fields
 
 | Field | Type | Description |
 |---|---|---|
 | `rel_path` | `str` | Route file path relative to repo root |
 | `auth_level` | `str` | One of the five constants above |
-| `auth_signals` | `List[str]` | Specific patterns that determined the level |
-| `methods` | `List[str]` | HTTP methods handled (`GET`, `POST`, etc.) |
-| `framework` | `str` | Framework the route belongs to |
+| `matched_signal` | `str` | Pattern that determined the level (or `"no auth signal found"`) |
+| `is_low_value` | `bool` | `True` for health-check, docs, or config endpoints |
+| `notes` | `list[str]` | Additional classifier notes |
 
 ### Usage
 
@@ -359,7 +359,7 @@ print(clf.report(results))
 # Unauthenticated endpoints: highest priority
 unauth = [r for r in results if r.auth_level == "NONE"]
 for r in unauth:
-    print(f"  {r.rel_path}  [{', '.join(r.methods)}]")
+    print(f"  {r.rel_path}  [{r.matched_signal}]")
 ```
 
 ### Example output
@@ -428,17 +428,18 @@ Example: unguarded eval (HIGH):
 result = vm.runInContext(userScript, ctx)
 ```
 
-### SinkFinding fields
+### SinkHit fields
 
 | Field | Type | Description |
 |---|---|---|
 | `rel_path` | `str` | File path relative to repo root |
 | `line` | `int` | Line number |
-| `sink_class` | `str` | One of the five sink classes above |
-| `severity` | `str` | `HIGH` or `MEDIUM` (after guard detection) |
+| `line_text` | `str` | The matched source line |
+| `category` | `str` | Sink class (e.g., `code_eval`, `subprocess`, `ssrf`, `path_traversal`) |
 | `cwe` | `str` | CWE identifier |
-| `snippet` | `str` | The matched source line |
-| `guard_note` | `str | None` | Guard condition description, if present |
+| `severity` | `str` | `HIGH` or `MEDIUM` (after guard detection) |
+| `description` | `str` | Human-readable finding description |
+| `guarded` | `bool` | `True` when a guard condition was detected near the sink |
 
 ### Usage
 
@@ -515,11 +516,12 @@ Custom field names can be added via `checker.add_scope_field("workspaceId")`.
 |---|---|---|
 | `rel_path` | `str` | File path relative to repo root |
 | `line` | `int` | Line number |
-| `model` | `str` | ORM model name (e.g., `Trace`, `User`) |
-| `operation` | `str` | ORM operation (e.g., `findUnique`, `findMany`) |
-| `severity` | `str` | `CONFIRMED` or `PLAUSIBLE` |
-| `missing_scope` | `List[str]` | Scope fields absent from the where clause |
-| `snippet` | `str` | Query source snippet |
+| `operation` | `str` | Full ORM call (e.g., `prisma.user.findUnique`) |
+| `model` | `str` | ORM model name (e.g., `user`, `trace`) |
+| `op_type` | `str` | Operation type (`findUnique`, `findMany`, `update`, `delete`, `upsert`) |
+| `where_text` | `str` | Extracted where-clause text from source |
+| `severity` | `str` | `CONFIRMED`, `PLAUSIBLE`, or `INFO` |
+| `note` | `str` | Classifier note explaining the finding |
 
 ### Usage
 
@@ -583,12 +585,11 @@ template block score higher than two signals in different functions in the same 
 
 | Field | Type | Description |
 |---|---|---|
-| `rel_path` | `str` | File path |
-| `severity` | `str` | `HIGH` or `MEDIUM` |
-| `tag` | `str` | Signal pair identifier, e.g. `unsafe_render+type_dispatch` |
-| `signals` | `List[str]` | The co-located signal names |
-| `context_snippets` | `List[str]` | Source lines for each signal |
-| `score` | `int` | Co-location score (higher = signals in same function) |
+| `rel_path` | `str` | File path relative to repo root |
+| `tags` | `dict[str, list[str]]` | Signal-pair label → matched source lines (e.g., `{"unsafe_render+type_dispatch": [...]}`) |
+| `high_confidence` | `bool` | `True` when a strong co-location heuristic fired |
+| `score` | `int` (property) | Number of signal pairs present (`len(tags)`) |
+| `risk_label` | `str` (property) | `HIGH` (score ≥ 3 or `high_confidence`), `MEDIUM` (score 2), `LOW` (score 1) |
 
 ### Usage
 
@@ -649,17 +650,14 @@ up to 5 hops deep.
 
 | Field | Type | Description |
 |---|---|---|
-| `sink` | `SinkFinding` | The sink at the end of the chain |
-| `source` | `SourceRef` | The user-controlled input at the start |
-| `hops` | `List[TaintHop]` | Every intermediate function call |
-| `confidence` | `str` | `CONFIRMED` or `PLAUSIBLE` |
+| `sink` | `SinkHit` | The sink at the end of the chain |
+| `hops` | `list[TaintHop]` | Every function in the chain from route handler to sink |
+| `confidence` | `str` | `DIRECT` (0 hops), `HIGH` (1 hop), `MEDIUM` (2 hops), `LOW` (3+ hops) |
+| `has_source` | `bool` | `True` when the chain traces back to a confirmed user-controlled input |
 
 Each `TaintHop` carries `rel_path`, `line`, and `func_name`.
 
-A path is `CONFIRMED` when every hop is a direct argument pass (no conditional
-branching, no reassignment to an unrelated variable). A path is `PLAUSIBLE` when the
-tracker found a chain but at least one hop is an indirect call or passes through a
-conditional.
+Confidence is derived from call-chain depth: a sink reached directly from the route handler (no intermediate function) is `DIRECT`. Each additional hop between the source and sink lowers confidence by one tier. `has_source` is `False` when the tracker found a chain from a sink backward but did not reach a known source input.
 
 ### Usage
 
