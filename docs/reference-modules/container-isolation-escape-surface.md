@@ -83,6 +83,21 @@ Run `SourceIsolationChecker` as the first scan on any multi-tenant SaaS backend 
 
 ---
 
+## Reading findings
+
+`SourceIsolationChecker.check()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` |
+| `orm` | ORM type (`prisma`, `mongoose`, `sqlalchemy`) |
+| `method` | ORM query method (e.g., `findFirst`, `findMany`) |
+| `file` | Source file path and line number |
+| `missing` | Missing tenant/owner isolation field (e.g., `projectId`, `orgId`) |
+| `snippet` | Code snippet showing the unguarded query |
+
+---
+
 ## See also
 
 - [Source Code Analysis Pipeline](bare-integration.md) — `SourceContext` that `SourceIsolationChecker` consumes

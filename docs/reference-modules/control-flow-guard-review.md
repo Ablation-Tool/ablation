@@ -90,6 +90,28 @@ Run `CFGBypassDetector` when analyzing Windows PE binaries for exploit developme
 
 ---
 
+## Reading findings
+
+`CFGBypassDetector.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` / `MEDIUM` / `LOW` |
+| `code` | Finding code (e.g., `EXPORT_SUPPRESSION_MISSING`, `XFG_NOT_ENABLED`, `INDIRECT_CALL_NOT_GUARDED`) |
+| `detail` | Human-readable explanation with specific export/call site counts |
+
+`CFGBypassDetector.cfg_config()` returns a `CFGConfig` object:
+
+| Attribute | Content |
+|:---|:---|
+| `instrumented` | `True` if the binary is CFG-instrumented |
+| `table_present` | `True` if the CFG bitmap table is present |
+| `export_suppression` | `True` if `__guard_suppress_export_checks` is set |
+| `xfg` | `True` if XFG (eXtended Flow Guard) is enabled |
+| `entry_stride` | CFG bitmap stride in bytes |
+
+---
+
 ## See also
 
 - [SEH and SafeSEH Review](seh-and-safeseh-review.md) — Windows PE structured exception handler chain analysis
