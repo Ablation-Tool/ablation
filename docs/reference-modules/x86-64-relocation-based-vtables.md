@@ -88,15 +88,16 @@ Run `VtableDispatchScanner` on any x86-64 ELF binary where vtable hijacking is a
 
 ## Reading output
 
-`VtableDispatchScanner.scan()` returns a `VtableScanResult` object:
+`VtableDispatchScanner.scan(slot_map)` returns a `DispatchReport`:
 
-| Attribute | Content |
+| Method / Attribute | Content |
 |:---|:---|
-| `indirect_call_count` | Total indirect call sites found |
-| `live_slots` | `Dict[str, int]` — register+offset string → number of call sites (e.g., `{'rax+0': 42}`) |
-| `vtables` | `List[VtableEntry]` — reconstructed vtable objects with `base_va` and `slots` |
+| `slot_offsets` | `Dict[str, List[DispatchSite]]` — vtable slot name → list of dispatch sites using that slot |
+| `live()` | Returns only slots with at least one `DispatchSite` |
+| `dead()` | Returns only slots with no `DispatchSite` (unreachable slots) |
+| `sites_for(key)` | `List[DispatchSite]` for a named slot |
 
-`VtableDispatchScanner.inject(ctx)` registers all reconstructed function names into `ctx` via `ctx.set_name()`.
+Each `DispatchSite` has `call_va: int`, `register: str` (base register, e.g., `'rax'`), `slot_offset: int`, and `encoding: str` (`'disp8'` or `'disp32'`).
 
 ---
 

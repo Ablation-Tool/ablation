@@ -128,17 +128,16 @@ execve calls observed:
 
 ## Reading output
 
-`SyscallTracer.trace(pid)` returns a `SyscallTrace` object:
+`SyscallTracer(pid).trace_process(duration=5)` returns a plain `dict`:
 
-| Attribute | Content |
+| Key | Content |
 |:---|:---|
-| `total_calls` | Total syscall invocations |
+| `total_calls` | Total syscall invocations captured |
 | `total_errors` | Total calls that returned an error |
-| `by_name` | `Dict[str, SyscallStats]` — per-syscall stats (`calls`, `errors`, `time_pct`) |
-| `exec_calls` | `List[ExecRecord]` — all `execve`/`execveat` calls with args |
-| `open_calls` | `List[OpenRecord]` — all `open`/`openat` calls with paths |
+| `syscalls` | `List[dict]` — one entry per syscall, each with `name`, `calls`, `errors`, `time_percent`, `total_time` |
+| `error` | Error string if tracing failed (e.g., `'strace not installed'`); absent on success |
 
-`SyscallTracer.summary()` returns a formatted report string matching the example output format.
+`SyscallTracer(pid).trace_detailed(duration, syscall_filter)` returns per-call argument records. Pass `syscall_filter='execve,open,read'` to narrow the trace.
 
 ---
 

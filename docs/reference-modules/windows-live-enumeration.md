@@ -95,14 +95,19 @@ Run `WindowsEnumerator` after gaining low-privilege access to a Windows host. CO
 
 ## Reading findings
 
-`WindowsEnumerator.enumerate_all()` returns a `WindowsEnumResult` object:
+`WindowsEnumerator().enumerate_all()` returns `Dict[str, List[Finding]]` — section name → findings:
 
-| Attribute | Content |
+| Section key | Content |
 |:---|:---|
-| `com_hijack_candidates` | `List[{clsid, hklm_path, hkcu_writable}]` — COM server keys where HKCU is writable |
-| `rpc_endpoints` | `List[{protocol, endpoint, service, finding}]` — locally accessible RPC endpoints |
-| `dll_hijack_candidates` | `List[{service, dll_path, writable_dir}]` — services with DLLs in writable directories |
-| `findings` | `List[{severity, title, detail}]` — prioritized escalation findings |
+| `'com'` | COM server HKCU hijack candidates |
+| `'rpc'` | Accessible local RPC endpoints |
+| `'servicedll'` | Service DLLs in writable directories |
+| `'autoruns'` | Autorun entries |
+| `'etw'` | Active ETW session consumers |
+| `'pipes'` | Named pipe surfaces |
+| `'token'` | Token privilege information |
+
+Each `Finding` has `severity: str`, `category: str`, `title: str`, `detail: str`, and `evidence: str`.
 
 ---
 

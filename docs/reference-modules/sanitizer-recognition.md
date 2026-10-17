@@ -94,16 +94,19 @@ Run `SanitizerDetector` before or alongside `TaintTracker`. After TaintTracker f
 
 ## Reading output
 
-`SanitizerDetector.scan()` returns a list of `SanitizerProfile` objects:
+`audit_coverage(binary_path, func_va)` (the main entry point in `ablation/analyzers/sanitizer_detector.py`) returns a `SanitizerCoverageReport`:
 
 | Attribute | Content |
 |:---|:---|
-| `func_va` | VA of the sanitizer function |
-| `score` | Integer — number of detection signals found |
-| `accepted_bytes` | `frozenset[int]` — byte values permitted by the sanitizer |
-| `shell_safe()` | `True` if the accepted set excludes all shell metacharacters |
+| `func_va` | VA of the audited function |
+| `chars_checked` | `FrozenSet[int]` — every ASCII byte value found in compare instructions or call arguments |
+| `missing_metachars` | `FrozenSet[int]` — shell metacharacters not covered by any check |
+| `verdict` | `'SHELL_SAFE'` / `'PARTIAL'` / `'SPACE_ONLY'` / `'NO_CHECKS'` / `'UNKNOWN'` |
+| `n_cmp_sources` | Count of ASCII values found via CMP instructions |
+| `n_callarg_sources` | Count of ASCII values found via call argument loads |
+| `detail` | Human-readable explanation string |
 
-`SanitizerProfile.blocked(char)` returns `True` if `char` is blocked by the sanitizer.
+`SanitizerCoverageReport.shell_safe` is a `bool` property: `True` when `verdict == 'SHELL_SAFE'`.
 
 ---
 

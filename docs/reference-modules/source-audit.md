@@ -779,6 +779,22 @@ Run `SourceContext` first (loads the codebase once), then `SourceEntryClassifier
 
 ---
 
+## Reading output
+
+Each tool in the pipeline returns its own finding type:
+
+| Tool | Return type | Key output fields |
+|:---|:---|:---|
+| `SourceEntryClassifier.classify_all_source()` | `List[RouteClassification]` | `rel_path`, `auth_level` (`NONE`/`SESSION`/`ADMIN`), `matched_signal` |
+| `SourceSinkScanner.scan()` | `List[SinkHit]` | `rel_path`, `line`, `category`, `cwe`, `severity`, `guarded` |
+| `SourceIsolationChecker.scan()` | `List[IsolationFinding]` | `rel_path`, `line`, `model`, `op_type`, `where_text`, `severity` |
+| `SourceTaintTracker.run()` | `List[TaintPath]` | `source`, `sink`, `path` (call chain), `confirmed` |
+| `SourceArchRiskScanner.scan()` | `List[ArchFinding]` | `category`, `severity`, `detail` (framework-level issues) |
+
+All finding types share `severity: str` and `detail: str` attributes for uniform report rendering.
+
+---
+
 ## See also
 
 - [Tenant Isolation Checks](tenant-isolation-checks.md) — `SourceIsolationChecker` and `SourceEntryClassifier` individual capability reference

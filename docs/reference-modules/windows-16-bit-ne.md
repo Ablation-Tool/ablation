@@ -87,14 +87,16 @@ Run `win16_ne_sweep.py` on any Win16 NE binary. Output feeds the standard findin
 
 ## Reading output
 
-`NEBinary.parse(path)` returns a `NEBinary` object:
+`NEBinary(path)` parses on construction. Its key attributes are:
 
 | Attribute | Content |
 |:---|:---|
-| `segments` | `List[NESegment]` — all NE segments with `index`, `type` (`CODE`/`DATA`), and `va` |
-| `imports` | `List[(module, function)]` — all relocation-record imports across all segments |
-| `exports` | `List[(ordinal, name, va)]` — exported entry points |
-| `function_starts()` | `List[int]` — VAs of all CODE segment function entry points |
+| `segments` | `List[dict]` — all NE segments, each with `index`, `file_offset`, `file_size`, `is_code`, `has_reloc`, `flags` |
+| `module_names` | `List[str]` — imported module name list (1-indexed per NE format) |
+
+`NEBinary.code_segments()` returns only the segments where `is_code=True` and `file_offset > 0`.
+
+`NEBinary.build_segment_import_map(seg)` returns `Dict[source_offset, 'MODULE!function']` — the per-segment import resolution from relocation records.
 
 ---
 

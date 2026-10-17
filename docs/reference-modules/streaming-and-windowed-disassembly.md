@@ -90,15 +90,17 @@ The following illustrates annotated disassembly output format. Actual instructio
 
 ## Reading output
 
-`WindowAnalyzer.dump_text(va, size)` returns an annotated disassembly string. Each line has the form:
+`WindowAnalyzer.dump_text(va, window, align_back, header)` returns an annotated disassembly string with a header line and separator. Each disassembly line has the form:
 
 ```
 0x<va>: <mnemonic>  <operands>          ; <annotation>
 ```
 
-Annotations are added by `BinaryContext` for PLT call targets, string references, and named VAs. No structured object is returned — the output is a formatted string suitable for display or LLM input.
+Annotations are added for PLT call targets, string references, and named VAs registered in `BinaryContext`.
 
-`WindowAnalyzer.dump_window(va, size)` returns `List[CsInsn]` — raw Capstone instruction objects for programmatic processing.
+`WindowAnalyzer.dump(va, window, align_back)` returns `List[str]` — the same lines without the header block, for programmatic processing.
+
+`WindowAnalyzer.calls_in_window(va, window)` returns `List[(call_va, target_va, label)]` — all call/bl instruction targets in the window.
 
 ---
 
