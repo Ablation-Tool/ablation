@@ -75,6 +75,20 @@ The following illustrates terminal output format. Actual color sequences are ter
 
 ---
 
+## Reading output
+
+`TerminalPresenter.render(findings)` writes directly to stdout and returns `None`. For programmatic access to the rendered content, use:
+
+| Method | Return |
+|:---|:---|
+| `format_finding(finding)` | ANSI-escaped string for a single finding |
+| `format_table(findings)` | Full bordered table string for a finding list |
+| `strip_ansi(text)` | Plain text with ANSI escape sequences removed — for log capture |
+
+All formatting respects the `NO_COLOR` environment variable (RFC 5424): when set, all ANSI codes are omitted.
+
+---
+
 ## See also
 
 - [JSON and SARIF Export](json-and-sarif-export.md) — structured export that bypasses terminal presentation for machine-readable output

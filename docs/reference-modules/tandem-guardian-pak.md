@@ -80,6 +80,19 @@ Run `extract_to()` on any Guardian PAK `.ZIP` file before all other analysis. Th
 
 ---
 
+## Reading output
+
+`GuardianPakExtractor.extract(pak_path, out_dir)` returns a list of `GuardianEntry` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Guardian file name (e.g., `$SYSTEM.ZFILE.TGTCP100`) |
+| `size` | Extracted file size in bytes |
+| `out_path` | Absolute path to the extracted file |
+| `is_mips_binary` | `True` if the entry appears to be a MIPS32 BE binary |
+
+---
+
 ## See also
 
 - [AIX BFF Extraction](aix-bff-extractor.md) — `BffExtractor` for AIX BFF/liblpp.a archives (similar COTS-alternative-extraction pattern)

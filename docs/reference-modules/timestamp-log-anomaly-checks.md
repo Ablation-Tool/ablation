@@ -85,6 +85,21 @@ Run timestamp and log anomaly checks during post-compromise forensic analysis, a
 
 ---
 
+## Reading findings
+
+Timestamp and log anomaly detection functions return `List[{severity, title, detail}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (timestomp, log clear) / `MEDIUM` (log gap, future timestamp) |
+| `title` | Finding code (e.g., `MFT_TIMESTOMP`, `LOG_CLEAR_EVENT`, `LOG_GAP`, `FUTURE_TIMESTAMP`) |
+| `detail` | File path, EventID, timestamp values, or gap duration |
+
+For `MFT_TIMESTOMP`: `detail` contains the file path, MTIME, and CRTIME values.
+For `LOG_CLEAR_EVENT`: `detail` contains the EVTX file name and EventID.
+
+---
+
 ## See also
 
 - [Windows Artifact Discovery](windows-artifact-discovery.md) — $MFT, LNK, Prefetch, and EVTX analysis for host-activity timeline
