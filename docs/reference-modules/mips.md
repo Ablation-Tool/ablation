@@ -60,7 +60,7 @@ from ablation.analyzers.taint_tracker_mips import MIPS32TaintTracker
 tracker = MIPS32TaintTracker.from_path('/path/to/mips32.elf')
 findings = tracker.run()
 for f in findings:
-    print(f"[{f.severity}] {f.source} → {f.sink} @ {f.va:#x}")
+    print(f"{f.source_name} → {f.sink_name} @ {f.sink_va:#x}")
 
 # Interprocedural (follows call edges depth-limited)
 chains = tracker.run_interprocedural(depth=4)
