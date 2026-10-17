@@ -3,11 +3,11 @@
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/standards-ablation.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/standards-ablation.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/standards-ablation.md) [![Sponsor Me](https://img.shields.io/badge/Sponsor%20Me-grey)](docs/SPONSORS.md)
 
 
-Ablation is an autonomous, evidence-driven research platform for analyzing difficult binaries, firmware, appliances, and security systems.
+Ablation is an autonomous, evidence-driven research platform for difficult binaries, firmware, appliances, and security systems.
 
-It combines obscure format support, vulnerability analysis, retained research knowledge, dynamic evidence, and reproducible reporting into one repeatable workflow.
+It unifies obscure format support, vulnerability analysis, persistent research knowledge, dynamic evidence, and reproducible reporting in one workflow.
 
-Ablation is self-contained and does not require legacy analysis tools or an MCP server. When used with Codex or Claude Code, it operates as an autonomous reverse-engineering system.
+Ablation is self-contained and requires neither legacy tools nor an MCP server. With Codex or Claude Code, it operates as an autonomous reverse-engineering system.
 
 
 
