@@ -412,9 +412,11 @@ Each `ROMRegion` has:
 
 | Attribute | Content |
 |:---|:---|
-| `start` / `end` | Byte offset range (exclusive end) |
+| `start` | First byte offset of the region (inclusive) |
+| `end` | Last byte offset of the region (exclusive) |
 | `region_type` | `'ERASED'` / `'CODE'` / `'CALIBRATION'` / `'MIXED'` / `'PADDING'` / `'IVT'` |
-| `entropy` | Mean entropy across windows in this region |
+| `entropy` | Mean Shannon entropy across all windows in the region |
+| `window_count` | Number of analysis windows merged into this region |
 | `size` | Property: `end - start` |
 
 ---

@@ -96,16 +96,21 @@ Run `DynamicSandbox` as Phase 3 in the hypothesis validation pipeline — after 
 
 ## Reading output
 
-`LeafFunctionChecker.probe(va, **inputs)` returns a `ProbeResult` object:
+`DynamicSandbox.probe(va, **inputs)` returns a `SandboxResult`:
 
 | Attribute | Content |
 |:---|:---|
-| `status` | `ok`, `timeout`, or `error` |
-| `outputs` | `Dict[str, int]` — register values on return (e.g., `{'x0': 0x1234, 'x1': 0x4242}`) |
-| `insn_count` | Integer — number of instructions executed |
-| `behavioral_signature` | String encoding of output register values for deduplication |
+| `va` | VA of the probed function |
+| `input_regs` | `Dict[str, int]` — register values used as inputs |
+| `output_regs` | `Dict[str, int]` — register values on return |
+| `return_value` | `Optional[int]` — return register value, or `None` |
+| `executed_insns` | Number of instructions executed |
+| `memory_writes` | `List[tuple]` — `(address, size, value_bytes)` tuples for each memory write |
+| `aborted` | `True` if execution was cut short |
+| `abort_reason` | Reason string if aborted, empty otherwise |
+| `arch` | Architecture string (default `'arm64'`) |
 
-`LeafFunctionChecker.is_leaf(va)` returns `True` if the function makes no calls.
+`LeafFunctionChecker.is_leaf(va, ctx=None)` returns `True` if the function at `va` makes no external (PLT) calls — use this to identify safe probe candidates before running `DynamicSandbox`.
 
 ---
 

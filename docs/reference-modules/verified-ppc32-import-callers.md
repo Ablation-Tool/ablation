@@ -81,7 +81,7 @@ Run `PPC32PLTTracer` after `PPC32ELF` is constructed from the target binary. Use
 
 ## Reading output
 
-`PPC32PLTTracer.trace()` returns `Dict[str, List[PltCallSite]]` — symbol name → call sites:
+`PPC32PLTTracer.find_callers(sym_name)` returns `List[PLTCallSite]` — all verified call sites for the named import:
 
 | Attribute | Content |
 |:---|:---|
