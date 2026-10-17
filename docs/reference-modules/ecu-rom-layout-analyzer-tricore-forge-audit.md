@@ -201,7 +201,7 @@ Tests 1–3 passed live. Test 4 verified via documentation review (0.0 density �
 
 ## Reading output
 
-`EcuRomLayoutAnalyzer(path, arch_hint).analyze()` returns a `ROMLayout`:
+`EcuROMLayoutAnalyzer(path, arch_hint).analyze()` returns a `ROMLayout`:
 
 | Attribute | Content |
 |:---|:---|
@@ -226,4 +226,4 @@ See [ecu-rom-layout-analyzer](ecu-rom-layout-analyzer.md) for the full module re
 
 ## See also
 
-- [ECU ROM Layout Analyzer](ecu-rom-layout-analyzer.md) — module reference page for `EcuRomLayoutAnalyzer`
+- [ECU ROM Layout Analyzer](ecu-rom-layout-analyzer.md) — module reference page for `EcuROMLayoutAnalyzer`
