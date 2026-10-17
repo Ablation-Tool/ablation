@@ -76,6 +76,21 @@ Run `EcuVLEDecoder` after `EcuArchDetector` confirms `ppc_vle` architecture. `fu
 
 ---
 
+## Reading output
+
+`EcuVLEDecoder.function_starts()` returns `List[int]` — VA list of VLE functions.
+
+`EcuVLEDecoder.disassemble(va, size)` returns a list of `VLEInstruction` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Virtual address |
+| `size` | Instruction size in bytes (2 for SE, 4 for standard VLE) |
+| `mnemonic` | VLE mnemonic (e.g., `stwu`, `se_li`, `se_bl`) |
+| `operands` | Operand string |
+
+---
+
 ## See also
 
 - [Flat ROM Function Discovery](flat-rom-function-discovery.md) — `EcuArchDetector` that identifies VLE architecture
