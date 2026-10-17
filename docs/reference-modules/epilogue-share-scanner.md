@@ -164,16 +164,18 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`EpilogueShareScanner.from_context(ctx).scan()` returns `List[EpilogueShareHit]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `from_func_va` | VA of the function that contains the unconditional jump |
+| `jump_va` | VA of the jump instruction itself |
+| `target_va` | VA the jump lands on |
+| `host_func_va` | VA of the function whose body the target falls inside |
+
+After scanning, all `target_va` values are added to `ctx.shared_epilogues` so that `run_interprocedural()` skips them as false function-start candidates.
 
 ---
 

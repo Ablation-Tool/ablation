@@ -171,16 +171,19 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`SinkSanitizerFilter.from_path(path).apply(classifications)` accepts and returns `List[SinkClassification]` — the same type as `SinkArgClassifier.classify_all()`. Sites where a shell-safe sanitizer guards the argument are reclassified to `verdict='SANITIZER_VALIDATED'` with `severity='LOW'`. All other sites pass through unchanged.
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `sink_name` | Name of the exec-class sink function |
+| `arg_pos` | 0-indexed argument position |
+| `func_va` | VA of the calling function |
+| `call_va` | VA of the call instruction |
+| `verdict` | Original verdict or `'SANITIZER_VALIDATED'` if a shell-safe guard was confirmed |
+| `detail` | Trace description — updated to name the sanitizer if reclassified |
+| `severity` | `'LOW'` for SANITIZER_VALIDATED and RODATA_CONST; `'HIGH'` for ARG_PROPAGATED |
 
 ---
 

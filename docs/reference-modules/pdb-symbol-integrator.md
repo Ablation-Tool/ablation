@@ -123,14 +123,17 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`PDBSymbolIntegrator.from_path(path).scan()` returns `List[PDBFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `severity` | `'HIGH'` / `'MEDIUM'` / `'LOW'` / `'INFO'` |
+| `category` | `'pdb_info'` / `'symbols_loaded'` / `'no_pdb'` / `'symbols_missing'` |
+| `title` | Short finding title |
+| `location` | PE path or PDB filename identifying the relevant artifact |
+| `description` | Human-readable explanation of the finding |
+
+`PDBInfo` (available from `integrator.pdb_info`) contains the raw PDB reference: `guid`, `guid_formatted`, `age`, `pdb_filename`, `symbol_url`.
 
 ---
 

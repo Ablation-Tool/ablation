@@ -178,15 +178,29 @@ Version-mismatch findings appear when a known key or certificate is present in a
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`FortiGateCertKeyScanner(path).scan()` returns a `CertKeyScanResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category of the finding (e.g., `HARDCODED_KEY`, `WEAK_ALGO`, `AUTH_BYPASS`) |
-| `va` | Virtual address in the binary, if applicable |
-| `detail` | Human-readable description of what was found |
-| `evidence` | Byte offset or string excerpt that triggered the finding |
+| `path` | Source firmware zip path |
+| `version` | Version string parsed from filename, or `'unknown'` |
+| `keys` | `Dict[str, KeyEntry]` keyed by filename (e.g., `'fgt_512.key'`) |
+| `error` | `None` on success, error string if the scan failed |
+| `scan_time_s` | Wall-clock time taken |
+| `from_cache` | `True` if result was returned from a prior cache |
+
+Each `KeyEntry` in `result.keys`:
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Key filename (e.g., `'fgt_512.key'`) |
+| `md5` | MD5 hexdigest (identification only) |
+| `sha256` | SHA-256 hexdigest (cross-validation) |
+| `family` | Key family name or `'UNKNOWN'` for unrecognized variants |
+| `severity` | `'CRITICAL'` (known-weak key) / `'HIGH'` / `'UNKNOWN'` |
+| `description` | Human-readable note about this key |
 
 ---
 

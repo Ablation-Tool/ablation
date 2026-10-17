@@ -86,17 +86,20 @@ Run `PycBytecodeScanner.scan_dir()` as the first pass on any firmware with a Pyt
 
 ---
 
-## Reading findings
+## Reading output
 
-`PycBytecodeScanner.scan(path)` returns a list of `PycFinding` objects:
+`PycBytecodeScanner(dangerous_names).scan_file(path)` returns a `PycScanResult` (not a list of findings). See [pyc-bytecode-scanner](pyc-bytecode-scanner.md) for the full field reference.
 
 | Attribute | Content |
 |:---|:---|
-| `file` | Path to the `.pyc` file |
-| `python_version` | Python version detected from magic bytes |
-| `finding_type` | `DANGEROUS_CALL` (e.g., `os.system`) or `DANGEROUS_IMPORT` (e.g., `subprocess`) |
-| `detail` | Name found in `co_names` or import statement |
-| `module_name` | Top-level module name |
+| `path` | Path to the `.pyc` file |
+| `filename` | Original `.py` source path from the code object |
+| `python_version` | Detected Python version (e.g., `'3.11'`) |
+| `danger_hits` | `FrozenSet[str]` — dangerous names found in bytecode |
+| `confidence` | `'clean'` / `'HIGH'` / `'LOW'` |
+| `error` | `None` on success, error string on parse failure |
+
+Use `scan_dir(path)` to scan a directory tree and return `List[PycScanResult]`.
 
 `PycBytecodeScanner.report(findings)` returns a formatted scan summary string.
 

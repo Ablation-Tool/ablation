@@ -117,15 +117,19 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`sweep_package(input_path)` returns a `Tuple[str, List[dict]]` — `(package_name, findings_list)`. Each findings dict:
+
+| Key | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `binary` | Path to the analyzed binary within the package |
+| `arch` | Detected architecture string |
+| `findings` | `List[dict]` — per-binary findings with `severity`, `category`, `title`, `description`, `va` |
+| `taint_results` | `List[SinkClassification]` — taint analysis results for exec-class sinks |
+| `nnc_result` | `TiNNCScanResult` dict if TVM/NNC artifacts were found, else `None` |
+
+`sweep_directory(directory)` calls `sweep_package` for each package in the directory and returns a list of the same tuples.
 
 ---
 

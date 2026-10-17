@@ -105,16 +105,34 @@ Run `version_delta` after `DTWMatcher` identifies a candidate homolog to verify 
 
 ## Reading output
 
-`VersionDelta.compare(va, binary_b)` returns a `DeltaReport` object:
+`VersionDelta` takes two `BinaryContext` objects and `seed_va` as constructor arguments. Run `.run()` to build the `DeltaReport`:
+
+`DeltaReport` fields:
 
 | Attribute | Content |
 |:---|:---|
-| `homolog_match` | `HomologMatch` (VA, Jaccard score, semantic score, confidence) |
-| `patch_delta` | `PatchDelta` (ratio, unified diff of instruction sequences) |
-| `era_confirmed` | `True` if the homolog is from the same version era |
-| `callee_changed` | `True` if the callee set changed between versions |
-| `new_callees` | List of callee names added in the newer version |
-| `removed_callees` | List of callee names removed in the newer version |
+| `seed_binary` | Path of the seed (known-version) binary |
+| `seed_va` | VA of the seed function in the seed binary |
+| `seed_name` | Name of the seed function |
+| `target_binary` | Path of the target binary |
+| `target_version` | Version string extracted from the target binary |
+| `match` | `Optional[HomologMatch]` — best homolog found in the target, or `None` |
+| `anchor_results` | `List[DeltaReport]` — delta results for each anchor function |
+| `era_confirmed` | Property — `Optional[int]` — inferred version era if confirmed, else `None` |
+
+The `match` attribute is a `HomologMatch` with these fields:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | VA of the homolog in the target binary |
+| `name` | Name of the matched function |
+| `jaccard` | Jaccard similarity of mnemonic sets |
+| `semantic_score` | Semantic similarity score (0.0–1.0) |
+| `confidence` | `'HIGH'` / `'MEDIUM'` / `'LOW'` |
+| `delta` | `PatchDelta` — instruction-level diff |
+| `new_callees` | Callee names added in the target vs. seed |
+| `removed_callees` | Callee names removed in the target vs. seed |
+| `callee_changed` | Property — `True` if either `new_callees` or `removed_callees` is non-empty |
 
 ---
 

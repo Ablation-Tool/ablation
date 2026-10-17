@@ -99,14 +99,26 @@ Step 2 of the cross-version patch analysis workflow: after `DTWMatcher.score_fun
 
 ## Reading output
 
-`MatrixProfileDiff.diff_functions(va_v1, va_v2)` returns a `PatchDiffResult` object:
+`MatrixProfileDiff.diff_functions(va_v1, va_v2)` returns a `DiffResult` object:
 
 | Attribute | Content |
 |:---|:---|
-| `change_regions` | `List[ChangeRegion]` — `{kind: CHANGED/UNCHANGED, v1_range, peak_distance}` |
-| `change_pct` | Float — percentage of the function that changed |
-| `is_likely_patched()` | `True` if `change_pct` exceeds the threshold |
-| `patch_offset_v1` | VA of the first `CHANGED` region start in version 1 |
+| `va_v1` / `va_v2` | VAs of the two functions being compared |
+| `seq_v1` / `seq_v2` | Mnemonic sequences (lists) for each function |
+| `regions` | `List[ChangeRegion]` — classified regions of the alignment |
+| `window` | Matrix-profile window size used |
+| `change_pct` | Property — float percentage of the function that changed |
+| `is_likely_patched()` | `True` if `change_pct` exceeds the configured threshold |
+| `patch_offset_v1()` | VA of the first modified region start in version 1 |
+
+Each `ChangeRegion` has:
+
+| Attribute | Content |
+|:---|:---|
+| `kind` | `'unchanged'` / `'modified'` / `'inserted'` / `'deleted'` (all lowercase) |
+| `v1_range` | `(start, end)` index range in `seq_v1` |
+| `v2_range` | `(start, end)` index range in `seq_v2` |
+| `peak_distance` | Maximum matrix-profile distance within this region |
 
 ---
 

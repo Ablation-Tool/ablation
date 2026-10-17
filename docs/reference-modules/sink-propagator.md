@@ -137,16 +137,19 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`SinkPropagator.from_context(ctx).propagate()` returns `List[SinkWrapper]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `va` | VA of the wrapper function |
+| `name` | Demangled name, or `sub_VA` if stripped |
+| `param_idx` | Which parameter the wrapper propagates (0-based) |
+| `call_va` | VA of the call instruction inside the wrapper that reaches the sink |
+| `wraps_va` | VA of the immediate sink being called |
+| `wraps_name` | Name of the immediate sink |
+| `chain` | `List[str]` — lineage from root PLT sink (root last); empty if direct |
 
 ---
 

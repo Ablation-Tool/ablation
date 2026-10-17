@@ -471,12 +471,15 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading findings
 
-| Field | Content |
+Each layer returns its own finding type. `DexAnalyzer(dex_data).scan()` returns `List[DexFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'INFO'` |
+| `category` | Finding category (e.g., `'jni_dangerous_call'`, `'dynamic_code_loading'`, `'crypto_weak'`) |
+| `title` | Short description of the finding |
+
+`JniBridgeScanner` and `BinderScanner` return `List[dict]` with `method`, `class`, `severity`, and `detail` keys. `APKParser` returns metadata (no findings).
 
 ---
 

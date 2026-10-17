@@ -145,16 +145,22 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`FortiBuildTrackClassifier.classify(filename)` returns a `BuildTrackResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `filename` | Input filename (basename) |
+| `product` | Product code string (e.g., `'FGT_VM64'`, `'FOS_VM64_KVM'`) |
+| `version` | Version string (e.g., `'7.4.12'`) |
+| `build_number` | Integer build number (e.g., `2902`) |
+| `build_track` | `'M'` (main/GA) or `'F'` (feature/beta) |
+| `expected_keys` | List of cert-key names expected for this product/version combo |
+| `key_generation` | `'Gen1'` or `'Gen2'` — key generation epoch |
+| `error` | `None` on success, error string if classification failed |
+
+Use `result.discrepancy(actual_keys)` to compare `expected_keys` against keys found by `FortiGateCertKeyScanner`.
 
 ---
 

@@ -225,16 +225,11 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+`ELFVtableReconstructor.from_path(path).reconstruct_class('ClassName')` returns a `VtableMap`. See [elf-vtable-reconstructor](elf-vtable-reconstructor.md) for the full field reference.
+
+`CppVtableReconstructor.from_context(ctx).scan()` returns a `VtableReconstructorResult`. See [cpp-vtable-reconstructor](cpp-vtable-reconstructor.md) for the full field reference (`vtables`, `propagation`, `named_slot_count`, `resolved_call_count`).
 
 ---
 

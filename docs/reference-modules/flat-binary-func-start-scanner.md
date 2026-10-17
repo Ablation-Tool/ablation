@@ -156,16 +156,20 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`FlatBinaryFuncStartScanner(data, base_va=0).scan()` returns a `FuncStartResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `arch` | Detected ISA string (e.g., `'PPC32-VLE'`, `'M68K'`, `'SH-2A'`) |
+| `confidence` | `'HIGH'` / `'MEDIUM'` / `'LOW'` — confidence in the ISA detection |
+| `function_starts` | `List[int]` — probable function entry VAs from prologue scanning |
+| `call_targets` | `List[int]` — all static call targets found during the scan |
+| `prologue_hits` | `List[int]` — VAs where a recognized prologue pattern matched |
+| `detect_result` | `ArchDetectResult` from the internal `EcuArchDetector` run (or `None`) |
+
+Feed `result.function_starts` directly to a taint tracker or `BinaryContext.set_func_starts()`.
 
 ---
 

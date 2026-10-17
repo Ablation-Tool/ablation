@@ -123,12 +123,18 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading findings
 
-| Field | Content |
+`ElectronSecurityScanner.from_path(root).scan()` returns `List[ElectronFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `path` | Absolute path to the file containing the finding |
+| `rel_path` | Source file path relative to the app root |
+| `lineno` | Line number of the finding |
+| `finding_class` | Finding code (e.g., `'node-integration-rce'`, `'tls-bypass'`, `'context-isolation-disabled'`) |
+| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` |
+| `cwe` | CWE identifier (e.g., `'CWE-78'`, `'CWE-295'`) |
+| `title` | Short description of the misconfiguration |
+| `detail` | Extended explanation of the security impact |
 
 ---
 

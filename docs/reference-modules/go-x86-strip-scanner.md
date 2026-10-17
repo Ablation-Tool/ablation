@@ -124,16 +124,20 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`GoX86StripScanner(path).scan()` returns a `GoScanResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `binary_path` | Path to the analyzed binary |
+| `funcs` | `Dict[int, str]` — VA-to-name map for all recovered functions |
+| `go_version` | Go version string extracted from pclntab (e.g., `'go1.21.3'`) |
+| `text_start` | VA of the `.text` section start |
+| `nfunc` | Number of functions in the pclntab |
+| `pclntab_file_off` | File offset of the pclntab header |
+| `func_starts` | Property — `List[int]` of all function entry VAs sorted |
+| `named_funcs` | Property — `Dict[int, str]` for only functions with non-empty names |
 
 ---
 

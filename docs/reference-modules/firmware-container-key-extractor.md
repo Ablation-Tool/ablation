@@ -194,15 +194,32 @@ Version-mismatch findings appear when a known key or certificate is present in a
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`FirmwareContainerKeyExtractor.from_path(path).extract()` returns an `ExtractionResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category of the finding (e.g., `HARDCODED_KEY`, `WEAK_ALGO`, `AUTH_BYPASS`) |
-| `va` | Virtual address in the binary, if applicable |
-| `detail` | Human-readable description of what was found |
-| `evidence` | Byte offset or string excerpt that triggered the finding |
+| `fw_path` | Path to the input firmware file |
+| `outer_key` | `Optional[bytes]` — recovered outer encryption key, if found |
+| `outer_key_confidence` | Float 0.0–1.0 — confidence in the recovered key |
+| `pkcs1_candidates` | `List[bytes]` — raw PKCS#1 key candidate bytes |
+| `partitions` | `List[PartitionResult]` — extracted firmware partitions |
+| `datafs_path` | `Optional[str]` — path to the extracted data filesystem, if recovered |
+| `workdir` | `Optional[str]` — temp directory holding extracted files; call `result.cleanup()` when done |
+| `error` | `None` on success, error string if extraction failed |
+
+Each `PartitionResult`:
+
+| Attribute | Content |
+|:---|:---|
+| `kind` | Filesystem kind (e.g., `'gzip'`, `'squashfs-le'`, `'jffs2-be-node'`) |
+| `offset` | Byte offset in the decrypted full image |
+| `encrypted_path` | Path to the raw encrypted partition bytes |
+| `decrypted_path` | Path to the decrypted partition (None if not recovered) |
+| `key_used` | `Optional[bytes]` — encryption key that succeeded |
+| `cipher` | `'rc4'` / `'xor'` / `'none'` |
+| `valid_header` | `True` if the partition header validated for this filesystem kind |
 
 ---
 
