@@ -89,6 +89,20 @@ Run streaming operational helpers after `messaging-streaming-enumeration` confir
 
 ---
 
+## Reading findings
+
+Streaming operational probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (credential exposure in messages) / `HIGH` (schema registry) / `MEDIUM` (topic accessible) |
+| `title` | Finding code (e.g., `KAFKA_SENSITIVE_SCHEMA_FIELD`, `KAFKA_CREDENTIAL_IN_TOPIC`, `SCHEMA_REGISTRY_SENSITIVE`) |
+| `detail` | Topic name, schema name, or credential field names found in sampled messages |
+| `host` | Broker or schema registry host |
+| `port` | Service port |
+
+---
+
 ## See also
 
 - [Messaging/Streaming Enumeration](messaging-streaming-enumeration.md) — passive enumeration that identifies accessible topics and endpoints
