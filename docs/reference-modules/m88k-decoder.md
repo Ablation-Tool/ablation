@@ -161,11 +161,14 @@ Reads the binary image and resolves the target-specific data structures (PLT, GO
 ## Usage
 
 ```python
-from ablation.analyzers.m88k_decoder import M88KBCSCOFFSupport(MC88100Motorola88000)
+from ablation.core.coff_m88k_parser import parse
+from ablation.analyzers.insn_m88k import M88kDecoder
 
-results = M88KBCSCOFFSupport(MC88100Motorola88000).from_context(ctx).run()
-for r in results:
-    print(r)
+binary = parse('/path/to/target.coff')
+decoder = M88kDecoder(binary)
+
+for insn in decoder.disassemble_bytes(binary.text.data, base_va=binary.text.vaddr):
+    print(insn)
 ```
 
 ---

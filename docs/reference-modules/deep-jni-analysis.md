@@ -27,11 +27,21 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 ## Usage
 
 ```python
-from ablation.analyzers.deep_jni_analysis import DeepJNIAnalysis
+from modules.deep_jni_analysis import (
+    analyze_structure_accesses,
+    analyze_call_targets,
+    analyze_vtable_patterns,
+)
 
-results = DeepJNIAnalysis.from_context(ctx).run()
-for r in results:
-    print(r)
+with open('/path/to/libnative.so', 'rb') as f:
+    data = f.read()
+
+struct_hits = analyze_structure_accesses(data)
+call_hits   = analyze_call_targets(data)
+vtable_hits = analyze_vtable_patterns(data)
+
+for h in struct_hits + call_hits + vtable_hits:
+    print(h)
 ```
 
 ---

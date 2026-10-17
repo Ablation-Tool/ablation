@@ -237,11 +237,14 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 ## Usage
 
 ```python
-from ablation.analyzers.beam import ErlangBEAMAnalysis
+from ablation.analyzers.beam_context import BeamContext, SEVERITY_CODE_EXEC
 
-results = ErlangBEAMAnalysis.from_context(ctx).run()
-for r in results:
-    print(r)
+ctx = BeamContext.from_path('/path/to/target.beam')
+print(ctx.summary())
+
+dangerous = ctx.dangerous_imports(min_severity=SEVERITY_CODE_EXEC)
+for imp in dangerous:
+    print(f"[{imp.severity}] {imp.module}:{imp.function}/{imp.arity}")
 ```
 
 ---

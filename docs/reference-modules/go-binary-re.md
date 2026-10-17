@@ -28,11 +28,13 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 ## Usage
 
 ```python
-from ablation.analyzers.go_binary_re import GoBinaryRE
+from modules.go_binary_re import analyze
 
-results = GoBinaryRE.from_context(ctx).run()
-for r in results:
-    print(r)
+result = analyze('/path/to/go_binary')
+for fn in result.get('functions', []):
+    print(f"{fn.va:#x}  {fn.name}")
+for h in result.handlers:
+    print(f"[handler] cmd={h.cmd_id:#x}  {h.func_name}  ({h.args_hint})")
 ```
 
 ---
