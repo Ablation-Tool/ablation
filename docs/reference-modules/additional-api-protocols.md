@@ -100,9 +100,9 @@ ws_findings = probe_websocket(base)
 for f in ws_findings:
     print(f"[WS_{f['type'].upper()}] {f['path']}")
 
-# Full pipeline — all protocol probes run as phases in analyze_api()
-from modules.api_re import analyze_api
-results = analyze_api('https://target.internal:8443')
+# Full pipeline — all protocol probes run as phases in run_re()
+from modules.api_re import run_re
+results = run_re('https://target.internal:8443')
 print(f"Total findings: {sum(len(v) for v in results.values() if isinstance(v, list))}")
 ```
 
