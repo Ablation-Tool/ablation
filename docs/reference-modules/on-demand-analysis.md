@@ -360,14 +360,30 @@ ctx.set_name(0x4000, 'parse_radius_packet', source='confirmed')
 
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+`load_or_build(path)` hashes the binary with SHA-256, checks `~/.ablation/cache/<sha256[:16]>_<basename>.json`, and returns the deserialized `BinaryContext` in ~130 ms on a hit. On a miss it runs the five-step build pipeline described in the sections above — format parse, FDE unwind scan, callee augmentation, call graph construction, string xref indexing — then serializes to the cache file. The SHA-256 key guarantees cache correctness: any byte change in the binary produces a different hash and forces a rebuild. No version tag, no timestamp. See **Build phase** above for the full step-by-step description.
 
 ---
 
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+BinaryContext: libservice.so
+  sha256     : fdfaceccdc740d82...
+  arch       : arm64
+  base_va    : 0x0
+  func_starts: 19842
+  exports    : 0
+  plt entries: 314
+  strings    : 8821
+  call_edges : 84763
+  str_xrefs  : 22104 pairs indexed
+  named funcs: 47 (overlay)
+
+  Top PLT imports (callers):
+    strcpy           called by 12 functions
+    malloc           called by 31 functions
+    memcpy           called by 44 functions
+    ...
 ```
 
 ---
