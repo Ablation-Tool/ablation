@@ -76,6 +76,22 @@ Run `ARM32IntOverflowScanner` on any ARM32 ELF binary as part of initial triage,
 
 ---
 
+## Reading findings
+
+`ARM32IntOverflowScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` |
+| `title` | Finding code (e.g., `UMULL_TO_MALLOC_UNCHECKED`, `MUL_SIZE_NO_OVERFLOW_GUARD`) |
+| `mul_va` | VA of the UMULL/MUL instruction |
+| `sink_va` | VA of the allocation or memcpy sink that receives the multiplied size |
+| `operands` | String describing the multiplied registers |
+| `source_va` | VA of the taint source (e.g., `recv()`) if recoverable |
+| `detail` | Full description of the overflow path |
+
+---
+
 ## See also
 
 - [ARM32 Sink Argument Classification](arm32-sink-arg-classification.md) — `SinkArgClassifierARM32` for full 4-verdict sink arg provenance

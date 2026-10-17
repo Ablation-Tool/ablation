@@ -110,6 +110,20 @@ Run `detect_sip_flood_surface()` and `detect_sip_eavesdropping_surface()` first 
 
 ---
 
+## Reading findings
+
+Voice abuse probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `MEDIUM` (TDoS surface) / `HIGH` (authentication bypass) |
+| `title` | Finding code (e.g., `SIP_NO_RATE_LIMIT`, `TDOS_INVITE_FLOOD`, `SIP_ANONYMOUS_CALL_ACCEPTED`) |
+| `detail` | Description of the abuse surface and exploitation scenario |
+| `host` | Target host |
+| `port` | SIP port (typically `5060` UDP or `5061` TLS) |
+
+---
+
 ## See also
 
 - [SIP Attack Surface Detection](sip-attack-surface-detection.md) — signaling manipulation, header injection, interception indicators

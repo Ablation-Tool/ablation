@@ -88,6 +88,21 @@ Run TLS certificate and protocol probing on all management interfaces discovered
 
 ---
 
+## Reading output
+
+`TLSAnalyzer.analyze(host, port)` returns a `TLSResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `chain` | `List[CertInfo]` — leaf, intermediate(s), root; each has `cn`, `key_bits`, `key_type`, `sig_alg`, `expiry` |
+| `cipher_suites` | `List[str]` — accepted cipher suites |
+| `protocol_versions` | `List[str]` — TLS versions accepted (e.g., `['TLSv1.2', 'TLSv1.3']`) |
+| `findings` | `List[{severity, title, detail, host, port}]` — policy violations (e.g., `WEAK_CIPHER`, `CERT_NEAR_EXPIRY`) |
+
+`CipherSuiteProber.probe(host, port)` returns `List[{cipher, protocol, bits}]` — all accepted ciphers.
+
+---
+
 ## See also
 
 - [TLS Policy Checks](tls-policy-checks.md) — HSTS/CT/mTLS policy layer above protocol probing

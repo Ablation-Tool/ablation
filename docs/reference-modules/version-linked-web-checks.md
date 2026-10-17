@@ -98,6 +98,22 @@ Run `NginxEnumerator.check_cves()` after `fingerprint()` has successfully extrac
 
 ---
 
+## Reading findings
+
+`NginxCVEChecker.check(host, port)` returns `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` / `MEDIUM` |
+| `title` | `CVE: <CVE-ID>` — the applicable CVE identifier |
+| `detail` | Affected version range, description, and exploit path |
+| `host` | Target host |
+| `port` | HTTP/HTTPS port |
+
+Results are only emitted for CVEs where the detected version falls within the affected range.
+
+---
+
 ## See also
 
 - [nginx Enum](nginx-enum.md) — full NginxEnumerator reference: all probe methods, stub_status, auth bypass, SSRF
