@@ -79,7 +79,22 @@ Run `BinderScanner` on any Android APK (system app, security agent, MDM client) 
 
 ---
 
+## Reading findings
+
+`BinderScanner.scan()` returns a list of `BinderFinding` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (exported, no permission) / `HIGH` (exported, weak permission) |
+| `class_name` | Android service class name |
+| `exported` | `True` if the service is exported to other apps |
+| `permission` | Required permission string, or `None` if none |
+| `transaction_codes` | List of known transaction code integers from the AIDL interface |
+| `detail` | Exploitation description |
+
+---
+
 ## See also
 
-- [COM Attack Surface Mapping](frame-pointer-and-memory-range-state.md) — Windows equivalent for COM interface enumeration
-- [Browser Extension Auditing](binary-ninja-plugin.md) — Chrome extension equivalent for web-facing IPC surfaces
+- [COM Attack Surface Mapping](com-attack-surface-mapping.md) — Windows equivalent for COM interface enumeration
+- [Browser Extension Auditing](browser-extension-auditing.md) — Chrome extension equivalent for web-facing IPC surfaces

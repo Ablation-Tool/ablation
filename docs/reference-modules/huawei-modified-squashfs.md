@@ -77,6 +77,22 @@ Run `ARCDecoder` / `ARCDisasm` on any ARC 700/HS firmware after `EcuArchDetector
 
 ---
 
+## Reading output
+
+`ARCDisasm.decode_frames(va, size)` returns a list of `ARCFrame` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Virtual address |
+| `size` | Frame size in bytes (2 or 4) |
+| `kind` | `compact-16` or standard |
+| `mnemonic` | Decoded instruction mnemonic |
+| `target_va` | Target VA for CALL and BRANCH frames (or `None`) |
+
+`ARCDisasm.function_starts()` returns `List[int]` — VA list of functions identified by `push_s blink` prologues.
+
+---
+
 ## See also
 
 - [Flat ROM Function Discovery](flat-rom-function-discovery.md) — `EcuArchDetector` for initial architecture detection

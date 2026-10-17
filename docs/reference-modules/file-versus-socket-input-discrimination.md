@@ -85,6 +85,19 @@ Run `ARM64FgetsFdDiscriminator.classify()` immediately after `TaintTracker` to p
 
 ---
 
+## Reading output
+
+`ARM64FgetsFdDiscriminator.classify(findings)` returns a list of classified finding dicts, extending the input `TaintTracker` findings with a `fd_type` field:
+
+| Additional Field | Content |
+|:---|:---|
+| `fd_type` | `NETWORK` (network socket), `FILE` (filesystem path), or `UNKNOWN` (caller-provided) |
+| `adjusted_severity` | Updated severity: `NETWORK` → original, `FILE` → `INFORMATIONAL`, `UNKNOWN` → `MEDIUM` |
+
+Filter to `fd_type='NETWORK'` for actionable findings.
+
+---
+
 ## See also
 
 - [Taint Analysis](taint-analysis.md) — produces the `fgets`-sourced findings this module classifies
