@@ -77,6 +77,20 @@ Run `DeprecatedFuncScanner` as an early step in initial triage for any x86-64 EL
 
 ---
 
+## Reading findings
+
+`DeprecatedFuncScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (gets, getwd) / `HIGH` (strcpy, strcat, sprintf, mktemp) |
+| `func` | Deprecated function name |
+| `call_va` | VA of the deprecated function call |
+| `overflow_offset` | Frame-relative buffer offset in bytes (or `None` if not statically recoverable) |
+| `reachability_chain` | Ordered list of caller VAs from entry point to the deprecated call |
+
+---
+
 ## See also
 
 - [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` for sink findings that require full dataflow

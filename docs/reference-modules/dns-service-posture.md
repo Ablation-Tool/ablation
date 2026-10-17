@@ -109,6 +109,22 @@ Run DNS zone transfer first on any newly identified authoritative nameserver —
 
 ---
 
+## Reading findings
+
+DNS probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
+| `title` | Finding code (e.g., `DNS_ZONE_TRANSFER_ALLOWED`, `DNS_OPEN_RESOLVER`, `DNS_ANY_AMPLIFICATION`) |
+| `detail` | Zone name, record count, or amplification factor |
+| `host` | Target nameserver |
+| `port` | UDP/TCP 53, 853, or 443 |
+
+`probe_dns_zone_transfer()` also returns the raw zone data in `detail` when a transfer succeeds.
+
+---
+
 ## See also
 
 - [PCAP Inspection](pcap-inspection.md) — `PCAPAnalyzer.extract_dns()` for offline DNS query history from packet captures
