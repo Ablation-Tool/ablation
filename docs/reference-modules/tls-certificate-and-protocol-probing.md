@@ -18,7 +18,7 @@ Inspect TLS certificate chains, key strength, legacy protocol version support (T
 
 ```mermaid
 flowchart TD
-    A["TLSAnalyzer(host, port=443)"] --> B["connect() → cert_chain, cipher_suite\n  _ssl_ctx_no_verify(): do not validate chain (get all certs)\n  ssl.SSLSocket.getpeercert(binary_form=True)\n  Extract: leaf + intermediates + root\n  _extract_cert_key_info(cert) per certificate:\n    key_type, key_size, sig_alg, not_after"]
+    A["TLSAnalyzer() — no constructor args\n  analyzer.analyze(host, port=443) → result dict"] --> B["connect() → cert_chain, cipher_suite\n  _ssl_ctx_no_verify(): do not validate chain (get all certs)\n  ssl.SSLSocket.getpeercert(binary_form=True)\n  Extract: leaf + intermediates + root\n  _extract_cert_key_info(cert) per certificate:\n    key_type, key_size, sig_alg, not_after"]
     B --> C["CipherSuiteProber(host, port):\n  probe_legacy_versions()\n    SSLv3, TLSv1.0 (0x0301), TLSv1.1 (0x0302)\n    _send_raw_clienthello(payload) → ServerHello or Alert\n  probe_weak_ciphers()\n    RC4: 0x0005, 0x000A, 0x0013, 0x0014\n    3DES: 0x000A  |  NULL: 0x002C  |  EXPORT: 0x0006\n    Anon DH: 0x001A, 0x0018\n  probe_dh_params()\n    DH key exchange: extract p, g, server_key_share\n    Check: p < 2048 bits (weak DH)"]
     C --> D["tls_enum.py:\n  check_certificate_transparency(host, port)\n  check_tls_inspection(host, port) → proxy detection\n  check_pin_mismatch(host, port)\n  → TLSFinding(severity, title, detail, host, port)"]
 ```

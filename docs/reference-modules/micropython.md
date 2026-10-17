@@ -1,6 +1,6 @@
 # MicroPython Analysis
 
-Lift compiled MicroPython `.mpy` v6 bytecode files to readable pseudo-Python source, extract imported module names, and flag dangerous call patterns (`exec`, `eval`, `compile`, `os.system`, `machine.mem32`) — identifying firmware-embedded scripting attack surfaces without requiring the MicroPython runtime — via `modules/mpy_lifter.py` `MpyLifter`.
+Lift compiled MicroPython `.mpy` v6 bytecode files to readable pseudo-Python source, extract imported module names, and flag dangerous import and call patterns (`exec`, `eval`, `os`, `machine`, `uctypes`) — identifying firmware-embedded scripting attack surfaces without requiring the MicroPython runtime — via `modules/mpy_lifter.py` `MpyLifter`.
 
 ---
 
@@ -10,7 +10,7 @@ Lift compiled MicroPython `.mpy` v6 bytecode files to readable pseudo-Python sou
 
 2. **`.mpy` files are not source code — they require a bytecode-aware lifter** — a compiled `.mpy` v6 file stores a qstr table (interned string constants), a constant object table, and a recursive code-object tree with VM opcodes. `MpyLifter` decodes all three structures without launching the MicroPython VM, producing readable pseudo-Python that exposes function definitions, imports, constant values, and call patterns.
 
-3. **`MpyLifter.dangerous_calls()` flags security-relevant patterns without false positive noise** — rather than flagging any import of `os` (which most modules use benignly), it checks for specific dangerous call patterns: `exec`/`eval`/`compile` (arbitrary code execution), `os.system`/`subprocess` (shell injection), `machine.mem32` write sequences (direct hardware memory manipulation), and `uctypes.addressof` (pointer arithmetic). These patterns are directly actionable findings in firmware security review.
+3. **`MpyLifter.dangerous_calls()` classifies security-relevant patterns into three finding types** — `DANGEROUS_IMPORT` (import of `os`, `machine`, `uctypes`, `subprocess`, etc.), `DANGEROUS_CALL` (call to `exec`, `eval`, `compile`, `open`), and `DANGEROUS_ATTR` (attribute access on dangerous modules: `machine.mem32`, `machine.mem16`, `uctypes.addressof`). Each finding carries a `function` field (the code object name) and `offset` field (bytecode instruction offset), enabling precise location within the bytecode.
 
 ---
 
@@ -19,9 +19,9 @@ Lift compiled MicroPython `.mpy` v6 bytecode files to readable pseudo-Python sou
 ```mermaid
 flowchart TD
     A["MpyLifter.from_path(path) or .from_bytes(data)"] --> B["_parse():\n  MpyHeader: magic, version=6, features, qstr_win\n  qstr table: {id → str} — all string constants\n  const object table: int, float, str, bytes literals\n  Recursive code-object tree: functions + nested lambdas"]
-    B --> C["lift_module() → str\n  Walk root code object + all children\n  Per opcode:\n    LOAD_GLOBAL/LOAD_ATTR → resolve from qstr table\n    CALL_FUNCTION → reconstruct call expression\n    IMPORT_NAME → record import + emit 'import X'\n  → pseudo-Python string (indented, readable)"]
-    C --> D["dangerous_calls() → List[dict]\n  Pattern match on lifted source + raw opcodes:\n    exec/eval/compile calls\n    os.system / subprocess.Popen\n    machine.mem32[addr] = val (write form)\n    uctypes.addressof\n  → [{type, call_expr, line_hint, severity}]"]
-    D --> E["MpyLifter.report(findings) → str\n  ASCII table of findings: type, call_expr, severity"]
+    B --> C["lift_module() → str\n  Walk root code object + all children via _lift_code()\n  Per opcode: IMPORT_NAME, LOAD_GLOBAL, LOAD_ATTR resolved\n  via qstr table → pseudo-Python string (indented, readable)"]
+    C --> D["imports() → list[str]\n  Walk all code objects\n  Collect IMPORT_NAME qstr values (deduplicated, in-order)\n  → module names as found in bytecode"]
+    D --> E["dangerous_calls() → list[dict]\n  Walk all code objects\n  IMPORT_NAME + name in _DANGEROUS_IMPORTS → DANGEROUS_IMPORT\n  LOAD_NAME/LOAD_GLOBAL + name in _DANGEROUS_NAMES → DANGEROUS_CALL\n  LOAD_ATTR + attr in _DANGEROUS_ATTRS → DANGEROUS_ATTR\n  Each: {type, detail, offset, function, severity}\n  → report(findings) → str ASCII table"]
 ```
 
 ---
@@ -37,15 +37,17 @@ lifter = MpyLifter.from_path('/path/to/extracted/module.mpy')
 # Full pseudo-Python source
 print(lifter.lift_module())
 
-# Imported module names
+# Imported module names (in-order, deduplicated)
 print("Imports:", lifter.imports())
 
-# Security findings: [{type, call_expr, line_hint, severity}]
+# Security findings
+# Each dict: {type, detail, offset, function, severity}
 findings = lifter.dangerous_calls()
 for f in findings:
-    print(f"  [{f['severity']}] {f['type']}: {f['call_expr']}")
+    print(f"  [{f['severity']}] {f['type']}: {f['detail']}  "
+          f"(in {f['function']} @ offset {f['offset']})")
 
-# ASCII report
+# ASCII table report
 print(MpyLifter.report(findings))
 ```
 
@@ -56,9 +58,7 @@ print(MpyLifter.report(findings))
 The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
-MpyLifter: module.mpy (v6)
-
-Pseudo-Python:
+lift_module():
   import machine
   import os
 
@@ -67,26 +67,34 @@ Pseudo-Python:
       machine.mem32[<addr>] = <value>
       exec(data)
 
-Imports: ['machine', 'os', 'uio']
+imports(): ['machine', 'os', 'uio']
 
-dangerous_calls:
-  type=EXEC_EVAL  call_expr='exec(data)'  severity=CRITICAL
-  type=MEM32_WRITE  call_expr='machine.mem32[<addr>] = <value>'  severity=HIGH
+dangerous_calls():
+  [HIGH]   DANGEROUS_CALL    exec        (in update_firmware @ offset 14)
+  [HIGH]   DANGEROUS_ATTR    mem32       (in update_firmware @ offset 8)
+  [HIGH]   DANGEROUS_IMPORT  machine     (in <module> @ offset 2)
+
+MpyLifter.report(findings):
+  Type                   Sev    Function                     Detail
+  -------------------------------------------------------------------------------
+  DANGEROUS_CALL         HIGH   update_firmware              exec
+  DANGEROUS_ATTR         HIGH   update_firmware              mem32
+  DANGEROUS_IMPORT       HIGH   <module>                     machine
 ```
 
 ---
 
 ## False positives
 
-**`machine.mem32` read access is less dangerous than write** — many MicroPython hardware drivers read hardware registers using `machine.mem32[addr]`. `MpyLifter.dangerous_calls()` distinguishes read-only access (lower severity) from write access (`machine.mem32[addr] = val`) which can overwrite firmware or peripheral registers. Review the `call_expr` to confirm the access direction.
+**`DANGEROUS_IMPORT` fires on any import of `os` or `machine`** — most MicroPython hardware drivers import `machine` for pin control and PWM. An `DANGEROUS_IMPORT` finding for `machine` is informational; escalate only when `DANGEROUS_ATTR` findings for `mem32`, `mem16`, or `mem8` also appear in the same function, indicating direct memory writes rather than safe peripheral API use.
 
-**`eval` in trusted utility code** — some firmware modules use `eval()` to implement a lightweight JSON-like parser for configuration values where a proper JSON library is too large for constrained memory. Check whether the input to `eval` is a constant string or a network-received value before escalating severity.
+**`DANGEROUS_ATTR` for `mem32` read access vs write access** — `machine.mem32[addr]` (read) is less dangerous than `machine.mem32[addr] = val` (write). The finding fires for either form; read the lifted pseudo-Python from `lift_module()` to determine whether the access is read-only or a write that could overwrite firmware or peripheral registers.
 
 ---
 
 ## Pipeline position
 
-Run `MpyLifter` on every `.mpy` file extracted from firmware containers. Combine with `BinaryContext.load_or_build()` on the native ELF loader to cover both the compiled C layer and the Python scripting layer. Use `firmware_extraction.py` to locate `.mpy` files within firmware squashfs images before analysis.
+Run `MpyLifter` on every `.mpy` file extracted from firmware containers. Combine with `BinaryContext.load_or_build()` on the native ELF loader to cover both the compiled C layer and the MicroPython scripting layer. Use firmware extraction tooling to locate `.mpy` files within firmware squashfs images before analysis.
 
 ---
 
