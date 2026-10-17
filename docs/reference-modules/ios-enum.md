@@ -75,10 +75,6 @@ Run `IOSEnumerator` after confirming a Cisco IOS device via SSH banner or HTTPS 
 | `severity` | `HIGH` / `MEDIUM` / `LOW` / `INFO` |
 | `title` | Short finding name (e.g., `IOS Telnet Open — Version Exposed`, `IOS SNMP Weak Community: public`) |
 | `detail` | Detail string (version string, SNMP sysDescr excerpt, etc.) |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
-| `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
 
 ---
 
