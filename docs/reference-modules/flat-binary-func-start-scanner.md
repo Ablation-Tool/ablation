@@ -169,7 +169,7 @@ The most common false positive is a tainted argument that is immediately sanitiz
 | `prologue_hits` | `List[int]` — VAs where a recognized prologue pattern matched |
 | `detect_result` | `ArchDetectResult` from the internal `EcuArchDetector` run (or `None`) |
 
-Feed `result.function_starts` directly to a taint tracker or `BinaryContext.set_func_starts()`.
+Feed `result.function_starts` directly to a taint tracker, or assign to `ctx.func_starts` before calling `BinaryContext.save_cache()` to persist the recovered starts.
 
 ---
 

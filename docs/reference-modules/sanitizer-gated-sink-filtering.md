@@ -88,13 +88,9 @@ Run `SinkSanitizerFilter.apply()` immediately after `SinkArgClassifier.classify_
 
 ## Reading output
 
-`SinkSanitizerFilter.filter(arg_propagated_sites)` returns a dict:
+`SinkSanitizerFilter.apply(classifications)` accepts `List[SinkClassification]` from `SinkArgClassifier` and returns a new `List[SinkClassification]`. `ARG_PROPAGATED` entries where all three sanitizer conditions are confirmed are upgraded to `SANITIZER_VALIDATED`; all other entries pass through unchanged.
 
-| Key | Content |
-|:---|:---|
-| `reclassified` | `List[{sink_va, sink_func, sanitizer_name, shell_safe}]` — sites with confirmed sanitizer coverage |
-| `remaining` | `List[SinkClassification]` — sites to pass to `TaintTracker` |
-| `input_count` | Integer — total `ARG_PROPAGATED` sites on input |
+Call `SinkSanitizerFilter.report(classifications)` after `apply()` to get a triage summary string showing how many sites were validated vs. remaining.
 
 ---
 

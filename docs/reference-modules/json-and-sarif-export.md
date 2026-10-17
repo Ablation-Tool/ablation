@@ -19,7 +19,7 @@ Export Ablation sweep results and confirmed findings to structured JSON or SARIF
 ```mermaid
 flowchart TD
     A["sweep_results = PatternLibrary.sweep()\nfindings = FindingRegistry.all()"] --> B["sarif.py:\n  sweep_to_sarif(sweep_results, binary_path) → dict\n    SARIF 2.1.0 document:\n      tool.driver.version = ablation package version\n      runs[0].artifacts[0].uri = binary_path\n      rules[] = one per (tag, pattern) pair\n      results[] = one per hit, level='warning'\n  findings_to_sarif(findings, binary_path) → dict\n    Confirmed findings → results level per severity_to_sarif():\n      CRITICAL/HIGH → 'error'\n      MEDIUM/LOW → 'warning'\n      INFO → 'note'"]
-    B --> C["json_export.py:\n  sweep_to_json(sweep_results, binary_path, min_score) → dict\n    Filter hits by min_score\n    → {binary, findings:[{tag, pattern, hits:[{va, score}]}]}\n  findings_to_json(findings, binary_path) → dict\n    → {binary, confirmed:[{va, tag, severity, detail}]}"]
+    B --> C["json_export.py:\n  sweep_to_json(sweep_results, binary_path, min_score) → dict\n    Filter hits by min_score\n    → {binary, findings:[{tag, pattern, hits:[{va, score}]}]}\n  findings_to_json(findings) → dict\n    → {findings: [...], total: N}"]
     C --> D["write_json(data, path)\nwrite_sarif(data, path)\n  Both call json.dumps(data, indent=2).write_text()"]
 ```
 
@@ -93,7 +93,7 @@ Export runs at the end of a sweep or confirmation session, never during triage. 
 
 ## Reading output
 
-`sweep_to_sarif(sweep_results, binary_path)` returns a SARIF 2.1.0 `dict`:
+`sweep_to_sarif(sweep_results, binary_path, min_score=0.0)` returns a SARIF 2.1.0 `dict`:
 
 | Key path | Content |
 |:---|:---|

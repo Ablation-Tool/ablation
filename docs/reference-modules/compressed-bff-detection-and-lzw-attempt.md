@@ -91,7 +91,7 @@ Run `EntropyMapper` as the first analysis step on any unknown binary before `Ecu
 
 ## Reading output
 
-`EntropyMapper.map()` returns a list of `EntropyRegion` objects:
+`EntropyMapper(path).run()` returns an `EntropyMapResult`. The result exposes a `regions` list of `EntropyRegion` objects:
 
 | Attribute | Content |
 |:---|:---|
@@ -102,9 +102,17 @@ Run `EntropyMapper` as the first analysis step on any unknown binary before `Ecu
 | `min_entropy` | Minimum entropy window value in this region |
 | `max_entropy` | Maximum entropy window value in this region |
 
-`EntropyMapper.encrypted_ranges()` returns `List[Tuple[int, int]]` — `(start, end)` offset pairs for high-entropy (≥7.5) regions.
+`EntropyMapResult.encrypted_ranges()` returns `List[Tuple[int, int]]` — `(start, end)` offset pairs for `ENCRYPTED`-classified regions.
 
-`EntropyMapper.transitions()` returns the count of entropy classification transitions above `threshold`.
+`EntropyMapResult.find_transitions(threshold=0.5)` returns `List[EntropyTransition]` — each representing a sharp entropy class change:
+
+| Attribute | Content |
+|:---|:---|
+| `offset` | File offset where the transition occurs |
+| `from_cls` | Entropy class of the preceding region |
+| `to_cls` | Entropy class of the following region |
+| `from_entropy` | Entropy value at the end of the preceding region |
+| `to_entropy` | Entropy value at the start of the following region |
 
 ---
 

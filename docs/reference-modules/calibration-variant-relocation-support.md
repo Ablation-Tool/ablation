@@ -84,11 +84,9 @@ Run `EcuOpenDamosParser` as the first step on any Bosch ECU ROM that has an avai
 
 ## Reading output
 
-`EcuOpenDamosParser.locate_in_rom(rom_path)` returns `{located: int, failed: int, tables: List[CalibrationTable]}`.
+`EcuOpenDamosParser.locate_in_rom(rom)` accepts raw ROM bytes and returns `Dict[str, int]` — `{characteristic_name: file_offset}` for every table found in this ROM variant. Tables that were not found are omitted from the result.
 
-`EcuOpenDamosParser.label_map()` returns `Dict[int, str]` — maps ROM offset to calibration table name for use with `ctx.set_name(va, name)`.
-
-`EcuOpenDamosParser.fingerprint_match(rom_path)` returns `{matched: int, total: int, match_rate: float}`.
+`EcuOpenDamosParser.label_map(rom=None)` returns `Dict[int, str]` — file offset → calibration table name. When `rom` is supplied, fingerprint relocation is performed first so the offsets reflect this ROM variant; when `None`, the default A2L addresses are used as-is.
 
 ---
 

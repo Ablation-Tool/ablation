@@ -98,15 +98,16 @@ Run SAML analysis when a SAML SSO endpoint is present; run `KeyCryptoAnalyzer` o
 
 ## Reading output
 
-`CryptoAudit.check_saml_wrapping_risk()` returns a dict:
+`CryptoAudit.analyze_saml_assertion(xml_str)` parses a SAML assertion and returns:
 
 | Key | Content |
 |:---|:---|
-| `xsw_risk` | `True` if the Assertion is signed but the Response is not |
-| `signature_scope` | `Assertion` or `Response` |
-| `reasoning` | Explanation string describing the XSW attack vector |
+| `signed` | `True` if a `<ds:Signature>` element is present in the Assertion |
+| `subject` | NameID string from the Subject element, or `None` |
+| `conditions` | `Dict` of NotBefore/NotOnOrAfter expiry values |
+| `vulns` | `List[str]` — one entry per detected vulnerability (e.g., `'UNSIGNED_ASSERTION'`, `'EXPIRED'`, `'MULTIPLE_ASSERTIONS'`, `'COMMENT_INJECTION'`) |
 
-`KeyCryptoAnalyzer.extract_key_material(binary_path)` returns `List[{key_type, pem_block, va}]`.
+`KeyCryptoAnalyzer.analyze_rsa_key(key_data)` accepts raw DER or PEM bytes and returns `list` of finding dicts. `KeyCryptoAnalyzer.scan_certificate_weaknesses(cert_pem)` accepts a PEM-encoded X.509 certificate string and returns a `list` of finding dicts. Both finding dicts use `type`, `severity`, `description`, `detail`, `exploit` keys.
 
 ---
 

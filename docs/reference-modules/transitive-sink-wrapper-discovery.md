@@ -92,16 +92,19 @@ Run `SinkPropagator.propagate()` before `SinkArgClassifier.classify_all()` on an
 
 ## Reading output
 
-`SinkPropagator.propagate()` returns `Dict[str, WrapperChain]` — wrapper function name → chain:
+`SinkPropagator.propagate()` returns `List[SinkWrapper]` — one entry per discovered wrapper function:
 
 | Attribute | Content |
 |:---|:---|
-| `name` | Wrapper function name |
-| `arg_pos` | Argument position passed to the ultimate sink |
-| `chain` | `List[str]` — call chain from wrapper to base sink (e.g., `['doSystem', 'system']`) |
-| `depth` | Chain length (1 = direct wrapper, 2+ = transitive) |
+| `va` | VA of the wrapper function |
+| `name` | Demangled name (or `sub_VA` if stripped) |
+| `param_idx` | Which parameter (0-based) is propagated to the sink |
+| `call_va` | VA of the call instruction inside this wrapper |
+| `wraps_va` | VA of the immediate sink being called |
+| `wraps_name` | Name of the immediate sink |
+| `chain` | `List[str]` — lineage from root PLT sink to this wrapper |
 
-`SinkPropagator.expanded_sinks()` returns `List[str]` — all sinks (base + discovered wrappers) for passing to `SinkArgClassifier`.
+Add wrapper names to `SinkArgClassifier` by calling `SinkPropagator.add_sink(name, arg_pos)` to extend coverage before running the classifier.
 
 ---
 

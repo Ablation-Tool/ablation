@@ -94,7 +94,7 @@ Run `ApacheModuleAnalyzer` on any Apache `.so` module found in firmware (`/usr/l
 | `hook_name` | Apache hook name (e.g., `ap_hook_check_access`) |
 | `handler_va` | VA of the hook handler function |
 
-`ApacheModuleAnalyzer.registered_hooks()` returns `List[{hook_name: str, handler_va: int}]`.
+Hook registration details are embedded in the `detail` field of each `ApacheFinding` returned by `analyze()`. Each finding includes the `hook_name` and `handler_va` attributes alongside the security verdict.
 
 ---
 
