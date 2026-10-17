@@ -1,38 +1,89 @@
-# BinaryContext
+# Binary Context
+
+Pre-compute and cache the complete working context for a stripped binary — PLT symbol map, export table, `.rodata` strings, function entry-point list, and full call graph — then expose it as a persistent, session-start-ready object that every downstream Ablation tool consumes.
+
+---
 
 ## Why this exists
 
-Three things were not possible before this module:
+1. **ELF parsing from scratch takes 2–5 seconds per binary.** In a real RE session, the analyst restarts Claude Code multiple times, switches between tools, and re-runs analyses with different parameters. Without a cache layer, every session start re-parses a 10MB firmware image — paying the LIEF overhead repeatedly. `BinaryContext` builds the context once, serializes it to `~/.ablation/cache/`, and reloads in under 100ms on all subsequent sessions. The binary's SHA256 is the cache key; if the binary changes, the cache automatically invalidates.
 
-1. **No per-session symbol resolution.** Before `BinaryContext`, every analysis tool had to re-parse the ELF, rebuild the PLT map, re-extract strings, and re-compute the call graph from scratch. On a 15MB firmware binary that overhead ran 4–6 seconds per session. `BinaryContext` builds once (~2–5 seconds), serializes to `~/.ablation/cache/`, and reloads in under 100ms on every subsequent session.
+2. **Every Ablation analysis tool needs the same foundational data.** `TaintTracker` needs `func_starts` and the PLT allocator set. `SemanticSearcher` needs named functions and call targets. `HeapVulnScanner` needs `func_starts` and PLT free/malloc symbols. `FormatStringScanner` needs the PLT format-function map and `.rodata` VA ranges. Rather than each tool re-parsing the binary independently, all tools share one `BinaryContext` object built by `load_or_build()`. This eliminates redundant parsing and ensures consistent symbol resolution across tools.
 
-2. **No cross-tool caller/callee queries.** Individual tools like `TaintTracker` and `SemanticSearcher` operated in isolation. There was no shared index for "what calls this symbol" or "what does this function call." `BinaryContext` builds `_callers_idx` and `_callees_idx` once and exposes them via `callers_of()` and `callees_of()`, making cross-tool queries O(1) lookups instead of per-session linear scans.
+3. **Discovered function names must persist across sessions.** When an analyst confirms a function's identity (`ctx.set_name(0x22ccc0, "recv_handler")`), that name must be available in the next session without re-analysis. The name overlay registry writes to disk immediately and is read back on every `name()` call. The overlay takes precedence over export symbols and PLT stubs, so manually confirmed names are never overridden by automated inference.
 
-3. **No Windows PE support in the context layer.** All of Ablation's analysis tools depend on `BinaryContext`: `SemanticSearcher`, `TaintTracker`, `WindowAnalyzer`, and `FuncProfiler`. Before v2.45.0, loading a Windows PE or `.sys` driver silently returned an empty context, so every search and taint trace returned nothing. The v2.45.0 PE path populates the same slots as ELF: IAT as PLT, exports, strings, func_starts, and call_edges. Every tool works on PE files with no changes to calling code.
-
----
-
-## What it does
-
-`BinaryContext` is the pre-computed working context for a stripped binary. One build populates:
-
-- `plt` (`{va: symbol_name}`): PLT stubs (ELF) or IAT entries (PE)
-- `exports` (`{symbol_name: va}`): all globally exported functions
-- `strings` (`{va: content}`): printable ASCII sequences ≥ 4 chars from read-only sections
-- `func_starts`: sorted list of function entry VAs (DWARF `.eh_frame` for ELF; export VAs + prologue scan for PE)
-- `call_edges`: flat call graph as a list of 3-tuples. Each tuple holds from-VA, to-VA, and label. Built by vectorized numpy scan.
-
-Named function VAs are tracked in the overlay via `ctx.set_name()` and persisted via `NameRegistry` across sessions.
+4. **Multi-architecture firmware requires a single consistent interface.** Ablation targets span ELF on x86_64, ARM64, ARM32, MIPS32, MIPS64, LoongArch64, RISC-V, PowerPC, and Windows PE on x86_64/x86_32. Every downstream tool would otherwise need format-specific code paths. `BinaryContext` abstracts these away: the same `ctx.func_starts`, `ctx.plt`, `ctx.call_edges` are populated regardless of whether the binary is a Fortinet ARM64 ELF or a Cisco x86_64 PE.
 
 ---
 
-## Supported formats
+## How it works
 
-| Format | Arch support | func_starts source |
+```mermaid
+flowchart TD
+    A["BinaryContext.load_or_build(path)"] --> B[Read binary bytes, compute SHA256]
+    B --> C{cache file exists AND sha256 matches?}
+    C -->|yes| D[_load_json: deserialize JSON → BinaryContext in <100ms]
+    C -->|no| E[_build: parse binary with LIEF]
+    E --> F{binary format?}
+    F -->|ELF| G[_build_elf: extract plt, exports, strings, func_starts, call_edges]
+    F -->|PE| H[_build_pe: extract IAT as plt, exports, strings, func_starts, call_edges]
+    G --> I[_build_string_xref_index: numpy RIP-relative displacement scan]
+    H --> I
+    I --> J[_build_indices: callers_idx, callees_idx, func_str_idx]
+    J --> K[_save_json: serialize to ~/.ablation/cache/sha256_basename.json]
+    D --> L[BinaryContext object]
+    K --> L
+    L --> M[name overlay: get_registry reads .ablation/names.db]
+    M --> N{query API}
+    N --> N1["plt[va] → symbol_name"]
+    N --> N2["exports[name] → va"]
+    N --> N3["callers_of(sym) → [(va, name), ...]"]
+    N --> N4["callees_of(func_va) → [(va, name), ...]"]
+    N --> N5["strings_near(va, radius) → [(va, content), ...]"]
+    N --> N6["string_xrefs(string_va) → [code_va, ...]"]
+    N --> N7["func_containing(va) → func_start_va (binary search)"]
+    N --> N8["name(va) → overlay > export > plt > hex"]
+```
+
+### Context fields
+
+| Field | Type | Content |
 |---|---|---|
-| ELF | x86_64, x86_32, arm64, arm32, ppc64, ppc32, mips64, mips32, riscv64, riscv32, loongarch64 | DWARF `.eh_frame` + exports + dynamic symbols |
-| Windows PE / `.sys` | x86_64, x86_32; arm64/arm32 return empty context safely | Exports + prologue scan |
-| Mach-O | Any (32-bit and 64-bit, little- and big-endian) | Entry point via `LC_MAIN` only; full func_starts not yet recovered |
+| `plt` | `Dict[int, str]` | VA → symbol name for all PLT stubs and dynamic imports |
+| `exports` | `Dict[str, int]` | Symbol name → VA for all globally exported functions |
+| `strings` | `Dict[int, str]` | VA → printable ASCII string (length ≥ 4) from `.rodata` |
+| `func_starts` | `List[int]` | Sorted list of function entry VAs from `.eh_frame` + callee augmentation |
+| `call_edges` | `List[Tuple[int, int, str]]` | `(from_va, to_va, label)` flat call graph |
+| `thumb_funcs` | `Set[int]` | VAs of ARM Thumb-encoded functions |
+| `arch` | `str` | Architecture string: `x86_64`, `arm64`, `arm32`, `mips32`, `loongarch64`, etc. |
+| `sha256` | `str` | SHA256 hex digest of the binary (cache invalidation key) |
+| `base_va` | `int` | Load base VA (0 for PIE, non-zero for fixed-load binaries) |
+
+### Supported architectures
+
+| Architecture | Binary format | Notes |
+|---|---|---|
+| x86_64 | ELF, PE | Full support; primary development target |
+| x86_32 | ELF, PE | Full support |
+| ARM64 (AArch64) | ELF | Full support |
+| ARM32 (Thumb/ARM) | ELF | Thumb function tracking via `thumb_funcs` |
+| MIPS32 / MIPS64 | ELF | Function start recovery from `.eh_frame` |
+| LoongArch64 | ELF | Full support |
+| PowerPC32 / PowerPC64 | ELF (XCOFF32 via separate extractor) | |
+| RISC-V 32 / 64 | ELF | |
+
+### String cross-reference index
+
+The `_build_string_xref_index()` pass uses a numpy displacement scan to find all RIP-relative references to `.rodata` strings in the code section. This index answers:
+- `ctx.string_xrefs(string_va)` → which instructions reference this string
+- `ctx.funcs_referencing_string(string_va)` → which functions reference this string
+- `ctx.strings_in_func(func_va)` → which strings does this function reference
+
+This is the fast path to identifying a function by its log messages or error strings without disassembling it first.
+
+### Name overlay
+
+The name overlay is a persistent SQLite registry (`~/.ablation/names.db`) keyed on `(sha256, va)`. `ctx.name(va)` checks the overlay first, then exports, then PLT, then falls back to `"0x{va:x}"`. `ctx.set_name()` writes to disk immediately; `ctx.set_names_bulk()` batches writes for performance when registering more than ~10 names at once.
 
 ---
 
@@ -41,250 +92,124 @@ Named function VAs are tracked in the overlay via `ctx.set_name()` and persisted
 ```python
 from ablation.analyzers.binary_context import BinaryContext
 
-# Works on both ELF and PE (load path auto-detects format)
-ctx = BinaryContext.load_or_build('/path/to/target.exe')
-
+# Session start — always begin here
+ctx = BinaryContext.load_or_build('/fw/fortigate/httpsd')
 print(ctx.summary())
 
-# Caller/callee queries (ELF and PE)
-ctx.callers_of('RpcServerRegisterIfEx')   # -> list of from_va, fn_name pairs
-ctx.callees_of(0x140001234)               # -> list of to_va, label pairs
+# Explore PLT imports
+for va, name in sorted(ctx.plt.items()):
+    print(f"  0x{va:x}  {name}")
 
-# String xrefs (ELF and PE x86_64)
-ctx.strings_in_func(0x140001234)          # -> list of va, content pairs
-ctx.funcs_referencing_string(0x14000a000) # -> [va, ...]
+# Explore exports / named functions
+for name, va in sorted(ctx.exports.items()):
+    print(f"  0x{va:x}  {name}")
 
-# Name overlay (persisted across sessions)
-ctx.set_name(0x140001234, 'parse_request', source='confirmed')
-```
+# Call graph navigation
+callers = ctx.callers_of('malloc')          # who calls malloc?
+callees = ctx.callees_of(0x22ccc0)          # what does this function call?
 
-### Mach-O: current scope
+# String cross-references
+xrefs = ctx.string_xrefs(0x4038a0)         # which instructions reference this string?
+funcs = ctx.funcs_referencing_string(0x4038a0)  # which functions use it?
 
-`BinaryParser` detects Mach-O files from their magic bytes (`0xFEEDFACE` / `0xFEEDFACF` and their
-byte-swapped variants) and reads the mach header fields — `cputype`, `cpusubtype`, `filetype`,
-`ncmds`, `sizeofcmds`, and `flags`. It iterates all load commands and extracts the entry point
-from `LC_MAIN` (`0x80000028`).
+# Find function containing an arbitrary VA
+func_va = ctx.func_containing(0x22d440)    # binary search → nearest func start
 
-Parsing of `LC_SEGMENT_64` / `LC_SEGMENT`, `LC_LOAD_DYLIB`, and `LC_CODE_SIGNATURE` is not yet
-implemented. Those load commands are iterated but skipped. Downstream tools that depend on
-`func_starts`, `plt`, or `exports` will receive empty results on Mach-O inputs.
+# Naming workflow
+ctx.set_name(0x22ccc0, "recv_handler", source="confirmed")
+print(ctx.name(0x22ccc0))                  # → "recv_handler"
+print(ctx.names_table())                   # formatted table of all named functions
 
-```python
-from ablation.core.binary_parser import BinaryParser
+# Force rebuild (after new binary version)
+ctx = BinaryContext.load_or_build('/fw/fortigate/httpsd', force_rebuild=True)
 
-bp = BinaryParser('/path/to/binary.dylib')
-info = bp.parse()
-# info['format']      -> 'Mach-O'
-# info['bits']        -> 32 or 64
-# info['endian']      -> 'little' or 'big'
-# info['entry_point'] -> hex string if LC_MAIN present, else None
-print(bp.report())
-```
+# Share context across multiple tools (avoid re-parsing)
+from ablation.analyzers.heap_vuln_scanner import HeapVulnScanner
+from ablation.analyzers.format_string_scanner import FormatStringScanner
+from ablation.analyzers.taint_tracker import TaintTracker
 
----
-
-### PE-specific: combining with the Windows PE analyzers
-
-```python
-from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.rpc_server_analyzer import RPCServerAnalyzer
-
-ctx = BinaryContext.load_or_build('/path/to/rpcss.dll')
-
-# SemanticSearcher, TaintTracker, WindowAnalyzer, FuncProfiler all work now
-from ablation.analyzers.semantic_searcher import SemanticSearcher
-results = SemanticSearcher(ctx).query("unauthenticated RPC registration")
-
-# Then hand off to the PE-specific analyzer for deep inspection
-rpc = RPCServerAnalyzer.from_path('/path/to/rpcss.dll')
-findings = rpc.scan()
+heap = HeapVulnScanner.from_context(ctx)
+fmt  = FormatStringScanner.from_context(ctx)
+# TaintTracker takes path only (no from_context yet)
+tt   = TaintTracker(ctx.path)
 ```
 
 ---
 
-## Cache
-
-Cache lives at `~/.ablation/cache/<sha256[:16]>_<basename>.json`. Invalidated on SHA256 mismatch. Force rebuild with `force_rebuild=True`.
-
-```python
-ctx = BinaryContext.load_or_build(path, force_rebuild=True)
-```
-
-To load without the original binary (e.g. `/tmp` was cleared):
-
-```python
-ctx = BinaryContext.load_from_cache_file('~/.ablation/cache/abc123_target.json')
-```
-
-Cache predating ARM64 gap fixes (AARCH64-GAP-001/002) will have empty `str_xref_idx`. On next
-`load_or_build()` the lazy-rebuild path in `_load_json()` detects the missing index and runs
-`_build_string_xref_index()` automatically if the original binary is accessible.
-
----
-
-## ARM64 / AArch64 support gaps fixed
-
-Two gaps prevented ARM64 binary analysis. Both are now resolved.
-
-### AARCH64-GAP-001: Call graph (fixed 2026-10-15)
-
-**Symptom:** `ctx.call_edges` contained ~1 edge on ARM64 ELFs.
-
-**Root cause:** `_build_call_graph()` fell through to the x86 `0xe8` opcode scanner for
-`arch='arm64'`. ARM64 has no `0xe8` call instruction.
-
-**Fix:** `_build_call_graph_arm64()` does a vectorized NumPy scan for BL instructions.
-
-AArch64 BL encoding in little-endian:
+## Example output (ctx.summary())
 
 ```
-bits 31:26 = 100101  ->  byte[3] in {0x94, 0x95, 0x96, 0x97}
-imm26 = word[25:0]
-target = insn_va + sign_ext26(imm26) x 4
-```
+BinaryContext: httpsd
+  sha256     : 3a4f8c1d2b9e7f5a...
+  arch       : x86_64
+  base_va    : 0x400000
+  func_starts: 1402
+  exports    : 0
+  plt entries: 847
+  strings    : 12483
+  call_edges : 9241
+  str_xrefs  : 43218 pairs indexed
+  named funcs: 37 (overlay)
 
-ARM64 adds no +8 pipeline adjustment. ARM32 adds +8; ARM64 does not. All instructions
-are 4-byte aligned so only word-aligned positions are scanned.
-
-Validated on emsworkers_linux_arm64 v8.0.0, a 78 MB Go binary: **1 to 69,344 call edges**.
-
-### AARCH64-GAP-002: String xref index (fixed 2026-10-15)
-
-**Symptom:** `ctx.string_xrefs(va)` always returned `[]` on ARM64 binaries.
-
-**Root cause:** `_build_string_xref_index()` claimed to support arm64 in its docstring.
-The implementation applied the x86-64 RIP-relative 32-bit displacement formula to ARM64
-code. ARM64 uses a different addressing mode.
-
-**Fix:** `_build_string_xref_index_arm64()` does a vectorized NumPy scan for ADRP+ADD pairs.
-
-ARM64 materialises a PC-relative string address as a two-instruction sequence:
-
-```
-ADRP X_d, #page_imm    byte[3] & 0x9F == 0x90; loads 4KB-aligned base page
-ADD  X_d, X_d, #off12  bits[31:22] == 0x244, 64-bit, shift=0; adds 12-bit offset
-```
-
-Page address: `page_base = (insn_va & ~0xFFF) + SignExtend(imm21) << 12`
-
-Full address: `page_base + imm12`
-
-Only consecutive instruction pairs where `ADD.Rn == ADRP.Rd` are matched.
-That check filters to pairs using the same destination register.
-
-Validated on emsworkers_linux_arm64 v8.0.0, a 78 MB Go binary: **0 to 13,962 string xref pairs**.
-
----
-
-## MIPS32/64 support gap fixed
-
-One gap prevented MIPS32 firmware analysis. It is now resolved.
-
-### MIPS-GAP-001: Call graph, JAL-only scanner missed all PLT calls (fixed 2026-10-15)
-
-**Symptom:** `ctx.call_edges` was empty on MIPS32 ET_EXEC firmware binaries.
-
-**Root cause:** `_build_call_graph_mips()` scanned only for JAL, opcode 3, bits 31:26.
-The O32 ABI PIC calling convention routes all PLT and cross-function calls through
-`LW $t9, N($gp)` + `JALR $t9`. ET_EXEC firmware uses zero JAL instructions.
-
-**Fix:** `_build_call_graph_mips()` now handles two patterns.
-
-Pattern 1: **JAL** (unchanged). `bits 31:26 == 3`, target = `(DS_PC & 0xF0000000) | (imm26 << 2)`.
-
-Pattern 2: **LW $t9, N($gp) + JALR $t9** (new).
-- Encoding: bits 31:16 = `0x8F99`. That is opcode LW at `0x23`, rs `$gp` at 28, rt `$t9` at 25.
-- `$gp` is fixed for ET_EXEC binaries. Read it from `.reginfo` at offset 20.
-- The GOT entry at `($gp + sign_ext(imm16))` holds the callee VA.
-- GOT contents are read from `.got`. Each entry is matched against `plt` and `func_starts`.
-
-```
-# BE: LW $t9, N($gp) opcode breakdown
-# bits 31:26 = LW = 0x23 = 0b100011
-# bits 25:21 = rs = $gp = 28 = 0x1C
-# bits 20:16 = rt = $t9 = 25 = 0x19
-# upper halfword = (0x23<<10)|(0x1C<<5)|0x19 = 0x8F99
-```
-
-`$gp` comes from `.reginfo` at byte offsets:
-
-```
-ri_gprmask   4 bytes at offset  0
-ri_cprmask  16 bytes at offset  4
-ri_gp_value  4 bytes at offset 20   <- gp
-```
-
-Validated on FortiAP cwWtpd, a 3.3MB MIPS32 BE binary with 1,170 exports: **0 to 23,617 call edges**.
-`callers_of('system')` and `callers_of('popen')` became functional. This led directly to
-CAPWAP VSP shell injection finding FAP-CWMIPS-1. See `re/fortinet/fortiap_re.py`.
-
-### MIPS-GAP-002: SinkArgClassifier does not support MIPS32 (fixed 2026-10-15)
-
-**Symptom:** `SinkArgClassifier.classify_all()` returns 0 results on MIPS32 ELFs.
-
-**Root cause:** `SinkArgClassifier` hardcodes x86-64 register names `rdi`, `rsi`, and `rdx` for
-argument tracking. MIPS32 uses `$a0` through `$a3` for the first four arguments. There is no
-equivalent register path.
-
-**Fix:** `SinkArgClassifierMIPS` implements the full MIPS32 O32 ABI argument trace path.
-It reads `$gp` from `.reginfo` at byte offset 20, builds a GOT VA→value map, and traces each
-sink argument backward through the three dominant patterns: direct `LW $aX, N($gp)` from GOT,
-two-instruction `LW $vX, N($gp)` + `ADDIU $aX, $vX, M`, and snprintf stack buffer fill.
-
-Validated on FortiAP cwWtpd (MIPS32 BE ET_EXEC, 1,170 exports): **104 call sites classified**
-(86 RODATA_CONST, 2 SNPRINTF_RODATA, 1 ARG_PROPAGATED, 15 UNKNOWN). Confirmed FAP-CWMIPS-1
-(root RCE via CAPWAP VSP password injection). See `re/fortinet/fortiap_re.py`.
-
-See `docs/reference-modules/sink-arg-classifier-mips.md` for full usage and design notes.
-
----
-
-## How it works
-
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
-
----
-
-## Example output
-
-```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+  imports via PLT (first 20):
+    0x402018  malloc
+    0x402020  free
+    0x402028  printf
+    0x402030  strcpy
+    ...
 ```
 
 ---
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Non-ELF files passed to load_or_build.** When a Mach-O fat binary, ZIP/APK, or BEAM bytecode file is passed, `load_or_build()` emits a warning and returns an empty context. All downstream tools will return empty results. Check `ctx.func_starts` after loading — an empty list indicates a format detection failure.
+
+**Go binaries with no `.eh_frame`.** Stripped Go binaries often lack the `.eh_frame` section that provides function start information. `func_starts` may be populated only from the export table or pclntab recovery. For Go binaries, call `patch_context()` with the `GoGoRetriever` result to populate `func_starts` from the pclntab before running any scanner.
+
+**Kernel-space VAs and numpy overflow.** VAs above `2^63 - 1` (kernel addresses on x86_64) cannot be stored as signed `int64`. The context uses `ctypes.c_int64()` bit-casting in `_va_to_i64()` to handle this correctly. Old cache entries built before this fix may have truncated kernel VAs; force-rebuild to correct them.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** File acquisition and verification. No other Ablation module is required.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Every analysis tool in Ablation. The canonical session start sequence is:
+
+```python
+ctx = BinaryContext.load_or_build(path)
+print(ctx.summary())
+if ctx.names_count():
+    print(ctx.names_table())
+```
 
 ---
 
-## Reading findings
+## Reading summary fields
 
 | Field | Content |
 |:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+| `sha256` | First 16 characters of the binary's SHA256 (full hash stored internally) |
+| `arch` | Detected architecture string |
+| `base_va` | Preferred load address (0 for PIE) |
+| `func_starts` | Count of function entry VAs (from `.eh_frame` + callee augmentation) |
+| `exports` | Count of named exported functions |
+| `plt entries` | Count of resolved dynamic import symbols |
+| `strings` | Count of printable ASCII strings in `.rodata` (length ≥ 4) |
+| `call_edges` | Count of directed call graph edges |
+| `str_xrefs` | Count of (string_va, code_va) RIP-relative reference pairs indexed |
+| `named funcs` | Count of analyst-confirmed names in the overlay registry |
 
 ---
 
 ## See also
 
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [ELF Internals and Hardening](elf-internals-and-hardening.md) — underlying ELF parser
+- [PE Internals and Indicators](pe-internals-and-indicators.md) — underlying PE parser
+- [Mach-O Internals](mach-o-internals.md) — underlying Mach-O parser
+- [Analyst Naming Registry](analyst-naming-registry.md) — persistent name overlay (`names.db`)
+- [Semantic Code Search](semantic-code-search.md) — uses `BinaryContext.names_map()` for corpus ingestion
+- [Heap Vulnerability Scanner](heap-vulnerability-scanner.md) — consumes `plt`, `func_starts`
+- [Taint Analysis](taint-analysis.md) — consumes `plt` for allocator/copy resolution
+- [Format String Scanner](format-string-scanner.md) — consumes `plt`, `func_starts`, rodata ranges
