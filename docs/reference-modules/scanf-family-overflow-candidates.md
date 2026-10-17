@@ -91,6 +91,21 @@ Run `SscanfSinkClassifier.classify_all()` alongside `SinkArgClassifier.classify_
 
 ---
 
+## Reading findings
+
+`ScanfOverflowScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (`RODATA_UNSAFE`: static format with `%s`) / `MEDIUM` (`DYNAMIC_FMT`: format from snprintf) |
+| `title` | Finding code: `SCANF_UNBOUNDED_S` or `SCANF_DYNAMIC_FMT` |
+| `detail` | Format string, destination register, and overflow condition |
+| `fmt_reg` | Register holding the format string argument |
+| `call_va` | VA of the `sscanf`/`fscanf` call |
+| `fmt_string` | Resolved format string value (if RODATA) |
+
+---
+
 ## See also
 
 - [Sink Argument Classifier](sink-argument-classifier.md) — exec-class sink classification (complementary)

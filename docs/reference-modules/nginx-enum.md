@@ -91,6 +91,21 @@ Run `NginxEnumerator.run()` after confirming an Nginx server via the `Server:` h
 
 ---
 
+## Reading findings
+
+`NginxEnumerator.enumerate()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
+| `type` | Finding code (e.g., `ALIAS_TRAVERSAL`, `NXAPI_UNAUTH`, `NGINX_STATUS_EXPOSED`) |
+| `description` | One-line finding title |
+| `detail` | Evidence: HTTP method, path, response code, or response excerpt |
+| `exploit` | Ready-to-run curl/command string |
+| `source` | Module that detected the finding (e.g., `nginx_enum`) |
+
+---
+
 ## See also
 
 - [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md) — TLS analysis for the Nginx HTTPS surface
