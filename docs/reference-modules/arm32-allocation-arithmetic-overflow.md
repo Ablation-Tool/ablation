@@ -90,6 +90,21 @@ Run `ARM32FunctionScanner.inject_into_context()` before any ARM32 taint or CFG a
 
 ---
 
+## Reading findings
+
+`analyze_cfg()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `type` | `ALLOC_MULTIPLY_OVERFLOW` or `ALLOC_OVERFLOW_CANDIDATE` |
+| `va` | Virtual address of the `bl malloc`/`bl calloc` call site |
+| `register` | Argument register carrying the tainted allocation size (e.g., `r0`) |
+| `taint_source` | Label of the taint source (e.g., `user`) |
+| `source_va` | VA of the function that introduced the taint |
+| `detail` | Human-readable description of the arithmetic path |
+
+---
+
 ## See also
 
 - [RISC-V](risc-v.md) — similar pattern (TaintState.join, analyze_cfg) for RISC-V targets

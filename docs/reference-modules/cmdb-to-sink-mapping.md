@@ -89,6 +89,22 @@ Run `CMDBSurfaceMapper` as Phase 0.5 in the FortiOS RE methodology — after `Se
 
 ---
 
+## Reading output
+
+`CMDBSurfaceMapper.map()` returns `Dict[int, CMDBTableEntry]` keyed by `table_id`:
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Table name from `_CONFIRMED_TABLES` or `table_0x<hex>` |
+| `callers` | List of function VAs that call `cmf_query_create(table_id)` |
+| `field_read_count` | Count of CMDB accessor calls co-located in caller functions |
+| `reaches_exec` | `True` if any caller body co-locates an exec-sink call |
+| `exec_func_va` | VA of the function with the co-located exec call (if any) |
+| `exec_call_va` | VA of the exec sink call instruction |
+| `exec_sink_name` | Sink function name (`system`, `popen`, etc.) |
+
+---
+
 ## See also
 
 - [Taint Analysis](taint-analysis.md) — next step after CMDB surface map identifies candidate functions

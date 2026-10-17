@@ -86,6 +86,21 @@ Report:
 
 ---
 
+## Reading findings
+
+`PEFABIClobberScanner.scan()` returns a list of `ABIClobberFinding` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `sink_va` | VA of the sink call instruction |
+| `sink_sym` | Symbol name of the sink (e.g., `system`, `popen`) |
+| `arg_n` | Argument position being clobbered (0-indexed) |
+| `register` | Register name (e.g., `r3`) |
+| `write_va` | VA where the argument was last written before the clobber |
+| `clobber_bl_va` | VA of the intermediate `bl` that clobbers the register |
+
+---
+
 ## See also
 
 - [PPC32/PPC476 Dedicated Lifting](ppc32-ppc476-dedicated-lifting.md) — Ppc32Lifter for human-readable PPC32 pseudocode
