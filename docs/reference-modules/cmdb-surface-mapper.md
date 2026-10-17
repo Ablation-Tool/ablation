@@ -154,7 +154,7 @@ Prior to this module, cmdb surface mapper required manual work outside the Ablat
 
 ## How it works
 
-`CMDBSurfaceMapper.from_path(path, sinks=None, verbose=False)` parses the ELF binary to extract the PLT and build a function start map. `map()` disassembles each function body with Capstone, collects call sites where `mov edi, <table_id>` precedes a CMDB API call (e.g., `cmf_query_create`), and flags each `CMDBTableEntry` as `reaches_exec=True` when the same caller function body also contains an exec-sink call (`system`, `popen`, `execv`). The output is a `Dict[int, CMDBTableEntry]` keyed by `table_id`. Co-location does not confirm a taint path — use `SinkArgClassifier` and `TaintTracker` to confirm.
+`CMDBSurfaceMapper.from_path(path, extra_sinks=None, extra_tables=None, verbose=False)` parses the ELF binary to extract the PLT and build a function start map. `map()` disassembles each function body with Capstone, collects call sites where `mov edi, <table_id>` precedes a CMDB API call (e.g., `cmf_query_create`), and flags each `CMDBTableEntry` as `reaches_exec=True` when the same caller function body also contains an exec-sink call (`system`, `popen`, `execv`). The output is a `Dict[int, CMDBTableEntry]` keyed by `table_id`. Co-location does not confirm a taint path — use `SinkArgClassifier` and `TaintTracker` to confirm.
 
 ---
 
@@ -189,20 +189,19 @@ Run `CMDBSurfaceMapper` after identifying a `libcmdb_plugin.so` or equivalent co
 
 ## Reading findings
 
-`CMDBSurfaceMapper.map()` returns `Dict[int, CMDBTableEntry]`, not a findings list.
+`CMDBSurfaceMapper.map()` returns `Dict[int, CMDBTableEntry]`, not a findings list. The full `CMDBTableEntry` field reference is in the [Output fields](#output-fields) table above. Primary triage fields:
 
-`CMDBTableEntry` attributes:
-
-| Attribute | Content |
+| Field | Content |
 |:---|:---|
-| `name` | Table name string (if symbol table present) |
-| `callers` | List of caller VAs |
-| `reaches_exec` | `True` if any caller body also contains an exec-sink call |
+| `reaches_exec` | `True` — advance to Phase 1 (SinkArgClassifier); `False` — skip |
+| `exec_sink_name` | Which exec sink is co-located (`system`, `popen`, etc.) |
+| `exec_func_va` | VA of the function to analyze with SinkArgClassifier |
+| `callers` | All VAs calling `cmf_query_create(table_id)` |
 
 ---
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [CMDB-to-Sink Mapping](cmdb-to-sink-mapping.md) — per-table field classification used in Phase 1
+- [SinkArgClassifier](sink-arg-classifier.md) — Phase 1 exec-reach confirmation from CMDB surface
+- [Taint Analysis](taint-analysis.md) — Phase 2 data flow confirmation
