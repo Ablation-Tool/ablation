@@ -305,7 +305,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Reading output
 
-`EcuRomRaiderParser.from_file(path)` constructs a parser. Access calibration tables via `parser.tables(xmlid)` which returns `List[CalibrationTable]`:
+`EcuRomRaiderParser.from_file(path)` constructs a parser. Access calibration tables via `parser.calibration_tables(variant_id)` which returns `List[CalibrationTable]`:
 
 | Attribute | Content |
 |:---|:---|
