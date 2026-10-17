@@ -42,7 +42,7 @@ if aws_creds:
 
 # Credential harvester: findings shape {source, data, severity}
 harvester = CredentialHarvester()
-harvester.harvest()
+harvester.harvest_all()
 for f in harvester.findings:
     print(f"  [{f['severity']}] {f['source']}: {str(f['data'])[:80]}")
 ```
