@@ -85,6 +85,20 @@ Run `PS3OPDVtableScanner.scan()` after `BinaryContext.load_or_build()` and befor
 
 ---
 
+## Reading output
+
+`PS3OPDVtableScanner.scan()` returns a list of `OPDVtable` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `base_va` | VA of the vtable base (start of OPD slot sequence) |
+| `slots` | Count of slots in the vtable |
+| `entries` | `List[OPDVtableSlot]` — one per slot |
+
+Each `OPDVtableSlot`: `{index, code_va, string_xrefs: List[str]}`.
+
+---
+
 ## See also
 
 - [PPC32/PPC476 Dedicated Lifting](ppc32-ppc476-dedicated-lifting.md) — PPC32/PPC64 instruction lifting and decompilation

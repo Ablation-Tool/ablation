@@ -87,6 +87,23 @@ Total: 6 records (budget 8, 2 remaining)
 
 ---
 
+## Reading output
+
+`RAGRetriever.retrieve(func_addr, ctx)` returns a list of `RetrievalRecord` objects sorted by relevance:
+
+| Attribute | Content |
+|:---|:---|
+| `strategy` | Strategy used: `exact_va`, `callee_overlap`, `role`, or `name` |
+| `status` | `CONFIRMED`, `INFERRED`, or `SEED` |
+| `func_name` | Function name at retrieval time |
+| `role` | Role tag (e.g., `network`, `parser`, `crypto`) |
+| `overlap` | Float — callee overlap score (for `callee_overlap` strategy) |
+| `callees` | `List[str]` — callee names used for overlap calculation |
+
+Retrieval stops when the token budget is exhausted; remaining records are dropped.
+
+---
+
 ## See also
 
 - [Function Identity Database](function-identity-database.md) — `func_id.db` and `FindingRegistry` that RAGRetriever queries
