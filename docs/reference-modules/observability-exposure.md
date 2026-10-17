@@ -86,6 +86,20 @@ Run observability exposure probing when internal service discovery reveals ports
 
 ---
 
+## Reading findings
+
+Observability probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` |
+| `title` | Finding code (e.g., `OTLP_UNAUTHENTICATED`, `VECTOR_API_OPEN`, `PROMETHEUS_METRICS_EXPOSED`) |
+| `detail` | Exploitation context — what can be injected or extracted |
+| `host` | Target IP |
+| `port` | Service port (e.g., `4317` for OTLP gRPC, `8686` for Vector) |
+
+---
+
 ## See also
 
 - [Secrets/Access Infrastructure](secrets-access-infrastructure.md) — Consul service mesh and GraphQL introspection for secrets and API discovery
