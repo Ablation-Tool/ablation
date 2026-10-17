@@ -53,11 +53,12 @@ result = solve_for_sink(ctx, sink_va=0x1234abcd)
 
 | Field | Description |
 |---|---|
-| `target_va` | VA of the sink instruction |
 | `sat` | `True` if Z3 found a satisfying assignment |
 | `path` | Block VA sequence from entry to sink |
 | `model` | `dict[str, int]`: concrete register values at function entry that reach the sink |
-| `constraints` | Z3 formula encoding all path and state constraints |
+| `clauses` | `int` — Z3 clauses added during path exploration |
+| `note` | `str` — `'timeout'` or `'unsat'` when `sat=False`; empty on success |
+| `seeded_fields` | `list[str]` — struct field names from `MemoryConstraint` that constrained this path |
 
 ### Limitations
 
@@ -141,7 +142,7 @@ PSIRT submission: title + CWE + severity + func_addr + binary + PoC inputs
 
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+`PathSolver` builds a basic-block adjacency list from Capstone disassembly and DFS-enumerates all simple paths from the function entry block to the block containing `target_va`, bounded by `max_path_blocks`. Each path is symbolically executed: registers are `z3.BitVec(64)` expressions; arithmetic and comparison instructions add constraints; `MemoryConstraint` seeds inject bounds for struct-field reads. Z3 is queried with a per-path timeout; a SAT result yields a concrete model of register values at function entry. `FindingRegistry.register()` inserts a row into `~/.ablation/findings.db` (SQLite), L2-normalizes the supplied embedding, and stores it for cosine-similarity retrieval. On registration the embedding is added to the in-memory matrix so `find_similar()` queries against it immediately without a reload.
 
 ---
 
@@ -151,11 +152,21 @@ Provides the session state, indexing, and utility functions that other Ablation 
 from modules.path_solver import PathSolver
 from ablation.analyzers.finding_registry import FindingRegistry
 from ablation.analyzers.binary_context import BinaryContext
+import capstone
 
 ctx = BinaryContext.load_or_build('/path/to/binary')
+md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
+md.detail = True
 
 # Confirm exploitability: enumerate all feasible paths to a taint sink
-solver = PathSolver(ctx.path, ctx.cfg, ctx.text_data, ctx.text_va, ctx.plt)
+solver = PathSolver(
+    data=ctx.text_data,
+    func_va=0x12000,
+    func_end_va=0x12800,
+    plt=ctx.plt,
+    cfg=ctx.cfg,
+    md=md,
+)
 results = solver.solve(target_va=0x1234abcd)
 for r in results:
     if r.sat:
@@ -170,8 +181,8 @@ reg.register(
     product='firmware',
     version='1.0',
     binary='libservice.so',
-    func_va=0x1234abcd,
-    cwe=121,
+    func_addr=0x1234abcd,
+    cwe_class='CWE-121',
     severity='HIGH',
     title='Stack overflow in input parser',
     description='Attacker-controlled length field flows to memcpy without bounds check.',
@@ -183,28 +194,40 @@ reg.register(
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+[SAT] path=0x12000 -> 0x12200 -> 0x1234ab clauses=42 model=(rdi=0x41414141, rsi=0x0)
+  seeded_fields: ['attr_len', 'attr_type']
+[UNSAT] path=0x12000 -> 0x12100 -> 0x1234ab clauses=19
+
+FindingRegistry.register() → finding_id='fgt-0042'
+  stored: vendor=fortinet  product=fortigate  cwe=CWE-121  severity=CRITICAL
+  embedding indexed (matrix size: 87 findings)
+
+FindingRegistry.stats()
+  findings: 87  seeds: 62  user-registered: 25
+  CRITICAL: 4  HIGH: 18  MEDIUM: 35  LOW: 30
 ```
 
 ---
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+**`PathSolver` SAT on an infeasible path** — unconstrained memory reads let Z3 assign arbitrary values to struct fields, producing models that satisfy the formula but are not reachable in practice. Use `MemoryConstraint` seeding to constrain known struct fields, and always validate the model against the vulnerability semantics (e.g., the `len` register should exceed the allocation size for a buffer overflow).
+
+**`PathSolver` UNSAT on a real path** — loops and indirect calls create unconstrained symbolic values that over-constrain the Z3 formula. Increase `max_path_blocks` or add `MemoryConstraint` seeds for register-held struct pointers. If a path still produces UNSAT, manual disassembly trace is the fallback.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** `TaintTracker` to identify the `sink_va`; `cfg_builder` or disassembly-derived CFG for `PathSolver`. The binary must be accessible at a stable path since `PathSolver` reads `text_data` directly.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** A SAT result confirms the finding is reachable. Register with `FindingRegistry.register()`, write to `re/<vendor>/<target>_re.py`, and byte-verify the `func_addr` against the binary before submitting to PSIRT.
 
 ---
 
 ## Reading output
 
-`PathSolver.from_context(ctx).solve(target_va)` returns `List[PathResult]`:
+`PathSolver(data, func_va, func_end_va, plt, cfg, md).solve(target_va)` returns `List[PathResult]`:
 
 | Attribute | Content |
 |:---|:---|
