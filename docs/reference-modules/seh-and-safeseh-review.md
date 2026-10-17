@@ -81,6 +81,21 @@ Run `SEHChainAnalyzer` on x86 (32-bit) Windows PE binaries identified as securit
 
 ---
 
+## Reading findings
+
+`SEHChainAnalyzer.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` |
+| `title` | Finding code (e.g., `SEH_HANDLER_NOT_IN_TABLE`, `SAFESEH_ABSENT`, `SEH_HANDLER_IN_WRITABLE`) |
+| `handler_va` | VA of the SEH handler |
+| `detail` | Description of the SafeSEH bypass condition |
+
+`SEHChainAnalyzer.safeseh_present()` returns `True` if the binary has a SafeSEH table.
+
+---
+
 ## See also
 
 - [Control Flow Guard Review](control-flow-guard-review.md) — x86_64 Windows CFG bypass analysis

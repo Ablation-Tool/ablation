@@ -96,6 +96,20 @@ Run SAML analysis when a SAML SSO endpoint is present; run `KeyCryptoAnalyzer` o
 
 ---
 
+## Reading output
+
+`CryptoAudit.check_saml_wrapping_risk()` returns a dict:
+
+| Key | Content |
+|:---|:---|
+| `xsw_risk` | `True` if the Assertion is signed but the Response is not |
+| `signature_scope` | `Assertion` or `Response` |
+| `reasoning` | Explanation string describing the XSW attack vector |
+
+`KeyCryptoAnalyzer.extract_key_material(binary_path)` returns `List[{key_type, pem_block, va}]`.
+
+---
+
 ## See also
 
 - [JWT Analysis and Weak Secret Testing](jwt-analysis-and-weak-secret-testing.md) — JWT-specific token forgery and weak secret brute-force
