@@ -100,6 +100,22 @@ Step 6.5 in the RE workflow: run `SinkArgClassifier.classify_all()` after `FuncP
 
 ---
 
+## Reading output
+
+`SinkArgClassifier.classify_all()` returns a list of `SinkClassification` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `sink_va` | VA of the sink call |
+| `sink_func` | Sink function name (e.g., `system`, `popen`, `execve`) |
+| `verdict` | `RODATA_CONST`, `SNPRINTF_RODATA`, `ARG_PROPAGATED`, or `UNKNOWN` |
+| `arg_reg` | Register holding the command argument (e.g., `rdi`) |
+| `provenance` | Source description for the argument (e.g., `LEA .rodata+N`, `function argument`) |
+
+Only `ARG_PROPAGATED` and `UNKNOWN` sinks are passed to `TaintTracker`.
+
+---
+
 ## See also
 
 - [Taint Analysis](taint-analysis.md) — downstream consumer of `ARG_PROPAGATED` and `UNKNOWN` sinks
