@@ -27,11 +27,19 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ## Usage
 
 ```python
-from ablation.analyzers.interproc_field_writer import InterprocFieldWriter
+from modules.interproc_field_writer import find_field_writers, Binary
 
-results = InterprocFieldWriter.from_context(ctx).run()
-for r in results:
-    print(r)
+# Binary is a target-specific class with hardcoded text/GOT VAs;
+# configure TEXT_VA, TEXT_SIZE, GOT_VA etc. before use.
+binary = Binary()
+writers = find_field_writers(
+    binary,
+    target_name='session_state',
+    target_offset=0x18,
+    max_depth=8,
+)
+for w in writers:
+    print(f"{w['fn']:#x}  pc={w['pc']:#x}  field+{w['field_offset']:#x}")
 ```
 
 ---

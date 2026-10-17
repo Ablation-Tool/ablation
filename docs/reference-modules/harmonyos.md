@@ -500,11 +500,14 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 ## Usage
 
 ```python
-from ablation.analyzers.harmonyos import HarmonyOSArkTSAnalysis
+from ablation.analyzers.abc_parser import ABCParser
 
-results = HarmonyOSArkTSAnalysis.from_context(ctx).run()
-for r in results:
-    print(r)
+parser = ABCParser.from_path('/path/to/classes.abc')
+print(f"ABC version {parser.header.version_tuple()}, methods={parser.header}")
+
+native_methods = parser.find_native_methods()
+for m in native_methods:
+    print(f"[native] {m.fqn()}")
 ```
 
 ---

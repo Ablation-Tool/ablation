@@ -328,9 +328,15 @@ Provides the session state, indexing, and utility functions that other Ablation 
 ```python
 from ablation.analyzers.stage_commitment import StageCommitment
 
-results = StageCommitment.from_context(ctx).run()
-for r in results:
-    print(r)
+sc = StageCommitment(doc_id="arm64-target-2024")
+rec = sc.commit(
+    stage_name="triage",
+    instance={"binary": "/path/to/target.elf", "n_funcs": 1200},
+    producer="analyst",
+    lock_mode="no-lock",
+)
+sc.approve(stage_name="triage", approver="lead")
+print(sc.audit_trail())
 ```
 
 ---

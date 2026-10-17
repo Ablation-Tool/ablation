@@ -107,9 +107,11 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ```python
 from ablation.analyzers.sscanf_sink_classifier import SscanfSinkClassifier
 
-results = SscanfSinkClassifier.from_context(ctx).run()
+classifier = SscanfSinkClassifier.from_context(ctx)
+results = classifier.classify_all()
 for r in results:
-    print(r)
+    if r.needs_investigation():
+        print(r.fmt())
 ```
 
 ---

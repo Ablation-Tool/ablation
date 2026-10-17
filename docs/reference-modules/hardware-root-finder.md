@@ -27,11 +27,12 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ## Usage
 
 ```python
-from ablation.analyzers.hardware_root_finder import HardwareRootFinder
+from modules.hardware_root_finder import HardwareRootFinder
 
-results = HardwareRootFinder.from_context(ctx).run()
-for r in results:
-    print(r)
+finder = HardwareRootFinder.from_context(ctx)
+roots = finder.find_roots(depth=2)
+for root in roots:
+    print(root.fmt())
 ```
 
 ---

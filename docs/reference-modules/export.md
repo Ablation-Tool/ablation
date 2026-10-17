@@ -158,11 +158,12 @@ Provides the session state, indexing, and utility functions that other Ablation 
 ## Usage
 
 ```python
-from ablation.analyzers.export import ExportFormatsSARIFandJSON
+from ablation.export.sarif import findings_to_sarif
+import json
 
-results = ExportFormatsSARIFandJSON.from_context(ctx).run()
-for r in results:
-    print(r)
+# findings: list of FindingRecord objects from FindingRegistry
+sarif_doc = findings_to_sarif(findings, binary_path='/path/to/target.elf')
+print(json.dumps(sarif_doc, indent=2))
 ```
 
 ---
