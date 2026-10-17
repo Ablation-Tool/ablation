@@ -73,6 +73,21 @@ Run `FormatStringScanner` as part of initial binary triage alongside `SinkArgCla
 
 ---
 
+## Reading findings
+
+`FormatStringScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (confirmed: network-sourced format arg) / `HIGH` (likely: stack-propagated) |
+| `title` | Finding code: `FORMAT_STRING_CONFIRMED` or `FORMAT_STRING_LIKELY` |
+| `detail` | Callee name, format register, def VA, and def type |
+| `format_reg` | Register holding the format string argument |
+| `def_va` | VA where the format register was last defined |
+| `def_type` | `recv_return`, `stack_from_arg`, or `unknown` |
+
+---
+
 ## See also
 
 - [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` for confirmed format string dataflow tracing

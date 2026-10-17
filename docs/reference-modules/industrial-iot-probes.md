@@ -102,6 +102,20 @@ Run industrial/IoT probes when network discovery reveals ports 502 (Modbus), 188
 
 ---
 
+## Reading findings
+
+Industrial IoT probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (unauthenticated read/write), `HIGH`, `MEDIUM`, or `LOW` (port open) |
+| `title` | Finding code (e.g., `MODBUS_READ_COILS_UNAUTH`, `MODBUS_REGISTERS_UNAUTH`, `MODBUS_PORT_OPEN`) |
+| `detail` | Function code used, response type, or condition |
+| `host` | Target IP address |
+| `port` | Protocol port (e.g., `502` for Modbus) |
+
+---
+
 ## See also
 
 - [Host/Service Discovery](host-service-discovery.md) — ICMP discovery and banner grabbing to identify IoT device presence
