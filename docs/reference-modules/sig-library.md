@@ -163,15 +163,9 @@ worse than "copies N bytes from src to dst; caller controls N; no upper bound ch
 
 ---
 
-## Why this exists
-
-Prior to this module, siglibrary -- function signature matching required manual work outside the Ablation pipeline. This module integrates the capability directly so findings feed the shared `PatternLibrary` and `FindingRegistry` without a separate toolchain.
-
----
-
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+`load_model()` loads the sentence-transformers model and encodes the 40 signature descriptions into a 768-dim embedding matrix, caching the result to `~/.ablation/sig_cache/`. On subsequent loads the matrix is deserialized from disk in ~2 ms instead of being recomputed. `match_description()` encodes the input description as a single 768-dim vector, computes cosine similarity against the matrix (one NumPy matmul), and returns the best match if it exceeds `threshold`. `auto_name()` iterates over every `ANGR_INFERRED` placeholder function in the corpus DB, builds a behavioral description from the `call_targets` JSON column and `string_xrefs` text, calls `match_description()`, and writes back the matched `name` for every hit above threshold.
 
 ---
 
@@ -196,28 +190,36 @@ if match:
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+$ ablation sigs firmware.so --dry-run
+SigLibrary  firmware.so  (2847 fn_0x* candidates)
+  fn_0x1d700  →  likely:memcpy     score=0.89  cwe=CWE-120
+  fn_0x1e200  →  likely:strlen     score=0.84  cwe=None
+  fn_0x1f100  →  likely:strcpy     score=0.81  cwe=CWE-120
+  fn_0x21400  →  likely:malloc     score=0.78  cwe=None
+  fn_0x22800  →  likely:recv       score=0.72  cwe=None
+  ... (47 total matches above threshold=0.62)
+Dry run: 47 functions would be renamed (no DB write)
 ```
 
 ---
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+**High similarity score for a function that only calls the matched function.** A thin wrapper around `memcpy` (3–5 instructions: `MOV rdi, …`, `MOV rsi, …`, `CALL memcpy`, `RET`) has the same behavioral description as `memcpy` itself and will score above threshold. Use `--dry-run` to inspect proposed renames and filter out functions where the description is dominated by a single call target rather than a broader pattern.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** `CorpusBuilder.build()` to build the function corpus DB. `auto_name()` reads from and writes to the corpus DB, so the corpus must exist before running it.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** `SemanticSearcher.build_corpus()` re-encodes the renamed functions so semantic queries no longer match `memcpy` wrappers. Standard pipeline: `BinaryContext.load_or_build()` → `CorpusBuilder.build()` → `SigLibrary.auto_name()` → `SemanticSearcher.build_corpus()`.
 
 ---
 
 ## Reading output
 
-`SigLibrary().match_function(va, ctx)` returns `Optional[SigMatch]` — `None` if no signature matches with sufficient confidence:
+`SigLibrary().match_function(name, call_targets, string_xrefs, notes='')` returns `Optional[SigMatch]` — `None` if no signature matches with sufficient confidence:
 
 | Attribute | Content |
 |:---|:---|

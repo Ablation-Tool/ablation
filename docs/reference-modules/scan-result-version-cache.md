@@ -70,29 +70,36 @@ cache.save()
 
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+`for_scanner(scanner_class)` builds a cache key from the scanner class's source file SHA-256 and stores it alongside the results. `get_or_scan(file_path)` computes the SHA-256 of the target file, checks whether both the scanner source and the file hash match the cached values, and returns the cached `list[dict]` on a hit. On a miss it runs the scanner's standard interface (`from_pe32plus(data)` or `scan_binary(path)`) and stores the result as `dataclasses.asdict()` output. `scan_batch()` runs `get_or_scan()` concurrently across a list of files and returns `dict[abspath, list[dict]]`. `save()` flushes all in-memory results to `~/.ablation/cache/scan_results/<ScannerClassName>.json`.
 
 ---
 
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+ScanResultVersionCache  LA64MaxNotMinScanner
+  cache: ~/.ablation/cache/scan_results/LA64MaxNotMinScanner.json
+  scanner hash: 3f8a1c9d...  (source SHA-256 prefix)
+  scan_batch /lib/modules/5.10.0/kernel/  1096 files
+    cache hits : 1049  (no rescan)
+    rescanned  : 47    (scanner or file changed)
+    total time : 3.2 s (vs ~94 s without cache)
+  findings    : 23 across 18 files
 ```
 
 ---
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+The cache does not introduce false positives — it returns the wrapped scanner's results verbatim. If a scanner's findings change after a bug fix, call `get_or_scan(path, force=True)` or delete `~/.ablation/cache/scan_results/<ScannerClassName>.json` to force a full rescan. The scanner source hash invalidation catches this automatically when the scanner's `.py` file changes.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** The target files must exist on disk. No other Ablation setup required — `ScanResultVersionCache` wraps any scanner that follows the standard interface (`from_pe32plus(data)` or `scan_binary(path)` returning a findings list).
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** Pass results to downstream analysis or write to `~/VDT/VULNERABILITIES-<ip>.md`. The cache automatically invalidates on scanner source changes, so there is no manual cache management needed between sessions.
 
 ---
 
