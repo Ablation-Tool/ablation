@@ -151,7 +151,7 @@ Prior to this module, export formats -- sarif and json required manual work outs
 
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+`sweep_to_sarif()` and `sweep_to_json()` iterate the `PatternLibrary.sweep()` result list and filter hits by `min_score`. Each passing hit becomes one SARIF `result` entry or one JSON `hit` dict. SARIF results carry the rule ID from the pattern's `tag`, the virtual address in `physicalLocation.address.absoluteAddress`, and the cosine similarity score in `properties.score`. `findings_to_sarif()` and `findings_to_json()` do the same for rows from `FindingRegistry.list_findings()`, using the CWE class as the SARIF rule ID. `write_sarif()` and `write_json()` serialize to disk; both set `"$schema"` to the SARIF 2.1.0 schema URI.
 
 ---
 
@@ -170,8 +170,23 @@ print(json.dumps(sarif_doc, indent=2))
 
 ## Example output
 
-```
-# Output varies by module. See Usage section for representative examples.
+```json
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [{
+    "tool": {"driver": {"name": "ablation", "version": "2.57.0", "rules": [
+      {"id": "buffer-overflow/strcpy-no-length-check", "shortDescription": {"text": "buffer-overflow"}}
+    ]}},
+    "results": [{
+      "ruleId": "buffer-overflow/strcpy-no-length-check",
+      "level": "warning",
+      "message": {"text": "strcpy with user-controlled src, no length check (score=0.71)"},
+      "locations": [{"physicalLocation": {"address": {"absoluteAddress": 130560}}}],
+      "properties": {"score": 0.71, "va": "0x1fa00"}
+    }]
+  }]
+}
 ```
 
 ---
@@ -184,9 +199,9 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** `PatternLibrary.sweep()` to generate sweep hits, or `FindingRegistry.list_findings()` to retrieve confirmed findings. Both produce the input lists these functions consume.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** Upload to GitHub Code Scanning via `gh api repos/.../code-scanning/sarifs`, import into a SAST dashboard, or feed into downstream tooling. No further Ablation modules depend on export output.
 
 ---
 
