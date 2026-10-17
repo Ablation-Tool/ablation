@@ -100,11 +100,12 @@ Running this at the start of every engagement means the tool's accumulated knowl
 ## Usage
 
 ```python
-from ablation.analyzers.cross_target_learning import CrossTargetLearning
+from ablation.analyzers.cross_binary_taint import CrossBinaryTaintTracker
 
-results = CrossTargetLearning.from_context(ctx).run()
-for r in results:
-    print(r)
+tracker = CrossBinaryTaintTracker.from_lib_graph(lib_graph, entry_binary='/path/to/main', max_hops=6)
+chains = tracker.run()
+for chain in chains:
+    print(chain)
 ```
 
 ---

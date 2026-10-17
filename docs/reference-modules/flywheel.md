@@ -139,11 +139,13 @@ See [Registry Modules](registry.md) for the full `FindingRegistry` and `NameRegi
 ## Usage
 
 ```python
-from ablation.analyzers.flywheel import TheFlywheel
+from ablation.analyzers.engine_pattern_library import EnginePatternLibrary
 
-results = TheFlywheel.from_context(ctx).run()
-for r in results:
-    print(r)
+lib = EnginePatternLibrary.default()
+labels = lib.label_binary(ctx)
+for va, label in sorted(labels.items()):
+    if label.confidence >= 0.80:
+        print(f"  {va:#x}  {label.engine}  conf={label.confidence:.2f}")
 ```
 
 ---

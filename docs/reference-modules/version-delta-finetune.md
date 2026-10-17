@@ -21,11 +21,17 @@ Provides the session state, indexing, and utility functions that other Ablation 
 ## Usage
 
 ```python
-from ablation.analyzers.version_delta_finetune import VersionDeltaFineTune
+from modules.version_delta_finetune import finetune_model
 
-results = VersionDeltaFineTune.from_context(ctx).run()
-for r in results:
-    print(r)
+# train_pairs: list of (anchor_text, positive_text) function description pairs
+# eval_pairs: list of (text_a, text_b, label) tuples
+model = finetune_model(
+    train_pairs=[("heap_alloc size check", "malloc with bounds"), ...],
+    eval_pairs=[("recv handler", "network input", 1.0), ...],
+    base_model_name="sentence-transformers/all-MiniLM-L6-v2",
+    output_path="/tmp/ablation-finetuned",
+    epochs=4,
+)
 ```
 
 ---
