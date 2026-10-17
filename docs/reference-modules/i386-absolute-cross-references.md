@@ -86,6 +86,21 @@ Run `StaticELF32FuncStartScanner.inject()` immediately after `BinaryContext.load
 
 ---
 
+## Reading output
+
+`StaticELF32FuncStartScanner.scan()` injects function starts into `BinaryContext` and returns a summary dict:
+
+| Key | Content |
+|:---|:---|
+| `primary_count` | Functions found by primary prologue (`55 89 e5`) |
+| `secondary_count` | Functions found by secondary prologue (`55 57 56`) |
+| `calltarget_count` | Functions found by call-target fallback analysis |
+| `total_injected` | Total deduplicated function starts added to `ctx` |
+
+After `scan()`, `ctx.func_starts` contains the injected addresses.
+
+---
+
 ## See also
 
 - [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext.func_starts` that this scanner populates

@@ -78,6 +78,21 @@ Run `MCPToolTaintScanner` on any AI/MCP server codebase as the first scan, along
 
 ---
 
+## Reading findings
+
+`MCPToolTaintScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` / `MEDIUM` |
+| `title` | Finding code (e.g., `COOKIE_CLI`, `PROMPT_INJECTION`, `TOOL_SSRF`) |
+| `cwe` | CWE identifier (e.g., `CWE-214`, `CWE-77`) |
+| `file` | Source file path |
+| `line` | Line number |
+| `detail` | Code excerpt and exploitation description |
+
+---
+
 ## See also
 
 - [Source Dangerous Sink Detection](source-code-auditing.md) — `SourceSinkScanner` for complementary source-level sink detection

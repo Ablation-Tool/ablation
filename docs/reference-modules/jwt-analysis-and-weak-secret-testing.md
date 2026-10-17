@@ -83,6 +83,20 @@ Run JWT analysis after capturing a token from HTTP traffic (via `PCAPAnalyzer`) 
 
 ---
 
+## Reading findings
+
+`CryptoAudit.analyze_jwt()` returns a dict:
+
+| Key | Content |
+|:---|:---|
+| `alg` | Algorithm claim from JWT header |
+| `none_bypass` | `True` if the server accepted an unsigned `alg: none` token |
+| `weak_secret` | The matched wordlist secret string, or `None` |
+
+`CryptoAudit.scan_process_secrets()` returns `List[{pid: int, process: str, secret_var: str, value: str}]`.
+
+---
+
 ## See also
 
 - [SAML and Key Material Review](saml-and-key-material-review.md) — SAML assertion wrapping and key extraction from XML signing structures
