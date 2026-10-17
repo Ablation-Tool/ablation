@@ -252,15 +252,15 @@ cisco     ios_xe      CLI command injection via snmp trap  CWE-78     HIGH
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+`FindingRegistry` and `NameRegistry` do not emit security findings. A `find_similar()` result with high similarity to a prior confirmed finding is a candidate for review, not a confirmed finding. Always verify the candidate with `TaintTracker` and byte-verify the VA before registering a new finding.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** `FindingRegistry.register()` requires a confirmed finding from `PathSolver` and a FORGE-passed RE module. `NameRegistry.set_name()` is called any time a function VA is confirmed — it has no prerequisites beyond `BinaryContext`.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** Registered findings feed `PatternLibrary.ingest_from_registry()` at the start of the next engagement, closing the flywheel loop. Named functions from `NameRegistry` appear in `BinaryContext.names_table()` and in all downstream corpus descriptions.
 
 ---
 

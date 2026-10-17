@@ -180,7 +180,9 @@ Gate: PASSED — no CRITICAL or HIGH findings.
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+**`MEDIUM` finding on path normalization** — FORGE flags any `open()`, `os.path.join()`, or `pathlib.Path()` call that takes an argument not validated against a known prefix. This is correct for user-supplied paths, but a false positive when the path is constructed internally from a package data directory or a hardcoded `~/.ablation/` prefix. Add an explicit comment in `record_result()` noting the internal-only path if a finding of this type is downgraded from MEDIUM.
+
+**`FORGE.audit_module()` raises `ForgeAuditRequired` on every call** — this means the cache has no prior result for this module. It is not a false positive; it is the signal to run the audit inline. Run the SAFE CODE review and call `record_result()` to cache the result so future calls return instantly.
 
 ---
 

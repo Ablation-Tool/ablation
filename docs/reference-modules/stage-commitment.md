@@ -356,15 +356,15 @@ StageCommitment doc_id='cisco/fmc_server'
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+`StageCommitment` does not emit security findings. The most common operational error is a `verify()` failure caused by replaying the audit trail on the wrong `doc_id` — each document ID produces a distinct hash chain. If `verify()` returns `False`, check that the `doc_id` and stage name arguments match the values used at `commit()` time.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** `WorkflowDocument.advance()` to commit a stage and produce the `instance` dict. `StageCommitment` records tamper evidence for the same instance that `WorkflowDocument` has already validated.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** Store the `StageCommitment` object alongside the `WorkflowDocument` JSON. At the end of the engagement, call `audit_trail()` to produce the hash chain proof for the full pipeline run and include it in the PSIRT submission.
 
 ---
 
