@@ -373,7 +373,7 @@ Core infrastructure modules do not emit security findings directly. False positi
 | `producer` | Producer identity string |
 | `content_hash` | SHA-256 of the committed stage output |
 | `timestamp` | ISO 8601 commitment time |
-| `lock_mode` | `'soft'` (revisable by approver) or `'hard'` (immutable) |
+| `lock_mode` | `'no-lock'` (revisable by approver) or `'locked'` (producer signals no revision intended) |
 | `approver` | Approver identity string, or `None` if not yet approved |
 | `revised_content_hash` | SHA-256 of approved revision, or `None` |
 | `approving_hash` | SHA-256 of the approval record itself, or `None` |
