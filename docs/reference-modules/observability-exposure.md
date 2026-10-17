@@ -43,7 +43,8 @@ for host in discovered_hosts:
     schema = probe_kafka_schema_registry(host)
 
     for finding in otel + vec + redis + schema:
-        print(f"  [{finding.get('severity','INFO')}] {finding['finding']} @ {host}")
+        # findings: {severity, title, detail, host, port}
+        print(f"  [{finding['severity']}] {finding['title']}: {finding['detail'][:80]}")
 ```
 
 ---
