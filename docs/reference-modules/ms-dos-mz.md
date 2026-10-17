@@ -74,6 +74,20 @@ Run `SinkArgClassifierX86_32.classify_all()` on every x86-32 ELF or PE binary be
 
 ---
 
+## Reading output
+
+`SinkArgClassifierX86_32.classify_all()` returns a list of `SinkClassification` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `sink_va` | VA of the sink call |
+| `sink_func` | Sink function name |
+| `verdict` | `RODATA_CONST`, `ARG_PROPAGATED`, or `UNKNOWN` |
+| `arg_source` | How the argument was loaded: `PUSH [ebp+N]` (stack arg), `PUSH [ebx+N]` (RODATA), etc. |
+| `provenance` | Provenance classification description |
+
+---
+
 ## See also
 
 - [Exec-Class Sink Argument Classification](exec-class-sink-argument-classification.md) — `SinkArgClassifier` x86-64 equivalent
