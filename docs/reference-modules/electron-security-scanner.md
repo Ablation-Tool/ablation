@@ -87,9 +87,9 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 ```python
 from ablation.analyzers.electron_security_scanner import ElectronSecurityScanner
 
-results = ElectronSecurityScanner.from_context(ctx).run()
-for r in results:
-    print(r)
+findings = ElectronSecurityScanner.from_path('/path/to/electron_app_src/').scan()
+for f in findings:
+    print(f.fmt())
 ```
 
 ---

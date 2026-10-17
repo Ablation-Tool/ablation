@@ -178,11 +178,17 @@ Provides the session state, indexing, and utility functions that other Ablation 
 ## Usage
 
 ```python
-from ablation.analyzers.sig_library import SigLibraryFunctionSignatureMatching
+from ablation.analyzers.sig_library import SigLibrary
 
-results = SigLibraryFunctionSignatureMatching.from_context(ctx).run()
-for r in results:
-    print(r)
+lib = SigLibrary()
+# match_function takes name, call_targets (JSON str), string_xrefs (str)
+match = lib.match_function(
+    name='fn_401000',
+    call_targets='["strcpy","malloc"]',
+    string_xrefs='buffer overflow detected',
+)
+if match:
+    print(f"  {match.sig_name}  score={match.score:.2f}")
 ```
 
 ---

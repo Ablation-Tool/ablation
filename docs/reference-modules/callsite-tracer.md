@@ -27,11 +27,18 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ## Usage
 
 ```python
-from ablation.analyzers.callsite_tracer import CallsiteTracer
+from modules.callsite_tracer import backward_slice
+import lief
 
-results = CallsiteTracer.from_context(ctx).run()
-for r in results:
-    print(r)
+binary = lief.parse('/path/to/target.elf')
+text_sec = binary.get_section('.text')
+raw = bytes(text_sec.content)
+
+# Backward slice from a specific call site VA
+callsite_va = 0x401234
+sliced = backward_slice(raw, binary, callsite_va, max_insns=64)
+for entry in sliced:
+    print(entry)
 ```
 
 ---
