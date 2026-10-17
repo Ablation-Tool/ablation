@@ -87,6 +87,20 @@ Run after stripping and mounting the firmware filesystem. `GoSubprocessScanner` 
 
 ---
 
+## Reading findings
+
+`GoSubprocessScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (PATH injection) / `MEDIUM` (DYNAMIC unresolved) / `INFO` (ABSOLUTE path) |
+| `call_va` | VA of the `exec.Command()` or `os.Exec()` call site |
+| `cmd_type` | `PATH` (no slash — PATH injection), `ABSOLUTE` (hardcoded path), or `DYNAMIC` (unresolved at analysis time) |
+| `cmd` | Resolved command string (e.g., `ping`, `/usr/bin/sh`) or `<unresolved>` |
+| `detail` | Exploitation context for PATH findings |
+
+---
+
 ## See also
 
 - [Go String Recovery](go-string-recovery.md) — full `GoStringResolver` API reference

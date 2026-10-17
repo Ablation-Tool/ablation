@@ -85,6 +85,20 @@ Run Kubernetes policy posture checks after initial `K8sEnumerator.enumerate_all(
 
 ---
 
+## Reading findings
+
+Kubernetes policy probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
+| `title` | Finding code (e.g., `K8S_CLUSTERROLEBINDING_WILDCARD`, `K8S_NO_NETWORKPOLICY`, `K8S_PRIVILEGED_POD`) |
+| `detail` | Namespace, resource name, or permission details |
+| `host` | Kubernetes API server host |
+| `port` | API server port (typically `6443`) |
+
+---
+
 ## See also
 
 - [Kubernetes Inventory](kubernetes-inventory.md) — `K8sEnumerator` resource enumeration that runs before policy checks

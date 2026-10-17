@@ -103,6 +103,21 @@ Run `version_delta` after `DTWMatcher` identifies a candidate homolog to verify 
 
 ---
 
+## Reading output
+
+`VersionDelta.compare(va, binary_b)` returns a `DeltaReport` object:
+
+| Attribute | Content |
+|:---|:---|
+| `homolog_match` | `HomologMatch` (VA, Jaccard score, semantic score, confidence) |
+| `patch_delta` | `PatchDelta` (ratio, unified diff of instruction sequences) |
+| `era_confirmed` | `True` if the homolog is from the same version era |
+| `callee_changed` | `True` if the callee set changed between versions |
+| `new_callees` | List of callee names added in the newer version |
+| `removed_callees` | List of callee names removed in the newer version |
+
+---
+
 ## See also
 
 - [DTW Function Homolog Matching](dtw-function-homolog-matching.md) — Stage 2 DTW matching that feeds into version delta

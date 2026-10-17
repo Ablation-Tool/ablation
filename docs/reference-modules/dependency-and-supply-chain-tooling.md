@@ -130,6 +130,20 @@ The `pyproject.toml` configuration is the source of truth for the package — it
 
 ---
 
+## Reading output
+
+`pyproject.toml` is a configuration file, not a Python API. Relevant commands:
+
+| Command | Output |
+|:---|:---|
+| `pip show ablation-tool` | Installed version, location, and dependency list |
+| `ablation --help` | Available CLI entry points and flags |
+| `pip install -e ".[full]"` | Exit 0 on success; dependency resolution errors on stdout |
+
+`FORGE.audit_module()` produces a structured report; see [FORGE Module](forge.md) for the output schema.
+
+---
+
 ## See also
 
 - [CI and Release Automation](ci-and-release-automation.md) — publish workflow that uses `python -m build` and `pypa/gh-action-pypi-publish`

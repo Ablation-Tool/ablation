@@ -105,6 +105,22 @@ find_similar('command injection in parser'):
 
 ---
 
+## Reading output
+
+`FindingRegistry.stats()` returns `{confirmed: int, inferred: int, seed: int}`.
+
+`FindingRegistry.find_similar(query)` returns a list of `FindingRecord` objects ranked by similarity:
+
+| Attribute | Content |
+|:---|:---|
+| `id` | Finding identifier (e.g., `VULN-TARGET-001`, CVE number) |
+| `similarity` | Float 0.0–1.0 — embedding cosine similarity to the query |
+| `title` | Brief finding title |
+| `detail` | Full finding description |
+| `source` | `confirmed`, `inferred`, or `seed` |
+
+---
+
 ## See also
 
 - [Function Corpus Builder](function-corpus-builder.md) — populates `func_id.db` with `ANGR_INFERRED` records

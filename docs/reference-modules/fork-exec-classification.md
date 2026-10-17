@@ -90,6 +90,23 @@ Run `ForkExecClassifier` after `SinkArgClassifier` returns `ARG_PROPAGATED` find
 
 ---
 
+## Reading output
+
+`ForkExecClassifier.classify()` returns a list of `ForkExecSite` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `fork_va` | VA of the `fork()` call |
+| `func_va` | VA of the function containing the fork |
+| `classification` | `EXEC_AFTER_FORK`, `WORKER`, or `EXIT_IN_CHILD` |
+| `exec_va` | VA of the `exec*()` call after fork (for `EXEC_AFTER_FORK` only) |
+| `exec_func` | Exec function name (e.g., `execve`, `system`) |
+| `child_blocks` | Count of basic blocks in the child code path |
+
+Only `EXEC_AFTER_FORK` sites need taint analysis. `WORKER` and `EXIT_IN_CHILD` sites can be eliminated.
+
+---
+
 ## See also
 
 - [Sink Argument Classification](sink-argument-classifier.md) — `SinkArgClassifier` whose ARG_PROPAGATED findings are routed through fork-exec classification
