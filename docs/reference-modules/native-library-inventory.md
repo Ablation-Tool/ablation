@@ -72,6 +72,21 @@ Run `LibraryInventory` at session start for any Android APK or firmware root fil
 
 ---
 
+## Reading output
+
+`LibraryInventory.scan()` returns a list of `LibraryEntry` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Library filename |
+| `size_kb` | File size in kilobytes |
+| `arch` | Architecture string (e.g., `arm64`, `x86`) |
+| `exports` | Count of exported symbols |
+| `jni_exports` | Count of JNI `Java_*` exports |
+| `score` | Float priority score — higher is more worth analyzing |
+
+---
+
 ## See also
 
 - [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext` for full analysis of high-score libraries

@@ -80,6 +80,21 @@ Run `LA64MaxNotMinScanner` on any LoongArch64 ELF or PE binary. Prioritize `CRIT
 
 ---
 
+## Reading findings
+
+`LA64MaxNotMinScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (flows to sink) / `HIGH` (pattern found, no confirmed sink) |
+| `va` | VA of the incorrect min/max comparison |
+| `pattern` | `immediate_compare` or `register_compare` |
+| `bound` | Immediate bound value (for `immediate_compare`) |
+| `flows_to_sink` | `True` if the value reaches a memory copy or allocation sink |
+| `sink_va` | VA of the downstream sink (if `flows_to_sink=True`) |
+
+---
+
 ## See also
 
 - [LoongArch64 Taint Analysis](taint-analysis-2.md) — `TaintTrackerLA64` for full dataflow verification of scanner findings

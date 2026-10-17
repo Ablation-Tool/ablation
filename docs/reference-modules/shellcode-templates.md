@@ -166,6 +166,21 @@ d823f10000007f00003b00000000000010e1a31a00007f000000000000000000
 
 ---
 
+## Reading output
+
+`ShellcodeLibrary.get(arch, os, payload_type)` returns `bytes` — the raw shellcode.
+
+`ROPGadgetFinder.find(binary)` returns a list of `ROPGadget` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Virtual address of the gadget |
+| `insns` | Gadget instruction string (e.g., `pop rdi ; ret`) |
+
+`ShellcodeEncoder.encode(shellcode, bad_bytes)` returns `{encoded: bytes, total_size: int, status: str}`.
+
+---
+
 ## See also
 
 - [Taint Analysis](taint-analysis.md) — confirm that a controllable buffer reaches the overwritten `rip` before building a payload

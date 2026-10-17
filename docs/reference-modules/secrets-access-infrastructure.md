@@ -89,6 +89,20 @@ Run secrets infrastructure probing after Consul and Redis ports are discovered v
 
 ---
 
+## Reading findings
+
+Secrets infrastructure probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (unauthenticated KV/secrets) / `HIGH` (schema/mutation exposure) |
+| `title` | Finding code (e.g., `CONSUL_KV_OPEN`, `GRAPHQL_INTROSPECTION_OPEN`, `VAULT_UNAUTHENTICATED`) |
+| `detail` | KV paths, exposed types/mutations, or plaintext secret excerpt |
+| `host` | Target IP |
+| `port` | Service port (e.g., `8500` for Consul, `4000` for GraphQL) |
+
+---
+
 ## See also
 
 - [Orchestration/Management Exposure](orchestration-management-exposure.md) — Consul service catalog and Kong admin API
