@@ -85,10 +85,10 @@ Run `PPC32PLTTracer` after `PPC32ELF` is constructed from the target binary. Use
 
 | Attribute | Content |
 |:---|:---|
-| `call_va` | VA of the `bl` instruction calling the PLT stub |
-| `thunk_va` | VA of the PLT thunk |
-| `r3` | VA of the `r3` argument (if statically determinable) or `None` |
-| `r3_string` | String value of `r3` if it points to `.rodata` (or `None`) |
+| `bl_va` | VA of the `BL` instruction calling the PLT thunk |
+| `thunk_va` | VA of the PLT thunk function |
+| `caller_r30` | Active `r30` value at the call site — used to verify PLT slot selection |
+| `func_name` | Imported symbol name resolved from the thunk, or `None` if unresolved |
 
 ---
 

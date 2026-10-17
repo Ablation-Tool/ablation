@@ -88,16 +88,18 @@ Run `StaticELF32FuncStartScanner.inject()` immediately after `BinaryContext.load
 
 ## Reading output
 
-`StaticELF32FuncStartScanner.scan()` injects function starts into `BinaryContext` and returns a summary dict:
+`StaticELF32FuncStartScanner.scan()` returns `List[int]` — sorted VA list of discovered function entry points.
 
-| Key | Content |
+`StaticELF32FuncStartScanner.scan_full()` returns a `ScanResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `primary_count` | Functions found by primary prologue (`55 89 e5`) |
-| `secondary_count` | Functions found by secondary prologue (`55 57 56`) |
-| `calltarget_count` | Functions found by call-target fallback analysis |
-| `total_injected` | Total deduplicated function starts added to `ctx` |
+| `path` | Path to the scanned binary |
+| `starts` | `List[int]` — sorted function entry VAs |
+| `patterns_used` | `List[str]` — prologue pattern names that produced matches |
+| `segment_count` | Number of executable segments scanned |
 
-After `scan()`, `ctx.func_starts` contains the injected addresses.
+`StaticELF32FuncStartScanner.inject(ctx)` calls `scan()` and writes the starts directly to `ctx.func_starts`, returning the count injected. Only runs when `ctx.func_starts` is empty — it does not overwrite existing `eh_frame` data.
 
 ---
 

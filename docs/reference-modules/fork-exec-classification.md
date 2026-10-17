@@ -92,16 +92,18 @@ Run `ForkExecClassifier` after `SinkArgClassifier` returns `ARG_PROPAGATED` find
 
 ## Reading output
 
-`ForkExecClassifier.classify()` returns a list of `ForkExecSite` objects:
+`ForkExecClassifier.classify()` returns a list of `ForkCallerResult` objects:
 
 | Attribute | Content |
 |:---|:---|
-| `fork_va` | VA of the `fork()` call |
+| `caller_va` | VA of the `call fork` instruction |
 | `func_va` | VA of the function containing the fork |
-| `classification` | `EXEC_AFTER_FORK`, `WORKER`, or `EXIT_IN_CHILD` |
-| `exec_va` | VA of the `exec*()` call after fork (for `EXEC_AFTER_FORK` only) |
-| `exec_func` | Exec function name (e.g., `execve`, `system`) |
-| `child_blocks` | Count of basic blocks in the child code path |
+| `verdict` | `EXEC_AFTER_FORK`, `WORKER`, `EXIT_IN_CHILD`, or `UNKNOWN` |
+| `child_entry_va` | VA where the child branch begins (`eax==0` path), or `0` |
+| `exec_target` | Exec function name (e.g., `'execve'`, `'system'`) — set when `EXEC_AFTER_FORK` |
+| `exec_call_va` | VA of the exec call — set when `EXEC_AFTER_FORK`, otherwise `0` |
+| `blocks_walked` | Count of BFS blocks examined during child-path analysis |
+| `detail` | Human-readable verdict detail string |
 
 Only `EXEC_AFTER_FORK` sites need taint analysis. `WORKER` and `EXIT_IN_CHILD` sites can be eliminated.
 

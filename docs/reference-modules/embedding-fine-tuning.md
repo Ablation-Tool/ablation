@@ -89,16 +89,19 @@ Run `SigLibrary.auto_name()` after `CorpusBuilder.build()` and before `SemanticS
 
 ## Reading output
 
-`SigLibrary.auto_name(ctx)` returns a list of `NameMatch` objects:
+`SigLibrary.auto_name(db_path, dry_run=False)` renames all `ANGR_INFERRED` placeholder functions in the `func_id_db` SQLite database and returns `int` — the count of functions renamed.
+
+`SigLibrary.match_function(name, call_targets, string_xrefs, notes)` returns an `Optional[SigMatch]` for a single function record:
 
 | Attribute | Content |
 |:---|:---|
-| `func_va` | Virtual address of the unnamed function |
-| `likely_name` | Best candidate name (e.g., `memcpy`, `strlen`) |
+| `name` | Matched signature name (e.g., `'memcpy'`, `'strlen'`) |
+| `aliases` | `List[str]` — alternate known names for this function |
+| `category` | Vulnerability category (e.g., `'memory-safety'`) |
+| `cwe_risk` | Associated CWE string, or `None` |
 | `score` | Float 0.0–1.0 — embedding cosine similarity |
-| `renamed` | `True` if `ctx.set_name()` was called for this match |
 
-Below-threshold results are omitted from the list. The threshold is configurable via `SigLibrary(threshold=0.75)`.
+Returns `None` when no match exceeds the threshold.
 
 ---
 

@@ -94,18 +94,9 @@ Use `Ppc32Lifter` and `Ppc476Decompiler` after `TaintTracker` identifies a candi
 
 ---
 
-## See also
-
 ## Reading output
 
-`Ppc32Lifter.lift(va)` returns a `LiftedFunction` object:
-
-| Attribute | Content |
-|:---|:---|
-| `va` | VA of the lifted function |
-| `pseudocode` | C-style pseudocode string with typed local variables and PPC register comments |
-| `calls` | `List[{callee_va, callee_name, args}]` — calls identified in the function |
-| `opd_info` | `Ppc64ElfV1Info` — OPD entry count and resolved PLT stubs (PPC64 ELFv1 only) |
+`Ppc32Lifter.lift(va, n_insn=150)` returns a `str` — multi-line C-like pseudocode with typed local variables, PPC register comments, and symbolic callee names. There is no structured return object; the full pseudocode is in the string.
 
 ---
 

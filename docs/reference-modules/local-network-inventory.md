@@ -88,15 +88,14 @@ Run `NetworkAnalyzer` immediately after gaining shell access on a compromised ho
 
 ## Reading output
 
-`NetworkAnalyzer.analyze()` returns a dict:
+`NetworkAnalyzer.enumerate_all()` returns a dict:
 
 | Key | Content |
 |:---|:---|
-| `interfaces` | `List[{name, ip, prefix, mac}]` — network interfaces |
-| `listening_ports` | `List[{addr, port, process}]` — bound listening services |
-| `routing_table` | `List[{dest, gateway, iface}]` — routing table entries |
-| `firewall_rules` | `List[str]` — iptables rule summary lines |
-| `subnets` | `List[str]` — derived CIDR subnets for discovery |
+| `interfaces` | `List` — network interfaces enumerated from `/proc/net/dev` |
+| `connections` | `List` — established and time-wait TCP connections |
+| `listening` | `List` — bound listening services |
+| `firewall` | `List[str]` — iptables rule summary lines |
 
 ---
 
