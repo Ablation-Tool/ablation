@@ -313,11 +313,13 @@ Provides the session state, indexing, and utility functions that other Ablation 
 ## Usage
 
 ```python
-from ablation.analyzers.workflow_document import WorkflowDocument
+from ablation.analyzers.workflow_document import WorkflowDocument, Stage
 
-results = WorkflowDocument.from_context(ctx).run()
-for r in results:
-    print(r)
+stages = [Stage(name="triage"), Stage(name="confirm"), Stage(name="report")]
+doc = WorkflowDocument(stages=stages)
+errors = doc.validate("triage", {"va": 0x401000, "sink": "system"})
+if not errors:
+    doc.advance("triage")
 ```
 
 ---
