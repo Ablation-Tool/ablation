@@ -88,6 +88,23 @@ Run `RPCServerAnalyzer` on any Windows service DLL or EXE with `RpcServer*` impo
 
 ---
 
+## Reading findings
+
+`RPCServerAnalyzer.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (unauthenticated interface) / `MEDIUM` (exposed endpoint) |
+| `title` | Finding code (e.g., `RPC_UNAUTHENTICATED_INTERFACE`, `RPC_NULL_SESSION_TRANSPORT`) |
+| `detail` | UUID, auth level, and transport endpoint |
+| `uuid` | RPC interface UUID string |
+| `auth_level` | `RPC_C_AUTHN_LEVEL_NONE` or higher auth level constant |
+| `unauthenticated` | `True` if no authentication is required |
+
+`RPCServerAnalyzer.interfaces()` returns `List[{uuid, auth_level, unauthenticated}]`.
+
+---
+
 ## See also
 
 - [BYOVD Capability Detection](byovd-capability-detection.md) — dangerous kernel import detection for signed drivers

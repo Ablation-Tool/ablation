@@ -80,6 +80,18 @@ Run packing and anti-analysis checks as the second analysis step on any PE binar
 
 ---
 
+## Reading findings
+
+`detect_binary_obfuscation_patterns()` and `detect_pe_peb_manipulation()` return `List[{severity, title, detail}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` / `MEDIUM` |
+| `title` | Finding code (e.g., `PACKED_STUB`, `DEBUGGER_DETECT_API`, `PEB_MODULE_UNLINK`, `PE_HEADER_ERASE`) |
+| `detail` | Entropy value, API reference, or PEB manipulation pattern description |
+
+---
+
 ## See also
 
 - [Office/PDF Triage](office-pdf-triage.md) — document-delivered dropper analysis; the dropped PE feeds into this page's checks

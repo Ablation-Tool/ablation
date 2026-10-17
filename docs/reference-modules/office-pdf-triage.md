@@ -91,6 +91,18 @@ Run Office/PDF triage on any document obtained during initial access analysis or
 
 ---
 
+## Reading findings
+
+`detect_office_macro_indicators()` and `detect_pdf_exploit_indicators()` return `List[{severity, title, detail}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` / `MEDIUM` |
+| `title` | Finding code (e.g., `AUTOOPEN`, `DOWNLOAD_CRADLE`, `JS_HEAPSPRAY`, `LAUNCH_ACTION`) |
+| `detail` | Technique description, code excerpt, or byte pattern |
+
+---
+
 ## See also
 
 - [Packing and Anti-Analysis Indicators](packing-and-anti-analysis-indicators.md) — PE packer detection and anti-analysis technique enumeration

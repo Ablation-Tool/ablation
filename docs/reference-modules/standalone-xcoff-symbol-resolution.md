@@ -75,6 +75,20 @@ Run `parse()` before `BinaryContext` initialization on any AIX XCOFF binary. Pas
 
 ---
 
+## Reading output
+
+`XCOFFParser.exports()` returns a list of `XCOFFSymbol` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Symbol name string |
+| `va` | Virtual address |
+| `sym_type` | `XTY_LD` (function), `XTY_SD` (static data), or `XTY_ER` (external reference) |
+
+`XCOFFParser.imports()` returns `List[str]` — archive member names for imported shared objects (e.g., `libc.a(shr.o)`).
+
+---
+
 ## See also
 
 - [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext.load_or_build()` that uses `xcoff_parser.py` for AIX targets
