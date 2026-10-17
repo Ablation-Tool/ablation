@@ -1,22 +1,157 @@
-# Binary format and platform identification
+# Binary Format and Platform Identification
 
-Detect ELF/PE/Mach-O and inspect file/OS/architecture metadata through the appropriate parser.
-
----
-
-## What it does
-
-Detect ELF/PE/Mach-O and inspect file/OS/architecture metadata through the appropriate parser.
+Identify a binary's format (ELF, PE, Mach-O), architecture (32/64-bit, endianness), and entry point from raw magic bytes and header fields — without external dependencies — before any analysis begins.
 
 ---
 
-## Implementation
+## Why this exists
 
-- [`binary_parser.py`](../../ablation/core/binary_parser.py)
-- [`elf_parser.py`](../../ablation/core/elf_parser.py)
+1. **Every analysis tool must know what it is analyzing before it begins.** Whether to disassemble as x86, ARM, or MIPS; whether to read `.eh_frame` or iterate load commands; whether the PLT is at a fixed offset or in a DataDirectory — all of this depends on knowing the binary's format and architecture. Format identification is the mandatory first step in the pipeline.
+
+2. **Identification must work in environments without LIEF or other libraries.** Deployment contexts for Ablation include CI pipelines, air-gapped analysis hosts, and minimal embedded Python environments. `BinaryParser` uses only Python standard library (`struct`, `pathlib`) to detect format and extract header metadata. LIEF is only required for the deeper parsing done by `BinaryContext`.
+
+3. **Mach-O, ELF, and PE detection must be definitive from 4 bytes.** The magic number at byte offset 0 unambiguously identifies the format: `\x7fELF` → ELF, `MZ` → PE, and the four Mach-O magic constants identify 32/64-bit and endianness simultaneously. This 4-byte dispatch is the correct architecture for a format detection layer.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["BinaryParser(path)"] --> B[Read first 4 bytes: magic]
+    B --> C{magic bytes}
+    C -->|"\\x7fELF"| D[ELF → _parse_elf]
+    C -->|"MZ"| E[PE → _parse_pe]
+    C -->|0xFEEDFACE or 0xCEFAEDFE| F[Mach-O 32-bit → _parse_macho]
+    C -->|0xFEEDFACF or 0xCFFAEDFE| G[Mach-O 64-bit → _parse_macho]
+    C -->|other| H[format = Unknown]
+    D --> I["bits from EI_CLASS byte 4\n1=32-bit, 2=64-bit\nendian from EI_DATA byte 5\n1=little, 2=big\nentry_point at offset 24 (ELF64)"]
+    E --> J["e_lfanew at offset 0x3C → PE header offset\nMachine: 0x014C=x86_32, 0x8664=x86_64\nentry_point = AddressOfEntryPoint from Optional Header"]
+    F --> K["bits from magic (32)\nendian from magic byte order\nLC_MAIN (0x80000028) → entry_point"]
+    G --> K
+    I & J & K --> L["return dict: format, bits, endian, entry_point"]
+```
+
+### Magic byte constants
+
+| Magic | Constant | Format |
+|---|---|---|
+| `7F 45 4C 46` | `\x7fELF` | ELF (32 or 64-bit) |
+| `4D 5A` | `MZ` | Windows PE |
+| `CE FA ED FE` | `0xFEEDFACE` (LE) | Mach-O 32-bit little-endian |
+| `FE ED FA CE` | `0xCEFAEDFE` (BE) | Mach-O 32-bit big-endian |
+| `CF FA ED FE` | `0xFEEDFACF` (LE) | Mach-O 64-bit little-endian |
+| `FF FA ED CF` | `0xCFFAEDFE` (BE) | Mach-O 64-bit big-endian |
+
+### Architecture detection per format
+
+**ELF:** `EI_CLASS` at byte 4 (`0x01` = 32-bit, `0x02` = 64-bit); `EI_DATA` at byte 5 (`0x01` = little-endian, `0x02` = big-endian). Entry point at byte offset 24 (ELF64) or 24 (ELF32, 4 bytes vs 8 bytes).
+
+**PE:** Entry point is `AddressOfEntryPoint` from the Optional Header. Architecture from `Machine` field: `0x014C` = x86-32, `0x8664` = x86-64.
+
+**Mach-O:** Bitness and endianness are encoded in the magic constant itself. Entry point via `LC_MAIN` load command (`cmd = 0x80000028`), `entryoff` field.
+
+---
+
+## BinaryParser
+
+```python
+from ablation.core.binary_parser import BinaryParser
+
+parser = BinaryParser('/path/to/binary')
+
+# Quick format detection (reads only 4 bytes)
+fmt = parser.detect_format()  # 'ELF', 'PE', 'Mach-O', or 'Unknown'
+
+# Full header parse
+info = parser.parse()
+# {
+#   'format': 'ELF',
+#   'bits': 64,
+#   'endian': 'little',
+#   'entry_point': '0x402340',
+#   'sections': 31   # ELF only
+# }
+
+print(parser.report())
+```
+
+---
+
+## Usage
+
+```python
+from ablation.core.binary_parser import BinaryParser
+
+# Batch triage across a firmware extraction directory
+import os
+for filename in os.listdir('/fw/extracted/'):
+    path = os.path.join('/fw/extracted/', filename)
+    p = BinaryParser(path)
+    fmt = p.detect_format()
+    if fmt == 'Unknown':
+        continue
+    info = p.parse()
+    print(f"{filename:40s}  {fmt:6s}  {info.get('bits', '?')}-bit  {info.get('endian', '')}")
+
+# Gate analysis on architecture before running x86-specific tools
+p = BinaryParser('/fw/target/httpd')
+info = p.parse()
+if info['format'] == 'ELF' and info['bits'] == 64:
+    from ablation.analyzers.binary_context import BinaryContext
+    ctx = BinaryContext.load_or_build('/fw/target/httpd')
+    # proceed with x86-64 taint/heap analysis
+elif info['format'] == 'ELF' and info['bits'] == 32:
+    from ablation.analyzers.arm32_function_scanner import ARM32FunctionScanner
+    # proceed with ARM32 prologue scan
+```
+
+---
+
+## Example output
+
+```
+Binary: httpsd
+Format: ELF
+Architecture: 64 bit
+Endianness: little
+Entry Point: 0x402340
+Sections: 31
+```
+
+---
+
+## False positives
+
+**Packed PE files.** Packers often preserve the DOS `MZ` signature at the start of the file, so the binary correctly identifies as PE. However, the internal structure may be partially overwritten by the packer stub. The entry point parsed from the Optional Header will point to the packer's stub, not the original OEP.
+
+**Mach-O fat binaries.** The fat binary magic `0xCAFEBABE` is not in the detection table. `detect_format()` returns `'Unknown'` for fat binaries. Extract the appropriate architecture slice with `lipo -extract <arch>` before passing to `BinaryParser`.
+
+---
+
+## Pipeline position
+
+**Before this module:** File acquisition only.
+
+**After this module:** `BinaryContext.load_or_build()` uses the parsed format to select ELF, PE, or Mach-O parsing paths. `ARM32FunctionScanner.from_path()` requires that the binary is confirmed as ELF 32-bit ARM.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `format` | `'ELF'`, `'PE'`, `'Mach-O'`, or `'Unknown'` |
+| `bits` | `32` or `64` (or `None` for Unknown) |
+| `endian` | `'little'` or `'big'` (ELF/Mach-O only) |
+| `entry_point` | Hex string of the entry point VA, or `None` if absent |
+| `sections` | Section header count (ELF only) |
 
 ---
 
 ## See also
 
-- [Binary Context](binary-context.md) — module-level reference with constructor patterns and usage examples
+- [Binary Context](binary-context.md) — full analysis context built on top of this parser
+- [ELF Internals and Hardening](elf-internals-and-hardening.md) — detailed ELF header anatomy
+- [PE Internals and Indicators](pe-internals-and-indicators.md) — PE COFF and Optional header detail
+- [Mach-O Internals](mach-o-internals.md) — Mach-O load command iteration and magic constants
