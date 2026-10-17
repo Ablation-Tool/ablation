@@ -85,15 +85,26 @@ Run `IPRegAnnotator.annotate()` on confirmed pre-auth handler VAs or CMDB sink-c
 
 ## Reading output
 
-`IPRegAnnotator.annotate_chain(root_va)` returns a `ChainResult` object:
+`IPRegAnnotator.annotate_chain(root_va)` returns an `IPChain` object:
 
 | Attribute | Content |
 |:---|:---|
-| `depth` | Interprocedural depth traced |
-| `chain` | List of `CallChainEntry` (VA, callee name, argument register states) per call in the chain |
-| `sink_calls` | List of `(sink_va, sink_name, call_site_va)` for all detected sink calls in the chain |
+| `root_va` | VA of the root entry function |
+| `root_binary` | Path of the binary containing the root function |
+| `max_hops` | Maximum call depth configured for this trace |
+| `root` | `ChainResult` — root function result, with nested callee chains via `.calls` |
 
-`IPRegAnnotator.all_sinks(sink_name)` returns a list of `(sink_va, sink_name, call_site_va)` tuples for all occurrences of the named sink within the traced chain, with argument register provenance.
+Each `ChainResult` in the chain:
+
+| Attribute | Content |
+|:---|:---|
+| `func_va` | VA of this function |
+| `func_end_va` | End VA of this function |
+| `binary` | Path of the binary containing this function |
+| `hop` | Hop depth (0 = root, 1 = callee, 2 = callee's callee, …) |
+| `calls` | `List[ChainCallSite]` — each call site with its argument register annotations |
+
+Call `chain.all_sinks(sink_names)` to get all `(func_va, binary, ChainCallSite)` tuples for any named sink within the full chain.
 
 ---
 

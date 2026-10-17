@@ -93,11 +93,14 @@ Run `FortiBuildTrackClassifier.classify()` on the firmware filename as the first
 
 | Attribute | Content |
 |:---|:---|
-| `product` | Product name string (e.g., `FortiGate`, `FortiMail`) |
-| `version` | Version string (e.g., `7.2.4`) |
-| `track` | Track character (`F`, `M`, `B`, etc.) |
-| `expected_keys` | `Set[str]` — filenames of encryption keys expected in this build |
-| `anomaly` | `True` if the filename does not match known naming conventions |
+| `filename` | Input filename (basename) |
+| `product` | Product name string (e.g., `'FGT_VM64'`, `'FOS_VM64_KVM'`) |
+| `version` | Version string (e.g., `'7.4.12'`) |
+| `build_number` | Build number integer (e.g., `2902`) |
+| `build_track` | Track identifier: `'M'` (main) or `'F'` (feature) |
+| `expected_keys` | `List[str]` — filenames of encryption keys expected in this build |
+| `key_generation` | Key generation identifier (e.g., `'Gen1'`, `'Gen2'`) |
+| `error` | `Optional[str]` — error message if classification failed |
 
 `FortiBuildTrackClassifier.batch_classify(filenames)` returns `List[BuildTrackResult]`.
 

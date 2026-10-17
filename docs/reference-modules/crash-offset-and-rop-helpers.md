@@ -101,10 +101,10 @@ Run crash offset and ROP helpers after `TaintTracker` confirms an ARG_PROPAGATED
 
 | Attribute | Content |
 |:---|:---|
-| `va` | Virtual address of the gadget |
-| `insns` | List of instruction strings ending in `ret`/`jmp`/`call` |
-| `length` | Instruction count |
-| `category` | `POP_REG`, `MOV_REG_MEM`, `SYSCALL`, `JMP_REG`, or `OTHER` |
+| `addr` | Virtual address of the first byte of the gadget |
+| `insns` | Human-readable disassembly string (e.g. `'pop rdi ; ret'`) |
+| `source` | Originating binary name (empty string when scanning raw bytes) |
+| `type` | Gadget category: `'ret'`, `'pop_ret'`, `'syscall'`, `'stack_pivot'`, `'mov_ret'` |
 
 ---
 

@@ -91,11 +91,12 @@ Run `PS3OPDVtableScanner.scan()` after `BinaryContext.load_or_build()` and befor
 
 | Attribute | Content |
 |:---|:---|
-| `base_va` | VA of the vtable base (start of OPD slot sequence) |
-| `slots` | Count of slots in the vtable |
-| `entries` | `List[OPDVtableSlot]` — one per slot |
-
-Each `OPDVtableSlot`: `{index, code_va, string_xrefs: List[str]}`.
+| `va` | VA of the first vtable slot (past the RTTI header) |
+| `slots` | Number of virtual method slots |
+| `method_vas` | `List[int]` — resolved code VAs per slot |
+| `null_slots` | `List[int]` — slot indices (not code VAs) of null-stub slots |
+| `rtti_offset` | Bytes before `va` where the RTTI header starts (0 if not found) |
+| `class_hint` | Nearest string evidence for class name (empty string if none) |
 
 ---
 

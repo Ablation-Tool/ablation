@@ -105,16 +105,19 @@ Run `Structurizer` as the final pass before presenting lifted output to a human 
 
 ## Reading output
 
-`Structurizer.structure(cfg)` returns a `StructuredFunc` object:
+`Structurizer(cfg).structure()` returns the root `StructuredNode` of the AST. `Structurizer(cfg).emit(insn_emitter)` returns the full pseudocode string.
 
-| Attribute | Content |
-|:---|:---|
-| `va` | Entry VA of the structured function |
-| `pseudocode` | Indented pseudocode string with `if/else/while/return` constructs |
-| `nodes` | `List[StructNode]` — AST nodes (`IfNode`, `LoopNode`, `SeqNode`, `RetNode`) |
-| `depth` | Maximum nesting depth (an approximation of complexity) |
+`StructuredNode` subclass types:
 
-`Structurizer.to_text(structured_func)` returns the `pseudocode` string in isolation.
+| Node type | Fields | Meaning |
+|:---|:---|:---|
+| `SequenceNode` | `children: List[StructuredNode]` | Ordered sequence of child nodes |
+| `InsnNode` | `block_start: int`, `insns: list`, `is_loop_header: bool` | A single basic block's instructions |
+| `IfNode` | `cond_block: int`, `then_body`, `else_body`, `join_block` | `if/else` construct |
+| `WhileNode` | `header_block: int`, `body`, `exit_block` | `while` loop |
+| `BreakNode` | *(no fields)* | `break` — exits innermost loop |
+| `ContinueNode` | *(no fields)* | `continue` — jumps to loop header |
+| `ReturnNode` | `block_start: int`, `insns: list` | `return` from function |
 
 ---
 

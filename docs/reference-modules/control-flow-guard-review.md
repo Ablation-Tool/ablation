@@ -108,11 +108,16 @@ Run `CFGBypassDetector` when analyzing Windows PE binaries for exploit developme
 
 | Attribute | Content |
 |:---|:---|
-| `instrumented` | `True` if the binary is CFG-instrumented |
-| `table_present` | `True` if the CFG bitmap table is present |
-| `export_suppression` | `True` if `__guard_suppress_export_checks` is set |
-| `xfg` | `True` if XFG (eXtended Flow Guard) is enabled |
-| `entry_stride` | CFG bitmap stride in bytes |
+| `cfg_enabled` | `True` if CFG is enabled in the binary |
+| `guard_flags` | Raw `GuardFlags` integer from `IMAGE_LOAD_CONFIG` |
+| `function_count` | Number of functions in the CFG table |
+| `function_table_va` | VA of the CFG function table |
+| `function_table_rvas` | `List[int]` — RVAs of all CFG-protected functions |
+| `instrumented` | Property — `True` if `CF_INSTRUMENTED` flag is set |
+| `table_present` | Property — `True` if `CF_TABLE_PRESENT` flag is set |
+| `export_suppression` | Property — `True` if `__guard_suppress_export_checks` is set |
+| `xfg_enabled` | Property — `True` if XFG (eXtended Flow Guard) is enabled |
+| `entry_stride` | Property — CFG bitmap stride in bytes |
 
 ---
 

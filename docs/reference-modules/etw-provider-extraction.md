@@ -94,10 +94,10 @@ Run `ETWProviderExtractor` as part of Windows PE initial triage alongside `RPCSe
 
 | Attribute | Content |
 |:---|:---|
-| `guid` | Provider GUID string |
-| `name` | Provider name from the known-provider table, or `(unknown)` |
-| `write_sites` | List of VAs where `EventWrite()` is called for this provider |
-| `security_relevant` | `True` if the provider GUID matches a known security telemetry provider |
+| `guid` | Provider GUID string (e.g., `'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'`) |
+| `known_name` | Name from the known-provider table, or empty string if not recognized |
+| `registration_count` | Number of `EventRegister` call sites for this GUID |
+| `registration_vas` | `List[int]` — VAs of each `EventRegister` call site |
 
 `ETWProviderExtractor.write_site_count()` returns `int` — total count of `EventWrite` call sites across all providers.
 

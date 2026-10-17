@@ -96,9 +96,9 @@ Run hash algorithm and CBC detection during firmware static analysis after `scan
 
 | Attribute | Content |
 |:---|:---|
-| `algorithm` | Algorithm name (e.g., `SHA-256`, `MD5`) |
-| `confidence` | Float 0.0–1.0 |
-| `first_const_va` | VA of the first matching K-table constant |
+| `algo` | Algorithm name (e.g., `'SHA256'`, `'MD5'`, `'CRC32'`) |
+| `confidence` | Integer 0–100 — confidence score based on K-table constant coverage |
+| `matched` | `List[ConstMatch]` — each matched constant with `.va` (address) and `.name` (constant name) |
 
 `CustomCBCDetector.detect()` returns `{iv_va, block_ptr, chain_xor_va}` or `None`.
 

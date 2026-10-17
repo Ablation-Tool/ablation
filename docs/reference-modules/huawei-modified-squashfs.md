@@ -83,11 +83,16 @@ Run `ARCDecoder` / `ARCDisasm` on any ARC 700/HS firmware after `EcuArchDetector
 
 | Attribute | Content |
 |:---|:---|
-| `va` | Virtual address |
-| `size` | Frame size in bytes (2 or 4) |
-| `kind` | `compact-16` or standard |
-| `mnemonic` | Decoded instruction mnemonic |
-| `target_va` | Target VA for CALL and BRANCH frames (or `None`) |
+| `va` | Virtual address of the instruction |
+| `width` | Frame width in bytes: `2` (16-bit) or `4` (32-bit) |
+| `hw0` | First halfword (bits 15:0) |
+| `hw1` | Second halfword (bits 31:16); `0` for 16-bit instructions |
+| `mnemonic` | Decoded instruction mnemonic string |
+| `op_str` | Operand string |
+| `is_branch` | `True` if the instruction is a branch |
+| `is_call` | `True` if the instruction is a call |
+| `is_ret` | `True` if the instruction is a return |
+| `target` | Resolved branch/call target VA (0 if not computed) |
 
 `ARCDisasm.function_starts()` returns `List[int]` — VA list of functions identified by `push_s blink` prologues.
 

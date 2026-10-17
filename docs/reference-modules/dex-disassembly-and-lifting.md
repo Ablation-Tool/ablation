@@ -100,10 +100,14 @@ void processInput(String p1) {
 
 | Attribute | Content |
 |:---|:---|
-| `offset` | Bytecode offset within the method |
-| `opcode` | DEX opcode name (e.g., `invoke-virtual`, `iget-object`) |
-| `operands` | Decoded operand string with resolved type/method/field references |
-| `kind` | `CALL`, `RETURN`, `BRANCH`, or `NORMAL` |
+| `cu_offset` | Offset in code units from start of `insns[]` |
+| `opcode` | DEX opcode integer |
+| `mnemonic` | DEX mnemonic string (e.g., `'invoke-virtual'`, `'iget-object'`) |
+| `fmt` | DEX format code string (e.g., `'35c'`) |
+| `regs` | `List[int]` — register indices |
+| `ref_idx` | Reference table index, or `-1` if not applicable |
+| `literal` | Literal value (signed integer), or `0` |
+| `branch` | Branch offset in code units (signed, relative to this instruction), or `0` |
 
 `DEXLifter.lift_method(class_name, method_name)` returns a pseudocode string (pseudo-Java with register annotations).
 

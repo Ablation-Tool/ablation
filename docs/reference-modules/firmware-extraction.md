@@ -98,10 +98,14 @@ FirmwareContainerKeyExtractor:
 
 | Attribute | Content |
 |:---|:---|
-| `xor_key` | Bytes — 64-byte XOR key; `confidence` float 0.0–1.0 |
-| `partitions` | `List[PartitionEntry]` — `{name, offset, magic, encrypted}` |
-| `rootfs_path` | Path to the decrypted `rootfs.gz` on disk (or `None` if decryption failed) |
-| `datafs_path` | Path to the decrypted `datafs.gz` on disk (or `None`) |
+| `fw_path` | Path of the input firmware file |
+| `outer_key` | `Optional[bytes]` — recovered outer XOR key |
+| `outer_key_confidence` | Float 0.0–1.0 — confidence of the outer key recovery |
+| `pkcs1_candidates` | `List[bytes]` — PKCS#1-formatted key block candidates |
+| `partitions` | `List[PartitionResult]` — extracted partition results |
+| `datafs_path` | `Optional[str]` — path to the extracted `datafs` on disk |
+| `workdir` | `Optional[str]` — temp working directory (call `.cleanup()` when done) |
+| `error` | `Optional[str]` — error message if extraction failed partially |
 
 `FirmwareContainerKeyExtractor.extract()` returns `{pkcs1_key_blocks: List[bytes], rc4_inner_key: bytes}`.
 

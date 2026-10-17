@@ -95,10 +95,14 @@ Run `FortiMailVmdkExtractor` as part of FortiMail VM firmware analysis before an
 
 | Attribute | Content |
 |:---|:---|
-| `keys` | List of `{path, sha256, size_bytes}` for each extracted `.key` file |
-| `datafs_path` | Path to the extracted `datafs.tar.gz` archive |
-| `vmdk_path` | Path to the source VMDK file |
-| `error` | Error message string if extraction failed partially, else `None` |
+| `fw_path` | Path of the input firmware/VMDK file |
+| `outer_key` | `Optional[bytes]` — recovered outer XOR key |
+| `outer_key_confidence` | Float 0.0–1.0 — confidence of the outer key recovery |
+| `pkcs1_candidates` | `List[bytes]` — PKCS#1-formatted key block candidates |
+| `partitions` | `List[PartitionResult]` — extracted partition results |
+| `datafs_path` | `Optional[str]` — path to the extracted `datafs` archive on disk |
+| `workdir` | `Optional[str]` — temp working directory (call `.cleanup()` when done) |
+| `error` | `Optional[str]` — error message if extraction failed partially |
 
 ---
 

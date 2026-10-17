@@ -90,16 +90,18 @@ Run `XorSolver.solve()` after `EntropyMapper` identifies an encrypted region (`H
 
 ## Reading output
 
-`XorSolver.solve()` returns an `XorSolverResult` object:
+`XorSolver.solve()` returns an `XorSolverResult` object (or `None` if no key was recovered):
 
 | Attribute | Content |
 |:---|:---|
-| `method` | `kpa` (known-plaintext attack) or `frequency` (byte frequency analysis) |
-| `key` | Recovered key as `bytes` |
+| `key` | Recovered key as `Optional[bytes]` |
+| `key_length` | `Optional[int]` — length of the recovered key |
+| `method` | `'kpa'` (known-plaintext), `'hamming+freq'` (frequency analysis), or `'manual'` |
+| `magic_matched` | `Optional[str]` — magic bytes label if KPA matched a known header |
 | `confidence` | Float 0.0–1.0 — key correctness confidence |
-| `decrypt_path` | Path to the decrypted output file written to disk |
+| `notes` | Additional notes from the solver |
 
-Returns `None` if no key was recovered.
+Call `result.decrypt(data)` to apply the recovered key to raw bytes.
 
 ---
 

@@ -116,9 +116,11 @@ Each `ChangeRegion` has:
 | Attribute | Content |
 |:---|:---|
 | `kind` | `'unchanged'` / `'modified'` / `'inserted'` / `'deleted'` (all lowercase) |
-| `v1_range` | `(start, end)` index range in `seq_v1` |
-| `v2_range` | `(start, end)` index range in `seq_v2` |
-| `peak_distance` | Maximum matrix-profile distance within this region |
+| `v1_start` | Start index in `seq_v1` instruction sequence (`-1` if this region is inserted) |
+| `v1_end` | Exclusive end index in `seq_v1` |
+| `v2_start` | Start index in `seq_v2` instruction sequence (`-1` if this region is deleted) |
+| `v2_end` | Exclusive end index in `seq_v2` |
+| `max_discord` | Maximum matrix-profile distance value within this region |
 
 ---
 

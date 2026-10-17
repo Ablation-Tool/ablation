@@ -97,16 +97,26 @@ Step 8 in the RE workflow (CLAUDE.md): `IPRegAnnotator` for cross-library call c
 
 ## Reading output
 
-`IPRegAnnotator.trace_chain(entry_va)` returns a `CallChain` object:
+`IPRegAnnotator.annotate_chain(root_va)` returns an `IPChain` object:
 
 | Attribute | Content |
 |:---|:---|
-| `entry_va` | VA of the chain entry function |
-| `hops` | `List[ChainHop]` — one per function in the call chain |
-| `sink_va` | VA of the terminal sink call (or `None` if no sink reached) |
-| `sink_func` | Name of the sink function |
+| `root_va` | VA of the root entry function |
+| `root_binary` | Path of the binary containing the root function |
+| `max_hops` | Maximum call depth configured for this trace |
+| `root` | `ChainResult` — root function result with nested callee chains via `.calls` |
 
-Each `ChainHop`: `{va, func_name, call_va, reg_annotations: List[RegAnnotation]}`.
+Each `ChainResult` in the chain:
+
+| Attribute | Content |
+|:---|:---|
+| `func_va` | VA of this function |
+| `func_end_va` | End VA of this function |
+| `binary` | Path of the binary containing this function |
+| `hop` | Hop depth (0 = root, 1 = callee, 2 = callee's callee, …) |
+| `calls` | `List[ChainCallSite]` — each call site with its argument register annotations |
+
+Call `chain.all_sinks(sink_names)` to get `(func_va, binary, ChainCallSite)` tuples for any named sink in the full chain.
 
 ---
 

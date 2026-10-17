@@ -113,14 +113,21 @@ KF_LOAD_EFF [MAP 16x16]
 | Attribute | Content |
 |:---|:---|
 | `name` | Table name from the `.a2l`/`.damos` definition |
-| `table_type` | `MAP` (2D), `CURVE` (1D), `VALUE` (scalar), `AXIS_PTS` |
-| `address` | File offset or VA of the table data |
-| `data` | Numpy array of physical-unit values (scaled + biased) |
-| `x_axis` | Breakpoint array for the X axis (rpm, load, etc.) |
-| `y_axis` | Breakpoint array for the Y axis (for MAP type) |
+| `description` | Human-readable description from the definition file |
+| `category` | Source-file category label |
+| `table_type` | `'MAP'` (2D), `'CURVE'` (1D), `'VALUE'` (scalar), `'AXIS_PTS'` |
+| `address` | File offset of the table data |
+| `rows` | Row count (Y-axis length for MAP type) |
+| `cols` | Column count (X-axis length for MAP type) |
+| `element_bits` | Bit width of each element (8, 16, or 32) |
+| `little_endian` | `True` for little-endian byte order |
 | `scale` | Scale factor applied to raw integer data |
-| `bias` | Bias added after scale |
+| `bias` | Bias added after scaling |
 | `unit` | Physical unit string (e.g., `mg/stroke`, `°C`) |
+| `x_axis` | `Optional[CalibrationAxis]` — X-axis breakpoints |
+| `y_axis` | `Optional[CalibrationAxis]` — Y-axis breakpoints (MAP type only) |
+| `source_file` | Path to the definition file this table was parsed from |
+| `is_float` | `True` when storage type is float/float32 |
 
 ---
 
