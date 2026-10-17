@@ -30,23 +30,29 @@ flowchart TD
 ```python
 from modules.crypto_audit import CryptoAudit, KeyCryptoAnalyzer, check_key_management_weakness
 
-# SAML wrapping risk assessment
+# SAML assertion analysis — method is analyze_saml_assertion() not check_saml_wrapping_risk()
 audit = CryptoAudit()
 saml_xml = open('saml_response.xml').read()
-risk = audit.check_saml_wrapping_risk(saml_xml)
-print(f"XSW risk: {risk['xsw_risk']}  scope: {risk['signature_scope']}")
+result = audit.analyze_saml_assertion(saml_xml)
+# Return keys: signed, subject, conditions, vulns
+print(f"signed: {result['signed']}")
+print(f"subject: {result['subject']}")
+for vuln in result['vulns']:
+    print(f"  VULN: {vuln}")
 
-# Extract embedded key material from firmware
-firmware_data = open('firmware.bin', 'rb').read()
-analyzer = KeyCryptoAnalyzer(firmware_data)
-for km in analyzer.scan():
-    print(f"  {km['type']} at offset {km['offset']:#x}  bits={km.get('size_bits')}")
-
-# Config file key hygiene check
+# Config file / source key management weakness check
 config_text = open('/etc/app/config.yaml').read()
-weaknesses = check_key_management_weakness(config_text)
-for w in weaknesses:
-    print(f"  [{w['severity']}] {w['weakness_type']}: {w['value_snippet']}")
+# Returns [{severity, title, detail, host, port}]
+for w in check_key_management_weakness(config_text):
+    print(f"  [{w['severity']}] {w['title']}: {w['detail'][:80]}")
+
+# Per-key DER analysis — analyze_rsa_key() takes bytes of a DER or PEM key
+key_analyzer = KeyCryptoAnalyzer()
+# key_analyzer.findings populated by analyze_rsa_key(), check_ecdsa_nonce_reuse(), etc.
+rsa_findings = key_analyzer.analyze_rsa_key(open('server.key', 'rb').read())
+for f in rsa_findings:
+    # findings: {type, severity, description, detail, exploit}
+    print(f"  [{f['severity']}] {f['type']}: {f['description']}")
 ```
 
 ---

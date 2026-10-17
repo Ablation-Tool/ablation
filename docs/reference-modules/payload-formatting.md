@@ -34,25 +34,32 @@ from ablation.core.shellcode_utils import (
 )
 
 # Check shellcode for bad bytes
+# detect_bad_bytes(shellcode, bad_set=set) → {found, clean, offsets, bad_bytes_present, summary}
 sc = b'\x48\x31\xff\x57\x57\x5e\xb0\x3b\x0f\x05'
-bad = detect_bad_bytes(sc, bad_bytes=b'\x00\x0a\x0d')
-if bad:
-    print(f"Bad bytes: {[hex(b['byte_value']) for b in bad]}")
+result = detect_bad_bytes(sc, bad_set={0x00, 0x0a, 0x0d})
+if result['found']:
+    print(f"Bad bytes found: {result['summary']}")
+    # offsets: list of (offset, byte_value) tuples
+    for off, val in result['offsets']:
+        print(f"  offset={off:#x}  byte={val:#04x}")
     encoded, decoder = encode_xor_rolling(sc, key=0x42)
     payload = decoder + encoded
 else:
     payload = sc
 
 # Build complete exploit buffer
+# build_exploit_buffer(shellcode, total_size, ret_addr: bytes, ret_count=4, platform_str=...) → bytes
+ret_bytes = b'\x00\x00\xff\xff\xfe\x7f\x00\x00'  # little-endian bytes, not int
 buffer = build_exploit_buffer(
     shellcode=payload,
-    offset=264,     # cyclic pattern offset from crash-offset page
-    ret_addr=0x7ffe00000000,
-    arch='x86_64',
-    nop_size=32
+    total_size=264,       # total buffer size up to (not including) ret_addr region
+    ret_addr=ret_bytes,
+    ret_count=4,
 )
 print(f"Buffer length: {len(buffer)}")
-print(shellcode_length(buffer))
+# shellcode_length(bytes) → {bytes, hex_size, dword_aligned, qword_aligned, page_aligned}
+info = shellcode_length(payload)
+print(f"Shellcode: {info['bytes']} bytes  ({info['hex_size']})  qword_aligned={info['qword_aligned']}")
 ```
 
 ---
