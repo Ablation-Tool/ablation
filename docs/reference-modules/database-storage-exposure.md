@@ -88,6 +88,21 @@ Run `SqlSinkScanner` after `SinkArgClassifier` on any binary with MySQL C API or
 
 ---
 
+## Reading findings
+
+`SqlSinkScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (confirmed format string injection) / `HIGH` (ARG_PROPAGATED without prepared statement) / `MEDIUM` (UNKNOWN classification) |
+| `sink` | SQL sink function name (e.g., `mysql_query`, `sqlite3_exec`) |
+| `call_va` | VA of the sink call instruction |
+| `arg_class` | `ARG_PROPAGATED`, `RODATA_CONST`, or `UNKNOWN` |
+| `format_string_va` | VA of the format string if recovered, else `None` |
+| `detail` | Classification rationale |
+
+---
+
 ## See also
 
 - [Sink Argument Classification](sink-argument-classifier.md) — shell-class sink classification (complements SQL analysis)

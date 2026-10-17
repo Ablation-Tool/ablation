@@ -89,6 +89,19 @@ Run `FortiMailVmdkExtractor` as part of FortiMail VM firmware analysis before an
 
 ---
 
+## Reading output
+
+`FortiMailVmdkExtractor.extract()` returns an `ExtractionResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `keys` | List of `{path, sha256, size_bytes}` for each extracted `.key` file |
+| `datafs_path` | Path to the extracted `datafs.tar.gz` archive |
+| `vmdk_path` | Path to the source VMDK file |
+| `error` | Error message string if extraction failed partially, else `None` |
+
+---
+
 ## See also
 
 - [Fortinet Build Track Classification](fortinet-build-track-classification.md) — predicts expected key counts from firmware filename

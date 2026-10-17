@@ -89,6 +89,21 @@ Run `CorpusBuilder.build()` immediately after the first `BinaryContext.load_or_b
 
 ---
 
+## Reading output
+
+`CorpusBuilder.build()` returns a `CorpusStats` object (also persists to the `func_id.db` SQLite database):
+
+| Attribute | Content |
+|:---|:---|
+| `total` | Total functions added to the corpus |
+| `new` | Functions added for the first time (not already in the corpus) |
+| `updated` | Functions updated with new analysis results |
+| `roles` | `Dict[str, int]` — count per inferred role label |
+
+`CorpusBuilder.query(role=..., min_confidence=...)` returns a list of `CorpusEntry` objects for programmatic access to the built corpus.
+
+---
+
 ## See also
 
 - [Bundled Finding Signature Seeds](bundled-finding-signature-seeds.md) — `SigLibrary.auto_name()` promotes `ANGR_INFERRED` → named when semantic match found

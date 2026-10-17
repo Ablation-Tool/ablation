@@ -93,6 +93,29 @@ Run `CrossBinaryTaintTracker` after single-binary TaintTracker confirms that a t
 
 ---
 
+## Reading output
+
+`LibGraph.from_dir(dir_path)` returns a `LibGraph` object.
+
+`LibGraph.defined_in(sym_name)` returns the path to the binary that exports `sym_name`, or `None` if unresolved.
+
+`CrossBinaryTaintTracker.trace()` returns a list of `TaintChain` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `hops` | Ordered list of `TaintHop` — one per library crossing |
+| `sink_binary` | Path to the binary where taint reaches the sink |
+| `sink_sym` | Sink function name in `sink_binary` |
+
+Each `TaintHop`:
+
+| Attribute | Content |
+|:---|:---|
+| `binary` | Binary path |
+| `export_sym` | Symbol through which taint exits this binary |
+
+---
+
 ## See also
 
 - [Taint Analysis](taint-analysis.md) — single-binary taint; prerequisite for cross-library analysis

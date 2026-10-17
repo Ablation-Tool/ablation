@@ -88,6 +88,23 @@ Run `ETWProviderExtractor` as part of Windows PE initial triage alongside `RPCSe
 
 ---
 
+## Reading output
+
+`ETWProviderExtractor.providers()` returns a list of `ETWProvider` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `guid` | Provider GUID string |
+| `name` | Provider name from the known-provider table, or `(unknown)` |
+| `write_sites` | List of VAs where `EventWrite()` is called for this provider |
+| `security_relevant` | `True` if the provider GUID matches a known security telemetry provider |
+
+`ETWProviderExtractor.write_site_count()` returns `int` — total count of `EventWrite` call sites across all providers.
+
+`ETWProviderExtractor.scan_gaps()` returns a list of finding dicts `{severity, va, detail}` for security-relevant functions with no detected ETW coverage.
+
+---
+
 ## See also
 
 - [Windows RPC Server Analysis](rpc-server-analysis.md) — unauthenticated RPC interface analysis for Windows targets

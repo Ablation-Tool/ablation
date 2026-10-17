@@ -94,6 +94,21 @@ void processInput(String p1) {
 
 ---
 
+## Reading output
+
+`DEXDisasm.disasm_method(class_name, method_name)` returns a list of `DEXInstruction` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `offset` | Bytecode offset within the method |
+| `opcode` | DEX opcode name (e.g., `invoke-virtual`, `iget-object`) |
+| `operands` | Decoded operand string with resolved type/method/field references |
+| `kind` | `CALL`, `RETURN`, `BRANCH`, or `NORMAL` |
+
+`DEXLifter.lift_method(class_name, method_name)` returns a pseudocode string (pseudo-Java with register annotations).
+
+---
+
 ## See also
 
 - [DEX Analysis](dex.md) — full `DexAnalyzer` security scanner: secret detection, dangerous APIs, crypto misuse

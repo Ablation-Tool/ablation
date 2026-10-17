@@ -89,6 +89,20 @@ Run firmware flasher trust checks on any PE executable found in a firmware updat
 
 ---
 
+## Reading findings
+
+`FlasherTrustChecker.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (unsigned flasher with IOCTL write path) / `HIGH` (missing trust check before write) |
+| `code` | Finding code (e.g., `UNSIGNED_FLASHER`, `MISSING_WINVERIFYTRUST`, `IOCTL_WRITE_BEFORE_VERIFY`) |
+| `ioctl_va` | VA of the IOCTL call that writes firmware (if identified) |
+| `trust_va` | VA of the `WinVerifyTrust` call (or `None` if absent) |
+| `detail` | Human-readable description of the trust gap |
+
+---
+
 ## See also
 
 - [Hardware Root Discovery](hardware-root-discovery.md) — firmware container partition analysis and entropy classification

@@ -142,6 +142,22 @@ This is the release automation layer — it sits above all module development an
 
 ---
 
+## Reading output
+
+CI/CD workflows do not return Python objects. CI status is read via `gh` CLI:
+
+```bash
+# Check latest CI run status
+gh run list --limit 5
+
+# Watch a specific run
+gh run watch <run-id>
+```
+
+`pytest -m fast --tb=short -q` exits 0 on success, non-zero on test failure. Coverage threshold failure produces a non-zero exit with the message `FAIL Required test coverage of 85.0% not reached.`
+
+---
+
 ## See also
 
 - [Coverage Gate](coverage-gate.md) — TCL3 qualification scope, 85% coverage threshold, qualified module list
