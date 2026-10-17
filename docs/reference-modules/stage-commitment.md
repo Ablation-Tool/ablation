@@ -319,7 +319,7 @@ See `workflow-document.md` for the `WorkflowDocument` API.
 
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+Each `commit()` call serializes the `instance` dict to canonical JSON (keys sorted, no extra whitespace) and stores its SHA-256 as `content_hash`. The hash is stored, not the instance content, so future verification only needs the current instance — not the original. `approve()` computes a second hash over the concatenation of `content_hash` and the SHA-256 of the revised instance (or empty string if no revision), binding the approver's identity to both the original and the final content. `verify()` reconstructs both hashes from the current instance and checks them against the stored values. Any post-approval modification changes the hash chain and surfaces as a tamper failure.
 
 ---
 
@@ -344,7 +344,12 @@ print(sc.audit_trail())
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+StageCommitment doc_id='cisco/fmc_server'
+  stage                    producer       lock        approver       chain
+  ------------------------------------------------------------------------
+  triage                   session-42     no-lock     session-43     approved
+  semantic_sweep           session-42     no-lock     -              pending
+  finding_confirmation     session-42     locked      session-43     approved
 ```
 
 ---
