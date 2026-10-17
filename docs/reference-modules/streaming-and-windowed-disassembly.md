@@ -88,6 +88,20 @@ The following illustrates annotated disassembly output format. Actual instructio
 
 ---
 
+## Reading output
+
+`WindowAnalyzer.dump_text(va, size)` returns an annotated disassembly string. Each line has the form:
+
+```
+0x<va>: <mnemonic>  <operands>          ; <annotation>
+```
+
+Annotations are added by `BinaryContext` for PLT call targets, string references, and named VAs. No structured object is returned — the output is a formatted string suitable for display or LLM input.
+
+`WindowAnalyzer.dump_window(va, size)` returns `List[CsInsn]` — raw Capstone instruction objects for programmatic processing.
+
+---
+
 ## See also
 
 - [LLM Analyst Loop](llm-analyst-loop.md) — `get_disassembly` tool calls `WindowAnalyzer.dump_text()` internally

@@ -74,6 +74,21 @@ Run `EcuC28xDecoder` on any TI F28x-series firmware after `EcuArchDetector` conf
 
 ---
 
+## Reading output
+
+`EcuC28xDecoder.decode_frames_clean(va, size)` returns `List[C28xInstruction]`:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Instruction VA |
+| `size` | Instruction size in bytes (2 or 4 for C28x 16/32-bit encoding) |
+| `mnemonic` | Instruction mnemonic (e.g., `MOVL`, `LCR`, `ADDB`) |
+| `operands` | Operand string |
+
+`EcuC28xDecoder.function_starts()` returns `List[int]` — VAs of identified C28x function entry points.
+
+---
+
 ## See also
 
 - [TI COFF Archive Loading](ti-coff-archive-loading.md) — `TiCoffLoader` for symbol names in COFF2-format C28x firmware

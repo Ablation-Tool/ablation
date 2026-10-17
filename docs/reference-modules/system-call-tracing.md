@@ -126,6 +126,22 @@ execve calls observed:
 
 ---
 
+## Reading output
+
+`SyscallTracer.trace(pid)` returns a `SyscallTrace` object:
+
+| Attribute | Content |
+|:---|:---|
+| `total_calls` | Total syscall invocations |
+| `total_errors` | Total calls that returned an error |
+| `by_name` | `Dict[str, SyscallStats]` — per-syscall stats (`calls`, `errors`, `time_pct`) |
+| `exec_calls` | `List[ExecRecord]` — all `execve`/`execveat` calls with args |
+| `open_calls` | `List[OpenRecord]` — all `open`/`openat` calls with paths |
+
+`SyscallTracer.summary()` returns a formatted report string matching the example output format.
+
+---
+
 ## See also
 
 - [Process Enumeration](process-enum.md) — enumerate running processes to find target PIDs
