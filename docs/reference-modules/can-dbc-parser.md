@@ -259,68 +259,80 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_DBC_BYTES=16MB` at declara
 
 ## How it works
 
-Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+`CanDbcParser.from_file()` reads the DBC file in two passes:
+
+**Pass 1 — message and signal parsing:** Splits the text into `BO_` blocks with a regex and parses each block line by line. The raw message ID is read and bit 31 is tested to set `is_extended`; the 29-bit canonical ID is stored in `msg_id`. Each `SG_` line inside the block is parsed with a single compiled regex that extracts `start_bit`, `length`, `byte_order`, `sign`, `factor`, `offset`, `min_val`, `max_val`, `unit`, and `receivers`. Malformed signal lines that fail the regex match are silently skipped.
+
+**Pass 2 — comments and value tables:** A second pass over the full file text applies `re.DOTALL` patterns to extract `CM_ BO_` and `CM_ SG_` multi-line comment records, stripping enclosing quotes. `VAL_` records are parsed with a token scanner that reads alternating `integer "string"` pairs. Both comment and value table records are stored by `(raw_id, signal_name)` key and then attached to the already-constructed `CANMessage` and `CANSignal` objects.
 
 ---
 
 ## Example output
 
-```
-[CRITICAL] WEAK_SEED   UDS 0x27 0x01 at ROM:0x8004A0
-  detail: seed is timestamp-derived (LSB of timer register)
-  algorithm: linear congruential; key derivable in < 2^16 guesses
+The following illustrates `summary()` and message iteration output. Actual values are DBC-specific.
 
-[HIGH] UNPROTECTED_WRITE   calibration region at ROM:0x810000
-  detail: no write-protect fuse check before accepting 0x34 WriteDataByIdentifier
+```
+CanDbcParser: network.dbc
+
+CAN DBC database
+  messages : 8 total (1 standard  7 extended)
+  signals  : 32
+  val_tables: 5
+
+0x0CF004FE  EXT  EEC1  8B
+  EngineSpeed  24|16  x0.125+0  rpm
+  ActualEnginePercentTorque  8|8  x1.0+-125  %
+  DriversDemandEnginePercentTorque  0|8  x1.0+-125  %
+
+EngineSpeed raw=2000 → 250.0 rpm
 ```
 
 ---
 
 ## False positives
 
-Calibration data regions contain byte sequences that decode as valid instructions in some ISAs. Confirm candidate function VAs against the ROM layout from `ECURomLayoutAnalyzer` before treating them as code. Security Access sequences in boot ROM are expected and not findings unless the seed/key algorithm is cryptographically weak.
+**29-bit extended frame ID collision:** When two messages in the same DBC file have the same 29-bit ID but different bit-31 extended/standard markers, `CanDbcParser` keeps only one (last-parsed wins). This is a malformed DBC condition; validate with `standard_messages()` + `extended_messages()` to detect duplicate canonical IDs.
+
+**Motorola byte order decode is not implemented:** `CANSignal.decode()` applies `raw * factor + offset` regardless of `little_endian`. For Motorola byte-order signals, the raw integer passed to `decode()` must already be correctly extracted by the caller (using `start_bit` and `length` with Motorola bit numbering). Passing a naively extracted raw integer to `decode()` on a Motorola signal produces a wrong physical value.
+
+**Multiplexed signals read but not grouped:** The `M`/`m<n>` multiplexor indicator is silently skipped. All signals are stored flat under the message. If the DBC uses multiplexing (e.g., engine fault code DTC signals), all multiplexed variants are returned by `msg.signals` with no mux ID discrimination.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
+**Before this module:** Use `CanDbcParser` after obtaining a DBC file from the CAN network or the ECU vendor's calibration tools. DBC files are commonly distributed alongside A2L/XDF calibration files for the same ECU.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed `CANSignal` scaling factors into `EcuA2LParser` cross-reference — match signal names to calibration table names to confirm which ROM addresses a CAN message writes. Use `msg_id` to filter captured CAN traces (e.g., from a J1939 sniffer) to only messages relevant to the target ECU.
 
 ---
 
 ## Reading output
 
-`CanDbcParser(path).parse()` returns `List[CANMessage]`, each containing `List[CANSignal]`:
+`CanDbcParser.from_file(path).messages()` returns `list[CANMessage]`, each containing `list[CANSignal]`. See the [Data types](#data-types) section above for the complete field reference. Key fields for RE workflows:
 
-**`CANMessage` attributes:**
+**`CANMessage` fields used in RE:**
 
-| Attribute | Content |
-|:---|:---|
-| `msg_id` | Canonical CAN ID (11-bit or 29-bit, bit 31 stripped) |
-| `name` | Message name from the DBC file |
-| `dlc` | Data length code in bytes |
-| `sender` | Node name of the transmitter |
-| `is_extended` | `True` for 29-bit extended frames |
-| `signals` | `List[CANSignal]` — signals decoded within this message |
+| Field | Type | Content |
+|:---|:---|:---|
+| `msg_id` | `int` | Canonical CAN ID (bit 31 stripped) — use for `message()` lookup |
+| `is_extended` | `bool` | `True` for J1939/29-bit frames |
+| `signals` | `list[CANSignal]` | All signals in this message |
+| `comment` | `str` | Manufacturer description from CM_ record |
 
-**`CANSignal` attributes:**
+**`CANSignal` fields used in RE:**
 
-| Attribute | Content |
-|:---|:---|
-| `name` | Signal name |
-| `start_bit` | Start bit position in the frame |
-| `length` | Signal width in bits |
-| `little_endian` | `True` for Intel/little-endian byte order |
-| `factor` / `offset` | Scaling: `physical = raw * factor + offset` |
-| `unit` | Engineering unit string (e.g., `'km/h'`) |
-| `value_table` | `Dict[int, str]` mapping raw values to named states |
+| Field | Type | Content |
+|:---|:---|:---|
+| `name` | `str` | Signal name — cross-reference against A2L characteristic names |
+| `factor` / `offset` | `float` | `physical = raw * factor + offset` |
+| `value_table` | `dict[int, str]` | Enumerated state names from VAL_ record (fault codes, gear positions) |
+| `comment` | `str` | Manufacturer description from CM_ record |
 
 ---
 
 ## See also
 
-- [ECUArchDetector](ecu-arch-detector.md) — identify processor family before choosing a decoder
-- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md) — map ROM sections before decoding
-- [ECUSecurityAccessScanner](ecu-security-access-scanner.md) — find UDS 0x27 bypass vectors in decoded code
+- [Calibration Parsers](calibration-parsers.md) — A2L/open_damos parsers; cross-reference calibration table names against DBC signal names
+- [CAN DBC XDF Fusion](can-dbc-xdf-fusion.md) — combine DBC signal layout with XDF calibration definitions
+- [C166/C167 ECU Decoding](c166-c167-decoding.md) — Bosch/Siemens C167 ECU firmware analysis after CAN signal mapping
