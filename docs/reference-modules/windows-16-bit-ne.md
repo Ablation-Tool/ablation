@@ -85,6 +85,19 @@ Run `win16_ne_sweep.py` on any Win16 NE binary. Output feeds the standard findin
 
 ---
 
+## Reading output
+
+`NEBinary.parse(path)` returns a `NEBinary` object:
+
+| Attribute | Content |
+|:---|:---|
+| `segments` | `List[NESegment]` — all NE segments with `index`, `type` (`CODE`/`DATA`), and `va` |
+| `imports` | `List[(module, function)]` — all relocation-record imports across all segments |
+| `exports` | `List[(ordinal, name, va)]` — exported entry points |
+| `function_starts()` | `List[int]` — VAs of all CODE segment function entry points |
+
+---
+
 ## See also
 
 - [Windows LE/VxD Analysis](windows-le-vxd.md) — `win16_le_vxd_sweep.py` for Linear Executable / Virtual Device Driver format

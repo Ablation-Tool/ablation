@@ -80,6 +80,19 @@ Run `win16_le_vxd_sweep.py` on any Windows 3.x VxD binary (`.386`, `.vxd`, `.drv
 
 ---
 
+## Reading output
+
+`LEBinary.parse(path)` returns a `LEBinary` object:
+
+| Attribute | Content |
+|:---|:---|
+| `objects` | `List[LEObject]` — all LE objects with `type` (`CODE`/`DATA`) and `va` |
+| `vmm_services` | `List[(name, va)]` — resolved VMM service call targets (VxD only) |
+| `ddb` | `VxDDDB` — Device Descriptor Block fields: `Device_Init_VA`, `PM_API_VA`, `V86_API_VA` (or `None` if not a VxD) |
+| `function_starts()` | `List[int]` — VAs of all CODE object entry points |
+
+---
+
 ## See also
 
 - [Windows 16-bit NE Analysis](windows-16-bit-ne.md) — `win16_ne_sweep.py` for segmented 16-bit NE executables
