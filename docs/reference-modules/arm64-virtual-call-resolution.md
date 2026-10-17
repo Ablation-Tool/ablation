@@ -96,6 +96,21 @@ Run `VtableResolver` after `XRefGraph` and before `TaintTracker` on C++ ARM64 bi
 
 ---
 
+## Reading output
+
+`VtableResolver.resolve()` returns a `Dict[int, List[int]]` mapping each BLR VA to a list of resolved target VAs.
+
+`VtableResolver.summary()` returns:
+
+| Field | Content |
+|:---|:---|
+| `vtable_regions` | Count of vtable regions found in `.rodata` |
+| `constructor_vptr_assignments` | Count of confirmed constructor vtable assignments |
+| `blr_sites` | Total BLR instruction count |
+| `resolved` | Count of BLR sites with at least one resolved target |
+
+---
+
 ## See also
 
 - [ARM64 Symbolic Slicing](arm64-symbolic-slicing.md) — slice from BLR sites to find argument sources
