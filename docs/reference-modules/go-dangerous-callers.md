@@ -27,11 +27,12 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ## Usage
 
 ```python
-from ablation.analyzers.go_dangerous_callers import GoDangerousCallers
+from modules.go_dangerous_callers import GoDangerousCallerScanner
 
-results = GoDangerousCallers.from_context(ctx).run()
-for r in results:
-    print(r)
+scanner = GoDangerousCallerScanner('/path/to/go_binary')
+hits = scanner.scan(dangerous_targets=['exec.Command', 'os/exec.Command'])
+for h in hits:
+    print(h)
 ```
 
 ---

@@ -138,11 +138,11 @@ Reads the binary image and resolves the target-specific data structures (PLT, GO
 ## Usage
 
 ```python
-from ablation.analyzers.syscall_trace import SyscallTracerSystemExploitationSurfaceDetection
+from modules.syscall_trace import SyscallTracer
 
-results = SyscallTracerSystemExploitationSurfaceDetection.from_context(ctx).run()
-for r in results:
-    print(r)
+tracer = SyscallTracer(pid=None)    # or pass a running pid
+result = tracer.trace_process(duration=5)
+print(result)
 ```
 
 ---
