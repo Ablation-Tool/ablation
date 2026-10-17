@@ -101,6 +101,23 @@ Run debug metadata recovery immediately after `BinaryContext.load_or_build()` on
 
 ---
 
+## Reading output
+
+`ARM32FunctionScanner.inject_into_context(ctx)` modifies `ctx.func_starts` in place and returns:
+
+| Field | Content |
+|:---|:---|
+| `added` | Count of new function starts added to `ctx` |
+| `existing` | Count of function starts already in `ctx` (from symbols or prior analysis) |
+
+`I386AbsoluteXrefScanner.inject_into_context(ctx)` modifies `ctx.xrefs` in place and returns:
+
+| Field | Content |
+|:---|:---|
+| `xrefs_added` | Count of new cross-references added |
+
+---
+
 ## See also
 
 - [ARM32 Allocation Arithmetic Overflow](arm32-allocation-arithmetic-overflow.md) — `ARM32FunctionScanner` prologue scan for ARM32 stripped binaries

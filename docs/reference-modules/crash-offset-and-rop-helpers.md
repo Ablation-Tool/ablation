@@ -93,7 +93,22 @@ Run crash offset and ROP helpers after `TaintTracker` confirms an ARG_PROPAGATED
 
 ---
 
+## Reading output
+
+`find_cyclic_offset(crash_bytes)` returns `int` — the byte offset at which the de Bruijn pattern is overwritten, or raises `ValueError` if the crash bytes are not recognized as de Bruijn output.
+
+`scan_rop_gadgets(binary_path)` returns a list of `RopGadget` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Virtual address of the gadget |
+| `insns` | List of instruction strings ending in `ret`/`jmp`/`call` |
+| `length` | Instruction count |
+| `category` | `POP_REG`, `MOV_REG_MEM`, `SYSCALL`, `JMP_REG`, or `OTHER` |
+
+---
+
 ## See also
 
 - [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` that identifies ARG_PROPAGATED overflow sinks before ROP work begins
-- [Sink Argument Classification](sink-argument-classification.md) — `SinkArgClassifier` that confirms overflow at the sink call site
+- [Sink Argument Classification](sink-argument-classifier.md) — `SinkArgClassifier` that confirms overflow at the sink call site
