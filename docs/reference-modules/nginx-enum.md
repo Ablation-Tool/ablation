@@ -1,99 +1,98 @@
 # Nginx Enumeration
 
-**File:** `modules/nginx_enum.py`
+Probe Nginx web server instances for version disclosure, CVE-exploitable configurations (CVE-2017-7529, CVE-2021-23017), alias traversal misconfigurations, stub_status exposure, TLS weaknesses, LFI/SSRF surfaces, ingress-nginx controller exposure, and rate-limit bypass vectors — via `modules/nginx_enum.py` `NginxEnumerator`.
+
+---
 
 ## Why this exists
 
-Nginx attack surface enumeration covering: server tokens / version disclosure, CVE-2017-7529 (range filter integer overflow), CVE-2021-23017 (off-by-one in resolver), alias traversal misconfigurations, stub_status / diagnostic endpoint exposure, TLS configuration (session tickets, SNI enforcement, self-signed cert, OCSP stapling), LFI/SSRF confirmation probes, Kubernetes ingress-nginx controller exposure, rate-limit bypass via spoofed headers, error log / config file leakage via alias traversal, and diagnostic endpoint disclosure (phpinfo, server-status, etc.).
+1. **Nginx alias traversal is a distinct attack class not detected by general web scanners** — when a `location /static/` block uses `alias /var/www/static` (missing trailing slash), a request for `/static../secret` resolves to `/var/www/secret`. `NginxEnumerator.probe_alias_traversal()` sends crafted requests targeting this off-by-one and checks responses for directory contents or file data that would be inaccessible through the intended path.
 
-## Probe functions
+2. **`stub_status` and `NX-API` endpoints are disabled by default but commonly left enabled in production** — `probe_stub_status()` checks `/nginx_status`, `/_status`, and `/status` for the nginx stub_status module output (active connections, accepted requests, handled requests). `enum_nxapi()` probes for Cisco NX-OS NX-API endpoints (`/ins`, `/api/aaaLogin.json`) that may coexist with an Nginx reverse proxy. Both surfaces are information disclosure findings that seed further enumeration.
 
-- `check_server_tokens(host, port)`: Server header version disclosure
-- `check_cve_2021_23017(host, port)`: DNS resolver off-by-one
-- `check_autoindex(host, port)`: directory listing exposure
-- `check_internal_endpoint_exposure(host, port)`: internal path probing
-- `probe_tls_configuration(host, port)`: TLS session tickets, SNI enforcement, self-signed cert, OCSP
-- `probe_lfi_surface(host, port)`: LFI and SSRF via include/page/file parameters
-- `probe_nginx_ingress_controller(host, port)`: ingress-nginx /healthz,:10254/metrics, stub_status, XFF injection
-- `probe_nginx_rate_limit_bypass(host, port)`: rate-limit absence and X-Real-IP bypass
-- `probe_nginx_error_log_exposure(host, port)`: alias traversal to log/config files and error body path disclosure
-- `probe_nginx_diagnostic_endpoint_exposure(host, port)`: stub_status, phpinfo, server-status, error redirects
-
-## Constructor
-
-```python
-from modules.nginx_enum import NginxEnumerator
-enum = NginxEnumerator("10.0.0.1", port=443, use_tls=True)
-results = enum.run()
-print(enum.report())
-```
-
-## FORGE audit
-
-Gate: **PASSED**. One low-severity CLI bug fixed (line 2282: undefined `MACSTADIUM_HOST` → `'localhost'`). All recv loops bounded: `_raw_http()` at 512 KB, SNI probe at 65536 B. All response body processing uses `body[:N]` slices. No file reads. No lief.parse().
+3. **CVE-2021-23017 (off-by-one in Nginx resolver) requires confirmation against the specific version and configuration** — `check_cve_2021_23017()` extracts the server version from the `Server:` header and checks if it falls in the affected range (1.17.6–1.21.0). It additionally verifies whether `resolver` is configured by probing DNS resolution behavior. A version-positive finding without a configured `resolver` directive is a false positive; the check differentiates these cases.
 
 ---
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+```mermaid
+flowchart TD
+    A["NginxEnumerator(host, port=443, use_tls=True, timeout=10)"] --> B["fingerprint() → dict\n  GET / → Server header: nginx/<version>\n  GET /notfound → 404 body: nginx/<version>\n  → {reachable, server, version, server_tokens_on}"]
+    B --> C["run() → dict\n  Keys: fingerprint, stub_status, cves, alias_traversal,\n    host_header, smuggling, nxapi_endpoints, null_byte,\n    server_tokens, autoindex, internal_endpoint_exposure,\n    basic_auth_over_http, cve_2021_23017, ssrf,\n    findings (List[dict])"]
+    C --> D["Each finding appended via _add(severity, ftype, desc, detail, exploit, source)\n  Finding dict: {severity, type, description, detail, exploit, source}\n  report() → str ASCII table grouping findings by severity"]
+```
 
 ---
 
 ## Usage
 
 ```python
-from ablation.analyzers.nginx_enum import NginxEnumeration
+from modules.nginx_enum import (
+    NginxEnumerator,
+    probe_lfi_surface,
+    probe_nginx_rate_limit_bypass,
+    probe_security_headers,
+)
 
-results = NginxEnumeration.from_context(ctx).run()
-for r in results:
-    print(r)
+# Class-based full scan
+enum = NginxEnumerator('target.example.com', port=443, use_tls=True)
+result = enum.run()
+print(enum.report())
+
+# Each finding: {severity, type, description, detail, exploit, source}
+for f in result['findings']:
+    print(f"  [{f['severity']}] {f['type']}: {f['description']}")
+    if f.get('exploit'):
+        print(f"    exploit: {f['exploit']}")
+
+# Standalone probes return [{severity, type, description, detail, exploit, source}]
+for f in probe_lfi_surface('target.example.com', port=443):
+    print(f"  [{f['severity']}] {f['type']}")
 ```
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+NGINX ENUMERATION — target.example.com:443
+============================================================
+
+[CRITICAL] ALIAS_TRAVERSAL
+  Alias traversal confirmed: location block off-by-one allows path escape
+  detail : GET /static../etc/passwd → HTTP 200, root:x:0:0
+  exploit: curl 'https://target.example.com/static../etc/passwd'
+
+[HIGH] NXAPI_UNAUTH
+  NX-API endpoint accessible without authentication
+  detail : POST /ins → HTTP 200, command execution surface
+
+[MEDIUM] STUB_STATUS_EXPOSED
+  Nginx stub_status accessible at /_status
+  detail : Active connections: 42  Reading: 1 Writing: 1 Waiting: 40
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`check_cve_2021_23017()` version match without configured `resolver`** — CVE-2021-23017 is only exploitable when the Nginx `resolver` directive is active (enabling DNS resolution for upstream proxying). A version-positive finding on an Nginx instance with no `resolver` directive is not exploitable. Review the Nginx configuration to confirm `resolver` is present before escalating.
+
+**`ALIAS_TRAVERSAL` on servers behind a WAF that normalizes path segments** — a WAF performing URL normalization (decoding `%2f`, collapsing `../`) upstream of Nginx will block alias traversal requests before they reach the server. The probe sends encoded path segments; confirm that the request reaches Nginx unmodified by checking access logs or bypassing the WAF in test.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
-
----
-
-## Reading findings
-
-| Field | Content |
-|:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
-| `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
+Run `NginxEnumerator.run()` after confirming an Nginx server via the `Server:` header or default error page. Run `probe_lfi_surface()` and `probe_nginx_ingress_controller()` as standalone probes when specific LFI/ingress-nginx surfaces are the focus. Combine with `probe_tls_configuration()` for a complete TLS posture picture on the same host.
 
 ---
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md) — TLS analysis for the Nginx HTTPS surface
+- [Web Application Probe Helpers](web-app-probe-helpers.md) — path enumeration and auth bypass helper functions
+- [Finding Registry](finding-registry.md) — record confirmed Nginx findings
