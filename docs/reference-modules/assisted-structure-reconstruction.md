@@ -86,6 +86,23 @@ Run `Structurizer` on the CFG produced by `FuncProfiler.profile()` after taint a
 
 ---
 
+## Reading output
+
+`Structurizer.structurize(cfg)` returns a tree of `StructNode` objects. All node types:
+
+| Node Type | Description |
+|:---|:---|
+| `SequenceNode` | Ordered list of child nodes (sequential code blocks) |
+| `IfNode` | Conditional with `cond`, `then_branch`, optional `else_branch` |
+| `WhileNode` | Loop with `cond` expression and `body` child |
+| `DoWhileNode` | Loop with `body` first, then `cond` |
+| `SwitchNode` | Switch with `expr` and `cases: List[(value, StructNode)]` |
+| `BreakNode` | Loop break statement |
+| `ContinueNode` | Loop continue statement |
+| `InsnNode` | Leaf node wrapping a single Capstone instruction |
+
+---
+
 ## See also
 
 - [Single-Function Profiling](single-function-profiling.md) — `FuncProfiler` that produces the CFG input for `Structurizer`

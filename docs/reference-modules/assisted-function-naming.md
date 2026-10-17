@@ -81,6 +81,21 @@ Run assisted naming after `SemanticSearcher` and `FuncProfiler` have identified 
 
 ---
 
+## Reading output
+
+`FunctionNamingAgent.run()` returns a list of naming result dicts, one per function:
+
+| Field | Content |
+|:---|:---|
+| `va` | Virtual address of the function |
+| `proposed_name` | Suggested function name |
+| `confidence` | Float 0.0–1.0 |
+| `evidence` | Plain-language rationale for the proposed name |
+
+Use `ctx.set_name(r['va'], r['proposed_name'], source='llm')` to apply accepted names.
+
+---
+
 ## See also
 
 - [LLM Analyst Loop](llm-analyst-loop.md) — `AgentLoop` that drives the naming queries

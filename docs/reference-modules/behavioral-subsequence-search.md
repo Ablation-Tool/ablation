@@ -101,6 +101,25 @@ Run `SubsequenceSearcher` after `SemanticSearcher` has identified the top candid
 
 ---
 
+## Reading output
+
+`SubsequenceSearcher.search(pattern)` returns a list of match dicts:
+
+| Field | Content |
+|:---|:---|
+| `func_va` | Virtual address of the matching function |
+| `occurrences` | Count of times the pattern occurs within the function |
+| `seq_len` | Total instruction count of the function |
+
+`SubsequenceSearcher.search_like(va, threshold)` returns matches ranked by DTW similarity score:
+
+| Field | Content |
+|:---|:---|
+| `func_va` | Virtual address of the similar function |
+| `score` | DTW similarity score (0.0–1.0; 1.0 = identical) |
+
+---
+
 ## See also
 
 - [Semantic Search](semantic-search.md) — name/description similarity; complementary to behavioral subsequence search

@@ -124,6 +124,22 @@ Use `BinaryLifter.lift_function(va)` after `FuncProfiler` identifies a candidate
 
 ---
 
+## Reading output
+
+`BinaryLifter.lift_function(va)` returns a pseudocode string — human-readable C-like IR with taint annotations inline.
+
+`BinaryLifter.lift_function_ir(va)` returns a list of `IRStatement` objects for programmatic consumption:
+
+| Attribute | Content |
+|:---|:---|
+| `kind` | Statement kind: `ASSIGN`, `CALL`, `BRANCH`, `RETURN`, `LOAD`, `STORE` |
+| `dst` | Destination register or memory expression |
+| `src` | Source `NativeVal` (constant, register, or expression) |
+| `tainted` | `True` if any source operand is tainted |
+| `taint_label` | Taint source label (e.g., `recv`) if `tainted` |
+
+---
+
 ## See also
 
 - [Binary Lifter](binary-lifter.md) — complete `BinaryLifter` API, `NativeVal` dataclass, `_X86_64State` detail
