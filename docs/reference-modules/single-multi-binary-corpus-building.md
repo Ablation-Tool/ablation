@@ -82,6 +82,19 @@ Build `LibGraph` once per firmware image at session start, before any `CrossBina
 
 ---
 
+## Reading output
+
+`LibGraph.build(rootfs_path)` returns a `LibGraph` object:
+
+| Method | Return |
+|:---|:---|
+| `callers_of(func_name)` | `List[{library, call_va}]` — all call sites of `func_name` across the corpus |
+| `exporters_of(func_name)` | `List[str]` — libraries that export `func_name` |
+| `binaries` | `List[str]` — all library paths in the corpus |
+| `binary_count` | Integer — number of binaries loaded |
+
+---
+
 ## See also
 
 - [Configurable Taint Reporting](configurable-taint-reporting.md) — `CrossBinaryTaintTracker` that uses `LibGraph` for import resolution

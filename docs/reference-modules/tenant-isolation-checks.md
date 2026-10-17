@@ -90,6 +90,23 @@ Run tenant isolation checks as part of source code review after `SourceEntryClas
 
 ---
 
+## Reading findings
+
+`SourceIsolationChecker.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` / `MEDIUM` |
+| `title` | Finding code (e.g., `MISSING_TENANT_FILTER`, `UNSCOPED_QUERY`) |
+| `file` | Source file path |
+| `line` | Line number |
+| `auth_level` | Route auth level: `SESSION`, `ADMIN`, or `PUBLIC` |
+| `detail` | Code excerpt showing the isolation gap |
+
+`SourceEntryClassifier.classify()` returns `Dict[file_path, auth_level]`.
+
+---
+
 ## See also
 
 - [Repository Ingestion and Search](repository-ingestion-and-search.md) — `SourceContext` for indexing the codebase before running isolation checks

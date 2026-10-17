@@ -85,6 +85,21 @@ Run `TaintTrackerLA64` after `LA64MaxNotMinScanner` to confirm that compiler-bug
 
 ---
 
+## Reading findings
+
+`TaintTrackerLA64.run()` returns a list of `TaintFindingLA64` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `func_va` | VA of the function containing the sink |
+| `sink_va` | VA of the sink call |
+| `tainted_args` | `List[str]` — LoongArch64 argument register names with taint (e.g., `$a0`, `$a2`) |
+| `labels` | `Set[str]` — taint source names (e.g., `{'recv'}`) |
+| `bound` | Size bound value (if recoverable; `None` if unbounded) |
+| `severity` | `CRITICAL` (unbound) / `HIGH` |
+
+---
+
 ## See also
 
 - [LoongArch64 Compiler Bug Detection](loongarch64-2.md) — `LA64MaxNotMinScanner` findings verified by this tracker

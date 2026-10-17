@@ -76,6 +76,20 @@ Run TLS policy checks after `TLSAnalyzer` certificate chain analysis. Policy che
 
 ---
 
+## Reading findings
+
+TLS policy probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` / `MEDIUM` / `INFO` |
+| `title` | Finding code (e.g., `MTLS_NOT_ENFORCED`, `HSTS_MISSING`, `ACME_CHALLENGE_EXPOSED`, `CT_COMPLIANT`) |
+| `detail` | Policy requirement, header value, or response code |
+| `host` | Target hostname |
+| `port` | TLS port |
+
+---
+
 ## See also
 
 - [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md) — `TLSAnalyzer`/`CipherSuiteProber` for certificate and cipher analysis
