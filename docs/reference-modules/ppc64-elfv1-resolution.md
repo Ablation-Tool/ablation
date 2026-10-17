@@ -87,6 +87,19 @@ Run `Ppc64ElfV1Resolver.patch_context()` immediately after `BinaryContext.load_o
 
 ---
 
+## Reading output
+
+`patch_context(ctx)` modifies `ctx.plt` in-place and returns a dict:
+
+| Key | Content |
+|:---|:---|
+| `patched_count` | Integer — number of PLT entries resolved and added to `ctx.plt` |
+| `plt` | `Dict[int, str]` — VA → symbol name (the patched context's PLT dict) |
+
+After `patch_context()`, `ctx.plt_name(va)` returns the symbol name for any OPD-resolved address.
+
+---
+
 ## See also
 
 - [PPC32/PPC476 Dedicated Lifting](ppc32-ppc476-dedicated-lifting.md) — complete PPC32/PPC64 analysis stack

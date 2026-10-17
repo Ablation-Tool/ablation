@@ -89,6 +89,19 @@ Run `PEFBinaryAnalyzer` on any Mac Classic `.pfcd`/PEF binary before taint analy
 
 ---
 
+## Reading output
+
+`PEFBinaryAnalyzer.parse()` returns a `PEFBinary` object:
+
+| Attribute | Content |
+|:---|:---|
+| `sections` | `List[{name, kind, size, data}]` — code, data, and loader sections |
+| `imported_libs` | `List[{name, version, symbol_count}]` — shared library imports |
+| `exports` | `List[{name, va, sym_type}]` — exported symbols |
+| `function_starts` | `List[int]` — VA list of code section functions |
+
+---
+
 ## See also
 
 - [PEF ABI Clobber Detection](ppc32-heap-slot-overflow.md) — `PEFABIClobberScanner` for argument register clobber between PEF call sites
