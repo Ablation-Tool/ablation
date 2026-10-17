@@ -6,11 +6,11 @@ Recover function boundaries, names, and type information from `.eh_frame` CFI re
 
 ## Why this exists
 
-1. **Stripped ELF binaries drop `.symtab` but typically retain `.eh_frame` CFI records emitted by GCC/Clang for C++ exception unwinding — these records contain precise function start VAs as FDE (Frame Description Entry) entries.** `DwarfLoongArch64.function_starts_from_eh_frame()` extracts all FDE start addresses, providing function boundaries without the noise of prologue-scan heuristics. On a typical stripped firmware binary, `.eh_frame` yields function start accuracy of 99%+ versus prologue scan's ~85%.
+1. **Stripped ELF binaries drop `.symtab` but typically retain `.eh_frame` CFI records emitted by GCC/Clang for C++ exception unwinding — these records contain precise function start VAs as FDE (Frame Description Entry) entries.** `extract_eh_frame_starts(path)` extracts all FDE start addresses, providing function boundaries without the noise of prologue-scan heuristics. On a typical stripped firmware binary, `.eh_frame` yields function start accuracy of 99%+ versus prologue scan's ~85%.
 
-2. **`.debug_info` sections (present in `-g` builds) provide `(name, low_pc, high_pc)` triples via `DW_TAG_subprogram`** — `high_pc` eliminates the "next-function-start" approximation that `.eh_frame` alone requires. When `.debug_info` is present (common in development firmware images or partial debug builds), `DwarfLoongArch64.function_intervals_from_dwarf()` yields precise function end addresses, enabling accurate function-size calculations and loop detection.
+2. **`.debug_info` sections (present in `-g` builds) provide `(name, low_pc, high_pc)` triples via `DW_TAG_subprogram`** — `high_pc` eliminates the "next-function-start" approximation that `.eh_frame` alone requires. When `.debug_info` is present (common in development firmware images or partial debug builds), `extract_debug_funcs(path)` yields precise function end addresses, enabling accurate function-size calculations and loop detection.
 
-3. **Linux kernel modules stripped of `.symtab` often retain `.BTF` and `.BTF.ext` sections** — BTF maps section offsets to function names even without symbol tables, enabling name recovery for kernel modules and eBPF programs where DWARF is absent. `DwarfLoongArch64.names_from_btf()` parses the BTF string and type sections without external dependencies (pure struct parsing, no libbpf required).
+3. **Linux kernel modules stripped of `.symtab` often retain `.BTF` and `.BTF.ext` sections** — BTF maps section offsets to function names even without symbol tables, enabling name recovery for kernel modules and eBPF programs where DWARF is absent. `extract_btf_funcs(path)` parses the BTF string and type sections without external dependencies (pure struct parsing, no libbpf required).
 
 ---
 
@@ -18,12 +18,12 @@ Recover function boundaries, names, and type information from `.eh_frame` CFI re
 
 ```mermaid
 flowchart TD
-    A["DwarfLoongArch64(elf_path)"] --> B["function_starts_from_eh_frame() → Set[int]\n  Parse .eh_frame with pyelftools CIE/FDE decoder\n  Extract pc_begin from each FDE\n  Best-effort: returns empty set if section absent"]
-    A --> C["function_intervals_from_dwarf() → List[Tuple[int,int,str]]\n  Parse .debug_info DW_TAG_subprogram\n  Extract (low_pc, high_pc, name)\n  Requires -g build; returns [] if .debug_info absent"]
-    A --> D["names_from_btf() → Dict[int,str]\n  Parse .BTF type section (BTF_KIND_FUNC)\n  Parse .BTF.ext for func_info VA→name mapping\n  Pure struct parsing, no libbpf\n  Returns {} if .BTF absent"]
-    B --> E["inject_into_context(ctx) → int\n  Add all recovered starts to BinaryContext.func_starts\n  Returns: count of new starts added"]
-    C --> E
-    D --> F["ctx.set_name(va, name, source='dwarf') for DWARF names\n  ctx.set_name(va, name, source='btf') for BTF names"]
+    P["elf_path (str)"] --> B["extract_eh_frame_starts(path) → Set[int]\n  Parse .eh_frame with pyelftools CIE/FDE decoder\n  Extract pc_begin from each FDE\n  Best-effort: returns empty set if section absent"]
+    P --> C["extract_debug_funcs(path) → Dict[int, Tuple[str, int]]\n  Parse .debug_info DW_TAG_subprogram\n  Returns {low_pc: (name, high_pc)}\n  Requires -g build; returns {} if .debug_info absent"]
+    P --> D["extract_btf_funcs(path) → Dict[int, str]\n  Parse .BTF type section (BTF_KIND_FUNC)\n  Parse .BTF.ext for func_info VA→name mapping\n  Pure struct parsing, no libbpf\n  Returns {} if .BTF absent"]
+    B --> E["ctx.func_starts.update(starts)\n  Add recovered starts to BinaryContext"]
+    C --> F["ctx.set_name(va, name, source='dwarf') for each entry"]
+    D --> F2["ctx.set_name(va, name, source='btf') for each entry"]
 
     G["I386AbsoluteXrefScanner\n  (i386 ELF32 string reference recovery)"] --> H["scan_full() → XrefResult\n  Scan .text for 4-byte LE values matching known string VAs\n  Attribute hits to enclosing function\n  ELF32 only — PE32 not supported"]
     H --> I["inject(ctx) → int\n  Add discovered xrefs to BinaryContext\n  Returns: count of new xrefs added"]
@@ -34,25 +34,29 @@ flowchart TD
 ## Usage
 
 ```python
-from ablation.analyzers.dwarf_loongarch64 import DwarfLoongArch64
+from ablation.analyzers.dwarf_loongarch64 import (
+    extract_eh_frame_starts,
+    extract_debug_funcs,
+    extract_btf_funcs,
+)
 from ablation.analyzers.i386_absolute_xref_scanner import I386AbsoluteXrefScanner
 from ablation.analyzers.binary_context import BinaryContext
 
 # ── ELF64 debug metadata (eh_frame / DWARF / BTF) ──────────────────────────
 ctx = BinaryContext.load_or_build('/path/to/target.elf')
-dwarf = DwarfLoongArch64('/path/to/target.elf')
 
-n_starts = dwarf.inject_into_context(ctx)
-print(f"Added {n_starts} function starts from eh_frame/DWARF")
+starts = extract_eh_frame_starts('/path/to/target.elf')
+ctx.func_starts.update(starts)
+print(f"Added {len(starts)} function starts from .eh_frame")
 
 # Recover names from BTF (kernel modules)
-btf_names = dwarf.names_from_btf()
+btf_names = extract_btf_funcs('/path/to/target.elf')
 for va, name in btf_names.items():
     ctx.set_name(va, name, source='btf')
 
 # Recover debug intervals if available
-intervals = dwarf.function_intervals_from_dwarf()
-for low_pc, high_pc, name in intervals:
+debug_funcs = extract_debug_funcs('/path/to/target.elf')
+for low_pc, (name, high_pc) in debug_funcs.items():
     ctx.set_name(low_pc, name, source='dwarf')
 
 # ── i386 string xref recovery ──────────────────────────────────────────────
@@ -71,11 +75,11 @@ print(result.report())
 The following illustrates the recovery output format. Actual counts and names are binary-specific.
 
 ```
-DwarfLoongArch64 (.eh_frame):
+extract_eh_frame_starts():
   FDE entries found: <N>
   Function starts added to context: <M>  (net new)
 
-DwarfLoongArch64 (.BTF):
+extract_btf_funcs():
   BTF functions found: <N>
   Names set in context: <N>
 
@@ -97,11 +101,17 @@ I386AbsoluteXrefScanner:
 
 ## Pipeline position
 
-Run debug metadata recovery immediately after `BinaryContext.load_or_build()` on any target binary — before `CorpusBuilder`, `SemanticSearcher`, or taint analysis. Better function boundaries and more string xrefs improve all downstream analyses. The `inject_into_context()` methods modify the context in place.
+Run debug metadata recovery immediately after `BinaryContext.load_or_build()` on any target binary — before `CorpusBuilder`, `SemanticSearcher`, or taint analysis. Better function boundaries and more string xrefs improve all downstream analyses. Add recovered starts to `ctx.func_starts` and set names via `ctx.set_name()` before any analysis pass.
 
 ---
 
 ## Reading output
+
+`extract_eh_frame_starts(path)` returns `Set[int]` — VA of every function start found in `.eh_frame` FDE records. Returns an empty set if `.eh_frame` is absent.
+
+`extract_debug_funcs(path)` returns `Dict[int, Tuple[str, int]]` — maps `low_pc` → `(name, high_pc)`. Returns `{}` if `.debug_info` is absent or contains no `DW_TAG_subprogram` entries.
+
+`extract_btf_funcs(path)` returns `Dict[int, str]` — maps VA → function name from `.BTF`/`.BTF.ext` sections. Returns `{}` if BTF is absent.
 
 `ARM32FunctionScanner.inject_into_context(ctx)` modifies `ctx.func_starts` in place and returns:
 

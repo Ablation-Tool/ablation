@@ -108,7 +108,7 @@ KF_LOAD_EFF [MAP 16x16]
 
 ## Reading output
 
-`CalibrationTable` object attributes (returned from `CalibrationParser.parse()`):
+`CalibrationTable` object attributes (returned by `EcuA2LParser.from_file(path)` and the other ECU definition parsers):
 
 | Attribute | Content |
 |:---|:---|

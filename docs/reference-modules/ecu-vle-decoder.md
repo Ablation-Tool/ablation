@@ -364,7 +364,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Reading output
 
-`EcuVleDecoder.from_bytes(data, base=0).decode_all()` returns `List[VLEInsn]`:
+`EcuVLEDecoder.from_bytes(data, base_va=0).decode_all()` returns `List[VLEInsn]`:
 
 | Attribute | Content |
 |:---|:---|
