@@ -83,15 +83,16 @@ Run `EpilogueShareScanner` once per binary immediately after `BinaryContext.load
 
 ## Reading output
 
-`EpilogueShareScanner.scan()` returns a list of `EpilogueHit` objects:
+`EpilogueShareScanner.scan()` returns a list of `EpilogueShareHit` objects:
 
 | Attribute | Content |
 |:---|:---|
-| `func_va` | VA of the function whose tail jumps into the shared epilogue |
-| `shared_va` | VA of the shared epilogue entry point |
-| `pattern` | Pattern name (e.g., `x86_pop_ret`, `arm64_ldp_ret`) |
+| `from_func_va` | VA of the function that contains the unconditional jump |
+| `jump_va` | VA of the jump instruction itself |
+| `target_va` | VA where the jump lands (the shared epilogue entry) |
+| `host_func_va` | VA of the function whose body the target lands inside |
 
-`EpilogueShareScanner.inject()` returns an integer — the count of phantom `func_starts` removed from `ctx`.
+`EpilogueShareScanner.inject(ctx)` adds all `target_va` values to `ctx.shared_epilogues` and returns `int` — the count of entries added.
 
 ---
 

@@ -74,16 +74,20 @@ Run `LibraryInventory` at session start for any Android APK or firmware root fil
 
 ## Reading output
 
-`LibraryInventory.scan()` returns a list of `LibraryEntry` objects:
+`LibraryInventory.scan()` returns a list of `LibInventoryEntry` objects:
 
 | Attribute | Content |
 |:---|:---|
-| `name` | Library filename |
+| `path` | Absolute path to the library |
+| `filename` | Library basename |
 | `size_kb` | File size in kilobytes |
 | `arch` | Architecture string (e.g., `arm64`, `x86`) |
-| `exports` | Count of exported symbols |
-| `jni_exports` | Count of JNI `Java_*` exports |
-| `score` | Float priority score — higher is more worth analyzing |
+| `exports` | Total count of dynamic symbols with a non-zero value |
+| `internal` | BL-target internal function count (−1 if unsupported arch) |
+| `jni` | Count of `Java_*` JNI exports |
+| `has_jni_on_load` | `True` if `JNI_OnLoad` is exported |
+| `security_score` | Integer 0–10 — security interest score; higher = more worth analyzing |
+| `plt_hooks` | `List[str]` — critical PLT import labels found |
 
 ---
 

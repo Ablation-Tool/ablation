@@ -94,16 +94,18 @@ Run `PS3SELFDecryptor.from_path()` before any SELF file analysis. After successf
 
 ## Reading output
 
-`PS3SELFDecryptor.decrypt()` returns the path to the decrypted ELF file (written to disk). No finding dict is returned. Call `BinaryContext.load_or_build(output_path)` immediately after decryption.
-
-`PS3SELFDecryptor.header()` returns an `SELFHeader` object:
+`PS3SELFDecryptor.decrypt(in_path, out_path)` returns a `SELFDecryptResult`:
 
 | Attribute | Content |
 |:---|:---|
-| `key_rev` | Key revision byte from the SELF header |
-| `program_type` | SELF program type (e.g., `PPU_EXEC`, `SPU_EXEC`) |
-| `app_version` | Application version field |
-| `sdk_type` | SDK type identifier |
+| `in_path` | Path to the input SELF file |
+| `out_path` | Path where the decrypted ELF was written |
+| `key_rev` | Key revision byte used for decryption (e.g., `0x0016`) |
+| `section_count` | Total SELF segments found in the header |
+| `decrypted_sections` | Count of segments successfully decrypted |
+| `elf_size` | Size of the output ELF in bytes |
+
+Use `decrypt_to_tmp(in_path)` to decrypt to a temporary file and return its path as a string; pass that path directly to `BinaryContext.load_or_build()`.
 
 ---
 

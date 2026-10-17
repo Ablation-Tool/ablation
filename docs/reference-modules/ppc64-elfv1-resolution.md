@@ -22,7 +22,7 @@ flowchart TD
     B --> C["For each .opd entry:\n  Read code_va from offset 0\n  Read toc_va from offset 8\n  Build: opd_va → code_va mapping"]
     C --> D["Resolve .plt entries:\n  Each .plt entry (glink stub) jmps to .opd VA\n  Trace: plt_va → glink → opd_va → code_va\n  Build: plt_va → symbol_name from .dynsym/.rela.plt"]
     D --> E["Ppc64ElfV1Info:\n  opd_map: Dict[opd_va, code_va]\n  plt: Dict[plt_va, symbol_name]"]
-    E --> F["patch_context(ctx: BinaryContext) → int\n  ctx.plt.update(info.plt)\n  Returns: count of PLT entries patched\n  After patch: ctx.plt_name(plt_va) returns symbol"]
+    E --> F["patch_context(ctx: BinaryContext) → None\n  ctx.plt.update(stub_map)\n  ctx.func_starts updated with code VAs\n  After patch: ctx.plt_name(stub_va) returns symbol"]
 ```
 
 ---
@@ -39,8 +39,8 @@ ctx = BinaryContext.load_or_build('/path/to/power_linux_binary')
 if not ctx.plt:
     print("PLT empty — may be ELFv1 binary; applying resolver")
     resolver = Ppc64ElfV1Resolver.resolve('/path/to/power_linux_binary')
-    n_patched = resolver.patch_context(ctx)
-    print(f"Patched {n_patched} PLT entries")
+    resolver.patch_context(ctx)
+    print(f"Patched {len(ctx.plt)} PLT entries")
 
 # Now PLT names work
 print(ctx.plt_name(0x10001234))  # 'system' (previously None)
@@ -89,14 +89,19 @@ Run `Ppc64ElfV1Resolver.patch_context()` immediately after `BinaryContext.load_o
 
 ## Reading output
 
-`patch_context(ctx)` modifies `ctx.plt` in-place and returns a dict:
+`Ppc64ElfV1Resolver.patch_context(ctx)` modifies `ctx.plt` and `ctx.func_starts` in-place and returns `None`. Access the resolved data via `Ppc64ElfV1Resolver.resolve()`, which returns a `Ppc64ElfV1Info`:
 
-| Key | Content |
+| Attribute | Content |
 |:---|:---|
-| `patched_count` | Integer — number of PLT entries resolved and added to `ctx.plt` |
-| `plt` | `Dict[int, str]` — VA → symbol name (the patched context's PLT dict) |
+| `binary_path` | Path to the analyzed ELF |
+| `opd_va` | VA of the `.opd` section |
+| `opd_size` | Size of the `.opd` section in bytes |
+| `toc` | TOC pointer value (read from the entry-point OPD entry) |
+| `text_va` | VA of the `.text` section |
+| `opd_to_code` | `Dict[int, int]` — OPD entry VA → code function VA |
+| `stub_map` | `Dict[int, str]` — PLT stub VA → import symbol name |
 
-After `patch_context()`, `ctx.plt_name(va)` returns the symbol name for any OPD-resolved address.
+After `patch_context()`, `ctx.plt` maps stub VAs to import names and `ctx.func_starts` lists code VAs (not OPD VAs).
 
 ---
 

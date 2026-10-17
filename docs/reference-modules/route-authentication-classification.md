@@ -80,16 +80,18 @@ Run `PreAuthRouteAuditor` immediately after `BinaryContext.load_or_build()` for 
 
 ## Reading findings
 
-`PreAuthRouteAuditor.audit()` returns a list of `RouteFinding` objects:
+`PreAuthRouteAuditor.audit()` returns a list of `RouteEntry` objects:
 
 | Attribute | Content |
 |:---|:---|
-| `severity` | `HIGH` (handler with exec/parse sink) / `MEDIUM` (pre-auth route, no sink) |
-| `route` | URL path string (e.g., `/api/v2/upload`) |
-| `method` | HTTP method |
-| `handler_class` | Handler class name |
-| `handler_va` | VA of the handler function |
-| `sink_va` | VA of the sink call in the handler (if severity is `HIGH`) |
+| `url` | URL path string (e.g., `'/api/v2/upload'`) |
+| `handler` | Handler name string |
+| `middleware` | Middleware name string (empty if none) |
+| `method_ids` | `List[int]` — HTTP method ID list |
+| `url_reg_va` | VA of the URL registration call |
+| `handler_reg_va` | VA of the handler registration call |
+| `middleware_va` | VA of the middleware registration |
+| `is_preauth` | `True` if the route has no session/permission check |
 
 ---
 

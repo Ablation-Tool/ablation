@@ -89,15 +89,17 @@ Run `K8sEnumerator` from within a compromised container after establishing shell
 
 ## Reading findings
 
-`K8sEnumerator.enumerate_all()` returns a dict of categorized finding lists:
+`K8sEnumerator.enumerate_all()` returns a dict with the following keys (among others):
 
 | Key | Content |
 |:---|:---|
-| `rbac_findings` | `List[str]` — allowed verbs/resources from self-subject access review |
-| `configmap_credential_candidates` | `List[{namespace, name, keys}]` — ConfigMaps with credential-looking keys |
-| `kubelet_api_findings` | `List[{severity, title, detail, host, port}]` — unauthenticated kubelet endpoints |
-| `secret_findings` | `List[{namespace, name, type}]` — accessible Secret objects |
-| `pod_list` | Count of enumerated pods |
+| `rbac` | RBAC self-subject access review result dict |
+| `configmap_creds` | `List` — ConfigMaps with credential-looking keys |
+| `kubelet_findings` | `List[{severity, title, detail, host, port}]` — unauthenticated kubelet endpoints |
+| `secrets` | `List` — accessible Secret objects |
+| `pods` | `List` — enumerated pods |
+| `escape_vectors` | `List` — container escape vectors found |
+| `etcd_findings` | `List` — etcd exposure findings |
 
 ---
 

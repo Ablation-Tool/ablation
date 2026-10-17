@@ -104,14 +104,15 @@ cache_stats(): {'total': 3, 'hits': 2, 'misses': 1}
 
 `ScanResultVersionCache.get_or_scan(path)` returns the scanner's native findings list — whatever `scanner.scan()` would return. The return type is identical whether the result came from cache or live scan.
 
-`ScanResultVersionCache.stats()` returns a `CacheStats` object:
+`ScanResultVersionCache.cache_stats()` returns a dict:
 
-| Attribute | Content |
+| Key | Content |
 |:---|:---|
-| `hits` | Number of cache hits in this session |
-| `misses` | Number of cache misses (live scans executed) |
-| `evictions` | Number of stale entries replaced |
-| `cache_file` | Path to the JSON cache file on disk |
+| `scanner` | Scanner class name string |
+| `scanner_version_hash` | SHA-256 prefix of the scanner source used to build the cache |
+| `cache_path` | Absolute path to the JSON cache file on disk |
+| `entries` | Number of entries currently in the cache |
+| `cache_exists` | `True` if the cache file exists on disk |
 
 ---
 
