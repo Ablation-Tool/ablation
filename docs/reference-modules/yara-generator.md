@@ -62,7 +62,7 @@ The condition combines the three string categories with `OR`:
 
 ---
 
-## YARARule and generator functions
+## Usage
 
 ```python
 from ablation.core.yara_generator import (

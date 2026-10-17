@@ -43,7 +43,7 @@ flowchart TD
 
 ---
 
-## JniBridgeScanner
+## Usage
 
 ```python
 from ablation.analyzers.jni_bridge_scanner import JniBridgeScanner

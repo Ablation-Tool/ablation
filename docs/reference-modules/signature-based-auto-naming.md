@@ -72,7 +72,7 @@ TLS_HANDLER  IPSEC_HANDLER  DNS_HANDLER  IPS_DECODER  AV_SCANNER
 
 ---
 
-## FuncDB
+## Usage
 
 ```python
 from ablation.analyzers.func_id_db import FuncDB, BinaryRecord, FuncRecord, StructField, CallChain

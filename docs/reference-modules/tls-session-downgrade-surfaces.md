@@ -1,16 +1,16 @@
-# PPC64 Taint Analysis
+# TLS Session Downgrade Surfaces
 
-Track data flow through PPC64 big-endian and little-endian ELF binaries — supporting both ELFv1 (AIX, old Linux PPC64) and ELFv2 (modern OpenPOWER Linux, POWER8+) ABIs with 8 integer argument registers (`r3`–`r10`), and propagating taint from `recv`/`read`/`recvfrom` sources through to exec-class sinks.
+Detect TLS protocol downgrade weaknesses — absence of `TLS_FALLBACK_SCSV` protection (RFC 7507), legacy version acceptance (TLS 1.0/1.1), session ticket reuse enabling retroactive decryption, and TLS 1.3 0-RTT replay surfaces — by sending raw ClientHello records and probing session resumption behavior via `modules/tls_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **PPC64 BE is the architecture for FortiOS 6.x and earlier binaries** — the target architecture for the original FortiGate taint analysis work. `PPC64TaintTracker` provides the same labeled-taint model as `TaintTrackerARM64` but for PPC64 BE, covering `r3`–`r10` argument registers and the `r2` TOC pointer that distinguishes ELFv1 from ELFv2.
+1. **`probe_tls_downgrade_attack()` confirms whether the server enforces `TLS_FALLBACK_SCSV` (RFC 7507)** — a client that cannot negotiate TLS 1.3 falls back to a lower version. An active MITM attacker can force this fallback by blocking higher-version records. RFC 7507 requires servers to respond with a fatal `inappropriate_fallback` alert (content type 21, level 2, description 86) when they see `TLS_FALLBACK_SCSV` (0x5600) in a ClientHello with a version below the server's maximum. Absence of this alert means the server does not reject forced downgrades. `probe_tls_downgrade_attack()` sends a TLS 1.1 ClientHello containing `TLS_FALLBACK_SCSV` and checks for the alert response.
 
-2. **ELFv1 (AIX, old Linux PPC64) uses function descriptors in `.opd`** — each function is a 3-pointer struct (code VA, TOC, environment). `PPC64TaintTracker.from_context(ctx, endian='big')` handles ELFv1 automatically when `Ppc64ElfV1Resolver` has patched the context; pass `endian='little'` for ELFv2 LE (modern IBM POWER servers, RHEL PPC64LE).
+2. **Legacy TLS version acceptance creates a persistent downgrade surface** — TLS 1.0 and 1.1 were deprecated by RFC 8996 in March 2021. Both versions use MAC-then-Encrypt with CBC cipher suites that are vulnerable to BEAST (TLS 1.0) and POODLE class attacks. `probe_tls_downgrade_attack()` attempts a TLS 1.0 and TLS 1.1 handshake using `ssl.SSLContext.minimum_version = ssl.TLSVersion.TLSv1` and flags servers that complete the handshake as `TLS10_ACCEPTED` / `TLS11_ACCEPTED`.
 
-3. **`PPC64TaintTracker.run_on_function(func_va, func_end_va)` enables targeted analysis** — rather than running the full binary taint analysis, the caller specifies the function VA bounds and receives taint findings only for that function. This is the mechanism used by `IPRegAnnotator` to extend taint chains across function boundaries without re-running the full corpus.
+3. **`probe_tls_session_resumption()` tests session ticket reuse and TLS 1.3 0-RTT replay risk** — session tickets encrypt the server's session state under a ticket encryption key. A server that accepts session resumption (`session_reused=True` on second handshake) means that any attacker who captured prior TLS ciphertext and later compromises the ticket key can retroactively decrypt those sessions. On TLS 1.3 connections, session resumption enables 0-RTT early data — a channel that does not provide replay protection and that an on-path attacker can replay without triggering a handshake failure.
 
 ---
 
@@ -18,9 +18,10 @@ Track data flow through PPC64 big-endian and little-endian ELF binaries — supp
 
 ```mermaid
 flowchart TD
-    A["PPC64TaintTracker.from_context(ctx, endian='big')\n  or .from_path(path, endian='big')"] --> B["run() → List[TaintFindingPPC64]\n  For each function in ctx.func_starts:\n    Source detection:\n      BL recv/recvfrom/read/fgets → r3 tainted\n    Propagation (PPC64 RISC rules):\n      mr Rd, Rs: copy taint\n      lwz/lbz/lhz: load-from-tainted-ptr → tainted\n      stw/stb: store (track taint to stack)\n      ori/addi/rlwinm: arithmetic preserves taint\n      BL callee: caller-saved r0/r3-r12 cleared\n    Sink detection:\n      BL system/execv/popen: r3 arg checked\n      → TaintFindingPPC64 if r3 tainted at sink call"]
-    B --> C["run_on_function(func_va, func_end_va) → List[TaintFindingPPC64]\n  Run taint only for the specified function range\n  Used by IPRegAnnotator for hop-by-hop tracing"]
-    C --> D["TaintFindingPPC64:\n  sink_va: int\n  sink_name: str\n  source_va: int\n  source_name: str\n  path: List[int]  (instruction VAs on taint path)\n  severity: str"]
+    A["probe_tls_downgrade_attack(host, port=443) → list\n  findings: [{severity, title, detail, host, port}]"] --> B["TLS_FALLBACK_SCSV probe:\n  Build ClientHello: max_version=TLS1.1 (0x0302)\n  Ciphers: AES128(0x002F), AES256(0x0035), FALLBACK_SCSV(0x5600)\n  Send raw record over TCP\n  Response: content_type=21, level=2, desc=86 → PASS\n  No alert or different desc → NO_FALLBACK_SCSV_PROTECTION (HIGH)"]
+    B --> C["Legacy version acceptance:\n  ssl.TLSVersion.TLSv1 → TLS 1.0 handshake attempt\n  ssl.TLSVersion.TLSv1_1 → TLS 1.1 handshake attempt\n  Handshake succeeds → TLS10_ACCEPTED (HIGH)\n                      → TLS11_ACCEPTED (MEDIUM)\n  ssl.SSLError raised → version rejected (no finding)"]
+    C --> D["HSTS policy check:\n  GET https://host/ → Strict-Transport-Security header\n  max-age < 31536000 → SHORT_HSTS_MAX_AGE (MEDIUM)\n  Missing includeSubDomains or preload → HSTS_NOT_PRELOAD_READY (MEDIUM)"]
+    D --> E["probe_tls_session_resumption(host, port=443) → list\n  Connection 1: capture ssl.SSLSocket.session object\n  Session ticket issued → TLS_SESSION_TICKET_ISSUED (INFO)\n  Connection 2: inject captured session before handshake\n    ssl.SSLSocket.session = session_obj; do_handshake()\n    session_reused=True → TLS_SESSION_TICKET_REUSE (MEDIUM)\n    version=TLSv1.3 AND reused → TLS13_SESSION_0RTT_SURFACE (HIGH)"]
 ```
 
 ---
@@ -28,59 +29,67 @@ flowchart TD
 ## Usage
 
 ```python
-from ablation.analyzers.taint_tracker_ppc64 import PPC64TaintTracker
-from ablation.analyzers.binary_context import BinaryContext
-from ablation.analyzers.ppc64_elfv1_resolver import Ppc64ElfV1Resolver
+from modules.tls_enum import probe_tls_downgrade_attack, probe_tls_session_resumption
 
-ctx = BinaryContext.load_or_build('/path/to/fortios_6x_httpd')
-# Patch ELFv1 OPD if needed
-Ppc64ElfV1Resolver(ctx).patch_context()
+host = '<target-host>'
 
-tracker = PPC64TaintTracker.from_context(ctx, endian='big')
-findings = tracker.run()
+# All findings: {severity, title, detail, host, port}
+for finding in probe_tls_downgrade_attack(host, port=443):
+    print(f"  [{finding['severity']}] {finding['title']}: {finding['detail'][:100]}")
 
-for f in findings:
-    print(f"  {f.sink_name} at {f.sink_va:#x}  source={f.source_name}@{f.source_va:#x}")
+# Session resumption / 0-RTT check
+for finding in probe_tls_session_resumption(host, port=443):
+    print(f"  [{finding['severity']}] {finding['title']}: {finding['detail'][:100]}")
 ```
 
 ---
 
 ## Example output
 
-The following illustrates PPC64 taint analysis output format. Actual addresses are binary-specific.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
-PPC64TaintTracker: fortios_6x_httpd  (big-endian, ELFv1)
+probe_tls_downgrade_attack: <target-host>:443
 
-Sources: recv, recvfrom, read, fgets
-Sinks:   system, execv, popen
+  [HIGH]   NO_FALLBACK_SCSV_PROTECTION
+           Server did not return inappropriate_fallback alert (RFC 7507) when
+           TLS_FALLBACK_SCSV was presented with a downgraded version
 
-Findings: <N>
+  [HIGH]   TLS10_ACCEPTED
+           Server accepted TLS 1.0 — deprecated since RFC 8996 (2021)
 
-  system at <va>
-    source: recv() at <va>
-    path: [<va>, <va>, <va>, ...]
-    CRITICAL: unbound taint reaches r3 of system()
+  [MEDIUM] SHORT_HSTS_MAX_AGE
+           HSTS max-age=<n> is below 31536000 (1 year)
+
+probe_tls_session_resumption: <target-host>:443
+
+  [INFO]   TLS_SESSION_TICKET_ISSUED
+           TLS session ticket issued (version TLSv1.3) — ticket key rotation
+           policy determines forward secrecy window
+
+  [HIGH]   TLS13_SESSION_0RTT_SURFACE
+           TLS 1.3 session ticket reused — 0-RTT early data replay attack surface
 ```
 
 ---
 
 ## False positives
 
-**ELFv1 function descriptor resolution requires `Ppc64ElfV1Resolver.patch_context()` to run first** — if the context is not patched, PLT entries point to OPD descriptors rather than code VAs, and `run()` will not find sink call sites. Always run `Ppc64ElfV1Resolver` before `PPC64TaintTracker` on ELFv1 targets.
+**`TLS10_ACCEPTED` on hosts behind a TLS-terminating load balancer** — the probe connects to the load balancer, which may accept legacy versions while the backend application only sees TLS 1.3 traffic. Confirm the version the application itself receives by checking server-side TLS configuration or using an internal probe.
 
-**`r2` TOC pointer tracking is approximate** — ELFv2 binaries expect `r2` to be set by the caller's `TOC` save slot. If `r2` is used as a general-purpose register in a compiler-optimized function (rare but valid), the tracker may misidentify it as a taint propagation through `r2`.
+**`TLS_SESSION_TICKET_REUSE` on TLS 1.3 with short-lived tickets** — RFC 8446 §4.6.1 requires TLS 1.3 session tickets to have a `ticket_lifetime` of at most 7 days. If the server rotates ticket keys every few hours, the blast radius of ticket key compromise is bounded. Treat `TLS_SESSION_TICKET_REUSE` as a configuration finding to document, not a direct exploitability indicator.
+
+**`NO_FALLBACK_SCSV_PROTECTION` on TLS 1.3-only servers** — a server that refuses all connections below TLS 1.3 at the TCP/TLS layer will terminate the connection before evaluating `TLS_FALLBACK_SCSV`. In this case the probe may see a connection reset rather than a `ServerHello`, and the finding may not fire. Absence of the finding on a TLS 1.3-only server is a correct negative.
 
 ---
 
 ## Pipeline position
 
-Run `PPC64TaintTracker` on any PPC64 BE ELF binary (FortiOS 6.x, Cell PPU PS3 system binaries, IBM POWER server daemons). For ELFv1 targets, always run `Ppc64ElfV1Resolver.patch_context()` first. For PPC64 LE (RHEL, Ubuntu PPC64LE), pass `endian='little'`.
+Run TLS session downgrade checks after `TLSAnalyzer.analyze()` establishes the server's advertised cipher and version support. Findings from `probe_tls_downgrade_attack()` and `probe_tls_session_resumption()` confirm active downgrade risk; combine with `check_weak_cipher_suites()` and `probe_mtls_enforcement()` for a complete TLS posture picture.
 
 ---
 
 ## See also
 
-- [PPC64 ELFv1 Resolution](ppc64-elfv1-resolution.md) — `Ppc64ElfV1Resolver` required preprocessing for ELFv1 targets
-- [PPC64 BE Sink Classification](ppc64-be-sink-classification.md) — `Ppc64BeSinkClassifier` for gap-filling before PPC64TaintTracker
-- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — ARM64/x86-64 equivalent
+- [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md) — `TLSAnalyzer` for certificate chain and cipher suite inventory
+- [TLS Policy Checks](tls-policy-checks.md) — mTLS enforcement, ACME endpoint exposure, certificate pinning

@@ -40,7 +40,7 @@ reports each hop so confirmation is reading, not hunting.
 
 ---
 
-## Architecture
+## How it works
 
 The six analyzers build on each other in a fixed pipeline. SourceContext is always first.
 SourceAuditCompressor runs next to filter files. The remaining four run in parallel on
@@ -696,7 +696,7 @@ SourceTaintTracker  langfuse  (3 confirmed paths)
 
 ---
 
-## Running a full source audit
+## Usage
 
 All six analyzers compose cleanly. Standard sequence:
 
@@ -748,3 +748,39 @@ pre-authentication remote code execution finding.
 
 For the full step-by-step workflow with a worked example, see
 [Source Code Audit Workflow](../workflows/source-code-audit.md).
+
+---
+
+## Example output
+
+See the per-tool `### Example output` subsections within each tool section above for representative output from individual components. A complete `source_audit_session.py` run produces:
+
+```
+SourceContext: <N> Python files / <N> routes / <N> sinks
+SourceEntryClassifier: <N> routes — <N> NONE / <N> USER / <N> ADMIN
+SourceSinkScanner: <N> findings — <N> HIGH / <N> MEDIUM / <N> LOW
+SourceIsolationChecker: <N> cross-tenant findings — <N> CONFIRMED / <N> PLAUSIBLE
+SourceTaintTracker: <N> confirmed taint paths
+```
+
+---
+
+## False positives
+
+**`SourceSinkScanner` matches on dangerous function names in safe wrapper code** — a function named `safe_exec()` that sanitizes its input before passing to `exec()` will match the `exec` sink pattern. Verify taint path: if `SourceTaintTracker` shows the tainted input is sanitized before reaching the sink, the finding is a false positive.
+
+**`SourceIsolationChecker` tenant boundary detection is conservative** — it flags any query that uses a non-`tenant_id` field in a WHERE clause when the model has a `tenant_id` field. Some legitimate single-tenant administrative endpoints intentionally query without tenant filtering. Use `auth_level` from `SourceEntryClassifier` to distinguish `ADMIN`-gated from `NONE`-gated administrative queries.
+
+---
+
+## Pipeline position
+
+Run `SourceContext` first (loads the codebase once), then `SourceEntryClassifier` (authentication surface map), `SourceSinkScanner` (dangerous call sites), `SourceIsolationChecker` (tenant boundary), and `SourceTaintTracker` (path confirmation). Each tool takes `SourceContext` and augments the picture built by its predecessors. Complete the run with `SourceArchRiskScanner` for framework-level misconfiguration findings.
+
+---
+
+## See also
+
+- [Tenant Isolation Checks](tenant-isolation-checks.md) — `SourceIsolationChecker` and `SourceEntryClassifier` individual capability reference
+- [Route Authentication Classification](route-authentication-classification.md) — `SourceEntryClassifier` standalone reference
+- [Source Code Auditing](source-code-auditing.md) — companion tool reference
