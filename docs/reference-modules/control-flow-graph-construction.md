@@ -123,13 +123,14 @@ Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGB
 | `successors(va)` | List of successor block VAs for block starting at `va` |
 | `predecessors(va)` | List of predecessor block VAs for block starting at `va` |
 
-`BasicBlock` attributes:
+`BasicBlock` attributes (`cfg_builder.py`):
 
 | Attribute | Content |
 |:---|:---|
-| `va` | Start VA |
-| `insns` | List of Capstone instruction objects |
-| `succs` | List of successor VAs |
+| `start` | Start VA of the block |
+| `end` | VA of the last instruction (inclusive) |
+| `insns` | `List[Tuple[int, str, str]]` — `(va, mnemonic, op_str)` per instruction |
+| `succs` | `List[int]` — successor block start VAs |
 
 ---
 

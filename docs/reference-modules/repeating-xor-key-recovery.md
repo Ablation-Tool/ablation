@@ -84,17 +84,18 @@ Run `XorSolver` on firmware images that extract as opaque binary blobs — when 
 
 ## Reading output
 
-`XorSolver.solve()` returns an `XorSolverResult` object:
+`XorSolver.solve()` returns an `XorSolverResult` object (or `None` if recovery fails):
 
 | Attribute | Content |
 |:---|:---|
-| `key` | `bytes` — recovered XOR key |
-| `method` | `kpa` (known-plaintext) or `frequency` |
+| `key` | `Optional[bytes]` — recovered XOR key |
+| `key_length` | `Optional[int]` — length of the recovered key |
+| `method` | `'kpa'` (known-plaintext), `'hamming+freq'` (frequency analysis), or `'manual'` |
+| `magic_matched` | `Optional[str]` — magic bytes label if KPA matched a known header |
 | `confidence` | Float 0.0–1.0 |
-| `repeats` | Integer — number of times the key repeats in the ciphertext (verified) |
-| `fmt()` | Formatted string: `key=<hex> (<ascii>)` |
+| `notes` | Additional solver notes |
 
-Returns `None` if recovery fails.
+Call `result.decrypt(data)` to XOR-decrypt a byte string with the recovered key.
 
 ---
 

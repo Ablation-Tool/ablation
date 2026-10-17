@@ -117,7 +117,7 @@ Run `version_delta` after `DTWMatcher` identifies a candidate homolog to verify 
 | `target_binary` | Path of the target binary |
 | `target_version` | Version string extracted from the target binary |
 | `match` | `Optional[HomologMatch]` — best homolog found in the target, or `None` |
-| `anchor_results` | `List[DeltaReport]` — delta results for each anchor function |
+| `anchor_results` | `List[AnchorScanResult]` — masked byte-pattern anchor results (each with `anchor_name`, `era`, `hit_offset`, `description`; `found` property returns `True` when `hit_offset >= 0`) |
 | `era_confirmed` | Property — `Optional[int]` — inferred version era if confirmed, else `None` |
 
 The `match` attribute is a `HomologMatch` with these fields:

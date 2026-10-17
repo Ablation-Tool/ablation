@@ -96,11 +96,13 @@ Run `Ppc64BeSinkClassifier.classify_all()` after `Ppc64ElfV1Resolver.patch_conte
 
 | Attribute | Content |
 |:---|:---|
-| `sink_va` | VA of the sink call |
-| `sink_func` | Sink function name |
-| `verdict` | `RODATA_CONST`, `SNPRINTF_RODATA`, `ARG_PROPAGATED`, or `UNKNOWN` |
-| `arg_reg` | PPC64 argument register (`r3`, `r4`, etc.) |
-| `provenance` | Provenance description |
+| `sink_name` | Sink function name |
+| `arg_pos` | 0-indexed argument position being classified |
+| `func_va` | VA of the calling function |
+| `call_va` | VA of the call instruction |
+| `verdict` | `'RODATA_CONST'`, `'SNPRINTF_RODATA'`, `'ARG_PROPAGATED'`, or `'UNKNOWN'` |
+| `detail` | Human-readable trace of the argument provenance |
+| `severity` | `'HIGH'` (ARG_PROPAGATED), `'MEDIUM'` (SNPRINTF_RODATA / UNKNOWN), or `'LOW'` (RODATA_CONST) |
 
 Only `ARG_PROPAGATED` and `UNKNOWN` sinks are passed to `PPC64TaintTracker`.
 

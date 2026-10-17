@@ -106,11 +106,13 @@ Step 6.5 in the RE workflow: run `SinkArgClassifier.classify_all()` after `FuncP
 
 | Attribute | Content |
 |:---|:---|
-| `sink_va` | VA of the sink call |
-| `sink_func` | Sink function name (e.g., `system`, `popen`, `execve`) |
-| `verdict` | `RODATA_CONST`, `SNPRINTF_RODATA`, `ARG_PROPAGATED`, or `UNKNOWN` |
-| `arg_reg` | Register holding the command argument (e.g., `rdi`) |
-| `provenance` | Source description for the argument (e.g., `LEA .rodata+N`, `function argument`) |
+| `sink_name` | Sink function name (e.g., `'system'`, `'popen'`, `'execve'`) |
+| `arg_pos` | 0-indexed argument position being classified (e.g., `0` for the first arg) |
+| `func_va` | VA of the calling function containing this call site |
+| `call_va` | VA of the call instruction |
+| `verdict` | `'RODATA_CONST'`, `'SNPRINTF_RODATA'`, `'ARG_PROPAGATED'`, or `'UNKNOWN'` |
+| `detail` | Human-readable trace description of how the argument was derived |
+| `severity` | `'HIGH'` (ARG_PROPAGATED), `'MEDIUM'` (SNPRINTF_RODATA / UNKNOWN), or `'LOW'` (RODATA_CONST) |
 
 Only `ARG_PROPAGATED` and `UNKNOWN` sinks are passed to `TaintTracker`.
 

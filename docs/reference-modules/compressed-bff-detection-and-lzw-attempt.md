@@ -95,10 +95,12 @@ Run `EntropyMapper` as the first analysis step on any unknown binary before `Ecu
 
 | Attribute | Content |
 |:---|:---|
-| `start` | Start file offset |
-| `end` | End file offset |
-| `entropy` | Shannon entropy `H` (float, 0.0–8.0) |
-| `classification` | `code`, `data`, `encrypted`, `low_entropy`, or `padding` |
+| `offset_start` | Start file offset (inclusive) |
+| `offset_end` | End file offset (exclusive) |
+| `cls` | Entropy classification: `'ENCRYPTED'` / `'CODE'` / `'SPARSE'` / `'PADDING'` |
+| `avg_entropy` | Mean Shannon entropy across windows in this region (0.0–8.0) |
+| `min_entropy` | Minimum entropy window value in this region |
+| `max_entropy` | Maximum entropy window value in this region |
 
 `EntropyMapper.encrypted_ranges()` returns `List[Tuple[int, int]]` — `(start, end)` offset pairs for high-entropy (≥7.5) regions.
 

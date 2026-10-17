@@ -103,14 +103,11 @@ Returns `dict[str, list[Finding]]`. `Finding` fields:
 
 | Field | Content |
 |:---|:---|
-| `severity` | `HIGH` / `MEDIUM` / `LOW` / `INFO` |
-| `category` | Section name (e.g., `COM Hijacking`, `Token Privileges`, `Named Pipes`) |
+| `severity` | `'HIGH'` / `'MEDIUM'` / `'LOW'` / `'INFO'` |
+| `category` | Section name (e.g., `'COM Hijacking'`, `'Token Privileges'`, `'Named Pipes'`) |
 | `title` | Short description of the specific finding |
-| `detail` | Full detail string |
+| `detail` | Full detail string explaining what was found and why it matters |
 | `evidence` | Supporting evidence string (may be empty) |
-| `endpoint` | URI, port, or service address where the finding was observed |
-| `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
 
 ---
 

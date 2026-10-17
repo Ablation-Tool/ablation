@@ -86,23 +86,26 @@ Run `CrossBinaryTaintTracker` after single-binary `TaintTracker` has established
 
 ## Reading output
 
-`CrossBinaryTaintTracker.trace()` returns a list of `TaintChain` objects:
+`CrossBinaryTaintTracker.run(source_binary, source_va, tainted_args)` returns a list of `TaintChain` objects:
 
 | Attribute | Content |
 |:---|:---|
-| `hops` | Ordered list of `TaintHop` — one per binary crossed |
-| `source_binary` | Path to the binary where taint originates |
+| `hops` | `List[TaintHop]` — one per binary crossed |
 | `sink_binary` | Path to the binary where taint arrives at the sink |
-| `sink_sym` | Sink function name |
 | `sink_va` | VA of the sink call in `sink_binary` |
+| `sink_name` | Sink function name |
+| `tainted_args` | `List[int]` — which argument indices are tainted at the sink |
+| `source_name` | Name of the taint source function |
 
 Each `TaintHop`:
 
 | Attribute | Content |
 |:---|:---|
-| `binary` | Path to the binary for this hop |
-| `export_sym` | Export symbol name through which taint crosses |
-| `import_sym` | Import symbol name in the receiving binary |
+| `binary_path` | Path to the binary for this hop |
+| `func_va` | VA of the function in this binary |
+| `func_name` | Name of the function |
+| `tainted_arg_indices` | `List[int]` — which argument positions arrived tainted |
+| `calls_made` | `List[str]` — notable calls made within this function |
 
 ---
 

@@ -89,12 +89,14 @@ Run `WCodeParser` on any IBM POWER object file compiled with XLC before building
 
 | Attribute | Content |
 |:---|:---|
-| `record_id` | Integer record identifier |
-| `name` | Resolved builtin name (from `WCodeBuiltinCatalog`) or `None` |
-| `args` | Argument count |
-| `va` | Virtual address of the corresponding call site (if available) |
+| `type_field_0` | First type field (uint32 BE at offset `+0x00`) |
+| `type_field_1` | Second type field (uint32 BE at offset `+0x04`) |
+| `type_field_2` | Third type field (uint16 BE at offset `+0x08`) |
+| `name` | Builtin name string (leading underscores stripped) |
+| `raw` | `bytes` — original record bytes including the 10-byte header |
+| `short_form` | `True` if record length ≤ 10 (type fields not compared in matching) |
 
-`WCodeBuiltinCatalog.lookup(record_id)` returns the name string or `None`.
+`WCodeBuiltinCatalog.lookup(name)` returns a `WCBEntry` with `index`, `arch_mask`, and type fields for the named builtin, or `None` if not found.
 
 ---
 
