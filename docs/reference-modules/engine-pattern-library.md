@@ -288,9 +288,10 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ```python
 from ablation.analyzers.engine_pattern_library import EnginePatternLibrary
 
-results = EnginePatternLibrary.from_context(ctx).run()
-for r in results:
-    print(r)
+lib = EnginePatternLibrary.default()
+labels = lib.label_binary(ctx)   # Dict[int, EngineLabel]
+for va, label in sorted(labels.items()):
+    print(f"  {va:#x}  {label.engine:20s}  conf={label.confidence:.2f}")
 ```
 
 ---

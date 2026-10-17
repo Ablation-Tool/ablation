@@ -116,11 +116,12 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ## Usage
 
 ```python
-from ablation.analyzers.sanitizer_detector import sanitizer_detector:ShellSanitizationAuditor
+from ablation.analyzers.sanitizer_detector import SanitizerDetector
 
-results = sanitizer_detector:ShellSanitizationAuditor.from_context(ctx).run()
-for r in results:
-    print(r)
+detector = SanitizerDetector.from_context(ctx)
+profiles = detector.detect(min_score=3)
+for p in profiles:
+    print(p)
 ```
 
 ---

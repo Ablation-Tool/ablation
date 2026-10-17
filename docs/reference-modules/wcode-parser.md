@@ -122,9 +122,12 @@ Reads the binary header to validate the container magic, walks the partition or 
 ```python
 from ablation.analyzers.wcode_parser import WCodeParser
 
-results = WCodeParser.from_context(ctx).run()
-for r in results:
-    print(r)
+with open('/path/to/xlcentry.o', 'rb') as fh:
+    data = fh.read()
+
+parser = WCodeParser()
+records = parser.scan(data)
+print(parser.report(records))
 ```
 
 ---
