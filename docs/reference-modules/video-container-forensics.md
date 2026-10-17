@@ -72,6 +72,19 @@ Run `VideoForensicsAnalyzer` on any video file received from an untrusted source
 
 ---
 
+## Reading findings
+
+`VideoForensicsAnalyzer.analyze(path)` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (embedded payload, appended data) / `MEDIUM` (DRM track, suspicious atom) |
+| `title` | Finding code (e.g., `EMBEDDED_PAYLOAD`, `APPENDED_DATA`, `DRM_TRACK`, `HIGH_ENTROPY_ATOM`) |
+| `offset` | File offset of the suspicious atom or region |
+| `detail` | Atom type, entropy value, size in bytes, or magic bytes of appended content |
+
+---
+
 ## See also
 
 - [Office/PDF Triage](office-pdf-triage.md) — similar polyglot/payload detection for Office and PDF documents

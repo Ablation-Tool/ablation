@@ -100,6 +100,21 @@ cache_stats(): {'total': 3, 'hits': 2, 'misses': 1}
 
 ---
 
+## Reading output
+
+`ScanResultVersionCache.get_or_scan(path)` returns the scanner's native findings list — whatever `scanner.scan()` would return. The return type is identical whether the result came from cache or live scan.
+
+`ScanResultVersionCache.stats()` returns a `CacheStats` object:
+
+| Attribute | Content |
+|:---|:---|
+| `hits` | Number of cache hits in this session |
+| `misses` | Number of cache misses (live scans executed) |
+| `evictions` | Number of stale entries replaced |
+| `cache_file` | Path to the JSON cache file on disk |
+
+---
+
 ## See also
 
 - [Fortinet Multi-Phase Directory Sweeps](fortinet-multi-phase-directory-sweeps.md) — sweep scripts that use `ScanResultVersionCache`
