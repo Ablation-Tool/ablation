@@ -35,17 +35,15 @@ from modules.forensics_enum import (
     analyze_pe_resources
 )
 
-# Office document macro scan
+# Office document macro scan — returns [{severity, title, detail, host, port}]
 doc_data = open('suspicious.docm', 'rb').read()
-macros = detect_office_macro_indicators(doc_data)
-for m in macros:
-    print(f"  [{m['severity']}] {m['pattern']}: {m.get('location','')}")
+for m in detect_office_macro_indicators(doc_data):
+    print(f"  [{m['severity']}] {m['title']}: {m['detail'][:80]}")
 
-# PDF exploit scan
+# PDF exploit scan — returns [{severity, title, detail, host, port}]
 pdf_data = open('suspicious.pdf', 'rb').read()
-pdf_hits = detect_pdf_exploit_indicators(pdf_data)
-for p in pdf_hits:
-    print(f"  [{p['severity']}] {p['type']}: {p.get('js_snippet','')[:60]}")
+for p in detect_pdf_exploit_indicators(pdf_data):
+    print(f"  [{p['severity']}] {p['title']}: {p['detail'][:80]}")
 
 # PE structural analysis
 pe_data = open('dropped.exe', 'rb').read()

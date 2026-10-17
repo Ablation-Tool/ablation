@@ -28,24 +28,26 @@ flowchart TD
 ## Usage
 
 ```python
+from ablation.analyzers.source_ingestion import SourceContext
 from ablation.analyzers.source_isolation_checker import SourceIsolationChecker
 from ablation.analyzers.source_entry_classifier import SourceEntryClassifier
 
-# Step 1: classify routes by auth level
-from ablation.analyzers.source_ingestion import SourceContext
+# Both classifiers take a SourceContext — not a raw file list
 ctx = SourceContext.from_path('/path/to/project')
-route_files = [f for f in ctx.source_files if 'route' in f.path or 'api' in f.path]
 
-entry_classifier = SourceEntryClassifier(route_files)
-classifications = entry_classifier.classify_all()
-session_routes = [c for c in classifications if c.auth_level in ('SESSION', 'API_KEY')]
+# Step 1: classify routes by auth level — method is classify_all_source()
+classifier = SourceEntryClassifier.from_context(ctx)
+# RouteClassification fields: path, rel_path, auth_level, matched_signal, is_low_value, notes
+for c in classifier.classify_all_source():
+    print(f"  {c.rel_path}: auth_level={c.auth_level}  signal={c.matched_signal}")
 
-# Step 2: check isolation in user-facing routes
-checker = SourceIsolationChecker([c.file for c in session_routes])
-findings = checker.check()
-for f in findings:
-    print(f"  [{f.severity}] {f.file}:{f.line}  {f.query_type} missing {f.scope_field or 'tenant scope'}")
-    print(f"    where: {f.where_clause[:80]}")
+# Step 2: scan for missing tenant isolation — method is scan(), not check()
+checker = SourceIsolationChecker.from_context(ctx)
+# IsolationFinding fields: path, rel_path, line, operation, model, op_type, where_text, severity, note
+for f in checker.scan():
+    print(f"  [{f.severity}] {f.rel_path}:{f.line}  {f.operation} (model: {f.model})")
+    print(f"    where_text: {f.where_text[:80]}")
+    print(f"    note: {f.note}")
 ```
 
 ---

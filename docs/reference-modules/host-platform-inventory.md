@@ -32,13 +32,18 @@ flowchart TD
 from ablation.core.platform_detect import PlatformDetector
 
 detector = PlatformDetector()
-info = detector.detect()
+# detect_all() not detect() — populates and returns self.info dict
+info = detector.detect_all()
 
-print(f"OS: {info['os_id']} {info['os_version']}")
-print(f"Kernel: {info['kernel']}  Arch: {info['arch']}")
-print(f"ASLR: {info['aslr_level']}  NX: {info['nx_enabled']}")
-print(f"SELinux: {info['selinux_mode']}  SecComp: {info['seccomp']}")
-print(f"libc: {info['libc']} {info['libc_version']}")
+print(f"OS: {info['os']} {info.get('distro', '')} {info.get('distro_version', '')}")
+print(f"os_release: {info['os_release']}  os_version: {info['os_version']}")
+print(f"machine: {info['machine']}  arch_family: {info.get('arch_family')}  bits: {info.get('arch_bits')}")
+print(f"libc: {info.get('libc')} {info.get('libc_version', '')}")
+
+# Security features are nested under info['security']
+sec = info.get('security', {})
+print(f"ASLR: {sec.get('aslr', 'unknown')}")
+print(f"SELinux: {sec.get('selinux', False)}  AppArmor: {sec.get('apparmor', False)}")
 ```
 
 ---
