@@ -89,6 +89,27 @@ Run `HashAlgoDiscriminator` and `CustomCBCDetector` during initial binary triage
 
 ---
 
+## Reading findings
+
+`HashAlgoDiscriminator.scan()` returns a list of `HashAlgoMatch` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Virtual address of the identified hash function |
+| `algo` | Algorithm name (e.g., `SHA256`, `MD5`, `BLAKE2b`) |
+| `confidence` | `HIGH` / `MEDIUM` based on K-table coverage |
+
+`CustomCBCDetector.scan()` returns a list of `CBCPattern` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Virtual address of the CBC implementation |
+| `iv_va` | VA of the IV in `.rodata` |
+| `bss_pair_va` | VA of the BSS buffer pair used as state |
+| `detail` | Inferred block cipher (if identifiable) |
+
+---
+
 ## See also
 
 - [Firmware Signature and Secret Triage](firmware-signature-and-secret-triage.md) — key and credential discovery in firmware
