@@ -19,8 +19,8 @@ Annotate ARM32/Thumb function call sites with AAPCS argument register values —
 ```mermaid
 flowchart TD
     A["ARM32RegAnnotator.from_path(path, thumb_funcs)\n  or .from_context(ctx)"] --> B["annotate_calls(func_va, end_va) → AnnotationResult\n  Single forward pass over ARM32/Thumb instructions:\n    MOV r0-r3, #imm → RegVal.Const(imm)\n    LDR r0-r3, [PC, #off] → RegVal.String(resolve_literal(off))\n    MOV r0, r3 → propagate existing RegVal\n    BL / BLX to PLT → CallSite(va, callee, {r0:val, r1:val, ...})\n    BL / BLX to internal → reset r0-r3 to Unknown (caller-saved)\n    Callee-save clobber r4-r11 → no reset (AAPCS guaranteed)"]
-    B --> C["AnnotationResult:\n  call_sites: List[CallSite]\n  (same type as RegAnnotator output)"]
-    C --> D["CallSite:\n  va: int\n  callee: str\n  args: Dict[str, RegVal]  (r0/r1/r2/r3)\n  (same type as RegAnnotator output)"]
+    B --> C["AnnotationResult:\n  func_va: int\n  func_end_va: int\n  calls: List[CallSite]\n  reg_trace: List[Tuple[int, str, RegVal]]\n  (same type as RegAnnotator output)"]
+    C --> D["CallSite:\n  site_va: int\n  target_va: int\n  target_name: str\n  args: Dict[str, RegVal]  (r0/r1/r2/r3)\n  (same type as RegAnnotator output)"]
     D --> E["Consumed by SinkArgClassifier, FuncProfiler\n  transparently — same API as x86-64 path"]
 ```
 
@@ -37,8 +37,8 @@ annotator = ARM32RegAnnotator.from_context(ctx)
 
 # Annotate a specific function
 result = annotator.annotate_calls(func_va=0x12340, end_va=0x12500)
-for site in result.call_sites:
-    print(f"  {site.va:#x}: {site.callee}")
+for site in result.calls:
+    print(f"  {site.site_va:#x}: {site.target_name}")
     for reg, val in site.args.items():
         print(f"    {reg} = {val}")
 
@@ -87,13 +87,25 @@ annotate_calls(0x12340, 0x12500):
 
 ## Reading output
 
-`ARM32RegAnnotator.annotate_calls(func_va)` returns a list of call annotation dicts (same shape as `RegAnnotator`):
+`ARM32RegAnnotator.annotate_calls(func_va, end_va)` returns `AnnotationResult` (same type as `RegAnnotator`):
+
+`AnnotationResult` fields:
 
 | Field | Content |
 |:---|:---|
-| `va` | Virtual address of the ARM32 call instruction |
-| `target` | Callee symbol or VA |
-| `args` | Dict of `r0`–`r3` → `RegValue` (one of `Const(v)`, `Tainted(label)`, `Arg(n)`, `Unknown`) |
+| `func_va` | VA of the annotated function entry |
+| `func_end_va` | VA of the function end |
+| `calls` | `List[CallSite]` — all call sites found |
+| `reg_trace` | `List[Tuple[int, str, RegVal]]` — per-instruction register state trace |
+
+Each `CallSite`:
+
+| Field | Content |
+|:---|:---|
+| `site_va` | VA of the `BL`/`BLX` call instruction |
+| `target_va` | VA of the callee (resolved) |
+| `target_name` | Callee symbol name (from PLT or names registry) |
+| `args` | `Dict[str, RegVal]` — `r0`–`r3` → one of `Const(v)`, `String(s)`, `Arg(n)`, `Unknown` |
 
 State resets: `r0`–`r3` are reset to `Unknown` at every `BL`/`BLX` call site (AAPCS caller-saved).
 
