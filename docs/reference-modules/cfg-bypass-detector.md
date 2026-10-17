@@ -81,35 +81,63 @@ CWE: CWE-693 (Protection Mechanism Failure) on all HIGH/MEDIUM findings.
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`CFGBypassDetector.from_path()` opens the PE with LIEF and reads `IMAGE_LOAD_CONFIG.GuardFlags`. The flags are tested against four masks:
+
+1. **`IMAGE_GUARD_CF_INSTRUMENTED` (0x100)** — if absent, emits a HIGH `cfg_disabled` finding immediately; no further CFG checks apply.
+2. **`IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT` (0x400)** — if absent, emits HIGH `cfg_table_absent` (the runtime check passes every address regardless of the table).
+3. **`IMAGE_GUARD_CF_ENABLE_EXPORT_SUPPRESSION` (0x8000)** — if absent, emits MEDIUM `no_export_suppression`; all exported functions are valid indirect call targets.
+4. **Export-vs-table cross-reference** — when export suppression is enabled, reads all named exports from `PE.exports` and checks each against the CFG function table. Exports absent from the table emit individual MEDIUM `export_not_in_cfg_table` findings.
+
+The `entry_stride` for the CFG function table is `4 + (GuardFlags >> 28)` — standard CFG uses 4 bytes per entry, XFG uses 8 bytes. Entries are read at stride intervals from the table RVA.
+
+A secondary Capstone pass over all code sections counts `call reg` / `jmp reg` instructions and emits an INFO `indirect_call_stats` finding with the total count.
 
 ---
 
 ## Example output
 
-```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+The following illustrates `CFGBypassDetector.report()` output format. Actual values are binary-specific.
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+```
+CFGBypassDetector: ntdll.dll
+
+Findings: 2 high/critical  3 medium  1 info
+
+  [MEDIUM] no_export_suppression
+    location : IMAGE_LOAD_CONFIG.GuardFlags
+    category : no_export_suppression
+    cwe      : CWE-693
+    Export suppression not enabled — all 437 exports are valid CFG indirect call targets.
+
+  [MEDIUM] export_not_in_cfg_table
+    location : LdrLoadDll
+    category : export_not_in_cfg_table
+    cwe      : CWE-693
+    Export 'LdrLoadDll' at VA 0x7FF800A31234 is not in the CFG protected function table.
+
+  [INFO] indirect_call_stats
+    location : .text
+    category : indirect_call_stats
+    Indirect call sites (call reg / jmp reg): 212
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+**Delay-load imports expand the bypass surface:** The Capstone `call reg` / `jmp reg` count includes delay-load thunks, which dispatch to the OS loader. These are legitimate indirect calls, not bypass vectors. Subtract IAT thunk addresses from the indirect call count when sizing the actual attacker-reachable surface.
+
+**`export_not_in_cfg_table` on non-callable exports:** DLL exports that are data symbols (not functions) are never in the CFG table. Distinguish function vs. data exports by checking `lief.PE.Export.Entry.function_rva` vs. data RVAs, or filter to exports whose RVA falls inside a code section.
+
+**XFG type-token mismatch not detected:** When XFG is enabled, the runtime also validates a per-call-site type token. A function present in the CFG table may still be blocked by XFG type mismatch. `CFGBypassDetector` reports presence/absence in the table only; it does not analyze XFG type compatibility.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** Use on any Windows PE (kernel module, system DLL, or userland binary). No `BinaryContext` required — `from_path()` uses LIEF directly. Run before any exploit feasibility analysis to confirm whether CFG restricts indirect call targets.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Feed `export_not_in_cfg_table` findings into exploit chain construction — these are the specific exports usable as gadget pivots. Use `va` from each finding for exact address confirmation with `BinaryContext` or WinDbg.
 
 ---
 
@@ -131,8 +159,6 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [PE Sweep](pe-sweep.md) — coarse Windows PE security feature check (DEP, ASLR, SafeSEH, CFG); `CFGBypassDetector` extends CFG analysis to per-export bypass surface
+- [BinaryContext](binary-context.md) — load PE for further analysis after identifying bypass targets
+- [FindingRegistry](registry.md) — register confirmed bypass findings with CWE attribution
