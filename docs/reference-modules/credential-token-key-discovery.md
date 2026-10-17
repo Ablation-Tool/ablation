@@ -96,6 +96,22 @@ Run credential and key discovery immediately after gaining shell access, before 
 
 ---
 
+## Reading findings
+
+Each enumerator returns a list of finding dicts with `{severity, title, detail, host, port}`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
+| `title` | Finding name (e.g., `SSH_KEY_UNENCRYPTED`, `API_TOKEN_EXPOSED`, `AWS_IAM_CREDS`) |
+| `detail` | File path, key type, token prefix, or IAM role name with context |
+| `host` | Target host or `localhost` for local file findings |
+| `port` | Service port or `0` for local findings |
+
+`detect_ssh_key_reuse()` returns a list of `{fingerprint, files}` dicts identifying shared keys.
+
+---
+
 ## See also
 
 - [Credential Testing Helpers](credential-testing-helpers.md) — using discovered credentials in SSH/FTP spray operations

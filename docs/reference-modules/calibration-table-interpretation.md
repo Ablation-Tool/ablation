@@ -106,6 +106,24 @@ KF_LOAD_EFF [MAP 16x16]
 
 ---
 
+## Reading output
+
+`CalibrationTable` object attributes (returned from `CalibrationParser.parse()`):
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Table name from the `.a2l`/`.damos` definition |
+| `table_type` | `MAP` (2D), `CURVE` (1D), `VALUE` (scalar), `AXIS_PTS` |
+| `address` | File offset or VA of the table data |
+| `data` | Numpy array of physical-unit values (scaled + biased) |
+| `x_axis` | Breakpoint array for the X axis (rpm, load, etc.) |
+| `y_axis` | Breakpoint array for the Y axis (for MAP type) |
+| `scale` | Scale factor applied to raw integer data |
+| `bias` | Bias added after scale |
+| `unit` | Physical unit string (e.g., `mg/stroke`, `°C`) |
+
+---
+
 ## See also
 
 - [Calibration Parsers](calibration-parsers.md) — A2L, open_damos, Conescan — produce `List[CalibrationTable]`

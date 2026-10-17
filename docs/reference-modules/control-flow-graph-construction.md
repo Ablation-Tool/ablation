@@ -110,6 +110,29 @@ Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGB
 
 ---
 
+## Reading output
+
+`CFGBuilder.build(va)` returns a `CFG` object:
+
+| Attribute / Method | Content |
+|:---|:---|
+| `blocks` | `Dict[int, BasicBlock]` keyed by block start VA |
+| `stats()` | `{n_blocks, n_edges, n_loops, has_indirect_branch}` dict |
+| `dominator_tree()` | `Dict[int, int]` mapping each block VA to its immediate dominator VA |
+| `loops()` | List of `(header_va, body_blocks)` natural loop tuples |
+| `successors(va)` | List of successor block VAs for block starting at `va` |
+| `predecessors(va)` | List of predecessor block VAs for block starting at `va` |
+
+`BasicBlock` attributes:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Start VA |
+| `insns` | List of Capstone instruction objects |
+| `succs` | List of successor VAs |
+
+---
+
 ## See also
 
 - [XRefGraph](xref-graph.md) — provides function starts and PLT map; required for `CFGBuilder`
