@@ -106,6 +106,21 @@ Use `ProbeRanker` when multiple candidate findings need prioritization across a 
 
 ---
 
+## Reading output
+
+`ProbeRanker.rank(hypotheses)` returns a list of ranked probe plan dicts in priority order:
+
+| Field | Content |
+|:---|:---|
+| `hypothesis` | The input `VulnHypothesis` object |
+| `predicted_disagreement` | Float 0.0–1.0 — how likely this probe is to change current confidence |
+| `observability` | Float 0.0–1.0 — how deterministic the probe result is |
+| `reliability` | Float 0.0–1.0 — how repeatable the probe is |
+| `estimated_cost` | Estimated analyst time string (e.g., `5 min`, `30 min`) |
+| `probe_value` | Composite score (`predicted_disagreement × observability / estimated_cost_minutes`) |
+
+---
+
 ## See also
 
 - [Assisted Vulnerability Hypotheses](assisted-vulnerability-hypotheses.md) — produces hypotheses that `ProbeRanker` prioritizes

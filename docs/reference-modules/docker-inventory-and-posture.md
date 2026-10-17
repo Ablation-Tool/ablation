@@ -84,6 +84,22 @@ Run `DockerEnumerator` after gaining shell access to a host or container. Use `c
 
 ---
 
+## Reading findings
+
+`check_container_isolation()` returns `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` |
+| `title` | Finding code (e.g., `CAP_SYS_ADMIN_IN_CONTAINER`, `DOCKER_SOCKET_MOUNTED`) |
+| `detail` | Evidence (capability bit, mount path) |
+| `host` | `localhost` |
+| `port` | `0` |
+
+`enumerate_containers()` returns `List[{id, image, status, ports}]`. `enumerate_all()` returns a keyed dict — see the constructor section for all keys.
+
+---
+
 ## See also
 
 - [Kubernetes Inventory](kubernetes-inventory.md) — `K8sEnumerator` for cluster-level inventory after container-level access

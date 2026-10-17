@@ -81,6 +81,20 @@ Finding at <va>:
 
 ---
 
+## Reading findings
+
+The LoongArch64 syscall table is a look-up resource, not a finding-producing API. Findings come from the `TaintTracker` that consumes `SYSCALL_TABLE`:
+
+| Field | Content |
+|:---|:---|
+| `va` | VA of the syscall instruction (`syscall 0`) |
+| `sink` | Syscall name resolved from `$a7` constant (e.g., `execve`, `write`, `openat`) |
+| `tainted_args` | Tainted argument registers at the syscall site (e.g., `$a0`, `$a1`) |
+| `sources` | Taint source labels |
+| `taint_path` | Register propagation chain |
+
+---
+
 ## See also
 
 - [ARM64 Symbolic Slicing](arm64-symbolic-slicing.md) — same `analyze_cfg()` pattern for ARM64 targets

@@ -80,6 +80,21 @@ Run `PerlTaintScanner` on any Perl codebase found in firmware (RSCT `.pm` layers
 
 ---
 
+## Reading findings
+
+`PerlTaintScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (TAINTED) / `MEDIUM` (UNKNOWN) |
+| `verdict` | `TAINTED`, `UNKNOWN`, or `SANITIZED` (sanitized findings are not returned) |
+| `file` | Source file path and line number |
+| `snippet` | Code snippet showing the sink and tainted variable |
+| `var` | Tainted variable name |
+| `source` | Taint source type (`ARGV`, `PARAM`, `ENV`, or `UNKNOWN`) |
+
+---
+
 ## See also
 
 - [Source Dangerous Sink Detection](source-code-auditing.md) — `SourceSinkScanner` for Python/JS/TS equivalent
