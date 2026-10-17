@@ -97,7 +97,7 @@ Run `ConstPropAnalysis` or `ReachingDefsAnalysis` when TaintTracker or SinkArgCl
 
 ## Reading output
 
-`ConstPropAnalysis.run()` returns a `Dict[int, Dict[str, LatValue]]` keyed by block VA:
+`ConstPropAnalysis.solve(func_addr)` returns a `Tuple[Dict[int, Dict[str, LatValue]], Dict[int, Dict[str, LatValue]]]` — `(mfp_out, mfp_in)` keyed by block VA:
 
 | Type | Meaning |
 |:---|:---|
