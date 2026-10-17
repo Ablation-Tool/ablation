@@ -140,16 +140,13 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+This page describes a CFG reachability workflow. Individual tools return different types:
+
+- **TaintTracker** paths from entry point to security sink: `List[TaintPath]` — see [source-audit](source-audit.md) for `TaintPath` fields (`sink`, `hops`, `confidence`, `has_source`).
+- **SourceEntryClassifier** routes without auth: `List[RouteClassification]` — see [tenant-isolation-checks](tenant-isolation-checks.md) for `RouteClassification` fields (`rel_path`, `auth_level`, `matched_signal`).
+- **GateFinding** for binary targets: `List[GateFinding]` — see [compiler-security-gate](compiler_security_gate.md) for fields (`func_va`, `site_va`, `category`, `severity`).
 
 ---
 

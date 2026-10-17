@@ -58,16 +58,20 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`mcp_grammar_fuzzer.run(argv)` is a CLI entry point — it writes results to stdout and to a JSONL output file. There is no typed finding dataclass.
+
+Each JSONL record written to the output file is a dict:
+
+| Key | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `tool` | MCP tool name being fuzzed |
+| `case_id` | Integer case identifier within this run |
+| `input` | The generated input dict sent to the tool |
+| `response` | Raw tool response string |
+| `anomaly` | `True` if the response triggered a grammar anomaly |
+| `verdict` | `'CRASH'` / `'ERROR'` / `'ANOMALY'` / `'OK'` |
 
 ---
 

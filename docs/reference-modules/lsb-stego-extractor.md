@@ -133,16 +133,20 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`PrimeCoordExtractor(bmp_path).extract(seed, n_primes=8)` returns a `StegoKeyResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `seed` | The seed string used for extraction |
+| `type_count` | Number of distinct component types extracted |
+| `n_groups` | Number of coordinate groups |
+| `n_pts` | Total number of points read |
+| `components` | `List[str]` — each component as a hex string |
+| `raw_key_hex` | Hex string of all components concatenated |
+
+Use `result.fmt()` for a human-readable multi-line summary including per-component hex excerpts.
 
 ---
 

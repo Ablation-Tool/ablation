@@ -133,13 +133,26 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Reading findings
 
-| Field | Content |
+`TiNNCScanner(path).scan()` returns a `TiNNCScanResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `binary_path` | Path to the analyzed ELF |
+| `has_npu_init` | `True` if a TVM NPU initialization function was found |
+| `modules` | `List[TiNNCModule]` — one per compiled TVM model |
+| `findings` | `List[TiNNCScanFinding]` — security findings |
+
+Each `TiNNCScanFinding`:
+
+| Attribute | Content |
+|:---|:---|
+| `finding_id` | Stable identifier string (e.g., `'TINCC-001'`) |
+| `severity` | `'HIGH'` / `'MEDIUM'` / `'INFO'` |
+| `title` | Short finding title |
+| `description` | Human-readable description of the finding |
+| `module_name` | Name of the TVM module where the finding was observed |
+| `va` | VA of the relevant function or symbol |
+| `symbol` | Symbol name involved (None if not applicable) |
 
 ---
 

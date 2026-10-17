@@ -92,18 +92,29 @@ Run tenant isolation checks as part of source code review after `SourceEntryClas
 
 ## Reading findings
 
-`SourceIsolationChecker.scan()` returns a list of finding dicts:
+`SourceIsolationChecker.scan()` returns `List[IsolationFinding]`:
 
-| Field | Content |
+| Attribute | Content |
 |:---|:---|
-| `severity` | `HIGH` / `MEDIUM` |
-| `title` | Finding code (e.g., `MISSING_TENANT_FILTER`, `UNSCOPED_QUERY`) |
-| `file` | Source file path |
-| `line` | Line number |
-| `auth_level` | Route auth level: `SESSION`, `ADMIN`, or `PUBLIC` |
-| `detail` | Code excerpt showing the isolation gap |
+| `path` / `rel_path` | Absolute and repository-relative path of the file |
+| `line` | Line number of the isolation gap |
+| `operation` | Operation string (e.g., `'query'`, `'filter'`, `'update'`) |
+| `model` | ORM model name where the operation occurs |
+| `op_type` | Operation kind: `'READ'`, `'WRITE'`, or `'DELETE'` |
+| `where_text` | Text of the WHERE clause or filter expression |
+| `severity` | `'CONFIRMED'` — no tenant filter found; `'PLAUSIBLE'` — tenant filter may exist but not traced; `'INFO'` — context gap, needs manual review |
+| `note` | One-line human-readable explanation |
+| `call_window` | Surrounding source lines for context |
 
-`SourceEntryClassifier.classify()` returns `Dict[file_path, auth_level]`.
+`SourceEntryClassifier.classify()` returns `List[RouteClassification]`:
+
+| Attribute | Content |
+|:---|:---|
+| `path` / `rel_path` | Absolute and repository-relative path |
+| `auth_level` | `'NONE'`, `'SESSION'`, or `'ADMIN'` |
+| `matched_signal` | The decorator/guard string that determined auth level |
+| `is_low_value` | `True` for static-file or health-check routes |
+| `notes` | List of annotation strings explaining the classification |
 
 ---
 

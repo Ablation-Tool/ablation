@@ -187,14 +187,19 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`PatternLibrary.match(ctx)` returns `List[EngineLabel]` — one per confirmed engine function match. See [engine-pattern-library](engine-pattern-library.md) for full field reference.
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `va` | VA of the matched function in the binary |
+| `engine` | Engine key (e.g., `'ue4'`, `'unity'`, `'godot'`) |
+| `name` | Canonical engine function name |
+| `confidence` | Float 0.0–1.0 — match confidence |
+| `match_kind` | `'string_marker'` / `'string_pattern'` / `'semantic'` / `'sax'` |
+
+For PS3/Cell SPU and Mac PEF targets, additional decoder output formats apply — see [pef-abi-clobber-scanner](pef-abi-clobber-scanner.md).
 
 ---
 

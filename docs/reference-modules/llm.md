@@ -168,14 +168,11 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+The LLM analyst does not return a typed finding list. The Claude ReAct loop produces findings as structured text that is then parsed and entered into `FindingRegistry`. The output format is determined by the tool schema passed to the `LLMAnalyst` instance and the prompt.
+
+Structured tool calls made by the LLM return dicts with keys defined per-tool — typically `func_va`, `description`, `evidence`, and `severity` — which the orchestrator validates and routes to `ctx.set_name()` or `FindingRegistry.register()`.
 
 ---
 

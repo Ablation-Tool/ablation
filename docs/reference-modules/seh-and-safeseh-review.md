@@ -22,7 +22,7 @@ flowchart TD
     B --> C["safe_seh_handlers() → List[int]\n  Read handler VAs from SEHandlerTable\n  Returns [] if SafeSEH not present"]
     B --> D["seh_frames() → List[SEHFrame]\n  Scan .text for push handler / push FS:[0] / mov FS:[0], esp\n  Each match: SEHFrame(setup_va, handler_va, func_va)"]
     B --> E["scan() → List[SEHFinding]\n  Finding: SEH_NO_SAFESEH if not present\n  Finding: SEH_EMPTY_TABLE if SEHandlerCount == 0\n  Finding: SEH_HANDLER_NOT_IN_TABLE for handlers in seh_frames() not in safe_seh_handlers()"]
-    E --> F["SEHFinding:\n  finding_type: str\n  handler_va: Optional[int]\n  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM'\n  fmt() → single-line finding"]
+    E --> F["SEHFinding:\n  category: 'safeseh_disabled' | 'no_handlers' | 'handler_not_in_table'\n  severity: 'HIGH' | 'MEDIUM' | 'LOW'\n  title: str\n  location: str\n  description: str\n  va: int\n  cwe: str"]
     F --> G["report(findings) → str"]
 ```
 
@@ -83,16 +83,17 @@ Run `SEHChainAnalyzer` on x86 (32-bit) Windows PE binaries identified as securit
 
 ## Reading findings
 
-`SEHChainAnalyzer.scan()` returns a list of finding dicts:
+`SEHChainAnalyzer.from_path(path).scan()` returns `List[SEHFinding]`. See [seh-chain-analyzer](seh-chain-analyzer.md) for the full field reference.
 
-| Field | Content |
+| Attribute | Content |
 |:---|:---|
-| `severity` | `HIGH` |
-| `title` | Finding code (e.g., `SEH_HANDLER_NOT_IN_TABLE`, `SAFESEH_ABSENT`, `SEH_HANDLER_IN_WRITABLE`) |
-| `handler_va` | VA of the SEH handler |
-| `detail` | Description of the SafeSEH bypass condition |
-
-`SEHChainAnalyzer.safeseh_present()` returns `True` if the binary has a SafeSEH table.
+| `severity` | `'HIGH'` / `'MEDIUM'` / `'LOW'` / `'INFO'` |
+| `category` | `'safeseh_disabled'` / `'no_handlers'` / `'handler_not_in_table'` / `'seh_frame_count'` / `'dynamic_handler_count'` |
+| `title` | Short finding title |
+| `location` | PE path or section name |
+| `description` | Explanation of the SafeSEH bypass condition |
+| `va` | VA of the relevant `push handler_va` instruction (0 if not applicable) |
+| `cwe` | CWE identifier |
 
 ---
 

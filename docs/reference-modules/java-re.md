@@ -64,14 +64,21 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`analyze_jar(jar_path)` returns a dict:
+
+| Key | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `jar_path` | Path string of the analyzed JAR/WAR/EAR |
+| `class_count` | Number of `.class` files processed |
+| `frameworks` | `Set[str]` — detected framework names (e.g., `'Spring'`, `'Jakarta EE'`) |
+| `dangerous_calls` | `List[dict]` — each with `method`, `class`, and call site |
+| `security_strings` | `List[str]` — security-relevant string literals found |
+| `manifest` | Dict of MANIFEST.MF entries (`Main-Class`, `Class-Path`, etc.) |
+| `maven_deps` | `List[dict]` — bundled Maven dependency metadata |
+| `jndi_patterns` | `List[str]` — JNDI lookup strings found (Log4Shell detection) |
+| `findings` | `List[dict]` — structured findings with `severity`, `title`, `description` |
 
 ---
 

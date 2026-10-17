@@ -63,14 +63,18 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`DeepJNIAnalyzer.analyze(binary_path)` and the module-level functions (`analyze_structure_accesses`, `analyze_immediate_constants`, `analyze_call_targets`, `analyze_vtable_patterns`) each return text output printed to stdout. There is no typed finding dataclass.
+
+For structured output, call `java_decompiler.JavaDecompiler(path).analyze()` which returns a dict:
+
+| Key | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `path` | Absolute path to the analyzed file |
+| `classes` | `List[dict]` — per-class analysis (name, methods, fields) |
+| `security` | Security audit result string |
+| `findings` | `List[dict]` — individual findings with `severity`, `title`, `description` |
 
 ---
 

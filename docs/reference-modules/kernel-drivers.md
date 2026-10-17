@@ -286,14 +286,13 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
-|:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+This page covers two tools with different output types.
+
+`IoctlAttackSurface` (from `IoctlAttackSurfaceMapper.from_path(path).scan()`): see [ioctl-attack-surface](ioctl-attack-surface.md) for the `IoctlAttackSurface` / `IoctlHandlerProfile` field reference.
+
+`KernelModuleSubsystemClassifier().classify(ko_path)` returns a `KernelModuleClassification`: see [kernel-module-subsystem-classifier](kernel-module-subsystem-classifier.md) for field reference.
+
+For heap and pool overflow analysis (`HeapUAFScanner`), see [heap-uaf-scanner](heap-uaf-scanner.md) — returns `List[HeapFinding]` with `func_va`, `site_va`, `kind`, `severity`, `description`.
 
 ---
 

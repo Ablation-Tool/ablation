@@ -1141,14 +1141,13 @@ Version-mismatch findings appear when a known key or certificate is present in a
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category of the finding (e.g., `HARDCODED_KEY`, `WEAK_ALGO`, `AUTH_BYPASS`) |
-| `va` | Virtual address in the binary, if applicable |
-| `detail` | Human-readable description of what was found |
+This page covers multiple container-parsing modules. Output types by tool:
+
+- **FirmwareContainerKeyExtractor** — `ExtractionResult` with `outer_key`, `partitions` (`List[PartitionResult]`). See [firmware-container-key-extractor](firmware-container-key-extractor.md).
+- **InstallerBinaryAnalyzer** — `InstallerAnalysisResult` with `installer_type`, `binaries` (`List[CarvedBinary]`). See [installer-binary-analyzer](installer-binary-analyzer.md).
+- **FortiGateCertKeyScanner** — `CertKeyScanResult` with `keys` (`Dict[str, KeyEntry]`). See [fortigate-cert-key-scanner](fortigate-cert-key-scanner.md).
 | `evidence` | Byte offset or string excerpt that triggered the finding |
 
 ---

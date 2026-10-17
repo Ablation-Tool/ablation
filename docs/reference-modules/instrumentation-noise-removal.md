@@ -19,7 +19,7 @@ Run Ablation's vulnerability detector suite on a freshly compiled binary before 
 ```mermaid
 flowchart TD
     A["CompilerSecurityGate.from_path(binary_path)\n  or .from_context(ctx)"] --> B["scan() → List[GateFinding]\n  Run detector suite per architecture:\n    All: TaintTracker (sources/sinks from profiles)\n    x86-64: FormatStringScanner\n    x86-32: SEHChainAnalyzer\n    ARM64: ARM64FgetsFdDiscriminator\n    All: SinkArgClassifier.classify_all()\n      → suppress RODATA_CONST findings\n    All: LengthUnderflow scanner\n  → GateFinding per confirmed finding"]
-    B --> C["GateFinding:\n  va: int\n  finding_type: str\n  severity: CRITICAL | HIGH | MEDIUM | LOW\n  semantic_block: SemanticBlock  (DAG Adapter)\n  fmt() → str"]
+    B --> C["GateFinding:\n  func_va: int\n  site_va: int\n  category: TAINT_FLOW | FORMAT_STRING | HEAP | LENGTH_UNDERFLOW\n  severity: CRITICAL | HIGH | MEDIUM | LOW\n  description: str\n  detector: str"]
     C --> D["report(findings) → str"]
     D --> E["check(strict=False) → int\n  strict=False: return 1 if any CRITICAL/HIGH\n  strict=True:  return 1 if any finding\n  return 0 if gate passes"]
 ```
@@ -89,15 +89,16 @@ check(strict=False): 1  (gate FAILED — 1 CRITICAL finding)
 
 ## Reading findings
 
-`CompilerSecurityGate.run()` returns a list of finding dicts:
+`CompilerSecurityGate.from_context(ctx).scan()` returns `List[GateFinding]`. See [compiler-security-gate](compiler_security_gate.md) for the full field reference.
 
-| Field | Content |
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
-| `category` | `taint` or `format_string` |
-| `va` | VA of the sink call |
-| `detail` | Sink name, taint source, and propagation path description |
-| `semantic_block` | Abbreviated taint chain (e.g., `recv[va] → strncpy[va] → system[va]`) |
+| `func_va` | VA of the containing function |
+| `site_va` | VA of the specific instruction |
+| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` |
+| `category` | `'TAINT_FLOW'` / `'FORMAT_STRING'` / `'HEAP'` / `'LENGTH_UNDERFLOW'` |
+| `description` | Sink name, taint source, and propagation path description |
+| `detector` | Name of the detector that identified this pattern |
 
 ---
 

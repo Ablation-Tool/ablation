@@ -231,16 +231,19 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
+
+`sweep_directory_pe(directory, model, profiles, top_k)` returns `List[dict]` — one dict per analyzed PE file. The `FirmwareAuthBypassFinding` TypedDict (embedded in each result's `firmware_auth_bypass` key) has these fields:
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `id` | Finding identifier string (e.g., `'GAP-015'`) |
+| `title` | Short finding title |
+| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'INFO'` |
+| `evidence` | `List[str]` — IAT names or import strings that triggered the finding |
+| `note` | Human-readable explanation |
+
+Each result dict also contains `binary`, `arch`, `findings` (top-k semantic matches), `firmware_iat`, and `signing_iat` keys.
 
 ---
 

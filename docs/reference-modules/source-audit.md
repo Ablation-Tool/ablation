@@ -785,13 +785,11 @@ Each tool in the pipeline returns its own finding type:
 
 | Tool | Return type | Key output fields |
 |:---|:---|:---|
-| `SourceEntryClassifier.classify_all_source()` | `List[RouteClassification]` | `rel_path`, `auth_level` (`NONE`/`SESSION`/`ADMIN`), `matched_signal` |
-| `SourceSinkScanner.scan()` | `List[SinkHit]` | `rel_path`, `line`, `category`, `cwe`, `severity`, `guarded` |
-| `SourceIsolationChecker.scan()` | `List[IsolationFinding]` | `rel_path`, `line`, `model`, `op_type`, `where_text`, `severity` |
-| `SourceTaintTracker.run()` | `List[TaintPath]` | `source`, `sink`, `path` (call chain), `confirmed` |
-| `SourceArchRiskScanner.scan()` | `List[ArchFinding]` | `category`, `severity`, `detail` (framework-level issues) |
-
-All finding types share `severity: str` and `detail: str` attributes for uniform report rendering.
+| `SourceEntryClassifier.classify()` | `List[RouteClassification]` | `rel_path`, `auth_level` (`NONE`/`SESSION`/`ADMIN`), `matched_signal`, `is_low_value`, `notes` |
+| `SourceSinkScanner.scan()` | `List[SinkHit]` | `rel_path`, `line`, `line_text`, `category`, `cwe`, `severity`, `guarded` |
+| `SourceIsolationChecker.scan()` | `List[IsolationFinding]` | `rel_path`, `line`, `operation`, `model`, `op_type`, `where_text`, `severity` (`CONFIRMED`/`PLAUSIBLE`/`INFO`), `note` |
+| `SourceTaintTracker.trace_all(sink_hits)` | `List[TaintPath]` | `sink: SinkHit`, `hops: list[TaintHop]`, `confidence` (`DIRECT`/`HIGH`/`MEDIUM`/`LOW`), `has_source: bool` |
+| `SourceArchRiskScanner.scan()` | `List[ArchRiskFinding]` | `rel_path`, `tags: dict[str, list[str]]`, `high_confidence: bool`, `risk_label` (`HIGH`/`MEDIUM`/`LOW`), `score: int` |
 
 ---
 

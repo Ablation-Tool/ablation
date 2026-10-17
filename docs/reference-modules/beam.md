@@ -273,14 +273,23 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`BeamContext.from_path(path)` returns a `BeamContext` object — this is the parsed module surface, not a list of findings:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `path` | Path to the `.beam` file |
+| `module_name` | Erlang module name string |
+| `atoms` | `List[str]` — all atom strings in the module |
+| `exports` | `List[BeamExport]` — exported functions as `function/arity` |
+| `imports` | `List[BeamImport]` — imported functions; dangerous ones have `dangerous=True` and a `severity` string |
+| `literals` | `List[str]` — ETF-decoded literal representations |
+| `strings` | `List[str]` — raw StrT byte segments |
+| `source_file` | Original `.erl` filename (only when debug info is present) |
+| `ast_functions` | `List[BeamAstFunction]` — function names with source line numbers |
+
+Dangerous imports are identified inline: `import.dangerous == True` and `import.severity` in `('CRITICAL'/'HIGH'/'MEDIUM')`.
 
 ---
 

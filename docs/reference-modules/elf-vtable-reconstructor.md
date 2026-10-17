@@ -64,16 +64,31 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`ELFVtableReconstructor.from_path(path).reconstruct_class('ClassName')` returns a `VtableMap`. Access individual slots via `vtable_map.slots` (a `Dict[int, VtableSlot]` keyed by byte offset from `vtable_ptr`):
+
+`VtableMap` attributes:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `vtable_va` | VA of the vtable data in the binary |
+| `vtable_ptr` | VA that class instances store as their vtable pointer |
+| `class_name` | Demangled class name (empty if not available) |
+| `slots` | `Dict[int, VtableSlot]` keyed by byte offset |
+
+Each `VtableSlot`:
+
+| Attribute | Content |
+|:---|:---|
+| `slot_index` | 0-based slot index |
+| `slot_offset` | Byte offset from `vtable_ptr` |
+| `abs_va` | Absolute VA of this slot entry in `.data.rel.ro` |
+| `function_va` | Resolved target function VA |
+| `function_name` | Demangled name, or `sub_0x...` fallback |
+| `is_rtti` | `True` for RTTI/typeinfo slots |
+
+Use `vtable_map.live_slots()` to filter out RTTI entries and zero-VA slots.
 
 ---
 

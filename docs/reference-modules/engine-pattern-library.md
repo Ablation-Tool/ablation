@@ -323,16 +323,21 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`PatternLibrary.match(ctx)` returns `List[EngineLabel]` — one per confirmed function match:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `va` | VA of the matched function in the target binary |
+| `engine` | Engine identifier string (e.g., `'ue4'`, `'unity'`, `'godot'`) |
+| `category` | Functional category (e.g., `'memory'`, `'render'`, `'network'`) |
+| `name` | Canonical engine function name (e.g., `'FMemory::Malloc'`) |
+| `confidence` | Float 0.0–1.0 — match confidence from the signature |
+| `match_kind` | `'string_marker'` / `'string_pattern'` / `'semantic'` / `'sax'` |
+| `sig_id` | Stable signature identifier (e.g., `'ue4.fmemory.malloc'`) |
+
+Use `label.strip()` to test if the match is high-confidence enough to exclude from manual analysis.
 
 ---
 

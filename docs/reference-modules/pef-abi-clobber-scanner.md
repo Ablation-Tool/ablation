@@ -239,14 +239,15 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`PEFABIClobberScanner.from_context(ctx).scan(sink_vas, check_regs)` returns `List[ABIClobberFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `site_va` | VA of the sink `bl` instruction |
+| `check_reg` | Register index examined (e.g., `4` for `r4`) |
+| `verdict` | `'PLAUSIBLE'` — argument register was last written before the intermediate call, leaving it clobbered; `'SAFE'` — register was re-written after all calls before reaching the sink |
+| `stop_va` | VA where the backward walk stopped |
+| `stop_reason` | `'reg_written'` / `'call_clobber'` / `'uncond_branch'` / `'return'` / `'window_exhausted'` |
 
 ---
 

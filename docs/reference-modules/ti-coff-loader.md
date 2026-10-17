@@ -158,15 +158,30 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`TiCoffLoader(data, path='').parse()` populates the loader's object list. Access objects via `loader.objects` which returns `List[TiCoffObject]`:
+
+Each `TiCoffObject`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `member_name` | AR archive member name (empty for standalone `.obj`) |
+| `header` | `CoffFileHeader` with `magic`, `n_sections`, `target_id`, `flags` |
+| `symbols` | `List[CoffSymbol]` — all symbol table entries |
+
+Each `CoffSymbol`:
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Symbol name string |
+| `value` | Symbol value (address or constant) |
+| `section_number` | `0` = undefined external; `-1` = absolute; `1+` = section index |
+| `storage_class` | TI COFF storage class integer |
+| `member_name` | AR member this symbol came from |
+| `is_weak` | Property — `True` for `C_UEXT` tentative-external symbols |
+| `is_global` | Property — `True` for `C_EXT` strong global symbols |
+| `is_defined` | Property — `True` if `section_number > 0` |
 
 ---
 

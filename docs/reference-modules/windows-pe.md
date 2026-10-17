@@ -266,14 +266,19 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
-|:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+Each of the seven analyzers returns its own typed finding list. For full field references:
+
+| Analyzer | Return type | Reference page |
+|:---|:---|:---|
+| `CFGBypassDetector` | `List[CFGBypassFinding]` | [cfg-bypass-detector](cfg-bypass-detector.md) |
+| `SEHChainAnalyzer` | `List[SEHFinding]` | [seh-chain-analyzer](seh-chain-analyzer.md) |
+| `ETWProviderExtractor` | `List[ETWFinding]` | [etw-provider-extractor](etw-provider-extractor.md) |
+| `RPCServerAnalyzer` | `List[RPCFinding]` | [rpc-server-analyzer](rpc-server-analyzer.md) |
+| `COMAttackSurfaceMapper` | `List[COMFinding]` | [com-attack-surface-mapper](com-attack-surface-mapper.md) |
+| `HeapUAFScanner` | `List[HeapFinding]` | [heap-uaf-scanner](heap-uaf-scanner.md) |
+| `IoctlAttackSurfaceMapper` | `IoctlAttackSurface` | [ioctl-attack-surface](ioctl-attack-surface.md) |
+
+All finding types share `severity`, `category`, `title`, `location`, `description`, and `va` fields.
 
 ---
 

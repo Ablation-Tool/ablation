@@ -124,14 +124,21 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`LuaInjectionAnalyzer.from_context(ctx).scan()` returns `List[LuaInjectionFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `path` | `Path` object of the file containing the injection site |
+| `rel_path` | Repository-relative path string |
+| `cwe` | CWE identifier (typically `'CWE-94'` — code injection) |
+| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` |
+| `injection_type` | `'DIRECT'` (string directly from user input), `'INDIRECT'` (via variable), or `'SUBPROCESS'` (via subprocess call) |
+| `exec_line` | Line number of the `lua.execute()` or subprocess call |
+| `exec_text` | Source line text of the execute call |
+| `format_line` | Line number of the format operation (f-string, `.format()`, `%`) |
+| `format_text` | Source line text of the format operation |
+| `var_name` | Variable name for `INDIRECT` paths (empty for `DIRECT`) |
+| `description` | Human-readable explanation of the finding |
 
 ---
 

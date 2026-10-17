@@ -64,16 +64,19 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`backward_slice(raw, binary, callsite_va, arg_regs)` returns `Dict[str, SymbolicVal]` — a map from register name to symbolic value at `callsite_va`. The four symbolic value types:
+
+| Type | Meaning |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `Const(v)` | Register holds an immediate constant `v` at the callsite |
+| `Global(name, delta)` | Register holds a known global symbol address + byte delta |
+| `Add(base, imm)` | Register holds `base` (Arg or Global) plus an immediate offset |
+| `Arg(idx, delta)` | Register holds the function's `idx`-th argument + delta |
+| `Unknown(reg, pc)` | Provenance not resolved within the look-back window |
+
+Check `isinstance(v, Arg)` to identify argument-derived values before reporting as taintable.
 
 ---
 

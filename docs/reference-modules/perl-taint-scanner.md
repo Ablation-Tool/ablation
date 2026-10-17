@@ -151,14 +151,19 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`PerlTaintScanner.from_path(path).scan()` returns `List[SinkHit]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `file` | Source file path |
+| `line_no` | Line number of the sink call |
+| `line` | Raw source line text |
+| `var` | The interpolated variable name at the sink |
+| `sink_type` | `'backtick'` / `'qx'` / `'system'` / `'open_pipe'` |
+| `verdict` | `'INJECTABLE'` — no sanitization found; `'SANITIZED'` — sanitization confirmed; `'PARAM_UNKNOWN'` — input source unclear; `'INTERNAL'` — constant or known-safe value; `'UNKNOWN'` — could not determine |
+| `source_desc` | Human-readable description of the input source |
+| `sanitization` | Description of sanitization found (empty if none) |
+| `caller_file` | File where a `PARAM` resolved to an `ARGV` source (None if not applicable) |
 
 ---
 

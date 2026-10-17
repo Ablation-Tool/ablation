@@ -63,14 +63,21 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`analyze_go_garble_binary(binary_path)` returns a dict:
+
+| Key | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `binary` | Path string of the analyzed binary |
+| `file_size` | Hex+MB formatted file size string |
+| `errors` | `List[str]` — any parse or load errors |
+| `elf` | ELF header metadata dict (`entry_va`, `load_segs`, etc.) |
+| `pclntab` | pclntab parse results (`magic`, `go_version`, `num_funcs`, `funcs`) |
+| `bootstrap` | Bootstrap function analysis results |
+| `string_xrefs` | Dict mapping string values to lists of referencing function VAs |
+| `decrypt_stubs` | List of identified garble string-decryption stub VAs |
+| `findings` | `List[dict]` — each with `severity`, `category`, `title`, `description`, `va` |
 
 ---
 

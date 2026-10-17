@@ -112,14 +112,18 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`ETWProviderExtractor.from_path(path).scan()` returns `List[ETWFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `severity` | `'HIGH'` / `'MEDIUM'` / `'LOW'` / `'INFO'` |
+| `category` | `'no_etw'` / `'detection_gap'` / `'known_security_provider'` / `'provider_inventory'` |
+| `title` | Short finding title string |
+| `location` | Section name, PE path, or GUID identifying where the issue was found |
+| `description` | Human-readable explanation of the finding |
+| `va` | VA of the relevant `EventRegister` or `EventWrite` call site (0 if not applicable) |
+
+The scan also extracts `ETWProvider` objects (not findings) accessible via `.providers` on the scanner instance, with fields `guid`, `known_name`, `registration_count`, `registration_vas`.
 
 ---
 

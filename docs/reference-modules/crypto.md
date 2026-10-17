@@ -385,14 +385,19 @@ Hard-coded constants that share byte patterns with known keys but are not crypto
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+This page covers two tools with different output types.
+
+`HashAlgoDiscriminator(binary, load_addr).scan_function(va, size)` returns a `HashAlgoMatch`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `HARDCODED_KEY`, `WEAK_ALGO`, `REUSED_IV`, `ECB_MODE`) |
-| `va` | Virtual address of the key material or algorithm constant, if in a binary |
-| `algorithm` | Identified cipher or hash algorithm |
+| `algo` | Algorithm name string (e.g., `'SHA-256'`, `'MD5'`, `'CRC32'`) |
+| `confidence` | Integer 0–100 — identification confidence |
+| `matched` | `List[ConstMatch]` — each with `va`, `value`, `name`, `algo` |
+
+`CBCPatternDetector(binary, load_addr).scan_range(va, size)` returns `List[CBCPattern]` — each with fields for the IV load site, encrypt/decrypt direction, and key schedule VA.
 | `detail` | What was found and the cryptographic weakness |
 
 ---
