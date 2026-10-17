@@ -74,6 +74,21 @@ Run `ChunkWalkerValidator` on network protocol parser binaries after `SemanticSe
 
 ---
 
+## Reading findings
+
+`ChunkWalkerValidator.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` |
+| `title` | Finding code (e.g., `CHUNK_LENGTH_NO_ALIGNMENT`, `CHUNK_ADVANCE_UNSIGNED`) |
+| `va` | VA of the unaligned pointer advance instruction |
+| `ptr_advance` | Disassembly of the advance instruction (e.g., `add rdi, rdx`) |
+| `next_read` | Disassembly of the subsequent read using the advanced pointer |
+| `detail` | Description of the alignment gap |
+
+---
+
 ## See also
 
 - [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` to confirm the length value is network-sourced

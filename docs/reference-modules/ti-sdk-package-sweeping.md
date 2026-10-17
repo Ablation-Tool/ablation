@@ -80,6 +80,20 @@ Run TI SDK sweeping on any TI SDK package directory or HiSilicon NearLink firmwa
 
 ---
 
+## Reading output
+
+`Isa8051Scanner.scan()` and `HisiRv32ExtScanner.scan()` each return a `SdkSweepResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `isa` | ISA identifier (e.g., `isa_8051`, `hisi_rv32_ext`) |
+| `sfr_accesses` | `List[{va, insn, sfr_name, sfr_role}]` — SFR-mapped accesses (8051) |
+| `fixed_count` | Number of Capstone mis-decoded instructions corrected (HiSilicon) |
+| `custom3_count` | Number of HiSilicon Custom-3 extension dispatches found |
+| `findings` | `List[{severity, title, detail}]` — security findings |
+
+---
+
 ## See also
 
 - [TI C28x Decoding](ti-c28x-decoding.md) — `EcuC28xDecoder` for C28x DSP targets in the same TI SDK
