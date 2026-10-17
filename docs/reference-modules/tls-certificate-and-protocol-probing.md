@@ -30,20 +30,26 @@ flowchart TD
 ```python
 from ablation.core.tls_analyzer import TLSAnalyzer, CipherSuiteProber
 
-# Certificate chain analysis
-analyzer = TLSAnalyzer('target.example.com', port=443)
-chain = analyzer.connect()
-for cert in chain:
-    print(f"  {cert['subject']}  key={cert['key_size']}b  {cert['sig_alg']}")
+# TLSAnalyzer() takes no constructor args; host/port go to analyze()
+analyzer = TLSAnalyzer()
+result = analyzer.analyze('target.example.com', port=443)
 
-# Weak cipher probing
-prober = CipherSuiteProber('target.example.com', port=443)
-legacy = prober.probe_legacy_versions()
-weak = prober.probe_weak_ciphers()
-dh = prober.probe_dh_params()
+# cert_chain: [{subject_cn, issuer_cn, key_algorithm, key_bits, sig_algorithm,
+#               not_after, sans, is_self_signed, sha256, ...}]
+for cert in result['cert_chain']:
+    print(f"  {cert['subject_cn']}  key={cert['key_bits']}b {cert['key_algorithm']}"
+          f"  sig={cert['sig_algorithm']}  expires={cert['not_after']}")
 
-for finding in legacy + weak + dh:
+# findings: [{severity, title, detail, host, port}]
+for finding in result['findings']:
     print(f"  [{finding['severity']}] {finding['title']}: {finding['detail']}")
+
+# CipherSuiteProber(host, port) — probe_version_support() → {version_str: supported}
+prober = CipherSuiteProber('target.example.com', port=443)
+version_support = prober.probe_version_support()
+for version, supported in version_support.items():
+    if supported:
+        print(f"  LEGACY TLS SUPPORTED: {version}")
 ```
 
 ---

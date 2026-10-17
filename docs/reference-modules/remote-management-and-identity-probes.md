@@ -38,14 +38,22 @@ from modules.lateral_movement import (
     _build_smb_negotiate, _build_smb_session_setup_null
 )
 
-# Lateral movement recon for a target host
+# Subnet discovery: scan_subnets populates nd.live_hosts {ip: {port: banner}}
 nd = NetworkDiscovery()
-# The class wraps probe_smb_null_session, probe_wmi_unauth, probe_winrm, probe_rdp
-for host in nd.scan_subnet_parallel('10.0.0.0/24', ports=[445, 5985, 3389, 135]):
-    print(f"  {host['ip']}: open={host['open_ports']}")
-    # Run targeted probes:
-    import modules.lateral_movement as lm
-    # Access probe methods through the appropriate class instances
+nd.scan_subnets(['<target-subnet>/24'], ports=[445, 5985, 3389, 135])
+
+for ip, ports in nd.live_hosts.items():
+    print(f"  {ip}: open={sorted(ports.keys())}")
+    # LateralMovementEnumerator(host, port=445) — each probe is a method
+    if 445 in ports:
+        lme = LateralMovementEnumerator(ip, port=445)
+        smb = lme.probe_smb_null_session()
+        # smb: {null_session, dialect, os, security_mode, shares, error}
+        print(f"    SMB null_session={smb['null_session']}  dialect={smb.get('dialect')}")
+    if 5985 in ports:
+        lme = LateralMovementEnumerator(ip, port=5985)
+        winrm = lme.probe_winrm()
+        print(f"    WinRM: {winrm}")
 ```
 
 ---
