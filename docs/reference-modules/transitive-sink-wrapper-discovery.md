@@ -90,6 +90,21 @@ Run `SinkPropagator.propagate()` before `SinkArgClassifier.classify_all()` on an
 
 ---
 
+## Reading output
+
+`SinkPropagator.propagate()` returns `Dict[str, WrapperChain]` — wrapper function name → chain:
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Wrapper function name |
+| `arg_pos` | Argument position passed to the ultimate sink |
+| `chain` | `List[str]` — call chain from wrapper to base sink (e.g., `['doSystem', 'system']`) |
+| `depth` | Chain length (1 = direct wrapper, 2+ = transitive) |
+
+`SinkPropagator.expanded_sinks()` returns `List[str]` — all sinks (base + discovered wrappers) for passing to `SinkArgClassifier`.
+
+---
+
 ## See also
 
 - [Sink Argument Classifier](sink-argument-classifier.md) — consumes the expanded sink list from `SinkPropagator`

@@ -83,6 +83,21 @@ Run `VMXDensityScanner.inject_labels()` early in the analysis of Cell PPU or IBM
 
 ---
 
+## Reading output
+
+`VMXDensityScanner.scan()` returns a list of `VMXDensityHit` objects (sorted by descending density):
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Function VA |
+| `density` | Float — VMX instruction ratio (VMX count / total insn count) |
+| `vmx_count` | Number of VMX/Altivec instructions in the function |
+| `total_count` | Total instruction count |
+| `label` | Inferred label (e.g., `vector_math`, `vector_crypto`, `memcpy_vectorized`) or `None` |
+| `above_threshold` | `True` if `density >= threshold` |
+
+---
+
 ## See also
 
 - [PS3 OPD Virtual Tables](ps3-opd-virtual-tables.md) — PS3/Cell PPU virtual dispatch table analysis
