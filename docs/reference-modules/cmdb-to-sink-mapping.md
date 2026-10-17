@@ -21,12 +21,12 @@ flowchart TD
     A["CMDBSurfaceMapper.from_path(path) or\nCMDBSurfaceMapper.from_context(ctx)"] --> B["XRef graph: find all cmf_query_create() PLT entries\n+ all exec-class PLT entries\n(system, execve, popen, execl, execlp, etc.)"]
     B --> C["For each function in binary:\n  Does it call cmf_query_create? → Yes → record call sites\n  Does it call exec-class sink? → Yes → mark as sink function"]
     C --> D["For each cmf_query_create call site:\n  Backtrack from call VA\n  Look for: mov edi, <imm> or mov edi, <const>\n  → table_id = imm, or None if register/global-propagated"]
-    D --> E["CMDBTableEntry:\n  table_id: Optional[int]\n  func_va: int\n  query_vas: List[int]\n  sink_vas: List[int]\n  sink_names: List[str]"]
-    E --> F{"table_id not None AND\nsink_vas not empty?"}
-    F -->|Yes| G["Include in surface map\n→ this table ID appears in a function\nthat also calls an exec sink"]
-    F -->|No| H["Exclude (no sink co-location\nor table_id unresolvable)"]
-    G --> I["map() → Dict[int, CMDBTableEntry]\n  keyed by func_va"]
-    I --> J["report(surface) → str\n  Formatted table: table_id | func_va | sink_names"]
+    D --> E["CMDBTableEntry (per table_id):\n  name: str (from _CONFIRMED_TABLES or 'table_0x<hex>')\n  callers: List[int]  (function VAs calling cmf_query_create(table_id))\n  field_read_count: int\n  reaches_exec: bool\n  exec_func_va: Optional[int]\n  exec_call_va: Optional[int]\n  exec_sink_name: Optional[str]"]
+    E --> F{"reaches_exec?"}
+    F -->|Yes| G["Include in triage surface\n→ advance to Phase 1"]
+    F -->|No| H["Exclude (no exec co-location)"]
+    G --> I["map() → Dict[int, CMDBTableEntry]\n  keyed by table_id (int)"]
+    I --> J["report(surface) → str\n  table_id | name | callers | exec_sink_name"]
 ```
 
 ---
@@ -49,10 +49,11 @@ surface = mapper.map()
 print(CMDBSurfaceMapper.report(surface))
 
 # Inspect specific entries
-for func_va, entry in surface.items():
-    print(f"  func={func_va:#x}  table_id={entry.table_id}  sinks={entry.sink_names}")
-    print(f"    query_vas: {[f'{v:#x}' for v in entry.query_vas]}")
-    print(f"    sink_vas:  {[f'{v:#x}' for v in entry.sink_vas]}")
+for table_id, entry in surface.items():
+    if entry.reaches_exec:
+        print(f"  table_id={table_id:#x}  name={entry.name}  sink={entry.exec_sink_name}")
+        print(f"    exec_func_va: {entry.exec_func_va:#x}")
+        print(f"    callers:      {[f'{v:#x}' for v in entry.callers]}")
 ```
 
 ---
@@ -91,17 +92,17 @@ Run `CMDBSurfaceMapper` as Phase 0.5 in the FortiOS RE methodology — after `Se
 
 ## Reading output
 
-`CMDBSurfaceMapper.map()` returns `Dict[int, CMDBTableEntry]` keyed by `table_id`:
+`CMDBSurfaceMapper.map()` returns `Dict[int, CMDBTableEntry]` keyed by `table_id` (integer):
 
-| Attribute | Content |
-|:---|:---|
-| `name` | Table name from `_CONFIRMED_TABLES` or `table_0x<hex>` |
-| `callers` | List of function VAs that call `cmf_query_create(table_id)` |
-| `field_read_count` | Count of CMDB accessor calls co-located in caller functions |
-| `reaches_exec` | `True` if any caller body co-locates an exec-sink call |
-| `exec_func_va` | VA of the function with the co-located exec call (if any) |
-| `exec_call_va` | VA of the exec sink call instruction |
-| `exec_sink_name` | Sink function name (`system`, `popen`, etc.) |
+| Attribute | Type | Content |
+|:---|:---|:---|
+| `name` | `str` | Table name from `_CONFIRMED_TABLES` dict, or `'table_0x<hex>'` if unknown |
+| `callers` | `List[int]` | VAs of all functions that call `cmf_query_create(table_id)` |
+| `field_read_count` | `int` | Count of CMDB accessor calls co-located in caller functions |
+| `reaches_exec` | `bool` | `True` if any caller body also contains an exec-class sink call |
+| `exec_func_va` | `Optional[int]` | VA of the function with co-located exec call |
+| `exec_call_va` | `Optional[int]` | VA of the exec sink call instruction itself |
+| `exec_sink_name` | `Optional[str]` | Name of the exec sink (`'system'`, `'popen'`, etc.) |
 
 ---
 
