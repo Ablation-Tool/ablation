@@ -58,7 +58,7 @@ for r in reuse:
 
 ## Example output
 
-The following illustrates credential and key discovery output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
 SSHKeyEnumerator:
@@ -68,16 +68,16 @@ SSHKeyEnumerator:
 
 APITokenDetector:
 
-  GITHUB_TOKEN=ghp_***  (env var, entropy=4.8)
-  /home/user/.config/app/config.yaml: api_key=sk-***
+  GITHUB_TOKEN=<token>  (env var, entropy=<score>)
+  /home/user/.config/app/config.yaml: api_key=<token>
 
 CloudMetadataProber:
 
-  AWS: role=ec2-deploy  AccessKeyId=ASIA...  (temporary STS credentials)
+  AWS: role=<iam-role>  AccessKeyId=<access-key-id>  (temporary STS credentials)
 
 detect_ssh_key_reuse:
 
-  REUSE: SHA256:Abc... in 4 authorized_keys files (shared deployment key)
+  REUSE: <key-fingerprint> in 4 authorized_keys files (shared deployment key)
 ```
 
 ---

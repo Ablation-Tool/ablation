@@ -51,22 +51,22 @@ for f in graphql_findings:
 
 ## Example output
 
-The following illustrates secrets infrastructure exposure output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
-probe_consul_service_mesh: 10.0.10.5:8500 (KV store)
+probe_consul_service_mesh: <target-ip>:8500 (KV store)
 
-  [CRITICAL] CONSUL_KV_SECRETS:
-    vault/database/password → 'C1sco12345!' (plaintext)
-    vault/api/aws_key       → 'AKIA...' (AWS access key)
+  [CRITICAL] CONSUL_KV_OPEN:
+    detail: /v1/kv/?recurse accessible without authentication; KV store contains
+            service credentials, API keys, and configuration secrets in plaintext
 
-probe_graphql_introspection: 10.0.10.20:4000
+probe_graphql_introspection: <target-ip>:4000
 
   [HIGH] GRAPHQL_INTROSPECTION_OPEN:
     Types: User, Token, AdminSession
     Mutations: createUser, resetPassword, revokeToken
 
-probe_grpc_server_reflection: 10.0.10.30:50051
+probe_grpc_server_reflection: <target-ip>:50051
 
   [HIGH] GRPC_REFLECTION_OPEN:
     Services: auth.AuthService, admin.UserManagement

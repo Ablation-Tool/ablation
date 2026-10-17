@@ -52,22 +52,22 @@ for host in nd.scan_subnet_parallel('10.0.0.0/24', ports=[445, 5985, 3389, 135])
 
 ## Example output
 
-The following illustrates remote management probe output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
-probe_smb_null_session: 10.0.0.5:445
+probe_smb_null_session: <target-ip>:445
 
-  null_session: True  dialect: NT LM 0.12  OS: Windows Server 2012
+  null_session: True  dialect: NT LM 0.12  OS: Windows Server <version>
 
-probe_smb_ntlm: 10.0.0.5:445
+probe_smb_ntlm: <target-ip>:445
 
-  NTLM Challenge: 0x4a3b2c1d8e7f6a5b  target: CORP  (NTLMv2 relay/crack target)
+  NTLM Challenge: <challenge-bytes>  target: <domain>  (NTLMv2 relay/crack target)
 
-probe_winrm: 10.0.0.5:5985
+probe_winrm: <target-ip>:5985
 
   WinRM enabled  auth_methods: [Kerberos, NTLM]  (pass-the-hash viable)
 
-probe_rdp: 10.0.0.5:3389
+probe_rdp: <target-ip>:3389
 
   RDP enabled  NLA required: True  (requires valid credentials, no CredSSP bypass)
 ```

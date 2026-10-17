@@ -52,23 +52,23 @@ for cred in report.get('credentials', []):
 
 ## Example output
 
-The following illustrates hardware root discovery output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
 FirmwareContainer: firmware.bin
 
-Vendor: Acme Corp  Product: NetGateway-2000
+Vendor: <vendor>  Product: <product>
 Partitions:
-  bootloader: ELF @ 0x0000 (65536 bytes)
-  kernel: gzip @ 0x10000 (2097152 bytes)
-  rootfs: SquashFS @ 0x210000 (8388608 bytes)
+  bootloader: ELF @ 0x0000 (<N> bytes)
+  kernel: gzip @ 0x10000 (<N> bytes)
+  rootfs: SquashFS @ 0x210000 (<N> bytes)
 
 scan_firmware_signatures:
   SquashFS at 0x210000
   U-Boot at 0x0000
 
 extract_firmware_strings:
-  credentials: ['admin:admin', 'debug:debug']
+  credentials: ['<user>:<password>', '<user>:<password>']
   crypto_material: ['-----BEGIN RSA PRIVATE KEY-----']
 ```
 

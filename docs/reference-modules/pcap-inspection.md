@@ -1,16 +1,16 @@
 # PCAP Inspection
 
-Extract DNS queries, HTTP request/response metadata, and cleartext credential patterns from PCAP files — without requiring Scapy or Wireshark — using a pure-Python packet parser that handles Ethernet/IP/TCP/UDP frame reassembly, via `modules/network_analyze.py` `PCAPAnalyzer`.
+Extract DNS queries (with NXDOMAIN/domain-flux detection), cleartext credentials (FTP USER/PASS, Telnet login prompts, HTTP Basic Auth), and HTTP request lines from PCAP files — without Scapy, dpkt, or libpcap — using a pure-Python libpcap global header parser that handles Ethernet/IP/TCP/UDP frame reassembly, via `modules/network_analyze.py` `PCAPAnalyzer`.
 
 ---
 
 ## Why this exists
 
-1. **`PCAPAnalyzer` extracts cleartext credentials without external tools.** `CredentialExtractor` (in `net_sniffer.py`) searches TCP streams for HTTP Basic Auth `Authorization: Basic` headers, FTP `USER`/`PASS` commands, SMTP `AUTH PLAIN`, and Telnet password prompts. These patterns are detected in the raw byte stream without requiring application-layer protocol parsing; `CredentialExtractor.extract()` returns matches with the stream direction, source IP, and port.
+1. **`PCAPAnalyzer` extracts cleartext credentials from PCAP files without external tools.** `extract_credentials()` scans TCP payloads for FTP `USER`/`PASS` command sequences (port 21), Telnet `login:` and `Password:` prompts (port 23), and HTTP Basic Auth `Authorization: Basic <base64>` headers (ports 80/8080). Credentials are returned as `[{'proto', 'src', 'dst', 'cred'}]` dicts where `cred` is the decoded plaintext string.
 
-2. **`analyze_pcap()` provides a single-call PCAP summary** — DNS query names and resolved IPs, HTTP `Host` headers and URI paths (for unencrypted HTTP/1.x), and protocol distribution by port number. This is the standard first-pass on any PCAP obtained from a post-compromise capture session, providing a communication map before detailed stream analysis.
+2. **`analyze_pcap()` provides a single-call PCAP summary** — credential extraction, DNS query enumeration, and HTTP request logging combined in one pass. DNS extraction (`extract_dns()`) returns `[{'query', 'type', 'src', 'rcode', 'qr'}]` dicts; NXDOMAIN responses (rcode=3) are included as domain-flux indicators per the Conficker analysis pattern from Violent Python chapter 4.
 
-3. **`PCAPAnalyzer` is dependency-free** — it implements libpcap global header parsing (`magic 0xa1b2c3d4`, `snaplen`, `linktype`), Ethernet frame extraction (`linktype=1`), IPv4 header parsing, and TCP/UDP payload extraction in pure Python `struct.unpack`. No Scapy, dpkt, or system libpcap required.
+3. **`PCAPAnalyzer` is dependency-free** — it parses the libpcap global header (`magic 0xA1B2C3D4` or `0xD4C3B2A1` LE, `snaplen`, `linktype`), Ethernet frame extraction (`linktype=1`), and IPv4/TCP/UDP header fields in pure Python `struct.unpack`. `LINKTYPE_ETHERNET = 1` and `LINKTYPE_RAW = 101` are the two supported link types. No Scapy, dpkt, or system libpcap is required.
 
 ---
 
@@ -18,10 +18,9 @@ Extract DNS queries, HTTP request/response metadata, and cleartext credential pa
 
 ```mermaid
 flowchart TD
-    A["PCAPAnalyzer.from_file(path)\n  or analyze_pcap(filepath) → dict"] --> B["Parse libpcap global header:\n  magic: 0xa1b2c3d4 (LE) or 0xd4c3b2a1 (BE)\n  snaplen, linktype (1=Ethernet)\n  → endianness + per-packet iterator"]
-    B --> C["Per packet:\n  Ethernet: bytes 0-13 (src/dst MAC, ethertype)\n  IPv4: bytes 14+ (src/dst IP, proto, payload)\n  TCP (proto=6): src/dst port, flags, payload\n  UDP (proto=17): src/dst port, payload"]
-    C --> D["DNS extraction (UDP port 53):\n  Parse DNS question section\n  Extract QNAME: domain name queried\n  Parse A/AAAA answers: resolved IPs\n  → {qname: [ip, ...]}\n\nHTTP extraction (TCP port 80/8080):\n  Find b'Host:' + b'GET/POST/PUT'\n  Extract Host header + URI path\n  → [(host, path, method)]"]
-    D --> E["CredentialExtractor.extract(stream) → List[dict]\n  Scan TCP payload for:\n    Authorization: Basic <b64> → decoded credential\n    USER <name> + PASS <pw> (FTP)\n    AUTH PLAIN <b64> (SMTP/IMAP)\n  → [{src, dst, proto, credential}]"]
+    A["PCAPAnalyzer(filepath: str)\n  .parse() → bool\n    Read libpcap global header (24 bytes):\n      magic: 0xA1B2C3D4 (BE) or 0xD4C3B2A1 (LE)\n      version_major, version_minor\n      snaplen, linktype\n    Read per-packet records into self.packets list\n  .run_all() → dict"] --> B["extract_credentials() → list\n  Scan TCP payloads per stream:\n    FTP (port 21): USER + PASS sequence → 'user:pass'\n    Telnet (port 23): login: / Password: prompts\n    HTTP Basic (port 80/8080): Authorization: Basic <b64>\n      base64.b64decode → cleartext\n  → [{proto, src, dst, cred}]"]
+    B --> C["extract_dns() → list\n  UDP port 53 packets:\n    DNS header: txid, flags, qdcount\n    Decode QNAME label encoding\n    qr_bit=0 → query; rcode=3 → NXDOMAIN response\n  → [{query: str, type: str, src: str, rcode: int, qr: str}]"]
+    C --> D["extract_http() → list\n  TCP port 80/8080/8000/443 payloads:\n    Match GET/POST/PUT/DELETE request lines\n    Extract Host: header\n  → [{method, path, host, src}]\n\nrun_all() → dict:\n  {filepath, packet_count, credentials, dns_queries, http_requests}"]
 ```
 
 ---
@@ -30,50 +29,61 @@ flowchart TD
 
 ```python
 from modules.network_analyze import PCAPAnalyzer, analyze_pcap
-from modules.net_sniffer import CredentialExtractor
 
-# Quick PCAP summary
+# Single-call summary
 summary = analyze_pcap('/path/to/capture.pcap')
-print(f"DNS queries: {list(summary['dns'].keys())[:10]}")
-print(f"HTTP hosts: {summary['http_hosts'][:5]}")
+print(f"Packets: {summary['packet_count']}")
+print(f"Credentials found: {len(summary['credentials'])}")
+for c in summary['credentials']:
+    # keys: proto, src, dst, cred
+    print(f"  [{c['proto']}] {c['src']} → {c['cred']}")
 
-# Detailed analysis with credential extraction
-analyzer = PCAPAnalyzer.from_file('/path/to/capture.pcap')
-streams = analyzer.tcp_streams()
-extractor = CredentialExtractor()
-for stream in streams:
-    creds = extractor.extract(stream.payload)
-    for c in creds:
-        print(f"  [{c['proto']}] {c['src']} → {c['credential']}")
+# DNS query history
+for d in summary['dns_queries']:
+    # keys: query, type, src, rcode, qr
+    if d['rcode'] == 3:
+        print(f"  NXDOMAIN from {d['src']}: {d['query']}")
+    elif d['qr'] == 'query':
+        print(f"  Query from {d['src']}: {d['query']} ({d['type']})")
+
+# Direct instantiation for multi-step use
+analyzer = PCAPAnalyzer('/path/to/capture.pcap')
+analyzer.parse()
+credentials = analyzer.extract_credentials()
+dns = analyzer.extract_dns()
 ```
 
 ---
 
 ## Example output
 
-The following illustrates PCAP inspection output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
-PCAPAnalyzer: capture.pcap  (<N> packets)
+analyze_pcap: capture.pcap
 
-DNS queries:
-  api.internal → 10.0.1.50
-  db.prod.internal → 10.0.2.100
+packet_count: <N>
 
-HTTP hosts: api.internal, db.prod.internal
+credentials:
+  {proto: 'FTP', src: '<src-ip>', dst: '<dst-ip>', cred: '<user>:<password>'}
+  {proto: 'HTTP', src: '<src-ip>', dst: '<dst-ip>', cred: '<user>:<password>'}
 
-CredentialExtractor:
-  [HTTP Basic] 10.0.0.5 → admin:C1sco12345  (Authorization: Basic)
-  [FTP] 10.0.0.7 → USER=ftpuser PASS=<plaintext>
+dns_queries:
+  {query: 'internal-api.corp.example', type: 'A', src: '<src-ip>', rcode: 0, qr: 'query'}
+  {query: 'db.prod.example', type: 'A', src: '<src-ip>', rcode: 0, qr: 'query'}
+  {query: 'rnd-a1b2.evil.example', type: 'A', src: '<src-ip>', rcode: 3, qr: 'response'}
+
+http_requests:
+  {method: 'GET', path: '/api/v1/users', host: 'api.internal.example', src: '<src-ip>'}
 ```
 
 ---
 
 ## False positives
 
-**HTTP Basic credential extraction is regex-based** — Base64-encoded values that happen to match the `Authorization: Basic ` prefix in non-authentication traffic (e.g., a base64-encoded block in a POST body that starts with `Basic `) will trigger a false positive. Verify that the extracted value is in an `Authorization:` HTTP header, not a body parameter.
+**HTTP Basic credential extraction is regex-based** — the `Authorization: Basic` pattern is matched on the raw TCP payload. A base64-encoded value that appears in a POST body with a field name containing `Authorization:` will match. Verify that extracted credentials appear in an HTTP header context, not a body parameter.
 
-**DNS reassembly is single-packet only** — DNS responses that span multiple UDP packets (rare but possible for DNSSEC responses) will not be parsed correctly. Truncated DNS responses are logged but not decoded.
+**DNS NXDOMAIN domain-flux detection** — a single NXDOMAIN response does not confirm domain flux. The pattern is significant only when a single source IP generates many NXDOMAIN responses in sequence — consistent with a worm or malware attempting to locate a C2 via generated domain names.
 
 ---
 
@@ -85,5 +95,5 @@ Run PCAP inspection on any packet capture obtained from a post-compromise networ
 
 ## See also
 
-- [Raw Packet Capture](raw-packet-capture.md) — `RawSniffer` for live capture to produce PCAP for this tool
-- [Local Network Inventory](local-network-inventory.md) — `NetworkAnalyzer` for live network interface and connection enumeration
+- [Raw Packet Capture](raw-packet-capture.md) — `RawSniffer` for live capture producing PCAP files for analysis here
+- [DNS Service Posture](dns-service-posture.md) — `probe_dns_zone_transfer()` and `probe_dns_recursion()` for active DNS security probing

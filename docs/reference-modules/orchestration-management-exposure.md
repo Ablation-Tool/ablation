@@ -53,23 +53,23 @@ for host in discovered_hosts:
 
 ## Example output
 
-The following illustrates orchestration management exposure output format.
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
 ```
-probe_vsphere_vcenter: 10.0.10.1:443
+probe_vsphere_vcenter: <target-ip>:443
 
-  [HIGH] VCENTER_EXPOSED: version=vSphere 7.0.3  POST /api/session → 401 (auth enforced)
-  [INFO] version: VMware vCenter Server 7.0.3
+  [HIGH] VCENTER_EXPOSED: version=vSphere <version>  POST /api/session → 401 (auth enforced)
 
-probe_consul_service_mesh: 10.0.10.5:8500
+probe_consul_service_mesh: <target-ip>:8500
 
-  [CRITICAL] CONSUL_CATALOG_OPEN: /v1/catalog/services → 14 services (no auth)
-    Services: redis, postgres, api-gateway, auth-service ...
-  [HIGH] CONSUL_KV_OPEN: /v1/kv/?recurse → 38 keys accessible
+  [CRITICAL] CONSUL_CATALOG_OPEN: /v1/catalog/services → <N> services (no auth)
+    detail: service catalog readable without authentication; service mesh topology exposed
 
-probe_kong_gateway_admin: 10.0.10.8:8001
+  [HIGH] CONSUL_KV_OPEN: /v1/kv/?recurse → <N> keys accessible
 
-  [CRITICAL] KONG_ADMIN_OPEN: /services → 6 upstreams; /consumers → 12 consumers with key-auth
+probe_kong_gateway_admin: <target-ip>:8001
+
+  [CRITICAL] KONG_ADMIN_OPEN: /services → <N> upstreams; /consumers → <N> consumers
 ```
 
 ---
