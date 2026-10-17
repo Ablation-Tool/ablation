@@ -94,6 +94,21 @@ Run `DynamicSandbox` as Phase 3 in the hypothesis validation pipeline — after 
 
 ---
 
+## Reading output
+
+`LeafFunctionChecker.probe(va, **inputs)` returns a `ProbeResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `status` | `ok`, `timeout`, or `error` |
+| `outputs` | `Dict[str, int]` — register values on return (e.g., `{'x0': 0x1234, 'x1': 0x4242}`) |
+| `insn_count` | Integer — number of instructions executed |
+| `behavioral_signature` | String encoding of output register values for deduplication |
+
+`LeafFunctionChecker.is_leaf(va)` returns `True` if the function makes no calls.
+
+---
+
 ## See also
 
 - [Evidence Scoring and Probe Ranking](evidence-scoring-and-probe-ranking.md) — `ProbeRanker` that includes sandbox probing as a ranked probe type

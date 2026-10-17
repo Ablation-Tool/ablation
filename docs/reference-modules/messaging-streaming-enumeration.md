@@ -93,6 +93,20 @@ Run messaging and streaming enumeration after discovering port 9092 (Kafka), 808
 
 ---
 
+## Reading findings
+
+Messaging/streaming probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (unauthenticated access) / `HIGH` (RCE surface) |
+| `title` | Finding code (e.g., `KAFKA_TOPICS_UNAUTH`, `FLINK_JAR_UPLOAD_EXPOSED`) |
+| `detail` | Topic list, job count, or RCE function name |
+| `host` | Target IP |
+| `port` | Service port (e.g., `9092` for Kafka, `8081` for Flink) |
+
+---
+
 ## See also
 
 - [Streaming Operational Helpers](streaming-operational-helpers.md) — `kafka_consume_sample()` for actual message sampling from discovered topics

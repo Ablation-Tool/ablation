@@ -89,6 +89,20 @@ Run orchestration management probing after host/service discovery reveals manage
 
 ---
 
+## Reading findings
+
+Orchestration probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (unauthenticated catalog/API) / `HIGH` (management API exposed) |
+| `title` | Finding code (e.g., `CONSUL_CATALOG_OPEN`, `VCENTER_EXPOSED`, `KONG_ADMIN_OPEN`) |
+| `detail` | Service count, version, or configuration exposure description |
+| `host` | Target IP |
+| `port` | Service port |
+
+---
+
 ## See also
 
 - [Secrets/Access Infrastructure](secrets-access-infrastructure.md) — Consul KV vault secrets and GraphQL API exposure
