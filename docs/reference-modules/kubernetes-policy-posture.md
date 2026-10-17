@@ -18,7 +18,7 @@ Enumerate Kubernetes RBAC wildcard bindings, cluster-admin grants, privileged po
 
 ```mermaid
 flowchart TD
-    A["K8sEnumerator.enumerate() runs:\n  check_rbac()\n  check_rbac_clusteradmin()\n  check_network_policies()\n  check_privileged_pods()\n  check_secret_env_vars()\n  check_pod_security_admission()\n  check_admission_webhooks()\n  check_etcd_encryption()"] --> B["check_rbac():\n  GET /apis/rbac.authorization.k8s.io/v1/clusterrolebindings\n  GET /apis/rbac.authorization.k8s.io/v1/rolebindings\n  Flag: verbs=['*'] or resources=['*'] → wildcard grant\n  → rbac_findings: List[str]"]
+    A["K8sEnumerator.enumerate_all() runs:\n  check_rbac()\n  check_rbac_clusteradmin()\n  check_network_policies()\n  check_privileged_pods()\n  check_secret_env_vars()\n  check_pod_security_admission()\n  check_admission_webhooks()\n  check_etcd_encryption()"] --> B["check_rbac():\n  GET /apis/rbac.authorization.k8s.io/v1/clusterrolebindings\n  GET /apis/rbac.authorization.k8s.io/v1/rolebindings\n  Flag: verbs=['*'] or resources=['*'] → wildcard grant\n  → rbac_findings: List[str]"]
     B --> C["check_rbac_clusteradmin():\n  List all ClusterRoleBindings to 'cluster-admin' role\n  → cluster_admin_binding_findings: List[str]"]
     C --> D["check_network_policies():\n  GET /apis/networking.k8s.io/v1/networkpolicies (all namespaces)\n  Namespace with zero policies → flat network finding\n  → network_policy_findings: List[str]"]
     D --> E["check_privileged_pods():\n  GET /api/v1/pods (all namespaces)\n  Flag: securityContext.privileged=true\n  Flag: hostPID=true + runAsNonRoot absent\n  → privileged_pod_findings: List[str]"]
@@ -36,7 +36,7 @@ enumerator = K8sEnumerator(
     token=sa_token,
     ca_cert=ca_cert,
 )
-results = enumerator.enumerate()
+results = enumerator.enumerate_all()
 
 for finding in results.get('rbac_findings', []):
     print(f"  [RBAC] {finding}")
@@ -81,7 +81,7 @@ Privileged pod findings:
 
 ## Pipeline position
 
-Run Kubernetes policy posture checks after initial `K8sEnumerator.enumerate()` confirms cluster access. Policy findings direct privilege escalation: cluster-admin binding → escalate; privileged pods → node escape; flat namespace → lateral move to other pods.
+Run Kubernetes policy posture checks after initial `K8sEnumerator.enumerate_all()` confirms cluster access. Policy findings direct privilege escalation: cluster-admin binding → escalate; privileged pods → node escape; flat namespace → lateral move to other pods.
 
 ---
 

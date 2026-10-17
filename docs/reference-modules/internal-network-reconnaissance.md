@@ -6,7 +6,7 @@ Parse ARP tables and routing tables, discover adjacent subnets, harvest credenti
 
 ## Why this exists
 
-1. **`NetworkDiscovery` parses ARP and routing tables in pure Python** — reading `/proc/net/arp` and `/proc/net/route` directly, it produces a list of reachable subnets and known hosts without running `ip route` or `arp -a`. The subnet list seeds parallel TCP connect scanning via `NetworkDiscovery.scan_subnet_parallel()`, which uses Python threads to scan all 254 hosts in a /24 within seconds.
+1. **`NetworkDiscovery` parses ARP and routing tables in pure Python** — reading `/proc/net/arp` and `/proc/net/route` directly, it produces a list of reachable subnets and known hosts without running `ip route` or `arp -a`. The subnet list seeds parallel TCP connect scanning via `NetworkDiscovery.scan_subnets()`, which uses Python threads to scan all 254 hosts in a /24 within seconds.
 
 2. **`CredentialHarvester` extracts credentials from well-known filesystem locations** — `/etc/passwd`, `/etc/shadow`, `/home/*/.netrc`, `/home/*/.ssh/`, `/var/lib/git/.git/config`, and application configuration files in `/etc/` and `/opt/`. `SSHKeyEnumerator` enumerates all RSA/ECDSA/ED25519 private keys and `known_hosts` files found in user home directories, providing direct lateral movement material for SSH-accessible hosts.
 
@@ -18,7 +18,7 @@ Parse ARP tables and routing tables, discover adjacent subnets, harvest credenti
 
 ```mermaid
 flowchart TD
-    A["modules/lateral_movement.py"] --> B["NetworkDiscovery:\n  parse_arp_table() → [(ip, mac)]\n  parse_routing_table() → [(subnet, gateway, iface)]\n  scan_subnet_parallel(subnet, ports=[22,80,443,3306,5432]) → List[dict]\n    Threaded TCP connect scan (32 threads)\n    → [{ip, open_ports: List[int]}]"]
+    A["modules/lateral_movement.py"] --> B["NetworkDiscovery:\n  parse_arp_table() → [(ip, mac)]\n  parse_route_table() → populates nd.routes [{iface,dest,gw,mask,flags}]\n  scan_subnets([cidr_list], ports=[22,80,443,3306,5432]) → populates nd.live_hosts\n    nd.live_hosts: {ip: {port: banner}}\n    Threaded TCP connect scan"]
     B --> C["CredentialHarvester:\n  harvest_netrc() → List[dict]  /home/*/.netrc\n  harvest_git_credentials() → List[dict]  .git/config, .gitconfig\n  harvest_ssh_keys() → via SSHKeyEnumerator\n  harvest_env_tokens() → APITokenDetector (env vars)"]
     C --> D["CloudMetadataProber:\n  probe_aws(timeout=2) → dict\n    GET 169.254.169.254/latest/meta-data/iam/security-credentials/\n    → role name + {AccessKeyId, SecretAccessKey, Token}\n  probe_gcp(timeout=2) → dict\n    GET 169.254.169.254/computeMetadata/v1/ (Metadata-Flavor: Google)\n  probe_azure(timeout=2) → dict\n    GET 169.254.169.254/metadata/instance?api-version=2021-02-01\n  → cloud credentials or None"]
     D --> E["APITokenDetector:\n  scan_env_variables() → List[dict]\n    os.environ: match API_KEY, TOKEN, SECRET, AWS_*, GITHUB_TOKEN\n  scan_config_files(paths) → List[dict]\n    Regex for token-like strings in /etc/, /opt/, ~/.config/"]
@@ -82,7 +82,7 @@ SSHKeyEnumerator:
 
 ## False positives
 
-**`scan_subnet_parallel()` TCP connect scanning** — TCP SYN to all hosts in a subnet is highly detectable by IDS/IPS systems and will generate alerts in monitored environments. Limit to targeted scanning of specific IPs identified from ARP/routing tables.
+**`scan_subnets()` TCP connect scanning** — TCP SYN to all hosts in a subnet is highly detectable by IDS/IPS systems and will generate alerts in monitored environments. Limit to targeted scanning of specific IPs identified from ARP/routing tables.
 
 **`APITokenDetector.scan_env_variables()`** — environment variables that contain the word `TOKEN`, `KEY`, or `SECRET` in their name but do not hold actual credentials (e.g., `MAX_RETRY_COUNT`) will not produce false matches because the detector checks value format (length ≥ 20, entropy ≥ 3.5 bits/char), not just key name.
 
