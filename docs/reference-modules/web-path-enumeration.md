@@ -82,6 +82,14 @@ Run `FlatuiMethodDecoder` immediately after route registration analysis and befo
 
 ---
 
+## Reading output
+
+`FlatuiMethodDecoder.decode(ctx)` returns `Dict[int, Set[str]]` — method ID → set of HTTP verb strings (e.g., `{0: {'GET'}, 1: {'POST'}, 15: {'POST', 'PUT', 'DELETE'}}`).
+
+`FlatuiMethodDecoder.report(mapping)` returns a formatted string suitable for embedding in a findings report. Pass the dict from `decode()` directly.
+
+---
+
 ## See also
 
 - [Pre-Authentication Route Auditing](route-authentication-classification.md) — `PreAuthRouteAuditor` that consumes `FlatuiMethodDecoder` results
