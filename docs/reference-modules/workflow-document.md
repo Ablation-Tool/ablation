@@ -355,7 +355,7 @@ WorkflowDocument id='cisco/fmc_server'
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+`WorkflowDocument` does not emit security findings. The most common operational error is calling `advance()` with an instance that fails schema validation — this raises `ValueError` with the validation error list. Call `validate(stage_name, instance)` first to pre-check without advancing, then fix any reported errors before calling `advance()`.
 
 ---
 

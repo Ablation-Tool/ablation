@@ -193,7 +193,7 @@ print(json.dumps(sarif_doc, indent=2))
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+The export module does not emit security findings. A SARIF output that contains no results (`"results": []`) is valid and expected when `findings` is empty — not a false positive from the tool. If `sweep_to_sarif` produces no results, verify that `PatternLibrary.sweep()` returned hits and that the hit objects have non-null `func_addr` fields before calling the exporter.
 
 ---
 

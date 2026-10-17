@@ -390,7 +390,7 @@ BinaryContext: libservice.so
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+`BinaryContext.load_or_build()` does not emit security findings. The most common failure mode is a cache hit returning a stale context after the binary has been modified: the SHA-256 key prevents this for the binary itself, but the NameRegistry overlay is separate. If a function name registered in a prior session has since been determined incorrect, call `ctx.delete_name(va)` and `ctx.set_name(va, corrected_name, source='confirmed')` to update both the in-memory overlay and the persistent `NameRegistry`.
 
 ---
 
