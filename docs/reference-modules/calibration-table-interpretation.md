@@ -115,7 +115,7 @@ KF_LOAD_EFF [MAP 16x16]
 | `name` | Table name from the `.a2l`/`.damos` definition |
 | `description` | Human-readable description from the definition file |
 | `category` | Source-file category label |
-| `table_type` | `'MAP'` (2D), `'CURVE'` (1D), `'VALUE'` (scalar), `'AXIS_PTS'` |
+| `table_type` | `'VALUE'` (scalar), `'CURVE'` (1D with x_axis), `'MAP'` (2D with x_axis + y_axis) |
 | `address` | File offset of the table data |
 | `rows` | Row count (Y-axis length for MAP type) |
 | `cols` | Column count (X-axis length for MAP type) |
