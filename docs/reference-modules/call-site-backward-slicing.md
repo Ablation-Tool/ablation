@@ -18,9 +18,9 @@ Extend `RegAnnotator`'s single-function forward symbolic pass to follow call cha
 
 ```mermaid
 flowchart TD
-    A["IPRegAnnotator(ctx, lib_graph=None)"] --> B["annotate(func_va, max_hops=3) → ChainResult\n  Run RegAnnotator.annotate(func_va)\n  For each BL/CALL in the result:\n    If callee is resolvable (PLT name in ctx or lib_graph):\n      Load callee function\n      Seed callee entry registers with caller's live RegVals at call_va\n      Run RegAnnotator.annotate(callee_va, seeded_state)\n      → ChainCallSite(call_va, callee_name, args, chain_result)\n  Recurse up to max_hops"]
-    B --> C["ChainResult:\n  root_func_va: int\n  call_sites: List[ChainCallSite]\n  all_sinks(sink_names) → List[Tuple[int, str, ChainCallSite]]\n    Find (va, sink_name, call_site) where callee in sink_names\n  fmt() → str"]
-    C --> D["ChainCallSite:\n  call_va: int\n  callee_name: str\n  args: Dict[str, RegVal]  ($a0–$a7 or r0–r7 etc)\n  depth: int\n  chain_result: Optional[ChainResult]\n  fmt() → str"]
+    A["IPRegAnnotator(ctx, lib_graph=None)"] --> B["annotate_chain(entry_va, max_hops=2) → IPChain\n  Run RegAnnotator for root function\n  For each BL/CALL in the result:\n    If callee is resolvable (PLT name in ctx or lib_graph):\n      Load callee function\n      Seed callee entry registers with caller's live RegVals at site_va\n      Run RegAnnotator for callee with seeded state\n      → ChainCallSite(site_va, target_va, target_name, target_binary, args, callee_chain)\n  Recurse up to max_hops"]
+    B --> C["IPChain:\n  root_va: int\n  root_binary: str\n  max_hops: int\n  root: ChainResult\n  all_sinks(sink_names) → List[Tuple[int, str, ChainCallSite]]\n  fmt() → str"]
+    C --> D["ChainResult:\n  func_va: int\n  func_end_va: int\n  binary: str\n  hop: int\n  calls: List[ChainCallSite]\n  all_sinks(sink_names) → List[Tuple[int, str, ChainCallSite]]"]
 ```
 
 ---
@@ -37,12 +37,12 @@ lib_graph = LibGraph.from_dir('/path/to/firmware/lib/')
 
 annotator = IPRegAnnotator(ctx, lib_graph=lib_graph)
 
-result = annotator.annotate(handler_va, max_hops=3)
-print(result.fmt())
+chain = annotator.annotate_chain(handler_va, max_hops=3)
+print(chain.fmt())
 
 # Find all sink calls reachable from this handler
-for va, sink_name, call_site in result.all_sinks({'system', 'execv', 'popen'}):
-    print(f"  Sink: {sink_name} at {va:#x}  depth={call_site.depth}")
+for func_va, binary, call_site in chain.all_sinks({'system', 'execv', 'popen'}):
+    print(f"  Sink: {call_site.target_name} at {call_site.site_va:#x}  in {binary}")
     print(f"  args: {call_site.args}")
 ```
 
@@ -53,18 +53,17 @@ for va, sink_name, call_site in result.all_sinks({'system', 'execv', 'popen'}):
 The following illustrates interprocedural register annotation output format. Actual VAs are binary-specific.
 
 ```
-IPRegAnnotator: httpd  root=<va>
+CHAIN 0x<va>  httpd  [max_hops=3]
 
-ChainResult:
-  Depth 0 → handler at <va>
-    BL validate_input(<va>)  args: {r0: ARG0_from_recv, r1: 0x20}
-  Depth 1 → validate_input at <va>
-    BL exec_wrapper(<va>)    args: {r0: ARG0_from_recv (passed through)}
-  Depth 2 → exec_wrapper at <va>
-    BL system(<va>)          args: {r0: ARG0_from_recv}
+[0x<root_va>..0x<root_end>]  httpd  hop 0
+  0x<call1>  validate_input(r0=arg0, r1=0x20)
+    [0x<validate_va>..0x<validate_end>]  httpd  hop 1
+      0x<call2>  exec_wrapper(r0=arg0)
+        [0x<exec_va>..0x<exec_end>]  httpd  hop 2
+          0x<call3>  system(r0=arg0)  [PLT/external]
 
-all_sinks('system'): [(system_va, 'system', call_site)]
-  ARG0 = ARG0_from_recv  (provenance: recv() at <va>)
+SINK CALLS in chain from 0x<root_va>:
+  httpd:0x<exec_va> -> system(0x<call3>)  [r0=arg0]
 ```
 
 ---
@@ -85,7 +84,7 @@ Run `IPRegAnnotator.annotate()` on confirmed pre-auth handler VAs or CMDB sink-c
 
 ## Reading output
 
-`IPRegAnnotator.annotate_chain(root_va)` returns an `IPChain` object:
+`IPRegAnnotator.annotate_chain(entry_va, max_hops=2)` returns an `IPChain` object:
 
 | Attribute | Content |
 |:---|:---|
@@ -103,6 +102,18 @@ Each `ChainResult` in the chain:
 | `binary` | Path of the binary containing this function |
 | `hop` | Hop depth (0 = root, 1 = callee, 2 = callee's callee, …) |
 | `calls` | `List[ChainCallSite]` — each call site with its argument register annotations |
+
+Each `ChainCallSite`:
+
+| Attribute | Content |
+|:---|:---|
+| `site_va` | VA of the `CALL`/`BL` instruction |
+| `target_va` | VA of the called function |
+| `target_name` | Name of the called function (from PLT or names registry) |
+| `target_binary` | Path of the binary containing the target function |
+| `args` | `Dict[str, RegVal]` — argument registers with their symbolic values at the call |
+| `callee_chain` | `Optional[ChainResult]` — recursive chain for this callee (if followed) |
+| `is_plt_leaf` | `True` if the callee is an external PLT call not followed further |
 
 Call `chain.all_sinks(sink_names)` to get all `(func_va, binary, ChainCallSite)` tuples for any named sink within the full chain.
 
