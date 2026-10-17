@@ -20,48 +20,50 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `Path.stat().st_size` guard befo
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`ChunkWalkerValidator.scan()` runs a Capstone linear sweep over the `.text` section. For each instruction, it applies a two-phase pattern match:
 
----
+1. **Chunk header read** — a `movzwl` or `movzbl` instruction reading from a memory operand into a register (the `length_reg`). This matches the typical 16-bit or 8-bit TLV length field read.
+2. **Pointer advance** — within a lookahead window (`ADVANCE_LOOKAHEAD` instructions), an `add` or `lea` that advances a pointer register (`advance_reg`) by exactly `length_reg`. This is `ptr += raw_length`.
+3. **Alignment check** — between steps 1 and 2, the scanner looks for the `(length + 3) & ~3` rounding pattern: either an `add reg, 3; and reg, ~3` sequence or an equivalent `lea`. If found, `aligned=True`.
+4. **Next field read** — within `READ_LOOKAHEAD` instructions after the advance, the scanner looks for the next chunk header read (a memory dereference through `advance_reg`). If found, its VA is stored in `read_va`.
 
-## Usage
-
-```python
-from modules.chunk_walker_validator import ChunkWalkerValidator
-
-validator = ChunkWalkerValidator.from_context(ctx)
-findings = validator.scan()
-for f in findings:
-    print(f.fmt())
-```
+A finding is emitted when an unaligned advance is detected (`aligned=False`). Aligned advances are also reported (`aligned=True`) to confirm correct protocol implementations.
 
 ---
 
 ## Example output
 
-```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+The following illustrates `ChunkWalkFinding.fmt()` output. Actual addresses are binary-specific.
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+```
+ChunkWalkerValidator: sctp_parser_x86-64.elf
+
+[UNALIGNED]  func=0x401a20  advance=0x401b44
+  func   : 0x401a20
+  advance: 0x401b44  rsi += rdx
+  next_rd: 0x401b58
+
+[ALIGNED]  func=0x402310  advance=0x402388
+  func   : 0x402310
+  advance: 0x402388  rdi += rcx
+  next_rd: 0x4023a0
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+**Non-chunk pointer arithmetic:** Any `add reg1, reg2` where `reg2` was loaded from memory by `movzwl`/`movzbl` matches the pattern, regardless of whether it is actually a TLV chunk advance. Length-limited string copies or struct field-guided copies trigger the pattern. Verify candidate VAs with `FuncProfiler` to confirm a TLV loop structure (outer loop over chunk pointer, inner reads for type and value fields).
+
+**Alignment pattern in copied register:** The scanner checks for alignment of `length_reg` only between the header read and the advance instruction. If alignment is computed from a copy of `length_reg` in a different register, the `aligned=True` flag is not set, producing a spurious `UNALIGNED` result.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` with the target binary. Use `SemanticSearcher.query("TLV chunk parser length advance alignment")` to confirm the binary has TLV parsers before running the scanner.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For `aligned=False` findings, verify with `FuncProfiler` that the function contains a TLV parsing loop. Report confirmed SCTP/DNS/GRE chunk alignment bugs as misparse-on-malformed-input findings.
 
 ---
 
@@ -84,8 +86,6 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md) — load target binary before calling `from_context()`
+- [Single-Function Profiling](single-function-profiling.md) — `FuncProfiler` for verifying TLV loop structure around flagged VAs
+- [Semantic Searching](semantic-searching.md) — `SemanticSearcher` to identify TLV parser candidates before scanning
