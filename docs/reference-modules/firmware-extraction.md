@@ -92,6 +92,21 @@ FirmwareContainerKeyExtractor:
 
 ---
 
+## Reading output
+
+`FortiOSHardwareExtractor.extract()` returns an `ExtractionResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `xor_key` | Bytes — 64-byte XOR key; `confidence` float 0.0–1.0 |
+| `partitions` | `List[PartitionEntry]` — `{name, offset, magic, encrypted}` |
+| `rootfs_path` | Path to the decrypted `rootfs.gz` on disk (or `None` if decryption failed) |
+| `datafs_path` | Path to the decrypted `datafs.gz` on disk (or `None`) |
+
+`FirmwareContainerKeyExtractor.extract()` returns `{pkcs1_key_blocks: List[bytes], rc4_inner_key: bytes}`.
+
+---
+
 ## See also
 
 - [Firmware Signature and Secret Triage](firmware-signature-and-secret-triage.md) — key and credential extraction from decrypted partitions

@@ -85,6 +85,23 @@ Run `BssTaintTracker` on stripped kernel binaries where `SemanticSearcher` fails
 
 ---
 
+## Reading output
+
+`BssTaintTracker.run()` returns a dict:
+
+| Key | Content |
+|:---|:---|
+| `decrypt_va` | VA of the candidate decrypt function |
+| `start_sym` | BSS address used as start bound for the loop |
+| `end_sym` | BSS address used as end bound for the loop |
+| `bss_loads` | Count of BSS loads found in the candidate function |
+| `loop_back_edge_va` | VA of the loop back-edge instruction |
+| `tainted_regs` | List of register names that carry BSS-derived values to the memory base |
+
+Returns `None` if no BSS-loop decrypt candidate is found.
+
+---
+
 ## See also
 
 - [Taint Analysis (x86)](x86.md) — standard x86/x86-64 taint tracker for network-source analysis

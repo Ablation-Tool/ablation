@@ -83,6 +83,20 @@ Run `FormatStringScanner` as part of the initial `SemanticSearcher`-guided triag
 
 ---
 
+## Reading findings
+
+`FormatStringScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (format arg is a function parameter), `MEDIUM` (stack load — unclear provenance) |
+| `title` | Finding code, e.g., `FORMAT_STRING_ARG_PROPAGATED` or `FORMAT_STRING_STACK_LOAD` |
+| `detail` | Function name, sink VA, format register, and provenance description |
+| `fmt_reg` | Register holding the format string argument (e.g., `rdi`, `rsi`) |
+| `call_va` | VA of the format-string sink call |
+
+---
+
 ## See also
 
 - [Sink Argument Classifier](sink-argument-classifier.md) — complementary: classifies command-string provenance at exec-class sinks
