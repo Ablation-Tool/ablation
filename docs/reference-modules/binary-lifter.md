@@ -1,91 +1,80 @@
-# BinaryLifter
+# Binary Lifter
 
-Lift native binary functions to annotated C pseudocode.
-
-**Module:** `ablation.analyzers.binary_lifter` 
-**Exports:** `BinaryLifter`, `NativeVal`
-
----
-
-## What this is
-
-BinaryLifter is the single lift entry point for all 17 ISAs in Ablation. It accepts any supported binary, an arch token, and a function VA and returns annotated pseudo-C. All ISA backends use per-register state machines and calling-convention-aware call signatures; output completeness varies by ISA (CFG depth, loop structuring, type recovery). BEAM files lift to module summaries through the same interface.
-
----
-
-## Where it's used
-
-After `SemanticSearcher` and `TaintTracker` identify candidates, BinaryLifter makes a flagged function readable. Use it to understand what a function does before writing a finding.
-
----
-
-## Safe usage
-
-**Specify `arch=` for non-ARM64 binaries.** The default is `arm64`. An SH-2A, MIPS, or RISC-V binary passed without `arch=` produces misidentified instructions with no error.
-
-**Use `from_context()` when a `BinaryContext` already exists.** `from_path()` re-parses the ELF. `from_context()` reuses the section map already in memory and avoids a redundant file read.
-
-**Call `with_taint(findings)` after a TaintTracker run.** Without taint annotations, the lifted output shows call structure but not which paths carry attacker-controlled data. Taint annotations mark the calls worth tracing.
-
-**Check ISA backend completeness before relying on data-flow output.** All backends track register state; completeness varies, higher-completeness backends resolve CFG edges, emit typed expressions, and annotate taint. Lower-completeness backends resolve calls/returns/branches and emit remaining instructions as `// mnemonic ops`. For full decompiler output on PPC476, use `Ppc476Decompiler` directly.
+Lift native binary functions to annotated C pseudocode across 18 ISA variants, from full typed register-tracking IR on ARM64/x86-64 to structural pseudocode on all other ablation-native decoders.
 
 ---
 
 ## Why this exists
 
-Three things were not possible before in Ablation:
+1. **Before BinaryLifter there was no single entry point that produced readable pseudocode for all 18 ISA variants in Ablation — each new engagement required hand-crafted Capstone loops and ad-hoc register tracking for MIPS, PPC, RISC-V, LoongArch64, ARC, V850, nanoMIPS, and SH-2A.** `BinaryLifter.from_path(binary, arch='ppc32').lift_function(va)` produces a structural skeleton for any of the 18 supported ISAs in a single call. The per-ISA state machines (`_ARM64State`, `_MIPSState`, `_PPCState`, `_RISCVState`, etc.) each seed register slots from their ABI calling convention so that argument and return registers have named `arg0`/`arg1` expressions without manual setup.
 
-1. **A single lifting entry point for 17 ISA variants**: the ISA infrastructure existed for MIPS, PPC, RISC-V, LoongArch64, ARC, V850, nanoMIPS, and BEAM, but there was no way to get readable pseudocode from any of them. Reviewing a PPC32 function required manual Capstone loops and ad-hoc register tracking per engagement. Now `BinaryLifter.from_path(binary, arch='ppc32').lift_function(va)` produces a structural skeleton for any of the 17 supported ISAs in one call.
+2. **The CFG walk infrastructure was identical across ISAs — block-level BFS over `cfg_*.blocks` — but had never been connected to a shared IR emitter, forcing copy-paste per ISA.** `_walk_ablation_cfg` closes that gap: one BFS walker, per-ISA `_make_*_emit` closures, no duplication. Calls are emitted with resolved PLT symbol names, returns use the ABI return register, and branches emit `if (/* cond */) goto label;`. Arithmetic instructions that are not yet modeled emit as `// mnemonic ops` rather than silently dropping information.
 
-2. **Structural pseudocode for all ablation-native decoders**: the CFG walk infrastructure (block-level BFS over `cfg_*.blocks`) was identical across ISAs but had never been connected to an IR emitter. `_walk_ablation_cfg` closes that gap: one shared BFS walker, ISA-specific emit closures, no code duplication.
-
-3. **BEAM module analysis via the BinaryLifter interface**: `BeamContext` existed but required a separate invocation outside the `BinaryLifter` API. Now `BinaryLifter.from_path(beam_file, arch='beam').lift_function(0)` returns a module-level summary (exports, dangerous imports, atom inventory) through the same interface as native ISA lifting.
+3. **`BeamContext` existed for Erlang/Elixir BEAM module analysis but required a separate invocation outside any consistent RE interface.** `BinaryLifter.from_path(beam_file, arch='beam').lift_function(0)` returns a module-level summary (exports, dangerous imports, atom inventory) through the same `lift_function` interface as native ISA lifting, allowing BEAM modules to appear in the same pipeline position as any other binary target.
 
 ---
 
-## Architecture support
-
-| Arch | `arch=` strings | Status |
-|---|---|---|
-| Arch | `arch=` strings | Backend / completeness |
-|---|---|---|
-| ARM64 | `arm64` | CFG + register state machine + calling convention + taint |
-| x86-64 | `x86_64`, `x86-64`, `amd64` | Linear disasm + register tracking + taint; PE + ELF |
-| x86-32 | `x86_32`, `i386`, `i686` | Register state machine (_X86_32State); CDECL; eax return |
-| ARM32 | `arm32`, `arm` | insn_arm32 + cfg_arm32; AAPCS r0-r3 |
-| Thumb/Thumb-2 | `thumb`, `thumb2` | insn_arm32 Thumb mode |
-| MIPS-32 | `mips32`, `mips`, `mips32el` | insn_mips + cfg_mips; o32 $a0-$a3 |
-| MIPS-64 | `mips64`, `mips64el` | insn_mips + cfg_mips; n64 $a0-$a7 |
-| nanoMIPS | `nanomips` | NanoMIPSDecoder linear walk; o32 ABI |
-| PPC-32 | `ppc32`, `ppc`, `powerpc` | insn_ppc + cfg_ppc; SysV32 r3-r10 |
-| PPC-64 | `ppc64`, `powerpc64` | insn_ppc + cfg_ppc; ELFv2 r3-r10 |
-| RISC-V 32 | `rv32`, `riscv32` | insn_riscv + cfg_riscv; psABI a0-a7 |
-| RISC-V 64 | `rv64`, `riscv64` | insn_riscv + cfg_riscv; psABI a0-a7 |
-| ARC EM/HS | `arc`, `arcem`, `archs` | requires `arc-elf32-objdump` in PATH |
-| V850/RH850 | `v850`, `rh850`, `v850e2` | requires `v850-elf-objdump` in PATH |
-| LoongArch64 | `la64`, `loongarch64` | LoongArchDecoder + cfg_loongarch64; lp64 $a0-$a7 |
-| BEAM (Erlang/Elixir) | `beam`, `erlang`, `elixir` | Module summary: BeamContext; no VA space |
-
-All ISA backends track register state via per-ISA state machines seeded from calling conventions. Completeness varies: ARM64 and x86-64 include taint annotations and full CFG traversal; others resolve calls/returns/branches and emit remaining instructions as `// mnemonic ops`. For PPC476 with full loop structuring and type recovery, use `Ppc476Decompiler`. ARC and V850 require a GNU cross-toolchain in PATH; they return a comment explaining the requirement if the toolchain is absent.
+## How it works
 
 ```mermaid
 flowchart TD
-    A[/"binary (ELF · PE · flat ROM)"/] --> B["BinaryLifter.from_path(arch=?)"]
-    B --> C{"arch="}
-    C -->|"arm64 (default)\nx86_64 / amd64"| D["Register state machine\nCFG + calling convention\ntyped NativeVal IR\ntaint annotations via .with_taint()"]
-    C -->|"arm32 · thumb · mips32 · mips64\nnanomips · ppc32 · ppc64\nrv32 · rv64 · la64 · x86_32 · sh2a"| E["Register state machine\n_walk_ablation_cfg BFS\ncall / return / branch resolved\nother insns as // comments"]
-    C -->|"arc / v850 / rh850"| F["Register state machine\nrequires GNU cross-toolchain in PATH\narc-elf32-objdump / v850-elf-objdump"]
-    C -->|"beam / erlang / elixir"| G["BEAM module summary\nBeamContext — no VA space\nexports · imports · atoms · dangerous calls"]
-    D --> H["lift_function(va)"]
-    E --> H
-    F --> H
-    G --> H
-    H --> I[/"pseudo-C string\nARM64/x86-64: typed register IR + taint\nother ISAs: calls + branches resolved; other insns as // comments\nbeam: module summary block"/]
+    A[/"binary\n(ELF · PE · flat ROM · .beam)"/] --> B["BinaryLifter.from_path(binary, arch='arm64')\nor from_context(ctx)"]
+    B --> C["_build_section_map(binary_path)\n→ [(va_start, size, file_offset), ...]"]
+    C --> D["lift_function(va, max_insns=512)\n→ arch string dispatch"]
+    D --> E{"arch"}
 
-    style A fill:#1e293b,stroke:#475569,color:#e2e8f0
-    style D fill:#1e3a5f,stroke:#1d4ed8,color:#bfdbfe
-    style I fill:#14532d,stroke:#166534,color:#dcfce7
+    E -->|"arm64 (default)"| F["_lift_arm64:\nfrom_capstone → build_cfg\n_ARM64State(tainted_params)\nper-insn state.emit(insn)\ntyped NativeVal IR + taint annotation"]
+    E -->|"x86_64 · amd64 · x86"| G["_lift_x86_64:\nCapstone CS_ARCH_X86 CS_MODE_64\n_X86_64State register tracking\ntyped NativeVal IR + taint annotation"]
+    E -->|"x86_32 · i386 · i686"| H["_lift_x86_32:\nCapstone CS_MODE_32\n_X86_32State CDECL (eax return, stack args)"]
+    E -->|"arm32 · arm · arm-32\nthumb · thumb2"| I["_lift_arm32(thumb=False/True):\ninsn_arm32 + cfg_arm32\n_walk_ablation_cfg + _make_arm32_emit\nAAPCS r0-r3 args"]
+    E -->|"mips32 · mips · mipsbe\nmips32el · mips64 · mips64el"| J["_lift_mips(bits=32/64, little=True/False):\ninsn_mips + cfg_mips\n_walk_ablation_cfg + _make_mips_emit\no32 $a0-$a3 / n64 $a0-$a7"]
+    E -->|"nanomips"| K["_lift_nanomips:\nNanoMIPSDecoder linear walk\n_walk_ablation_cfg + _make_nanomips_emit\no32 ABI $a0-$a3"]
+    E -->|"ppc32 · ppc · powerpc\nppc64 · powerpc64"| L["_lift_ppc(bits=32/64):\ninsn_ppc + cfg_ppc\n_walk_ablation_cfg + _make_ppc_emit\nSysV32 r3-r10 / ELFv2 r3-r10"]
+    E -->|"rv32 · riscv32\nrv64 · riscv64"| M["_lift_riscv(bits=32/64):\ninsn_riscv + cfg_riscv\n_walk_ablation_cfg + _make_riscv_emit\npsABI a0-a7"]
+    E -->|"la64 · loongarch64"| N["_lift_loongarch64:\nLoongArchDecoder + cfg_loongarch64\n_walk_ablation_cfg + _make_la64_emit\nlp64 $a0-$a7"]
+    E -->|"sh2a · sh-2a · sh2"| O["_lift_sh2a:\nEcuSH2aDecoder linear walk\n_walk_ablation_cfg + _make_sh2a_emit\nRenesas SuperH ABI R4-R7 args"]
+    E -->|"arc · archs · arcem"| P["_lift_arc:\nrequires arc-elf32-objdump in PATH\n_walk_ablation_cfg + _make_arc_emit"]
+    E -->|"v850 · rh850 · v850e2"| Q["_lift_v850:\nrequires v850-elf-objdump in PATH\n_walk_ablation_cfg + _make_v850_emit"]
+    E -->|"beam · erlang · elixir"| R["_lift_beam:\nBeamContext.from_path\nno VA space — module summary\nexports · dangerous imports · atoms"]
+
+    F --> S[/"pseudo-C string\n(ARM64/x86-64: typed register IR + taint)\n(other ISAs: calls+branches resolved;\n arithmetic as // comments)\n(beam: module summary block)"/]
+    G --> S
+    H --> S
+    I --> S
+    J --> S
+    K --> S
+    L --> S
+    M --> S
+    N --> S
+    O --> S
+    P --> S
+    Q --> S
+    R --> S
 ```
+
+### Architecture support
+
+| ISA | `arch=` strings | Completeness |
+|:---|:---|:---|
+| ARM64 | `arm64` | Full: CFG + register state machine + typed NativeVal IR + taint annotation |
+| x86-64 | `x86_64`, `x86-64`, `amd64`, `x86` | Full: linear disasm + `_X86_64State` register tracking + taint; PE + ELF |
+| x86-32 | `x86_32`, `x86-32`, `i386`, `i686` | Structural: `_X86_32State` CDECL; eax return, stack args |
+| ARM32 | `arm32`, `arm`, `arm-32` | Structural: `insn_arm32` + `cfg_arm32`; AAPCS r0-r3 |
+| Thumb/Thumb-2 | `thumb`, `thumb2`, `arm-thumb` | Structural: `insn_arm32` Thumb mode |
+| MIPS-32 (BE) | `mips32`, `mips`, `mips-32`, `mipsbe` | Structural: `insn_mips` + `cfg_mips`; o32 $a0-$a3 |
+| MIPS-32 (LE) | `mips32el`, `mipsel`, `mips-32-el` | Structural: same as MIPS-32 BE; little-endian byte swap |
+| MIPS-64 (BE) | `mips64`, `mips-64`, `mipsn64` | Structural: `insn_mips` + `cfg_mips`; n64 $a0-$a7 |
+| MIPS-64 (LE) | `mips64el` | Structural: same as MIPS-64 BE; little-endian |
+| nanoMIPS | `nanomips` | Structural: `NanoMIPSDecoder` linear walk; o32 ABI |
+| PPC-32 | `ppc32`, `ppc`, `powerpc`, `ppc-32` | Structural: `insn_ppc` + `cfg_ppc`; SysV32 r3-r10 |
+| PPC-64 | `ppc64`, `powerpc64`, `ppc-64` | Structural: `insn_ppc` + `cfg_ppc`; ELFv2 r3-r10 |
+| RISC-V 32 | `rv32`, `riscv32`, `riscv-32` | Structural: `insn_riscv` + `cfg_riscv`; psABI a0-a7 |
+| RISC-V 64 | `rv64`, `riscv64`, `riscv-64` | Structural: `insn_riscv` + `cfg_riscv`; psABI a0-a7 |
+| LoongArch64 | `la64`, `loongarch64`, `loongarch_64`, `loongarch-64` | Structural: `LoongArchDecoder` + `cfg_loongarch64`; lp64 $a0-$a7 |
+| SH-2A | `sh2a`, `sh-2a`, `sh2` | Structural: `EcuSH2aDecoder` linear walk; Renesas SuperH ABI R4-R7 |
+| ARC EM/HS | `arc`, `archs`, `arcem`, `arc-32` | Structural: requires `arc-elf32-objdump` in PATH |
+| V850/RH850 | `v850`, `rh850`, `v850e2` | Structural: requires `v850-elf-objdump` in PATH |
+| BEAM | `beam`, `erlang`, `elixir` | Module summary: `BeamContext`; no VA space — pass `va=0` |
 
 ---
 
@@ -94,20 +83,28 @@ flowchart TD
 ```python
 from ablation.analyzers.binary_lifter import BinaryLifter
 
-# ARM64 (full)
+# Default ARM64 (full register-tracking + taint-ready)
 lifter = BinaryLifter.from_path('/path/to/arm64.elf')
 print(lifter.lift_function(0x12340))
 
-# PPC32 (structural)
+# Structural backend — PPC32
 lifter = BinaryLifter.from_path('/path/to/ppc32.elf', arch='ppc32')
 print(lifter.lift_function(0x10430))
 
-# BEAM module summary (pass va=0)
+# BEAM module summary (va=0, arch string triggers BeamContext)
 lifter = BinaryLifter.from_path('/path/to/module.beam', arch='beam')
 print(lifter.lift_function(0))
+
+# MIPS-32 little-endian
+lifter = BinaryLifter.from_path('/path/to/mipsel.elf', arch='mips32el')
+print(lifter.lift_function(0x400a00))
+
+# ARC EM (requires arc-elf32-objdump in PATH)
+lifter = BinaryLifter.from_path('/path/to/arc.elf', arch='arc')
+print(lifter.lift_function(0x1000))
 ```
 
-### With a BinaryContext (recommended for ARM64/x86-64)
+### With a BinaryContext (recommended — avoids re-parsing)
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
@@ -118,7 +115,7 @@ lifter = BinaryLifter.from_context(ctx)
 print(lifter.lift_function(0x12340))
 ```
 
-### With taint annotations
+### With taint annotations from ARM64TaintTracker
 
 ```python
 from ablation.analyzers.taint_tracker_arm64 import ARM64TaintTracker
@@ -127,6 +124,7 @@ from ablation.analyzers.binary_lifter import BinaryLifter
 findings = ARM64TaintTracker.from_path_full(elf).run_interprocedural()
 lifter = BinaryLifter.from_path(elf).with_taint(findings)
 print(lifter.lift_function(0x12340))
+# Tainted registers appear as /* TAINTED */ in output
 ```
 
 ### Convenience one-liner
@@ -137,51 +135,27 @@ BinaryLifter.report('/path/to/binary', 0x12340, arch='mips32')
 
 ---
 
-## API
+## Example output
 
-### `BinaryLifter.from_path(binary_path, arch='arm64') → BinaryLifter`
+The following illustrates the output format for the three completeness tiers. Actual function names, virtual addresses, and IR expressions will reflect the specific binary.
 
-Construct from a binary path. `arch` selects the ISA backend; see the architecture support table above for valid strings.
-
-### `BinaryLifter.from_context(ctx, arch='arm64') → BinaryLifter`
-
-Construct from a `BinaryContext`. Inherits PLT symbol names and confirmed function names from the context's name overlay.
-
-### `.with_taint(findings) → BinaryLifter`
-
-Accept a list of `TaintFindingARM64` objects (ARM64 only). Returns a new `BinaryLifter` whose `lift_function` output annotates tainted registers with `/* TAINTED */`. Does not mutate the original instance.
-
-### `.lift_function(va, max_insns=512) → str`
-
-Lift the function at virtual address `va` to pseudo-C IR. Returns a multi-line string. `max_insns` bounds how many instructions are disassembled before the CFG walk begins.
-
-For `arch='beam'`: `va` is ignored; the full module summary is returned.
-
-### `BinaryLifter.report(binary_path, va, arch='arm64') → None`
-
-Convenience: construct, lift, and print.
-
----
-
-## Output format
-
-**Full backend (ARM64):**
+**Full backend (ARM64) with taint annotations:**
 ```c
-// fn_12340 @ 0x12340
+// <function-name> @ <va>
 {
   uint64_t v0 = arg0 + 0x10;
   uint64_t v1 = *(uint64_t *)(v0);   /* TAINTED */
-  uint64_t v2 = fn_5678(arg0, arg1, arg2);
-  if (arg0 == arg1) goto loc_12380;
+  uint64_t v2 = <callee-name>(arg0, arg1, arg2);
+  if (arg0 == arg1) goto loc_<label-va>;
   return v2;
-  loc_12380:
+  loc_<label-va>:
   return 0;
 }
 ```
 
-**Structural backend (MIPS32):**
+**Structural backend (MIPS-32) — calls resolved, arithmetic as comments:**
 ```c
-// fn_10430 @ 0x10430
+// fn_<va> @ <va>
 {
   // addiu $sp, $sp, -0x18
   // sw $ra, 0x14($sp)
@@ -192,83 +166,39 @@ Convenience: construct, lift, and print.
 }
 ```
 
-**BEAM module summary:**
+**BEAM module summary (`arch='beam'`, `va=0`):**
 ```
-// BEAM module: my_module
-// OTP: False
+// BEAM module: <module-name>
+// OTP: <True|False>
 {
   // exports:
-  //   start/0
-  //   handle_call/3
+  //   <function>/<arity>
+  //   <function>/<arity>
   // dangerous imports:
-  //   erlang:open_port/2  /* TAINTED */
-  // atoms (first 16 of 128):
-  //   'ok'
+  //   erlang:<dangerous-call>/<arity>  /* TAINTED */
+  // atoms (first 16 of <n>):
+  //   '<atom>'
   ...
 }
 ```
 
 ---
 
-## NativeVal
-
-```python
-@dataclass
-class NativeVal:
-    ctype:   str    # "uint64_t", "uint32_t", "uint8_t", "int32_t", "void *", ...
-    expr:    str    # expression: "arg0", "v3", "0x1234", "*(uint64_t*)v1 + 8"
-    is_ptr:  bool   # True when expression is known to be a pointer
-    tainted: bool   # True when sourced from a tainted register
-    uses:    int    # incremented on each read
-```
-
-`NativeVal` is populated by backends that emit typed IR expressions. ARM64 and x86-64 produce the most complete `NativeVal` population (type-annotated per-register state). Other ISA backends track register state via calling convention seeds and state machines; their output completeness varies and `NativeVal` coverage is shallower.
-
----
-
-## Design
-
-**Higher-completeness backends (ARM64, x86-64):** read bytes at VA → `insn_*.from_capstone` → `cfg_*.build_cfg` → per-register state machine (`_ARM64State`, `_X86_64State`) walks blocks and emits typed C expressions with taint annotations.
-
-**Other ISA backends:** read bytes at VA → ISA-specific decoder (Capstone, ablation native decoder, or objdump) → per-register state machine (`_X86_32State`, `_PPC32State`, etc.) seeded with ABI → `_walk_ablation_cfg` BFS walks blocks → `_make_*_emit` closure emits: calls with resolved PLT names, returns with ABI return register, branches as `if (/* cond */) goto label;`, other instructions as `// mnemonic ops`.
-
-**BEAM:** `BeamContext.from_path` parses the BEAM module chunk format → module name, exports, imports, atoms extracted → formatted as a comment block.
-
-See `active-hypothesis-engine-plan.md` for Phase 2/3 context.
-
----
-
-## How it works
-
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
-
----
-
-## Example output
-
-```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
-```
-
----
-
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Compiler-synthesized stubs appear as functions in some loaders.** PLT entries and thunks are short sequences that `BinaryContext` filters using known stub patterns, but custom thunks built from non-standard sequences may pass the filter. Validate any candidate VA against `ctx.func_starts` before investing in full lift output — a thunk will show only 1-3 instructions with a single tail-call.
+
+**Structural backends emit `// mnemonic ops` for arithmetic instructions that are not yet modeled.** These comment lines indicate the instruction was decoded but the state machine has no emit closure for it. They are not errors — the function skeleton is still correct for calls, returns, and branches. If arithmetic in the comment lines is relevant to the finding, read the raw instruction bytes directly using `ctx.disasm_func(va)` and trace the values manually.
+
+**`arch=` default is `arm64` — passing a non-ARM64 binary without specifying `arch=` produces misidentified instructions with no error.** There is no arch detection from the binary's ELF `e_machine` field; the lifter uses whatever `arch=` string the caller provides. Always specify `arch=` for any ISA other than ARM64.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution, PLT index, and confirmed function names via `ctx.set_name()`. For stripped binaries, run `SemanticSearcher.query()` first to identify candidate function VAs — lifting unrelated functions at arbitrary addresses wastes time on prologue/epilogue sequences.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Pass lifted pseudo-C output to `TaintTracker` for data-flow confirmation on ARM64/x86-64 targets. For structural backends, use the resolved call graph from lifted output to identify which callee functions to lift next. For `arch='beam'` targets, feed dangerous-import findings into `modules/java_re.py` OTP patterns for cross-runtime analysis.
 
 ---
 
@@ -276,15 +206,18 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 | Field | Content |
 |:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+| `va` | Virtual address of the lifted function entry point |
+| `arch` | ISA backend used (e.g., `arm64`, `ppc32`, `mips32el`) |
+| Lifted output | Multi-line pseudo-C string — `/* TAINTED */` marks tainted registers (ARM64/x86-64 only); `// mnemonic ops` marks unmodeled arithmetic (structural ISAs) |
+| `NativeVal.ctype` | C type string for a register slot: `uint64_t`, `uint32_t`, `void*`, `int32_t`, etc. |
+| `NativeVal.expr` | Expression string: `arg0`, `v3`, `0x1234`, `*(uint64_t*)v1 + 8` |
+| `NativeVal.tainted` | `True` when the register was seeded from a tainted parameter (ARM64/x86-64 only) |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md) — session state, function/import index, confirmed name overlay
+- [TaintAnalysis](taint-analysis.md) — dataflow tracking; feed `findings` into `.with_taint()` for annotation
+- [SemanticSearch](semantic-search.md) — behavioral candidate search to identify VAs worth lifting
+- [BinaryLifterSH2A](binary-lifter-sh2a.md) — SH-2A specific lifting details and ECU function patterns

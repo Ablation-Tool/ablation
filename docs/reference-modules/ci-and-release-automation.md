@@ -1,21 +1,149 @@
-# CI and release automation
+# CI and Release Automation
 
-Repository workflows for configured checks, coverage and package publishing.
-
----
-
-## What it does
-
-Repository workflows for configured checks, coverage and package publishing.
+Three GitHub Actions workflows that enforce import smoke tests, run the pytest suite, publish release builds to PyPI via OIDC trusted publishing, and automatically update Homebrew-formula checksums on every version tag.
 
 ---
 
-## Implementation
+## Why this exists
 
-_See README for implementation files._
+1. **Ablation's analyzer tree has 60+ modules across 4 package namespaces (`ablation`, `ablation.analyzers`, `ablation.core`, `sweeps`) — a broken import in any one of them produces a silent failure during RE sessions that manifests as an `ImportError` at the worst possible moment.** The CI workflow runs import smoke tests for the six highest-impact modules (`BinaryContext`, `XRefGraph`, `CFGBuilder`, `CorpusBuilder`, `SemanticSearcher`, `PatternLibrary`) on every push and pull request to `main`. These tests run before `pytest` so that a missing dependency or circular import is caught before the test suite even starts.
+
+2. **PyPI publication requires signing provenance — an incorrect manual `twine upload` can publish a build without provenance attestation, which breaks downstream package integrity verification.** The publish workflow uses `pypa/gh-action-pypi-publish@release/v1` with OIDC trusted publishing (no API token stored in secrets) and is triggered only on GitHub Release publication events, not on arbitrary pushes. This means every PyPI upload is traceable to a specific signed GitHub Release event.
+
+3. **Homebrew formula SHA-256 checksums must be updated atomically with the release tag — a formula that references an outdated checksum blocks all `brew install` users until the formula is manually fixed.** The `update-checksums.yml` workflow fires on any `v*.*.*` tag push, computes `git archive` SHA-256 for that tag, and commits the updated checksum to `main` automatically. The full pipeline (tag → CI green → Release published → PyPI published → Homebrew checksum updated) is automated end-to-end.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["Push to main branch\nor Pull Request to main"] --> B["ci.yml: test job\nubuntu-latest, Python 3.11\npip install -e '.[full]'"]
+    B --> C["Import smoke tests:\n  BinaryContext, XRefGraph, CFGBuilder\n  CorpusBuilder, SemanticSearcher, PatternLibrary\n  ablation.cli.main\n  → 'All imports OK' or ImportError"]
+    C --> D["CLI: ablation --help\n(confirms console_scripts entry point)"]
+    D --> E["Integration test on /usr/bin/ls:\n  BinaryContext.load_or_build('/usr/bin/ls')\n  XRefGraph.from_path('/usr/bin/ls')\n  CFGBuilder('/usr/bin/ls').build_function(fva)\n  Asserts: func_starts > 0, stats['functions'] > 0, blocks > 0"]
+    E --> F["pytest tests/ -x -q\n(|| true — non-blocking if no tests present)\nCoverage measured on TCL3 scope (see coverage-gate.md)"]
+
+    G["GitHub Release published"] --> H["publish.yml: publish job\nubuntu-latest, Python 3.12\npip install build; python -m build\npypa/gh-action-pypi-publish@release/v1\nOIDC trusted publishing — no API token required\nEnvironment: 'pypi' (required for OIDC)"]
+
+    I["git push tag v<major>.<minor>.<patch>"] --> J["update-checksums.yml:\ncheckout main (full history)\nTAG=GITHUB_REF_NAME (e.g. v2.81.0)\nVERSION=TAG#v\ngit archive ${TAG} --prefix=ablation-${VERSION}/\n→ sha256sum → SHA256 value\nCommit checksum update to main\nwrite: true permission for contents"]
+
+    style C fill:#1e293b,stroke:#475569,color:#e2e8f0
+    style H fill:#1e3a5f,stroke:#1d4ed8,color:#bfdbfe
+    style J fill:#14532d,stroke:#166534,color:#dcfce7
+```
+
+### Workflow reference
+
+| Workflow | File | Trigger | Purpose |
+|:---|:---|:---|:---|
+| CI | `ci.yml` | Push/PR to `main` | Import smoke tests, CLI test, /usr/bin/ls integration test, pytest |
+| Publish | `publish.yml` | GitHub Release published | Build sdist/wheel, OIDC-publish to PyPI |
+| Update checksums | `update-checksums.yml` | Tag push `v*.*.*` | Compute `git archive` SHA-256, commit to Homebrew formula |
+
+### CI test stages
+
+| Stage | Command | Blocks on failure |
+|:---|:---|:---|
+| Import smoke test | `python -c "from ablation... import ..."` | Yes — any ImportError fails the job |
+| CLI help | `ablation --help` | Yes — confirms entry-point registration |
+| Integration test | Python inline script on `/usr/bin/ls` | Yes — asserts on function/block counts |
+| pytest | `pytest tests/ -x -q` | No (`|| true`) — test failures are advisory |
+
+---
+
+## Usage
+
+### Running CI locally
+
+```bash
+# Replicate the CI import smoke tests
+python -c "from ablation.analyzers.binary_context import BinaryContext"
+python -c "from ablation.analyzers.xref_graph import XRefGraph"
+python -c "from ablation.analyzers.cfg_builder import CFGBuilder"
+python -c "from ablation.analyzers.corpus_builder import CorpusBuilder"
+python -c "from ablation.analyzers.semantic_search import SemanticSearcher"
+python -c "from ablation.analyzers.pattern_library import PatternLibrary"
+python -c "from ablation.cli import main"
+ablation --help
+
+# Replicate the integration test
+python - <<'EOF'
+from ablation.analyzers.binary_context import BinaryContext
+from ablation.analyzers.xref_graph import XRefGraph
+from ablation.analyzers.cfg_builder import CFGBuilder
+
+ctx = BinaryContext.load_or_build('/usr/bin/ls')
+assert ctx.func_starts, "no functions found"
+print(f"BinaryContext: {len(ctx.func_starts)} functions")
+EOF
+
+# Run the test suite
+python -m pytest tests/ -x -q
+
+# Run coverage (TCL3 scope only — see coverage-gate.md)
+python -m pytest tests/ --cov --cov-report=term-missing
+```
+
+### Triggering a release
+
+```bash
+# 1. Update version in pyproject.toml
+# 2. Commit and push to main (CI must pass)
+# 3. Create and push the tag
+git tag v2.81.0
+env HOME=/home/cowboy GIT_LFS_SKIP_SMUDGE=1 git push origin main
+env HOME=/home/cowboy GIT_LFS_SKIP_SMUDGE=1 git push origin v2.81.0
+# 4. Create a GitHub Release on the tag via gh CLI
+gh release create v2.81.0 --title "v2.81.0" --notes "Release notes here"
+# → triggers publish.yml → PyPI publish
+# → update-checksums.yml fires on tag push → Homebrew formula updated
+```
+
+---
+
+## Example output
+
+The following illustrates representative CI job output. Actual function and block counts will reflect the `/usr/bin/ls` binary on the CI runner.
+
+```
+=== CI job: test ===
+All imports OK
+BinaryContext: <n> functions
+XRefGraph: <n> functions, <n> PLT
+CFG 0x<va>: <n> blocks
+..... (pytest output)
+<n> passed in <t>s
+
+=== publish job ===
+Building sdist and wheel...
+Uploading distributions to PyPI...
+Package 'ablation-tool' published at https://pypi.org/p/ablation-tool
+
+=== update-checksums job ===
+tag=v<version>
+SHA256=<sha256-hex>
+Updated Homebrew formula checksum for v<version>
+```
+
+---
+
+## False positives
+
+**`pytest tests/ -x -q || true` in the CI workflow means test failures do not block merge.** This is intentional: the test suite contains integration tests marked with `@pytest.mark.integration` that require binary fixtures not available in the CI environment (specific firmware images). Failure of integration tests in CI is expected. Only import failures and integration test assertion errors on `/usr/bin/ls` are blocking.
+
+**The `update-checksums.yml` workflow commits to `main` using `contents: write` — this creates an automated commit on `main` after every version tag.** If the Homebrew formula file has conflicting changes in the same merge window as a tag push, the automated commit may fail. Check the `update-checksums.yml` run status after every release tag push.
+
+---
+
+## Pipeline position
+
+This is the release automation layer — it sits above all module development and RE work. CI runs on every PR before merge. The publish and update-checksums workflows run post-release. There are no module dependencies in the `reference-modules` sense — CI tests the modules, not the other way around.
 
 ---
 
 ## See also
 
-- [Standards Ablation](standards-ablation.md) — module-level reference with constructor patterns and usage examples
+- [Coverage Gate](coverage-gate.md) — TCL3 qualification scope, 85% coverage threshold, qualified module list
+- [FORGE Module](forge.md) — pre-commit module audit gate; runs before `git commit`, independent of CI
+- [Dependency and Supply Chain Tooling](dependency-and-supply-chain-tooling.md) — `pyproject.toml` dependency management and optional extras
