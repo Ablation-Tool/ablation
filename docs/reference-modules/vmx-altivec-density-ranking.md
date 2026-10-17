@@ -85,16 +85,17 @@ Run `VMXDensityScanner.inject_labels()` early in the analysis of Cell PPU or IBM
 
 ## Reading output
 
-`VMXDensityScanner.scan()` returns a list of `VMXDensityHit` objects (sorted by descending density):
+`VMXDensityScanner.scan(threshold, min_insns)` returns a list of `VMXFunctionResult` objects (sorted by descending density):
 
 | Attribute | Content |
 |:---|:---|
 | `va` | Function VA |
-| `density` | Float — VMX instruction ratio (VMX count / total insn count) |
-| `vmx_count` | Number of VMX/Altivec instructions in the function |
-| `total_count` | Total instruction count |
-| `label` | Inferred label (e.g., `vector_math`, `vector_crypto`, `memcpy_vectorized`) or `None` |
-| `above_threshold` | `True` if `density >= threshold` |
+| `total_insns` | Total instruction count |
+| `vmx_count` | Number of VMX/AltiVec instructions |
+| `density` | Float — `vmx_count / total_insns` |
+| `label` | Property — threshold-based label (e.g., `"vector_math"`, `"vector_trace"`) |
+
+`VMXFunctionResult.fmt(name_fn)` returns a formatted line for display. Pass `ctx.name` as `name_fn` to include resolved function names.
 
 ---
 

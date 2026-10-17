@@ -102,12 +102,14 @@ Step 6 in the RE workflow (CLAUDE.md): `FuncProfiler.profile()` on top candidate
 
 | Attribute | Content |
 |:---|:---|
-| `va` | VA of the profiled function |
-| `size_bytes` | Function size in bytes |
-| `call_count` | Number of call sites in the function |
-| `string_refs` | `List[(va, string)]` — string references within the function |
-| `calls` | `List[CallAnnotation]` — annotated call sites with `RegAnnotation` per argument |
-| `sink_count` | Number of sink calls identified |
+| `va` | Entry VA of the profiled function |
+| `end_va` | End VA (last instruction) |
+| `size` | Function size in bytes |
+| `strings` | `List[(va, string)]` — string references within the function |
+| `calls` | `List[ProfiledCall]` — all call sites with argument register annotations |
+| `sink_calls` | `List[ProfiledCall]` — only the sink-classified calls (property) |
+
+`FuncProfile.has_sink(name)` returns `True` if any sink call's `target_name` matches `name`.
 
 ---
 

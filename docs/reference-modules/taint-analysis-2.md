@@ -87,16 +87,19 @@ Run `TaintTrackerLA64` after `LA64MaxNotMinScanner` to confirm that compiler-bug
 
 ## Reading findings
 
-`TaintTrackerLA64.run()` returns a list of `TaintFindingLA64` objects:
+`LoongArch64TaintTracker.run()` returns a list of `TaintFindingLA64` objects:
 
 | Attribute | Content |
 |:---|:---|
 | `func_va` | VA of the function containing the sink |
-| `sink_va` | VA of the sink call |
-| `tainted_args` | `List[str]` — LoongArch64 argument register names with taint (e.g., `$a0`, `$a2`) |
-| `labels` | `Set[str]` — taint source names (e.g., `{'recv'}`) |
-| `bound` | Size bound value (if recoverable; `None` if unbounded) |
-| `severity` | `CRITICAL` (unbound) / `HIGH` |
+| `func_name` | Name of the function (from `ctx.name()`) |
+| `sink_va` | VA of the sink call instruction |
+| `sink_name` | Name of the sink function (e.g., `memcpy`, `system`) |
+| `tainted_args` | `List[str]` — LoongArch64 argument register names with taint (e.g., `['$a2']`) |
+| `source_name` | Name of the taint source function (e.g., `recv`) |
+| `severity` | `"HIGH"` (default) |
+
+Bound information (the `andi` upper-bit mask) is tracked in the internal `Taint` state during analysis; it is not exposed as a field on `TaintFindingLA64`.
 
 ---
 

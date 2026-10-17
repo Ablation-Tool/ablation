@@ -82,14 +82,17 @@ Run `win16_le_vxd_sweep.py` on any Windows 3.x VxD binary (`.386`, `.vxd`, `.drv
 
 ## Reading output
 
-`LEBinary.parse(path)` returns a `LEBinary` object:
+`LEBinary(path)` parses on construction. Its key attributes are:
 
 | Attribute | Content |
 |:---|:---|
-| `objects` | `List[LEObject]` — all LE objects with `type` (`CODE`/`DATA`) and `va` |
-| `vmm_services` | `List[(name, va)]` — resolved VMM service call targets (VxD only) |
-| `ddb` | `VxDDDB` — Device Descriptor Block fields: `Device_Init_VA`, `PM_API_VA`, `V86_API_VA` (or `None` if not a VxD) |
-| `function_starts()` | `List[int]` — VAs of all CODE object entry points |
+| `objects` | `List[dict]` — all LE objects with `index`, `vbase`, `vsize`, `flags`, `mapsize` |
+| `num_pages` | Total page count in the LE binary |
+| `data_base` | File offset where page data begins |
+
+`LEBinary.code_objects()` returns only objects with the EXECUTABLE flag set. Each result dict has `obj_index`, `vbase`, `vsize`, and `bytes` (assembled code bytes).
+
+`LEBinary.scan_ddb(code_bytes)` returns `Optional[dict]` — `None` if no VxD DDB signature is found, or a dict with `dev_name`, `dev_num`, `ctrl_proc`, `pm_api_proc`, `v86_api_proc`, and `sdk_ver`.
 
 ---
 
