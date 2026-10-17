@@ -130,12 +130,19 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading findings
 
-| Field | Content |
+`ApacheModuleAnalyzer.from_path(path).analyze()` returns `List[ApacheFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `binary` | Path of the analyzed Apache module `.so` |
+| `finding_class` | `HANDLER_REGISTRATION` / `AUTH_TABLE_ACCESS` / `SESSION_SKIP_FLAG` / `AUTH_BYPASS_SURFACE` / `APR_TABLE_WRITE` |
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` / `INFO` |
+| `cwe` | CWE identifier (e.g., `CWE-284`, `CWE-200`) |
+| `va` | VA of the instruction or call site |
+| `title` | Short description of the vulnerability |
+| `detail` | Detailed explanation of the attack vector |
+| `symbol` | PLT symbol involved (e.g., `apr_table_get`) — present on table-access findings |
+| `header` | Header key string for table-access findings |
 
 ---
 

@@ -231,15 +231,20 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`EcuConescanParser.from_file(path)` constructs a parser with these attributes:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `xmlid` | ROM ID string (e.g., `'LFG2EE'`) |
+| `make` / `model` / `memmodel` | ECU metadata strings |
+| `internal_id_address` | File offset for ROM identification (int) |
+| `internal_id_string` | ASCII string expected at `internal_id_address` |
+
+Call `parser.tables()` to get `List[CalibrationTable]` with the same fields as `EcuA2LParser`: `name`, `table_type`, `address`, `rows`, `cols`, `scale`, `bias`, `unit`.
+
+`parser.label_map()` returns `Dict[int, str]` for direct `ctx.set_name()` injection.
 
 ---
 

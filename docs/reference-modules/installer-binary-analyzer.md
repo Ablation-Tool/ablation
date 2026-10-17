@@ -124,16 +124,21 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`InstallerBinaryAnalyzer.from_path(path).analyze()` returns an `InstallerAnalysisResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `path` | Path of the installer file analyzed |
+| `installer_type` | Detected installer format: `'bitrock-lzma-4.0'` / `'nsis'` / `'inno'` / `'unknown'` |
+| `upx_unpacked` | `True` if the installer payload was UPX-compressed and was unpacked |
+| `payload_size` | Decompressed payload size in bytes |
+| `binaries` | `List[CarvedBinary]` — PE binaries carved from the decompressed payload |
+| `extracted_paths` | `Dict[str, str]` mapping carved binary name hints to temp file paths |
+| `errors` | `List[str]` — parse or extraction errors encountered |
+
+Each `CarvedBinary` has: `offset: int`, `arch: str`, `size: int`, `data: bytes`, `name_hint: str`.
 
 ---
 

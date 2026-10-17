@@ -108,12 +108,16 @@ Extraction either succeeds or raises an exception — there are no false positiv
 
 ## Reading findings
 
-| Field | Content |
+`VxWorksArchiveScanner.from_path(path).scan()` returns `List[ArchiveSite]`:
+
+| Attribute | Content |
 |:---|:---|
-| `path` | Filesystem path to the extracted file or partition |
-| `partition_name` | Partition label or index from the container header |
-| `size` | Size of the extracted payload in bytes |
-| `format` | Detected format of the extracted payload (`ext4`, `squashfs`, `ELF`, etc.) |
+| `obj_file` | Member name of the `.o` archive member containing the finding |
+| `func_name` | Enclosing function symbol name (if resolved) |
+| `func_va` | Function start offset in `.text` |
+| `call_va` | Offset of the `bl` (branch-and-link) instruction |
+| `frame_size` | Stack frame size allocated at function entry |
+| `callee_name` | Target symbol name from `.rela.text` (or hex address if unresolved) |
 
 ---
 

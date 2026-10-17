@@ -290,15 +290,32 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`CanDbcParser(path).parse()` returns `List[CANMessage]`, each containing `List[CANSignal]`:
+
+**`CANMessage` attributes:**
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `msg_id` | Canonical CAN ID (11-bit or 29-bit, bit 31 stripped) |
+| `name` | Message name from the DBC file |
+| `dlc` | Data length code in bytes |
+| `sender` | Node name of the transmitter |
+| `is_extended` | `True` for 29-bit extended frames |
+| `signals` | `List[CANSignal]` — signals decoded within this message |
+
+**`CANSignal` attributes:**
+
+| Attribute | Content |
+|:---|:---|
+| `name` | Signal name |
+| `start_bit` | Start bit position in the frame |
+| `length` | Signal width in bits |
+| `little_endian` | `True` for Intel/little-endian byte order |
+| `factor` / `offset` | Scaling: `physical = raw * factor + offset` |
+| `unit` | Engineering unit string (e.g., `'km/h'`) |
+| `value_table` | `Dict[int, str]` mapping raw values to named states |
 
 ---
 

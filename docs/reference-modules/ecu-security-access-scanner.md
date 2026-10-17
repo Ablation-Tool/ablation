@@ -240,13 +240,15 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Reading findings
 
-| Field | Content |
+`EcuSecurityAccessScanner(path).scan()` returns `List[SecurityAccessFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `offset` | Byte offset of the triggering instruction in the ROM |
+| `arch` | Architecture where the pattern was detected: `'M68K'` or `'PPC32'` |
+| `pattern` | Always `'static-seed-requestSeed'` for the currently implemented detection |
+| `evidence` | Raw bytes of the triggering instruction sequence |
+| `note` | Human-readable description of what was detected |
 
 ---
 

@@ -220,15 +220,20 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`EcuC28xDecoder.from_bytes(data, base_va=0).decode_all()` returns `List[C28xInsn]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `word_va` | Word-address VA of this instruction (byte offset / 2 + base_va) |
+| `is_32bit` | `True` for 2-word (32-bit) instructions, `False` for 16-bit |
+| `mnemonic` | Instruction mnemonic (e.g., `'MOV32'`, `'LC'`, `'BF'`) |
+| `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'LOOP'` / `'MISC'` |
+| `raw` | Raw instruction bytes (2 or 4 bytes, little-endian) |
+| `target` | Word-address target VA for branches/calls (None otherwise) |
+| `cond` | Condition name for conditional branches (None for unconditional) |
+| `imm` | Immediate operand value (None if not applicable) |
 
 ---
 

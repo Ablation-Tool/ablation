@@ -106,14 +106,20 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`DeprecatedFuncScanner.from_context(ctx).scan()` returns `List[DeprecatedHit]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `va` | VA of the call instruction |
+| `func_va` | Start VA of the containing function |
+| `func_name` | Name of the containing function |
+| `plt_name` | Name of the dangerous deprecated function (e.g., `gets`, `mktemp`) |
+| `cwe` | CWE identifier (e.g., `CWE-242/CWE-121`, `CWE-242/CWE-377`) |
+| `reason` | One-line description of why this function is dangerous |
+| `buf_size` | Bytes from buffer start to frame base (`-1` if unknown) |
+| `frame_size` | Total stack frame allocation in bytes (`-1` if unknown) |
+| `overflow_offset` | Bytes to reach saved RIP (`-1` if unknown) |
+| `callers` | `List[str]` — names of functions that call the containing function |
 
 ---
 

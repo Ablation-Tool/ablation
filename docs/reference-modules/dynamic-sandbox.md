@@ -152,14 +152,21 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`DynamicSandbox.from_context(ctx).probe(va, input_regs)` returns a `SandboxResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `va` | Entry VA of the probed function |
+| `input_regs` | `Dict[str, int]` — register values supplied at entry |
+| `output_regs` | `Dict[str, int]` — register values on return |
+| `return_value` | Return value (`rax`/`r0`) as an integer, or `None` if aborted |
+| `executed_insns` | Number of instructions executed before return or abort |
+| `memory_writes` | `List[Tuple[address, size, value_bytes]]` — all memory stores during execution |
+| `aborted` | `True` if execution was stopped before returning (timeout or unsafe access) |
+| `abort_reason` | Reason string when `aborted=True` |
+| `arch` | Architecture of the probe run (e.g., `'arm64'`, `'x86_64'`) |
 
 ---
 

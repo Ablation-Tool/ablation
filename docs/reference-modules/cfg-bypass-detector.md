@@ -115,14 +115,17 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`CFGBypassDetector.from_path(path).scan()` returns `List[CFGBypassFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` / `INFO` |
+| `category` | `cfg_disabled` / `cfg_table_absent` / `no_export_suppression` / `export_not_in_table` / `indirect_call_stats` |
+| `title` | Short description of the bypass opportunity |
+| `location` | Human-readable location string (function name, export name, or PE header field) |
+| `description` | Detailed explanation of why this is a bypass surface |
+| `va` | VA of the relevant instruction or table entry (0 if not applicable) |
+| `cwe` | CWE identifier (e.g., `CWE-693`) |
 
 ---
 

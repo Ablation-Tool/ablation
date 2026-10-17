@@ -66,14 +66,19 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`HeapUAFScanner.from_path(path).scan()` returns `List[HeapFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `binary` | Path of the analyzed binary |
+| `func_va` | Start VA of the function containing the vulnerability site |
+| `func_name` | Name of the function (if resolved) |
+| `site_va` | VA of the specific instruction flagged |
+| `kind` | `UAF` / `DOUBLE_FREE` / `HEAP_OVERFLOW` / `TYPE_CONFUSION` |
+| `description` | Description of the specific vulnerability pattern |
+| `severity` | `HIGH` / `MEDIUM` |
+
+`HeapFinding.fmt()` returns a one-line summary with severity tag, kind, and function context.
 
 ---
 

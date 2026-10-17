@@ -306,15 +306,20 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`EcuNissanParser.from_file(path)` constructs a parser. Access calibration tables via `parser.tables(xmlid, rom)` which returns `List[CalibrationTable]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `name` | Calibration object name |
+| `table_type` | `'VALUE'` / `'CURVE'` / `'MAP'` / `'BITWISE'` |
+| `address` | File offset of the data block in the ROM |
+| `rows` / `cols` | Table dimensions |
+| `scale` / `bias` | Physical-to-raw scaling |
+| `unit` | Engineering unit string |
+
+`parser.label_map(xmlid, rom)` returns `Dict[int, str]` for direct `ctx.set_name()` injection.
 
 ---
 

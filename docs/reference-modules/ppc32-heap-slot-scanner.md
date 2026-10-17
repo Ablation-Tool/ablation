@@ -101,12 +101,20 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ## Reading findings
 
-| Field | Content |
+`PPC32HeapSlotScanner.from_path(path).scan()` returns `List[HeapSlotFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+| `func_name` | Name of the enclosing function (if resolved) |
+| `func_va` | Function start VA |
+| `mulli_va` | VA of the `mulli` instruction computing `slot_size × count` |
+| `slot_size` | Bytes per slot — the multiplier operand in `mulli` |
+| `malloc_va` | VA of the `bl malloc` call |
+| `strcpy_va` | VA of the `bl strcpy` (or equivalent copy) call |
+| `strcpy_target` | Resolved callee name at `strcpy_va` |
+| `has_size_check` | `True` if a `cmpwi`/`cmplwi` was found between `malloc` and `strcpy` |
+| `mulli_bytes` | Raw bytes at `mulli_va` — for byte-level verification |
+| `strcpy_bytes` | Raw bytes at `strcpy_va` — for byte-level verification |
 
 ---
 
