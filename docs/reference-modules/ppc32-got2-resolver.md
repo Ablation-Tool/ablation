@@ -238,14 +238,20 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`PPC32GOT2Resolver.from_context(ctx).resolve()` returns a `GOT2ResolveResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+| `resolved` | `List[GOT2ResolvedCall]` — BCTRL sites where the target was resolved |
+| `unresolved` | `List[GOT2UnresolvedCall]` — BCTRL sites that could not be resolved |
+
+Each `GOT2ResolvedCall` has: `bctrl_va`, `kind` (`'got2'` or `'direct'`), `target`, `name`, `r30`, `disp`, `entry_va`.
+
+Each `GOT2UnresolvedCall` has: `bctrl_va`, `reason` (e.g., `'dynamic_dispatch'`, `'no_r30_setup_precedes'`).
+
+`GOT2ResolveResult.stats` returns a summary dict with `total_bctrl`, `resolved`, `got2`, `direct`, `unresolved`, `dynamic` counts.
 
 ---
 

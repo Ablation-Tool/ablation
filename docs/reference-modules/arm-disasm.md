@@ -64,14 +64,16 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`ARMDisassembler.from_bytes(data, base=0).disassemble()` returns `List[ARMInstruction]`:
+
+| Attribute | Content |
 |:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+| `address` | Virtual address of the instruction |
+| `encoding` | Raw 32-bit instruction encoding |
+| `mnemonic` | Instruction mnemonic string (e.g., `'ldr'`, `'bl'`, `'mov'`) |
+| `operands` | Decoded operands as a string (e.g., `'r0, [r1, #4]'`) |
 
 ---
 

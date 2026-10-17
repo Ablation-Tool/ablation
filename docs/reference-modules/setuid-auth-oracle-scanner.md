@@ -123,14 +123,23 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`SetuidAuthOracleScanner.from_path(path).scan()` returns `List[OracleHit]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `binary_path` | Path of the analyzed binary |
+| `is_setuid` | `True` if the binary has the setuid bit set |
+| `shadow_func` | Shadow credential function name (e.g., `'getspnam'`) |
+| `crypt_func` | Password hashing function name (e.g., `'crypt'`) |
+| `cmp_func` | Comparison function name (e.g., `'strcmp'`) |
+| `has_rate_limit` | `True` if PAM, `sleep`, or login-tally was detected |
+| `oracle_func_va` | VA of the function containing all three oracle calls |
+| `oracle_func_name` | Resolved name of the oracle function |
+| `callers` | `List[str]` — names of functions that call the oracle function |
+| `cwe` | CWE identifier (default `'CWE-307'`) |
+| `weak_prng` | `True` if a weak PRNG seeded by time was found co-located |
+
+`OracleHit.fmt()` returns a multi-line summary with rate-limit and optional weak-PRNG detail.
 
 ---
 

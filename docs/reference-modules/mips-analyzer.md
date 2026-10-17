@@ -66,12 +66,19 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ## Reading findings
 
-| Field | Content |
+`MIPS32TaintTracker.from_context(ctx).scan()` returns `List[TaintFinding32Mips]`:
+
+| Attribute | Content |
 |:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+| `binary` | Path of the analyzed binary |
+| `func_va` | Start VA of the function containing the taint path |
+| `func_name` | Name of the function (if resolved) |
+| `sink_va` | VA of the dangerous sink call |
+| `sink_name` | Name of the dangerous sink function |
+| `tainted_args` | `List[int]` — 0-indexed positions of tainted arguments at the sink |
+| `source_name` | Name of the taint source function |
+
+`MIPS32FuncProfiler.profile(ctx, va)` returns a `MipsFuncProfile` with: `func_va`, `func_name`, `calls: List[MipsCallProfile]`, `strings: List[Tuple[int, str]]`.
 
 ---
 

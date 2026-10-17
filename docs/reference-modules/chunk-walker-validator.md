@@ -66,14 +66,18 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`ChunkWalkerValidator.from_context(ctx).run()` returns `List[ChunkWalkFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `func_va` | Start VA of the function containing the unaligned chunk advance |
+| `advance_va` | VA of the pointer advance instruction (`ptr += raw_length`) |
+| `advance_reg` | Register holding the chunk pointer being advanced |
+| `length_reg` | Register holding the raw user-supplied length value |
+| `aligned` | `True` if an alignment rounding pattern was found in the instruction lookahead |
+| `read_va` | VA of the next field read after the advance (0 if not found in window) |
+
+`ChunkWalkFinding.fmt()` returns a formatted string tagged `[ALIGNED]` or `[UNALIGNED]`.
 
 ---
 

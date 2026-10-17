@@ -64,16 +64,27 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`HardwareRootFinder.from_context(ctx).find()` returns `List[HardwareRoot]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `func_va` | Start VA of the function containing MMIO accesses |
+| `accesses` | `List[HardwareAccess]` — each access to an MMIO address range |
+| `call_spine` | `List[List[int]]` — caller paths leading to this hardware-access function |
+| `mmio_labels` | Property returning unique MMIO range names across all accesses |
+
+Each `HardwareAccess` has:
+
+| Attribute | Content |
+|:---|:---|
+| `func_va` | Containing function start VA |
+| `site_va` | VA of the individual MMIO read/write instruction |
+| `mmio_addr` | The MMIO address referenced |
+| `mmio_label` | Range label (e.g., `'STM32-APB/AHB'`) |
+| `mnemonic` | Instruction mnemonic at `site_va` |
+| `is_write` | `True` if this is a store to MMIO |
 
 ---
 

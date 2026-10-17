@@ -182,14 +182,16 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`CompilerSecurityGate.from_context(ctx).scan()` returns `List[GateFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `func_va` | Start VA of the function containing the finding |
+| `site_va` | VA of the specific instruction or call site flagged |
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
+| `category` | `TAINT_FLOW` / `FORMAT_STRING` / `HEAP` / `LENGTH_UNDERFLOW` |
+| `description` | One-line description of what was detected |
+| `detector` | Name of the sub-scanner that produced this finding |
 
 ---
 

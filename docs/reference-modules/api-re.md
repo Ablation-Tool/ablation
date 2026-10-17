@@ -138,15 +138,20 @@ Rate-limit and authentication findings from internal networks or behind authenti
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`APIREAnalyzer.run()` returns an `APIMap` and optionally a list of `Endpoint` objects:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | API-specific category (e.g., `BOLA`, `MASS_ASSIGN`, `INJECTION`, `AUTH_BYPASS`) |
-| `endpoint` | HTTP method and path of the vulnerable endpoint |
-| `detail` | What was found and how to reproduce it |
-| `evidence` | Request/response excerpt that confirms the finding |
+| `base_url` | Base URL of the target API |
+| `endpoints` | `List[Endpoint]` — each with `path`, `methods`, `params`, `responses` |
+| `auth_required` | `True` if authentication signals were detected |
+| `framework` | Detected framework string (e.g., `'express'`, `'flask'`), or `None` |
+| `version` | Detected API version string, or `None` |
+| `findings` | List of free-form finding notes from the analysis |
+
+Each `Endpoint` has: `path: str`, `methods: list`, `params: dict`, `responses: dict`, `vuln_signals: list`.
 
 ---
 

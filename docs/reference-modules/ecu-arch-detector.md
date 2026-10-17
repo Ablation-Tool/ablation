@@ -234,15 +234,19 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`EcuArchDetector(data).detect()` returns an `ArchDetectResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `arch` | Best-match ISA string (e.g., `'PPC32-VLE'`, `'M68K'`, `'SH-2A'`, `'ARM-Thumb'`) |
+| `confidence` | `'HIGH'` / `'MEDIUM'` / `'LOW'` — confidence in the ISA detection |
+| `score` | Numeric density score of the winning hypothesis |
+| `reason` | One-line human-readable explanation of why this ISA was chosen |
+| `candidates` | `List[ArchCandidate]` — all scored hypotheses (each with `arch`, `score`, `reason`) |
+
+`result.is_confident` is `True` when `confidence` is `'HIGH'` or `'MEDIUM'`.
 
 ---
 

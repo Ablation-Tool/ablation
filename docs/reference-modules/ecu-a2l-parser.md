@@ -276,15 +276,24 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`EcuA2LParser.from_file(path)` constructs a parser. Access tables via `parser.tables()` which returns `List[CalibrationTable]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `name` | Calibration object name from the A2L file |
+| `description` | Human-readable description |
+| `table_type` | `'VALUE'` (scalar) / `'CURVE'` (1-D) / `'MAP'` (2-D) |
+| `address` | File offset of the data block in the ROM |
+| `rows` | Row count (Y-axis length) |
+| `cols` | Column count (X-axis length) |
+| `element_bits` | Storage width per element in bits |
+| `scale` / `bias` | Physical-to-raw conversion: `physical = raw * scale + bias` |
+| `unit` | Engineering unit string (e.g., `'°C'`, `'kPa'`) |
+| `x_axis` / `y_axis` | `CalibrationAxis` for axis labels (None for scalar tables) |
+
+`parser.label_map()` returns `Dict[int, str]` for direct `ctx.set_name()` injection.
 
 ---
 

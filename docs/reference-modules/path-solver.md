@@ -80,11 +80,18 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`PathSolver.from_context(ctx).solve_path(start_va, target_va)` returns a `PathResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `sat` | `True` if a satisfying path exists from `start_va` to `target_va` |
+| `path` | `List[int]` — block VAs on the found path (empty if `sat=False`) |
+| `model` | `Dict[str, int]` — concrete register values at function entry that satisfy the path |
+| `clauses` | Number of Z3 clauses added during solving |
+| `note` | Reason string if `sat=False` (e.g., `'timeout'`, `'unsat'`) |
+| `seeded_fields` | `List[str]` — struct field names that were used to constrain the path |
 
 ---
 

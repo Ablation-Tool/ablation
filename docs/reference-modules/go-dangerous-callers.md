@@ -66,14 +66,16 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`GoDangerousCallerScanner.build(ctx).query_dangerous_callers()` returns `List[DangerousCallHit]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `func_name` | Name of the function containing the dangerous call |
+| `func_va` | Start VA of the containing function |
+| `call_va` | VA of the specific call instruction |
+| `call_target_va` | VA of the dangerous function being called |
+| `call_target_name` | Resolved name of the dangerous callee |
+| `string_refs` | `List[Tuple[int, str]]` — (VA, string) pairs for string refs in the same function |
 
 ---
 

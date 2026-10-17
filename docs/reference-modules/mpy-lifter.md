@@ -211,14 +211,18 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`MpyLifter.from_bytes(data).lift()` returns a `MpyCodeObj` representing the top-level module:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `kind` | Code object kind indicator |
+| `name` | Function/module name (default `'<module>'` for top-level) |
+| `data` | Raw bytecode bytes for this code object |
+| `children` | `List[MpyCodeObj]` — nested code objects (inner functions, lambdas) |
+
+Use `MpyLifter.disassemble(obj)` to get `List[MpyInsn]` (each with `offset`, `opcode`, `mnemonic`, `operand`, `qstr_val`).
 
 ---
 

@@ -261,16 +261,23 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`CppVtableReconstructor.from_context(ctx).reconstruct()` returns a `VtableReconstructorResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `vtables` | `List[VtableSpec]` — one entry per reconstructed C++ vtable |
+| `propagation` | `List[TypePropSite]` — functions identified as vtable type consumers |
+| `binary_path` | Path of the analyzed binary |
+| `arch` | Architecture string (e.g., `'x86_64'`, `'aarch64'`) |
+| `named_slot_count` | Number of vtable slots with resolved function names |
+| `total_slot_count` | Total vtable slots across all reconstructed vtables |
+| `resolved_call_count` | Number of virtual dispatch call sites successfully resolved |
+
+Each `VtableSpec` has: `va`, `slots: List[SlotSpec]`, `type_name`, `ctor_sites: List[int]`, `section_name`, `writable: bool`.
+
+Each `SlotSpec` has: `slot_index`, `slot_offset`, `func_va`, `func_name`, `name_source`.
 
 ---
 
