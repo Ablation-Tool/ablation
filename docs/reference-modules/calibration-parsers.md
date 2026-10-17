@@ -18,10 +18,10 @@ Parse ECU calibration definition files — ASAM/ASAP2 A2L (industry standard for
 
 ```mermaid
 flowchart TD
-    A["EcuA2LParser.from_file(a2l_path)"] --> B["calibration_tables() → List[CalibrationTable]\n  Parse A2L: CHARACTERISTIC, MEASUREMENT, AXIS_DESCR\n  For each CHARACTERISTIC:\n    name, description, type (MAP/CURVE/VALUE)\n    address (ROM VA), X-axis, Y-axis descriptions\n    COMPU_METHOD for physical unit conversion\n  → CalibrationTable(name, va, axes, compu_method)"]
-    A --> C["EcuOpenDamosParser.from_file(json_path)"] --> D["locate_in_rom(rom: bytes) → Dict[str, int]\n  For each table: match axis fingerprint in rom bytes\n  Return: table_name → adjusted ROM VA"]
-    D --> E["calibration_tables() → List[CalibrationTable]\n  As above, but with fingerprint-relocated VAs"]
-    B --> F["CalibrationTable: name, va, axes\n  Inject into BinaryContext:\n    ctx.set_name(va, table.name, source='a2l')\n  → named in FuncProfiler / WindowAnalyzer output"]
+    A["EcuA2LParser.from_file(a2l_path)"] --> B["calibration_tables() → list[CalibrationTable]\n  Parse A2L: CHARACTERISTIC, MEASUREMENT, AXIS_DESCR\n  For each CHARACTERISTIC:\n    name, description, category, table_type (MAP/CURVE/VALUE)\n    address (file offset), rows, cols, scale, bias, unit\n    x_axis, y_axis: CalibrationAxis objects\n  → CalibrationTable with effective_address property"]
+    A --> C["EcuOpenDamosParser.from_file(json_path)"] --> D["locate_in_rom(rom: bytes) → dict[str, int]\n  For each table: match axis fingerprint in rom bytes\n  Return: table_name → file_offset (sets relocated_address)"]
+    D --> E["calibration_tables() → list[CalibrationTable]\n  As above, but with relocated_address set from fingerprint scan"]
+    B --> F["CalibrationTable.label_map() → dict[int, str]\n  Inject into BinaryContext:\n    for addr, label in table.label_map().items():\n        ctx.set_name(addr, label, source='a2l')\n  → named in FuncProfiler / WindowAnalyzer output"]
 ```
 
 ---
@@ -41,7 +41,7 @@ tables = parser.calibration_tables()
 print(f"A2L calibration tables: {len(tables)}")
 
 for table in tables:
-    ctx.set_name(table.va, table.name, source='a2l')
+    ctx.set_name(table.effective_address, table.name, source='a2l')
 
 print(f"Annotated {len(tables)} calibration entries")
 
@@ -94,16 +94,23 @@ Run `EcuA2LParser` or `EcuOpenDamosParser` after `BinaryContext.load_or_build()`
 
 ## Reading output
 
-`EcuA2LParser.parse()` returns `List[CalibrationTable]`:
+`EcuA2LParser.calibration_tables()` returns `list[CalibrationTable]`:
 
 | Attribute | Content |
 |:---|:---|
-| `name` | Table name from the A2L definition |
-| `va` | Virtual address (applied to BinaryContext entries) |
-| `table_type` | `MAP`, `CURVE`, or `VALUE` |
-| `data` | Numpy array of physical-unit values |
-| `x_axis` | X breakpoint array (for CURVE and MAP) |
-| `y_axis` | Y breakpoint array (for MAP only) |
+| `name` | Table name from the A2L/DAMOS definition |
+| `description` | Long description string from the calibration file |
+| `category` | Category string from the source file |
+| `table_type` | `'VALUE'`, `'CURVE'`, or `'MAP'` |
+| `address` | File offset of the data block (raw, before relocation) |
+| `relocated_address` | Fingerprint-relocated address, or `None` if not relocated |
+| `effective_address` | Property — `relocated_address` if set, else `address` |
+| `rows` | Row count (y-axis length) |
+| `cols` | Column count (x-axis length) |
+| `scale` / `bias` | Physical-unit conversion factors |
+| `unit` | Physical unit string |
+| `x_axis` / `y_axis` | `CalibrationAxis` objects (for CURVE and MAP), or `None` |
+| `label_map()` | Returns `{file_offset: label}` — inject into `BinaryContext` via `set_name()` |
 
 `EcuOpenDamosParser.locate_in_rom(rom)` accepts raw ROM bytes and returns `Dict[str, int]` — `{characteristic_name: file_offset}` for every characteristic table found in this ROM variant.
 
