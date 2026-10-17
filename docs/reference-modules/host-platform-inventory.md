@@ -90,6 +90,24 @@ Run `PlatformDetector` as the second step after gaining shell access (after `Net
 
 ---
 
+## Reading output
+
+`PlatformDetector.detect_all()` returns a flat `dict`:
+
+| Key | Content |
+|:---|:---|
+| `os` | OS name string (e.g., `Linux`, `Windows`) |
+| `distro` | Linux distribution name (e.g., `ubuntu`, `alpine`) or `None` |
+| `distro_version` | Distribution version string or `None` |
+| `machine` | Machine architecture (e.g., `x86_64`, `aarch64`) |
+| `arch_family` | Architecture family (`x86`, `arm`, `mips`, `riscv`) |
+| `arch_bits` | Integer — 32 or 64 |
+| `kernel` | Kernel version string |
+| `libc` | C library name (`glibc`, `musl`, `uclibc`) |
+| `libc_version` | C library version string or `None` |
+
+---
+
 ## See also
 
 - [Crash Offset and ROP Helpers](crash-offset-and-rop-helpers.md) — `shellcode_utils.py` exploit helpers informed by platform detection results

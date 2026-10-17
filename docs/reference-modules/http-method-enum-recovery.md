@@ -82,6 +82,22 @@ Run `ApacheModuleAnalyzer` on any Apache `.so` module found in firmware (`/usr/l
 
 ---
 
+## Reading findings
+
+`ApacheModuleAnalyzer.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` / `MEDIUM` |
+| `title` | Finding code (e.g., `SESSION_SKIP_FLAG`, `ACCESS_CHECK_BYPASS`) |
+| `detail` | Hook name, handler VA, and bypass pattern description |
+| `hook_name` | Apache hook name (e.g., `ap_hook_check_access`) |
+| `handler_va` | VA of the hook handler function |
+
+`ApacheModuleAnalyzer.registered_hooks()` returns `List[{hook_name: str, handler_va: int}]`.
+
+---
+
 ## See also
 
 - [Route Authentication Classification](route-authentication-classification.md) — `PreAuthRouteAuditor` for flatui/web framework pre-auth routes

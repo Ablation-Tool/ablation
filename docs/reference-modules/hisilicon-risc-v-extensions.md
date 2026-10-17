@@ -83,6 +83,21 @@ Use `LoongArchDecoderV2` instead of `LoongArchDecoder` (V1) for all `CONFIG_KASA
 
 ---
 
+## Reading output
+
+`LoongArchDecoderV2.count_instrumentation()` returns a dict:
+
+| Key | Content |
+|:---|:---|
+| `kasan` | Count of KASAN instrumentation instructions |
+| `kcov` | Count of KCOV instrumentation instructions |
+| `real` | Count of non-instrumentation instructions |
+| `density` | Float — `(kasan + kcov) / real` instrumentation density |
+
+`LoongArchDecoderV2.decode_frames_clean()` returns `List[ARCFrame]` with instrumentation frames stripped.
+
+---
+
 ## See also
 
 - [LoongArch64 Taint Analysis](taint-analysis-2.md) — `TaintTrackerLA64` that consumes clean frames

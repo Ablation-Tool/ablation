@@ -84,6 +84,21 @@ Run HyperFlex/UCS/Intersight probes after network discovery confirms HyperFlex m
 
 ---
 
+## Reading findings
+
+HyperFlex/UCS/Intersight probe functions return `List[{severity, title, detail, host, port, evidence}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
+| `title` | Finding code (e.g., `HX_DEFAULT_CRED`, `UCSM_UNAUTHENTICATED_API`, `INTERSIGHT_CLAIM_TOKEN_EXPOSED`) |
+| `detail` | Description of the misconfiguration |
+| `host` | Target host IP or hostname |
+| `port` | Service port |
+| `evidence` | Response excerpt or credential confirming the finding |
+
+---
+
 ## See also
 
 - [Nexus Dashboard](nexus-dashboard.md) — Nexus Dashboard management layer above HyperFlex in Cisco deployments
