@@ -18,9 +18,9 @@ Enumerate Kafka topics and consumer groups without credentials, probe Flink REST
 
 ```mermaid
 flowchart TD
-    A["kafka_list_topics(host, port=9092) → List[dict]\n  TCP connect\n  _kafka_request(api_key=3, api_version=1, body=b'')\n    → Metadata response: brokers + topics\n  Parse: topic_name, partition_count, leader_id\n  → [{topic_name, partitions, replication_factor}]"] --> B["flink_enumerate(host, port=8081) → dict\n  GET /jobs/overview → running/finished jobs\n  GET /taskmanagers → TM count + memory\n  GET /jars → uploaded JAR list\n  → {jobs, taskmanagers, jars, config}\n\nflink_submit_jar_rce(host, jar_bytes, entryClass) → dict\n  POST /jars/upload (multipart jar)\n  POST /jars/<id>/run {entryClass, programArgs}\n  → {job_id, status: RUNNING|FAILED}"]
+    A["kafka_list_topics(host, port=9092) → dict\n  TCP connect\n  _kafka_request(api_key=3, api_version=0, body=pack('>i', 0))\n    → Metadata response: brokers array + topics array\n  Parse: topic name strings only (partition/replication not decoded)\n  → {host, port, reachable: bool, topics: List[str], error: str|None}"] --> B["flink_enumerate(host, port=8081) → dict\n  GET /jobs/overview → running/finished jobs\n  GET /taskmanagers → TM count + memory\n  GET /jars → uploaded JAR list\n  → {jobs, taskmanagers, jars, config}\n\nflink_submit_jar_rce(host, jar_bytes, entryClass) → dict\n  POST /jars/upload (multipart jar)\n  POST /jars/<id>/run {entryClass, programArgs}\n  → {job_id, status: RUNNING|FAILED}"]
     B --> C["nifi_enumerate(host, timeout=8) → dict\n  GET /nifi-api/controller/config → instance config\n  GET /nifi-api/process-groups/root/processors\n    → [{name, type, properties: {credentials, endpoints}}]\n  GET /nifi-api/system-diagnostics → JVM memory\n  → {version, processors: List, properties_with_creds}"]
-    C --> D["RabbitMQ management API:\n  probe_rabbitmq_management(host, port=15672) → list\n    GET /api/vhosts → vhost list (guest:guest default)\n    GET /api/queues → all queues + message count\n    → [{finding: RABBITMQ_DEFAULT_CREDS, vhosts, queues}]\n\ncheck_nats_exposure(host, port=4222) → dict\n  TCP + NATS INFO message parse\n  CONNECT {} (empty credentials)\n  PONG response → unauthenticated\n  → {nats_version, auth_required: bool}"]
+    C --> D["RabbitMQ management API:\n  probe_rabbitmq_management(host, port=15672) → list\n    GET /api/vhosts → vhost list (guest:guest default)\n    GET /api/queues → all queues + message count\n    → [{finding: RABBITMQ_DEFAULT_CREDS, vhosts, queues}]\n\ncheck_nats_exposure(host, port=4222) → list\n  TCP connect: NATS INFO banner parsed\n  HTTP /varz, /connz monitoring endpoints\n  → [{severity, title, detail, host, port}]\n  Titles: 'NATS server client port exposed' (MEDIUM)\n          'NATS unauth access (monitoring)' (HIGH)\n          'NATS credentials in varz' (CRITICAL)"]
 ```
 
 ---
@@ -36,9 +36,10 @@ from modules.streaming_enum import (
     schema_registry_enumerate
 )
 
-# Kafka topic enumeration
-topics = kafka_list_topics(target_host, port=9092)
-print(f"Topics: {[t['topic_name'] for t in topics]}")
+# Kafka topic enumeration — returns dict {host, port, reachable, topics: List[str], error}
+result = kafka_list_topics(target_host, port=9092)
+if result['reachable']:
+    print(f"Topics: {result['topics']}")
 
 # Flink REST API
 flink = flink_enumerate(target_host)
