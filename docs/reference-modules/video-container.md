@@ -95,11 +95,11 @@ Reads the binary header to validate the container magic, walks the partition or 
 ## Usage
 
 ```python
-from ablation.analyzers.video_container import VideoContainerAnalyzer
+from modules.video_container import VideoContainerAnalyzer
 
-results = VideoContainerAnalyzer.from_context(ctx).run()
-for r in results:
-    print(r)
+analyzer = VideoContainerAnalyzer.from_path('/path/to/sample.mp4')
+findings = analyzer.scan()
+print(analyzer.report(findings))
 ```
 
 ---

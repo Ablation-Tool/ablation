@@ -27,11 +27,15 @@ Reads the binary image and resolves the target-specific data structures (PLT, GO
 ## Usage
 
 ```python
-from ablation.analyzers.arm_disasm import ARMDisassembler
+from modules.arm_disasm import ARMDisassembler
 
-results = ARMDisassembler.from_context(ctx).run()
-for r in results:
-    print(r)
+with open('/path/to/arm32_firmware.bin', 'rb') as fh:
+    data = fh.read()
+
+disasm = ARMDisassembler(data, base_addr=0x10000)
+insns = disasm.disassemble(start=0x10000, count=100)
+for insn in insns:
+    print(insn)
 ```
 
 ---

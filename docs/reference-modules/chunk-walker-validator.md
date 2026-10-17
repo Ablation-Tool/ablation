@@ -27,11 +27,12 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ## Usage
 
 ```python
-from ablation.analyzers.chunk_walker_validator import ChunkWalkerValidator
+from modules.chunk_walker_validator import ChunkWalkerValidator
 
-results = ChunkWalkerValidator.from_context(ctx).run()
-for r in results:
-    print(r)
+validator = ChunkWalkerValidator.from_context(ctx)
+findings = validator.scan()
+for f in findings:
+    print(f.fmt())
 ```
 
 ---
@@ -66,7 +67,7 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-`ChunkWalkerValidator.from_context(ctx).run()` returns `List[ChunkWalkFinding]`:
+`ChunkWalkerValidator.from_context(ctx).scan()` returns `List[ChunkWalkFinding]`:
 
 | Attribute | Content |
 |:---|:---|
