@@ -105,14 +105,14 @@ SourceAuditCompressor: <N> files → <K> buckets
 | `action` | `READ` (review needed), `SKIM` (light review), `SKIP` (no dangerous sinks) |
 | `profile_bits` | Bitmask of detected patterns (subprocess, eval, open, SQL, etc.) shown in bracket notation |
 
-`SourceTaintTracker.paths()` returns a list of `TaintPath` objects:
+`SourceTaintTracker.trace_all(sinks)` returns a list of `TaintPath` objects:
 
 | Attribute | Content |
 |:---|:---|
-| `source` | Source function name and file (user-controlled input) |
-| `sink` | Sink function name and VA where taint arrives |
-| `path` | Ordered list of `(file, line, function)` call chain from source to sink |
-| `sanitizers` | List of sanitizer functions found on the path (may be empty) |
+| `sink` | `SinkHit` — the sink at the end of this path |
+| `hops` | `List[TaintHop]` — ordered call chain from route handler to sink (each hop has `func_name`, `file`, `line`, `rel_path`) |
+| `confidence` | `'DIRECT'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` — based on number of intermediate hops |
+| `has_source` | `True` if the path reaches a route handler (HTTP trust boundary) |
 
 ---
 

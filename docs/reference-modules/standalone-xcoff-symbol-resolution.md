@@ -77,7 +77,11 @@ Run `parse()` before `BinaryContext` initialization on any AIX XCOFF binary. Pas
 
 ## Reading output
 
-`load_xcoff(path)` returns an `XcoffBinary` with a `.symbols` list of `XcoffSymbol`:
+`load_xcoff(path)` returns an `XcoffBinary` with `.exports` and `.imports` lists of `XcoffSymbol`.
+
+`XcoffBinary` attributes: `path` (str), `arch` (`'ppc32'`/`'ppc64'`), `entry` (int), `text_start` (int), `data_start` (int), `toc_va` (int), `sections` (`List[XcoffSection]`), `exports` and `imports` (`List[XcoffSymbol]`).
+
+Each `XcoffSymbol` entry has:
 
 | Attribute | Content |
 |:---|:---|

@@ -80,11 +80,13 @@ Run `SinkArgClassifierARM32.classify_all()` on every ARM32 ELF binary before run
 
 | Attribute | Content |
 |:---|:---|
-| `sink_va` | VA of the sink call |
-| `sink_func` | Sink function name (e.g., `system`, `execv`) |
-| `verdict` | `RODATA_CONST`, `ARG_PROPAGATED`, or `UNKNOWN` |
-| `arg_reg` | ARM32 argument register holding the command string (`r0`–`r3`) |
-| `provenance` | Description of how the argument was derived |
+| `sink_name` | Sink function name (e.g., `'system'`, `'execv'`) |
+| `arg_pos` | 0-indexed argument position being classified |
+| `func_va` | VA of the calling function |
+| `call_va` | VA of the call instruction |
+| `verdict` | `'RODATA_CONST'`, `'ARG_PROPAGATED'`, or `'UNKNOWN'` |
+| `detail` | Human-readable trace description of the argument provenance |
+| `severity` | `'HIGH'` (ARG_PROPAGATED), `'MEDIUM'` (UNKNOWN), or `'LOW'` (RODATA_CONST) |
 
 ---
 

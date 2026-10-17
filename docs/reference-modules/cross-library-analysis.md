@@ -99,20 +99,25 @@ Run `CrossBinaryTaintTracker` after single-binary TaintTracker confirms that a t
 
 `LibGraph.defined_in(sym_name)` returns the path to the binary that exports `sym_name`, or `None` if unresolved.
 
-`CrossBinaryTaintTracker.trace()` returns a list of `TaintChain` objects:
+`CrossBinaryTaintTracker.run(source_binary, source_va, tainted_args)` returns a list of `TaintChain` objects:
 
 | Attribute | Content |
 |:---|:---|
-| `hops` | Ordered list of `TaintHop` — one per library crossing |
+| `hops` | `List[TaintHop]` — one per library crossing |
 | `sink_binary` | Path to the binary where taint reaches the sink |
-| `sink_sym` | Sink function name in `sink_binary` |
+| `sink_name` | Sink function name in `sink_binary` |
+| `sink_va` | VA of the sink call |
+| `tainted_args` | `List[int]` — argument indices tainted at the sink |
+| `source_name` | Name of the taint source function |
 
 Each `TaintHop`:
 
 | Attribute | Content |
 |:---|:---|
-| `binary` | Binary path |
-| `export_sym` | Symbol through which taint exits this binary |
+| `binary_path` | Path to the binary for this hop |
+| `func_va` | VA of the function in this binary |
+| `func_name` | Name of the function |
+| `tainted_arg_indices` | `List[int]` — which argument positions arrived tainted |
 
 ---
 

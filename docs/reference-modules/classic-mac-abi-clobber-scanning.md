@@ -92,12 +92,11 @@ Report:
 
 | Attribute | Content |
 |:---|:---|
-| `sink_va` | VA of the sink call instruction |
-| `sink_sym` | Symbol name of the sink (e.g., `system`, `popen`) |
-| `arg_n` | Argument position being clobbered (0-indexed) |
-| `register` | Register name (e.g., `r3`) |
-| `write_va` | VA where the argument was last written before the clobber |
-| `clobber_bl_va` | VA of the intermediate `bl` that clobbers the register |
+| `site_va` | VA of the sink `bl` (call) instruction |
+| `check_reg` | Register index examined (e.g., `4` for `r4`) |
+| `verdict` | `'PLAUSIBLE'` — backward walk reached function start without a write; `'SAFE'` — register was written before the call |
+| `stop_va` | VA where the backward walk stopped |
+| `stop_reason` | `'reg_written'` / `'call_clobber'` / `'uncond_branch'` / `'return'` / `'window_exhausted'` |
 
 ---
 

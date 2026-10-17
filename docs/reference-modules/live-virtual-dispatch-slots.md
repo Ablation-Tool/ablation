@@ -85,12 +85,12 @@ Run `BinderScanner` on any Android APK (system app, security agent, MDM client) 
 
 | Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` (exported, no permission) / `HIGH` (exported, weak permission) |
-| `class_name` | Android service class name |
-| `exported` | `True` if the service is exported to other apps |
-| `permission` | Required permission string, or `None` if none |
-| `transaction_codes` | List of known transaction code integers from the AIDL interface |
-| `detail` | Exploitation description |
+| `severity` | `'CRITICAL'` (exported, no permission) / `'HIGH'` (exported, weak permission) / `'MEDIUM'` / `'LOW'` / `'INFO'` |
+| `category` | Finding category (e.g., `'exported_service'`, `'weak_permission'`) |
+| `title` | Short finding title |
+| `detail` | Exploitation description and supporting context |
+| `source` | Source location identifier (e.g., service class name or manifest entry) |
+| `evidence` | Evidence excerpt from the APK (permission declaration, AIDL interface, etc.) |
 
 ---
 

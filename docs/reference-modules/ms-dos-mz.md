@@ -80,11 +80,13 @@ Run `SinkArgClassifierX86_32.classify_all()` on every x86-32 ELF or PE binary be
 
 | Attribute | Content |
 |:---|:---|
-| `sink_va` | VA of the sink call |
-| `sink_func` | Sink function name |
-| `verdict` | `RODATA_CONST`, `ARG_PROPAGATED`, or `UNKNOWN` |
-| `arg_source` | How the argument was loaded: `PUSH [ebp+N]` (stack arg), `PUSH [ebx+N]` (RODATA), etc. |
-| `provenance` | Provenance classification description |
+| `sink_name` | Sink function name |
+| `arg_pos` | 0-indexed argument position being classified |
+| `func_va` | VA of the calling function |
+| `call_va` | VA of the call instruction |
+| `verdict` | `'RODATA_CONST'`, `'ARG_PROPAGATED'`, or `'UNKNOWN'` |
+| `detail` | Human-readable trace of how the argument was loaded (e.g., `PUSH [ebp+N]` stack arg) |
+| `severity` | `'HIGH'` (ARG_PROPAGATED), `'MEDIUM'` (UNKNOWN), or `'LOW'` (RODATA_CONST) |
 
 ---
 

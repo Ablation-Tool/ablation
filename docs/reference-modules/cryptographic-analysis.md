@@ -95,18 +95,22 @@ Run `HashAlgoDiscriminator` and `CustomCBCDetector` during initial binary triage
 
 | Attribute | Content |
 |:---|:---|
-| `va` | Virtual address of the identified hash function |
-| `algo` | Algorithm name (e.g., `SHA256`, `MD5`, `BLAKE2b`) |
-| `confidence` | `HIGH` / `MEDIUM` based on K-table coverage |
+| `algo` | Algorithm name (e.g., `'SHA256'`, `'MD5'`, `'CRC32'`) |
+| `confidence` | Integer 0–100 — confidence score based on K-table constant coverage |
+| `matched` | `List[ConstMatch]` — each matched constant with `.va` and `.name` |
 
 `CustomCBCDetector.scan()` returns a list of `CBCPattern` objects:
 
 | Attribute | Content |
 |:---|:---|
-| `va` | Virtual address of the CBC implementation |
-| `iv_va` | VA of the IV in `.rodata` |
-| `bss_pair_va` | VA of the BSS buffer pair used as state |
-| `detail` | Inferred block cipher (if identifiable) |
+| `outer_func_va` | VA of the outer function or scan range |
+| `block_func_va` | VA of the single-block AES call (BL target inside the loop) |
+| `chaining_reg` | Register carrying the previous ciphertext / IV pointer |
+| `iv_va` | `Optional[int]` — VA of IV in `.rodata` (None if not resolved) |
+| `iv_bytes` | `Optional[bytes]` — 16-byte IV value (None if not resolved) |
+| `xor_va` | VA of the first XOR instruction in the loop body |
+| `loop_va` | VA of the loop start (back-edge target) |
+| `confidence` | Integer 0–100 |
 
 ---
 

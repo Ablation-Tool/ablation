@@ -87,12 +87,13 @@ Run `PPC64TaintTracker` after `BinaryContext.load_or_build()` and `Ppc64ElfV1Res
 
 | Attribute | Content |
 |:---|:---|
+| `binary` | Path of the analyzed binary |
 | `func_va` | VA of the function containing the sink |
-| `sink_va` | VA of the sink call |
-| `tainted_args` | `List[int]` — argument register indices that carry tainted values |
-| `source_name` | Name of the taint source (e.g., `recv`, `read`) |
-| `severity` | `HIGH` or `CRITICAL` |
-| `detail` | Sink function name and taint path description |
+| `func_name` | Name of the function containing the sink |
+| `sink_va` | VA of the sink call instruction |
+| `sink_name` | Name of the sink function |
+| `tainted_args` | `List[int]` — 0-indexed argument positions that carry tainted values |
+| `source_name` | Name of the taint source (e.g., `'recv'`, `'read'`) |
 
 ---
 
