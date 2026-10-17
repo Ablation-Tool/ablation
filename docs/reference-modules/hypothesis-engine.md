@@ -222,7 +222,7 @@ print(ranker.plan_report(hypotheses, top_n=5))
 
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+`HypothesisEngine.from_binary()` builds a `HypothesisSession` keyed to the binary's SHA-256. `seed()` creates `HypothesisRecord` objects with the caller-supplied prior. `add_evidence()` creates an `EvidenceRecord`, appends it to the session, and calls `EvidenceScorer.update_hypothesis()` immediately — confidence is recalculated on every evidence addition, not lazily. `EvidenceScorer.score()` sums per-family contribution (strength × family_weight × independence_factor) with a diminishing-returns multiplier of 1/(1 + ln(count)) for repeated evidence from the same family. State transitions are deterministic: `CONFIRMED` requires confidence ≥ 0.75 plus at least one structural/data-flow/behavioral item and at least two independent families with no hard contradiction; one contradiction item with strength ≥ 0.80 immediately sets `REJECTED`. `plan()` calls `ProbeRanker.generate()` which scores each un-executed probe kind by EIG = disagreement × observability / cost across all active hypotheses and returns the top-n ranked list.
 
 ---
 
@@ -250,22 +250,40 @@ for p in engine.session.executed_probes():
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+HypothesisEngine  binary=fmc_server  session=S-7f3a1b2c
+  Hypothesis 1  indirect_call_target  call_site_va=0x401920
+    status=SUPPORTED  confidence=0.68
+    evidence:
+      [data_flow  0.80  supports]  ARM64TaintTracker  source_to_sink=True  path_length=3
+      [structure  0.65  supports]  CFGBuilder         basic_blocks=4
+    prior=0.50  support_score=0.58  contradiction_score=0.00
+
+  Hypothesis 2  indirect_call_target  call_site_va=0x401920
+    status=REJECTED  confidence=0.00
+    evidence:
+      [structure  0.85  contradicts]  Capstone  insn_type=data_not_code (hard contradiction)
+
+  plan (top 3 by EIG):
+    1.  disassembly  EIG=0.74  (cost=0.5  disagreement=0.80  observability=0.95)
+    2.  taint        EIG=0.40  (cost=3.0  disagreement=0.82  observability=0.80)
+    3.  xref         EIG=0.29  (cost=0.8  disagreement=0.40  observability=0.85)
 ```
 
 ---
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+**`CONFIRMED` on an incorrect hypothesis** — the confidence threshold (0.75) can be reached with two well-chosen pieces of supporting evidence from structural and data-flow families. This is by design: accumulating enough evidence from independent families is the definition of CONFIRMED. If evidence turns out to be wrong (e.g., the taint path was tracking a wrong variable), add a `contradicts` item with strength ≥ 0.80 to trigger `REJECTED`, or call `engine.add_hard_contradiction()` directly.
+
+**Stale evidence from a prior session** — `EvidenceScorer` applies diminishing returns within a session but does not de-duplicate evidence across sessions when the same probe kind has been run on prior loads of the same session file. Load and continue an existing session with `HypothesisEngine.load(path)` rather than creating a new engine and re-adding evidence.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** `BinaryContext.load_or_build()` to obtain the binary SHA-256 and architecture. `SemanticSearcher` and `FuncProfiler` results can be fed as evidence items immediately after seeding.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** When a hypothesis reaches `CONFIRMED`, its subject fields (e.g., `call_site_va`, `target_va`) are verified ground truth — register the finding with `FindingRegistry.register()` and write to `re/<vendor>/<target>_re.py`. Hypotheses reaching `UNRESOLVED` (observationally equivalent competitors) require a manual probe (`kind='manual'`, `strength=0.95`) to break the tie.
 
 ---
 
@@ -279,7 +297,7 @@ Core infrastructure modules do not emit security findings directly. False positi
 | `kind` | Hypothesis kind (e.g., `'buffer_overflow'`, `'use_after_free'`, `'format_string'`) |
 | `subject` | `dict` — what the hypothesis is about (e.g., `{"va": "0x401920"}`) |
 | `claim` | `dict` — the specific machine-readable claim |
-| `status` | `ConfidenceState`: `'UNTESTED'` / `'SUPPORTED'` / `'CONTRADICTED'` / `'CONFIRMED'` |
+| `status` | `ConfidenceState`: `'UNTESTED'` / `'PLAUSIBLE'` / `'SUPPORTED'` / `'CONFIRMED'` / `'UNRESOLVED'` / `'REJECTED'` |
 | `prior` | Float — Bayesian prior probability (default 0.5) |
 | `confidence` | Float — posterior confidence after evidence scoring |
 | `support_score` | Float — cumulative support evidence score |
