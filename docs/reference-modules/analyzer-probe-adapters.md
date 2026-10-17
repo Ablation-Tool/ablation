@@ -50,9 +50,9 @@ flowchart TD
 
 | Value | Meaning |
 |---|---|
-| `NEUTRAL` | Observation is informational — does not yet confirm or refute |
+| `NEUTRAL` | Observation is informational — does not yet confirm or contradict |
 | `SUPPORTS` | Observation confirms the hypothesis (e.g., a taint path found) |
-| `REFUTES` | Observation contradicts the hypothesis |
+| `CONTRADICTS` | Observation contradicts the hypothesis |
 
 ---
 
@@ -166,7 +166,7 @@ DTW similarity=0.891
 
 | Field | Content |
 |:---|:---|
-| `ev.relation` | `NEUTRAL` / `SUPPORTS` / `REFUTES` — engine scoring signal |
+| `ev.relation` | `NEUTRAL` / `SUPPORTS` / `CONTRADICTS` — engine scoring signal |
 | `ev.strength` | 0.0–0.90 — how strongly the observation affects the hypothesis score |
 | `ev.reliability` | 0.8 default (most adapters) — confidence in the observation accuracy |
 | `ev.family` | `structure` / `data_flow` / `cross_reference` / `semantic` / `version` / `manual` |

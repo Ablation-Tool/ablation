@@ -89,34 +89,41 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_IMAGE_BYTES=256MB`; `os.pa
 
 ## How it works
 
-Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation (CRC32 or SHA256 depending on container format) runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
+`AmiCramFSExtractor.from_path()` reads the entire image into memory (size-limited to 256 MB via `os.path.getsize()` guard) and validates the CramFS magic (`0x28cd3d45`). `from_image()` reads only the 8-byte header at the given offset, validates the magic and `total_size`, then reads the exact partition slice. Directory enumeration uses `_parse_entries()`, which reads 16-byte AMI extended inodes at each entry offset: `w0` holds mode and uid, `w1` holds size and gid, `w2` holds `namelen` in bits[8:13], and `w3` holds the data offset in 4-byte units. For regular files, `_decompress_file()` reads the block pointer table at `data_off × 4` and decompresses each 4 KB block with `zlib.decompress()`. When block 0 fails decompression (GOT prefix variant), the function scans for the first valid zlib CMF byte (`0x78` followed by `0x01`, `0x5e`, `0x9c`, or `0xda`) and decompresses from that offset, discarding the prefix.
 
 ---
 
 ## Example output
 
-```
-Extracted 4 partitions from firmware.bin:
-  [0] boot      512 KB  ELF (ARM64)
-  [1] rootfs    18 MB   SquashFS
-  [2] data      4 MB    ext4
-  [3] config    128 KB  JFFS2
-Written to /tmp/extracted/
+```python
+>>> ext = AmiCramFSExtractor.from_image('/path/to/bmc.ima', offset=0x160000)
+>>> list(ext.list_files())[:8]
+['/bin/sh', '/bin/busybox', '/etc/passwd', '/usr/local/bin/spx_restservice',
+ '/usr/local/lib/libnetwork.so', '/usr/local/lib/libspx.so',
+ '/usr/local/sbin/psme-rest-server', '/var/www/redfish/v1/index.html']
+
+>>> data = ext.extract_file('/usr/local/bin/spx_restservice')
+>>> len(data)
+2387456
+>>> data[:4].hex()
+'7f454c46'    # ELF magic — ARM32 binary, ready for BinaryContext
 ```
 
 ---
 
 ## False positives
 
-Extraction either succeeds or raises an exception — there are no false positives in the traditional sense. Check for incomplete downloads (`.aria2` sidecar present) before analysis: partial images produce truncated or zero-filled partitions that pass validation but contain no useful data.
+**Truncated archive yields fewer entries than expected without an error.** `_parse_entries()` stops silently when it reaches the end of the directory block or when `next_off > len(cramfs)`. A partially downloaded firmware image passes the magic check at the start but produces an incomplete file tree. Verify download integrity with the firmware manifest before relying on `list_files()` count.
+
+**Block-0 GOT prefix scan may match on binary content.** The zlib header scan in `_decompress_file()` looks for `0x78` followed by a valid FLG byte. In rare cases a raw binary file with no zlib content may contain `0x78 0x9c` as data bytes before any actual zlib stream, causing `zlib.decompress()` to fail. When this happens the extractor raises `zlib.error` rather than silently producing garbage. Catch and report the path and block index for manual analysis.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to identify the outer binary format and confirm the container is present.
+**Before this module:** Locate the CramFS partition offset in the BMC firmware image by scanning for the `0x28cd3d45` magic bytes (e.g., `data.find(b'\x45\x3d\xcd\x28')`). Confirm the AMI format by checking that the inode at offset 8 (root inode) has a 16-byte stride — standard CramFS root inodes are 12 bytes. On known AMI SPX images the CramFS typically starts at offset `0x160000`.
 
-**After this module:** Feed extracted partition bytes to `BinaryContext.load_or_build()` or the appropriate ISA taint tracker for each extracted payload.
+**After this module:** Write each extracted binary to a temp file and load with `BinaryContext.load_or_build()`. The ARM32 `spx_restservice` and `psme-rest-server` binaries are the primary RE targets — both take HTTP input via FastCGI and call shell sinks. Run `ARM32TaintTracker` after loading.
 
 ---
 
