@@ -91,6 +91,22 @@ Use `SAXIndex` as the first filter in a corpus-scale similarity search: index al
 
 ---
 
+## Reading output
+
+`SAXIndex.query(va)` returns `List[SAXMatch]`:
+
+| Attribute | Content |
+|:---|:---|
+| `binary` | Path to the matched binary |
+| `va` | VA of the matched function |
+| `edit_dist` | Levenshtein edit distance between query word and match word (0 = exact) |
+| `seq_len_delta` | Difference in instruction sequence length between query and match |
+| `sax_word` | The SAX word representation of the matched function |
+
+Results are ordered by ascending `edit_dist`.
+
+---
+
 ## See also
 
 - [Semantic Search](semantic-search.md) — embedding-based similarity; consumes SAX shortlist

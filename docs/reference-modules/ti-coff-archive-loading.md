@@ -74,6 +74,20 @@ Run `TiCoffLoader` on any TI COFF2 `.obj` or `.a` file before `TiNNCScanner` or 
 
 ---
 
+## Reading output
+
+`TiCoffLoader.load(path)` returns a `TiCoffModule` object:
+
+| Attribute | Content |
+|:---|:---|
+| `target_id` | TI COFF target identifier (e.g., `28` for C28x) |
+| `symbols` | `List[TiCoffSymbol]` — all global defined symbols |
+| `function_starts()` | `List[int]` — VAs of all `C_EXT` / `C_WEAKEXT` symbols with code storage class |
+
+`TiCoffSymbol` has `name: str`, `va: int`, and `sym_class: str` (`C_EXT`, `C_WEAKEXT`, `C_STAT`).
+
+---
+
 ## See also
 
 - [TI Neural Network Artifact Detection](ti-neural-network-artifacts.md) — `TiNNCScanner` that uses `TiCoffLoader` for C28x targets

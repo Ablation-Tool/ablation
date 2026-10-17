@@ -78,6 +78,19 @@ Run `TiNNCScanner` on any TI MCU firmware as part of initial triage. ML inferenc
 
 ---
 
+## Reading findings
+
+`TiNNCScanner.scan()` returns a `TiNNCScanResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `modules` | `List[TvmModule]` — detected TVM inference modules |
+| `findings` | `List[{severity, title, detail}]` — security findings (e.g., `TVM_UNVALIDATED_INPUT_SHAPE`) |
+
+`TvmModule` has `name: str`, `op: str` (e.g., `nn_dense`, `nn_conv2d`), and `dims: List[int]`.
+
+---
+
 ## See also
 
 - [TI COFF Archive Loading](ti-coff-archive-loading.md) — `TiCoffLoader` used internally for C28x COFF2 targets
