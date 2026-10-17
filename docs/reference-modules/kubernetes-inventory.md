@@ -87,6 +87,20 @@ Run `K8sEnumerator` from within a compromised container after establishing shell
 
 ---
 
+## Reading findings
+
+`K8sEnumerator.enumerate_all()` returns a dict of categorized finding lists:
+
+| Key | Content |
+|:---|:---|
+| `rbac_findings` | `List[str]` — allowed verbs/resources from self-subject access review |
+| `configmap_credential_candidates` | `List[{namespace, name, keys}]` — ConfigMaps with credential-looking keys |
+| `kubelet_api_findings` | `List[{severity, title, detail, host, port}]` — unauthenticated kubelet endpoints |
+| `secret_findings` | `List[{namespace, name, type}]` — accessible Secret objects |
+| `pod_list` | Count of enumerated pods |
+
+---
+
 ## See also
 
 - [Kubernetes Policy Posture](kubernetes-policy-posture.md) — RBAC, network policy, and admission controller gap analysis
