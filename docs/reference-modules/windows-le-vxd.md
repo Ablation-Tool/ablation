@@ -92,7 +92,7 @@ Run `win16_le_vxd_sweep.py` on any Windows 3.x VxD binary (`.386`, `.vxd`, `.drv
 
 `LEBinary.code_objects()` returns only objects with the EXECUTABLE flag set. Each result dict has `obj_index`, `vbase`, `vsize`, and `bytes` (assembled code bytes).
 
-`LEBinary.scan_ddb(code_bytes)` returns `Optional[dict]` — `None` if no VxD DDB signature is found, or a dict with `dev_name`, `dev_num`, `ctrl_proc`, `pm_api_proc`, `v86_api_proc`, and `sdk_ver`.
+`LEBinary.scan_ddb(code_bytes)` returns `Optional[dict]` — `None` if no VxD DDB signature is found, or a dict with `ddb_off`, `sdk_ver`, `dev_num`, `dev_name`, `ctrl_proc`, `v86_api_proc`, and `pm_api_proc`.
 
 ---
 

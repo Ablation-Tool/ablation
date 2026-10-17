@@ -145,6 +145,41 @@ Provides the session state, indexing, and utility functions that other Ablation 
 
 ---
 
+## Usage
+
+```python
+from modules.path_solver import PathSolver
+from ablation.analyzers.finding_registry import FindingRegistry
+from ablation.analyzers.binary_context import BinaryContext
+
+ctx = BinaryContext.load_or_build('/path/to/binary')
+
+# Confirm exploitability: enumerate all feasible paths to a taint sink
+solver = PathSolver(ctx.path, ctx.cfg, ctx.text_data, ctx.text_va, ctx.plt)
+results = solver.solve(target_va=0x1234abcd)
+for r in results:
+    if r.sat:
+        print(f"SAT — input constraints:")
+        for reg, val in r.model.items():
+            print(f"  {reg} = 0x{val:x}")
+
+# Register the confirmed finding
+reg = FindingRegistry()
+reg.register(
+    vendor='acme',
+    product='firmware',
+    version='1.0',
+    binary='libservice.so',
+    func_va=0x1234abcd,
+    cwe=121,
+    severity='HIGH',
+    title='Stack overflow in input parser',
+    description='Attacker-controlled length field flows to memcpy without bounds check.',
+)
+```
+
+---
+
 ## Example output
 
 ```

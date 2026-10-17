@@ -161,6 +161,52 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 
 ---
 
+## Usage
+
+```python
+from ablation.analyzers.engine_pattern_library import EnginePatternLibrary
+from ablation.analyzers.binary_context import BinaryContext
+from ablation.analyzers.xref_graph import XRefGraph
+
+lib = EnginePatternLibrary.default()
+ctx = BinaryContext.load_or_build('/path/to/game.exe')
+xg  = XRefGraph.from_path('/path/to/game.exe')
+xg.build()
+
+# Label all functions as engine-internal or unlabeled
+labels = lib.label_binary(ctx, xg)
+print(lib.strip_report(labels, len(ctx.func_starts)))
+
+# Isolate unknown functions for manual review
+unlabeled = lib.unlabeled(ctx.func_starts, labels)
+print(f"{len(unlabeled)} functions to analyze manually")
+```
+
+For PS3 Cell SPU targets:
+
+```python
+from modules.spu_disassembler import dump_spu_elf, frequency_report
+
+# Disassemble all SPU text sections in the ELF
+dump_spu_elf('/path/to/spu_module.self', '/tmp/spu_out/')
+
+# Frequency analysis to identify crypto/compression routines
+frequency_report('/path/to/spu_module.self')
+```
+
+For Mac OS 8/9 PEF binaries:
+
+```python
+from ablation.analyzers.pef_abi_clobber_scanner import PEFABIClobberScanner
+
+scanner = PEFABIClobberScanner('/path/to/library.pef')
+findings = scanner.scan()
+for f in findings:
+    print(f.severity, f.title, f.va)
+```
+
+---
+
 ## Example output
 
 ```

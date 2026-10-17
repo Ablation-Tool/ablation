@@ -353,6 +353,35 @@ Scans the binary for known cryptographic constants (S-boxes, round constants, ma
 
 ---
 
+## Usage
+
+```python
+from ablation.analyzers.entropy_mapper import EntropyMapper
+from ablation.analyzers.xor_solver import XorSolver
+from modules.crypto_audit import CryptoAudit
+
+# Step 1: map entropy regions to locate encrypted blobs and key material
+mapper = EntropyMapper('/path/to/firmware.raw')
+regions = mapper.classify()
+for r in regions:
+    print(r.fmt())  # 0x00000000  [ENCRYPTED 7.94]  ████████████████
+
+# Step 2: attempt XOR key recovery on high-entropy regions
+solver = XorSolver('/path/to/firmware.raw')
+result = solver.solve()
+if result.key:
+    print(f"XOR key: {result.key.hex()}")
+    decrypted = result.decrypt(open('/path/to/firmware.raw', 'rb').read())
+
+# Step 3: full crypto audit — weak algorithms, key material, hard-coded secrets
+audit = CryptoAudit('/path/to/firmware.elf')
+findings = audit.run()
+for f in findings:
+    print(f['severity'], f['title'], f['detail'])
+```
+
+---
+
 ## Example output
 
 ```

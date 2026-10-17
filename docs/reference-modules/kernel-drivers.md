@@ -250,9 +250,43 @@ the import table is stripped.
 
 ---
 
+## Why this exists
+
+Three gaps made Windows kernel driver analysis manual before these modules:
+
+1. **No existing tool recovers the IRP dispatch table without symbols.** The `MajorFunction` array in a `DRIVER_OBJECT` is populated at runtime in `DriverEntry`. Without symbols, locating which function handles each IRP_MJ_* code required tracing `DriverEntry` by hand. `KernelDriverAnalyzer` decodes the table automatically for both x86 (4-byte slots at `+0x38`) and x64 (8-byte slots at `+0x70`).
+
+2. **IOCTL handler enumeration was impossible on MSVC-compiled drivers.** MSVC compiles `switch(IoControlCode)` as a cascade of register subtractions, not a jump table. Standard pattern matching for `CTL_CODE` values misses handlers in this form. `IoctlCascadeDecoder` reconstructs every IOCTL code in the cascade, including those derived via a stride register, without requiring a jump table.
+
+3. **BYOVD detection required manual capability checking.** Determining whether a signed driver is exploitable for Bring Your Own Vulnerable Driver attacks required checking the kernel API surface, MSR write capability, and dangerous pattern presence manually. `ByovdDetector` automates this check and produces a scored finding with the specific capability vectors present.
+
+---
+
 ## How it works
 
 Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+
+---
+
+## Usage
+
+```python
+from ablation.analyzers.kernel_driver_analyzer import KernelDriverAnalyzer
+from ablation.analyzers.byovd_detector import ByovdDetector
+
+# Full attack surface map
+kda = KernelDriverAnalyzer.from_path('/path/to/driver.sys')
+report = kda.analyze()
+print(report.fmt())
+
+# Check for BYOVD exploitability
+detector = ByovdDetector.from_path('/path/to/driver.sys')
+byovd_findings = detector.detect()
+for f in byovd_findings:
+    print(f.severity, f.title)
+    for cap in f.capabilities:
+        print(f"  capability: {cap}")
+```
 
 ---
 

@@ -641,6 +641,38 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 
 ---
 
+## Usage
+
+```python
+from ablation.analyzers.binary_context import BinaryContext
+from ablation.analyzers.format_string_scanner import FormatStringScanner
+from ablation.analyzers.heap_vuln_scanner import HeapVulnScanner
+from ablation.analyzers.sql_sink_scanner import SqlSinkScanner
+
+ctx = BinaryContext.load_or_build('/path/to/binary')
+
+# Run each scanner independently
+fmt_findings  = FormatStringScanner.from_context(ctx).scan()
+heap_findings = HeapVulnScanner.from_context(ctx).scan()
+sql_findings  = SqlSinkScanner.from_context(ctx).scan()
+
+# Combine and filter to HIGH and above
+all_findings = fmt_findings + heap_findings + sql_findings
+highs = [f for f in all_findings if f.severity in ('HIGH', 'CRITICAL')]
+print(f"{len(highs)} HIGH/CRITICAL findings across all scanners")
+
+for f in sorted(highs, key=lambda x: x.va):
+    print(f.severity, f.title, hex(f.va))
+```
+
+Run all scanners from the command line:
+
+```bash
+python3 sweeps/fortinet_sweep.py /path/to/binary --vendor acme --product fw --version 1.0
+```
+
+---
+
 ## Example output
 
 ```

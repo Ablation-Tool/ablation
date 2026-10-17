@@ -221,3 +221,11 @@ Newer probe functions return `{severity, title, detail, host, port}`. Older enum
 | `kafka_list_topics()` | `{host, port, reachable, topics: List[str], error}` |
 | `flink_enumerate()` | `{jobs, taskmanagers, jars, config}` |
 | `check_nats_exposure()` | `List[{severity, title, detail, host, port}]` |
+
+---
+
+## See also
+
+- [Messaging/Streaming Enumeration](messaging-streaming-enumeration.md) — probe-style findings from the same `streaming_enum.py` module in `{severity, title, detail, host, port}` format
+- [Internal Network Reconnaissance](internal-network-reconnaissance.md) — host discovery and port scanning to identify streaming infrastructure before enumeration
+- [Evidence Scoring and Probe Ranking](evidence-scoring-and-probe-ranking.md) — rank streaming findings by confidence before escalating to active exploitation
