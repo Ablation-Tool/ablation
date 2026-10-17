@@ -198,14 +198,21 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`parse(path)` returns an `M88kCoffBinary`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `path` | `str` | Path to the analyzed binary |
+| `entry` | `int` | Program entry point VA |
+| `text_start` | `int` | `.text` section base VA |
+| `data_start` | `int` | `.data` section base VA |
+| `sections` | `List[Section]` | All parsed sections |
+
+Each `Section`: `name, vaddr, size, flags, data`; properties `is_text, is_data, va_end`; methods `read_word(va)`, `read_bytes(va, n)`, `contains_va(va)`.
+
+Helper methods on `M88kCoffBinary`: `section(name)`, `text` (property), `data` (property), `va_to_bytes(va, n)`, `words_at(va, count)`.
 
 ---
 

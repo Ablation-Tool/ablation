@@ -64,14 +64,18 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+The slicer returns a list of `WriteRecord` objects per target global symbol.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `pc` | `int` | VA of the STR/STP instruction performing the write |
+| `insn` | `str` | Disassembled instruction text |
+| `symbol` | `str` | Target global name (e.g., `mmtls::gILinkKey`) |
+| `field_off` | `int` | Byte offset from the symbol base being written |
+| `size` | `int` | Write size in bytes: 8 for STR, 16 for STP pair |
+| `base_sse` | `SSE` | SSE expression for the base register before `field_off` is applied |
 
 ---
 

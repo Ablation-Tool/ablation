@@ -81,14 +81,19 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`NEBinary` is the parsed representation of a Win16 NE binary. The CLI sweep writes findings to `reports/sweep_ne_<vendor>_<product>_<version>_<ts>.md`.
+
+The semantic sweep returns a `dict` keyed by vulnerability profile name, each value a list of candidate function dicts:
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `name` | `str` | Function name (from ordinal table or auto-generated `sub_NNNN`) |
+| `va` | `int` | Segment-relative VA of the function |
+| `score` | `float` | Semantic similarity score (0.0–1.0) |
+| `seg_name` | `str` | NE segment name (e.g., `seg_1`) |
+| `insn_count` | `int` | Number of disassembled instructions |
 
 ---
 

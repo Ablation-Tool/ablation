@@ -99,14 +99,18 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`loader_symbols(data)` returns `Dict[str, int]` mapping symbol name → text-section VA.
+
+`loader_imports(data)` returns `Dict[str, List[str]]` mapping library archive member name → list of imported symbol names.
+
+| Return value | Type | Content |
+|:---|:---|:---|
+| `loader_symbols` result key | `str` | Exported or defined symbol name |
+| `loader_symbols` result value | `int` | VA of the symbol in the text section |
+| `loader_imports` result key | `str` | Library archive member name (e.g., `/lib/libc.a(shr.o)`) |
+| `loader_imports` result value | `List[str]` | Names of symbols imported from that library member |
 
 ---
 

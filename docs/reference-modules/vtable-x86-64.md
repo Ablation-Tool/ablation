@@ -210,12 +210,19 @@ vtable_map = rec.reconstruct_class('RequestHandler')
 for slot_off, slot in vtable_map.live_slots().items():
     print(f"+0x{slot_off:x}  {slot.name}")
 
-# Scan for dangerous virtual dispatch patterns (use-after-free, type confusion)
+# Scan for virtual dispatch sites matching this vtable's slot layout
+# VtableDispatchScanner.scan() accepts a VtableMap directly
 ctx = BinaryContext.load_or_build('/path/to/lib.so')
 scanner = VtableDispatchScanner.from_context(ctx)
-findings = scanner.scan()
-for f in findings:
-    print(f.severity, f.title, hex(f.va))
+report = scanner.scan(vtable_map)  # scan returns a DispatchReport
+for key, sites in report.live().items():
+    for site in sites:
+        print(f"slot {key} called at 0x{site.call_va:x} via {site.register}")
+
+# Scan a specific slot offset without a full vtable map
+sites = scanner.scan_offset(0x18)  # all dispatch sites for slot +0x18
+for site in sites:
+    print(f"0x{site.call_va:x}  via {site.register}  enc={site.encoding}")
 ```
 
 ---

@@ -132,13 +132,17 @@ SinkArgClassifier:
 
 ## Reading findings
 
-| Field | Content |
-|:---|:---|
-| `f.severity` | `CRITICAL` (RCE-class), `HIGH` (format string, OOB write), `MEDIUM` (info leak) |
-| `f.source` | Source function and return register (e.g., `recv → $v0`) |
-| `f.sink` | Sink function and argument register (e.g., `system($a0)`) |
-| `f.chain` | `[(va, mnemonic, register), ...]` — taint propagation path |
-| `f.va` | Virtual address of the sink call site |
+`MIPS32TaintTracker.from_context(ctx).scan()` returns `List[TaintFinding32Mips]`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `binary` | `str` | Binary path |
+| `func_va` | `int` | VA of the function containing the sink call |
+| `func_name` | `str` | Name of the function (from `ctx`) |
+| `sink_va` | `int` | VA of the sink call instruction |
+| `sink_name` | `str` | Sink function name (e.g., `system`, `sprintf`) |
+| `tainted_args` | `List[int]` | 0-indexed argument positions that are tainted at the call |
+| `source_name` | `str` | Taint source label (e.g., `recv`, `read`) |
 
 ---
 

@@ -115,14 +115,36 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`parse(path)` returns an `XcoffBinary`.
+
+`XcoffBinary` fields:
+
+| Attribute | Type | Content |
+|:---|:---|:---|
+| `path` | `str` | Path to the analyzed binary |
+| `arch` | `str` | `'ppc32'` or `'ppc64'` |
+| `entry` | `int` | Entry point VA (descriptor VA on PPC32) |
+| `text_start` | `int` | VA of the `.text` section |
+| `data_start` | `int` | VA of the `.data` section |
+| `toc_va` | `int` | TOC anchor VA |
+| `sections` | `List[XcoffSection]` | All sections |
+| `exports` | `List[XcoffSymbol]` | Defined symbols |
+| `imports` | `List[XcoffSymbol]` | External references |
+
+`XcoffSymbol` fields:
+
+| Attribute | Type | Content |
+|:---|:---|:---|
+| `name` | `str` | Symbol name |
+| `va` | `int` | Descriptor VA (functions) or data VA; 0 for imports |
+| `lib` | `str` | Import library name; empty for exports |
+| `smclas` | `int` | Storage mapping class |
+| `code_va` | `int` | Resolved code entry point VA after descriptor resolution; 0 if unresolved |
+| `is_import` | `bool` | Property: `True` when `lib` is non-empty |
+
+`XcoffSection` fields: `name, vaddr, size, offset, flags, data`; properties `is_text, is_data, is_bss`.
 
 ---
 

@@ -171,14 +171,18 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`PS3OPDVtableScanner(binary).scan(min_slots=3)` returns `List[OPDVtable]`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `va` | `int` | Data-segment VA of the first vtable slot (past the RTTI header) |
+| `slots` | `int` | Number of virtual method slots |
+| `method_vas` | `List[int]` | Resolved code VAs per slot (in slot order) |
+| `null_slots` | `List[int]` | Slot indices (not VAs) of null-stub (deleted/pure-virtual) slots |
+| `rtti_offset` | `int` | Bytes before `va` where the RTTI header starts |
+| `class_hint` | `str` | Nearest string evidence for class identity (empty if none found) |
 
 ---
 

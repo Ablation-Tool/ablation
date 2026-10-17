@@ -129,14 +129,20 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`PEFBinaryAnalyzer.from_path(path).analyze()` returns a `PEFAnalysis`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `architecture` | `int` | `PEF_ARCH_PWPC` (PowerPC) or `PEF_ARCH_M68K` (68K) |
+| `format_version` | `int` | PEF container version |
+| `sections` | `List[PEFSection]` | Code, data, and loader sections |
+| `imports` | `List[PEFImport]` | Imported symbol references with library and symbol names |
+
+Each `PEFSection`: `section_type, name, default_address, total_size, unpacked_size, packed_size, offset, alignment, sharing, data`.
+
+Each `PEFImport`: `lib_name: str`, `sym_name: str`, `sym_class: int`.
 
 ---
 

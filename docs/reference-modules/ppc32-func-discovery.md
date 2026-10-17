@@ -64,14 +64,13 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`PPC32FuncDiscovery.discover()` returns `Set[int]` — VA of every function entry point found.
+
+The module-level helper `discover_ppc32_functions(elf_path)` is equivalent to `PPC32FuncDiscovery.from_path(elf_path).discover()`.
+
+`PPC32FuncDiscovery.report(func_starts)` accepts the `Set[int]` returned by `discover()` and returns a formatted string listing all start VAs.
 
 ---
 

@@ -221,14 +221,16 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`PPC32PLTTracer.find_callers(sym_name)` returns `List[PLTCallSite]`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `bl_va` | `int` | VA of the BL instruction |
+| `thunk_va` | `int` | VA of the PLT thunk (or stub VA for BSS PLT binaries) |
+| `caller_r30` | `int` | r30 value verified against the expected TOC anchor; `0` for BSS PLT |
+| `func_name` | `Optional[str]` | Import name resolved from the PLT entry |
 
 ---
 
