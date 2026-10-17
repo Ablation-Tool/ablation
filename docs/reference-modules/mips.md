@@ -1,21 +1,150 @@
-# MIPS
+# MIPS ISA Support
 
-.
-
----
-
-## What it does
-
-.
+Taint analysis, sink classification, structural lifting, and semantic search across MIPS-32/64 big-endian and little-endian, nanoMIPS, and RouterOS embedded firmware targets.
 
 ---
 
-## Implementation
+## Why this exists
 
-_See README for implementation files._
+1. **MIPS-32 big-endian is the dominant ISA for consumer routing firmware — Mikrotik RouterOS, older Cisco IOS images, and embedded HTTP/SNMP stacks frequently ship as MIPS-32 BE ELF — yet the architecture's load-delay slot makes naive taint propagation incorrect.** The instruction immediately after a branch/jump executes before the branch takes effect; a taint tracker that processes instructions in linear order produces false positives and false negatives for any register written in a delay slot. `MIPS32TaintTracker` processes delay slots as part of the preceding branch instruction, consuming them before updating PC, which matches the hardware execution model.
+
+2. **MIPS sink classification requires a platform-specific approach because `sprintf` argument position is different in MIPS32 O32 ABI ($a0 = format, $a1+ = args) versus MIPS64 N64 ($a0-$a7 all used) — and RouterOS uses a custom memory allocator whose allocation functions are not in the standard PLT.** `SinkArgClassifierMIPS` (`sink_arg_classifier_mips.py`) extends the generic `SinkArgClassifier` with MIPS-specific argument register slots per ABI variant and RouterOS-specific allocation sink signatures. `mips_analyzer.py` wraps the full analysis pipeline for MIPS firmware targets.
+
+3. **nanoMIPS is a compressed ISA used in MIPS I7200 and P-class cores for code-density-optimized embedded targets — it is not Thumb-equivalent MIPS16e; it requires a distinct decoder.** `taint_tracker_nanomips.py` and `nanomips_decoder.py` provide the instruction model and taint analysis for nanoMIPS binaries, preventing misidentification of nanoMIPS 16-bit opcodes as MIPS32 instructions in `check_rtp_port_range` and related analysis passes.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["MIPS32TaintTracker.from_path(binary)"] --> B["BinaryContext.load_or_build(binary)\nELF section map + PLT (MIPS-specific .dynamic)\n.reginfo section → GP base address"]
+    B --> C["insn_mips.from_capstone(code, va)\nDecode MIPS32/64 instruction stream\nDelay-slot awareness: branch insn carries next-insn operand"]
+    C --> D["cfg_mips.build_cfg(insns)\nBranch: beq/bne/bltz/bgtz/j/jal\nDelay slot resolved per branch\nCall edges via jal/jalr (PLT targets labeled)"]
+    D --> E["MIPS32TaintTracker.run():\n_MIPSState: O32 ABI seed\n  $a0-$a3 = arg0-arg3\n  $v0/$v1 = return values\n  $t0-$t9 = caller-saved temps\nSources: recv/recvfrom/read/fgets/gets/fread\n  ($v0 = return value = tainted)\nPropagation: lw/lb/lh/lbu (load)\n  sw/sb (store)\n  add/addu/sub (arithmetic)\n  and/or/xor/sll/srl (bitwise)\n  move/lui/ori (immediate/move)"]
+    E --> F["Sinks: system/execve/execl/execvp\n  popen/strcpy/sprintf/memcpy\n  strcat/snprintf (MIPS PLT names)\n  → TaintFinding(severity, source, sink, chain, va)"]
+
+    G["MIPS64TaintTracker.from_path(binary)"] --> H["Same pipeline; N64 ABI:\n  $a0-$a7 = arg0-arg7 (8 regs)\n  $v0 = return\n  64-bit register width; ld/sd instead of lw/sw"]
+
+    I["NanoMIPSTaintTracker.from_path(binary)"] --> J["nanomips_decoder.py: 16/32/48-bit variable-length encoding\nLinear walk + call graph construction\nO32 ABI (same as MIPS32)\nNo delay slots in nanoMIPS"]
+
+    K["SinkArgClassifierMIPS.from_path(elf)"] --> L["classify_all():\nFor each system/exec/str*/sprintf call site:\n  RODATA_CONST: format arg is .rodata string → not exploitable\n  SNPRINTF_RODATA: snprintf format is .rodata → not exploitable\n  ARG_PROPAGATED: format arg from $a0-$a3 caller arg → TAINT\n  UNKNOWN: can't determine statically → TAINT\nEliminate RODATA_CONST before TaintTracker to reduce FPs"]
+
+    M["mips_analyzer.py (modules/)"] --> N["MIPSAnalyzer.analyze(binary, arch='mips32'):\nIntegrates BinaryContext + SinkArgClassifierMIPS\n+ MIPS32TaintTracker\nFull findings report for RouterOS / embedded MIPS targets"]
+```
+
+### Module inventory
+
+| Module | Role |
+|:---|:---|
+| `taint_tracker_mips.py` | MIPS-32 labeled-taint tracker; delay-slot-aware; O32 ABI; RouterOS targets |
+| `taint_tracker_mips64.py` | MIPS-64 labeled-taint tracker; N64 ABI |
+| `taint_tracker_mips_labeled.py` | TCL3-qualified labeled-taint variant; used in coverage gate scope |
+| `taint_tracker_nanomips.py` | nanoMIPS labeled-taint tracker; 16/32/48-bit variable-length encoding |
+| `insn_mips.py` | MIPS-32/64 instruction decoder with delay-slot model |
+| `cfg_mips.py` | MIPS CFG builder: branch/delay-slot edges, JAL/JALR calls |
+| `isa_mips.py` | ISA constant tables: register names, ABI modes, calling convention |
+| `analysis_mips.py` | CFG fixpoint analysis for labeled taint |
+| `nanomips_decoder.py` | nanoMIPS binary decoder: variable-length instruction parsing |
+| `sink_arg_classifier_mips.py` | MIPS-specific sink argument classification (RODATA_CONST / ARG_PROPAGATED / UNKNOWN) |
+| `modules/mips_analyzer.py` | Module-level orchestrator for MIPS firmware RE targets |
+
+---
+
+## Usage
+
+```python
+from ablation.analyzers.taint_tracker_mips import MIPS32TaintTracker
+
+# MIPS-32 big-endian (RouterOS, Cisco IOS)
+tracker = MIPS32TaintTracker.from_path('/path/to/mips32.elf')
+findings = tracker.run()
+for f in findings:
+    print(f"[{f.severity}] {f.source} → {f.sink} @ {f.va:#x}")
+
+# Interprocedural (follows call edges depth-limited)
+chains = tracker.run_interprocedural(depth=4)
+
+# MIPS-64 N64 ABI
+from ablation.analyzers.taint_tracker_mips64 import MIPS64TaintTracker
+tracker64 = MIPS64TaintTracker.from_path('/path/to/mips64.elf')
+findings = tracker64.run()
+
+# Sink argument classification (run before TaintTracker to reduce false positives)
+from ablation.analyzers.sink_arg_classifier_mips import SinkArgClassifierMIPS
+clf = SinkArgClassifierMIPS.from_path('/path/to/mips32.elf')
+classified = clf.classify_all()
+# Filter to non-RODATA_CONST before running taint tracker
+for va, classification in classified.items():
+    if classification not in ('RODATA_CONST', 'SNPRINTF_RODATA'):
+        print(f"{va:#x}: {classification} — run taint tracker")
+
+# Structural lifting via BinaryLifter
+from ablation.analyzers.binary_lifter import BinaryLifter
+lifter = BinaryLifter.from_path('/path/to/mips32.elf', arch='mips32')
+print(lifter.lift_function(0x400a00))
+
+# Little-endian (mipsel)
+lifter_el = BinaryLifter.from_path('/path/to/mipsel.elf', arch='mips32el')
+print(lifter_el.lift_function(0x400a00))
+```
+
+---
+
+## Example output
+
+The following illustrates the format for representative taint findings. Actual function names, addresses, and call chains reflect the specific binary.
+
+```
+[CRITICAL] recv → system @ <va>
+  Chain: recv($v0) → lw $a0, sp+0x1c → jal system
+  Taint: $v0 (recv return, unbound)
+  Sink: system — shell injection via unvalidated recv buffer
+
+[HIGH] fgets → sprintf @ <va>
+  Chain: fgets($v0) → move $a1, $v0 → jal sprintf($a0=<fmt>, $a1=<tainted>)
+  Taint: $v0 (fgets input), $a1 propagated
+  Sink: sprintf argument-1 — format-string or buffer overflow candidate
+
+SinkArgClassifier:
+  <va>: RODATA_CONST (format from .rodata — not a finding)
+  <va>: ARG_PROPAGATED ($a0 from caller) — run taint tracker
+  <va>: UNKNOWN — run taint tracker
+```
+
+---
+
+## False positives
+
+**MIPS delay slots in tainted branches produce apparent taint flows that are not real.** When a branch instruction `beq $t0, $zero, target` has a tainted register in the condition, the delay slot's instruction executes regardless of branch direction. A taint sink in the delay slot appears to execute on both branch paths, but it only executes once (before the branch takes effect). The tracker models this correctly, but output that shows the delay slot instruction as a taint step may be confusing — it is the branch pre-condition, not a conditional write.
+
+**`SinkArgClassifierMIPS` marks RouterOS custom allocator calls as `UNKNOWN` because they are not in the standard PLT.** RouterOS uses `fast_malloc`/`fast_free` family functions that are not exported or present in standard glibc PLT slots. `SinkArgClassifier` cannot determine their argument positions and marks them `UNKNOWN`. Run `SemanticSearcher.query("allocation function MIPS")` to identify them before classification.
+
+---
+
+## Pipeline position
+
+**Before this module:** Run `SinkArgClassifierMIPS.classify_all()` to eliminate `RODATA_CONST` and `SNPRINTF_RODATA` sites — this typically reduces TaintTracker input by 40-60% on firmware binaries. For little-endian MIPS (mipsel), specify `arch='mips32el'` or `arch='mips64el'` in `BinaryLifter.from_path()`.
+
+**After this module:** Feed confirmed findings into `FindingRegistry.register()` and write them to `re/<vendor>/<target>_re.py`.
+
+---
+
+## Reading findings
+
+| Field | Content |
+|:---|:---|
+| `f.severity` | `CRITICAL` (RCE-class), `HIGH` (format string, OOB write), `MEDIUM` (info leak) |
+| `f.source` | Source function and return register (e.g., `recv → $v0`) |
+| `f.sink` | Sink function and argument register (e.g., `system($a0)`) |
+| `f.chain` | `[(va, mnemonic, register), ...]` — taint propagation path |
+| `f.va` | Virtual address of the sink call site |
 
 ---
 
 ## See also
 
-- [Binary Lifter](binary-lifter.md) — module-level reference with constructor patterns and usage examples
+- [Binary Lifter](binary-lifter.md) — `arch='mips32'`/`'mips64'`/`'nanomips'` structural lifting
+- [Sink Arg Classifier](sink-arg-classifier.md) — generic sink classification; MIPS variant extends it
+- [Taint Analysis](taint-analysis.md) — labeled-taint model and CFG fixpoint analysis
+- [MIPS Analyzer](mips-analyzer.md) — module-level orchestrator for MIPS firmware RE
