@@ -63,29 +63,39 @@ The pattern that does not work: em dashes where a period would do. Parenthetical
 
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+`check(text)` splits the input on newlines and applies a fixed set of compiled `re.Pattern` rules to each line: `em_dash` matches `\s—\s` or `—`; `parenthetical` matches `\([^)]{8,}\)` (parenthetical phrases over 8 characters); `filler` matches a list of banned phrases (e.g., `comprehensive`, `fully`, `simply`, `leverage`); `ai_copy` matches phrases common in AI-generated prose (e.g., `delve into`, `in the realm of`). Each match produces a `ProseIssue` with rule, line, column, matched text, and a suggestion string. `check_file(path)` reads the file and calls `check()`. `report(issues, filename)` formats them as a human-readable list. The CLI entry point exits with code 1 on any violation so it can gate pre-commit hooks.
 
 ---
 
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+$ python3 -m ablation.core.prose docs/reference-modules/forge.md
+forge.md:3:12  em_dash      "FORGE — the audit gate"
+               → Use a period or "because" instead of an em dash.
+forge.md:18:5  filler       "fully automates"
+               → Drop "fully"; "automates" carries the meaning.
+forge.md:41:9  parenthetical  "(parse, scan, detect)"
+               → Inline the items or use a list.
+3 violations found.
+[exit code 1]
 ```
 
 ---
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+**`parenthetical` false positive on code spans** — a parenthetical like `(e.g. SHA256)` or `(default 0.62)` exceeds 8 characters and will trigger the rule even though it is appropriate in technical docs. Inline code using backticks instead of parentheses to avoid the rule: `` default `0.62` `` instead of `(default 0.62)`.
+
+**`filler` on legitimate compound words** — phrases like `simply put` and `leverages` are caught by the filler and ai_copy rules, but a domain-specific compound like `leverage ratio` in a finance context is not a filler phrase. Extend the rule set with a per-project allowlist if the default rules produce excessive noise.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** No prerequisites. `check(text)` and `check_file(path)` can be called standalone on any markdown string or file path.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** Fix all reported violations before committing documentation or module docstrings. Wire `python3 -m ablation.core.prose` into a pre-commit hook to enforce the standard automatically.
 
 ---
 

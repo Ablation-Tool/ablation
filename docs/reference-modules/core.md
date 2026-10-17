@@ -490,22 +490,34 @@ for chain in chains:
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+BinaryContext  firmware.so
+  sha256   : 3f8a1c9d...
+  arch     : x86_64  bits=64
+  functions: 1847
+  plt      : 142
+  exports  : 0
+  strings  : 3291
+  call edges: 8420
+
+ctx.name(0x1d700)     → "proto_parse_message"
+ctx.strings_in_func(0x1d700) → [(0x41000, "malformed header"), (0x41020, "%s: %d")]
+ctx.callers_of("memcpy")     → [(0x1d700, "proto_parse_message"), (0x2a100, "fn_0x2a100")]
+ctx.callees_of(0x1d700)      → [(0x3000, "memcpy"), (0x4000, "recv")]
 ```
 
 ---
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+`BinaryContext`, `XRefGraph`, `CFGBuilder`, and `FuncProfiler` do not emit security findings. `TaintTracker` FPs fall into two categories: (1) taint propagated through a callee that zeroes the register (`xor rX, rX` is modeled as clear, but a callee that unconditionally zeroes a register is not), and (2) source functions called on trusted data where the function name matches a source pattern (e.g., a `read()` call reading from a local file, not a socket). Use `SinkArgClassifier` to eliminate RODATA_CONST call sites before running `TaintTracker`; this removes the most common FP class before any taint analysis begins.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** No prerequisites. `BinaryContext.load_or_build(path)` is the session entry point for every Ablation workflow. It has no dependencies on other Ablation modules.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** All other modules consume `BinaryContext`. Standard ordering: `load_or_build()` → `CorpusBuilder.build()` → `SemanticSearcher.query()` → `SinkArgClassifier.classify_all()` → `TaintTracker.run()` (on ARG_PROPAGATED/UNKNOWN sinks only) → `PathSolver.solve()` → `FindingRegistry.register()`.
 
 ---
 

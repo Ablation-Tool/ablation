@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before
 
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+For each function in `LIB_DB`, `_score(profile, summary)` accumulates integer score points: argument count range match, per-position argument kind match (`ptr` / `int` / `float`), return kind match, null-on-fail and neg-on-fail flags, and `used_as_heap_base` for allocators. `classify()` builds a ranked list of `(name, score)` pairs from all `LIB_DB` entries, returns the top match if its score meets `min_score`, and always returns the full `top3` list for inspection. The `ObservedSlotProfile` is built by the caller from observed call-site behavior — `num_callsites`, `arg_kinds`, `ret_kind`, and usage-pattern flags — typically by driving disassembly of all call sites for a given PLT stub VA with Capstone.
 
 ---
 
@@ -50,22 +50,32 @@ print(f"  {name}  score={score}  top3={top3}")
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+classify(profile)
+  top match : malloc  score=9
+  top3 : [('malloc', 9), ('operator_new', 7), ('realloc', 4)]
+
+classify(profile_recv)
+  top match : recv  score=11
+  top3 : [('recv', 11), ('read', 8), ('recvfrom', 6)]
+
+classify(profile_ambiguous)
+  top match : None  (best score 3 < min_score 4)
+  top3 : [('memcpy', 3), ('memmove', 3), ('memset', 2)]
 ```
 
 ---
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+**Wrong match when PLT stubs share an ABI pattern** — `malloc`, `operator_new`, and `calloc` have similar argument kind profiles. If the profile is built from only a few call sites (low `num_callsites`) the `used_as_heap_base` and `null_on_fail` flags may not be observable, reducing the discriminating signal. Verify the returned `top3` list: if the top two scores are within 2 points, treat the classification as ambiguous and fall back to `SigLibrary` description-based matching.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** `BinaryContext.load_or_build()` to identify PLT stubs without symbol names. Capstone disassembly of all call sites for each unnamed PLT stub to build the `ObservedSlotProfile`.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** Pass the matched function name to `ctx.set_name(stub_va, name, source='libfunc_db')`. Named PLT stubs then appear in `SemanticSearcher` corpus descriptions and `TaintTracker` sink matching.
 
 ---
 
