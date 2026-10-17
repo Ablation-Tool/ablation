@@ -20,7 +20,7 @@ Enumerate running Docker containers, images, volumes, and network configurations
 flowchart TD
     A["DockerEnumerator()"] --> B["enumerate_containers() → List[dict]\n  docker ps -a --format json\n  or docker API at /var/run/docker.sock\n  → ID, image, command, status, ports"]
     B --> C["enumerate_images() → List[dict]\n  docker images --format json\n  → repository, tag, image_id, size, created"]
-    C --> D["check_container_isolation(host, timeout) → List[dict]\n  Probe Docker daemon: TCP port 2375\n  Check mounted /var/run/docker.sock in container\n  Per-container flags: privileged, cap_add, net=host, pid=host\n  → isolation_findings: List[str]"]
+    C --> D["check_container_isolation(host='localhost') → List[dict]\n  Reads /proc/1/cgroup to detect container runtime\n  Checks /proc/self/status CapEff for CAP_SYS_ADMIN\n  Checks /proc/self/mounts for docker.sock bind-mount\n  Checks PID/net namespace inode vs host init\n  → [{severity, title, detail, host, port}]"]
     D --> E["check_image_security(registry_host, port) → List[dict]\n  Pull image manifests from registry\n  Flag: missing content-trust, unsigned, stale base\n  check_dependency_confusion_indicators(registry_host)\n    Compare internal image names vs Docker Hub catalog"]
 ```
 
@@ -40,10 +40,10 @@ print(f"Containers: {len(containers)}  Images: {len(images)}")
 for c in containers:
     print(f"  {c['id'][:12]}  {c['image']}  {c['status']}")
 
-# Check isolation posture
+# Check isolation posture — each finding: {severity, title, detail, host, port}
 findings = check_container_isolation('localhost')
 for f in findings:
-    print(f"  [ISOLATION] {f}")
+    print(f"  [{f['severity']}] {f['title']}: {f['detail'][:80]}")
 ```
 
 ---
@@ -62,9 +62,10 @@ Containers: <N>
 Images: <M>
 
 check_container_isolation():
-  CRITICAL: Docker daemon TCP port 2375 open (unauthenticated)
-  HIGH: container nginx — privileged=true
-  HIGH: container app-server — cap_add=[SYS_ADMIN]
+  [CRITICAL] CAP_SYS_ADMIN_IN_CONTAINER — escape possible
+             CapEff bit 21 (CAP_SYS_ADMIN) is set inside the container.
+  [CRITICAL] DOCKER_SOCKET_MOUNTED — container escape
+             /var/run/docker.sock is mounted inside the container.
 ```
 
 ---
