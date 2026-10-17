@@ -53,11 +53,13 @@ Reads the binary header to validate the container magic, walks the partition or 
 ## Usage
 
 ```python
-from ablation.analyzers.physmem_elf_vfs import PhysmemElfVfs:PhysicalMemoryELFExtractor
+from modules.physmem_elf_vfs import PhysmemVFS
 
-results = PhysmemElfVfs:PhysicalMemoryELFExtractor.from_context(ctx).run()
-for r in results:
-    print(r)
+with PhysmemVFS('/path/to/memory-dump.bin') as vfs:
+    n = vfs.build_index()
+    print(f"Indexed {n} ELF candidates")
+    for cand in vfs.find_proc_maps():
+        print(cand)
 ```
 
 ---

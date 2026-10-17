@@ -27,11 +27,11 @@ Reads the binary image and resolves the target-specific data structures (PLT, GO
 ## Usage
 
 ```python
-from ablation.analyzers.ppc32_func_discovery import PPC32FunctionDiscovery
+from modules.ppc32_func_discovery import PPC32FuncDiscovery
 
-results = PPC32FunctionDiscovery.from_context(ctx).run()
-for r in results:
-    print(r)
+scanner = PPC32FuncDiscovery.from_path('/path/to/ppc32_firmware.elf')
+func_starts = scanner.discover()
+print(scanner.report(func_starts))
 ```
 
 ---

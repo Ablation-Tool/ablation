@@ -27,11 +27,12 @@ Reads the binary image and resolves the target-specific data structures (PLT, GO
 ## Usage
 
 ```python
-from ablation.analyzers.mips_analyzer import MIPSAnalyzer
+from modules.mips_analyzer import MIPS32TaintTracker
 
-results = MIPSAnalyzer.from_context(ctx).run()
-for r in results:
-    print(r)
+tracker = MIPS32TaintTracker.from_context(ctx)
+findings = tracker.run_interprocedural(depth=4)
+for f in findings:
+    print(f)
 ```
 
 ---
@@ -66,7 +67,7 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ## Reading findings
 
-`MIPS32TaintTracker.from_context(ctx).scan()` returns `List[TaintFinding32Mips]`:
+`MIPS32TaintTracker.from_context(ctx).run_interprocedural()` returns `List[TaintFinding32Mips]`:
 
 | Attribute | Content |
 |:---|:---|
