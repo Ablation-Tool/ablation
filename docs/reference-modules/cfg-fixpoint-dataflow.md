@@ -105,12 +105,10 @@ Run `ConstPropAnalysis` or `ReachingDefsAnalysis` when TaintTracker or SinkArgCl
 | `Top` | Value not determinable (set by a non-constant write) |
 | `Bottom` | Block unreachable |
 
-`SCCPAnalysis.run()` returns:
+`SCCPAnalysis.solve(func_addr)` returns `Tuple[Dict[int, Any], Set[Tuple[int, int]]]`:
 
-| Attribute | Content |
-|:---|:---|
-| `exec_edges` | `Set[Tuple[int, int]]` — edges determined reachable (`(src_va, dst_va)`) |
-| `const_values` | `Dict[int, Dict[str, Const]]` — same shape as `ConstPropAnalysis` for reachable blocks |
+- **First element** (`cp_vals`): `Dict[block_label, Dict[register, LatValue]]` — per-block register constant state; `None` for unreachable blocks.
+- **Second element** (`exec_edges`): `Set[Tuple[int, int]]` — `(src_va, dst_va)` edges proven reachable given the constant conditions.
 
 ---
 

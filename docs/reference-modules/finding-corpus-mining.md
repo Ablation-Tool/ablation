@@ -90,7 +90,9 @@ Run `CMDBSurfaceMapper` as Phase 0.5 triage immediately after `BinaryContext.loa
 | `name` | Table name string (if recovered from binary) or `None` |
 | `callers` | Count of functions that access this table |
 | `reaches_exec` | `True` if any caller reaches an exec-class sink |
-| `exec_sink_callers` | `List[int]` — VAs of callers that reach exec sinks |
+| `exec_func_va` | VA of the function that co-locates the exec sink call (`None` if not found) |
+| `exec_call_va` | VA of the call instruction to the exec sink (`None` if not found) |
+| `exec_sink_name` | Name of the exec sink (e.g., `'system'`, `'popen'`), or `None` |
 
 High-priority entries are those where `reaches_exec=True`.
 

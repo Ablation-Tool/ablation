@@ -1148,7 +1148,6 @@ This page covers multiple container-parsing modules. Output types by tool:
 - **FirmwareContainerKeyExtractor** — `ExtractionResult` with `outer_key`, `partitions` (`List[PartitionResult]`). See [firmware-container-key-extractor](firmware-container-key-extractor.md).
 - **InstallerBinaryAnalyzer** — `InstallerAnalysisResult` with `installer_type`, `binaries` (`List[CarvedBinary]`). See [installer-binary-analyzer](installer-binary-analyzer.md).
 - **FortiGateCertKeyScanner** — `CertKeyScanResult` with `keys` (`Dict[str, KeyEntry]`). See [fortigate-cert-key-scanner](fortigate-cert-key-scanner.md).
-| `evidence` | Byte offset or string excerpt that triggered the finding |
 
 ---
 

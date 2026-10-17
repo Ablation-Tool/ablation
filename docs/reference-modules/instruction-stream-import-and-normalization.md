@@ -86,14 +86,7 @@ Run `BinaryLifter.lift_function()` after `TaintTracker` confirms a finding to pr
 
 ## Reading output
 
-`BinaryLifter.lift(va)` returns a `LiftedFunction` object:
-
-| Attribute | Content |
-|:---|:---|
-| `va` | VA of the lifted function |
-| `pseudocode` | Lifted pseudocode string — human-readable IR with named parameters |
-| `taint_annotations` | `List[str]` — inline taint annotations for tainted operations |
-| `sink_calls` | `List[{sink_name, va, args}]` — sink calls identified in the lifted code |
+`BinaryLifter.lift_function(va, max_insns=512)` returns a `str` — the lifted annotated C pseudocode for the function at `va`. Taint annotations appear inline in the string when `with_taint(findings)` was called before lifting. There is no structured return object.
 
 ---
 

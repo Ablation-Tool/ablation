@@ -85,15 +85,17 @@ Run JWT analysis after capturing a token from HTTP traffic (via `PCAPAnalyzer`) 
 
 ## Reading findings
 
-`CryptoAudit.analyze_jwt()` returns a dict:
+`CryptoAudit.analyze_jwt(token)` returns a dict:
 
 | Key | Content |
 |:---|:---|
-| `alg` | Algorithm claim from JWT header |
-| `none_bypass` | `True` if the server accepted an unsigned `alg: none` token |
-| `weak_secret` | The matched wordlist secret string, or `None` |
+| `header` | Decoded JWT header dict |
+| `payload` | Decoded JWT payload dict |
+| `alg` | Algorithm claim string (e.g., `'HS256'`, `'none'`) |
+| `vulns` | `List[str]` — one entry per detected weakness (e.g., `'CRITICAL:WEAK_SECRET — secret is ...'`, `'MEDIUM:HS256 — symmetric; secret may be weak'`) |
+| `forged_token` | A forged JWT string when a weakness allows forgery, or `None` |
 
-`CryptoAudit.scan_process_secrets()` returns `List[{pid: int, process: str, secret_var: str, value: str}]`.
+`CryptoAudit.scan_for_jwts(paths)` scans a list of file paths and returns a list of `(path, token_string)` tuples for all JWT strings found.
 
 ---
 

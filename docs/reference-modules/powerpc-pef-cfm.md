@@ -91,14 +91,28 @@ Run `PEFBinaryAnalyzer` on any Mac Classic `.pfcd`/PEF binary before taint analy
 
 ## Reading output
 
-`PEFBinaryAnalyzer.parse()` returns a `PEFBinary` object:
+`PEFBinaryAnalyzer.from_path(path)` (or `from_bytes(data)`) returns a `PEFBinaryAnalyzer`. Access parsed content via properties:
+
+`PEFBinaryAnalyzer.sections` returns `List[PEFSection]`:
 
 | Attribute | Content |
 |:---|:---|
-| `sections` | `List[{name, kind, size, data}]` — code, data, and loader sections |
-| `imported_libs` | `List[{name, version, symbol_count}]` — shared library imports |
-| `exports` | `List[{name, va, sym_type}]` — exported symbols |
-| `function_starts` | `List[int]` — VA list of code section functions |
+| `name` | Section name string (empty if no name in container) |
+| `kind` | Kind integer — `0=code`, `1=data`, `2=loader` |
+| `kind_name` | Property — `'code'`, `'data'`, or `'loader'` string |
+| `default_address` | Base VA for this section |
+| `total_size` | Total size including zero-fill |
+| `file_offset` | Absolute file offset of section data |
+
+`PEFBinaryAnalyzer.imports` returns `List[PEFImport]`:
+
+| Attribute | Content |
+|:---|:---|
+| `index` | Global import index (0-based) |
+| `lib_name` | Shared library name this symbol comes from |
+| `sym_name` | Imported symbol name |
+| `sym_class` | PEF symbol class constant |
+| `rtoc_offset` | Byte offset from RTOC to TVect pointer slot |
 
 ---
 

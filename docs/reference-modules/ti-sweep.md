@@ -119,17 +119,21 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Reading output
 
-`sweep_package(input_path)` returns a `Tuple[str, List[dict]]` — `(package_name, findings_list)`. Each findings dict:
+`sweep_package(input_path)` returns a `Tuple[str, List[dict], str]` — `(package_name, findings_list, report_markdown)`. Each dict in `findings_list` represents one finding:
 
 | Key | Content |
 |:---|:---|
-| `binary` | Path to the analyzed binary within the package |
-| `arch` | Detected architecture string |
-| `findings` | `List[dict]` — per-binary findings with `severity`, `category`, `title`, `description`, `va` |
-| `taint_results` | `List[SinkClassification]` — taint analysis results for exec-class sinks |
-| `nnc_result` | `TiNNCScanResult` dict if TVM/NNC artifacts were found, else `None` |
+| `binary` | Basename of the analyzed file |
+| `binary_path` | Absolute path to the analyzed file |
+| `finding_id` | Phase-specific ID — `TAINT-ARM32`, `TAINT-ARM64`, `TAINT-RV32`, or NNC scanner ID |
+| `severity` | `HIGH` or scanner-reported severity string |
+| `title` | Finding description string |
+| `phase` | Phase that produced it — `nnc`, `taint`, or `c28x` |
+| `va` | Virtual address of the finding (NNC findings only) |
+| `symbol` | Symbol name (NNC findings only) |
+| `arch` | Architecture string — `arm32_thumb`, `arm64`, `riscv32` (taint findings only) |
 
-`sweep_directory(directory)` calls `sweep_package` for each package in the directory and returns a list of the same tuples.
+`sweep_directory(tirex_dir)` calls `sweep_package` for each `.zip` package in the directory and writes per-package and master Markdown reports to `reports/`.
 
 ---
 
