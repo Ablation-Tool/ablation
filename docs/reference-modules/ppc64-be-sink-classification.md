@@ -90,6 +90,22 @@ Run `Ppc64BeSinkClassifier.classify_all()` after `Ppc64ElfV1Resolver.patch_conte
 
 ---
 
+## Reading output
+
+`Ppc64BeSinkClassifier.classify_all()` returns a list of `SinkClassification` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `sink_va` | VA of the sink call |
+| `sink_func` | Sink function name |
+| `verdict` | `RODATA_CONST`, `SNPRINTF_RODATA`, `ARG_PROPAGATED`, or `UNKNOWN` |
+| `arg_reg` | PPC64 argument register (`r3`, `r4`, etc.) |
+| `provenance` | Provenance description |
+
+Only `ARG_PROPAGATED` and `UNKNOWN` sinks are passed to `PPC64TaintTracker`.
+
+---
+
 ## See also
 
 - [Sink Argument Classification](sink-argument-classifier.md) — x86/x64 equivalent of this module

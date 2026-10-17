@@ -92,6 +92,23 @@ Run `SanitizerDetector` before or alongside `TaintTracker`. After TaintTracker f
 
 ## See also
 
+## Reading output
+
+`SanitizerDetector.scan()` returns a list of `SanitizerProfile` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `func_va` | VA of the sanitizer function |
+| `score` | Integer — number of detection signals found |
+| `accepted_bytes` | `frozenset[int]` — byte values permitted by the sanitizer |
+| `shell_safe()` | `True` if the accepted set excludes all shell metacharacters |
+
+`SanitizerProfile.blocked(char)` returns `True` if `char` is blocked by the sanitizer.
+
+---
+
+## See also
+
 - [Sanitizer-Gated Sink Filtering](sanitizer-gated-sink-filtering.md) — integrates SanitizerDetector results to filter TaintTracker findings
 - [Taint Analysis](taint-analysis.md) — primary consumer of sanitizer recognition results
 - [x86 Taint Tracking](x86.md) — TaintTracker for x86-64; benefits most from sanitizer pre-filtering

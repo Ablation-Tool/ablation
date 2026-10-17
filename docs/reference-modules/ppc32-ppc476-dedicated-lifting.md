@@ -96,6 +96,21 @@ Use `Ppc32Lifter` and `Ppc476Decompiler` after `TaintTracker` identifies a candi
 
 ## See also
 
+## Reading output
+
+`Ppc32Lifter.lift(va)` returns a `LiftedFunction` object:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | VA of the lifted function |
+| `pseudocode` | C-style pseudocode string with typed local variables and PPC register comments |
+| `calls` | `List[{callee_va, callee_name, args}]` — calls identified in the function |
+| `opd_info` | `Ppc64ElfV1Info` — OPD entry count and resolved PLT stubs (PPC64 ELFv1 only) |
+
+---
+
+## See also
+
 - [Binary Lifter](binary-lifter.md) — structural PPC32 backend (`arch='ppc32'`) for automated pipeline use
 - [PPC32 Heap Slot Overflow](ppc32-heap-slot-overflow.md) — scanner for PPC32-specific heap allocation overflow patterns
 - [Verified PPC32 Import Callers](verified-ppc32-import-callers.md) — PPC32 PLT caller verification complementary to PPC64 ELFv1
