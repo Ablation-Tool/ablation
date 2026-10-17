@@ -457,7 +457,6 @@ byte-verify the upstream bounds check before promoting to CONFIRMED.
 **Struct-size add**: `addi.w $a0, $t0, sizeof(hdr)` where `t0` is a user-provided
 payload size. Genuine vulnerability if payload size is unbounded: confirms as HIGH
 after source-level verification.
-```
 
 ---
 
@@ -703,10 +702,17 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-This page covers two scanners targeting x86-64 ELF binaries. Each returns its own typed list:
+Each scanner on this page returns its own typed list. Finding fields are documented under each scanner's **Finding fields** section above. Quick reference:
 
-- **HeapUAFScanner** — `List[HeapFinding]` with `binary`, `func_va`, `func_name`, `site_va`, `kind` (`'UAF'`/`'DOUBLE_FREE'`/`'HEAP_OVERFLOW'`/`'TYPE_CONFUSION'`), `description`, `severity` (`'HIGH'`/`'MEDIUM'`). See [heap-uaf-scanner](heap-uaf-scanner.md).
-- **GateFinding** (CompilerSecurityGate) — `List[GateFinding]` with `func_va`, `site_va`, `category`, `severity`, `description`, `detector`. See [compiler-security-gate](compiler_security_gate.md).
+| Scanner | Finding type | Key fields |
+|---|---|---|
+| `FormatStringScanner` | `FmtStringFinding` | `func_va`, `call_va`, `callee`, `fmt_reg`, `provenance`, `severity` |
+| `HeapVulnScanner` | `HeapFinding` | `kind`, `func_va`, `site_va`, `alloc_sym`, `freed_at`, `severity` |
+| `SqlSinkScanner` | `SqlFinding` | `sink_name`, `call_va`, `func_va`, `verdict`, `fmt_string`, `fmt_va` |
+| `LA64MaxNotMinScanner` | `LA64MaxNotMinFinding` | `pattern_va`, `result_name`, `sink_va`, `sink_name`, `sink_arg` |
+| `LA64HeapVulnScanner` | `LA64HeapVulnFinding` | `overflow_va`, `overflow_op`, `overflow_reg`, `sink_va`, `sink_name`, `size_arg`, `severity` |
+| `ARM64FgetsFdDiscriminator` | `FgetsClassifiedFinding` | `finding`, `fd_class`, `severity`, `source_name` |
+| `GoSubprocessScanner` | `SubprocessSite` | `scanner_func`, `call_va`, `exec_target`, `cmd_string`, `cmd_type`, `severity` |
 
 ---
 
