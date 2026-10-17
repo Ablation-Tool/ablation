@@ -143,16 +143,20 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`KernelModuleSubsystemClassifier().classify(ko_path)` returns a `KernelModuleClassification`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `ko_path` | Path to the `.ko` file |
+| `subsystem` | Canonical subsystem label (e.g., `'net/mac80211'`, `'fs/dlm'`, `'drivers/usb/serial'`) |
+| `attack_surface` | Attack-surface label (e.g., `'PROXIMITY'`, `'NETWORK-cluster'`, `'LOCAL-USB'`) |
+| `network_reachable` | `True` if the subsystem is reachable without physical access |
+| `confidence` | `'HIGH'` (exact rule match) / `'MEDIUM'` (broad rule) / `'LOW'` (fallback) |
+| `rule_matched` | The subsystem prefix rule that fired, for auditability |
+
+Use `classifier.classify_batch(ko_paths)` to classify a list of modules at once.
 
 ---
 

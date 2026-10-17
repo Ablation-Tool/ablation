@@ -153,16 +153,24 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`SanitizerDetector.from_context(ctx).detect(min_score=3)` returns `List[SanitizerProfile]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `func_va` | VA of the detected sanitizer function |
+| `score` | Detection confidence score (0–10) |
+| `allowed_bytes` | `FrozenSet[int]` — reconstructed allowed charset byte values |
+| `blocked_bytes` | `FrozenSet[int]` — reconstructed blocked charset byte values |
+| `shell_safe` | `True` if `allowed_bytes` contains no shell metacharacters |
+| `verdict` | `'SHELL_SAFE'` / `'SHELL_UNSAFE'` / `'PARTIAL'` / `'UNKNOWN'` |
+| `comparison_imms` | `List[int]` — raw comparison immediates observed |
+| `n_byte_loads` | Number of single-byte load instructions found |
+| `n_comparisons` | Number of comparison instructions found |
+| `detail` | Human-readable description |
+
+Pass matching `SanitizerProfile` objects to `SinkSanitizerFilter` to downgrade `ARG_PROPAGATED` verdicts.
 
 ---
 

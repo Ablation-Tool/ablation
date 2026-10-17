@@ -315,15 +315,20 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`HiSiRV32Ext(ctx).scan_custom3(code, base_va)` returns `List[HisiInsn]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `address` | VA of the instruction |
+| `size` | Instruction size in bytes (4 for custom-3 encoding) |
+| `mnemonic` | Decoded mnemonic string (e.g., `'hisi.conv2d'`, `'hisi.matmul'`) |
+| `op_str` | Decoded operand string |
+| `rd` / `rs1` / `rs2` | Destination and source register indices |
+| `funct3` / `funct7` | Function code fields from the 32-bit custom-3 encoding |
+
+Use `scan_all_custom()` to scan all HiSilicon custom opcode spaces in one pass.
 
 ---
 

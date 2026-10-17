@@ -141,14 +141,19 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`RPCServerAnalyzer.from_path(path).scan()` returns `List[RPCFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` / `'INFO'` |
+| `category` | `'unauthenticated_rpc'` / `'rpc_interface'` / `'endpoint_inventory'` |
+| `title` | Short finding title |
+| `location` | UUID string or PE path identifying the relevant interface |
+| `description` | Human-readable explanation of the finding |
+| `va` | VA of the `RpcServerRegisterIf*` call site (0 if not applicable) |
+| `cwe` | CWE identifier string (e.g., `'CWE-306'`) |
+
+The scan also extracts `RPCInterface` objects (inventory, not findings) with `uuid`, `auth_level`, `auth_level_name`, `registration_va`, and `endpoints` fields.
 
 ---
 

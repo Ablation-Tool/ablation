@@ -155,16 +155,17 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`WindowAnalyzer.from_context(ctx).dump_text(va, window=1536, align_back=0)` returns a formatted string block — a disassembly listing with annotations. There is no typed finding dataclass; output is text for manual analysis.
+
+Use the helper methods to extract structured data from the window:
+
+| Method | Returns |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `find_func_starts(va, window)` | `List[int]` — VAs of `[FUNC_START]` entries in the window |
+| `calls_in_window(va, window)` | `List[Tuple[int, int, str]]` — `(call_site_va, target_va, label)` for each call |
+| `dump(va, window, align_back)` | `List[str]` — individual annotated disassembly lines |
 
 ---
 

@@ -153,16 +153,30 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`EntropyMapper(path).scan()` returns an `EntropyMapResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `path` | Path to the analyzed file |
+| `file_size` | Total file size in bytes |
+| `window_size` | Entropy window size used |
+| `step_size` | Step size between windows |
+| `windows` | `List[EntropyWindow]` — per-window entropy values |
+| `regions` | `List[EntropyRegion]` — contiguous runs of the same entropy class |
+
+Each `EntropyRegion`:
+
+| Attribute | Content |
+|:---|:---|
+| `offset_start` / `offset_end` | Byte range (exclusive end) |
+| `cls` | `'ENCRYPTED'` / `'CODE'` / `'SPARSE'` / `'PADDING'` |
+| `avg_entropy` | Mean Shannon entropy (bits/byte) across windows in this region |
+| `min_entropy` / `max_entropy` | Min/max entropy in the region |
+| `size` | Property: `offset_end - offset_start` |
+
+Call `result.find_transitions(threshold=0.5)` to get `List[EntropyTransition]` at region boundaries.
 
 ---
 

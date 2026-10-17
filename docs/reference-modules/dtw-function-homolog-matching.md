@@ -94,16 +94,27 @@ Step 1 of the three-step cross-version patch analysis workflow in `CLAUDE.md`: `
 
 ## Reading output
 
-`DTWMatcher.score_functions(va_a, binary_b)` returns a list of match dicts sorted by score descending:
+`DTWMatcher.score_functions(va_a, va_b)` scores one function pair and returns a `SimilarityReport`:
 
-| Field | Content |
+| Attribute | Content |
 |:---|:---|
-| `va_b` | VA of the candidate homolog in `binary_b` |
-| `score` | DTW similarity score (0.0–1.0; ≥0.85 = HIGH confidence homolog) |
-| `seq_len_a` | Instruction count for function `va_a` |
-| `seq_len_b` | Instruction count for the candidate |
+| `va_a` / `va_b` | VAs of the two functions being compared |
+| `similarity` | DTW similarity score (0.0–1.0; ≥0.85 = HIGH confidence homolog) |
+| `dtw_dist` | Raw DTW distance (lower = more similar) |
+| `jaccard` | Jaccard similarity on the mnemonic sets |
+| `len_a` / `len_b` | Instruction counts for each function |
+| `verdict` | `'HOMOLOG'` / `'SIMILAR'` / `'DIFFERENT'` — summary classification |
 
-`DTWMatcher.find_homolog(va, binary_b, threshold=0.85)` returns the highest-scoring match dict above the threshold, or `None` if no match exceeds the threshold.
+`DTWMatcher.find_homologs(va, binary_b, threshold=0.85)` scans all functions in `binary_b` and returns `List[HomologMatch]` of candidates above the threshold, sorted by `similarity` descending:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | VA of the matching function in `binary_b` |
+| `binary` | Path string of `binary_b` |
+| `similarity` | DTW similarity score |
+| `dtw_dist` | Raw DTW distance |
+| `jaccard` | Jaccard similarity |
+| `seq_len` | Instruction count of the matching function |
 
 ---
 

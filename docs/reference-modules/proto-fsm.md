@@ -176,16 +176,36 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`analyze_fn(raw, binary, fn_va, state_vars)` returns a `FnProps` for one function. Build the protocol FSM by calling it across all functions. The state model objects:
+
+`FSMState`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `id` | Integer state identifier |
+| `value` | State variable value in this state |
+| `functions` | `List[int]` — function VAs active in this state |
+
+`FSMTransition`:
+
+| Attribute | Content |
+|:---|:---|
+| `from_state` | Source state ID |
+| `to_state` | Destination state ID |
+| `trigger_pc` | PC of the instruction that caused the transition |
+| `trigger_fn` | VA of the function containing `trigger_pc` |
+| `state_var` | BSS VA of the state variable being written |
+
+`StateVar` (input to the analysis):
+
+| Attribute | Content |
+|:---|:---|
+| `addr` | BSS VA of the state variable |
+| `read_sites` | `List[int]` — PCs of LDR instructions that read it before a branch |
+| `write_sites` | `List[int]` — PCs of STR instructions that write it after a branch |
+| `observed_values` | `Set[int]` — concrete values observed at write sites |
 
 ---
 

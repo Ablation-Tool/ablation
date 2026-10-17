@@ -64,14 +64,16 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`JavaDecompiler(path).analyze()` returns a dict:
+
+| Key | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `path` | Absolute path to the analyzed `.class` / `.jar` file |
+| `classes` | `List[dict]` — per-class analysis with `name`, `methods`, `fields` |
+| `security` | Security audit result string summarizing all findings |
+| `findings` | `List[dict]` — individual findings, each with `severity`, `title`, `description` |
 
 ---
 

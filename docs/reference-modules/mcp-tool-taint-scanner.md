@@ -107,14 +107,17 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`MCPToolTaintScanner.scan_file(path)` returns `List[MCPTaintFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `file` | Source file path |
+| `line` | Line number where the issue was detected |
+| `issue_type` | `'BIND_WIDE'` / `'EXEC_IN_ALLOWED'` / `'NO_AUTH'` / `'CREDENTIAL_EXPOSURE'` / `'PROMPT_INJECTION'` |
+| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` |
+| `cwe` | CWE identifier string (e.g., `'CWE-77'`, `'CWE-798'`) |
+| `description` | Human-readable explanation of the issue |
+| `snippet` | Source code snippet at the finding line |
 
 ---
 

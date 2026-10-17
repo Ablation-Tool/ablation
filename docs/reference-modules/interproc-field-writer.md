@@ -64,16 +64,19 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`interprocedural_field_writes(ctx, target_gv)` returns a `Dict[int, FuncSummary]` keyed by function VA. Each `FuncSummary`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `addr` | Function VA |
+| `global_field_writes` | `List[Tuple[name, field_offset, store_pc, store_bytes]]` — stores to a known global struct field |
+| `global_to_callee` | `List[Tuple[callee_va, global_name, callee_arg_idx, call_pc]]` — global forwarded to a callee |
+| `arg_field_writes` | `List[Tuple[arg_idx, field_offset, store_pc, store_bytes]]` — stores to a field of an argument struct |
+| `arg_to_callee` | `List[Tuple[callee_va, caller_arg_idx, callee_arg_idx, call_pc]]` — argument forwarded to a callee |
+| `direct_callees` | `Set[int]` — all direct callee VAs found in BL instructions |
+| `insns_scanned` | Number of instructions analyzed |
 
 ---
 

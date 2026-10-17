@@ -671,14 +671,10 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
-|:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+This page covers two scanners targeting x86-64 ELF binaries. Each returns its own typed list:
+
+- **HeapUAFScanner** — `List[HeapFinding]` with `func_va`, `site_va`, `kind` (`UAF`/`DOUBLE_FREE`/`HEAP_OVERFLOW`/`TYPE_CONFUSION`), `severity`, `description`. See [heap-uaf-scanner](heap-uaf-scanner.md).
+- **GateFinding** (CompilerSecurityGate) — `List[GateFinding]` with `func_va`, `site_va`, `category`, `severity`, `description`, `detector`. See [compiler-security-gate](compiler_security_gate.md).
 
 ---
 

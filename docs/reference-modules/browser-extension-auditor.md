@@ -111,12 +111,20 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading findings
 
-| Field | Content |
+`BrowserExtensionAuditor.scan_dir(path)` returns `List[ExtFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `path` | Absolute path to the file containing the finding |
+| `rel_path` | Path relative to the extension root |
+| `lineno` | Line number of the finding |
+| `finding_class` | Finding code (e.g., `'EXT_CONN_BROAD'`, `'MSG_HANDLER_PREAUTH'`, `'NATIVE_MSG_NO_ALLOWLIST'`) |
+| `severity` | `'HIGH'` / `'MEDIUM'` |
+| `cwe` | CWE identifier (e.g., `'CWE-346'`, `'CWE-285'`) |
+| `title` | Short description of the vulnerability |
+| `detail` | Extended explanation |
+| `snippet` | Source code snippet at the finding line |
+| `evidence` | Additional evidence string (e.g., the broad match pattern) |
 
 ---
 

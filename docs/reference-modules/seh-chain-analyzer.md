@@ -104,14 +104,17 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`SEHChainAnalyzer.from_path(path).scan()` returns `List[SEHFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `severity` | `'HIGH'` / `'MEDIUM'` / `'LOW'` / `'INFO'` |
+| `category` | `'safeseh_disabled'` / `'no_handlers'` / `'handler_not_in_table'` / `'seh_frame_count'` / `'dynamic_handler_count'` |
+| `title` | Short finding title |
+| `location` | PE path or section name |
+| `description` | Human-readable explanation |
+| `va` | VA of the relevant `push handler_va` instruction (0 if not applicable) |
+| `cwe` | CWE identifier string (e.g., `'CWE-693'`) |
 
 ---
 

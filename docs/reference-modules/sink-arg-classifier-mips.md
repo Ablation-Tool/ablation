@@ -198,14 +198,17 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`SinkArgClassifierMips.from_path(path).classify_all()` returns `List[SinkClassification]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `sink_name` | Name of the exec-class sink function (e.g., `'system'`, `'popen'`) |
+| `arg_pos` | 0-indexed argument position analyzed (0 = `$a0`, 1 = `$a1`, etc.) |
+| `func_va` | VA of the calling function |
+| `call_va` | VA of the `jal` / `jalr` instruction |
+| `verdict` | `'RODATA_CONST'` — hardcoded constant; `'SNPRINTF_RODATA'` — buffer from fixed-format snprintf; `'ARG_PROPAGATED'` — traces to entry-point `$a0`–`$a3`; `'UNKNOWN'` — provenance unresolved |
+| `detail` | Human-readable trace description |
+| `severity` | Derived from verdict: `'LOW'` (RODATA_CONST) / `'MEDIUM'` (SNPRINTF_RODATA/UNKNOWN) / `'HIGH'` (ARG_PROPAGATED) |
 
 ---
 

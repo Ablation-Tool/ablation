@@ -538,12 +538,15 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading findings
 
-| Field | Content |
+HarmonyOS analysis uses the same pipeline as Android analysis. `DexAnalyzer(dex_data).scan()` returns `List[DexFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'INFO'` |
+| `category` | Finding category (e.g., `'jni_dangerous_call'`, `'dynamic_code_loading'`) |
+| `title` | Short description of the finding |
+
+For native `.so` components extracted from `.hap` packages, the standard binary RE pipeline applies — see [source-code-auditing](source-code-auditing.md) for JavaScript/TypeScript ArkTS source findings.
 
 ---
 

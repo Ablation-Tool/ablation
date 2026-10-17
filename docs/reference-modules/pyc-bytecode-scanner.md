@@ -130,14 +130,21 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`PycBytecodeScanner(dangerous_names).scan_file(path)` returns a `PycScanResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `path` | Path to the `.pyc` file |
+| `filename` | `co_filename` string from the top-level code object (the original `.py` source path) |
+| `python_version` | Version string (e.g., `'3.4'`, `'3.11'`) |
+| `co_names` | `FrozenSet[str]` — all name references in the bytecode |
+| `danger_hits` | `FrozenSet[str]` — intersection of `co_names` with `dangerous_names` |
+| `os_module_present` | `True` if `'os'` appears in `co_names` |
+| `error` | `None` on success, error string if the file could not be parsed |
+| `is_clean` | Property — `True` if `danger_hits` is empty and no error |
+| `confidence` | Property — `'clean'` / `'HIGH'` (os module + danger hits) / `'LOW'` (danger hits only) |
 
 ---
 

@@ -144,14 +144,18 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`SscanfSinkClassifier.from_context(ctx).classify_all()` returns `List[SscanfClassification]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `sink_name` | Name of the sscanf-family function (e.g., `'sscanf'`, `'vsscanf'`) |
+| `fmt_arg_pos` | 0-indexed position of the format-string argument |
+| `func_va` | VA of the calling function |
+| `call_va` | VA of the call instruction |
+| `verdict` | `'RODATA_SAFE'` — fixed safe format; `'RODATA_UNSAFE'` — fixed format with `%s` without width; `'DYNAMIC_FMT'` — format comes from a variable; `'ARG_PROPAGATED'` — format traces to an entry argument; `'UNKNOWN'` — provenance unresolved |
+| `format_str` | Decoded format string if from `.rodata`, else empty string |
+| `detail` | Human-readable trace description |
+| `severity` | Derived: `'LOW'` (RODATA_SAFE) / `'HIGH'` (RODATA_UNSAFE, ARG_PROPAGATED) / `'MEDIUM'` (DYNAMIC_FMT, UNKNOWN) |
 
 ---
 

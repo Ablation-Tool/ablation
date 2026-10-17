@@ -20,7 +20,7 @@ Analyze Windows PE binaries for Control Flow Guard (CFG) bypass opportunities �
 flowchart TD
     A["CFGBypassDetector.from_path('ntdll.dll')"] --> B["Parse IMAGE_LOAD_CONFIG_DIRECTORY:\n  CFGConfig:\n    instrumented(): IMAGE_GUARD_CF_INSTRUMENTED flag\n    table_present(): IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT\n    export_suppression(): IMAGE_GUARD_RF_EXPORT_SUPPRESSION\n    longjump_table(): IMAGE_GUARD_CF_LONGJUMP_TABLE_PRESENT\n    xfg_enabled(): IMAGE_GUARD_RF_ENABLE_XFG\n    entry_stride(): bytes per CFG table entry (4 or 8)"]
     B --> C["scan() → List[CFGBypassFinding]\n  Finding 1: CFG_ABSENT if not instrumented()\n  Finding 2: EXPORT_SUPPRESSION_MISSING if instrumented() and not export_suppression()\n  Finding 3: For each export not in CFG table → CFG_TARGET_NOT_SUPPRESSED\n    (only when export_suppression() is True but entry is missing)"]
-    C --> D["CFGBypassFinding:\n  finding_type: 'CFG_ABSENT' | 'EXPORT_SUPPRESSION_MISSING' | 'CFG_TARGET_NOT_SUPPRESSED'\n  export_name: Optional[str]  (for CFG_TARGET_NOT_SUPPRESSED)\n  export_va: Optional[int]\n  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM'"]
+    C --> D["CFGBypassFinding:\n  category: 'cfg_disabled' | 'no_export_suppression' | 'export_not_in_table'\n  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM'\n  title: str\n  location: str\n  description: str\n  va: int\n  cwe: str"]
     D --> E["report(findings) → str"]
 ```
 
@@ -43,10 +43,10 @@ print(f"XFG enabled: {cfg.xfg_enabled()}")
 print(f"CFG entry stride: {cfg.entry_stride()} bytes")
 
 # Filter to specific finding types
-bypass_targets = [f for f in findings if f.finding_type == 'CFG_TARGET_NOT_SUPPRESSED']
+bypass_targets = [f for f in findings if f.category == 'export_not_in_table']
 print(f"Unsuppressed exports: {len(bypass_targets)}")
 for f in bypass_targets:
-    print(f"  {f.export_name}  VA={f.export_va:#x}")
+    print(f"  {f.location}  VA={f.va:#x}")
 ```
 
 ---
@@ -92,13 +92,17 @@ Run `CFGBypassDetector` when analyzing Windows PE binaries for exploit developme
 
 ## Reading findings
 
-`CFGBypassDetector.scan()` returns a list of finding dicts:
+`CFGBypassDetector.from_path(path).scan()` returns `List[CFGBypassFinding]`. See [cfg-bypass-detector](cfg-bypass-detector.md) for the full field reference.
 
-| Field | Content |
+| Attribute | Content |
 |:---|:---|
-| `severity` | `HIGH` / `MEDIUM` / `LOW` |
-| `code` | Finding code (e.g., `EXPORT_SUPPRESSION_MISSING`, `XFG_NOT_ENABLED`, `INDIRECT_CALL_NOT_GUARDED`) |
-| `detail` | Human-readable explanation with specific export/call site counts |
+| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` |
+| `category` | `'cfg_disabled'` / `'cfg_table_absent'` / `'no_export_suppression'` / `'export_not_in_table'` / `'indirect_call_stats'` |
+| `title` | Short finding title |
+| `location` | PE path or export name identifying the bypass surface |
+| `description` | Explanation of the bypass opportunity and impact |
+| `va` | VA of the relevant export or call site (0 if not applicable) |
+| `cwe` | CWE identifier (e.g., `'CWE-693'`) |
 
 `CFGBypassDetector.cfg_config()` returns a `CFGConfig` object:
 
