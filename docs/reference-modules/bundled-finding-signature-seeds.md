@@ -93,6 +93,26 @@ Run `SigLibrary.auto_name()` after building the initial corpus but before runnin
 
 ---
 
+## Reading output
+
+`SigLibrary.match(va)` returns a list of match dicts ranked by confidence:
+
+| Field | Content |
+|:---|:---|
+| `name` | Matched library function name (e.g., `likely:memcpy`) |
+| `confidence` | Float 0.0–1.0 — profile similarity score |
+| `seed_profile` | Profile bitmask from the seed library |
+| `target_profile` | Profile bitmask from the target function |
+
+`SigLibrary.auto_name()` applies `ctx.set_name(va, name)` for matches above the `MIN_CONFIDENCE` threshold and returns a summary dict:
+
+| Field | Content |
+|:---|:---|
+| `renamed` | Count of functions renamed |
+| `top_matches` | List of `(name, count)` for the most frequent matched names |
+
+---
+
 ## See also
 
 - [Semantic Search](semantic-search.md) — embedding-based similarity; complementary to SigLibrary profile matching

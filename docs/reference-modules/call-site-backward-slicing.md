@@ -83,6 +83,20 @@ Run `IPRegAnnotator.annotate()` on confirmed pre-auth handler VAs or CMDB sink-c
 
 ---
 
+## Reading output
+
+`IPRegAnnotator.annotate_chain(root_va)` returns a `ChainResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `depth` | Interprocedural depth traced |
+| `chain` | List of `CallChainEntry` (VA, callee name, argument register states) per call in the chain |
+| `sink_calls` | List of `(sink_va, sink_name, call_site_va)` for all detected sink calls in the chain |
+
+`IPRegAnnotator.all_sinks(sink_name)` returns a list of `(sink_va, sink_name, call_site_va)` tuples for all occurrences of the named sink within the traced chain, with argument register provenance.
+
+---
+
 ## See also
 
 - [Register Annotation (Single Function)](register-annotation.md) — `RegAnnotator` base for single-function symbolic forward pass

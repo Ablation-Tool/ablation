@@ -157,6 +157,26 @@ TFTP blocked: TFTP ERROR 1 — File not found
 
 ---
 
+## Reading findings
+
+Each helper returns decoded strings or structured results, not finding dicts.
+
+`CiscoType7Decoder.decode(hash)` returns the plaintext password string.
+
+`SNMPWalker.walk(host, community)` returns `{oid: value}` dict.
+
+`CiscoRunningConfigDecoder.decode(host)` returns `{host, config_text, decoded_secrets: List[{type, encoded, decoded}]}`.
+
+`decoded_secrets` item:
+
+| Field | Content |
+|:---|:---|
+| `type` | Key type (e.g., `enable password 7`, `snmp-server community encrypted`) |
+| `encoded` | Original encoded/hashed value from config |
+| `decoded` | Plaintext credential |
+
+---
+
 ## See also
 
 - [IOS Enum](ios-enum.md) — full IOS/IOS-XE enumeration: REST API, AAA probe, privilege escalation check
