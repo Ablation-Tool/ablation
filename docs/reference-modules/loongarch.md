@@ -57,7 +57,7 @@ from ablation.analyzers.taint_tracker_loongarch64 import LoongArch64TaintTracker
 tracker = LoongArch64TaintTracker.from_path('/path/to/loongarch64.elf')
 findings = tracker.run()
 for f in findings:
-    print(f"[{f.severity}] {f.source} → {f.sink} @ {f.va:#x}")
+    print(f"[{f.severity}] {f.source_name} → {f.sink_name} @ {f.sink_va:#x}")
 
 # Interprocedural (depth-limited call-graph traversal)
 chains = tracker.run_interprocedural(depth=4)

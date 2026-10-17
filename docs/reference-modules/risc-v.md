@@ -53,7 +53,7 @@ eng = TaintEngine(Width.RV64)
 eng.taint_register("a0", "user")
 findings = eng.run(from_listing(objdump_text))
 for f in findings:
-    print(f"[{f.severity}] {f.source} → {f.sink} @ {f.va:#x}")
+    print(f"{f.address:#x} [{f.kind}] {f.detail} <- {sorted(f.labels)}")
 
 # CFG fixpoint analysis
 from ablation.analyzers.analysis_riscv import analyze_cfg
