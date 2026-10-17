@@ -104,6 +104,20 @@ Run binary analysis functions (`detect_seh_chain_corruption()`, `detect_dpc_time
 
 ---
 
+## Reading findings
+
+All three detection functions return `List[{severity, title, detail}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` / `HIGH` |
+| `title` | Finding code (e.g., `SEH_CHAIN_ACCESSED`, `POPAD_JMP_EGGSCAN`, `HIGH_FREQUENCY_TIMER`, `ANONYMOUS_RWX_MAPPING`) |
+| `detail` | Instruction VA, PID/process name, or memory range providing evidence |
+
+`detect_linux_memory_artifacts()` additionally includes `pid` and `process` fields in `detail`.
+
+---
+
 ## See also
 
 - [Volatile and Linux Artifact Triage](volatile-and-linux-artifact-triage.md) — `/proc`-based triage combining forensics and privesc indicators

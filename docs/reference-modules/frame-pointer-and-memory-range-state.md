@@ -94,6 +94,19 @@ Run `COMAttackSurfaceMapper` on any Windows PE binary (DLL or EXE) during initia
 
 ---
 
+## Reading output
+
+`COMAttackSurfaceMapper` returns structured results:
+
+| Method / Attribute | Content |
+|:---|:---|
+| `is_com_server()` | `True` if the binary exports `DllGetClassObject` or `DllRegisterServer` |
+| `com_server_exports()` | `List[str]` — exported COM registration entry points |
+| `referenced_clsids()` | `List[str]` — CLSID GUIDs found in binary strings or data sections |
+| `cocreate_sites()` | `List[{va: int, clsid: str}]` — `CoCreateInstance` call sites and their CLSID arguments |
+
+---
+
 ## See also
 
 - [RPC Server Analysis](rpc-server-analysis.md) — `RPCServerAnalyzer` for Windows RPC interface UUID enumeration
