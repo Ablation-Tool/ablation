@@ -362,15 +362,19 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`EcuVleDecoder.from_bytes(data, base=0).decode_all()` returns `List[VLEInsn]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `offset` | Byte offset (or VA if base is set) of this instruction |
+| `is_16bit` | `True` for 16-bit SE format, `False` for 32-bit VLE format |
+| `mnemonic` | Instruction mnemonic string (e.g., `'se_lwz'`, `'e_b'`) |
+| `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'LOAD'` / `'STORE'` / `'MISC'` |
+| `raw` | Raw instruction bytes (2 or 4 bytes) |
+| `target` | Branch/call target VA (None if not a control-flow instruction) |
+| `rd` / `rs` / `ra` / `imm` | Decoded operand values (None if not applicable) |
 
 ---
 

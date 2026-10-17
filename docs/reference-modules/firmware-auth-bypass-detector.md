@@ -128,15 +128,21 @@ Version-mismatch findings appear when a known key or certificate is present in a
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`FirmwareAuthBypassDetector.from_path(path).analyze()` returns a `FirmwareAuthBypassResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category of the finding (e.g., `HARDCODED_KEY`, `WEAK_ALGO`, `AUTH_BYPASS`) |
-| `va` | Virtual address in the binary, if applicable |
-| `detail` | Human-readable description of what was found |
-| `evidence` | Byte offset or string excerpt that triggered the finding |
+| `path` | Path of the analyzed binary |
+| `is_vulnerable` | `True` if a firmware auth bypass pattern was detected |
+| `severity` | `CLEAN` / `INFO` / `MEDIUM` / `HIGH` / `CRITICAL` |
+| `summary` | Human-readable summary of the finding |
+| `firmware_iat` | `List[str]` — firmware-related IAT import names |
+| `signing_iat` | `List[str]` — signing-related IAT import names |
+| `firmware_strings` | `List[str]` — firmware-related strings found in the binary |
+| `arch` | Detected architecture string (e.g., `'x86_64'`, `'ARM'`) |
+| `has_resources` | `True` if the binary has embedded PE resources |
 
 ---
 

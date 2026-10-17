@@ -397,15 +397,25 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`EcuROMLayoutAnalyzer(data).analyze()` returns a `ROMLayout`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `file_size` | Total ROM size in bytes |
+| `regions` | `List[ROMRegion]` — entropy-classified regions |
+| `window_size` | Entropy window size used during analysis |
+| `fill_byte` | Fill byte value (`0xFF` for NOR flash, `0x00` for some NAND) |
+
+Each `ROMRegion` has:
+
+| Attribute | Content |
+|:---|:---|
+| `start` / `end` | Byte offset range (exclusive end) |
+| `region_type` | `'ERASED'` / `'CODE'` / `'CALIBRATION'` / `'MIXED'` / `'PADDING'` / `'IVT'` |
+| `entropy` | Mean entropy across windows in this region |
+| `size` | Property: `end - start` |
 
 ---
 

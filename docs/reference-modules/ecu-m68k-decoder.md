@@ -232,15 +232,19 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`EcuM68kDecoder.from_bytes(data, base=0).decode_all()` returns `List[M68kInsn]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | ECU-specific category (e.g., `WEAK_SEED`, `BYPASS_VECTOR`, `UNPROTECTED_WRITE`) |
-| `address` | ROM address of the finding |
-| `detail` | What was found and the security impact |
-| `service_id` | UDS service identifier if the finding is protocol-level |
+| `offset` | Byte offset (or VA if base is set) of this instruction |
+| `mnemonic` | Instruction mnemonic (e.g., `'MOVE.W'`, `'JSR'`, `'CLR.B'`) |
+| `op_str` | Decoded operands string (e.g., `'D0, 0x1234'`) |
+| `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'MISC'` |
+| `raw` | Raw instruction bytes |
+| `size` | Instruction size in bytes (2, 4, or 6) |
+| `target` | Branch/call target address (None if not a control-flow instruction) |
 
 ---
 

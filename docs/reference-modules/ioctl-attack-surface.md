@@ -159,16 +159,28 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`IoctlAttackSurfaceGenerator.from_path(path).generate()` returns an `IoctlAttackSurface`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `binary_path` | Path of the analyzed driver binary |
+| `driver_type` | Detected driver class (e.g., `'WDM'`, `'WDF'`) |
+| `is_signed` | `True` if the driver has an Authenticode signature |
+| `pdb_path` | PDB symbol path string from the PE header, or `None` |
+| `profiles` | `List[IoctlHandlerProfile]` — one entry per decoded IOCTL code |
+
+Each `IoctlHandlerProfile` key fields:
+
+| Attribute | Content |
+|:---|:---|
+| `ioctl_raw` | Raw IOCTL code value |
+| `method_name` | Transfer method string: `'METHOD_BUFFERED'` / `'METHOD_NEITHER'` / etc. |
+| `risk_level` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` (derived property) |
+| `has_probe` | `True` if handler calls `ProbeForRead`/`ProbeForWrite` |
+| `handler_va` | VA of the dispatch handler function (0 if not located) |
+| `dangerous_patterns` | `List[IoctlHandlerPattern]` — specific dangerous patterns found |
 
 ---
 

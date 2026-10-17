@@ -64,14 +64,20 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`GoBinaryAnalyzer.from_path(path).analyze()` returns an `AnalysisResult`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Runtime-specific category (e.g., `DANGEROUS_CALL`, `UNTRUSTED_INPUT`, `OBFUSCATED_CODE`) |
-| `location` | Class, method, or file offset where the finding was observed |
-| `detail` | What was found and why it matters for the native attack surface |
+| `binary_path` | Path of the analyzed Go binary |
+| `go_version` | Go toolchain version string extracted from pclntab (e.g., `'go1.21.5'`) |
+| `arch` | Target architecture string |
+| `pclntab_magic` | Pclntab magic value (identifies pclntab format version) |
+| `num_functions` | Total number of functions recovered from pclntab |
+| `functions` | `List[GoFunc]` — each with `va`, `fileoff`, `name`, `nameoff` |
+| `handlers` | `List[HandlerEntry]` — command dispatch handlers with `cmd_id`, `func_va`, `func_name` |
+| `errors` | `List[str]` — parse errors encountered |
 
 ---
 

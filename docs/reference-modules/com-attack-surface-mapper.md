@@ -105,14 +105,17 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-| Field | Content |
+`COMAttackSurfaceMapper.from_path(path).scan()` returns `List[COMFinding]`:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Scanner-specific category label |
-| `va` | Virtual address of the call site or instruction in the binary |
-| `func_va` | Virtual address of the containing function |
-| `detail` | What was found and the specific condition that triggered it |
-| `sink_name` | Name of the dangerous function reached (if applicable) |
+| `severity` | `HIGH` / `MEDIUM` / `LOW` / `INFO` |
+| `category` | `com_server` / `com_create` / `com_hijack_risk` / `com_marshal` / `clsid_inventory` / `idispatch` |
+| `title` | Short description of the COM attack surface exposure |
+| `location` | Human-readable location string (CLSID, export name, or registry key path) |
+| `description` | Detailed explanation of the attack vector |
+| `va` | VA of the relevant instruction (0 if not applicable) |
+| `cwe` | CWE identifier (e.g., `CWE-284`, `CWE-346`) |
 
 ---
 
