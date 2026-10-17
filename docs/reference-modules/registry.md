@@ -128,7 +128,7 @@ reg.register(
 ```python
 hits = reg.find_similar(func_embedding, top_k=8)
 for h in hits:
-    print(f"  {h.vendor}/{h.product} {h.version} -- {h.title} ({h.severity})")
+    print(f"  {h['vendor']}/{h['product']} {h['version']} -- {h['title']} ({h['severity']})")
 
 print(reg.stats())
 reg.list_findings(vendor='my-vendor')
