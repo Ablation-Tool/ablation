@@ -81,6 +81,21 @@ Run `PPC64TaintTracker` after `BinaryContext.load_or_build()` and `Ppc64ElfV1Res
 
 ---
 
+## Reading findings
+
+`PPC64TaintTracker.run()` returns a list of `TaintFindingPPC64` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `func_va` | VA of the function containing the sink |
+| `sink_va` | VA of the sink call |
+| `tainted_args` | `List[int]` — argument register indices that carry tainted values |
+| `source_name` | Name of the taint source (e.g., `recv`, `read`) |
+| `severity` | `HIGH` or `CRITICAL` |
+| `detail` | Sink function name and taint path description |
+
+---
+
 ## See also
 
 - [PPC64 ELFv1 Resolution](ppc64-elfv1-resolution.md) — required preprocessing for ELFv1 targets

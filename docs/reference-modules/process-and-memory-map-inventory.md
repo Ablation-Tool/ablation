@@ -85,6 +85,22 @@ Run process and memory map inventory after `host-platform-inventory` establishes
 
 ---
 
+## Reading findings
+
+`ProcessEnumerator.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (RWX mapping or writable hijack path) / `MEDIUM` (suspicious load path) |
+| `title` | Finding code (e.g., `ANONYMOUS_RWX_MAPPING`, `DLL_HIJACK_CANDIDATE`) |
+| `pid` | Process ID |
+| `process` | Process executable path |
+| `detail` | Memory range, loaded library path, or writable directory description |
+
+`ProcessEnumerator.scan_dll_hijacking_candidates()` returns `List[{pid, process, writable_path, library}]`.
+
+---
+
 ## See also
 
 - [Linux Privilege Escalation Triage](linux-privilege-escalation-triage.md) — `PrivescEnumerator` for SUID, capabilities, and sudo paths
