@@ -91,6 +91,20 @@ Run volatile capture as the very first step on any suspected compromised Linux h
 
 ---
 
+## Reading findings
+
+Volatile/Linux triage functions return `List[{severity, title, detail}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` / `MEDIUM` |
+| `title` | Finding code (e.g., `LD_PRELOAD_INJECT`, `PTRACE_ATTACH`, `SUSPICIOUS_KERNEL_MODULE`) |
+| `detail` | VA of the call, library path, module path, or process description |
+
+`enumerate_volatile_forensics()` also returns a `processes` count and a `suspicious_modules` list.
+
+---
+
 ## See also
 
 - [Process and Memory Map Inventory](process-and-memory-map-inventory.md) — `/proc/pid/maps` RWX region and DLL hijacking analysis
