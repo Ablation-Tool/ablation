@@ -118,11 +118,19 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`render.py` provides module-level terminal formatting functions — no findings, no return values beyond strings:
+
+| Function | Returns |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `box(lines, color, width)` | Multi-line framed box string |
+| `sbox(lines, color, width)` | Single-line compact box string |
+| `section(title, color, width)` | Section header string with separator |
+| `arrow(label, color)` | Right-arrow label string |
+| `strip(s)` | Input string with ANSI escape codes removed |
+
+ANSI color constants (`RED`, `ORANGE`, `YELLOW`, `GREEN`, `GRAY`, `WHITE`, `BOLD`, `DIM`, `RESET`) are auto-selected based on terminal capability.
 
 ---
 

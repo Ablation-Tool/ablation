@@ -209,11 +209,17 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`SigLibrary().match_function(va, ctx)` returns `Optional[SigMatch]` — `None` if no signature matches with sufficient confidence:
+
+| Attribute | Content |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `name` | Standard library function name (e.g., `'memcpy'`, `'SSL_read'`) |
+| `aliases` | `List[str]` — alternate names this function is known by |
+| `category` | Category string: `'Memory ops'` / `'String ops'` / `'Heap'` / `'Network'` / etc. |
+| `cwe_risk` | CWE risk identifier if the matched function is security-sensitive, or `None` |
+| `score` | Float — cosine similarity score of the match (0.0–1.0) |
 
 ---
 

@@ -408,11 +408,17 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`SemanticSearcher.from_context(ctx).query(description, top_k)` returns `list[SimilarFunction]`:
+
+| Attribute | Content |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `name` | Best-known function name (from `ctx.name(va)`) |
+| `role` | Role tag associated with the matched function |
+| `confidence` | Confidence label for the name assignment |
+| `va` | Virtual address of the matched function |
+| `score` | Float — cosine similarity score (0.0–1.0) |
 
 ---
 

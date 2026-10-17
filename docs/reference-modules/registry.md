@@ -215,11 +215,13 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+`NameRegistry.get_name(sha256, va)` returns `Optional[str]` — the stored function name for the given binary SHA-256 and VA, or `None` if not registered.
+
+`FindingRegistry.register(vendor, product, title, description, cwe_class, severity)` returns an `int` — the new row ID in the findings SQLite table. Rows include `vendor`, `product`, `version`, `binary`, `func_addr`, `cwe_class`, `severity`, `title`, `description`, `source`, and `confirmed` (1/0 boolean).
+
+`FindingRegistry.similar(embedding, top_k)` returns a list of row dicts from the findings table, ranked by embedding cosine similarity.
 
 ---
 

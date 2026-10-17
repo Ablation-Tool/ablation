@@ -89,11 +89,17 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`prose.check(text)` and `prose.check_file(path)` return `list[ProseIssue]`:
+
+| Attribute | Content |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `rule` | Rule that triggered: `'em_dash'` / `'parenthetical'` / `'filler'` / `'ai_copy'` |
+| `line` | 1-indexed line number |
+| `col` | 1-indexed column of the match |
+| `text` | Matched text that violated the rule |
+| `suggestion` | Replacement guidance |
 
 ---
 

@@ -378,11 +378,11 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+`BinaryContext.load_or_build(path)` returns a `BinaryContext` — the session object that all analysis modules operate on. It has no findings output; it is the input handle. See [BinaryContext](binary-context.md) for the full method reference.
+
+For PLT resolution specifically: `ctx.imports()` returns `Dict[str, int]` — import name → GOT VA.
 
 ---
 
