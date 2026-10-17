@@ -18,10 +18,10 @@ Detect OS family, kernel version, CPU architecture, libc variant, and security c
 
 ```mermaid
 flowchart TD
-    A["PlatformDetector()"] --> B["OS detection:\n  /etc/os-release → ID, VERSION_ID, PRETTY_NAME\n  /proc/version → kernel version string\n  uname().release → kernel version\n  uname().machine → architecture string\n  → {os_id, os_version, kernel_version, arch}"]
-    B --> C["Security settings:\n  /proc/sys/kernel/randomize_va_space → aslr_level (0/1/2)\n  /proc/sys/fs/protected_hardlinks → hardlink_protection\n  /sys/fs/selinux/enforce → selinux_mode (0=permissive, 1=enforcing)\n  /sys/module/apparmor/parameters/enabled → apparmor_enabled\n  /proc/self/status → Seccomp: <n> → seccomp_mode"]
-    C --> D["Capability detection:\n  /proc/self/exe ELF header → e_machine (architecture confirm)\n  /proc/self/maps → VDSO base (ASLR present if non-zero)\n  ldd --version → glibc version\n    or ldd on busybox → musl\n  → {libc_name, libc_version}"]
-    D --> E["detect() → dict:\n  os_id, os_version, kernel, arch\n  aslr_level: int (0-2)\n  nx_enabled: bool\n  selinux_mode: str\n  apparmor: bool\n  seccomp: int\n  libc: str, libc_version: str"]
+    A["PlatformDetector()"] --> B["detect_os() → info['os'], info['os_release'], info['os_version']\n  /etc/os-release → info['distro'], info['distro_version']\n  detect_arch() → info['machine'], info['processor']\n    info['arch_family'] (x86/ARM/MIPS), info['arch_bits'] (32/64)\n    info['pointer_size'], info['byte_order']"]
+    B --> C["detect_kernel() → info['kernel'], info['kernel_major'], info['kernel_minor']\n  detect_libc() → info['libc'] (glibc/musl/bionic)\n    info['libc_version']\n  detect_capabilities() → info['capabilities']\n    {is_root: bool, ptrace_scope: int, available_tools: [str]}"]
+    C --> D["detect_security_features() → info['security']\n  /proc/sys/kernel/randomize_va_space:\n    info['security']['aslr'] = 'disabled'|'partial'|'full'\n  /sys/fs/selinux → info['security']['selinux'] = bool\n  /sys/kernel/security/apparmor → info['security']['apparmor'] = bool"]
+    D --> E["detect_all() → self.info dict (all keys above)\n  Top-level: os, os_release, os_version, distro, distro_version,\n             machine, arch_family, arch_bits, kernel, libc, libc_version\n  Nested: security = {aslr, selinux, apparmor}\n          capabilities = {is_root, ptrace_scope, available_tools}"]
 ```
 
 ---
@@ -53,24 +53,34 @@ print(f"SELinux: {sec.get('selinux', False)}  AppArmor: {sec.get('apparmor', Fal
 The following illustrates host platform inventory output format.
 
 ```
-PlatformDetector:
+PlatformDetector.detect_all() → info
 
-OS: ubuntu 22.04  kernel: 5.15.0-91-generic  arch: x86_64
-ASLR: 2 (full randomization)
-NX: enabled
-SELinux: permissive
-AppArmor: enabled
-Seccomp: 0 (not filtered for this process)
-libc: glibc 2.35
+info['os']          = 'Linux'
+info['distro']      = 'ubuntu'
+info['distro_version'] = '22.04'
+info['machine']     = 'x86_64'
+info['arch_family'] = 'x86'
+info['arch_bits']   = 64
+info['kernel']      = '5.15.0-91-generic'
+info['libc']        = 'glibc'
+info['libc_version'] = '2.35'
+
+info['security']['aslr']     = 'full'
+info['security']['selinux']  = False
+info['security']['apparmor'] = True
+
+info['capabilities']['is_root']     = False
+info['capabilities']['ptrace_scope'] = 1
+info['capabilities']['available_tools'] = ['gdb', 'strings', 'readelf']
 ```
 
 ---
 
 ## False positives
 
-**`/sys/fs/selinux/enforce` absence does not mean SELinux is disabled** — some distributions compile SELinux into the kernel but mount the securityfs elsewhere, or use a different path. `PlatformDetector` returns `selinux_mode='unknown'` when the path is absent; verify with `getenforce` if available.
+**`info['security']['selinux']` is `True` when `/sys/fs/selinux` exists, not when SELinux is enforcing** — `detect_security_features()` checks `os.path.exists('/sys/fs/selinux')`, which is `True` even in permissive mode. It does not distinguish permissive from enforcing. To confirm enforcement, read `/sys/fs/selinux/enforce` separately (value `1` = enforcing, `0` = permissive).
 
-**`aslr_level=2` does not guarantee every region is randomized** — some applications disable ASLR for specific threads via `personality(ADDR_NO_RANDOMIZE)`. The `/proc/sys/kernel/randomize_va_space` value reflects the system-wide setting, not per-process enforcement.
+**`info['security']['aslr'] = 'full'` does not guarantee every region is randomized** — some applications disable ASLR for specific threads via `personality(ADDR_NO_RANDOMIZE)`. The `/proc/sys/kernel/randomize_va_space` value reflects the system-wide setting only; per-process enforcement must be verified separately.
 
 ---
 
