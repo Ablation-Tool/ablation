@@ -189,7 +189,9 @@ Prior to this module, registry modules required manual work outside the Ablation
 
 ## How it works
 
-Provides the session state, indexing, and utility functions that other Ablation modules depend on. The implementation details vary by class; see the class-level docstrings and the relevant workflow docs for specifics.
+**NameRegistry** writes function names keyed by `(binary_sha256, va)` to `~/.ablation/function_names.json` on every `set_name()` call. `BinaryContext.load_or_build()` calls `NameRegistry.all_names()` at load time and caches the result so that `ctx.name(va)` is a pure in-memory lookup during analysis. The SHA-256 key means names track the exact binary file, not just its filename — version bumps with the same filename do not inherit incorrect names.
+
+**FindingRegistry** is backed by a user-local SQLite file (`~/.ablation/findings.db`). `register()` inserts a row and returns the row ID as an integer. When an `embedding` is provided, it is L2-normalized before storage as a binary blob. `find_similar(embedding, top_k)` runs cosine similarity over stored embeddings in Python and returns the top-k result rows as dicts. The pre-loaded `ablation/data/seed_corpus.json` populates the DB at first run with patterns from published CVEs, so cross-vendor similarity queries work immediately without any prior registrations.
 
 ---
 
@@ -204,7 +206,7 @@ ctx = BinaryContext.load_or_build('/path/to/binary')
 
 # NameRegistry: persist confirmed function names across sessions
 names = NameRegistry()
-names.set(ctx.sha256, 0x1234, 'parse_http_request', source='confirmed')
+names.set_name(ctx.sha256, 0x1234, 'parse_http_request', source='confirmed')
 
 # Retrieve names in a later session
 ctx2 = BinaryContext.load_or_build('/path/to/binary')
@@ -214,8 +216,8 @@ print(ctx2.name(0x1234))  # 'parse_http_request'
 reg = FindingRegistry()
 reg.register(
     vendor='acme', product='firmware', version='1.0',
-    binary='libservice.so', func_va=0x1234,
-    cwe=121, severity='HIGH',
+    binary='libservice.so', func_addr=0x1234,
+    cwe_class='CWE-121', severity='HIGH',
     title='Stack overflow in HTTP parser',
     description='Length field flows unvalidated to memcpy.',
 )
@@ -231,7 +233,19 @@ for h in findings:
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+$ python -m ablation.analyzers.finding_registry stats
+FindingRegistry  ~/.ablation/findings.db
+  total findings  : 47  (23 confirmed)
+  vendors         : cisco (12), juniper (9), fortinet (11), custom (15)
+  cwe classes     : CWE-787 (8), CWE-121 (6), CWE-119 (11), CWE-120 (7), other (15)
+  with embeddings : 31
+
+$ python -m ablation.analyzers.finding_registry list --vendor cisco
+vendor    product     title                                cwe_class  severity
+------    -------     -----                                ---------  --------
+cisco     fmc_server  TLV zero-length infinite loop        CWE-835    HIGH
+cisco     asa_fw      SIP parser heap overflow             CWE-787    CRITICAL
+cisco     ios_xe      CLI command injection via snmp trap  CWE-78     HIGH
 ```
 
 ---
@@ -256,7 +270,7 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 `FindingRegistry.register(vendor, product, title, description, cwe_class, severity)` returns an `int` — the new row ID in the findings SQLite table. Rows include `vendor`, `product`, `version`, `binary`, `func_addr`, `cwe_class`, `severity`, `title`, `description`, `source`, and `confirmed` (1/0 boolean).
 
-`FindingRegistry.similar(embedding, top_k)` returns a list of row dicts from the findings table, ranked by embedding cosine similarity.
+`FindingRegistry.find_similar(embedding, top_k)` returns a list of row dicts from the findings table, ranked by embedding cosine similarity.
 
 ---
 
