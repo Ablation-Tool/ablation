@@ -79,6 +79,19 @@ Run `PPC32PLTTracer` after `PPC32ELF` is constructed from the target binary. Use
 
 ---
 
+## Reading output
+
+`PPC32PLTTracer.trace()` returns `Dict[str, List[PltCallSite]]` — symbol name → call sites:
+
+| Attribute | Content |
+|:---|:---|
+| `call_va` | VA of the `bl` instruction calling the PLT stub |
+| `thunk_va` | VA of the PLT thunk |
+| `r3` | VA of the `r3` argument (if statically determinable) or `None` |
+| `r3_string` | String value of `r3` if it points to `.rodata` (or `None`) |
+
+---
+
 ## See also
 
 - [PowerPC PEF/CFM Binary Analysis](powerpc-pef-cfm.md) — PEF equivalent for Mac Classic binaries
