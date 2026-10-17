@@ -87,6 +87,19 @@ Run `RawSniffer` during post-compromise dwell operations to map internal network
 
 ---
 
+## Reading output
+
+`RawSniffer.sniff(iface, duration)` returns a dict:
+
+| Key | Content |
+|:---|:---|
+| `packet_count` | Integer — total packets captured |
+| `credentials` | `List[{proto, src, dst, cred}]` — cleartext credentials from cleartext protocols |
+| `mdns_services` | `List[{service, hostname, ip}]` — mDNS service announcements |
+| `pcap_path` | Path to the saved PCAP file for offline analysis |
+
+---
+
 ## See also
 
 - [PCAP Inspection](pcap-inspection.md) — `PCAPAnalyzer` for offline PCAP analysis

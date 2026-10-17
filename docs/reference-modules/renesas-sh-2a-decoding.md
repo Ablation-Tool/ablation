@@ -76,6 +76,21 @@ Run `EcuSH2aDecoder` after `EcuArchDetector` confirms `sh2a` architecture. Chain
 
 ---
 
+## Reading output
+
+`EcuSH2aDecoder.function_starts()` returns `List[int]` — VA list of SH-2A functions.
+
+`EcuSH2aDecoder.disassemble(va, size)` returns a list of `SH2AInstruction` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Virtual address |
+| `size` | Instruction size in bytes (2 or 4 for 32-bit extended instructions) |
+| `mnemonic` | SH-2A mnemonic (e.g., `sts.l`, `jsr`, `mov.l`) |
+| `operands` | Operand string |
+
+---
+
 ## See also
 
 - [Flat ROM Function Discovery](flat-rom-function-discovery.md) — `EcuArchDetector` that identifies SH-2A architecture
