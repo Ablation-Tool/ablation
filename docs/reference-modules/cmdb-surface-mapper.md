@@ -160,41 +160,44 @@ Prior to this module, cmdb surface mapper required manual work outside the Ablat
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+`CMDBSurfaceMapper.report(surface)` prints one line per table entry with exec-reach flag:
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+CMDB SURFACE MAPPER  libcmdb_plugin.so
+──────────────────────────────────────────────────────────
+table_id=12   name=DEVICE_CONFIG     callers=3  exec_reach=✓
+  callers: 0x0040a120 (config_apply), 0x0040b3f0 (set_hostname), 0x0041c2a0 (parse_settings)
+table_id=47   name=USER_ACCOUNT      callers=1  exec_reach=✗
+  callers: 0x0040d810 (auth_check)
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`reaches_exec=True` does not confirm a taint path** — co-location means the caller function body contains both a CMDB access and an exec-sink call, but they may operate on completely different data. Use `SinkArgClassifier.classify_all()` to confirm the CMDB field is classified as `ARG_PROPAGATED` before running `TaintTracker`.
+
+**Register-propagated table IDs are excluded** — `_extract_rdi` resolves only `mov edi, <imm>` and `xor edi, edi`. Table IDs loaded from memory or computed at runtime do not appear in the map.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run `CMDBSurfaceMapper` after identifying a `libcmdb_plugin.so` or equivalent configuration database library in the firmware. Pass `reaches_exec=True` entries directly to `SinkArgClassifier` and `TaintTracker`.
 
 ---
 
 ## Reading findings
 
-| Field | Content |
+`CMDBSurfaceMapper.map()` returns `Dict[int, CMDBTableEntry]`, not a findings list.
+
+`CMDBTableEntry` attributes:
+
+| Attribute | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
-| `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
+| `name` | Table name string (if symbol table present) |
+| `callers` | List of caller VAs |
+| `reaches_exec` | `True` if any caller body also contains an exec-sink call |
 
 ---
 

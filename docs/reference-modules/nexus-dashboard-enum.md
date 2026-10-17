@@ -88,10 +88,6 @@ Findings list probes return `{severity, title, detail, host, port}`:
 | `detail` | What was found and why it matters |
 | `host` | Target host |
 | `port` | Target port |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
-| `endpoint` | URI, port, or service address where the finding was observed |
-| `detail` | What was found and why it matters |
-| `evidence` | Response excerpt or protocol trace that confirms the finding |
 
 ---
 
