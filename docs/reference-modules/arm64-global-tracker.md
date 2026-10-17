@@ -27,11 +27,18 @@ Reads the binary image and resolves the target-specific data structures (PLT, GO
 ## Usage
 
 ```python
-from ablation.analyzers.arm64_global_tracker import ARM64GlobalTracker
+from modules.arm64_global_tracker import scan, report
+from pathlib import Path
+import lief
 
-results = ARM64GlobalTracker.from_context(ctx).run()
-for r in results:
-    print(r)
+binary = lief.parse('/path/to/arm64_firmware.elf')
+text_sec = binary.get_section('.text')
+text_data = bytes(text_sec.content)
+text_start = text_sec.virtual_address
+
+records = scan(Path('/path/to/arm64_firmware.elf'), text_start=text_start,
+               text_size=len(text_data))
+report(records)
 ```
 
 ---
