@@ -1,22 +1,87 @@
-# Windows artifact discovery
+# Windows Artifact Discovery
 
-Locate MFT/LNK/Prefetch/EVTX-related artifacts and markers; this is not full decoding of those formats.
-
----
-
-## What it does
-
-Locate MFT/LNK/Prefetch/EVTX-related artifacts and markers; this is not full decoding of those formats.
+Scan the Windows filesystem for $MFT timeline anomalies, LNK file targets (recent documents, persistence shortcuts), Prefetch execution records, EVTX log gaps, mutex name artifacts from known malware families, and clipboard monitor patterns — providing a host-activity timeline from a mounted Windows volume — via `modules/forensics_enum.py`.
 
 ---
 
-## Implementation
+## Why this exists
 
-- [`forensics_enum.py`](../../modules/forensics_enum.py)
-- [`process_enum.py`](../../modules/process_enum.py)
+1. **`detect_windows_forensic_artifacts()` builds a host-activity timeline without requiring Windows tools** — it reads `$MFT` for file creation/modification timestamps, scans `%APPDATA%\Microsoft\Windows\Recent\` for LNK files (revealing what was accessed and when), reads Prefetch files from `C:\Windows\Prefetch\` for application execution records, and scans EVTX logs for gaps (time ranges with no events, indicating log clearing). All parsing is pure Python with no Windows API calls.
+
+2. **`detect_mutex_artifacts()` identifies malware families by their mutex names** — well-known malware families use consistent mutex names to prevent double-infection: `Global\{GUID}` patterns specific to ransomware families, APT loader names, and banking trojan mutex strings. `detect_mutex_artifacts()` scans binary data for string patterns matching a curated list of known malicious mutex names, providing a rapid family attribution signal without dynamic execution.
+
+3. **`detect_windows_forensic_artifacts()` detects EVTX log tampering** — it reads Security Event Log entries and identifies System Event ID 1102 (Audit log cleared) and Security Event ID 104 (System log cleared), which are direct evidence of attacker log clearing. It also detects temporal gaps in the EVTX event sequence where events jump more than a configurable threshold (default: 2 hours) without a system shutdown event.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["detect_windows_forensic_artifacts(scan_path='/') → List[dict]\n  $MFT: parse record timestamps\n    Created/Modified/Accessed/Changed\n    Flag: Modified < Created (timestamp manipulation)\n  LNK: scan %APPDATA%/Recent/*.lnk\n    Parse shell link header: target path, volume, machine ID\n    → [{lnk_path, target, accessed_time}]"] --> B["Prefetch: C:\\Windows\\Prefetch\\*.pf\n  Parse MAM/MAM compressed header\n  Extract: executable name, run count, last run time\n  → [{executable, run_count, last_run}]\n\nEVTX: C:\\Windows\\System32\\winevt\\Logs\\*.evtx\n  Parse binary EVTX record format\n  Flag: EventID 1102/104 (log clear)\n  Flag: > 2h gap without shutdown event\n  → [{log, event_id, timestamp, anomaly}]"]
+    B --> C["detect_mutex_artifacts(binary_data) → list\n  Scan for string matches against\n    known malware mutex name list\n    (ransomware, banking trojans, APT loaders)\n  → [{mutex_name, malware_family, confidence}]"]
+    C --> D["detect_clipboard_monitor(binary_data) → list\n  Scan for: SetClipboardViewer / AddClipboardFormatListener\n  OpenClipboard + GetClipboardData sequence\n  → [{va, api_seq, description}]"]
+```
+
+---
+
+## Usage
+
+```python
+from modules.forensics_enum import (
+    detect_windows_forensic_artifacts,
+    detect_mutex_artifacts,
+    detect_clipboard_monitor
+)
+
+# Filesystem timeline analysis (run on mounted Windows volume)
+artifacts = detect_windows_forensic_artifacts('/mnt/windows')
+for a in artifacts:
+    print(f"  [{a['type']}] {a['path']}: {a['description']}")
+
+# Malware family attribution by mutex name
+data = open('sample.exe', 'rb').read()
+mutexes = detect_mutex_artifacts(data)
+for m in mutexes:
+    print(f"  [{m['confidence']}] {m['mutex_name']} → {m['malware_family']}")
+```
+
+---
+
+## Example output
+
+The following illustrates Windows artifact discovery output format.
+
+```
+detect_windows_forensic_artifacts: /mnt/windows
+
+  [MFT] C:\Users\user\Desktop\tools.zip: Modified < Created (timestamp rollback)
+  [LNK] Recent\cmd.lnk → C:\Windows\System32\cmd.exe (accessed 2026-10-16)
+  [PREFETCH] nc.exe → run_count=4  last_run=2026-10-16T14:32:00
+  [EVTX] Security.evtx: EventID 1102 at 2026-10-16T14:30:01 (audit log cleared)
+
+detect_mutex_artifacts:
+
+  [HIGH] Global\{12AB34CD-...} → Ryuk ransomware family
+```
+
+---
+
+## False positives
+
+**`$MFT` `Modified < Created` timestamps** — this pattern indicates timestamp manipulation, which is present in both attacker anti-forensics and legitimate archiving tools (ZIP extraction sets modification time from archive metadata, resulting in a modification timestamp before the local creation timestamp). Verify against EVTX event records for the same file.
+
+**Mutex name matching is string-based** — mutex names from malware families can be coincidentally reproduced by legitimate software. A `HIGH` confidence match means the string is in the known-malicious list; it does not mean the file is confirmed malware without corroborating evidence.
+
+---
+
+## Pipeline position
+
+Run Windows artifact discovery on any mounted Windows volume or memory image during post-compromise forensic analysis. EVTX timeline gaps identify the attacker's active window; Prefetch execution records confirm which tools were run.
 
 ---
 
 ## See also
 
-- [Forensics Enum](forensics-enum.md) — module-level reference with constructor patterns and usage examples
+- [Rootkit/Bootkit Indicators](rootkit-bootkit-indicators.md) — kernel-level persistence patterns that accompany filesystem artifact manipulation
+- [Timestamp/Log Anomaly Checks](timestamp-log-anomaly-checks.md) — cross-platform timestamp validation and log tampering detection
