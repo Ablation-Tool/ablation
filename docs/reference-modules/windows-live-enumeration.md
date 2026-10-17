@@ -18,10 +18,10 @@ Enumerate COM hijacking candidates (HKCU vs. HKLM CLSID delta), active RPC endpo
 
 ```mermaid
 flowchart TD
-    A["WindowsEnumerator()"] --> B["com_hijack_candidates() → list[Finding]\n  _reg_query HKLM SOFTWARE\\Classes\\CLSID → all CLSIDs\n  _reg_query HKCU Software\\Classes\\CLSID → user CLSIDs\n  Delta: HKLM-only CLSIDs where InprocServer32 path is writable\n  → Finding(clsid, hklm_path, writable_path, privilege_owner)"]
-    B --> C["rpc_endpoints() → list[Finding]\n  _run rpcping / _ps Get-WmiObject Win32_DCOMApplication\n  Parse endpoint mapper: ncacn_* transports\n  Flag: SAMR, SVCCTL, IWbemServices, TaskScheduler\n  → Finding(endpoint, transport, interface_name, risk)"]
-    C --> D["etw_sessions() → list[Finding]\n  _ps logman query -ets\n  Check: NT Kernel Logger (process/image/network tracing)\n  Check: session with consumer pointing to Threat Detection tool\n  → Finding(session_name, provider_guid, consumer, risk)\n\nnamed_pipes() → list[Finding]\n  _run gci \\\\.\\pipe\\\\ (or Get-ChildItem)\n  Flag: writable pipes not owned by SYSTEM\n  → Finding(pipe_name, owner, writable)"]
-    D --> E["service_dlls() → list[Finding]\n  HKLM SYSTEM\\CurrentControlSet\\Services\\*/Parameters/ServiceDll\n  Check: DLL path writable by current user\n  → Finding(service, dll_path, writable)\n\ntoken_privileges() → list[Finding]\n  _run whoami /priv\n  Flag: SeImpersonatePrivilege, SeAssignPrimaryTokenPrivilege\n  → Finding(privilege, state, abuse_technique)"]
+    A["WindowsEnumerator()\n  enumerate_all() → dict[str, list[Finding]]\n    keys: com, rpc, etw, pipes, secfeatures,\n          servicedll, autoruns, token, modules"] --> B["com_hijack_candidates() → list[Finding]\n  HKLM SOFTWARE\\Classes\\CLSID → all CLSIDs\n  HKCU Software\\Classes\\CLSID → user CLSIDs\n  Delta: HKLM CLSIDs absent in HKCU with writable InprocServer32 path\n  Finding(severity, category='com', title, detail, evidence)"]
+    B --> C["rpc_endpoints() → list[Finding]\n  rpcping / Win32_DCOMApplication\n  Parse ncacn_* transport endpoints\n  Flag: SAMR, SVCCTL, IWbemServices, TaskScheduler\n  Finding(severity, category='rpc', title, detail, evidence)\n\netw_sessions() → list[Finding]\n  logman query -ets\n  NT Kernel Logger, threat-detection session consumers\n  Finding(severity, category='etw', title, detail, evidence)"]
+    C --> D["named_pipes() → list[Finding]\n  \\\\.\\pipe\\\\ enumeration\n  Flag: writable pipes not owned by SYSTEM\n  Finding(severity, category='pipes', title, detail, evidence)\n\nservice_dlls() → list[Finding]\n  HKLM SYSTEM\\CurrentControlSet\\Services\\*/Parameters/ServiceDll\n  Flag: DLL path in user-writable directory\n  Finding(severity, category='servicedll', title, detail, evidence)"]
+    D --> E["token_privileges() → list[Finding]\n  whoami /priv\n  Flag: SeImpersonatePrivilege, SeAssignPrimaryTokenPrivilege\n  Finding(severity, category='token', title, detail, evidence)\n\nsystem_security_features() → list[Finding]\n  CFG, DEP, ASLR policy reads via NtQuerySystemInformation\n  Finding(severity, category='secfeatures', title, detail, evidence)"]
 ```
 
 ---
@@ -32,16 +32,21 @@ flowchart TD
 from modules.windows_enum import WindowsEnumerator
 
 enumerator = WindowsEnumerator()
+# enumerate_all() returns dict with keys: 'com', 'rpc', 'etw', 'pipes',
+# 'secfeatures', 'servicedll', 'autoruns', 'token', 'modules'
 results = enumerator.enumerate_all()
 
 # COM hijacking candidates
-for f in results['com_hijack']:
-    print(f"  {f.clsid}: {f.hklm_path} → writable by current user")
+# Finding attributes: severity, category, title, detail, evidence
+for f in results.get('com', []):
+    print(f"  [{f.severity}] {f.title}: {f.detail}")
+    if f.evidence:
+        print(f"    evidence: {f.evidence}")
 
 # Token privileges (impersonation escalation)
-for f in results['token_privileges']:
-    if 'SeImpersonatePrivilege' in f.description:
-        print(f"  SeImpersonatePrivilege: {f.state} → Potato escalation possible")
+for f in results.get('token', []):
+    if 'SeImpersonatePrivilege' in f.detail or 'SeImpersonate' in f.title:
+        print(f"  [{f.severity}] {f.title}: {f.detail}")
 
 # Print full report
 print(WindowsEnumerator.report(results))

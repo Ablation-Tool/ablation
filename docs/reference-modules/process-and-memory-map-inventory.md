@@ -31,19 +31,23 @@ flowchart TD
 ```python
 from modules.process_enum import ProcessEnumerator, scan_dll_hijacking_candidates
 
+# List all processes: each entry is {'pid': int, 'name': str, 'cmdline': str}
 enumerator = ProcessEnumerator()
-processes = enumerator.enumerate()
+processes = enumerator.list_all_processes()
 
-# Find processes with anonymous RWX memory
+# Per-PID memory map inspection
 for proc in processes:
-    rwx = [m for m in proc.maps if 'x' in m.perms and not m.path]
-    if rwx:
-        print(f"  PID {proc.pid} ({proc.cmdline[:40]}): anonymous RWX at {rwx[0].va_start:#x}")
+    pid_enum = ProcessEnumerator(pid=proc['pid'])
+    maps = pid_enum.get_memory_maps()
+    for m in maps:
+        # m: dict with 'start', 'end', 'perms', 'offset', 'device', 'inode', 'path'
+        if 'x' in m.get('perms', '') and not m.get('path', ''):
+            print(f"  PID {proc['pid']} ({proc['cmdline'][:40]}): anonymous RWX {m['start']}-{m['end']}")
 
-# DLL hijacking surface
-hijacking = scan_dll_hijacking_candidates()
-for h in hijacking:
-    print(f"  [{h['pid']}] {h['lib_path']}  writable={h['writable']}")
+# DLL hijacking candidates — returns [{severity, title, detail, host, port}]
+for finding in scan_dll_hijacking_candidates():
+    if finding['title'] == 'DLL_HIJACK_WRITABLE_PATH':
+        print(f"  [{finding['severity']}] {finding['title']}: {finding['detail']}")
 ```
 
 ---
