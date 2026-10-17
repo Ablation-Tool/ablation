@@ -94,6 +94,22 @@ Run `ConstPropAnalysis`/`SCCPAnalysis` before `TaintTracker` when a suspicious c
 
 ---
 
+## Reading output
+
+`SCCPAnalysis.run()` returns a result object:
+
+| Attribute | Content |
+|:---|:---|
+| `const_values` | `Dict[int, Dict[str, LatValue]]` — per block-VA, per-register constants |
+| `exec_edges` | `Set[Tuple[int, int]]` — `(src, dst)` edges determined reachable |
+| `unreachable_blocks` | `Set[int]` — block VAs determined unreachable |
+
+`LatValue` types: `Const(v)` (concrete), `TOP` (unknown), `BOTTOM` (unreachable).
+
+`ReachingDefinitions.run()` returns `Dict[int, Dict[str, Set[int]]]` — for each block VA, for each register, the set of instruction VAs that can define it at that block entry.
+
+---
+
 ## See also
 
 - [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md) — `SCCPAnalysis` (Wegman-Zadeck) and MFP worklist implementation details

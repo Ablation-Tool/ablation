@@ -90,6 +90,23 @@ Run `EcuC166Decoder` after `EcuArchDetector` confirms `c166` or `c167` architect
 
 ---
 
+## Reading output
+
+`EcuC166Decoder.disassemble()` returns a list of `C166Instruction` objects. Key attributes:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Virtual address of the instruction |
+| `mnemonic` | Instruction mnemonic (e.g., `MOV`, `CALLS`, `JMP`) |
+| `operands` | Decoded operand string |
+| `kind` | `CALL`, `JUMP`, `RETURN`, or `NORMAL` |
+
+`EcuC166Decoder.function_starts()` returns `List[int]` — VA list of identified function entry points.
+
+`EcuC166Decoder.ivt_entries()` returns `List[IVTEntry]` with `{name, handler_va}` per interrupt vector.
+
+---
+
 ## See also
 
 - [Flat ROM Function Discovery](flat-rom-function-discovery.md) — `EcuArchDetector` for architecture identification before this decoder

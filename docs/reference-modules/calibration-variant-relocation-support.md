@@ -82,6 +82,16 @@ Run `EcuOpenDamosParser` as the first step on any Bosch ECU ROM that has an avai
 
 ---
 
+## Reading output
+
+`EcuOpenDamosParser.locate_in_rom(rom_path)` returns `{located: int, failed: int, tables: List[CalibrationTable]}`.
+
+`EcuOpenDamosParser.label_map()` returns `Dict[int, str]` — maps ROM offset to calibration table name for use with `ctx.set_name(va, name)`.
+
+`EcuOpenDamosParser.fingerprint_match(rom_path)` returns `{matched: int, total: int, match_rate: float}`.
+
+---
+
 ## See also
 
 - [TI C28x Decoding](ti-c28x-decoding.md) — `EcuC28xDecoder` for TI-based ECU firmware (different architecture but similar calibration analysis pattern)
