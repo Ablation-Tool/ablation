@@ -69,7 +69,7 @@ print(ext.list_members())
 
 ## How it works
 
-Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation (CRC32 or SHA256 depending on container format) runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
+`AixBigArExtractor.__init__()` reads the entire archive into memory and validates the `<bigaf>\n` magic. `extract()` reads the two text-decimal offsets from the 128-byte global header (`fl_fstmoff`, `fl_lstmoff`), then walks the member doubly-linked list via `ar_nxtoff` at each member header. For each member, it parses the 112-byte fixed header, extracts the `ar_namlen`-byte name field, verifies the 2-byte `ar_fmag` consistency trailer (`\x60\x0a`), and yields `(name, member_bytes)`. The metadata-only members (empty name, `/`, `//`) — the member table and global symbol tables — are skipped. `xcoff_members()` filters the output of `extract()` by checking that the first 2 bytes of each member are `\x01\xdf` (XCOFF32) or `\x01\xf7` (XCOFF64). If a member header is corrupt at any point, the walk stops cleanly via the `except` guard rather than raising.
 
 ---
 
@@ -87,13 +87,17 @@ for name, data in members.items():
 
 ## Example output
 
-```
-Extracted 4 partitions from firmware.bin:
-  [0] boot      512 KB  ELF (ARM64)
-  [1] rootfs    18 MB   SquashFS
-  [2] data      4 MB    ext4
-  [3] config    128 KB  JFFS2
-Written to /tmp/extracted/
+```python
+>>> ext = AixBigArExtractor('/aix/usr/lib/libc.a')
+>>> ext.list_members()
+['crypt.o', 'frexp.o', 'ldexp.o', 'modf.o', 'frexp_64.o', 'ldexp_64.o', 'modf_64.o', ...]
+
+>>> for name, data in ext.xcoff_members():
+...     magic = '0x01df' if data[:2] == b'\x01\xdf' else '0x01f7'
+...     print(f"  {name}: {len(data)} bytes  magic={magic}")
+  crypt.o: 4096 bytes  magic=0x01df
+  frexp.o: 2048 bytes  magic=0x01df
+  frexp_64.o: 2560 bytes  magic=0x01f7
 ```
 
 ---
@@ -112,14 +116,16 @@ Extraction either succeeds or raises an exception — there are no false positiv
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`AixBigArExtractor.extract()` yields `Tuple[str, bytes]` — `(member_name, member_bytes)`. `from_path()` returns `Dict[str, bytes]`. `xcoff_members()` yields only members whose first 2 bytes match an XCOFF magic.
+
+| Value | Content |
 |:---|:---|
-| `path` | Filesystem path to the extracted file or partition |
-| `partition_name` | Partition label or index from the container header |
-| `size` | Size of the extracted payload in bytes |
-| `format` | Detected format of the extracted payload (`ext4`, `squashfs`, `ELF`, etc.) |
+| `member_name` | Archive member name (e.g., `frexp.o`, `frexp_64.o`) |
+| `member_bytes` | Raw bytes of the XCOFF object file |
+| First 2 bytes `\x01\xdf` | XCOFF32 — 32-bit PowerPC object code |
+| First 2 bytes `\x01\xf7` | XCOFF64 — 64-bit PowerPC object code |
 
 ---
 
