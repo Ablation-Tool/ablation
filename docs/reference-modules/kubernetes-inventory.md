@@ -37,7 +37,7 @@ token = Path('/var/run/secrets/kubernetes.io/serviceaccount/token').read_text()
 ca = Path('/var/run/secrets/kubernetes.io/serviceaccount/ca.crt').read_text()
 
 enumerator = K8sEnumerator('https://kubernetes.default.svc', token=token, ca_cert=ca)
-results = enumerator.enumerate()
+results = enumerator.enumerate_all()
 
 print(f"Pods:     {len(results['pods'])}")
 print(f"Secrets:  {len(results['secrets'])}")
