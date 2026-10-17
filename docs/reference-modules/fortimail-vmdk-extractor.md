@@ -126,9 +126,8 @@ Reads the binary header to validate the container magic, walks the partition or 
 ```python
 from ablation.analyzers.fortimail_vmdk_extractor import FortiMailVmdkExtractor
 
-results = FortiMailVmdkExtractor.from_context(ctx).run()
-for r in results:
-    print(r)
+result = FortiMailVmdkExtractor.from_zip('/path/to/FortiMail-VM64.ovf.zip')
+print(result.report())
 ```
 
 ---
