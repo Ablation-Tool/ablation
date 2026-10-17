@@ -202,7 +202,7 @@ from ablation.analyzers.pef_abi_clobber_scanner import PEFABIClobberScanner
 scanner = PEFABIClobberScanner('/path/to/library.pef')
 findings = scanner.scan()
 for f in findings:
-    print(f.severity, f.title, f.va)
+    print(f.fmt())
 ```
 
 ---
