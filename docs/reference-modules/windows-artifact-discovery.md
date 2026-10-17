@@ -80,6 +80,19 @@ Run Windows artifact discovery on any mounted Windows volume or memory image dur
 
 ---
 
+## Reading findings
+
+`detect_windows_forensic_artifacts(mount_path)` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (MFT rollback, EVTX clear) / `MEDIUM` (prefetch entry, LNK file) |
+| `title` | Artifact type: `MFT`, `LNK`, `PREFETCH`, or `EVTX` |
+| `path` | Windows file path of the artifact |
+| `detail` | Observation (e.g., modified < created, run count, EventID) |
+
+---
+
 ## See also
 
 - [Rootkit/Bootkit Indicators](rootkit-bootkit-indicators.md) — kernel-level persistence patterns that accompany filesystem artifact manipulation
