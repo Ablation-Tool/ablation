@@ -20,10 +20,10 @@ Detect PPC32 PEF ABI register clobber bugs in classic Mac OS / OpenTransport bin
 flowchart TD
     A["PEFABIClobberScanner.from_bytes(code, base_va)"] --> B["For each instruction in linear scan:\n  Identify sink calls (bl to known exec-class symbols)\n  Record sink VA + argument registers needed (r3, r4, ...)"]
     B --> C["For each sink call site:\n  Backward walk from sink VA:\n    Track last-write register for each argument reg\n    Stop at: ret/rfi (RETURN), b/ba (UNCOND), function boundary\n    Stop at: bl (CALL) — any intermediate bl clobbers r3-r13"]
-    C --> D{"Intermediate bl found\nbetween last-write(rN)\nand sink call(rN)?"}
-    D -->|Yes| E["ABIClobberFinding:\n  sink_va: int\n  sink_sym: str\n  clobbered_reg: str (e.g. 'r4')\n  arg_index: int\n  clobber_bl_va: int\n  last_write_va: int"]
-    D -->|No| F["No finding for this path"]
-    E --> G["scan() → List[ABIClobberFinding]\nreport(findings) → str"]
+    C --> D{"Backward walk result?"}
+    D -->|"call_clobber: bl found\nbetween last-write and sink"| E["ABIClobberFinding:\n  site_va: int  (sink BL VA)\n  check_reg: int  (e.g. 4 for r4)\n  verdict: 'PLAUSIBLE' or 'SAFE'\n  stop_va: int  (where walk stopped)\n  stop_reason: 'reg_written' | 'call_clobber' | \n    'uncond_branch' | 'return' | 'window_exhausted'"]
+    D -->|"reg_written before any bl"| F["verdict='SAFE' — no finding"]
+    E --> G["scan(sink_vas, check_regs=[4], window=32) → List[ABIClobberFinding]\nreport(findings) → str"]
 ```
 
 ---
@@ -42,14 +42,18 @@ code_section = pef_data[<code_section_offset>:<code_section_end>]
 base_va = <code_section_load_address>
 
 scanner = PEFABIClobberScanner.from_bytes(code_section, base_va=base_va)
-findings = scanner.scan()
+
+# Provide the VAs of known sink BL instructions and the argument registers to check
+sink_vas = [0x01690, 0x01774]  # BL to OTStrCat
+findings = scanner.scan(sink_vas=sink_vas, check_regs=[4])  # check r4 (source arg)
 print(PEFABIClobberScanner.report(findings))
 
 # Inspect individual findings
 for f in findings:
-    print(f.fmt())
-    print(f"  sink={f.sink_va:#x} ({f.sink_sym}), arg{f.arg_index} (r{f.clobbered_reg})")
-    print(f"  clobbered at bl {f.clobber_bl_va:#x}, last written at {f.last_write_va:#x}")
+    print(f.fmt())  # [PLAUSIBLE]  0x001690  r4  call_clobber @ 0x001650
+    if f.verdict == 'PLAUSIBLE':
+        print(f"  site={f.site_va:#x}, reg=r{f.check_reg}")
+        print(f"  stopped at {f.stop_va:#x} ({f.stop_reason})")
 ```
 
 ---
