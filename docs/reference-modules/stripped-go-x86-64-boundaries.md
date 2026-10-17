@@ -49,7 +49,7 @@ The Go pclntab (`runtime.pclntab`, stored in `.gopclntab`) encodes all function 
 
 ---
 
-## GoStringResolver
+## Usage
 
 ```python
 import lief

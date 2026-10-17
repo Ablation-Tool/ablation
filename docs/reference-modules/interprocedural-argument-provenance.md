@@ -70,7 +70,7 @@ flowchart TD
 
 ---
 
-## RegAnnotator
+## Usage
 
 ```python
 from ablation.analyzers.reg_annotator import RegAnnotator
