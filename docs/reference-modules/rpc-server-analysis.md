@@ -1,0 +1,95 @@
+# Windows RPC Server Analysis
+
+Enumerate Windows RPC server interfaces registered in a PE binary — extracting interface UUIDs, authentication levels, and transport endpoint strings — and report unauthenticated RPC interfaces (those registered with `RPC_C_AUTHN_LEVEL_NONE`) as HIGH findings.
+
+---
+
+## Why this exists
+
+1. **Windows RPC interfaces registered with `RPC_C_AUTHN_LEVEL_NONE` (`authLevel=1`) accept calls from any unauthenticated network or local caller, regardless of Windows firewall or SMB authentication.** `RPCServerAnalyzer.scan()` identifies these interfaces by reading the `RPC_SERVER_INTERFACE` struct from the `RpcServerRegisterIf/IfEx/IfEx2` call site argument, enabling pre-auth attack surface enumeration without manual PE debugging.
+
+2. **`RPCServerAnalyzer.interfaces()` returns all registered interfaces with their UUID and auth level, enabling differential analysis between service versions.** A patch that raises the auth level from `NONE` to `PKT_PRIVACY` closes a pre-auth RPC attack vector — this is verifiable statically across versions by comparing `RPCInterface.auth_level_name()` output.
+
+3. **`RPCServerAnalyzer.endpoint_strings()` extracts transport endpoint strings from `RpcServerUseProtseqEp` call sites** — returning named pipe paths (`\\pipe\\svcname`), TCP port numbers, and ALPC endpoint names. Combined with interface UUID and auth level, this provides the complete pre-auth attack surface: which interface, over which transport, with which authentication requirement.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["RPCServerAnalyzer.from_path(pe_path)"] --> B["interfaces() → List[RPCInterface]\n  Find: RpcServerRegisterIf, RpcServerRegisterIfEx, RpcServerRegisterIfEx2 callers\n  For each call site:\n    Arg 0: pointer to RPC_SERVER_INTERFACE struct\n      Read: InterfaceId.SyntaxGUID (16 bytes) → UUID\n      Read: TransferSyntax.SyntaxGUID → transfer UUID\n    Arg 1 (IfEx only): UINT authLevel\n  → RPCInterface(uuid, transfer_syntax, auth_level)"]
+    B --> C["RPCInterface:\n  uuid: str  (formatted GUID)\n  transfer_syntax: str\n  auth_level: int\n  auth_level_name() → str  (e.g. 'RPC_C_AUTHN_LEVEL_NONE')\n  unauthenticated() → bool  (auth_level == 1)"]
+    C --> D["endpoint_strings() → List[str]\n  Find: RpcServerUseProtseqEp call sites\n  Arg 1: protocol sequence string (ncacn_ip_tcp, ncacn_np, etc.)\n  Arg 3: endpoint string (port or pipe name)\n  Return: list of endpoint strings"]
+    D --> E["scan() → List[RPCFinding]\n  For each RPCInterface where unauthenticated():\n    → RPCFinding(interface, severity='HIGH', description=...)"]
+    E --> F["report(findings) → str"]
+```
+
+---
+
+## Usage
+
+```python
+from ablation.analyzers.rpc_server_analyzer import RPCServerAnalyzer
+
+analyzer = RPCServerAnalyzer.from_path('/path/to/windows_service.dll')
+
+# All registered interfaces
+for iface in analyzer.interfaces():
+    print(f"  {iface.uuid}  auth={iface.auth_level_name()}  unauthenticated={iface.unauthenticated()}")
+
+# Endpoint strings
+for ep in analyzer.endpoint_strings():
+    print(f"  endpoint: {ep}")
+
+# Unauthenticated interface findings
+findings = analyzer.scan()
+if findings:
+    print(RPCServerAnalyzer.report(findings))
+```
+
+---
+
+## Example output
+
+The following illustrates the RPC analysis output format. Actual UUIDs and transport strings are binary-specific.
+
+```
+RPCServerAnalyzer: windows_service.dll
+
+Interfaces:
+  <uuid-1>   auth=RPC_C_AUTHN_LEVEL_NONE   unauthenticated=True
+  <uuid-2>   auth=RPC_C_AUTHN_LEVEL_PKT    unauthenticated=False
+
+Endpoints:
+  ncacn_np:\\pipe\<service-pipe>
+  ncacn_ip_tcp:<port>
+
+Findings (1):
+  [HIGH] Unauthenticated RPC interface
+    Interface: <uuid-1>
+    Auth level: RPC_C_AUTHN_LEVEL_NONE (1)
+    Transport: ncacn_np:\\pipe\<service-pipe>
+```
+
+---
+
+## False positives
+
+**`RpcServerRegisterIf` (without `Ex`) does not take an auth level argument** — the auth level defaults to `RPC_C_AUTHN_LEVEL_DEFAULT` (0), which inherits from the process security descriptor, not `NONE`. `RPCInterface.unauthenticated()` returns `False` for these interfaces; only `RpcServerRegisterIfEx` with an explicit `authLevel=1` argument generates a HIGH finding.
+
+**Arg reading uses static analysis** — if the auth level argument to `RpcServerRegisterIfEx` is passed through a register loaded at runtime (e.g., from a config file), `RPCInterface.auth_level` may be `None` and `unauthenticated()` returns `False`. Treat `None` auth-level interfaces as requiring manual verification.
+
+---
+
+## Pipeline position
+
+Run `RPCServerAnalyzer` on any Windows service DLL or EXE with `RpcServer*` imports as part of initial pre-auth surface enumeration. Unauthenticated interface findings (`severity='HIGH'`) qualify for taint analysis via `FuncProfiler` on the corresponding RPC method dispatch function VAs.
+
+---
+
+## See also
+
+- [BYOVD Capability Detection](byovd-capability-detection.md) — dangerous kernel import detection for signed drivers
+- [Control Flow Guard Review](control-flow-guard-review.md) — CFG/XFG bypass analysis for Windows PE targets
+- [Route Authentication Classification](route-authentication-classification.md) — pre-auth route auditing for embedded web frameworks
