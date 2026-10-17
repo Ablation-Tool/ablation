@@ -74,6 +74,20 @@ Run `SinkArgClassifierARM32.classify_all()` on every ARM32 ELF binary before run
 
 ---
 
+## Reading output
+
+`SinkArgClassifierARM32.classify_all()` returns a list of `SinkClassification` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `sink_va` | VA of the sink call |
+| `sink_func` | Sink function name (e.g., `system`, `execv`) |
+| `verdict` | `RODATA_CONST`, `ARG_PROPAGATED`, or `UNKNOWN` |
+| `arg_reg` | ARM32 argument register holding the command string (`r0`–`r3`) |
+| `provenance` | Description of how the argument was derived |
+
+---
+
 ## See also
 
 - [Exec-Class Sink Argument Classification](exec-class-sink-argument-classification.md) — `SinkArgClassifier` x86-64 equivalent

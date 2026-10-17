@@ -86,6 +86,20 @@ Run `NetworkAnalyzer` immediately after gaining shell access on a compromised ho
 
 ---
 
+## Reading output
+
+`NetworkAnalyzer.analyze()` returns a dict:
+
+| Key | Content |
+|:---|:---|
+| `interfaces` | `List[{name, ip, prefix, mac}]` — network interfaces |
+| `listening_ports` | `List[{addr, port, process}]` — bound listening services |
+| `routing_table` | `List[{dest, gateway, iface}]` — routing table entries |
+| `firewall_rules` | `List[str]` — iptables rule summary lines |
+| `subnets` | `List[str]` — derived CIDR subnets for discovery |
+
+---
+
 ## See also
 
 - [Host/Service Discovery](host-service-discovery.md) — `ICMPScanner` and banner grabbing for hosts in discovered subnets

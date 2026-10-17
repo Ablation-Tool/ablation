@@ -98,6 +98,19 @@ Run `MpyLifter` on every `.mpy` file extracted from firmware containers. Combine
 
 ---
 
+## Reading output
+
+`MpyLifter.lift_module()` returns a `LiftedModule` object:
+
+| Attribute | Content |
+|:---|:---|
+| `source` | Lifted pseudocode string — Python-like source reconstruction |
+| `imports` | `List[str]` — imported module names |
+| `functions` | `List[str]` — defined function names |
+| `dangerous_calls` | `List[{func, va, args}]` — calls to `exec`, `eval`, `machine.mem32`, etc. |
+
+---
+
 ## See also
 
 - [MicroPython .mpy Lifter](mpy-lifter.md) — detailed constructor patterns, opcode reference, and version compatibility table

@@ -84,6 +84,21 @@ Run `EcuM68kDecoder` after `EcuArchDetector` confirms `m68k` architecture. `func
 
 ---
 
+## Reading output
+
+`EcuM68kDecoder.function_starts()` returns `List[int]` — VA list of detected function entry points.
+
+`EcuM68kDecoder.disassemble(va, size)` returns a list of `M68KInstruction` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Virtual address |
+| `size` | Instruction size in bytes (2 or 4) |
+| `mnemonic` | M68K mnemonic (e.g., `link.w`, `jsr`, `move.w`) |
+| `operands` | Operand string |
+
+---
+
 ## See also
 
 - [Flat ROM Function Discovery](flat-rom-function-discovery.md) — `EcuArchDetector` that identifies M68K architecture before this decoder runs
