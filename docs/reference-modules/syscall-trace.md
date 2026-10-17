@@ -175,14 +175,24 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`SyscallTracer(pid).trace_process(duration)` returns a `dict` with statistics from `strace -c`:
+
+| Key | Type | Content |
+|:---|:---|:---|
+| `syscalls` | `List[dict]` | Per-syscall entries (see below) |
+| `error` | `Optional[str]` | Error message if tracing failed; `None` on success |
+
+Each entry in `syscalls`:
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `name` | `str` | Syscall name (e.g., `read`, `write`, `mmap`) |
+| `calls` | `int` | Number of times this syscall was invoked |
+| `errors` | `int` | Number of calls that returned an error |
+| `time_percent` | `float` | Percentage of total traced time spent in this syscall |
+| `total_time` | `float` | Cumulative seconds spent in this syscall |
 
 ---
 

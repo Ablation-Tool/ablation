@@ -135,14 +135,20 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`PS3SELFDecryptor.from_path(self_path).decrypt(in_path, out_path)` returns `SELFDecryptResult`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `in_path` | `str` | Path to the input SELF file |
+| `out_path` | `str` | Path to the output plain ELF file |
+| `key_rev` | `int` | Key revision used for decryption |
+| `section_count` | `int` | Total number of SELF sections |
+| `decrypted_sections` | `int` | Number of sections successfully decrypted |
+| `elf_size` | `int` | Size of the output ELF in bytes |
+
+`decrypt_to_tmp(in_path, suffix='.elf')` decrypts to a temporary file and returns its path as `str`.
 
 ---
 

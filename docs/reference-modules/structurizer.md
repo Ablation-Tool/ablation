@@ -220,14 +220,19 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`Structurizer(cfg).structure()` returns the root `StructuredNode` of the recovered control-flow tree. Concrete node types:
+
+| Node type | Fields | Meaning |
+|:---|:---|:---|
+| `SequenceNode` | `children: List[StructuredNode]` | Linear sequence of nodes |
+| `InsnNode` | `insn` | Single SH-2A instruction |
+| `IfNode` | `condition, then_branch, else_branch` | `if/else` region |
+| `WhileNode` | `condition, body` | Loop region |
+| `BreakNode` | — | `break` out of enclosing loop |
+| `ContinueNode` | — | `continue` to loop header |
+| `ReturnNode` | — | Function return |
 
 ---
 

@@ -112,13 +112,17 @@ The following illustrates the format for representative taint findings. Actual f
 
 ## Reading findings
 
-| Field | Content |
-|:---|:---|
-| `f.severity` | `CRITICAL` (RCE-class sink), `HIGH` (format string, OOB write), `MEDIUM` (info leak) |
-| `f.source` | Source function name (e.g., `recv`, `fgets`) and argument register |
-| `f.sink` | Sink function name (e.g., `execve`, `sprintf`) and sink argument |
-| `f.chain` | Ordered list of `(va, mnemonic, register)` tuples tracing taint propagation |
-| `f.va` | Virtual address of the sink call site |
+`scan_sources_to_sinks(ctx)` returns `List[TaintFindingLA64]`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `func_va` | `int` | VA of the function containing the sink call |
+| `func_name` | `str` | Name of the function (from `ctx`) |
+| `sink_va` | `int` | VA of the sink call instruction |
+| `sink_name` | `str` | Sink function name (e.g., `system`, `execve`) |
+| `tainted_args` | `List[str]` | Tainted argument register names at the call (e.g., `['a0']`) |
+| `source_name` | `str` | Taint source label (e.g., `recv`, `fgets`) |
+| `severity` | `str` | `'HIGH'` for all findings (default) |
 
 ---
 

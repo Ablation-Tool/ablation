@@ -90,14 +90,25 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`sweep(path)` returns `MZSweepResult`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `binary` | `str` | Basename of the analyzed file |
+| `func_count` | `int` | Number of function starts found |
+| `hits` | `List[MZSweepHit]` | Vulnerability profile matches above threshold |
+| `errors` | `List[str]` | Parse or disassembly errors (non-fatal) |
+
+Each `MZSweepHit`:
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `offset` | `int` | Code-section byte offset of the function start |
+| `profile` | `str` | Vulnerability profile name that matched |
+| `score` | `float` | Semantic similarity score (0.0–1.0) |
+| `insn_count` | `int` | Number of instructions in the function |
 
 ---
 

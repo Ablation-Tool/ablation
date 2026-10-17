@@ -205,14 +205,16 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`BinaryLifter.from_path(path).lift_function(va, max_insns=512)` returns a `str` — the pseudo-C disassembly of the function at `va`, one statement per line.
+
+The output uses `NativeVal` as the symbolic type for register state. `NativeVal` represents a register value as one of:
+- `Const(v)` — concrete integer constant
+- `Arg(n)` — function argument register (a0–a7 for RISC-V; w0–w7 for AArch64)
+- `Mem(addr_text)` — pointer load
+- `Expr(text)` — complex expression string
+- `Unknown(reg)` — unresolved
 
 ---
 

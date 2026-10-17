@@ -220,10 +220,10 @@ reg.register(
     description='Length field flows unvalidated to memcpy.',
 )
 
-# Replay hits on new binary (semantic search over confirmed findings)
-hits = reg.search('stack overflow http parse', top_k=5)
-for h in hits:
-    print(h.title, h.severity, h.binary)
+# List findings by vendor (no model required)
+findings = reg.list_findings(vendor='acme')
+for h in findings:
+    print(h['title'], h['severity'], h['product'])
 ```
 
 ---

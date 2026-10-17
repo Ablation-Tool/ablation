@@ -58,14 +58,27 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`findings_from_results(results, binary_path)` returns a BARE-compatible findings dict:
+
+| Key | Type | Content |
+|:---|:---|:---|
+| `version` | `int` | Always `1` |
+| `source` | `str` | Always `'ablation'` |
+| `findings` | `List[dict]` | One entry per function with `vuln_notes` (see below) |
+
+Each entry in `findings`:
+
+| Key | Type | Content |
+|:---|:---|:---|
+| `id` | `str` | `"<basename>:<func_va_hex>"` |
+| `title` | `str` | `"<func_name> (<role>)"` |
+| `description` | `str` | Concatenation of role, vuln notes, and rationale |
+| `target` | `str` | `binary_path` passed to `findings_from_results` |
+| `severity` | `str` | `'critical'` / `'high'` / `'medium'` / `'low'` (derived from confidence) |
+
+`run_bare(findings, timeout)` passes this dict to the BARE binary and returns its parsed output dict.
 
 ---
 

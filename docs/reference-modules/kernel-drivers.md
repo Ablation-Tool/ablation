@@ -211,13 +211,13 @@ Reference: [loldrivers.io](https://www.loldrivers.io/) for known-vulnerable driv
 ```python
 from ablation.analyzers.byovd_detector import ByovdDetector
 
-detector = ByovdDetector.from_path('/path/to/driver.sys')
+detector = ByovdDetector('/path/to/driver.sys')
 result = detector.detect()
 print(result.fmt())
 
 if result.is_byovd_capable:
     for cap in result.capabilities:
-        print(f"  {cap.capability_class}: {cap.api_name}")
+        print(f"  {cap.capability_class}: {cap.api_name} ({cap.risk})")
 
 # Check for a specific capability class
 if any(c.capability_class == 'PHYS_MEM_RW' for c in result.capabilities):
@@ -280,12 +280,14 @@ report = kda.analyze()
 print(report.fmt())
 
 # Check for BYOVD exploitability
-detector = ByovdDetector.from_path('/path/to/driver.sys')
-byovd_findings = detector.detect()
-for f in byovd_findings:
-    print(f.severity, f.title)
-    for cap in f.capabilities:
-        print(f"  capability: {cap}")
+detector = ByovdDetector('/path/to/driver.sys')
+byovd = detector.detect()
+if byovd.is_byovd_capable:
+    print(f"BYOVD risk level: {byovd.risk_level}")
+    for cap in byovd.capabilities:
+        print(f"  {cap.capability_class}: {cap.api_name} — {cap.risk}")
+    for msr in byovd.msr_accesses:
+        print(f"  {msr.kind} @ +0x{msr.offset:x}: {msr.description}")
 ```
 
 ---

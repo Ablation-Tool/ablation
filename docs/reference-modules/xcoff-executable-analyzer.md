@@ -97,14 +97,18 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`XCOFFExecutableAnalyzer.from_path(path)` or `.from_context(ctx)` — then call convenience methods:
+
+| Method | Return type | Content |
+|:---|:---|:---|
+| `arch()` | `str` | `'ppc32'` or `'ppc64'` |
+| `entry()` | `int` | Entry point VA (descriptor VA on PPC32) |
+| `exports_table()` | `Dict[str,int]` | Maps export name → code VA (descriptor-resolved) |
+| `imports_by_lib()` | `Dict[str,List[str]]` | Maps archive member name → list of imported symbol names |
+| `func_starts()` | `List[Tuple[str,int]]` | `(name, code_va)` pairs for all exported functions |
+| `section_at_va(va)` | `Optional[XcoffSection]` | Section whose VA range contains `va` |
 
 ---
 

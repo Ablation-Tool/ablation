@@ -160,14 +160,28 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`build_cfg(data, entry_va)` returns a `CFG`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `blocks` | `Dict[int, Block]` | All basic blocks keyed by start VA |
+| `entry` | `int` | Entry point VA |
+| `flow` | property → `List[Tuple[int,int]]` | All `(src_va, dst_va)` forward edges |
+| `flow_r()` | method → `List[Tuple[int,int]]` | Reversed edges for backward dataflow |
+
+Each `Block`:
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `start` | `int` | VA of the first instruction |
+| `insns` | `List[SH2aInsn]` | Instructions in the block (delay slot last if present) |
+| `succs` | `List[int]` | Start VAs of successor blocks |
+| `preds` | `List[int]` | Start VAs of predecessor blocks |
+| `end` | property → `int` | VA one past the last instruction |
+| `terminator()` | method | The control-transfer instruction, or `None` |
+| `delay_slot()` | method | The delay-slot instruction if terminator has one |
 
 ---
 

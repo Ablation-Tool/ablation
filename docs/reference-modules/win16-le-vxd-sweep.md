@@ -142,14 +142,20 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`LEBinary.scan_ddb(code_bytes)` returns `Optional[dict]` — `None` if no VxD DDB found, or a dict with:
+
+| Key | Content |
 |:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+| `sdk_ver` | SDK version word (e.g., `0x030a` = WfW 3.11, `0x030b` = Win 3.1 DDK) |
+| `dev_num` | Microsoft-assigned device number |
+| `dev_name` | Device name string (8 chars, stripped) |
+| `ctrl_proc` | VA of the DDB Control procedure |
+| `v86_api_proc` | VA of the V86 API procedure |
+| `pm_api_proc` | VA of the PM API procedure |
+
+The CLI sweep writes a Markdown report to `reports/sweep_le_<vendor>_<product>_<version>_<ts>.md`.
 
 ---
 

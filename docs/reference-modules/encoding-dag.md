@@ -598,11 +598,26 @@ Reads the binary image and resolves the target-specific data structures (PLT, GO
 ## Usage
 
 ```python
-from ablation.analyzers.encoding_dag import EncodingDAG
+from ablation.analyzers.encoding_dag import ISASpec, SemanticOp, SemanticBlock
 
-results = EncodingDAG.from_context(ctx).run()
-for r in results:
-    print(r)
+# Round-trip: encode a semantic op to bytes, then decode back
+op = SemanticOp("LOAD", {"dst": "r0", "base": "r5", "offset": 4}, node_id="n1")
+node = ISA24.encode(op)        # ISA24 is a bundled 24-bit example ISASpec
+print(node.to_hex())           # 0x060504
+print(node.to_rgb())           # (6, 5, 4) — RGB packing matches ISA-24 layout
+
+enode, sop = ISA24.decode(bytes.fromhex("060504"))
+print(sop)                     # n1: LOAD dst=r0, base=r5, offset=4
+print(node.show_layout())      # ASCII bit-field layout
+
+# Build a semantic IR block with explicit dataflow edges
+from ablation.analyzers.encoding_dag import DataflowEdge
+block = SemanticBlock(label="entry")
+block.add_op(SemanticOp("ADD",  {"dst": "r1", "a": "r0", "b": 4}, node_id="a"))
+block.add_op(SemanticOp("LOAD", {"dst": "r2", "base": "r1"},      node_id="b"))
+block.add_edge(DataflowEdge(producer_id="a", consumer_id="b", value_name="r1"))
+for op in block.dag_nodes():   # topological order
+    print(op)
 ```
 
 ---
@@ -635,14 +650,22 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`ISASpec.encode(sop)` returns an `EncodingNode`:
+
+| Attribute | Type | Content |
+|:---|:---|:---|
+| `template` | `Template` | The `Template` used for encoding (bitfield layout) |
+| `field_values` | `Dict[str,int]` | `{field_name: int_value}` for all fields in the template |
+| `to_bytes()` | method | Raw byte encoding (big-endian) |
+| `to_hex()` | method | `'0xRRGGBB'`-style hex string |
+| `to_rgb()` | method | `(R, G, B)` tuple (ISA-24 maps to RGB exactly) |
+| `show_layout()` | method | ASCII bitfield breakdown for debugging |
+
+`ISASpec.decode(data)` returns `(EncodingNode, SemanticOp)` — the raw node and the decoded semantic operation.
+
+`SemanticBlock.dag_nodes()` yields `SemanticOp` instances in topological order.
 
 ---
 

@@ -122,14 +122,19 @@ CFG fixpoint (analyze_cfg):
 
 ## Reading findings
 
-| Field | Content |
-|:---|:---|
-| `f.severity` | `CRITICAL` (RCE-class), `HIGH` (format string, OOB), `MEDIUM` (info leak) |
-| `f.source` | Source function and argument register (e.g., `read → a0`) |
-| `f.sink` | Sink function and tainted argument (e.g., `execve(a1=tainted)`) |
-| `f.chain` | `[(va, mnemonic, register), ...]` |
-| `f.va` | Sink call site VA |
-| `f.bound` | Taint bound from andi/ori: `int` or `None` if unbounded |
+`RISCV64TaintTracker.from_context(ctx).run()` returns `List[TaintFindingRISCV64]`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `binary` | `str` | Binary path |
+| `func_va` | `int` | VA of the function containing the sink call |
+| `func_name` | `str` | Name of the function (from `ctx`) |
+| `sink_va` | `int` | VA of the sink call instruction |
+| `sink_name` | `str` | Sink function name (e.g., `system`, `execve`) |
+| `tainted_args` | `List[int]` | 0-indexed argument positions that are tainted at the call |
+| `source_name` | `str` | Taint source label (e.g., `read`, `recv`) |
+
+The RISC-V 32-bit tracker (`taint_tracker_riscv32.py`) returns `TaintFindingRISCV32` with the same fields. bound from andi/ori: `int` or `None` if unbounded |
 
 ---
 
