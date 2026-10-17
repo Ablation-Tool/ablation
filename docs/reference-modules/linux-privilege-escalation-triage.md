@@ -32,17 +32,26 @@ flowchart TD
 from modules.privesc_enum import PrivescEnumerator
 
 enumerator = PrivescEnumerator()
-results = enumerator.enumerate_all()
+# enumerate_all() returns self.findings — a flat list of finding dicts
+# Each finding: {category: str, severity: str, description: str, exploit: str, items: list, count: int}
+findings = enumerator.enumerate_all()
 
-print(f"SUID binaries: {len(results['suid_binaries'])}")
-for s in results['suid_binaries']:
-    if s.get('gtfobins_known'):
-        print(f"  EXPLOITABLE: {s['path']}")
+# All findings sorted by severity
+for f in sorted(findings, key=lambda x: {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3}.get(x['severity'], 4)):
+    print(f"  [{f['severity']}] {f['category']}: {f['description']}")
+    if f.get('exploit'):
+        print(f"    exploit: {f['exploit']}")
 
-print(f"Sudo NOPASSWD: {[r['command'] for r in results['sudo_access'] if r.get('nopasswd')]}")
-print(f"Capabilities: {results['capabilities']}")
-print(f"Docker group: {results['docker_group']['in_group']}")
-print(f"Docker socket writable: {results['docker_group']['socket_writable']}")
+# Filter by category
+suid = [f for f in findings if 'SUID' in f.get('category', '')]
+docker = [f for f in findings if 'Docker' in f.get('category', '')]
+sudo = [f for f in findings if 'sudo' in f.get('category', '').lower()]
+
+# Docker socket check (separate method with own return)
+socket_result = enumerator.check_docker_socket()
+# returns {'docker_socket_accessible': bool, 'path': str}
+if socket_result['docker_socket_accessible']:
+    print(f"  Docker socket accessible at {socket_result['path']}")
 ```
 
 ---

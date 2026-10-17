@@ -34,17 +34,20 @@ from modules.crypto_audit import forge_jwt, CryptoAudit
 none_token = forge_jwt({"sub": "1234", "role": "admin"}, secret="", alg="none")
 print(f"alg:none token: {none_token}")
 
-# Audit a captured JWT
+# Analyze a captured JWT — method is analyze_jwt(), not audit_jwt()
 audit = CryptoAudit()
-result = audit.audit_jwt("<captured_token>")
+result = audit.analyze_jwt("<captured_token>")
+# Return keys: raw, header, payload, alg, vulns, forged_token
 print(f"alg: {result['alg']}")
-print(f"none_bypass: {result['none_bypass']}")
-print(f"weak_secret: {result.get('weak_secret')}")
+print(f"vulnerabilities: {result['vulns']}")
+if result['forged_token']:
+    print(f"forged: {result['forged_token'][:60]}...")
 
-# Scan running processes for JWT secrets
-secrets = audit.scan_process_secrets()
-for s in secrets:
-    print(f"  PID {s['pid']} ({s['cmdline'][:40]}): {s['key_name']}={s['value'][:20]}...")
+# Scan filesystem paths for JWT secrets
+# scan_for_jwts scans files for embedded JWT strings
+tokens_found = audit.scan_for_jwts(paths=['/etc', '/home', '/opt'])
+for t in tokens_found:
+    print(f"  {t.get('source')}: {t.get('token', '')[:40]}...")
 ```
 
 ---
