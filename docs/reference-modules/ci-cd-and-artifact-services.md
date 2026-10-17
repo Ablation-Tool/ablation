@@ -90,16 +90,20 @@ Run `CompilerSecurityGate` as a post-link CI/CD step, before the release artifac
 
 ## Reading findings
 
-`CompilerSecurityGate.check()` returns a list of finding dicts:
+`CompilerSecurityGate.scan()` returns `List[GateFinding]`:
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
-| `check` | Mitigation check name (e.g., `NX_DISABLED`, `STACK_CANARY_MISSING`, `RELRO_NONE`) |
-| `binary` | Path to the binary where the check failed |
-| `detail` | Explanation of the missing mitigation and exploitation implications |
+| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` |
+| `category` | `'TAINT_FLOW'` / `'FORMAT_STRING'` / `'HEAP'` / `'LENGTH_UNDERFLOW'` |
+| `func_va` | VA of the function containing the finding |
+| `site_va` | VA of the specific call site (sink instruction) |
+| `description` | Human-readable explanation of the vulnerability |
+| `detector` | Which scanner produced this finding (e.g., `'taint'`, `'format_string'`) |
+| `taint_dag` | Optional `SemanticBlock` DAG for taint path visualization |
+| `fmt()` | Single-line formatted string for build log output |
 
-`CompilerSecurityGate.check()` also returns exit code `1` (via `sys.exit`) if any `HIGH` or `CRITICAL` findings are present.
+`CompilerSecurityGate.check(strict=False)` returns `int` — `0` if no HIGH/CRITICAL findings, `1` otherwise. In strict mode (`strict=True`), returns `1` on any finding regardless of severity.
 
 ---
 
