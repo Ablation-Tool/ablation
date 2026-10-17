@@ -69,11 +69,18 @@ Provides the session state, indexing, and utility functions that other Ablation 
 ## Usage
 
 ```python
-from ablation.analyzers.structural_sim import StructuralSimilarity
+from modules.structural_sim import extract_fingerprint, fingerprint_sim, find_structural_orphans
 
-results = StructuralSimilarity.from_context(ctx).run()
-for r in results:
-    print(r)
+# Build fingerprints from disassembly
+fp_a = extract_fingerprint(va=0x401234, insns=["mov rdi, rsp", "call 0x4010a0", "ret"], calls=["malloc"])
+fp_b = extract_fingerprint(va=0x402000, insns=["push rbx", "call 0x4010a0", "pop rbx", "ret"], calls=["malloc"])
+
+# Compare → float [0.0, 1.0]
+score = fingerprint_sim(fp_a, fp_b)
+print(f"Similarity: {score:.3f}")
+
+# Find functions in version B with no match in version A
+orphans = find_structural_orphans(fps_a=fps_old, fps_b=fps_new, threshold=0.65)
 ```
 
 ---
@@ -100,11 +107,20 @@ Core infrastructure modules do not emit security findings directly. False positi
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`extract_fingerprint(va, insns, calls)` returns a `FunctionFingerprint`:
+
+| Attribute | Content |
 |:---|:---|
-| `result` | Module-specific output; see the class docstring for the exact type |
+| `va` | Virtual address of the function |
+| `n_insns` | Total instruction count |
+| `opcode_hist` | `dict` — category → fraction of total instructions (12 categories: DATA/ARITH/BIT/CMP/BRANCH/CALL/RET/FLOAT/SIMD/MEMOP/FRAME/OTHER) |
+| `immediates` | `frozenset[int]` — integer constants ≥ 0x100 from operands (struct offsets, magic bytes, buffer sizes) |
+| `calls` | `list[str]` — PLT-resolved call names |
+| `branch_density` | Float — branch instruction count divided by total instruction count |
+
+`fingerprint_sim(fp_a, fp_b)` returns a float in `[0.0, 1.0]` — weighted composite similarity across available signals.
 
 ---
 

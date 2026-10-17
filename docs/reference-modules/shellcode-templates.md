@@ -168,16 +168,25 @@ d823f10000007f00003b00000000000010e1a31a00007f000000000000000000
 
 ## Reading output
 
-`ShellcodeLibrary.get(arch, os, payload_type)` returns `bytes` — the raw shellcode.
+All shellcode generators return `bytes` (position-independent machine code):
+- `shellcode_reverse_tcp_linux_x86_64(lhost, lport)` → reverse TCP shell bytes
+- `shellcode_reverse_tcp_linux_arm64(lhost, lport)` → ARM64 variant
+- `shellcode_bind_tcp_linux_x86_64(port)` → bind shell bytes
+- `shellcode_execve_linux_x86(path)` → x86 execve with JMP/CALL/POP embedding
+- `shellcode_staged_loader(fd)` → minimal read-mmap-jmp loader
 
-`ROPGadgetFinder.find(binary)` returns a list of `ROPGadget` objects:
+`find_rop_gadgets(binary_data, base_addr)` returns `List[RopGadget]`:
 
 | Attribute | Content |
 |:---|:---|
-| `va` | Virtual address of the gadget |
-| `insns` | Gadget instruction string (e.g., `pop rdi ; ret`) |
+| `addr` | Virtual address of the gadget's first byte |
+| `insns` | Human-readable disassembly (e.g., `'pop rdi ; ret'`) |
+| `source` | Binary name the gadget was found in (empty string for raw scans) |
+| `type` | `'ret'` / `'pop_ret'` / `'syscall'` / `'stack_pivot'` / `'mov_ret'` |
 
-`ShellcodeEncoder.encode(shellcode, bad_bytes)` returns `{encoded: bytes, total_size: int, status: str}`.
+`encode_xor_rolling(shellcode, key)` returns `Tuple[bytes, bytes]` — `(encoded_payload, decoder_stub)`.
+
+`detect_bad_bytes(shellcode, bad_bytes)` returns `List[int]` — offsets of bad bytes in the shellcode.
 
 ---
 

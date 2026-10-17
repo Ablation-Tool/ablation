@@ -77,15 +77,18 @@ Run `parse()` before `BinaryContext` initialization on any AIX XCOFF binary. Pas
 
 ## Reading output
 
-`XCOFFParser.exports()` returns a list of `XCOFFSymbol` objects:
+`load_xcoff(path)` returns an `XcoffBinary` with a `.symbols` list of `XcoffSymbol`:
 
 | Attribute | Content |
 |:---|:---|
 | `name` | Symbol name string |
-| `va` | Virtual address |
-| `sym_type` | `XTY_LD` (function), `XTY_SD` (static data), or `XTY_ER` (external reference) |
+| `va` | Descriptor VA (for functions) or data VA; 0 for imports |
+| `lib` | Import library name — non-empty for imports, empty for exports |
+| `smclas` | Storage mapping class integer |
+| `code_va` | Resolved code VA (set after descriptor resolution, 0 otherwise) |
+| `is_import` | Property — `True` if `lib` is non-empty |
 
-`XCOFFParser.imports()` returns `List[str]` — archive member names for imported shared objects (e.g., `libc.a(shr.o)`).
+`XCOFFExecutableAnalyzer.from_path(path).exports_table()` returns `Dict[str, int]` — symbol name → code VA for all exported functions.
 
 ---
 

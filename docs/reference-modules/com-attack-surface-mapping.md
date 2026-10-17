@@ -99,17 +99,19 @@ Run `COMAttackSurfaceMapper` on Windows PE binaries (DLLs and EXEs) during Windo
 
 ## Reading findings
 
-`COMAttackSurfaceMapper.scan()` returns a list of finding dicts:
+`COMAttackSurfaceMapper(pe, path, raw).scan()` returns `list[COMFinding]`:
 
-| Field | Content |
+| Attribute | Content |
 |:---|:---|
-| `severity` | `HIGH` / `MEDIUM` |
-| `code` | Finding code (e.g., `COM_HIJACK_CANDIDATE`, `COM_DISPATCH_REMOTE`) |
-| `clsid` | CLSID string (e.g., `{00000000-...}`) or `None` if not statically recoverable |
-| `call_va` | VA of the `CoCreateInstance` or `IDispatch::Invoke` call |
-| `detail` | Explanation with specific CLSID, import usage, or flag name |
+| `severity` | `'HIGH'` / `'MEDIUM'` / `'LOW'` / `'INFO'` |
+| `category` | Finding category: `'com_server'` / `'com_create'` / `'com_hijack_risk'` / `'com_marshal'` / `'clsid_inventory'` / `'idispatch'` |
+| `title` | Short finding title |
+| `location` | Import name, section, or symbol that triggered the finding |
+| `description` | Detailed explanation with CLSID, VA, or flag specifics |
+| `va` | VA of the relevant call or reference (0 if not applicable) |
+| `cwe` | CWE identifier string, or empty if not classified |
 
-`COMAttackSurfaceMapper.referenced_clsids()` returns `List[str]` — all statically recovered CLSID strings for registry cross-reference.
+`COMAttackSurfaceMapper.referenced_clsids()` returns `list[str]` — all statically recovered CLSID strings for registry cross-reference.
 
 ---
 

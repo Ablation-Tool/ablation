@@ -92,19 +92,24 @@ Run `PlatformDetector` as the second step after gaining shell access (after `Net
 
 ## Reading output
 
-`PlatformDetector.detect_all()` returns a flat `dict`:
+`PlatformDetector().detect_all()` returns a flat `dict`:
 
 | Key | Content |
 |:---|:---|
-| `os` | OS name string (e.g., `Linux`, `Windows`) |
-| `distro` | Linux distribution name (e.g., `ubuntu`, `alpine`) or `None` |
-| `distro_version` | Distribution version string or `None` |
-| `machine` | Machine architecture (e.g., `x86_64`, `aarch64`) |
-| `arch_family` | Architecture family (`x86`, `arm`, `mips`, `riscv`) |
-| `arch_bits` | Integer — 32 or 64 |
-| `kernel` | Kernel version string |
-| `libc` | C library name (`glibc`, `musl`, `uclibc`) |
-| `libc_version` | C library version string or `None` |
+| `os` | OS name (e.g., `'Linux'`, `'Windows'`) |
+| `os_release` | Platform release string |
+| `os_version` | Full platform version string |
+| `distro` | Linux distribution name (e.g., `'ubuntu'`), or absent on non-Linux |
+| `distro_version` | Distribution version string, or absent |
+| `machine` | CPU architecture string (e.g., `'x86_64'`, `'aarch64'`) |
+| `processor` | Processor identifier string |
+| `pointer_size` | Integer — pointer size in bits (32 or 64) |
+| `byte_order` | `'little'` or `'big'` |
+| `arch_family` | Normalized family: `'x86'` / `'ARM'` / `'MIPS'` / raw machine string |
+| `arch_bits` | Integer — 32 or 64 (set for x86 and ARM) |
+| `kernel` | Kernel version string (Linux only) |
+| `libc` | C library name (`'glibc'` / `'musl'` / `'uclibc'`), if detectable |
+| `libc_version` | C library version string, if detectable |
 
 ---
 

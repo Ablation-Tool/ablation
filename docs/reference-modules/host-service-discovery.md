@@ -89,17 +89,26 @@ Run host/service discovery after `local-network-inventory` reveals subnets. Disc
 
 ## Reading output
 
-`HostScanner.scan(subnet)` returns a list of `HostResult` dicts:
+`icmp_host_discovery(target_cidr, timeout)` returns `List[dict]`:
 
 | Field | Content |
 |:---|:---|
-| `host` | IP address |
-| `alive` | `True` if ICMP or TCP probe succeeded |
-| `os_hint` | OS guess from TTL heuristic (e.g., `Linux`, `Windows`, `Unknown`) |
-| `open_ports` | `Dict[int, str]` — port → service banner |
-| `banners` | `Dict[int, str]` — port → raw banner string |
+| `host` | IP address string |
+| `latency_ms` | Round-trip latency in milliseconds |
+| `ttl` | IP TTL value from the ICMP reply (0 when TCP fallback was used) |
 
-`MDNSDiscovery.query(service_type)` returns a list of `{host, name, port, txt_records}` dicts.
+`scan_tcp_banner(host, port, timeout)` returns a dict:
+
+| Field | Content |
+|:---|:---|
+| `port` | Port number |
+| `banner_raw` | First 256 bytes of response as a hex string |
+| `service_guess` | Identified service name (e.g., `'SSH'`, `'HTTP'`, `'Redis'`, `'unknown'`) |
+| `tls` | `True` if TLS was attempted on this port |
+
+`MDNSDiscovery.query(service_type)` returns `List[dict]` with keys `instance_name`, `host`, `ip`, `port`.
+
+`SSDPDiscovery.discover(timeout)` returns `List[dict]` with keys `device_type`, `friendly_name`, `ip`, `location_url`.
 
 ---
 

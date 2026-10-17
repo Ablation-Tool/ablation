@@ -175,11 +175,15 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 ## Usage
 
 ```python
-from ablation.analyzers.mpy_lifter import MicroPython.mpyBytecodeLifter
+from modules.mpy_lifter import MpyLifter
 
-results = MicroPython.mpyBytecodeLifter.from_context(ctx).run()
-for r in results:
-    print(r)
+# Lift a .mpy file to pseudo-Python
+source = MpyLifter.from_path('/fw/esp32/network_client.mpy').lift_module()
+print(source)
+
+# Or from raw bytes
+data = open('app.mpy', 'rb').read()
+source = MpyLifter.from_bytes(data).lift_module()
 ```
 
 ---
@@ -213,16 +217,28 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading output
 
-`MpyLifter.from_bytes(data).lift()` returns a `MpyCodeObj` representing the top-level module:
+`MpyLifter.from_path(path).lift_module()` returns a Python source string (the lifted module text).
+
+`MpyLifter.from_bytes(data)` returns a `MpyLifter` ready for lifting when you already have raw `.mpy` bytes.
+
+The intermediate code object tree is `MpyCodeObj`:
 
 | Attribute | Content |
 |:---|:---|
-| `kind` | Code object kind indicator |
-| `name` | Function/module name (default `'<module>'` for top-level) |
+| `kind` | Integer — code object kind indicator |
 | `data` | Raw bytecode bytes for this code object |
-| `children` | `List[MpyCodeObj]` — nested code objects (inner functions, lambdas) |
+| `children` | `list[MpyCodeObj]` — nested code objects (inner functions, lambdas) |
+| `name` | Function or module name (`'<module>'` for top-level) |
 
-Use `MpyLifter.disassemble(obj)` to get `List[MpyInsn]` (each with `offset`, `opcode`, `mnemonic`, `operand`, `qstr_val`).
+`MpyInsn` (from the disassembler pass):
+
+| Attribute | Content |
+|:---|:---|
+| `offset` | Bytecode offset |
+| `opcode` | Raw opcode integer |
+| `mnemonic` | Opcode mnemonic string |
+| `operand` | Integer operand, or `None` |
+| `qstr_val` | Resolved QSTR string, or `None` |
 
 ---
 

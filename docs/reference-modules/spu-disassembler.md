@@ -208,11 +208,17 @@ Reads the binary image and resolves the target-specific data structures (PLT, GO
 ## Usage
 
 ```python
-from ablation.analyzers.spu_disassembler import SPUDisassembler
+from modules.spu_disassembler import (
+    extract_spu_text_from_elf,
+    disassemble_spu_text,
+)
 
-results = SPUDisassembler.from_context(ctx).run()
-for r in results:
-    print(r)
+# Extract and decode SPU .text from an ELF
+sections = extract_spu_text_from_elf('/path/to/spu_elf')
+for seg in sections:
+    insns = disassemble_spu_text(seg['data'], seg['base_va'])
+    for insn in insns:
+        print(f"  {insn.addr:#010x}: {insn.mnemonic}")
 ```
 
 ---
@@ -245,14 +251,25 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`decode_spu_word(addr, word)` returns an `SPUInstruction`:
+
+| Attribute | Content |
 |:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+| `addr` | Virtual address of the instruction |
+| `word` | 32-bit big-endian instruction word |
+| `mnemonic` | SPU instruction mnemonic (e.g., `'lqd'`, `'stqd'`, `'brsl'`) |
+| `fmt` | Instruction format class string |
+| `rT` | Destination register number (bits 0–6) |
+| `rA` | Source register A (bits 7–13) |
+| `rB` | Source register B (bits 14–20) |
+| `I7` | 7-bit immediate (sign-extended) |
+| `I10` | 10-bit immediate (sign-extended) |
+| `I16` | 16-bit immediate (sign-extended) — used for branch targets |
+| `I18` | 18-bit immediate (sign-extended) — used for `ilhu`/`lqr` |
+
+`disassemble_spu_text(data, base_va)` returns `List[SPUInstruction]` for a byte range.
 
 ---
 

@@ -229,7 +229,7 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 `ELFVtableReconstructor.from_path(path).reconstruct_class('ClassName')` returns a `VtableMap`. See [elf-vtable-reconstructor](elf-vtable-reconstructor.md) for the full field reference.
 
-`CppVtableReconstructor.from_context(ctx).scan()` returns a `VtableReconstructorResult`. See [cpp-vtable-reconstructor](cpp-vtable-reconstructor.md) for the full field reference (`vtables`, `propagation`, `named_slot_count`, `resolved_call_count`).
+`CppVtableReconstructorAnalyzer.from_context(ctx).scan()` returns a `VtableReconstructorResult`. See [cpp-vtable-reconstructor](cpp-vtable-reconstructor.md) for the full field reference (`vtables`, `propagation`, `binary_path`, `arch`, `named_slot_count`, `total_slot_count`, `resolved_call_count`).
 
 ---
 

@@ -21,11 +21,12 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ## Usage
 
 ```python
-from ablation.analyzers.mcp_grammar_fuzzer import MCPGrammarFuzzer
+from ablation.analyzers.mcp_tool_taint_scanner import MCPToolTaintScanner
 
-results = MCPGrammarFuzzer.from_context(ctx).run()
-for r in results:
-    print(r)
+scanner = MCPToolTaintScanner.from_path('/path/to/mcp_server_root')
+findings = scanner.scan()
+for f in findings:
+    print(f.fmt())
 ```
 
 ---
@@ -58,20 +59,19 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ---
 
-## Reading output
+## Reading findings
 
-`mcp_grammar_fuzzer.run(argv)` is a CLI entry point — it writes results to stdout and to a JSONL output file. There is no typed finding dataclass.
+`MCPToolTaintScanner.from_path(root).scan()` returns `List[MCPTaintFinding]`:
 
-Each JSONL record written to the output file is a dict:
-
-| Key | Content |
+| Attribute | Content |
 |:---|:---|
-| `tool` | MCP tool name being fuzzed |
-| `case_id` | Integer case identifier within this run |
-| `input` | The generated input dict sent to the tool |
-| `response` | Raw tool response string |
-| `anomaly` | `True` if the response triggered a grammar anomaly |
-| `verdict` | `'CRASH'` / `'ERROR'` / `'ANOMALY'` / `'OK'` |
+| `file` | Path to the source file containing the finding |
+| `line` | Line number of the taint source or sink |
+| `issue_type` | `'BIND_WIDE'` / `'EXEC_IN_ALLOWED'` / `'NO_AUTH'` / `'CREDENTIAL_EXPOSURE'` / `'PROMPT_INJECTION'` |
+| `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` |
+| `cwe` | CWE identifier string (e.g., `'CWE-78'`) |
+| `description` | Explanation of the taint path or security issue |
+| `snippet` | Source code snippet (may be empty) |
 
 ---
 

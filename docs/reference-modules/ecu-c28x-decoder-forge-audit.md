@@ -181,3 +181,28 @@ assert insn.mnemonic == 'BF'
 assert insn.cond == 'EQ'
 assert insn.target == 0x20 + 2 - 3   # 0x1F
 ```
+
+---
+
+## Reading output
+
+`EcuC28xDecoder.from_bytes(data, base_va).decode_one(word_offset)` returns a `C28xInsn`:
+
+| Attribute | Content |
+|:---|:---|
+| `word_va` | Word-address VA of the instruction |
+| `is_32bit` | `True` when the instruction occupies two 16-bit words |
+| `mnemonic` | Instruction mnemonic (e.g., `'MOV'`, `'B'`, `'LRET'`) |
+| `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'LOOP'` / `'MISC'` |
+| `raw` | 2 or 4 raw bytes (little-endian) |
+| `target` | Word-address branch/call target VA, or `None` |
+| `cond` | Condition name for `B`/`BF` instructions, or `None` for unconditional |
+| `imm` | Immediate operand value, or `None` |
+
+See [ecu-c28x-decoder](ecu-c28x-decoder.md) for the full module reference.
+
+---
+
+## See also
+
+- [ECU C28x Decoder](ecu-c28x-decoder.md) — module reference page for `EcuC28xDecoder`
