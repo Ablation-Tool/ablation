@@ -79,6 +79,20 @@ Run SD-WAN/Meraki probes when network discovery identifies TCP/8443 (vManage) or
 
 ---
 
+## Reading findings
+
+SD-WAN/Meraki probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (unauthenticated API) / `MEDIUM` (portal fingerprint) |
+| `title` | Finding code (e.g., `VMANAGE_UNAUTH_API`, `VMANAGE_PORTAL_FINGERPRINT`, `MERAKI_DEFAULT_CRED`) |
+| `detail` | Endpoint, HTTP response code, or data accessible without authentication |
+| `host` | Target IP |
+| `port` | Service port (e.g., `8443` for vManage) |
+
+---
+
 ## See also
 
 - [NX-OS/ACI/APIC Fabric Enumeration](nx-os-aci-apic-fabric-enumeration.md) — complementary Cisco management plane enumeration

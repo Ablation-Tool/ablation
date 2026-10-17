@@ -81,6 +81,20 @@ Run `EpilogueShareScanner` once per binary immediately after `BinaryContext.load
 
 ---
 
+## Reading output
+
+`EpilogueShareScanner.scan()` returns a list of `EpilogueHit` objects:
+
+| Attribute | Content |
+|:---|:---|
+| `func_va` | VA of the function whose tail jumps into the shared epilogue |
+| `shared_va` | VA of the shared epilogue entry point |
+| `pattern` | Pattern name (e.g., `x86_pop_ret`, `arm64_ldp_ret`) |
+
+`EpilogueShareScanner.inject()` returns an integer — the count of phantom `func_starts` removed from `ctx`.
+
+---
+
 ## See also
 
 - [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` that consumes the cleaned `ctx.func_starts`

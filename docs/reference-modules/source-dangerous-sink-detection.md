@@ -85,6 +85,22 @@ Run `SourceSinkScanner` as an early source-analysis pass after cloning or extrac
 
 ---
 
+## Reading findings
+
+`SourceSinkScanner.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (unguarded) / `MEDIUM` (guarded by env var or feature flag) |
+| `cwe` | CWE identifier (e.g., `CWE-94`, `CWE-78`) |
+| `title` | Vulnerability class (e.g., `Code Evaluation`, `Subprocess Execution`) |
+| `file` | Source file path |
+| `line` | Line number |
+| `sink` | Sink function or method name |
+| `guard` | Guard condition description (if `severity=MEDIUM`) |
+
+---
+
 ## See also
 
 - [Source Code Auditing](source-code-auditing.md) — broader source analysis including dataflow and dependency scanning
