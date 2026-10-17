@@ -48,9 +48,16 @@ print(f"Added {n_added} function starts from prologue scan")
 init = TaintState()
 init.taint_reg("r0", "user")   # r0 = recv return (tainted network data)
 
-# Get disassembly listing for the function
-text = ctx.disasm_text(func_va=0x12340)
-insns = list(from_listing(text))
+# Get instructions via insn_arm32 directly from binary bytes
+import lief, capstone
+binary = lief.parse('/path/to/arm32_firmware.elf')
+text_sec = binary.get_section('.text')
+text_data = bytes(text_sec.content)
+text_va = text_sec.virtual_address
+func_va = 0x12340
+func_data = text_data[func_va - text_va: func_va - text_va + 4096]
+from ablation.analyzers.insn_arm32 import from_capstone, Mode
+insns = list(from_capstone(func_data, mode=Mode.ARM, base=func_va))
 result = analyze_cfg(insns, initial=init)
 
 for f in result.findings:
