@@ -31,23 +31,21 @@ flowchart TD
 from modules.forensics_enum import detect_windows_forensic_artifacts
 
 # Windows volume (mounted or native)
+# Returns [{severity, title, detail, host, port}]
 artifacts = detect_windows_forensic_artifacts('/mnt/windows')
 
-# Filter by type
-timestomps = [a for a in artifacts if a['type'] == 'MFT_TIMESTOMP']
-log_clears = [a for a in artifacts if 'LOG_CLEAR' in a['type']]
+# Filter by title keyword (MFT_TIMESTOMP, LOG_CLEAR_EVENT, EVTX_TOO_SMALL, etc.)
+for a in artifacts:
+    if 'TIMESTOMP' in a['title']:
+        print(f"  [{a['severity']}] TIMESTOMP: {a['detail']}")
+    elif 'LOG_CLEAR' in a['title'] or 'EVTX' in a['title']:
+        print(f"  [{a['severity']}] {a['title']}: {a['detail'][:80]}")
 
-for t in timestomps:
-    print(f"  TIMESTOMP: {t['path']}  mtime={t['mtime']}  crtime={t['crtime']}")
-
-for l in log_clears:
-    print(f"  LOG CLEAR: {l['file']}  {l['detail']}")
-
-# Linux forensic artifacts (run on live system)
+# Linux forensic artifacts (same function, different scan_path)
 linux_artifacts = detect_windows_forensic_artifacts('/')
 for a in linux_artifacts:
-    if 'CLEARED' in a['type'] or 'HISTORY' in a['type']:
-        print(f"  [{a['type']}] {a.get('path', '')}")
+    if 'CLEARED' in a['title'] or 'HISTORY' in a['title']:
+        print(f"  [{a['severity']}] {a['title']}: {a['detail'][:80]}")
 ```
 
 ---
