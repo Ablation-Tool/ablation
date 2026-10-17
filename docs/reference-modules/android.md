@@ -90,27 +90,29 @@ with APKParser.from_path('app.apk') as apk:
     print(mf.dangerous_permissions())
     print(mf.exported_components())
 
-    # DEX: scan all dex files for dangerous API usage
-    findings = []
-    for dex in apk.iter_dex():
-        analyzer = DexAnalyzer(dex)
-        findings.extend(analyzer.scan())
+    # DEX: scan all classes*.dex files for dangerous API usage
+    # DexAnalyzer(apk) iterates all DEX files in the APK internally
+    dex_findings = DexAnalyzer(apk).scan()
+    for f in dex_findings:
+        print(f.severity, f.category, f.title, f.source)
 
     # JNI bridges: find native method declarations and their .so implementations
-    bridges = JniBridgeScanner(apk).scan()
-    for b in bridges:
-        print(b.java_class, b.java_method, b.native_lib, b.registration_type)
+    jni_findings = JniBridgeScanner(apk).scan()
+    for f in jni_findings:
+        print(f.severity, f.title, f.detail)
 
     # Binder surface: exported service endpoints
-    binder = BinderScanner(apk).scan()
-    for svc in binder:
-        print(svc.class_name, svc.transaction_codes)
+    binder_findings = BinderScanner(apk).scan()
+    for f in binder_findings:
+        print(f.severity, f.title, f.detail)
 ```
 
 Use `sweeps/android_sweep.py` for a single command that runs all four layers and writes a finding report:
 
-```bash
-python3 sweeps/android_sweep.py app.apk --vendor acme --product myapp --version 3.1
+```python
+from sweeps.android_sweep import run_sweep
+
+run_sweep('app.apk')
 ```
 
 ---

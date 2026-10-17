@@ -144,14 +144,23 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`Ppc64ElfV1Resolver.from_path(path).resolve()` returns `Ppc64ElfV1Info`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `binary_path` | `str` | Path to the resolved binary |
+| `opd_va` | `int` | VA of the OPD (.opd) section |
+| `opd_file_off` | `int` | File offset of OPD section |
+| `opd_size` | `int` | OPD section size in bytes |
+| `toc` | `int` | TOC pointer VA (read from entry-point OPD entry) |
+| `text_va` | `int` | VA of the .text section |
+| `text_file_off` | `int` | File offset of .text section |
+| `text_size` | `int` | .text section size in bytes |
+| `opd_to_code` | `Dict[int,int]` | Maps OPD entry VA → code VA (resolved function address) |
+
+Use `ppc64elfv1_resolve(ctx)` to integrate resolved info into a `BinaryContext` directly: populates `ctx.plt` (stub VA → name) and `ctx.func_starts`.
 
 ---
 

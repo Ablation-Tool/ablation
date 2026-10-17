@@ -110,14 +110,22 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
+`scan(binary, target, target_size, text_start, text_size)` returns `(exact_writers, mem_writers)`:
+
+- `exact_writers` — `List[Tuple]` of `(store_va, src_reg, base_reg, field_off, ea_val, ea_sse)` tuples for stores whose effective address exactly matches the target range.
+- `mem_writers` — `List[Tuple]` with the same structure for stores that *might* reach the target via a pointer dereference (Mem-path); these require manual confirmation.
+
+The `SSE` domain types used in `ea_sse`:
+
+| Type | Meaning |
 |:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+| `Const(v)` | Concrete constant (page address or immediate) |
+| `Add(sse, imm)` | `sse + imm` |
+| `Sub(sse, imm)` | `sse - imm` |
+| `Mem(sse, imm)` | Load from `*(sse + imm)` |
+| `Unknown(reg, pc)` | Unresolvable register at `pc` |
 
 ---
 

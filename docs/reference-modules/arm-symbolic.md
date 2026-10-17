@@ -27,11 +27,22 @@ Reads the binary image and resolves the target-specific data structures (PLT, GO
 ## Usage
 
 ```python
-from ablation.analyzers.arm_symbolic import ARMSymbolicExecution
+from pathlib import Path
+from modules.arm_symbolic import ARMSymbolicAnalyzer
 
-results = ARMSymbolicExecution.from_context(ctx).run()
-for r in results:
-    print(r)
+raw = Path('/path/to/firmware').read_bytes()
+analyzer = ARMSymbolicAnalyzer(data=raw, base_addr=0x10000)
+
+# Analyze a specific function — returns a FuncSummary
+summary = analyzer.analyze_function(addr=0x11234)
+print(summary)
+
+# Mark arg 0 (r0) as the untrusted input buffer and trace writes
+summary = analyzer.analyze_function(addr=0x11234, mark_inputbuf=0)
+for arg_idx, field_off in summary.arg_field_writes:
+    print(f"  arg[{arg_idx}] → field+0x{field_off:x}")
+for off in summary.inputbuf_reads:
+    print(f"  inputbuf read at +0x{off:x}")
 ```
 
 ---
@@ -39,13 +50,12 @@ for r in results:
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+FuncSummary @ 0x11234
+  arg_field_writes: [(0, 0x10), (0, 0x18)]
+  inputbuf_reads: ['0x0', '0x4', '0x8']
+  const_stores: {0x1c: 1}
+  calls: 3 direct calls
+  vcalls: 1 vtable calls
 ```
 
 ---
@@ -66,12 +76,17 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ## Reading findings
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`ARMSymbolicAnalyzer.analyze_function(addr, mark_inputbuf=None)` returns a `FuncSummary`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `addr` | `int` | Function start address passed to `analyze_function()` |
+| `name` | `str` | Name if known from symbol table; empty string if stripped |
+| `arg_field_writes` | `List[Tuple[int,int]]` | `(arg_index, field_offset)` pairs — argument register written to an object field |
+| `inputbuf_reads` | `List[int]` | Byte offsets into the `mark_inputbuf` arg that are read by this function |
+| `const_stores` | `Dict[int,int]` | `{field_offset: constant_value}` — constants stored to object fields |
+| `calls` | `List[Tuple[int, List[SymVal]]]` | `(callee_va, arg_symvals)` for direct calls made by this function |
+| `vcalls` | `List[Optional[int]]` | Vtable slot indices for indirect `BLX`/`BLR` dispatches; `None` if slot unknown |
 
 ---
 

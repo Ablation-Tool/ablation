@@ -170,12 +170,20 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ## Reading findings
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`Ppc64BeSinkClassifier.from_path(path).classify_all()` returns `List[Ppc64SinkSite]`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `va` | `int` | VA of the BL instruction |
+| `sink_name` | `str` | Sink function name (e.g., `strcpyx`, `sprintf`) |
+| `stub_va` | `int` | VA of the glink PLT stub |
+| `dest_class` | `str` | r3 (destination) classification: `STACK_DEST` / `IMM_SIZE` / `IBM_OBJECT` / `UNKNOWN` |
+| `src_class` | `str` | r4 (source) classification: `RODATA_TOC` / `ARG_PROPAGATED` / `IMM` / `UNKNOWN` |
+| `dest_detail` | `str` | Human-readable r3 context (e.g., `sp+0x70`) |
+| `src_detail` | `str` | Human-readable r4 context (e.g., `ld 0(r25) [arg r3]`) |
+| `fmt_class` | `str` | Format-string classification for sprintf/snprintf only; `CATGETS_RETURN` or empty |
+| `fmt_detail` | `str` | Human-readable format-string source context |
+| `interesting` | `bool` | `True` when dest=`STACK_DEST`, src=`ARG_PROPAGATED`, fmt_class != `CATGETS_RETURN` |
 
 ---
 

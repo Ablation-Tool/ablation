@@ -295,14 +295,16 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ---
 
-## Reading findings
+## Reading output
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`Ppc32Lifter.from_context(ctx).lift(func_va, n_insn=150)` returns a `str` — the pseudo-C disassembly of the function, one statement per line.
+
+The lifter tracks register state using `_Val` internally. Output lines use C-like expressions:
+- Constants printed as `0xNNN` hex literals
+- Arguments as `a0`, `a1`, etc. (r3 = `a0`, r4 = `a1` per PPC32 calling convention)
+- Named imports as their symbol name (resolved from PLT map)
+- Memory loads/stores as pointer-cast dereferences (e.g., `*(u32 *)(sp + 0x18)`)
+- Unknown register state as `?<regname>`
 
 ---
 

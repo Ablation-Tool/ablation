@@ -159,19 +159,49 @@ flowchart TD
 ```
 
 ```python
-from ablation.analyzers.vtable_resolver import VtableResolver
+from pathlib import Path
+import lief
+from ablation.analyzers.vtable_resolver import (
+    extract_vtable_regions, detect_ctor_vptr_inits,
+    detect_blr_sites, resolve_blr_sites,
+)
 
-resolver = VtableResolver('/path/to/libwechatnetwork.so')
-result = resolver.resolve()
+raw    = Path('/path/to/libwechatnetwork.so').read_bytes()
+binary = lief.parse('/path/to/libwechatnetwork.so')
 
-for vt in result.vtables:
+def _sec(name):
+    for s in binary.sections:
+        if s.name == name: return s
+
+text_sec    = _sec('.text')
+drelro_sec  = _sec('.data.rel.ro')
+
+text_va, text_size  = text_sec.virtual_address, text_sec.size
+drelro_va           = drelro_sec.virtual_address
+drelro_sz           = drelro_sec.size
+text_data           = raw[text_va : text_va + text_size]
+
+# Phase 1: candidate vtable regions in .data.rel.ro
+vtable_regions = extract_vtable_regions(
+    binary, text_va, text_size, drelro_va, drelro_sz)
+
+# Phase 2: constructor vptr stores (ADRP+ADD+STR pattern)
+vtable_vas = {vt.va for vt in vtable_regions}
+ctor_inits = detect_ctor_vptr_inits(text_data, text_va, text_size, vtable_vas)
+
+# Phase 3 + 4: find and resolve BLR dispatch sites
+blr_sites = detect_blr_sites(text_data, text_va, text_size)
+resolve_blr_sites(blr_sites, vtable_regions, ctor_inits)  # fills resolved_targets in place
+
+for vt in vtable_regions:
     print(f"vtable 0x{vt.va:x}: {len(vt.slots)} slots")
     for i, slot_va in enumerate(vt.slots):
         print(f"  slot[{i}] -> 0x{slot_va:x}")
 
-for blr in result.resolved_blr:
-    print(f"BLR@0x{blr.site:x} slot={blr.slot} -> "
-          f"targets={[hex(t) for t in blr.targets]}")
+for site in blr_sites:
+    if site.resolved_targets:
+        print(f"BLR@0x{site.blr_pc:x} slot+0x{site.slot_offset:x} -> "
+              f"{[hex(t) for t in site.resolved_targets]}")
 ```
 
 ---
@@ -242,8 +272,6 @@ Provides the session state, indexing, and utility functions that other Ablation 
 ```python
 from ablation.analyzers.version_delta import VersionDelta
 from modules.structural_sim import extract_fingerprint, fingerprint_sim
-from ablation.analyzers.vtable_resolver import VtableResolver
-from ablation.analyzers.binary_context import BinaryContext
 
 # Track a function across firmware versions
 vd = VersionDelta(
@@ -257,14 +285,9 @@ print(f"Homolog in v2: 0x{result.va_v2:x}  confidence={result.confidence:.2f}")
 changed = vd.changed_functions(top_n=50)
 for fn in changed:
     print(f"0x{fn.va_v1:x} -> 0x{fn.va_v2:x}  change_score={fn.change_score:.3f}")
-
-# Resolve vtable virtual dispatch targets in a stripped ARM64 binary
-ctx = BinaryContext.load_or_build('/path/to/firmware.so')
-resolver = VtableResolver(ctx)
-vtable_map = resolver.resolve()
-for va, targets in vtable_map.items():
-    print(f"0x{va:x}: {[hex(t) for t in targets]}")
 ```
+
+For ARM64 vtable resolution, see the `## VtableResolver` section above which uses `extract_vtable_regions()`, `detect_blr_sites()`, and `resolve_blr_sites()` from `ablation.analyzers.vtable_resolver`.
 
 ---
 

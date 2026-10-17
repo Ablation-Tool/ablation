@@ -197,12 +197,16 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ## Reading findings
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`scan_sources_to_sinks(ctx)` returns `List[NanoMIPSTaintFinding]`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `func_va` | `int` | VA of the function containing the sink call |
+| `sink_va` | `int` | VA of the sink call instruction |
+| `sink_name` | `str` | Sink function name (e.g., `system`, `strcpy`) |
+| `tainted_args` | `List[str]` | Tainted argument registers at the call (e.g., `['a0', 'a1']`) |
+| `source_name` | `str` | Taint source label that propagated to this sink |
+| `full_decode` | `bool` | `True` if Capstone 6.x full decode was used; `False` for conservative frame-walk fallback |
 
 ---
 

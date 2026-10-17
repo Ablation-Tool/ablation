@@ -294,12 +294,17 @@ Symbol resolution errors produce phantom function boundaries. Verify any candida
 
 ## Reading findings
 
-| Field | Content |
-|:---|:---|
-| `va` | Virtual address of the resolved symbol, function, or instruction |
-| `name` | Recovered name if available, empty string if stripped |
-| `detail` | What was resolved or decoded |
-| `confidence` | `HIGH` / `MEDIUM` / `LOW` — how certain the resolution is |
+`scan_sources_to_sinks(ctx)` returns `List[TaintFindingLA64]`.
+
+| Field | Type | Content |
+|:---|:---|:---|
+| `func_va` | `int` | VA of the function containing the sink call |
+| `func_name` | `str` | Name of the function (from `ctx`) |
+| `sink_va` | `int` | VA of the sink call instruction |
+| `sink_name` | `str` | Sink function name (e.g., `system`, `popen`) |
+| `tainted_args` | `List[str]` | Tainted argument registers at the call (e.g., `['a0']`) |
+| `source_name` | `str` | Taint source label that propagated to this sink |
+| `severity` | `str` | `'HIGH'` for all findings (default) |
 
 ---
 
