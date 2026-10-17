@@ -111,16 +111,17 @@ Every SPU instruction treats its register as a vector of four 32-bit integers, t
 ### Usage
 
 ```python
-from modules.spu_disassembler import SPUDisassembler
+from modules.spu_disassembler import dump_spu_elf, frequency_report, extract_spu_text_from_elf
 
 # Disassemble a range in a Cell SPU ELF
-SPUDisassembler.dump_spu_elf('/path/to/spu.elf', start_va=0x0, limit=200)
+dump_spu_elf('/path/to/spu.elf', start_va=0x0, limit=200)
 
 # Frequency analysis for gap detection
-SPUDisassembler.frequency_report('/path/to/spu.elf', base=0x0)
+elf_data = open('/path/to/spu.elf', 'rb').read()
+print(frequency_report(elf_data, base_vaddr=0x0))
 
 # Extract raw .text bytes from a Cell SPU ELF
-data = SPUDisassembler.extract_spu_text_from_elf(open(path, 'rb').read())
+sections = extract_spu_text_from_elf(elf_data)
 ```
 
 `frequency_report` shows instruction frequency distribution. High branch count indicates loops. High XOR/AND/shift count indicates crypto. High `wrch`/`rdch` count indicates DMA-heavy sections: channel writes and reads are how the SPU communicates with the rest of the system.
