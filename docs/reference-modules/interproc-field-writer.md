@@ -29,9 +29,9 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ```python
 from modules.interproc_field_writer import find_field_writers, Binary
 
-# Binary is a target-specific class with hardcoded text/GOT VAs;
-# configure TEXT_VA, TEXT_SIZE, GOT_VA etc. before use.
-binary = Binary()
+# Binary takes a path; TEXT_VA/TEXT_SIZE/GOT_VA are hardcoded class-level
+# constants for the target — subclass or override them for other binaries.
+binary = Binary('/path/to/target.elf')
 writers = find_field_writers(
     binary,
     target_name='session_state',
