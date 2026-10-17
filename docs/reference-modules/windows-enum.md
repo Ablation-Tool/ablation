@@ -60,44 +60,54 @@ Gate: **PASSED**. No code changes needed.
 
 ## How it works
 
-Establishes a connection to the target using the specified protocol, iterates through a prioritized probe list, and records each response as a structured finding. Probes run in sequence unless `parallel=True` is set. Each probe checks for a specific weakness class: information disclosure, missing authentication, weak configuration, or exposed management interface. Findings are deduped by endpoint and finding type before returning.
+`WindowsEnumerator().enumerate_all()` runs each registered enumeration section (`com`, `rpc`, `etw`, `pipes`, `secfeatures`, `servicedll`, `autoruns`, `token`, `modules`) and returns `dict[str, list[Finding]]`. Each `Finding` is a dataclass with `{severity, category, title, detail, evidence}`. On non-Windows hosts each section returns an INFO finding stub instead of raising.
 
 ---
 
 ## Example output
 
-```
-[HIGH]     UNAUTH_ACCESS     /api/v1/config/backup
-  detail: unauthenticated GET returns full config including credentials
-  evidence: HTTP 200, Content-Type: application/json, body: {"admin_pass": ...}
+The following is a schematic example showing output structure and field names. Values are illustrative.
 
-[MEDIUM]   INFO_DISCLOSURE   /status
-  detail: version string exposed without authentication
-  evidence: X-Version: FortiOS 7.2.1 build 1254
+```
+WindowsEnumerator.enumerate_all():
+
+results['com']:
+  Finding(severity='HIGH', category='COM Hijacking', title='CLSID {some-guid} shadowed in HKCU',
+          detail='HKCU\\...\\InprocServer32 = C:\\Users\\user\\AppData\\Local\\dll.dll',
+          evidence='HKLM copy exists — user-writable HKCU override present')
+
+results['token']:
+  Finding(severity='HIGH', category='Token Privileges',
+          title='SeDebugPrivilege enabled', detail='Process has SeDebugPrivilege — can open any process', evidence='')
 ```
 
 ---
 
 ## False positives
 
-Findings from internal management interfaces, development endpoints, and lab-only services are not real attack surface. Filter by comparing discovered endpoints against the product's documented management plane. Authentication-required findings are lower severity unless a pre-auth bypass is confirmed separately.
+**`com_hijack_candidates()` on developer machines** — developer tools (Visual Studio, build systems) legitimately register per-user COM objects in HKCU that shadow HKLM entries. Confirm the CLSID is associated with an application and not a persistence mechanism by checking the registered InprocServer32 DLL path.
+
+**`token_privileges()` reporting `SeDebugPrivilege`** — administrators and debuggers legitimately hold SeDebugPrivilege. This is a HIGH finding on service accounts and restricted users, but expected on admin sessions.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Network reachability confirmation and credential acquisition. `BinaryContext` is not required; this module works from a live target or captured traffic.
-
-**After this module:** Feed findings to `FindingRegistry.register()` and review with `LLMAnalyst` for chaining opportunities.
+Run `WindowsEnumerator` on a live Windows host from an unprivileged shell after gaining initial access. Run `com_hijack_candidates()` to identify persistence opportunities and `token_privileges()` to enumerate privilege escalation paths.
 
 ---
 
 ## Reading findings
 
+Returns `dict[str, list[Finding]]`. `Finding` fields:
+
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `finding_type` | Category (e.g., `UNAUTH_ACCESS`, `INFO_DISCLOSURE`, `WEAK_CONFIG`) |
+| `severity` | `HIGH` / `MEDIUM` / `LOW` / `INFO` |
+| `category` | Section name (e.g., `COM Hijacking`, `Token Privileges`, `Named Pipes`) |
+| `title` | Short description of the specific finding |
+| `detail` | Full detail string |
+| `evidence` | Supporting evidence string (may be empty) |
 | `endpoint` | URI, port, or service address where the finding was observed |
 | `detail` | What was found and why it matters |
 | `evidence` | Response excerpt or protocol trace that confirms the finding |
