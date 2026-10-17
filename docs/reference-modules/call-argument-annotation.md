@@ -86,22 +86,38 @@ Run `RegAnnotator.annotate_calls()` immediately after `TaintTracker` identifies 
 
 ## Reading output
 
-`RegAnnotator.annotate_calls()` returns a list of call annotation dicts, one per call site:
+`RegAnnotator.annotate_calls(func_va, func_end_va)` returns `AnnotationResult`:
 
 | Field | Content |
 |:---|:---|
-| `va` | Virtual address of the call instruction |
-| `target` | Callee name or VA |
-| `args` | Dict mapping register name → `RegValue` (one of `Const(v)`, `Tainted(label)`, `Arg(n)`, `Unknown`) |
+| `func_va` | Start VA of the annotated function |
+| `func_end_va` | End VA of the annotated function |
+| `calls` | `List[CallSite]` — all call sites in the function |
+| `reg_trace` | `List[Tuple[int, str, RegVal]]` — per-instruction register state log |
 
-`RegValue` types:
+Each `CallSite`:
 
-| Type | Meaning |
+| Field | Content |
 |:---|:---|
-| `Const(v)` | Compile-time constant `v` |
-| `Tainted(label)` | Register holds a value tainted by source `label` |
-| `Arg(n)` | Register holds the original `n`-th caller argument passed through |
-| `Unknown` | Value not determinable (clobbered by unresolved call or loop) |
+| `site_va` | VA of the call instruction |
+| `target_va` | Resolved VA of the callee |
+| `target_name` | Callee symbol name |
+| `args` | `Dict[str, RegVal]` — argument register → `RegVal` at call time |
+
+`RegVal` is a dataclass with a `kind` string attribute:
+
+| `kind` | `display()` output | Meaning |
+|:---|:---|:---|
+| `'arg'` | `arg0_entry (rdi@entry)` | Entry-time argument register (passed through unmodified) |
+| `'const'` | `0x<hex>` | Immediate constant propagated to call site |
+| `'string'` | `'<preview>'` | `.rodata` string pointer resolved via LEA |
+| `'copy'` | `<src_val> (via <reg>)` | Copied from another register; chain shows origin |
+| `'ret'` | `ret(<callee>)` | Return value of a prior named call |
+| `'zero'` | `0` | Explicitly zeroed (e.g., `xor reg, reg`) |
+| `'mem'` | `[<desc>]` | Loaded from memory; not statically resolvable |
+| `'unknown'` | `?` | Clobbered or untracked |
+
+Use `val.display()` to produce a human-readable string. Use `val.kind == 'arg'` to identify passed-through argument registers when assessing taint paths.
 
 ---
 
