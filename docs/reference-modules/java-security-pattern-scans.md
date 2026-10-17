@@ -84,6 +84,22 @@ Run `LuaInjectionAnalyzer` on any Python codebase that interacts with Lua (via `
 
 ---
 
+## Reading findings
+
+`LuaInjectionAnalyzer.scan()` returns a list of finding dicts:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `CRITICAL` (newline injection breaks Lua comment) / `HIGH` (long bracket injection) |
+| `title` | Finding code: `LUA_COMMENT_INJECTION` or `LUA_LONGBRACKET_INJECTION` |
+| `file` | Source file path |
+| `line` | Line number of the template |
+| `var` | Variable name embedded in the template |
+| `detail` | Template excerpt and required escape |
+| `escape_needed` | Recommended escaping approach |
+
+---
+
 ## See also
 
 - [Source Dangerous Sink Detection](source-code-auditing.md) — `SourceSinkScanner` for complementary source-level dangerous sink scanning

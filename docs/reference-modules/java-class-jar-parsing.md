@@ -94,6 +94,22 @@ Run `ABCParser.from_path()` on any extracted HarmonyOS `.abc` file before securi
 
 ---
 
+## Reading output
+
+`ABCParser.parse()` returns an `ABCModule` object:
+
+| Attribute | Content |
+|:---|:---|
+| `version` | ABC format version string |
+| `dialect` | `STATIC` or `DYNAMIC` |
+| `methods` | `List[ABCMethod]` — all method records |
+
+Each `ABCMethod`: `{name, has_code, native, instructions: List[ABCInstruction]}`.
+
+`ABCParser.disassemble(method_name)` returns `List[str]` — textual disassembly of the method body.
+
+---
+
 ## See also
 
 - [DEX Disassembly and Lifting](dex-disassembly-and-lifting.md) — Android DEX equivalent parser and lifter

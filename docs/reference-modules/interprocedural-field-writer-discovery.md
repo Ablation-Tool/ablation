@@ -95,6 +95,21 @@ Step 8 in the RE workflow (CLAUDE.md): `IPRegAnnotator` for cross-library call c
 
 ---
 
+## Reading output
+
+`IPRegAnnotator.trace_chain(entry_va)` returns a `CallChain` object:
+
+| Attribute | Content |
+|:---|:---|
+| `entry_va` | VA of the chain entry function |
+| `hops` | `List[ChainHop]` — one per function in the call chain |
+| `sink_va` | VA of the terminal sink call (or `None` if no sink reached) |
+| `sink_func` | Name of the sink function |
+
+Each `ChainHop`: `{va, func_name, call_va, reg_annotations: List[RegAnnotation]}`.
+
+---
+
 ## See also
 
 - [Call Argument Annotation](call-argument-annotation.md) — single-function `RegAnnotator` that `IPRegAnnotator` extends

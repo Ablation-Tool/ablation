@@ -87,6 +87,22 @@ Run `FortiBuildTrackClassifier.classify()` on the firmware filename as the first
 
 ---
 
+## Reading output
+
+`FortiBuildTrackClassifier.classify(filename)` returns a `BuildTrackResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `product` | Product name string (e.g., `FortiGate`, `FortiMail`) |
+| `version` | Version string (e.g., `7.2.4`) |
+| `track` | Track character (`F`, `M`, `B`, etc.) |
+| `expected_keys` | `Set[str]` — filenames of encryption keys expected in this build |
+| `anomaly` | `True` if the filename does not match known naming conventions |
+
+`FortiBuildTrackClassifier.batch_classify(filenames)` returns `List[BuildTrackResult]`.
+
+---
+
 ## See also
 
 - [FortiMail VM Key Extraction](fortimail-vm-key-extraction.md) — extracts keys that this classifier predicts
