@@ -46,7 +46,7 @@ flowchart TD
 
 ```python
 from pathlib import Path
-from ablation.analyzers.bff_decompressor import (
+from modules.bff_decompressor import (
     BFFDecompressor, BFFCompressedError, detect
 )
 from ablation.core.bff_extractor import BFF_MAGIC
