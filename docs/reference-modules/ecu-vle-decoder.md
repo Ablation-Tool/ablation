@@ -338,12 +338,18 @@ Reads the ROM image at the specified base address and applies the ISA decoder to
 ## Example output
 
 ```
-[CRITICAL] WEAK_SEED   UDS 0x27 0x01 at ROM:0x8004A0
-  detail: seed is timestamp-derived (LSB of timer register)
-  algorithm: linear congruential; key derivable in < 2^16 guesses
+$ python3 -c "
+from ablation.analyzers.ecu_vle_decoder import EcuVLEDecoder
+dec = EcuVLEDecoder.from_path('E39a_3072KiB_12664221.bin', base_va=0)
+for i in dec.disassemble(start=0x2A000, end=0x2A040):
+    print(i)
+"
 
-[HIGH] UNPROTECTED_WRITE   calibration region at ROM:0x810000
-  detail: no write-protect fuse check before accepting 0x34 WriteDataByIdentifier
+0x0002A000  [SE16]  se_mflr          r0
+0x0002A002  [SE16]  se_stw           r0, 4(r1)
+0x0002A004  [VLE32] e_stwu           r1, -32(r1)
+0x0002A008  [VLE32] e_li             r3, 0
+0x0002A00C  [VLE32] e_b              0x0002B140
 ```
 
 ---
@@ -356,7 +362,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Pipeline position
 
-**Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
+**Before this module:** `EcuArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
 **After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
 
@@ -364,22 +370,22 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Reading output
 
-`EcuVLEDecoder.from_bytes(data, base_va=0).decode_all()` returns `List[VLEInsn]`:
+`EcuVLEDecoder(data, base_va=0).disassemble()` (or `from_path()` / `from_bytes()`) returns `list[VLEInsn]`:
 
 | Attribute | Content |
 |:---|:---|
-| `offset` | Byte offset (or VA if base is set) of this instruction |
+| `offset` | Instruction VA (base_va + byte offset in buffer) |
 | `is_16bit` | `True` for 16-bit SE format, `False` for 32-bit VLE format |
 | `mnemonic` | Instruction mnemonic string (e.g., `'se_lwz'`, `'e_b'`) |
-| `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'LOAD'` / `'STORE'` / `'MISC'` |
+| `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'LOAD'` / `'STORE'` / `'LR_SAVE'` / `'LR_RESTORE'` / `'PROLOGUE'` / `'MISC'` |
 | `raw` | Raw instruction bytes (2 or 4 bytes) |
-| `target` | Branch/call target VA (None if not a control-flow instruction) |
+| `target` | Branch/call target VA, or `None` for non-control-flow instructions |
 | `rd` / `rs` / `ra` / `imm` | Decoded operand values (None if not applicable) |
 
 ---
 
 ## See also
 
-- [ECUArchDetector](ecu-arch-detector.md) — identify processor family before choosing a decoder
-- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md) — map ROM sections before decoding
+- [EcuArchDetector](ecu-arch-detector.md) — identify processor family before choosing a decoder
+- [EcuROMLayoutAnalyzer](ecu-rom-layout-analyzer.md) — map ROM sections before decoding
 - [ECUSecurityAccessScanner](ecu-security-access-scanner.md) — find UDS 0x27 bypass vectors in decoded code
