@@ -113,38 +113,58 @@ for chain in chains:
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+pl.ingest_from_registry(reg)
+  28 new patterns ingested (3 already present, skipped)
+  total patterns: 31
+
+pl.sweep(searcher, top_k=8, min_score=0.30)
+  heap_overflow (CWE-122):
+    0.84  fn_0x2a100  (auth_radius_parse)
+    0.71  fn_0x31400  (process_dhcp_option)
+    0.68  fn_0x44200  (parse_snmp_varbind)
+  command_injection (CWE-78):
+    0.79  fn_0x58000  (exec_cli_command)
+  [2 patterns: no hits above 0.30]
 ```
 
 ---
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+**High sweep scores on non-vulnerable functions** — `PatternLibrary.sweep()` uses a minimum score threshold (default 0.30) that is intentionally low. Many functions that score above 0.30 will not have the targeted vulnerability; the sweep produces candidates for manual review, not confirmed findings. Raise `min_score` to 0.50–0.60 if the candidate list is too large for triage.
+
+**Patterns that over-match a broad function class** — a confirmed finding described with generic terms (e.g., "reads from network socket into buffer") will match many network-receive functions. Descriptions that include the specific error pattern (e.g., "reads attacker-controlled byte count into fixed-size stack buffer without bounds check") produce more targeted patterns and fewer false candidates.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** `CorpusBuilder.build()` to build the function corpus DB, and `SemanticSearcher.build_corpus()` to load the embedding matrix. `FindingRegistry` must have at least one confirmed finding before `ingest_from_registry()` adds any patterns.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** `PatternLibrary.sweep()` results feed directly into candidate prioritization. High-score functions (above 0.60) proceed to `FuncProfiler.profile()` and then `TaintTracker.run()`. Low-score functions can be deprioritized without losing confirmed findings from prior engagements.
 
 ---
 
 ## Reading output
 
-`EnginePatternLibrary.default().label_binary(ctx)` returns `Dict[int, EngineLabel]` — VA → matched engine-code label:
+`PatternLibrary.sweep(searcher, top_k, min_score)` returns `dict[str, list[tuple[float, int, str]]]` — tag → list of `(score, func_id, name)` tuples sorted by descending score:
 
-| Attribute | Content |
+| Element | Content |
 |:---|:---|
-| `va` | Virtual address of the matched function |
-| `engine` | Engine name (e.g., `'openssl'`, `'mbedtls'`, `'lwip'`) |
-| `category` | Engine category (e.g., `'tls'`, `'crypto'`, `'network'`) |
-| `name` | Specific function name match |
-| `confidence` | Float 0.0–1.0 — match confidence |
-| `match_kind` | Match method: `'string_marker'` / `'string_pattern'` / `'semantic'` / `'sax'` |
-| `sig_id` | Signature ID from `EnginePatternLibrary` |
+| `score` | Float — cosine similarity between the pattern query embedding and the function's corpus embedding |
+| `func_id` | Integer corpus DB row ID for the matched function |
+| `name` | Function name from the corpus (overlay name, export, PLT, or hex VA string) |
+
+`FindingRegistry.find_similar(embedding, top_k, min_sim)` returns `list[dict]` — each dict is a row from `findings.db`:
+
+| Key | Content |
+|:---|:---|
+| `vendor` | Target vendor name |
+| `product` | Target product name |
+| `title` | Finding title |
+| `cwe_class` | CWE identifier |
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
+| `similarity` | Float — cosine similarity to the query embedding |
 
 ---
 

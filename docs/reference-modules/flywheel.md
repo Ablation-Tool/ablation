@@ -92,7 +92,7 @@ for tag, hits in results.items():
 embedding = searcher.embed_function(va)
 hits = reg.find_similar(embedding, top_k=8, min_sim=0.60)
 for h in hits:
-    print(f"  {h.vendor}/{h.product} {h.version}  {h.title}  ({h.severity})")
+    print(f"  {h['vendor']}/{h['product']} {h['version']}  {h['title']}  ({h['severity']})")
 ```
 
 ---
@@ -153,34 +153,52 @@ for va, label in sorted(labels.items()):
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+pl.ingest_from_registry(reg)
+  31 new patterns ingested (0 already present)
+  total patterns: 93  (62 seed + 31 confirmed)
+
+pl.sweep(searcher, top_k=8, min_score=0.30)  target=fortigate_7.2.1
+  heap_overflow (CWE-122):
+    0.82  fn_0x1d700  (auth_radius_parse)
+    0.71  fn_0x31400  (process_dhcp_option)
+  command_injection (CWE-78):
+    0.77  fn_0x58000  (exec_cli_command)
+  stack_overflow (CWE-121):
+    [no hits above 0.30]
+
+reg.find_similar(embedding, top_k=3, min_sim=0.60)
+  fortinet/fortigate 7.0.x  Pre-auth heap overflow in RADIUS parse  CRITICAL  sim=0.84
+  tencent/tencentos 1.2       Heap overflow in dhcpv6 option handler  HIGH      sim=0.71
+  cisco/ios_xe 17.3          Stack overflow in SNMP trap handler      HIGH      sim=0.63
 ```
 
 ---
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+**Patterns that flood every sweep** — a confirmed finding with a very generic description (e.g., "processes network input") will score above 0.30 against most functions in any network-facing binary. The pattern produces high recall but low precision. Improve it by editing the stored description in `findings.db` to include the specific error condition: memory operation type, size field behavior, and call chain.
+
+**`ingest_from_registry()` adding patterns from false-positive findings** — if a finding was registered but later determined to be a false positive at the analysis stage, its pattern remains in the library. Call `reg.list_findings()` to identify and remove the false-positive finding from `findings.db` before the next engagement, then rebuild the pattern library.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** `FindingRegistry` must have at least one confirmed finding for `ingest_from_registry()` to add anything beyond the seed corpus. `SemanticSearcher.build_corpus()` must be called so `sweep()` has an embedding matrix to query against.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** Sweep hits (above 0.60) go to `FuncProfiler` and `TaintTracker`. Confirmed findings from this engagement are registered with `FindingRegistry.register()`, closing the loop and growing the pattern library for the next target.
 
 ---
 
 ## Reading output
 
-The flywheel has no single output type — it is an operational loop between three modules:
+The flywheel has no single output type. It is an operational loop between three modules:
 
-1. `EnginePatternLibrary.label_binary(ctx)` → `Dict[int, EngineLabel]` — engine-code labels stripped from the target
-2. `PatternLibrary.sweep(ctx)` → confirmed and unconfirmed finding candidates from prior session patterns
-3. `FindingRegistry.register(...)` → persists confirmed findings as new search patterns
+1. `PatternLibrary.sweep(searcher, top_k, min_score)` → `dict[str, list[tuple[float, int, str]]]` — tag → `(score, func_id, name)` candidates from prior confirmed patterns.
+2. `FindingRegistry.find_similar(embedding, top_k, min_sim)` → `list[dict]` — confirmed findings from prior engagements whose embeddings are similar to the query. Dict keys: `vendor`, `product`, `version`, `title`, `cwe_class`, `severity`, `func_addr`, `binary`, `similarity`.
+3. `FindingRegistry.register(...)` → `str` (finding ID) — persists a new confirmed finding and adds its embedding to the in-memory matrix for immediate similarity queries.
 
-See [Cross-Target Learning](cross-target-learning.md) for `EngineLabel` field details and [Finding Validation](finding-validation.md) for `PathResult` details.
+See [Finding Validation](finding-validation.md) and [Registry](registry.md) for full API details.
 
 ---
 

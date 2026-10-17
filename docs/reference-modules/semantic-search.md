@@ -390,22 +390,38 @@ for r in results:
 ## Example output
 
 ```
-# Output varies by module. See Usage section for representative examples.
+SemanticSearcher.from_context(ctx)  binary=firmware.so  functions=11842
+  corpus: loading from cache  ~/.ablation/func_semantic_cache_3f8a1c9d.pkl  (0.1s)
+
+searcher.query("TLV parser pointer advance without minimum length check", top_k=5)
+  0.83  0x1d700  parse_radius_packet
+  0.76  0x2a100  fn_0x2a100
+  0.71  0x44200  process_tlv_option
+  0.68  0x58000  fn_0x58000
+  0.61  0x31400  fn_0x31400
+
+PatternLibrary.sweep  patterns=93  binary=firmware.so
+  heap_overflow (CWE-122)   [CVSS 9.1 ★]:
+    0.84  0x1d700  parse_radius_packet
+  command_injection (CWE-78)  [CVSS 8.8]:
+    0.77  0x58000  fn_0x58000
 ```
 
 ---
 
 ## False positives
 
-Core infrastructure modules do not emit security findings directly. False positives in downstream scanners are addressed at the scanner level, not here.
+**Scores above 0.55 on unrelated functions** — PCA whitening reduces the baseline similarity between unrelated functions from 0.6-0.9 to 0.4-0.6, but two functions can still score high if they have similar call targets or string references that happen to appear in the query. When a result looks wrong given its disassembly, verify with `ctx.strings_in_func(va)` and `ctx.callees_of(va)` to see what the encoder was responding to.
+
+**Low scores on a real match** — a function with no PLT calls and no string references is described only by its normalized assembly category sequence. If the query references specific call targets (`calls: memcpy recv`) the encoder weighs those fields heavily. Omit the `calls:` and `strings:` parts of the query when targeting functions with no imported symbols, and rely on the role hint and vulnerability description only.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to build the analysis session.
+**Before this module:** `CorpusBuilder.build()` to write the behavioral description database (`func_id.db`). `SemanticSearcher.from_context(ctx)` reads from this database and encodes the corpus. If `SigLibrary.auto_name()` has been run, function names in the corpus improve embedding quality.
 
-**After this module:** Results feed directly into the analysis pipeline: `SemanticSearcher`, `TaintTracker`, or output modules depending on the task.
+**After this module:** Candidates above 0.55 go to `FuncProfiler.profile()` for rapid triage. Candidates above 0.40 go to `SinkArgClassifier` to eliminate RODATA_CONST call sites before `TaintTracker.run()`. `PatternLibrary.sweep()` runs all confirmed patterns from prior engagements against the same corpus in one pass.
 
 ---
 
