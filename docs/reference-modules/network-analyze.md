@@ -87,6 +87,18 @@ Run `NetworkAnalyzer.enumerate_all()` immediately after gaining shell access. Th
 
 ---
 
+## Reading output
+
+`NetworkAnalyzer.enumerate_all()` returns a dict:
+
+| Key | Content |
+|:---|:---|
+| `interfaces` | `List[{name, ip}]` — network interface list |
+| `listening` | `List[{protocol, local_ip, local_port, state, uid}]` — listening services |
+| `connections` | `List[{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}]` — active connections |
+
+---
+
 ## See also
 
 - [Local Network Inventory](local-network-inventory.md) — same module with more complete annotation of connection fields

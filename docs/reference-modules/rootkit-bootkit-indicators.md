@@ -85,6 +85,18 @@ Run rootkit/bootkit indicator analysis on any kernel driver binary (`*.sys`), me
 
 ---
 
+## Reading findings
+
+`detect_ssdt_hook_indicators()`, `detect_dpc_timer_abuse()`, and `detect_bootkit_indicators()` return `List[{severity, title, detail}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` |
+| `title` | Finding code (e.g., `SSDT_OVERWRITE`, `NOTIFY_CALLBACK`, `BOOTKIT_PARTITION_READ`) |
+| `detail` | VA, function name, or detected pattern description |
+
+---
+
 ## See also
 
 - [Windows Artifact Discovery](windows-artifact-discovery.md) — filesystem timeline artifacts ($MFT, LNK, Prefetch, EVTX) for correlation
