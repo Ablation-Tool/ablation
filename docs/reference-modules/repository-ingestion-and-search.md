@@ -80,6 +80,20 @@ Route files (sample):
 
 ---
 
+## Reading output
+
+`SourceContext.from_path(path)` returns a `SourceContext` object:
+
+| Attribute | Content |
+|:---|:---|
+| `all_files` | `List[str]` — all source file paths in the repository |
+| `route_files` | `List[str]` — files containing route definitions |
+| `package_roots` | `List[str]` — paths to `package.json`, `pom.xml`, or `pyproject.toml` files |
+| `search(pattern)` | `List[(file, line, text)]` — grep-style search across all indexed source files |
+| `read_file(path)` | `str` — content of a source file relative to the repository root |
+
+---
+
 ## See also
 
 - [Source Code Auditing](source-code-auditing.md) — `SourceSinkScanner` that consumes `SourceContext`

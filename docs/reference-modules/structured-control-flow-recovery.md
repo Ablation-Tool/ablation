@@ -103,6 +103,23 @@ Run `Structurizer` as the final pass before presenting lifted output to a human 
 
 ## See also
 
+## Reading output
+
+`Structurizer.structure(cfg)` returns a `StructuredFunc` object:
+
+| Attribute | Content |
+|:---|:---|
+| `va` | Entry VA of the structured function |
+| `pseudocode` | Indented pseudocode string with `if/else/while/return` constructs |
+| `nodes` | `List[StructNode]` — AST nodes (`IfNode`, `LoopNode`, `SeqNode`, `RetNode`) |
+| `depth` | Maximum nesting depth (an approximation of complexity) |
+
+`Structurizer.to_text(structured_func)` returns the `pseudocode` string in isolation.
+
+---
+
+## See also
+
 - [Control-Flow Graph Construction](control-flow-graph-construction.md) — produces `CFG` that Structurizer consumes
 - [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md) — `DomTree`, `LoopInfo` from `dataflow_engine.py`
 - [PPC32/PPC476 Dedicated Lifting](ppc32-ppc476-dedicated-lifting.md) — `Ppc476Decompiler` uses Structurizer for decompiler output
