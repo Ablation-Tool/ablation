@@ -202,9 +202,19 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ```python
 from ablation.analyzers.pef_abi_clobber_scanner import PEFABIClobberScanner
 
-results = PEFABIClobberScanner.from_context(ctx).run()
-for r in results:
-    print(r)
+import lief
+binary = lief.parse('/path/to/classic_macos.pef')
+code_sec = binary.get_section('__TEXT')
+code = bytes(code_sec.content)
+base_va = code_sec.virtual_address
+
+# Identify sink call VAs (e.g. bl OTStrCat) from symbol table or sweep
+sink_vas = [0x1234, 0x5678]   # VAs of bl instructions targeting sink functions
+
+scanner = PEFABIClobberScanner.from_bytes(code, base_va=base_va)
+findings = scanner.scan(sink_vas=sink_vas)
+for f in findings:
+    print(f.fmt())
 ```
 
 ---

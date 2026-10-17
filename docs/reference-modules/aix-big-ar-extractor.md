@@ -78,9 +78,9 @@ Reads the binary header to validate the container magic, walks the partition or 
 ```python
 from ablation.analyzers.aix_big_ar_extractor import AixBigArExtractor
 
-results = AixBigArExtractor.from_context(ctx).run()
-for r in results:
-    print(r)
+members = AixBigArExtractor.from_path('/path/to/libc.a')
+for name, data in members.items():
+    print(f"  {name}: {len(data)} bytes")
 ```
 
 ---

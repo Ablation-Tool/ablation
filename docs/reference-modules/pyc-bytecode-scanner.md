@@ -94,11 +94,11 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 ## Usage
 
 ```python
-from ablation.analyzers.pyc_bytecode_scanner import PYCBytecodeScanner
+from ablation.analyzers.pyc_bytecode_scanner import PycBytecodeScanner
 
-results = PYCBytecodeScanner.from_context(ctx).run()
-for r in results:
-    print(r)
+scanner = PycBytecodeScanner()
+results = scanner.scan_dir('/path/to/extracted_firmware/', recursive=True)
+print(scanner.report(results))
 ```
 
 ---

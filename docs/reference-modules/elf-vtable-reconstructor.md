@@ -27,11 +27,12 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ## Usage
 
 ```python
-from ablation.analyzers.elf_vtable_reconstructor import ELFVTableReconstructor
+from modules.elf_vtable_reconstructor import ELFVtableReconstructor
 
-results = ELFVTableReconstructor.from_context(ctx).run()
-for r in results:
-    print(r)
+recon = ELFVtableReconstructor.from_path('/path/to/target.so')
+vtmap = recon.reconstruct(vtable_va=0x12000)
+for va, slot in vtmap.slots.items():
+    print(f"  {va:#x}: {slot.name or '<unknown>'}")
 ```
 
 ---

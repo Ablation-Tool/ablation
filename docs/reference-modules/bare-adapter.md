@@ -21,11 +21,12 @@ Reads the binary image and resolves the target-specific data structures (PLT, GO
 ## Usage
 
 ```python
-from ablation.analyzers.bare_adapter import BAREAdapter
+from modules.bare_adapter import run_bare, findings_from_results, format_bare_output
 
-results = BAREAdapter.from_context(ctx).run()
-for r in results:
-    print(r)
+# Run BARE analysis (bare_result is a raw findings dict)
+bare_result = run_bare(findings={}, timeout=60)
+findings = findings_from_results(bare_result)
+print(format_bare_output(bare_result, min_score=0.3))
 ```
 
 ---
