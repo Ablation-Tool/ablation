@@ -36,18 +36,22 @@ from modules.lateral_movement import (
 
 # ARP + routing recon
 nd = NetworkDiscovery()
-subnets = nd.parse_routing_table()
-for subnet in subnets[:3]:
-    print(f"  Subnet: {subnet}")
-    hosts = nd.scan_subnet_parallel(subnet['subnet'])
-    for h in hosts:
-        print(f"    {h['ip']}  ports={h['open_ports']}")
+nd.parse_route_table()   # populates nd.routes: [{iface, dest, gw, mask, flags}]
+nd.parse_arp_table()     # populates nd.arp_table: [{ip, mac}]
 
-# Cloud metadata
+# scan_subnets(subnets: list, ports=None) populates nd.live_hosts: {ip: {port: banner}}
+subnets = [r['dest'] + '/' + r.get('mask', '24') for r in nd.routes if r['dest'] != '0.0.0.0']
+nd.scan_subnets(subnets[:3])
+for ip, ports in nd.live_hosts.items():
+    print(f"  {ip}  open_ports={sorted(ports.keys())}")
+
+# Cloud metadata — probe_all() not probe_aws(); returns self.results dict
 cloud = CloudMetadataProber()
-aws_creds = cloud.probe_aws()
-if aws_creds:
-    print(f"AWS IAM role: {aws_creds.get('role')}  KeyId={aws_creds.get('AccessKeyId')}")
+results = cloud.probe_all()
+# keys: aws_imdsv1, aws_imdsv2, aws_iam_creds, gcp_metadata, azure_imds, etc.
+aws = results.get('aws_iam_creds', {})
+if aws:
+    print(f"AWS IAM: role={aws.get('role')}  AccessKeyId={aws.get('AccessKeyId')}")
 ```
 
 ---
