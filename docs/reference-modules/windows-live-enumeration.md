@@ -93,6 +93,19 @@ Run `WindowsEnumerator` after gaining low-privilege access to a Windows host. CO
 
 ---
 
+## Reading findings
+
+`WindowsEnumerator.enumerate_all()` returns a `WindowsEnumResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `com_hijack_candidates` | `List[{clsid, hklm_path, hkcu_writable}]` — COM server keys where HKCU is writable |
+| `rpc_endpoints` | `List[{protocol, endpoint, service, finding}]` — locally accessible RPC endpoints |
+| `dll_hijack_candidates` | `List[{service, dll_path, writable_dir}]` — services with DLLs in writable directories |
+| `findings` | `List[{severity, title, detail}]` — prioritized escalation findings |
+
+---
+
 ## See also
 
 - [Linux Privilege Escalation Triage](linux-privilege-escalation-triage.md) — equivalent Linux escalation enumeration
