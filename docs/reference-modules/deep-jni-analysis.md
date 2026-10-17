@@ -65,7 +65,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading output
 
-`DeepJNIAnalyzer.analyze(binary_path)` and the module-level functions (`analyze_structure_accesses`, `analyze_immediate_constants`, `analyze_call_targets`, `analyze_vtable_patterns`) each return text output printed to stdout. There is no typed finding dataclass.
+The module-level functions `analyze_structure_accesses(data)`, `analyze_immediate_constants(data)`, `analyze_call_targets(data)`, and `analyze_vtable_patterns(data)` each return text output printed to stdout. There is no typed finding dataclass.
 
 For structured output, call `java_decompiler.JavaDecompiler(path).analyze()` which returns a dict:
 

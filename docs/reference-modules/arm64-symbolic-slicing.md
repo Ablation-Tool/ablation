@@ -90,21 +90,17 @@ Run `analyze_cfg()` after `SemanticSearcher` identifies handler candidates and b
 
 ## Reading findings
 
-`TaintAnalyzer.analyze_cfg()` returns a list of finding dicts and the `final_state`:
+`ARM64TaintTracker(ctx, func_va).run()` returns `List[TaintFindingARM64]`:
 
-```python
-{'findings': List[dict], 'final_state': TaintState}
-```
-
-Each finding in the list:
-
-| Field | Content |
+| Attribute | Content |
 |:---|:---|
-| `va` | Virtual address of the sink call instruction |
-| `sink` | Sink function name (e.g., `system`, `popen`, `execv`) |
+| `func_va` | VA of the function containing the sink call |
+| `func_name` | Name of the function (from `ctx`) |
+| `sink_va` | VA of the sink call instruction |
+| `sink_name` | Sink function name (e.g., `system`, `popen`, `execv`) |
 | `tainted_args` | List of tainted argument registers at the call (e.g., `['x0']`) |
-| `sources` | List of taint source labels that contribute to the taint |
-| `taint_path` | Human-readable register propagation chain (e.g., `x0←x19←x0(recv)`) |
+| `source_name` | Taint source label that propagated to the sink |
+| `severity` | `'HIGH'` (default) |
 
 ---
 

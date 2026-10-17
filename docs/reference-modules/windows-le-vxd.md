@@ -20,7 +20,7 @@ Parse Windows 3.x Linear Executable (LE) Virtual Device Driver binaries — reso
 flowchart TD
     A["win16_le_vxd_sweep.py <binary.386> --vendor <v> --product <p>"] --> B["Detect LE magic at MZ[0x3C]:\n  Read 2 bytes == 'LE' (0x4C45)\n  Parse LE header:\n    le_ldrpages: loader page count\n    le_objcnt: object count\n    le_objoff: object table offset\n    le_pagoff: page data offset\n  Object page table: 3-byte BE page numbers + 1-byte flags\n  Compute data pages base: le_off + obj_table + loader_size + fixup_size"]
     B --> C["LEBinary.code_objects() → List[dict]\n  Filter objects with EXEC attribute\n  Return {data: bytes, base_va: int} per code object"]
-    C --> D["LEBinary.scan_ddb(code_bytes) → Optional[dict]\n  Scan for VxD DDB signature (DDK magic)\n  Extract entry-point table from DDB\n  → {device_init_va, pm_api_va, v86_api_va, ...}"]
+    C --> D["LEBinary.scan_ddb(code_bytes) → Optional[dict]\n  Scan for VxD DDB signature (DDK magic)\n  Extract entry-point table from DDB\n  → {dev_name, dev_num, ctrl_proc, pm_api_proc, v86_api_proc, sdk_ver}"]
     D --> E["Semantic sweep:\n  Capstone CS_ARCH_X86 + CS_MODE_32\n  Function starts: 32-bit prologue (PUSH EBP; MOV EBP, ESP)\n  Resolve INT 0x20 + DWORD → VMM service name\n  Ring-0-specific query set + standard queries\n  Output: reports/sweep_le_<vendor>_<product>_<ts>.md"]
 ```
 

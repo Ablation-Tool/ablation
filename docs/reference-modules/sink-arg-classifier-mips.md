@@ -198,7 +198,7 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 ## Reading findings
 
-`SinkArgClassifierMips.from_path(path).classify_all()` returns `List[SinkClassification]`:
+`SinkArgClassifierMIPS.from_path(path).classify_all()` returns `List[SinkClassification]`:
 
 | Attribute | Content |
 |:---|:---|

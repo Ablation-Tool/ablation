@@ -66,7 +66,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading output
 
-`GoBinaryAnalyzer.from_path(path).analyze()` returns an `AnalysisResult`:
+`analyze(binary_path)` (module-level function) returns an `AnalysisResult`:
 
 | Attribute | Content |
 |:---|:---|

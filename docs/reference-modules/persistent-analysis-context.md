@@ -121,4 +121,4 @@ BinaryContext: /path/to/target.elf
 
 - [Control-Flow Graph Construction](control-flow-graph-construction.md) — `CFGBuilder(ctx)` uses the context for disassembly
 - [Function Corpus Builder](function-corpus-builder.md) — `CorpusBuilder.build()` augments the context with `ANGR_INFERRED` records
-- [Debug Metadata Recovery](debug-metadata-recovery.md) — `DwarfLoongArch64.inject_into_context()` adds DWARF/BTF data to the context
+- [Debug Metadata Recovery](debug-metadata-recovery.md) — `extract_eh_frame_starts()`, `extract_debug_funcs()`, `extract_btf_funcs()` add function boundaries and names to the context
