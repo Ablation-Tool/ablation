@@ -32,6 +32,7 @@ Named function VAs are tracked in the overlay via `ctx.set_name()` and persisted
 |---|---|---|
 | ELF | x86_64, x86_32, arm64, arm32, ppc64, ppc32, mips64, mips32, riscv64, riscv32, loongarch64 | DWARF `.eh_frame` + exports + dynamic symbols |
 | Windows PE / `.sys` | x86_64, x86_32; arm64/arm32 return empty context safely | Exports + prologue scan |
+| Mach-O | Any (32-bit and 64-bit, little- and big-endian) | Entry point via `LC_MAIN` only; full func_starts not yet recovered |
 
 ---
 
@@ -56,6 +57,31 @@ ctx.funcs_referencing_string(0x14000a000) # -> [va, ...]
 # Name overlay (persisted across sessions)
 ctx.set_name(0x140001234, 'parse_request', source='confirmed')
 ```
+
+### Mach-O: current scope
+
+`BinaryParser` detects Mach-O files from their magic bytes (`0xFEEDFACE` / `0xFEEDFACF` and their
+byte-swapped variants) and reads the mach header fields — `cputype`, `cpusubtype`, `filetype`,
+`ncmds`, `sizeofcmds`, and `flags`. It iterates all load commands and extracts the entry point
+from `LC_MAIN` (`0x80000028`).
+
+Parsing of `LC_SEGMENT_64` / `LC_SEGMENT`, `LC_LOAD_DYLIB`, and `LC_CODE_SIGNATURE` is not yet
+implemented. Those load commands are iterated but skipped. Downstream tools that depend on
+`func_starts`, `plt`, or `exports` will receive empty results on Mach-O inputs.
+
+```python
+from ablation.core.binary_parser import BinaryParser
+
+bp = BinaryParser('/path/to/binary.dylib')
+info = bp.parse()
+# info['format']      -> 'Mach-O'
+# info['bits']        -> 32 or 64
+# info['endian']      -> 'little' or 'big'
+# info['entry_point'] -> hex string if LC_MAIN present, else None
+print(bp.report())
+```
+
+---
 
 ### PE-specific: combining with the Windows PE analyzers
 
