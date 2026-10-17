@@ -81,6 +81,22 @@ Run `SEHChainAnalyzer` on any x86 32-bit Windows PE binary as part of initial at
 
 ---
 
+## Reading findings
+
+`SEHChainAnalyzer.scan()` returns a list of finding dicts (Windows escalation variant):
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` |
+| `title` | Finding code (e.g., `SEH_HANDLER_NOT_IN_TABLE`, `SAFESEH_ABSENT`) |
+| `install_va` | VA of the SEH frame installation |
+| `handler_va` | VA of the SEH handler |
+| `detail` | Description of the bypass condition |
+
+`SEHChainAnalyzer.safe_seh_handlers()` returns `List[int]` — VAs registered in the SafeSEH table (empty list if SafeSEH is absent).
+
+---
+
 ## See also
 
 - [Injection and Persistence Indicators](injection-and-persistence-indicators.md) — format string and stack control findings that enable SEH exploitation

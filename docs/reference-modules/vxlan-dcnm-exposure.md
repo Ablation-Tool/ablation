@@ -75,6 +75,20 @@ Run VXLAN/DCNM probes after identifying Cisco data center management IPs (port 9
 
 ---
 
+## Reading findings
+
+VXLAN/DCNM probe functions return `List[{severity, title, detail, host, port}]`:
+
+| Field | Content |
+|:---|:---|
+| `severity` | `HIGH` (unauthenticated API) / `MEDIUM` (version disclosure) / `INFO` (version fingerprint) |
+| `title` | Finding code (e.g., `DCNM_UNAUTH_REST_API`, `DCNM_VERSION_DISCLOSURE`, `VXLAN_VTEP_ENUMERATED`) |
+| `detail` | Version string, VTEP IP list, or accessible REST endpoint path |
+| `host` | Target host |
+| `port` | Service port (e.g., `9443` for DCNM) |
+
+---
+
 ## See also
 
 - [NX-OS/ACI/APIC Fabric Enumeration](nx-os-aci-apic-fabric-enumeration.md) — APIC/ACI fabric enumeration (DCNM successor)

@@ -86,6 +86,20 @@ Run `VtableDispatchScanner` on any x86-64 ELF binary where vtable hijacking is a
 
 ---
 
+## Reading output
+
+`VtableDispatchScanner.scan()` returns a `VtableScanResult` object:
+
+| Attribute | Content |
+|:---|:---|
+| `indirect_call_count` | Total indirect call sites found |
+| `live_slots` | `Dict[str, int]` — register+offset string → number of call sites (e.g., `{'rax+0': 42}`) |
+| `vtables` | `List[VtableEntry]` — reconstructed vtable objects with `base_va` and `slots` |
+
+`VtableDispatchScanner.inject(ctx)` registers all reconstructed function names into `ctx` via `ctx.set_name()`.
+
+---
+
 ## See also
 
 - [PS3 OPD Virtual Tables](ps3-opd-virtual-tables.md) — PPC32/PS3 OPD-pointer vtable reconstruction (non-x86 equivalent)
