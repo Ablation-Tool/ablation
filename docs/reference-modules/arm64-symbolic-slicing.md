@@ -41,9 +41,16 @@ ctx = BinaryContext.load_or_build('/path/to/arm64_firmware.elf')
 init = TaintState()
 init.taint_reg("x0", "user")   # x0 = recv() return value
 
-# Get ARM64 disassembly listing for function
-text = ctx.disasm_text(func_va=0x12340)
-insns = list(from_listing(text))
+# Get instructions via insn_arm64 from raw binary bytes
+import lief
+binary = lief.parse('/path/to/arm64_firmware.elf')
+text_sec = binary.get_section('.text')
+text_data = bytes(text_sec.content)
+text_va = text_sec.virtual_address
+func_va = 0x12340
+func_data = text_data[func_va - text_va: func_va - text_va + 4096]
+from ablation.analyzers.insn_arm64 import from_capstone
+insns = list(from_capstone(func_data, base=func_va))
 
 # Run flow-sensitive analysis
 result = analyze_cfg(insns, initial=init)
@@ -90,7 +97,7 @@ Run `analyze_cfg()` after `SemanticSearcher` identifies handler candidates and b
 
 ## Reading findings
 
-`ARM64TaintTracker(ctx, func_va).run()` returns `List[TaintFindingARM64]`:
+`ARM64TaintTracker.from_path(path).run()` returns `List[TaintFindingARM64]`:
 
 | Attribute | Content |
 |:---|:---|

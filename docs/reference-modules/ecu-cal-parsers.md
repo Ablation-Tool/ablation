@@ -251,7 +251,7 @@ from ablation.analyzers.ecu_romraider_parser import EcuRomRaiderParser
 
 # Load from A2L definition file
 parser = EcuA2LParser.from_file('ecu_definitions.a2l')
-for table in parser.tables():
+for table in parser.calibration_tables():
     print(f"{table.name}  {table.table_type}  addr={table.address:#x}")
 
 # Inject labels from parser into BinaryContext
@@ -290,7 +290,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Reading output
 
-`EcuA2LParser`, `EcuConescanParser`, and `EcuRomRaiderParser` all expose the same output interface via `parser.tables()` which returns `List[CalibrationTable]`:
+`EcuA2LParser`, `EcuConescanParser`, and `EcuRomRaiderParser` all expose the same output interface via `parser.calibration_tables()` which returns `List[CalibrationTable]`:
 
 | Attribute | Content |
 |:---|:---|
