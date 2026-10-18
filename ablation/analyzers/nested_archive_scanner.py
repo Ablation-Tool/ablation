@@ -101,10 +101,10 @@ def _extract_to_tmpdir(archive_path: str, fmt: str) -> Iterator[str]:
                 zf.extractall(tmp)
         elif fmt == 'tgz':
             with tarfile.open(archive_path, 'r:gz') as tf:
-                tf.extractall(tmp, set_attrs=False)
+                tf.extractall(tmp, filter='data')
         elif fmt == 'tar':
             with tarfile.open(archive_path, 'r:') as tf:
-                tf.extractall(tmp, set_attrs=False)
+                tf.extractall(tmp, filter='data')
         elif fmt == 'compress':
             subprocess.run(
                 f'uncompress -c {shlex.quote(archive_path)} > /tmp/nas-uncomp.tar',
@@ -112,7 +112,7 @@ def _extract_to_tmpdir(archive_path: str, fmt: str) -> Iterator[str]:
             )
             try:
                 with tarfile.open('/tmp/nas-uncomp.tar', 'r:') as tf:
-                    tf.extractall(tmp, set_attrs=False)
+                    tf.extractall(tmp, filter='data')
             finally:
                 try:
                     os.unlink('/tmp/nas-uncomp.tar')

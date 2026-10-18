@@ -574,15 +574,29 @@ class WindowAnalyzer:
         align_back: int = 0,
     ) -> List[str]:
         """
-        Disassemble [va - align_back, va - align_back + window) and return
+        Disassemble starting from `va` (or a prologue before it) and return
         annotated instruction strings.
 
         Args:
             va        : center/start VA to disassemble from
             window    : bytes to disassemble (default 1536 = 1.5KB)
-            align_back: bytes before va to include (default 0)
+            align_back: bytes before va to include.  When > 0, automatically
+                        searches backward for an ENDBR64 / push-rbp prologue
+                        marker within `align_back` bytes and starts there,
+                        eliminating misaligned decode from raw-offset subtraction.
+                        Pass align_back=0 to disable alignment and start exactly at va.
+
+        The prologue search is arch-gated: x86_64 only (ENDBR64 → push rbp fallback).
+        Other architectures fall back to the plain va − align_back offset.
         """
-        start_va = va - align_back
+        if align_back > 0:
+            # Auto-align: find the nearest function prologue instead of raw subtraction.
+            # This is the "FunctionBoundaryAligner" fix wired into the CALL scan path.
+            start_va = self.align_to_func_start(va, search_back=align_back)
+            # Extend window so it always covers va (prologue may be further back than align_back).
+            window = max(window, va - start_va + 64)
+        else:
+            start_va = va
         offset = self._va_to_offset(start_va)
         chunk = self.data[offset:offset + window]
         if not chunk:
@@ -731,21 +745,13 @@ class WindowAnalyzer:
         max_insns: int = 30,
     ) -> List[str]:
         """
-        Disassemble the function containing `call_site_va` from its prologue to
-        the call instruction. Fixes garbled output caused by misaligned backward
-        scans (see IBM-RE session 9: sim_ppc-power9/reader UNKNOWN).
+        Convenience wrapper: disassemble the function containing `call_site_va`
+        and return the last `max_insns` instructions.
 
-        Steps:
-          1. Search backward for function start (ENDBR64 or push rbp).
-          2. Disassemble forward from that start.
-          3. Return the last `max_insns` instructions up to and including call_site_va.
+        Delegates to dump(align_back=search_back) which now auto-aligns to the
+        nearest function prologue (ENDBR64 / push rbp) in the search window.
         """
-        start_va = self.align_to_func_start(call_site_va, search_back=search_back)
-        window_size = call_site_va - start_va + 16  # +16 to include the call instruction
-        if window_size <= 0:
-            window_size = search_back
-        lines = self.dump(start_va, window=window_size, align_back=0)
-        # Return only the tail (last max_insns lines) for focus
+        lines = self.dump(call_site_va, window=search_back, align_back=search_back)
         return lines[-max_insns:] if len(lines) > max_insns else lines
 
     def _load_va(self) -> int:
