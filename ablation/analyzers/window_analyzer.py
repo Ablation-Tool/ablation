@@ -80,6 +80,211 @@ def _parse_rip_target(insn_addr: int, insn_size: int, op_str: str) -> Optional[i
     return insn_addr + insn_size + disp
 
 
+# ── Pseudo-C register lifter ──────────────────────────────────────────────────
+
+_ARG_REGS_64 = ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']
+_ARG_REGS_32 = ['edi', 'esi', 'edx', 'ecx', 'r8d', 'r9d']
+_ALL_REGS_64 = _ARG_REGS_64 + ['rax', 'rbx', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15']
+# Mapping 32-bit sub-registers to their 64-bit canonical names
+_REG32_TO_64 = {
+    'eax': 'rax', 'ecx': 'rcx', 'edx': 'rdx', 'ebx': 'rbx',
+    'esi': 'rsi', 'edi': 'rdi', 'esp': 'rsp', 'ebp': 'rbp',
+    'r8d': 'r8', 'r9d': 'r9', 'r10d': 'r10', 'r11d': 'r11',
+    'r12d': 'r12', 'r13d': 'r13', 'r14d': 'r14', 'r15d': 'r15',
+}
+_REG16_TO_64 = {
+    'ax': 'rax', 'cx': 'rcx', 'dx': 'rdx', 'bx': 'rbx',
+    'si': 'rsi', 'di': 'rdi', 'sp': 'rsp', 'bp': 'rbp',
+}
+_REG8_TO_64 = {
+    'al': 'rax', 'cl': 'rcx', 'dl': 'rdx', 'bl': 'rbx',
+    'sil': 'rsi', 'dil': 'rdi', 'r8b': 'r8', 'r9b': 'r9',
+}
+
+def _canonical_reg(name: str) -> Optional[str]:
+    if name in _ALL_REGS_64:
+        return name
+    if name in _REG32_TO_64:
+        return _REG32_TO_64[name]
+    if name in _REG16_TO_64:
+        return _REG16_TO_64[name]
+    if name in _REG8_TO_64:
+        return _REG8_TO_64[name]
+    return None
+
+
+def _lift_to_pseudo_c(annotated_lines: List[str]) -> List[str]:
+    """
+    Parse annotated WindowAnalyzer dump lines and emit pseudo-C for each CALL.
+
+    Register state is tracked forward; each CALL line emits a call expression
+    with resolved argument names.  String annotations ('; "..."') from the dump
+    are used as the value for that register.
+
+    Format of input lines (from WindowAnalyzer.dump()):
+        0x41366: lea  rdi, [rip+0x...]  ; "cmd_%s"
+        0x4136d: call 0x3000            ; PLT -> system
+    """
+    # reg → display string (e.g. '"cmd_%s"', '0x80', 'local_10', 'argv_1', '?')
+    state: Dict[str, str] = {}
+    out: List[str] = []
+    branch_mnems = {'jmp', 'je', 'jne', 'jg', 'jge', 'jl', 'jle', 'ja', 'jae',
+                    'jb', 'jbe', 'jz', 'jnz', 'js', 'jns', 'jo', 'jno', 'jp',
+                    'jnp', 'jecxz', 'jrcxz', 'loop', 'loope', 'loopne'}
+
+    for line in annotated_lines:
+        line = line.strip()
+        if ':' not in line:
+            continue
+
+        # Parse: "0xVADDR: mnemonic operands  ; annotation"
+        colon_pos = line.index(':')
+        try:
+            addr = int(line[:colon_pos], 16)
+        except ValueError:
+            continue
+        rest = line[colon_pos + 1:].strip()
+
+        # Split annotation
+        annotation = ''
+        if ';' in rest:
+            semi_pos = rest.index(';')
+            annotation = rest[semi_pos + 1:].strip()
+            rest = rest[:semi_pos].strip()
+
+        parts = rest.split(None, 1)
+        if not parts:
+            continue
+        mnem = parts[0].lower()
+        ops = parts[1].strip() if len(parts) > 1 else ''
+
+        # ── CALL ──────────────────────────────────────────────────────────────
+        if mnem in ('call', 'bl', 'blr'):
+            # Resolve function name from annotation
+            func_name = ops
+            if 'PLT ->' in annotation:
+                func_name = annotation.split('PLT ->')[1].split('|')[0].strip().rstrip('"').rstrip()
+            elif annotation and not annotation.startswith('"'):
+                func_name = annotation.split('|')[0].strip()
+
+            # Build arg list from state at this point
+            arg_vals = []
+            for reg in _ARG_REGS_64:
+                val = state.get(reg, '')
+                if val and val != '?':
+                    arg_vals.append(val)
+                else:
+                    break  # stop at first unknown arg (conservative)
+
+            args_str = ', '.join(arg_vals) if arg_vals else '...'
+            out.append(f'[{addr:#x}] {func_name}({args_str})')
+
+            # After call: rax = return value; caller-saved regs clobbered
+            for reg in ['rax', 'rcx', 'rdx', 'rsi', 'rdi', 'r8', 'r9', 'r10', 'r11']:
+                state.pop(reg, None)
+            state['rax'] = f'retval_{func_name.split("@")[0]}'
+            continue
+
+        # ── MOV / MOVZX / MOVSX ───────────────────────────────────────────────
+        if mnem in ('mov', 'movq', 'movzx', 'movsx', 'movsxd'):
+            dst, _, src = ops.partition(',')
+            dst = dst.strip()
+            src = src.strip()
+            canonical = _canonical_reg(dst)
+            if canonical is None:
+                continue
+            # Determine value
+            val = _resolve_val(src, annotation, state)
+            state[canonical] = val
+            continue
+
+        # ── LEA ───────────────────────────────────────────────────────────────
+        if mnem == 'lea':
+            dst, _, src = ops.partition(',')
+            dst = dst.strip()
+            src = src.strip()
+            canonical = _canonical_reg(dst)
+            if canonical is None:
+                continue
+            if annotation.startswith('"'):
+                # string annotation — use the string
+                val = annotation.split('"')[1] if '"' in annotation else annotation
+                state[canonical] = f'"{val}"'
+            elif 'rbp' in src or 'rsp' in src:
+                # stack local
+                val = _stack_name(src)
+                state[canonical] = val
+            elif 'rip' in src:
+                state[canonical] = annotation if annotation else src
+            else:
+                state[canonical] = src
+            continue
+
+        # ── PUSH ──────────────────────────────────────────────────────────────
+        if mnem == 'push':
+            canonical = _canonical_reg(ops.strip())
+            if canonical:
+                state['__push__'] = state.get(canonical, '?')
+            continue
+
+        # ── XOR reg, reg (zeroing idiom) ──────────────────────────────────────
+        if mnem == 'xor':
+            dst, _, src = ops.partition(',')
+            dst = dst.strip(); src = src.strip()
+            if dst == src:
+                canonical = _canonical_reg(dst)
+                if canonical:
+                    state[canonical] = '0'
+            continue
+
+        # ── Branches invalidate state (conservative) ──────────────────────────
+        if mnem in branch_mnems:
+            for reg in list(state.keys()):
+                state[reg] = '?'
+            continue
+
+    return out
+
+
+def _resolve_val(src: str, annotation: str, state: Dict[str, str]) -> str:
+    """Resolve a MOV source operand to a display string."""
+    # Immediate
+    if src.startswith('0x') or (src.lstrip('-').isdigit() and src.lstrip('-')):
+        return src
+    # String annotation from a prior LEA/MOV that loaded rip+...
+    if annotation.startswith('"'):
+        inner = annotation.strip('"').strip()
+        return f'"{inner}"'
+    # Register
+    canonical = _canonical_reg(src)
+    if canonical:
+        return state.get(canonical, canonical)
+    # Stack local
+    if '[rbp' in src or '[rsp' in src:
+        return _stack_name(src)
+    # rip-relative (should have annotation)
+    if '[rip' in src:
+        return annotation if annotation else src
+    return src
+
+
+def _stack_name(mem_expr: str) -> str:
+    """Convert [rbp-0x10] → local_10, [rbp+0x10] → arg_10, etc."""
+    mem_expr = mem_expr.strip().lstrip('[').rstrip(']').strip()
+    for base in ('rbp', 'rsp', 'ebp', 'esp'):
+        if base in mem_expr:
+            rest = mem_expr.replace(base, '').strip()
+            if not rest:
+                return f'{base}_0'
+            sign = '-' if rest.startswith('-') else '+'
+            offset = rest.lstrip('+-').strip()
+            prefix = 'local' if sign == '-' else 'arg'
+            return f'{prefix}_{offset.lstrip("0x") or "0"}'
+    return mem_expr
+
+
+# ── Main class ────────────────────────────────────────────────────────────────
+
 class WindowAnalyzer:
     """
     Bulk window disassembler with inline PLT + string annotation.
@@ -753,6 +958,41 @@ class WindowAnalyzer:
         """
         lines = self.dump(call_site_va, window=search_back, align_back=search_back)
         return lines[-max_insns:] if len(lines) > max_insns else lines
+
+    def dump_pseudo_c(
+        self,
+        va: int,
+        window: int = 1536,
+        align_back: int = 0,
+    ) -> List[str]:
+        """
+        Produce simplified pseudo-C lines for each CALL instruction in the window.
+
+        Tracks register state (rdi/rsi/rdx/rcx/r8/r9 + rax) forward through
+        the annotated dump, then emits one pseudo-C line per CALL showing the
+        resolved argument values.
+
+        Single-basic-block only: no cross-BB tracking. Register state is
+        carried linearly; any branch resets uncertain registers to '?'.
+
+        Example output (from raw ASM):
+            [0x41366] system("cmd_%s %s")   // ARG_REGS: rdi="cmd_%s %s"
+            [0x413d2] snprintf(buf, 0x80, "%d: %s", local_10, arg_0)
+
+        Returns a list of pseudo-C strings, one per annotated CALL.
+        """
+        raw_lines = self.dump(va, window=window, align_back=align_back)
+        return _lift_to_pseudo_c(raw_lines)
+
+    def dump_pseudo_c_text(
+        self,
+        va: int,
+        window: int = 1536,
+        align_back: int = 0,
+    ) -> str:
+        """Return dump_pseudo_c() as a single newline-joined string."""
+        lines = self.dump_pseudo_c(va, window=window, align_back=align_back)
+        return '\n'.join(lines) if lines else '(no calls in window)'
 
     def _load_va(self) -> int:
         """Return the load VA (first PT_LOAD p_vaddr) for file-offset arithmetic."""
