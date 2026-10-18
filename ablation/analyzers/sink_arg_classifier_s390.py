@@ -445,8 +445,9 @@ class SinkArgClassifierS390:
                 results.append(SinkClassification(
                     func_va=func_va,
                     call_va=insn.address,
-                    sink=sink_name,
-                    classification=classification,
+                    sink_name=sink_name,
+                    arg_pos=arg_pos,
+                    verdict=classification,
                     detail=f's390x arg_pos={arg_pos}',
                 ))
 
