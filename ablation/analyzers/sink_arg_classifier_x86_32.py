@@ -783,3 +783,9 @@ class SinkArgClassifierX86_32:
                 f'  [{r.detail}]'
             )
         return '\n'.join(lines) + '\n'
+
+
+# Canonical name used by sac_for_path() and the stop-hook condition.
+# SinkArgClassifierX86_32 is the implementation; SinkArgClassifierI386 is the
+# public alias that matches the IBM-RE gap ID naming convention (i386 architecture).
+SinkArgClassifierI386 = SinkArgClassifierX86_32
