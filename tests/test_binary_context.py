@@ -1,6 +1,7 @@
 """Tests for BinaryContext -- ELF parsing, string extraction, import resolution."""
 
 import sys
+import warnings
 from pathlib import Path
 
 import pytest
@@ -79,3 +80,35 @@ def test_cache_hit_is_fast(tmp_path):
     t2 = time.perf_counter()
     # Second call should not be significantly slower than first (cache hit)
     assert (t2 - t1) <= (t1 - t0) + 1.0  # generous bound -- just not hanging
+
+
+def test_bff_magic_issues_warning(tmp_path):
+    """load_or_build on AIX BFF magic bytes must issue a UserWarning, not crash."""
+    from ablation.analyzers.binary_context import BinaryContext
+    fake_bff = tmp_path / 'test.bff'
+    # AIX BFF magic: 0x09006bea (big-endian u32)
+    fake_bff.write_bytes(b'\x09\x00\x6b\xea' + b'\x00' * 100)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        ctx = BinaryContext.load_or_build(str(fake_bff))
+    msgs = [str(w.message) for w in caught if issubclass(w.category, UserWarning)]
+    assert any('BFF' in m or 'installp' in m for m in msgs), (
+        f'Expected BFF warning, got: {msgs}'
+    )
+    assert ctx is not None  # must not raise, returns empty context
+
+
+def test_xcoff32_magic_issues_warning(tmp_path):
+    """load_or_build on XCOFF32 magic bytes must issue a UserWarning, not crash."""
+    from ablation.analyzers.binary_context import BinaryContext
+    fake_xcoff = tmp_path / 'test.o'
+    # XCOFF32 magic: 0x01df (big-endian u16 at offset 0)
+    fake_xcoff.write_bytes(b'\x01\xdf' + b'\x00' * 100)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        ctx = BinaryContext.load_or_build(str(fake_xcoff))
+    msgs = [str(w.message) for w in caught if issubclass(w.category, UserWarning)]
+    assert any('XCOFF32' in m or 'xcoff' in m.lower() for m in msgs), (
+        f'Expected XCOFF32 warning, got: {msgs}'
+    )
+    assert ctx is not None
