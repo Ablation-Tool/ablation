@@ -337,9 +337,12 @@ class SinkArgClassifierI386:
             if not self._writes_reg(insn, reg_id):
                 continue
 
-            # Found a definition — classify based on opcode
+            # Found a definition — classify based on opcode.
+            # Pass start_idx so _classify_lea can use it as the snprintf
+            # backtrack origin (handles the case where the snprintf filling
+            # the buffer comes between the lea and the sink call).
             if mn == 'lea':
-                return self._classify_lea(insn, j, insns, depth)
+                return self._classify_lea(insn, j, insns, depth, call_idx=start_idx)
             elif mn in ('mov', 'movzx', 'movsx'):
                 return self._classify_mov(insn, j, insns, reg_id, depth)
             elif mn in ('xor', 'and'):
@@ -355,8 +358,21 @@ class SinkArgClassifierI386:
 
         return UNKNOWN
 
+    # Instructions whose first operand is a *source*, not a destination.
+    # `push reg` reads the register; `cmp`/`test` are comparison-only; `call`
+    # uses the operand as a branch target.  None of these write to the register.
+    _READ_ONLY_MNEMONICS = frozenset({'push', 'cmp', 'test', 'jmp', 'call'})
+
     def _writes_reg(self, insn, reg_id: int) -> bool:
-        """True if the instruction's first operand writes to reg_id."""
+        """True if the instruction's first operand is a register destination (writes reg_id).
+
+        Excludes instructions where the first operand is a source: push, cmp, test,
+        jmp, call.  Without this exclusion, 'push esi' would be mistaken for a write
+        to ESI, causing _classify_value() to stop at the push rather than continuing
+        backward to the lea that actually loads ESI.
+        """
+        if insn.mnemonic in self._READ_ONLY_MNEMONICS:
+            return False
         ops = insn.operands
         if not ops:
             return False
@@ -367,7 +383,8 @@ class SinkArgClassifierI386:
         # We accept exact match; partial register (al, ax vs eax) handled by same reg_id
         return op.reg == reg_id
 
-    def _classify_lea(self, insn, insn_idx: int, insns: list, depth: int) -> str:
+    def _classify_lea(self, insn, insn_idx: int, insns: list, depth: int,
+                      call_idx: int = -1) -> str:
         """
         Classify a lea instruction.
         lea eax, [abs_addr]   → direct absolute address; check if in .rodata
@@ -397,8 +414,12 @@ class SinkArgClassifierI386:
             if disp > 0:
                 return ARG_PROPAGATED
             if disp < 0:
-                # Address of local stack buffer — snprintf backtrack
-                return self._backtrack_stack_slot(insns, insn_idx, -disp, depth)
+                # Address of local stack buffer — snprintf backtrack.
+                # Use call_idx (the original sink call site) as the scan origin when
+                # available: the snprintf that fills the buffer may be BETWEEN the lea
+                # and the sink call, so scanning from insn_idx would miss it.
+                backtrack_from = call_idx if call_idx > insn_idx else insn_idx
+                return self._backtrack_stack_slot(insns, backtrack_from, -disp, depth)
             return UNKNOWN
 
         # ebx-relative (GOT base in PIC x86_32)

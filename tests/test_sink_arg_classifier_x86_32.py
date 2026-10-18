@@ -157,6 +157,67 @@ def test_push_arg_system():
 
 
 @_SKIP_DEPS
+def test_push_reg_lea_sprintf_snprintf_rodata():
+    """push esi (where lea esi, [ebp-N] and sprintf fills [ebp-N]) → SNPRINTF_RODATA.
+
+    Pattern found in DOORS doorsd i386: GCC emits lea esi, [ebp-N] first, then uses
+    esi as both the sprintf dest arg and the system() arg.  The sequence:
+        lea esi, [ebp - 0x10]          # esi = local buffer
+        push esi; push RODATA_FMT      # sprintf(esi, fmt)
+        call sprintf
+        add esp, 8
+        push esi                       # system(esi)
+        call system
+
+    The old code misclassified this as UNKNOWN because:
+      1. _writes_reg() matched 'push esi' as a write to esi (wrong — push reads esi).
+      2. _classify_lea() passed insn_idx (before sprintf) as backtrack origin, so
+         the backward scan missed sprintf which comes after the lea.
+    Fixed by: excluding 'push' in _writes_reg(); passing call_idx to _classify_lea().
+    """
+    import capstone
+    from capstone.x86_const import X86_REG_ESI, X86_REG_EBP
+
+    func_va  = BASE_VA
+    RODATA_FMT = RODATA_STR  # a format string in .rodata
+
+    # Build the code sequence byte-by-byte:
+    # [A] lea esi, [ebp - 0x10]         f: 8d 75 f0
+    # [B] push RODATA_FMT               68 XX XX XX XX
+    # [C] push esi                       56
+    # [D] call sprintf                   e8 ...
+    # [E] add esp, 8                     83 c4 08
+    # [F] push esi                       56
+    # [G] call system                    e8 ...
+
+    va = func_va
+    lea_esi  = b'\x8d\x75\xf0'                           # lea esi, [ebp-0x10]
+    va += len(lea_esi)
+    push_fmt = b'\x68' + struct.pack('<I', RODATA_FMT)   # push RODATA_FMT (arg1 of sprintf)
+    va += len(push_fmt)
+    push_esi_sprintf = b'\x56'                            # push esi (arg0 = dest buf)
+    va += len(push_esi_sprintf)
+    call_sprintf = _encode_call_rel32(va, SPRINTF_PLT)
+    va += len(call_sprintf)
+    add_esp = b'\x83\xc4\x08'                            # add esp, 8
+    va += len(add_esp)
+    push_esi_system = b'\x56'                             # push esi (arg0 of system)
+    va += len(push_esi_system)
+    call_system = _encode_call_rel32(va, SYSTEM_PLT)
+
+    code = (lea_esi + push_fmt + push_esi_sprintf + call_sprintf
+            + add_esp + push_esi_system + call_system)
+    clf = _make_clf(code, func_va)
+    results = clf.classify_all()
+    hit = [r for r in results if r.sink_name == 'system']
+    assert hit, 'system call site must be found'
+    assert hit[0].verdict == SNPRINTF_RODATA, (
+        f'lea/sprintf/push-reg pattern: expected SNPRINTF_RODATA, '
+        f'got {hit[0].verdict}; detail={hit[0].detail}'
+    )
+
+
+@_SKIP_DEPS
 def test_push_unknown_global():
     """push [ebx+0x100] with no GOT info → UNKNOWN (struct field)."""
     func_va = BASE_VA
