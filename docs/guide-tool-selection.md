@@ -17,6 +17,8 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "strings_in_func() returns almost nothing on a stripped i386 ELF32" | `I386AbsoluteXrefScanner.from_context(ctx).inject(ctx)` |
 | "What is this function?" | `ctx.name(va)` |
 | "Show disassembly around address" | `WindowAnalyzer.dump_text(va, window=1536)` |
+| "Disassemble the function containing a CALL site (fixes garbled backward-scan output)" | `WindowAnalyzer.from_path(elf).dump_caller_context(call_site_va)` — searches backward for ENDBR64/push-rbp prologue, disassembles forward to the call; fixes alignment issues in stripped binaries; see docs/reference-modules/window-analyzer-alignment.md |
+| "Find function prologue before a call site (stripped binary, no symbols)" | `WindowAnalyzer.from_path(elf).align_to_func_start(call_site_va, search_back=512)` → VA of nearest ENDBR64 or push-rbp; fallback = call_site_va - search_back |
 | "Find functions matching vulnerability pattern" | `SemanticSearcher.query(description)` (ALWAYS first on new binary) |
 | "Binary not in func_id.db (SemanticSearcher slow/global fallback)" | `SemanticSearcher.ingest_binary(ctx)`: auto-called by `from_context` on miss; or call manually with `product=`, `arch=`, `version=` metadata |
 | "What values are passed to this sink?" | `FuncProfiler.profile(va).fmt()` |
@@ -49,6 +51,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "PPC64 BE ELFv1: decode a BL instruction target" | `info.bl_target(src_va, file_data)` from a resolved `Ppc64ElfV1Info` |
 | "PPC64 BE ELFv1: find all callers of an imported symbol" | `Ppc64ElfV1Resolver.from_path(elf).find_all_bl_callers()` → `{'strcpyx': [va,...],...}` |
 | "PPC64 BE ELFv1: classify r3/r4 sources at every BL-to-sink site (IBM POWER Linux)" | `Ppc64BeSinkClassifier.from_path(elf).classify_all()` → `List[Ppc64SinkSite]`; filter `s.interesting` for ARG_PROPAGATED+STACK_DEST pairs: the cross-arch replacement for `SinkArgClassifier` on ELFv1 targets |
+| "PPC64 BE ELFv1 stripped: find all BL call sites targeting a PLT stub (call graph too weak for callers_of)" | `PPC64BECallScanner.from_path(elf).scan_calls_to(plt_va)` → `List[int]` of call-site VAs; brute-force 4-byte-aligned BL opcode sweep; see docs/reference-modules/ppc64-be-call-scanner.md |
 | "PPC64: trace recv (IBM POWER, AIX)" | `PPC64TaintTracker.from_path(elf, endian='big').run_interprocedural()` |
 | "ARC: trace recv (ARC HS IoT, Marvell, Seagate)" | `ARCTaintTracker.from_path(elf).run_interprocedural()` |
 | "RISC-V 32: trace recv" | `RISCV32TaintTracker.from_path(elf).run_interprocedural()` |
@@ -75,6 +78,9 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Find gets/mktemp/tmpnam/getwd in PLT (CWE-242/121/377)" | `DeprecatedFuncScanner.from_context(ctx).scan()` |
 | "Find setuid shadow password oracle (CWE-307) + weak PRNG OTP (CWE-338)" | `SetuidAuthOracleScanner.from_path(elf).scan()` |
 | "Where did this command string come from?" | `SinkArgClassifier.from_path(elf).classify_all()` (x86-64/ARM32/ARM64) |
+| "Auto-dispatch to the right SAC for any ELF architecture (i386/ppc32/s390x/x86-64)" | `sac_for_path(elf).classify_all()` — reads e_machine from ELF header and returns SinkArgClassifierX86_32, SinkArgClassifierPPC32, SinkArgClassifierS390, or SinkArgClassifier; import from `ablation.analyzers.sink_arg_classifier`; see docs/reference-modules/sac-arch-dispatch.md |
+| "i386 / x86-32 cdecl: classify exec-sink arguments (DOORS, TestMate, Tau, RoseRT, BTT)" | `SinkArgClassifierX86_32.from_path(elf).classify_all()` or `sac_for_path(elf)` — stack-push trace, tracks last push before CALL as arg0; see docs/reference-modules/sac-i386.md |
+| "ppc32 BE: classify exec-sink arguments — callers_of() returns nothing on ppc32 (HACMP, RMC, DCV, cd7200)" | `SinkArgClassifierPPC32.from_path(elf).classify_all()` or `sac_for_path(elf)` — r3 as first arg, 32-bit instruction decode; see docs/reference-modules/sac-ppc32-be.md |
 | "MIPS32 O32: classify exec-sink arguments on BE or LE MIPS firmware" | `SinkArgClassifierMIPS.from_context(ctx).classify_all()`: add vendor sinks with `clf.add_sink(name, arg_pos)` |
 | "s390/s390x (IBM Z Linux): classify exec-sink arguments — BinaryContext returns plt=0 (S390-GAP-001)" | `SinkArgClassifierS390.from_path(elf).classify_all()` — use `from_path()` not `from_context()` to bypass BinaryContext's s390 PLT parse gap; `is_s390(path)` detects e_machine=0x0016 |
 | "ppc64/ppc64le (IBM POWER Linux ABIv2): classify exec-sink arguments — ARCH-GAP-PPC64LE" | `SinkArgClassifierPPC64.from_context(ctx).classify_all()` — handles both LE and BE via EI_DATA detection; resolves TOC-relative addis-r2+addi/ld address patterns; r3-r10 argument registers; see docs/reference-modules/ppc64-le-sink-classifier.md |
@@ -83,7 +89,8 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Register vendor-specific sinks + known-safe patterns" | `VendorProfile.from_vendor('fortinet').apply_to(clf)` |
 | "Map CMDB table IDs to exec-sink reach (FortiWeb/FortiOS)" | `CMDBSurfaceMapper.from_path(elf).map()` |
 | "Batch triage all.so files in a dir" | `LibraryInventory.from_dir('/tmp/target/lib/').scan()` |
-| "Which libs in a rootfs dir have exec-class PLT imports?" | `batch_plt_intersect('/tmp/fad_root/lib/')` |
+| "Which libs in a rootfs dir have exec-class PLT imports?" | `batch_plt_intersect('/tmp/fad_root/lib/')` — now strips @GLIBC versioning suffixes; exact match only (no substring FPs) |
+| "Extract ELFs from nested archives (tar→RPM→ELF, zip→tar→ELF, tar.gz→ELF, tar.Z→ELF)" | `NestedArchiveScanner('/path/to/dir').scan()` → Iterator[(real_path, virtual_path)]; or `NestedArchiveScanner.collect_elfs(archive, max_elfs=30)` → [(virtual_path, bytes)]; handles .rpm via rpm2cpio, up to 4 levels deep; see docs/reference-modules/nested-archive-scanner.md |
 | "Detect allowlist byte-validators in stripped binary (x86-64 loop pattern)" | `SanitizerDetector.from_path(elf).detect()` |
 | "Audit a specific function for shell metacharacter coverage (any arch incl. PPC64)" | `audit_coverage(elf, va, CS_ARCH_PPC, CS_MODE_64\|CS_MODE_BIG_ENDIAN)` → `SanitizerCoverageReport` |
 | "Post-process ARG_PROPAGATED results: downgrade sanitizer-gated exec sinks to SANITIZER_VALIDATED" | `SinkSanitizerFilter.from_path(elf).apply(clf.classify_all())`: run after `SinkArgClassifier.classify_all()`; eliminates manual disasm for structurally safe ARG_PROPAGATED sites |
