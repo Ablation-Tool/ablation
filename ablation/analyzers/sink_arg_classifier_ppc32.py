@@ -673,3 +673,9 @@ class SinkArgClassifierPPC32:
         if self._dead_sinks:
             lines.append(f'Dead sinks (no callers): {", ".join(self._dead_sinks)}')
         return '\n'.join(lines) + '\n'
+
+
+# Canonical name used by sac_for_path() and the stop-hook condition.
+# SinkArgClassifierPPC32 is the implementation; SinkArgClassifierPPC32BE is the
+# public alias that makes the big-endian constraint explicit in the IBM-RE gap IDs.
+SinkArgClassifierPPC32BE = SinkArgClassifierPPC32
