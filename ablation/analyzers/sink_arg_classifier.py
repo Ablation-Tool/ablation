@@ -868,6 +868,12 @@ class SinkArgClassifier:
             if (dst.type == X86_OP_MEM and src.type == X86_OP_IMM):
                 dst_base = self._reg_id_to_canon(dst.mem.base) if dst.mem.base else ''
                 if dst_base == base_reg and dst.mem.disp == disp:
+                    # If any PLT call appears between this write and the sink call,
+                    # the buffer may be overwritten — classify conservatively as UNKNOWN.
+                    if self._has_plt_call_between(insns, j, load_idx):
+                        return (UNKNOWN,
+                                f'immediate 0x{src.imm:x} written to [{base_reg}{disp:#x}]'
+                                f' but PLT calls follow before sink @ 0x{insn.address:x}')
                     return (RODATA_CONST,
                             f'immediate 0x{src.imm:x} written to [{base_reg}{disp:#x}]'
                             f' @ 0x{insn.address:x}')
@@ -892,12 +898,47 @@ class SinkArgClassifier:
                         if self._reg_id_to_canon(kdst.reg) != src_canon:
                             continue
                         if ksrc.type == X86_OP_IMM:
+                            # If any PLT call appears between this write and the sink,
+                            # the buffer may be overwritten — classify conservatively.
+                            if self._has_plt_call_between(insns, j, load_idx):
+                                return (UNKNOWN,
+                                        f'movabs/mov 0x{ksrc.imm:x} → {src_canon}'
+                                        f' → [{base_reg}{disp:#x}] but PLT calls follow'
+                                        f' @ 0x{insn.address:x}')
                             return (RODATA_CONST,
                                     f'movabs/mov 0x{ksrc.imm:x} → {src_canon}'
                                     f' → [{base_reg}{disp:#x}] @ 0x{insn.address:x}')
                         break  # reg set to non-immediate; not constant
 
         return None
+
+    def _has_plt_call_between(
+        self,
+        insns: list,
+        write_idx: int,
+        sink_idx: int,
+    ) -> bool:
+        """
+        Return True if any direct CALL to a PLT entry appears in insns[write_idx+1:sink_idx].
+
+        Used to detect that a stack buffer initialised via movabs was subsequently
+        written by a PLT function (strcpy, strcat, snprintf, …) before being passed
+        to the sink — in which case the buffer is NOT a constant and RODATA_CONST
+        would be a false negative.
+        """
+        for i in range(write_idx + 1, sink_idx):
+            insn = insns[i]
+            if insn.mnemonic.lower() != 'call':
+                continue
+            if not insn.operands:
+                continue
+            from capstone.x86 import X86_OP_IMM as _X86_OP_IMM
+            op = insn.operands[0]
+            if op.type != _X86_OP_IMM:
+                continue
+            if op.imm in self._plt:
+                return True
+        return False
 
     def _verify_rdi_is_slot(
         self,
