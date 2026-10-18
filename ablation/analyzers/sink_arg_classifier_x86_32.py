@@ -100,6 +100,7 @@ _DEFAULT_SINKS_X86_32: Dict[str, int] = {
     'popen':     0,   # arg_pos 0 = cmd string
     'execve':    0,   # arg_pos 0 = pathname
     'execvp':    0,
+    'execv':     0,   # execv(path, argv[]) — no envp; path at arg_pos 0
     'execl':     0,
     'execlp':    0,
 }
