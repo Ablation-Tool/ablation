@@ -216,12 +216,12 @@ class ForkExecClassifier:
     def _init_sink_plts(self) -> None:
         self._fork_plt = self._plt_rev.get('fork') or self._plt_rev.get('vfork')
         self._exec_plts = {
-            va: name for va, name in self._plt.items()
-            if name in _EXEC_SINKS
+            va: name.split('@')[0] for va, name in self._plt.items()
+            if name in _EXEC_SINKS or name.split('@')[0] in _EXEC_SINKS
         }
         self._exit_plts = {
             va for va, name in self._plt.items()
-            if name in _EXIT_SINKS
+            if name in _EXIT_SINKS or name.split('@')[0] in _EXIT_SINKS
         }
 
     # ── helpers ───────────────────────────────────────────────────────────────

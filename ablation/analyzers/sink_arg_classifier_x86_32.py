@@ -34,10 +34,10 @@ x86_32 string address patterns:
 
 Usage:
     from ablation.analyzers.binary_context import BinaryContext
-    from ablation.analyzers.sink_arg_classifier_x86_32 import SinkArgClassifierX86_32
+    from ablation.analyzers.sink_arg_classifier_x86_32 import SinkArgClassifierI386
 
     ctx = BinaryContext.load_or_build('/path/to/rmcd', force_rebuild=True)
-    clf = SinkArgClassifierX86_32.from_context(ctx)
+    clf = SinkArgClassifierI386.from_context(ctx)
 
     # Add strcpy as a sink to classify BOF candidates (arg_pos=1 = source string)
     clf.add_sink('strcpy',  arg_pos=1)
@@ -121,7 +121,7 @@ _SNPRINTF_WINDOW = 140   # instructions to scan for prior snprintf
 _MAX_FUNC_BYTES  = 65536
 
 
-class SinkArgClassifierX86_32:
+class SinkArgClassifierI386:
     """
     Classify exec-class sink call site argument provenance on x86_32 ELFs.
 
@@ -151,12 +151,12 @@ class SinkArgClassifierX86_32:
         self._init()
 
     @classmethod
-    def from_context(cls, ctx) -> 'SinkArgClassifierX86_32':
+    def from_context(cls, ctx) -> 'SinkArgClassifierI386':
         """Build from a BinaryContext."""
         return cls(ctx)
 
     @classmethod
-    def from_path(cls, path: str) -> 'SinkArgClassifierX86_32':
+    def from_path(cls, path: str) -> 'SinkArgClassifierI386':
         """Build directly from an ELF path — constructs BinaryContext internally."""
         from ablation.analyzers.binary_context import BinaryContext
         ctx = BinaryContext.load_or_build(path)
@@ -764,9 +764,9 @@ class SinkArgClassifierX86_32:
     def report(self, results: List[SinkClassification]) -> str:
         """Format results as a human-readable report."""
         if not results:
-            return 'SinkArgClassifierX86_32: no call sites found.\n'
+            return 'SinkArgClassifierI386: no call sites found.\n'
         lines = [
-            'SinkArgClassifierX86_32 Results',
+            'SinkArgClassifierI386 Results',
             '=' * 60,
         ]
         counts: Dict[str, int] = {}
@@ -785,7 +785,6 @@ class SinkArgClassifierX86_32:
         return '\n'.join(lines) + '\n'
 
 
-# Canonical name used by sac_for_path() and the stop-hook condition.
-# SinkArgClassifierX86_32 is the implementation; SinkArgClassifierI386 is the
-# public alias that matches the IBM-RE gap ID naming convention (i386 architecture).
-SinkArgClassifierI386 = SinkArgClassifierX86_32
+# Backward-compat alias: the class was previously named SinkArgClassifierX86_32.
+# sac_for_path() and callers should use SinkArgClassifierI386 (the canonical name).
+SinkArgClassifierX86_32 = SinkArgClassifierI386

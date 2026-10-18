@@ -48,10 +48,10 @@ them requires knowing the GOT base at runtime.  Only the lis+addi/lis+lwz forms
 
 Usage:
     from ablation.analyzers.binary_context import BinaryContext
-    from ablation.analyzers.sink_arg_classifier_ppc32 import SinkArgClassifierPPC32
+    from ablation.analyzers.sink_arg_classifier_ppc32 import SinkArgClassifierPPC32BE
 
     ctx = BinaryContext.load_or_build('/path/to/clstrmgr')
-    clf = SinkArgClassifierPPC32.from_context(ctx)
+    clf = SinkArgClassifierPPC32BE.from_context(ctx)
 
     # Optionally add vendor-specific sinks beyond the defaults
     clf.add_sink('my_exec_wrapper', arg_pos=0)
@@ -163,7 +163,7 @@ def _sign16(v: int) -> int:
     return v if v < 0x8000 else v - 0x10000
 
 
-class SinkArgClassifierPPC32:
+class SinkArgClassifierPPC32BE:
     """
     Classify exec-class sink call-site argument provenance on PPC32 BE ELFs.
 
@@ -188,11 +188,11 @@ class SinkArgClassifierPPC32:
         self._init()
 
     @classmethod
-    def from_context(cls, ctx) -> 'SinkArgClassifierPPC32':
+    def from_context(cls, ctx) -> 'SinkArgClassifierPPC32BE':
         return cls(ctx)
 
     @classmethod
-    def from_path(cls, path: str) -> 'SinkArgClassifierPPC32':
+    def from_path(cls, path: str) -> 'SinkArgClassifierPPC32BE':
         """Build directly from an ELF path — constructs BinaryContext internally."""
         from ablation.analyzers.binary_context import BinaryContext
         ctx = BinaryContext.load_or_build(path)
@@ -658,8 +658,8 @@ class SinkArgClassifierPPC32:
 
     def report(self, results: List[SinkClassification]) -> str:
         if not results:
-            return 'SinkArgClassifierPPC32: no results\n'
-        lines = [f'SinkArgClassifierPPC32: {len(results)} results']
+            return 'SinkArgClassifierPPC32BE: no results\n'
+        lines = [f'SinkArgClassifierPPC32BE: {len(results)} results']
         for r in results:
             lines.append(
                 f'  {r.verdict:16s} {r.sink_name}(arg{r.arg_pos})'
@@ -675,7 +675,6 @@ class SinkArgClassifierPPC32:
         return '\n'.join(lines) + '\n'
 
 
-# Canonical name used by sac_for_path() and the stop-hook condition.
-# SinkArgClassifierPPC32 is the implementation; SinkArgClassifierPPC32BE is the
-# public alias that makes the big-endian constraint explicit in the IBM-RE gap IDs.
-SinkArgClassifierPPC32BE = SinkArgClassifierPPC32
+# Backward-compat alias: the class was previously named SinkArgClassifierPPC32.
+# sac_for_path() and callers should use SinkArgClassifierPPC32BE (the canonical name).
+SinkArgClassifierPPC32 = SinkArgClassifierPPC32BE

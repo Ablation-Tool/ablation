@@ -40,10 +40,10 @@ s390x string-address load patterns handled:
 
 Usage:
     from ablation.analyzers.binary_context import BinaryContext
-    from ablation.analyzers.sink_arg_classifier_s390 import SinkArgClassifierS390
+    from ablation.analyzers.sink_arg_classifier_s390 import SinkArgClassifierS390X
 
     ctx = BinaryContext.load_or_build('/path/to/bfagent')
-    clf = SinkArgClassifierS390.from_path(ctx.path)  # bypass BinaryContext PLT gap
+    clf = SinkArgClassifierS390X.from_path(ctx.path)  # bypass BinaryContext PLT gap
 
     results = clf.classify_all()
     print(clf.report(results))
@@ -150,7 +150,7 @@ def _sign32(v: int) -> int:
     return v if v < 0x80000000 else v - 0x100000000
 
 
-class SinkArgClassifierS390:
+class SinkArgClassifierS390X:
     """
     Classify exec-class sink call-site argument provenance on s390/s390x BE ELFs.
 
@@ -178,12 +178,12 @@ class SinkArgClassifierS390:
         self._init()
 
     @classmethod
-    def from_path(cls, path: str) -> 'SinkArgClassifierS390':
+    def from_path(cls, path: str) -> 'SinkArgClassifierS390X':
         """Construct directly from file path, bypassing BinaryContext's s390 gap."""
         return cls(path)
 
     @classmethod
-    def from_context(cls, ctx) -> 'SinkArgClassifierS390':
+    def from_context(cls, ctx) -> 'SinkArgClassifierS390X':
         """Accept a BinaryContext for API consistency; uses ctx.path internally."""
         return cls(ctx.path)
 
@@ -485,3 +485,8 @@ class SinkArgClassifierS390:
             return e_machine == 0x0016
         except Exception:
             return False
+
+
+# Backward-compat alias: the class was previously named SinkArgClassifierS390.
+# sac_for_path() and callers should use SinkArgClassifierS390X (the canonical name).
+SinkArgClassifierS390 = SinkArgClassifierS390X
