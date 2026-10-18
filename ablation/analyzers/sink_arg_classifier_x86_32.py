@@ -329,6 +329,7 @@ class SinkArgClassifierX86_32:
     def _classify_lea(self, insn, insn_idx: int, insns: list, depth: int) -> str:
         """
         Classify a lea instruction.
+        lea eax, [abs_addr]   → direct absolute address; check if in .rodata
         lea eax, [ebx + N]    → GOT-relative; check if target is .rodata
         lea eax, [ebp - N]    → address of stack local; snprintf backtrack
         lea eax, [ebp + N]    → address of function arg (rare); ARG_PROPAGATED
@@ -339,8 +340,16 @@ class SinkArgClassifierX86_32:
         mem = ops[1]
         if mem.type != X86_OP_MEM:
             return UNKNOWN
-        base = mem.mem.base
-        disp = mem.mem.disp
+        base  = mem.mem.base
+        index = mem.mem.index
+        disp  = mem.mem.disp
+
+        # Direct absolute address: lea eax, [0xNNNN] — base=0, index=0
+        # Capstone reports no-register as 0 (X86_REG_INVALID).
+        if base == 0 and index == 0:
+            if self._is_rodata(disp):
+                return RODATA_CONST
+            return UNKNOWN
 
         # ebp-relative: local buffer or argument address
         if base == X86_REG_EBP:
@@ -409,8 +418,15 @@ class SinkArgClassifierX86_32:
     def _find_ebx_got_base(self, insns: list, from_idx: int) -> Optional[int]:
         """
         Find the GOT base value in ebx.
-        In PIC x86_32: call _got_stub / pop ebx / add ebx, N (computed at link time).
-        Scan backward for 'add ebx, imm' which sets ebx to the GOT base.
+
+        Two PIC x86_32 patterns:
+          1. call $+5 / pop ebx / add ebx, DELTA  — used in hand-written or old GCC code.
+             pop_va = address of pop ebx; got_base = pop_va + DELTA.
+
+          2. call __x86_get_pc_thunk_bx / add ebx, DELTA  — GCC PIC standard.
+             Thunk body: mov ebx, [esp]; ret — so on return, ebx = return address
+             = address of the instruction after the call = address of the add itself.
+             got_base = add_insn.address + DELTA.
         """
         start = max(0, from_idx - _LOOKBACK * 2)
         for j in range(from_idx - 1, start - 1, -1):
@@ -422,19 +438,15 @@ class SinkArgClassifierX86_32:
                 continue
             if ops[0].type == X86_OP_REG and ops[0].reg == X86_REG_EBX:
                 if ops[1].type == X86_OP_IMM:
-                    # ebx was set by: pop ebx (gets RIP), then add ebx, N
-                    # The pop value would be the instruction after the call; reconstruct:
-                    # The add instruction is at insn.address; pop would be at insn.address - 1
-                    # pop ebx puts insns[j].address into ebx (the call/pop thunk address)
-                    # But we don't know the exact pop value statically — we need the pop target.
-                    # In PIC code: pop ebx gets the address of the next instruction after
-                    # the 'call $+5' trick, then add ebx, DELTA gets GOT base.
-                    # We can recover: the pop_va is insns[j].address (the add instruction)
-                    # Actually pop_va is 1 byte before the add (since pop = 1 byte: 0x5b).
-                    # Let's scan one more step back for the 'pop ebx' + get its address.
+                    delta = ops[1].imm
+                    # Pattern 1: call $+5 / pop ebx
                     pop_va = self._find_pop_ebx_va(insns, j)
                     if pop_va is not None:
-                        return pop_va + ops[1].imm
+                        return pop_va + delta
+                    # Pattern 2: call __x86_get_pc_thunk_bx
+                    # The thunk puts the add instruction's address into ebx.
+                    if self._has_pc_thunk_call(insns, j):
+                        return insn.address + delta
         return None
 
     def _find_pop_ebx_va(self, insns: list, add_idx: int) -> Optional[int]:
@@ -447,6 +459,41 @@ class SinkArgClassifierX86_32:
                 if ops and ops[0].type == X86_OP_REG and ops[0].reg == X86_REG_EBX:
                     return insn.address
         return None
+
+    def _has_pc_thunk_call(self, insns: list, add_idx: int) -> bool:
+        """
+        Return True if a call to __x86_get_pc_thunk_bx (or equivalent) immediately
+        precedes the 'add ebx, N' at add_idx.
+
+        Two identification strategies:
+          - Named: call target matches a known PLT/export entry with 'get_pc_thunk'
+            or 'i686.get_pc.thunk' in its name.
+          - Structural: any call within 4 instructions before the add where the
+            callee is a tiny (≤8 byte) function — GCC always emits the thunk as
+            a tiny helper near the call site.
+        """
+        start = max(0, add_idx - 4)
+        for j in range(add_idx - 1, start - 1, -1):
+            insn = insns[j]
+            if insn.mnemonic != 'call':
+                continue
+            ops = insn.operands
+            if not ops or ops[0].type != X86_OP_IMM:
+                continue
+            target_va = ops[0].imm
+            # Named check via context symbol table
+            name = (self._ctx.name(target_va) or '').lower()
+            if 'get_pc_thunk' in name or 'i686.get_pc.thunk' in name:
+                return True
+            # Structural check: callee is ≤8 bytes (thunk body is 3 bytes: mov+ret)
+            import bisect
+            fs = self._ctx.func_starts
+            idx = bisect.bisect_right(fs, target_va)
+            if idx < len(fs):
+                callee_size = fs[idx] - target_va
+                if 0 < callee_size <= 8:
+                    return True
+        return False
 
     def _backtrack_stack_slot(
         self, insns: list, from_idx: int, ebp_neg_offset: int, depth: int
@@ -524,24 +571,52 @@ class SinkArgClassifierX86_32:
         self, insns: list, call_idx: int, arg_pos: int
     ) -> Optional[int]:
         """
-        Find the instruction index that pushes argument arg_pos.
-        arg_pos 0 = last push before call, arg_pos 1 = second-to-last, etc.
-        Handles both: push <val> and sub esp, N / mov [esp+M], val patterns.
+        Find the instruction index that provides argument arg_pos.
+
+        Handles two x86_32 cdecl calling convention styles:
+          Push-based (O0): push <val> instructions right-to-left.
+            arg_pos 0 = last push, arg_pos 1 = second-to-last, etc.
+          Sub-esp+mov (O1+): frame pre-allocated by sub esp,N; args written
+            as mov dword ptr [esp + N*4], val.
+            arg_pos N → look for mov [esp + N*4], val.
         """
         pushes: List[int] = []
         start = max(0, call_idx - _LOOKBACK)
 
-        # Scan backward counting push instructions and sub-esp+mov patterns
         for j in range(call_idx - 1, start - 1, -1):
             insn = insns[j]
-            if insn.mnemonic == 'push':
+            mn = insn.mnemonic
+            if mn == 'push':
                 pushes.append(j)
-            elif insn.mnemonic in ('ret', 'leave', 'call'):
-                break  # don't cross function boundaries or other calls
+            elif mn in ('ret', 'leave'):
+                break
+            elif mn == 'call' and j < call_idx - 1:
+                # Don't cross an earlier call's argument setup region.
+                if pushes:
+                    break
 
-        # pushes is in reverse order; pushes[0] = last push = arg_pos 0
-        if arg_pos < len(pushes):
-            return pushes[arg_pos]
+        if pushes:
+            if arg_pos < len(pushes):
+                return pushes[arg_pos]
+            return None
+
+        # No push instructions found — try sub-esp + mov [esp + N*4], val pattern.
+        target_disp = arg_pos * 4
+        for j in range(call_idx - 1, start - 1, -1):
+            insn = insns[j]
+            if insn.mnemonic != 'mov':
+                continue
+            ops = insn.operands
+            if len(ops) < 2:
+                continue
+            dst = ops[0]
+            if dst.type != X86_OP_MEM:
+                continue
+            if dst.mem.base != X86_REG_ESP or dst.mem.index != 0:
+                continue
+            if dst.mem.disp == target_disp:
+                return j
+
         return None
 
     def _get_pushed_arg(
@@ -550,6 +625,10 @@ class SinkArgClassifierX86_32:
         """
         Get the classification verdict for arg_pos at the call at call_idx.
         Returns verdict string or None if the argument couldn't be found.
+
+        Handles both push-based and sub-esp+mov calling styles.
+        For push: ops[0] is the value.
+        For mov [esp+N], val: ops[0] is the destination, ops[1] is the value.
         """
         push_idx = self._find_push_for_arg(insns, call_idx, arg_pos)
         if push_idx is None:
@@ -558,7 +637,15 @@ class SinkArgClassifierX86_32:
         ops = insn.operands
         if not ops:
             return None
-        op = ops[0]
+
+        # Select the value operand based on instruction type.
+        if insn.mnemonic == 'push':
+            op = ops[0]
+        elif insn.mnemonic == 'mov' and len(ops) >= 2:
+            op = ops[1]  # mov [esp+N], <src> — source is ops[1]
+        else:
+            return UNKNOWN
+
         if op.type == X86_OP_IMM:
             return self._classify_value(insns, push_idx, f'imm:{op.imm}', depth)
         if op.type == X86_OP_REG:
@@ -570,6 +657,14 @@ class SinkArgClassifierX86_32:
                     return ARG_PROPAGATED
                 if m.disp < 0:
                     return self._backtrack_stack_slot(insns, push_idx, -m.disp, depth)
+            if m.base == X86_REG_EBX and m.index == 0:
+                got_base = self._find_ebx_got_base(insns, push_idx)
+                if got_base is not None:
+                    target_va = got_base + m.disp
+                    ptr = self._read_u32(target_va)
+                    if ptr is not None and self._is_rodata(ptr):
+                        return RODATA_CONST
+                return UNKNOWN
         return UNKNOWN
 
     # ── per-call-site classification ──────────────────────────────────────────
