@@ -77,6 +77,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Where did this command string come from?" | `SinkArgClassifier.from_path(elf).classify_all()` (x86-64/ARM32/ARM64) |
 | "MIPS32 O32: classify exec-sink arguments on BE or LE MIPS firmware" | `SinkArgClassifierMIPS.from_context(ctx).classify_all()`: add vendor sinks with `clf.add_sink(name, arg_pos)` |
 | "s390/s390x (IBM Z Linux): classify exec-sink arguments — BinaryContext returns plt=0 (S390-GAP-001)" | `SinkArgClassifierS390.from_path(elf).classify_all()` — use `from_path()` not `from_context()` to bypass BinaryContext's s390 PLT parse gap; `is_s390(path)` detects e_machine=0x0016 |
+| "ppc64/ppc64le (IBM POWER Linux ABIv2): classify exec-sink arguments — ARCH-GAP-PPC64LE" | `SinkArgClassifierPPC64.from_context(ctx).classify_all()` — handles both LE and BE via EI_DATA detection; resolves TOC-relative addis-r2+addi/ld address patterns; r3-r10 argument registers; see docs/reference-modules/ppc64-le-sink-classifier.md |
 | "Does sscanf/scanf/fscanf format string have unbounded %s?" | `SscanfSinkClassifier.from_path(elf).classify_all()`: RODATA_SAFE=eliminated, RODATA_UNSAFE=HIGH, DYNAMIC_FMT=verify snprintf template manually |
 | "Find wrappers around system/popen/exec* (multi-level injection chains)" | `SinkPropagator.from_context(ctx).propagate()` |
 | "Register vendor-specific sinks + known-safe patterns" | `VendorProfile.from_vendor('fortinet').apply_to(clf)` |
