@@ -98,6 +98,8 @@ def _make_clf(code: bytes, func_va: int = BASE_VA) -> SinkArgClassifierX86_32:
         SNPRINTF_PLT: 2,
     }
     clf._rodata_ranges = [(RODATA_STR, RODATA_END)]
+    clf._data_ranges   = []
+    clf._bss_ranges    = []
     clf._dead_sinks = []
     clf._bin = None
 

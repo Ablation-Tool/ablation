@@ -138,6 +138,8 @@ class SinkArgClassifierX86_32:
         self._sinks: Dict[str, int]   = dict(_DEFAULT_SINKS_X86_32)
         self._snprintf_plts: Dict[int, int] = {}  # PLT VA → fmt arg position
         self._rodata_ranges: List[Tuple[int, int]] = []
+        self._data_ranges:  List[Tuple[int, int]] = []
+        self._bss_ranges:   List[Tuple[int, int]] = []
         self._dead_sinks: List[str] = []
         self._bin = None
         self._cs: Optional[Cs] = None
@@ -163,10 +165,14 @@ class SinkArgClassifierX86_32:
         if not _LIEF_OK or self._bin is None:
             return
         for sec in self._bin.sections:
+            va_s = int(sec.virtual_address)
+            va_e = va_s + int(sec.size)
             if sec.name in ('.rodata', '.rodata1', '__const', '__cstring', '.rdata'):
-                self._rodata_ranges.append(
-                    (int(sec.virtual_address), int(sec.virtual_address) + int(sec.size))
-                )
+                self._rodata_ranges.append((va_s, va_e))
+            elif sec.name in ('.data', '.data.rel.ro', '.data.rel', '.data1'):
+                self._data_ranges.append((va_s, va_e))
+            elif sec.name in ('.bss', '.tbss', '.sbss'):
+                self._bss_ranges.append((va_s, va_e))
         for name, fmt_pos in _SNPRINTF_FMT_POS_X86_32.items():
             va = self._plt_rev.get(name)
             if va is not None:
@@ -176,6 +182,34 @@ class SinkArgClassifierX86_32:
 
     def _is_rodata(self, va: int) -> bool:
         return any(s <= va < e for s, e in self._rodata_ranges)
+
+    def _is_in_bss(self, va: int) -> bool:
+        return any(s <= va < e for s, e in self._bss_ranges)
+
+    def _read_cstr(self, va: int) -> Optional[str]:
+        """Return null-terminated printable ASCII at va, or None if not a string."""
+        raw = self._read_va(va, 256)
+        for i, b in enumerate(raw):
+            if b == 0:
+                if i == 0:
+                    return None  # empty string — likely BSS zero, not a constant
+                try:
+                    return raw[:i].decode('ascii')
+                except Exception:
+                    return None
+            if b < 0x20 and b not in (0x09, 0x0a, 0x0d):
+                return None
+            if b > 0x7e:
+                return None
+        return None
+
+    def _is_static_const(self, va: int) -> bool:
+        """True if va holds a compile-time string constant (.rodata or .data init)."""
+        if self._is_rodata(va):
+            return True
+        if self._is_in_bss(va):
+            return False
+        return self._read_cstr(va) is not None
 
     def _va_to_file_offset(self, va: int) -> int:
         if self._bin is None:
@@ -268,7 +302,7 @@ class SinkArgClassifierX86_32:
             val = int(target[4:])
             if val == 0:
                 return RODATA_CONST  # NULL constant
-            return RODATA_CONST if self._is_rodata(val) else UNKNOWN
+            return RODATA_CONST if self._is_static_const(val) else UNKNOWN
 
         if target.startswith('arg:'):
             return ARG_PROPAGATED
@@ -347,7 +381,7 @@ class SinkArgClassifierX86_32:
         # Direct absolute address: lea eax, [0xNNNN] — base=0, index=0
         # Capstone reports no-register as 0 (X86_REG_INVALID).
         if base == 0 and index == 0:
-            if self._is_rodata(disp):
+            if self._is_static_const(disp):
                 return RODATA_CONST
             return UNKNOWN
 
@@ -366,11 +400,11 @@ class SinkArgClassifierX86_32:
             got_base = self._find_ebx_got_base(insns, insn_idx)
             if got_base is not None:
                 target_va = got_base + disp
-                if self._is_rodata(target_va):
+                if self._is_static_const(target_va):
                     return RODATA_CONST
-                # Could be a GOT entry pointing to .rodata
+                # Could be a GOT entry pointing to .rodata or .data string
                 ptr = self._read_u32(target_va)
-                if ptr is not None and self._is_rodata(ptr):
+                if ptr is not None and self._is_static_const(ptr):
                     return RODATA_CONST
             return UNKNOWN
 
@@ -407,7 +441,7 @@ class SinkArgClassifierX86_32:
                 if got_base is not None:
                     target_va = got_base + disp
                     ptr = self._read_u32(target_va)
-                    if ptr is not None and self._is_rodata(ptr):
+                    if ptr is not None and self._is_static_const(ptr):
                         return RODATA_CONST
                 return UNKNOWN
             # [reg + N] — struct/heap field
@@ -428,8 +462,7 @@ class SinkArgClassifierX86_32:
              = address of the instruction after the call = address of the add itself.
              got_base = add_insn.address + DELTA.
         """
-        start = max(0, from_idx - _LOOKBACK * 2)
-        for j in range(from_idx - 1, start - 1, -1):
+        for j in range(from_idx - 1, -1, -1):
             insn = insns[j]
             if insn.mnemonic != 'add':
                 continue
@@ -662,7 +695,7 @@ class SinkArgClassifierX86_32:
                 if got_base is not None:
                     target_va = got_base + m.disp
                     ptr = self._read_u32(target_va)
-                    if ptr is not None and self._is_rodata(ptr):
+                    if ptr is not None and self._is_static_const(ptr):
                         return RODATA_CONST
                 return UNKNOWN
         return UNKNOWN
