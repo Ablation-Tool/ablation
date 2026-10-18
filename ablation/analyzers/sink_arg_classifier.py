@@ -1133,13 +1133,24 @@ def batch_plt_intersect(
                 plt = _extract_plt_arm64(binary)
             elif 'ARM' in machine:
                 plt = _extract_plt_arm32(binary)
+            elif 'I386' in machine or 'PPC' in machine or 'S390' in machine:
+                # Architectures where _extract_plt_x86 (x86_64-only) silently misses
+                # all PLT entries. Use pltgot_relocations — arch-agnostic, name-only.
+                plt = {
+                    rel.address: rel.symbol.name
+                    for rel in binary.pltgot_relocations
+                    if rel.has_symbol and rel.symbol.name
+                }
             else:
                 plt = _extract_plt_x86(binary, data)
         except Exception:
             continue
         # Strip PLT versioning suffix before matching: system@GLIBC_2.2.5 → system.
         # The sink_set uses bare symbol names, so versioned entries would silently miss.
-        matches = [name for _va, name in plt.items() if name.split('@')[0] in sink_set]
+        # Use exact set membership — never substring — to prevent false positives like
+        # check_and_perform_system_login_2factor_auth_unix matching 'system'.
+        matches = [name.split('@')[0] for _va, name in plt.items()
+                   if name.split('@')[0] in sink_set]
         if matches:
             hits[fpath] = sorted(matches)
     return hits
