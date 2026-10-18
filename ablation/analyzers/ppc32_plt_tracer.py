@@ -116,6 +116,27 @@ class PPC32ELF:
                 callers.append(instr_va)
         return callers
 
+    def scan_bctrl(self) -> List[int]:
+        """Return VA of every bctrl instruction (opcode 0x4E800421) in .text.
+
+        ppc32 WAX-GOT ELFv1 binaries (old glibc PIC, statically-linked AIX-style
+        executables) route ALL external calls through a GOT-loaded CTR register:
+            lwz  rX, N(r30)   ; load function pointer from GOT
+            mtctr rX
+            bctrl              ; 0x4E800421 — call through CTR, link
+        The PLT is NOBITS (zero at load time) so SinkArgClassifier returns 0
+        results.  Use scan_bctrl() + manual CTR-source tracing to find exec-class
+        sinks in these binaries.
+        """
+        text = self.section('.text')
+        if not text:
+            return []
+        sites: List[int] = []
+        for i in range(0, text.size - 3, 4):
+            if struct.unpack_from('>I', self.data, text.offset + i)[0] == 0x4E800421:
+                sites.append(text.virtual_address + i)
+        return sites
+
     # kept for backward compatibility with ppc32_tools.py callers
     def find_import_callers(self, sym_name: str) -> Dict[int, List[int]]:
         """
