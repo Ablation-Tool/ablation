@@ -213,7 +213,9 @@ class SinkArgClassifierPPC64:
         if not self._toc_base:
             for sec in self._bin.sections:
                 if sec.name in ('.toc', '.got'):
-                    self._toc_base = int(sec.virtual_address)
+                    # ABIv2: r2 is biased +0x8000 past GOT start so ±16-bit signed
+                    # displacements cover both GOT (negative offsets) and TOC (positive).
+                    self._toc_base = int(sec.virtual_address) + 0x8000
                     break
         # snprintf PLT entries
         for name, fmt_pos in _SNPRINTF_FMT_POS_PPC64.items():
