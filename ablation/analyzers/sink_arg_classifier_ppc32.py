@@ -191,6 +191,13 @@ class SinkArgClassifierPPC32:
     def from_context(cls, ctx) -> 'SinkArgClassifierPPC32':
         return cls(ctx)
 
+    @classmethod
+    def from_path(cls, path: str) -> 'SinkArgClassifierPPC32':
+        """Build directly from an ELF path — constructs BinaryContext internally."""
+        from ablation.analyzers.binary_context import BinaryContext
+        ctx = BinaryContext.load_or_build(path)
+        return cls(ctx)
+
     def add_sink(self, name: str, arg_pos: int) -> None:
         """Register a vendor-specific exec-class sink."""
         self._sinks[name] = arg_pos

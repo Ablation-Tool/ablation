@@ -686,3 +686,78 @@ class WindowAnalyzer:
             except (ValueError, IndexError):
                 pass
         return calls
+
+    def align_to_func_start(self, call_site_va: int, search_back: int = 512) -> int:
+        """
+        Search backward from `call_site_va` for a function prologue marker and
+        return its VA. Resolves the garbled-disassembly problem: backward scanning
+        from an arbitrary offset produces misaligned instruction decode.
+
+        Prologue search order (x86_64):
+          1. ENDBR64 (f3 0f 1e fa) — CET control-flow integrity marker, always aligned
+          2. push rbp (55) — classic frame pointer prologue
+
+        Returns `call_site_va - search_back` as a last-resort fallback (no alignment,
+        same as plain dump) so callers always get a valid start VA.
+        """
+        try:
+            with open(self._path, 'rb') as f:
+                raw = f.read()
+        except OSError:
+            return call_site_va - search_back
+
+        va_base = self._load_va()
+        call_off = call_site_va - va_base
+        search_start = max(0, call_off - search_back)
+        window = raw[search_start:call_off]
+
+        # Prefer ENDBR64 (guaranteed aligned on compilers that emit CET)
+        _ENDBR64 = b'\xf3\x0f\x1e\xfa'
+        pos = window.rfind(_ENDBR64)
+        if pos >= 0:
+            return va_base + search_start + pos
+
+        # Fallback: rightmost `push rbp` (0x55) in the search window
+        pos = window.rfind(b'\x55')
+        if pos >= 0:
+            return va_base + search_start + pos
+
+        return call_site_va - search_back
+
+    def dump_caller_context(
+        self,
+        call_site_va: int,
+        search_back: int = 512,
+        max_insns: int = 30,
+    ) -> List[str]:
+        """
+        Disassemble the function containing `call_site_va` from its prologue to
+        the call instruction. Fixes garbled output caused by misaligned backward
+        scans (see IBM-RE session 9: sim_ppc-power9/reader UNKNOWN).
+
+        Steps:
+          1. Search backward for function start (ENDBR64 or push rbp).
+          2. Disassemble forward from that start.
+          3. Return the last `max_insns` instructions up to and including call_site_va.
+        """
+        start_va = self.align_to_func_start(call_site_va, search_back=search_back)
+        window_size = call_site_va - start_va + 16  # +16 to include the call instruction
+        if window_size <= 0:
+            window_size = search_back
+        lines = self.dump(start_va, window=window_size, align_back=0)
+        # Return only the tail (last max_insns lines) for focus
+        return lines[-max_insns:] if len(lines) > max_insns else lines
+
+    def _load_va(self) -> int:
+        """Return the load VA (first PT_LOAD p_vaddr) for file-offset arithmetic."""
+        try:
+            import lief as _lief
+            binary = _lief.parse(self._path)
+            if binary is None:
+                return 0
+            for seg in binary.segments:
+                if str(getattr(seg, 'type', '')).endswith('LOAD') and seg.virtual_address:
+                    return seg.virtual_address - seg.file_offset
+        except Exception:
+            pass
+        return 0

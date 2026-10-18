@@ -1137,10 +1137,70 @@ def batch_plt_intersect(
                 plt = _extract_plt_x86(binary, data)
         except Exception:
             continue
-        matches = [name for _va, name in plt.items() if name in sink_set]
+        # Strip PLT versioning suffix before matching: system@GLIBC_2.2.5 → system.
+        # The sink_set uses bare symbol names, so versioned entries would silently miss.
+        matches = [name for _va, name in plt.items() if name.split('@')[0] in sink_set]
         if matches:
             hits[fpath] = sorted(matches)
     return hits
+
+
+# ── Architecture-aware factory ────────────────────────────────────────────────
+
+_ELF_MACHINE_I386   = 0x0003
+_ELF_MACHINE_PPC32  = 0x0014
+_ELF_MACHINE_PPC64  = 0x0015
+_ELF_MACHINE_S390   = 0x0016
+_ELF_MACHINE_ARM    = 0x0028
+_ELF_MACHINE_AARCH64 = 0x00b7
+_ELF_MACHINE_X86_64 = 0x003e
+
+
+def sac_for_path(path: str):
+    """
+    Architecture-aware factory: read the ELF header's machine type and return
+    the correct SinkArgClassifier variant for that architecture.
+
+    Returns one of:
+      SinkArgClassifier          — x86_64 (default)
+      SinkArgClassifierX86_32    — i386  (closes DOORS/TestMate/Tau SAC=0 gap)
+      SinkArgClassifierPPC32     — ppc32 BE (closes HACMP/RMC/DCV SAC=0 gap)
+      SinkArgClassifierS390      — s390/s390x (closes zLinux-XLC SAC=0 gap)
+      SinkArgClassifier          — arm32/aarch64/ppc64 (best-effort x86_64 SAC)
+
+    All returned objects expose the same public API:
+      .classify_all()  → List[SinkClassification]
+      .classify_sink() → List[SinkClassification]
+      .add_sink()
+
+    Example:
+        from ablation.analyzers.sink_arg_classifier import sac_for_path
+        clf = sac_for_path('/tmp/extract/usr/sbin/doorsd')
+        for r in clf.classify_all():
+            print(r)
+    """
+    try:
+        with open(path, 'rb') as f:
+            header = f.read(20)
+        if len(header) < 20 or header[:4] != b'\x7fELF':
+            return SinkArgClassifier.from_path(path)
+        enc = header[5]  # 1=LE 2=BE
+        fmt = '>H' if enc == 2 else '<H'
+        machine = struct.unpack_from(fmt, header, 18)[0]
+    except OSError:
+        return SinkArgClassifier.from_path(path)
+
+    if machine == _ELF_MACHINE_I386:
+        from ablation.analyzers.sink_arg_classifier_x86_32 import SinkArgClassifierX86_32
+        return SinkArgClassifierX86_32.from_path(path)
+    elif machine == _ELF_MACHINE_PPC32:
+        from ablation.analyzers.sink_arg_classifier_ppc32 import SinkArgClassifierPPC32
+        return SinkArgClassifierPPC32.from_path(path)
+    elif machine == _ELF_MACHINE_S390:
+        from ablation.analyzers.sink_arg_classifier_s390 import SinkArgClassifierS390
+        return SinkArgClassifierS390.from_path(path)
+    else:
+        return SinkArgClassifier.from_path(path)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
