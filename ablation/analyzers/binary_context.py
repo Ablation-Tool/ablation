@@ -205,6 +205,14 @@ class BinaryContext:
             b'\xca\xfe\xba\xbe': 'Mach-O fat binary',
             b'\xce\xfa\xed\xfe': 'Mach-O 32-bit',
             b'\xcf\xfa\xed\xfe': 'Mach-O 64-bit',
+            # IBM AIX installp package (BFF format). Contains AIX .a static libs and
+            # XCOFF32/64 binaries for AIX, not Linux ELFs.  lief.parse() silently returns
+            # None or logs parse errors on these. Magic: 0x09006bea (big-endian u32).
+            b'\x09\x00\x6b\xea': 'AIX BFF (installp) package — no Linux ELF content',
+            # IBM XCOFF32 object file (RS/6000, AIX). lief.parse() either silently returns
+            # None or logs noise. Magic: 0x01df (big-endian u16 at offset 0).
+            # Note: XCOFF64 uses 0x01f7; BinaryContext.build_xcoff() handles that path.
+            b'\x01\xdf': 'XCOFF32 object file (AIX RS/6000) — use build_xcoff() instead',
         }
         for magic, label in _NON_ELF.items():
             if data[:len(magic)] == magic:
