@@ -461,6 +461,7 @@ _DEFAULT_SINKS: Dict[str, int] = {
     'execl':      0,
     'execlp':     0,
     'execle':     0,
+    'execv':      0,   # execv(path, argv[]) — no envp; path at rdi
     '__libc_system': 0,
 }
 
