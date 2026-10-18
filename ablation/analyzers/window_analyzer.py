@@ -715,7 +715,7 @@ class WindowAnalyzer:
         same as plain dump) so callers always get a valid start VA.
         """
         try:
-            with open(self._path, 'rb') as f:
+            with open(self.path, 'rb') as f:
                 raw = f.read()
         except OSError:
             return call_site_va - search_back
@@ -758,7 +758,7 @@ class WindowAnalyzer:
         """Return the load VA (first PT_LOAD p_vaddr) for file-offset arithmetic."""
         try:
             import lief as _lief
-            binary = _lief.parse(self._path)
+            binary = _lief.parse(self.path)
             if binary is None:
                 return 0
             for seg in binary.segments:
