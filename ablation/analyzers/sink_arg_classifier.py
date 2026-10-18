@@ -1303,6 +1303,34 @@ def sac_for_path(path: str):
         return SinkArgClassifier.from_path(path)
 
 
+def sac_for_context(ctx):
+    """
+    Architecture-aware factory: return the correct SinkArgClassifier variant
+    for the given BinaryContext's architecture, building from the cached context.
+
+    Parallel to sac_for_path() but accepts a pre-loaded BinaryContext so the
+    caller avoids double-parsing.  Falls back to x86_64 SinkArgClassifier for
+    architectures without a specialised variant.
+
+    Returns one of:
+      SinkArgClassifierI386    — x86_32 / i386
+      SinkArgClassifierPPC32BE — ppc32 BE
+      SinkArgClassifierS390X   — s390 / s390x
+      SinkArgClassifier        — everything else (x86_64, ppc64, aarch64, …)
+    """
+    arch = getattr(ctx, 'arch', 'x86_64')
+    if arch == 'x86_32':
+        from ablation.analyzers.sink_arg_classifier_x86_32 import SinkArgClassifierI386
+        return SinkArgClassifierI386.from_context(ctx)
+    if arch == 'ppc32':
+        from ablation.analyzers.sink_arg_classifier_ppc32 import SinkArgClassifierPPC32BE
+        return SinkArgClassifierPPC32BE.from_context(ctx)
+    if arch in ('s390', 's390x'):
+        from ablation.analyzers.sink_arg_classifier_s390 import SinkArgClassifierS390X
+        return SinkArgClassifierS390X.from_context(ctx)
+    return SinkArgClassifier.from_context(ctx)
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def _cli() -> None:
