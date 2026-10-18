@@ -50,7 +50,10 @@ _DEFAULT_SINKS = frozenset([
 ])
 
 # PPC64 BL (Branch and Link, AA=0) opcode mask and match
-_BL_MASK  = 0xFC000001
+# Mask covers bits[0:5] (opcode), bit[30] (AA), bit[31] (LK) from MSB.
+# AA=0 selects relative-branch BL; BLA (AA=1) decodes the LI field as an
+# absolute VA and must be excluded or _decode_bl_target produces a wrong target.
+_BL_MASK  = 0xFC000003   # opcode (6 bits) + AA flag + LK flag
 _BL_MATCH = 0x48000001   # opcode=18, AA=0, LK=1
 
 
