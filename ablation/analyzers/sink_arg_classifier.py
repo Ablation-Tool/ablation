@@ -961,6 +961,45 @@ class SinkArgClassifier:
             return False  # reg was clobbered by something else
         return False
 
+    # ── function boundary alignment ───────────────────────────────────────────
+
+    _ENDBR64 = b'\xf3\x0f\x1e\xfa'
+    _PUSH_RBP = b'\x55'
+    _ALIGN_SEARCH_BACK = 512
+
+    def _align_func_va(self, func_va: int) -> int:
+        """
+        Search backward from func_va for an ENDBR64 or push-rbp prologue and
+        return the prologue address if found within _ALIGN_SEARCH_BACK bytes.
+
+        BinaryContext func_starts are heuristic-detected and may point slightly
+        past the actual prologue.  Aligning to the real prologue before
+        disassembly ensures the CALL scan sees the full instruction stream from
+        the function entry — including any argument-loading code that precedes
+        the first instruction at the detected start.
+
+        This is the FunctionBoundaryAligner step wired into the CALL scan path:
+        it runs for every function before _classify_function() disassembles it.
+        """
+        off = self._va_to_file_offset(func_va)
+        search = min(off, self._ALIGN_SEARCH_BACK)
+        if search < 4:
+            return func_va
+        window = self._data[off - search:off + 1]
+        # Search backward for ENDBR64
+        idx = window.rfind(self._ENDBR64)
+        if idx != -1:
+            candidate = func_va - (len(window) - 1 - idx)
+            return candidate
+        # Fallback: push rbp
+        idx = window.rfind(self._PUSH_RBP)
+        if idx != -1:
+            candidate = func_va - (len(window) - 1 - idx)
+            # Only use if it's close (within 64 bytes); a lone 0x55 far back is noise.
+            if func_va - candidate <= 64:
+                return candidate
+        return func_va
+
     # ── main scan ─────────────────────────────────────────────────────────────
 
     def classify_all(self) -> List[SinkClassification]:
@@ -1007,6 +1046,14 @@ class SinkArgClassifier:
         sink_plts: Dict[int, Tuple[str, int]],
         max_bytes: int = _MAX_FUNC_BYTES,
     ) -> List[SinkClassification]:
+        # Align to the actual function prologue (ENDBR64 / push rbp) before
+        # disassembling.  BinaryContext func_starts are heuristic-detected and
+        # may point a few bytes past the prologue; starting there would miss any
+        # argument-loading instructions that live before the detected start.
+        aligned_va = self._align_func_va(func_va)
+        if aligned_va < func_va:
+            max_bytes += func_va - aligned_va
+            func_va = aligned_va
         raw = self._read_va(func_va, max_bytes)
         if not raw:
             return []
