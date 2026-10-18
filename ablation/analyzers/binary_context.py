@@ -635,12 +635,19 @@ class BinaryContext:
     def _extract_plt_x86_32(self, binary) -> None:
         """i386 ELF PLT extraction.
 
-        Each PLT stub (16 bytes) has the form:
-          ff 25 XX XX XX XX  jmp dword ptr [abs_GOT_va]  <- absolute 32-bit GOT entry addr
+        ET_EXEC stubs (non-PIC):
+          ff 25 XX XX XX XX  jmp dword ptr [abs_GOT_va]
           68 YY YY YY YY     push reloc_offset
           e9 ZZ ZZ ZZ ZZ     jmp PLT_resolver
-        PLT[0] is the resolver stub (push/jmp to the dynamic linker) — not a real call target.
-        .rel.plt entries (8-byte REL, no addend): r_offset=GOT_entry_va, r_info=(sym_idx<<8)|7
+
+        ET_DYN PIC stubs (EBX = GOT base at runtime):
+          ff a3 XX XX XX XX  jmp dword ptr [ebx+disp32]
+          68 YY YY YY YY     push reloc_offset
+          e9 ZZ ZZ ZZ ZZ     jmp PLT_resolver
+          got_va = got_base + disp32  (got_base = .got section VA)
+
+        PLT[0] is the resolver stub — not a real call target.
+        .rel.plt: 8-byte REL entries, r_offset=GOT_entry_va, r_info=(sym_idx<<8)|7
         """
         got_to_sym: Dict[int, str] = {}
         try:
@@ -662,6 +669,17 @@ class BinaryContext:
         if not got_to_sym:
             return
 
+        # For PIC SOs (ET_DYN), stubs use [ebx+disp32]. Resolve GOT base from .got section.
+        got_base: int = 0
+        for got_sec_name in ('.got', '.got.plt'):
+            try:
+                gs = binary.get_section(got_sec_name)
+                if gs:
+                    got_base = int(gs.virtual_address)
+                    break
+            except Exception:
+                pass
+
         for sec_name in ('.plt', '.plt.got'):
             try:
                 sec = binary.get_section(sec_name)
@@ -676,7 +694,14 @@ class BinaryContext:
                 if len(chunk) < 6:
                     break
                 if chunk[0:2] == b'\xff\x25':
+                    # ET_EXEC: absolute GOT address
                     got_va = struct.unpack_from('<I', chunk, 2)[0]
+                    if got_va in got_to_sym:
+                        self.plt[sec_va + off] = got_to_sym[got_va]
+                elif chunk[0:2] == b'\xff\xa3' and got_base:
+                    # ET_DYN PIC: jmp [ebx+disp32], EBX=got_base at runtime
+                    disp32 = struct.unpack_from('<I', chunk, 2)[0]
+                    got_va = got_base + disp32
                     if got_va in got_to_sym:
                         self.plt[sec_va + off] = got_to_sym[got_va]
 
