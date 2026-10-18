@@ -98,6 +98,8 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Detect allowlist byte-validators in stripped binary (x86-64 loop pattern)" | `SanitizerDetector.from_path(elf).detect()` |
 | "Audit a specific function for shell metacharacter coverage (any arch incl. PPC64)" | `audit_coverage(elf, va, CS_ARCH_PPC, CS_MODE_64\|CS_MODE_BIG_ENDIAN)` → `SanitizerCoverageReport` |
 | "Post-process ARG_PROPAGATED results: downgrade sanitizer-gated exec sinks to SANITIZER_VALIDATED" | `SinkSanitizerFilter.from_path(elf).apply(clf.classify_all())`: run after `SinkArgClassifier.classify_all()`; eliminates manual disasm for structurally safe ARG_PROPAGATED sites |
+| "Filter dead-code ARG_PROPAGATED findings: check if function has runtime callers" | `FuncReachabilityAnalyzer.from_context(ctx).filter_unreachable(findings)`: removes findings in unreachable functions; check() returns REACHABLE/UNREACHABLE_DEBUG/UNREACHABLE_NOREF/REACHABLE_VIA_PTR |
+| "Trace what callers pass for an ARG_PROPAGATED function argument (i386 cdecl)" | `CallerArgResolver.from_context(ctx).resolve(func_va, func_arg_pos)` or `resolve_from_classification(sc)`: classifies each caller as CONST_NULL/CONST_NONZERO/ARG_PROPAGATED/STACK_LOCAL/RODATA_CONST/UNKNOWN |
 | "Classify fork() callers as worker/exec/exit" | `ForkExecClassifier.from_path(elf).classify()` |
 | "Find pre-auth routes in flatui firmware" | `PreAuthRouteAuditor.run(route_init_va, factory_va)` |
 | "Find encrypted/packed sections in binary" | `EntropyMapper.scan()` |
