@@ -586,7 +586,10 @@ class BinaryContext:
             try:
                 for sym in binary.imported_functions:
                     if hasattr(sym, 'value') and sym.value and sym.name:
-                        self.plt[sym.value] = sym.name
+                        # Strip ELF versioning suffix (system@GLIBC_2.0 → system).
+                        # Downstream consumers use exact-match lookups; versioned names
+                        # cause silent misses — or, if callers use `in` substring, false positives.
+                        self.plt[sym.value] = sym.name.split('@')[0]
             except Exception:
                 pass
             try:
@@ -595,7 +598,7 @@ class BinaryContext:
                         continue
                     rtype = str(getattr(rel, 'type', ''))
                     if 'JUMP_SLOT' in rtype and rel.symbol.name:
-                        self.plt[rel.address] = rel.symbol.name
+                        self.plt[rel.address] = rel.symbol.name.split('@')[0]
             except Exception:
                 pass
             return

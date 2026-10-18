@@ -1162,11 +1162,11 @@ def sac_for_path(path: str):
     the correct SinkArgClassifier variant for that architecture.
 
     Returns one of:
-      SinkArgClassifier          — x86_64 (default)
-      SinkArgClassifierX86_32    — i386  (closes DOORS/TestMate/Tau SAC=0 gap)
-      SinkArgClassifierPPC32     — ppc32 BE (closes HACMP/RMC/DCV SAC=0 gap)
-      SinkArgClassifierS390      — s390/s390x (closes zLinux-XLC SAC=0 gap)
-      SinkArgClassifier          — arm32/aarch64/ppc64 (best-effort x86_64 SAC)
+      SinkArgClassifier            — x86_64 (default)
+      SinkArgClassifierI386        — i386  (closes DOORS/TestMate/Tau SAC=0 gap)
+      SinkArgClassifierPPC32BE     — ppc32 BE (closes HACMP/RMC/DCV SAC=0 gap)
+      SinkArgClassifierS390X       — s390/s390x (closes zLinux-XLC SAC=0 gap)
+      SinkArgClassifier            — arm32/aarch64/ppc64 (best-effort x86_64 SAC)
 
     All returned objects expose the same public API:
       .classify_all()  → List[SinkClassification]
@@ -1191,14 +1191,14 @@ def sac_for_path(path: str):
         return SinkArgClassifier.from_path(path)
 
     if machine == _ELF_MACHINE_I386:
-        from ablation.analyzers.sink_arg_classifier_x86_32 import SinkArgClassifierX86_32
-        return SinkArgClassifierX86_32.from_path(path)
+        from ablation.analyzers.sink_arg_classifier_x86_32 import SinkArgClassifierI386
+        return SinkArgClassifierI386.from_path(path)
     elif machine == _ELF_MACHINE_PPC32:
-        from ablation.analyzers.sink_arg_classifier_ppc32 import SinkArgClassifierPPC32
-        return SinkArgClassifierPPC32.from_path(path)
+        from ablation.analyzers.sink_arg_classifier_ppc32 import SinkArgClassifierPPC32BE
+        return SinkArgClassifierPPC32BE.from_path(path)
     elif machine == _ELF_MACHINE_S390:
-        from ablation.analyzers.sink_arg_classifier_s390 import SinkArgClassifierS390
-        return SinkArgClassifierS390.from_path(path)
+        from ablation.analyzers.sink_arg_classifier_s390 import SinkArgClassifierS390X
+        return SinkArgClassifierS390X.from_path(path)
     else:
         return SinkArgClassifier.from_path(path)
 
