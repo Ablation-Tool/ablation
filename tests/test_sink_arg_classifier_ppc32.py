@@ -40,6 +40,7 @@ _SKIP_DEPS = pytest.mark.skipif(
 
 from ablation.analyzers.sink_arg_classifier_ppc32 import (
     SinkArgClassifierPPC32,
+    SinkArgClassifierPPC32BE,
     RODATA_CONST,
     ARG_PROPAGATED,
     SNPRINTF_RODATA,
@@ -359,3 +360,56 @@ def test_entry_arg_stw_save_detected() -> None:
     hit = [r for r in results if r.sink_name == 'system']
     assert hit
     assert hit[0].verdict == ARG_PROPAGATED, f'expected ARG_PROPAGATED, got {hit[0].verdict}: {hit[0].detail}'
+
+
+# ── SinkArgClassifierPPC32BE canonical-name tests ─────────────────────────────
+
+@_SKIP_DEPS
+def test_ppc32be_canonical_name():
+    """type(clf).__name__ returns SinkArgClassifierPPC32BE, not the alias."""
+    from capstone import Cs, CS_ARCH_PPC, CS_MODE_32, CS_MODE_BIG_ENDIAN
+    ctx = MagicMock()
+    ctx.path = '/dev/null'
+    ctx.base_va = BASE_VA
+    ctx.plt = DEFAULT_PLT
+    ctx.exports = {}
+    ctx.func_starts = [FUNC_VA]
+    ctx.thumb_funcs = set()
+    ctx.callers_of = lambda va: [FUNC_VA] if va in DEFAULT_PLT else []
+    clf = SinkArgClassifierPPC32BE.__new__(SinkArgClassifierPPC32BE)
+    clf._ctx = ctx
+    clf._data = b'\x00' * 4
+    clf._plt_rev = {}
+    clf._sinks = {}
+    clf._snprintf_plts = {}
+    clf._rodata_ranges = []
+    clf._dead_sinks = []
+    clf._bin = None
+    clf._cs = Cs(CS_ARCH_PPC, CS_MODE_32 | CS_MODE_BIG_ENDIAN)
+    clf._cs.detail = True
+    clf._va_to_file_offset = lambda va: va - FUNC_VA
+    assert type(clf).__name__ == 'SinkArgClassifierPPC32BE'
+
+
+@_SKIP_DEPS
+def test_ppc32be_r3_rodata_const():
+    """r3-register trace: lis r3, HI / addi r3, r3, LO / bl system → RODATA_CONST.
+
+    PPC32 BE SysV ABI: arg0 is in r3.  _find_reg_for_arg() walks backward from
+    the BL and classifies the lis+addi pair as a 32-bit immediate.
+    _classify_value() checks if the reconstructed VA is in the .rodata range.
+    """
+    hi = RODATA_STR >> 16
+    lo = RODATA_STR & 0xFFFF
+    code = _ppc32_be(
+        _lis(3, hi),
+        _addi(3, 3, lo),
+        _bl(FUNC_VA + 8, SYSTEM_PLT),
+    )
+    clf = _make_clf(code)
+    results = clf.classify_all()
+    hit = [r for r in results if r.sink_name == 'system']
+    assert hit, 'r3-register trace must find the system call site'
+    assert hit[0].verdict == RODATA_CONST, (
+        f'expected RODATA_CONST, got {hit[0].verdict}; detail={hit[0].detail}'
+    )
