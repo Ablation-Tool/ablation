@@ -868,8 +868,3 @@ Feel free to contact me if you have any questions, ideas, complaints or bugs.
 𝕏 [@showxlate](https://x.com/showxlate)
 
 </details>
-
----
-
----
-
