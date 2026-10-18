@@ -214,6 +214,14 @@ class SinkArgClassifierPPC32BE:
                     (int(sec.virtual_address),
                      int(sec.virtual_address) + int(sec.size))
                 )
+        # BinaryContext._extract_plt() is x86_64-only; for ppc32 ELFs it returns
+        # plt={}.  Fall back to LIEF pltgot_relocations — arch-agnostic and works
+        # for all ELF ABIs including PPC32 BE.
+        if not self._plt_rev:
+            for rel in self._bin.pltgot_relocations:
+                if rel.has_symbol and rel.symbol.name:
+                    bare = rel.symbol.name.split('@')[0]
+                    self._plt_rev[bare] = rel.address
         for name, fmt_pos in _SNPRINTF_FMT_POS_PPC32.items():
             va = self._plt_rev.get(name)
             if va:
@@ -271,11 +279,11 @@ class SinkArgClassifierPPC32BE:
                         break
             if not va:
                 continue
-            callers = list(self._ctx.callers_of(va))
-            if not callers:
-                self._dead_sinks.append(name)
-            else:
-                result[va] = (name, arg_pos)
+            # Do NOT gate on callers_of() here: BinaryContext's call graph is
+            # x86_64-only and returns [] for all PPC32 BE binaries, which would
+            # mark every import as dead and return no sites.  We include the sink
+            # if it has a PLT VA; classify_all() scans all func_starts instead.
+            result[va] = (name, arg_pos)
         return result
 
     # ── per-function disassembly ──────────────────────────────────────────────
@@ -625,20 +633,18 @@ class SinkArgClassifierPPC32BE:
     # ── public API ────────────────────────────────────────────────────────────
 
     def classify_all(self) -> List[SinkClassification]:
-        """Run classification across all callers of registered sinks."""
+        """Run classification across all functions for registered sink call sites.
+
+        Iterates over all known func_starts rather than using callers_of():
+        BinaryContext's call graph is x86_64-only and returns [] for PPC32 BE
+        binaries, so callers_of()-based dispatch would always produce zero results.
+        """
         sink_plts = self._find_sink_plts()
         if not sink_plts:
             return []
         results: List[SinkClassification] = []
-        seen_funcs: set = set()
-        for sink_va, (sink_name, arg_pos) in sink_plts.items():
-            for entry in self._ctx.callers_of(sink_va):
-                # callers_of may return (va, name) tuples or plain ints
-                caller_va = entry[0] if isinstance(entry, tuple) else entry
-                if caller_va in seen_funcs:
-                    continue
-                seen_funcs.add(caller_va)
-                results.extend(self._classify_function(caller_va, sink_plts))
+        for func_va in self._ctx.func_starts:
+            results.extend(self._classify_function(func_va, sink_plts))
         return results
 
     def classify_sink(self, sink_name: str) -> List[SinkClassification]:

@@ -379,10 +379,88 @@ class SinkArgClassifierS390X:
 
     # ── classify_all ─────────────────────────────────────────────────────────
 
+    def _raw_brasl_scan(
+        self,
+        sink_plts: Dict[int, Tuple[str, int]],
+        text_va: int,
+        text_data: bytes,
+    ) -> List[SinkClassification]:
+        """
+        Byte-sweep a raw code segment for BRASL instructions whose target is a
+        PLT sink.  Used for stripped binaries where ELF FUNC symbols do not cover
+        the actual code.
+
+        s390x BRASL encoding: 0xC0 0xE5 <i32 half-word offset> (6 bytes).
+        target = call_va + 2 * sign_extend_32(offset)
+        We verify each hit with Capstone before running the argument trace.
+        """
+        results: List[SinkClassification] = []
+        data = text_data
+        n = len(data)
+        # Lookback window: _LOOKBACK instructions at max 6 bytes each, plus a
+        # 16-byte alignment pad so we don't start mid-instruction.
+        _WIN_BYTES = _LOOKBACK * 6 + 16
+        for i in range(0, n - 5):
+            if data[i] != 0xC0 or data[i + 1] != 0xE5:
+                continue
+            call_va = text_va + i
+            raw_off = struct.unpack('>i', data[i + 2:i + 6])[0]
+            target_va = (call_va + 2 * raw_off) & 0xFFFFFFFFFFFFFFFF
+            if target_va not in sink_plts:
+                continue
+            sink_name, arg_pos = sink_plts[target_va]
+            if arg_pos >= len(_S390_ARG_REGS):
+                continue
+            # Disassemble a tight lookback window ending at the call.  Using
+            # _MAX_FUNC_BYTES causes Capstone to fail on long s390x sections
+            # that contain undecodable bytes before the call; using a short
+            # window avoids this but may start mid-instruction if the computed
+            # start lands on a data byte.  Walk forward 2 bytes at a time
+            # (s390x minimum instruction size) until Capstone can decode past
+            # the call.
+            window_start = max(0, i - _WIN_BYTES)
+            insns: list = []
+            call_idx: Optional[int] = None
+            for _adj in range(0, min(16, i - window_start + 1), 2):
+                ws = window_start + _adj
+                window_va = text_va + ws
+                code = data[ws:i + 6]
+                try:
+                    insns = list(self._cs.disasm(code, window_va))
+                except Exception:
+                    insns = []
+                call_idx = next(
+                    (j for j, ins in enumerate(insns) if ins.address == call_va),
+                    None,
+                )
+                if call_idx is not None:
+                    break
+            if call_idx is None:
+                continue
+            arg_reg = _S390_ARG_REGS[arg_pos]
+            verdict = self._classify_reg(insns, call_idx, arg_reg)
+            # func_va approximation: first instruction in the disassembled window
+            func_va_approx = insns[0].address if insns else call_va
+            results.append(SinkClassification(
+                func_va=func_va_approx,
+                call_va=call_va,
+                sink_name=sink_name,
+                arg_pos=arg_pos,
+                verdict=verdict,
+                detail=f's390x arg_pos={arg_pos} (text-sweep)',
+            ))
+        return results
+
     def classify_all(self) -> List[SinkClassification]:
         """
         Find all exec-class sink call sites in this binary and classify each.
         Returns a list of SinkClassification named tuples.
+
+        For non-stripped binaries the ELF FUNC symbols cover all functions.
+        For stripped binaries (no .symtab) the symbol set covers only exported
+        entries (typically OpenSSL/libc glue) and misses the actual application
+        code.  In that case a raw BRASL byte-sweep over the .text section is used
+        to locate call sites, bypassing the need for function-boundary symbols.
         """
         if not _LIEF_OK or self._bin is None or not _CS_OK or self._cs is None:
             return []
@@ -392,6 +470,7 @@ class SinkArgClassifierS390X:
             return []
 
         results: List[SinkClassification] = []
+        seen_call_vas: set = set()
         seen_funcs: set = set()
 
         for func_sym in self._bin.symbols:
@@ -441,15 +520,33 @@ class SinkArgClassifierS390X:
                     continue
                 arg_reg = _S390_ARG_REGS[arg_pos]
 
+                call_va = insn.address
+                if call_va in seen_call_vas:
+                    continue
+                seen_call_vas.add(call_va)
+
                 classification = self._classify_reg(insns, idx, arg_reg)
                 results.append(SinkClassification(
                     func_va=func_va,
-                    call_va=insn.address,
+                    call_va=call_va,
                     sink_name=sink_name,
                     arg_pos=arg_pos,
                     verdict=classification,
                     detail=f's390x arg_pos={arg_pos}',
                 ))
+
+        # Stripped-binary fallback: sweep the .text section directly for BRASL
+        # instructions targeting PLT sinks.  Skip call sites already found above.
+        text_sec = self._bin.get_section('.text')
+        if text_sec is not None:
+            text_va  = int(text_sec.virtual_address)
+            text_off = self._va_to_file_offset(text_va)
+            if 0 <= text_off < len(self._data):
+                text_data = self._data[text_off:text_off + int(text_sec.size)]
+                for r in self._raw_brasl_scan(sink_plts, text_va, text_data):
+                    if r.call_va not in seen_call_vas:
+                        seen_call_vas.add(r.call_va)
+                        results.append(r)
 
         return results
 
