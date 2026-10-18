@@ -558,12 +558,12 @@ class SinkArgClassifierS390X:
         lines = [f'SinkArgClassifierS390({Path(self._path).name}): {len(results)} call sites']
         counts: Dict[str, int] = {}
         for r in results:
-            counts[r.classification] = counts.get(r.classification, 0) + 1
+            counts[r.verdict] = counts.get(r.verdict, 0) + 1
         lines.append(f'  verdicts: {counts}')
         for r in results:
             lines.append(
-                f'  {r.classification} func={hex(r.func_va)} call={hex(r.call_va)} '
-                f'sink={r.sink} detail={r.detail!r}'
+                f'  {r.verdict} func={hex(r.func_va)} call={hex(r.call_va)} '
+                f'sink={r.sink_name} detail={r.detail!r}'
             )
         return '\n'.join(lines)
 
