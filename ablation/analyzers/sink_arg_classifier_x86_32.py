@@ -155,6 +155,13 @@ class SinkArgClassifierX86_32:
         """Build from a BinaryContext."""
         return cls(ctx)
 
+    @classmethod
+    def from_path(cls, path: str) -> 'SinkArgClassifierX86_32':
+        """Build directly from an ELF path — constructs BinaryContext internally."""
+        from ablation.analyzers.binary_context import BinaryContext
+        ctx = BinaryContext.load_or_build(path)
+        return cls(ctx)
+
     def add_sink(self, name: str, arg_pos: int) -> None:
         """Register an additional sink (e.g., 'strcpy' at arg_pos=1 for source)."""
         self._sinks[name] = arg_pos
