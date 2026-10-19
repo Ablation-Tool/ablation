@@ -1262,11 +1262,13 @@ def sac_for_path(path: str):
     the correct SinkArgClassifier variant for that architecture.
 
     Returns one of:
-      SinkArgClassifier            — x86_64 (default)
-      SinkArgClassifierI386        — i386  (closes DOORS/TestMate/Tau SAC=0 gap)
-      SinkArgClassifierPPC32BE     — ppc32 BE (closes HACMP/RMC/DCV SAC=0 gap)
+      SinkArgClassifier               — x86_64 (default)
+      SinkArgClassifierI386           — i386  (closes DOORS/TestMate/Tau SAC=0 gap)
+      SinkArgClassifierPPC32BE        — ppc32 BE (closes HACMP/RMC/DCV SAC=0 gap)
+      SinkArgClassifierPPC64ELFv1     — ppc64 BE ELFv1 (closes LOADL-GAP-002)
       SinkArgClassifierS390X       — s390/s390x (closes zLinux-XLC SAC=0 gap)
-      SinkArgClassifier            — arm32/aarch64/ppc64 (best-effort x86_64 SAC)
+      SinkArgClassifierPPC64ELFv1     — ppc64 BE ELFv1 (closes LOADL-GAP-002)
+      SinkArgClassifier               — arm32/aarch64/ppc64le and everything else
 
     All returned objects expose the same public API:
       .classify_all()  → List[SinkClassification]
@@ -1296,6 +1298,10 @@ def sac_for_path(path: str):
     elif machine == _ELF_MACHINE_PPC32:
         from ablation.analyzers.sink_arg_classifier_ppc32 import SinkArgClassifierPPC32BE
         return SinkArgClassifierPPC32BE.from_path(path)
+    elif machine == _ELF_MACHINE_PPC64 and enc == 2:
+        # PPC64 BE ELFv1 — inline 7-instruction TOC stubs, not a standard PLT
+        from ablation.analyzers.sink_arg_classifier_ppc64_elfv1 import SinkArgClassifierPPC64ELFv1
+        return SinkArgClassifierPPC64ELFv1.from_path(path)
     elif machine == _ELF_MACHINE_S390:
         from ablation.analyzers.sink_arg_classifier_s390 import SinkArgClassifierS390X
         return SinkArgClassifierS390X.from_path(path)
@@ -1313,10 +1319,11 @@ def sac_for_context(ctx):
     architectures without a specialised variant.
 
     Returns one of:
-      SinkArgClassifierI386    — x86_32 / i386
-      SinkArgClassifierPPC32BE — ppc32 BE
-      SinkArgClassifierS390X   — s390 / s390x
-      SinkArgClassifier        — everything else (x86_64, ppc64, aarch64, …)
+      SinkArgClassifierI386         — x86_32 / i386
+      SinkArgClassifierPPC32BE      — ppc32 BE
+      SinkArgClassifierPPC64ELFv1   — ppc64 BE (ELFv1; detected via EI_DATA=2 in ELF header)
+      SinkArgClassifierS390X        — s390 / s390x
+      SinkArgClassifier             — everything else (x86_64, ppc64le, aarch64, …)
     """
     arch = getattr(ctx, 'arch', 'x86_64')
     if arch == 'x86_32':
@@ -1325,6 +1332,16 @@ def sac_for_context(ctx):
     if arch == 'ppc32':
         from ablation.analyzers.sink_arg_classifier_ppc32 import SinkArgClassifierPPC32BE
         return SinkArgClassifierPPC32BE.from_context(ctx)
+    if arch == 'ppc64':
+        # Distinguish BE ELFv1 from LE ELFv2 via ELF header EI_DATA byte.
+        try:
+            with open(ctx.path, 'rb') as _f:
+                _ei_data = _f.read(6)[5]  # 1=LE 2=BE
+        except Exception:
+            _ei_data = 0
+        if _ei_data == 2:
+            from ablation.analyzers.sink_arg_classifier_ppc64_elfv1 import SinkArgClassifierPPC64ELFv1
+            return SinkArgClassifierPPC64ELFv1.from_context(ctx)
     if arch in ('s390', 's390x'):
         from ablation.analyzers.sink_arg_classifier_s390 import SinkArgClassifierS390X
         return SinkArgClassifierS390X.from_context(ctx)
