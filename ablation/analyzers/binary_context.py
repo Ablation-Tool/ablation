@@ -1053,34 +1053,54 @@ class BinaryContext:
                                             self.plt[text_va + off] = sym
                                         continue
 
-            # ── 6-instruction stub: std r2,N(r1) + ld r11,LO(r2) + mtctr r11 + … ──
-            # Used when GOT offset from r2 fits in a signed 16-bit value (within ±32KB).
-            # Form: std r2,N(r1); ld r11,LO(r2); mtctr r11; ld r11,LO+16(r2);
-            #       ld r2,LO+8(r2); bctr
+            # ── 6 / 5-instruction stubs: std r2,N(r1) prefix ──
+            # Both forms start with std r2,N(r1) (0xF841xxxx), then differ by the target
+            # register of the ld instruction that follows:
+            #   r11 → 6-instruction form (0xE962):
+            #     std r2,N(r1); ld r11,LO(r2); mtctr r11; ld r11,LO+16(r2); ld r2,LO+8(r2); bctr
+            #   r12 → 5-instruction form (0xE982):
+            #     std r2,N(r1); ld r12,LO(r2); mtctr r12; ld r2,LO+8(r2); bctr
+            # Both: desc_va = r2 + sign_extend16(LO). Used when GOT offset fits in ±32KB.
             if (w0 & 0xFFFF0000) != 0xF8410000:   # std r2, N(r1)
                 continue
-            if len(text_data) - off < 24:
+            if len(text_data) - off < 20:
                 continue
             w1 = struct.unpack_from('>I', text_data, off + 4)[0]
-            if (w1 & 0xFFFF0000) != 0xE9620000:   # ld r11, LO(r2)
+            w1_upper = w1 & 0xFFFF0000
+
+            if w1_upper == 0xE9620000:             # ld r11, LO(r2)  → 6-instruction form
+                if len(text_data) - off < 24:
+                    continue
+                w2 = struct.unpack_from('>I', text_data, off + 8)[0]
+                if w2 != 0x7D6903A6:               # mtctr r11
+                    continue
+                w3 = struct.unpack_from('>I', text_data, off + 12)[0]
+                if (w3 & 0xFFFF0000) != 0xE9620000:  # ld r11, LO+16(r2)
+                    continue
+                w4 = struct.unpack_from('>I', text_data, off + 16)[0]
+                if (w4 & 0xFFFF0000) != 0xE8420000:  # ld r2, LO+8(r2)
+                    continue
+                w5 = struct.unpack_from('>I', text_data, off + 20)[0]
+                if w5 != 0x4E800420:               # bctr
+                    continue
+            elif w1_upper == 0xE9820000:           # ld r12, LO(r2)  → 5-instruction form
+                w2 = struct.unpack_from('>I', text_data, off + 8)[0]
+                if w2 != 0x7D8903A6:               # mtctr r12
+                    continue
+                w3 = struct.unpack_from('>I', text_data, off + 12)[0]
+                if (w3 & 0xFFFF0000) != 0xE8420000:  # ld r2, LO+8(r2)
+                    continue
+                w4 = struct.unpack_from('>I', text_data, off + 16)[0]
+                if w4 != 0x4E800420:               # bctr
+                    continue
+            else:
                 continue
-            w2 = struct.unpack_from('>I', text_data, off + 8)[0]
-            if w2 != 0x7D6903A6:                   # mtctr r11
-                continue
-            w3 = struct.unpack_from('>I', text_data, off + 12)[0]
-            if (w3 & 0xFFFF0000) != 0xE9620000:   # ld r11, LO+16(r2)
-                continue
-            w4 = struct.unpack_from('>I', text_data, off + 16)[0]
-            if (w4 & 0xFFFF0000) != 0xE8420000:   # ld r2, LO+8(r2)
-                continue
-            w5 = struct.unpack_from('>I', text_data, off + 20)[0]
-            if w5 != 0x4E800420:                   # bctr
-                continue
-            # GOT descriptor VA: r2 + sign_extend16(LO from ld r11,LO(r2))
-            lo6 = w1 & 0xFFFF
-            if lo6 & 0x8000:
-                lo6 -= 0x10000
-            desc_va = (r2 + lo6) & 0xFFFFFFFFFFFFFFFF
+
+            # GOT descriptor VA: r2 + sign_extend16(LO from first ld instruction)
+            lo_s = w1 & 0xFFFF
+            if lo_s & 0x8000:
+                lo_s -= 0x10000
+            desc_va = (r2 + lo_s) & 0xFFFFFFFFFFFFFFFF
             sym = got_to_sym.get(desc_va)
             if sym:
                 self.plt[text_va + off] = sym
