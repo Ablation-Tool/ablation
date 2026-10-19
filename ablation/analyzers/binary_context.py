@@ -1771,7 +1771,7 @@ class BinaryContext:
             valid       = _valid_targets(tgt_v)
             _attr_edges(insn_v[valid], tgt_v[valid])
 
-        # --- LW $t9, N($gp) scan (O32 ABI PIC) ---
+        # --- LW $t9, N($gp) scan (O32 ABI PIC and MIPS N32 IRIX) ---
         # LW $t9, N($gp): upper halfword bits 31:16 = (opcode=LW<<10)|(rs=$gp<<5)|(rt=$t9)
         # = (0x23<<10)|(0x1C<<5)|0x19 = 0x8C00|0x0380|0x0019 = 0x8F99
         got_sec  = binary.get_section(".got")
@@ -1820,6 +1820,60 @@ class BinaryContext:
                         insn_v_lw = _va_to_i64(sec_va) + lw_t9_idx[sel].astype(np.int64) * 4
                         valid_lw  = _valid_targets(tgt_v_lw)
                         _attr_edges(insn_v_lw[valid_lw], tgt_v_lw[valid_lw])
+
+                        # IRIX MIPS N32 fallback: static GOT holds RLD resolver stubs,
+                        # not PLT VAs, so the GOT-value path above misses external calls.
+                        # Run this for any LW instruction not matched by GOT value to
+                        # cover both IRIX (all external calls missed) and Linux MIPS
+                        # (internal-ptr calls found by GOT, external PLT calls missed).
+                        if hasattr(binary, 'dynamic_entries'):
+                            local_gotno_v = None
+                            gotsym_v = None
+                            for tag in binary.dynamic_entries:
+                                ts = str(tag.tag)
+                                if 'LOCAL_GOTNO' in ts:
+                                    local_gotno_v = int(tag.value)
+                                elif 'GOTSYM' in ts:
+                                    gotsym_v = int(tag.value)
+                            if local_gotno_v is not None and gotsym_v is not None:
+                                plt_name_to_va: Dict[str, int] = {n: va for va, n in self.plt.items()}
+                                gp_off_to_plt: Dict[int, int] = {}
+                                if hasattr(binary, 'dynamic_symbols'):
+                                    for sym_idx, sym in enumerate(binary.dynamic_symbols):
+                                        if sym_idx < gotsym_v:
+                                            continue
+                                        nm = str(sym.name)
+                                        plt_va = plt_name_to_va.get(nm)
+                                        if plt_va is None:
+                                            continue
+                                        got_idx_d = local_gotno_v + (sym_idx - gotsym_v)
+                                        entry_va = got_va + got_idx_d * 4
+                                        gp_off = entry_va - gp_val
+                                        if -0x8000 <= gp_off <= 0x7FFF:
+                                            gp_off_to_plt[gp_off] = plt_va
+                                if gp_off_to_plt:
+                                    # Only emit edges for LW instructions not already
+                                    # resolved via GOT value (avoid duplicates).
+                                    already_resolved = set(zip(
+                                        (insn_v_lw[valid_lw]).tolist(),
+                                        (tgt_v_lw[valid_lw]).tolist(),
+                                    ))
+                                    imm16_list = imm16.tolist()
+                                    insn_v_arr = _va_to_i64(sec_va) + lw_t9_idx.astype(np.int64) * 4
+                                    insn_list  = insn_v_arr.tolist()
+                                    for off, insn_va in zip(imm16_list, insn_list):
+                                        plt_va = gp_off_to_plt.get(int(off))
+                                        if plt_va is None:
+                                            continue
+                                        if (int(insn_va), plt_va) in already_resolved:
+                                            continue
+                                        label = self.plt.get(plt_va, "")
+                                        if len(func_arr):
+                                            oi = max(0, int(np.searchsorted(func_arr, insn_va, side='right')) - 1)
+                                            owner = int(func_arr[oi])
+                                        else:
+                                            owner = int(insn_va)
+                                        edges.append((owner, plt_va, label))
 
         self.call_edges = edges
 
