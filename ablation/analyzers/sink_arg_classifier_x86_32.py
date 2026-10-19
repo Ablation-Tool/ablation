@@ -7,6 +7,15 @@ Gap this fills vs SinkArgClassifier:
   That gap is RMC-GAP-002 / COMMSVR-GAP-004 / HACMP-GAP-001.
   This module resolves all three.
 
+Session 20 improvements (2026-10-19):
+  [A] [reg+disp] dereference → ARG_PROPAGATED when base register traces to ARG_PROPAGATED.
+      Fixes execv(argv[0], argv) pattern where arg0 = [eax] and eax = [ebp+8].
+      Prior: UNKNOWN. Now: ARG_PROPAGATED.
+  [B] strcpy/strcat-family added to _backtrack_stack_slot.
+      Fixes strcpy(buf, RODATA); system(buf) — buffer filled from static string.
+      Prior: UNKNOWN. Now: SNPRINTF_RODATA.
+  Gap IDs: SYNERGY-UNKNOWN-001 (execv argv deref), SYNERGY-UNKNOWN-002 (strcpy fill).
+
 Four verdicts (same as SinkArgClassifier):
   RODATA_CONST     — argument is a constant from .rodata or a literal immediate.
   SNPRINTF_RODATA  — argument is a stack buffer written by snprintf/sprintf
@@ -116,6 +125,21 @@ _SNPRINTF_FMT_POS_X86_32: Dict[str, int] = {
     '__snprintf_chk': 4,
 }
 
+# strcpy-family: dest=arg0, src=arg1.  If the src is RODATA_CONST and dest is our
+# stack slot, the slot holds a RODATA-derived string → SNPRINTF_RODATA verdict.
+# strcat fills dst at arg0 from src at arg1.
+_STRCPY_DST_SRC_X86_32: Dict[str, Tuple[int, int]] = {
+    'strcpy':    (0, 1),
+    'strncpy':   (0, 1),
+    'strlcpy':   (0, 1),
+    'stpcpy':    (0, 1),
+    'strcat':    (0, 1),
+    'strncat':   (0, 1),
+    'g_strlcpy': (0, 1),
+    'g_strlcat': (0, 1),
+    'g_stpcpy':  (0, 1),
+}
+
 # ── Scan constants ────────────────────────────────────────────────────────────
 _LOOKBACK        = 80    # instructions to scan backward from call site
 _SNPRINTF_WINDOW = 140   # instructions to scan for prior snprintf
@@ -138,6 +162,7 @@ class SinkArgClassifierI386:
         self._plt_rev: Dict[str, int] = {v: k for k, v in ctx.plt.items()}
         self._sinks: Dict[str, int]   = dict(_DEFAULT_SINKS_X86_32)
         self._snprintf_plts: Dict[int, int] = {}  # PLT VA → fmt arg position
+        self._strcpy_plts: Dict[int, Tuple[int, int]] = {}  # PLT VA → (dst_pos, src_pos)
         self._rodata_ranges: List[Tuple[int, int]] = []
         self._data_ranges:  List[Tuple[int, int]] = []
         self._bss_ranges:   List[Tuple[int, int]] = []
@@ -185,6 +210,10 @@ class SinkArgClassifierI386:
             va = self._plt_rev.get(name)
             if va is not None:
                 self._snprintf_plts[va] = fmt_pos
+        for name, (dst_pos, src_pos) in _STRCPY_DST_SRC_X86_32.items():
+            va = self._plt_rev.get(name)
+            if va is not None:
+                self._strcpy_plts[va] = (dst_pos, src_pos)
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
@@ -473,7 +502,22 @@ class SinkArgClassifierI386:
                     if ptr is not None and self._is_static_const(ptr):
                         return RODATA_CONST
                 return UNKNOWN
-            # [reg + N] — struct/heap field
+            # [disp] — absolute address (base=X86_REG_INVALID=0), no index
+            if base == 0 and idx == 0 and disp != 0:
+                if self._is_static_const(disp):
+                    return RODATA_CONST
+                ptr = self._read_u32(disp)
+                if ptr is not None and self._is_static_const(ptr):
+                    return RODATA_CONST
+                return UNKNOWN
+            # [reg + N] — pointer dereference (struct, heap, or argv-style array).
+            # Trace the base register: if it came from an ARG_PROPAGATED source,
+            # so does its dereference.  Applies to execv(argv[0], argv) where
+            # arg0 = [eax] and eax = [ebp+8].
+            if base != 0 and idx == 0 and depth < 2:
+                base_verdict = self._classify_value(insns, insn_idx, f'reg:{base}', depth + 1)
+                if base_verdict == ARG_PROPAGATED:
+                    return ARG_PROPAGATED
             return UNKNOWN
 
         return UNKNOWN
@@ -561,8 +605,9 @@ class SinkArgClassifierI386:
         self, insns: list, from_idx: int, ebp_neg_offset: int, depth: int
     ) -> str:
         """
-        Determine if a stack slot [ebp - ebp_neg_offset] was filled by a snprintf with
-        RODATA format string. Returns SNPRINTF_RODATA or UNKNOWN.
+        Determine if a stack slot [ebp - ebp_neg_offset] was filled by a string-building
+        call (snprintf/sprintf or strcpy/strcat) with a RODATA source.
+        Returns SNPRINTF_RODATA or UNKNOWN.
         """
         if depth > 2:
             return UNKNOWN
@@ -576,29 +621,32 @@ class SinkArgClassifierI386:
             if not ops or ops[0].type != X86_OP_IMM:
                 continue
             callee_va = ops[0].imm
-            if callee_va not in self._snprintf_plts:
+            if callee_va not in self._snprintf_plts and callee_va not in self._strcpy_plts:
                 continue
 
-            # Found a snprintf-family call. Verify its dest is our slot.
-            fmt_pos = self._snprintf_plts[callee_va]
-            # For sprintf(dest, fmt, ...) → arg_pos 0 = dest, arg_pos 1 = fmt
-            # snprintf(dest, n, fmt, ...) → arg_pos 0 = dest, arg_pos 2 = fmt
-            dest_arg_idx = 0
-
-            dest_verdict = self._get_pushed_arg(insns, j, dest_arg_idx, depth + 1)
-            fmt_verdict  = self._get_pushed_arg(insns, j, fmt_pos, depth + 1)
-
-            if dest_verdict is None or fmt_verdict is None:
+            # snprintf-family: check dest=slot and fmt=RODATA
+            if callee_va in self._snprintf_plts:
+                fmt_pos = self._snprintf_plts[callee_va]
+                dest_arg_idx = 0
+                dest_is_our_slot = self._arg_is_stack_slot(insns, j, dest_arg_idx, ebp_neg_offset)
+                if not dest_is_our_slot:
+                    continue
+                fmt_verdict = self._get_pushed_arg(insns, j, fmt_pos, depth + 1)
+                if fmt_verdict == RODATA_CONST:
+                    return SNPRINTF_RODATA
                 continue
 
-            # Check if dest points to [ebp - ebp_neg_offset]
-            dest_is_our_slot = self._arg_is_stack_slot(insns, j, dest_arg_idx, ebp_neg_offset)
-            if not dest_is_our_slot:
+            # strcpy-family: check dest=slot and src=RODATA.
+            # strcpy(dest=[ebp-N], src=RODATA) → slot holds a RODATA-derived string.
+            if callee_va in self._strcpy_plts:
+                dst_pos, src_pos = self._strcpy_plts[callee_va]
+                dest_is_our_slot = self._arg_is_stack_slot(insns, j, dst_pos, ebp_neg_offset)
+                if not dest_is_our_slot:
+                    continue
+                src_verdict = self._get_pushed_arg(insns, j, src_pos, depth + 1)
+                if src_verdict == RODATA_CONST:
+                    return SNPRINTF_RODATA  # slot holds string copied from .rodata
                 continue
-
-            # Verify format string is RODATA
-            if fmt_verdict == RODATA_CONST:
-                return SNPRINTF_RODATA
 
         return UNKNOWN
 
@@ -727,6 +775,19 @@ class SinkArgClassifierI386:
                     if ptr is not None and self._is_static_const(ptr):
                         return RODATA_CONST
                 return UNKNOWN
+            # [disp] absolute address
+            if m.base == 0 and m.index == 0 and m.disp != 0:
+                if self._is_static_const(m.disp):
+                    return RODATA_CONST
+                ptr = self._read_u32(m.disp)
+                if ptr is not None and self._is_static_const(ptr):
+                    return RODATA_CONST
+                return UNKNOWN
+            # [reg+N] — trace base register: execv(argv[0]) where argv[0]=[eax] and eax=[ebp+8]
+            if m.base != 0 and m.index == 0 and depth < 2:
+                base_verdict = self._classify_value(insns, push_idx, f'reg:{m.base}', depth + 1)
+                if base_verdict == ARG_PROPAGATED:
+                    return ARG_PROPAGATED
         return UNKNOWN
 
     # ── per-call-site classification ──────────────────────────────────────────
