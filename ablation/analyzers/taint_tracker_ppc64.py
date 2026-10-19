@@ -270,19 +270,18 @@ class PPC64TaintTracker:
             for sym in binary.pltgot_relocations:
                 if sym.symbol and sym.symbol.name:
                     self._plt[sym.address] = sym.symbol.name
-            for sym in binary.plt_relocations:
-                if sym.symbol and sym.symbol.name:
-                    self._plt[sym.address] = sym.symbol.name
             starts: Set[int] = set()
-            for sym in binary.static_symbols:
-                if sym.type == _lief.ELF.SYMBOL_TYPES.FUNC and sym.value:
+            _func_type = _lief.ELF.Symbol.TYPE.FUNC
+            for sym in binary.symtab_symbols:
+                if sym.type == _func_type and sym.value:
                     starts.add(sym.value)
             for sym in binary.dynamic_symbols:
-                if sym.type == _lief.ELF.SYMBOL_TYPES.FUNC and sym.value:
+                if sym.type == _func_type and sym.value:
                     starts.add(sym.value)
             self._func_starts = sorted(starts)
+            _load_type = _lief.ELF.Segment.TYPE.LOAD
             for seg in binary.segments:
-                if seg.type == _lief.ELF.SEGMENT_TYPES.LOAD and seg.flags & 0x1:
+                if seg.type == _load_type and int(seg.flags) & 0x1:
                     self._text_va   = seg.virtual_address
                     self._text_off  = seg.file_offset
                     self._text_size = seg.physical_size
