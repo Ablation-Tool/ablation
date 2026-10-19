@@ -195,6 +195,10 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "XCOFF loader import table" | `from modules.xcoff_loader_symbols import loader_imports; loader_imports(data)` |
 | "Extract files from a Tandem NonStop Guardian PAK archive" | `from ablation.core.guardian_pak_extractor import iter_files; list(iter_files(Path('patch.zip').read_bytes()))` |
 | "Build BinaryContext from an AIX XCOFF binary" | `BinaryContext.load_or_build(path)` (auto-detects XCOFF magic 0x01DF/0x01EF) |
+| "One-shot: extract all XCOFF binaries from an AIX installp .bff package" | `AixBffExtractor.from_path(bff_path)` → `[(name, xcoff_bytes), ...]`; uses `bff_extractor.iter_entries` with magic-scan fallback |
+| "Find AIX PPC32 external-call stub VAs for system()/popen()/exec*() in XCOFF32" | `XCOFF32Info.from_path(path).import_stubs()` → `{'.system': va, '.popen': va, ...}`; searches COFF symtab (inline) then stub pattern (lwz r12+stw r2) |
+| "Find all callers of an AIX PPC32 import stub" | `XCOFF32Info.from_path(path).callers_of(stub_va)` → `[call_va, ...]`; exhaustive bl scan of .text |
+| "Triage dangerous imports + stub VAs + caller count in one call (AIX XCOFF32)" | `XCOFF32Info.from_path(path).summary()` |
 | "Extract files from Huawei VRP squashfs v4 XZ image" | `HuaweiSquashfsExtractor(sqfs_path).extract(inner_path)` |
 | "Extract files from AMI BMC CramFS firmware" | `AmiCramFSExtractor.from_image(ima_path, offset).extract_file('/path')` |
 | "Extract FortiOS hardware firmware (.out file)" | `FortiOSHardwareExtractor.from_path(fw).extract_to(outdir)` |
