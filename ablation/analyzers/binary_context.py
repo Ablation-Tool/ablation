@@ -275,7 +275,7 @@ class BinaryContext:
             raw = self._callers_idx.get(symbol_or_va, [])
         else:
             va = symbol_or_va
-            sym = self.plt.get(va) or f"0x{va:x}"
+            sym = self.plt.get(va) or self._va_name(va)
             raw = self._callers_idx.get(sym, [])
         return [(cva, self.name(cva)) for cva, _ in raw]
 
