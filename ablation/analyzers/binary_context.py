@@ -1023,41 +1023,64 @@ class BinaryContext:
         except Exception:
             return
 
-        for off in range(0, len(text_data) - 27, 4):
+        for off in range(0, len(text_data) - 23, 4):
             w0 = struct.unpack_from('>I', text_data, off)[0]
-            # w0: addis r12, r2, HI  — upper 16 bits = 0x3D82
-            if (w0 & 0xFFFF0000) != 0x3D820000:
+
+            # ── 7-instruction stub: addis r12,r2,HI + std r2,N(r1) + ld r11,LO(r12) + … ──
+            # Used when GOT offset from r2 does not fit in 16 bits.
+            if (w0 & 0xFFFF0000) == 0x3D820000 and len(text_data) - off >= 28:
+                w1 = struct.unpack_from('>I', text_data, off + 4)[0]
+                if (w1 & 0xFFFF0000) == 0xF8410000:   # std r2, N(r1)
+                    w2 = struct.unpack_from('>I', text_data, off + 8)[0]
+                    if (w2 & 0xFFFF0000) == 0xE96C0000:  # ld r11, LO(r12)
+                        w3 = struct.unpack_from('>I', text_data, off + 12)[0]
+                        if (w3 & 0xFFFF0000) == 0xE84C0000:  # ld r2, LO+8(r12)
+                            w4 = struct.unpack_from('>I', text_data, off + 16)[0]
+                            if w4 == 0x7D6903A6:  # mtctr r11
+                                w5 = struct.unpack_from('>I', text_data, off + 20)[0]
+                                if (w5 & 0xFFFF0000) == 0xE96C0000:  # ld r11, LO+16(r12)
+                                    w6 = struct.unpack_from('>I', text_data, off + 24)[0]
+                                    if w6 == 0x4E800420:  # bctr
+                                        hi = w0 & 0xFFFF
+                                        lo = w2 & 0xFFFF
+                                        if hi & 0x8000:
+                                            hi -= 0x10000
+                                        if lo & 0x8000:
+                                            lo -= 0x10000
+                                        desc_va = r2 + (hi << 16) + lo
+                                        sym = got_to_sym.get(desc_va)
+                                        if sym:
+                                            self.plt[text_va + off] = sym
+                                        continue
+
+            # ── 6-instruction stub: std r2,N(r1) + ld r11,LO(r2) + mtctr r11 + … ──
+            # Used when GOT offset from r2 fits in a signed 16-bit value (within ±32KB).
+            # Form: std r2,N(r1); ld r11,LO(r2); mtctr r11; ld r11,LO+16(r2);
+            #       ld r2,LO+8(r2); bctr
+            if (w0 & 0xFFFF0000) != 0xF8410000:   # std r2, N(r1)
+                continue
+            if len(text_data) - off < 24:
                 continue
             w1 = struct.unpack_from('>I', text_data, off + 4)[0]
-            # w1: std r2, N(r1)  — upper 16 bits = 0xF841
-            if (w1 & 0xFFFF0000) != 0xF8410000:
+            if (w1 & 0xFFFF0000) != 0xE9620000:   # ld r11, LO(r2)
                 continue
             w2 = struct.unpack_from('>I', text_data, off + 8)[0]
-            # w2: ld r11, LO(r12)  — upper 16 bits = 0xE96C
-            if (w2 & 0xFFFF0000) != 0xE96C0000:
+            if w2 != 0x7D6903A6:                   # mtctr r11
                 continue
             w3 = struct.unpack_from('>I', text_data, off + 12)[0]
-            # w3: ld r2, LO+8(r12) — upper 16 bits = 0xE84C
-            if (w3 & 0xFFFF0000) != 0xE84C0000:
+            if (w3 & 0xFFFF0000) != 0xE9620000:   # ld r11, LO+16(r2)
                 continue
             w4 = struct.unpack_from('>I', text_data, off + 16)[0]
-            if w4 != 0x7D6903A6:  # mtctr r11
+            if (w4 & 0xFFFF0000) != 0xE8420000:   # ld r2, LO+8(r2)
                 continue
             w5 = struct.unpack_from('>I', text_data, off + 20)[0]
-            # w5: ld r11, LO+16(r12) — upper 16 bits = 0xE96C
-            if (w5 & 0xFFFF0000) != 0xE96C0000:
+            if w5 != 0x4E800420:                   # bctr
                 continue
-            w6 = struct.unpack_from('>I', text_data, off + 24)[0]
-            if w6 != 0x4E800420:  # bctr
-                continue
-            # Compute PLT descriptor VA: r2 + (HI << 16) + LO
-            hi = w0 & 0xFFFF
-            lo = w2 & 0xFFFF
-            if hi & 0x8000:
-                hi -= 0x10000
-            if lo & 0x8000:
-                lo -= 0x10000
-            desc_va = r2 + (hi << 16) + lo
+            # GOT descriptor VA: r2 + sign_extend16(LO from ld r11,LO(r2))
+            lo6 = w1 & 0xFFFF
+            if lo6 & 0x8000:
+                lo6 -= 0x10000
+            desc_va = (r2 + lo6) & 0xFFFFFFFFFFFFFFFF
             sym = got_to_sym.get(desc_va)
             if sym:
                 self.plt[text_va + off] = sym
