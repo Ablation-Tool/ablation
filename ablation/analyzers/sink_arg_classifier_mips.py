@@ -55,7 +55,7 @@ from typing import Dict, List, Optional, Tuple
 _CS_OK = False
 try:
     import capstone
-    from capstone import Cs, CS_ARCH_MIPS, CS_MODE_MIPS32, CS_MODE_BIG_ENDIAN, CS_MODE_LITTLE_ENDIAN
+    from capstone import Cs, CS_ARCH_MIPS, CS_MODE_MIPS32, CS_MODE_MIPS64, CS_MODE_BIG_ENDIAN, CS_MODE_LITTLE_ENDIAN
     from capstone.mips_const import MIPS_OP_REG, MIPS_OP_MEM, MIPS_OP_IMM
     _CS_OK = True
 except ImportError:
@@ -145,7 +145,7 @@ class SinkArgClassifierMIPS:
     This module fills MIPS-GAP-002.
     """
 
-    def __init__(self, ctx, big_endian: bool = True):
+    def __init__(self, ctx, big_endian: bool = True, mips_n32: bool = False):
         self._ctx         = ctx
         self._big_endian  = big_endian
         self._data: bytes = Path(ctx.path).read_bytes()
@@ -160,7 +160,11 @@ class SinkArgClassifierMIPS:
         self._bin = None
         self._cs: Optional[Cs] = None
         if _CS_OK:
-            mode = CS_MODE_MIPS32 + (CS_MODE_BIG_ENDIAN if big_endian else CS_MODE_LITTLE_ENDIAN)
+            # MIPS N32 (EF_MIPS_ABI2): uses 64-bit instructions (sd/ld/daddiu) on a
+            # 64-bit MIPS3/4 processor. CS_MODE_MIPS32 decodes them as unknown and
+            # stops; use CS_MODE_MIPS64 for correct disassembly.
+            word_mode = CS_MODE_MIPS64 if mips_n32 else CS_MODE_MIPS32
+            mode = word_mode + (CS_MODE_BIG_ENDIAN if big_endian else CS_MODE_LITTLE_ENDIAN)
             self._cs = Cs(CS_ARCH_MIPS, mode)
             self._cs.detail = True
         if _LIEF_OK:
@@ -172,14 +176,20 @@ class SinkArgClassifierMIPS:
     @classmethod
     def from_context(cls, ctx) -> 'SinkArgClassifierMIPS':
         big_endian = True
+        mips_n32 = False
         if _LIEF_OK:
             try:
                 b = _lief.parse(ctx.path)
                 if b and hasattr(b.header, 'endianness'):
                     big_endian = 'BIG' in str(b.header.endianness).upper()
+                # EF_MIPS_ABI2 (0x20): MIPS N32 ABI — uses 64-bit instructions
+                # (sd/ld/daddiu) on a 64-bit MIPS3/4 processor. CS_MODE_MIPS32
+                # stops decoding at the first 64-bit instruction; use MIPS64 mode.
+                if b and hasattr(b.header, 'processor_flag'):
+                    mips_n32 = bool(int(b.header.processor_flag) & 0x20)
             except Exception:
                 pass
-        return cls(ctx, big_endian=big_endian)
+        return cls(ctx, big_endian=big_endian, mips_n32=mips_n32)
 
     def add_sink(self, name: str, arg_pos: int) -> None:
         """Register a vendor-specific exec-class sink (e.g., cwSysCmdRun)."""
@@ -216,6 +226,35 @@ class SinkArgClassifierMIPS:
             vals = struct.unpack(endian + 'I' * count, gd[:count * 4])
             for i, v in enumerate(vals):
                 self._got[gva + i * 4] = int(v)
+
+        # MIPS dynsym-based GOT offset map: sink_gp_offset → PLT VA.
+        # On IRIX (and some older MIPS Linux ABIs) the on-disk GOT entries for
+        # external functions hold IRIX RLD resolver stubs — not our PLT stub
+        # VAs — so _resolve_got comparisons fail. Build a deterministic map
+        # from dynsym index + DT_MIPS_LOCAL_GOTNO + DT_MIPS_GOTSYM instead.
+        self._sink_gp_offsets: Dict[int, int] = {}  # signed gp_offset → PLT VA
+        if got_sec and self._gp and hasattr(self._bin, 'dynamic_symbols'):
+            local_gotno = None
+            gotsym = None
+            for tag in (self._bin.dynamic_entries if hasattr(self._bin, 'dynamic_entries') else []):
+                tag_str = str(tag.tag)
+                if 'LOCAL_GOTNO' in tag_str:
+                    local_gotno = int(tag.value)
+                elif 'GOTSYM' in tag_str:
+                    gotsym = int(tag.value)
+            if local_gotno is not None and gotsym is not None:
+                gva = int(got_sec.virtual_address)
+                for idx, sym in enumerate(self._bin.dynamic_symbols):
+                    if idx < gotsym:
+                        continue
+                    name = str(sym.name)
+                    if name in self._plt_rev:
+                        got_idx = local_gotno + (idx - gotsym)
+                        entry_va = gva + got_idx * 4
+                        gp_off = entry_va - self._gp
+                        # Store as signed 16-bit value (MIPS instruction encoding range)
+                        if -0x8000 <= gp_off <= 0x7FFF:
+                            self._sink_gp_offsets[gp_off] = self._plt_rev[name]
 
         # Build snprintf PLT map
         for name, fmt_pos in _SNPRINTF_FMT_POS_MIPS.items():
@@ -267,22 +306,31 @@ class SinkArgClassifierMIPS:
 
     def _find_sink_plts(self) -> Dict[int, Tuple[str, int]]:
         """
-        Return {sink_va: (sink_name, arg_pos)} for sinks with ≥1 known caller.
-        Checks PLT stubs first, then ctx.exports for internal functions.
-        callers_of is called by name (string) so that the call-graph index
-        key resolves correctly for both PLT stubs and exported internals.
+        Return {sink_va: (sink_name, arg_pos)} for all sinks with a known PLT/export VA.
+
+        All sinks with a PLT or export address are included in the result — the old
+        callers_of() gate has been removed because MIPS IRIX binaries call PLT functions
+        via 'LW $t9, N($gp); JALR $t9' (indirect through GOT) which is not tracked in
+        the BinaryContext call graph. The per-function JALR scanner resolves these calls
+        independently via GOT values (_resolve_got) or dynsym-derived gp_offsets
+        (_sink_gp_offsets).
+
+        _dead_sinks is still populated for sinks where callers_of() returns empty AND
+        the dynsym-based gp_offset map has no entry — indicating the sink is genuinely
+        unreachable or uses an unsupported calling convention.
         """
         result: Dict[int, Tuple[str, int]] = {}
         self._dead_sinks = []
+        sink_gp_offsets = getattr(self, '_sink_gp_offsets', {})
+        dynsym_mapped_vas = set(sink_gp_offsets.values())
         for name, arg_pos in self._sinks.items():
             va = self._plt_rev.get(name) or self._ctx.exports.get(name)
             if not va:
                 continue
+            result[va] = (name, arg_pos)
             callers = self._ctx.callers_of(name)
-            if not callers:
+            if not callers and va not in dynsym_mapped_vas:
                 self._dead_sinks.append(name)
-            else:
-                result[va] = (name, arg_pos)
         return result
 
     # ── per-function scan ─────────────────────────────────────────────────────
@@ -317,8 +365,16 @@ class SinkArgClassifierMIPS:
                     continue
                 if prev.operands[1].mem.base != _R_GP:
                     continue
-                tgt = self._resolve_got(prev.operands[1].mem.disp)
+                disp = prev.operands[1].mem.disp
+                tgt = self._resolve_got(disp)
+                # Primary path: GOT value matches sink VA (Linux MIPS lazy binding)
                 if tgt == sink_va:
+                    sites.append(i)
+                    break
+                # Fallback: dynsym-derived gp_offset matches (IRIX / pre-linked ABIs
+                # where on-disk GOT holds RLD stubs, not our PLT VAs)
+                mapped = self._sink_gp_offsets.get(disp)
+                if mapped == sink_va:
                     sites.append(i)
                     break
         return sites
@@ -551,9 +607,15 @@ class SinkArgClassifierMIPS:
                     continue
                 if prev.operands[1].mem.base != _R_GP:
                     continue
-                tgt = self._resolve_got(prev.operands[1].mem.disp)
+                disp = prev.operands[1].mem.disp
+                tgt = self._resolve_got(disp)
                 if tgt is not None and tgt in self._snprintf_plts:
                     snp_plt_va = tgt
+                    break
+                # IRIX fallback: match via dynsym-derived gp_offset
+                mapped = self._sink_gp_offsets.get(disp)
+                if mapped is not None and mapped in self._snprintf_plts:
+                    snp_plt_va = mapped
                     break
 
             if snp_plt_va is None:
