@@ -329,6 +329,10 @@ class WindowAnalyzer:
             return
 
         self.base_va = binary.imagebase
+        # ET_DYN (PIE executable or shared object): file offsets == VAs for the
+        # first PT_LOAD, so the fallback in _va_to_offset must use `va` not
+        # `va - base_va`.  Track this so _va_to_offset can choose correctly.
+        self._is_pie = (binary.header.file_type == lief.ELF.E_TYPE.DYN)
 
         # Locate .text bounds
         text_sec = binary.get_section(".text")
@@ -770,6 +774,12 @@ class WindowAnalyzer:
             s_sz = sec.size
             if s_va <= va < s_va + s_sz:
                 return s_off + (va - s_va)
+        # PIE (ET_DYN): file offsets equal VAs in the first PT_LOAD segment, so
+        # the correct fallback when no section matches is `va`, not `va - base_va`.
+        # Non-PIE executables (ET_EXEC) with a fixed load address (e.g. 0x400000)
+        # need `va - base_va` to convert back to a file offset.
+        if getattr(self, '_is_pie', False):
+            return va
         return va - self.base_va
 
     def dump(

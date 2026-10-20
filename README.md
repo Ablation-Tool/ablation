@@ -132,6 +132,7 @@ Messages from your other sessions        accept
 
 | Capability | Code | |
 |:---|:---|:---|
+| [**Network&nbsp;Sink&nbsp;Finder**](docs/reference-modules/network-sink-finder.md) | [1](ablation/analyzers/network_sink_finder.py) | BFS callgraph reachability from network sources (recv/read/fgets/accept) crossed with SinkArgClassifier results. Turns the 50-line HACMP-003 pattern into 3 lines because depth-N reachability and SAC cross-reference were previously separate manual steps. |
 | [**Taint&nbsp;Analysis**](docs/reference-modules/taint-analysis-2.md) | [1](ablation/analyzers/taint_tracker.py)&nbsp;[2](ablation/analyzers/taint_tracker_arm64.py) | Source-to-sink register/dataflow tracking, with architecture-specific intraprocedural, interprocedural and flow-sensitive implementations. |
 | [**Cross-Library&nbsp;Analysis**](docs/reference-modules/cross-library-analysis.md) | [1](ablation/analyzers/cross_binary_taint.py)&nbsp;[2](ablation/analyzers/lib_graph.py) | Resolve imports and exports across a firmware library set and propagate supported argument taint across library boundaries. |
 | [**Pre-Authentication&nbsp;Exposure**](docs/reference-modules/preauth-exposure.md) | [1](ablation/analyzers/preauth_route_auditor.py) | Recover supported Flatui route/auth-wrapper structures, associate handlers and identify pre-authentication handlers with sensitive sinks. |

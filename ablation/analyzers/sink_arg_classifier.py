@@ -584,6 +584,26 @@ class SinkArgClassifier:
 
     @classmethod
     def from_context(cls, ctx) -> 'SinkArgClassifier':
+        """Return the arch-appropriate classifier for *ctx*.
+
+        Dispatches to the correct arch-specific subclass so callers don't need
+        to import the right one themselves.  Falls through to the x86-64
+        implementation for unknown arches.
+        """
+        arch = getattr(ctx, 'arch', 'x86_64')
+        if arch == 'ppc32':
+            from ablation.analyzers.sink_arg_classifier_ppc32 import SinkArgClassifierPPC32BE
+            return SinkArgClassifierPPC32BE.from_context(ctx)
+        if arch == 'x86_32':
+            from ablation.analyzers.sink_arg_classifier_i386 import SinkArgClassifierI386
+            return SinkArgClassifierI386.from_context(ctx)
+        if arch == 'arm32':
+            from ablation.analyzers.sink_arg_classifier_arm32 import SinkArgClassifierARM32
+            return SinkArgClassifierARM32.from_context(ctx)
+        if arch == 's390x':
+            from ablation.analyzers.sink_arg_classifier_s390 import SinkArgClassifierS390X
+            return SinkArgClassifierS390X.from_context(ctx)
+        # x86_64 (default): build in-place
         obj = cls(ctx.path)
         obj._plt = ctx.plt.copy()
         obj._plt_rev = {v: k for k, v in obj._plt.items()}

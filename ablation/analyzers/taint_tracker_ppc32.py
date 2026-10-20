@@ -138,6 +138,30 @@ _SOURCES: Set[str] = {
     'recv@plt', 'read@plt', 'fgets@plt', 'recvfrom@plt',
 }
 
+# Which argument register holds the data BUFFER for each source.
+# recv(fd[r3], buf[r4], len[r5])  → actual network bytes arrive at *r4
+# read(fd[r3], buf[r4], count[r5]) → same
+# fgets(s[r3], n[r4], stream[r5]) → output goes into *r3; r3 also returned
+# gets(s[r3])                      → same as fgets
+# fread(ptr[r3], ...)              → output goes into *r3; r3 also returned
+# getenv returns a pointer in r3 to the env value string
+_BUFFER_ARG_REG: Dict[str, str] = {
+    'recv':     'r4',
+    'recvfrom': 'r4',
+    'recvmsg':  'r4',
+    'read':     'r4',
+    'pread':    'r4',
+    'fgets':    'r3',
+    'gets':     'r3',
+    'fread':    'r3',
+    'getenv':   'r3',
+    # @plt aliases
+    'recv@plt':    'r4',
+    'read@plt':    'r4',
+    'fgets@plt':   'r3',
+    'recvfrom@plt':'r4',
+}
+
 _DEFAULT_SINKS: Dict[str, List[int]] = {
     'system':      [0],   # arg index 0 = r3
     'execv':       [0],
@@ -829,7 +853,12 @@ class PPC32TaintTracker:
                     target_name = self._resolve_bctrl_name(prev2, prev1, func_r30, prev3)
 
                 if target_name in _SOURCES:
-                    tainted['r3'] = True
+                    # Seed the buffer argument register, not r3.
+                    # recv/read return the byte count in r3 (not attacker-controlled
+                    # data); the actual network bytes land in the buffer at r4.
+                    # fgets/gets/fread write into *r3 and also return r3.
+                    buf_reg = _BUFFER_ARG_REG.get(target_name, 'r4')
+                    tainted[buf_reg] = True
 
                 elif target_name in self._sinks:
                     hit_args = []
@@ -847,11 +876,12 @@ class PPC32TaintTracker:
                             source_name='recv/arg',
                         ))
 
-                # Clobber caller-saved after call
-                for r in _CALLER_SAVED - {'r3'}:
+                # Clobber all caller-saved after call, then restore buffer taint.
+                for r in _CALLER_SAVED:
                     tainted[r] = False
-                if target_name not in _SOURCES:
-                    tainted['r3'] = False
+                if target_name in _SOURCES:
+                    buf_reg = _BUFFER_ARG_REG.get(target_name, 'r4')
+                    tainted[buf_reg] = True
 
             # -- Return: blr/blrl --
             elif insn.id in _RET_IDS:

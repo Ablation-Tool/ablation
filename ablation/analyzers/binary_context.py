@@ -279,6 +279,33 @@ class BinaryContext:
             raw = self._callers_idx.get(sym, [])
         return [(cva, self.name(cva)) for cva, _ in raw]
 
+    def reachable_from(self, source_vas, depth: int = 3) -> Set[int]:
+        """Return the set of function VAs reachable from *source_vas* within *depth* call steps.
+
+        Uses BFS over ``callees_of``, so depth is exact (not a hop-count bound that
+        DFS can exceed via backtracking).  PLT stubs are included in traversal so
+        cross-library hops count toward the depth limit.
+
+        Example::
+
+            net_srcs = {va for va, _ in ctx.callers_of('recv')}
+            reachable = ctx.reachable_from(net_srcs, depth=3)
+            dangerous = ap_func_vas & reachable
+        """
+        frontier: Set[int] = set(source_vas)
+        visited:  Set[int] = set(frontier)
+        for _ in range(depth):
+            next_frontier: Set[int] = set()
+            for va in frontier:
+                for callee_va, _ in self.callees_of(va):
+                    if callee_va not in visited:
+                        visited.add(callee_va)
+                        next_frontier.add(callee_va)
+            frontier = next_frontier
+            if not frontier:
+                break
+        return visited
+
     def callees_of(self, func_va: int) -> List[Tuple[int, str]]:
         """Return [(target_va, label), ...] for all calls from func_va.
 
@@ -362,12 +389,18 @@ class BinaryContext:
 
     # ── discovered-name overlay ───────────────────────────────────────────────
 
-    def name(self, va: int) -> str:
+    def name(self, va) -> str:
         """Best available name for va: overlay > export > PLT > hex.
 
         This is the single call for "what is this function?": use it everywhere
         a hex address would otherwise appear.
+
+        *va* may be a ``(va, name)`` tuple as returned by :meth:`callers_of` and
+        :meth:`callees_of`; in that case the integer element is extracted
+        automatically so callers do not need to unpack.
         """
+        if isinstance(va, tuple):
+            va = va[0]
         reg = get_registry()
         discovered = reg.get_name(self.sha256, va)
         if discovered:
