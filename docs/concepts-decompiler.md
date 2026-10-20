@@ -956,12 +956,111 @@ RAA is absent from this collection. The DHE mirror (`public.dhe.ibm.com`) has no
 
 ---
 
+### IBM Dynamite JIT (PowerVM LX86): x86→POWER binary translator
+
+**PowerVM LX86** (`powervm-lx86`, stripped PPC64 ELF) is IBM's x86-Linux binary translator — the evolution of WABI. It runs x86 ELF binaries on POWER via dynamic binary translation. The binary retains full build-time source paths, exposing the complete JIT architecture.
+
+**Source tree reconstructed from debug paths:**
+
+```
+src/
+├── irConstructor/
+│   ├── common/
+│   │   ├── GenericExpressionInterface.cc      — abstract Expression* factory API
+│   │   └── GenericExpressionInterfaceIRMkI.cc — Mark I IR implementation
+│   ├── Sx86-autogen/                          — AUTO-GENERATED from FADE tables
+│   │   ├── X86FadeIRDelegate.cc               — x86 integer IR construction
+│   │   ├── X86FadeIRDelegate_FP.cc            — x86 FP IR construction
+│   │   └── X86FadeIRDelegateSystem.cc         — x86 syscall IR construction
+│   └── Sx86/
+│       ├── X86DataManagement.cc               — load/store with sign extension
+│       ├── X86IRConstructorContext.cc         — per-instruction conversion context
+│       ├── NevisFlagManagement.cc             — x86 EFLAGS computation
+│       └── X86LazyFlags.cc                   — lazy flag evaluation
+└── codeGenerator/
+    ├── common/
+    │   ├── RegisterAllocator.cc               — target register allocation
+    │   └── TraversalOrdering.cc               — node traversal order for emission
+    ├── Sx86-Tppc/
+    │   ├── BackEnd_X86Atomic.cc               — x86 atomic → POWER lock instructions
+    │   ├── BackEnd_X86FloatingPoint.cc        — x86 FP → POWER VMX/FPU
+    │   └── Bgenerate.cc                       — main x86→POWER backend driver
+    └── Tppc/
+        ├── BackEnd.cc                         — POWER instruction emitter
+        ├── nodeGenerates.cc                   — per-node 32-bit POWER emission
+        └── nodeGenerates64.cc                 — per-node 64-bit POWER emission
+```
+
+**IR data types (from mangled symbol names):**
+
+| Type | Role |
+|:---|:---|
+| `Expression*` | IR expression node (equivalent to `ExprNode`) |
+| `BasicBlock*` | Basic block container |
+| `IR*` | Per-block IR; passed to factory methods |
+| `AbstractOperation*` | IR operation (statement-level node) |
+| `Tlabel` | Branch target label |
+| `TRegID` / `ARegID` | Target (POWER) / abstract register IDs |
+| `TCAccessedVariable` | Shared variable between x86 subject and POWER target |
+
+**Three-stage translation pipeline:**
+
+```
+1. Decode:    FADE tables → X86FadeIRDelegate (auto-generated per opcode)
+2. Lift:      X86FadeIRDelegate calls GenericExpressionInterface factory methods
+              → Expression* IR tree per basic block
+3. Emit:      nodeGenerates.cc walks Expression* tree → POWER instructions
+```
+
+**Key Expression factory methods (from symbol strings):**
+
+```cpp
+// X86DataManagement — load/store with type and sign extension
+Expression* load(Expression* addr, RegisterID dst, X86SizeType sz, X86SignExtension sext);
+void        store(Expression* addr, RegisterID src, Expression* val, X86SizeType sz);
+
+// GenericExpressionInterface — binary arithmetic
+static Expression* sub64(IR*, Expression*, Expression*);
+
+// GenericExpressionInterfaceIRMkI — higher-level builders
+static Expression*        byteSwapDouble(IR*, Expression*);
+static Expression*        byteSwapSingle(IR*, Expression*);
+static AbstractOperation* createLabelVersionOfBranch(IR*, AbstractOperation*, Tlabel, bool);
+```
+
+**FADE decoder: table-driven autogeneration of IR lifting code**
+
+The `Sx86-autogen/` directory is auto-generated — the FADE (Fast Architecture Decoder Engine) tables describe x86 instruction encodings. The autogen step creates `X86FadeIRDelegate.cc`, which calls the appropriate `GenericExpressionInterface` factory method for each x86 opcode. This is the same pattern as HATS BMS parser's JavaCC grammar — machine-readable tables auto-generate the per-opcode translation code.
+
+**Lazy flag evaluation** (`X86LazyFlags.cc`)
+
+x86 EFLAGS (CF, ZF, SF, OF, PF) are computed lazily: they are only evaluated when the translated code reads a flag register. This avoids emitting POWER condition-register update code for every arithmetic instruction when the flags are rarely consumed. The IR keeps flags as separate `Expression*` nodes; `NevisFlagManagement.cc` generates the flag expression when a conditional branch reads CF/ZF/etc.
+
+**Ablation ExprLifter mapping:**
+
+```
+FADE tables → X86FadeIRDelegate    ≡    ExprLifter.rules (LiftRule per opcode)
+GenericExpressionInterface.load()  ≡    ExprNode.load()
+GenericExpressionInterfaceIRMkI    ≡    ExprNode (concrete implementation)
+nodeGenerates.cc per-node dispatch ≡    ExprSimplifier._SIMPLIFIERS[op] dispatch
+TCAccessedVariable                 ≡    ValueNumberer (shared variable ≡ CSE'd expression)
+X86LazyFlags                       ≡    ExprNode.tainted flag (propagated lazily)
+```
+
+The two-interface split (`GenericExpressionInterface` abstract + `IRMkI` concrete) confirms the VisualAge EPDC wire/model split appears independently in IBM's JIT framework — it is a stable IBM IR design pattern.
+
+---
+
 ### Summary: IBM patterns for ExprLifter
 
 | Concern | IBM source | Pattern |
 |:---|:---|:---|
 | Field-level rule dispatch | HATS v75 `AbstractRenderingRulesEngine` | Greedy consumption: `ConsumableInsnList` + priority-ordered rules + per-rule `recognise()` |
 | Operand-level sub-dispatch | HATS v75 `BMSParser.jj` | Per-operand sub-rules within a production: `field_keyword()` → 20 attribute handlers |
+| Table-driven autogen lifting | PowerVM LX86 `X86FadeIRDelegate` (FADE) | Machine-readable decoder tables auto-generate per-opcode IR construction delegates |
+| Expression factory interface | PowerVM LX86 `GenericExpressionInterface` | Abstract factory API + concrete `IRMkI` implementation — same wire/model split as VisualAge |
+| Per-node POWER emission | PowerVM LX86 `nodeGenerates.cc` | Per-node dispatch table for code generation — mirrors `_SIMPLIFIERS[op]` |
+| Lazy flag computation | PowerVM LX86 `X86LazyFlags.cc` | Flags as deferred `Expression*` nodes; computed only on conditional branch |
 | Expression simplification | XLC/OMR `TR_Simplifier` (1116 functions) | Per-opcode dispatch table: `_SIMPLIFIERS[opcode](node)` |
 | Value numbering / CSE | XLC/OMR `TR_ValueNumberInfo` | Hash-congruence: `(opcode, child_vnums)` key + `canShareValueNumber()` eligibility guard |
 | Dominator computation | XLC/OMR `TR_Dominators` | Lengauer-Tarjan O(n α(n)): `compress/eval/link` |
