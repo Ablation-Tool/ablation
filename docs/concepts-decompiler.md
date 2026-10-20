@@ -682,6 +682,196 @@ These ISAs have their own decoder and taint tracker. They do not go through `Bin
 
 ---
 
+## ExprLifter: design architecture from IBM production systems
+
+This section documents design patterns extracted from three IBM production tools — HATS 7.5, XLC/OMR for s390x, and VisualAge CPP iDebug. These patterns directly inform how Ablation's planned `ExprLifter` module should be implemented.
+
+---
+
+### HATS: the pattern-recognition and rewrite engine
+
+**HATS (Host Access Transformation Services) 7.5** transforms IBM 3270 terminal screen fields into web UI components. Its `AbstractRenderingRulesEngine.processScreen()` implements a greedy consumption model that maps directly to an instruction-level rewrite engine.
+
+The algorithm from `AbstractRenderingRulesEngine` bytecode (hsrendering.jar):
+
+```
+1. Build ConsumableFieldList from HsrScreen  (≡ ConsumableInsnList from basic block)
+2. Get Iterator over IRenderingRuleSet rules  (≡ iterate LiftRules in priority order)
+3. While unmatched fields remain AND rules remain:
+   a. Get next rule (IRenderingRule)
+   b. Skip if rule.isEnabled() is false
+   c. PatternComponent.newInstance(rule.componentClassName, classLoader, screen, fieldList)
+      (≡ factory-instantiate the pattern component by class name)
+   d. component.recognize(region, settings) → ComponentElement[]
+      (≡ try rule.pattern.match(window) → IRNode[] if matched, None if not)
+   e. If matched: consume matched fields, emit ComponentElement[]
+      (≡ consume matched instructions, emit IR nodes)
+4. Consumed fields are gone; remaining unmatched fields fall through to default
+```
+
+**Key constraints visible in the bytecode:**
+- The loop exits when `consumedCount >= fieldList.size()` — all fields consumed — OR the rule iterator is exhausted. This is greedy: the first rule that matches a region wins.
+- `PatternComponent.newInstance()` instantiates by class name string — the component class is stored in `RenderingRule.componentClassName`, not hardcoded. This is the extensible factory pattern.
+- `ComponentElement[]` (plural) — one rule match can produce multiple IR nodes.
+
+**Ablation ExprLifter mapping:**
+
+```python
+@dataclass
+class LiftRule:
+    name: str                # rule identifier
+    pattern: InsnPattern     # window matcher: InsnPattern.match(insns) -> Optional[List[IRNode]]
+    node_class: str          # 'ablation.ir.Add', 'ablation.ir.Load', etc.
+    enabled: bool = True
+
+class ExprLifter:
+    def lift(self, insns: List[Insn]) -> List[IRNode]:
+        """Greedy consumption: lift each instruction window to IR."""
+        consumable = ConsumableInsnList(insns)
+        nodes = []
+        while not consumable.empty():
+            for rule in self._rules:
+                if not rule.enabled:
+                    continue
+                window = consumable.peek(rule.pattern.width)
+                matched = rule.pattern.match(window)
+                if matched:
+                    consumable.consume(rule.pattern.width)
+                    nodes.extend(matched)
+                    break
+            else:
+                # No rule matched: emit fallback node for head instruction
+                nodes.append(IRNode.opaque(consumable.pop()))
+        return nodes
+```
+
+---
+
+### XLC/OMR: value numbering and per-opcode simplifier dispatch
+
+**WCodeDriver** (IBM XL C++ for s390x, 26MB, unstripped) uses the Eclipse OMR JIT framework. Its exported symbols reveal the optimizer pass structure. All passes are confirmed by `c++filt` demangled symbol names.
+
+**Value numbering** (`TR_ValueNumberInfo`, 37 exported functions):
+
+| Symbol | Purpose |
+|:---|:---|
+| `TR_ValueNumberInfo::initializeNode(TR::Node*, int&)` | Assign initial value number to a new node |
+| `TR_ValueNumberInfo::congruentNodes(TR::Node*, TR::Node*)` | Structural equality check: same opcode + same child value numbers |
+| `TR_ValueNumberInfo::canShareValueNumber(TR::Node*)` | CSE eligibility guard: no side effects, no volatile loads |
+| `TR_ValueNumberInfo::setValueNumber(TR::Node*, TR::Node*)` | Assign target's value number to source |
+| `TR_ValueNumberInfo::changeValueNumber(TR::Node*, int)` | Update value number after transformation |
+| `TR_ValueNumberInfo::getValueNumber(TR::Node*)` | Query current value number |
+
+The OMR approach is hash-congruence: two nodes are congruent if they have the same opcode and their children have the same value numbers. `canShareValueNumber()` gates CSE eligibility before `congruentNodes()` runs. This separates the "are they the same expression" check from the "can we share them" check, because aliasing, volatility, and exception ordering make some structurally-equal nodes unsafe to reuse.
+
+**Per-opcode simplifier dispatch** (`TR_Simplifier`, 1116 exported functions):
+
+Every IR opcode has a dedicated simplifier function. Function signature pattern: `xyzSimplifier(TR::Node*, TR::Block*, TR_Simplifier*)`. Examples confirmed in symbol table:
+
+- `sdivSimplifier` — signed division constant folding (x/1 → x, x/pow2 → shift)
+- `i2sSimplifier` — integer-to-short sign extension elimination
+- `arraycopybndchkSimplifier` — bounds check removal for provably-safe array copies
+
+**Ablation ExprLifter mapping:**
+
+```python
+# Per-opcode dispatch table (one entry per IR opcode)
+_SIMPLIFIERS: Dict[str, Callable[['IRNode'], 'IRNode']] = {
+    'Add':  simplify_add,    # constant folding, neutral element elimination
+    'Mul':  simplify_mul,    # 0/1 elimination, power-of-two → shift
+    'Div':  simplify_div,    # constant folding, div-by-power-of-2
+    'I2S':  simplify_i2s,    # extend then narrow → narrow directly
+    'Load': simplify_load,   # known-address constant load
+    # ...
+}
+
+class ValueNumberTable:
+    """Hash-congruence value numbering over IR nodes."""
+    def get_or_assign(self, node: IRNode) -> int:
+        if not node.can_share():       # ≡ TR_ValueNumberInfo::canShareValueNumber
+            return self._fresh()
+        key = self._congruence_key(node)  # ≡ TR_ValueNumberInfo::congruentNodes
+        if key not in self._table:
+            self._table[key] = self._fresh()
+        return self._table[key]
+
+    def _congruence_key(self, node: IRNode):
+        # Opcode + child value numbers — the OMR congruence definition
+        child_vnums = tuple(self.get_or_assign(c) for c in node.children)
+        return (node.opcode, child_vnums)
+```
+
+---
+
+### VisualAge CPP EPDC: IR node type hierarchy
+
+**VisualAge CPP iDebug 8.5.7** uses EPDC (Engine Protocol for Debug Communication) to stream type information between the Java debugger frontend and the C++ backend. The wire protocol uses `EStdTreeNode` as a flat discriminated record; the model layer uses polymorphic subclasses.
+
+**Type hierarchy from `com/ibm/debug/model` class names** (jdebug_sui.exe strings):
+
+| Wire type | Model class | IR analogy |
+|:---|:---|:---|
+| `EStdTreeNode` | `MonitoredExpressionTreeNode` | `IRNode` base class |
+| `EStdExpression2` | `MonitoredExpression` | typed expression with value |
+| scalar | `ScalarMonitoredExpressionTreeNode` | `IntNode`, `FloatNode` |
+| pointer | `PointerMonitoredExpressionTreeNode` | `PtrNode` |
+| array | `ArrayMonitoredExpressionTreeNode` | `ArrayNode` |
+| struct | `StructMonitoredExpressionTreeNode` | `StructNode` |
+| aggregate | `AggregateMonitoredExpressionTreeNode` | `AggNode` |
+| class | `ClassMonitoredExpressionTreeNode` | `ObjNode` |
+
+**Key design from EPDC constructor signatures:**
+
+```java
+// Deserialization: wire node + parent expression → model node
+new MonitoredExpressionTreeNode(EStdTreeNode wire, MonitoredExpression parent)
+
+// Full expression deserialization: wire + type info → typed node
+new MonitoredExpression(EStdExpression2 wire, int typeId, short typeFlags,
+                        int repType, boolean hasChildren, boolean isModifiable,
+                        Client client, ...)
+```
+
+The separation of `EStdTreeNode` (flat wire format) from `MonitoredExpressionTreeNode` (model) means the deserializer reads the type discriminator byte, then calls the appropriate subclass constructor. This is a type-tagged union on the wire, polymorphic on the model side.
+
+**Ablation ExprLifter mapping:**
+
+```python
+# Wire format: flat discriminated record
+@dataclass
+class IRNodeWire:
+    opcode: int          # type discriminator
+    operands: bytes      # raw operand bytes
+
+# Model: polymorphic nodes
+class IRNode:
+    @staticmethod
+    def from_wire(wire: IRNodeWire) -> 'IRNode':
+        """Factory: reads type discriminator, returns appropriate subclass."""
+        cls = _NODE_CLASS_BY_OPCODE[wire.opcode]  # dispatch table
+        return cls._from_wire(wire)
+
+class IntNode(IRNode):  ...   # scalar integer expression
+class PtrNode(IRNode):  ...   # pointer expression
+class LoadNode(IRNode): ...   # memory load
+class AddNode(IRNode):  ...   # addition
+```
+
+The VisualAge pattern confirms: keep the wire format flat (type-tagged record) and the model layer polymorphic. Never merge both into a single class hierarchy — the wire format must be stable across versions while the model layer evolves.
+
+---
+
+### Summary: three IBM patterns for ExprLifter
+
+| Concern | IBM source | Pattern |
+|:---|:---|:---|
+| Rule evaluation engine | HATS `AbstractRenderingRulesEngine` | Greedy consumption: `ConsumableInsnList` + priority-ordered rules + per-rule pattern.match() |
+| Expression simplification | XLC/OMR `TR_Simplifier` (1116 functions) | Per-opcode dispatch table: `_SIMPLIFIERS[opcode](node)` |
+| Value numbering / CSE | XLC/OMR `TR_ValueNumberInfo` | Hash-congruence: `(opcode, child_vnums)` key + `canShareValueNumber()` eligibility guard |
+| IR node hierarchy | VisualAge EPDC model layer | Flat wire format (`EStdTreeNode`) + polymorphic model (`ScalarNode`, `PtrNode`, …) |
+
+---
+
 ## Further reading
 
 - `docs/guide-re-workflow.md`: how these stages map to the analysis pipeline
