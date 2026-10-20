@@ -332,7 +332,7 @@ class WindowAnalyzer:
         # ET_DYN (PIE executable or shared object): file offsets == VAs for the
         # first PT_LOAD, so the fallback in _va_to_offset must use `va` not
         # `va - base_va`.  Track this so _va_to_offset can choose correctly.
-        self._is_pie = (binary.header.file_type == lief.ELF.E_TYPE.DYN)
+        self._is_pie = "DYN" in str(binary.header.file_type)
 
         # Locate .text bounds
         text_sec = binary.get_section(".text")
