@@ -688,6 +688,69 @@ This section documents design patterns extracted from three IBM production tools
 
 ---
 
+### HATS v75: BMSParser — binary translator for COBOL field operations
+
+**HATS (Host Access Transformation Services) 7.5** added `com.ibm.etools.bms.parser` as a standalone component. It is absent from v71. Its core is `BMSParser.jj` — a JavaCC grammar (1760 lines) that translates COBOL BMS macro definitions into EMF model objects.
+
+BMS (Basic Mapping Support) defines 3270 screens using COBOL assembler-like macros:
+
+```
+MAPSET    DFHMSD TYPE=&SYSPARM,MODE=INOUT,LANG=COBOL,TIOAPFX=YES
+MAP1      DFHMDI SIZE=(24,80),LINE=1,COLUMN=1
+FIELD1    DFHMDF POS=(3,10),LENGTH=20,ATTRB=(UNPROT,NORM)
+          DFHMSD TYPE=FINAL
+          END
+```
+
+The parser builds a hierarchy: `BMSFile` → `BMSMapset` → `BMSMap` → `BMSField`. Each node is created by an EMF factory: `factory.createBMSField()`, `factory.createBMSMap()`, etc.
+
+The critical structural pattern — per-operand sub-dispatch within a production rule:
+
+```java
+// BMSParser.jj
+void field_keyword() : {} {
+    field_attrb()     // ATTRB=(PROT,BRT)
+  | field_pos()       // POS=(3,10)
+  | field_length()    // LENGTH=20
+  | field_color()     // COLOR=RED
+  | field_initial()   // INITIAL='default'
+  // ... 15 more sub-rules
+}
+
+void field_attrb_value(BMSAttributesType attrb) : {} {
+    "PROT"   { attrb.setWriteable(BMSWriteableType.PROTECTED_LITERAL);}
+  | "UNPROT" { attrb.setWriteable(BMSWriteableType.UNPROTECTED_LITERAL);}
+  | "BRT"    { attrb.setDisplayable(BMSDisplayableType.BRIGHT_LITERAL);}
+  | "NORM"   { attrb.setDisplayable(BMSDisplayableType.NORMAL_LITERAL);}
+  // ...
+}
+```
+
+This is a two-level dispatch: `field_keyword()` routes to the right attribute handler; each attribute handler dispatches on attribute values. The factory constructs the output object in phases — `createBMSField()` first, then each attribute sub-rule sets one property.
+
+**Key distinction from AbstractRenderingRulesEngine:** the BMS parser has per-operand sub-dispatch *within* a rule. AbstractRenderingRulesEngine fires one rule per screen region. The BMS parser fires one sub-rule per operand token within a field declaration. Together they define two levels of dispatch: field-level (which rule handles this instruction) and operand-level (how to lift each operand).
+
+**v71 vs v75:** v71 has no `bms.parser` JAR. BMS field translation was embedded in the v71 core. v75 refactored it into an explicit JavaCC grammar, making the translation structure machine-readable.
+
+**Ablation ExprLifter mapping:**
+
+```python
+# BMSParser.jj factory.createBMSField()  ≡  ExprNode.add() / ExprNode.load()
+# field_keyword() per-operand dispatch   ≡  separate operand lifting within LiftRule.recognise()
+# field_attrb setWriteable/setDisplay    ≡  ExprNode.ctype, ExprNode.tainted flags
+
+# Example: a LiftRule that lifts a load-and-add pair, handling each operand separately
+def recognise_load_add(insns):
+    if len(insns) < 2: return None, 0
+    load, add = insns[0], insns[1]
+    if load.mnemonic != 'ld' or add.mnemonic != 'add': return None, 0
+    addr  = _lift_operand(load.operands[0])   # per-operand sub-dispatch
+    base  = _lift_operand(add.operands[1])    # per-operand sub-dispatch
+    return ExprNode.add(ExprNode.load(addr), base), 2
+```
+
+---
+
 ### HATS: the pattern-recognition and rewrite engine
 
 **HATS (Host Access Transformation Services) 7.5** transforms IBM 3270 terminal screen fields into web UI components. Its `AbstractRenderingRulesEngine.processScreen()` implements a greedy consumption model that maps directly to an instruction-level rewrite engine.
@@ -763,6 +826,28 @@ class ExprLifter:
 | `TR_ValueNumberInfo::getValueNumber(TR::Node*)` | Query current value number |
 
 The OMR approach is hash-congruence: two nodes are congruent if they have the same opcode and their children have the same value numbers. `canShareValueNumber()` gates CSE eligibility before `congruentNodes()` runs. This separates the "are they the same expression" check from the "can we share them" check, because aliasing, volatility, and exception ordering make some structurally-equal nodes unsafe to reuse.
+
+**Reaching definitions and dominators — WCodeDriver does not use phi-SSA:**
+
+WCodeDriver uses **GEN/KILL bit-vector reaching definitions** (`TR_UseDefInfo`), not classical phi-SSA. From diagnostic strings in the binary:
+
+- `"Gen and kill sets for block_%d:"` — per-block GEN/KILL computation
+- `"completed reaching definition analysis for use/def"` — forward dataflow result
+- `"interrupted in backward bit vector analysis"` — liveness computed backward
+
+`TR_UseDefInfo::buildUseDefs()` builds use-def chains via forward dataflow. `TR_Liveness` computes live variable sets via backward dataflow. Both are standard bit-vector analyses. No phi nodes are inserted.
+
+`TR_Dominators::findDominators()` uses the **Lengauer-Tarjan** algorithm. The three auxiliary functions confirm this:
+
+| Function | Lengauer-Tarjan role |
+|:---|:---|
+| `TR_Dominators::compress(int)` | Path compression on the dominator forest |
+| `TR_Dominators::eval(int)` | Evaluate semi-dominator of a DFS ancestor |
+| `TR_Dominators::link(int, int)` | Link child to parent in the dominator forest |
+
+No other dominator algorithm uses this exact `compress/eval/link` triad. Lengauer-Tarjan runs in O(n α(n)) and is the standard choice for JIT compilers where dominator computation happens at compile time per-function.
+
+**Why reaching definitions rather than phi-SSA:** XLC/OMR processes s390x code that already has physical register assignments from the machine ABI. Phi nodes represent merge points for virtual variables; physical registers have explicit use-def chains. Reaching definitions directly express which assignment reaches which use, without requiring a rename pass. The `TR_ValueNumberInfo` hash-congruence works over this representation because it doesn't need phi merge points — structural equality of expression trees is sufficient.
 
 **Per-opcode simplifier dispatch** (`TR_Simplifier`, 1116 exported functions):
 
@@ -861,14 +946,28 @@ The VisualAge pattern confirms: keep the wire format flat (type-tagged record) a
 
 ---
 
-### Summary: three IBM patterns for ExprLifter
+### RAA (Rational Application Architect) — not acquired
+
+IBM Rational Application Architect contains `com.ibm.raa.core.decompiler.*` implementing Sharir's interval analysis for control-flow structuring (if/while/for recovery from CFG). This is the reference for a future **Structurizer** module.
+
+RAA is absent from this collection. The DHE mirror (`public.dhe.ibm.com`) has no RAA directory. The collection's Rational subdirectories contain Apex, DOORS, Rose, and RoseRT — not Application Architect.
+
+**Decision:** ExprLifter operates at expression level (single instruction → IR node). It does not perform CFG-level structuring. Sharir's interval analysis is needed for a future Structurizer, not ExprLifter. ExprLifter is not blocked by the absence of RAA.
+
+---
+
+### Summary: IBM patterns for ExprLifter
 
 | Concern | IBM source | Pattern |
 |:---|:---|:---|
-| Rule evaluation engine | HATS `AbstractRenderingRulesEngine` | Greedy consumption: `ConsumableInsnList` + priority-ordered rules + per-rule pattern.match() |
+| Field-level rule dispatch | HATS v75 `AbstractRenderingRulesEngine` | Greedy consumption: `ConsumableInsnList` + priority-ordered rules + per-rule `recognise()` |
+| Operand-level sub-dispatch | HATS v75 `BMSParser.jj` | Per-operand sub-rules within a production: `field_keyword()` → 20 attribute handlers |
 | Expression simplification | XLC/OMR `TR_Simplifier` (1116 functions) | Per-opcode dispatch table: `_SIMPLIFIERS[opcode](node)` |
 | Value numbering / CSE | XLC/OMR `TR_ValueNumberInfo` | Hash-congruence: `(opcode, child_vnums)` key + `canShareValueNumber()` eligibility guard |
+| Dominator computation | XLC/OMR `TR_Dominators` | Lengauer-Tarjan O(n α(n)): `compress/eval/link` |
+| Dataflow representation | XLC/OMR `TR_UseDefInfo` | GEN/KILL bit-vector reaching definitions; no phi nodes |
 | IR node hierarchy | VisualAge EPDC model layer | Flat wire format (`EStdTreeNode`) + polymorphic model (`ScalarNode`, `PtrNode`, …) |
+| CFG structuring | RAA `com.ibm.raa.core.decompiler` | **Not acquired** — Sharir interval analysis deferred to Structurizer module |
 
 ---
 
