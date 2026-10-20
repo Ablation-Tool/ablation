@@ -676,22 +676,19 @@ class PPC32GOT2Resolver:
         For the BL+4 variant the setup VA is the `bl` instruction itself which is
         inside the function body, so a strict `va <= func_va` lookup misses it.
         """
-        # First try: setup strictly before func_va (BCL variant and most cases)
-        before = [va for va in r30_map if va <= func_va]
-        if before:
-            best_before = max(before)
-            # If the preceding setup is far away (> 2K), also check for a prologue
-            # setup inside this function that might be a better match.
-            if func_va - best_before < 0x800:
-                return r30_map[best_before]
-
-        # Second try: setup inside the function prologue window (BL+4 variant)
+        # First priority: a setup inside the function prologue window (BL+4 variant).
+        # The BL+4 / MFLR r30 prologue places the setup INSIDE the function body
+        # (typically at func_va + 8 or so). This r30 directly belongs to this
+        # function and must be preferred over any preceding function's setup.
         prologue_end = func_va + self._PROLOGUE_SCAN_SLACK
         inside = [va for va in r30_map if func_va < va < prologue_end]
         if inside:
             return r30_map[min(inside)]
 
-        # Fall back to the best preceding setup even if it's far
+        # Second priority: nearest setup before func_va (BCL/ADDIS/ADDI variant,
+        # where the BCL is the very first instruction of the function, or for small
+        # leaf functions that inherit the enclosing CU's r30).
+        before = [va for va in r30_map if va <= func_va]
         if before:
             return r30_map[max(before)]
         return None
