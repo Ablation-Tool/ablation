@@ -139,6 +139,9 @@ class PPC32GOT2Resolver:
         self._dynstr_size = dynstr_size
         self._got2_va = got2_va
         self._got2_end = (got2_va + got2_size) if (got2_va is not None and got2_size is not None) else None
+        # List of additional mapped sections: (va, end, file_off).
+        # Used by _va_to_off to reach .got2, .rodata, .sdata etc. beyond .text/.data.
+        self._extra_sections: List[Tuple[int, int, int]] = []
 
     @classmethod
     def from_path(cls, elf_path: str) -> "PPC32GOT2Resolver":
@@ -160,7 +163,7 @@ class PPC32GOT2Resolver:
         dynsym = elf.get_section(".dynsym")
         dynstr = elf.get_section(".dynstr")
         got2 = elf.get_section(".got2")
-        return cls(
+        resolver = cls(
             data=data,
             text_va=text.virtual_address,
             text_size=text.size,
@@ -175,6 +178,16 @@ class PPC32GOT2Resolver:
             got2_va=got2.virtual_address if got2 else None,
             got2_size=got2.size if got2 else None,
         )
+        # Register additional readable sections for resolve_data_load dereferences.
+        # .got2 holds GOT2 pointer table; .rodata/.sdata hold string constants.
+        for name in (".got2", ".rodata", ".sdata", ".sdata2", ".got"):
+            sec = elf.get_section(name)
+            if sec and sec.size > 0 and sec.virtual_address:
+                resolver._extra_sections.append(
+                    (sec.virtual_address,
+                     sec.virtual_address + sec.size,
+                     sec.offset))
+        return resolver
 
     @classmethod
     def from_sections(
@@ -221,17 +234,24 @@ class PPC32GOT2Resolver:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    _BCL_20_31 = 0x429f0005
-    _MFLR_R30  = 0x7fc802a6
-    _BCTRL     = 0x4e800421
-    _MTCTR_MASK = 0xfc1fffff
-    _MTCTR_BASE = 0x7c0903a6
+    _BCL_20_31   = 0x429f0005
+    _BL_PLUS4    = 0x48000005   # bl +4 (IBM GCC PIC prologue variant)
+    _MFLR_R30    = 0x7fc802a6
+    _ADD_R30_R0  = 0x7fc0f214   # add r30, r0, r30 (XO=266)
+    _LWZ_R0_R30_MASK = 0xffff0000
+    _LWZ_R0_R30_BASE = 0x801e0000  # lwz r0, D(r30): opcode=32, rD=0, rA=30
+    _BCTRL       = 0x4e800421
+    _MTCTR_MASK  = 0xfc1fffff
+    _MTCTR_BASE  = 0x7c0903a6
 
     def _va_to_off(self, va: int) -> Optional[int]:
         if self._text_va <= va < self._text_end:
             return self._text_off + (va - self._text_va)
         if self._data_va <= va < self._data_end:
             return self._data_off + (va - self._data_va)
+        for (sec_va, sec_end, sec_off) in self._extra_sections:
+            if sec_va <= va < sec_end:
+                return sec_off + (va - sec_va)
         return None
 
     def _read32(self, va: int) -> Optional[int]:
@@ -294,9 +314,18 @@ class PPC32GOT2Resolver:
         text_off = self._text_off
         text_len = self._text_end - self._text_va
 
+        # Opcodes where bits 6-10 are the SOURCE register (rS), not rD.
+        # These never write to a GPR, so they cannot clobber r30 even if rS=30.
+        _STORE_OPS = frozenset({36, 37, 38, 39, 44, 45, 46, 47, 52, 53, 54, 55})
+
         def _clobbers_r30(instr: int) -> bool:
             """True if instr writes to r30 (other than the MFLR/ADDIS/ADDI we want)."""
             op = (instr >> 26) & 0x3f
+            # Store instructions use bits 6-10 as rS (source), not rD — they never
+            # clobber any GPR. Without this check, `stw r30, X(r1)` is mistakenly
+            # treated as overwriting r30, which cuts off the BL+4 prologue scan.
+            if op in _STORE_OPS:
+                return False
             rt = (instr >> 21) & 0x1f
             if rt != 30:
                 return False
@@ -364,6 +393,79 @@ class PPC32GOT2Resolver:
             lo = self._sign16(addi_instr & 0xffff)
             r30 = (lr_val + hi + lo) & 0xffffffff
             setups[bcl_va] = r30
+
+        # ------------------------------------------------------------------
+        # Alternative variant: BL +4 / MFLR r30 / LWZ r0, D(r30) / ADD r30, r0, r30
+        # Used by IBM GCC for HACMP and related PPC32 Linux binaries.
+        # The delta (GOT2_VA - LR) is stored as a 32-bit word in .text at
+        # address (LR + D) where LR = bl_va + 4 and D comes from the LWZ.
+        # ------------------------------------------------------------------
+        for off in range(text_off, text_off + text_len - 64, 4):
+            if struct.unpack_from(">I", data, off)[0] != self._BL_PLUS4:
+                continue
+
+            bl_va = self._text_va + (off - text_off)
+            lr_val = bl_va + 4   # LR = address of instruction after bl
+
+            # Step 1: find MFLR r30 within 16 instructions of bl target
+            mflr_off = None
+            for j in range(0, 17):
+                p = off + 4 + j * 4
+                if p + 4 > text_off + text_len:
+                    break
+                w = struct.unpack_from(">I", data, p)[0]
+                if w == self._MFLR_R30:
+                    mflr_off = p
+                    break
+                # stop if r30 is clobbered by a non-mflr instruction
+                if _clobbers_r30(w):
+                    break
+            if mflr_off is None:
+                continue
+
+            # Step 2: find LWZ r0, D(r30) within 8 instructions of MFLR
+            lwz_off = None
+            lwz_disp = None
+            for k in range(1, 9):
+                p = mflr_off + k * 4
+                if p + 4 > text_off + text_len:
+                    break
+                w = struct.unpack_from(">I", data, p)[0]
+                if (w & self._LWZ_R0_R30_MASK) == self._LWZ_R0_R30_BASE:
+                    lwz_off = p
+                    lwz_disp = self._sign16(w & 0xffff)
+                    break
+                if _clobbers_r30(w):
+                    break
+            if lwz_off is None:
+                continue
+
+            # Step 3: find ADD r30, r0, r30 within 8 instructions of LWZ
+            add_found = False
+            for m in range(1, 9):
+                p = lwz_off + m * 4
+                if p + 4 > text_off + text_len:
+                    break
+                w = struct.unpack_from(">I", data, p)[0]
+                if w == self._ADD_R30_R0:
+                    add_found = True
+                    break
+                if _clobbers_r30(w):
+                    break
+            if not add_found:
+                continue
+
+            # Read the linker-embedded delta word from binary image
+            delta_va = (lr_val + lwz_disp) & 0xffffffff
+            delta = self._read32(delta_va)
+            if delta is None:
+                continue
+
+            r30 = (lr_val + delta) & 0xffffffff
+            # Only record if r30 looks like a data-segment address (above text)
+            if r30 > self._text_end:
+                setups[bl_va] = r30
+
         return setups
 
     def _r30_at(
@@ -557,6 +659,134 @@ class PPC32GOT2Resolver:
             ))
 
         return result
+
+    # Max instructions after func_va to scan for a BL+4 / BCL prologue setup.
+    # IBM GCC prologues are always within the first few instructions.
+    _PROLOGUE_SCAN_SLACK = 0x40  # 16 instructions max
+
+    def _r30_for_func(self, r30_map: Dict[int, int], func_va: int) -> Optional[int]:
+        """
+        Return the r30 value live throughout func_va's body.
+
+        Searches for the nearest setup in r30_map that either:
+        - Precedes func_va (BCL/ADDIS/ADDI variant, setup before first instruction), OR
+        - Falls within the function prologue window [func_va, func_va + _PROLOGUE_SCAN_SLACK)
+          (BL+4/MFLR/LWZ/ADD variant, setup is a few instructions into the function).
+
+        For the BL+4 variant the setup VA is the `bl` instruction itself which is
+        inside the function body, so a strict `va <= func_va` lookup misses it.
+        """
+        # First try: setup strictly before func_va (BCL variant and most cases)
+        before = [va for va in r30_map if va <= func_va]
+        if before:
+            best_before = max(before)
+            # If the preceding setup is far away (> 2K), also check for a prologue
+            # setup inside this function that might be a better match.
+            if func_va - best_before < 0x800:
+                return r30_map[best_before]
+
+        # Second try: setup inside the function prologue window (BL+4 variant)
+        prologue_end = func_va + self._PROLOGUE_SCAN_SLACK
+        inside = [va for va in r30_map if func_va < va < prologue_end]
+        if inside:
+            return r30_map[min(inside)]
+
+        # Fall back to the best preceding setup even if it's far
+        if before:
+            return r30_map[max(before)]
+        return None
+
+    def resolve_data_load(self, func_va: int, disp: int) -> Optional[str]:
+        """
+        Resolve a GOT2-relative data load `lwz rN, disp(r30)` to its string value.
+
+        Given a function entry VA and a signed GOT2 displacement, computes the r30
+        anchor for that function, reads the pointer at GOT2[r30 + disp], and if that
+        pointer addresses a NUL-terminated string in the binary returns the string.
+        Returns None if the anchor, entry address, or target cannot be resolved.
+
+        Usage:
+            resolver = PPC32GOT2Resolver.from_path('/path/to/clstrmgr')
+            # resolve `lwz r3, -0x7fc0(r30)` in function at 0x1010f694
+            s = resolver.resolve_data_load(0x1010f694, -0x7fc0)
+            # → '/usr/es/sbin/cluster/events/cmd/clevlog'
+
+        Works for any load that points to .rodata string literals, format strings,
+        or other constant data. Does not follow multi-level pointer chains.
+        """
+        r30_map = self._find_r30_setups()
+        if not r30_map:
+            return None
+
+        r30 = self._r30_for_func(r30_map, func_va)
+        if r30 is None:
+            return None
+
+        entry_va = (r30 + disp) & 0xFFFFFFFF
+        ptr = self._read32(entry_va)
+        if ptr is None:
+            return None
+
+        # Dereference: read up to 256 bytes as NUL-terminated string
+        ptr_off = self._va_to_off(ptr)
+        if ptr_off is None or ptr_off >= len(self._data):
+            return None
+        raw = self._data[ptr_off: ptr_off + 256]
+        nul = raw.find(b'\x00')
+        if nul < 0:
+            return None
+        try:
+            return raw[:nul].decode('utf-8', errors='replace')
+        except Exception:
+            return None
+
+    def resolve_data_loads(
+        self,
+        func_va: int,
+        disps: Dict[int, str],
+    ) -> Dict[str, Optional[str]]:
+        """
+        Batch version of resolve_data_load.
+
+        Args:
+            func_va:  function entry VA (used to determine r30)
+            disps:    mapping of {displacement: label}
+
+        Returns:
+            mapping of {label: resolved_string_or_None}
+
+        Usage:
+            results = resolver.resolve_data_loads(0x1010f694, {
+                -0x7fc0: 'exec_cmd path',
+                -0x7fd0: 'sprintf fmt',
+            })
+        """
+        r30_map = self._find_r30_setups()
+        r30 = self._r30_for_func(r30_map, func_va)
+        if r30 is None:
+            return {label: None for label in disps.values()}
+
+        out: Dict[str, Optional[str]] = {}
+        for disp, label in disps.items():
+            entry_va = (r30 + disp) & 0xFFFFFFFF
+            ptr = self._read32(entry_va)
+            if ptr is None:
+                out[label] = None
+                continue
+            ptr_off = self._va_to_off(ptr)
+            if ptr_off is None or ptr_off >= len(self._data):
+                out[label] = None
+                continue
+            raw = self._data[ptr_off: ptr_off + 256]
+            nul = raw.find(b'\x00')
+            if nul < 0:
+                out[label] = None
+            else:
+                try:
+                    out[label] = raw[:nul].decode('utf-8', errors='replace')
+                except Exception:
+                    out[label] = None
+        return out
 
     def export_jsonl(self, result: GOT2ResolveResult, out_path: str) -> None:
         with open(out_path, "w") as f:
