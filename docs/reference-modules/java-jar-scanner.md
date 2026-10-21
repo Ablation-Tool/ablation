@@ -8,7 +8,7 @@ Three gaps in existing Ablation coverage:
 
 1. **BinaryContext silently fails on Java .class files.** `BinaryContext.load_or_build()` returns `arch=x86_64` fallback with `func_starts=0` for `.class` inputs. `SinkArgClassifier` produces 0 results. Java components inside BFF archives or ZIP distributions were treated as analyzed when they were not.
 
-2. **IBM-RE contains Java exec-class components that prior analysis missed.** IBM Debugger ships `derdebug.jar` (z/390 version, 350 classes) with a confirmed `Runtime.exec()` call in `j.class`. IBM EGL-VSE ships `src.jar` (819 classes, IBM EGL compiler source). Both required constant-pool scanning, not native analysis.
+2. **Enterprise packages contain Java exec-class components that prior analysis missed.** Enterprise distributions ship Java `.jar` files inside `.bff` archives or ZIP distributions. A `.jar` that imports `Runtime.exec()` is invisible to `BinaryContext` and `SinkArgClassifier`. Both required constant-pool scanning, not native analysis.
 
 3. **Common method names produce false positives without co-occurrence checks.** Names like `exec`, `start`, `load` appear in thousands of unrelated Java classes. A correct scanner requires both the exec-class class name (`java/lang/Runtime`) and method name (`exec`) to co-occur in the same class file's constant pool.
 
@@ -50,13 +50,6 @@ result = JavaJarScanner.scan_bytes(inner_data, label='nested.jar')
 
 /path/to/src.jar: 819 classes, 0 exec-class APIs
 ```
-
-## IBM-RE findings (2026-10-18)
-
-| Package | JAR | Classes | Findings |
-|---|---|---|---|
-| IBM-Debugger idebug.client.extras | derdebug.jar (390/lib/) | 350 | RUNTIME_EXEC: `j.class` — `Runtime.exec(String)` confirmed by signature `(Ljava/lang/String;)Ljava/lang/Process;` |
-| EGL-VSE | src.jar | 819 | 0 exec-class APIs |
 
 ## Limitations
 

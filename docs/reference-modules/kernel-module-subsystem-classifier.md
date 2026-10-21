@@ -111,35 +111,17 @@ Use HIGH confidence for unambiguous subsystems, MEDIUM for broad prefixes where 
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`classify(ko_path)` calls `_extract_subsystem_path(ko_path)` to find the path component after the last `/kernel/` directory in the path. It then iterates `_SUBSYSTEM_RULES` in order (most-specific prefix first) and returns on the first match. No file is opened; no disassembly occurs. The rule table is validated at module import time by `_check_rule_order()`, which raises `AssertionError` if a broader rule appears before a more-specific one that it would shadow.
 
----
-
-## Example output
-
-```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
-
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
-```
-
----
-
-## False positives
-
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+When the path contains no `/kernel/` component, `classify()` returns `confidence="LOW"`, `attack_surface="LOCAL"`, and `rule_matched="(no /kernel/ component in path)"`. When the path contains a `/kernel/` component but no rule prefix matches the subsystem, the fallback uses the top-level directory as the subsystem label and returns `confidence="LOW"`.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before:** Collect `.ko` file paths from the target (e.g., `find /lib/modules -name '*.ko'`). No BinaryContext required.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After:** Use `attack_surface` and `network_reachable` to filter and prioritize findings from other scanners (e.g., `LA64MaxNotMinScanner`, `HeapVulnScanner`) that return a `ko_path` field.
 
 ---
 
