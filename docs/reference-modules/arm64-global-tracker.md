@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `Path.stat().st_size` guard befo
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`scan(binary_path, text_start, text_size)` reads the binary with a 256 MB size guard, then walks the `.text` range in 4-byte steps. For each word it checks for `STR Xt, [Xn, #imm]` and `STUR Xt, [Xn, #simm]` instructions. For each write, it back-traces the register's SSE (Symbolic Stack Expression) state: `ADRP + ADD/LDR` sequences that resolve to a known GOT slot map the write to a named global symbol. Writes to unknown registers record the raw SSE. Returns `List[WriteRecord]` — one per global variable write site. `report(records)` groups writes by symbol name and prints them.
 
 ---
 
@@ -46,13 +46,15 @@ report(records)
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+============================================================
+GLOBAL: __mmtls_ctx  (3 writes)
+============================================================
+  pc=0x246364  field=+0x00  STR x0,[x19,#0x0]
+        base_sse=Global('__mmtls_ctx', 0)
+  pc=0x246380  field=+0x08  STR x1,[x19,#0x8]
+        base_sse=Global('__mmtls_ctx', 0)
+  pc=0x246390  field=+0x10  STR x2,[x19,#0x10]
+        base_sse=Global('__mmtls_ctx', 0)
 ```
 
 ---

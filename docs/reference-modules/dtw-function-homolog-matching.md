@@ -64,25 +64,26 @@ matcher2 = DTWMatcher.from_context(ctx1, ctx2)
 The following illustrates the matching output format. Actual similarity scores and addresses are binary-specific.
 
 ```
-HomologMatch:
-  v1 VA: <va>    v2 VA: <va>
-  Similarity: <score>  Confidence: HIGH
-  delta_insn: +<N>  (function grew by N instructions)
+# SimilarityReport.fmt() for a single pair:
+DTW 0x22ccc0 vs 0x23a010
+  dtw_similarity : 0.9142
+  dtw_distance   : 8.7500
+  jaccard_4gram  : 0.8730
+  lengths        : 312 vs 318
+  verdict        : same_era
 
-SimilarityReport (batch):
-  VA_v1      VA_v2      Similarity  Confidence
-  <va>       <va>        0.91       HIGH
-  <va>       <va>        0.74       MEDIUM
-  <va>       (no match)  --         --
+# DTWFunctionMatch.__str__() per entry in score_functions() batch:
+0x22ccc0  httpsd_v1  dtw_sim=0.914  dtw_dist=8.7500  jaccard=0.873  len=312
+0x23a010  httpsd_v2  dtw_sim=0.831  dtw_dist=14.2100  jaccard=0.742  len=344
 ```
 
 ---
 
 ## False positives
 
-**Short functions (fewer than ~15 instructions) produce unreliable DTW similarity scores — two unrelated short functions can score HIGH simply because both are short.** Filter `HomologMatch` results with `delta_insn < 3` for very short functions and require manual confirmation before using them as homolog anchors.
+**Short functions (fewer than ~15 instructions) produce unreliable DTW similarity scores — two unrelated short functions can score `same_era` simply because both are short.** Filter `SimilarityReport` results where `len_a < 15` and require manual confirmation before using them as homolog anchors.
 
-**DTW with sakoe-chiba band (radius 10%) can miss heavily-restructured functions** — a function that was split into two functions or merged from two will score below the HIGH threshold. If `DTWMatcher` returns no HIGH-confidence match, use `SubsequenceSearcher` to search for a sub-sequence match instead.
+**DTW with sakoe-chiba band (radius 10%) can miss heavily-restructured functions** — a function that was split into two functions or merged from two will score `rewritten` or `different`. If `DTWMatcher` returns no `same_era` match, use `SubsequenceSearcher` to search for a sub-sequence match instead.
 
 ---
 
