@@ -144,34 +144,55 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_load()` reads the ELF directly
 
 ## How it works
 
-`analyze_fn(raw, binary, fn_va, state_vars)` disassembles the function at `fn_va` with Capstone and tracks state transitions across the function's instruction stream. For each assignment to a state variable and each branch predicated on a state variable, it records a `FSMState` transition. Call it across all functions and aggregate to reconstruct the protocol FSM graph. No func_starts iteration — analyzes one function at a time.
+Four-phase pipeline using `_load()` (lief + raw bytes) directly — no `BinaryContext` required.
+
+**Phase 1** — `identify_state_vars()` scans the entire `.text` section for STR/STP instructions writing small integer immediates (≤255) to BSS addresses, and LDR instructions reading BSS addresses within 4 instructions of a conditional branch. These patterns identify state variables.
+
+**Phase 2** — `build_cluster()` performs BFS from user-supplied seed VAs over direct `BL` edges, bounded by `hop_depth` (default 2). Returns `{fn_va: set_of_callees}`.
+
+**Phase 3** — `analyze_fn()` runs once per cluster function. Returns a `FnProps(va, reads_state_vars, writes_state_vars, calls_insert, calls_delete)` where `reads_state_vars` and `writes_state_vars` are lists of BSS VAs. Then `extract_transitions()` finds `(LDR state_var → branch → BL → STR state_var)` quads and emits `FSMTransition` objects.
+
+**Phase 4** — `build_fsm()` assigns integer state IDs and `emit_dot()` exports Graphviz DOT.
 
 ---
 
 ## Example output
 
-```
-FnProps  fn_va=0x00401200  (parse_request)
-  state_reads: ['conn_state', 'auth_state']
-  state_writes: [('conn_state', 'CONNECTED'), ('auth_state', 'PENDING')]
-  transitions:
-    AUTH_NONE → AUTH_PENDING  @ 0x00401248  (beq conn_state, CONNECTED)
-    AUTH_PENDING → AUTH_OK    @ 0x004013c0  (beq auth_result, 0)
+```python
+# FnProps for one cluster function (fn_va=0x246364, saveAuthLongList)
+fn_props[0x246364]
+# FnProps(va=0x246364,
+#   reads_state_vars=[0x3d1a08, 0x3d1a10],   # BSS VAs of state vars read
+#   writes_state_vars=[0x3d1a08],              # BSS VAs of state vars written
+#   calls_insert=True,
+#   calls_delete=False)
+
+# Transitions (printed via the Usage section loop):
+# state 0 --[0x246380]--> state 1
+# state 1 --[0x111fa4]--> state 2
+# state 2 --[0x305020]--> state 0
+
+# DOT graph:
+# digraph FSM {
+#   0 [label="s0\n(val=0)\n[0x246364]"];
+#   1 [label="s1\n(val=1)\n[0x111f98]"];
+#   0 -> 1 [label="@0x246380\n->0x111fa4"];
+# }
 ```
 
 ---
 
 ## False positives
 
-State variable identification requires manual annotation of which global/struct fields are state variables. Incorrect `state_vars` input produces false transitions. Verify that the tracked variable is actually a state enum, not a counter or pointer.
+State variable identification heuristic (BSS writes with small immediates ≤255) may pick up non-state counters or flags. Check `observed_values` in each `StateVar` — a genuine state enum has a small number of distinct values (2–8). Counters produce many distinct values and should be excluded.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()`. Identify protocol state variable VAs via `SemanticSearcher` or string-reference analysis.
+**Before this module:** Use `_load(path)` directly (returns `binary, raw, load_addr`). Identify seed VAs via `SemanticSearcher.query("handshake state machine authentication")` or known entry points. No `BinaryContext` required.
 
-**After this module:** Aggregate `FnProps` across all functions to build the FSM graph. Identify missing state checks (transitions from a sensitive state without authentication validation).
+**After this module:** Call `emit_dot(states, transitions, state_vars)` and render with Graphviz to visualize the FSM. Identify missing authentication state checks (e.g., a transition from an unauthenticated state to a sensitive resource that skips the authenticated state).
 
 ---
 
