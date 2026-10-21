@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `Path.stat().st_size` guard befo
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`HeapUAFScanner.scan()` iterates func_starts via `_get_func_starts()` (uses `ctx.func_starts` or extracts from binary). For each function, disassembles with Capstone and runs a forward symbolic pass tracking per-register pointer state: `ALLOC` (malloc/calloc return), `FREE` (passed to free()), `UNKNOWN`. A `HeapFinding(UAF|DOUBLE_FREE|HEAP_OVERFLOW)` is emitted when a `FREE`-state register is dereferenced or freed again, or when an allocation size is bounded but a copy uses a user-controlled length.
 
 ---
 

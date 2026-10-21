@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`GoDangerousCallers.from_context(ctx).scan()` builds a pre-computed callgraph from a single sequential disassembly pass (`{callee_va: caller_va_set}` and `{caller_va: callee_va_set}`) rather than iterating func_starts. Identifies dangerous call targets (fmt.Sprintf with tainted variadics, os.exec, unsafe.Pointer casts) by Go 1.17+ register ABI (`rax/rbx` = arg0, `rcx/rdx` = arg1). Resolves itabs from `.rodata` for virtual dispatch sites. Returns `List[DangerousCallHit]` sorted by severity.
 
 ---
 

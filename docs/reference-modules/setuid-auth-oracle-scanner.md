@@ -89,7 +89,7 @@ Confirmed on: `LoginMOMIssue` (setuid, 1 oracle hit, CWE-307 + CWE-338 co-findin
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`SetuidAuthOracleScanner.from_context(ctx).scan()` checks `ctx.plt` for `getspnam`/`crypt`/`strcmp` imports (oracle signal) and `pam_start` absence (no PAM rate-limiting). For each oracle function (the function body calling both `getspnam` and `crypt`), it uses `ctx.callers_of()` to find the call chain one level up. No func_starts iteration — purely PLT import analysis and caller-graph lookup. Returns `List[OracleHit]` with `shadow_func`, `crypt_func`, `cmp_func`, and `oracle_func_va`.
 
 ---
 

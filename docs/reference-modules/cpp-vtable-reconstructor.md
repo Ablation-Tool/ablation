@@ -243,7 +243,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_ELF_BYTES=256MB` + `os.pat
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`CppVtableReconstructorAnalyzer.scan()` runs a 3-layer pipeline. **Layer 1** `scan_vtables()` extracts vtable structures via RELA relocations (dynamic ELF) or raw code-pointer scan fallback. No func_starts iteration. **Layer 2** `name_slots()` resolves each slot to a name via export symbols and string xrefs. **Layer 3** `trace_consumers()` finds call sites dispatching through vtable slots — x86-64 via `VtableDispatchScanner`, ARM64 via `vtable_resolver`, other arches via pointer-literal scan. Consumer tracing uses `_func_starts_sorted()` internally.
 
 ---
 
