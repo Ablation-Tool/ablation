@@ -14,7 +14,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. No unbounded file reads. No HTTP
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`MCPGrammarFuzzer.from_path(mcp_config).fuzz()` reads the `.mcp.json` / JSON-RPC 2.0 tool manifest and mutates `description`, `name`, and `inputSchema` property description fields with prompt injection payloads. Uses Atheris (if available) or a deterministic mutation loop. Runs each mutated manifest through a real LLM inference call (subprocess) and checks response for injection markers. Returns `List[MCPTaintFinding]` — one per confirmed injection in a tool field. No binary disassembly.
 
 ---
 

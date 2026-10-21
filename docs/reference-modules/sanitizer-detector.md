@@ -109,7 +109,7 @@ elif r.verdict == 'PARTIAL':
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`SanitizerDetector.detect(min_score)` iterates `ctx.func_starts`, disassembles each function with Capstone, and checks for patterns that indicate shell-safe string handling: `strncpy`/`snprintf` with explicit length bounds, bounds-checked `memcpy`, or format strings with no `%s` without width. Scores each function 0–10 by number of sanitizer signals. Functions scoring above `min_score` (default 4) are returned as `SanitizerProfile(shell_safe=True/False, score, func_va, evidence_list)`.
 
 ---
 
