@@ -220,6 +220,15 @@ class AixInstallpDecompressor:
         if type_byte == 0x0e:
             uncompressed_size = field_a
             bwt_index = field_c
+        elif type_byte in (0x0f, 0x10, 0x11):
+            # 0x0f: bwt_index = field_a (BE), uncompressed_size = field_c (LE).
+            # 0x10/0x11: exact header layout unknown (empirical RE: no 4-byte field
+            # in raw[4:16] equals total symbol count for known entries).  Use the
+            # same layout as 0x0f; _unary_huffman_decode will stop at payload
+            # exhaustion when the decoded count exceeds a nonsense uncompressed_size.
+            # Callers should treat uncompressed_size as an upper bound, not exact.
+            bwt_index = field_a
+            uncompressed_size = field_c
         else:
             bwt_index = field_a
             uncompressed_size = field_c
@@ -231,6 +240,62 @@ class AixInstallpDecompressor:
             bwt_index=bwt_index,
             sym_table=sym_table,
         )
+
+    @staticmethod
+    def _count_payload_symbols(raw: bytes) -> int:
+        """Count total decodable Huffman symbols in the payload (type 0x10/0x11 helper).
+
+        Decodes the unary Huffman stream until payload exhaustion.  Returns the
+        total symbol count, which is the true uncompressed_size for type 0x10/0x11
+        entries where the header field is unreliable.
+        """
+        payload = raw[272:]
+        buf = 0
+        nbits = 0
+        pos = 0
+        total = 0
+        while True:
+            if nbits == 0:
+                if pos >= len(payload):
+                    break
+                buf = payload[pos]; pos += 1; nbits = 8
+            b = (buf >> 7) & 1; buf = (buf << 1) & 0xFF; nbits -= 1
+            if b == 0:
+                total += 1
+                continue
+            while True:
+                if nbits == 0:
+                    if pos >= len(payload):
+                        return total
+                    buf = payload[pos]; pos += 1; nbits = 8
+                b = (buf >> 7) & 1; buf = (buf << 1) & 0xFF; nbits -= 1
+                if b == 0:
+                    total += 1
+                    break
+        return total
+
+    @staticmethod
+    def _detect_bwt_index_type10(raw: bytes, n_symbols: int) -> int:
+        """Best-effort bwt_index for type 0x10/0x11 entries.
+
+        Tries all 16-bit and 32-bit interpretations of raw[4:16].  Returns the
+        first value in [0, n_symbols) found, or 0 if none qualifies.  Documented
+        empirically: the 4.3.x bos.net automountd entries have no 32-bit field in
+        raw[4:16] that equals a valid bwt_index, suggesting the field is encoded as
+        a pair of 16-bit values or at a different offset.
+        """
+        candidates = []
+        for off in (4, 6, 8, 10, 12, 14):
+            if off + 2 <= 16:
+                candidates.append(struct.unpack_from('>H', raw, off)[0])
+                candidates.append(struct.unpack_from('<H', raw, off)[0])
+        for off in (4, 8, 12):
+            candidates.append(struct.unpack_from('>I', raw, off)[0])
+            candidates.append(struct.unpack_from('<I', raw, off)[0])
+        for v in candidates:
+            if 0 < v < n_symbols:
+                return v
+        return 0
 
     def _unary_huffman_decode(self, max_symbols: int) -> list[int]:
         """Decode unary MSB-first Huffman codes from the payload.
