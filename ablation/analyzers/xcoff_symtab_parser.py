@@ -152,11 +152,8 @@ class XcoffSymtabParser:
 
     def _parse_xcoff32(self, data: bytes) -> list[tuple[int, str]]:
         """Parse XCOFF32 .symtab; return list of (va, name) pairs."""
-        # XCOFF32 file header: magic(2) + nscns(2) + timdat(4) + symptr(4) + nsyms(4) + opthdr(2) + flags(2)
         if len(data) < 20:
             return []
-        nscns, timdat, symptr, nsyms, opthdr_sz, flags = struct.unpack_from('>HIIIHHH'[1:], data, 2)
-        # Re-parse correctly: XCOFF32 header layout
         _magic, _nscns = struct.unpack_from('>HH', data, 0)
         _timdat, _symptr, _nsyms = struct.unpack_from('>III', data, 4)
         _opthdr, _flags = struct.unpack_from('>HH', data, 16)
@@ -272,7 +269,8 @@ class XcoffSymtabParser:
             if off + 72 > len(data):
                 break
             s_vaddr = struct.unpack_from('>Q', data, off + 16)[0]
-            s_flags = struct.unpack_from('>H', data, off + 68)[0]
+            # flags at offset 64: name(8)+paddr(8)+vaddr(8)+size(8)+scnptr(8)+relptr(8)+lnnoptr(8)+nreloc(4)+nlnno(4)=64
+            s_flags = struct.unpack_from('>I', data, off + 64)[0]
             if s_flags & _STYP_TEXT:
                 sec_va[sn + 1] = s_vaddr
 

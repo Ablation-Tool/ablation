@@ -52,7 +52,7 @@ Usage::
 from __future__ import annotations
 
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
@@ -217,6 +217,8 @@ class AixType0fStreamSplitter:
                         sentinel_end = pos
                         return indices, bits_consumed, True, sentinel_end
                     n += 1
+                    if n >= 256:
+                        return indices, bits_consumed, False, len(payload)
                 else:
                     consecutive_ones = 0
                     break
