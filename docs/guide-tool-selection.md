@@ -194,6 +194,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Open a BFF archive that may be compressed (Huffman 0x0C or LZW 0x0E)" | `BFFDecompressor.open(path)`: raises `BFFCompressedError` with remediation text |
 | "Detect BFF compression type before parsing" | `from modules.bff_decompressor import detect; detect(data)` |
 | "Extract XCOFF members from AIX big archive (<bigaf>: libc.a, libm.a, libpthreads.a)" | `from ablation.analyzers.aix_big_ar_extractor import AixBigArExtractor; members = AixBigArExtractor.from_path(path)` |
+| "Decompile an AIX PPC32 XCOFF32 function to C-like pseudocode (descriptor resolution + TOC naming)" | `Xcoff32Decompiler.from_context(ctx).decompile(func_va)` → pseudocode string; see `docs/reference-modules/xcoff32-decompiler.md` |
 | "Parse an AIX XCOFF32/XCOFF64 binary" | `from ablation.core.xcoff_parser import parse; parse(path)` |
 | "XCOFF32/64 exports, imports, function starts, section lookup (analyzer interface)" | `XCOFFExecutableAnalyzer.from_path(path).exports_table()` |
 | "XCOFF loader symbol quick lookup without full parse" | `from modules.xcoff_loader_symbols import loader_symbols; loader_symbols(data)` |
