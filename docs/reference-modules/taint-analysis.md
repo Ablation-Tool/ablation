@@ -180,11 +180,11 @@ for sink in sinks:
 ## Example output
 
 ```
-0x40a214  [call_arg   ]  call 0x401050  (tainted: rdi): arg1 at call
+0x40a214  [call_arg]  call 0x401050  (tainted: rdi): arg1 at call
 0x40a228  [branch_cond]  test rax, rax  (tainted: rax)
-0x40a250  [alloc_size ]  call 0x401030  (tainted: rdi): ALLOC SIZE ARG
-0x40a270  [mem_write  ]  mov qword ptr [rbx+0x10], rax  (tainted: rax)
-0x40a290  [copy_len   ]  call 0x401060  (tainted: rsi): COPY LEN/ADDR ARG
+0x40a250  [alloc_size]  call 0x401030  (tainted: rdi): ALLOC SIZE ARG
+0x40a270  [mem_write]  mov qword ptr [rbx+0x10], rax  (tainted: rax)
+0x40a290  [copy_len]  call 0x401060  (tainted: rsi): COPY LEN/ADDR ARG
 ```
 
 ---

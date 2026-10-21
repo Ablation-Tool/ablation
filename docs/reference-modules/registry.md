@@ -234,18 +234,26 @@ for h in findings:
 
 ```
 $ python -m ablation.analyzers.finding_registry stats
-FindingRegistry  ~/.ablation/findings.db
-  total findings  : 47  (23 confirmed)
-  vendors         : cisco (12), juniper (9), fortinet (11), custom (15)
-  cwe classes     : CWE-787 (8), CWE-121 (6), CWE-119 (11), CWE-120 (7), other (15)
-  with embeddings : 31
+Total findings : 47
+With embedding : 31
+DB path        : /home/user/.ablation/findings.db
+
+By vendor:
+  cisco                12
+  juniper              9
+  fortinet             11
+  custom               15
+
+By CWE class:
+  CWE-787      8
+  CWE-121      6
+  CWE-119      11
+  CWE-120      7
 
 $ python -m ablation.analyzers.finding_registry list --vendor cisco
-vendor    product     title                                cwe_class  severity
-------    -------     -----                                ---------  --------
-cisco     fmc_server  TLV zero-length infinite loop        CWE-835    HIGH
-cisco     asa_fw      SIP parser heap overflow             CWE-787    CRITICAL
-cisco     ios_xe      CLI command injection via snmp trap  CWE-78     HIGH
+[   1] cisco        fmc_server           CWE-835    HIGH     TLV zero-length infinite loop
+[   2] cisco        asa_fw               CWE-787    CRITICAL SIP parser heap overflow
+[   3] cisco        ios_xe               CWE-78     HIGH     CLI command injection via snmp trap
 ```
 
 ---
