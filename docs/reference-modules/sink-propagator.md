@@ -105,35 +105,35 @@ Tested on:
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`SinkPropagator.from_context(ctx).propagate()` iterates `ctx.func_starts` and for each function, disassembles with Capstone to find any call to a known sink. For each such call, it traces the argument register backward to determine if the argument came directly from the function's own parameter. If the argument propagates from the caller's parameter unchanged into the sink, the function is a `SinkWrapper` — an indirect sink that extends the taint scope. The chain field records the lineage back to the root PLT sink.
 
 ---
 
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+SinkWrapper  parse_user_input (0x00401200)  param=0
+  call_va=0x00401248  wraps: sprintf (0x00403c00)
+  chain: parse_user_input → sprintf → system
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+SinkWrapper  build_command (0x00402800)  param=1
+  call_va=0x00402870  wraps: parse_user_input (0x00401200)
+  chain: build_command → parse_user_input → sprintf → system
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+A function that calls a sink with an argument derived from its parameter but applies a bounding operation before the call (e.g., truncates or sanitizes) is still flagged as a SinkWrapper. The trace checks register identity, not taint safety. Verify `param_idx` and the call site manually before treating the wrapper as an exploitable path.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` and `SinkArgClassifier.classify_all()` to identify direct sink call sites. Run `SinkPropagator` to extend taint scope to wrapper functions.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Add discovered wrapper VAs to the sink list for `TaintTracker` — treat them as additional taint sinks. Run `SinkSanitizerFilter` on the extended sink list before taint analysis.
 
 ---
 

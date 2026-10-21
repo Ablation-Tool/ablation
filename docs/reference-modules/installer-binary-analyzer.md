@@ -92,35 +92,37 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_INSTALLER_BYTES=256MB`; `o
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`InstallerBinaryAnalyzer.from_path(path).analyze()` detects the installer format (NSIS, Inno Setup, BitRock LZMA) from file magic bytes, decompresses the payload (LZMA, zlib, NSIS block), and carves PE binaries from the decompressed data using MZ header scanning. Returns an `InstallerAnalysisResult` with the carved `CarvedBinary` objects and extracted temp file paths. No func_starts or Capstone — purely file-format parsing.
 
 ---
 
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
-
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+InstallerAnalysisResult  /tmp/setup.exe
+  installer_type: nsis
+  upx_unpacked: False
+  payload_size: 14,823,412 bytes
+  binaries: 3 carved
+    [0] offset=0x1a440  arch=x86  size=2,194,304  name_hint=app_runtime.dll
+    [1] offset=0x21c000  arch=x64  size=8,192,000  name_hint=main_service.exe
+    [2] offset=0x9bc000  arch=x86  size=819,200   name_hint=helper_32.dll
+  extracted_paths: {app_runtime.dll: /tmp/_carved_0, ...}
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+Compressed data or encrypted PE sections that happen to start with `MZ` produce false `CarvedBinary` entries with `arch='unknown'` and parse failures in `errors`. Check `errors` for extraction failures and verify `arch` is not `'unknown'` before analyzing carved binaries.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** Nothing required — `from_path(path)` is self-contained.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For each `CarvedBinary`, write `data` to a temp file and run `BinaryContext.load_or_build()` on `extracted_paths[name_hint]` to analyze the carved payload.
 
 ---
 

@@ -211,35 +211,36 @@ Two things were not possible before in Ablation:
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`sweep_directory_pe(directory, model, profiles, top_k)` scans a directory for PE files, loads each with `BinaryContext.load_or_build()`, and runs a configurable set of analysis profiles (SAC, taint, firmware-auth-bypass) across all PE files in parallel. Results are returned as `List[dict]` — one dict per PE file. Uses `SemanticSearcher` and `SinkArgClassifier` internally; not a standalone analysis primitive.
 
 ---
 
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+[  1/12] httpsd.exe  — SAC: 3 ARG_PROPAGATED  1 RODATA_CONST
+  firmware_auth_bypass: {'has_bypass': True, 'bypass_va': 0x00418200, 'severity': 'HIGH'}
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+[  2/12] sslvpnd.exe  — SAC: 0 ARG_PROPAGATED  8 RODATA_CONST
+  firmware_auth_bypass: {'has_bypass': False}
+
+[  3/12] fcgi_dynamic.exe  — SAC: 1 ARG_PROPAGATED
+  firmware_auth_bypass: {'has_bypass': False}
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+Sweep results inherit false-positive rates of each individual analysis module. Run the sweep for initial triage, then re-run each `ARG_PROPAGATED` hit individually with `TaintTracker` before reporting.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** Collect PE files into a target directory. Configure profiles and model settings.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Filter sweep output for `has_bypass=True` or `ARG_PROPAGATED` hits. Run targeted analysis on those binaries with `TaintTracker` and `PathSolver`.
 
 ---
 

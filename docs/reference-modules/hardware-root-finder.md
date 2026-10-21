@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`HardwareRootFinder.from_context(ctx).find()` iterates `ctx.func_starts`, disassembles each function with Capstone, and flags memory accesses to known MMIO address ranges (device registers, peripheral memory maps). For each match, it builds a call spine (caller chain up to exported functions) to show how hardware access is reached from the API surface.
 
 ---
 
@@ -40,28 +40,27 @@ for root in roots:
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
-
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+HardwareRoot  func_va=0x004010a0  (write_gpio_state)
+  mmio_labels: ['GPIO_BASE', 'SPI_CTRL']
+  accesses:
+    0x004010b4  MOV [0xffe10004], eax  GPIO_BASE+0x4
+    0x004010c8  MOV [0xffe30000], ecx  SPI_CTRL+0x0
+  call_spine: main → board_init → write_gpio_state
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+Constants in the MMIO address range that are used as local variables (not actual memory writes/reads) may produce false hits. Verify that the instruction is a memory operation targeting the MMIO range, not an arithmetic operation on an immediate that happens to fall in the range.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` with `ctx.func_starts` populated. Configure the MMIO range table for the target hardware platform.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For MMIO write functions, trace what values are written from the call spine to assess whether an attacker-controlled input can reach the hardware register.
 
 ---
 

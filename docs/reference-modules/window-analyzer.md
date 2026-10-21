@@ -123,35 +123,38 @@ Gate: **PASS**. No CRITICAL or HIGH findings. One open item tracked for follow-u
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`WindowAnalyzer.dump_text(va, window)` extracts `window` bytes centered on `va`, disassembles the range with Capstone (x86-64 or ARM64 based on binary architecture), resolves PLT call targets to their names, and annotates `.rodata` string references inline. Returns a list of annotated disassembly lines for LLM or manual analysis. Not a scanner — produces no findings.
 
 ---
 
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
-
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+0x00401f20 <handle_request+0x20>:
+  push   rbp
+  mov    rbp, rsp
+  sub    rsp, 0x110
+  mov    rdi, QWORD PTR [rbp-0x108]   ; arg_0
+  call   0x4030a0 <recv@plt>           ; recv(sock, buf, len, flags)
+  test   rax, rax
+  js     0x401f48
+  lea    rdi, [rip+0x20840]            ; "User: %s\n"  (.rodata:0x6040e0)
+  call   0x4031b0 <printf@plt>
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+Not applicable — `WindowAnalyzer` is a display tool, not a scanner. It produces disassembly context for human/LLM review, not structured findings.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `SemanticSearcher.query()` and `FuncProfiler.profile()` to identify a candidate VA. `SinkArgClassifier` and `TaintTracker` should be exhausted first — use `WindowAnalyzer` only when automated tools have no configured sink for the pattern.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Manual or LLM analysis of the disassembly window. Identify the taint path and feed back into `TaintTracker` by configuring the new sink pattern.
 
 ---
 

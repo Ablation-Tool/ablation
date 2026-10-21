@@ -72,35 +72,37 @@ Confirmed on: `commandcontrol` (setuid, 1 confirmed `gets()` hit, 3 callers corr
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`DeprecatedFuncScanner.from_context(ctx).scan()` iterates `ctx.func_starts` and disassembles each function with Capstone. For each call to a deprecated/dangerous PLT function (`gets`, `mktemp`, `tmpnam`, `sprintf` without bounds), it computes: the buffer size from frame prologue analysis (`sub rsp, N`), the overflow offset to saved RIP, and the CWE class. Returns a list of `DeprecatedHit` objects sorted by VA.
 
 ---
 
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+[CWE-242/CWE-121] gets() call at 0x403c10
+  in:     handle_input
+  reason: unbounded stdin read into fixed-size stack buffer
+  buf:    256 bytes at [rbp-0x100]
+  overflow_offset: 0x108 (264) bytes to RIP
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+[CWE-242/CWE-377] mktemp() call at 0x4041a8
+  in:     create_temp_file
+  reason: predictable temp file name — race condition between check and use
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+Frame size analysis (detecting buffer bounds) fails for functions with complex prologues (alloca, variable-length stack frames). For hits where `buf_size == -1`, the buffer size was not determined; the dangerous call is still real but the overflow offset is unknown. Do not dismiss — just note that bounds estimation was not possible.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` with `ctx.func_starts` populated.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For `gets`/`mktemp` hits, check whether the buffer address is passed out of the function (heap-copyout pattern) or used only locally. Register with `FindingRegistry`.
 
 ---
 

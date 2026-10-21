@@ -132,35 +132,35 @@ Automotive flat ROM firmware, GCC-compiled at `-O2`. Any firmware where
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`EpilogueShareScanner.from_context(ctx).scan()` iterates `ctx.func_starts` and disassembles each function with Capstone. For every unconditional jump (`JMP`, `JMPF` on x86; `B` on ARM), it checks whether the target VA falls inside another known function's body — i.e., between that function's start VA and the next function's start VA. If so, it records an `EpilogueShareHit`. Tail-call sharing is the most common source: the compiler merges identical epilogue sequences across multiple functions.
 
 ---
 
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+EpilogueShareHit  from_func=sub_0x00401200 (0x00401200)
+  jump_va=0x00401248  target_va=0x004015c0
+  host_func=handle_cleanup (0x004015a0)
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+EpilogueShareHit  from_func=parse_header (0x00402800)
+  jump_va=0x00402870  target_va=0x004015c8
+  host_func=handle_cleanup (0x004015a0)
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+Jump tables in switch statements produce false hits if the jump target happens to fall inside another function's VA range. For `from_func` that contains a known switch, filter with `target_va` checks against `.rodata` jump table entries. Also: inlined functions where `ctx.func_starts` has two adjacent entries but the second is actually a continuation rather than a separate function.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` with `ctx.func_starts` populated. Used when function boundary analysis suggests incorrect splits (overlapping or merged functions).
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Use hits to merge `host_func_va` and `from_func_va` boundaries in `ctx` before running `TaintTracker`, or to confirm that tail-call-optimized wrappers share epilogue code with their callees.
 
 ---
 

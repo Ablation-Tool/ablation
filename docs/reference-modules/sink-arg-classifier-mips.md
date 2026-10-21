@@ -164,35 +164,35 @@ before the JALR in a different branch, the verdict will be wrong.
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`SinkArgClassifierMIPS.from_context(ctx).classify_all()` iterates `ctx.func_starts` (MIPS32 binary) and disassembles each function with Capstone. For each call to a configured exec-class sink (`system`, `execve`, `popen`, etc.), it traces the first argument register (`a0`) backward in the instruction stream using MIPS register conventions. Resolves to `RODATA_CONST` if the argument traces to a `.rodata` address; `ARG_PROPAGATED` if traced to a parameter; `UNKNOWN` if unresolved. Accounts for MIPS delay slot — the instruction after each branch/call is part of the branch semantics.
 
 ---
 
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+SinkClassification  system  call_va=0x00801f44  func=run_cmd (0x00801f00)
+  verdict: ARG_PROPAGATED  severity: HIGH
+  detail: a0 traced to parameter at 0x00801f08 (delay slot: lw a0,4(sp))
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+SinkClassification  system  call_va=0x00802310  func=init_service (0x008022c0)
+  verdict: RODATA_CONST  severity: LOW
+  detail: a0 resolved to "start-service" at .rodata:0x00810a00
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+Delay-slot misattribution: a load in the delay slot of a branch may be incorrectly attributed as the argument source when it's actually part of the branch cleanup. Verify the a0 trace manually for `ARG_PROPAGATED` sites where `delay slot` appears in the detail.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` on a MIPS32 ELF with `ctx.func_starts` populated. Confirm target is MIPS with `ctx.arch`.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Pass `ARG_PROPAGATED` and `UNKNOWN` sites to `TaintTrackerMIPS`. Exclude `RODATA_CONST` sites from taint analysis.
 
 ---
 

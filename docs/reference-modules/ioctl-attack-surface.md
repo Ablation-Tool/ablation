@@ -127,35 +127,39 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_DRIVER_BYTES=64MB`; `Path.
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`IoctlAttackSurfaceGenerator.from_path(path).generate()` reads the driver binary, parses the PE import table for IOCTL-related DDI calls, decodes every `CTL_CODE` value found in the binary, and maps each IOCTL code to its dispatch handler function. No func_starts iteration — uses PE section parsing and cascade decoder from `KernelDriverAnalyzer`. Returns an `IoctlAttackSurface` with per-IOCTL `IoctlHandlerProfile` entries.
 
 ---
 
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+IoctlAttackSurface  driver.sys  type=WDM  signed=True
+  profiles: 3
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+  IoctlHandlerProfile  0x00222003  METHOD_NEITHER  FILE_ANY_ACCESS
+    handler_va: 0x00019a40  (DispatchDeviceControl)
+    device_type: 0x0022  func: 0x800
+    risk: METHOD_NEITHER — raw user pointer, no ProbeForRead detected
+
+  IoctlHandlerProfile  0x00222007  METHOD_BUFFERED  FILE_ANY_ACCESS
+    handler_va: 0x00019a40
+    risk: BUFFERED — kernel copies input, lower risk
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+IOCTL codes decoded from data sections (jump tables, pool tags) that coincidentally match the `CTL_CODE` pattern. The scanner applies an ASCII-filter (`decode_ioctl_code` rejects all-printable 4-byte values) but this does not eliminate all false positives. Verify each `METHOD_NEITHER` finding against the actual dispatch handler before reporting.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** Nothing required — `from_path(path)` is self-contained.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For `METHOD_NEITHER` IOCTLs without ProbeForRead, trace `Type3InputBuffer` dereferences in the handler manually. Use `KernelDriverAnalyzer` to extend the analysis with MSR/CR patterns.
 
 ---
 
