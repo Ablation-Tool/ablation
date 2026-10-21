@@ -99,7 +99,8 @@ The decoder recognises the following instruction types. All type strings appear 
 | `insn_type` | Opcode | Form | Notes |
 |:---|:---|:---|:---|
 | `MOV_IMM` | `0xE6` | `MOV Rwn, #imm16` | Immediate word load; byte1 low nibble = reg |
-| `CMP_IMM` | `0x66` | `CMP Rwn, #imm16` | Compare with immediate |
+| `CMP_IMM` | `0x66` / `0x46` | `CMP Rwn, #imm16` | Compare with immediate; byte1 low nibble = reg. Both forms confirmed in MS43. |
+| `ADD_IMM` | `0x06` | `ADD Rwn, #data16` | Add immediate word; byte1 low nibble = reg. Row x6 col 0. |
 | `JMPS` | `0xFA` | `JMPS seg, caddr` | Absolute code-segment jump |
 | `CALLS` | `0xDA` | `CALLS seg, caddr` | Absolute code-segment call; `target` resolved |
 | `MOV_LD` | `0xF2` / `0xC2` / `0xA2` | `MOV Rwn, mem` / `[Rwm]` | Load (DPP-mapped / internal / indirect) |
@@ -111,7 +112,13 @@ The decoder recognises the following instruction types. All type strings appear 
 |:---|:---|:---|:---|
 | `ADD_REG` | `0x00 nm` | `ADD Rwn, Rwm` | Infineon C167CR ISA table: lower-nibble-0 col, row 0 |
 | `XOR_REG` | `0x50 nm` | `XOR Rwn, Rwm` | Infineon C167CR ISA table: lower-nibble-0 col, row 5 |
-| `MOV_REG` | `0xF0 nm` | `MOV Rwdst, Rwsrc` | Byte-verified in MS43 ROM prologue/epilogue |
+| `MOV_REG` | `0xF0 nm` / `0xE0 nm` | `MOV Rwdst, Rwsrc` | 0xF0 byte-verified in MS43 prologues. 0xE0 is the second MOV encoding: ISA table x0 col at row E. |
+| `MUL_REG` | `0x0B nm` | `MUL Rwn, Rwm` | Signed 16x16 multiply; 32-bit result in MDL:MDH. PDF row xB col 0. |
+| `MULU_REG` | `0x1B nm` | `MULU Rwn, Rwm` | Unsigned 16x16 multiply. PDF row xB col 1. Confirmed in MS43 SA loop. |
+| `SHL_REG` | `0x4C nm` | `SHL Rwn, Rwm` | Shift left by register count. PDF row xC col 4. |
+| `SHL_IMM` | `0x5C nm` | `SHL Rwn, #data4` | Shift left by immediate 0-15; count in low nibble of byte1. |
+| `SHR_REG` | `0x6C nm` | `SHR Rwn, Rwm` | Logical shift right by register count. |
+| `SHR_IMM` | `0x7C nm` | `SHR Rwn, #data4` | Logical shift right by immediate 0-15. |
 | `MOVBZ` | `0xC0 nm` | `MOVBZ Rwn, Rbm` | ISA table col 0, row C. Zero-extends byte to word register. |
 | `MOVBS` | `0xD0 nm` | `MOVBS Rwn, Rbm` | ISA table col 0, row D. Sign-extends byte to word register. |
 | `PUSH` | `0x88 n0` | `PUSH Rwn` | Byte-verified in MS43 function prologues |
@@ -120,9 +127,13 @@ The decoder recognises the following instruction types. All type strings appear 
 | `JMPR` | `nD rel8` | `JMPR cc, target` | Low nibble 0xD = JMPR; cc in high nibble |
 | `UNKNOWN_2B` | any other | `db xx yy` | Opcode not yet decoded; decode continues |
 
-**Opcode table anchor:** The C167CR ISA manual organises 2-byte `nm`-format instructions in a 16×16 table where the column selects the lower nibble and the row selects the upper nibble. Lower-nibble column 0 (the `x0` column) maps rows 0–F to: ADD(0), ADDC(1), SUB(2), SUBC(3), CMP(4), XOR(5), AND(6), OR(7), CMPI1(8), CMPI2(9), CMPD1(A), CMPD2(B), MOVBZ(C), MOVBS(D), MOV(E), MOV(F). `0xF0=MOV` is byte-verified from MS43; all other entries in this column are derived from the same table row.
+**Opcode table anchor.** The C167CR ISA manual organises 2-byte `nm`-format instructions in a 16x16 table. The lower nibble of the opcode byte selects the addressing mode (row); the upper nibble selects the operation (column). Lower-nibble-0 column maps upper nibbles 0-F to: ADD, ADDC, SUB, SUBC, CMP, XOR, AND, OR, CMPI1, CMPI2, CMPD1, CMPD2, MOVBZ, MOVBS, MOV, MOV. `0xF0=MOV` is byte-verified from MS43; the full column is derived from the same ISA table row.
 
-**Important correction (2026-10-21).** Prior analysis assumed `0xC0 nm = XOR`. The ISA table confirms `0xC0 nm = MOVBZ` and `0x50 nm = XOR`. MOVBZ moves a byte register to a word register with zero extension. Bytes previously labelled as XOR in the BMW MS43 LFSR step function were MOVBZ operations extracting the low byte of a register. The seed-key algorithm uses MOVBZ + ADD + multiply rather than XOR + shift, and `0x91DA` is an additive constant rather than a Galois feedback polynomial.
+**Lower-nibble-6 column (4-byte immediate operations).** Instructions with lower nibble 6 are 4-byte: `opcode nm ## ##` where `nm` byte holds flags or register in low nibble, and `## ##` is a 16-bit little-endian immediate or address. Confirmed entries: `0x06`=ADD, `0x46`=CMP, `0x66`=CMP, `0xE6`=MOV.
+
+**Correction: MOVBZ vs XOR.** Prior analysis assumed `0xC0 nm = XOR`. The ISA table places XOR at `0x50 nm` and MOVBZ at `0xC0 nm`.
+
+**Correction: MS43 inner loop alignment.** The bytes `46 f4 0b 00` at offset 0x02BA46 form a single 4-byte `CMP R4, #0x000B`, not `UNKNOWN_2B` followed by `MUL R0, R0`. The decoder previously misread them as two 2-byte instructions because `0x46` was absent from `_FOUR_BYTE_OPS`. The BMW MS43 SecurityAccess function is a multiply-accumulate hash. Each inner-loop iteration calls `MULU R5, R8`, reads MDL, accumulates into R2, and terminates when `R4 = (base - 1586) + R2 > 11`. The constant `0x91DA` is additive, not a Galois polynomial. No XOR instructions appear in the function.
 
 ---
 
