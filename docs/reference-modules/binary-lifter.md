@@ -228,7 +228,7 @@ The following illustrates the output format for the three completeness tiers. Ac
 
 **File:** `ablation/analyzers/ppc476_lifter.py`
 
-Standalone IBM PPC476 BE pseudo-C lifter. Dedicated to the PPC476 microcontroller (IBM PowerPC 476FP) used in IBM AIX embedded firmware and POWER blade BMCs. Unlike the generic `BinaryLifter` ppc32 backend, `Ppc476Lifter` handles PPC476-specific quirks: SPE APU extensions, PPC476FP FPU instructions, and IBM's modified ABI for embedded stacks.
+Standalone IBM PPC476 BE pseudo-C lifter. Fills gap PPC476-GAP-003: no Python-native PPC32 BE lifter existed before this module. Lifts a function linearly — tracks register state across straight-line instruction sequences and annotates branches as `// if/else` comments; does **not** perform cross-branch data-flow analysis. Uses Capstone `CS_ARCH_PPC + CS_MODE_32 | CS_MODE_BIG_ENDIAN`. Architecture: PPC32 BE (IBM PPC476, glibc 2.15).
 
 **Usage:**
 ```python
