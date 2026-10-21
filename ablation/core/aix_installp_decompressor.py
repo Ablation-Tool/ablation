@@ -62,10 +62,12 @@ Step 4 (escape-byte decode + trailing block)::
     After escape decode: append raw bytes from offset (272 + huffman_bytes_consumed)
     to end of entry.  These trailing bytes are a second uncompressed block.
 
-    NOTE: The LF-map of the current BWT last column has 15+ cycles (not a single cycle),
-    indicating the BWT reconstruction (step 3) produces a K-alphabet approximation, not
-    the exact step4-encoded content.  The escape decode and trailing block together give
-    the closest available approximation of the original entry content.
+    NOTE: IBM's installp BWT omits a unique terminator character, producing a multi-cycle
+    LF-map.  For automountd (type 0x0e, N=199,196): 19 cycles, lengths
+    [111380,29182,26585,17754,7087,4382,1283,577,468,333,...], none of length N.  Inverse
+    BWT from the stored bwt_index cycles within one cycle rather than reconstructing the
+    full file.  The correct multi-cycle concatenation order is IBM-proprietary.  The step4
+    escape decode and trailing block together give the closest available approximation.
 
 Cross-version header difference::
 
@@ -73,6 +75,19 @@ Cross-version header difference::
     For the same binary (amqzxma0_nd): 5.0 bwt_idx=1806 uncomp=201258;
     5.2 bwt_idx=798 uncomp=199443.  The b4/b12 role swap is consistent across
     all matched entries.
+
+    VIOS automountd: type=0x0e (not 0x0f); header 0e00010000030a1c1f223b3c1a030000;
+    uncomp=199196 (field_a_BE), bwt_index=794 (field_c_LE=0x0000031a).
+
+Type 0x0f sentinel::
+
+    Type 0x0f Huffman streams terminate early with a 256-consecutive-1-bit sentinel
+    (≥32 bytes of 0xFF) rather than decoding all uncomp_size symbols.  After the
+    sentinel, remaining bytes are a secondary compressed block in an unknown IBM format.
+    MQSeries amqzxma0_nd (type 0x0f, 50848-byte entry): Huffman decodes 397 symbols
+    (K=13, escape_byte=0x00) then hits n>=256 at payload[139]; remaining 50437 bytes
+    are the secondary block.  The _unary_huffman_decode() ``n >= 256: return indices``
+    guard correctly detects this sentinel and returns the partial decode.
 """
 
 from __future__ import annotations
