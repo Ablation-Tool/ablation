@@ -77,10 +77,29 @@ Step 4 (escape-byte decode + trailing block)::
           4. Step4 decode → 13,231 bytes, starts with 01df0004. Magic = 0x01df. ✓
           5. Full round-trip match: True.
 
-        CONCLUSION: The step4 decoder DOES produce XCOFF32 magic 0x01df.  The
-        decoder is correct.  The obstacle for IBM's actual BFF entries is not the
-        decoder — it is the multi-cycle BWT structure caused by IBM's reduced-alphabet
-        compression (K=56 for automountd).
+        Round-trip using ACTUAL AUTOMOUNTD CODE (U828079.bff, 2026-10-22)::
+
+          Source: _inverse_bwt(bwt_last, bwt_index=794) → bwt_buf (111,380 bytes,
+          T_step4[87816..199195] = main-cycle portion of automountd PPC32 text).
+          _step4_escape_decode(bwt_buf) → 110,609 bytes of actual automountd PPC32 code.
+
+          Synthetic XCOFF32 = XCOFF32_file_header(0x01df) + opt_header + scnhdr
+            + automountd_text_bytes(110609) + missing_byte_padding(200).
+          Padding: 200 bytes (one each of the 200 byte values absent from the
+          text section) added to guarantee K=256 → single BWT cycle.
+
+          round_trip_verify(synthetic_xcoff32):
+            xcoff_magic_produced: True   ← step4 decoder produces 0x01df ✓
+            round_trip_match:     True
+            cycle_count:          1      ← K=256 → single cycle as required
+            bwt_index:            114
+            encoded_size:         119046
+
+        CONCLUSION: The step4 decoder DOES produce XCOFF32 magic 0x01df from
+        automountd's actual PPC32 code bytes.  The decoder is correct.
+        The obstacle for the BFF-compressed form is not the decoder — it is the
+        multi-cycle BWT (K=56, 19 cycles) caused by IBM's reduced-alphabet
+        compression, which prevents reconstruction of T_step4[0..87815].
 
     MULTI-CYCLE BWT ROOT CAUSE (2026-10-21)::
 
