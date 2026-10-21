@@ -366,9 +366,17 @@ class SinkArgClassifierS390X:
         lo = max(0, stack_addr_idx - _SNPRINTF_WINDOW)
         for i in range(stack_addr_idx - 1, lo - 1, -1):
             insn = insns[i]
-            if insn.id not in (self._snprintf_plts or {}):
+            # Identify BRASL/BAS calls to snprintf PLT stubs by checking the
+            # branch target VA in the operand, not insn.id (which is a small
+            # Capstone enum constant, never a PLT VA).
+            target_va: Optional[int] = None
+            for op in insn.operands:
+                if op.type == SYSZ_OP_IMM:
+                    target_va = op.imm & 0xFFFFFFFFFFFFFFFF
+                    break
+            if target_va is None or target_va not in self._snprintf_plts:
                 continue
-            fmt_pos = self._snprintf_plts[insn.id]
+            fmt_pos = self._snprintf_plts[target_va]
             fmt_reg = _S390_ARG_REGS[fmt_pos] if fmt_pos < len(_S390_ARG_REGS) else None
             if fmt_reg is None:
                 continue
