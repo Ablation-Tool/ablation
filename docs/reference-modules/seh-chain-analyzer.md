@@ -70,35 +70,21 @@ x86 (I386) PE only. Calling `from_path()` on an x64 or ARM PE raises `ValueError
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`from_path(path)` reads the PE with `Path(path).read_bytes()` and `lief.parse()`. Only `MACHINE_TYPES.I386` PE is accepted; non-x86 input raises `ValueError`.
 
----
+`safe_seh_handlers()` reads `IMAGE_LOAD_CONFIG.SEHandlerTable` and `SEHandlerCount` via lief's `load_configuration` attribute, then reads the 4-byte handler RVA array directly from `self._raw` using `_va_to_offset()` to convert VA to file offset.
 
-## Example output
+`seh_frames()` iterates all code sections (sections with `IMAGE_SCN_CNT_CODE` characteristic), disassembles each with `capstone.Cs(CS_ARCH_X86, CS_MODE_32)`, and scans for `PUSH <imm32>` instructions followed within four instructions by a memory operand with `FS:` as the segment register. A match is an SEH frame installation; the immediate operand is the handler VA.
 
-```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
-
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
-```
-
----
-
-## False positives
-
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+`scan()` combines both: it checks for a null or absent `IMAGE_LOAD_CONFIG` (HIGH finding), reads the SafeSEH table, enumerates SEH frame installations, and cross-references frames against the table to find handlers not in SafeSEH.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before:** Run on x86 PE inputs that show no `/GS` cookie or known legacy compilation. No BinaryContext required.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After:** Report `HIGH` findings (`safesh_disabled`) immediately. For `MEDIUM` findings (`handler_not_in_table`), disassemble the call site at `finding.va` with `WindowAnalyzer` to determine how the handler VA is computed.
 
 ---
 
@@ -109,7 +95,7 @@ The most common false positive is a tainted argument that is immediately sanitiz
 | Attribute | Content |
 |:---|:---|
 | `severity` | `'HIGH'` / `'MEDIUM'` / `'LOW'` / `'INFO'` |
-| `category` | `'safeseh_disabled'` / `'no_handlers'` / `'handler_not_in_table'` / `'seh_frame_count'` / `'dynamic_handler_count'` |
+| `category` | `'safesh_disabled'` / `'handler_not_in_table'` / `'safesh_enabled'` / `'seh_frame_count'` |
 | `title` | Short finding title |
 | `location` | PE path or section name |
 | `description` | Human-readable explanation |
