@@ -93,6 +93,12 @@ _ADD_REG  = 'ADD_REG'   # ADD Rwn, Rwm — word add (2-byte, 00 nm); from PDF ta
 _XOR_REG  = 'XOR_REG'   # XOR Rwn, Rwm — word XOR (2-byte, 50 nm); from PDF table col x0 row 5
 _MOVBZ    = 'MOVBZ'     # MOVBZ Rwn, Rbm — byte zero-extend to word (2-byte, C0 nm); from PDF col x0 row C
 _MOVBS    = 'MOVBS'     # MOVBS Rwn, Rbm — byte sign-extend to word (2-byte, D0 nm); from PDF col x0 row D
+_MUL_REG  = 'MUL_REG'  # MUL Rwn, Rwm  — signed 16×16 multiply; result in MDL:MDH (2-byte, 0B nm); PDF row xB col 0
+_MULU_REG = 'MULU_REG' # MULU Rwn, Rwm — unsigned 16×16 multiply; result in MDL:MDH (2-byte, 1B nm); PDF row xB col 1
+_SHL_REG  = 'SHL_REG'  # SHL Rwn, Rwm  — logical shift left by register count (2-byte, 4C nm); PDF row xC col 4
+_SHL_IMM  = 'SHL_IMM'  # SHL Rwn, #data4 — logical shift left by immediate 0–15 (2-byte, 5C nm); PDF row xC col 5
+_SHR_REG  = 'SHR_REG'  # SHR Rwn, Rwm  — logical shift right by register count (2-byte, 6C nm); PDF row xC col 6
+_SHR_IMM  = 'SHR_IMM'  # SHR Rwn, #data4 — logical shift right by immediate 0–15 (2-byte, 7C nm); PDF row xC col 7
 _PUSH     = 'PUSH'       # PUSH Rwn — push register onto stack (2-byte, 88 n0)
 _POP      = 'POP'        # POP Rwn — pop register from stack (2-byte, 98 n0)
 _RET      = 'RET'        # RET — return from subroutine (2-byte, DB 00)
@@ -535,6 +541,88 @@ class EcuC166Decoder:
                 mnemonic=f'MOVBS R{dst:X}, Rb{src:X}',
                 insn_type=_MOVBS,
                 reg=dst,
+            )
+
+        # MUL Rwn, Rwm: opcode 0x0B, byte1 = (n<<4)|m.
+        # Signed 16x16 multiply; 32-bit result stored in MDL:MDH (SFR 0xFE0E:0xFE0C).
+        # From PDF table row xB, position 0 (upper nibble 0, lower nibble B).
+        # Seen as '0b 00' (MUL R0, R0) in MS43 LFSR step function inner loop.
+        if op == 0x0B:
+            dst = (b1 >> 4) & 0xF
+            src = b1 & 0xF
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'MUL R{dst:X}, R{src:X}',
+                insn_type=_MUL_REG,
+                reg=dst,
+            )
+
+        # MULU Rwn, Rwm: opcode 0x1B, byte1 = (n<<4)|m.
+        # Unsigned 16x16 multiply; 32-bit result stored in MDL:MDH.
+        # From PDF table row xB, position 1 (upper nibble 1, lower nibble B).
+        if op == 0x1B:
+            dst = (b1 >> 4) & 0xF
+            src = b1 & 0xF
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'MULU R{dst:X}, R{src:X}',
+                insn_type=_MULU_REG,
+                reg=dst,
+            )
+
+        # SHL Rwn, Rwm: opcode 0x4C, byte1 = (n<<4)|m.
+        # Logical shift left of Rwn by shift count in Rwm (count mod 16).
+        # From PDF table row xC, position 4 (upper nibble 4, lower nibble C).
+        if op == 0x4C:
+            dst = (b1 >> 4) & 0xF
+            cnt = b1 & 0xF
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'SHL R{dst:X}, R{cnt:X}',
+                insn_type=_SHL_REG,
+                reg=dst,
+            )
+
+        # SHL Rwn, #data4: opcode 0x5C, byte1 = (n<<4)|count.
+        # Logical shift left of Rwn by immediate count 0–15.
+        # From PDF table row xC, position 5 (upper nibble 5, lower nibble C).
+        # Seen as '5c 25' (SHL R2, #5) in the MS43 seed-key outer loop.
+        if op == 0x5C:
+            dst = (b1 >> 4) & 0xF
+            cnt = b1 & 0xF
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'SHL R{dst:X}, #{cnt}',
+                insn_type=_SHL_IMM,
+                reg=dst,
+                imm=cnt,
+            )
+
+        # SHR Rwn, Rwm: opcode 0x6C, byte1 = (n<<4)|m.
+        # Logical shift right of Rwn by shift count in Rwm (count mod 16).
+        # From PDF table row xC, position 6 (upper nibble 6, lower nibble C).
+        if op == 0x6C:
+            dst = (b1 >> 4) & 0xF
+            cnt = b1 & 0xF
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'SHR R{dst:X}, R{cnt:X}',
+                insn_type=_SHR_REG,
+                reg=dst,
+            )
+
+        # SHR Rwn, #data4: opcode 0x7C, byte1 = (n<<4)|count.
+        # Logical shift right of Rwn by immediate count 0–15.
+        # From PDF table row xC, position 7 (upper nibble 7, lower nibble C).
+        if op == 0x7C:
+            dst = (b1 >> 4) & 0xF
+            cnt = b1 & 0xF
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'SHR R{dst:X}, #{cnt}',
+                insn_type=_SHR_IMM,
+                reg=dst,
+                imm=cnt,
             )
 
         # PUSH Rwn: opcode 0x88, register in high nibble of byte1, low nibble = 0.
