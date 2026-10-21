@@ -633,7 +633,7 @@ Messages from your other sessions        accept
 </details>
 
 <details>
-<summary><strong>30 Decompilers</strong></summary>
+<summary><strong>31 Decompilers</strong></summary>
 
 <details>
 <summary><strong>Native CPUs</strong> </summary>
