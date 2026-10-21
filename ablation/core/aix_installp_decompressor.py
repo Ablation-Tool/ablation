@@ -383,11 +383,12 @@ class AixInstallpDecompressor:
         disjoint cycles. This function reconstructs the sub-string reachable from
         bwt_index (the main cycle). Returns cycle_len bytes where cycle_len ≤ n.
 
-        Multi-cycle result property (by BWT cycle property L[q→bwt_idx]=F[bwt_idx]):
-          result[0] = T[0] = F[bwt_index] (correct first byte of step4 stream)
-          result[k] for k≥1 = T[n-cycle_len+k] (bytes from near end of step4 stream)
-        The reconstruction is non-contiguous for multi-cycle inputs; step4 decode of
-        the result is partial and does not produce the full original file.
+        Multi-cycle result property (proven empirically for VIOS automountd K=56, n=199196):
+          result[k] = T[n-cycle_len+k]  for k=0..cycle_len-1
+          result[0] = T[n-cycle_len]    (NOT T[0]; equals T[87816]=0x01 for automountd by coincidence)
+          F[bwt_index] = T[0] by BWT matrix property; T[0] is NOT in result for K<256/multi-cycle.
+        The reconstruction covers T[n-cycle_len..n-1] (last cycle_len bytes of step4 stream).
+        T[0..n-cycle_len-1] is in other cycles whose bwt_indices are not stored in BFF headers.
         """
         try:
             import numpy as np
