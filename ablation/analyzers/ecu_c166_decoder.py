@@ -89,6 +89,10 @@ _CALLS    = 'CALLS'      # CALLS seg, caddr
 _MOV_LD   = 'MOV_LD'    # load from direct/indirect memory address
 _MOV_ST   = 'MOV_ST'    # store to direct/indirect memory address
 _MOV_REG  = 'MOV_REG'   # MOV Rwdst, Rwsrc — register-to-register (2-byte, F0)
+_ADD_REG  = 'ADD_REG'   # ADD Rwn, Rwm — word add (2-byte, 00 nm); from PDF table col x0 row 0
+_XOR_REG  = 'XOR_REG'   # XOR Rwn, Rwm — word XOR (2-byte, 50 nm); from PDF table col x0 row 5
+_MOVBZ    = 'MOVBZ'     # MOVBZ Rwn, Rbm — byte zero-extend to word (2-byte, C0 nm); from PDF col x0 row C
+_MOVBS    = 'MOVBS'     # MOVBS Rwn, Rbm — byte sign-extend to word (2-byte, D0 nm); from PDF col x0 row D
 _PUSH     = 'PUSH'       # PUSH Rwn — push register onto stack (2-byte, 88 n0)
 _POP      = 'POP'        # POP Rwn — pop register from stack (2-byte, 98 n0)
 _RET      = 'RET'        # RET — return from subroutine (2-byte, DB 00)
@@ -479,6 +483,59 @@ class EcuC166Decoder:
         """
         op = raw[0]
         b1 = raw[1]
+
+        # ADD Rwn, Rwm: opcode 0x00, byte1 = (dst<<4)|src.
+        # From PDF opcode table: lower-nibble-0 col, upper-nibble-0 row = ADD.
+        # Cross-check: 0x50 (XOR) and 0xF0 (MOV) are at rows 5 and F of the same column.
+        if op == 0x00:
+            dst = (b1 >> 4) & 0xF
+            src = b1 & 0xF
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'ADD R{dst:X}, R{src:X}',
+                insn_type=_ADD_REG,
+                reg=dst,
+            )
+
+        # XOR Rwn, Rwm: opcode 0x50, byte1 = (dst<<4)|src.
+        # From PDF opcode table: lower-nibble-0 col, upper-nibble-5 row = XOR.
+        # Corrects prior assumption that 0xC0 was XOR — 0xC0 is MOVBZ.
+        if op == 0x50:
+            dst = (b1 >> 4) & 0xF
+            src = b1 & 0xF
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'XOR R{dst:X}, R{src:X}',
+                insn_type=_XOR_REG,
+                reg=dst,
+            )
+
+        # MOVBZ Rwn, Rbm: opcode 0xC0, byte1 = (dst<<4)|src.
+        # Move byte register Rbm with zero extension into word register Rwn.
+        # From PDF opcode table: lower-nibble-0 col, upper-nibble-C row = MOVBZ.
+        # Seen in MS43 LFSR step function as 'C0 C2' (MOVBZ R12, Rb2) and 'C0 C4' (MOVBZ R12, Rb4).
+        if op == 0xC0:
+            dst = (b1 >> 4) & 0xF
+            src = b1 & 0xF
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'MOVBZ R{dst:X}, Rb{src:X}',
+                insn_type=_MOVBZ,
+                reg=dst,
+            )
+
+        # MOVBS Rwn, Rbm: opcode 0xD0, byte1 = (dst<<4)|src.
+        # Move byte register Rbm with sign extension into word register Rwn.
+        # From PDF opcode table: lower-nibble-0 col, upper-nibble-D row = MOVBS.
+        if op == 0xD0:
+            dst = (b1 >> 4) & 0xF
+            src = b1 & 0xF
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'MOVBS R{dst:X}, Rb{src:X}',
+                insn_type=_MOVBS,
+                reg=dst,
+            )
 
         # PUSH Rwn: opcode 0x88, register in high nibble of byte1, low nibble = 0.
         # Confirmed: 88 90/80/70/60/E0/D0/C0 = PUSH R9/R8/R7/R6/R14/R13/R12

@@ -61,8 +61,11 @@ def _st_indirect(src: int, base: int) -> bytes:
 
 
 def _nop_2b() -> bytes:
-    """A generic 2-byte placeholder (NOP-like unknown opcode)."""
-    return bytes([0x00, 0x00])
+    """A generic 2-byte placeholder (NOP-like unknown opcode).
+
+    Uses 0xEA, which has no defined C166 decode (confirmed in test_unknown_opcode_decoded_as_raw).
+    """
+    return bytes([0xEA, 0x00])
 
 
 def _ivt_entry(seg: int, addr: int) -> bytes:
