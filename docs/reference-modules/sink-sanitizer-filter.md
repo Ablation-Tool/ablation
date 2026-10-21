@@ -139,35 +139,36 @@ Module-level constant for verdict comparisons.
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`apply(classifications)` takes the `List[SinkClassification]` from `SinkArgClassifier.classify_all()` and disassembles each calling function. For each site, it performs an arg-identity trace backwards from the sink call to find a `call` to a shell-safe validator that writes the same argument register. If the validator is confirmed shell-safe (via `SanitizerDetector`) and the argument is the same value passed to the sink, the site's verdict is reclassified to `SANITIZER_VALIDATED` with severity lowered to `LOW`. No func_starts iteration — only the functions identified by the incoming classifications are disassembled.
 
 ---
 
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+# Classifications in; same-length list out. Changed sites show updated verdict:
+SinkClassification  call_va=0x00401f44  sink=system  arg=0  func=handle_request
+  verdict: ARG_PROPAGATED → SANITIZER_VALIDATED  (validator: validate_input at 0x00401e80)
+  severity: HIGH → LOW
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+SinkClassification  call_va=0x004023a0  sink=system  arg=0  func=run_command
+  verdict: ARG_PROPAGATED  (no sanitizer found)
+  severity: HIGH
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+A function with multiple paths where the sanitizer is only on one branch produces a SANITIZER_VALIDATED verdict even if the other path is exploitable. The arg-identity trace is linear and does not build a CFG. For HIGH-risk sinks, verify the sanitizer is on all paths before marking as validated.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `SinkArgClassifier.classify_all()` — this filter consumes its output directly. `BinaryContext.load_or_build()` and `SanitizerDetector` must also be built.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Pass remaining `ARG_PROPAGATED` / `UNKNOWN` sites to `TaintTracker`. The `SANITIZER_VALIDATED` sites are excluded from taint analysis.
 
 ---
 

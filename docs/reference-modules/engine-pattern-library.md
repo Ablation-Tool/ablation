@@ -279,7 +279,12 @@ Prior to this module, enginepatternlibrary required manual work outside the Abla
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`EnginePatternLibrary.label_binary(ctx, xg)` runs three passes against `ctx.func_starts`:
+1. **String-marker pass:** finds string constants unique to each engine (e.g., `"UE4"`, `"idTech"`) in the binary and labels functions that reference them.
+2. **Semantic pass:** queries `SemanticSearcher` with engine-specific natural-language descriptions and labels high-confidence hits.
+3. **SAX structural pass:** encodes each function's opcode sequence as SAX symbols and finds approximate nearest neighbors in the engine corpus.
+
+Each labeled function gets an `EngineLabel` with the engine name and confidence score. `strip_report(labels, total_funcs)` summarizes coverage.
 
 ---
 
@@ -299,28 +304,28 @@ for va, label in sorted(labels.items()):
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+EnginePatternLibrary: game.exe  labeled=1847 / 2310 functions (79.9%)
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+  0x00401000  unreal              conf=0.97  (string-marker: "UE4")
+  0x00402c40  unreal              conf=0.89  (semantic: UObject::ProcessEvent)
+  0x00419880  unreal              conf=0.72  (sax-structural: NN match)
+  ...
+  unlabeled residual: 463 functions (20.1%) — game-specific code
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+Game code that happens to reference engine string constants (e.g., a debug log line with "UE4 version") produces false labels. For `conf < 0.8`, manually inspect the function before marking it as engine code. SAX-structural matches have the highest false-positive rate; filter to `conf >= 0.85` for automated exclusion.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` + `XRefGraph.from_path(path).build()`. The XRefGraph is required for the string-marker pass.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Use `unlabeled = [va for va in ctx.func_starts if va not in labels]` to get the game-specific residual functions. Run `SemanticSearcher.query()` only on these.
 
 ---
 

@@ -80,7 +80,7 @@ if scanner.is_go_x86_64(ctx.path):
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`GoX86StripScanner.scan()` locates the Go pclntab (magic `0xFFFFFAFF` / `0xFFFFFAFB` at the start of the table) in the binary image, parses the function table, and recovers the name and entry VA for every function in the table. No func_starts iteration — it reads the pclntab structure directly. The result is a `GoScanResult` with a complete `Dict[int, str]` VA-to-name map. `result.func_starts` returns just the entry VAs as a sorted list for injection into `BinaryContext`.
 
 ---
 
@@ -101,28 +101,25 @@ print(result)
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
-
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+GoScanResult  /path/to/service  go1.21.3  nfunc=2847
+  text_start=0x00401000  pclntab_file_off=0x01234560
+  funcs: {0x00401000: 'main.main', 0x00401840: 'main.handleRequest', ...}
+  named_funcs: 2840 / 2847  (7 anonymous)
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+None — pclntab parsing is structural and produces exact function starts. The only failure mode is a binary where the Go toolchain was deliberately modified to strip or corrupt the pclntab, in which case the scanner returns an empty `funcs` dict.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` for the stripped Go binary. Confirm `ctx.func_starts` is empty or incomplete (pclntab was not found by default extraction).
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Call `scanner.scan()` and inject the result: `ctx.set_func_starts(result.func_starts)`. Then run `SemanticSearcher.query()` with the populated starts.
 
 ---
 

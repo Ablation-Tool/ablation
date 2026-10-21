@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `Path.stat().st_size` guard befo
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`interprocedural_field_writes(ctx, target_gv)` iterates `ctx.func_starts`, disassembles each function with Capstone, and tracks writes to the memory address of `target_gv` (a global variable VA). For each write, it records the value written and the call path leading to the write. Returns a `Dict[int, FuncSummary]` mapping function VA to a summary of field writes within that function.
 
 ---
 
@@ -47,28 +47,30 @@ for w in writers:
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+interprocedural_field_writes(ctx, target_gv=0x00620040):
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+  0x00401200 (set_auth_flag):
+    writes: {0x00620040+0x00: [0x1, 0x0]}  (auth_enabled: True/False)
+    callers: [handle_login, handle_logout]
+
+  0x00403800 (reset_session):
+    writes: {0x00620040+0x08: [0x0]}  (session_token: cleared)
+    callers: [session_expire]
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+Conditional writes on rarely-taken paths (e.g., error recovery) are included in the write set even if the main path never exercises them. Review `callers` to assess reachability of each write site before reporting.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` with `ctx.func_starts` populated. Identify the target global variable VA via `SemanticSearcher` or `PatternLibrary`.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For security-relevant global writes (e.g., auth flags), trace whether an attacker-controlled value can reach the write site via `TaintTracker`.
 
 ---
 

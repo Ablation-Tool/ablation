@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard in `__
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`ELFVtableReconstructor.from_path(path)` uses pyelftools to parse the ELF dynamic relocation table (`.rela.dyn`) and resolve PIE vtable slot values that are zero-initialized in the file but populated at load time. Handles `R_X86_64_RELATIVE` (base + addend) and `R_X86_64_64` (sym_value + addend) relocation types. No func_starts iteration — operates on relocation entries and symbol table only.
 
 ---
 
@@ -40,28 +40,25 @@ for va, slot in vtmap.slots.items():
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
-
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+ELFVtableReconstructor: lib.so  class=RequestHandler  slots=12
+  +0x000  vfunc[0]  RequestHandler::~RequestHandler()
+  +0x008  vfunc[1]  RequestHandler::handleRequest(HttpContext&)
+  +0x010  vfunc[2]  RequestHandler::getRoutePrefix() const
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+Secondary vtable sub-sections (multiple inheritance) appear as `is_rtti=True` entries at negative `slot_offset`; these are not virtual function slots. For classes with complex inheritance hierarchies, manually inspect entries near `slot_offset=0x00` for misclassification.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** Confirm the target is an ET_DYN x86-64 ELF with C++ content (look for `_ZTV` symbols in the symbol table).
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Pass the `VtableMap` to `VtableDispatchScanner` to find live vs. dead virtual dispatch sites.
 
 ---
 

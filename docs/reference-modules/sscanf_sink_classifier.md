@@ -98,7 +98,7 @@ gate_passed=True. 1 MEDIUM finding (dead-sink filter when `_plt_caller_counts` e
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`SscanfSinkClassifier.from_context(ctx).classify_all()` iterates `ctx.func_starts` and disassembles each function with Capstone. For each `sscanf`/`__isoc99_sscanf` call site, it traces the format-string argument (rsi / arg1) backward in the instruction stream. If the format string resolves to a `.rodata` constant, the site is `RODATA_CONST`. If it resolves to a register written from a network-sourced buffer, the site is `ARG_PROPAGATED`. Unresolved sites are `UNKNOWN`. Returns `List[SinkClassification]` (re-exported from the x86 SAC module).
 
 ---
 
@@ -119,28 +119,28 @@ for r in results:
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+SinkClassification  sscanf  call_va=0x00401f44  func=parse_header (0x00401f00)
+  verdict: ARG_PROPAGATED  severity: HIGH
+  detail: format string arg (rsi) traced to buf from recv() at 0x00401e80
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+SinkClassification  sscanf  call_va=0x00402310  func=parse_config (0x004022c0)
+  verdict: RODATA_CONST  severity: LOW
+  detail: format string resolved to "%d:%s" at .rodata:0x6040a0
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+`RODATA_CONST` sites where the format string is a global that can be overwritten by a memory write primitive are incorrectly classified as low-risk. For memory-write findings in the same binary, re-verify sscanf `RODATA_CONST` sites before final report.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` with `ctx.func_starts` populated. Run `SinkArgClassifier` first for exec-class sinks; run `SscanfSinkClassifier` in the same pass for sscanf-specific sinks.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Pass `ARG_PROPAGATED` and `UNKNOWN` sites to `TaintTracker`. Exclude `RODATA_CONST` sites.
 
 ---
 
