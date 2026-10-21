@@ -376,8 +376,18 @@ class AixInstallpDecompressor:
     def _inverse_bwt(bwt_last: bytes, bwt_index: int) -> bytes:
         """Inverse Burrows-Wheeler Transform via LF-mapping.
 
-        Reconstructs the original (or pre-RLE) byte sequence from the BWT
-        last column and the BWT primary index.
+        For single-cycle BWT (K=256, standard): reconstructs the full n-byte
+        original step4-encoded sequence. result[k] = T[k] for all k.
+
+        For IBM's multi-cycle BWT (K < 256): the LF-map decomposes into multiple
+        disjoint cycles. This function reconstructs the sub-string reachable from
+        bwt_index (the main cycle). Returns cycle_len bytes where cycle_len ≤ n.
+
+        Multi-cycle result property (by BWT cycle property L[q→bwt_idx]=F[bwt_idx]):
+          result[0] = T[0] = F[bwt_index] (correct first byte of step4 stream)
+          result[k] for k≥1 = T[n-cycle_len+k] (bytes from near end of step4 stream)
+        The reconstruction is non-contiguous for multi-cycle inputs; step4 decode of
+        the result is partial and does not produce the full original file.
         """
         try:
             import numpy as np
@@ -395,9 +405,24 @@ class AixInstallpDecompressor:
             rank[i] = seen[L[i]]
             seen[L[i]] += 1
         lf_map = cumcount[L] + rank
-        result = bytearray(n)
+
+        # Determine the length of the cycle containing bwt_index.
+        # For single-cycle BWT cycle_len == n and behaviour is unchanged.
+        # For IBM's multi-cycle BWT (K < 256, repeated-byte structure) the
+        # LF-map has multiple disjoint cycles; following it past the first
+        # full traversal overwrites the correct output with repeated garbage.
+        # We reconstruct only the sub-string reachable from bwt_index.
         p = bwt_index
-        for i in range(n - 1, -1, -1):
+        cycle_len = 0
+        while True:
+            p = int(lf_map[p])
+            cycle_len += 1
+            if p == bwt_index:
+                break
+
+        result = bytearray(cycle_len)
+        p = bwt_index
+        for i in range(cycle_len - 1, -1, -1):
             result[i] = L[p]
             p = int(lf_map[p])
         return bytes(result)
