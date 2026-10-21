@@ -67,18 +67,15 @@ for v in firmware_versions:
 The following illustrates the diff output format. Actual percentages and change regions are binary-specific.
 
 ```
-MatrixProfileDiff: v1@<va>...<va> vs v2@<va>...<va>
+# DiffResult.fmt() output (from diff_functions()):
+MatrixProfileDiff  v1=0x22ccc0 (312 insns)  v2=0x23a010 (318 insns)  window=4  change=14.4%
+  [CHANGED  ]  v1[42:58]             v2[42:61]             discord=3.82
+  [UNCHANGED]  v1[58:312]            v2[61:318]            discord=0.14
 
-Change regions:
-  CHANGED:   v1[<off>..<off>]  (distance peak: <score>)
-  UNCHANGED: v1[<off>..<off>]  (low distance)
-  CHANGED:   v1[<off>..<off>]  (distance peak: <score>)
+# change_summary() method:
+change=14.4%  changed:16
 
-change_pct(): <N>%
-is_likely_patched(): True
-patch_offset_v1(): <va>
-
-change_summary(): 2 changed regions; ~<N>% of function modified; likely patch at <va>
+# is_likely_patched(): True when change_pct >= threshold (default 15.0)
 ```
 
 ---
