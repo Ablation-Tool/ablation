@@ -45,7 +45,6 @@ Empirical results (automountd K=56, n=199,196):
 from __future__ import annotations
 
 import enum
-from typing import Callable
 
 import numpy as np
 
@@ -212,15 +211,19 @@ class BwtEulerianReconstructor:
             advanced = False
 
             if policy == EdgePolicy.NON_MAIN_FIRST and main_cycle_rows:
+                # Prefer the first unused non-main edge from current ptr position.
+                # Scan forward; if none found before end of list, fall through to
+                # the standard scan below which picks any unused edge.
+                # NOTE: worst-case O(n²) if every edge is main-cycle — acceptable
+                # for RE analysis where n < 200K and non-main edges are plentiful.
+                save = ptr[v]
                 while ptr[v] < len(rows):
                     r = rows[ptr[v]]
                     if not used[r] and r not in main_cycle_rows:
                         break
                     ptr[v] += 1
                 else:
-                    ptr[v] = 0
-                while ptr[v] < len(rows) and used[rows[ptr[v]]]:
-                    ptr[v] += 1
+                    ptr[v] = save  # no non-main found; restore for standard fallback
 
             while ptr[v] < len(rows) and used[rows[ptr[v]]]:
                 ptr[v] += 1

@@ -203,6 +203,11 @@ class AixInstallpStep4MultiLevel:
 
         Level mapping: level k, term at sorted_K_nonescape[term_idx] →
           sym_table[K + (k-1)*L + term_idx]  where L = len(sorted_K_nonescape).
+
+        CURRENT LIMITATION: the inner loop below uses k=1 for all odd E-runs
+        (pair-based self-escape is applied first, leaving exactly one E).  Full
+        multi-level promotion (k = total run / 2 or similar) requires a confirmed
+        IBM encoding spec.  This method is a placeholder for that test path.
         """
         E = self._escape
         sym = self._sym
@@ -308,7 +313,5 @@ class AixInstallpStep4MultiLevel:
             return None
         term = K_set_sorted_nonescape[term_idx]
 
-        n_self_pairs = 0
-        e_run = k
-        encoding: list[int] = [E] * e_run + [term]
+        encoding: list[int] = [E] * k + [term]
         return encoding
