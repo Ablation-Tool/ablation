@@ -90,6 +90,42 @@ Run `EcuC166Decoder` after `EcuArchDetector` confirms `c166` or `c167` architect
 
 ---
 
+## Decoded opcode families
+
+The decoder recognises the following instruction types. All type strings appear in `C166Insn.insn_type`.
+
+### 4-byte instructions (in `_FOUR_BYTE_OPS`)
+
+| `insn_type` | Opcode | Form | Notes |
+|:---|:---|:---|:---|
+| `MOV_IMM` | `0xE6` | `MOV Rwn, #imm16` | Immediate word load; byte1 low nibble = reg |
+| `CMP_IMM` | `0x66` | `CMP Rwn, #imm16` | Compare with immediate |
+| `JMPS` | `0xFA` | `JMPS seg, caddr` | Absolute code-segment jump |
+| `CALLS` | `0xDA` | `CALLS seg, caddr` | Absolute code-segment call; `target` resolved |
+| `MOV_LD` | `0xF2` / `0xC2` / `0xA2` | `MOV Rwn, mem` / `[Rwm]` | Load (DPP-mapped / internal / indirect) |
+| `MOV_ST` | `0xF6` / `0xB2` | `MOV mem/[Rwm], Rwn` | Store |
+
+### 2-byte instructions
+
+| `insn_type` | Opcode | Form | Confirmation source |
+|:---|:---|:---|:---|
+| `ADD_REG` | `0x00 nm` | `ADD Rwn, Rwm` | Infineon C167CR ISA table: lower-nibble-0 col, row 0 |
+| `XOR_REG` | `0x50 nm` | `XOR Rwn, Rwm` | Infineon C167CR ISA table: lower-nibble-0 col, row 5 |
+| `MOV_REG` | `0xF0 nm` | `MOV Rwdst, Rwsrc` | Byte-verified in MS43 ROM prologue/epilogue |
+| `MOVBZ` | `0xC0 nm` | `MOVBZ Rwn, Rbm` | ISA table: col 0, row C — zero-extend byte to word |
+| `MOVBS` | `0xD0 nm` | `MOVBS Rwn, Rbm` | ISA table: col 0, row D — sign-extend byte to word |
+| `PUSH` | `0x88 n0` | `PUSH Rwn` | Byte-verified in MS43 function prologues |
+| `POP` | `0x98 n0` | `POP Rwn` | Byte-verified in MS43 function epilogues |
+| `RET` | `0xDB 0x00` | `RET` | Byte-verified: appears after POP epilogue |
+| `JMPR` | `nD rel8` | `JMPR cc, target` | Low nibble 0xD = JMPR; cc in high nibble |
+| `UNKNOWN_2B` | any other | `db xx yy` | Opcode not yet decoded; decode continues |
+
+**Opcode table anchor:** The C167CR ISA manual organises 2-byte `nm`-format instructions in a 16×16 table where the column selects the lower nibble and the row selects the upper nibble. Lower-nibble column 0 (the `x0` column) maps rows 0–F to: ADD(0), ADDC(1), SUB(2), SUBC(3), CMP(4), XOR(5), AND(6), OR(7), CMPI1(8), CMPI2(9), CMPD1(A), CMPD2(B), MOVBZ(C), MOVBS(D), MOV(E), MOV(F). `0xF0=MOV` is byte-verified from MS43; all other entries in this column are derived from the same table row.
+
+**Important correction (2026-10-21):** Prior analysis assumed `0xC0 nm = XOR`. The ISA table confirms `0xC0 nm = MOVBZ` (Move Byte, Zero Extend to Word) and `0x50 nm = XOR`. Bytes previously labelled as XOR in the BMW MS43 LFSR step function were MOVBZ operations extracting the low byte of a register. The seed-key algorithm uses MOVBZ + ADD + multiply (not XOR + shift); `0x91DA` is an additive constant, not a Galois feedback polynomial.
+
+---
+
 ## Reading output
 
 `EcuC166Decoder.disassemble(start_pa=None, end_pa=None)` returns `list[C166Insn]`. Omitting both bounds disassembles the entire ROM:
@@ -99,7 +135,7 @@ Run `EcuC166Decoder` after `EcuArchDetector` confirms `c166` or `c167` architect
 | `pa` | Physical address (file offset for flat ROM) |
 | `raw` | `bytes` — 2 or 4 raw bytes of the encoded instruction |
 | `mnemonic` | Decoded mnemonic string (e.g., `'MOV'`, `'CALLS'`, `'JMPS'`) |
-| `insn_type` | Instruction category constant (`CALLS`, `JMPS`, `JMPR`, `MOV_IMM`, etc.) |
+| `insn_type` | Instruction category constant — see **Decoded opcode families** above |
 | `reg` | Destination/source register number (0–15), or `None` |
 | `imm` | Immediate value or direct address, or `None` |
 | `target` | Resolved target PA for `JMPS`/`CALLS` instructions, or `None` |
