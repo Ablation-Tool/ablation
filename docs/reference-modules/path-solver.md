@@ -80,7 +80,7 @@ for r in results:
 ## Example output
 
 ```
-[SAT] path=0x12000 -> 0x12200 -> 0x12340 clauses=37 model=(rdi=0x41414141, rsi=0x0)
+[SAT] path=0x12000 -> 0x12200 -> 0x12340 clauses=37 model=(rdi=0x41414141)
 [UNSAT] path=0x12000 -> 0x12100 -> 0x12340 clauses=22
 [timeout] path=0x12000 -> 0x12180 -> 0x12340 clauses=51
 ```
