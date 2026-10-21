@@ -1,6 +1,6 @@
 # IOCTL Attack Surface
 
-**File:** `ablation/analyzers/ioctl_attack_surface.py`
+**File:** `modules/ioctl_attack_surface.py`
 
 Maps the complete IOCTL dispatch surface of a Windows kernel driver and flags METHOD_NEITHER codes before manual review begins. An integer-overflow path from a user-supplied length to a kernel allocation is a HIGH finding. Unprobed METHOD_NEITHER dereferences are CRITICAL.
 
@@ -61,8 +61,8 @@ print(surface.summary())
 
 # CRITICAL handlers only (METHOD_NEITHER without ProbeForRead)
 for profile in surface.critical:
-    print(f"CRITICAL 0x{profile.ioctl_code:08x}  method={profile.method_name}")
-    for pattern in profile.patterns:
+    print(f"CRITICAL 0x{profile.ioctl_raw:08x}  method={profile.method_name}")
+    for pattern in profile.dangerous_patterns:
         print(f"  [{pattern.severity}] {pattern.description}")
 
 # Reuse an existing KernelDriverReport to avoid re-parsing
@@ -80,14 +80,14 @@ surface = gen.analyze()
 
 | Field | Description |
 |---|---|
-| `ioctl_code` | Raw IOCTL code (32-bit) |
+| `ioctl_raw` | Raw IOCTL code (32-bit) |
 | `method` | Transfer method: 0–3 |
 | `method_name` | `METHOD_BUFFERED` / `METHOD_IN_DIRECT` / `METHOD_OUT_DIRECT` / `METHOD_NEITHER` |
 | `device_type` | Upper 16 bits of IOCTL code |
 | `function_code` | Bits [13:2] of IOCTL code |
 | `access` | Bits [15:14] of IOCTL code |
 | `handler_va` | VA of the dispatch handler function |
-| `patterns` | `list[IoctlHandlerPattern]`: security-relevant patterns found in the handler |
+| `dangerous_patterns` | `list[IoctlHandlerPattern]`: security-relevant patterns found in the handler |
 | `has_probe` | `True` if `ProbeForRead`/`ProbeForWrite` appears in the handler |
 | `risk_level` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
 
@@ -127,24 +127,26 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_DRIVER_BYTES=64MB`; `Path.
 
 ## How it works
 
-`IoctlAttackSurfaceGenerator.from_path(path).generate()` reads the driver binary, parses the PE import table for IOCTL-related DDI calls, decodes every `CTL_CODE` value found in the binary, and maps each IOCTL code to its dispatch handler function. No func_starts iteration — uses PE section parsing and cascade decoder from `KernelDriverAnalyzer`. Returns an `IoctlAttackSurface` with per-IOCTL `IoctlHandlerProfile` entries.
+`IoctlAttackSurfaceGenerator(driver_path).analyze()` reads the driver binary with LIEF, then uses Capstone to disassemble the IOCTL dispatch handler. It decodes `IoControlCode` fields from `IO_STACK_LOCATION` offsets (`+0x18`) found in the disassembly, extracting each raw IOCTL code and its transfer method (bits `[1:0]`). For each decoded code, it traces the corresponding handler to record: whether `ProbeForRead`/`ProbeForWrite` is called, whether `InputBufferLength` reaches an allocation call, and whether any copy or dangerous API is present. File size is capped at `_MAX_DRIVER_BYTES = 64 MB`. An optional `kda_report` (pre-built `KernelDriverReport`) can be supplied to avoid re-parsing.
 
 ---
 
 ## Example output
 
 ```
-IoctlAttackSurface  driver.sys  type=WDM  signed=True
-  profiles: 3
+[ioctl_attack_surface] driver.sys
+  driver_type=WDM  signed=True
+  pdb_path=N/A
+  3 IOCTL codes: 1 CRITICAL, 0 HIGH, 1 METHOD_NEITHER
 
-  IoctlHandlerProfile  0x00222003  METHOD_NEITHER  FILE_ANY_ACCESS
-    handler_va: 0x00019a40  (DispatchDeviceControl)
-    device_type: 0x0022  func: 0x800
-    risk: METHOD_NEITHER — raw user pointer, no ProbeForRead detected
+  IOCTL 0x00222003  DevType=0x0022  Func=0x0800  METHOD_NEITHER  [CRITICAL]  USER-DEFINED
+    handler_va=0x19a40
+    flags: reads_input_len, has_alloc
+    *** METHOD_NEITHER without ProbeForRead/Write: raw user pointer deref = arbitrary kernel R/W ***
 
-  IoctlHandlerProfile  0x00222007  METHOD_BUFFERED  FILE_ANY_ACCESS
-    handler_va: 0x00019a40
-    risk: BUFFERED — kernel copies input, lower risk
+  IOCTL 0x00222007  DevType=0x0022  Func=0x0801  METHOD_BUFFERED  [INFO]
+    handler_va=0x19a40
+    flags: reads_input_len, reads_output_len, has_copy
 ```
 
 ---

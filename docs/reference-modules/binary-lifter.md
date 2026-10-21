@@ -221,3 +221,29 @@ The following illustrates the output format for the three completeness tiers. Ac
 - [TaintAnalysis](taint-analysis.md) — dataflow tracking; feed `findings` into `.with_taint()` for annotation
 - [SemanticSearch](semantic-search.md) — behavioral candidate search to identify VAs worth lifting
 - [BinaryLifterSH2A](binary-lifter-sh2a.md) — SH-2A specific lifting details and ECU function patterns
+
+---
+
+## Ppc476Lifter — specialized IBM PPC476 BE lifter
+
+**File:** `ablation/analyzers/ppc476_lifter.py`
+
+Standalone IBM PPC476 BE pseudo-C lifter. Dedicated to the PPC476 microcontroller (IBM PowerPC 476FP) used in IBM AIX embedded firmware and POWER blade BMCs. Unlike the generic `BinaryLifter` ppc32 backend, `Ppc476Lifter` handles PPC476-specific quirks: SPE APU extensions, PPC476FP FPU instructions, and IBM's modified ABI for embedded stacks.
+
+**Usage:**
+```python
+from ablation.analyzers.ppc476_lifter import Ppc476Lifter
+lifter = Ppc476Lifter.from_context(ctx)
+pseudo = lifter.lift(func_va, n_insn=200)
+print(pseudo)
+```
+
+**Output format** — C-like pseudo-code lines tagged with VA:
+```
+[0x10002754] r1 -= 0x80;           // frame alloc
+[0x10002760] r9 = r3;              // arg copy
+[0x100027a4] fork();               // PLT call
+[0x10002838] execv(r3, r4);        // PLT call
+```
+
+**ABI:** `r3`–`r10` args and return; `r14`–`r31` callee-saved; `r1` stack pointer; `r2` TOC; `r13` SDA pointer; `LR` link register; `CTR` indirect-call register.

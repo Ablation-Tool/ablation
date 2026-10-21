@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before
 
 ## How it works
 
-`HardwareRootFinder.from_context(ctx).find()` iterates `ctx.func_starts`, disassembles each function with Capstone, and flags memory accesses to known MMIO address ranges (device registers, peripheral memory maps). For each match, it builds a call spine (caller chain up to exported functions) to show how hardware access is reached from the API surface.
+`HardwareRootFinder.find_roots()` disassembles the entire `.text` section sequentially with Capstone. For each instruction, it applies `_IMM_RE` (regex `\b0x[0-9a-f]{6,16}\b`) to the operand string to extract hexadecimal immediates. Any immediate that falls in a known MMIO range (`_MMIO_RANGES`) is recorded as a `HardwareAccess`. Function boundaries are tracked by watching for `endbr64` / `push rbp` prologues; if a `BinaryContext` is supplied, `ctx.func_containing()` is used instead for more accurate attribution. Accesses are grouped by function VA into `HardwareRoot` objects. If a `BinaryContext` is provided, `find_roots(depth=N)` walks callers N hops back to build the call spine.
 
 ---
 
@@ -40,12 +40,13 @@ for root in roots:
 ## Example output
 
 ```
-HardwareRoot  func_va=0x004010a0  (write_gpio_state)
-  mmio_labels: ['GPIO_BASE', 'SPI_CTRL']
-  accesses:
-    0x004010b4  MOV [0xffe10004], eax  GPIO_BASE+0x4
-    0x004010c8  MOV [0xffe30000], ecx  SPI_CTRL+0x0
-  call_spine: main → board_init → write_gpio_state
+HardwareRoot func=0x4010a0
+  MMIO ranges : STM32-APB/AHB
+  accesses    : 2
+    0x4010b4  WRITE  MMIO=0x40010004 (STM32-APB/AHB)  func=0x4010a0  [mov]
+    0x4010c8  READ   MMIO=0x40030000 (STM32-APB/AHB)  func=0x4010a0  [ldr]
+  callers (1 paths):
+    0x401000 -> 0x401050 -> 0x4010a0
 ```
 
 ---
@@ -58,7 +59,7 @@ Constants in the MMIO address range that are used as local variables (not actual
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` with `ctx.func_starts` populated. Configure the MMIO range table for the target hardware platform.
+**Before this module:** `HardwareRootFinder('/path/to/binary')` or `HardwareRootFinder.from_context(ctx)`. Configure `extra_ranges` if the target SoC is not in `_MMIO_RANGES` (STM32, BCM, Qualcomm IPQ, Cavium OCTEON, Intel APIC/HPET are built in).
 
 **After this module:** For MMIO write functions, trace what values are written from the call spine to assess whether an attacker-controlled input can reach the hardware register.
 
