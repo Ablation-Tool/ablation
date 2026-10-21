@@ -79,15 +79,20 @@ Cross-version header difference::
     VIOS automountd: type=0x0e (not 0x0f); header 0e00010000030a1c1f223b3c1a030000;
     uncomp=199196 (field_a_BE), bwt_index=794 (field_c_LE=0x0000031a).
 
-Type 0x0f sentinel::
+Type 0x0f sentinel (version-dependent)::
 
-    Type 0x0f Huffman streams terminate early with a 256-consecutive-1-bit sentinel
-    (≥32 bytes of 0xFF) rather than decoding all uncomp_size symbols.  After the
-    sentinel, remaining bytes are a secondary compressed block in an unknown IBM format.
-    MQSeries amqzxma0_nd (type 0x0f, 50848-byte entry): Huffman decodes 397 symbols
-    (K=13, escape_byte=0x00) then hits n>=256 at payload[139]; remaining 50437 bytes
-    are the secondary block.  The _unary_huffman_decode() ``n >= 256: return indices``
-    guard correctly detects this sentinel and returns the partial decode.
+    AIX 5.0 type 0x0f: SINGLE-STREAM format.  Full N symbols decoded (no sentinel);
+    trailing secondary block is small (e.g. amqzxma0_nd 5.0: N=201258, secondary=2066 B).
+
+    AIX 5.2 type 0x0f: TWO-STREAM format.  A 256-consecutive-1-bit sentinel (32 bytes
+    of 0xFF) terminates the primary Huffman stream early.  After the sentinel, remaining
+    bytes are a secondary compressed block in an unknown IBM format.
+    MQSeries amqzxma0_nd (AIX 5.2, type 0x0f, 50848-byte entry): Huffman decodes 397
+    symbols (K=13, escape_byte=0x00) then hits n>=256 at payload[139]; remaining 50437
+    bytes are the secondary block.  The sentinel is format-intentional: K=13 limits
+    normal MTF indices to 0–12, so n>=256 is physically impossible from valid BWT data.
+    The _unary_huffman_decode() ``n >= 256: return indices`` guard detects it correctly.
+    Secondary block format for both AIX versions: unidentified IBM proprietary stream.
 """
 
 from __future__ import annotations
