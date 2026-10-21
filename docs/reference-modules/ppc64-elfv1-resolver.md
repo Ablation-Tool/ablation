@@ -112,7 +112,7 @@ Ppc64ElfV1Resolver.is_ppc64_elfv1('/path/to/bin')  # -> bool
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`PPC64ELFv1Resolver.resolve(binary_path)` fills the gap where `BinaryContext.plt` is empty for PPC64 big-endian ELFv1 binaries (AIX-style OPD format). It parses the `.opd` section (Official Procedure Descriptor table), where each entry is a 3-word struct: `{func_entry_va, TOC_va, env_ptr}`. `_resolve_glink()` follows glink stubs that redirect through the PLT lazy-binding chain. Returns a `{stub_va: symbol_name}` dict that callers can merge into `ctx.plt` to make downstream tools PLT-aware for PPC64 BE targets.
 
 ---
 

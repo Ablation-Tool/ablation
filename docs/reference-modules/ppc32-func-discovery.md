@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`PPC32FuncDiscovery.discover(data, entry_va)` finds function entry points in stripped PowerPC 32-bit ELF binaries. Three discovery passes: (1) ELF header entry point; (2) direct branch targets — `bl` (0x48000001) and `bla` (0x48000003) — whose targets are within the text section; (3) prologue scan for standard PPC32 patterns: `mflr r0` (0x7C0802A6) + `stw r0, …(r1)` + `stwu r1, …` or frameless `stwu r1`. Returns a sorted `List[int]` of discovered function VAs.
 
 ---
 

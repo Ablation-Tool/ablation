@@ -83,7 +83,7 @@ Gate: **PASSED** (0 HIGH, 0 CRITICAL). 2 MEDIUM findings for XCOFF64 path (wrong
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`xcoff_parser.parse(path)` parses an IBM XCOFF32 or XCOFF64 binary (AIX PowerPC). XCOFF is the AIX variant of COFF with extensions for 64-bit, dynamic linking via a `.loader` section, and the CSECT (control section) subdivision within segments. The parser extracts: section headers and section data, the XCOFF symbol table (including `C_EXT` / `C_WEAKEXT` entries), the loader section (function imports and exports with VAs), and CSECT boundaries used as function-start candidates. Returns `XcoffBinary` with `sections`, `symbols`, `plt`, and `func_starts`.
 
 ---
 

@@ -49,7 +49,7 @@ Functions with ≤15 instructions containing exactly one import call score high 
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`NEBinary(path)` parses a Windows 3.x New Executable (NE format). Reads the NE header, segment table, module reference table, and exported name table. For each code segment, reconstructs the segment data from file offsets and resolves imported ordinals against the Win16 KERNEL, USER, and GDI ordinal tables (lines 47–503). `NEBinary.sweep()` disassembles each code segment with CS_ARCH_X86 + CS_MODE_16 and scans for dangerous Win16 API calls (`lstrcpy`, `lstrcat`, `sprintf`, `GetDlgItemText`) that allow attacker-controlled input to overflow fixed-size buffers.
 
 ---
 

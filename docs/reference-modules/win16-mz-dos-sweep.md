@@ -58,7 +58,7 @@ Confirmed on TCP/IP-32 3.11a: 171 hits across 7 utilities after filter; all spot
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`MZDosBinary(path)` parses a 16-bit real-mode MS-DOS MZ executable. Handles large-model DOS programs with multiple code segments — typical of WfW 3.11 network utilities (ARP.EXE, PING.EXE, TRACERT.EXE). The parser reads the MZ header's segment relocation table, reconstructs the load image, and resolves far-call segment:offset addresses. `MZDosBinary.sweep()` disassembles each code segment with CS_ARCH_X86 + CS_MODE_16 and scans for unsafe interrupt calls (INT 21h with no input validation) and unbounded string operations.
 
 ---
 

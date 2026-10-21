@@ -131,7 +131,7 @@ Gate: **PASSED**. 10 CWE-770 fixes applied (9 unbounded procfs reads + 1 unbound
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`SyscallTrace.trace(pid_or_cmd)` attaches `strace` or `ptrace` to a running process (by PID) or launches a command and traces from the start. Captures each syscall entry and exit, recording syscall number, arguments, and return value. Returns a `List[SyscallEvent]`. Used for runtime verification of findings identified statically: confirm that a discovered command-injection sink actually issues an `execve` or `system` call with attacker-controlled arguments during live testing.
 
 ---
 

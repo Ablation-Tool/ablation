@@ -67,7 +67,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings.
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`XcoffLoaderSymbols.resolve(path)` extracts the XCOFF loader symbol table from an AIX binary without requiring `BinaryContext` or a full `xcoff_parser.parse()` call. It reads the `.loader` section directly, parses the loader section header to locate the symbol table, and returns a `{va: name}` dict. Useful for ad-hoc session scripts where only the import table is needed — e.g., checking whether a stripped binary links against `strcpy` or `system` — without paying the cost of a full XCOFF parse and context build.
 
 ---
 

@@ -65,7 +65,7 @@ Gate: **PASSED**. CWE-770 (unbounded `Path.read_bytes()` in `xcoff_parser.parse(
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`XcoffExecutableAnalyzer.from_path(path)` wraps `xcoff_parser.parse()` and exposes the AIX binary RE surface in the same `from_context(ctx)` pattern as other ablation analyzers. `xcoff_parser.parse()` returns an `XcoffBinary` — this module promotes it to a `BinaryContext`-compatible surface: PLT from the XCOFF loader section, function starts from the XCOFF symbol table, and section data for Capstone disassembly. Primarily used when the target is an AIX `.a` archive member or a standalone XCOFF64 `a.out`.
 
 ---
 

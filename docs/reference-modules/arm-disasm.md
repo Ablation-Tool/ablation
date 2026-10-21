@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`ArmDisasm` decodes ARMv7 32-bit fixed-width instructions in pure Python with no external disassembly libraries. It classifies each instruction word by bits [27:25] into one of five groups — Data Processing (AND/ADD/SUB/MOV/…), Load/Store (LDR/STR/LDRB/…), Branch (B/BL/BX/BLX), Multiply (MUL/MLA/UMULL/…), and Status Register Access (MRS/MSR) — then extracts condition code [31:28] and instruction-specific fields to build the decoded instruction. Called by `ARM32TaintTracker` when Capstone is unavailable.
 
 ---
 

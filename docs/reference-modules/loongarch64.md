@@ -248,7 +248,7 @@ For kernel modules, `_SOURCE_NAMES` and `_SINK_NAMES` extend to kernel-space nam
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`analyze_cfg(cfg, state, insn_frames)` runs a path-insensitive, flow-sensitive dataflow analysis over a LoongArch64 CFG. Instruction frames come from `from_loongarch_frames()` (decoded LA64 instructions); the initial taint `State` seeds argument registers. Each basic block executes the transfer functions for the LoongArch64 instruction set, merging taint state at join points. Called by `TaintTrackerLoongArch64` to propagate attacker-controlled data from source registers to sink call sites.
 
 ---
 

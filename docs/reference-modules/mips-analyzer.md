@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `Path.stat().st_size` guard befo
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`MIPS32TaintTracker.trace(func_va, tainted_regs)` runs source-to-sink taint tracking over MIPS32/MIPS32r2 function bodies. Sources: `recv`, `read`, and similar input functions. Register model follows O32 ABI: $a0–$a3 seeded as ARG at function entry; $v0–$v1 tainted after source calls; $t0–$t9 caller-saved (killed across calls); $s0–$s7 callee-saved (survive calls). `MIPS32FuncProfiler.profile(va)` does quick function profiling: call count, string xrefs, sink detection, without full taint propagation.
 
 ---
 

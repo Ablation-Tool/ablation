@@ -78,7 +78,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings.
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`SSESlicer.slice(target_bss_va)` runs a backward slice over an ARM64 binary to find all `STR` instructions whose effective address resolves to `target_bss_va`. Implements the EmTaint algorithm: starting from the target address, it back-propagates through `ADRP + ADD/LDR` chains (the ARM64 GOT-load pattern) using Structured Symbolic Expressions (SSE). Each `STR` write to the target address becomes a `WriteRecord` with the write instruction, the source register SSE, and the containing symbol. Called by `ARM64GlobalTracker` to find all code sites that write to a known global.
 
 ---
 

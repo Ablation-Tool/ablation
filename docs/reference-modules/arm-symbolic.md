@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`ARMSymbolicExecutor` runs path-insensitive symbolic execution over ARM32 function bodies to build per-function summaries. Symbolic domain: `Arg(index)` (function arg register r0–r3), `InputBuf(id)` (protocol buffer pointer), `Add(base, off)` (flattened pointer arithmetic), and `Unknown` (merge points or complex operations). Transfer functions for MOV, ADD, SUB, LDR, STR, BL, BLX. Output: `arg_field_writes: [(arg_idx, offset)]` — which function arguments write to which struct field offsets. No SMT solver; no path forking.
 
 ---
 
