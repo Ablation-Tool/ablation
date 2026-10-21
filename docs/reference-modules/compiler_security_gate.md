@@ -148,35 +148,15 @@ Prior to this module, compiler_security_gate required manual work outside the Ab
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
-
----
-
-## Example output
-
-```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
-
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
-```
-
----
-
-## False positives
-
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+`CompilerSecurityGate.from_path(path)` accepts a binary path and optionally a pre-built `BinaryContext`. Internally it runs `SinkArgClassifier` to classify all exec-sink call sites (RODATA_CONST / ARG_PROPAGATED / UNKNOWN), then runs `TaintTracker` on ARG_PROPAGATED and UNKNOWN sites. `_taint_dag()` reconstructs a simplified taint chain from the raw taint results. `_normalize_taint()` converts each raw finding to a `GateFinding` with severity based on the sink name. Results are sorted by severity then virtual address.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before:** Requires a binary with a populated PLT map. `BinaryContext.load_or_build()` first if you want cached results.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After:** Pass gate findings to `FindingRegistry`. Each `GateFinding` carries a `taint_chain` field ready for RE write-up.
 
 ---
 

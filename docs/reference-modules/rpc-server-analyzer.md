@@ -107,35 +107,15 @@ When `RpcServerRegisterIf` (not `IfEx`) is called, no auth level argument is pas
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
-
----
-
-## Example output
-
-```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
-
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
-```
-
----
-
-## False positives
-
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+`RPCServerAnalyzer.from_path(path)` reads the PE with lief and `Path(path).read_bytes()`. `_build_iat()` scans the IAT for `RpcServerRegisterIf`, `RpcServerRegisterIfEx`, and `NdrServerCall2`. `scan()` walks all code sections looking for call sites that resolve to those IAT entries, extracts the first argument (the `RPC_SERVER_INTERFACE` struct pointer), and follows the pointer into the binary to read the interface GUID, transfer syntax, and dispatch table entry count via `_read_rpc_server_interface()`. Auth level is read from `MIDL_SERVER_INFO` if present.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before:** Run on Windows PE binaries (`.dll`, `.exe`) that expose MSRPC interfaces.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After:** Use the extracted interface GUID to look up the interface in the RPC interface database. Unauthenticated interfaces (`auth_level=0`) are HIGH findings.
 
 ---
 

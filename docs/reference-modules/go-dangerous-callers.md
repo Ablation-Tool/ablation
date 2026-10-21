@@ -40,28 +40,26 @@ for h in hits:
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+DangerousCallHit  os/exec.Command  at 0x0041f820 in runUserScript (0x0041f800)
+  string refs: "sh" (0x0041f814), "-c" (0x0041f818)
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+DangerousCallHit  os.Getenv  at 0x00423c10 in buildAuthToken (0x00423be0)
+  string refs: "SECRET_KEY" (0x00423c04)
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+Calls to `os/exec.Command` with fully static string arguments (hardcoded command paths) are not exploitable. Check `string_refs` — if all arguments are constant strings in `.rodata`, the call is likely benign. Context strings that appear only in comment or log branches also produce false hits.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` with a Go stripped binary. The scanner requires `ctx.func_starts` and uses `pclntab` for Go name resolution.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For `os/exec.Command` hits with non-constant arguments, run `TaintTracker` to determine whether the arguments trace back to network input. Register with `FindingRegistry`.
 
 ---
 

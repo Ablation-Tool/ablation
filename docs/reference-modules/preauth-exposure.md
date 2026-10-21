@@ -115,28 +115,28 @@ The PoC output is paste-ready for a disclosure report. The curl command reproduc
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+=== PreAuthRouteAuditor Results ===
+  Total routes scanned:  24
+  Pre-auth routes found: 3
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+[HIGH]   /api/admin/reboot     handler=admin_reboot (0x0041b400)  no auth decorator
+[MEDIUM] /api/system/status    handler=status_handler (0x00419200)  no auth decorator
+[LOW]    /api/version          handler=version_handler (0x004188a0)  no auth decorator (info only)
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+Routes registered with auth middleware at the app level (not as a decorator on the handler function) appear as unauthenticated. The scanner only detects per-route auth decorators; verify app-level middleware before reporting. Informational endpoints (version, health) that are intentionally unauthenticated are expected findings.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** No binary analysis required — `from_path(source_root)` operates on Python/JS source files.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For HIGH/MEDIUM pre-auth routes that reach business-logic handlers, verify whether the handler reads user-controlled input and passes it to a taint sink. Register with `FindingRegistry`.
 
 ---
 

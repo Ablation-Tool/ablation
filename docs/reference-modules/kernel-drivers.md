@@ -264,7 +264,7 @@ Three gaps made Windows kernel driver analysis manual before these modules:
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`KernelDriverAnalyzer.from_path(path)` reads the driver binary with `open(path, 'rb').read()` and parses it via lief as a Windows PE. It scans the IAT for kernel API imports (IOCTL dispatch patterns, dangerous DDI calls, MSR read/write sequences) without iterating func_starts. `ByovdDetector` consumes `KernelDriverAnalyzer` output and scores the driver against a capability matrix (MSR write, PTE mapping, memory read/write, IOCTL exposure) to produce a BYOVD exploitability score. No per-function Capstone disassembly is involved.
 
 ---
 
@@ -295,28 +295,33 @@ if byovd.is_byovd_capable:
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+KernelDriverAnalyzer: driver.sys (x64)
+  Framework:       WDM
+  DriverEntry:     0x00018000
+  Dispatch table:  IRP_MJ_DEVICE_CONTROL → 0x00019a40
+  IOCTL codes:     3 found
+    0x00222003  DevType=0x0022  Func=0x800  METHOD_NEITHER  FILE_ANY_ACCESS  *** NEITHER (raw user ptr)
+  Kernel APIs:     MmMapIoSpace [PHYS_MEM_RW], ZwTerminateProcess [PROCESS_KILL]
+  Patterns:        WRMSR [MSR_WRITE]
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+ByovdDetector: BYOVD_CAPABLE  score=3/8
+  PHYS_MEM_RW (CRITICAL): MmMapIoSpace
+  MSR_WRITE (CRITICAL): WRMSR at +0x1b820
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+`NEITHER_IOCTL_NO_PROBE` may fire on drivers that resolve `ProbeForRead` dynamically (zero-IAT pattern). `decode_ioctl_code` rejects printable-ASCII 4-byte values to avoid pool tags; a real IOCTL whose all four bytes are coincidentally printable would be missed. Manually verify any METHOD_NEITHER IOCTL against the dispatch handler.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** Nothing required — `KernelDriverAnalyzer.from_path(path)` and `ByovdDetector(path)` are self-contained. For bulk driver triage, collect `.sys` paths first.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For confirmed BYOVD candidates, run `PatternLibrary.record_hit()` and register with `FindingRegistry`. For IOCTL surface findings, trace `Type3InputBuffer` dereferences in the METHOD_NEITHER handler manually.
 
 ---
 

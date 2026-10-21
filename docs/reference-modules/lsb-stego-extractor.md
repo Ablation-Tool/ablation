@@ -101,35 +101,15 @@ Key material recovered: per-session encryption keys stored in BMP assets bundled
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
-
----
-
-## Example output
-
-```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
-
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
-```
-
----
-
-## False positives
-
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+`LSBStegoReader` operates on raw pixel bytes (not a binary firmware). It reads covert data from the least-significant bits of pixel channels using a prime-based coordinate scheme: successive read positions are determined by a walk through a prime-number sequence rather than sequential byte offsets. `read_bytes(offset, n_bytes)` reads `n_bytes` from the covert channel starting at position `offset` in the prime-indexed coordinate space. No file I/O, no disassembly, no func_starts.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before:** Extract the pixel data from the image (e.g., decode a PNG to raw RGB bytes).
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After:** Feed the decoded covert payload to the appropriate decoder for the expected format.
 
 ---
 

@@ -78,35 +78,15 @@ Extend by adding entries to `_KNOWN_PROVIDERS` in the module source.
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
-
----
-
-## Example output
-
-```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
-
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
-```
-
----
-
-## False positives
-
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+`ETWProviderExtractor.from_path(path)` reads the PE with `lief.parse()` and builds an IAT map via `_build_iat()`. `providers()` scans all code sections for call sites that resolve to `EventRegister` or `EventRegisterEx`, then extracts the GUID pointer argument (first argument in the MSVC calling convention) via `_extract_guid_arg()`. `scan()` checks each extracted provider for missing auth level, missing trace level guard, and excessive write sites.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before:** Run on x86_64 Windows PE binaries (kernel or user-mode) that may emit ETW events.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After:** ETW provider GUIDs can be used to subscribe to the provider in a test environment to observe what events are emitted. HIGH findings indicate missing auth or level guard.
 
 ---
 

@@ -131,28 +131,27 @@ Same five as `EcuArchDetector`: `arm_cm`, `m68k`, `ppc32`, `ppc_vle`, `sh2a`.
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+FuncStartResult  arch=ARM_THUMB  confidence=HIGH
+  function_starts: 147  (prologue_hits=142, call_targets=5)
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+FuncStartResult  arch=MIPS32_BE  confidence=MEDIUM
+  function_starts: 31  (prologue_hits=28, call_targets=3)
+  note: low prologue hit rate — verify with manual sample
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+CALL target heuristic (`call_targets` in result) may include jump tables or data pointers that are not function starts. For `confidence=LOW` results, manually verify a sample of recovered starts before running `TaintTracker`. FPO binaries (no frame pointer prologues) produce more call-target-derived starts, which have higher false-positive rates.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** Confirm `BinaryContext.load_or_build()` returned `func_starts=0` (or very few) for the flat binary. This scanner runs automatically for supported architectures via `BinaryContext._extract_func_starts()`.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Use the populated `ctx.func_starts` with `SemanticSearcher.query()`, `SinkArgClassifier.from_context(ctx)`, and `TaintTracker`.
 
 ---
 

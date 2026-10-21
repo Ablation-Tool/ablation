@@ -96,28 +96,30 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+[HIGH] CWE-307  login (setuid)
+  oracle: getspnam + crypt + strcmp  no rate limit
+  oracle_func: verify_credentials (0x00408200)
+  callers: main, handle_login
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+[MEDIUM] CWE-307  su_helper
+  oracle: getpwnam + crypt + strcmp  rate limit: sleep
+  oracle_func: check_password (0x004091a0)
+  callers: main
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+`has_rate_limit=True` is set when `sleep`, PAM, or login-tally strings appear anywhere in the binary, not necessarily in the oracle function. A binary may have a `sleep` in an unrelated codepath. Verify that the rate-limiting call is actually reachable from the oracle function before marking as low-risk.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** No binary analysis required — `from_path(path)` is self-contained. Optionally verify the binary has the setuid bit with `stat` before running.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For CWE-307 hits without rate limiting, confirm that the oracle function is reachable from network input (not only local console) before reporting. Register with `FindingRegistry`.
 
 ---
 

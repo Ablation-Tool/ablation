@@ -129,28 +129,28 @@ for p in profiles:
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+SanitizerProfile  0x0040b200  score=8  verdict=SHELL_SAFE
+  allowed_bytes: 0x30-0x39 0x41-0x5a 0x61-0x7a 0x5f  (alphanumeric + underscore)
+  shell_safe: True  comparisons=12  byte_loads=8
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+SanitizerProfile  0x0042c400  score=4  verdict=SHELL_UNSAFE
+  allowed_bytes: 0x20-0x7e  (printable ASCII — shell metacharacters not excluded)
+  shell_safe: False  comparisons=3  byte_loads=2
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+A function that compares against a small set of comparison immediates (e.g., a simple null-terminator check) produces a low `score` but may still be incorrectly classified if the comparison set coincidentally matches the SHELL_SAFE pattern. Verify `allowed_bytes` reconstructed from comparison immediates matches the actual validation intent.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate sanitizer functions (character validation patterns near taint sinks).
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For `SHELL_UNSAFE` verdict on a function used as a taint-sink guard, treat the guarded path as unvalidated. Re-run `TaintTracker` excluding the sanitizer guard.
 
 ---
 

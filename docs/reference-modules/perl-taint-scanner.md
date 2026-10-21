@@ -117,35 +117,15 @@ PerlTaintScanner is independent of BinaryContext, it works entirely on text file
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
-
----
-
-## Example output
-
-```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
-
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
-```
-
----
-
-## False positives
-
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+`PerlTaintScanner` takes a list of Perl source `Path` objects. For each file, `_FileAnalysis._parse_functions()` splits the source into function scopes by scanning for `sub name {` declarations. `scan()` iterates each file's functions and applies regex patterns to identify taint sources (`$ENV{...}`, `param(...)`, `<STDIN>`, CGI input) and sink calls (`system`, backtick exec, `open`, `eval`, `DBI`). `_FileAnalysis.lines_in_func()` limits sink search to the current function scope. No binary parsing; no disassembly.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before:** Collect Perl source files (`.pl`, `.pm`, CGI scripts) from the target.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After:** HIGH findings require manual confirmation that the taint source reaches the sink without sanitization. Check for `use strict` and `use warnings` as context.
 
 ---
 

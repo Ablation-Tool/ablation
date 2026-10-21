@@ -34,28 +34,26 @@ for f in findings:
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+[MEDIUM] CREDENTIAL_EXPOSURE  CWE-214  mcp.py:42
+  detail: json.dumps(request.COOKIES) passed as --cookies CLI argument
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+[MEDIUM] AUTH_BYPASS  CWE-306  views.py:88
+  detail: /api/tools route registered without auth decorator in preceding 8 lines
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+`AUTH_BYPASS` checks only the 8 lines preceding the route registration; app-level middleware is not detected and produces false positives. Verify the actual authentication model for each flagged route before reporting.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** No binary analysis required. Point directly at the MCP server source directory.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For `CREDENTIAL_EXPOSURE` findings, verify that the CLI argument is visible in `/proc/<pid>/cmdline` or MCP logs. Register with `FindingRegistry`.
 
 ---
 
