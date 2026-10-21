@@ -56,8 +56,10 @@ Step 4 (escape-byte decode + trailing block)::
       b != escape_byte  → emit b (literal common byte).
       b == escape_byte  → read next byte n:
         n == escape_byte → emit escape_byte (self-escape = literal escape byte).
-        n in common_set  → emit escape_byte + n (escape followed by common = two literals).
-        n not in common  → emit sym_table[K + rank(n, sorted_non_common)] (rare byte).
+        n in common_set  → emit sym_table[K + rank(n, sorted_K_nonescape)] (rare byte;
+                           K_set byte acts as single-byte term code for rare byte at
+                           sym_table[K + sorted_K_nonescape.index(n)]).
+        n not in common  → multi-byte IBM proprietary term (rarely occurs; emit as-is).
 
     After escape decode: append raw bytes from offset (272 + huffman_bytes_consumed)
     to end of entry.  These trailing bytes are a second uncompressed block.
@@ -324,7 +326,16 @@ class AixInstallpDecompressor:
         K_set = set(bwt_buf)
         K = len(K_set)
         escape_byte = sym_table[0]
-        sorted_rare = sorted(b for b in range(256) if b not in K_set)
+        # Term codes for rare bytes: sorted K_set bytes excluding escape_byte.
+        # The j-th rare byte (sym_table[K+j]) uses sorted_K_nonescape[j] as its
+        # single-byte term code (valid for j < len(sorted_K_nonescape)).
+        sorted_K_nonescape = sorted(b for b in K_set if b != escape_byte)
+        # term_to_rare_byte maps a K_set term byte → the rare byte it encodes.
+        term_to_rare_byte = {}
+        for j, term in enumerate(sorted_K_nonescape):
+            rare_idx = K + j
+            if rare_idx < 256:
+                term_to_rare_byte[term] = sym_table[rare_idx]
 
         result = bytearray()
         i = 0
@@ -343,15 +354,22 @@ class AixInstallpDecompressor:
             nxt = bwt_buf[i]
             i += 1
             if nxt == escape_byte:
+                # Self-escaped escape byte → emit one escape_byte literal.
                 result.append(escape_byte)
             elif nxt in K_set:
+                # nxt is a single-byte term code → emit the rare byte it encodes.
+                # (escape_byte is already handled above; here nxt != escape_byte.)
+                rare = term_to_rare_byte.get(nxt)
+                if rare is not None:
+                    result.append(rare)
+                else:
+                    # j >= len(sorted_K_nonescape): IBM multi-byte term (not supported).
+                    result.append(escape_byte)
+                    result.append(nxt)
+            else:
+                # nxt not in K_set: IBM proprietary multi-byte term code.
                 result.append(escape_byte)
                 result.append(nxt)
-            else:
-                # nxt not in K_set → guaranteed in sorted_rare
-                rank = sorted_rare.index(nxt)
-                rare_idx = K + rank
-                result.append(sym_table[rare_idx] if rare_idx < 256 else nxt)
         return bytes(result)
 
     @staticmethod
