@@ -130,28 +130,28 @@ Iterates over all functions in the binary context using `ctx.func_starts`. For e
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+[HIGH] TAINT_FLOW  0x00401234 in handle_request (0x004010c0)
+  detail: UBSan miscompilation allows tainted len to bypass bounds check
+  detector: UBSanTaintBridge
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+[HIGH] LENGTH_UNDERFLOW  0x00402a10 in parse_header (0x00402980)
+  detail: signed comparison with unsigned length enables heap underflow
+  detector: LengthUnderflowDetector
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+`TAINT_FLOW` may fire when the compiler defect pattern (e.g., signed/unsigned mismatch) is present but the specific value range cannot satisfy the exploit condition. Verify the actual range of the length or pointer source before reporting. `LENGTH_UNDERFLOW` may fire on sanity checks intentionally coded as signed comparisons with no actual underflow path.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` to resolve func_starts. `SemanticSearcher.query()` to identify candidate functions near allocation and length-processing patterns.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** For `TAINT_FLOW` hits, run `TaintTracker` to confirm network input reaches the compiler-defect site. Register with `FindingRegistry`.
 
 ---
 

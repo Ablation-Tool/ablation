@@ -89,35 +89,15 @@ The MSF parser covers the public symbols stream (`S_PUB32` records). Private sym
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
-
----
-
-## Example output
-
-```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
-
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
-```
-
----
-
-## False positives
-
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+`PDBSymbolIntegrator.from_path(path)` reads the PE with lief and locates the `IMAGE_DEBUG_DIRECTORY` entry of type `IMAGE_DEBUG_TYPE_CODEVIEW`. `pdb_info()` parses the CodeView header to extract the PDB GUID, age, and filename. `fetch_pdb()` downloads the matching PDB from the Microsoft Symbol Server using the GUID+age as the URL key. `load_pdb()` parses the PDB MSF7 container, locates the DBI stream, and extracts the symbol name table mapping VAs to function names. No Capstone disassembly; no func_starts iteration.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before:** Run on Windows PE binaries where the CodeView debug directory is present (typically non-stripped retail binaries or driver `.sys` files with public PDB symbols).
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After:** Call `ctx.set_name(va, name)` for each symbol returned by `load_pdb()` to populate the BinaryContext name table.
 
 ---
 

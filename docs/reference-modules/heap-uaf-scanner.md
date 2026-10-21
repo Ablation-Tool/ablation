@@ -40,28 +40,26 @@ for f in findings:
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+[HIGH] UAF  func_0x1a3c40 (RequestHandler::free_user_data)
+  site: 0x1a3c88  use-after-free: ptr stored at +0x18 accessed after free at 0x1a3c74
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+[MEDIUM] DOUBLE_FREE  func_0x2b4010 (cleanup_buffer)
+  site: 0x2b4058  double free: same ptr freed at 0x2b4040 and 0x2b4058
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+UAF findings may fire when the freeing and the subsequent access are in different functions that the scanner cannot prove are reachable in order. Verify that the code path `free → use` is actually reachable (not guarded by a condition that prevents both from executing) before reporting.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** `BinaryContext.load_or_build()` to resolve func_starts and names. Optionally run `SemanticSearcher.query()` to narrow to allocation/free patterns first.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Verify UAF findings with `PathSolver` to confirm the use-after-free path is feasible. Register with `FindingRegistry`.
 
 ---
 

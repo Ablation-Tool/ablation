@@ -61,7 +61,7 @@ Validated on FortiManager v8.0.0 AI stack: FMG-AI-1 (CREDENTIAL_EXPOSURE) and FM
 
 ## How it works
 
-Iterates over all functions in the binary context using `ctx.func_starts`. For each function, disassembles the instruction stream with Capstone and applies the scanner's pattern or heuristic. Call sites matching the target pattern are collected and scored. A finding is emitted when the condition passes the configured confidence threshold. Results are sorted by severity then virtual address.
+`MCPToolTaintScanner.scan_file(path)` reads Python/JavaScript MCP server source files and applies regex-based taint analysis without AST parsing. It detects `tool_name = args["key"]` patterns (taint sources from MCP tool arguments) and traces them to exec-class sinks (`subprocess.run`, `os.system`, `shell=True` patterns) and filesystem sinks (`open(path, 'w')`). `_has_auth_in_window()` checks the surrounding lines for authorization guards. No binary disassembly; no func_starts.
 
 ---
 
@@ -80,28 +80,26 @@ for f in findings:
 ## Example output
 
 ```
-[HIGH] TAINT_SINK   system() at 0x4023A0 in sub_401F00
-  source: recv() → $rdi at 0x401F44
-  chain: recv → strcpy(buf) → system(buf)
-  arg_index: 0
+[MEDIUM] CREDENTIAL_EXPOSURE  CWE-214  mcp.py:42
+  detail: json.dumps(request.COOKIES) passed as --cookies CLI argument
 
-[MEDIUM] DEPRECATED_FUNC   gets() at 0x403C10 in handle_input
-  detail: unbounded read into stack buffer
+[HIGH] PROMPT_INJECTION  CWE-77  agent_views.py:88
+  detail: user-supplied FortiGate script assigned as system-role content
 ```
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+`AUTH_BYPASS` checks only the 8 lines preceding the route registration; middleware registered at app-init level is not detected and produces false positives. `PROMPT_INJECTION` may fire on comment strings that contain `system` and role-assignment patterns. Review findings against the actual auth model.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate functions. Run `SinkArgClassifier` first to eliminate `RODATA_CONST` call sites before passing candidates here.
+**Before this module:** No binary analysis required. Point directly at the MCP server source directory.
 
-**After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
+**After this module:** Manually verify `CREDENTIAL_EXPOSURE` by checking `/proc/<pid>/cmdline` visibility or MCP log output. Verify `PROMPT_INJECTION` by confirming that the user-controlled input reaches the system-role message without sanitization.
 
 ---
 
