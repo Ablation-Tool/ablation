@@ -72,6 +72,8 @@ from typing import Optional
 _FOUR_BYTE_OPS: frozenset[int] = frozenset({
     0xE6,   # MOV Rwn, #data16          — immediate word load
     0x66,   # CMP Rwn, #data16          — compare with immediate
+    0x46,   # CMP Rwn, #data16          — compare immediate (row x6 col 4); loop termination form
+    0x06,   # ADD Rwn, #data16          — add immediate (row x6 col 0)
     0xFA,   # JMPS seg, caddr           — absolute code segment jump
     0xDA,   # CALLS seg, caddr          — absolute code segment call
     0xF2,   # MOV Rwn, mem              — load from direct address (DPP-mapped)
@@ -84,6 +86,7 @@ _FOUR_BYTE_OPS: frozenset[int] = frozenset({
 # Instruction type tags
 _MOV_IMM  = 'MOV_IMM'    # MOV Rwn, #imm16
 _CMP_IMM  = 'CMP_IMM'    # CMP Rwn, #imm16
+_ADD_IMM  = 'ADD_IMM'    # ADD Rwn, #data16 — add 16-bit immediate (4-byte, 06 n_ ##  ##)
 _JMPS     = 'JMPS'       # JMPS seg, caddr
 _CALLS    = 'CALLS'      # CALLS seg, caddr
 _MOV_LD   = 'MOV_LD'    # load from direct/indirect memory address
@@ -410,12 +413,30 @@ class EcuC166Decoder:
                 reg=reg, imm=imm,
             )
 
-        if op == 0x66:
+        if op in (0x66, 0x46):
+            # 0x66: CMP Rwn, #data16 — compare with 16-bit immediate (row x6 col 6).
+            # 0x46: CMP Rwn, #data16 — second loop-termination form (row x6 col 4).
+            # Both encode the destination register in the low nibble of byte1.
+            # Confirmed: '66 f4 40 00' = CMP R4, #0x0040 (followed by JMPR NZ at 0x02BA54);
+            #            '46 f4 0b 00' = CMP R4, #0x000B (inner-loop boundary, 0x02BA46).
             reg = b1 & 0x0F
             return C166Insn(
                 pa=pa, raw=raw,
                 mnemonic=f'CMP R{reg:X}, #{imm:#06x}',
                 insn_type=_CMP_IMM,
+                reg=reg, imm=imm,
+            )
+
+        # ADD Rwn, #data16: opcode 0x06 — add 16-bit immediate to word register.
+        # Row x6, column 0 (upper nibble 0, lower nibble 6).
+        # Register in low nibble of byte1 (same convention as 0x66/0xE6).
+        # Confirmed: '06 f4 0e 00' = ADD R4, #0x000E (pointer offset in MS43 inner loop).
+        if op == 0x06:
+            reg = b1 & 0x0F
+            return C166Insn(
+                pa=pa, raw=raw,
+                mnemonic=f'ADD R{reg:X}, #{imm:#06x}',
+                insn_type=_ADD_IMM,
                 reg=reg, imm=imm,
             )
 
@@ -668,9 +689,11 @@ class EcuC166Decoder:
                 imm=rel,
             )
 
-        # MOV Rwdst, Rwsrc: opcode 0xF0, byte1 = (dst<<4)|src.
-        # Confirmed: F0 8D = MOV R8,RD / F0 9C = MOV R9,RC (seed_fetch prologue arg-save)
-        if op == 0xF0:
+        # MOV Rwdst, Rwsrc: opcode 0xF0 or 0xE0, byte1 = (dst<<4)|src.
+        # 0xF0 (row x0, col F): confirmed from seed_fetch prologue (F0 8D = MOV R8,RD).
+        # 0xE0 (row x0, col E): second MOV encoding in the x0 column table.
+        # Seen as 'e0 b5' (MOV RB, R5) and 'e0 08' (MOV R0, R8) in MS43 SA function.
+        if op in (0xF0, 0xE0):
             dst = (b1 >> 4) & 0xF
             src = b1 & 0xF
             return C166Insn(
