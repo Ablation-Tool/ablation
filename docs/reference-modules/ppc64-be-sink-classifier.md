@@ -136,7 +136,7 @@ second arg (src), r5 = third arg (size for snprintf/memcpy).
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`PPC64BESinkClassifier.classify_all()` classifies PPC64 big-endian ELFv1 sink call sites as `RODATA_CONST`, `SNPRINTF_RODATA`, `ARG_PROPAGATED`, or `UNKNOWN` — the same classification set as `SinkArgClassifier` (x86-only). On PPC64 BE, function calls use `bl` (branch-link) with the callee VA as a direct immediate, not an x86 `call` relocation. This classifier scans for `bl` instructions to PLT-resolved sinks, back-traces the argument registers (r3–r10, PPC64 ELFv1 ABI), and classifies whether the argument register holds a RODATA pointer, a format string, or a propagated function argument.
 
 ---
 

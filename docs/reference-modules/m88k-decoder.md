@@ -154,7 +154,7 @@ See `re/lotus/moto_gen_re.py` for the full findings module.
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`CoffM88kParser.parse(path)` reads a Motorola 88000 BCS COFF executable (COFF magic 0x016D). LIEF and Capstone have no 88000 support; this pure-Python parser extracts section headers, section data, symbol table, and string table from the COFF layout. Returns an `M88kBinary` with section data bytes and a PLT-like import table derived from the COFF symbol table. Consumed by `M88KDisassembler` and `M88KTaintTracker`.
 
 ---
 

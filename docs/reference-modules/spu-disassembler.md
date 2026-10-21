@@ -201,7 +201,7 @@ Prior to this module, spu disassembler required manual work outside the Ablation
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`SPUDisassembler.disassemble(data, base_va)` decodes Cell BE SPU instructions. The SPU has 128 × 128-bit registers, a 256KB local store, and 32-bit fixed-width big-endian instructions. Format hierarchy (IBM bit notation, bit 0 = MSB): RRR (4-bit op, top nibble 0x8/0xB–0xF), RI18 (7-bit op), RI16 (9-bit op), RI10 (8-bit op), and RR/RI7 (11-bit op). Opcode table sourced from IBM SPU ISA v1.2. Dual even/odd pipeline: even-slot instructions (compute) and odd-slot instructions (load/store/branch) are extracted and reported separately.
 
 ---
 

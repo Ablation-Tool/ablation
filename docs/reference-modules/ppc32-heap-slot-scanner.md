@@ -67,7 +67,7 @@ Gate: **PASSED** (2 INFO findings).
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`PPC32HeapSlotScanner.scan(func_va)` detects the PPC32 heap slot overflow pattern: a buffer allocated as `N × slot_size` via `mulli` (multiply-low-immediate), then each slot filled by `strcpy` or `strcat` with no per-slot bounds check between the allocation size and the copy. PPC32 `mulli rt, ra, imm` multiplies a register by an immediate — typical compiler output for `malloc(count * sizeof(slot))`. The scanner walks the basic block containing the `mulli`, then forward-traces to all `bl strcpy` / `bl strcat` call sites.
 
 ---
 

@@ -110,7 +110,7 @@ Output goes to `reports/sweep_le_<vendor>_<product>_<version>_<ts>.md`.
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`LEBinary(path)` parses a Windows 3.x/9x Linear Executable (LE format) VxD driver. LE is the ring-0 driver format for WfW 3.11 and Windows 9x virtual devices. The parser reads the LE header at the stub MZ offset, extracts the object table (code/data segments), and resolves page offsets to reconstruct loadable segments. `LEBinary.sweep()` disassembles the VxD code section with CS_ARCH_X86 + CS_MODE_32, detects the Device Descriptor Block (DDB) at the entry point, identifies VMM INT 20h service calls, and scans for unsafe string and memory operations accessible from ring-3 IOCTL paths.
 
 ---
 

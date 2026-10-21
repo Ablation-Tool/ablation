@@ -14,7 +14,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. No file reads beyond writing a t
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`BareAdapter.run(findings)` serializes ablation vuln findings to a `findings.json` temp file then pipes it through the BARE binary at `~/.local/bin/bare`. BARE has 3,904 Metasploit modules encoded at compile time; it returns a ranked list of modules whose primitive class matches the finding's CWE class and function description. AI/ML-specific findings (HPKE, STRAP, RADIUS dialects) will typically trigger BARE's `no_high_confidence_match` sentinel — this is expected. Classic overflow/memcpy primitives surface usable MSF modules.
 
 ---
 

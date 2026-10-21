@@ -188,7 +188,7 @@ Example output (before: linear lifter, after: structurizer):
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`Structurizer.run(cfg)` converts a basic-block CFG into a structured control-flow tree. Uses dominator-tree analysis to identify loop headers and if–else branch pairs, then folds them bottom-up into `Sequence`, `If`, and `While` AST nodes. The output tree is equivalent to the source-level control flow — suitable for pattern-matching against known vulnerability structures without manual CFG traversal. Used by `MCUAnalyzer` for ECU/MCU firmware where the CFG is small and structured recovery is accurate.
 
 ---
 

@@ -591,7 +591,7 @@ instruction encoding.
 
 ## How it works
 
-Reads the binary image and resolves the target-specific data structures (PLT, GOT, `.eh_frame`, symbol tables) to build a function and import index. Architecture-specific calling conventions and instruction encodings are applied to recover call edges, argument registers, and return value locations. Results are stored in the session `BinaryContext` so downstream tools can use resolved names and edges.
+`EncodingDAG` represents ISA instruction encodings as a three-layer DAG for fixed-width architectures. Layer 1: raw bytes / hex / RGB-integer (B0, B1, B2). Layer 2: bitfield template — each node is a named field with width and position, extracted via mask-and-shift. Layer 3: semantic IR — field values mapped to symbolic operands (registers, immediates, targets). The DAG structure allows the same bitfield template to be shared across opcodes that differ only in one field, reducing the encoding table size for dense ISAs.
 
 ---
 
