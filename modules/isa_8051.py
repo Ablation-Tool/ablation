@@ -506,13 +506,15 @@ class IntelHexLoader:
                     addr = int(line[3:7], 16)
                     rtype = int(line[7:9], 16)
                     raw = bytes.fromhex(line[9:9 + bc * 2])
-                except ValueError:
+                except (ValueError, struct.error):
                     continue
                 if rtype == 0x00:   # data
                     full = (base << 16) | addr
                     for i, byte in enumerate(raw):
                         loader._data[full + i] = byte
                 elif rtype == 0x04:  # extended linear address
+                    if len(raw) < 2:
+                        continue
                     base = struct.unpack(">H", raw[:2])[0]
                 elif rtype == 0x01:  # EOF
                     break
@@ -532,13 +534,15 @@ class IntelHexLoader:
                 addr = int(line[3:7], 16)
                 rtype = int(line[7:9], 16)
                 raw = bytes.fromhex(line[9:9 + bc * 2])
-            except ValueError:
+            except (ValueError, struct.error):
                 continue
             if rtype == 0x00:
                 full = (base << 16) | addr
                 for i, byte in enumerate(raw):
                     loader._data[full + i] = byte
             elif rtype == 0x04:
+                if len(raw) < 2:
+                    continue
                 base = struct.unpack(">H", raw[:2])[0]
             elif rtype == 0x01:
                 break
