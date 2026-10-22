@@ -105,8 +105,7 @@ Messages from your other sessions        accept
 <details>
 <summary><strong>31 Decompilers</strong></summary>
 
-<details>
-<summary><strong>Native CPUs</strong> </summary>
+**Native CPUs**
 
 | ISA | Variants |
 |---|---|
@@ -119,10 +118,7 @@ Messages from your other sessions        accept
 | [**LoongArch**](docs/reference-modules/loongarch.md) | LoongArch64 |
 | [**Intel&nbsp;MCS**](docs/reference-modules/isa-8051.md) | 8051 |
 
-</details>
-
-<details>
-<summary><strong>Automotive ECUs</strong> </summary>
+**Automotive ECUs**
 
 | ISA | Variants |
 |---|---|
@@ -132,18 +128,13 @@ Messages from your other sessions        accept
 | [**Infineon**](docs/reference-modules/tricore-taint-tracker.md) | TriCore TC1.6x |
 | [**TI&nbsp;DSP**](docs/reference-modules/ecu-c28x-decoder.md) | TMS320C28x |
 
-</details>
-
-<details>
-<summary><strong>VMs & Runtimes</strong> </summary>
+**VMs & Runtimes**
 
 | ISA | Variants |
 |---|---|
 | [**DEX**](docs/reference-modules/dex.md) | Dalvik · ART |
 | [**ARK**](docs/reference-modules/harmonyos.md) | ArkTS |
 | [**MicroPython**](docs/reference-modules/micropython.md) |.mpy v6 |
-
-</details>
 
 </details>
 
