@@ -160,7 +160,9 @@ class TaintedStringTracker:
         self._data: bytes = Path(ctx.path).read_bytes()
         self._base_va: int = ctx.base_va
         self._arch: str = getattr(ctx, 'arch', 'x86_64')
-        self._snprintf_va: Optional[int] = self._resolve_snprintf()
+        self._snprintf_va: Optional[int]
+        self._is_sprintf: bool
+        self._snprintf_va, self._is_sprintf = self._resolve_snprintf()
 
     @classmethod
     def from_context(cls, ctx) -> 'TaintedStringTracker':
@@ -176,6 +178,7 @@ class TaintedStringTracker:
         Accepts a list of SAC result objects (anything with .verdict and .call_va).
         Returns a list of TaintedFormatResult for each SNPRINTF_RODATA verdict
         where at least one format argument is ARG_PROPAGATED.
+        Handles both snprintf (format arg starts at rcx) and sprintf (rdx).
         """
         if self._snprintf_va is None:
             return []
@@ -218,24 +221,42 @@ class TaintedStringTracker:
 
     # ── internals ─────────────────────────────────────────────────────────────
 
-    def _resolve_snprintf(self) -> Optional[int]:
-        """Find snprintf's VA from BinaryContext PLT."""
+    def _resolve_snprintf(self) -> Tuple[Optional[int], bool]:
+        """Find snprintf or sprintf VA from BinaryContext PLT.
+
+        Returns (va, is_sprintf) where is_sprintf=True means the format arg
+        is at rdx (not rcx) because there's no size argument.
+        snprintf takes precedence over sprintf when both are present.
+        """
         plt: Dict[int, str] = getattr(self._ctx, 'plt', {})
+        snprintf_va: Optional[int] = None
+        sprintf_va: Optional[int] = None
         for va, name in plt.items():
-            if name.split('@')[0].strip() in ('snprintf', '__snprintf_chk'):
-                return va
-        return None
+            stem = name.split('@')[0].strip()
+            if stem in ('snprintf', '__snprintf_chk'):
+                snprintf_va = va
+            elif stem in ('sprintf', '__sprintf_chk'):
+                sprintf_va = va
+        if snprintf_va is not None:
+            return snprintf_va, False
+        return sprintf_va, True
 
     def _classify_format_args(self, snprintf_call_va: int) -> Tuple[List[str], List[str]]:
         """
-        Classify the format arguments of the snprintf call at snprintf_call_va.
+        Classify the format arguments of the snprintf/sprintf call at snprintf_call_va.
         Returns (tainted_arg_names, evidence_list).
+
+        x86_64 register assignments:
+          snprintf(buf, n, fmt, arg1, ...)  → fmt=rdx, arg1=rcx, arg2=r8, arg3=r9
+          sprintf(buf,    fmt, arg1, ...)   → fmt=rsi, arg1=rdx, arg2=rcx, arg3=r8
         """
         tainted: List[str] = []
         evidence: List[str] = []
 
         if self._arch == 'x86_64':
-            for reg in _FMT_ARGS_X86_64:
+            # sprintf shifts the format arg registers by one position
+            regs = ['rdx', 'rcx', 'r8'] if self._is_sprintf else _FMT_ARGS_X86_64
+            for reg in regs:
                 verdict, ev = _classify_reg_at_call_x86_64(
                     self._data, self._base_va, snprintf_call_va, reg
                 )
