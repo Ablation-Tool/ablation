@@ -103,6 +103,51 @@ Messages from your other sessions        accept
 ## Capabilities
 
 <details>
+<summary><strong>31 Decompilers</strong></summary>
+
+<details>
+<summary><strong>Native CPUs</strong> </summary>
+
+| ISA | Variants |
+|---|---|
+| [**x86**](docs/reference-modules/x86.md) | x86-32 · x86-64 |
+| [**ARM**](docs/reference-modules/binary-lifter.md) | ARM-32 · ARM-64 · Thumb |
+| [**MIPS**](docs/reference-modules/mips.md) | MIPS-32 · [nanoMIPS](docs/reference-modules/nanomips.md) · MIPS-64 |
+| [**PowerPC**](docs/reference-modules/ppc32-taint-tracker.md) | PPC-32 · PPC-64 · [VLE](docs/reference-modules/ecu-vle-decoder.md) · [PPC476 Book E](docs/reference-modules/ppc476-lifter.md) · [XCOFF32 / AIX](docs/reference-modules/xcoff32-decompiler.md) |
+| [**RISC-V**](docs/reference-modules/risc-v.md) | RV32 · RV64 · [HiSilicon ext](docs/reference-modules/hisi-rv32-ext.md) |
+| [**ARC**](docs/reference-modules/binary-lifter.md) | ARC EM/HS |
+| [**LoongArch**](docs/reference-modules/loongarch.md) | LoongArch64 |
+| [**Intel&nbsp;MCS**](docs/reference-modules/isa-8051.md) | 8051 |
+
+</details>
+
+<details>
+<summary><strong>Automotive ECUs</strong> </summary>
+
+| ISA | Variants |
+|---|---|
+| [**V850&nbsp;/&nbsp;RH850**](docs/reference-modules/v850-rh850.md) | V850-32 · RH850 |
+| [**Renesas&nbsp;SH**](docs/reference-modules/binary-lifter-sh2a.md) | SH-2A |
+| [**Motorola**](docs/reference-modules/ecu-m68k-decoder.md) | M68K / CPU32 · [MC88100](docs/reference-modules/m88k-decoder.md) |
+| [**Infineon**](docs/reference-modules/tricore-taint-tracker.md) | TriCore TC1.6x |
+| [**TI&nbsp;DSP**](docs/reference-modules/ecu-c28x-decoder.md) | TMS320C28x |
+
+</details>
+
+<details>
+<summary><strong>VMs & Runtimes</strong> </summary>
+
+| ISA | Variants |
+|---|---|
+| [**DEX**](docs/reference-modules/dex.md) | Dalvik · ART |
+| [**ARK**](docs/reference-modules/harmonyos.md) | ArkTS |
+| [**MicroPython**](docs/reference-modules/micropython.md) |.mpy v6 |
+
+</details>
+
+</details>
+
+<details>
 <summary><strong>Core analysis engine</strong></summary>
 
 | Capability | Code | |
@@ -629,51 +674,6 @@ Messages from your other sessions        accept
 | [**Bundled&nbsp;finding/signature&nbsp;seeds**](docs/reference-modules/bundled-finding-signature-seeds.md) | [1](sweeps/base_sweep.py)&nbsp;[2](sweeps/fortinet_sweep.py) | Ship initial finding and function-signature data to populate or bootstrap local analysis libraries. |
 | [**Dependency&nbsp;and&nbsp;supply-chain&nbsp;tooling**](docs/reference-modules/dependency-and-supply-chain-tooling.md) | [1](scripts/audit-deps.sh)&nbsp;[2](scripts/generate-lockfile.sh) | Scripts for dependency auditing, hash-pinned requirements, SBOM generation and monitoring. |
 | [**CI&nbsp;and&nbsp;release&nbsp;automation**](docs/reference-modules/ci-and-release-automation.md) | [1](scripts/audit-deps.sh)&nbsp;[2](scripts/generate-lockfile.sh) | Repository workflows for configured checks, coverage and package publishing. |
-
-</details>
-
-<details>
-<summary><strong>31 Decompilers</strong></summary>
-
-<details>
-<summary><strong>Native CPUs</strong> </summary>
-
-| ISA | Variants |
-|---|---|
-| [**x86**](docs/reference-modules/x86.md) | x86-32 · x86-64 |
-| [**ARM**](docs/reference-modules/binary-lifter.md) | ARM-32 · ARM-64 · Thumb |
-| [**MIPS**](docs/reference-modules/mips.md) | MIPS-32 · [nanoMIPS](docs/reference-modules/nanomips.md) · MIPS-64 |
-| [**PowerPC**](docs/reference-modules/ppc32-taint-tracker.md) | PPC-32 · PPC-64 · [VLE](docs/reference-modules/ecu-vle-decoder.md) · [PPC476 Book E](docs/reference-modules/ppc476-lifter.md) · [XCOFF32 / AIX](docs/reference-modules/xcoff32-decompiler.md) |
-| [**RISC-V**](docs/reference-modules/risc-v.md) | RV32 · RV64 · [HiSilicon ext](docs/reference-modules/hisi-rv32-ext.md) |
-| [**ARC**](docs/reference-modules/binary-lifter.md) | ARC EM/HS |
-| [**LoongArch**](docs/reference-modules/loongarch.md) | LoongArch64 |
-| [**Intel&nbsp;MCS**](docs/reference-modules/isa-8051.md) | 8051 |
-
-</details>
-
-<details>
-<summary><strong>Automotive ECUs</strong> </summary>
-
-| ISA | Variants |
-|---|---|
-| [**V850&nbsp;/&nbsp;RH850**](docs/reference-modules/v850-rh850.md) | V850-32 · RH850 |
-| [**Renesas&nbsp;SH**](docs/reference-modules/binary-lifter-sh2a.md) | SH-2A |
-| [**Motorola**](docs/reference-modules/ecu-m68k-decoder.md) | M68K / CPU32 · [MC88100](docs/reference-modules/m88k-decoder.md) |
-| [**Infineon**](docs/reference-modules/tricore-taint-tracker.md) | TriCore TC1.6x |
-| [**TI&nbsp;DSP**](docs/reference-modules/ecu-c28x-decoder.md) | TMS320C28x |
-
-</details>
-
-<details>
-<summary><strong>VMs & Runtimes</strong> </summary>
-
-| ISA | Variants |
-|---|---|
-| [**DEX**](docs/reference-modules/dex.md) | Dalvik · ART |
-| [**ARK**](docs/reference-modules/harmonyos.md) | ArkTS |
-| [**MicroPython**](docs/reference-modules/micropython.md) |.mpy v6 |
-
-</details>
 
 </details>
 
