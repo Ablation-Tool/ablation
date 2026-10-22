@@ -78,6 +78,7 @@ try:
         PPC_INS_LD, PPC_INS_LDU, PPC_INS_LWA,
         PPC_INS_STD, PPC_INS_STDU,
         PPC_INS_BL,
+        PPC_INS_B,
         PPC_INS_OR, PPC_INS_ORI,
         PPC_INS_MR,
         PPC_INS_LBZ, PPC_INS_LHZ,
@@ -93,6 +94,7 @@ except ImportError:
     (PPC_INS_LD, PPC_INS_LDU, PPC_INS_LWA) = (599, 605, 643)
     (PPC_INS_STD, PPC_INS_STDU) = (1032, 1037)
     PPC_INS_BL = 108
+    PPC_INS_B  = 88
     (PPC_INS_OR, PPC_INS_ORI) = (843, 845)
     PPC_INS_MR = 759
     (PPC_INS_LBZ, PPC_INS_LHZ) = (594, 626)
@@ -232,6 +234,76 @@ class SinkArgClassifierPPC64ELFv2:
                 self._r2 = int(got.virtual_address) + 0x8000
         except Exception:
             pass
+        # Remap GOT entry VAs in _plt_rev to the actual PLT call stub VAs.
+        # GNU gold places ppc64le ELFv2 PLT call stubs in .fini (sometimes
+        # other non-.text executable sections) rather than adjacent to .text.
+        # Code branches with BL <stub_va>; the stub does:
+        #   std r2, 0x18(r1)           [save TOC]
+        #   addis r12, r2, ha          [GOT_VA = r2 + ha<<16 + lo]
+        #   ld    r12, lo(r12)
+        #   mtctr r12
+        #   bctr
+        # _find_call_sites() matches BL <va> against sink_va from _plt_rev.
+        # Without remapping, sink_va is the GOT slot address — never a BL target.
+        if self._r2 and self._plt_rev:
+            self._remap_plt_rev_to_stubs()
+
+    def _remap_plt_rev_to_stubs(self) -> None:
+        """Scan non-.text executable sections for ppc64le ELFv2 PLT call stubs
+        and remap _plt_rev entries from GOT VAs to the callable stub VAs."""
+        import struct as _s
+        STD_R2 = _s.pack('<I', 0xF8410018)   # std r2, 0x18(r1)
+        MTCTR  = _s.pack('<I', 0x7D8903A6)   # mtctr r12
+        BCTR   = _s.pack('<I', 0x4E800420)   # bctr
+        r2 = self._r2
+        # Build GOT_VA → stub_VA from all non-.text executable sections.
+        got_to_stub: Dict[int, int] = {}
+        exec_flag = 4  # SHF_EXECINSTR
+        text_name = '.text'
+        for sec in self._bin.sections:
+            sec_va   = int(sec.virtual_address)
+            sec_size = int(sec.size)
+            if sec_size < 20 or sec.name == text_name:
+                continue
+            try:
+                flags = int(sec.flags)
+            except Exception:
+                flags = 0
+            if not (flags & exec_flag):
+                continue
+            try:
+                sec_off = int(self._bin.virtual_address_to_offset(sec_va))
+            except Exception:
+                sec_off = sec_va
+            if sec_off < 0 or sec_off >= len(self._data):
+                continue
+            sec_data = self._data[sec_off:sec_off + sec_size]
+            for i in range(0, sec_size - 20, 4):
+                if sec_data[i:i+4] != STD_R2:
+                    continue
+                w1 = _s.unpack_from('<I', sec_data, i + 4)[0]
+                w2 = _s.unpack_from('<I', sec_data, i + 8)[0]
+                if (w1 & 0xFFFF0000) != 0x3D820000:  # addis r12, r2, ha
+                    continue
+                if (w2 & 0xFFFF0000) != 0xE98C0000:  # ld r12, lo(r12)
+                    continue
+                if sec_data[i+12:i+16] != MTCTR:
+                    continue
+                if sec_data[i+16:i+20] != BCTR:
+                    continue
+                ha = w1 & 0xFFFF
+                lo = w2 & 0xFFFF
+                if ha & 0x8000: ha -= 0x10000
+                if lo & 0x8000: lo -= 0x10000
+                got_va   = r2 + ha * 0x10000 + lo
+                stub_va  = sec_va + i
+                got_to_stub[got_va] = stub_va
+        if not got_to_stub:
+            return
+        for name in list(self._plt_rev):
+            old_va = self._plt_rev[name]
+            if old_va in got_to_stub:
+                self._plt_rev[name] = got_to_stub[old_va]
 
     def _is_rodata(self, va: int) -> bool:
         return any(s <= va < e for s, e in self._rodata_ranges)
@@ -299,7 +371,23 @@ class SinkArgClassifierPPC64ELFv2:
         raw  = self._read_va(func_va, size)
         if not raw:
             return []
-        return list(self._cs.disasm(raw, func_va))
+        insns = list(self._cs.disasm(raw, func_va))
+        # ppc64le ELFv2 (GNU gold): the Global Entry Point (GEP) is a short stub
+        # that sets up r2 then branches to the Local Entry Point (LEP) via an
+        # unconditional B.  The GEP and LEP can be thousands of bytes apart with
+        # null-byte alignment padding between them; capstone stops at the padding,
+        # so the actual function body is never seen.  When we get ≤ 8 instructions
+        # ending in B (not BL), follow that branch to disassemble the LEP.
+        if insns and len(insns) <= 8:
+            last = insns[-1]
+            if last.id == PPC_INS_B and last.operands:
+                lep_va = last.operands[0].imm
+                if lep_va != func_va and self._read_va(lep_va, 4):
+                    lep_size = _MAX_FUNC_BYTES
+                    lep_raw  = self._read_va(lep_va, lep_size)
+                    if lep_raw:
+                        insns = list(self._cs.disasm(lep_raw, lep_va))
+        return insns
 
     def _find_call_sites(self, insns: list, sink_va: int) -> List[int]:
         sites: List[int] = []
@@ -674,6 +762,71 @@ class SinkArgClassifierPPC64ELFv2:
                 ))
         return results
 
+    def _scan_uncovered_bls(
+        self,
+        sink_plts: Dict[int, Tuple[str, int]],
+        covered_call_vas: set,
+    ) -> List['SinkClassification']:
+        """Fallback: scan .text bytes directly for BL <stub_va> when func_starts
+        misses the containing function (e.g. ppc64le ELFv2 large Go DSOs where
+        BinaryContext doesn't register every GEP as a func_start).
+
+        For each uncovered BL hit, disassemble a 256-instruction window ending
+        at the call site and classify as if called from a pseudo func_start.
+        """
+        import struct as _s
+        results: List[SinkClassification] = []
+        text_sec = None
+        if self._bin is not None:
+            for sec in self._bin.sections:
+                if sec.name == '.text':
+                    text_sec = sec
+                    break
+        if text_sec is None or self._cs is None:
+            return results
+        text_va  = int(text_sec.virtual_address)
+        text_off = self._va_to_file_offset(text_va)
+        text_sz  = int(text_sec.size)
+        if text_off < 0 or text_off >= len(self._data):
+            return results
+        text_raw = self._data[text_off:text_off + text_sz]
+        for sink_va, (sink_name, arg_pos) in sink_plts.items():
+            # Scan every 4-byte-aligned position for BL stub_va from that position.
+            for i in range(0, text_sz - 4, 4):
+                caller_va = text_va + i
+                offset = sink_va - caller_va
+                if offset % 4 != 0:
+                    continue
+                li = (offset >> 2) & 0xFFFFFF
+                bl_word = 0x48000001 | ((li & 0xFFFFFF) << 2)
+                if _s.unpack_from('<I', text_raw, i)[0] != bl_word:
+                    continue
+                if caller_va in covered_call_vas:
+                    continue
+                # Disassemble a window: up to 256 instructions ending at caller_va.
+                window_start = max(text_va, caller_va - 256 * 4)
+                window_raw   = self._read_va(window_start, caller_va - window_start + 4)
+                if not window_raw:
+                    continue
+                insns = list(self._cs.disasm(window_raw, window_start))
+                # Find the BL index in this window.
+                call_idx = next(
+                    (j for j, ins in enumerate(insns)
+                     if ins.id == PPC_INS_BL
+                     and ins.operands
+                     and ins.operands[0].imm == sink_va),
+                    None,
+                )
+                if call_idx is None:
+                    continue
+                verdict, detail = self._trace_arg(insns, call_idx, arg_pos)
+                severity = '' if verdict in (RODATA_CONST, SNPRINTF_RODATA) else 'HIGH'
+                results.append(SinkClassification(
+                    sink_name, arg_pos, window_start,
+                    caller_va, verdict, detail, severity,
+                ))
+        return results
+
     def classify_all(self) -> List[SinkClassification]:
         """Run classification across all func_starts for all registered sink call sites."""
         sink_plts = self._find_sink_plts()
@@ -682,6 +835,9 @@ class SinkArgClassifierPPC64ELFv2:
         results: List[SinkClassification] = []
         for func_va in self._ctx.func_starts:
             results.extend(self._classify_function(func_va, sink_plts))
+        # Fall back to direct BL scan for call sites not covered by func_starts.
+        covered = {r.call_va for r in results}
+        results.extend(self._scan_uncovered_bls(sink_plts, covered))
         return results
 
     def classify_sink(self, sink_name: str) -> List[SinkClassification]:
