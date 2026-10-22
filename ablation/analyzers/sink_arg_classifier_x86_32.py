@@ -206,6 +206,29 @@ class SinkArgClassifierI386:
                 self._data_ranges.append((va_s, va_e))
             elif sec.name in ('.bss', '.tbss', '.sbss'):
                 self._bss_ranges.append((va_s, va_e))
+        # BinaryContext._extract_plt() is x86_64-only; for i386 ELFs it returns
+        # plt={}.  Fall back to manual .rel.plt parse — R_386_JMP_SLOT=7; PLT
+        # header = 16 bytes; stub size = 16 bytes; GNU LD ELF i386 layout.
+        if not self._plt_rev:
+            import struct as _struct
+            R_386_JMP_SLOT = 7
+            plt_sec = self._bin.get_section('.plt')
+            rel_sec = self._bin.get_section('.rel.plt')
+            if plt_sec and rel_sec:
+                plt_base = int(plt_sec.virtual_address)
+                rel_data = bytes(rel_sec.content)
+                for i in range(len(rel_data) // 8):
+                    off = i * 8
+                    _r_offset, r_info = _struct.unpack_from('<II', rel_data, off)
+                    if (r_info & 0xFF) != R_386_JMP_SLOT:
+                        continue
+                    sym_idx = r_info >> 8
+                    try:
+                        sname = self._bin.dynamic_symbols[sym_idx].name.split('@')[0]
+                        stub_va = plt_base + 16 + i * 16
+                        self._plt_rev[sname] = stub_va
+                    except Exception:
+                        pass
         for name, fmt_pos in _SNPRINTF_FMT_POS_X86_32.items():
             va = self._plt_rev.get(name)
             if va is not None:
@@ -287,17 +310,17 @@ class SinkArgClassifierI386:
         return list(self._cs.disasm(raw, func_va))
 
     def _find_sink_plts(self) -> Dict[int, Tuple[str, int]]:
-        """Return {sink_va: (name, arg_pos)} for sinks with ≥1 caller."""
+        """Return {sink_va: (name, arg_pos)} for sinks present in the PLT.
+
+        Do NOT gate on callers_of(): BinaryContext's call graph is x86_64-only
+        and returns [] for i386 binaries, which would mark every import as dead.
+        classify_all() scans all func_starts instead.
+        """
         result: Dict[int, Tuple[str, int]] = {}
         self._dead_sinks = []
         for name, arg_pos in self._sinks.items():
             va = self._plt_rev.get(name) or self._ctx.exports.get(name)
-            if not va:
-                continue
-            callers = self._ctx.callers_of(name)
-            if not callers:
-                self._dead_sinks.append(name)
-            else:
+            if va:
                 result[va] = (name, arg_pos)
         return result
 
