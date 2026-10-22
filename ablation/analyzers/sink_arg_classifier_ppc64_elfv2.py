@@ -298,6 +298,15 @@ class SinkArgClassifierPPC64ELFv2:
                 got_va   = r2 + ha * 0x10000 + lo
                 stub_va  = sec_va + i
                 got_to_stub[got_va] = stub_va
+        # Power10 pass: add Form-A (compact ld r12,D(r2)) and Form-B (PLD pcrel)
+        # stubs that the classic addis+ld scan misses (ELFv2-PLD-GAP-001).
+        try:
+            from ablation.analyzers.ppc64_power10_plt_stubs import scan_power10_stubs
+            got_to_stub.update({v: k for k, v in
+                                 scan_power10_stubs(self._data, self._bin, self._r2).items()})
+        except Exception:
+            pass
+
         if not got_to_stub:
             return
         for name in list(self._plt_rev):
