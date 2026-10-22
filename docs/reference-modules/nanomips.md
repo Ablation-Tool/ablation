@@ -170,13 +170,11 @@ findings = tracker.run_interprocedural()
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# NanoMIPSFrame.__str__() — variable-width instruction decode:
+0x00400100  [32-bit]  d8600001    addiu r3, r0, 0x1
+0x00400104  [16-bit]  2400        lw r2, [r2]
+0x00400106  [32-bit]  d4830000    lw r4, 0(r3)
+0x0040010a  [16-bit]  4450        bc 0x400140
 ```
 
 ---

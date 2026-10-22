@@ -180,13 +180,18 @@ rather than crashing.
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# BinaryLifter.lift_function(0x22ccc0) output (ARM64):
+// httpsd_handle_request @ 0x22ccc0
+{
+  v1 = arg0;
+  v2 = *(uint64_t*)(v1 + 0x10);
+  if (/* cond @ 0x22ccd4 */) {
+    v1 = 0;
+  loc_22ccdc:
+    v3 = *(uint64_t*)(v2 + 0x28);
+  }
+  v4 = v3 + 1;
+}
 ```
 
 ---

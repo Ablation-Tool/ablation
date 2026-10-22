@@ -146,13 +146,15 @@ non-null, unnamed slots. Returns count of new names added.
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
+# PS3OPDVtableScanner.report(vtables):
+PS3 OPD vtable scan — 47 vtables found
+  toc=0x80500000  null_stub=0x80401234
 
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+  VA              slots  null  hint                                      first_methods
+  ----------------------------------------------------------------------------------------------------
+  0x805a0200          9     0  CNetworkManager                           0x80412000  0x80412080  0x804120c0
+  0x805a0240          6     1  CSocketBase                               0x8041b000  0x8041b100
+  0x805a0280          4     0                                            0x80422000  0x80422040
 ```
 
 ---

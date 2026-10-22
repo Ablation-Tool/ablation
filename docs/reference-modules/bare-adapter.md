@@ -34,13 +34,13 @@ print(format_bare_output(bare_result, min_score=0.3))
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
+# BareAdapter.run(findings) ranked Metasploit output:
+[bare] 3 findings → findings.json
+[bare] ranked 3 candidates from 3904 modules
 
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+  score=0.91  exploit/linux/http/fortinet_sslvpnd_heap  (CWE-122 match)
+  score=0.87  exploit/linux/misc/generic_heap_overflow   (primitive: HEAP_OVERFLOW)
+  score=0.41  auxiliary/scanner/http/fortinet_webui_vuln (no_high_confidence_match)
 ```
 
 ---

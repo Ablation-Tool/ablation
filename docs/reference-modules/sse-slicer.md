@@ -85,13 +85,14 @@ Gate: **PASSED**. No HIGH or CRITICAL findings.
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# SSESlicer.slice(target_bss_va=0x10020004) → List[WriteRecord]:
+============================================================
+GLOBAL: g_session_ctx  (2 writes)
+============================================================
+  pc=0x246364  field=+0x00  STR x0,[x19,#0x0]
+        base_sse=Global('g_session_ctx', 0)
+  pc=0x246380  field=+0x08  STR x1,[x19,#0x8]
+        base_sse=Global('g_session_ctx', 0)
 ```
 
 ---

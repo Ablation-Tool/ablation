@@ -39,13 +39,17 @@ print(scanner.report(func_starts))
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
+# PPC32FuncDiscovery.report(func_starts):
+PowerPC 32-bit Function Discovery Report
+==================================================
+Binary VA range: 0x10000000 - 0x10025000
+Entry point: 0x10001200
+Total functions discovered: 47
 
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+  0x10001200  [entry point]
+  0x10001280  [bl target @ 0x10001234]
+  0x10001300  [prologue: mflr+stw+stwu @ 0x10001300]
+  ...
 ```
 
 ---

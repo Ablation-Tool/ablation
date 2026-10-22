@@ -195,13 +195,22 @@ Example output (before: linear lifter, after: structurizer):
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# Structurizer.emit(func_name, insn_emitter) output:
+// parse_header @ 0x12000
+{
+  r3 = arg0;
+  r4 = *(uint32_t*)(r3 + 0);
+  if (/* cond @ 0x12010 */) {
+    r3 = 0;
+  } else {
+    r5 = r4 + 1;
+    while (/* cond @ 0x12040 */) {
+      r4 = *(uint32_t*)(r3 + 0x4);
+      r3 = r3 + 0x8;
+    }
+    break;
+  }
+}
 ```
 
 ---

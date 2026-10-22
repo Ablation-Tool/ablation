@@ -119,13 +119,15 @@ Ppc64ElfV1Resolver.is_ppc64_elfv1('/path/to/bin')  # -> bool
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# Ppc64ElfV1Info.fmt():
+Ppc64ElfV1Info(/firmware/aix/libservice.so)
+  OPD:   VA=0x10000168  off=0x168  sz=0x240  entries=16
+  .text: VA=0x10000400  off=0x400  sz=0x12000
+  TOC:   0x10010000
+  OPD->code entries: 16
+  glink stubs: 24
+  0x10000168  -> 0x10000400  proto_init
+  0x10000180  -> 0x100004a0  proto_parse
 ```
 
 ---

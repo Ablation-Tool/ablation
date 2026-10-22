@@ -65,13 +65,21 @@ Confirmed on TCP/IP-32 3.11a: 171 hits across 7 utilities after filter; all spot
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
+# MZ DOS sweep report() markdown output:
+# MZ DOS sweep — Microsoft TCP/IP-32 3.11a
+generated: 20260112_1430   threshold: 0.3
 
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+**3 binaries | 47 functions | 5 hits ≥ 0.3**
+
+| Binary | Functions | Hits | Top score | Top profile |
+|--------|-----------|------|-----------|-------------|
+| PING.EXE | 12 | 2 | 0.7400 | strcpy_overflow |
+| ARP.EXE | 18 | 3 | 0.6200 | unbounded_input |
+| TRACERT.EXE | 17 | 0 | — | — |
+
+## PING.EXE
+  offset=0x0124  score=0.7400  profile=strcpy_overflow  insns=48
+  offset=0x01a0  score=0.4100  profile=unbounded_input  insns=31
 ```
 
 ---

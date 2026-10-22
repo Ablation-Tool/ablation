@@ -104,13 +104,13 @@ PEFBinaryAnalyzer.is_pef(data)   # checks tag1/tag2
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
+# PEFBinaryAnalyzer.report() header line + sections:
+PEF  arch=pwpc  format_version=1  sections=4  imports=31
 
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+  sect[0]  code  va=0x00000000  sz=0x14200  file_off=0x68
+  sect[1]  data  va=0x00014200  sz=0x2800   file_off=0x142a4
+  sect[2]  pidata                            file_off=0x16ab0
+  sect[3]  loader                            file_off=0x1a000
 ```
 
 ---

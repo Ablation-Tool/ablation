@@ -40,13 +40,16 @@ for f in findings:
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
+# MIPS32TaintResult.__str__() for each sink hit:
+[MIPS32-TAINT] parse_packet (0x400a00) -> memcpy($a0, $a1) @ 0x400b20  [src: recv]
+[MIPS32-TAINT] parse_packet (0x400a00) -> strcpy($a0) @ 0x400c40  [src: recv]
 
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# MIPS32FuncProfiler.fmt() for quick profiling:
+[mips_profiler] parse_packet @ 0x400a00
+  8 calls, 3 sinks, 2 strings
+  STRINGS:
+    0x400b00  'Content-Length'
+    0x400b14  'Transfer-Encoding'
 ```
 
 ---

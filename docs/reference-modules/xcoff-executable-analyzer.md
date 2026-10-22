@@ -72,13 +72,11 @@ Gate: **PASSED**. CWE-770 (unbounded `Path.read_bytes()` in `xcoff_parser.parse(
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# XCOFFExecutableAnalyzer.summary():
+XCOFFExecutableAnalyzer  path=/firmware/aix/libssl.a[openssl.so]
+  arch=ppc64  entry=0x10001200  toc=0x10010000
+  sections=6 [.text .data .bss .loader .typchk .debug]
+  exports=47  imports=23
 ```
 
 ---

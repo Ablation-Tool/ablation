@@ -43,13 +43,13 @@ for insn in insns:
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# ArmInstruction.__str__() output:
+push     {r4, r5, r6, lr}
+ldr      r3, [r7, #0]
+add      r2, r0, r1
+bne      0x400120
+bl       0x4012a0
+pop      {r4, r5, r6, pc}
 ```
 
 ---

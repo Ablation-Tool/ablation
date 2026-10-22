@@ -143,13 +143,14 @@ second arg (src), r5 = third arg (size for snprintf/memcpy).
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# Ppc64BeSinkClassifier.report(results):
+Ppc64BeSinkClassifier results:
+  312 call sites classified
+  4 INTERESTING (STACK_DEST + ARG_PROPAGATED):
+    0x100123a0  sprintf       dest=ARG_PROPAGATED  r4=arg1
+    0x1001cc80  strcpy        dest=ARG_PROPAGATED  r3=arg0
+    0x100200a4  snprintf      dest=ARG_PROPAGATED  r3=arg0  format_ok=True
+    0x100241b0  memcpy        dest=ARG_PROPAGATED  r3=arg0  len=r5=arg2
 ```
 
 ---

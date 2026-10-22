@@ -117,13 +117,22 @@ Output goes to `reports/sweep_le_<vendor>_<product>_<version>_<ts>.md`.
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
+# _write_report() markdown output:
+# Win16 LE VxD Sweep Report
 
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+**Vendor:** Microsoft  **Product:** WfW 3.11 Net  **Version:** 3.11
+
+---
+
+## NETBEUI.386
+
+**Path:** `/target/NETBEUI.386`  **Arch:** `x86-32`  **Functions found:** 23
+**VxD DDB:** device=`NetBEUI` sdk_ver=`0x030a` ctrl_proc=`0x00012400` v86_api=`0x00000000` pm_api=`0x00012c00`
+
+### Semantic Sweep
+
+**strcpy_overflow** — top score `0.6200` @ `seg0:0x0124`
+  calls: NetBEUI_Send, _strncpy_unsafe
 ```
 
 ---

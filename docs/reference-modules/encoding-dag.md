@@ -625,13 +625,14 @@ for op in block.dag_nodes():   # topological order
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
+# SemanticOp.__str__() per node in the DAG:
+0001: ADD  dst=r3, src1=r4, src2=r5
+0002: LOAD  dst=r2, addr=[r3 + 0x8]
+0003: STORE  addr=[r1 + 0x14], src=r2
+0004: CALL  target=0x12500, args=(r0, r1, r2)
 
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# MemRef.__str__():
+[r3 + 0x10]
 ```
 
 ---

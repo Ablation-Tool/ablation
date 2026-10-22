@@ -213,13 +213,9 @@ Prior to this module, ppc32got2resolver required manual work outside the Ablatio
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# PPC32GOT2Resolver.resolve().report():
+PPC32 GOT2 resolver: 38/42 resolved (90%)
+  GOT2: 31  direct: 7  dynamic (runtime-only): 3  other unresolved: 1
 ```
 
 ---

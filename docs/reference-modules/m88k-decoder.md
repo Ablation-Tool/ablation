@@ -176,13 +176,16 @@ for insn in decoder.disassemble_bytes(binary.text.data, base_va=binary.text.vadd
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# coff_m88k_parser.parse() — M88kBinary attribute access:
+>>> b = parse('netmgr88k')
+>>> hex(b.entry_va)
+'0x8000c'
+>>> b.sections[0].name
+'.text'
+>>> len(b.symbols)
+184
+>>> b.plt['printf']
+0x8000c0
 ```
 
 ---

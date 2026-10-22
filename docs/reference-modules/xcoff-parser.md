@@ -89,14 +89,15 @@ Gate: **PASSED** (0 HIGH, 0 CRITICAL). 2 MEDIUM findings for XCOFF64 path (wrong
 
 ## Example output
 
-```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+```python
+# xcoff_parser.parse() returns XcoffBinary — attribute access:
+b = parse('/firmware/aix/libservice.so')
+b.arch           # 'ppc64'
+hex(b.entry)     # '0x10001200'
+hex(b.toc_va)    # '0x10010000'
+len(b.sections)  # 6
+b.plt            # {'strcpy': 0xd00b1c8, 'malloc': 0xd00a2b4, ...}
+b.func_starts    # [0x10001200, 0x10001280, 0x10001300, ...]
 ```
 
 ---

@@ -73,14 +73,13 @@ Gate: **PASSED**. No HIGH or CRITICAL findings.
 
 ## Example output
 
-```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+```python
+# loader_symbols() returns Dict[str, int] (symbol_name → VA):
+from modules.xcoff_loader_symbols import loader_symbols
+syms = loader_symbols(open('/firmware/aix/lina', 'rb').read())
+# {'strcpy': 0xd00b1c8, 'malloc': 0xd00a2b4, 'printf': 0xd00c010, ...}
+print(syms.get('strcpy', 'not linked'))
+# 0xd00b1c8
 ```
 
 ---
