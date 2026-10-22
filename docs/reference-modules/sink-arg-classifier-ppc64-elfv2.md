@@ -104,6 +104,17 @@ LR   return address
 
 ---
 
+## Known gaps (closed)
+
+| ID | Fix commit | Description |
+|:---|:---|:---|
+| ELFv2-GAP-001 | `5b0ad3a4` | `pltgot_relocations` returns GOT slot VAs, not stub VAs. GNU gold places call stubs in `.fini` (not `.text`). Added `_remap_plt_rev_to_stubs()`: scans every non-`.text` executable section for the 5-instruction `std/addis/ld/mtctr/bctr` stub signature and remaps `_plt_rev` entries to callable stub VAs. |
+| ELFv2-GAP-002 | `5b0ad3a4` | `BinaryContext func_starts` misses function GEPs in large Go DSOs (e.g. `libgo.so` 59 MB), so `classify_all()` never disassembles the function body. Added `_scan_uncovered_bls()` fallback: after the `func_starts` scan, byte-search `.text` for any `BL <stub_va>` not covered by a prior result and classify it directly. |
+| ELFv2-GAP-003 | `b6828c94` | `_scan_uncovered_bls` passed `arg_pos` (integer 0) directly to `_trace_arg` instead of converting it to the Capstone register constant via `_PPC64_ARG_REGS`. This caused the trace to follow `r0` instead of `r3`, always returning `UNKNOWN` for uncovered functions. Also fixed: the GEP backward-scan mask for `addis r2,r12,N` (`0x3C4C0000`). |
+| ELFv2-PLD-GAP-001 | `3da1ef2b` | Power10 (`-mcpu=power10`) objects use two compact PLT stub forms that the classic `addis+ld` scanner misses: Form A (`std r2 / ld r12,D(r2) / mtctr / bctr`) and Form B (`pld r12,@got@pcrel / mtctr / bctr`). Added [`Power10PPC64PLTStubScanner`](ppc64-power10-plt-stubs.md) integrated into `_remap_plt_rev_to_stubs` as a secondary pass. |
+
+---
+
 ## Limitations
 
 **FPR arguments are not tracked.** Floating-point registers (`f1–f13`) pass to the first floating-point argument slots. Exec sinks that receive a command string through an FPR argument are out of scope.
@@ -124,6 +135,7 @@ LR   return address
 
 ## See also
 
+- [Power10PPC64PLTStubScanner](ppc64-power10-plt-stubs.md) — Power10 PLT stub forms integrated into this classifier
 - [SinkArgClassifierPPC64ELFv1](sink-arg-classifier-ppc64-elfv1.md) — same pipeline for big-endian ELFv1
 - [SinkArgClassifier](sink-arg-classifier.md) — x86-64 baseline and full verdict reference
 - [PPC64 Taint Analysis](ppc64-taint-analysis.md) — receives ARG_PROPAGATED findings
