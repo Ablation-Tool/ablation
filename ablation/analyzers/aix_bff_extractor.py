@@ -419,17 +419,16 @@ class XCOFF32Info:
         if len(hdr) < 32:
             return {}
         n_lsyms = struct.unpack('>I', hdr[4:8])[0]
-        impoff  = struct.unpack('>I', hdr[20:24])[0]
+        n_lrel  = struct.unpack('>I', hdr[8:12])[0]
         istlen  = struct.unpack('>I', hdr[12:16])[0]
+        impoff  = struct.unpack('>I', hdr[20:24])[0]
         stoff   = struct.unpack('>I', hdr[28:32])[0]
 
         imp_raw = self._data[lo + impoff: lo + impoff + istlen]
         libs = [s.decode('ascii', 'replace') for s in imp_raw.split(b'\x00') if s]
 
-        # TOC slot VA → loader sym name
-        # Simultaneously build an ordered list of import names for positional fallback.
+        # TOC slot VA → loader sym name (for linked binaries where lval != 0)
         toc_slot_to_name: Dict[int, str] = {}
-        import_names_ordered: List[str] = []   # loader syms in table order
         lsym_base = lo + 32
         for k in range(n_lsyms):
             lsym = self._data[lsym_base + k * 24: lsym_base + k * 24 + 24]
@@ -444,42 +443,64 @@ class XCOFF32Info:
                 str_abs = lo + stoff + l_offset
                 lname = (self._data[str_abs:].split(b'\x00', 1)[0]
                          .decode('ascii', 'replace') if str_abs < len(self._data) else '')
-            if lval:                               # resolved: direct slot mapping
+            if lval:
                 toc_slot_to_name[lval] = lname
-            import_names_ordered.append(lname)
 
-        # Primary: match stubs to names via TOC slot VA
+        # Count leading non-function (non-XMC_GL) LDSYM entries.  In XCOFF32
+        # static binaries the table begins with runtime symbols (___bzero,
+        # ___memmove, errno, …) whose l_smclas != XMC_GL (0x0a).  The LDREL
+        # l_symndx is absolute from the start of LDSYM (including those), so we
+        # subtract n_prefix before the name lookup to get the true import index.
+        _XMC_GL = 0x0a
+        n_prefix = 0
+        for k in range(n_lsyms):
+            lsym_k = self._data[lsym_base + k * 24: lsym_base + k * 24 + 24]
+            if len(lsym_k) < 24:
+                break
+            if lsym_k[15] == _XMC_GL:
+                break
+            n_prefix += 1
+
+        # LDREL-based TOC disp → name mapping (XCOFF32-GAP-001 fix).
+        # Each loader relocation record maps a .data VA (= the TOC slot) to the
+        # loader symbol that fills it.  When lval=0 for all LDSYM entries (static
+        # XCOFF32), this is the only authoritative source for toc_disp→name.
+        # l_symndx is absolute (includes the n_prefix runtime/data entries), so
+        # subtract n_prefix to get the true import-function index.
+        ldrel_toc_to_name: Dict[int, str] = {}
+        lrel_base = lo + 32 + n_lsyms * 24
+        for k in range(n_lrel):
+            lrel = self._data[lrel_base + k * 12: lrel_base + k * 12 + 12]
+            if len(lrel) < 12:
+                break
+            l_vaddr  = struct.unpack('>I', lrel[0:4])[0]
+            l_symndx = struct.unpack('>i', lrel[4:8])[0]
+            true_idx = l_symndx - n_prefix
+            if 0 <= true_idx < n_lsyms:
+                lsym2 = self._data[lsym_base + true_idx * 24: lsym_base + true_idx * 24 + 24]
+                if len(lsym2) < 24:
+                    continue
+                if lsym2[15] != _XMC_GL:          # skip data/runtime entries
+                    continue
+                l_z2 = struct.unpack('>I', lsym2[0:4])[0]
+                if l_z2:
+                    lname2 = lsym2[0:8].rstrip(b'\x00').decode('ascii', 'replace')
+                else:
+                    l_off2 = struct.unpack('>I', lsym2[4:8])[0]
+                    str_abs2 = lo + stoff + l_off2
+                    lname2 = (self._data[str_abs2:].split(b'\x00', 1)[0]
+                              .decode('ascii', 'replace') if str_abs2 < len(self._data) else '')
+                toc_disp_ldrel = l_vaddr - o_toc
+                ldrel_toc_to_name[toc_disp_ldrel] = lname2
+
+        # Match stubs to names: lval-based first, LDREL-based as fallback.
         found: Dict[str, int] = {}
         for stub_va, toc_disp in all_stubs:
             slot_va = o_toc + toc_disp
-            lname = toc_slot_to_name.get(slot_va, '')
+            lname = toc_slot_to_name.get(slot_va) or ldrel_toc_to_name.get(toc_disp, '')
             dot_name = f'.{lname}' if lname else ''
             if dot_name in targets and dot_name not in already_found:
                 found[dot_name] = stub_va
-
-        # Positional fallback (XCOFF32-GAP-001): when lval=0 for all import symbols,
-        # the TOC-slot lookup produces no matches.  In that case, the stubs are
-        # arranged in the same positional order as the function-import symbols in the
-        # loader table.  Data-only symbols (errno, _iob, __crt0v, …) have TOC slots
-        # but no glink stubs; skip them so the positional index stays in sync.
-        _DATA_ONLY_NAMES: frozenset = frozenset({
-            'errno', '_iob', '__iob',
-            '__crt0v', '__crt1v',
-            '__malloc_user_defined_name',
-            '__start', '__end',
-        })
-        remaining = targets - set(already_found) - {f'.{k}' for k in found}
-        if remaining and not found:
-            stubs_sorted = sorted(all_stubs, key=lambda x: x[1])   # ascending toc_disp
-            fn_imports = [n for n in import_names_ordered
-                          if n not in _DATA_ONLY_NAMES and not n.startswith('__start')]
-            for idx, (stub_va, _) in enumerate(stubs_sorted):
-                if idx >= len(fn_imports):
-                    break
-                lname = fn_imports[idx]
-                dot_name = f'.{lname}'
-                if dot_name in remaining and dot_name not in found:
-                    found[dot_name] = stub_va
 
         return found
 
