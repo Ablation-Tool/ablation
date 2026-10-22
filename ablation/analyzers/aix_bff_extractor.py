@@ -427,14 +427,16 @@ class XCOFF32Info:
         libs = [s.decode('ascii', 'replace') for s in imp_raw.split(b'\x00') if s]
 
         # TOC slot VA → loader sym name
+        # Simultaneously build an ordered list of import names for positional fallback.
         toc_slot_to_name: Dict[int, str] = {}
+        import_names_ordered: List[str] = []   # loader syms in table order
         lsym_base = lo + 32
         for k in range(n_lsyms):
             lsym = self._data[lsym_base + k * 24: lsym_base + k * 24 + 24]
             if len(lsym) < 24:
                 break
             l_z    = struct.unpack('>I', lsym[0:4])[0]
-            lval   = struct.unpack('>I', lsym[8:12])[0]   # TOC slot VA
+            lval   = struct.unpack('>I', lsym[8:12])[0]   # TOC slot VA (0 = unresolved)
             if l_z:
                 lname = lsym[0:8].rstrip(b'\x00').decode('ascii', 'replace')
             else:
@@ -442,9 +444,11 @@ class XCOFF32Info:
                 str_abs = lo + stoff + l_offset
                 lname = (self._data[str_abs:].split(b'\x00', 1)[0]
                          .decode('ascii', 'replace') if str_abs < len(self._data) else '')
-            toc_slot_to_name[lval] = lname
+            if lval:                               # resolved: direct slot mapping
+                toc_slot_to_name[lval] = lname
+            import_names_ordered.append(lname)
 
-        # Match stubs to names
+        # Primary: match stubs to names via TOC slot VA
         found: Dict[str, int] = {}
         for stub_va, toc_disp in all_stubs:
             slot_va = o_toc + toc_disp
@@ -452,6 +456,31 @@ class XCOFF32Info:
             dot_name = f'.{lname}' if lname else ''
             if dot_name in targets and dot_name not in already_found:
                 found[dot_name] = stub_va
+
+        # Positional fallback (XCOFF32-GAP-001): when lval=0 for all import symbols,
+        # the TOC-slot lookup produces no matches.  In that case, the stubs are
+        # arranged in the same positional order as the function-import symbols in the
+        # loader table.  Data-only symbols (errno, _iob, __crt0v, …) have TOC slots
+        # but no glink stubs; skip them so the positional index stays in sync.
+        _DATA_ONLY_NAMES: frozenset = frozenset({
+            'errno', '_iob', '__iob',
+            '__crt0v', '__crt1v',
+            '__malloc_user_defined_name',
+            '__start', '__end',
+        })
+        remaining = targets - set(already_found) - {f'.{k}' for k in found}
+        if remaining and not found:
+            stubs_sorted = sorted(all_stubs, key=lambda x: x[1])   # ascending toc_disp
+            fn_imports = [n for n in import_names_ordered
+                          if n not in _DATA_ONLY_NAMES and not n.startswith('__start')]
+            for idx, (stub_va, _) in enumerate(stubs_sorted):
+                if idx >= len(fn_imports):
+                    break
+                lname = fn_imports[idx]
+                dot_name = f'.{lname}'
+                if dot_name in remaining and dot_name not in found:
+                    found[dot_name] = stub_va
+
         return found
 
     # ── caller enumeration ────────────────────────────────────────────────────
