@@ -199,7 +199,7 @@ class AixInstallpDecompressor:
                 result = dec.decompress()   # returns bytes (step4 escape + trailing block)
     """
 
-    SUPPORTED_TYPES = (0x0e, 0x0f, 0x10, 0x11)
+    SUPPORTED_TYPES = (0x0c, 0x0e, 0x0f, 0x10, 0x11)
 
     def __init__(self, raw: bytes) -> None:
         if len(raw) < 272:
@@ -216,10 +216,18 @@ class AixInstallpDecompressor:
         type_byte = raw[0]
         version = bytes(raw[1:4])
         field_a = struct.unpack('>I', raw[4:8])[0]
-        field_c = struct.unpack('<I', raw[12:16])[0]
-        if type_byte == 0x0e:
+        field_c_le = struct.unpack('<I', raw[12:16])[0]
+        field_c_be = struct.unpack('>I', raw[12:16])[0]
+        if type_byte == 0x0c:
+            # Type 0x0c (AIX 4.3.3 bos.net.tcp.server imapd/pop3d): same BWT/Huffman algorithm
+            # as 0x0e but field_c stored big-endian (not LE).  Empirically confirmed 2026-10-22:
+            # field_a_BE=68879=n for both imapd and pop3d; field_c_BE=32769 < 68879 (valid bwt_index).
+            # field_c_LE=25165824 >> 68879 (invalid as bwt_index), which would skip inverse_bwt.
             uncompressed_size = field_a
-            bwt_index = field_c
+            bwt_index = field_c_be
+        elif type_byte == 0x0e:
+            uncompressed_size = field_a
+            bwt_index = field_c_le
         elif type_byte in (0x0f, 0x10, 0x11):
             # 0x0f: bwt_index = field_a (BE), uncompressed_size = field_c (LE).
             # 0x10/0x11: exact header layout unknown (empirical RE: no 4-byte field
@@ -228,10 +236,10 @@ class AixInstallpDecompressor:
             # exhaustion when the decoded count exceeds a nonsense uncompressed_size.
             # Callers should treat uncompressed_size as an upper bound, not exact.
             bwt_index = field_a
-            uncompressed_size = field_c
+            uncompressed_size = field_c_le
         else:
             bwt_index = field_a
-            uncompressed_size = field_c
+            uncompressed_size = field_c_le
         sym_table = bytes(raw[16:272])
         return AixInstallpHeader(
             type_byte=type_byte,
