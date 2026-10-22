@@ -226,13 +226,13 @@ for seg in sections:
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# SPUInsn.asm() per decoded instruction:
+0x000002a0  lnop
+0x000002a4  il $3, 0
+0x000002a8  lqd $4, 0($sp)
+0x000002ac  rotmi $3, $3, -32
+0x000002b0  selb $5, $3, $4, $6
+0x000002b4  bi $0
 ```
 
 ---

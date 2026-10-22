@@ -196,13 +196,11 @@ Prior to this module, ppc32plttracer required manual work outside the Ablation p
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# PPC32PLTTracer.report(sites, sym_name):
+[strcpy] 3 confirmed call site(s):
+  BL@0x10002480  thunk@0x10000a00  r30=0x1000f000  in parse_request
+  BL@0x10003120  thunk@0x10000a00  r30=0x1000f000  in build_response
+  BL@0x10003f10  thunk@0x10000a00  r30=0x1000f000  in handle_auth
 ```
 
 ---

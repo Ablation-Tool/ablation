@@ -110,13 +110,16 @@ Add additional keysets at runtime with `PS3SELFDecryptor.register_keyset(rev, er
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# PS3SELFDecryptor.decrypt(in_path, out_path) → SELFDecryptResult:
+>>> r = PS3SELFDecryptor.from_path('EBOOT.BIN').decrypt('EBOOT.BIN', '/tmp/eboot.elf')
+>>> r.key_rev
+3
+>>> r.section_count
+4
+>>> r.decrypted_sections
+4
+>>> r.elf_size
+524288
 ```
 
 ---

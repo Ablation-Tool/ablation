@@ -56,13 +56,23 @@ Functions with ≤15 instructions containing exactly one import call score high 
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
+# _render_report() markdown output:
+# Win16 NE Sweep Report
 
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+**Vendor:** Microsoft  **Product:** WfW  **Version:** 3.11
+**Generated:** 2026-01-12 14:30 UTC  **Targets:** 2 binaries
+
+---
+
+## COMMDLG.DLL
+
+**Path:** `/target/COMMDLG.DLL`  **Arch:** `x86-16`  **Segments:** 8  **Functions found:** 34
+**Imports from:** KERNEL, USER, GDI
+
+### Semantic Sweep
+
+**lstrcpy_overflow** — top score `0.7800` @ `seg2:0x0348`
+  calls: lstrcpy, lstrcat, GetDlgItemText
 ```
 
 ---

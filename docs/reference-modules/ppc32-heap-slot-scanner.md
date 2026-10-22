@@ -74,13 +74,10 @@ Gate: **PASSED** (2 INFO findings).
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# PPC32HeapSlotScanner.report(findings):
+PPC32HeapSlotScanner: 2 candidate(s)
+  parse_attrs  mulli_va=0x10002480  slot=0x40B  malloc_va=0x10002490  NO-CHECK
+  build_slots  mulli_va=0x10004100  slot=0x80B  malloc_va=0x10004110  SIZE-CHECKED
 ```
 
 ---

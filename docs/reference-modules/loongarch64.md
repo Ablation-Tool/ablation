@@ -268,13 +268,9 @@ for f in findings:
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# analyze_cfg(cfg, state, insn_frames) taint output (same State.tainted_sinks format):
+[LA64-TAINT] tlv_parse (0x4a2000) -> memcpy($a0, $a1, $a2) @ 0x4a2140  [src: recv]
+[LA64-TAINT] tlv_parse (0x4a2000) -> snprintf($a0) @ 0x4a2200  [src: recv]
 ```
 
 ---

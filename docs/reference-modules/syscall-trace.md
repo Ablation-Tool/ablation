@@ -150,13 +150,17 @@ print(result)
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
+# SyscallTrace.report(stats):
+Syscall Trace Summary
+------------------------------------------------------------
+Total calls: 847
+Total errors: 3
 
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+Top syscalls:
+  read     : 412 calls (3 errors)
+  write    : 201 calls
+  mmap     : 48 calls
+  openat   : 31 calls
 ```
 
 ---

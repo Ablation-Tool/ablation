@@ -270,13 +270,16 @@ assert ctx.plt[0x1000f320] == 'fork'
 ## Example output
 
 ```
-Resolved 847 PLT entries
-Recovered 312 function starts from .eh_frame
-Named 28 functions from DWARF remnants
-
-va=0x401200  name=verify_admin_token  confidence=HIGH
-va=0x4015C0  name=process_http_request  confidence=HIGH
-va=0x403A00  name=''  confidence=MEDIUM  (stripped)
+# Ppc32Lifter.lift(func_va) output:
+// PPC32 lift of 0x10002480 @ 0x10002480
+//
+  [0x10002480] sp -= 64;
+  [0x10002490] r5 = arg0 + 0x1c;
+  [0x10002494] r3 = *(r5);
+  [0x10002498] if r3 == 0: goto 0x100024c0;
+  [0x1000249c] r4 = arg1;
+  [0x100024a0] call strcpy(r3, r4);
+  [0x100024a4] return r3;
 ```
 
 ---
