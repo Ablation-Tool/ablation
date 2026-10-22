@@ -222,15 +222,15 @@ PPC32 GOT2 resolver: 38/42 resolved (90%)
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Dynamic (runtime-only) calls.** PPC32 binaries that use `bctr` (branch to CTR) after loading the address from a computed expression (rather than GOT2) are reported as `dynamic (runtime-only)` — they cannot be resolved statically. These are genuine indirect dispatch sites that require dynamic tracing to resolve.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Run `PPC32TaintTracker.scan()` and identify functions with `BCTRL` sink candidates.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Merge the resolved `{bctrl_va: target_name}` dict into `ctx.plt` so that downstream `PPC32TaintTracker` runs classify previously-unresolved `BCTRL` sinks correctly.
 
 ---
 

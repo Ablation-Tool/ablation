@@ -62,15 +62,15 @@ FuncSummary @ 0x11234
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Merge-point precision.** The path-insensitive model assigns `Unknown` at all join points (after `if/else` merges). A value that is `Arg(0)` on one branch and a constant on the other is assigned `Unknown` at the merge. This causes false negatives for protocol fields that are only reachable via one branch.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Use ARM32 Capstone disassembly to obtain the instruction list for the function.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Use the returned `arg_field_writes` summary to seed `TaintTracker` — for each `(arg_idx, offset)` pair, `arg_idx` is the tainted argument register and `offset` is the struct field the write targets.
 
 ---
 

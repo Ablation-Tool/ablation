@@ -56,15 +56,15 @@ pop      {r4, r5, r6, pc}
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Non-Thumb2 encoding.** `ArmDisassembler` decodes ARMv7 fixed-width 32-bit instructions (A32 encoding only). It does not decode Thumb-16 or Thumb-32 instructions. If the binary contains Thumb code regions, Capstone with `CS_MODE_THUMB` should be used instead.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Confirm the target is an ARM32 ELF with A32 encoding. Check `ctx.arch` is `ARM` and not `THUMB`.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Pass the decoded instruction list to `ARM32TaintTracker` or use individual `ArmInstruction` objects in custom analysis.
 
 ---
 

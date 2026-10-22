@@ -192,15 +192,15 @@ for insn in decoder.disassemble_bytes(binary.text.data, base_va=binary.text.vadd
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Symbol table coverage.** `coff_m88k_parser` reads `C_EXT` and `C_WEAKEXT` COFF symbol entries. Static functions (not exported) have `C_STAT` type and are excluded from `b.plt`. Use prologue pattern scanning on `b.sections[0].data` to find static function starts.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Confirm the binary has COFF magic 0x016D (`file -b target` shows `mc68k COFF` or `m88k COFF`).
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Pass `M88kBinary.sections[0].data` and the PLT to `M88KTaintTracker` for source-to-sink analysis.
 
 ---
 

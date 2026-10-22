@@ -47,15 +47,15 @@ print(format_bare_output(bare_result, min_score=0.3))
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**AI/ML-specific findings.** BARE's 3,904-module corpus is built from public Metasploit modules. Novel findings against AI/ML inference infrastructure (HPKE key exchange, RADIUS EAP extensions, TensorFlow Serving RPC) produce `no_high_confidence_match` because no public MSF module covers them. The absence of a match does not mean the finding is invalid.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** `FindingRegistry.register()` must have been called with at least one confirmed finding that has a `cwe_class` and a `description`.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Use the ranked MSF module name as a reference for exploitation category and preconditions — not as a ready-to-use exploit. Manual adaptation is always required.
 
 ---
 

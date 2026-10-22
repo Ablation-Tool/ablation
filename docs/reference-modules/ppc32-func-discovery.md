@@ -56,15 +56,15 @@ Total functions discovered: 47
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**False starts from data.** `bl` instructions in data sections (jump tables stored as immediates) produce false function starts. The PPC32 `bl` encoding is `0x48000001 | target` — any data word matching this pattern is recorded. Filter by checking that the discovered VA aligns to 4 bytes and that the first instruction matches a standard prologue.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** `BinaryContext.load_or_build()` to get the ELF layout. Pass the `.text` section data and base VA to `PPC32FuncDiscovery`.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Pass the discovered function starts to `PPC32TaintTracker` as `func_starts` to enable interprocedural analysis.
 
 ---
 

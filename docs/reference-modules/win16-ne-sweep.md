@@ -79,15 +79,15 @@ Functions with ≤15 instructions containing exactly one import call score high 
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Ordinal-only imports.** Some WfW 3.x binaries import by ordinal without name. For known ordinals in the built-in KERNEL, USER, and GDI tables (lines 47–503 of `win16_ne_sweep.py`), names are resolved automatically. Unknown ordinals are displayed as `module#N` — look them up in the Win16 SDK headers.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Confirm the binary is a Win16 NE executable (NE magic at the offset stored at MZ+0x3c).
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Review hits for `lstrcpy_overflow` and `unbounded_input` profiles. Escalate VA hits to a Win16 disassembler or OllyDbg 1.10 under WINE for manual taint tracing.
 
 ---
 

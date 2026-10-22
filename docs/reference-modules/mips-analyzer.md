@@ -56,15 +56,15 @@ for f in findings:
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**MIPS delay slots.** `MIPS32TaintTracker` does not model branch delay slots. A taint update in a delay slot instruction (the instruction immediately following a branch) may be attributed to the wrong basic block. This is usually a minor issue in practice but can cause a false negative if the delay slot writes to a register used as a sink argument.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** `BinaryContext.load_or_build()` for the MIPS32 ELF. Pass `ctx.func_starts` candidates to `MIPS32FuncProfiler` first to filter before running the full taint pass.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Escalate `MIPS32TaintResult` sink hits to `PathSolver` (not directly available for MIPS32 — manual Capstone trace instead).
 
 ---
 

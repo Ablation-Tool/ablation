@@ -207,15 +207,15 @@ Prior to this module, ppc32plttracer required manual work outside the Ablation p
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Thunk VA overlap.** If the target binary is stripped and `PPC32GOT2Resolver` has not been run first, multiple unresolved `BCTRL` sites may share the same thunk VA (the stub VA, not the final target). In this case, `thunk_va` is correct but `caller_r30` may not uniquely identify the call site.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Run `PPC32GOT2Resolver` to populate `ctx.plt` with resolved BCTRL targets. Pass the resolved PLT to `PPC32PLTTracer`.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Use the confirmed `PLTCallSite.bl_va` addresses as candidates for `PPC32TaintTracker` source-to-sink traces.
 
 ---
 

@@ -126,15 +126,15 @@ Add additional keysets at runtime with `PS3SELFDecryptor.register_keyset(rev, er
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Keyset dependency.** `PS3SELFDecryptor` requires pre-loaded keysets (ERK/RIV pairs). `from_path()` auto-selects from the built-in keyset table by `key_rev` header field. If the SELF uses a key revision not in the built-in table, `from_path()` raises `ValueError: no keyset for key_rev=N`. Register the missing keyset with `register_keyset(key_rev, erk, riv)` before calling `from_path()`.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Confirm the binary is a PS3 SELF file (`file -b target` shows `PlayStation 3 executable` or the first 4 bytes are `0x53 0x43 0x45 0x00`).
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Pass the decrypted ELF path to `BinaryContext.load_or_build()` for standard analysis. Clean up the temp file when done.
 
 ---
 

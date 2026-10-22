@@ -217,15 +217,15 @@ Example output (before: linear lifter, after: structurizer):
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Irreducible CFGs.** `Structurizer` relies on dominator-tree analysis, which works correctly only for reducible CFGs. Binaries compiled without optimization (common in ECU firmware) sometimes contain irreducible CFGs due to computed gotos or `setjmp`/`longjmp`. `Structurizer.structure()` raises `StructurizationError` for irreducible CFGs — fall back to raw basic-block listing.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Build the basic-block CFG with the appropriate arch-specific CFG builder (e.g., `cfg_builder.build_cfg()` for x86-64, `build_cfg_sh2a()` for SH-2A).
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Pass the structured tree to `Ppc32Lifter` or `BinaryLifter` to emit pseudocode, or pattern-match directly against the `IfNode`/`WhileNode`/`SequenceNode` tree structure.
 
 ---
 

@@ -277,15 +277,15 @@ for f in findings:
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**GOT-based indirect calls.** `analyze_cfg()` tracks taint through direct calls resolved by `analysis_loongarch64`'s PLT table. Indirect calls through the GOT (common in shared libraries) are not fully resolved — the callee is recorded as `Unknown`. Use `ppc64_elfv1_resolver` pattern (adapted for LA64) to pre-populate the PLT before analysis.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Build the LoongArch64 CFG with `from_loongarch_frames()`. Seed the initial `State` with tainted argument registers for the function entry point.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Inspect the returned sink list for `CALL` sinks with tainted argument registers, and escalate those to `PathSolver` for feasibility confirmation.
 
 ---
 

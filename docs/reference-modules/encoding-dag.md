@@ -639,15 +639,15 @@ for op in block.dag_nodes():   # topological order
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Fixed-width ISAs only.** `EncodingDAG` assumes all instructions are the same width (set at construction time). It does not handle variable-length encodings like x86, nanoMIPS, or ARM Thumb2. Use `NanoMIPSDecoder` for nanoMIPS, Capstone for x86.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Build the bitfield template table from the ISA reference (e.g., IBM SPU ISA v1.2 for SPU, LoongArch ABI for LA64).
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Use the decoded `SemanticOp` IR as input to architecture-specific taint trackers and CFG builders.
 
 ---
 

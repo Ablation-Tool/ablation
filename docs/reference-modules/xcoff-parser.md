@@ -104,15 +104,15 @@ b.func_starts    # [0x10001200, 0x10001280, 0x10001300, ...]
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**XCOFF archive support.** `xcoff_parser.parse()` parses a single XCOFF file. AIX `.a` archive files contain multiple XCOFF members with an archive header. `parse()` raises `ValueError: not an XCOFF binary` on `.a` archive files. Extract members first with `ar x libfoo.a`.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Confirm XCOFF magic with `struct.unpack('>H', data[:2])` — `0x01DF` (XCOFF32), `0x01F7` (XCOFF64), or `0x01EF` (XCOFF64 alt). Pass `data=` kwarg if already read to avoid double reads.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Pass `XcoffBinary.func_starts` to `PPC64BESinkClassifier` for PPC64 targets, or `XcoffBinary.plt` to `TaintTracker` for import resolution.
 
 ---
 
