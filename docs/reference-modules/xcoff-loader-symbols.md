@@ -86,15 +86,15 @@ print(syms.get('strcpy', 'not linked'))
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Descriptor VA vs. code VA.** On XCOFF32 (PPC32 AIX), function symbols in the loader section point to the OPD function descriptor (in `.data`), not to the first code instruction (in `.text`). `loader_symbols()` returns descriptor VAs. Use `xcoff_parser.parse()` and its `_resolve_descriptors()` step to get code VAs.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Read the raw XCOFF binary bytes. This function is a standalone call — no BinaryContext needed.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Use the returned `{name: va}` dict to check whether a target binary imports dangerous symbols (`strcpy`, `system`, `execve`) before committing to a full `xcoff_parser.parse()` call.
 
 ---
 

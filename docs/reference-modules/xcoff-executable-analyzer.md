@@ -83,15 +83,15 @@ XCOFFExecutableAnalyzer  path=/firmware/aix/libssl.a[openssl.so]
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**AIX `.a` archive members.** AIX static libraries are XCOFF `.a` archives — individual `.o` files are nested inside. `XCOFFExecutableAnalyzer` parses a single XCOFF binary; for archive members, extract the member first with `ar x libfoo.a member.o`, then pass the extracted file.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Confirm the binary is XCOFF (`file -b target` shows `AIX XCOFF32 executable` or `AIX XCOFF64 executable`).
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Use the returned `ctx.plt` (from `xcoff_parser.parse()`) and `ctx.func_starts` to run `TaintTracker` or `SinkArgClassifier` on the AIX binary.
 
 ---
 

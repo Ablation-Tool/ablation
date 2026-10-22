@@ -99,15 +99,15 @@ GLOBAL: g_session_ctx  (2 writes)
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**ADRP resolution gaps.** The backward slicer resolves `ADRP + ADD/LDR` sequences but only when both instructions are in the same basic block's predecessor chain. Cross-function ADRP loads (where the ADRP is in a wrapper that passes the address) are not resolved — the SSE for those writes is `Unknown`. Use `ARM64GlobalTracker` (which calls this module) to get the full write surface, then investigate `Unknown` base_sse entries manually.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Identify which BSS/data symbol VAs are of interest. Run `BinaryContext.load_or_build()` to get the binary path and `.text` range.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Inspect each `WriteRecord.base_sse` to confirm the write target. `Global(name)` confirms the write reaches the intended symbol; `Unknown` entries need manual investigation.
 
 ---
 

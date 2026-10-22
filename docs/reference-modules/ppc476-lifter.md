@@ -286,15 +286,15 @@ assert ctx.plt[0x1000f320] == 'fork'
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**No branch condition lifting.** `Ppc32Lifter` emits `if <va>: goto <va>` placeholders for all conditional branches — it does not evaluate the condition expression. The branch condition must be inferred from the instructions that set CR0/CR1 before the branch instruction.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Run `PPC32TaintTracker` and `PPC32PLTTracer` to confirm the function contains tainted argument paths to dangerous sinks.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Read the lifted pseudocode to understand the function's control flow and identify the constraints that guard the sink.
 
 ---
 

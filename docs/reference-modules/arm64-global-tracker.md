@@ -61,15 +61,15 @@ GLOBAL: __mmtls_ctx  (3 writes)
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Missing ARM64 STR patterns.** `scan()` looks for `STR Xt, [Xn, #imm]` and `STUR Xt, [Xn, #simm]` only. Writes through indirect memory (`str x0, [x1, x2]`) or via `STP` instructions are not emitted as `WriteRecord`s. In optimized ARM64 code, compilers sometimes use `STP` to write two consecutive fields in one instruction — those writes are currently missed.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Identify which BSS/data symbols are of interest (e.g., from `SemanticSearcher` or a string xref scan). Pass the binary path and `.text` range to `scan()`.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Inspect `WriteRecord.base_sse` for each hit. `Global(name)` entries confirm writes to known globals. `Unknown` entries point to writes whose base register could not be resolved — investigate those manually with `TaintTracker`.
 
 ---
 

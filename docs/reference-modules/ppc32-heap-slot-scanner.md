@@ -84,15 +84,15 @@ PPC32HeapSlotScanner: 2 candidate(s)
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Compiler-split mulli.** Some compilers emit `mulli` for unrelated multiplications (e.g., array index computations) that are not slot allocation patterns. Filter results by checking that the `mulli_va` is immediately followed by a `bl malloc` or `bl calloc` within 4–8 instructions.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Run `PPC32TaintTracker` to identify `CALL_ARG` sinks at `strcpy`/`strcat`. Use those function VAs as starting points.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Escalate `has_size_check=False` results to manual verification — confirm that the allocated slot count and the per-slot copy are in the same function.
 
 ---
 

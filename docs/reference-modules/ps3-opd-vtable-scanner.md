@@ -161,15 +161,15 @@ PS3 OPD vtable scan — 47 vtables found
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**OPD pointer false positives.** Any 8-byte-aligned array of pointers in `.rodata` that happen to all point into the `.opd` section is interpreted as a vtable. In binaries with large array-of-function-pointer tables (jump tables, dispatch tables), this can produce false vtable reports. Filter by requiring `slots >= 4` and checking that the `class_hint` (from nearby string xrefs) is a plausible C++ class name.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Run `Ppc64ElfV1Resolver.resolve()` so that OPD entries are mapped to their code VAs.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Use the resolved `method_vas` from each `OPDVtable` as candidates for `PPC64TaintTracker` analysis. The vtable VA plus slot index is the dispatch site.
 
 ---
 

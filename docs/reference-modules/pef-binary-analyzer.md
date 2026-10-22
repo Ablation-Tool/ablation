@@ -117,15 +117,15 @@ PEF  arch=pwpc  format_version=1  sections=4  imports=31
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**PPC32 only.** `PEFBinaryAnalyzer` loads the PEF container and builds a PLT for PPC32 targets only (`arch=pwpc`). M68K PEF containers (`arch=m68k`) are parsed but the import resolver is not wired to an M68K taint tracker.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Confirm the binary is a PEF container (`file -b target` shows `Mac OS X PEF binary`).
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Pass the resolved PLT to `PPC32TaintTracker.from_context()` by constructing a compatible context object from the `PEFBinaryAnalyzer` exports.
 
 ---
 

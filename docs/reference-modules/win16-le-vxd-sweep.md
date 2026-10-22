@@ -139,15 +139,15 @@ Output goes to `reports/sweep_le_<vendor>_<product>_<version>_<ts>.md`.
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Page mapping edge cases.** LE page offsets use a 4KB page table with encoded page types (normal, iterated, invalid, zeroed). The parser handles all four types, but heavily iterated pages (common in compressed VxDs) expand to large in-memory buffers. If a VxD has > 32 objects, parsing is rejected with `ValueError` at line 342.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Confirm the binary is an LE-format VxD (starts with `MZ` stub, contains LE signature at offset specified in MZ header).
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Escalate high-score `ioctl_overflow` or `ring0_string_op` profile hits to manual Capstone analysis of the flagged function. The ring-0 context means any confirmed stack overflow is a kernel privilege escalation.
 
 ---
 

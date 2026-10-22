@@ -239,15 +239,15 @@ for seg in sections:
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**SIMD instruction coverage.** The SPU instruction set includes `shufb` (byte shuffle), `selb` (select bits), and `mpya/fma/fms/fnms` (float-multiply-accumulate) in RRR format. These instructions operate on all 128 bits of the 128-bit registers — a misidentified field extraction (e.g., wrong rC field) may report an incorrect destination register. Verify RRR-format decodes against the IBM SPU ISA v1.2 PDF tables.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Locate the SPU `.text` section in the Cell PPU ELF — SPU programs are typically embedded as data blobs and extracted to the SPU local store at runtime.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Pass the decoded instruction list to an SPU taint tracker or manually inspect for unsafe `stqd` (store quadword with displacement) patterns where the displacement is attacker-controlled.
 
 ---
 

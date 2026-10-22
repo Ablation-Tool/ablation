@@ -86,15 +86,15 @@ generated: 20260112_1430   threshold: 0.3
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Large-model segment complexity.** MS-DOS large-model executables have multiple code segments with far-call relocation. The sweep disassembles each segment independently in 16-bit mode. Cross-segment calls (far calls) are recorded by address but not resolved to function names — the callee segment:offset appears in the `calls` field without a resolved name.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Confirm the binary is an MZ DOS executable (`MZ` magic). Run on the original uncompressed binary — `EXEPACK` or `LZEXE` compression must be decompressed first.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Investigate high-score hits using a DOS debugger (DOSBox + ProSoft) or a 16-bit disassembler. Look for `int 21h` calls with no length validation on string parameters.
 
 ---
 

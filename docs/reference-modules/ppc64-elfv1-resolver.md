@@ -134,15 +134,15 @@ Ppc64ElfV1Info(/firmware/aix/libservice.so)
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**Stripped glink stubs.** If the binary has been stripped and the `.glink` section is absent, `_resolve_glink()` falls back to scanning for glink-stub patterns in `.text`. This pattern scan can miss stubs that use non-standard stub sequences (e.g., custom linker scripts).
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** `BinaryContext.load_or_build()` on the PPC64 BE ELF. Check `ctx.plt` — if empty, run this resolver first.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Merge `Ppc64ElfV1Info.stub_map` into `ctx.plt`: `ctx._plt.update(resolver.info.stub_map)`. All downstream tools (SinkArgClassifier, TaintTracker) then see named imports.
 
 ---
 

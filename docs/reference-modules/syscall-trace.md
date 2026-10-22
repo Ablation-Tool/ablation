@@ -167,15 +167,15 @@ Top syscalls:
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**strace overhead.** Attaching `strace` to a running process adds significant per-syscall overhead (ptrace stops for every syscall entry and exit). On high-throughput binaries (servers handling hundreds of requests/second), this can cause timeout failures or missed calls. Use `--trace=execve,openat,read,write` to filter to security-relevant syscalls only.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Compile or obtain the target binary. For dynamic tracing during exploitation research, have the binary running or launchable in a controlled environment.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Cross-reference `SyscallEvent` entries with static findings from `TaintTracker` — confirm that a `execve` or `system` call site identified statically is actually reached with attacker-controlled arguments at runtime.
 
 ---
 

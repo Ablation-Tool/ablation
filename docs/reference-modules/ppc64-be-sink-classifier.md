@@ -157,15 +157,15 @@ Ppc64BeSinkClassifier results:
 
 ## False positives
 
-Symbol resolution errors produce phantom function boundaries. Verify any candidate VA against `ctx.func_starts` before analysis. Compiler-synthesized stubs (PLT entries, thunks) appear as functions in some loaders — `BinaryContext` filters known stub patterns but custom thunks may slip through.
+**TOC-relative loads.** On PPC64 ELFv1 big-endian, arguments are often loaded from TOC-relative addresses (`ld r4, X(r2)`). If `r2` (TOC) has not been resolved for the function, the argument classification defaults to `UNKNOWN`. Run `Ppc64ElfV1Resolver` to populate the TOC base before running this classifier.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution. For stripped binaries, run `SemanticSearcher` first to identify candidate function VAs.
+**Before this module:** Run `Ppc64ElfV1Resolver.resolve()` to fill `ctx.plt` and establish the TOC base for argument resolution.
 
-**After this module:** Pass resolved call edges and function VAs to `TaintTracker` or `SinkArgClassifier`.
+**After this module:** Pass `ARG_PROPAGATED` and `UNKNOWN` sites to `PPC64TaintTracker` for full source-to-sink confirmation. Discard `RODATA_CONST` sites.
 
 ---
 
