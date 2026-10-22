@@ -803,8 +803,21 @@ class SinkArgClassifierPPC64ELFv2:
                     continue
                 if caller_va in covered_call_vas:
                     continue
-                # Disassemble a window: up to 256 instructions ending at caller_va.
-                window_start = max(text_va, caller_va - 256 * 4)
+                # Locate the function's Global Entry Point (GEP) by scanning
+                # backward for "addis r2, r12, N" (opcode 15, rt=r2, ra=r12 =
+                # 0x3C420000|N in LE ppc64).  .text may have null-byte gaps so a
+                # fixed backward window can stop too early; starting from the GEP
+                # and disassembling forward gives the complete function body.
+                gep_va = caller_va  # fallback: start at call site
+                scan_back_limit = max(text_va, caller_va - _MAX_FUNC_BYTES)
+                j = caller_va - 4
+                while j >= scan_back_limit:
+                    w = _s.unpack_from('<I', text_raw, j - text_va)[0]
+                    if (w & 0xFFFF0000) == 0x3C4C0000 and (w >> 26) == 15:
+                        gep_va = j
+                        break
+                    j -= 4
+                window_start = gep_va
                 window_raw   = self._read_va(window_start, caller_va - window_start + 4)
                 if not window_raw:
                     continue
@@ -819,7 +832,10 @@ class SinkArgClassifierPPC64ELFv2:
                 )
                 if call_idx is None:
                     continue
-                verdict, detail = self._trace_arg(insns, call_idx, arg_pos)
+                if arg_pos >= len(_PPC64_ARG_REGS):
+                    continue
+                arg_reg = _PPC64_ARG_REGS[arg_pos]
+                verdict, detail = self._trace_arg(insns, call_idx, arg_reg)
                 severity = '' if verdict in (RODATA_CONST, SNPRINTF_RODATA) else 'HIGH'
                 results.append(SinkClassification(
                     sink_name, arg_pos, window_start,
