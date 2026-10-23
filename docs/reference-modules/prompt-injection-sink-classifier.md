@@ -4,7 +4,7 @@
 
 One thing was not possible before in Ablation:
 
-1. **Identify binary code paths where untrusted external input reaches an LLM API call site that also embeds a system prompt.** No prior Ablation module recognized LLM API endpoints or system-prompt injection patterns. `PromptInjectionSinkClassifier` searches for LLM provider host strings (10 providers), checks for system-prompt indicator strings (12 patterns including `"role":"system"`, `<<SYS>>`, `system_prompt`), and then walks function disassembly to find functions that both read from external input sources and write to HTTP/network sinks. When both signals appear in the same function, user-controlled data is combining with a system prompt before reaching the LLM, making the application vulnerable to prompt injection.
+1. **Identify binary code paths where untrusted external input reaches an LLM API call site that also embeds a system prompt.** No prior Ablation module recognized LLM API endpoints or system-prompt injection patterns. `PromptInjectionSinkClassifier` searches for LLM provider host strings (10 providers), checks for 12 system-prompt indicator patterns such as `"role":"system"`, `<<SYS>>`, and `system_prompt`, and then walks function disassembly to find functions that both read from external input sources and write to HTTP/network sinks. When both signals appear in the same function, user-controlled data is combining with a system prompt before reaching the LLM, making the application vulnerable to prompt injection.
 
 ## Usage
 
