@@ -45,7 +45,7 @@ The scanner uses a sliding window over function disassembly:
 3. Check whether the instruction after the unconditional branch is another compare or conditional branch (the dead check).
 4. If all conditions hold, emit a finding.
 
-Covers x86-64 (`jmp`, `je`, `cmp`, `test`), ARM32/64 (`b`, `beq`, `bne`, `cmp`, `tst`), and MIPS (`j`, `beq`, `bne`).
+Covers x86-64 with `jmp`, `je`, `cmp`, and `test`; ARM32/64 with `b`, `beq`, `bne`, `cmp`, and `tst`; and MIPS with `j`, `beq`, and `bne`.
 
 ## False positives
 
