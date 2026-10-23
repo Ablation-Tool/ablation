@@ -64,7 +64,7 @@ Findings: <N>
 
 ## False positives
 
-**`andi` bound detection uses the immediate operand as the bound**: a multi-step bound (e.g., `andi` followed by `addi` to shift the range) produces an incorrectly loose bound. Verify that the `andi` is the final bounding operation before the sink.
+**`andi` bound detection uses the immediate operand as the bound**: a multi-step bound for example `andi` followed by `addi` to shift the range produces an incorrectly loose bound. Verify that the `andi` is the final bounding operation before the sink.
 
 **LP64 ABI caller-saved register clobbering**: `$a0`–`$t8` are caller-saved and the tracker conservatively clears their taint on every `bl` call to a non-source. This may produce false negatives if taint is preserved in callee-saved registers (`$s0`–`$s8`) across calls.
 
@@ -72,7 +72,7 @@ Findings: <N>
 
 ## Pipeline position
 
-Run `TaintTrackerLA64` after `LA64MaxNotMinScanner` to confirm that compiler-bug findings produce a reachable taint path. Also use as the primary taint analysis tool for all LoongArch64 ELF targets (TencentOS kernel modules, LoongArch64 system daemons).
+Run `TaintTrackerLA64` after `LA64MaxNotMinScanner` to confirm that compiler-bug findings produce a reachable taint path. Also use as the primary taint analysis tool for all LoongArch64 ELF targets TencentOS kernel modules, LoongArch64 system daemons.
 
 ---
 
@@ -85,9 +85,9 @@ Run `TaintTrackerLA64` after `LA64MaxNotMinScanner` to confirm that compiler-bug
 | `func_va` | VA of the function containing the sink |
 | `func_name` | Name of the function (from `ctx.name()`) |
 | `sink_va` | VA of the sink call instruction |
-| `sink_name` | Name of the sink function (e.g., `memcpy`, `system`) |
-| `tainted_args` | `List[str]`: LoongArch64 argument register names with taint (e.g., `['$a2']`) |
-| `source_name` | Name of the taint source function (e.g., `recv`) |
+| `sink_name` | Name of the sink function for example `memcpy`, `system` |
+| `tainted_args` | `List[str]`: LoongArch64 argument register names with taint for example `['$a2']` |
+| `source_name` | Name of the taint source function for example `recv` |
 | `severity` | `"HIGH"` (default) |
 
 Bound information (the `andi` upper-bit mask) is tracked in the internal `Taint` state during analysis; it is not exposed as a field on `TaintFindingLA64`.

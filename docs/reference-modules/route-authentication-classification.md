@@ -84,7 +84,7 @@ Run `PreAuthRouteAuditor` immediately after `BinaryContext.load_or_build()` for 
 
 | Attribute | Content |
 |:---|:---|
-| `url` | URL path string (e.g., `'/api/v2/upload'`) |
+| `url` | URL path string for example `'/api/v2/upload'` |
 | `handler` | Handler name string |
 | `middleware` | Middleware name string empty if none |
 | `method_ids` | `List[int]`: HTTP method ID list |

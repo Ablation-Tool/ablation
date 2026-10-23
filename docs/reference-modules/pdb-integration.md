@@ -93,7 +93,7 @@ Run `PDBSymbolIntegrator` immediately after `BinaryContext.load_or_build()` for 
 
 ## Reading output
 
-`PDBSymbolIntegrator.inject_into_context(ctx, pdb_path=None)` loads PDB symbols into `BinaryContext` via `ctx.set_name()` and returns `int`: the count of symbol names injected. When `pdb_path=None`, the method fetches the PDB from the Microsoft symbol server automatically.
+`PDBSymbolIntegrator.inject_into_contextctx, pdb_path=None` loads PDB symbols into `BinaryContext` via `ctx.set_name()` and returns `int`: the count of symbol names injected. When `pdb_path=None`, the method fetches the PDB from the Microsoft symbol server automatically.
 
 `PDBSymbolIntegrator.load_pdbpdb_path` returns `Dict[int, str]`: `{rva: name}` for all public symbols in the PDB without touching `BinaryContext`.
 

@@ -6,11 +6,11 @@ Compute the transitive closure of passthrough wrappers around known exec sinks: 
 
 ## Why this exists
 
-1. **When a binary wraps `system()` behind `doSystem(string)` which is called by `systemLog(char*)`: three levels deep: `TaintTracker` finds zero injection sites while the vulnerability is fully reachable.** `SinkPropagator.propagate()` discovers all three wrapper functions by iterating to a fixed point: if `addUser()` passes its arg to `doSystem()`, and `doSystem()` passes its arg to `systemLog()`, and `systemLog()` calls `system()`: all three are returned as `SinkWrapper` findings with their full call chain lineage.
+1. **When a binary wraps `system()` behind `doSystem(string)` which is called by `systemLog(char*)`: three levels deep: `TaintTracker` finds zero injection sites while the vulnerability is reachable.** `SinkPropagator.propagate()` discovers all three wrapper functions by iterating to a fixed point: if `addUser()` passes its arg to `doSystem()`, and `doSystem()` passes its arg to `systemLog()`, and `systemLog()` calls `system()`: all three are returned as `SinkWrapper` findings with their full call chain lineage.
 
 2. **The expanded wrapper list enables a single `TaintTracker` run to trace injection from the entry point to the ultimate exec sink**: without wrapper discovery, the analyst must manually identify wrapper chains by reading call graphs, a process that takes 20–60 minutes per wrapper level. `SinkPropagator` completes this in under 10 seconds on typical firmware binaries.
 
-3. **`SinkPropagator` handles multi-parameter wrappers**: some wrappers forward argument 1 (`rsi`) to the sink rather than argument 0 (`rdi`). `SinkWrapper.wrapper_arg_pos` records which argument of the wrapper corresponds to the sink's dangerous argument, so `TaintTracker.add_sink(name, arg_pos=wrapper_arg_pos)` is called with the correct position.
+3. **`SinkPropagator` handles multi-parameter wrappers**: some wrappers forward argument 1 (`rsi`) to the sink rather than argument 0 (`rdi`). `SinkWrapper.wrapper_arg_pos` records which argument of the wrapper corresponds to the sink's dangerous argument, so `TaintTracker.add_sinkname, arg_pos=wrapper_arg_pos` is called with the correct position.
 
 ---
 

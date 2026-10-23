@@ -121,9 +121,9 @@ The three Layer 1 helpers convert between representations:
 
 | Helper | Input | Output |
 |---|---|---|
-| `rgb_to_bytes(r, g, b)` | Three integers (0-255) | `bytes` of length 3 |
-| `bytes_to_rgb(b)` | `bytes` of length 3 | `(r, g, b)` tuple |
-| `rgb_int(r, g, b)` | Three integers | Single `int` 0-16777215 |
+| `rgb_to_bytesr, g, b` | Three integers (0-255) | `bytes` of length 3 |
+| `bytes_to_rgb(b)` | `bytes` of length 3 | `r, g, b` tuple |
+| `rgb_intr, g, b` | Three integers | Single `int` 0-16777215 |
 
 For ISAs with instruction widths other than 24 bits, the packing extends naturally: a
 32-bit ISA uses a 4-byte RGBA integer. The field arithmetic in Layer 2 is width-agnostic;
@@ -569,7 +569,7 @@ references; the root template aggregates sub-templates by concatenating their en
 call sites for `OTStrCat`, `OTStrCopy`, and `OTMemcpy`. The scanner reconstructs each
 call site's instruction stream as a `SemanticBlock` and adds `DataflowEdge` entries to
 trace which registers are live at the call. The `dag_nodes()` traversal then confirms
-whether the correct argument registers (r4, r5) hold caller-supplied values without
+whether the correct argument registers r4 and r5 hold caller-supplied values without
 intermediate clobbers.
 
 The EncodingDAG is used here because the PPC32 `ori` encoding has a subtle field
@@ -661,7 +661,7 @@ for op in block.dag_nodes():   # topological order
 | `field_values` | `Dict[str,int]` | `{field_name: int_value}` for all fields in the template |
 | `to_bytes()` | method | Raw byte encoding big-endian |
 | `to_hex()` | method | `'0xRRGGBB'`-style hex string |
-| `to_rgb()` | method | `(R, G, B)` tuple ISA-24 maps to RGB exactly |
+| `to_rgb()` | method | `R, G, B` tuple ISA-24 maps to RGB exactly |
 | `show_layout()` | method | ASCII bitfield breakdown for debugging |
 
 `ISASpec.decode(data)` returns a two-element tuple of `EncodingNode` and `SemanticOp`: the raw node and the decoded semantic operation.

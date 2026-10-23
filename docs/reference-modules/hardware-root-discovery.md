@@ -1,14 +1,14 @@
 # Hardware Root Discovery
 
-Parse firmware container images with a plaintext partition table, identify partition payload types (ELF, ext2/3/4, gzip, xz, SquashFS, JFFS2), extract component version strings and vendor metadata, and perform entropy-based section classification to locate keys, certificates, and compressed code regions: providing the hardware root of trust analysis baseline for firmware security assessment: via `ablation/core/firmware_analyzer.py` and `ablation/analyzers/firmware_container.py`.
+Parse firmware container images with a plaintext partition table, identify partition payload types ELF, ext2/3/4, gzip, xz, SquashFS, JFFS2, extract component version strings and vendor metadata, and perform entropy-based section classification to locate keys, certificates, and compressed code regions: providing the hardware root of trust analysis baseline for firmware security assessment: via `ablation/core/firmware_analyzer.py` and `ablation/analyzers/firmware_container.py`.
 
 ---
 
 ## Why this exists
 
-1. **`FirmwareContainer` parses proprietary firmware partition table formats** without requiring vendor tooling, it reads the fixed-layout container header (`magic[8]`, `fw_version[8]`, `vendor_string[16]`, `product_string[16]`, `partition_table[n × 296 bytes]`) and extracts each partition's payload type using `_detect_payload()`. The partition table structure is common across network equipment and embedded Linux devices using custom update formats. Extracting partitions without vendor tools is the prerequisite for all subsequent static analysis.
+1. **`FirmwareContainer` parses proprietary firmware partition table formats** without requiring vendor tooling, it reads the fixed-layout container header `magic[8]`, `fw_version[8]`, `vendor_string[16]`, `product_string[16]`, `partition_table[n × 296 bytes]` and extracts each partition's payload type using `_detect_payload()`. The partition table structure is common across network equipment and embedded Linux devices using custom update formats. Extracting partitions without vendor tools is the prerequisite for all subsequent static analysis.
 
-2. **`scan_firmware_file()` performs a complete static analysis pass** on a firmware image, it runs `scan_firmware_signatures()` to identify embedded filesystems, bootloaders, and archive types by magic bytes (SquashFS `0x68737173`, JFFS2 `0x1985`, U-Boot `\x27\x05\x19\x56`), runs `analyze_firmware_entropy()` to classify 1KB blocks as code entropy 6.0–7.5, data entropy 3.0–6.0, compressed/encrypted entropy > 7.5, or zero-padded, and calls `extract_firmware_strings()` to surface hardcoded credentials, private key material, and configuration parameters.
+2. **`scan_firmware_file()` performs a complete static analysis pass** on a firmware image, it runs `scan_firmware_signatures()` to identify embedded filesystems, bootloaders, and archive types by magic bytes SquashFS `0x68737173`, JFFS2 `0x1985`, U-Boot `\x27\x05\x19\x56`, runs `analyze_firmware_entropy()` to classify 1KB blocks as code entropy 6.0–7.5, data entropy 3.0–6.0, compressed/encrypted entropy > 7.5, or zero-padded, and calls `extract_firmware_strings()` to surface hardcoded credentials, private key material, and configuration parameters.
 
 3. **`extract_firmware_strings()` extracts printable strings by category**, it returns a structured dict with `credentials` username/password patterns, `urls` hardcoded management URLs and endpoints, `crypto_material` PEM headers, certificate subjects, key identifiers, `version_strings` software component versions and build timestamps, and `paths` filesystem paths revealing directory layout. This feeds directly into the vulnerability assessment without requiring filesystem mount access.
 
@@ -111,7 +111,7 @@ Each `FirmwarePartition`:
 | `offset` | Byte offset within the firmware image |
 | `size` | Partition size in bytes |
 | `destpath` | Destination path string from the partition table |
-| `payload_type` | Detected payload type (e.g., `'elf'`, `'ext2'`, `'squashfs'`, `'gzip'`, `'unknown'`) |
+| `payload_type` | Detected payload type for example `'elf'`, `'ext2'`, `'squashfs'`, `'gzip'`, `'unknown'` |
 
 ---
 

@@ -10,7 +10,7 @@ ReAct Reason + Act agent loop that drives Claude through a tool-calling conversa
 
 2. **The `RAGRetriever` injects prior analysis results as context before the first tool call: if the same function VA has been analyzed before on any binary with the same SHA-256, the prior result is loaded.** This means the analyst loop does not re-analyze functions it has already confirmed, and can use prior naming to resolve callees. `persist_result()` saves results to the function database so they are available in future sessions.
 
-3. **A budget governor (`max_tool_calls`, default 10) and a loop detector identical tool+args terminates with a warning prevent unbounded token consumption.** Without these guards, an unconstrained agentic loop over a complex function would run until context is exhausted. The budget governor ensures that even if Claude does not call `done()` within budget, `run()` returns the best available `AnalysisResult` from the last tool call.
+3. **A budget governor `max_tool_calls`, default 10 and a loop detector identical tool+args terminates with a warning prevent unbounded token consumption.** Without these guards, an unconstrained agentic loop over a complex function would run until context is exhausted. The budget governor ensures that even if Claude does not call `done()` within budget, `run()` returns the best available `AnalysisResult` from the last tool call.
 
 ---
 
@@ -49,7 +49,7 @@ flowchart TD
 |:---|:---|:---|
 | `func_addr` | `int` | VA of the analyzed function |
 | `name` | `str` | Proposed function name snake_case |
-| `role` | `str` | Role description (e.g., "network input handler") |
+| `role` | `str` | Role description for example "network input handler" |
 | `confidence` | `float` | 0.0–1.0 confidence in the naming/role |
 | `cve_hypothesis` | `str` | Optional vulnerability hypothesis (populated by `run_patch()`) |
 
@@ -140,14 +140,14 @@ Run `AgentLoop` as a targeted tool on `SemanticSearcher` top candidates that nee
 |:---|:---|
 | `func_addr` | VA of the analyzed function |
 | `name` | Inferred function name |
-| `role` | Role tag (e.g., `'network input handler'`, `'parser'`) |
+| `role` | Role tag for example `'network input handler'`, `'parser'` |
 | `confidence` | Float 0.0–1.0 |
 | `rationale` | Plain-language explanation of the naming/role evidence |
 | `vuln_notes` | Vulnerability hypothesis notes, if requested |
 | `tool_calls` | Count of tool calls made during the loop |
 | `finished` | `True` if `done()` was called; `False` if the tool-call budget was exhausted |
 | `model` | Claude model ID used |
-| `task` | Task name (e.g., `'name_function'`, `'vulnerability_hypothesis'`) |
+| `task` | Task name for example `'name_function'`, `'vulnerability_hypothesis'` |
 
 `AgentLoop.run_patchfunc_addr_v1, func_addr_v2` returns an `AnalysisResult` for patch diff analysis.
 

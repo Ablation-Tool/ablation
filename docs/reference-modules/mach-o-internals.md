@@ -52,9 +52,9 @@ flowchart TD
 | `CA FE BA BE` | `0xCAFEBABE` | Universal fat binary not parsed by this module |
 
 **Header fields.** After the 4-byte magic, the Mach-O header contains:
-- `cputype` (4 bytes): CPU architecture (12 = x86, 16777228 = ARM, 16777223 = x86-64, 16777228 + 0x01000000 = ARM64)
+- `cputype` (4 bytes): CPU architecture 12 = x86, 16777228 = ARM, 16777223 = x86-64, 16777228 + 0x01000000 = ARM64
 - `cpusubtype` (4 bytes): CPU subtype further specifies microarchitecture
-- `filetype` (4 bytes): binary type (2 = MH_EXECUTE, 6 = MH_DYLIB, 8 = MH_BUNDLE, 11 = MH_KEXT_BUNDLE)
+- `filetype` (4 bytes): binary type 2 = MH_EXECUTE, 6 = MH_DYLIB, 8 = MH_BUNDLE, 11 = MH_KEXT_BUNDLE
 - `ncmds` (4 bytes): count of load commands following the header
 - `sizeofcmds` (4 bytes): total byte size of all load commands
 - `flags` (4 bytes): binary attribute flags

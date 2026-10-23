@@ -17,8 +17,8 @@ the kernel API surface, and flags dangerous byte patterns.
 ### Architecture support
 
 `KernelDriverAnalyzer` detects PE machine type on construction:
-- **x86 (IMAGE_FILE_MACHINE_I386, 0x014c):** uses Capstone `CS_MODE_32`; recovers `MajorFunction` from `DRIVER_OBJECT+0x38` 4-byte slots; uses prologue-seeded disassembly for IOCTL extraction and pattern scanning see below
-- **x64 (IMAGE_FILE_MACHINE_AMD64, 0x8664):** uses Capstone `CS_MODE_64`; recovers `MajorFunction` from `DRIVER_OBJECT+0x70` 8-byte slots; uses `.pdata`-bounded disassembly
+- **x86 IMAGE_FILE_MACHINE_I386, 0x014c:** uses Capstone `CS_MODE_32`; recovers `MajorFunction` from `DRIVER_OBJECT+0x38` 4-byte slots; uses prologue-seeded disassembly for IOCTL extraction and pattern scanning see below
+- **x64 IMAGE_FILE_MACHINE_AMD64, 0x8664:** uses Capstone `CS_MODE_64`; recovers `MajorFunction` from `DRIVER_OBJECT+0x70` 8-byte slots; uses `.pdata`-bounded disassembly
 
 ### What it maps
 

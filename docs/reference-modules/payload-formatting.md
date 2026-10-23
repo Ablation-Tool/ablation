@@ -88,7 +88,7 @@ build_exploit_buffer:
 
 ## False positives
 
-**`detect_bad_bytes()` context-dependent bad bytes**: the set of bad bytes is protocol-dependent. A payload delivered over a base64 channel has no bad bytes. A payload delivered via a format string exploit may have different bad byte constraints (e.g., `%` metacharacter). Always specify the correct `bad_bytes` set for the delivery mechanism.
+**`detect_bad_bytes()` context-dependent bad bytes**: the set of bad bytes is protocol-dependent. A payload delivered over a base64 channel has no bad bytes. A payload delivered via a format string exploit may have different bad byte constraints for example `%` metacharacter. Always specify the correct `bad_bytes` set for the delivery mechanism.
 
 **`encode_xor_rolling()` decoder stub incompatibility**: the included XOR decoder stub is x86-64 and assumes the shellcode is mapped as RWX. If the target uses NX/DEP, the decoder cannot write to the shellcode segment. In this case, the ROP chain from `crash-offset-and-rop-helpers.md` must map new RWX memory before invoking the decoder.
 

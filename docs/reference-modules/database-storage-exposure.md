@@ -1,12 +1,12 @@
 # SQL Injection Detection
 
-Detect raw SQL injection in C/C++ ELF binaries that call the MySQL C API or SQLite3 directly: by chaining: find SQL sink (`mysql_query`, `sqlite3_exec`) → trace the SQL string argument → find the `snprintf`/`sprintf` format string builder → inspect the format string for `%s` injection specifiers: catching SQL injection that `FormatStringScanner` misses because it does not understand that `snprintf` safe-by-itself is unsafe when passed to a SQL sink.
+Detect raw SQL injection in C/C++ ELF binaries that call the MySQL C API or SQLite3 directly: by chaining: find SQL sink `mysql_query`, `sqlite3_exec` → trace the SQL string argument → find the `snprintf`/`sprintf` format string builder → inspect the format string for `%s` injection specifiers: catching SQL injection that `FormatStringScanner` misses because it does not understand that `snprintf` safe-by-itself is unsafe when passed to a SQL sink.
 
 ---
 
 ## Why this exists
 
-1. **`FormatStringScanner` identifies dangerous format strings at `printf`-family call sites but does not understand SQL sinks.** An `snprintf(buf, sizeof(buf), "SELECT ... WHERE login='%s'", username)` followed by `mysql_queryconn, buf` is SQL injection, but `FormatStringScanner` sees a safe-sized `snprintf` and stops. `SqlSinkScanner` specifically chains these two call sites and reports the combined pattern as SQL injection.
+1. **`FormatStringScanner` identifies dangerous format strings at `printf`-family call sites but does not understand SQL sinks.** An `snprintfbuf, sizeof(buf, "SELECT ... WHERE login='%s'", username)` followed by `mysql_queryconn, buf` is SQL injection, but `FormatStringScanner` sees a safe-sized `snprintf` and stops. `SqlSinkScanner` specifically chains these two call sites and reports the combined pattern as SQL injection.
 
 2. **MySQL C API and SQLite3 are the primary SQL libraries used in embedded network device firmware**: Fortinet, Cisco, and Juniper device management planes commonly use SQLite3 for configuration persistence. `SqlSinkScanner` includes both `mysql_query`/`mysql_real_query` (MySQL C API) and `sqlite3_exec`/`sqlite3_prepare` (SQLite3) sink catalogs.
 
@@ -84,7 +84,7 @@ Findings (<M> total):
 
 ## Pipeline position
 
-Run `SqlSinkScanner` after `SinkArgClassifier` on any binary with MySQL C API or SQLite3 imports. `SinkArgClassifier` handles shell-execution sinks (`system`, `execve`); `SqlSinkScanner` handles SQL sinks. Both should run as part of the initial sink classification phase before `TaintTracker`.
+Run `SqlSinkScanner` after `SinkArgClassifier` on any binary with MySQL C API or SQLite3 imports. `SinkArgClassifier` handles shell-execution sinks `system`, `execve`; `SqlSinkScanner` handles SQL sinks. Both should run as part of the initial sink classification phase before `TaintTracker`.
 
 ---
 
@@ -95,7 +95,7 @@ Run `SqlSinkScanner` after `SinkArgClassifier` on any binary with MySQL C API or
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` confirmed format string injection / `HIGH` ARG_PROPAGATED without prepared statement / `MEDIUM` UNKNOWN classification |
-| `sink` | SQL sink function name (e.g., `mysql_query`, `sqlite3_exec`) |
+| `sink` | SQL sink function name for example `mysql_query`, `sqlite3_exec` |
 | `call_va` | VA of the sink call instruction |
 | `arg_class` | `ARG_PROPAGATED`, `RODATA_CONST`, or `UNKNOWN` |
 | `format_string_va` | VA of the format string if recovered, else `None` |

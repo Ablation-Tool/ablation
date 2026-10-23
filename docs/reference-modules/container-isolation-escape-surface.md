@@ -71,9 +71,9 @@ Findings (<M> total):
 
 ## False positives
 
-**Pattern matching may not capture all multi-line query objects**: a Prisma `findFirst` with a complex `where` object spanning multiple lines may not be fully parsed, causing `SourceIsolationChecker` to miss the `projectId` field if it appears on a later line. Validate `CRITICAL` findings by inspecting the full query object, not just the detected snippet.
+**Pattern matching may not capture all multi-line query objects**: a Prisma `findFirst` with a complex `where` object spanning multiple lines may not be parsed, causing `SourceIsolationChecker` to miss the `projectId` field if it appears on a later line. Validate `CRITICAL` findings by inspecting the full query object, not just the detected snippet.
 
-**`orgId` fields in non-scoping positions**: a query that includes `orgId` as a returned field (e.g., `select: { orgId: true }`) but not in the `where` clause may incorrectly suppress a finding if the pattern matcher does not distinguish field positions. `missing_field` should be interpreted as "not found in where clause," not "not found anywhere."
+**`orgId` fields in non-scoping positions**: a query that includes `orgId` as a returned field for example `select: { orgId: true }` but not in the `where` clause may incorrectly suppress a finding if the pattern matcher does not distinguish field positions. `missing_field` should be interpreted as "not found in where clause," not "not found anywhere."
 
 ---
 
@@ -90,10 +90,10 @@ Run `SourceIsolationChecker` as the first scan on any multi-tenant SaaS backend 
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` |
-| `orm` | ORM type (`prisma`, `mongoose`, `sqlalchemy`) |
-| `method` | ORM query method (e.g., `findFirst`, `findMany`) |
+| `orm` | ORM type `prisma`, `mongoose`, `sqlalchemy` |
+| `method` | ORM query method for example `findFirst`, `findMany` |
 | `file` | Source file path and line number |
-| `missing` | Missing tenant/owner isolation field (e.g., `projectId`, `orgId`) |
+| `missing` | Missing tenant/owner isolation field for example `projectId`, `orgId` |
 | `snippet` | Code snippet showing the unguarded query |
 
 ---

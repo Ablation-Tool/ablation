@@ -50,7 +50,7 @@ byte[3] == 0x67           (the seed byte value)
 ```
 
 This mask covers all M68K destination addressing modes in one comparison:
-`(Dn)`, `(An)`, `(An)+`, `-(An)`, `(d16,An)`, `abs.W`, and `abs.L`.
+`(Dn)`, `(An)`, `(An)+`, `-(An)`, `d16,An`, `abs.W`, and `abs.L`.
 
 After the MOVE.B is found, the scanner looks within the next `window` bytes default 256 for
 at least two CLR.B instructions. CLR.B encodes as:
@@ -78,7 +78,7 @@ The immediately following word must be `stb` (opcode 38 = `0x26`):
 ```
 
 After this `li/stb` trigger is found, the scanner looks within the next `window` bytes for
-two `(li rY, 0; stb)` pairs using the same masks with `simm16 = 0`:
+two `li rY, 0; stb` pairs using the same masks with `simm16 = 0`:
 
 ```
 (word & 0xFC1FFFFF) == 0x38000000   (li rY, 0, any register)
@@ -234,7 +234,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, or C28x for vulnerability analysis.
 
 ---
 

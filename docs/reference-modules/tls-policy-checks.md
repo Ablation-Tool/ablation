@@ -8,7 +8,7 @@ Probe TLS policy enforcement: HSTS header presence and max-age, HTTP→HTTPS red
 
 1. **mTLS enforcement is often misconfigured at the path level**: `probe_mtls_enforcement()` tests whether the server requires a client certificate by attempting an unauthenticated TLS connection no client certificate. A successful HTTP response without a client certificate means mTLS is not enforced, even if the endpoint is documented as mTLS-protected. The check sends the connection to both the root path and well-known API paths.
 
-2. **ACME challenge endpoint exposure**: `probe_acme_endpoint_exposure()` checks whether `/.well-known/acme-challenge/` is accessible from the external network. If so, an attacker who controls a DNS response can redirect the ACME validation request to issue a fraudulent certificate for the target domain. This check is relevant for any service that uses ACME (Let's Encrypt, ZeroSSL) for certificate provisioning.
+2. **ACME challenge endpoint exposure**: `probe_acme_endpoint_exposure()` checks whether `/.well-known/acme-challenge/` is accessible from the external network. If so, an attacker who controls a DNS response can redirect the ACME validation request to issue a fraudulent certificate for the target domain. This check is relevant for any service that uses ACME Let's Encrypt, ZeroSSL for certificate provisioning.
 
 3. **`probe_zero_trust_bypass_surface()` and `probe_cloud_proxy_ssl_inspection_bypass()`** test whether TLS inspection proxies introduce certificate chain substitution: a common zero-trust deployment pattern that breaks certificate pinning and introduces a trust path the client did not consent to. These checks detect the proxy's CA certificate in the chain and compare it against a list of known corporate root CA signatures.
 
@@ -83,7 +83,7 @@ TLS policy probe functions return `List[{severity, title, detail, host, port}]`:
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` / `MEDIUM` / `INFO` |
-| `title` | Finding code (e.g., `MTLS_NOT_ENFORCED`, `HSTS_MISSING`, `ACME_CHALLENGE_EXPOSED`, `CT_COMPLIANT`) |
+| `title` | Finding code for example `MTLS_NOT_ENFORCED`, `HSTS_MISSING`, `ACME_CHALLENGE_EXPOSED`, `CT_COMPLIANT` |
 | `detail` | Policy requirement, header value, or response code |
 | `host` | Target hostname |
 | `port` | TLS port |

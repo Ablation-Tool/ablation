@@ -102,7 +102,7 @@ Run `CMDBSurfaceMapper` as Phase 0.5 in the FortiOS RE methodology: after `Seman
 | `reaches_exec` | `bool` | `True` if any caller body also contains an exec-class sink call |
 | `exec_func_va` | `Optional[int]` | VA of the function with co-located exec call |
 | `exec_call_va` | `Optional[int]` | VA of the exec sink call instruction itself |
-| `exec_sink_name` | `Optional[str]` | Name of the exec sink (`'system'`, `'popen'`, etc.) |
+| `exec_sink_name` | `Optional[str]` | Name of the exec sink `'system'`, `'popen'`, etc. |
 
 ---
 

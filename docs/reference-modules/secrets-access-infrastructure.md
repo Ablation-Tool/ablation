@@ -8,7 +8,7 @@ Probe Consul KV store for unsealed secret material, enumerate GraphQL API schema
 
 1. **`probe_consul_service_mesh()` with KV store access reveals secrets stored in Consul**: many teams store database passwords, API keys, and TLS certificates in Consul's KV store as a lightweight secrets backend. `probe_consul_service_mesh()` recursively lists all keys at `/v1/kv/?recurse` without authentication in misconfigured deployments, and individual values are retrieved via `/v1/kv/<key>` as base64-encoded data. Consul KV secrets are typically stored in plaintext: no encryption at rest unless Vault transit is configured.
 
-2. **`probe_graphql_introspection()` maps the entire API surface via a single unauthenticated query**: GraphQL's introspection feature returns the complete schema: every type, query, mutation, field name, argument name, and return type. This is equivalent to reading the API specification without needing documentation access. `probe_graphql_introspection()` sends `{"query": "{__schema{types{name fields{name type{name}}}}"}` and parses the response to identify authentication-related types (`User`, `Token`, `Session`), mutation entry points for credential modification, and fields that return sensitive data types.
+2. **`probe_graphql_introspection()` maps the entire API surface via a single unauthenticated query**: GraphQL's introspection feature returns the complete schema: every type, query, mutation, field name, argument name, and return type. This is equivalent to reading the API specification without needing documentation access. `probe_graphql_introspection()` sends `{"query": "{__schema{types{name fields{name type{name}}}}"}` and parses the response to identify authentication-related types `User`, `Token`, `Session`, mutation entry points for credential modification, and fields that return sensitive data types.
 
 3. **`probe_grpc_server_reflection()` enumerates gRPC service method definitions**: gRPC Server Reflection port 50051 exposes a `ServerReflectionInfo` streaming RPC that returns protobuf file descriptors for all registered services. `probe_grpc_server_reflection()` reconstructs the service/method tree from the descriptor, identifying privileged operations admin RPC methods, credential management calls that may be callable without authentication from the internal network.
 
@@ -77,7 +77,7 @@ probe_grpc_server_reflection: <target-ip>:50051
 
 ## False positives
 
-**`probe_consul_service_mesh()` KV pattern matching**: keys with names matching `password`, `token`, or `cert` may contain non-sensitive placeholder values (e.g., `password: changeme_in_prod`). Evaluate the actual decoded value rather than reporting based on key name alone.
+**`probe_consul_service_mesh()` KV pattern matching**: keys with names matching `password`, `token`, or `cert` may contain non-sensitive placeholder values for example `password: changeme_in_prod`. Evaluate the actual decoded value rather than reporting based on key name alone.
 
 **`probe_graphql_introspection()` mutation enumeration**: the presence of mutations like `resetPassword` is an inherent GraphQL feature, not a vulnerability in isolation. The finding is that introspection is unauthenticated, which reveals the schema to attackers. Confirm whether the mutations themselves require authentication before assessing impact.
 
@@ -96,10 +96,10 @@ Secrets infrastructure probe functions return `List[{severity, title, detail, ho
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` unauthenticated KV/secrets / `HIGH` schema/mutation exposure |
-| `title` | Finding code (e.g., `CONSUL_KV_OPEN`, `GRAPHQL_INTROSPECTION_OPEN`, `VAULT_UNAUTHENTICATED`) |
+| `title` | Finding code for example `CONSUL_KV_OPEN`, `GRAPHQL_INTROSPECTION_OPEN`, `VAULT_UNAUTHENTICATED` |
 | `detail` | KV paths, exposed types/mutations, or plaintext secret excerpt |
 | `host` | Target IP |
-| `port` | Service port (e.g., `8500` for Consul, `4000` for GraphQL) |
+| `port` | Service port for example `8500` for Consul, `4000` for GraphQL |
 
 ---
 

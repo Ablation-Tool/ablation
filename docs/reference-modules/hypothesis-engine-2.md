@@ -10,7 +10,7 @@ Coordinate the analysis session lifecycle for a single binary: accepting typed h
 
 2. **The probe ranker reduces wasted analysis time by ranking which probe to run next based on expected information gain against surviving hypotheses.** For a binary with 15 competing hypotheses about indirect call targets, running all 15 probes sequentially ignores that some probes resolve multiple hypotheses simultaneously. `ProbeRanker.top_probe()` calculates which probe kind: `cfg`, `taint`, `semantic`, `lifter`: maximally reduces uncertainty across surviving non-CONFIRMED, non-REJECTED hypotheses. `plan()` returns a dry-run ranked list without executing anything.
 
-3. **The three-milestone architecture separates plan-and-report Milestones 1/2 from auto-execution Milestone 3: allowing the engine to be used as a reasoning aid before probe execution is wired up.** In Milestones 1/2, `step(approved=False)` records the probe for analyst review; the analyst executes it manually and calls `add_evidence()`. In Milestone 3, `step(approved=True, ctx=BinaryContext)` executes the probe via `probe_adapters.execute_probe()` and feeds the result back into the confidence scorer automatically.
+3. **The three-milestone architecture separates plan-and-report Milestones 1/2 from auto-execution Milestone 3: allowing the engine to be used as a reasoning aid before probe execution is wired up.** In Milestones 1/2, `step(approved=False)` records the probe for analyst review; the analyst executes it manually and calls `add_evidence()`. In Milestone 3, `stepapproved=True, ctx=BinaryContext` executes the probe via `probe_adapters.execute_probe()` and feeds the result back into the confidence scorer automatically.
 
 ---
 
@@ -143,7 +143,7 @@ report() excerpt:
 
 **`ConfidenceState.CONFIRMED` at `confidence ≥ 0.90` does not guarantee correctness, it reflects evidence quality, not ground truth.** A hypothesis reaches CONFIRMED when sufficient supporting evidence accumulates. If the supporting evidence comes from analyzers with high reliability scores but the underlying observation is wrong for example a semantic search returning a false positive, the hypothesis can be CONFIRMED incorrectly. Always byte-verify CONFIRMED indirect call targets with `data[off:off+n] == expected_bytes` before recording findings.
 
-**`add_hard_contradiction()` sets `strength=0.95`, but does not block future supporting evidence from recovering the hypothesis.** A hard contradiction drives confidence toward 0.05 rejection floor but does not permanently lock the hypothesis as REJECTED. If subsequent evidence with `strength > 0.95` is added in `relation='supports'`, the confidence score can recover. Use `add_hard_contradiction()` for observations that are definitively contradictory (XRef count = 0, invalid VA, wrong architecture), not for weak negative evidence.
+**`add_hard_contradiction()` sets `strength=0.95`, but does not block future supporting evidence from recovering the hypothesis.** A hard contradiction drives confidence toward 0.05 rejection floor but does not permanently lock the hypothesis as REJECTED. If subsequent evidence with `strength > 0.95` is added in `relation='supports'`, the confidence score can recover. Use `add_hard_contradiction()` for observations that are definitively contradictory XRef count = 0, invalid VA, wrong architecture, not for weak negative evidence.
 
 **`step(approved=False)` records the probe in `session.probes` without executing it: `_executed_kinds` is only updated when `approved=True`.** If `step(approved=False)` is called repeatedly, the same probe kind may appear multiple times in the pending list because `executed_kinds` does not include it. The ranker de-duplicates by `executed_kinds`, which is only updated on approval. For planning-only sessions Milestones 1/2, call `plan()` for ranked probe lists rather than `step(approved=False)`.
 
@@ -163,9 +163,9 @@ report() excerpt:
 |:---|:---|
 | `h.status` | `ConfidenceState` enum: CONFIRMED/SUPPORTED/PLAUSIBLE/UNRESOLVED/UNTESTED/REJECTED |
 | `h.confidence` | 0.0–1.0 Bayesian posterior: updated by `scorer.update_hypothesis()` after each evidence |
-| `h.kind` | Hypothesis type string (`indirect_call_target`, `taint_flow`, `vuln_class`) |
-| `h.subject` | Dict identifying the binary artifact being analyzed (e.g., `{"call_site_va": "0x401920"}`) |
-| `h.claim` | Dict stating the specific claim being tested (e.g., `{"target_va": "0x4026c0"}`) |
+| `h.kind` | Hypothesis type string `indirect_call_target`, `taint_flow`, `vuln_class` |
+| `h.subject` | Dict identifying the binary artifact being analyzed for example `{"call_site_va": "0x401920"}` |
+| `h.claim` | Dict stating the specific claim being tested for example `{"target_va": "0x4026c0"}` |
 | `probe.expected_information_gain` | Expected reduction in hypothesis uncertainty: higher = run first |
 
 ---

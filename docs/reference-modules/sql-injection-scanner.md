@@ -1,12 +1,12 @@
 # SQL Injection Scanner
 
-Detect raw SQL injection in x86-64 ELF binaries that call the MySQL C API (`mysql_query`, `mysql_real_query`) or SQLite3 (`sqlite3_exec`, `sqlite3_prepare_v2`, `sqlite3_prepare`) directly: tracing the SQL string argument backward from each call site to classify its provenance as `INJECTABLE`, `INJECTABLE_LITERAL`, `RODATA_CONST`, `SAFE_NUMERIC`, `ARG_PROPAGATED`, or `UNKNOWN`.
+Detect raw SQL injection in x86-64 ELF binaries that call the MySQL C API `mysql_query`, `mysql_real_query` or SQLite3 `sqlite3_exec`, `sqlite3_prepare_v2`, `sqlite3_prepare` directly: tracing the SQL string argument backward from each call site to classify its provenance as `INJECTABLE`, `INJECTABLE_LITERAL`, `RODATA_CONST`, `SAFE_NUMERIC`, `ARG_PROPAGATED`, or `UNKNOWN`.
 
 ---
 
 ## Why this exists
 
-1. **`FormatStringScanner` misses the SQL injection pattern because `snprintf` is safe in isolation: the danger is `snprintf(buf, sizeof(buf), "WHERE login='%s'", username); mysql_queryconn, buf`.** `FormatStringScanner` reports a finding when a format string contains `%s` and the buffer is passed to a dangerous output function. It does not model the SQL API call chain: `snprintf` writes to a local buffer; `mysql_query` receives that buffer as its SQL argument. Detecting this requires chaining: find SQL sink → trace SQL arg register RSI, arg1 backward → find the `snprintf` call that populated the buffer → inspect the format string.
+1. **`FormatStringScanner` misses the SQL injection pattern because `snprintf` is safe in isolation: the danger is `snprintfbuf, sizeof(buf, "WHERE login='%s'", username); mysql_queryconn, buf`.** `FormatStringScanner` reports a finding when a format string contains `%s` and the buffer is passed to a dangerous output function. It does not model the SQL API call chain: `snprintf` writes to a local buffer; `mysql_query` receives that buffer as its SQL argument. Detecting this requires chaining: find SQL sink → trace SQL arg register RSI, arg1 backward → find the `snprintf` call that populated the buffer → inspect the format string.
 
 2. **SQL sink PLT dead-import detection avoids scanning binaries where SQL APIs are imported but never called.** Before scanning any instructions, `SqlSinkScanner` counts how many call sites each SQL PLT stub has (`_count_plt_callers()`). A sink with zero callers is a "dead import", it is recorded in the report but no instruction scan is performed. This prevents both false positives where a PLT-imported symbol happens to match a SQL API name but is never invoked and wasted scan time on binaries that import SQL headers but use a different database layer at runtime.
 
@@ -30,7 +30,7 @@ flowchart TD
 | Verdict | Severity | Meaning |
 |---|---|---|
 | `INJECTABLE` | HIGH | `snprintf` format string contains `%s`; SQL string is format-built from a non-RODATA source |
-| `INJECTABLE_LITERAL` | HIGH | SQL string is a RODATA literal that already contains `%s` (e.g., `"WHERE id='%s'"`) |
+| `INJECTABLE_LITERAL` | HIGH | SQL string is a RODATA literal that already contains `%s` for example `"WHERE id='%s'"` |
 | `ARG_PROPAGATED` | HIGH | SQL string came from a function entry-point register: caller may control it |
 | `UNKNOWN` | MEDIUM | Provenance not resolved within the 40-instruction lookback window |
 | `SAFE_NUMERIC` | LOW | Format string uses only `%d`/`%u`/`%x`: no string interpolation |
@@ -43,8 +43,8 @@ flowchart TD
 | `mysql_query` | arg1 (RSI) | `mysql_queryMYSQL *conn, const char *q` |
 | `mysql_real_query` | arg1 (RSI) | `mysql_real_queryMYSQL *conn, const char *q, unsigned long len` |
 | `sqlite3_exec` | arg1 (RSI) | `sqlite3_execsqlite3 *db, const char *sql, ...` |
-| `sqlite3_prepare_v2` | arg1 (RSI) | `sqlite3_prepare_v2(sqlite3 *db, const char *zSql, ...)` |
-| `sqlite3_prepare` | arg1 (RSI) | `sqlite3_prepare(sqlite3 *db, const char *zSql, ...)` |
+| `sqlite3_prepare_v2` | arg1 (RSI) | `sqlite3_prepare_v2sqlite3 *db, const char *zSql, ...` |
+| `sqlite3_prepare` | arg1 (RSI) | `sqlite3_preparesqlite3 *db, const char *zSql, ...` |
 
 ---
 

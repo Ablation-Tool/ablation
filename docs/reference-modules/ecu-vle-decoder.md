@@ -58,7 +58,7 @@ Before this module, there was no way to disassemble these binaries at all inside
 
 **2. No function_starts() for VLE firmware.** The existing `ppc32-taint-tracker.py` pipeline seeds
 its taint engine from a function-start list. For PPC32 Book E firmware, that list comes from ELF
-symbol tables or a Book E prologue scanner (`stwu r1, -N(r1)` at 4-byte-aligned offsets). For VLE
+symbol tables or a Book E prologue scanner `stwu r1, -N(r1` at 4-byte-aligned offsets). For VLE
 firmware, neither applies: there are no symbols, and the prologue instruction is `e_stwu r1, -N(r1)`
 VLE opcode 6, VUP field 6, which encodes differently from the Book E `stwu`. Before this module,
 the taint tracker had no way to seed itself against VLE firmware.
@@ -122,12 +122,12 @@ intentional encoding property of the e200 VLE ISA, not a heuristic.
 
 | Instruction | Op / Encoding | Type |
 |---|---|---|
-| `e_stwu rS, D8(rA)` | `OPVUP(6,6)` = `0x18000600 \|...` | STORE / PROLOGUE |
-| `e_stmw / e_lmw` | `OPVUP(6,9)` / `OPVUP(6,8)` | STORE / LOAD |
+| `e_stwu rS, D8(rA)` | `OPVUP6,6` = `0x18000600 \|...` | STORE / PROLOGUE |
+| `e_stmw / e_lmw` | `OPVUP6,9` / `OPVUP6,8` | STORE / LOAD |
 | `e_add16i rD, rA, SI` | `OP(7)` = `0x1C000000` | MISC |
 | `e_lbz / e_stb / e_lha` | `OP12/13/14` | LOAD / STORE |
 | `e_lwz / e_stw / e_lhz` | `OP20/21/22` | LOAD / STORE |
-| `e_li rD, LI20` | `LI20(28,0)` | MISC |
+| `e_li rD, LI20` | `LI2028,0` | MISC |
 | `e_b / e_bl BD24` | `BD2430,0,0/1` | BRANCH / CALL |
 
 Instructions not in this list decode as `se_unknown_XXXX` or `vle32_opN` with `insn_type="MISC"`.
@@ -144,7 +144,7 @@ Instructions not in this list decode as `se_unknown_XXXX` or `vle32_opN` with `i
 e_stwu r1, -N(r1)
 ```
 
-Encoded as `OPVUP(6,6)` with RS=1, RA=1, and D8 < 0 bit 7 of D8 set. Detected by scanning
+Encoded as `OPVUP6,6` with RS=1, RA=1, and D8 < 0 bit 7 of D8 set. Detected by scanning
 every 4-byte-aligned offset for the exact bit pattern:
 
 ```python
@@ -161,7 +161,7 @@ every 4-byte-aligned offset for the exact bit pattern:
 se_mflr r0
 ```
 
-Encoded as `0x0080` (SE_R(0,8)). Detected by scanning every 2-byte-aligned offset for
+Encoded as `0x0080` SE_R0,8. Detected by scanning every 2-byte-aligned offset for
 `(hw & 0xFFF0) == 0x0080`. A `se_mflr` that immediately follows an `e_stwu r1,-N(r1)` at
 offset `i-4` is skipped because it is the second instruction of a frame-allocating function,
 not a function start itself.
@@ -261,7 +261,7 @@ if bd24_raw & 0x01000000:      # sign bit
 target = instruction_VA + bd24
 ```
 
-Absolute-address variants (`e_ba`, `e_bla`, AA=1) decode with the displacement as an absolute VA.
+Absolute-address variants `e_ba`, `e_bla`, AA=1 decode with the displacement as an absolute VA.
 
 ---
 
@@ -364,19 +364,19 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `EcuArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, or C28x for vulnerability analysis.
 
 ---
 
 ## Reading output
 
-`EcuVLEDecoder(data, base_va=0).disassemble()` (or `from_path()` / `from_bytes()`) returns `list[VLEInsn]`:
+`EcuVLEDecoderdata, base_va=0.disassemble()` (or `from_path()` / `from_bytes()`) returns `list[VLEInsn]`:
 
 | Attribute | Content |
 |:---|:---|
 | `offset` | Instruction VA base_va + byte offset in buffer |
 | `is_16bit` | `True` for 16-bit SE format, `False` for 32-bit VLE format |
-| `mnemonic` | Instruction mnemonic string (e.g., `'se_lwz'`, `'e_b'`) |
+| `mnemonic` | Instruction mnemonic string for example `'se_lwz'`, `'e_b'` |
 | `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'LOAD'` / `'STORE'` / `'LR_SAVE'` / `'LR_RESTORE'` / `'PROLOGUE'` / `'MISC'` |
 | `raw` | Raw instruction bytes 2 or 4 bytes |
 | `target` | Branch/call target VA, or `None` for non-control-flow instructions |

@@ -374,7 +374,7 @@ StageCommitment doc_id='cisco/fmc_server'
 
 | Attribute | Content |
 |:---|:---|
-| `stage_name` | Stage identifier (e.g., `'taint_analysis'`, `'path_solver'`) |
+| `stage_name` | Stage identifier for example `'taint_analysis'`, `'path_solver'` |
 | `producer` | Producer identity string |
 | `content_hash` | SHA-256 of the committed stage output |
 | `timestamp` | ISO 8601 commitment time |

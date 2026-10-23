@@ -1,6 +1,6 @@
 # TI COFF Archive Loading
 
-Parse Texas Instruments COFF2 object files (`.obj`) and AR archives (`.a`) produced by TI Code Generation Tools (`cl2000`, `c29clang`, `tiarmclang`): extracting symbol tables, section bindings, and storage class information for TI embedded targets where the binary format is COFF2, not ELF.
+Parse Texas Instruments COFF2 object files (`.obj`) and AR archives (`.a`) produced by TI Code Generation Tools `cl2000`, `c29clang`, `tiarmclang`: extracting symbol tables, section bindings, and storage class information for TI embedded targets where the binary format is COFF2, not ELF.
 
 ---
 
@@ -89,7 +89,7 @@ Each `CoffSymbol`:
 | Attribute | Content |
 |:---|:---|
 | `name` | Symbol name string |
-| `value` | Symbol value (address for code/data symbols, `0` for undefined externals) |
+| `value` | Symbol value address for code/data symbols, `0` for undefined externals |
 | `section_number` | `0` = undefined external, `-1` = absolute, `1+` = section index |
 | `storage_class` | Raw storage class integer |
 | `member_name` | AR member this symbol came from empty for standalone objects |

@@ -103,7 +103,7 @@ Run host/service discovery after `local-network-inventory` reveals subnets. Disc
 |:---|:---|
 | `port` | Port number |
 | `banner_raw` | First 256 bytes of response as a hex string |
-| `service_guess` | Identified service name (e.g., `'SSH'`, `'HTTP'`, `'Redis'`, `'unknown'`) |
+| `service_guess` | Identified service name for example `'SSH'`, `'HTTP'`, `'Redis'`, `'unknown'` |
 | `tls` | `True` if TLS was attempted on this port |
 
 `MDNSDiscovery.queryservice_type` returns `List[dict]` with keys `instance_name`, `host`, `ip`, `port`.

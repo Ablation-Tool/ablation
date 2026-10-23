@@ -6,7 +6,7 @@ Classify stripped PPC64/Cell PPU functions as instances of dynamic data structur
 
 ## Why this exists
 
-1. **Stripped PPC64 firmware has no function names.** On Cell PPU targets (PS3 system binaries, Demonware network stack, IBM PowerVM management firmware), `SigLibrary` and `SemanticSearcher` are both limited without symbol anchors. `DynDSClassifier` identifies function classes from their instruction structure: BST traversal produces recursive self-calls; B-tree mutation produces distinct loop shapes and multiple return sites: enabling semantic labeling of stripped functions without any string evidence.
+1. **Stripped PPC64 firmware has no function names.** On Cell PPU targets PS3 system binaries, Demonware network stack, IBM PowerVM management firmware, `SigLibrary` and `SemanticSearcher` are both limited without symbol anchors. `DynDSClassifier` identifies function classes from their instruction structure: BST traversal produces recursive self-calls; B-tree mutation produces distinct loop shapes and multiple return sites: enabling semantic labeling of stripped functions without any string evidence.
 
 2. **Patterns are derived from Chou & Amarasinghe, "Compilation of Dynamic Sparse Tensor Algebra", OOPSLA 2022**: sparse dynamic data structures produce code with predictable structural shapes when traversed or modified. Each shape maps to a combination of: recursive self-calls BST/C-tree traversal, backward conditional branches for-loops over array chunks, and multiple `BLR` sites with literal 0/1 return values coroutine iterators. `DynDSClassifier` implements these discriminators for PPC64 big-endian encoding.
 
@@ -86,7 +86,7 @@ Run `DynDSClassifier` after `BinaryContext.load_or_build()` and `SigLibrary` mat
 | Field | Content |
 |:---|:---|
 | `va` | Virtual address of the classified function |
-| `classification` | Data structure class (e.g., `BST_TRAVERSAL`, `COROUTINE_ITER`, `LINKED_LIST`, `HASH_TABLE`) |
+| `classification` | Data structure class for example `BST_TRAVERSAL`, `COROUTINE_ITER`, `LINKED_LIST`, `HASH_TABLE` |
 | `features` | Dict of raw behavioral features used for classification recursive_calls, blr_count, etc. |
 | `detail` | Human-readable classification rationale |
 

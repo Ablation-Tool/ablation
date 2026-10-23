@@ -6,9 +6,9 @@ Chrome/Edge/Firefox extension security auditor: scanning manifest.json and JavaS
 
 ## Why this exists
 
-1. **FortiClient EMS and related Fortinet browser-resident agents FSSO, FIDO2, VPN ship Chrome extensions with `externally_connectable` patterns broad enough to allow any HTTPS page to call `chrome.runtime.sendMessage` into a privileged service worker.** `BrowserExtensionAuditor` was built to find `FPAM-EXT-1` (CWE-346, HIGH: `externally_connectable` matches `https://*/*`): a pattern that allows any HTTPS origin to use the extension as a confused-deputy port-scan oracle against `127.0.0.1`. Without automation, each extension audit required reading the Chrome extension security model from scratch.
+1. **FortiClient EMS and related Fortinet browser-resident agents FSSO, FIDO2, VPN ship Chrome extensions with `externally_connectable` patterns broad enough to allow any HTTPS page to call `chrome.runtime.sendMessage` into a privileged service worker.** `BrowserExtensionAuditor` was built to find `FPAM-EXT-1` CWE-346, HIGH: `externally_connectable` matches `https://*/*`: a pattern that allows any HTTPS origin to use the extension as a confused-deputy port-scan oracle against `127.0.0.1`. Without automation, each extension audit required reading the Chrome extension security model from scratch.
 
-2. **`MSG_HANDLER_PREAUTH` is the most commonly missed finding in manual extension review: the background service worker destructures the request object or calls `fetch`/`XMLHttpRequest` before checking `sender.id`, `sender.url`, or `sender.origin`.** `BrowserExtensionAuditor` statically matches the JavaScript source for message handler bodies that perform payload processing before a sender check, using regex patterns for all three Chrome extension API surfaces (`chrome.runtime.onMessage`, `chrome.runtime.onMessageExternal`, `browser.runtime.onMessage`).
+2. **`MSG_HANDLER_PREAUTH` is the most commonly missed finding in manual extension review: the background service worker destructures the request object or calls `fetch`/`XMLHttpRequest` before checking `sender.id`, `sender.url`, or `sender.origin`.** `BrowserExtensionAuditor` statically matches the JavaScript source for message handler bodies that perform payload processing before a sender check, using regex patterns for all three Chrome extension API surfaces `chrome.runtime.onMessage`, `chrome.runtime.onMessageExternal`, `browser.runtime.onMessage`.
 
 3. **`WEBSOCKET_BUS` detects background service workers that create or connect to a WebSocket server on localhost: bypassing Chrome's extension message API entirely.** A `ws://localhost:<port>` bus has no sender validation and no `externally_connectable` restriction. Any web page that can reach the same loopback port can drive the extension's privileged behavior. This pattern has appeared in enterprise VPN and endpoint security extensions.
 
@@ -90,7 +90,7 @@ The following illustrates the finding format. Actual file paths, line numbers, a
 
 ## False positives
 
-**`MSG_HANDLER_PREAUTH` fires when a sender check is present but appears after payload destructuring.** Some extensions destructure the message type (e.g., `const { type, payload } = request`) before checking `sender.url`, but the type check itself is a guard. Review the full handler body before confirming: a false positive fires when the destructuring is not followed by privileged action.
+**`MSG_HANDLER_PREAUTH` fires when a sender check is present but appears after payload destructuring.** Some extensions destructure the message type for example `const { type, payload } = request` before checking `sender.url`, but the type check itself is a guard. Review the full handler body before confirming: a false positive fires when the destructuring is not followed by privileged action.
 
 **`EXT_CONN_BROAD` fires for `*://*/*` even when the extension is intended for intranet deployment with an allowlisted set of internal origins.** Enterprise extensions may intentionally use `*://*/*` for a managed deployment. Verify whether `externally_connectable` is narrowed via enterprise policy before escalating.
 
@@ -110,9 +110,9 @@ Run `BrowserExtensionAuditor` as a standalone step during assessment of any vend
 |:---|:---|
 | `rel_path` | Source file path relative to the extension root |
 | `lineno` | Line number of the finding |
-| `finding_class` | Finding code (e.g., `EXT_CONN_BROAD`, `MSG_HANDLER_PREAUTH`, `NATIVE_MSG_NO_ALLOWLIST`) |
+| `finding_class` | Finding code for example `EXT_CONN_BROAD`, `MSG_HANDLER_PREAUTH`, `NATIVE_MSG_NO_ALLOWLIST` |
 | `severity` | `HIGH` / `MEDIUM` |
-| `cwe` | CWE identifier (e.g., `CWE-346`, `CWE-285`) |
+| `cwe` | CWE identifier for example `CWE-346`, `CWE-285` |
 | `title` | Short description of the vulnerability |
 | `detail` | Detailed explanation of the attack vector |
 | `snippet` | Code excerpt at the finding location if available |

@@ -92,10 +92,10 @@ NX-OS/ACI/APIC probe functions return `List[{severity, title, detail, host, port
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` credential success / `HIGH` unauthenticated info / `MEDIUM` |
-| `title` | Finding code (e.g., `APIC_DEFAULT_CRED`, `APIC_UNAUTHENTICATED_INFO`, `NXOS_OSPF_AUTH_BYPASS`) |
+| `title` | Finding code for example `APIC_DEFAULT_CRED`, `APIC_UNAUTHENTICATED_INFO`, `NXOS_OSPF_AUTH_BYPASS` |
 | `detail` | Version, tenant/node count, credential, or auth domain information |
 | `host` | Target APIC or NX-OS IP |
-| `port` | Service port (e.g., `443` for APIC REST API) |
+| `port` | Service port for example `443` for APIC REST API |
 
 ---
 

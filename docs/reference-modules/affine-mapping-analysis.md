@@ -6,9 +6,9 @@ Recover XOR encryption keys from firmware blobs using three attack modes: Known 
 
 ## Why this exists
 
-1. **Firmware XOR obfuscation uses static repeating keys that can be recovered in seconds.** Vendors apply a single repeating XOR key before flashing firmware to NAND (Fortinet, HiSilicon, a range of industrial targets). The cipher is not cryptographic, it is obfuscation. Three well-known attacks break it: known-plaintext recovery from firmware magic bytes, Index of Coincidence spike detection on sparse images, and transposition frequency analysis. Without automated tooling, analysts perform these manually per engagement.
+1. **Firmware XOR obfuscation uses static repeating keys that can be recovered in seconds.** Vendors apply a single repeating XOR key before flashing firmware to NAND Fortinet, HiSilicon, a range of industrial targets. The cipher is not cryptographic, it is obfuscation. Three well-known attacks break it: known-plaintext recovery from firmware magic bytes, Index of Coincidence spike detection on sparse images, and transposition frequency analysis. Without automated tooling, analysts perform these manually per engagement.
 
-2. **NAND flash images have overwhelming sparsity: most bytes are 0xFF (erased) or 0x00 initialized.** This property makes the XOR key immediately recoverable from the most-common-byte-per-column statistic: the most frequent ciphertext byte in each of the key-length columns is `most_common_plaintext XOR key_byte`. The IC spike method identifies the key length first IC rises sharply at multiples of the true key length, then frequency analysis extracts each byte. Validated on FortiWiFi FWF_60E (IC=0.753, 192× above random baseline, 256 MB NAND) and a 512 MB x86-64 firmware image (IC=0.953, 244× above baseline).
+2. **NAND flash images have overwhelming sparsity: most bytes are 0xFF (erased) or 0x00 initialized.** This property makes the XOR key immediately recoverable from the most-common-byte-per-column statistic: the most frequent ciphertext byte in each of the key-length columns is `most_common_plaintext XOR key_byte`. The IC spike method identifies the key length first IC rises sharply at multiples of the true key length, then frequency analysis extracts each byte. Validated on FortiWiFi FWF_60E IC=0.753, 192× above random baseline, 256 MB NAND and a 512 MB x86-64 firmware image IC=0.953, 244× above baseline.
 
 3. **`AffineMapAnalyzer` proves whether an unknown encryption function is pure XOR or has unexpected bit mixing.** When a firmware encryption routine is identified in a binary but its structure is unknown, `AffineMapAnalyzer` reconstructs the function's GF(2) affine map (A×P + K) by calling the function with unit-vector inputs. A pure XOR cipher produces A = Identity. Zero columns reveal plaintext bits that never affect output implementation bugs. Off-diagonal entries reveal accidental bit rotation or mixing beyond simple XOR.
 
@@ -159,7 +159,7 @@ AffineMapAnalyzer: block_size=16 (128 bits)
 | `result.key` | Recovered XOR key bytes, or `None` if all methods failed |
 | `result.key_length` | Length of the repeating key |
 | `result.method` | `'ic+freq'` / `'kpa'` / `'hamming+freq'` / `'none'` |
-| `result.magic_matched` | KPA-matched magic label (e.g., `'SquashFS (little-endian)'`) |
+| `result.magic_matched` | KPA-matched magic label for example `'SquashFS (little-endian'`) |
 | `result.confidence` | 0.0–1.0: KPA=0.65–0.85, IC+freq=entropy-drop fraction |
 | `result.notes` | Entropy before/after, drop %, key length detail |
 | `analyze()` `A == I` | `True` = pure XOR; `False` = bit mixing or implementation bug |

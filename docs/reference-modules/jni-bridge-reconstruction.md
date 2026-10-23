@@ -113,11 +113,11 @@ for f in findings:
 
 ## False positives
 
-**`ACC_NATIVE` count vs. reachable count.** The `jni/dex_native_methods` finding counts every `ACC_NATIVE` method in the APK. Many of these may be in library classes never instantiated in the main application flow. Trace the call graph from Android entry points (`onCreate`, `onStartCommand`, `handleMessage`) to find which native methods are actually reachable from user input.
+**`ACC_NATIVE` count vs. reachable count.** The `jni/dex_native_methods` finding counts every `ACC_NATIVE` method in the APK. Many of these may be in library classes never instantiated in the main application flow. Trace the call graph from Android entry points `onCreate`, `onStartCommand`, `handleMessage` to find which native methods are actually reachable from user input.
 
 **Peer field naming conventions.** The `_PEER_NAMES` set contains common names but does not cover all vendor-specific naming conventions. A peer field named `mEngineId` or `nativeBuf` does not match and goes unreported. Run `ctx.grep(r'type_desc.*J.*field_name', lang='dex')` to find all `long` fields in the APK for a broader sweep.
 
-**Canonical naming not equal to safe.** `jni/canonical_naming` carries MEDIUM rather than HIGH not because canonical binding is safer, but because the attack surface is easier to enumerate: the class and method names are already visible. The actual native code at `Java_*` can still be fully attacker-controlled. Always taint-trace canonical exports the same way as dynamic ones.
+**Canonical naming not equal to safe.** `jni/canonical_naming` carries MEDIUM rather than HIGH not because canonical binding is safer, but because the attack surface is easier to enumerate: the class and method names are already visible. The actual native code at `Java_*` can still be attacker-controlled. Always taint-trace canonical exports the same way as dynamic ones.
 
 ---
 

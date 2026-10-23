@@ -1,6 +1,6 @@
 # Analyzer Probe Adapters
 
-Bridge between the Hypothesis Engine's typed `ProbeRecord` requests and the concrete Ablation analyzers: dispatching `disassembly`, `cfg`, `xref`, `lifter`, `semantic`, `version`, `taint`, and `manual` probe kinds to their respective tools (Capstone, CFGBuilder, XRefGraph, BinaryLifter, SemanticSearcher, DTWMatcher, arch-appropriate TaintTracker) and returning `EvidenceRecord` objects that the engine feeds back into its hypothesis scoring loop.
+Bridge between the Hypothesis Engine's typed `ProbeRecord` requests and the concrete Ablation analyzers: dispatching `disassembly`, `cfg`, `xref`, `lifter`, `semantic`, `version`, `taint`, and `manual` probe kinds to their respective tools Capstone, CFGBuilder, XRefGraph, BinaryLifter, SemanticSearcher, DTWMatcher, arch-appropriate TaintTracker and returning `EvidenceRecord` objects that the engine feeds back into its hypothesis scoring loop.
 
 ---
 
@@ -171,7 +171,7 @@ DTW similarity=0.891
 | `ev.reliability` | 0.8 default most adapters: confidence in the observation accuracy |
 | `ev.family` | `structure` / `data_flow` / `cross_reference` / `semantic` / `version` / `manual` |
 | `ev.observation` | Dict with adapter-specific fields see table above for per-adapter keys |
-| `ev.analyzer` | Adapter class name (e.g., `TaintAdapter`, `DisassemblyAdapter`) |
+| `ev.analyzer` | Adapter class name for example `TaintAdapter`, `DisassemblyAdapter` |
 
 ---
 

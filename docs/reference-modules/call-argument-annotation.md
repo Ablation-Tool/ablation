@@ -72,7 +72,7 @@ The following illustrates the annotation output format. Actual addresses and val
 
 ## False positives
 
-**`RegAnnotator` clears caller-saved registers at unknown CALL targets**: a `Const` value that was set before an unresolved call will appear as `Unknown` afterward, even if the callee doesn't actually clobber it. To track values through specific callees, pre-populate the callee's PLT entry with `RegAnnotator.register_callee_preserves(sym, regs=[...])`.
+**`RegAnnotator` clears caller-saved registers at unknown CALL targets**: a `Const` value that was set before an unresolved call will appear as `Unknown` afterward, even if the callee doesn't actually clobber it. To track values through specific callees, pre-populate the callee's PLT entry with `RegAnnotator.register_callee_preservessym, regs=[...]`.
 
 **Single-pass forward propagation does not handle loops**: a register modified in a loop body will appear with its first-assignment value, not the loop-updated value. For loop-body analysis, use `ConstPropAnalysis` from [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md) instead.
 
@@ -113,7 +113,7 @@ Each `CallSite`:
 | `'string'` | `'<preview>'` | `.rodata` string pointer resolved via LEA |
 | `'copy'` | `<src_val> via <reg>` | Copied from another register; chain shows origin |
 | `'ret'` | `ret<callee>` | Return value of a prior named call |
-| `'zero'` | `0` | Explicitly zeroed (e.g., `xor reg, reg`) |
+| `'zero'` | `0` | Explicitly zeroed for example `xor reg, reg` |
 | `'mem'` | `[<desc>]` | Loaded from memory; not statically resolvable |
 | `'unknown'` | `?` | Clobbered or untracked |
 

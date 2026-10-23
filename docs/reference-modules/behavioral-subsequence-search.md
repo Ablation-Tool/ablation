@@ -97,7 +97,7 @@ search_like(<va>, threshold=0.5):
 
 ## Pipeline position
 
-Run `SubsequenceSearcher` after `SemanticSearcher` has identified the top candidates for a vulnerability class. Use `search_like()` with a confirmed candidate to find structural relatives in the same binary: catching alternative handlers that semantic search missed because their string content differs. The search operates on pre-computed operation-category sequences and is fast (~1-2 seconds for 10,000 functions after `precompute()`).
+Run `SubsequenceSearcher` after `SemanticSearcher` has identified the top candidates for a vulnerability class. Use `search_like()` with a confirmed candidate to find structural relatives in the same binary: catching alternative handlers that semantic search missed because their string content differs. The search operates on pre-computed operation-category sequences and is fast ~1-2 seconds for 10,000 functions after `precompute(`).
 
 ---
 

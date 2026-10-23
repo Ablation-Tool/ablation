@@ -92,8 +92,8 @@ Run `SourceSinkScanner` as an early source-analysis pass after cloning or extrac
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` unguarded / `MEDIUM` guarded by env var or feature flag |
-| `cwe` | CWE identifier (e.g., `CWE-94`, `CWE-78`) |
-| `title` | Vulnerability class (e.g., `Code Evaluation`, `Subprocess Execution`) |
+| `cwe` | CWE identifier for example `CWE-94`, `CWE-78` |
+| `title` | Vulnerability class for example `Code Evaluation`, `Subprocess Execution` |
 | `file` | Source file path |
 | `line` | Line number |
 | `sink` | Sink function or method name |

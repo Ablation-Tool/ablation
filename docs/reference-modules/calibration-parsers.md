@@ -82,7 +82,7 @@ EcuOpenDamosParser: open_damos.json  (EDC16C34)
 
 **`locate_in_rom()` fingerprint matching may return wrong addresses when multiple ROM regions contain the same axis breakpoint values**: fuel map axis values for example RPM breakpoints 800, 1200, 1600, ... may appear in multiple places. The parser selects the first match; validate located tables by comparing axis value counts against the A2L definition.
 
-**A2L ROM addresses are absolute**: if the ECU ROM is loaded at a non-zero base address in `BinaryContext`, `CalibrationTable.va` must be adjusted by the base offset before injection. A2L addresses are typically the actual Flash memory physical addresses (e.g., `0x80000000` for ARM Cortex-M Flash base).
+**A2L ROM addresses are absolute**: if the ECU ROM is loaded at a non-zero base address in `BinaryContext`, `CalibrationTable.va` must be adjusted by the base offset before injection. A2L addresses are typically the actual Flash memory physical addresses for example `0x80000000` for ARM Cortex-M Flash base.
 
 ---
 

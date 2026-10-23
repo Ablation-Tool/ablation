@@ -82,9 +82,9 @@ Run TI SDK sweeping on any TI SDK package directory or HiSilicon NearLink firmwa
 
 ## Reading output
 
-**MCS-51 8051 firmware:** `Mcs51Decoderdata, base_va.decode_rangeoffset, size` yields `Mcs51Insn`. See [isa-8051](isa-8051.md) for the full `Mcs51Insn` field reference (`offset`, `raw`, `mnemonic`, `operands`, `insn_type`, `target`, `size`).
+**MCS-51 8051 firmware:** `Mcs51Decoderdata, base_va.decode_rangeoffset, size` yields `Mcs51Insn`. See [isa-8051](isa-8051.md) for the full `Mcs51Insn` field reference `offset`, `raw`, `mnemonic`, `operands`, `insn_type`, `target`, `size`.
 
-**HiSilicon WS63 (NearLink firmware):** `HiSiliconRV32ExtDecoderbinary, base_va.scan_custom3code, base_va` returns `List[HisiInsn]`. See [hisi-rv32-ext](hisi-rv32-ext.md) for the full `HisiInsn` field reference (`address`, `size`, `mnemonic`, `op_str`, `rd`, `rs1`, `rs2`, `funct3`, `funct7`).
+**HiSilicon WS63 (NearLink firmware):** `HiSiliconRV32ExtDecoderbinary, base_va.scan_custom3code, base_va` returns `List[HisiInsn]`. See [hisi-rv32-ext](hisi-rv32-ext.md) for the full `HisiInsn` field reference `address`, `size`, `mnemonic`, `op_str`, `rd`, `rs1`, `rs2`, `funct3`, `funct7`.
 
 ---
 

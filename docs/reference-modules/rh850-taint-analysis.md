@@ -6,7 +6,7 @@ Tracks user-controlled data from source registers R6–R9 through GHS CC-RH / IA
 
 ## Why this exists
 
-1. **V850TaintTracker requires a well-formed ELF binary. Denso RH850/G3M and Bosch GS327 ECU firmware ships as flat ROM dumps without ELF headers.** The V850 tracker uses `_load_elf()` which calls `lief.parse()`, which returns `None` for raw binary blobs. `RH850TaintTracker.from_bytes(data, base_va=0x0)` skips ELF loading and creates the tracker directly from flat bytes, taking the base virtual address as an explicit parameter. The caller provides function boundaries to `scan_function()` rather than relying on symbol table discovery.
+1. **V850TaintTracker requires a well-formed ELF binary. Denso RH850/G3M and Bosch GS327 ECU firmware ships as flat ROM dumps without ELF headers.** The V850 tracker uses `_load_elf()` which calls `lief.parse()`, which returns `None` for raw binary blobs. `RH850TaintTracker.from_bytesdata, base_va=0x0` skips ELF loading and creates the tracker directly from flat bytes, taking the base virtual address as an explicit parameter. The caller provides function boundaries to `scan_function()` rather than relying on symbol table discovery.
 
 2. **GHS CC-RH and IAR default to `double = 32 bits`, not 64 bits as GCC assumes.** Reference: GHS-RE-REFERENCE.md §2.7. In the GHS CC-RH ABI, a `double` argument occupies one arg register, R6, R7, R8, or R9, not a register pair. V850TaintTracker models the GCC ABI where `double = 64 bits` occupies a pair (R6:R7). For a function `foochar *s, double d`, V850TaintTracker incorrectly marks R7 as the high half of the double, leaving R7 as the taint destination instead of tracking it as the independent argument `d`. `double_is_32bit=True` the default corrects this.
 

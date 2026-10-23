@@ -6,7 +6,7 @@ Extend interprocedural taint tracking across shared library boundaries: followin
 
 ## Why this exists
 
-1. **Single-binary `TaintTracker.run_interprocedural()` stops at PLT entries, it knows the symbol name but not the address of the implementation in the exporting library.** `CrossBinaryTaintTracker` resolves PLT symbol names to their implementations in the firmware's shared library collection using `LibGraph`, then continues the taint BFS from the exported function's entry point. A taint chain that originates in `httpsd`, passes through `libservice.so`, and reaches `system()` in `libc.so` is fully recovered.
+1. **Single-binary `TaintTracker.run_interprocedural()` stops at PLT entries, it knows the symbol name but not the address of the implementation in the exporting library.** `CrossBinaryTaintTracker` resolves PLT symbol names to their implementations in the firmware's shared library collection using `LibGraph`, then continues the taint BFS from the exported function's entry point. A taint chain that originates in `httpsd`, passes through `libservice.so`, and reaches `system()` in `libc.so` is recovered.
 
 2. **Network appliance firmware is a layered shared library ecosystem: FortiOS `httpsd` calls into `libcmdb.so`, which calls into `libservice.so`, which calls `system()`.** Without cross-library tracking, each library is analyzed in isolation and the end-to-end taint path is invisible. `CrossBinaryTaintTracker` rebuilds the complete chain by BFS over the library graph, bounded by `max_hops` to prevent infinite traversal.
 
@@ -81,7 +81,7 @@ CrossBinaryTaintChain (depth=<N>):
 
 ## False positives
 
-**`LibGraph.from_dir()` resolves imports by symbol name: if two `.so` files export the same symbol name, `LibGraph` will pick the first one found filesystem ordering.** On firmware with multiple ABI-compatible implementations of a symbol (e.g., a debug and release variant of `libservice.so`), the wrong exporting binary may be selected. Always verify the resolved binary path in each `TaintHop`.
+**`LibGraph.from_dir()` resolves imports by symbol name: if two `.so` files export the same symbol name, `LibGraph` will pick the first one found filesystem ordering.** On firmware with multiple ABI-compatible implementations of a symbol for example a debug and release variant of `libservice.so`, the wrong exporting binary may be selected. Always verify the resolved binary path in each `TaintHop`.
 
 **`max_hops=6` stops BFS at 6 library crossings: some taint chains in large firmware ecosystems may require more hops.** Increase `max_hops` if chains are consistently truncated at the limit. The cost is linear in `max_hops` × number of chains explored.
 

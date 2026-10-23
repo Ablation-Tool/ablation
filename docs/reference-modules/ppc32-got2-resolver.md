@@ -245,7 +245,7 @@ PPC32 GOT2 resolver: 38/42 resolved (90%)
 
 Each `GOT2ResolvedCall` has: `bctrl_va`, `kind` (`'got2'` or `'direct'`), `target`, `name`, `r30`, `disp`, `entry_va`.
 
-Each `GOT2UnresolvedCall` has: `bctrl_va`, `reason` (e.g., `'dynamic_dispatch'`, `'no_r30_setup_precedes'`).
+Each `GOT2UnresolvedCall` has: `bctrl_va`, `reason` for example `'dynamic_dispatch'`, `'no_r30_setup_precedes'`.
 
 `GOT2ResolveResult.stats` returns a summary dict with `total_bctrl`, `resolved`, `got2`, `direct`, `unresolved`, `dynamic` counts.
 

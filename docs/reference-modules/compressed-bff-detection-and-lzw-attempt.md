@@ -77,7 +77,7 @@ Transitions: 3  (threshold=0.50)
 
 ## False positives
 
-**`encrypted_ranges()` threshold H≥7.5 also fires on valid compressed data**: standard gzip, xz, squashfs filesystems all have H close to 8.0. The distinction between encrypted and compressed is not deterministic from entropy alone; use the offset returned by `encrypted_ranges()` as the starting point for magic-byte detection (`1f 8b` for gzip, `68 73 71 73` for squashfs) before applying a decryption attempt.
+**`encrypted_ranges()` threshold H≥7.5 also fires on valid compressed data**: standard gzip, xz, squashfs filesystems all have H close to 8.0. The distinction between encrypted and compressed is not deterministic from entropy alone; use the offset returned by `encrypted_ranges()` as the starting point for magic-byte detection `1f 8b` for gzip, `68 73 71 73` for squashfs before applying a decryption attempt.
 
 **Small window sizes < 512 bytes produce noisy entropy estimates** for regions with sparse content. Use the default 4096-byte window for firmware analysis; smaller windows are appropriate only for detailed region inspection.
 

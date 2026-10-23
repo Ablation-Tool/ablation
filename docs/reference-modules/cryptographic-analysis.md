@@ -6,7 +6,7 @@ Identify cryptographic algorithm implementations in compiled ARM32/Thumb2 firmwa
 
 ## Why this exists
 
-1. **Compiled hash implementations leave algorithm-specific K-table constants round constants, magic numbers embedded in `.rodata` or as immediate loads in code: `HashAlgoDiscriminator` identifies these constants against known algorithm fingerprints without requiring disassembly of the full hash round loop.** For example, SHA-256 round constants (`0x428a2f98`, `0x71374491`, ...) appear as distinct 32-bit values that cannot be misidentified as another algorithm, enabling instant hash algorithm identification from static data.
+1. **Compiled hash implementations leave algorithm-specific K-table constants round constants, magic numbers embedded in `.rodata` or as immediate loads in code: `HashAlgoDiscriminator` identifies these constants against known algorithm fingerprints without requiring disassembly of the full hash round loop.** For example, SHA-256 round constants `0x428a2f98`, `0x71374491`, ... appear as distinct 32-bit values that cannot be misidentified as another algorithm, enabling instant hash algorithm identification from static data.
 
 2. **Hand-rolled AES-128-CBC in ARM32/Thumb2 has a characteristic BSS-tracked block pointer, XOR-with-previous-ciphertext chaining loop, and IV loaded from `.rodata`.** `CustomCBCDetector` identifies these structural patterns without requiring the AES S-box to be present: critical for implementations that use hardware AES acceleration for the block cipher but implement the CBC chaining mode in software. The Fortinet ARM32 pattern was the original motivation.
 
@@ -95,7 +95,7 @@ Run `HashAlgoDiscriminator` and `CustomCBCDetector` during initial binary triage
 
 | Attribute | Content |
 |:---|:---|
-| `algo` | Algorithm name (e.g., `'SHA256'`, `'MD5'`, `'CRC32'`) |
+| `algo` | Algorithm name for example `'SHA256'`, `'MD5'`, `'CRC32'` |
 | `confidence` | Integer 0–100: confidence score based on K-table constant coverage |
 | `matched` | `List[ConstMatch]`: each matched constant with `.va` and `.name` |
 

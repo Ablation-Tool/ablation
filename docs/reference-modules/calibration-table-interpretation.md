@@ -10,7 +10,7 @@
 
 2. **A single `CalibrationTable` may have a shared x-axis breakpoint array referenced by many tables: `CalibrationAxis.shared_from` names the owning table.** This is the ASAM A2L `AXIS_PTS` pattern: a standalone axis object referenced by multiple `CHARACTERISTIC` entries. Knowing whether an axis is shared vs. private matters for address labeling: `label_map()` only emits axis labels for axes with non-None addresses; `DALINK` axes no physical storage emit only the table label.
 
-3. **`eval_math_equation()` evaluates TunerPro-style MATH string equations (`X*0.1`, `X/4+20`, etc.) for definition files that use equation-form scaling instead of linear A/B coefficients.** This covers the XDF/TunerPro calibration format subset used by some Bosch and Siemens aftermarket definition files. Without it, physical values from MATH-equation axes would require parsing in the caller.
+3. **`eval_math_equation()` evaluates TunerPro-style MATH string equations `X*0.1`, `X/4+20`, etc. for definition files that use equation-form scaling instead of linear A/B coefficients.** This covers the XDF/TunerPro calibration format subset used by some Bosch and Siemens aftermarket definition files. Without it, physical values from MATH-equation axes would require parsing in the caller.
 
 ---
 
@@ -123,7 +123,7 @@ KF_LOAD_EFF [MAP 16x16]
 | `little_endian` | `True` for little-endian byte order |
 | `scale` | Scale factor applied to raw integer data |
 | `bias` | Bias added after scaling |
-| `unit` | Physical unit string (e.g., `mg/stroke`, `°C`) |
+| `unit` | Physical unit string for example `mg/stroke`, `°C` |
 | `x_axis` | `Optional[CalibrationAxis]`: X-axis breakpoints |
 | `y_axis` | `Optional[CalibrationAxis]`: Y-axis breakpoints MAP type only |
 | `source_file` | Path to the definition file this table was parsed from |

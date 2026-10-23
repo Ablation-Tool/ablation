@@ -94,7 +94,7 @@ Run `ETWProviderExtractor` as part of Windows PE initial triage alongside `RPCSe
 
 | Attribute | Content |
 |:---|:---|
-| `guid` | Provider GUID string (e.g., `'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'`) |
+| `guid` | Provider GUID string for example `'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'` |
 | `known_name` | Name from the known-provider table, or empty string if not recognized |
 | `registration_count` | Number of `EventRegister` call sites for this GUID |
 | `registration_vas` | `List[int]`: VAs of each `EventRegister` call site |

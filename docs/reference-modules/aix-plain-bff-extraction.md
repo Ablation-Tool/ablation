@@ -10,7 +10,7 @@ Parse AIX backup-by-name (BFF) archives produced by AIX 4.x and 5.x backup(8): i
 
 2. **BFF archives use little-endian integer encoding on a big-endian (PowerPC) platform.** All fields in the extended stat block, file size word, and stat summary block are little-endian `uint32`: the opposite of XCOFF and AIX's native byte order. XCOFF tools and most AIX-aware parsers assume big-endian for all fields, producing incorrect sizes that cause them to skip or misread entries. This extractor handles the mixed-endian layout explicitly: magic at offset 0 is `b'\x09\x00'` LE uint16 value 9, file size at `ext_stat+56` is LE uint32, uid/gid/mode in the stat summary are LE uint32.
 
-3. **BFF archives from AIX 4.3.3 and 5.1 contain the primary RE targets for AIX kernel extension analysis.** Kernel extensions (`.ext`), shared objects (`.a` in AIX XCOFF format), and network daemon binaries (`imapd`, `named8`, `gated`, `telnetd`) are all distributed inside BFF archives. `iter_entries()` yields their data bytes directly: ready for `BinaryContext.load_or_build()` or XCOFF parsing without any intermediate extraction step.
+3. **BFF archives from AIX 4.3.3 and 5.1 contain the primary RE targets for AIX kernel extension analysis.** Kernel extensions (`.ext`), shared objects (`.a` in AIX XCOFF format), and network daemon binaries `imapd`, `named8`, `gated`, `telnetd` are all distributed inside BFF archives. `iter_entries()` yields their data bytes directly: ready for `BinaryContext.load_or_build()` or XCOFF parsing without any intermediate extraction step.
 
 ---
 
@@ -126,9 +126,9 @@ telnetd: 234,568 bytes  ELF_magic=01df
 
 ## Pipeline position
 
-**Before this module:** Confirm the archive is a plain BFF (`data[0] == 0x09`) rather than a compressed variant. Use `bff_decompressor.detect(data)` to check: compressed archives (LZW `0x0E`, Huffman `0x0C`) require `BFFDecompressor.open()` from `bff_decompressor.py`.
+**Before this module:** Confirm the archive is a plain BFF (`data[0] == 0x09`) rather than a compressed variant. Use `bff_decompressor.detect(data)` to check: compressed archives LZW `0x0E`, Huffman `0x0C` require `BFFDecompressor.open()` from `bff_decompressor.py`.
 
-**After this module:** Feed `BffEntry.data` bytes for XCOFF binaries directly to `BinaryContext.load_or_build()` via a temporary file (write `entry.data` to a temp path, then load). Run `CorpusBuilder.build()` on the full extracted tree before any cross-binary analysis: kernel extensions in AIX BFF archives reference shared symbols in `libinet.a` and `libnet.a` that must be in the corpus.
+**After this module:** Feed `BffEntry.data` bytes for XCOFF binaries directly to `BinaryContext.load_or_build()` via a temporary file write `entry.data` to a temp path, then load. Run `CorpusBuilder.build()` on the full extracted tree before any cross-binary analysis: kernel extensions in AIX BFF archives reference shared symbols in `libinet.a` and `libnet.a` that must be in the corpus.
 
 ---
 

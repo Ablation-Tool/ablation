@@ -6,7 +6,7 @@ Parse APK containers, decode Android binary XML manifests (AXML), iterate DEX cl
 
 ## Why this exists
 
-1. **Android apps ship as ZIP containers with binary-encoded manifests and multi-DEX class databases.** The `AndroidManifest.xml` inside an APK is not text, it is AXML (Android Binary XML, chunk type `0x0003`) with a separate string pool, resource map, and compact attribute encoding. DEX files use ULEB128-encoded method, field, and class tables. Without a dedicated parser, analysts use `aapt`, `apktool`, or `jadx`: tools not available in automated pipelines and not integrated with the ablation scanner chain.
+1. **Android apps ship as ZIP containers with binary-encoded manifests and multi-DEX class databases.** The `AndroidManifest.xml` inside an APK is not text, it is AXML Android Binary XML, chunk type `0x0003` with a separate string pool, resource map, and compact attribute encoding. DEX files use ULEB128-encoded method, field, and class tables. Without a dedicated parser, analysts use `aapt`, `apktool`, or `jadx`: tools not available in automated pipelines and not integrated with the ablation scanner chain.
 
 2. **Hardcoded credentials, API keys, and weak cipher choices live in DEX string pools and are not visible from manifest inspection alone.** The DEX string pool contains every string constant from the Java source: AWS `AKIA*` access keys, Firebase API keys, Tuya `appKey`/`appSecret`, JWT bearer tokens, PEM-encoded private keys, and hardcoded 16/32-byte hex keys all appear as strings. `DexAnalyzer` scans all `classes*.dex` string pools in a single pass and matches 12 secret patterns plus a database of dangerous class and method references.
 

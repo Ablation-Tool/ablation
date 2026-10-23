@@ -92,7 +92,7 @@ Timestamp and log anomaly detection functions return `List[{severity, title, det
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` timestomp, log clear / `MEDIUM` log gap, future timestamp |
-| `title` | Finding code (e.g., `MFT_TIMESTOMP`, `LOG_CLEAR_EVENT`, `LOG_GAP`, `FUTURE_TIMESTAMP`) |
+| `title` | Finding code for example `MFT_TIMESTOMP`, `LOG_CLEAR_EVENT`, `LOG_GAP`, `FUTURE_TIMESTAMP` |
 | `detail` | File path, EventID, timestamp values, or gap duration |
 
 For `MFT_TIMESTOMP`: `detail` contains the file path, MTIME, and CRTIME values.

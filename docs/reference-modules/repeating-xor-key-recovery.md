@@ -78,7 +78,7 @@ XorSolverResult:
 
 ## Pipeline position
 
-Run `XorSolver` on firmware images that extract as opaque binary blobs: when `FirmwareExtraction` tools (`binwalk`, entropy analysis) show no recognized headers and the entropy plot is uniformly high typical of XOR obfuscation, not compression. After decryption, re-run extraction and analysis tools on the decrypted image.
+Run `XorSolver` on firmware images that extract as opaque binary blobs: when `FirmwareExtraction` tools `binwalk`, entropy analysis show no recognized headers and the entropy plot is uniformly high typical of XOR obfuscation, not compression. After decryption, re-run extraction and analysis tools on the decrypted image.
 
 ---
 

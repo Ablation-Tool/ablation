@@ -15,7 +15,7 @@ Web framework route tables in compiled firmware binaries are initialized at runt
 
 ## How it works
 
-The auditor targets flatui-style web frameworks (FortiManager, FortiAnalyzer web management backends) but the control flow graph traversal approach applies to any route-registration framework where the authentication check is expressed as a middleware parameter at registration time.
+The auditor targets flatui-style web frameworks FortiManager, FortiAnalyzer web management backends but the control flow graph traversal approach applies to any route-registration framework where the authentication check is expressed as a middleware parameter at registration time.
 
 ### Full pipeline
 
@@ -79,7 +79,7 @@ Each result in `results.routes` has:
 
 | Field | Content |
 |---|---|
-| `path` | HTTP path string (e.g., `api/v2/monitor/system/status`) |
+| `path` | HTTP path string for example `api/v2/monitor/system/status` |
 | `method` | `GET` / `POST` / `PUT` / `DELETE` |
 | `handler_va` | VA of the handler function |
 | `sink_calls` | List of dangerous PLT calls reachable from the handler |
@@ -144,9 +144,9 @@ Routes registered with auth middleware at the app level not as a decorator on th
 
 This page describes a CFG reachability workflow. Individual tools return different types:
 
-- **TaintTracker** paths from entry point to security sink: `List[TaintPath]`: see [source-audit](source-audit.md) for `TaintPath` fields (`sink`, `hops`, `confidence`, `has_source`).
-- **SourceEntryClassifier** routes without auth: `List[RouteClassification]`: see [tenant-isolation-checks](tenant-isolation-checks.md) for `RouteClassification` fields (`rel_path`, `auth_level`, `matched_signal`).
-- **GateFinding** for binary targets: `List[GateFinding]`: see [compiler-security-gate](compiler_security_gate.md) for fields (`func_va`, `site_va`, `category`, `severity`).
+- **TaintTracker** paths from entry point to security sink: `List[TaintPath]`: see [source-audit](source-audit.md) for `TaintPath` fields `sink`, `hops`, `confidence`, `has_source`.
+- **SourceEntryClassifier** routes without auth: `List[RouteClassification]`: see [tenant-isolation-checks](tenant-isolation-checks.md) for `RouteClassification` fields `rel_path`, `auth_level`, `matched_signal`.
+- **GateFinding** for binary targets: `List[GateFinding]`: see [compiler-security-gate](compiler_security_gate.md) for fields `func_va`, `site_va`, `category`, `severity`.
 
 ---
 

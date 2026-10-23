@@ -131,7 +131,7 @@ for f in findings:
 
 ## Pipeline position
 
-**Before this module:** Run `BinaryContext.load_or_build()` on the `.so` file to build the symbol index. Confirm that `lief` and `capstone` are installed (`import lief; import capstone`: if either is missing, `analyze()` returns `[]` silently). Verify the binary is an Apache module by checking for `ap_hook_handler` or `register_hooks` in the dynamic symbol table: `[s.name for s in lief.parse(path).dynamic_symbols]`.
+**Before this module:** Run `BinaryContext.load_or_build()` on the `.so` file to build the symbol index. Confirm that `lief` and `capstone` are installed `import lief; import capstone`: if either is missing, `analyze(` returns `[]` silently). Verify the binary is an Apache module by checking for `ap_hook_handler` or `register_hooks` in the dynamic symbol table: `[s.name for s in lief.parse(path).dynamic_symbols]`.
 
 **After this module:** For `AUTH_BYPASS_SURFACE` findings: use `TaintTracker` to trace the Cookie header value through `session_from_string()` → `decrypt_and_auth()` to the skip flag write: confirming that attacker-controlled input from the Cookie header reaches the flag. Check whether the session key RC4, AES is retrievable from the binary or from a configuration file before reporting impact. Register the finding with `FindingRegistry.register()` and write to `re/<vendor>/<target>_re.py`.
 

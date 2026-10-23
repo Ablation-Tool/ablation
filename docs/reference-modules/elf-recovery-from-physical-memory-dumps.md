@@ -100,7 +100,7 @@ Run `PS3SELFDecryptor.from_path()` before any SELF file analysis. After successf
 |:---|:---|
 | `in_path` | Path to the input SELF file |
 | `out_path` | Path where the decrypted ELF was written |
-| `key_rev` | Key revision byte used for decryption (e.g., `0x0016`) |
+| `key_rev` | Key revision byte used for decryption for example `0x0016` |
 | `section_count` | Total SELF segments found in the header |
 | `decrypted_sections` | Count of segments successfully decrypted |
 | `elf_size` | Size of the output ELF in bytes |

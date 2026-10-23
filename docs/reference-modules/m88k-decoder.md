@@ -29,7 +29,7 @@ Motorola MC88100 is a RISC processor from the late 1980s used in Motorola 88000 
 
 **Seed analysis from `function_starts()`.** The BCS COFF is typically stripped. `function_starts()` recovers function boundaries from BSR/BSR.N call sites in `.text`. Without seeds, the taint tracker has no entry points.
 
-**Do not interpret triadic op placeholder output as findings.** Triadic ops (0x3A-0x3C) decode as placeholder mnemonics because the shift, rotate, multiply, and divide function codes are not fully decoded. A triadic placeholder in a taint path is not a confirmed finding.
+**Do not interpret triadic op placeholder output as findings.** Triadic ops (0x3A-0x3C) decode as placeholder mnemonics because the shift, rotate, multiply, and divide function codes are not decoded. A triadic placeholder in a taint path is not a confirmed finding.
 
 **Use `string_refs()` separately from taint analysis.** `string_refs()` scans for `OR.U + OR` constant-load pairs that point into `.data`. These are format string and constant references, not taint sources.
 
@@ -74,7 +74,7 @@ All MC88100 instruction classes decoded:
 | Branch | 0x30–0x33 | BR, BR.N, BSR 26-bit PC-relative × 4, BSR.N |
 | Conditional | 0x25, 0x29, 0x2D | BCND / BCND.N 16-bit PC-relative × 4 |
 | CTL JMP/JSR/MOV | 0x3D | bits 15:14 select JMP (11), JSR (10), MOV (00/01) |
-| Triadic integer | 0x3A–0x3C | partial: function code field not fully decoded |
+| Triadic integer | 0x3A–0x3C | partial: function code field not decoded |
 | Unknown | all others | decoded as `???XX`, no exception |
 
 Triadic ops (0x3A–0x3C) emit placeholder mnemonics; the full MC88100 PRM
@@ -216,9 +216,9 @@ for insn in decoder.disassemble_bytes(binary.text.data, base_va=binary.text.vadd
 | `data_start` | `int` | `.data` section base VA |
 | `sections` | `List[Section]` | All parsed sections |
 
-Each `Section`: `name, vaddr, size, flags, data`; properties `is_text, is_data, va_end`; methods `read_word(va)`, `read_bytes(va, n)`, `contains_va(va)`.
+Each `Section`: `name, vaddr, size, flags, data`; properties `is_text, is_data, va_end`; methods `read_word(va)`, `read_bytesva, n`, `contains_va(va)`.
 
-Helper methods on `M88kCoffBinary`: `section(name)`, `text` property, `data` property, `va_to_bytes(va, n)`, `words_atva, count`.
+Helper methods on `M88kCoffBinary`: `section(name)`, `text` property, `data` property, `va_to_bytesva, n`, `words_atva, count`.
 
 ---
 

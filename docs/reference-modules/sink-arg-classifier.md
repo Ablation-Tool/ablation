@@ -8,7 +8,7 @@ Classify the provenance of command-string arguments at every exec-class sink cal
 
 1. **TaintTracker wastes effort on sinks that cannot be exploited.** A `system("/bin/ls")` call is a sink in name only: the argument originates from `.rodata`, not from user input. Passing every exec-class call site to `TaintTracker` means tracing dozens of unreachable sinks for every real one. `SinkArgClassifier` runs first and stamps `RODATA_CONST` on every hardcoded-literal sink, removing them from the taint queue entirely.
 
-2. **Most firmware shell invocations go through a snprintf buffer.** The dominant pattern in Fortinet, Aruba, and Cisco firmware builds a shell command with `snprintf(cmd, sizeof(cmd), '/bin/tool %s', user_param)` and passes `cmd` to a vendor exec function. A pure backward trace from the exec site sees a stack-buffer argument and returns `UNKNOWN`: the format string is never examined. This tool follows the stack buffer one level up to the `snprintf` call and classifies the `snprintf` format register: if that register also holds a `.rodata` literal, the verdict changes from `UNKNOWN` to `SNPRINTF_RODATA`, which carries only MEDIUM risk (format is fixed; injection requires controlling a `%s` argument).
+2. **Most firmware shell invocations go through a snprintf buffer.** The dominant pattern in Fortinet, Aruba, and Cisco firmware builds a shell command with `snprintfcmd, sizeof(cmd, '/bin/tool %s', user_param)` and passes `cmd` to a vendor exec function. A pure backward trace from the exec site sees a stack-buffer argument and returns `UNKNOWN`: the format string is never examined. This tool follows the stack buffer one level up to the `snprintf` call and classifies the `snprintf` format register: if that register also holds a `.rodata` literal, the verdict changes from `UNKNOWN` to `SNPRINTF_RODATA`, which carries only MEDIUM risk (format is fixed; injection requires controlling a `%s` argument).
 
 3. **Vendor exec functions differ from the POSIX `system` API in argument position.** Fortinet's `fadcsystem` passes the command string in `rsi` (arg 1), not `rdi` (arg 0). Fortinet's `fadcsystem_envp` uses `rdi`. Cisco's `sys_vdom_exec` uses `rsi`. Without configurable argument position, a classifier built around `system(rdi)` misclassifies every vendor-specific sink. `add_sinkname, arg_pos` registers these variants without modifying the module.
 
@@ -160,8 +160,8 @@ Total: 47  RODATA_CONST: 31  ARG_PROPAGATED: 8  SNPRINTF_RODATA: 5  UNKNOWN: 3
 
 | Field | Content |
 |:---|:---|
-| `sink_name` | Name of the called sink function (e.g., `fadcsystem`, `system`) |
-| `arg_pos` | 0-indexed argument position of the command string (0 = `rdi`, 1 = `rsi`, etc.) |
+| `sink_name` | Name of the called sink function for example `fadcsystem`, `system` |
+| `arg_pos` | 0-indexed argument position of the command string 0 = `rdi`, 1 = `rsi`, etc. |
 | `func_va` | VA of the function containing the sink call |
 | `call_va` | VA of the `CALL` instruction |
 | `verdict` | `RODATA_CONST` / `SNPRINTF_RODATA` / `ARG_PROPAGATED` / `UNKNOWN` |

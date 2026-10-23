@@ -103,10 +103,10 @@ Remote management probe functions return `List[{severity, title, detail, host, p
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` auth bypass or relay target / `MEDIUM` enabled service |
-| `title` | Finding code (e.g., `SMB_NULL_SESSION`, `SMB_NTLM_RELAY_TARGET`, `WINRM_ENABLED`) |
+| `title` | Finding code for example `SMB_NULL_SESSION`, `SMB_NTLM_RELAY_TARGET`, `WINRM_ENABLED` |
 | `detail` | Dialect, OS, NTLM challenge bytes, or auth method list |
 | `host` | Target host IP |
-| `port` | Protocol port (e.g., `445` for SMB, `5985` for WinRM) |
+| `port` | Protocol port for example `445` for SMB, `5985` for WinRM |
 
 ---
 

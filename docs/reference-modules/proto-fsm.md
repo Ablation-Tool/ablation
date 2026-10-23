@@ -190,7 +190,7 @@ State variable identification heuristic BSS writes with small immediates ≤255 
 
 ## Pipeline position
 
-**Before this module:** Use `_load(path)` directly (returns `binary, raw, load_addr`). Identify seed VAs via `SemanticSearcher.query("handshake state machine authentication")` or known entry points. No `BinaryContext` required.
+**Before this module:** Use `_load(path)` directly returns `binary, raw, load_addr`. Identify seed VAs via `SemanticSearcher.query("handshake state machine authentication")` or known entry points. No `BinaryContext` required.
 
 **After this module:** Call `emit_dotstates, transitions, state_vars` and render with Graphviz to visualize the FSM. Identify missing authentication state checks for example a transition from an unauthenticated state to a sensitive resource that skips the authenticated state.
 

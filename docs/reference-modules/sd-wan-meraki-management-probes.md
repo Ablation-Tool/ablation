@@ -86,10 +86,10 @@ SD-WAN/Meraki probe functions return `List[{severity, title, detail, host, port}
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` unauthenticated API / `MEDIUM` portal fingerprint |
-| `title` | Finding code (e.g., `VMANAGE_UNAUTH_API`, `VMANAGE_PORTAL_FINGERPRINT`, `MERAKI_DEFAULT_CRED`) |
+| `title` | Finding code for example `VMANAGE_UNAUTH_API`, `VMANAGE_PORTAL_FINGERPRINT`, `MERAKI_DEFAULT_CRED` |
 | `detail` | Endpoint, HTTP response code, or data accessible without authentication |
 | `host` | Target IP |
-| `port` | Service port (e.g., `8443` for vManage) |
+| `port` | Service port for example `8443` for vManage |
 
 ---
 

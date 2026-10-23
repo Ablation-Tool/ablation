@@ -100,7 +100,7 @@ Run `ForkExecClassifier` after `SinkArgClassifier` returns `ARG_PROPAGATED` find
 | `func_va` | VA of the function containing the fork |
 | `verdict` | `EXEC_AFTER_FORK`, `WORKER`, `EXIT_IN_CHILD`, or `UNKNOWN` |
 | `child_entry_va` | VA where the child branch begins (`eax==0` path), or `0` |
-| `exec_target` | Exec function name (e.g., `'execve'`, `'system'`): set when `EXEC_AFTER_FORK` |
+| `exec_target` | Exec function name for example `'execve'`, `'system'`: set when `EXEC_AFTER_FORK` |
 | `exec_call_va` | VA of the exec call: set when `EXEC_AFTER_FORK`, otherwise `0` |
 | `blocks_walked` | Count of BFS blocks examined during child-path analysis |
 | `detail` | Human-readable verdict detail string |

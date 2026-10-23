@@ -1,6 +1,6 @@
 # AIX Big Archive Extraction
 
-Detect and handle compressed AIX BFF archives (LZW type `0x0E`, IBM Huffman type `0x0C`): routing plain archives to `bff_extractor.iter_entries()`, calling the system `uncompress` command for LZW archives, and raising `BFFCompressedError` with specific guidance when decompression requires an AIX `restore(8)` environment.
+Detect and handle compressed AIX BFF archives LZW type `0x0E`, IBM Huffman type `0x0C`: routing plain archives to `bff_extractor.iter_entries()`, calling the system `uncompress` command for LZW archives, and raising `BFFCompressedError` with specific guidance when decompression requires an AIX `restore(8)` environment.
 
 ---
 
@@ -122,7 +122,7 @@ stream on an AIX 4.3.3 system and open a module gap against XLC-GAP-014.
 
 **`detect()` returns `'not-bff'` for truncated downloads.** A BFF archive with a valid magic byte (`0x09`) but truncated body reports as plain. `detect()` only checks the first byte, it does not verify the volume header is complete. A truncated plain BFF will pass `detect()` but `iter_entries()` will yield zero entries (the first entry's ext_stat block will be incomplete). Verify archive integrity by checking file size against the IBM package manifest before attempting extraction.
 
-**LZW decompression via `uncompress -c` requires the `ncompress` package.** On most modern Linux systems (Ubuntu, Debian, CentOS), `uncompress` is not installed by default, it lives in the `ncompress` package. `_try_uncompress_lzw()` calls `subprocess.run(['uncompress', '-c'], ...)`: if `uncompress` is not found, the subprocess returns non-zero and `BFFCompressedError` is raised with the AIX-restore guidance. Install `ncompress` first: `apt install ncompress` or `yum install ncompress`.
+**LZW decompression via `uncompress -c` requires the `ncompress` package.** On most modern Linux systems Ubuntu, Debian, CentOS, `uncompress` is not installed by default, it lives in the `ncompress` package. `_try_uncompress_lzw()` calls `subprocess.run(['uncompress', '-c'], ...)`: if `uncompress` is not found, the subprocess returns non-zero and `BFFCompressedError` is raised with the AIX-restore guidance. Install `ncompress` first: `apt install ncompress` or `yum install ncompress`.
 
 **`_try_restore()` returns a temp directory path bytes, not entries.** The current `_try_restore()` implementation returns the temp directory path as bytes a marker rather than a list of `BffEntry` objects: the re-packing step from extracted files back to BffEntry objects is not implemented. For Huffman archives where `restore(8)` is available, `BFFDecompressor` still raises `BFFCompressedError`: the AIX restore path is detection only, not full extraction.
 

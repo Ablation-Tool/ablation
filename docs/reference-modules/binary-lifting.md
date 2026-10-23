@@ -10,7 +10,7 @@ Lift native binary instructions from 18 ISA variants: ARM64, x86-64, x86-32, ARM
 
 2. **ARM64 and x86-64 have full typed-register-state lifters; all other ISAs produce structured pseudocode**: the ARM64 backend (`_lift_arm64`) and x86-64 backend (`_lift_x86_64`) both maintain a typed register state machine: each instruction's output is modeled as a `NativeVal` with a C type, and taint annotations are propagated register-by-register. All other backends produce structured pseudocode: call sites are resolved to names, branch targets are labeled, and arithmetic appears as C-style expressions, but without a register state machine.
 
-3. **`with_taintfindings` integrates TaintTracker output directly into lifted pseudocode**: `BinaryLifter.with_taintfindings` accepts a list of `TaintFindingARM64` (or any object with `func_va`, `source_reg`, `sink_reg`, or `tainted_regs` attributes) and returns a new `BinaryLifter` instance that annotates affected instructions in the lifted output with taint markers. This connects the automated taint analysis to the human-readable pseudocode.
+3. **`with_taintfindings` integrates TaintTracker output directly into lifted pseudocode**: `BinaryLifter.with_taintfindings` accepts a list of `TaintFindingARM64` or any object with `func_va`, `source_reg`, `sink_reg`, or `tainted_regs` attributes and returns a new `BinaryLifter` instance that annotates affected instructions in the lifted output with taint markers. This connects the automated taint analysis to the human-readable pseudocode.
 
 ---
 

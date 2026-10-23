@@ -10,7 +10,7 @@ Enumerate the Windows COM attack surface in PE binaries: detecting self-register
 
 2. **COM hijacking exploits machine-writable registry keys at `HKCU\Software\Classes\CLSID\{...}`: if a CLSID registered under `HKLM` can be overridden per-user, any low-privilege process can register a malicious COM server for that CLSID.** `cocreate_sites()` returns `call_va, clsid_string` tuples for all `CoCreateInstance` call sites, providing the inventory needed to check each referenced CLSID against the registry for hijackability. Without this inventory, COM hijacking assessment requires manual enumeration.
 
-3. **`CoCreateInstance` combined with `IDispatch::Invoke` is a common DCOM lateral movement pattern: the binary activates a remote COM object and drives it via the `Invoke` dispatch interface.** `scan()` detects `IDispatch` usage (`IDispatch::Invoke`, `CoCreateInstanceEx`, `CLSIDFromString`) combined with `CoCreateInstance` in the same binary and reports `COM_DISPATCH_REMOTE` findings, which are candidates for DCOM-based lateral movement.
+3. **`CoCreateInstance` combined with `IDispatch::Invoke` is a common DCOM lateral movement pattern: the binary activates a remote COM object and drives it via the `Invoke` dispatch interface.** `scan()` detects `IDispatch` usage `IDispatch::Invoke`, `CoCreateInstanceEx`, `CLSIDFromString` combined with `CoCreateInstance` in the same binary and reports `COM_DISPATCH_REMOTE` findings, which are candidates for DCOM-based lateral movement.
 
 ---
 
@@ -85,7 +85,7 @@ The following illustrates the finding report format. Actual CLSIDs and addresses
 
 ## False positives
 
-**`cocreate_sites()` attempts to backtrack from the call VA to the CLSID push argument, but indirect CLSID loading CLSID from registry, CLSID from configuration file, CLSID from IPC will produce `(call_va, None)` entries.** A `None` CLSID indicates the CLSID is not statically recoverable. These entries still appear in `COM_HIJACK_CANDIDATE` findings to flag the call site: they require dynamic analysis or manual reverse engineering to resolve.
+**`cocreate_sites()` attempts to backtrack from the call VA to the CLSID push argument, but indirect CLSID loading CLSID from registry, CLSID from configuration file, CLSID from IPC will produce `call_va, None` entries.** A `None` CLSID indicates the CLSID is not statically recoverable. These entries still appear in `COM_HIJACK_CANDIDATE` findings to flag the call site: they require dynamic analysis or manual reverse engineering to resolve.
 
 **`COM_DISPATCH_REMOTE` fires on any binary that imports both `CoCreateInstance` and `IDispatch::Invoke`, this includes benign shell extensions and document viewers that use COM for in-process object activation.** Confirm lateral movement potential by checking whether `CoCreateInstanceEx` cross-machine DCOM or `CLSCTX_REMOTE_SERVER` flag is used at the specific call site.
 

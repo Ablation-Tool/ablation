@@ -10,7 +10,7 @@ Collect security posture indicators for exposed LLM inference endpoints across s
 
 2. **MITRE ATLAS adversarial ML techniques require active probing to confirm: static analysis cannot identify them.** AML.T0054 prompt injection requires sending a payload and observing the response. AML.T0050 backdoor model requires checking model names and provenance hashes. AML.T0052 ML model ontology discovery requires confirming whether `/v1/models` returns architecture metadata. AML.T0048 exfiltration via model requires confirming whether the embedding endpoint accepts PII strings and returns vectors. None of these are visible from port scanning.
 
-3. **AI systems deployed on enterprise networks lack the audit artifact controls expected of production systems.** Audit logs (`/v1/audit_log`), request replay surfaces (`x-request-id` + `/v1/requests/{id}`), and debug endpoints (`/debug`, `/v1/debug`) expose the full inference history of an AI system without authentication in most default deployments. These artifacts are critical for incident reconstruction, and equally useful to an adversary mapping who queried what model with what prompts.
+3. **AI systems deployed on enterprise networks lack the audit artifact controls expected of production systems.** Audit logs (`/v1/audit_log`), request replay surfaces (`x-request-id` + `/v1/requests/{id}`), and debug endpoints `/debug`, `/v1/debug` expose the full inference history of an AI system without authentication in most default deployments. These artifacts are critical for incident reconstruction, and equally useful to an adversary mapping who queried what model with what prompts.
 
 ---
 

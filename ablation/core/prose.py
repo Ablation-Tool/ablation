@@ -85,11 +85,29 @@ def _scan_line(lineno: int, line: str) -> Iterator[ProseIssue]:
             yield ProseIssue('ai_copy', lineno, m.start() + 1, m.group(), suggestion)
 
 
+_INLINE_CODE = re.compile(r'`[^`\n]+`')
+
+
 def check(text: str) -> list[ProseIssue]:
-    """Check a string for white-bronco violations."""
+    """Check a string for white-bronco violations.
+
+    Skips fenced code blocks (``` or ~~~) and strips inline code spans
+    before applying rules, so Python examples and mermaid diagrams do not
+    produce false positives.
+    """
     issues: list[ProseIssue] = []
+    in_code_block = False
     for i, line in enumerate(text.splitlines(), start=1):
-        issues.extend(_scan_line(i, line))
+        stripped = line.strip()
+        if stripped.startswith('```') or stripped.startswith('~~~'):
+            in_code_block = not in_code_block
+            continue
+        if in_code_block:
+            continue
+        # Replace inline code spans with spaces so column offsets are preserved
+        # for any violations that follow the span on the same line.
+        prose_line = _INLINE_CODE.sub(lambda m: ' ' * len(m.group()), line)
+        issues.extend(_scan_line(i, prose_line))
     return issues
 
 

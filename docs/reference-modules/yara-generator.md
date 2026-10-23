@@ -147,7 +147,7 @@ rule mal_malware_exe_3a4f8c1d2b9e7f5a
 
 ## False positives
 
-**Shared IOC strings with common values.** If an IOC string is a common domain or IP address (e.g., `127.0.0.1`, `example.com`), the `2 of ($s_*)` condition does not filter it out. Only one instance of a widely shared string could still match alongside another one. Remove obviously common values from the IOC strings input before calling the generator.
+**Shared IOC strings with common values.** If an IOC string is a common domain or IP address for example `127.0.0.1`, `example.com`, the `2 of ($s_*)` condition does not filter it out. Only one instance of a widely shared string could still match alongside another one. Remove obviously common values from the IOC strings input before calling the generator.
 
 **API names in security utilities.** Anti-malware, EDR agents, and debugging tools legitimately import `NtCreateThreadEx`, `VirtualAllocEx`, and other CRITICAL APIs for monitoring purposes. The CRITICAL threshold in the generator is calibrated for untrusted samples: applying generated rules to enterprise endpoint binaries will produce false positives.
 

@@ -147,7 +147,7 @@ boolean onTransact(int p1, Parcel p2, Parcel p3, int p4) {
 
 **Before this module:** Use `APKParser.parse_manifest()` to generate the exported service list: `DEXDisasm` and `DEXLifter` require a class name to disassemble, and the manifest is the authoritative source for which services are exported and what permission guards exist at the component level.
 
-**After this module:** For services with no `checkCallingPermission()` in `onTransact()` branches that read Parcel data: feed the sink method (e.g., `processCommand()`) back through `DEXLifter.lift_method()` to trace the full data path from the IPC boundary to the sink. For services with `IPC_STRING_DIRECT_TO_SINK` patterns: a `readString()` result passed to a method like `exec()`, `Runtime.exec()`, or `ProcessBuilder`: escalate directly to a taint-trace with `TaintTracker`.
+**After this module:** For services with no `checkCallingPermission()` in `onTransact()` branches that read Parcel data: feed the sink method for example `processCommand(`) back through `DEXLifter.lift_method()` to trace the full data path from the IPC boundary to the sink. For services with `IPC_STRING_DIRECT_TO_SINK` patterns: a `readString()` result passed to a method like `exec()`, `Runtime.exec()`, or `ProcessBuilder`: escalate directly to a taint-trace with `TaintTracker`.
 
 ---
 

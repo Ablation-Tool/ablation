@@ -1,6 +1,6 @@
 # Vendor Sink Profiles
 
-Load vendor-specific sink registrations and known-safe exec patterns from YAML profiles in `ablation/profiles/`: extending `SinkArgClassifier` with firmware-specific wrapper functions (e.g., Fortinet's `fadcsystem`, Cisco's `cpexec`) and known-safe patterns (e.g., `popen` calls that always use a fixed unsetenv prefix) without modifying the core classifier.
+Load vendor-specific sink registrations and known-safe exec patterns from YAML profiles in `ablation/profiles/`: extending `SinkArgClassifier` with firmware-specific wrapper functions for example Fortinet's `fadcsystem`, Cisco's `cpexec` and known-safe patterns for example `popen` calls that always use a fixed unsetenv prefix without modifying the core classifier.
 
 ---
 
@@ -79,7 +79,7 @@ SinkArgClassifier (with fortinet profile):
 
 **A vendor-specific wrapper is only safe to treat as a sink at arg_pos N if the wrapper always passes its arg_pos N directly to the underlying exec function.** If a wrapper sanitizes its input before calling exec, `apply_to()` will over-report by classifying the sanitized wrapper the same as a raw exec call. Review each registered wrapper's implementation before relying on its profile registration.
 
-**Known-safe patterns match by string prefix: a pattern `'^/usr/bin/logger'` will match any command starting with `/usr/bin/logger`.** If the pattern is followed by user-controlled data (e.g., `/usr/bin/logger $USER_INPUT`), the pattern is not actually safe. Verify that the command string after the prefix is also hardcoded before registering the pattern.
+**Known-safe patterns match by string prefix: a pattern `'^/usr/bin/logger'` will match any command starting with `/usr/bin/logger`.** If the pattern is followed by user-controlled data for example `/usr/bin/logger $USER_INPUT`, the pattern is not actually safe. Verify that the command string after the prefix is also hardcoded before registering the pattern.
 
 ---
 
@@ -95,7 +95,7 @@ Apply `VendorProfile.apply_to(clf)` immediately after creating `SinkArgClassifie
 
 | Attribute | Content |
 |:---|:---|
-| `vendor` | Vendor name string (e.g., `'fortinet'`) |
+| `vendor` | Vendor name string for example `'fortinet'` |
 | `sinks` | `List[dict]`: dicts with `name`, `arg_pos`, `note` |
 | `safe_patterns` | `List[dict]`: known-safe exec pattern records with `pattern` and `note` |
 | `sanitizers` | `List[dict]`: known sanitizer function records |

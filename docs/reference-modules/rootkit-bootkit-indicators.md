@@ -1,6 +1,6 @@
 # Rootkit/Bootkit Indicators
 
-Detect kernel hook installation patterns (SSDT, KiFastCallEntry, notify callbacks), DPC/timer abuse for persistent kernel execution, bootloader tampering signatures MBR/VBR overwrite, UEFI module injection, and memory-only malware indicators: all through static binary analysis without running the sample: via `modules/forensics_enum.py`.
+Detect kernel hook installation patterns SSDT, KiFastCallEntry, notify callbacks, DPC/timer abuse for persistent kernel execution, bootloader tampering signatures MBR/VBR overwrite, UEFI module injection, and memory-only malware indicators: all through static binary analysis without running the sample: via `modules/forensics_enum.py`.
 
 ---
 
@@ -8,7 +8,7 @@ Detect kernel hook installation patterns (SSDT, KiFastCallEntry, notify callback
 
 1. **`detect_ssdt_hook_indicators()` identifies Windows kernel rootkit patterns statically**, it scans binary data for string references to `KeServiceDescriptorTable`, `KiFastCallEntry`, `PsSetLoadImageNotifyRoutine`, `ObRegisterCallbacks`, and `CmRegisterCallback`. These are the hook installation points used by kernel-mode rootkits to intercept system calls, hide processes, and monitor object creation. Presence of these references in a non-driver binary is a strong rootkit indicator.
 
-2. **`detect_dpc_timer_abuse()` identifies covert persistence mechanisms**: kernel rootkits use Deferred Procedure Calls (`KeInitializeDpc`, `KeSetTimerEx`) and work items (`IoQueueWorkItem`) to schedule malicious callbacks without a visible thread. `detect_dpc_timer_abuse()` scans for these API references alongside suspicious patterns: timer periods below 100ms polling cadence typical of rootkit checkins, callbacks to non-standard driver sections, and `KeSetTimerEx` calls with negative due times immediate execution.
+2. **`detect_dpc_timer_abuse()` identifies covert persistence mechanisms**: kernel rootkits use Deferred Procedure Calls `KeInitializeDpc`, `KeSetTimerEx` and work items (`IoQueueWorkItem`) to schedule malicious callbacks without a visible thread. `detect_dpc_timer_abuse()` scans for these API references alongside suspicious patterns: timer periods below 100ms polling cadence typical of rootkit checkins, callbacks to non-standard driver sections, and `KeSetTimerEx` calls with negative due times immediate execution.
 
 3. **`detect_bootkit_indicators()` covers MBR, VBR, and UEFI-layer persistence**, it scans for disk sector write patterns to LBA 0 MBR overwrite, `INT 0x13` hook installation real-mode bootloader intercept, `EFI_BOOT_SERVICES` table manipulation, and UEFI module installation patterns. Bootkits survive OS reinstallation; detecting them statically from a memory image or disk sector dump is the only analysis path that does not require running the bootkit.
 
@@ -92,7 +92,7 @@ Run rootkit/bootkit indicator analysis on any kernel driver binary (`*.sys`), me
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` |
-| `title` | Finding code (e.g., `SSDT_OVERWRITE`, `NOTIFY_CALLBACK`, `BOOTKIT_PARTITION_READ`) |
+| `title` | Finding code for example `SSDT_OVERWRITE`, `NOTIFY_CALLBACK`, `BOOTKIT_PARTITION_READ` |
 | `detail` | VA, function name, or detected pattern description |
 
 ---

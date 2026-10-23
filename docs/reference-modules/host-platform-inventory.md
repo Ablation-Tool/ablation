@@ -1,6 +1,6 @@
 # Host Platform Inventory
 
-Detect OS family, kernel version, CPU architecture, libc variant, and security capability settings (ASLR, NX bit, SELinux/AppArmor status, seccomp) on a live host: providing the platform baseline needed to select the correct exploit primitives: via `ablation/core/platform_detect.py` `PlatformDetector`.
+Detect OS family, kernel version, CPU architecture, libc variant, and security capability settings ASLR, NX bit, SELinux/AppArmor status, seccomp on a live host: providing the platform baseline needed to select the correct exploit primitives: via `ablation/core/platform_detect.py` `PlatformDetector`.
 
 ---
 
@@ -8,7 +8,7 @@ Detect OS family, kernel version, CPU architecture, libc variant, and security c
 
 1. **Exploit primitive selection depends on exact platform details**: a kernel heap overflow exploit requires knowing whether the host runs glibc or musl, whether ASLR is enabled (`/proc/sys/kernel/randomize_va_space`), and whether the kernel was compiled with SMEP/SMAP. `PlatformDetector` extracts these facts from `/proc/version`, `/proc/sys/`, `/etc/os-release`, and `uname` without requiring root.
 
-2. **`PlatformDetector` is architecture-aware**, it distinguishes x86-64, ARM64, ARMv7, MIPS32, PPC64, and RISC-V from `uname -m` and the ELF header of `/proc/self/exe`. This is relevant when the compromised host is an embedded Linux device (ARM-based network equipment, IoT gateway) where x86-64 shellcode will fail silently.
+2. **`PlatformDetector` is architecture-aware**, it distinguishes x86-64, ARM64, ARMv7, MIPS32, PPC64, and RISC-V from `uname -m` and the ELF header of `/proc/self/exe`. This is relevant when the compromised host is an embedded Linux device ARM-based network equipment, IoT gateway where x86-64 shellcode will fail silently.
 
 3. **Security capability detection**: ASLR level (0/1/2), NX (`/sys/devices/system/cpu/cpu0/topology/`), SELinux mode (`/sys/fs/selinux/enforce`), AppArmor status (`/sys/module/apparmor/parameters/enabled`), and seccomp filter status from `/proc/self/status`: all without executing privileged commands. This determines whether a found exploit is directly executable or requires a mitigation bypass step.
 
@@ -78,7 +78,7 @@ info['capabilities']['available_tools'] = ['gdb', 'strings', 'readelf']
 
 ## False positives
 
-**`info['security']['selinux']` is `True` when `/sys/fs/selinux` exists, not when SELinux is enforcing**: `detect_security_features()` checks `os.path.exists('/sys/fs/selinux')`, which is `True` even in permissive mode. It does not distinguish permissive from enforcing. To confirm enforcement, read `/sys/fs/selinux/enforce` separately (value `1` = enforcing, `0` = permissive).
+**`info['security']['selinux']` is `True` when `/sys/fs/selinux` exists, not when SELinux is enforcing**: `detect_security_features()` checks `os.path.exists('/sys/fs/selinux')`, which is `True` even in permissive mode. It does not distinguish permissive from enforcing. To confirm enforcement, read `/sys/fs/selinux/enforce` separately value `1` = enforcing, `0` = permissive.
 
 **`info['security']['aslr'] = 'full'` does not guarantee every region is randomized**: some applications disable ASLR for specific threads via `personalityADDR_NO_RANDOMIZE`. The `/proc/sys/kernel/randomize_va_space` value reflects the system-wide setting only; per-process enforcement must be verified separately.
 
@@ -96,12 +96,12 @@ Run `PlatformDetector` as the second step after gaining shell access (after `Net
 
 | Key | Content |
 |:---|:---|
-| `os` | OS name (e.g., `'Linux'`, `'Windows'`) |
+| `os` | OS name for example `'Linux'`, `'Windows'` |
 | `os_release` | Platform release string |
 | `os_version` | Full platform version string |
-| `distro` | Linux distribution name (e.g., `'ubuntu'`), or absent on non-Linux |
+| `distro` | Linux distribution name for example `'ubuntu'`, or absent on non-Linux |
 | `distro_version` | Distribution version string, or absent |
-| `machine` | CPU architecture string (e.g., `'x86_64'`, `'aarch64'`) |
+| `machine` | CPU architecture string for example `'x86_64'`, `'aarch64'` |
 | `processor` | Processor identifier string |
 | `pointer_size` | Integer: pointer size in bits 32 or 64 |
 | `byte_order` | `'little'` or `'big'` |

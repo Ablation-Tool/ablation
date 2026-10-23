@@ -96,7 +96,7 @@ Orchestration probe functions return `List[{severity, title, detail, host, port}
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` unauthenticated catalog/API / `HIGH` management API exposed |
-| `title` | Finding code (e.g., `CONSUL_CATALOG_OPEN`, `VCENTER_EXPOSED`, `KONG_ADMIN_OPEN`) |
+| `title` | Finding code for example `CONSUL_CATALOG_OPEN`, `VCENTER_EXPOSED`, `KONG_ADMIN_OPEN` |
 | `detail` | Service count, version, or configuration exposure description |
 | `host` | Target IP |
 | `port` | Service port |

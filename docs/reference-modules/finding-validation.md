@@ -211,7 +211,7 @@ FindingRegistry.stats()
 
 ## False positives
 
-**`PathSolver` SAT on an infeasible path**: unconstrained memory reads let Z3 assign arbitrary values to struct fields, producing models that satisfy the formula but are not reachable in practice. Use `MemoryConstraint` seeding to constrain known struct fields, and always validate the model against the vulnerability semantics (e.g., the `len` register should exceed the allocation size for a buffer overflow).
+**`PathSolver` SAT on an infeasible path**: unconstrained memory reads let Z3 assign arbitrary values to struct fields, producing models that satisfy the formula but are not reachable in practice. Use `MemoryConstraint` seeding to constrain known struct fields, and always validate the model against the vulnerability semantics for example the `len` register should exceed the allocation size for a buffer overflow.
 
 **`PathSolver` UNSAT on a real path**: loops and indirect calls create unconstrained symbolic values that over-constrain the Z3 formula. Increase `max_path_blocks` or add `MemoryConstraint` seeds for register-held struct pointers. If a path still produces UNSAT, manual disassembly trace is the fallback.
 

@@ -8,7 +8,7 @@ Analyze Apache C module binaries (`.so` files built against APR/APRUTIL) for sec
 
 1. **FortiAnalyzer v7.6.3 ships a custom Apache module `mod_extension.so` that bypasses MFA via a session skip flag.** Manual disassembly FAZ-CVE22572 / CVE-2026-22572 was required to confirm the bypass surface because no Ablation tool could identify Apache APR hook registration patterns, find the authentication hook handler function, or locate the `DECLINED` return path. `ApacheModuleAnalyzer` closes this gap.
 
-2. **Apache modules export hook registration functions (`register_hooks`, `module_name_module`) and register callbacks via `ap_hook_check_access`/`ap_hook_check_access_ex`/`ap_hook_auth_checker`.** `ApacheModuleAnalyzer.from_path()` identifies these registration sites and maps each hook to its handler function VA, enabling `FuncProfiler` to analyze exactly the handler function, not the full module.
+2. **Apache modules export hook registration functions `register_hooks`, `module_name_module` and register callbacks via `ap_hook_check_access`/`ap_hook_check_access_ex`/`ap_hook_auth_checker`.** `ApacheModuleAnalyzer.from_path()` identifies these registration sites and maps each hook to its handler function VA, enabling `FuncProfiler` to analyze exactly the handler function, not the full module.
 
 3. **`ApacheModuleAnalyzer.scan()` looks for authentication skip patterns in hook handlers**: `DECLINED` returns (-1) before any credential validation, `r->notes` flag checks that bypass the authentication flow, and `apr_table_get(r->notes, "skip_auth")` patterns. These patterns are the structural signature of auth bypass vulnerabilities in Apache C modules.
 
@@ -70,7 +70,7 @@ scan() findings:
 
 ## False positives
 
-**`DECLINED` return detection uses backward trace from return instruction**: a function that returns `DECLINED` (`-1`) for specific URI patterns (e.g., to skip auth for public assets like `/favicon.ico`) is architecturally valid. Verify that the `DECLINED` return path is conditional on the skip flag rather than unconditional.
+**`DECLINED` return detection uses backward trace from return instruction**: a function that returns `DECLINED` (`-1`) for specific URI patterns for example to skip auth for public assets like `/favicon.ico` is architecturally valid. Verify that the `DECLINED` return path is conditional on the skip flag rather than unconditional.
 
 **`ap_hook_*` function name matching uses PLT name lookup**: if the module uses a wrapper that calls `ap_hook_check_access` indirectly for example through a function pointer stored in a struct, the hook registration may not be detected. Inspect the module's `register_hooks` function manually if no hooks are detected in a known Apache module.
 
@@ -78,7 +78,7 @@ scan() findings:
 
 ## Pipeline position
 
-Run `ApacheModuleAnalyzer` on any Apache `.so` module found in firmware (`/usr/lib/apache2/modules/`, FortiAnalyzer `/webroot/lib/`) during initial attack surface enumeration. Pair with `PreAuthRouteAuditor` for web framework authentication bypass analysis on the same target.
+Run `ApacheModuleAnalyzer` on any Apache `.so` module found in firmware `/usr/lib/apache2/modules/`, FortiAnalyzer `/webroot/lib/` during initial attack surface enumeration. Pair with `PreAuthRouteAuditor` for web framework authentication bypass analysis on the same target.
 
 ---
 
@@ -89,9 +89,9 @@ Run `ApacheModuleAnalyzer` on any Apache `.so` module found in firmware (`/usr/l
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` / `MEDIUM` |
-| `title` | Finding code (e.g., `SESSION_SKIP_FLAG`, `ACCESS_CHECK_BYPASS`) |
+| `title` | Finding code for example `SESSION_SKIP_FLAG`, `ACCESS_CHECK_BYPASS` |
 | `detail` | Hook name, handler VA, and bypass pattern description |
-| `hook_name` | Apache hook name (e.g., `ap_hook_check_access`) |
+| `hook_name` | Apache hook name for example `ap_hook_check_access` |
 | `handler_va` | VA of the hook handler function |
 
 Hook registration details are embedded in the `detail` field of each `ApacheFinding` returned by `analyze()`. Each finding includes the `hook_name` and `handler_va` attributes alongside the security verdict.

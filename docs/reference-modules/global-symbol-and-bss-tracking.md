@@ -6,7 +6,7 @@ Locate functions that walk a `[start, end)` range from adjacent pointer-sized BS
 
 ## Why this exists
 
-1. **Stripped Fortinet kernel binaries contain firmware decrypt routines that use `initrd_start`/`initrd_end` BSS globals to determine the region to decrypt, these routines cannot be found by string search or function name matching because they have no symbols and no printable string references.** `BssTaintTracker` finds them by scanning for adjacent pointer-pair BSS loads (`[abs_addr]`, `[abs_addr+8]`) in the same basic block, then forward-tainting from those pairs to find loops where the tainted pointers are used as both memory bases and comparison bounds.
+1. **Stripped Fortinet kernel binaries contain firmware decrypt routines that use `initrd_start`/`initrd_end` BSS globals to determine the region to decrypt, these routines cannot be found by string search or function name matching because they have no symbols and no printable string references.** `BssTaintTracker` finds them by scanning for adjacent pointer-pair BSS loads `[abs_addr]`, `[abs_addr+8]` in the same basic block, then forward-tainting from those pairs to find loops where the tainted pointers are used as both memory bases and comparison bounds.
 
 2. **`BssTaintTracker` is the only Ablation module that reasons about BSS global pointer pairs**: all other taint trackers start from network input sources. BSS tracking is specifically for the case where the "source" of the interesting data is a pair of kernel globals that bound the region of interest, rather than a network-received buffer.
 

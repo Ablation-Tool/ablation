@@ -96,7 +96,7 @@ TLS downgrade probe functions return `List[{severity, title, detail, host, port}
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` active downgrade / `MEDIUM` deprecated version accepted |
-| `title` | Finding code (e.g., `NO_FALLBACK_SCSV_PROTECTION`, `TLS10_ACCEPTED`, `TLS11_ACCEPTED`) |
+| `title` | Finding code for example `NO_FALLBACK_SCSV_PROTECTION`, `TLS10_ACCEPTED`, `TLS11_ACCEPTED` |
 | `detail` | RFC reference and exploitation context |
 | `host` | Target hostname |
 | `port` | TLS port (typically `443`) |

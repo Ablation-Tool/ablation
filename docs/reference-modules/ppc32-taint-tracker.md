@@ -104,7 +104,7 @@ These are the true PLT stub VAs. This fallback runs **only when LIEF populated
 zero PLT entries** (`if not self._plt:`), which is always the case for Huawei
 binaries with the vendor reloc type.
 
-On SYSV PIC binaries (IBM HPS, glibc `.so`), LIEF correctly populates `_plt`
+On SYSV PIC binaries IBM HPS, glibc `.so`, LIEF correctly populates `_plt`
 from `.rela.plt` R_PPC_JMP_SLOT entries. The guard prevents
 `_load_plt_from_dynsym_raw()` from running on these binaries; undefined
 symbols in SYSV PIC have `st_value=0` and adding them would corrupt the PLT map.
@@ -113,7 +113,7 @@ symbols in SYSV PIC have `st_value=0` and adding them would corrupt the PLT map.
 
 GCC PPC32 emits `crclr cr1eq` (or `creqv`) between `mtctr rX` and `bctrl` as
 a variadic calling convention indicator. The 2-instruction look-back pattern
-(`prev2=lwz, prev1=mtctr`) breaks when this extra instruction is present.
+`prev2=lwz, prev1=mtctr` breaks when this extra instruction is present.
 
 The resolver handles this: when `prev1` is not `PPC_INS_MTCTR` but `prev2` is,
 and `prev3` (the instruction 3 before `bctrl`) is `PPC_INS_LWZ`, the window
@@ -226,7 +226,7 @@ Seeds the worklist with every call site of each configured source function. For 
 
 ## False positives
 
-The most common false positive is taint surviving a zero-clear instruction (`xor rax, rax`). The `CLR` rule in the taint lattice clears taint unconditionally on self-XOR, but some architectures use different clearing idioms. Use `SinkArgClassifier` to pre-filter `RODATA_CONST` call sites before running the taint tracker, these are not findings regardless of register state.
+The most common false positive is taint surviving a zero-clear instruction `xor rax, rax`. The `CLR` rule in the taint lattice clears taint unconditionally on self-XOR, but some architectures use different clearing idioms. Use `SinkArgClassifier` to pre-filter `RODATA_CONST` call sites before running the taint tracker, these are not findings regardless of register state.
 
 ---
 
@@ -244,7 +244,7 @@ The most common false positive is taint surviving a zero-clear instruction (`xor
 |:---|:---|
 | `sink_name` | Name of the dangerous function reached |
 | `sink_va` | Virtual address of the call site |
-| `source_name` | Name of the taint source (e.g., `recv`, `read`) |
+| `source_name` | Name of the taint source for example `recv`, `read` |
 | `arg_index` | Which argument to the sink carries taint 0-indexed |
 | `chain` | `[va, register, operation]` steps from source to sink |
 | `path` | `[caller_va, ...]` function VAs traversed interprocedurally |

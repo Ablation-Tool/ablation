@@ -8,7 +8,7 @@ Parse and disassemble HarmonyOS/ArkTS `.abc` Ark Bytecode files: covering both D
 
 1. **HarmonyOS applications HAP packages ship compiled `.abc` bytecode, not `.py` or `.js` source files.** `ABCParser` provides the only programmatic access to method names, class hierarchies, and literal string tables in these binaries. Without it, analyzing a FortiClient HarmonyOS HAP or a WeChat `.abc` module requires reverse-engineering the ArkCompiler binary format from scratch for each engagement.
 
-2. **Two ABC dialects exist in the wild with different `access_flags` encodings**: DYNAMIC (ECMAScript/ArkTS runtime, `access_flags` as ULEB128) and STATIC (typed ArkTS, `access_flags` as `u32`). `ABCParser.from_path()` auto-detects the dialect from the ABC header version. Using the wrong decoder silently produces wrong method metadata: `ABCParser` handles this transparently.
+2. **Two ABC dialects exist in the wild with different `access_flags` encodings**: DYNAMIC ECMAScript/ArkTS runtime, `access_flags` as ULEB128 and STATIC typed ArkTS, `access_flags` as `u32`. `ABCParser.from_path()` auto-detects the dialect from the ABC header version. Using the wrong decoder silently produces wrong method metadata: `ABCParser` handles this transparently.
 
 3. **`ARKDisasm` decodes the full ArkCompiler ISA v13.0.0.0, 324 opcodes across 4 prefix groups**: producing both structured `ARKInstruction` objects and smali-style text output for manual review. `ARKInstruction.is_call()`, `is_string_load()`, `string_id()`, and `func_entity_id()` enable automated security pattern scanning dangerous function calls, string argument extraction without full decompilation.
 

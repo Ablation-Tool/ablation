@@ -90,7 +90,7 @@ LateralMovementEnumerator.probe_smb_null_session: <target-ip>:445
 
 **`ssh_credential_spray()` banner-layer limitation**: the spray function does not perform a full SSH key exchange or authentication. `SSH_SPRAY_CANDIDATE` indicates that the transport framing was accepted at the banner layer; it does not confirm that the credential pair authenticates successfully. Confirm with a full paramiko KEX in a controlled lab before treating the finding as a verified login.
 
-**`probe_smb_null_session()` SMBv1 dialect requirement**: null sessions require SMBv1. Hosts with SMBv1 disabled (Windows Server 2016+, modern Samba with `server min protocol = SMB2`) will return `STATUS_NOT_SUPPORTED` or close the connection at the negotiate step. A `null_session=False` result with an `error` field does not confirm that SMB authentication is hardened: only that the null session path is blocked.
+**`probe_smb_null_session()` SMBv1 dialect requirement**: null sessions require SMBv1. Hosts with SMBv1 disabled Windows Server 2016+, modern Samba with `server min protocol = SMB2` will return `STATUS_NOT_SUPPORTED` or close the connection at the negotiate step. A `null_session=False` result with an `error` field does not confirm that SMB authentication is hardened: only that the null session path is blocked.
 
 ---
 

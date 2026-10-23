@@ -1,6 +1,6 @@
 # PPC32 PLT Import Caller Tracing
 
-Find every call site that calls a named imported symbol in a PPC32 BE position-independent `.so`: using the PLT-thunk calling model (`LWZ rx,d(r30) + MTCTR + BCTR`) and verifying each caller's active `r30` against the expected `implied_r30` for the target symbol, eliminating false positives where multiple compilation units share a thunk VA but route to different PLT slots depending on their `r30`.
+Find every call site that calls a named imported symbol in a PPC32 BE position-independent `.so`: using the PLT-thunk calling model `LWZ rx,d(r30 + MTCTR + BCTR`) and verifying each caller's active `r30` against the expected `implied_r30` for the target symbol, eliminating false positives where multiple compilation units share a thunk VA but route to different PLT slots depending on their `r30`.
 
 ---
 

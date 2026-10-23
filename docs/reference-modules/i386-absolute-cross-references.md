@@ -6,9 +6,9 @@ Discover function starts in stripped statically-linked i386 ELF binaries: where 
 
 ## Why this exists
 
-1. **`lief` populates `BinaryContext.func_starts` only from `.symtab` / `.dynsym` symbol table entries.** Statically linked stripped i386 ELF binaries (common in legacy network firmware, VxWorks images, and old Linux daemons compiled with `strip --strip-all`) have neither table populated. Without `func_starts`, `SemanticSearcher`, `TaintTracker`, and `SinkArgClassifier` cannot run.
+1. **`lief` populates `BinaryContext.func_starts` only from `.symtab` / `.dynsym` symbol table entries.** Statically linked stripped i386 ELF binaries common in legacy network firmware, VxWorks images, and old Linux daemons compiled with `strip --strip-all` have neither table populated. Without `func_starts`, `SemanticSearcher`, `TaintTracker`, and `SinkArgClassifier` cannot run.
 
-2. **The primary CDECL prologue (`55 89 e5`: `push ebp; mov ebp, esp`) is present in ~95% of GCC-compiled i386 functions**, it is the most reliable function start indicator in stripped i386 binaries. `StaticELF32FuncStartScanner.scan()` finds all occurrences of this byte sequence in executable segments (`PT_LOAD + PF_X`) as the primary method.
+2. **The primary CDECL prologue `55 89 e5`: `push ebp; mov ebp, esp` is present in ~95% of GCC-compiled i386 functions**, it is the most reliable function start indicator in stripped i386 binaries. `StaticELF32FuncStartScanner.scan()` finds all occurrences of this byte sequence in executable segments (`PT_LOAD + PF_X`) as the primary method.
 
 3. **`inject(ctx)` patches the discovered starts directly into `BinaryContext.func_starts`**: after injection, the full Ablation analysis pipeline runs normally on the previously unanalyzable stripped binary. `scan_full()` returns a `ScanResult` with primary/secondary/call-target counts for diagnostic purposes.
 

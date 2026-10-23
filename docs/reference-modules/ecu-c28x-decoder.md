@@ -216,19 +216,19 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, or C28x for vulnerability analysis.
 
 ---
 
 ## Reading output
 
-`EcuC28xDecoder.from_bytes(data, base_va=0).decode_all()` returns `List[C28xInsn]`:
+`EcuC28xDecoder.from_bytesdata, base_va=0.decode_all()` returns `List[C28xInsn]`:
 
 | Attribute | Content |
 |:---|:---|
 | `word_va` | Word-address VA of this instruction byte offset / 2 + base_va |
 | `is_32bit` | `True` for 2-word (32-bit) instructions, `False` for 16-bit |
-| `mnemonic` | Instruction mnemonic (e.g., `'MOV32'`, `'LC'`, `'BF'`) |
+| `mnemonic` | Instruction mnemonic for example `'MOV32'`, `'LC'`, `'BF'` |
 | `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'LOOP'` / `'MISC'` |
 | `raw` | Raw instruction bytes 2 or 4 bytes, little-endian |
 | `target` | Word-address target VA for branches/calls (None otherwise) |

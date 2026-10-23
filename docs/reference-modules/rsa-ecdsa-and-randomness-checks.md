@@ -96,7 +96,7 @@ Run hash algorithm and CBC detection during firmware static analysis after `scan
 
 | Attribute | Content |
 |:---|:---|
-| `algo` | Algorithm name (e.g., `'SHA256'`, `'MD5'`, `'CRC32'`) |
+| `algo` | Algorithm name for example `'SHA256'`, `'MD5'`, `'CRC32'` |
 | `confidence` | Integer 0–100: confidence score based on K-table constant coverage |
 | `matched` | `List[ConstMatch]`: each matched constant with `.va` (address) and `.name` constant name |
 

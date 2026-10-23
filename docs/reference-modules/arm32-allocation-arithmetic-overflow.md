@@ -6,7 +6,7 @@ Detect integer overflow in allocation size arithmetic on ARM32/Thumb2: finding p
 
 ## Why this exists
 
-1. **ARM32 network equipment firmware (Cisco routers, IoT gateways, embedded web servers) uses `malloc(n * sizeof(T))` extensively in packet parsers: if `n` is attacker-controlled and the multiplication is computed in a 32-bit register without an overflow check, `n * sizeof(T)` wraps around and `malloc` allocates a smaller-than-expected buffer.** `analysis_arm32.py` scans for the `MUL`/`ADD` → `BL malloc` pattern with taint tracking from network sources, identifying these overflows without requiring manual inspection of each allocation site.
+1. **ARM32 network equipment firmware Cisco routers, IoT gateways, embedded web servers uses `malloc(n * sizeof(T))` extensively in packet parsers: if `n` is attacker-controlled and the multiplication is computed in a 32-bit register without an overflow check, `n * sizeof(T)` wraps around and `malloc` allocates a smaller-than-expected buffer.** `analysis_arm32.py` scans for the `MUL`/`ADD` → `BL malloc` pattern with taint tracking from network sources, identifying these overflows without requiring manual inspection of each allocation site.
 
 2. **ARM32 `MUL` stores only the lower 32 bits of the product: overflow is silent and produces a small wrapped value.** The overflow condition is: `n > UINT32_MAX / sizeof(T)`. Most ARM32 parsers do not check this condition before passing the product to `malloc`. `analyze_cfg()` identifies these sites by looking for multiplication instructions whose operands include an ARM32/Thumb register last written by a tainted source network input, followed by a `BL malloc` where the product register is passed as `r0`.
 
@@ -105,8 +105,8 @@ Run `ARM32FunctionScanner.inject_into_context()` before any ARM32 taint or CFG a
 |:---|:---|
 | `type` | `ALLOC_MULTIPLY_OVERFLOW` or `ALLOC_OVERFLOW_CANDIDATE` |
 | `va` | Virtual address of the `bl malloc`/`bl calloc` call site |
-| `register` | Argument register carrying the tainted allocation size (e.g., `r0`) |
-| `taint_source` | Label of the taint source (e.g., `user`) |
+| `register` | Argument register carrying the tainted allocation size for example `r0` |
+| `taint_source` | Label of the taint source for example `user` |
 | `source_va` | VA of the function that introduced the taint |
 | `detail` | Human-readable description of the arithmetic path |
 
@@ -114,7 +114,7 @@ Run `ARM32FunctionScanner.inject_into_context()` before any ARM32 taint or CFG a
 
 ## See also
 
-- [RISC-V](risc-v.md): similar pattern (TaintState.join, analyze_cfg) for RISC-V targets
+- [RISC-V](risc-v.md): similar pattern TaintState.join, analyze_cfg for RISC-V targets
 - [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md): full fixpoint dataflow for path-sensitive ARM32 analysis
 - [Taint Analysis](taint-analysis.md): general taint model
 - [ARM64 Symbolic Slicing](arm64-symbolic-slicing.md): ARM64 slice from allocation sites to sources

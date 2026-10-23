@@ -10,7 +10,7 @@ Parse ELF32 and ELF64 binaries without external dependencies: extracting section
 
 2. **Hardening state is part of vulnerability triage.** Whether a buffer overflow is exploitable depends heavily on whether the binary was compiled with stack canaries, whether the stack is non-executable, whether position-independent code is enabled, and whether GOT/PLT entries are protected by RELRO. These are not afterthoughts: they determine severity, exploitability, and what kind of mitigation bypass is required. Surfacing them at parse time puts them in front of the analyst before any deeper work begins.
 
-3. **ELF covers the full target landscape.** Fortinet firmware (FortiOS, FortiAP), Cisco IOS/IOS-XE userspace, Huawei HarmonyOS native code, TencentOS system binaries: everything in Ablation's real-world target set is ELF. Getting this right is not optional.
+3. **ELF covers the full target landscape.** Fortinet firmware FortiOS, FortiAP, Cisco IOS/IOS-XE userspace, Huawei HarmonyOS native code, TencentOS system binaries: everything in Ablation's real-world target set is ELF. Getting this right is not optional.
 
 ---
 
@@ -38,7 +38,7 @@ flowchart TD
     O --> P[BinaryContext: plt, exports, func_starts, strings, call_edges]
 ```
 
-**Bitness and endianness detection** comes from two bytes in the ELF identification area: `EI_CLASS` at offset 4 (`0x01` = ELF32, `0x02` = ELF64) and `EI_DATA` at offset 5 (`0x01` = little-endian, `0x02` = big-endian). All subsequent struct reads use the correct format string.
+**Bitness and endianness detection** comes from two bytes in the ELF identification area: `EI_CLASS` at offset 4 `0x01` = ELF32, `0x02` = ELF64 and `EI_DATA` at offset 5 `0x01` = little-endian, `0x02` = big-endian. All subsequent struct reads use the correct format string.
 
 **Entry point** is at offset 24 in the ELF header: a 4-byte value for ELF32 and an 8-byte value for ELF64.
 
@@ -137,7 +137,7 @@ JSON Output:
 
 **Stripped binaries with no `.symtab`.** Many production firmware binaries strip the symbol table. The parser still reads the ELF header and section headers correctly; the section count and entry point are accurate even when `p.symbols` is empty.
 
-**Custom section names.** Some embedded firmware uses non-standard section names (e.g. `.ftext`, `.iram`, `.dram0.text`). The section type (`sh_type`) is still meaningful even when the name is unfamiliar.
+**Custom section names.** Some embedded firmware uses non-standard section names e.g. `.ftext`, `.iram`, `.dram0.text`. The section type (`sh_type`) is still meaningful even when the name is unfamiliar.
 
 ---
 

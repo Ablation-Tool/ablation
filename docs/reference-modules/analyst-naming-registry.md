@@ -130,7 +130,7 @@ ctx.names_table()
 | Field | Content |
 |:---|:---|
 | `sha256[:16]` | 64-bit SHA256 prefix used as the binary identifier |
-| `va_hex` | Hex string of the function VA (e.g., `"0x22ccc0"`) |
+| `va_hex` | Hex string of the function VA for example `"0x22ccc0"` |
 | `name` | Analyst-assigned function name |
 | `source` | `confirmed` / `manual` / `string`: confidence level |
 | `ts` | ISO 8601 UTC timestamp of last update |

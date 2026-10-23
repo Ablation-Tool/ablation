@@ -6,7 +6,7 @@ Lift native binary functions to annotated C pseudocode across 18 ISA variants: p
 
 ## Why this exists
 
-1. **ARM64 and x86-64 are fully supported with register-tracking state machines**: `BinaryLifter.lift_function()` on an ARM64 or x86-64 target produces C pseudocode with named registers, argument propagation, and calling convention annotations. This is the output consumed by `FuncProfiler.profile()` when generating human-readable function summaries for session documentation.
+1. **ARM64 and x86-64 are supported with register-tracking state machines**: `BinaryLifter.lift_function()` on an ARM64 or x86-64 target produces C pseudocode with named registers, argument propagation, and calling convention annotations. This is the output consumed by `FuncProfiler.profile()` when generating human-readable function summaries for session documentation.
 
 2. **Structural pseudocode for the remaining 16 ISAs** resolves calls, returns, and branches with correct target names from `BinaryContext.name()`, and emits arithmetic as comments. This provides navigable pseudocode for PPC32/64, MIPS32/64, ARM32, Thumb, x86-32, and others without requiring a full decompiler: sufficient for confirming a taint path or verifying a sink call argument.
 
@@ -72,7 +72,7 @@ void sub_<va>(char *param_0, int param_1) {
 
 ## False positives
 
-**Structural pseudocode for non-ARM64/x86-64 targets does not track register state**: register names appear verbatim (e.g., `r3`, `r4`) rather than as typed variables. Argument identification relies on calling convention conventions, not tracked values. This is sufficient for confirming a call sequence but not for detailed argument analysis.
+**Structural pseudocode for non-ARM64/x86-64 targets does not track register state**: register names appear verbatim for example `r3`, `r4` rather than as typed variables. Argument identification relies on calling convention conventions, not tracked values. This is sufficient for confirming a call sequence but not for detailed argument analysis.
 
 **`max_insns=512` truncates very large functions**: functions with more than 512 instructions are truncated with a `// [truncated]` marker. Increase `max_insns` for large functions, but be aware that very large lifts have longer runtime.
 
@@ -86,7 +86,7 @@ Run `BinaryLifter.lift_function()` after `TaintTracker` confirms a finding to pr
 
 ## Reading output
 
-`BinaryLifter.lift_function(va, max_insns=512)` returns a `str`: the lifted annotated C pseudocode for the function at `va`. Taint annotations appear inline in the string when `with_taintfindings` was called before lifting. There is no structured return object.
+`BinaryLifter.lift_functionva, max_insns=512` returns a `str`: the lifted annotated C pseudocode for the function at `va`. Taint annotations appear inline in the string when `with_taintfindings` was called before lifting. There is no structured return object.
 
 ---
 

@@ -10,7 +10,7 @@ Run the parallel phase batch phases 17-30 of the API RE pipeline against a mappe
 
 2. **Shadow and deprecated API versions skip hardening applied to current versions: authentication enforcement, validation, and rate limiting added in `/v2` or `/v3` are frequently absent from `/v0`, `/beta`, `/dev`, and `/api/legacy` paths that are never sunset.** `probe_shadow_versions()` probes 16 shadow path patterns and, for each that returns a non-404, checks whether endpoints marked `auth_required` on the current version return 200 on the shadow version: directly confirming authentication bypass via version downgrade OWASP API9: Improper Inventory Management.
 
-3. **Business logic attacks: negative prices, integer overflow in quantities, privilege escalation via status field injection, and sequence skipping: do not trigger any injection signal and are invisible to automated scanners that only check for error conditions.** `probe_business_logic()` probes numeric parameters (`price`, `amount`, `cost`, `qty`, `balance`) with boundary values (0, -1, 99999999, `NaN`, `Infinity`) and status/role parameters (`status`, `role`, `tier`, `plan`) with privileged strings (`admin`, `approved`, `verified`, `premium`). A sentinel baseline comparison (`__sentinel_xyz_12345__`) ensures that endpoints that accept any value don't generate noise.
+3. **Business logic attacks: negative prices, integer overflow in quantities, privilege escalation via status field injection, and sequence skipping: do not trigger any injection signal and are invisible to automated scanners that only check for error conditions.** `probe_business_logic()` probes numeric parameters `price`, `amount`, `cost`, `qty`, `balance` with boundary values 0, -1, 99999999, `NaN`, `Infinity` and status/role parameters `status`, `role`, `tier`, `plan` with privileged strings `admin`, `approved`, `verified`, `premium`. A sentinel baseline comparison (`__sentinel_xyz_12345__`) ensures that endpoints that accept any value don't generate noise.
 
 ---
 
@@ -158,7 +158,7 @@ The following illustrates the `evidence` field format for representative finding
 
 ## Pipeline position
 
-**Before this module:** Run phases 1-16 via `run_re(base, depth='normal')` to build `api.endpoints`. Phases 17-30 consume `endpoints` for path selection: running them against an empty endpoint list limits discovery to fixed path lists in each probe function and misses endpoint-specific findings (CORS on discovered paths, NoSQL on discovered parameters, PII on discovered collection endpoints).
+**Before this module:** Run phases 1-16 via `run_re(base, depth='normal')` to build `api.endpoints`. Phases 17-30 consume `endpoints` for path selection: running them against an empty endpoint list limits discovery to fixed path lists in each probe function and misses endpoint-specific findings CORS on discovered paths, NoSQL on discovered parameters, PII on discovered collection endpoints.
 
 **After this module:** For `cors_reflect CRITICAL`: demonstrate token exfiltration with `fetch('https://api.target.com/api/v1/me', {credentials:'include'})` from `evil.com` to confirm. For `bfla_admin_accessible`: enumerate `/api/admin/users`, `/api/admin/config`, and `/api/admin/export` to assess full admin surface. For `shadow_version` paths: rerun `run_re(<shadow_base>, depth='normal', focus='auth')` with the shadow version as base URL to assess its auth posture independently. Write confirmed findings to `~/VDT/VULNERABILITIES-<ip>.md`.
 

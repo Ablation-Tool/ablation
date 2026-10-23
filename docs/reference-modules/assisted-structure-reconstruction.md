@@ -6,7 +6,7 @@ Convert a basic-block CFG into a tree of structured nodes: `SequenceNode`, `IfNo
 
 ## Why this exists
 
-1. **All compiled automotive firmware AUTOSAR classic, plain-C ECU code produces fully reducible CFGs**: every loop is a natural loop with a single entry. A dominator-driven Relooper variant correctly reconstructs the structured control flow for all such binaries without the arbitrary `goto` insertion that makes naive liftings unreadable to human analysts.
+1. **All compiled automotive firmware AUTOSAR classic, plain-C ECU code produces reducible CFGs**: every loop is a natural loop with a single entry. A dominator-driven Relooper variant correctly reconstructs the structured control flow for all such binaries without the arbitrary `goto` insertion that makes naive liftings unreadable to human analysts.
 
 2. **`IfNode`, `WhileNode`, `BreakNode`, and `ContinueNode` each carry the controlling condition and the branch targets**: enabling an analyst to read the reconstructed tree as a structured program trace rather than a flat basic-block graph. This is the output consumed by `FuncProfiler.profile()` when generating human-readable function summaries for session documentation.
 
@@ -74,7 +74,7 @@ SequenceNode
 
 ## False positives
 
-**Irreducible CFGs (e.g., `goto` into the middle of a loop from outside) are not handled**: compiled ECU targets produce only reducible CFGs, but hand-patched binaries or obfuscated code may not. `Structurizer` will raise `IrreducibleCFGError` for irreducible graphs rather than producing incorrect output.
+**Irreducible CFGs for example `goto` into the middle of a loop from outside are not handled**: compiled ECU targets produce only reducible CFGs, but hand-patched binaries or obfuscated code may not. `Structurizer` will raise `IrreducibleCFGError` for irreducible graphs rather than producing incorrect output.
 
 **`WhileNode` condition extraction requires the loop header's terminal branch**: if the loop condition is spread across multiple basic blocks for example computed via a multi-block expression, `Structurizer` may emit a `WhileNode` with an `UnknownCond` condition. The structural grouping is still correct; only the textual condition label is missing.
 

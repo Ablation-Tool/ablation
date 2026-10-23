@@ -85,7 +85,7 @@ SSHKeyEnumerator:
 
 **`scan_subnets()` TCP connect scanning**: TCP SYN to all hosts in a subnet is highly detectable by IDS/IPS systems and will generate alerts in monitored environments. Limit to targeted scanning of specific IPs identified from ARP/routing tables.
 
-**`APITokenDetector.scan_env_variables()`**: environment variables that contain the word `TOKEN`, `KEY`, or `SECRET` in their name but do not hold actual credentials (e.g., `MAX_RETRY_COUNT`) will not produce false matches because the detector checks value format length ≥ 20, entropy ≥ 3.5 bits/char, not just key name.
+**`APITokenDetector.scan_env_variables()`**: environment variables that contain the word `TOKEN`, `KEY`, or `SECRET` in their name but do not hold actual credentials for example `MAX_RETRY_COUNT` will not produce false matches because the detector checks value format length ≥ 20, entropy ≥ 3.5 bits/char, not just key name.
 
 ---
 
@@ -102,7 +102,7 @@ Network recon functions return `List[{severity, title, detail, host, port}]`:
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` credential exposed / `HIGH` sensitive service / `MEDIUM` / `LOW` |
-| `title` | Finding code (e.g., `CLOUD_IAM_CREDENTIAL_EXPOSED`, `OPEN_PORT_DB`, `SCAN_RESULT`) |
+| `title` | Finding code for example `CLOUD_IAM_CREDENTIAL_EXPOSED`, `OPEN_PORT_DB`, `SCAN_RESULT` |
 | `detail` | Host, open ports, or credential/token excerpt |
 | `host` | Target host IP or hostname |
 | `port` | Port number or `None` for subnet-level findings |

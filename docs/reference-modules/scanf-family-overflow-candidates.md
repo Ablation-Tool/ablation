@@ -6,9 +6,9 @@ Classify `sscanf`/`scanf`/`fscanf`/`vsscanf` call sites for destination buffer o
 
 ## Why this exists
 
-1. **`scanf("%s", buf)` with an unbounded `%s` is CWE-121: the `%s` specifier reads until whitespace with no length limit, overflowing `buf` if the input is long enough.** `SscanfSinkClassifier` finds all `scanf`-family call sites and classifies them: `RODATA_SAFE` sites (format has explicit width specifier, e.g., `"%46s"`) require no further analysis; `RODATA_UNSAFE` sites (format has unbounded `%s`) are confirmed overflow candidates; other verdicts require deeper investigation.
+1. **`scanf"%s", buf` with an unbounded `%s` is CWE-121: the `%s` specifier reads until whitespace with no length limit, overflowing `buf` if the input is long enough.** `SscanfSinkClassifier` finds all `scanf`-family call sites and classifies them: `RODATA_SAFE` sites format has explicit width specifier, e.g., `"%46s"` require no further analysis; `RODATA_UNSAFE` sites (format has unbounded `%s`) are confirmed overflow candidates; other verdicts require deeper investigation.
 
-2. **The `DYNAMIC_FMT` verdict handles the `libwmshared.so` pattern: `snprintf(buf, 32, "%%%zus %%lu %%d", 46)` → `"%46s %lu %d"`.** This pattern dynamically builds a width-bounded format string at runtime, making it appear dangerous (the format is not a `.rodata` constant) when it is actually safe. `SscanfSinkClassifier` detects this pattern and emits `DYNAMIC_FMT` instead of `UNKNOWN`, reducing the manual trace burden to: confirm the `snprintf` format template is a `.rodata` constant.
+2. **The `DYNAMIC_FMT` verdict handles the `libwmshared.so` pattern: `snprintfbuf, 32, "%%%zus %%lu %%d", 46` → `"%46s %lu %d"`.** This pattern dynamically builds a width-bounded format string at runtime, making it appear dangerous (the format is not a `.rodata` constant) when it is actually safe. `SscanfSinkClassifier` detects this pattern and emits `DYNAMIC_FMT` instead of `UNKNOWN`, reducing the manual trace burden to: confirm the `snprintf` format template is a `.rodata` constant.
 
 3. **`SscanfSinkClassifier` fills the gap left by `SinkArgClassifier`**: `SinkArgClassifier` handles exec-class sinks (`system`/`popen`/`execve`) while `SscanfSinkClassifier` handles input-parsing sinks. Using both gives complete coverage of the two highest-value vulnerability classes in protocol parser firmware (command injection and buffer overflow via `scanf`).
 
@@ -97,7 +97,7 @@ Run `SscanfSinkClassifier.classify_all()` alongside `SinkArgClassifier.classify_
 
 | Attribute | Content |
 |:---|:---|
-| `sink_name` | Sink function name (e.g., `'sscanf'`, `'fscanf'`) |
+| `sink_name` | Sink function name for example `'sscanf'`, `'fscanf'` |
 | `fmt_arg_pos` | Argument position of the format string |
 | `func_va` | VA of the function containing the sink call |
 | `call_va` | VA of the `sscanf`/`fscanf` call |

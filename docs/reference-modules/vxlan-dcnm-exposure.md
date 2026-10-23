@@ -82,10 +82,10 @@ VXLAN/DCNM probe functions return `List[{severity, title, detail, host, port}]`:
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` unauthenticated API / `MEDIUM` version disclosure / `INFO` version fingerprint |
-| `title` | Finding code (e.g., `DCNM_UNAUTH_REST_API`, `DCNM_VERSION_DISCLOSURE`, `VXLAN_VTEP_ENUMERATED`) |
+| `title` | Finding code for example `DCNM_UNAUTH_REST_API`, `DCNM_VERSION_DISCLOSURE`, `VXLAN_VTEP_ENUMERATED` |
 | `detail` | Version string, VTEP IP list, or accessible REST endpoint path |
 | `host` | Target host |
-| `port` | Service port (e.g., `9443` for DCNM) |
+| `port` | Service port for example `9443` for DCNM |
 
 ---
 

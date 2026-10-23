@@ -86,7 +86,7 @@ Run `EcuSH2aDecoder` after `EcuArchDetector` confirms `sh2a` architecture. Chain
 |:---|:---|
 | `va` | Virtual address |
 | `size` | Instruction size in bytes 2 or 4 for 32-bit extended instructions |
-| `mnemonic` | SH-2A mnemonic (e.g., `sts.l`, `jsr`, `mov.l`) |
+| `mnemonic` | SH-2A mnemonic for example `sts.l`, `jsr`, `mov.l` |
 | `operands` | Operand string |
 
 ---

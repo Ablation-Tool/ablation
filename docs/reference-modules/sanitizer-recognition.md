@@ -1,12 +1,12 @@
 # Sanitizer Recognition
 
-Detect allowlist-style byte-validator functions in x86-64 ELF binaries without symbol names: identifying functions that enforce character allowlists (e.g., `[A-Za-z0-9._-]`) on user input before it reaches exec-class sinks, and determining whether the enforced charset blocks shell metacharacters.
+Detect allowlist-style byte-validator functions in x86-64 ELF binaries without symbol names: identifying functions that enforce character allowlists for example `[A-Za-z0-9._-]` on user input before it reaches exec-class sinks, and determining whether the enforced charset blocks shell metacharacters.
 
 ---
 
 ## Why this exists
 
-1. **Stripped firmware contains validator functions (Fortinet's `is_valid_host_name` in `libcmdb_plugin.so`, Cisco's `sanitize_input` in `httpd`) that enforce character allowlists: if an argument passes through one of these functions before reaching `system()`, shell metacharacter injection is structurally impossible regardless of sink type.** `SanitizerDetector.detect()` identifies these functions by behavioral signature: short function, byte-load loop, range/equality comparisons, dual return values (0=reject, 1=accept): without needing their names.
+1. **Stripped firmware contains validator functions Fortinet's `is_valid_host_name` in `libcmdb_plugin.so`, Cisco's `sanitize_input` in `httpd` that enforce character allowlists: if an argument passes through one of these functions before reaching `system()`, shell metacharacter injection is structurally impossible regardless of sink type.** `SanitizerDetector.detect()` identifies these functions by behavioral signature: short function, byte-load loop, range/equality comparisons, dual return values 0=reject, 1=accept: without needing their names.
 
 2. **TaintTracker false positive rate on FortiOS/IOS-XE binaries is dominated by paths where the tainted argument is validated before the sink call.** Running `SanitizerDetector` before TaintTracker enables `sanitizer_gated_sink_filtering.py` to eliminate findings where the taint path passes through a detected sanitizer that blocks `|;&$()\``: reducing false positive counts by 40-60% on typical appliance binaries.
 

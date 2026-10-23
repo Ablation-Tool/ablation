@@ -1,12 +1,12 @@
 # ARM32 Sink Argument Classification
 
-Classify exec-class sink argument provenance in ARM32 ELF binaries: producing the four-verdict model (`RODATA_CONST`, `SNPRINTF_RODATA`, `ARG_PROPAGATED`, `UNKNOWN`) for `r0`–`r3` AAPCS argument registers: filling the gap left by `SinkArgClassifier` which hardcodes x86-64 registers.
+Classify exec-class sink argument provenance in ARM32 ELF binaries: producing the four-verdict model `RODATA_CONST`, `SNPRINTF_RODATA`, `ARG_PROPAGATED`, `UNKNOWN` for `r0`–`r3` AAPCS argument registers: filling the gap left by `SinkArgClassifier` which hardcodes x86-64 registers.
 
 ---
 
 ## Why this exists
 
-1. **`SinkArgClassifier` hardcodes x86-64 registers (`rdi`, `rsi`, `rdx`).** ARM32 AAPCS passes the first four arguments in `r0`–`r3`. The gap was documented as `ARM-SNMP-GAP-001`: running `SinkArgClassifier` on ARM32 targets produced `UNKNOWN` for all sinks because the classification logic looked for `rdi` assignments and found none. `SinkArgClassifierARM32` resolves this.
+1. **`SinkArgClassifier` hardcodes x86-64 registers `rdi`, `rsi`, `rdx`.** ARM32 AAPCS passes the first four arguments in `r0`–`r3`. The gap was documented as `ARM-SNMP-GAP-001`: running `SinkArgClassifier` on ARM32 targets produced `UNKNOWN` for all sinks because the classification logic looked for `rdi` assignments and found none. `SinkArgClassifierARM32` resolves this.
 
 2. **AAPCS `r0`–`r3` follow the same four-verdict model**: `RODATA_CONST` argument is a PC-relative literal pool load or immediate, `SNPRINTF_RODATA` (argument is a stack buffer written by `snprintf` with RODATA format string), `ARG_PROPAGATED` (traces back to the function's own `r0`–`r3` entry), `UNKNOWN` provenance not resolved within look-back window. This matches the x86-64 verdict semantics exactly.
 
@@ -80,7 +80,7 @@ Run `SinkArgClassifierARM32.classify_all()` on every ARM32 ELF binary before run
 
 | Attribute | Content |
 |:---|:---|
-| `sink_name` | Sink function name (e.g., `'system'`, `'execv'`) |
+| `sink_name` | Sink function name for example `'system'`, `'execv'` |
 | `arg_pos` | 0-indexed argument position being classified |
 | `func_va` | VA of the calling function |
 | `call_va` | VA of the call instruction |

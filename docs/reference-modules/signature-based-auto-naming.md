@@ -188,7 +188,7 @@ MATCH 0x40b100 ← http_param_execute [httpsd:7.4.1] score=0.907
 
 **`ANGR_INFERRED` role wrong on multi-purpose functions.** The `_infer_role` heuristic assigns the first matching role. A function that calls both `socket()` and `SSL_connect()` receives `NETWORK_IO`, not `TLS_HANDLER`, because `NETWORK_IO` appears first in `_ROLE_HINTS`. These inferences affect the semantic search corpus quality but do not produce false positives in the matching path: `match_by_sig()` only queries `CONFIRMED` records.
 
-**Struct offset tolerance misidentification.** `match_by_struct_offset('gp_name', 0x2b0, tolerance=8)` returns every struct field named `gp_name` within ±8 bytes of offset `0x2b0`. When two different structs both have a `gp_name` field near that offset, the match is ambiguous. Qualify by `version_str` to narrow to the correct firmware version.
+**Struct offset tolerance misidentification.** `match_by_struct_offset'gp_name', 0x2b0, tolerance=8` returns every struct field named `gp_name` within ±8 bytes of offset `0x2b0`. When two different structs both have a `gp_name` field near that offset, the match is ambiguous. Qualify by `version_str` to narrow to the correct firmware version.
 
 ---
 
@@ -204,7 +204,7 @@ MATCH 0x40b100 ← http_param_execute [httpsd:7.4.1] score=0.907
 
 | Field | Content |
 |:---|:---|
-| `FuncRecord.sig_bytes` | Hex-encoded byte sequence (2 chars per byte, e.g., `"55 48 89 e5"`) |
+| `FuncRecord.sig_bytes` | Hex-encoded byte sequence 2 chars per byte, e.g., `"55 48 89 e5"` |
 | `FuncRecord.sig_mask` | Wildcard mask: `ff` = must match, `00` = skip matches any byte |
 | `FuncRecord.role` | Role tag from the taxonomy above |
 | `FuncRecord.confidence` | `CONFIRMED` / `ANGR_INFERRED` / `CANDIDATE` |

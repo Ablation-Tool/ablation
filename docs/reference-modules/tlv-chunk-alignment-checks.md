@@ -81,9 +81,9 @@ Run `ChunkWalkerValidator` on network protocol parser binaries after `SemanticSe
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` |
-| `title` | Finding code (e.g., `CHUNK_LENGTH_NO_ALIGNMENT`, `CHUNK_ADVANCE_UNSIGNED`) |
+| `title` | Finding code for example `CHUNK_LENGTH_NO_ALIGNMENT`, `CHUNK_ADVANCE_UNSIGNED` |
 | `va` | VA of the unaligned pointer advance instruction |
-| `ptr_advance` | Disassembly of the advance instruction (e.g., `add rdi, rdx`) |
+| `ptr_advance` | Disassembly of the advance instruction for example `add rdi, rdx` |
 | `next_read` | Disassembly of the subsequent read using the advanced pointer |
 | `detail` | Description of the alignment gap |
 

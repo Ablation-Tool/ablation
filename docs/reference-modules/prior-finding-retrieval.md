@@ -97,7 +97,7 @@ Total: 6 records (budget 8, 2 remaining)
 | `func_addr` | VA of the prior function |
 | `binary_sha256` | SHA256 of the binary this finding came from |
 | `func_name` | Function name at time of recording |
-| `role` | Role tag (e.g., `'network'`, `'parser'`, `'crypto'`) |
+| `role` | Role tag for example `'network'`, `'parser'`, `'crypto'` |
 | `callees` | Callee name list used for overlap scoring |
 
 Results are ranked by strategy priority: exact VA match → callee-set overlap → role match → name fuzzy match. Stops when `_MAX_RESULTS` is reached.

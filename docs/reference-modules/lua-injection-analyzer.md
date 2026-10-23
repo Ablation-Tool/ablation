@@ -10,11 +10,11 @@ Four things were not possible before in Ablation:
 
 3. **Detecting assignment-mediated injection**, the FAZ-SIEM-002 pattern assigned a format result to a variable (`code = "record[\"{}\"]=...".format(key, val)`) and then passed that variable to the execute call. SourceSinkScanner regex matching cannot track variable assignments across statements; this module's AST scope visitor does.
 
-4. **Subprocess lua injection**, `subprocess.run(['lua', '-e', formatted_code])` and `subprocess.run(['/usr/bin/env', 'lua',...])` patterns weren't detectable at all previously.
+4. **Subprocess lua injection**, `subprocess.run['lua', '-e', formatted_code]` and `subprocess.run['/usr/bin/env', 'lua',...]` patterns weren't detectable at all previously.
 
 ## What it does
 
-Scans Python source files for taint paths from string format operations (`.format()`, f-strings, `%`-formatting) into Lua execution sinks (`lua.execute()`, `lua.eval()`, subprocess invocations of lua/luajit).
+Scans Python source files for taint paths from string format operations `.format()`, f-strings, and `%`-formatting into Lua execution sinks `lua.execute()`, `lua.eval()`, and subprocess invocations of lua/luajit.
 
 Three injection types:
 
@@ -25,7 +25,7 @@ Three injection types:
 | SUBPROCESS | `subprocess.run(['lua', '-e', f'...{x}...'])` |
 
 Severity:
-- **CRITICAL**: format arg includes a known user-input variable name (`description`, `log_str`, `value`, `request`, etc.)
+- **CRITICAL**: format arg includes a known user-input variable name `description`, `log_str`, `value`, `request`, etc.
 - **HIGH**: format arg is any non-literal expression
 - **MEDIUM**: subprocess-only path indirect exploitation
 
@@ -67,7 +67,7 @@ lua_code = f"-- '{description}'\n{body}"
 lua.execute(lua_code)
 ```
 
-The scanner detects this as INDIRECT (variable `lua_code` assigned from f-string, then passed to execute). Variable `description` is in `_USER_INPUT_NAMES` → severity CRITICAL.
+The scanner detects this as INDIRECT variable `lua_code` assigned from f-string, then passed to execute. Variable `description` is in `_USER_INPUT_NAMES` → severity CRITICAL.
 
 ## FAZ-SIEM-002 reproduction
 
@@ -90,13 +90,13 @@ Detected as INDIRECT. Variable `value` is in `_USER_INPUT_NAMES` → CRITICAL.
 
 ## How it works
 
-`LuaInjectionAnalyzer` uses Python's `ast.parse()` to parse Python source files, not binary disassembly. `_FuncScopeVisitor` walks the AST and identifies calls to Lua execute functions (`lua.eval`, `lua.execute`, etc.) and subprocess calls that pass a Lua script path or inline Lua code. `_is_format_expression()` detects f-strings and `%`-formatted strings as injection vectors. `_severity_for_format()` checks whether the format arguments come from user-controlled names.
+`LuaInjectionAnalyzer` uses Python's `ast.parse()` to parse Python source files, not binary disassembly. `_FuncScopeVisitor` walks the AST and identifies calls to Lua execute functions `lua.eval`, `lua.execute`, etc. and subprocess calls that pass a Lua script path or inline Lua code. `_is_format_expression()` detects f-strings and `%`-formatted strings as injection vectors. `_severity_for_format()` checks whether the format arguments come from user-controlled names.
 
 ---
 
 ## Pipeline position
 
-**Before:** Run on Python source files that embed a Lua runtime (e.g., via `lupa`, `lunatic-python`).
+**Before:** Run on Python source files that embed a Lua runtime for example via `lupa`, `lunatic-python`.
 
 **After:** Pass HIGH findings to manual review. MEDIUM findings warrant checking whether the Lua runtime has a sandbox.
 
@@ -115,7 +115,7 @@ Detected as INDIRECT. Variable `value` is in `_USER_INPUT_NAMES` → CRITICAL.
 | `injection_type` | `'DIRECT'` string directly from user input, `'INDIRECT'` via variable, or `'SUBPROCESS'` via subprocess call |
 | `exec_line` | Line number of the `lua.execute()` or subprocess call |
 | `exec_text` | Source line text of the execute call |
-| `format_line` | Line number of the format operation (f-string, `.format()`, `%`) |
+| `format_line` | Line number of the format operation f-string, `.format`, `%` |
 | `format_text` | Source line text of the format operation |
 | `var_name` | Variable name for `INDIRECT` paths (empty for `DIRECT`) |
 | `description` | Human-readable explanation of the finding |

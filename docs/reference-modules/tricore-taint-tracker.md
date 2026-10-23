@@ -207,7 +207,7 @@ Seeds the worklist with every call site of each configured source function. For 
 
 ## False positives
 
-The most common false positive is taint surviving a zero-clear instruction (`xor rax, rax`). The `CLR` rule in the taint lattice clears taint unconditionally on self-XOR, but some architectures use different clearing idioms. Use `SinkArgClassifier` to pre-filter `RODATA_CONST` call sites before running the taint tracker, these are not findings regardless of register state.
+The most common false positive is taint surviving a zero-clear instruction `xor rax, rax`. The `CLR` rule in the taint lattice clears taint unconditionally on self-XOR, but some architectures use different clearing idioms. Use `SinkArgClassifier` to pre-filter `RODATA_CONST` call sites before running the taint tracker, these are not findings regardless of register state.
 
 ---
 
@@ -225,7 +225,7 @@ The most common false positive is taint surviving a zero-clear instruction (`xor
 |:---|:---|
 | `sink_name` | Name of the dangerous function reached |
 | `sink_va` | Virtual address of the call site |
-| `source_name` | Name of the taint source (e.g., `recv`, `read`) |
+| `source_name` | Name of the taint source for example `recv`, `read` |
 | `arg_index` | Which argument to the sink carries taint 0-indexed |
 | `chain` | `[va, register, operation]` steps from source to sink |
 | `path` | `[caller_va, ...]` function VAs traversed interprocedurally |

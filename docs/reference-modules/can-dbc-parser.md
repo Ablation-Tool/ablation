@@ -16,7 +16,7 @@ look up which CAN signal a ROM calibration table feeds.
 
 **2. No 29-bit extended frame ID decoding.** DBC files mark 29-bit extended CAN frames by
 setting bit 31 in the raw message ID field. J1939 ECUs use extended frames for every
-PGN-addressed message (e.g., EEC1 Engine Speed at raw ID 0x0CF004FE). Without bit-31
+PGN-addressed message for example EEC1 Engine Speed at raw ID 0x0CF004FE. Without bit-31
 detection, a parser stores the wrong canonical ID and every extended message is unreachable by
 `message()` lookup. This parser masks bit 31 at parse time and stores the 29-bit ID in
 `msg_id`.
@@ -229,7 +229,7 @@ CAN DBC database
   EEC1 EngineSpeed: start=24, factor=0.125, decode(2000)=250.0 rpm
 ```
 
-EEC1 message ID: 0x0CF004FE (PGN 0xF004, source 0xFE). Raw DBC ID: 0x8CF004FE bit 31 set.
+EEC1 message ID: 0x0CF004FE PGN 0xF004, source 0xFE. Raw DBC ID: 0x8CF004FE bit 31 set.
 Signal decode at raw=2000: 2000 * 0.125 + 0 = 250.0 rpm.
 
 ---

@@ -6,7 +6,7 @@ Generic Monotone Framework worklist algorithm (`DataflowEngine`) plus pre-built 
 
 ## Why this exists
 
-1. **ARM32 pool loads (`ldr r0, [pc, #N]`) and `movw`/`movt` immediate chains cannot be resolved by a single-instruction analysis: the constant value is split across two instructions or loaded from a literal pool.** `ConstPropAnalysis` implements a dataflow constant propagation over the CFG, resolving pool loads, immediate chains, and GOT-seeded values. Without it, `SinkArgClassifier` and `TaintTracker` see `rdi = unknown` where they could see `rdi = 0x12345678`.
+1. **ARM32 pool loads `ldr r0, [pc, #N]` and `movw`/`movt` immediate chains cannot be resolved by a single-instruction analysis: the constant value is split across two instructions or loaded from a literal pool.** `ConstPropAnalysis` implements a dataflow constant propagation over the CFG, resolving pool loads, immediate chains, and GOT-seeded values. Without it, `SinkArgClassifier` and `TaintTracker` see `rdi = unknown` where they could see `rdi = 0x12345678`.
 
 2. **Thumb `tbh`/`tbb` switch tables (ARM32 `switch` lowering) fragment the CFG: capstone decodes the `tbh` as an indirect branch with no known targets, breaking any analysis that depends on complete successor sets.** `SCCPAnalysis` sparse conditional constant propagation, Wegman-Zadeck algorithm propagates conditions through executable edges only. An edge that cannot be reached under SCCP is marked non-executable, which avoids adding its target to the work queue and prevents spurious constant merges. This fixes the switch-table fragmentation: `tbh` targets that are provably unreachable are correctly excluded.
 
@@ -85,7 +85,7 @@ SCCPAnalysis: exec_edges = {(<src>, <dst>), ...}
 
 **`ConstPropAnalysis` with `arch='arm32'` does not handle Thumb IT (If-Then) block conditional execution**: instructions inside an IT block are treated as unconditional, which can cause incorrect constant assignments on paths that are conditionally dead. Use `SCCPAnalysis` when IT block condition tracking is required.
 
-**`ReachingDefsAnalysis` produces use-definition chains at the basic-block level: the reaching defs at block entry is the join of all predecessor exit sets.** This means the "last definition" for a register at a join point (e.g., after an `if`/`else`) shows both the then-path and else-path definitions. Backward slicing must handle the case where a register has multiple reaching defs.
+**`ReachingDefsAnalysis` produces use-definition chains at the basic-block level: the reaching defs at block entry is the join of all predecessor exit sets.** This means the "last definition" for a register at a join point for example after an `if`/`else` shows both the then-path and else-path definitions. Backward slicing must handle the case where a register has multiple reaching defs.
 
 ---
 

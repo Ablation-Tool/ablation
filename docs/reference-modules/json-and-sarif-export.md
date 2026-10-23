@@ -93,7 +93,7 @@ Export runs at the end of a sweep or confirmation session, never during triage. 
 
 ## Reading output
 
-`sweep_to_sarif(sweep_results, binary_path, min_score=0.0)` returns a SARIF 2.1.0 `dict`:
+`sweep_to_sarifsweep_results, binary_path, min_score=0.0` returns a SARIF 2.1.0 `dict`:
 
 | Key path | Content |
 |:---|:---|

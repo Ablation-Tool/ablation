@@ -86,10 +86,10 @@ Run `extract_to()` on any Guardian PAK `.ZIP` file before all other analysis. Th
 
 | Attribute | Content |
 |:---|:---|
-| `path` | Full Guardian path string (e.g., `$DEV2.ZMQP00.1EALTMQF`) |
-| `volume` | Volume component (e.g., `$DEV2`) |
-| `subvolume` | Subvolume component (e.g., `ZMQP00`) |
-| `filename` | Filename component (e.g., `1EALTMQF`) |
+| `path` | Full Guardian path string for example `$DEV2.ZMQP00.1EALTMQF` |
+| `volume` | Volume component for example `$DEV2` |
+| `subvolume` | Subvolume component for example `ZMQP00` |
+| `filename` | Filename component for example `1EALTMQF` |
 | `data` | Extracted file bytes |
 | `arch` | Always `"mips32be"` for Himalaya K-series targets |
 

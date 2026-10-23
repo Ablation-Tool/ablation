@@ -6,7 +6,7 @@ Parse a fixed-record firmware container image: reading the 84-byte header, walki
 
 ## Why this exists
 
-1. **Embedded firmware images frequently use proprietary container formats that binwalk does not recognize.** Many industrial and IoT vendors (Fortinet, Hikvision, HiSilicon-derived products) ship firmware as a flat binary with a plaintext header, a version string, and a fixed-record partition table. These containers are not compressed at the container level: individual partitions carry gzip, xz, or ext2 payloads, but the outer envelope uses no standard archive format. `FirmwareContainer` reads the exact binary layout: magic at `0x00`, version at `0x08`, vendor/product/language strings at `0x24`–`0x53`, and partition records starting at `0x0054`.
+1. **Embedded firmware images frequently use proprietary container formats that binwalk does not recognize.** Many industrial and IoT vendors Fortinet, Hikvision, HiSilicon-derived products ship firmware as a flat binary with a plaintext header, a version string, and a fixed-record partition table. These containers are not compressed at the container level: individual partitions carry gzip, xz, or ext2 payloads, but the outer envelope uses no standard archive format. `FirmwareContainer` reads the exact binary layout: magic at `0x00`, version at `0x08`, vendor/product/language strings at `0x24`–`0x53`, and partition records starting at `0x0054`.
 
 2. **Partition payload type affects the correct next-step tool selection.** A partition of type `elf` feeds directly into `BinaryContext.load_or_build()`. A partition of type `gzip` or `xz` requires decompression before analysis. An `ext2/3/4` partition requires mounting or `debugfs` extraction. Identifying the payload type at parse time: rather than running `file` on extracted bytes: lets the analyst route each partition to the correct tool without intermediate steps.
 
@@ -156,7 +156,7 @@ extracted 'kernel' (2,097,152 bytes) → /tmp/kernel.img
 
 **Partition table termination on first all-zero record.** The parser stops when `entry[:4] == b'\x00\x00\x00\x00'`. A firmware image with padding between valid partition entries zero-filled gaps for alignment triggers early termination. If `fw.partitions` has fewer entries than expected, check whether the raw image has zero-filled gaps between partition table entries at multiples of 296 bytes from `0x0054`.
 
-**`entry[0] not in (ord('V'), 0x00)` termination condition.** The guard checks whether the first byte of the version string is `V` (ASCII 86, the start of common version strings like `V2.1`) or `\x00`. Version strings starting with any other letter (e.g., `R2.1`, `1.4.0`, `FW_v2`) cause early termination. When the version string in the firmware uses a different prefix, remove or adjust this guard and re-parse.
+**`entry[0] not in (ord('V'), 0x00)` termination condition.** The guard checks whether the first byte of the version string is `V` ASCII 86, the start of common version strings like `V2.1` or `\x00`. Version strings starting with any other letter for example `R2.1`, `1.4.0`, `FW_v2` cause early termination. When the version string in the firmware uses a different prefix, remove or adjust this guard and re-parse.
 
 **`payload_type='unknown'` on valid but rare formats.** The detection table covers 9 common formats plus ext2/3/4. Ubifs (`\x31\x18\x10\x06`), cramfs (`\x45\x3d\xcd\x28`), squashfs (`sqsh` / `hsqs`), and JFFS2 (`\x19\x85`) are not in the table. An `unknown` payload type does not mean the partition is empty or corrupt: run `file` on the extracted bytes to identify these formats.
 
@@ -187,4 +187,4 @@ extracted 'kernel' (2,097,152 bytes) → /tmp/kernel.img
 
 - [Firmware Analysis](firmware-analysis.md): higher-level firmware analysis pipeline: filesystem extraction, binary listing
 - [Binary Format and Platform Identification](binary-format-and-platform-identification.md): identify architecture of ELF partitions before BinaryContext load
-- [Installer Payload Analysis](installer-payload-analysis.md): parallel parser for Windows installer container formats (BitRock, NSIS, Inno Setup)
+- [Installer Payload Analysis](installer-payload-analysis.md): parallel parser for Windows installer container formats BitRock, NSIS, Inno Setup

@@ -4,7 +4,7 @@
 
 Maps the complete IOCTL dispatch surface of a Windows kernel driver and flags METHOD_NEITHER codes before manual review begins. An integer-overflow path from a user-supplied length to a kernel allocation is a HIGH finding. Unprobed METHOD_NEITHER dereferences are CRITICAL.
 
-Grounded in TAOSSA Chapter 12 (Windows IPC, DeviceIoControl, IRP dispatch model) and Windows Internals Part 1 Chapter 6 I/O Manager, IRP, IO_STACK_LOCATION layout.
+Grounded in TAOSSA Chapter 12 Windows IPC, DeviceIoControl, IRP dispatch model and Windows Internals Part 1 Chapter 6 I/O Manager, IRP, IO_STACK_LOCATION layout.
 
 ---
 
@@ -172,7 +172,7 @@ IOCTL codes decoded from data sections jump tables, pool tags that coincidentall
 | Attribute | Content |
 |:---|:---|
 | `binary_path` | Path of the analyzed driver binary |
-| `driver_type` | Detected driver class (e.g., `'WDM'`, `'WDF'`) |
+| `driver_type` | Detected driver class for example `'WDM'`, `'WDF'` |
 | `is_signed` | `True` if the driver has an Authenticode signature |
 | `pdb_path` | PDB symbol path string from the PE header, or `None` |
 | `profiles` | `List[IoctlHandlerProfile]`: one entry per decoded IOCTL code |

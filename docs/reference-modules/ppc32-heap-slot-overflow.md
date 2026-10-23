@@ -81,7 +81,7 @@ Run `PEFABIClobberScanner` immediately after `PEFBinaryAnalyzer` provides the co
 |:---|:---|
 | `severity` | `HIGH` |
 | `title` | `PEF_ABI_ARG_CLOBBER` |
-| `reg` | Clobbered register name (e.g., `r3`, `r4`) |
+| `reg` | Clobbered register name for example `r3`, `r4` |
 | `write_va` | VA of the instruction that clobbers the register |
 | `clobber_va` | VA of the call that overwrites the register before the outer call |
 | `outer_call_va` | VA of the outer call that receives the clobbered value |

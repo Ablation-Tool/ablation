@@ -1,6 +1,6 @@
 # Agent Protocol Exposure
 
-Enumerate unauthenticated agentic API surfaces on exposed LLM inference endpoints: detecting `/v1/assistants`, `/v1/agents`, `/v1/threads`, `/v1/runs`, and `/v1/tools` endpoints accessible without authorization, identifying dangerous tool types (`computer_use`, `bash`, `file_search`, `code_interpreter`) loaded into active assistants, probing tool-calling acceptance at the inference layer, and confirming whether the assistants API requires authentication before exposing tool capability definitions.
+Enumerate unauthenticated agentic API surfaces on exposed LLM inference endpoints: detecting `/v1/assistants`, `/v1/agents`, `/v1/threads`, `/v1/runs`, and `/v1/tools` endpoints accessible without authorization, identifying dangerous tool types `computer_use`, `bash`, `file_search`, `code_interpreter` loaded into active assistants, probing tool-calling acceptance at the inference layer, and confirming whether the assistants API requires authentication before exposing tool capability definitions.
 
 ---
 
@@ -117,7 +117,7 @@ if status == 200 and 'tool_calls' in body:
 
 **`/v1/assistants` returns 200 with an empty `data` array.** The finding fires on HTTP 200 regardless of whether any assistant definitions are present. An empty `{"data": []}` response confirms the endpoint is unauthenticated and enumerable but does not confirm active dangerous tools. Severity remains HIGH the endpoint should require auth; downgrade to MEDIUM if the array is empty and note the absence of active tool definitions.
 
-**Tool-calling `tool_calls` in response does not confirm routing to real execution.** `_TOOL_PROBE_PAYLOAD` causes the model to emit a `tool_calls` JSON object in its response, but the calling application must separately route that object to an actual executor. Many production deployments emit `tool_calls` responses but never wire them to real functions. The finding is `TOOL_CALLING_ACCEPTED`: the model emitted the call. Confirm actual execution by checking whether the application has a tool router (e.g., a `/v1/runs` endpoint that accepts `tool_outputs` submissions).
+**Tool-calling `tool_calls` in response does not confirm routing to real execution.** `_TOOL_PROBE_PAYLOAD` causes the model to emit a `tool_calls` JSON object in its response, but the calling application must separately route that object to an actual executor. Many production deployments emit `tool_calls` responses but never wire them to real functions. The finding is `TOOL_CALLING_ACCEPTED`: the model emitted the call. Confirm actual execution by checking whether the application has a tool router for example a `/v1/runs` endpoint that accepts `tool_outputs` submissions.
 
 ---
 

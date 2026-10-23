@@ -93,7 +93,7 @@ point into `.text`. Correct for PIE ELF where `virtual_address == file_offset` f
 sections.
 
 Each `VtableSpec` records:
-- `va`: the vtable pointer address (vfunc[0], what's stored in objects)
+- `va`: the vtable pointer address vfunc[0], what's stored in objects
 - `slots`: ordered `SlotSpec` list with index, byte offset, function VA, name
 - `has_itanium_header`: True when the 16 bytes before `va` look like offset-to-top=0 +
  RTTI pointer standard Itanium ABI vtable layout
@@ -109,7 +109,7 @@ Names each slot in place. Attempts in order:
 1. **Export / symtab symbol**: direct match on `func_va`
 2. **BinaryContext confirmed name**: from prior RE session `ctx.set_name()` calls
 3. **String literal xref**: if the function body references a string like `"modexp"`,
- the slot is named `"modexp"` (filtered: no spaces, no `%`, 3–32 chars)
+ the slot is named `"modexp"` filtered: no spaces, no `%`, 3–32 chars
 4. **Named callee**: if the function calls e.g. `BN_mod_exp`, the slot is named
    `"mod_exp"` after stripping the `BN_` prefix
 
@@ -212,7 +212,7 @@ Call Sites:
 ## Limitations
 
 - **ET_EXEC (non-PIE) binaries**: the byte scan fallback assumes `virtual_address ==
- file_offset`. For executables loaded at a high base (e.g., `0x400000`), the fallback
+ file_offset`. For executables loaded at a high base for example `0x400000`, the fallback
  will produce incorrect file offsets. The RELA-based method works correctly regardless.
 - **Slot naming without ctx**: only export/symtab symbols are used. Pass a `BinaryContext`
  for string-xref and callee-name naming.
@@ -230,7 +230,7 @@ Call Sites:
 ## Release notes
 
 Added in v2.41.0. v2.49.0 adds `VtableSpec.section_name` and `VtableSpec.writable` fields
-populated by all three scan paths (RELA-based, byte-scan, and the `_make_spec_from_run` helper).
+populated by all three scan paths RELA-based, byte-scan, and the `_make_spec_from_run` helper.
 A vtable in `.data` with `writable=True` means any kernel or process write primitive reaching
 the vtable data can redirect virtual dispatch. Normal vtables live in `.rodata` or `.data.rel.ro`
 read-only after RELRO.
@@ -270,7 +270,7 @@ The most common false positive is a tainted argument that is immediately sanitiz
 | `vtables` | `List[VtableSpec]`: one entry per reconstructed C++ vtable |
 | `propagation` | `List[TypePropSite]`: functions identified as vtable type consumers |
 | `binary_path` | Path of the analyzed binary |
-| `arch` | Architecture string (e.g., `'x86_64'`, `'aarch64'`) |
+| `arch` | Architecture string for example `'x86_64'`, `'aarch64'` |
 | `named_slot_count` | Number of vtable slots with resolved function names |
 | `total_slot_count` | Total vtable slots across all reconstructed vtables |
 | `resolved_call_count` | Number of virtual dispatch call sites successfully resolved |

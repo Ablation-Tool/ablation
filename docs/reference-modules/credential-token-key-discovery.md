@@ -103,7 +103,7 @@ Each enumerator returns a list of finding dicts with `{severity, title, detail, 
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
-| `title` | Finding name (e.g., `SSH_KEY_UNENCRYPTED`, `API_TOKEN_EXPOSED`, `AWS_IAM_CREDS`) |
+| `title` | Finding name for example `SSH_KEY_UNENCRYPTED`, `API_TOKEN_EXPOSED`, `AWS_IAM_CREDS` |
 | `detail` | File path, key type, token prefix, or IAM role name with context |
 | `host` | Target host or `localhost` for local file findings |
 | `port` | Service port or `0` for local findings |

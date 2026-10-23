@@ -50,11 +50,11 @@ The constant range `[4, 256]` covers typical protocol header sizes: IPv4 (20), T
 
 ### Guard lookback
 
-Scans the 25 instructions preceding the subtraction for any `CMP` or `TEST` instruction that uses the same register family as the subtraction destination. Register aliases are canonicalized (e.g., `edx` and `rdx` are the same family), so a `CMP r9d, 0x10` is recognized as a guard for a `LEA edx, [r9 - 0x10]`.
+Scans the 25 instructions preceding the subtraction for any `CMP` or `TEST` instruction that uses the same register family as the subtraction destination. Register aliases are canonicalized for example `edx` and `rdx` are the same family, so a `CMP r9d, 0x10` is recognized as a guard for a `LEA edx, [r9 - 0x10]`.
 
 ### Truncation detection
 
-Looks for register-to-register `MOVZX`/`MOVZWL`/`MOVZBL` within 10 instructions after the subtraction, where the source register is in the same family as the subtraction destination. Memory-to-register `MOVZX` forms (e.g., `movzx edx, byte ptr [rdx+6]`) are excluded: those load a new value from memory, not the arithmetic result.
+Looks for register-to-register `MOVZX`/`MOVZWL`/`MOVZBL` within 10 instructions after the subtraction, where the source register is in the same family as the subtraction destination. Memory-to-register `MOVZX` forms for example `movzx edx, byte ptr [rdx+6]` are excluded: those load a new value from memory, not the arithmetic result.
 
 ---
 
@@ -132,7 +132,7 @@ UnderflowFinding [UNGUARDED]
 
 ## False positives
 
-**Fixed-size structure offset arithmetic.** Code that computes an index into a fixed-size struct member (e.g., `lea rdi, [rbx - 8]` to access a struct field 8 bytes before a pointer) will match the subtraction check. The register destination then passed through a `MOVZX` for a different purpose could complete the pattern spuriously. Verify by examining the context: does the subtracted register actually hold a user-supplied length field?
+**Fixed-size structure offset arithmetic.** Code that computes an index into a fixed-size struct member for example `lea rdi, [rbx - 8]` to access a struct field 8 bytes before a pointer will match the subtraction check. The register destination then passed through a `MOVZX` for a different purpose could complete the pattern spuriously. Verify by examining the context: does the subtracted register actually hold a user-supplied length field?
 
 **Guarded instances that fail the lookback window.** A bounds check more than 25 instructions before the subtraction for example the check is at the function entry and the arithmetic is deep in a loop will not be seen by the guard lookback. The finding is marked `guarded=False` even though a real guard exists. These produce false positives in the unguarded set.
 

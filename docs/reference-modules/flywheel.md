@@ -130,7 +130,7 @@ BinFuse maps opcodes to 11 behavioral categories before encoding. The category s
 | `FindingRegistry.list_findings(vendor=None)` | List all findings, optionally filtered |
 | `PatternLibrary.ingest_from_registry(reg)` | Pull all confirmed findings into the pattern library idempotent |
 | `PatternLibrary.sweepsearcher` | Run all confirmed patterns against the current binary |
-| `PatternLibrary.record_hit(tag, binary, va, confirmed=True)` | Mark a sweep hit as confirmed |
+| `PatternLibrary.record_hittag, binary, va, confirmed=True` | Mark a sweep hit as confirmed |
 
 See [Registry Modules](registry.md) for the full `FindingRegistry` and `NameRegistry` API.
 
@@ -176,7 +176,7 @@ reg.find_similar(embedding, top_k=3, min_sim=0.60)
 
 ## False positives
 
-**Patterns that flood every sweep**: a confirmed finding with a very generic description (e.g., "processes network input") will score above 0.30 against most functions in any network-facing binary. The pattern produces high recall but low precision. Improve it by editing the stored description in `findings.db` to include the specific error condition: memory operation type, size field behavior, and call chain.
+**Patterns that flood every sweep**: a confirmed finding with a very generic description for example "processes network input" will score above 0.30 against most functions in any network-facing binary. The pattern produces high recall but low precision. Improve it by editing the stored description in `findings.db` to include the specific error condition: memory operation type, size field behavior, and call chain.
 
 **`ingest_from_registry()` adding patterns from false-positive findings**: if a finding was registered but later determined to be a false positive at the analysis stage, its pattern remains in the library. Call `reg.list_findings()` to identify and remove the false-positive finding from `findings.db` before the next engagement, then rebuild the pattern library.
 

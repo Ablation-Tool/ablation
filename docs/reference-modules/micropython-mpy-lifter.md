@@ -1,6 +1,6 @@
 # MicroPython .mpy Lifter
 
-Parse MicroPython `.mpy` v6 compiled modules: decoding the global qstr table, constant object table, and recursive code-object tree, and lift bytecode to pseudo-Python source while flagging dangerous imports (`os`, `machine`, `uctypes`), dangerous calls (`exec`, `eval`, `compile`), and direct hardware memory access (`machine.mem32`, `machine.mem16`, `machine.mem8`).
+Parse MicroPython `.mpy` v6 compiled modules: decoding the global qstr table, constant object table, and recursive code-object tree, and lift bytecode to pseudo-Python source while flagging dangerous imports `os`, `machine`, `uctypes`, dangerous calls `exec`, `eval`, `compile`, and direct hardware memory access `machine.mem32`, `machine.mem16`, `machine.mem8`.
 
 ---
 
@@ -10,7 +10,7 @@ Parse MicroPython `.mpy` v6 compiled modules: decoding the global qstr table, co
 
 2. **Dangerous hardware access in MicroPython firmware uses `machine.mem32` / `machine.mem16` / `machine.mem8`, which appear as attribute loads, not as function calls, making them invisible to string search.** `machine.mem32[0x40011000] = 0x1` is a STORE_SUBSCR on a `LOAD_ATTR` result, not a `CALL_FUNCTION`. A grep for `mem32` in the source finds nothing after compilation. `dangerous_calls()` flags `LOAD_ATTR` instructions where the attribute name is in `_DANGEROUS_ATTRS` = `{'system', 'popen', 'execv', 'execve', 'spawn', 'mem32', 'mem16', 'mem8'}`.
 
-3. **CircuitPython modules use the same `.mpy` v6 format as MicroPython: hardware access, network code, and credential strings embedded in CircuitPython `.mpy` files are fully recoverable.** CircuitPython 7.x and 8.x ship with the same v6 format (same `M\x06` magic, same bytecode). `MpyLifter` supports `.mpy` v6.0 through v6.3 (MicroPython 1.19–1.23+) and all CircuitPython 7.x/8.x versions without configuration.
+3. **CircuitPython modules use the same `.mpy` v6 format as MicroPython: hardware access, network code, and credential strings embedded in CircuitPython `.mpy` files are recoverable.** CircuitPython 7.x and 8.x ship with the same v6 format same `M\x06` magic, same bytecode. `MpyLifter` supports `.mpy` v6.0 through v6.3 (MicroPython 1.19–1.23+) and all CircuitPython 7.x/8.x versions without configuration.
 
 ---
 
@@ -130,7 +130,7 @@ DANGEROUS_CALL         HIGH   <module>                     exec
 
 ## Pipeline position
 
-**Before this module:** Confirm the file is a `.mpy` v6 binary: check that `data[0] == 0x4D` (ASCII `M`) and `data[1] == 0x06`. Files produced by earlier MicroPython versions v5 or below or CircuitPython 6.x are not supported and raise `ValueError('.mpy version N not supported')`. Native or Viper-compiled code objects (`KIND_NATIVE=1`, `KIND_VIPER=2`) produce `# <native/viper code, not lifted>` in the pseudo-Python output: they require separate native code analysis.
+**Before this module:** Confirm the file is a `.mpy` v6 binary: check that `data[0] == 0x4D` (ASCII `M`) and `data[1] == 0x06`. Files produced by earlier MicroPython versions v5 or below or CircuitPython 6.x are not supported and raise `ValueError('.mpy version N not supported')`. Native or Viper-compiled code objects `KIND_NATIVE=1`, `KIND_VIPER=2` produce `# <native/viper code, not lifted>` in the pseudo-Python output: they require separate native code analysis.
 
 **After this module:** For `mem32`/`mem16`/`mem8` findings: extract the address from `lift_module()` output and cross-reference with the target SoC's memory map to identify the peripheral register being accessed. For `exec`/`eval` findings: check whether the argument is user-controlled network input, file read, environment variable: if yes, this is a remote code execution surface. For network import findings: check whether plaintext credentials are embedded in string constants using `co._qstrs` or `co._objs` from the code object tree.
 

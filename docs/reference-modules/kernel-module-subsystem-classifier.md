@@ -119,9 +119,9 @@ When the path contains no `/kernel/` component, `classify()` returns `confidence
 
 ## Pipeline position
 
-**Before:** Collect `.ko` file paths from the target (e.g., `find /lib/modules -name '*.ko'`). No BinaryContext required.
+**Before:** Collect `.ko` file paths from the target for example `find /lib/modules -name '*.ko'`. No BinaryContext required.
 
-**After:** Use `attack_surface` and `network_reachable` to filter and prioritize findings from other scanners (e.g., `LA64MaxNotMinScanner`, `HeapVulnScanner`) that return a `ko_path` field.
+**After:** Use `attack_surface` and `network_reachable` to filter and prioritize findings from other scanners for example `LA64MaxNotMinScanner`, `HeapVulnScanner` that return a `ko_path` field.
 
 ---
 
@@ -132,8 +132,8 @@ When the path contains no `/kernel/` component, `classify()` returns `confidence
 | Attribute | Content |
 |:---|:---|
 | `ko_path` | Path to the `.ko` file |
-| `subsystem` | Canonical subsystem label (e.g., `'net/mac80211'`, `'fs/dlm'`, `'drivers/usb/serial'`) |
-| `attack_surface` | Attack-surface label (e.g., `'PROXIMITY'`, `'NETWORK-cluster'`, `'LOCAL-USB'`) |
+| `subsystem` | Canonical subsystem label for example `'net/mac80211'`, `'fs/dlm'`, `'drivers/usb/serial'` |
+| `attack_surface` | Attack-surface label for example `'PROXIMITY'`, `'NETWORK-cluster'`, `'LOCAL-USB'` |
 | `network_reachable` | `True` if the subsystem is reachable without physical access |
 | `confidence` | `'HIGH'` exact rule match / `'MEDIUM'` broad rule / `'LOW'` fallback |
 | `rule_matched` | The subsystem prefix rule that fired, for auditability |

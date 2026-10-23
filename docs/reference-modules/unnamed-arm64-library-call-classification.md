@@ -83,11 +83,11 @@ Run `ARM32IntOverflowScanner` on any ARM32 ELF binary as part of initial triage,
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` |
-| `title` | Finding code (e.g., `UMULL_TO_MALLOC_UNCHECKED`, `MUL_SIZE_NO_OVERFLOW_GUARD`) |
+| `title` | Finding code for example `UMULL_TO_MALLOC_UNCHECKED`, `MUL_SIZE_NO_OVERFLOW_GUARD` |
 | `mul_va` | VA of the UMULL/MUL instruction |
 | `sink_va` | VA of the allocation or memcpy sink that receives the multiplied size |
 | `operands` | String describing the multiplied registers |
-| `source_va` | VA of the taint source (e.g., `recv()`) if recoverable |
+| `source_va` | VA of the taint source for example `recv(`) if recoverable |
 | `detail` | Full description of the overflow path |
 
 ---
