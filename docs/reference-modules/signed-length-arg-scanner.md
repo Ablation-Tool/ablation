@@ -48,8 +48,8 @@ findings = scanner.scan()
 
 Within a 20-instruction window before each sink call, walks backwards from the call looking for instructions that write to the length register and are one of:
 
-- **HIGH:** `movsx`, `movsxd` (x86-64), `sbfx`, `sxtw`, `sxtb`, `sxth` (ARM64), `seb`, `seh` (MIPS) — direct sign extension.
-- **MEDIUM:** `imul`, `idiv` (x86), `smull`, `sdiv` (ARM) — signed arithmetic whose result feeds the length.
+- **HIGH:** `movsx`, `movsxd` (x86-64), `sbfx`, `sxtw`, `sxtb`, `sxth` (ARM64), `seb`, `seh` (MIPS): direct sign extension.
+- **MEDIUM:** `imul`, `idiv` (x86), `smull`, `sdiv` (ARM): signed arithmetic whose result feeds the length.
 
 Architecture support: x86-64 and ARM64. MIPS sign-extension mnemonics included.
 
