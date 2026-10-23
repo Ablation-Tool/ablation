@@ -592,3 +592,56 @@ class SemanticSearcher:
             cache.unlink()
         self._vectors = None
         self._meta    = None
+
+
+# ── Known query patterns for common vuln classes ─────────────────────────────
+#
+# Usage:
+#   from ablation.analyzers.semantic_search import KNOWN_QUERIES, KNOWN_PLT_PATTERNS
+#   results = searcher.query(KNOWN_QUERIES['anti_analysis_apis'])
+#   matched_imports = ctx.plt_names & KNOWN_PLT_PATTERNS['anti_analysis_apis']
+
+KNOWN_QUERIES: dict[str, str] = {
+    'anti_analysis_apis': (
+        "function that calls IsDebuggerPresent, CheckRemoteDebuggerPresent, "
+        "CreateToolhelp32Snapshot, GetAdaptersInfo, or SetWindowsHookEx to detect "
+        "debuggers, virtual machines, or analyst monitoring tools"
+    ),
+    'sign_extension_packet': (
+        "function that reads a signed char or short field from a network packet "
+        "buffer and widens it to int or long before using it as a buffer length "
+        "or array index — sign extension producing a large value from a negative input"
+    ),
+    'hallucinated_dependency': (
+        "function or string literal referencing an npm, pip, or cargo package name "
+        "that matches known AI-hallucinated package names: langchain-tools, "
+        "openai-functions, anthropic-sdk-extra, gpt-utils, copilot-helper"
+    ),
+    'float_to_int_narrowing': (
+        "function using VCVT, CVTTSS2SI, CVTTSD2SI, or CVTSS2SI instructions "
+        "to convert a floating-point value to integer, then using the result "
+        "as a buffer size or allocation length — float truncation producing a "
+        "wrong or negative integer size"
+    ),
+    'auth_bypass_framing': (
+        "function or system prompt string containing 'you are a helpful assistant' "
+        "or 'ignore previous instructions' combined with capability-granting phrases "
+        "like 'you have full access', 'no restrictions', or 'override safety'"
+    ),
+}
+
+# PLT import sets for the vuln classes that rely on import-table presence
+KNOWN_PLT_PATTERNS: dict[str, frozenset] = {
+    'anti_analysis_apis': frozenset({
+        'IsDebuggerPresent', 'CheckRemoteDebuggerPresent',
+        'CreateToolhelp32Snapshot', 'Process32First', 'Process32Next',
+        'GetAdaptersInfo', 'GetAdaptersAddresses',
+        'SetWindowsHookEx', 'GetForegroundWindow',
+        'NtQueryInformationProcess',
+        'OutputDebugStringA', 'OutputDebugStringW',
+    }),
+    'float_to_int_narrowing': frozenset({
+        'lrintf', 'lrint', 'llrintf', 'llrint',
+        'roundf', 'round', 'truncf', 'trunc',
+    }),
+}
