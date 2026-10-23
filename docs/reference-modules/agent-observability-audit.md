@@ -4,7 +4,7 @@
 
 One thing was not possible before in Ablation:
 
-1. **Detect LLM agent runtimes that lack the logging, human-in-the-loop checkpoints, and kernel audit trail needed to reconstruct what actions the agent took.** Without these components, post-incident analysis of a compromised agentic system is impossible: there is no record of which tool the model invoked, what the tool returned, or whether a human had an opportunity to intervene. `AgentObservabilityAudit` gates on agent indicator strings (`tool_call`, `function_call`, `agent_loop`) to confirm the binary is an agent runtime, then checks PLT imports for structured logging sinks, scans function names for HITL confirmation patterns, and checks for kernel audit trail sinks.
+1. **Detect LLM agent runtimes that lack the logging, human-in-the-loop checkpoints, and kernel audit trail needed to reconstruct what actions the agent took.** Without these components, post-incident analysis of a compromised agentic system is impossible: there is no record of which tool the model invoked, what the tool returned, or whether a human had an opportunity to intervene. `AgentObservabilityAudit` gates on agent indicator strings such as `tool_call`, `function_call`, and `agent_loop` to confirm the binary is an agent runtime, then checks PLT imports for structured logging sinks, scans function names for HITL confirmation patterns, and checks for kernel audit trail sinks.
 
 ## Usage
 
