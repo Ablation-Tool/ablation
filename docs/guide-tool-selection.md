@@ -130,6 +130,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Scan Electron app JS extracted asar for nodeIntegration, IPC no-sender-check, TLS bypass, openDevTools in prod" | `ElectronSecurityScanner.from_path(app_src).scan()` |
 | "Audit Chrome/Edge/Firefox extension for externally_connectable exposure, pre-auth message handlers, DOM hooks, WebSocket bus" | `BrowserExtensionAuditor.from_path(ext_dir).scan()` |
 | "Analyze Apache C module.so for handler registration, Cookie→session taint, skip-flag bypass surface" | `ApacheModuleAnalyzer.from_path(mod_so).analyze()` |
+| "Scan binary rodata for hardcoded API keys, AWS credentials, JWT tokens, PEM private keys, passwords" | `HardcodedCredentialScanner.from_context(ctx).scan()` |
 | "Find shell injection in Perl.pm/.pl qx//, backtick, system with $var" | `PerlTaintScanner.from_path(dir).scan()` |
 | "Confirm Perl sink is sanitized vs. injectable quotemeta, single-quote wrap" | `PerlTaintScanner.from_files[pm, pl].scan()` → check `hit.verdict` |
 | "Scan MCP server code for BIND_WIDE / EXEC_IN_ALLOWED / NO_AUTH" | `MCPToolTaintScanner.from_path(root).scan()` |
