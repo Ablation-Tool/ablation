@@ -1341,6 +1341,20 @@ class BinaryContext:
                             pos = idx + 4
             except Exception:
                 pass
+        # x86_32: strip PLT stub VAs from func_starts before the threshold check.
+        # On i386 binaries built with -fasynchronous-unwind-tables, EH frame entries
+        # include PLT stubs, which causes all .text call sites to be attributed to
+        # the last PLT stub (the highest VA below any .text address). Removing PLT
+        # VAs lets StaticELF32FuncStartScanner trigger normally. (X86-32-PLT-FUNCSTART)
+        if self.arch == 'x86_32' and _LIEF_OK and binary:
+            try:
+                plt_sec = binary.get_section('.plt')
+                if plt_sec:
+                    plt_va  = int(plt_sec.virtual_address)
+                    plt_end = plt_va + int(plt_sec.size)
+                    starts  = {va for va in starts if not (plt_va <= va < plt_end)}
+            except Exception:
+                pass
         # x86_32: scan for i386 function prologues (push ebp; mov ebp, esp) and,
         # as a fallback for -fomit-frame-pointer binaries, call-target analysis.
         # Runs when eh_frame+exports produce fewer than 50 starts, matching the
