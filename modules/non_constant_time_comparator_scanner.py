@@ -26,6 +26,7 @@ Usage:
 """
 
 from __future__ import annotations
+from modules._disasm_helper import disasm_func
 
 import re
 from dataclasses import dataclass
@@ -107,7 +108,7 @@ class NonConstantTimeComparatorScanner:
 
     def _get_plt_map(self, ctx) -> dict[str, int]:
         result: dict[str, int] = {}
-        for name, va in ctx.plt_entries():
+        for va, name in ctx.plt.items():
             base = name.split('@')[0].lstrip('_')
             result[base] = va
         return result
@@ -143,7 +144,7 @@ class NonConstantTimeComparatorScanner:
             # Check function name for security context
             func_is_security = bool(_SECURITY_FUNC_KEYWORDS.search(func_name))
 
-            for insn in ctx.disasm_func(func_va):
+            for insn in disasm_func(ctx, func_va):
                 mn = insn.mnemonic.lower()
                 if mn not in ('call', 'bl', 'blx', 'jalr', 'jal'):
                     continue

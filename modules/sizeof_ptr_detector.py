@@ -32,6 +32,7 @@ Usage:
 """
 
 from __future__ import annotations
+from modules._disasm_helper import disasm_func
 
 from dataclasses import dataclass
 from typing import List, Optional
@@ -101,7 +102,7 @@ class SizeofPtrDetector:
 
     def _plt_map(self, ctx) -> dict[int, str]:
         result: dict[int, str] = {}
-        for name, va in ctx.plt_entries():
+        for va, name in ctx.plt.items():
             base = name.split('@')[0].lstrip('_')
             result[va] = base
         return result
@@ -115,7 +116,7 @@ class SizeofPtrDetector:
 
     def _arch(self, ctx) -> str:
         try:
-            return ctx.arch()
+            return ctx.arch
         except Exception:
             return 'x86_64'
 
@@ -126,7 +127,7 @@ class SizeofPtrDetector:
         findings: list[SizeofPtrFinding] = []
 
         for func_va in ctx.func_starts:
-            insns = list(ctx.disasm_func(func_va))
+            insns = list(disasm_func(ctx, func_va))
             func_name = ctx.name(func_va)
 
             for idx, insn in enumerate(insns):

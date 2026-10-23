@@ -32,6 +32,7 @@ Usage:
 """
 
 from __future__ import annotations
+from modules._disasm_helper import disasm_func
 
 import re
 from dataclasses import dataclass
@@ -114,14 +115,14 @@ class WeakPRNGAtSecuritySinkScanner:
 
     def _plt_va_map(self, ctx) -> dict[int, str]:
         result: dict[int, str] = {}
-        for name, va in ctx.plt_entries():
+        for va, name in ctx.plt.items():
             base = name.split('@')[0].lstrip('_')
             result[va] = base
         return result
 
     def _func_calls_weak_prng(self, ctx, func_va: int, plt_va_map: dict[int, str]) -> list[str]:
         weak_found: list[str] = []
-        for insn in ctx.disasm_func(func_va):
+        for insn in disasm_func(ctx, func_va):
             mn = insn.mnemonic.lower()
             if mn not in ('call', 'bl', 'blx', 'jalr', 'jal'):
                 continue
@@ -135,7 +136,7 @@ class WeakPRNGAtSecuritySinkScanner:
         return weak_found
 
     def _func_calls_time(self, ctx, func_va: int, plt_va_map: dict[int, str]) -> bool:
-        for insn in ctx.disasm_func(func_va):
+        for insn in disasm_func(ctx, func_va):
             mn = insn.mnemonic.lower()
             if mn not in ('call', 'bl', 'blx', 'jalr', 'jal'):
                 continue

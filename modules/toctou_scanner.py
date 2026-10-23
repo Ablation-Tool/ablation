@@ -32,6 +32,7 @@ Usage:
 """
 
 from __future__ import annotations
+from modules._disasm_helper import disasm_func
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -88,7 +89,7 @@ class TOCTOUScanner:
     def _plt_vas(self, ctx, name_set: frozenset) -> frozenset:
         """Return the set of PLT VAs for any sink whose name is in name_set."""
         vas: set[int] = set()
-        for name, va in ctx.plt_entries():
+        for va, name in ctx.plt.items():
             base = name.split('@')[0].lstrip('_')
             if base in name_set:
                 vas.add(va)
@@ -114,7 +115,7 @@ class TOCTOUScanner:
             return []
 
         for func_va in ctx.func_starts:
-            insns = list(ctx.disasm_func(func_va))
+            insns = list(disasm_func(ctx, func_va))
             if not insns:
                 continue
 

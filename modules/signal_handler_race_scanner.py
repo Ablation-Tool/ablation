@@ -33,6 +33,7 @@ Usage:
 """
 
 from __future__ import annotations
+from modules._disasm_helper import disasm_func
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -115,7 +116,7 @@ class SignalHandlerRaceScanner:
     def _plt_va_map(self, ctx) -> dict[int, str]:
         """Return {plt_va: function_name} for all PLT entries."""
         result: dict[int, str] = {}
-        for name, va in ctx.plt_entries():
+        for va, name in ctx.plt.items():
             base = name.split('@')[0].lstrip('_')
             result[va] = base
         return result
@@ -123,7 +124,7 @@ class SignalHandlerRaceScanner:
     def _call_targets(self, ctx, func_va: int, plt_map: dict[int, str]) -> list[tuple[int, str]]:
         """Return list of (call_va, callee_name_or_va) for calls in func_va."""
         results: list[tuple[int, str]] = []
-        for insn in ctx.disasm_func(func_va):
+        for insn in disasm_func(ctx, func_va):
             mn = insn.mnemonic.lower()
             if mn not in ('call', 'bl', 'blx', 'jalr', 'jal'):
                 continue
@@ -136,7 +137,8 @@ class SignalHandlerRaceScanner:
 
     def _extract_handler_va(self, ctx, signal_call_va: int) -> int:
         """Try to extract the handler VA from the instruction before a signal() call."""
-        insns = list(ctx.disasm_func_containing(signal_call_va))
+        containing_va = ctx.func_containing(signal_call_va)
+        insns = disasm_func(ctx, containing_va) if containing_va else []
         if not insns:
             return 0
         # Walk backwards from the signal() call looking for the handler arg load

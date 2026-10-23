@@ -28,6 +28,7 @@ Usage:
 """
 
 from __future__ import annotations
+from modules._disasm_helper import disasm_func
 
 import re
 from dataclasses import dataclass
@@ -137,7 +138,7 @@ class PromptInjectionSinkClassifier:
 
     def _plt_va_map(self, ctx) -> dict[int, str]:
         result: dict[int, str] = {}
-        for name, va in ctx.plt_entries():
+        for va, name in ctx.plt.items():
             base = name.split('@')[0].lstrip('_')
             result[va] = base
         return result
@@ -166,7 +167,7 @@ class PromptInjectionSinkClassifier:
 
         for func_va in ctx.func_starts:
             func_name = ctx.name(func_va)
-            insns = list(ctx.disasm_func(func_va))
+            insns = list(disasm_func(ctx, func_va))
 
             calls: list[str] = []
             for insn in insns:
