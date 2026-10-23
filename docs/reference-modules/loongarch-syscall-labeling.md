@@ -14,6 +14,52 @@ Map LoongArch64 Linux syscall numbers to names and argument signatures using the
 
 ---
 
+## Security classification
+
+The module defines three classification sets used by the taint tracker to decide what to track and at what severity.
+
+**Sources**: syscalls that introduce attacker-controlled data into `$a0` on return. The taint tracker seeds the return register with the source label when it sees one of these resolved at a `syscall` instruction.
+
+| Syscall | Taint label |
+|:---|:---|
+| `read`, `pread64`, `readv`, `preadv`, `preadv2` | `syscall:read` |
+| `recvfrom`, `recvmsg`, `recvmmsg` | `syscall:network` |
+| `getdents64`, `getxattr`, `fgetxattr`, `lgetxattr`, `readlinkat`, `getcwd` | `syscall:fs` |
+| `getsockopt`, `getpeername`, `getsockname` | `syscall:network` |
+| `process_vm_readv` | `syscall:process_mem` |
+| `getrandom` | `syscall:rng` |
+
+**Sinks**: syscalls that consume user-controlled data as a dangerous operation. A finding is produced when a tainted register reaches one of these as an argument.
+
+| Syscall | Severity |
+|:---|:---|
+| `execve`, `execveat` | CRITICAL |
+| `ptrace`, `process_vm_writev` | CRITICAL |
+| `bpf` | CRITICAL |
+| `kexec_load`, `kexec_file_load` | CRITICAL |
+| `init_module`, `finit_module` | CRITICAL |
+| `write`, `writev`, `pwrite64` | HIGH |
+| `sendto`, `sendmsg`, `sendmmsg` | HIGH |
+| `mmap`, `mprotect` | HIGH |
+| `clone`, `clone3` | HIGH |
+| `delete_module` | HIGH |
+
+**Escalation**: syscalls that cross a privilege boundary. Always CRITICAL regardless of taint state. The tracker flags these when the resolved syscall name appears in `SYSCALL_ESCALATION`: `setuid`, `setgid`, `setresuid`, `setresgid`, `setreuid`, `setregid`, `setfsuid`, `setfsgid`, `setgroups`, `capset`, `prctl`.
+
+---
+
+## Kernel module classification
+
+For kernel module analysis, the module defines separate source and sink sets that mirror the userspace classification against kernel memory-copy primitives.
+
+**Kernel sources**: functions that read from user memory into a kernel buffer. The taint tracker seeds with `copy_from_user` and related helpers: `__copy_from_user`, `__copy_from_user_inatomic`, `get_user`, `__get_user`, `strncpy_from_user`, `strnlen_user`, `nla_get_string`, `nla_data`, `nlmsg_data`, `__nlmsg_put`, `skb_get_data`, `skb_pull_data`, `memdup_user`, `__memdup_user`, `vmalloc_user`, `kzalloc_user`.
+
+**Kernel sinks**: functions that consume tainted kernel data dangerously: `copy_to_user`, `__copy_to_user`, `put_user`, `__put_user`, `call_usermodehelper`, `call_usermodehelper_exec`, `kernel_execve`, `sprintf`, `snprintf`, `vsprintf`, `vsnprintf`, `strcpy`, `strcat`, `memcpy`, `kmalloc`, `kzalloc`, `vmalloc`.
+
+**Kernel escalation**: privilege primitives always classified CRITICAL: `commit_creds`, `prepare_kernel_cred`, `set_current_cred`, `override_creds`, `__sys_setuid`, `security_setuid`.
+
+---
+
 ## How it works
 
 ```mermaid
@@ -28,12 +74,30 @@ flowchart TD
 ## Usage
 
 ```python
-from ablation.analyzers.syscall_loongarch64 import SYSCALL_TABLE, syscall_name
+from ablation.analyzers.syscall_loongarch64 import (
+    SYSCALL_TABLE, syscall_name, classify_syscall,
+    syscall_label, syscall_severity,
+)
 
 # Direct syscall number lookup
 print(syscall_name(221))  # 'execve'
 print(syscall_name(64))   # 'write'
 print(syscall_name(9999)) # 'syscall_9999' (unknown)
+
+# Three-tier classification: returns (name, kind) or None
+result = classify_syscall(221)   # ('execve', 'sink')
+result = classify_syscall(0)     # ('io_setup', None) — unclassified
+result = classify_syscall(146)   # ('setuid', 'escalation')
+result = classify_syscall(63)    # ('read', 'source')
+
+# Taint label for a source syscall (used when seeding return register)
+print(syscall_label(63))   # 'syscall:read'
+print(syscall_label(207))  # 'syscall:network'  (recvfrom)
+
+# Severity for a sink or escalation syscall
+print(syscall_severity(221))  # 'CRITICAL'  (execve)
+print(syscall_severity(64))   # 'HIGH'      (write)
+print(syscall_severity(146))  # 'CRITICAL'  (setuid — escalation path)
 
 # Use in LoongArch64 analysis
 from ablation.analyzers.analysis_loongarch64 import analyze_cfg
@@ -62,6 +126,7 @@ The following illustrates labeled syscall output. Actual addresses are binary-sp
 ```
 Finding at <va>:
   sink: execve  (syscall 221)
+  severity: CRITICAL
   tainted args: $a0 (pathname), $a1 (argv)
   sources: ['user']
   $a7 = Const(221) at syscall instruction
@@ -89,6 +154,7 @@ The LoongArch64 syscall table is a look-up resource, not a finding-producing API
 |:---|:---|
 | `va` | VA of the syscall instruction (`syscall 0`) |
 | `sink` | Syscall name resolved from `$a7` constant: `execve`, `write`, `openat` |
+| `severity` | `CRITICAL` or `HIGH` from `SYSCALL_SINKS`; always `CRITICAL` for escalation syscalls |
 | `tainted_args` | Tainted argument registers at the syscall site: `$a0`, `$a1` |
 | `sources` | Taint source labels |
 | `taint_path` | Register propagation chain |
