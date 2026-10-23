@@ -223,9 +223,6 @@ class ArgvBuildToSinkClassifier:
             elif name in _STRCAT_FUNCS:
                 if self._second_arg_from_argv(insns, i):
                     strcat_vas.append(insn.address)
-                else:
-                    # partial — still record, may confirm via other means
-                    strcat_vas.append(insn.address)
 
             elif name in _GATE_FUNCS:
                 gate_funcs.append(name)

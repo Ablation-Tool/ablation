@@ -120,58 +120,73 @@ class PrivilegeDropBeforeExecAnalyzer:
         except ValueError:
             return None
 
-    def _arg_is_from_getuid(self, insns: List, call_idx: int) -> bool:
-        """
-        Return True if the first argument (edi/rdi/eax at call site) was loaded
-        from a register that received getuid()'s return value (eax).
+    # x86 register families: writing any member kills all aliases
+    _REG_FAM: Dict[str, str] = {
+        n: f for f, ns in {
+            'a':  ['al','ah','ax','eax','rax'],
+            'b':  ['bl','bh','bx','ebx','rbx'],
+            'c':  ['cl','ch','cx','ecx','rcx'],
+            'd':  ['dl','dh','dx','edx','rdx'],
+            'si': ['sil','si','esi','rsi'],
+            'di': ['dil','di','edi','rdi'],
+            'sp': ['spl','sp','esp','rsp'],
+            'bp': ['bpl','bp','ebp','rbp'],
+        }.items() for n in ns
+    }
 
-        Heuristic: scan back up to 30 instructions looking for:
-          - mov edi/rdi, eax  (direct use of getuid() return)
-          - mov edi/rdi, [mem]  where [mem] was recently written with eax after getuid
-          - Or edi == 0xffffffff (setreuid -1 first arg — ignore, check esi instead)
+    def _arg_is_from_getuid(self, insns: List, uid_idx: int, call_idx: int) -> bool:
         """
-        # Track which stack slots hold getuid() return after the call
-        getuid_result_slots: Set[str] = {'eax', 'rax'}
+        Forward-pass taint tracker from uid_idx to call_idx.
 
-        for i in range(call_idx - 1, max(call_idx - 30, -1), -1):
+        Starts after the uid call (getuid/geteuid) at uid_idx with 'a' family
+        tainted.  On subsequent uid calls, also adds 'a' (they also return a
+        uid value).  On all other calls, discards 'a'.
+
+        Returns True if edi/esi/rdi/rsi holds a uid-derived value at call_idx.
+
+        Forward pass is required: a backward scan sees 'mov edi, eax' before
+        'mov eax, [struct+0x10]', which would falsely conclude eax still holds
+        the getuid result (the hscdc false-positive pattern).
+        """
+        tainted: Set[str] = {'a'}
+        tainted_slots: Set[str] = set()
+
+        for i in range(uid_idx + 1, call_idx):
             pi = insns[i]
-            op = pi.op_str
-
-            # If we see a call to getuid/geteuid, that's too far back
             if pi.mnemonic == 'call':
-                target = self._resolve_call(pi)
-                if target and self._plt_name(target) in _UID_FUNCS:
-                    # getuid result is in eax/rax at this point
-                    getuid_result_slots = {'eax', 'rax'}
+                t = self._resolve_call(pi)
+                if t and self._plt_name(t) in _UID_FUNCS:
+                    tainted.add('a')     # uid function — eax holds uid result
+                else:
+                    tainted.discard('a') # other call clobbers rax
+                continue
+            if pi.mnemonic != 'mov':
+                continue
+            parts = [p.strip() for p in pi.op_str.split(',')]
+            if len(parts) != 2:
+                continue
+            dst, src = parts
 
-            # Track stack stores of eax/rax
-            if pi.mnemonic == 'mov':
-                parts = [p.strip() for p in op.split(',')]
-                if len(parts) == 2:
-                    dst, src = parts
-                    # If destination is edi/rdi, check if src is from getuid result
-                    if dst in ('edi', 'rdi'):
-                        if src in getuid_result_slots:
-                            return True
-                        # mov edi, 0xffffffff is the -1 "don't change" sentinel for setreuid
-                        try:
-                            if int(src, 16) == 0xffffffff:
-                                # -1 means "don't change" — check esi instead
-                                pass
-                        except ValueError:
-                            pass
-                    elif dst in ('esi', 'rsi'):
-                        # setreuid second arg — this is the euid to set
-                        if src in getuid_result_slots:
-                            return True
-                    # Track stores of getuid result to stack slots
-                    if src in getuid_result_slots and '[' in dst:
-                        getuid_result_slots.add(dst)
-                    # Track loads from stack slots that hold getuid result
-                    if dst in ('eax', 'rax') and src in getuid_result_slots:
-                        getuid_result_slots.add('eax')
-                        getuid_result_slots.add('rax')
-        return False
+            dst_fam = self._REG_FAM.get(dst)
+            src_fam = self._REG_FAM.get(src)
+
+            src_tainted = (
+                (src_fam is not None and src_fam in tainted) or
+                src in tainted_slots
+            )
+
+            if dst_fam is not None:
+                if src_tainted:
+                    tainted.add(dst_fam)
+                else:
+                    tainted.discard(dst_fam)
+            elif '[' in dst:
+                if src_tainted:
+                    tainted_slots.add(dst)
+                else:
+                    tainted_slots.discard(dst)
+
+        return bool(tainted & {'di', 'si'})
 
     def _scan_func(self, func_va: int) -> List[PrivDropFinding]:
         insns = self._disasm_func(func_va)
@@ -179,8 +194,9 @@ class PrivilegeDropBeforeExecAnalyzer:
             return []
 
         findings = []
-        getuid_events: List[Tuple[int, str]] = []   # (va, name)
-        drop_events: List[Tuple[int, str]] = []     # (va, name) for drops from getuid
+        # (va, name, insn_idx) — idx needed for forward-pass taint analysis
+        getuid_events: List[Tuple[int, str, int]] = []
+        drop_events: List[Tuple[int, str, int]] = []   # (va, name, insn_idx)
 
         for i, insn in enumerate(insns):
             if insn.mnemonic != 'call':
@@ -193,33 +209,33 @@ class PrivilegeDropBeforeExecAnalyzer:
                 continue
 
             if name in _UID_FUNCS:
-                getuid_events.append((insn.address, name))
+                getuid_events.append((insn.address, name, i))
 
             elif name in _SETUID_FUNCS and getuid_events:
-                # Check if arg to this setuid comes from getuid return
-                if self._arg_is_from_getuid(insns, i):
-                    drop_events.append((insn.address, name))
+                # Forward-pass from earliest uid call that could taint edi/esi
+                uid_va, uid_name, uid_idx = getuid_events[0]
+                if self._arg_is_from_getuid(insns, uid_idx, i):
+                    drop_events.append((insn.address, name, i))
 
             elif name in _EXEC_FUNCS and getuid_events and drop_events:
                 # Privilege was dropped (setuid(getuid())) before this exec
                 # Check if any re-escalation happened between last drop and exec
-                last_drop_va = drop_events[-1][0]
+                last_drop_va, _, last_drop_idx = drop_events[-1]
                 reescalation = False
-                for j in range(i):
+                for j in range(last_drop_idx + 1, i):
                     pinsn = insns[j]
-                    if pinsn.address <= last_drop_va:
-                        continue
                     if pinsn.mnemonic != 'call':
                         continue
                     pt = self._resolve_call(pinsn)
                     if pt and self._plt_name(pt) in _SETUID_FUNCS:
-                        # Another setuid after the drop — potential re-escalation
-                        if not self._arg_is_from_getuid(insns, j):
+                        # Another setuid after the drop — check if it's also a drop
+                        uid_va, uid_name, uid_idx = getuid_events[0]
+                        if not self._arg_is_from_getuid(insns, uid_idx, j):
                             reescalation = True
                             break
 
-                uid_va, uid_name = getuid_events[-1]
-                drop_va, drop_name = drop_events[-1]
+                uid_va, uid_name, _ = getuid_events[-1]
+                drop_va, drop_name, _ = drop_events[-1]
 
                 verdict = 'NOT_EXPLOITABLE' if not reescalation else 'PLAUSIBLE_DROP'
                 note = (
