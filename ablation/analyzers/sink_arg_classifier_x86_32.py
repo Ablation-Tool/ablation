@@ -16,6 +16,18 @@ Session 20 improvements (2026-10-19):
       Prior: UNKNOWN. Now: SNPRINTF_RODATA.
   Gap IDs: SYNERGY-UNKNOWN-001 (execv argv deref), SYNERGY-UNKNOWN-002 (strcpy fill).
 
+Session 49 fix (2026-10-22): X86-32-SNPRINTF-GAP-001
+  SNPRINTF_RODATA was returned for sprintf(buf, "cmd %s", net_input) → system(buf)
+  because only the format string position was checked, not the format string content
+  or its variadic arguments.  Demonstrated by DOORS-002: system() at 0x8076373 was
+  classified SNPRINTF_RODATA when the format string "unzip … '%s'" has a %s arg that
+  comes from a DBP network packet.
+  Fix: _backtrack_stack_slot now reads the format string bytes via _try_get_imm_va +
+  _read_cstr, counts non-%% specifiers, and calls _snprintf_variadic_verdict to
+  classify each variadic argument.  No specifiers → SNPRINTF_RODATA unchanged.
+  Any ARG_PROPAGATED variadic arg → ARG_PROPAGATED.  Any UNKNOWN → UNKNOWN.
+  Gap ID: X86-32-SNPRINTF-GAP-001.
+
 Four verdicts (same as SinkArgClassifier):
   RODATA_CONST     — argument is a constant from .rodata or a literal immediate.
   SNPRINTF_RODATA  — argument is a stack buffer written by snprintf/sprintf
@@ -624,13 +636,81 @@ class SinkArgClassifierI386:
                     return True
         return False
 
+    def _try_get_imm_va(self, insns: list, call_idx: int, arg_pos: int) -> Optional[int]:
+        """
+        Return the VA of the argument if it is a direct push-immediate RODATA pointer.
+        Returns None for GOT-relative or register-based patterns.
+        """
+        push_idx = self._find_push_for_arg(insns, call_idx, arg_pos)
+        if push_idx is None:
+            return None
+        insn = insns[push_idx]
+        ops = insn.operands
+        if not ops:
+            return None
+        if insn.mnemonic == 'push':
+            op = ops[0]
+            if op.type == X86_OP_IMM:
+                return op.imm if self._is_rodata(op.imm) else None
+        elif insn.mnemonic == 'mov' and len(ops) >= 2:
+            op = ops[1]
+            if op.type == X86_OP_IMM:
+                return op.imm if self._is_rodata(op.imm) else None
+        return None
+
+    def _snprintf_variadic_verdict(
+        self, insns: list, call_idx: int, fmt_pos: int, fmt_va: Optional[int], depth: int
+    ) -> str:
+        """
+        Check variadic arguments to snprintf/sprintf after confirming the format
+        string is RODATA_CONST.  Close X86-32-SNPRINTF-GAP-001: a format string
+        that contains %s/%d/… with user-controlled arguments was previously
+        returned as SNPRINTF_RODATA (false-safe), hiding vulnerabilities like
+        sprintf(buf, "unzip -o '%s'", network_path) → system(buf).
+
+        Algorithm:
+          1. Read the format string.  If unreadable → conservative UNKNOWN.
+          2. Count non-%% % specifiers.  If none → the buffer is truly static → SNPRINTF_RODATA.
+          3. For each variadic position, call _get_pushed_arg.
+             ARG_PROPAGATED dominates; accumulate UNKNOWN as fallback.
+        """
+        if fmt_va is None:
+            return UNKNOWN  # can't read format; assume worst
+
+        fmt_str = self._read_cstr(fmt_va)
+        if fmt_str is None:
+            return UNKNOWN
+
+        # Count non-%% format specifiers
+        spec_count = 0
+        i = 0
+        while i < len(fmt_str):
+            if fmt_str[i] == '%':
+                if i + 1 < len(fmt_str) and fmt_str[i + 1] != '%':
+                    spec_count += 1
+                i += 2
+            else:
+                i += 1
+
+        if spec_count == 0:
+            return SNPRINTF_RODATA
+
+        worst = SNPRINTF_RODATA
+        for k in range(spec_count):
+            v = self._get_pushed_arg(insns, call_idx, fmt_pos + 1 + k, depth + 1)
+            if v == ARG_PROPAGATED:
+                return ARG_PROPAGATED
+            if v in (UNKNOWN, None):
+                worst = UNKNOWN
+        return worst
+
     def _backtrack_stack_slot(
         self, insns: list, from_idx: int, ebp_neg_offset: int, depth: int
     ) -> str:
         """
         Determine if a stack slot [ebp - ebp_neg_offset] was filled by a string-building
         call (snprintf/sprintf or strcpy/strcat) with a RODATA source.
-        Returns SNPRINTF_RODATA or UNKNOWN.
+        Returns SNPRINTF_RODATA, ARG_PROPAGATED, or UNKNOWN.
         """
         if depth > 2:
             return UNKNOWN
@@ -656,7 +736,8 @@ class SinkArgClassifierI386:
                     continue
                 fmt_verdict = self._get_pushed_arg(insns, j, fmt_pos, depth + 1)
                 if fmt_verdict == RODATA_CONST:
-                    return SNPRINTF_RODATA
+                    fmt_va = self._try_get_imm_va(insns, j, fmt_pos)
+                    return self._snprintf_variadic_verdict(insns, j, fmt_pos, fmt_va, depth)
                 continue
 
             # strcpy-family: check dest=slot and src=RODATA.
@@ -668,7 +749,7 @@ class SinkArgClassifierI386:
                     continue
                 src_verdict = self._get_pushed_arg(insns, j, src_pos, depth + 1)
                 if src_verdict == RODATA_CONST:
-                    return SNPRINTF_RODATA  # slot holds string copied from .rodata
+                    return SNPRINTF_RODATA  # strcpy from RODATA — no format specifiers
                 continue
 
         return UNKNOWN
