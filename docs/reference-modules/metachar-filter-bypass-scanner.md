@@ -47,7 +47,7 @@ findings = scanner.scan()
 ## Severity logic
 
 - `HIGH`: function name contains `sanitize`, `filter`, `escape`, `strip`, `clean`, `validate`, `check`, `encode`, `allow`, `deny`, or `block`.
-- `HIGH`: function contains 3 or more metacharacter CMPs AND also calls an exec-family sink (`system`, `execve`, `popen`, etc.) in the same function body.
+- `HIGH`: function contains 3 or more metacharacter CMPs AND also calls an exec-family sink such as `system`, `execve`, or `popen` in the same function body.
 - `MEDIUM`: metacharacter CMPs present but no named sanitizer pattern and no exec sink.
 
 ## False positives
