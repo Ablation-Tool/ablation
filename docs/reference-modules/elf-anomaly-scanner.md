@@ -37,16 +37,16 @@ findings = scanner.scan()
 
 | Check | Severity | What it detects |
 |-------|----------|-----------------|
-| `section_past_eof` | HIGH | `sh_offset + sh_size > filesize` — section claims to extend beyond the file |
-| `zero_size_exec_load` | HIGH | PT_LOAD+X with `p_filesz == 0` — executable segment with no file backing (shellcode pattern) |
-| `ep_outside_load` | HIGH | Entry point VA is not inside any PT_LOAD segment — binary will fault at startup normally |
-| `multiple_pt_interp` | MEDIUM | More than one PT_INTERP segment — seen in custom loaders |
+| `section_past_eof` | HIGH | `sh_offset + sh_size > filesize`: section claims to extend beyond the file |
+| `zero_size_exec_load` | HIGH | PT_LOAD+X with `p_filesz == 0`: executable segment with no file backing (shellcode pattern) |
+| `ep_outside_load` | HIGH | Entry point VA is not inside any PT_LOAD segment: binary will fault at startup normally |
+| `multiple_pt_interp` | MEDIUM | More than one PT_INTERP segment: seen in custom loaders |
 | `overlapping_sections` | MEDIUM | Two sections whose file ranges overlap each other |
 | `section_segment_mismatch` | LOW | Section count is more than 10x the segment count or vice versa |
 
 ## Notes
 
-Non-ELF inputs (PE, raw shellcode, `/dev/null`) return an empty finding list immediately after the magic byte check.
+Non-ELF inputs such as PE binaries and raw shellcode return an empty finding list immediately after the magic byte check.
 
 LIEF may silently normalize some malformed ELF inputs before presenting them to the checks. If a binary fails the magic check but you expect ELF anomalies, read the raw bytes directly rather than via LIEF.
 
