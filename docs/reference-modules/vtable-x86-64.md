@@ -248,7 +248,7 @@ VtableDispatchScanner: lib.so  2 methods scanned
 
 ## False positives
 
-Secondary vtable sub-sections (multiple inheritance) produce `is_rtti=True` entries at negative `slot_offset` values; exclude these from dispatch scanning. `VtableDispatchScanner` may flag indirect `call [reg+disp]` patterns that use the same slot offset but are not C++ vtable dispatch (e.g., struct function pointer tables). Confirm by checking whether the register holds a vtable pointer at the call site.
+Secondary vtable sub-sections (multiple inheritance) produce `is_rtti=True` entries at negative `slot_offset` values; exclude these from dispatch scanning. `VtableDispatchScanner` may flag indirect `call [reg+disp]` patterns that use the same slot offset but are not C++ vtable dispatch for example struct function pointer tables. Confirm by checking whether the register holds a vtable pointer at the call site.
 
 ---
 
@@ -270,8 +270,8 @@ Secondary vtable sub-sections (multiple inheritance) produce `is_rtti=True` entr
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

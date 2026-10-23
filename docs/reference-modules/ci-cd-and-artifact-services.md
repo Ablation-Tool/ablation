@@ -1,16 +1,16 @@
 # CI/CD and Post-Linker Security Gate
 
-Run Ablation's vulnerability detector suite on a freshly compiled binary before it ships — catching post-optimization vulnerabilities that sanitizers miss because they run before compiler optimization passes complete, with multi-architecture support and structured `GateFinding` output.
+Run Ablation's vulnerability detector suite on a freshly compiled binary before it ships: catching post-optimization vulnerabilities that sanitizers miss because they run before compiler optimization passes complete, with multi-architecture support and structured `GateFinding` output.
 
 ---
 
 ## Why this exists
 
-1. **Address-sanitizers and undefined-behavior-sanitizers run on instrumented builds before optimization — they miss vulnerabilities introduced by optimization passes such as inlined string functions, vectorized memory copies, and dead-code elimination that removes safety checks.** `CompilerSecurityGate.scan()` runs on the optimized release binary, after linking, catching the vulnerabilities that the sanitizer build would not expose.
+1. **Address-sanitizers and undefined-behavior-sanitizers run on instrumented builds before optimization: they miss vulnerabilities introduced by optimization passes such as inlined string functions, vectorized memory copies, and dead-code elimination that removes safety checks.** `CompilerSecurityGate.scan()` runs on the optimized release binary, after linking, catching the vulnerabilities that the sanitizer build would not expose.
 
-2. **`CompilerSecurityGate` supports 11 architectures** — x86_64, x86_32, arm32, arm64, MIPS32, MIPS64, PPC32, PPC64, RISC-V 32, RISC-V 64, LoongArch64 — with taint analysis adapted to each ISA's calling convention and register set. Additional x86_64-only scanners (format string, heap corruption, length underflow) run alongside the cross-architecture taint analysis when the binary is x86_64.
+2. **`CompilerSecurityGate` supports 11 architectures**: x86_64, x86_32, arm32, arm64, MIPS32, MIPS64, PPC32, PPC64, RISC-V 32, RISC-V 64, LoongArch64: with taint analysis adapted to each ISA's calling convention and register set. Additional x86_64-only scanners (format string, heap corruption, length underflow) run alongside the cross-architecture taint analysis when the binary is x86_64.
 
-3. **Exit code 0 (no HIGH/CRITICAL findings) or 1 (findings present) enables CI/CD pipeline integration** — `check(strict=False)` returns the exit code directly. In non-strict mode, MEDIUM and LOW findings do not block the build; in strict mode, any finding blocks. `GateFinding.fmt()` produces a single-line human-readable finding suitable for build log output.
+3. **Exit code 0 (no HIGH/CRITICAL findings) or 1 (findings present) enables CI/CD pipeline integration**: `check(strict=False)` returns the exit code directly. In non-strict mode, MEDIUM and LOW findings do not block the build; in strict mode, any finding blocks. `GateFinding.fmt()` produces a single-line human-readable finding suitable for build log output.
 
 ---
 
@@ -76,7 +76,7 @@ Exit code: 1
 
 ## False positives
 
-**`CompilerSecurityGate` applies the same taint analysis as `TaintTracker` and inherits the same false positive profile** — path-insensitive analysis over-taints at join points. Use `SinkSanitizerFilter` to post-process `ARG_PROPAGATED` findings before the gate, reducing false positives in CI.
+**`CompilerSecurityGate` applies the same taint analysis as `TaintTracker` and inherits the same false positive profile**: path-insensitive analysis over-taints at join points. Use `SinkSanitizerFilter` to post-process `ARG_PROPAGATED` findings before the gate, reducing false positives in CI.
 
 **Exit code 1 means HIGH or CRITICAL findings were detected, not that they are confirmed exploitable.** In initial CI integration, run in observation mode (`check()` but don't fail the build) for one release cycle to calibrate the false positive rate before enforcing the gate.
 
@@ -103,12 +103,12 @@ Run `CompilerSecurityGate` as a post-link CI/CD step, before the release artifac
 | `taint_dag` | Optional `SemanticBlock` DAG for taint path visualization |
 | `fmt()` | Single-line formatted string for build log output |
 
-`CompilerSecurityGate.check(strict=False)` returns `int` — `0` if no HIGH/CRITICAL findings, `1` otherwise. In strict mode (`strict=True`), returns `1` on any finding regardless of severity.
+`CompilerSecurityGate.check(strict=False)` returns `int`: `0` if no HIGH/CRITICAL findings, `1` otherwise. In strict mode (`strict=True`), returns `1` on any finding regardless of severity.
 
 ---
 
 ## See also
 
-- [Taint Analysis](taint-analysis.md) — underlying taint engine used by the gate
-- [Format String Scanning](format-string-scanning.md) — x86_64-only scanner included in the gate
-- [Protocol Length Underflow Detection](protocol-length-underflow-detection.md) — x86_64-only scanner included in the gate
+- [Taint Analysis](taint-analysis.md): underlying taint engine used by the gate
+- [Format String Scanning](format-string-scanning.md): x86_64-only scanner included in the gate
+- [Protocol Length Underflow Detection](protocol-length-underflow-detection.md): x86_64-only scanner included in the gate

@@ -1,16 +1,16 @@
 # Electron Application Auditing
 
-Scan Electron application JavaScript source for security misconfigurations — detecting `nodeIntegration` enabled in renderer processes, missing IPC sender validation, `contextIsolation` disabled, TLS bypass flags, DevTools enabled in production builds, and missing `contextBridge` isolation patterns across extracted `.asar` archives.
+Scan Electron application JavaScript source for security misconfigurations: detecting `nodeIntegration` enabled in renderer processes, missing IPC sender validation, `contextIsolation` disabled, TLS bypass flags, DevTools enabled in production builds, and missing `contextBridge` isolation patterns across extracted `.asar` archives.
 
 ---
 
 ## Why this exists
 
-1. **FortiFone Desktop v8.0 (Electron/Chromium SIP phone client) required reading the Electron security model from scratch for each finding during manual review of `app.asar` JS.** Seven confirmed findings emerged — all of which would have been caught by automated pattern matching. `ElectronSecurityScanner` encodes these patterns so they apply automatically to all Electron-based targets (FortiFone, FortiClient desktop integrations, FPAM browser extension host, any vendor Electron app) without repeated manual effort.
+1. **FortiFone Desktop v8.0 (Electron/Chromium SIP phone client) required reading the Electron security model from scratch for each finding during manual review of `app.asar` JS.** Seven confirmed findings emerged: all of which would have been caught by automated pattern matching. `ElectronSecurityScanner` encodes these patterns so they apply automatically to all Electron-based targets (FortiFone, FortiClient desktop integrations, FPAM browser extension host, any vendor Electron app) without repeated manual effort.
 
-2. **Electron's security model is systematically different from web browsers — `nodeIntegration: true` in a renderer process gives loaded web content full Node.js system access.** Combining this with an unvalidated IPC handler that accepts renderer-initiated navigation (`webContents.loadURL(userInput)`) or a deep link without scheme validation creates a Remote Code Execution path from a malicious URL opened by the app. `ElectronSecurityScanner` detects these patterns and their combinations.
+2. **Electron's security model is systematically different from web browsers: `nodeIntegration: true` in a renderer process gives loaded web content full Node.js system access.** Combining this with an unvalidated IPC handler that accepts renderer-initiated navigation (`webContents.loadURL(userInput)`) or a deep link without scheme validation creates a Remote Code Execution path from a malicious URL opened by the app. `ElectronSecurityScanner` detects these patterns and their combinations.
 
-3. **`scan()` returns typed `ElectronFinding` objects with CWE classification and severity** — findings map directly to standard CWE entries (CWE-78 for `nodeIntegration` + `loadURL`, CWE-295 for TLS bypass, CWE-749 for exposed dangerous APIs), enabling consistent severity triage aligned with how the findings are reported downstream.
+3. **`scan()` returns typed `ElectronFinding` objects with CWE classification and severity**: findings map directly to standard CWE entries (CWE-78 for `nodeIntegration` + `loadURL`, CWE-295 for TLS bypass, CWE-749 for exposed dangerous APIs), enabling consistent severity triage aligned with how the findings are reported downstream.
 
 ---
 
@@ -80,9 +80,9 @@ Total: <N> findings  (<C> critical, <H> high, <M> medium)
 
 ## False positives
 
-**`_check_node_integration` fires on any `nodeIntegration: true` string** — some apps use `nodeIntegration: true` in the main window deliberately and safely (e.g., loading only trusted local content). Validate by checking whether the same `BrowserWindow` also calls `loadURL` with user-controlled or network-sourced URLs.
+**`_check_node_integration` fires on any `nodeIntegration: true` string**: some apps use `nodeIntegration: true` in the main window deliberately and safely for example loading only trusted local content. Validate by checking whether the same `BrowserWindow` also calls `loadURL` with user-controlled or network-sourced URLs.
 
-**`_check_ipc_no_sender_check` is a pattern match** — it detects `ipcMain.on(...)` without `event.sender` in the handler body. Large handler functions that perform sender validation in a helper call will be flagged as false positives. Inspect the handler for indirect sender validation before reporting.
+**`_check_ipc_no_sender_check` is a pattern match**, it detects `ipcMain.on(...)` without `event.sender` in the handler body. Large handler functions that perform sender validation in a helper call will be flagged as false positives. Inspect the handler for indirect sender validation before reporting.
 
 ---
 
@@ -112,5 +112,5 @@ Run `ElectronSecurityScanner` after extracting the `.asar` archive from the Elec
 
 ## See also
 
-- [Source Dangerous Sink Detection](source-dangerous-sink-detection.md) — `SourceSinkScanner` for dangerous patterns in source-level JavaScript
-- [Firmware Extraction](firmware-extraction.md) — extracting `.asar` and Electron bundles from firmware images
+- [Source Dangerous Sink Detection](source-dangerous-sink-detection.md): `SourceSinkScanner` for dangerous patterns in source-level JavaScript
+- [Firmware Extraction](firmware-extraction.md): extracting `.asar` and Electron bundles from firmware images

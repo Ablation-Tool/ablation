@@ -1,16 +1,16 @@
 # Structured CFG Reconstruction
 
-Convert a basic-block CFG into a tree of structured nodes — `SequenceNode`, `IfNode`, `WhileNode`, `BreakNode`, `ContinueNode` — using dominator-tree and natural-loop analysis, producing output equivalent to the source-level control flow of the original C code without the `goto` statements a naive lifter produces.
+Convert a basic-block CFG into a tree of structured nodes: `SequenceNode`, `IfNode`, `WhileNode`, `BreakNode`, `ContinueNode`: using dominator-tree and natural-loop analysis, producing output equivalent to the source-level control flow of the original C code without the `goto` statements a naive lifter produces.
 
 ---
 
 ## Why this exists
 
-1. **All compiled automotive firmware (AUTOSAR classic, plain-C ECU code) produces fully reducible CFGs** — every loop is a natural loop with a single entry. A dominator-driven Relooper variant correctly reconstructs the structured control flow for all such binaries without the arbitrary `goto` insertion that makes naive liftings unreadable to human analysts.
+1. **All compiled automotive firmware (AUTOSAR classic, plain-C ECU code) produces fully reducible CFGs**: every loop is a natural loop with a single entry. A dominator-driven Relooper variant correctly reconstructs the structured control flow for all such binaries without the arbitrary `goto` insertion that makes naive liftings unreadable to human analysts.
 
-2. **`IfNode`, `WhileNode`, `BreakNode`, and `ContinueNode` each carry the controlling condition and the branch targets** — enabling an analyst to read the reconstructed tree as a structured program trace rather than a flat basic-block graph. This is the output consumed by `FuncProfiler.profile()` when generating human-readable function summaries for session documentation.
+2. **`IfNode`, `WhileNode`, `BreakNode`, and `ContinueNode` each carry the controlling condition and the branch targets**: enabling an analyst to read the reconstructed tree as a structured program trace rather than a flat basic-block graph. This is the output consumed by `FuncProfiler.profile()` when generating human-readable function summaries for session documentation.
 
-3. **`Structurizer` operates on the same CFG representation used by `TaintTracker`** — basic blocks with predecessor/successor edges. Any binary that can be analyzed with `TaintTracker` can have its control flow structured by `Structurizer` without additional preprocessing, using the same `BinaryContext` data.
+3. **`Structurizer` operates on the same CFG representation used by `TaintTracker`**: basic blocks with predecessor/successor edges. Any binary that can be analyzed with `TaintTracker` can have its control flow structured by `Structurizer` without additional preprocessing, using the same `BinaryContext` data.
 
 ---
 
@@ -74,9 +74,9 @@ SequenceNode
 
 ## False positives
 
-**Irreducible CFGs (e.g., `goto` into the middle of a loop from outside) are not handled** — compiled ECU targets produce only reducible CFGs, but hand-patched binaries or obfuscated code may not. `Structurizer` will raise `IrreducibleCFGError` for irreducible graphs rather than producing incorrect output.
+**Irreducible CFGs (e.g., `goto` into the middle of a loop from outside) are not handled**: compiled ECU targets produce only reducible CFGs, but hand-patched binaries or obfuscated code may not. `Structurizer` will raise `IrreducibleCFGError` for irreducible graphs rather than producing incorrect output.
 
-**`WhileNode` condition extraction requires the loop header's terminal branch** — if the loop condition is spread across multiple basic blocks (e.g., computed via a multi-block expression), `Structurizer` may emit a `WhileNode` with an `UnknownCond` condition. The structural grouping is still correct; only the textual condition label is missing.
+**`WhileNode` condition extraction requires the loop header's terminal branch**: if the loop condition is spread across multiple basic blocks for example computed via a multi-block expression, `Structurizer` may emit a `WhileNode` with an `UnknownCond` condition. The structural grouping is still correct; only the textual condition label is missing.
 
 ---
 
@@ -92,13 +92,13 @@ Run `Structurizer` on the CFG produced by `FuncProfiler.profile()` after taint a
 
 | Node Type | Key Attributes |
 |:---|:---|
-| `SequenceNode` | `children: List[StructuredNode]` — sequential code blocks |
+| `SequenceNode` | `children: List[StructuredNode]`: sequential code blocks |
 | `IfNode` | `cond_block`, `then_body`, `else_body` (optional), `join_block` |
 | `WhileNode` | `header_block`, `body: StructuredNode`, `exit_block` |
-| `BreakNode` | No attributes — unconditional loop exit |
-| `ContinueNode` | No attributes — unconditional loop continue |
-| `ReturnNode` | `block_start`, `insns` — leaf with return instructions |
-| `InsnNode` | `block_start`, `insns`, `is_loop_header` — leaf instruction block |
+| `BreakNode` | No attributes: unconditional loop exit |
+| `ContinueNode` | No attributes: unconditional loop continue |
+| `ReturnNode` | `block_start`, `insns`: leaf with return instructions |
+| `InsnNode` | `block_start`, `insns`, `is_loop_header`: leaf instruction block |
 
 `Structurizer.emit(insn_emitter)` walks the node tree and returns a pseudocode string. `insn_emitter` is a callable that formats a single instruction; use `lambda insn: str(insn)` for the default rendering.
 
@@ -106,5 +106,5 @@ Run `Structurizer` on the CFG produced by `FuncProfiler.profile()` after taint a
 
 ## See also
 
-- [Single-Function Profiling](single-function-profiling.md) — `FuncProfiler` that produces the CFG input for `Structurizer`
-- [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext` whose basic-block graph feeds `Structurizer`
+- [Single-Function Profiling](single-function-profiling.md): `FuncProfiler` that produces the CFG input for `Structurizer`
+- [Persistent Analysis Context](persistent-analysis-context.md): `BinaryContext` whose basic-block graph feeds `Structurizer`

@@ -1,18 +1,18 @@
 # AIX XCOFF32/64 Analysis
 
-Parse IBM AIX PowerPC executables in XCOFF32 (magic `0x01DF`, PPC32) or XCOFF64 (magic `0x01F7`/`0x01EF`, PPC64) format — extracting all sections, importing the `.loader` section's complete import/export symbol table with library attribution, resolving function-descriptor VAs to code VAs, and recovering internal function names from the symbol table when the loader section is absent or incomplete.
+Parse IBM AIX PowerPC executables in XCOFF32 (magic `0x01DF`, PPC32) or XCOFF64 (magic `0x01F7`/`0x01EF`, PPC64) format: extracting all sections, importing the `.loader` section's complete import/export symbol table with library attribution, resolving function-descriptor VAs to code VAs, and recovering internal function names from the symbol table when the loader section is absent or incomplete.
 
 ---
 
 ## Why this exists
 
-1. **LIEF does not support XCOFF.** `lief.parse()` returns `None` on XCOFF input. `BinaryContext` then falls through to a default `x86_64` context with no sections, no symbols, and no function starts. Every AIX RE session using only the existing LIEF stack was silently broken — appearing to succeed but operating on an empty binary model. `xcoff_parser` is the XCOFF-specific replacement.
+1. **LIEF does not support XCOFF.** `lief.parse()` returns `None` on XCOFF input. `BinaryContext` then falls through to a default `x86_64` context with no sections, no symbols, and no function starts. Every AIX RE session using only the existing LIEF stack was silently broken: appearing to succeed but operating on an empty binary model. `xcoff_parser` is the XCOFF-specific replacement.
 
-2. **The `.loader` section survives stripping and holds the complete import/export table.** AIX production builds routinely set `nsyms == 0` in the file header (fully stripped). But the `.loader` section — identified by `s_flags == STYP_LOADER (0x1000)` — is not removed by `strip`. It contains every external reference and definition with name, library origin, virtual address, and storage mapping class. This is the primary RE surface for stripped AIX binaries.
+2. **The `.loader` section survives stripping and holds the complete import/export table.** AIX production builds routinely set `nsyms == 0` in the file header (fully stripped). But the `.loader` section: identified by `s_flags == STYP_LOADER (0x1000)`: is not removed by `strip`. It contains every external reference and definition with name, library origin, virtual address, and storage mapping class. This is the primary RE surface for stripped AIX binaries.
 
-3. **XCOFF uses a function-descriptor ABI — exported function VAs in the loader section point to `.data` descriptors, not code.** On PPC32/PPC64, each exported function has a descriptor in `.data` consisting of `{code_va(4), toc_va(4)}` (PPC32) or `{code_va(8), toc_va(8)}` (PPC64). The loader symbol's `l_value` points to the descriptor, not the code. `_resolve_descriptors()` reads the descriptor at `l_value - dsec.vaddr` and writes the true code VA into `sym.code_va`.
+3. **XCOFF uses a function-descriptor ABI: exported function VAs in the loader section point to `.data` descriptors, not code.** On PPC32/PPC64, each exported function has a descriptor in `.data` consisting of `{code_va(4), toc_va(4)}` (PPC32) or `{code_va(8), toc_va(8)}` (PPC64). The loader symbol's `l_value` points to the descriptor, not the code. `_resolve_descriptors()` reads the descriptor at `l_value - dsec.vaddr` and writes the true code VA into `sym.code_va`.
 
-4. **XCOFF64 section headers are 72 bytes — XCOFF32 section headers are 40 bytes.** The same parser handles both variants by selecting the correct struct format at parse time, preventing the silent field misalignment that would occur from sharing a single format string.
+4. **XCOFF64 section headers are 72 bytes: XCOFF32 section headers are 40 bytes.** The same parser handles both variants by selecting the correct struct format at parse time, preventing the silent field misalignment that would occur from sharing a single format string.
 
 ---
 
@@ -49,7 +49,7 @@ flowchart TD
 | `STYP_TEXT` | `0x0020` | Executable code |
 | `STYP_DATA` | `0x0040` | Initialized data |
 | `STYP_BSS` | `0x0080` | Uninitialized data |
-| `STYP_LOADER` | `0x1000` | `.loader` section — survives strip |
+| `STYP_LOADER` | `0x1000` | `.loader` section: survives strip |
 
 ### Loader symbol storage mapping classes (smclas)
 
@@ -138,13 +138,13 @@ exports: 847  imports: 312
 
 **Descriptor resolution fails when `.data` section is absent.** `_resolve_descriptors()` requires both the `.data` section (descriptor storage) and the `.text` section (code boundary verification) to be present in the parsed binary. Static `.o` files and archive members may be missing one or both sections. When `binary.data is None`, all exports have `code_va == 0`. Use the raw `sym.va` as the descriptor address and resolve manually when needed.
 
-**XCOFF32 executables store absolute VAs in the symbol table — object files store section-relative offsets.** `_parse_symtab32()` handles relocatable `.o` files (section-relative semantics); `_parse_symtab32_exe()` handles executables (absolute VA semantics). The parser calls the correct function based on context. When processing an AIX static archive (`.a` file containing `.o` members), use `_parse_symtab32()` — not the exe variant — or the symbol VAs will be wrong.
+**XCOFF32 executables store absolute VAs in the symbol table: object files store section-relative offsets.** `_parse_symtab32()` handles relocatable `.o` files (section-relative semantics); `_parse_symtab32_exe()` handles executables (absolute VA semantics). The parser calls the correct function based on context. When processing an AIX static archive (`.a` file containing `.o` members), use `_parse_symtab32()`, not the exe variant, or the symbol VAs will be wrong.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm the file is XCOFF by checking `magic_raw` at offset 0 (`struct.unpack_from('>H', data, 0)[0]`). AIX `.a` archives contain XCOFF members but are Big Archive format (magic `\xc3\xd4\xc1\xd2`) — extract the `.o` members first using `aix-big-archive-extraction.md` before passing to `parse()`.
+**Before this module:** Confirm the file is XCOFF by checking `magic_raw` at offset 0 (`struct.unpack_from('>H', data, 0)[0]`). AIX `.a` archives contain XCOFF members but are Big Archive format (magic `\xc3\xd4\xc1\xd2`): extract the `.o` members first using `aix-big-archive-extraction.md` before passing to `parse()`.
 
 **After this module:** Map `sym.code_va` values from `binary.exports` as confirmed function names via `ctx.set_name(va, name, source='confirmed')`. Feed `binary.text.data` to any byte-level scanner. Use `binary.imports` to identify the complete external dependency surface before planning taint analysis across library boundaries.
 
@@ -167,7 +167,7 @@ exports: 847  imports: 312
 
 ## See also
 
-- [AIX Big Archive Extraction](aix-big-archive-extraction.md) — extract XCOFF `.o` members from AIX `.a` archives before passing to this parser
-- [AIX Plain BFF Extraction](aix-plain-bff-extraction.md) — extract filesystem trees from AIX backup format before analysis
-- [Binary Format and Platform Identification](binary-format-and-platform-identification.md) — initial format detection to confirm XCOFF before calling `parse()`
-- [Signature-Based Auto-Naming](signature-based-auto-naming.md) — build cross-version corpus from XCOFF exports for identity matching
+- [AIX Big Archive Extraction](aix-big-archive-extraction.md): extract XCOFF `.o` members from AIX `.a` archives before passing to this parser
+- [AIX Plain BFF Extraction](aix-plain-bff-extraction.md): extract filesystem trees from AIX backup format before analysis
+- [Binary Format and Platform Identification](binary-format-and-platform-identification.md): initial format detection to confirm XCOFF before calling `parse()`
+- [Signature-Based Auto-Naming](signature-based-auto-naming.md): build cross-version corpus from XCOFF exports for identity matching

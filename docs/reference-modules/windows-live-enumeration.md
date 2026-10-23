@@ -1,16 +1,16 @@
 # Windows Live Enumeration
 
-Enumerate COM hijacking candidates (HKCU vs. HKLM CLSID delta), active RPC endpoints, ETW session consumers, named pipe surfaces, service DLL hijacking paths, autoruns, token privileges, and system security feature status (CFG, DEP, ASLR policies) — providing a complete Windows live-system attack surface map — via `modules/windows_enum.py` `WindowsEnumerator`.
+Enumerate COM hijacking candidates (HKCU vs. HKLM CLSID delta), active RPC endpoints, ETW session consumers, named pipe surfaces, service DLL hijacking paths, autoruns, token privileges, and system security feature status (CFG, DEP, ASLR policies): providing a complete Windows live-system attack surface map: via `modules/windows_enum.py` `WindowsEnumerator`.
 
 ---
 
 ## Why this exists
 
-1. **`WindowsEnumerator.com_hijack_candidates()` identifies COM classes that can be hijacked via HKCU override** — Windows COM resolution checks `HKCU\Software\Classes\CLSID\` before `HKLM\SOFTWARE\Classes\CLSID\`. Any COM class registered in HKLM but absent from HKCU can be overridden by a low-privilege user: writing a new `InprocServer32` entry under HKCU pointing to an attacker DLL causes the DLL to execute whenever a privileged process instantiates that class. `com_hijack_candidates()` computes the delta between HKLM and HKCU registrations for the current user.
+1. **`WindowsEnumerator.com_hijack_candidates()` identifies COM classes that can be hijacked via HKCU override**: Windows COM resolution checks `HKCU\Software\Classes\CLSID\` before `HKLM\SOFTWARE\Classes\CLSID\`. Any COM class registered in HKLM but absent from HKCU can be overridden by a low-privilege user: writing a new `InprocServer32` entry under HKCU pointing to an attacker DLL causes the DLL to execute whenever a privileged process instantiates that class. `com_hijack_candidates()` computes the delta between HKLM and HKCU registrations for the current user.
 
-2. **`rpc_endpoints()` enumerates active RPC endpoint mapper registrations** — RPC servers registered with the endpoint mapper often expose privileged functionality without requiring Windows authentication when accessed from the local system. `rpc_endpoints()` queries `ncacn_ip_tcp`, `ncalrpc`, and `ncacn_np` transport bindings and flags endpoints bound to `\pipe\svcctl`, `\pipe\samr`, or interfaces associated with known lateral movement primitives (`IWbemServices`, task scheduler).
+2. **`rpc_endpoints()` enumerates active RPC endpoint mapper registrations**: RPC servers registered with the endpoint mapper often expose privileged functionality without requiring Windows authentication when accessed from the local system. `rpc_endpoints()` queries `ncacn_ip_tcp`, `ncalrpc`, and `ncacn_np` transport bindings and flags endpoints bound to `\pipe\svcctl`, `\pipe\samr`, or interfaces associated with known lateral movement primitives (`IWbemServices`, task scheduler).
 
-3. **`system_security_features()` enumerates mitigation policy status** — Control Flow Guard (CFG) enforcement policy, Data Execution Prevention (DEP) policy (AlwaysOn vs. OptIn vs. OptOut), ASLR mandatory randomization, SEHOP (Structured Exception Handling Overwrite Protection), and Credential Guard / Device Guard status. This is the Windows equivalent of `host-platform-inventory` — it determines which exploit mitigation bypasses are necessary before attempting memory corruption.
+3. **`system_security_features()` enumerates mitigation policy status**: Control Flow Guard (CFG) enforcement policy, Data Execution Prevention (DEP) policy (AlwaysOn vs. OptIn vs. OptOut), ASLR mandatory randomization, SEHOP (Structured Exception Handling Overwrite Protection), and Credential Guard / Device Guard status. This is the Windows equivalent of `host-platform-inventory`, it determines which exploit mitigation bypasses are necessary before attempting memory corruption.
 
 ---
 
@@ -81,9 +81,9 @@ system_security_features:
 
 ## False positives
 
-**`com_hijack_candidates()` writability check** — the module checks whether the DLL path stored in the HKLM CLSID entry points to a directory writable by the current user. Some enterprise environments add ACLs that prevent writable-path detection via standard API calls. Verify write access manually by attempting to create a test file.
+**`com_hijack_candidates()` writability check**: the module checks whether the DLL path stored in the HKLM CLSID entry points to a directory writable by the current user. Some enterprise environments add ACLs that prevent writable-path detection via standard API calls. Verify write access manually by attempting to create a test file.
 
-**`named_pipes()` writable pipe detection** — writable named pipes not owned by SYSTEM are unusual but not always exploitable. A writable pipe requires a privileged process to connect to it for impersonation to succeed. Cross-reference with `service_dlls()` to find services that connect to user-accessible pipes.
+**`named_pipes()` writable pipe detection**: writable named pipes not owned by SYSTEM are unusual but not always exploitable. A writable pipe requires a privileged process to connect to it for impersonation to succeed. Cross-reference with `service_dlls()` to find services that connect to user-accessible pipes.
 
 ---
 
@@ -95,7 +95,7 @@ Run `WindowsEnumerator` after gaining low-privilege access to a Windows host. CO
 
 ## Reading findings
 
-`WindowsEnumerator().enumerate_all()` returns `Dict[str, List[Finding]]` — section name → findings:
+`WindowsEnumerator().enumerate_all()` returns `Dict[str, List[Finding]]`: section name → findings:
 
 | Section key | Content |
 |:---|:---|
@@ -113,5 +113,5 @@ Each `Finding` has `severity: str`, `category: str`, `title: str`, `detail: str`
 
 ## See also
 
-- [Linux Privilege Escalation Triage](linux-privilege-escalation-triage.md) — equivalent Linux escalation enumeration
-- [Windows Artifact Discovery](windows-artifact-discovery.md) — filesystem and registry timeline artifacts for forensic analysis
+- [Linux Privilege Escalation Triage](linux-privilege-escalation-triage.md): equivalent Linux escalation enumeration
+- [Windows Artifact Discovery](windows-artifact-discovery.md): filesystem and registry timeline artifacts for forensic analysis

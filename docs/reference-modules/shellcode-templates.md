@@ -1,6 +1,6 @@
 # Shellcode Templates
 
-Generate position-independent shellcode for x86, x86-64, and ARM64 targets — reverse TCP shell, bind TCP shell, staged loader, x86 execve with JMP/CALL/POP string embedding — plus ROP gadget scanner, minimal execve ROP chain constructor, bad byte detector, and XOR rolling encoder for delivery constraint compliance.
+Generate position-independent shellcode for x86, x86-64, and ARM64 targets: reverse TCP shell, bind TCP shell, staged loader, x86 execve with JMP/CALL/POP string embedding: plus ROP gadget scanner, minimal execve ROP chain constructor, bad byte detector, and XOR rolling encoder for delivery constraint compliance.
 
 ---
 
@@ -8,7 +8,7 @@ Generate position-independent shellcode for x86, x86-64, and ARM64 targets — r
 
 1. **Confirming a code-execution finding requires a functional payload, not just a crash.** Demonstrating that an out-of-bounds write reaches `rip` is stronger than describing the overwrite. The reverse TCP and bind TCP templates produce valid, tested shellcode for immediate use in a controlled proof-of-concept without depending on msfvenom, metasploit, or any external toolchain. The templates are constructed from raw byte sequences with objdump-verified encoding and are directly usable in an exploit chain.
 
-2. **ARM64 is the dominant architecture in embedded Linux targets — and it differs from x86-64 in ways that break direct ports.** ARM64 replaces `dup2(2)` with `dup3(3)` (Linux syscall 24 vs. x86-64 syscall 33). Darwin/macOS ARM64 uses a different syscall number class (XNU BSD layer: `0x2000000 | number`). The ARM64 template handles both Linux and Darwin via a single function parameter and selects the correct syscall table at construction time. The x86-64 template is not a starting point for ARM64 — this module provides both independently.
+2. **ARM64 is the dominant architecture in embedded Linux targets, and it differs from x86-64 in ways that break direct ports.** ARM64 replaces `dup2(2)` with `dup3(3)` (Linux syscall 24 vs. x86-64 syscall 33). Darwin/macOS ARM64 uses a different syscall number class (XNU BSD layer: `0x2000000 | number`). The ARM64 template handles both Linux and Darwin via a single function parameter and selects the correct syscall table at construction time. The x86-64 template is not a starting point for ARM64, this module provides both independently.
 
 3. **Bad bytes in shellcode trigger input filters before execution reaches the payload.** A null byte (`\x00`) truncates a `strcpy` destination. `\x0A` terminates a line-input read. `\x0D` triggers HTTP header termination. The bad byte detector scans any buffer against a caller-supplied set and returns precise offsets. Six named sets cover the common contexts: `BAD_BYTES_NULL`, `BAD_BYTES_NEWLINE`, `BAD_BYTES_COMMON`, `BAD_BYTES_HTTP`, `BAD_BYTES_SQL`, and `BAD_BYTES_CARRIAGE`. The XOR rolling encoder transforms any payload that fails the check.
 
@@ -136,17 +136,17 @@ d823f10000007f00003b00000000000010e1a31a00007f000000000000000000
 
 **ROP gadget scanner detects bytes inside instruction operands.** `find_rop_gadgets()` scans with `bytes.find()`, stepping by 1 byte at each position. An `\xC3` byte appearing as an immediate operand (e.g., `mov al, 0xC3`) registers as a `ret` gadget. Before using any gadget address, disassemble 8 bytes before and after it to confirm the byte falls at an instruction boundary. `capstone.Cs(CS_ARCH_X86, CS_MODE_64).disasm()` is the appropriate verification.
 
-**ARM64 port field encoding requires big-endian for network order.** `_pack_port()` uses `struct.pack(">H", port)` — big-endian. ARM64 instruction encoding pushes values in little-endian memory order. The `mov_imm8(0, port_val & 0xFFFF)` stores the port as a 16-bit immediate in the register — the subsequent `strh w0, [sp, #2]` writes it to the sockaddr_in at offset 2 (network byte order). Ports with `0x00` in their high byte (ports 0–255) produce a `movz` that embeds a zero byte in the encoded instruction sequence.
+**ARM64 port field encoding requires big-endian for network order.** `_pack_port()` uses `struct.pack(">H", port)`: big-endian. ARM64 instruction encoding pushes values in little-endian memory order. The `mov_imm8(0, port_val & 0xFFFF)` stores the port as a 16-bit immediate in the register: the subsequent `strh w0, [sp, #2]` writes it to the sockaddr_in at offset 2 (network byte order). Ports with `0x00` in their high byte (ports 0–255) produce a `movz` that embeds a zero byte in the encoded instruction sequence.
 
-**Staged loader size constraint.** `shellcode_staged_loader()` specifies `map_size` as the amount of second-stage code to read via `read(fd, ...)`. If the second-stage is larger than `map_size`, `read()` returns a partial buffer and the second-stage executes truncated. Pass `map_size` equal to the known second-stage size. The `mmap` call requests `PROT_READ|PROT_WRITE|PROT_EXEC` (value 7) — this combination is denied on systems with strict `W^X` enforcement (SELinux enforcing, recent grsecurity patches). Verify the target enforces `W^X` before deploying.
+**Staged loader size constraint.** `shellcode_staged_loader()` specifies `map_size` as the amount of second-stage code to read via `read(fd, ...)`. If the second-stage is larger than `map_size`, `read()` returns a partial buffer and the second-stage executes truncated. Pass `map_size` equal to the known second-stage size. The `mmap` call requests `PROT_READ|PROT_WRITE|PROT_EXEC` (value 7), this combination is denied on systems with strict `W^X` enforcement (SELinux enforcing, recent grsecurity patches). Verify the target enforces `W^X` before deploying.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Identify the target architecture via `BinaryContext.arch` or `detect_platform()`. Confirm code execution by reaching `rip`/`pc` control — use `PathSolver` to verify the execution path to the overflow.
+**Before this module:** Identify the target architecture via `BinaryContext.arch` or `detect_platform()`. Confirm code execution by reaching `rip`/`pc` control: use `PathSolver` to verify the execution path to the overflow.
 
-**After this module:** Verify the generated shellcode against the delivery constraint with `detect_bad_bytes()` before use. For encoders: confirm the decoder stub does not itself contain bad bytes — call `detect_bad_bytes(stub + encoded_payload, bad_set)` on the combined buffer. Run the shellcode in a controlled VM matching the target kernel version; do not test against production systems.
+**After this module:** Verify the generated shellcode against the delivery constraint with `detect_bad_bytes()` before use. For encoders: confirm the decoder stub does not itself contain bad bytes: call `detect_bad_bytes(stub + encoded_payload, bad_set)` on the combined buffer. Run the shellcode in a controlled VM matching the target kernel version; do not test against production systems.
 
 ---
 
@@ -184,14 +184,14 @@ All shellcode generators return `bytes` (position-independent machine code):
 | `source` | Binary name the gadget was found in (empty string for raw scans) |
 | `type` | `'ret'` / `'pop_ret'` / `'syscall'` / `'stack_pivot'` / `'mov_ret'` |
 
-`encode_xor_rolling(shellcode, key)` returns `Tuple[bytes, bytes]` — `(encoded_payload, decoder_stub)`.
+`encode_xor_rolling(shellcode, key)` returns `Tuple[bytes, bytes]`: `(encoded_payload, decoder_stub)`.
 
-`detect_bad_bytes(shellcode, bad_bytes)` returns `List[int]` — offsets of bad bytes in the shellcode.
+`detect_bad_bytes(shellcode, bad_bytes)` returns `List[int]`: offsets of bad bytes in the shellcode.
 
 ---
 
 ## See also
 
-- [Taint Analysis](taint-analysis.md) — confirm that a controllable buffer reaches the overwritten `rip` before building a payload
-- [Sink Arg Classifier](sink-arg-classifier.md) — identify the sink function whose argument the shellcode will be delivered through
-- [System-Call Tracing](system-call-tracing.md) — verify shellcode syscall behavior against expected trace on the target kernel
+- [Taint Analysis](taint-analysis.md): confirm that a controllable buffer reaches the overwritten `rip` before building a payload
+- [Sink Arg Classifier](sink-arg-classifier.md): identify the sink function whose argument the shellcode will be delivered through
+- [System-Call Tracing](system-call-tracing.md): verify shellcode syscall behavior against expected trace on the target kernel

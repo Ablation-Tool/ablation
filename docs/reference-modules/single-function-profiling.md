@@ -1,6 +1,6 @@
 # Single Function Profiling
 
-Produce a complete analysis report for one function in a single call — combining string cross-references, callee annotation, sink detection, and register argument values from `BinaryContext`, `RegAnnotator`, and the sink catalog — replacing the four-call manual sequence `callees_of()` + `dump_text()` + `annotate_calls()` + string lookup.
+Produce a complete analysis report for one function in a single call: combining string cross-references, callee annotation, sink detection, and register argument values from `BinaryContext`, `RegAnnotator`, and the sink catalog: replacing the four-call manual sequence `callees_of()` + `dump_text()` + `annotate_calls()` + string lookup.
 
 ---
 
@@ -8,9 +8,9 @@ Produce a complete analysis report for one function in a single call — combini
 
 1. **Manual triage of a candidate function requires four separate tool calls: enumerate callees, dump disassembly, annotate call arguments, and look up string cross-references.** `FuncProfiler.profile()` collapses these into a single call that returns a `FuncProfile` with all four outputs in one structured block, formatted for immediate reading. On a function with 10 calls and 4 string references, this saves roughly 15 minutes of manual assembly.
 
-2. **`FuncProfiler` integrates sink awareness directly into the profile output — each call site is annotated as `[SINK]` if the callee name appears in the sink catalog (default or custom).** Without sink tagging, an analyst reading raw call output must mentally cross-reference against a sink list. With sink tagging, the first line of the profile shows `2 SINKS` and the sink call sites are marked inline.
+2. **`FuncProfiler` integrates sink awareness directly into the profile output: each call site is annotated as `[SINK]` if the callee name appears in the sink catalog (default or custom).** Without sink tagging, an analyst reading raw call output must mentally cross-reference against a sink list. With sink tagging, the first line of the profile shows `2 SINKS` and the sink call sites are marked inline.
 
-3. **`FuncProfiler` accepts custom sinks via `custom_sinks={'exec_handler': [2]}` — the dict maps function names to argument positions.** This allows vendor-specific wrapper functions (`fadcsystem`, `vendor_exec`) to be treated as sinks in the profile without modifying the global sink catalog.
+3. **`FuncProfiler` accepts custom sinks via `custom_sinks={'exec_handler': [2]}`: the dict maps function names to argument positions.** This allows vendor-specific wrapper functions (`fadcsystem`, `vendor_exec`) to be treated as sinks in the profile without modifying the global sink catalog.
 
 ---
 
@@ -86,13 +86,13 @@ CALLS:
 
 ## False positives
 
-**`is_sink` classification uses callee name matching — a callee named `exec_result_handler` matches the `exec` prefix in some catalog configurations.** Review `profile.fmt()` output to confirm that `[SINK]`-tagged calls are genuine exec sinks and not name-collision matches. Extend the catalog with full function names rather than prefixes for vendor-specific wrappers.
+**`is_sink` classification uses callee name matching: a callee named `exec_result_handler` matches the `exec` prefix in some catalog configurations.** Review `profile.fmt()` output to confirm that `[SINK]`-tagged calls are genuine exec sinks and not name-collision matches. Extend the catalog with full function names rather than prefixes for vendor-specific wrappers.
 
 ---
 
 ## Pipeline position
 
-Step 6 in the RE workflow (CLAUDE.md): `FuncProfiler.profile()` on top candidates from `SemanticSearcher`. This is the standard triage step before `SinkArgClassifier` — the profile gives the human analyst enough context (strings, call pattern, sink presence) to decide whether to proceed to taint analysis or discard the candidate.
+Step 6 in the RE workflow (CLAUDE.md): `FuncProfiler.profile()` on top candidates from `SemanticSearcher`. This is the standard triage step before `SinkArgClassifier`: the profile gives the human analyst enough context (strings, call pattern, sink presence) to decide whether to proceed to taint analysis or discard the candidate.
 
 ---
 
@@ -105,9 +105,9 @@ Step 6 in the RE workflow (CLAUDE.md): `FuncProfiler.profile()` on top candidate
 | `va` | Entry VA of the profiled function |
 | `end_va` | End VA (last instruction) |
 | `size` | Function size in bytes |
-| `strings` | `List[(va, string)]` — string references within the function |
-| `calls` | `List[ProfiledCall]` — all call sites with argument register annotations |
-| `sink_calls` | `List[ProfiledCall]` — only the sink-classified calls (property) |
+| `strings` | `List[(va, string)]`: string references within the function |
+| `calls` | `List[ProfiledCall]`: all call sites with argument register annotations |
+| `sink_calls` | `List[ProfiledCall]`: only the sink-classified calls (property) |
 
 `FuncProfile.has_sink(name)` returns `True` if any sink call's `target_name` matches `name`.
 
@@ -115,6 +115,6 @@ Step 6 in the RE workflow (CLAUDE.md): `FuncProfiler.profile()` on top candidate
 
 ## See also
 
-- [Call Argument Annotation](call-argument-annotation.md) — `RegAnnotator` underlying the CALLS section
-- [Sink Argument Classifier](sink-argument-classifier.md) — next step after profiling confirms a sink
-- [Control-Flow Graph Construction](control-flow-graph-construction.md) — `CFGBuilder` used within `BinaryContext` for disassembly
+- [Call Argument Annotation](call-argument-annotation.md): `RegAnnotator` underlying the CALLS section
+- [Sink Argument Classifier](sink-argument-classifier.md): next step after profiling confirms a sink
+- [Control-Flow Graph Construction](control-flow-graph-construction.md): `CFGBuilder` used within `BinaryContext` for disassembly

@@ -1,6 +1,6 @@
 # Windows RPC Server Analysis
 
-Enumerate Windows RPC server interfaces registered in a PE binary — extracting interface UUIDs, authentication levels, and transport endpoint strings — and report unauthenticated RPC interfaces (those registered with `RPC_C_AUTHN_LEVEL_NONE`) as HIGH findings.
+Enumerate Windows RPC server interfaces registered in a PE binary: extracting interface UUIDs, authentication levels, and transport endpoint strings, and report unauthenticated RPC interfaces (those registered with `RPC_C_AUTHN_LEVEL_NONE`) as HIGH findings.
 
 ---
 
@@ -8,9 +8,9 @@ Enumerate Windows RPC server interfaces registered in a PE binary — extracting
 
 1. **Windows RPC interfaces registered with `RPC_C_AUTHN_LEVEL_NONE` (`authLevel=1`) accept calls from any unauthenticated network or local caller, regardless of Windows firewall or SMB authentication.** `RPCServerAnalyzer.scan()` identifies these interfaces by reading the `RPC_SERVER_INTERFACE` struct from the `RpcServerRegisterIf/IfEx/IfEx2` call site argument, enabling pre-auth attack surface enumeration without manual PE debugging.
 
-2. **`RPCServerAnalyzer.interfaces()` returns all registered interfaces with their UUID and auth level, enabling differential analysis between service versions.** A patch that raises the auth level from `NONE` to `PKT_PRIVACY` closes a pre-auth RPC attack vector — this is verifiable statically across versions by comparing `RPCInterface.auth_level_name()` output.
+2. **`RPCServerAnalyzer.interfaces()` returns all registered interfaces with their UUID and auth level, enabling differential analysis between service versions.** A patch that raises the auth level from `NONE` to `PKT_PRIVACY` closes a pre-auth RPC attack vector, this is verifiable statically across versions by comparing `RPCInterface.auth_level_name()` output.
 
-3. **`RPCServerAnalyzer.endpoint_strings()` extracts transport endpoint strings from `RpcServerUseProtseqEp` call sites** — returning named pipe paths (`\\pipe\\svcname`), TCP port numbers, and ALPC endpoint names. Combined with interface UUID and auth level, this provides the complete pre-auth attack surface: which interface, over which transport, with which authentication requirement.
+3. **`RPCServerAnalyzer.endpoint_strings()` extracts transport endpoint strings from `RpcServerUseProtseqEp` call sites**: returning named pipe paths (`\\pipe\\svcname`), TCP port numbers, and ALPC endpoint names. Combined with interface UUID and auth level, this provides the complete pre-auth attack surface: which interface, over which transport, with which authentication requirement.
 
 ---
 
@@ -76,9 +76,9 @@ Findings (1):
 
 ## False positives
 
-**`RpcServerRegisterIf` (without `Ex`) does not take an auth level argument** — the auth level defaults to `RPC_C_AUTHN_LEVEL_DEFAULT` (0), which inherits from the process security descriptor, not `NONE`. `RPCInterface.unauthenticated()` returns `False` for these interfaces; only `RpcServerRegisterIfEx` with an explicit `authLevel=1` argument generates a HIGH finding.
+**`RpcServerRegisterIf` (without `Ex`) does not take an auth level argument**: the auth level defaults to `RPC_C_AUTHN_LEVEL_DEFAULT` (0), which inherits from the process security descriptor, not `NONE`. `RPCInterface.unauthenticated()` returns `False` for these interfaces; only `RpcServerRegisterIfEx` with an explicit `authLevel=1` argument generates a HIGH finding.
 
-**Arg reading uses static analysis** — if the auth level argument to `RpcServerRegisterIfEx` is passed through a register loaded at runtime (e.g., from a config file), `RPCInterface.auth_level` may be `None` and `unauthenticated()` returns `False`. Treat `None` auth-level interfaces as requiring manual verification.
+**Arg reading uses static analysis**: if the auth level argument to `RpcServerRegisterIfEx` is passed through a register loaded at runtime for example from a config file, `RPCInterface.auth_level` may be `None` and `unauthenticated()` returns `False`. Treat `None` auth-level interfaces as requiring manual verification.
 
 ---
 
@@ -107,6 +107,6 @@ Run `RPCServerAnalyzer` on any Windows service DLL or EXE with `RpcServer*` impo
 
 ## See also
 
-- [BYOVD Capability Detection](byovd-capability-detection.md) — dangerous kernel import detection for signed drivers
-- [Control Flow Guard Review](control-flow-guard-review.md) — CFG/XFG bypass analysis for Windows PE targets
-- [Route Authentication Classification](route-authentication-classification.md) — pre-auth route auditing for embedded web frameworks
+- [BYOVD Capability Detection](byovd-capability-detection.md): dangerous kernel import detection for signed drivers
+- [Control Flow Guard Review](control-flow-guard-review.md): CFG/XFG bypass analysis for Windows PE targets
+- [Route Authentication Classification](route-authentication-classification.md): pre-auth route auditing for embedded web frameworks

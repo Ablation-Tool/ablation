@@ -110,7 +110,7 @@ b.func_starts    # [0x10001200, 0x10001280, 0x10001300, ...]
 
 ## Pipeline position
 
-**Before this module:** Confirm XCOFF magic with `struct.unpack('>H', data[:2])` — `0x01DF` (XCOFF32), `0x01F7` (XCOFF64), or `0x01EF` (XCOFF64 alt). Pass `data=` kwarg if already read to avoid double reads.
+**Before this module:** Confirm XCOFF magic with `struct.unpack('>H', data[:2])`: `0x01DF` (XCOFF32), `0x01F7` (XCOFF64), or `0x01EF` (XCOFF64 alt). Pass `data=` kwarg if already read to avoid double reads.
 
 **After this module:** Pass `XcoffBinary.func_starts` to `PPC64BESinkClassifier` for PPC64 targets, or `XcoffBinary.plt` to `TaintTracker` for import resolution.
 
@@ -151,6 +151,6 @@ b.func_starts    # [0x10001200, 0x10001280, 0x10001300, ...]
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

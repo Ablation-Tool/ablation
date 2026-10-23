@@ -1,6 +1,6 @@
 # SinkArgClassifierPPC64ELFv1
 
-Classify exec-class sink argument provenance on PPC64 BE ELFv1 ELFs — the POWER Linux calling convention used by IBM LoadLeveler, iAccess for Linux, and POWER PE bundle binaries.
+Classify exec-class sink argument provenance on PPC64 BE ELFv1 ELFs: the POWER Linux calling convention used by IBM LoadLeveler, iAccess for Linux, and POWER PE bundle binaries.
 
 ---
 
@@ -110,7 +110,7 @@ LR   return address
 
 ## See also
 
-- [SinkArgClassifierPPC64ELFv2](sink-arg-classifier-ppc64-elfv2.md) — same pipeline for ppc64le LE ELFv2
-- [SinkArgClassifier](sink-arg-classifier.md) — x86-64 baseline
-- [PPC64 Taint Analysis](ppc64-taint-analysis.md) — receives ARG_PROPAGATED findings
-- [SAC Arch Dispatch](sac-arch-dispatch.md) — auto-selects the right SAC variant from BinaryContext arch
+- [SinkArgClassifierPPC64ELFv2](sink-arg-classifier-ppc64-elfv2.md): same pipeline for ppc64le LE ELFv2
+- [SinkArgClassifier](sink-arg-classifier.md): x86-64 baseline
+- [PPC64 Taint Analysis](ppc64-taint-analysis.md): receives ARG_PROPAGATED findings
+- [SAC Arch Dispatch](sac-arch-dispatch.md): auto-selects the right SAC variant from BinaryContext arch

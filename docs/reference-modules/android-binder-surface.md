@@ -1,16 +1,16 @@
 # Android Binder Surface
 
-Disassemble DEX bytecode to annotated smali and lift it to readable pseudo-Java IR — resolving all method, field, type, and string references from the DEX flat tables — to identify exported Binder service classes, map `onTransact()` transaction code dispatch, and analyze the IPC call surface for authorization gaps, unsanitized parameter passing, and missing `checkCallingPermission()` guards.
+Disassemble DEX bytecode to annotated smali and lift it to readable pseudo-Java IR: resolving all method, field, type, and string references from the DEX flat tables: to identify exported Binder service classes, map `onTransact()` transaction code dispatch, and analyze the IPC call surface for authorization gaps, unsanitized parameter passing, and missing `checkCallingPermission()` guards.
 
 ---
 
 ## Why this exists
 
-1. **Binder IPC is the primary inter-process communication mechanism in Android — and it operates below the intent system.** Any process with a handle to a Binder object can call `transact()` directly on it with arbitrary transaction codes and `Parcel` payloads. Exported services registered in the service manager (`ServiceManager.addService()`) and exported `<service>` components are reachable from any app holding the right permissions — or from no app at all if the service exports without a permission guard. `APKParser` identifies exported service components from the manifest; `DEXDisasm` + `DEXLifter` analyze the `onTransact()` implementation to determine what each transaction code does.
+1. **Binder IPC is the primary inter-process communication mechanism in Android, and it operates below the intent system.** Any process with a handle to a Binder object can call `transact()` directly on it with arbitrary transaction codes and `Parcel` payloads. Exported services registered in the service manager (`ServiceManager.addService()`) and exported `<service>` components are reachable from any app holding the right permissions, or from no app at all if the service exports without a permission guard. `APKParser` identifies exported service components from the manifest; `DEXDisasm` + `DEXLifter` analyze the `onTransact()` implementation to determine what each transaction code does.
 
-2. **`onTransact()` dispatch logic is not readable from smali alone — method reference indexes require full DEX table resolution.** Raw smali output like `invoke-virtual {v0, v1}, method@2847` is meaningless without resolving index 2847 against the method_ids table. `DEXDisasm` resolves every reference at decode time, producing `invoke-virtual {v0, v1}, Landroid/os/Parcel;->readString()Ljava/lang/String;` — making it immediately clear what data is being read from the incoming `Parcel`. `DEXLifter` goes further, lifting the full dispatch block to pseudo-Java so the switch statement structure, permission check locations, and parameter handling are readable without a decompiler.
+2. **`onTransact()` dispatch logic is not readable from smali alone: method reference indexes require full DEX table resolution.** Raw smali output like `invoke-virtual {v0, v1}, method@2847` is meaningless without resolving index 2847 against the method_ids table. `DEXDisasm` resolves every reference at decode time, producing `invoke-virtual {v0, v1}, Landroid/os/Parcel;->readString()Ljava/lang/String;`: making it immediately clear what data is being read from the incoming `Parcel`. `DEXLifter` goes further, lifting the full dispatch block to pseudo-Java so the switch statement structure, permission check locations, and parameter handling are readable without a decompiler.
 
-3. **`checkCallingPermission()` absence in a transaction branch is not detectable from string-pool scanning — it requires control-flow analysis.** A service that calls `enforceCallingPermission()` at the top of `onTransact()` is different from one that checks it only in specific transaction branches. A service that calls neither is an authorization bypass. These patterns require reading the disassembly at the method level — exactly what `DEXDisasm.disasm_method()` and `DEXLifter.lift_method()` provide.
+3. **`checkCallingPermission()` absence in a transaction branch is not detectable from string-pool scanning, it requires control-flow analysis.** A service that calls `enforceCallingPermission()` at the top of `onTransact()` is different from one that checks it only in specific transaction branches. A service that calls neither is an authorization bypass. These patterns require reading the disassembly at the method level: exactly what `DEXDisasm.disasm_method()` and `DEXLifter.lift_method()` provide.
 
 ---
 
@@ -135,9 +135,9 @@ boolean onTransact(int p1, Parcel p2, Parcel p3, int p4) {
 
 ## False positives
 
-**`is_exported_or_implicit()` returns true for intent-filter services that are not Binder services.** A `JobService`, `AccessibilityService`, or `NotificationListenerService` exports itself via intent-filter (required by the framework) but does not implement `onTransact()` for custom IPC — it uses the framework Binder stub. `DEXDisasm.list_methods()` returns empty for `onTransact` on these classes. Skip services with empty `list_methods(class_name)` results — they are framework-managed, not custom Binder surfaces.
+**`is_exported_or_implicit()` returns true for intent-filter services that are not Binder services.** A `JobService`, `AccessibilityService`, or `NotificationListenerService` exports itself via intent-filter (required by the framework) but does not implement `onTransact()` for custom IPC, it uses the framework Binder stub. `DEXDisasm.list_methods()` returns empty for `onTransact` on these classes. Skip services with empty `list_methods(class_name)` results: they are framework-managed, not custom Binder surfaces.
 
-**Lifted pseudo-Java shows `// no pending invoke` for move-result instructions.** This comment appears when a `move-result` instruction does not immediately follow its corresponding `invoke-*` — for example, when a `goto` or another instruction appears between them (valid bytecode but uncommon). The smali output from `DEXDisasm` is always correct for these cases — use it as the authoritative reference when the lifted pseudo-Java output shows this comment. The instruction stream is valid; the lifter's pending-invoke state was cleared by the intervening instruction.
+**Lifted pseudo-Java shows `// no pending invoke` for move-result instructions.** This comment appears when a `move-result` instruction does not immediately follow its corresponding `invoke-*`: for example, when a `goto` or another instruction appears between them (valid bytecode but uncommon). The smali output from `DEXDisasm` is always correct for these cases: use it as the authoritative reference when the lifted pseudo-Java output shows this comment. The instruction stream is valid; the lifter's pending-invoke state was cleared by the intervening instruction.
 
 **Permission check in superclass `onTransact()` is not visible in the subclass disassembly.** If `RemoteService` calls `super.onTransact()` and the permission check is in the `Binder` superclass, `DEXLifter` on the subclass will not show a `checkCallingPermission()` call. This is the normal pattern for services that delegate auth to the superclass. Before reporting a missing permission check, confirm whether the `invoke-super` at the top of the method targets a class that enforces permissions.
 
@@ -145,9 +145,9 @@ boolean onTransact(int p1, Parcel p2, Parcel p3, int p4) {
 
 ## Pipeline position
 
-**Before this module:** Use `APKParser.parse_manifest()` to generate the exported service list — `DEXDisasm` and `DEXLifter` require a class name to disassemble, and the manifest is the authoritative source for which services are exported and what permission guards exist at the component level.
+**Before this module:** Use `APKParser.parse_manifest()` to generate the exported service list: `DEXDisasm` and `DEXLifter` require a class name to disassemble, and the manifest is the authoritative source for which services are exported and what permission guards exist at the component level.
 
-**After this module:** For services with no `checkCallingPermission()` in `onTransact()` branches that read Parcel data: feed the sink method (e.g., `processCommand()`) back through `DEXLifter.lift_method()` to trace the full data path from the IPC boundary to the sink. For services with `IPC_STRING_DIRECT_TO_SINK` patterns — a `readString()` result passed to a method like `exec()`, `Runtime.exec()`, or `ProcessBuilder` — escalate directly to a taint-trace with `TaintTracker`.
+**After this module:** For services with no `checkCallingPermission()` in `onTransact()` branches that read Parcel data: feed the sink method (e.g., `processCommand()`) back through `DEXLifter.lift_method()` to trace the full data path from the IPC boundary to the sink. For services with `IPC_STRING_DIRECT_TO_SINK` patterns: a `readString()` result passed to a method like `exec()`, `Runtime.exec()`, or `ProcessBuilder`: escalate directly to a taint-trace with `TaintTracker`.
 
 ---
 
@@ -155,16 +155,16 @@ boolean onTransact(int p1, Parcel p2, Parcel p3, int p4) {
 
 | Observation | Meaning |
 |:---|:---|
-| `onTransact` absent from `list_methods()` | Class uses framework Binder stub — no custom IPC surface |
-| `super.onTransact()` only, no `packed-switch` | Binder stub passes all transactions to superclass — analyze superclass |
-| `p2.readString()` → `this.methodName()` with no permission check between | IPC string passes directly to method — taint trace required |
-| `enforceCallingPermission()` before first `packed-switch` | Auth enforced globally — verify per-branch bypass is not possible |
-| `DEXLifter` shows `// no pending invoke` | `move-result` without preceding `invoke-*` — check smali output directly |
+| `onTransact` absent from `list_methods()` | Class uses framework Binder stub: no custom IPC surface |
+| `super.onTransact()` only, no `packed-switch` | Binder stub passes all transactions to superclass: analyze superclass |
+| `p2.readString()` → `this.methodName()` with no permission check between | IPC string passes directly to method: taint trace required |
+| `enforceCallingPermission()` before first `packed-switch` | Auth enforced globally: verify per-branch bypass is not possible |
+| `DEXLifter` shows `// no pending invoke` | `move-result` without preceding `invoke-*`: check smali output directly |
 
 ---
 
 ## See also
 
-- [Android / APK Analysis](android-apk-analysis.md) — manifest exported component enumeration prerequisite for this analysis
-- [Taint Analysis](taint-analysis.md) — trace IPC-sourced string arguments from `readString()` through to execution sinks
-- [JNI Bridge Reconstruction](jni-bridge-reconstruction.md) — when `onTransact()` delegates to native code via JNI
+- [Android / APK Analysis](android-apk-analysis.md): manifest exported component enumeration prerequisite for this analysis
+- [Taint Analysis](taint-analysis.md): trace IPC-sourced string arguments from `readString()` through to execution sinks
+- [JNI Bridge Reconstruction](jni-bridge-reconstruction.md): when `onTransact()` delegates to native code via JNI

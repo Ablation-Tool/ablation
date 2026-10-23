@@ -26,7 +26,7 @@ reachable VA set
 
 The BFS uses `BinaryContext.reachable_from`, which guarantees minimum call depth from the source. Results are keyed by function VA so multiple sinks in the same function collapse to the highest-priority verdict.
 
-Verdict priority: `ARG_PROPAGATED` > `UNKNOWN` > `SNPRINTF_RODATA`. `RODATA_CONST` sinks are dropped — they are not injectable.
+Verdict priority: `ARG_PROPAGATED` > `UNKNOWN` > `SNPRINTF_RODATA`. `RODATA_CONST` sinks are dropped: they are not injectable.
 
 ---
 
@@ -129,6 +129,6 @@ NetworkSinkFinder: 7 network-reachable dangerous sinks
 
 ## See also
 
-- [Sink Arg Classifier](sink-arg-classifier.md) — provides the ARG_PROPAGATED results NetworkSinkFinder filters
-- [Window Analyzer](window-analyzer.md) — use after NetworkSinkFinder to confirm the argument chain
-- [TaintTracker PPC32](taint-tracker-ppc32.md) — interprocedural taint for confirmed candidates
+- [Sink Arg Classifier](sink-arg-classifier.md): provides the ARG_PROPAGATED results NetworkSinkFinder filters
+- [Window Analyzer](window-analyzer.md): use after NetworkSinkFinder to confirm the argument chain
+- [TaintTracker PPC32](taint-tracker-ppc32.md): interprocedural taint for confirmed candidates

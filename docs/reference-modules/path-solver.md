@@ -42,7 +42,7 @@ Gate: **PASSED**. No file reads. No network I/O. No subprocess. No lief.parse().
 
 ## How it works
 
-`PathSolver` builds a basic-block CFG from the function's Capstone disassembly, then DFS-enumerates all simple paths from the function entry block to the block containing `target_va`, bounded by `max_path_blocks`. For each path, it runs a symbolic execution pass: registers are `z3.BitVec(64)` expressions; arithmetic and comparison instructions add constraints to the Z3 solver; `MemoryConstraint` seeds inject lower/upper bounds for struct-field reads at `(base_reg, byte_offset)` instead of leaving them unconstrained. Z3 is invoked with a per-path timeout (`z3_timeout_ms`). A `sat=True` result includes a concrete model — register values at function entry that make the path constraints satisfiable and therefore the sink reachable.
+`PathSolver` builds a basic-block CFG from the function's Capstone disassembly, then DFS-enumerates all simple paths from the function entry block to the block containing `target_va`, bounded by `max_path_blocks`. For each path, it runs a symbolic execution pass: registers are `z3.BitVec(64)` expressions; arithmetic and comparison instructions add constraints to the Z3 solver; `MemoryConstraint` seeds inject lower/upper bounds for struct-field reads at `(base_reg, byte_offset)` instead of leaving them unconstrained. Z3 is invoked with a per-path timeout (`z3_timeout_ms`). A `sat=True` result includes a concrete model: register values at function entry that make the path constraints satisfiable and therefore the sink reachable.
 
 ---
 
@@ -89,9 +89,9 @@ for r in results:
 
 ## False positives
 
-**Z3 `UNSAT` on a real path** — the symbolic executor uses bounded BitVec arithmetic; path constraints from loop-carried values or indirect memory reads may be over-constrained, producing `UNSAT` on a path that is actually reachable. Increase `max_path_blocks` or add struct seeding for struct-pointer reads to give Z3 more context.
+**Z3 `UNSAT` on a real path**: the symbolic executor uses bounded BitVec arithmetic; path constraints from loop-carried values or indirect memory reads may be over-constrained, producing `UNSAT` on a path that is actually reachable. Increase `max_path_blocks` or add struct seeding for struct-pointer reads to give Z3 more context.
 
-**`sat=True` on an infeasible path** — under-constrained memory reads (fields Z3 leaves unconstrained) may produce concrete models that satisfy the formula but are not actually reachable in the program. Always confirm the `model` values make semantic sense for the vulnerability class (e.g., an overlong length field should be larger than the allocation size).
+**`sat=True` on an infeasible path**: under-constrained memory reads (fields Z3 leaves unconstrained) may produce concrete models that satisfy the formula but are not actually reachable in the program. Always confirm the `model` values make semantic sense for the vulnerability class for example an overlong length field should be larger than the allocation size.
 
 ---
 
@@ -110,16 +110,16 @@ for r in results:
 | Attribute | Content |
 |:---|:---|
 | `sat` | `True` if Z3 found a satisfying assignment |
-| `path` | `List[int]` — basic block VAs on the solved path, entry → target |
-| `model` | `Dict[str, int]` — concrete register values at function entry (populated only when `sat=True`) |
-| `clauses` | `int` — Z3 clauses added during path constraint solving |
-| `note` | `str` — `'timeout'` or `'unsat'` when `sat=False`; empty string on success |
-| `seeded_fields` | `List[str]` — struct field names from `MemoryConstraint` that constrained this path |
+| `path` | `List[int]`: basic block VAs on the solved path, entry → target |
+| `model` | `Dict[str, int]`: concrete register values at function entry (populated only when `sat=True`) |
+| `clauses` | `int`: Z3 clauses added during path constraint solving |
+| `note` | `str`: `'timeout'` or `'unsat'` when `sat=False`; empty string on success |
+| `seeded_fields` | `List[str]`: struct field names from `MemoryConstraint` that constrained this path |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

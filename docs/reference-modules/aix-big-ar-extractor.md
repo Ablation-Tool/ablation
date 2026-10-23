@@ -69,7 +69,7 @@ print(ext.list_members())
 
 ## How it works
 
-`AixBigArExtractor.__init__()` reads the entire archive into memory and validates the `<bigaf>\n` magic. `extract()` reads the two text-decimal offsets from the 128-byte global header (`fl_fstmoff`, `fl_lstmoff`), then walks the member doubly-linked list via `ar_nxtoff` at each member header. For each member, it parses the 112-byte fixed header, extracts the `ar_namlen`-byte name field, verifies the 2-byte `ar_fmag` consistency trailer (`\x60\x0a`), and yields `(name, member_bytes)`. The metadata-only members (empty name, `/`, `//`) — the member table and global symbol tables — are skipped. `xcoff_members()` filters the output of `extract()` by checking that the first 2 bytes of each member are `\x01\xdf` (XCOFF32) or `\x01\xf7` (XCOFF64). If a member header is corrupt at any point, the walk stops cleanly via the `except` guard rather than raising.
+`AixBigArExtractor.__init__()` reads the entire archive into memory and validates the `<bigaf>\n` magic. `extract()` reads the two text-decimal offsets from the 128-byte global header (`fl_fstmoff`, `fl_lstmoff`), then walks the member doubly-linked list via `ar_nxtoff` at each member header. For each member, it parses the 112-byte fixed header, extracts the `ar_namlen`-byte name field, verifies the 2-byte `ar_fmag` consistency trailer (`\x60\x0a`), and yields `(name, member_bytes)`. The metadata-only members (empty name, `/`, `//`): the member table and global symbol tables: are skipped. `xcoff_members()` filters the output of `extract()` by checking that the first 2 bytes of each member are `\x01\xdf` (XCOFF32) or `\x01\xf7` (XCOFF64). If a member header is corrupt at any point, the walk stops cleanly via the `except` guard rather than raising.
 
 ---
 
@@ -104,7 +104,7 @@ for name, data in members.items():
 
 ## False positives
 
-Extraction either succeeds or raises an exception — there are no false positives in the traditional sense. Check for incomplete downloads (`.aria2` sidecar present) before analysis: partial images produce truncated or zero-filled partitions that pass validation but contain no useful data.
+Extraction either succeeds or raises an exception, there are no false positives in the traditional sense. Check for incomplete downloads (`.aria2` sidecar present) before analysis: partial images produce truncated or zero-filled partitions that pass validation but contain no useful data.
 
 ---
 
@@ -118,19 +118,19 @@ Extraction either succeeds or raises an exception — there are no false positiv
 
 ## Reading output
 
-`AixBigArExtractor.extract()` yields `Tuple[str, bytes]` — `(member_name, member_bytes)`. `from_path()` returns `Dict[str, bytes]`. `xcoff_members()` yields only members whose first 2 bytes match an XCOFF magic.
+`AixBigArExtractor.extract()` yields `Tuple[str, bytes]`: `(member_name, member_bytes)`. `from_path()` returns `Dict[str, bytes]`. `xcoff_members()` yields only members whose first 2 bytes match an XCOFF magic.
 
 | Value | Content |
 |:---|:---|
 | `member_name` | Archive member name (e.g., `frexp.o`, `frexp_64.o`) |
 | `member_bytes` | Raw bytes of the XCOFF object file |
-| First 2 bytes `\x01\xdf` | XCOFF32 — 32-bit PowerPC object code |
-| First 2 bytes `\x01\xf7` | XCOFF64 — 64-bit PowerPC object code |
+| First 2 bytes `\x01\xdf` | XCOFF32: 32-bit PowerPC object code |
+| First 2 bytes `\x01\xf7` | XCOFF64: 64-bit PowerPC object code |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — load extracted payloads for analysis
-- [FirmwareContainers](firmware-containers.md) — higher-level firmware partition walker
-- [EntropyMapper](entropy-mapper.md) — locate encrypted or compressed regions before extraction
+- [BinaryContext](binary-context.md): load extracted payloads for analysis
+- [FirmwareContainers](firmware-containers.md): higher-level firmware partition walker
+- [EntropyMapper](entropy-mapper.md): locate encrypted or compressed regions before extraction

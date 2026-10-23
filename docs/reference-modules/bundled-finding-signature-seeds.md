@@ -1,16 +1,16 @@
 # Bundled Finding Signature Seeds
 
-Pre-bundled behavioral signature library for stripped function identification — matching unknown functions against a curated set of known-dangerous and known-safe function profiles using `SigLibrary`, auto-naming BERT-inferred functions in the corpus with `likely:` prefixes.
+Pre-bundled behavioral signature library for stripped function identification: matching unknown functions against a curated set of known-dangerous and known-safe function profiles using `SigLibrary`, auto-naming BERT-inferred functions in the corpus with `likely:` prefixes.
 
 ---
 
 ## Why this exists
 
-1. **BERT-based semantic search produces embedding-space nearest neighbors, but `SigLibrary` adds a structured behavioral profile layer — each signature has an explicit description, category, and confidence threshold calibrated against known-good and known-bad examples.** `SigLibrary.match_description()` returns a `SigMatch` with a `likely:` prefixed name and a confidence score, providing a more actionable label than raw embedding similarity for common library functions (`memcpy`, `strcpy`, `strlen`, `malloc`).
+1. **BERT-based semantic search produces embedding-space nearest neighbors, but `SigLibrary` adds a structured behavioral profile layer: each signature has an explicit description, category, and confidence threshold calibrated against known-good and known-bad examples.** `SigLibrary.match_description()` returns a `SigMatch` with a `likely:` prefixed name and a confidence score, providing a more actionable label than raw embedding similarity for common library functions (`memcpy`, `strcpy`, `strlen`, `malloc`).
 
-2. **`SigLibrary.auto_name()` renames all `ANGR_INFERRED` placeholder functions in a corpus database in a single pass** — functions that were auto-named by angr's decompiler (e.g., `sub_0x1d700`) but not yet confirmed by a human analyst. The `likely:` prefix distinguishes machine-inferred names from human-confirmed names, preventing accidental trust of inferred labels in downstream RE work.
+2. **`SigLibrary.auto_name()` renames all `ANGR_INFERRED` placeholder functions in a corpus database in a single pass**: functions that were auto-named by angr's decompiler (e.g., `sub_0x1d700`) but not yet confirmed by a human analyst. The `likely:` prefix distinguishes machine-inferred names from human-confirmed names, preventing accidental trust of inferred labels in downstream RE work.
 
-3. **The bundled `sigs.json` ships with Ablation and covers the functions most commonly mistaken in binary RE — `memcpy`/`memmove` confusion, `strcpy`/`strncpy` misidentification, `malloc`/`calloc`/`realloc` distinction, and dangerous one-shot functions (`gets`, `sprintf` with fixed dest).** The confidence thresholds are set conservatively: a function must score >0.85 against a profile to receive the `likely:` label, reducing false positive auto-naming.
+3. **The bundled `sigs.json` ships with Ablation and covers the functions most commonly mistaken in binary RE: `memcpy`/`memmove` confusion, `strcpy`/`strncpy` misidentification, `malloc`/`calloc`/`realloc` distinction, and dangerous one-shot functions (`gets`, `sprintf` with fixed dest).** The confidence thresholds are set conservatively: a function must score >0.85 against a profile to receive the `likely:` label, reducing false positive auto-naming.
 
 ---
 
@@ -89,7 +89,7 @@ auto_name() report:
 
 ## Pipeline position
 
-Run `SigLibrary.auto_name()` after building the initial corpus but before running `SemanticSearcher` — the `likely:*` labels improve embedding search quality by replacing generic `sub_XXXXXXXX` names with descriptive labels. `SigLibrary.match_function()` can be called alongside `SemanticSearcher` to add structured signature matches alongside embedding similarity results.
+Run `SigLibrary.auto_name()` after building the initial corpus but before running `SemanticSearcher`: the `likely:*` labels improve embedding search quality by replacing generic `sub_XXXXXXXX` names with descriptive labels. `SigLibrary.match_function()` can be called alongside `SemanticSearcher` to add structured signature matches alongside embedding similarity results.
 
 ---
 
@@ -100,7 +100,7 @@ Run `SigLibrary.auto_name()` after building the initial corpus but before runnin
 | Field | Content |
 |:---|:---|
 | `name` | Matched library function name (e.g., `likely:memcpy`) |
-| `confidence` | Float 0.0–1.0 — profile similarity score |
+| `confidence` | Float 0.0–1.0: profile similarity score |
 | `seed_profile` | Profile bitmask from the seed library |
 | `target_profile` | Profile bitmask from the target function |
 
@@ -115,6 +115,6 @@ Run `SigLibrary.auto_name()` after building the initial corpus but before runnin
 
 ## See also
 
-- [Semantic Search](semantic-search.md) — embedding-based similarity; complementary to SigLibrary profile matching
-- [Function Identity Database](function-identity-database.md) — persistent corpus; `auto_name()` modifies it
-- [Pattern Library](prior-finding-retrieval.md) — confirmed finding patterns across sessions; distinct from SigLibrary
+- [Semantic Search](semantic-search.md): embedding-based similarity; complementary to SigLibrary profile matching
+- [Function Identity Database](function-identity-database.md): persistent corpus; `auto_name()` modifies it
+- [Pattern Library](prior-finding-retrieval.md): confirmed finding patterns across sessions; distinct from SigLibrary

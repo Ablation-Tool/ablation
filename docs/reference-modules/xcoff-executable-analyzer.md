@@ -65,7 +65,7 @@ Gate: **PASSED**. CWE-770 (unbounded `Path.read_bytes()` in `xcoff_parser.parse(
 
 ## How it works
 
-`XcoffExecutableAnalyzer.from_path(path)` wraps `xcoff_parser.parse()` and exposes the AIX binary RE surface in the same `from_context(ctx)` pattern as other ablation analyzers. `xcoff_parser.parse()` returns an `XcoffBinary` — this module promotes it to a `BinaryContext`-compatible surface: PLT from the XCOFF loader section, function starts from the XCOFF symbol table, and section data for Capstone disassembly. Primarily used when the target is an AIX `.a` archive member or a standalone XCOFF64 `a.out`.
+`XcoffExecutableAnalyzer.from_path(path)` wraps `xcoff_parser.parse()` and exposes the AIX binary RE surface in the same `from_context(ctx)` pattern as other ablation analyzers. `xcoff_parser.parse()` returns an `XcoffBinary`, this module promotes it to a `BinaryContext`-compatible surface: PLT from the XCOFF loader section, function starts from the XCOFF symbol table, and section data for Capstone disassembly. Primarily used when the target is an AIX `.a` archive member or a standalone XCOFF64 `a.out`.
 
 ---
 
@@ -83,7 +83,7 @@ XCOFFExecutableAnalyzer  path=/firmware/aix/libssl.a[openssl.so]
 
 ## False positives
 
-**AIX `.a` archive members.** AIX static libraries are XCOFF `.a` archives — individual `.o` files are nested inside. `XCOFFExecutableAnalyzer` parses a single XCOFF binary; for archive members, extract the member first with `ar x libfoo.a member.o`, then pass the extracted file.
+**AIX `.a` archive members.** AIX static libraries are XCOFF `.a` archives: individual `.o` files are nested inside. `XCOFFExecutableAnalyzer` parses a single XCOFF binary; for archive members, extract the member first with `ar x libfoo.a member.o`, then pass the extracted file.
 
 ---
 
@@ -97,7 +97,7 @@ XCOFFExecutableAnalyzer  path=/firmware/aix/libssl.a[openssl.so]
 
 ## Reading output
 
-`XCOFFExecutableAnalyzer.from_path(path)` or `.from_context(ctx)` — then call convenience methods:
+`XCOFFExecutableAnalyzer.from_path(path)` or `.from_context(ctx)`: then call convenience methods:
 
 | Method | Return type | Content |
 |:---|:---|:---|
@@ -112,6 +112,6 @@ XCOFFExecutableAnalyzer  path=/firmware/aix/libssl.a[openssl.so]
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

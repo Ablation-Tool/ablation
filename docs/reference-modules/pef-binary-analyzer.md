@@ -97,7 +97,7 @@ PEFBinaryAnalyzer.is_pef(data)   # checks tag1/tag2
 
 ## How it works
 
-`PEFBinaryAnalyzer.from_path(path)` parses a Mac Classic / PEF (CFM) container — the format used by all pre-Intel Mac OS (8.x–9.x) and early Classic Mac OS X PPC applications. `PEFContainer._parse_sections()` extracts loader sections; `_resolve_imports()` walks the import symbol table to build the PLT equivalent. `PPC32TaintTracker` cannot load PEF files (ELF only), so this module provides the PEF-specific binary loading layer so that taint tracking can run on Mac Classic PPC32 binaries.
+`PEFBinaryAnalyzer.from_path(path)` parses a Mac Classic / PEF (CFM) container: the format used by all pre-Intel Mac OS (8.x–9.x) and early Classic Mac OS X PPC applications. `PEFContainer._parse_sections()` extracts loader sections; `_resolve_imports()` walks the import symbol table to build the PLT equivalent. `PPC32TaintTracker` cannot load PEF files (ELF only), so this module provides the PEF-specific binary loading layer so that taint tracking can run on Mac Classic PPC32 binaries.
 
 ---
 
@@ -148,6 +148,6 @@ Each `PEFImport`: `lib_name: str`, `sym_name: str`, `sym_class: int`.
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

@@ -1,16 +1,16 @@
 # RelDynPc32Scanner
 
-Scan the `.rel.dyn` section of i386 ELF shared objects for `R_386_PC32` relocations targeting exec-class or network-class sinks — covering the import mechanism that `BinaryContext` and `SinkArgClassifier` miss entirely on PIC i386 shared objects.
+Scan the `.rel.dyn` section of i386 ELF shared objects for `R_386_PC32` relocations targeting exec-class or network-class sinks: covering the import mechanism that `BinaryContext` and `SinkArgClassifier` miss entirely on PIC i386 shared objects.
 
 ---
 
 ## Why this exists
 
-1. **`BinaryContext` only reads `.rel.plt` for import extraction.** `BinaryContext._build_plt()` scans `.rel.plt` (type `R_386_JUMP_SLOT`) to populate the PLT map. Some i386 PIC shared objects use `R_386_PC32` direct-call fixups in `.rel.dyn` instead of PLT stubs. Those binaries report `plt=0` and `SAC` returns 0 results — not because the binary is safe, but because the import mechanism is different.
+1. **`BinaryContext` only reads `.rel.plt` for import extraction.** `BinaryContext._build_plt()` scans `.rel.plt` (type `R_386_JUMP_SLOT`) to populate the PLT map. Some i386 PIC shared objects use `R_386_PC32` direct-call fixups in `.rel.dyn` instead of PLT stubs. Those binaries report `plt=0` and `SAC` returns 0 results, not because the binary is safe, but because the import mechanism is different.
 
 2. **The gap is a real source of missed findings.** Four IBM RSCT/CSM shared objects confirmed this: `libevfbpv.so` imports `system` via `R_386_PC32` at offset `0x3ac87e`; `liblinux.so` imports `fork` and `socket` the same way. All four returned SAC=0 before this module existed.
 
-3. **The scanner works standalone on raw ELF bytes.** It parses ELF32 section headers and `.rel.dyn` using only `struct`, without LIEF or BinaryContext. This is intentional — it exists specifically to cover the case where normal BinaryContext import extraction fails.
+3. **The scanner works standalone on raw ELF bytes.** It parses ELF32 section headers and `.rel.dyn` using only `struct`, without LIEF or BinaryContext. This is intentional, it exists specifically to cover the case where normal BinaryContext import extraction fails.
 
 ---
 
@@ -115,7 +115,7 @@ sac_results = sac.classify_all()
 
 ## Limitations
 
-**Only LE i386 is supported.** `_parse_elf()` returns False on `EI_DATA=2` (big-endian) or ELFCLASS64. The scanner returns an empty hit list silently — it does not raise. Always verify the binary is i386 LE before assuming a 0-hit result means the binary is clean.
+**Only LE i386 is supported.** `_parse_elf()` returns False on `EI_DATA=2` (big-endian) or ELFCLASS64. The scanner returns an empty hit list silently, it does not raise. Always verify the binary is i386 LE before assuming a 0-hit result means the binary is clean.
 
 **`exec_names` and `net_names` properties re-scan.** Both properties call `scan()` independently. If you access both in sequence the relocation table is walked twice. Call `scan()` once and filter the returned list instead.
 
@@ -133,6 +133,6 @@ sac_results = sac.classify_all()
 
 ## See also
 
-- [Sink Arg Classifier](sink-arg-classifier.md) — primary SAC for PLT-based imports
-- [Window Analyzer](window-analyzer.md) — disassemble the call site returned by `call_va`
-- [StaticLinkSinkScanner](static-link-sink-scanner.md) — for statically linked binaries with no PLT at all
+- [Sink Arg Classifier](sink-arg-classifier.md): primary SAC for PLT-based imports
+- [Window Analyzer](window-analyzer.md): disassemble the call site returned by `call_va`
+- [StaticLinkSinkScanner](static-link-sink-scanner.md): for statically linked binaries with no PLT at all

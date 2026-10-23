@@ -1,16 +1,16 @@
 # SQL Injection Scanner
 
-Detect raw SQL injection in x86-64 ELF binaries that call the MySQL C API (`mysql_query`, `mysql_real_query`) or SQLite3 (`sqlite3_exec`, `sqlite3_prepare_v2`, `sqlite3_prepare`) directly — tracing the SQL string argument backward from each call site to classify its provenance as `INJECTABLE`, `INJECTABLE_LITERAL`, `RODATA_CONST`, `SAFE_NUMERIC`, `ARG_PROPAGATED`, or `UNKNOWN`.
+Detect raw SQL injection in x86-64 ELF binaries that call the MySQL C API (`mysql_query`, `mysql_real_query`) or SQLite3 (`sqlite3_exec`, `sqlite3_prepare_v2`, `sqlite3_prepare`) directly: tracing the SQL string argument backward from each call site to classify its provenance as `INJECTABLE`, `INJECTABLE_LITERAL`, `RODATA_CONST`, `SAFE_NUMERIC`, `ARG_PROPAGATED`, or `UNKNOWN`.
 
 ---
 
 ## Why this exists
 
-1. **`FormatStringScanner` misses the SQL injection pattern because `snprintf` is safe in isolation — the danger is `snprintf(buf, sizeof(buf), "WHERE login='%s'", username); mysql_query(conn, buf)`.** `FormatStringScanner` reports a finding when a format string contains `%s` and the buffer is passed to a dangerous output function. It does not model the SQL API call chain: `snprintf` writes to a local buffer; `mysql_query` receives that buffer as its SQL argument. Detecting this requires chaining: find SQL sink → trace SQL arg register (RSI, arg1) backward → find the `snprintf` call that populated the buffer → inspect the format string.
+1. **`FormatStringScanner` misses the SQL injection pattern because `snprintf` is safe in isolation: the danger is `snprintf(buf, sizeof(buf), "WHERE login='%s'", username); mysql_query(conn, buf)`.** `FormatStringScanner` reports a finding when a format string contains `%s` and the buffer is passed to a dangerous output function. It does not model the SQL API call chain: `snprintf` writes to a local buffer; `mysql_query` receives that buffer as its SQL argument. Detecting this requires chaining: find SQL sink → trace SQL arg register (RSI, arg1) backward → find the `snprintf` call that populated the buffer → inspect the format string.
 
-2. **SQL sink PLT dead-import detection avoids scanning binaries where SQL APIs are imported but never called.** Before scanning any instructions, `SqlSinkScanner` counts how many call sites each SQL PLT stub has (`_count_plt_callers()`). A sink with zero callers is a "dead import" — it is recorded in the report but no instruction scan is performed. This prevents both false positives (where a PLT-imported symbol happens to match a SQL API name but is never invoked) and wasted scan time on binaries that import SQL headers but use a different database layer at runtime.
+2. **SQL sink PLT dead-import detection avoids scanning binaries where SQL APIs are imported but never called.** Before scanning any instructions, `SqlSinkScanner` counts how many call sites each SQL PLT stub has (`_count_plt_callers()`). A sink with zero callers is a "dead import", it is recorded in the report but no instruction scan is performed. This prevents both false positives (where a PLT-imported symbol happens to match a SQL API name but is never invoked) and wasted scan time on binaries that import SQL headers but use a different database layer at runtime.
 
-3. **The `ARG_PROPAGATED` verdict identifies SQL injection via caller control rather than format strings.** When the SQL string argument traces back to an entry-point register (RDI, RSI, RDX, RCX, R8, R9 at function entry), the SQL string comes from the caller — possibly from user-controlled data. This is the same severity as `INJECTABLE` but requires taint tracking from the call site back through the call chain rather than format string inspection. `ARG_PROPAGATED` findings require `TaintTracker` follow-up.
+3. **The `ARG_PROPAGATED` verdict identifies SQL injection via caller control rather than format strings.** When the SQL string argument traces back to an entry-point register (RDI, RSI, RDX, RCX, R8, R9 at function entry), the SQL string comes from the caller: possibly from user-controlled data. This is the same severity as `INJECTABLE` but requires taint tracking from the call site back through the call chain rather than format string inspection. `ARG_PROPAGATED` findings require `TaintTracker` follow-up.
 
 ---
 
@@ -31,9 +31,9 @@ flowchart TD
 |---|---|---|
 | `INJECTABLE` | HIGH | `snprintf` format string contains `%s`; SQL string is format-built from a non-RODATA source |
 | `INJECTABLE_LITERAL` | HIGH | SQL string is a RODATA literal that already contains `%s` (e.g., `"WHERE id='%s'"`) |
-| `ARG_PROPAGATED` | HIGH | SQL string came from a function entry-point register — caller may control it |
+| `ARG_PROPAGATED` | HIGH | SQL string came from a function entry-point register: caller may control it |
 | `UNKNOWN` | MEDIUM | Provenance not resolved within the 40-instruction lookback window |
-| `SAFE_NUMERIC` | LOW | Format string uses only `%d`/`%u`/`%x` — no string interpolation |
+| `SAFE_NUMERIC` | LOW | Format string uses only `%d`/`%u`/`%x`: no string interpolation |
 | `RODATA_CONST` | LOW | SQL string is a fixed RODATA literal with no format specifiers |
 
 ### SQL sinks covered
@@ -106,9 +106,9 @@ SqlSinkScanner: /path/webapp_binary
 
 ## False positives
 
-**`INJECTABLE` verdict on format strings where the `%s` argument is a hardcoded RODATA value.** The scanner checks whether the format string has `%s` — it does not verify whether the string argument passed to `%s` is user-controlled or a fixed constant. A call like `snprintf(buf, N, "WHERE type='%s'", "admin"); mysql_query(conn, buf)` is `INJECTABLE` because the format string has `%s`, but the argument `"admin"` is fixed. After identifying an `INJECTABLE` finding, verify with `TaintTracker` that the `%s` argument register at the `snprintf` call is user-influenced.
+**`INJECTABLE` verdict on format strings where the `%s` argument is a hardcoded RODATA value.** The scanner checks whether the format string has `%s`, it does not verify whether the string argument passed to `%s` is user-controlled or a fixed constant. A call like `snprintf(buf, N, "WHERE type='%s'", "admin"); mysql_query(conn, buf)` is `INJECTABLE` because the format string has `%s`, but the argument `"admin"` is fixed. After identifying an `INJECTABLE` finding, verify with `TaintTracker` that the `%s` argument register at the `snprintf` call is user-influenced.
 
-**`ARG_PROPAGATED` stops at function entry — the argument may be a fixed constant at the call site.** The scanner traces the SQL argument backward and stops when it finds an entry-point register. Whether the register contains user data depends on the caller. An `ARG_PROPAGATED` finding at a library helper function called with a hardcoded literal from `main()` is a false positive. Use `TaintTracker.run_interprocedural()` to trace from the actual data source.
+**`ARG_PROPAGATED` stops at function entry: the argument may be a fixed constant at the call site.** The scanner traces the SQL argument backward and stops when it finds an entry-point register. Whether the register contains user data depends on the caller. An `ARG_PROPAGATED` finding at a library helper function called with a hardcoded literal from `main()` is a false positive. Use `TaintTracker.run_interprocedural()` to trace from the actual data source.
 
 **Lookback window of 40 instructions misses provenance for long function prologues.** Functions with complex setup code before the SQL call (> 40 instructions between the argument load and the call site) will produce `UNKNOWN` rather than `INJECTABLE` or `RODATA_CONST`. If the binary has many `UNKNOWN` findings, try `SqlSinkScanner.from_context(ctx)` which has access to the full function list for better function boundary resolution, or manually inspect the function with the Capstone disassembly.
 
@@ -126,7 +126,7 @@ SqlSinkScanner: /path/webapp_binary
 
 | Field | Content |
 |:---|:---|
-| `finding.verdict` | Classification of the SQL string provenance — primary triage signal |
+| `finding.verdict` | Classification of the SQL string provenance: primary triage signal |
 | `finding.sink_name` | MySQL or SQLite3 function name that received the SQL string |
 | `finding.call_va` | Virtual address of the SQL sink call instruction |
 | `finding.func_va` | Virtual address of the enclosing function |
@@ -138,6 +138,6 @@ SqlSinkScanner: /path/webapp_binary
 
 ## See also
 
-- [Sink Arg Classifier](sink-arg-classifier.md) — classify all call sites (not just SQL) as RODATA_CONST/ARG_PROPAGATED/UNKNOWN before running this scanner
-- [Taint Analysis](taint-analysis.md) — trace ARG_PROPAGATED findings from user input to the SQL sink
-- [Format String Analysis](format-string-analysis.md) — format string detection for non-SQL output sinks
+- [Sink Arg Classifier](sink-arg-classifier.md): classify all call sites (not just SQL) as RODATA_CONST/ARG_PROPAGATED/UNKNOWN before running this scanner
+- [Taint Analysis](taint-analysis.md): trace ARG_PROPAGATED findings from user input to the SQL sink
+- [Format String Analysis](format-string-analysis.md): format string detection for non-SQL output sinks

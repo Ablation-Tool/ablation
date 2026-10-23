@@ -6,7 +6,7 @@
 
 Two things were not possible before in Ablation:
 
-1. **`BinaryContext` cannot find function starts in stripped static ELF32 binaries.** `BinaryContext._extract_func_starts()` relies on `.symtab` / `.dynsym` (no entries in stripped binaries) and `.eh_frame` (absent in non-exception-aware or `--strip-all` builds). For stripped static i386 ELF binaries, `ctx.func_starts` is empty and `SemanticSearcher`, `SinkArgClassifier`, and `TaintTracker` all return 0 results — not because the binary is safe, but because the analysis has no entry points.
+1. **`BinaryContext` cannot find function starts in stripped static ELF32 binaries.** `BinaryContext._extract_func_starts()` relies on `.symtab` / `.dynsym` (no entries in stripped binaries) and `.eh_frame` (absent in non-exception-aware or `--strip-all` builds). For stripped static i386 ELF binaries, `ctx.func_starts` is empty and `SemanticSearcher`, `SinkArgClassifier`, and `TaintTracker` all return 0 results, not because the binary is safe, but because the analysis has no entry points.
 
 2. **FPO binaries compiled with `-fomit-frame-pointer` produce no recognizable prologues.** The primary recovery method for x86 (prologue pattern `55 89 e5`: `push ebp; mov ebp, esp`) works for ~95% of GCC i386 output, but GCC with `-fomit-frame-pointer` omits `push ebp` entirely. A second fallback is required for these binaries.
 
@@ -85,6 +85,6 @@ scanner.inject(ctx)
 
 ## See also
 
-- [BinaryContext](binary-context.md) — calls this scanner via `inject()` when func_starts is empty
-- [FlatBinaryFuncStartScanner](flat-binary-func-start-scanner.md) — equivalent for flat ROM images (no ELF header, ISA-agnostic)
-- [SinkArgClassifier](sink-arg-classifier.md) — next step after func_starts are populated
+- [BinaryContext](binary-context.md): calls this scanner via `inject()` when func_starts is empty
+- [FlatBinaryFuncStartScanner](flat-binary-func-start-scanner.md): equivalent for flat ROM images (no ELF header, ISA-agnostic)
+- [SinkArgClassifier](sink-arg-classifier.md): next step after func_starts are populated

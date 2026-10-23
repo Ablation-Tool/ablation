@@ -591,7 +591,7 @@ instruction encoding.
 
 ## How it works
 
-`EncodingDAG` represents ISA instruction encodings as a three-layer DAG for fixed-width architectures. Layer 1: raw bytes / hex / RGB-integer (B0, B1, B2). Layer 2: bitfield template — each node is a named field with width and position, extracted via mask-and-shift. Layer 3: semantic IR — field values mapped to symbolic operands (registers, immediates, targets). The DAG structure allows the same bitfield template to be shared across opcodes that differ only in one field, reducing the encoding table size for dense ISAs.
+`EncodingDAG` represents ISA instruction encodings as a three-layer DAG for fixed-width architectures. Layer 1: raw bytes / hex / RGB-integer (B0, B1, B2). Layer 2: bitfield template: each node is a named field with width and position, extracted via mask-and-shift. Layer 3: semantic IR: field values mapped to symbolic operands (registers, immediates, targets). The DAG structure allows the same bitfield template to be shared across opcodes that differ only in one field, reducing the encoding table size for dense ISAs.
 
 ---
 
@@ -645,7 +645,7 @@ for op in block.dag_nodes():   # topological order
 
 ## Pipeline position
 
-**Before this module:** Build the bitfield template table from the ISA reference (e.g., IBM SPU ISA v1.2 for SPU, LoongArch ABI for LA64).
+**Before this module:** Build the bitfield template table from the ISA reference for example IBM SPU ISA v1.2 for SPU, LoongArch ABI for LA64.
 
 **After this module:** Use the decoded `SemanticOp` IR as input to architecture-specific taint trackers and CFG builders.
 
@@ -664,7 +664,7 @@ for op in block.dag_nodes():   # topological order
 | `to_rgb()` | method | `(R, G, B)` tuple (ISA-24 maps to RGB exactly) |
 | `show_layout()` | method | ASCII bitfield breakdown for debugging |
 
-`ISASpec.decode(data)` returns `(EncodingNode, SemanticOp)` — the raw node and the decoded semantic operation.
+`ISASpec.decode(data)` returns `(EncodingNode, SemanticOp)`: the raw node and the decoded semantic operation.
 
 `SemanticBlock.dag_nodes()` yields `SemanticOp` instances in topological order.
 
@@ -672,6 +672,6 @@ for op in block.dag_nodes():   # topological order
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

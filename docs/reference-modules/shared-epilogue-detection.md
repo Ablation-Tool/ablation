@@ -1,16 +1,16 @@
 # Shared Epilogue Detection
 
-Detect functions that share a tail block (epilogue) via unconditional jump — marking the shared block's address so the interprocedural taint loop skips it as a phantom function entry point, eliminating false-positive taint paths in corpus-wide analysis.
+Detect functions that share a tail block (epilogue) via unconditional jump: marking the shared block's address so the interprocedural taint loop skips it as a phantom function entry point, eliminating false-positive taint paths in corpus-wide analysis.
 
 ---
 
 ## Why this exists
 
-1. **Some compilers merge the epilogue of multiple functions into a single shared block** reached via unconditional `JMP` or `B` — a size optimization common in MSVC for x86 PE targets, GCC for ARM thumb, and NXP VLE for ECU firmware. When `run_interprocedural()` encounters the shared block's address in `ctx.func_starts`, it treats it as an independent function entry and follows the taint path from there, producing a phantom result with no real source.
+1. **Some compilers merge the epilogue of multiple functions into a single shared block** reached via unconditional `JMP` or `B`: a size optimization common in MSVC for x86 PE targets, GCC for ARM thumb, and NXP VLE for ECU firmware. When `run_interprocedural()` encounters the shared block's address in `ctx.func_starts`, it treats it as an independent function entry and follows the taint path from there, producing a phantom result with no real source.
 
-2. **The phantom taint path is not a false positive that TaintTracker can filter internally** — from TaintTracker's perspective, it is analyzing a real function entry with valid instructions. The only fix is to prevent the shared block from appearing in `func_starts` before the interprocedural loop starts. `EpilogueShareScanner.inject(ctx)` removes shared-epilogue entries from `ctx.func_starts` in place, upstream of TaintTracker.
+2. **The phantom taint path is not a false positive that TaintTracker can filter internally**: from TaintTracker's perspective, it is analyzing a real function entry with valid instructions. The only fix is to prevent the shared block from appearing in `func_starts` before the interprocedural loop starts. `EpilogueShareScanner.inject(ctx)` removes shared-epilogue entries from `ctx.func_starts` in place, upstream of TaintTracker.
 
-3. **`EpilogueShareHit` records the function that jumps to the shared block, the shared block VA, and the reason the unconditional jump was classified as an epilogue share** — distinguishing tail calls (different callee signature) from epilogue shares (same frame teardown sequence: `POP RBP / RET` or `LDM SP!,{...,PC}`). This distinction is needed for accurate `report()` output and for manual review of ambiguous cases.
+3. **`EpilogueShareHit` records the function that jumps to the shared block, the shared block VA, and the reason the unconditional jump was classified as an epilogue share**: distinguishing tail calls (different callee signature) from epilogue shares (same frame teardown sequence: `POP RBP / RET` or `LDM SP!,{...,PC}`). This distinction is needed for accurate `report()` output and for manual review of ambiguous cases.
 
 ---
 
@@ -69,15 +69,15 @@ inject(): <N> phantom entries removed from ctx.func_starts
 
 ## False positives
 
-**Unconditional jumps to a non-epilogue code block may be misclassified as epilogue shares** — if the target block happens to start with `POP RBP` for other reasons, `EpilogueShareScanner` will mark it as a shared epilogue. Verify that the target is genuinely a frame teardown sequence and not a block that opens with a stack restoration for other reasons before accepting `inject()` removals.
+**Unconditional jumps to a non-epilogue code block may be misclassified as epilogue shares**: if the target block happens to start with `POP RBP` for other reasons, `EpilogueShareScanner` will mark it as a shared epilogue. Verify that the target is genuinely a frame teardown sequence and not a block that opens with a stack restoration for other reasons before accepting `inject()` removals.
 
-**ARM32 `LDM SP!, {r4-r7, PC}` pattern may not match all calling conventions** — the epilogue signature check requires the register list to include PC. Non-standard calling conventions that use PC restore via `MOV PC, LR` are not detected and will not be marked as shared epilogues.
+**ARM32 `LDM SP!, {r4-r7, PC}` pattern may not match all calling conventions**: the epilogue signature check requires the register list to include PC. Non-standard calling conventions that use PC restore via `MOV PC, LR` are not detected and will not be marked as shared epilogues.
 
 ---
 
 ## Pipeline position
 
-Run `EpilogueShareScanner` once per binary immediately after `BinaryContext.load_or_build()` and before `TaintTracker.run_interprocedural()`. It is a one-time preprocessing step — no findings to triage, only `inject()` to call.
+Run `EpilogueShareScanner` once per binary immediately after `BinaryContext.load_or_build()` and before `TaintTracker.run_interprocedural()`. It is a one-time preprocessing step, no findings to triage, only `inject()` to call.
 
 ---
 
@@ -92,11 +92,11 @@ Run `EpilogueShareScanner` once per binary immediately after `BinaryContext.load
 | `target_va` | VA where the jump lands (the shared epilogue entry) |
 | `host_func_va` | VA of the function whose body the target lands inside |
 
-`EpilogueShareScanner.inject(ctx)` adds all `target_va` values to `ctx.shared_epilogues` and returns `int` — the count of entries added.
+`EpilogueShareScanner.inject(ctx)` adds all `target_va` values to `ctx.shared_epilogues` and returns `int`: the count of entries added.
 
 ---
 
 ## See also
 
-- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` that consumes the cleaned `ctx.func_starts`
-- [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext` whose `func_starts` is modified by `inject()`
+- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): `TaintTracker` that consumes the cleaned `ctx.func_starts`
+- [Persistent Analysis Context](persistent-analysis-context.md): `BinaryContext` whose `func_starts` is modified by `inject()`

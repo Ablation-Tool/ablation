@@ -188,7 +188,7 @@ Example output (before: linear lifter, after: structurizer):
 
 ## How it works
 
-`Structurizer.run(cfg)` converts a basic-block CFG into a structured control-flow tree. Uses dominator-tree analysis to identify loop headers and if–else branch pairs, then folds them bottom-up into `Sequence`, `If`, and `While` AST nodes. The output tree is equivalent to the source-level control flow — suitable for pattern-matching against known vulnerability structures without manual CFG traversal. Used by `MCUAnalyzer` for ECU/MCU firmware where the CFG is small and structured recovery is accurate.
+`Structurizer.run(cfg)` converts a basic-block CFG into a structured control-flow tree. Uses dominator-tree analysis to identify loop headers and if–else branch pairs, then folds them bottom-up into `Sequence`, `If`, and `While` AST nodes. The output tree is equivalent to the source-level control flow: suitable for pattern-matching against known vulnerability structures without manual CFG traversal. Used by `MCUAnalyzer` for ECU/MCU firmware where the CFG is small and structured recovery is accurate.
 
 ---
 
@@ -217,7 +217,7 @@ Example output (before: linear lifter, after: structurizer):
 
 ## False positives
 
-**Irreducible CFGs.** `Structurizer` relies on dominator-tree analysis, which works correctly only for reducible CFGs. Binaries compiled without optimization (common in ECU firmware) sometimes contain irreducible CFGs due to computed gotos or `setjmp`/`longjmp`. `Structurizer.structure()` raises `StructurizationError` for irreducible CFGs — fall back to raw basic-block listing.
+**Irreducible CFGs.** `Structurizer` relies on dominator-tree analysis, which works correctly only for reducible CFGs. Binaries compiled without optimization (common in ECU firmware) sometimes contain irreducible CFGs due to computed gotos or `setjmp`/`longjmp`. `Structurizer.structure()` raises `StructurizationError` for irreducible CFGs: fall back to raw basic-block listing.
 
 ---
 
@@ -239,14 +239,14 @@ Example output (before: linear lifter, after: structurizer):
 | `InsnNode` | `insn` | Single SH-2A instruction |
 | `IfNode` | `condition, then_branch, else_branch` | `if/else` region |
 | `WhileNode` | `condition, body` | Loop region |
-| `BreakNode` | — | `break` out of enclosing loop |
-| `ContinueNode` | — | `continue` to loop header |
-| `ReturnNode` | — | Function return |
+| `BreakNode` |: | `break` out of enclosing loop |
+| `ContinueNode` |: | `continue` to loop header |
+| `ReturnNode` |: | Function return |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

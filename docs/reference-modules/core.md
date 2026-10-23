@@ -523,15 +523,15 @@ ctx.callees_of(0x1d700)      → [(0x3000, "memcpy"), (0x4000, "recv")]
 
 ## Reading output
 
-`BinaryContext.load_or_build(path).summary()` returns a formatted string — not a structured object. For programmatic access:
+`BinaryContext.load_or_build(path).summary()` returns a formatted string, not a structured object. For programmatic access:
 
 | Method | Returns |
 |:---|:---|
-| `ctx.name(va)` | `str` — best known name for VA, or `hex(va)` |
-| `ctx.names_count()` | `int` — number of named functions |
-| `ctx.func_starts()` | `List[int]` — sorted function start VAs |
-| `ctx.strings_near(va)` | `List[str]` — string references near VA |
-| `ctx.callees_of(va)` | `List[str]` — PLT-resolved callee names |
+| `ctx.name(va)` | `str`: best known name for VA, or `hex(va)` |
+| `ctx.names_count()` | `int`: number of named functions |
+| `ctx.func_starts()` | `List[int]`: sorted function start VAs |
+| `ctx.strings_near(va)` | `List[str]`: string references near VA |
+| `ctx.callees_of(va)` | `List[str]`: PLT-resolved callee names |
 
 See [BinaryContext](binary-context.md) for the full API.
 
@@ -539,6 +539,6 @@ See [BinaryContext](binary-context.md) for the full API.
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

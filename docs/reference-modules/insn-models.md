@@ -8,7 +8,7 @@ Instruction representation, operand parsing, and disassembler backends for ARC E
 
 1. **Taint trackers and CFG builders need a unified instruction type, not raw strings.** Capstone, objdump, and hand-written listings all produce different text forms. The `Insn` dataclass provides a single normalized representation with typed operands (`Reg`, `Imm`, `Mem`) that downstream tools query without parsing strings themselves.
 
-2. **ARC has no Capstone backend; x86 has three text formats.** `insn_arc.py` provides a pure-Python decoder for GNU objdump text output — the only practical disassembly path for ARC EM/HS. `insn_x86.py` handles Intel listing, AT&T objdump (auto-converted), and Capstone structured output. Without this layer, each tool would implement its own text parser.
+2. **ARC has no Capstone backend; x86 has three text formats.** `insn_arc.py` provides a pure-Python decoder for GNU objdump text output: the only practical disassembly path for ARC EM/HS. `insn_x86.py` handles Intel listing, AT&T objdump (auto-converted), and Capstone structured output. Without this layer, each tool would implement its own text parser.
 
 3. **Operand typing enables safe taint propagation.** A `Reg` operand carries the register name; a `Mem` operand carries base/index/displacement; an `Imm` carries the immediate value. Taint trackers query `insn.operands[0]` and branch on type rather than parsing instruction text for every propagation step.
 
@@ -50,7 +50,7 @@ Mem(base, index, disp, segment)   # memory reference
 
 ## Backends
 
-**`insn_arc.py`** — `from_listing(text)` / `from_objdump(text)`:
+**`insn_arc.py`**: `from_listing(text)` / `from_objdump(text)`:
 
 ```python
 from ablation.analyzers.insn_arc import from_listing, from_capstone
@@ -61,7 +61,7 @@ insns = list(from_listing("""
 """))
 ```
 
-**`insn_x86.py`** — three entry points:
+**`insn_x86.py`**: three entry points:
 
 ```python
 from ablation.analyzers.insn_x86 import from_listing, from_objdump, from_capstone
@@ -93,6 +93,6 @@ insns = list(from_capstone(md.disasm(code, va)))
 
 ## See also
 
-- [ISA Models](isa-models.md) — register canon and ABI constants imported by these modules
-- [Analysis Engine](analysis-engine.md) — uses `Insn` lists as CFG block contents
-- [Taint Analysis](taint-analysis.md) — taint trackers that consume `Insn` sequences
+- [ISA Models](isa-models.md): register canon and ABI constants imported by these modules
+- [Analysis Engine](analysis-engine.md): uses `Insn` lists as CFG block contents
+- [Taint Analysis](taint-analysis.md): taint trackers that consume `Insn` sequences

@@ -1,6 +1,6 @@
 # Mach-O Internals
 
-Parse Apple Mach-O binaries — including universal fat binaries, dylibs, and macOS/iOS executables — extracting architecture metadata, bitness, endianness, and entry point from the Mach-O header and LC_MAIN load command.
+Parse Apple Mach-O binaries: including universal fat binaries, dylibs, and macOS/iOS executables: extracting architecture metadata, bitness, endianness, and entry point from the Mach-O header and LC_MAIN load command.
 
 ---
 
@@ -72,10 +72,10 @@ The parser extracts:
 - Entry point via `LC_MAIN`
 
 The following are not yet parsed in this version:
-- `LC_SEGMENT` / `LC_SEGMENT_64` — section VA mapping and permissions
-- `LC_LOAD_DYLIB` — dylib dependency list
-- `LC_CODE_SIGNATURE` — code signing blobs
-- `LC_DYLD_INFO` — rebase and binding information
+- `LC_SEGMENT` / `LC_SEGMENT_64`: section VA mapping and permissions
+- `LC_LOAD_DYLIB`: dylib dependency list
+- `LC_CODE_SIGNATURE`: code signing blobs
+- `LC_DYLD_INFO`: rebase and binding information
 - Symbol table (`LC_SYMTAB` / `LC_DYSYMTAB`)
 
 For full Mach-O analysis including imports, exports, and code signature verification, use `BinaryContext.load_or_build()` backed by LIEF's Mach-O support.
@@ -154,7 +154,7 @@ JSON:
 
 **Universal fat binaries.** A Mach-O fat binary begins with `0xCAFEBABE`, which is not parsed by this module. The magic detection returns `Unknown` for fat binaries. To analyze a fat binary, extract the architecture-specific slice first using `lipo -extract` or LIEF's fat binary support, then pass the extracted slice to `BinaryParser`.
 
-**Dylibs and bundles without LC_MAIN.** Shared libraries (MH_DYLIB) and plugin bundles (MH_BUNDLE) do not have an entry point; they have `_init` sections instead. The parser returns `entry_point: None` for these. This is correct — the absence of an entry point in a dylib is expected behavior, not a parsing error.
+**Dylibs and bundles without LC_MAIN.** Shared libraries (MH_DYLIB) and plugin bundles (MH_BUNDLE) do not have an entry point; they have `_init` sections instead. The parser returns `entry_point: None` for these. This is correct: the absence of an entry point in a dylib is expected behavior, not a parsing error.
 
 **32-bit ARM Mach-O (Thumb).** iOS 32-bit binaries may use Thumb instruction encoding for ARM code. The entry point VA from `LC_MAIN` points to the Thumb entry function, but the lowest bit may need to be masked off to get the aligned instruction address: `entry_va & ~1`. The parser returns the raw `entryoff` value without masking.
 
@@ -181,7 +181,7 @@ JSON:
 
 ## See also
 
-- [Binary Context](binary-context.md) — full analysis context for Mach-O; required for downstream tools
-- [ELF Internals and Hardening](elf-internals-and-hardening.md) — equivalent parser for ELF binaries
-- [PE Internals and Indicators](pe-internals-and-indicators.md) — equivalent parser for Windows PE
-- [Binary Format and Platform Identification](binary-format-and-platform-identification.md) — the magic-detection layer that selects this parser
+- [Binary Context](binary-context.md): full analysis context for Mach-O; required for downstream tools
+- [ELF Internals and Hardening](elf-internals-and-hardening.md): equivalent parser for ELF binaries
+- [PE Internals and Indicators](pe-internals-and-indicators.md): equivalent parser for Windows PE
+- [Binary Format and Platform Identification](binary-format-and-platform-identification.md): the magic-detection layer that selects this parser

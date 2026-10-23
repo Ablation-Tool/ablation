@@ -56,7 +56,7 @@ cdp_neighbors: [{'label': '10.0.0.2'}, {'label': '10.0.0.3'}]
 
 ## False positives
 
-**`brute_snmp_communities()` with the `public` community string** — community string `public` is present on almost every unmodified Cisco device. The finding is accurate; escalation depends on whether SNMP v3 is also available. Cross-reference with the target's SNMP configuration to determine whether SNMP v1/v2c should have been disabled.
+**`brute_snmp_communities()` with the `public` community string**: community string `public` is present on almost every unmodified Cisco device. The finding is accurate; escalation depends on whether SNMP v3 is also available. Cross-reference with the target's SNMP configuration to determine whether SNMP v1/v2c should have been disabled.
 
 ---
 
@@ -73,13 +73,13 @@ Run `IOSEnumerator` after confirming a Cisco IOS device via SSH banner or HTTPS 
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` / `MEDIUM` / `LOW` / `INFO` |
-| `title` | Short finding name (e.g., `IOS Telnet Open — Version Exposed`, `IOS SNMP Weak Community: public`) |
+| `title` | Short finding name (e.g., `IOS Telnet Open: Version Exposed`, `IOS SNMP Weak Community: public`) |
 | `detail` | Detail string (version string, SNMP sysDescr excerpt, etc.) |
 
 ---
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [FindingRegistry](registry.md): record confirmed findings from enumeration
+- [LateralMovement](lateral-movement.md): chain enumeration findings into a lateral path
+- [NetworkAnalyze](network-analyze.md): port and service fingerprinting

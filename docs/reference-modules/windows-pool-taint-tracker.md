@@ -107,7 +107,7 @@ Seeds the worklist with every call site of each configured source function. For 
 
 ## False positives
 
-The most common false positive is taint surviving a zero-clear instruction (`xor rax, rax`). The `CLR` rule in the taint lattice clears taint unconditionally on self-XOR, but some architectures use different clearing idioms. Use `SinkArgClassifier` to pre-filter `RODATA_CONST` call sites before running the taint tracker — these are not findings regardless of register state.
+The most common false positive is taint surviving a zero-clear instruction (`xor rax, rax`). The `CLR` rule in the taint lattice clears taint unconditionally on self-XOR, but some architectures use different clearing idioms. Use `SinkArgClassifier` to pre-filter `RODATA_CONST` call sites before running the taint tracker, these are not findings regardless of register state.
 
 ---
 
@@ -135,7 +135,7 @@ The most common false positive is taint surviving a zero-clear instruction (`xor
 
 ## See also
 
-- [TaintAnalysis](taint-analysis.md) — multi-architecture taint tracking reference
-- [SinkArgClassifier](sink-arg-classifier.md) — pre-filter RODATA_CONST sinks before taint
-- [PathSolver](path-solver.md) — confirm path feasibility after a taint hit
-- [SinkPropagator](sink-propagator.md) — extend sink coverage across wrappers
+- [TaintAnalysis](taint-analysis.md): multi-architecture taint tracking reference
+- [SinkArgClassifier](sink-arg-classifier.md): pre-filter RODATA_CONST sinks before taint
+- [PathSolver](path-solver.md): confirm path feasibility after a taint hit
+- [SinkPropagator](sink-propagator.md): extend sink coverage across wrappers

@@ -168,7 +168,7 @@ Each `TiCoffObject`:
 |:---|:---|
 | `member_name` | AR archive member name (empty for standalone `.obj`) |
 | `header` | `CoffFileHeader` with `magic`, `n_sections`, `target_id`, `flags` |
-| `symbols` | `List[CoffSymbol]` — all symbol table entries |
+| `symbols` | `List[CoffSymbol]`: all symbol table entries |
 
 Each `CoffSymbol`:
 
@@ -179,14 +179,14 @@ Each `CoffSymbol`:
 | `section_number` | `0` = undefined external; `-1` = absolute; `1+` = section index |
 | `storage_class` | TI COFF storage class integer |
 | `member_name` | AR member this symbol came from |
-| `is_weak` | Property — `True` for `C_UEXT` tentative-external symbols |
-| `is_global` | Property — `True` for `C_EXT` strong global symbols |
-| `is_defined` | Property — `True` if `section_number > 0` |
+| `is_weak` | Property: `True` for `C_UEXT` tentative-external symbols |
+| `is_global` | Property: `True` for `C_EXT` strong global symbols |
+| `is_defined` | Property: `True` if `section_number > 0` |
 
 ---
 
 ## See also
 
-- [ECUArchDetector](ecu-arch-detector.md) — identify processor family before choosing a decoder
-- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md) — map ROM sections before decoding
-- [ECUSecurityAccessScanner](ecu-security-access-scanner.md) — find UDS 0x27 bypass vectors in decoded code
+- [ECUArchDetector](ecu-arch-detector.md): identify processor family before choosing a decoder
+- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md): map ROM sections before decoding
+- [ECUSecurityAccessScanner](ecu-security-access-scanner.md): find UDS 0x27 bypass vectors in decoded code

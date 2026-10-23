@@ -138,9 +138,9 @@ Version-mismatch findings appear when a known key or certificate is present in a
 | `is_vulnerable` | `True` if a firmware auth bypass pattern was detected |
 | `severity` | `CLEAN` / `INFO` / `MEDIUM` / `HIGH` / `CRITICAL` |
 | `summary` | Human-readable summary of the finding |
-| `firmware_iat` | `List[str]` — firmware-related IAT import names |
-| `signing_iat` | `List[str]` — signing-related IAT import names |
-| `firmware_strings` | `List[str]` — firmware-related strings found in the binary |
+| `firmware_iat` | `List[str]`: firmware-related IAT import names |
+| `signing_iat` | `List[str]`: signing-related IAT import names |
+| `firmware_strings` | `List[str]`: firmware-related strings found in the binary |
 | `arch` | Detected architecture string (e.g., `'x86_64'`, `'ARM'`) |
 | `has_resources` | `True` if the binary has embedded PE resources |
 
@@ -148,7 +148,7 @@ Version-mismatch findings appear when a known key or certificate is present in a
 
 ## See also
 
-- [FirmwareContainers](firmware-containers.md) — partition extraction from container images
-- [FirmwareContainerKeyExtractor](firmware-container-key-extractor.md) — recover embedded key material
-- [TaintAnalysis](taint-analysis.md) — trace network input to sinks in extracted binaries
-- [SemanticSearch](semantic-search.md) — find vulnerability candidates in extracted ELFs
+- [FirmwareContainers](firmware-containers.md): partition extraction from container images
+- [FirmwareContainerKeyExtractor](firmware-container-key-extractor.md): recover embedded key material
+- [TaintAnalysis](taint-analysis.md): trace network input to sinks in extracted binaries
+- [SemanticSearch](semantic-search.md): find vulnerability candidates in extracted ELFs

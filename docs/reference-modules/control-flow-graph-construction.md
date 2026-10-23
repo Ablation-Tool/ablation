@@ -1,16 +1,16 @@
 # Control-Flow Graph Construction
 
-Per-function control-flow graph construction for x86-64 ELF binaries using iterative recursive disassembly — producing `BasicBlock` and `CFG` structures with dominator trees, reaching definitions, and successor edges for use by flow-sensitive taint analysis and structural analysis tools.
+Per-function control-flow graph construction for x86-64 ELF binaries using iterative recursive disassembly: producing `BasicBlock` and `CFG` structures with dominator trees, reaching definitions, and successor edges for use by flow-sensitive taint analysis and structural analysis tools.
 
 ---
 
 ## Why this exists
 
-1. **Flow-sensitive taint analysis (`analyze_function_flow_sensitive()`) and dominator-based loop detection both require a correctly built CFG — without it, all analysis treats a function's instructions as a flat sequence, missing the semantics of conditional branches and loop back-edges.** `CFGBuilder.build_function()` constructs the CFG using iterative recursive disassembly (Andriesse, "Practical Binary Analysis" §8.2.4): follow direct branches from each basic block, stop at `ret`/`jmp`/`hlt`, push both sides of a conditional branch. The result is a `CFG` with correct successor edges across all paths.
+1. **Flow-sensitive taint analysis (`analyze_function_flow_sensitive()`) and dominator-based loop detection both require a correctly built CFG: without it, all analysis treats a function's instructions as a flat sequence, missing the semantics of conditional branches and loop back-edges.** `CFGBuilder.build_function()` constructs the CFG using iterative recursive disassembly (Andriesse, "Practical Binary Analysis" §8.2.4): follow direct branches from each basic block, stop at `ret`/`jmp`/`hlt`, push both sides of a conditional branch. The result is a `CFG` with correct successor edges across all paths.
 
-2. **Each ISA has an ISA-specific CFG builder (`cfg_arm64.py`, `cfg_mips.py`, `cfg_riscv.py`, etc.) that handles ISA-specific branch semantics — ARM32 conditional execution, MIPS delay slots, RISC-V compressed (RVC) branches.** The x86-64 `CFGBuilder` in `cfg_builder.py` is the primary builder for stripped server and appliance binaries. ISA-specific builders share the same `CFG`/`BasicBlock` type contracts and produce the same analysis interface.
+2. **Each ISA has an ISA-specific CFG builder (`cfg_arm64.py`, `cfg_mips.py`, `cfg_riscv.py`, etc.) that handles ISA-specific branch semantics: ARM32 conditional execution, MIPS delay slots, RISC-V compressed (RVC) branches.** The x86-64 `CFGBuilder` in `cfg_builder.py` is the primary builder for stripped server and appliance binaries. ISA-specific builders share the same `CFG`/`BasicBlock` type contracts and produce the same analysis interface.
 
-3. **`CFG.dominator_tree()` computes the dominance relation for loop detection and structured control-flow recovery — a block `d` dominates block `n` if every path from the function entry to `n` passes through `d`.** Back-edges (edges from a block to one of its dominators) identify loop headers. `CFGBuilder` exposes `dominator_tree()` and loop head detection without requiring a full SSA transformation, keeping build time under 10ms per function.
+3. **`CFG.dominator_tree()` computes the dominance relation for loop detection and structured control-flow recovery: a block `d` dominates block `n` if every path from the function entry to `n` passes through `d`.** Back-edges (edges from a block to one of its dominators) identify loop headers. `CFGBuilder` exposes `dominator_tree()` and loop head detection without requiring a full SSA transformation, keeping build time under 10ms per function.
 
 ---
 
@@ -34,7 +34,7 @@ flowchart TD
 | `cfg_builder.py` | x86-64 | Iterative recursive disassembly; call fall-through |
 | `cfg_arm64.py` | ARM64 | `cbz`/`cbnz`/`tbz`/`tbnz` conditional branches |
 | `cfg_arm32.py` | ARM32/Thumb | Conditional execution codes; Thumb IT blocks |
-| `cfg_mips.py` | MIPS-32/64 | Delay-slot awareness — branch insn carries next insn |
+| `cfg_mips.py` | MIPS-32/64 | Delay-slot awareness: branch insn carries next insn |
 | `cfg_riscv.py` | RISC-V | RVC 16-bit compressed branch instructions |
 | `cfg_ppc.py` | PPC-32/64 | `bc`/`bcl` conditional links; CTR-based loops |
 | `cfg_arc.py` | ARC EM/HS | `bbit0`/`bbit1` bit-test branches; delay slots |
@@ -100,13 +100,13 @@ CFG for <func-va>:
 
 **`build_function()` stops at `jmp` (unconditional jump) without following jump-table targets.** Functions with switch statements that use a `jmp [rax*8+table]` pattern will have their jump-table cases appear as unreachable blocks in the CFG. The `stats()` field `has_indirect_branch: True` flags this. Flow-sensitive analysis on such functions may miss paths through switch cases.
 
-**`build_all()` uses `XRefGraph` prologue scan to identify function starts — this misses functions that don't match the prologue pattern (`push rbp; mov rbp, rsp` or `sub rsp, N`).** On heavily optimized binaries or firmware compiled with `-fomit-frame-pointer`, the prologue scan underestimates function count. Supply explicit `func_starts` to `CFGBuilder` when known entry points are available from other sources.
+**`build_all()` uses `XRefGraph` prologue scan to identify function starts, this misses functions that don't match the prologue pattern (`push rbp; mov rbp, rsp` or `sub rsp, N`).** On heavily optimized binaries or firmware compiled with `-fomit-frame-pointer`, the prologue scan underestimates function count. Supply explicit `func_starts` to `CFGBuilder` when known entry points are available from other sources.
 
 ---
 
 ## Pipeline position
 
-Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGBuilder` is a prerequisite for `analyze_function_flow_sensitive()`, `SubsequenceSearcher` (which uses op-category sequences derived from CFG blocks), and `StructureRecovery` (which reads dominator trees). Build once per session and cache — `BinaryContext.load_or_build()` handles this automatically.
+Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGBuilder` is a prerequisite for `analyze_function_flow_sensitive()`, `SubsequenceSearcher` (which uses op-category sequences derived from CFG blocks), and `StructureRecovery` (which reads dominator trees). Build once per session and cache: `BinaryContext.load_or_build()` handles this automatically.
 
 ---
 
@@ -129,14 +129,14 @@ Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGB
 |:---|:---|
 | `start` | Start VA of the block |
 | `end` | VA of the last instruction (inclusive) |
-| `insns` | `List[Tuple[int, str, str]]` — `(va, mnemonic, op_str)` per instruction |
-| `succs` | `List[int]` — successor block start VAs |
+| `insns` | `List[Tuple[int, str, str]]`: `(va, mnemonic, op_str)` per instruction |
+| `succs` | `List[int]`: successor block start VAs |
 
 ---
 
 ## See also
 
-- [XRefGraph](xref-graph.md) — provides function starts and PLT map; required for `CFGBuilder`
-- [Taint Analysis](taint-analysis.md) — `analyze_function_flow_sensitive()` uses CFG basic blocks
-- [Dominator and Loop Analysis](dominators-and-loop-analysis.md) — reads `CFG.dominator_tree()` for structured recovery
-- [Behavioral Subsequence Search](behavioral-subsequence-search.md) — uses op-category sequences from CFG instruction lists
+- [XRefGraph](xref-graph.md): provides function starts and PLT map; required for `CFGBuilder`
+- [Taint Analysis](taint-analysis.md): `analyze_function_flow_sensitive()` uses CFG basic blocks
+- [Dominator and Loop Analysis](dominators-and-loop-analysis.md): reads `CFG.dominator_tree()` for structured recovery
+- [Behavioral Subsequence Search](behavioral-subsequence-search.md): uses op-category sequences from CFG instruction lists

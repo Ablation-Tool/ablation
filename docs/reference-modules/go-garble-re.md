@@ -58,7 +58,7 @@ print(f"garble decrypt stubs: {len(stubs)}")
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs — findings from incomplete graphs carry lower confidence.
+Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
@@ -78,18 +78,18 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 |:---|:---|
 | `binary` | Path string of the analyzed binary |
 | `file_size` | Hex+MB formatted file size string |
-| `errors` | `List[str]` — any parse or load errors |
+| `errors` | `List[str]`: any parse or load errors |
 | `elf` | ELF header metadata dict (`entry_va`, `load_segs`, etc.) |
 | `pclntab` | pclntab parse results (`magic`, `go_version`, `num_funcs`, `funcs`) |
 | `bootstrap` | Bootstrap function analysis results |
 | `string_xrefs` | Dict mapping string values to lists of referencing function VAs |
 | `decrypt_stubs` | List of identified garble string-decryption stub VAs |
-| `findings` | `List[dict]` — each with `severity`, `category`, `title`, `description`, `va` |
+| `findings` | `List[dict]`: each with `severity`, `category`, `title`, `description`, `va` |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — native binary context when the runtime wraps a native library
-- [TaintAnalysis](taint-analysis.md) — trace dangerous calls found in the runtime layer
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): native binary context when the runtime wraps a native library
+- [TaintAnalysis](taint-analysis.md): trace dangerous calls found in the runtime layer
+- [FindingRegistry](registry.md): record confirmed findings

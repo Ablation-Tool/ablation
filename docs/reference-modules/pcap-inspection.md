@@ -1,6 +1,6 @@
 # PCAP Inspection
 
-Extract DNS queries (with NXDOMAIN/domain-flux detection), cleartext credentials (FTP USER/PASS, Telnet login prompts, HTTP Basic Auth), and HTTP request lines from PCAP files — without Scapy, dpkt, or libpcap — using a pure-Python libpcap global header parser that handles Ethernet/IP/TCP/UDP frame reassembly, via `modules/network_analyze.py` `PCAPAnalyzer`.
+Extract DNS queries (with NXDOMAIN/domain-flux detection), cleartext credentials (FTP USER/PASS, Telnet login prompts, HTTP Basic Auth), and HTTP request lines from PCAP files: without Scapy, dpkt, or libpcap: using a pure-Python libpcap global header parser that handles Ethernet/IP/TCP/UDP frame reassembly, via `modules/network_analyze.py` `PCAPAnalyzer`.
 
 ---
 
@@ -8,9 +8,9 @@ Extract DNS queries (with NXDOMAIN/domain-flux detection), cleartext credentials
 
 1. **`PCAPAnalyzer` extracts cleartext credentials from PCAP files without external tools.** `extract_credentials()` scans TCP payloads for FTP `USER`/`PASS` command sequences (port 21), Telnet `login:` and `Password:` prompts (port 23), and HTTP Basic Auth `Authorization: Basic <base64>` headers (ports 80/8080). Credentials are returned as `[{'proto', 'src', 'dst', 'cred'}]` dicts where `cred` is the decoded plaintext string.
 
-2. **`analyze_pcap()` provides a single-call PCAP summary** — credential extraction, DNS query enumeration, and HTTP request logging combined in one pass. DNS extraction (`extract_dns()`) returns `[{'query', 'type', 'src', 'rcode', 'qr'}]` dicts; NXDOMAIN responses (rcode=3) are included as domain-flux indicators per the Conficker analysis pattern from Violent Python chapter 4.
+2. **`analyze_pcap()` provides a single-call PCAP summary**: credential extraction, DNS query enumeration, and HTTP request logging combined in one pass. DNS extraction (`extract_dns()`) returns `[{'query', 'type', 'src', 'rcode', 'qr'}]` dicts; NXDOMAIN responses (rcode=3) are included as domain-flux indicators per the Conficker analysis pattern from Violent Python chapter 4.
 
-3. **`PCAPAnalyzer` is dependency-free** — it parses the libpcap global header (`magic 0xA1B2C3D4` or `0xD4C3B2A1` LE, `snaplen`, `linktype`), Ethernet frame extraction (`linktype=1`), and IPv4/TCP/UDP header fields in pure Python `struct.unpack`. `LINKTYPE_ETHERNET = 1` and `LINKTYPE_RAW = 101` are the two supported link types. No Scapy, dpkt, or system libpcap is required.
+3. **`PCAPAnalyzer` is dependency-free**, it parses the libpcap global header (`magic 0xA1B2C3D4` or `0xD4C3B2A1` LE, `snaplen`, `linktype`), Ethernet frame extraction (`linktype=1`), and IPv4/TCP/UDP header fields in pure Python `struct.unpack`. `LINKTYPE_ETHERNET = 1` and `LINKTYPE_RAW = 101` are the two supported link types. No Scapy, dpkt, or system libpcap is required.
 
 ---
 
@@ -81,9 +81,9 @@ http_requests:
 
 ## False positives
 
-**HTTP Basic credential extraction is regex-based** — the `Authorization: Basic` pattern is matched on the raw TCP payload. A base64-encoded value that appears in a POST body with a field name containing `Authorization:` will match. Verify that extracted credentials appear in an HTTP header context, not a body parameter.
+**HTTP Basic credential extraction is regex-based**: the `Authorization: Basic` pattern is matched on the raw TCP payload. A base64-encoded value that appears in a POST body with a field name containing `Authorization:` will match. Verify that extracted credentials appear in an HTTP header context, not a body parameter.
 
-**DNS NXDOMAIN domain-flux detection** — a single NXDOMAIN response does not confirm domain flux. The pattern is significant only when a single source IP generates many NXDOMAIN responses in sequence — consistent with a worm or malware attempting to locate a C2 via generated domain names.
+**DNS NXDOMAIN domain-flux detection**: a single NXDOMAIN response does not confirm domain flux. The pattern is significant only when a single source IP generates many NXDOMAIN responses in sequence: consistent with a worm or malware attempting to locate a C2 via generated domain names.
 
 ---
 
@@ -101,9 +101,9 @@ Run PCAP inspection on any packet capture obtained from a post-compromise networ
 |:---|:---|
 | `filepath` | Path to the PCAP file |
 | `packet_count` | Total packets parsed from the PCAP |
-| `credentials` | `list` — cleartext credentials extracted (FTP, Telnet, HTTP Basic Auth) |
-| `dns_queries` | `list` — DNS query records |
-| `http_requests` | `list` — HTTP request records |
+| `credentials` | `list`: cleartext credentials extracted (FTP, Telnet, HTTP Basic Auth) |
+| `dns_queries` | `list`: DNS query records |
+| `http_requests` | `list`: HTTP request records |
 
 The module-level `analyze_pcap(filepath)` is a convenience wrapper that calls `PCAPAnalyzer(filepath).run_all()`.
 
@@ -111,5 +111,5 @@ The module-level `analyze_pcap(filepath)` is a convenience wrapper that calls `P
 
 ## See also
 
-- [Raw Packet Capture](raw-packet-capture.md) — `RawSniffer` for live capture producing PCAP files for analysis here
-- [DNS Service Posture](dns-service-posture.md) — `probe_dns_zone_transfer()` and `probe_dns_recursion()` for active DNS security probing
+- [Raw Packet Capture](raw-packet-capture.md): `RawSniffer` for live capture producing PCAP files for analysis here
+- [DNS Service Posture](dns-service-posture.md): `probe_dns_zone_transfer()` and `probe_dns_recursion()` for active DNS security probing

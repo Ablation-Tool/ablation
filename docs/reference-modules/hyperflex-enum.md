@@ -14,7 +14,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. All HTTP response bodies read wi
 
 ## How it works
 
-`HyperFlexEnumerator(host, timeout=8).enumerate_all()` runs six probes in sequence: `probe_hx_connect_api()` (HX Connect login surface), `probe_ucsm_api()` (UCSM XML API), `probe_apic_api()` (APIC REST API), `probe_iscsi_no_chap()` (iSCSI without CHAP), `probe_stctlvm_ssh()` (storage controller VM SSH), and `probe_cluster_discovery()` (cluster node enumeration). Returns a deduplicated `List[dict]` — all findings combined. Each finding uses `_finding()` returning `{severity, title, detail, host, port, evidence}`.
+`HyperFlexEnumerator(host, timeout=8).enumerate_all()` runs six probes in sequence: `probe_hx_connect_api()` (HX Connect login surface), `probe_ucsm_api()` (UCSM XML API), `probe_apic_api()` (APIC REST API), `probe_iscsi_no_chap()` (iSCSI without CHAP), `probe_stctlvm_ssh()` (storage controller VM SSH), and `probe_cluster_discovery()` (cluster node enumeration). Returns a deduplicated `List[dict]`: all findings combined. Each finding uses `_finding()` returning `{severity, title, detail, host, port, evidence}`.
 
 ---
 
@@ -51,7 +51,7 @@ HyperFlexEnumerator.enumerate_all(): 10.0.0.1
 
 ## False positives
 
-**`probe_hx_connect_api()` default credential finding on locked-down HX Connect** — HyperFlex clusters in hardened configurations disable the web UI and return 403 or redirect to a corporate SSO. The finding fires only on a successful login response (HTTP 200 + token). A 403 or redirect is not a finding.
+**`probe_hx_connect_api()` default credential finding on locked-down HX Connect**: HyperFlex clusters in hardened configurations disable the web UI and return 403 or redirect to a corporate SSO. The finding fires only on a successful login response (HTTP 200 + token). A 403 or redirect is not a finding.
 
 ---
 
@@ -76,6 +76,6 @@ Run `HyperFlexEnumerator` after confirming a Cisco HyperFlex management IP via r
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [FindingRegistry](registry.md): record confirmed findings from enumeration
+- [LateralMovement](lateral-movement.md): chain enumeration findings into a lateral path
+- [NetworkAnalyze](network-analyze.md): port and service fingerprinting

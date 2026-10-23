@@ -1,16 +1,16 @@
 # Streaming and Windowed Disassembly
 
-Dump a configurable-size disassembly window centered on any target VA — annotating PLT call targets and `.rodata` string references inline — for LLM-native bulk disassembly analysis that avoids the round-trip overhead of per-instruction calls.
+Dump a configurable-size disassembly window centered on any target VA: annotating PLT call targets and `.rodata` string references inline: for LLM-native bulk disassembly analysis that avoids the round-trip overhead of per-instruction calls.
 
 ---
 
 ## Why this exists
 
-1. **Per-instruction disassembly calls fragment LLM context across dozens of round trips — each call to `get_disassembly` in the `AgentLoop` tool registry returns a small slice, requiring the model to accumulate context across many calls to understand a function.** `WindowAnalyzer.dump_text()` returns a single annotated disassembly block (default 1536 bytes) that the LLM can pattern-match in one pass, reducing round trips from O(N instructions / page_size) to 1 for typical function analysis.
+1. **Per-instruction disassembly calls fragment LLM context across dozens of round trips: each call to `get_disassembly` in the `AgentLoop` tool registry returns a small slice, requiring the model to accumulate context across many calls to understand a function.** `WindowAnalyzer.dump_text()` returns a single annotated disassembly block (default 1536 bytes) that the LLM can pattern-match in one pass, reducing round trips from O(N instructions / page_size) to 1 for typical function analysis.
 
-2. **Inline annotation of PLT call targets and `.rodata` strings makes the disassembly immediately readable** — instead of `call 0x3000`, the output shows `call 0x3000  ; PLT -> recv`, and instead of `lea rdi, [rip+0x1234]`, the output shows `lea rdi, [rip+0x1234]  ; "==diff==> %s:%d loading cli context fail"`. An analyst (or LLM) can read the annotated dump and immediately understand the function's behavior without cross-referencing the PLT or string tables.
+2. **Inline annotation of PLT call targets and `.rodata` strings makes the disassembly immediately readable**: instead of `call 0x3000`, the output shows `call 0x3000  ; PLT -> recv`, and instead of `lea rdi, [rip+0x1234]`, the output shows `lea rdi, [rip+0x1234]  ; "==diff==> %s:%d loading cli context fail"`. An analyst (or LLM) can read the annotated dump and immediately understand the function's behavior without cross-referencing the PLT or string tables.
 
-3. **`WindowAnalyzer.find_func_starts()` heuristically identifies function starts within the window** — detecting `endbr64` (CET entry point markers) and push-rbp prologues in the window, providing function boundary hints in stripped binaries where `.eh_frame` FDE entries are absent.
+3. **`WindowAnalyzer.find_func_starts()` heuristically identifies function starts within the window**: detecting `endbr64` (CET entry point markers) and push-rbp prologues in the window, providing function boundary hints in stripped binaries where `.eh_frame` FDE entries are absent.
 
 ---
 
@@ -76,7 +76,7 @@ The following illustrates annotated disassembly output format. Actual instructio
 
 ## False positives
 
-**`find_func_starts()` is heuristic — it detects `endbr64` and `PUSH RBP` patterns that may appear as instruction data sequences, not actual function prologues.** Confirm heuristic starts against `ctx.func_starts` or `.eh_frame` FDE entries before using them as analysis entry points.
+**`find_func_starts()` is heuristic, it detects `endbr64` and `PUSH RBP` patterns that may appear as instruction data sequences, not actual function prologues.** Confirm heuristic starts against `ctx.func_starts` or `.eh_frame` FDE entries before using them as analysis entry points.
 
 **Window size may split a function at an inconvenient boundary.** Use `ctx.func_containing(va)` to find the function start VA, then set `va` to the function start and `window` to `ctx.func_size(va)` for a complete function window.
 
@@ -98,14 +98,14 @@ The following illustrates annotated disassembly output format. Actual instructio
 
 Annotations are added for PLT call targets, string references, and named VAs registered in `BinaryContext`.
 
-`WindowAnalyzer.dump(va, window, align_back)` returns `List[str]` — the same lines without the header block, for programmatic processing.
+`WindowAnalyzer.dump(va, window, align_back)` returns `List[str]`: the same lines without the header block, for programmatic processing.
 
-`WindowAnalyzer.calls_in_window(va, window)` returns `List[(call_va, target_va, label)]` — all call/bl instruction targets in the window.
+`WindowAnalyzer.calls_in_window(va, window)` returns `List[(call_va, target_va, label)]`: all call/bl instruction targets in the window.
 
 ---
 
 ## See also
 
-- [LLM Analyst Loop](llm-analyst-loop.md) — `get_disassembly` tool calls `WindowAnalyzer.dump_text()` internally
-- [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext` that provides PLT and string tables to `WindowAnalyzer`
-- [Single Function Profiling](single-function-profiling.md) — `FuncProfiler` provides a higher-level profile using the same underlying data
+- [LLM Analyst Loop](llm-analyst-loop.md): `get_disassembly` tool calls `WindowAnalyzer.dump_text()` internally
+- [Persistent Analysis Context](persistent-analysis-context.md): `BinaryContext` that provides PLT and string tables to `WindowAnalyzer`
+- [Single Function Profiling](single-function-profiling.md): `FuncProfiler` provides a higher-level profile using the same underlying data

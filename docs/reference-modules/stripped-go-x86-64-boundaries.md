@@ -6,9 +6,9 @@ Recover function entry points and accurate string contents from stripped Go 1.17
 
 ## Why this exists
 
-1. **Stripped Go binaries break `.eh_frame`-based function recovery.** Go's runtime stores its own function boundary information in the `pclntab` section (`.gopclntab`) — a compressed program counter to line number table that encodes every function start VA, function end VA, and source location. When a Go binary is stripped (`-ldflags="-s -w"`), the `.symtab` is removed but the `pclntab` is typically preserved because the Go runtime uses it for stack unwinding and panic formatting. This module reads the pclntab to recover function boundaries even when all debug symbols are gone.
+1. **Stripped Go binaries break `.eh_frame`-based function recovery.** Go's runtime stores its own function boundary information in the `pclntab` section (`.gopclntab`): a compressed program counter to line number table that encodes every function start VA, function end VA, and source location. When a Go binary is stripped (`-ldflags="-s -w"`), the `.symtab` is removed but the `pclntab` is typically preserved because the Go runtime uses it for stack unwinding and panic formatting. This module reads the pclntab to recover function boundaries even when all debug symbols are gone.
 
-2. **Go strings are not NUL-terminated — they are length-prefixed.** In C, strings end with a NUL byte; `strlen()` and `BinaryContext`'s string extractor both rely on this convention. Go strings are Go runtime `string` structs: a `(data_ptr, length)` pair. The string bytes in `.rodata` have no NUL terminator, so the C-string extractor either truncates the string early (if the next string's first byte happens to be a word boundary) or reads into adjacent data. The correct reading requires finding the `mov ebx, N` length hint at the call site.
+2. **Go strings are not NUL-terminated: they are length-prefixed.** In C, strings end with a NUL byte; `strlen()` and `BinaryContext`'s string extractor both rely on this convention. Go strings are Go runtime `string` structs: a `(data_ptr, length)` pair. The string bytes in `.rodata` have no NUL terminator, so the C-string extractor either truncates the string early (if the next string's first byte happens to be a word boundary) or reads into adjacent data. The correct reading requires finding the `mov ebx, N` length hint at the call site.
 
 3. **Go 1.17+ uses a register-based AMD64 ABI that changes argument passing.** Before Go 1.17, the Go ABI passed all arguments on the stack. From Go 1.17, Go adopted a register-based ABI for AMD64 where the first argument is in `rax` (pointer) and the second in `rbx` (length). A string argument is passed as the `(rax, rbx)` pair. Recognizing this pattern at call sites lets Ablation determine accurate string lengths at analysis time.
 
@@ -41,7 +41,7 @@ flowchart TD
 
 **Window expiration fallback.** If no `mov ebx` is found within `window` (default: 4) instructions after the `lea rax`, the resolver falls back to NUL-terminated reading capped at `fallback_max_len` bytes (default: 256). This handles cases where the Go runtime itself uses the string in a context where the compiler emits a different pattern.
 
-**Invalidation.** Any instruction that writes to the `rax` family after a pending `lea rax` invalidates the pending state — a new `lea rax` may follow.
+**Invalidation.** Any instruction that writes to the `rax` family after a pending `lea rax` invalidates the pending state: a new `lea rax` may follow.
 
 ### pclntab-based function boundary recovery
 
@@ -163,7 +163,7 @@ print(f"After: {len(ctx.func_starts)} function starts (+{added} from pclntab)")
 
 ## See also
 
-- [Binary Context](binary-context.md) — inject recovered function starts here
-- [Stripped Function Discovery](stripped-function-discovery.md) — equivalent prologue-scan for ARM32 Go binaries
-- [Semantic Code Search](semantic-code-search.md) — use resolved string literals to improve function descriptions in the corpus
-- [Taint Analysis](taint-analysis.md) — trace recovered function entry points as taint sources
+- [Binary Context](binary-context.md): inject recovered function starts here
+- [Stripped Function Discovery](stripped-function-discovery.md): equivalent prologue-scan for ARM32 Go binaries
+- [Semantic Code Search](semantic-code-search.md): use resolved string literals to improve function descriptions in the corpus
+- [Taint Analysis](taint-analysis.md): trace recovered function entry points as taint sources

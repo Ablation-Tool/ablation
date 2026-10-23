@@ -91,13 +91,13 @@ ScanResultVersionCache  LA64MaxNotMinScanner
 
 ## False positives
 
-The cache does not introduce false positives — it returns the wrapped scanner's results verbatim. If a scanner's findings change after a bug fix, call `get_or_scan(path, force=True)` or delete `~/.ablation/cache/scan_results/<ScannerClassName>.json` to force a full rescan. The scanner source hash invalidation catches this automatically when the scanner's `.py` file changes.
+The cache does not introduce false positives, it returns the wrapped scanner's results verbatim. If a scanner's findings change after a bug fix, call `get_or_scan(path, force=True)` or delete `~/.ablation/cache/scan_results/<ScannerClassName>.json` to force a full rescan. The scanner source hash invalidation catches this automatically when the scanner's `.py` file changes.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** The target files must exist on disk. No other Ablation setup required — `ScanResultVersionCache` wraps any scanner that follows the standard interface (`from_pe32plus(data)` or `scan_binary(path)` returning a findings list).
+**Before this module:** The target files must exist on disk. No other Ablation setup required: `ScanResultVersionCache` wraps any scanner that follows the standard interface (`from_pe32plus(data)` or `scan_binary(path)` returning a findings list).
 
 **After this module:** Pass results to downstream analysis or write to `~/VDT/VULNERABILITIES-<ip>.md`. The cache automatically invalidates on scanner source changes, so there is no manual cache management needed between sessions.
 
@@ -105,12 +105,12 @@ The cache does not introduce false positives — it returns the wrapped scanner'
 
 ## Reading output
 
-`ScanResultVersionCache(db_path, scanner_class).get_or_scan(file_path, force)` returns `List[dict]` — finding dicts converted from the scanner's dataclass findings via `dataclasses.asdict()`. The schema matches the wrapped scanner's finding class. Pass `force=True` to bypass the cache and always re-scan.
+`ScanResultVersionCache(db_path, scanner_class).get_or_scan(file_path, force)` returns `List[dict]`: finding dicts converted from the scanner's dataclass findings via `dataclasses.asdict()`. The schema matches the wrapped scanner's finding class. Pass `force=True` to bypass the cache and always re-scan.
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

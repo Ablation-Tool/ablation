@@ -1,16 +1,16 @@
 # Debug Metadata Recovery
 
-Recover function boundaries, names, and type information from `.eh_frame` CFI records, DWARF `.debug_info`, and Linux BTF `.BTF`/`.BTF.ext` sections in ELF binaries — providing precise `(start, end)` function intervals and names even when `.symtab` is stripped, for LoongArch64 and all other ELF targets.
+Recover function boundaries, names, and type information from `.eh_frame` CFI records, DWARF `.debug_info`, and Linux BTF `.BTF`/`.BTF.ext` sections in ELF binaries: providing precise `(start, end)` function intervals and names even when `.symtab` is stripped, for LoongArch64 and all other ELF targets.
 
 ---
 
 ## Why this exists
 
-1. **Stripped ELF binaries drop `.symtab` but typically retain `.eh_frame` CFI records emitted by GCC/Clang for C++ exception unwinding — these records contain precise function start VAs as FDE (Frame Description Entry) entries.** `extract_eh_frame_starts(path)` extracts all FDE start addresses, providing function boundaries without the noise of prologue-scan heuristics. On a typical stripped firmware binary, `.eh_frame` yields function start accuracy of 99%+ versus prologue scan's ~85%.
+1. **Stripped ELF binaries drop `.symtab` but typically retain `.eh_frame` CFI records emitted by GCC/Clang for C++ exception unwinding, these records contain precise function start VAs as FDE (Frame Description Entry) entries.** `extract_eh_frame_starts(path)` extracts all FDE start addresses, providing function boundaries without the noise of prologue-scan heuristics. On a typical stripped firmware binary, `.eh_frame` yields function start accuracy of 99%+ versus prologue scan's ~85%.
 
-2. **`.debug_info` sections (present in `-g` builds) provide `(name, low_pc, high_pc)` triples via `DW_TAG_subprogram`** — `high_pc` eliminates the "next-function-start" approximation that `.eh_frame` alone requires. When `.debug_info` is present (common in development firmware images or partial debug builds), `extract_debug_funcs(path)` yields precise function end addresses, enabling accurate function-size calculations and loop detection.
+2. **`.debug_info` sections (present in `-g` builds) provide `(name, low_pc, high_pc)` triples via `DW_TAG_subprogram`**: `high_pc` eliminates the "next-function-start" approximation that `.eh_frame` alone requires. When `.debug_info` is present (common in development firmware images or partial debug builds), `extract_debug_funcs(path)` yields precise function end addresses, enabling accurate function-size calculations and loop detection.
 
-3. **Linux kernel modules stripped of `.symtab` often retain `.BTF` and `.BTF.ext` sections** — BTF maps section offsets to function names even without symbol tables, enabling name recovery for kernel modules and eBPF programs where DWARF is absent. `extract_btf_funcs(path)` parses the BTF string and type sections without external dependencies (pure struct parsing, no libbpf required).
+3. **Linux kernel modules stripped of `.symtab` often retain `.BTF` and `.BTF.ext` sections**: BTF maps section offsets to function names even without symbol tables, enabling name recovery for kernel modules and eBPF programs where DWARF is absent. `extract_btf_funcs(path)` parses the BTF string and type sections without external dependencies (pure struct parsing, no libbpf required).
 
 ---
 
@@ -101,17 +101,17 @@ I386AbsoluteXrefScanner:
 
 ## Pipeline position
 
-Run debug metadata recovery immediately after `BinaryContext.load_or_build()` on any target binary — before `CorpusBuilder`, `SemanticSearcher`, or taint analysis. Better function boundaries and more string xrefs improve all downstream analyses. Add recovered starts to `ctx.func_starts` and set names via `ctx.set_name()` before any analysis pass.
+Run debug metadata recovery immediately after `BinaryContext.load_or_build()` on any target binary: before `CorpusBuilder`, `SemanticSearcher`, or taint analysis. Better function boundaries and more string xrefs improve all downstream analyses. Add recovered starts to `ctx.func_starts` and set names via `ctx.set_name()` before any analysis pass.
 
 ---
 
 ## Reading output
 
-`extract_eh_frame_starts(path)` returns `Set[int]` — VA of every function start found in `.eh_frame` FDE records. Returns an empty set if `.eh_frame` is absent.
+`extract_eh_frame_starts(path)` returns `Set[int]`: VA of every function start found in `.eh_frame` FDE records. Returns an empty set if `.eh_frame` is absent.
 
-`extract_debug_funcs(path)` returns `Dict[int, Tuple[str, int]]` — maps `low_pc` → `(name, high_pc)`. Returns `{}` if `.debug_info` is absent or contains no `DW_TAG_subprogram` entries.
+`extract_debug_funcs(path)` returns `Dict[int, Tuple[str, int]]`: maps `low_pc` → `(name, high_pc)`. Returns `{}` if `.debug_info` is absent or contains no `DW_TAG_subprogram` entries.
 
-`extract_btf_funcs(path)` returns `Dict[int, str]` — maps VA → function name from `.BTF`/`.BTF.ext` sections. Returns `{}` if BTF is absent.
+`extract_btf_funcs(path)` returns `Dict[int, str]`: maps VA → function name from `.BTF`/`.BTF.ext` sections. Returns `{}` if BTF is absent.
 
 `ARM32FunctionScanner.inject_into_context(ctx)` modifies `ctx.func_starts` in place and returns:
 
@@ -130,6 +130,6 @@ Run debug metadata recovery immediately after `BinaryContext.load_or_build()` on
 
 ## See also
 
-- [ARM32 Allocation Arithmetic Overflow](arm32-allocation-arithmetic-overflow.md) — `ARM32FunctionScanner` prologue scan for ARM32 stripped binaries
-- [Function Corpus Builder](function-corpus-builder.md) — uses function starts recovered here for corpus population
-- [PPC32/PPC476 Dedicated Lifting](ppc32-ppc476-dedicated-lifting.md) — PPC64 ELFv1 resolver that also patches BinaryContext
+- [ARM32 Allocation Arithmetic Overflow](arm32-allocation-arithmetic-overflow.md): `ARM32FunctionScanner` prologue scan for ARM32 stripped binaries
+- [Function Corpus Builder](function-corpus-builder.md): uses function starts recovered here for corpus population
+- [PPC32/PPC476 Dedicated Lifting](ppc32-ppc476-dedicated-lifting.md): PPC64 ELFv1 resolver that also patches BinaryContext

@@ -1,14 +1,14 @@
 # Sink Arg Classifier
 
-Classify the provenance of command-string arguments at every exec-class sink call site in an x86-64 binary — eliminating hardcoded-string callers from triage before `TaintTracker` runs, and automatically resolving the dominant `snprintf(buf, n, rodata_fmt, ...) → exec_sink(buf)` pattern without manual trace.
+Classify the provenance of command-string arguments at every exec-class sink call site in an x86-64 binary: eliminating hardcoded-string callers from triage before `TaintTracker` runs, and automatically resolving the dominant `snprintf(buf, n, rodata_fmt, ...) → exec_sink(buf)` pattern without manual trace.
 
 ---
 
 ## Why this exists
 
-1. **TaintTracker wastes effort on sinks that cannot be exploited.** A `system("/bin/ls")` call is a sink in name only — the argument originates from `.rodata`, not from user input. Passing every exec-class call site to `TaintTracker` means tracing dozens of unreachable sinks for every real one. `SinkArgClassifier` runs first and stamps `RODATA_CONST` on every hardcoded-literal sink, removing them from the taint queue entirely.
+1. **TaintTracker wastes effort on sinks that cannot be exploited.** A `system("/bin/ls")` call is a sink in name only: the argument originates from `.rodata`, not from user input. Passing every exec-class call site to `TaintTracker` means tracing dozens of unreachable sinks for every real one. `SinkArgClassifier` runs first and stamps `RODATA_CONST` on every hardcoded-literal sink, removing them from the taint queue entirely.
 
-2. **Most firmware shell invocations go through a snprintf buffer.** The dominant pattern in Fortinet, Aruba, and Cisco firmware builds a shell command with `snprintf(cmd, sizeof(cmd), '/bin/tool %s', user_param)` and passes `cmd` to a vendor exec function. A pure backward trace from the exec site sees a stack-buffer argument and returns `UNKNOWN` — the format string is never examined. This tool follows the stack buffer one level up to the `snprintf` call and classifies the `snprintf` format register: if that register also holds a `.rodata` literal, the verdict changes from `UNKNOWN` to `SNPRINTF_RODATA`, which carries only MEDIUM risk (format is fixed; injection requires controlling a `%s` argument).
+2. **Most firmware shell invocations go through a snprintf buffer.** The dominant pattern in Fortinet, Aruba, and Cisco firmware builds a shell command with `snprintf(cmd, sizeof(cmd), '/bin/tool %s', user_param)` and passes `cmd` to a vendor exec function. A pure backward trace from the exec site sees a stack-buffer argument and returns `UNKNOWN`: the format string is never examined. This tool follows the stack buffer one level up to the `snprintf` call and classifies the `snprintf` format register: if that register also holds a `.rodata` literal, the verdict changes from `UNKNOWN` to `SNPRINTF_RODATA`, which carries only MEDIUM risk (format is fixed; injection requires controlling a `%s` argument).
 
 3. **Vendor exec functions differ from the POSIX `system` API in argument position.** Fortinet's `fadcsystem` passes the command string in `rsi` (arg 1), not `rdi` (arg 0). Fortinet's `fadcsystem_envp` uses `rdi`. Cisco's `sys_vdom_exec` uses `rsi`. Without configurable argument position, a classifier built around `system(rdi)` misclassifies every vendor-specific sink. `add_sink(name, arg_pos)` registers these variants without modifying the module.
 
@@ -41,7 +41,7 @@ flowchart TD
 
 | Verdict | Severity | Meaning | Action |
 |---|---|---|---|
-| `RODATA_CONST` | LOW | Argument LEA'd from `.rodata` — hardcoded literal | Skip: no injection path |
+| `RODATA_CONST` | LOW | Argument LEA'd from `.rodata`: hardcoded literal | Skip: no injection path |
 | `SNPRINTF_RODATA` | MEDIUM | Buffer built by `snprintf` with `.rodata` format | Verify: injection requires `%s` argument control |
 | `ARG_PROPAGATED` | HIGH | Argument came from a caller-supplied entry register | Taint-trace: confirm caller-control depth |
 | `UNKNOWN` | MEDIUM | Backward trace exhausted lookback without resolving | Manual trace required |
@@ -140,9 +140,9 @@ Total: 47  RODATA_CONST: 31  ARG_PROPAGATED: 8  SNPRINTF_RODATA: 5  UNKNOWN: 3
 
 ## False positives
 
-**`RODATA_CONST` on pointer-chasing code.** When the argument register receives a `.rodata` address that is then further processed (e.g., the value is incremented past a prefix, then the incremented pointer reaches the sink), the classifier still returns `RODATA_CONST` because it saw a `.rodata` LEA in the backward trace. Verify by checking whether any arithmetic modifies the register between the LEA and the call.
+**`RODATA_CONST` on pointer-chasing code.** When the argument register receives a `.rodata` address that is then further processed for example the value is incremented past a prefix, then the incremented pointer reaches the sink, the classifier still returns `RODATA_CONST` because it saw a `.rodata` LEA in the backward trace. Verify by checking whether any arithmetic modifies the register between the LEA and the call.
 
-**`SNPRINTF_RODATA` with controllable `%s` arguments.** `SNPRINTF_RODATA` means the format string itself is a `.rodata` literal, but a `%s` slot in that format string can still receive attacker input. `snprintf(cmd, sz, '/bin/tool %s', user_param)` classifies as `SNPRINTF_RODATA` correctly — but injection still works through `user_param`. Treat `SNPRINTF_RODATA` as medium risk, not safe.
+**`SNPRINTF_RODATA` with controllable `%s` arguments.** `SNPRINTF_RODATA` means the format string itself is a `.rodata` literal, but a `%s` slot in that format string can still receive attacker input. `snprintf(cmd, sz, '/bin/tool %s', user_param)` classifies as `SNPRINTF_RODATA` correctly, but injection still works through `user_param`. Treat `SNPRINTF_RODATA` as medium risk, not safe.
 
 **`ARG_PROPAGATED` on already-validated entry arguments.** An entry argument can be attacker-controlled or can be an internal pointer validated before the function was called. `ARG_PROPAGATED` is a necessary but not sufficient condition for exploitability. Confirm with `TaintTracker` and `PathSolver`.
 
@@ -150,7 +150,7 @@ Total: 47  RODATA_CONST: 31  ARG_PROPAGATED: 8  SNPRINTF_RODATA: 5  UNKNOWN: 3
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` — PLT and func_starts accelerate classification. Register vendor sinks with `add_sink()` before calling `classify_all()`.
+**Before this module:** `BinaryContext.load_or_build()`: PLT and func_starts accelerate classification. Register vendor sinks with `add_sink()` before calling `classify_all()`.
 
 **After this module:** Discard `RODATA_CONST` results. Pass `ARG_PROPAGATED` and `UNKNOWN` sites to `TaintTracker.trace_function()`. `SNPRINTF_RODATA` sites warrant manual inspection of `%s` argument sources before taint tracing.
 
@@ -172,7 +172,7 @@ Total: 47  RODATA_CONST: 31  ARG_PROPAGATED: 8  SNPRINTF_RODATA: 5  UNKNOWN: 3
 
 ## See also
 
-- [Taint Analysis](taint-analysis.md) — run on `ARG_PROPAGATED` and `UNKNOWN` results
-- [Function Profiler](function-profiler.md) — integrates sink detection with argument annotation
-- [Binary Context](binary-context.md) — share PLT via `from_context()` to skip re-parsing
-- [Format String Scanner](format-string-scanner.md) — parallel scanner for printf-class sinks
+- [Taint Analysis](taint-analysis.md): run on `ARG_PROPAGATED` and `UNKNOWN` results
+- [Function Profiler](function-profiler.md): integrates sink detection with argument annotation
+- [Binary Context](binary-context.md): share PLT via `from_context()` to skip re-parsing
+- [Format String Scanner](format-string-scanner.md): parallel scanner for printf-class sinks

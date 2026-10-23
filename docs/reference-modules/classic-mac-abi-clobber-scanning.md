@@ -1,16 +1,16 @@
 # Classic Mac ABI Clobber Scanning
 
-Detect PPC32 PEF ABI register clobber bugs in classic Mac OS / OpenTransport binaries — finding call sites where an argument register is clobbered by an intermediate `bl` instruction between the time it was last written and the time it is read by a sink call.
+Detect PPC32 PEF ABI register clobber bugs in classic Mac OS / OpenTransport binaries: finding call sites where an argument register is clobbered by an intermediate `bl` instruction between the time it was last written and the time it is read by a sink call.
 
 ---
 
 ## Why this exists
 
-1. **Classic Mac OS PEF (Preferred Executable Format) binaries use PPC32 BE with the classic ABI (r3-r10 args, r3 return, r14-r31 callee-saved) — a bug class unique to this ABI is the argument clobber: argument register rN is written, an intermediate `bl` clears it (BL clobbers r3-r13 as caller-saved), then the original value is read by the sink.** `PEFABIClobberScanner` detects this pattern without requiring symbols, using a backward walk from each sink call to find intermediate `bl` instructions between the last write to the sink's argument registers and the sink call itself.
+1. **Classic Mac OS PEF (Preferred Executable Format) binaries use PPC32 BE with the classic ABI (r3-r10 args, r3 return, r14-r31 callee-saved): a bug class unique to this ABI is the argument clobber: argument register rN is written, an intermediate `bl` clears it (BL clobbers r3-r13 as caller-saved), then the original value is read by the sink.** `PEFABIClobberScanner` detects this pattern without requiring symbols, using a backward walk from each sink call to find intermediate `bl` instructions between the last write to the sink's argument registers and the sink call itself.
 
-2. **Three structural bugs in a prior hand-written OpenTransport scanner are impossible in `PEFABIClobberScanner` because the fix is structural.** `ori`/`addi` use D-form with different dest-field positions (RT vs RA at different bit positions) — one shared field extractor silently produces wrong register names for one of the forms. `Ppc32Template`/`Ppc32Field` use separate templates per instruction form with named bitfield positions, eliminating the asymmetry. `addic` (opcode 12) was missing from the r4-write detection list — adding opcode 12 is a single dict entry, not a hidden path. Unconditional `b`/`ba` instructions were not treated as basic-block boundaries — the semantic dispatch on `_UNCOND` stops the backward walk immediately.
+2. **Three structural bugs in a prior hand-written OpenTransport scanner are impossible in `PEFABIClobberScanner` because the fix is structural.** `ori`/`addi` use D-form with different dest-field positions (RT vs RA at different bit positions): one shared field extractor silently produces wrong register names for one of the forms. `Ppc32Template`/`Ppc32Field` use separate templates per instruction form with named bitfield positions, eliminating the asymmetry. `addic` (opcode 12) was missing from the r4-write detection list: adding opcode 12 is a single dict entry, not a hidden path. Unconditional `b`/`ba` instructions were not treated as basic-block boundaries: the semantic dispatch on `_UNCOND` stops the backward walk immediately.
 
-3. **`ABIClobberFinding` reports the exact call chain — sink VA, intermediate `bl` VA, clobbered register, argument index — providing the precise information needed to confirm exploitability.** A clobbered argument can be a false positive if the intermediate `bl` restores the value (via callee-saved chain), so the finding includes enough detail for manual confirmation.
+3. **`ABIClobberFinding` reports the exact call chain: sink VA, intermediate `bl` VA, clobbered register, argument index: providing the precise information needed to confirm exploitability.** A clobbered argument can be a false positive if the intermediate `bl` restores the value (via callee-saved chain), so the finding includes enough detail for manual confirmation.
 
 ---
 
@@ -78,7 +78,7 @@ Report:
 
 ## False positives
 
-**The intermediate `bl` clobbers the register in the caller-saved ABI sense, but if the intermediate callee saves and restores the value (e.g., a leaf function that happens to not write r4), there is no actual clobber.** `PEFABIClobberScanner` reports the structural pattern — the `bl` is between the write and the read of an argument register — but does not track whether the callee preserves the value. Confirm by inspecting the callee at `clobber_bl_va`.
+**The intermediate `bl` clobbers the register in the caller-saved ABI sense, but if the intermediate callee saves and restores the value for example a leaf function that happens to not write r4, there is no actual clobber.** `PEFABIClobberScanner` reports the structural pattern: the `bl` is between the write and the read of an argument register, but does not track whether the callee preserves the value. Confirm by inspecting the callee at `clobber_bl_va`.
 
 **Linear scan without a CFG means the scanner may traverse dead code paths.** Functions with conditional branches that bypass the clobber `bl` may generate findings for paths that are not taken. Pair with `CFGBuilder` for confirmation when `ABIClobberFinding` appears on a short function with obvious branch structure.
 
@@ -86,7 +86,7 @@ Report:
 
 ## Pipeline position
 
-`PEFABIClobberScanner` is a standalone tool for classic Mac OS PEF binaries — it does not depend on `BinaryContext` or `XRefGraph`. Run it on extracted PEF code section bytes with the correct `base_va`. The finding output feeds into manual disassembly at `clobber_bl_va` to confirm whether the intermediate callee preserves the argument register.
+`PEFABIClobberScanner` is a standalone tool for classic Mac OS PEF binaries, it does not depend on `BinaryContext` or `XRefGraph`. Run it on extracted PEF code section bytes with the correct `base_va`. The finding output feeds into manual disassembly at `clobber_bl_va` to confirm whether the intermediate callee preserves the argument register.
 
 ---
 
@@ -98,7 +98,7 @@ Report:
 |:---|:---|
 | `site_va` | VA of the sink `bl` (call) instruction |
 | `check_reg` | Register index examined (e.g., `4` for `r4`) |
-| `verdict` | `'PLAUSIBLE'` — backward walk reached function start without a write; `'SAFE'` — register was written before the call |
+| `verdict` | `'PLAUSIBLE'`: backward walk reached function start without a write; `'SAFE'`: register was written before the call |
 | `stop_va` | VA where the backward walk stopped |
 | `stop_reason` | `'reg_written'` / `'call_clobber'` / `'uncond_branch'` / `'return'` / `'window_exhausted'` |
 
@@ -106,6 +106,6 @@ Report:
 
 ## See also
 
-- [PPC32/PPC476 Dedicated Lifting](ppc32-ppc476-dedicated-lifting.md) — Ppc32Lifter for human-readable PPC32 pseudocode
-- [Taint Analysis](taint-analysis.md) — general taint model; PEF clobber scanning is a PPC32-specific structural analogue
-- [PowerPC PEF/CFM](powerpc-pef-cfm.md) — PEF binary format parsing for classic Mac OS targets
+- [PPC32/PPC476 Dedicated Lifting](ppc32-ppc476-dedicated-lifting.md): Ppc32Lifter for human-readable PPC32 pseudocode
+- [Taint Analysis](taint-analysis.md): general taint model; PEF clobber scanning is a PPC32-specific structural analogue
+- [PowerPC PEF/CFM](powerpc-pef-cfm.md): PEF binary format parsing for classic Mac OS targets

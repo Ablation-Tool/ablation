@@ -1,16 +1,16 @@
 # Function Identity Database
 
-Persistent SQLite store of confirmed and inferred function records, prior RE findings, and semantic embeddings — the central shared state for `SemanticSearcher`, `CorpusBuilder`, `SigLibrary`, `RAGRetriever`, and `FindingRegistry` across all targets and engagements.
+Persistent SQLite store of confirmed and inferred function records, prior RE findings, and semantic embeddings: the central shared state for `SemanticSearcher`, `CorpusBuilder`, `SigLibrary`, `RAGRetriever`, and `FindingRegistry` across all targets and engagements.
 
 ---
 
 ## Why this exists
 
-1. **RE work accumulates knowledge across engagements — a confirmed finding in one firmware image is evidence for the same function in all future images from the same vendor.** `func_id.db` persists function records (`name`, `role`, `call_targets`, `string_xrefs`, `confidence`) and finding records across sessions. Without a persistent store, each new binary starts from zero and the analyst re-discovers the same function patterns.
+1. **RE work accumulates knowledge across engagements: a confirmed finding in one firmware image is evidence for the same function in all future images from the same vendor.** `func_id.db` persists function records (`name`, `role`, `call_targets`, `string_xrefs`, `confidence`) and finding records across sessions. Without a persistent store, each new binary starts from zero and the analyst re-discovers the same function patterns.
 
-2. **`FindingRegistry` stores every confirmed vulnerability with its embedding vector — `FindingRegistry.find_similar()` retrieves prior findings with semantic similarity to a new candidate, grounding LLM hypotheses and PatternLibrary queries in confirmed evidence rather than pattern speculation.** The seed corpus (`ablation/data/seed_corpus.json`) ships with embedding-ready records from published CVEs, giving the database useful signal before any engagement-specific findings are added.
+2. **`FindingRegistry` stores every confirmed vulnerability with its embedding vector: `FindingRegistry.find_similar()` retrieves prior findings with semantic similarity to a new candidate, grounding LLM hypotheses and PatternLibrary queries in confirmed evidence rather than pattern speculation.** The seed corpus (`ablation/data/seed_corpus.json`) ships with embedding-ready records from published CVEs, giving the database useful signal before any engagement-specific findings are added.
 
-3. **`PatternLibrary` accumulates successful semantic search queries with hit rates per binary** — `pl.sweep(searcher)` auto-replays all confirmed patterns on new binaries in step 5 of the RE workflow, ensuring that patterns that found real vulnerabilities in past engagements are always tried on new targets.
+3. **`PatternLibrary` accumulates successful semantic search queries with hit rates per binary**: `pl.sweep(searcher)` auto-replays all confirmed patterns on new binaries in step 5 of the RE workflow, ensuring that patterns that found real vulnerabilities in past engagements are always tried on new targets.
 
 ---
 
@@ -93,9 +93,9 @@ find_similar('command injection in parser'):
 
 ## False positives
 
-**`find_similar()` returns findings with similarity ≥ `min_sim` (default 0.60)** — a similarity of 0.65 means "semantically related" not "the same vulnerability." Use similarity scores for prioritization and hypothesis seeding only. Confirm findings independently.
+**`find_similar()` returns findings with similarity ≥ `min_sim` (default 0.60)**: a similarity of 0.65 means "semantically related" not "the same vulnerability." Use similarity scores for prioritization and hypothesis seeding only. Confirm findings independently.
 
-**`PatternLibrary.sweep()` returns hits based on semantic similarity to stored query strings** — a high-hit-rate pattern like "unsafe string copy from network input" will match many functions that copy strings from network input, most of which are correct implementations. Filter by `confirmed=True` hits to get patterns with the best precision.
+**`PatternLibrary.sweep()` returns hits based on semantic similarity to stored query strings**: a high-hit-rate pattern like "unsafe string copy from network input" will match many functions that copy strings from network input, most of which are correct implementations. Filter by `confirmed=True` hits to get patterns with the best precision.
 
 ---
 
@@ -114,7 +114,7 @@ find_similar('command injection in parser'):
 | Attribute | Content |
 |:---|:---|
 | `id` | Finding identifier (e.g., `VULN-TARGET-001`, CVE number) |
-| `similarity` | Float 0.0–1.0 — embedding cosine similarity to the query |
+| `similarity` | Float 0.0–1.0: embedding cosine similarity to the query |
 | `title` | Brief finding title |
 | `detail` | Full finding description |
 | `source` | `confirmed`, `inferred`, or `seed` |
@@ -123,6 +123,6 @@ find_similar('command injection in parser'):
 
 ## See also
 
-- [Function Corpus Builder](function-corpus-builder.md) — populates `func_id.db` with `ANGR_INFERRED` records
-- [Bundled Finding Signature Seeds](bundled-finding-signature-seeds.md) — `SigLibrary` reads `func_id.db` for BERT matching
-- [Prior Finding Retrieval](prior-finding-retrieval.md) — `RAGRetriever` SQLite-query retrieval strategy
+- [Function Corpus Builder](function-corpus-builder.md): populates `func_id.db` with `ANGR_INFERRED` records
+- [Bundled Finding Signature Seeds](bundled-finding-signature-seeds.md): `SigLibrary` reads `func_id.db` for BERT matching
+- [Prior Finding Retrieval](prior-finding-retrieval.md): `RAGRetriever` SQLite-query retrieval strategy

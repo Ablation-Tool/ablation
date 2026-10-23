@@ -100,7 +100,7 @@ Masked byte-pattern anchors classify the implementation variant. Useful for larg
 | Branch density proximity | 0.10 | Control flow shape: linear / switch / loop-heavy |
 | Size proximity | 0.05 | Instruction count ratio |
 
-Weights are normalized when a signal is absent (e.g., no named PLT calls → weight redistributed to remaining signals).
+Weights are normalized when a signal is absent for example no named PLT calls → weight redistributed to remaining signals.
 
 Why immediates unlock cross-version matching: struct field offsets, magic constants, and buffer sizes survive recompilation. `cmp rax, 0x1000` (4KB limit check) is a stable fingerprint across optimization levels. PLT-only matching fails on functions that call no external symbols; immediate-value overlap works on all of them.
 
@@ -333,7 +333,7 @@ See the individual module pages for module-specific false positive scenarios:
 
 Each module returns its own typed result. See the module-specific pages for field details:
 
-- `FuncMatcher(ctx).find_homolog(seed_features, target_functions)` → `Optional[HomologMatch]` — best structural match in the target binary. See [Version Delta](version-delta.md).
+- `FuncMatcher(ctx).find_homolog(seed_features, target_functions)` → `Optional[HomologMatch]`: best structural match in the target binary. See [Version Delta](version-delta.md).
 - `fingerprint_sim(fp_a, fp_b)` → `float [0.0, 1.0]`. See [Structural Sim](structural-sim.md).
 - `resolve_blr_sites(ctx)` → `List[BLRSite]`. See [ARM64 Virtual Call Resolution](arm64-virtual-call-resolution.md).
 
@@ -341,6 +341,6 @@ Each module returns its own typed result. See the module-specific pages for fiel
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

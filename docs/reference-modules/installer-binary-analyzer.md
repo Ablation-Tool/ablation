@@ -92,7 +92,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_INSTALLER_BYTES=256MB`; `o
 
 ## How it works
 
-`InstallerBinaryAnalyzer.from_path(path).analyze()` detects the installer format (NSIS, Inno Setup, BitRock LZMA) from file magic bytes, decompresses the payload (LZMA, zlib, NSIS block), and carves PE binaries from the decompressed data using MZ header scanning. Returns an `InstallerAnalysisResult` with the carved `CarvedBinary` objects and extracted temp file paths. No func_starts or Capstone — purely file-format parsing.
+`InstallerBinaryAnalyzer.from_path(path).analyze()` detects the installer format (NSIS, Inno Setup, BitRock LZMA) from file magic bytes, decompresses the payload (LZMA, zlib, NSIS block), and carves PE binaries from the decompressed data using MZ header scanning. Returns an `InstallerAnalysisResult` with the carved `CarvedBinary` objects and extracted temp file paths. No func_starts or Capstone: purely file-format parsing.
 
 ---
 
@@ -120,7 +120,7 @@ Compressed data or encrypted PE sections that happen to start with `MZ` produce 
 
 ## Pipeline position
 
-**Before this module:** Nothing required — `from_path(path)` is self-contained.
+**Before this module:** Nothing required: `from_path(path)` is self-contained.
 
 **After this module:** For each `CarvedBinary`, write `data` to a temp file and run `BinaryContext.load_or_build()` on `extracted_paths[name_hint]` to analyze the carved payload.
 
@@ -136,9 +136,9 @@ Compressed data or encrypted PE sections that happen to start with `MZ` produce 
 | `installer_type` | Detected installer format: `'bitrock-lzma-4.0'` / `'nsis'` / `'inno'` / `'unknown'` |
 | `upx_unpacked` | `True` if the installer payload was UPX-compressed and was unpacked |
 | `payload_size` | Decompressed payload size in bytes |
-| `binaries` | `List[CarvedBinary]` — PE binaries carved from the decompressed payload |
+| `binaries` | `List[CarvedBinary]`: PE binaries carved from the decompressed payload |
 | `extracted_paths` | `Dict[str, str]` mapping carved binary name hints to temp file paths |
-| `errors` | `List[str]` — parse or extraction errors encountered |
+| `errors` | `List[str]`: parse or extraction errors encountered |
 
 Each `CarvedBinary` has: `offset: int`, `arch: str`, `size: int`, `data: bytes`, `name_hint: str`.
 
@@ -146,8 +146,8 @@ Each `CarvedBinary` has: `offset: int`, `arch: str`, `size: int`, `data: bytes`,
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

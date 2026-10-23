@@ -1,16 +1,16 @@
 # Network Analysis
 
-Network traffic analysis and active enumeration — PCAP parsing for credential extraction and protocol identification, TCP/UDP port scanning with service fingerprinting, ICMP host discovery, and HTTP directory brute-force — via `modules/network_analyze.py`.
+Network traffic analysis and active enumeration: PCAP parsing for credential extraction and protocol identification, TCP/UDP port scanning with service fingerprinting, ICMP host discovery, and HTTP directory brute-force: via `modules/network_analyze.py`.
 
 ---
 
 ## Why this exists
 
-1. **PCAP-based credential extraction without Wireshark** — `PCAPAnalyzer.parse()` then `extract_credentials()` parses a PCAP file and extracts: HTTP Basic Auth credentials (decoded from `Authorization:` headers), FTP `USER`/`PASS` sequences, Telnet command sequences, and DNS query names. This enables offline credential triage from captured traffic without requiring Wireshark or tshark.
+1. **PCAP-based credential extraction without Wireshark**: `PCAPAnalyzer.parse()` then `extract_credentials()` parses a PCAP file and extracts: HTTP Basic Auth credentials (decoded from `Authorization:` headers), FTP `USER`/`PASS` sequences, Telnet command sequences, and DNS query names. This enables offline credential triage from captured traffic without requiring Wireshark or tshark.
 
-2. **Host network state enumeration from `/proc/net/`** — `NetworkAnalyzer.enumerate_all()` reads `/proc/net/tcp`, `/proc/net/tcp6`, `/proc/net/udp`, and `/proc/net/dev` directly. All reads are bounded by `_MAX_PROC_BYTES=4MB`. Returns `{interfaces, connections, listening, firewall}` with connection dicts as `{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}`.
+2. **Host network state enumeration from `/proc/net/`**: `NetworkAnalyzer.enumerate_all()` reads `/proc/net/tcp`, `/proc/net/tcp6`, `/proc/net/udp`, and `/proc/net/dev` directly. All reads are bounded by `_MAX_PROC_BYTES=4MB`. Returns `{interfaces, connections, listening, firewall}` with connection dicts as `{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}`.
 
-3. **Active scanning without nmap** — `run_network_analysis(target)` probes a target with ICMP and HTTP using `ICMPScanner.scan()` and `WebDirBrute.scan()`. Returns `{target, icmp, web, findings}`.
+3. **Active scanning without nmap**: `run_network_analysis(target)` probes a target with ICMP and HTTP using `ICMPScanner.scan()` and `WebDirBrute.scan()`. Returns `{target, icmp, web, findings}`.
 
 ---
 
@@ -75,9 +75,9 @@ connections:
 
 ## False positives
 
-**`get_firewall_rules()` requires root** — on hosts without root access, `iptables -L -n` fails silently; the firewall rules list is empty. An empty result means "could not enumerate" not "no rules."
+**`get_firewall_rules()` requires root**: on hosts without root access, `iptables -L -n` fails silently; the firewall rules list is empty. An empty result means "could not enumerate" not "no rules."
 
-**`/proc/net/tcp` port encoding** — ports are stored as hex in `/proc/net/tcp` (e.g., `0050` = port 80). `NetworkAnalyzer` converts these; verify conversion is correct for ports above `0x7FFF` on big-endian kernels.
+**`/proc/net/tcp` port encoding**: ports are stored as hex in `/proc/net/tcp` (e.g., `0050` = port 80). `NetworkAnalyzer` converts these; verify conversion is correct for ports above `0x7FFF` on big-endian kernels.
 
 ---
 
@@ -93,14 +93,14 @@ Run `NetworkAnalyzer.enumerate_all()` immediately after gaining shell access. Th
 
 | Key | Content |
 |:---|:---|
-| `interfaces` | `List[{name, ip}]` — network interface name and IP address |
-| `listening` | `List[{protocol, local_ip, local_port, uid}]` — listening services |
-| `connections` | `List[{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}]` — active connections |
+| `interfaces` | `List[{name, ip}]`: network interface name and IP address |
+| `listening` | `List[{protocol, local_ip, local_port, uid}]`: listening services |
+| `connections` | `List[{protocol, local_ip, local_port, remote_ip, remote_port, state, uid}]`: active connections |
 | `firewall` | Platform-specific firewall rule list |
 
 ---
 
 ## See also
 
-- [Local Network Inventory](local-network-inventory.md) — same module with more complete annotation of connection fields
-- [Host/Service Discovery](host-service-discovery.md) — `ICMPScanner` for adjacent subnet enumeration
+- [Local Network Inventory](local-network-inventory.md): same module with more complete annotation of connection fields
+- [Host/Service Discovery](host-service-discovery.md): `ICMPScanner` for adjacent subnet enumeration

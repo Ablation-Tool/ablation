@@ -46,13 +46,13 @@ Copy this file to `re/<vendor>/SESSION_<target>.md`. Fill in all fields before r
 ## 2. Scope and Purpose (MIL-HDBK-115C §4.2)
 
 **Purpose of this RE effort:** 
-(e.g., PSIRT vulnerability research; safety case support; curriculum material)
+for example PSIRT vulnerability research; safety case support; curriculum material
 
 **Scope:** 
 (e.g., all exported functions in `<binary>`; network-facing functions only; security-access handler only)
 
 **Out of scope:** 
-(e.g., calibration data; bootloader; DRM)
+for example calibration data; bootloader; DRM
 
 ---
 

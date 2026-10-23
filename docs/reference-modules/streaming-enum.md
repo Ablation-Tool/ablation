@@ -198,9 +198,9 @@ probe_prometheus_metrics_endpoint:
 
 ## False positives
 
-**`probe_prometheus_metrics_endpoint()` on internal-only Prometheus** — Prometheus is commonly deployed with no authentication on internal networks where access control is at the network boundary. Confirm whether the endpoint is accessible from outside the trusted network before treating this as an exposure finding.
+**`probe_prometheus_metrics_endpoint()` on internal-only Prometheus**: Prometheus is commonly deployed with no authentication on internal networks where access control is at the network boundary. Confirm whether the endpoint is accessible from outside the trusted network before treating this as an exposure finding.
 
-**`kafka: {topics: [...]}` including internal `__consumer_offsets` topics** — Kafka always has internal topics prefixed with `__`. Report only non-internal topics as data exposure candidates.
+**`kafka: {topics: [...]}` including internal `__consumer_offsets` topics**: Kafka always has internal topics prefixed with `__`. Report only non-internal topics as data exposure candidates.
 
 ---
 
@@ -226,6 +226,6 @@ Newer probe functions return `{severity, title, detail, host, port}`. Older enum
 
 ## See also
 
-- [Messaging/Streaming Enumeration](messaging-streaming-enumeration.md) — probe-style findings from the same `streaming_enum.py` module in `{severity, title, detail, host, port}` format
-- [Internal Network Reconnaissance](internal-network-reconnaissance.md) — host discovery and port scanning to identify streaming infrastructure before enumeration
-- [Evidence Scoring and Probe Ranking](evidence-scoring-and-probe-ranking.md) — rank streaming findings by confidence before escalating to active exploitation
+- [Messaging/Streaming Enumeration](messaging-streaming-enumeration.md): probe-style findings from the same `streaming_enum.py` module in `{severity, title, detail, host, port}` format
+- [Internal Network Reconnaissance](internal-network-reconnaissance.md): host discovery and port scanning to identify streaming infrastructure before enumeration
+- [Evidence Scoring and Probe Ranking](evidence-scoring-and-probe-ranking.md): rank streaming findings by confidence before escalating to active exploitation

@@ -1,6 +1,6 @@
 # Function Profiler
 
-Generate a complete behavioral profile of a single function in one call — the strings it references, every call site with argument values inferred by register tracing, and flags on any call that reaches a dangerous sink — replacing the four-call manual sequence of callees, dump, annotate, and string lookup.
+Generate a complete behavioral profile of a single function in one call: the strings it references, every call site with argument values inferred by register tracing, and flags on any call that reaches a dangerous sink: replacing the four-call manual sequence of callees, dump, annotate, and string lookup.
 
 ---
 
@@ -8,7 +8,7 @@ Generate a complete behavioral profile of a single function in one call — the 
 
 1. **Candidate analysis is the most time-consuming step in a firmware RE session.** After semantic search or heap scanning surfaces a candidate function, the analyst must answer: what does this function call, with what arguments, and does it pass user-controlled data to a dangerous sink? Doing this manually requires four separate tool invocations: `callees_of()`, disassemble-and-dump, register annotation, string cross-reference. `FuncProfiler.profile()` collapses all four into one call, producing a formatted block that includes everything needed for a triage decision.
 
-2. **Argument values at call sites change everything.** Seeing `malloc` in a callee list tells you the function allocates memory. Seeing `malloc(rdi=strlen(arg0)+1)` — the argument traced to `strlen` of the first entry argument plus one — tells you whether there is an off-by-one risk. `RegAnnotator` traces register values backwards through the instruction stream so each argument displayed shows its specific computed value — not just a register name like `rdi` or `rbx`.
+2. **Argument values at call sites change everything.** Seeing `malloc` in a callee list tells you the function allocates memory. Seeing `malloc(rdi=strlen(arg0)+1)`: the argument traced to `strlen` of the first entry argument plus one: tells you whether there is an off-by-one risk. `RegAnnotator` traces register values backwards through the instruction stream so each argument displayed shows its specific computed value, not just a register name like `rdi` or `rbx`.
 
 3. **Sink detection at function scope eliminates false-triage overhead.** Not all calls to `strcpy` are dangerous; many are safe uses with known buffer sizes. The profiler classifies each call site as a sink or not, based on a configurable sink dict (buffer-overflow, cmd-exec, tcl-inject, fmt-string, filesystem), and marks `*** SINK ***` only where a dangerous function is called. Vendor-specific sinks (Fortinet's `fadcsystem`, Cisco's `exec_handler`) can be added without modifying the module.
 
@@ -45,7 +45,7 @@ Each argument displayed in the profile carries a value kind from `RegAnnotator`:
 
 | Kind | Display | Meaning |
 |---|---|---|
-| `string` | `'literal text'` | LEA from `.rodata` — known string constant |
+| `string` | `'literal text'` | LEA from `.rodata`: known string constant |
 | `immediate` | `0x10` | Known integer constant |
 | `ret` | `ret(malloc)` | Return value of a prior call |
 | `entry_arg` | `arg0_entry` | Entry argument register passed through |
@@ -122,7 +122,7 @@ for p in profiles:
 
 **Sink calls with hardcoded arguments.** A `system("/bin/ls")` call with a `.rodata` string argument qualifies as a sink but cannot be exploited. The profile marks it `*** SINK (cmd-exec) ***` regardless. Verify the argument kind: if `rdi='hardcoded/path'` (string kind), the call is safe. Only `arg0_entry`, `stack_ref`, or `unknown` as the first argument to a cmd-exec sink represent real risk.
 
-**Unknown argument kind.** When the register annotation cannot trace an argument within its look-back window, it shows `unknown`. This occurs when the argument was computed in a prior function call and stored in a callee-saved register. Treat `unknown` at a sink argument as MEDIUM risk — confirm safety with a manual trace.
+**Unknown argument kind.** When the register annotation cannot trace an argument within its look-back window, it shows `unknown`. This occurs when the argument was computed in a prior function call and stored in a callee-saved register. Treat `unknown` at a sink argument as MEDIUM risk: confirm safety with a manual trace.
 
 **ARM32 profiling.** On ARM32 binaries, `FuncProfiler` automatically uses `ARM32RegAnnotator` instead of the x86-64 `RegAnnotator`. Argument registers follow the ARM32 AAPCS: `r0`–`r3` serve as the first four arguments. The profile output uses ARM register names.
 
@@ -143,16 +143,16 @@ for p in profiles:
 | `va` | Function start VA |
 | `end_va` | Function end VA (estimated from `func_starts` if not provided) |
 | `size` | Byte size of the function (`end_va - va`) |
-| `strings` | `List[Tuple[int, str]]` — all strings referenced in this function |
-| `calls` | `List[ProfiledCall]` — all call sites with argument annotations |
+| `strings` | `List[Tuple[int, str]]`: all strings referenced in this function |
+| `calls` | `List[ProfiledCall]`: all call sites with argument annotations |
 | `sink_calls` | Filtered subset of `calls` where `is_sink == True` |
 
 ---
 
 ## See also
 
-- [Binary Context](binary-context.md) — provides `func_starts` and string table
-- [Taint Analysis](taint-analysis.md) — confirm that sink arguments carry attacker-controlled data
-- [Sink Arg Classifier](sink-arg-classifier.md) — pre-classify all sink arguments before full profiling
-- [Semantic Code Search](semantic-code-search.md) — generates candidate VA lists for `profile_many()`
-- [Interprocedural Argument Provenance](interprocedural-argument-provenance.md) — traces arguments across function call boundaries
+- [Binary Context](binary-context.md): provides `func_starts` and string table
+- [Taint Analysis](taint-analysis.md): confirm that sink arguments carry attacker-controlled data
+- [Sink Arg Classifier](sink-arg-classifier.md): pre-classify all sink arguments before full profiling
+- [Semantic Code Search](semantic-code-search.md): generates candidate VA lists for `profile_many()`
+- [Interprocedural Argument Provenance](interprocedural-argument-provenance.md): traces arguments across function call boundaries

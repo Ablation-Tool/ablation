@@ -14,7 +14,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. No unbounded file reads. No HTTP
 
 ## How it works
 
-`MCPGrammarFuzzer.from_path(mcp_config).fuzz()` reads the `.mcp.json` / JSON-RPC 2.0 tool manifest and mutates `description`, `name`, and `inputSchema` property description fields with prompt injection payloads. Uses Atheris (if available) or a deterministic mutation loop. Runs each mutated manifest through a real LLM inference call (subprocess) and checks response for injection markers. Returns `List[MCPTaintFinding]` — one per confirmed injection in a tool field. No binary disassembly.
+`MCPGrammarFuzzer.from_path(mcp_config).fuzz()` reads the `.mcp.json` / JSON-RPC 2.0 tool manifest and mutates `description`, `name`, and `inputSchema` property description fields with prompt injection payloads. Uses Atheris (if available) or a deterministic mutation loop. Runs each mutated manifest through a real LLM inference call (subprocess) and checks response for injection markers. Returns `List[MCPTaintFinding]`: one per confirmed injection in a tool field. No binary disassembly.
 
 ---
 
@@ -75,8 +75,8 @@ for f in findings:
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

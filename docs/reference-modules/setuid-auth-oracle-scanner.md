@@ -89,7 +89,7 @@ Confirmed on: `LoginMOMIssue` (setuid, 1 oracle hit, CWE-307 + CWE-338 co-findin
 
 ## How it works
 
-`SetuidAuthOracleScanner.from_context(ctx).scan()` checks `ctx.plt` for `getspnam`/`crypt`/`strcmp` imports (oracle signal) and `pam_start` absence (no PAM rate-limiting). For each oracle function (the function body calling both `getspnam` and `crypt`), it uses `ctx.callers_of()` to find the call chain one level up. No func_starts iteration — purely PLT import analysis and caller-graph lookup. Returns `List[OracleHit]` with `shadow_func`, `crypt_func`, `cmp_func`, and `oracle_func_va`.
+`SetuidAuthOracleScanner.from_context(ctx).scan()` checks `ctx.plt` for `getspnam`/`crypt`/`strcmp` imports (oracle signal) and `pam_start` absence (no PAM rate-limiting). For each oracle function (the function body calling both `getspnam` and `crypt`), it uses `ctx.callers_of()` to find the call chain one level up. No func_starts iteration: purely PLT import analysis and caller-graph lookup. Returns `List[OracleHit]` with `shadow_func`, `crypt_func`, `cmp_func`, and `oracle_func_va`.
 
 ---
 
@@ -117,7 +117,7 @@ Confirmed on: `LoginMOMIssue` (setuid, 1 oracle hit, CWE-307 + CWE-338 co-findin
 
 ## Pipeline position
 
-**Before this module:** No binary analysis required — `from_path(path)` is self-contained. Optionally verify the binary has the setuid bit with `stat` before running.
+**Before this module:** No binary analysis required: `from_path(path)` is self-contained. Optionally verify the binary has the setuid bit with `stat` before running.
 
 **After this module:** For CWE-307 hits without rate limiting, confirm that the oracle function is reachable from network input (not only local console) before reporting. Register with `FindingRegistry`.
 
@@ -137,7 +137,7 @@ Confirmed on: `LoginMOMIssue` (setuid, 1 oracle hit, CWE-307 + CWE-338 co-findin
 | `has_rate_limit` | `True` if PAM, `sleep`, or login-tally was detected |
 | `oracle_func_va` | VA of the function containing all three oracle calls |
 | `oracle_func_name` | Resolved name of the oracle function |
-| `callers` | `List[str]` — names of functions that call the oracle function |
+| `callers` | `List[str]`: names of functions that call the oracle function |
 | `cwe` | CWE identifier (default `'CWE-307'`) |
 | `weak_prng` | `True` if a weak PRNG seeded by time was found co-located |
 
@@ -147,8 +147,8 @@ Confirmed on: `LoginMOMIssue` (setuid, 1 oracle hit, CWE-307 + CWE-338 co-findin
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

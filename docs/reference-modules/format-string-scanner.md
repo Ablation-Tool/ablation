@@ -8,7 +8,7 @@ Detect printf-family call sites where the format argument is not a string litera
 
 1. **Format string vulnerabilities are invisible to import-list audits.** Seeing `printf` or `syslog` in a binary's import table tells you nothing about whether those calls are safe. The only thing that matters is whether the format argument is a string literal from `.rodata` or a value the attacker can influence. There was no tool in Ablation that answered that question automatically across an entire firmware image.
 
-2. **Manual inspection of every printf-family call site is impractical.** A typical FortiOS or Cisco LINA binary has several hundred printf-family call sites. Walking backwards through disassembly from each one to trace the format register is mechanical work that takes seconds per site — but hours across a full binary. This scanner does it in one pass.
+2. **Manual inspection of every printf-family call site is impractical.** A typical FortiOS or Cisco LINA binary has several hundred printf-family call sites. Walking backwards through disassembly from each one to trace the format register is mechanical work that takes seconds per site, but hours across a full binary. This scanner does it in one pass.
 
 3. **Logging wrappers conceal the real format argument position.** Firmware commonly defines `log_printf(priority, fmt, ...)` or `debug_printf(tag, fmt, ...)` where the format string is not the first argument. A scanner that only looks at `rdi` for every call misses these. This scanner maintains a per-function format-register map so each callee's ABI is handled correctly.
 
@@ -18,17 +18,17 @@ Detect printf-family call sites where the format argument is not a string litera
 
 The scanner operates in three stages: **sink enumeration**, **per-function disassembly**, and **backwards register tracing**.
 
-**Stage 1 — Sink enumeration.** The scanner resolves the binary's PLT and maps each imported format-string function (printf, fprintf, snprintf, syslog, err, warn, and common firmware logging wrappers) to the register that carries the format argument under the SysV AMD64 ABI. `printf(fmt, ...)` puts `fmt` in `rdi`; `fprintf(stream, fmt, ...)` puts it in `rsi`; `snprintf(buf, n, fmt, ...)` puts it in `rdx`. This mapping is built once from the PLT and stored as `_fmt_call_vas`.
+**Stage 1: Sink enumeration.** The scanner resolves the binary's PLT and maps each imported format-string function (printf, fprintf, snprintf, syslog, err, warn, and common firmware logging wrappers) to the register that carries the format argument under the SysV AMD64 ABI. `printf(fmt, ...)` puts `fmt` in `rdi`; `fprintf(stream, fmt, ...)` puts it in `rsi`; `snprintf(buf, n, fmt, ...)` puts it in `rdx`. This mapping is built once from the PLT and stored as `_fmt_call_vas`.
 
-**Stage 2 — Per-function disassembly.** For each function start in `func_starts`, the scanner disassembles up to 4096 bytes. It iterates instructions looking for `CALL` instructions whose target is in `_fmt_call_vas`.
+**Stage 2: Per-function disassembly.** For each function start in `func_starts`, the scanner disassembles up to 4096 bytes. It iterates instructions looking for `CALL` instructions whose target is in `_fmt_call_vas`.
 
-**Stage 3 — Backwards register tracing.** For each qualifying call site, the scanner walks back up to 20 instructions to find the last instruction that wrote to the format register. The outcome is one of five provenance values:
+**Stage 3: Backwards register tracing.** For each qualifying call site, the scanner walks back up to 20 instructions to find the last instruction that wrote to the format register. The outcome is one of five provenance values:
 
 | Provenance | Meaning | Severity |
 |---|---|---|
-| `rodata` | LEA from `.rodata` — string literal, safe | — (skipped) |
+| `rodata` | LEA from `.rodata`: string literal, safe |: (skipped) |
 | `arg_passthrough` | Entry argument (`rdi`/`rsi`/`rdx`/`rcx`) passed unchanged | **HIGH** |
-| `stack_load` | Loaded from `[rbp±N]` or `[rsp±N]` — local buffer or argv | MEDIUM |
+| `stack_load` | Loaded from `[rbp±N]` or `[rsp±N]`: local buffer or argv | MEDIUM |
 | `register` | Loaded from another non-entry register | MEDIUM |
 | `unknown` | No definition found within 20 instructions | MEDIUM |
 
@@ -133,7 +133,7 @@ for f in findings:
 
 **Logging wrapper arguments.** If a firmware logging wrapper always receives a string literal from its callers but stores it in a local variable first, the scanner may flag the wrapper's internal printf call as MEDIUM (stack_load). Add the wrapper to `_FMT_FUNCS` or verify the wrapper's call sites are all string literals.
 
-**20-instruction lookback limit.** If the format register was defined more than 20 instructions before the call (e.g. after a long loop prologue), the scanner returns `unknown` (MEDIUM). This is intentionally conservative — it does not declare the site safe just because it cannot see the definition.
+**20-instruction lookback limit.** If the format register was defined more than 20 instructions before the call (e.g. after a long loop prologue), the scanner returns `unknown` (MEDIUM). This is intentionally conservative, it does not declare the site safe just because it cannot see the definition.
 
 ---
 
@@ -162,6 +162,6 @@ for f in findings:
 
 ## See also
 
-- [Taint Analysis](taint-analysis.md) — confirm HIGH findings are reachable from attacker-controlled network input
-- [Sink Arg Classifier](sink-arg-classifier.md) — pre-classify all sink call sites as RODATA_CONST / ARG_PROPAGATED before running the full scanner
-- [Binary Context](binary-context.md) — provides `func_starts` and PLT; run this first
+- [Taint Analysis](taint-analysis.md): confirm HIGH findings are reachable from attacker-controlled network input
+- [Sink Arg Classifier](sink-arg-classifier.md): pre-classify all sink call sites as RODATA_CONST / ARG_PROPAGATED before running the full scanner
+- [Binary Context](binary-context.md): provides `func_starts` and PLT; run this first

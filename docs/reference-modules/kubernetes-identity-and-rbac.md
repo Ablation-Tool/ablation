@@ -1,14 +1,14 @@
 # Kubernetes Identity and RBAC
 
-Determine whether a process runs inside a Kubernetes pod, extract the service account JWT and cluster CA certificate from the default mount, enumerate RBAC cluster-admin bindings, identify privileged pods and host-escape primitives, and detect secret and ConfigMap credential exposure — all via direct Kubernetes API calls using the pod's own service account token, with no kubectl dependency.
+Determine whether a process runs inside a Kubernetes pod, extract the service account JWT and cluster CA certificate from the default mount, enumerate RBAC cluster-admin bindings, identify privileged pods and host-escape primitives, and detect secret and ConfigMap credential exposure: all via direct Kubernetes API calls using the pod's own service account token, with no kubectl dependency.
 
 ---
 
 ## Why this exists
 
-1. **Most containerized RE targets run inside Kubernetes — and most don't restrict their service account.** The default Kubernetes service account in the `default` namespace has no roles attached, but in practice many deployments bind `cluster-admin` or broad `ClusterRole` permissions to service accounts to simplify deployment. When a pod runs with excessive RBAC permissions, any code execution inside that pod gains API access equivalent to a cluster administrator. `check_rbac_clusteradmin()` enumerates every binding to `cluster-admin` in under a second via a single API call.
+1. **Most containerized RE targets run inside Kubernetes, and most don't restrict their service account.** The default Kubernetes service account in the `default` namespace has no roles attached, but in practice many deployments bind `cluster-admin` or broad `ClusterRole` permissions to service accounts to simplify deployment. When a pod runs with excessive RBAC permissions, any code execution inside that pod gains API access equivalent to a cluster administrator. `check_rbac_clusteradmin()` enumerates every binding to `cluster-admin` in under a second via a single API call.
 
-2. **Service account tokens provide direct API access without any external tools.** Every Kubernetes pod receives a JWT bearer token mounted at `/var/run/secrets/kubernetes.io/serviceaccount/token`, the cluster CA certificate at `ca.crt`, and the current namespace at `namespace`. This triple grants authenticated access to the Kubernetes API server at `https://kubernetes.default.svc` — the in-cluster service endpoint — without installing kubectl, helm, or any other tool. `K8sEnumerator` reads these files directly and builds its own HTTPS requests.
+2. **Service account tokens provide direct API access without any external tools.** Every Kubernetes pod receives a JWT bearer token mounted at `/var/run/secrets/kubernetes.io/serviceaccount/token`, the cluster CA certificate at `ca.crt`, and the current namespace at `namespace`. This triple grants authenticated access to the Kubernetes API server at `https://kubernetes.default.svc`: the in-cluster service endpoint: without installing kubectl, helm, or any other tool. `K8sEnumerator` reads these files directly and builds its own HTTPS requests.
 
 3. **Privileged pods and host-mounted paths expose the underlying node.** A container with `privileged: true` in its `securityContext` has full access to every host device, including the node's disk (`/dev/sda`), kernel modules, and host network namespace. `hostPath` volume mounts expose node filesystem paths directly inside the container. Detecting these configurations from inside a pod identifies the escalation path from container compromise to full node compromise.
 
@@ -112,11 +112,11 @@ ConfigMap credentials found:
 
 ## False positives
 
-**`cluster-admin` bindings for legitimate operators.** Some namespaces genuinely require cluster-admin binding — cert-manager, Kubernetes operators, monitoring agents. `check_rbac_clusteradmin()` reports all bindings regardless of intent. Verify each finding against the deployment documentation before treating it as a privilege escalation path. The `severity=CRITICAL` classification for `ServiceAccount` subjects is accurate from a security surface perspective but not every ServiceAccount binding is exploitable from within the current pod.
+**`cluster-admin` bindings for legitimate operators.** Some namespaces genuinely require cluster-admin binding: cert-manager, Kubernetes operators, monitoring agents. `check_rbac_clusteradmin()` reports all bindings regardless of intent. Verify each finding against the deployment documentation before treating it as a privilege escalation path. The `severity=CRITICAL` classification for `ServiceAccount` subjects is accurate from a security surface perspective but not every ServiceAccount binding is exploitable from within the current pod.
 
 **`hostPath` mounts for logging and monitoring infrastructure.** Node exporters and log forwarders legitimately mount `/proc`, `/sys`, and `/var/log`. These appear as `HIGH` severity findings in `check_privileged_pods()`. Assess each mount against the pod's purpose: a node exporter that mounts `/proc` is expected; an application pod that mounts `/var/lib/docker` is not.
 
-**API errors when service account lacks permissions.** `_api_get()` returns `None` on any HTTP error. `check_rbac_clusteradmin()` returns an empty list when the SA lacks permission to list `clusterrolebindings` — this produces no output, not an error. An empty findings list means either no cluster-admin bindings exist OR the SA cannot read them. Confirm by attempting `_api_get('/apis/rbac.authorization.k8s.io/v1/clusterrolebindings')` directly and checking the response status code.
+**API errors when service account lacks permissions.** `_api_get()` returns `None` on any HTTP error. `check_rbac_clusteradmin()` returns an empty list when the SA lacks permission to list `clusterrolebindings`, this produces no output, not an error. An empty findings list means either no cluster-admin bindings exist OR the SA cannot read them. Confirm by attempting `_api_get('/apis/rbac.authorization.k8s.io/v1/clusterrolebindings')` directly and checking the response status code.
 
 ---
 
@@ -143,6 +143,6 @@ ConfigMap credentials found:
 
 ## See also
 
-- [Docker Enum](docker-enum.md) — container escape detection and Docker socket exposure
-- [Cloud Metadata](agent-protocol-exposure.md) — cloud IMDS credential extraction from within a pod
-- [Architectural Risk Detection](architectural-risk-detection.md) — source RE complement for K8s API surface mapping
+- [Docker Enum](docker-enum.md): container escape detection and Docker socket exposure
+- [Cloud Metadata](agent-protocol-exposure.md): cloud IMDS credential extraction from within a pod
+- [Architectural Risk Detection](architectural-risk-detection.md): source RE complement for K8s API surface mapping

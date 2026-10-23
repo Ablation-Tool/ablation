@@ -1,12 +1,12 @@
 # Binary Format and Platform Identification
 
-Identify a binary's format (ELF, PE, Mach-O), architecture (32/64-bit, endianness), and entry point from raw magic bytes and header fields — without external dependencies — before any analysis begins.
+Identify a binary's format (ELF, PE, Mach-O), architecture (32/64-bit, endianness), and entry point from raw magic bytes and header fields: without external dependencies: before any analysis begins.
 
 ---
 
 ## Why this exists
 
-1. **Every analysis tool must know what it is analyzing before it begins.** Whether to disassemble as x86, ARM, or MIPS; whether to read `.eh_frame` or iterate load commands; whether the PLT is at a fixed offset or in a DataDirectory — all of this depends on knowing the binary's format and architecture. Format identification is the mandatory first step in the pipeline.
+1. **Every analysis tool must know what it is analyzing before it begins.** Whether to disassemble as x86, ARM, or MIPS; whether to read `.eh_frame` or iterate load commands; whether the PLT is at a fixed offset or in a DataDirectory: all of this depends on knowing the binary's format and architecture. Format identification is the mandatory first step in the pipeline.
 
 2. **Identification must work in environments without LIEF or other libraries.** Deployment contexts for Ablation include CI pipelines, air-gapped analysis hosts, and minimal embedded Python environments. `BinaryParser` uses only Python standard library (`struct`, `pathlib`) to detect format and extract header metadata. LIEF is only required for the deeper parsing done by `BinaryContext`.
 
@@ -151,7 +151,7 @@ Sections: 31
 
 ## See also
 
-- [Binary Context](binary-context.md) — full analysis context built on top of this parser
-- [ELF Internals and Hardening](elf-internals-and-hardening.md) — detailed ELF header anatomy
-- [PE Internals and Indicators](pe-internals-and-indicators.md) — PE COFF and Optional header detail
-- [Mach-O Internals](mach-o-internals.md) — Mach-O load command iteration and magic constants
+- [Binary Context](binary-context.md): full analysis context built on top of this parser
+- [ELF Internals and Hardening](elf-internals-and-hardening.md): detailed ELF header anatomy
+- [PE Internals and Indicators](pe-internals-and-indicators.md): PE COFF and Optional header detail
+- [Mach-O Internals](mach-o-internals.md): Mach-O load command iteration and magic constants

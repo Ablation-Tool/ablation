@@ -6,11 +6,11 @@ Taint analysis, sink classification, structural lifting, and semantic search acr
 
 ## Why this exists
 
-1. **MIPS-32 big-endian is the dominant ISA for consumer routing firmware — Mikrotik RouterOS, older Cisco IOS images, and embedded HTTP/SNMP stacks frequently ship as MIPS-32 BE ELF — yet the architecture's load-delay slot makes naive taint propagation incorrect.** The instruction immediately after a branch/jump executes before the branch takes effect; a taint tracker that processes instructions in linear order produces false positives and false negatives for any register written in a delay slot. `MIPS32TaintTracker` processes delay slots as part of the preceding branch instruction, consuming them before updating PC, which matches the hardware execution model.
+1. **MIPS-32 big-endian is the dominant ISA for consumer routing firmware: Mikrotik RouterOS, older Cisco IOS images, and embedded HTTP/SNMP stacks frequently ship as MIPS-32 BE ELF, yet the architecture's load-delay slot makes naive taint propagation incorrect.** The instruction immediately after a branch/jump executes before the branch takes effect; a taint tracker that processes instructions in linear order produces false positives and false negatives for any register written in a delay slot. `MIPS32TaintTracker` processes delay slots as part of the preceding branch instruction, consuming them before updating PC, which matches the hardware execution model.
 
-2. **MIPS sink classification requires a platform-specific approach because `sprintf` argument position is different in MIPS32 O32 ABI ($a0 = format, $a1+ = args) versus MIPS64 N64 ($a0-$a7 all used) — and RouterOS uses a custom memory allocator whose allocation functions are not in the standard PLT.** `SinkArgClassifierMIPS` (`sink_arg_classifier_mips.py`) extends the generic `SinkArgClassifier` with MIPS-specific argument register slots per ABI variant and RouterOS-specific allocation sink signatures. `mips_analyzer.py` wraps the full analysis pipeline for MIPS firmware targets.
+2. **MIPS sink classification requires a platform-specific approach because `sprintf` argument position is different in MIPS32 O32 ABI ($a0 = format, $a1+ = args) versus MIPS64 N64 ($a0-$a7 all used), and RouterOS uses a custom memory allocator whose allocation functions are not in the standard PLT.** `SinkArgClassifierMIPS` (`sink_arg_classifier_mips.py`) extends the generic `SinkArgClassifier` with MIPS-specific argument register slots per ABI variant and RouterOS-specific allocation sink signatures. `mips_analyzer.py` wraps the full analysis pipeline for MIPS firmware targets.
 
-3. **nanoMIPS is a compressed ISA used in MIPS I7200 and P-class cores for code-density-optimized embedded targets — it is not Thumb-equivalent MIPS16e; it requires a distinct decoder.** `taint_tracker_nanomips.py` and `nanomips_decoder.py` provide the instruction model and taint analysis for nanoMIPS binaries, preventing misidentification of nanoMIPS 16-bit opcodes as MIPS32 instructions in `check_rtp_port_range` and related analysis passes.
+3. **nanoMIPS is a compressed ISA used in MIPS I7200 and P-class cores for code-density-optimized embedded targets, it is not Thumb-equivalent MIPS16e; it requires a distinct decoder.** `taint_tracker_nanomips.py` and `nanomips_decoder.py` provide the instruction model and taint analysis for nanoMIPS binaries, preventing misidentification of nanoMIPS 16-bit opcodes as MIPS32 instructions in `check_rtp_port_range` and related analysis passes.
 
 ---
 
@@ -116,7 +116,7 @@ SinkArgClassifier:
 
 ## False positives
 
-**MIPS delay slots in tainted branches produce apparent taint flows that are not real.** When a branch instruction `beq $t0, $zero, target` has a tainted register in the condition, the delay slot's instruction executes regardless of branch direction. A taint sink in the delay slot appears to execute on both branch paths, but it only executes once (before the branch takes effect). The tracker models this correctly, but output that shows the delay slot instruction as a taint step may be confusing — it is the branch pre-condition, not a conditional write.
+**MIPS delay slots in tainted branches produce apparent taint flows that are not real.** When a branch instruction `beq $t0, $zero, target` has a tainted register in the condition, the delay slot's instruction executes regardless of branch direction. A taint sink in the delay slot appears to execute on both branch paths, but it only executes once (before the branch takes effect). The tracker models this correctly, but output that shows the delay slot instruction as a taint step may be confusing, it is the branch pre-condition, not a conditional write.
 
 **`SinkArgClassifierMIPS` marks RouterOS custom allocator calls as `UNKNOWN` because they are not in the standard PLT.** RouterOS uses `fast_malloc`/`fast_free` family functions that are not exported or present in standard glibc PLT slots. `SinkArgClassifier` cannot determine their argument positions and marks them `UNKNOWN`. Run `SemanticSearcher.query("allocation function MIPS")` to identify them before classification.
 
@@ -124,7 +124,7 @@ SinkArgClassifier:
 
 ## Pipeline position
 
-**Before this module:** Run `SinkArgClassifierMIPS.classify_all()` to eliminate `RODATA_CONST` and `SNPRINTF_RODATA` sites — this typically reduces TaintTracker input by 40-60% on firmware binaries. For little-endian MIPS (mipsel), specify `arch='mips32el'` or `arch='mips64el'` in `BinaryLifter.from_path()`.
+**Before this module:** Run `SinkArgClassifierMIPS.classify_all()` to eliminate `RODATA_CONST` and `SNPRINTF_RODATA` sites, this typically reduces TaintTracker input by 40-60% on firmware binaries. For little-endian MIPS (mipsel), specify `arch='mips32el'` or `arch='mips64el'` in `BinaryLifter.from_path()`.
 
 **After this module:** Feed confirmed findings into `FindingRegistry.register()` and write them to `re/<vendor>/<target>_re.py`.
 
@@ -148,7 +148,7 @@ SinkArgClassifier:
 
 ## See also
 
-- [Binary Lifter](binary-lifter.md) — `arch='mips32'`/`'mips64'`/`'nanomips'` structural lifting
-- [Sink Arg Classifier](sink-arg-classifier.md) — generic sink classification; MIPS variant extends it
-- [Taint Analysis](taint-analysis.md) — labeled-taint model and CFG fixpoint analysis
-- [MIPS Analyzer](mips-analyzer.md) — module-level orchestrator for MIPS firmware RE
+- [Binary Lifter](binary-lifter.md): `arch='mips32'`/`'mips64'`/`'nanomips'` structural lifting
+- [Sink Arg Classifier](sink-arg-classifier.md): generic sink classification; MIPS variant extends it
+- [Taint Analysis](taint-analysis.md): labeled-taint model and CFG fixpoint analysis
+- [MIPS Analyzer](mips-analyzer.md): module-level orchestrator for MIPS firmware RE

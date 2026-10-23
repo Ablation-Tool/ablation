@@ -1,16 +1,16 @@
 # Fork-Exec Classification
 
-Classify `fork()` callers in x86-64 ELF binaries as `WORKER`, `EXEC_AFTER_FORK`, or `EXIT_IN_CHILD` — enabling elimination of fork callers that never load a new process image from injection-vector analysis, reducing false-positive command injection findings from `SinkArgClassifier` and `TaintTracker` on `execve`/`system` sinks in worker-process callers.
+Classify `fork()` callers in x86-64 ELF binaries as `WORKER`, `EXEC_AFTER_FORK`, or `EXIT_IN_CHILD`: enabling elimination of fork callers that never load a new process image from injection-vector analysis, reducing false-positive command injection findings from `SinkArgClassifier` and `TaintTracker` on `execve`/`system` sinks in worker-process callers.
 
 ---
 
 ## Why this exists
 
-1. **Many network daemons fork a child process to handle a connection, then the child enters an event loop that never calls `exec*()`.** `SinkArgClassifier` and `TaintTracker` report `exec*()` sinks in these worker processes as `ARG_PROPAGATED` findings, but the sink is in the parent's code path and the forked child never loads a new image — the finding is not exploitable as a command injection. `ForkExecClassifier.classify()` identifies these as `WORKER` and marks them `ELIMINATED`.
+1. **Many network daemons fork a child process to handle a connection, then the child enters an event loop that never calls `exec*()`.** `SinkArgClassifier` and `TaintTracker` report `exec*()` sinks in these worker processes as `ARG_PROPAGATED` findings, but the sink is in the parent's code path and the forked child never loads a new image: the finding is not exploitable as a command injection. `ForkExecClassifier.classify()` identifies these as `WORKER` and marks them `ELIMINATED`.
 
-2. **`EXEC_AFTER_FORK` verdict identifies the security-relevant pattern** — child processes that call `exec*()` immediately after `fork()` can be injection vectors if the `exec*()` argument is tainted. The `ForkCallerResult.exec_target` field names the specific `exec` function and `exec_call_va` gives its VA for direct handoff to `TaintTracker`.
+2. **`EXEC_AFTER_FORK` verdict identifies the security-relevant pattern**: child processes that call `exec*()` immediately after `fork()` can be injection vectors if the `exec*()` argument is tainted. The `ForkCallerResult.exec_target` field names the specific `exec` function and `exec_call_va` gives its VA for direct handoff to `TaintTracker`.
 
-3. **`EXIT_IN_CHILD` verdict identifies `fork()` callers used only for daemonization** — the child calls `exit()` immediately after `fork()` (double-fork daemonization pattern). These callers are `ELIMINATED` as injection vectors. Distinguishing them from `WORKER` requires BFS across the child branch, which `ForkExecClassifier.classify_caller()` performs up to its block-walk budget.
+3. **`EXIT_IN_CHILD` verdict identifies `fork()` callers used only for daemonization**: the child calls `exit()` immediately after `fork()` (double-fork daemonization pattern). These callers are `ELIMINATED` as injection vectors. Distinguishing them from `WORKER` requires BFS across the child branch, which `ForkExecClassifier.classify_caller()` performs up to its block-walk budget.
 
 ---
 
@@ -78,9 +78,9 @@ Eliminated: <K>
 
 ## False positives
 
-**`UNKNOWN` verdict means the BFS block-walk budget was exhausted** — the warning in `ForkCallerResult.fmt()` is explicit: "TRACE CHILD TO EXHAUSTION — do not override to ELIMINATED from a partial trace". An `UNKNOWN` result may be `EXEC_AFTER_FORK` deeper in the child branch. Always trace `UNKNOWN` callers manually before treating them as eliminated.
+**`UNKNOWN` verdict means the BFS block-walk budget was exhausted**: the warning in `ForkCallerResult.fmt()` is explicit: "TRACE CHILD TO EXHAUSTION: do not override to ELIMINATED from a partial trace". An `UNKNOWN` result may be `EXEC_AFTER_FORK` deeper in the child branch. Always trace `UNKNOWN` callers manually before treating them as eliminated.
 
-**Classification is x86-64 only** — ARM64, MIPS, and other architectures are not supported. `ForkExecClassifier` uses `call fork` mnemonic matching specific to x86-64. On non-x86-64 binaries, all results will be `UNKNOWN`.
+**Classification is x86-64 only**: ARM64, MIPS, and other architectures are not supported. `ForkExecClassifier` uses `call fork` mnemonic matching specific to x86-64. On non-x86-64 binaries, all results will be `UNKNOWN`.
 
 ---
 
@@ -100,8 +100,8 @@ Run `ForkExecClassifier` after `SinkArgClassifier` returns `ARG_PROPAGATED` find
 | `func_va` | VA of the function containing the fork |
 | `verdict` | `EXEC_AFTER_FORK`, `WORKER`, `EXIT_IN_CHILD`, or `UNKNOWN` |
 | `child_entry_va` | VA where the child branch begins (`eax==0` path), or `0` |
-| `exec_target` | Exec function name (e.g., `'execve'`, `'system'`) — set when `EXEC_AFTER_FORK` |
-| `exec_call_va` | VA of the exec call — set when `EXEC_AFTER_FORK`, otherwise `0` |
+| `exec_target` | Exec function name (e.g., `'execve'`, `'system'`): set when `EXEC_AFTER_FORK` |
+| `exec_call_va` | VA of the exec call: set when `EXEC_AFTER_FORK`, otherwise `0` |
 | `blocks_walked` | Count of BFS blocks examined during child-path analysis |
 | `detail` | Human-readable verdict detail string |
 
@@ -111,6 +111,6 @@ Only `EXEC_AFTER_FORK` sites need taint analysis. `WORKER` and `EXIT_IN_CHILD` s
 
 ## See also
 
-- [Sink Argument Classification](sink-argument-classifier.md) — `SinkArgClassifier` whose ARG_PROPAGATED findings are routed through fork-exec classification
-- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` for confirmed EXEC_AFTER_FORK sites
-- [Single-Function Profiling](single-function-profiling.md) — `FuncProfiler` for detailed analysis of EXEC_AFTER_FORK functions
+- [Sink Argument Classification](sink-argument-classifier.md): `SinkArgClassifier` whose ARG_PROPAGATED findings are routed through fork-exec classification
+- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): `TaintTracker` for confirmed EXEC_AFTER_FORK sites
+- [Single-Function Profiling](single-function-profiling.md): `FuncProfiler` for detailed analysis of EXEC_AFTER_FORK functions

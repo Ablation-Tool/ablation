@@ -144,15 +144,15 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_load()` reads the ELF directly
 
 ## How it works
 
-Four-phase pipeline using `_load()` (lief + raw bytes) directly — no `BinaryContext` required.
+Four-phase pipeline using `_load()` (lief + raw bytes) directly: no `BinaryContext` required.
 
-**Phase 1** — `identify_state_vars()` scans the entire `.text` section for STR/STP instructions writing small integer immediates (≤255) to BSS addresses, and LDR instructions reading BSS addresses within 4 instructions of a conditional branch. These patterns identify state variables.
+**Phase 1**: `identify_state_vars()` scans the entire `.text` section for STR/STP instructions writing small integer immediates (≤255) to BSS addresses, and LDR instructions reading BSS addresses within 4 instructions of a conditional branch. These patterns identify state variables.
 
-**Phase 2** — `build_cluster()` performs BFS from user-supplied seed VAs over direct `BL` edges, bounded by `hop_depth` (default 2). Returns `{fn_va: set_of_callees}`.
+**Phase 2**: `build_cluster()` performs BFS from user-supplied seed VAs over direct `BL` edges, bounded by `hop_depth` (default 2). Returns `{fn_va: set_of_callees}`.
 
-**Phase 3** — `analyze_fn()` runs once per cluster function. Returns a `FnProps(va, reads_state_vars, writes_state_vars, calls_insert, calls_delete)` where `reads_state_vars` and `writes_state_vars` are lists of BSS VAs. Then `extract_transitions()` finds `(LDR state_var → branch → BL → STR state_var)` quads and emits `FSMTransition` objects.
+**Phase 3**: `analyze_fn()` runs once per cluster function. Returns a `FnProps(va, reads_state_vars, writes_state_vars, calls_insert, calls_delete)` where `reads_state_vars` and `writes_state_vars` are lists of BSS VAs. Then `extract_transitions()` finds `(LDR state_var → branch → BL → STR state_var)` quads and emits `FSMTransition` objects.
 
-**Phase 4** — `build_fsm()` assigns integer state IDs and `emit_dot()` exports Graphviz DOT.
+**Phase 4**: `build_fsm()` assigns integer state IDs and `emit_dot()` exports Graphviz DOT.
 
 ---
 
@@ -184,7 +184,7 @@ fn_props[0x246364]
 
 ## False positives
 
-State variable identification heuristic (BSS writes with small immediates ≤255) may pick up non-state counters or flags. Check `observed_values` in each `StateVar` — a genuine state enum has a small number of distinct values (2–8). Counters produce many distinct values and should be excluded.
+State variable identification heuristic (BSS writes with small immediates ≤255) may pick up non-state counters or flags. Check `observed_values` in each `StateVar`: a genuine state enum has a small number of distinct values (2–8). Counters produce many distinct values and should be excluded.
 
 ---
 
@@ -192,7 +192,7 @@ State variable identification heuristic (BSS writes with small immediates ≤255
 
 **Before this module:** Use `_load(path)` directly (returns `binary, raw, load_addr`). Identify seed VAs via `SemanticSearcher.query("handshake state machine authentication")` or known entry points. No `BinaryContext` required.
 
-**After this module:** Call `emit_dot(states, transitions, state_vars)` and render with Graphviz to visualize the FSM. Identify missing authentication state checks (e.g., a transition from an unauthenticated state to a sensitive resource that skips the authenticated state).
+**After this module:** Call `emit_dot(states, transitions, state_vars)` and render with Graphviz to visualize the FSM. Identify missing authentication state checks for example a transition from an unauthenticated state to a sensitive resource that skips the authenticated state.
 
 ---
 
@@ -206,7 +206,7 @@ State variable identification heuristic (BSS writes with small immediates ≤255
 |:---|:---|
 | `id` | Integer state identifier |
 | `value` | State variable value in this state |
-| `functions` | `List[int]` — function VAs active in this state |
+| `functions` | `List[int]`: function VAs active in this state |
 
 `FSMTransition`:
 
@@ -223,16 +223,16 @@ State variable identification heuristic (BSS writes with small immediates ≤255
 | Attribute | Content |
 |:---|:---|
 | `addr` | BSS VA of the state variable |
-| `read_sites` | `List[int]` — PCs of LDR instructions that read it before a branch |
-| `write_sites` | `List[int]` — PCs of STR instructions that write it after a branch |
-| `observed_values` | `Set[int]` — concrete values observed at write sites |
+| `read_sites` | `List[int]`: PCs of LDR instructions that read it before a branch |
+| `write_sites` | `List[int]`: PCs of STR instructions that write it after a branch |
+| `observed_values` | `Set[int]`: concrete values observed at write sites |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

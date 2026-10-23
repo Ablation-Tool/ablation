@@ -158,7 +158,7 @@ for f in findings:
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs — findings from incomplete graphs carry lower confidence.
+Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
@@ -174,12 +174,12 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 The LLM analyst does not return a typed finding list. The Claude ReAct loop produces findings as structured text that is then parsed and entered into `FindingRegistry`. The output format is determined by the tool schema passed to the `LLMAnalyst` instance and the prompt.
 
-Structured tool calls made by the LLM return dicts with keys defined per-tool — typically `func_va`, `description`, `evidence`, and `severity` — which the orchestrator validates and routes to `ctx.set_name()` or `FindingRegistry.register()`.
+Structured tool calls made by the LLM return dicts with keys defined per-tool: typically `func_va`, `description`, `evidence`, and `severity`, which the orchestrator validates and routes to `ctx.set_name()` or `FindingRegistry.register()`.
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — native binary context when the runtime wraps a native library
-- [TaintAnalysis](taint-analysis.md) — trace dangerous calls found in the runtime layer
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): native binary context when the runtime wraps a native library
+- [TaintAnalysis](taint-analysis.md): trace dangerous calls found in the runtime layer
+- [FindingRegistry](registry.md): record confirmed findings

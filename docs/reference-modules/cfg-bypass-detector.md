@@ -83,12 +83,12 @@ CWE: CWE-693 (Protection Mechanism Failure) on all HIGH/MEDIUM findings.
 
 `CFGBypassDetector.from_path()` opens the PE with LIEF and reads `IMAGE_LOAD_CONFIG.GuardFlags`. The flags are tested against four masks:
 
-1. **`IMAGE_GUARD_CF_INSTRUMENTED` (0x100)** — if absent, emits a HIGH `cfg_disabled` finding immediately; no further CFG checks apply.
-2. **`IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT` (0x400)** — if absent, emits HIGH `cfg_table_absent` (the runtime check passes every address regardless of the table).
-3. **`IMAGE_GUARD_CF_ENABLE_EXPORT_SUPPRESSION` (0x8000)** — if absent, emits MEDIUM `no_export_suppression`; all exported functions are valid indirect call targets.
-4. **Export-vs-table cross-reference** — when export suppression is enabled, reads all named exports from `PE.exports` and checks each against the CFG function table. Exports absent from the table emit individual MEDIUM `export_not_in_cfg_table` findings.
+1. **`IMAGE_GUARD_CF_INSTRUMENTED` (0x100)**: if absent, emits a HIGH `cfg_disabled` finding immediately; no further CFG checks apply.
+2. **`IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT` (0x400)**: if absent, emits HIGH `cfg_table_absent` (the runtime check passes every address regardless of the table).
+3. **`IMAGE_GUARD_CF_ENABLE_EXPORT_SUPPRESSION` (0x8000)**: if absent, emits MEDIUM `no_export_suppression`; all exported functions are valid indirect call targets.
+4. **Export-vs-table cross-reference**: when export suppression is enabled, reads all named exports from `PE.exports` and checks each against the CFG function table. Exports absent from the table emit individual MEDIUM `export_not_in_cfg_table` findings.
 
-The `entry_stride` for the CFG function table is `4 + (GuardFlags >> 28)` — standard CFG uses 4 bytes per entry, XFG uses 8 bytes. Entries are read at stride intervals from the table RVA.
+The `entry_stride` for the CFG function table is `4 + (GuardFlags >> 28)`: standard CFG uses 4 bytes per entry, XFG uses 8 bytes. Entries are read at stride intervals from the table RVA.
 
 A secondary Capstone pass over all code sections counts `call reg` / `jmp reg` instructions and emits an INFO `indirect_call_stats` finding with the total count.
 
@@ -135,9 +135,9 @@ Findings: 2 high/critical  3 medium  1 info
 
 ## Pipeline position
 
-**Before this module:** Use on any Windows PE (kernel module, system DLL, or userland binary). No `BinaryContext` required — `from_path()` uses LIEF directly. Run before any exploit feasibility analysis to confirm whether CFG restricts indirect call targets.
+**Before this module:** Use on any Windows PE (kernel module, system DLL, or userland binary). No `BinaryContext` required: `from_path()` uses LIEF directly. Run before any exploit feasibility analysis to confirm whether CFG restricts indirect call targets.
 
-**After this module:** Feed `export_not_in_cfg_table` findings into exploit chain construction — these are the specific exports usable as gadget pivots. Use `va` from each finding for exact address confirmation with `BinaryContext` or WinDbg.
+**After this module:** Feed `export_not_in_cfg_table` findings into exploit chain construction, these are the specific exports usable as gadget pivots. Use `va` from each finding for exact address confirmation with `BinaryContext` or WinDbg.
 
 ---
 
@@ -159,6 +159,6 @@ Findings: 2 high/critical  3 medium  1 info
 
 ## See also
 
-- [PE Sweep](pe-sweep.md) — coarse Windows PE security feature check (DEP, ASLR, SafeSEH, CFG); `CFGBypassDetector` extends CFG analysis to per-export bypass surface
-- [BinaryContext](binary-context.md) — load PE for further analysis after identifying bypass targets
-- [FindingRegistry](registry.md) — register confirmed bypass findings with CWE attribution
+- [PE Sweep](pe-sweep.md): coarse Windows PE security feature check (DEP, ASLR, SafeSEH, CFG); `CFGBypassDetector` extends CFG analysis to per-export bypass surface
+- [BinaryContext](binary-context.md): load PE for further analysis after identifying bypass targets
+- [FindingRegistry](registry.md): register confirmed bypass findings with CWE attribution

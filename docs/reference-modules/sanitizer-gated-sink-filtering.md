@@ -1,16 +1,16 @@
 # Sanitizer-Gated Sink Filtering
 
-Post-process `ARG_PROPAGATED` `SinkArgClassifier` results to detect sanitizer-validated exec sinks — automatically reclassifying sites where a shell-safe allowlist validator is called on the argument before the exec sink with a conditional branch on the return value, reducing the manual triage burden from 30–60 minutes per `ARG_PROPAGATED` site to a single automated pass.
+Post-process `ARG_PROPAGATED` `SinkArgClassifier` results to detect sanitizer-validated exec sinks: automatically reclassifying sites where a shell-safe allowlist validator is called on the argument before the exec sink with a conditional branch on the return value, reducing the manual triage burden from 30–60 minutes per `ARG_PROPAGATED` site to a single automated pass.
 
 ---
 
 ## Why this exists
 
-1. **Every `ARG_PROPAGATED` result from `SinkArgClassifier` requires manual disassembly to determine whether the argument passes through a shell-safe validator before reaching the exec sink — a 30–60 minute task per site on a stripped binary.** `SinkSanitizerFilter` automates this: it pairs `SanitizerDetector`'s behavioral signature matching with backward analysis of the exec sink's argument path, identifying whether a confirmed shell-safe function is called on the same argument and whether a conditional branch on its return value guards the exec sink.
+1. **Every `ARG_PROPAGATED` result from `SinkArgClassifier` requires manual disassembly to determine whether the argument passes through a shell-safe validator before reaching the exec sink: a 30–60 minute task per site on a stripped binary.** `SinkSanitizerFilter` automates this: it pairs `SanitizerDetector`'s behavioral signature matching with backward analysis of the exec sink's argument path, identifying whether a confirmed shell-safe function is called on the same argument and whether a conditional branch on its return value guards the exec sink.
 
 2. **Three structural conditions must all be true for a site to be reclassified as `SANITIZER_VALIDATED`:** (1) A `SHELL_SAFE` function (detected by `SanitizerDetector`) is called on the same argument as the exec sink within `_SANITIZER_SCAN_WINDOW` instructions before the sink; (2) the sanitizer's return value is used in a conditional branch (`test eax, eax / jz <error>`); and (3) the conditional branch's false edge leads to an error path, not to the exec sink. All three conditions together mean that the exec sink is unreachable without passing the shell-safe allowlist check.
 
-3. **`SinkSanitizerFilter.apply()` modifies the `SinkClassification` list in-place** — `ARG_PROPAGATED` sites that pass all three conditions are upgraded to `SANITIZER_VALIDATED` and removed from the taint analysis queue. The remaining `ARG_PROPAGATED` sites are the ones that genuinely require `TaintTracker` analysis.
+3. **`SinkSanitizerFilter.apply()` modifies the `SinkClassification` list in-place**: `ARG_PROPAGATED` sites that pass all three conditions are upgraded to `SANITIZER_VALIDATED` and removed from the taint analysis queue. The remaining `ARG_PROPAGATED` sites are the ones that genuinely require `TaintTracker` analysis.
 
 ---
 
@@ -74,9 +74,9 @@ SinkSanitizerFilter:
 
 ## False positives
 
-**Condition 3 (conditional branch guards exec sink) requires that the false edge leads to an error path, not a partial sanitization.** A sanitizer that is called but whose result is not used to prevent the exec sink call (i.e., the sanitizer return value is ignored) will not be detected and the site will remain `ARG_PROPAGATED`. Verify by checking that the branch is conditional on the sanitizer's return, not on an unrelated condition.
+**Condition 3 (conditional branch guards exec sink) requires that the false edge leads to an error path, not a partial sanitization.** A sanitizer that is called but whose result is not used to prevent the exec sink call specifically the sanitizer return value is ignored will not be detected and the site will remain `ARG_PROPAGATED`. Verify by checking that the branch is conditional on the sanitizer's return, not on an unrelated condition.
 
-**`_SANITIZER_SCAN_WINDOW` is a fixed instruction count** — a sanitizer called more than `_SANITIZER_SCAN_WINDOW` instructions before the exec sink will not be detected. Increase the window for large functions with long sanitizer-to-sink paths.
+**`_SANITIZER_SCAN_WINDOW` is a fixed instruction count**: a sanitizer called more than `_SANITIZER_SCAN_WINDOW` instructions before the exec sink will not be detected. Increase the window for large functions with long sanitizer-to-sink paths.
 
 ---
 
@@ -96,6 +96,6 @@ Call `SinkSanitizerFilter.report(classifications)` after `apply()` to get a tria
 
 ## See also
 
-- [Sink Argument Classifier](sink-argument-classifier.md) — produces the `ARG_PROPAGATED` list that this filter processes
-- [Sanitizer Recognition](sanitizer-recognition.md) — `SanitizerDetector` that identifies `SHELL_SAFE` validators
-- [Taint Analysis](taint-analysis.md) — processes the remaining `ARG_PROPAGATED` sites after filtering
+- [Sink Argument Classifier](sink-argument-classifier.md): produces the `ARG_PROPAGATED` list that this filter processes
+- [Sanitizer Recognition](sanitizer-recognition.md): `SanitizerDetector` that identifies `SHELL_SAFE` validators
+- [Taint Analysis](taint-analysis.md): processes the remaining `ARG_PROPAGATED` sites after filtering

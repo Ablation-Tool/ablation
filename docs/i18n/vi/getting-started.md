@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Trên bất kỳ lần quét nào trong tương lai, phiên bản firmware khác, nhà cung cấp khác — `pl.sweep(searcher)` tự động chạy tất cả các mẫu đã xác nhận.
+Trên bất kỳ lần quét nào trong tương lai, phiên bản firmware khác, nhà cung cấp khác: `pl.sweep(searcher)` tự động chạy tất cả các mẫu đã xác nhận.
 
 ---
 

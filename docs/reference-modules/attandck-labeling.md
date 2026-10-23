@@ -6,11 +6,11 @@ Automatically annotate Ablation findings with MITRE ATT&CK technique IDs and tac
 
 ## Why this exists
 
-1. **Findings without ATT&CK context are difficult to prioritize in threat-model terms.** A report that says "buffer overflow in SSL handler" is a technical finding. A report that additionally says "T1190 Exploit Public-Facing Application — Initial Access" tells the reader exactly where in the kill chain this vulnerability sits and what class of threat actor would use it. Without automatic tagging, this mapping must be done manually for every finding — a labor-intensive step that is typically skipped under time pressure.
+1. **Findings without ATT&CK context are difficult to prioritize in threat-model terms.** A report that says "buffer overflow in SSL handler" is a technical finding. A report that additionally says "T1190 Exploit Public-Facing Application: Initial Access" tells the reader exactly where in the kill chain this vulnerability sits and what class of threat actor would use it. Without automatic tagging, this mapping must be done manually for every finding: a labor-intensive step that is typically skipped under time pressure.
 
 2. **Security practitioners and leadership consume findings in ATT&CK vocabulary.** CISO presentations, threat-hunt playbooks, and red team reports all use ATT&CK technique IDs as the lingua franca for cross-team communication. Generating those IDs from Ablation's raw findings automatically bridges the gap between low-level RE output and high-level threat intelligence reporting.
 
-3. **The mapping must respect kill-chain ordering for report readability.** ATT&CK defines 14 tactics in a logical sequence from Reconnaissance to Impact. When a finding maps to multiple techniques (e.g., an unauthenticated RCE could be both T1190 Initial Access and T1059 Execution), the output sorted by tactic order communicates the attack progression clearly.
+3. **The mapping must respect kill-chain ordering for report readability.** ATT&CK defines 14 tactics in a logical sequence from Reconnaissance to Impact. When a finding maps to multiple techniques for example an unauthenticated RCE could be both T1190 Initial Access and T1059 Execution, the output sorted by tactic order communicates the attack progression clearly.
 
 ---
 
@@ -51,7 +51,7 @@ The `ATTCK_MAP` dict maps lowercased keyword fragments to `{id, name, tactic}` d
 | Exfiltration | `'exfiltration'` → T1041, `'graph api'` → T1048 |
 | Impact | `'ransomware'` → T1486, `'wiper'` → T1485, `'service stop'` → T1489 |
 
-Deduplication: when multiple keywords match the same technique ID, only one entry appears in the output. This prevents a finding like "credential dump — shadow file dump" from producing two T1003 entries.
+Deduplication: when multiple keywords match the same technique ID, only one entry appears in the output. This prevents a finding like "credential dump: shadow file dump" from producing two T1003 entries.
 
 ---
 
@@ -136,11 +136,11 @@ for f in tagged_findings:
 
 ## False positives
 
-**Keyword collisions in short descriptions.** The keyword `'smb'` matches anything containing that substring — including a finding description mentioning "assembly SMB-like framing pattern" when the analyst meant something unrelated to SMB lateral movement. Add specific context to finding descriptions when generating them programmatically to avoid spurious matches.
+**Keyword collisions in short descriptions.** The keyword `'smb'` matches anything containing that substring: including a finding description mentioning "assembly SMB-like framing pattern" when the analyst meant something unrelated to SMB lateral movement. Add specific context to finding descriptions when generating them programmatically to avoid spurious matches.
 
 **Over-tagging on multi-topic descriptions.** A long finding description that mentions multiple techniques in context ("this overflow enables RCE from unauthenticated WAN, then lateral movement via pass-the-hash") will generate all matching techniques. This is correct behavior but the output can look alarming. Review the full finding context before presenting to stakeholders.
 
-**Missing techniques.** The `ATTCK_MAP` covers the most common vulnerability-to-technique mappings but is not exhaustive. Firmware-specific techniques (e.g., T1601 Modify System Image) are not in the default map. To add a mapping: add a new keyword → technique entry to `ATTCK_MAP` in `ablation/core/attck_tagger.py`.
+**Missing techniques.** The `ATTCK_MAP` covers the most common vulnerability-to-technique mappings but is not exhaustive. Firmware-specific techniques for example T1601 Modify System Image are not in the default map. To add a mapping: add a new keyword → technique entry to `ATTCK_MAP` in `ablation/core/attck_tagger.py`.
 
 ---
 
@@ -165,6 +165,6 @@ for f in tagged_findings:
 
 ## See also
 
-- [Finding Registry](finding-registry.md) — persistent storage for enriched findings
-- [YARA Rule Generation](yara-generator.md) — generate detection rules from confirmed findings
-- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — labeled taint tracking that preserves source identifiers through propagation
+- [Finding Registry](finding-registry.md): persistent storage for enriched findings
+- [YARA Rule Generation](yara-generator.md): generate detection rules from confirmed findings
+- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): labeled taint tracking that preserves source identifiers through propagation

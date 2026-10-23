@@ -319,7 +319,7 @@ ByovdDetector: BYOVD_CAPABLE  score=3/8
 
 ## Pipeline position
 
-**Before this module:** Nothing required — `KernelDriverAnalyzer.from_path(path)` and `ByovdDetector(path)` are self-contained. For bulk driver triage, collect `.sys` paths first.
+**Before this module:** Nothing required: `KernelDriverAnalyzer.from_path(path)` and `ByovdDetector(path)` are self-contained. For bulk driver triage, collect `.sys` paths first.
 
 **After this module:** For confirmed BYOVD candidates, run `PatternLibrary.record_hit()` and register with `FindingRegistry`. For IOCTL surface findings, trace `Type3InputBuffer` dereferences in the METHOD_NEITHER handler manually.
 
@@ -333,14 +333,14 @@ This page covers two tools with different output types.
 
 `KernelModuleSubsystemClassifier().classify(ko_path)` returns a `KernelModuleClassification`: see [kernel-module-subsystem-classifier](kernel-module-subsystem-classifier.md) for field reference.
 
-For heap and pool overflow analysis (`HeapUAFScanner`), see [heap-uaf-scanner](heap-uaf-scanner.md) — returns `List[HeapFinding]` with `func_va`, `site_va`, `kind`, `severity`, `description`.
+For heap and pool overflow analysis (`HeapUAFScanner`), see [heap-uaf-scanner](heap-uaf-scanner.md): returns `List[HeapFinding]` with `func_va`, `site_va`, `kind`, `severity`, `description`.
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

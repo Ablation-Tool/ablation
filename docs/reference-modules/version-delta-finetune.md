@@ -56,9 +56,9 @@ finetune_model  epochs=4  batch_size=32
 
 ## False positives
 
-**Model collapse with too few training pairs** — if the firmware versions are very similar (minor patch), `generate_structural_pairs()` may produce fewer than ~1000 positive pairs, which is insufficient for meaningful fine-tuning. In this case the loss curve flattens after epoch 1 and `eval_cosine` does not improve past 0.65. Use the pretrained MiniLM instead; fine-tuning on fewer than 1000 pairs will overfit to the available data.
+**Model collapse with too few training pairs**: if the firmware versions are very similar (minor patch), `generate_structural_pairs()` may produce fewer than ~1000 positive pairs, which is insufficient for meaningful fine-tuning. In this case the loss curve flattens after epoch 1 and `eval_cosine` does not improve past 0.65. Use the pretrained MiniLM instead; fine-tuning on fewer than 1000 pairs will overfit to the available data.
 
-**False positive pairs from single-PLT-call functions** — wrapper functions around a single `malloc`, `free`, or `memcpy` call produce a very high Jaccard score against each other even when they implement different data structures. The 15% instruction count constraint mitigates this but does not eliminate it entirely. Review `eval_separation()` output after training to confirm the fine-tuned model actually separates non-homologs.
+**False positive pairs from single-PLT-call functions**: wrapper functions around a single `malloc`, `free`, or `memcpy` call produce a very high Jaccard score against each other even when they implement different data structures. The 15% instruction count constraint mitigates this but does not eliminate it entirely. Review `eval_separation()` output after training to confirm the fine-tuned model actually separates non-homologs.
 
 ---
 
@@ -74,12 +74,12 @@ finetune_model  epochs=4  batch_size=32
 
 `finetune_model(train_pairs, eval_pairs, base_model_name, output_path, epochs, batch_size)` returns a fine-tuned `SentenceTransformer` model (from the `sentence-transformers` package). The trained model is saved to `output_path` and returned directly for immediate use.
 
-`generate_structural_pairs(corpus_a, corpus_b, min_plt_calls, min_jaccard, max_pairs)` returns `(train_pairs, eval_pairs)` — lists of `InputExample(texts=[anchor_desc, positive_desc])` used by `finetune_model()`.
+`generate_structural_pairs(corpus_a, corpus_b, min_plt_calls, min_jaccard, max_pairs)` returns `(train_pairs, eval_pairs)`: lists of `InputExample(texts=[anchor_desc, positive_desc])` used by `finetune_model()`.
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

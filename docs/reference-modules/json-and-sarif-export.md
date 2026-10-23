@@ -1,6 +1,6 @@
 # JSON and SARIF Export
 
-Export Ablation sweep results and confirmed findings to structured JSON or SARIF 2.1.0 — enabling consumption by GitHub Code Scanning, VS Code, IDE integrations, and any OASIS-compliant SAST platform — via `ablation/export/sarif.py` and `ablation/export/json_export.py`.
+Export Ablation sweep results and confirmed findings to structured JSON or SARIF 2.1.0: enabling consumption by GitHub Code Scanning, VS Code, IDE integrations, and any OASIS-compliant SAST platform: via `ablation/export/sarif.py` and `ablation/export/json_export.py`.
 
 ---
 
@@ -8,9 +8,9 @@ Export Ablation sweep results and confirmed findings to structured JSON or SARIF
 
 1. **SARIF 2.1.0 is the OASIS standard format consumed by GitHub Code Scanning, VS Code Problems, and most modern SAST platforms.** Without `sarif.py`, Ablation findings cannot be uploaded to GitHub Code Scanning via `gh api repos/.../code-scanning/sarifs` or viewed inline in VS Code. `sweep_to_sarif()` maps each semantic hit to a SARIF `result` with a `ruleId` derived from the finding's tag and query text, and an `artifactLocation` URI pointing to the analyzed binary.
 
-2. **`findings_to_sarif()`** converts `FindingRegistry`-confirmed findings — which carry a `severity` field — to SARIF `level` (`error`/`warning`/`note`). Confirmed findings differ from sweep hits: they have been byte-verified, path-solved, and written to the RE module. This distinction is preserved in the SARIF output: sweep results use `level: warning`; confirmed findings use their verified severity.
+2. **`findings_to_sarif()`** converts `FindingRegistry`-confirmed findings, which carry a `severity` field: to SARIF `level` (`error`/`warning`/`note`). Confirmed findings differ from sweep hits: they have been byte-verified, path-solved, and written to the RE module. This distinction is preserved in the SARIF output: sweep results use `level: warning`; confirmed findings use their verified severity.
 
-3. **`sweep_to_json()` and `findings_to_json()`** produce a flat JSON schema for programmatic downstream use — CI/CD pipelines, custom dashboards, LLM-driven triage tools. The schema is `{"binary": str, "findings": [{"tag": str, "pattern": str, "hits": [{"va": str, "score": float}]}]}`. `write_json()` and `write_sarif()` handle the file-write step.
+3. **`sweep_to_json()` and `findings_to_json()`** produce a flat JSON schema for programmatic downstream use: CI/CD pipelines, custom dashboards, LLM-driven triage tools. The schema is `{"binary": str, "findings": [{"tag": str, "pattern": str, "hits": [{"va": str, "score": float}]}]}`. `write_json()` and `write_sarif()` handle the file-write step.
 
 ---
 
@@ -79,9 +79,9 @@ The following illustrates SARIF and JSON export output format.
 
 ## False positives
 
-**SARIF `ruleId` collision** — if two different queries have the same tag, `_rule_id()` generates the same `ruleId`. The SARIF spec requires unique `ruleId` values per rule; downstream tools may merge or deduplicate results. Use distinct tags per query to avoid collisions.
+**SARIF `ruleId` collision**: if two different queries have the same tag, `_rule_id()` generates the same `ruleId`. The SARIF spec requires unique `ruleId` values per rule; downstream tools may merge or deduplicate results. Use distinct tags per query to avoid collisions.
 
-**`min_score` in `sweep_to_json()`** — the default `min_score=0.0` includes all hits including low-confidence matches. Pass `min_score=0.75` (the standard sweep threshold) to match the semantic sweep's own reporting threshold.
+**`min_score` in `sweep_to_json()`**: the default `min_score=0.0` includes all hits including low-confidence matches. Pass `min_score=0.75` (the standard sweep threshold) to match the semantic sweep's own reporting threshold.
 
 ---
 
@@ -104,7 +104,7 @@ Export runs at the end of a sweep or confirmation session, never during triage. 
 | `runs[0].results[*].message.text` | Finding detail string |
 | `runs[0].results[*].locations[*].uri` | File URI of the analyzed binary |
 
-`findings_to_sarif(findings, binary_path)` — same SARIF format, input is a flat finding list.
+`findings_to_sarif(findings, binary_path)`: same SARIF format, input is a flat finding list.
 
 `sweep_to_json(sweep_results)` and `findings_to_json(findings)` return plain `dict` representations of the same data, suitable for `write_json(data, path)`.
 
@@ -112,5 +112,5 @@ Export runs at the end of a sweep or confirmation session, never during triage. 
 
 ## See also
 
-- [Markdown Research Reports](markdown-research-reports.md) — `generate_report()` for human-readable markdown from sweep results
-- [Semantic Pattern Sweep](semantic-pattern-sweep.md) — `PatternLibrary.sweep()` that produces sweep results for export
+- [Markdown Research Reports](markdown-research-reports.md): `generate_report()` for human-readable markdown from sweep results
+- [Semantic Pattern Sweep](semantic-pattern-sweep.md): `PatternLibrary.sweep()` that produces sweep results for export

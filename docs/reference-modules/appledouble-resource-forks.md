@@ -1,16 +1,16 @@
 # AppleDouble Resource Forks
 
-Parse AppleDouble container files produced by `unar` and Stuffit Expander on Linux — stripping the 26-byte big-endian fixed header and 12-byte entry descriptors to extract raw resource fork bytes, Finder info, and real filename from Mac Classic `.rsrc` files.
+Parse AppleDouble container files produced by `unar` and Stuffit Expander on Linux: stripping the 26-byte big-endian fixed header and 12-byte entry descriptors to extract raw resource fork bytes, Finder info, and real filename from Mac Classic `.rsrc` files.
 
 ---
 
 ## Why this exists
 
-1. **`unar` and Stuffit Expander produce `.rsrc` files that are AppleDouble containers, not raw resource forks — and every tool that treated them as raw resource forks produced corrupt results.** An AppleDouble "header file" begins with a 26-byte header (`magic 0x00051607`, version, home filesystem string, entry count) followed by a table of 12-byte entry descriptors. Each descriptor gives an `entry_id`, a byte `offset` from the start of the file, and a `length`. The resource fork entry (`entry_id=2`) is at an offset that varies per file — it is never at offset 0. Feeding the file directly to a resource-fork parser skips past the header by accident only when the header happens to be exactly the right size, which it is not.
+1. **`unar` and Stuffit Expander produce `.rsrc` files that are AppleDouble containers, not raw resource forks, and every tool that treated them as raw resource forks produced corrupt results.** An AppleDouble "header file" begins with a 26-byte header (`magic 0x00051607`, version, home filesystem string, entry count) followed by a table of 12-byte entry descriptors. Each descriptor gives an `entry_id`, a byte `offset` from the start of the file, and a `length`. The resource fork entry (`entry_id=2`) is at an offset that varies per file, it is never at offset 0. Feeding the file directly to a resource-fork parser skips past the header by accident only when the header happens to be exactly the right size, which it is not.
 
-2. **Cross-archive resource-fork analysis of 533+ Tool_Chest Mac Classic binary archives was not scriptable without a reliable way to strip the AppleDouble wrapper.** Each session required manually computing the entry offset from a hex dump before passing data to the `CODE`/`DATA` resource map parser. `AppleDoubleExtractor.batch_extract_resource_forks()` processes a list of paths and returns `{path: raw_bytes | None}` for the resource fork entry in each — reducing a multi-hour manual process to a single function call.
+2. **Cross-archive resource-fork analysis of 533+ Tool_Chest Mac Classic binary archives was not scriptable without a reliable way to strip the AppleDouble wrapper.** Each session required manually computing the entry offset from a hex dump before passing data to the `CODE`/`DATA` resource map parser. `AppleDoubleExtractor.batch_extract_resource_forks()` processes a list of paths and returns `{path: raw_bytes | None}` for the resource fork entry in each: reducing a multi-hour manual process to a single function call.
 
-3. **AppleDouble files contain additional entries beyond the resource fork — Finder info (entry_id=8), file dates (entry_id=7), real name (entry_id=3) — that provide metadata useful for binary classification.** The `ENTRY_NAMES` dict maps all 10 standard entry IDs to human-readable names. `AppleDoubleResult.real_name()` decodes entry 3 as `mac_roman` text (the original Mac filename, which may differ from the POSIX path). `AppleDoubleResult.finder_info()` returns the 16-byte Finder info block (file type + creator code in the first 8 bytes) — the canonical way to identify Mac Classic binary types without relying on file extensions.
+3. **AppleDouble files contain additional entries beyond the resource fork: Finder info (entry_id=8), file dates (entry_id=7), real name (entry_id=3), that provide metadata useful for binary classification.** The `ENTRY_NAMES` dict maps all 10 standard entry IDs to human-readable names. `AppleDoubleResult.real_name()` decodes entry 3 as `mac_roman` text (the original Mac filename, which may differ from the POSIX path). `AppleDoubleResult.finder_info()` returns the 16-byte Finder info block (file type + creator code in the first 8 bytes): the canonical way to identify Mac Classic binary types without relying on file extensions.
 
 ---
 
@@ -33,7 +33,7 @@ flowchart TD
 | Entry ID | Constant | Description |
 |---|---|---|
 | 1 | `ENTRY_DATA_FORK` | Data fork bytes (rarely populated in AppleDouble) |
-| 2 | `ENTRY_RESOURCE_FORK` | Resource fork bytes — primary target |
+| 2 | `ENTRY_RESOURCE_FORK` | Resource fork bytes: primary target |
 | 3 | `ENTRY_REAL_NAME` | Original Mac filename (mac_roman encoded) |
 | 4 | `ENTRY_COMMENT` | Finder comment |
 | 5 | `ENTRY_ICON_BW` | Black-and-white icon data |
@@ -138,19 +138,19 @@ Batch:
 
 ## False positives
 
-**`batch_extract_resource_forks()` returns `None` for files that fail to parse — including non-AppleDouble files with similar extensions.** Some `.rsrc` files in Mac Classic archives are raw resource forks (not AppleDouble wrappers) — particularly those extracted by older tools that did not produce the AppleDouble format. These fail at `_parse()` with `ValueError("Not an AppleDouble file")` which `batch_extract_resource_forks()` silently converts to `None`. Use `is_appledouble(data)` to distinguish before reporting batch failures as missing resource forks.
+**`batch_extract_resource_forks()` returns `None` for files that fail to parse: including non-AppleDouble files with similar extensions.** Some `.rsrc` files in Mac Classic archives are raw resource forks (not AppleDouble wrappers): particularly those extracted by older tools that did not produce the AppleDouble format. These fail at `_parse()` with `ValueError("Not an AppleDouble file")` which `batch_extract_resource_forks()` silently converts to `None`. Use `is_appledouble(data)` to distinguish before reporting batch failures as missing resource forks.
 
-**`entry.read_from(data)` raises `ValueError` for entries with out-of-bounds offsets.** Corrupt AppleDouble files (e.g., truncated downloads or misextracted archives) may have entry descriptors with `offset + length > len(data)`. `_parse()` does not validate entry offsets — it only validates that the entry descriptor itself fits in the data. The offset validation happens lazily in `entry.read_from()`. If `resource_fork()` raises `ValueError`, the file is corrupt or was produced by a non-standard tool that writes incorrect offsets.
+**`entry.read_from(data)` raises `ValueError` for entries with out-of-bounds offsets.** Corrupt AppleDouble files for example truncated downloads or misextracted archives may have entry descriptors with `offset + length > len(data)`. `_parse()` does not validate entry offsets, it only validates that the entry descriptor itself fits in the data. The offset validation happens lazily in `entry.read_from()`. If `resource_fork()` raises `ValueError`, the file is corrupt or was produced by a non-standard tool that writes incorrect offsets.
 
-**AppleSingle files (magic `0x00051600`) are not AppleDouble.** AppleSingle embeds both the data fork and resource fork in a single file. `_parse()` detects the AppleSingle magic and raises `ValueError("AppleSingle file detected")` rather than attempting to parse it as AppleDouble. AppleSingle requires a dedicated parser — the entry layout is similar but the data fork is entry_id=1 and is inline.
+**AppleSingle files (magic `0x00051600`) are not AppleDouble.** AppleSingle embeds both the data fork and resource fork in a single file. `_parse()` detects the AppleSingle magic and raises `ValueError("AppleSingle file detected")` rather than attempting to parse it as AppleDouble. AppleSingle requires a dedicated parser: the entry layout is similar but the data fork is entry_id=1 and is inline.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Extract `.rsrc` files from Mac Classic archives using `unar -forks visible <archive>`. Confirm the output files are AppleDouble (not raw resource forks) with `is_appledouble(data[:4])`. If the archive was extracted with `unzip` or `tar` on Linux, the resource fork is typically lost — use `unar` specifically.
+**Before this module:** Extract `.rsrc` files from Mac Classic archives using `unar -forks visible <archive>`. Confirm the output files are AppleDouble (not raw resource forks) with `is_appledouble(data[:4])`. If the archive was extracted with `unzip` or `tar` on Linux, the resource fork is typically lost: use `unar` specifically.
 
-**After this module:** Feed `ext.resource_fork()` bytes to a Mac OS resource map parser to extract `CODE` resources (68k code segments), `DATA` resources, `STR#` string tables, and `MENU` resources. The `CODE 0` resource contains the jump table for the application — the entry point for Mac Classic binary analysis. Check `finder_info()[0:4]` for the file type (`APPL` = application, `INIT` = system extension, `cdev` = control panel) before selecting the appropriate analysis path.
+**After this module:** Feed `ext.resource_fork()` bytes to a Mac OS resource map parser to extract `CODE` resources (68k code segments), `DATA` resources, `STR#` string tables, and `MENU` resources. The `CODE 0` resource contains the jump table for the application: the entry point for Mac Classic binary analysis. Check `finder_info()[0:4]` for the file type (`APPL` = application, `INIT` = system extension, `cdev` = control panel) before selecting the appropriate analysis path.
 
 ---
 
@@ -158,17 +158,17 @@ Batch:
 
 | Field | Content |
 |:---|:---|
-| `entry_id=2` (`ENTRY_RESOURCE_FORK`) | Raw resource fork bytes — pass to resource map parser |
+| `entry_id=2` (`ENTRY_RESOURCE_FORK`) | Raw resource fork bytes: pass to resource map parser |
 | `entry_id=8` (`ENTRY_FINDER_INFO`) | Bytes 0-3 = file type, 4-7 = creator code (both mac_roman 4-char codes) |
-| `entry_id=3` (`ENTRY_REAL_NAME`) | Original Mac filename — may differ from POSIX archive path |
-| `ValueError("Not an AppleDouble file")` | File is a raw resource fork or corrupt — use direct offset parsing |
-| `ValueError("AppleSingle file detected")` | Single-file format — resource fork is entry_id=2 but requires AppleSingle parser |
-| `batch result = None` | Parse failed or no resource fork entry — check `is_appledouble()` first |
+| `entry_id=3` (`ENTRY_REAL_NAME`) | Original Mac filename: may differ from POSIX archive path |
+| `ValueError("Not an AppleDouble file")` | File is a raw resource fork or corrupt: use direct offset parsing |
+| `ValueError("AppleSingle file detected")` | Single-file format: resource fork is entry_id=2 but requires AppleSingle parser |
+| `batch result = None` | Parse failed or no resource fork entry: check `is_appledouble()` first |
 
 ---
 
 ## See also
 
-- [Apple bv41 Decompression](apple-bv41-decompression.md) — decode bv41-compressed streams before extracting AppleDouble files from them
-- [Mac Classic Binary Analysis](mac-classic-re.md) — parse `CODE`/`DATA` resource maps from extracted resource fork bytes
-- [Firmware Analysis](firmware-analysis.md) — full pipeline when AppleDouble files appear inside firmware images
+- [Apple bv41 Decompression](apple-bv41-decompression.md): decode bv41-compressed streams before extracting AppleDouble files from them
+- [Mac Classic Binary Analysis](mac-classic-re.md): parse `CODE`/`DATA` resource maps from extracted resource fork bytes
+- [Firmware Analysis](firmware-analysis.md): full pipeline when AppleDouble files appear inside firmware images

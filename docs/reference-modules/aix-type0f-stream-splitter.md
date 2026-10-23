@@ -1,6 +1,6 @@
 # AixType0fStreamSplitter
 
-Decode and split IBM AIX installp BFF type 0x0f entries — which contain two Huffman-compressed streams in one payload — recovering both the primary XCOFF32 text and the secondary block that was previously silently discarded.
+Decode and split IBM AIX installp BFF type 0x0f entries, which contain two Huffman-compressed streams in one payload: recovering both the primary XCOFF32 text and the secondary block that was previously silently discarded.
 
 ---
 
@@ -10,7 +10,7 @@ Decode and split IBM AIX installp BFF type 0x0f entries — which contain two Hu
 
 2. **`AixInstallpDecompressor._unary_huffman_decode` decodes only the primary stream** and stops after `uncompressed_size` symbols. Any secondary content is silently discarded, preventing analysis of type 0x0f secondary blocks. Trigger: IBM MQSeries `amqzxma0_nd` (AIX 5.2), where 14,064 bytes of secondary block were being lost.
 
-3. **AIX 5.0 type 0x0f entries are SINGLE-STREAM** — no sentinel, no secondary block. This module auto-detects the version-specific format and handles both cases transparently.
+3. **AIX 5.0 type 0x0f entries are SINGLE-STREAM**, no sentinel, no secondary block. This module auto-detects the version-specific format and handles both cases transparently.
 
 ---
 
@@ -80,5 +80,5 @@ if result.secondary_raw:
 
 ## See also
 
-- [AIX Installp Decompressor](aix-installp-decompressor.md) — full 4-step installp decompression pipeline
-- [BWT Eulerian Reconstructor](bwt-eulerian-reconstructor.md) — multi-cycle BWT recovery for K < 256 cases
+- [AIX Installp Decompressor](aix-installp-decompressor.md): full 4-step installp decompression pipeline
+- [BWT Eulerian Reconstructor](bwt-eulerian-reconstructor.md): multi-cycle BWT recovery for K < 256 cases

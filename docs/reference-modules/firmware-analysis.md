@@ -188,7 +188,7 @@ Version-mismatch findings appear when a known key or certificate is present in a
 
 ## See also
 
-- [FirmwareContainers](firmware-containers.md) — partition extraction from container images
-- [FirmwareContainerKeyExtractor](firmware-container-key-extractor.md) — recover embedded key material
-- [TaintAnalysis](taint-analysis.md) — trace network input to sinks in extracted binaries
-- [SemanticSearch](semantic-search.md) — find vulnerability candidates in extracted ELFs
+- [FirmwareContainers](firmware-containers.md): partition extraction from container images
+- [FirmwareContainerKeyExtractor](firmware-container-key-extractor.md): recover embedded key material
+- [TaintAnalysis](taint-analysis.md): trace network input to sinks in extracted binaries
+- [SemanticSearch](semantic-search.md): find vulnerability candidates in extracted ELFs

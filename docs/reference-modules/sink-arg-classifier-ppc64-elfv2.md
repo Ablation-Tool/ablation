@@ -1,6 +1,6 @@
 # SinkArgClassifierPPC64ELFv2
 
-Classify exec-class sink argument provenance on PPC64 LE ELFv2 ELFs — the little-endian POWER ABI used by RHEL/RHCOS ppc64le, IBM HMC management binaries, and PowerSC.
+Classify exec-class sink argument provenance on PPC64 LE ELFv2 ELFs: the little-endian POWER ABI used by RHEL/RHCOS ppc64le, IBM HMC management binaries, and PowerSC.
 
 ---
 
@@ -135,8 +135,8 @@ LR   return address
 
 ## See also
 
-- [Power10PPC64PLTStubScanner](ppc64-power10-plt-stubs.md) — Power10 PLT stub forms integrated into this classifier
-- [SinkArgClassifierPPC64ELFv1](sink-arg-classifier-ppc64-elfv1.md) — same pipeline for big-endian ELFv1
-- [SinkArgClassifier](sink-arg-classifier.md) — x86-64 baseline and full verdict reference
-- [PPC64 Taint Analysis](ppc64-taint-analysis.md) — receives ARG_PROPAGATED findings
-- [SAC Arch Dispatch](sac-arch-dispatch.md) — auto-selects the right SAC variant from BinaryContext arch
+- [Power10PPC64PLTStubScanner](ppc64-power10-plt-stubs.md): Power10 PLT stub forms integrated into this classifier
+- [SinkArgClassifierPPC64ELFv1](sink-arg-classifier-ppc64-elfv1.md): same pipeline for big-endian ELFv1
+- [SinkArgClassifier](sink-arg-classifier.md): x86-64 baseline and full verdict reference
+- [PPC64 Taint Analysis](ppc64-taint-analysis.md): receives ARG_PROPAGATED findings
+- [SAC Arch Dispatch](sac-arch-dispatch.md): auto-selects the right SAC variant from BinaryContext arch

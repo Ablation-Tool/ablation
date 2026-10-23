@@ -1,16 +1,16 @@
 # Global Symbol and BSS Tracking
 
-Locate functions that walk a `[start, end)` range from adjacent pointer-sized BSS globals — tracing forward taint propagation from BSS symbol pairs to detect decrypt loops and memory processing routines that consume `initrd_start`/`initrd_end` pairs in stripped kernel binaries.
+Locate functions that walk a `[start, end)` range from adjacent pointer-sized BSS globals: tracing forward taint propagation from BSS symbol pairs to detect decrypt loops and memory processing routines that consume `initrd_start`/`initrd_end` pairs in stripped kernel binaries.
 
 ---
 
 ## Why this exists
 
-1. **Stripped Fortinet kernel binaries contain firmware decrypt routines that use `initrd_start`/`initrd_end` BSS globals to determine the region to decrypt — these routines cannot be found by string search or function name matching because they have no symbols and no printable string references.** `BssTaintTracker` finds them by scanning for adjacent pointer-pair BSS loads (`[abs_addr]`, `[abs_addr+8]`) in the same basic block, then forward-tainting from those pairs to find loops where the tainted pointers are used as both memory bases and comparison bounds.
+1. **Stripped Fortinet kernel binaries contain firmware decrypt routines that use `initrd_start`/`initrd_end` BSS globals to determine the region to decrypt, these routines cannot be found by string search or function name matching because they have no symbols and no printable string references.** `BssTaintTracker` finds them by scanning for adjacent pointer-pair BSS loads (`[abs_addr]`, `[abs_addr+8]`) in the same basic block, then forward-tainting from those pairs to find loops where the tainted pointers are used as both memory bases and comparison bounds.
 
-2. **`BssTaintTracker` is the only Ablation module that reasons about BSS global pointer pairs** — all other taint trackers start from network input sources. BSS tracking is specifically for the case where the "source" of the interesting data is a pair of kernel globals that bound the region of interest, rather than a network-received buffer.
+2. **`BssTaintTracker` is the only Ablation module that reasons about BSS global pointer pairs**: all other taint trackers start from network input sources. BSS tracking is specifically for the case where the "source" of the interesting data is a pair of kernel globals that bound the region of interest, rather than a network-received buffer.
 
-3. **The primary output is the decrypt loop's VA and the BSS symbol pair that seeds it** — with these two pieces of information, an analyst can extract the encrypted initrd payload, apply the decrypt routine, and inspect the decrypted content without a JTAG debugger.
+3. **The primary output is the decrypt loop's VA and the BSS symbol pair that seeds it**: with these two pieces of information, an analyst can extract the encrypted initrd payload, apply the decrypt routine, and inspect the decrypted content without a JTAG debugger.
 
 ---
 
@@ -73,9 +73,9 @@ BssTaintTracker:
 
 ## False positives
 
-**Adjacent BSS loads in the same basic block may be unrelated pairs that happen to be 8 bytes apart** — array element access patterns produce the same signature. Confirm that the two BSS addresses are pointers (not integers) and that the forward taint actually produces a loop with pointer-increment behavior before treating the result as a decrypt loop.
+**Adjacent BSS loads in the same basic block may be unrelated pairs that happen to be 8 bytes apart**: array element access patterns produce the same signature. Confirm that the two BSS addresses are pointers (not integers) and that the forward taint actually produces a loop with pointer-increment behavior before treating the result as a decrypt loop.
 
-**`BssTaintTracker` uses register-level taint only** — stack spills of BSS pointers are not tracked. A function that spills the start/end pointers to the stack before the loop will not be detected. For stack-heavy functions, supplement with `ConstPropAnalysis` to trace the stack slot values.
+**`BssTaintTracker` uses register-level taint only**: stack spills of BSS pointers are not tracked. A function that spills the start/end pointers to the stack before the loop will not be detected. For stack-heavy functions, supplement with `ConstPropAnalysis` to trace the stack slot values.
 
 ---
 
@@ -93,13 +93,13 @@ Run `BssTaintTracker` on stripped kernel binaries where `SemanticSearcher` fails
 |:---|:---|
 | `fn_start` | VA of the candidate decrypt function |
 | `fn_name` | Name of the function (from debug info or `sub_VA`) |
-| `bss_pairs` | `List[Tuple[int, int]]` — `(start_bss_addr, end_bss_addr)` bounds pairs used in loops |
-| `loops` | `List` — detected loop structures in the candidate function |
+| `bss_pairs` | `List[Tuple[int, int]]`: `(start_bss_addr, end_bss_addr)` bounds pairs used in loops |
+| `loops` | `List`: detected loop structures in the candidate function |
 
 ---
 
 ## See also
 
-- [Taint Analysis (x86)](x86.md) — standard x86/x86-64 taint tracker for network-source analysis
-- [Cross-Binary Taint](cross-library-analysis.md) — extends BSS tracking across library boundaries
-- [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext` providing BSS section bounds for BSS address range detection
+- [Taint Analysis (x86)](x86.md): standard x86/x86-64 taint tracker for network-source analysis
+- [Cross-Binary Taint](cross-library-analysis.md): extends BSS tracking across library boundaries
+- [Persistent Analysis Context](persistent-analysis-context.md): `BinaryContext` providing BSS section bounds for BSS address range detection

@@ -1,16 +1,16 @@
 # TLS Policy Checks
 
-Probe TLS policy enforcement — HSTS header presence and max-age, HTTP→HTTPS redirect behavior, mTLS enforcement, HPKP/certificate pinning bypass surfaces, Certificate Transparency SCT presence, ACME challenge endpoint exposure, and zero-trust proxy SSL inspection bypass — via `modules/tls_enum.py`.
+Probe TLS policy enforcement: HSTS header presence and max-age, HTTP→HTTPS redirect behavior, mTLS enforcement, HPKP/certificate pinning bypass surfaces, Certificate Transparency SCT presence, ACME challenge endpoint exposure, and zero-trust proxy SSL inspection bypass: via `modules/tls_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **mTLS enforcement is often misconfigured at the path level** — `probe_mtls_enforcement()` tests whether the server requires a client certificate by attempting an unauthenticated TLS connection (no client certificate). A successful HTTP response without a client certificate means mTLS is not enforced, even if the endpoint is documented as mTLS-protected. The check sends the connection to both the root path and well-known API paths.
+1. **mTLS enforcement is often misconfigured at the path level**: `probe_mtls_enforcement()` tests whether the server requires a client certificate by attempting an unauthenticated TLS connection (no client certificate). A successful HTTP response without a client certificate means mTLS is not enforced, even if the endpoint is documented as mTLS-protected. The check sends the connection to both the root path and well-known API paths.
 
-2. **ACME challenge endpoint exposure** — `probe_acme_endpoint_exposure()` checks whether `/.well-known/acme-challenge/` is accessible from the external network. If so, an attacker who controls a DNS response can redirect the ACME validation request to issue a fraudulent certificate for the target domain. This check is relevant for any service that uses ACME (Let's Encrypt, ZeroSSL) for certificate provisioning.
+2. **ACME challenge endpoint exposure**: `probe_acme_endpoint_exposure()` checks whether `/.well-known/acme-challenge/` is accessible from the external network. If so, an attacker who controls a DNS response can redirect the ACME validation request to issue a fraudulent certificate for the target domain. This check is relevant for any service that uses ACME (Let's Encrypt, ZeroSSL) for certificate provisioning.
 
-3. **`probe_zero_trust_bypass_surface()` and `probe_cloud_proxy_ssl_inspection_bypass()`** test whether TLS inspection proxies introduce certificate chain substitution — a common zero-trust deployment pattern that breaks certificate pinning and introduces a trust path the client did not consent to. These checks detect the proxy's CA certificate in the chain and compare it against a list of known corporate root CA signatures.
+3. **`probe_zero_trust_bypass_surface()` and `probe_cloud_proxy_ssl_inspection_bypass()`** test whether TLS inspection proxies introduce certificate chain substitution: a common zero-trust deployment pattern that breaks certificate pinning and introduces a trust path the client did not consent to. These checks detect the proxy's CA certificate in the chain and compare it against a list of known corporate root CA signatures.
 
 ---
 
@@ -64,9 +64,9 @@ tls_enum: api.target.example.com
 
 ## False positives
 
-**`probe_mtls_enforcement()` false negatives at the load balancer** — some deployments terminate mTLS at a load balancer that is not the host being probed. An unauthenticated connection to the load balancer may succeed while mTLS is enforced at the backend. Always verify mTLS enforcement at the backend service layer, not only at the first TLS termination point.
+**`probe_mtls_enforcement()` false negatives at the load balancer**: some deployments terminate mTLS at a load balancer that is not the host being probed. An unauthenticated connection to the load balancer may succeed while mTLS is enforced at the backend. Always verify mTLS enforcement at the backend service layer, not only at the first TLS termination point.
 
-**ACME challenge path exposure is context-dependent** — ACME challenge path accessibility is expected for domain validation services; it is a finding only for services where the domain should not be accessible to ACME validation (internal-only services, services behind a WAF that should block public ACME traffic).
+**ACME challenge path exposure is context-dependent**: ACME challenge path accessibility is expected for domain validation services; it is a finding only for services where the domain should not be accessible to ACME validation (internal-only services, services behind a WAF that should block public ACME traffic).
 
 ---
 
@@ -92,5 +92,5 @@ TLS policy probe functions return `List[{severity, title, detail, host, port}]`:
 
 ## See also
 
-- [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md) — `TLSAnalyzer`/`CipherSuiteProber` for certificate and cipher analysis
-- [RSA/ECDSA and Randomness Checks](rsa-ecdsa-and-randomness-checks.md) — key material analysis for TLS certificates
+- [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md): `TLSAnalyzer`/`CipherSuiteProber` for certificate and cipher analysis
+- [RSA/ECDSA and Randomness Checks](rsa-ecdsa-and-randomness-checks.md): key material analysis for TLS certificates

@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `Path.stat().st_size` guard befo
 
 ## How it works
 
-`scan(binary_path, text_start, text_size)` reads the binary with a 256 MB size guard, then walks the `.text` range in 4-byte steps. For each word it checks for `STR Xt, [Xn, #imm]` and `STUR Xt, [Xn, #simm]` instructions. For each write, it back-traces the register's SSE (Symbolic Stack Expression) state: `ADRP + ADD/LDR` sequences that resolve to a known GOT slot map the write to a named global symbol. Writes to unknown registers record the raw SSE. Returns `List[WriteRecord]` — one per global variable write site. `report(records)` groups writes by symbol name and prints them.
+`scan(binary_path, text_start, text_size)` reads the binary with a 256 MB size guard, then walks the `.text` range in 4-byte steps. For each word it checks for `STR Xt, [Xn, #imm]` and `STUR Xt, [Xn, #simm]` instructions. For each write, it back-traces the register's SSE (Symbolic Stack Expression) state: `ADRP + ADD/LDR` sequences that resolve to a known GOT slot map the write to a named global symbol. Writes to unknown registers record the raw SSE. Returns `List[WriteRecord]`: one per global variable write site. `report(records)` groups writes by symbol name and prints them.
 
 ---
 
@@ -61,7 +61,7 @@ GLOBAL: __mmtls_ctx  (3 writes)
 
 ## False positives
 
-**Missing ARM64 STR patterns.** `scan()` looks for `STR Xt, [Xn, #imm]` and `STUR Xt, [Xn, #simm]` only. Writes through indirect memory (`str x0, [x1, x2]`) or via `STP` instructions are not emitted as `WriteRecord`s. In optimized ARM64 code, compilers sometimes use `STP` to write two consecutive fields in one instruction — those writes are currently missed.
+**Missing ARM64 STR patterns.** `scan()` looks for `STR Xt, [Xn, #imm]` and `STUR Xt, [Xn, #simm]` only. Writes through indirect memory (`str x0, [x1, x2]`) or via `STP` instructions are not emitted as `WriteRecord`s. In optimized ARM64 code, compilers sometimes use `STP` to write two consecutive fields in one instruction: those writes are currently missed.
 
 ---
 
@@ -69,7 +69,7 @@ GLOBAL: __mmtls_ctx  (3 writes)
 
 **Before this module:** Identify which BSS/data symbols are of interest (e.g., from `SemanticSearcher` or a string xref scan). Pass the binary path and `.text` range to `scan()`.
 
-**After this module:** Inspect `WriteRecord.base_sse` for each hit. `Global(name)` entries confirm writes to known globals. `Unknown` entries point to writes whose base register could not be resolved — investigate those manually with `TaintTracker`.
+**After this module:** Inspect `WriteRecord.base_sse` for each hit. `Global(name)` entries confirm writes to known globals. `Unknown` entries point to writes whose base register could not be resolved: investigate those manually with `TaintTracker`.
 
 ---
 
@@ -90,6 +90,6 @@ The slicer returns a list of `WriteRecord` objects per target global symbol.
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

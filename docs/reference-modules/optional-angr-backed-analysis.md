@@ -1,16 +1,16 @@
 # Dynamic Sandbox (Unicorn-Backed Probing)
 
-Execute leaf functions with controlled register inputs using Unicorn — capturing output register state as behavioral evidence for hypothesis validation, with safety constraints preventing access to external calls, PLT stubs, and system calls.
+Execute leaf functions with controlled register inputs using Unicorn: capturing output register state as behavioral evidence for hypothesis validation, with safety constraints preventing access to external calls, PLT stubs, and system calls.
 
 ---
 
 ## Why this exists
 
-1. **Static analysis can identify that a function transforms input in some way but cannot determine the exact transformation without running the code.** `DynamicSandbox` executes a leaf function with controlled inputs and captures the output register state, providing ground-truth behavioral evidence: `sandbox.probe(va, inputs={'x0': 0x41414141})` returns `{'x0': 0x12345678}` — the actual output value, not an approximation.
+1. **Static analysis can identify that a function transforms input in some way but cannot determine the exact transformation without running the code.** `DynamicSandbox` executes a leaf function with controlled inputs and captures the output register state, providing ground-truth behavioral evidence: `sandbox.probe(va, inputs={'x0': 0x41414141})` returns `{'x0': 0x12345678}`: the actual output value, not an approximation.
 
-2. **Safety constraints make sandbox execution reliable on unknown firmware code.** The sandbox only executes "leaf functions" (no external calls, verified by `LeafFunctionChecker`) and aborts immediately if execution reaches a PLT stub (mapped to an abort-hook region). A hard instruction-count timeout (default 100,000 instructions) prevents infinite loops. Snapshot/restore keeps binary memory clean between probes — each probe starts from an identical memory state.
+2. **Safety constraints make sandbox execution reliable on unknown firmware code.** The sandbox only executes "leaf functions" (no external calls, verified by `LeafFunctionChecker`) and aborts immediately if execution reaches a PLT stub (mapped to an abort-hook region). A hard instruction-count timeout (default 100,000 instructions) prevents infinite loops. Snapshot/restore keeps binary memory clean between probes: each probe starts from an identical memory state.
 
-3. **Architecture support is arm64 and x86_64** — the two primary firmware architectures for Ablation's main targets. LoongArch64 and MIPS64 stubs exist for future support but do not execute code. `DynamicSandbox` is described as "Phase 3" in the hypothesis engine plan, complementing static Phase 1 (taint) and Phase 2 (semantic) analysis.
+3. **Architecture support is arm64 and x86_64**: the two primary firmware architectures for Ablation's main targets. LoongArch64 and MIPS64 stubs exist for future support but do not execute code. `DynamicSandbox` is described as "Phase 3" in the hypothesis engine plan, complementing static Phase 1 (taint) and Phase 2 (semantic) analysis.
 
 ---
 
@@ -82,15 +82,15 @@ probe(0x12340, x0=0x41414141, x1=0x42424242):
 
 ## False positives
 
-**`is_leaf()` may classify a function as a leaf when it contains indirect calls through function pointers** — if a function pointer load is not recognized as a call by `LeafFunctionChecker`, the function may attempt to execute through an uninitialized pointer in the sandbox, causing a fault. The sandbox's fault abort prevents hanging but may miss real behavior.
+**`is_leaf()` may classify a function as a leaf when it contains indirect calls through function pointers**: if a function pointer load is not recognized as a call by `LeafFunctionChecker`, the function may attempt to execute through an uninitialized pointer in the sandbox, causing a fault. The sandbox's fault abort prevents hanging but may miss real behavior.
 
-**Sandbox results reflect the function's behavior for one specific set of inputs** — a function with conditional behavior based on input values may produce different output register values for different inputs. Use multiple probes with varied inputs to characterize the function's full behavioral signature.
+**Sandbox results reflect the function's behavior for one specific set of inputs**: a function with conditional behavior based on input values may produce different output register values for different inputs. Use multiple probes with varied inputs to characterize the function's full behavioral signature.
 
 ---
 
 ## Pipeline position
 
-Run `DynamicSandbox` as Phase 3 in the hypothesis validation pipeline — after static taint (Phase 1) and semantic search (Phase 2) have identified a suspicious leaf function. Sandbox probing provides ground-truth behavioral evidence before committing to PoC development time.
+Run `DynamicSandbox` as Phase 3 in the hypothesis validation pipeline: after static taint (Phase 1) and semantic search (Phase 2) have identified a suspicious leaf function. Sandbox probing provides ground-truth behavioral evidence before committing to PoC development time.
 
 ---
 
@@ -101,21 +101,21 @@ Run `DynamicSandbox` as Phase 3 in the hypothesis validation pipeline — after 
 | Attribute | Content |
 |:---|:---|
 | `va` | VA of the probed function |
-| `input_regs` | `Dict[str, int]` — register values used as inputs |
-| `output_regs` | `Dict[str, int]` — register values on return |
-| `return_value` | `Optional[int]` — return register value, or `None` |
+| `input_regs` | `Dict[str, int]`: register values used as inputs |
+| `output_regs` | `Dict[str, int]`: register values on return |
+| `return_value` | `Optional[int]`: return register value, or `None` |
 | `executed_insns` | Number of instructions executed |
-| `memory_writes` | `List[tuple]` — `(address, size, value_bytes)` tuples for each memory write |
+| `memory_writes` | `List[tuple]`: `(address, size, value_bytes)` tuples for each memory write |
 | `aborted` | `True` if execution was cut short |
 | `abort_reason` | Reason string if aborted, empty otherwise |
 | `arch` | Architecture string (default `'arm64'`) |
 
-`LeafFunctionChecker.is_leaf(va, ctx=None)` returns `True` if the function at `va` makes no external (PLT) calls — use this to identify safe probe candidates before running `DynamicSandbox`.
+`LeafFunctionChecker.is_leaf(va, ctx=None)` returns `True` if the function at `va` makes no external (PLT) calls: use this to identify safe probe candidates before running `DynamicSandbox`.
 
 ---
 
 ## See also
 
-- [Evidence Scoring and Probe Ranking](evidence-scoring-and-probe-ranking.md) — `ProbeRanker` that includes sandbox probing as a ranked probe type
-- [Assisted Vulnerability Hypotheses](assisted-vulnerability-hypotheses.md) — Phase 2 static analysis that identifies sandbox candidates
-- [ARM64 Symbolic Slicing](arm64-symbolic-slicing.md) — Phase 1 taint analysis complementing sandbox probing
+- [Evidence Scoring and Probe Ranking](evidence-scoring-and-probe-ranking.md): `ProbeRanker` that includes sandbox probing as a ranked probe type
+- [Assisted Vulnerability Hypotheses](assisted-vulnerability-hypotheses.md): Phase 2 static analysis that identifies sandbox candidates
+- [ARM64 Symbolic Slicing](arm64-symbolic-slicing.md): Phase 1 taint analysis complementing sandbox probing

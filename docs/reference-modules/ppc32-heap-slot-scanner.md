@@ -67,7 +67,7 @@ Gate: **PASSED** (2 INFO findings).
 
 ## How it works
 
-`PPC32HeapSlotScanner.scan(func_va)` detects the PPC32 heap slot overflow pattern: a buffer allocated as `N × slot_size` via `mulli` (multiply-low-immediate), then each slot filled by `strcpy` or `strcat` with no per-slot bounds check between the allocation size and the copy. PPC32 `mulli rt, ra, imm` multiplies a register by an immediate — typical compiler output for `malloc(count * sizeof(slot))`. The scanner walks the basic block containing the `mulli`, then forward-traces to all `bl strcpy` / `bl strcat` call sites.
+`PPC32HeapSlotScanner.scan(func_va)` detects the PPC32 heap slot overflow pattern: a buffer allocated as `N × slot_size` via `mulli` (multiply-low-immediate), then each slot filled by `strcpy` or `strcat` with no per-slot bounds check between the allocation size and the copy. PPC32 `mulli rt, ra, imm` multiplies a register by an immediate: typical compiler output for `malloc(count * sizeof(slot))`. The scanner walks the basic block containing the `mulli`, then forward-traces to all `bl strcpy` / `bl strcat` call sites.
 
 ---
 
@@ -84,7 +84,7 @@ PPC32HeapSlotScanner: 2 candidate(s)
 
 ## False positives
 
-**Compiler-split mulli.** Some compilers emit `mulli` for unrelated multiplications (e.g., array index computations) that are not slot allocation patterns. Filter results by checking that the `mulli_va` is immediately followed by a `bl malloc` or `bl calloc` within 4–8 instructions.
+**Compiler-split mulli.** Some compilers emit `mulli` for unrelated multiplications for example array index computations that are not slot allocation patterns. Filter results by checking that the `mulli_va` is immediately followed by a `bl malloc` or `bl calloc` within 4–8 instructions.
 
 ---
 
@@ -92,7 +92,7 @@ PPC32HeapSlotScanner: 2 candidate(s)
 
 **Before this module:** Run `PPC32TaintTracker` to identify `CALL_ARG` sinks at `strcpy`/`strcat`. Use those function VAs as starting points.
 
-**After this module:** Escalate `has_size_check=False` results to manual verification — confirm that the allocated slot count and the per-slot copy are in the same function.
+**After this module:** Escalate `has_size_check=False` results to manual verification: confirm that the allocated slot count and the per-slot copy are in the same function.
 
 ---
 
@@ -105,18 +105,18 @@ PPC32HeapSlotScanner: 2 candidate(s)
 | `func_name` | Name of the enclosing function (if resolved) |
 | `func_va` | Function start VA |
 | `mulli_va` | VA of the `mulli` instruction computing `slot_size × count` |
-| `slot_size` | Bytes per slot — the multiplier operand in `mulli` |
+| `slot_size` | Bytes per slot: the multiplier operand in `mulli` |
 | `malloc_va` | VA of the `bl malloc` call |
 | `strcpy_va` | VA of the `bl strcpy` (or equivalent copy) call |
 | `strcpy_target` | Resolved callee name at `strcpy_va` |
 | `has_size_check` | `True` if a `cmpwi`/`cmplwi` was found between `malloc` and `strcpy` |
-| `mulli_bytes` | Raw bytes at `mulli_va` — for byte-level verification |
-| `strcpy_bytes` | Raw bytes at `strcpy_va` — for byte-level verification |
+| `mulli_bytes` | Raw bytes at `mulli_va`: for byte-level verification |
+| `strcpy_bytes` | Raw bytes at `strcpy_va`: for byte-level verification |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

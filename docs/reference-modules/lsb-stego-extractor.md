@@ -107,7 +107,7 @@ Key material recovered: per-session encryption keys stored in BMP assets bundled
 
 ## Pipeline position
 
-**Before:** Extract the pixel data from the image (e.g., decode a PNG to raw RGB bytes).
+**Before:** Extract the pixel data from the image for example decode a PNG to raw RGB bytes.
 
 **After:** Feed the decoded covert payload to the appropriate decoder for the expected format.
 
@@ -123,7 +123,7 @@ Key material recovered: per-session encryption keys stored in BMP assets bundled
 | `type_count` | Number of distinct component types extracted |
 | `n_groups` | Number of coordinate groups |
 | `n_pts` | Total number of points read |
-| `components` | `List[str]` — each component as a hex string |
+| `components` | `List[str]`: each component as a hex string |
 | `raw_key_hex` | Hex string of all components concatenated |
 
 Use `result.fmt()` for a human-readable multi-line summary including per-component hex excerpts.
@@ -132,8 +132,8 @@ Use `result.fmt()` for a human-readable multi-line summary including per-compone
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

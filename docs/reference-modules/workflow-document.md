@@ -306,7 +306,7 @@ See `stage-commitment.md` for the full API.
 
 ## How it works
 
-`WorkflowDocument` holds an ordered list of `Stage` objects. `_current_index` tracks which stage is active. `advance(instance)` calls `_validate_instance()` to check required fields and property types against the current stage's schema. On success it stamps the instance into `stage.instance`, marks `committed=True`, records a `StageTransition` in `self.log` for each routing target, and increments `_current_index`. `validate()` runs the same check without advancing — useful for pre-flight before committing a stage. `dirty_since_commit()` detects out-of-band writes by re-hashing all committed instances and comparing to cached values set at `advance()` time.
+`WorkflowDocument` holds an ordered list of `Stage` objects. `_current_index` tracks which stage is active. `advance(instance)` calls `_validate_instance()` to check required fields and property types against the current stage's schema. On success it stamps the instance into `stage.instance`, marks `committed=True`, records a `StageTransition` in `self.log` for each routing target, and increments `_current_index`. `validate()` runs the same check without advancing: useful for pre-flight before committing a stage. `dirty_since_commit()` detects out-of-band writes by re-hashing all committed instances and comparing to cached values set at `advance()` time.
 
 ---
 
@@ -355,7 +355,7 @@ WorkflowDocument id='cisco/fmc_server'
 
 ## False positives
 
-`WorkflowDocument` does not emit security findings. The most common operational error is calling `advance()` with an instance that fails schema validation — this raises `ValueError` with the validation error list. Call `validate(stage_name, instance)` first to pre-check without advancing, then fix any reported errors before calling `advance()`.
+`WorkflowDocument` does not emit security findings. The most common operational error is calling `advance()` with an instance that fails schema validation, this raises `ValueError` with the validation error list. Call `validate(stage_name, instance)` first to pre-check without advancing, then fix any reported errors before calling `advance()`.
 
 ---
 
@@ -369,22 +369,22 @@ WorkflowDocument id='cisco/fmc_server'
 
 ## Reading output
 
-`WorkflowDocument.stages` is a `list[Stage]` — ordered pipeline stages:
+`WorkflowDocument.stages` is a `list[Stage]`: ordered pipeline stages:
 
 | Attribute | Content |
 |:---|:---|
 | `name` | Stage name string |
-| `schema` | `dict` — schema with `"required"` list and `"properties"` type map |
-| `instance` | `dict` — stage output data, populated by `advance()` |
-| `routing` | `list[str]` — downstream stage names to activate next |
+| `schema` | `dict`: schema with `"required"` list and `"properties"` type map |
+| `instance` | `dict`: stage output data, populated by `advance()` |
+| `routing` | `list[str]`: downstream stage names to activate next |
 | `committed` | `True` if `advance()` has been called for this stage |
 
-`WorkflowDocument.log` is a `list[StageTransition]` — pipeline advancement history.
+`WorkflowDocument.log` is a `list[StageTransition]`: pipeline advancement history.
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

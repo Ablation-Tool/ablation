@@ -12,7 +12,7 @@ Covers `.exe`, `.dll`, `.ocx`, and `.ax` files compiled for x86-32 or x86-64.
 
 Three gaps made PE binary analysis slower before this sweep:
 
-1. **`fortinet_sweep.py` is ELF-only.** The base sweep resolves function calls through the ELF PLT and uses ELF section headers to locate `.rodata`. Applying it to a PE binary produces zero call resolutions — PE uses the Import Address Table (IAT) and `.rdata` for both imports and string constants, which ELF parsers do not read.
+1. **`fortinet_sweep.py` is ELF-only.** The base sweep resolves function calls through the ELF PLT and uses ELF section headers to locate `.rodata`. Applying it to a PE binary produces zero call resolutions: PE uses the Import Address Table (IAT) and `.rdata` for both imports and string constants, which ELF parsers do not read.
 
 2. **x86-32 and AMD64 PE binaries use distinct calling conventions that must be handled separately.** i386 PE binaries encode IAT calls as `CALL dword ptr [abs_addr]` and string references as `PUSH imm32`. AMD64 PE binaries use `CALL qword ptr [rip+offset]` and `LEA reg, [rip+offset]`. A single code path cannot handle both correctly. `pe_sweep.py` detects the machine type (`IMAGE_FILE_MACHINE_I386` vs `IMAGE_FILE_MACHINE_AMD64`) and routes to the correct resolution path.
 
@@ -211,7 +211,7 @@ Two things were not possible before in Ablation:
 
 ## How it works
 
-`sweep_directory_pe(directory, model, profiles, top_k)` scans a directory for PE files, loads each with `BinaryContext.load_or_build()`, and runs a configurable set of analysis profiles (SAC, taint, firmware-auth-bypass) across all PE files in parallel. Results are returned as `List[dict]` — one dict per PE file. Uses `SemanticSearcher` and `SinkArgClassifier` internally; not a standalone analysis primitive.
+`sweep_directory_pe(directory, model, profiles, top_k)` scans a directory for PE files, loads each with `BinaryContext.load_or_build()`, and runs a configurable set of analysis profiles (SAC, taint, firmware-auth-bypass) across all PE files in parallel. Results are returned as `List[dict]`: one dict per PE file. Uses `SemanticSearcher` and `SinkArgClassifier` internally; not a standalone analysis primitive.
 
 ---
 
@@ -246,14 +246,14 @@ Sweep results inherit false-positive rates of each individual analysis module. R
 
 ## Reading output
 
-`sweep_directory_pe(directory, model, profiles, top_k)` returns `List[dict]` — one dict per analyzed PE file. The `FirmwareAuthBypassFinding` TypedDict (embedded in each result's `firmware_auth_bypass` key) has these fields:
+`sweep_directory_pe(directory, model, profiles, top_k)` returns `List[dict]`: one dict per analyzed PE file. The `FirmwareAuthBypassFinding` TypedDict (embedded in each result's `firmware_auth_bypass` key) has these fields:
 
 | Field | Content |
 |:---|:---|
 | `id` | Finding identifier string (e.g., `'GAP-015'`) |
 | `title` | Short finding title |
 | `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'INFO'` |
-| `evidence` | `List[str]` — IAT names or import strings that triggered the finding |
+| `evidence` | `List[str]`: IAT names or import strings that triggered the finding |
 | `note` | Human-readable explanation |
 
 Each result dict also contains `binary`, `arch`, `findings` (top-k semantic matches), `firmware_iat`, and `signing_iat` keys.
@@ -262,8 +262,8 @@ Each result dict also contains `binary`, `arch`, `findings` (top-k semantic matc
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

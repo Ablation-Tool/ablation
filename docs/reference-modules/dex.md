@@ -1,14 +1,14 @@
 # Android DEX Security Analysis
 
-Scan Android APK packages for hardcoded secrets, dangerous API invocations, cryptographic misuse, cleartext network endpoints, exported attack surface, and dangerous permission combinations — without external dependencies, using ablation's native DEX and AXML parsers.
+Scan Android APK packages for hardcoded secrets, dangerous API invocations, cryptographic misuse, cleartext network endpoints, exported attack surface, and dangerous permission combinations: without external dependencies, using ablation's native DEX and AXML parsers.
 
 ---
 
 ## Why this exists
 
-1. **Static analysis of Android APKs requires parsing two distinct binary formats simultaneously: Dalvik Executable (DEX) for bytecode and strings, and Android Binary XML (AXML) for manifest permissions and component declarations.** Tools that use only dexdump or apktool miss the cross-format findings — a `READ_CONTACTS` + `INTERNET` permission combination that feeds into a hardcoded C2 URL requires correlating manifest data with DEX string literals. `DexAnalyzer._scan_manifest()` and `_scan_dex_strings()` run together on the same `APKParser` instance so cross-format signals are always in scope.
+1. **Static analysis of Android APKs requires parsing two distinct binary formats simultaneously: Dalvik Executable (DEX) for bytecode and strings, and Android Binary XML (AXML) for manifest permissions and component declarations.** Tools that use only dexdump or apktool miss the cross-format findings: a `READ_CONTACTS` + `INTERNET` permission combination that feeds into a hardcoded C2 URL requires correlating manifest data with DEX string literals. `DexAnalyzer._scan_manifest()` and `_scan_dex_strings()` run together on the same `APKParser` instance so cross-format signals are always in scope.
 
-2. **Dangerous API detection must distinguish between intentional security mechanisms and misuse — `Cipher.getInstance("AES")` is not a finding by itself; `Cipher.getInstance("AES/ECB/NoPadding")` is.** `CRYPTO_PATTERNS` maps full method-reference strings (`Ljavax/crypto/Cipher;->getInstance(Ljava/lang/String;)`) to severity labels, so method-level precision is preserved. `DANGEROUS_API_PATTERNS` covers reflection (`Class.forName`, `Method.invoke`), subprocess execution (`Runtime.getRuntime`, `ProcessBuilder`), and dynamic code loading (`DexClassLoader`, `PathClassLoader`) with class + method-reference matching that is not fooled by package obfuscation that preserves method names.
+2. **Dangerous API detection must distinguish between intentional security mechanisms and misuse: `Cipher.getInstance("AES")` is not a finding by itself; `Cipher.getInstance("AES/ECB/NoPadding")` is.** `CRYPTO_PATTERNS` maps full method-reference strings (`Ljavax/crypto/Cipher;->getInstance(Ljava/lang/String;)`) to severity labels, so method-level precision is preserved. `DANGEROUS_API_PATTERNS` covers reflection (`Class.forName`, `Method.invoke`), subprocess execution (`Runtime.getRuntime`, `ProcessBuilder`), and dynamic code loading (`DexClassLoader`, `PathClassLoader`) with class + method-reference matching that is not fooled by package obfuscation that preserves method names.
 
 3. **Hardcoded secret detection without false positives requires entropy-gated pattern matching, not just keyword presence.** A string containing `api_key` in its literal value is only a finding when the value portion also has sufficient entropy. `_scan_dex_strings()` applies Shannon entropy pre-screening before reporting, reducing noise from help-text strings that mention "API key" in documentation comments while ensuring 32-char hex secrets and base64-encoded tokens are flagged regardless of their surrounding variable name.
 
@@ -111,17 +111,17 @@ MEDIUM (2)
 
 ## False positives
 
-**`HARDCODED_SECRET` fires on any high-entropy string matching a key pattern — including test fixture values and build-time-injected constants that are not real credentials.** Debug builds frequently embed test API keys with real entropy. Cross-reference `HARDCODED_SECRET` findings against the class name: strings in classes ending with `Test`, `Mock`, or `Fixture` are unlikely production secrets. Also check whether the string appears only in `static final` constants initialized to known-bad test values from a test library.
+**`HARDCODED_SECRET` fires on any high-entropy string matching a key pattern: including test fixture values and build-time-injected constants that are not real credentials.** Debug builds frequently embed test API keys with real entropy. Cross-reference `HARDCODED_SECRET` findings against the class name: strings in classes ending with `Test`, `Mock`, or `Fixture` are unlikely production secrets. Also check whether the string appears only in `static final` constants initialized to known-bad test values from a test library.
 
-**`EXPORTED_COMPONENT` fires on any exported component with no `permission=` attribute — but deep links and intent filters legitimately require exported components.** Android deep link receivers (handling `android:scheme=` URIs) and system broadcast receivers (ACTION_BOOT_COMPLETED, etc.) must be exported. Confirm that the exported component handles only deep-link intents and does not expose internal data or privileged operations before escalating to HIGH.
+**`EXPORTED_COMPONENT` fires on any exported component with no `permission=` attribute, but deep links and intent filters legitimately require exported components.** Android deep link receivers (handling `android:scheme=` URIs) and system broadcast receivers (ACTION_BOOT_COMPLETED, etc.) must be exported. Confirm that the exported component handles only deep-link intents and does not expose internal data or privileged operations before escalating to HIGH.
 
-**`REFLECTION` fires on any `Class.forName` or `Method.invoke` reference — but this includes standard Java serialization, dependency injection frameworks (Dagger, Hilt), and annotation processors.** The finding is present because reflection enables dynamic code execution that bypasses static taint analysis. Filter by class path: reflection in `com.google.inject`, `dagger`, `javax.annotation` packages is framework boilerplate; reflection in application-layer classes (company package names) warrants investigation.
+**`REFLECTION` fires on any `Class.forName` or `Method.invoke` reference, but this includes standard Java serialization, dependency injection frameworks (Dagger, Hilt), and annotation processors.** The finding is present because reflection enables dynamic code execution that bypasses static taint analysis. Filter by class path: reflection in `com.google.inject`, `dagger`, `javax.annotation` packages is framework boilerplate; reflection in application-layer classes (company package names) warrants investigation.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Unzip the APK to confirm it is a valid ZIP archive with `classes.dex` and `AndroidManifest.xml` entries. Multi-dex APKs have `classes2.dex`, `classes3.dex`, etc. — `APKParser.iter_dex()` handles all of them automatically.
+**Before this module:** Unzip the APK to confirm it is a valid ZIP archive with `classes.dex` and `AndroidManifest.xml` entries. Multi-dex APKs have `classes2.dex`, `classes3.dex`, etc.: `APKParser.iter_dex()` handles all of them automatically.
 
 **After this module:** For `DYNAMIC_CODE_LOAD` findings: extract the DEX path passed to `DexClassLoader` from the string constants near the call site, and re-run `DexAnalyzer` on the dynamically loaded DEX if it is accessible (common in sideloaded apps that download plugins). For `EXPORTED_COMPONENT` findings: trace intent-filter data tags to understand what URI parameters the component accepts, then test with `adb shell am start -n <component> -d <uri>` to confirm exposed functionality.
 
@@ -141,6 +141,6 @@ MEDIUM (2)
 
 ## See also
 
-- [DEX Disassembly and Lifting](dex-disassembly-and-lifting.md) — bytecode-level DEX instruction disassembly and lifting to IR
-- [Android](android.md) — full Android RE pipeline: APK, native library (JNI), Binder surface
-- [Android Binder Surface](android-binder-surface.md) — Binder IPC attack surface analysis
+- [DEX Disassembly and Lifting](dex-disassembly-and-lifting.md): bytecode-level DEX instruction disassembly and lifting to IR
+- [Android](android.md): full Android RE pipeline: APK, native library (JNI), Binder surface
+- [Android Binder Surface](android-binder-surface.md): Binder IPC attack surface analysis

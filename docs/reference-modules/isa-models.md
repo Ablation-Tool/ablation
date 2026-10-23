@@ -20,7 +20,7 @@ Per-architecture ISA constant tables and ABI models used internally by instructi
 |:---|:---|:---|:---|
 | `isa_arc.py` | Synopsys DesignWare ARC EM / ARC HS | `Mode.EM`, `Mode.HS` | ARC GNU 32-bit |
 | `isa_arm32.py` | ARM A32 + Thumb-2 (T32) | `Mode.ARM`, `Mode.THUMB` | AAPCS32 |
-| `isa_arm64.py` | AArch64 | — | AAPCS64 |
+| `isa_arm64.py` | AArch64 |: | AAPCS64 |
 | `isa_ppc.py` | PowerPC 32-bit + 64-bit | `Mode.PPC32`, `Mode.PPC64` | SysV32, ELFv1, ELFv2 |
 
 ---
@@ -93,6 +93,6 @@ Thumb state (T32): PC reads as instruction_address + 4; literal loads use Align(
 
 ## See also
 
-- [Insn Models](insn-models.md) — instruction representation layer that imports these ISA models
-- [Analysis Engine](analysis-engine.md) — CFG dataflow engine that uses these ABI constants
-- [Taint Analysis](taint-analysis.md) — taint trackers built on top of these models
+- [Insn Models](insn-models.md): instruction representation layer that imports these ISA models
+- [Analysis Engine](analysis-engine.md): CFG dataflow engine that uses these ABI constants
+- [Taint Analysis](taint-analysis.md): taint trackers built on top of these models

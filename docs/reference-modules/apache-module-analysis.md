@@ -1,16 +1,16 @@
 # Apache Module Analysis
 
-Analyze Apache 2.x C module binaries (`.so`) for authentication bypass surfaces — reconstructing the `ap_hook_handler` call graph, tracing APR table access patterns (Cookie/Authorization header reads), identifying session skip flag accessors, and emitting `AUTH_BYPASS_SURFACE` when a single handler function reads an auth header, decrypts a session, and checks a skip flag.
+Analyze Apache 2.x C module binaries (`.so`) for authentication bypass surfaces: reconstructing the `ap_hook_handler` call graph, tracing APR table access patterns (Cookie/Authorization header reads), identifying session skip flag accessors, and emitting `AUTH_BYPASS_SURFACE` when a single handler function reads an auth header, decrypts a session, and checks a skip flag.
 
 ---
 
 ## Why this exists
 
-1. **FortiAnalyzer ships custom Apache modules that bypass MFA via a session skip flag — and no ablation tool could reconstruct the handler call graph before this module existed.** `mod_extension.so` in FortiAnalyzer v7.6.3 contains a `register_hooks()` function that calls `ap_hook_handler()` to register a request handler. That handler reads the `Cookie` header, calls `session_from_string()` → `decrypt_and_auth()` → `session_get_adminuser_skip()`, and skips MFA if the flag is set. Without a tool that can trace `ap_hook_handler` registration → handler function → APR table reads → skip flag calls, this pattern requires full manual disassembly of the `.text` section.
+1. **FortiAnalyzer ships custom Apache modules that bypass MFA via a session skip flag, and no ablation tool could reconstruct the handler call graph before this module existed.** `mod_extension.so` in FortiAnalyzer v7.6.3 contains a `register_hooks()` function that calls `ap_hook_handler()` to register a request handler. That handler reads the `Cookie` header, calls `session_from_string()` → `decrypt_and_auth()` → `session_get_adminuser_skip()`, and skips MFA if the flag is set. Without a tool that can trace `ap_hook_handler` registration → handler function → APR table reads → skip flag calls, this pattern requires full manual disassembly of the `.text` section.
 
-2. **Standard binary analysis tools miss the Apache hook registration pattern because `register_hooks` is called from Apache's core — not from within the module.** `LIEF` can parse `.so` exports and `.rela.plt` relocations, but it does not know which function pointer is passed to `ap_hook_handler()`. `apache_module_analyzer` disassembles `register_hooks` specifically, tracks the `rdi` argument (handler function pointer on x86-64) immediately before each call to an `ap_hook_*` PLT stub, and follows the identified handler VA into `_analyze_handler()`.
+2. **Standard binary analysis tools miss the Apache hook registration pattern because `register_hooks` is called from Apache's core, not from within the module.** `LIEF` can parse `.so` exports and `.rela.plt` relocations, but it does not know which function pointer is passed to `ap_hook_handler()`. `apache_module_analyzer` disassembles `register_hooks` specifically, tracks the `rdi` argument (handler function pointer on x86-64) immediately before each call to an `ap_hook_*` PLT stub, and follows the identified handler VA into `_analyze_handler()`.
 
-3. **The AUTH_BYPASS_SURFACE composite finding detects the FAZ-CVE22572 / CVE-2026-22572 pattern automatically.** The pattern requires three co-occurring conditions in the same handler function: (1) `apr_table_get(r->headers_in, "Cookie")` — auth header read; (2) `decrypt_and_auth()` or `session_from_string()` — session decrypt; (3) `session_get_adminuser_skip()` or equivalent skip flag accessor. None of these three individually indicates a vulnerability — their co-occurrence in one request handler does. `_analyze_handler()` sets three boolean flags during disassembly and emits `AUTH_BYPASS_SURFACE CRITICAL` if all three are true.
+3. **The AUTH_BYPASS_SURFACE composite finding detects the FAZ-CVE22572 / CVE-2026-22572 pattern automatically.** The pattern requires three co-occurring conditions in the same handler function: (1) `apr_table_get(r->headers_in, "Cookie")`: auth header read; (2) `decrypt_and_auth()` or `session_from_string()`: session decrypt; (3) `session_get_adminuser_skip()` or equivalent skip flag accessor. None of these three individually indicates a vulnerability: their co-occurrence in one request handler does. `_analyze_handler()` sets three boolean flags during disassembly and emits `AUTH_BYPASS_SURFACE CRITICAL` if all three are true.
 
 ---
 
@@ -42,7 +42,7 @@ flowchart TD
 | Class | Severity | CWE | Description |
 |---|---|---|---|
 | `AUTH_BYPASS_SURFACE` | CRITICAL | CWE-287 | Cookie + decrypt + skip flag in one handler |
-| `HANDLER_REGISTRATION` | INFO | — | `ap_hook_*` call + handler function VA |
+| `HANDLER_REGISTRATION` | INFO |: | `ap_hook_*` call + handler function VA |
 | `AUTH_TABLE_ACCESS` | HIGH (auth headers) / MEDIUM (decrypt) | CWE-522 / CWE-287 | `apr_table_get` reading auth-relevant header |
 | `SESSION_SKIP_FLAG` | HIGH | CWE-287 | Skip flag accessor called in handler |
 | `APR_TABLE_WRITE` | MEDIUM | CWE-20 | Auth-relevant table write in handler |
@@ -121,19 +121,19 @@ for f in findings:
 
 ## False positives
 
-**`AUTH_BYPASS_SURFACE` fires when all three flags are set — but the skip flag call may be in a path that is only reached via a legitimate code flow.** The composite check does not verify that the skip flag read is reachable from the Cookie table read within the same control-flow path. A module that reads the Cookie header for logging (one function path) and checks a skip flag in a completely separate conditional (another path) will trigger `AUTH_BYPASS_SURFACE` because both are in the same 4096-byte disassembly window. Confirm with `PathSolver.solve_path()` from the Cookie read to the skip flag check before escalating.
+**`AUTH_BYPASS_SURFACE` fires when all three flags are set, but the skip flag call may be in a path that is only reached via a legitimate code flow.** The composite check does not verify that the skip flag read is reachable from the Cookie table read within the same control-flow path. A module that reads the Cookie header for logging (one function path) and checks a skip flag in a completely separate conditional (another path) will trigger `AUTH_BYPASS_SURFACE` because both are in the same 4096-byte disassembly window. Confirm with `PathSolver.solve_path()` from the Cookie read to the skip flag check before escalating.
 
-**PLT reconstruction fails on modules with a non-standard `.plt` stride.** `_build_plt()` assumes each PLT entry is 16 bytes (`plt_base + i * 16`). Some compilers and linker versions produce 8-byte PLT entries (e.g., ARM THUMB) or use `.plt.sec` for IBT-enabled modules. If `_build_plt()` produces an empty or incorrect `_plt` dict, `_find_register_hooks()` finds no hook calls and falls through to `_scan_text_for_auth_patterns()`. Verify by checking whether the `.rela.plt` section and `.plt` section are both present: `lief.parse(path).get_section('.rela.plt')`.
+**PLT reconstruction fails on modules with a non-standard `.plt` stride.** `_build_plt()` assumes each PLT entry is 16 bytes (`plt_base + i * 16`). Some compilers and linker versions produce 8-byte PLT entries for example ARM THUMB or use `.plt.sec` for IBT-enabled modules. If `_build_plt()` produces an empty or incorrect `_plt` dict, `_find_register_hooks()` finds no hook calls and falls through to `_scan_text_for_auth_patterns()`. Verify by checking whether the `.rela.plt` section and `.plt` section are both present: `lief.parse(path).get_section('.rela.plt')`.
 
-**Handler disassembly stops at 4096 bytes — large handlers are truncated.** `_read_va(handler_va, 4096)` limits disassembly to the first 4096 bytes of each handler. A handler longer than 4096 bytes will have its tail truncated: APR table calls or skip flag accessors after offset 4096 are missed. Check handler size with `FuncProfiler.profile()` before running `apache_module_analyzer` — handlers larger than 4096 bytes require manual capstone disassembly of the full function.
+**Handler disassembly stops at 4096 bytes: large handlers are truncated.** `_read_va(handler_va, 4096)` limits disassembly to the first 4096 bytes of each handler. A handler longer than 4096 bytes will have its tail truncated: APR table calls or skip flag accessors after offset 4096 are missed. Check handler size with `FuncProfiler.profile()` before running `apache_module_analyzer`: handlers larger than 4096 bytes require manual capstone disassembly of the full function.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Run `BinaryContext.load_or_build()` on the `.so` file to build the symbol index. Confirm that `lief` and `capstone` are installed (`import lief; import capstone` — if either is missing, `analyze()` returns `[]` silently). Verify the binary is an Apache module by checking for `ap_hook_handler` or `register_hooks` in the dynamic symbol table: `[s.name for s in lief.parse(path).dynamic_symbols]`.
+**Before this module:** Run `BinaryContext.load_or_build()` on the `.so` file to build the symbol index. Confirm that `lief` and `capstone` are installed (`import lief; import capstone`: if either is missing, `analyze()` returns `[]` silently). Verify the binary is an Apache module by checking for `ap_hook_handler` or `register_hooks` in the dynamic symbol table: `[s.name for s in lief.parse(path).dynamic_symbols]`.
 
-**After this module:** For `AUTH_BYPASS_SURFACE` findings: use `TaintTracker` to trace the Cookie header value through `session_from_string()` → `decrypt_and_auth()` to the skip flag write — confirming that attacker-controlled input from the Cookie header reaches the flag. Check whether the session key (RC4, AES) is retrievable from the binary or from a configuration file before reporting impact. Register the finding with `FindingRegistry.register()` and write to `re/<vendor>/<target>_re.py`.
+**After this module:** For `AUTH_BYPASS_SURFACE` findings: use `TaintTracker` to trace the Cookie header value through `session_from_string()` → `decrypt_and_auth()` to the skip flag write: confirming that attacker-controlled input from the Cookie header reaches the flag. Check whether the session key (RC4, AES) is retrievable from the binary or from a configuration file before reporting impact. Register the finding with `FindingRegistry.register()` and write to `re/<vendor>/<target>_re.py`.
 
 ---
 
@@ -141,18 +141,18 @@ for f in findings:
 
 | Field | Content |
 |:---|:---|
-| `finding_class='AUTH_BYPASS_SURFACE'` | Cookie + decrypt + skip flag co-present in one handler — highest priority finding |
-| `finding_class='HANDLER_REGISTRATION'` | Handler VA confirmed — use this VA as entry point for manual `TaintTracker` analysis |
-| `finding_class='AUTH_TABLE_ACCESS'` | `apr_table_get` key is in `_AUTH_HEADERS` — auth header read confirmed in handler |
+| `finding_class='AUTH_BYPASS_SURFACE'` | Cookie + decrypt + skip flag co-present in one handler: highest priority finding |
+| `finding_class='HANDLER_REGISTRATION'` | Handler VA confirmed: use this VA as entry point for manual `TaintTracker` analysis |
+| `finding_class='AUTH_TABLE_ACCESS'` | `apr_table_get` key is in `_AUTH_HEADERS`: auth header read confirmed in handler |
 | `finding_class='SESSION_SKIP_FLAG'` | Skip flag accessor symbol matched `_SESSION_SKIP_PATTERNS` |
-| `finding.va` | Virtual address of the call instruction — verify with `data[off:off+5]` byte check |
-| `finding.symbol` | PLT symbol name — cross-reference with `ctx.name(va)` |
-| `finding.header` | String key passed to `apr_table_get/set` — `None` if key not resolved from `.rodata` |
+| `finding.va` | Virtual address of the call instruction: verify with `data[off:off+5]` byte check |
+| `finding.symbol` | PLT symbol name: cross-reference with `ctx.name(va)` |
+| `finding.header` | String key passed to `apr_table_get/set`: `None` if key not resolved from `.rodata` |
 
 ---
 
 ## See also
 
-- [API Authorization Checks](api-authorization-checks.md) — HTTP-level authorization probes for the same endpoints this module exposes
-- [Taint Tracking](taint-analysis.md) — trace Cookie header data through decrypt → skip flag write to confirm exploitability
-- [Sink Arg Classifier](sink-arg-classifier.md) — classify call sites in Apache handler functions before running TaintTracker
+- [API Authorization Checks](api-authorization-checks.md): HTTP-level authorization probes for the same endpoints this module exposes
+- [Taint Tracking](taint-analysis.md): trace Cookie header data through decrypt → skip flag write to confirm exploitability
+- [Sink Arg Classifier](sink-arg-classifier.md): classify call sites in Apache handler functions before running TaintTracker

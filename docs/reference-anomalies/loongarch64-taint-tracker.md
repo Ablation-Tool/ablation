@@ -15,7 +15,7 @@ recommended workaround.
 **Description:** 
 `LoongArch64TaintTracker.from_path()` finds function starts from the ELF symbol table and
 `addi.d $sp,$sp,-N` prologues. Stripped binaries with neither `.symtab` nor
-frame-pointer prologues (e.g., leaf functions, tail-call optimised bodies) are not found.
+frame-pointer prologues for example leaf functions, tail-call optimised bodies are not found.
 `from_path_full()` adds `.eh_frame` FDE records, DWARF subprogram entries, and BTF
 `func_info` as additional sources.
 

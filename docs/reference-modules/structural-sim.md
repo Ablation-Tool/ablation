@@ -62,7 +62,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. No file reads. No network I/O. N
 
 ## How it works
 
-`extract_fingerprint()` classifies each instruction's mnemonic into one of 12 categories and records its fraction of the total instruction count as the opcode histogram. Immediate operands ≥ 0x100 are collected into a frozenset; RIP-relative values are excluded because they are position-dependent and change between binary versions. `fingerprint_sim()` computes up to five partial scores — opcode cosine, immediate Jaccard, PLT Jaccard, branch density delta, and size ratio — normalizes the weights based on which signals are available for both fingerprints, and returns a weighted sum in [0.0, 1.0]. `find_structural_orphans()` uses a bucket-based scan: it sorts fingerprints by `n_insns`, then for each function in `fps_b` checks the `bucket_size` nearest-by-size functions in `fps_a`, keeping any pair whose similarity exceeds `threshold`. Functions with no match above threshold are returned as orphans.
+`extract_fingerprint()` classifies each instruction's mnemonic into one of 12 categories and records its fraction of the total instruction count as the opcode histogram. Immediate operands ≥ 0x100 are collected into a frozenset; RIP-relative values are excluded because they are position-dependent and change between binary versions. `fingerprint_sim()` computes up to five partial scores: opcode cosine, immediate Jaccard, PLT Jaccard, branch density delta, and size ratio: normalizes the weights based on which signals are available for both fingerprints, and returns a weighted sum in [0.0, 1.0]. `find_structural_orphans()` uses a bucket-based scan: it sorts fingerprints by `n_insns`, then for each function in `fps_b` checks the `bucket_size` nearest-by-size functions in `fps_a`, keeping any pair whose similarity exceeds `threshold`. Functions with no match above threshold are returned as orphans.
 
 ---
 
@@ -104,9 +104,9 @@ orphans = find_structural_orphans(fps_a=fps_old, fps_b=fps_new, threshold=0.65)
 
 ## False positives
 
-**High similarity score for semantically different functions** — two small wrapper functions (10–15 instructions, no PLT calls, one conditional branch) can produce a similarity score above 0.80 purely from opcode histogram and branch density alignment, even if they have completely different purposes. When using `fingerprint_sim()` to match version-delta candidates, always follow a high-score pair with a semantic check: SemanticSearcher query of both functions or manual disasm comparison.
+**High similarity score for semantically different functions**: two small wrapper functions (10–15 instructions, no PLT calls, one conditional branch) can produce a similarity score above 0.80 purely from opcode histogram and branch density alignment, even if they have completely different purposes. When using `fingerprint_sim()` to match version-delta candidates, always follow a high-score pair with a semantic check: SemanticSearcher query of both functions or manual disasm comparison.
 
-**Orphan detection with too-small `bucket_size`** — `find_structural_orphans()` only compares each function in `fps_b` to `bucket_size` candidates in `fps_a` (the nearest by instruction count). A function that grew significantly between versions may land outside the bucket, producing a false orphan. Increase `bucket_size` (default 10) to 25–50 for binaries with large refactors.
+**Orphan detection with too-small `bucket_size`**: `find_structural_orphans()` only compares each function in `fps_b` to `bucket_size` candidates in `fps_a` (the nearest by instruction count). A function that grew significantly between versions may land outside the bucket, producing a false orphan. Increase `bucket_size` (default 10) to 25–50 for binaries with large refactors.
 
 ---
 
@@ -114,7 +114,7 @@ orphans = find_structural_orphans(fps_a=fps_old, fps_b=fps_new, threshold=0.65)
 
 **Before this module:** `BinaryContext.load_or_build()` for both versions, then `extract_fingerprint()` on the function sets you want to compare. Typically used after `DTWMatcher` identifies candidate homologs for version delta analysis.
 
-**After this module:** High-similarity pairs from `fingerprint_sim()` are candidates for the same function at a different VA. Confirm with `SemanticSearcher` or manual disassembly, then `ctx.set_name()` under the new VA. Orphans from `find_structural_orphans()` are new or heavily changed functions — candidates for taint analysis and finding registration.
+**After this module:** High-similarity pairs from `fingerprint_sim()` are candidates for the same function at a different VA. Confirm with `SemanticSearcher` or manual disassembly, then `ctx.set_name()` under the new VA. Orphans from `find_structural_orphans()` are new or heavily changed functions: candidates for taint analysis and finding registration.
 
 ---
 
@@ -126,17 +126,17 @@ orphans = find_structural_orphans(fps_a=fps_old, fps_b=fps_new, threshold=0.65)
 |:---|:---|
 | `va` | Virtual address of the function |
 | `n_insns` | Total instruction count |
-| `opcode_hist` | `dict` — category → fraction of total instructions (12 categories: DATA/ARITH/BIT/CMP/BRANCH/CALL/RET/FLOAT/SIMD/MEMOP/FRAME/OTHER) |
-| `immediates` | `frozenset[int]` — integer constants ≥ 0x100 from operands (struct offsets, magic bytes, buffer sizes) |
-| `calls` | `list[str]` — PLT-resolved call names |
-| `branch_density` | Float — branch instruction count divided by total instruction count |
+| `opcode_hist` | `dict`: category → fraction of total instructions (12 categories: DATA/ARITH/BIT/CMP/BRANCH/CALL/RET/FLOAT/SIMD/MEMOP/FRAME/OTHER) |
+| `immediates` | `frozenset[int]`: integer constants ≥ 0x100 from operands (struct offsets, magic bytes, buffer sizes) |
+| `calls` | `list[str]`: PLT-resolved call names |
+| `branch_density` | Float: branch instruction count divided by total instruction count |
 
-`fingerprint_sim(fp_a, fp_b)` returns a float in `[0.0, 1.0]` — weighted composite similarity across available signals.
+`fingerprint_sim(fp_a, fp_b)` returns a float in `[0.0, 1.0]`: weighted composite similarity across available signals.
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

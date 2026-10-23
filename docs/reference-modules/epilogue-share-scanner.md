@@ -132,7 +132,7 @@ Automotive flat ROM firmware, GCC-compiled at `-O2`. Any firmware where
 
 ## How it works
 
-`EpilogueShareScanner.from_context(ctx).scan()` iterates `ctx.func_starts` and disassembles each function with Capstone. For every unconditional jump (`JMP`, `JMPF` on x86; `B` on ARM), it checks whether the target VA falls inside another known function's body — i.e., between that function's start VA and the next function's start VA. If so, it records an `EpilogueShareHit`. Tail-call sharing is the most common source: the compiler merges identical epilogue sequences across multiple functions.
+`EpilogueShareScanner.from_context(ctx).scan()` iterates `ctx.func_starts` and disassembles each function with Capstone. For every unconditional jump (`JMP`, `JMPF` on x86; `B` on ARM), it checks whether the target VA falls inside another known function's body: i.e., between that function's start VA and the next function's start VA. If so, it records an `EpilogueShareHit`. Tail-call sharing is the most common source: the compiler merges identical epilogue sequences across multiple functions.
 
 ---
 
@@ -181,8 +181,8 @@ After scanning, all `target_va` values are added to `ctx.shared_epilogues` so th
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

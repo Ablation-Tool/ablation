@@ -6,11 +6,11 @@ Path-insensitive, flow-sensitive dataflow analysis over architecture-specific CF
 
 ## Why this exists
 
-1. **Taint trackers and CFG builders are separate layers that need a coordinator.** `cfg_arc` builds the CFG from instruction stream; `taint_tracker_arc_labeled` propagates taint state. Without an analysis engine to run the MFP (meet over all paths) worklist iteration, callers would have to implement the fixed-point loop themselves — and get the loop-head handling wrong.
+1. **Taint trackers and CFG builders are separate layers that need a coordinator.** `cfg_arc` builds the CFG from instruction stream; `taint_tracker_arc_labeled` propagates taint state. Without an analysis engine to run the MFP (meet over all paths) worklist iteration, callers would have to implement the fixed-point loop themselves, and get the loop-head handling wrong.
 
 2. **Loop heads need special treatment.** Naive worklist iteration over cyclic CFGs may not converge if loop-back edges re-inject tainted state at loop heads without a convergence check. `analyze_cfg` identifies loop heads with an iterative DFS (`_loop_heads()`) and applies the join-then-propagate order that guarantees termination in `max_iterations` steps.
 
-3. **All three arches use the same MFP algorithm.** `analysis_arc`, `analysis_x86`, and `analysis_ppc` are structurally identical — they differ only in which arch-specific CFG builder, ISA model, and taint tracker they import. A single doc covers all three.
+3. **All three arches use the same MFP algorithm.** `analysis_arc`, `analysis_x86`, and `analysis_ppc` are structurally identical: they differ only in which arch-specific CFG builder, ISA model, and taint tracker they import. A single doc covers all three.
 
 ---
 
@@ -69,7 +69,7 @@ result = analyze_cfg(insns, Mode.X64, initial=init)
 
 ## Convergence
 
-The MFP worklist runs up to `max_iterations=10_000` iterations. Loop heads are identified first by iterative DFS (no recursion — `_loop_heads()` uses an explicit stack). For CFGs without unbounded taint explosion (typical of stripped firmware functions), convergence occurs in under 50 iterations.
+The MFP worklist runs up to `max_iterations=10_000` iterations. Loop heads are identified first by iterative DFS (no recursion: `_loop_heads()` uses an explicit stack). For CFGs without unbounded taint explosion (typical of stripped firmware functions), convergence occurs in under 50 iterations.
 
 ---
 
@@ -84,6 +84,6 @@ For most binary RE workflows, use the arch-specific TaintTracker (`TaintTracker.
 
 ## See also
 
-- [ISA Models](isa-models.md) — ABI constants and `canon_reg()` used internally
-- [Insn Models](insn-models.md) — `Insn` dataclass consumed as input
-- [Taint Analysis](taint-analysis.md) — higher-level `TaintTracker.from_path()` API
+- [ISA Models](isa-models.md): ABI constants and `canon_reg()` used internally
+- [Insn Models](insn-models.md): `Insn` dataclass consumed as input
+- [Taint Analysis](taint-analysis.md): higher-level `TaintTracker.from_path()` API

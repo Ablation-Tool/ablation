@@ -1,6 +1,6 @@
 # Finding Registry
 
-Persist every confirmed vulnerability finding from every RE engagement to a local SQLite database and retrieve embeddings of past findings as seeds for semantic search on new binaries — so each confirmed finding automatically increases detection coverage for all future targets.
+Persist every confirmed vulnerability finding from every RE engagement to a local SQLite database and retrieve embeddings of past findings as seeds for semantic search on new binaries, so each confirmed finding automatically increases detection coverage for all future targets.
 
 ---
 
@@ -8,9 +8,9 @@ Persist every confirmed vulnerability finding from every RE engagement to a loca
 
 1. **Confirmed findings are the highest-quality signal in binary RE.** A human-verified vulnerability has a real embedding, a real CWE classification, a real product and version context, and a specific function description that produced a confirmed result. That information is too valuable to throw away at the end of an engagement. The Finding Registry persists it and makes it queryable for future semantic searches, meaning each new engagement starts with everything already learned from previous ones.
 
-2. **Seed corpus coverage has gaps.** The registry ships with a pre-seeded corpus (`ablation/data/seed_corpus.json`) of patterns derived from published CVEs. These cover common patterns but cannot anticipate every vendor's internal naming conventions, proprietary protocol parsers, or custom allocators. Confirmed findings from live engagements fill those gaps incrementally. After five engagements with FortiOS targets, the registry contains confirmed patterns for every major FortiOS vulnerability class — patterns that do not exist in any public CVE corpus.
+2. **Seed corpus coverage has gaps.** The registry ships with a pre-seeded corpus (`ablation/data/seed_corpus.json`) of patterns derived from published CVEs. These cover common patterns but cannot anticipate every vendor's internal naming conventions, proprietary protocol parsers, or custom allocators. Confirmed findings from live engagements fill those gaps incrementally. After five engagements with FortiOS targets, the registry contains confirmed patterns for every major FortiOS vulnerability class: patterns that do not exist in any public CVE corpus.
 
-3. **Embedding-based retrieval generalizes across binary variants.** A finding registered from FortiOS 7.4.x can surface the homologous function in FortiOS 7.6.x even when the symbol table is stripped and the function was recompiled with a different optimization level. The embedding captures behavioral semantics; the SQLite record supplies the human-readable classification. Together they enable `find_similar()` to return "high confidence — matches confirmed heap overflow from FortiOS 7.4 lina" in the context line.
+3. **Embedding-based retrieval generalizes across binary variants.** A finding registered from FortiOS 7.4.x can surface the homologous function in FortiOS 7.6.x even when the symbol table is stripped and the function was recompiled with a different optimization level. The embedding captures behavioral semantics; the SQLite record supplies the human-readable classification. Together they enable `find_similar()` to return "high confidence: matches confirmed heap overflow from FortiOS 7.4 lina" in the context line.
 
 ---
 
@@ -147,7 +147,7 @@ reg.find_similar(query_vec, top_k=3, min_sim=0.75)
 
 ## False positives
 
-**High similarity to generic patterns.** The seed corpus contains abstract pattern descriptions like "CLI command string constructed from user input." These match broadly, producing high-similarity scores for many functions that are not exploitable. The `confirmed_only=True` flag restricts `find_similar()` to only researcher-confirmed findings — seed entries are excluded — producing higher-precision results at the cost of recall on targets where no prior confirmed findings exist.
+**High similarity to generic patterns.** The seed corpus contains abstract pattern descriptions like "CLI command string constructed from user input." These match broadly, producing high-similarity scores for many functions that are not exploitable. The `confirmed_only=True` flag restricts `find_similar()` to only researcher-confirmed findings: seed entries are excluded: producing higher-precision results at the cost of recall on targets where no prior confirmed findings exist.
 
 **Stale embeddings after model switch.** The embedding model (`BAAI/bge-small-en-v1.5`) encodes text into a vector space that is specific to that model. Switching to a different model after entries are already stored produces invalid similarity comparisons between old and new vectors. Call `build_embeddings(model, force=True)` to rebuild all embeddings when changing models.
 
@@ -155,7 +155,7 @@ reg.find_similar(query_vec, top_k=3, min_sim=0.75)
 
 ## Pipeline position
 
-**Before this module:** After `TaintTracker` or `PathSolver` confirms a finding — not before. Register only confirmed findings, not candidates.
+**Before this module:** After `TaintTracker` or `PathSolver` confirms a finding, not before. Register only confirmed findings, not candidates.
 
 **After this module:** Call `PatternLibrary.ingest_from_registry()` to promote confirmed findings to the sweep pattern list. Export to the target RE file in `re/<vendor>/<target>_re.py`.
 
@@ -181,7 +181,7 @@ reg.find_similar(query_vec, top_k=3, min_sim=0.75)
 
 ## See also
 
-- [Pattern Library](pattern-library.md) — sweep layer built on top of this registry
-- [Semantic Code Search](semantic-code-search.md) — produces embeddings for `find_similar()` queries
-- [Taint Analysis](taint-analysis.md) — confirms findings before registration
-- [ATT&CK Labeling](attandck-labeling.md) — enrich findings with technique IDs before `title` is set
+- [Pattern Library](pattern-library.md): sweep layer built on top of this registry
+- [Semantic Code Search](semantic-code-search.md): produces embeddings for `find_similar()` queries
+- [Taint Analysis](taint-analysis.md): confirms findings before registration
+- [ATT&CK Labeling](attandck-labeling.md): enrich findings with technique IDs before `title` is set

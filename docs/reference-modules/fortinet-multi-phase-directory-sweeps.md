@@ -1,16 +1,16 @@
 # Cross-Version Function Tracking
 
-Track a specific function across binary versions using a three-stage homolog matching pipeline — structural pre-filter, mnemonic 4-gram Jaccard similarity, and semantic tiebreaker — then localize exactly which instructions changed using `difflib.SequenceMatcher` on normalized instruction lines.
+Track a specific function across binary versions using a three-stage homolog matching pipeline: structural pre-filter, mnemonic 4-gram Jaccard similarity, and semantic tiebreaker: then localize exactly which instructions changed using `difflib.SequenceMatcher` on normalized instruction lines.
 
 ---
 
 ## Why this exists
 
-1. **After identifying a vulnerable function in one firmware version, the analyst needs to confirm it is patched in a later version — and verify the patch actually addresses the root cause.** `version_delta.py` tracks a seed function VA across versions by finding its homolog in the target binary using three progressively more expensive stages, then diffs the instruction sequences to show exactly what changed. This was the primary tool for confirming CVE-2022-0778 / RADIUS overflow remediation.
+1. **After identifying a vulnerable function in one firmware version, the analyst needs to confirm it is patched in a later version, and verify the patch actually addresses the root cause.** `version_delta.py` tracks a seed function VA across versions by finding its homolog in the target binary using three progressively more expensive stages, then diffs the instruction sequences to show exactly what changed. This was the primary tool for confirming CVE-2022-0778 / RADIUS overflow remediation.
 
-2. **Stripped firmware has no symbol names — homolog matching cannot rely on function names.** Stage 1 (structural pre-filter: basic block count ±2, edge count ±30%) eliminates candidates quickly. Stage 2 (mnemonic 4-gram Jaccard similarity on the top-10 structural matches) identifies the best match by instruction sequence. Stage 3 (SemanticSearcher tiebreaker when top-2 candidates are within 0.05 Jaccard) uses semantic embeddings to break ties that mnemonic similarity cannot distinguish.
+2. **Stripped firmware has no symbol names: homolog matching cannot rely on function names.** Stage 1 (structural pre-filter: basic block count ±2, edge count ±30%) eliminates candidates quickly. Stage 2 (mnemonic 4-gram Jaccard similarity on the top-10 structural matches) identifies the best match by instruction sequence. Stage 3 (SemanticSearcher tiebreaker when top-2 candidates are within 0.05 Jaccard) uses semantic embeddings to break ties that mnemonic similarity cannot distinguish.
 
-3. **`HomologMatch.callee_changed` identifies when a patch introduced a new safety callee** — for example, a stack overflow patch that adds a call to `check_buffer_size()` before the dangerous `strcpy()`. This is a higher-confidence signal of a real patch than instruction-sequence changes alone, because adding a callee is a structural change that cannot be coincidental.
+3. **`HomologMatch.callee_changed` identifies when a patch introduced a new safety callee**: for example, a stack overflow patch that adds a call to `check_buffer_size()` before the dangerous `strcpy()`. This is a higher-confidence signal of a real patch than instruction-sequence changes alone, because adding a callee is a structural change that cannot be coincidental.
 
 ---
 
@@ -91,9 +91,9 @@ PatchDelta: ratio=0.94  (patched)
 
 ## False positives
 
-**Jaccard similarity of 0.05 at stage-2 tiebreaker boundary** — when two candidates have nearly identical mnemonic 4-gram Jaccard scores, the semantic tiebreaker is used. If the semantic model has low confidence for both (e.g., a small utility function), `HomologMatch.confidence` is `LOW`. Treat `LOW` confidence matches as requiring manual verification.
+**Jaccard similarity of 0.05 at stage-2 tiebreaker boundary**: when two candidates have nearly identical mnemonic 4-gram Jaccard scores, the semantic tiebreaker is used. If the semantic model has low confidence for both for example a small utility function, `HomologMatch.confidence` is `LOW`. Treat `LOW` confidence matches as requiring manual verification.
 
-**`compute_patch_delta()` uses normalized instruction lines** — normalization strips immediate values and addresses to make sequence comparison register-independent. A function where only an immediate constant changed (e.g., buffer size) will show `delta.ratio` close to 1.0 but `delta.is_patched = True` with the changed constant visible in `unified_diff()`.
+**`compute_patch_delta()` uses normalized instruction lines**: normalization strips immediate values and addresses to make sequence comparison register-independent. A function where only an immediate constant changed for example buffer size will show `delta.ratio` close to 1.0 but `delta.is_patched = True` with the changed constant visible in `unified_diff()`.
 
 ---
 
@@ -116,9 +116,9 @@ Run `version_delta` after `DTWMatcher` identifies a candidate homolog to verify 
 | `seed_name` | Name of the seed function |
 | `target_binary` | Path of the target binary |
 | `target_version` | Version string extracted from the target binary |
-| `match` | `Optional[HomologMatch]` — best homolog found in the target, or `None` |
-| `anchor_results` | `List[AnchorScanResult]` — masked byte-pattern anchor results (each with `anchor_name`, `era`, `hit_offset`, `description`; `found` property returns `True` when `hit_offset >= 0`) |
-| `era_confirmed` | Property — `Optional[int]` — inferred version era if confirmed, else `None` |
+| `match` | `Optional[HomologMatch]`: best homolog found in the target, or `None` |
+| `anchor_results` | `List[AnchorScanResult]`: masked byte-pattern anchor results (each with `anchor_name`, `era`, `hit_offset`, `description`; `found` property returns `True` when `hit_offset >= 0`) |
+| `era_confirmed` | Property: `Optional[int]`: inferred version era if confirmed, else `None` |
 
 The `match` attribute is a `HomologMatch` with these fields:
 
@@ -129,15 +129,15 @@ The `match` attribute is a `HomologMatch` with these fields:
 | `jaccard` | Jaccard similarity of mnemonic sets |
 | `semantic_score` | Semantic similarity score (0.0–1.0) |
 | `confidence` | `'HIGH'` / `'MEDIUM'` / `'LOW'` |
-| `delta` | `PatchDelta` — instruction-level diff |
+| `delta` | `PatchDelta`: instruction-level diff |
 | `new_callees` | Callee names added in the target vs. seed |
 | `removed_callees` | Callee names removed in the target vs. seed |
-| `callee_changed` | Property — `True` if either `new_callees` or `removed_callees` is non-empty |
+| `callee_changed` | Property: `True` if either `new_callees` or `removed_callees` is non-empty |
 
 ---
 
 ## See also
 
-- [DTW Function Homolog Matching](dtw-function-homolog-matching.md) — Stage 2 DTW matching that feeds into version delta
-- [Matrix Profile Patch Diff](matrix-profile-patch-diff.md) — complementary patch localization approach
-- [Generic Vulnerability Profile Sweeps](generic-vulnerability-profile-sweeps.md) — SemanticSearcher used in stage 3 tiebreaker
+- [DTW Function Homolog Matching](dtw-function-homolog-matching.md): Stage 2 DTW matching that feeds into version delta
+- [Matrix Profile Patch Diff](matrix-profile-patch-diff.md): complementary patch localization approach
+- [Generic Vulnerability Profile Sweeps](generic-vulnerability-profile-sweeps.md): SemanticSearcher used in stage 3 tiebreaker

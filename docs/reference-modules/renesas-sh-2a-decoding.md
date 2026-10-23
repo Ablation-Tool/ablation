@@ -1,16 +1,16 @@
 # Renesas SH-2A Decoding
 
-Decode Renesas SH-2A firmware for SH7058/SH7059 MCUs — distinguishing 16-bit fixed-width SH-2 base instructions from 32-bit SH-2A extended instructions by first-halfword pattern analysis, providing `function_starts()` for seeding taint analysis pipelines against Honda, Subaru, and Japanese OEM ECU firmware.
+Decode Renesas SH-2A firmware for SH7058/SH7059 MCUs: distinguishing 16-bit fixed-width SH-2 base instructions from 32-bit SH-2A extended instructions by first-halfword pattern analysis, providing `function_starts()` for seeding taint analysis pipelines against Honda, Subaru, and Japanese OEM ECU firmware.
 
 ---
 
 ## Why this exists
 
-1. **Capstone 5.0.7 does not support SH-2A.** The SH-2A ISA extends the 16-bit SH-2 base with 32-bit instructions, identified by specific first-halfword patterns from the Renesas SH2A Hardware Manual Rev.2.00. Without `EcuSH2aDecoder`, SH-2A firmware cannot be disassembled by any existing Capstone-based pipeline — manual byte parsing or commercial tools are the only options.
+1. **Capstone 5.0.7 does not support SH-2A.** The SH-2A ISA extends the 16-bit SH-2 base with 32-bit instructions, identified by specific first-halfword patterns from the Renesas SH2A Hardware Manual Rev.2.00. Without `EcuSH2aDecoder`, SH-2A firmware cannot be disassembled by any existing Capstone-based pipeline: manual byte parsing or commercial tools are the only options.
 
-2. **SH-2A is the core in Renesas SH7058/SH7059 MCUs found in Honda CBR250RR (ECU type 38770-K87-J01) and Subaru targets in the EcuFlash corpus.** `EcuSH2aDecoder` provides the same `function_starts()` interface as `EcuM68kDecoder` and `EcuVLEDecoder` — allowing the same downstream taint analysis pipeline to process SH-2A targets without ISA-specific dispatch.
+2. **SH-2A is the core in Renesas SH7058/SH7059 MCUs found in Honda CBR250RR (ECU type 38770-K87-J01) and Subaru targets in the EcuFlash corpus.** `EcuSH2aDecoder` provides the same `function_starts()` interface as `EcuM68kDecoder` and `EcuVLEDecoder`: allowing the same downstream taint analysis pipeline to process SH-2A targets without ISA-specific dispatch.
 
-3. **SH-2A instruction width discrimination is first-halfword-based** — the upper 4 bits of the first 16-bit halfword identify whether the full instruction is 32-bit. `EcuSH2aDecoder.insn_length(offset)` performs this check in O(1), enabling efficient sequential decoding of large flat ROM images.
+3. **SH-2A instruction width discrimination is first-halfword-based**: the upper 4 bits of the first 16-bit halfword identify whether the full instruction is 32-bit. `EcuSH2aDecoder.insn_length(offset)` performs this check in O(1), enabling efficient sequential decoding of large flat ROM images.
 
 ---
 
@@ -64,9 +64,9 @@ Disassembly at 0x00000200:
 
 ## False positives
 
-**32-bit SH-2A instruction first-halfword patterns may appear in data** — a 16-bit data word matching a 32-bit SH-2A first-halfword causes the decoder to misread the next 2 bytes as part of the instruction. Use `function_starts()` to anchor decode position to validated function entry points.
+**32-bit SH-2A instruction first-halfword patterns may appear in data**: a 16-bit data word matching a 32-bit SH-2A first-halfword causes the decoder to misread the next 2 bytes as part of the instruction. Use `function_starts()` to anchor decode position to validated function entry points.
 
-**`function_starts()` heuristic requires the full `STS.L PR, @-SP` prologue** — leaf functions that do not save the link register (no calls inside) will not be detected. These functions are present in the binary but not in `function_starts()`; the caller must supplement with call-graph reachability from detected starts.
+**`function_starts()` heuristic requires the full `STS.L PR, @-SP` prologue**: leaf functions that do not save the link register (no calls inside) will not be detected. These functions are present in the binary but not in `function_starts()`; the caller must supplement with call-graph reachability from detected starts.
 
 ---
 
@@ -78,7 +78,7 @@ Run `EcuSH2aDecoder` after `EcuArchDetector` confirms `sh2a` architecture. Chain
 
 ## Reading output
 
-`EcuSH2aDecoder.function_starts()` returns `List[int]` — VA list of SH-2A functions.
+`EcuSH2aDecoder.function_starts()` returns `List[int]`: VA list of SH-2A functions.
 
 `EcuSH2aDecoder.disassemble(va, size)` returns a list of `SH2AInstruction` objects:
 
@@ -93,6 +93,6 @@ Run `EcuSH2aDecoder` after `EcuArchDetector` confirms `sh2a` architecture. Chain
 
 ## See also
 
-- [Flat ROM Function Discovery](flat-rom-function-discovery.md) — `EcuArchDetector` that identifies SH-2A architecture
-- [M68K CPU32 Decoding](m68k-cpu32-decoding.md) — M68K equivalent for GM PCM targets
-- [Calibration Parsers](calibration-parsers.md) — A2L/open_damos for Honda/Subaru calibration maps
+- [Flat ROM Function Discovery](flat-rom-function-discovery.md): `EcuArchDetector` that identifies SH-2A architecture
+- [M68K CPU32 Decoding](m68k-cpu32-decoding.md): M68K equivalent for GM PCM targets
+- [Calibration Parsers](calibration-parsers.md): A2L/open_damos for Honda/Subaru calibration maps

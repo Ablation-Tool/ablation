@@ -1,16 +1,16 @@
 # CFG Fixpoint Dataflow
 
-Generic Monotone Framework worklist algorithm (`DataflowEngine`) plus pre-built analysis instances — constant propagation, reaching definitions, and sparse conditional constant propagation (SCCP) — for ARM32/ARM64 RE and switch-table recovery in stripped firmware.
+Generic Monotone Framework worklist algorithm (`DataflowEngine`) plus pre-built analysis instances: constant propagation, reaching definitions, and sparse conditional constant propagation (SCCP): for ARM32/ARM64 RE and switch-table recovery in stripped firmware.
 
 ---
 
 ## Why this exists
 
-1. **ARM32 pool loads (`ldr r0, [pc, #N]`) and `movw`/`movt` immediate chains cannot be resolved by a single-instruction analysis — the constant value is split across two instructions or loaded from a literal pool.** `ConstPropAnalysis` implements a dataflow constant propagation over the CFG, resolving pool loads, immediate chains, and GOT-seeded values. Without it, `SinkArgClassifier` and `TaintTracker` see `rdi = unknown` where they could see `rdi = 0x12345678`.
+1. **ARM32 pool loads (`ldr r0, [pc, #N]`) and `movw`/`movt` immediate chains cannot be resolved by a single-instruction analysis: the constant value is split across two instructions or loaded from a literal pool.** `ConstPropAnalysis` implements a dataflow constant propagation over the CFG, resolving pool loads, immediate chains, and GOT-seeded values. Without it, `SinkArgClassifier` and `TaintTracker` see `rdi = unknown` where they could see `rdi = 0x12345678`.
 
-2. **Thumb `tbh`/`tbb` switch tables (ARM32 `switch` lowering) fragment the CFG — capstone decodes the `tbh` as an indirect branch with no known targets, breaking any analysis that depends on complete successor sets.** `SCCPAnalysis` (sparse conditional constant propagation, Wegman-Zadeck algorithm) propagates conditions through executable edges only. An edge that cannot be reached under SCCP is marked non-executable, which avoids adding its target to the work queue and prevents spurious constant merges. This fixes the switch-table fragmentation: `tbh` targets that are provably unreachable are correctly excluded.
+2. **Thumb `tbh`/`tbb` switch tables (ARM32 `switch` lowering) fragment the CFG: capstone decodes the `tbh` as an indirect branch with no known targets, breaking any analysis that depends on complete successor sets.** `SCCPAnalysis` (sparse conditional constant propagation, Wegman-Zadeck algorithm) propagates conditions through executable edges only. An edge that cannot be reached under SCCP is marked non-executable, which avoids adding its target to the work queue and prevents spurious constant merges. This fixes the switch-table fragmentation: `tbh` targets that are provably unreachable are correctly excluded.
 
-3. **`ReachingDefsAnalysis` builds ud-chains (use-definition chains) for any `(register, call_site)` pair — answering "where was this register last written before this call?"** Use-definition chains are the foundation for backward slicing (tracing argument values back to their sources), cross-function constant propagation, and inter-procedural taint seeding.
+3. **`ReachingDefsAnalysis` builds ud-chains (use-definition chains) for any `(register, call_site)` pair: answering "where was this register last written before this call?"** Use-definition chains are the foundation for backward slicing (tracing argument values back to their sources), cross-function constant propagation, and inter-procedural taint seeding.
 
 ---
 
@@ -83,21 +83,21 @@ SCCPAnalysis: exec_edges = {(<src>, <dst>), ...}
 
 ## False positives
 
-**`ConstPropAnalysis` with `arch='arm32'` does not handle Thumb IT (If-Then) block conditional execution** — instructions inside an IT block are treated as unconditional, which can cause incorrect constant assignments on paths that are conditionally dead. Use `SCCPAnalysis` when IT block condition tracking is required.
+**`ConstPropAnalysis` with `arch='arm32'` does not handle Thumb IT (If-Then) block conditional execution**: instructions inside an IT block are treated as unconditional, which can cause incorrect constant assignments on paths that are conditionally dead. Use `SCCPAnalysis` when IT block condition tracking is required.
 
-**`ReachingDefsAnalysis` produces use-definition chains at the basic-block level — the reaching defs at block entry is the join of all predecessor exit sets.** This means the "last definition" for a register at a join point (e.g., after an `if`/`else`) shows both the then-path and else-path definitions. Backward slicing must handle the case where a register has multiple reaching defs.
+**`ReachingDefsAnalysis` produces use-definition chains at the basic-block level: the reaching defs at block entry is the join of all predecessor exit sets.** This means the "last definition" for a register at a join point (e.g., after an `if`/`else`) shows both the then-path and else-path definitions. Backward slicing must handle the case where a register has multiple reaching defs.
 
 ---
 
 ## Pipeline position
 
-Run `ConstPropAnalysis` or `ReachingDefsAnalysis` when TaintTracker or SinkArgClassifier reports `source=unknown` for a register argument — the dataflow engine often resolves the unknown to a concrete constant. Run `SCCPAnalysis` when `CFGBuilder.stats()` reports `has_indirect_branch=True` for a function with ARM32 Thumb switch tables — SCCP recovers the executable edges that capstone cannot.
+Run `ConstPropAnalysis` or `ReachingDefsAnalysis` when TaintTracker or SinkArgClassifier reports `source=unknown` for a register argument: the dataflow engine often resolves the unknown to a concrete constant. Run `SCCPAnalysis` when `CFGBuilder.stats()` reports `has_indirect_branch=True` for a function with ARM32 Thumb switch tables: SCCP recovers the executable edges that capstone cannot.
 
 ---
 
 ## Reading output
 
-`ConstPropAnalysis.solve(func_addr)` returns a `Tuple[Dict[int, Dict[str, LatValue]], Dict[int, Dict[str, LatValue]]]` — `(mfp_out, mfp_in)` keyed by block VA:
+`ConstPropAnalysis.solve(func_addr)` returns a `Tuple[Dict[int, Dict[str, LatValue]], Dict[int, Dict[str, LatValue]]]`: `(mfp_out, mfp_in)` keyed by block VA:
 
 | Type | Meaning |
 |:---|:---|
@@ -107,14 +107,14 @@ Run `ConstPropAnalysis` or `ReachingDefsAnalysis` when TaintTracker or SinkArgCl
 
 `SCCPAnalysis.solve(func_addr)` returns `Tuple[Dict[int, Any], Set[Tuple[int, int]]]`:
 
-- **First element** (`cp_vals`): `Dict[block_label, Dict[register, LatValue]]` — per-block register constant state; `None` for unreachable blocks.
-- **Second element** (`exec_edges`): `Set[Tuple[int, int]]` — `(src_va, dst_va)` edges proven reachable given the constant conditions.
+- **First element** (`cp_vals`): `Dict[block_label, Dict[register, LatValue]]`: per-block register constant state; `None` for unreachable blocks.
+- **Second element** (`exec_edges`): `Set[Tuple[int, int]]`: `(src_va, dst_va)` edges proven reachable given the constant conditions.
 
 ---
 
 ## See also
 
-- [Control-Flow Graph Construction](control-flow-graph-construction.md) — CFG that dataflow analysis operates over
-- [Taint Analysis](taint-analysis.md) — taint tracker that benefits from constant-propagation-resolved sources
-- [Structured Control-Flow Recovery](structured-control-flow-recovery.md) — uses dominator tree and loop info from `dataflow_engine.py`
-- [ARM32 Allocation Arithmetic Overflow](arm32-allocation-arithmetic-overflow.md) — uses reaching definitions to trace allocation size sources
+- [Control-Flow Graph Construction](control-flow-graph-construction.md): CFG that dataflow analysis operates over
+- [Taint Analysis](taint-analysis.md): taint tracker that benefits from constant-propagation-resolved sources
+- [Structured Control-Flow Recovery](structured-control-flow-recovery.md): uses dominator tree and loop info from `dataflow_engine.py`
+- [ARM32 Allocation Arithmetic Overflow](arm32-allocation-arithmetic-overflow.md): uses reaching definitions to trace allocation size sources

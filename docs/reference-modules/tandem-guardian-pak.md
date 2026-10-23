@@ -1,6 +1,6 @@
 # Tandem Guardian PAK Extraction
 
-Extract and enumerate files from Tandem NonStop Guardian PAK archives — the proprietary zlib-compressed BACKUP tape format used to distribute corrective service fixes for Guardian/NSK systems — enabling RE of MIPS32 big-endian Guardian-native binaries, via `ablation/core/guardian_pak_extractor.py`.
+Extract and enumerate files from Tandem NonStop Guardian PAK archives: the proprietary zlib-compressed BACKUP tape format used to distribute corrective service fixes for Guardian/NSK systems: enabling RE of MIPS32 big-endian Guardian-native binaries, via `ablation/core/guardian_pak_extractor.py`.
 
 ---
 
@@ -8,9 +8,9 @@ Extract and enumerate files from Tandem NonStop Guardian PAK archives — the pr
 
 1. **Guardian PAK archives are the only publicly accessible corpus of Tandem NonStop binaries.** NSK platform source code, ABI, and file-format specs are covered by NDA; no public documentation or disassembler exists. The only documented extractor (`UNPAK`) requires a live Tandem NSK system. `guardian_pak_extractor.py` provides extraction in pure Python without any NSK dependency.
 
-2. **Guardian PAK files are distributed with a `.ZIP` extension but are not ZIP archives.** `unzip`, `file`, `binwalk`, and every standard archive tool reject these files — they contain Tandem's proprietary PAK format (zlib-compressed chunks wrapping the Guardian BACKUP(8) on-tape format), not ZIP records. Without `guardian_pak_extractor.py`, the analyst has no means to access the binary content at all.
+2. **Guardian PAK files are distributed with a `.ZIP` extension but are not ZIP archives.** `unzip`, `file`, `binwalk`, and every standard archive tool reject these files: they contain Tandem's proprietary PAK format (zlib-compressed chunks wrapping the Guardian BACKUP(8) on-tape format), not ZIP records. Without `guardian_pak_extractor.py`, the analyst has no means to access the binary content at all.
 
-3. **`iter_files()` resolves Guardian paths to `GuardianFile` entries** — each entry includes the Guardian-format path (`volume.subvolume.filename`), file size, and extracted bytes. The MIPS32 big-endian binaries inside are NRL object format files that can be disassembled directly with Capstone `CS_ARCH_MIPS` + `CS_MODE_MIPS32` + `CS_MODE_BIG_ENDIAN`.
+3. **`iter_files()` resolves Guardian paths to `GuardianFile` entries**: each entry includes the Guardian-format path (`volume.subvolume.filename`), file size, and extracted bytes. The MIPS32 big-endian binaries inside are NRL object format files that can be disassembled directly with Capstone `CS_ARCH_MIPS` + `CS_MODE_MIPS32` + `CS_MODE_BIG_ENDIAN`.
 
 ---
 
@@ -68,9 +68,9 @@ Extracted <N> Guardian files:
 
 ## False positives
 
-**`_is_tape_label()`, `_is_file_catalog()`, `_is_file_header()` are pattern-based heuristics** — an unusual PAK variant may not match expected chunk signatures, causing files to be skipped. Verify extracted file count against the PAK's own catalog if available.
+**`_is_tape_label()`, `_is_file_catalog()`, `_is_file_header()` are pattern-based heuristics**: an unusual PAK variant may not match expected chunk signatures, causing files to be skipped. Verify extracted file count against the PAK's own catalog if available.
 
-**Guardian path parsing** — `volume`, `subvolume`, and `filename` are extracted from the BACKUP(8) on-tape record format. Paths with unusual characters or non-standard encodings may produce truncated names. The `data` field is always correct regardless of name parsing.
+**Guardian path parsing**: `volume`, `subvolume`, and `filename` are extracted from the BACKUP(8) on-tape record format. Paths with unusual characters or non-standard encodings may produce truncated names. The `data` field is always correct regardless of name parsing.
 
 ---
 
@@ -99,5 +99,5 @@ Load a `GuardianFile` for RE by calling `BinaryContext.load_or_build()` with the
 
 ## See also
 
-- [AIX BFF Extraction](aix-bff-extractor.md) — `BffExtractor` for AIX BFF/liblpp.a archives (similar COTS-alternative-extraction pattern)
-- [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext` for MIPS32 BE analysis after extraction
+- [AIX BFF Extraction](aix-bff-extractor.md): `BffExtractor` for AIX BFF/liblpp.a archives (similar COTS-alternative-extraction pattern)
+- [Persistent Analysis Context](persistent-analysis-context.md): `BinaryContext` for MIPS32 BE analysis after extraction

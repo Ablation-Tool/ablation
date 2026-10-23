@@ -277,7 +277,7 @@ for f in findings:
 
 ## False positives
 
-**GOT-based indirect calls.** `analyze_cfg()` tracks taint through direct calls resolved by `analysis_loongarch64`'s PLT table. Indirect calls through the GOT (common in shared libraries) are not fully resolved — the callee is recorded as `Unknown`. Use `ppc64_elfv1_resolver` pattern (adapted for LA64) to pre-populate the PLT before analysis.
+**GOT-based indirect calls.** `analyze_cfg()` tracks taint through direct calls resolved by `analysis_loongarch64`'s PLT table. Indirect calls through the GOT (common in shared libraries) are not fully resolved: the callee is recorded as `Unknown`. Use `ppc64_elfv1_resolver` pattern (adapted for LA64) to pre-populate the PLT before analysis.
 
 ---
 
@@ -307,6 +307,6 @@ for f in findings:
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

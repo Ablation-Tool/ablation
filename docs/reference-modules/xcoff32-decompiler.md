@@ -23,7 +23,7 @@
 
 **Pass a code VA, not a descriptor VA.** `XcoffBinary.exports` keys are descriptor VAs in `.data`. Call `Xcoff32Decompiler.from_context(ctx)` and let it resolve the descriptor, then call `decompile(code_va)` with the resolved entry point. Passing a descriptor VA to `decompile()` disassembles `.data` bytes as instructions and produces garbage output.
 
-**`decompile()` is a linear walk.** It does not reconstruct a CFG. Conditional branches emit `if (cond) goto loc_N;` labels. For functions with complex control flow, increase `n_insn` and follow the `goto` targets manually. Do not interpret the pseudocode as structured C — the function may have multiple exit paths.
+**`decompile()` is a linear walk.** It does not reconstruct a CFG. Conditional branches emit `if (cond) goto loc_N;` labels. For functions with complex control flow, increase `n_insn` and follow the `goto` targets manually. Do not interpret the pseudocode as structured C: the function may have multiple exit paths.
 
 **TOC resolution requires a non-zero `toc_va`.** `from_context()` derives `toc_va` from the first function descriptor's second word. If the binary has no exported functions with valid descriptors, `toc_va` defaults to 0 and all `lwz rN, off(r2)` loads appear as `TOC+off` rather than symbol names. Run `XcoffSymtabParser` first to populate function names, which helps `from_context()` locate a valid descriptor.
 

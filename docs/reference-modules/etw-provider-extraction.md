@@ -1,16 +1,16 @@
 # ETW Provider Extraction
 
-Enumerate Event Tracing for Windows (ETW) provider registrations and event write sites in a Windows PE binary — identifying security-relevant operations that produce no ETW telemetry (detection gaps) and reporting known security-relevant provider GUIDs.
+Enumerate Event Tracing for Windows (ETW) provider registrations and event write sites in a Windows PE binary: identifying security-relevant operations that produce no ETW telemetry (detection gaps) and reporting known security-relevant provider GUIDs.
 
 ---
 
 ## Why this exists
 
-1. **Security products, EDRs, and Windows kernel telemetry pipelines use ETW as their primary event feed — a binary performing security-relevant operations without ETW writes is invisible to these products.** `ETWProviderExtractor.scan()` cross-references functions that perform dangerous operations (file write, registry modification, process creation, network connection) against nearby ETW `EventWrite` call sites, reporting functions with no ETW coverage as detection gaps.
+1. **Security products, EDRs, and Windows kernel telemetry pipelines use ETW as their primary event feed: a binary performing security-relevant operations without ETW writes is invisible to these products.** `ETWProviderExtractor.scan()` cross-references functions that perform dangerous operations (file write, registry modification, process creation, network connection) against nearby ETW `EventWrite` call sites, reporting functions with no ETW coverage as detection gaps.
 
-2. **`ETWProviderExtractor.providers()` extracts all ETW provider registrations from `EventRegister` call sites** — reading the provider GUID from the first argument and matching against a table of known security-relevant ETW providers (Microsoft-Windows-Security-Auditing, Microsoft-Antimalware-Scan-Interface, etc.). A binary that re-registers a known security provider GUID or uses `EventUnregister` immediately after registration may be evading telemetry collection.
+2. **`ETWProviderExtractor.providers()` extracts all ETW provider registrations from `EventRegister` call sites**: reading the provider GUID from the first argument and matching against a table of known security-relevant ETW providers (Microsoft-Windows-Security-Auditing, Microsoft-Antimalware-Scan-Interface, etc.). A binary that re-registers a known security provider GUID or uses `EventUnregister` immediately after registration may be evading telemetry collection.
 
-3. **`write_site_count()` returns the total number of `EventWrite` call sites** — a binary with many security-relevant operations and zero `EventWrite` calls is a strong indicator of intentional telemetry evasion or an unmonitored attack surface that security products cannot observe.
+3. **`write_site_count()` returns the total number of `EventWrite` call sites**: a binary with many security-relevant operations and zero `EventWrite` calls is a strong indicator of intentional telemetry evasion or an unmonitored attack surface that security products cannot observe.
 
 ---
 
@@ -76,9 +76,9 @@ Detection gaps (<M> findings):
 
 ## False positives
 
-**ETW coverage proximity check is heuristic** — `EventWrite` calls in an adjacent function called from the security-relevant function count as covered if the static analysis traces the call. A function that calls `CreateProcess` and then separately calls an ETW-writing helper may be flagged as a gap if the helper is not statically traceable. Validate gap findings by inspecting the function and its callers for ETW coverage.
+**ETW coverage proximity check is heuristic**: `EventWrite` calls in an adjacent function called from the security-relevant function count as covered if the static analysis traces the call. A function that calls `CreateProcess` and then separately calls an ETW-writing helper may be flagged as a gap if the helper is not statically traceable. Validate gap findings by inspecting the function and its callers for ETW coverage.
 
-**Known provider GUID table is static** — vendor-defined ETW providers not in the built-in table are reported as `(unknown)`. A custom vendor security telemetry provider will not be recognized as security-relevant by `providers()`, but will still appear in the provider list for manual assessment.
+**Known provider GUID table is static**: vendor-defined ETW providers not in the built-in table are reported as `(unknown)`. A custom vendor security telemetry provider will not be recognized as security-relevant by `providers()`, but will still appear in the provider list for manual assessment.
 
 ---
 
@@ -97,16 +97,16 @@ Run `ETWProviderExtractor` as part of Windows PE initial triage alongside `RPCSe
 | `guid` | Provider GUID string (e.g., `'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'`) |
 | `known_name` | Name from the known-provider table, or empty string if not recognized |
 | `registration_count` | Number of `EventRegister` call sites for this GUID |
-| `registration_vas` | `List[int]` — VAs of each `EventRegister` call site |
+| `registration_vas` | `List[int]`: VAs of each `EventRegister` call site |
 
-`ETWProviderExtractor.write_site_count()` returns `int` — total count of `EventWrite` call sites across all providers.
+`ETWProviderExtractor.write_site_count()` returns `int`: total count of `EventWrite` call sites across all providers.
 
-`ETWProviderExtractor.scan()` returns `list[ETWFinding]` — one finding per uncovered security-relevant function. Fields: `severity`, `va`, `detail`.
+`ETWProviderExtractor.scan()` returns `list[ETWFinding]`: one finding per uncovered security-relevant function. Fields: `severity`, `va`, `detail`.
 
 ---
 
 ## See also
 
-- [Windows RPC Server Analysis](rpc-server-analysis.md) — unauthenticated RPC interface analysis for Windows targets
-- [Control Flow Guard Review](control-flow-guard-review.md) — CFG/XFG bypass detection complementing ETW evasion analysis
-- [BYOVD Capability Detection](byovd-capability-detection.md) — dangerous kernel capability detection for signed drivers
+- [Windows RPC Server Analysis](rpc-server-analysis.md): unauthenticated RPC interface analysis for Windows targets
+- [Control Flow Guard Review](control-flow-guard-review.md): CFG/XFG bypass detection complementing ETW evasion analysis
+- [BYOVD Capability Detection](byovd-capability-detection.md): dangerous kernel capability detection for signed drivers

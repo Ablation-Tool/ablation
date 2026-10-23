@@ -23,7 +23,7 @@ scale=0.0 and no unit for every entry. This parser loads the scaling library fir
 each table's scaling by name before building any CalibrationTable.
 
 **3. No three-level inheritance resolution.** Variants form a base chain: a terminal variant
-(e.g., CD001) references an intermediate variant (CD515), which references the structure root
+for example CD001 references an intermediate variant (CD515), which references the structure root
 (A2L). A variant with no table entries of its own inherits all entries from its ancestor chain.
 This parser walks the chain child-first, so a variant can override specific ancestor addresses
 without re-specifying all of them. The walk terminates at base="A2L" or when a base xmlid is
@@ -325,6 +325,6 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## See also
 
-- [ECUArchDetector](ecu-arch-detector.md) — identify processor family before choosing a decoder
-- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md) — map ROM sections before decoding
-- [ECUSecurityAccessScanner](ecu-security-access-scanner.md) — find UDS 0x27 bypass vectors in decoded code
+- [ECUArchDetector](ecu-arch-detector.md): identify processor family before choosing a decoder
+- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md): map ROM sections before decoding
+- [ECUSecurityAccessScanner](ecu-security-access-scanner.md): find UDS 0x27 bypass vectors in decoded code

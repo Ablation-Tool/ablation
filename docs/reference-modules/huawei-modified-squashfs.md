@@ -1,6 +1,6 @@
 # ARC ISA Decoding
 
-Decode Synopsys DesignWare ARC 700 / ARC HS variable-length firmware — discriminating 16-bit "compact" instructions from 32-bit instructions via the 5-bit `op5` field (`bits[15:11]` ≥ 24 → 16-bit; otherwise 32-bit) — with function start heuristics via `push_s blink` prologue scan and graceful upgrade to full Capstone `CS_ARCH_ARC` disassembly when available.
+Decode Synopsys DesignWare ARC 700 / ARC HS variable-length firmware: discriminating 16-bit "compact" instructions from 32-bit instructions via the 5-bit `op5` field (`bits[15:11]` ≥ 24 → 16-bit; otherwise 32-bit): with function start heuristics via `push_s blink` prologue scan and graceful upgrade to full Capstone `CS_ARCH_ARC` disassembly when available.
 
 ---
 
@@ -8,7 +8,7 @@ Decode Synopsys DesignWare ARC 700 / ARC HS variable-length firmware — discrim
 
 1. **Capstone 5.x does not support `CS_ARCH_ARC`.** The ARC architecture (Synopsys DesignWare ARC 700/HS) is used in embedded IoT devices, network processors, and automotive ECUs. Without `arc_decoder.py`, ARC firmware cannot be disassembled at all in the standard pipeline.
 
-2. **ARC uses a mixed 16/32-bit encoding** — `op5 = (hw0 >> 11) & 0x1f`; values ≥ 24 (0x18) indicate 16-bit "compact" instructions. This single-check width discriminant is O(1) per instruction, enabling fast sequential decode of large ARC firmware images. `ARCDecoder.decode_frames()` implements this discriminant along with control-flow hints for `BL`, `J`, and branch groups.
+2. **ARC uses a mixed 16/32-bit encoding**: `op5 = (hw0 >> 11) & 0x1f`; values ≥ 24 (0x18) indicate 16-bit "compact" instructions. This single-check width discriminant is O(1) per instruction, enabling fast sequential decode of large ARC firmware images. `ARCDecoder.decode_frames()` implements this discriminant along with control-flow hints for `BL`, `J`, and branch groups.
 
 3. **`ARCDecoder.has_full_decode()` transparently upgrades to full Capstone decoding** when `capstone` with `CS_ARCH_ARC` is available (capstone next branch), providing complete operand-level disassembly without requiring changes to calling code. This future-proofs the API: callers always call `decode_frames()`, and the level of detail improves automatically when the dependency becomes available.
 
@@ -65,9 +65,9 @@ ARCDisasm.function_starts(): <F> ARC functions (push_s blink prologue)
 
 ## False positives
 
-**`op5 >= 24` width discrimination is reliable for well-formed ARC code** — data sections that contain bytes resembling ARC instructions will produce incorrect frame boundaries. Use `function_starts()` to anchor decode position to validated function entries.
+**`op5 >= 24` width discrimination is reliable for well-formed ARC code**: data sections that contain bytes resembling ARC instructions will produce incorrect frame boundaries. Use `function_starts()` to anchor decode position to validated function entries.
 
-**`push_s blink` prologue heuristic** — leaf functions that do not save the link register (`blink`) are not detected. The function start list from `function_starts()` is a lower bound; supplement with ELF symbol table entries if available.
+**`push_s blink` prologue heuristic**: leaf functions that do not save the link register (`blink`) are not detected. The function start list from `function_starts()` is a lower bound; supplement with ELF symbol table entries if available.
 
 ---
 
@@ -94,11 +94,11 @@ Run `ARCDecoder` / `ARCDisasm` on any ARC 700/HS firmware after `EcuArchDetector
 | `is_ret` | `True` if the instruction is a return |
 | `target` | Resolved branch/call target VA (0 if not computed) |
 
-`ARCDisasm.function_starts()` returns `List[int]` — VA list of functions identified by `push_s blink` prologues.
+`ARCDisasm.function_starts()` returns `List[int]`: VA list of functions identified by `push_s blink` prologues.
 
 ---
 
 ## See also
 
-- [Flat ROM Function Discovery](flat-rom-function-discovery.md) — `EcuArchDetector` for initial architecture detection
-- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` ARC variant for full taint analysis
+- [Flat ROM Function Discovery](flat-rom-function-discovery.md): `EcuArchDetector` for initial architecture detection
+- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): `TaintTracker` ARC variant for full taint analysis

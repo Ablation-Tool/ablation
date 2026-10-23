@@ -243,13 +243,13 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_ELF_BYTES=256MB` + `os.pat
 
 ## How it works
 
-`CppVtableReconstructorAnalyzer.scan()` runs a 3-layer pipeline. **Layer 1** `scan_vtables()` extracts vtable structures via RELA relocations (dynamic ELF) or raw code-pointer scan fallback. No func_starts iteration. **Layer 2** `name_slots()` resolves each slot to a name via export symbols and string xrefs. **Layer 3** `trace_consumers()` finds call sites dispatching through vtable slots — x86-64 via `VtableDispatchScanner`, ARM64 via `vtable_resolver`, other arches via pointer-literal scan. Consumer tracing uses `_func_starts_sorted()` internally.
+`CppVtableReconstructorAnalyzer.scan()` runs a 3-layer pipeline. **Layer 1** `scan_vtables()` extracts vtable structures via RELA relocations (dynamic ELF) or raw code-pointer scan fallback. No func_starts iteration. **Layer 2** `name_slots()` resolves each slot to a name via export symbols and string xrefs. **Layer 3** `trace_consumers()` finds call sites dispatching through vtable slots: x86-64 via `VtableDispatchScanner`, ARM64 via `vtable_resolver`, other arches via pointer-literal scan. Consumer tracing uses `_func_starts_sorted()` internally.
 
 ---
 
 ## False positives
 
-The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings — `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
+The most common false positive is a tainted argument that is immediately sanitized by the callee before use. Run `SinkSanitizerFilter` on all HIGH findings before manual review. Call sites where the argument is loaded from `.rodata` are not findings: `SinkArgClassifier` classifies these as `RODATA_CONST` and they should be excluded before the scanner runs.
 
 ---
 
@@ -267,8 +267,8 @@ The most common false positive is a tainted argument that is immediately sanitiz
 
 | Attribute | Content |
 |:---|:---|
-| `vtables` | `List[VtableSpec]` — one entry per reconstructed C++ vtable |
-| `propagation` | `List[TypePropSite]` — functions identified as vtable type consumers |
+| `vtables` | `List[VtableSpec]`: one entry per reconstructed C++ vtable |
+| `propagation` | `List[TypePropSite]`: functions identified as vtable type consumers |
 | `binary_path` | Path of the analyzed binary |
 | `arch` | Architecture string (e.g., `'x86_64'`, `'aarch64'`) |
 | `named_slot_count` | Number of vtable slots with resolved function names |
@@ -283,8 +283,8 @@ Each `SlotSpec` has: `slot_index`, `slot_offset`, `func_va`, `func_name`, `name_
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

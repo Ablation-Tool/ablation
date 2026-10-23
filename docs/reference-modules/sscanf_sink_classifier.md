@@ -154,7 +154,7 @@ SinkClassification  sscanf  call_va=0x00402310  func=parse_config (0x004022c0)
 | `fmt_arg_pos` | 0-indexed position of the format-string argument |
 | `func_va` | VA of the calling function |
 | `call_va` | VA of the call instruction |
-| `verdict` | `'RODATA_SAFE'` — fixed safe format; `'RODATA_UNSAFE'` — fixed format with `%s` without width; `'DYNAMIC_FMT'` — format comes from a variable; `'ARG_PROPAGATED'` — format traces to an entry argument; `'UNKNOWN'` — provenance unresolved |
+| `verdict` | `'RODATA_SAFE'`: fixed safe format; `'RODATA_UNSAFE'`: fixed format with `%s` without width; `'DYNAMIC_FMT'`: format comes from a variable; `'ARG_PROPAGATED'`: format traces to an entry argument; `'UNKNOWN'`: provenance unresolved |
 | `format_str` | Decoded format string if from `.rodata`, else empty string |
 | `detail` | Human-readable trace description |
 | `severity` | Derived: `'LOW'` (RODATA_SAFE) / `'HIGH'` (RODATA_UNSAFE, ARG_PROPAGATED) / `'MEDIUM'` (DYNAMIC_FMT, UNKNOWN) |
@@ -163,8 +163,8 @@ SinkClassification  sscanf  call_va=0x00402310  func=parse_config (0x004022c0)
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

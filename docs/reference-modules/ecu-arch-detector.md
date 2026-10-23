@@ -193,7 +193,7 @@ Verified zero false positives across 9 SH-2A, 18 PPC32, and 1 TriCore ROM images
 
 ## Limitations
 
-- Discriminators are density-based: a ROM with very little code in the first 4 KB sample (e.g., a ROM that starts with calibration tables) may misidentify or return LOW confidence. Pass `sample_size=0` to sample the full image.
+- Discriminators are density-based: a ROM with very little code in the first 4 KB sample for example a ROM that starts with calibration tables may misidentify or return LOW confidence. Pass `sample_size=0` to sample the full image.
 - ARM Cortex-M identification is based solely on the vector table (no instruction density signal). A ROM that happens to have a 4-byte value in the SRAM range at offset 0 will false-positive. Use with `is_confident` check.
 - No support for RISC-V, RH850, SH-4, or M32C: add a new `_score_*` method following the same pattern.
 - TriCore detection requires scanning the full image; calling `EcuArchDetector(data, sample_size=N)` with a small N will still cause the TriCore discriminator to scan all of `data`, not the sample. This is intentional: startup code density is too low in the first few KB.
@@ -241,10 +241,10 @@ Calibration data regions contain byte sequences that decode as valid instruction
 | Attribute | Content |
 |:---|:---|
 | `arch` | Best-match ISA string (e.g., `'PPC32-VLE'`, `'M68K'`, `'SH-2A'`, `'ARM-Thumb'`) |
-| `confidence` | `'HIGH'` / `'MEDIUM'` / `'LOW'` — confidence in the ISA detection |
+| `confidence` | `'HIGH'` / `'MEDIUM'` / `'LOW'`: confidence in the ISA detection |
 | `score` | Numeric density score of the winning hypothesis |
 | `reason` | One-line human-readable explanation of why this ISA was chosen |
-| `candidates` | `List[ArchCandidate]` — all scored hypotheses (each with `arch`, `score`, `reason`) |
+| `candidates` | `List[ArchCandidate]`: all scored hypotheses (each with `arch`, `score`, `reason`) |
 
 `result.is_confident` is `True` when `confidence` is `'HIGH'` or `'MEDIUM'`.
 
@@ -252,5 +252,5 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## See also
 
-- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md) — map ROM sections before decoding
-- [ECUSecurityAccessScanner](ecu-security-access-scanner.md) — find UDS 0x27 bypass vectors in decoded code
+- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md): map ROM sections before decoding
+- [ECUSecurityAccessScanner](ecu-security-access-scanner.md): find UDS 0x27 bypass vectors in decoded code

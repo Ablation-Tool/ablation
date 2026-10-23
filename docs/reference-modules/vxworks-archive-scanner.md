@@ -94,7 +94,7 @@ Written to /tmp/extracted/
 
 ## False positives
 
-Extraction either succeeds or raises an exception — there are no false positives in the traditional sense. Check for incomplete downloads (`.aria2` sidecar present) before analysis: partial images produce truncated or zero-filled partitions that pass validation but contain no useful data.
+Extraction either succeeds or raises an exception, there are no false positives in the traditional sense. Check for incomplete downloads (`.aria2` sidecar present) before analysis: partial images produce truncated or zero-filled partitions that pass validation but contain no useful data.
 
 ---
 
@@ -123,6 +123,6 @@ Extraction either succeeds or raises an exception — there are no false positiv
 
 ## See also
 
-- [BinaryContext](binary-context.md) — load extracted payloads for analysis
-- [FirmwareContainers](firmware-containers.md) — higher-level firmware partition walker
-- [EntropyMapper](entropy-mapper.md) — locate encrypted or compressed regions before extraction
+- [BinaryContext](binary-context.md): load extracted payloads for analysis
+- [FirmwareContainers](firmware-containers.md): higher-level firmware partition walker
+- [EntropyMapper](entropy-mapper.md): locate encrypted or compressed regions before extraction

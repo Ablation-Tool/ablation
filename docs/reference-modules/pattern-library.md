@@ -1,6 +1,6 @@
 # Pattern Library
 
-Accumulate and replay semantic search queries that have produced confirmed RE findings — so each successful query string runs automatically on every new binary, turning past confirmed findings into permanent detection coverage.
+Accumulate and replay semantic search queries that have produced confirmed RE findings, so each successful query string runs automatically on every new binary, turning past confirmed findings into permanent detection coverage.
 
 ---
 
@@ -154,7 +154,7 @@ PatternLibrary: 33 patterns  (/home/user/.ablation/patterns.json)
 
 ## Pipeline position
 
-**Before this module:** `SemanticSearcher.build_corpus()` on the target binary — `sweep()` requires a pre-built corpus.
+**Before this module:** `SemanticSearcher.build_corpus()` on the target binary: `sweep()` requires a pre-built corpus.
 
 **After this module:** For every hit above threshold, call `FuncProfiler.profile()` and `SinkArgClassifier.classify_all()`. Confirmed findings go into `FindingRegistry.register()` and back into the pattern library via `ingest_from_registry()`.
 
@@ -172,13 +172,13 @@ PatternLibrary: 33 patterns  (/home/user/.ablation/patterns.json)
 | `PatternHit.va` | Function VA |
 | `PatternHit.score` | Cosine similarity score from `SemanticSearcher.query()` |
 | `PatternHit.confirmed` | `True` after manual RE confirmation; `False` for unreviewed candidates |
-| `SweepResult.hits` | `List[Tuple[int, float]]` — `(va, score)` pairs for one pattern |
+| `SweepResult.hits` | `List[Tuple[int, float]]`: `(va, score)` pairs for one pattern |
 
 ---
 
 ## See also
 
-- [Finding Registry](finding-registry.md) — source of confirmed findings for `ingest_from_registry()`
-- [Semantic Code Search](semantic-code-search.md) — the underlying query engine for `sweep()`
-- [Sink Arg Classifier](sink-arg-classifier.md) — follow-up tool for sweep hits at exec-class sinks
-- [Function Profiler](function-profiler.md) — deep profile of candidate functions from sweep results
+- [Finding Registry](finding-registry.md): source of confirmed findings for `ingest_from_registry()`
+- [Semantic Code Search](semantic-code-search.md): the underlying query engine for `sweep()`
+- [Sink Arg Classifier](sink-arg-classifier.md): follow-up tool for sweep hits at exec-class sinks
+- [Function Profiler](function-profiler.md): deep profile of candidate functions from sweep results

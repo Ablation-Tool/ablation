@@ -69,11 +69,11 @@ for policy in EdgePolicy:
 
 ## Pipeline position
 
-**When to use:** Check if `AixInstallpDecompressor.decompress()` produces fewer bytes than `uncompressed_size`. If under-recovery, the entry has multiple BWT cycles — run this module to attempt full text recovery.
+**When to use:** Check if `AixInstallpDecompressor.decompress()` produces fewer bytes than `uncompressed_size`. If under-recovery, the entry has multiple BWT cycles: run this module to attempt full text recovery.
 
 ---
 
 ## See also
 
-- [AIX Installp Decompressor](aix-installp-decompressor.md) — upstream; step 3 BWT inverse
-- [AIX Installp Step4 Multilevel](aix-installp-step4-multilevel.md) — handles rare bytes with j ≥ K-1
+- [AIX Installp Decompressor](aix-installp-decompressor.md): upstream; step 3 BWT inverse
+- [AIX Installp Step4 Multilevel](aix-installp-step4-multilevel.md): handles rare bytes with j ≥ K-1

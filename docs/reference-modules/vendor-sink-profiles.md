@@ -1,16 +1,16 @@
 # Vendor Sink Profiles
 
-Load vendor-specific sink registrations and known-safe exec patterns from YAML profiles in `ablation/profiles/` — extending `SinkArgClassifier` with firmware-specific wrapper functions (e.g., Fortinet's `fadcsystem`, Cisco's `cpexec`) and known-safe patterns (e.g., `popen` calls that always use a fixed unsetenv prefix) without modifying the core classifier.
+Load vendor-specific sink registrations and known-safe exec patterns from YAML profiles in `ablation/profiles/`: extending `SinkArgClassifier` with firmware-specific wrapper functions (e.g., Fortinet's `fadcsystem`, Cisco's `cpexec`) and known-safe patterns (e.g., `popen` calls that always use a fixed unsetenv prefix) without modifying the core classifier.
 
 ---
 
 ## Why this exists
 
-1. **Firmware vendors wrap libc exec functions with vendor-specific helpers — `fadcsystem` in FortiOS, `cpexec` in Cisco IOS, `wm_system` in network appliances — that are not in the default sink catalog but are equally dangerous.** `VendorProfile` registers these wrapper functions as sinks with the correct argument positions, so `SinkArgClassifier.classify_all()` catches them without the analyst manually adding each wrapper per engagement.
+1. **Firmware vendors wrap libc exec functions with vendor-specific helpers: `fadcsystem` in FortiOS, `cpexec` in Cisco IOS, `wm_system` in network appliances, that are not in the default sink catalog but are equally dangerous.** `VendorProfile` registers these wrapper functions as sinks with the correct argument positions, so `SinkArgClassifier.classify_all()` catches them without the analyst manually adding each wrapper per engagement.
 
-2. **Some exec-class call sites are structurally safe by vendor convention** — for example, a `popen` call that always prefixes the command with `unsetenv PATH; /usr/bin/logger` is safe even if the suffix is user-controlled (the unsetenv removes PATH injection and the logger is fixed). `VendorProfile.known_safe_exec_patterns` registers these patterns, allowing `SinkArgClassifier` to automatically mark them as `KNOWN_SAFE` instead of `ARG_PROPAGATED`.
+2. **Some exec-class call sites are structurally safe by vendor convention**: for example, a `popen` call that always prefixes the command with `unsetenv PATH; /usr/bin/logger` is safe even if the suffix is user-controlled (the unsetenv removes PATH injection and the logger is fixed). `VendorProfile.known_safe_exec_patterns` registers these patterns, allowing `SinkArgClassifier` to automatically mark them as `KNOWN_SAFE` instead of `ARG_PROPAGATED`.
 
-3. **YAML profiles separate vendor-specific knowledge from core analyzer code** — adding a new vendor's sink catalog requires only creating `ablation/profiles/<vendor>.yaml`, not modifying Python source. `VendorProfile.available_vendors()` lists all installed profiles; `VendorProfile.from_vendor('fortinet')` loads the Fortinet profile.
+3. **YAML profiles separate vendor-specific knowledge from core analyzer code**: adding a new vendor's sink catalog requires only creating `ablation/profiles/<vendor>.yaml`, not modifying Python source. `VendorProfile.available_vendors()` lists all installed profiles; `VendorProfile.from_vendor('fortinet')` loads the Fortinet profile.
 
 ---
 
@@ -79,13 +79,13 @@ SinkArgClassifier (with fortinet profile):
 
 **A vendor-specific wrapper is only safe to treat as a sink at arg_pos N if the wrapper always passes its arg_pos N directly to the underlying exec function.** If a wrapper sanitizes its input before calling exec, `apply_to()` will over-report by classifying the sanitized wrapper the same as a raw exec call. Review each registered wrapper's implementation before relying on its profile registration.
 
-**Known-safe patterns match by string prefix — a pattern `'^/usr/bin/logger'` will match any command starting with `/usr/bin/logger`.** If the pattern is followed by user-controlled data (e.g., `/usr/bin/logger $USER_INPUT`), the pattern is not actually safe. Verify that the command string after the prefix is also hardcoded before registering the pattern.
+**Known-safe patterns match by string prefix: a pattern `'^/usr/bin/logger'` will match any command starting with `/usr/bin/logger`.** If the pattern is followed by user-controlled data (e.g., `/usr/bin/logger $USER_INPUT`), the pattern is not actually safe. Verify that the command string after the prefix is also hardcoded before registering the pattern.
 
 ---
 
 ## Pipeline position
 
-Apply `VendorProfile.apply_to(clf)` immediately after creating `SinkArgClassifier.from_context(ctx)` and before calling `classify_all()`. The profile registration must happen before classification — it cannot be applied retroactively to an already-classified result list.
+Apply `VendorProfile.apply_to(clf)` immediately after creating `SinkArgClassifier.from_context(ctx)` and before calling `classify_all()`. The profile registration must happen before classification, it cannot be applied retroactively to an already-classified result list.
 
 ---
 
@@ -96,9 +96,9 @@ Apply `VendorProfile.apply_to(clf)` immediately after creating `SinkArgClassifie
 | Attribute | Content |
 |:---|:---|
 | `vendor` | Vendor name string (e.g., `'fortinet'`) |
-| `sinks` | `List[dict]` — dicts with `name`, `arg_pos`, `note` |
-| `safe_patterns` | `List[dict]` — known-safe exec pattern records with `pattern` and `note` |
-| `sanitizers` | `List[dict]` — known sanitizer function records |
+| `sinks` | `List[dict]`: dicts with `name`, `arg_pos`, `note` |
+| `safe_patterns` | `List[dict]`: known-safe exec pattern records with `pattern` and `note` |
+| `sanitizers` | `List[dict]`: known sanitizer function records |
 
 `VendorProfile.apply_to(classifier)` registers all profile sinks into a `SinkArgClassifier` and returns `None`.
 
@@ -106,6 +106,6 @@ Apply `VendorProfile.apply_to(clf)` immediately after creating `SinkArgClassifie
 
 ## See also
 
-- [Sink Argument Classifier](sink-argument-classifier.md) — classifier that VendorProfile extends
-- [Sanitizer Recognition](sanitizer-recognition.md) — identifies vendor-specific validators for `SinkSanitizerFilter`
-- [CMDB to Sink Mapping](cmdb-to-sink-mapping.md) — FortiOS-specific CMDB exec sink analysis
+- [Sink Argument Classifier](sink-argument-classifier.md): classifier that VendorProfile extends
+- [Sanitizer Recognition](sanitizer-recognition.md): identifies vendor-specific validators for `SinkSanitizerFilter`
+- [CMDB to Sink Mapping](cmdb-to-sink-mapping.md): FortiOS-specific CMDB exec sink analysis

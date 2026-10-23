@@ -1,12 +1,12 @@
 # TaintedStringTracker
 
-Upgrade `SNPRINTF_RODATA` verdicts from `SinkArgClassifier` to `ARG_PROPAGATED` when the `snprintf` format arguments — not the format string — carry attacker-controlled input.
+Upgrade `SNPRINTF_RODATA` verdicts from `SinkArgClassifier` to `ARG_PROPAGATED` when the `snprintf` format arguments, not the format string: carry attacker-controlled input.
 
 ---
 
 ## Why this exists
 
-1. **`SNPRINTF_RODATA` is incomplete, not safe.** `SinkArgClassifier` classifies `system(buf)` as `SNPRINTF_RODATA` when `buf` was written by `snprintf(buf, n, fmt, ...)` with a `.rodata` constant format. That is correct about the format — but says nothing about the `%s` arguments. The pattern:
+1. **`SNPRINTF_RODATA` is incomplete, not safe.** `SinkArgClassifier` classifies `system(buf)` as `SNPRINTF_RODATA` when `buf` was written by `snprintf(buf, n, fmt, ...)` with a `.rodata` constant format. That is correct about the format, but says nothing about the `%s` arguments. The pattern:
    ```c
    snprintf(cmd, sizeof(cmd), "%s %s", argv[1], argv[2]);
    system(cmd);
@@ -43,12 +43,12 @@ x86_64 `snprintf` argument positions (SysV ABI):
 
 | Argument | Register | Role |
 |:---|:---|:---|
-| 0 | `rdi` | `buf` (destination buffer — tracked by SAC) |
+| 0 | `rdi` | `buf` (destination buffer: tracked by SAC) |
 | 1 | `rsi` | `n` (size) |
-| 2 | `rdx` | `fmt` (format string — SAC verifies this is `.rodata`) |
-| 3 | `rcx` | First format arg — **this module classifies** |
-| 4 | `r8` | Second format arg — **this module classifies** |
-| 5 | `r9` | Third format arg — **this module classifies** |
+| 2 | `rdx` | `fmt` (format string: SAC verifies this is `.rodata`) |
+| 3 | `rcx` | First format arg: **this module classifies** |
+| 4 | `r8` | Second format arg: **this module classifies** |
+| 5 | `r9` | Third format arg: **this module classifies** |
 
 ---
 
@@ -81,7 +81,7 @@ TaintedStringTracker: 2 upgrade(s)
     // lea r8, [rbp-0x20] (stack buf from frame) at 0x22dff8
 ```
 
-**Full pipeline — SAC + upgrade + taint:**
+**Full pipeline: SAC + upgrade + taint:**
 ```python
 from ablation.analyzers.sink_arg_classifier import SNPRINTF_RODATA, ARG_PROPAGATED
 from ablation.analyzers.taint_tracker import TaintTracker
@@ -130,7 +130,7 @@ for r in to_trace:
 
 ## Pipeline position
 
-**Before:** `SinkArgClassifier.classify_all()` — produces the `SNPRINTF_RODATA` verdicts to upgrade.
+**Before:** `SinkArgClassifier.classify_all()`: produces the `SNPRINTF_RODATA` verdicts to upgrade.
 
 **After:** Treat upgraded `TaintedFormatResult` objects the same as `ARG_PROPAGATED` findings from SAC. Pass them to `TaintTracker`.
 
@@ -138,6 +138,6 @@ for r in to_trace:
 
 ## See also
 
-- [Sink Arg Classifier](sink-arg-classifier.md) — produces the SNPRINTF_RODATA inputs this module upgrades
-- [Taint Analysis](taint-analysis.md) — receives the upgraded ARG_PROPAGATED findings
-- [Format String Scanner](format-string-scanner.md) — separate scanner for printf-class vulnerabilities
+- [Sink Arg Classifier](sink-arg-classifier.md): produces the SNPRINTF_RODATA inputs this module upgrades
+- [Taint Analysis](taint-analysis.md): receives the upgraded ARG_PROPAGATED findings
+- [Format String Scanner](format-string-scanner.md): separate scanner for printf-class vulnerabilities

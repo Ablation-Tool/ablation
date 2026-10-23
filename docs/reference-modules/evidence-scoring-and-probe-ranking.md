@@ -1,16 +1,16 @@
 # Evidence Scoring and Probe Ranking
 
-Rank candidate analysis probes by expected value against a set of surviving vulnerability hypotheses — computing `predicted_disagreement × observability × analyzer_reliability / estimated_cost` to select the probe most likely to resolve hypothesis uncertainty and eliminate false positives with minimum analyst effort.
+Rank candidate analysis probes by expected value against a set of surviving vulnerability hypotheses: computing `predicted_disagreement × observability × analyzer_reliability / estimated_cost` to select the probe most likely to resolve hypothesis uncertainty and eliminate false positives with minimum analyst effort.
 
 ---
 
 ## Why this exists
 
-1. **After `SemanticSearcher` and `TaintTracker` produce a set of candidate findings, not all of them warrant the same follow-up effort — some findings are near-certainties, others are speculative.** `ProbeRanker` formalizes this by treating each candidate finding as a hypothesis with a confidence state and each possible next analysis action (manual disasm, PoC attempt, PathSolver run) as a probe. The probe that maximally resolves hypothesis uncertainty per unit analyst cost is ranked first.
+1. **After `SemanticSearcher` and `TaintTracker` produce a set of candidate findings, not all of them warrant the same follow-up effort: some findings are near-certainties, others are speculative.** `ProbeRanker` formalizes this by treating each candidate finding as a hypothesis with a confidence state and each possible next analysis action (manual disasm, PoC attempt, PathSolver run) as a probe. The probe that maximally resolves hypothesis uncertainty per unit analyst cost is ranked first.
 
-2. **`predicted_disagreement × observability × analyzer_reliability / estimated_cost` is the probe selection formula** — `predicted_disagreement` is how much the probe result is expected to differ across surviving hypotheses (a probe that confirms all hypotheses equally is useless); `observability` is how clearly the probe result can be observed (a PathSolver run is more observable than a fuzzing attempt); `analyzer_reliability` is the estimated false-positive rate of the analyzer performing the probe; `estimated_cost` is analyst time in minutes.
+2. **`predicted_disagreement × observability × analyzer_reliability / estimated_cost` is the probe selection formula**: `predicted_disagreement` is how much the probe result is expected to differ across surviving hypotheses (a probe that confirms all hypotheses equally is useless); `observability` is how clearly the probe result can be observed (a PathSolver run is more observable than a fuzzing attempt); `analyzer_reliability` is the estimated false-positive rate of the analyzer performing the probe; `estimated_cost` is analyst time in minutes.
 
-3. **`ProbeRanker.top_probe()` returns the single highest-value next action** — it is designed for use in an interactive analysis loop where the analyst completes the top probe, updates hypothesis confidence states (`HypothesisRecord.confidence`), and calls `top_probe()` again to get the next action. This loop continues until all hypotheses reach `CONFIRMED` or `ELIMINATED` confidence state.
+3. **`ProbeRanker.top_probe()` returns the single highest-value next action**, it is designed for use in an interactive analysis loop where the analyst completes the top probe, updates hypothesis confidence states (`HypothesisRecord.confidence`), and calls `top_probe()` again to get the next action. This loop continues until all hypotheses reach `CONFIRMED` or `ELIMINATED` confidence state.
 
 ---
 
@@ -94,15 +94,15 @@ ProbeRanker plan (2 hypotheses):
 
 ## False positives
 
-**`ProbeRanker` does not have access to the actual binary or analysis results — it ranks probes based on estimated values, not observed outcomes.** The rankings are prioritization heuristics, not guarantees. An H1 `PathSolver` run that returns `INFEASIBLE` is still the right first probe if it resolves the hypothesis quickly, even if the outcome is not the hoped-for confirmation.
+**`ProbeRanker` does not have access to the actual binary or analysis results, it ranks probes based on estimated values, not observed outcomes.** The rankings are prioritization heuristics, not guarantees. An H1 `PathSolver` run that returns `INFEASIBLE` is still the right first probe if it resolves the hypothesis quickly, even if the outcome is not the hoped-for confirmation.
 
-**`predicted_disagreement` assumes hypotheses are independent — in practice, confirming H1 may also confirm or eliminate H2.** `ProbeRanker` does not model inter-hypothesis dependencies. After completing a probe, update all affected hypothesis confidence states before calling `top_probe()` again.
+**`predicted_disagreement` assumes hypotheses are independent: in practice, confirming H1 may also confirm or eliminate H2.** `ProbeRanker` does not model inter-hypothesis dependencies. After completing a probe, update all affected hypothesis confidence states before calling `top_probe()` again.
 
 ---
 
 ## Pipeline position
 
-Use `ProbeRanker` when multiple candidate findings need prioritization across a limited analyst time budget. It is most valuable at the triage-to-confirmation transition — after `SemanticSearcher` and `TaintTracker` have produced 5–20 candidates and the analyst must decide which to pursue first.
+Use `ProbeRanker` when multiple candidate findings need prioritization across a limited analyst time budget. It is most valuable at the triage-to-confirmation transition: after `SemanticSearcher` and `TaintTracker` have produced 5–20 candidates and the analyst must decide which to pursue first.
 
 ---
 
@@ -113,9 +113,9 @@ Use `ProbeRanker` when multiple candidate findings need prioritization across a 
 | Field | Content |
 |:---|:---|
 | `hypothesis` | The input `VulnHypothesis` object |
-| `predicted_disagreement` | Float 0.0–1.0 — how likely this probe is to change current confidence |
-| `observability` | Float 0.0–1.0 — how deterministic the probe result is |
-| `reliability` | Float 0.0–1.0 — how repeatable the probe is |
+| `predicted_disagreement` | Float 0.0–1.0: how likely this probe is to change current confidence |
+| `observability` | Float 0.0–1.0: how deterministic the probe result is |
+| `reliability` | Float 0.0–1.0: how repeatable the probe is |
 | `estimated_cost` | Estimated analyst time string (e.g., `5 min`, `30 min`) |
 | `probe_value` | Composite score (`predicted_disagreement × observability / estimated_cost_minutes`) |
 
@@ -123,6 +123,6 @@ Use `ProbeRanker` when multiple candidate findings need prioritization across a 
 
 ## See also
 
-- [Assisted Vulnerability Hypotheses](assisted-vulnerability-hypotheses.md) — produces hypotheses that `ProbeRanker` prioritizes
-- [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md) — `SCCPAnalysis` can reduce hypothesis count by eliminating unreachable paths before ranking
-- [Function Identity Database](function-identity-database.md) — `FindingRegistry.find_similar()` for seeding initial hypothesis confidence
+- [Assisted Vulnerability Hypotheses](assisted-vulnerability-hypotheses.md): produces hypotheses that `ProbeRanker` prioritizes
+- [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md): `SCCPAnalysis` can reduce hypothesis count by eliminating unreachable paths before ranking
+- [Function Identity Database](function-identity-database.md): `FindingRegistry.find_similar()` for seeding initial hypothesis confidence

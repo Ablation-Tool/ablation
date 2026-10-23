@@ -360,7 +360,7 @@ ctx.set_name(0x4000, 'parse_radius_packet', source='confirmed')
 
 ## How it works
 
-`load_or_build(path)` hashes the binary with SHA-256, checks `~/.ablation/cache/<sha256[:16]>_<basename>.json`, and returns the deserialized `BinaryContext` in ~130 ms on a hit. On a miss it runs the five-step build pipeline described in the sections above — format parse, FDE unwind scan, callee augmentation, call graph construction, string xref indexing — then serializes to the cache file. The SHA-256 key guarantees cache correctness: any byte change in the binary produces a different hash and forces a rebuild. No version tag, no timestamp. See **Build phase** above for the full step-by-step description.
+`load_or_build(path)` hashes the binary with SHA-256, checks `~/.ablation/cache/<sha256[:16]>_<basename>.json`, and returns the deserialized `BinaryContext` in ~130 ms on a hit. On a miss it runs the five-step build pipeline described in the sections above: format parse, FDE unwind scan, callee augmentation, call graph construction, string xref indexing: then serializes to the cache file. The SHA-256 key guarantees cache correctness: any byte change in the binary produces a different hash and forces a rebuild. No version tag, no timestamp. See **Build phase** above for the full step-by-step description.
 
 ---
 
@@ -396,14 +396,14 @@ BinaryContext: libservice.so
 
 ## Reading output
 
-`BinaryContext.load_or_build(path)` returns a `BinaryContext` — the session object that all analysis modules operate on. It has no findings output; it is the input handle. See [BinaryContext](binary-context.md) for the full method reference.
+`BinaryContext.load_or_build(path)` returns a `BinaryContext`: the session object that all analysis modules operate on. It has no findings output; it is the input handle. See [BinaryContext](binary-context.md) for the full method reference.
 
-For PLT resolution specifically: `ctx.imports()` returns `Dict[str, int]` — import name → GOT VA.
+For PLT resolution specifically: `ctx.imports()` returns `Dict[str, int]`: import name → GOT VA.
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

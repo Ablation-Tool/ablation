@@ -1,16 +1,16 @@
 # API Authentication and Token Checks
 
-Scan live API responses for JWT tokens, test `alg=none` bypass and weak HMAC secrets, probe OAuth2/OIDC authorization server metadata, attempt `redirect_uri` manipulation and default client credentials, enumerate exposed JWKS endpoints, and verify PKCE and rate-limiting enforcement — as part of the broader `api_re.py` assessment workflow.
+Scan live API responses for JWT tokens, test `alg=none` bypass and weak HMAC secrets, probe OAuth2/OIDC authorization server metadata, attempt `redirect_uri` manipulation and default client credentials, enumerate exposed JWKS endpoints, and verify PKCE and rate-limiting enforcement: as part of the broader `api_re.py` assessment workflow.
 
 ---
 
 ## Why this exists
 
-1. **JWT tokens are transmitted in API responses and response headers — not just in auth endpoints.** Any endpoint that returns a 200 response may embed a JWT in its body or headers (`Authorization`, `Set-Cookie`, `X-Auth-Token`). `analyze_tokens_in_response()` scans all discovered endpoints, not just `/auth` or `/login`, using a structural regex (`eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*`) that matches by the Base64url-encoded `{"` prefix — catching tokens embedded in JSON responses, HTML pages, and custom headers alike.
+1. **JWT tokens are transmitted in API responses and response headers, not just in auth endpoints.** Any endpoint that returns a 200 response may embed a JWT in its body or headers (`Authorization`, `Set-Cookie`, `X-Auth-Token`). `analyze_tokens_in_response()` scans all discovered endpoints, not just `/auth` or `/login`, using a structural regex (`eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*`) that matches by the Base64url-encoded `{"` prefix: catching tokens embedded in JSON responses, HTML pages, and custom headers alike.
 
-2. **`alg=none` and weak HMAC secrets are exploitable in minutes but require server-side confirmation.** The `alg=none` bypass forges a new token with `"alg":"none"` and an empty signature, then replays it on the same endpoint — confirmation comes from the server returning anything other than 401. Weak secret cracking iterates 18 known-weak HMAC keys (including `""`, `"secret"`, `"HS256"`, `"your-256-bit-secret"`) and verifies each candidate by computing `HMAC-SHA{256,384,512}(header.payload, candidate)` and comparing to the token's signature bytes. Both attacks produce confirmed exploits, not theoretical findings.
+2. **`alg=none` and weak HMAC secrets are exploitable in minutes but require server-side confirmation.** The `alg=none` bypass forges a new token with `"alg":"none"` and an empty signature, then replays it on the same endpoint: confirmation comes from the server returning anything other than 401. Weak secret cracking iterates 18 known-weak HMAC keys (including `""`, `"secret"`, `"HS256"`, `"your-256-bit-secret"`) and verifies each candidate by computing `HMAC-SHA{256,384,512}(header.payload, candidate)` and comparing to the token's signature bytes. Both attacks produce confirmed exploits, not theoretical findings.
 
-3. **OAuth2/OIDC attack surface spans 13 discovery paths, redirect URI validation, scope escalation, PKCE downgrade, and default client credentials.** An authorization server with no PKCE requirement allows code injection attacks from public clients. An open `redirect_uri` allows authorization code theft. Default client credentials (`client:secret`, `admin:admin`) against the token endpoint grant immediate access. These checks require live interaction with the authorization server — static analysis of the API docs does not reveal them.
+3. **OAuth2/OIDC attack surface spans 13 discovery paths, redirect URI validation, scope escalation, PKCE downgrade, and default client credentials.** An authorization server with no PKCE requirement allows code injection attacks from public clients. An open `redirect_uri` allows authorization code theft. Default client credentials (`client:secret`, `admin:admin`) against the token endpoint grant immediate access. These checks require live interaction with the authorization server: static analysis of the API docs does not reveal them.
 
 ---
 
@@ -145,7 +145,7 @@ OAuth2 findings: 4
 
 ## False positives
 
-**`alg=none` replay returns non-401 but access is still denied.** Some APIs return 200 with an error body when authentication fails — the response body contains `"error": "invalid_token"` even though the status code is 200. The test reports `alg=none bypass` based on status code. Before writing the finding, confirm the forged token response body contains data equivalent to an authenticated response — not an error payload with a 200 wrapper.
+**`alg=none` replay returns non-401 but access is still denied.** Some APIs return 200 with an error body when authentication fails: the response body contains `"error": "invalid_token"` even though the status code is 200. The test reports `alg=none bypass` based on status code. Before writing the finding, confirm the forged token response body contains data equivalent to an authenticated response, not an error payload with a 200 wrapper.
 
 **`kid` present does not mean injection is exploitable.** Many compliant JWT libraries use `kid` to select among multiple valid signing keys by ID. The finding flags structural risk, not confirmed injection. Confirm exploitability by: (1) sending a token with `"kid": "' OR 1=1--"` and observing whether signature verification still passes, or (2) sending `"kid": "../../etc/passwd"` and observing the server's key-lookup error versus a signature verification error. Different error messages confirm different sink types.
 
@@ -155,9 +155,9 @@ OAuth2 findings: 4
 
 ## Pipeline position
 
-**Before this module:** Run `fuzz_paths()` and `harvest_openapi()` to build the endpoint list — `analyze_tokens_in_response()` requires an `Endpoint` list covering the full API surface, not just auth endpoints. Run `probe_rate_limiting()` on the auth endpoints after JWT testing — an API with neither rate limiting nor JWT expiry on auth endpoints has unbounded brute-force exposure.
+**Before this module:** Run `fuzz_paths()` and `harvest_openapi()` to build the endpoint list: `analyze_tokens_in_response()` requires an `Endpoint` list covering the full API surface, not just auth endpoints. Run `probe_rate_limiting()` on the auth endpoints after JWT testing: an API with neither rate limiting nor JWT expiry on auth endpoints has unbounded brute-force exposure.
 
-**After this module:** If `alg=none` bypass confirmed: escalate to admin role — decode the original payload, add `"role": "admin"` or equivalent, forge with `alg=none`, replay on admin-gated endpoints. If weak secret confirmed: compute a valid admin token offline using the recovered key — `hmac.new(secret.encode(), header.payload, hashlib.sha256).digest()` and `base64.urlsafe_b64encode(sig).rstrip(b'=')` constructs the new signature. If OAuth2 `redirect_uri` confirmed: simulate the full code-theft flow — lure a victim to the authorization URL with `redirect_uri=https://attacker.com/callback` and capture the authorization code.
+**After this module:** If `alg=none` bypass confirmed: escalate to admin role: decode the original payload, add `"role": "admin"` or equivalent, forge with `alg=none`, replay on admin-gated endpoints. If weak secret confirmed: compute a valid admin token offline using the recovered key: `hmac.new(secret.encode(), header.payload, hashlib.sha256).digest()` and `base64.urlsafe_b64encode(sig).rstrip(b'=')` constructs the new signature. If OAuth2 `redirect_uri` confirmed: simulate the full code-theft flow: lure a victim to the authorization URL with `redirect_uri=https://attacker.com/callback` and capture the authorization code.
 
 ---
 
@@ -165,7 +165,7 @@ OAuth2 findings: 4
 
 | Field | Content |
 |:---|:---|
-| `f['type'] == 'alg_none_bypass'` | JWT accepted with `alg=none` — signature verification disabled |
+| `f['type'] == 'alg_none_bypass'` | JWT accepted with `alg=none`: signature verification disabled |
 | `f['type'] == 'weak_jwt_secret'` | HMAC secret cracked; `f['secret']` contains the plaintext key |
 | `f['type'] == 'jwt_kid_present'` | `kid` header present; `f['kid']` is the key lookup value |
 | `f['type'] == 'jwt_jku_ssrf'` | `jku`/`x5u` header points to attacker-controlled JWKS URL |
@@ -177,6 +177,6 @@ OAuth2 findings: 4
 
 ## See also
 
-- [API Reverse Engineering](api-re.md) — full 15-phase workflow including this auth subsystem
-- [Media and Signaling Posture](media-and-signaling-posture.md) — SIP/Asterisk default credential testing for VoIP targets
-- [Agent Protocol Exposure](agent-protocol-exposure.md) — token/API key checks for AI agent control plane endpoints
+- [API Reverse Engineering](api-re.md): full 15-phase workflow including this auth subsystem
+- [Media and Signaling Posture](media-and-signaling-posture.md): SIP/Asterisk default credential testing for VoIP targets
+- [Agent Protocol Exposure](agent-protocol-exposure.md): token/API key checks for AI agent control plane endpoints

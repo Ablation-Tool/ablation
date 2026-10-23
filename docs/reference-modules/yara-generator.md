@@ -1,12 +1,12 @@
 # YARA Rule Generation
 
-Generate deployment-ready YARA detection rules from Ablation scan findings — IOC strings, CRITICAL-severity malware API imports, anti-debug byte patterns, and confirmed vulnerability signatures — with auto-generated metadata including the source binary's SHA256.
+Generate deployment-ready YARA detection rules from Ablation scan findings: IOC strings, CRITICAL-severity malware API imports, anti-debug byte patterns, and confirmed vulnerability signatures: with auto-generated metadata including the source binary's SHA256.
 
 ---
 
 ## Why this exists
 
-1. **Findings without detection rules have limited operational value.** An analyst who identifies a backdoor or malware sample in a firmware image needs to answer: "can I detect this at scale — across my environment, across ingested samples, across new firmware versions?" A YARA rule answers that question universally. Without automatic rule generation, analysts must manually translate findings into detection signatures — a step they skip under time pressure.
+1. **Findings without detection rules have limited operational value.** An analyst who identifies a backdoor or malware sample in a firmware image needs to answer: "can I detect this at scale: across my environment, across ingested samples, across new firmware versions?" A YARA rule answers that question universally. Without automatic rule generation, analysts must manually translate findings into detection signatures: a step they skip under time pressure.
 
 2. **IOC strings, malware API imports, and byte patterns have different detection properties.** A domain name in a C2 callback requires case-insensitive ASCII/wide matching. A `VirtualAllocEx` import requires a simple string match against the IAT. An anti-debug byte sequence (`EB 04 74 02`) requires a hex pattern match. A single YARA rule format can represent all three, but the generation logic must be type-aware. This module handles each category with the appropriate YARA string type and modifier.
 
@@ -149,7 +149,7 @@ rule mal_malware_exe_3a4f8c1d2b9e7f5a
 
 **Shared IOC strings with common values.** If an IOC string is a common domain or IP address (e.g., `127.0.0.1`, `example.com`), the `2 of ($s_*)` condition does not filter it out. Only one instance of a widely shared string could still match alongside another one. Remove obviously common values from the IOC strings input before calling the generator.
 
-**API names in security utilities.** Anti-malware, EDR agents, and debugging tools legitimately import `NtCreateThreadEx`, `VirtualAllocEx`, and other CRITICAL APIs for monitoring purposes. The CRITICAL threshold in the generator is calibrated for untrusted samples — applying generated rules to enterprise endpoint binaries will produce false positives.
+**API names in security utilities.** Anti-malware, EDR agents, and debugging tools legitimately import `NtCreateThreadEx`, `VirtualAllocEx`, and other CRITICAL APIs for monitoring purposes. The CRITICAL threshold in the generator is calibrated for untrusted samples: applying generated rules to enterprise endpoint binaries will produce false positives.
 
 **Empty rules (`condition: false`).** When the findings dict is empty (no IOC strings, no CRITICAL APIs, no byte patterns), the generator emits a rule with `condition: false`. This is a syntactically valid YARA rule that never matches. Validate that the findings input is populated before generating rules for deployment.
 
@@ -177,7 +177,7 @@ rule mal_malware_exe_3a4f8c1d2b9e7f5a
 
 ## See also
 
-- [ATT&CK Labeling](attandck-labeling.md) — enrich findings with technique IDs before generating rules
-- [Binary Context](binary-context.md) — provides string extractions for rule generation
-- [Finding Registry](finding-registry.md) — source of confirmed findings for high-confidence rule generation
-- [IOC Candidate Extraction](ioc-candidate-extraction.md) — extract IP/domain/key candidates for `ioc_strings` input
+- [ATT&CK Labeling](attandck-labeling.md): enrich findings with technique IDs before generating rules
+- [Binary Context](binary-context.md): provides string extractions for rule generation
+- [Finding Registry](finding-registry.md): source of confirmed findings for high-confidence rule generation
+- [IOC Candidate Extraction](ioc-candidate-extraction.md): extract IP/domain/key candidates for `ioc_strings` input

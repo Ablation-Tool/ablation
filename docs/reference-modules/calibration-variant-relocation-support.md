@@ -1,6 +1,6 @@
 # Calibration Variant Relocation Support
 
-Locate open_damos.json calibration tables in any firmware variant of a Bosch ECU family — using fingerprint relocation (matching expected physical breakpoint axis values) to find tables even when their absolute addresses differ across software generations — via `ablation/analyzers/ecu_open_damos_parser.py`.
+Locate open_damos.json calibration tables in any firmware variant of a Bosch ECU family: using fingerprint relocation (matching expected physical breakpoint axis values) to find tables even when their absolute addresses differ across software generations: via `ablation/analyzers/ecu_open_damos_parser.py`.
 
 ---
 
@@ -8,9 +8,9 @@ Locate open_damos.json calibration tables in any firmware variant of a Bosch ECU
 
 1. **Fixed-address calibration table lookups break across firmware variants.** Bosch EDC-family ECUs (EDC16C34, EDC17, MED17) have dozens of software generations; a calibration table found at `0x3E8000` in one build may appear at `0x3E9200` in the next. `EcuOpenDamosParser` uses the numeric axis fingerprints embedded in the open_damos.json to find each table in any variant without maintaining per-version address maps.
 
-2. **open_damos.json is the output format of the open-car-reprog project (Poisson48)** — a community-maintained calibration definition file for PSA/Bosch ECU families. Each axis entry carries expected physical breakpoint values (e.g., RPM axis = `[800, 1200, 1600, 2000, ...]`). `locate_in_rom()` XORs a search window against these fingerprints to find the table's location in any ROM variant, not just the baseline image used to build the JSON.
+2. **open_damos.json is the output format of the open-car-reprog project (Poisson48)**: a community-maintained calibration definition file for PSA/Bosch ECU families. Each axis entry carries expected physical breakpoint values (e.g., RPM axis = `[800, 1200, 1600, 2000, ...]`). `locate_in_rom()` XORs a search window against these fingerprints to find the table's location in any ROM variant, not just the baseline image used to build the JSON.
 
-3. **`label_map(rom)` returns `{file_offset: label}` directly usable with `ctx.set_name()`** — after calling `locate_in_rom()`, `label_map()` generates human-readable table names (e.g., `inj_duration_vs_rpm_load`, `boost_target_map`) keyed by file offset. This populates the `BinaryContext` name registry with calibration-domain labels in one call, enabling SemanticSearcher to find code that accesses specific tables by name.
+3. **`label_map(rom)` returns `{file_offset: label}` directly usable with `ctx.set_name()`**: after calling `locate_in_rom()`, `label_map()` generates human-readable table names (e.g., `inj_duration_vs_rpm_load`, `boost_target_map`) keyed by file offset. This populates the `BinaryContext` name registry with calibration-domain labels in one call, enabling SemanticSearcher to find code that accesses specific tables by name.
 
 ---
 
@@ -70,27 +70,27 @@ label_map():
 
 ## False positives
 
-**Fingerprint search within ±tolerance may produce offset collisions** — if two tables have similar axis fingerprints and appear near each other in ROM, `locate_in_rom()` may return the wrong table offset for one of them. Verify located offsets by inspecting the data at the returned offset against the expected axis values from the JSON.
+**Fingerprint search within ±tolerance may produce offset collisions**: if two tables have similar axis fingerprints and appear near each other in ROM, `locate_in_rom()` may return the wrong table offset for one of them. Verify located offsets by inspecting the data at the returned offset against the expected axis values from the JSON.
 
-**open_damos.json files are calibration-family-specific** — a PSA/Bosch EDC16C34 JSON will not locate tables in a BMW/Bosch MED17 ROM. Use the JSON file that matches the ECU family under analysis.
+**open_damos.json files are calibration-family-specific**: a PSA/Bosch EDC16C34 JSON will not locate tables in a BMW/Bosch MED17 ROM. Use the JSON file that matches the ECU family under analysis.
 
 ---
 
 ## Pipeline position
 
-Run `EcuOpenDamosParser` as the first step on any Bosch ECU ROM that has an available open_damos.json definition. Apply `label_map()` to `BinaryContext` before `SemanticSearcher` runs — calibration table names improve semantic hit quality for code that accesses injection/ignition/boost tables by referencing their human-readable names.
+Run `EcuOpenDamosParser` as the first step on any Bosch ECU ROM that has an available open_damos.json definition. Apply `label_map()` to `BinaryContext` before `SemanticSearcher` runs: calibration table names improve semantic hit quality for code that accesses injection/ignition/boost tables by referencing their human-readable names.
 
 ---
 
 ## Reading output
 
-`EcuOpenDamosParser.locate_in_rom(rom)` accepts raw ROM bytes and returns `Dict[str, int]` — `{characteristic_name: file_offset}` for every table found in this ROM variant. Tables that were not found are omitted from the result.
+`EcuOpenDamosParser.locate_in_rom(rom)` accepts raw ROM bytes and returns `Dict[str, int]`: `{characteristic_name: file_offset}` for every table found in this ROM variant. Tables that were not found are omitted from the result.
 
-`EcuOpenDamosParser.label_map(rom=None)` returns `Dict[int, str]` — file offset → calibration table name. When `rom` is supplied, fingerprint relocation is performed first so the offsets reflect this ROM variant; when `None`, the default A2L addresses are used as-is.
+`EcuOpenDamosParser.label_map(rom=None)` returns `Dict[int, str]`: file offset → calibration table name. When `rom` is supplied, fingerprint relocation is performed first so the offsets reflect this ROM variant; when `None`, the default A2L addresses are used as-is.
 
 ---
 
 ## See also
 
-- [TI C28x Decoding](ti-c28x-decoding.md) — `EcuC28xDecoder` for TI-based ECU firmware (different architecture but similar calibration analysis pattern)
-- [Flat ROM Function Discovery](flat-rom-function-discovery.md) — `EcuArchDetector` for initial architecture identification before calibration analysis
+- [TI C28x Decoding](ti-c28x-decoding.md): `EcuC28xDecoder` for TI-based ECU firmware (different architecture but similar calibration analysis pattern)
+- [Flat ROM Function Discovery](flat-rom-function-discovery.md): `EcuArchDetector` for initial architecture identification before calibration analysis

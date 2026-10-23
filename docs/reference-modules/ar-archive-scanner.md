@@ -8,9 +8,9 @@ Scan Unix ar (.a) static library archives for exec-class sinks by dispatching Si
 
 1. **Gap IBM-ARCH-002**: Static libraries (`.a` files) contain pre-compiled `.o` object files that must be checked for exec-class surface. `nested_archive_scanner.py` handles tar/RPM/zip/deb but does NOT handle ar format. MASS/Linux/`libmass_64.a` required manual extraction before SAC could run.
 
-2. **ar ≠ tar**: The ar format uses an 8-byte magic `!<arch>\n` and 60-byte member headers — completely different from tar. Python's `tarfile` module does not read ar archives.
+2. **ar ≠ tar**: The ar format uses an 8-byte magic `!<arch>\n` and 60-byte member headers: completely different from tar. Python's `tarfile` module does not read ar archives.
 
-3. **Architecture dispatch**: ELF objects inside `.a` files may be any architecture — ppc64 BE, i386, x86_64, ARM. The scanner reads `e_machine` from each member's ELF header and dispatches `SinkArgClassifierI386` for i386 cdecl and `SinkArgClassifier` for all others, matching the correct ABI.
+3. **Architecture dispatch**: ELF objects inside `.a` files may be any architecture: ppc64 BE, i386, x86_64, ARM. The scanner reads `e_machine` from each member's ELF header and dispatches `SinkArgClassifierI386` for i386 cdecl and `SinkArgClassifier` for all others, matching the correct ABI.
 
 ---
 
@@ -83,13 +83,13 @@ ArArchiveScanner: 55 ELF members, 0 with exec-class hits
   ...
 ```
 
-MASS libmass_64.a: 55 ELF64-BE-ppc64 math function objects, 0 exec-class — pure math library (IBM MASS 4.4).
+MASS libmass_64.a: 55 ELF64-BE-ppc64 math function objects, 0 exec-class: pure math library (IBM MASS 4.4).
 
 ---
 
 ## False positives
 
-None expected for pure math libraries. For application `.a` files, SAC may return `UNKNOWN` classification for indirect exec calls — same as for ELF binaries; treat identically.
+None expected for pure math libraries. For application `.a` files, SAC may return `UNKNOWN` classification for indirect exec calls: same as for ELF binaries; treat identically.
 
 **BSD extended names** (`#1/<len>` format): member names are not resolved but members are still analyzed. Only the name string will be wrong; the exec-class scan is unaffected.
 
@@ -105,6 +105,6 @@ None expected for pure math libraries. For application `.a` files, SAC may retur
 
 ## See also
 
-- [NEFormatParser](ne-format-parser.md) — for OS/2 NE/LX format binaries
-- [nested-archive-scanner](nested-archive-scanner.md) — for tar/RPM/zip/deb nesting
-- [sink-arg-classifier](sink-arg-classifier.md) — the underlying per-ELF analyzer
+- [NEFormatParser](ne-format-parser.md): for OS/2 NE/LX format binaries
+- [nested-archive-scanner](nested-archive-scanner.md): for tar/RPM/zip/deb nesting
+- [sink-arg-classifier](sink-arg-classifier.md): the underlying per-ELF analyzer

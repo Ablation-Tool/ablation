@@ -130,11 +130,11 @@ Three-pass construction:
 
 `build_cfg` is a three-pass algorithm over a flat `Sequence[SH2aInsn]` (already decoded by `EcuSH2aDecoder`):
 
-1. **Leader scan** — discovers all block-start VAs: the entry point, all branch targets extracted from `insn.target_va`, and the fall-through address immediately after each terminator (or two instructions after when the terminator has a delay slot). Delay-slot instructions are explicitly excluded from the leader set.
-2. **Partition** — assigns each instruction to the current block. When a terminator with a delay slot is encountered, the next instruction is consumed into the same block (as the delay slot); the block is then closed. Without a delay slot, the block closes at the terminator itself.
-3. **Edge fill** — iterates over all blocks; for each block's terminator type (`rts`, `bra`, `bt`/`bf`, `jsr`, etc.) the `succs` list is populated from the delay-slot-adjusted successor VA. `preds` is built as the inverse.
+1. **Leader scan**: discovers all block-start VAs: the entry point, all branch targets extracted from `insn.target_va`, and the fall-through address immediately after each terminator (or two instructions after when the terminator has a delay slot). Delay-slot instructions are explicitly excluded from the leader set.
+2. **Partition**: assigns each instruction to the current block. When a terminator with a delay slot is encountered, the next instruction is consumed into the same block (as the delay slot); the block is then closed. Without a delay slot, the block closes at the terminator itself.
+3. **Edge fill**: iterates over all blocks; for each block's terminator type (`rts`, `bra`, `bt`/`bf`, `jsr`, etc.) the `succs` list is populated from the delay-slot-adjusted successor VA. `preds` is built as the inverse.
 
-Indirect branches (`braf`, `jmp @Rn`) cannot be resolved statically — these produce open blocks with no successors.
+Indirect branches (`braf`, `jmp @Rn`) cannot be resolved statically, these produce open blocks with no successors.
 
 ---
 
@@ -163,7 +163,7 @@ True
 
 **Open blocks from indirect branches:** `braf Rn`, `bsrf Rn`, and `jmp @Rn` produce blocks with no successors because the target VA cannot be resolved from a static instruction sequence. Functions with dispatch tables (switch statements compiled to `jmp @Rn`) will have unreachable blocks in the CFG. `DomTree` and `LoopInfo` handle open blocks gracefully (they are not reachable from the entry block).
 
-**Delay-slot instruction boundary errors:** If `EcuSH2aDecoder` returns a disassembly list with a gap (e.g., truncated ROM or bad start offset), the delay-slot consumer may assign the wrong instruction as the delay slot, shifting all subsequent block boundaries. Verify the input `insns` covers the entire function before building the CFG.
+**Delay-slot instruction boundary errors:** If `EcuSH2aDecoder` returns a disassembly list with a gap for example truncated ROM or bad start offset, the delay-slot consumer may assign the wrong instruction as the delay slot, shifting all subsequent block boundaries. Verify the input `insns` covers the entire function before building the CFG.
 
 ---
 
@@ -202,6 +202,6 @@ Each `Block`:
 
 ## See also
 
-- [SH-2A Decoding](sh2a-decoding.md) — `EcuSH2aDecoder` that produces the `SH2aInsn` list consumed by `build_cfg`
-- [Dataflow Engine](dataflow-engine.md) — `DomTree` and `LoopInfo` that consume `CFG.flow` and `CFG.flow_r()`
-- [Flat ROM Function Discovery](flat-rom-function-discovery.md) — function start discovery for SH-2A ROMs before CFG construction
+- [SH-2A Decoding](sh2a-decoding.md): `EcuSH2aDecoder` that produces the `SH2aInsn` list consumed by `build_cfg`
+- [Dataflow Engine](dataflow-engine.md): `DomTree` and `LoopInfo` that consume `CFG.flow` and `CFG.flow_r()`
+- [Flat ROM Function Discovery](flat-rom-function-discovery.md): function start discovery for SH-2A ROMs before CFG construction

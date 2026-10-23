@@ -139,7 +139,7 @@ Module-level constant for verdict comparisons.
 
 ## How it works
 
-`apply(classifications)` takes the `List[SinkClassification]` from `SinkArgClassifier.classify_all()` and disassembles each calling function. For each site, it performs an arg-identity trace backwards from the sink call to find a `call` to a shell-safe validator that writes the same argument register. If the validator is confirmed shell-safe (via `SanitizerDetector`) and the argument is the same value passed to the sink, the site's verdict is reclassified to `SANITIZER_VALIDATED` with severity lowered to `LOW`. No func_starts iteration — only the functions identified by the incoming classifications are disassembled.
+`apply(classifications)` takes the `List[SinkClassification]` from `SinkArgClassifier.classify_all()` and disassembles each calling function. For each site, it performs an arg-identity trace backwards from the sink call to find a `call` to a shell-safe validator that writes the same argument register. If the validator is confirmed shell-safe (via `SanitizerDetector`) and the argument is the same value passed to the sink, the site's verdict is reclassified to `SANITIZER_VALIDATED` with severity lowered to `LOW`. No func_starts iteration: only the functions identified by the incoming classifications are disassembled.
 
 ---
 
@@ -166,7 +166,7 @@ A function with multiple paths where the sanitizer is only on one branch produce
 
 ## Pipeline position
 
-**Before this module:** `SinkArgClassifier.classify_all()` — this filter consumes its output directly. `BinaryContext.load_or_build()` and `SanitizerDetector` must also be built.
+**Before this module:** `SinkArgClassifier.classify_all()`, this filter consumes its output directly. `BinaryContext.load_or_build()` and `SanitizerDetector` must also be built.
 
 **After this module:** Pass remaining `ARG_PROPAGATED` / `UNKNOWN` sites to `TaintTracker`. The `SANITIZER_VALIDATED` sites are excluded from taint analysis.
 
@@ -174,7 +174,7 @@ A function with multiple paths where the sanitizer is only on one branch produce
 
 ## Reading output
 
-`SinkSanitizerFilter.from_path(path).apply(classifications)` accepts and returns `List[SinkClassification]` — the same type as `SinkArgClassifier.classify_all()`. Sites where a shell-safe sanitizer guards the argument are reclassified to `verdict='SANITIZER_VALIDATED'` with `severity='LOW'`. All other sites pass through unchanged.
+`SinkSanitizerFilter.from_path(path).apply(classifications)` accepts and returns `List[SinkClassification]`: the same type as `SinkArgClassifier.classify_all()`. Sites where a shell-safe sanitizer guards the argument are reclassified to `verdict='SANITIZER_VALIDATED'` with `severity='LOW'`. All other sites pass through unchanged.
 
 | Attribute | Content |
 |:---|:---|
@@ -183,15 +183,15 @@ A function with multiple paths where the sanitizer is only on one branch produce
 | `func_va` | VA of the calling function |
 | `call_va` | VA of the call instruction |
 | `verdict` | Original verdict or `'SANITIZER_VALIDATED'` if a shell-safe guard was confirmed |
-| `detail` | Trace description — updated to name the sanitizer if reclassified |
+| `detail` | Trace description: updated to name the sanitizer if reclassified |
 | `severity` | `'LOW'` for SANITIZER_VALIDATED and RODATA_CONST; `'HIGH'` for ARG_PROPAGATED |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

@@ -1,14 +1,14 @@
 # Affine Mapping Analysis
 
-Recover XOR encryption keys from firmware blobs using three attack modes — Known Plaintext Attack against a firmware magic-byte dictionary, Index of Coincidence spike detection for sparse flash images, and frequency analysis against an x86-64 opcode distribution — then verify the recovered cipher's linear structure using a white-box affine map reconstruction over GF(2).
+Recover XOR encryption keys from firmware blobs using three attack modes: Known Plaintext Attack against a firmware magic-byte dictionary, Index of Coincidence spike detection for sparse flash images, and frequency analysis against an x86-64 opcode distribution: then verify the recovered cipher's linear structure using a white-box affine map reconstruction over GF(2).
 
 ---
 
 ## Why this exists
 
-1. **Firmware XOR obfuscation uses static repeating keys that can be recovered in seconds.** Vendors apply a single repeating XOR key before flashing firmware to NAND (Fortinet, HiSilicon, a range of industrial targets). The cipher is not cryptographic — it is obfuscation. Three well-known attacks break it: known-plaintext recovery from firmware magic bytes, Index of Coincidence spike detection on sparse images, and transposition frequency analysis. Without automated tooling, analysts perform these manually per engagement.
+1. **Firmware XOR obfuscation uses static repeating keys that can be recovered in seconds.** Vendors apply a single repeating XOR key before flashing firmware to NAND (Fortinet, HiSilicon, a range of industrial targets). The cipher is not cryptographic, it is obfuscation. Three well-known attacks break it: known-plaintext recovery from firmware magic bytes, Index of Coincidence spike detection on sparse images, and transposition frequency analysis. Without automated tooling, analysts perform these manually per engagement.
 
-2. **NAND flash images have overwhelming sparsity — most bytes are 0xFF (erased) or 0x00 (initialized).** This property makes the XOR key immediately recoverable from the most-common-byte-per-column statistic: the most frequent ciphertext byte in each of the key-length columns is `most_common_plaintext XOR key_byte`. The IC spike method identifies the key length first (IC rises sharply at multiples of the true key length), then frequency analysis extracts each byte. Validated on FortiWiFi FWF_60E (IC=0.753, 192× above random baseline, 256 MB NAND) and a 512 MB x86-64 firmware image (IC=0.953, 244× above baseline).
+2. **NAND flash images have overwhelming sparsity: most bytes are 0xFF (erased) or 0x00 (initialized).** This property makes the XOR key immediately recoverable from the most-common-byte-per-column statistic: the most frequent ciphertext byte in each of the key-length columns is `most_common_plaintext XOR key_byte`. The IC spike method identifies the key length first (IC rises sharply at multiples of the true key length), then frequency analysis extracts each byte. Validated on FortiWiFi FWF_60E (IC=0.753, 192× above random baseline, 256 MB NAND) and a 512 MB x86-64 firmware image (IC=0.953, 244× above baseline).
 
 3. **`AffineMapAnalyzer` proves whether an unknown encryption function is pure XOR or has unexpected bit mixing.** When a firmware encryption routine is identified in a binary but its structure is unknown, `AffineMapAnalyzer` reconstructs the function's GF(2) affine map (A×P + K) by calling the function with unit-vector inputs. A pure XOR cipher produces A = Identity. Zero columns reveal plaintext bits that never affect output (implementation bugs). Off-diagonal entries reveal accidental bit rotation or mixing beyond simple XOR.
 
@@ -136,11 +136,11 @@ AffineMapAnalyzer: block_size=16 (128 bits)
 
 ## False positives
 
-**IC spike at multiples of the true key length.** The IC method returns the first shift above the threshold, which may be a divisor of the true key length (e.g., detecting length 16 when the actual key is 64 bytes with a repeating 16-byte sub-pattern). After `recover_by_frequency()`, check `_is_repeating(key)` to detect sub-period keys. When a sub-period is found, the derived key is still correct for decryption — it is a valid shorter representation of the same cipher.
+**IC spike at multiples of the true key length.** The IC method returns the first shift above the threshold, which may be a divisor of the true key length for example detecting length 16 when the actual key is 64 bytes with a repeating 16-byte sub-pattern. After `recover_by_frequency()`, check `_is_repeating(key)` to detect sub-period keys. When a sub-period is found, the derived key is still correct for decryption, it is a valid shorter representation of the same cipher.
 
-**KPA entropy check false negative on structured plaintext.** The KPA validation check (`3.0 ≤ entropy ≤ 7.5`) rejects derived keys whose 256-byte decrypted sample has entropy outside that range. A boot sector or early flash with very low plaintext entropy (e.g., all-zero padding at offset 0) passes a zero-entropy derived key silently. If `kpa_attack()` returns `key=None` but the firmware appears XOR'd, probe the magic dictionary entries directly and check each derived key manually.
+**KPA entropy check false negative on structured plaintext.** The KPA validation check (`3.0 ≤ entropy ≤ 7.5`) rejects derived keys whose 256-byte decrypted sample has entropy outside that range. A boot sector or early flash with very low plaintext entropy for example all-zero padding at offset 0 passes a zero-entropy derived key silently. If `kpa_attack()` returns `key=None` but the firmware appears XOR'd, probe the magic dictionary entries directly and check each derived key manually.
 
-**Frequency analysis fails on non-x86-64 plaintext.** `freq_attack()` scores columns against `_X86_64_FREQS` — an x86-64 opcode distribution. ARM/MIPS/PPC firmware has different opcode byte distributions. Use `ic_key_length()` + `recover_by_frequency()` instead — frequency analysis is not needed when plaintext sparsity is high, because the most-common-byte approach is architecture-independent.
+**Frequency analysis fails on non-x86-64 plaintext.** `freq_attack()` scores columns against `_X86_64_FREQS`: an x86-64 opcode distribution. ARM/MIPS/PPC firmware has different opcode byte distributions. Use `ic_key_length()` + `recover_by_frequency()` instead: frequency analysis is not needed when plaintext sparsity is high, because the most-common-byte approach is architecture-independent.
 
 ---
 
@@ -148,7 +148,7 @@ AffineMapAnalyzer: block_size=16 (128 bits)
 
 **Before this module:** Identify that the firmware is XOR-obfuscated: `binwalk` finds no valid filesystem signatures, or `file` returns "data" with high entropy (~5.5–7.0 bits/byte).
 
-**After this module:** Write the decrypted image to disk via `decrypt_file()`. Pass the decrypted file to `FirmwareContainer.from_path()` (for partitioned containers) or directly to `BinaryContext.load_or_build()` (for bare ELF). If `AffineMapAnalyzer` reveals implementation bugs (zero columns or rows), document the finding as a cipher integrity defect — the affected plaintext bits are unprotected regardless of key length.
+**After this module:** Write the decrypted image to disk via `decrypt_file()`. Pass the decrypted file to `FirmwareContainer.from_path()` (for partitioned containers) or directly to `BinaryContext.load_or_build()` (for bare ELF). If `AffineMapAnalyzer` reveals implementation bugs (zero columns or rows), document the finding as a cipher integrity defect: the affected plaintext bits are unprotected regardless of key length.
 
 ---
 
@@ -169,6 +169,6 @@ AffineMapAnalyzer: block_size=16 (128 bits)
 
 ## See also
 
-- [Partition-Table Extraction](partition-table-extraction.md) — parse decrypted firmware container after key recovery
-- [Firmware Analysis](firmware-analysis.md) — full firmware analysis pipeline
-- [Shellcode Templates](shellcode-templates.md) — `detect_bad_bytes()` for delivery constraint analysis on decrypted payloads
+- [Partition-Table Extraction](partition-table-extraction.md): parse decrypted firmware container after key recovery
+- [Firmware Analysis](firmware-analysis.md): full firmware analysis pipeline
+- [Shellcode Templates](shellcode-templates.md): `detect_bad_bytes()` for delivery constraint analysis on decrypted payloads

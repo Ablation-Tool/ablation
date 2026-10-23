@@ -1,16 +1,16 @@
 # Video Container Forensics
 
-Detect appended payloads, embedded binary content in metadata atoms, malformed box structures, DRM-encrypted tracks, and entropy anomalies in MP4/MOV (ISOBMFF), MKV/WebM (EBML), and AVI (RIFF) video containers — without full video decoding — via `modules/video_container.py`.
+Detect appended payloads, embedded binary content in metadata atoms, malformed box structures, DRM-encrypted tracks, and entropy anomalies in MP4/MOV (ISOBMFF), MKV/WebM (EBML), and AVI (RIFF) video containers: without full video decoding: via `modules/video_container.py`.
 
 ---
 
 ## Why this exists
 
-1. **Video containers are polyglot attack vectors** — MP4 files can embed arbitrary binary content in `udta`, `free`, `skip`, or `uuid` atoms without affecting video playback. `video_container.py` detects appended or prepended non-video payloads (content after `mdat`/`moov` in ISOBMFF, before the `EBML` header in MKV) by walking the container structure rather than relying on file extension or MIME type.
+1. **Video containers are polyglot attack vectors**: MP4 files can embed arbitrary binary content in `udta`, `free`, `skip`, or `uuid` atoms without affecting video playback. `video_container.py` detects appended or prepended non-video payloads (content after `mdat`/`moov` in ISOBMFF, before the `EBML` header in MKV) by walking the container structure rather than relying on file extension or MIME type.
 
-2. **`udta`, `free`, `skip`, and `uuid` atoms are standard ISO/IEC 14496-12 containers for vendor-specific metadata** — but their contents are opaque to playback software. `video_container.py` checks the entropy of these atom payloads: a `uuid` atom with Shannon entropy > 7.5 bits/byte is almost certainly encrypted or compressed binary content rather than metadata.
+2. **`udta`, `free`, `skip`, and `uuid` atoms are standard ISO/IEC 14496-12 containers for vendor-specific metadata**, but their contents are opaque to playback software. `video_container.py` checks the entropy of these atom payloads: a `uuid` atom with Shannon entropy > 7.5 bits/byte is almost certainly encrypted or compressed binary content rather than metadata.
 
-3. **EBML (Matroska/MKV) and RIFF (AVI) use distinct TLV encodings** — `_MP4Atom`, `_EBMLElement`, and the RIFF chunk parser each implement the format's length encoding. All three are needed because file extension is unreliable for forensic triage: a `.webm` file with an `.mp4` extension still uses EBML encoding and requires the EBML parser to walk its structure correctly.
+3. **EBML (Matroska/MKV) and RIFF (AVI) use distinct TLV encodings**: `_MP4Atom`, `_EBMLElement`, and the RIFF chunk parser each implement the format's length encoding. All three are needed because file extension is unreliable for forensic triage: a `.webm` file with an `.mp4` extension still uses EBML encoding and requires the EBML parser to walk its structure correctly.
 
 ---
 
@@ -60,9 +60,9 @@ Findings: <N>
 
 ## False positives
 
-**`uuid` atoms are used legitimately** — vendor-specific metadata (camera make/model, GPS coordinates, color space descriptors) in `uuid` atoms will have high entropy if encoded as binary rather than XML. Verify by checking whether the `uuid` bytes match a known vendor UUID before treating the finding as malicious.
+**`uuid` atoms are used legitimately**: vendor-specific metadata (camera make/model, GPS coordinates, color space descriptors) in `uuid` atoms will have high entropy if encoded as binary rather than XML. Verify by checking whether the `uuid` bytes match a known vendor UUID before treating the finding as malicious.
 
-**Entropy threshold (7.5 bits/byte)** — compressed video streams normally exceed 7.5 bits/byte. `_high_entropy_fraction()` only checks non-compressed metadata regions (atoms outside `mdat`). Findings in `mdat` itself are not reported.
+**Entropy threshold (7.5 bits/byte)**: compressed video streams normally exceed 7.5 bits/byte. `_high_entropy_fraction()` only checks non-compressed metadata regions (atoms outside `mdat`). Findings in `mdat` itself are not reported.
 
 ---
 
@@ -90,5 +90,5 @@ Run `VideoForensicsAnalyzer` on any video file received from an untrusted source
 
 ## See also
 
-- [Office/PDF Triage](office-pdf-triage.md) — similar polyglot/payload detection for Office and PDF documents
-- [Packing and Anti-Analysis Indicators](packing-and-anti-analysis-indicators.md) — entropy-based packing detection in PE/ELF extracted from video containers
+- [Office/PDF Triage](office-pdf-triage.md): similar polyglot/payload detection for Office and PDF documents
+- [Packing and Anti-Analysis Indicators](packing-and-anti-analysis-indicators.md): entropy-based packing detection in PE/ELF extracted from video containers

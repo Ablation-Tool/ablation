@@ -1,16 +1,16 @@
 # Coverage Gate
 
-TCL3-qualified coverage measurement for Ablation's labeled-taint engine modules — enforcing 85% statement coverage on the safety-critical subset of taint tracker code via pytest-cov and `pyproject.toml` coverage configuration.
+TCL3-qualified coverage measurement for Ablation's labeled-taint engine modules: enforcing 85% statement coverage on the safety-critical subset of taint tracker code via pytest-cov and `pyproject.toml` coverage configuration.
 
 ---
 
 ## Why this exists
 
-1. **Ablation's labeled-taint engine is used to generate findings for automotive ECU firmware under ISO 26262 TCL3 scope — a qualification level that requires evidence of systematic test coverage for safety-relevant software.** The coverage gate exists to produce that evidence. It applies only to the six labeled-taint tracker modules that feed into safety-relevant findings, not to the full ablation/analyzers tree (which would require hundreds of binary fixture files that are not available in the CI environment). Scoping coverage to the labeled-taint modules means the 85% threshold is achievable in CI with pure-Python unit tests, no firmware required.
+1. **Ablation's labeled-taint engine is used to generate findings for automotive ECU firmware under ISO 26262 TCL3 scope: a qualification level that requires evidence of systematic test coverage for safety-relevant software.** The coverage gate exists to produce that evidence. It applies only to the six labeled-taint tracker modules that feed into safety-relevant findings, not to the full ablation/analyzers tree (which would require hundreds of binary fixture files that are not available in the CI environment). Scoping coverage to the labeled-taint modules means the 85% threshold is achievable in CI with pure-Python unit tests, no firmware required.
 
-2. **Labeled-taint engine modules have complex lattice operations — `TaintState.join()`, `TaintState.invalidate_base()`, `Taint.__str__()`, and instruction-handler dispatch — that are easy to leave uncovered if only happy-path tests are written.** `tests/test_taint_labeled_coverage.py` specifically targets code paths identified during TCL3 coverage measurement: `join()` with asymmetric taint (one state tainted, one clean), join with different bounds (widening to `None`), memory merge at join-points, `invalidate_base()` stack-clobber detection, and `FP`/`HILO` instruction handlers that are not reached by normal CFG traversal.
+2. **Labeled-taint engine modules have complex lattice operations: `TaintState.join()`, `TaintState.invalidate_base()`, `Taint.__str__()`, and instruction-handler dispatch, that are easy to leave uncovered if only happy-path tests are written.** `tests/test_taint_labeled_coverage.py` specifically targets code paths identified during TCL3 coverage measurement: `join()` with asymmetric taint (one state tainted, one clean), join with different bounds (widening to `None`), memory merge at join-points, `invalidate_base()` stack-clobber detection, and `FP`/`HILO` instruction handlers that are not reached by normal CFG traversal.
 
-3. **`fail_under = 85` in `pyproject.toml` means a `pytest --cov` run that produces below-85% coverage fails with exit code 2 — blocking CI.** This is the enforcement mechanism. Without a `fail_under` threshold, coverage measurement is advisory and will be ignored under schedule pressure. The threshold of 85% (not 100%) reflects the TCL3 standard's allowance for uncoverable branches: `pragma: no cover`, `TYPE_CHECKING` guards, `raise NotImplementedError` in abstract base methods, and `@abstractmethod` decorators.
+3. **`fail_under = 85` in `pyproject.toml` means a `pytest --cov` run that produces below-85% coverage fails with exit code 2: blocking CI.** This is the enforcement mechanism. Without a `fail_under` threshold, coverage measurement is advisory and will be ignored under schedule pressure. The threshold of 85% (not 100%) reflects the TCL3 standard's allowance for uncoverable branches: `pragma: no cover`, `TYPE_CHECKING` guards, `raise NotImplementedError` in abstract base methods, and `@abstractmethod` decorators.
 
 ---
 
@@ -100,13 +100,13 @@ Required test coverage of 85.0% reached. Total coverage: <pct>%
 
 **`fail_under = 85` will fail the CI run if a new labeled-taint module is added to `[tool.coverage.run] include` without corresponding test coverage.** Adding a module to the coverage scope without writing tests is the most common way to trigger an unexpected CI failure. Always write supplementary coverage tests (or confirm the existing test suite reaches 85%) before adding a new module to the scope.
 
-**`show_missing = True` outputs line numbers for uncovered statements — but some line numbers reference `else` branches of `if TYPE_CHECKING` guards that are never executed at runtime.** These are in the `exclude_lines` list but may still appear if the pattern match fails due to indentation or trailing whitespace. Add `# pragma: no cover` to any line that appears in the missing list but is structurally uncoverable.
+**`show_missing = True` outputs line numbers for uncovered statements, but some line numbers reference `else` branches of `if TYPE_CHECKING` guards that are never executed at runtime.** These are in the `exclude_lines` list but may still appear if the pattern match fails due to indentation or trailing whitespace. Add `# pragma: no cover` to any line that appears in the missing list but is structurally uncoverable.
 
 ---
 
 ## Pipeline position
 
-The coverage gate runs as part of the CI test job (`ci.yml`). It is the last step in the test job and does not block the import smoke tests or integration test. Coverage below 85% fails the test job, which blocks merge to `main`. The FORGE pre-commit gate (`forge.py`) runs before commits, independently of CI coverage — they are complementary quality gates.
+The coverage gate runs as part of the CI test job (`ci.yml`). It is the last step in the test job and does not block the import smoke tests or integration test. Coverage below 85% fails the test job, which blocks merge to `main`. The FORGE pre-commit gate (`forge.py`) runs before commits, independently of CI coverage: they are complementary quality gates.
 
 ---
 
@@ -127,6 +127,6 @@ Relevant terminal fields:
 
 ## See also
 
-- [CI and Release Automation](ci-and-release-automation.md) — full CI workflow description; coverage runs as part of the `test` job
-- [FORGE Module](forge.md) — pre-commit module audit gate; complements coverage with structural quality checks
-- [Taint Analysis](taint-analysis.md) — general labeled-taint model; the modules in the TCL3 scope implement this model
+- [CI and Release Automation](ci-and-release-automation.md): full CI workflow description; coverage runs as part of the `test` job
+- [FORGE Module](forge.md): pre-commit module audit gate; complements coverage with structural quality checks
+- [Taint Analysis](taint-analysis.md): general labeled-taint model; the modules in the TCL3 scope implement this model

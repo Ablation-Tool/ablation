@@ -1,14 +1,14 @@
 # PE Internals and Indicators
 
-Parse Windows Portable Executable binaries — including `.exe`, `.dll`, `.sys`, and driver files — extracting the COFF header, optional header, import/export tables, sections, resources, and embedded strings, while flagging security-relevant patterns including anti-debug tricks, IOC candidates, and compiler hardening state.
+Parse Windows Portable Executable binaries: including `.exe`, `.dll`, `.sys`, and driver files: extracting the COFF header, optional header, import/export tables, sections, resources, and embedded strings, while flagging security-relevant patterns including anti-debug tricks, IOC candidates, and compiler hardening state.
 
 ---
 
 ## Why this exists
 
-1. **Windows PE is a first-class target format in Ablation.** Cisco ASA, Fortinet Windows management agents, RPC servers, kernel drivers, and a large portion of the corporate attack surface runs as PE binaries. Before v2.45.0, loading a PE into `BinaryContext` silently returned an empty context — every semantic search, taint trace, and function-profile call returned nothing. The PE parser maps the IAT as the PLT, populates exports as function starts, and makes every downstream analysis tool work on Windows binaries with no code changes.
+1. **Windows PE is a first-class target format in Ablation.** Cisco ASA, Fortinet Windows management agents, RPC servers, kernel drivers, and a large portion of the corporate attack surface runs as PE binaries. Before v2.45.0, loading a PE into `BinaryContext` silently returned an empty context: every semantic search, taint trace, and function-profile call returned nothing. The PE parser maps the IAT as the PLT, populates exports as function starts, and makes every downstream analysis tool work on Windows binaries with no code changes.
 
-2. **The PE format encodes security posture directly in its headers.** The `IMAGE_DLLCHARACTERISTICS` field in the optional header records whether Dynamic Base (ASLR), NX (DEP), SEH protection, CFG, and Control Flow Guard are enabled. These are not inferred — they are declared in the binary. Surfacing them immediately tells the analyst what mitigations they are working against before disassembly begins.
+2. **The PE format encodes security posture directly in its headers.** The `IMAGE_DLLCHARACTERISTICS` field in the optional header records whether Dynamic Base (ASLR), NX (DEP), SEH protection, CFG, and Control Flow Guard are enabled. These are not inferred: they are declared in the binary. Surfacing them immediately tells the analyst what mitigations they are working against before disassembly begins.
 
 3. **PE imports reveal capability and attack surface.** Knowing that a binary imports `NtCreateThreadEx`, `ZwWriteVirtualMemory`, `RtlDecompressBuffer`, or `CryptDecodeObjectEx` is often enough to characterize its purpose and prioritize analysis. The import table is the fastest path to understanding what a PE binary can do.
 
@@ -43,7 +43,7 @@ flowchart TD
 
 **COFF header.** The 20-byte COFF header immediately follows the PE signature. The `Machine` field identifies the architecture: `0x014C` is x86-32 (IMAGE_FILE_MACHINE_I386), `0x8664` is x86-64 (IMAGE_FILE_MACHINE_AMD64). The `Characteristics` field records file-level attributes including whether the image is a DLL, whether it is stripped of relocations, and whether it is a system-level image.
 
-**Optional header.** Despite its name, the optional header is required for executable images. It contains `AddressOfEntryPoint` (RVA of the program's first instruction), `ImageBase` (preferred load address), and the `DataDirectory` — an array of 16 entries pointing to the import table, export table, resource table, security directory, debug directory, and other critical structures.
+**Optional header.** Despite its name, the optional header is required for executable images. It contains `AddressOfEntryPoint` (RVA of the program's first instruction), `ImageBase` (preferred load address), and the `DataDirectory`: an array of 16 entries pointing to the import table, export table, resource table, security directory, debug directory, and other critical structures.
 
 **Hardening flags from DllCharacteristics.** The optional header's `DllCharacteristics` field is a bitmask:
 
@@ -158,7 +158,7 @@ Imports (selected):
 
 **Before this module:** File acquisition. No Ablation prerequisite.
 
-**After this module:** `BinaryContext.load_or_build()` uses the parsed PE structure to build the IAT map, function start list, and call graph. The Windows PE-specific analyzers — `RPCServerAnalyzer`, `CFGBypassDetector`, `KernelDriverAnalyzer`, `SEHChainAnalyzer` — all require a `BinaryContext` built on top of this parser.
+**After this module:** `BinaryContext.load_or_build()` uses the parsed PE structure to build the IAT map, function start list, and call graph. The Windows PE-specific analyzers: `RPCServerAnalyzer`, `CFGBypassDetector`, `KernelDriverAnalyzer`, `SEHChainAnalyzer`: all require a `BinaryContext` built on top of this parser.
 
 ---
 
@@ -174,8 +174,8 @@ Imports (selected):
 
 ## See also
 
-- [Binary Context](binary-context.md) — full analysis context; required for all downstream tools
-- [Windows PE Security Analysis](windows-pe.md) — PE sweep, CFG, SEH, RPC, COM, ETW, symbol and pool-allocation analyses
-- [Windows Kernel Driver & BYOVD](kernel-drivers.md) — driver-specific analysis built on PE parsing
-- [RPC Server Analyzer](rpc-server-analyzer.md) — deep RPC interface and endpoint analysis for PE binaries
-- [ELF Internals and Hardening](elf-internals-and-hardening.md) — equivalent parser for ELF targets
+- [Binary Context](binary-context.md): full analysis context; required for all downstream tools
+- [Windows PE Security Analysis](windows-pe.md): PE sweep, CFG, SEH, RPC, COM, ETW, symbol and pool-allocation analyses
+- [Windows Kernel Driver & BYOVD](kernel-drivers.md): driver-specific analysis built on PE parsing
+- [RPC Server Analyzer](rpc-server-analyzer.md): deep RPC interface and endpoint analysis for PE binaries
+- [ELF Internals and Hardening](elf-internals-and-hardening.md): equivalent parser for ELF targets

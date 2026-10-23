@@ -1,6 +1,6 @@
 # CMDB Attack Surface Mapping
 
-Enumerate the FortiOS/FortiWeb CMDB attack surface — finding every `cmf_query_create()` call site, identifying the CMDB table being accessed, and determining which tables have callers that also call exec-class sinks in the same function — enabling targeted `TaintTracker` runs on only the CMDB-to-sink callers instead of the full binary.
+Enumerate the FortiOS/FortiWeb CMDB attack surface: finding every `cmf_query_create()` call site, identifying the CMDB table being accessed, and determining which tables have callers that also call exec-class sinks in the same function: enabling targeted `TaintTracker` runs on only the CMDB-to-sink callers instead of the full binary.
 
 ---
 
@@ -8,9 +8,9 @@ Enumerate the FortiOS/FortiWeb CMDB attack surface — finding every `cmf_query_
 
 1. **FortiOS and FortiWeb expose configuration through a CMDB (Configuration and Management Database) layer accessed via `cmf_query_create()`.** User-supplied configuration fields flow from CMDB reads to exec-class sinks (`system()`, `execv()`) in handler functions. Without `CMDBSurfaceMapper`, identifying which CMDB tables are attacker-reachable inputs requires manual search across hundreds of call sites.
 
-2. **Analysis direction is forward from CMDB field reads toward exec sinks** — `CMDBSurfaceMapper` complements backward `TaintTracker` analysis by identifying which table IDs have callers that co-locate with exec sinks in the same function body. A function that reads CMDB table 0x4A and then calls `system()` is a high-priority `TaintTracker` target; a function that reads CMDB but calls only logging functions is not.
+2. **Analysis direction is forward from CMDB field reads toward exec sinks**: `CMDBSurfaceMapper` complements backward `TaintTracker` analysis by identifying which table IDs have callers that co-locate with exec sinks in the same function body. A function that reads CMDB table 0x4A and then calls `system()` is a high-priority `TaintTracker` target; a function that reads CMDB but calls only logging functions is not.
 
-3. **`CMDBSurfaceMapper` is a Phase 0.5 triage tool — not a verified data-flow analyzer.** It identifies candidates: `CMDBTableEntry.has_exec_sink_caller` is `True` when a co-location is detected in the same function, but it does not verify that the CMDB-read value reaches the sink argument. Run `TaintTracker` on `has_exec_sink_caller=True` entries for verification.
+3. **`CMDBSurfaceMapper` is a Phase 0.5 triage tool, not a verified data-flow analyzer.** It identifies candidates: `CMDBTableEntry.has_exec_sink_caller` is `True` when a co-location is detected in the same function, but it does not verify that the CMDB-read value reaches the sink argument. Run `TaintTracker` on `has_exec_sink_caller=True` entries for verification.
 
 ---
 
@@ -69,9 +69,9 @@ No co-location (lower priority):
 
 ## False positives
 
-**Co-location detection requires exec sink and CMDB read in the same function body** — a wrapper function that calls a CMDB reader and then calls a sink via a helper function is not detected as a co-location. Run `TaintTracker` on all CMDB callers, not only `has_exec_sink_caller=True` entries, for complete coverage of indirect call chains.
+**Co-location detection requires exec sink and CMDB read in the same function body**: a wrapper function that calls a CMDB reader and then calls a sink via a helper function is not detected as a co-location. Run `TaintTracker` on all CMDB callers, not only `has_exec_sink_caller=True` entries, for complete coverage of indirect call chains.
 
-**`table_id` extraction uses register-state analysis at the `cmf_query_create()` call site** — if the table ID is computed dynamically (e.g., from a dispatch table), it may not be deterministic at static analysis time. Dynamic table IDs are reported as `table_id=None` and excluded from the surface map.
+**`table_id` extraction uses register-state analysis at the `cmf_query_create()` call site**: if the table ID is computed dynamically for example from a dispatch table, it may not be deterministic at static analysis time. Dynamic table IDs are reported as `table_id=None` and excluded from the surface map.
 
 ---
 
@@ -100,5 +100,5 @@ High-priority entries are those where `reaches_exec=True`.
 
 ## See also
 
-- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` for verification of CMDB-to-sink paths
-- [Pre-Authentication Route Auditing](route-authentication-classification.md) — `PreAuthRouteAuditor` for complementary pre-auth surface identification
+- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): `TaintTracker` for verification of CMDB-to-sink paths
+- [Pre-Authentication Route Auditing](route-authentication-classification.md): `PreAuthRouteAuditor` for complementary pre-auth surface identification

@@ -1,16 +1,16 @@
 # PDB Symbol Integration
 
-Parse Windows PDB (Program Database) symbol files and integrate function names, type information, and source line data into `BinaryContext` via `NameRegistry` — enabling symbol-aware analysis of MSVC-compiled PE binaries without requiring Microsoft's `dbghelp.dll` or a Windows analysis environment.
+Parse Windows PDB (Program Database) symbol files and integrate function names, type information, and source line data into `BinaryContext` via `NameRegistry`: enabling symbol-aware analysis of MSVC-compiled PE binaries without requiring Microsoft's `dbghelp.dll` or a Windows analysis environment.
 
 ---
 
 ## Why this exists
 
-1. **MSVC-compiled PE binaries ship without symbols in the binary** — function names, type information, and source file paths live in a separate `.pdb` file. Without PDB integration, every function in the binary is anonymous, making `SemanticSearcher` queries ineffective and `ctx.names_table()` empty. `PDBSymbolIntegrator.load_pdb()` populates `NameRegistry` with all function names from the PDB, enabling the full Ablation analysis pipeline on Windows targets.
+1. **MSVC-compiled PE binaries ship without symbols in the binary**: function names, type information, and source file paths live in a separate `.pdb` file. Without PDB integration, every function in the binary is anonymous, making `SemanticSearcher` queries ineffective and `ctx.names_table()` empty. `PDBSymbolIntegrator.load_pdb()` populates `NameRegistry` with all function names from the PDB, enabling the full Ablation analysis pipeline on Windows targets.
 
 2. **The PDB GUID embedded in the PE's CodeView debug directory entry identifies the exact matching PDB on Microsoft's symbol server.** `PDBSymbolIntegrator.fetch_pdb()` uses this GUID to download the matching PDB via `symsrv.dll` protocol (`https://msdl.microsoft.com/download/symbols/`), enabling on-demand symbol resolution for any Microsoft-signed binary.
 
-3. **`PDBFinding` captures mismatches** — when the PE's embedded PDB GUID does not match the PDB file's own GUID (e.g., a patched binary paired with an old PDB), `PDBSymbolIntegrator` reports this as a `guid_mismatch` finding. A patched binary with a mismatched PDB cannot be reliably analyzed with those symbols.
+3. **`PDBFinding` captures mismatches**: when the PE's embedded PDB GUID does not match the PDB file's own GUID for example a patched binary paired with an old PDB, `PDBSymbolIntegrator` reports this as a `guid_mismatch` finding. A patched binary with a mismatched PDB cannot be reliably analyzed with those symbols.
 
 ---
 
@@ -79,9 +79,9 @@ names_table() (sample):
 
 ## False positives
 
-**`guid_mismatch` findings are expected for patched binaries** — a security patch that replaces a function without updating the PDB produces a GUID mismatch. The symbols may still be partially valid for unchanged functions but cannot be trusted for patched addresses. Use `pdb` source symbols only for functions not in the patch delta.
+**`guid_mismatch` findings are expected for patched binaries**: a security patch that replaces a function without updating the PDB produces a GUID mismatch. The symbols may still be partially valid for unchanged functions but cannot be trusted for patched addresses. Use `pdb` source symbols only for functions not in the patch delta.
 
-**Symbol server download requires network access** — `fetch_pdb()` will fail in air-gapped environments. Supply a locally mirrored PDB path via `load_pdb(pdb_path)` directly when network access is unavailable.
+**Symbol server download requires network access**: `fetch_pdb()` will fail in air-gapped environments. Supply a locally mirrored PDB path via `load_pdb(pdb_path)` directly when network access is unavailable.
 
 ---
 
@@ -93,9 +93,9 @@ Run `PDBSymbolIntegrator` immediately after `BinaryContext.load_or_build()` for 
 
 ## Reading output
 
-`PDBSymbolIntegrator.inject_into_context(ctx, pdb_path=None)` loads PDB symbols into `BinaryContext` via `ctx.set_name()` and returns `int` — the count of symbol names injected. When `pdb_path=None`, the method fetches the PDB from the Microsoft symbol server automatically.
+`PDBSymbolIntegrator.inject_into_context(ctx, pdb_path=None)` loads PDB symbols into `BinaryContext` via `ctx.set_name()` and returns `int`: the count of symbol names injected. When `pdb_path=None`, the method fetches the PDB from the Microsoft symbol server automatically.
 
-`PDBSymbolIntegrator.load_pdb(pdb_path)` returns `Dict[int, str]` — `{rva: name}` for all public symbols in the PDB without touching `BinaryContext`.
+`PDBSymbolIntegrator.load_pdb(pdb_path)` returns `Dict[int, str]`: `{rva: name}` for all public symbols in the PDB without touching `BinaryContext`.
 
 `PDBSymbolIntegrator.fetch_pdb(out_dir=None)` downloads the PDB to `out_dir` (or a temp directory) and returns the local path as a string, or `None` on failure.
 
@@ -105,5 +105,5 @@ After `inject_into_context()`, `ctx.name(va)` returns the PDB symbol name for an
 
 ## See also
 
-- [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext` whose `NameRegistry` is populated by `integrate()`
-- [Function Semantic Search](function-semantic-search.md) — `SemanticSearcher` that benefits from symbol-named functions
+- [Persistent Analysis Context](persistent-analysis-context.md): `BinaryContext` whose `NameRegistry` is populated by `integrate()`
+- [Function Semantic Search](function-semantic-search.md): `SemanticSearcher` that benefits from symbol-named functions

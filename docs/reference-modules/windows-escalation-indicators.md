@@ -1,16 +1,16 @@
 # SEH Chain Analysis
 
-Analyze Structured Exception Handler (SEH) chains in x86 (32-bit) Windows PE binaries — detecting missing SafeSEH protection, unregistered exception handler VAs, and `EXCEPTION_CONTINUE_EXECUTION` returns that enable SEH-based stack control-flow hijacking.
+Analyze Structured Exception Handler (SEH) chains in x86 (32-bit) Windows PE binaries: detecting missing SafeSEH protection, unregistered exception handler VAs, and `EXCEPTION_CONTINUE_EXECUTION` returns that enable SEH-based stack control-flow hijacking.
 
 ---
 
 ## Why this exists
 
-1. **x86 (32-bit) Windows uses a stack-linked list of SEH frames** — each frame lives on the stack at `FS:[0]` and holds a pointer to a handler function. An attacker who overwrites a stack SEH frame can redirect execution to an arbitrary address when an exception fires, without needing a return address overwrite. SEH exploitation remains relevant on legacy industrial, SCADA, and embedded Windows targets.
+1. **x86 (32-bit) Windows uses a stack-linked list of SEH frames**: each frame lives on the stack at `FS:[0]` and holds a pointer to a handler function. An attacker who overwrites a stack SEH frame can redirect execution to an arbitrary address when an exception fires, without needing a return address overwrite. SEH exploitation remains relevant on legacy industrial, SCADA, and embedded Windows targets.
 
-2. **SafeSEH (`IMAGE_LOAD_CONFIG.SEHandlerTable`) defends against this by listing all legitimate handler functions.** An exception dispatch to a handler not in `SEHandlerTable` triggers a process termination instead of calling the handler. `SEHChainAnalyzer.scan()` detects PE binaries that do not have a `SEHandlerTable` (`safe_seh_handlers()` returns empty) — indicating that all handler addresses on the stack are valid dispatch targets for an attacker.
+2. **SafeSEH (`IMAGE_LOAD_CONFIG.SEHandlerTable`) defends against this by listing all legitimate handler functions.** An exception dispatch to a handler not in `SEHandlerTable` triggers a process termination instead of calling the handler. `SEHChainAnalyzer.scan()` detects PE binaries that do not have a `SEHandlerTable` (`safe_seh_handlers()` returns empty): indicating that all handler addresses on the stack are valid dispatch targets for an attacker.
 
-3. **`SEHChainAnalyzer.seh_frames()` extracts the static SEH frame layout from the binary's code** — identifying all `__try`/`__except` constructs compiled into the binary as `SEHFrame` entries. For binaries without SafeSEH, `seh_frames()` provides the list of all handler VAs that would be trusted by the exception dispatcher, which is the set of VAs an attacker must reach to exploit the chain.
+3. **`SEHChainAnalyzer.seh_frames()` extracts the static SEH frame layout from the binary's code**: identifying all `__try`/`__except` constructs compiled into the binary as `SEHFrame` entries. For binaries without SafeSEH, `seh_frames()` provides the list of all handler VAs that would be trusted by the exception dispatcher, which is the set of VAs an attacker must reach to exploit the chain.
 
 ---
 
@@ -69,9 +69,9 @@ scan() findings:
 
 ## False positives
 
-**`no_safe_seh` fires on all 32-bit PE binaries that predate SafeSEH** — binaries compiled before MSVC 7.1 (Visual Studio 2003) do not support SafeSEH. The absence of SafeSEH is a finding, but exploitability requires a stack overflow or format-string write primitive on the same target.
+**`no_safe_seh` fires on all 32-bit PE binaries that predate SafeSEH**: binaries compiled before MSVC 7.1 (Visual Studio 2003) do not support SafeSEH. The absence of SafeSEH is a finding, but exploitability requires a stack overflow or format-string write primitive on the same target.
 
-**`seh_frames()` static extraction may not find all frames** — dynamically installed SEH frames (e.g., from compiler-generated `__finally` blocks that are only installed at runtime) are not visible in static analysis. The frame count from `seh_frames()` is a lower bound.
+**`seh_frames()` static extraction may not find all frames**: dynamically installed SEH frames (e.g., from compiler-generated `__finally` blocks that are only installed at runtime) are not visible in static analysis. The frame count from `seh_frames()` is a lower bound.
 
 ---
 
@@ -93,11 +93,11 @@ Run `SEHChainAnalyzer` on any x86 32-bit Windows PE binary as part of initial at
 | `handler_va` | VA of the SEH handler |
 | `detail` | Description of the bypass condition |
 
-`SEHChainAnalyzer.safe_seh_handlers()` returns `List[int]` — VAs registered in the SafeSEH table (empty list if SafeSEH is absent).
+`SEHChainAnalyzer.safe_seh_handlers()` returns `List[int]`: VAs registered in the SafeSEH table (empty list if SafeSEH is absent).
 
 ---
 
 ## See also
 
-- [Injection and Persistence Indicators](injection-and-persistence-indicators.md) — format string and stack control findings that enable SEH exploitation
-- [BYOVD Capability Detection](byovd-capability-detection.md) — `ByovdDetector` for kernel-mode SEH bypass via BYOVD
+- [Injection and Persistence Indicators](injection-and-persistence-indicators.md): format string and stack control findings that enable SEH exploitation
+- [BYOVD Capability Detection](byovd-capability-detection.md): `ByovdDetector` for kernel-mode SEH bypass via BYOVD

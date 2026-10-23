@@ -14,7 +14,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. No file reads beyond writing a t
 
 ## How it works
 
-`BareAdapter.run(findings)` serializes ablation vuln findings to a `findings.json` temp file then pipes it through the BARE binary at `~/.local/bin/bare`. BARE has 3,904 Metasploit modules encoded at compile time; it returns a ranked list of modules whose primitive class matches the finding's CWE class and function description. AI/ML-specific findings (HPKE, STRAP, RADIUS dialects) will typically trigger BARE's `no_high_confidence_match` sentinel — this is expected. Classic overflow/memcpy primitives surface usable MSF modules.
+`BareAdapter.run(findings)` serializes ablation vuln findings to a `findings.json` temp file then pipes it through the BARE binary at `~/.local/bin/bare`. BARE has 3,904 Metasploit modules encoded at compile time; it returns a ranked list of modules whose primitive class matches the finding's CWE class and function description. AI/ML-specific findings (HPKE, STRAP, RADIUS dialects) will typically trigger BARE's `no_high_confidence_match` sentinel, this is expected. Classic overflow/memcpy primitives surface usable MSF modules.
 
 ---
 
@@ -55,7 +55,7 @@ print(format_bare_output(bare_result, min_score=0.3))
 
 **Before this module:** `FindingRegistry.register()` must have been called with at least one confirmed finding that has a `cwe_class` and a `description`.
 
-**After this module:** Use the ranked MSF module name as a reference for exploitation category and preconditions — not as a ready-to-use exploit. Manual adaptation is always required.
+**After this module:** Use the ranked MSF module name as a reference for exploitation category and preconditions, not as a ready-to-use exploit. Manual adaptation is always required.
 
 ---
 
@@ -85,6 +85,6 @@ Each entry in `findings`:
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

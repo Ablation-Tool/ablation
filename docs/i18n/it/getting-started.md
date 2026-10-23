@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Su qualsiasi scansione futura, versione firmware diversa, vendor diverso — `pl.sweep(searcher)` esegue automaticamente tutti i pattern confermati.
+Su qualsiasi scansione futura, versione firmware diversa, vendor diverso: `pl.sweep(searcher)` esegue automaticamente tutti i pattern confermati.
 
 ---
 

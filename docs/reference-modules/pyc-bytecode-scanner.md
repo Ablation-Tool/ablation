@@ -118,7 +118,7 @@ print(scanner.report(results))
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs — findings from incomplete graphs carry lower confidence.
+Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
@@ -139,17 +139,17 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 | `path` | Path to the `.pyc` file |
 | `filename` | `co_filename` string from the top-level code object (the original `.py` source path) |
 | `python_version` | Version string (e.g., `'3.4'`, `'3.11'`) |
-| `co_names` | `FrozenSet[str]` — all name references in the bytecode |
-| `danger_hits` | `FrozenSet[str]` — intersection of `co_names` with `dangerous_names` |
+| `co_names` | `FrozenSet[str]`: all name references in the bytecode |
+| `danger_hits` | `FrozenSet[str]`: intersection of `co_names` with `dangerous_names` |
 | `os_module_present` | `True` if `'os'` appears in `co_names` |
 | `error` | `None` on success, error string if the file could not be parsed |
-| `is_clean` | Property — `True` if `danger_hits` is empty and no error |
-| `confidence` | Property — `'clean'` / `'HIGH'` (os module + danger hits) / `'LOW'` (danger hits only) |
+| `is_clean` | Property: `True` if `danger_hits` is empty and no error |
+| `confidence` | Property: `'clean'` / `'HIGH'` (os module + danger hits) / `'LOW'` (danger hits only) |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — native binary context when the runtime wraps a native library
-- [TaintAnalysis](taint-analysis.md) — trace dangerous calls found in the runtime layer
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): native binary context when the runtime wraps a native library
+- [TaintAnalysis](taint-analysis.md): trace dangerous calls found in the runtime layer
+- [FindingRegistry](registry.md): record confirmed findings

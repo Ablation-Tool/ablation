@@ -411,9 +411,9 @@ PatternLibrary.sweep  patterns=93  binary=firmware.so
 
 ## False positives
 
-**Scores above 0.55 on unrelated functions** — PCA whitening reduces the baseline similarity between unrelated functions from 0.6-0.9 to 0.4-0.6, but two functions can still score high if they have similar call targets or string references that happen to appear in the query. When a result looks wrong given its disassembly, verify with `ctx.strings_in_func(va)` and `ctx.callees_of(va)` to see what the encoder was responding to.
+**Scores above 0.55 on unrelated functions**: PCA whitening reduces the baseline similarity between unrelated functions from 0.6-0.9 to 0.4-0.6, but two functions can still score high if they have similar call targets or string references that happen to appear in the query. When a result looks wrong given its disassembly, verify with `ctx.strings_in_func(va)` and `ctx.callees_of(va)` to see what the encoder was responding to.
 
-**Low scores on a real match** — a function with no PLT calls and no string references is described only by its normalized assembly category sequence. If the query references specific call targets (`calls: memcpy recv`) the encoder weighs those fields heavily. Omit the `calls:` and `strings:` parts of the query when targeting functions with no imported symbols, and rely on the role hint and vulnerability description only.
+**Low scores on a real match**: a function with no PLT calls and no string references is described only by its normalized assembly category sequence. If the query references specific call targets (`calls: memcpy recv`) the encoder weighs those fields heavily. Omit the `calls:` and `strings:` parts of the query when targeting functions with no imported symbols, and rely on the role hint and vulnerability description only.
 
 ---
 
@@ -435,11 +435,11 @@ PatternLibrary.sweep  patterns=93  binary=firmware.so
 | `role` | Role tag associated with the matched function |
 | `confidence` | Confidence label for the name assignment |
 | `va` | Virtual address of the matched function |
-| `score` | Float — cosine similarity score (0.0–1.0) |
+| `score` | Float: cosine similarity score (0.0–1.0) |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [FindingRegistry](registry.md): persistent finding storage

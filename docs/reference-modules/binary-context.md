@@ -1,12 +1,12 @@
 # Binary Context
 
-Pre-compute and cache the complete working context for a stripped binary — PLT symbol map, export table, `.rodata` strings, function entry-point list, and full call graph — then expose it as a persistent, session-start-ready object that every downstream Ablation tool consumes.
+Pre-compute and cache the complete working context for a stripped binary: PLT symbol map, export table, `.rodata` strings, function entry-point list, and full call graph: then expose it as a persistent, session-start-ready object that every downstream Ablation tool consumes.
 
 ---
 
 ## Why this exists
 
-1. **ELF parsing from scratch takes 2–5 seconds per binary.** In a real RE session, the analyst restarts Claude Code multiple times, switches between tools, and re-runs analyses with different parameters. Without a cache layer, every session start re-parses a 10MB firmware image — paying the LIEF overhead repeatedly. `BinaryContext` builds the context once, serializes it to `~/.ablation/cache/`, and reloads in under 100ms on all subsequent sessions. The binary's SHA256 is the cache key; if the binary changes, the cache automatically invalidates.
+1. **ELF parsing from scratch takes 2–5 seconds per binary.** In a real RE session, the analyst restarts Claude Code multiple times, switches between tools, and re-runs analyses with different parameters. Without a cache layer, every session start re-parses a 10MB firmware image: paying the LIEF overhead repeatedly. `BinaryContext` builds the context once, serializes it to `~/.ablation/cache/`, and reloads in under 100ms on all subsequent sessions. The binary's SHA256 is the cache key; if the binary changes, the cache automatically invalidates.
 
 2. **Every Ablation analysis tool needs the same foundational data.** `TaintTracker` needs `func_starts` and the PLT allocator set. `SemanticSearcher` needs named functions and call targets. `HeapVulnScanner` needs `func_starts` and PLT free/malloc symbols. `FormatStringScanner` needs the PLT format-function map and `.rodata` VA ranges. Rather than each tool re-parsing the binary independently, all tools share one `BinaryContext` object built by `load_or_build()`. This eliminates redundant parsing and ensures consistent symbol resolution across tools.
 
@@ -163,7 +163,7 @@ BinaryContext: httpsd
 
 ## False positives
 
-**Non-ELF files passed to load_or_build.** When a Mach-O fat binary, ZIP/APK, or BEAM bytecode file is passed, `load_or_build()` emits a warning and returns an empty context. All downstream tools will return empty results. Check `ctx.func_starts` after loading — an empty list indicates a format detection failure.
+**Non-ELF files passed to load_or_build.** When a Mach-O fat binary, ZIP/APK, or BEAM bytecode file is passed, `load_or_build()` emits a warning and returns an empty context. All downstream tools will return empty results. Check `ctx.func_starts` after loading: an empty list indicates a format detection failure.
 
 **Go binaries with no `.eh_frame`.** Stripped Go binaries often lack the `.eh_frame` section that provides function start information. `func_starts` may be populated only from the export table or pclntab recovery. For Go binaries, call `patch_context()` with the `GoGoRetriever` result to populate `func_starts` from the pclntab before running any scanner.
 
@@ -205,11 +205,11 @@ if ctx.names_count():
 
 ## See also
 
-- [ELF Internals and Hardening](elf-internals-and-hardening.md) — underlying ELF parser
-- [PE Internals and Indicators](pe-internals-and-indicators.md) — underlying PE parser
-- [Mach-O Internals](mach-o-internals.md) — underlying Mach-O parser
-- [Analyst Naming Registry](analyst-naming-registry.md) — persistent name overlay (`names.db`)
-- [Semantic Code Search](semantic-code-search.md) — uses `BinaryContext.names_map()` for corpus ingestion
-- [Heap Vulnerability Scanner](heap-vulnerability-scanner.md) — consumes `plt`, `func_starts`
-- [Taint Analysis](taint-analysis.md) — consumes `plt` for allocator/copy resolution
-- [Format String Scanner](format-string-scanner.md) — consumes `plt`, `func_starts`, rodata ranges
+- [ELF Internals and Hardening](elf-internals-and-hardening.md): underlying ELF parser
+- [PE Internals and Indicators](pe-internals-and-indicators.md): underlying PE parser
+- [Mach-O Internals](mach-o-internals.md): underlying Mach-O parser
+- [Analyst Naming Registry](analyst-naming-registry.md): persistent name overlay (`names.db`)
+- [Semantic Code Search](semantic-code-search.md): uses `BinaryContext.names_map()` for corpus ingestion
+- [Heap Vulnerability Scanner](heap-vulnerability-scanner.md): consumes `plt`, `func_starts`
+- [Taint Analysis](taint-analysis.md): consumes `plt` for allocator/copy resolution
+- [Format String Scanner](format-string-scanner.md): consumes `plt`, `func_starts`, rodata ranges

@@ -67,7 +67,7 @@ probe_nxapi_cli: 10.0.0.1:80
 
 ## False positives
 
-**`probe_nxapi_cli()` on NX-API with management VRF restriction** — NX-API CLI may be accessible only from management VRF. A probe from the data plane may time out, producing no finding even when NX-API is misconfigured from the management plane. Confirm by sending the probe from a management-plane foothold.
+**`probe_nxapi_cli()` on NX-API with management VRF restriction**: NX-API CLI may be accessible only from management VRF. A probe from the data plane may time out, producing no finding even when NX-API is misconfigured from the management plane. Confirm by sending the probe from a management-plane foothold.
 
 ---
 
@@ -93,6 +93,6 @@ Findings list probes return `{severity, title, detail, host, port}`:
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [FindingRegistry](registry.md): record confirmed findings from enumeration
+- [LateralMovement](lateral-movement.md): chain enumeration findings into a lateral path
+- [NetworkAnalyze](network-analyze.md): port and service fingerprinting

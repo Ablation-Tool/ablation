@@ -1,16 +1,16 @@
 # Call Argument Annotation
 
-Lightweight forward symbolic register pass for call-site annotation — single forward pass through a function window tracking register assignments without Z3 or lattice fixpoint, recovering ~85% of argument values for typical firmware dispatch functions with near-zero overhead.
+Lightweight forward symbolic register pass for call-site annotation: single forward pass through a function window tracking register assignments without Z3 or lattice fixpoint, recovering ~85% of argument values for typical firmware dispatch functions with near-zero overhead.
 
 ---
 
 ## Why this exists
 
-1. **TaintTracker and SinkArgClassifier report sink call sites with tainted register arguments, but not the concrete values those registers hold at call time — knowing that `rdi` is tainted is useful, but knowing that `rdi = recv_buffer + 0x10` is more useful.** `RegAnnotator.annotate_calls()` performs a single forward pass through a function, tracking concrete register values via linear propagation, and annotates each call site with the argument register values at the time of the call. No Z3, no lattice: just instruction-level tracking.
+1. **TaintTracker and SinkArgClassifier report sink call sites with tainted register arguments, but not the concrete values those registers hold at call time: knowing that `rdi` is tainted is useful, but knowing that `rdi = recv_buffer + 0x10` is more useful.** `RegAnnotator.annotate_calls()` performs a single forward pass through a function, tracking concrete register values via linear propagation, and annotates each call site with the argument register values at the time of the call. No Z3, no lattice: just instruction-level tracking.
 
-2. **Approximately 85% of argument values in typical firmware dispatch functions are recoverable via single-pass forward propagation.** The remaining 15% are values loaded from heap or stack slots with non-constant offsets. `RegAnnotator` uses `RegVal` types to represent what is known: `Const(v)` for constant-propagated values, `Arg(n)` for function arguments, `String(s)` for string constant loads, `Ret(name)` for return values of named callees, and `Unknown` when the value cannot be determined. The `Unknown` result is explicit rather than silent — callers can distinguish between "value is zero" and "value is unknown".
+2. **Approximately 85% of argument values in typical firmware dispatch functions are recoverable via single-pass forward propagation.** The remaining 15% are values loaded from heap or stack slots with non-constant offsets. `RegAnnotator` uses `RegVal` types to represent what is known: `Const(v)` for constant-propagated values, `Arg(n)` for function arguments, `String(s)` for string constant loads, `Ret(name)` for return values of named callees, and `Unknown` when the value cannot be determined. The `Unknown` result is explicit rather than silent: callers can distinguish between "value is zero" and "value is unknown".
 
-3. **`RegAnnotator` is the template for all new scanners in Ablation** — its `from_context()` classmethod, `scan()` method returning a findings list, and `report()` method are the canonical interface pattern documented in `CLAUDE.md`. New analysis modules that need register annotation at call sites should call `RegAnnotator.annotate_calls()` rather than re-implementing the propagation.
+3. **`RegAnnotator` is the template for all new scanners in Ablation**: its `from_context()` classmethod, `scan()` method returning a findings list, and `report()` method are the canonical interface pattern documented in `CLAUDE.md`. New analysis modules that need register annotation at call sites should call `RegAnnotator.annotate_calls()` rather than re-implementing the propagation.
 
 ---
 
@@ -72,15 +72,15 @@ The following illustrates the annotation output format. Actual addresses and val
 
 ## False positives
 
-**`RegAnnotator` clears caller-saved registers at unknown CALL targets** — a `Const` value that was set before an unresolved call will appear as `Unknown` afterward, even if the callee doesn't actually clobber it. To track values through specific callees, pre-populate the callee's PLT entry with `RegAnnotator.register_callee_preserves(sym, regs=[...])`.
+**`RegAnnotator` clears caller-saved registers at unknown CALL targets**: a `Const` value that was set before an unresolved call will appear as `Unknown` afterward, even if the callee doesn't actually clobber it. To track values through specific callees, pre-populate the callee's PLT entry with `RegAnnotator.register_callee_preserves(sym, regs=[...])`.
 
-**Single-pass forward propagation does not handle loops** — a register modified in a loop body will appear with its first-assignment value, not the loop-updated value. For loop-body analysis, use `ConstPropAnalysis` from [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md) instead.
+**Single-pass forward propagation does not handle loops**: a register modified in a loop body will appear with its first-assignment value, not the loop-updated value. For loop-body analysis, use `ConstPropAnalysis` from [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md) instead.
 
 ---
 
 ## Pipeline position
 
-Run `RegAnnotator.annotate_calls()` immediately after `TaintTracker` identifies a finding — the annotation adds context to the sink call site (what concrete values are passed) without requiring a second full analysis pass. The annotation output goes into the finding record and CVE documentation.
+Run `RegAnnotator.annotate_calls()` immediately after `TaintTracker` identifies a finding: the annotation adds context to the sink call site (what concrete values are passed) without requiring a second full analysis pass. The annotation output goes into the finding record and CVE documentation.
 
 ---
 
@@ -92,8 +92,8 @@ Run `RegAnnotator.annotate_calls()` immediately after `TaintTracker` identifies 
 |:---|:---|
 | `func_va` | Start VA of the annotated function |
 | `func_end_va` | End VA of the annotated function |
-| `calls` | `List[CallSite]` — all call sites in the function |
-| `reg_trace` | `List[Tuple[int, str, RegVal]]` — per-instruction register state log |
+| `calls` | `List[CallSite]`: all call sites in the function |
+| `reg_trace` | `List[Tuple[int, str, RegVal]]`: per-instruction register state log |
 
 Each `CallSite`:
 
@@ -102,7 +102,7 @@ Each `CallSite`:
 | `site_va` | VA of the call instruction |
 | `target_va` | Resolved VA of the callee |
 | `target_name` | Callee symbol name |
-| `args` | `Dict[str, RegVal]` — argument register → `RegVal` at call time |
+| `args` | `Dict[str, RegVal]`: argument register → `RegVal` at call time |
 
 `RegVal` is a dataclass with a `kind` string attribute:
 
@@ -123,6 +123,6 @@ Use `val.display()` to produce a human-readable string. Use `val.kind == 'arg'` 
 
 ## See also
 
-- [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md) — `ConstPropAnalysis` for loop-body and fixpoint-accurate propagation
-- [Taint Analysis](taint-analysis.md) — identifies sink call sites; RegAnnotator annotates their arguments
-- [Single Function Profiling](single-function-profiling.md) — combines RegAnnotator with CFG stats and string refs for a complete function profile
+- [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md): `ConstPropAnalysis` for loop-body and fixpoint-accurate propagation
+- [Taint Analysis](taint-analysis.md): identifies sink call sites; RegAnnotator annotates their arguments
+- [Single Function Profiling](single-function-profiling.md): combines RegAnnotator with CFG stats and string refs for a complete function profile

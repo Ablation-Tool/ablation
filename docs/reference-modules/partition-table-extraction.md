@@ -1,16 +1,16 @@
 # Partition-Table Extraction
 
-Parse a fixed-record firmware container image — reading the 84-byte header, walking the 296-byte-per-entry partition table, identifying partition payload types from magic bytes, and extracting individual or all partitions to disk for downstream analysis.
+Parse a fixed-record firmware container image: reading the 84-byte header, walking the 296-byte-per-entry partition table, identifying partition payload types from magic bytes, and extracting individual or all partitions to disk for downstream analysis.
 
 ---
 
 ## Why this exists
 
-1. **Embedded firmware images frequently use proprietary container formats that binwalk does not recognize.** Many industrial and IoT vendors (Fortinet, Hikvision, HiSilicon-derived products) ship firmware as a flat binary with a plaintext header, a version string, and a fixed-record partition table. These containers are not compressed at the container level — individual partitions carry gzip, xz, or ext2 payloads, but the outer envelope uses no standard archive format. `FirmwareContainer` reads the exact binary layout: magic at `0x00`, version at `0x08`, vendor/product/language strings at `0x24`–`0x53`, and partition records starting at `0x0054`.
+1. **Embedded firmware images frequently use proprietary container formats that binwalk does not recognize.** Many industrial and IoT vendors (Fortinet, Hikvision, HiSilicon-derived products) ship firmware as a flat binary with a plaintext header, a version string, and a fixed-record partition table. These containers are not compressed at the container level: individual partitions carry gzip, xz, or ext2 payloads, but the outer envelope uses no standard archive format. `FirmwareContainer` reads the exact binary layout: magic at `0x00`, version at `0x08`, vendor/product/language strings at `0x24`–`0x53`, and partition records starting at `0x0054`.
 
-2. **Partition payload type affects the correct next-step tool selection.** A partition of type `elf` feeds directly into `BinaryContext.load_or_build()`. A partition of type `gzip` or `xz` requires decompression before analysis. An `ext2/3/4` partition requires mounting or `debugfs` extraction. Identifying the payload type at parse time — rather than running `file` on extracted bytes — lets the analyst route each partition to the correct tool without intermediate steps.
+2. **Partition payload type affects the correct next-step tool selection.** A partition of type `elf` feeds directly into `BinaryContext.load_or_build()`. A partition of type `gzip` or `xz` requires decompression before analysis. An `ext2/3/4` partition requires mounting or `debugfs` extraction. Identifying the payload type at parse time: rather than running `file` on extracted bytes: lets the analyst route each partition to the correct tool without intermediate steps.
 
-3. **The ext2/3/4 superblock appears at offset `+0x438` inside the partition data — not at byte 0.** A magic-bytes-only scanner that checks only the first 8 bytes of each partition misses ext filesystem partitions, which carry no identifying signature at their start. `FirmwareContainer` checks the first 8 bytes for all other formats (gzip, xz, zstd, lz4, lzo, cpio, ELF, PE), then falls back to the superblock probe at `+0x438` for ext2/3/4.
+3. **The ext2/3/4 superblock appears at offset `+0x438` inside the partition data, not at byte 0.** A magic-bytes-only scanner that checks only the first 8 bytes of each partition misses ext filesystem partitions, which carry no identifying signature at their start. `FirmwareContainer` checks the first 8 bytes for all other formats (gzip, xz, zstd, lz4, lzo, cpio, ELF, PE), then falls back to the superblock probe at `+0x438` for ext2/3/4.
 
 ---
 
@@ -158,15 +158,15 @@ extracted 'kernel' (2,097,152 bytes) → /tmp/kernel.img
 
 **`entry[0] not in (ord('V'), 0x00)` termination condition.** The guard checks whether the first byte of the version string is `V` (ASCII 86, the start of common version strings like `V2.1`) or `\x00`. Version strings starting with any other letter (e.g., `R2.1`, `1.4.0`, `FW_v2`) cause early termination. When the version string in the firmware uses a different prefix, remove or adjust this guard and re-parse.
 
-**`payload_type='unknown'` on valid but rare formats.** The detection table covers 9 common formats plus ext2/3/4. Ubifs (`\x31\x18\x10\x06`), cramfs (`\x45\x3d\xcd\x28`), squashfs (`sqsh` / `hsqs`), and JFFS2 (`\x19\x85`) are not in the table. An `unknown` payload type does not mean the partition is empty or corrupt — run `file` on the extracted bytes to identify these formats.
+**`payload_type='unknown'` on valid but rare formats.** The detection table covers 9 common formats plus ext2/3/4. Ubifs (`\x31\x18\x10\x06`), cramfs (`\x45\x3d\xcd\x28`), squashfs (`sqsh` / `hsqs`), and JFFS2 (`\x19\x85`) are not in the table. An `unknown` payload type does not mean the partition is empty or corrupt: run `file` on the extracted bytes to identify these formats.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm the image is a `FirmwareContainer`-format file. Check for the 8-byte magic string at `0x00` and a readable product string at `0x34`. If the file starts with a valid ELF header or gzip magic, it is a bare partition, not a container — use `BinaryContext.load_or_build()` directly.
+**Before this module:** Confirm the image is a `FirmwareContainer`-format file. Check for the 8-byte magic string at `0x00` and a readable product string at `0x34`. If the file starts with a valid ELF header or gzip magic, it is a bare partition, not a container: use `BinaryContext.load_or_build()` directly.
 
-**After this module:** For `elf` partitions: load with `BinaryContext.load_or_build()` and run `CorpusBuilder.build()` before any sweep. For `gzip`/`xz` partitions: decompress and inspect the decompressed content — these typically contain a second-level filesystem (squashfs, cramfs, cpio). For `ext2/3/4` partitions: mount read-only and examine `/etc`, `/usr/sbin`, and daemon startup scripts before identifying analysis targets.
+**After this module:** For `elf` partitions: load with `BinaryContext.load_or_build()` and run `CorpusBuilder.build()` before any sweep. For `gzip`/`xz` partitions: decompress and inspect the decompressed content, these typically contain a second-level filesystem (squashfs, cramfs, cpio). For `ext2/3/4` partitions: mount read-only and examine `/etc`, `/usr/sbin`, and daemon startup scripts before identifying analysis targets.
 
 ---
 
@@ -178,13 +178,13 @@ extracted 'kernel' (2,097,152 bytes) → /tmp/kernel.img
 | `fw.fw_version` | Firmware version string from header |
 | `fw.vendor` / `fw.product` | Vendor and product identifier strings |
 | `fw.partitions` | `List[FirmwarePartition]`: each with `index`, `name`, `version`, `offset`, `size`, `destpath`, `payload_type` |
-| `p.payload_type` | Detected content type — see table above |
+| `p.payload_type` | Detected content type: see table above |
 | `p.destpath` | Flash device path where the partition lands on the target (`/dev/mtdblock*`) |
 
 ---
 
 ## See also
 
-- [Firmware Analysis](firmware-analysis.md) — higher-level firmware analysis pipeline: filesystem extraction, binary listing
-- [Binary Format and Platform Identification](binary-format-and-platform-identification.md) — identify architecture of ELF partitions before BinaryContext load
-- [Installer Payload Analysis](installer-payload-analysis.md) — parallel parser for Windows installer container formats (BitRock, NSIS, Inno Setup)
+- [Firmware Analysis](firmware-analysis.md): higher-level firmware analysis pipeline: filesystem extraction, binary listing
+- [Binary Format and Platform Identification](binary-format-and-platform-identification.md): identify architecture of ELF partitions before BinaryContext load
+- [Installer Payload Analysis](installer-payload-analysis.md): parallel parser for Windows installer container formats (BitRock, NSIS, Inno Setup)

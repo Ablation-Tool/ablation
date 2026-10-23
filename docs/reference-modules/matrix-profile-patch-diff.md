@@ -1,14 +1,14 @@
 # Matrix Profile Patch Diff
 
-Localize instruction-level changes between two versions of the same function using Matrix Profile AB-join distance — encoding both versions as opcode category sequences and identifying the subsequences where the distance is highest (changed) versus lowest (unchanged).
+Localize instruction-level changes between two versions of the same function using Matrix Profile AB-join distance: encoding both versions as opcode category sequences and identifying the subsequences where the distance is highest (changed) versus lowest (unchanged).
 
 ---
 
 ## Why this exists
 
-1. **Once `DTWMatcher` confirms that two functions are homologs, the next question is: exactly what changed?** `MatrixProfileDiff` answers this at instruction-level precision by computing the AB-join distance profile between the two versions' opcode category sequences — high distance at position k means there is no close match for that subsequence in the other version, i.e., that region was changed. This points an analyst directly to the patched instruction window without requiring manual comparison of the full disassembly.
+1. **Once `DTWMatcher` confirms that two functions are homologs, the next question is: exactly what changed?** `MatrixProfileDiff` answers this at instruction-level precision by computing the AB-join distance profile between the two versions' opcode category sequences: high distance at position k means there is no close match for that subsequence in the other version, i.e., that region was changed. This points an analyst directly to the patched instruction window without requiring manual comparison of the full disassembly.
 
-2. **Matrix Profile AB-join avoids the false-change problem of naive instruction diffing.** Naive instruction-level diff (diff on disassembly text) reports every instruction that moved due to a non-local code change (e.g., a function growing by one instruction shifts all subsequent instruction offsets). Matrix Profile is shift-invariant: it matches subsequences regardless of offset, so an unchanged block that shifted by N bytes still reports as unchanged. The `ChangeRegion.is_insertion_shift` flag distinguishes true changes from shift artifacts.
+2. **Matrix Profile AB-join avoids the false-change problem of naive instruction diffing.** Naive instruction-level diff (diff on disassembly text) reports every instruction that moved due to a non-local code change for example a function growing by one instruction shifts all subsequent instruction offsets. Matrix Profile is shift-invariant: it matches subsequences regardless of offset, so an unchanged block that shifted by N bytes still reports as unchanged. The `ChangeRegion.is_insertion_shift` flag distinguishes true changes from shift artifacts.
 
 3. **`DiffResult.is_likely_patched(threshold=15.0)` provides a binary patched/not-patched verdict** suitable for automated version triage. When scanning N firmware images for a known vulnerability, `MatrixProfileDiff` can quickly identify which versions contain the unpatched function without requiring manual analysis of each version.
 
@@ -84,7 +84,7 @@ change=14.4%  changed:16
 
 **`is_likely_patched(threshold=15.0)` fires if more than 15% of the opcode sequence has no close match in the other version.** A function that was heavily refactored (not just patched) will also exceed the threshold. Use `change_pct()` and manual inspection of the identified `ChangeRegion` to distinguish a targeted security patch (one tight change region) from a refactor (many spread-out change regions).
 
-**STUMPY is optional — the numpy fallback uses the same math but is slower on sequences longer than ~2000 instructions.** For binaries where all functions are under 2000 instructions, the numpy fallback is adequate. Install STUMPY for firmware-wide batch triage: `pip install stumpy`.
+**STUMPY is optional: the numpy fallback uses the same math but is slower on sequences longer than ~2000 instructions.** For binaries where all functions are under 2000 instructions, the numpy fallback is adequate. Install STUMPY for firmware-wide batch triage: `pip install stumpy`.
 
 ---
 
@@ -102,9 +102,9 @@ Step 2 of the cross-version patch analysis workflow: after `DTWMatcher.score_fun
 |:---|:---|
 | `va_v1` / `va_v2` | VAs of the two functions being compared |
 | `seq_v1` / `seq_v2` | Mnemonic sequences (lists) for each function |
-| `regions` | `List[ChangeRegion]` — classified regions of the alignment |
+| `regions` | `List[ChangeRegion]`: classified regions of the alignment |
 | `window` | Matrix-profile window size used |
-| `change_pct` | Property — float percentage of the function that changed |
+| `change_pct` | Property: float percentage of the function that changed |
 | `is_likely_patched()` | `True` if `change_pct` exceeds the configured threshold |
 | `patch_offset_v1()` | VA of the first modified region start in version 1 |
 
@@ -123,6 +123,6 @@ Each `ChangeRegion` has:
 
 ## See also
 
-- [DTW Function Homolog Matching](dtw-function-homolog-matching.md) — step 1: confirms homologs before diffing
-- [Behavioral Subsequence Search](behavioral-subsequence-search.md) — for finding a known subsequence in a new binary without a confirmed homolog VA
-- [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md) — for semantic understanding of the changed region identified by the diff
+- [DTW Function Homolog Matching](dtw-function-homolog-matching.md): step 1: confirms homologs before diffing
+- [Behavioral Subsequence Search](behavioral-subsequence-search.md): for finding a known subsequence in a new binary without a confirmed homolog VA
+- [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md): for semantic understanding of the changed region identified by the diff

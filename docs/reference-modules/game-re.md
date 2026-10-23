@@ -222,7 +222,7 @@ for f in findings:
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs — findings from incomplete graphs carry lower confidence.
+Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
@@ -236,22 +236,22 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading output
 
-`PatternLibrary.match(ctx)` returns `List[EngineLabel]` — one per confirmed engine function match. See [engine-pattern-library](engine-pattern-library.md) for full field reference.
+`PatternLibrary.match(ctx)` returns `List[EngineLabel]`: one per confirmed engine function match. See [engine-pattern-library](engine-pattern-library.md) for full field reference.
 
 | Attribute | Content |
 |:---|:---|
 | `va` | VA of the matched function in the binary |
 | `engine` | Engine key (e.g., `'ue4'`, `'unity'`, `'godot'`) |
 | `name` | Canonical engine function name |
-| `confidence` | Float 0.0–1.0 — match confidence |
+| `confidence` | Float 0.0–1.0: match confidence |
 | `match_kind` | `'string_marker'` / `'string_pattern'` / `'semantic'` / `'sax'` |
 
-For PS3/Cell SPU and Mac PEF targets, additional decoder output formats apply — see [pef-abi-clobber-scanner](pef-abi-clobber-scanner.md).
+For PS3/Cell SPU and Mac PEF targets, additional decoder output formats apply: see [pef-abi-clobber-scanner](pef-abi-clobber-scanner.md).
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — native binary context when the runtime wraps a native library
-- [TaintAnalysis](taint-analysis.md) — trace dangerous calls found in the runtime layer
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): native binary context when the runtime wraps a native library
+- [TaintAnalysis](taint-analysis.md): trace dangerous calls found in the runtime layer
+- [FindingRegistry](registry.md): record confirmed findings

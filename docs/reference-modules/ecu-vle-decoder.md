@@ -386,6 +386,6 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## See also
 
-- [EcuArchDetector](ecu-arch-detector.md) — identify processor family before choosing a decoder
-- [EcuROMLayoutAnalyzer](ecu-rom-layout-analyzer.md) — map ROM sections before decoding
-- [ECUSecurityAccessScanner](ecu-security-access-scanner.md) — find UDS 0x27 bypass vectors in decoded code
+- [EcuArchDetector](ecu-arch-detector.md): identify processor family before choosing a decoder
+- [EcuROMLayoutAnalyzer](ecu-rom-layout-analyzer.md): map ROM sections before decoding
+- [ECUSecurityAccessScanner](ecu-security-access-scanner.md): find UDS 0x27 bypass vectors in decoded code

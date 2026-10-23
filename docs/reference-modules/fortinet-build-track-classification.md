@@ -1,6 +1,6 @@
 # Fortinet Build Track Classification
 
-Parse Fortinet firmware filenames to determine build track (M for Managed/maintenance, F for Feature), expected PKI certificate key set, product family, and firmware version — without any disk I/O — enabling batch scan anomaly detection when actual extracted key counts differ from expected counts.
+Parse Fortinet firmware filenames to determine build track (M for Managed/maintenance, F for Feature), expected PKI certificate key set, product family, and firmware version: without any disk I/O: enabling batch scan anomaly detection when actual extracted key counts differ from expected counts.
 
 ---
 
@@ -10,7 +10,7 @@ Parse Fortinet firmware filenames to determine build track (M for Managed/mainte
 
 2. **Batch anomaly detection catches builds where the actual key count differs from the expected count.** An M-build that unexpectedly ships only one key, or an F-build with three keys, would be silent evidence of a firmware supply-chain anomaly or key removal event. `BuildTrackResult.discrepancy(actual_keys)` surfaces these mismatches without manual inspection of each image.
 
-3. **`FortiBuildTrackClassifier.classify()` takes only a filename string — no disk access, no ELF parsing, no extraction.** This makes it usable as the first step in any Fortinet firmware batch processing pipeline: classify all filenames in a directory, identify expected key sets, then run extraction only on images where key count verification is needed.
+3. **`FortiBuildTrackClassifier.classify()` takes only a filename string, no disk access, no ELF parsing, no extraction.** This makes it usable as the first step in any Fortinet firmware batch processing pipeline: classify all filenames in a directory, identify expected key sets, then run extraction only on images where key count verification is needed.
 
 ---
 
@@ -75,15 +75,15 @@ Anomalies found: 0
 
 ## False positives
 
-**Filename patterns that deviate from Fortinet naming conventions** — custom or renamed firmware files may produce `track='UNKNOWN'`. Check `result.track` before relying on `expected_keys`. A result with `track='UNKNOWN'` should be manually inspected; `matches_scan()` returns `False` when `expected_keys` is empty.
+**Filename patterns that deviate from Fortinet naming conventions**: custom or renamed firmware files may produce `track='UNKNOWN'`. Check `result.track` before relying on `expected_keys`. A result with `track='UNKNOWN'` should be manually inspected; `matches_scan()` returns `False` when `expected_keys` is empty.
 
-**Track letter M/F may be absent from older firmware** — firmware from pre-v6.0 may use a different naming scheme without explicit track designation. These produce `track='UNKNOWN'`.
+**Track letter M/F may be absent from older firmware**: firmware from pre-v6.0 may use a different naming scheme without explicit track designation. These produce `track='UNKNOWN'`.
 
 ---
 
 ## Pipeline position
 
-Run `FortiBuildTrackClassifier.classify()` on the firmware filename as the first step in any Fortinet firmware extraction pipeline — before `FortiMailVmdkExtractor` or `FortiOSHardwareExtractor` runs. Use `BuildTrackResult.expected_keys` to set expectations for `VmdkExtractionResult.keys` comparison. Surface `discrepancy()` results as anomaly findings before proceeding to binary analysis.
+Run `FortiBuildTrackClassifier.classify()` on the firmware filename as the first step in any Fortinet firmware extraction pipeline: before `FortiMailVmdkExtractor` or `FortiOSHardwareExtractor` runs. Use `BuildTrackResult.expected_keys` to set expectations for `VmdkExtractionResult.keys` comparison. Surface `discrepancy()` results as anomaly findings before proceeding to binary analysis.
 
 ---
 
@@ -98,9 +98,9 @@ Run `FortiBuildTrackClassifier.classify()` on the firmware filename as the first
 | `version` | Version string (e.g., `'7.4.12'`) |
 | `build_number` | Build number integer (e.g., `2902`) |
 | `build_track` | Track identifier: `'M'` (main) or `'F'` (feature) |
-| `expected_keys` | `List[str]` — filenames of encryption keys expected in this build |
+| `expected_keys` | `List[str]`: filenames of encryption keys expected in this build |
 | `key_generation` | Key generation identifier (e.g., `'Gen1'`, `'Gen2'`) |
-| `error` | `Optional[str]` — error message if classification failed |
+| `error` | `Optional[str]`: error message if classification failed |
 
 `FortiBuildTrackClassifier.batch_classify(filenames)` returns `List[BuildTrackResult]`.
 
@@ -108,6 +108,6 @@ Run `FortiBuildTrackClassifier.classify()` on the firmware filename as the first
 
 ## See also
 
-- [FortiMail VM Key Extraction](fortimail-vm-key-extraction.md) — extracts keys that this classifier predicts
-- [Firmware Extraction](firmware-extraction.md) — hardware firmware extraction pipeline
-- [Firmware Signature and Secret Triage](firmware-signature-and-secret-triage.md) — broad credential scanning after extraction
+- [FortiMail VM Key Extraction](fortimail-vm-key-extraction.md): extracts keys that this classifier predicts
+- [Firmware Extraction](firmware-extraction.md): hardware firmware extraction pipeline
+- [Firmware Signature and Secret Triage](firmware-signature-and-secret-triage.md): broad credential scanning after extraction

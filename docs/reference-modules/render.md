@@ -92,7 +92,7 @@ Color constants are empty strings in plain mode, so the same code works in every
 
 ## How it works
 
-At import time, `render.py` checks `sys.stdout.isatty()`, the `NO_COLOR` environment variable, and `COLORTERM` / `TERM` to set the module-level `MODE` constant. All color constants (`RED`, `GREEN`, etc.) are then set to the appropriate ANSI escape sequences for the detected mode, or to empty strings if `MODE='plain'`. This means callers can concatenate color constants with strings unconditionally — in plain mode the concatenation produces no escape codes and the string is unchanged. `box()`, `sbox()`, `section()`, and `arrow()` build framed output strings using Unicode box-drawing characters; in plain mode they fall back to ASCII borders. `strip(s)` uses a compiled regex to remove all ANSI escape sequences for computing display-width of a colored string.
+At import time, `render.py` checks `sys.stdout.isatty()`, the `NO_COLOR` environment variable, and `COLORTERM` / `TERM` to set the module-level `MODE` constant. All color constants (`RED`, `GREEN`, etc.) are then set to the appropriate ANSI escape sequences for the detected mode, or to empty strings if `MODE='plain'`. This means callers can concatenate color constants with strings unconditionally: in plain mode the concatenation produces no escape codes and the string is unchanged. `box()`, `sbox()`, `section()`, and `arrow()` build framed output strings using Unicode box-drawing characters; in plain mode they fall back to ASCII borders. `strip(s)` uses a compiled regex to remove all ANSI escape sequences for computing display-width of a colored string.
 
 ---
 
@@ -134,13 +134,13 @@ In `plain` mode (pipe/redirect), the same code prints:
 
 **Before this module:** No prerequisites. Import at the top of any module that produces terminal output.
 
-**After this module:** Pass the formatted strings from `box()`, `sbox()`, and `section()` directly to `print()`. No further processing is required — all escape codes are embedded in the returned strings, and `strip()` is available if display-width calculation is needed.
+**After this module:** Pass the formatted strings from `box()`, `sbox()`, and `section()` directly to `print()`. No further processing is required: all escape codes are embedded in the returned strings, and `strip()` is available if display-width calculation is needed.
 
 ---
 
 ## Reading output
 
-`render.py` provides module-level terminal formatting functions — no findings, no return values beyond strings:
+`render.py` provides module-level terminal formatting functions, no findings, no return values beyond strings:
 
 | Function | Returns |
 |:---|:---|
@@ -156,6 +156,6 @@ ANSI color constants (`RED`, `ORANGE`, `YELLOW`, `GREEN`, `GRAY`, `WHITE`, `BOLD
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

@@ -6,9 +6,9 @@ Lift native binary functions to annotated C pseudocode across 18 ISA variants, f
 
 ## Why this exists
 
-1. **Before BinaryLifter there was no single entry point that produced readable pseudocode for all 18 ISA variants in Ablation — each new engagement required hand-crafted Capstone loops and ad-hoc register tracking for MIPS, PPC, RISC-V, LoongArch64, ARC, V850, nanoMIPS, and SH-2A.** `BinaryLifter.from_path(binary, arch='ppc32').lift_function(va)` produces a structural skeleton for any of the 18 supported ISAs in a single call. The per-ISA state machines (`_ARM64State`, `_MIPSState`, `_PPCState`, `_RISCVState`, etc.) each seed register slots from their ABI calling convention so that argument and return registers have named `arg0`/`arg1` expressions without manual setup.
+1. **Before BinaryLifter there was no single entry point that produced readable pseudocode for all 18 ISA variants in Ablation: each new engagement required hand-crafted Capstone loops and ad-hoc register tracking for MIPS, PPC, RISC-V, LoongArch64, ARC, V850, nanoMIPS, and SH-2A.** `BinaryLifter.from_path(binary, arch='ppc32').lift_function(va)` produces a structural skeleton for any of the 18 supported ISAs in a single call. The per-ISA state machines (`_ARM64State`, `_MIPSState`, `_PPCState`, `_RISCVState`, etc.) each seed register slots from their ABI calling convention so that argument and return registers have named `arg0`/`arg1` expressions without manual setup.
 
-2. **The CFG walk infrastructure was identical across ISAs — block-level BFS over `cfg_*.blocks` — but had never been connected to a shared IR emitter, forcing copy-paste per ISA.** `_walk_ablation_cfg` closes that gap: one BFS walker, per-ISA `_make_*_emit` closures, no duplication. Calls are emitted with resolved PLT symbol names, returns use the ABI return register, and branches emit `if (/* cond */) goto label;`. Arithmetic instructions that are not yet modeled emit as `// mnemonic ops` rather than silently dropping information.
+2. **The CFG walk infrastructure was identical across ISAs: block-level BFS over `cfg_*.blocks`, but had never been connected to a shared IR emitter, forcing copy-paste per ISA.** `_walk_ablation_cfg` closes that gap: one BFS walker, per-ISA `_make_*_emit` closures, no duplication. Calls are emitted with resolved PLT symbol names, returns use the ABI return register, and branches emit `if (/* cond */) goto label;`. Arithmetic instructions that are not yet modeled emit as `// mnemonic ops` rather than silently dropping information.
 
 3. **`BeamContext` existed for Erlang/Elixir BEAM module analysis but required a separate invocation outside any consistent RE interface.** `BinaryLifter.from_path(beam_file, arch='beam').lift_function(0)` returns a module-level summary (exports, dangerous imports, atom inventory) through the same `lift_function` interface as native ISA lifting, allowing BEAM modules to appear in the same pipeline position as any other binary target.
 
@@ -74,7 +74,7 @@ flowchart TD
 | SH-2A | `sh2a`, `sh-2a`, `sh2` | Structural: `EcuSH2aDecoder` linear walk; Renesas SuperH ABI R4-R7 |
 | ARC EM/HS | `arc`, `archs`, `arcem`, `arc-32` | Structural: requires `arc-elf32-objdump` in PATH |
 | V850/RH850 | `v850`, `rh850`, `v850e2` | Structural: requires `v850-elf-objdump` in PATH |
-| BEAM | `beam`, `erlang`, `elixir` | Module summary: `BeamContext`; no VA space — pass `va=0` |
+| BEAM | `beam`, `erlang`, `elixir` | Module summary: `BeamContext`; no VA space: pass `va=0` |
 
 ---
 
@@ -104,7 +104,7 @@ lifter = BinaryLifter.from_path('/path/to/arc.elf', arch='arc')
 print(lifter.lift_function(0x1000))
 ```
 
-### With a BinaryContext (recommended — avoids re-parsing)
+### With a BinaryContext (recommended: avoids re-parsing)
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
@@ -153,7 +153,7 @@ The following illustrates the output format for the three completeness tiers. Ac
 }
 ```
 
-**Structural backend (MIPS-32) — calls resolved, arithmetic as comments:**
+**Structural backend (MIPS-32): calls resolved, arithmetic as comments:**
 ```c
 // fn_<va> @ <va>
 {
@@ -186,17 +186,17 @@ The following illustrates the output format for the three completeness tiers. Ac
 
 ## False positives
 
-**Compiler-synthesized stubs appear as functions in some loaders.** PLT entries and thunks are short sequences that `BinaryContext` filters using known stub patterns, but custom thunks built from non-standard sequences may pass the filter. Validate any candidate VA against `ctx.func_starts` before investing in full lift output — a thunk will show only 1-3 instructions with a single tail-call.
+**Compiler-synthesized stubs appear as functions in some loaders.** PLT entries and thunks are short sequences that `BinaryContext` filters using known stub patterns, but custom thunks built from non-standard sequences may pass the filter. Validate any candidate VA against `ctx.func_starts` before investing in full lift output: a thunk will show only 1-3 instructions with a single tail-call.
 
-**Structural backends emit `// mnemonic ops` for arithmetic instructions that are not yet modeled.** These comment lines indicate the instruction was decoded but the state machine has no emit closure for it. They are not errors — the function skeleton is still correct for calls, returns, and branches. If arithmetic in the comment lines is relevant to the finding, read the raw instruction bytes directly using `ctx.disasm_func(va)` and trace the values manually.
+**Structural backends emit `// mnemonic ops` for arithmetic instructions that are not yet modeled.** These comment lines indicate the instruction was decoded but the state machine has no emit closure for it. They are not errors: the function skeleton is still correct for calls, returns, and branches. If arithmetic in the comment lines is relevant to the finding, read the raw instruction bytes directly using `ctx.disasm_func(va)` and trace the values manually.
 
-**`arch=` default is `arm64` — passing a non-ARM64 binary without specifying `arch=` produces misidentified instructions with no error.** There is no arch detection from the binary's ELF `e_machine` field; the lifter uses whatever `arch=` string the caller provides. Always specify `arch=` for any ISA other than ARM64.
+**`arch=` default is `arm64`: passing a non-ARM64 binary without specifying `arch=` produces misidentified instructions with no error.** There is no arch detection from the binary's ELF `e_machine` field; the lifter uses whatever `arch=` string the caller provides. Always specify `arch=` for any ISA other than ARM64.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution, PLT index, and confirmed function names via `ctx.set_name()`. For stripped binaries, run `SemanticSearcher.query()` first to identify candidate function VAs — lifting unrelated functions at arbitrary addresses wastes time on prologue/epilogue sequences.
+**Before this module:** `BinaryContext.load_or_build()` for symbol and import resolution, PLT index, and confirmed function names via `ctx.set_name()`. For stripped binaries, run `SemanticSearcher.query()` first to identify candidate function VAs: lifting unrelated functions at arbitrary addresses wastes time on prologue/epilogue sequences.
 
 **After this module:** Pass lifted pseudo-C output to `TaintTracker` for data-flow confirmation on ARM64/x86-64 targets. For structural backends, use the resolved call graph from lifted output to identify which callee functions to lift next. For `arch='beam'` targets, feed dangerous-import findings into `modules/java_re.py` OTP patterns for cross-runtime analysis.
 
@@ -208,7 +208,7 @@ The following illustrates the output format for the three completeness tiers. Ac
 |:---|:---|
 | `va` | Virtual address of the lifted function entry point |
 | `arch` | ISA backend used (e.g., `arm64`, `ppc32`, `mips32el`) |
-| Lifted output | Multi-line pseudo-C string — `/* TAINTED */` marks tainted registers (ARM64/x86-64 only); `// mnemonic ops` marks unmodeled arithmetic (structural ISAs) |
+| Lifted output | Multi-line pseudo-C string: `/* TAINTED */` marks tainted registers (ARM64/x86-64 only); `// mnemonic ops` marks unmodeled arithmetic (structural ISAs) |
 | `NativeVal.ctype` | C type string for a register slot: `uint64_t`, `uint32_t`, `void*`, `int32_t`, etc. |
 | `NativeVal.expr` | Expression string: `arg0`, `v3`, `0x1234`, `*(uint64_t*)v1 + 8` |
 | `NativeVal.tainted` | `True` when the register was seeded from a tainted parameter (ARM64/x86-64 only) |
@@ -217,18 +217,18 @@ The following illustrates the output format for the three completeness tiers. Ac
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state, function/import index, confirmed name overlay
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking; feed `findings` into `.with_taint()` for annotation
-- [SemanticSearch](semantic-search.md) — behavioral candidate search to identify VAs worth lifting
-- [BinaryLifterSH2A](binary-lifter-sh2a.md) — SH-2A specific lifting details and ECU function patterns
+- [BinaryContext](binary-context.md): session state, function/import index, confirmed name overlay
+- [TaintAnalysis](taint-analysis.md): dataflow tracking; feed `findings` into `.with_taint()` for annotation
+- [SemanticSearch](semantic-search.md): behavioral candidate search to identify VAs worth lifting
+- [BinaryLifterSH2A](binary-lifter-sh2a.md): SH-2A specific lifting details and ECU function patterns
 
 ---
 
-## Ppc476Lifter — specialized IBM PPC476 BE lifter
+## Ppc476Lifter: specialized IBM PPC476 BE lifter
 
 **File:** `ablation/analyzers/ppc476_lifter.py`
 
-Standalone IBM PPC476 BE pseudo-C lifter. Fills gap PPC476-GAP-003: no Python-native PPC32 BE lifter existed before this module. Lifts a function linearly — tracks register state across straight-line instruction sequences and annotates branches as `// if/else` comments; does **not** perform cross-branch data-flow analysis. Uses Capstone `CS_ARCH_PPC + CS_MODE_32 | CS_MODE_BIG_ENDIAN`. Architecture: PPC32 BE (IBM PPC476, glibc 2.15).
+Standalone IBM PPC476 BE pseudo-C lifter. Fills gap PPC476-GAP-003: no Python-native PPC32 BE lifter existed before this module. Lifts a function linearly: tracks register state across straight-line instruction sequences and annotates branches as `// if/else` comments; does **not** perform cross-branch data-flow analysis. Uses Capstone `CS_ARCH_PPC + CS_MODE_32 | CS_MODE_BIG_ENDIAN`. Architecture: PPC32 BE (IBM PPC476, glibc 2.15).
 
 **Usage:**
 ```python
@@ -238,7 +238,7 @@ pseudo = lifter.lift(func_va, n_insn=200)
 print(pseudo)
 ```
 
-**Output format** — C-like pseudo-code lines tagged with VA:
+**Output format**: C-like pseudo-code lines tagged with VA:
 ```
 [0x10002754] r1 -= 0x80;           // frame alloc
 [0x10002760] r9 = r3;              // arg copy

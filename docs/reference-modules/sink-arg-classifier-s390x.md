@@ -1,12 +1,12 @@
 # SinkArgClassifierS390X
 
-Classify exec-class sink argument provenance on s390 (31-bit) and s390x (64-bit) big-endian ELFs — bypassing `BinaryContext`'s broken s390x PLT detection to recover exec-class imports on IBM mainframe Linux binaries.
+Classify exec-class sink argument provenance on s390 (31-bit) and s390x (64-bit) big-endian ELFs: bypassing `BinaryContext`'s broken s390x PLT detection to recover exec-class imports on IBM mainframe Linux binaries.
 
 ---
 
 ## Why this exists
 
-1. **`BinaryContext` misidentifies s390x binaries as x86-64.** For `e_machine=0x0016` (EM_S390), `BinaryContext` falls through to its x86-64 PLT parser, which returns `plt=0` on every s390x binary. `SinkArgClassifier` is then called with an empty PLT map and produces 0 results — not because the binary is safe, but because the architecture detection is broken. Gap ID: `S390-GAP-001`.
+1. **`BinaryContext` misidentifies s390x binaries as x86-64.** For `e_machine=0x0016` (EM_S390), `BinaryContext` falls through to its x86-64 PLT parser, which returns `plt=0` on every s390x binary. `SinkArgClassifier` is then called with an empty PLT map and produces 0 results, not because the binary is safe, but because the architecture detection is broken. Gap ID: `S390-GAP-001`.
 
 2. **The gap affects real IBM targets.** Confirmed on: IBM ClearCase `linux_390` (`cleartool`, 20516 bytes), IBM Rational BuildForge 7.1.1.3 `bfagent` (s390x), IBM XL C/C++ Compiler 1.2.0 runtime for s390x. All three returned `BinaryContext.arch='x86_64'` with `plt=0` before this module existed.
 
@@ -32,7 +32,7 @@ SinkArgClassifierS390X.from_path(ctx.path)
 
 ```
 
-**`_trace_arg` patterns — s390x System V ABI:**
+**`_trace_arg` patterns: s390x System V ABI:**
 
 | Instruction | Classification |
 |:---|:---|
@@ -42,7 +42,7 @@ SinkArgClassifierS390X.from_path(ctx.path)
 | `lgr %rX, %rY` / `lr %rX, %rY` | `ARG_PROPAGATED` if rY in `r2–r6`; recurse otherwise |
 | `la %rX, N(%r15)` / `lay %rX, N(%r15)` | Stack slot address → snprintf back-track |
 | `lgrl %rX, addr` | Load 64-bit from PC-relative → `RODATA_CONST` if target in `.rodata` |
-| `lg %rX, N(%rY)` / `l %rX, N(%rY)` | Load from memory — `ARG_PROPAGATED` if rY in `r2–r6` |
+| `lg %rX, N(%rY)` / `l %rX, N(%rY)` | Load from memory: `ARG_PROPAGATED` if rY in `r2–r6` |
 
 ---
 
@@ -105,12 +105,12 @@ Both 31-bit s390 and 64-bit s390x use this layout. The module handles both word 
 
 **Architecture detection:** Check `ctx.arch == 's390x'` or `e_machine == 0x0016` before using this module. The `sac_for_context()` dispatcher routes s390/s390x automatically.
 
-**After:** Filter out `RODATA_CONST`. Pass `ARG_PROPAGATED` and `UNKNOWN` to manual `WindowAnalyzer` trace — no s390x `TaintTracker` variant exists yet.
+**After:** Filter out `RODATA_CONST`. Pass `ARG_PROPAGATED` and `UNKNOWN` to manual `WindowAnalyzer` trace, no s390x `TaintTracker` variant exists yet.
 
 ---
 
 ## See also
 
-- [Sink Arg Classifier](sink-arg-classifier.md) — x86-64 baseline and full verdict reference
-- [SAC Arch Dispatch](sac-arch-dispatch.md) — auto-selects this module for s390/s390x
-- [Window Analyzer](window-analyzer.md) — disassemble call sites for manual UNKNOWN resolution
+- [Sink Arg Classifier](sink-arg-classifier.md): x86-64 baseline and full verdict reference
+- [SAC Arch Dispatch](sac-arch-dispatch.md): auto-selects this module for s390/s390x
+- [Window Analyzer](window-analyzer.md): disassemble call sites for manual UNKNOWN resolution

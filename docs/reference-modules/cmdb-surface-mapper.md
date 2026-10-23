@@ -154,7 +154,7 @@ Prior to this module, cmdb surface mapper required manual work outside the Ablat
 
 ## How it works
 
-`CMDBSurfaceMapper.from_path(path, extra_sinks=None, extra_tables=None, verbose=False)` parses the ELF binary to extract the PLT and build a function start map. `map()` disassembles each function body with Capstone, collects call sites where `mov edi, <table_id>` precedes a CMDB API call (e.g., `cmf_query_create`), and flags each `CMDBTableEntry` as `reaches_exec=True` when the same caller function body also contains an exec-sink call (`system`, `popen`, `execv`). The output is a `Dict[int, CMDBTableEntry]` keyed by `table_id`. Co-location does not confirm a taint path — use `SinkArgClassifier` and `TaintTracker` to confirm.
+`CMDBSurfaceMapper.from_path(path, extra_sinks=None, extra_tables=None, verbose=False)` parses the ELF binary to extract the PLT and build a function start map. `map()` disassembles each function body with Capstone, collects call sites where `mov edi, <table_id>` precedes a CMDB API call (e.g., `cmf_query_create`), and flags each `CMDBTableEntry` as `reaches_exec=True` when the same caller function body also contains an exec-sink call (`system`, `popen`, `execv`). The output is a `Dict[int, CMDBTableEntry]` keyed by `table_id`. Co-location does not confirm a taint path: use `SinkArgClassifier` and `TaintTracker` to confirm.
 
 ---
 
@@ -175,9 +175,9 @@ table_id=47   name=USER_ACCOUNT      callers=1  exec_reach=✗
 
 ## False positives
 
-**`reaches_exec=True` does not confirm a taint path** — co-location means the caller function body contains both a CMDB access and an exec-sink call, but they may operate on completely different data. Use `SinkArgClassifier.classify_all()` to confirm the CMDB field is classified as `ARG_PROPAGATED` before running `TaintTracker`.
+**`reaches_exec=True` does not confirm a taint path**: co-location means the caller function body contains both a CMDB access and an exec-sink call, but they may operate on completely different data. Use `SinkArgClassifier.classify_all()` to confirm the CMDB field is classified as `ARG_PROPAGATED` before running `TaintTracker`.
 
-**Register-propagated table IDs are excluded** — `_extract_rdi` resolves only `mov edi, <imm>` and `xor edi, edi`. Table IDs loaded from memory or computed at runtime do not appear in the map.
+**Register-propagated table IDs are excluded**: `_extract_rdi` resolves only `mov edi, <imm>` and `xor edi, edi`. Table IDs loaded from memory or computed at runtime do not appear in the map.
 
 ---
 
@@ -193,7 +193,7 @@ Run `CMDBSurfaceMapper` after identifying a `libcmdb_plugin.so` or equivalent co
 
 | Field | Content |
 |:---|:---|
-| `reaches_exec` | `True` — advance to Phase 1 (SinkArgClassifier); `False` — skip |
+| `reaches_exec` | `True`: advance to Phase 1 (SinkArgClassifier); `False`: skip |
 | `exec_sink_name` | Which exec sink is co-located (`system`, `popen`, etc.) |
 | `exec_func_va` | VA of the function to analyze with SinkArgClassifier |
 | `callers` | All VAs calling `cmf_query_create(table_id)` |
@@ -202,6 +202,6 @@ Run `CMDBSurfaceMapper` after identifying a `libcmdb_plugin.so` or equivalent co
 
 ## See also
 
-- [CMDB-to-Sink Mapping](cmdb-to-sink-mapping.md) — per-table field classification used in Phase 1
-- [SinkArgClassifier](sink-arg-classifier.md) — Phase 1 exec-reach confirmation from CMDB surface
-- [Taint Analysis](taint-analysis.md) — Phase 2 data flow confirmation
+- [CMDB-to-Sink Mapping](cmdb-to-sink-mapping.md): per-table field classification used in Phase 1
+- [SinkArgClassifier](sink-arg-classifier.md): Phase 1 exec-reach confirmation from CMDB surface
+- [Taint Analysis](taint-analysis.md): Phase 2 data flow confirmation

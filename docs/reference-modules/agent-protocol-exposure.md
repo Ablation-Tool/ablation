@@ -1,14 +1,14 @@
 # Agent Protocol Exposure
 
-Enumerate unauthenticated agentic API surfaces on exposed LLM inference endpoints — detecting `/v1/assistants`, `/v1/agents`, `/v1/threads`, `/v1/runs`, and `/v1/tools` endpoints accessible without authorization, identifying dangerous tool types (`computer_use`, `bash`, `file_search`, `code_interpreter`) loaded into active assistants, probing tool-calling acceptance at the inference layer, and confirming whether the assistants API requires authentication before exposing tool capability definitions.
+Enumerate unauthenticated agentic API surfaces on exposed LLM inference endpoints: detecting `/v1/assistants`, `/v1/agents`, `/v1/threads`, `/v1/runs`, and `/v1/tools` endpoints accessible without authorization, identifying dangerous tool types (`computer_use`, `bash`, `file_search`, `code_interpreter`) loaded into active assistants, probing tool-calling acceptance at the inference layer, and confirming whether the assistants API requires authentication before exposing tool capability definitions.
 
 ---
 
 ## Why this exists
 
-1. **LLM agent frameworks expose a control plane API alongside the inference API — and the two are rarely secured independently.** OpenAI Assistants API, LangChain LangServe, AutoGPT, and self-hosted agentic frameworks each add endpoints beyond `/v1/chat/completions`: `/v1/assistants` (list assistants and their tool configurations), `/v1/threads` (conversation session management), `/v1/runs` (task execution tracking), and `/v1/agents` (agent definitions with system prompts and tool bindings). When these endpoints return 200 without an `Authorization` header, an adversary reads the full tool capability map without executing a single inference request.
+1. **LLM agent frameworks expose a control plane API alongside the inference API, and the two are rarely secured independently.** OpenAI Assistants API, LangChain LangServe, AutoGPT, and self-hosted agentic frameworks each add endpoints beyond `/v1/chat/completions`: `/v1/assistants` (list assistants and their tool configurations), `/v1/threads` (conversation session management), `/v1/runs` (task execution tracking), and `/v1/agents` (agent definitions with system prompts and tool bindings). When these endpoints return 200 without an `Authorization` header, an adversary reads the full tool capability map without executing a single inference request.
 
-2. **Dangerous tool types in agent definitions are directly exploitable as unauthenticated code execution surfaces.** An assistant with `"tool_type": "bash"` can execute shell commands on the host; `"computer_use"` grants screen and input control; `"file_search"` grants filesystem read; `"code_interpreter"` executes Python in a sandboxed but often misconfigured container. When `/v1/assistants` is unauthenticated, the adversary reads which of these capabilities are active, identifies the assistant IDs, and issues a `/v1/threads` + `/v1/runs` sequence to invoke tool calls directly — without needing to construct a prompt injection chain.
+2. **Dangerous tool types in agent definitions are directly exploitable as unauthenticated code execution surfaces.** An assistant with `"tool_type": "bash"` can execute shell commands on the host; `"computer_use"` grants screen and input control; `"file_search"` grants filesystem read; `"code_interpreter"` executes Python in a sandboxed but often misconfigured container. When `/v1/assistants` is unauthenticated, the adversary reads which of these capabilities are active, identifies the assistant IDs, and issues a `/v1/threads` + `/v1/runs` sequence to invoke tool calls directly: without needing to construct a prompt injection chain.
 
 3. **The tool-calling layer at `/v1/chat/completions` is a distinct attack surface from the assistants API.** Even when `/v1/assistants` requires auth, the inference endpoint itself may accept a `tools` array in the request body that defines functions for the model to call. A request with `tools=[{"type":"function","function":{"name":"execute_command","description":"Run shell command","parameters":{"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}}}]` invites the model to emit a `tool_calls` response invoking `execute_command`. If the calling application routes these calls to a real shell without authorization, this is unauthenticated RCE via the inference API.
 
@@ -117,15 +117,15 @@ if status == 200 and 'tool_calls' in body:
 
 **`/v1/assistants` returns 200 with an empty `data` array.** The finding fires on HTTP 200 regardless of whether any assistant definitions are present. An empty `{"data": []}` response confirms the endpoint is unauthenticated and enumerable but does not confirm active dangerous tools. Severity remains HIGH (the endpoint should require auth); downgrade to MEDIUM if the array is empty and note the absence of active tool definitions.
 
-**Tool-calling `tool_calls` in response does not confirm routing to real execution.** `_TOOL_PROBE_PAYLOAD` causes the model to emit a `tool_calls` JSON object in its response — but the calling application must separately route that object to an actual executor. Many production deployments emit `tool_calls` responses but never wire them to real functions. The finding is `TOOL_CALLING_ACCEPTED` — the model emitted the call. Confirm actual execution by checking whether the application has a tool router (e.g., a `/v1/runs` endpoint that accepts `tool_outputs` submissions).
+**Tool-calling `tool_calls` in response does not confirm routing to real execution.** `_TOOL_PROBE_PAYLOAD` causes the model to emit a `tool_calls` JSON object in its response, but the calling application must separately route that object to an actual executor. Many production deployments emit `tool_calls` responses but never wire them to real functions. The finding is `TOOL_CALLING_ACCEPTED`: the model emitted the call. Confirm actual execution by checking whether the application has a tool router (e.g., a `/v1/runs` endpoint that accepts `tool_outputs` submissions).
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Run `probe_openai_compatible_api()` first to confirm the inference endpoint is unauthenticated — agent surface checks require at minimum inference reachability to confirm the platform. 
+**Before this module:** Run `probe_openai_compatible_api()` first to confirm the inference endpoint is unauthenticated: agent surface checks require at minimum inference reachability to confirm the platform. 
 
-**After this module:** For CRITICAL findings with `bash` or `computer_use` tool types: issue a `/v1/threads` POST to create a new thread, then POST `/v1/runs` referencing the dangerous assistant ID — the model will emit a tool call, and a misconfigured orchestrator will execute it. Document the full path: assistant ID → thread creation → run submission → tool invocation → command output.
+**After this module:** For CRITICAL findings with `bash` or `computer_use` tool types: issue a `/v1/threads` POST to create a new thread, then POST `/v1/runs` referencing the dangerous assistant ID: the model will emit a tool call, and a misconfigured orchestrator will execute it. Document the full path: assistant ID → thread creation → run submission → tool invocation → command output.
 
 ---
 
@@ -143,6 +143,6 @@ if status == 200 and 'tool_calls' in body:
 
 ## See also
 
-- [AI Control Indicators](ai-control-indicators.md) — OWASP LLM, MITRE ATLAS, and IR posture checks from the same module
-- [API Authentication and Token Checks](api-authentication-and-token-checks.md) — JWT/OAuth2 checks for the auth layer protecting these endpoints
-- [API Reverse Engineering](api-re.md) — broader API assessment workflow for the HTTP layer surrounding the LLM surface
+- [AI Control Indicators](ai-control-indicators.md): OWASP LLM, MITRE ATLAS, and IR posture checks from the same module
+- [API Authentication and Token Checks](api-authentication-and-token-checks.md): JWT/OAuth2 checks for the auth layer protecting these endpoints
+- [API Reverse Engineering](api-re.md): broader API assessment workflow for the HTTP layer surrounding the LLM surface

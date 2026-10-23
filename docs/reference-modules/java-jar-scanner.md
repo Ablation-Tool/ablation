@@ -16,10 +16,10 @@ Three gaps in existing Ablation coverage:
 
 | Category | APIs detected |
 |---|---|
-| `RUNTIME_EXEC` | `Runtime.exec()` — requires `java/lang/Runtime` + `exec` co-occurrence |
-| `PROCESS_BUILDER` | `ProcessBuilder.start()` — requires `java/lang/ProcessBuilder` or `java/lang/Process` + `start` |
-| `NATIVE_LOAD` | `System.load()`, `System.loadLibrary()`, `System.mapLibraryName()` — requires `java/lang/System` + method |
-| `REFLECTIVE_EXEC` | `Class.forName()` + `invoke`/`getMethod` — reflective invocation pattern |
+| `RUNTIME_EXEC` | `Runtime.exec()`: requires `java/lang/Runtime` + `exec` co-occurrence |
+| `PROCESS_BUILDER` | `ProcessBuilder.start()`: requires `java/lang/ProcessBuilder` or `java/lang/Process` + `start` |
+| `NATIVE_LOAD` | `System.load()`, `System.loadLibrary()`, `System.mapLibraryName()`: requires `java/lang/System` + method |
+| `REFLECTIVE_EXEC` | `Class.forName()` + `invoke`/`getMethod`: reflective invocation pattern |
 
 ## Usage
 

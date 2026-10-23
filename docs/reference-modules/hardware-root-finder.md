@@ -72,8 +72,8 @@ Constants in the MMIO address range that are used as local variables (not actual
 | Attribute | Content |
 |:---|:---|
 | `func_va` | Start VA of the function containing MMIO accesses |
-| `accesses` | `List[HardwareAccess]` — each access to an MMIO address range |
-| `call_spine` | `List[List[int]]` — caller paths leading to this hardware-access function |
+| `accesses` | `List[HardwareAccess]`: each access to an MMIO address range |
+| `call_spine` | `List[List[int]]`: caller paths leading to this hardware-access function |
 | `mmio_labels` | Property returning unique MMIO range names across all accesses |
 
 Each `HardwareAccess` has:
@@ -91,8 +91,8 @@ Each `HardwareAccess` has:
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

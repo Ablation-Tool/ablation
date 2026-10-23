@@ -1,6 +1,6 @@
 # Kubernetes Inventory
 
-Enumerate Kubernetes pods, services, secrets, RBAC bindings, service accounts, and ConfigMap credential candidates — using the in-cluster service account token directly (no `kubectl` dependency) — via `modules/k8s_enum.py`.
+Enumerate Kubernetes pods, services, secrets, RBAC bindings, service accounts, and ConfigMap credential candidates: using the in-cluster service account token directly (no `kubectl` dependency): via `modules/k8s_enum.py`.
 
 ---
 
@@ -8,7 +8,7 @@ Enumerate Kubernetes pods, services, secrets, RBAC bindings, service accounts, a
 
 1. **`kubectl` is not available inside most compromised containers.** `K8sEnumerator` calls the Kubernetes API server directly using the service account token at `/var/run/secrets/kubernetes.io/serviceaccount/token` and the CA certificate at `/var/run/secrets/kubernetes.io/serviceaccount/ca.crt`. This provides full API access from within any pod that has a mounted service account, without installing any tools.
 
-2. **RBAC `SelfSubjectAccessReview`** — `K8sEnumerator` calls `POST /apis/authorization.k8s.io/v1/selfsubjectaccessreviews` to enumerate which API resources the current service account can access. This establishes the effective permission boundary before attempting resource listing, avoiding 403 errors that would otherwise require blind enumeration of all API paths.
+2. **RBAC `SelfSubjectAccessReview`**: `K8sEnumerator` calls `POST /apis/authorization.k8s.io/v1/selfsubjectaccessreviews` to enumerate which API resources the current service account can access. This establishes the effective permission boundary before attempting resource listing, avoiding 403 errors that would otherwise require blind enumeration of all API paths.
 
 3. **`check_k8s_configmap_exposure()` and `check_kubelet_api_exposure()`** enumerate two distinct exposure classes: ConfigMaps that contain credential-pattern keys (`password`, `secret`, `token`, `api_key`), and the kubelet read-only API (`port 10255`) and read-write API (`port 10250`) that are often exposed within the cluster network without authentication. Both functions operate over raw HTTPS without `kubectl`.
 
@@ -75,9 +75,9 @@ Kubelet API (10.0.1.5):
 
 ## False positives
 
-**`_looks_like_cred(key)` is a keyword-match heuristic** — keys like `secret_sauce` or `token_bucket_size` will match. Review the associated ConfigMap or Secret values to confirm credential presence.
+**`_looks_like_cred(key)` is a keyword-match heuristic**: keys like `secret_sauce` or `token_bucket_size` will match. Review the associated ConfigMap or Secret values to confirm credential presence.
 
-**RBAC `SelfSubjectAccessReview` returns permissions for the current service account only** — other service accounts in the cluster may have broader or narrower permissions. Use `check_k8s_resource_limits()` to identify pods running with high-privilege service accounts.
+**RBAC `SelfSubjectAccessReview` returns permissions for the current service account only**: other service accounts in the cluster may have broader or narrower permissions. Use `check_k8s_resource_limits()` to identify pods running with high-privilege service accounts.
 
 ---
 
@@ -94,16 +94,16 @@ Run `K8sEnumerator` from within a compromised container after establishing shell
 | Key | Content |
 |:---|:---|
 | `rbac` | RBAC self-subject access review result dict |
-| `configmap_creds` | `List` — ConfigMaps with credential-looking keys |
-| `kubelet_findings` | `List[{severity, title, detail, host, port}]` — unauthenticated kubelet endpoints |
-| `secrets` | `List` — accessible Secret objects |
-| `pods` | `List` — enumerated pods |
-| `escape_vectors` | `List` — container escape vectors found |
-| `etcd_findings` | `List` — etcd exposure findings |
+| `configmap_creds` | `List`: ConfigMaps with credential-looking keys |
+| `kubelet_findings` | `List[{severity, title, detail, host, port}]`: unauthenticated kubelet endpoints |
+| `secrets` | `List`: accessible Secret objects |
+| `pods` | `List`: enumerated pods |
+| `escape_vectors` | `List`: container escape vectors found |
+| `etcd_findings` | `List`: etcd exposure findings |
 
 ---
 
 ## See also
 
-- [Kubernetes Policy Posture](kubernetes-policy-posture.md) — RBAC, network policy, and admission controller gap analysis
-- [Docker Inventory and Posture](docker-inventory-and-posture.md) — `DockerEnumerator` for container-level enumeration before cluster enumeration
+- [Kubernetes Policy Posture](kubernetes-policy-posture.md): RBAC, network policy, and admission controller gap analysis
+- [Docker Inventory and Posture](docker-inventory-and-posture.md): `DockerEnumerator` for container-level enumeration before cluster enumeration

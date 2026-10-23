@@ -174,9 +174,9 @@ probe_h323_service:
 
 ## False positives
 
-**`check_srtp_required()` on SIP trunks that use TLS transport** — `SIPEnumerator.check_srtp_required()` sends a plain-RTP SDP offer over UDP. A SIP trunk configured for TLS/SRTP will not respond to a plain-UDP INVITE, and the missing SRTP enforcement finding will not fire even though SRTP may be required on the TLS path. Verify by sending the INVITE over TLS (port 5061) to confirm SRTP enforcement on the protected transport.
+**`check_srtp_required()` on SIP trunks that use TLS transport**: `SIPEnumerator.check_srtp_required()` sends a plain-RTP SDP offer over UDP. A SIP trunk configured for TLS/SRTP will not respond to a plain-UDP INVITE, and the missing SRTP enforcement finding will not fire even though SRTP may be required on the TLS path. Verify by sending the INVITE over TLS (port 5061) to confirm SRTP enforcement on the protected transport.
 
-**`enumerate_extensions()` differential sweep generates SIP traffic** — the sweep sends REGISTER/INVITE requests to candidate extension numbers. On systems with aggressive SIP intrusion detection (Fail2Ban, Cisco UCM rate limiting), probing more than ~50 extensions per minute may trigger a source IP block. Reduce the extension range or add delays for production SIP infrastructure.
+**`enumerate_extensions()` differential sweep generates SIP traffic**: the sweep sends REGISTER/INVITE requests to candidate extension numbers. On systems with aggressive SIP intrusion detection (Fail2Ban, Cisco UCM rate limiting), probing more than ~50 extensions per minute may trigger a source IP block. Reduce the extension range or add delays for production SIP infrastructure.
 
 ---
 
@@ -200,6 +200,6 @@ Run `SIPEnumerator.enumerate_all()` after port scanning identifies TCP/UDP 5060.
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [FindingRegistry](registry.md): record confirmed findings from enumeration
+- [LateralMovement](lateral-movement.md): chain enumeration findings into a lateral path
+- [NetworkAnalyze](network-analyze.md): port and service fingerprinting

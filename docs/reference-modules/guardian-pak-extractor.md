@@ -88,7 +88,7 @@ Gate: **PASSED** (0 HIGH, 0 CRITICAL).
 
 - 1 MEDIUM (FORGE §3): `zlib.decompress()` has no `max_length`: a crafted PAK could cause OOM via zlib bomb. Acceptable for trusted RE corpus use; callers consuming untrusted PAK files should pre-screen decompressed size.
 - 1 LOW (FORGE §6): the docstring listed specific record type code values (`0x6891`, `0xDF3B`, `0x0F02`) as if they were authoritative. Fixed before commit: docstring now explicitly states codes are not stable and documents the content-detection approach instead.
-- 1 LOW (FORGE §2): the `< 4` chunk size guard in `iter_files` discarded legitimate small data chunks (e.g., 3-byte or 1-byte payloads). Fixed before commit: guard changed to skip only truly empty blocks (`if not chunk`).
+- 1 LOW (FORGE §2): the `< 4` chunk size guard in `iter_files` discarded legitimate small data chunks for example 3-byte or 1-byte payloads. Fixed before commit: guard changed to skip only truly empty blocks (`if not chunk`).
 
 Confirmed on two NSK middleware PTF archives (66 files / ~130 MB and 83 files / ~139 MB decompressed).
 
@@ -115,7 +115,7 @@ Written to /tmp/extracted/
 
 ## False positives
 
-Extraction either succeeds or raises an exception — there are no false positives in the traditional sense. Check for incomplete downloads (`.aria2` sidecar present) before analysis: partial images produce truncated or zero-filled partitions that pass validation but contain no useful data.
+Extraction either succeeds or raises an exception, there are no false positives in the traditional sense. Check for incomplete downloads (`.aria2` sidecar present) before analysis: partial images produce truncated or zero-filled partitions that pass validation but contain no useful data.
 
 ---
 
@@ -140,6 +140,6 @@ Extraction either succeeds or raises an exception — there are no false positiv
 
 ## See also
 
-- [BinaryContext](binary-context.md) — load extracted payloads for analysis
-- [FirmwareContainers](firmware-containers.md) — higher-level firmware partition walker
-- [EntropyMapper](entropy-mapper.md) — locate encrypted or compressed regions before extraction
+- [BinaryContext](binary-context.md): load extracted payloads for analysis
+- [FirmwareContainers](firmware-containers.md): higher-level firmware partition walker
+- [EntropyMapper](entropy-mapper.md): locate encrypted or compressed regions before extraction

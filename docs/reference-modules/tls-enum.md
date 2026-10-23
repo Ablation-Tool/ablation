@@ -137,9 +137,9 @@ probe_tls_downgrade_attack: target.example.com:443
 
 ## False positives
 
-**`probe_cloud_proxy_ssl_inspection_bypass()` generates IDS alerts** — this probe sends a QUIC Long Header Initial packet to UDP/443 and a 3-fragment ClientHello. These are active out-of-band probes that may appear in IDS logs as malformed TLS or protocol violation events on the target.
+**`probe_cloud_proxy_ssl_inspection_bypass()` generates IDS alerts**, this probe sends a QUIC Long Header Initial packet to UDP/443 and a 3-fragment ClientHello. These are active out-of-band probes that may appear in IDS logs as malformed TLS or protocol violation events on the target.
 
-**`probe_zero_trust_bypass_surface()` logs appear as auth bypass attempts** — the probe sends a JWT-shaped token as a URL query parameter. The target may log this as an attempted authentication bypass attempt, which is visible in security event logs.
+**`probe_zero_trust_bypass_surface()` logs appear as auth bypass attempts**: the probe sends a JWT-shaped token as a URL query parameter. The target may log this as an attempted authentication bypass attempt, which is visible in security event logs.
 
 ---
 
@@ -163,6 +163,6 @@ Run TLS enumeration after confirming a listening HTTPS service. Run `probe_tls_d
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [FindingRegistry](registry.md): record confirmed findings from enumeration
+- [LateralMovement](lateral-movement.md): chain enumeration findings into a lateral path
+- [NetworkAnalyze](network-analyze.md): port and service fingerprinting

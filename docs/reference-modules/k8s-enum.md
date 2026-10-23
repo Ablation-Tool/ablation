@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. All procfs reads use `f.read(_MA
 
 ## How it works
 
-`K8sEnumerator()` (no constructor args — auto-detects token, CA cert, API server from environment). `enumerate_all()` runs `check_in_k8s()` first to confirm Kubernetes context, then runs RBAC, pod, secret, network policy, and admission controller checks. Escape vectors accumulate in `self.escape_vectors` as `{type, severity, description, exploit}` dicts. Other finding lists (e.g., `clusteradmin_findings`, `privileged_pod_findings`) use `{severity, ...resource-specific keys}`.
+`K8sEnumerator()` (no constructor args: auto-detects token, CA cert, API server from environment). `enumerate_all()` runs `check_in_k8s()` first to confirm Kubernetes context, then runs RBAC, pod, secret, network policy, and admission controller checks. Escape vectors accumulate in `self.escape_vectors` as `{type, severity, description, exploit}` dicts. Other finding lists (e.g., `clusteradmin_findings`, `privileged_pod_findings`) use `{severity, ...resource-specific keys}`.
 
 ---
 
@@ -66,15 +66,15 @@ privileged_pod_findings:
 
 ## False positives
 
-**`check_rbac_clusteradmin()` on CI/CD service accounts** — many CI/CD pipelines (ArgoCD, Tekton, Flux) legitimately bind their service accounts to `cluster-admin` for deployment automation. Confirm whether the binding is intentional by checking the bound service account's namespace and workload name before escalating.
+**`check_rbac_clusteradmin()` on CI/CD service accounts**: many CI/CD pipelines (ArgoCD, Tekton, Flux) legitimately bind their service accounts to `cluster-admin` for deployment automation. Confirm whether the binding is intentional by checking the bound service account's namespace and workload name before escalating.
 
-**`check_network_policies()` reports `NO_NETWORK_POLICY` per namespace** — a namespace without a NetworkPolicy allows all traffic by default. In single-tenant clusters or staging environments this is often intentional. The finding is accurate; intent must be verified separately.
+**`check_network_policies()` reports `NO_NETWORK_POLICY` per namespace**: a namespace without a NetworkPolicy allows all traffic by default. In single-tenant clusters or staging environments this is often intentional. The finding is accurate; intent must be verified separately.
 
 ---
 
 ## Pipeline position
 
-Run `K8sEnumerator` from inside a pod after gaining container-level shell access. `check_in_k8s()` detects the service account token at `/var/run/secrets/kubernetes.io/serviceaccount/token` — if the token has RBAC access, full cluster enumeration proceeds automatically.
+Run `K8sEnumerator` from inside a pod after gaining container-level shell access. `check_in_k8s()` detects the service account token at `/var/run/secrets/kubernetes.io/serviceaccount/token`: if the token has RBAC access, full cluster enumeration proceeds automatically.
 
 ---
 
@@ -88,6 +88,6 @@ Other finding lists (`clusteradmin_findings`, `network_policy_findings`, `privil
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [FindingRegistry](registry.md): record confirmed findings from enumeration
+- [LateralMovement](lateral-movement.md): chain enumeration findings into a lateral path
+- [NetworkAnalyze](network-analyze.md): port and service fingerprinting

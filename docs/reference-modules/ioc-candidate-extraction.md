@@ -1,16 +1,16 @@
 # Perl Shell Injection Detection
 
-Detect shell injection vulnerabilities in Perl source code — finding `qx//`, `system()`, and `exec()` call sites where variables are interpolated without sanitization, recognizing Perl-specific sanitization idioms (`quotemeta()`, single-quote wrapping, `s/'/ /g`), and resolving cross-file caller chains for function-parameter taint sources — covering the `.pm`/`.pl` layers that wrap root-privileged setuid ELFs in RSCT, IBM HMC, and embedded Linux targets.
+Detect shell injection vulnerabilities in Perl source code: finding `qx//`, `system()`, and `exec()` call sites where variables are interpolated without sanitization, recognizing Perl-specific sanitization idioms (`quotemeta()`, single-quote wrapping, `s/'/ /g`), and resolving cross-file caller chains for function-parameter taint sources: covering the `.pm`/`.pl` layers that wrap root-privileged setuid ELFs in RSCT, IBM HMC, and embedded Linux targets.
 
 ---
 
 ## Why this exists
 
-1. **`TaintTracker` is ELF-only — it never sees the Perl script layer above a setuid ELF.** RSCT, IBM HMC, and many embedded Linux targets ship thick `.pm`/`.pl` layers that wrap root-privileged binaries. `PerlTaintScanner` closes this gap: it finds shell sinks with interpolated variables and traces those variables to their origin (CLI args, function parameters, or internal state).
+1. **`TaintTracker` is ELF-only, it never sees the Perl script layer above a setuid ELF.** RSCT, IBM HMC, and many embedded Linux targets ship thick `.pm`/`.pl` layers that wrap root-privileged binaries. `PerlTaintScanner` closes this gap: it finds shell sinks with interpolated variables and traces those variables to their origin (CLI args, function parameters, or internal state).
 
 2. **Perl codebases use sanitization idioms that a generic grep cannot recognize.** `quotemeta()` escapes all shell metacharacters; single-quote wrapping (`"'" . join("' '", @args) . "'"`) ensures no word splitting; `s/'/ /g` removes single quotes before interpolation. `PerlTaintScanner` recognizes all three and reports `SANITIZED` rather than false-positiving on them.
 
-3. **Cross-file caller resolution for `PARAM` sources** — when a sink variable comes from `shift(@_)` (a function parameter), the scanner identifies the calling function across files to determine whether the parameter receives user-controlled input or a trusted internal value, avoiding the false-positive class where internal helpers are flagged as injection points.
+3. **Cross-file caller resolution for `PARAM` sources**: when a sink variable comes from `shift(@_)` (a function parameter), the scanner identifies the calling function across files to determine whether the parameter receives user-controlled input or a trusted internal value, avoiding the false-positive class where internal helpers are flagged as injection points.
 
 ---
 
@@ -68,15 +68,15 @@ Files: <F>  Sinks found: <N>
 
 ## False positives
 
-**Single-quote wrapping detection requires the canonical pattern** — `"'" . $var . "'"` is detected as sanitized. Partial wrapping (e.g., only the left side is quoted) passes through as `UNKNOWN`. Review `UNKNOWN` verdict sites for partial-sanitization patterns.
+**Single-quote wrapping detection requires the canonical pattern**: `"'" . $var . "'"` is detected as sanitized. Partial wrapping for example only the left side is quoted passes through as `UNKNOWN`. Review `UNKNOWN` verdict sites for partial-sanitization patterns.
 
-**Cross-file `PARAM` source resolution uses file-level function index** — if the calling function is in a dynamically loaded module (`require` or `use` of a non-static path), the resolver may not find it, producing `UNKNOWN` instead of `ARGV`. These are not false positives; they require manual inspection of the calling convention.
+**Cross-file `PARAM` source resolution uses file-level function index**: if the calling function is in a dynamically loaded module (`require` or `use` of a non-static path), the resolver may not find it, producing `UNKNOWN` instead of `ARGV`. These are not false positives; they require manual inspection of the calling convention.
 
 ---
 
 ## Pipeline position
 
-Run `PerlTaintScanner` on any Perl codebase found in firmware (RSCT `.pm` layers, IBM HMC management scripts, embedded Linux `/usr/lib/perl/`). Pair with `ELF` taint analysis on the setuid binary the Perl wraps — a Perl injection finding confirmed by both layers is a chain finding.
+Run `PerlTaintScanner` on any Perl codebase found in firmware (RSCT `.pm` layers, IBM HMC management scripts, embedded Linux `/usr/lib/perl/`). Pair with `ELF` taint analysis on the setuid binary the Perl wraps: a Perl injection finding confirmed by both layers is a chain finding.
 
 ---
 
@@ -97,5 +97,5 @@ Run `PerlTaintScanner` on any Perl codebase found in firmware (RSCT `.pm` layers
 
 ## See also
 
-- [Source Dangerous Sink Detection](source-code-auditing.md) — `SourceSinkScanner` for Python/JS/TS equivalent
-- [Source Code Analysis Pipeline](bare-integration.md) — `SourceContext` for full repository context
+- [Source Dangerous Sink Detection](source-code-auditing.md): `SourceSinkScanner` for Python/JS/TS equivalent
+- [Source Code Analysis Pipeline](bare-integration.md): `SourceContext` for full repository context

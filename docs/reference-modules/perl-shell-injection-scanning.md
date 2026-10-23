@@ -1,16 +1,16 @@
 # Perl Shell-Injection Scanning
 
-Statically trace user-controlled input from Perl CLI argument sources (`@ARGV`, `Getopt`, `STDIN`) through all interpolated shell sink patterns (backtick, `qx//`, `system()`, `open PIPE`) — classifying each finding by its taint source, sanitization status, and cross-file caller resolution depth.
+Statically trace user-controlled input from Perl CLI argument sources (`@ARGV`, `Getopt`, `STDIN`) through all interpolated shell sink patterns (backtick, `qx//`, `system()`, `open PIPE`): classifying each finding by its taint source, sanitization status, and cross-file caller resolution depth.
 
 ---
 
 ## Why this exists
 
-1. **Embedded Linux targets ship thick Perl layers above setuid ELF binaries.** IBM RSCT, HMC, Fortinet SNMP helpers, and many industrial device management systems implement their command interfaces as `.pm`/`.pl` files that call root-privileged binaries via `system()` and backtick. `TaintTracker` is ELF-only — it never touches these scripts. `PerlTaintScanner` closes that gap: it finds every shell sink with variable interpolation and traces each interpolated variable to its origin.
+1. **Embedded Linux targets ship thick Perl layers above setuid ELF binaries.** IBM RSCT, HMC, Fortinet SNMP helpers, and many industrial device management systems implement their command interfaces as `.pm`/`.pl` files that call root-privileged binaries via `system()` and backtick. `TaintTracker` is ELF-only, it never touches these scripts. `PerlTaintScanner` closes that gap: it finds every shell sink with variable interpolation and traces each interpolated variable to its origin.
 
 2. **Perl-specific sanitization idioms produce false positives in naive string scanners.** A generic grep for `` `$var` `` or `system("...$var...")` hits thousands of legitimately sanitized patterns: `quotemeta()`, single-quote wrapping (`"'" . join("' '", @args) . "'"`), and `s/'/ /g` substitutions before shell expansion. The scanner recognizes all three and reports `SANITIZED` rather than flooding the analyst with unreachable findings.
 
-3. **The injection variable often enters through a different file.** The canonical RSCT pattern: `ERRM_cli_utils.pm` receives `$condition_name` via `shift(@_)`, passes it to `qx{lsrsrc -c $condition_name}`. The `.pm` file never touches `@ARGV`. But `rmcondition` — the CLI script — calls `ERRM_cli_utils::remove_condition($ARGV[0])`. The scanner resolves one caller hop and upgrades the verdict from `PARAM_UNKNOWN` to `INJECTABLE`.
+3. **The injection variable often enters through a different file.** The canonical RSCT pattern: `ERRM_cli_utils.pm` receives `$condition_name` via `shift(@_)`, passes it to `qx{lsrsrc -c $condition_name}`. The `.pm` file never touches `@ARGV`. But `rmcondition`: the CLI script: calls `ERRM_cli_utils::remove_condition($ARGV[0])`. The scanner resolves one caller hop and upgrades the verdict from `PARAM_UNKNOWN` to `INJECTABLE`.
 
 ---
 
@@ -57,7 +57,7 @@ flowchart TD
 | Pattern | Description |
 |---|---|
 | `quotemeta($var)` | Escapes all non-alphanumeric characters for shell safety |
-| `"'" . join("' '", @args) . "'"` | Single-quote wrapping — prevents word-splitting and globbing |
+| `"'" . join("' '", @args) . "'"` | Single-quote wrapping: prevents word-splitting and globbing |
 | `s/'/ /g` | Strips single quotes from a variable before shell interpolation |
 
 ---
@@ -124,7 +124,7 @@ Summary: INJECTABLE=2, PARAM_UNKNOWN=1, SANITIZED=1
 
 ## False positives
 
-**`PARAM_UNKNOWN` on internal callers with controlled data.** When the scan set includes only the `.pm` library but not the CLI script that calls it, a genuine injection through `shift(@_)` appears as `PARAM_UNKNOWN` rather than `INJECTABLE`. Extend the scan to include all `.pl` scripts in the target's `bin/` directory and re-run — the scanner will follow the one-hop caller resolution and upgrade the verdict.
+**`PARAM_UNKNOWN` on internal callers with controlled data.** When the scan set includes only the `.pm` library but not the CLI script that calls it, a genuine injection through `shift(@_)` appears as `PARAM_UNKNOWN` rather than `INJECTABLE`. Extend the scan to include all `.pl` scripts in the target's `bin/` directory and re-run: the scanner will follow the one-hop caller resolution and upgrade the verdict.
 
 **`UNKNOWN` on dynamically assigned variables.** When a variable receives its value from a hash lookup (`$cmd = $actions{$key}`) rather than a direct assignment, the backward scan does not match any source pattern and reports `UNKNOWN`. These warrant manual inspection: trace whether `$actions` is populated from user input at any point in the file.
 
@@ -158,6 +158,6 @@ Summary: INJECTABLE=2, PARAM_UNKNOWN=1, SANITIZED=1
 
 ## See also
 
-- [Taint Analysis](taint-analysis.md) — ELF taint tracing for the C/C++ binary layer called by Perl scripts
-- [Sink Arg Classifier](sink-arg-classifier.md) — classify argument provenance at ELF `system()` call sites
-- [Source Entry Classifier](architectural-risk-detection.md) — source RE entry point classification for web API layers
+- [Taint Analysis](taint-analysis.md): ELF taint tracing for the C/C++ binary layer called by Perl scripts
+- [Sink Arg Classifier](sink-arg-classifier.md): classify argument provenance at ELF `system()` call sites
+- [Source Entry Classifier](architectural-risk-detection.md): source RE entry point classification for web API layers
