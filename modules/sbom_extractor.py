@@ -158,7 +158,7 @@ class SBOMExtractor:
         return results
 
     def _signature_components(self, existing_names: set[str]) -> list[SBOMComponent]:
-        from ablation.analyzers.third_party_library_identifier import ThirdPartyLibraryIdentifier
+        from modules.third_party_library_identifier import ThirdPartyLibraryIdentifier
         ident = ThirdPartyLibraryIdentifier(self._path, min_matches=2)
         sig_findings = ident.scan()
         results: list[SBOMComponent] = []
