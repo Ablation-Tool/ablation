@@ -4,7 +4,7 @@
 
 One thing was not possible before in Ablation:
 
-1. **Extract dependency confusion attack surface from compiled binaries.** Build systems embed registry URLs, package cache paths, and internal package names as strings in the final binary. These strings reveal which internal package names could be registered on public package managers to mount a dependency confusion attack. `DependencyConfusionScanner` searches the raw binary for 4 signal types: private registry URLs (8 patterns covering Artifactory, JFrog, Azure Artifacts, AWS CodeArtifact, GitHub Packages), public registry URL co-presence with a private one (indicating mixed registry configuration), build cache paths that expose internal package identifiers, and scoped npm package names matching the `@company/package` pattern.
+1. **Extract dependency confusion attack surface from compiled binaries.** Build systems embed registry URLs, package cache paths, and internal package names as strings in the final binary. These strings reveal which internal package names could be registered on public package managers to mount a dependency confusion attack. `DependencyConfusionScanner` searches the raw binary for 4 signal types: 8 private registry URL patterns covering Artifactory, JFrog, Azure Artifacts, AWS CodeArtifact, and GitHub Packages; public registry URL co-presence with a private one (indicating mixed registry configuration), build cache paths that expose internal package identifiers, and scoped npm package names matching the `@company/package` pattern.
 
 ## Usage
 
