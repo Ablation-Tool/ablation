@@ -62,13 +62,20 @@ DEFAULT_PLT = {
 }
 
 
-def _make_clf(code: bytes, func_va: int = BASE_VA) -> SinkArgClassifierX86_32:
+def _make_clf(
+    code: bytes,
+    func_va: int = BASE_VA,
+    rodata_content: bytes = b'',
+) -> SinkArgClassifierX86_32:
     """
     Build a SinkArgClassifierX86_32 from a raw byte sequence.
 
     Constructs a minimal mock context and a minimal ELF in memory using lief.
     The .text section contains `code` at func_va.
     The .rodata section covers RODATA_STR – RODATA_END.
+
+    rodata_content: optional bytes placed at RODATA_STR in the data buffer so
+    that _read_cstr() can read format string content during _snprintf_variadic_verdict.
     """
     ctx = MagicMock()
     ctx.plt      = DEFAULT_PLT
@@ -84,9 +91,16 @@ def _make_clf(code: bytes, func_va: int = BASE_VA) -> SinkArgClassifierX86_32:
 
     ctx.callers_of.side_effect = callers_of_side
 
+    # Build data buffer: code at func_va, optional rodata at RODATA_STR.
+    rodata_offset = RODATA_STR - func_va
+    if rodata_content:
+        buf = code + b'\x00' * (rodata_offset - len(code)) + rodata_content
+    else:
+        buf = code
+
     clf = SinkArgClassifierX86_32.__new__(SinkArgClassifierX86_32)
     clf._ctx  = ctx
-    clf._data = code
+    clf._data = buf
     clf._plt_rev   = {v: k for k, v in DEFAULT_PLT.items()}
     clf._sinks     = {
         'system':   0,
@@ -207,13 +221,75 @@ def test_push_reg_lea_sprintf_snprintf_rodata():
 
     code = (lea_esi + push_fmt + push_esi_sprintf + call_sprintf
             + add_esp + push_esi_system + call_system)
-    clf = _make_clf(code, func_va)
+    # Provide a no-specifier format string at RODATA_STR so _snprintf_variadic_verdict
+    # can confirm there are no %s/%d args and return SNPRINTF_RODATA.
+    clf = _make_clf(code, func_va, rodata_content=b'ps -ef 2>/dev/null\x00')
     results = clf.classify_all()
     hit = [r for r in results if r.sink_name == 'system']
     assert hit, 'system call site must be found'
     assert hit[0].verdict == SNPRINTF_RODATA, (
         f'lea/sprintf/push-reg pattern: expected SNPRINTF_RODATA, '
         f'got {hit[0].verdict}; detail={hit[0].detail}'
+    )
+
+
+@_SKIP_DEPS
+def test_sprintf_fmt_specifier_arg_propagated():
+    """sprintf(buf, "cmd %s", [ebp+8]) → system(buf) classifies as ARG_PROPAGATED.
+
+    Closes X86-32-SNPRINTF-GAP-001: when the format string has %s/%d specifiers,
+    check the variadic arguments — do not return SNPRINTF_RODATA blindly.
+    Pattern: DOORS-002 doorsd unixZipGetComment.
+
+    Code sequence:
+        sub esp, 0x100
+        push [ebp+8]            # variadic arg0 from caller (ARG_PROPAGATED)
+        push RODATA_FMT_SPEC    # format string "unzip -o '%s'" in .rodata
+        lea eax, [ebp-0x100]    # dest = local buffer
+        push eax
+        call sprintf
+        add esp, 0x0c
+        lea eax, [ebp-0x100]
+        push eax
+        call system
+    """
+    import struct as _struct
+
+    func_va = BASE_VA
+    RODATA_FMT_SPEC = RODATA_STR   # format string WITH %s specifier
+
+    va = func_va
+    sub_esp    = b'\x83\xec\x00'                          # sub esp, 0 (placeholder)
+    va += len(sub_esp)
+    push_arg   = b'\xff\x75\x08'                          # push [ebp+8] (func arg0)
+    va += len(push_arg)
+    push_fmt   = b'\x68' + _struct.pack('<I', RODATA_FMT_SPEC)
+    va += len(push_fmt)
+    lea_dst    = b'\x8d\x85\x00\xff\xff\xff'             # lea eax, [ebp-0x100]
+    va += len(lea_dst)
+    push_eax_s = b'\x50'                                  # push eax (dest)
+    va += len(push_eax_s)
+    call_spf   = _encode_call_rel32(va, SPRINTF_PLT)
+    va += len(call_spf)
+    add_esp    = b'\x83\xc4\x0c'                          # add esp, 12
+    va += len(add_esp)
+    lea_sys    = b'\x8d\x85\x00\xff\xff\xff'             # lea eax, [ebp-0x100]
+    va += len(lea_sys)
+    push_eax_y = b'\x50'                                  # push eax (system arg)
+    va += len(push_eax_y)
+    call_sys   = _encode_call_rel32(va, SYSTEM_PLT)
+
+    code = (sub_esp + push_arg + push_fmt + lea_dst + push_eax_s + call_spf
+            + add_esp + lea_sys + push_eax_y + call_sys)
+
+    # Format string has one %s specifier — variadic arg [ebp+8] is ARG_PROPAGATED
+    clf = _make_clf(code, func_va, rodata_content=b"unzip -o '%s'\x00")
+    results = clf.classify_all()
+    hit = [r for r in results if r.sink_name == 'system']
+    assert hit, 'system call site must be found'
+    assert hit[0].verdict == ARG_PROPAGATED, (
+        f'sprintf(buf, fmt_with_%s, [ebp+8]) → system(buf): expected ARG_PROPAGATED '
+        f'(X86-32-SNPRINTF-GAP-001 fix), got {hit[0].verdict}; detail={hit[0].detail}'
     )
 
 
