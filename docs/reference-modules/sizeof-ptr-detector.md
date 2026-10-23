@@ -48,8 +48,8 @@ Fill sinks: `memset`, `bzero`, `explicit_bzero`, `memset_explicit`, `SecureZeroM
 
 Not every length-4 or length-8 is a bug. A `memcpy` of exactly one pointer is intentional. Common legitimate patterns:
 
-- `memcpy(&dst_ptr, &src_ptr, sizeof(void*))` — pointer copy, intentional.
-- `memset(&int_field, 0, 4)` — zeroing a 4-byte integer field.
+- `memcpy(&dst_ptr, &src_ptr, sizeof(void*))`: pointer copy, intentional.
+- `memset(&int_field, 0, 4)`: zeroing a 4-byte integer field.
 
 Verify each finding by examining what the destination buffer is. If the destination is a `char buf[128]` or heap allocation larger than 8 bytes, the finding is real.
 
