@@ -1,16 +1,16 @@
 # Source Code Analysis Pipeline
 
-Build a `SourceContext` index over a local or remote git repository — the source-code analog of `BinaryContext` — then run inter-procedural taint path tracing from dangerous sinks back to HTTP route handler trust boundaries, and compress large codebases into profiled audit buckets for systematic coverage.
+Build a `SourceContext` index over a local or remote git repository: the source-code analog of `BinaryContext`: then run inter-procedural taint path tracing from dangerous sinks back to HTTP route handler trust boundaries, and compress large codebases into profiled audit buckets for systematic coverage.
 
 ---
 
 ## Why this exists
 
-1. **Source RE requires the same systematic approach as binary RE: build a cached surface once, query it many times.** `SourceContext` is that surface — a fast, indexed view of a codebase that downstream source analyzers (`SourceSinkScanner`, `SourceTaintTracker`, `SourceAuditCompressor`) consume without re-scanning the file tree on every query. `SourceContext.grep()` and `grep_context()` provide pattern search across the full codebase with language filtering and context window output.
+1. **Source RE requires the same systematic approach as binary RE: build a cached surface once, query it many times.** `SourceContext` is that surface: a fast, indexed view of a codebase that downstream source analyzers (`SourceSinkScanner`, `SourceTaintTracker`, `SourceAuditCompressor`) consume without re-scanning the file tree on every query. `SourceContext.grep()` and `grep_context()` provide pattern search across the full codebase with language filtering and context window output.
 
-2. **`SourceTaintTracker.trace_to_source()` follows `SinkHit` findings backward through the call graph to HTTP route handler trust boundaries** — the source analog of binary `TaintTracker.run_interprocedural()`. Each `TaintPath` is a chain of `(file, line, function)` hops from the route handler down to the dangerous sink, providing the complete attack path without manual call graph traversal.
+2. **`SourceTaintTracker.trace_to_source()` follows `SinkHit` findings backward through the call graph to HTTP route handler trust boundaries**: the source analog of binary `TaintTracker.run_interprocedural()`. Each `TaintPath` is a chain of `(file, line, function)` hops from the route handler down to the dangerous sink, providing the complete attack path without manual call graph traversal.
 
-3. **`SourceAuditCompressor` addresses the coverage problem in large codebases** — it assigns each source file a 5-bit security profile (network access, file I/O, subprocess, deserialization, auth), buckets files with identical profiles, and returns one representative per bucket with an `audit_action` directive. This ensures systematic coverage: every security-relevant file pattern is reviewed at least once without reading identical-profile files multiple times.
+3. **`SourceAuditCompressor` addresses the coverage problem in large codebases**, it assigns each source file a 5-bit security profile (network access, file I/O, subprocess, deserialization, auth), buckets files with identical profiles, and returns one representative per bucket with an `audit_action` directive. This ensures systematic coverage: every security-relevant file pattern is reviewed at least once without reading identical-profile files multiple times.
 
 ---
 
@@ -83,9 +83,9 @@ SourceAuditCompressor: <N> files → <K> buckets
 
 ## False positives
 
-**`SourceTaintTracker.build()` constructs the call graph from AST parsing** — dynamic dispatch through decorators, dependency injection, or framework routing (Django URL patterns, Flask route decorators) may not be fully captured. Verify `TaintPath` starting points by checking that the route handler is actually reachable from the attacker's perspective.
+**`SourceTaintTracker.build()` constructs the call graph from AST parsing**: dynamic dispatch through decorators, dependency injection, or framework routing (Django URL patterns, Flask route decorators) may not be fully captured. Verify `TaintPath` starting points by checking that the route handler is actually reachable from the attacker's perspective.
 
-**`SourceAuditCompressor` profile bits are assigned by pattern matching** — a file that imports `subprocess` but never calls it may be assigned the `subprocess` profile bit, resulting in a `READ` action that is unnecessary. The profile errs toward inclusion to prevent missed coverage.
+**`SourceAuditCompressor` profile bits are assigned by pattern matching**: a file that imports `subprocess` but never calls it may be assigned the `subprocess` profile bit, resulting in a `READ` action that is unnecessary. The profile errs toward inclusion to prevent missed coverage.
 
 ---
 
@@ -109,15 +109,15 @@ SourceAuditCompressor: <N> files → <K> buckets
 
 | Attribute | Content |
 |:---|:---|
-| `sink` | `SinkHit` — the sink at the end of this path |
-| `hops` | `List[TaintHop]` — ordered call chain from route handler to sink (each hop has `func_name`, `file`, `line`, `rel_path`) |
-| `confidence` | `'DIRECT'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` — based on number of intermediate hops |
+| `sink` | `SinkHit`: the sink at the end of this path |
+| `hops` | `List[TaintHop]`: ordered call chain from route handler to sink (each hop has `func_name`, `file`, `line`, `rel_path`) |
+| `confidence` | `'DIRECT'` / `'HIGH'` / `'MEDIUM'` / `'LOW'`: based on number of intermediate hops |
 | `has_source` | `True` if the path reaches a route handler (HTTP trust boundary) |
 
 ---
 
 ## See also
 
-- [Source Dangerous Sink Detection](source-dangerous-sink-detection.md) — `SourceSinkScanner` that produces `SinkHit` inputs to `SourceTaintTracker`
-- [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext` binary analog of `SourceContext`
-- [Assisted Vulnerability Hypotheses](assisted-vulnerability-hypotheses.md) — LLM hypothesis generation for source-level `TaintPath` findings
+- [Source Dangerous Sink Detection](source-dangerous-sink-detection.md): `SourceSinkScanner` that produces `SinkHit` inputs to `SourceTaintTracker`
+- [Persistent Analysis Context](persistent-analysis-context.md): `BinaryContext` binary analog of `SourceContext`
+- [Assisted Vulnerability Hypotheses](assisted-vulnerability-hypotheses.md): LLM hypothesis generation for source-level `TaintPath` findings

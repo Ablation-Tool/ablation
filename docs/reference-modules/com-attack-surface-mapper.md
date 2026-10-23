@@ -73,11 +73,11 @@ COM hijacking works when a DLL is loaded via a CLSID registered under `HKCU\Soft
 
 `COMAttackSurfaceMapper.from_path()` opens the PE with LIEF. The five analysis steps match the "What it does" section above:
 
-1. **Export scan** — checks the PE export table for `DllGetClassObject`, `DllRegisterServer`, `DllUnregisterServer`, `DllCanUnloadNow` using LIEF's `binary.exported_functions`. Any of these marks the DLL as a COM server.
-2. **GUID string scan** — walks `.rdata` and `.data` sections for the regex `{[0-9A-F]{8}-[0-9A-F]{4}-...}` to collect CLSID string references. Each unique GUID is stored in the CLSID inventory.
-3. **CoCreateInstance call site scan** — Capstone disassembles each code section; for each `call CoCreateInstance*` instruction, the preceding `lea` or `mov` loading the first argument (`rcx` on x64, stack push on x86) is backtracked to extract the CLSID binary value (16 bytes at the pointed-to address in `.rdata`).
-4. **IAT import scan** — checks the PE import table for `CoMarshalInterface`, `CoUnmarshalInterface`, `CoMarshalInterThreadInterfaceInStream`, `Invoke`, `GetIDsOfNames` using LIEF `binary.imports`.
-5. **Finding emission** — emits a `COMFinding` per category. `com_hijack_risk` is emitted only when both COM server exports AND CLSID references are found together.
+1. **Export scan**: checks the PE export table for `DllGetClassObject`, `DllRegisterServer`, `DllUnregisterServer`, `DllCanUnloadNow` using LIEF's `binary.exported_functions`. Any of these marks the DLL as a COM server.
+2. **GUID string scan**: walks `.rdata` and `.data` sections for the regex `{[0-9A-F]{8}-[0-9A-F]{4}-...}` to collect CLSID string references. Each unique GUID is stored in the CLSID inventory.
+3. **CoCreateInstance call site scan**: Capstone disassembles each code section; for each `call CoCreateInstance*` instruction, the preceding `lea` or `mov` loading the first argument (`rcx` on x64, stack push on x86) is backtracked to extract the CLSID binary value (16 bytes at the pointed-to address in `.rdata`).
+4. **IAT import scan**: checks the PE import table for `CoMarshalInterface`, `CoUnmarshalInterface`, `CoMarshalInterThreadInterfaceInStream`, `Invoke`, `GetIDsOfNames` using LIEF `binary.imports`.
+5. **Finding emission**: emits a `COMFinding` per category. `com_hijack_risk` is emitted only when both COM server exports AND CLSID references are found together.
 
 ---
 
@@ -105,15 +105,15 @@ COMAttackSurfaceMapper: shdocvw.dll
 
 ## False positives
 
-**`com_hijack_risk` requires manual registry check** — the scanner identifies that the DLL is a COM server with CLSID references, but does not query the registry. Whether the CLSIDs are registered under `HKCU` (hijackable) vs `HKLM`-only (not directly hijackable) must be checked separately with `reg query HKCU\Software\Classes\CLSID\{...}`.
+**`com_hijack_risk` requires manual registry check**: the scanner identifies that the DLL is a COM server with CLSID references, but does not query the registry. Whether the CLSIDs are registered under `HKCU` (hijackable) vs `HKLM`-only (not directly hijackable) must be checked separately with `reg query HKCU\Software\Classes\CLSID\{...}`.
 
-**`CoCreateInstance` call site with unresolved CLSID** — when the CLSID pointer is computed at runtime (loaded from a global, allocated on the heap), the scanner cannot extract the binary GUID. These are reported as `com_create` findings with `va` set but `clsid=None` in `cocreate_sites()` output. Not all `CoCreateInstance` calls are hijackable.
+**`CoCreateInstance` call site with unresolved CLSID**: when the CLSID pointer is computed at runtime (loaded from a global, allocated on the heap), the scanner cannot extract the binary GUID. These are reported as `com_create` findings with `va` set but `clsid=None` in `cocreate_sites()` output. Not all `CoCreateInstance` calls are hijackable.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** No `BinaryContext` required — `from_path()` uses LIEF directly. Use on any Windows PE that may be a COM server (DLLs exporting `DllGetClassObject`) or a COM client (binaries importing `CoCreateInstance`).
+**Before this module:** No `BinaryContext` required: `from_path()` uses LIEF directly. Use on any Windows PE that may be a COM server (DLLs exporting `DllGetClassObject`) or a COM client (binaries importing `CoCreateInstance`).
 
 **After this module:** For `com_hijack_risk` findings, check registry registration of each identified CLSID under `HKCU` on the target system. For `com_create` findings, verify whether the activated CLSID's server DLL path is writable by the target user.
 
@@ -137,6 +137,6 @@ COMAttackSurfaceMapper: shdocvw.dll
 
 ## See also
 
-- [CFG Bypass Detector](cfg-bypass-detector.md) — companion Windows PE scanner for CFG bypass surface analysis
-- [PE Sweep](pe-sweep.md) — coarse Windows PE security feature check (DEP, ASLR, SafeSEH)
-- [FindingRegistry](registry.md) — register confirmed COM hijacking findings
+- [CFG Bypass Detector](cfg-bypass-detector.md): companion Windows PE scanner for CFG bypass surface analysis
+- [PE Sweep](pe-sweep.md): coarse Windows PE security feature check (DEP, ASLR, SafeSEH)
+- [FindingRegistry](registry.md): register confirmed COM hijacking findings

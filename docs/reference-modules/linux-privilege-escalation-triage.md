@@ -1,16 +1,16 @@
 # Linux Privilege Escalation Triage
 
-Enumerate SUID/SGID binaries, `sudo` rules, Linux capabilities (`cap_net_raw`, `cap_setuid`), world-writable cron jobs, Docker/LXD group membership, accessible Docker sockets, kernel module exposure, and namespace escape surfaces — providing a ranked set of privilege escalation candidates from a low-privilege shell — via `modules/privesc_enum.py` `PrivescEnumerator`.
+Enumerate SUID/SGID binaries, `sudo` rules, Linux capabilities (`cap_net_raw`, `cap_setuid`), world-writable cron jobs, Docker/LXD group membership, accessible Docker sockets, kernel module exposure, and namespace escape surfaces: providing a ranked set of privilege escalation candidates from a low-privilege shell: via `modules/privesc_enum.py` `PrivescEnumerator`.
 
 ---
 
 ## Why this exists
 
-1. **`PrivescEnumerator.enumerate_all()` provides a single-call survey of every common Linux privilege escalation vector** — SUID binary enumeration, `sudo -l` access checks, Linux capabilities (`getcap -r /` equivalent), and writable paths in `$PATH`. Running this once establishes which category of escalation is likely to succeed before spending time on individual techniques.
+1. **`PrivescEnumerator.enumerate_all()` provides a single-call survey of every common Linux privilege escalation vector**: SUID binary enumeration, `sudo -l` access checks, Linux capabilities (`getcap -r /` equivalent), and writable paths in `$PATH`. Running this once establishes which category of escalation is likely to succeed before spending time on individual techniques.
 
-2. **`check_capabilities()` finds granular privilege abuse surfaces** — capabilities like `cap_net_raw` (raw socket abuse), `cap_setuid` (UID switching), `cap_dac_override` (file permission bypass), and `cap_sys_ptrace` (ptrace arbitrary process injection) are misunderstood mitigations: administrators add them to avoid running processes as root but the capabilities are exploitable just as root access is. `PrivescEnumerator` reads `/proc/<pid>/status` for per-process capabilities and runs `getcap` on filesystem binaries.
+2. **`check_capabilities()` finds granular privilege abuse surfaces**: capabilities like `cap_net_raw` (raw socket abuse), `cap_setuid` (UID switching), `cap_dac_override` (file permission bypass), and `cap_sys_ptrace` (ptrace arbitrary process injection) are misunderstood mitigations: administrators add them to avoid running processes as root but the capabilities are exploitable just as root access is. `PrivescEnumerator` reads `/proc/<pid>/status` for per-process capabilities and runs `getcap` on filesystem binaries.
 
-3. **`check_wtmp_utmp_anomalies()` and `check_adversary_tool_indicators()`** detect prior compromise indicators — `wtmp`/`utmp` log gaps (sessions with no login record), `check_adversary_tool_indicators()` scans for known post-exploitation tool artifacts (`linpeas.sh`, `pspy64`, `mimikatz`, exploit binary patterns in `/tmp/` and `/dev/shm/`). This is the forensic counterpart to the live exploitation surface checks.
+3. **`check_wtmp_utmp_anomalies()` and `check_adversary_tool_indicators()`** detect prior compromise indicators: `wtmp`/`utmp` log gaps (sessions with no login record), `check_adversary_tool_indicators()` scans for known post-exploitation tool artifacts (`linpeas.sh`, `pspy64`, `mimikatz`, exploit binary patterns in `/tmp/` and `/dev/shm/`). This is the forensic counterpart to the live exploitation surface checks.
 
 ---
 
@@ -81,15 +81,15 @@ World-writable cron: /etc/cron.daily/backup.sh
 
 ## False positives
 
-**GTFOBins cross-reference is a static list** — `check_suid_binaries()` flags binaries whose names appear in the embedded GTFOBins list. Verify that the binary on the target is the standard version and has not been replaced with a non-exploitable wrapper. A path like `/usr/local/bin/python3` may be a restricted version without the `os.system()` entrypoint.
+**GTFOBins cross-reference is a static list**: `check_suid_binaries()` flags binaries whose names appear in the embedded GTFOBins list. Verify that the binary on the target is the standard version and has not been replaced with a non-exploitable wrapper. A path like `/usr/local/bin/python3` may be a restricted version without the `os.system()` entrypoint.
 
-**`check_capabilities()` per-process scanning requires /proc access** — processes not visible to the current user (root-owned processes with restricted `/proc/<pid>/` permissions) will not be enumerated. The filesystem `getcap` check is complementary but only covers file-backed capabilities, not runtime process capabilities.
+**`check_capabilities()` per-process scanning requires /proc access**: processes not visible to the current user (root-owned processes with restricted `/proc/<pid>/` permissions) will not be enumerated. The filesystem `getcap` check is complementary but only covers file-backed capabilities, not runtime process capabilities.
 
 ---
 
 ## Pipeline position
 
-Run `PrivescEnumerator` immediately after establishing low-privilege shell access. The ranked output of SUID, sudo, capability, and group-based escalation paths determines which single technique is most likely to succeed — attempt in that order to minimize detection risk.
+Run `PrivescEnumerator` immediately after establishing low-privilege shell access. The ranked output of SUID, sudo, capability, and group-based escalation paths determines which single technique is most likely to succeed: attempt in that order to minimize detection risk.
 
 ---
 
@@ -109,5 +109,5 @@ Run `PrivescEnumerator` immediately after establishing low-privilege shell acces
 
 ## See also
 
-- [Process and Memory Map Inventory](process-and-memory-map-inventory.md) — DLL hijacking and anonymous RWX for injection-based escalation
-- [Host Platform Inventory](host-platform-inventory.md) — ASLR/NX/seccomp baseline determining which exploit primitives apply
+- [Process and Memory Map Inventory](process-and-memory-map-inventory.md): DLL hijacking and anonymous RWX for injection-based escalation
+- [Host Platform Inventory](host-platform-inventory.md): ASLR/NX/seccomp baseline determining which exploit primitives apply

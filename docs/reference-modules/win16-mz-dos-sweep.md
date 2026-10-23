@@ -58,7 +58,7 @@ Confirmed on TCP/IP-32 3.11a: 171 hits across 7 utilities after filter; all spot
 
 ## How it works
 
-`MZDosBinary(path)` parses a 16-bit real-mode MS-DOS MZ executable. Handles large-model DOS programs with multiple code segments — typical of WfW 3.11 network utilities (ARP.EXE, PING.EXE, TRACERT.EXE). The parser reads the MZ header's segment relocation table, reconstructs the load image, and resolves far-call segment:offset addresses. `MZDosBinary.sweep()` disassembles each code segment with CS_ARCH_X86 + CS_MODE_16 and scans for unsafe interrupt calls (INT 21h with no input validation) and unbounded string operations.
+`MZDosBinary(path)` parses a 16-bit real-mode MS-DOS MZ executable. Handles large-model DOS programs with multiple code segments: typical of WfW 3.11 network utilities (ARP.EXE, PING.EXE, TRACERT.EXE). The parser reads the MZ header's segment relocation table, reconstructs the load image, and resolves far-call segment:offset addresses. `MZDosBinary.sweep()` disassembles each code segment with CS_ARCH_X86 + CS_MODE_16 and scans for unsafe interrupt calls (INT 21h with no input validation) and unbounded string operations.
 
 ---
 
@@ -86,13 +86,13 @@ generated: 20260112_1430   threshold: 0.3
 
 ## False positives
 
-**Large-model segment complexity.** MS-DOS large-model executables have multiple code segments with far-call relocation. The sweep disassembles each segment independently in 16-bit mode. Cross-segment calls (far calls) are recorded by address but not resolved to function names — the callee segment:offset appears in the `calls` field without a resolved name.
+**Large-model segment complexity.** MS-DOS large-model executables have multiple code segments with far-call relocation. The sweep disassembles each segment independently in 16-bit mode. Cross-segment calls (far calls) are recorded by address but not resolved to function names: the callee segment:offset appears in the `calls` field without a resolved name.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm the binary is an MZ DOS executable (`MZ` magic). Run on the original uncompressed binary — `EXEPACK` or `LZEXE` compression must be decompressed first.
+**Before this module:** Confirm the binary is an MZ DOS executable (`MZ` magic). Run on the original uncompressed binary: `EXEPACK` or `LZEXE` compression must be decompressed first.
 
 **After this module:** Investigate high-score hits using a DOS debugger (DOSBox + ProSoft) or a 16-bit disassembler. Look for `int 21h` calls with no length validation on string parameters.
 
@@ -122,6 +122,6 @@ Each `MZSweepHit`:
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

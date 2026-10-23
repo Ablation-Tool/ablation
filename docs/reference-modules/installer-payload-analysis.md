@@ -1,16 +1,16 @@
 # Installer Payload Analysis
 
-Detect self-extracting installer format (BitRock LZMA-4.0, NSIS, Inno Setup), decompress the embedded payload, carve all valid PE binaries from the decompressed data, and extract them to a directory for downstream binary analysis — with UPX pre-unpacking when the BitRock stub is UPX-packed.
+Detect self-extracting installer format (BitRock LZMA-4.0, NSIS, Inno Setup), decompress the embedded payload, carve all valid PE binaries from the decompressed data, and extract them to a directory for downstream binary analysis: with UPX pre-unpacking when the BitRock stub is UPX-packed.
 
 ---
 
 ## Why this exists
 
-1. **Firmware and SDK installers for embedded targets ship multiple binaries in a single self-extracting executable.** TI CC3xxx RadioTool, RTI SDK, and a range of industrial IoT installers use BitRock InstallBuilder (now Bitnami) as their Windows installer wrapper. The installed binaries — drivers, update utilities, diagnostic tools — are the actual analysis targets, but they are embedded as an LZMA-compressed catalog inside the installer PE's overlay section. Without extraction, static analysis sees only the BitRock stub, not the target binaries.
+1. **Firmware and SDK installers for embedded targets ship multiple binaries in a single self-extracting executable.** TI CC3xxx RadioTool, RTI SDK, and a range of industrial IoT installers use BitRock InstallBuilder (now Bitnami) as their Windows installer wrapper. The installed binaries: drivers, update utilities, diagnostic tools: are the actual analysis targets, but they are embedded as an LZMA-compressed catalog inside the installer PE's overlay section. Without extraction, static analysis sees only the BitRock stub, not the target binaries.
 
-2. **UPX wrapping on the outer installer stub prevents both format detection and extraction.** RTI SDK packages the BitRock PE itself with UPX before distribution. A raw `file` or `binwalk` pass identifies the outer file as "UPX compressed data" and stops — the BitRock marker and LZMA payload are invisible until UPX is decompressed. `InstallerBinaryAnalyzer` detects UPX by PE section names (`UPX0`/`UPX1`), calls `upx -d` on a temporary copy, and then applies BitRock extraction to the decompressed result.
+2. **UPX wrapping on the outer installer stub prevents both format detection and extraction.** RTI SDK packages the BitRock PE itself with UPX before distribution. A raw `file` or `binwalk` pass identifies the outer file as "UPX compressed data" and stops: the BitRock marker and LZMA payload are invisible until UPX is decompressed. `InstallerBinaryAnalyzer` detects UPX by PE section names (`UPX0`/`UPX1`), calls `upx -d` on a temporary copy, and then applies BitRock extraction to the decompressed result.
 
-3. **Carving PE files from a raw decompressed payload requires section-table validation.** BitRock's file catalog does not use a well-defined binary format with an index of offsets — embedded files are concatenated as raw bytes with string metadata preceding each file. Carving by `MZ` magic alone produces false positives from PE header fragments and alignment padding. The carver validates the full section table for each candidate: it checks `PE\x00\x00` at `e_lfanew`, validates section count, rejects `num_sec > 96`, and confirms all section table reads fit within the buffer before accepting a carved binary.
+3. **Carving PE files from a raw decompressed payload requires section-table validation.** BitRock's file catalog does not use a well-defined binary format with an index of offsets: embedded files are concatenated as raw bytes with string metadata preceding each file. Carving by `MZ` magic alone produces false positives from PE header fragments and alignment padding. The carver validates the full section table for each candidate: it checks `PE\x00\x00` at `e_lfanew`, validates section count, rejects `num_sec > 96`, and confirms all section table reads fit within the buffer before accepting a carved binary.
 
 ---
 
@@ -133,7 +133,7 @@ Extracted to /tmp/rti_extracted/:
 
 **MZ scan produces alignment fragment matches.** PE files embedded in a catalog may share alignment padding with the preceding file, causing the carver to find valid-looking `MZ` offsets at offsets inside the previous binary's raw data. These produce `CarvedBinary` entries where `size` is anomalously small (< 512 bytes) or where the `arch` field decodes to an unexpected machine value. Filter by `binary.size > 4096` to discard fragment hits before feeding to `BinaryContext`.
 
-**UPX detection fires on non-installer PE files.** `_is_upx()` checks only for section names starting with `UPX` — it does not verify that the sections contain valid UPX compressed data. A PE file that happens to have a section named `UPX_HEADER` for unrelated reasons triggers the UPX branch. If `upx -d` fails, the analyzer logs `'UPX detected but upx binary not found on PATH'` or the error is silently swallowed and analysis proceeds on the packed data — in that case BitRock detection may fail.
+**UPX detection fires on non-installer PE files.** `_is_upx()` checks only for section names starting with `UPX`, it does not verify that the sections contain valid UPX compressed data. A PE file that happens to have a section named `UPX_HEADER` for unrelated reasons triggers the UPX branch. If `upx -d` fails, the analyzer logs `'UPX detected but upx binary not found on PATH'` or the error is silently swallowed and analysis proceeds on the packed data: in that case BitRock detection may fail.
 
 **NSIS and Inno Setup formats are not extracted.** When the format is detected as `nsis` or `inno`, `analyze()` sets the `installer_type` field and populates `result.errors` with a tool recommendation but does not extract any binaries. `result.binaries` is empty. These formats require external tools (`7z e` for NSIS or `innoextract` for Inno Setup). Run the recommended tool manually and then load the extracted binaries directly via `BinaryContext.load_or_build()`.
 
@@ -141,9 +141,9 @@ Extracted to /tmp/rti_extracted/:
 
 ## Pipeline position
 
-**Before this module:** Confirm the installer format. Run `file setup.exe` to detect UPX packing or known installer signatures. Check the Download Status table in `README.md` for the target collection — do not analyze an incomplete download (`.aria2` present alongside the file).
+**Before this module:** Confirm the installer format. Run `file setup.exe` to detect UPX packing or known installer signatures. Check the Download Status table in `README.md` for the target collection: do not analyze an incomplete download (`.aria2` present alongside the file).
 
-**After this module:** Feed each extracted PE path from `extract_to_dir()` to `BinaryContext.load_or_build()` for full function table construction and ablation sweep. Pay particular attention to unhinged binaries (name hint empty, small size) — these may be update utilities or loader stubs with their own interesting attack surface.
+**After this module:** Feed each extracted PE path from `extract_to_dir()` to `BinaryContext.load_or_build()` for full function table construction and ablation sweep. Pay particular attention to unhinged binaries (name hint empty, small size), these may be update utilities or loader stubs with their own interesting attack surface.
 
 ---
 
@@ -155,13 +155,13 @@ Extracted to /tmp/rti_extracted/:
 | `upx_unpacked` | `True` if UPX was detected and successfully decompressed before extraction |
 | `payload_size` | Decompressed payload size in bytes (0 for NSIS/Inno/unknown) |
 | `binaries` | List of `CarvedBinary`: each with `offset`, `arch`, `size`, `data`, `name_hint` |
-| `extracted_paths` | `{filename: path}` map written by `extract_to_dir()` — empty until that method is called |
+| `extracted_paths` | `{filename: path}` map written by `extract_to_dir()`: empty until that method is called |
 | `errors` | List of error strings: UPX failures, overlay parse failures, format-specific tool recommendations |
 
 ---
 
 ## See also
 
-- [Binary Format and Platform Identification](binary-format-and-platform-identification.md) — identify architecture and format of carved binaries before sweep
-- [Semantic Binary Sweep](semantic-binary-sweep.md) — run vulnerability class sweep on extracted PE binaries
-- [Corpus Builder](signature-based-auto-naming.md) — build function identity corpus from extracted binaries for cross-version matching
+- [Binary Format and Platform Identification](binary-format-and-platform-identification.md): identify architecture and format of carved binaries before sweep
+- [Semantic Binary Sweep](semantic-binary-sweep.md): run vulnerability class sweep on extracted PE binaries
+- [Corpus Builder](signature-based-auto-naming.md): build function identity corpus from extracted binaries for cross-version matching

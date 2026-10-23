@@ -1,12 +1,12 @@
 # StaticLinkSinkScanner
 
-Locate exec-class sink implementations in statically linked ELFs and classify all their call sites — filling the gap where `SinkArgClassifier` returns 0 results because there is no PLT to scan.
+Locate exec-class sink implementations in statically linked ELFs and classify all their call sites: filling the gap where `SinkArgClassifier` returns 0 results because there is no PLT to scan.
 
 ---
 
 ## Why this exists
 
-1. **`SinkArgClassifier` requires a PLT.** It finds call sites by locating PLT stub VAs for `system`, `popen`, `execve`, etc. Statically linked binaries compile libc directly in — there are no PLT stubs, and `BinaryContext.plt` is empty. `SinkArgClassifier.classify_all()` returns 0 results and the binary appears safe when it is not.
+1. **`SinkArgClassifier` requires a PLT.** It finds call sites by locating PLT stub VAs for `system`, `popen`, `execve`, etc. Statically linked binaries compile libc directly in, there are no PLT stubs, and `BinaryContext.plt` is empty. `SinkArgClassifier.classify_all()` returns 0 results and the binary appears safe when it is not.
 
 2. **The gap affects real targets.** IBM POWER tools: `BTT52iFix` (static x86_64), `VE/UninstallAssistantLinux` (static x86_32), `HMC-V11/img2a` (static ppc64le), many IBM XL C runtime tools. All returned SAC=0 before this module. Gap IDs: `SAC-STATIC-001` (system), `SAC-STATIC-002` (popen), `SAC-STATIC-003` (strcpy/strcat).
 
@@ -38,7 +38,7 @@ StaticLinkSinkScanner.from_context(ctx)
                  └── UNKNOWN-STATIC — cannot resolve within lookback window
 ```
 
-Note: `UNKNOWN-STATIC` differs from `UNKNOWN`. It signals that the scan found a real call site to a statically-linked sink implementation, but could not determine argument provenance — not that the result is unreliable.
+Note: `UNKNOWN-STATIC` differs from `UNKNOWN`. It signals that the scan found a real call site to a statically-linked sink implementation, but could not determine argument provenance, not that the result is unreliable.
 
 ---
 
@@ -120,6 +120,6 @@ Summary: 1 RODATA_CONST, 1 ARG_PROPAGATED, 12 UNKNOWN-STATIC
 
 ## See also
 
-- [Sink Arg Classifier](sink-arg-classifier.md) — PLT-based SAC for dynamically linked binaries
-- [RelDynPc32Scanner](rel-dyn-pc32-scanner.md) — for i386 PIC shared objects that use `.rel.dyn` instead of PLT
-- [Window Analyzer](window-analyzer.md) — manual trace for UNKNOWN-STATIC results
+- [Sink Arg Classifier](sink-arg-classifier.md): PLT-based SAC for dynamically linked binaries
+- [RelDynPc32Scanner](rel-dyn-pc32-scanner.md): for i386 PIC shared objects that use `.rel.dyn` instead of PLT
+- [Window Analyzer](window-analyzer.md): manual trace for UNKNOWN-STATIC results

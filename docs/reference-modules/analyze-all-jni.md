@@ -1,16 +1,16 @@
 # Analyze All JNI
 
-Run ARM32 symbolic execution across all 10 JNI functions in `libhijoyptt.so` — the HiJoy PTT Android shared library — to produce a complete JNI surface map: per-function argument-to-field write lists, protocol buffer read offsets, direct call counts, vtable dispatch counts, and function type classifications. Writes a Markdown surface report with call graph and attack surface summary.
+Run ARM32 symbolic execution across all 10 JNI functions in `libhijoyptt.so`: the HiJoy PTT Android shared library: to produce a complete JNI surface map: per-function argument-to-field write lists, protocol buffer read offsets, direct call counts, vtable dispatch counts, and function type classifications. Writes a Markdown surface report with call graph and attack surface summary.
 
 ---
 
 ## Why this exists
 
-1. **JNI function VAs are not exported by name in stripped shared libraries — they can only be located through the JNI dispatch table in `JNI_OnLoad()` or through pattern matching.** The 10 functions in `libhijoyptt.so` were previously confirmed from `hijoy_ptt_re.py` analysis. `analyze_all_jni.py` codifies those VAs into `JNI_FUNCTIONS` and runs the full symbolic analysis pipeline against each one in a single script invocation — ensuring reproducibility and providing a complete surface summary without re-running the initial RE work.
+1. **JNI function VAs are not exported by name in stripped shared libraries: they can only be located through the JNI dispatch table in `JNI_OnLoad()` or through pattern matching.** The 10 functions in `libhijoyptt.so` were previously confirmed from `hijoy_ptt_re.py` analysis. `analyze_all_jni.py` codifies those VAs into `JNI_FUNCTIONS` and runs the full symbolic analysis pipeline against each one in a single script invocation: ensuring reproducibility and providing a complete surface summary without re-running the initial RE work.
 
-2. **Symbolic execution on each JNI function reveals the argument write pattern — specifically which argument indices write to which field offsets in the channel struct.** This is the primary data needed to understand what untrusted data flows from the Android app layer (via JNI) into the C++ channel object. `FuncSummary.arg_field_writes` tracks `(arg_idx, struct_offset)` pairs emitted by the ARM32 symbolic executor; `FuncSummary.inputbuf_reads` tracks which protocol buffer byte offsets are read. Functions with both arg writes and input buffer reads are the highest-value targets for input validation analysis.
+2. **Symbolic execution on each JNI function reveals the argument write pattern: specifically which argument indices write to which field offsets in the channel struct.** This is the primary data needed to understand what untrusted data flows from the Android app layer (via JNI) into the C++ channel object. `FuncSummary.arg_field_writes` tracks `(arg_idx, struct_offset)` pairs emitted by the ARM32 symbolic executor; `FuncSummary.inputbuf_reads` tracks which protocol buffer byte offsets are read. Functions with both arg writes and input buffer reads are the highest-value targets for input validation analysis.
 
-3. **The generated Markdown report (`JNI-SURFACE-ANALYSIS.md`) is the deliverable for JNI surface RE — not console output.** `generate_report()` writes a structured Markdown file with a JNI function table (address, type, complexity, call count, arg writes), per-function symbolic effects, a call graph sample (up to 20 edges), and an attack surface section that highlights COMPLEX functions (>5 direct calls) and functions with protocol buffer access. This file is the reference for all subsequent taint analysis on the library.
+3. **The generated Markdown report (`JNI-SURFACE-ANALYSIS.md`) is the deliverable for JNI surface RE, not console output.** `generate_report()` writes a structured Markdown file with a JNI function table (address, type, complexity, call count, arg writes), per-function symbolic effects, a call graph sample (up to 20 edges), and an attack surface section that highlights COMPLEX functions (>5 direct calls) and functions with protocol buffer access. This file is the reference for all subsequent taint analysis on the library.
 
 ---
 
@@ -137,9 +137,9 @@ Function breakdown:
 
 ## False positives
 
-**Symbolic argument writes at `[base + 0x0]` for multiple functions indicate a shared channel struct base register.** The symbolic executor identifies writes to ARM registers that are themselves derived from function arguments. When the first argument in an INIT function points to a struct, all stores to `base + offset` where `base = arg(0)` appear as arg writes for `arg_idx=0`. This is expected and correct — the function initializes fields in the channel struct. It does not indicate that all three write targets are independently attacker-controlled; only that the struct pointer (arg 0) carries the write.
+**Symbolic argument writes at `[base + 0x0]` for multiple functions indicate a shared channel struct base register.** The symbolic executor identifies writes to ARM registers that are themselves derived from function arguments. When the first argument in an INIT function points to a struct, all stores to `base + offset` where `base = arg(0)` appear as arg writes for `arg_idx=0`. This is expected and correct: the function initializes fields in the channel struct. It does not indicate that all three write targets are independently attacker-controlled; only that the struct pointer (arg 0) carries the write.
 
-**COMPLEX classification (>5 direct calls) includes calls to internal helpers, not only security-sensitive calls.** `StartSend` and `SendSignaling` are typically COMPLEX because they call codec initialization, socket setup, and internal PTT state machine helpers — not because they have more dangerous sinks. COMPLEX is a prioritization heuristic for manual review, not a severity label.
+**COMPLEX classification (>5 direct calls) includes calls to internal helpers, not only security-sensitive calls.** `StartSend` and `SendSignaling` are typically COMPLEX because they call codec initialization, socket setup, and internal PTT state machine helpers, not because they have more dangerous sinks. COMPLEX is a prioritization heuristic for manual review, not a severity label.
 
 **`max_insns=150` limit may terminate analysis before the full function body for long functions.** `ARMSymbolicAnalyzer.analyze_function(addr, max_insns=150)` stops symbolic execution after 150 instructions. Functions that exceed this limit (typically only `SendSignaling` in this binary) may have incomplete `inputbuf_reads` and `calls` lists. When a function's call count appears suspiciously low for its classification, increase `max_insns` to 300 and re-run.
 
@@ -147,7 +147,7 @@ Function breakdown:
 
 ## Pipeline position
 
-**Before this module:** Confirm `libhijoyptt.so` is the correct binary by verifying the VAs in `JNI_FUNCTIONS` against the binary bytes — `data[0x239a4:0x239a8]` should be a valid ARM32 function prologue. Run `hijoy_ptt_re.py` first if the VAs have not been confirmed from that session.
+**Before this module:** Confirm `libhijoyptt.so` is the correct binary by verifying the VAs in `JNI_FUNCTIONS` against the binary bytes: `data[0x239a4:0x239a8]` should be a valid ARM32 function prologue. Run `hijoy_ptt_re.py` first if the VAs have not been confirmed from that session.
 
 **After this module:** Feed `SendSignaling` (the IO-classified function with the most protocol buffer reads) into `ARMSymbolicAnalyzer` with a longer `max_insns` budget and custom taint sources set to `InputBuf` base to confirm whether unsanitized buffer content reaches `sendto()` or `write()` sinks. Write confirmed findings to `re/hijoy/hijoy_ptt_re.py` via `FindingRegistry.register()`.
 
@@ -160,16 +160,16 @@ Function breakdown:
 | `results['functions'][name]['addr']` | String hex VA of the JNI function (`'0x239a4'`) |
 | `results['functions'][name]['classification']['type']` | `INIT` / `CLEANUP` / `CONFIG` / `CONTROL` / `IO` |
 | `results['functions'][name]['classification']['complexity']` | `SIMPLE` / `MODERATE` / `COMPLEX` |
-| `summary.arg_field_writes` | `List[(arg_idx, struct_offset)]` — argument-derived field writes |
-| `summary.inputbuf_reads` | `List[int]` — protocol buffer byte offsets read |
-| `summary.calls` | `List[(target_va, symbolic_args)]` — direct call targets |
-| `summary.vcalls` | `List[...]` — vtable (virtual dispatch) call sites |
+| `summary.arg_field_writes` | `List[(arg_idx, struct_offset)]`: argument-derived field writes |
+| `summary.inputbuf_reads` | `List[int]`: protocol buffer byte offsets read |
+| `summary.calls` | `List[(target_va, symbolic_args)]`: direct call targets |
+| `summary.vcalls` | `List[...]`: vtable (virtual dispatch) call sites |
 
 ---
 
 ## See also
 
-- [ARM Symbolic Analysis](arm-symbolic-analysis.md) — `ARMSymbolicAnalyzer` and `FuncSummary` — the symbolic execution engine used by this module
-- [HiJoy PTT RE](../targets/hijoy-ptt.md) — the RE session that confirmed the JNI VAs in `JNI_FUNCTIONS`
-- [PTT Protocol RE](ptt-protocol-re.md) — `PTTProtocolAnalyzer` (imported but not yet used in the surface analysis phase)
-- [Finding Registry](finding-registry.md) — register confirmed findings from `SendSignaling` taint analysis
+- [ARM Symbolic Analysis](arm-symbolic-analysis.md): `ARMSymbolicAnalyzer` and `FuncSummary`: the symbolic execution engine used by this module
+- [HiJoy PTT RE](../targets/hijoy-ptt.md): the RE session that confirmed the JNI VAs in `JNI_FUNCTIONS`
+- [PTT Protocol RE](ptt-protocol-re.md): `PTTProtocolAnalyzer` (imported but not yet used in the surface analysis phase)
+- [Finding Registry](finding-registry.md): register confirmed findings from `SendSignaling` taint analysis

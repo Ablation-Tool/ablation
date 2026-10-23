@@ -109,7 +109,7 @@ for f in findings:
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs — findings from incomplete graphs carry lower confidence.
+Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
@@ -140,6 +140,6 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## See also
 
-- [BinaryContext](binary-context.md) — native binary context when the runtime wraps a native library
-- [TaintAnalysis](taint-analysis.md) — trace dangerous calls found in the runtime layer
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): native binary context when the runtime wraps a native library
+- [TaintAnalysis](taint-analysis.md): trace dangerous calls found in the runtime layer
+- [FindingRegistry](registry.md): record confirmed findings

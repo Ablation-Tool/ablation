@@ -94,7 +94,7 @@ Confirmed on: `commandcontrol` (setuid, 1 confirmed `gets()` hit, 3 callers corr
 
 ## False positives
 
-Frame size analysis (detecting buffer bounds) fails for functions with complex prologues (alloca, variable-length stack frames). For hits where `buf_size == -1`, the buffer size was not determined; the dangerous call is still real but the overflow offset is unknown. Do not dismiss — just note that bounds estimation was not possible.
+Frame size analysis (detecting buffer bounds) fails for functions with complex prologues (alloca, variable-length stack frames). For hits where `buf_size == -1`, the buffer size was not determined; the dangerous call is still real but the overflow offset is unknown. Do not dismiss: just note that bounds estimation was not possible.
 
 ---
 
@@ -121,14 +121,14 @@ Frame size analysis (detecting buffer bounds) fails for functions with complex p
 | `buf_size` | Bytes from buffer start to frame base (`-1` if unknown) |
 | `frame_size` | Total stack frame allocation in bytes (`-1` if unknown) |
 | `overflow_offset` | Bytes to reach saved RIP (`-1` if unknown) |
-| `callers` | `List[str]` — names of functions that call the containing function |
+| `callers` | `List[str]`: names of functions that call the containing function |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

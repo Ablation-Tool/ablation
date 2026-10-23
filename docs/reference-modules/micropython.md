@@ -1,16 +1,16 @@
 # MicroPython Analysis
 
-Lift compiled MicroPython `.mpy` v6 bytecode files to readable pseudo-Python source, extract imported module names, and flag dangerous import and call patterns (`exec`, `eval`, `os`, `machine`, `uctypes`) — identifying firmware-embedded scripting attack surfaces without requiring the MicroPython runtime — via `modules/mpy_lifter.py` `MpyLifter`.
+Lift compiled MicroPython `.mpy` v6 bytecode files to readable pseudo-Python source, extract imported module names, and flag dangerous import and call patterns (`exec`, `eval`, `os`, `machine`, `uctypes`): identifying firmware-embedded scripting attack surfaces without requiring the MicroPython runtime: via `modules/mpy_lifter.py` `MpyLifter`.
 
 ---
 
 ## Why this exists
 
-1. **Embedded firmware increasingly ships with compiled MicroPython modules** — network appliances, IoT gateways, and industrial controllers embed `.mpy` files alongside native code. These modules run with full hardware access (`machine.mem32`, `machine.mem16`, `machine.mem8`) and can execute arbitrary Python expressions via `eval`/`exec`. Binary analysis tools that only process ELF or PE binaries miss the entire scripting layer of these devices.
+1. **Embedded firmware increasingly ships with compiled MicroPython modules**: network appliances, IoT gateways, and industrial controllers embed `.mpy` files alongside native code. These modules run with full hardware access (`machine.mem32`, `machine.mem16`, `machine.mem8`) and can execute arbitrary Python expressions via `eval`/`exec`. Binary analysis tools that only process ELF or PE binaries miss the entire scripting layer of these devices.
 
-2. **`.mpy` files are not source code — they require a bytecode-aware lifter** — a compiled `.mpy` v6 file stores a qstr table (interned string constants), a constant object table, and a recursive code-object tree with VM opcodes. `MpyLifter` decodes all three structures without launching the MicroPython VM, producing readable pseudo-Python that exposes function definitions, imports, constant values, and call patterns.
+2. **`.mpy` files are not source code: they require a bytecode-aware lifter**: a compiled `.mpy` v6 file stores a qstr table (interned string constants), a constant object table, and a recursive code-object tree with VM opcodes. `MpyLifter` decodes all three structures without launching the MicroPython VM, producing readable pseudo-Python that exposes function definitions, imports, constant values, and call patterns.
 
-3. **`MpyLifter.dangerous_calls()` classifies security-relevant patterns into three finding types** — `DANGEROUS_IMPORT` (import of `os`, `machine`, `uctypes`, `subprocess`, etc.), `DANGEROUS_CALL` (call to `exec`, `eval`, `compile`, `open`), and `DANGEROUS_ATTR` (attribute access on dangerous modules: `machine.mem32`, `machine.mem16`, `uctypes.addressof`). Each finding carries a `function` field (the code object name) and `offset` field (bytecode instruction offset), enabling precise location within the bytecode.
+3. **`MpyLifter.dangerous_calls()` classifies security-relevant patterns into three finding types**: `DANGEROUS_IMPORT` (import of `os`, `machine`, `uctypes`, `subprocess`, etc.), `DANGEROUS_CALL` (call to `exec`, `eval`, `compile`, `open`), and `DANGEROUS_ATTR` (attribute access on dangerous modules: `machine.mem32`, `machine.mem16`, `uctypes.addressof`). Each finding carries a `function` field (the code object name) and `offset` field (bytecode instruction offset), enabling precise location within the bytecode.
 
 ---
 
@@ -86,9 +86,9 @@ MpyLifter.report(findings):
 
 ## False positives
 
-**`DANGEROUS_IMPORT` fires on any import of `os` or `machine`** — most MicroPython hardware drivers import `machine` for pin control and PWM. An `DANGEROUS_IMPORT` finding for `machine` is informational; escalate only when `DANGEROUS_ATTR` findings for `mem32`, `mem16`, or `mem8` also appear in the same function, indicating direct memory writes rather than safe peripheral API use.
+**`DANGEROUS_IMPORT` fires on any import of `os` or `machine`**: most MicroPython hardware drivers import `machine` for pin control and PWM. An `DANGEROUS_IMPORT` finding for `machine` is informational; escalate only when `DANGEROUS_ATTR` findings for `mem32`, `mem16`, or `mem8` also appear in the same function, indicating direct memory writes rather than safe peripheral API use.
 
-**`DANGEROUS_ATTR` for `mem32` read access vs write access** — `machine.mem32[addr]` (read) is less dangerous than `machine.mem32[addr] = val` (write). The finding fires for either form; read the lifted pseudo-Python from `lift_module()` to determine whether the access is read-only or a write that could overwrite firmware or peripheral registers.
+**`DANGEROUS_ATTR` for `mem32` read access vs write access**: `machine.mem32[addr]` (read) is less dangerous than `machine.mem32[addr] = val` (write). The finding fires for either form; read the lifted pseudo-Python from `lift_module()` to determine whether the access is read-only or a write that could overwrite firmware or peripheral registers.
 
 ---
 
@@ -100,15 +100,15 @@ Run `MpyLifter` on every `.mpy` file extracted from firmware containers. Combine
 
 ## Reading output
 
-`MpyLifter.lift_module()` returns a `str` — multi-line Python-like pseudocode for the entire `.mpy` module. Additional methods:
+`MpyLifter.lift_module()` returns a `str`: multi-line Python-like pseudocode for the entire `.mpy` module. Additional methods:
 
-- `MpyLifter.imports()` → `List[str]` — all imported module names found in the bytecode
-- `MpyLifter.dangerous_calls()` → `List[dict]` — calls to `exec`, `eval`, `os`, `machine`, `uctypes`, etc.; each dict has `type`, `qstr`, `va`, `severity`
+- `MpyLifter.imports()` → `List[str]`: all imported module names found in the bytecode
+- `MpyLifter.dangerous_calls()` → `List[dict]`: calls to `exec`, `eval`, `os`, `machine`, `uctypes`, etc.; each dict has `type`, `qstr`, `va`, `severity`
 
 ---
 
 ## See also
 
-- [MicroPython .mpy Lifter](mpy-lifter.md) — detailed constructor patterns, opcode reference, and version compatibility table
-- [Firmware Extraction](firmware-extraction.md) — squashfs and CRAMFS extraction to locate embedded `.mpy` files
-- [Hardware Root Discovery](hardware-root-discovery.md) — native firmware analysis for the C/assembler layer alongside MicroPython modules
+- [MicroPython .mpy Lifter](mpy-lifter.md): detailed constructor patterns, opcode reference, and version compatibility table
+- [Firmware Extraction](firmware-extraction.md): squashfs and CRAMFS extraction to locate embedded `.mpy` files
+- [Hardware Root Discovery](hardware-root-discovery.md): native firmware analysis for the C/assembler layer alongside MicroPython modules

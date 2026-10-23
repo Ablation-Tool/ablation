@@ -162,10 +162,10 @@ CALL target heuristic (`call_targets` in result) may include jump tables or data
 | Attribute | Content |
 |:---|:---|
 | `arch` | Detected ISA string (e.g., `'PPC32-VLE'`, `'M68K'`, `'SH-2A'`) |
-| `confidence` | `'HIGH'` / `'MEDIUM'` / `'LOW'` — confidence in the ISA detection |
-| `function_starts` | `List[int]` — probable function entry VAs from prologue scanning |
-| `call_targets` | `List[int]` — all static call targets found during the scan |
-| `prologue_hits` | `List[int]` — VAs where a recognized prologue pattern matched |
+| `confidence` | `'HIGH'` / `'MEDIUM'` / `'LOW'`: confidence in the ISA detection |
+| `function_starts` | `List[int]`: probable function entry VAs from prologue scanning |
+| `call_targets` | `List[int]`: all static call targets found during the scan |
+| `prologue_hits` | `List[int]`: VAs where a recognized prologue pattern matched |
 | `detect_result` | `ArchDetectResult` from the internal `EcuArchDetector` run (or `None`) |
 
 Feed `result.function_starts` directly to a taint tracker, or assign to `ctx.func_starts` before calling `BinaryContext.save_cache()` to persist the recovered starts.
@@ -174,8 +174,8 @@ Feed `result.function_starts` directly to a taint tracker, or assign to `ctx.fun
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

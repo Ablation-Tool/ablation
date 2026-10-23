@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Backward-slices argument registers (x0–x7) at ARM64 BL call sites to confirm that a target function receives a specific value. Primary use: verifying GOT-based struct pointer aliasing in stripped ARM64 shared objects (e.g., WeChat libwechatnetwork.so).
+Backward-slices argument registers (x0–x7) at ARM64 BL call sites to confirm that a target function receives a specific value. Primary use: verifying GOT-based struct pointer aliasing in stripped ARM64 shared objects for example WeChat libwechatnetwork.so.
 
 ## Key constants
 
@@ -66,17 +66,17 @@ backward_slice(callsite_va=0xC8F3A0, arg_regs=['x0', 'x1']):
 
 ## False positives
 
-**GOT entries not in the `_GOT` catalogue resolve to `Unknown`** — the catalogue is hardcoded to specific `(segment_base, got_offset)` pairs for WeChat libwechatnetwork.so. On any other binary, all GOT-derived values return `Unknown` unless you extend the catalogue. Check the `_GOT` dict at the top of `callsite_tracer.py` and add entries after inspecting GOT entries with `lief`.
+**GOT entries not in the `_GOT` catalogue resolve to `Unknown`**: the catalogue is hardcoded to specific `(segment_base, got_offset)` pairs for WeChat libwechatnetwork.so. On any other binary, all GOT-derived values return `Unknown` unless you extend the catalogue. Check the `_GOT` dict at the top of `callsite_tracer.py` and add entries after inspecting GOT entries with `lief`.
 
-**Prologue detection is heuristic** — `_fn_start()` scans backward up to 4 KB for an `STP x29, x30, [sp, #-k]!` frame setup instruction. If the enclosing function has an unusual prologue (e.g., a tail-call optimized leaf), the simulation starts at the wrong address and may return `Unknown` for all registers.
+**Prologue detection is heuristic**: `_fn_start()` scans backward up to 4 KB for an `STP x29, x30, [sp, #-k]!` frame setup instruction. If the enclosing function has an unusual prologue for example a tail-call optimized leaf, the simulation starts at the wrong address and may return `Unknown` for all registers.
 
-**`BL` to internal functions resets caller-saved registers** — any `x0`–`x18` value established before an intermediate function call is overwritten with `Unknown` at that `BL`. If the target call site is reached through a call chain, `backward_slice` may under-report `Arg(n)` provenance.
+**`BL` to internal functions resets caller-saved registers**: any `x0`–`x18` value established before an intermediate function call is overwritten with `Unknown` at that `BL`. If the target call site is reached through a call chain, `backward_slice` may under-report `Arg(n)` provenance.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Identify the target call site VA using `SemanticSearcher` or `FuncProfiler`. Use `SinkArgClassifier` to confirm the call site is `ARG_PROPAGATED` or `UNKNOWN` (not `RODATA_CONST`) before slicing — `RODATA_CONST` call sites cannot have argument-derived values in `x0`–`x7`.
+**Before this module:** Identify the target call site VA using `SemanticSearcher` or `FuncProfiler`. Use `SinkArgClassifier` to confirm the call site is `ARG_PROPAGATED` or `UNKNOWN` (not `RODATA_CONST`) before slicing: `RODATA_CONST` call sites cannot have argument-derived values in `x0`–`x7`.
 
 **After this module:** Confirm feasibility with `PathSolver`. Register confirmed findings with `FindingRegistry`.
 
@@ -84,7 +84,7 @@ backward_slice(callsite_va=0xC8F3A0, arg_regs=['x0', 'x1']):
 
 ## Reading output
 
-`backward_slice(raw, binary, callsite_va, arg_regs, max_depth=128)` returns `Dict[str, Any]` — a map from each register name in `arg_regs` to one of five symbolic value types at `callsite_va`:
+`backward_slice(raw, binary, callsite_va, arg_regs, max_depth=128)` returns `Dict[str, Any]`: a map from each register name in `arg_regs` to one of five symbolic value types at `callsite_va`:
 
 | Type | Fields | Meaning |
 |:---|:---|:---|
@@ -100,8 +100,8 @@ All five types are frozen dataclasses exported from `modules.callsite_tracer`. U
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

@@ -176,9 +176,9 @@ reg.find_similar(embedding, top_k=3, min_sim=0.60)
 
 ## False positives
 
-**Patterns that flood every sweep** — a confirmed finding with a very generic description (e.g., "processes network input") will score above 0.30 against most functions in any network-facing binary. The pattern produces high recall but low precision. Improve it by editing the stored description in `findings.db` to include the specific error condition: memory operation type, size field behavior, and call chain.
+**Patterns that flood every sweep**: a confirmed finding with a very generic description (e.g., "processes network input") will score above 0.30 against most functions in any network-facing binary. The pattern produces high recall but low precision. Improve it by editing the stored description in `findings.db` to include the specific error condition: memory operation type, size field behavior, and call chain.
 
-**`ingest_from_registry()` adding patterns from false-positive findings** — if a finding was registered but later determined to be a false positive at the analysis stage, its pattern remains in the library. Call `reg.list_findings()` to identify and remove the false-positive finding from `findings.db` before the next engagement, then rebuild the pattern library.
+**`ingest_from_registry()` adding patterns from false-positive findings**: if a finding was registered but later determined to be a false positive at the analysis stage, its pattern remains in the library. Call `reg.list_findings()` to identify and remove the false-positive finding from `findings.db` before the next engagement, then rebuild the pattern library.
 
 ---
 
@@ -194,9 +194,9 @@ reg.find_similar(embedding, top_k=3, min_sim=0.60)
 
 The flywheel has no single output type. It is an operational loop between three modules:
 
-1. `PatternLibrary.sweep(searcher, top_k, min_score)` → `dict[str, list[tuple[float, int, str]]]` — tag → `(score, func_id, name)` candidates from prior confirmed patterns.
-2. `FindingRegistry.find_similar(embedding, top_k, min_sim)` → `list[dict]` — confirmed findings from prior engagements whose embeddings are similar to the query. Dict keys: `vendor`, `product`, `version`, `title`, `cwe_class`, `severity`, `func_addr`, `binary`, `similarity`.
-3. `FindingRegistry.register(...)` → `str` (finding ID) — persists a new confirmed finding and adds its embedding to the in-memory matrix for immediate similarity queries.
+1. `PatternLibrary.sweep(searcher, top_k, min_score)` → `dict[str, list[tuple[float, int, str]]]`: tag → `(score, func_id, name)` candidates from prior confirmed patterns.
+2. `FindingRegistry.find_similar(embedding, top_k, min_sim)` → `list[dict]`: confirmed findings from prior engagements whose embeddings are similar to the query. Dict keys: `vendor`, `product`, `version`, `title`, `cwe_class`, `severity`, `func_addr`, `binary`, `similarity`.
+3. `FindingRegistry.register(...)` → `str` (finding ID): persists a new confirmed finding and adds its embedding to the in-memory matrix for immediate similarity queries.
 
 See [Finding Validation](finding-validation.md) and [Registry](registry.md) for full API details.
 
@@ -204,6 +204,6 @@ See [Finding Validation](finding-validation.md) and [Registry](registry.md) for 
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

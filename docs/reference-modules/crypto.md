@@ -402,7 +402,7 @@ for f in findings:
 
 ## False positives
 
-Hard-coded constants that share byte patterns with known keys but are not cryptographic material (e.g., protocol magic, alignment padding) are not findings. Confirm key candidates by verifying they decrypt a known-plaintext block before reporting. Algorithm detection based on constant patterns can misclassify hand-rolled arithmetic as a named cipher — verify the full key schedule before concluding.
+Hard-coded constants that share byte patterns with known keys but are not cryptographic material for example protocol magic, alignment padding are not findings. Confirm key candidates by verifying they decrypt a known-plaintext block before reporting. Algorithm detection based on constant patterns can misclassify hand-rolled arithmetic as a named cipher: verify the full key schedule before concluding.
 
 ---
 
@@ -423,16 +423,16 @@ This page covers two tools with different output types.
 | Attribute | Content |
 |:---|:---|
 | `algo` | Algorithm name string (e.g., `'SHA-256'`, `'MD5'`, `'CRC32'`) |
-| `confidence` | Integer 0–100 — identification confidence |
-| `matched` | `List[ConstMatch]` — each with `va`, `value`, `name`, `algo` |
+| `confidence` | Integer 0–100: identification confidence |
+| `matched` | `List[ConstMatch]`: each with `va`, `value`, `name`, `algo` |
 
-`CBCPatternDetector(binary, load_addr).scan_range(va, size)` returns `List[CBCPattern]` — each with fields for the IV load site, encrypt/decrypt direction, and key schedule VA.
+`CBCPatternDetector(binary, load_addr).scan_range(va, size)` returns `List[CBCPattern]`: each with fields for the IV load site, encrypt/decrypt direction, and key schedule VA.
 | `detail` | What was found and the cryptographic weakness |
 
 ---
 
 ## See also
 
-- [EntropyMapper](entropy-mapper.md) — locate high-entropy regions before key extraction
-- [FirmwareContainerKeyExtractor](firmware-container-key-extractor.md) — extract and classify firmware keys
-- [TaintAnalysis](taint-analysis.md) — trace how recovered keys or weak configs are used
+- [EntropyMapper](entropy-mapper.md): locate high-entropy regions before key extraction
+- [FirmwareContainerKeyExtractor](firmware-container-key-extractor.md): extract and classify firmware keys
+- [TaintAnalysis](taint-analysis.md): trace how recovered keys or weak configs are used

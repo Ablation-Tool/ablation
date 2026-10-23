@@ -1,16 +1,16 @@
 # Process and Memory Map Inventory
 
-Enumerate running processes, loaded shared libraries, executable/RWX memory regions, open file descriptors, and environment variables — providing the live process surface map needed to identify injection targets, privilege escalation conditions, and DLL hijacking candidates — via `modules/process_enum.py`.
+Enumerate running processes, loaded shared libraries, executable/RWX memory regions, open file descriptors, and environment variables: providing the live process surface map needed to identify injection targets, privilege escalation conditions, and DLL hijacking candidates: via `modules/process_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **`ProcessEnumerator` reads `/proc/<pid>/maps`, `/proc/<pid>/environ`, and `/proc/<pid>/fd/`** — providing the complete memory layout and open file descriptors for every process the current user can read. RWX memory regions (`rwx` in `/proc/pid/maps` without a backing file) are flagged as potential shellcode injection targets: a process with an anonymous RWX region may be a shellcode host or JIT compiler.
+1. **`ProcessEnumerator` reads `/proc/<pid>/maps`, `/proc/<pid>/environ`, and `/proc/<pid>/fd/`**: providing the complete memory layout and open file descriptors for every process the current user can read. RWX memory regions (`rwx` in `/proc/pid/maps` without a backing file) are flagged as potential shellcode injection targets: a process with an anonymous RWX region may be a shellcode host or JIT compiler.
 
-2. **`scan_dll_hijacking_candidates()`** enumerates processes with shared library loads from writable directories — a common misconfiguration where a privileged process (`root`, SUID) loads a `.so` from `/tmp/` or a user-writable path. If the calling user can write to the load path, they can substitute a malicious library and execute code at the privilege level of the target process.
+2. **`scan_dll_hijacking_candidates()`** enumerates processes with shared library loads from writable directories: a common misconfiguration where a privileged process (`root`, SUID) loads a `.so` from `/tmp/` or a user-writable path. If the calling user can write to the load path, they can substitute a malicious library and execute code at the privilege level of the target process.
 
-3. **`enumerate_volatile_forensics()`** captures volatile system state — process list, network connections, loaded kernel modules (`/proc/modules`), and `/proc/sysrq-trigger` accessibility — to a timestamped output directory. This is the standard pre-rootkit-analysis capture step: volatile state is collected before any analysis tools potentially modify the system.
+3. **`enumerate_volatile_forensics()`** captures volatile system state: process list, network connections, loaded kernel modules (`/proc/modules`), and `/proc/sysrq-trigger` accessibility: to a timestamped output directory. This is the standard pre-rootkit-analysis capture step: volatile state is collected before any analysis tools potentially modify the system.
 
 ---
 
@@ -73,9 +73,9 @@ scan_dll_hijacking_candidates:
 
 ## False positives
 
-**Anonymous RWX regions in JIT runtimes** — Node.js, Java JVM, Python (via ctypes), and V8-based applications use anonymous RWX pages for JIT-compiled code. These are not shellcode; they are expected behavior. Filter JIT runtime processes by their `cmdline` before reporting RWX as a finding.
+**Anonymous RWX regions in JIT runtimes**: Node.js, Java JVM, Python (via ctypes), and V8-based applications use anonymous RWX pages for JIT-compiled code. These are not shellcode; they are expected behavior. Filter JIT runtime processes by their `cmdline` before reporting RWX as a finding.
 
-**`detect_hollow_process()`** — certain anti-cheat and DRM systems deliberately remap the process image at runtime. A hollowed process indicator does not definitively indicate malware; verify by examining the actual mapped content.
+**`detect_hollow_process()`**: certain anti-cheat and DRM systems deliberately remap the process image at runtime. A hollowed process indicator does not definitively indicate malware; verify by examining the actual mapped content.
 
 ---
 
@@ -103,5 +103,5 @@ Run process and memory map inventory after `host-platform-inventory` establishes
 
 ## See also
 
-- [Linux Privilege Escalation Triage](linux-privilege-escalation-triage.md) — `PrivescEnumerator` for SUID, capabilities, and sudo paths
-- [Host Platform Inventory](host-platform-inventory.md) — OS/kernel/libc baseline that informs which exploit paths apply
+- [Linux Privilege Escalation Triage](linux-privilege-escalation-triage.md): `PrivescEnumerator` for SUID, capabilities, and sudo paths
+- [Host Platform Inventory](host-platform-inventory.md): OS/kernel/libc baseline that informs which exploit paths apply

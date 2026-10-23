@@ -145,7 +145,7 @@ Rate-limit and authentication findings from internal networks or behind authenti
 | Attribute | Content |
 |:---|:---|
 | `base_url` | Base URL of the target API |
-| `endpoints` | `List[Endpoint]` — each with `path`, `methods`, `params`, `responses` |
+| `endpoints` | `List[Endpoint]`: each with `path`, `methods`, `params`, `responses` |
 | `auth_required` | `True` if authentication signals were detected |
 | `framework` | Detected framework string (e.g., `'express'`, `'flask'`), or `None` |
 | `version` | Detected API version string, or `None` |
@@ -157,6 +157,6 @@ Each `Endpoint` has: `path: str`, `methods: list`, `params: dict`, `responses: d
 
 ## See also
 
-- [NetworkAnalyze](network-analyze.md) — port and service discovery before API RE
-- [PreAuthExposure](preauth-exposure.md) — find unauthenticated code paths in the backend binary
-- [FindingRegistry](registry.md) — record confirmed API findings
+- [NetworkAnalyze](network-analyze.md): port and service discovery before API RE
+- [PreAuthExposure](preauth-exposure.md): find unauthenticated code paths in the backend binary
+- [FindingRegistry](registry.md): record confirmed API findings

@@ -57,9 +57,9 @@ RawSniffer.sniff(duration=30):
 
 ## False positives
 
-**`RawSniffer` requires a promiscuous-mode interface** — on a switched network without port mirroring, the raw socket only sees broadcast/multicast traffic and traffic to/from the host. Credentials extracted belong to the local host's connections only; the sniffer does not see other hosts' traffic without a SPAN port or mirror.
+**`RawSniffer` requires a promiscuous-mode interface**: on a switched network without port mirroring, the raw socket only sees broadcast/multicast traffic and traffic to/from the host. Credentials extracted belong to the local host's connections only; the sniffer does not see other hosts' traffic without a SPAN port or mirror.
 
-**`CredentialExtractor` HTTP Basic Auth detection** — the extractor decodes base64 strings following `Authorization: Basic`. A false positive can occur if a non-auth base64 string happens to parse as UTF-8 text with a colon separator. Verify that the decoded string matches the `username:password` pattern.
+**`CredentialExtractor` HTTP Basic Auth detection**: the extractor decodes base64 strings following `Authorization: Basic`. A false positive can occur if a non-auth base64 string happens to parse as UTF-8 text with a colon separator. Verify that the decoded string matches the `username:password` pattern.
 
 ---
 
@@ -83,6 +83,6 @@ Run `RawSniffer` after gaining root shell access on a network switch or router w
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [FindingRegistry](registry.md): record confirmed findings from enumeration
+- [LateralMovement](lateral-movement.md): chain enumeration findings into a lateral path
+- [NetworkAnalyze](network-analyze.md): port and service fingerprinting

@@ -1,16 +1,16 @@
 # IBM W-Code Parsing
 
-Parse IBM XLC compiler W-Code (internal IR) binary records embedded in XLC-compiled POWER object files — extracting builtin descriptor tables from `xlCentry` to identify POWER-specific intrinsics, vector operations, MASS math library calls, and IBM-internal control flow nodes that appear as opaque call sites in stripped POWER binaries.
+Parse IBM XLC compiler W-Code (internal IR) binary records embedded in XLC-compiled POWER object files: extracting builtin descriptor tables from `xlCentry` to identify POWER-specific intrinsics, vector operations, MASS math library calls, and IBM-internal control flow nodes that appear as opaque call sites in stripped POWER binaries.
 
 ---
 
 ## Why this exists
 
-1. **IBM XLC's W-Code IR records encode references to POWER-specific compiler builtins — `__vec_op`, `__maths_pow`, MASS library intrinsics — that appear in stripped object files as call sites to internal symbols that cannot be resolved from ELF symbol tables.** Without `WCodeParser`, these call sites appear as blank function calls in `BinaryContext.plt` and `FuncProfiler` output, making it impossible to determine whether a function uses vectorized operations or math library calls.
+1. **IBM XLC's W-Code IR records encode references to POWER-specific compiler builtins: `__vec_op`, `__maths_pow`, MASS library intrinsics, that appear in stripped object files as call sites to internal symbols that cannot be resolved from ELF symbol tables.** Without `WCodeParser`, these call sites appear as blank function calls in `BinaryContext.plt` and `FuncProfiler` output, making it impossible to determine whether a function uses vectorized operations or math library calls.
 
-2. **`WCodeBuiltinCatalog.from_binary(xlcentry_path)` extracts the builtin descriptor table from the `xlCentry` compiler binary** — `xlCentry` contains the canonical mapping from W-Code record IDs to builtin names, argument counts, and calling conventions. This makes the catalog authoritative rather than hand-maintained: updating `xlCentry` automatically updates the catalog.
+2. **`WCodeBuiltinCatalog.from_binary(xlcentry_path)` extracts the builtin descriptor table from the `xlCentry` compiler binary**: `xlCentry` contains the canonical mapping from W-Code record IDs to builtin names, argument counts, and calling conventions. This makes the catalog authoritative rather than hand-maintained: updating `xlCentry` automatically updates the catalog.
 
-3. **`WCodeBuiltinCatalog.lookup(rec)` returns the `WCBEntry` for a parsed `WCodeRecord`** — enabling downstream analysis to substitute meaningful names for opaque POWER intrinsic call sites in disassembly output. Combined with `BinaryContext.set_name()`, identified builtins appear in `FuncProfiler` and `WindowAnalyzer` output with their actual names.
+3. **`WCodeBuiltinCatalog.lookup(rec)` returns the `WCBEntry` for a parsed `WCodeRecord`**: enabling downstream analysis to substitute meaningful names for opaque POWER intrinsic call sites in disassembly output. Combined with `BinaryContext.set_name()`, identified builtins appear in `FuncProfiler` and `WindowAnalyzer` output with their actual names.
 
 ---
 
@@ -71,9 +71,9 @@ Records parsed: <N>
 
 ## False positives
 
-**`WCodeParser.scan()` operates on raw bytes of the W-Code IR section** — if the binary does not contain a W-Code IR section (e.g., object files compiled with GCC or LLVM rather than XLC), `scan()` produces no records. This is not an error; it simply means the binary was not compiled with XLC.
+**`WCodeParser.scan()` operates on raw bytes of the W-Code IR section**: if the binary does not contain a W-Code IR section for example object files compiled with GCC or LLVM rather than XLC, `scan()` produces no records. This is not an error; it simply means the binary was not compiled with XLC.
 
-**W-Code record IDs are XLC version-specific** — `WCodeBuiltinCatalog` built from XLC 13.1 may not correctly map record IDs from XLC 14.x or 16.x binaries. Always use a catalog built from the same XLC version used to compile the target binary.
+**W-Code record IDs are XLC version-specific**: `WCodeBuiltinCatalog` built from XLC 13.1 may not correctly map record IDs from XLC 14.x or 16.x binaries. Always use a catalog built from the same XLC version used to compile the target binary.
 
 ---
 
@@ -93,7 +93,7 @@ Run `WCodeParser` on any IBM POWER object file compiled with XLC before building
 | `type_field_1` | Second type field (uint32 BE at offset `+0x04`) |
 | `type_field_2` | Third type field (uint16 BE at offset `+0x08`) |
 | `name` | Builtin name string (leading underscores stripped) |
-| `raw` | `bytes` — original record bytes including the 10-byte header |
+| `raw` | `bytes`: original record bytes including the 10-byte header |
 | `short_form` | `True` if record length ≤ 10 (type fields not compared in matching) |
 
 `WCodeBuiltinCatalog.lookup(name)` returns a `WCBEntry` with `index`, `arch_mask`, and type fields for the named builtin, or `None` if not found.
@@ -102,6 +102,6 @@ Run `WCodeParser` on any IBM POWER object file compiled with XLC before building
 
 ## See also
 
-- [PPC64 ELFv1 Resolution](ppc64-elfv1-resolution.md) — PLT patching for POWER Linux binaries
-- [PPC32/PPC476 Dedicated Lifting](ppc32-ppc476-dedicated-lifting.md) — PPC32/PPC64 instruction analysis
-- [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext.set_name()` for builtin name registration
+- [PPC64 ELFv1 Resolution](ppc64-elfv1-resolution.md): PLT patching for POWER Linux binaries
+- [PPC32/PPC476 Dedicated Lifting](ppc32-ppc476-dedicated-lifting.md): PPC32/PPC64 instruction analysis
+- [Persistent Analysis Context](persistent-analysis-context.md): `BinaryContext.set_name()` for builtin name registration

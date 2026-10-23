@@ -1,14 +1,14 @@
 # Source/Dangerous Sink Detection
 
-Scan source code repositories for dangerous sink patterns — code evaluation, subprocess execution, SSRF, path traversal, and unguarded internal endpoints — with guard-condition detection that narrows findings from HIGH to MEDIUM when a sink is gated behind an environment variable or conditional check.
+Scan source code repositories for dangerous sink patterns: code evaluation, subprocess execution, SSRF, path traversal, and unguarded internal endpoints: with guard-condition detection that narrows findings from HIGH to MEDIUM when a sink is gated behind an environment variable or conditional check.
 
 ---
 
 ## Why this exists
 
-1. **Binary RE tools find sinks in compiled code; `SourceSinkScanner` finds the same sink classes in source-available targets (Node.js, Python, Go, Ruby web applications) where the attack surface is in interpreted or compiled-from-source code rather than firmware.** `SourceSinkScanner` is the source-code analogue of `dangerous_callers.py` and `format_string_scanner.py` — it applies the same sink taxonomy (code eval, subprocess, SSRF, path traversal) to repository source files using pattern-based static analysis.
+1. **Binary RE tools find sinks in compiled code; `SourceSinkScanner` finds the same sink classes in source-available targets (Node.js, Python, Go, Ruby web applications) where the attack surface is in interpreted or compiled-from-source code rather than firmware.** `SourceSinkScanner` is the source-code analogue of `dangerous_callers.py` and `format_string_scanner.py`, it applies the same sink taxonomy (code eval, subprocess, SSRF, path traversal) to repository source files using pattern-based static analysis.
 
-2. **Guard-condition detection prevents over-reporting gated sinks.** `LFG-CODEEVAL-1` was a confirmed finding where `vm.runInContext()` (code eval) was gated behind `LANGFUSE_CODE_EVAL_DISPATCHER=insecure-local` — a severity HIGH finding that is practically MEDIUM when the gate requires an operator-configured environment variable. `SourceSinkScanner` detects `if (env_var === 'value')` and `process.env.FEATURE_FLAG` patterns surrounding sink calls and downgrade their severity accordingly.
+2. **Guard-condition detection prevents over-reporting gated sinks.** `LFG-CODEEVAL-1` was a confirmed finding where `vm.runInContext()` (code eval) was gated behind `LANGFUSE_CODE_EVAL_DISPATCHER=insecure-local`: a severity HIGH finding that is practically MEDIUM when the gate requires an operator-configured environment variable. `SourceSinkScanner` detects `if (env_var === 'value')` and `process.env.FEATURE_FLAG` patterns surrounding sink calls and downgrade their severity accordingly.
 
 3. **CWE mapping makes findings directly actionable for vulnerability documentation.** Each `SinkDef` maps to a CWE: subprocess execution to CWE-78, SSRF to CWE-918, path traversal to CWE-22, code evaluation to CWE-94. `SinkHit.as_dict()` produces structured findings compatible with `FindingRegistry` without manual CWE lookup.
 
@@ -73,9 +73,9 @@ The following illustrates the finding format. Actual files, lines, and sink name
 
 ## False positives
 
-**Pattern-based sink matching fires on sink names in comments, string literals, and import statements.** `SourceSinkScanner` uses line-level pattern matching — a comment like `# don't use os.system()` will match the `os.system` sink pattern. Filter by confirming the match appears in executable context (not preceded by `#` or inside a string literal at that indentation level).
+**Pattern-based sink matching fires on sink names in comments, string literals, and import statements.** `SourceSinkScanner` uses line-level pattern matching: a comment like `# don't use os.system()` will match the `os.system` sink pattern. Filter by confirming the match appears in executable context (not preceded by `#` or inside a string literal at that indentation level).
 
-**Guard-condition detection looks N lines before the sink — a complex guard in a different function (passed as a callback parameter) will not be detected, and the finding will remain severity HIGH.** Treat `guarded=False` as "guard not detected by static analysis," not as "no guard exists."
+**Guard-condition detection looks N lines before the sink: a complex guard in a different function (passed as a callback parameter) will not be detected, and the finding will remain severity HIGH.** Treat `guarded=False` as "guard not detected by static analysis," not as "no guard exists."
 
 ---
 
@@ -103,6 +103,6 @@ Run `SourceSinkScanner` as an early source-analysis pass after cloning or extrac
 
 ## See also
 
-- [Source Code Auditing](source-code-auditing.md) — broader source analysis including dataflow and dependency scanning
-- [Java Security Pattern Scans](java-security-pattern-scans.md) — Java/Spring-specific sink detection
-- [Repository Ingestion and Search](repository-ingestion-and-search.md) — `SourceContext` that feeds `SourceSinkScanner`
+- [Source Code Auditing](source-code-auditing.md): broader source analysis including dataflow and dependency scanning
+- [Java Security Pattern Scans](java-security-pattern-scans.md): Java/Spring-specific sink detection
+- [Repository Ingestion and Search](repository-ingestion-and-search.md): `SourceContext` that feeds `SourceSinkScanner`

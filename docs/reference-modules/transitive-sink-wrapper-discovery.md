@@ -1,16 +1,16 @@
 # Transitive Sink Wrapper Discovery
 
-Compute the transitive closure of passthrough wrappers around known exec sinks — finding all wrapper functions (at any depth) that propagate their argument to `system`/`popen`/`execve`, so that `TaintTracker` can use the expanded sink list to find injection paths hidden behind multi-level custom wrappers.
+Compute the transitive closure of passthrough wrappers around known exec sinks: finding all wrapper functions (at any depth) that propagate their argument to `system`/`popen`/`execve`, so that `TaintTracker` can use the expanded sink list to find injection paths hidden behind multi-level custom wrappers.
 
 ---
 
 ## Why this exists
 
-1. **When a binary wraps `system()` behind `doSystem(string)` which is called by `systemLog(char*)` — three levels deep — `TaintTracker` finds zero injection sites while the vulnerability is fully reachable.** `SinkPropagator.propagate()` discovers all three wrapper functions by iterating to a fixed point: if `addUser()` passes its arg to `doSystem()`, and `doSystem()` passes its arg to `systemLog()`, and `systemLog()` calls `system()` — all three are returned as `SinkWrapper` findings with their full call chain lineage.
+1. **When a binary wraps `system()` behind `doSystem(string)` which is called by `systemLog(char*)`: three levels deep: `TaintTracker` finds zero injection sites while the vulnerability is fully reachable.** `SinkPropagator.propagate()` discovers all three wrapper functions by iterating to a fixed point: if `addUser()` passes its arg to `doSystem()`, and `doSystem()` passes its arg to `systemLog()`, and `systemLog()` calls `system()`: all three are returned as `SinkWrapper` findings with their full call chain lineage.
 
-2. **The expanded wrapper list enables a single `TaintTracker` run to trace injection from the entry point to the ultimate exec sink** — without wrapper discovery, the analyst must manually identify wrapper chains by reading call graphs, a process that takes 20–60 minutes per wrapper level. `SinkPropagator` completes this in under 10 seconds on typical firmware binaries.
+2. **The expanded wrapper list enables a single `TaintTracker` run to trace injection from the entry point to the ultimate exec sink**: without wrapper discovery, the analyst must manually identify wrapper chains by reading call graphs, a process that takes 20–60 minutes per wrapper level. `SinkPropagator` completes this in under 10 seconds on typical firmware binaries.
 
-3. **`SinkPropagator` handles multi-parameter wrappers** — some wrappers forward argument 1 (`rsi`) to the sink rather than argument 0 (`rdi`). `SinkWrapper.wrapper_arg_pos` records which argument of the wrapper corresponds to the sink's dangerous argument, so `TaintTracker.add_sink(name, arg_pos=wrapper_arg_pos)` is called with the correct position.
+3. **`SinkPropagator` handles multi-parameter wrappers**: some wrappers forward argument 1 (`rsi`) to the sink rather than argument 0 (`rdi`). `SinkWrapper.wrapper_arg_pos` records which argument of the wrapper corresponds to the sink's dangerous argument, so `TaintTracker.add_sink(name, arg_pos=wrapper_arg_pos)` is called with the correct position.
 
 ---
 
@@ -78,9 +78,9 @@ Total: <N> wrappers at depth 1-3
 
 ## False positives
 
-**`SinkPropagator` detects argument passthrough by checking whether the wrapper's call to the sink uses the wrapper's own entry argument register** — a wrapper that modifies the argument before passing it (e.g., adds a prefix string) will be classified as a wrapper even though it is partially safe. `SinkWrapper.chain` shows the full call path for manual verification.
+**`SinkPropagator` detects argument passthrough by checking whether the wrapper's call to the sink uses the wrapper's own entry argument register**: a wrapper that modifies the argument before passing it for example adds a prefix string will be classified as a wrapper even though it is partially safe. `SinkWrapper.chain` shows the full call path for manual verification.
 
-**Propagation to a fixed point with large binaries may return hundreds of wrappers** — most will be utility functions that happen to call exec with a caller-provided path. Filter by `depth <= 3` and focus on wrappers that appear in the `SemanticSearcher` sweep results as handler candidates.
+**Propagation to a fixed point with large binaries may return hundreds of wrappers**: most will be utility functions that happen to call exec with a caller-provided path. Filter by `depth <= 3` and focus on wrappers that appear in the `SemanticSearcher` sweep results as handler candidates.
 
 ---
 
@@ -92,7 +92,7 @@ Run `SinkPropagator.propagate()` before `SinkArgClassifier.classify_all()` on an
 
 ## Reading output
 
-`SinkPropagator.propagate()` returns `List[SinkWrapper]` — one entry per discovered wrapper function:
+`SinkPropagator.propagate()` returns `List[SinkWrapper]`: one entry per discovered wrapper function:
 
 | Attribute | Content |
 |:---|:---|
@@ -102,7 +102,7 @@ Run `SinkPropagator.propagate()` before `SinkArgClassifier.classify_all()` on an
 | `call_va` | VA of the call instruction inside this wrapper |
 | `wraps_va` | VA of the immediate sink being called |
 | `wraps_name` | Name of the immediate sink |
-| `chain` | `List[str]` — lineage from root PLT sink to this wrapper |
+| `chain` | `List[str]`: lineage from root PLT sink to this wrapper |
 
 Add wrapper names to `SinkArgClassifier` by calling `SinkPropagator.add_sink(name, arg_pos)` to extend coverage before running the classifier.
 
@@ -110,6 +110,6 @@ Add wrapper names to `SinkArgClassifier` by calling `SinkPropagator.add_sink(nam
 
 ## See also
 
-- [Sink Argument Classifier](sink-argument-classifier.md) — consumes the expanded sink list from `SinkPropagator`
-- [Vendor Sink Profiles](vendor-sink-profiles.md) — vendor-specific wrappers registered explicitly via YAML profile
-- [Cross-Library Analysis](cross-library-analysis.md) — extends wrapper discovery across library boundaries
+- [Sink Argument Classifier](sink-argument-classifier.md): consumes the expanded sink list from `SinkPropagator`
+- [Vendor Sink Profiles](vendor-sink-profiles.md): vendor-specific wrappers registered explicitly via YAML profile
+- [Cross-Library Analysis](cross-library-analysis.md): extends wrapper discovery across library boundaries

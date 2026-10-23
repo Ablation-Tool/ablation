@@ -119,19 +119,19 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Reading output
 
-`sweep_package(input_path)` returns a `Tuple[str, List[dict], str]` — `(package_name, findings_list, report_markdown)`. Each dict in `findings_list` represents one finding:
+`sweep_package(input_path)` returns a `Tuple[str, List[dict], str]`: `(package_name, findings_list, report_markdown)`. Each dict in `findings_list` represents one finding:
 
 | Key | Content |
 |:---|:---|
 | `binary` | Basename of the analyzed file |
 | `binary_path` | Absolute path to the analyzed file |
-| `finding_id` | Phase-specific ID — `TAINT-ARM32`, `TAINT-ARM64`, `TAINT-RV32`, or NNC scanner ID |
+| `finding_id` | Phase-specific ID: `TAINT-ARM32`, `TAINT-ARM64`, `TAINT-RV32`, or NNC scanner ID |
 | `severity` | `HIGH` or scanner-reported severity string |
 | `title` | Finding description string |
-| `phase` | Phase that produced it — `nnc`, `taint`, or `c28x` |
+| `phase` | Phase that produced it: `nnc`, `taint`, or `c28x` |
 | `va` | Virtual address of the finding (NNC findings only) |
 | `symbol` | Symbol name (NNC findings only) |
-| `arch` | Architecture string — `arm32_thumb`, `arm64`, `riscv32` (taint findings only) |
+| `arch` | Architecture string: `arm32_thumb`, `arm64`, `riscv32` (taint findings only) |
 
 `sweep_directory(tirex_dir)` calls `sweep_package` for each `.zip` package in the directory and writes per-package and master Markdown reports to `reports/`.
 
@@ -139,6 +139,6 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## See also
 
-- [ECUArchDetector](ecu-arch-detector.md) — identify processor family before choosing a decoder
-- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md) — map ROM sections before decoding
-- [ECUSecurityAccessScanner](ecu-security-access-scanner.md) — find UDS 0x27 bypass vectors in decoded code
+- [ECUArchDetector](ecu-arch-detector.md): identify processor family before choosing a decoder
+- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md): map ROM sections before decoding
+- [ECUSecurityAccessScanner](ecu-security-access-scanner.md): find UDS 0x27 bypass vectors in decoded code

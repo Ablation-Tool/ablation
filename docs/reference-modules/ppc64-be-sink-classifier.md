@@ -41,7 +41,7 @@ at each call site, and classifies r3 (destination) and r4 (source) using these c
 | `IMM_SIZE` | r3 = li rX, N (N < 0x2000): IBM string allocator size | SAFE (allocator) |
 | `IMM` | li with large value | SAFE |
 | `IBM_OBJECT` | r3 via mr from a callee-saved non-volatile: IBM string object | Context-dependent |
-| `MR_FROM` | Intermediate: mr chain followed backward automatically | — |
+| `MR_FROM` | Intermediate: mr chain followed backward automatically |: |
 | `UNKNOWN` | Cannot determine within lookback window | Needs manual trace |
 
 Sites where `dest_class == 'STACK_DEST'` and `src_class == 'ARG_PROPAGATED'` are flagged
@@ -136,7 +136,7 @@ second arg (src), r5 = third arg (size for snprintf/memcpy).
 
 ## How it works
 
-`PPC64BESinkClassifier.classify_all()` classifies PPC64 big-endian ELFv1 sink call sites as `RODATA_CONST`, `SNPRINTF_RODATA`, `ARG_PROPAGATED`, or `UNKNOWN` — the same classification set as `SinkArgClassifier` (x86-only). On PPC64 BE, function calls use `bl` (branch-link) with the callee VA as a direct immediate, not an x86 `call` relocation. This classifier scans for `bl` instructions to PLT-resolved sinks, back-traces the argument registers (r3–r10, PPC64 ELFv1 ABI), and classifies whether the argument register holds a RODATA pointer, a format string, or a propagated function argument.
+`PPC64BESinkClassifier.classify_all()` classifies PPC64 big-endian ELFv1 sink call sites as `RODATA_CONST`, `SNPRINTF_RODATA`, `ARG_PROPAGATED`, or `UNKNOWN`: the same classification set as `SinkArgClassifier` (x86-only). On PPC64 BE, function calls use `bl` (branch-link) with the callee VA as a direct immediate, not an x86 `call` relocation. This classifier scans for `bl` instructions to PLT-resolved sinks, back-traces the argument registers (r3–r10, PPC64 ELFv1 ABI), and classifies whether the argument register holds a RODATA pointer, a format string, or a propagated function argument.
 
 ---
 
@@ -190,6 +190,6 @@ Ppc64BeSinkClassifier results:
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

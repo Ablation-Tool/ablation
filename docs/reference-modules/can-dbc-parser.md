@@ -261,9 +261,9 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_DBC_BYTES=16MB` at declara
 
 `CanDbcParser.from_file()` reads the DBC file in two passes:
 
-**Pass 1 — message and signal parsing:** Splits the text into `BO_` blocks with a regex and parses each block line by line. The raw message ID is read and bit 31 is tested to set `is_extended`; the 29-bit canonical ID is stored in `msg_id`. Each `SG_` line inside the block is parsed with a single compiled regex that extracts `start_bit`, `length`, `byte_order`, `sign`, `factor`, `offset`, `min_val`, `max_val`, `unit`, and `receivers`. Malformed signal lines that fail the regex match are silently skipped.
+**Pass 1: message and signal parsing:** Splits the text into `BO_` blocks with a regex and parses each block line by line. The raw message ID is read and bit 31 is tested to set `is_extended`; the 29-bit canonical ID is stored in `msg_id`. Each `SG_` line inside the block is parsed with a single compiled regex that extracts `start_bit`, `length`, `byte_order`, `sign`, `factor`, `offset`, `min_val`, `max_val`, `unit`, and `receivers`. Malformed signal lines that fail the regex match are silently skipped.
 
-**Pass 2 — comments and value tables:** A second pass over the full file text applies `re.DOTALL` patterns to extract `CM_ BO_` and `CM_ SG_` multi-line comment records, stripping enclosing quotes. `VAL_` records are parsed with a token scanner that reads alternating `integer "string"` pairs. Both comment and value table records are stored by `(raw_id, signal_name)` key and then attached to the already-constructed `CANMessage` and `CANSignal` objects.
+**Pass 2: comments and value tables:** A second pass over the full file text applies `re.DOTALL` patterns to extract `CM_ BO_` and `CM_ SG_` multi-line comment records, stripping enclosing quotes. `VAL_` records are parsed with a token scanner that reads alternating `integer "string"` pairs. Both comment and value table records are stored by `(raw_id, signal_name)` key and then attached to the already-constructed `CANMessage` and `CANSignal` objects.
 
 ---
 
@@ -295,7 +295,7 @@ EngineSpeed raw=2000 → 250.0 rpm
 
 **Motorola byte order decode is not implemented:** `CANSignal.decode()` applies `raw * factor + offset` regardless of `little_endian`. For Motorola byte-order signals, the raw integer passed to `decode()` must already be correctly extracted by the caller (using `start_bit` and `length` with Motorola bit numbering). Passing a naively extracted raw integer to `decode()` on a Motorola signal produces a wrong physical value.
 
-**Multiplexed signals read but not grouped:** The `M`/`m<n>` multiplexor indicator is silently skipped. All signals are stored flat under the message. If the DBC uses multiplexing (e.g., engine fault code DTC signals), all multiplexed variants are returned by `msg.signals` with no mux ID discrimination.
+**Multiplexed signals read but not grouped:** The `M`/`m<n>` multiplexor indicator is silently skipped. All signals are stored flat under the message. If the DBC uses multiplexing for example engine fault code DTC signals, all multiplexed variants are returned by `msg.signals` with no mux ID discrimination.
 
 ---
 
@@ -303,7 +303,7 @@ EngineSpeed raw=2000 → 250.0 rpm
 
 **Before this module:** Use `CanDbcParser` after obtaining a DBC file from the CAN network or the ECU vendor's calibration tools. DBC files are commonly distributed alongside A2L/XDF calibration files for the same ECU.
 
-**After this module:** Feed `CANSignal` scaling factors into `EcuA2LParser` cross-reference — match signal names to calibration table names to confirm which ROM addresses a CAN message writes. Use `msg_id` to filter captured CAN traces (e.g., from a J1939 sniffer) to only messages relevant to the target ECU.
+**After this module:** Feed `CANSignal` scaling factors into `EcuA2LParser` cross-reference: match signal names to calibration table names to confirm which ROM addresses a CAN message writes. Use `msg_id` to filter captured CAN traces for example from a J1939 sniffer to only messages relevant to the target ECU.
 
 ---
 
@@ -315,7 +315,7 @@ EngineSpeed raw=2000 → 250.0 rpm
 
 | Field | Type | Content |
 |:---|:---|:---|
-| `msg_id` | `int` | Canonical CAN ID (bit 31 stripped) — use for `message()` lookup |
+| `msg_id` | `int` | Canonical CAN ID (bit 31 stripped): use for `message()` lookup |
 | `is_extended` | `bool` | `True` for J1939/29-bit frames |
 | `signals` | `list[CANSignal]` | All signals in this message |
 | `comment` | `str` | Manufacturer description from CM_ record |
@@ -324,7 +324,7 @@ EngineSpeed raw=2000 → 250.0 rpm
 
 | Field | Type | Content |
 |:---|:---|:---|
-| `name` | `str` | Signal name — cross-reference against A2L characteristic names |
+| `name` | `str` | Signal name: cross-reference against A2L characteristic names |
 | `factor` / `offset` | `float` | `physical = raw * factor + offset` |
 | `value_table` | `dict[int, str]` | Enumerated state names from VAL_ record (fault codes, gear positions) |
 | `comment` | `str` | Manufacturer description from CM_ record |
@@ -333,6 +333,6 @@ EngineSpeed raw=2000 → 250.0 rpm
 
 ## See also
 
-- [Calibration Parsers](calibration-parsers.md) — A2L/open_damos parsers; cross-reference calibration table names against DBC signal names
-- [CAN DBC XDF Fusion](can-dbc-xdf-fusion.md) — combine DBC signal layout with XDF calibration definitions
-- [C166/C167 ECU Decoding](c166-c167-decoding.md) — Bosch/Siemens C167 ECU firmware analysis after CAN signal mapping
+- [Calibration Parsers](calibration-parsers.md): A2L/open_damos parsers; cross-reference calibration table names against DBC signal names
+- [CAN DBC XDF Fusion](can-dbc-xdf-fusion.md): combine DBC signal layout with XDF calibration definitions
+- [C166/C167 ECU Decoding](c166-c167-decoding.md): Bosch/Siemens C167 ECU firmware analysis after CAN signal mapping

@@ -1,16 +1,16 @@
 # SAX Approximate Indexing
 
-Fast approximate nearest-neighbor function lookup using SAX (Symbolic Aggregate approXimation) encoding of operation-category sequences — a pre-filter for `SemanticSearcher` that narrows candidates in microseconds without running embedding inference on every function.
+Fast approximate nearest-neighbor function lookup using SAX (Symbolic Aggregate approXimation) encoding of operation-category sequences: a pre-filter for `SemanticSearcher` that narrows candidates in microseconds without running embedding inference on every function.
 
 ---
 
 ## Why this exists
 
-1. **`SemanticSearcher` runs BERT-class embedding inference — each query takes 50-200ms per function scored, which is acceptable for a shortlist of 10-50 candidates but prohibitive for full-corpus scanning of a 10,000-function binary.** `SAXIndex` encodes each function's operation-category sequence as a short symbolic word (8 characters from an 8-symbol alphabet), then uses edit-distance lookup to find approximate matches in microseconds. The SAX pre-filter narrows the 10,000-function corpus to a 10-100 function shortlist before `SemanticSearcher` runs.
+1. **`SemanticSearcher` runs BERT-class embedding inference: each query takes 50-200ms per function scored, which is acceptable for a shortlist of 10-50 candidates but prohibitive for full-corpus scanning of a 10,000-function binary.** `SAXIndex` encodes each function's operation-category sequence as a short symbolic word (8 characters from an 8-symbol alphabet), then uses edit-distance lookup to find approximate matches in microseconds. The SAX pre-filter narrows the 10,000-function corpus to a 10-100 function shortlist before `SemanticSearcher` runs.
 
-2. **SAX encoding produces the same or nearby words for similar sequences — two functions that both do `[cmp, jmp, call, mov, ret]` with minor variations will produce identical or 1-edit-distance SAX words.** This property enables approximate matching: `query_seq()` returns all functions within a configurable edit distance of the query word. Unlike exact substring matching, SAX tolerates small insertions and deletions that appear when the same algorithm is compiled with different optimization levels.
+2. **SAX encoding produces the same or nearby words for similar sequences: two functions that both do `[cmp, jmp, call, mov, ret]` with minor variations will produce identical or 1-edit-distance SAX words.** This property enables approximate matching: `query_seq()` returns all functions within a configurable edit distance of the query word. Unlike exact substring matching, SAX tolerates small insertions and deletions that appear when the same algorithm is compiled with different optimization levels.
 
-3. **`SAXIndex.add_binary()` indexes all functions in a binary in a single pass using `OpSeqEncoder`** — the operation-category sequence for every function is computed once during indexing, not at query time. The index can be saved to disk (`save()`) and reloaded (`load()`) for reuse across sessions, avoiding re-computation on large firmware collections.
+3. **`SAXIndex.add_binary()` indexes all functions in a binary in a single pass using `OpSeqEncoder`**: the operation-category sequence for every function is computed once during indexing, not at query time. The index can be saved to disk (`save()`) and reloaded (`load()`) for reuse across sessions, avoiding re-computation on large firmware collections.
 
 ---
 
@@ -79,9 +79,9 @@ SAXIndex query for <func-va> (sax_word='<word>'):
 
 ## False positives
 
-**SAX edit distance 1 includes both similar and incidentally similar functions — two functions that happen to map to the same SAX word may be structurally unrelated (e.g., a hash function and a sort function that both have many comparison operations).** SAX results are candidates for embedding scoring, not confirmed matches. Always pass SAX results through `SemanticSearcher` before treating them as similar functions.
+**SAX edit distance 1 includes both similar and incidentally similar functions: two functions that happen to map to the same SAX word may be structurally unrelated for example a hash function and a sort function that both have many comparison operations.** SAX results are candidates for embedding scoring, not confirmed matches. Always pass SAX results through `SemanticSearcher` before treating them as similar functions.
 
-**`sax_word()` uses a fixed Gaussian distribution breakpoint table for the alphabet — on binaries with highly skewed operation-category distributions (e.g., SIMD-heavy code with many arithmetic operations), the breakpoints may not distribute words evenly across the alphabet.** Adjust `alphabet_size` or `word_size` if query results are consistently clustered in a few alphabet letters.
+**`sax_word()` uses a fixed Gaussian distribution breakpoint table for the alphabet: on binaries with highly skewed operation-category distributions for example SIMD-heavy code with many arithmetic operations, the breakpoints may not distribute words evenly across the alphabet.** Adjust `alphabet_size` or `word_size` if query results are consistently clustered in a few alphabet letters.
 
 ---
 
@@ -110,6 +110,6 @@ Results are ordered by ascending `mindist`. Use `str(match)` for a formatted one
 
 ## See also
 
-- [Semantic Search](semantic-search.md) — embedding-based similarity; consumes SAX shortlist
-- [Behavioral Subsequence Search](behavioral-subsequence-search.md) — DTW-based structural matching; complementary to SAX pre-filter
-- [Function Identity Database](function-identity-database.md) — persistent storage for confirmed function identities; integrates with SAX corpus
+- [Semantic Search](semantic-search.md): embedding-based similarity; consumes SAX shortlist
+- [Behavioral Subsequence Search](behavioral-subsequence-search.md): DTW-based structural matching; complementary to SAX pre-filter
+- [Function Identity Database](function-identity-database.md): persistent storage for confirmed function identities; integrates with SAX corpus

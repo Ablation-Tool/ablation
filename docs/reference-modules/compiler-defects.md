@@ -123,7 +123,7 @@ Rust `Vec` append patterns use `bltu remaining_cap,...` to guard the write. Thes
 
 ## How it works
 
-`LA64MaxNotMinScanner.scan()` disassembles the entire `.text` section with a pure-Python LoongArch64 decoder — not Capstone, no func_starts iteration. For each instruction, it detects the GCC-generated `masknez rd, ra, cond + maskeqz rd2, rb, cond + or rd, rd, rd2` pattern that emits `min(a,b)` when the source code called `max(a,b)`. On a match, looks ahead for a sink call (malloc/memcpy/recv) using the result register. Returns `List[LA64MaxNotMinFinding]` with `pattern_va`, `result_reg`, `sink_va`, `sink_name`, `sink_arg`.
+`LA64MaxNotMinScanner.scan()` disassembles the entire `.text` section with a pure-Python LoongArch64 decoder, not Capstone, no func_starts iteration. For each instruction, it detects the GCC-generated `masknez rd, ra, cond + maskeqz rd2, rb, cond + or rd, rd, rd2` pattern that emits `min(a,b)` when the source code called `max(a,b)`. On a match, looks ahead for a sink call (malloc/memcpy/recv) using the result register. Returns `List[LA64MaxNotMinFinding]` with `pattern_va`, `result_reg`, `sink_va`, `sink_name`, `sink_arg`.
 
 ---
 
@@ -143,7 +143,7 @@ Rust `Vec` append patterns use `bltu remaining_cap,...` to guard the write. Thes
 
 ## False positives
 
-`TAINT_FLOW` may fire when the compiler defect pattern (e.g., signed/unsigned mismatch) is present but the specific value range cannot satisfy the exploit condition. Verify the actual range of the length or pointer source before reporting. `LENGTH_UNDERFLOW` may fire on sanity checks intentionally coded as signed comparisons with no actual underflow path.
+`TAINT_FLOW` may fire when the compiler defect pattern for example signed/unsigned mismatch is present but the specific value range cannot satisfy the exploit condition. Verify the actual range of the length or pointer source before reporting. `LENGTH_UNDERFLOW` may fire on sanity checks intentionally coded as signed comparisons with no actual underflow path.
 
 ---
 
@@ -172,8 +172,8 @@ Rust `Vec` append patterns use `bltu remaining_cap,...` to guard the write. Thes
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

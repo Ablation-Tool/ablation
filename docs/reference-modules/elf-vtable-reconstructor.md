@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard in `__
 
 ## How it works
 
-`ELFVtableReconstructor.from_path(path)` uses pyelftools to parse the ELF dynamic relocation table (`.rela.dyn`) and resolve PIE vtable slot values that are zero-initialized in the file but populated at load time. Handles `R_X86_64_RELATIVE` (base + addend) and `R_X86_64_64` (sym_value + addend) relocation types. No func_starts iteration — operates on relocation entries and symbol table only.
+`ELFVtableReconstructor.from_path(path)` uses pyelftools to parse the ELF dynamic relocation table (`.rela.dyn`) and resolve PIE vtable slot values that are zero-initialized in the file but populated at load time. Handles `R_X86_64_RELATIVE` (base + addend) and `R_X86_64_64` (sym_value + addend) relocation types. No func_starts iteration: operates on relocation entries and symbol table only.
 
 ---
 
@@ -92,8 +92,8 @@ Use `vtable_map.live_slots()` to filter out RTTI entries and zero-VA slots.
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

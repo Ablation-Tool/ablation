@@ -1,12 +1,12 @@
 # PEParser (core)
 
-Low-level Windows PE file parser in `ablation/core/pe_parser.py`. Foundation layer consumed by `pe_analyzer.py` and `kernel_driver_analyzer.py`. Takes `data: bytes` directly — callers load the file.
+Low-level Windows PE file parser in `ablation/core/pe_parser.py`. Foundation layer consumed by `pe_analyzer.py` and `kernel_driver_analyzer.py`. Takes `data: bytes` directly: callers load the file.
 
 ---
 
 ## Why this exists
 
-1. **`pe_analyzer.py` and `kernel_driver_analyzer.py` need a shared PE parsing substrate.** Without `PEParser`, each analyzer would duplicate DOS/COFF/optional-header parsing — and diverge on edge cases like PE32 vs PE32+ magic, or short optional headers in embedded firmware.
+1. **`pe_analyzer.py` and `kernel_driver_analyzer.py` need a shared PE parsing substrate.** Without `PEParser`, each analyzer would duplicate DOS/COFF/optional-header parsing, and diverge on edge cases like PE32 vs PE32+ magic, or short optional headers in embedded firmware.
 
 2. **No dependency on LIEF or pefile for Windows targets.** LIEF's PE support is solid but returns objects tuned for binary instrumentation, not forensic field access. `PEParser` exposes raw field values and section tables with the exact offsets needed for IOCTL code extraction and pool-tag byte-pattern scans.
 
@@ -59,5 +59,5 @@ else:
 
 ## See also
 
-- [PE Analyzer](pe-analyzer.md) — higher-level analysis built on this parser
-- [Kernel Driver Analyzer](kernel-driver-analyzer.md) — extends PEParser for Windows kernel drivers
+- [PE Analyzer](pe-analyzer.md): higher-level analysis built on this parser
+- [Kernel Driver Analyzer](kernel-driver-analyzer.md): extends PEParser for Windows kernel drivers

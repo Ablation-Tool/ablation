@@ -99,7 +99,7 @@ GLOBAL: g_session_ctx  (2 writes)
 
 ## False positives
 
-**ADRP resolution gaps.** The backward slicer resolves `ADRP + ADD/LDR` sequences but only when both instructions are in the same basic block's predecessor chain. Cross-function ADRP loads (where the ADRP is in a wrapper that passes the address) are not resolved — the SSE for those writes is `Unknown`. Use `ARM64GlobalTracker` (which calls this module) to get the full write surface, then investigate `Unknown` base_sse entries manually.
+**ADRP resolution gaps.** The backward slicer resolves `ADRP + ADD/LDR` sequences but only when both instructions are in the same basic block's predecessor chain. Cross-function ADRP loads (where the ADRP is in a wrapper that passes the address) are not resolved: the SSE for those writes is `Unknown`. Use `ARM64GlobalTracker` (which calls this module) to get the full write surface, then investigate `Unknown` base_sse entries manually.
 
 ---
 
@@ -115,8 +115,8 @@ GLOBAL: g_session_ctx  (2 writes)
 
 `scan(binary, target, target_size, text_start, text_size)` returns `(exact_writers, mem_writers)`:
 
-- `exact_writers` — `List[Tuple]` of `(store_va, src_reg, base_reg, field_off, ea_val, ea_sse)` tuples for stores whose effective address exactly matches the target range.
-- `mem_writers` — `List[Tuple]` with the same structure for stores that *might* reach the target via a pointer dereference (Mem-path); these require manual confirmation.
+- `exact_writers`: `List[Tuple]` of `(store_va, src_reg, base_reg, field_off, ea_val, ea_sse)` tuples for stores whose effective address exactly matches the target range.
+- `mem_writers`: `List[Tuple]` with the same structure for stores that *might* reach the target via a pointer dereference (Mem-path); these require manual confirmation.
 
 The `SSE` domain types used in `ea_sse`:
 
@@ -132,6 +132,6 @@ The `SSE` domain types used in `ea_sse`:
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

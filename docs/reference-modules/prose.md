@@ -85,9 +85,9 @@ forge.md:41:9  parenthetical  "(parse, scan, detect)"
 
 ## False positives
 
-**`parenthetical` false positive on code spans** — a parenthetical like `(e.g. SHA256)` or `(default 0.62)` exceeds 8 characters and will trigger the rule even though it is appropriate in technical docs. Inline code using backticks instead of parentheses to avoid the rule: `` default `0.62` `` instead of `(default 0.62)`.
+**`parenthetical` false positive on code spans**: a parenthetical like `(e.g. SHA256)` or `(default 0.62)` exceeds 8 characters and will trigger the rule even though it is appropriate in technical docs. Inline code using backticks instead of parentheses to avoid the rule: `` default `0.62` `` instead of `(default 0.62)`.
 
-**`filler` on legitimate compound words** — phrases like `simply put` and `leverages` are caught by the filler and ai_copy rules, but a domain-specific compound like `leverage ratio` in a finance context is not a filler phrase. Extend the rule set with a per-project allowlist if the default rules produce excessive noise.
+**`filler` on legitimate compound words**: phrases like `simply put` and `leverages` are caught by the filler and ai_copy rules, but a domain-specific compound like `leverage ratio` in a finance context is not a filler phrase. Extend the rule set with a per-project allowlist if the default rules produce excessive noise.
 
 ---
 
@@ -115,6 +115,6 @@ forge.md:41:9  parenthetical  "(parse, scan, detect)"
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

@@ -404,7 +404,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 | Attribute | Content |
 |:---|:---|
 | `file_size` | Total ROM size in bytes |
-| `regions` | `List[ROMRegion]` — entropy-classified regions |
+| `regions` | `List[ROMRegion]`: entropy-classified regions |
 | `window_size` | Entropy window size used during analysis |
 | `fill_byte` | Fill byte value (`0xFF` for NOR flash, `0x00` for some NAND) |
 
@@ -423,5 +423,5 @@ Each `ROMRegion` has:
 
 ## See also
 
-- [ECUArchDetector](ecu-arch-detector.md) — identify processor family before choosing a decoder
-- [ECUSecurityAccessScanner](ecu-security-access-scanner.md) — find UDS 0x27 bypass vectors in decoded code
+- [ECUArchDetector](ecu-arch-detector.md): identify processor family before choosing a decoder
+- [ECUSecurityAccessScanner](ecu-security-access-scanner.md): find UDS 0x27 bypass vectors in decoded code

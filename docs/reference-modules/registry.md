@@ -189,7 +189,7 @@ Prior to this module, registry modules required manual work outside the Ablation
 
 ## How it works
 
-**NameRegistry** writes function names keyed by `(binary_sha256, va)` to `~/.ablation/function_names.json` on every `set_name()` call. `BinaryContext.load_or_build()` calls `NameRegistry.all_names()` at load time and caches the result so that `ctx.name(va)` is a pure in-memory lookup during analysis. The SHA-256 key means names track the exact binary file, not just its filename — version bumps with the same filename do not inherit incorrect names.
+**NameRegistry** writes function names keyed by `(binary_sha256, va)` to `~/.ablation/function_names.json` on every `set_name()` call. `BinaryContext.load_or_build()` calls `NameRegistry.all_names()` at load time and caches the result so that `ctx.name(va)` is a pure in-memory lookup during analysis. The SHA-256 key means names track the exact binary file, not just its filename: version bumps with the same filename do not inherit incorrect names.
 
 **FindingRegistry** is backed by a user-local SQLite file (`~/.ablation/findings.db`). `register()` inserts a row and returns the row ID as an integer. When an `embedding` is provided, it is L2-normalized before storage as a binary blob. `find_similar(embedding, top_k)` runs cosine similarity over stored embeddings in Python and returns the top-k result rows as dicts. The pre-loaded `ablation/data/seed_corpus.json` populates the DB at first run with patterns from published CVEs, so cross-vendor similarity queries work immediately without any prior registrations.
 
@@ -266,7 +266,7 @@ $ python -m ablation.analyzers.finding_registry list --vendor cisco
 
 ## Pipeline position
 
-**Before this module:** `FindingRegistry.register()` requires a confirmed finding from `PathSolver` and a FORGE-passed RE module. `NameRegistry.set_name()` is called any time a function VA is confirmed — it has no prerequisites beyond `BinaryContext`.
+**Before this module:** `FindingRegistry.register()` requires a confirmed finding from `PathSolver` and a FORGE-passed RE module. `NameRegistry.set_name()` is called any time a function VA is confirmed, it has no prerequisites beyond `BinaryContext`.
 
 **After this module:** Registered findings feed `PatternLibrary.ingest_from_registry()` at the start of the next engagement, closing the flywheel loop. Named functions from `NameRegistry` appear in `BinaryContext.names_table()` and in all downstream corpus descriptions.
 
@@ -274,9 +274,9 @@ $ python -m ablation.analyzers.finding_registry list --vendor cisco
 
 ## Reading output
 
-`NameRegistry.get_name(sha256, va)` returns `Optional[str]` — the stored function name for the given binary SHA-256 and VA, or `None` if not registered.
+`NameRegistry.get_name(sha256, va)` returns `Optional[str]`: the stored function name for the given binary SHA-256 and VA, or `None` if not registered.
 
-`FindingRegistry.register(vendor, product, title, description, cwe_class, severity)` returns an `int` — the new row ID in the findings SQLite table. Rows include `vendor`, `product`, `version`, `binary`, `func_addr`, `cwe_class`, `severity`, `title`, `description`, `source`, and `confirmed` (1/0 boolean).
+`FindingRegistry.register(vendor, product, title, description, cwe_class, severity)` returns an `int`: the new row ID in the findings SQLite table. Rows include `vendor`, `product`, `version`, `binary`, `func_addr`, `cwe_class`, `severity`, `title`, `description`, `source`, and `confirmed` (1/0 boolean).
 
 `FindingRegistry.find_similar(embedding, top_k)` returns a list of row dicts from the findings table, ranked by embedding cosine similarity.
 
@@ -284,5 +284,5 @@ $ python -m ablation.analyzers.finding_registry list --vendor cisco
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification

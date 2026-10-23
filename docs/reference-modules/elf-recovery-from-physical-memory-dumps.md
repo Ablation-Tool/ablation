@@ -1,16 +1,16 @@
 # PS3 SELF Decryption
 
-Decrypt PS3 SELF (Signed ELF) files programmatically inside a Python pipeline — auto-detecting the correct keyset from the SCE header `key_rev` field, applying AES-128-CBC decryption with the correct ERK/RIV pair, and producing a standard ELF that `BinaryContext.load_or_build()` can parse.
+Decrypt PS3 SELF (Signed ELF) files programmatically inside a Python pipeline: auto-detecting the correct keyset from the SCE header `key_rev` field, applying AES-128-CBC decryption with the correct ERK/RIV pair, and producing a standard ELF that `BinaryContext.load_or_build()` can parse.
 
 ---
 
 ## Why this exists
 
-1. **`lief`, `capstone`, and `BinaryContext.load_or_build()` all fail silently on encrypted SELF format** — they see garbage or raise exceptions on the non-ELF magic bytes `0x53434500` (`SCE\0`). Before `PS3SELFDecryptor`, decryption required the external `scetool` binary (C, manual build, not importable as a Python library), invoked manually before each analysis session with the correct keyset flags.
+1. **`lief`, `capstone`, and `BinaryContext.load_or_build()` all fail silently on encrypted SELF format**: they see garbage or raise exceptions on the non-ELF magic bytes `0x53434500` (`SCE\0`). Before `PS3SELFDecryptor`, decryption required the external `scetool` binary (C, manual build, not importable as a Python library), invoked manually before each analysis session with the correct keyset flags.
 
 2. **Auto-detection from `key_rev` eliminates manual keyset lookup.** The `key_rev` field at bytes 6–7 of the SCE header selects the master keyset (ERK/RIV). `PS3SELFDecryptor.from_path()` reads `key_rev` and selects the correct keyset automatically. Without this, matching `key_rev` to the right ERK/RIV required manual lookup in `scetool`'s `keys.h` for every new SELF file.
 
-3. **`decrypt_to_tmp()` integrates directly into analysis pipelines** — it decrypts to a temporary file and returns the path, enabling `BinaryContext.load_or_build(decryptor.decrypt_to_tmp(self_path))` as a one-liner. The temporary file is managed by the caller; `decrypt()` writes to a caller-specified output path for persistent results.
+3. **`decrypt_to_tmp()` integrates directly into analysis pipelines**, it decrypts to a temporary file and returns the path, enabling `BinaryContext.load_or_build(decryptor.decrypt_to_tmp(self_path))` as a one-liner. The temporary file is managed by the caller; `decrypt()` writes to a caller-specified output path for persistent results.
 
 ---
 
@@ -80,9 +80,9 @@ BinaryContext: eboot_decrypted.elf  (ELF64, PPC64)  <N> functions
 
 ## False positives
 
-**`from_path()` raises on unknown `key_rev`** — if the SELF file uses a `key_rev` not in the registered keyset table, `PS3SELFDecryptor.from_path()` raises a `KeyError`. Use `register_keyset()` to add new ERK/RIV pairs before calling `from_path()` for new PS3 firmware eras.
+**`from_path()` raises on unknown `key_rev`**: if the SELF file uses a `key_rev` not in the registered keyset table, `PS3SELFDecryptor.from_path()` raises a `KeyError`. Use `register_keyset()` to add new ERK/RIV pairs before calling `from_path()` for new PS3 firmware eras.
 
-**Decrypted output is only valid if the keyset is correct** — an incorrect ERK/RIV produces a file with AES output that appears syntactically valid (correct ELF magic after decryption) but contains garbage instruction bytes. Verify decryption success by checking that `BinaryContext.load_or_build()` parses correctly and `ctx.func_starts` is non-empty.
+**Decrypted output is only valid if the keyset is correct**: an incorrect ERK/RIV produces a file with AES output that appears syntactically valid (correct ELF magic after decryption) but contains garbage instruction bytes. Verify decryption success by checking that `BinaryContext.load_or_build()` parses correctly and `ctx.func_starts` is non-empty.
 
 ---
 
@@ -111,6 +111,6 @@ Use `decrypt_to_tmp(in_path)` to decrypt to a temporary file and return its path
 
 ## See also
 
-- [PS3 OPD Virtual Tables](ps3-opd-virtual-tables.md) — PS3 Cell PPU vtable reconstruction after SELF decryption
-- [VMX/AltiVec Density Ranking](vmx-altivec-density-ranking.md) — vector function labeling for PS3 binaries
-- [PPC64 ELFv1 Resolution](ppc64-elfv1-resolution.md) — PLT patching required on PS3 Cell PPU ELFv1 binaries
+- [PS3 OPD Virtual Tables](ps3-opd-virtual-tables.md): PS3 Cell PPU vtable reconstruction after SELF decryption
+- [VMX/AltiVec Density Ranking](vmx-altivec-density-ranking.md): vector function labeling for PS3 binaries
+- [PPC64 ELFv1 Resolution](ppc64-elfv1-resolution.md): PLT patching required on PS3 Cell PPU ELFv1 binaries

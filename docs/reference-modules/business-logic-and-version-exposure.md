@@ -1,16 +1,16 @@
 # Business Logic and Version Exposure
 
-Run the parallel phase batch (phases 17-30) of the API RE pipeline against a mapped API — covering CORS misconfiguration, JWT algorithm confusion (RS256→HS256), NoSQL injection, Broken Function Level Authorization (BFLA), excessive data exposure and PII scanning, host header injection, timing-oracle user enumeration, second-order injection, null byte/WAF evasion, OAuth2 dynamic client registration, WebSocket/SSE enumeration, pagination traversal, shadow/deprecated API version detection, and OAuth2 state parameter / PKCE downgrade attacks.
+Run the parallel phase batch (phases 17-30) of the API RE pipeline against a mapped API: covering CORS misconfiguration, JWT algorithm confusion (RS256→HS256), NoSQL injection, Broken Function Level Authorization (BFLA), excessive data exposure and PII scanning, host header injection, timing-oracle user enumeration, second-order injection, null byte/WAF evasion, OAuth2 dynamic client registration, WebSocket/SSE enumeration, pagination traversal, shadow/deprecated API version detection, and OAuth2 state parameter / PKCE downgrade attacks.
 
 ---
 
 ## Why this exists
 
-1. **CORS misconfiguration with `Access-Control-Allow-Credentials: true` and origin reflection allows cross-origin cookie and token theft — but most API scanners report all CORS issues at the same severity regardless of whether credentials are enabled.** `probe_cors()` distinguishes between three levels: `*` wildcard (data exposure only, no credentials risk), reflected origin without credentials (MEDIUM — cross-origin read allowed), and reflected origin with `Access-Control-Allow-Credentials: true` (CRITICAL — cross-origin token/cookie exfiltration). Only the third combination produces an actionable finding.
+1. **CORS misconfiguration with `Access-Control-Allow-Credentials: true` and origin reflection allows cross-origin cookie and token theft, but most API scanners report all CORS issues at the same severity regardless of whether credentials are enabled.** `probe_cors()` distinguishes between three levels: `*` wildcard (data exposure only, no credentials risk), reflected origin without credentials (MEDIUM: cross-origin read allowed), and reflected origin with `Access-Control-Allow-Credentials: true` (CRITICAL: cross-origin token/cookie exfiltration). Only the third combination produces an actionable finding.
 
-2. **Shadow and deprecated API versions skip hardening applied to current versions — authentication enforcement, validation, and rate limiting added in `/v2` or `/v3` are frequently absent from `/v0`, `/beta`, `/dev`, and `/api/legacy` paths that are never sunset.** `probe_shadow_versions()` probes 16 shadow path patterns and, for each that returns a non-404, checks whether endpoints marked `auth_required` on the current version return 200 on the shadow version — directly confirming authentication bypass via version downgrade (OWASP API9: Improper Inventory Management).
+2. **Shadow and deprecated API versions skip hardening applied to current versions: authentication enforcement, validation, and rate limiting added in `/v2` or `/v3` are frequently absent from `/v0`, `/beta`, `/dev`, and `/api/legacy` paths that are never sunset.** `probe_shadow_versions()` probes 16 shadow path patterns and, for each that returns a non-404, checks whether endpoints marked `auth_required` on the current version return 200 on the shadow version: directly confirming authentication bypass via version downgrade (OWASP API9: Improper Inventory Management).
 
-3. **Business logic attacks — negative prices, integer overflow in quantities, privilege escalation via status field injection, and sequence skipping — do not trigger any injection signal and are invisible to automated scanners that only check for error conditions.** `probe_business_logic()` probes numeric parameters (`price`, `amount`, `cost`, `qty`, `balance`) with boundary values (0, -1, 99999999, `NaN`, `Infinity`) and status/role parameters (`status`, `role`, `tier`, `plan`) with privileged strings (`admin`, `approved`, `verified`, `premium`). A sentinel baseline comparison (`__sentinel_xyz_12345__`) ensures that endpoints that accept any value don't generate noise.
+3. **Business logic attacks: negative prices, integer overflow in quantities, privilege escalation via status field injection, and sequence skipping: do not trigger any injection signal and are invisible to automated scanners that only check for error conditions.** `probe_business_logic()` probes numeric parameters (`price`, `amount`, `cost`, `qty`, `balance`) with boundary values (0, -1, 99999999, `NaN`, `Infinity`) and status/role parameters (`status`, `role`, `tier`, `plan`) with privileged strings (`admin`, `approved`, `verified`, `premium`). A sentinel baseline comparison (`__sentinel_xyz_12345__`) ensures that endpoints that accept any value don't generate noise.
 
 ---
 
@@ -120,7 +120,7 @@ for f in timing:
 
 ## Example output
 
-The following illustrates the `evidence` field format for representative findings. Actual values — email addresses, API keys, JWT tokens, timing deltas, endpoint paths — will reflect the specific target.
+The following illustrates the `evidence` field format for representative findings. Actual values: email addresses, API keys, JWT tokens, timing deltas, endpoint paths: will reflect the specific target.
 
 ```
 [CRITICAL] cors_reflect: origin='https://evil.com' creds='true'
@@ -148,17 +148,17 @@ The following illustrates the `evidence` field format for representative finding
 
 ## False positives
 
-**`probe_cors()` flags `cors_reflect MEDIUM` when an API reflects the `Origin` header for same-site requests — this is expected CORS behavior for single-page applications.** An SPA at `https://app.target.com` sending XHR to `https://api.target.com` correctly gets its origin reflected in `Access-Control-Allow-Origin`. Without `Access-Control-Allow-Credentials: true`, there is no credential theft risk. Only escalate `cors_reflect` findings where `acac == "true"` AND the reflected origin is a non-allowlisted domain.
+**`probe_cors()` flags `cors_reflect MEDIUM` when an API reflects the `Origin` header for same-site requests, this is expected CORS behavior for single-page applications.** An SPA at `https://app.target.com` sending XHR to `https://api.target.com` correctly gets its origin reflected in `Access-Control-Allow-Origin`. Without `Access-Control-Allow-Credentials: true`, there is no credential theft risk. Only escalate `cors_reflect` findings where `acac == "true"` AND the reflected origin is a non-allowlisted domain.
 
-**`probe_shadow_versions()` `shadow_auth_bypass` requires `ep.auth_required == True` — but `auth_required` is never set by the pipeline.** `ep.auth_required` defaults to `False` on every `Endpoint` object and is never updated by any phase. The `shadow_auth_bypass` check (`if r2.status_code == 200` on shadow version for `auth_required` endpoints) never fires because no endpoint is ever marked `auth_required`. The finding depends on the caller setting `ep.auth_required = True` after manual auth confirmation. Shadow versions are still discovered and reported via `shadow_version` findings.
+**`probe_shadow_versions()` `shadow_auth_bypass` requires `ep.auth_required == True`, but `auth_required` is never set by the pipeline.** `ep.auth_required` defaults to `False` on every `Endpoint` object and is never updated by any phase. The `shadow_auth_bypass` check (`if r2.status_code == 200` on shadow version for `auth_required` endpoints) never fires because no endpoint is ever marked `auth_required`. The finding depends on the caller setting `ep.auth_required = True` after manual auth confirmation. Shadow versions are still discovered and reported via `shadow_version` findings.
 
-**`probe_timing_oracle()` requires a stable network environment — latency jitter > 50ms masks timing differences.** The 50ms significance threshold (`abs(delta) > 0.05`) filters out jitter in most stable local-network environments, but VPN tunnels, cloud endpoints, and load-balanced targets add 50-200ms of jitter that overwhelms the bcrypt timing signal. Increase `samples` from 8 to 20+ to reduce noise, or run from a host on the same network segment as the target.
+**`probe_timing_oracle()` requires a stable network environment: latency jitter > 50ms masks timing differences.** The 50ms significance threshold (`abs(delta) > 0.05`) filters out jitter in most stable local-network environments, but VPN tunnels, cloud endpoints, and load-balanced targets add 50-200ms of jitter that overwhelms the bcrypt timing signal. Increase `samples` from 8 to 20+ to reduce noise, or run from a host on the same network segment as the target.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Run phases 1-16 via `run_re(base, depth='normal')` to build `api.endpoints`. Phases 17-30 consume `endpoints` for path selection — running them against an empty endpoint list limits discovery to fixed path lists in each probe function and misses endpoint-specific findings (CORS on discovered paths, NoSQL on discovered parameters, PII on discovered collection endpoints).
+**Before this module:** Run phases 1-16 via `run_re(base, depth='normal')` to build `api.endpoints`. Phases 17-30 consume `endpoints` for path selection: running them against an empty endpoint list limits discovery to fixed path lists in each probe function and misses endpoint-specific findings (CORS on discovered paths, NoSQL on discovered parameters, PII on discovered collection endpoints).
 
 **After this module:** For `cors_reflect CRITICAL`: demonstrate token exfiltration with `fetch('https://api.target.com/api/v1/me', {credentials:'include'})` from `evil.com` to confirm. For `bfla_admin_accessible`: enumerate `/api/admin/users`, `/api/admin/config`, and `/api/admin/export` to assess full admin surface. For `shadow_version` paths: rerun `run_re(<shadow_base>, depth='normal', focus='auth')` with the shadow version as base URL to assess its auth posture independently. Write confirmed findings to `~/VDT/VULNERABILITIES-<ip>.md`.
 
@@ -178,5 +178,5 @@ The following illustrates the `evidence` field format for representative finding
 
 ## See also
 
-- [Unknown HTTP API Mapping](unknown-http-api-mapping.md) — phases 1-16: framework detection, OpenAPI harvest, path fuzzing, injection probing, JWT extraction, OAuth metadata, gRPC, SOAP, JSON-RPC
-- [Nginx Configuration Probes](nginx-configuration-probes.md) — auth bypass, rate-limit bypass, and LFI probes specific to nginx-fronted APIs
+- [Unknown HTTP API Mapping](unknown-http-api-mapping.md): phases 1-16: framework detection, OpenAPI harvest, path fuzzing, injection probing, JWT extraction, OAuth metadata, gRPC, SOAP, JSON-RPC
+- [Nginx Configuration Probes](nginx-configuration-probes.md): auth bypass, rate-limit bypass, and LFI probes specific to nginx-fronted APIs

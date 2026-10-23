@@ -103,7 +103,7 @@ Output is a normalized instruction diff. Addresses and RIP-relative immediates a
 
 This diff is disclosure-quality evidence that the patch addressed the specific root cause.
 
-For long insertions or deletions (e.g., an entire authentication block added), use `MatrixProfileDiff` instead. The STOMP algorithm finds the most-changed subsequence across the two function bodies:
+For long insertions or deletions for example an entire authentication block added, use `MatrixProfileDiff` instead. The STOMP algorithm finds the most-changed subsequence across the two function bodies:
 
 ```python
 from ablation.analyzers.matrix_profile_diff import MatrixProfileDiff

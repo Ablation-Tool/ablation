@@ -1,16 +1,16 @@
 # Signature-Based Auto-Naming
 
-Identify unknown functions in stripped binaries by matching their byte patterns, call graph neighborhoods, struct field access offsets, and referenced strings against a database of confirmed function identities accumulated across prior RE engagements — so repeated encounters with the same function across firmware versions require only one human identification.
+Identify unknown functions in stripped binaries by matching their byte patterns, call graph neighborhoods, struct field access offsets, and referenced strings against a database of confirmed function identities accumulated across prior RE engagements, so repeated encounters with the same function across firmware versions require only one human identification.
 
 ---
 
 ## Why this exists
 
-1. **Stripped firmware contains the same function in every build, unnamed every time.** FortiOS ships dozens of builds per year. The `fadcsystem` command dispatch function appears in every one of them, at a different virtual address, with a different prologue shape. Without a cross-version identity database, each build starts from zero: semantic search, profiler triage, manual disassembly — all to re-confirm a function the analyst confirmed six months ago. `FuncDB` stores confirmed function records keyed by binary SHA256, and `match_by_sig()` finds the same function in the new build in under a second.
+1. **Stripped firmware contains the same function in every build, unnamed every time.** FortiOS ships dozens of builds per year. The `fadcsystem` command dispatch function appears in every one of them, at a different virtual address, with a different prologue shape. Without a cross-version identity database, each build starts from zero: semantic search, profiler triage, manual disassembly: all to re-confirm a function the analyst confirmed six months ago. `FuncDB` stores confirmed function records keyed by binary SHA256, and `match_by_sig()` finds the same function in the new build in under a second.
 
-2. **Byte-pattern matching needs wildcard masking to survive recompilation.** A naive byte-for-byte comparison fails across compiler version changes or optimization level changes — even when the function logic is identical. The `CALL rel32` instruction encoding changes every build because the callee address changes. The wildcard mask marks those bytes as `0x00` (skip) and the surrounding bytes as `0xff` (must match). The pattern matches even when relative call targets differ between builds.
+2. **Byte-pattern matching needs wildcard masking to survive recompilation.** A naive byte-for-byte comparison fails across compiler version changes or optimization level changes: even when the function logic is identical. The `CALL rel32` instruction encoding changes every build because the callee address changes. The wildcard mask marks those bytes as `0x00` (skip) and the surrounding bytes as `0xff` (must match). The pattern matches even when relative call targets differ between builds.
 
-3. **Struct field offsets anchor function identity when byte patterns differ.** An ASLR-compiled `STRUCT_INIT` function has no reliable byte-level fingerprint — the code changes substantially when the struct layout shifts by one field. But the struct itself persists: `gp_name` at offset `0x2b0` is present across every FortiOS major version. `match_by_struct_offset()` finds all functions that access that field, letting the analyst identify the init function by what data structure it initializes rather than by what opcodes it uses.
+3. **Struct field offsets anchor function identity when byte patterns differ.** An ASLR-compiled `STRUCT_INIT` function has no reliable byte-level fingerprint: the code changes substantially when the struct layout shifts by one field. But the struct itself persists: `gp_name` at offset `0x2b0` is present across every FortiOS major version. `match_by_struct_offset()` finds all functions that access that field, letting the analyst identify the init function by what data structure it initializes rather than by what opcodes it uses.
 
 4. **`CorpusBuilder` creates coverage for libraries with no prior RE work.** When an engagement introduces a new shared library (`libparse.so`) that has never been analyzed, `SemanticSearcher.build_corpus()` requires function records in `func_id.db` before it can produce embeddings. `CorpusBuilder.build()` runs in one call, indexes every function discovered via `eh_frame` FDE entries, infers roles from callee PLT names and referenced strings, and populates the database. The resulting `ANGR_INFERRED` records give semantic search a starting point without any manual analysis.
 
@@ -18,7 +18,7 @@ Identify unknown functions in stripped binaries by matching their byte patterns,
 
 ## How it works
 
-### FuncDB — identity store
+### FuncDB: identity store
 
 ```mermaid
 flowchart TD
@@ -34,7 +34,7 @@ flowchart TD
     C --> K["summary() → {binaries, functions, struct_fields, call_chains, ...}"]
 ```
 
-### CorpusBuilder — initial indexing pass
+### CorpusBuilder: initial indexing pass
 
 ```mermaid
 flowchart TD
@@ -54,7 +54,7 @@ flowchart TD
 | Confidence | Source | Used by |
 |---|---|---|
 | `CONFIRMED` | Analyst-confirmed via taint trace or CVE | `match_by_sig()`, all match methods |
-| `ANGR_INFERRED` | `CorpusBuilder.build()` — heuristic role inference | `SemanticSearcher.build_corpus()` |
+| `ANGR_INFERRED` | `CorpusBuilder.build()`: heuristic role inference | `SemanticSearcher.build_corpus()` |
 | `CANDIDATE` | Preliminary classification, not yet confirmed | Not used by matchers |
 
 ### Role taxonomy (partial)
@@ -186,7 +186,7 @@ MATCH 0x40b100 ← http_param_execute [httpsd:7.4.1] score=0.907
 
 **High score for a different function with similar prologue.** Two unrelated functions that happen to begin with the same push/pop sequence can match at a score above 0.75 when the window is short. Verify byte-pattern matches against the callee set: if the matched `FuncRecord.call_targets` list does not approximately match the actual callees of the candidate function, the match is a false positive. Use `window=32` for narrower hits at the cost of lower recall on functions shorter than 32 bytes.
 
-**`ANGR_INFERRED` role wrong on multi-purpose functions.** The `_infer_role` heuristic assigns the first matching role. A function that calls both `socket()` and `SSL_connect()` receives `NETWORK_IO`, not `TLS_HANDLER`, because `NETWORK_IO` appears first in `_ROLE_HINTS`. These inferences affect the semantic search corpus quality but do not produce false positives in the matching path — `match_by_sig()` only queries `CONFIRMED` records.
+**`ANGR_INFERRED` role wrong on multi-purpose functions.** The `_infer_role` heuristic assigns the first matching role. A function that calls both `socket()` and `SSL_connect()` receives `NETWORK_IO`, not `TLS_HANDLER`, because `NETWORK_IO` appears first in `_ROLE_HINTS`. These inferences affect the semantic search corpus quality but do not produce false positives in the matching path: `match_by_sig()` only queries `CONFIRMED` records.
 
 **Struct offset tolerance misidentification.** `match_by_struct_offset('gp_name', 0x2b0, tolerance=8)` returns every struct field named `gp_name` within ±8 bytes of offset `0x2b0`. When two different structs both have a `gp_name` field near that offset, the match is ambiguous. Qualify by `version_str` to narrow to the correct firmware version.
 
@@ -215,7 +215,7 @@ MATCH 0x40b100 ← http_param_execute [httpsd:7.4.1] score=0.907
 
 ## See also
 
-- [Semantic Code Search](semantic-code-search.md) — consumes `ANGR_INFERRED` records produced by `CorpusBuilder`
-- [Analyst Naming Registry](analyst-naming-registry.md) — session-scoped name overlay; `FuncDB` provides the cross-session identity store
-- [Binary Context](binary-context.md) — supplies `func_starts`, `callees_of()`, and `strings_in_func()` to `CorpusBuilder`
-- [Function Profiler](function-profiler.md) — uses `match_by_role()` results to focus profile runs on known-dangerous roles
+- [Semantic Code Search](semantic-code-search.md): consumes `ANGR_INFERRED` records produced by `CorpusBuilder`
+- [Analyst Naming Registry](analyst-naming-registry.md): session-scoped name overlay; `FuncDB` provides the cross-session identity store
+- [Binary Context](binary-context.md): supplies `func_starts`, `callees_of()`, and `strings_in_func()` to `CorpusBuilder`
+- [Function Profiler](function-profiler.md): uses `match_by_role()` results to focus profile runs on known-dangerous roles

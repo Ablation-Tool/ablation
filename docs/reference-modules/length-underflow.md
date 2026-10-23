@@ -6,11 +6,11 @@ Detect protocol parser integer underflow in x86-64 firmware: the C12-class patte
 
 ## Why this exists
 
-1. **Integer underflow in protocol parsers is a systematic vulnerability class across firmware.** The pattern is not specific to one protocol or one vendor — DNS, GRE, PPTP, SCTP, Diameter, and many proprietary protocols all parse variable-length fields by subtracting a fixed header size from a user-supplied total length to compute the payload size. When the user supplies a length smaller than the header size, the subtraction underflows, and the resulting negative value wraps to a large positive integer when truncated to uint16 or uint8. A scanner that looks for this pattern across an entire binary body identifies every instance systematically.
+1. **Integer underflow in protocol parsers is a systematic vulnerability class across firmware.** The pattern is not specific to one protocol or one vendor: DNS, GRE, PPTP, SCTP, Diameter, and many proprietary protocols all parse variable-length fields by subtracting a fixed header size from a user-supplied total length to compute the payload size. When the user supplies a length smaller than the header size, the subtraction underflows, and the resulting negative value wraps to a large positive integer when truncated to uint16 or uint8. A scanner that looks for this pattern across an entire binary body identifies every instance systematically.
 
 2. **The pattern is invisible to import-list auditing.** The subtraction and truncation are ordinary arithmetic instructions, not calls to flagged library functions. There is no `DANGEROUS_SUBTRACT` import to search for. The vulnerability is entirely in the operand sequence: subtract → truncate → call, without a bounds guard in between. Only a pattern-matching disassembly scan can detect it at scale.
 
-3. **Guarded vs. unguarded instances must be distinguished to avoid overwhelming the analyst.** Many codebases subtract header sizes from lengths but correctly bounds-check the result before the truncation. A scanner that flags everything — guarded and unguarded — produces too much noise. This scanner includes a 25-instruction backwards guard scan: if a `CMP` or `TEST` involving the subtraction result register appears before the truncation, the finding is marked `guarded=True` and filtered from triage by default. Only `guarded=False` findings require immediate analyst attention.
+3. **Guarded vs. unguarded instances must be distinguished to avoid overwhelming the analyst.** Many codebases subtract header sizes from lengths but correctly bounds-check the result before the truncation. A scanner that flags everything: guarded and unguarded: produces too much noise. This scanner includes a 25-instruction backwards guard scan: if a `CMP` or `TEST` involving the subtraction result register appears before the truncation, the finding is marked `guarded=True` and filtered from triage by default. Only `guarded=False` findings require immediate analyst attention.
 
 ---
 
@@ -54,7 +54,7 @@ Scans the 25 instructions preceding the subtraction for any `CMP` or `TEST` inst
 
 ### Truncation detection
 
-Looks for register-to-register `MOVZX`/`MOVZWL`/`MOVZBL` within 10 instructions after the subtraction, where the source register is in the same family as the subtraction destination. Memory-to-register `MOVZX` forms (e.g., `movzx edx, byte ptr [rdx+6]`) are excluded — those load a new value from memory, not the arithmetic result.
+Looks for register-to-register `MOVZX`/`MOVZWL`/`MOVZBL` within 10 instructions after the subtraction, where the source register is in the same family as the subtraction destination. Memory-to-register `MOVZX` forms (e.g., `movzx edx, byte ptr [rdx+6]`) are excluded: those load a new value from memory, not the arithmetic result.
 
 ---
 
@@ -134,9 +134,9 @@ UnderflowFinding [UNGUARDED]
 
 **Fixed-size structure offset arithmetic.** Code that computes an index into a fixed-size struct member (e.g., `lea rdi, [rbx - 8]` to access a struct field 8 bytes before a pointer) will match the subtraction check. The register destination then passed through a `MOVZX` for a different purpose could complete the pattern spuriously. Verify by examining the context: does the subtracted register actually hold a user-supplied length field?
 
-**Guarded instances that fail the lookback window.** A bounds check more than 25 instructions before the subtraction (e.g., the check is at the function entry and the arithmetic is deep in a loop) will not be seen by the guard lookback. The finding is marked `guarded=False` even though a real guard exists. These produce false positives in the unguarded set.
+**Guarded instances that fail the lookback window.** A bounds check more than 25 instructions before the subtraction for example the check is at the function entry and the arithmetic is deep in a loop will not be seen by the guard lookback. The finding is marked `guarded=False` even though a real guard exists. These produce false positives in the unguarded set.
 
-**Stack frame accesses excluded by design.** `lea reg, [rbp - N]` and `lea reg, [rsp - N]` are deliberately excluded even when N is in the header size range. These are function frame slot accesses, not length subtraction. If firmware uses an unusual convention where the frame base pointer holds a data pointer rather than the stack frame base, this exclusion would produce false negatives — but this is extremely rare.
+**Stack frame accesses excluded by design.** `lea reg, [rbp - N]` and `lea reg, [rsp - N]` are deliberately excluded even when N is in the header size range. These are function frame slot accesses, not length subtraction. If firmware uses an unusual convention where the frame base pointer holds a data pointer rather than the stack frame base, this exclusion would produce false negatives, but this is extremely rare.
 
 ---
 
@@ -166,7 +166,7 @@ UnderflowFinding [UNGUARDED]
 
 ## See also
 
-- [Taint Analysis](taint-analysis.md) — confirm that the length field originates from user-controlled input
-- [Heap Vulnerability Scanner](heap-vulnerability-scanner.md) — detects integer overflows before allocation (multiplicative overflow class)
-- [Binary Context](binary-context.md) — provides `func_starts` and PLT; run first
-- [Path Solver](path-solver.md) — feasibility analysis for confirmed unguarded findings
+- [Taint Analysis](taint-analysis.md): confirm that the length field originates from user-controlled input
+- [Heap Vulnerability Scanner](heap-vulnerability-scanner.md): detects integer overflows before allocation (multiplicative overflow class)
+- [Binary Context](binary-context.md): provides `func_starts` and PLT; run first
+- [Path Solver](path-solver.md): feasibility analysis for confirmed unguarded findings

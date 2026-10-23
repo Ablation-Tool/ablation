@@ -110,7 +110,7 @@ Detected as INDIRECT. Variable `value` is in `_USER_INPUT_NAMES` → CRITICAL.
 |:---|:---|
 | `path` | `Path` object of the file containing the injection site |
 | `rel_path` | Repository-relative path string |
-| `cwe` | CWE identifier (typically `'CWE-94'` — code injection) |
+| `cwe` | CWE identifier (typically `'CWE-94'`: code injection) |
 | `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` |
 | `injection_type` | `'DIRECT'` (string directly from user input), `'INDIRECT'` (via variable), or `'SUBPROCESS'` (via subprocess call) |
 | `exec_line` | Line number of the `lua.execute()` or subprocess call |
@@ -124,8 +124,8 @@ Detected as INDIRECT. Variable `value` is in `_USER_INPUT_NAMES` → CRITICAL.
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

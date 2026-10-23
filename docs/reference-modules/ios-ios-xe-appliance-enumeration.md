@@ -1,16 +1,16 @@
 # IOS/IOS-XE Appliance Enumeration
 
-Enumerate Cisco IOS and IOS-XE appliances via HTTP/RESTCONF API, SNMP (CDP neighbor table, running-config OID), Telnet banner, TFTP configuration pull, and Type 7 password decoding — detecting AAA configuration, enabled services, and management interface exposure — via `modules/ios_enum.py`.
+Enumerate Cisco IOS and IOS-XE appliances via HTTP/RESTCONF API, SNMP (CDP neighbor table, running-config OID), Telnet banner, TFTP configuration pull, and Type 7 password decoding: detecting AAA configuration, enabled services, and management interface exposure: via `modules/ios_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **IOS Type 7 password encoding is not encryption** — it is a deterministic XOR obfuscation with a fixed key. `decode_type7()` recovers the plaintext password from any Type 7-encoded string in the running configuration. SNMP community strings and AAA shared secrets stored as Type 7 in the config are trivially recoverable from any config file obtained via TFTP pull, SNMPv2 `sysDescr` response, or REST API.
+1. **IOS Type 7 password encoding is not encryption**, it is a deterministic XOR obfuscation with a fixed key. `decode_type7()` recovers the plaintext password from any Type 7-encoded string in the running configuration. SNMP community strings and AAA shared secrets stored as Type 7 in the config are trivially recoverable from any config file obtained via TFTP pull, SNMPv2 `sysDescr` response, or REST API.
 
-2. **SNMP OID `1.3.6.1.4.1.9.2.1.55.0` (Cisco `cisco-show-run`) returns the full running configuration on IOS devices that have SNMPv2 public community enabled.** `ios_enum.py` includes a pure-Python SNMP GET request builder using BER/DER encoding (`_ber_oid`, `_ber_int`, `_ber_str`, `_ber_seq`, `_snmp_get_request`) — no `pysnmp` dependency required.
+2. **SNMP OID `1.3.6.1.4.1.9.2.1.55.0` (Cisco `cisco-show-run`) returns the full running configuration on IOS devices that have SNMPv2 public community enabled.** `ios_enum.py` includes a pure-Python SNMP GET request builder using BER/DER encoding (`_ber_oid`, `_ber_int`, `_ber_str`, `_ber_seq`, `_snmp_get_request`): no `pysnmp` dependency required.
 
-3. **`probe_apic_unauthenticated()`** (from `nxos_enum.py`) — the APIC REST API exposes `aaaListDomains.json` without authentication, returning the list of configured authentication domains and the APIC cluster's configured software version. This unauthenticated disclosure is combined with the IOS enumeration results to provide a unified Cisco management surface view.
+3. **`probe_apic_unauthenticated()`** (from `nxos_enum.py`): the APIC REST API exposes `aaaListDomains.json` without authentication, returning the list of configured authentication domains and the APIC cluster's configured software version. This unauthenticated disclosure is combined with the IOS enumeration results to provide a unified Cisco management surface view.
 
 ---
 
@@ -67,9 +67,9 @@ Type 7 decoded from config:
 
 ## False positives
 
-**SNMP running-config retrieval requires SNMPv2 `public` community to have read-write access** — read-only community access returns `sysDescr` and CDP neighbor data but not the full configuration. The attempt to pull `running-config` via the Cisco private MIB OID will be rejected on hardened configurations.
+**SNMP running-config retrieval requires SNMPv2 `public` community to have read-write access**: read-only community access returns `sysDescr` and CDP neighbor data but not the full configuration. The attempt to pull `running-config` via the Cisco private MIB OID will be rejected on hardened configurations.
 
-**TFTP config pull attempts may trigger IOS access-list logging** — TFTP is blocked by default on IOS-XE 16.x and later. Expect failed TFTP pulls on modern IOS-XE unless the device has an explicit `tftp-server` configuration.
+**TFTP config pull attempts may trigger IOS access-list logging**: TFTP is blocked by default on IOS-XE 16.x and later. Expect failed TFTP pulls on modern IOS-XE unless the device has an explicit `tftp-server` configuration.
 
 ---
 
@@ -95,5 +95,5 @@ IOS/IOS-XE probe functions return `List[{severity, title, detail, host, port}]`:
 
 ## See also
 
-- [NX-OS/ACI/APIC Fabric Enumeration](nx-os-aci-apic-fabric-enumeration.md) — `nxos_enum.py` for NX-OS and ACI APIC fabric
-- [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md) — TLS posture of management interfaces
+- [NX-OS/ACI/APIC Fabric Enumeration](nx-os-aci-apic-fabric-enumeration.md): `nxos_enum.py` for NX-OS and ACI APIC fabric
+- [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md): TLS posture of management interfaces

@@ -159,7 +159,7 @@ IOCTL codes decoded from data sections (jump tables, pool tags) that coincidenta
 
 ## Pipeline position
 
-**Before this module:** Nothing required — `from_path(path)` is self-contained.
+**Before this module:** Nothing required: `from_path(path)` is self-contained.
 
 **After this module:** For `METHOD_NEITHER` IOCTLs without ProbeForRead, trace `Type3InputBuffer` dereferences in the handler manually. Use `KernelDriverAnalyzer` to extend the analysis with MSR/CR patterns.
 
@@ -175,7 +175,7 @@ IOCTL codes decoded from data sections (jump tables, pool tags) that coincidenta
 | `driver_type` | Detected driver class (e.g., `'WDM'`, `'WDF'`) |
 | `is_signed` | `True` if the driver has an Authenticode signature |
 | `pdb_path` | PDB symbol path string from the PE header, or `None` |
-| `profiles` | `List[IoctlHandlerProfile]` — one entry per decoded IOCTL code |
+| `profiles` | `List[IoctlHandlerProfile]`: one entry per decoded IOCTL code |
 
 Each `IoctlHandlerProfile` key fields:
 
@@ -186,14 +186,14 @@ Each `IoctlHandlerProfile` key fields:
 | `risk_level` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` (derived property) |
 | `has_probe` | `True` if handler calls `ProbeForRead`/`ProbeForWrite` |
 | `handler_va` | VA of the dispatch handler function (0 if not located) |
-| `dangerous_patterns` | `List[IoctlHandlerPattern]` — specific dangerous patterns found |
+| `dangerous_patterns` | `List[IoctlHandlerPattern]`: specific dangerous patterns found |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

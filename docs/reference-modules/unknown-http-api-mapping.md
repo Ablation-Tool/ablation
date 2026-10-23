@@ -1,16 +1,16 @@
 # Unknown HTTP API Mapping
 
-Autonomously reverse-engineer an unknown HTTP API from a base URL — detecting framework, harvesting OpenAPI specs, fuzzing paths and methods, probing injection surfaces (path traversal, SQLi, SSTI, SSRF, XXE, prototype pollution), JWT attack surface (alg=none, weak secret, kid injection, jku SSRF), BOLA/IDOR, GraphQL introspection, OAuth2/OIDC metadata, gRPC reflection, SOAP/WSDL discovery, JSON-RPC enumeration, and webhook SSRF — producing a structured `APIMap` with discovered endpoints, parameters, vulnerability signals, and findings.
+Autonomously reverse-engineer an unknown HTTP API from a base URL: detecting framework, harvesting OpenAPI specs, fuzzing paths and methods, probing injection surfaces (path traversal, SQLi, SSTI, SSRF, XXE, prototype pollution), JWT attack surface (alg=none, weak secret, kid injection, jku SSRF), BOLA/IDOR, GraphQL introspection, OAuth2/OIDC metadata, gRPC reflection, SOAP/WSDL discovery, JSON-RPC enumeration, and webhook SSRF: producing a structured `APIMap` with discovered endpoints, parameters, vulnerability signals, and findings.
 
 ---
 
 ## Why this exists
 
-1. **APIs served behind NX-API proxies, ML inference servers, and voice synthesis endpoints do not publish schema documentation externally — the only way to determine what parameters they accept, what authentication they use, and which attack surfaces they expose is to probe them systematically.** `api_re.py` covers the 16 phases that precede behavioral analysis: framework detection from `Server` headers and framework-specific path signatures, OpenAPI schema harvesting from 18 known paths (`/openapi.json`, `/swagger.json`, `/api-docs`, `/_schema/`, etc.), threaded path fuzzing across a 95-entry wordlist, and per-parameter injection probing with confirming-signal gating. Without this, each RE session starts from a manual `curl` baseline.
+1. **APIs served behind NX-API proxies, ML inference servers, and voice synthesis endpoints do not publish schema documentation externally: the only way to determine what parameters they accept, what authentication they use, and which attack surfaces they expose is to probe them systematically.** `api_re.py` covers the 16 phases that precede behavioral analysis: framework detection from `Server` headers and framework-specific path signatures, OpenAPI schema harvesting from 18 known paths (`/openapi.json`, `/swagger.json`, `/api-docs`, `/_schema/`, etc.), threaded path fuzzing across a 95-entry wordlist, and per-parameter injection probing with confirming-signal gating. Without this, each RE session starts from a manual `curl` baseline.
 
-2. **Injection probing without confirming-signal gating produces hundreds of false positives — `PATH_ACCESS` (file-not-found error in body) fires for path traversal, SQL injection, SSRF, and XXE payloads indiscriminately.** `CONFIRMING_SIGNALS` maps each injection category to the signal set that confirms it: `sql_injection` requires `SQL_REFLECT` (MySQL/Postgres/ORA- syntax errors), not just `PATH_ACCESS`; `ssrf` requires `SSRF_ACTIVE` (connection refused / no route) or `SSRF_CLOUD_METADATA` (ami-id, instance-id in body, without errno); `ssti` requires `SSTI_EVAL` (payload `{{7*7}}` produces `49` in body). Only findings with a confirmed signal are reported.
+2. **Injection probing without confirming-signal gating produces hundreds of false positives: `PATH_ACCESS` (file-not-found error in body) fires for path traversal, SQL injection, SSRF, and XXE payloads indiscriminately.** `CONFIRMING_SIGNALS` maps each injection category to the signal set that confirms it: `sql_injection` requires `SQL_REFLECT` (MySQL/Postgres/ORA- syntax errors), not just `PATH_ACCESS`; `ssrf` requires `SSRF_ACTIVE` (connection refused / no route) or `SSRF_CLOUD_METADATA` (ami-id, instance-id in body, without errno); `ssti` requires `SSTI_EVAL` (payload `{{7*7}}` produces `49` in body). Only findings with a confirmed signal are reported.
 
-3. **JWT attacks — alg=none bypass, HS256 weak-secret cracking, kid SQL/path injection, and jku SSRF — are invisible to standard vulnerability scanners because they require token extraction from response bodies and headers before manipulation.** `analyze_tokens_in_response()` extracts JWTs using `eyJ[A-Za-z0-9_-]+\.eyJ...` regex from both response body and headers, decodes without signature verification, and runs four attacks: forge `alg=none` and resend with `Authorization: Bearer <forged>`; crack HS256 against 18 weak secrets; check `kid` header claim presence (SQLi/path traversal in key lookup); check `jku`/`x5u`/`jwks_uri` header claims (SSRF via JWK Set URL).
+3. **JWT attacks: alg=none bypass, HS256 weak-secret cracking, kid SQL/path injection, and jku SSRF: are invisible to standard vulnerability scanners because they require token extraction from response bodies and headers before manipulation.** `analyze_tokens_in_response()` extracts JWTs using `eyJ[A-Za-z0-9_-]+\.eyJ...` regex from both response body and headers, decodes without signature verification, and runs four attacks: forge `alg=none` and resend with `Authorization: Bearer <forged>`; crack HS256 against 18 weak secrets; check `kid` header claim presence (SQLi/path traversal in key lookup); check `jku`/`x5u`/`jwks_uri` header claims (SSRF via JWK Set URL).
 
 ---
 
@@ -159,17 +159,17 @@ API-RE: http://<target>:<port>
 
 ## False positives
 
-**`probe_param()` with `SSRF_ACTIVE` signal fires on any connection-refused error — not only from injected SSRF payloads.** If the target API itself calls an external service that happens to be down, any response with `connection refused` will trigger `SSRF_ACTIVE` regardless of which payload triggered it. Verify by checking that the error appears only with SSRF URL payloads (`http://127.0.0.1/`, `http://169.254.169.254/`) and not with benign string payloads. Retry with `VERBOSE=True` to see non-confirming probe signals.
+**`probe_param()` with `SSRF_ACTIVE` signal fires on any connection-refused error, not only from injected SSRF payloads.** If the target API itself calls an external service that happens to be down, any response with `connection refused` will trigger `SSRF_ACTIVE` regardless of which payload triggered it. Verify by checking that the error appears only with SSRF URL payloads (`http://127.0.0.1/`, `http://169.254.169.254/`) and not with benign string payloads. Retry with `VERBOSE=True` to see non-confirming probe signals.
 
-**`probe_oauth2()` discovers OAuth metadata but `redirect_uri` manipulation fires on any non-400 response — including redirect to the legitimate callback URL.** The check flags a redirect URI as not rejected if the response status is not 400/422. An OAuth server that returns 302 to a legitimate redirect URI (not the evil.com value) still triggers the finding if the status check alone fires. Inspect `r.text` or `r.headers['location']` to confirm that the evil URI was accepted, not just that the authorization request was processed.
+**`probe_oauth2()` discovers OAuth metadata but `redirect_uri` manipulation fires on any non-400 response: including redirect to the legitimate callback URL.** The check flags a redirect URI as not rejected if the response status is not 400/422. An OAuth server that returns 302 to a legitimate redirect URI (not the evil.com value) still triggers the finding if the status check alone fires. Inspect `r.text` or `r.headers['location']` to confirm that the evil URI was accepted, not just that the authorization request was processed.
 
-**`analyze_tokens_in_response()` JWT cracking against 18 weak secrets misses custom short secrets.** The weak-secret list covers common defaults (`secret`, `password`, `123456`, `jwt`, `token`). Secrets like `app-specific-key-2024` or environment-variable-named secrets are not in the list. A JWT with no weak-secret match still gets `jwt_found` recorded — run `hashcat -m 16500` with a domain-specific wordlist for thorough cracking.
+**`analyze_tokens_in_response()` JWT cracking against 18 weak secrets misses custom short secrets.** The weak-secret list covers common defaults (`secret`, `password`, `123456`, `jwt`, `token`). Secrets like `app-specific-key-2024` or environment-variable-named secrets are not in the list. A JWT with no weak-secret match still gets `jwt_found` recorded: run `hashcat -m 16500` with a domain-specific wordlist for thorough cracking.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm network reachability and port number with `tiptoe` or a direct `curl -I http://target:port/`. Verify TLS versus plain HTTP — `run_re` uses `requests.Session` which handles both automatically, but HTTPS targets with self-signed certificates require `SESSION.verify = False` (set this manually before running on targets with untrusted certs).
+**Before this module:** Confirm network reachability and port number with `tiptoe` or a direct `curl -I http://target:port/`. Verify TLS versus plain HTTP: `run_re` uses `requests.Session` which handles both automatically, but HTTPS targets with self-signed certificates require `SESSION.verify = False` (set this manually before running on targets with untrusted certs).
 
 **After this module:** For `path_traversal FILE_READ` findings: expand the payload set to extract `/etc/nginx/nginx.conf`, `/proc/self/environ`, and `/root/.ssh/id_rsa`. For `jwt_alg_none_bypass` findings: forge a modified payload (e.g., `role=admin`) and replay. For `oauth2_discovery` findings: feed `authorization_endpoint`, `token_endpoint`, and `jwks_uri` to `probe_jwt_alg_confusion()` directly. Write confirmed findings to `~/VDT/VULNERABILITIES-<ip>.md`.
 
@@ -180,15 +180,15 @@ API-RE: http://<target>:<port>
 | Field | Content |
 |:---|:---|
 | `api.framework` | Detected framework string or `"unknown"` |
-| `api.endpoints` | `[Endpoint]` — each with `.path`, `.methods`, `.params`, `.vuln_signals` |
+| `api.endpoints` | `[Endpoint]`: each with `.path`, `.methods`, `.params`, `.vuln_signals` |
 | `ep.vuln_signals` | Injection categories with confirmed signals (e.g., `['path_traversal', 'ssrf']`) |
-| `ep.params` | `{name: {location, required, schema}}` — from OpenAPI or path fuzzing |
-| `api.findings` | Phase 17-30 results — CORS, BFLA, PII, host injection, OAuth, shadow versions, etc. |
+| `ep.params` | `{name: {location, required, schema}}`: from OpenAPI or path fuzzing |
+| `api.findings` | Phase 17-30 results: CORS, BFLA, PII, host injection, OAuth, shadow versions, etc. |
 
 ---
 
 ## See also
 
-- [Business Logic and Version Exposure](business-logic-and-version-exposure.md) — phases 17-30: CORS, BFLA, PII scanner, host injection, timing oracle, shadow versions, OAuth state/PKCE, WebSocket enumeration
-- [Nginx Fingerprinting and Exposure](nginx-fingerprinting-and-exposure.md) — fingerprint nginx version and CVEs when the API is served behind nginx
-- [LLM Inference Endpoint Enumeration](inference-endpoint-enumeration.md) — ML-inference-specific endpoint and parameter probing
+- [Business Logic and Version Exposure](business-logic-and-version-exposure.md): phases 17-30: CORS, BFLA, PII scanner, host injection, timing oracle, shadow versions, OAuth state/PKCE, WebSocket enumeration
+- [Nginx Fingerprinting and Exposure](nginx-fingerprinting-and-exposure.md): fingerprint nginx version and CVEs when the API is served behind nginx
+- [LLM Inference Endpoint Enumeration](inference-endpoint-enumeration.md): ML-inference-specific endpoint and parameter probing

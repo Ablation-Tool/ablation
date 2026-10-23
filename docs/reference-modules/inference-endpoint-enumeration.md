@@ -1,16 +1,16 @@
 # Inference Endpoint Enumeration
 
-Enumerate unauthenticated LLM inference platform surfaces — Ollama, LM Studio, LocalAI, HuggingFace Text Generation Inference (TGI), and OpenAI-compatible APIs — alongside extended server-level management surfaces for vLLM, NVIDIA Triton Inference Server, TorchServe, MLflow model registry, and vector store administrative interfaces (Qdrant, Weaviate, Chroma, Pinecone local, pgvector via PostgREST) — identifying unprotected model listings, unauthenticated inference execution, operational metrics exposure, snapshot creation, and training artifact disclosure without credentials.
+Enumerate unauthenticated LLM inference platform surfaces: Ollama, LM Studio, LocalAI, HuggingFace Text Generation Inference (TGI), and OpenAI-compatible APIs: alongside extended server-level management surfaces for vLLM, NVIDIA Triton Inference Server, TorchServe, MLflow model registry, and vector store administrative interfaces (Qdrant, Weaviate, Chroma, Pinecone local, pgvector via PostgREST): identifying unprotected model listings, unauthenticated inference execution, operational metrics exposure, snapshot creation, and training artifact disclosure without credentials.
 
 ---
 
 ## Why this exists
 
-1. **LLM inference platforms do not enforce authentication by default — Ollama binds to `0.0.0.0` without any API key, vLLM serves on port 8000 unless `--api-key` is explicitly set, Triton's model repository namespace has no auth gate separate from the inference endpoint, and Chroma has no authentication layer at all.** When these services are deployed on internal networks and exposed via a misconfigured ingress controller, load balancer rule, or cloud security group, the attack surface is fully open to the internet. `LLMEnumerator` and `probe_llm_inference_server_metadata()` cover each platform's canonical discovery paths so the analyst does not need to know which platform is running before the scan begins — the module fingerprints the platform from response structure.
+1. **LLM inference platforms do not enforce authentication by default: Ollama binds to `0.0.0.0` without any API key, vLLM serves on port 8000 unless `--api-key` is explicitly set, Triton's model repository namespace has no auth gate separate from the inference endpoint, and Chroma has no authentication layer at all.** When these services are deployed on internal networks and exposed via a misconfigured ingress controller, load balancer rule, or cloud security group, the attack surface is fully open to the internet. `LLMEnumerator` and `probe_llm_inference_server_metadata()` cover each platform's canonical discovery paths so the analyst does not need to know which platform is running before the scan begins: the module fingerprints the platform from response structure.
 
-2. **Vector store administrative interfaces are a higher-severity risk than the inference endpoints they serve — a snapshot of a Qdrant collection or a Weaviate backup listing hands an adversary the complete RAG corpus in a single HTTP request, regardless of the collection size.** Individual endpoint enumeration via the inference layer requires per-query retrieval bounded by the model's context window; a snapshot bypasses all of that. `probe_vector_store_admin_api()` covers five vector store platforms across their administrative namespaces (`/cluster`, `/collections/{name}/snapshots`, `/v1/schema`, `/v1/backups`, `/api/v1/collections/{id}/get`, `/indexes`, `/vectors/fetch`, `/rpc/match_documents`) to assess whether the full corpus is extractable before the inference layer is even reached.
+2. **Vector store administrative interfaces are a higher-severity risk than the inference endpoints they serve: a snapshot of a Qdrant collection or a Weaviate backup listing hands an adversary the complete RAG corpus in a single HTTP request, regardless of the collection size.** Individual endpoint enumeration via the inference layer requires per-query retrieval bounded by the model's context window; a snapshot bypasses all of that. `probe_vector_store_admin_api()` covers five vector store platforms across their administrative namespaces (`/cluster`, `/collections/{name}/snapshots`, `/v1/schema`, `/v1/backups`, `/api/v1/collections/{id}/get`, `/indexes`, `/vectors/fetch`, `/rpc/match_documents`) to assess whether the full corpus is extractable before the inference layer is even reached.
 
-3. **MLflow model registries and Triton repository indexes disclose the organization's complete ML pipeline — model lineage, fine-tune identifiers, artifact storage URIs, training hyperparameters, and filesystem paths — before any inference has been attempted.** `probe_llm_inference_server_metadata()` targets the registry and management namespaces of each platform separately from the inference endpoints, because in production deployments these surfaces are often on different ports (Triton: 8000/8001/8500; TorchServe: management 8080, inference 8081; MLflow: 5000) and expose structural metadata that the inference API does not.
+3. **MLflow model registries and Triton repository indexes disclose the organization's complete ML pipeline: model lineage, fine-tune identifiers, artifact storage URIs, training hyperparameters, and filesystem paths: before any inference has been attempted.** `probe_llm_inference_server_metadata()` targets the registry and management namespaces of each platform separately from the inference endpoints, because in production deployments these surfaces are often on different ports (Triton: 8000/8001/8500; TorchServe: management 8080, inference 8081; MLflow: 5000) and expose structural metadata that the inference API does not.
 
 ---
 
@@ -160,7 +160,7 @@ for f in qdrant_findings:
 
 ## Example output
 
-The following illustrates the `evidence` field format for representative findings. Actual values — model names, digest hashes, peer addresses, collection names, artifact URIs — will reflect the specific target.
+The following illustrates the `evidence` field format for representative findings. Actual values: model names, digest hashes, peer addresses, collection names, artifact URIs: will reflect the specific target.
 
 ```
 [CRITICAL] Ollama unauth model list
@@ -204,9 +204,9 @@ The following illustrates the `evidence` field format for representative finding
 
 ## False positives
 
-**`probe_openai_compatible_api()` flags `MEDIUM: LLM API endpoint accessible without authentication` when a gateway returns 400/422 for a missing or invalid `model` parameter — not because auth failed.** The probe sends `_TEST_PAYLOAD_TEMPLATE` which uses `model: gpt-3.5-turbo` as a placeholder. A correctly configured API that rejects unknown model IDs returns 400/422 and triggers the MEDIUM finding even when authentication is enforced. Verify by sending an `Authorization: Bearer invalid_key` header and observing whether the response changes to 401/403; if it remains 400/422, auth is not the issue.
+**`probe_openai_compatible_api()` flags `MEDIUM: LLM API endpoint accessible without authentication` when a gateway returns 400/422 for a missing or invalid `model` parameter, not because auth failed.** The probe sends `_TEST_PAYLOAD_TEMPLATE` which uses `model: gpt-3.5-turbo` as a placeholder. A correctly configured API that rejects unknown model IDs returns 400/422 and triggers the MEDIUM finding even when authentication is enforced. Verify by sending an `Authorization: Bearer invalid_key` header and observing whether the response changes to 401/403; if it remains 400/422, auth is not the issue.
 
-**`probe_llm_inference_server_metadata()` probes each platform's canonical port(s) in addition to the supplied `port` argument — a scan against port 80 will also probe Triton ports 8000/8001/8500, TorchServe 8080/8081, and Ollama 11434.** For targets where those canonical ports are not intended to be assessed, pass the specific port and filter findings by `f['port']`. Each finding records the actual port in the `port` field so findings from unintended ports are identifiable.
+**`probe_llm_inference_server_metadata()` probes each platform's canonical port(s) in addition to the supplied `port` argument: a scan against port 80 will also probe Triton ports 8000/8001/8500, TorchServe 8080/8081, and Ollama 11434.** For targets where those canonical ports are not intended to be assessed, pass the specific port and filter findings by `f['port']`. Each finding records the actual port in the `port` field so findings from unintended ports are identifiable.
 
 **Qdrant `QDRANT_SNAPSHOT_CREATE` is a HIGH-severity finding even if snapshot download is subsequently blocked at the network layer.** The probe only confirms that the snapshot creation request was accepted (HTTP 200/201). Whether the resulting snapshot file is downloadable via `GET /collections/{name}/snapshots/{filename}` depends on network controls that this probe does not verify. Escalate to CRITICAL only after confirming the snapshot is downloadable; treat HIGH as indicating a misconfigured admin API regardless.
 
@@ -214,7 +214,7 @@ The following illustrates the `evidence` field format for representative finding
 
 ## Pipeline position
 
-**Before this module:** Run `tiptoe` to identify which LLM-relevant ports are open (11434, 8000, 8080, 8001, 6333, 5001, 3000, 5000). Confirm whether the target is on a private VLAN or externally reachable — unauthenticated Ollama on a public IP is a CRITICAL finding; on a properly isolated internal segment it is MEDIUM (network control partially mitigates). The `https` parameter on `LLMEnumerator` must be set correctly — connecting with TLS to a plain-HTTP port returns no data.
+**Before this module:** Run `tiptoe` to identify which LLM-relevant ports are open (11434, 8000, 8080, 8001, 6333, 5001, 3000, 5000). Confirm whether the target is on a private VLAN or externally reachable: unauthenticated Ollama on a public IP is a CRITICAL finding; on a properly isolated internal segment it is MEDIUM (network control partially mitigates). The `https` parameter on `LLMEnumerator` must be set correctly: connecting with TLS to a plain-HTTP port returns no data.
 
 **After this module:** For `OLLAMA_UNAUTH_GENERATE`: run `probe_system_prompt_disclosure()` and `probe_prompt_injection_chain()` to assess behavioral attack surface. For `TRITON_REPO_INDEX_UNAUTH` or `TORCHSERVE_MODELS_UNAUTH`: extract handler class paths and attempt `GET /v2/models/{name}/config` (Triton) or `GET /models/{name}` (TorchServe) for full configuration. For `QDRANT_SNAPSHOT_CREATE`: attempt `GET /collections/{name}/snapshots` to enumerate downloadable snapshot names and confirm extractability. For `MLFLOW_MODELS_UNAUTH`: extract artifact URIs and attempt direct S3/GCS path access. Write confirmed findings to `~/VDT/VULNERABILITIES-<ip>.md`.
 
@@ -234,6 +234,6 @@ The following illustrates the `evidence` field format for representative finding
 
 ## See also
 
-- [LLM Behavior Security Probes](llm-behavior-security-probes.md) — system prompt disclosure, prompt injection chains, OWASP LLM control verification, MITRE ATLAS techniques, CoSAI baseline controls
-- [Model Data Pipeline Exposure](model-data-pipeline-exposure.md) — RAG pipeline, MCP server, A2A trust boundaries, multi-agent orchestration, memory poisoning, supply chain artifact exposure
-- [Unknown HTTP API Mapping](unknown-http-api-mapping.md) — general API discovery for non-LLM HTTP endpoints on the same host
+- [LLM Behavior Security Probes](llm-behavior-security-probes.md): system prompt disclosure, prompt injection chains, OWASP LLM control verification, MITRE ATLAS techniques, CoSAI baseline controls
+- [Model Data Pipeline Exposure](model-data-pipeline-exposure.md): RAG pipeline, MCP server, A2A trust boundaries, multi-agent orchestration, memory poisoning, supply chain artifact exposure
+- [Unknown HTTP API Mapping](unknown-http-api-mapping.md): general API discovery for non-LLM HTTP endpoints on the same host

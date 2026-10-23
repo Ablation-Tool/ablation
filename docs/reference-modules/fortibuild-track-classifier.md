@@ -113,7 +113,7 @@ Fortinet firmware filename (no I/O)
 
 ## How it works
 
-`FortiBuildTrackClassifier.classify(filename)` is a pure string classifier — no binary parsing. It matches the FortiOS image filename against a table of known build-track naming patterns (e.g. `FGT_<model>-v<major>-build<build>-FORTINET.out`) to extract the hardware model, major version, and build number. `_predict_keys()` maps track+major_version to the set of firmware section keys expected for that release. `BuildTrackResult.discrepancy()` compares predicted keys against actual scanned keys.
+`FortiBuildTrackClassifier.classify(filename)` is a pure string classifier, no binary parsing. It matches the FortiOS image filename against a table of known build-track naming patterns (e.g. `FGT_<model>-v<major>-build<build>-FORTINET.out`) to extract the hardware model, major version, and build number. `_predict_keys()` maps track+major_version to the set of firmware section keys expected for that release. `BuildTrackResult.discrepancy()` compares predicted keys against actual scanned keys.
 
 ---
 
@@ -137,7 +137,7 @@ Fortinet firmware filename (no I/O)
 | `build_number` | Integer build number (e.g., `2902`) |
 | `build_track` | `'M'` (main/GA) or `'F'` (feature/beta) |
 | `expected_keys` | List of cert-key names expected for this product/version combo |
-| `key_generation` | `'Gen1'` or `'Gen2'` — key generation epoch |
+| `key_generation` | `'Gen1'` or `'Gen2'`: key generation epoch |
 | `error` | `None` on success, error string if classification failed |
 
 Use `result.discrepancy(actual_keys)` to compare `expected_keys` against keys found by `FortiGateCertKeyScanner`.
@@ -146,8 +146,8 @@ Use `result.discrepancy(actual_keys)` to compare `expected_keys` against keys fo
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

@@ -134,13 +134,13 @@ Ppc64ElfV1Info(/firmware/aix/libservice.so)
 
 ## False positives
 
-**Stripped glink stubs.** If the binary has been stripped and the `.glink` section is absent, `_resolve_glink()` falls back to scanning for glink-stub patterns in `.text`. This pattern scan can miss stubs that use non-standard stub sequences (e.g., custom linker scripts).
+**Stripped glink stubs.** If the binary has been stripped and the `.glink` section is absent, `_resolve_glink()` falls back to scanning for glink-stub patterns in `.text`. This pattern scan can miss stubs that use non-standard stub sequences for example custom linker scripts.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` on the PPC64 BE ELF. Check `ctx.plt` — if empty, run this resolver first.
+**Before this module:** `BinaryContext.load_or_build()` on the PPC64 BE ELF. Check `ctx.plt`: if empty, run this resolver first.
 
 **After this module:** Merge `Ppc64ElfV1Info.stub_map` into `ctx.plt`: `ctx._plt.update(resolver.info.stub_map)`. All downstream tools (SinkArgClassifier, TaintTracker) then see named imports.
 
@@ -168,6 +168,6 @@ Use `ppc64elfv1_resolve(ctx)` to integrate resolved info into a `BinaryContext` 
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

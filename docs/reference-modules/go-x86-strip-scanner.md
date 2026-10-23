@@ -80,7 +80,7 @@ if scanner.is_go_x86_64(ctx.path):
 
 ## How it works
 
-`GoX86StripScanner.scan()` locates the Go pclntab (magic `0xFFFFFAFF` / `0xFFFFFAFB` at the start of the table) in the binary image, parses the function table, and recovers the name and entry VA for every function in the table. No func_starts iteration — it reads the pclntab structure directly. The result is a `GoScanResult` with a complete `Dict[int, str]` VA-to-name map. `result.func_starts` returns just the entry VAs as a sorted list for injection into `BinaryContext`.
+`GoX86StripScanner.scan()` locates the Go pclntab (magic `0xFFFFFAFF` / `0xFFFFFAFB` at the start of the table) in the binary image, parses the function table, and recovers the name and entry VA for every function in the table. No func_starts iteration, it reads the pclntab structure directly. The result is a `GoScanResult` with a complete `Dict[int, str]` VA-to-name map. `result.func_starts` returns just the entry VAs as a sorted list for injection into `BinaryContext`.
 
 ---
 
@@ -111,7 +111,7 @@ GoScanResult  /path/to/service  go1.21.3  nfunc=2847
 
 ## False positives
 
-None — pclntab parsing is structural and produces exact function starts. The only failure mode is a binary where the Go toolchain was deliberately modified to strip or corrupt the pclntab, in which case the scanner returns an empty `funcs` dict.
+None: pclntab parsing is structural and produces exact function starts. The only failure mode is a binary where the Go toolchain was deliberately modified to strip or corrupt the pclntab, in which case the scanner returns an empty `funcs` dict.
 
 ---
 
@@ -130,20 +130,20 @@ None — pclntab parsing is structural and produces exact function starts. The o
 | Attribute | Content |
 |:---|:---|
 | `binary_path` | Path to the analyzed binary |
-| `funcs` | `Dict[int, str]` — VA-to-name map for all recovered functions |
+| `funcs` | `Dict[int, str]`: VA-to-name map for all recovered functions |
 | `go_version` | Go version string extracted from pclntab (e.g., `'go1.21.3'`) |
 | `text_start` | VA of the `.text` section start |
 | `nfunc` | Number of functions in the pclntab |
 | `pclntab_file_off` | File offset of the pclntab header |
-| `func_starts` | Property — `List[int]` of all function entry VAs sorted |
-| `named_funcs` | Property — `Dict[int, str]` for only functions with non-empty names |
+| `func_starts` | Property: `List[int]` of all function entry VAs sorted |
+| `named_funcs` | Property: `Dict[int, str]` for only functions with non-empty names |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

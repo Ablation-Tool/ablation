@@ -1,16 +1,16 @@
 # API Authorization Checks
 
-Probe object-level, function-level, and property-level authorization failures — executing BOLA/IDOR ID substitution, BFLA admin path probing, mass assignment with 21 privileged field names, and excessive data exposure scanning against discovered API endpoints.
+Probe object-level, function-level, and property-level authorization failures: executing BOLA/IDOR ID substitution, BFLA admin path probing, mass assignment with 21 privileged field names, and excessive data exposure scanning against discovered API endpoints.
 
 ---
 
 ## Why this exists
 
-1. **OWASP API1 (BOLA) and API5 (BFLA) are the two most commonly exploited API vulnerability classes — and both require active probing rather than passive analysis.** Broken Object Level Authorization is not detectable from a schema or a spec: the endpoint `GET /api/users/{id}` returns a 200 for every valid ID, and the question is whether the authenticated user is allowed to see ID 2 when they own ID 1. `probe_bola()` injects integer sequences, UUIDs, and common string IDs into path placeholders and trailing path segments, observing 200 responses with non-trivial response sizes as the authorization failure signal. BFLA requires probing admin paths (`/admin`, `/internal`, `/management`) and privileged operation suffixes (`/promote`, `/export`, `/dump`) without admin credentials.
+1. **OWASP API1 (BOLA) and API5 (BFLA) are the two most commonly exploited API vulnerability classes, and both require active probing rather than passive analysis.** Broken Object Level Authorization is not detectable from a schema or a spec: the endpoint `GET /api/users/{id}` returns a 200 for every valid ID, and the question is whether the authenticated user is allowed to see ID 2 when they own ID 1. `probe_bola()` injects integer sequences, UUIDs, and common string IDs into path placeholders and trailing path segments, observing 200 responses with non-trivial response sizes as the authorization failure signal. BFLA requires probing admin paths (`/admin`, `/internal`, `/management`) and privileged operation suffixes (`/promote`, `/export`, `/dump`) without admin credentials.
 
 2. **Mass assignment is invisible from the outside until a privileged field is reflected in a response.** `probe_mass_assignment()` sends 8 of the 21 `MASS_ASSIGNMENT_FIELDS` (including `admin`, `is_admin`, `role`, `superuser`, `privileges`, `group`, `balance`, `id`) in a POST body alongside the expected fields and checks whether any appear in the response body but not in the baseline response. A reflected `is_admin` field confirms OWASP API3 Broken Object Property Level Authorization.
 
-3. **Excessive data exposure is a structural API defect — the API returns the full model object when only a subset of fields is needed.** `probe_excessive_data_exposure()` scans every API response for 9 PII/secret pattern types (`PII_PATTERNS`: email, SSN, credit card, US phone, API key, bearer token, password-in-response, private key, AWS key, internal IPv4) and flags bulk responses (>50,000 bytes and >100 records) as unfiltered data dumps. These findings identify both misconfigured response filters and data governance failures.
+3. **Excessive data exposure is a structural API defect: the API returns the full model object when only a subset of fields is needed.** `probe_excessive_data_exposure()` scans every API response for 9 PII/secret pattern types (`PII_PATTERNS`: email, SSN, credit card, US phone, API key, bearer token, password-in-response, private key, AWS key, internal IPv4) and flags bulk responses (>50,000 bytes and >100 records) as unfiltered data dumps. These findings identify both misconfigured response filters and data governance failures.
 
 ---
 
@@ -117,19 +117,19 @@ print(f"Authorization findings: {len(auth_findings)}")
 
 ## False positives
 
-**BOLA finds `200` responses on public resources that require no authorization.** The detection checks HTTP 200 and response size > 50 bytes — it does not confirm that the resource is sensitive or that the requesting user has no business accessing it. A public product catalog endpoint (`/api/products/{id}`) correctly returns 200 for any valid ID. Before reporting a BOLA finding, confirm the resource contains user-specific or sensitive data (user profiles, orders, private messages) that should be access-controlled.
+**BOLA finds `200` responses on public resources that require no authorization.** The detection checks HTTP 200 and response size > 50 bytes, it does not confirm that the resource is sensitive or that the requesting user has no business accessing it. A public product catalog endpoint (`/api/products/{id}`) correctly returns 200 for any valid ID. Before reporting a BOLA finding, confirm the resource contains user-specific or sensitive data (user profiles, orders, private messages) that should be access-controlled.
 
-**BFLA `BFLA_ADMIN_ACCESSIBLE` fires on development health pages at `/debug`.** Many APIs expose a `/debug` or `/api/debug` endpoint that returns non-sensitive build or health information (commit hash, environment name, uptime). The finding fires if the status is not 404/401/403. Check the response body before escalating — a debug endpoint returning `{"env":"prod","commit":"abc123"}` is an information disclosure issue, not BFLA.
+**BFLA `BFLA_ADMIN_ACCESSIBLE` fires on development health pages at `/debug`.** Many APIs expose a `/debug` or `/api/debug` endpoint that returns non-sensitive build or health information (commit hash, environment name, uptime). The finding fires if the status is not 404/401/403. Check the response body before escalating: a debug endpoint returning `{"env":"prod","commit":"abc123"}` is an information disclosure issue, not BFLA.
 
-**Mass assignment `MASS_ASSIGN` on fields that the API echoes back by design.** Some APIs return the full request body in their response for logging or confirmation purposes — including fields they do not process. A field like `balance` appearing in the response does not confirm mass assignment if the API returns all submitted fields verbatim regardless of whether it stored them. Confirm by checking whether a subsequent GET on the same resource shows the modified field value.
+**Mass assignment `MASS_ASSIGN` on fields that the API echoes back by design.** Some APIs return the full request body in their response for logging or confirmation purposes: including fields they do not process. A field like `balance` appearing in the response does not confirm mass assignment if the API returns all submitted fields verbatim regardless of whether it stored them. Confirm by checking whether a subsequent GET on the same resource shows the modified field value.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Run `probe_api_surface()` to build the `endpoints` list — all authorization probes require discovered endpoints with known methods and path parameters. Run `analyze_tokens_in_response()` first to confirm the API is authenticated (bearer/session token present) before interpreting BOLA findings — unauthenticated APIs have no authorization layer to bypass.
+**Before this module:** Run `probe_api_surface()` to build the `endpoints` list: all authorization probes require discovered endpoints with known methods and path parameters. Run `analyze_tokens_in_response()` first to confirm the API is authenticated (bearer/session token present) before interpreting BOLA findings: unauthenticated APIs have no authorization layer to bypass.
 
-**After this module:** For confirmed BOLA findings: attempt cross-user access — authenticate as user A, retrieve user B's resource ID from a BOLA probe, then confirm that user A can access user B's resource with user A's session token. For confirmed BFLA admin path findings: enumerate users, configuration, and secrets from the admin endpoint before reporting.
+**After this module:** For confirmed BOLA findings: attempt cross-user access: authenticate as user A, retrieve user B's resource ID from a BOLA probe, then confirm that user A can access user B's resource with user A's session token. For confirmed BFLA admin path findings: enumerate users, configuration, and secrets from the admin endpoint before reporting.
 
 ---
 
@@ -137,10 +137,10 @@ print(f"Authorization findings: {len(auth_findings)}")
 
 | Finding type | Meaning |
 |:---|:---|
-| `bola` (path + id) | Object-level auth bypass — resource returned for foreign object ID |
+| `bola` (path + id) | Object-level auth bypass: resource returned for foreign object ID |
 | `bfla_admin_accessible` | Admin/management function accessible without admin credentials |
 | `bfla_privileged_op` | Privileged operation (export/delete/promote) succeeded |
-| `MASS_ASSIGN` | Privileged field reflected in response after POST — write accepted |
+| `MASS_ASSIGN` | Privileged field reflected in response after POST: write accepted |
 | `excessive_data_{type}` | PII or secret matched in response body |
 | `excessive_data_bulk` | Unfiltered collection returned (>100 records, >50KB) |
 
@@ -148,6 +148,6 @@ print(f"Authorization findings: {len(auth_findings)}")
 
 ## See also
 
-- [API Authentication and Token Checks](api-authentication-and-token-checks.md) — JWT/OAuth2 analysis of the auth layer protecting these endpoints
-- [API Injection and Validation Checks](api-injection-and-validation-checks.md) — parameter-level injection probes for discovered endpoints
-- [API Reverse Engineering](api-re.md) — full API RE workflow that calls these authorization probes as sub-phases
+- [API Authentication and Token Checks](api-authentication-and-token-checks.md): JWT/OAuth2 analysis of the auth layer protecting these endpoints
+- [API Injection and Validation Checks](api-injection-and-validation-checks.md): parameter-level injection probes for discovered endpoints
+- [API Reverse Engineering](api-re.md): full API RE workflow that calls these authorization probes as sub-phases

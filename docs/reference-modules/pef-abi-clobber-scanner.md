@@ -193,7 +193,7 @@ Prior to this module, pef abi clobber scanner required manual work outside the A
 
 ## How it works
 
-`PEFABIClobberScanner.from_bytes(code, base_va)` takes raw PPC32 code bytes from a PEF (Classic Mac OS Portable Executable Format) binary. `scan()` decodes each instruction using a lightweight PPC32 word classifier (`classify(word)`) — no Capstone, no func_starts. It tracks callee-saved register state (r13–r31, f14–f31, CR2–CR4) across the instruction stream. `_check_site()` flags sites where a callee-saved register is written before being saved or is read after being clobbered by a prior write without an intervening save.
+`PEFABIClobberScanner.from_bytes(code, base_va)` takes raw PPC32 code bytes from a PEF (Classic Mac OS Portable Executable Format) binary. `scan()` decodes each instruction using a lightweight PPC32 word classifier (`classify(word)`), no Capstone, no func_starts. It tracks callee-saved register state (r13–r31, f14–f31, CR2–CR4) across the instruction stream. `_check_site()` flags sites where a callee-saved register is written before being saved or is read after being clobbered by a prior write without an intervening save.
 
 ---
 
@@ -232,13 +232,13 @@ PEFABIClobberScanner: 2 site(s): PLAUSIBLE=2  SAFE=0
 
 ## False positives
 
-Conditional branches (opcode 16) are transparent — the backward walk does not stop at `beq`/`bne`. A PLAUSIBLE verdict may result when the register is written on only one branch of a conditional; a full CFG analysis (not implemented) would distinguish this. Inspect the PLAUSIBLE site and trace whether all predecessor blocks write the register before the sink call.
+Conditional branches (opcode 16) are transparent: the backward walk does not stop at `beq`/`bne`. A PLAUSIBLE verdict may result when the register is written on only one branch of a conditional; a full CFG analysis (not implemented) would distinguish this. Inspect the PLAUSIBLE site and trace whether all predecessor blocks write the register before the sink call.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Identify sink call VAs — BL instructions targeting dangerous functions (e.g., OTStrCat, OTStrCopy, OTMemcpy). Use `SemanticSearcher.query()` or the PEF symbol table.
+**Before this module:** Identify sink call VAs: BL instructions targeting dangerous functions for example OTStrCat, OTStrCopy, OTMemcpy. Use `SemanticSearcher.query()` or the PEF symbol table.
 
 **After this module:** Manually verify PLAUSIBLE sites. A PLAUSIBLE verdict means the register may be undefined at the sink call; confirm by inspecting the specific call path from the source VAs in `stop_va`.
 
@@ -252,7 +252,7 @@ Conditional branches (opcode 16) are transparent — the backward walk does not 
 |:---|:---|
 | `site_va` | VA of the sink `bl` instruction |
 | `check_reg` | Register index examined (e.g., `4` for `r4`) |
-| `verdict` | `'PLAUSIBLE'` — argument register was last written before the intermediate call, leaving it clobbered; `'SAFE'` — register was re-written after all calls before reaching the sink |
+| `verdict` | `'PLAUSIBLE'`: argument register was last written before the intermediate call, leaving it clobbered; `'SAFE'`: register was re-written after all calls before reaching the sink |
 | `stop_va` | VA where the backward walk stopped |
 | `stop_reason` | `'reg_written'` / `'call_clobber'` / `'uncond_branch'` / `'return'` / `'window_exhausted'` |
 
@@ -260,8 +260,8 @@ Conditional branches (opcode 16) are transparent — the backward walk does not 
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

@@ -156,7 +156,7 @@ pairs = vn.cse_pairs(nodes)
 `ValueNumberer` implements XLC/OMR `TR_ValueNumberInfo` hash-congruence:
 two nodes are congruent when they have the same opcode, same ctype, same
 constant/name, and their children have the same value numbers (recursively).
-`can_share()` gates CSE eligibility — loads, stores, and calls always get
+`can_share()` gates CSE eligibility: loads, stores, and calls always get
 fresh numbers regardless of structural equality.
 
 ### Methods
@@ -287,7 +287,7 @@ to `ExprNode`, simplify, then use `to_c()` as the expression text.
 **Before this module:** `BinaryLifter`, `ppc476_decompiler`, any arch lifter
 producing register-tracked expression strings.
 
-**After this module:** `SinkArgClassifier` or `TaintTracker` — pass the
+**After this module:** `SinkArgClassifier` or `TaintTracker`: pass the
 simplified `ExprNode.to_c()` as the expression string. CSE results help
 identify which function argument a sink expression aliases.
 
@@ -295,7 +295,7 @@ identify which function argument a sink expression aliases.
 
 ## FORGE audit
 
-2 LOW findings — see FORGE cache. Gate passed.
+2 LOW findings: see FORGE cache. Gate passed.
 
 | Finding | Severity | Mitigation |
 |:---|:---|:---|
@@ -306,7 +306,7 @@ identify which function argument a sink expression aliases.
 
 ## See also
 
-- [Decompiler and IR Lifter Concepts](../concepts-decompiler.md) — ExprLifter design architecture section
-- [BinaryLifter](binary-lifter.md) — upstream lifter producing NativeVal register state
-- [PPC476 Lifter](ppc476-lifter.md) — arch-specific decompiler; ExprLifter targets its `_Val` expressions
-- [Structurizer](structurizer.md) — downstream CFG structuring pass
+- [Decompiler and IR Lifter Concepts](../concepts-decompiler.md): ExprLifter design architecture section
+- [BinaryLifter](binary-lifter.md): upstream lifter producing NativeVal register state
+- [PPC476 Lifter](ppc476-lifter.md): arch-specific decompiler; ExprLifter targets its `_Val` expressions
+- [Structurizer](structurizer.md): downstream CFG structuring pass

@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before
 
 ## How it works
 
-`ARMSymbolicExecutor` runs path-insensitive symbolic execution over ARM32 function bodies to build per-function summaries. Symbolic domain: `Arg(index)` (function arg register r0–r3), `InputBuf(id)` (protocol buffer pointer), `Add(base, off)` (flattened pointer arithmetic), and `Unknown` (merge points or complex operations). Transfer functions for MOV, ADD, SUB, LDR, STR, BL, BLX. Output: `arg_field_writes: [(arg_idx, offset)]` — which function arguments write to which struct field offsets. No SMT solver; no path forking.
+`ARMSymbolicExecutor` runs path-insensitive symbolic execution over ARM32 function bodies to build per-function summaries. Symbolic domain: `Arg(index)` (function arg register r0–r3), `InputBuf(id)` (protocol buffer pointer), `Add(base, off)` (flattened pointer arithmetic), and `Unknown` (merge points or complex operations). Transfer functions for MOV, ADD, SUB, LDR, STR, BL, BLX. Output: `arg_field_writes: [(arg_idx, offset)]`, which function arguments write to which struct field offsets. No SMT solver; no path forking.
 
 ---
 
@@ -70,7 +70,7 @@ FuncSummary @ 0x11234
 
 **Before this module:** Use ARM32 Capstone disassembly to obtain the instruction list for the function.
 
-**After this module:** Use the returned `arg_field_writes` summary to seed `TaintTracker` — for each `(arg_idx, offset)` pair, `arg_idx` is the tainted argument register and `offset` is the struct field the write targets.
+**After this module:** Use the returned `arg_field_writes` summary to seed `TaintTracker`: for each `(arg_idx, offset)` pair, `arg_idx` is the tainted argument register and `offset` is the struct field the write targets.
 
 ---
 
@@ -82,9 +82,9 @@ FuncSummary @ 0x11234
 |:---|:---|:---|
 | `addr` | `int` | Function start address passed to `analyze_function()` |
 | `name` | `str` | Name if known from symbol table; empty string if stripped |
-| `arg_field_writes` | `List[Tuple[int,int]]` | `(arg_index, field_offset)` pairs — argument register written to an object field |
+| `arg_field_writes` | `List[Tuple[int,int]]` | `(arg_index, field_offset)` pairs: argument register written to an object field |
 | `inputbuf_reads` | `List[int]` | Byte offsets into the `mark_inputbuf` arg that are read by this function |
-| `const_stores` | `Dict[int,int]` | `{field_offset: constant_value}` — constants stored to object fields |
+| `const_stores` | `Dict[int,int]` | `{field_offset: constant_value}`: constants stored to object fields |
 | `calls` | `List[Tuple[int, List[SymVal]]]` | `(callee_va, arg_symvals)` for direct calls made by this function |
 | `vcalls` | `List[Optional[int]]` | Vtable slot indices for indirect `BLX`/`BLR` dispatches; `None` if slot unknown |
 
@@ -92,6 +92,6 @@ FuncSummary @ 0x11234
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

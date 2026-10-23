@@ -56,7 +56,7 @@ the tracker treats it as unconditionally executed.
 - Conditions guarded by input validation checks (e.g., `ITTT EQ` after a length comparison)
 
 **Impact:** False positive. The tracker may report a finding at a sink that is only reached
-when the condition is false (i.e., after validation passes). The finding may overstate
+when the condition is false specifically after validation passes. The finding may overstate
 exploitability for inputs that satisfy the length check.
 
 **Workaround:** 

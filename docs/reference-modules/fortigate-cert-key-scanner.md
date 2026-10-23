@@ -206,7 +206,7 @@ Each `KeyEntry` in `result.keys`:
 
 ## See also
 
-- [FirmwareContainers](firmware-containers.md) — partition extraction from container images
-- [FirmwareContainerKeyExtractor](firmware-container-key-extractor.md) — recover embedded key material
-- [TaintAnalysis](taint-analysis.md) — trace network input to sinks in extracted binaries
-- [SemanticSearch](semantic-search.md) — find vulnerability candidates in extracted ELFs
+- [FirmwareContainers](firmware-containers.md): partition extraction from container images
+- [FirmwareContainerKeyExtractor](firmware-container-key-extractor.md): recover embedded key material
+- [TaintAnalysis](taint-analysis.md): trace network input to sinks in extracted binaries
+- [SemanticSearch](semantic-search.md): find vulnerability candidates in extracted ELFs

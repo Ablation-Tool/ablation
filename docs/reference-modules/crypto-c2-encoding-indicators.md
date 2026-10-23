@@ -1,16 +1,16 @@
 # PPC64 Dynamic Data Structure Classification
 
-Classify stripped PPC64/Cell PPU functions as instances of dynamic data structure traversal or manipulation patterns — identifying BST traversal, block linked list iteration, C-tree traversal, B-tree mutation, and coroutine iterators from pure structural instruction patterns without requiring string cross-references, symbol names, or debug information.
+Classify stripped PPC64/Cell PPU functions as instances of dynamic data structure traversal or manipulation patterns: identifying BST traversal, block linked list iteration, C-tree traversal, B-tree mutation, and coroutine iterators from pure structural instruction patterns without requiring string cross-references, symbol names, or debug information.
 
 ---
 
 ## Why this exists
 
-1. **Stripped PPC64 firmware has no function names.** On Cell PPU targets (PS3 system binaries, Demonware network stack, IBM PowerVM management firmware), `SigLibrary` and `SemanticSearcher` are both limited without symbol anchors. `DynDSClassifier` identifies function classes from their instruction structure — BST traversal produces recursive self-calls; B-tree mutation produces distinct loop shapes and multiple return sites — enabling semantic labeling of stripped functions without any string evidence.
+1. **Stripped PPC64 firmware has no function names.** On Cell PPU targets (PS3 system binaries, Demonware network stack, IBM PowerVM management firmware), `SigLibrary` and `SemanticSearcher` are both limited without symbol anchors. `DynDSClassifier` identifies function classes from their instruction structure: BST traversal produces recursive self-calls; B-tree mutation produces distinct loop shapes and multiple return sites: enabling semantic labeling of stripped functions without any string evidence.
 
-2. **Patterns are derived from Chou & Amarasinghe, "Compilation of Dynamic Sparse Tensor Algebra", OOPSLA 2022** — sparse dynamic data structures produce code with predictable structural shapes when traversed or modified. Each shape maps to a combination of: recursive self-calls (BST/C-tree traversal), backward conditional branches (for-loops over array chunks), and multiple `BLR` sites with literal 0/1 return values (coroutine iterators). `DynDSClassifier` implements these discriminators for PPC64 big-endian encoding.
+2. **Patterns are derived from Chou & Amarasinghe, "Compilation of Dynamic Sparse Tensor Algebra", OOPSLA 2022**: sparse dynamic data structures produce code with predictable structural shapes when traversed or modified. Each shape maps to a combination of: recursive self-calls (BST/C-tree traversal), backward conditional branches (for-loops over array chunks), and multiple `BLR` sites with literal 0/1 return values (coroutine iterators). `DynDSClassifier` implements these discriminators for PPC64 big-endian encoding.
 
-3. **`DynDSFinding.fmt(name_fn)` accepts a name function** — when called with `ctx.name`, it annotates the output with any existing names for the function VA and its self-call targets, combining structure-based classification with symbol-based labeling where available.
+3. **`DynDSFinding.fmt(name_fn)` accepts a name function**: when called with `ctx.name`, it annotates the output with any existing names for the function VA and its self-call targets, combining structure-based classification with symbol-based labeling where available.
 
 ---
 
@@ -67,15 +67,15 @@ Findings: <N>
 
 ## False positives
 
-**Structural patterns may match non-data-structure functions** — a function with recursive self-calls and the right loop shape for a reason unrelated to data structures (e.g., a parsing function or an algorithm with similar structural features) will be classified. Structural classification is a labeling hint, not a confirmed semantic — verify with `FuncProfiler` before treating as a BST/linked-list implementation.
+**Structural patterns may match non-data-structure functions**: a function with recursive self-calls and the right loop shape for a reason unrelated to data structures for example a parsing function or an algorithm with similar structural features will be classified. Structural classification is a labeling hint, not a confirmed semantic: verify with `FuncProfiler` before treating as a BST/linked-list implementation.
 
-**`min_insns=4` threshold may produce low-quality findings for very short functions** — functions with fewer than the minimum instruction count are excluded, but functions just above the threshold may not have enough instruction variety to reliably match a pattern. Increase `min_insns` for higher-confidence results.
+**`min_insns=4` threshold may produce low-quality findings for very short functions**: functions with fewer than the minimum instruction count are excluded, but functions just above the threshold may not have enough instruction variety to reliably match a pattern. Increase `min_insns` for higher-confidence results.
 
 ---
 
 ## Pipeline position
 
-Run `DynDSClassifier` after `BinaryContext.load_or_build()` and `SigLibrary` matching on PPC64 BE targets. Use structural classification to label unnamed functions before running `TaintTracker` — named functions produce more interpretable taint traces.
+Run `DynDSClassifier` after `BinaryContext.load_or_build()` and `SigLibrary` matching on PPC64 BE targets. Use structural classification to label unnamed functions before running `TaintTracker`: named functions produce more interpretable taint traces.
 
 ---
 
@@ -94,5 +94,5 @@ Run `DynDSClassifier` after `BinaryContext.load_or_build()` and `SigLibrary` mat
 
 ## See also
 
-- [Function Semantic Search](function-semantic-search.md) — `SemanticSearcher` for complementary semantic labeling
-- [PPC64 ELFv1 Resolution](ppc64-elfv1-resolution.md) — `Ppc64ElfV1Resolver` for preprocessing PPC64 ELFv1 targets before classification
+- [Function Semantic Search](function-semantic-search.md): `SemanticSearcher` for complementary semantic labeling
+- [PPC64 ELFv1 Resolution](ppc64-elfv1-resolution.md): `Ppc64ElfV1Resolver` for preprocessing PPC64 ELFv1 targets before classification

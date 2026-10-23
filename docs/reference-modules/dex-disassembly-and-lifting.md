@@ -1,16 +1,16 @@
 # DEX Disassembly and Lifting
 
-Decode Android DEX bytecode to annotated smali output (`DEXDisasm`) and lift DEX instruction streams to readable pseudo-Java IR (`DEXLifter`) — handling all 17 DEX instruction formats with full method/field/type/string reference resolution from the DEX flat tables.
+Decode Android DEX bytecode to annotated smali output (`DEXDisasm`) and lift DEX instruction streams to readable pseudo-Java IR (`DEXLifter`): handling all 17 DEX instruction formats with full method/field/type/string reference resolution from the DEX flat tables.
 
 ---
 
 ## Why this exists
 
-1. **Android APKs contain compiled `.dex` bytecode rather than source Java — static analysis of APK security requires disassembling the DEX bytecode to smali and then lifting it to pseudo-Java for comprehension.** `DEXDisasm` decodes all 17 DEX instruction formats and renders smali-style output with full reference resolution (method descriptors, field names, type names, string constants from the DEX flat tables). Without reference resolution, smali output shows numeric indices (`method@0023`) rather than `Lcom/example/Foo;->bar(Ljava/lang/String;)V`.
+1. **Android APKs contain compiled `.dex` bytecode rather than source Java: static analysis of APK security requires disassembling the DEX bytecode to smali and then lifting it to pseudo-Java for comprehension.** `DEXDisasm` decodes all 17 DEX instruction formats and renders smali-style output with full reference resolution (method descriptors, field names, type names, string constants from the DEX flat tables). Without reference resolution, smali output shows numeric indices (`method@0023`) rather than `Lcom/example/Foo;->bar(Ljava/lang/String;)V`.
 
-2. **`DEXLifter` lifts the decoded instruction stream to pseudo-Java IR without external dependencies** — handling the 90% of real Android methods that use field get/put, invoke-virtual/direct/static, const-string, if-* conditionals, and backward goto (loop) patterns. The result is readable pseudo-Java like `this.apiKey = getString(R.string.api_key)` rather than raw register-based smali operations. Complex methods (switch tables, try/catch blocks) fall back to annotated pseudo-smali that is still more readable than raw smali because all references are resolved.
+2. **`DEXLifter` lifts the decoded instruction stream to pseudo-Java IR without external dependencies**: handling the 90% of real Android methods that use field get/put, invoke-virtual/direct/static, const-string, if-* conditionals, and backward goto (loop) patterns. The result is readable pseudo-Java like `this.apiKey = getString(R.string.api_key)` rather than raw register-based smali operations. Complex methods (switch tables, try/catch blocks) fall back to annotated pseudo-smali that is still more readable than raw smali because all references are resolved.
 
-3. **`DEXDisasm` and `DEXLifter` are consumed by `DexAnalyzer`** — the security scanner described in [DEX Analysis](dex.md) — but they are also available as standalone disassembly and lifting tools for targeted method-level analysis without running the full security scan. This allows analysts to disassemble a specific class or lift a specific method without the overhead of APK-wide scanning.
+3. **`DEXDisasm` and `DEXLifter` are consumed by `DexAnalyzer`**: the security scanner described in [DEX Analysis](dex.md), but they are also available as standalone disassembly and lifting tools for targeted method-level analysis without running the full security scan. This allows analysts to disassemble a specific class or lift a specific method without the overhead of APK-wide scanning.
 
 ---
 
@@ -82,7 +82,7 @@ void processInput(String p1) {
 
 ## False positives
 
-**`disasm_method()` disassembles the bytecode as-is — obfuscated DEX (ProGuard/R8 with identifier scrambling) will produce correct disassembly with scrambled names (`a.b.c.A.a()`).** The instruction decoding is correct regardless of obfuscation; only the human-readable names are affected by obfuscation.
+**`disasm_method()` disassembles the bytecode as-is: obfuscated DEX (ProGuard/R8 with identifier scrambling) will produce correct disassembly with scrambled names (`a.b.c.A.a()`).** The instruction decoding is correct regardless of obfuscation; only the human-readable names are affected by obfuscation.
 
 **`DEXLifter` falls back to annotated pseudo-smali for try/catch blocks and switch tables.** These patterns are common in complex methods. The fallback output is still annotated with resolved references but uses register names (v0, v1) rather than inferred type names. Pseudo-Java quality degrades gracefully on complex methods rather than failing.
 
@@ -90,7 +90,7 @@ void processInput(String p1) {
 
 ## Pipeline position
 
-`DEXDisasm` and `DEXLifter` are typically consumed through `DexAnalyzer.scan()` (see [DEX Analysis](dex.md)) rather than called directly. Use them directly when you need to inspect a specific method found during `DexAnalyzer` scanning — for example, to read the code of a `HARDCODED_SECRET` method or a `DYNAMIC_CODE_LOAD` site.
+`DEXDisasm` and `DEXLifter` are typically consumed through `DexAnalyzer.scan()` (see [DEX Analysis](dex.md)) rather than called directly. Use them directly when you need to inspect a specific method found during `DexAnalyzer` scanning: for example, to read the code of a `HARDCODED_SECRET` method or a `DYNAMIC_CODE_LOAD` site.
 
 ---
 
@@ -104,7 +104,7 @@ void processInput(String p1) {
 | `opcode` | DEX opcode integer |
 | `mnemonic` | DEX mnemonic string (e.g., `'invoke-virtual'`, `'iget-object'`) |
 | `fmt` | DEX format code string (e.g., `'35c'`) |
-| `regs` | `List[int]` — register indices |
+| `regs` | `List[int]`: register indices |
 | `ref_idx` | Reference table index, or `-1` if not applicable |
 | `literal` | Literal value (signed integer), or `0` |
 | `branch` | Branch offset in code units (signed, relative to this instruction), or `0` |
@@ -115,6 +115,6 @@ void processInput(String p1) {
 
 ## See also
 
-- [DEX Analysis](dex.md) — full `DexAnalyzer` security scanner: secret detection, dangerous APIs, crypto misuse
-- [Java Class/JAR Parsing](java-class-jar-parsing.md) — JVM bytecode parsing for library and server-side code
-- [Firmware Extraction](firmware-extraction.md) — APK extraction from firmware images
+- [DEX Analysis](dex.md): full `DexAnalyzer` security scanner: secret detection, dangerous APIs, crypto misuse
+- [Java Class/JAR Parsing](java-class-jar-parsing.md): JVM bytecode parsing for library and server-side code
+- [Firmware Extraction](firmware-extraction.md): APK extraction from firmware images

@@ -1,14 +1,14 @@
 # AixInstallpStep4Multilevel
 
-Multi-level escape decoder for IBM AIX installp BFF step 4 — handling rare bytes whose sorted-rank index exceeds the K-1 limit of the single-level decoder in `AixInstallpDecompressor`.
+Multi-level escape decoder for IBM AIX installp BFF step 4: handling rare bytes whose sorted-rank index exceeds the K-1 limit of the single-level decoder in `AixInstallpDecompressor`.
 
 ---
 
 ## Why this exists
 
-1. **The single-level step4 decoder silently drops rare bytes with sorted-rank j ≥ K-1.** For K=56, this means any rare byte with j ≥ 55 is lost. These bytes produce no output — they are either dropped or emitted as raw escape pairs rather than the intended byte.
+1. **The single-level step4 decoder silently drops rare bytes with sorted-rank j ≥ K-1.** For K=56, this means any rare byte with j ≥ 55 is lost. These bytes produce no output: they are either dropped or emitted as raw escape pairs rather than the intended byte.
 
-2. **Empirical RE on VIOS `automountd` (U828079.bff, K=56) proves a j=185 case exists.** `sym_table[241]=0xdf` carries j=185, which far exceeds the single-level limit of 54. The byte 0xdf is part of the XCOFF32 magic `0x01df` — without decoding it, XCOFF32 magic verification fails.
+2. **Empirical RE on VIOS `automountd` (U828079.bff, K=56) proves a j=185 case exists.** `sym_table[241]=0xdf` carries j=185, which far exceeds the single-level limit of 54. The byte 0xdf is part of the XCOFF32 magic `0x01df`: without decoding it, XCOFF32 magic verification fails.
 
 3. **IBM `liblpp.a` uses a level-k E-run scheme for large j.** The level-k hypothesis encodes rare byte R with rank j using k escape bytes followed by a term byte, where `k = floor(j / (K - 1)) + 1`.
 
@@ -54,7 +54,7 @@ decoded_bytes = decoder.decode()
 
 ## Limitations
 
-**Level-k hypothesis is empirically unconfirmed.** The E-run distribution in the `automountd` main-cycle segment shows E^1 (713×), E^2 (25×), E^3 (12×), E^4 (3×), E^5 (1×). E^4 sequences decode as two self-escape pairs (2 × E literals) in the observed data — not as level-4 terms. No j ≥ 55 rare bytes have been observed in any decoded segment so far. This module encodes the hypothesis; it has not yet been validated against a confirmed level-k case.
+**Level-k hypothesis is empirically unconfirmed.** The E-run distribution in the `automountd` main-cycle segment shows E^1 (713×), E^2 (25×), E^3 (12×), E^4 (3×), E^5 (1×). E^4 sequences decode as two self-escape pairs (2 × E literals) in the observed data, not as level-4 terms. No j ≥ 55 rare bytes have been observed in any decoded segment so far. This module encodes the hypothesis; it has not yet been validated against a confirmed level-k case.
 
 **Only for K < 256 entries.** When K=256 (all 256 bytes are common), there are no rare bytes and the single-level decoder is sufficient.
 
@@ -70,5 +70,5 @@ decoded_bytes = decoder.decode()
 
 ## See also
 
-- [AIX Installp Decompressor](aix-installp-decompressor.md) — full pipeline; single-level step 4
-- [BWT Eulerian Reconstructor](bwt-eulerian-reconstructor.md) — multi-cycle BWT recovery when K < 256
+- [AIX Installp Decompressor](aix-installp-decompressor.md): full pipeline; single-level step 4
+- [BWT Eulerian Reconstructor](bwt-eulerian-reconstructor.md): multi-cycle BWT recovery when K < 256

@@ -254,5 +254,5 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## See also
 
-- [ECUArchDetector](ecu-arch-detector.md) — identify processor family before choosing a decoder
-- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md) — map ROM sections before decoding
+- [ECUArchDetector](ecu-arch-detector.md): identify processor family before choosing a decoder
+- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md): map ROM sections before decoding

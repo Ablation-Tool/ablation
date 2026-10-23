@@ -121,9 +121,9 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_IMAGE_BYTES=256MB`; `os.pa
 
 ## Pipeline position
 
-**Before this module:** Locate the CramFS partition offset in the BMC firmware image by scanning for the `0x28cd3d45` magic bytes (e.g., `data.find(b'\x45\x3d\xcd\x28')`). Confirm the AMI format by checking that the inode at offset 8 (root inode) has a 16-byte stride — standard CramFS root inodes are 12 bytes. On known AMI SPX images the CramFS typically starts at offset `0x160000`.
+**Before this module:** Locate the CramFS partition offset in the BMC firmware image by scanning for the `0x28cd3d45` magic bytes (e.g., `data.find(b'\x45\x3d\xcd\x28')`). Confirm the AMI format by checking that the inode at offset 8 (root inode) has a 16-byte stride: standard CramFS root inodes are 12 bytes. On known AMI SPX images the CramFS typically starts at offset `0x160000`.
 
-**After this module:** Write each extracted binary to a temp file and load with `BinaryContext.load_or_build()`. The ARM32 `spx_restservice` and `psme-rest-server` binaries are the primary RE targets — both take HTTP input via FastCGI and call shell sinks. Run `ARM32TaintTracker` after loading.
+**After this module:** Write each extracted binary to a temp file and load with `BinaryContext.load_or_build()`. The ARM32 `spx_restservice` and `psme-rest-server` binaries are the primary RE targets: both take HTTP input via FastCGI and call shell sinks. Run `ARM32TaintTracker` after loading.
 
 ---
 
@@ -139,19 +139,19 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_IMAGE_BYTES=256MB`; `os.pa
 | `gid` | Owner GID |
 | `size` | Uncompressed file size in bytes |
 | `data_off` | Data offset in 4-byte units from the start of the CramFS image |
-| `is_dir` | Property — `True` for directory entries |
-| `is_reg` | Property — `True` for regular files |
-| `is_lnk` | Property — `True` for symbolic links |
-| `byte_offset` | Property — `data_off × 4` in bytes |
+| `is_dir` | Property: `True` for directory entries |
+| `is_reg` | Property: `True` for regular files |
+| `is_lnk` | Property: `True` for symbolic links |
+| `byte_offset` | Property: `data_off × 4` in bytes |
 
 `AmiCramFSExtractor.list_files()` yields all file paths as strings (recursive walk).
-`AmiCramFSExtractor.extract_file(path)` returns `bytes` — decompressed content of a file at `path`.
+`AmiCramFSExtractor.extract_file(path)` returns `bytes`: decompressed content of a file at `path`.
 `AmiCramFSExtractor.extract_all(out_dir)` extracts all files to `out_dir`.
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — load extracted payloads for analysis
-- [FirmwareContainers](firmware-containers.md) — higher-level firmware partition walker
-- [EntropyMapper](entropy-mapper.md) — locate encrypted or compressed regions before extraction
+- [BinaryContext](binary-context.md): load extracted payloads for analysis
+- [FirmwareContainers](firmware-containers.md): higher-level firmware partition walker
+- [EntropyMapper](entropy-mapper.md): locate encrypted or compressed regions before extraction

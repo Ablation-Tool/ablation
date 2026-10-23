@@ -319,7 +319,7 @@ See `workflow-document.md` for the `WorkflowDocument` API.
 
 ## How it works
 
-Each `commit()` call serializes the `instance` dict to canonical JSON (keys sorted, no extra whitespace) and stores its SHA-256 as `content_hash`. The hash is stored, not the instance content, so future verification only needs the current instance — not the original. `approve()` computes a second hash over the concatenation of `content_hash` and the SHA-256 of the revised instance (or empty string if no revision), binding the approver's identity to both the original and the final content. `verify()` reconstructs both hashes from the current instance and checks them against the stored values. Any post-approval modification changes the hash chain and surfaces as a tamper failure.
+Each `commit()` call serializes the `instance` dict to canonical JSON (keys sorted, no extra whitespace) and stores its SHA-256 as `content_hash`. The hash is stored, not the instance content, so future verification only needs the current instance, not the original. `approve()` computes a second hash over the concatenation of `content_hash` and the SHA-256 of the revised instance (or empty string if no revision), binding the approver's identity to both the original and the final content. `verify()` reconstructs both hashes from the current instance and checks them against the stored values. Any post-approval modification changes the hash chain and surfaces as a tamper failure.
 
 ---
 
@@ -356,7 +356,7 @@ StageCommitment doc_id='cisco/fmc_server'
 
 ## False positives
 
-`StageCommitment` does not emit security findings. The most common operational error is a `verify()` failure caused by replaying the audit trail on the wrong `doc_id` — each document ID produces a distinct hash chain. If `verify()` returns `False`, check that the `doc_id` and stage name arguments match the values used at `commit()` time.
+`StageCommitment` does not emit security findings. The most common operational error is a `verify()` failure caused by replaying the audit trail on the wrong `doc_id`: each document ID produces a distinct hash chain. If `verify()` returns `False`, check that the `doc_id` and stage name arguments match the values used at `commit()` time.
 
 ---
 
@@ -387,6 +387,6 @@ StageCommitment doc_id='cisco/fmc_server'
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

@@ -1,6 +1,6 @@
 # SAML and Key Material Review
 
-Detect SAML assertion wrapping vulnerability surfaces, extract PEM-encoded RSA/EC key material from binaries and configuration files, detect hardcoded private keys and certificates, and assess key management weaknesses in application configuration — via `modules/crypto_audit.py` `CryptoAudit` and `KeyCryptoAnalyzer`.
+Detect SAML assertion wrapping vulnerability surfaces, extract PEM-encoded RSA/EC key material from binaries and configuration files, detect hardcoded private keys and certificates, and assess key management weaknesses in application configuration: via `modules/crypto_audit.py` `CryptoAudit` and `KeyCryptoAnalyzer`.
 
 ---
 
@@ -8,9 +8,9 @@ Detect SAML assertion wrapping vulnerability surfaces, extract PEM-encoded RSA/E
 
 1. **SAML XML Signature Wrapping (XSW)** is a class of attack where an attacker copies a legitimately signed `<Assertion>` element into a new XML document alongside a forged assertion, relying on the service provider to validate the signed node but process the unsigned node. `CryptoAudit.check_saml_wrapping_risk()` examines SAML response XML to identify whether the SP implementation is likely vulnerable: specifically, whether the `AssertionConsumerServiceURL` is validated, whether the `IssuerID` is checked, and whether the signature references the outer `<Response>` or only the inner `<Assertion>`.
 
-2. **`KeyCryptoAnalyzer` extracts embedded key material from arbitrary binary and configuration data** — it scans for PEM markers (`-----BEGIN RSA PRIVATE KEY-----`, `-----BEGIN EC PRIVATE KEY-----`, `-----BEGIN CERTIFICATE-----`), DER-encoded RSA modulus sequences, and base64-encoded PKCS#8 blocks. This surfaces private keys embedded in firmware images, container filesystem layers, and application configuration files that would otherwise require manual inspection.
+2. **`KeyCryptoAnalyzer` extracts embedded key material from arbitrary binary and configuration data**, it scans for PEM markers (`-----BEGIN RSA PRIVATE KEY-----`, `-----BEGIN EC PRIVATE KEY-----`, `-----BEGIN CERTIFICATE-----`), DER-encoded RSA modulus sequences, and base64-encoded PKCS#8 blocks. This surfaces private keys embedded in firmware images, container filesystem layers, and application configuration files that would otherwise require manual inspection.
 
-3. **`check_key_management_weakness(config_text)`** identifies key management anti-patterns in configuration files — hardcoded signing keys in YAML/JSON/INI format, JWT secrets shorter than 32 characters, symmetric encryption keys stored alongside the data they protect, and certificate pinning disabled via `verify=False` or `SSL_VERIFY=0`. These patterns do not represent broken cryptography but broken key hygiene that makes the cryptographic strength irrelevant.
+3. **`check_key_management_weakness(config_text)`** identifies key management anti-patterns in configuration files: hardcoded signing keys in YAML/JSON/INI format, JWT secrets shorter than 32 characters, symmetric encryption keys stored alongside the data they protect, and certificate pinning disabled via `verify=False` or `SSL_VERIFY=0`. These patterns do not represent broken cryptography but broken key hygiene that makes the cryptographic strength irrelevant.
 
 ---
 
@@ -84,9 +84,9 @@ check_key_management_weakness: config.yaml
 
 ## False positives
 
-**`check_saml_wrapping_risk()` is a static analysis of the SAML XML** — it cannot verify whether the SP implementation actually processes the unsigned assertion or the signed one. The risk assessment flags the XML structure; confirm exploitability by testing against the actual SP with a crafted XSW payload.
+**`check_saml_wrapping_risk()` is a static analysis of the SAML XML**, it cannot verify whether the SP implementation actually processes the unsigned assertion or the signed one. The risk assessment flags the XML structure; confirm exploitability by testing against the actual SP with a crafted XSW payload.
 
-**PEM marker detection in firmware** — test certificate PEM blocks embedded in firmware for TLS verification (not private keys) will be flagged by `KeyCryptoAnalyzer`. Distinguish certificate material (public key only) from private key material by checking the PEM header. Certificate findings are informational only unless the private key is also present.
+**PEM marker detection in firmware**: test certificate PEM blocks embedded in firmware for TLS verification (not private keys) will be flagged by `KeyCryptoAnalyzer`. Distinguish certificate material (public key only) from private key material by checking the PEM header. Certificate findings are informational only unless the private key is also present.
 
 ---
 
@@ -105,7 +105,7 @@ Run SAML analysis when a SAML SSO endpoint is present; run `KeyCryptoAnalyzer` o
 | `signed` | `True` if a `<ds:Signature>` element is present in the Assertion |
 | `subject` | NameID string from the Subject element, or `None` |
 | `conditions` | `Dict` of NotBefore/NotOnOrAfter expiry values |
-| `vulns` | `List[str]` — one entry per detected vulnerability (e.g., `'UNSIGNED_ASSERTION'`, `'EXPIRED'`, `'MULTIPLE_ASSERTIONS'`, `'COMMENT_INJECTION'`) |
+| `vulns` | `List[str]`: one entry per detected vulnerability (e.g., `'UNSIGNED_ASSERTION'`, `'EXPIRED'`, `'MULTIPLE_ASSERTIONS'`, `'COMMENT_INJECTION'`) |
 
 `KeyCryptoAnalyzer.analyze_rsa_key(key_data)` accepts raw DER or PEM bytes and returns `list` of finding dicts. `KeyCryptoAnalyzer.scan_certificate_weaknesses(cert_pem)` accepts a PEM-encoded X.509 certificate string and returns a `list` of finding dicts. Both finding dicts use `type`, `severity`, `description`, `detail`, `exploit` keys.
 
@@ -113,5 +113,5 @@ Run SAML analysis when a SAML SSO endpoint is present; run `KeyCryptoAnalyzer` o
 
 ## See also
 
-- [JWT Analysis and Weak Secret Testing](jwt-analysis-and-weak-secret-testing.md) — JWT-specific token forgery and weak secret brute-force
-- [RSA/ECDSA and Randomness Checks](rsa-ecdsa-and-randomness-checks.md) — mathematical weakness analysis of extracted key material
+- [JWT Analysis and Weak Secret Testing](jwt-analysis-and-weak-secret-testing.md): JWT-specific token forgery and weak secret brute-force
+- [RSA/ECDSA and Randomness Checks](rsa-ecdsa-and-randomness-checks.md): mathematical weakness analysis of extracted key material

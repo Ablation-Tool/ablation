@@ -1,6 +1,6 @@
 # Packing and Anti-Analysis Indicators
 
-Detect packed section entropy, PEB/debugger detection patterns, opaque predicate and junk-code insertion, anti-disassembly (overlapping instructions, data-in-code), sandbox environment fingerprinting, and binary obfuscation patterns — providing rapid classification of whether a binary requires unpacking before analysis — via `modules/forensics_enum.py`.
+Detect packed section entropy, PEB/debugger detection patterns, opaque predicate and junk-code insertion, anti-disassembly (overlapping instructions, data-in-code), sandbox environment fingerprinting, and binary obfuscation patterns: providing rapid classification of whether a binary requires unpacking before analysis: via `modules/forensics_enum.py`.
 
 ---
 
@@ -8,9 +8,9 @@ Detect packed section entropy, PEB/debugger detection patterns, opaque predicate
 
 1. **`detect_binary_obfuscation_patterns()` identifies four categories of anti-analysis technique** in raw binary data: (1) packed sections where entropy > 7.0 combined with a minimal import table (`VirtualAlloc` + `GetProcAddress` only), (2) `IsDebuggerPresent` / `CheckRemoteDebuggerPresent` / `NtQueryInformationProcess(ProcessDebugPort)` PEB/API debugger detection, (3) timing-based sandbox detection (`GetTickCount` / `QueryPerformanceCounter` with delta comparison), and (4) CPUID/RDTSC instruction sequences used for hypervisor or emulator fingerprinting.
 
-2. **`detect_pe_peb_manipulation()` identifies techniques that evade process image inspection** — unlinking from the PEB module list (`InMemoryOrderModuleList` FLINK/BLINK manipulation), erasing the PE header from mapped memory (zeroing the MZ/PE magic bytes at the base address), and `NtSetInformationProcess(ProcessBreakOnTermination)` crash-on-inspect patterns. These techniques break the PE introspection tools that security products use to identify malicious code at runtime.
+2. **`detect_pe_peb_manipulation()` identifies techniques that evade process image inspection**: unlinking from the PEB module list (`InMemoryOrderModuleList` FLINK/BLINK manipulation), erasing the PE header from mapped memory (zeroing the MZ/PE magic bytes at the base address), and `NtSetInformationProcess(ProcessBreakOnTermination)` crash-on-inspect patterns. These techniques break the PE introspection tools that security products use to identify malicious code at runtime.
 
-3. **`analyze_elf_binary_indicators()`** provides the Linux-side counterpart — `detect_binary_obfuscation_patterns()` in the same module covers `ptrace(PTRACE_TRACEME)` self-debugging anti-attach, `/proc/self/status` TracerPid check (Linux debugger detection), and environment variable sandbox detection (`SANDBOX`, `CUCKOO`, `TRIAGE` in environment variable names accessed by the binary).
+3. **`analyze_elf_binary_indicators()`** provides the Linux-side counterpart: `detect_binary_obfuscation_patterns()` in the same module covers `ptrace(PTRACE_TRACEME)` self-debugging anti-attach, `/proc/self/status` TracerPid check (Linux debugger detection), and environment variable sandbox detection (`SANDBOX`, `CUCKOO`, `TRIAGE` in environment variable names accessed by the binary).
 
 ---
 
@@ -68,9 +68,9 @@ detect_pe_peb_manipulation:
 
 ## False positives
 
-**High entropy packed section** — legitimate software protectors (VMProtect, Themida, game DRM) and self-extracting installers produce high-entropy sections that are indistinguishable from malware packers based on entropy alone. Correlate with import table anomalies: a packed stub's IAT contains only what's needed to unpack, while a DRM-protected game retains a full import table.
+**High entropy packed section**: legitimate software protectors (VMProtect, Themida, game DRM) and self-extracting installers produce high-entropy sections that are indistinguishable from malware packers based on entropy alone. Correlate with import table anomalies: a packed stub's IAT contains only what's needed to unpack, while a DRM-protected game retains a full import table.
 
-**`IsDebuggerPresent` as benign anti-cheat** — many games, commercial software, and enterprise applications call `IsDebuggerPresent` to protect intellectual property. This is not malware behavior in isolation. Flag it only when combined with other indicators (packed section, PEB unlinking, import hashing).
+**`IsDebuggerPresent` as benign anti-cheat**: many games, commercial software, and enterprise applications call `IsDebuggerPresent` to protect intellectual property. This is not malware behavior in isolation. Flag it only when combined with other indicators (packed section, PEB unlinking, import hashing).
 
 ---
 
@@ -94,5 +94,5 @@ Run packing and anti-analysis checks as the second analysis step on any PE binar
 
 ## See also
 
-- [Office/PDF Triage](office-pdf-triage.md) — document-delivered dropper analysis; the dropped PE feeds into this page's checks
-- [Rootkit/Bootkit Indicators](rootkit-bootkit-indicators.md) — post-unpack analysis for kernel-mode malware components
+- [Office/PDF Triage](office-pdf-triage.md): document-delivered dropper analysis; the dropped PE feeds into this page's checks
+- [Rootkit/Bootkit Indicators](rootkit-bootkit-indicators.md): post-unpack analysis for kernel-mode malware components

@@ -201,12 +201,12 @@ Version-mismatch findings appear when a known key or certificate is present in a
 | Attribute | Content |
 |:---|:---|
 | `fw_path` | Path to the input firmware file |
-| `outer_key` | `Optional[bytes]` — recovered outer encryption key, if found |
-| `outer_key_confidence` | Float 0.0–1.0 — confidence in the recovered key |
-| `pkcs1_candidates` | `List[bytes]` — raw PKCS#1 key candidate bytes |
-| `partitions` | `List[PartitionResult]` — extracted firmware partitions |
-| `datafs_path` | `Optional[str]` — path to the extracted data filesystem, if recovered |
-| `workdir` | `Optional[str]` — temp directory holding extracted files; call `result.cleanup()` when done |
+| `outer_key` | `Optional[bytes]`: recovered outer encryption key, if found |
+| `outer_key_confidence` | Float 0.0–1.0: confidence in the recovered key |
+| `pkcs1_candidates` | `List[bytes]`: raw PKCS#1 key candidate bytes |
+| `partitions` | `List[PartitionResult]`: extracted firmware partitions |
+| `datafs_path` | `Optional[str]`: path to the extracted data filesystem, if recovered |
+| `workdir` | `Optional[str]`: temp directory holding extracted files; call `result.cleanup()` when done |
 | `error` | `None` on success, error string if extraction failed |
 
 Each `PartitionResult`:
@@ -217,7 +217,7 @@ Each `PartitionResult`:
 | `offset` | Byte offset in the decrypted full image |
 | `encrypted_path` | Path to the raw encrypted partition bytes |
 | `decrypted_path` | Path to the decrypted partition (None if not recovered) |
-| `key_used` | `Optional[bytes]` — encryption key that succeeded |
+| `key_used` | `Optional[bytes]`: encryption key that succeeded |
 | `cipher` | `'rc4'` / `'xor'` / `'none'` |
 | `valid_header` | `True` if the partition header validated for this filesystem kind |
 
@@ -225,6 +225,6 @@ Each `PartitionResult`:
 
 ## See also
 
-- [FirmwareContainers](firmware-containers.md) — partition extraction from container images
-- [TaintAnalysis](taint-analysis.md) — trace network input to sinks in extracted binaries
-- [SemanticSearch](semantic-search.md) — find vulnerability candidates in extracted ELFs
+- [FirmwareContainers](firmware-containers.md): partition extraction from container images
+- [TaintAnalysis](taint-analysis.md): trace network input to sinks in extracted binaries
+- [SemanticSearch](semantic-search.md): find vulnerability candidates in extracted ELFs

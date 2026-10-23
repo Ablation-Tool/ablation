@@ -1,16 +1,16 @@
 # Privilege Escalation Enumeration
 
-Enumerate SUID/SGID binaries with GTFOBins cross-reference, sudo NOPASSWD policies, writable cron jobs and PATH directories, Linux capability misconfigurations, container namespace escape surfaces, kernel module rootkit indicators, and heap injection paths — providing a complete local privilege escalation picture from an unprivileged shell — via `modules/privesc_enum.py` `PrivescEnumerator`.
+Enumerate SUID/SGID binaries with GTFOBins cross-reference, sudo NOPASSWD policies, writable cron jobs and PATH directories, Linux capability misconfigurations, container namespace escape surfaces, kernel module rootkit indicators, and heap injection paths: providing a complete local privilege escalation picture from an unprivileged shell: via `modules/privesc_enum.py` `PrivescEnumerator`.
 
 ---
 
 ## Why this exists
 
-1. **SUID binary enumeration requires GTFOBins cross-reference to separate actionable from benign** — `PrivescEnumerator.check_suid_binaries()` finds every SUID binary in standard PATH directories, but the set always includes expected system binaries (`sudo`, `su`, `ping`). Without cross-referencing against GTFOBins patterns, the finding list is unactionable noise. `PrivescEnumerator` cross-references against known-exploitable binaries and additionally checks for SUID binaries in world-writable directories and writable SUID binaries — both conditions that allow direct privilege escalation regardless of GTFOBins membership.
+1. **SUID binary enumeration requires GTFOBins cross-reference to separate actionable from benign**: `PrivescEnumerator.check_suid_binaries()` finds every SUID binary in standard PATH directories, but the set always includes expected system binaries (`sudo`, `su`, `ping`). Without cross-referencing against GTFOBins patterns, the finding list is unactionable noise. `PrivescEnumerator` cross-references against known-exploitable binaries and additionally checks for SUID binaries in world-writable directories and writable SUID binaries: both conditions that allow direct privilege escalation regardless of GTFOBins membership.
 
-2. **Standalone check functions cover runtime indicators that require live system access** — `check_loaded_kernel_modules()` compares loaded modules against rootkit signatures (`KNOWN_ROOTKIT_MODULE_LOADED`) and flags modules loaded from non-standard paths. `check_network_namespace_escape()` compares the container's network namespace inode against PID 1's namespace to detect container escape conditions. `check_heap_injection_surface()` scans `/proc/pid/maps` for RWX segments, oversized heaps, and spray indicators. These checks cannot be run from binary analysis alone.
+2. **Standalone check functions cover runtime indicators that require live system access**: `check_loaded_kernel_modules()` compares loaded modules against rootkit signatures (`KNOWN_ROOTKIT_MODULE_LOADED`) and flags modules loaded from non-standard paths. `check_network_namespace_escape()` compares the container's network namespace inode against PID 1's namespace to detect container escape conditions. `check_heap_injection_surface()` scans `/proc/pid/maps` for RWX segments, oversized heaps, and spray indicators. These checks cannot be run from binary analysis alone.
 
-3. **Binary analysis functions operate on raw PE/ELF bytes** — `detect_token_manipulation()`, `detect_uac_bypass_indicators()`, and `detect_driver_exploitation()` take raw bytes and search for Windows privilege escalation patterns (token impersonation sequences, AlwaysInstallElevated registry checks, vulnerable driver signatures) without requiring a Windows execution environment. This enables Windows binary triage from a Linux analysis host.
+3. **Binary analysis functions operate on raw PE/ELF bytes**: `detect_token_manipulation()`, `detect_uac_bypass_indicators()`, and `detect_driver_exploitation()` take raw bytes and search for Windows privilege escalation patterns (token impersonation sequences, AlwaysInstallElevated registry checks, vulnerable driver signatures) without requiring a Windows execution environment. This enables Windows binary triage from a Linux analysis host.
 
 ## Key constants
 
@@ -157,9 +157,9 @@ check_loaded_kernel_modules():
 
 ## False positives
 
-**`SUID/SGID Binaries` findings include vendor-expected SUID binaries** — the SUID check flags all SUID binaries against a GTFOBins cross-reference. Some SUID binaries are intentionally installed (e.g., `sudo`, `su`, `ping`) and are not misconfiguration findings. Review `items` in the finding dict to identify unexpected binaries not part of the base distribution.
+**`SUID/SGID Binaries` findings include vendor-expected SUID binaries**: the SUID check flags all SUID binaries against a GTFOBins cross-reference. Some SUID binaries are intentionally installed (e.g., `sudo`, `su`, `ping`) and are not misconfiguration findings. Review `items` in the finding dict to identify unexpected binaries not part of the base distribution.
 
-**`UNREFERENCED_KERNEL_MODULE` from `check_loaded_kernel_modules()`** — custom vendor drivers and out-of-tree modules (VirtualBox guest additions, DKMS modules) appear as `UNREFERENCED` since they are not in the reference list. Confirm against the target's installed driver list before escalating.
+**`UNREFERENCED_KERNEL_MODULE` from `check_loaded_kernel_modules()`**: custom vendor drivers and out-of-tree modules (VirtualBox guest additions, DKMS modules) appear as `UNREFERENCED` since they are not in the reference list. Confirm against the target's installed driver list before escalating.
 
 ---
 
@@ -194,6 +194,6 @@ Run `PrivescEnumerator` on a live host after gaining a shell (unprivileged). Run
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [FindingRegistry](registry.md): record confirmed findings from enumeration
+- [LateralMovement](lateral-movement.md): chain enumeration findings into a lateral path
+- [NetworkAnalyze](network-analyze.md): port and service fingerprinting

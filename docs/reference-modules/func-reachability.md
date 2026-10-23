@@ -1,6 +1,6 @@
 # FuncReachabilityAnalyzer
 
-Determine whether a function is reachable at runtime — filtering dead code from `SinkArgClassifier` findings before taint tracing begins.
+Determine whether a function is reachable at runtime: filtering dead code from `SinkArgClassifier` findings before taint tracing begins.
 
 ---
 
@@ -8,7 +8,7 @@ Determine whether a function is reachable at runtime — filtering dead code fro
 
 1. **An ARG_PROPAGATED finding in dead code is not exploitable.** `SinkArgClassifier` makes no distinction between functions that execute at runtime and functions that exist only as unreferenced debug artifacts. Every `ARG_PROPAGATED` site in dead code produces a false positive that `TaintTracker` then spends time on.
 
-2. **The gap is measurable.** IBM RecoveryRMd (CSM SAM 2.2.0.1): `func@0x839c14f` contained an `ARG_PROPAGATED` `system()` site. Manual investigation established the function had no callers — all references to `0x839c14f` existed only in `.debug_pubnames` (file offsets `0x3020c`, `0x11eb730`). That investigation took ~20 minutes. This module would have classified it `UNREACHABLE_DEBUG` in milliseconds.
+2. **The gap is measurable.** IBM RecoveryRMd (CSM SAM 2.2.0.1): `func@0x839c14f` contained an `ARG_PROPAGATED` `system()` site. Manual investigation established the function had no callers: all references to `0x839c14f` existed only in `.debug_pubnames` (file offsets `0x3020c`, `0x11eb730`). That investigation took ~20 minutes. This module would have classified it `UNREACHABLE_DEBUG` in milliseconds.
 
 3. **Call-graph edges alone are insufficient.** A function with no `call_edges` entry could be dead code or could be reached via a function pointer. Checking the call graph without scanning for VA references misclassifies function-pointer-called functions as unreachable.
 
@@ -18,9 +18,9 @@ Determine whether a function is reachable at runtime — filtering dead code fro
 
 Two independent checks determine the verdict.
 
-**Check 1 — call edges.** Scan `BinaryContext.call_edges` for any `(src, dst, name)` triple where `dst == func_va`. A single match returns `REACHABLE` immediately.
+**Check 1: call edges.** Scan `BinaryContext.call_edges` for any `(src, dst, name)` triple where `dst == func_va`. A single match returns `REACHABLE` immediately.
 
-**Check 2 — binary VA scan.** If no call edges exist, scan the entire binary for the function VA as a 4-byte or 8-byte little-endian word. Each hit is mapped to its section by file offset. Sections fall into three buckets:
+**Check 2: binary VA scan.** If no call edges exist, scan the entire binary for the function VA as a 4-byte or 8-byte little-endian word. Each hit is mapped to its section by file offset. Sections fall into three buckets:
 
 ```
 Runtime-loadable sections (.text, .data, .rodata, .got, .init_array, ...):
@@ -39,10 +39,10 @@ No references at all:
 
 | Verdict | Meaning | Action |
 |:---|:---|:---|
-| `REACHABLE` | At least one call edge exists | Normal ARG_PROPAGATED path — proceed to TaintTracker |
+| `REACHABLE` | At least one call edge exists | Normal ARG_PROPAGATED path: proceed to TaintTracker |
 | `REACHABLE_VIA_PTR` | No call edges; VA appears in runtime section | Investigate function pointer usage before discarding |
-| `UNREACHABLE_DEBUG` | No call edges; VA only in debug/symbol sections | Discard finding — dead code, not reachable at runtime |
-| `UNREACHABLE_NOREF` | No call edges; no references found | Discard finding — function is orphaned |
+| `UNREACHABLE_DEBUG` | No call edges; VA only in debug/symbol sections | Discard finding: dead code, not reachable at runtime |
+| `UNREACHABLE_NOREF` | No call edges; no references found | Discard finding: function is orphaned |
 
 ---
 
@@ -112,7 +112,7 @@ The analyzer auto-detects whether to search for 4-byte or 8-byte VA patterns. It
 
 ## Pipeline position
 
-**Before:** `SinkArgClassifier.classify_all()` — produces the findings to filter.
+**Before:** `SinkArgClassifier.classify_all()`: produces the findings to filter.
 
 **After:** `FuncReachabilityAnalyzer.filter_unreachable(findings)` removes `UNREACHABLE_DEBUG` and `UNREACHABLE_NOREF` entries before `TaintTracker` runs.
 
@@ -120,6 +120,6 @@ The analyzer auto-detects whether to search for 4-byte or 8-byte VA patterns. It
 
 ## See also
 
-- [Sink Arg Classifier](sink-arg-classifier.md) — produces the ARG_PROPAGATED findings this module filters
-- [Caller Arg Resolver](caller-arg-resolver.md) — for REACHABLE ARG_PROPAGATED sites, traces what callers actually pass
-- [Taint Analysis](taint-analysis.md) — runs on the surviving REACHABLE findings
+- [Sink Arg Classifier](sink-arg-classifier.md): produces the ARG_PROPAGATED findings this module filters
+- [Caller Arg Resolver](caller-arg-resolver.md): for REACHABLE ARG_PROPAGATED sites, traces what callers actually pass
+- [Taint Analysis](taint-analysis.md): runs on the surviving REACHABLE findings

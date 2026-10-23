@@ -1,16 +1,16 @@
 # Legacy Voice Protocols
 
-Probe H.323 Q.931/RAS, SCCP/Skinny, and MGCP telephony infrastructure for unauthenticated call-signaling response, gatekeeper registration without authentication, phone registration without CAPF, and unauthenticated call creation or endpoint audit on media gateways — via `modules/sip_enum.py`.
+Probe H.323 Q.931/RAS, SCCP/Skinny, and MGCP telephony infrastructure for unauthenticated call-signaling response, gatekeeper registration without authentication, phone registration without CAPF, and unauthenticated call creation or endpoint audit on media gateways: via `modules/sip_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **H.323 Q.931 (TCP/1720) and RAS (UDP/1719) are cleartext by default** — `probe_h323_service()` sends a minimal SETUP TPKT to TCP/1720 to confirm the port accepts H.323 call setup without TLS, and sends a GatekeeperRequest (GRQ) to UDP/1719 to test whether the gatekeeper issues a GatekeeperConfirm (GCF) without H.235 authentication. A GCF without authentication (`H323_GATEKEEPER_UNAUTH_CONFIRM`) means an attacker can register, enumerate the dial plan, and bypass admission control.
+1. **H.323 Q.931 (TCP/1720) and RAS (UDP/1719) are cleartext by default**: `probe_h323_service()` sends a minimal SETUP TPKT to TCP/1720 to confirm the port accepts H.323 call setup without TLS, and sends a GatekeeperRequest (GRQ) to UDP/1719 to test whether the gatekeeper issues a GatekeeperConfirm (GCF) without H.235 authentication. A GCF without authentication (`H323_GATEKEEPER_UNAUTH_CONFIRM`) means an attacker can register, enumerate the dial plan, and bypass admission control.
 
-2. **SCCP/Skinny registration has an optional CAPF certificate layer that is widely not enforced** — `probe_sccp_skinny()` sends a RegisterMessage (0x0001) to TCP/2000; a RegisterAck (0x0081) in response means CUCM/CME accepted registration from an unknown device without credentials (`SCCP_UNAUTH_REGISTER_ACCEPTED`). `detect_sccp_skinny_surface()` extends this: it probes the KeepAlive path (0x0000 → 0x0120 KeepAliveAck) and sends an unsolicited OpenReceiveChannelAck (0x0022) to test whether the call agent accepts an attacker-controlled RTP endpoint description without a preceding OpenReceiveChannel.
+2. **SCCP/Skinny registration has an optional CAPF certificate layer that is widely not enforced**: `probe_sccp_skinny()` sends a RegisterMessage (0x0001) to TCP/2000; a RegisterAck (0x0081) in response means CUCM/CME accepted registration from an unknown device without credentials (`SCCP_UNAUTH_REGISTER_ACCEPTED`). `detect_sccp_skinny_surface()` extends this: it probes the KeepAlive path (0x0000 → 0x0120 KeepAliveAck) and sends an unsolicited OpenReceiveChannelAck (0x0022) to test whether the call agent accepts an attacker-controlled RTP endpoint description without a preceding OpenReceiveChannel.
 
-3. **MGCP media gateways accept call control commands without IPsec in most enterprise deployments** — RFC 3435 §5 specifies IPsec for call agent authentication, but it is absent in most deployments. `detect_mgcp_surface()` sends three MGCP commands (AUEP, RQNT, CRCX) to UDP/2427; a 200-class response to any of them without authentication represents a direct path to endpoint enumeration, event subscription hijack, or unauthenticated call creation.
+3. **MGCP media gateways accept call control commands without IPsec in most enterprise deployments**: RFC 3435 §5 specifies IPsec for call agent authentication, but it is absent in most deployments. `detect_mgcp_surface()` sends three MGCP commands (AUEP, RQNT, CRCX) to UDP/2427; a 200-class response to any of them without authentication represents a direct path to endpoint enumeration, event subscription hijack, or unauthenticated call creation.
 
 ---
 
@@ -87,9 +87,9 @@ detect_mgcp_surface: <target-host>:2427
 
 ## False positives
 
-**`H323_CALL_SIGNALING_ACTIVE` (MEDIUM) on H.323 proxies with upstream TLS termination** — some enterprise deployments terminate TLS at a session border controller (SBC) that forwards cleartext to internal H.323 gateways. Confirm whether TCP/1720 is reachable from the external network boundary before treating this as an externally exploitable finding. The `H323_GATEKEEPER_UNAUTH_CONFIRM` (HIGH) finding from UDP/1719 is more directly actionable since it confirms admission control bypass regardless of network position.
+**`H323_CALL_SIGNALING_ACTIVE` (MEDIUM) on H.323 proxies with upstream TLS termination**: some enterprise deployments terminate TLS at a session border controller (SBC) that forwards cleartext to internal H.323 gateways. Confirm whether TCP/1720 is reachable from the external network boundary before treating this as an externally exploitable finding. The `H323_GATEKEEPER_UNAUTH_CONFIRM` (HIGH) finding from UDP/1719 is more directly actionable since it confirms admission control bypass regardless of network position.
 
-**`SCCP_KEEPALIVE_RESPONSIVE` on lab or development CUCM clusters** — development CUCM deployments commonly disable CAPF and accept any keepalive traffic for operational simplicity. Confirm whether the probed CUCM cluster serves production phones before escalating `SCCP_KEEPALIVE_RESPONSIVE` or `SCCP_REGISTER_ACCEPTED`.
+**`SCCP_KEEPALIVE_RESPONSIVE` on lab or development CUCM clusters**: development CUCM deployments commonly disable CAPF and accept any keepalive traffic for operational simplicity. Confirm whether the probed CUCM cluster serves production phones before escalating `SCCP_KEEPALIVE_RESPONSIVE` or `SCCP_REGISTER_ACCEPTED`.
 
 ---
 
@@ -115,6 +115,6 @@ H.323/SCCP probe functions return `List[{severity, title, detail, host, port}]`:
 
 ## See also
 
-- [SIP Service and Extension Discovery](sip-service-and-extension-discovery.md) — SIP OPTIONS/REGISTER/INVITE probes, extension enumeration
-- [SIP Attack Surface Detection](sip-attack-surface-detection.md) — TDoS/flood susceptibility, eavesdropping surfaces, header injection
-- [VoIP Protocol Inspection and Covert Channels](voip-protocol-and-covert-channels.md) — DTMF extraction, RTP covert channels, WebRTC signaling
+- [SIP Service and Extension Discovery](sip-service-and-extension-discovery.md): SIP OPTIONS/REGISTER/INVITE probes, extension enumeration
+- [SIP Attack Surface Detection](sip-attack-surface-detection.md): TDoS/flood susceptibility, eavesdropping surfaces, header injection
+- [VoIP Protocol Inspection and Covert Channels](voip-protocol-and-covert-channels.md): DTMF extraction, RTP covert channels, WebRTC signaling

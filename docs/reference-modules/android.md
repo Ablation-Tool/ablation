@@ -514,9 +514,9 @@ BinderScanner report:
 
 ## False positives
 
-**DEX string pool includes documentation strings and error messages.** `Runtime.exec`, `DES`, and `MD5` appear in diagnostic log strings and exception message templates compiled into DEX. `DexAnalyzer` flags these on the string match — use `iter_method_refs()` to confirm the corresponding `Runtime.exec()` or `Cipher.getInstance("DES")` call is present before escalating.
+**DEX string pool includes documentation strings and error messages.** `Runtime.exec`, `DES`, and `MD5` appear in diagnostic log strings and exception message templates compiled into DEX. `DexAnalyzer` flags these on the string match: use `iter_method_refs()` to confirm the corresponding `Runtime.exec()` or `Cipher.getInstance("DES")` call is present before escalating.
 
-**`generic_secret` matches template placeholder values.** Strings like `"secret=YOUR_SECRET_HERE"` or `"api_key=<replace>"` trigger the pattern. The `evidence` field exposes the raw string — discard matches under 16 characters or containing obvious placeholder text.
+**`generic_secret` matches template placeholder values.** Strings like `"secret=YOUR_SECRET_HERE"` or `"api_key=<replace>"` trigger the pattern. The `evidence` field exposes the raw string: discard matches under 16 characters or containing obvious placeholder text.
 
 **ProGuard-obfuscated APKs produce incomplete method reference graphs.** On heavily obfuscated APKs, class and method names are single letters. String pool scanning and dangerous API detection remain effective; class-name-based analysis (exported component names, Binder service class lookup) is unreliable. Cross-reference findings with `DexDisasm` output at the method level.
 
@@ -549,6 +549,6 @@ Each layer returns typed finding objects. `DexAnalyzer(apk).scan()` returns `Lis
 
 ## See also
 
-- [BinaryContext](binary-context.md) — native binary context when the runtime wraps a native library
-- [TaintAnalysis](taint-analysis.md) — trace dangerous calls found in the runtime layer
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): native binary context when the runtime wraps a native library
+- [TaintAnalysis](taint-analysis.md): trace dangerous calls found in the runtime layer
+- [FindingRegistry](registry.md): record confirmed findings

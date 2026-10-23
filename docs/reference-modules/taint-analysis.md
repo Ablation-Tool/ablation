@@ -6,11 +6,11 @@ Forward-propagate attacker-controlled data through a function's instruction stre
 
 ## Why this exists
 
-1. **A finding from a scanner is a hypothesis — taint analysis converts it to a verdict.** When the `HeapVulnScanner` reports an integer overflow before `malloc`, or the `FormatStringScanner` reports that a format register originates from a function argument, neither tool has answered the critical question: does that value come from attacker-controlled network input? `TaintTracker` takes those findings as starting points and traces the data forward through the function body, answering precisely which instruction paths are reachable from tainted data.
+1. **A finding from a scanner is a hypothesis: taint analysis converts it to a verdict.** When the `HeapVulnScanner` reports an integer overflow before `malloc`, or the `FormatStringScanner` reports that a format register originates from a function argument, neither tool has answered the critical question: does that value come from attacker-controlled network input? `TaintTracker` takes those findings as starting points and traces the data forward through the function body, answering precisely which instruction paths are reachable from tainted data.
 
-2. **Register aliasing defeats naive taint propagation.** The x86-64 instruction set allows code to write to `eax` (32-bit) and then read from `rax` (64-bit), or write to `al` (8-bit) and read from `rax`. A taint propagator that tracks registers by name only (not canonical form) will silently lose taint when the compiler emits a `movzx eax, byte ptr [rbp-8]` followed by `mov [rdi+rcx*4], rax`. This tracker normalizes every register reference to its 64-bit canonical form before any propagation operation — `al`, `ax`, `eax`, and `rax` are all tracked as `rax`.
+2. **Register aliasing defeats naive taint propagation.** The x86-64 instruction set allows code to write to `eax` (32-bit) and then read from `rax` (64-bit), or write to `al` (8-bit) and read from `rax`. A taint propagator that tracks registers by name only (not canonical form) will silently lose taint when the compiler emits a `movzx eax, byte ptr [rbp-8]` followed by `mov [rdi+rcx*4], rax`. This tracker normalizes every register reference to its 64-bit canonical form before any propagation operation: `al`, `ax`, `eax`, and `rax` are all tracked as `rax`.
 
-3. **Intra-function taint analysis covers the highest-value vulnerability patterns without requiring symbolic execution.** The majority of remotely exploitable firmware vulnerabilities — heap overflows, format string bugs, and buffer overreads — are exploitable within a single function: attacker data arrives as a function argument and reaches a sink within that same function body. This tool provides that analysis in milliseconds, without SMT solvers, without symbolic path constraints, and without the operational overhead of a full binary analysis platform.
+3. **Intra-function taint analysis covers the highest-value vulnerability patterns without requiring symbolic execution.** The majority of remotely exploitable firmware vulnerabilities: heap overflows, format string bugs, and buffer overreads: are exploitable within a single function: attacker data arrives as a function argument and reaches a sink within that same function body. This tool provides that analysis in milliseconds, without SMT solvers, without symbolic path constraints, and without the operational overhead of a full binary analysis platform.
 
 ---
 
@@ -91,7 +91,7 @@ The tracker is **path-insensitive**: it does not branch-fork the taint state at 
 - A value that is tainted on one branch of a conditional is considered tainted after the merge point.
 - This prevents false negatives at the cost of some false positives on paths that are not actually reachable together.
 
-`setcc` instructions (e.g., `sete al`) are treated as always untainted — they produce a known 0/1 value derived from flags, not from tainted data, so they do not propagate taint.
+`setcc` instructions (e.g., `sete al`) are treated as always untainted: they produce a known 0/1 value derived from flags, not from tainted data, so they do not propagate taint.
 
 ---
 
@@ -191,13 +191,13 @@ for sink in sinks:
 
 ## False positives
 
-**Path-insensitive analysis on guarded code.** A function that validates user input at the top and returns early on invalid input will still show taint reaching sinks on the guarded fast path — the tracker does not model the fact that the early return prevents the tainted value from ever reaching the allocation on the valid-input path. Manually verify that the branch at the `branch_cond` sink does not guard the `alloc_size` sink.
+**Path-insensitive analysis on guarded code.** A function that validates user input at the top and returns early on invalid input will still show taint reaching sinks on the guarded fast path: the tracker does not model the fact that the early return prevents the tainted value from ever reaching the allocation on the valid-input path. Manually verify that the branch at the `branch_cond` sink does not guard the `alloc_size` sink.
 
-**`xor reg, reg` tracking.** The tracker special-cases `xor dst, src` when `dst == src` as a zero-initializer (clears taint). However, some compilers use `xor eax, eax` as a NOP-substitute or pipeline filler without intent to zero. When `xor eax, eax` immediately precedes a `call` that returns a value into `rax`, the resulting `rax` write on return is from the call, not the xor — and the tracker correctly handles this because the call return kills all caller-saved taint.
+**`xor reg, reg` tracking.** The tracker special-cases `xor dst, src` when `dst == src` as a zero-initializer (clears taint). However, some compilers use `xor eax, eax` as a NOP-substitute or pipeline filler without intent to zero. When `xor eax, eax` immediately precedes a `call` that returns a value into `rax`, the resulting `rax` write on return is from the call, not the xor, and the tracker correctly handles this because the call return kills all caller-saved taint.
 
 **Large functions with loops.** The `max_insns` limit (default 800) prevents runaway disassembly on pathological functions, but it means a function with a long loop prologue may not reach all sinks. If the function is of interest, increase `max_insns` or increase `max_func_size`.
 
-**Memory taint.** The tracker does not model memory taint — only register and stack-slot taint. If tainted data is stored to memory and later reloaded into a register, the reload is treated as untainted. This is a fundamental limitation of the intra-function, register-only model; full memory taint requires a different analysis tier.
+**Memory taint.** The tracker does not model memory taint: only register and stack-slot taint. If tainted data is stored to memory and later reloaded into a register, the reload is treated as untainted. This is a fundamental limitation of the intra-function, register-only model; full memory taint requires a different analysis tier.
 
 ---
 
@@ -223,8 +223,8 @@ for sink in sinks:
 
 ## See also
 
-- [Heap Vulnerability Scanner](heap-vulnerability-scanner.md) — generates the function candidates that `TaintTracker` confirms
-- [Format String Scanner](format-string-scanner.md) — produces `arg_passthrough` candidates for taint confirmation
-- [Binary Context](binary-context.md) — required for PLT-based allocator and copy-function resolution
-- [Path Solver](path-solver.md) — feasibility analysis for confirmed taint paths
-- [Sink Arg Classifier](sink-arg-classifier.md) — pre-classify all sink arguments before full taint tracing
+- [Heap Vulnerability Scanner](heap-vulnerability-scanner.md): generates the function candidates that `TaintTracker` confirms
+- [Format String Scanner](format-string-scanner.md): produces `arg_passthrough` candidates for taint confirmation
+- [Binary Context](binary-context.md): required for PLT-based allocator and copy-function resolution
+- [Path Solver](path-solver.md): feasibility analysis for confirmed taint paths
+- [Sink Arg Classifier](sink-arg-classifier.md): pre-classify all sink arguments before full taint tracing

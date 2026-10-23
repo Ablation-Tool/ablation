@@ -6,11 +6,11 @@ Three GitHub Actions workflows that enforce import smoke tests, run the pytest s
 
 ## Why this exists
 
-1. **Ablation's analyzer tree has 60+ modules across 4 package namespaces (`ablation`, `ablation.analyzers`, `ablation.core`, `sweeps`) — a broken import in any one of them produces a silent failure during RE sessions that manifests as an `ImportError` at the worst possible moment.** The CI workflow runs import smoke tests for the six highest-impact modules (`BinaryContext`, `XRefGraph`, `CFGBuilder`, `CorpusBuilder`, `SemanticSearcher`, `PatternLibrary`) on every push and pull request to `main`. These tests run before `pytest` so that a missing dependency or circular import is caught before the test suite even starts.
+1. **Ablation's analyzer tree has 60+ modules across 4 package namespaces (`ablation`, `ablation.analyzers`, `ablation.core`, `sweeps`): a broken import in any one of them produces a silent failure during RE sessions that manifests as an `ImportError` at the worst possible moment.** The CI workflow runs import smoke tests for the six highest-impact modules (`BinaryContext`, `XRefGraph`, `CFGBuilder`, `CorpusBuilder`, `SemanticSearcher`, `PatternLibrary`) on every push and pull request to `main`. These tests run before `pytest` so that a missing dependency or circular import is caught before the test suite even starts.
 
-2. **PyPI publication requires signing provenance — an incorrect manual `twine upload` can publish a build without provenance attestation, which breaks downstream package integrity verification.** The publish workflow uses `pypa/gh-action-pypi-publish@release/v1` with OIDC trusted publishing (no API token stored in secrets) and is triggered only on GitHub Release publication events, not on arbitrary pushes. This means every PyPI upload is traceable to a specific signed GitHub Release event.
+2. **PyPI publication requires signing provenance: an incorrect manual `twine upload` can publish a build without provenance attestation, which breaks downstream package integrity verification.** The publish workflow uses `pypa/gh-action-pypi-publish@release/v1` with OIDC trusted publishing (no API token stored in secrets) and is triggered only on GitHub Release publication events, not on arbitrary pushes. This means every PyPI upload is traceable to a specific signed GitHub Release event.
 
-3. **Homebrew formula SHA-256 checksums must be updated atomically with the release tag — a formula that references an outdated checksum blocks all `brew install` users until the formula is manually fixed.** The `update-checksums.yml` workflow fires on any `v*.*.*` tag push, computes `git archive` SHA-256 for that tag, and commits the updated checksum to `main` automatically. The full pipeline (tag → CI green → Release published → PyPI published → Homebrew checksum updated) is automated end-to-end.
+3. **Homebrew formula SHA-256 checksums must be updated atomically with the release tag: a formula that references an outdated checksum blocks all `brew install` users until the formula is manually fixed.** The `update-checksums.yml` workflow fires on any `v*.*.*` tag push, computes `git archive` SHA-256 for that tag, and commits the updated checksum to `main` automatically. The full pipeline (tag → CI green → Release published → PyPI published → Homebrew checksum updated) is automated end-to-end.
 
 ---
 
@@ -45,10 +45,10 @@ flowchart TD
 
 | Stage | Command | Blocks on failure |
 |:---|:---|:---|
-| Import smoke test | `python -c "from ablation... import ..."` | Yes — any ImportError fails the job |
-| CLI help | `ablation --help` | Yes — confirms entry-point registration |
-| Integration test | Python inline script on `/usr/bin/ls` | Yes — asserts on function/block counts |
-| pytest | `pytest tests/ -x -q` | No (`|| true`) — test failures are advisory |
+| Import smoke test | `python -c "from ablation... import ..."` | Yes: any ImportError fails the job |
+| CLI help | `ablation --help` | Yes: confirms entry-point registration |
+| Integration test | Python inline script on `/usr/bin/ls` | Yes: asserts on function/block counts |
+| pytest | `pytest tests/ -x -q` | No (`|| true`): test failures are advisory |
 
 ---
 
@@ -132,13 +132,13 @@ Updated Homebrew formula checksum for v<version>
 
 **`pytest tests/ -x -q || true` in the CI workflow means test failures do not block merge.** This is intentional: the test suite contains integration tests marked with `@pytest.mark.integration` that require binary fixtures not available in the CI environment (specific firmware images). Failure of integration tests in CI is expected. Only import failures and integration test assertion errors on `/usr/bin/ls` are blocking.
 
-**The `update-checksums.yml` workflow commits to `main` using `contents: write` — this creates an automated commit on `main` after every version tag.** If the Homebrew formula file has conflicting changes in the same merge window as a tag push, the automated commit may fail. Check the `update-checksums.yml` run status after every release tag push.
+**The `update-checksums.yml` workflow commits to `main` using `contents: write`, this creates an automated commit on `main` after every version tag.** If the Homebrew formula file has conflicting changes in the same merge window as a tag push, the automated commit may fail. Check the `update-checksums.yml` run status after every release tag push.
 
 ---
 
 ## Pipeline position
 
-This is the release automation layer — it sits above all module development and RE work. CI runs on every PR before merge. The publish and update-checksums workflows run post-release. There are no module dependencies in the `reference-modules` sense — CI tests the modules, not the other way around.
+This is the release automation layer, it sits above all module development and RE work. CI runs on every PR before merge. The publish and update-checksums workflows run post-release. There are no module dependencies in the `reference-modules` sense: CI tests the modules, not the other way around.
 
 ---
 
@@ -160,6 +160,6 @@ gh run watch <run-id>
 
 ## See also
 
-- [Coverage Gate](coverage-gate.md) — TCL3 qualification scope, 85% coverage threshold, qualified module list
-- [FORGE Module](forge.md) — pre-commit module audit gate; runs before `git commit`, independent of CI
-- [Dependency and Supply Chain Tooling](dependency-and-supply-chain-tooling.md) — `pyproject.toml` dependency management and optional extras
+- [Coverage Gate](coverage-gate.md): TCL3 qualification scope, 85% coverage threshold, qualified module list
+- [FORGE Module](forge.md): pre-commit module audit gate; runs before `git commit`, independent of CI
+- [Dependency and Supply Chain Tooling](dependency-and-supply-chain-tooling.md): `pyproject.toml` dependency management and optional extras

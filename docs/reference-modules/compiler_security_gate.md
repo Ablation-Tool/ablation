@@ -172,14 +172,14 @@ Prior to this module, compiler_security_gate required manual work outside the Ab
 | `category` | `TAINT_FLOW` / `FORMAT_STRING` / `HEAP` / `LENGTH_UNDERFLOW` |
 | `description` | One-line description of what was detected |
 | `detector` | Name of the sub-scanner that produced this finding |
-| `taint_dag` | `Optional[SemanticBlock]` — DAG adapter block for walking the taint path; `None` for non-taint findings (format string, heap, underflow) |
+| `taint_dag` | `Optional[SemanticBlock]`: DAG adapter block for walking the taint path; `None` for non-taint findings (format string, heap, underflow) |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

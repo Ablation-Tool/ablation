@@ -765,9 +765,9 @@ SourceTaintTracker: <N> confirmed taint paths
 
 ## False positives
 
-**`SourceSinkScanner` matches on dangerous function names in safe wrapper code** — a function named `safe_exec()` that sanitizes its input before passing to `exec()` will match the `exec` sink pattern. Verify taint path: if `SourceTaintTracker` shows the tainted input is sanitized before reaching the sink, the finding is a false positive.
+**`SourceSinkScanner` matches on dangerous function names in safe wrapper code**: a function named `safe_exec()` that sanitizes its input before passing to `exec()` will match the `exec` sink pattern. Verify taint path: if `SourceTaintTracker` shows the tainted input is sanitized before reaching the sink, the finding is a false positive.
 
-**`SourceIsolationChecker` tenant boundary detection is conservative** — it flags any query that uses a non-`tenant_id` field in a WHERE clause when the model has a `tenant_id` field. Some legitimate single-tenant administrative endpoints intentionally query without tenant filtering. Use `auth_level` from `SourceEntryClassifier` to distinguish `ADMIN`-gated from `NONE`-gated administrative queries.
+**`SourceIsolationChecker` tenant boundary detection is conservative**, it flags any query that uses a non-`tenant_id` field in a WHERE clause when the model has a `tenant_id` field. Some legitimate single-tenant administrative endpoints intentionally query without tenant filtering. Use `auth_level` from `SourceEntryClassifier` to distinguish `ADMIN`-gated from `NONE`-gated administrative queries.
 
 ---
 
@@ -793,6 +793,6 @@ Each tool in the pipeline returns its own finding type:
 
 ## See also
 
-- [Tenant Isolation Checks](tenant-isolation-checks.md) — `SourceIsolationChecker` and `SourceEntryClassifier` individual capability reference
-- [Route Authentication Classification](route-authentication-classification.md) — `SourceEntryClassifier` standalone reference
-- [Source Code Auditing](source-code-auditing.md) — companion tool reference
+- [Tenant Isolation Checks](tenant-isolation-checks.md): `SourceIsolationChecker` and `SourceEntryClassifier` individual capability reference
+- [Route Authentication Classification](route-authentication-classification.md): `SourceEntryClassifier` standalone reference
+- [Source Code Auditing](source-code-auditing.md): companion tool reference

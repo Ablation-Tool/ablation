@@ -239,13 +239,13 @@ for seg in sections:
 
 ## False positives
 
-**SIMD instruction coverage.** The SPU instruction set includes `shufb` (byte shuffle), `selb` (select bits), and `mpya/fma/fms/fnms` (float-multiply-accumulate) in RRR format. These instructions operate on all 128 bits of the 128-bit registers — a misidentified field extraction (e.g., wrong rC field) may report an incorrect destination register. Verify RRR-format decodes against the IBM SPU ISA v1.2 PDF tables.
+**SIMD instruction coverage.** The SPU instruction set includes `shufb` (byte shuffle), `selb` (select bits), and `mpya/fma/fms/fnms` (float-multiply-accumulate) in RRR format. These instructions operate on all 128 bits of the 128-bit registers: a misidentified field extraction for example wrong rC field may report an incorrect destination register. Verify RRR-format decodes against the IBM SPU ISA v1.2 PDF tables.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Locate the SPU `.text` section in the Cell PPU ELF — SPU programs are typically embedded as data blobs and extracted to the SPU local store at runtime.
+**Before this module:** Locate the SPU `.text` section in the Cell PPU ELF: SPU programs are typically embedded as data blobs and extracted to the SPU local store at runtime.
 
 **After this module:** Pass the decoded instruction list to an SPU taint tracker or manually inspect for unsafe `stqd` (store quadword with displacement) patterns where the displacement is attacker-controlled.
 
@@ -266,8 +266,8 @@ for seg in sections:
 | `rB` | Source register B (bits 14–20) |
 | `I7` | 7-bit immediate (sign-extended) |
 | `I10` | 10-bit immediate (sign-extended) |
-| `I16` | 16-bit immediate (sign-extended) — used for branch targets |
-| `I18` | 18-bit immediate (sign-extended) — used for `ilhu`/`lqr` |
+| `I16` | 16-bit immediate (sign-extended): used for branch targets |
+| `I18` | 18-bit immediate (sign-extended): used for `ilhu`/`lqr` |
 
 `disassemble_spu_text(data, base_va)` returns `List[SPUInstruction]` for a byte range.
 
@@ -275,6 +275,6 @@ for seg in sections:
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

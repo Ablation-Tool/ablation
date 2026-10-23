@@ -1,16 +1,16 @@
 # Office/PDF Triage
 
-Detect VBA macro indicators (auto-execution entry points, Shell/WScript invocations, obfuscated string concatenation), PDF exploit patterns (JavaScript `eval()`, embedded EXE launch, heap spray byte sequences), and PE resource section anomalies — providing a rapid first-pass triage verdict for Office and PDF document samples — via `modules/forensics_enum.py`.
+Detect VBA macro indicators (auto-execution entry points, Shell/WScript invocations, obfuscated string concatenation), PDF exploit patterns (JavaScript `eval()`, embedded EXE launch, heap spray byte sequences), and PE resource section anomalies: providing a rapid first-pass triage verdict for Office and PDF document samples: via `modules/forensics_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **`detect_office_macro_indicators()` identifies malicious VBA macro patterns statically** — it scans binary data for `AutoOpen`, `Workbook_Open`, `Document_Open`, and `Auto_Open` entry points (which execute without user interaction), `Shell()`, `WScript.Shell`, `CreateObject("Shell.Application")`, `ActiveX` object creation, and PowerShell download cradle strings (`IEX`, `Invoke-Expression`, `New-Object Net.WebClient`). These patterns appear in malicious Office documents used as initial access vectors.
+1. **`detect_office_macro_indicators()` identifies malicious VBA macro patterns statically**, it scans binary data for `AutoOpen`, `Workbook_Open`, `Document_Open`, and `Auto_Open` entry points (which execute without user interaction), `Shell()`, `WScript.Shell`, `CreateObject("Shell.Application")`, `ActiveX` object creation, and PowerShell download cradle strings (`IEX`, `Invoke-Expression`, `New-Object Net.WebClient`). These patterns appear in malicious Office documents used as initial access vectors.
 
-2. **`detect_pdf_exploit_indicators()` scans for JavaScript-based PDF exploit patterns** — PDF documents containing JavaScript (`/JS`, `/JavaScript` stream) that calls `eval()`, `unescape()`, or `String.fromCharCode()` with long character arrays (heap spray), and embedded file launches (`/EmbeddedFile`, `/Launch` action with `cmd.exe` or `powershell.exe`). These are the canonical indicators of malicious PDF documents targeting Adobe Reader and PDF viewer vulnerabilities.
+2. **`detect_pdf_exploit_indicators()` scans for JavaScript-based PDF exploit patterns**: PDF documents containing JavaScript (`/JS`, `/JavaScript` stream) that calls `eval()`, `unescape()`, or `String.fromCharCode()` with long character arrays (heap spray), and embedded file launches (`/EmbeddedFile`, `/Launch` action with `cmd.exe` or `powershell.exe`). These are the canonical indicators of malicious PDF documents targeting Adobe Reader and PDF viewer vulnerabilities.
 
-3. **`analyze_pe_file()` and `analyze_pe_resources()`** provide a detailed structural analysis of PE executables embedded within or dropped by documents — section entropy (indicating packing), import table anomalies (common in malware: minimal imports + `VirtualAlloc`/`LoadLibrary` + `GetProcAddress`), resource section embedded executables (PE-in-PE embedding), and version info / PE certificate anomalies.
+3. **`analyze_pe_file()` and `analyze_pe_resources()`** provide a detailed structural analysis of PE executables embedded within or dropped by documents: section entropy (indicating packing), import table anomalies (common in malware: minimal imports + `VirtualAlloc`/`LoadLibrary` + `GetProcAddress`), resource section embedded executables (PE-in-PE embedding), and version info / PE certificate anomalies.
 
 ---
 
@@ -79,9 +79,9 @@ analyze_pe_file: dropped.exe
 
 ## False positives
 
-**`detect_office_macro_indicators()` `Chr()` concatenation** — legitimate VBA scripts sometimes use `Chr()` for non-ASCII characters in string operations (e.g., localized templates). Short `Chr()` sequences (< 20 calls) are not obfuscation; flag only when the concatenation assembles a string of 50+ characters.
+**`detect_office_macro_indicators()` `Chr()` concatenation**: legitimate VBA scripts sometimes use `Chr()` for non-ASCII characters in string operations for example localized templates. Short `Chr()` sequences (< 20 calls) are not obfuscation; flag only when the concatenation assembles a string of 50+ characters.
 
-**High PE section entropy** — compressed game asset DLLs, legitimate packers (Denuvo, Steam DRM), and self-extracting installers routinely produce sections with entropy > 7.0. Correlate high entropy with import table anomalies and overlay data before concluding that a PE is malicious.
+**High PE section entropy**: compressed game asset DLLs, legitimate packers (Denuvo, Steam DRM), and self-extracting installers routinely produce sections with entropy > 7.0. Correlate high entropy with import table anomalies and overlay data before concluding that a PE is malicious.
 
 ---
 
@@ -105,5 +105,5 @@ Run Office/PDF triage on any document obtained during initial access analysis or
 
 ## See also
 
-- [Packing and Anti-Analysis Indicators](packing-and-anti-analysis-indicators.md) — PE packer detection and anti-analysis technique enumeration
-- [Rootkit/Bootkit Indicators](rootkit-bootkit-indicators.md) — kernel persistence analysis for the post-exploitation stage following document delivery
+- [Packing and Anti-Analysis Indicators](packing-and-anti-analysis-indicators.md): PE packer detection and anti-analysis technique enumeration
+- [Rootkit/Bootkit Indicators](rootkit-bootkit-indicators.md): kernel persistence analysis for the post-exploitation stage following document delivery

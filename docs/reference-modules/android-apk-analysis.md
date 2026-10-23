@@ -1,14 +1,14 @@
 # Android / APK Analysis
 
-Parse APK containers, decode Android binary XML manifests (AXML), iterate DEX class/method tables, enumerate `ACC_NATIVE` methods and bundled native libraries, then scan all DEX string pools and method reference tables for hardcoded secrets, dangerous API usage, weak cryptography, cleartext traffic, and unprotected exported components — with no external dependencies.
+Parse APK containers, decode Android binary XML manifests (AXML), iterate DEX class/method tables, enumerate `ACC_NATIVE` methods and bundled native libraries, then scan all DEX string pools and method reference tables for hardcoded secrets, dangerous API usage, weak cryptography, cleartext traffic, and unprotected exported components: with no external dependencies.
 
 ---
 
 ## Why this exists
 
-1. **Android apps ship as ZIP containers with binary-encoded manifests and multi-DEX class databases.** The `AndroidManifest.xml` inside an APK is not text — it is AXML (Android Binary XML, chunk type `0x0003`) with a separate string pool, resource map, and compact attribute encoding. DEX files use ULEB128-encoded method, field, and class tables. Without a dedicated parser, analysts use `aapt`, `apktool`, or `jadx` — tools not available in automated pipelines and not integrated with the ablation scanner chain.
+1. **Android apps ship as ZIP containers with binary-encoded manifests and multi-DEX class databases.** The `AndroidManifest.xml` inside an APK is not text, it is AXML (Android Binary XML, chunk type `0x0003`) with a separate string pool, resource map, and compact attribute encoding. DEX files use ULEB128-encoded method, field, and class tables. Without a dedicated parser, analysts use `aapt`, `apktool`, or `jadx`: tools not available in automated pipelines and not integrated with the ablation scanner chain.
 
-2. **Hardcoded credentials, API keys, and weak cipher choices live in DEX string pools and are not visible from manifest inspection alone.** The DEX string pool contains every string constant from the Java source — AWS `AKIA*` access keys, Firebase API keys, Tuya `appKey`/`appSecret`, JWT bearer tokens, PEM-encoded private keys, and hardcoded 16/32-byte hex keys all appear as strings. `DexAnalyzer` scans all `classes*.dex` string pools in a single pass and matches 12 secret patterns plus a database of dangerous class and method references.
+2. **Hardcoded credentials, API keys, and weak cipher choices live in DEX string pools and are not visible from manifest inspection alone.** The DEX string pool contains every string constant from the Java source: AWS `AKIA*` access keys, Firebase API keys, Tuya `appKey`/`appSecret`, JWT bearer tokens, PEM-encoded private keys, and hardcoded 16/32-byte hex keys all appear as strings. `DexAnalyzer` scans all `classes*.dex` string pools in a single pass and matches 12 secret patterns plus a database of dangerous class and method references.
 
 3. **Native method inventory from DEX is the prerequisite for JNI bridge reconstruction.** `ACC_NATIVE` methods in DEX (`code_off == 0` in `class_data_item`) declare the JNI bridge boundary: Java code declares them, native `.so` files implement them. Identifying all native method declarations, the libraries they load (`System.loadLibrary`), and any opaque peer pointer fields (`long` fields with names matching `_PEER_NAMES`) feeds directly into `JniBridgeScanner` for the ELF-side analysis.
 
@@ -144,9 +144,9 @@ Summary: CRITICAL=2, HIGH=5, MEDIUM=3, LOW=2, INFO=8
 
 ## False positives
 
-**`allowBackup=True` finding on apps targeting API 31+.** As of Android 12 (API 31), `allowBackup=true` is the default but automatic cloud backup requires explicit `BackupAgent` configuration. On apps with `targetSdk >= 31` that do not implement `BackupAgent`, `adb backup` is blocked by default even with `allowBackup=true`. The finding is still accurate as a configuration observation — evaluate it in context of the `targetSdk` value.
+**`allowBackup=True` finding on apps targeting API 31+.** As of Android 12 (API 31), `allowBackup=true` is the default but automatic cloud backup requires explicit `BackupAgent` configuration. On apps with `targetSdk >= 31` that do not implement `BackupAgent`, `adb backup` is blocked by default even with `allowBackup=true`. The finding is still accurate as a configuration observation: evaluate it in context of the `targetSdk` value.
 
-**`generic_secret` matches variable assignments, not literal secret values.** The `generic_secret` pattern matches strings like `"secret=changeMe"` and `"api_key=YOUR_KEY_HERE"` — placeholder values from developer templates that are not actual credentials. Inspect the `evidence` field: any value under 16 characters or containing obvious placeholder text is not a real credential. Set the pattern minimum match length or add an entropy filter for production analysis.
+**`generic_secret` matches variable assignments, not literal secret values.** The `generic_secret` pattern matches strings like `"secret=changeMe"` and `"api_key=YOUR_KEY_HERE"`: placeholder values from developer templates that are not actual credentials. Inspect the `evidence` field: any value under 16 characters or containing obvious placeholder text is not a real credential. Set the pattern minimum match length or add an entropy filter for production analysis.
 
 **DEX string pool includes documentation and error messages.** DES, MD5, and SHA1 strings appear in crypto provider diagnostic strings, documentation comments compiled into the DEX, and error message templates. `weak_cipher/DES` and `weak_hash/MD5` findings require verification that the string appears in an API call argument, not a log message. Use `iter_method_refs()` to confirm the corresponding `Ljavax/crypto/Cipher;->getInstance()` call is present with that algorithm string.
 
@@ -154,9 +154,9 @@ Summary: CRITICAL=2, HIGH=5, MEDIUM=3, LOW=2, INFO=8
 
 ## Pipeline position
 
-**Before this module:** Confirm the file is a valid APK (ZIP magic at offset 0: `PK\x03\x04`). For APKs with split DEX (multi-dex apps), `iter_dex()` automatically covers all `classes*.dex` files — no special handling needed.
+**Before this module:** Confirm the file is a valid APK (ZIP magic at offset 0: `PK\x03\x04`). For APKs with split DEX (multi-dex apps), `iter_dex()` automatically covers all `classes*.dex` files, no special handling needed.
 
-**After this module:** Extract native libraries via `native_libs()` + `extract_native_lib()`, then run `JniBridgeScanner.from_path()` on the APK to correlate DEX `ACC_NATIVE` declarations with ELF JNI exports. For `InMemoryDexClassLoader` findings: capture the DEX bytes passed to the loader at runtime (dynamic analysis) — the loaded DEX is not present in the APK at static analysis time.
+**After this module:** Extract native libraries via `native_libs()` + `extract_native_lib()`, then run `JniBridgeScanner.from_path()` on the APK to correlate DEX `ACC_NATIVE` declarations with ELF JNI exports. For `InMemoryDexClassLoader` findings: capture the DEX bytes passed to the loader at runtime (dynamic analysis): the loaded DEX is not present in the APK at static analysis time.
 
 ---
 
@@ -170,12 +170,12 @@ Summary: CRITICAL=2, HIGH=5, MEDIUM=3, LOW=2, INFO=8
 | `DexFinding.severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` / `INFO` |
 | `DexFinding.category` | Dotted path: `manifest/debug`, `dyn_load/InMemoryDexClassLoader`, `tls/SSLv3`, etc. |
 | `DexFinding.evidence` | The raw string, class reference, or component name that triggered the finding |
-| `NativeMethod.has_code` | `True` = anomaly (native + DEX code present — possible decompiler artifact) |
+| `NativeMethod.has_code` | `True` = anomaly (native + DEX code present: possible decompiler artifact) |
 
 ---
 
 ## See also
 
-- [JNI Bridge Reconstruction](jni-bridge-reconstruction.md) — ELF-side JNI surface for native methods identified here
-- [Architectural Risk Detection](architectural-risk-detection.md) — source-level equivalent for server-side Java/Kotlin APIs
-- [Android Binder Surface](android-binder-surface.md) — Binder IPC attack surface complementary to exported component analysis
+- [JNI Bridge Reconstruction](jni-bridge-reconstruction.md): ELF-side JNI surface for native methods identified here
+- [Architectural Risk Detection](architectural-risk-detection.md): source-level equivalent for server-side Java/Kotlin APIs
+- [Android Binder Surface](android-binder-surface.md): Binder IPC attack surface complementary to exported component analysis

@@ -1,16 +1,16 @@
 # scanf Family Overflow Candidates
 
-Classify `sscanf`/`scanf`/`fscanf`/`vsscanf` call sites for destination buffer overflow risk via unbounded `%s` format specifiers — determining whether the format string is a `.rodata` constant with width bounds (`RODATA_SAFE`), an unsafe unbounded `%s` literal (`RODATA_UNSAFE`), a runtime-built format (`DYNAMIC_FMT`), a caller-propagated argument (`ARG_PROPAGATED`), or unresolvable (`UNKNOWN`).
+Classify `sscanf`/`scanf`/`fscanf`/`vsscanf` call sites for destination buffer overflow risk via unbounded `%s` format specifiers: determining whether the format string is a `.rodata` constant with width bounds (`RODATA_SAFE`), an unsafe unbounded `%s` literal (`RODATA_UNSAFE`), a runtime-built format (`DYNAMIC_FMT`), a caller-propagated argument (`ARG_PROPAGATED`), or unresolvable (`UNKNOWN`).
 
 ---
 
 ## Why this exists
 
-1. **`scanf("%s", buf)` with an unbounded `%s` is CWE-121 — the `%s` specifier reads until whitespace with no length limit, overflowing `buf` if the input is long enough.** `SscanfSinkClassifier` finds all `scanf`-family call sites and classifies them: `RODATA_SAFE` sites (format has explicit width specifier, e.g., `"%46s"`) require no further analysis; `RODATA_UNSAFE` sites (format has unbounded `%s`) are confirmed overflow candidates; other verdicts require deeper investigation.
+1. **`scanf("%s", buf)` with an unbounded `%s` is CWE-121: the `%s` specifier reads until whitespace with no length limit, overflowing `buf` if the input is long enough.** `SscanfSinkClassifier` finds all `scanf`-family call sites and classifies them: `RODATA_SAFE` sites (format has explicit width specifier, e.g., `"%46s"`) require no further analysis; `RODATA_UNSAFE` sites (format has unbounded `%s`) are confirmed overflow candidates; other verdicts require deeper investigation.
 
 2. **The `DYNAMIC_FMT` verdict handles the `libwmshared.so` pattern: `snprintf(buf, 32, "%%%zus %%lu %%d", 46)` → `"%46s %lu %d"`.** This pattern dynamically builds a width-bounded format string at runtime, making it appear dangerous (the format is not a `.rodata` constant) when it is actually safe. `SscanfSinkClassifier` detects this pattern and emits `DYNAMIC_FMT` instead of `UNKNOWN`, reducing the manual trace burden to: confirm the `snprintf` format template is a `.rodata` constant.
 
-3. **`SscanfSinkClassifier` fills the gap left by `SinkArgClassifier`** — `SinkArgClassifier` handles exec-class sinks (`system`/`popen`/`execve`) while `SscanfSinkClassifier` handles input-parsing sinks. Using both gives complete coverage of the two highest-value vulnerability classes in protocol parser firmware (command injection and buffer overflow via `scanf`).
+3. **`SscanfSinkClassifier` fills the gap left by `SinkArgClassifier`**: `SinkArgClassifier` handles exec-class sinks (`system`/`popen`/`execve`) while `SscanfSinkClassifier` handles input-parsing sinks. Using both gives complete coverage of the two highest-value vulnerability classes in protocol parser firmware (command injection and buffer overflow via `scanf`).
 
 ---
 
@@ -81,13 +81,13 @@ The following illustrates the classification output format. Actual addresses and
 
 ## False positives
 
-**`RODATA_UNSAFE` fires when the format string contains any unbounded `%s`** — this includes formats like `"%s:"` where the `%s` is the first of a two-part format and the destination is a temp buffer with intentional bounds enforcement via `strncat`. Confirm the buffer size and whether there is a subsequent length check on the destination.
+**`RODATA_UNSAFE` fires when the format string contains any unbounded `%s`**, this includes formats like `"%s:"` where the `%s` is the first of a two-part format and the destination is a temp buffer with intentional bounds enforcement via `strncat`. Confirm the buffer size and whether there is a subsequent length check on the destination.
 
 ---
 
 ## Pipeline position
 
-Run `SscanfSinkClassifier.classify_all()` alongside `SinkArgClassifier.classify_all()` as part of the initial sink classification sweep. The two classifiers together cover exec-class sinks and input-parsing sinks — the two highest-value vulnerability classes. `RODATA_UNSAFE` findings are the highest priority since the buffer overflow is often directly confirmable from the format string alone.
+Run `SscanfSinkClassifier.classify_all()` alongside `SinkArgClassifier.classify_all()` as part of the initial sink classification sweep. The two classifiers together cover exec-class sinks and input-parsing sinks: the two highest-value vulnerability classes. `RODATA_UNSAFE` findings are the highest priority since the buffer overflow is often directly confirmable from the format string alone.
 
 ---
 
@@ -110,6 +110,6 @@ Run `SscanfSinkClassifier.classify_all()` alongside `SinkArgClassifier.classify_
 
 ## See also
 
-- [Sink Argument Classifier](sink-argument-classifier.md) — exec-class sink classification (complementary)
-- [Deprecated Unsafe Function Scanning](deprecated-unsafe-function-scanning.md) — `gets()` detection (another unbounded input function)
-- [Taint Analysis](taint-analysis.md) — confirm `ARG_PROPAGATED` formats are user-controlled
+- [Sink Argument Classifier](sink-argument-classifier.md): exec-class sink classification (complementary)
+- [Deprecated Unsafe Function Scanning](deprecated-unsafe-function-scanning.md): `gets()` detection (another unbounded input function)
+- [Taint Analysis](taint-analysis.md): confirm `ARG_PROPAGATED` formats are user-controlled

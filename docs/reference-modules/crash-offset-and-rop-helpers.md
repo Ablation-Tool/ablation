@@ -1,6 +1,6 @@
 # Crash Offset and ROP Helpers
 
-Generate de Bruijn cyclic patterns for crash offset identification, detect common ROP gadgets in x86-64 and ARM64 code, and construct minimal x86-64 ROP chains — supporting exploit feasibility work on confirmed stack-overflow and format-string findings — via `ablation/core/shellcode_utils.py`.
+Generate de Bruijn cyclic patterns for crash offset identification, detect common ROP gadgets in x86-64 and ARM64 code, and construct minimal x86-64 ROP chains: supporting exploit feasibility work on confirmed stack-overflow and format-string findings: via `ablation/core/shellcode_utils.py`.
 
 ---
 
@@ -8,7 +8,7 @@ Generate de Bruijn cyclic patterns for crash offset identification, detect commo
 
 1. **`PathSolver` confirms vulnerability reachability but does not produce a proof-of-concept.** When `TaintTracker` confirms an ARG_PROPAGATED stack overflow, the next question is crash-offset: how many bytes from the tainted input overwrite the return address? `generate_cyclic_pattern()` produces a de Bruijn sequence; `find_cyclic_offset()` computes the exact return address offset from the 4-byte crash pattern in the core dump or SIGTRAP register state.
 
-2. **ROP gadget detection operates on disassembled function output** — `scan_rop_gadgets()` scans the binary for `RET`, `POP; RET`, `ADD RSP, N; RET`, and `JMP [REG]` sequences, returning a `GadgetList` keyed by gadget type. Common gadget classes (`pop rdi; ret`, `pop rsi; ret`, `syscall`) are annotated by name. This is substantially faster than running a full ROPgadget or ropper pass when only a small set of gadget types is needed for a specific exploit chain.
+2. **ROP gadget detection operates on disassembled function output**: `scan_rop_gadgets()` scans the binary for `RET`, `POP; RET`, `ADD RSP, N; RET`, and `JMP [REG]` sequences, returning a `GadgetList` keyed by gadget type. Common gadget classes (`pop rdi; ret`, `pop rsi; ret`, `syscall`) are annotated by name. This is substantially faster than running a full ROPgadget or ropper pass when only a small set of gadget types is needed for a specific exploit chain.
 
 3. **`shellcode_reverse_tcp_linux_x86_64()` and `shellcode_reverse_tcp_linux_arm64()`** produce ready-to-embed connect-back shellcode with configurable `lhost` and `lport`, with bad-byte checking via `check_bad_bytes()` and XOR encoding via `xor_encode()` when the target has bad-byte constraints. `nop_sled()` generates a NOP sled for width-padding.
 
@@ -81,9 +81,9 @@ shellcode_reverse_tcp_linux_x86_64: <N> bytes
 
 ## False positives
 
-**`scan_rop_gadgets()` scans the full binary including data sections** — bytes in data sections that decode as valid ROP sequences will appear in the gadget list. Filter results to text section ranges using `BinaryContext.section_range('.text')` before searching for gadgets.
+**`scan_rop_gadgets()` scans the full binary including data sections**: bytes in data sections that decode as valid ROP sequences will appear in the gadget list. Filter results to text section ranges using `BinaryContext.section_range('.text')` before searching for gadgets.
 
-**`find_cyclic_offset()` assumes a standard de Bruijn pattern** — if the target overwrites more than 4 bytes at a time, `find_cyclic_offset()` may return an offset that is a multiple of the overwrite granularity. Verify the offset by constructing a proof-of-concept with a controlled 8-byte value at the computed offset before proceeding.
+**`find_cyclic_offset()` assumes a standard de Bruijn pattern**: if the target overwrites more than 4 bytes at a time, `find_cyclic_offset()` may return an offset that is a multiple of the overwrite granularity. Verify the offset by constructing a proof-of-concept with a controlled 8-byte value at the computed offset before proceeding.
 
 ---
 
@@ -95,7 +95,7 @@ Run crash offset and ROP helpers after `TaintTracker` confirms an ARG_PROPAGATED
 
 ## Reading output
 
-`find_cyclic_offset(crash_bytes)` returns `int` — the byte offset at which the de Bruijn pattern is overwritten, or raises `ValueError` if the crash bytes are not recognized as de Bruijn output.
+`find_cyclic_offset(crash_bytes)` returns `int`: the byte offset at which the de Bruijn pattern is overwritten, or raises `ValueError` if the crash bytes are not recognized as de Bruijn output.
 
 `find_rop_gadgets(binary_data, base_addr=0)` accepts raw bytes and an optional base address, returning a list of `RopGadget` objects:
 
@@ -110,5 +110,5 @@ Run crash offset and ROP helpers after `TaintTracker` confirms an ARG_PROPAGATED
 
 ## See also
 
-- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` that identifies ARG_PROPAGATED overflow sinks before ROP work begins
-- [Sink Argument Classification](sink-argument-classifier.md) — `SinkArgClassifier` that confirms overflow at the sink call site
+- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): `TaintTracker` that identifies ARG_PROPAGATED overflow sinks before ROP work begins
+- [Sink Argument Classification](sink-argument-classifier.md): `SinkArgClassifier` that confirms overflow at the sink call site

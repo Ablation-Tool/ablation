@@ -116,7 +116,7 @@ to exploit media parsers.
 ### Checks performed
 
 **Polyglot detection**: scans the first 8 bytes for multiple valid magic signatures
-(e.g., ZIP + MP4, ELF + MP4). A dual-magic file is a polyglot and warrants manual
+for example ZIP + MP4, ELF + MP4. A dual-magic file is a polyglot and warrants manual
 inspection.
 
 **Trailer data (appended payload)**: computes the declared container end from the
@@ -1193,6 +1193,6 @@ This page covers multiple container-parsing modules. Output types by tool:
 
 ## See also
 
-- [FirmwareContainerKeyExtractor](firmware-container-key-extractor.md) — recover embedded key material
-- [TaintAnalysis](taint-analysis.md) — trace network input to sinks in extracted binaries
-- [SemanticSearch](semantic-search.md) — find vulnerability candidates in extracted ELFs
+- [FirmwareContainerKeyExtractor](firmware-container-key-extractor.md): recover embedded key material
+- [TaintAnalysis](taint-analysis.md): trace network input to sinks in extracted binaries
+- [SemanticSearch](semantic-search.md): find vulnerability candidates in extracted ELFs

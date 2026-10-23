@@ -1,6 +1,6 @@
 # ELF Internals and Hardening
 
-Parse ELF32 and ELF64 binaries without external dependencies — extracting section headers, symbol tables, entry points, and architecture metadata — and surface the hardening indicators that determine whether mitigations like NX, PIE, RELRO, and stack canaries are present.
+Parse ELF32 and ELF64 binaries without external dependencies: extracting section headers, symbol tables, entry points, and architecture metadata, and surface the hardening indicators that determine whether mitigations like NX, PIE, RELRO, and stack canaries are present.
 
 ---
 
@@ -8,9 +8,9 @@ Parse ELF32 and ELF64 binaries without external dependencies — extracting sect
 
 1. **Every Ablation analysis tool runs on top of ELF structure.** `BinaryContext`, `TaintTracker`, `SemanticSearcher`, and every scanner in the framework need to know where the binary's code lives, what its imports are, and where function starts can be found. Rather than depending on `readelf`, `pyelftools`, or `lief` being present in every deployment, Ablation includes a zero-dependency ELF parser that provides a consistent interface regardless of environment.
 
-2. **Hardening state is part of vulnerability triage.** Whether a buffer overflow is exploitable depends heavily on whether the binary was compiled with stack canaries, whether the stack is non-executable, whether position-independent code is enabled, and whether GOT/PLT entries are protected by RELRO. These are not afterthoughts — they determine severity, exploitability, and what kind of mitigation bypass is required. Surfacing them at parse time puts them in front of the analyst before any deeper work begins.
+2. **Hardening state is part of vulnerability triage.** Whether a buffer overflow is exploitable depends heavily on whether the binary was compiled with stack canaries, whether the stack is non-executable, whether position-independent code is enabled, and whether GOT/PLT entries are protected by RELRO. These are not afterthoughts: they determine severity, exploitability, and what kind of mitigation bypass is required. Surfacing them at parse time puts them in front of the analyst before any deeper work begins.
 
-3. **ELF covers the full target landscape.** Fortinet firmware (FortiOS, FortiAP), Cisco IOS/IOS-XE userspace, Huawei HarmonyOS native code, TencentOS system binaries — everything in Ablation's real-world target set is ELF. Getting this right is not optional.
+3. **ELF covers the full target landscape.** Fortinet firmware (FortiOS, FortiAP), Cisco IOS/IOS-XE userspace, Huawei HarmonyOS native code, TencentOS system binaries: everything in Ablation's real-world target set is ELF. Getting this right is not optional.
 
 ---
 
@@ -163,7 +163,7 @@ JSON Output:
 
 ## See also
 
-- [Binary Context](binary-context.md) — full analysis context built on top of this parser
-- [PE Internals and Indicators](pe-internals-and-indicators.md) — same role for Windows PE
-- [Mach-O Internals](mach-o-internals.md) — same role for Apple Mach-O
-- [Binary Format and Platform Identification](binary-format-and-platform-identification.md) — the format detection layer that selects this parser
+- [Binary Context](binary-context.md): full analysis context built on top of this parser
+- [PE Internals and Indicators](pe-internals-and-indicators.md): same role for Windows PE
+- [Mach-O Internals](mach-o-internals.md): same role for Apple Mach-O
+- [Binary Format and Platform Identification](binary-format-and-platform-identification.md): the format detection layer that selects this parser

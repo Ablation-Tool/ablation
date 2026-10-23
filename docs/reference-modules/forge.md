@@ -150,7 +150,7 @@ FORGE.list_local_modules()    # list registered modules
 
 ## How it works
 
-`FORGE.audit_module(path)` computes a two-part cache key: `sha256(system_prompt)[:16] + ":" + sha256(file_bytes)[:16]`. A hit returns the cached `ForgeReport` in under a millisecond with no LLM call. A miss raises `ForgeAuditRequired` — this is the signal to read the file in the current Claude Code session, apply the 10-section SAFE CODE review, and call `FORGE.record_result()` to write the result to `~/.ablation/forge_cache.json`. Changing either the SOP file or the module source invalidates the cache entry for that module only; changing the SOP invalidates all entries. `gate_passed` is the property checked before `git add`.
+`FORGE.audit_module(path)` computes a two-part cache key: `sha256(system_prompt)[:16] + ":" + sha256(file_bytes)[:16]`. A hit returns the cached `ForgeReport` in under a millisecond with no LLM call. A miss raises `ForgeAuditRequired`, this is the signal to read the file in the current Claude Code session, apply the 10-section SAFE CODE review, and call `FORGE.record_result()` to write the result to `~/.ablation/forge_cache.json`. Changing either the SOP file or the module source invalidates the cache entry for that module only; changing the SOP invalidates all entries. `gate_passed` is the property checked before `git add`.
 
 ---
 
@@ -180,9 +180,9 @@ Gate: PASSED — no CRITICAL or HIGH findings.
 
 ## False positives
 
-**`MEDIUM` finding on path normalization** — FORGE flags any `open()`, `os.path.join()`, or `pathlib.Path()` call that takes an argument not validated against a known prefix. This is correct for user-supplied paths, but a false positive when the path is constructed internally from a package data directory or a hardcoded `~/.ablation/` prefix. Add an explicit comment in `record_result()` noting the internal-only path if a finding of this type is downgraded from MEDIUM.
+**`MEDIUM` finding on path normalization**: FORGE flags any `open()`, `os.path.join()`, or `pathlib.Path()` call that takes an argument not validated against a known prefix. This is correct for user-supplied paths, but a false positive when the path is constructed internally from a package data directory or a hardcoded `~/.ablation/` prefix. Add an explicit comment in `record_result()` noting the internal-only path if a finding of this type is downgraded from MEDIUM.
 
-**`FORGE.audit_module()` raises `ForgeAuditRequired` on every call** — this means the cache has no prior result for this module. It is not a false positive; it is the signal to run the audit inline. Run the SAFE CODE review and call `record_result()` to cache the result so future calls return instantly.
+**`FORGE.audit_module()` raises `ForgeAuditRequired` on every call**, this means the cache has no prior result for this module. It is not a false positive; it is the signal to run the audit inline. Run the SAFE CODE review and call `record_result()` to cache the result so future calls return instantly.
 
 ---
 
@@ -202,9 +202,9 @@ Gate: PASSED — no CRITICAL or HIGH findings.
 |:---|:---|
 | `path` | Path to the audited module |
 | `mode` | `'module'` (LLM audit) or `'source'` (static compressor audit) |
-| `findings` | `list[ForgeFinding]` — individual findings sorted by severity |
+| `findings` | `list[ForgeFinding]`: individual findings sorted by severity |
 | `summary` | Short summary string |
-| `gate_passed` | Property — `True` if no CRITICAL or HIGH findings |
+| `gate_passed` | Property: `True` if no CRITICAL or HIGH findings |
 
 Each `ForgeFinding`:
 
@@ -224,6 +224,6 @@ Each `ForgeFinding`:
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

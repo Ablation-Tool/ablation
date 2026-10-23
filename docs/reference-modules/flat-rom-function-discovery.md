@@ -1,16 +1,16 @@
 # Flat ROM Function Discovery
 
-Fingerprint the instruction set architecture of a flat ECU ROM image from raw bytes — identifying the ISA from reset vector patterns, instruction density signatures, and byte-level statistical features — then discover function start addresses using ISA-specific prologue patterns on the identified architecture.
+Fingerprint the instruction set architecture of a flat ECU ROM image from raw bytes: identifying the ISA from reset vector patterns, instruction density signatures, and byte-level statistical features: then discover function start addresses using ISA-specific prologue patterns on the identified architecture.
 
 ---
 
 ## Why this exists
 
-1. **Flat ECU ROM images have no ELF header, no IHEX record type, and no symbol table — just raw bytes at a base address.** Before any disassembly or analysis can proceed, the ISA must be identified. `EcuArchDetector` distinguishes between ARM Cortex-M (Thumb-2 LE vector table at offset 0), Infineon TriCore AURIX, Motorola M68K/CPU32, PowerPC 32-bit Book E, PowerPC VLE, and Renesas SH-2A/SH-2 using a multi-signal fingerprinting approach.
+1. **Flat ECU ROM images have no ELF header, no IHEX record type, and no symbol table: just raw bytes at a base address.** Before any disassembly or analysis can proceed, the ISA must be identified. `EcuArchDetector` distinguishes between ARM Cortex-M (Thumb-2 LE vector table at offset 0), Infineon TriCore AURIX, Motorola M68K/CPU32, PowerPC 32-bit Book E, PowerPC VLE, and Renesas SH-2A/SH-2 using a multi-signal fingerprinting approach.
 
-2. **`EcuArchDetector` uses three independent detection signals — reset vector pointer validity, instruction density signatures, and byte-level statistical patterns — producing a confidence-ranked list of candidates.** `ArchDetectResult.is_confident()` returns `True` when the top candidate has a significant confidence margin over the second candidate, enabling automated pipeline decisions without analyst intervention for common ECU types.
+2. **`EcuArchDetector` uses three independent detection signals: reset vector pointer validity, instruction density signatures, and byte-level statistical patterns: producing a confidence-ranked list of candidates.** `ArchDetectResult.is_confident()` returns `True` when the top candidate has a significant confidence margin over the second candidate, enabling automated pipeline decisions without analyst intervention for common ECU types.
 
-3. **Once the ISA is identified, ISA-specific decoders (`EcuC28xDecoder`, `EcuM68kDecoder`, `V850Decoder`, `ARCDecoder`) provide `function_starts()` via prologue pattern scanning** — finding function boundaries without symbols in flat binaries that have no `.eh_frame` or DWARF.
+3. **Once the ISA is identified, ISA-specific decoders (`EcuC28xDecoder`, `EcuM68kDecoder`, `V850Decoder`, `ARCDecoder`) provide `function_starts()` via prologue pattern scanning**: finding function boundaries without symbols in flat binaries that have no `.eh_frame` or DWARF.
 
 ---
 
@@ -79,15 +79,15 @@ Confident: True  (top candidate margin 0.68)
 
 ## False positives
 
-**`is_confident()` uses a threshold margin** — when two architectures have similar confidence (e.g., PPC32 vs PPC VLE in a mixed image), `is_confident()` returns `False`. In this case, inspect `candidates[:3]` and select manually based on the `evidence` field.
+**`is_confident()` uses a threshold margin**: when two architectures have similar confidence for example PPC32 vs PPC VLE in a mixed image, `is_confident()` returns `False`. In this case, inspect `candidates[:3]` and select manually based on the `evidence` field.
 
-**`function_starts()` in ISA decoders is prologue-scan based** — it finds functions with standard calling-convention prologues and misses functions with non-standard or compiler-specific prologues. Always treat `function_starts()` output as a starting point, not a complete function list.
+**`function_starts()` in ISA decoders is prologue-scan based**, it finds functions with standard calling-convention prologues and misses functions with non-standard or compiler-specific prologues. Always treat `function_starts()` output as a starting point, not a complete function list.
 
 ---
 
 ## Pipeline position
 
-`EcuArchDetector` is the entry point for any flat ECU ROM analysis — it must run first to select the correct ISA decoder. After detection, proceed to the ISA-specific decoder's `disassemble()` and `function_starts()`, then build a `BinaryContext` equivalent manually (since flat ROMs have no ELF header for `BinaryContext.load_or_build()`).
+`EcuArchDetector` is the entry point for any flat ECU ROM analysis, it must run first to select the correct ISA decoder. After detection, proceed to the ISA-specific decoder's `disassemble()` and `function_starts()`, then build a `BinaryContext` equivalent manually (since flat ROMs have no ELF header for `BinaryContext.load_or_build()`).
 
 ---
 
@@ -101,12 +101,12 @@ Confident: True  (top candidate margin 0.68)
 | `confidence` | `HIGH` / `MEDIUM` / `LOW` |
 | `evidence` | List of byte-pattern evidence items that drove the detection |
 
-Select the decoder class from `result.isa` — `'RH850'` → `EcuRh850Decoder`, `'TRICORE'` → `EcuTriCoreDecoder`, `'C167'` → `EcuC166Decoder`. `EcuArchDetector` does not expose a decoder-factory method directly.
+Select the decoder class from `result.isa`: `'RH850'` → `EcuRh850Decoder`, `'TRICORE'` → `EcuTriCoreDecoder`, `'C167'` → `EcuC166Decoder`. `EcuArchDetector` does not expose a decoder-factory method directly.
 
 ---
 
 ## See also
 
-- [C166/C167 Decoding](c166-c167-decoding.md) — C166/C167 flat ROM decoder (not covered by EcuArchDetector)
-- [Calibration Parsers](calibration-parsers.md) — A2L/open_damos parsing after ISA detection
-- [ECU Calibration Table Interpretation](calibration-table-interpretation.md) — calibration data extraction after firmware analysis
+- [C166/C167 Decoding](c166-c167-decoding.md): C166/C167 flat ROM decoder (not covered by EcuArchDetector)
+- [Calibration Parsers](calibration-parsers.md): A2L/open_damos parsing after ISA detection
+- [ECU Calibration Table Interpretation](calibration-table-interpretation.md): calibration data extraction after firmware analysis

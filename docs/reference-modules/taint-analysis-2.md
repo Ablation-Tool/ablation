@@ -1,16 +1,16 @@
 # LoongArch64 Taint Analysis
 
-Track data flow through LoongArch64 binaries using a labeled taint model — propagating taint through the LP64 ABI's eight argument registers (`$a0`–`$a7`), bounding taint ranges via `andi` upper-bit zeroing, and tracking `addi.d $sp` frame-offset rebases — with sources at `recv`/`recvfrom`/`recvmsg`/`read`/`fgets`/`gets`/`fread` return values.
+Track data flow through LoongArch64 binaries using a labeled taint model: propagating taint through the LP64 ABI's eight argument registers (`$a0`–`$a7`), bounding taint ranges via `andi` upper-bit zeroing, and tracking `addi.d $sp` frame-offset rebases: with sources at `recv`/`recvfrom`/`recvmsg`/`read`/`fgets`/`gets`/`fread` return values.
 
 ---
 
 ## Why this exists
 
-1. **LoongArch64 uses the LP64 ABI with eight argument registers (`$a0`–`$a7`)** — significantly more than the four registers used by ARM64 AAPCS or x86-64 SystemV. Without a LoongArch64-specific taint tracker, sinks with more than four arguments (common in complex kernel call sites) cannot be analyzed: the standard tracker would not know which register holds the fifth argument.
+1. **LoongArch64 uses the LP64 ABI with eight argument registers (`$a0`–`$a7`)**: significantly more than the four registers used by ARM64 AAPCS or x86-64 SystemV. Without a LoongArch64-specific taint tracker, sinks with more than four arguments (common in complex kernel call sites) cannot be analyzed: the standard tracker would not know which register holds the fifth argument.
 
-2. **`andi` on LoongArch64 zeroes the upper bits of the result** — if `$a0` holds a tainted value and `andi $t0, $a0, 0xff` is executed, the result is bounded to `[0, 255]`. `LoongArch64TaintTracker` internal `Taint.bound` records this upper bound, enabling `SinkArgClassifier`-equivalent reasoning: a tainted byte that is bounded to `0xff` cannot cause a heap overflow via a size argument to `malloc`.
+2. **`andi` on LoongArch64 zeroes the upper bits of the result**: if `$a0` holds a tainted value and `andi $t0, $a0, 0xff` is executed, the result is bounded to `[0, 255]`. `LoongArch64TaintTracker` internal `Taint.bound` records this upper bound, enabling `SinkArgClassifier`-equivalent reasoning: a tainted byte that is bounded to `0xff` cannot cause a heap overflow via a size argument to `malloc`.
 
-3. **`addi.d $sp, $sp, -N` tracks frame-offset rebases** — stack allocations on LoongArch64 are expressed as subtractions from `$sp`. When `$sp` is used as a base for address computation, `LoongArch64TaintTracker` rebases taint labels to the new frame offset, maintaining correct stack-slot tracking across function prologues and mid-function allocations.
+3. **`addi.d $sp, $sp, -N` tracks frame-offset rebases**: stack allocations on LoongArch64 are expressed as subtractions from `$sp`. When `$sp` is used as a base for address computation, `LoongArch64TaintTracker` rebases taint labels to the new frame offset, maintaining correct stack-slot tracking across function prologues and mid-function allocations.
 
 ---
 
@@ -64,9 +64,9 @@ Findings: <N>
 
 ## False positives
 
-**`andi` bound detection uses the immediate operand as the bound** — a multi-step bound (e.g., `andi` followed by `addi` to shift the range) produces an incorrectly loose bound. Verify that the `andi` is the final bounding operation before the sink.
+**`andi` bound detection uses the immediate operand as the bound**: a multi-step bound (e.g., `andi` followed by `addi` to shift the range) produces an incorrectly loose bound. Verify that the `andi` is the final bounding operation before the sink.
 
-**LP64 ABI caller-saved register clobbering** — `$a0`–`$t8` are caller-saved and the tracker conservatively clears their taint on every `bl` call to a non-source. This may produce false negatives if taint is preserved in callee-saved registers (`$s0`–`$s8`) across calls.
+**LP64 ABI caller-saved register clobbering**: `$a0`–`$t8` are caller-saved and the tracker conservatively clears their taint on every `bl` call to a non-source. This may produce false negatives if taint is preserved in callee-saved registers (`$s0`–`$s8`) across calls.
 
 ---
 
@@ -86,7 +86,7 @@ Run `TaintTrackerLA64` after `LA64MaxNotMinScanner` to confirm that compiler-bug
 | `func_name` | Name of the function (from `ctx.name()`) |
 | `sink_va` | VA of the sink call instruction |
 | `sink_name` | Name of the sink function (e.g., `memcpy`, `system`) |
-| `tainted_args` | `List[str]` — LoongArch64 argument register names with taint (e.g., `['$a2']`) |
+| `tainted_args` | `List[str]`: LoongArch64 argument register names with taint (e.g., `['$a2']`) |
 | `source_name` | Name of the taint source function (e.g., `recv`) |
 | `severity` | `"HIGH"` (default) |
 
@@ -96,6 +96,6 @@ Bound information (the `andi` upper-bit mask) is tracked in the internal `Taint`
 
 ## See also
 
-- [LoongArch64 Compiler Bug Detection](loongarch64-2.md) — `LA64MaxNotMinScanner` findings verified by this tracker
-- [LoongArch64 KASAN-Aware Decoding](hisilicon-risc-v-extensions.md) — `LoongArchDecoderV2` for debug kernel taint analysis
-- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — ARM64/x86-64 equivalent for non-LoongArch targets
+- [LoongArch64 Compiler Bug Detection](loongarch64-2.md): `LA64MaxNotMinScanner` findings verified by this tracker
+- [LoongArch64 KASAN-Aware Decoding](hisilicon-risc-v-extensions.md): `LoongArchDecoderV2` for debug kernel taint analysis
+- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): ARM64/x86-64 equivalent for non-LoongArch targets

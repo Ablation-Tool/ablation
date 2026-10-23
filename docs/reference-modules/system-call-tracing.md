@@ -1,16 +1,16 @@
 # System-Call Tracing
 
-Attach to a running process via `strace` (Linux) or `dtruss` (macOS) and summarize its filesystem, network, and process-creation system call behavior — producing a frequency table of every syscall observed during the trace window with per-call timing and error counts.
+Attach to a running process via `strace` (Linux) or `dtruss` (macOS) and summarize its filesystem, network, and process-creation system call behavior: producing a frequency table of every syscall observed during the trace window with per-call timing and error counts.
 
 ---
 
 ## Why this exists
 
-1. **Dynamic analysis reveals what static analysis cannot see.** A binary that passes all strings through a runtime config lookup, an obfuscated decoding routine, or an encrypted config file produces no useful static strings. `strace` intercepts the actual file paths passed to `open()`, the actual command strings passed to `execve()`, and the actual host/port pairs passed to `connect()` — regardless of how the binary constructs those values at runtime.
+1. **Dynamic analysis reveals what static analysis cannot see.** A binary that passes all strings through a runtime config lookup, an obfuscated decoding routine, or an encrypted config file produces no useful static strings. `strace` intercepts the actual file paths passed to `open()`, the actual command strings passed to `execve()`, and the actual host/port pairs passed to `connect()`: regardless of how the binary constructs those values at runtime.
 
-2. **Syscall frequency profiles fingerprint behavior classes.** A daemon that makes 10,000 `recv()` calls and 0 `fork()` calls is a network listener; one that calls `execve()` in response to network input is a command-execution target. The `trace_process()` summary table surfaces this behavioral profile in seconds — before any disassembly is needed — and directs the analyst toward the specific syscall categories worth tracing in detail.
+2. **Syscall frequency profiles fingerprint behavior classes.** A daemon that makes 10,000 `recv()` calls and 0 `fork()` calls is a network listener; one that calls `execve()` in response to network input is a command-execution target. The `trace_process()` summary table surfaces this behavioral profile in seconds: before any disassembly is needed, and directs the analyst toward the specific syscall categories worth tracing in detail.
 
-3. **Filtered detail traces narrow the attack surface.** The three focused trace methods (`analyze_file_access`, `analyze_network`, `analyze_process_ops`) each run a `strace -e trace=...` filter pass, returning only the syscalls relevant to the analyst's current question. An analyst asking "what files does this service write during a config change?" runs `analyze_file_access()` and reads a list of `open()` and `write()` calls with full path arguments — not 10,000 lines of mixed output.
+3. **Filtered detail traces narrow the attack surface.** The three focused trace methods (`analyze_file_access`, `analyze_network`, `analyze_process_ops`) each run a `strace -e trace=...` filter pass, returning only the syscalls relevant to the analyst's current question. An analyst asking "what files does this service write during a config change?" runs `analyze_file_access()` and reads a list of `open()` and `write()` calls with full path arguments, not 10,000 lines of mixed output.
 
 ---
 
@@ -103,7 +103,7 @@ execve calls observed:
 
 **Partial output on timeout.** `strace -c` accumulates statistics in kernel memory and prints the summary table when the tracee exits or the tracing process terminates. When `trace_process()` calls `subprocess.run(timeout=duration)` on a long-running daemon, it raises `TimeoutExpired` and parses whatever partial `strace -c` output was written to `stderr` at that point. For short-running processes, the summary is complete. For daemons, always set `duration` longer than the activity window you want to capture.
 
-**`strace` overhead changes timing ratios.** Each intercepted syscall passes through ptrace, adding latency. The `time_percent` and `total_time` fields reflect traced timing — typically 5–20× slower than native. Do not use timing fields to characterize performance; use them only to identify which syscall categories dominate CPU time in the syscall table.
+**`strace` overhead changes timing ratios.** Each intercepted syscall passes through ptrace, adding latency. The `time_percent` and `total_time` fields reflect traced timing: typically 5–20× slower than native. Do not use timing fields to characterize performance; use them only to identify which syscall categories dominate CPU time in the syscall table.
 
 **macOS coverage gap.** The macOS path uses `dtruss -p PID`, which requires root and System Integrity Protection disabled. In normal macOS environments, `dtruss` is unavailable or blocked. The parsed output provides syscall counts but not timing data (`time_percent=0.0` for all entries on macOS).
 
@@ -134,7 +134,7 @@ execve calls observed:
 |:---|:---|
 | `total_calls` | Total syscall invocations captured |
 | `total_errors` | Total calls that returned an error |
-| `syscalls` | `List[dict]` — one entry per syscall, each with `name`, `calls`, `errors`, `time_percent`, `total_time` |
+| `syscalls` | `List[dict]`: one entry per syscall, each with `name`, `calls`, `errors`, `time_percent`, `total_time` |
 | `error` | Error string if tracing failed (e.g., `'strace not installed'`); absent on success |
 
 `SyscallTracer(pid).trace_detailed(duration, syscall_filter)` returns per-call argument records. Pass `syscall_filter='execve,open,read'` to narrow the trace.
@@ -143,6 +143,6 @@ execve calls observed:
 
 ## See also
 
-- [Process Enumeration](process-enum.md) — enumerate running processes to find target PIDs
-- [Sink Arg Classifier](sink-arg-classifier.md) — static confirmation of `execve`-class calls found in trace
-- [Go Dangerous Call Graph](go-dangerous-call-graph.md) — static Go `os/exec` surface preceding dynamic trace
+- [Process Enumeration](process-enum.md): enumerate running processes to find target PIDs
+- [Sink Arg Classifier](sink-arg-classifier.md): static confirmation of `execve`-class calls found in trace
+- [Go Dangerous Call Graph](go-dangerous-call-graph.md): static Go `os/exec` surface preceding dynamic trace

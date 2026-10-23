@@ -1,16 +1,16 @@
 # SIP Attack Surface Detection
 
-Detect telephony denial-of-service surfaces, eavesdropping vectors, call-interception primitives, authentication bypass conditions, signaling manipulation surfaces, and header injection attack paths across SIP deployments — using twelve standalone probe functions from `sip_enum.py`.
+Detect telephony denial-of-service surfaces, eavesdropping vectors, call-interception primitives, authentication bypass conditions, signaling manipulation surfaces, and header injection attack paths across SIP deployments: using twelve standalone probe functions from `sip_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **SIP servers that accept unlimited INVITE bursts without rate limiting, that do not require ACK before call setup completes, and that allow large Contact URI registration batches are vulnerable to telephony denial-of-service (TDoS) without any authentication credential.** Standard network scanners cannot identify these surfaces because TDoS vectors require SIP-dialect message construction — half-open INVITE floods (INVITE without ACK consumes call-state memory), oversized Contact URI registration (100 unique Contact URIs per AoR saturates the registrar's binding table), and malformed INVITEs with no Via header test parser robustness. `detect_sip_flood_surface()` and `detect_tdos_indicators()` apply three distinct resource-exhaustion probes each, producing actionable `INVITE_FLOOD_SURFACE`, `REGISTER_EXHAUSTION`, and `TDOS_CALLER_ID_SPOOF` findings.
+1. **SIP servers that accept unlimited INVITE bursts without rate limiting, that do not require ACK before call setup completes, and that allow large Contact URI registration batches are vulnerable to telephony denial-of-service (TDoS) without any authentication credential.** Standard network scanners cannot identify these surfaces because TDoS vectors require SIP-dialect message construction: half-open INVITE floods (INVITE without ACK consumes call-state memory), oversized Contact URI registration (100 unique Contact URIs per AoR saturates the registrar's binding table), and malformed INVITEs with no Via header test parser robustness. `detect_sip_flood_surface()` and `detect_tdos_indicators()` apply three distinct resource-exhaustion probes each, producing actionable `INVITE_FLOOD_SURFACE`, `REGISTER_EXHAUSTION`, and `TDOS_CALLER_ID_SPOOF` findings.
 
-2. **SIP eavesdropping does not require decryption — it requires only the ability to subscribe to presence events, receive unsolicited NOTIFY messages, or intercept codec negotiation details from SDP bodies.** An adversary with network access to UDP/5060 can learn which extensions are on active calls (SUBSCRIBE Event:presence), determine codec and media IP assignments from multi-codec SDP offers (PCMU vs G.729 vs iLBC), and identify RTCP out-of-band signaling ports that expose call quality metrics. `detect_sip_eavesdropping_surface()` and `detect_voip_eavesdrop_surface()` map these surfaces without media capture, identifying where SRTP enforcement is absent and where RTCP streams are reachable.
+2. **SIP eavesdropping does not require decryption, it requires only the ability to subscribe to presence events, receive unsolicited NOTIFY messages, or intercept codec negotiation details from SDP bodies.** An adversary with network access to UDP/5060 can learn which extensions are on active calls (SUBSCRIBE Event:presence), determine codec and media IP assignments from multi-codec SDP offers (PCMU vs G.729 vs iLBC), and identify RTCP out-of-band signaling ports that expose call quality metrics. `detect_sip_eavesdropping_surface()` and `detect_voip_eavesdrop_surface()` map these surfaces without media capture, identifying where SRTP enforcement is absent and where RTCP streams are reachable.
 
-3. **SIP signaling manipulation — REFER-based blind call transfer, re-INVITE c= redirect to an attacker IP, forged UPDATE with fabricated To-tag, and SIP header injection — produces call-interception and privilege escalation primitives that are completely invisible to DLP and network IDS signatures because the traffic uses standard SIP method codes and valid SIP grammar.** `detect_sip_interception_indicators()`, `detect_sip_signaling_manipulation()`, `detect_sip_header_injection()`, `probe_sip_authentication_weaknesses()`, and `probe_sip_authentication_bypass()` cover the full manipulation and bypass surface, from nonce replay through P-Asserted-Identity spoofing.
+3. **SIP signaling manipulation: REFER-based blind call transfer, re-INVITE c= redirect to an attacker IP, forged UPDATE with fabricated To-tag, and SIP header injection: produces call-interception and privilege escalation primitives that are completely invisible to DLP and network IDS signatures because the traffic uses standard SIP method codes and valid SIP grammar.** `detect_sip_interception_indicators()`, `detect_sip_signaling_manipulation()`, `detect_sip_header_injection()`, `probe_sip_authentication_weaknesses()`, and `probe_sip_authentication_bypass()` cover the full manipulation and bypass surface, from nonce replay through P-Asserted-Identity spoofing.
 
 ---
 
@@ -71,7 +71,7 @@ flowchart TD
 | `SIP_FLOOD_MALFORMED` | HIGH | `detect_sip_flood_surface` | Malformed INVITE (no Via) returns non-5xx response |
 | `SIP_LARGE_CONTACT_ACCEPT` | MEDIUM | `detect_sip_flood_surface` | 8KB Contact URI accepted without 413 |
 | `TDOS_CALLER_ID_SPOOF` | HIGH | `detect_tdos_indicators` | INVITE with spoofed Caller-ID accepted (100/180/200) |
-| `TDOS_RATE_UNLIMITED` | MEDIUM | `detect_tdos_indicators` | 10 OPTIONS in 1s all answered — no rate limiting |
+| `TDOS_RATE_UNLIMITED` | MEDIUM | `detect_tdos_indicators` | 10 OPTIONS in 1s all answered: no rate limiting |
 | `REGISTER_EXHAUSTION` | HIGH | `detect_tdos_indicators` | 100 unique Contact URIs registered for single AoR |
 | `PRESENCE_SUBSCRIBE_OPEN` | MEDIUM | `detect_sip_eavesdropping_surface` | SUBSCRIBE Event:presence → 200 without auth |
 | `UNSOLICITED_NOTIFY_ACCEPTED` | MEDIUM | `detect_sip_eavesdropping_surface` | Out-of-dialog NOTIFY accepted (not 481/489) |
@@ -93,8 +93,8 @@ flowchart TD
 | `SIP_AUTH_BYPASS` | CRITICAL | `probe_sip_authentication_bypass` | Empty Authorization header accepted → 200 |
 | `SIP_UNAUTH_INVITE` | HIGH | `probe_sip_authentication_bypass` | Anonymous INVITE accepted (100/183/200) |
 | `SIP_DIGEST_BYPASS` | CRITICAL | `probe_sip_authentication_bypass` | Zeroed 32-hex MD5 Digest response accepted → 200 |
-| `SIP_PROXY_AUTH_ONLY` | MEDIUM | `probe_sip_authentication_bypass` | 407 Proxy-Auth only — no WWW-Authenticate on REGISTER |
-| `HEADER_INJECTION_CRLF` | HIGH | `detect_sip_header_injection` | CRLF in From display name accepted — header injection |
+| `SIP_PROXY_AUTH_ONLY` | MEDIUM | `probe_sip_authentication_bypass` | 407 Proxy-Auth only: no WWW-Authenticate on REGISTER |
+| `HEADER_INJECTION_CRLF` | HIGH | `detect_sip_header_injection` | CRLF in From display name accepted: header injection |
 | `CONTACT_NULL_BYTE` | MEDIUM | `detect_sip_header_injection` | Null byte (%00) in Contact URI not sanitized |
 | `VIA_STACK_SPOOF` | HIGH | `detect_sip_header_injection` | Forged Via header with TEST-NET IP accepted |
 | `PAI_SPOOFED` | HIGH | `detect_sip_header_injection` | P-Asserted-Identity with arbitrary caller accepted |
@@ -164,7 +164,7 @@ for f in probe_rtp_injection_surface(TARGET, rtp_port=RTP_PORT, timeout=3.0):
 
 ## Example output
 
-The following illustrates the output format for representative findings. Actual values — IP addresses, extension numbers, nonce values, header content — will reflect the specific target.
+The following illustrates the output format for representative findings. Actual values: IP addresses, extension numbers, nonce values, header content: will reflect the specific target.
 
 ```
 [CRITICAL] REFER_UNAUTH: <target>:<port> returned 202 Accepted to REFER sip:<ext>@<target>
@@ -200,9 +200,9 @@ The following illustrates the output format for representative findings. Actual 
 
 ## False positives
 
-**`TDOS_RATE_UNLIMITED` fires when the SIP server correctly responds to all 10 OPTIONS — but OPTIONS rate limiting is a policy decision, not an RFC violation.** RFC 3261 does not specify rate limits for OPTIONS responses. Many enterprise PBX deployments intentionally respond to all OPTIONS for keep-alive signaling. The finding is `MEDIUM` severity and should be escalated only when combined with `INVITE_FLOOD_SURFACE` evidence — unrestricted OPTIONS alone does not constitute a TDoS vulnerability without evidence that INVITE rate limiting is also absent.
+**`TDOS_RATE_UNLIMITED` fires when the SIP server correctly responds to all 10 OPTIONS, but OPTIONS rate limiting is a policy decision, not an RFC violation.** RFC 3261 does not specify rate limits for OPTIONS responses. Many enterprise PBX deployments intentionally respond to all OPTIONS for keep-alive signaling. The finding is `MEDIUM` severity and should be escalated only when combined with `INVITE_FLOOD_SURFACE` evidence: unrestricted OPTIONS alone does not constitute a TDoS vulnerability without evidence that INVITE rate limiting is also absent.
 
-**`HEADER_INJECTION_CRLF` requires confirming that the injected header propagates to a downstream system — some SIP proxies accept the request but strip CRLF sequences before forwarding.** The probe sends a REGISTER or INVITE with CRLF in the display name field and checks whether the server accepts the message (non-400 response). This confirms the server does not sanitize CRLF before accepting the message, but does not confirm downstream propagation. Use a controlled proxy or SIP capture to verify that the `X-Injected` header appears in forwarded messages before escalating to HIGH.
+**`HEADER_INJECTION_CRLF` requires confirming that the injected header propagates to a downstream system: some SIP proxies accept the request but strip CRLF sequences before forwarding.** The probe sends a REGISTER or INVITE with CRLF in the display name field and checks whether the server accepts the message (non-400 response). This confirms the server does not sanitize CRLF before accepting the message, but does not confirm downstream propagation. Use a controlled proxy or SIP capture to verify that the `X-Injected` header appears in forwarded messages before escalating to HIGH.
 
 **`SIP_UNAUTH_INVITE` is elevated to HIGH when anonymous INVITE is accepted, but anonymous INVITE is a legitimate SIP mechanism for emergency calls (RFC 3325 Privacy header).** Some deployments intentionally permit anonymous INVITE for emergency services (E.911). Confirm whether the target is a PSTN gateway with emergency call policy, in which case anonymous INVITE acceptance is expected behavior. If the target is an enterprise PBX, anonymous INVITE without Require: Privacy is a finding; if it is a carrier gateway, confirm the policy before reporting.
 
@@ -210,7 +210,7 @@ The following illustrates the output format for representative findings. Actual 
 
 ## Pipeline position
 
-**Before this module:** Run `sip-service-and-extension-discovery.md` probes first to confirm SIP responsiveness, identify the server type (Asterisk, FreePBX, CUCM), and obtain a baseline response code for unauthenticated REGISTER. Server type informs which authentication-bypass probes are most likely to succeed — Asterisk deployments are more susceptible to digest-bypass findings; CUCM deployments are more likely to show `SIP_PROXY_AUTH_ONLY`.
+**Before this module:** Run `sip-service-and-extension-discovery.md` probes first to confirm SIP responsiveness, identify the server type (Asterisk, FreePBX, CUCM), and obtain a baseline response code for unauthenticated REGISTER. Server type informs which authentication-bypass probes are most likely to succeed: Asterisk deployments are more susceptible to digest-bypass findings; CUCM deployments are more likely to show `SIP_PROXY_AUTH_ONLY`.
 
 **After this module:** For `REFER_UNAUTH` and `REINVITE_MEDIA_REDIRECT` CRITICAL findings: construct a full call-hijacking proof-of-concept using `detect_dtmf_extraction_surface()` and `probe_rtp_covert_channel()` from `voip-protocol-and-covert-channels.md` to demonstrate the media-layer impact. For `SIP_DIGEST_BYPASS` or `NONCE_REPLAY_ACCEPTED`: enumerate all extensions via `SIPEnumerator.enumerate_extensions()` to identify all registrable AoRs. For `HEADER_INJECTION_CRLF`: escalate to manual SIP proxy analysis to test Log4j-class downstream injection impact. Write confirmed findings to `~/VDT/VULNERABILITIES-<ip>.md`.
 
@@ -230,5 +230,5 @@ The following illustrates the output format for representative findings. Actual 
 
 ## See also
 
-- [SIP Service and Extension Discovery](sip-service-and-extension-discovery.md) — SIPEnumerator class, extension enumeration, registration hijacking, media interception posture
-- [VoIP Protocol Inspection and Covert Channels](voip-protocol-and-covert-channels.md) — DTMF extraction, RTP/RTCP covert channels, H.323/SCCP/MGCP legacy protocol deep inspection, ASA SIP fixup bypass, WebRTC infrastructure exposure
+- [SIP Service and Extension Discovery](sip-service-and-extension-discovery.md): SIPEnumerator class, extension enumeration, registration hijacking, media interception posture
+- [VoIP Protocol Inspection and Covert Channels](voip-protocol-and-covert-channels.md): DTMF extraction, RTP/RTCP covert channels, H.323/SCCP/MGCP legacy protocol deep inspection, ASA SIP fixup bypass, WebRTC infrastructure exposure

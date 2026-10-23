@@ -1,16 +1,16 @@
 # Local Network Inventory
 
-Enumerate network interfaces, active connections, listening ports, firewall rules, routing tables, and ARP observations on a compromised host — providing the complete local network topology needed to plan lateral movement — via `modules/network_analyze.py` `NetworkAnalyzer`.
+Enumerate network interfaces, active connections, listening ports, firewall rules, routing tables, and ARP observations on a compromised host: providing the complete local network topology needed to plan lateral movement: via `modules/network_analyze.py` `NetworkAnalyzer`.
 
 ---
 
 ## Why this exists
 
-1. **`NetworkAnalyzer` enumerates the host network state without any external tools** — it reads `/proc/net/tcp`, `/proc/net/tcp6`, `/proc/net/udp`, `/proc/net/if_inet6`, and `/proc/net/arp` directly, and on macOS uses `ifconfig`/`netstat` subprocess calls. This provides interface addresses, listening ports, established connections, and the ARP table without requiring `netstat`, `ss`, `ip`, or `nmap` to be installed.
+1. **`NetworkAnalyzer` enumerates the host network state without any external tools**, it reads `/proc/net/tcp`, `/proc/net/tcp6`, `/proc/net/udp`, `/proc/net/if_inet6`, and `/proc/net/arp` directly, and on macOS uses `ifconfig`/`netstat` subprocess calls. This provides interface addresses, listening ports, established connections, and the ARP table without requiring `netstat`, `ss`, `ip`, or `nmap` to be installed.
 
-2. **`run_network_analysis()` produces a combined analysis result** — interfaces with IPs and subnets, all listening TCP/UDP ports with PIDs (if readable from `/proc/<pid>/`), established outbound connections with remote IPs, and `iptables`/`pfctl` firewall rule summary. The subnet list from interface enumeration seeds `icmp_host_discovery()` in `net_sniffer.py` for automatic adjacent subnet scanning.
+2. **`run_network_analysis()` produces a combined analysis result**: interfaces with IPs and subnets, all listening TCP/UDP ports with PIDs (if readable from `/proc/<pid>/`), established outbound connections with remote IPs, and `iptables`/`pfctl` firewall rule summary. The subnet list from interface enumeration seeds `icmp_host_discovery()` in `net_sniffer.py` for automatic adjacent subnet scanning.
 
-3. **Firewall rule enumeration** — `NetworkAnalyzer` reads `iptables -L -n` output (Linux) and `pfctl -sr` (macOS) to extract ACCEPT/REJECT/DROP rules. Overly permissive rules (e.g., `ACCEPT all -- 0.0.0.0/0 → 0.0.0.0/0 in the FORWARD chain) indicate a misconfigured host that routes between network segments — a pivot point for reaching otherwise-isolated subnets.
+3. **Firewall rule enumeration**: `NetworkAnalyzer` reads `iptables -L -n` output (Linux) and `pfctl -sr` (macOS) to extract ACCEPT/REJECT/DROP rules. Overly permissive rules (e.g., `ACCEPT all -- 0.0.0.0/0 → 0.0.0.0/0 in the FORWARD chain) indicate a misconfigured host that routes between network segments: a pivot point for reaching otherwise-isolated subnets.
 
 ---
 
@@ -74,9 +74,9 @@ Subnets: [<subnet-a>, <subnet-b>]
 
 ## False positives
 
-**`iptables -L` requires root** — on hosts without root access, firewall rule enumeration falls back to an empty list rather than an error. Interpret an empty firewall rules list as "could not enumerate" rather than "no rules configured."
+**`iptables -L` requires root**: on hosts without root access, firewall rule enumeration falls back to an empty list rather than an error. Interpret an empty firewall rules list as "could not enumerate" rather than "no rules configured."
 
-**`/proc/net/tcp` port display** — ports are stored in hexadecimal in `/proc/net/tcp`. `NetworkAnalyzer` converts them to decimal; verify that the conversion is correct for port numbers above 32767 on big-endian kernels.
+**`/proc/net/tcp` port display**: ports are stored in hexadecimal in `/proc/net/tcp`. `NetworkAnalyzer` converts them to decimal; verify that the conversion is correct for port numbers above 32767 on big-endian kernels.
 
 ---
 
@@ -92,14 +92,14 @@ Run `NetworkAnalyzer` immediately after gaining shell access on a compromised ho
 
 | Key | Content |
 |:---|:---|
-| `interfaces` | `List` — network interfaces enumerated from `/proc/net/dev` |
-| `connections` | `List` — established and time-wait TCP connections |
-| `listening` | `List` — bound listening services |
-| `firewall` | `List[str]` — iptables rule summary lines |
+| `interfaces` | `List`: network interfaces enumerated from `/proc/net/dev` |
+| `connections` | `List`: established and time-wait TCP connections |
+| `listening` | `List`: bound listening services |
+| `firewall` | `List[str]`: iptables rule summary lines |
 
 ---
 
 ## See also
 
-- [Host/Service Discovery](host-service-discovery.md) — `ICMPScanner` and banner grabbing for hosts in discovered subnets
-- [Raw Packet Capture](raw-packet-capture.md) — `RawSniffer` for traffic analysis on the identified interfaces
+- [Host/Service Discovery](host-service-discovery.md): `ICMPScanner` and banner grabbing for hosts in discovered subnets
+- [Raw Packet Capture](raw-packet-capture.md): `RawSniffer` for traffic analysis on the identified interfaces

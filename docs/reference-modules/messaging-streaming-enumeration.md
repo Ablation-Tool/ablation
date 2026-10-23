@@ -1,16 +1,16 @@
 # Messaging/Streaming Enumeration
 
-Enumerate Kafka topics and consumer groups without credentials, probe Flink REST API for job topology and JAR submission endpoints, enumerate NiFi processor configurations, probe RabbitMQ management API for vhosts and queues, test NATS server for unauthenticated connection, and enumerate Confluent Schema Registry subjects — providing the complete messaging and streaming infrastructure attack surface — via `modules/streaming_enum.py`.
+Enumerate Kafka topics and consumer groups without credentials, probe Flink REST API for job topology and JAR submission endpoints, enumerate NiFi processor configurations, probe RabbitMQ management API for vhosts and queues, test NATS server for unauthenticated connection, and enumerate Confluent Schema Registry subjects: providing the complete messaging and streaming infrastructure attack surface: via `modules/streaming_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **`kafka_list_topics()` enumerates Kafka topics and partition metadata using raw protocol** — it constructs a binary `Metadata(v1)` request (`api_key=3, api_version=1`) directly over TCP without using any Kafka client library, conforming to the Kafka wire protocol. In default deployments, Kafka brokers do not require authentication (`PLAINTEXT` listener). Topic enumeration reveals message streams containing PII, financial data, internal events, and machine-to-machine credentials that flow through the cluster.
+1. **`kafka_list_topics()` enumerates Kafka topics and partition metadata using raw protocol**, it constructs a binary `Metadata(v1)` request (`api_key=3, api_version=1`) directly over TCP without using any Kafka client library, conforming to the Kafka wire protocol. In default deployments, Kafka brokers do not require authentication (`PLAINTEXT` listener). Topic enumeration reveals message streams containing PII, financial data, internal events, and machine-to-machine credentials that flow through the cluster.
 
-2. **`flink_enumerate()` and `flink_submit_jar_rce()` expose Flink's unauthenticated REST API** — Flink's JobManager REST API (port 8081) exposes job listing, task manager metrics, and JAR upload + submission without authentication in default configurations. `flink_submit_jar_rce()` uploads a JAR to `/jars/upload` and submits it to `/jars/<id>/run`, executing arbitrary code in the Flink cluster under the TaskManager process identity. This is a reliable remote code execution primitive on any Flink cluster accessible from the network.
+2. **`flink_enumerate()` and `flink_submit_jar_rce()` expose Flink's unauthenticated REST API**: Flink's JobManager REST API (port 8081) exposes job listing, task manager metrics, and JAR upload + submission without authentication in default configurations. `flink_submit_jar_rce()` uploads a JAR to `/jars/upload` and submits it to `/jars/<id>/run`, executing arbitrary code in the Flink cluster under the TaskManager process identity. This is a reliable remote code execution primitive on any Flink cluster accessible from the network.
 
-3. **`nifi_enumerate()` extracts NiFi processor graph configuration** — Apache NiFi (port 8080/8443) exposes a REST API that returns the full processor graph: all configured processors, their properties (including database credentials, API keys, and cloud credentials stored as processor parameters), and the data flow topology. `nifi_enumerate()` calls `/nifi-api/process-groups/root/processors` and `/nifi-api/controller/config` to enumerate the configuration. NiFi processor properties include cleartext credentials for every data source and sink in the flow.
+3. **`nifi_enumerate()` extracts NiFi processor graph configuration**: Apache NiFi (port 8080/8443) exposes a REST API that returns the full processor graph: all configured processors, their properties (including database credentials, API keys, and cloud credentials stored as processor parameters), and the data flow topology. `nifi_enumerate()` calls `/nifi-api/process-groups/root/processors` and `/nifi-api/controller/config` to enumerate the configuration. NiFi processor properties include cleartext credentials for every data source and sink in the flow.
 
 ---
 
@@ -81,9 +81,9 @@ check_nats_exposure: <nats-host>:4222
 
 ## False positives
 
-**`kafka_list_topics()` internal topics** — Kafka clusters always contain internal topics (`__consumer_offsets`, `__transaction_state`) prefixed with `__`. These are system topics and not data exposure findings. Count and report only non-internal topics.
+**`kafka_list_topics()` internal topics**: Kafka clusters always contain internal topics (`__consumer_offsets`, `__transaction_state`) prefixed with `__`. These are system topics and not data exposure findings. Count and report only non-internal topics.
 
-**`flink_submit_jar_rce()` execution confirmation** — the JAR upload and run API calls return `{job_id: ..., status: RUNNING}` even if the JAR fails to initialize. A `RUNNING` status confirms the JAR was accepted and started; it does not confirm that arbitrary code executed successfully. Verify by checking the job's task metrics or by having the JAR write a canary file.
+**`flink_submit_jar_rce()` execution confirmation**: the JAR upload and run API calls return `{job_id: ..., status: RUNNING}` even if the JAR fails to initialize. A `RUNNING` status confirms the JAR was accepted and started; it does not confirm that arbitrary code executed successfully. Verify by checking the job's task metrics or by having the JAR write a canary file.
 
 ---
 
@@ -109,5 +109,5 @@ Messaging/streaming probe functions return `List[{severity, title, detail, host,
 
 ## See also
 
-- [Streaming Operational Helpers](streaming-operational-helpers.md) — `kafka_consume_sample()` for actual message sampling from discovered topics
-- [Observability Exposure](observability-exposure.md) — `probe_kafka_schema_registry()` for schema introspection
+- [Streaming Operational Helpers](streaming-operational-helpers.md): `kafka_consume_sample()` for actual message sampling from discovered topics
+- [Observability Exposure](observability-exposure.md): `probe_kafka_schema_registry()` for schema introspection

@@ -1,17 +1,17 @@
 # CallerArgResolver
 
-Trace one hop up the call chain from a `SinkArgClassifier` `ARG_PROPAGATED` finding to classify what each caller actually passes for the propagated argument — determining whether the propagated argument is attacker-controlled or internally fixed.
+Trace one hop up the call chain from a `SinkArgClassifier` `ARG_PROPAGATED` finding to classify what each caller actually passes for the propagated argument: determining whether the propagated argument is attacker-controlled or internally fixed.
 
 ---
 
 ## Why this exists
 
-1. **ARG_PROPAGATED means the argument came from outside the function — not that it is exploitable.** When `SinkArgClassifier` reports `ARG_PROPAGATED` for `system(arg0)` at `func@0x805842b`, it means the argument to `system()` traces back to an entry argument of `func`. That argument may be user-supplied, or it may be a hardcoded constant passed by every caller. Without examining the call sites, both cases look identical.
+1. **ARG_PROPAGATED means the argument came from outside the function, not that it is exploitable.** When `SinkArgClassifier` reports `ARG_PROPAGATED` for `system(arg0)` at `func@0x805842b`, it means the argument to `system()` traces back to an entry argument of `func`. That argument may be user-supplied, or it may be a hardcoded constant passed by every caller. Without examining the call sites, both cases look identical.
 
 2. **Manual caller examination is slow.** IBM CSM `samlicm`: `lum_add_nodelocked` (`func@0x805842b`) has an `ARG_PROPAGATED` `system()` site where `arg_pos=9` traces to `[ebp+0x2c]`. Manual disassembly of all three callers revealed:
-   - `netls_add_nodelocked` (`0x80526b6`): passes `push 0` → `system(NULL)` — shell probe, not exploitable
-   - `installTryBuyLicense` (`0x804d3ba`): passes `push 0` → `system(NULL)` — not exploitable
-   - `netls_add_nodelocked_from_certificate` (`0x80774a4`): passes `&[ebp-0x7b8]` — a stack buffer containing certificate data → **exploitable path**
+   - `netls_add_nodelocked` (`0x80526b6`): passes `push 0` → `system(NULL)`: shell probe, not exploitable
+   - `installTryBuyLicense` (`0x804d3ba`): passes `push 0` → `system(NULL)`, not exploitable
+   - `netls_add_nodelocked_from_certificate` (`0x80774a4`): passes `&[ebp-0x7b8]`: a stack buffer containing certificate data → **exploitable path**
 
    Manual investigation took ~40 minutes. This module classifies all three in seconds and flags only the certificate path for further review.
 
@@ -48,10 +48,10 @@ resolve(func_va=0x805842b, func_arg_pos=9)
 
 | Verdict | Meaning | Action |
 |:---|:---|:---|
-| `CONST_NULL` | `push 0` — `system(NULL)` shell probe | Discard: shell probe tests if a shell is available, not exploitable |
+| `CONST_NULL` | `push 0`: `system(NULL)` shell probe | Discard: shell probe tests if a shell is available, not exploitable |
 | `CONST_NONZERO` | `push imm32 ≠ 0` or LEA from `.rodata` | Verify: static string to `system()` is benign unless the string is mutable |
-| `ARG_PROPAGATED` | `push [ebp+N]` — value from caller's caller | Continue: trace one more level up or confirm with TaintTracker |
-| `STACK_LOCAL` | `push [ebp-N]` or `lea [ebp-N]` | Investigate: stack buffer — check if its content is user-controlled (snprintf pattern) |
+| `ARG_PROPAGATED` | `push [ebp+N]`: value from caller's caller | Continue: trace one more level up or confirm with TaintTracker |
+| `STACK_LOCAL` | `push [ebp-N]` or `lea [ebp-N]` | Investigate: stack buffer: check if its content is user-controlled (snprintf pattern) |
 | `UNKNOWN` | Push source not resolved within lookback | Manual trace required |
 
 ---
@@ -125,7 +125,7 @@ The `resolve()` method returns a report object. Each call site produces a `Calle
 
 ## Pipeline position
 
-**Before:** `SinkArgClassifier.classify_all()` — produces the `ARG_PROPAGATED` findings to resolve.
+**Before:** `SinkArgClassifier.classify_all()`: produces the `ARG_PROPAGATED` findings to resolve.
 
 **After:** `STACK_LOCAL` and `ARG_PROPAGATED` results from this module feed into `TaintedStringTracker` (for `STACK_LOCAL` with snprintf pattern) or another `CallerArgResolver.resolve()` call (for `ARG_PROPAGATED`).
 
@@ -133,7 +133,7 @@ The `resolve()` method returns a report object. Each call site produces a `Calle
 
 ## See also
 
-- [Sink Arg Classifier](sink-arg-classifier.md) — produces the ARG_PROPAGATED inputs to this module
-- [Func Reachability](func-reachability.md) — filter dead code before running caller resolution
-- [Tainted String Tracker](tainted-string-tracker.md) — upgrade SNPRINTF_RODATA when stack buffer is tainted
-- [Taint Analysis](taint-analysis.md) — full interprocedural trace for confirmed paths
+- [Sink Arg Classifier](sink-arg-classifier.md): produces the ARG_PROPAGATED inputs to this module
+- [Func Reachability](func-reachability.md): filter dead code before running caller resolution
+- [Tainted String Tracker](tainted-string-tracker.md): upgrade SNPRINTF_RODATA when stack buffer is tainted
+- [Taint Analysis](taint-analysis.md): full interprocedural trace for confirmed paths

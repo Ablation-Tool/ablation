@@ -1,14 +1,14 @@
 # JNI Bridge Reconstruction
 
-Recover the Java-to-native method mapping in an Android APK by scanning the DEX layer for `ACC_NATIVE` method declarations, `System.loadLibrary` call sites, and opaque peer pointer fields — then cross-referencing the ELF `.so` dynsym tables for `JNI_OnLoad` and canonical `Java_*` exports — so every native bridge entry point in the application is classified before any native binary is opened.
+Recover the Java-to-native method mapping in an Android APK by scanning the DEX layer for `ACC_NATIVE` method declarations, `System.loadLibrary` call sites, and opaque peer pointer fields: then cross-referencing the ELF `.so` dynsym tables for `JNI_OnLoad` and canonical `Java_*` exports, so every native bridge entry point in the application is classified before any native binary is opened.
 
 ---
 
 ## Why this exists
 
-1. **The JNI bridge is the widest attack surface in Android native code.** Every `ACC_NATIVE` method declaration in the DEX is a callable entry point from Java that jumps into native code without ART's type system. Developers frequently pass unsanitized user data across this boundary — the performance-focused Java layer doesn't validate; the C/C++ layer doesn't sanitize. Finding every JNI bridge entry point is the first step before any native binary analysis; the `JniBridgeScanner` produces the complete map in a single call.
+1. **The JNI bridge is the widest attack surface in Android native code.** Every `ACC_NATIVE` method declaration in the DEX is a callable entry point from Java that jumps into native code without ART's type system. Developers frequently pass unsanitized user data across this boundary: the performance-focused Java layer doesn't validate; the C/C++ layer doesn't sanitize. Finding every JNI bridge entry point is the first step before any native binary analysis; the `JniBridgeScanner` produces the complete map in a single call.
 
-2. **There are two registration styles and the attacker surface differs between them.** Libraries that export `JNI_OnLoad` register methods with `env->RegisterNatives()` at runtime — function pointers go into a `JNINativeMethod[]` array, and canonical `Java_*` symbol names do not appear in the dynsym. Libraries that export `Java_*` symbols use static registration — the class and method names are directly readable from the symbol table even in stripped binaries. The scanner surfaces which style each library uses so the analyst routes to the appropriate RE technique: `RegisterNatives` traversal for dynamic, direct disassembly for canonical.
+2. **There are two registration styles and the attacker surface differs between them.** Libraries that export `JNI_OnLoad` register methods with `env->RegisterNatives()` at runtime: function pointers go into a `JNINativeMethod[]` array, and canonical `Java_*` symbol names do not appear in the dynsym. Libraries that export `Java_*` symbols use static registration: the class and method names are directly readable from the symbol table even in stripped binaries. The scanner surfaces which style each library uses so the analyst routes to the appropriate RE technique: `RegisterNatives` traversal for dynamic, direct disassembly for canonical.
 
 3. **Opaque peer pointer fields mark unsafe native memory handles.** A Java class that holds a `long` field named `mNativePtr`, `peer`, or `nativeHandle` is following the opaque peer idiom: native code writes a raw C++ object pointer into the Java long field via `SetLongField`, and subsequent method calls pass that pointer back to native code. Missing bounds checks or lifetime validation in the native accessor creates use-after-free and type confusion vulnerabilities. The scanner detects every `type='J'` field with a peer-like name and flags the class for manual review.
 
@@ -117,13 +117,13 @@ for f in findings:
 
 **Peer field naming conventions.** The `_PEER_NAMES` set contains common names but does not cover all vendor-specific naming conventions. A peer field named `mEngineId` or `nativeBuf` does not match and goes unreported. Run `ctx.grep(r'type_desc.*J.*field_name', lang='dex')` to find all `long` fields in the APK for a broader sweep.
 
-**Canonical naming not equal to safe.** `jni/canonical_naming` carries MEDIUM rather than HIGH not because canonical binding is safer, but because the attack surface is easier to enumerate — the class and method names are already visible. The actual native code at `Java_*` can still be fully attacker-controlled. Always taint-trace canonical exports the same way as dynamic ones.
+**Canonical naming not equal to safe.** `jni/canonical_naming` carries MEDIUM rather than HIGH not because canonical binding is safer, but because the attack surface is easier to enumerate: the class and method names are already visible. The actual native code at `Java_*` can still be fully attacker-controlled. Always taint-trace canonical exports the same way as dynamic ones.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `APKParser.from_path()` — supplies DEX iteration and native library access.
+**Before this module:** `APKParser.from_path()`: supplies DEX iteration and native library access.
 
 **After this module:** For `jni/dynamic_registration` libraries: load the `.so` in `BinaryContext`, find `JNI_OnLoad` by VA, trace `RegisterNatives` with `TaintTracker` to recover the `JNINativeMethod[]` array. For `jni/canonical_naming` libraries: directly disassemble each `Java_*` export. For `jni/opaque_peer` classes: find the `GetFieldID` call in `JNI_OnLoad`, trace all usages of the returned field ID with `RegAnnotator`.
 
@@ -144,7 +144,7 @@ for f in findings:
 
 ## See also
 
-- [Android APK Analysis](android-apk-analysis.md) — `APKParser` and full APK surface map
-- [Android Binder Surface](android-binder-surface.md) — binder IPC analysis complementing JNI bridge
-- [Binary Context](binary-context.md) — load the `.so` after identifying the bridge entry
-- [Taint Analysis](taint-analysis.md) — trace data from JNI arguments to sinks in native code
+- [Android APK Analysis](android-apk-analysis.md): `APKParser` and full APK surface map
+- [Android Binder Surface](android-binder-surface.md): binder IPC analysis complementing JNI bridge
+- [Binary Context](binary-context.md): load the `.so` after identifying the bridge entry
+- [Taint Analysis](taint-analysis.md): trace data from JNI arguments to sinks in native code

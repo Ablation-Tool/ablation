@@ -79,7 +79,7 @@ Functions with ≤15 instructions containing exactly one import call score high 
 
 ## False positives
 
-**Ordinal-only imports.** Some WfW 3.x binaries import by ordinal without name. For known ordinals in the built-in KERNEL, USER, and GDI tables (lines 47–503 of `win16_ne_sweep.py`), names are resolved automatically. Unknown ordinals are displayed as `module#N` — look them up in the Win16 SDK headers.
+**Ordinal-only imports.** Some WfW 3.x binaries import by ordinal without name. For known ordinals in the built-in KERNEL, USER, and GDI tables (lines 47–503 of `win16_ne_sweep.py`), names are resolved automatically. Unknown ordinals are displayed as `module#N`: look them up in the Win16 SDK headers.
 
 ---
 
@@ -109,6 +109,6 @@ The semantic sweep returns a `dict` keyed by vulnerability profile name, each va
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

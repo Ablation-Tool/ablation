@@ -1,16 +1,16 @@
 # Deprecated Function Detection
 
-Detect inherently unsafe deprecated functions — `gets()`, `mktemp()`, `tmpnam()`, and `getwd()` — whose mere presence in the PLT is a confirmed finding regardless of call context, with buffer overflow offset calculation for `gets()` call sites where the destination buffer address is extractable from a preceding `LEA` instruction.
+Detect inherently unsafe deprecated functions: `gets()`, `mktemp()`, `tmpnam()`, and `getwd()`: whose mere presence in the PLT is a confirmed finding regardless of call context, with buffer overflow offset calculation for `gets()` call sites where the destination buffer address is extractable from a preceding `LEA` instruction.
 
 ---
 
 ## Why this exists
 
-1. **`gets()`, `mktemp()`, `tmpnam()`, and `getwd()` have no safe use.** A `gets()` call will overflow any fixed-size buffer; no input validation or sanitization can make it safe. Their presence in the PLT is a `CWE-242` confirmed finding without taint analysis. `DeprecatedFuncScanner` detects them in a single PLT walk — no disassembly required for the initial finding.
+1. **`gets()`, `mktemp()`, `tmpnam()`, and `getwd()` have no safe use.** A `gets()` call will overflow any fixed-size buffer; no input validation or sanitization can make it safe. Their presence in the PLT is a `CWE-242` confirmed finding without taint analysis. `DeprecatedFuncScanner` detects them in a single PLT walk, no disassembly required for the initial finding.
 
 2. **Buffer overflow offset calculation at each `gets()` call site.** For `gets()` calls where the destination buffer is at `[rbp-N]`, the module extracts `N` from the preceding `LEA rdi, [rbp-N]` instruction and reports the exact byte count needed to reach the saved return address: `N + 8` on x86-64. This converts a `HIGH` finding into a `CRITICAL` with a verified exploit offset, eliminating the manual offset-calculation step.
 
-3. **`mktemp()`/`tmpnam()` findings include the call site VA and the race-window description** — documenting the TOCTOU gap between the filename generation and the subsequent `open()` call. This is the evidence needed for a session finding entry without additional analysis.
+3. **`mktemp()`/`tmpnam()` findings include the call site VA and the race-window description**: documenting the TOCTOU gap between the filename generation and the subsequent `open()` call. This is the evidence needed for a session finding entry without additional analysis.
 
 ---
 
@@ -65,15 +65,15 @@ DeprecatedFuncScanner: target.so
 
 ## False positives
 
-**`gets()` with `overflow_offset=None`** — a `gets()` call where the preceding `LEA` is not in the immediately preceding 5 instructions (e.g., the buffer was set up earlier in the function or passed as an argument) will not have an offset. The finding is still `HIGH`; manual offset calculation is required.
+**`gets()` with `overflow_offset=None`**: a `gets()` call where the preceding `LEA` is not in the immediately preceding 5 instructions for example the buffer was set up earlier in the function or passed as an argument will not have an offset. The finding is still `HIGH`; manual offset calculation is required.
 
-**`mktemp()` findings at call sites in test code or dead code** — `DeprecatedFuncScanner` finds all call sites including those in test functions or unreachable code. Verify that the call site is in a reachable code path before including in a finding.
+**`mktemp()` findings at call sites in test code or dead code**: `DeprecatedFuncScanner` finds all call sites including those in test functions or unreachable code. Verify that the call site is in a reachable code path before including in a finding.
 
 ---
 
 ## Pipeline position
 
-Run `DeprecatedFuncScanner` as an early step in initial triage for any x86-64 ELF binary. `gets()` findings with `overflow_offset` are confirmed RCE candidates requiring no further taint analysis — proceed directly to `PathSolver.solve_path()` for feasibility confirmation.
+Run `DeprecatedFuncScanner` as an early step in initial triage for any x86-64 ELF binary. `gets()` findings with `overflow_offset` are confirmed RCE candidates requiring no further taint analysis: proceed directly to `PathSolver.solve_path()` for feasibility confirmation.
 
 ---
 
@@ -93,5 +93,5 @@ Run `DeprecatedFuncScanner` as an early step in initial triage for any x86-64 EL
 
 ## See also
 
-- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` for sink findings that require full dataflow
-- [Single-Function Profiling](single-function-profiling.md) — `FuncProfiler` for deep analysis of functions containing deprecated calls
+- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): `TaintTracker` for sink findings that require full dataflow
+- [Single-Function Profiling](single-function-profiling.md): `FuncProfiler` for deep analysis of functions containing deprecated calls

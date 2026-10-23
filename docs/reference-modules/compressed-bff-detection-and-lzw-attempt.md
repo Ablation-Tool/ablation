@@ -1,6 +1,6 @@
 # Entropy Mapping
 
-Map Shannon entropy across a binary file using a sliding window — classifying byte regions as encrypted/compressed (H≈8.0), code (H≈4.0–6.0), or low-entropy data/padding (H≈0.0–4.0) — and identifying region boundaries and transitions to locate encrypted partitions, compressed filesystems, and embedded compressed payloads.
+Map Shannon entropy across a binary file using a sliding window: classifying byte regions as encrypted/compressed (H≈8.0), code (H≈4.0–6.0), or low-entropy data/padding (H≈0.0–4.0), and identifying region boundaries and transitions to locate encrypted partitions, compressed filesystems, and embedded compressed payloads.
 
 ---
 
@@ -8,9 +8,9 @@ Map Shannon entropy across a binary file using a sliding window — classifying 
 
 1. **Before extracting or disassembling firmware, analysts need to know which byte ranges contain encrypted or compressed data versus executable code versus empty padding.** `EntropyMapper` produces a visual entropy map with region-level classification, enabling targeted extraction attempts on high-entropy regions (H≥7.5) without wasting time running `binwalk` on padding-heavy ROM images.
 
-2. **`EntropyMapResult.encrypted_ranges()` returns offset ranges with H≥7.5** — these are the candidates for XOR key recovery (`XorSolver`), AES decryption, or squashfs decompression. Combined with `find_transitions()` (entropy drops of ≥0.5 between adjacent windows), boundary detection narrows extraction targets to specific byte offsets without manual inspection.
+2. **`EntropyMapResult.encrypted_ranges()` returns offset ranges with H≥7.5**, these are the candidates for XOR key recovery (`XorSolver`), AES decryption, or squashfs decompression. Combined with `find_transitions()` (entropy drops of ≥0.5 between adjacent windows), boundary detection narrows extraction targets to specific byte offsets without manual inspection.
 
-3. **`EntropyMapper` is architecture- and format-agnostic** — it operates on raw bytes with no ELF header requirement, making it suitable as the first-pass tool for flat ECU ROMs, NAND flash dumps, VMDK raw images, and any unknown binary where structure is not yet established.
+3. **`EntropyMapper` is architecture- and format-agnostic**, it operates on raw bytes with no ELF header requirement, making it suitable as the first-pass tool for flat ECU ROMs, NAND flash dumps, VMDK raw images, and any unknown binary where structure is not yet established.
 
 ---
 
@@ -77,7 +77,7 @@ Transitions: 3  (threshold=0.50)
 
 ## False positives
 
-**`encrypted_ranges()` threshold H≥7.5 also fires on valid compressed data** — standard gzip, xz, squashfs filesystems all have H close to 8.0. The distinction between encrypted and compressed is not deterministic from entropy alone; use the offset returned by `encrypted_ranges()` as the starting point for magic-byte detection (`1f 8b` for gzip, `68 73 71 73` for squashfs) before applying a decryption attempt.
+**`encrypted_ranges()` threshold H≥7.5 also fires on valid compressed data**: standard gzip, xz, squashfs filesystems all have H close to 8.0. The distinction between encrypted and compressed is not deterministic from entropy alone; use the offset returned by `encrypted_ranges()` as the starting point for magic-byte detection (`1f 8b` for gzip, `68 73 71 73` for squashfs) before applying a decryption attempt.
 
 **Small window sizes (< 512 bytes) produce noisy entropy estimates** for regions with sparse content. Use the default 4096-byte window for firmware analysis; smaller windows are appropriate only for detailed region inspection.
 
@@ -102,9 +102,9 @@ Run `EntropyMapper` as the first analysis step on any unknown binary before `Ecu
 | `min_entropy` | Minimum entropy window value in this region |
 | `max_entropy` | Maximum entropy window value in this region |
 
-`EntropyMapResult.encrypted_ranges()` returns `List[Tuple[int, int]]` — `(start, end)` offset pairs for `ENCRYPTED`-classified regions.
+`EntropyMapResult.encrypted_ranges()` returns `List[Tuple[int, int]]`: `(start, end)` offset pairs for `ENCRYPTED`-classified regions.
 
-`EntropyMapResult.find_transitions(threshold=0.5)` returns `List[EntropyTransition]` — each representing a sharp entropy class change:
+`EntropyMapResult.find_transitions(threshold=0.5)` returns `List[EntropyTransition]`: each representing a sharp entropy class change:
 
 | Attribute | Content |
 |:---|:---|
@@ -118,6 +118,6 @@ Run `EntropyMapper` as the first analysis step on any unknown binary before `Ecu
 
 ## See also
 
-- [Firmware Extraction](firmware-extraction.md) — XOR key recovery pipeline for high-entropy FortiOS regions
-- [Flat ROM Function Discovery](flat-rom-function-discovery.md) — `EcuArchDetector` for code-region ISA identification
-- [Persistent Analysis Context](persistent-analysis-context.md) — `BinaryContext` for code regions after decryption
+- [Firmware Extraction](firmware-extraction.md): XOR key recovery pipeline for high-entropy FortiOS regions
+- [Flat ROM Function Discovery](flat-rom-function-discovery.md): `EcuArchDetector` for code-region ISA identification
+- [Persistent Analysis Context](persistent-analysis-context.md): `BinaryContext` for code regions after decryption

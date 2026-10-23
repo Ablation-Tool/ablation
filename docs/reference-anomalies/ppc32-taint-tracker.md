@@ -76,7 +76,7 @@ and the tracker will produce completely wrong results.
 
 **Triggering conditions:** 
 - SYSV PIC `.so` files where LIEF populates zero PLT entries for reasons other than the
- Huawei vendor reloc (e.g., a malformed or obfuscated binary, or a future LIEF regression)
+ Huawei vendor reloc for example a malformed or obfuscated binary, or a future LIEF regression
 
 **Impact:** False positive or corrupted analysis. The guard condition is `if not self._plt:`,
 so any binary where LIEF returns zero entries triggers the fallback.

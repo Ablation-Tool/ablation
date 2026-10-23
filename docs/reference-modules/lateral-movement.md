@@ -23,7 +23,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. Four CWE-770 reads fixed this se
 
 ## How it works
 
-`CloudMetadataProber().probe_all()` returns `self.results` — a dict with keys `aws_imdsv1`, `aws_imdsv2`, `aws_iam_creds`, `gcp_metadata`, `azure_imds`, `oci_imds`. `CredentialHarvester()` scans local files (`~/.kube/config`, `~/.aws/credentials`, environment variables) and appends `{source, data, severity}` finding dicts. `LateralMovementEnumerator()` probes SMB null sessions and WMI unauthenticated access.
+`CloudMetadataProber().probe_all()` returns `self.results`: a dict with keys `aws_imdsv1`, `aws_imdsv2`, `aws_iam_creds`, `gcp_metadata`, `azure_imds`, `oci_imds`. `CredentialHarvester()` scans local files (`~/.kube/config`, `~/.aws/credentials`, environment variables) and appends `{source, data, severity}` finding dicts. `LateralMovementEnumerator()` probes SMB null sessions and WMI unauthenticated access.
 
 ---
 
@@ -68,7 +68,7 @@ CredentialHarvester.findings:
 
 ## False positives
 
-**`CloudMetadataProber.probe_all()` fires on non-cloud hosts with IMDS-like HTTP services** — any HTTP service on 169.254.169.254:80 will be probed. Corporate DHCP servers or virtual machine management agents sometimes listen on this address. Verify the response body structure matches the expected IMDS JSON format before treating as a confirmed cloud environment.
+**`CloudMetadataProber.probe_all()` fires on non-cloud hosts with IMDS-like HTTP services**: any HTTP service on 169.254.169.254:80 will be probed. Corporate DHCP servers or virtual machine management agents sometimes listen on this address. Verify the response body structure matches the expected IMDS JSON format before treating as a confirmed cloud environment.
 
 ---
 
@@ -95,5 +95,5 @@ Run `CloudMetadataProber` immediately after gaining shell access to any host. A 
 
 ## See also
 
-- [Credential Token Key Discovery](credential-token-key-discovery.md) — full credential surface including IMDS keys
-- [Internal Network Reconnaissance](internal-network-reconnaissance.md) — cloud network pivot planning
+- [Credential Token Key Discovery](credential-token-key-discovery.md): full credential surface including IMDS keys
+- [Internal Network Reconnaissance](internal-network-reconnaissance.md): cloud network pivot planning

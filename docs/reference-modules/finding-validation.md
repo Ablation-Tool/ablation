@@ -56,9 +56,9 @@ result = solve_for_sink(ctx, sink_va=0x1234abcd)
 | `sat` | `True` if Z3 found a satisfying assignment |
 | `path` | Block VA sequence from entry to sink |
 | `model` | `dict[str, int]`: concrete register values at function entry that reach the sink |
-| `clauses` | `int` — Z3 clauses added during path exploration |
-| `note` | `str` — `'timeout'` or `'unsat'` when `sat=False`; empty on success |
-| `seeded_fields` | `list[str]` — struct field names from `MemoryConstraint` that constrained this path |
+| `clauses` | `int`: Z3 clauses added during path exploration |
+| `note` | `str`: `'timeout'` or `'unsat'` when `sat=False`; empty on success |
+| `seeded_fields` | `list[str]`: struct field names from `MemoryConstraint` that constrained this path |
 
 ### Limitations
 
@@ -211,9 +211,9 @@ FindingRegistry.stats()
 
 ## False positives
 
-**`PathSolver` SAT on an infeasible path** — unconstrained memory reads let Z3 assign arbitrary values to struct fields, producing models that satisfy the formula but are not reachable in practice. Use `MemoryConstraint` seeding to constrain known struct fields, and always validate the model against the vulnerability semantics (e.g., the `len` register should exceed the allocation size for a buffer overflow).
+**`PathSolver` SAT on an infeasible path**: unconstrained memory reads let Z3 assign arbitrary values to struct fields, producing models that satisfy the formula but are not reachable in practice. Use `MemoryConstraint` seeding to constrain known struct fields, and always validate the model against the vulnerability semantics (e.g., the `len` register should exceed the allocation size for a buffer overflow).
 
-**`PathSolver` UNSAT on a real path** — loops and indirect calls create unconstrained symbolic values that over-constrain the Z3 formula. Increase `max_path_blocks` or add `MemoryConstraint` seeds for register-held struct pointers. If a path still produces UNSAT, manual disassembly trace is the fallback.
+**`PathSolver` UNSAT on a real path**: loops and indirect calls create unconstrained symbolic values that over-constrain the Z3 formula. Increase `max_path_blocks` or add `MemoryConstraint` seeds for register-held struct pointers. If a path still produces UNSAT, manual disassembly trace is the fallback.
 
 ---
 
@@ -232,16 +232,16 @@ FindingRegistry.stats()
 | Attribute | Content |
 |:---|:---|
 | `sat` | `True` if Z3 found a satisfiable path to the target VA |
-| `path` | `List[int]` — basic block VAs on the satisfying path |
-| `model` | `Dict[str, int]` — concrete register values at function entry that satisfy the constraints |
-| `clauses` | Integer — number of Z3 clauses added during path exploration |
+| `path` | `List[int]`: basic block VAs on the satisfying path |
+| `model` | `Dict[str, int]`: concrete register values at function entry that satisfy the constraints |
+| `clauses` | Integer: number of Z3 clauses added during path exploration |
 | `note` | Status string: `'timeout'` / `'unsat'` / empty on success |
-| `seeded_fields` | `List[str]` — struct field names used to seed the Z3 model |
+| `seeded_fields` | `List[str]`: struct field names used to seed the Z3 model |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

@@ -47,7 +47,7 @@ for r in results:
 
 ## Example output
 
-A real sample of what the module returns. Show a populated finding dict, a printed result, or annotated output — whichever is most representative.
+A real sample of what the module returns. Show a populated finding dict, a printed result, or annotated output: whichever is most representative.
 
 ```
 [SEVERITY] FINDING_TYPE   function_name (0xVA)
@@ -83,5 +83,5 @@ What generates noise and how to eliminate it before manual review. Cover the 2-3
 
 ## See also
 
-- [Related Module](related-module.md) — why to use it alongside this one
-- [Another Module](another-module.md) — what it adds
+- [Related Module](related-module.md): why to use it alongside this one
+- [Another Module](another-module.md): what it adds

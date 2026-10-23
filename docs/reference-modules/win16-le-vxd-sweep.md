@@ -153,7 +153,7 @@ Output goes to `reports/sweep_le_<vendor>_<product>_<version>_<ts>.md`.
 
 ## Reading output
 
-`LEBinary.scan_ddb(code_bytes)` returns `Optional[dict]` — `None` if no VxD DDB found, or a dict with:
+`LEBinary.scan_ddb(code_bytes)` returns `Optional[dict]`: `None` if no VxD DDB found, or a dict with:
 
 | Key | Content |
 |:---|:---|
@@ -170,6 +170,6 @@ The CLI sweep writes a Markdown report to `reports/sweep_le_<vendor>_<product>_<
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

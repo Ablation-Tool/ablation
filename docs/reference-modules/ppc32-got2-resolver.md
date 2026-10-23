@@ -222,7 +222,7 @@ PPC32 GOT2 resolver: 38/42 resolved (90%)
 
 ## False positives
 
-**Dynamic (runtime-only) calls.** PPC32 binaries that use `bctr` (branch to CTR) after loading the address from a computed expression (rather than GOT2) are reported as `dynamic (runtime-only)` — they cannot be resolved statically. These are genuine indirect dispatch sites that require dynamic tracing to resolve.
+**Dynamic (runtime-only) calls.** PPC32 binaries that use `bctr` (branch to CTR) after loading the address from a computed expression (rather than GOT2) are reported as `dynamic (runtime-only)`: they cannot be resolved statically. These are genuine indirect dispatch sites that require dynamic tracing to resolve.
 
 ---
 
@@ -240,8 +240,8 @@ PPC32 GOT2 resolver: 38/42 resolved (90%)
 
 | Attribute | Content |
 |:---|:---|
-| `resolved` | `List[GOT2ResolvedCall]` — BCTRL sites where the target was resolved |
-| `unresolved` | `List[GOT2UnresolvedCall]` — BCTRL sites that could not be resolved |
+| `resolved` | `List[GOT2ResolvedCall]`: BCTRL sites where the target was resolved |
+| `unresolved` | `List[GOT2UnresolvedCall]`: BCTRL sites that could not be resolved |
 
 Each `GOT2ResolvedCall` has: `bctrl_va`, `kind` (`'got2'` or `'direct'`), `target`, `name`, `r30`, `disp`, `entry_va`.
 
@@ -253,6 +253,6 @@ Each `GOT2UnresolvedCall` has: `bctrl_va`, `reason` (e.g., `'dynamic_dispatch'`,
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

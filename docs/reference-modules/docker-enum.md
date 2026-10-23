@@ -63,7 +63,7 @@ privileged_container_findings:
 
 ## False positives
 
-**`probe_docker_daemon_api()` fires on non-Docker HTTP services on port 2375** — a TCP response to `GET /version` on port 2375 does not guarantee Docker. Verify `Content-Type: application/json` and the presence of `Version` and `APIVersion` fields in the response before treating this as a confirmed Docker daemon.
+**`probe_docker_daemon_api()` fires on non-Docker HTTP services on port 2375**: a TCP response to `GET /version` on port 2375 does not guarantee Docker. Verify `Content-Type: application/json` and the presence of `Version` and `APIVersion` fields in the response before treating this as a confirmed Docker daemon.
 
 ---
 
@@ -89,5 +89,5 @@ Finding dicts in the result's `*_findings` keys use `{severity, title, detail, h
 
 ## See also
 
-- [Docker Inventory and Posture](docker-inventory-and-posture.md) — `check_container_isolation()` for `/proc`-based escape surface
-- [Cluster Management Exposure](cluster-management-exposure.md) — combined Docker + Kubernetes management surface
+- [Docker Inventory and Posture](docker-inventory-and-posture.md): `check_container_isolation()` for `/proc`-based escape surface
+- [Cluster Management Exposure](cluster-management-exposure.md): combined Docker + Kubernetes management surface

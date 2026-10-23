@@ -1,12 +1,12 @@
 # AixInstallpDecompressor
 
-Decompress IBM AIX installp BFF archive entries whose magic bytes indicate IBM proprietary compression (types 0x0e, 0x0f, 0x10, 0x11) — entries that zlib, bzip2, lzma, and binwalk all fail to handle.
+Decompress IBM AIX installp BFF archive entries whose magic bytes indicate IBM proprietary compression (types 0x0e, 0x0f, 0x10, 0x11): entries that zlib, bzip2, lzma, and binwalk all fail to handle.
 
 ---
 
 ## Why this exists
 
-1. **IBM AIX installp packages compress executables with a proprietary algorithm.** Entries with type bytes 0x0e, 0x0f, 0x10, or 0x11 are IBM-compressed XCOFF32 binaries, not plain XCOFF32. Before this module, these entries were opaque — every standard decompressor failed.
+1. **IBM AIX installp packages compress executables with a proprietary algorithm.** Entries with type bytes 0x0e, 0x0f, 0x10, or 0x11 are IBM-compressed XCOFF32 binaries, not plain XCOFF32. Before this module, these entries were opaque: every standard decompressor failed.
 
 2. **The compression algorithm has been reverse-engineered through four steps.** This module implements all four steps of the decompression pipeline as derived from IBM `liblpp.a` and empirical analysis of real installp entries.
 
@@ -97,7 +97,7 @@ For entries where K < 256 and rare-byte ranks exceed K-1, use `AixInstallpStep4M
 
 ## See also
 
-- [AIX BFF Extractor](aix-bff-extractor.md) — outer BFF container; dispatches to this module
-- [AIX Installp Step4 Multilevel](aix-installp-step4-multilevel.md) — multi-level rare byte decoder
-- [BWT Eulerian Reconstructor](bwt-eulerian-reconstructor.md) — multi-cycle BWT recovery
-- [AIX Type0f Stream Splitter](aix-type0f-stream-splitter.md) — two-stream type 0x0f decoder
+- [AIX BFF Extractor](aix-bff-extractor.md): outer BFF container; dispatches to this module
+- [AIX Installp Step4 Multilevel](aix-installp-step4-multilevel.md): multi-level rare byte decoder
+- [BWT Eulerian Reconstructor](bwt-eulerian-reconstructor.md): multi-cycle BWT recovery
+- [AIX Type0f Stream Splitter](aix-type0f-stream-splitter.md): two-stream type 0x0f decoder

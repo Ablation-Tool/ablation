@@ -85,9 +85,9 @@ results['token']:
 
 ## False positives
 
-**`com_hijack_candidates()` on developer machines** — developer tools (Visual Studio, build systems) legitimately register per-user COM objects in HKCU that shadow HKLM entries. Confirm the CLSID is associated with an application and not a persistence mechanism by checking the registered InprocServer32 DLL path.
+**`com_hijack_candidates()` on developer machines**: developer tools (Visual Studio, build systems) legitimately register per-user COM objects in HKCU that shadow HKLM entries. Confirm the CLSID is associated with an application and not a persistence mechanism by checking the registered InprocServer32 DLL path.
 
-**`token_privileges()` reporting `SeDebugPrivilege`** — administrators and debuggers legitimately hold SeDebugPrivilege. This is a HIGH finding on service accounts and restricted users, but expected on admin sessions.
+**`token_privileges()` reporting `SeDebugPrivilege`**: administrators and debuggers legitimately hold SeDebugPrivilege. This is a HIGH finding on service accounts and restricted users, but expected on admin sessions.
 
 ---
 
@@ -113,6 +113,6 @@ Returns `dict[str, list[Finding]]`. `Finding` fields:
 
 ## See also
 
-- [FindingRegistry](registry.md) — record confirmed findings from enumeration
-- [LateralMovement](lateral-movement.md) — chain enumeration findings into a lateral path
-- [NetworkAnalyze](network-analyze.md) — port and service fingerprinting
+- [FindingRegistry](registry.md): record confirmed findings from enumeration
+- [LateralMovement](lateral-movement.md): chain enumeration findings into a lateral path
+- [NetworkAnalyze](network-analyze.md): port and service fingerprinting

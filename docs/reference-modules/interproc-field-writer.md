@@ -62,7 +62,7 @@ interprocedural_field_writes(ctx, target_gv=0x00620040):
 
 ## False positives
 
-Conditional writes on rarely-taken paths (e.g., error recovery) are included in the write set even if the main path never exercises them. Review `callers` to assess reachability of each write site before reporting.
+Conditional writes on rarely-taken paths for example error recovery are included in the write set even if the main path never exercises them. Review `callers` to assess reachability of each write site before reporting.
 
 ---
 
@@ -70,7 +70,7 @@ Conditional writes on rarely-taken paths (e.g., error recovery) are included in 
 
 **Before this module:** `BinaryContext.load_or_build()` with `ctx.func_starts` populated. Identify the target global variable VA via `SemanticSearcher` or `PatternLibrary`.
 
-**After this module:** For security-relevant global writes (e.g., auth flags), trace whether an attacker-controlled value can reach the write site via `TaintTracker`.
+**After this module:** For security-relevant global writes for example auth flags, trace whether an attacker-controlled value can reach the write site via `TaintTracker`.
 
 ---
 
@@ -81,19 +81,19 @@ Conditional writes on rarely-taken paths (e.g., error recovery) are included in 
 | Attribute | Content |
 |:---|:---|
 | `addr` | Function VA |
-| `global_field_writes` | `List[Tuple[name, field_offset, store_pc, store_bytes]]` — stores to a known global struct field |
-| `global_to_callee` | `List[Tuple[callee_va, global_name, callee_arg_idx, call_pc]]` — global forwarded to a callee |
-| `arg_field_writes` | `List[Tuple[arg_idx, field_offset, store_pc, store_bytes]]` — stores to a field of an argument struct |
-| `arg_to_callee` | `List[Tuple[callee_va, caller_arg_idx, callee_arg_idx, call_pc]]` — argument forwarded to a callee |
-| `direct_callees` | `Set[int]` — all direct callee VAs found in BL instructions |
+| `global_field_writes` | `List[Tuple[name, field_offset, store_pc, store_bytes]]`: stores to a known global struct field |
+| `global_to_callee` | `List[Tuple[callee_va, global_name, callee_arg_idx, call_pc]]`: global forwarded to a callee |
+| `arg_field_writes` | `List[Tuple[arg_idx, field_offset, store_pc, store_bytes]]`: stores to a field of an argument struct |
+| `arg_to_callee` | `List[Tuple[callee_va, caller_arg_idx, callee_arg_idx, call_pc]]`: argument forwarded to a callee |
+| `direct_callees` | `Set[int]`: all direct callee VAs found in BL instructions |
 | `insns_scanned` | Number of instructions analyzed |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

@@ -164,7 +164,7 @@ before the JALR in a different branch, the verdict will be wrong.
 
 ## How it works
 
-`SinkArgClassifierMIPS.from_context(ctx).classify_all()` iterates `ctx.func_starts` (MIPS32 binary) and disassembles each function with Capstone. For each call to a configured exec-class sink (`system`, `execve`, `popen`, etc.), it traces the first argument register (`a0`) backward in the instruction stream using MIPS register conventions. Resolves to `RODATA_CONST` if the argument traces to a `.rodata` address; `ARG_PROPAGATED` if traced to a parameter; `UNKNOWN` if unresolved. Accounts for MIPS delay slot — the instruction after each branch/call is part of the branch semantics.
+`SinkArgClassifierMIPS.from_context(ctx).classify_all()` iterates `ctx.func_starts` (MIPS32 binary) and disassembles each function with Capstone. For each call to a configured exec-class sink (`system`, `execve`, `popen`, etc.), it traces the first argument register (`a0`) backward in the instruction stream using MIPS register conventions. Resolves to `RODATA_CONST` if the argument traces to a `.rodata` address; `ARG_PROPAGATED` if traced to a parameter; `UNKNOWN` if unresolved. Accounts for MIPS delay slot: the instruction after each branch/call is part of the branch semantics.
 
 ---
 
@@ -206,7 +206,7 @@ Delay-slot misattribution: a load in the delay slot of a branch may be incorrect
 | `arg_pos` | 0-indexed argument position analyzed (0 = `$a0`, 1 = `$a1`, etc.) |
 | `func_va` | VA of the calling function |
 | `call_va` | VA of the `jal` / `jalr` instruction |
-| `verdict` | `'RODATA_CONST'` — hardcoded constant; `'SNPRINTF_RODATA'` — buffer from fixed-format snprintf; `'ARG_PROPAGATED'` — traces to entry-point `$a0`–`$a3`; `'UNKNOWN'` — provenance unresolved |
+| `verdict` | `'RODATA_CONST'`: hardcoded constant; `'SNPRINTF_RODATA'`: buffer from fixed-format snprintf; `'ARG_PROPAGATED'`: traces to entry-point `$a0`–`$a3`; `'UNKNOWN'`: provenance unresolved |
 | `detail` | Human-readable trace description |
 | `severity` | Derived from verdict: `'LOW'` (RODATA_CONST) / `'MEDIUM'` (SNPRINTF_RODATA/UNKNOWN) / `'HIGH'` (ARG_PROPAGATED) |
 
@@ -214,8 +214,8 @@ Delay-slot misattribution: a load in the delay slot of a branch may be incorrect
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

@@ -1,6 +1,6 @@
 # Apache Module Analysis
 
-Analyze Apache C module binaries (`.so` files built against APR/APRUTIL) for security vulnerabilities — finding authentication bypass patterns in `ap_hook_check_access` handlers, session skip flag logic, and direct `DECLINED` returns in authentication hooks — as demonstrated by the FortiAnalyzer `mod_extension.so` MFA bypass (CVE-2026-22572 / FAZ-CVE22572).
+Analyze Apache C module binaries (`.so` files built against APR/APRUTIL) for security vulnerabilities: finding authentication bypass patterns in `ap_hook_check_access` handlers, session skip flag logic, and direct `DECLINED` returns in authentication hooks: as demonstrated by the FortiAnalyzer `mod_extension.so` MFA bypass (CVE-2026-22572 / FAZ-CVE22572).
 
 ---
 
@@ -8,9 +8,9 @@ Analyze Apache C module binaries (`.so` files built against APR/APRUTIL) for sec
 
 1. **FortiAnalyzer v7.6.3 ships a custom Apache module `mod_extension.so` that bypasses MFA via a session skip flag.** Manual disassembly (FAZ-CVE22572 / CVE-2026-22572) was required to confirm the bypass surface because no Ablation tool could identify Apache APR hook registration patterns, find the authentication hook handler function, or locate the `DECLINED` return path. `ApacheModuleAnalyzer` closes this gap.
 
-2. **Apache modules export hook registration functions (`register_hooks`, `module_name_module`) and register callbacks via `ap_hook_check_access`/`ap_hook_check_access_ex`/`ap_hook_auth_checker`.** `ApacheModuleAnalyzer.from_path()` identifies these registration sites and maps each hook to its handler function VA, enabling `FuncProfiler` to analyze exactly the handler function — not the full module.
+2. **Apache modules export hook registration functions (`register_hooks`, `module_name_module`) and register callbacks via `ap_hook_check_access`/`ap_hook_check_access_ex`/`ap_hook_auth_checker`.** `ApacheModuleAnalyzer.from_path()` identifies these registration sites and maps each hook to its handler function VA, enabling `FuncProfiler` to analyze exactly the handler function, not the full module.
 
-3. **`ApacheModuleAnalyzer.scan()` looks for authentication skip patterns in hook handlers** — `DECLINED` returns (-1) before any credential validation, `r->notes` flag checks that bypass the authentication flow, and `apr_table_get(r->notes, "skip_auth")` patterns. These patterns are the structural signature of auth bypass vulnerabilities in Apache C modules.
+3. **`ApacheModuleAnalyzer.scan()` looks for authentication skip patterns in hook handlers**: `DECLINED` returns (-1) before any credential validation, `r->notes` flag checks that bypass the authentication flow, and `apr_table_get(r->notes, "skip_auth")` patterns. These patterns are the structural signature of auth bypass vulnerabilities in Apache C modules.
 
 ---
 
@@ -70,9 +70,9 @@ scan() findings:
 
 ## False positives
 
-**`DECLINED` return detection uses backward trace from return instruction** — a function that returns `DECLINED` (`-1`) for specific URI patterns (e.g., to skip auth for public assets like `/favicon.ico`) is architecturally valid. Verify that the `DECLINED` return path is conditional on the skip flag rather than unconditional.
+**`DECLINED` return detection uses backward trace from return instruction**: a function that returns `DECLINED` (`-1`) for specific URI patterns (e.g., to skip auth for public assets like `/favicon.ico`) is architecturally valid. Verify that the `DECLINED` return path is conditional on the skip flag rather than unconditional.
 
-**`ap_hook_*` function name matching uses PLT name lookup** — if the module uses a wrapper that calls `ap_hook_check_access` indirectly (e.g., through a function pointer stored in a struct), the hook registration may not be detected. Inspect the module's `register_hooks` function manually if no hooks are detected in a known Apache module.
+**`ap_hook_*` function name matching uses PLT name lookup**: if the module uses a wrapper that calls `ap_hook_check_access` indirectly for example through a function pointer stored in a struct, the hook registration may not be detected. Inspect the module's `register_hooks` function manually if no hooks are detected in a known Apache module.
 
 ---
 
@@ -100,6 +100,6 @@ Hook registration details are embedded in the `detail` field of each `ApacheFind
 
 ## See also
 
-- [Route Authentication Classification](route-authentication-classification.md) — `PreAuthRouteAuditor` for flatui/web framework pre-auth routes
-- [Single-Function Profiling](single-function-profiling.md) — `FuncProfiler` for deep analysis of identified hook handler functions
-- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` for request data flow through auth hooks
+- [Route Authentication Classification](route-authentication-classification.md): `PreAuthRouteAuditor` for flatui/web framework pre-auth routes
+- [Single-Function Profiling](single-function-profiling.md): `FuncProfiler` for deep analysis of identified hook handler functions
+- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): `TaintTracker` for request data flow through auth hooks

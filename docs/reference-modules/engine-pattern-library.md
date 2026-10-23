@@ -331,7 +331,7 @@ Game code that happens to reference engine string constants (e.g., a debug log l
 
 ## Reading output
 
-`PatternLibrary.match(ctx)` returns `List[EngineLabel]` — one per confirmed function match:
+`PatternLibrary.match(ctx)` returns `List[EngineLabel]`: one per confirmed function match:
 
 | Attribute | Content |
 |:---|:---|
@@ -339,7 +339,7 @@ Game code that happens to reference engine string constants (e.g., a debug log l
 | `engine` | Engine identifier string (e.g., `'ue4'`, `'unity'`, `'godot'`) |
 | `category` | Functional category (e.g., `'memory'`, `'render'`, `'network'`) |
 | `name` | Canonical engine function name (e.g., `'FMemory::Malloc'`) |
-| `confidence` | Float 0.0–1.0 — match confidence from the signature |
+| `confidence` | Float 0.0–1.0: match confidence from the signature |
 | `match_kind` | `'string_marker'` / `'string_pattern'` / `'semantic'` / `'sax'` |
 | `sig_id` | Stable signature identifier (e.g., `'ue4.fmemory.malloc'`) |
 
@@ -349,8 +349,8 @@ Use `label.strip()` to test if the match is high-confidence enough to exclude fr
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

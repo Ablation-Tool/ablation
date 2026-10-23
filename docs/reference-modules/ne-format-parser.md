@@ -88,7 +88,7 @@ NE format=NE target_os=OS/2-1.x modules=['DOSCALLS', 'MSG'] exec_imports=[] segm
 ```
 
 IBM 4690 retail OS utilities (6 NE files): all `DOSCALLS`-only, no `DOSEXECPGM`.
-CM2 alert.exe (LX OS/2-2.x): `DOSCALLS, NLS, MSG` — no exec-class.
+CM2 alert.exe (LX OS/2-2.x): `DOSCALLS, NLS, MSG`, no exec-class.
 
 ---
 
@@ -102,7 +102,7 @@ None typical. The module only flags when exec-class names appear verbatim in the
 
 ## Pipeline position
 
-**This module is standalone** — it does not feed into SinkArgClassifier or TaintTracker. OS/2 binaries have no ELF exec surface. The verdict is import-table-only.
+**This module is standalone**, it does not feed into SinkArgClassifier or TaintTracker. OS/2 binaries have no ELF exec surface. The verdict is import-table-only.
 
 **Before:** Check magic bytes to confirm MZ header before calling.
 
@@ -112,5 +112,5 @@ None typical. The module only flags when exec-class names appear verbatim in the
 
 ## See also
 
-- [ArArchiveScanner](ar-archive-scanner.md) — for `.a` static library archives containing ELF members
-- [sink-arg-classifier](sink-arg-classifier.md) — for ELF binaries after format identification
+- [ArArchiveScanner](ar-archive-scanner.md): for `.a` static library archives containing ELF members
+- [sink-arg-classifier](sink-arg-classifier.md): for ELF binaries after format identification

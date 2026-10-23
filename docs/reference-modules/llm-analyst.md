@@ -8,7 +8,7 @@ ReAct agent loop for LLM-assisted binary analysis. Seven modules under `ablation
 
 1. **Semantic gaps that pattern matching cannot close.** SemanticSearcher and SinkArgClassifier reach a ceiling: they can identify that a function calls `memcpy` with an argument from `recv`, but cannot assess whether an intervening `if (len > MAX)` actually prevents overflow. The LLM analyst closes this gap by reasoning over disassembly, callee names, and prior findings in a structured loop.
 
-2. **Tool-calling loop prevents hallucination drift.** A single-shot LLM call with raw disassembly produces confident wrong answers. The ReAct loop forces the model to use tools (`get_disassembly`, `get_strings`, `get_imports`) to retrieve specific evidence before committing. `done()` is the only exit — the model cannot stop without stating a name, role, and rationale.
+2. **Tool-calling loop prevents hallucination drift.** A single-shot LLM call with raw disassembly produces confident wrong answers. The ReAct loop forces the model to use tools (`get_disassembly`, `get_strings`, `get_imports`) to retrieve specific evidence before committing. `done()` is the only exit: the model cannot stop without stating a name, role, and rationale.
 
 3. **Pre-screening and RAG amortize the token cost.** `vuln_hypothesis.py` skips Claude calls entirely for functions with no dangerous callees. `rag_retriever.py` injects confirmed prior findings from `func_id_db`, so the model often needs only 1–2 tool calls (usually just `done()`).
 
@@ -54,11 +54,11 @@ for c in results:
 ## agent_loop.py
 
 **AgentLoop** drives a Claude ReAct loop. Key parameters:
-- `max_tool_calls=10` — hard budget; loop exits whether or not `done()` is called
+- `max_tool_calls=10`: hard budget; loop exits whether or not `done()` is called
 - Loop detector: identical `(tool_name, args)` pair injects `LOOP_DETECTED` error and blocks the call
 - `persist_result()`: writes to `func_id_db` at `confidence >= 0.5`
 
-`run_patch(v1, v2, disasm_v1, disasm_v2)` — single-shot patch analysis (no tool loop needed; disasm already injected).
+`run_patch(v1, v2, disasm_v1, disasm_v2)`: single-shot patch analysis (no tool loop needed; disasm already injected).
 
 ---
 
@@ -69,7 +69,7 @@ for c in results:
 2. Callee names (strongest semantic signal)
 3. String xrefs (capped at 10, trimmed to 120 chars each)
 4. CFG summary
-5. Raw disassembly (last — token-expensive)
+5. Raw disassembly (last: token-expensive)
 
 ---
 
@@ -77,7 +77,7 @@ for c in results:
 
 **RAGRetriever** retrieves prior findings from `func_id_db` via four strategies (in priority order):
 1. Exact binary SHA256 + VA match
-2. Callee-set overlap (LIKE query, parameterized — no injection risk)
+2. Callee-set overlap (LIKE query, parameterized, no injection risk)
 3. Role-based match
 4. Name fuzzy match
 
@@ -87,7 +87,7 @@ Results ranked by callee overlap score; capped at `_MAX_RESULTS=8`.
 
 ## tool_registry.py
 
-**ToolRegistry** wraps binary analysis tools for the agent loop. Uses `angr.Project(binary_path, auto_load_libs=False)` (lazy — built on first `get_disassembly` call). Tool output trimmed to `_MAX_RESULT_CHARS=4000`. Available tools: `get_disassembly`, `get_cfg`, `get_xrefs`, `get_strings`, `get_imports`, `query_func_db`, `done`.
+**ToolRegistry** wraps binary analysis tools for the agent loop. Uses `angr.Project(binary_path, auto_load_libs=False)` (lazy: built on first `get_disassembly` call). Tool output trimmed to `_MAX_RESULT_CHARS=4000`. Available tools: `get_disassembly`, `get_cfg`, `get_xrefs`, `get_strings`, `get_imports`, `query_func_db`, `done`.
 
 ---
 
@@ -111,6 +111,6 @@ Pre-screens PLT callee names against `_DANGEROUS_IMPORTS` (strcpy, memcpy, mallo
 
 ## See also
 
-- [Taint Analysis](taint-analysis.md) — lower-cost automated taint tracking before LLM analysis
-- [Semantic Searcher](semantic-searcher.md) — initial candidate identification before LLM analysis
-- [Function Profiler](func-profiler.md) — function characterization used alongside naming
+- [Taint Analysis](taint-analysis.md): lower-cost automated taint tracking before LLM analysis
+- [Semantic Searcher](semantic-searcher.md): initial candidate identification before LLM analysis
+- [Function Profiler](func-profiler.md): function characterization used alongside naming

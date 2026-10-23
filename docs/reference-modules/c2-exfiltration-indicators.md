@@ -1,16 +1,16 @@
 # C2 / Exfiltration Indicators
 
-Probe a live host for active command-and-control channel signatures — Cobalt Strike default beacon responses, Meterpreter HTTP stager behavior, Empire and Metasploit default listener ports, and ransomware initial-access precursors (exposed RDP, OWA, Fortinet VPN, Pulse VPN) — using raw socket connections with no external tool dependencies.
+Probe a live host for active command-and-control channel signatures: Cobalt Strike default beacon responses, Meterpreter HTTP stager behavior, Empire and Metasploit default listener ports, and ransomware initial-access precursors (exposed RDP, OWA, Fortinet VPN, Pulse VPN): using raw socket connections with no external tool dependencies.
 
 ---
 
 ## Why this exists
 
-1. **Known C2 framework default configurations produce distinctive network fingerprints.** Cobalt Strike with an unmodified Malleable C2 profile responds to `GET /` with HTTP 200, no `Server` header, and `Content-Length: 0` or zero body bytes. Meterpreter HTTP stager responds HTTP 200 to any path, including random 4-character URIs that no legitimate service would handle. These patterns are not guaranteed — operators change them — but they appear frequently enough in engagements that probing them before manual analysis saves time.
+1. **Known C2 framework default configurations produce distinctive network fingerprints.** Cobalt Strike with an unmodified Malleable C2 profile responds to `GET /` with HTTP 200, no `Server` header, and `Content-Length: 0` or zero body bytes. Meterpreter HTTP stager responds HTTP 200 to any path, including random 4-character URIs that no legitimate service would handle. These patterns are not guaranteed: operators change them, but they appear frequently enough in engagements that probing them before manual analysis saves time.
 
 2. **Well-known C2 framework default ports confirm compromise without service identification.** Port 50050 is the Cobalt Strike teamserver default. Port 8443 is the PowerShell Empire default. Port 55553 is the Metasploit default reverse handler. When any of these ports responds to a TCP connect on an internal host that has no business running these services, that response alone constitutes an indicator of compromise. The function probes all three in sequence.
 
-3. **Ransomware operators use specific exposed services as initial access vectors.** RDP (`3389`), Outlook Web Access, Fortinet VPN (`/remote/login`), and Pulse VPN (`/dana-na/auth/url_default/welcome.cgi`) are the four most common initial access broker pivot points. Identifying these services — especially unpatched VPN appliances with publicly known vulnerabilities — maps the external attack surface before an active exploitation attempt is made.
+3. **Ransomware operators use specific exposed services as initial access vectors.** RDP (`3389`), Outlook Web Access, Fortinet VPN (`/remote/login`), and Pulse VPN (`/dana-na/auth/url_default/welcome.cgi`) are the four most common initial access broker pivot points. Identifying these services: especially unpatched VPN appliances with publicly known vulnerabilities: maps the external attack surface before an active exploitation attempt is made.
 
 ---
 
@@ -110,11 +110,11 @@ for f in all_findings:
 
 ## False positives
 
-**`POTENTIAL_CS_BEACON` on misconfigured servers.** A legitimate web server with `ServerTokens Off` and no content on `/` produces the same `Server`-absent, zero-body 200 response as an unmodified Cobalt Strike profile. This finding is an indicator, not a confirmation. Follow up with SSL certificate inspection (`openssl s_client -connect host:port`) — Cobalt Strike default certificates use self-signed RSA with a known subject string.
+**`POTENTIAL_CS_BEACON` on misconfigured servers.** A legitimate web server with `ServerTokens Off` and no content on `/` produces the same `Server`-absent, zero-body 200 response as an unmodified Cobalt Strike profile. This finding is an indicator, not a confirmation. Follow up with SSL certificate inspection (`openssl s_client -connect host:port`): Cobalt Strike default certificates use self-signed RSA with a known subject string.
 
-**`POTENTIAL_METERPRETER_STAGER` on wildcard handlers.** Any server with a catch-all route that returns 200 for unknown paths (common in single-page apps and load balancers) triggers this finding. The distinguishing factor for Meterpreter is binary body content containing PE headers or shellcode. The function does not inspect body content — treat this as low-confidence until the response body is analyzed.
+**`POTENTIAL_METERPRETER_STAGER` on wildcard handlers.** Any server with a catch-all route that returns 200 for unknown paths (common in single-page apps and load balancers) triggers this finding. The distinguishing factor for Meterpreter is binary body content containing PE headers or shellcode. The function does not inspect body content: treat this as low-confidence until the response body is analyzed.
 
-**`KNOWN_C2_PORT_OPEN` on legitimate services.** Port 8443 runs TLS services on many production hosts (Elasticsearch, Kubernetes API, Jenkins). `_tcp_open()` only checks whether the port accepts a TCP connection — it does not send any protocol-specific probe. Verify with `openssl s_client -connect host:8443 </dev/null` and check the certificate subject.
+**`KNOWN_C2_PORT_OPEN` on legitimate services.** Port 8443 runs TLS services on many production hosts (Elasticsearch, Kubernetes API, Jenkins). `_tcp_open()` only checks whether the port accepts a TCP connection, it does not send any protocol-specific probe. Verify with `openssl s_client -connect host:8443 </dev/null` and check the certificate subject.
 
 ---
 
@@ -140,6 +140,6 @@ for f in all_findings:
 
 ## See also
 
-- [System-Call Tracing](system-call-tracing.md) — dynamic trace to confirm active beaconing from a compromised host
-- [Binary Format and Platform Identification](binary-format-and-platform-identification.md) — identify firmware on exposed VPN appliances
-- [API Authentication and Token Checks](api-authentication-and-token-checks.md) — binary RE for VPN authentication bypass
+- [System-Call Tracing](system-call-tracing.md): dynamic trace to confirm active beaconing from a compromised host
+- [Binary Format and Platform Identification](binary-format-and-platform-identification.md): identify firmware on exposed VPN appliances
+- [API Authentication and Token Checks](api-authentication-and-token-checks.md): binary RE for VPN authentication bypass

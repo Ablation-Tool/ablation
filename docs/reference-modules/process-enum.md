@@ -140,9 +140,9 @@ detect_cron_persistence():
 
 ## False positives
 
-**`detect_sandbox_environment_indicators()` fires on cloud VM instances** — cloud providers use hypervisor flags in `/proc/cpuinfo` and DMI strings (`Google`, `Amazon`, `Microsoft Corporation`) that match the sandbox indicator signatures. On cloud hosts this is expected and not a sandbox finding. Filter by checking whether the hypervisor DMI string matches the known cloud provider for the deployment environment.
+**`detect_sandbox_environment_indicators()` fires on cloud VM instances**: cloud providers use hypervisor flags in `/proc/cpuinfo` and DMI strings (`Google`, `Amazon`, `Microsoft Corporation`) that match the sandbox indicator signatures. On cloud hosts this is expected and not a sandbox finding. Filter by checking whether the hypervisor DMI string matches the known cloud provider for the deployment environment.
 
-**`detect_ptrace_instrumentation()` fires on CI/CD agents** — `Valgrind`, `AddressSanitizer`, and Intel PIN appear in process maps on testing hosts. If the host is a CI agent or developer workstation, instrumentation tool presence is expected. Confirm against the host's role before escalating.
+**`detect_ptrace_instrumentation()` fires on CI/CD agents**: `Valgrind`, `AddressSanitizer`, and Intel PIN appear in process maps on testing hosts. If the host is a CI agent or developer workstation, instrumentation tool presence is expected. Confirm against the host's role before escalating.
 
 ---
 
@@ -161,13 +161,13 @@ All standalone functions return `List[{severity, title, detail, host: 'localhost
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
 | `title` | Finding code (e.g., `HOLLOW_PROCESS`, `WRITABLE_CRON_FILE`, `CRON_REVERSE_SHELL`) |
 | `detail` | Explanation of what was found and why it matters |
-| `host` | Always `'localhost'` — these are local-system findings |
-| `port` | Always `0` — these are local-system findings |
+| `host` | Always `'localhost'`: these are local-system findings |
+| `port` | Always `0`: these are local-system findings |
 
 ---
 
 ## See also
 
-- [Privilege Escalation Enumeration](privesc-enum.md) — SUID/sudo/capability escalation on the same host
-- [Volatile and Linux Artifact Triage](volatile-and-linux-artifact-triage.md) — `enumerate_volatile_forensics()` combining process and forensics analysis
-- [Forensics Enumeration](forensics-enum.md) — Windows/ELF binary rootkit detection
+- [Privilege Escalation Enumeration](privesc-enum.md): SUID/sudo/capability escalation on the same host
+- [Volatile and Linux Artifact Triage](volatile-and-linux-artifact-triage.md): `enumerate_volatile_forensics()` combining process and forensics analysis
+- [Forensics Enumeration](forensics-enum.md): Windows/ELF binary rootkit detection

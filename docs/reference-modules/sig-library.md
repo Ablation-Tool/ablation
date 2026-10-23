@@ -219,20 +219,20 @@ Dry run: 47 functions would be renamed (no DB write)
 
 ## Reading output
 
-`SigLibrary().match_function(name, call_targets, string_xrefs, notes='')` returns `Optional[SigMatch]` — `None` if no signature matches with sufficient confidence:
+`SigLibrary().match_function(name, call_targets, string_xrefs, notes='')` returns `Optional[SigMatch]`: `None` if no signature matches with sufficient confidence:
 
 | Attribute | Content |
 |:---|:---|
 | `name` | Standard library function name (e.g., `'memcpy'`, `'SSL_read'`) |
-| `aliases` | `List[str]` — alternate names this function is known by |
+| `aliases` | `List[str]`: alternate names this function is known by |
 | `category` | Category string: `'Memory ops'` / `'String ops'` / `'Heap'` / `'Network'` / etc. |
 | `cwe_risk` | CWE risk identifier if the matched function is security-sensitive, or `None` |
-| `score` | Float — cosine similarity score of the match (0.0–1.0) |
+| `score` | Float: cosine similarity score of the match (0.0–1.0) |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session foundation for all analysis
-- [SemanticSearch](semantic-search.md) — function candidate identification
-- [FindingRegistry](registry.md) — persistent finding storage
+- [BinaryContext](binary-context.md): session foundation for all analysis
+- [SemanticSearch](semantic-search.md): function candidate identification
+- [FindingRegistry](registry.md): persistent finding storage

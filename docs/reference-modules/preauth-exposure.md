@@ -134,7 +134,7 @@ Routes registered with auth middleware at the app level (not as a decorator on t
 
 ## Pipeline position
 
-**Before this module:** No binary analysis required — `from_path(source_root)` operates on Python/JS source files.
+**Before this module:** No binary analysis required: `from_path(source_root)` operates on Python/JS source files.
 
 **After this module:** For HIGH/MEDIUM pre-auth routes that reach business-logic handlers, verify whether the handler reads user-controlled input and passes it to a taint sink. Register with `FindingRegistry`.
 
@@ -144,16 +144,16 @@ Routes registered with auth middleware at the app level (not as a decorator on t
 
 This page describes a CFG reachability workflow. Individual tools return different types:
 
-- **TaintTracker** paths from entry point to security sink: `List[TaintPath]` — see [source-audit](source-audit.md) for `TaintPath` fields (`sink`, `hops`, `confidence`, `has_source`).
-- **SourceEntryClassifier** routes without auth: `List[RouteClassification]` — see [tenant-isolation-checks](tenant-isolation-checks.md) for `RouteClassification` fields (`rel_path`, `auth_level`, `matched_signal`).
-- **GateFinding** for binary targets: `List[GateFinding]` — see [compiler-security-gate](compiler_security_gate.md) for fields (`func_va`, `site_va`, `category`, `severity`).
+- **TaintTracker** paths from entry point to security sink: `List[TaintPath]`: see [source-audit](source-audit.md) for `TaintPath` fields (`sink`, `hops`, `confidence`, `has_source`).
+- **SourceEntryClassifier** routes without auth: `List[RouteClassification]`: see [tenant-isolation-checks](tenant-isolation-checks.md) for `RouteClassification` fields (`rel_path`, `auth_level`, `matched_signal`).
+- **GateFinding** for binary targets: `List[GateFinding]`: see [compiler-security-gate](compiler_security_gate.md) for fields (`func_va`, `site_va`, `category`, `severity`).
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

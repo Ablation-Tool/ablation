@@ -51,7 +51,7 @@ DangerousCallHit  os.Getenv  at 0x00423c10 in buildAuthToken (0x00423be0)
 
 ## False positives
 
-Calls to `os/exec.Command` with fully static string arguments (hardcoded command paths) are not exploitable. Check `string_refs` — if all arguments are constant strings in `.rodata`, the call is likely benign. Context strings that appear only in comment or log branches also produce false hits.
+Calls to `os/exec.Command` with fully static string arguments (hardcoded command paths) are not exploitable. Check `string_refs`: if all arguments are constant strings in `.rodata`, the call is likely benign. Context strings that appear only in comment or log branches also produce false hits.
 
 ---
 
@@ -74,14 +74,14 @@ Calls to `os/exec.Command` with fully static string arguments (hardcoded command
 | `call_va` | VA of the specific call instruction |
 | `call_target_va` | VA of the dangerous function being called |
 | `call_target_name` | Resolved name of the dangerous callee |
-| `string_refs` | `List[Tuple[int, str]]` — (VA, string) pairs for string refs in the same function |
+| `string_refs` | `List[Tuple[int, str]]`: (VA, string) pairs for string refs in the same function |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

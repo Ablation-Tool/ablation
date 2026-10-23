@@ -1,6 +1,6 @@
 # PEF ABI Clobber Detection
 
-Detect argument register clobber in PPC32 PEF/CFM binaries — finding call sites where an argument register (`r3`–`r10`) is written for an outer call but then overwritten by an intermediate `bl` instruction before the outer call reads it, producing a silent argument corruption that is structurally invisible to naive call-site inspection.
+Detect argument register clobber in PPC32 PEF/CFM binaries: finding call sites where an argument register (`r3`–`r10`) is written for an outer call but then overwritten by an intermediate `bl` instruction before the outer call reads it, producing a silent argument corruption that is structurally invisible to naive call-site inspection.
 
 ---
 
@@ -10,7 +10,7 @@ Detect argument register clobber in PPC32 PEF/CFM binaries — finding call site
 
 2. **PEF CFM binaries use the Mac Classic PPC32 ABI where r3–r10 are volatile caller-saved argument registers.** An intermediate `bl` call is permitted to clobber any of these registers. Compilers ensure the outer arguments are reloaded before the outer call, but handwritten or decompiler-produced code sometimes omits the reload. `PEFABIClobberScanner.scan()` finds every site where the reload is missing.
 
-3. **`ABIClobberFinding.fmt()` includes the clobbered register, the clobbering instruction VA, and the outer call target** — providing the exact three-way triple needed for a confirmation byte-trace: write-VA → clobber-VA → outer-call-VA. This is sufficient to generate a PoC payload that exploits the clobbered argument.
+3. **`ABIClobberFinding.fmt()` includes the clobbered register, the clobbering instruction VA, and the outer call target**: providing the exact three-way triple needed for a confirmation byte-trace: write-VA → clobber-VA → outer-call-VA. This is sufficient to generate a PoC payload that exploits the clobbered argument.
 
 ---
 
@@ -61,9 +61,9 @@ Findings: <N>
 
 ## False positives
 
-**An intermediate `bl` that does not clobber the argument register in practice** — the ABI permits clobbering r3–r10, but many leaf functions do not modify registers they do not need. `PEFABIClobberScanner` conservatively treats all intermediate `bl` calls as potential clobbers. Verify by tracing the intermediate callee's actual r3 write behavior before escalating a finding.
+**An intermediate `bl` that does not clobber the argument register in practice**: the ABI permits clobbering r3–r10, but many leaf functions do not modify registers they do not need. `PEFABIClobberScanner` conservatively treats all intermediate `bl` calls as potential clobbers. Verify by tracing the intermediate callee's actual r3 write behavior before escalating a finding.
 
-**Inlined `mr` or `li` after the intermediate call that reloads the register** — if the reload instruction is categorized as `WRITE_ARG` with the same register, the scanner should clear the clobber state. Verify that the reload appears between `clobber_va` and `outer_call_va` in the disassembly.
+**Inlined `mr` or `li` after the intermediate call that reloads the register**: if the reload instruction is categorized as `WRITE_ARG` with the same register, the scanner should clear the clobber state. Verify that the reload appears between `clobber_va` and `outer_call_va` in the disassembly.
 
 ---
 
@@ -90,6 +90,6 @@ Run `PEFABIClobberScanner` immediately after `PEFBinaryAnalyzer` provides the co
 
 ## See also
 
-- [PowerPC PEF/CFM Binary Analysis](powerpc-pef-cfm.md) — `PEFBinaryAnalyzer` that provides the code section for scanning
-- [PPC64 BE Sink Classification](ppc64-be-sink-classification.md) — PPC64 equivalent for ELF targets
-- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md) — `TaintTracker` for full dataflow taint from clobbered arguments
+- [PowerPC PEF/CFM Binary Analysis](powerpc-pef-cfm.md): `PEFBinaryAnalyzer` that provides the code section for scanning
+- [PPC64 BE Sink Classification](ppc64-be-sink-classification.md): PPC64 equivalent for ELF targets
+- [Named Taint Sources and Bounds](named-taint-sources-and-bounds.md): `TaintTracker` for full dataflow taint from clobbered arguments

@@ -123,7 +123,7 @@ Gate: **PASS**. No CRITICAL or HIGH findings. One open item tracked for follow-u
 
 ## How it works
 
-`WindowAnalyzer.dump_text(va, window)` extracts `window` bytes centered on `va`, disassembles the range with Capstone (x86-64 or ARM64 based on binary architecture), resolves PLT call targets to their names, and annotates `.rodata` string references inline. Returns a list of annotated disassembly lines for LLM or manual analysis. Not a scanner — produces no findings.
+`WindowAnalyzer.dump_text(va, window)` extracts `window` bytes centered on `va`, disassembles the range with Capstone (x86-64 or ARM64 based on binary architecture), resolves PLT call targets to their names, and annotates `.rodata` string references inline. Returns a list of annotated disassembly lines for LLM or manual analysis. Not a scanner: produces no findings.
 
 ---
 
@@ -146,13 +146,13 @@ Gate: **PASS**. No CRITICAL or HIGH findings. One open item tracked for follow-u
 
 ## False positives
 
-Not applicable — `WindowAnalyzer` is a display tool, not a scanner. It produces disassembly context for human/LLM review, not structured findings.
+Not applicable: `WindowAnalyzer` is a display tool, not a scanner. It produces disassembly context for human/LLM review, not structured findings.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `SemanticSearcher.query()` and `FuncProfiler.profile()` to identify a candidate VA. `SinkArgClassifier` and `TaintTracker` should be exhausted first — use `WindowAnalyzer` only when automated tools have no configured sink for the pattern.
+**Before this module:** `SemanticSearcher.query()` and `FuncProfiler.profile()` to identify a candidate VA. `SinkArgClassifier` and `TaintTracker` should be exhausted first: use `WindowAnalyzer` only when automated tools have no configured sink for the pattern.
 
 **After this module:** Manual or LLM analysis of the disassembly window. Identify the taint path and feed back into `TaintTracker` by configuring the new sink pattern.
 
@@ -160,22 +160,22 @@ Not applicable — `WindowAnalyzer` is a display tool, not a scanner. It produce
 
 ## Reading output
 
-`WindowAnalyzer.from_context(ctx).dump_text(va, window=1536, align_back=0)` returns a formatted string block — a disassembly listing with annotations. There is no typed finding dataclass; output is text for manual analysis.
+`WindowAnalyzer.from_context(ctx).dump_text(va, window=1536, align_back=0)` returns a formatted string block: a disassembly listing with annotations. There is no typed finding dataclass; output is text for manual analysis.
 
 Use the helper methods to extract structured data from the window:
 
 | Method | Returns |
 |:---|:---|
-| `find_func_starts(va, window)` | `List[int]` — VAs of `[FUNC_START]` entries in the window |
-| `calls_in_window(va, window)` | `List[Tuple[int, int, str]]` — `(call_site_va, target_va, label)` for each call |
-| `dump(va, window, align_back)` | `List[str]` — individual annotated disassembly lines |
+| `find_func_starts(va, window)` | `List[int]`: VAs of `[FUNC_START]` entries in the window |
+| `calls_in_window(va, window)` | `List[Tuple[int, int, str]]`: `(call_site_va, target_va, label)` for each call |
+| `dump(va, window, align_back)` | `List[str]`: individual annotated disassembly lines |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

@@ -105,7 +105,7 @@ Tested on:
 
 ## How it works
 
-`SinkPropagator.from_context(ctx).propagate()` iterates `ctx.func_starts` and for each function, disassembles with Capstone to find any call to a known sink. For each such call, it traces the argument register backward to determine if the argument came directly from the function's own parameter. If the argument propagates from the caller's parameter unchanged into the sink, the function is a `SinkWrapper` — an indirect sink that extends the taint scope. The chain field records the lineage back to the root PLT sink.
+`SinkPropagator.from_context(ctx).propagate()` iterates `ctx.func_starts` and for each function, disassembles with Capstone to find any call to a known sink. For each such call, it traces the argument register backward to determine if the argument came directly from the function's own parameter. If the argument propagates from the caller's parameter unchanged into the sink, the function is a `SinkWrapper`: an indirect sink that extends the taint scope. The chain field records the lineage back to the root PLT sink.
 
 ---
 
@@ -125,7 +125,7 @@ SinkWrapper  build_command (0x00402800)  param=1
 
 ## False positives
 
-A function that calls a sink with an argument derived from its parameter but applies a bounding operation before the call (e.g., truncates or sanitizes) is still flagged as a SinkWrapper. The trace checks register identity, not taint safety. Verify `param_idx` and the call site manually before treating the wrapper as an exploitable path.
+A function that calls a sink with an argument derived from its parameter but applies a bounding operation before the call for example truncates or sanitizes is still flagged as a SinkWrapper. The trace checks register identity, not taint safety. Verify `param_idx` and the call site manually before treating the wrapper as an exploitable path.
 
 ---
 
@@ -133,7 +133,7 @@ A function that calls a sink with an argument derived from its parameter but app
 
 **Before this module:** `BinaryContext.load_or_build()` and `SinkArgClassifier.classify_all()` to identify direct sink call sites. Run `SinkPropagator` to extend taint scope to wrapper functions.
 
-**After this module:** Add discovered wrapper VAs to the sink list for `TaintTracker` — treat them as additional taint sinks. Run `SinkSanitizerFilter` on the extended sink list before taint analysis.
+**After this module:** Add discovered wrapper VAs to the sink list for `TaintTracker`: treat them as additional taint sinks. Run `SinkSanitizerFilter` on the extended sink list before taint analysis.
 
 ---
 
@@ -149,14 +149,14 @@ A function that calls a sink with an argument derived from its parameter but app
 | `call_va` | VA of the call instruction inside the wrapper that reaches the sink |
 | `wraps_va` | VA of the immediate sink being called |
 | `wraps_name` | Name of the immediate sink |
-| `chain` | `List[str]` — lineage from root PLT sink (root last); empty if direct |
+| `chain` | `List[str]`: lineage from root PLT sink (root last); empty if direct |
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

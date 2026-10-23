@@ -67,7 +67,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings.
 
 ## How it works
 
-`XcoffLoaderSymbols.resolve(path)` extracts the XCOFF loader symbol table from an AIX binary without requiring `BinaryContext` or a full `xcoff_parser.parse()` call. It reads the `.loader` section directly, parses the loader section header to locate the symbol table, and returns a `{va: name}` dict. Useful for ad-hoc session scripts where only the import table is needed — e.g., checking whether a stripped binary links against `strcpy` or `system` — without paying the cost of a full XCOFF parse and context build.
+`XcoffLoaderSymbols.resolve(path)` extracts the XCOFF loader symbol table from an AIX binary without requiring `BinaryContext` or a full `xcoff_parser.parse()` call. It reads the `.loader` section directly, parses the loader section header to locate the symbol table, and returns a `{va: name}` dict. Useful for ad-hoc session scripts where only the import table is needed: e.g., checking whether a stripped binary links against `strcpy` or `system`: without paying the cost of a full XCOFF parse and context build.
 
 ---
 
@@ -92,7 +92,7 @@ print(syms.get('strcpy', 'not linked'))
 
 ## Pipeline position
 
-**Before this module:** Read the raw XCOFF binary bytes. This function is a standalone call — no BinaryContext needed.
+**Before this module:** Read the raw XCOFF binary bytes. This function is a standalone call, no BinaryContext needed.
 
 **After this module:** Use the returned `{name: va}` dict to check whether a target binary imports dangerous symbols (`strcpy`, `system`, `execve`) before committing to a full `xcoff_parser.parse()` call.
 
@@ -115,6 +115,6 @@ print(syms.get('strcpy', 'not linked'))
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

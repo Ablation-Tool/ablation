@@ -1,14 +1,14 @@
 # Hash and AES Implementation Recognition
 
-Identify hash algorithm implementations (MD5, SHA-1, SHA-256, SHA-512, CRC32) and hand-rolled AES-128-CBC in ARM32/Thumb2 disassembly — using K-table constant fingerprinting for hash identification and behavioral pattern matching for CBC mode detection.
+Identify hash algorithm implementations (MD5, SHA-1, SHA-256, SHA-512, CRC32) and hand-rolled AES-128-CBC in ARM32/Thumb2 disassembly: using K-table constant fingerprinting for hash identification and behavioral pattern matching for CBC mode detection.
 
 ---
 
 ## Why this exists
 
-1. **Stripped firmware frequently contains inlined or hand-rolled cryptographic implementations that are invisible to symbol-name analysis — a function named `sub_401200` that contains the MD5 K-table constants is provably an MD5 implementation regardless of its name.** `HashAlgoDiscriminator` extracts 32-bit constants from literal pools and immediate loads in a function, then matches against known K-tables (MD5 round constants, SHA-1 initial hash values, SHA-256/512 K values, CRC32 polynomial). The match is definitive: no other function in normal firmware contains these exact constant sequences.
+1. **Stripped firmware frequently contains inlined or hand-rolled cryptographic implementations that are invisible to symbol-name analysis: a function named `sub_401200` that contains the MD5 K-table constants is provably an MD5 implementation regardless of its name.** `HashAlgoDiscriminator` extracts 32-bit constants from literal pools and immediate loads in a function, then matches against known K-tables (MD5 round constants, SHA-1 initial hash values, SHA-256/512 K values, CRC32 polynomial). The match is definitive: no other function in normal firmware contains these exact constant sequences.
 
-2. **`CustomCBCDetector` identifies hand-rolled AES-128-CBC in ARM32 Thumb2 by its behavioral signature: a BSS-tracked block pointer, XOR-with-previous-ciphertext chaining (the defining operation of CBC mode), and an IV loaded from `.rodata`.** This pattern appears in network appliance firmware that implements AES-CBC without calling an external library — the implementation is directly auditable for IV reuse, key derivation errors, and padding oracle conditions.
+2. **`CustomCBCDetector` identifies hand-rolled AES-128-CBC in ARM32 Thumb2 by its behavioral signature: a BSS-tracked block pointer, XOR-with-previous-ciphertext chaining (the defining operation of CBC mode), and an IV loaded from `.rodata`.** This pattern appears in network appliance firmware that implements AES-CBC without calling an external library: the implementation is directly auditable for IV reuse, key derivation errors, and padding oracle conditions.
 
 3. **Finding a custom AES-CBC implementation without using a constant-time comparison for CBC-MAC authentication is a common source of padding oracle vulnerabilities in embedded firmware.** `CustomCBCDetector` flags the implementation's location; manual inspection of the MAC comparison at the function's caller determines whether a timing oracle exists.
 
@@ -80,7 +80,7 @@ CBCPattern:
 
 ## False positives
 
-**`HashAlgoDiscriminator` may match CRC32 in firmware that implements Ethernet FCS — this is a legitimate CRC32 implementation, not a cryptographic hash usage.** CRC32 findings should be labeled "implementation found" not "cryptographic use found." Distinguish by context: CRC32 in a network receive path is Ethernet FCS, not a hash function.
+**`HashAlgoDiscriminator` may match CRC32 in firmware that implements Ethernet FCS, this is a legitimate CRC32 implementation, not a cryptographic hash usage.** CRC32 findings should be labeled "implementation found" not "cryptographic use found." Distinguish by context: CRC32 in a network receive path is Ethernet FCS, not a hash function.
 
 **`CustomCBCDetector` requires the AES round constants (`0x63`, Rcon table) to be present in the scan range.** AES implementations that load their Rcon table from a different section or compute it on-the-fly will score below the confidence threshold and not generate a `CBCPattern` finding. Use `scan_range()` with a wider range if the S-box or Rcon table is in a separate section.
 
@@ -102,7 +102,7 @@ Run `HashAlgoDiscriminator` and `CustomCBCDetector` after `SemanticSearcher` ide
 |:---|:---|
 | `algo` | Algorithm name (e.g., `'SHA-256'`, `'MD5'`, `'SHA-1'`, `'CRC32'`) |
 | `confidence` | Integer 0–100 |
-| `matched` | `List[ConstMatch]` — constant match sites used for identification |
+| `matched` | `List[ConstMatch]`: constant match sites used for identification |
 
 `CustomCBCDetector(binary, load_addr).scan_range(va, size)` returns `List[CBCPattern]`:
 
@@ -121,7 +121,7 @@ Run `HashAlgoDiscriminator` and `CustomCBCDetector` after `SemanticSearcher` ide
 
 ## See also
 
-- [Cryptographic Analysis](cryptographic-analysis.md) — RSA/ECDSA/RNG analysis complementary to hash/AES identification
-- [RSA, ECDSA, and Randomness Checks](rsa-ecdsa-and-randomness-checks.md) — public key crypto implementation review
-- [Source Code Auditing](source-code-auditing.md) — for OpenSSL/mbedTLS source-available targets
-- [Taint Analysis](taint-analysis.md) — after identifying the crypto implementation, trace key material flow
+- [Cryptographic Analysis](cryptographic-analysis.md): RSA/ECDSA/RNG analysis complementary to hash/AES identification
+- [RSA, ECDSA, and Randomness Checks](rsa-ecdsa-and-randomness-checks.md): public key crypto implementation review
+- [Source Code Auditing](source-code-auditing.md): for OpenSSL/mbedTLS source-available targets
+- [Taint Analysis](taint-analysis.md): after identifying the crypto implementation, trace key material flow

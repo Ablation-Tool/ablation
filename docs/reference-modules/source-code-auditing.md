@@ -1,16 +1,16 @@
 # Source Dangerous Sink Detection
 
-Find dangerous code patterns across a source repository — detecting `eval`/`vm.runInContext` code execution, `subprocess`/`exec` command injection, SSRF-prone `fetch`/`axios` calls, path traversal in `fs.readFile`, and unguarded internal endpoints — with guard-condition detection that narrows findings to unguarded sinks and maps each to a CWE and severity.
+Find dangerous code patterns across a source repository: detecting `eval`/`vm.runInContext` code execution, `subprocess`/`exec` command injection, SSRF-prone `fetch`/`axios` calls, path traversal in `fs.readFile`, and unguarded internal endpoints: with guard-condition detection that narrows findings to unguarded sinks and maps each to a CWE and severity.
 
 ---
 
 ## Why this exists
 
-1. **Source RE requires the same sink-to-taint discipline as binary RE, but at the AST level.** `SourceSinkScanner` is the source-code equivalent of `SinkArgClassifier` + `FormatStringScanner` — it identifies every dangerous sink in a repository and classifies each by severity and CWE, providing the starting point for `SourceTaintTracker` dataflow analysis.
+1. **Source RE requires the same sink-to-taint discipline as binary RE, but at the AST level.** `SourceSinkScanner` is the source-code equivalent of `SinkArgClassifier` + `FormatStringScanner`, it identifies every dangerous sink in a repository and classifies each by severity and CWE, providing the starting point for `SourceTaintTracker` dataflow analysis.
 
-2. **Guard-condition detection reduces `HIGH` findings to `MEDIUM` for gated sinks** — `vm.runInContext` gated by `LANGFUSE_CODE_EVAL_DISPATCHER=insecure-local` is a `MEDIUM` (requires explicit misconfiguration), not a `HIGH` (always reachable). This was the LFG-CODEEVAL-1 pattern: the sink was present, dangerous in the abstract, but not exploitable without the env-var gate. `SourceSinkScanner` detects the gate and adjusts severity.
+2. **Guard-condition detection reduces `HIGH` findings to `MEDIUM` for gated sinks**: `vm.runInContext` gated by `LANGFUSE_CODE_EVAL_DISPATCHER=insecure-local` is a `MEDIUM` (requires explicit misconfiguration), not a `HIGH` (always reachable). This was the LFG-CODEEVAL-1 pattern: the sink was present, dangerous in the abstract, but not exploitable without the env-var gate. `SourceSinkScanner` detects the gate and adjusts severity.
 
-3. **`SinkHit.as_dict()` provides structured output for `AgentLoop` integration** — findings include file path, line number, sink function, CWE, severity, and the snippet. `AgentLoop` can consume these as pre-analyzed candidates for generating vulnerability hypothesis reports, referencing the exact file and line without re-running the scanner.
+3. **`SinkHit.as_dict()` provides structured output for `AgentLoop` integration**: findings include file path, line number, sink function, CWE, severity, and the snippet. `AgentLoop` can consume these as pre-analyzed candidates for generating vulnerability hypothesis reports, referencing the exact file and line without re-running the scanner.
 
 ---
 
@@ -67,9 +67,9 @@ Files scanned: <N>  Findings: <M>
 
 ## False positives
 
-**Pattern matching without AST analysis may fire on string literals** — a `eval("safe_constant")` call where the argument is a string literal will be flagged as `CODE_EVAL`. Verify the `snippet` to confirm the sink argument is not a compile-time constant before escalating.
+**Pattern matching without AST analysis may fire on string literals**: a `eval("safe_constant")` call where the argument is a string literal will be flagged as `CODE_EVAL`. Verify the `snippet` to confirm the sink argument is not a compile-time constant before escalating.
 
-**Guard-condition detection uses regex on the surrounding code block** — a conditional gate that checks the env-var on a different line than the sink invocation may not be detected. Findings with complex or multi-file guard logic should be reviewed manually even if `gated=False`.
+**Guard-condition detection uses regex on the surrounding code block**: a conditional gate that checks the env-var on a different line than the sink invocation may not be detected. Findings with complex or multi-file guard logic should be reviewed manually even if `gated=False`.
 
 ---
 
@@ -101,6 +101,6 @@ Run `SourceSinkScanner` immediately after `SourceContext.from_path()` as the fir
 
 ## See also
 
-- [Source Code Analysis Pipeline](bare-integration.md) — `SourceContext` that `SourceSinkScanner` consumes
-- [Tenant Isolation Checking](container-isolation-escape-surface.md) — `SourceIsolationChecker` for IDOR complement scan
-- [Source Taint Tracking](bare-integration.md) — `SourceTaintTracker` for full dataflow from identified sinks
+- [Source Code Analysis Pipeline](bare-integration.md): `SourceContext` that `SourceSinkScanner` consumes
+- [Tenant Isolation Checking](container-isolation-escape-surface.md): `SourceIsolationChecker` for IDOR complement scan
+- [Source Taint Tracking](bare-integration.md): `SourceTaintTracker` for full dataflow from identified sinks

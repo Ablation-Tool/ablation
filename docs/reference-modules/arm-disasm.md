@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before
 
 ## How it works
 
-`ArmDisasm` decodes ARMv7 32-bit fixed-width instructions in pure Python with no external disassembly libraries. It classifies each instruction word by bits [27:25] into one of five groups — Data Processing (AND/ADD/SUB/MOV/…), Load/Store (LDR/STR/LDRB/…), Branch (B/BL/BX/BLX), Multiply (MUL/MLA/UMULL/…), and Status Register Access (MRS/MSR) — then extracts condition code [31:28] and instruction-specific fields to build the decoded instruction. Called by `ARM32TaintTracker` when Capstone is unavailable.
+`ArmDisasm` decodes ARMv7 32-bit fixed-width instructions in pure Python with no external disassembly libraries. It classifies each instruction word by bits [27:25] into one of five groups: Data Processing (AND/ADD/SUB/MOV/…), Load/Store (LDR/STR/LDRB/…), Branch (B/BL/BX/BLX), Multiply (MUL/MLA/UMULL/…), and Status Register Access (MRS/MSR): then extracts condition code [31:28] and instruction-specific fields to build the decoded instruction. Called by `ARM32TaintTracker` when Capstone is unavailable.
 
 ---
 
@@ -83,6 +83,6 @@ pop      {r4, r5, r6, pc}
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

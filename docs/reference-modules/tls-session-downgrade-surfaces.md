@@ -1,16 +1,16 @@
 # TLS Session Downgrade Surfaces
 
-Detect TLS protocol downgrade weaknesses — absence of `TLS_FALLBACK_SCSV` protection (RFC 7507), legacy version acceptance (TLS 1.0/1.1), session ticket reuse enabling retroactive decryption, and TLS 1.3 0-RTT replay surfaces — by sending raw ClientHello records and probing session resumption behavior via `modules/tls_enum.py`.
+Detect TLS protocol downgrade weaknesses: absence of `TLS_FALLBACK_SCSV` protection (RFC 7507), legacy version acceptance (TLS 1.0/1.1), session ticket reuse enabling retroactive decryption, and TLS 1.3 0-RTT replay surfaces: by sending raw ClientHello records and probing session resumption behavior via `modules/tls_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **`probe_tls_downgrade_attack()` confirms whether the server enforces `TLS_FALLBACK_SCSV` (RFC 7507)** — a client that cannot negotiate TLS 1.3 falls back to a lower version. An active MITM attacker can force this fallback by blocking higher-version records. RFC 7507 requires servers to respond with a fatal `inappropriate_fallback` alert (content type 21, level 2, description 86) when they see `TLS_FALLBACK_SCSV` (0x5600) in a ClientHello with a version below the server's maximum. Absence of this alert means the server does not reject forced downgrades. `probe_tls_downgrade_attack()` sends a TLS 1.1 ClientHello containing `TLS_FALLBACK_SCSV` and checks for the alert response.
+1. **`probe_tls_downgrade_attack()` confirms whether the server enforces `TLS_FALLBACK_SCSV` (RFC 7507)**: a client that cannot negotiate TLS 1.3 falls back to a lower version. An active MITM attacker can force this fallback by blocking higher-version records. RFC 7507 requires servers to respond with a fatal `inappropriate_fallback` alert (content type 21, level 2, description 86) when they see `TLS_FALLBACK_SCSV` (0x5600) in a ClientHello with a version below the server's maximum. Absence of this alert means the server does not reject forced downgrades. `probe_tls_downgrade_attack()` sends a TLS 1.1 ClientHello containing `TLS_FALLBACK_SCSV` and checks for the alert response.
 
-2. **Legacy TLS version acceptance creates a persistent downgrade surface** — TLS 1.0 and 1.1 were deprecated by RFC 8996 in March 2021. Both versions use MAC-then-Encrypt with CBC cipher suites that are vulnerable to BEAST (TLS 1.0) and POODLE class attacks. `probe_tls_downgrade_attack()` attempts a TLS 1.0 and TLS 1.1 handshake using `ssl.SSLContext.minimum_version = ssl.TLSVersion.TLSv1` and flags servers that complete the handshake as `TLS10_ACCEPTED` / `TLS11_ACCEPTED`.
+2. **Legacy TLS version acceptance creates a persistent downgrade surface**: TLS 1.0 and 1.1 were deprecated by RFC 8996 in March 2021. Both versions use MAC-then-Encrypt with CBC cipher suites that are vulnerable to BEAST (TLS 1.0) and POODLE class attacks. `probe_tls_downgrade_attack()` attempts a TLS 1.0 and TLS 1.1 handshake using `ssl.SSLContext.minimum_version = ssl.TLSVersion.TLSv1` and flags servers that complete the handshake as `TLS10_ACCEPTED` / `TLS11_ACCEPTED`.
 
-3. **`probe_tls_session_resumption()` tests session ticket reuse and TLS 1.3 0-RTT replay risk** — session tickets encrypt the server's session state under a ticket encryption key. A server that accepts session resumption (`session_reused=True` on second handshake) means that any attacker who captured prior TLS ciphertext and later compromises the ticket key can retroactively decrypt those sessions. On TLS 1.3 connections, session resumption enables 0-RTT early data — a channel that does not provide replay protection and that an on-path attacker can replay without triggering a handshake failure.
+3. **`probe_tls_session_resumption()` tests session ticket reuse and TLS 1.3 0-RTT replay risk**: session tickets encrypt the server's session state under a ticket encryption key. A server that accepts session resumption (`session_reused=True` on second handshake) means that any attacker who captured prior TLS ciphertext and later compromises the ticket key can retroactively decrypt those sessions. On TLS 1.3 connections, session resumption enables 0-RTT early data: a channel that does not provide replay protection and that an on-path attacker can replay without triggering a handshake failure.
 
 ---
 
@@ -75,11 +75,11 @@ probe_tls_session_resumption: <target-host>:443
 
 ## False positives
 
-**`TLS10_ACCEPTED` on hosts behind a TLS-terminating load balancer** — the probe connects to the load balancer, which may accept legacy versions while the backend application only sees TLS 1.3 traffic. Confirm the version the application itself receives by checking server-side TLS configuration or using an internal probe.
+**`TLS10_ACCEPTED` on hosts behind a TLS-terminating load balancer**: the probe connects to the load balancer, which may accept legacy versions while the backend application only sees TLS 1.3 traffic. Confirm the version the application itself receives by checking server-side TLS configuration or using an internal probe.
 
-**`TLS_SESSION_TICKET_REUSE` on TLS 1.3 with short-lived tickets** — RFC 8446 §4.6.1 requires TLS 1.3 session tickets to have a `ticket_lifetime` of at most 7 days. If the server rotates ticket keys every few hours, the blast radius of ticket key compromise is bounded. Treat `TLS_SESSION_TICKET_REUSE` as a configuration finding to document, not a direct exploitability indicator.
+**`TLS_SESSION_TICKET_REUSE` on TLS 1.3 with short-lived tickets**: RFC 8446 §4.6.1 requires TLS 1.3 session tickets to have a `ticket_lifetime` of at most 7 days. If the server rotates ticket keys every few hours, the blast radius of ticket key compromise is bounded. Treat `TLS_SESSION_TICKET_REUSE` as a configuration finding to document, not a direct exploitability indicator.
 
-**`NO_FALLBACK_SCSV_PROTECTION` on TLS 1.3-only servers** — a server that refuses all connections below TLS 1.3 at the TCP/TLS layer will terminate the connection before evaluating `TLS_FALLBACK_SCSV`. In this case the probe may see a connection reset rather than a `ServerHello`, and the finding may not fire. Absence of the finding on a TLS 1.3-only server is a correct negative.
+**`NO_FALLBACK_SCSV_PROTECTION` on TLS 1.3-only servers**: a server that refuses all connections below TLS 1.3 at the TCP/TLS layer will terminate the connection before evaluating `TLS_FALLBACK_SCSV`. In this case the probe may see a connection reset rather than a `ServerHello`, and the finding may not fire. Absence of the finding on a TLS 1.3-only server is a correct negative.
 
 ---
 
@@ -105,5 +105,5 @@ TLS downgrade probe functions return `List[{severity, title, detail, host, port}
 
 ## See also
 
-- [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md) — `TLSAnalyzer` for certificate chain and cipher suite inventory
-- [TLS Policy Checks](tls-policy-checks.md) — mTLS enforcement, ACME endpoint exposure, certificate pinning
+- [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md): `TLSAnalyzer` for certificate chain and cipher suite inventory
+- [TLS Policy Checks](tls-policy-checks.md): mTLS enforcement, ACME endpoint exposure, certificate pinning

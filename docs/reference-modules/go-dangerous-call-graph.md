@@ -1,6 +1,6 @@
 # Go Dangerous Call Graph
 
-Map every `os/exec` call site in a stripped Go binary — resolving the static command string argument using pclntab function boundaries and `GoStringResolver` LEA/MOV tracking — so every relative-path and bare-name subprocess invocation surfaces as a named finding before any manual disassembly.
+Map every `os/exec` call site in a stripped Go binary: resolving the static command string argument using pclntab function boundaries and `GoStringResolver` LEA/MOV tracking, so every relative-path and bare-name subprocess invocation surfaces as a named finding before any manual disassembly.
 
 ---
 
@@ -8,7 +8,7 @@ Map every `os/exec` call site in a stripped Go binary — resolving the static c
 
 1. **`os/exec.Command("curl", ...)` is safe. `os/exec.Command("./helper")` is not.** Both patterns appear throughout Go-based network appliances and management tools, and both look the same in a call graph without argument resolution. The critical distinction is the command path type: an absolute path (`/usr/bin/curl`) is not injectable via `PATH` or `CWD`; a bare name (`curl`) resolves through `PATH` and can be hijacked; a relative path (`./helper`) resolves against the process working directory and is exploitable whenever the caller sets that directory to something writable. `GoSubprocessScanner` resolves the static command string at each call site and classifies it before any manual inspection.
 
-2. **Go pclntab provides function boundaries in stripped binaries.** The `.gopclntab` section embeds a complete function name-to-VA table regardless of whether `strip` was run on the binary. This makes Go substantially different from C firmware: every function name is available, caller/callee relationships are fully recoverable, and the scanner filters out the Go standard library namespace at the name level rather than having to infer it from export tables. The scanner processes only application-package functions — the subset that actually calls `os/exec` — reducing the disassembly pass from the full binary to the relevant application code.
+2. **Go pclntab provides function boundaries in stripped binaries.** The `.gopclntab` section embeds a complete function name-to-VA table regardless of whether `strip` was run on the binary. This makes Go substantially different from C firmware: every function name is available, caller/callee relationships are fully recoverable, and the scanner filters out the Go standard library namespace at the name level rather than having to infer it from export tables. The scanner processes only application-package functions: the subset that actually calls `os/exec`: reducing the disassembly pass from the full binary to the relevant application code.
 
 3. **Go 1.17+ AMD64 ABI uses registers for argument passing, not the stack.** In the post-1.17 register ABI, `os/exec.Command(name string, ...)` receives the command string in `rax` (pointer) and `rbx` (length). The `GoStringResolver` 4-instruction window traces the LEA+MOV pair that loads this value, resolving `.rodata` string literals in under a millisecond per call site. Functions that construct the command string at runtime (heap allocation, `fmt.Sprintf`) return `cmd_type=dynamic` rather than a static string.
 
@@ -115,9 +115,9 @@ MEDIUM    dynamic   github.com/hassio/addon.startAddon   0x4a30c0    os/exec.Com
 
 ## False positives
 
-**Format string arguments classified as dynamic.** `os/exec.Command(fmt.Sprintf("/usr/bin/%s", bin), ...)` loads the command from `fmt.Sprintf` — a function return — not a static `.rodata` LEA. The resolver sees no `lea rax` for the call and returns `dynamic`. This is not a false positive in the security sense (dynamic commands do require manual trace), but it does include findings that are not exploitable when the `fmt.Sprintf` format string is `"absolute"`.
+**Format string arguments classified as dynamic.** `os/exec.Command(fmt.Sprintf("/usr/bin/%s", bin), ...)` loads the command from `fmt.Sprintf`: a function return, not a static `.rodata` LEA. The resolver sees no `lea rax` for the call and returns `dynamic`. This is not a false positive in the security sense (dynamic commands do require manual trace), but it does include findings that are not exploitable when the `fmt.Sprintf` format string is `"absolute"`.
 
-**Multi-call-site functions.** A function that calls `os/exec.Command` in two branches — once with a hardcoded absolute path (`/bin/ls`) and once with a dynamic string — produces two `SubprocessSite` entries at different `call_va` values. The absolute finding appears if `skip_absolute=False`. Review both entries before dismissing the function.
+**Multi-call-site functions.** A function that calls `os/exec.Command` in two branches: once with a hardcoded absolute path (`/bin/ls`) and once with a dynamic string: produces two `SubprocessSite` entries at different `call_va` values. The absolute finding appears if `skip_absolute=False`. Review both entries before dismissing the function.
 
 **ARM64 always reports MEDIUM/dynamic.** `GoStringResolver` uses x86-64 LEA+MOV patterns. ARM64 uses `ADRP`+`ADD` to load string addresses into registers, which is not yet implemented. All ARM64 exec call sites appear as `cmd_type=dynamic, severity=MEDIUM` regardless of whether the actual command is a static string. Verify ARM64 findings manually.
 
@@ -125,7 +125,7 @@ MEDIUM    dynamic   github.com/hassio/addon.startAddon   0x4a30c0    os/exec.Com
 
 ## Pipeline position
 
-**Before this module:** For initial Go binary triage, run `scan_binary()` before any semantic search — it is faster than building a corpus and directly surfaces the most dangerous patterns. If a dynamic call site needs deeper trace, follow with `GoStringResolver.resolve_call_site()` directly to inspect the broader instruction window.
+**Before this module:** For initial Go binary triage, run `scan_binary()` before any semantic search, it is faster than building a corpus and directly surfaces the most dangerous patterns. If a dynamic call site needs deeper trace, follow with `GoStringResolver.resolve_call_site()` directly to inspect the broader instruction window.
 
 **After this module:** For `relative` and `path` findings, run `IPRegAnnotator.annotate_chain()` from the caller function to determine whether the caller receives the `CWD` or `PATH` from user-controlled input. Register confirmed `relative`/`path` findings in `FindingRegistry` with `cwe_class="CWE-78"`.
 
@@ -148,7 +148,7 @@ MEDIUM    dynamic   github.com/hassio/addon.startAddon   0x4a30c0    os/exec.Com
 
 ## See also
 
-- [Stripped Go x86-64 Boundaries](stripped-go-x86-64-boundaries.md) — `GoStringResolver` and pclntab boundary extraction
-- [Interprocedural Argument Provenance](interprocedural-argument-provenance.md) — trace dynamic command string sources across call hops
-- [Pattern Library](pattern-library.md) — record `os/exec` with attacker-controlled command as a replayable pattern
-- [YARA Generator](yara-generator.md) — generate YARA rules from resolved command string literals
+- [Stripped Go x86-64 Boundaries](stripped-go-x86-64-boundaries.md): `GoStringResolver` and pclntab boundary extraction
+- [Interprocedural Argument Provenance](interprocedural-argument-provenance.md): trace dynamic command string sources across call hops
+- [Pattern Library](pattern-library.md): record `os/exec` with attacker-controlled command as a replayable pattern
+- [YARA Generator](yara-generator.md): generate YARA rules from resolved command string literals

@@ -1,16 +1,16 @@
 # Browser Extension Auditing
 
-Audit Chrome/Edge/Firefox extension security — detecting broadly-wildcarded `externally_connectable` host patterns, privileged Chrome messaging bus exposure, unsafe `eval()` usage, CSP policy weaknesses, and host permission over-grants — with findings mapped to CWE and severity for systematic extension security review.
+Audit Chrome/Edge/Firefox extension security: detecting broadly-wildcarded `externally_connectable` host patterns, privileged Chrome messaging bus exposure, unsafe `eval()` usage, CSP policy weaknesses, and host permission over-grants: with findings mapped to CWE and severity for systematic extension security review.
 
 ---
 
 ## Why this exists
 
-1. **FortiClient EMS ships a browser extension (FPAM) that exposes a privileged Chrome messaging bus to web pages via `externally_connectable`.** Manual analysis of `manifest.json` and the background service worker confirmed FPAM-EXT-1: the `externally_connectable` host pattern included broad wildcards, enabling any page matching the pattern to send privileged messages to the extension — a cross-origin privilege escalation vector. `BrowserExtensionAuditor` automates detection of this pattern class across all browser extension targets.
+1. **FortiClient EMS ships a browser extension (FPAM) that exposes a privileged Chrome messaging bus to web pages via `externally_connectable`.** Manual analysis of `manifest.json` and the background service worker confirmed FPAM-EXT-1: the `externally_connectable` host pattern included broad wildcards, enabling any page matching the pattern to send privileged messages to the extension: a cross-origin privilege escalation vector. `BrowserExtensionAuditor` automates detection of this pattern class across all browser extension targets.
 
-2. **`externally_connectable` with `*://*/ ` or `<all_urls>` gives every web page access to the extension's `chrome.runtime.sendMessage` bus** — if the background service worker does not validate the sender identity, any malicious page can invoke extension APIs that have access to browser storage, native messaging, or cross-domain network requests. `BrowserExtensionAuditor` detects both the broad pattern and the missing sender-check pattern simultaneously.
+2. **`externally_connectable` with `*://*/ ` or `<all_urls>` gives every web page access to the extension's `chrome.runtime.sendMessage` bus**: if the background service worker does not validate the sender identity, any malicious page can invoke extension APIs that have access to browser storage, native messaging, or cross-domain network requests. `BrowserExtensionAuditor` detects both the broad pattern and the missing sender-check pattern simultaneously.
 
-3. **`BrowserExtensionAuditor.scan_file()` processes individual JS files** — enabling targeted analysis of a specific service worker or content script alongside the full extension scan. `ExtFinding.finding_class` categorizes findings into `externally_connectable_broad`, `missing_sender_check`, `eval_usage`, `csp_unsafe`, and `overgrant_permission` for triage prioritization.
+3. **`BrowserExtensionAuditor.scan_file()` processes individual JS files**: enabling targeted analysis of a specific service worker or content script alongside the full extension scan. `ExtFinding.finding_class` categorizes findings into `externally_connectable_broad`, `missing_sender_check`, `eval_usage`, `csp_unsafe`, and `overgrant_permission` for triage prioritization.
 
 ---
 
@@ -80,9 +80,9 @@ Total: <N> findings  (<C> critical, <H> high)
 
 ## False positives
 
-**`externally_connectable_broad` fires on `https://*.example.com/*` patterns** — subdomain-wildcarded patterns are flagged as broad because they cover all subdomains including attacker-controlled ones (if the root domain allows user subdomains). Validate whether the wildcarded domain is single-vendor or user-extensible before treating as critical.
+**`externally_connectable_broad` fires on `https://*.example.com/*` patterns**: subdomain-wildcarded patterns are flagged as broad because they cover all subdomains including attacker-controlled ones (if the root domain allows user subdomains). Validate whether the wildcarded domain is single-vendor or user-extensible before treating as critical.
 
-**Missing sender check pattern uses regex matching** — an `onMessageExternal` listener that performs sender validation in a called helper function will be flagged as missing the check if the helper is not inlined. Inspect the listener body for indirect validation before reporting.
+**Missing sender check pattern uses regex matching**: an `onMessageExternal` listener that performs sender validation in a called helper function will be flagged as missing the check if the helper is not inlined. Inspect the listener body for indirect validation before reporting.
 
 ---
 
@@ -109,5 +109,5 @@ Run `BrowserExtensionAuditor` on any Chrome/Edge/Firefox extension extracted fro
 
 ## See also
 
-- [Electron Application Auditing](electron-application-auditing.md) — Electron app security scanning (similar pattern class)
-- [Source Dangerous Sink Detection](source-dangerous-sink-detection.md) — `SourceSinkScanner` for source-level JavaScript dangerous sinks
+- [Electron Application Auditing](electron-application-auditing.md): Electron app security scanning (similar pattern class)
+- [Source Dangerous Sink Detection](source-dangerous-sink-detection.md): `SourceSinkScanner` for source-level JavaScript dangerous sinks

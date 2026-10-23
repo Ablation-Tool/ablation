@@ -1,12 +1,12 @@
 # DTW Function Homolog Matching
 
-Find cross-version function homologs using Dynamic Time Warping on opcode category sequences — tolerating basic-block insertions and deletions that 4-gram Jaccard similarity penalizes unfairly, enabling accurate identification of where a function moved or was split between firmware versions.
+Find cross-version function homologs using Dynamic Time Warping on opcode category sequences: tolerating basic-block insertions and deletions that 4-gram Jaccard similarity penalizes unfairly, enabling accurate identification of where a function moved or was split between firmware versions.
 
 ---
 
 ## Why this exists
 
-1. **Cross-version patch analysis requires finding the same function across firmware versions — but functions that gain or lose one validation block between versions have low 4-gram Jaccard similarity even though the core logic is identical.** `DTWMatcher` uses DTW on opcode category sequences instead of n-gram bags: DTW is warp-invariant and handles insertions/deletions by aligning non-identical-length sequences, achieving ~0.91 similarity for a function with one inserted block versus Jaccard's ~0.65 for the same pair.
+1. **Cross-version patch analysis requires finding the same function across firmware versions, but functions that gain or lose one validation block between versions have low 4-gram Jaccard similarity even though the core logic is identical.** `DTWMatcher` uses DTW on opcode category sequences instead of n-gram bags: DTW is warp-invariant and handles insertions/deletions by aligning non-identical-length sequences, achieving ~0.91 similarity for a function with one inserted block versus Jaccard's ~0.65 for the same pair.
 
 2. **DTW similarity is calibrated: ≥0.85 is a reliable homolog, 0.70-0.85 is a candidate worth manual review, <0.70 is a different function.** The `HomologMatch.similarity` field gives the DTW-derived score (0.0–1.0) alongside `confidence` label (`HIGH`/`MEDIUM`/`LOW`) so triage is immediate without threshold tuning.
 
@@ -81,15 +81,15 @@ DTW 0x22ccc0 vs 0x23a010
 
 ## False positives
 
-**Short functions (fewer than ~15 instructions) produce unreliable DTW similarity scores — two unrelated short functions can score `same_era` simply because both are short.** Filter `SimilarityReport` results where `len_a < 15` and require manual confirmation before using them as homolog anchors.
+**Short functions (fewer than ~15 instructions) produce unreliable DTW similarity scores: two unrelated short functions can score `same_era` simply because both are short.** Filter `SimilarityReport` results where `len_a < 15` and require manual confirmation before using them as homolog anchors.
 
-**DTW with sakoe-chiba band (radius 10%) can miss heavily-restructured functions** — a function that was split into two functions or merged from two will score `rewritten` or `different`. If `DTWMatcher` returns no `same_era` match, use `SubsequenceSearcher` to search for a sub-sequence match instead.
+**DTW with sakoe-chiba band (radius 10%) can miss heavily-restructured functions**: a function that was split into two functions or merged from two will score `rewritten` or `different`. If `DTWMatcher` returns no `same_era` match, use `SubsequenceSearcher` to search for a sub-sequence match instead.
 
 ---
 
 ## Pipeline position
 
-Step 1 of the three-step cross-version patch analysis workflow in `CLAUDE.md`: `DTWMatcher.score_functions()` first (same era?), `MatrixProfileDiff.diff_functions()` second (what changed?), `VersionTracker.find_homolog()` third (first appearance). Run `DTWMatcher` before `MatrixProfileDiff` — only confirmed homologs are worth the full instruction-level diff.
+Step 1 of the three-step cross-version patch analysis workflow in `CLAUDE.md`: `DTWMatcher.score_functions()` first (same era?), `MatrixProfileDiff.diff_functions()` second (what changed?), `VersionTracker.find_homolog()` third (first appearance). Run `DTWMatcher` before `MatrixProfileDiff`: only confirmed homologs are worth the full instruction-level diff.
 
 ---
 
@@ -104,7 +104,7 @@ Step 1 of the three-step cross-version patch analysis workflow in `CLAUDE.md`: `
 | `dtw_dist` | Raw DTW distance (lower = more similar) |
 | `jaccard` | Jaccard similarity on the mnemonic sets |
 | `len_a` / `len_b` | Instruction counts for each function |
-| `verdict` | `'HOMOLOG'` / `'SIMILAR'` / `'DIFFERENT'` — summary classification |
+| `verdict` | `'HOMOLOG'` / `'SIMILAR'` / `'DIFFERENT'`: summary classification |
 
 `DTWMatcher.find_homologs(va, binary_b, threshold=0.85)` scans all functions in `binary_b` and returns `List[HomologMatch]` of candidates above the threshold, sorted by `similarity` descending:
 
@@ -121,6 +121,6 @@ Step 1 of the three-step cross-version patch analysis workflow in `CLAUDE.md`: `
 
 ## See also
 
-- [Matrix Profile Patch Diff](matrix-profile-patch-diff.md) — instruction-level change localization within confirmed homologs
-- [Behavioral Subsequence Search](behavioral-subsequence-search.md) — find split/merged functions that DTW misses
-- [Function Corpus Builder](function-corpus-builder.md) — corpus required for homolog matching against unlabeled binaries
+- [Matrix Profile Patch Diff](matrix-profile-patch-diff.md): instruction-level change localization within confirmed homologs
+- [Behavioral Subsequence Search](behavioral-subsequence-search.md): find split/merged functions that DTW misses
+- [Function Corpus Builder](function-corpus-builder.md): corpus required for homolog matching against unlabeled binaries

@@ -175,7 +175,7 @@ Top syscalls:
 
 **Before this module:** Compile or obtain the target binary. For dynamic tracing during exploitation research, have the binary running or launchable in a controlled environment.
 
-**After this module:** Cross-reference `SyscallEvent` entries with static findings from `TaintTracker` — confirm that a `execve` or `system` call site identified statically is actually reached with attacker-controlled arguments at runtime.
+**After this module:** Cross-reference `SyscallEvent` entries with static findings from `TaintTracker`: confirm that a `execve` or `system` call site identified statically is actually reached with attacker-controlled arguments at runtime.
 
 ---
 
@@ -202,6 +202,6 @@ Each entry in `syscalls`:
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

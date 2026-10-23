@@ -1,6 +1,6 @@
 # Host/Service Discovery
 
-Discover live hosts via ICMP echo requests, grab TCP service banners, enumerate mDNS and SSDP service announcements, and fingerprint OS from TTL/response characteristics — building an internal host map from a compromised network position — via `modules/net_sniffer.py`.
+Discover live hosts via ICMP echo requests, grab TCP service banners, enumerate mDNS and SSDP service announcements, and fingerprint OS from TTL/response characteristics: building an internal host map from a compromised network position: via `modules/net_sniffer.py`.
 
 ---
 
@@ -8,7 +8,7 @@ Discover live hosts via ICMP echo requests, grab TCP service banners, enumerate 
 
 1. **`icmp_host_discovery()` scans a full CIDR range with raw ICMP without `nmap` or `ping`.** It sends ICMP echo requests to every host in the target range and collects replies, returning a list of live IP addresses. The raw socket approach (`SOCK_RAW + IPPROTO_ICMP`) works without any external tools but requires root or `CAP_NET_RAW`. This is the primary host discovery method for lateral movement planning from a compromised Linux host.
 
-2. **`scan_tcp_banner()` connects to a specific port and reads the service banner** — the first bytes returned after connection often identify the service and version without requiring protocol-specific probing. SSH banners (`SSH-2.0-OpenSSH_8.4`), SMTP banners (`220 mail.example.com Postfix`), and HTTP server headers are all returned in the first `recv()`. `fingerprint_os_from_ttl()` uses the TTL value in the IP header to infer OS (TTL ≈ 64 → Linux/macOS; TTL ≈ 128 → Windows; TTL ≈ 255 → network device).
+2. **`scan_tcp_banner()` connects to a specific port and reads the service banner**: the first bytes returned after connection often identify the service and version without requiring protocol-specific probing. SSH banners (`SSH-2.0-OpenSSH_8.4`), SMTP banners (`220 mail.example.com Postfix`), and HTTP server headers are all returned in the first `recv()`. `fingerprint_os_from_ttl()` uses the TTL value in the IP header to infer OS (TTL ≈ 64 → Linux/macOS; TTL ≈ 128 → Windows; TTL ≈ 255 → network device).
 
 3. **`MDNSDiscovery` and `SSDPDiscovery`** enumerate service types on the local network segment passively. `MDNSDiscovery.query('_http._tcp.local')` sends an mDNS PTR query and collects responses, identifying HTTP services (management interfaces, embedded device dashboards) without TCP scanning. `SSDPDiscovery.discover()` sends an M-SEARCH and collects UPnP device type and location responses.
 
@@ -75,9 +75,9 @@ SSDP devices:
 
 ## False positives
 
-**TTL-based OS fingerprinting is a heuristic** — VPN tunnels, NAT, and SDN overlays alter TTL values in transit. A host behind a NAT that decrements TTL may appear as a different OS. Use banner grabbing to confirm OS identity independently.
+**TTL-based OS fingerprinting is a heuristic**: VPN tunnels, NAT, and SDN overlays alter TTL values in transit. A host behind a NAT that decrements TTL may appear as a different OS. Use banner grabbing to confirm OS identity independently.
 
-**mDNS query responses may include cached records** — `MDNSDiscovery.query()` may receive responses from DNS cache on the local resolver rather than direct device responses. Verify that the returned IP addresses respond on the reported port.
+**mDNS query responses may include cached records**: `MDNSDiscovery.query()` may receive responses from DNS cache on the local resolver rather than direct device responses. Verify that the returned IP addresses respond on the reported port.
 
 ---
 
@@ -114,5 +114,5 @@ Run host/service discovery after `local-network-inventory` reveals subnets. Disc
 
 ## See also
 
-- [Local Network Inventory](local-network-inventory.md) — `NetworkAnalyzer` for interface and subnet discovery before host scanning
-- [PCAP Inspection](pcap-inspection.md) — traffic analysis for communication patterns between discovered hosts
+- [Local Network Inventory](local-network-inventory.md): `NetworkAnalyzer` for interface and subnet discovery before host scanning
+- [PCAP Inspection](pcap-inspection.md): traffic analysis for communication patterns between discovered hosts

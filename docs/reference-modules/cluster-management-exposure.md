@@ -1,16 +1,16 @@
 # Cluster Management Exposure
 
-Enumerate the combined Docker and Kubernetes cluster management API surface — identifying unauthenticated Docker daemon TCP exposure, Kubernetes API server accessibility, etcd direct access, and cluster-admin credential paths — from a foothold within the cluster network, via `modules/docker_enum.py` and `modules/k8s_enum.py`.
+Enumerate the combined Docker and Kubernetes cluster management API surface: identifying unauthenticated Docker daemon TCP exposure, Kubernetes API server accessibility, etcd direct access, and cluster-admin credential paths: from a foothold within the cluster network, via `modules/docker_enum.py` and `modules/k8s_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **Container orchestration management APIs are the highest-value targets in a cluster compromise** — Docker daemon TCP port 2375, Kubernetes API server port 6443, and etcd port 2379/2380 are each sufficient for full cluster control when unauthenticated. `cluster-management-exposure` combines the Docker and Kubernetes enumeration to produce a single triage of the three highest-severity exposure classes.
+1. **Container orchestration management APIs are the highest-value targets in a cluster compromise**: Docker daemon TCP port 2375, Kubernetes API server port 6443, and etcd port 2379/2380 are each sufficient for full cluster control when unauthenticated. `cluster-management-exposure` combines the Docker and Kubernetes enumeration to produce a single triage of the three highest-severity exposure classes.
 
-2. **`check_k8s_network_policy_gaps()` in `docker_enum.py`** probes the Kubernetes API at port 8001 from within the cluster network to identify namespaces without NetworkPolicy objects — the same flat-network finding as `kubernetes-policy-posture.md`, but accessible here from a Docker container context that may not have service account token access.
+2. **`check_k8s_network_policy_gaps()` in `docker_enum.py`** probes the Kubernetes API at port 8001 from within the cluster network to identify namespaces without NetworkPolicy objects: the same flat-network finding as `kubernetes-policy-posture.md`, but accessible here from a Docker container context that may not have service account token access.
 
-3. **`check_resource_quota_bypass()`** identifies Kubernetes clusters where individual pods can request unlimited CPU and memory — an indicator that LimitRange and ResourceQuota are not enforced. In clusters without resource quotas, a compromised pod can exhaust host resources (denial-of-service against other pods) or request a pod with `resources.requests.cpu: 1000` to trigger node-level scheduling pressure.
+3. **`check_resource_quota_bypass()`** identifies Kubernetes clusters where individual pods can request unlimited CPU and memory: an indicator that LimitRange and ResourceQuota are not enforced. In clusters without resource quotas, a compromised pod can exhaust host resources (denial-of-service against other pods) or request a pod with `resources.requests.cpu: 1000` to trigger node-level scheduling pressure.
 
 ---
 
@@ -67,9 +67,9 @@ Cluster management exposure triage:
 
 ## False positives
 
-**Docker TCP 2375 probe is a connection check only** — a TCP response on port 2375 does not guarantee it is a Docker daemon. Verify by sending a `GET /version` HTTP request and checking for a Docker version JSON response before treating this as a confirmed finding.
+**Docker TCP 2375 probe is a connection check only**: a TCP response on port 2375 does not guarantee it is a Docker daemon. Verify by sending a `GET /version` HTTP request and checking for a Docker version JSON response before treating this as a confirmed finding.
 
-**`check_k8s_network_policy_gaps()` requires Kubernetes API access at port 8001** — if the target cluster does not have `kubectl proxy` running on port 8001, this check will fail silently. Use `K8sEnumerator` with a service account token for reliable network policy enumeration.
+**`check_k8s_network_policy_gaps()` requires Kubernetes API access at port 8001**: if the target cluster does not have `kubectl proxy` running on port 8001, this check will fail silently. Use `K8sEnumerator` with a service account token for reliable network policy enumeration.
 
 ---
 
@@ -95,6 +95,6 @@ Each probe function returns a list of finding dicts with `{severity, title, deta
 
 ## See also
 
-- [Docker Inventory and Posture](docker-inventory-and-posture.md) — `DockerEnumerator` detailed Docker surface
-- [Kubernetes Inventory](kubernetes-inventory.md) — `K8sEnumerator` detailed Kubernetes enumeration
-- [Kubernetes Policy Posture](kubernetes-policy-posture.md) — RBAC and policy gap analysis
+- [Docker Inventory and Posture](docker-inventory-and-posture.md): `DockerEnumerator` detailed Docker surface
+- [Kubernetes Inventory](kubernetes-inventory.md): `K8sEnumerator` detailed Kubernetes enumeration
+- [Kubernetes Policy Posture](kubernetes-policy-posture.md): RBAC and policy gap analysis

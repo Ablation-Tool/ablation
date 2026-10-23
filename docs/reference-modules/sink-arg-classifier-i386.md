@@ -8,7 +8,7 @@ Forward register-state exec-sink classifier for i386 ELF binaries.
 
 1. **Gap RMC-GAP-002 / COMMSVR-GAP-004 / HACMP-GAP-001**: The main `SinkArgClassifier` hardcodes x86-64 registers (`rdi`, `rsi`, `rdx`). i386 cdecl passes all arguments on the stack (`push` or `sub esp; mov [esp+N]`). This module is the canonical i386-aware variant.
 
-2. **Forward-state vs backward-scan**: `sink_arg_classifier_x86_32.py` uses a backward push-count scan with a fixed lookback window. When the exec argument register is loaded far before the call (beyond the window) and aliased through several `mov reg, reg2` instructions, the backward scan returns UNKNOWN. This module uses a forward register-state pass — no lookback limit.
+2. **Forward-state vs backward-scan**: `sink_arg_classifier_x86_32.py` uses a backward push-count scan with a fixed lookback window. When the exec argument register is loaded far before the call (beyond the window) and aliased through several `mov reg, reg2` instructions, the backward scan returns UNKNOWN. This module uses a forward register-state pass, no lookback limit.
 
 3. **Register alias tracking**: When the forward pass sees `mov eax, [ebp+8]`, it records `reg_state[eax] = ARG_PROPAGATED`. A subsequent `mov edi, eax` then sets `reg_state[edi] = ARG_PROPAGATED`. This chain persists for the entire function lifetime.
 
@@ -44,7 +44,7 @@ for each function in func_starts:
     mov [esp+N], val          → call_args[N//4] = classify(val)
 ```
 
-**Key ordering**: exec-sink results are recorded BEFORE `call_args.clear()` — the verdict is captured from the accumulated push/mov state, then cleared for the next call.
+**Key ordering**: exec-sink results are recorded BEFORE `call_args.clear()`: the verdict is captured from the accumulated push/mov state, then cleared for the next call.
 
 ---
 
@@ -93,7 +93,7 @@ All ARG_PROPAGATED findings byte-verified against known synergy_re.py entries.
 | push convention | ✓ | ✓ |
 | sub-esp/mov[esp+N] | ✓ | ✓ |
 | [reg+deref] propagation | ✓ (session 20) | ✓ |
-| strcpy-family backtrack | ✓ (session 20) | — (no stack-slot fill tracking) |
+| strcpy-family backtrack | ✓ (session 20) |: (no stack-slot fill tracking) |
 | Long-range register persistence | limited (lookback window) | ✓ (full function) |
 | Register alias chains | limited | ✓ (reg_state propagation) |
 
@@ -103,6 +103,6 @@ Use x86_32 when strcpy/snprintf stack-slot patterns need classification. Use i38
 
 ## Gap IDs
 
-- `RMC-GAP-002` — i386 cdecl ABI mismatch in main SinkArgClassifier
-- `COMMSVR-GAP-004` — same
-- `HACMP-GAP-001` — same
+- `RMC-GAP-002`: i386 cdecl ABI mismatch in main SinkArgClassifier
+- `COMMSVR-GAP-004`: same
+- `HACMP-GAP-001`: same

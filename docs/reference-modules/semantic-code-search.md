@@ -1,16 +1,16 @@
 # Semantic Code Search
 
-Find functions in a stripped binary using natural language — a BERT-based embedding search that matches behavioral descriptions like "HTTP request parser" or "AES key schedule" to the binary's disassembled functions, without symbol names or source code.
+Find functions in a stripped binary using natural language: a BERT-based embedding search that matches behavioral descriptions like "HTTP request parser" or "AES key schedule" to the binary's disassembled functions, without symbol names or source code.
 
 ---
 
 ## Why this exists
 
-1. **Stripped firmware has no symbol names.** The first step in any firmware RE engagement is identifying what functions exist and what they do. Without symbols, the only practical options are recognizing known patterns (pattern matching) or semantic similarity to function descriptions. When a pattern library has no coverage — a new target, a modified function, a custom cipher — the analyst needs a way to search by what the function *does* rather than what it is called. Semantic Code Search provides that capability.
+1. **Stripped firmware has no symbol names.** The first step in any firmware RE engagement is identifying what functions exist and what they do. Without symbols, the only practical options are recognizing known patterns (pattern matching) or semantic similarity to function descriptions. When a pattern library has no coverage: a new target, a modified function, a custom cipher: the analyst needs a way to search by what the function *does* rather than what it is called. Semantic Code Search provides that capability.
 
 2. **Direct binary similarity tools fail across architectures and compiler versions.** Tools that compare raw byte sequences or control flow graph structure produce false negatives when a function is recompiled with different optimization levels or ported across ISAs. A FortiGate x86 function and its FortiSwitch ARM64 counterpart implement the same algorithm but share almost no structural similarity at the byte or CFG level. Encoding both as behavioral embeddings (opcode category sequences) allows cross-architecture matching that structural tools cannot achieve.
 
-3. **BERT embedding anisotropy must be corrected for threshold-based filtering to work.** Off-the-shelf BERT models produce embeddings that cluster in a narrow cone of the embedding space. Without correction, cosine similarity between unrelated function descriptions scores 0.6–0.9, making it impossible to set a threshold that separates true matches from noise. This searcher applies PCA whitening (Su et al. 2021) so that unrelated pairs score 0.4–0.6 and true matches stay above 0.8 — providing a calibrated, actionable similarity score.
+3. **BERT embedding anisotropy must be corrected for threshold-based filtering to work.** Off-the-shelf BERT models produce embeddings that cluster in a narrow cone of the embedding space. Without correction, cosine similarity between unrelated function descriptions scores 0.6–0.9, making it impossible to set a threshold that separates true matches from noise. This searcher applies PCA whitening (Su et al. 2021) so that unrelated pairs score 0.4–0.6 and true matches stay above 0.8: providing a calibrated, actionable similarity score.
 
 ---
 
@@ -56,7 +56,7 @@ Raw disassembly contains build-specific tokens (addresses, register names, large
 
 Cross-architecture invariance: `mov rax, rbx` (x86-64), `ldr x0, [x1]` (AArch64), and `ldm r0, {r1,r2}` (ARM32) all produce `DATA_TRANSFER_OP`. The encoding measures *what a function does*, not *which ISA it uses*.
 
-**Markov transitions** over the opcode category sequence capture structural fingerprints — the characteristic transition patterns of sorting algorithms, cipher rounds, protocol parsers. The top-5 most frequent adjacent-category transitions are appended to the description text.
+**Markov transitions** over the opcode category sequence capture structural fingerprints: the characteristic transition patterns of sorting algorithms, cipher rounds, protocol parsers. The top-5 most frequent adjacent-category transitions are appended to the description text.
 
 **Operand type patterns** from BinDeep (Tian et al., 2020): keeping `MEM[REG+IMM]` patterns alongside opcode categories adds approximately 1.2% F1 over opcode-only encoding.
 
@@ -75,7 +75,7 @@ Without whitening, cosine similarity between unrelated BERT embeddings scores 0.
 
 The corpus is expensive to build (~549 seconds for 11,000 functions on CPU, ~4 hours for the full 296k function corpus). The searcher caches the whitened embedding matrix as a `.pkl` file at `~/.ablation/func_semantic_cache_BAAI_bge_small_en_v1_5_<live_hash>.pkl`. Cache validity is keyed on `sha256(func_id.db)`: any new function insertion invalidates the cache. A `live_addrs` hash is included so caches for different binaries do not collide.
 
-Scoping the corpus to a single binary (via `from_context()`) encodes approximately 11k functions instead of all 296k — a 26x speedup on first build (9 minutes vs 4 hours), with a 0.1s hot-path cost on cache hits.
+Scoping the corpus to a single binary (via `from_context()`) encodes approximately 11k functions instead of all 296k: a 26x speedup on first build (9 minutes vs 4 hours), with a 0.1s hot-path cost on cache hits.
 
 ---
 
@@ -174,7 +174,7 @@ searcher.invalidate_cache()
 
 **Cache staleness.** If new function names have been added to the names registry (`ctx.set_name()`) since the last corpus build, queries will not find the newly named functions until the cache is invalidated. Call `searcher.invalidate_cache()` then re-run the query.
 
-**Cross-architecture false negatives.** The `from_context()` path scopes the corpus to CONFIRMED/ANGR_INFERRED functions in `func_id.db` for this specific binary. If a cross-binary match is needed (e.g., finding the same algorithm in an ARM64 binary after identifying it in x86-64), the second binary must also be ingested into `func_id.db` and searched separately.
+**Cross-architecture false negatives.** The `from_context()` path scopes the corpus to CONFIRMED/ANGR_INFERRED functions in `func_id.db` for this specific binary. If a cross-binary match is needed for example finding the same algorithm in an ARM64 binary after identifying it in x86-64, the second binary must also be ingested into `func_id.db` and searched separately.
 
 ---
 
@@ -200,8 +200,8 @@ searcher.invalidate_cache()
 
 ## See also
 
-- [Binary Context](binary-context.md) — corpus ingest source; run `from_context()` first
-- [Function Profiler](function-profiler.md) — deep behavioral analysis for candidates found by semantic search
-- [Pattern Library](pattern-library.md) — replay confirmed patterns instead of text queries when patterns exist
-- [RAG Retriever](rag-retriever.md) — augments SQL callee-overlap results with vector similarity from this module
-- [Version Delta](version-delta.md) — uses semantic embeddings for cross-version function matching
+- [Binary Context](binary-context.md): corpus ingest source; run `from_context()` first
+- [Function Profiler](function-profiler.md): deep behavioral analysis for candidates found by semantic search
+- [Pattern Library](pattern-library.md): replay confirmed patterns instead of text queries when patterns exist
+- [RAG Retriever](rag-retriever.md): augments SQL callee-overlap results with vector similarity from this module
+- [Version Delta](version-delta.md): uses semantic embeddings for cross-version function matching

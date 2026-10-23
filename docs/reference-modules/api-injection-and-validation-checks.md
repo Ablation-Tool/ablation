@@ -1,16 +1,16 @@
 # API Injection and Validation Checks
 
-Probe parameter-level injection and input-handling failures — running SQL injection, SSTI, SSRF, path traversal, XXE, prototype pollution, and format string payloads against discovered API parameters; testing verb tampering (12 HTTP methods + 4 override headers); switching content types to bypass validators; duplicating parameters for pollution; and probing webhook endpoints for SSRF to cloud metadata.
+Probe parameter-level injection and input-handling failures: running SQL injection, SSTI, SSRF, path traversal, XXE, prototype pollution, and format string payloads against discovered API parameters; testing verb tampering (12 HTTP methods + 4 override headers); switching content types to bypass validators; duplicating parameters for pollution; and probing webhook endpoints for SSRF to cloud metadata.
 
 ---
 
 ## Why this exists
 
-1. **API parameter injection requires category-specific confirming signals — not just error code differences.** `probe_param()` tests 8 injection categories (SQL injection, SSTI, SSRF, path traversal, pickle/RCE, format string, XXE, prototype pollution) against each discovered parameter. Each category has a defined `CONFIRMING_SIGNALS` set: SQL injection requires `SQL_REFLECT` (MySQL/Oracle/SQLite error in response), not just `PATH_ACCESS`; SSRF requires `SSRF_ACTIVE` (connection refused from server-side attempt) or `SSRF_CLOUD_METADATA` (169.254.x.x or AWS metadata content); SSTI requires `SSTI_EVAL` (`49` in the response to `{{7*7}}`). This prevents false positives from server-side path handling errors that match injection payloads superficially.
+1. **API parameter injection requires category-specific confirming signals, not just error code differences.** `probe_param()` tests 8 injection categories (SQL injection, SSTI, SSRF, path traversal, pickle/RCE, format string, XXE, prototype pollution) against each discovered parameter. Each category has a defined `CONFIRMING_SIGNALS` set: SQL injection requires `SQL_REFLECT` (MySQL/Oracle/SQLite error in response), not just `PATH_ACCESS`; SSRF requires `SSRF_ACTIVE` (connection refused from server-side attempt) or `SSRF_CLOUD_METADATA` (169.254.x.x or AWS metadata content); SSTI requires `SSTI_EVAL` (`49` in the response to `{{7*7}}`). This prevents false positives from server-side path handling errors that match injection payloads superficially.
 
 2. **HTTP verb tampering bypasses API gateways that enforce authorization only on GET and POST.** A DELETE endpoint that requires admin credentials may be accessible via a POST with `X-HTTP-Method-Override: DELETE` header if the gateway strips method override headers before applying access control but the backend reads the override header directly. `probe_verb_tampering()` tests all 12 HTTP methods against each endpoint (skipping methods the endpoint already declares), plus 4 method override headers (`X-HTTP-Method-Override`, `X-HTTP-Method`, `X-Method-Override`, `_method`).
 
-3. **Webhook endpoints that accept URLs from user input and fetch them server-side are the most common SSRF surface in API services.** `probe_webhook_ssrf()` uses a sentinel baseline comparison — sending a garbage URL first to establish what an "ignored parameter" response looks like — and only reports when the cloud metadata URL produces a response that differs from the baseline. This eliminates false positives from APIs that return the same 200 regardless of parameter value.
+3. **Webhook endpoints that accept URLs from user input and fetch them server-side are the most common SSRF surface in API services.** `probe_webhook_ssrf()` uses a sentinel baseline comparison: sending a garbage URL first to establish what an "ignored parameter" response looks like, and only reports when the cloud metadata URL produces a response that differs from the baseline. This eliminates false positives from APIs that return the same 200 regardless of parameter value.
 
 ---
 
@@ -111,9 +111,9 @@ for f in host_findings:
 
 ## False positives
 
-**`SSRF_ACTIVE` signal from network errors unrelated to SSRF.** The `SSRF_ACTIVE` signal fires when `"connection refused"` or `"no route to host"` appears in the response body. Some APIs return these strings in generic error messages when any backend service is unreachable — not specifically when the SSRF URL is fetched. Before reporting, confirm the error message appears only when the SSRF URL is sent and not when sending a benign value to the same parameter.
+**`SSRF_ACTIVE` signal from network errors unrelated to SSRF.** The `SSRF_ACTIVE` signal fires when `"connection refused"` or `"no route to host"` appears in the response body. Some APIs return these strings in generic error messages when any backend service is unreachable, not specifically when the SSRF URL is fetched. Before reporting, confirm the error message appears only when the SSRF URL is sent and not when sending a benign value to the same parameter.
 
-**`PATH_ACCESS` signal fires on injection categories it cannot confirm.** `CONFIRMING_SIGNALS` deliberately excludes `PATH_ACCESS` from SQL injection, SSTI, SSRF, and XXE categories. This prevents a path-handling error (server trying to `open(payload)`) from being miscategorized as SQL injection when the response contains `"errno"` from a file operation. If a probe reports `signals=['PATH_ACCESS']` only (not in `confirmed_signals`), it is a path traversal indicator, not a SQL injection indicator — the signal is correct but the category it appears under may mislead.
+**`PATH_ACCESS` signal fires on injection categories it cannot confirm.** `CONFIRMING_SIGNALS` deliberately excludes `PATH_ACCESS` from SQL injection, SSTI, SSRF, and XXE categories. This prevents a path-handling error (server trying to `open(payload)`) from being miscategorized as SQL injection when the response contains `"errno"` from a file operation. If a probe reports `signals=['PATH_ACCESS']` only (not in `confirmed_signals`), it is a path traversal indicator, not a SQL injection indicator: the signal is correct but the category it appears under may mislead.
 
 **`NOSQL_JSON` fires on endpoints that return 200 for any POST body regardless of content.** Some APIs return HTTP 200 with an error body (`{"error":"invalid field"}`) even when the JSON body is invalid. If the response length exceeds 100 bytes and the status is 200, `probe_nosql_injection()` records a `nosql_operator_inject` finding. Confirm by checking whether the response contains actual data fields (user list, records) rather than an error message.
 
@@ -121,9 +121,9 @@ for f in host_findings:
 
 ## Pipeline position
 
-**Before this module:** Run `probe_api_surface()` to discover endpoints with parameter lists (`ep.params`). `probe_param()` requires a specific path and parameter name — it does not discover parameters itself. Run it on parameters identified from OpenAPI specs, response introspection, or endpoint enumeration.
+**Before this module:** Run `probe_api_surface()` to discover endpoints with parameter lists (`ep.params`). `probe_param()` requires a specific path and parameter name, it does not discover parameters itself. Run it on parameters identified from OpenAPI specs, response introspection, or endpoint enumeration.
 
-**After this module:** For confirmed `SSRF_CLOUD_METADATA` findings: retrieve the IAM credentials from `http://169.254.169.254/latest/meta-data/iam/security-credentials/` before reporting — demonstrating actual credential access is stronger evidence than an internal IP response. For `NOSQL_AUTH_BYPASS` findings: use the issued token to confirm admin access before reporting critical impact.
+**After this module:** For confirmed `SSRF_CLOUD_METADATA` findings: retrieve the IAM credentials from `http://169.254.169.254/latest/meta-data/iam/security-credentials/` before reporting: demonstrating actual credential access is stronger evidence than an internal IP response. For `NOSQL_AUTH_BYPASS` findings: use the issued token to confirm admin access before reporting critical impact.
 
 ---
 
@@ -133,17 +133,17 @@ for f in host_findings:
 |:---|:---|
 | `SSRF_CLOUD_METADATA` | Server fetched attacker-provided URL and returned cloud metadata content |
 | `SSRF_ACTIVE` | Server attempted the URL (connection refused confirms server-side request) |
-| `SQL_REFLECT` | SQL error message in response — injection payload reached SQL layer |
-| `SSTI_EVAL` | `{{7*7}}` evaluated to `49` — template engine processes user input |
-| `FILE_READ` | `/etc/passwd` content in response — path traversal or XXE confirmed |
-| `nosql_auth_bypass` | NoSQL `$ne` operator bypassed authentication — token issued for unauthenticated user |
-| `webhook_ssrf_metadata` | Cloud metadata returned via webhook URL parameter — SSRF confirmed |
+| `SQL_REFLECT` | SQL error message in response: injection payload reached SQL layer |
+| `SSTI_EVAL` | `{{7*7}}` evaluated to `49`: template engine processes user input |
+| `FILE_READ` | `/etc/passwd` content in response: path traversal or XXE confirmed |
+| `nosql_auth_bypass` | NoSQL `$ne` operator bypassed authentication: token issued for unauthenticated user |
+| `webhook_ssrf_metadata` | Cloud metadata returned via webhook URL parameter: SSRF confirmed |
 | `VERB_OVERRIDE` | Method override header accepted by backend despite endpoint declaration |
 
 ---
 
 ## See also
 
-- [API Authorization Checks](api-authorization-checks.md) — BOLA/BFLA/mass assignment probes for the same endpoints
-- [API Authentication and Token Checks](api-authentication-and-token-checks.md) — JWT/OAuth2 checks for the auth layer
-- [API Reverse Engineering](api-re.md) — full 15-phase workflow that calls these injection probes as sub-phases
+- [API Authorization Checks](api-authorization-checks.md): BOLA/BFLA/mass assignment probes for the same endpoints
+- [API Authentication and Token Checks](api-authentication-and-token-checks.md): JWT/OAuth2 checks for the auth layer
+- [API Reverse Engineering](api-re.md): full 15-phase workflow that calls these injection probes as sub-phases

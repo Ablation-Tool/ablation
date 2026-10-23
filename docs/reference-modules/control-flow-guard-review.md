@@ -1,16 +1,16 @@
 # Control Flow Guard Review
 
-Analyze Windows PE binaries for Control Flow Guard (CFG) bypass opportunities — detecting whether CFG is absent, whether export suppression is missing (expanding the valid-target bitmap to the entire export table), and which specific exports are reachable as CFG bypass targets when export suppression is enabled but incomplete.
+Analyze Windows PE binaries for Control Flow Guard (CFG) bypass opportunities: detecting whether CFG is absent, whether export suppression is missing (expanding the valid-target bitmap to the entire export table), and which specific exports are reachable as CFG bypass targets when export suppression is enabled but incomplete.
 
 ---
 
 ## Why this exists
 
-1. **CFG validates indirect call targets against a compiler-built bitmap of valid function entry points — a target not in the bitmap triggers a CFG violation.** When CFG is not enabled at all (`CFGConfig.instrumented() == False`), every `CALL [reg]` and `JMP [reg]` in the binary is unprotected and an attacker can redirect execution to any gadget. `CFGBypassDetector` identifies this condition immediately from the PE's `IMAGE_LOAD_CONFIG_DIRECTORY` flags.
+1. **CFG validates indirect call targets against a compiler-built bitmap of valid function entry points: a target not in the bitmap triggers a CFG violation.** When CFG is not enabled at all (`CFGConfig.instrumented() == False`), every `CALL [reg]` and `JMP [reg]` in the binary is unprotected and an attacker can redirect execution to any gadget. `CFGBypassDetector` identifies this condition immediately from the PE's `IMAGE_LOAD_CONFIG_DIRECTORY` flags.
 
-2. **When CFG is enabled but export suppression is missing, all exported functions are automatically added to the valid-target bitmap** — even functions that were never intended as indirect call targets. This expands the attacker's gadget surface from the minimal set of legitimate virtual dispatch targets to the entire export table, which in `ntdll.dll` can be hundreds of useful gadgets.
+2. **When CFG is enabled but export suppression is missing, all exported functions are automatically added to the valid-target bitmap**: even functions that were never intended as indirect call targets. This expands the attacker's gadget surface from the minimal set of legitimate virtual dispatch targets to the entire export table, which in `ntdll.dll` can be hundreds of useful gadgets.
 
-3. **XFG (eXtended Flow Guard) is a superset of CFG that adds type hashes to call sites and target addresses — `CFGConfig.xfg_enabled()` checks for XFG instrumentation.** Binaries with XFG provide stronger protection than CFG-only binaries; the presence of XFG reduces the exploitability of CFG bypass findings.
+3. **XFG (eXtended Flow Guard) is a superset of CFG that adds type hashes to call sites and target addresses: `CFGConfig.xfg_enabled()` checks for XFG instrumentation.** Binaries with XFG provide stronger protection than CFG-only binaries; the presence of XFG reduces the exploitability of CFG bypass findings.
 
 ---
 
@@ -78,15 +78,15 @@ Severity: HIGH  (CFG present but export suppression absent)
 
 ## False positives
 
-**`CFG_TARGET_NOT_SUPPRESSED` fires on exports that appear in the export table but not in the CFG table** — some exports (especially forwarded exports and data exports) are legitimately absent from the CFG table because they are not code entry points. Verify that the flagged export is actual code before treating it as a bypass target.
+**`CFG_TARGET_NOT_SUPPRESSED` fires on exports that appear in the export table but not in the CFG table**: some exports (especially forwarded exports and data exports) are legitimately absent from the CFG table because they are not code entry points. Verify that the flagged export is actual code before treating it as a bypass target.
 
-**`CFG_ABSENT` on a binary compiled for a non-CFG target (e.g., a debug build or a driver compiled with `/guard:cf-` override) is expected, not a security vulnerability** — check whether the binary is a security-sensitive component before treating CFG absence as a finding.
+**`CFG_ABSENT` on a binary compiled for a non-CFG target (e.g., a debug build or a driver compiled with `/guard:cf-` override) is expected, not a security vulnerability**: check whether the binary is a security-sensitive component before treating CFG absence as a finding.
 
 ---
 
 ## Pipeline position
 
-Run `CFGBypassDetector` when analyzing Windows PE binaries for exploit development surface — it is an early triage check that determines whether CFG protections constrain the available call gadgets before spending time on ROP chain construction. `CFGBypassDetector` is independent of taint analysis and ELF-specific tools; it requires only the PE binary path.
+Run `CFGBypassDetector` when analyzing Windows PE binaries for exploit development surface, it is an early triage check that determines whether CFG protections constrain the available call gadgets before spending time on ROP chain construction. `CFGBypassDetector` is independent of taint analysis and ELF-specific tools; it requires only the PE binary path.
 
 ---
 
@@ -112,17 +112,17 @@ Run `CFGBypassDetector` when analyzing Windows PE binaries for exploit developme
 | `guard_flags` | Raw `GuardFlags` integer from `IMAGE_LOAD_CONFIG` |
 | `function_count` | Number of functions in the CFG table |
 | `function_table_va` | VA of the CFG function table |
-| `function_table_rvas` | `List[int]` — RVAs of all CFG-protected functions |
-| `instrumented` | Property — `True` if `CF_INSTRUMENTED` flag is set |
-| `table_present` | Property — `True` if `CF_TABLE_PRESENT` flag is set |
-| `export_suppression` | Property — `True` if `__guard_suppress_export_checks` is set |
-| `xfg_enabled` | Property — `True` if XFG (eXtended Flow Guard) is enabled |
-| `entry_stride` | Property — CFG bitmap stride in bytes |
+| `function_table_rvas` | `List[int]`: RVAs of all CFG-protected functions |
+| `instrumented` | Property: `True` if `CF_INSTRUMENTED` flag is set |
+| `table_present` | Property: `True` if `CF_TABLE_PRESENT` flag is set |
+| `export_suppression` | Property: `True` if `__guard_suppress_export_checks` is set |
+| `xfg_enabled` | Property: `True` if XFG (eXtended Flow Guard) is enabled |
+| `entry_stride` | Property: CFG bitmap stride in bytes |
 
 ---
 
 ## See also
 
-- [SEH and SafeSEH Review](seh-and-safeseh-review.md) — Windows PE structured exception handler chain analysis
-- [Crash Offset and ROP Helpers](crash-offset-and-rop-helpers.md) — ROP gadget enumeration using the CFG bypass surface
-- [Windows Artifact Discovery](windows-artifact-discovery.md) — broader Windows binary analysis context
+- [SEH and SafeSEH Review](seh-and-safeseh-review.md): Windows PE structured exception handler chain analysis
+- [Crash Offset and ROP Helpers](crash-offset-and-rop-helpers.md): ROP gadget enumeration using the CFG bypass surface
+- [Windows Artifact Discovery](windows-artifact-discovery.md): broader Windows binary analysis context

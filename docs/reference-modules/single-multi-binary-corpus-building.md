@@ -1,16 +1,16 @@
 # Cross-Binary Import/Export Graph
 
-Build a unified import/export graph for all ELF binaries in a firmware directory — providing `callers_of(symbol)` lookups that identify every binary and function VA that imports and calls a named symbol, enabling cross-library attack surface analysis without loading each binary individually.
+Build a unified import/export graph for all ELF binaries in a firmware directory: providing `callers_of(symbol)` lookups that identify every binary and function VA that imports and calls a named symbol, enabling cross-library attack surface analysis without loading each binary individually.
 
 ---
 
 ## Why this exists
 
-1. **`TaintTracker` and `CrossBinaryTaintTracker` need to know which binaries import a given symbol to perform cross-binary taint analysis.** Without `LibGraph`, identifying all callers of `ssl_read()` across 80 firmware libraries requires running `BinaryContext.load_or_build()` on each library separately. `LibGraph.from_dir()` builds the full import/export matrix for all libraries in one call — subsequent `callers_of()` queries are O(1) lookups.
+1. **`TaintTracker` and `CrossBinaryTaintTracker` need to know which binaries import a given symbol to perform cross-binary taint analysis.** Without `LibGraph`, identifying all callers of `ssl_read()` across 80 firmware libraries requires running `BinaryContext.load_or_build()` on each library separately. `LibGraph.from_dir()` builds the full import/export matrix for all libraries in one call: subsequent `callers_of()` queries are O(1) lookups.
 
-2. **`LibGraph.from_dir()` caches `BinaryContext` hits at ~110ms per binary** — enabling fast re-use across sessions without rebuilding the full context for each library. The cache hit rate for a stable firmware image is ~100%, making the second and subsequent `LibGraph.from_dir()` calls near-instant.
+2. **`LibGraph.from_dir()` caches `BinaryContext` hits at ~110ms per binary**: enabling fast re-use across sessions without rebuilding the full context for each library. The cache hit rate for a stable firmware image is ~100%, making the second and subsequent `LibGraph.from_dir()` calls near-instant.
 
-3. **`LibGraph` is the resolution layer used by `CrossBinaryTaintTracker`** — when a taint path exits one binary via a PLT stub, `CrossBinaryTaintTracker` calls `lib_graph.callers_of()` to find the implementing binary and VA, then continues taint propagation there. `LibGraph` is not optional for cross-binary taint analysis; it is the mandatory dependency.
+3. **`LibGraph` is the resolution layer used by `CrossBinaryTaintTracker`**: when a taint path exits one binary via a PLT stub, `CrossBinaryTaintTracker` calls `lib_graph.callers_of()` to find the implementing binary and VA, then continues taint propagation there. `LibGraph` is not optional for cross-binary taint analysis; it is the mandatory dependency.
 
 ---
 
@@ -70,15 +70,15 @@ cross_edges(): <E> edges
 
 ## False positives
 
-**PLT import detection is by name** — two binaries that both import `system` appear as separate callers in `callers_of('system')`. If one binary wraps `system` and the other calls the wrapper (not `system` directly), the wrapper call chain is not captured in `LibGraph`. Use `CrossBinaryTaintTracker` for verified path analysis.
+**PLT import detection is by name**: two binaries that both import `system` appear as separate callers in `callers_of('system')`. If one binary wraps `system` and the other calls the wrapper (not `system` directly), the wrapper call chain is not captured in `LibGraph`. Use `CrossBinaryTaintTracker` for verified path analysis.
 
-**`from_dir()` includes all `.so` files** — test libraries, debug libraries, or stale libraries in the same directory will be indexed. Filter by known library set using `from_paths()` when the directory contains non-production files.
+**`from_dir()` includes all `.so` files**: test libraries, debug libraries, or stale libraries in the same directory will be indexed. Filter by known library set using `from_paths()` when the directory contains non-production files.
 
 ---
 
 ## Pipeline position
 
-Build `LibGraph` once per firmware image at session start, before any `CrossBinaryTaintTracker` run. Store it as a session variable — it is reused by all subsequent cross-library analysis steps. Do not rebuild per-target; one `LibGraph` covers the entire firmware image.
+Build `LibGraph` once per firmware image at session start, before any `CrossBinaryTaintTracker` run. Store it as a session variable, it is reused by all subsequent cross-library analysis steps. Do not rebuild per-target; one `LibGraph` covers the entire firmware image.
 
 ---
 
@@ -88,14 +88,14 @@ Build `LibGraph` once per firmware image at session start, before any `CrossBina
 
 | Method | Return |
 |:---|:---|
-| `callers_of(func_name)` | `List[{library, call_va}]` — all call sites of `func_name` across the corpus |
-| `exporters_of(func_name)` | `List[str]` — libraries that export `func_name` |
-| `binaries` | `List[str]` — all library paths in the corpus |
-| `binary_count` | Integer — number of binaries loaded |
+| `callers_of(func_name)` | `List[{library, call_va}]`: all call sites of `func_name` across the corpus |
+| `exporters_of(func_name)` | `List[str]`: libraries that export `func_name` |
+| `binaries` | `List[str]`: all library paths in the corpus |
+| `binary_count` | Integer: number of binaries loaded |
 
 ---
 
 ## See also
 
-- [Configurable Taint Reporting](configurable-taint-reporting.md) — `CrossBinaryTaintTracker` that uses `LibGraph` for import resolution
-- [Native Library Inventory](native-library-inventory.md) — `LibraryInventory` for per-library triage before `LibGraph` construction
+- [Configurable Taint Reporting](configurable-taint-reporting.md): `CrossBinaryTaintTracker` that uses `LibGraph` for import resolution
+- [Native Library Inventory](native-library-inventory.md): `LibraryInventory` for per-library triage before `LibGraph` construction

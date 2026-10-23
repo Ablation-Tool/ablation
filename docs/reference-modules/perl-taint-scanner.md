@@ -140,7 +140,7 @@ PerlTaintScanner is independent of BinaryContext, it works entirely on text file
 | `line` | Raw source line text |
 | `var` | The interpolated variable name at the sink |
 | `sink_type` | `'backtick'` / `'qx'` / `'system'` / `'open_pipe'` |
-| `verdict` | `'INJECTABLE'` — no sanitization found; `'SANITIZED'` — sanitization confirmed; `'PARAM_UNKNOWN'` — input source unclear; `'INTERNAL'` — constant or known-safe value; `'UNKNOWN'` — could not determine |
+| `verdict` | `'INJECTABLE'`: no sanitization found; `'SANITIZED'`: sanitization confirmed; `'PARAM_UNKNOWN'`: input source unclear; `'INTERNAL'`: constant or known-safe value; `'UNKNOWN'`: could not determine |
 | `source_desc` | Human-readable description of the input source |
 | `sanitization` | Description of sanitization found (empty if none) |
 | `caller_file` | File where a `PARAM` resolved to an `ARGV` source (None if not applicable) |
@@ -149,8 +149,8 @@ PerlTaintScanner is independent of BinaryContext, it works entirely on text file
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

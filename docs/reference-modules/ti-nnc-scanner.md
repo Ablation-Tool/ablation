@@ -139,8 +139,8 @@ Calibration data regions contain byte sequences that decode as valid instruction
 |:---|:---|
 | `binary_path` | Path to the analyzed ELF |
 | `has_npu_init` | `True` if a TVM NPU initialization function was found |
-| `modules` | `List[TiNNCModule]` — one per compiled TVM model |
-| `findings` | `List[TiNNCScanFinding]` — security findings |
+| `modules` | `List[TiNNCModule]`: one per compiled TVM model |
+| `findings` | `List[TiNNCScanFinding]`: security findings |
 
 Each `TiNNCScanFinding`:
 
@@ -158,6 +158,6 @@ Each `TiNNCScanFinding`:
 
 ## See also
 
-- [ECUArchDetector](ecu-arch-detector.md) — identify processor family before choosing a decoder
-- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md) — map ROM sections before decoding
-- [ECUSecurityAccessScanner](ecu-security-access-scanner.md) — find UDS 0x27 bypass vectors in decoded code
+- [ECUArchDetector](ecu-arch-detector.md): identify processor family before choosing a decoder
+- [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md): map ROM sections before decoding
+- [ECUSecurityAccessScanner](ecu-security-access-scanner.md): find UDS 0x27 bypass vectors in decoded code

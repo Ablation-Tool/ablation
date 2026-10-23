@@ -286,7 +286,7 @@ assert ctx.plt[0x1000f320] == 'fork'
 
 ## False positives
 
-**No branch condition lifting.** `Ppc32Lifter` emits `if <va>: goto <va>` placeholders for all conditional branches — it does not evaluate the condition expression. The branch condition must be inferred from the instructions that set CR0/CR1 before the branch instruction.
+**No branch condition lifting.** `Ppc32Lifter` emits `if <va>: goto <va>` placeholders for all conditional branches, it does not evaluate the condition expression. The branch condition must be inferred from the instructions that set CR0/CR1 before the branch instruction.
 
 ---
 
@@ -300,7 +300,7 @@ assert ctx.plt[0x1000f320] == 'fork'
 
 ## Reading output
 
-`Ppc32Lifter.from_context(ctx).lift(func_va, n_insn=150)` returns a `str` — the pseudo-C disassembly of the function, one statement per line.
+`Ppc32Lifter.from_context(ctx).lift(func_va, n_insn=150)` returns a `str`: the pseudo-C disassembly of the function, one statement per line.
 
 The lifter tracks register state using `_Val` internally. Output lines use C-like expressions:
 - Constants printed as `0xNNN` hex literals
@@ -313,6 +313,6 @@ The lifter tracks register state using `_Val` internally. Output lines use C-lik
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

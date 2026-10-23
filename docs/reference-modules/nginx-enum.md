@@ -1,16 +1,16 @@
 # Nginx Enumeration
 
-Probe Nginx web server instances for version disclosure, CVE-exploitable configurations (CVE-2017-7529, CVE-2021-23017), alias traversal misconfigurations, stub_status exposure, TLS weaknesses, LFI/SSRF surfaces, ingress-nginx controller exposure, and rate-limit bypass vectors — via `modules/nginx_enum.py` `NginxEnumerator`.
+Probe Nginx web server instances for version disclosure, CVE-exploitable configurations (CVE-2017-7529, CVE-2021-23017), alias traversal misconfigurations, stub_status exposure, TLS weaknesses, LFI/SSRF surfaces, ingress-nginx controller exposure, and rate-limit bypass vectors: via `modules/nginx_enum.py` `NginxEnumerator`.
 
 ---
 
 ## Why this exists
 
-1. **Nginx alias traversal is a distinct attack class not detected by general web scanners** — when a `location /static/` block uses `alias /var/www/static` (missing trailing slash), a request for `/static../secret` resolves to `/var/www/secret`. `NginxEnumerator.probe_alias_traversal()` sends crafted requests targeting this off-by-one and checks responses for directory contents or file data that would be inaccessible through the intended path.
+1. **Nginx alias traversal is a distinct attack class not detected by general web scanners**: when a `location /static/` block uses `alias /var/www/static` (missing trailing slash), a request for `/static../secret` resolves to `/var/www/secret`. `NginxEnumerator.probe_alias_traversal()` sends crafted requests targeting this off-by-one and checks responses for directory contents or file data that would be inaccessible through the intended path.
 
-2. **`stub_status` and `NX-API` endpoints are disabled by default but commonly left enabled in production** — `probe_stub_status()` checks `/nginx_status`, `/_status`, and `/status` for the nginx stub_status module output (active connections, accepted requests, handled requests). `enum_nxapi()` probes for Cisco NX-OS NX-API endpoints (`/ins`, `/api/aaaLogin.json`) that may coexist with an Nginx reverse proxy. Both surfaces are information disclosure findings that seed further enumeration.
+2. **`stub_status` and `NX-API` endpoints are disabled by default but commonly left enabled in production**: `probe_stub_status()` checks `/nginx_status`, `/_status`, and `/status` for the nginx stub_status module output (active connections, accepted requests, handled requests). `enum_nxapi()` probes for Cisco NX-OS NX-API endpoints (`/ins`, `/api/aaaLogin.json`) that may coexist with an Nginx reverse proxy. Both surfaces are information disclosure findings that seed further enumeration.
 
-3. **CVE-2021-23017 (off-by-one in Nginx resolver) requires confirmation against the specific version and configuration** — `check_cve_2021_23017()` extracts the server version from the `Server:` header and checks if it falls in the affected range (1.17.6–1.21.0). It additionally verifies whether `resolver` is configured by probing DNS resolution behavior. A version-positive finding without a configured `resolver` directive is a false positive; the check differentiates these cases.
+3. **CVE-2021-23017 (off-by-one in Nginx resolver) requires confirmation against the specific version and configuration**: `check_cve_2021_23017()` extracts the server version from the `Server:` header and checks if it falls in the affected range (1.17.6–1.21.0). It additionally verifies whether `resolver` is configured by probing DNS resolution behavior. A version-positive finding without a configured `resolver` directive is a false positive; the check differentiates these cases.
 
 ---
 
@@ -79,9 +79,9 @@ NGINX ENUMERATION — target.example.com:443
 
 ## False positives
 
-**`check_cve_2021_23017()` version match without configured `resolver`** — CVE-2021-23017 is only exploitable when the Nginx `resolver` directive is active (enabling DNS resolution for upstream proxying). A version-positive finding on an Nginx instance with no `resolver` directive is not exploitable. Review the Nginx configuration to confirm `resolver` is present before escalating.
+**`check_cve_2021_23017()` version match without configured `resolver`**: CVE-2021-23017 is only exploitable when the Nginx `resolver` directive is active (enabling DNS resolution for upstream proxying). A version-positive finding on an Nginx instance with no `resolver` directive is not exploitable. Review the Nginx configuration to confirm `resolver` is present before escalating.
 
-**`ALIAS_TRAVERSAL` on servers behind a WAF that normalizes path segments** — a WAF performing URL normalization (decoding `%2f`, collapsing `../`) upstream of Nginx will block alias traversal requests before they reach the server. The probe sends encoded path segments; confirm that the request reaches Nginx unmodified by checking access logs or bypassing the WAF in test.
+**`ALIAS_TRAVERSAL` on servers behind a WAF that normalizes path segments**: a WAF performing URL normalization (decoding `%2f`, collapsing `../`) upstream of Nginx will block alias traversal requests before they reach the server. The probe sends encoded path segments; confirm that the request reaches Nginx unmodified by checking access logs or bypassing the WAF in test.
 
 ---
 
@@ -108,6 +108,6 @@ Run `NginxEnumerator.run()` after confirming an Nginx server via the `Server:` h
 
 ## See also
 
-- [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md) — TLS analysis for the Nginx HTTPS surface
-- [Web Application Probe Helpers](web-app-probe-helpers.md) — path enumeration and auth bypass helper functions
-- [Finding Registry](finding-registry.md) — record confirmed Nginx findings
+- [TLS Certificate and Protocol Probing](tls-certificate-and-protocol-probing.md): TLS analysis for the Nginx HTTPS surface
+- [Web Application Probe Helpers](web-app-probe-helpers.md): path enumeration and auth bypass helper functions
+- [Finding Registry](finding-registry.md): record confirmed Nginx findings

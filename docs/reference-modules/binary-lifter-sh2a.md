@@ -198,7 +198,7 @@ rather than crashing.
 
 ## False positives
 
-**Indirect calls.** `BinaryLifter` emits `call 0x<target>` for direct branch-and-link instructions. Indirect calls (through a register or through the PLT) are emitted as `call reg` or `call <plt_name>` — the register value at call time is not evaluated symbolically.
+**Indirect calls.** `BinaryLifter` emits `call 0x<target>` for direct branch-and-link instructions. Indirect calls (through a register or through the PLT) are emitted as `call reg` or `call <plt_name>`: the register value at call time is not evaluated symbolically.
 
 ---
 
@@ -212,19 +212,19 @@ rather than crashing.
 
 ## Reading output
 
-`BinaryLifter.from_path(path).lift_function(va, max_insns=512)` returns a `str` — the pseudo-C disassembly of the function at `va`, one statement per line.
+`BinaryLifter.from_path(path).lift_function(va, max_insns=512)` returns a `str`: the pseudo-C disassembly of the function at `va`, one statement per line.
 
 The output uses `NativeVal` as the symbolic type for register state. `NativeVal` represents a register value as one of:
-- `Const(v)` — concrete integer constant
-- `Arg(n)` — function argument register (a0–a7 for RISC-V; w0–w7 for AArch64)
-- `Mem(addr_text)` — pointer load
-- `Expr(text)` — complex expression string
-- `Unknown(reg)` — unresolved
+- `Const(v)`: concrete integer constant
+- `Arg(n)`: function argument register (a0–a7 for RISC-V; w0–w7 for AArch64)
+- `Mem(addr_text)`: pointer load
+- `Expr(text)`: complex expression string
+- `Unknown(reg)`: unresolved
 
 ---
 
 ## See also
 
-- [BinaryContext](binary-context.md) — session state and function/import index
-- [TaintAnalysis](taint-analysis.md) — dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md) — behavioral candidate search on the binary
+- [BinaryContext](binary-context.md): session state and function/import index
+- [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
+- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary

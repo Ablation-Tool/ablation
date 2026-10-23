@@ -1,16 +1,16 @@
 # TI Neural Network Artifact Detection
 
-Detect TVM-generated `tvmgen_*` inference symbols in TI MCU firmware compiled by the TI Neural Network Compiler (NNC, built on Apache TVM) — identifying embedded ML inference modules, their operator types, and tensor shapes — across both ELF targets (Cortex-M0+/M33/M4/R5, C29x) and TI COFF2 targets (C28x F28P55x via `TiCoffLoader`).
+Detect TVM-generated `tvmgen_*` inference symbols in TI MCU firmware compiled by the TI Neural Network Compiler (NNC, built on Apache TVM): identifying embedded ML inference modules, their operator types, and tensor shapes: across both ELF targets (Cortex-M0+/M33/M4/R5, C29x) and TI COFF2 targets (C28x F28P55x via `TiCoffLoader`).
 
 ---
 
 ## Why this exists
 
-1. **Firmware that runs embedded ML inference has a larger attack surface than firmware without ML.** A `tvmgen_*` symbol indicates that the binary includes a compiled ML model. The inference operator (`tvmgen_default_fused_nn_conv2d`, `tvmgen_default_fused_nn_dense`) names the operation type and indirectly the input tensor shape — both relevant for assessing the firmware's input handling complexity and the attack surface of the inference path.
+1. **Firmware that runs embedded ML inference has a larger attack surface than firmware without ML.** A `tvmgen_*` symbol indicates that the binary includes a compiled ML model. The inference operator (`tvmgen_default_fused_nn_conv2d`, `tvmgen_default_fused_nn_dense`) names the operation type and indirectly the input tensor shape: both relevant for assessing the firmware's input handling complexity and the attack surface of the inference path.
 
-2. **TI NNC targets both ELF and COFF2 binary formats** — Cortex-M33/M4/R5 and C29x targets produce ELF; C28x F28P55x targets produce COFF2. `TiNNCScanner` handles both through a unified `NormSymbol` interface: ELF via `lief`, COFF2 via `TiCoffLoader`. This single API covers all TI NNC target architectures without requiring the caller to know the binary format.
+2. **TI NNC targets both ELF and COFF2 binary formats**: Cortex-M33/M4/R5 and C29x targets produce ELF; C28x F28P55x targets produce COFF2. `TiNNCScanner` handles both through a unified `NormSymbol` interface: ELF via `lief`, COFF2 via `TiCoffLoader`. This single API covers all TI NNC target architectures without requiring the caller to know the binary format.
 
-3. **`TiNNCScanResult.modules`** lists all detected `TiNNCModule` entries — each with the operator name, symbol VA, and inferred tensor dimensions (from operator name parsing). `TiNNCScanFinding` records security-relevant observations: large tensor sizes that require heap allocation, extern data symbols that indicate off-chip tensor storage, and mismatched operator/symbol-name patterns.
+3. **`TiNNCScanResult.modules`** lists all detected `TiNNCModule` entries: each with the operator name, symbol VA, and inferred tensor dimensions (from operator name parsing). `TiNNCScanFinding` records security-relevant observations: large tensor sizes that require heap allocation, extern data symbols that indicate off-chip tensor storage, and mismatched operator/symbol-name patterns.
 
 ---
 
@@ -66,9 +66,9 @@ Findings:
 
 ## False positives
 
-**`tvmgen_*` pattern matching will detect symbols in non-inference code that happens to use the same prefix** — this is unlikely but possible in codebases that use `tvmgen_` as a conventional prefix for their own code. Verify that the matched symbols follow the standard TVM operator naming convention before treating them as NNC artifacts.
+**`tvmgen_*` pattern matching will detect symbols in non-inference code that happens to use the same prefix**, this is unlikely but possible in codebases that use `tvmgen_` as a conventional prefix for their own code. Verify that the matched symbols follow the standard TVM operator naming convention before treating them as NNC artifacts.
 
-**Tensor dimension parsing from symbol name** — operator names sometimes omit tensor dimensions entirely or use abbreviated forms. In such cases, `dims=[]` is returned; this is not an error but a limitation of static name parsing.
+**Tensor dimension parsing from symbol name**: operator names sometimes omit tensor dimensions entirely or use abbreviated forms. In such cases, `dims=[]` is returned; this is not an error but a limitation of static name parsing.
 
 ---
 
@@ -85,9 +85,9 @@ Run `TiNNCScanner` on any TI MCU firmware as part of initial triage. ML inferenc
 | Attribute | Content |
 |:---|:---|
 | `binary_path` | Path to the scanned binary |
-| `has_npu_init` | `True` if `TI_NPU_init` symbol is present — confirms hardware NPU mode |
-| `modules` | `List[TiNNCModule]` — one entry per detected `tvmgen_<name>_run` model |
-| `findings` | `List[TiNNCScanFinding]` — all security findings |
+| `has_npu_init` | `True` if `TI_NPU_init` symbol is present: confirms hardware NPU mode |
+| `modules` | `List[TiNNCModule]`: one entry per detected `tvmgen_<name>_run` model |
+| `findings` | `List[TiNNCScanFinding]`: all security findings |
 
 Each `TiNNCModule`:
 
@@ -97,12 +97,12 @@ Each `TiNNCModule`:
 | `run_va` | VA of the `tvmgen_<name>_run` function |
 | `execution_mode` | `'npu_hw'` / `'npu_soft'` / `'unknown'` |
 | `has_finished_flag` | `True` if `tvmgen_<name>_finished` symbol is present |
-| `norm_symbols` | `List[NormSymbol]` — all normalization data symbols for this model |
-| `weak_norm_symbols` | `List[str]` — subset of `norm_symbols` with WEAK ELF binding |
+| `norm_symbols` | `List[NormSymbol]`: all normalization data symbols for this model |
+| `weak_norm_symbols` | `List[str]`: subset of `norm_symbols` with WEAK ELF binding |
 
 ---
 
 ## See also
 
-- [TI COFF Archive Loading](ti-coff-archive-loading.md) — `TiCoffLoader` used internally for C28x COFF2 targets
-- [TI C28x Decoding](ti-c28x-decoding.md) — `EcuC28xDecoder` for full C28x instruction analysis
+- [TI COFF Archive Loading](ti-coff-archive-loading.md): `TiCoffLoader` used internally for C28x COFF2 targets
+- [TI C28x Decoding](ti-c28x-decoding.md): `EcuC28xDecoder` for full C28x instruction analysis

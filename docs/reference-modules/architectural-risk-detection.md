@@ -1,6 +1,6 @@
 # Architectural Risk Detection (Source RE)
 
-Build an authentication surface map of a source code repository in under five seconds — classifying every HTTP route handler by its authentication level so the analyst knows exactly which endpoints accept unauthenticated requests before reading a single line of handler code.
+Build an authentication surface map of a source code repository in under five seconds: classifying every HTTP route handler by its authentication level so the analyst knows exactly which endpoints accept unauthenticated requests before reading a single line of handler code.
 
 ---
 
@@ -140,7 +140,7 @@ ADMIN              3
 
 **DRF import-chain auth not followed.** Import resolution follows only one hop. When authentication logic lives two files deep (route → handler → auth module), the classifier sees `NONE` and marks the route as unprotected. Check `is_low_value=False` NONE results manually before treating them as confirmed findings.
 
-**`is_low_value` on non-trivial health checks.** The `is_low_value` classifier uses `health`, `ready`, `ping`, `version`, `info`, and `status` as signals. A route named `status.ts` that also handles webhook events classifies as low-value. Do not skip `is_low_value=True` routes entirely — review them before dismissal.
+**`is_low_value` on non-trivial health checks.** The `is_low_value` classifier uses `health`, `ready`, `ping`, `version`, `info`, and `status` as signals. A route named `status.ts` that also handles webhook events classifies as low-value. Do not skip `is_low_value=True` routes entirely: review them before dismissal.
 
 ---
 
@@ -165,6 +165,6 @@ ADMIN              3
 
 ## See also
 
-- [Source Audit](source-audit.md) — deep scan of individual route handlers for injection sinks
-- [Agent Protocol Exposure](agent-protocol-exposure.md) — detection of LLM prompt injection in route handlers
-- [API Authentication and Token Checks](api-authentication-and-token-checks.md) — binary RE analog for auth bypass in compiled APIs
+- [Source Audit](source-audit.md): deep scan of individual route handlers for injection sinks
+- [Agent Protocol Exposure](agent-protocol-exposure.md): detection of LLM prompt injection in route handlers
+- [API Authentication and Token Checks](api-authentication-and-token-checks.md): binary RE analog for auth bypass in compiled APIs

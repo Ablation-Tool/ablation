@@ -1,6 +1,6 @@
 # Motorola 88000 / BCS COFF Analysis
 
-Decode Motorola 88000 (M88K) binaries — identifying `RISC.88000` architecture COFF containers, disassembling M88K instructions, and providing function start discovery for taint analysis of legacy Motorola 88000 firmware targets including NeXT workstations, early Motorola embedded platforms, and HP-UX systems that used the M88K processor.
+Decode Motorola 88000 (M88K) binaries: identifying `RISC.88000` architecture COFF containers, disassembling M88K instructions, and providing function start discovery for taint analysis of legacy Motorola 88000 firmware targets including NeXT workstations, early Motorola embedded platforms, and HP-UX systems that used the M88K processor.
 
 ---
 
@@ -10,7 +10,7 @@ Decode Motorola 88000 (M88K) binaries — identifying `RISC.88000` architecture 
 
 2. **M88K COFF BCS (Binary Compatibility Standard) containers** use the `RISC.88000` magic identifier in the COFF header's optional machine type field. `isa_m88k.py` parses BCS COFF to extract code sections and determine the base address for disassembly. This is the entry point for M88K firmware analysis without a full RE platform.
 
-3. **M88K uses a fixed 32-bit instruction width with a pure RISC encoding** — all instructions are 4 bytes, big-endian, with a 6-bit opcode field and distinct register encoding for 3-operand, immediate, and branch forms. The fixed width makes sequential disassembly reliable; `InsnM88K` provides the security-relevant subset (loads, stores, branches, and arithmetic) needed for taint analysis.
+3. **M88K uses a fixed 32-bit instruction width with a pure RISC encoding**: all instructions are 4 bytes, big-endian, with a 6-bit opcode field and distinct register encoding for 3-operand, immediate, and branch forms. The fixed width makes sequential disassembly reliable; `InsnM88K` provides the security-relevant subset (loads, stores, branches, and arithmetic) needed for taint analysis.
 
 ---
 
@@ -69,21 +69,21 @@ Disassembly at <va>:
 
 ## False positives
 
-**`function_starts()` heuristic is based on `subu r31, r31, N` + `st r1, r31, N` prologue** — leaf functions that do not save LR are not detected. The function start list is a lower bound; supplement with call-graph reachability from detected starts.
+**`function_starts()` heuristic is based on `subu r31, r31, N` + `st r1, r31, N` prologue**: leaf functions that do not save LR are not detected. The function start list is a lower bound; supplement with call-graph reachability from detected starts.
 
-**M88K `jsr.n` (delayed branch) includes a delay slot instruction** — the instruction following `jsr.n` executes before the branch takes effect. `M88kInsn` has `is_call=True` for `jsr.n` but does not automatically consume the delay slot. Callers must skip one instruction after a `jsr.n` to maintain correct sequential decode.
+**M88K `jsr.n` (delayed branch) includes a delay slot instruction**: the instruction following `jsr.n` executes before the branch takes effect. `M88kInsn` has `is_call=True` for `jsr.n` but does not automatically consume the delay slot. Callers must skip one instruction after a `jsr.n` to maintain correct sequential decode.
 
 ---
 
 ## Pipeline position
 
-Run M88K analysis on any BCS COFF firmware binary confirmed to use the M88K architecture. Function starts feed `TaintTracker`-equivalent analysis using the same source/sink model — porting to M88K ABI (r2–r9 argument registers) is required for full taint analysis.
+Run M88K analysis on any BCS COFF firmware binary confirmed to use the M88K architecture. Function starts feed `TaintTracker`-equivalent analysis using the same source/sink model: porting to M88K ABI (r2–r9 argument registers) is required for full taint analysis.
 
 ---
 
 ## Reading output
 
-`M88kDecoder(binary).function_starts()` returns `Set[int]` — VA set of identified M88K function entry points.
+`M88kDecoder(binary).function_starts()` returns `Set[int]`: VA set of identified M88K function entry points.
 
 `M88kDecoder(binary).decode_word(word, va)` returns an `M88kInsn`:
 
@@ -102,5 +102,5 @@ Run M88K analysis on any BCS COFF firmware binary confirmed to use the M88K arch
 
 ## See also
 
-- [Flat ROM Function Discovery](flat-rom-function-discovery.md) — `EcuArchDetector` for architecture identification before M88K-specific analysis
-- [M68K CPU32 Decoding](m68k-cpu32-decoding.md) — Motorola M68K equivalent (different architecture family)
+- [Flat ROM Function Discovery](flat-rom-function-discovery.md): `EcuArchDetector` for architecture identification before M88K-specific analysis
+- [M68K CPU32 Decoding](m68k-cpu32-decoding.md): Motorola M68K equivalent (different architecture family)

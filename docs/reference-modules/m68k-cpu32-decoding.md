@@ -1,14 +1,14 @@
 # M68K/CPU32 Decoding
 
-Decode Motorola M68K/CPU32 ECU firmware via Capstone with GM P-series PCM (P01, P04, P05, P08, P10, P11, P59) function boundary recovery — using `LINK.W A6, #-N` and `MOVEM.L regs, -(SP)` prologue patterns to identify function starts in flat ROM images with no symbols.
+Decode Motorola M68K/CPU32 ECU firmware via Capstone with GM P-series PCM (P01, P04, P05, P08, P10, P11, P59) function boundary recovery: using `LINK.W A6, #-N` and `MOVEM.L regs, -(SP)` prologue patterns to identify function starts in flat ROM images with no symbols.
 
 ---
 
 ## Why this exists
 
-1. **GM P-series PCMs (P01, P04, P05, P08, P10, P11, P59) are M68K/CPU32-based ECUs.** The CPU32 is a derivative of the M68020 instruction set used in GM's engine management firmware from the 1990s–2000s. Capstone 5.0.7 supports M68K via `CS_ARCH_M68K / CS_MODE_M68K_020` (CPU32 is a subset of 68020) — `EcuM68kDecoder` wraps Capstone and adds the GM-specific prologue patterns for function start discovery that Capstone alone cannot provide.
+1. **GM P-series PCMs (P01, P04, P05, P08, P10, P11, P59) are M68K/CPU32-based ECUs.** The CPU32 is a derivative of the M68020 instruction set used in GM's engine management firmware from the 1990s–2000s. Capstone 5.0.7 supports M68K via `CS_ARCH_M68K / CS_MODE_M68K_020` (CPU32 is a subset of 68020): `EcuM68kDecoder` wraps Capstone and adds the GM-specific prologue patterns for function start discovery that Capstone alone cannot provide.
 
-2. **`M68kInsn` wraps Capstone output with the same field conventions as `VLEInsn`** — both can be fed to the same downstream pipeline stages (CFG building, taint analysis, XRAM scan patterns) without ISA-specific dispatch. The `M68kInsn.address`, `M68kInsn.mnemonic`, `M68kInsn.op_str`, `M68kInsn.size` fields match the VLE convention, enabling ISA-agnostic analysis pipelines.
+2. **`M68kInsn` wraps Capstone output with the same field conventions as `VLEInsn`**: both can be fed to the same downstream pipeline stages (CFG building, taint analysis, XRAM scan patterns) without ISA-specific dispatch. The `M68kInsn.address`, `M68kInsn.mnemonic`, `M68kInsn.op_str`, `M68kInsn.size` fields match the VLE convention, enabling ISA-agnostic analysis pipelines.
 
 3. **`function_starts()` finds `LINK.W A6, #-N` (GM CPU32 frame-allocation convention) and `MOVEM.L regs, -(SP)` (callee-save-only functions without frame pointer) patterns across the full ROM image.** These two patterns cover ~95% of functions in GM P-series firmware, providing function boundaries without symbols or `.eh_frame`.
 
@@ -72,9 +72,9 @@ Disassembly at <va>:
 
 ## False positives
 
-**`function_starts()` may detect `LINK.W A6` patterns in data sections** — constant values that match the opcode pattern will be reported as function starts. Validate starts against known code regions (ROM address ranges where the ECU executes code) before treating every detected start as a function entry.
+**`function_starts()` may detect `LINK.W A6` patterns in data sections**: constant values that match the opcode pattern will be reported as function starts. Validate starts against known code regions (ROM address ranges where the ECU executes code) before treating every detected start as a function entry.
 
-**CPU32 uses `LINK.W` (16-bit displacement) while some GM P-series functions use `LINK.L` (32-bit displacement)** — `LINK.L` prologues are detected by the `MOVEM.L` fallback pattern. If `function_starts()` misses functions with large stack frames, check whether `LINK.L A6, #-N` is present and add it to the pattern list.
+**CPU32 uses `LINK.W` (16-bit displacement) while some GM P-series functions use `LINK.L` (32-bit displacement)**: `LINK.L` prologues are detected by the `MOVEM.L` fallback pattern. If `function_starts()` misses functions with large stack frames, check whether `LINK.L A6, #-N` is present and add it to the pattern list.
 
 ---
 
@@ -86,7 +86,7 @@ Run `EcuM68kDecoder` after `EcuArchDetector` confirms `m68k` architecture. `func
 
 ## Reading output
 
-`EcuM68kDecoder.function_starts()` returns `List[int]` — VA list of detected function entry points.
+`EcuM68kDecoder.function_starts()` returns `List[int]`: VA list of detected function entry points.
 
 `EcuM68kDecoder.disassemble(va, size)` returns a list of `M68KInstruction` objects:
 
@@ -101,6 +101,6 @@ Run `EcuM68kDecoder` after `EcuArchDetector` confirms `m68k` architecture. `func
 
 ## See also
 
-- [Flat ROM Function Discovery](flat-rom-function-discovery.md) — `EcuArchDetector` that identifies M68K architecture before this decoder runs
-- [Calibration Parsers](calibration-parsers.md) — A2L/open_damos for GM P-series calibration data
-- [C166/C167 Decoding](c166-c167-decoding.md) — Infineon C166/C167 ECU decoder for Bosch/Siemens targets
+- [Flat ROM Function Discovery](flat-rom-function-discovery.md): `EcuArchDetector` that identifies M68K architecture before this decoder runs
+- [Calibration Parsers](calibration-parsers.md): A2L/open_damos for GM P-series calibration data
+- [C166/C167 Decoding](c166-c167-decoding.md): Infineon C166/C167 ECU decoder for Bosch/Siemens targets

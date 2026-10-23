@@ -3,7 +3,7 @@
 ## Why this exists
 
 1. **Gap: SanitizerDetector was x86-64 only.** The existing auto-detection relied on
-   `movzx`-in-loop + inline `cmp` patterns — valid for Fortinet-style pure byte-validator
+   `movzx`-in-loop + inline `cmp` patterns: valid for Fortinet-style pure byte-validator
  functions but completely missed IBM LoadLeveler's pattern: a 280-instruction class
  method that calls `string::find(0x20)` via `li r3, 0x20; bl string_func` on PPC64.
 
@@ -142,7 +142,7 @@ SanitizerProfile  0x0042c400  score=4  verdict=SHELL_UNSAFE
 
 ## False positives
 
-A function that compares against a small set of comparison immediates (e.g., a simple null-terminator check) produces a low `score` but may still be incorrectly classified if the comparison set coincidentally matches the SHELL_SAFE pattern. Verify `allowed_bytes` reconstructed from comparison immediates matches the actual validation intent.
+A function that compares against a small set of comparison immediates for example a simple null-terminator check produces a low `score` but may still be incorrectly classified if the comparison set coincidentally matches the SHELL_SAFE pattern. Verify `allowed_bytes` reconstructed from comparison immediates matches the actual validation intent.
 
 ---
 
@@ -162,11 +162,11 @@ A function that compares against a small set of comparison immediates (e.g., a s
 |:---|:---|
 | `func_va` | VA of the detected sanitizer function |
 | `score` | Detection confidence score (0–10) |
-| `allowed_bytes` | `FrozenSet[int]` — reconstructed allowed charset byte values |
-| `blocked_bytes` | `FrozenSet[int]` — reconstructed blocked charset byte values |
+| `allowed_bytes` | `FrozenSet[int]`: reconstructed allowed charset byte values |
+| `blocked_bytes` | `FrozenSet[int]`: reconstructed blocked charset byte values |
 | `shell_safe` | `True` if `allowed_bytes` contains no shell metacharacters |
 | `verdict` | `'SHELL_SAFE'` / `'SHELL_UNSAFE'` / `'PARTIAL'` / `'UNKNOWN'` |
-| `comparison_imms` | `List[int]` — raw comparison immediates observed |
+| `comparison_imms` | `List[int]`: raw comparison immediates observed |
 | `n_byte_loads` | Number of single-byte load instructions found |
 | `n_comparisons` | Number of comparison instructions found |
 | `detail` | Human-readable description |
@@ -177,8 +177,8 @@ Pass matching `SanitizerProfile` objects to `SinkSanitizerFilter` to downgrade `
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md): eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md): confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md): verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md): record confirmed findings

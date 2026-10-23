@@ -1,16 +1,16 @@
 # Apple bv41 Decompression
 
-Decode Apple Compression.framework's proprietary chunked LZ4 container format — parsing `bv41` / `bv4-` / `bv4$` chunk headers, decompressing raw LZ4 blocks per chunk, and streaming output to disk for large APFS snapshot layer files that exceed available RAM.
+Decode Apple Compression.framework's proprietary chunked LZ4 container format: parsing `bv41` / `bv4-` / `bv4$` chunk headers, decompressing raw LZ4 blocks per chunk, and streaming output to disk for large APFS snapshot layer files that exceed available RAM.
 
 ---
 
 ## Why this exists
 
-1. **Standard LZ4 decoders, 7-Zip, and forensic suites (BlackBag, Cellebrite, RECON LAB) all reject bv41 streams at the magic byte check.** Every LZ4 implementation's first gate is the frame-format magic `0x184D2204`. bv41 streams have no such prefix — they start with `b'bv41'` or `b'bv4-'`. Any decoder that checks for the LZ4 frame magic before processing the block data fails immediately. Additionally, `binwalk` and entropy-based carvers miss bv41 because neither `bv41` nor `bv4-` appears in any public format registry.
+1. **Standard LZ4 decoders, 7-Zip, and forensic suites (BlackBag, Cellebrite, RECON LAB) all reject bv41 streams at the magic byte check.** Every LZ4 implementation's first gate is the frame-format magic `0x184D2204`. bv41 streams have no such prefix: they start with `b'bv41'` or `b'bv4-'`. Any decoder that checks for the LZ4 frame magic before processing the block data fails immediately. Additionally, `binwalk` and entropy-based carvers miss bv41 because neither `bv41` nor `bv4-` appears in any public format registry.
 
-2. **bv41 uses raw LZ4 blocks, not LZ4 frames — requiring `lz4.block.decompress()` with an explicit uncompressed size from the bv41 header.** The bv41 chunk header provides `uncompressed_size` (uint32 LE) and `compressed_size` (uint32 LE). The payload is a raw LZ4 block — not an LZ4 frame. `lz4.block.decompress(payload, uncompressed_size=N)` is the only correct call; passing the payload to any frame-format decoder fails because there is no frame header. Without the explicit `uncompressed_size` argument, `lz4.block.decompress` guesses the output buffer size and frequently returns corrupt data.
+2. **bv41 uses raw LZ4 blocks, not LZ4 frames: requiring `lz4.block.decompress()` with an explicit uncompressed size from the bv41 header.** The bv41 chunk header provides `uncompressed_size` (uint32 LE) and `compressed_size` (uint32 LE). The payload is a raw LZ4 block, not an LZ4 frame. `lz4.block.decompress(payload, uncompressed_size=N)` is the only correct call; passing the payload to any frame-format decoder fails because there is no frame header. Without the explicit `uncompressed_size` argument, `lz4.block.decompress` guesses the output buffer size and frequently returns corrupt data.
 
-3. **APFS snapshot layer files and Orka VM images are distributed in bv41 format — making offline RE of macOS supply chain components impossible without this decoder.** `AppleArchive.ByteStream.decompressionStream(using: .lz4)` is the private framework call that produces bv41 streams. Without an offline decoder, analyzing the contents of APFS sealed-volume layer files requires running inside a live macOS process — not viable for supply-chain inspection, forensics, or layer diffing.
+3. **APFS snapshot layer files and Orka VM images are distributed in bv41 format: making offline RE of macOS supply chain components impossible without this decoder.** `AppleArchive.ByteStream.decompressionStream(using: .lz4)` is the private framework call that produces bv41 streams. Without an offline decoder, analyzing the contents of APFS sealed-volume layer files requires running inside a live macOS process, not viable for supply-chain inspection, forensics, or layer diffing.
 
 ---
 
@@ -36,7 +36,7 @@ flowchart TD
 | `compressed_size` | 4 bytes | LE uint32 | Byte count of LZ4 block payload that follows |
 | Payload | `compressed_size` bytes | raw LZ4 block | No LZ4 frame magic prefix |
 
-The `bv4$` terminator has no size fields or payload — reading 4 bytes of magic and stopping is the complete handling.
+The `bv4$` terminator has no size fields or payload: reading 4 bytes of magic and stopping is the complete handling.
 
 ---
 
@@ -116,19 +116,19 @@ Streamed 298,061,824 bytes to /tmp/layer_decoded.bin
 
 ## False positives
 
-**`is_bv41()` returns True for any file whose first 4 bytes happen to be `bv41` or `bv4-`.** The check is magic-only — it does not verify the chunk structure. A binary that coincidentally begins with `0x62763431` (ASCII `bv41`) will pass the check and then fail at the first `struct.unpack('<II', ...)` call if the following bytes are not a valid chunk header. Confirm with `probe_bv41()` before attempting a full decode — a malformed stream raises `ValueError` from `probe_bv41()` on the first bad chunk.
+**`is_bv41()` returns True for any file whose first 4 bytes happen to be `bv41` or `bv4-`.** The check is magic-only, it does not verify the chunk structure. A binary that coincidentally begins with `0x62763431` (ASCII `bv41`) will pass the check and then fail at the first `struct.unpack('<II', ...)` call if the following bytes are not a valid chunk header. Confirm with `probe_bv41()` before attempting a full decode: a malformed stream raises `ValueError` from `probe_bv41()` on the first bad chunk.
 
-**`decode_bv41()` raises `RuntimeError` when `lz4` is not installed — not `ImportError`.** The lz4 import is deferred to function call time (inside `decode_bv41()`) to allow `probe_bv41()`, `iter_bv41_chunks()`, and `is_bv41()` to work without the `lz4` package. If `lz4` is missing, `decode_bv41()` raises `RuntimeError("lz4 required: pip install lz4")`. Callers that catch only `ImportError` will see an uncaught `RuntimeError`.
+**`decode_bv41()` raises `RuntimeError` when `lz4` is not installed, not `ImportError`.** The lz4 import is deferred to function call time (inside `decode_bv41()`) to allow `probe_bv41()`, `iter_bv41_chunks()`, and `is_bv41()` to work without the `lz4` package. If `lz4` is missing, `decode_bv41()` raises `RuntimeError("lz4 required: pip install lz4")`. Callers that catch only `ImportError` will see an uncaught `RuntimeError`.
 
-**`bv4-` passthrough chunks use `payload[:uncomp_size]`, not `payload` — the two values differ when padding is present.** The bv41 format stores the full (potentially padded) payload in `compressed_size` bytes but the actual data is only the first `uncomp_size` bytes. `decode_bv41()` writes `payload[:uncomp_size]` — callers using `iter_bv41_chunks()` directly must also slice to `uncomp_size` when processing passthrough chunks; writing the full `payload` bytes produces corrupt output with trailing garbage.
+**`bv4-` passthrough chunks use `payload[:uncomp_size]`, not `payload`: the two values differ when padding is present.** The bv41 format stores the full (potentially padded) payload in `compressed_size` bytes but the actual data is only the first `uncomp_size` bytes. `decode_bv41()` writes `payload[:uncomp_size]`: callers using `iter_bv41_chunks()` directly must also slice to `uncomp_size` when processing passthrough chunks; writing the full `payload` bytes produces corrupt output with trailing garbage.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm the layer file is bv41 with `is_bv41(data)`. For APFS snapshot files, confirm extraction from the APFS container was successful (the layer file should be at the path indicated by the snapshot's `AEARecipientHKDF` entry). Check available disk space — the decoded output is typically 2–3× the compressed input.
+**Before this module:** Confirm the layer file is bv41 with `is_bv41(data)`. For APFS snapshot files, confirm extraction from the APFS container was successful (the layer file should be at the path indicated by the snapshot's `AEARecipientHKDF` entry). Check available disk space: the decoded output is typically 2–3× the compressed input.
 
-**After this module:** For macOS firmware layers: pass decoded bytes to `FirmwareContainer.from_bytes()` for format detection (Mach-O, DMG, APFS nested). For Orka VM images: the decoded stream is typically a raw APFS volume — mount with `hdiutil` or pass to `apfs-fuse` for file extraction. For supply-chain RE: feed the decoded binary tree to `CorpusBuilder.build()` before any cross-binary analysis.
+**After this module:** For macOS firmware layers: pass decoded bytes to `FirmwareContainer.from_bytes()` for format detection (Mach-O, DMG, APFS nested). For Orka VM images: the decoded stream is typically a raw APFS volume: mount with `hdiutil` or pass to `apfs-fuse` for file extraction. For supply-chain RE: feed the decoded binary tree to `CorpusBuilder.build()` before any cross-binary analysis.
 
 ---
 
@@ -136,16 +136,16 @@ Streamed 298,061,824 bytes to /tmp/layer_decoded.bin
 
 | Field | Content |
 |:---|:---|
-| `probe_bv41()['chunk_count']` | Number of chunks — zero means corrupt stream or not bv41 |
-| `probe_bv41()['overall_ratio']` | Compression ratio — very low (< 1.1x) with many `bv4-` chunks suggests the payload was pre-compressed |
+| `probe_bv41()['chunk_count']` | Number of chunks: zero means corrupt stream or not bv41 |
+| `probe_bv41()['overall_ratio']` | Compression ratio: very low (< 1.1x) with many `bv4-` chunks suggests the payload was pre-compressed |
 | `probe_bv41()['chunks'][i]['type']` | `'compressed'` (raw LZ4 block) or `'passthrough'` (verbatim) |
-| `ValueError` from `decode_bv41()` | Truncated payload — `compressed_size` declared in header exceeds remaining data |
-| `RuntimeError` from `decode_bv41()` | `lz4` package not installed — run `pip install lz4` |
+| `ValueError` from `decode_bv41()` | Truncated payload: `compressed_size` declared in header exceeds remaining data |
+| `RuntimeError` from `decode_bv41()` | `lz4` package not installed: run `pip install lz4` |
 
 ---
 
 ## See also
 
-- [Firmware Container](firmware-container.md) — format dispatch for decoded bv41 payloads (Mach-O, DMG, APFS nested)
-- [Apple Binary Analysis](apple-binary-analysis.md) — Mach-O analysis for binaries extracted from decoded layers
-- [AppleDouble Resource Forks](appledouble-resource-forks.md) — parse AppleDouble wrappers around Mac Classic resource forks
+- [Firmware Container](firmware-container.md): format dispatch for decoded bv41 payloads (Mach-O, DMG, APFS nested)
+- [Apple Binary Analysis](apple-binary-analysis.md): Mach-O analysis for binaries extracted from decoded layers
+- [AppleDouble Resource Forks](appledouble-resource-forks.md): parse AppleDouble wrappers around Mac Classic resource forks

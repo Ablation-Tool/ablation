@@ -1,14 +1,14 @@
 # Raw Packet Capture
 
-Capture live network traffic with a raw socket (`AF_PACKET` / `AF_INET` + `SOCK_RAW`), parse IPv4/TCP/UDP headers, and detect credential patterns, ARP spoofing, and mDNS/SSDP service announcements — without `libpcap`, `tcpdump`, or Scapy — via `modules/net_sniffer.py`.
+Capture live network traffic with a raw socket (`AF_PACKET` / `AF_INET` + `SOCK_RAW`), parse IPv4/TCP/UDP headers, and detect credential patterns, ARP spoofing, and mDNS/SSDP service announcements: without `libpcap`, `tcpdump`, or Scapy: via `modules/net_sniffer.py`.
 
 ---
 
 ## Why this exists
 
-1. **`RawSniffer` operates without any external network capture dependency.** Using `socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))` (Linux) or `socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)` (macOS), `RawSniffer` captures all Ethernet frames on the specified interface in pure Python. `tcpdump`, `Wireshark`, and `libpcap` are not required — only root privileges and a network interface name.
+1. **`RawSniffer` operates without any external network capture dependency.** Using `socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))` (Linux) or `socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)` (macOS), `RawSniffer` captures all Ethernet frames on the specified interface in pure Python. `tcpdump`, `Wireshark`, and `libpcap` are not required: only root privileges and a network interface name.
 
-2. **`CredentialExtractor` performs pattern-based credential extraction from live TCP streams** — HTTP Basic Auth `Authorization: Basic` headers, FTP `USER`/`PASS` sequences, and SMTP `AUTH PLAIN` values are identified in real-time as packets are captured. This is suitable for post-compromise network monitoring without installing additional tools.
+2. **`CredentialExtractor` performs pattern-based credential extraction from live TCP streams**: HTTP Basic Auth `Authorization: Basic` headers, FTP `USER`/`PASS` sequences, and SMTP `AUTH PLAIN` values are identified in real-time as packets are captured. This is suitable for post-compromise network monitoring without installing additional tools.
 
 3. **`MDNSDiscovery` and `SSDPDiscovery`** listen on multicast addresses (mDNS: `224.0.0.251:5353`, SSDP: `239.255.255.250:1900`) and parse service announcements passively. `MDNSDiscovery` returns `PTR` records with service instance names; `SSDPDiscovery` returns device type, friendly name, and USN from `M-SEARCH` responses. Both run without sending probe packets.
 
@@ -75,9 +75,9 @@ ARP spoofing: none detected
 
 ## False positives
 
-**`detect_arp_spoofing()` requires a reference ARP table** — it reads the current ARP table via `_arp_read()` and compares subsequent ARP responses. If the ARP table is already poisoned when the sniffer starts, the poisoned entries become the reference baseline and the attack will not be detected.
+**`detect_arp_spoofing()` requires a reference ARP table**, it reads the current ARP table via `_arp_read()` and compares subsequent ARP responses. If the ARP table is already poisoned when the sniffer starts, the poisoned entries become the reference baseline and the attack will not be detected.
 
-**`RawSniffer` promiscuous mode requires root** — without root (or `CAP_NET_RAW`), `RawSniffer` falls back to non-promiscuous capture, which only captures packets addressed to the local interface. Non-promiscuous mode misses broadcast, multicast, and traffic to/from other hosts on the same segment.
+**`RawSniffer` promiscuous mode requires root**: without root (or `CAP_NET_RAW`), `RawSniffer` falls back to non-promiscuous capture, which only captures packets addressed to the local interface. Non-promiscuous mode misses broadcast, multicast, and traffic to/from other hosts on the same segment.
 
 ---
 
@@ -93,16 +93,16 @@ Run `RawSniffer` during post-compromise dwell operations to map internal network
 
 | Key | Content |
 |:---|:---|
-| `packets` | Integer — total packets captured |
-| `credentials` | `List[dict]` — cleartext credentials detected (protocol, source, credential fragment) |
-| `connections` | `List[tuple]` — unique `(src_ip, dst_ip, dst_port)` tuples observed |
+| `packets` | Integer: total packets captured |
+| `credentials` | `List[dict]`: cleartext credentials detected (protocol, source, credential fragment) |
+| `connections` | `List[tuple]`: unique `(src_ip, dst_ip, dst_port)` tuples observed |
 | `error` | Error string if the socket was unavailable; absent on success |
 
-For mDNS and SSDP service discovery, use `MDNSDiscovery` and `SSDPDiscovery` from the same `modules/net_sniffer.py` module — they are separate classes from `RawSniffer`. The convenience wrapper `sniff_network()` combines all three and also returns `mdns_services`, `ssdp_devices`, and `arp_findings`.
+For mDNS and SSDP service discovery, use `MDNSDiscovery` and `SSDPDiscovery` from the same `modules/net_sniffer.py` module: they are separate classes from `RawSniffer`. The convenience wrapper `sniff_network()` combines all three and also returns `mdns_services`, `ssdp_devices`, and `arp_findings`.
 
 ---
 
 ## See also
 
-- [PCAP Inspection](pcap-inspection.md) — `PCAPAnalyzer` for offline PCAP analysis
-- [Local Network Inventory](local-network-inventory.md) — `NetworkAnalyzer` for interface and connection state enumeration
+- [PCAP Inspection](pcap-inspection.md): `PCAPAnalyzer` for offline PCAP analysis
+- [Local Network Inventory](local-network-inventory.md): `NetworkAnalyzer` for interface and connection state enumeration

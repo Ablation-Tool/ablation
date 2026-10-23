@@ -1,12 +1,12 @@
 # BYOVD Capability Detection
 
-Detect Bring Your Own Vulnerable Driver (BYOVD) capabilities in Windows kernel drivers — identifying dangerous physical memory R/W, process/token manipulation, and MSR access import patterns that can be used to bypass EDR controls and escalate from userland to kernel-mode execution.
+Detect Bring Your Own Vulnerable Driver (BYOVD) capabilities in Windows kernel drivers: identifying dangerous physical memory R/W, process/token manipulation, and MSR access import patterns that can be used to bypass EDR controls and escalate from userland to kernel-mode execution.
 
 ---
 
 ## Why this exists
 
-1. **BYOVD attacks load a legitimate, Authenticode-signed driver containing dangerous kernel APIs — `MmMapIoSpace`, `HalTranslateBusAddress`, `ZwOpenProcess`, `IoCreateDevice` — and exploit those APIs through the driver's IOCTL surface to gain kernel-mode capabilities without loading an unsigned driver.** `ByovdDetector` identifies these capability classes statically from imports and string evidence, enabling fast triage of driver files found during firmware or software distribution analysis before PoC effort is invested.
+1. **BYOVD attacks load a legitimate, Authenticode-signed driver containing dangerous kernel APIs: `MmMapIoSpace`, `HalTranslateBusAddress`, `ZwOpenProcess`, `IoCreateDevice`, and exploit those APIs through the driver's IOCTL surface to gain kernel-mode capabilities without loading an unsigned driver.** `ByovdDetector` identifies these capability classes statically from imports and string evidence, enabling fast triage of driver files found during firmware or software distribution analysis before PoC effort is invested.
 
 2. **Stage 1 (import signature) catches obvious cases; Stage 2 (IOCTL surface scan) identifies whether the dangerous capabilities are reachable from the IOCTL dispatch table.** A driver importing `MmMapIoSpace` but never reaching it from a valid IOCTL code is a different risk than one where a specific `IOCTL_CODE` directly calls `MmMapIoSpace` with an attacker-controlled physical address. `ByovdReport.risk_level` accounts for this distinction.
 
@@ -69,9 +69,9 @@ risk_level: HIGH
 
 ## False positives
 
-**Legitimate kernel drivers may import `MmMapIoSpace` for hardware DMA mapping** — a NIC or storage driver importing `MmMapIoSpace` for DMA is not BYOVD-capable unless the IOCTL surface passes an attacker-controlled physical address. `risk_level` returns `MEDIUM` (not `HIGH`) when Stage 1 detects an import but Stage 2 finds no IOCTL-reachable path, reflecting this distinction.
+**Legitimate kernel drivers may import `MmMapIoSpace` for hardware DMA mapping**: a NIC or storage driver importing `MmMapIoSpace` for DMA is not BYOVD-capable unless the IOCTL surface passes an attacker-controlled physical address. `risk_level` returns `MEDIUM` (not `HIGH`) when Stage 1 detects an import but Stage 2 finds no IOCTL-reachable path, reflecting this distinction.
 
-**Stage 2 IOCTL tracing uses static analysis** — indirect dispatch (function pointer tables, virtual dispatch through objects) may not be traced to all capability call sites. A `risk_level` of `MEDIUM` from Stage 1 alone warrants manual verification of the IOCTL dispatch table before ruling out BYOVD capability.
+**Stage 2 IOCTL tracing uses static analysis**: indirect dispatch (function pointer tables, virtual dispatch through objects) may not be traced to all capability call sites. A `risk_level` of `MEDIUM` from Stage 1 alone warrants manual verification of the IOCTL dispatch table before ruling out BYOVD capability.
 
 ---
 
@@ -100,6 +100,6 @@ Run `ByovdDetector` as a triage step on any signed Windows kernel driver file fo
 
 ## See also
 
-- [Windows RPC Server Analysis](rpc-server-analysis.md) — unauthenticated RPC interface detection for Windows PE targets
-- [Control Flow Guard Review](control-flow-guard-review.md) — CFG/XFG bypass detection on Windows PE binaries
-- [SEH and SafeSEH Review](seh-and-safeseh-review.md) — x86 Structured Exception Handling chain analysis
+- [Windows RPC Server Analysis](rpc-server-analysis.md): unauthenticated RPC interface detection for Windows PE targets
+- [Control Flow Guard Review](control-flow-guard-review.md): CFG/XFG bypass detection on Windows PE binaries
+- [SEH and SafeSEH Review](seh-and-safeseh-review.md): x86 Structured Exception Handling chain analysis

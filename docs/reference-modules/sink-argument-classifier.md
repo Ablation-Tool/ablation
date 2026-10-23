@@ -1,12 +1,12 @@
 # Sink Argument Classifier
 
-Classify the provenance of command-string arguments at arbitrary exec-class sink call sites in x86-64 ELF binaries — determining whether a shell-invoking sink receives a hardcoded literal, a stack-formatted string from a fixed template, a caller-propagated argument, or an unresolved source — to eliminate RODATA_CONST sinks from taint analysis before they waste analyst time.
+Classify the provenance of command-string arguments at arbitrary exec-class sink call sites in x86-64 ELF binaries: determining whether a shell-invoking sink receives a hardcoded literal, a stack-formatted string from a fixed template, a caller-propagated argument, or an unresolved source: to eliminate RODATA_CONST sinks from taint analysis before they waste analyst time.
 
 ---
 
 ## Why this exists
 
-1. **The overwhelming majority of `system()` / `popen()` / `execve()` call sites in firmware binaries receive a `.rodata` string literal — analyzing these with `TaintTracker` would be pure noise.** `SinkArgClassifier.classify_all()` must run before `TaintTracker` on every binary; it classifies all shell sink call sites into four verdicts and eliminates `RODATA_CONST` and parameterless `SNPRINTF_RODATA` sites from the taint queue. Only `ARG_PROPAGATED` and `UNKNOWN` sites are worth the full taint analysis pass.
+1. **The overwhelming majority of `system()` / `popen()` / `execve()` call sites in firmware binaries receive a `.rodata` string literal: analyzing these with `TaintTracker` would be pure noise.** `SinkArgClassifier.classify_all()` must run before `TaintTracker` on every binary; it classifies all shell sink call sites into four verdicts and eliminates `RODATA_CONST` and parameterless `SNPRINTF_RODATA` sites from the taint queue. Only `ARG_PROPAGATED` and `UNKNOWN` sites are worth the full taint analysis pass.
 
 2. **`SinkArgClassifier` handles the `__snprintf_chk` calling convention** where the format argument is in `r8` (not `rdx` as in plain `snprintf`), and performs one level of `snprintf` recursion: if the command argument is a stack buffer filled by a preceding `snprintf`, `SinkArgClassifier` classifies *that* `snprintf`'s format argument instead of the buffer pointer. Without this recursion, every `system(buf)` where `buf` was built by `snprintf(buf, n, fmt, ...)` would appear as `UNKNOWN` when the format is actually a `.rodata` constant.
 
@@ -88,15 +88,15 @@ Sink Argument Classification
 
 ## False positives
 
-**`UNKNOWN` fires when provenance cannot be resolved within the look-back window.** Increase the look-back window if a known-safe site is classified `UNKNOWN` due to a long instruction sequence between the buffer initialization and the sink call. `UNKNOWN` is not a confirmed vulnerability — it is a prompt for `TaintTracker` analysis.
+**`UNKNOWN` fires when provenance cannot be resolved within the look-back window.** Increase the look-back window if a known-safe site is classified `UNKNOWN` due to a long instruction sequence between the buffer initialization and the sink call. `UNKNOWN` is not a confirmed vulnerability, it is a prompt for `TaintTracker` analysis.
 
-**`SNPRINTF_RODATA` requires manual inspection of the format's `%s` arguments** — if a `%s` argument at the `snprintf` call site is itself user-controlled, the verdict should be escalated to `ARG_PROPAGATED` after inspection. `SinkArgClassifier` does not recurse into `snprintf`'s own arguments beyond one level.
+**`SNPRINTF_RODATA` requires manual inspection of the format's `%s` arguments**: if a `%s` argument at the `snprintf` call site is itself user-controlled, the verdict should be escalated to `ARG_PROPAGATED` after inspection. `SinkArgClassifier` does not recurse into `snprintf`'s own arguments beyond one level.
 
 ---
 
 ## Pipeline position
 
-Step 6.5 in the RE workflow: run `SinkArgClassifier.classify_all()` after `FuncProfiler.profile()` and before `TaintTracker`. See `CLAUDE.md`: "classify ALL shell sink call sites as RODATA_CONST / SNPRINTF_RODATA / ARG_PROPAGATED / UNKNOWN — eliminate RODATA_CONST and parameterless SNPRINTF_RODATA before TaintTracker runs."
+Step 6.5 in the RE workflow: run `SinkArgClassifier.classify_all()` after `FuncProfiler.profile()` and before `TaintTracker`. See `CLAUDE.md`: "classify ALL shell sink call sites as RODATA_CONST / SNPRINTF_RODATA / ARG_PROPAGATED / UNKNOWN: eliminate RODATA_CONST and parameterless SNPRINTF_RODATA before TaintTracker runs."
 
 ---
 
@@ -120,6 +120,6 @@ Only `ARG_PROPAGATED` and `UNKNOWN` sinks are passed to `TaintTracker`.
 
 ## See also
 
-- [Taint Analysis](taint-analysis.md) — downstream consumer of `ARG_PROPAGATED` and `UNKNOWN` sinks
-- [Format String Scanning](format-string-scanning.md) — complementary: finds user-controlled format arguments rather than command arguments
-- [Deprecated Unsafe Function Scanning](deprecated-unsafe-function-scanning.md) — finds gets/mktemp/tmpnam independently of argument classification
+- [Taint Analysis](taint-analysis.md): downstream consumer of `ARG_PROPAGATED` and `UNKNOWN` sinks
+- [Format String Scanning](format-string-scanning.md): complementary: finds user-controlled format arguments rather than command arguments
+- [Deprecated Unsafe Function Scanning](deprecated-unsafe-function-scanning.md): finds gets/mktemp/tmpnam independently of argument classification

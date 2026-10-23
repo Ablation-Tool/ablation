@@ -264,7 +264,7 @@ for imp in dangerous:
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs — findings from incomplete graphs carry lower confidence.
+Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
@@ -278,19 +278,19 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading output
 
-`BeamContext.from_path(path)` returns a `BeamContext` object — this is the parsed module surface, not a list of findings:
+`BeamContext.from_path(path)` returns a `BeamContext` object, this is the parsed module surface, not a list of findings:
 
 | Attribute | Content |
 |:---|:---|
 | `path` | Path to the `.beam` file |
 | `module_name` | Erlang module name string |
-| `atoms` | `List[str]` — all atom strings in the module |
-| `exports` | `List[BeamExport]` — exported functions as `function/arity` |
-| `imports` | `List[BeamImport]` — imported functions; dangerous ones have `dangerous=True` and a `severity` string |
-| `literals` | `List[str]` — ETF-decoded literal representations |
-| `strings` | `List[str]` — raw StrT byte segments |
+| `atoms` | `List[str]`: all atom strings in the module |
+| `exports` | `List[BeamExport]`: exported functions as `function/arity` |
+| `imports` | `List[BeamImport]`: imported functions; dangerous ones have `dangerous=True` and a `severity` string |
+| `literals` | `List[str]`: ETF-decoded literal representations |
+| `strings` | `List[str]`: raw StrT byte segments |
 | `source_file` | Original `.erl` filename (only when debug info is present) |
-| `ast_functions` | `List[BeamAstFunction]` — function names with source line numbers |
+| `ast_functions` | `List[BeamAstFunction]`: function names with source line numbers |
 
 Dangerous imports are identified inline: `import.dangerous == True` and `import.severity` in `('CRITICAL'/'HIGH'/'MEDIUM')`.
 
@@ -298,6 +298,6 @@ Dangerous imports are identified inline: `import.dangerous == True` and `import.
 
 ## See also
 
-- [BinaryContext](binary-context.md) — native binary context when the runtime wraps a native library
-- [TaintAnalysis](taint-analysis.md) — trace dangerous calls found in the runtime layer
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md): native binary context when the runtime wraps a native library
+- [TaintAnalysis](taint-analysis.md): trace dangerous calls found in the runtime layer
+- [FindingRegistry](registry.md): record confirmed findings

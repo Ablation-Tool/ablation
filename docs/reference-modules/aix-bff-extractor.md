@@ -1,6 +1,6 @@
 # AixBffExtractor / XCOFF32Info
 
-Extract XCOFF binaries from AIX installp BFF archives by magic-scan, and enumerate dangerous imports directly from the XCOFF32 loader section — without needing AIX or a working `pax(1)`.
+Extract XCOFF binaries from AIX installp BFF archives by magic-scan, and enumerate dangerous imports directly from the XCOFF32 loader section: without needing AIX or a working `pax(1)`.
 
 ---
 
@@ -10,7 +10,7 @@ Extract XCOFF binaries from AIX installp BFF archives by magic-scan, and enumera
 
 2. **The outer BFF envelope does not need to be fully parsed.** BFF archives contain XCOFF binaries at 4-byte-aligned offsets. The XCOFF32 magic bytes (`0x01\xdf`) are reliably distinct. The module locates every XCOFF binary by magic scan, validates the `FILHDR`, computes the binary extent from section headers and symbol table layout, and returns raw XCOFF bytes. No BFF block-structure parser required.
 
-3. **Dangerous import triage requires no AIX environment.** The XCOFF32 loader section (section type `0x0005`) contains an import ID table — null-separated `path/archive/member` strings — that names every dynamically linked function. `XCOFF32Info.dangerous_imports()` scans this table for exec-class and network-class function names. The entire pipeline runs on Linux.
+3. **Dangerous import triage requires no AIX environment.** The XCOFF32 loader section (section type `0x0005`) contains an import ID table: null-separated `path/archive/member` strings, that names every dynamically linked function. `XCOFF32Info.dangerous_imports()` scans this table for exec-class and network-class function names. The entire pipeline runs on Linux.
 
 4. **AixBffExtractor and aix_big_ar_extractor address different formats.** `aix_big_ar_extractor` handles AIX `<bigaf>` library archives (shared libraries distributed as `libc.a`, `libm.a`). This module handles AIX installp BFF packages (OS components, management agents). Both embed XCOFF binaries; only the outer container differs.
 
@@ -98,7 +98,7 @@ for name, xcoff_bytes in AixBffExtractor.from_path('/path/to/pkg.bff'):
 | `dangerous_imports()` | `list[str]` | Import names matching exec/net sink sets |
 | `import_stubs()` | `dict[str, int]` | Map of `.funcname` → stub VA in `.text` |
 | `callers_of(va)` | `list[int]` | VAs of BL instructions targeting `va` |
-| `save(path)` | — | Write the raw XCOFF bytes to a file |
+| `save(path)` |: | Write the raw XCOFF bytes to a file |
 | `nsyms` | `int` | Number of symbol table entries |
 
 ---
@@ -116,7 +116,7 @@ The import ID table uses dotted names (`.system`, `.popen`). The scanner strips 
 
 ## Limitations
 
-**Incomplete BFF downloads produce false structure.** If a `.bff` file was incompletely downloaded (e.g., an `.aria2` partial-download file is present alongside it), the magic scan may locate partial XCOFF headers. Always check the IBM-RE download status table in `README.md` before analyzing an image — incomplete downloads are flagged with `.aria2` files in the research collection.
+**Incomplete BFF downloads produce false structure.** If a `.bff` file was incompletely downloaded (e.g., an `.aria2` partial-download file is present alongside it), the magic scan may locate partial XCOFF headers. Always check the IBM-RE download status table in `README.md` before analyzing an image: incomplete downloads are flagged with `.aria2` files in the research collection.
 
 **XCOFF64 extent computation is approximate.** 64-bit XCOFF headers use a different field layout. The extent estimate for XCOFF64 binaries may be imprecise. Verify that extracted bytes produce a valid XCOFF64 header before passing to downstream tools.
 
@@ -134,7 +134,7 @@ The import ID table uses dotted names (`.system`, `.popen`). The scanner strips 
 
 ## See also
 
-- [XcoffSymtabParser](xcoff-symtab-parser.md) — populate BinaryContext with function names after extraction
-- [Xcoff32Decompiler](xcoff32-decompiler.md) — decompile XCOFF32 functions to pseudocode
-- [BFF Extractor](bff-extractor.md) — an alternative extractor with a different outer-format approach
-- [AIX Big Archive Extractor](aix-big-ar-extractor.md) — for `<bigaf>` shared library archives (libc.a)
+- [XcoffSymtabParser](xcoff-symtab-parser.md): populate BinaryContext with function names after extraction
+- [Xcoff32Decompiler](xcoff32-decompiler.md): decompile XCOFF32 functions to pseudocode
+- [BFF Extractor](bff-extractor.md): an alternative extractor with a different outer-format approach
+- [AIX Big Archive Extractor](aix-big-ar-extractor.md): for `<bigaf>` shared library archives (libc.a)

@@ -1,16 +1,16 @@
 # Forensics Enumeration
 
-Detect Windows rootkit indicators (SEH chain access, SSDT hooks, DPC/timer abuse), live Linux memory artifacts (anonymous RWX mappings, `/dev/shm` execution, interpreter injection), forensic artifact presence ($MFT, LNK files, Prefetch, EVTX), and binary obfuscation patterns — from raw binary data or live procfs — via `modules/forensics_enum.py`.
+Detect Windows rootkit indicators (SEH chain access, SSDT hooks, DPC/timer abuse), live Linux memory artifacts (anonymous RWX mappings, `/dev/shm` execution, interpreter injection), forensic artifact presence ($MFT, LNK files, Prefetch, EVTX), and binary obfuscation patterns: from raw binary data or live procfs: via `modules/forensics_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **SEH-based exploit detection requires byte-level pattern matching that generic AV cannot perform** — `detect_seh_chain_corruption()` searches for Windows SEH access patterns (`FS:[0]` or `GS:[0]` register loads), POPAD+JMP eggscan sequences (classic SEH overwrite: POPAD restores registers, JMP skips nSEH), VEH installation patterns (`RtlAddVectoredExceptionHandler` import), and custom exception handler field writes. These are malware and exploit delivery indicators that are only detectable at the byte level in stripped or packed binaries.
+1. **SEH-based exploit detection requires byte-level pattern matching that generic AV cannot perform**: `detect_seh_chain_corruption()` searches for Windows SEH access patterns (`FS:[0]` or `GS:[0]` register loads), POPAD+JMP eggscan sequences (classic SEH overwrite: POPAD restores registers, JMP skips nSEH), VEH installation patterns (`RtlAddVectoredExceptionHandler` import), and custom exception handler field writes. These are malware and exploit delivery indicators that are only detectable at the byte level in stripped or packed binaries.
 
-2. **SSDT and DPC abuse indicates kernel rootkits operating below the process layer** — `detect_ssdt_hook_indicators()` searches for kernel function pointer manipulation patterns (SSDT index-based call sequences). `detect_dpc_timer_abuse()` finds `KeInsertQueueDpc`, `KeInitializeTimer`, and `KeSetTimerEx` import strings alongside `KeWaitForSingleObject` in a tight call window — the signature of timing-based rootkit persistence via deferred procedure calls.
+2. **SSDT and DPC abuse indicates kernel rootkits operating below the process layer**: `detect_ssdt_hook_indicators()` searches for kernel function pointer manipulation patterns (SSDT index-based call sequences). `detect_dpc_timer_abuse()` finds `KeInsertQueueDpc`, `KeInitializeTimer`, and `KeSetTimerEx` import strings alongside `KeWaitForSingleObject` in a tight call window: the signature of timing-based rootkit persistence via deferred procedure calls.
 
-3. **Live Linux memory artifact detection** — `detect_linux_memory_artifacts()` reads `/proc/<pid>/maps` for all processes and flags: anonymous RWX mappings (no file backing, executable — shellcode or reflective loader), execution from `/dev/shm` (tmpfs-backed executable memory, persistence-free malware), and interpreter injection (Python/Ruby/Perl in a process that should not have scripting engines). This is a fast triage for active compromise on a live host without requiring a full memory image.
+3. **Live Linux memory artifact detection**: `detect_linux_memory_artifacts()` reads `/proc/<pid>/maps` for all processes and flags: anonymous RWX mappings (no file backing, executable: shellcode or reflective loader), execution from `/dev/shm` (tmpfs-backed executable memory, persistence-free malware), and interpreter injection (Python/Ruby/Perl in a process that should not have scripting engines). This is a fast triage for active compromise on a live host without requiring a full memory image.
 
 ---
 
@@ -92,15 +92,15 @@ detect_linux_memory_artifacts:
 
 ## False positives
 
-**`SEH_CHAIN_ACCESSED` on legitimate Windows exception handlers** — many compiler-generated try/catch blocks access FS:[0] to register a handler at function entry. The pattern fires on every Windows binary that uses structured exception handling for normal error recovery, not just malicious SEH overwrites. Confirm by tracing the access to a WRITE to the SEH chain pointer (exploit) vs. a READ-only `push`/`call` sequence (legitimate handler installation).
+**`SEH_CHAIN_ACCESSED` on legitimate Windows exception handlers**: many compiler-generated try/catch blocks access FS:[0] to register a handler at function entry. The pattern fires on every Windows binary that uses structured exception handling for normal error recovery, not just malicious SEH overwrites. Confirm by tracing the access to a WRITE to the SEH chain pointer (exploit) vs. a READ-only `push`/`call` sequence (legitimate handler installation).
 
-**`ANONYMOUS_RWX_MAPPING` from JIT compilers** — V8 (Node.js/Chrome), LuaJIT, and Java's JIT compiler all create anonymous RWX mappings for compiled code. On application servers where these runtimes are expected, this finding is noise. Filter by checking the process name and `/proc/<pid>/cmdline` against the known runtime list for the host.
+**`ANONYMOUS_RWX_MAPPING` from JIT compilers**: V8 (Node.js/Chrome), LuaJIT, and Java's JIT compiler all create anonymous RWX mappings for compiled code. On application servers where these runtimes are expected, this finding is noise. Filter by checking the process name and `/proc/<pid>/cmdline` against the known runtime list for the host.
 
 ---
 
 ## Pipeline position
 
-Run binary analysis functions (`detect_seh_chain_corruption()`, `detect_dpc_timer_abuse()`) during static analysis of suspected malware samples. Run `detect_linux_memory_artifacts()` immediately upon gaining shell access to a live host — it provides a fast indicator-of-compromise sweep in under one second.
+Run binary analysis functions (`detect_seh_chain_corruption()`, `detect_dpc_timer_abuse()`) during static analysis of suspected malware samples. Run `detect_linux_memory_artifacts()` immediately upon gaining shell access to a live host, it provides a fast indicator-of-compromise sweep in under one second.
 
 ---
 
@@ -120,6 +120,6 @@ All three detection functions return `List[{severity, title, detail}]`:
 
 ## See also
 
-- [Volatile and Linux Artifact Triage](volatile-and-linux-artifact-triage.md) — `/proc`-based triage combining forensics and privesc indicators
-- [Windows Artifact Discovery](windows-artifact-discovery.md) — `detect_windows_forensic_artifacts()` combined with registry and EVTX parsing
-- [Finding Registry](finding-registry.md) — record confirmed forensic findings
+- [Volatile and Linux Artifact Triage](volatile-and-linux-artifact-triage.md): `/proc`-based triage combining forensics and privesc indicators
+- [Windows Artifact Discovery](windows-artifact-discovery.md): `detect_windows_forensic_artifacts()` combined with registry and EVTX parsing
+- [Finding Registry](finding-registry.md): record confirmed forensic findings
