@@ -120,7 +120,7 @@ class ProcessInjectionComboScanner:
     def _get_import_names(self, ctx) -> frozenset:
         """Return frozenset of all PLT/import symbol base names."""
         names: set[str] = set()
-        for name, _ in ctx.plt_entries():
+        for _, name in ctx.plt.items():
             base = name.split('@')[0].lstrip('_')
             names.add(base)
         return frozenset(names)

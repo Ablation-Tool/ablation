@@ -106,7 +106,7 @@ class BuildIntegrityAnalyzer:
     def _plt_names(self) -> frozenset:
         try:
             ctx = self._load_ctx()
-            return frozenset(n.split('@')[0].lstrip('_') for n, _ in ctx.plt_entries())
+            return frozenset(n.split('@')[0].lstrip('_') for _, n in ctx.plt.items())
         except Exception:
             return frozenset()
 
