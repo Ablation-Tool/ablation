@@ -45,6 +45,9 @@ String-address load patterns (same instructions as ELFv1, LE-encoded)
  10. addis rX, r2, HI; addi rX, rX, LO   — TOC-relative address
  11. addis rX, r2, HI; ld rX, LO(rX)     — TOC-relative pointer dereference
  12. ld   rX, N(r2)                       — direct TOC slot dereference
+ 13. addis rX, r2, HI; [addi rX, rX, LO]; addi r3, rX, OFF — callee-saved base
+     register loaded at function entry beyond the 80-instruction backward window.
+     (PPC64-SAC-CALLEE-001: full-function forward scan via _eval_callee_saved_reg)
 
 Usage
 -----
@@ -433,6 +436,89 @@ class SinkArgClassifierPPC64ELFv2:
                 return None
         return None
 
+    def _eval_callee_saved_reg(self, insns: list, reg_id: int, use_idx: int) -> Optional[int]:
+        """Forward-pass constant propagation for a callee-saved register.
+
+        PPC64 ELFv2 callee-saved registers (r14-r31) are often loaded once at
+        function entry with a TOC-relative address and then used as base registers
+        throughout the function — far beyond the 80-instruction backward window.
+        This scan tracks the deterministic value of reg_id from function start up
+        to use_idx by following:
+          addis rX, r2, HI          -> rX = r2 + sign16(HI)<<16
+          addi  rX, rX, LO          -> rX += sign16(LO)  (only when base == rX)
+          ld    rX, N(r2)           -> rX = mem[r2 + sign16(N)]  (direct GOT load)
+        Any other write invalidates the known value (returns None).
+        """
+        # (PPC64-SAC-CALLEE-001)
+        if self._r2 is None:
+            return None
+        val: Optional[int] = None
+        for idx in range(min(use_idx, len(insns))):
+            insn = insns[idx]
+            # Store instructions have the source register as ops[0] — skip them so
+            # 'std r14, N(r1)' (callee-save spill) does not falsely invalidate val.
+            if insn.id in _PPC64_STORE_INSNS:
+                continue
+            if not self._writes_reg(insn, reg_id):
+                continue
+            if insn.id == PPC_INS_ADDIS:
+                ops = insn.operands
+                if (len(ops) >= 3
+                        and ops[1].type == PPC_OP_REG
+                        and ops[1].reg == PPC_REG_R2
+                        and ops[2].type == PPC_OP_IMM):
+                    val = (self._r2 + (_sign16(ops[2].imm & 0xFFFF) << 16)) & 0xFFFFFFFFFFFFFFFF
+                else:
+                    val = None
+            elif insn.id == PPC_INS_ADDI:
+                ops = insn.operands
+                if (val is not None
+                        and len(ops) >= 3
+                        and ops[1].type == PPC_OP_REG
+                        and ops[1].reg == reg_id
+                        and ops[2].type == PPC_OP_IMM):
+                    val = (val + _sign16(ops[2].imm & 0xFFFF)) & 0xFFFFFFFFFFFFFFFF
+                else:
+                    val = None
+            elif insn.id in _PPC64_LOAD_INSNS:
+                ops = insn.operands
+                if (len(ops) >= 2
+                        and ops[1].type == PPC_OP_MEM
+                        and ops[1].mem.base == PPC_REG_R2):
+                    toc_slot = (self._r2 + _sign16(ops[1].mem.disp)) & 0xFFFFFFFFFFFFFFFF
+                    ptr = self._read_u64_le(toc_slot)
+                    val = ptr  # None if unreadable
+                else:
+                    val = None
+            else:
+                val = None
+        return val
+
+    def _is_callee_saved_from_entry_arg(self, insns: list, reg_id: int, use_idx: int) -> bool:
+        """Return True if the most recent write to reg_id before use_idx was
+        'mr reg_id, rY' where rY is an entry-arg register (r3-r10).
+
+        Handles 'ld r3, N(r26)' where r26 = mr r26, r3 (entry arg struct ptr).
+        The backward scan is the same direction as _trace_arg to get the effective
+        value at the call site (not the function-entry value).
+        (PPC64-SAC-CALLEE-001)
+        """
+        limit = max(use_idx - _LOOKBACK * 2, -1)
+        for k in range(use_idx - 1, limit, -1):
+            insn = insns[k]
+            if insn.id in _PPC64_STORE_INSNS:
+                continue
+            if not self._writes_reg(insn, reg_id):
+                continue
+            if insn.id in (PPC_INS_MR, PPC_INS_OR):
+                ops = insn.operands
+                if (len(ops) >= 2
+                        and ops[1].type == PPC_OP_REG
+                        and ops[1].reg in _PPC64_ENTRY_ARG_SET):
+                    return True
+            return False
+        return False
+
     def _resolve_lis_pair(
         self,
         insns: list,
@@ -615,6 +701,25 @@ class SinkArgClassifierPPC64ELFv2:
                         return (ARG_PROPAGATED,
                                 f'addi {_rname(arg_reg)}, {_rname(base_r)}: entry+imm')
 
+                    # Callee-saved base register (r14-r31) holding a TOC-derived address
+                    # loaded at function entry — beyond the narrow backward window.
+                    # Case A: base_r = addis rX, r2, HI [+ addi rX, rX, LO] → rodata constant.
+                    # Case B: base_r = mr rX, rEntryArg → addi r3, rX, LO is ARG_PROPAGATED.
+                    # (PPC64-SAC-CALLEE-001)
+                    base_val = self._eval_callee_saved_reg(insns, base_r, j)
+                    if base_val is not None:
+                        final_va = (base_val + _sign16(lo_val)) & 0xFFFFFFFFFFFFFFFF
+                        if self._is_rodata(final_va):
+                            return (RODATA_CONST,
+                                    f'addis+addi(r2→{_rname(base_r)}) → {final_va:#018x} in .rodata')
+                        ptr = self._read_u64_le(final_va)
+                        if ptr is not None and self._is_rodata(ptr):
+                            return (RODATA_CONST,
+                                    f'addis+addi(r2→{_rname(base_r)}) → ptr {final_va:#018x} → {ptr:#018x} in .rodata')
+                    if self._is_callee_saved_from_entry_arg(insns, base_r, j):
+                        return (ARG_PROPAGATED,
+                                f'addi {_rname(arg_reg)}, {_rname(base_r)}: base is entry+imm')
+
                 return (UNKNOWN,
                         f'addi {_rname(arg_reg)}: unknown base @ {insn.address:#010x}')
 
@@ -652,6 +757,25 @@ class SinkArgClassifierPPC64ELFv2:
                         return (ARG_PROPAGATED,
                                 f'{insn.mnemonic} {_rname(arg_reg)}, {disp:#x}({_rname(base_reg)})'
                                 f' struct field of entry arg')
+
+                    # Callee-saved base register (r14-r31) set via TOC or entry arg copy.
+                    # Case A: base_reg = addis rX, r2, HI [+ addi rX, rX, LO] → rodata ptr.
+                    # Case B: base_reg = mr rX, rEntryArg → ld r3, N(rX) is ARG_PROPAGATED.
+                    # (PPC64-SAC-CALLEE-001)
+                    base_val = self._eval_callee_saved_reg(insns, base_reg, j)
+                    if base_val is not None:
+                        load_va = (base_val + _sign16(disp)) & 0xFFFFFFFFFFFFFFFF
+                        if self._is_rodata(load_va):
+                            return (RODATA_CONST,
+                                    f'{insn.mnemonic}(r2→{_rname(base_reg)}) → {load_va:#018x} in .rodata')
+                        ptr = self._read_u64_le(load_va)
+                        if ptr is not None and self._is_rodata(ptr):
+                            return (RODATA_CONST,
+                                    f'{insn.mnemonic}(r2→{_rname(base_reg)}) → ptr {load_va:#018x} → {ptr:#018x} in .rodata')
+                    if self._is_callee_saved_from_entry_arg(insns, base_reg, j):
+                        return (ARG_PROPAGATED,
+                                f'ld {_rname(arg_reg)}, {disp:#x}({_rname(base_reg)} ← entry arg)')
+
                     return (UNKNOWN,
                             f'{insn.mnemonic} {_rname(arg_reg)}, {disp:#x}({_rname(base_reg)})')
 
