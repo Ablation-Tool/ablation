@@ -4,7 +4,7 @@
 
 One thing was not possible before in Ablation:
 
-1. **Flag the complete process injection toolkit at import level.** `SinkArgClassifier` classifies individual `VirtualAllocEx` or `WriteProcessMemory` call sites. No prior module checked for the *combination* — the full API triad that together enables code injection into a foreign process. `ProcessInjectionComboScanner` checks whether all three capability groups (allocate, write, execute) are present as PLT imports and reports the matching ATT&CK technique. This runs in milliseconds on import data alone, before any disassembly.
+1. **Flag the complete process injection toolkit at import level.** `SinkArgClassifier` classifies individual `VirtualAllocEx` or `WriteProcessMemory` call sites. No prior module checked for the *combination*. The full API triad together enables code injection into a foreign process: allocate memory in the target, write shellcode, then trigger execution. `ProcessInjectionComboScanner` checks whether all three capability groups are present as PLT imports and reports the matching ATT&CK technique. This runs in milliseconds on import data alone, before any disassembly.
 
 ## Usage
 
