@@ -433,3 +433,61 @@ class PatternLibrary:
         if not any(r.hits for r in results.values()):
             lines.append("  (no hits above threshold)")
         return "\n".join(lines)
+
+    # ── fuzzy byte similarity ─────────────────────────────────────────────────
+
+    @staticmethod
+    def fuzzy_similarity(bytes_a: bytes, bytes_b: bytes, method: str = 'tlsh') -> float:
+        """Return 0.0–1.0 similarity score between two byte sequences.
+
+        method='tlsh': uses the TLSH locality-sensitive hash (requires tlsh package).
+          TLSH is designed for 50-byte+ inputs. Returns 1.0 when the two inputs
+          are identical; approaches 0.0 as byte content diverges. TLSH score is
+          reported as a distance (lower = more similar); this method converts to
+          similarity as 1 - (distance / 300) clamped to [0, 1].
+
+        method='ssdeep': uses ssdeep context-triggered piecewise hashing (requires
+          ssdeep package). Returns block-size-normalized similarity in [0, 100]
+          converted to [0.0, 1.0].
+
+        method='byte': plain byte-level Jaccard similarity on 4-gram sets.
+          No external package needed; less sensitive to reordering.
+
+        Falls back gracefully to method='byte' if the requested library is absent.
+        """
+        if not bytes_a or not bytes_b:
+            return 0.0
+
+        if method == 'tlsh':
+            try:
+                import tlsh
+                h_a = tlsh.hash(bytes_a)
+                h_b = tlsh.hash(bytes_b)
+                if h_a in ('TNULL', '', None) or h_b in ('TNULL', '', None):
+                    return PatternLibrary.fuzzy_similarity(bytes_a, bytes_b, 'byte')
+                dist = tlsh.diff(h_a, h_b)
+                return max(0.0, 1.0 - dist / 300.0)
+            except ImportError:
+                return PatternLibrary.fuzzy_similarity(bytes_a, bytes_b, 'byte')
+
+        if method == 'ssdeep':
+            try:
+                import ssdeep
+                h_a = ssdeep.hash(bytes_a)
+                h_b = ssdeep.hash(bytes_b)
+                sim = ssdeep.compare(h_a, h_b)  # 0..100
+                return sim / 100.0
+            except ImportError:
+                return PatternLibrary.fuzzy_similarity(bytes_a, bytes_b, 'byte')
+
+        # Byte-level 4-gram Jaccard fallback
+        def ngrams(b: bytes, n: int = 4) -> set:
+            return {b[i:i + n] for i in range(len(b) - n + 1)}
+
+        set_a = ngrams(bytes_a)
+        set_b = ngrams(bytes_b)
+        if not set_a or not set_b:
+            return 0.0
+        intersection = len(set_a & set_b)
+        union = len(set_a | set_b)
+        return intersection / union if union else 0.0
