@@ -4,9 +4,10 @@
 
 Ablation is a self-contained reverse engineering and security analysis framework.
 
-It depends on neither legacy tools nor an MCP server, which removes the attack surface associated with MCP. When used with Codex or Claude Code, it operates as an autonomous reverse engineering system.
+It depends on neither legacy tools nor an MCP server, which removes the attack surface associated with MCP.
 
-It covers the full stack of appliance, firmware, and system security: static lifting and flow-sensitive taint tracking across **31 ISAs and runtimes** covering native CPUs, automotive ECUs, legacy mainframes, and VMs; vendor firmware/container extraction; and live protocol, cloud, and host surface auditing.
+
+When used with Codex or Claude Code, it operates as an autonomous reverse engineering system.
 
 ---
 
