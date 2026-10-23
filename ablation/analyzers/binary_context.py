@@ -527,6 +527,108 @@ class BinaryContext:
 
         return "\n".join(lines)
 
+    # ── analysis helpers ─────────────────────────────────────────────────────
+
+    def plt_sparsity_warning(self, threshold: int = 6) -> str | None:
+        """Return a warning string when PLT import count is below threshold.
+
+        Canonical packer footprint: only VirtualAlloc / LoadLibrary /
+        GetProcAddress (3-5 imports). Pairs with EntropyAnalyzer to gate
+        pre-analysis packing detection. Returns None when not sparse.
+        """
+        n = len(self.plt)
+        if n == 0:
+            return None
+        if n >= threshold:
+            return None
+        names = ', '.join(sorted(self.plt.values())[:threshold])
+        return (f"[PLT_SPARSE] {n} import(s) below threshold {threshold} "
+                f"— possible packer stub: {names}")
+
+    def pushad_at_entry(self) -> bool:
+        """Return True when PUSHAD/PUSHA appears within the first 32 bytes of the entry point.
+
+        On x86 firmware, PUSHAD at entry is a strong packer signature: the
+        packer saves all registers, unpacks to a new memory region, then POPAD
+        and JMP to the original entry point. Requires lief for EP location.
+        """
+        if self.arch not in ('x86', 'i386', 'i686'):
+            return False
+        try:
+            import lief
+            import capstone
+            data = open(self.path, 'rb').read()
+            elf = lief.parse(self.path)
+            if elf is None:
+                return False
+            ep = elf.header.entrypoint
+            if ep == 0:
+                return False
+            off = ep - self.base_va
+            if off < 0 or off + 32 > len(data):
+                return False
+            md = capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_32)
+            for insn in md.disasm(data[off:off + 32], ep):
+                if insn.mnemonic in ('pushad', 'pusha'):
+                    return True
+                # Stop at the first non-push instruction (packer must start with PUSHAD)
+                if not insn.mnemonic.startswith('push'):
+                    break
+            return False
+        except Exception:
+            return False
+
+    def ads_reference_vas(self) -> list[int]:
+        """Return VAs of CreateFileA/NtCreateFile call sites whose filename includes ':'.
+
+        Alternate Data Streams (ADS) are referenced by paths like 'file.txt:hidden'.
+        NtCreateFile with such a path hides data from most directory listings.
+        Only meaningful for PE binaries; returns [] for ELF.
+        """
+        ads_funcs = frozenset({'CreateFileA', 'CreateFileW', 'NtCreateFile',
+                                'ZwCreateFile', 'CreateFile'})
+        ads_call_vas: list[int] = []
+        for va, name in self.plt.items():
+            if name.split('@')[0].lstrip('_') not in ads_funcs:
+                continue
+            for xref_va in self.callers_of(va):
+                # Check for a nearby string containing ':' in the strings table
+                nearby = self.strings_near(xref_va, window=64)
+                if any(':' in s for s in nearby):
+                    ads_call_vas.append(xref_va)
+        return ads_call_vas
+
+    def cpuid_locations(self) -> list[int]:
+        """Return VAs of CPUID instructions followed by a conditional branch.
+
+        Used for VM-detection heuristic: CPUID + conditional branch is a
+        classic anti-VM check pattern (e.g. checking hypervisor bit in ECX).
+        Only meaningful on x86/x86_64 binaries.
+        """
+        if self.arch not in ('x86_64', 'x86', 'i386', 'i686'):
+            return []
+        try:
+            import capstone
+            data = open(self.path, 'rb').read()
+            base = self.base_va
+            md = capstone.Cs(capstone.CS_ARCH_X86,
+                             capstone.CS_MODE_64 if self.arch == 'x86_64' else capstone.CS_MODE_32)
+            md.detail = False
+            results: list[int] = []
+            insns = list(md.disasm(data, base))
+            for i, insn in enumerate(insns):
+                if insn.mnemonic != 'cpuid':
+                    continue
+                # Check if the next 5 instructions contain a conditional branch
+                window = insns[i + 1:i + 6]
+                for nxt in window:
+                    if nxt.mnemonic.startswith('j') and nxt.mnemonic != 'jmp':
+                        results.append(insn.address)
+                        break
+            return results
+        except Exception:
+            return []
+
     # ── build internals ───────────────────────────────────────────────────────
 
     @classmethod
