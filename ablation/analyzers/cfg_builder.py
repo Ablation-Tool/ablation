@@ -347,6 +347,144 @@ def _get_imm_target(insn) -> Optional[int]:
     return None
 
 
+# ── CFG analysis helpers ──────────────────────────────────────────────────────
+
+import re as _re
+
+_AUTH_PAT = _re.compile(
+    r'(auth|acl|perm|check|grant|allow|deny|role|priv|cap|trust)',
+    _re.I,
+)
+_SECURITY_WRITE_MNEMS = frozenset({'mov', 'str', 'stw', 'std', 'stb', 'sth'})
+_ZERO_MNEMS = frozenset({'xor', 'eor', 'sub'})
+_COND_BRANCH_PREFIXES = frozenset({'j', 'b.'})
+
+
+def find_complete_mediation_gaps(cfg: 'CFG', auth_block_vas: set) -> list[int]:
+    """Return block VAs reachable from the entry that bypass all auth_block_vas.
+
+    A complete mediation gap exists when there is at least one path from entry
+    to any successor of an auth block that does not pass through any auth block.
+    auth_block_vas: set of block VAs identified as access-control check points
+    (e.g., blocks containing CMP+JE on a return value named 'check_auth').
+
+    Returns list of entry-reachable block VAs that have no auth block ancestor
+    in the dominator tree.
+    """
+    if not auth_block_vas or not cfg.blocks:
+        return []
+
+    dom = cfg.dominator_tree()
+    gaps: list[int] = []
+    for block_va in cfg.blocks:
+        if block_va == cfg.entry():
+            continue
+        # Walk dominator chain: if no ancestor is an auth block, this block
+        # is reachable without passing through any auth check.
+        va = block_va
+        dominated_by_auth = False
+        seen: set = set()
+        while va in dom and va not in seen:
+            seen.add(va)
+            parent = dom[va]
+            if parent in auth_block_vas:
+                dominated_by_auth = True
+                break
+            va = parent
+        if not dominated_by_auth:
+            gaps.append(block_va)
+    return gaps
+
+
+def find_error_path_security_gaps(cfg: 'CFG') -> list[tuple[int, int]]:
+    """Return (write_block_va, skip_block_va) pairs for security-state writes
+    on non-error paths that are absent on error paths.
+
+    An error-path security gap occurs when a security-critical write (session
+    token zeroing, auth flag clear, role reset) is performed on the success
+    path but the error path jumps over it. The post-error state retains the
+    prior security value.
+
+    Detection: find MOV/STR instructions whose operand string matches a security
+    keyword (session, token, key, auth, role, secret) in one successor block
+    but not in the other successor of the same branch.
+
+    Returns list of (secure_block_va, skipped_va) pairs.
+    """
+    _SEC_OP_PAT = _re.compile(
+        r'(session|token|key|auth|role|secret|passwd|cred)',
+        _re.I,
+    )
+    gaps: list[tuple[int, int]] = []
+    for block_va, block in cfg.blocks.items():
+        if len(block.succs) != 2:
+            continue
+        succ_list = list(block.succs)
+        for i, s_a in enumerate(succ_list):
+            s_b = succ_list[1 - i]
+            blk_a = cfg.blocks.get(s_a)
+            blk_b = cfg.blocks.get(s_b)
+            if not blk_a or not blk_b:
+                continue
+            # Check if s_a has a security write that s_b lacks
+            def has_sec_write(blk) -> bool:
+                for _, mnem, op_str in blk.insns:
+                    if mnem in _SECURITY_WRITE_MNEMS and _SEC_OP_PAT.search(op_str):
+                        return True
+                return False
+            if has_sec_write(blk_a) and not has_sec_write(blk_b):
+                gaps.append((s_a, s_b))
+    return gaps
+
+
+def find_auth_bypass_via_error_path(cfg: 'CFG') -> list[int]:
+    """Return block VAs where a zero/success return is reachable via error path
+    without passing through an auth check block.
+
+    An auth-bypass via error path exists when a function returns 0 (success)
+    on an error path that diverged before the auth check executed. The caller
+    interprets 0 as authorized.
+
+    Detection: find RET/BX LR blocks whose predecessor path never passes through
+    a block whose instructions match the auth keyword pattern, and whose last
+    instruction loads a zero return value (XOR eax,eax / MOV eax,0 / MOVZ w0,0).
+    """
+    _ZERO_RET_PAT = _re.compile(r'\b(eax|rax|w0|x0)\b.*\b0\b', _re.I)
+    _RET_MNEMS = frozenset({'ret', 'retn', 'bx', 'br'})
+    dom = cfg.dominator_tree()
+    bypass_vas: list[int] = []
+
+    for block_va, block in cfg.blocks.items():
+        if not block.insns:
+            continue
+        last_va, last_mnem, _ = block.insns[-1]
+        if last_mnem not in _RET_MNEMS:
+            continue
+        # Check for zero return value in this block
+        has_zero_ret = any(
+            (mnem in _ZERO_MNEMS and 'eax' in op.lower() and op.lower().count('eax') == 2)
+            or (mnem in ('mov', 'movz', 'movzx') and _ZERO_RET_PAT.search(op))
+            for _, mnem, op in block.insns
+        )
+        if not has_zero_ret:
+            continue
+        # Walk dominator chain: if no ancestor has auth-keyword instructions, flag it
+        va = block_va
+        has_auth_ancestor = False
+        seen: set = set()
+        while va in dom and va not in seen:
+            seen.add(va)
+            parent = dom[va]
+            anc = cfg.blocks.get(parent)
+            if anc and any(_AUTH_PAT.search(op) for _, _, op in anc.insns):
+                has_auth_ancestor = True
+                break
+            va = parent
+        if not has_auth_ancestor:
+            bypass_vas.append(block_va)
+    return bypass_vas
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def _cli():
