@@ -201,6 +201,66 @@ class FindingRegistry:
         self._con.commit()
         return cur.lastrowid
 
+    # ── STRIDE / DREAD helpers ────────────────────────────────────────────────
+
+    @staticmethod
+    def stride_category(cwe_class: str) -> str:
+        """Return the STRIDE category for a CWE class string.
+
+        Maps CWE numbers to STRIDE letters: S=Spoofing, T=Tampering, R=Repudiation,
+        I=Information Disclosure, D=Denial of Service, E=Elevation of Privilege.
+        Returns empty string for unknown CWEs.
+        """
+        _STRIDE_MAP: dict[str, str] = {
+            # Spoofing
+            'CWE-290': 'S', 'CWE-287': 'S', 'CWE-306': 'S', 'CWE-294': 'S',
+            'CWE-384': 'S', 'CWE-345': 'S', 'CWE-346': 'S',
+            # Tampering
+            'CWE-78':  'T', 'CWE-77':  'T', 'CWE-88':  'T',
+            'CWE-94':  'T', 'CWE-95':  'T', 'CWE-20':  'T',
+            'CWE-119': 'T', 'CWE-120': 'T', 'CWE-121': 'T', 'CWE-122': 'T',
+            'CWE-125': 'T', 'CWE-126': 'T', 'CWE-127': 'T',
+            'CWE-787': 'T', 'CWE-788': 'T', 'CWE-416': 'T', 'CWE-415': 'T',
+            'CWE-190': 'T', 'CWE-191': 'T', 'CWE-194': 'T', 'CWE-195': 'T',
+            # Repudiation
+            'CWE-778': 'R', 'CWE-117': 'R', 'CWE-532': 'R',
+            # Information Disclosure
+            'CWE-200': 'I', 'CWE-201': 'I', 'CWE-203': 'I', 'CWE-209': 'I',
+            'CWE-312': 'I', 'CWE-319': 'I', 'CWE-321': 'I', 'CWE-326': 'I',
+            'CWE-327': 'I', 'CWE-328': 'I', 'CWE-330': 'I', 'CWE-331': 'I',
+            'CWE-338': 'I', 'CWE-798': 'I',
+            # Denial of Service
+            'CWE-400': 'D', 'CWE-401': 'D', 'CWE-770': 'D', 'CWE-834': 'D',
+            'CWE-476': 'D', 'CWE-617': 'D',
+            # Elevation of Privilege
+            'CWE-250': 'E', 'CWE-269': 'E', 'CWE-271': 'E', 'CWE-272': 'E',
+            'CWE-284': 'E', 'CWE-285': 'E', 'CWE-732': 'E',
+        }
+        return _STRIDE_MAP.get(cwe_class.upper().strip(), '')
+
+    @staticmethod
+    def dread_score(severity: str, cwe_class: str) -> int:
+        """Return a 0-10 DREAD score derived from severity and CWE class.
+
+        DREAD: Damage, Reproducibility, Exploitability, Affected users, Discoverability.
+        This is a heuristic approximation from severity + CWE rather than a full
+        qualitative assessment. Use as a triage priority signal, not a formal score.
+        """
+        _SEV_BASE: dict[str, int] = {
+            'CRITICAL': 9, 'HIGH': 7, 'MEDIUM': 5, 'LOW': 3, 'INFO': 1,
+        }
+        _CWE_BONUS: dict[str, int] = {
+            # Remote code execution / command injection: high exploitability
+            'CWE-78': 1, 'CWE-77': 1, 'CWE-94': 1, 'CWE-95': 1,
+            # Memory corruption: high damage
+            'CWE-119': 1, 'CWE-120': 1, 'CWE-121': 1, 'CWE-122': 1, 'CWE-787': 1,
+            # Use-after-free: high exploitability
+            'CWE-416': 1, 'CWE-415': 1,
+        }
+        base = _SEV_BASE.get(severity.upper().strip(), 5)
+        bonus = _CWE_BONUS.get(cwe_class.upper().strip(), 0)
+        return min(10, base + bonus)
+
     # ── read ──────────────────────────────────────────────────────────────────
 
     def find_similar(
