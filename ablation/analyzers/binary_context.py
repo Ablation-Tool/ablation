@@ -871,6 +871,7 @@ class BinaryContext:
         # => r2 = prologue_VA + sign_extend_16(HI)*0x10000 + sign_extend_16(LO)
 
         got_to_sym: Dict[int, str] = {}
+        rela_plt_ordered: List[Optional[str]] = []  # file-order names for .glink stub mapping
         try:
             rela_plt = binary.get_section('.rela.plt')
             if rela_plt:
@@ -882,8 +883,11 @@ class BinaryContext:
                         sym = binary.dynamic_symbols[sym_idx]
                         if sym.name:
                             got_to_sym[r_offset] = sym.name
+                            rela_plt_ordered.append(sym.name)
+                        else:
+                            rela_plt_ordered.append(None)
                     except Exception:
-                        pass
+                        rela_plt_ordered.append(None)
         except Exception:
             pass
 
@@ -914,7 +918,11 @@ class BinaryContext:
                     if lo & 0x8000:
                         lo -= 0x10000
                     cand = (sec_va + off) + (hi << 16) + lo
-                    if any(-(1 << 15) <= (gva - cand) < (1 << 15) for gva in got_to_sym):
+                    # PIE DSO form: addis r2,r12,HI is encoding-unambiguous (rA=r12
+                    # only in TOC prologues). When all PLT stubs use 5-word addis+ld
+                    # the GOT may be >32KB from r2; widen the acceptance window to
+                    # ±2GB so large DSOs with HI!=0 addis stubs are not rejected.
+                    if any(-(1 << 31) <= (gva - cand) < (1 << 31) for gva in got_to_sym):
                         r2 = cand
                         break
                 # lis r2, HI (= addis r2, r0, HI, rA=0) — absolute-address form used by position-dependent
@@ -937,6 +945,26 @@ class BinaryContext:
                 break
 
         if r2 is None:
+            # .glink lazy PLT fallback (ELFv2-GLINK-001): when r2 cannot be determined
+            # (e.g. PIE DSOs where TOC is set dynamically at load time), the 4-word stub
+            # scan cannot run, but .glink lazy stubs can still be mapped directly from
+            # .rela.plt file order — no r2 needed.
+            if rela_plt_ordered:
+                try:
+                    glink = binary.get_section('.glink')
+                    if glink:
+                        glink_va = int(glink.virtual_address)
+                        glink_size = int(glink.size)
+                        PLT0_SIZE = 0x40  # ELFv2: PLT0 resolver padded to 64-byte alignment
+                        for i, sym_name in enumerate(rela_plt_ordered):
+                            if not sym_name:
+                                continue
+                            stub_va = glink_va + PLT0_SIZE + i * 4
+                            if stub_va + 4 > glink_va + glink_size:
+                                break
+                            self.plt[stub_va] = sym_name
+                except Exception:
+                    pass
             return
 
         # Decode stubs: scan .text and .init for 4-word and 5-word PLT stub patterns.
@@ -998,6 +1026,28 @@ class BinaryContext:
                         sym = got_to_sym.get(r2 + (hi << 16) + lo)
                         if sym:
                             self.plt[sec_va + off] = sym
+
+        # .glink lazy PLT fallback (ELFv2-GLINK-001): for binaries using lazy binding
+        # (not -z now / BIND_NOW), stubs are 4-byte 'b glink_resolver' branches inside
+        # .glink rather than the 4-word std r2/ld r12/mtctr/bctr pattern in .text.
+        # PLT0 (the lazy resolver) occupies the first 64 bytes of .glink (ELFv2 fixed);
+        # stubs follow in .rela.plt file order, 4 bytes each.
+        if not self.plt and rela_plt_ordered:
+            try:
+                glink = binary.get_section('.glink')
+                if glink:
+                    glink_va = int(glink.virtual_address)
+                    glink_size = int(glink.size)
+                    PLT0_SIZE = 0x40  # ELFv2: PLT0 resolver padded to 64-byte alignment
+                    for i, sym_name in enumerate(rela_plt_ordered):
+                        if not sym_name:
+                            continue
+                        stub_va = glink_va + PLT0_SIZE + i * 4
+                        if stub_va + 4 > glink_va + glink_size:
+                            break
+                        self.plt[stub_va] = sym_name
+            except Exception:
+                pass
 
     def _extract_plt_ppc64be(self, binary) -> None:
         # PPC64 BE ELFv1: PLT calls use inline 7-instruction call stubs in .text.
