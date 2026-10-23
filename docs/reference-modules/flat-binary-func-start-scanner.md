@@ -85,14 +85,14 @@ tables, which can suppress the confidence level.
 
 ### Step 2: Call-target harvesting
 
-Starting from the reset entry point (decoded from the ISA-specific reset vector location):
+Starting from the reset entry point decoded from the ISA-specific reset vector location:
 
 - Linear decode walks instructions in the detected ISA
-- Direct call instructions (BSR / BL / PPC BL / SH-2A BSR) yield call targets
+- Direct call instructions BSR / BL / PPC BL / SH-2A BSR yield call targets
 - Each new target is pushed to the BFS queue
 - The scan stops at the first return instruction per function, or after 512 instructions
 
-Indirect calls (JSR / BLR / BX LR / SH-2A JSR) are not resolved: they require a taint
+Indirect calls JSR / BLR / BX LR / SH-2A JSR are not resolved: they require a taint
 trace. Direct calls only.
 
 ### Step 3: Prologue pattern scan
@@ -121,9 +121,9 @@ Same five as `EcuArchDetector`: `arm_cm`, `m68k`, `ppc32`, `ppc_vle`, `sh2a`.
   `WindowAnalyzer` trace for JSR targets.
 - Call-target harvesting is BFS from the reset vector only. Functions reachable only via
  interrupt vectors or RTOS task entry points will appear in prologue hits but not call targets.
-- ARM Cortex-M: BLX with register form (indirect) is skipped. Only BL (absolute offset) and
- BLX (with imm offset, to ARM mode) are harvested.
-- PPC VLE: `se_bl` (short 16-bit form of BL) is not currently harvested in the call scanner.
+- ARM Cortex-M: BLX with register form indirect is skipped. Only BL absolute offset and
+ BLX with imm offset, to ARM mode are harvested.
+- PPC VLE: `se_bl` short 16-bit form of BL is not currently harvested in the call scanner.
  It does appear as a `ppc_vle` prologue hit via `e_stwu` scan.
 
 ---
@@ -143,13 +143,13 @@ FuncStartResult  arch=MIPS32_BE  confidence=MEDIUM
 
 ## False positives
 
-CALL target heuristic (`call_targets` in result) may include jump tables or data pointers that are not function starts. For `confidence=LOW` results, manually verify a sample of recovered starts before running `TaintTracker`. FPO binaries (no frame pointer prologues) produce more call-target-derived starts, which have higher false-positive rates.
+CALL target heuristic (`call_targets` in result) may include jump tables or data pointers that are not function starts. For `confidence=LOW` results, manually verify a sample of recovered starts before running `TaintTracker`. FPO binaries no frame pointer prologues produce more call-target-derived starts, which have higher false-positive rates.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm `BinaryContext.load_or_build()` returned `func_starts=0` (or very few) for the flat binary. This scanner runs automatically for supported architectures via `BinaryContext._extract_func_starts()`.
+**Before this module:** Confirm `BinaryContext.load_or_build()` returned `func_starts=0` or very few for the flat binary. This scanner runs automatically for supported architectures via `BinaryContext._extract_func_starts()`.
 
 **After this module:** Use the populated `ctx.func_starts` with `SemanticSearcher.query()`, `SinkArgClassifier.from_context(ctx)`, and `TaintTracker`.
 

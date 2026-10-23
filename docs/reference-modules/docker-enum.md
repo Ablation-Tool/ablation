@@ -15,13 +15,13 @@ Docker API and container attack surface enumeration: exposed Docker sockets, con
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. All HTTP reads use `resp.read(_MAX_HTTP_BYTES)`. Five procfs reads all capped with `f.read(_MAX_FILE_BYTES)` or `f.read(_MAX_FILE_BYTES).splitlines()`: `/proc/1/cgroup` (L112, L366), `/proc/self/status` in `check_privileged()` (L270) and `get_capabilities()` (L297), `/proc/self/mountinfo` in `get_mounts()` (L311). No lief.parse().
+Gate: **PASSED**. No HIGH or CRITICAL findings. All HTTP reads use `resp.read_MAX_HTTP_BYTES`. Five procfs reads all capped with `f.read_MAX_FILE_BYTES` or `f.read_MAX_FILE_BYTES.splitlines()`: `/proc/1/cgroup` L112, L366, `/proc/self/status` in `check_privileged()` (L270) and `get_capabilities()` (L297), `/proc/self/mountinfo` in `get_mounts()` (L311). No lief.parse().
 
 ---
 
 ## How it works
 
-`DockerEnumerator.enumerate_all()` runs in three paths based on environment: always runs `probe_docker_daemon_api()` (TCP port 2375 unauthenticated API probe), then conditionally runs socket-based checks if `/var/run/docker.sock` is accessible, and container-escape checks if running inside a container. Returns a single dict with all results.
+`DockerEnumerator.enumerate_all()` runs in three paths based on environment: always runs `probe_docker_daemon_api()` TCP port 2375 unauthenticated API probe, then conditionally runs socket-based checks if `/var/run/docker.sock` is accessible, and container-escape checks if running inside a container. Returns a single dict with all results.
 
 ---
 

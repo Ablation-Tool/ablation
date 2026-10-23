@@ -8,7 +8,7 @@ Recover function entry points in stripped ARM32 ELF binaries: where `.eh_frame`,
 
 1. **Stripped ARM32 firmware has no reliable function boundary information.** On x86-64, `.eh_frame` records unwind information for every function, and `BinaryContext` uses it to recover function starts even in fully stripped binaries. On ARM32, `.eh_frame` is frequently absent in embedded firmware (Fortinet switches, older Cisco routers, embedded IoT devices). Without it, `func_starts` is populated only from export symbols and call targets: missing many internal functions entirely.
 
-2. **ARM32 and Thumb interworking requires separate scanning strategies.** ARM32 binaries may contain both ARM (4-byte instructions) and Thumb (2-byte or 4-byte Thumb-2) code regions. The PUSH-with-LR prologue encodes differently in each mode: ARM32 uses `STMFD r13!, {rN.., lr}` as a 4-byte word; Thumb-2 uses `STMDB SP!, {rN.., lr}` as a 32-bit Thumb encoding; Thumb-1 uses a 16-bit `PUSH {rlist, lr}` halfword. A single scan pattern cannot cover all three, this tool runs mode-appropriate passes.
+2. **ARM32 and Thumb interworking requires separate scanning strategies.** ARM32 binaries may contain both ARM 4-byte instructions and Thumb 2-byte or 4-byte Thumb-2 code regions. The PUSH-with-LR prologue encodes differently in each mode: ARM32 uses `STMFD r13!, {rN.., lr}` as a 4-byte word; Thumb-2 uses `STMDB SP!, {rN.., lr}` as a 32-bit Thumb encoding; Thumb-1 uses a 16-bit `PUSH {rlist, lr}` halfword. A single scan pattern cannot cover all three, this tool runs mode-appropriate passes.
 
 3. **False positive suppression is critical for ARM32/Thumb mixed binaries.** The Thumb-1 high-byte `0xB5` (the bit that marks `PUSH {rlist, lr}`) appears at non-aligned positions inside ARM32 `BL` instruction words. Without alignment-aware filtering, a Thumb-1 scan on an ARM32 binary would generate hundreds of false function starts at branch target encodings. This scanner suppresses Thumb-1 scanning in ARM32 mode entirely, relying on alignment checks to clean up edge cases in Thumb-2 scanning.
 
@@ -35,13 +35,13 @@ flowchart TD
 
 ### ARM32 prologue pattern
 
-ARM32 `STMFD r13!, {rN.., lr}` (Push multiple registers including LR onto the stack) encodes as:
+ARM32 `STMFD r13!, {rN.., lr}` Push multiple registers including LR onto the stack encodes as:
 
 ```
 [rlist_lo] [rlist_hi | 0x40] [0x2D] [0xE9]
 ```
 
-In little-endian memory, bytes 2–3 are always `\x2d\xe9`. The LR bit (register 14, bit 14 of the register list field) lives in bit 6 of byte 1 (`text[insn_start + 1] & 0x40`). The scanner searches for the `\x2d\xe9` sentinel, steps back 2 bytes to the instruction start, checks 4-byte alignment, and checks the LR bit.
+In little-endian memory, bytes 2–3 are always `\x2d\xe9`. The LR bit register 14, bit 14 of the register list field lives in bit 6 of byte 1 (`text[insn_start + 1] & 0x40`). The scanner searches for the `\x2d\xe9` sentinel, steps back 2 bytes to the instruction start, checks 4-byte alignment, and checks the LR bit.
 
 ### Thumb-2 prologue pattern
 
@@ -122,17 +122,17 @@ Injection: added 312 new function starts to BinaryContext
 
 ## False positives
 
-**Non-function PUSH prologues.** Compiler-generated code occasionally emits `PUSH {rN.., lr}` inside switch statement jump tables or initializer blocks that are not function entries. These produce valid PUSH encodings at the right alignment but are not actual function starts. The count will be slightly inflated (typically 1–5%) above the true function count. Manual disassembly of suspicious entries quickly confirms whether they are entry points.
+**Non-function PUSH prologues.** Compiler-generated code occasionally emits `PUSH {rN.., lr}` inside switch statement jump tables or initializer blocks that are not function entries. These produce valid PUSH encodings at the right alignment but are not actual function starts. The count will be slightly inflated typically 1–5% above the true function count. Manual disassembly of suspicious entries quickly confirms whether they are entry points.
 
-**Thumb-2 in ARM32 mode.** Mixed ARM/Thumb binaries (using `BX`/`BLX` for interworking calls) contain both ARM and Thumb code in the same `.text` section. The Thumb-2 scanner runs in both modes, but its alignment check (2-byte alignment) is less restrictive than the ARM32 check (4-byte alignment). In practice, Thumb-2 PUSH prologues in ARM regions are rare but possible when ARM code calls into a Thumb function inline without a trampoline.
+**Thumb-2 in ARM32 mode.** Mixed ARM/Thumb binaries (using `BX`/`BLX` for interworking calls) contain both ARM and Thumb code in the same `.text` section. The Thumb-2 scanner runs in both modes, but its alignment check 2-byte alignment is less restrictive than the ARM32 check 4-byte alignment. In practice, Thumb-2 PUSH prologues in ARM regions are rare but possible when ARM code calls into a Thumb function inline without a trampoline.
 
-**ELF `.text` vs LOAD segment fallback.** When `.text` is absent (some embedded RTOSs strip section headers entirely), the scanner falls back to the first executable LOAD segment. This is usually correct but may include more bytes than the true code section if the LOAD segment spans both code and data.
+**ELF `.text` vs LOAD segment fallback.** When `.text` is absent some embedded RTOSs strip section headers entirely, the scanner falls back to the first executable LOAD segment. This is usually correct but may include more bytes than the true code section if the LOAD segment spans both code and data.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` to establish the baseline `func_starts` from `.eh_frame` and export symbols. Check `len(ctx.func_starts)`: if it is low relative to binary size for example fewer than 100 functions in a 1MB ARM32 binary, prologue scanning is needed.
+**Before this module:** `BinaryContext.load_or_build()` to establish the baseline `func_starts` from `.eh_frame` and export symbols. Check `lenctx.func_starts`: if it is low relative to binary size for example fewer than 100 functions in a 1MB ARM32 binary, prologue scanning is needed.
 
 **After this module:** `inject_into_context(ctx)` followed by `ctx.save_cache()` to persist the expanded function list. Then run `HeapVulnScanner`, `FormatStringScanner`, `TaintTracker`, and other tools that consume `func_starts`: they will now have complete coverage.
 
@@ -143,7 +143,7 @@ Injection: added 312 new function starts to BinaryContext
 | Field | Content |
 |:---|:---|
 | Return value of `scan()` | Sorted `List[int]` of candidate function start VAs |
-| Return value of `inject_into_context()` | Count of VAs newly added to `ctx.func_starts` (already-known VAs excluded) |
+| Return value of `inject_into_context()` | Count of VAs newly added to `ctx.func_starts` already-known VAs excluded |
 | `report(starts)` | Human-readable summary: count and VA range |
 
 ---
@@ -151,7 +151,7 @@ Injection: added 312 new function starts to BinaryContext
 ## See also
 
 - [Binary Context](binary-context.md): provides baseline `func_starts`; inject results here
-- [Stripped Go x86-64 Boundaries](stripped-go-x86-64-boundaries.md): equivalent for stripped Go x86-64 binaries (pclntab recovery)
+- [Stripped Go x86-64 Boundaries](stripped-go-x86-64-boundaries.md): equivalent for stripped Go x86-64 binaries pclntab recovery
 - [Flat-ROM Function Discovery](flat-rom-function-discovery.md): bare-metal ROM with no ELF headers
 - [ARM32 Taint Analysis](arm32-taint-analysis.md): downstream consumer of the expanded `func_starts` list
 - [Interprocedural Argument Provenance](interprocedural-argument-provenance.md): uses ARM32 register annotator with full function coverage

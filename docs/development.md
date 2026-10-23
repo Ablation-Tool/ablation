@@ -60,7 +60,7 @@ Follow this process when adding a new scanner to Ablation:
 2. **Create `ablation/analyzers/<scanner_name>.py`.** Use `length_underflow.py` as a template. Wire three entry points:
  - `from_context(ctx)`: classmethod constructor
  - `scan()` → list of findings
- - `report(findings)` → formatted string
+ - `reportfindings` → formatted string
 
 3. **Run on a known-positive binary.** Analyze false positives: cross-BB register clobber? Trusted source? Callee reads the register before the sink?
 
@@ -112,7 +112,7 @@ Follow the existing pattern:
 
 Seed `_regs` with the ISA's calling convention argument registers and return register. Use `_walk_ablation_cfg()` as the shared BFS walker.
 
-If the new ISA requires structured control flow (loops, if/else), pass the CFG through `Structurizer` before emission. See `binary_lifter_sh2a.md` for an example.
+If the new ISA requires structured control flow loops, if/else, pass the CFG through `Structurizer` before emission. See `binary_lifter_sh2a.md` for an example.
 
 ---
 

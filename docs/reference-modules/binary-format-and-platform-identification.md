@@ -1,6 +1,6 @@
 # Binary Format and Platform Identification
 
-Identify a binary's format (ELF, PE, Mach-O), architecture (32/64-bit, endianness), and entry point from raw magic bytes and header fields: without external dependencies: before any analysis begins.
+Identify a binary's format ELF, PE, Mach-O, architecture 32/64-bit, endianness, and entry point from raw magic bytes and header fields: without external dependencies: before any analysis begins.
 
 ---
 
@@ -36,7 +36,7 @@ flowchart TD
 
 | Magic | Constant | Format |
 |---|---|---|
-| `7F 45 4C 46` | `\x7fELF` | ELF (32 or 64-bit) |
+| `7F 45 4C 46` | `\x7fELF` | ELF 32 or 64-bit |
 | `4D 5A` | `MZ` | Windows PE |
 | `CE FA ED FE` | `0xFEEDFACE` (LE) | Mach-O 32-bit little-endian |
 | `FE ED FA CE` | `0xCEFAEDFE` (BE) | Mach-O 32-bit big-endian |
@@ -45,7 +45,7 @@ flowchart TD
 
 ### Architecture detection per format
 
-**ELF:** `EI_CLASS` at byte 4 (`0x01` = 32-bit, `0x02` = 64-bit); `EI_DATA` at byte 5 (`0x01` = little-endian, `0x02` = big-endian). Entry point at byte offset 24 (ELF64) or 24 (ELF32, 4 bytes vs 8 bytes).
+**ELF:** `EI_CLASS` at byte 4 (`0x01` = 32-bit, `0x02` = 64-bit); `EI_DATA` at byte 5 (`0x01` = little-endian, `0x02` = big-endian). Entry point at byte offset 24 (ELF64) or 24 ELF32, 4 bytes vs 8 bytes.
 
 **PE:** Entry point is `AddressOfEntryPoint` from the Optional Header. Architecture from `Machine` field: `0x014C` = x86-32, `0x8664` = x86-64.
 
@@ -143,9 +143,9 @@ Sections: 31
 |:---|:---|
 | `format` | `'ELF'`, `'PE'`, `'Mach-O'`, or `'Unknown'` |
 | `bits` | `32` or `64` (or `None` for Unknown) |
-| `endian` | `'little'` or `'big'` (ELF/Mach-O only) |
+| `endian` | `'little'` or `'big'` ELF/Mach-O only |
 | `entry_point` | Hex string of the entry point VA, or `None` if absent |
-| `sections` | Section header count (ELF only) |
+| `sections` | Section header count ELF only |
 
 ---
 

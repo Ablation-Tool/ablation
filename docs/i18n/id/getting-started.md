@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Pada pemindaian di masa depan mana pun, versi firmware berbeda, vendor berbeda: `pl.sweep(searcher)` secara otomatis menjalankan semua pola yang dikonfirmasi.
+Pada pemindaian di masa depan mana pun, versi firmware berbeda, vendor berbeda: `pl.sweepsearcher` secara otomatis menjalankan semua pola yang dikonfirmasi.
 
 ---
 

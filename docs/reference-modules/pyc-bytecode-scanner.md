@@ -10,7 +10,7 @@ FortiSwitch v7 management plane ships only `.pyc` bytecode, no `.py` source file
 
 2. **Full decompilation is not required to detect dangerous patterns.** Every Python code object stores `co_names`, the list of all attribute and global names referenced by `LOAD_ATTR`, `LOAD_GLOBAL`, and `STORE_ATTR` opcodes. If a module calls `os.system()`, the strings `"system"` and `"os"` appear in `co_names` without decompilation.
 
-3. **`xdis` handles cross-version marshal parsing (Python 3.4–3.12+).** Already installed as an `uncompyle6` dependency, no new requirements.
+3. **`xdis` handles cross-version marshal parsing Python 3.4–3.12+.** Already installed as an `uncompyle6` dependency, no new requirements.
 
 Gap closed: 2026-10-16. FortiSwitch v7 Python layer confirmed CLEAN.
 
@@ -68,12 +68,12 @@ custom = PycBytecodeScanner(dangerous_names=frozenset({"marshal", "pickle"}))
 |---|---|---|
 | `"3.4"` | `\xee\x0c\x0d\x0a` | 12-byte header |
 | `"3.6"` | `\xb0\x0b\x0d\x0a` | 12-byte header |
-| `"3.8"` | `\x55\x0d\x0d\x0a` | 16-byte header (PEP 552 flags field) |
+| `"3.8"` | `\x55\x0d\x0d\x0a` | 16-byte header PEP 552 flags field |
 | `"3.10"` | `\x6f\x0d\x0d\x0a` | 16-byte header |
 | `"3.11"` | `\xa7\x0d\x0d\x0a` | 16-byte header |
 | `"3.12"` | `\xcb\x0d\x0d\x0a` | 16-byte header |
 
-Header size determined by magic_int threshold: `magic_int >= 0x0d55` (Python 3.8+) → 16 bytes, otherwise 12 bytes.
+Header size determined by magic_int threshold: `magic_int >= 0x0d55` Python 3.8+ → 16 bytes, otherwise 12 bytes.
 
 ## FORGE audit
 
@@ -132,7 +132,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading output
 
-`PycBytecodeScanner(dangerous_names).scan_file(path)` returns a `PycScanResult`:
+`PycBytecodeScannerdangerous_names.scan_file(path)` returns a `PycScanResult`:
 
 | Attribute | Content |
 |:---|:---|
@@ -144,7 +144,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 | `os_module_present` | `True` if `'os'` appears in `co_names` |
 | `error` | `None` on success, error string if the file could not be parsed |
 | `is_clean` | Property: `True` if `danger_hits` is empty and no error |
-| `confidence` | Property: `'clean'` / `'HIGH'` (os module + danger hits) / `'LOW'` (danger hits only) |
+| `confidence` | Property: `'clean'` / `'HIGH'` os module + danger hits / `'LOW'` danger hits only |
 
 ---
 

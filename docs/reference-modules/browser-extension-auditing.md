@@ -6,7 +6,7 @@ Chrome/Edge/Firefox extension security auditor: scanning manifest.json and JavaS
 
 ## Why this exists
 
-1. **FortiClient EMS and related Fortinet browser-resident agents (FSSO, FIDO2, VPN) ship Chrome extensions with `externally_connectable` patterns broad enough to allow any HTTPS page to call `chrome.runtime.sendMessage` into a privileged service worker.** `BrowserExtensionAuditor` was built to find `FPAM-EXT-1` (CWE-346, HIGH: `externally_connectable` matches `https://*/*`): a pattern that allows any HTTPS origin to use the extension as a confused-deputy port-scan oracle against `127.0.0.1`. Without automation, each extension audit required reading the Chrome extension security model from scratch.
+1. **FortiClient EMS and related Fortinet browser-resident agents FSSO, FIDO2, VPN ship Chrome extensions with `externally_connectable` patterns broad enough to allow any HTTPS page to call `chrome.runtime.sendMessage` into a privileged service worker.** `BrowserExtensionAuditor` was built to find `FPAM-EXT-1` (CWE-346, HIGH: `externally_connectable` matches `https://*/*`): a pattern that allows any HTTPS origin to use the extension as a confused-deputy port-scan oracle against `127.0.0.1`. Without automation, each extension audit required reading the Chrome extension security model from scratch.
 
 2. **`MSG_HANDLER_PREAUTH` is the most commonly missed finding in manual extension review: the background service worker destructures the request object or calls `fetch`/`XMLHttpRequest` before checking `sender.id`, `sender.url`, or `sender.origin`.** `BrowserExtensionAuditor` statically matches the JavaScript source for message handler bodies that perform payload processing before a sender check, using regex patterns for all three Chrome extension API surfaces (`chrome.runtime.onMessage`, `chrome.runtime.onMessageExternal`, `browser.runtime.onMessage`).
 
@@ -98,7 +98,7 @@ The following illustrates the finding format. Actual file paths, line numbers, a
 
 ## Pipeline position
 
-Run `BrowserExtensionAuditor` as a standalone step during assessment of any vendor-shipped browser extension or endpoint security product with a browser component. No binary analysis required: the scanner operates entirely on the unpacked extension source. Pair with `JWTAnalysis` (for extensions that handle authentication tokens) and manual WebSocket port enumeration when `WEBSOCKET_BUS` fires.
+Run `BrowserExtensionAuditor` as a standalone step during assessment of any vendor-shipped browser extension or endpoint security product with a browser component. No binary analysis required: the scanner operates entirely on the unpacked extension source. Pair with `JWTAnalysis` for extensions that handle authentication tokens and manual WebSocket port enumeration when `WEBSOCKET_BUS` fires.
 
 ---
 
@@ -115,7 +115,7 @@ Run `BrowserExtensionAuditor` as a standalone step during assessment of any vend
 | `cwe` | CWE identifier (e.g., `CWE-346`, `CWE-285`) |
 | `title` | Short description of the vulnerability |
 | `detail` | Detailed explanation of the attack vector |
-| `snippet` | Code excerpt at the finding location (if available) |
+| `snippet` | Code excerpt at the finding location if available |
 
 `ExtFinding.fmt()` returns a formatted multi-line string for direct display.
 

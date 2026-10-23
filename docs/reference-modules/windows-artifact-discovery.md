@@ -1,16 +1,16 @@
 # Windows Artifact Discovery
 
-Scan the Windows filesystem for $MFT timeline anomalies, LNK file targets (recent documents, persistence shortcuts), Prefetch execution records, EVTX log gaps, mutex name artifacts from known malware families, and clipboard monitor patterns: providing a host-activity timeline from a mounted Windows volume: via `modules/forensics_enum.py`.
+Scan the Windows filesystem for $MFT timeline anomalies, LNK file targets recent documents, persistence shortcuts, Prefetch execution records, EVTX log gaps, mutex name artifacts from known malware families, and clipboard monitor patterns: providing a host-activity timeline from a mounted Windows volume: via `modules/forensics_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **`detect_windows_forensic_artifacts()` builds a host-activity timeline without requiring Windows tools**, it reads `$MFT` for file creation/modification timestamps, scans `%APPDATA%\Microsoft\Windows\Recent\` for LNK files (revealing what was accessed and when), reads Prefetch files from `C:\Windows\Prefetch\` for application execution records, and scans EVTX logs for gaps (time ranges with no events, indicating log clearing). All parsing is pure Python with no Windows API calls.
+1. **`detect_windows_forensic_artifacts()` builds a host-activity timeline without requiring Windows tools**, it reads `$MFT` for file creation/modification timestamps, scans `%APPDATA%\Microsoft\Windows\Recent\` for LNK files revealing what was accessed and when, reads Prefetch files from `C:\Windows\Prefetch\` for application execution records, and scans EVTX logs for gaps time ranges with no events, indicating log clearing. All parsing is pure Python with no Windows API calls.
 
 2. **`detect_mutex_artifacts()` identifies malware families by their mutex names**: well-known malware families use consistent mutex names to prevent double-infection: `Global\{GUID}` patterns specific to ransomware families, APT loader names, and banking trojan mutex strings. `detect_mutex_artifacts()` scans binary data for string patterns matching a curated list of known malicious mutex names, providing a rapid family attribution signal without dynamic execution.
 
-3. **`detect_windows_forensic_artifacts()` detects EVTX log tampering**, it reads Security Event Log entries and identifies System Event ID 1102 (Audit log cleared) and Security Event ID 104 (System log cleared), which are direct evidence of attacker log clearing. It also detects temporal gaps in the EVTX event sequence where events jump more than a configurable threshold (default: 2 hours) without a system shutdown event.
+3. **`detect_windows_forensic_artifacts()` detects EVTX log tampering**, it reads Security Event Log entries and identifies System Event ID 1102 Audit log cleared and Security Event ID 104 System log cleared, which are direct evidence of attacker log clearing. It also detects temporal gaps in the EVTX event sequence where events jump more than a configurable threshold default: 2 hours without a system shutdown event.
 
 ---
 
@@ -68,7 +68,7 @@ detect_mutex_artifacts:
 
 ## False positives
 
-**`$MFT` `Modified < Created` timestamps**, this pattern indicates timestamp manipulation, which is present in both attacker anti-forensics and legitimate archiving tools (ZIP extraction sets modification time from archive metadata, resulting in a modification timestamp before the local creation timestamp). Verify against EVTX event records for the same file.
+**`$MFT` `Modified < Created` timestamps**, this pattern indicates timestamp manipulation, which is present in both attacker anti-forensics and legitimate archiving tools ZIP extraction sets modification time from archive metadata, resulting in a modification timestamp before the local creation timestamp. Verify against EVTX event records for the same file.
 
 **Mutex name matching is string-based**: mutex names from malware families can be coincidentally reproduced by legitimate software. A `HIGH` confidence match means the string is in the known-malicious list; it does not mean the file is confirmed malware without corroborating evidence.
 
@@ -82,11 +82,11 @@ Run Windows artifact discovery on any mounted Windows volume or memory image dur
 
 ## Reading findings
 
-`detect_windows_forensic_artifacts(mount_path)` returns a list of finding dicts:
+`detect_windows_forensic_artifactsmount_path` returns a list of finding dicts:
 
 | Field | Content |
 |:---|:---|
-| `severity` | `HIGH` (MFT rollback, EVTX clear) / `MEDIUM` (prefetch entry, LNK file) |
+| `severity` | `HIGH` MFT rollback, EVTX clear / `MEDIUM` prefetch entry, LNK file |
 | `title` | Artifact type: `MFT`, `LNK`, `PREFETCH`, or `EVTX` |
 | `path` | Windows file path of the artifact |
 | `detail` | Observation for example modified < created, run count, EventID |

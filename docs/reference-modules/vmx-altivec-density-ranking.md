@@ -8,7 +8,7 @@ Identify PowerPC64/PPC32 functions with high concentrations of VMX (AltiVec) vec
 
 1. **On Cell PPU (PS3), IBM POWER5–9, and G5 targets, math, physics, and renderer functions are heavily vectorized via VMX/AltiVec, these functions have no printable string references and appear opaque to `SemanticSearcher`.** `VMXDensityScanner.scan()` identifies them by VMX instruction density: functions above the density threshold are labeled `vector_math` and excluded from security analysis queues, preventing time waste on graphics/physics code.
 
-2. **VMX instructions use primary opcode 4 (0b000100) in the PowerPC ISA: in big-endian PPC64/PPC32 encoding, byte[0] of any word-aligned VMX instruction is one of {0x10, 0x11, 0x12, 0x13}.** This single-byte check is extremely fast: `VMXDensityScanner` processes 885 functions in approximately 35 seconds on a typical Cell PPU binary without capstone disassembly, making it practical as an early pre-filter.
+2. **VMX instructions use primary opcode 4 0b000100 in the PowerPC ISA: in big-endian PPC64/PPC32 encoding, byte[0] of any word-aligned VMX instruction is one of {0x10, 0x11, 0x12, 0x13}.** This single-byte check is extremely fast: `VMXDensityScanner` processes 885 functions in approximately 35 seconds on a typical Cell PPU binary without capstone disassembly, making it practical as an early pre-filter.
 
 3. **`VMXFunctionResult.label()` integrates with `BinaryContext.set_name()`**: functions labeled `vector_math` at density ≥ threshold are excluded from the taint analysis queue, and their names are set in the context so they appear as labeled in `FuncProfiler` output.
 
@@ -71,9 +71,9 @@ Total vector_math functions: <K>
 
 ## False positives
 
-**VMX opcode detection uses byte[0] ∈ {0x10–0x13} on word-aligned words**: data embedded in the code section (jump tables, constant pools in old PPC ABIs) may have bytes in the {0x10–0x13} range, inflating the VMX count. For functions with suspiciously high density on non-vector code, verify with capstone PPC64 disassembly.
+**VMX opcode detection uses byte[0] ∈ {0x10–0x13} on word-aligned words**: data embedded in the code section jump tables, constant pools in old PPC ABIs may have bytes in the {0x10–0x13} range, inflating the VMX count. For functions with suspiciously high density on non-vector code, verify with capstone PPC64 disassembly.
 
-**Threshold 0.50 is calibrated for Cell PPU**: on IBM POWER9 server binaries where vectorization rates are lower, lower thresholds (0.25–0.35) may be more appropriate.
+**Threshold 0.50 is calibrated for Cell PPU**: on IBM POWER9 server binaries where vectorization rates are lower, lower thresholds 0.25–0.35 may be more appropriate.
 
 ---
 
@@ -85,7 +85,7 @@ Run `VMXDensityScanner.inject_labels()` early in the analysis of Cell PPU or IBM
 
 ## Reading output
 
-`VMXDensityScanner.scan(threshold, min_insns)` returns a list of `VMXFunctionResult` objects (sorted by descending density):
+`VMXDensityScanner.scanthreshold, min_insns` returns a list of `VMXFunctionResult` objects sorted by descending density:
 
 | Attribute | Content |
 |:---|:---|

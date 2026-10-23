@@ -4,9 +4,9 @@
 
 Three things were not possible before in Ablation:
 
-1. **No COM server detection.** A DLL that exports `DllGetClassObject` is a COM server; any registered CLSID it provides is an activation target. If that CLSID is registered under `HKCU\Software\Classes\CLSID` (user-writable) rather than `HKLM`, any process running as the same user can hijack it by writing their own in-process server path. Before this module, finding COM server DLLs and their CLSID references required manual export inspection plus string search.
+1. **No COM server detection.** A DLL that exports `DllGetClassObject` is a COM server; any registered CLSID it provides is an activation target. If that CLSID is registered under `HKCU\Software\Classes\CLSID` user-writable rather than `HKLM`, any process running as the same user can hijack it by writing their own in-process server path. Before this module, finding COM server DLLs and their CLSID references required manual export inspection plus string search.
 
-2. **No CoCreateInstance call site analysis.** A binary that calls `CoCreateInstance` is activating a COM object at runtime. If the CLSID it passes resolves to a machine-writable registry key (a key under `HKCU` or under a user-writable `HKLM` path), an attacker can redirect that activation to their own DLL. Extracting the CLSID argument from a `CoCreateInstance` call site (distinguishing a hardcoded GUID constant from a computed one) required manual disassembly. There was no automated path.
+2. **No CoCreateInstance call site analysis.** A binary that calls `CoCreateInstance` is activating a COM object at runtime. If the CLSID it passes resolves to a machine-writable registry key (a key under `HKCU` or under a user-writable `HKLM` path), an attacker can redirect that activation to their own DLL. Extracting the CLSID argument from a `CoCreateInstance` call site distinguishing a hardcoded GUID constant from a computed one required manual disassembly. There was no automated path.
 
 3. **No COM marshaling / IDispatch surface inventory.** `CoMarshalInterface` and `CoUnmarshalInterface` enable cross-process and cross-machine COM calls. If marshaled data is attacker-influenced, the deserialization path (`IStream`, `IMoniker`) is an exploitation vector. `IDispatch.Invoke` makes a COM object scriptable via OLE automation. Neither of these import categories was tracked in Ablation's Windows PE analysis.
 
@@ -18,8 +18,8 @@ Three things were not possible before in Ablation:
 
 1. Checks PE exports for `DllGetClassObject`, `DllRegisterServer`, `DllUnregisterServer`, `DllCanUnloadNow` to identify COM servers.
 2. Scans `.rdata` and `.data` sections for GUID strings in `{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}` format.
-3. Scans code sections for `CoCreateInstance*` call sites with Capstone and extracts the first argument (CLSID pointer) to read the binary GUID.
-4. Checks IAT for `CoMarshalInterface`, `CoUnmarshalInterface`, `CoMarshalInterThreadInterfaceInStream` (COM marshaling) and `Invoke`/`GetIDsOfNames` (IDispatch OLE automation).
+3. Scans code sections for `CoCreateInstance*` call sites with Capstone and extracts the first argument CLSID pointer to read the binary GUID.
+4. Checks IAT for `CoMarshalInterface`, `CoUnmarshalInterface`, `CoMarshalInterThreadInterfaceInStream` COM marshaling and `Invoke`/`GetIDsOfNames` IDispatch OLE automation.
 5. Reports COM servers with CLSID references as a hijacking surface and CoCreateInstance sites as activation targets.
 
 ---
@@ -64,7 +64,7 @@ COM hijacking works when a DLL is loaded via a CLSID registered under `HKCU\Soft
 
 ## Dependencies
 
-- `lief >= 0.14.0` (PE parsing, exports, IAT)
+- `lief >= 0.14.0` PE parsing, exports, IAT
 - `capstone >= 5.0` (CoCreateInstance call site scanning)
 
 ---
@@ -105,9 +105,9 @@ COMAttackSurfaceMapper: shdocvw.dll
 
 ## False positives
 
-**`com_hijack_risk` requires manual registry check**: the scanner identifies that the DLL is a COM server with CLSID references, but does not query the registry. Whether the CLSIDs are registered under `HKCU` (hijackable) vs `HKLM`-only (not directly hijackable) must be checked separately with `reg query HKCU\Software\Classes\CLSID\{...}`.
+**`com_hijack_risk` requires manual registry check**: the scanner identifies that the DLL is a COM server with CLSID references, but does not query the registry. Whether the CLSIDs are registered under `HKCU` hijackable vs `HKLM`-only not directly hijackable must be checked separately with `reg query HKCU\Software\Classes\CLSID\{...}`.
 
-**`CoCreateInstance` call site with unresolved CLSID**: when the CLSID pointer is computed at runtime (loaded from a global, allocated on the heap), the scanner cannot extract the binary GUID. These are reported as `com_create` findings with `va` set but `clsid=None` in `cocreate_sites()` output. Not all `CoCreateInstance` calls are hijackable.
+**`CoCreateInstance` call site with unresolved CLSID**: when the CLSID pointer is computed at runtime loaded from a global, allocated on the heap, the scanner cannot extract the binary GUID. These are reported as `com_create` findings with `va` set but `clsid=None` in `cocreate_sites()` output. Not all `CoCreateInstance` calls are hijackable.
 
 ---
 
@@ -128,9 +128,9 @@ COMAttackSurfaceMapper: shdocvw.dll
 | `severity` | `HIGH` / `MEDIUM` / `LOW` / `INFO` |
 | `category` | `com_server` / `com_create` / `com_hijack_risk` / `com_marshal` / `clsid_inventory` / `idispatch` |
 | `title` | Short description of the COM attack surface exposure |
-| `location` | Human-readable location string (CLSID, export name, or registry key path) |
+| `location` | Human-readable location string CLSID, export name, or registry key path |
 | `description` | Detailed explanation of the attack vector |
-| `va` | VA of the relevant instruction (0 if not applicable) |
+| `va` | VA of the relevant instruction 0 if not applicable |
 | `cwe` | CWE identifier (e.g., `CWE-284`, `CWE-346`) |
 
 ---

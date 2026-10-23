@@ -18,13 +18,13 @@ results = enumerate_nexus_dashboard(["10.0.0.1", "10.0.0.2"])
 
 ## FORGE audit
 
-Gate: **PASSED**. All HTTP response bodies read with inline `r.read(4 * 1024 * 1024)` cap (4 MB). Socket recv bounded. No file reads. No lief.parse().
+Gate: **PASSED**. All HTTP response bodies read with inline `r.read4 * 1024 * 1024` cap (4 MB). Socket recv bounded. No file reads. No lief.parse().
 
 ---
 
 ## How it works
 
-Standalone probe functions `(host, port, timeout) → list` return `{severity, title, detail, host, port}` finding dicts. `probe_nexus_dashboard(host)` returns a plain data dict `{host, port, reachable, version, cred_result, unauth_data, auth_data, kafka_export_open, sso_impact}`. `enumerate_nexus_dashboard(hosts)` runs all probes across a list of hosts and returns a combined findings list.
+Standalone probe functions `host, port, timeout → list` return `{severity, title, detail, host, port}` finding dicts. `probe_nexus_dashboard(host)` returns a plain data dict `{host, port, reachable, version, cred_result, unauth_data, auth_data, kafka_export_open, sso_impact}`. `enumerate_nexus_dashboard(hosts)` runs all probes across a list of hosts and returns a combined findings list.
 
 ---
 
@@ -73,7 +73,7 @@ probe_nxapi_cli: 10.0.0.1:80
 
 ## Pipeline position
 
-Run `probe_nexus_dashboard()` after identifying a Cisco Nexus Dashboard management IP. Run `probe_nxapi_cli()` and `probe_nxapi_rest()` when NX-API ports (TCP/80, TCP/443) are confirmed open on a Cisco Nexus switch.
+Run `probe_nexus_dashboard()` after identifying a Cisco Nexus Dashboard management IP. Run `probe_nxapi_cli()` and `probe_nxapi_rest()` when NX-API ports TCP/80, TCP/443 are confirmed open on a Cisco Nexus switch.
 
 ---
 

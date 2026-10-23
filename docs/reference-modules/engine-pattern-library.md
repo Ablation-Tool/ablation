@@ -89,7 +89,7 @@ version string content).
 
 ### Semantic pass
 
-Calls `SemanticSearcher.query(sig.description)` and maps hits back to
+Calls `SemanticSearcher.querysig.description` and maps hits back to
 function VAs. Useful when no string constants are present but the
 function's behavior description is distinctive (e.g. "UE4 TArray
 growth; doubles capacity; moves elements").
@@ -186,11 +186,11 @@ The seed corpus covers the most commonly encountered engine functions.
 | Cross-engine runtime | 12 | memory, runtime, debug |
 
 **Confidence base values:**
-- Unity il2cpp: 0.80 (machine-generated, highly consistent)
-- id Tech: 0.75 (strong RTTI and debug string coverage)
-- Unreal: 0.72 (version drift reduces exact match rate)
+- Unity il2cpp: 0.80 machine-generated, highly consistent
+- id Tech: 0.75 strong RTTI and debug string coverage
+- Unreal: 0.72 version drift reduces exact match rate
 - Source 2 / CryEngine: 0.70
-- Runtime / stdlib: 0.65 (pattern varies by compiler and version)
+- Runtime / stdlib: 0.65 pattern varies by compiler and version
 
 ---
 
@@ -215,7 +215,7 @@ lib.add_signature(EngineSignature(
 lib.save()
 ```
 
-### Ingesting confirmed findings (flywheel)
+### Ingesting confirmed findings flywheel
 
 ```python
 from ablation.analyzers.finding_registry import FindingRegistry
@@ -248,7 +248,7 @@ ProbeRanker → next probe type           ← Phase 3: QEMU dynamic execution
 
 After stripping engine code, the analyst runs the hypothesis engine on
 unlabeled functions. The lifter provides structural evidence. The
-engine proposes targeted probes (disassembly → xref → taint → semantic)
+engine proposes targeted probes disassembly → xref → taint → semantic
 and converges to CONFIRMED/REJECTED states without manual triage.
 
 ---
@@ -262,7 +262,7 @@ insufficient for confirmation. The architecture mirrors the evidence
 family hierarchy in `evidence_scorer.py`: exact match → structural →
 semantic.
 
-The `il2cpp` confidence advantage (0.80 vs. 0.72) reflects a real
+The `il2cpp` confidence advantage 0.80 vs. 0.72 reflects a real
 property of the target code, not an arbitrary choice. Unity's il2cpp
 is a C# IL → native code transpiler. The output is deterministic and the patterns are stable across Unity versions. UE4 hand-written C++
 varies by editor version, studio customization, and build configuration,
@@ -284,7 +284,7 @@ Prior to this module, enginepatternlibrary required manual work outside the Abla
 2. **Semantic pass:** queries `SemanticSearcher` with engine-specific natural-language descriptions and labels high-confidence hits.
 3. **SAX structural pass:** encodes each function's opcode sequence as SAX symbols and finds approximate nearest neighbors in the engine corpus.
 
-Each labeled function gets an `EngineLabel` with the engine name and confidence score. `strip_report(labels, total_funcs)` summarizes coverage.
+Each labeled function gets an `EngineLabel` with the engine name and confidence score. `strip_reportlabels, total_funcs` summarizes coverage.
 
 ---
 

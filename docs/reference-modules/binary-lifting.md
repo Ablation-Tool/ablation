@@ -6,11 +6,11 @@ Lift native binary instructions from 18 ISA variants: ARM64, x86-64, x86-32, ARM
 
 ## Why this exists
 
-1. **Firmware targets span dozens of ISA variants that commercial tools support poorly**: nanoMIPS (MediaTek), BEAM (Erlang/OTP embedded nodes), SH-2A (Renesas automotive), ARC EM/HS (DesignWare embedded), and V850/RH850 (automotive ECUs) are second-tier targets in commercial disassemblers. `BinaryLifter` provides a single dispatch interface across all 18 ISAs so that ablation analysis scripts do not branch on architecture.
+1. **Firmware targets span dozens of ISA variants that commercial tools support poorly**: nanoMIPS (MediaTek), BEAM Erlang/OTP embedded nodes, SH-2A Renesas automotive, ARC EM/HS (DesignWare embedded), and V850/RH850 automotive ECUs are second-tier targets in commercial disassemblers. `BinaryLifter` provides a single dispatch interface across all 18 ISAs so that ablation analysis scripts do not branch on architecture.
 
 2. **ARM64 and x86-64 have full typed-register-state lifters; all other ISAs produce structured pseudocode**: the ARM64 backend (`_lift_arm64`) and x86-64 backend (`_lift_x86_64`) both maintain a typed register state machine: each instruction's output is modeled as a `NativeVal` with a C type, and taint annotations are propagated register-by-register. All other backends produce structured pseudocode: call sites are resolved to names, branch targets are labeled, and arithmetic appears as C-style expressions, but without a register state machine.
 
-3. **`with_taint(findings)` integrates TaintTracker output directly into lifted pseudocode**: `BinaryLifter.with_taint(findings)` accepts a list of `TaintFindingARM64` (or any object with `func_va`, `source_reg`, `sink_reg`, or `tainted_regs` attributes) and returns a new `BinaryLifter` instance that annotates affected instructions in the lifted output with taint markers. This connects the automated taint analysis to the human-readable pseudocode.
+3. **`with_taintfindings` integrates TaintTracker output directly into lifted pseudocode**: `BinaryLifter.with_taintfindings` accepts a list of `TaintFindingARM64` (or any object with `func_va`, `source_reg`, `sink_reg`, or `tainted_regs` attributes) and returns a new `BinaryLifter` instance that annotates affected instructions in the lifted output with taint markers. This connects the automated taint analysis to the human-readable pseudocode.
 
 ---
 
@@ -120,7 +120,7 @@ lift_function(0x10430)   [arch=mips32, structural backend]
 
 ## Pipeline position
 
-Use `BinaryLifter.lift_function(va)` after `FuncProfiler` identifies a candidate function and `SinkArgClassifier` classifies the sink as `ARG_PROPAGATED` or `UNKNOWN`. The pseudocode output serves as human-readable confirmation of the taint path before writing the finding to `re/<vendor>/<target>_re.py`. For ARM64 and x86-64 targets, chain `.with_taint(findings)` from a prior `TaintTracker` run to annotate taint flow directly in the pseudocode.
+Use `BinaryLifter.lift_function(va)` after `FuncProfiler` identifies a candidate function and `SinkArgClassifier` classifies the sink as `ARG_PROPAGATED` or `UNKNOWN`. The pseudocode output serves as human-readable confirmation of the taint path before writing the finding to `re/<vendor>/<target>_re.py`. For ARM64 and x86-64 targets, chain `.with_taintfindings` from a prior `TaintTracker` run to annotate taint flow directly in the pseudocode.
 
 ---
 

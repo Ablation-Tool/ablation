@@ -8,7 +8,7 @@
 
 ## What this is
 
-IBM PPC476 is a 32-bit big-endian PowerPC core (Book E architecture) used in IBM embedded
+IBM PPC476 is a 32-bit big-endian PowerPC core Book E architecture used in IBM embedded
 appliances and storage controllers. Firmware targeting this core runs against a glibc 2.15
 sysroot. `BinaryLifter`'s ppc32 backend produces structural output only: most instructions
 appear as comments and call arguments are not resolved. `Ppc32Lifter` is a vulnerability-analysis
@@ -93,7 +93,7 @@ pseudo = lifter.lift(0x10002754, n_insn=80)
 print(pseudo)
 ```
 
-Example output (abbreviated):
+Example output abbreviated:
 
 ```
 // PPC32 lift of 0x10002754 @ 0x10002754
@@ -139,11 +139,11 @@ correctly under `CS_ARCH_PPC | CS_MODE_32 | CS_MODE_BIG_ENDIAN`.
 
 | Instruction | Class | Lifter output |
 |---|---|---|
-| `tlbwe`, `tlbre`, `tlbivax` | TLB management (privileged) | `// tlbwe...` |
+| `tlbwe`, `tlbre`, `tlbivax` | TLB management privileged | `// tlbwe...` |
 | `dcbt`, `dcbst`, `icbi`, `dcbf` | Cache management | `// dcbt...` |
 | `wait` | Wait-for-interrupt | `// wait` |
 | `mfmsr`, `mtmsr` | Machine state register | `// mfmsr...` |
-| `mtspr`, `mfspr` (SPRs 256–767) | Special-purpose registers | `// mtspr...` |
+| `mtspr`, `mfspr` SPRs 256–767 | Special-purpose registers | `// mtspr...` |
 | `evlddx`, `evstddx` (SPE) | Signal Processing Engine | `// evlddx...`: SPE is absent on PPC476; encountering these indicates a misidentified binary |
 
 ---
@@ -195,7 +195,7 @@ easy to cross-reference GOT slots and string literals with `ctx.strings`.
 **Call argument resolution.** At each `bl target` instruction, the lifter collects the current
 value of every argument register (`r3`–`r8`) and appends them to the call statement. Only
 registers with a non-`unknown` value appear. After the call, `r3` is set to `_Val.sym("sym()")`
-and `r4`–`r12` are evicted (caller-saved by PPC32 ABI).
+and `r4`–`r12` are evicted caller-saved by PPC32 ABI.
 
 **PLT stub VAs.** `BinaryContext.plt` maps `stub_va → sym_name` for PPC32 targets after the
 `_extract_plt_ppc32be` fix. The lifter's `bl` handler looks up `target` in `ctx.plt` first, then
@@ -220,17 +220,17 @@ falls back to `ctx.exports`. An unresolved `bl` appears as `0x1000xxxx()`.
    bctr              0x4E800420
    ```
 
-4. For each matching quad, computes `got_va = (HI << 16) + sign_ext16(LO)`.
+4. For each matching quad, computes `got_va = HI << 16 + sign_ext16(LO)`.
 5. If `got_va` is in `got_va → sym_name`, records `stub_va → sym_name` in `self.plt`.
 
 **Why the glink entries are not the call targets:** 
 The `.plt` section in a PPC32 ELF contains 4-byte initial GOT slot values pointing to
 `b <resolver>` one-word glink entries in `.text`. These glink entries are used by `ld.so` during
-lazy binding, not by direct caller `bl` instructions. The actual call stubs (lis/lwz/mtctr/bctr)
+lazy binding, not by direct caller `bl` instructions. The actual call stubs lis/lwz/mtctr/bctr
 sit earlier in `.text` and are what callers `bl` to. An extractor that reads the glink entry
 addresses from `.plt` slot values maps the wrong VAs, call-graph edges never reach them.
 
-**Verification (rpcgen, glibc 2.15, PPC476 sysroot):**
+**Verification rpcgen, glibc 2.15, PPC476 sysroot:**
 
 ```python
 ctx = BinaryContext.load_or_build('.../ppc/usr/bin/rpcgen')
@@ -263,7 +263,7 @@ assert ctx.plt[0x1000f320] == 'fork'
 
 - **SPE instructions indicate a wrong binary.** PPC476 does not implement the Signal Processing
  Engine (SPE). If `evlddx` / `evstddx` instructions appear in the output, the binary is from a
- different PPC32 core (e500, e500v2) and not a PPC476 target.
+ different PPC32 core e500, e500v2 and not a PPC476 target.
 
 ---
 
@@ -305,7 +305,7 @@ assert ctx.plt[0x1000f320] == 'fork'
 The lifter tracks register state using `_Val` internally. Output lines use C-like expressions:
 - Constants printed as `0xNNN` hex literals
 - Arguments as `a0`, `a1`, etc. (r3 = `a0`, r4 = `a1` per PPC32 calling convention)
-- Named imports as their symbol name (resolved from PLT map)
+- Named imports as their symbol name resolved from PLT map
 - Memory loads/stores as pointer-cast dereferences (e.g., `*(u32 *)(sp + 0x18)`)
 - Unknown register state as `?<regname>`
 

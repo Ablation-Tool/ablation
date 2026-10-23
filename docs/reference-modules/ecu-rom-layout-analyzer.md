@@ -21,7 +21,7 @@ only. It never calls a disassembler. The result is correct for TriCore, PPC32, M
 ARM Cortex-M ROMs because Shannon entropy and instruction density are independent of ISA identity.
 
 **3. No calibration region boundary source for downstream scanners.** `EcuCalibrationTableScanner`
-needs a list of `(start, end)` byte ranges to search. `ROMLayout.calibration_regions()` returns them
+needs a list of `start, end` byte ranges to search. `ROMLayout.calibration_regions()` returns them
 directly so the scanner never processes ERASED or CODE ranges.
 
 **4. No way to detect OBD calibration-only dumps before running code analysis.** OBD tuning tools
@@ -29,14 +29,14 @@ capture only the calibration flash partition; the program flash is absent. Runni
 `EcuSecurityAccessScanner` or any disassembler against such an image produces only false positives
 because the byte patterns it recognizes as M68K or PPC32 instructions do not appear. Before this,
 there was no way to detect this condition programmatically. `ROMLayout.is_calibration_only()` returns
-`(True, reason)` when the layout has zero CODE regions and at least one active (non-erased) region,
+`(True, reason)` when the layout has zero CODE regions and at least one active non-erased region,
 so callers can skip code analysis entirely.
 
 **5. No TriCore AURIX layout classification.** The AURIX Interrupt Vector Table (IVT) is 256 entries
 × 32 bytes each, each containing `rslcx`/`rfe`/`nop` sequences. It has entropy above 6.5 bits/byte
 and passes the CODE threshold, but it is not navigable application code: feeding it to a disassembler
 or `TriCoreTaintTracker` produces noise. Similarly, TriCore application code at 4.8–6.5 bits/byte
-entropy fails the PPC density check (no PPC opcodes) and is mislabelled CALIBRATION. And
+entropy fails the PPC density check no PPC opcodes and is mislabelled CALIBRATION. And
 TriCore-compressed OS blobs have entropy ≥ 6.0 and pass as CODE. Before this addition, running the
 analyzer on any AURIX flat ROM image gave a completely wrong layout map. The `arch_hint="tricore"`
 path adds a Capstone decode-density classifier and an IVT pattern detector to correctly distinguish
@@ -46,7 +46,7 @@ all four TriCore region classes.
 
 ## Classification algorithm
 
-The analyzer divides the ROM into `window_size` (default 4096-byte) windows and classifies each one
+The analyzer divides the ROM into `window_size` default 4096-byte windows and classifies each one
 using three signals: Shannon entropy, fill-byte ratio, and PPC32 instruction density.
 
 ### Shannon entropy
@@ -66,7 +66,7 @@ Real-world ROM regions fall into distinct bands:
 | PADDING (0x00 fill) | 0.0 | Single byte value |
 | CALIBRATION | 2.5 to 6.5 | Structured numeric tables with bounded values |
 | MIXED | 6.5 to 6.8 | Code/cal boundaries; descriptor tables |
-| CODE | 5.4 to 6.3 (fixed-width ISA) | Aligned instruction streams with clustered opcodes |
+| CODE | 5.4 to 6.3 fixed-width ISA | Aligned instruction streams with clustered opcodes |
 
 The overlap between CALIBRATION and CODE in the 4.8 to 6.5 range is the core classification
 problem. Fixed-width ISAs (PPC32, M68k, TriCore, SH) produce lower code entropy than x86 because
@@ -115,7 +115,7 @@ else:                     CODE
 ```
 
 The `_T_CODE_FLOOR = 4.8` threshold is the key discovery from testing on GM E38 vs EDC16C34 ROMs:
-dense Bosch calibration tables (lookup arrays, descriptor structs) reach entropy 5.0 to 5.9 with
+dense Bosch calibration tables lookup arrays, descriptor structs reach entropy 5.0 to 5.9 with
 low fill ratio, so they pass the original entropy-only test for CODE. The floor cuts them out
 because no ISA in the corpus produces instruction streams below 4.8 bits/byte.
 
@@ -152,7 +152,7 @@ layout = ana.analyze()
 | `window_size` | 4096 | Window size in bytes. Use 1024 for ROMs smaller than 256 KB. |
 | `fill_byte` | 0xFF | Erased flash fill byte. NOR flash erases to 0xFF; some NAND to 0x00. |
 | `fill_threshold` | 0.85 | Fill-byte proportion above which a window is ERASED. |
-| `arch_hint` | `""` | Architecture hint. Pass `"tricore"` for Infineon AURIX TC-series flat ROM images to enable TriCore-aware classification (Capstone decode density + IVT pattern detection). Leave empty for all other architectures. |
+| `arch_hint` | `""` | Architecture hint. Pass `"tricore"` for Infineon AURIX TC-series flat ROM images to enable TriCore-aware classification Capstone decode density + IVT pattern detection. Leave empty for all other architectures. |
 
 ---
 
@@ -183,7 +183,7 @@ class ROMLayout:
 ### `is_calibration_only() -> tuple[bool, str]`
 
 Returns `(True, reason)` when the layout contains no CODE regions and at least one active
-(non-ERASED, non-PADDING) region. Returns `(False, "")` when CODE regions are present.
+non-ERASED, non-PADDING region. Returns `(False, "")` when CODE regions are present.
 Returns `(False, "image is fully erased")` when no active regions exist at all.
 
 Use this before running `EcuSecurityAccessScanner` or any disassembly pipeline:
@@ -221,7 +221,7 @@ class ROMRegion:
 
 ## Validated results
 
-### EDC16C34 PSA Berlingo (9663944680.bin, 2 MB, calibration-only)
+### EDC16C34 PSA Berlingo 9663944680.bin, 2 MB, calibration-only
 
 ```
 Offset              Type          Size   Entropy
@@ -259,7 +259,7 @@ Offset              Type          Size   Entropy
 0x1FF000-0x200000    ERASED          4 KB  0.00
 ```
 
-6 CODE regions totaling 1520 KB (PPC32 application + OS). 13 CALIBRATION regions totaling 240 KB.
+6 CODE regions totaling 1520 KB PPC32 application + OS. 13 CALIBRATION regions totaling 240 KB.
 The 208 KB ERASED gap at 0x18B000 cleanly separates the code image from the calibration image.
 
 ---
@@ -295,7 +295,7 @@ covered by valid TriCore instructions is the decode density:
 | Calibration tables | < 10% | Not instructions |
 
 Thresholds: `_T_TC_CODE = 0.35` (below = not confirmed as code), `_T_TC_DATA = 0.10` (below = CALIBRATION).
-The band 10–35% maps to MIXED (boundary or partial code window).
+The band 10–35% maps to MIXED boundary or partial code window.
 
 ### AURIX IVT detection
 
@@ -305,7 +305,7 @@ when at least 4 of the first 8 entries contain one of these mnemonics.
 
 AURIX IVT properties:
 - 256 entries × 32 bytes per entry = 8 KB per IVT block
-- Each entry ends with `rfe` (Return From Exception)
+- Each entry ends with `rfe` Return From Exception
 - Entries are padded with `nop` (0x0D 0x00 LE)
 - High entropy (> 6.5) because of opcode diversity, but Capstone decode density is 5–30%
 
@@ -366,7 +366,7 @@ for r in layout.ivt_regions():
 
 ## How it works
 
-Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 
@@ -412,8 +412,8 @@ Each `ROMRegion` has:
 
 | Attribute | Content |
 |:---|:---|
-| `start` | First byte offset of the region (inclusive) |
-| `end` | Last byte offset of the region (exclusive) |
+| `start` | First byte offset of the region inclusive |
+| `end` | Last byte offset of the region exclusive |
 | `region_type` | `'ERASED'` / `'CODE'` / `'CALIBRATION'` / `'MIXED'` / `'PADDING'` / `'IVT'` |
 | `entropy` | Mean Shannon entropy across all windows in the region |
 | `window_count` | Number of analysis windows merged into this region |

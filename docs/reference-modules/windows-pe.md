@@ -98,7 +98,7 @@ Structured Exception Handling (SEH) is an x86-32 mechanism that stores exception
 
 ## ETWProviderExtractor
 
-Event Tracing for Windows (ETW) is the kernel telemetry channel that security products (EDRs, AV, audit logging) use for real-time event streams. A driver that registers an ETW provider but never calls `EventWrite` may be suppressing security telemetry.
+Event Tracing for Windows (ETW) is the kernel telemetry channel that security products EDRs, AV, audit logging use for real-time event streams. A driver that registers an ETW provider but never calls `EventWrite` may be suppressing security telemetry.
 
 ```mermaid
 flowchart TD

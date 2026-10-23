@@ -6,7 +6,7 @@ Four things were not possible before in Ablation:
 
 1. **Parse XCOFF32/XCOFF64 binaries.** LIEF returns `None` for XCOFF inputs. Calling `BinaryContext.load_or_build()` on any AIX binary produced a default `x86_64` context with no sections, no symbols, and no function starts. Every AIX analysis session was silently broken before this module.
 
-2. **Extract loader-section symbols from stripped AIX binaries.** AIX production builds routinely have `nsyms=0` in the XCOFF file header (all symbol table entries stripped). The `.loader` section, keyed by flags `0x1000`, survives stripping and holds all import/export symbol names with their virtual addresses. This is the primary RE surface for stripped AIX network drivers and kernel extensions.
+2. **Extract loader-section symbols from stripped AIX binaries.** AIX production builds routinely have `nsyms=0` in the XCOFF file header all symbol table entries stripped. The `.loader` section, keyed by flags `0x1000`, survives stripping and holds all import/export symbol names with their virtual addresses. This is the primary RE surface for stripped AIX network drivers and kernel extensions.
 
 3. **Resolve PPC32 function descriptors to code VAs.** Exported functions on PPC32/PPC64 appear as 8-byte descriptors in `.data` (`[code_va(4), toc_va(4)]`), not as direct code-section pointers. The optional header `entry` field points to a descriptor, not raw code. Resolving the actual code VA requires reading `.data` at the descriptor address, which no prior ablation module attempted.
 
@@ -14,13 +14,13 @@ Four things were not possible before in Ablation:
 
 ## Format notes
 
-XCOFF magic numbers (big-endian, first 2 bytes):
-- `0x01DF` = XCOFF32 (AIX 4.x/5.x 32-bit, PPC32)
-- `0x01EF` = XCOFF64 (AIX 5.x/6.x 64-bit, PPC64)
+XCOFF magic numbers big-endian, first 2 bytes:
+- `0x01DF` = XCOFF32 AIX 4.x/5.x 32-bit, PPC32
+- `0x01EF` = XCOFF64 AIX 5.x/6.x 64-bit, PPC64
 
 File layout (XCOFF32):
 - File header: 20 bytes
-- Optional header: 72 bytes (entry, toc at optional+28)
+- Optional header: 72 bytes entry, toc at optional+28
 - Section headers: 40 bytes each
 - Section data: at `scnptr` offsets
 - `.loader` section: flags `0x1000`; contains loader header + symbols + import file table + string table
@@ -77,13 +77,13 @@ for sym in binary.imports:
 
 ## FORGE audit
 
-Gate: **PASSED** (0 HIGH, 0 CRITICAL). 2 MEDIUM findings for XCOFF64 path (wrong optional header format; wrong loader symbol size). Both are out of scope for AIX 4.x (32-bit) targets. Will be fixed when first XCOFF64 binary is available.
+Gate: **PASSED** 0 HIGH, 0 CRITICAL. 2 MEDIUM findings for XCOFF64 path wrong optional header format; wrong loader symbol size. Both are out of scope for AIX 4.x (32-bit) targets. Will be fixed when first XCOFF64 binary is available.
 
 ---
 
 ## How it works
 
-`xcoff_parser.parse(path)` parses an IBM XCOFF32 or XCOFF64 binary (AIX PowerPC). XCOFF is the AIX variant of COFF with extensions for 64-bit, dynamic linking via a `.loader` section, and the CSECT (control section) subdivision within segments. The parser extracts: section headers and section data, the XCOFF symbol table (including `C_EXT` / `C_WEAKEXT` entries), the loader section (function imports and exports with VAs), and CSECT boundaries used as function-start candidates. Returns `XcoffBinary` with `sections`, `symbols`, `plt`, and `func_starts`.
+`xcoff_parser.parse(path)` parses an IBM XCOFF32 or XCOFF64 binary (AIX PowerPC). XCOFF is the AIX variant of COFF with extensions for 64-bit, dynamic linking via a `.loader` section, and the CSECT control section subdivision within segments. The parser extracts: section headers and section data, the XCOFF symbol table (including `C_EXT` / `C_WEAKEXT` entries), the loader section function imports and exports with VAs, and CSECT boundaries used as function-start candidates. Returns `XcoffBinary` with `sections`, `symbols`, `plt`, and `func_starts`.
 
 ---
 
@@ -110,7 +110,7 @@ b.func_starts    # [0x10001200, 0x10001280, 0x10001300, ...]
 
 ## Pipeline position
 
-**Before this module:** Confirm XCOFF magic with `struct.unpack('>H', data[:2])`: `0x01DF` (XCOFF32), `0x01F7` (XCOFF64), or `0x01EF` (XCOFF64 alt). Pass `data=` kwarg if already read to avoid double reads.
+**Before this module:** Confirm XCOFF magic with `struct.unpack('>H', data[:2])`: `0x01DF` (XCOFF32), `0x01F7` (XCOFF64), or `0x01EF` XCOFF64 alt. Pass `data=` kwarg if already read to avoid double reads.
 
 **After this module:** Pass `XcoffBinary.func_starts` to `PPC64BESinkClassifier` for PPC64 targets, or `XcoffBinary.plt` to `TaintTracker` for import resolution.
 
@@ -126,7 +126,7 @@ b.func_starts    # [0x10001200, 0x10001280, 0x10001300, ...]
 |:---|:---|:---|
 | `path` | `str` | Path to the analyzed binary |
 | `arch` | `str` | `'ppc32'` or `'ppc64'` |
-| `entry` | `int` | Entry point VA (descriptor VA on PPC32) |
+| `entry` | `int` | Entry point VA descriptor VA on PPC32 |
 | `text_start` | `int` | VA of the `.text` section |
 | `data_start` | `int` | VA of the `.data` section |
 | `toc_va` | `int` | TOC anchor VA |
@@ -139,7 +139,7 @@ b.func_starts    # [0x10001200, 0x10001280, 0x10001300, ...]
 | Attribute | Type | Content |
 |:---|:---|:---|
 | `name` | `str` | Symbol name |
-| `va` | `int` | Descriptor VA (functions) or data VA; 0 for imports |
+| `va` | `int` | Descriptor VA functions or data VA; 0 for imports |
 | `lib` | `str` | Import library name; empty for exports |
 | `smclas` | `int` | Storage mapping class |
 | `code_va` | `int` | Resolved code entry point VA after descriptor resolution; 0 if unresolved |

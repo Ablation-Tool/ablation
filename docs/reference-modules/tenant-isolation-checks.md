@@ -1,6 +1,6 @@
 # Tenant Isolation Checks
 
-Scan source code for ORM queries (Prisma, Mongoose, SQLAlchemy, raw SQL) that fetch or mutate multi-tenant data without scoping to the authenticated tenant's `orgId`, `projectId`, or `userId`: detecting IDOR and cross-tenant data leak patterns before code reaches production: via `ablation/analyzers/source_isolation_checker.py` `SourceIsolationChecker`.
+Scan source code for ORM queries Prisma, Mongoose, SQLAlchemy, raw SQL that fetch or mutate multi-tenant data without scoping to the authenticated tenant's `orgId`, `projectId`, or `userId`: detecting IDOR and cross-tenant data leak patterns before code reaches production: via `ablation/analyzers/source_isolation_checker.py` `SourceIsolationChecker`.
 
 ---
 
@@ -86,7 +86,7 @@ SourceIsolationChecker (SESSION routes):
 
 ## Pipeline position
 
-Run tenant isolation checks as part of source code review after `SourceEntryClassifier` identifies user-facing API routes. The check is fast (regex-based, no execution required) and should run on every route file touching shared data models.
+Run tenant isolation checks as part of source code review after `SourceEntryClassifier` identifies user-facing API routes. The check is fast regex-based, no execution required and should run on every route file touching shared data models.
 
 ---
 

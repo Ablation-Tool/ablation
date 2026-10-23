@@ -25,7 +25,7 @@ Erlang applications compile to `.beam` files, one per module, using the IFF cont
 
 **Check `ctx.obfuscated` before relying on function names.** An obfuscated BEAM file has its `Dbgi` chunk stripped so `ast_functions` is empty and export/import analysis is the only available path. Reporting zero dangerous imports on an obfuscated module without flagging the obfuscation is a false negative.
 
-**Filter `erlang:apply` separately from code-execution findings.** `erlang:apply` (DISPATCH severity) appears in almost every OTP application as a routing mechanism. Mixing DISPATCH findings with CODE_EXEC findings hides the actual high-risk imports.
+**Filter `erlang:apply` separately from code-execution findings.** `erlang:apply` DISPATCH severity appears in almost every OTP application as a routing mechanism. Mixing DISPATCH findings with CODE_EXEC findings hides the actual high-risk imports.
 
 **Use `sweep_beam_dir()` for OTP applications.** An OTP release has dozens of `.beam` files. Analyzing one module in isolation misses import chains that cross module boundaries.
 
@@ -38,7 +38,7 @@ Erlang applications compile to `.beam` files, one per module, using the IFF cont
 Two things blocked BEAM security analysis before this module:
 
 **1. No Erlang-native equivalent of PLT scanning.**
-In ELF binaries, the PLT is the authoritative list of external function calls. Finding `system` or `popen` in a C binary means scanning the import table. In BEAM, the equivalent is the ImpT (Import Table) chunk, but it encodes calls as `{Module, Function, Arity}` tuples in Erlang's External Term Format (ETF), not as symbol table entries. No tool exposed this as a queryable Python API. `BeamContext.imports` provides `dangerous_imports(min_severity=...)` with the same interface as a PLT scan.
+In ELF binaries, the PLT is the authoritative list of external function calls. Finding `system` or `popen` in a C binary means scanning the import table. In BEAM, the equivalent is the ImpT Import Table chunk, but it encodes calls as `{Module, Function, Arity}` tuples in Erlang's External Term Format (ETF), not as symbol table entries. No tool exposed this as a queryable Python API. `BeamContext.imports` provides `dangerous_imports(min_severity=...)` with the same interface as a PLT scan.
 
 **2. Obfuscation detection required manual chunk inspection.**
 Erlang obfuscators strip or corrupt the `Dbgi` debug chunk and the `AtU8` atom table. Without these chunks, a BEAM file has no readable function names or source locations. `BeamContext.obfuscated` and `ctx.obfuscation_indicators` expose this as a flag rather than requiring the analyst to read the IFF chunk headers manually.
@@ -47,7 +47,7 @@ Erlang obfuscators strip or corrupt the `Dbgi` debug chunk and the `AtU8` atom t
 
 ## How BEAM files are structured
 
-A BEAM file is an IFF (Interchange File Format) container. IFF was designed for structured binary data exchange. The BEAM format uses it to pack all module information into one file with self-describing chunk types.
+A BEAM file is an IFF Interchange File Format container. IFF was designed for structured binary data exchange. The BEAM format uses it to pack all module information into one file with self-describing chunk types.
 
 ```
   IFF header (12 bytes):
@@ -85,7 +85,7 @@ flowchart TD
 
 The atom table is the foundation of all other tables. Exports, imports, and literals all reference atoms by index. `AtU8` is the UTF-8 atom table (OTP 20+). `Atom` is the Latin-1 predecessor. `BeamContext` tries `AtU8` first and falls back to `Atom`.
 
-The ImpT entries encode calls as three atom indices: `(module_atom_idx, function_atom_idx, arity)`. `BeamContext` resolves these to readable `"os:cmd/1"` strings using the atom table.
+The ImpT entries encode calls as three atom indices: `module_atom_idx, function_atom_idx, arity`. `BeamContext` resolves these to readable `"os:cmd/1"` strings using the atom table.
 
 ---
 
@@ -110,7 +110,7 @@ print(ctx.summary())
 | ExpT | `exports` | ELF exported symbols |
 | ImpT | `imports` | PLT entries |
 | AtU8 / Atom | `atoms` | String table |
-| LitT | `literals` | `.rodata` constants (ETF-decoded) |
+| LitT | `literals` | `.rodata` constants ETF-decoded |
 | StrT | `strings` | Raw string table segments |
 | Dbgi | `ast_functions` | DWARF debug info: source file, function names, line numbers |
 
@@ -157,7 +157,7 @@ for imp in dangerous:
 | `code` | `load_binary` | CODE_EVAL | Hot-load module from binary blob |
 | `ssl` | `connect` | NETWORK | Outbound TLS connection |
 | `gen_tcp` | `connect` | NETWORK | Outbound TCP connection |
-| `erlang` | `apply` | DISPATCH | Dynamic dispatch (high volume) |
+| `erlang` | `apply` | DISPATCH | Dynamic dispatch high volume |
 
 ### Why `erlang:open_port` is dangerous
 
@@ -289,7 +289,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 | `imports` | `List[BeamImport]`: imported functions; dangerous ones have `dangerous=True` and a `severity` string |
 | `literals` | `List[str]`: ETF-decoded literal representations |
 | `strings` | `List[str]`: raw StrT byte segments |
-| `source_file` | Original `.erl` filename (only when debug info is present) |
+| `source_file` | Original `.erl` filename only when debug info is present |
 | `ast_functions` | `List[BeamAstFunction]`: function names with source line numbers |
 
 Dangerous imports are identified inline: `import.dangerous == True` and `import.severity` in `('CRITICAL'/'HIGH'/'MEDIUM')`.

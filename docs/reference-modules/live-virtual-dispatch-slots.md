@@ -75,7 +75,7 @@ Services found: <N>
 
 ## Pipeline position
 
-Run `BinderScanner` on any Android APK (system app, security agent, MDM client) as the first step of Android attack surface enumeration. `CRITICAL` findings (exported, no permission) are the highest-priority triage targets. Follow with `BinderFinding.transaction_codes` analysis to enumerate the full AIDL method surface.
+Run `BinderScanner` on any Android APK system app, security agent, MDM client as the first step of Android attack surface enumeration. `CRITICAL` findings exported, no permission are the highest-priority triage targets. Follow with `BinderFinding.transaction_codes` analysis to enumerate the full AIDL method surface.
 
 ---
 
@@ -85,12 +85,12 @@ Run `BinderScanner` on any Android APK (system app, security agent, MDM client) 
 
 | Attribute | Content |
 |:---|:---|
-| `severity` | `'CRITICAL'` (exported, no permission) / `'HIGH'` (exported, weak permission) / `'MEDIUM'` / `'LOW'` / `'INFO'` |
+| `severity` | `'CRITICAL'` exported, no permission / `'HIGH'` exported, weak permission / `'MEDIUM'` / `'LOW'` / `'INFO'` |
 | `category` | Finding category (e.g., `'exported_service'`, `'weak_permission'`) |
 | `title` | Short finding title |
 | `detail` | Exploitation description and supporting context |
 | `source` | Source location identifier for example service class name or manifest entry |
-| `evidence` | Evidence excerpt from the APK (permission declaration, AIDL interface, etc.) |
+| `evidence` | Evidence excerpt from the APK permission declaration, AIDL interface, etc. |
 
 ---
 

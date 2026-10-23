@@ -66,7 +66,7 @@ ARM32IntOverflowScanner: arm32_target.so
 
 **`ReachingDefsAnalysis` may not trace through all calling conventions**: a wire-controlled value passed via a callee-saved register across multiple function boundaries may not be traced back to its `recv` source. Findings with `wire_source=UNKNOWN` require manual trace verification.
 
-**CMP upper-bound check detection looks for `CMP Rd, IMM` within the basic-block range between `mul_va` and `alloc_va`**: a bounds check in a called helper function (not inline) is not detected. Verify that `bounds_checked=False` findings are not guarded by an out-of-line check.
+**CMP upper-bound check detection looks for `CMP Rd, IMM` within the basic-block range between `mul_va` and `alloc_va`**: a bounds check in a called helper function not inline is not detected. Verify that `bounds_checked=False` findings are not guarded by an out-of-line check.
 
 ---
 

@@ -6,11 +6,11 @@
 
 Three gaps in the existing x86-64 sink analysis chain:
 
-1. **SinkArgClassifier does not analyze sscanf-family sinks.** It classifies the command string argument at exec-class sinks (system/popen/execve). It does not classify the format string at sscanf/scanf/fscanf, the vuln class where `sscanf(input, "%s", buf)` overflows `buf` when `input` is attacker-controlled.
+1. **SinkArgClassifier does not analyze sscanf-family sinks.** It classifies the command string argument at exec-class sinks system/popen/execve. It does not classify the format string at sscanf/scanf/fscanf, the vuln class where `sscanf(input, "%s", buf)` overflows `buf` when `input` is attacker-controlled.
 
 2. **sscanf format strings require a different analysis target.** For exec-class sinks, the question is "where did the command string come from?" For sscanf, the question is "does the format string allow writing past the destination buffer?" These require tracing different argument registers and a second-pass scan of the resolved bytes.
 
-3. **Four sscanf callers in libwmshared.so (session 18) required full manual disassembly.** The most interesting one (0x2c3550) used a dynamically-constructed format `%46s %lu %d` built via `snprintf`. This module would have auto-classified it as DYNAMIC_FMT, reducing work to: confirm snprintf format template is constant. The remaining three would have been classified by register trace without manual capstone trace.
+3. **Four sscanf callers in libwmshared.so session 18 required full manual disassembly.** The most interesting one (0x2c3550) used a dynamically-constructed format `%46s %lu %d` built via `snprintf`. This module would have auto-classified it as DYNAMIC_FMT, reducing work to: confirm snprintf format template is constant. The remaining three would have been classified by register trace without manual capstone trace.
 
 ## Entry points
 
@@ -43,24 +43,24 @@ clf = SscanfSinkClassifier.from_context(ctx)
 
 | Sink | Format arg |
 |------|-----------|
-| `sscanf(str, fmt,...)` | rsi (arg 1) |
-| `vsscanf(str, fmt, ap)` | rsi (arg 1) |
-| `__isoc99_sscanf(str, fmt,...)` | rsi (arg 1) |
+| `sscanfstr, fmt,...` | rsi (arg 1) |
+| `vsscanfstr, fmt, ap` | rsi (arg 1) |
+| `__isoc99_sscanfstr, fmt,...` | rsi (arg 1) |
 | `scanf(fmt,...)` | rdi (arg 0) |
 | `__isoc99_scanf(fmt,...)` | rdi (arg 0) |
-| `fscanf(file, fmt,...)` | rsi (arg 1) |
-| `__isoc99_fscanf(file, fmt,...)` | rsi (arg 1) |
+| `fscanffile, fmt,...` | rsi (arg 1) |
+| `__isoc99_fscanffile, fmt,...` | rsi (arg 1) |
 
 ## Format string analysis (`_has_unbounded_s`)
 
 Parses the resolved `.rodata` format string byte-by-byte to detect `%s` without an explicit width specifier. Handles:
 
-- `%s` → UNSAFE (no width)
-- `%20s` → SAFE (explicit width 20)
+- `%s` → UNSAFE no width
+- `%20s` → SAFE explicit width 20
 - `%05s` → SAFE (`0` consumed as flag, `5` is width)
-- `%*s` → SAFE (assignment-suppressed: no buffer write)
-- `%%` → SAFE (escaped percent, not a specifier)
-- `%ls`, `%hs` → UNSAFE (length modifier, no width)
+- `%*s` → SAFE assignment-suppressed: no buffer write
+- `%%` → SAFE escaped percent, not a specifier
+- `%ls`, `%hs` → UNSAFE length modifier, no width
 
 Known limitation: `%[...]` character-class specifiers without a width are also unbounded but are not detected. Only `%s` conversion is checked.
 
@@ -98,7 +98,7 @@ gate_passed=True. 1 MEDIUM finding (dead-sink filter when `_plt_caller_counts` e
 
 ## How it works
 
-`SscanfSinkClassifier.from_context(ctx).classify_all()` iterates `ctx.func_starts` and disassembles each function with Capstone. For each `sscanf`/`__isoc99_sscanf` call site, it traces the format-string argument (rsi / arg1) backward in the instruction stream. If the format string resolves to a `.rodata` constant, the site is `RODATA_CONST`. If it resolves to a register written from a network-sourced buffer, the site is `ARG_PROPAGATED`. Unresolved sites are `UNKNOWN`. Returns `List[SinkClassification]` (re-exported from the x86 SAC module).
+`SscanfSinkClassifier.from_context(ctx).classify_all()` iterates `ctx.func_starts` and disassembles each function with Capstone. For each `sscanf`/`__isoc99_sscanf` call site, it traces the format-string argument rsi / arg1 backward in the instruction stream. If the format string resolves to a `.rodata` constant, the site is `RODATA_CONST`. If it resolves to a register written from a network-sourced buffer, the site is `ARG_PROPAGATED`. Unresolved sites are `UNKNOWN`. Returns `List[SinkClassification]` re-exported from the x86 SAC module.
 
 ---
 
@@ -157,7 +157,7 @@ SinkClassification  sscanf  call_va=0x00402310  func=parse_config (0x004022c0)
 | `verdict` | `'RODATA_SAFE'`: fixed safe format; `'RODATA_UNSAFE'`: fixed format with `%s` without width; `'DYNAMIC_FMT'`: format comes from a variable; `'ARG_PROPAGATED'`: format traces to an entry argument; `'UNKNOWN'`: provenance unresolved |
 | `format_str` | Decoded format string if from `.rodata`, else empty string |
 | `detail` | Human-readable trace description |
-| `severity` | Derived: `'LOW'` (RODATA_SAFE) / `'HIGH'` (RODATA_UNSAFE, ARG_PROPAGATED) / `'MEDIUM'` (DYNAMIC_FMT, UNKNOWN) |
+| `severity` | Derived: `'LOW'` RODATA_SAFE / `'HIGH'` RODATA_UNSAFE, ARG_PROPAGATED / `'MEDIUM'` DYNAMIC_FMT, UNKNOWN |
 
 ---
 

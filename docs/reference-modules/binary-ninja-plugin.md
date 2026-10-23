@@ -80,7 +80,7 @@ Total: <N> findings  (<C> critical, <H> high)
 
 ## False positives
 
-**`externally_connectable_broad` fires on `https://*.example.com/*` patterns**: subdomain-wildcarded patterns are flagged as broad because they cover all subdomains including attacker-controlled ones (if the root domain allows user subdomains). Validate whether the wildcarded domain is single-vendor or user-extensible before treating as critical.
+**`externally_connectable_broad` fires on `https://*.example.com/*` patterns**: subdomain-wildcarded patterns are flagged as broad because they cover all subdomains including attacker-controlled ones if the root domain allows user subdomains. Validate whether the wildcarded domain is single-vendor or user-extensible before treating as critical.
 
 **Missing sender check pattern uses regex matching**: an `onMessageExternal` listener that performs sender validation in a called helper function will be flagged as missing the check if the helper is not inlined. Inspect the listener body for indirect validation before reporting.
 
@@ -109,5 +109,5 @@ Run `BrowserExtensionAuditor` on any Chrome/Edge/Firefox extension extracted fro
 
 ## See also
 
-- [Electron Application Auditing](electron-application-auditing.md): Electron app security scanning (similar pattern class)
+- [Electron Application Auditing](electron-application-auditing.md): Electron app security scanning similar pattern class
 - [Source Dangerous Sink Detection](source-dangerous-sink-detection.md): `SourceSinkScanner` for source-level JavaScript dangerous sinks

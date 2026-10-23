@@ -1,14 +1,14 @@
 # Credential Testing Helpers
 
-Test SSH and FTP service authentication with credential lists using parallel threads, probe SMB for null session access (via `LateralMovementEnumerator`), detect SSH legacy protocol versions and vulnerable implementations, and identify SSH weak authentication surface (keyboard-interactive, password auth acceptance): via `modules/lateral_movement.py`.
+Test SSH and FTP service authentication with credential lists using parallel threads, probe SMB for null session access (via `LateralMovementEnumerator`), detect SSH legacy protocol versions and vulnerable implementations, and identify SSH weak authentication surface keyboard-interactive, password auth acceptance: via `modules/lateral_movement.py`.
 
 ---
 
 ## Why this exists
 
-1. **`ssh_credential_spray()` performs banner-layer SSH surface probing against a list of targets and credentials**, it implements a thread pool where each worker connects to TCP/22, reads the SSH server banner, sends the client banner `SSH-2.0-OpenSSH_8.0`, and evaluates banner responses against a credential pair. Detection is banner-layer only (no full KEX or authentication exchange); a `CRITICAL SSH_SPRAY_CANDIDATE` finding indicates the banner exchange completed and the transport accepted the framing: upgrade to a full paramiko KEX session in a controlled lab for definitive authentication confirmation. All findings return `{severity, title, detail, host, port}`.
+1. **`ssh_credential_spray()` performs banner-layer SSH surface probing against a list of targets and credentials**, it implements a thread pool where each worker connects to TCP/22, reads the SSH server banner, sends the client banner `SSH-2.0-OpenSSH_8.0`, and evaluates banner responses against a credential pair. Detection is banner-layer only no full KEX or authentication exchange; a `CRITICAL SSH_SPRAY_CANDIDATE` finding indicates the banner exchange completed and the transport accepted the framing: upgrade to a full paramiko KEX session in a controlled lab for definitive authentication confirmation. All findings return `{severity, title, detail, host, port}`.
 
-2. **`LateralMovementEnumerator.probe_smb_null_session()` tests SMB for unauthenticated IPC$ access**, it sends a raw `SMBv1 Negotiate` (dialects: LANMAN1.0, LM1.2X002, NT LM 0.12) followed by `Session Setup ANDX` with empty ANSI and Unicode password fields. A `STATUS_SUCCESS` (0x00000000) response confirms null session access. Returns `{'null_session': bool, 'dialect': str, 'os': str, 'security_mode': str, 'shares': list, 'error': str}`, not the standard `{severity, title, detail, host, port}` shape.
+2. **`LateralMovementEnumerator.probe_smb_null_session()` tests SMB for unauthenticated IPC$ access**, it sends a raw `SMBv1 Negotiate` dialects: LANMAN1.0, LM1.2X002, NT LM 0.12 followed by `Session Setup ANDX` with empty ANSI and Unicode password fields. A `STATUS_SUCCESS` (0x00000000) response confirms null session access. Returns `{'null_session': bool, 'dialect': str, 'os': str, 'security_mode': str, 'shares': list, 'error': str}`, not the standard `{severity, title, detail, host, port}` shape.
 
 3. **`detect_ssh_weak_auth_surface()` identifies legacy SSH implementations and vulnerable versions**, it connects to TCP/22, reads the server banner, and checks for: (1) SSHv1 banners (`SSH-1.x`) that indicate a legacy protocol version; (2) implementation strings matching known-vulnerable versions in `vuln_map` for example old Dropbear, old OpenSSH with specific CVEs. Returns `[{severity, title, detail, host, port}]`. This is a passive banner-read operation, no authentication exchange, no log entries generated on the target.
 
@@ -96,7 +96,7 @@ LateralMovementEnumerator.probe_smb_null_session: <target-ip>:445
 
 ## Pipeline position
 
-Run `detect_ssh_weak_auth_surface()` first, it is entirely passive (no auth attempt, no log entry). Use results to determine which hosts are viable spray targets before running `ssh_credential_spray()`. SMB null session testing applies to any Windows host running SMBv1, particularly domain controllers and file servers on enterprise networks.
+Run `detect_ssh_weak_auth_surface()` first, it is entirely passive no auth attempt, no log entry. Use results to determine which hosts are viable spray targets before running `ssh_credential_spray()`. SMB null session testing applies to any Windows host running SMBv1, particularly domain controllers and file servers on enterprise networks.
 
 ---
 

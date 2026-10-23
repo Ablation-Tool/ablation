@@ -6,7 +6,7 @@ Detect self-extracting installer format (BitRock LZMA-4.0, NSIS, Inno Setup), de
 
 ## Why this exists
 
-1. **Firmware and SDK installers for embedded targets ship multiple binaries in a single self-extracting executable.** TI CC3xxx RadioTool, RTI SDK, and a range of industrial IoT installers use BitRock InstallBuilder (now Bitnami) as their Windows installer wrapper. The installed binaries: drivers, update utilities, diagnostic tools: are the actual analysis targets, but they are embedded as an LZMA-compressed catalog inside the installer PE's overlay section. Without extraction, static analysis sees only the BitRock stub, not the target binaries.
+1. **Firmware and SDK installers for embedded targets ship multiple binaries in a single self-extracting executable.** TI CC3xxx RadioTool, RTI SDK, and a range of industrial IoT installers use BitRock InstallBuilder now Bitnami as their Windows installer wrapper. The installed binaries: drivers, update utilities, diagnostic tools: are the actual analysis targets, but they are embedded as an LZMA-compressed catalog inside the installer PE's overlay section. Without extraction, static analysis sees only the BitRock stub, not the target binaries.
 
 2. **UPX wrapping on the outer installer stub prevents both format detection and extraction.** RTI SDK packages the BitRock PE itself with UPX before distribution. A raw `file` or `binwalk` pass identifies the outer file as "UPX compressed data" and stops: the BitRock marker and LZMA payload are invisible until UPX is decompressed. `InstallerBinaryAnalyzer` detects UPX by PE section names (`UPX0`/`UPX1`), calls `upx -d` on a temporary copy, and then applies BitRock extraction to the decompressed result.
 
@@ -34,7 +34,7 @@ flowchart TD
     I --> N["extract_to_dir(result, out_dir)\nWrite each CarvedBinary to {name_hint or binary_N}.exe/.dll\nHandle name collisions with _{i} suffix\nReturn {filename: path} mapping"]
 ```
 
-### Architecture map (ARCH_MAP)
+### Architecture map ARCH_MAP
 
 | Machine value | Architecture |
 |---|---|
@@ -131,7 +131,7 @@ Extracted to /tmp/rti_extracted/:
 
 ## False positives
 
-**MZ scan produces alignment fragment matches.** PE files embedded in a catalog may share alignment padding with the preceding file, causing the carver to find valid-looking `MZ` offsets at offsets inside the previous binary's raw data. These produce `CarvedBinary` entries where `size` is anomalously small (< 512 bytes) or where the `arch` field decodes to an unexpected machine value. Filter by `binary.size > 4096` to discard fragment hits before feeding to `BinaryContext`.
+**MZ scan produces alignment fragment matches.** PE files embedded in a catalog may share alignment padding with the preceding file, causing the carver to find valid-looking `MZ` offsets at offsets inside the previous binary's raw data. These produce `CarvedBinary` entries where `size` is anomalously small < 512 bytes or where the `arch` field decodes to an unexpected machine value. Filter by `binary.size > 4096` to discard fragment hits before feeding to `BinaryContext`.
 
 **UPX detection fires on non-installer PE files.** `_is_upx()` checks only for section names starting with `UPX`, it does not verify that the sections contain valid UPX compressed data. A PE file that happens to have a section named `UPX_HEADER` for unrelated reasons triggers the UPX branch. If `upx -d` fails, the analyzer logs `'UPX detected but upx binary not found on PATH'` or the error is silently swallowed and analysis proceeds on the packed data: in that case BitRock detection may fail.
 
@@ -143,7 +143,7 @@ Extracted to /tmp/rti_extracted/:
 
 **Before this module:** Confirm the installer format. Run `file setup.exe` to detect UPX packing or known installer signatures. Check the Download Status table in `README.md` for the target collection: do not analyze an incomplete download (`.aria2` present alongside the file).
 
-**After this module:** Feed each extracted PE path from `extract_to_dir()` to `BinaryContext.load_or_build()` for full function table construction and ablation sweep. Pay particular attention to unhinged binaries (name hint empty, small size), these may be update utilities or loader stubs with their own interesting attack surface.
+**After this module:** Feed each extracted PE path from `extract_to_dir()` to `BinaryContext.load_or_build()` for full function table construction and ablation sweep. Pay particular attention to unhinged binaries name hint empty, small size, these may be update utilities or loader stubs with their own interesting attack surface.
 
 ---
 
@@ -153,7 +153,7 @@ Extracted to /tmp/rti_extracted/:
 |:---|:---|
 | `installer_type` | `bitrock-lzma-4.0` / `nsis` / `inno` / `unknown` |
 | `upx_unpacked` | `True` if UPX was detected and successfully decompressed before extraction |
-| `payload_size` | Decompressed payload size in bytes (0 for NSIS/Inno/unknown) |
+| `payload_size` | Decompressed payload size in bytes 0 for NSIS/Inno/unknown |
 | `binaries` | List of `CarvedBinary`: each with `offset`, `arch`, `size`, `data`, `name_hint` |
 | `extracted_paths` | `{filename: path}` map written by `extract_to_dir()`: empty until that method is called |
 | `errors` | List of error strings: UPX failures, overlay parse failures, format-specific tool recommendations |

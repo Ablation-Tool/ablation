@@ -4,7 +4,7 @@
 **Standard:** CISA Secure by Design: Principle 2: Embrace Radical Transparency and Accountability 
 **Scope:** All modules in `ablation/analyzers/`; all modules in `modules/`; all taint trackers; FORGE gate
 
-This document satisfies CISA-SBD2 (Transparency) in the Ablation compliance matrix. It records how Ablation's limitations, quality gates, and audit results are disclosed to users and maintainers.
+This document satisfies CISA-SBD2 Transparency in the Ablation compliance matrix. It records how Ablation's limitations, quality gates, and audit results are disclosed to users and maintainers.
 
 ---
 
@@ -22,7 +22,7 @@ These files are committed to the public repository and are visible in every rele
 
 ### 1.2 FORGE Audit Results
 
-Every module committed to Ablation has passed the SAFE CODE 10-section audit and FORGE gate (`gate_passed=True`). The FORGE cache is stored at `~/.ablation/forge_cache.json` (a single JSON file keyed by blake2b content hash). The following is committed per module:
+Every module committed to Ablation has passed the SAFE CODE 10-section audit and FORGE gate (`gate_passed=True`). The FORGE cache is stored at `~/.ablation/forge_cache.json` a single JSON file keyed by blake2b content hash. The following is committed per module:
 - `docs/reference-modules/<module>.md`: public-facing module reference including "Why this exists" gap list and usage constraints
 - SAFE CODE residual risk section: documents any findings that were ACCEPTED rather than fixed, with justification
 

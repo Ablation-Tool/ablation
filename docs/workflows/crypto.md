@@ -72,8 +72,8 @@ keys embedded in `.data` or `.rodata`.
 
 ### Entropy-guided search
 
-Crypto key material (AES-128/256, RSA private key, EC private key) has high entropy
-(H ~= 7.5 to 8.0) but short length (16 to 256 bytes). It appears as a small high-entropy
+Crypto key material AES-128/256, RSA private key, EC private key has high entropy
+(H ~= 7.5 to 8.0) but short length 16 to 256 bytes. It appears as a small high-entropy
 island surrounded by lower-entropy strings or code.
 
 ```python

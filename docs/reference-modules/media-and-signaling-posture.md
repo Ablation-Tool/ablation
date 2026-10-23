@@ -8,9 +8,9 @@ Enumerate SIP server exposure across five attack surfaces: version fingerprint v
 
 1. **SIP servers expose extension existence and platform version to unauthenticated probes by design.** RFC 3261 requires SIP servers to respond to OPTIONS with supported methods and server identity. Kamailio, Asterisk, and FreePBX all respond to unauthenticated REGISTER requests with response codes that differentiate valid extensions (401) from invalid ones (403/404): creating an enumeration surface that does not require credentials. Without a dedicated scanner, analysts manually craft SIP packets and interpret response differentials by hand.
 
-2. **Asterisk AMI default credentials (admin:admin, admin:amp111) allow full call-system control without SIP access.** The Asterisk Manager Interface runs on TCP 5038 with a plaintext protocol and ships with default credentials in many packaged distributions (FreePBX, Elastix, TrixBox). Successful AMI authentication enables call origination (toll fraud), extension listing (`SIPpeers` action), and dialplan execution: none of which require SIP protocol access.
+2. **Asterisk AMI default credentials admin:admin, admin:amp111 allow full call-system control without SIP access.** The Asterisk Manager Interface runs on TCP 5038 with a plaintext protocol and ships with default credentials in many packaged distributions (FreePBX, Elastix, TrixBox). Successful AMI authentication enables call origination toll fraud, extension listing (`SIPpeers` action), and dialplan execution: none of which require SIP protocol access.
 
-3. **Unencrypted RTP streams are interceptable on any intermediate network segment.** When a SIP server accepts an INVITE offering `RTP/AVP` (unencrypted G.711), the resulting media stream traverses the network without encryption. The SDP answer in the 200 OK response reveals the exact IP and port where the audio stream will arrive: the specific interception target. This posture is common on enterprise UC systems where SRTP was never enforced.
+3. **Unencrypted RTP streams are interceptable on any intermediate network segment.** When a SIP server accepts an INVITE offering `RTP/AVP` unencrypted G.711, the resulting media stream traverses the network without encryption. The SDP answer in the 200 OK response reveals the exact IP and port where the audio stream will arrive: the specific interception target. This posture is common on enterprise UC systems where SRTP was never enforced.
 
 ---
 
@@ -43,12 +43,12 @@ flowchart TD
     U -->|401| X["LOW: INVITE requires auth"]
 ```
 
-### Response code semantics (extension enumeration)
+### Response code semantics extension enumeration
 
 | Code | Extension state | Deployment |
 |---|---|---|
 | `200 OK` | EXISTS + no auth | CRITICAL: registration hijack possible |
-| `401 Unauthorized` | EXISTS (auth required) | Kamailio, Asterisk default |
+| `401 Unauthorized` | EXISTS auth required | Kamailio, Asterisk default |
 | `403 Forbidden` | DOES NOT EXIST | Trixbox/FreePBX typical |
 | `404 Not Found` | DOES NOT EXIST | INVITE/OPTIONS default |
 | `486 Busy Here` | EXISTS (in use) | Any SIP server |
@@ -136,7 +136,7 @@ if media:
 
 ## Pipeline position
 
-**Before this module:** Confirm UDP/5060 is open via `tiptoe` or `nmap -sU -p 5060`. SIP runs over UDP by default: TCP SIP (port 5060 or 5061 for TLS) requires explicitly setting the transport.
+**Before this module:** Confirm UDP/5060 is open via `tiptoe` or `nmap -sU -p 5060`. SIP runs over UDP by default: TCP SIP port 5060 or 5061 for TLS requires explicitly setting the transport.
 
 **After this module:** For `CRITICAL: unauthenticated REGISTER` findings: document the extension range and perform targeted registration hijacking in a controlled test. For `SRTP not enforced` findings: record the media IP and port from the SDP answer, these are the eavesdrop coordinates. For AMI default-credential findings: issue `Action: SIPpeers` to enumerate all registered extensions, then `Action: Originate` to confirm toll-fraud capability in scope.
 
@@ -146,16 +146,16 @@ if media:
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` (unauth registration, AMI default creds) / `HIGH` (confirmed extensions) / `MEDIUM` (server active, SRTP not enforced, AMI exposed) / `LOW` (version disclosure, SRTP enforced) |
+| `severity` | `CRITICAL` unauth registration, AMI default creds / `HIGH` confirmed extensions / `MEDIUM` server active, SRTP not enforced, AMI exposed / `LOW` version disclosure, SRTP enforced |
 | `title` | Short classification string |
 | `detail` | Full probe result with IP, port, codes, and SDP media parameters when applicable |
 | `host` | Target IP |
-| `port` | SIP server port (default 5060) |
+| `port` | SIP server port default 5060 |
 
 ---
 
 ## See also
 
-- [C2 / Exfiltration Indicators](c2-exfiltration-indicators.md): live host service probing (C2 ports, VPN exposure)
+- [C2 / Exfiltration Indicators](c2-exfiltration-indicators.md): live host service probing C2 ports, VPN exposure
 - [System-Call Tracing](system-call-tracing.md): dynamic trace of media daemon syscall behavior
 - [Appliance Configuration Secret Helpers](appliance-configuration-secret-helpers.md): Cisco IOS SNMP/TFTP credential extraction from UC appliances

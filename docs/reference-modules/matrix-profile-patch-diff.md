@@ -1,6 +1,6 @@
 # Matrix Profile Patch Diff
 
-Localize instruction-level changes between two versions of the same function using Matrix Profile AB-join distance: encoding both versions as opcode category sequences and identifying the subsequences where the distance is highest (changed) versus lowest (unchanged).
+Localize instruction-level changes between two versions of the same function using Matrix Profile AB-join distance: encoding both versions as opcode category sequences and identifying the subsequences where the distance is highest (changed) versus lowest unchanged.
 
 ---
 
@@ -8,7 +8,7 @@ Localize instruction-level changes between two versions of the same function usi
 
 1. **Once `DTWMatcher` confirms that two functions are homologs, the next question is: exactly what changed?** `MatrixProfileDiff` answers this at instruction-level precision by computing the AB-join distance profile between the two versions' opcode category sequences: high distance at position k means there is no close match for that subsequence in the other version, i.e., that region was changed. This points an analyst directly to the patched instruction window without requiring manual comparison of the full disassembly.
 
-2. **Matrix Profile AB-join avoids the false-change problem of naive instruction diffing.** Naive instruction-level diff (diff on disassembly text) reports every instruction that moved due to a non-local code change for example a function growing by one instruction shifts all subsequent instruction offsets. Matrix Profile is shift-invariant: it matches subsequences regardless of offset, so an unchanged block that shifted by N bytes still reports as unchanged. The `ChangeRegion.is_insertion_shift` flag distinguishes true changes from shift artifacts.
+2. **Matrix Profile AB-join avoids the false-change problem of naive instruction diffing.** Naive instruction-level diff diff on disassembly text reports every instruction that moved due to a non-local code change for example a function growing by one instruction shifts all subsequent instruction offsets. Matrix Profile is shift-invariant: it matches subsequences regardless of offset, so an unchanged block that shifted by N bytes still reports as unchanged. The `ChangeRegion.is_insertion_shift` flag distinguishes true changes from shift artifacts.
 
 3. **`DiffResult.is_likely_patched(threshold=15.0)` provides a binary patched/not-patched verdict** suitable for automated version triage. When scanning N firmware images for a known vulnerability, `MatrixProfileDiff` can quickly identify which versions contain the unpatched function without requiring manual analysis of each version.
 
@@ -82,7 +82,7 @@ change=14.4%  changed:16
 
 ## False positives
 
-**`is_likely_patched(threshold=15.0)` fires if more than 15% of the opcode sequence has no close match in the other version.** A function that was heavily refactored (not just patched) will also exceed the threshold. Use `change_pct()` and manual inspection of the identified `ChangeRegion` to distinguish a targeted security patch (one tight change region) from a refactor (many spread-out change regions).
+**`is_likely_patched(threshold=15.0)` fires if more than 15% of the opcode sequence has no close match in the other version.** A function that was heavily refactored not just patched will also exceed the threshold. Use `change_pct()` and manual inspection of the identified `ChangeRegion` to distinguish a targeted security patch one tight change region from a refactor many spread-out change regions.
 
 **STUMPY is optional: the numpy fallback uses the same math but is slower on sequences longer than ~2000 instructions.** For binaries where all functions are under 2000 instructions, the numpy fallback is adequate. Install STUMPY for firmware-wide batch triage: `pip install stumpy`.
 
@@ -96,7 +96,7 @@ Step 2 of the cross-version patch analysis workflow: after `DTWMatcher.score_fun
 
 ## Reading output
 
-`MatrixProfileDiff.diff_functions(va_v1, va_v2)` returns a `DiffResult` object:
+`MatrixProfileDiff.diff_functionsva_v1, va_v2` returns a `DiffResult` object:
 
 | Attribute | Content |
 |:---|:---|
@@ -112,7 +112,7 @@ Each `ChangeRegion` has:
 
 | Attribute | Content |
 |:---|:---|
-| `kind` | `'unchanged'` / `'modified'` / `'inserted'` / `'deleted'` (all lowercase) |
+| `kind` | `'unchanged'` / `'modified'` / `'inserted'` / `'deleted'` all lowercase |
 | `v1_start` | Start index in `seq_v1` instruction sequence (`-1` if this region is inserted) |
 | `v1_end` | Exclusive end index in `seq_v1` |
 | `v2_start` | Start index in `seq_v2` instruction sequence (`-1` if this region is deleted) |

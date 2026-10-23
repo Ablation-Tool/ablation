@@ -33,7 +33,7 @@ Every ISA module provides at minimum:
 canon_reg(name: str) -> Optional[str | Tuple[str, int]]
 ```
 
-Returns the canonical register name (and access width for AArch64). Returns `None` for unknown names. Used by taint trackers to normalize Capstone output.
+Returns the canonical register name and access width for AArch64. Returns `None` for unknown names. Used by taint trackers to normalize Capstone output.
 
 ```python
 ARG_REGS: Tuple[str, ...]   # argument registers in calling-convention order
@@ -76,7 +76,7 @@ ARM state (A32): PC reads as instruction_address + 8 (ARM ARM A2.3.1)
 Thumb state (T32): PC reads as instruction_address + 4; literal loads use Align(PC, 4)
 ```
 
-`Mode.pc_value(address, size, align)` encodes this so instruction parsers and taint trackers compute the correct target address without duplicating the ARM ARM rule.
+`Mode.pc_valueaddress, size, align` encodes this so instruction parsers and taint trackers compute the correct target address without duplicating the ARM ARM rule.
 
 ---
 
@@ -85,8 +85,8 @@ Thumb state (T32): PC reads as instruction_address + 4; literal loads use Align(
 | Module | Primary source |
 |:---|:---|
 | `isa_arc.py` | ARCv2 ISA Programmer's Reference Manual; ARC GNU/Linux ABI |
-| `isa_arm32.py` | ARM Architecture Reference Manual (ARMv7-A/R); AAPCS32 |
-| `isa_arm64.py` | Arm Architecture Reference Manual (A-profile); AAPCS64 |
+| `isa_arm32.py` | ARM Architecture Reference Manual ARMv7-A/R; AAPCS32 |
+| `isa_arm64.py` | Arm Architecture Reference Manual A-profile; AAPCS64 |
 | `isa_ppc.py` | Power ISA v2.07/v3.0; 32-bit SysV PPC supplement; 64-bit ELFv1/ELFv2 ABI |
 
 ---

@@ -1,6 +1,6 @@
 # Binary Lifting to Pseudocode
 
-Lift native binary functions to annotated C pseudocode across 18 ISA variants: providing full register-tracking state machines for ARM64 and x86-64, and structural pseudocode (call/return/branch resolved, arithmetic as comments) for all other supported architectures: enabling human-readable function analysis without a decompiler.
+Lift native binary functions to annotated C pseudocode across 18 ISA variants: providing full register-tracking state machines for ARM64 and x86-64, and structural pseudocode call/return/branch resolved, arithmetic as comments for all other supported architectures: enabling human-readable function analysis without a decompiler.
 
 ---
 
@@ -10,7 +10,7 @@ Lift native binary functions to annotated C pseudocode across 18 ISA variants: p
 
 2. **Structural pseudocode for the remaining 16 ISAs** resolves calls, returns, and branches with correct target names from `BinaryContext.name()`, and emits arithmetic as comments. This provides navigable pseudocode for PPC32/64, MIPS32/64, ARM32, Thumb, x86-32, and others without requiring a full decompiler: sufficient for confirming a taint path or verifying a sink call argument.
 
-3. **`BinaryLifter.with_taint(findings)` annotates the lifted pseudocode with taint findings**: inserting inline comments at the exact lines where `TaintTracker` findings were confirmed, combining the human-readable pseudocode with machine-generated taint evidence into a single artifact for finding documentation.
+3. **`BinaryLifter.with_taintfindings` annotates the lifted pseudocode with taint findings**: inserting inline comments at the exact lines where `TaintTracker` findings were confirmed, combining the human-readable pseudocode with machine-generated taint evidence into a single artifact for finding documentation.
 
 ---
 
@@ -86,7 +86,7 @@ Run `BinaryLifter.lift_function()` after `TaintTracker` confirms a finding to pr
 
 ## Reading output
 
-`BinaryLifter.lift_function(va, max_insns=512)` returns a `str`: the lifted annotated C pseudocode for the function at `va`. Taint annotations appear inline in the string when `with_taint(findings)` was called before lifting. There is no structured return object.
+`BinaryLifter.lift_function(va, max_insns=512)` returns a `str`: the lifted annotated C pseudocode for the function at `va`. Taint annotations appear inline in the string when `with_taintfindings` was called before lifting. There is no structured return object.
 
 ---
 

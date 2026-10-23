@@ -6,11 +6,11 @@ Detect PE-format firmware update executables that lack Authenticode signature ve
 
 ## Why this exists
 
-1. **Firmware updater binaries that do not call `WinVerifyTrust` or `CryptVerifyMessageSignature` before writing to flash cannot verify that the firmware image is from the legitimate vendor**: an attacker who can place a modified firmware file on the update path (network share, USB, download directory) can achieve persistent firmware-level code execution. `KernelDriverAnalyzer._check_signature()` checks the PE `IMAGE_DIRECTORY_ENTRY_SECURITY` data directory entry (index 4): if the offset and size are both zero, the binary has no Authenticode WIN_CERTIFICATE table and ships unsigned. An unsigned firmware flasher cannot be a trust anchor.
+1. **Firmware updater binaries that do not call `WinVerifyTrust` or `CryptVerifyMessageSignature` before writing to flash cannot verify that the firmware image is from the legitimate vendor**: an attacker who can place a modified firmware file on the update path network share, USB, download directory can achieve persistent firmware-level code execution. `KernelDriverAnalyzer._check_signature()` checks the PE `IMAGE_DIRECTORY_ENTRY_SECURITY` data directory entry (index 4): if the offset and size are both zero, the binary has no Authenticode WIN_CERTIFICATE table and ships unsigned. An unsigned firmware flasher cannot be a trust anchor.
 
-2. **Checking for verification call-sites is the second layer**: even when the flasher binary itself is signed (has an Authenticode certificate), it may not call signature verification APIs before flashing the payload. `KernelDriverAnalyzer` scans the import table and optionally the disassembled code for `WinVerifyTrust`, `CryptVerifyMessageSignature`, `Crypt32.dll` import presence, and `WTD_UI_NONE` pattern (indicating `WinVerifyTrust` called in silent verification mode). Absence of these imports in a binary that calls `DeviceIoControl` with firmware write IOCTL codes is a strong indicator of unsigned firmware acceptance.
+2. **Checking for verification call-sites is the second layer**: even when the flasher binary itself is signed has an Authenticode certificate, it may not call signature verification APIs before flashing the payload. `KernelDriverAnalyzer` scans the import table and optionally the disassembled code for `WinVerifyTrust`, `CryptVerifyMessageSignature`, `Crypt32.dll` import presence, and `WTD_UI_NONE` pattern (indicating `WinVerifyTrust` called in silent verification mode). Absence of these imports in a binary that calls `DeviceIoControl` with firmware write IOCTL codes is a strong indicator of unsigned firmware acceptance.
 
-3. **IOCTL-based firmware write detection**: `KernelDriverAnalyzer._extract_ioctl_codes()` decodes IOCTL codes in the flasher binary using the CTL_CODE macro formula (`(device_type << 16) | (access << 14) | (function << 2) | method`). IOCTL codes in the range `0x0022xxxx` (FILE_DEVICE_UNKNOWN) or `0x00070084` (IOCTL_STORAGE_FIRMWARE_DOWNLOAD) that appear alongside `DeviceIoControl` calls without a preceding `WinVerifyTrust` call indicate a flasher that accepts arbitrary payloads.
+3. **IOCTL-based firmware write detection**: `KernelDriverAnalyzer._extract_ioctl_codes()` decodes IOCTL codes in the flasher binary using the CTL_CODE macro formula (`(device_type << 16) | access << 14 | function << 2 | method`). IOCTL codes in the range `0x0022xxxx` FILE_DEVICE_UNKNOWN or `0x00070084` IOCTL_STORAGE_FIRMWARE_DOWNLOAD that appear alongside `DeviceIoControl` calls without a preceding `WinVerifyTrust` call indicate a flasher that accepts arbitrary payloads.
 
 ---
 
@@ -79,7 +79,7 @@ FINDING: FIRMWARE_FLASHER_TRUST_GAP
 
 **Authenticode table absent in debug builds**: unsigned PE binaries produced during development may be flashers distributed only internally during engineering. Confirm whether the binary is a shipping product or an internal debug build before treating absence of signing as a shipping vulnerability.
 
-**`WinVerifyTrust` imported but not called before IOCTL**: some flashers import `wintrust.dll` for other purposes (certificate UI, non-firmware trust checks). Only flag a trust gap when import table analysis is combined with IOCTL trace showing flash write before trust verification.
+**`WinVerifyTrust` imported but not called before IOCTL**: some flashers import `wintrust.dll` for other purposes certificate UI, non-firmware trust checks. Only flag a trust gap when import table analysis is combined with IOCTL trace showing flash write before trust verification.
 
 ---
 
@@ -104,7 +104,7 @@ Run firmware flasher trust checks on any PE executable found in a firmware updat
 | `dangerous_patterns` | `list`: patterns indicating firmware write without prior trust check |
 | `error` | `None` on success; error string on parse failure |
 
-`KernelApiFinding` fields: `api` (import name), `dll`, `severity`, `category`.
+`KernelApiFinding` fields: `api`, the import name; `dll`, `severity`, `category`.
 
 ---
 

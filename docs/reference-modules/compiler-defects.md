@@ -9,7 +9,7 @@ Finds security vulnerabilities the compiler introduced through miscompilation. T
 One class of vulnerability was completely invisible before this module:
 
 **Compiler bugs are not detectable by code review or manual RE.**
-A developer writes correct C++: `size_t n = std::max(input_len, min_len)`. The compiler emits a four-instruction sequence that produces the opposite result. The source code is correct. The disassembly looks like a bounds check is present. Only a scanner that knows the specific buggy instruction pattern can detect it. Auditing TencentOS 4.6 without `LA64MaxNotMinScanner` would not surface these 172 findings because there is nothing wrong with the source. The defect exists only in the binary.
+A developer writes correct C++: `size_t n = std::maxinput_len, min_len`. The compiler emits a four-instruction sequence that produces the opposite result. The source code is correct. The disassembly looks like a bounds check is present. Only a scanner that knows the specific buggy instruction pattern can detect it. Auditing TencentOS 4.6 without `LA64MaxNotMinScanner` would not surface these 172 findings because there is nothing wrong with the source. The defect exists only in the binary.
 
 ---
 
@@ -33,11 +33,11 @@ GCC 12.3.1.7 for LoongArch64 miscompiles comparison operations that feed into si
   Expected: rd = MAX(a, b)   Actual: rd = MIN(a, b)   <-- WRONG
 ```
 
-The LA64 `masknez` and `maskeqz` instructions are branchless select primitives: `masknez dst, src, cond` writes `src` to `dst` if `cond != 0`, otherwise writes zero. The correct `max` implementation uses `masknez` to select the LARGER operand. GCC inverts the selection: it uses `masknez` on `a` when `a < b` is true, so it selects `a` (the smaller value). The `or` then combines the two conditional slots and delivers the minimum.
+The LA64 `masknez` and `maskeqz` instructions are branchless select primitives: `masknez dst, src, cond` writes `src` to `dst` if `cond != 0`, otherwise writes zero. The correct `max` implementation uses `masknez` to select the LARGER operand. GCC inverts the selection: it uses `masknez` on `a` when `a < b` is true, so it selects `a` the smaller value. The `or` then combines the two conditional slots and delivers the minimum.
 
 ### Security impact
 
-When `rd` flows into a `malloc` size argument, the allocation is smaller than the code expects. Any subsequent write of `max(input_len, min_len)` bytes into that buffer is a heap overflow because the actual allocation is only `min(input_len, min_len)` bytes.
+When `rd` flows into a `malloc` size argument, the allocation is smaller than the code expects. Any subsequent write of `maxinput_len, min_len` bytes into that buffer is a heap overflow because the actual allocation is only `mininput_len, min_len` bytes.
 
 ```
   Input: input_len = 4096 (attacker-controlled)
@@ -88,11 +88,11 @@ GCC places the size calculation immediately before the allocation call. Twenty i
 
 | Target | Format | Findings |
 |---|---|---|
-| TencentOS 4.6 libstd | ELF | 5 confirmed (F-030..F-034) |
+| TencentOS 4.6 libstd | ELF | 5 confirmed F-030..F-034 |
 | TencentOS EDK2 UEFI | PE32+ | 63 across 26 modules (TlsDxe highest risk) |
 | TencentOS kernel modules | ELF | 104 across kernel tree |
 
-Total confirmed: 172 (2 CRITICAL, 55 HIGH, 115 MEDIUM).
+Total confirmed: 172 2 CRITICAL, 55 HIGH, 115 MEDIUM.
 
 ---
 
@@ -123,7 +123,7 @@ Rust `Vec` append patterns use `bltu remaining_cap,...` to guard the write. Thes
 
 ## How it works
 
-`LA64MaxNotMinScanner.scan()` disassembles the entire `.text` section with a pure-Python LoongArch64 decoder, not Capstone, no func_starts iteration. For each instruction, it detects the GCC-generated `masknez rd, ra, cond + maskeqz rd2, rb, cond + or rd, rd, rd2` pattern that emits `min(a,b)` when the source code called `max(a,b)`. On a match, looks ahead for a sink call (malloc/memcpy/recv) using the result register. Returns `List[LA64MaxNotMinFinding]` with `pattern_va`, `result_reg`, `sink_va`, `sink_name`, `sink_arg`.
+`LA64MaxNotMinScanner.scan()` disassembles the entire `.text` section with a pure-Python LoongArch64 decoder, not Capstone, no func_starts iteration. For each instruction, it detects the GCC-generated `masknez rd, ra, cond + maskeqz rd2, rb, cond + or rd, rd, rd2` pattern that emits `min(a,b)` when the source code called `max(a,b)`. On a match, looks ahead for a sink call malloc/memcpy/recv using the result register. Returns `List[LA64MaxNotMinFinding]` with `pattern_va`, `result_reg`, `sink_va`, `sink_name`, `sink_arg`.
 
 ---
 

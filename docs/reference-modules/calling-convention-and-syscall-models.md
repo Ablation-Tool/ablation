@@ -75,7 +75,7 @@ annotate_calls(0x12340, 0x12500):
 
 **Thumb mode detection depends on `thumb_funcs` set**: `from_path()` auto-detects Thumb functions from ELF symbol table `STT_FUNC` + odd address convention; `from_context()` uses `ctx.thumb_funcs` if available. If the binary has no symbol table and `thumb_funcs` is not provided, the annotator may misidentify ARM mode vs Thumb mode and produce incorrect instruction decoding.
 
-**Register state resets at call boundaries**: `r0`–`r3` are reset to `Unknown` at every internal `BL`/`BLX` call (AAPCS caller-saved). If a string argument is loaded into `r0` before an intermediate function call, the state will be `Unknown` at the subsequent sink call site, potentially under-classifying what `SinkArgClassifier` would rate as `ARG_PROPAGATED`.
+**Register state resets at call boundaries**: `r0`–`r3` are reset to `Unknown` at every internal `BL`/`BLX` call AAPCS caller-saved. If a string argument is loaded into `r0` before an intermediate function call, the state will be `Unknown` at the subsequent sink call site, potentially under-classifying what `SinkArgClassifier` would rate as `ARG_PROPAGATED`.
 
 ---
 
@@ -87,7 +87,7 @@ annotate_calls(0x12340, 0x12500):
 
 ## Reading output
 
-`ARM32RegAnnotator.annotate_calls(func_va, end_va)` returns `AnnotationResult` (same type as `RegAnnotator`):
+`ARM32RegAnnotator.annotate_callsfunc_va, end_va` returns `AnnotationResult` (same type as `RegAnnotator`):
 
 `AnnotationResult` fields:
 
@@ -103,11 +103,11 @@ Each `CallSite`:
 | Field | Content |
 |:---|:---|
 | `site_va` | VA of the `BL`/`BLX` call instruction |
-| `target_va` | VA of the callee (resolved) |
-| `target_name` | Callee symbol name (from PLT or names registry) |
+| `target_va` | VA of the callee resolved |
+| `target_name` | Callee symbol name from PLT or names registry |
 | `args` | `Dict[str, RegVal]`: `r0`–`r3` → one of `Const(v)`, `String(s)`, `Arg(n)`, `Unknown` |
 
-State resets: `r0`–`r3` are reset to `Unknown` at every `BL`/`BLX` call site (AAPCS caller-saved).
+State resets: `r0`–`r3` are reset to `Unknown` at every `BL`/`BLX` call site AAPCS caller-saved.
 
 ---
 

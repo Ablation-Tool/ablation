@@ -39,7 +39,7 @@ repository (git clone or local path)
 
 ---
 
-## Phase 1: Context and entry point map (< 5 seconds)
+## Phase 1: Context and entry point map < 5 seconds
 
 ```python
 from ablation.analyzers.source_ingestion import SourceContext
@@ -71,7 +71,7 @@ access. On Python/Django stacks the classifier maps REST API endpoints to their
 
 ---
 
-## Phase 2: Sink scan (< 10 seconds)
+## Phase 2: Sink scan < 10 seconds
 
 ```python
 from ablation.analyzers.source_sink_scanner import SourceSinkScanner
@@ -91,7 +91,7 @@ classes.
 
 ---
 
-## Phase 3: Compress and rank (< 30 seconds)
+## Phase 3: Compress and rank < 30 seconds
 
 ```python
 from ablation.analyzers.source_audit_compressor import SourceAuditCompressor
@@ -128,7 +128,7 @@ Estimated audit compression: 97.5% fewer reads
   profile=00000  (0): 2790 files  [no signals]
 ```
 
-Start with the highest-profile files. Profile 16+ (unsafe rendering) is the first
+Start with the highest-profile files. Profile 16+ unsafe rendering is the first
 pass. These are the only files where a single line can produce a DOM XSS finding
 without further chaining.
 
@@ -138,7 +138,7 @@ without further chaining.
 
 Read every file in `compressor.priority_reads(buckets)`. For each file:
 
-1. Find the signal that triggered the profile (the bit table in the module reference tells you what to search for).
+1. Find the signal that triggered the profile the bit table in the module reference tells you what to search for.
 2. Trace backwards: where does the value come from? Admin-configured? API-returned? User-controlled?
 3. Check whether any sanitization sits between source and sink.
 
@@ -149,7 +149,7 @@ for bucket in compressor.priority_reads(buckets):
         print(f"  {fp.rel_path}")
 ```
 
-**Worked example: PromptStage.ts (profile 19)**
+**Worked example: PromptStage.ts profile 19**
 
 Profile 19 = `unsafe_render | user_data | shared_module`. Reading a flow stage
 template component found:
@@ -191,7 +191,7 @@ Read 10% of the files in each spot-check bucket, spread across subsystems. You a
 looking for a surprise: a file assigned a low profile because the dangerous signal
 uses a non-standard API that the compressor patterns don't cover.
 
-**Worked example: profiles 2-3 (212 files)**
+**Worked example: profiles 2-3 212 files**
 
 All spot-check reads confirmed the same pattern -- user data rendered as Lit text
 nodes:
@@ -217,8 +217,8 @@ Read one representative file from profile 0. Confirm it contains nothing but con
 type definitions, lifecycle hooks, or pure utility logic with no rendering. If so,
 declare the entire profile 0 bucket BATCH-CLEAN.
 
-2790 files batch-closed via 2 reads: a Django process entrypoint (no rendering) and
-a React-query hook (no rendering).
+2790 files batch-closed via 2 reads: a Django process entrypoint no rendering and
+a React-query hook no rendering.
 
 ---
 
@@ -258,14 +258,14 @@ git push origin main
 | LOW | PLAUSIBLE | Admin-configured HTML in prompt stages; user-controlled XSS via flow key reuse |
 | N/A | ELIMINATED | `window.open()` URL validated before call |
 
-**Audit compression:** 4942 files, ~80 manual reads (98.4% reduction).
+**Audit compression:** 4942 files, ~80 manual reads 98.4% reduction.
 
 ---
 
 ## Applying to any codebase
 
 The workflow is language-agnostic. The compressor's bit definitions are TypeScript/JavaScript
-oriented (Lit, React, JSX patterns), but SourceContext indexes Python, Go, Rust, Java,
+oriented Lit, React, JSX patterns, but SourceContext indexes Python, Go, Rust, Java,
 Ruby, and PHP as well. For non-JS stacks:
 
 - Use `SourceEntryClassifier` and `SourceSinkScanner` directly. They have Python, Rust, and Go patterns built in.

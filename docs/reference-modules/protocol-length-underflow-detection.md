@@ -6,9 +6,9 @@ Detect C12-class integer underflow bugs in protocol parsers across any x86-64 bi
 
 ## Why this exists
 
-1. **Protocol parsers that strip a fixed header size from a user-supplied length field are vulnerable to integer underflow when the supplied length is smaller than the header.** The C12-class pattern is: `movzwl [mem], reg` (narrow load of user-supplied length), `lea -N(reg), dest` or `sub $N, reg` (subtract header size N), `movzwl %?x, dest` (uint16 truncation), `call target` (pass wrapped value). When `length < N`, the subtraction underflows and the truncation wraps to `65535 - (N - length - 1)`: a value the caller interprets as a large length, causing OOB read.
+1. **Protocol parsers that strip a fixed header size from a user-supplied length field are vulnerable to integer underflow when the supplied length is smaller than the header.** The C12-class pattern is: `movzwl [mem], reg` narrow load of user-supplied length, `lea -N(reg), dest` or `sub $N, reg` subtract header size N, `movzwl %?x, dest` uint16 truncation, `call target` pass wrapped value. When `length < N`, the subtraction underflows and the truncation wraps to `65535 - N - length - 1`: a value the caller interprets as a large length, causing OOB read.
 
-2. **The pattern generalizes across protocols.** DNS (subtract 12-byte header), GRE (subtract 4-byte header), PPTP (subtract 8-byte header), SCTP (subtract 12-byte common header), Diameter (subtract 20-byte base AVP header) all use this pattern. `LengthUnderflowScanner` detects any subtraction of a constant N in [4..256] from a narrow-loaded register, covering the full range of fixed protocol header sizes without protocol-specific configuration.
+2. **The pattern generalizes across protocols.** DNS subtract 12-byte header, GRE subtract 4-byte header, PPTP subtract 8-byte header, SCTP subtract 12-byte common header, Diameter subtract 20-byte base AVP header all use this pattern. `LengthUnderflowScanner` detects any subtraction of a constant N in [4..256] from a narrow-loaded register, covering the full range of fixed protocol header sizes without protocol-specific configuration.
 
 3. **`scan_unguarded()` filters to only those instances where no prior `cmp`/`test` bounds check was found on the loaded register after the subtraction.** Many parsers do check for `length >= N` before proceeding: `scan_unguarded()` eliminates guarded instances that are not vulnerabilities, reducing false positives from the broader `scan()` output.
 
@@ -69,7 +69,7 @@ The following illustrates the finding format. Actual addresses and targets are b
 
 **The `cmp`/`test` bounds check detection looks in a fixed instruction window**: a bounds check implemented as a table lookup or a called function (rather than a direct `cmp/test`) will not be detected, and the finding will be marked `guarded=False` when it is actually guarded. Manual verification should check for calls to validation functions between the subtract and call sites.
 
-**`movzwl` (zero-extend word) and `movzbl` (zero-extend byte) are both matched as narrow loads**: in some parsers, the narrow load is a legitimate protocol field width, not a user-supplied length. Confirm that the loaded value comes from a network-received buffer (via `TaintTracker`) before treating the finding as a vulnerability.
+**`movzwl` zero-extend word and `movzbl` zero-extend byte are both matched as narrow loads**: in some parsers, the narrow load is a legitimate protocol field width, not a user-supplied length. Confirm that the loaded value comes from a network-received buffer (via `TaintTracker`) before treating the finding as a vulnerability.
 
 ---
 
@@ -85,7 +85,7 @@ Run `LengthUnderflowScanner` as part of the SemanticSearcher-guided sweep on pro
 
 | Field | Content |
 |:---|:---|
-| `severity` | `HIGH` (unguarded) / `MEDIUM` (potentially guarded) |
+| `severity` | `HIGH` unguarded / `MEDIUM` potentially guarded |
 | `title` | `LENGTH_UNDERFLOW_UNGUARDED` or `LENGTH_UNDERFLOW_GUARDED` |
 | `narrow_load_va` | VA of the narrow load instruction (e.g., `movzwl`) |
 | `subtract_va` | VA of the header-size subtraction |

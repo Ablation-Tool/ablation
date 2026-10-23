@@ -14,7 +14,7 @@ Three things were not possible before this module:
 
 1. **LSB steganography in firmware was undetected.** Binaries that load a BMP asset and recover key material from its pixel stream left no obvious string or API footprint. The pattern, seed hash → pixel offset → LSB channel → Lagrange reconstruction: the pattern appeared in stripped ARM32 `.so` libraries with no prior public analysis.
 
-2. **Lagrange interpolation over multi-prime CRT was manual.** Reconstructing the secret required identifying the coordinate pairs in the LSB channel, building the polynomial, and running exact rational arithmetic. This module automates the full pipeline with a stdlib-only implementation (no sympy).
+2. **Lagrange interpolation over multi-prime CRT was manual.** Reconstructing the secret required identifying the coordinate pairs in the LSB channel, building the polynomial, and running exact rational arithmetic. This module automates the full pipeline with a stdlib-only implementation no sympy.
 
 3. **The byte-order and sign-handling were undocumented.** The key output uses `imath mp_int_to_binary` semantics: little-endian, with a non-standard reverse-TC transformation for negative polynomial values. Without this module, matching the output of the producing library required per-engagement trial and error.
 
@@ -81,7 +81,7 @@ For each key component, the extractor takes `n_pts` coordinate pairs and evaluat
 f(0) = Σ y_i * Π (0 - x_j) / (x_i - x_j)   for j ≠ i
 ```
 
-The interpolation runs over exact rational arithmetic using multi-prime CRT to avoid floating-point error. The prime set (8 primes at 63 bits each) is sufficient for the key sizes observed in the Fortinet firmware corpus.
+The interpolation runs over exact rational arithmetic using multi-prime CRT to avoid floating-point error. The prime set 8 primes at 63 bits each is sufficient for the key sizes observed in the Fortinet firmware corpus.
 
 ### Output encoding
 
@@ -92,8 +92,8 @@ Negative values apply a reverse two's-complement transformation matching the `im
 
 ## Known targets
 
-- FortiAnalyzer 7.x (ARM32 management daemon): two CRITICAL findings
-- FortiManager 7.x (ARM32 policy daemon): one CRITICAL finding
+- FortiAnalyzer 7.x ARM32 management daemon: two CRITICAL findings
+- FortiManager 7.x ARM32 policy daemon: one CRITICAL finding
 
 Key material recovered: per-session encryption keys stored in BMP assets bundled with the application package. No other scanner in the Ablation corpus detected this class before this module was built.
 
@@ -101,7 +101,7 @@ Key material recovered: per-session encryption keys stored in BMP assets bundled
 
 ## How it works
 
-`LSBStegoReader` operates on raw pixel bytes (not a binary firmware). It reads covert data from the least-significant bits of pixel channels using a prime-based coordinate scheme: successive read positions are determined by a walk through a prime-number sequence rather than sequential byte offsets. `read_bytes(offset, n_bytes)` reads `n_bytes` from the covert channel starting at position `offset` in the prime-indexed coordinate space. No file I/O, no disassembly, no func_starts.
+`LSBStegoReader` operates on raw pixel bytes not a binary firmware. It reads covert data from the least-significant bits of pixel channels using a prime-based coordinate scheme: successive read positions are determined by a walk through a prime-number sequence rather than sequential byte offsets. `read_bytesoffset, n_bytes` reads `n_bytes` from the covert channel starting at position `offset` in the prime-indexed coordinate space. No file I/O, no disassembly, no func_starts.
 
 ---
 
@@ -115,7 +115,7 @@ Key material recovered: per-session encryption keys stored in BMP assets bundled
 
 ## Reading output
 
-`PrimeCoordExtractor(bmp_path).extract(seed, n_primes=8)` returns a `StegoKeyResult`:
+`PrimeCoordExtractorbmp_path.extract(seed, n_primes=8)` returns a `StegoKeyResult`:
 
 | Attribute | Content |
 |:---|:---|

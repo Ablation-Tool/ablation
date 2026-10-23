@@ -8,7 +8,7 @@ Locate exec-class sink implementations in statically linked ELFs and classify al
 
 1. **`SinkArgClassifier` requires a PLT.** It finds call sites by locating PLT stub VAs for `system`, `popen`, `execve`, etc. Statically linked binaries compile libc directly in, there are no PLT stubs, and `BinaryContext.plt` is empty. `SinkArgClassifier.classify_all()` returns 0 results and the binary appears safe when it is not.
 
-2. **The gap affects real targets.** IBM POWER tools: `BTT52iFix` (static x86_64), `VE/UninstallAssistantLinux` (static x86_32), `HMC-V11/img2a` (static ppc64le), many IBM XL C runtime tools. All returned SAC=0 before this module. Gap IDs: `SAC-STATIC-001` (system), `SAC-STATIC-002` (popen), `SAC-STATIC-003` (strcpy/strcat).
+2. **The gap affects real targets.** IBM POWER tools: `BTT52iFix` static x86_64, `VE/UninstallAssistantLinux` static x86_32, `HMC-V11/img2a` static ppc64le, many IBM XL C runtime tools. All returned SAC=0 before this module. Gap IDs: `SAC-STATIC-001` (system), `SAC-STATIC-002` (popen), `SAC-STATIC-003` strcpy/strcat.
 
 3. **glibc's `system()` has a reliable signature.** `system()` always passes `"/bin/sh"` as a literal string argument to `execve()`. Locating `"/bin/sh"` in `.rodata`, then finding every function that loads that address with a LEA/MOV and also calls `execve()`, identifies `system()` implementation VAs with high confidence. All BL/CALL instructions targeting those VAs become `system()` call sites.
 
@@ -96,7 +96,7 @@ Summary: 1 RODATA_CONST, 1 ARG_PROPAGATED, 12 UNKNOWN-STATIC
 | x86_32 | `/bin/sh` xref + execve CALL | CALL rel32 i386 |
 | ppc64 / ppc32 | `/bin/sh` xref | BL / BLA instruction encoding |
 | s390x | `/bin/sh` xref | BRASL instruction |
-| Other | `/bin/sh` xref only | `UNKNOWN-STATIC` (no call scan) |
+| Other | `/bin/sh` xref only | `UNKNOWN-STATIC` no call scan |
 
 ---
 

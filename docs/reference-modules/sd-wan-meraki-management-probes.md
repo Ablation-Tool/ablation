@@ -6,7 +6,7 @@ Probe Cisco SD-WAN vManage controller for unauthenticated REST API access and po
 
 ## Why this exists
 
-1. **`probe_cisco_sdwan_vmanage_exposure()` detects unauthenticated vManage REST API access**: vManage is the SD-WAN policy controller that exposes a REST API on TCP/8443. The `/dataservice/device` endpoint returns full device inventory; `/dataservice/template/device` returns device templates that contain device credentials; `/dataservice/certificate/vedge/list` returns the PKI trust chain for all SD-WAN edge devices. CVE-2021-1479 (unauthenticated heap overflow via `/dataservice/disasterrecovery`) and CVE-2023-20214 (session establishment without authentication) are the canonical exploitation paths. `probe_cisco_sdwan_vmanage_exposure()` fingerprints the portal and attempts `/dataservice/device` to confirm whether authentication is enforced.
+1. **`probe_cisco_sdwan_vmanage_exposure()` detects unauthenticated vManage REST API access**: vManage is the SD-WAN policy controller that exposes a REST API on TCP/8443. The `/dataservice/device` endpoint returns full device inventory; `/dataservice/template/device` returns device templates that contain device credentials; `/dataservice/certificate/vedge/list` returns the PKI trust chain for all SD-WAN edge devices. CVE-2021-1479 (unauthenticated heap overflow via `/dataservice/disasterrecovery`) and CVE-2023-20214 session establishment without authentication are the canonical exploitation paths. `probe_cisco_sdwan_vmanage_exposure()` fingerprints the portal and attempts `/dataservice/device` to confirm whether authentication is enforced.
 
 2. **`probe_cisco_meraki_api_exposure()` tests the Meraki local status page**: each Meraki MX/MS/MR device exposes a local web status page (port 80) that returns SSID names, VLAN configurations, uplink IP addresses, and connected client counts without authentication. This page is intended for local physical access troubleshooting but is accessible to any host on the management network. Additionally, the probe scans environment variables and configuration files for `X-Cisco-Meraki-API-Key` patterns: the single API key that provides full read/write access to all networks under a Meraki organization.
 
@@ -85,7 +85,7 @@ SD-WAN/Meraki probe functions return `List[{severity, title, detail, host, port}
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` (unauthenticated API) / `MEDIUM` (portal fingerprint) |
+| `severity` | `CRITICAL` unauthenticated API / `MEDIUM` portal fingerprint |
 | `title` | Finding code (e.g., `VMANAGE_UNAUTH_API`, `VMANAGE_PORTAL_FINGERPRINT`, `MERAKI_DEFAULT_CRED`) |
 | `detail` | Endpoint, HTTP response code, or data accessible without authentication |
 | `host` | Target IP |

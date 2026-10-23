@@ -1,14 +1,14 @@
 # Fortinet Build Track Classification
 
-Parse Fortinet firmware filenames to determine build track (M for Managed/maintenance, F for Feature), expected PKI certificate key set, product family, and firmware version: without any disk I/O: enabling batch scan anomaly detection when actual extracted key counts differ from expected counts.
+Parse Fortinet firmware filenames to determine build track M for Managed/maintenance, F for Feature, expected PKI certificate key set, product family, and firmware version: without any disk I/O: enabling batch scan anomaly detection when actual extracted key counts differ from expected counts.
 
 ---
 
 ## Why this exists
 
-1. **The M/F build track distinction appears in the Fortinet firmware filename and deterministically predicts the key set shipped with that firmware.** Before `FortiBuildTrackClassifier`, there was no programmatic way to predict whether a firmware image ships one or three cert keys without running a full VMDK conversion and `debugfs` extraction. The classifier validates this prediction against every virtual format in the corpus (VMware OVF, Hyper-V VHD/VHDX, KVM QCOW2, ARM64 KVM).
+1. **The M/F build track distinction appears in the Fortinet firmware filename and deterministically predicts the key set shipped with that firmware.** Before `FortiBuildTrackClassifier`, there was no programmatic way to predict whether a firmware image ships one or three cert keys without running a full VMDK conversion and `debugfs` extraction. The classifier validates this prediction against every virtual format in the corpus VMware OVF, Hyper-V VHD/VHDX, KVM QCOW2, ARM64 KVM.
 
-2. **Batch anomaly detection catches builds where the actual key count differs from the expected count.** An M-build that unexpectedly ships only one key, or an F-build with three keys, would be silent evidence of a firmware supply-chain anomaly or key removal event. `BuildTrackResult.discrepancy(actual_keys)` surfaces these mismatches without manual inspection of each image.
+2. **Batch anomaly detection catches builds where the actual key count differs from the expected count.** An M-build that unexpectedly ships only one key, or an F-build with three keys, would be silent evidence of a firmware supply-chain anomaly or key removal event. `BuildTrackResult.discrepancyactual_keys` surfaces these mismatches without manual inspection of each image.
 
 3. **`FortiBuildTrackClassifier.classify()` takes only a filename string, no disk access, no ELF parsing, no extraction.** This makes it usable as the first step in any Fortinet firmware batch processing pipeline: classify all filenames in a directory, identify expected key sets, then run extraction only on images where key count verification is needed.
 
@@ -89,11 +89,11 @@ Run `FortiBuildTrackClassifier.classify()` on the firmware filename as the first
 
 ## Reading output
 
-`FortiBuildTrackClassifier.classify(filename)` returns a `BuildTrackResult` object:
+`FortiBuildTrackClassifier.classifyfilename` returns a `BuildTrackResult` object:
 
 | Attribute | Content |
 |:---|:---|
-| `filename` | Input filename (basename) |
+| `filename` | Input filename basename |
 | `product` | Product name string (e.g., `'FGT_VM64'`, `'FOS_VM64_KVM'`) |
 | `version` | Version string (e.g., `'7.4.12'`) |
 | `build_number` | Build number integer (e.g., `2902`) |
@@ -102,7 +102,7 @@ Run `FortiBuildTrackClassifier.classify()` on the firmware filename as the first
 | `key_generation` | Key generation identifier (e.g., `'Gen1'`, `'Gen2'`) |
 | `error` | `Optional[str]`: error message if classification failed |
 
-`FortiBuildTrackClassifier.batch_classify(filenames)` returns `List[BuildTrackResult]`.
+`FortiBuildTrackClassifier.batch_classifyfilenames` returns `List[BuildTrackResult]`.
 
 ---
 

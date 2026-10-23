@@ -6,7 +6,7 @@ Parse Texas Instruments COFF2 object files (`.obj`) and AR archives (`.a`) produ
 
 ## Why this exists
 
-1. **TI Code Generation Tools for C28x and C29x targets produce COFF2 object files, not ELF.** `BinaryContext.load_or_build()` uses `lief` for ELF loading and cannot parse COFF2. Without `TiCoffLoader`, TI COFF firmware (F28P55x DSP, C2000 series) cannot be analyzed by any Ablation tool. `TiCoffLoader` fills this gap with native Python COFF2 parsing.
+1. **TI Code Generation Tools for C28x and C29x targets produce COFF2 object files, not ELF.** `BinaryContext.load_or_build()` uses `lief` for ELF loading and cannot parse COFF2. Without `TiCoffLoader`, TI COFF firmware F28P55x DSP, C2000 series cannot be analyzed by any Ablation tool. `TiCoffLoader` fills this gap with native Python COFF2 parsing.
 
 2. **TI AR archives (`.a`) package multiple COFF2 members**: the same `!<arch>\n` Unix AR format used by `AixBigArExtractor`, but with COFF2 members instead of AIX Big Archive members. `TiCoffLoader` parses both the standalone `.obj` and the `.a` archive format, extracting all members for bulk symbol analysis.
 
@@ -62,7 +62,7 @@ Global defined:
 
 ## False positives
 
-**`is_weak()` uses storage class `C_WEAKEXT`**: TI COFF2 represents weak symbols via `C_WEAKEXT` (storage class 22), which is TI-specific. Standard COFF weak symbol conventions differ from ELF; verify that `is_weak()` results align with TI CGT documentation for the specific target.
+**`is_weak()` uses storage class `C_WEAKEXT`**: TI COFF2 represents weak symbols via `C_WEAKEXT`, storage class 22, which is TI-specific. Standard COFF weak symbol conventions differ from ELF; verify that `is_weak()` results align with TI CGT documentation for the specific target.
 
 **AR archive parsing assumes Unix AR format with COFF2 members**: if the `.a` file contains non-COFF2 members for example a manifest or index, those members will fail to parse. Non-COFF2 members are skipped silently.
 
@@ -92,12 +92,12 @@ Each `CoffSymbol`:
 | `value` | Symbol value (address for code/data symbols, `0` for undefined externals) |
 | `section_number` | `0` = undefined external, `-1` = absolute, `1+` = section index |
 | `storage_class` | Raw storage class integer |
-| `member_name` | AR member this symbol came from (empty for standalone objects) |
-| `is_weak` | Property: `True` if `storage_class == C_UEXT` (tentative external / weak) |
+| `member_name` | AR member this symbol came from empty for standalone objects |
+| `is_weak` | Property: `True` if `storage_class == C_UEXT` tentative external / weak |
 
 ---
 
 ## See also
 
 - [TI Neural Network Artifact Detection](ti-neural-network-artifacts.md): `TiNNCScanner` that uses `TiCoffLoader` for C28x targets
-- [AIX Big Archive Extraction](aix-big-ar-extractor.md): `AixBigArExtractor` for AIX Big Archive format (similar archive structure)
+- [AIX Big Archive Extraction](aix-big-ar-extractor.md): `AixBigArExtractor` for AIX Big Archive format similar archive structure

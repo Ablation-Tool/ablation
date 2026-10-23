@@ -1,12 +1,12 @@
 # PS3 SELF Decryption
 
-Decrypt PS3 SELF (Signed ELF) files programmatically inside a Python pipeline: auto-detecting the correct keyset from the SCE header `key_rev` field, applying AES-128-CBC decryption with the correct ERK/RIV pair, and producing a standard ELF that `BinaryContext.load_or_build()` can parse.
+Decrypt PS3 SELF Signed ELF files programmatically inside a Python pipeline: auto-detecting the correct keyset from the SCE header `key_rev` field, applying AES-128-CBC decryption with the correct ERK/RIV pair, and producing a standard ELF that `BinaryContext.load_or_build()` can parse.
 
 ---
 
 ## Why this exists
 
-1. **`lief`, `capstone`, and `BinaryContext.load_or_build()` all fail silently on encrypted SELF format**: they see garbage or raise exceptions on the non-ELF magic bytes `0x53434500` (`SCE\0`). Before `PS3SELFDecryptor`, decryption required the external `scetool` binary (C, manual build, not importable as a Python library), invoked manually before each analysis session with the correct keyset flags.
+1. **`lief`, `capstone`, and `BinaryContext.load_or_build()` all fail silently on encrypted SELF format**: they see garbage or raise exceptions on the non-ELF magic bytes `0x53434500` (`SCE\0`). Before `PS3SELFDecryptor`, decryption required the external `scetool` binary C, manual build, not importable as a Python library, invoked manually before each analysis session with the correct keyset flags.
 
 2. **Auto-detection from `key_rev` eliminates manual keyset lookup.** The `key_rev` field at bytes 6–7 of the SCE header selects the master keyset (ERK/RIV). `PS3SELFDecryptor.from_path()` reads `key_rev` and selects the correct keyset automatically. Without this, matching `key_rev` to the right ERK/RIV required manual lookup in `scetool`'s `keys.h` for every new SELF file.
 
@@ -82,7 +82,7 @@ BinaryContext: eboot_decrypted.elf  (ELF64, PPC64)  <N> functions
 
 **`from_path()` raises on unknown `key_rev`**: if the SELF file uses a `key_rev` not in the registered keyset table, `PS3SELFDecryptor.from_path()` raises a `KeyError`. Use `register_keyset()` to add new ERK/RIV pairs before calling `from_path()` for new PS3 firmware eras.
 
-**Decrypted output is only valid if the keyset is correct**: an incorrect ERK/RIV produces a file with AES output that appears syntactically valid (correct ELF magic after decryption) but contains garbage instruction bytes. Verify decryption success by checking that `BinaryContext.load_or_build()` parses correctly and `ctx.func_starts` is non-empty.
+**Decrypted output is only valid if the keyset is correct**: an incorrect ERK/RIV produces a file with AES output that appears syntactically valid correct ELF magic after decryption but contains garbage instruction bytes. Verify decryption success by checking that `BinaryContext.load_or_build()` parses correctly and `ctx.func_starts` is non-empty.
 
 ---
 
@@ -94,7 +94,7 @@ Run `PS3SELFDecryptor.from_path()` before any SELF file analysis. After successf
 
 ## Reading output
 
-`PS3SELFDecryptor.decrypt(in_path, out_path)` returns a `SELFDecryptResult`:
+`PS3SELFDecryptor.decryptin_path, out_path` returns a `SELFDecryptResult`:
 
 | Attribute | Content |
 |:---|:---|

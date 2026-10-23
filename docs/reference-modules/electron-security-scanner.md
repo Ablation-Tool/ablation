@@ -20,7 +20,7 @@ Gap closed: 2026-10-16. All confirmed FFO findings re-detected automatically in 
 | `SERVER_URL_IN_WINDOW` | CWE-601 | HIGH/MEDIUM | `loadURL(var)` where var appears server-derived; HIGH if NI:true present in file | FFO-OAUTH-1 |
 | `DEVTOOLS_IN_PROD` | CWE-489 | MEDIUM | `openDevTools()` without `isDev`/`NODE_ENV===development` guard | FFO-DEVTOOLS-1 |
 | `DEEP_LINK_NO_VALIDATION` | CWE-601 | MEDIUM | Protocol URL handler uses argument in `loadURL`/login without scheme/domain check | FFO-DEEPLINK-1 |
-| `TLS_BYPASS` | CWE-295 | CRITICAL/HIGH | `certificate-error` handler calls `callback(true)` (CRITICAL); `rejectUnauthorized:false` (HIGH) | FFO-CERTBYP-1, FFO-UPDATE-1 |
+| `TLS_BYPASS` | CWE-295 | CRITICAL/HIGH | `certificate-error` handler calls `callback(true)` CRITICAL; `rejectUnauthorized:false` (HIGH) | FFO-CERTBYP-1, FFO-UPDATE-1 |
 | `CONTEXT_BRIDGE_MISSING` | CWE-693 | HIGH | Preload script assigns `ipcRenderer` to `window`/`global` without `contextBridge` |: |
 
 ## Key API
@@ -51,7 +51,7 @@ Or use ablation's built-in asar reader (see `ablation/analyzers/source_audit_com
 
 ## IPC severity escalation
 
-`IPC_NO_SENDER_CHECK` starts at MEDIUM and escalates to HIGH when the handler body (next 15 lines) contains keywords: `cookie`, `session`, `cert`, `key`, `token`, `password`, `credential`, `global.`, `sharedObject`, `require(`, `exec`, `spawn`, `readFile`, `writeFile`.
+`IPC_NO_SENDER_CHECK` starts at MEDIUM and escalates to HIGH when the handler body next 15 lines contains keywords: `cookie`, `session`, `cert`, `key`, `token`, `password`, `credential`, `global.`, `sharedObject`, `require(`, `exec`, `spawn`, `readFile`, `writeFile`.
 
 ## Detection limitations
 

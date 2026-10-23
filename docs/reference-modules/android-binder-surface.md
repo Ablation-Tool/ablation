@@ -26,7 +26,7 @@ flowchart TD
     F --> G["Output: readable pseudo-Java showing:\nParcel.readInt() transaction code dispatch\ncheckCallingPermission() / enforceCallingPermission() presence\nParcel.readString() / readParcelable() data sources\nMethod calls downstream of IPC data"]
 ```
 
-### DEX instruction format summary (selected)
+### DEX instruction format summary selected
 
 | Format | Code units | Use |
 |---|---|---|
@@ -135,9 +135,9 @@ boolean onTransact(int p1, Parcel p2, Parcel p3, int p4) {
 
 ## False positives
 
-**`is_exported_or_implicit()` returns true for intent-filter services that are not Binder services.** A `JobService`, `AccessibilityService`, or `NotificationListenerService` exports itself via intent-filter (required by the framework) but does not implement `onTransact()` for custom IPC, it uses the framework Binder stub. `DEXDisasm.list_methods()` returns empty for `onTransact` on these classes. Skip services with empty `list_methods(class_name)` results: they are framework-managed, not custom Binder surfaces.
+**`is_exported_or_implicit()` returns true for intent-filter services that are not Binder services.** A `JobService`, `AccessibilityService`, or `NotificationListenerService` exports itself via intent-filter required by the framework but does not implement `onTransact()` for custom IPC, it uses the framework Binder stub. `DEXDisasm.list_methods()` returns empty for `onTransact` on these classes. Skip services with empty `list_methodsclass_name` results: they are framework-managed, not custom Binder surfaces.
 
-**Lifted pseudo-Java shows `// no pending invoke` for move-result instructions.** This comment appears when a `move-result` instruction does not immediately follow its corresponding `invoke-*`: for example, when a `goto` or another instruction appears between them (valid bytecode but uncommon). The smali output from `DEXDisasm` is always correct for these cases: use it as the authoritative reference when the lifted pseudo-Java output shows this comment. The instruction stream is valid; the lifter's pending-invoke state was cleared by the intervening instruction.
+**Lifted pseudo-Java shows `// no pending invoke` for move-result instructions.** This comment appears when a `move-result` instruction does not immediately follow its corresponding `invoke-*`: for example, when a `goto` or another instruction appears between them valid bytecode but uncommon. The smali output from `DEXDisasm` is always correct for these cases: use it as the authoritative reference when the lifted pseudo-Java output shows this comment. The instruction stream is valid; the lifter's pending-invoke state was cleared by the intervening instruction.
 
 **Permission check in superclass `onTransact()` is not visible in the subclass disassembly.** If `RemoteService` calls `super.onTransact()` and the permission check is in the `Binder` superclass, `DEXLifter` on the subclass will not show a `checkCallingPermission()` call. This is the normal pattern for services that delegate auth to the superclass. Before reporting a missing permission check, confirm whether the `invoke-super` at the top of the method targets a class that enforces permissions.
 

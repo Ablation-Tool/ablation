@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Op elke toekomstige scan, andere firmwareversie, andere leverancier: voert `pl.sweep(searcher)` automatisch alle bevestigde patronen uit.
+Op elke toekomstige scan, andere firmwareversie, andere leverancier: voert `pl.sweepsearcher` automatisch alle bevestigde patronen uit.
 
 ---
 

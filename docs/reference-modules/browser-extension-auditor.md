@@ -4,7 +4,7 @@
 
 **Gap closed:** TG-FPAM-1, no ablation module for browser extension security analysis.
 
-FortiClient EMS ships the FPAM browser extension (Chrome/Edge). Manual analysis of its
+FortiClient EMS ships the FPAM browser extension Chrome/Edge. Manual analysis of its
 `manifest.json` and background service worker confirmed FPAM-EXT-1: `externally_connectable`
 with `https://*/*` exposes the Chrome messaging API to any HTTPS page. The service worker
 processes request payloads before validating `sender.url`, turning it into a confused-deputy
@@ -32,7 +32,7 @@ findings = BrowserExtensionAuditor.scan_file('/tmp/fpam-ext/background.js')
 |--------|---------|-------|
 | `from_path(path)` | `BrowserExtensionAuditor` | Recursively collects JS/TS/MJS + manifest.json |
 | `scan()` | `List[ExtFinding]` | Runs all checks; sorted by severity |
-| `scan_file(path)` | `List[ExtFinding]` | Single-file scan (no manifest audit) |
+| `scan_file(path)` | `List[ExtFinding]` | Single-file scan no manifest audit |
 | `report(findings, min_severity=None)` | `str` | Human-readable summary with counts |
 
 ## Finding classes
@@ -68,11 +68,11 @@ python3 -m ablation.analyzers.browser_extension_auditor /path/to/ext/ --severity
 
 - Manifest V2 and V3 both supported
 - Pre-filter: JS/TS files must contain a Chrome extension API signal to be scanned
- (avoids false positives on third-party bundled JS)
+ avoids false positives on third-party bundled JS
 - Message handler pre-auth check uses a 50-line lookahead window: deeply nested handlers
  may be missed
 - Does not analyze compiled/minified bundles (no AST); source maps not followed
-- Does not validate native messaging host manifests (separate JSON on the OS install path)
+- Does not validate native messaging host manifests separate JSON on the OS install path
 
 ---
 

@@ -67,7 +67,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading output
 
-`analyze_jar(jar_path)` returns a dict:
+`analyze_jarjar_path` returns a dict:
 
 | Key | Content |
 |:---|:---|
@@ -78,7 +78,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 | `security_strings` | `List[str]`: security-relevant string literals found |
 | `manifest` | Dict of MANIFEST.MF entries (`Main-Class`, `Class-Path`, etc.) |
 | `maven_deps` | `List[dict]`: bundled Maven dependency metadata |
-| `jndi_patterns` | `List[str]`: JNDI lookup strings found (Log4Shell detection) |
+| `jndi_patterns` | `List[str]`: JNDI lookup strings found Log4Shell detection |
 | `findings` | `List[dict]`: structured findings with `severity`, `title`, `description` |
 
 ---

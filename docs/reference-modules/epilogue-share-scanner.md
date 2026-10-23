@@ -158,7 +158,7 @@ Jump tables in switch statements produce false hits if the jump target happens t
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` with `ctx.func_starts` populated. Used when function boundary analysis suggests incorrect splits (overlapping or merged functions).
+**Before this module:** `BinaryContext.load_or_build()` with `ctx.func_starts` populated. Used when function boundary analysis suggests incorrect splits overlapping or merged functions.
 
 **After this module:** Use hits to merge `host_func_va` and `from_func_va` boundaries in `ctx` before running `TaintTracker`, or to confirm that tail-call-optimized wrappers share epilogue code with their callees.
 

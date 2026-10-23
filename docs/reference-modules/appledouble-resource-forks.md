@@ -10,7 +10,7 @@ Parse AppleDouble container files produced by `unar` and Stuffit Expander on Lin
 
 2. **Cross-archive resource-fork analysis of 533+ Tool_Chest Mac Classic binary archives was not scriptable without a reliable way to strip the AppleDouble wrapper.** Each session required manually computing the entry offset from a hex dump before passing data to the `CODE`/`DATA` resource map parser. `AppleDoubleExtractor.batch_extract_resource_forks()` processes a list of paths and returns `{path: raw_bytes | None}` for the resource fork entry in each: reducing a multi-hour manual process to a single function call.
 
-3. **AppleDouble files contain additional entries beyond the resource fork: Finder info (entry_id=8), file dates (entry_id=7), real name (entry_id=3), that provide metadata useful for binary classification.** The `ENTRY_NAMES` dict maps all 10 standard entry IDs to human-readable names. `AppleDoubleResult.real_name()` decodes entry 3 as `mac_roman` text (the original Mac filename, which may differ from the POSIX path). `AppleDoubleResult.finder_info()` returns the 16-byte Finder info block (file type + creator code in the first 8 bytes): the canonical way to identify Mac Classic binary types without relying on file extensions.
+3. **AppleDouble files contain additional entries beyond the resource fork: Finder info (entry_id=8), file dates (entry_id=7), real name (entry_id=3), that provide metadata useful for binary classification.** The `ENTRY_NAMES` dict maps all 10 standard entry IDs to human-readable names. `AppleDoubleResult.real_name()` decodes entry 3 as `mac_roman` text the original Mac filename, which may differ from the POSIX path. `AppleDoubleResult.finder_info()` returns the 16-byte Finder info block file type + creator code in the first 8 bytes: the canonical way to identify Mac Classic binary types without relying on file extensions.
 
 ---
 
@@ -34,23 +34,23 @@ flowchart TD
 |---|---|---|
 | 1 | `ENTRY_DATA_FORK` | Data fork bytes (rarely populated in AppleDouble) |
 | 2 | `ENTRY_RESOURCE_FORK` | Resource fork bytes: primary target |
-| 3 | `ENTRY_REAL_NAME` | Original Mac filename (mac_roman encoded) |
+| 3 | `ENTRY_REAL_NAME` | Original Mac filename mac_roman encoded |
 | 4 | `ENTRY_COMMENT` | Finder comment |
 | 5 | `ENTRY_ICON_BW` | Black-and-white icon data |
 | 6 | `ENTRY_ICON_COLOR` | Color icon data |
-| 7 | `ENTRY_FILE_DATES` | File dates (created, modified, backup, accessed) |
+| 7 | `ENTRY_FILE_DATES` | File dates created, modified, backup, accessed |
 | 8 | `ENTRY_FINDER_INFO` | 16-byte Finder info (bytes 0-3 = file type, 4-7 = creator) |
 | 9 | `ENTRY_MACINTOSH_INFO` | Macintosh file info flags |
 | 10 | `ENTRY_FILE_DATES_NEW` | Extended file dates |
 
-### Header layout (big-endian)
+### Header layout big-endian
 
 | Offset | Size | Field |
 |---|---|---|
 | 0 | 4 bytes BE uint32 | Magic: `0x00051607` |
 | 4 | 2 bytes BE uint16 | Version high (2 = version 2.x) |
 | 6 | 2 bytes BE uint16 | Version low (0 = 2.0) |
-| 8 | 16 bytes | Home filesystem string (null-padded) |
+| 8 | 16 bytes | Home filesystem string null-padded |
 | 24 | 2 bytes BE uint16 | Entry count |
 | 26 | `entry_count × 12` | Entry descriptors |
 
@@ -148,9 +148,9 @@ Batch:
 
 ## Pipeline position
 
-**Before this module:** Extract `.rsrc` files from Mac Classic archives using `unar -forks visible <archive>`. Confirm the output files are AppleDouble (not raw resource forks) with `is_appledouble(data[:4])`. If the archive was extracted with `unzip` or `tar` on Linux, the resource fork is typically lost: use `unar` specifically.
+**Before this module:** Extract `.rsrc` files from Mac Classic archives using `unar -forks visible <archive>`. Confirm the output files are AppleDouble not raw resource forks with `is_appledoubledata[:4]`. If the archive was extracted with `unzip` or `tar` on Linux, the resource fork is typically lost: use `unar` specifically.
 
-**After this module:** Feed `ext.resource_fork()` bytes to a Mac OS resource map parser to extract `CODE` resources (68k code segments), `DATA` resources, `STR#` string tables, and `MENU` resources. The `CODE 0` resource contains the jump table for the application: the entry point for Mac Classic binary analysis. Check `finder_info()[0:4]` for the file type (`APPL` = application, `INIT` = system extension, `cdev` = control panel) before selecting the appropriate analysis path.
+**After this module:** Feed `ext.resource_fork()` bytes to a Mac OS resource map parser to extract `CODE` resources 68k code segments, `DATA` resources, `STR#` string tables, and `MENU` resources. The `CODE 0` resource contains the jump table for the application: the entry point for Mac Classic binary analysis. Check `finder_info()[0:4]` for the file type (`APPL` = application, `INIT` = system extension, `cdev` = control panel) before selecting the appropriate analysis path.
 
 ---
 
@@ -159,7 +159,7 @@ Batch:
 | Field | Content |
 |:---|:---|
 | `entry_id=2` (`ENTRY_RESOURCE_FORK`) | Raw resource fork bytes: pass to resource map parser |
-| `entry_id=8` (`ENTRY_FINDER_INFO`) | Bytes 0-3 = file type, 4-7 = creator code (both mac_roman 4-char codes) |
+| `entry_id=8` (`ENTRY_FINDER_INFO`) | Bytes 0-3 = file type, 4-7 = creator code both mac_roman 4-char codes |
 | `entry_id=3` (`ENTRY_REAL_NAME`) | Original Mac filename: may differ from POSIX archive path |
 | `ValueError("Not an AppleDouble file")` | File is a raw resource fork or corrupt: use direct offset parsing |
 | `ValueError("AppleSingle file detected")` | Single-file format: resource fork is entry_id=2 but requires AppleSingle parser |

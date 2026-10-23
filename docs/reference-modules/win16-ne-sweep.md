@@ -6,11 +6,11 @@
 
 Three things were not possible before in Ablation:
 
-1. **No Win16 NE binary could be loaded.** LIEF does not support the NE (New Executable) format used by Windows 3.x.EXE and.DLL files. Without a loader, the 16-bit TCP/IP stack, FTP clients, Winsock layer, and all WfW 3.11 networking binaries were invisible to every sweep.
+1. **No Win16 NE binary could be loaded.** LIEF does not support the NE New Executable format used by Windows 3.x.EXE and.DLL files. Without a loader, the 16-bit TCP/IP stack, FTP clients, Winsock layer, and all WfW 3.11 networking binaries were invisible to every sweep.
 
-2. **16-bit import resolution was missing.** Win16 imports are stored as per-segment relocation records that map code offsets to `(module_ref, ordinal)` tuples, not an IAT. Call resolution requires parsing the module reference table and the imported names table, then looking up ordinals in per-module tables for KERNEL, USER, GDI, and SHELL. Without this, every call in a Win16 binary appeared as a bare hex address, producing meaningless semantic descriptions.
+2. **16-bit import resolution was missing.** Win16 imports are stored as per-segment relocation records that map code offsets to `module_ref, ordinal` tuples, not an IAT. Call resolution requires parsing the module reference table and the imported names table, then looking up ordinals in per-module tables for KERNEL, USER, GDI, and SHELL. Without this, every call in a Win16 binary appeared as a bare hex address, producing meaningless semantic descriptions.
 
-3. **Win16-specific vulnerability profiles did not exist.** Win16 programs use `LocalAlloc`/`GlobalAlloc` (16-bit wrap at 64 KB), `lstrcpy` (no length parameter), `GetDlgItemText` (fixed OFSTRUCT), and `WinExec`, different sinks from the 32/64-bit world. Generic profiles scored these functions incorrectly.
+3. **Win16-specific vulnerability profiles did not exist.** Win16 programs use `LocalAlloc`/`GlobalAlloc` 16-bit wrap at 64 KB, `lstrcpy` no length parameter, `GetDlgItemText` fixed OFSTRUCT, and `WinExec`, different sinks from the 32/64-bit world. Generic profiles scored these functions incorrectly.
 
 ---
 
@@ -33,8 +33,8 @@ Output: `reports/sweep_ne_<vendor>_<product>_<version>_<ts>.md`
 
 ## Key implementation notes
 
-- NE header field `align_shift` controls the sector multiplier for segment file offsets. Default is 9 (512-byte sectors) when the field is 0.
-- The relocation source offset for a FAR CALL (`9A`) is at `call_file_offset + 1` (byte after the opcode), not at the opcode itself.
+- NE header field `align_shift` controls the sector multiplier for segment file offsets. Default is 9 512-byte sectors when the field is 0.
+- The relocation source offset for a FAR CALL (`9A`) is at `call_file_offset + 1` byte after the opcode, not at the opcode itself.
 - Class is `NEBinary` (not `NEParser`).
 - `NEBinary.build_segment_import_map(seg)` returns `{source_offset: 'MOD!funcname'}` where `source_offset` is relative to the segment start.
 - Win16 functions may use `enter imm16, 0` (`c8 XX XX 00`) instead of `push bp; mov bp, sp`: the prologue scanner checks both forms.
@@ -49,7 +49,7 @@ Functions with ≤15 instructions containing exactly one import call score high 
 
 ## How it works
 
-`NEBinary(path)` parses a Windows 3.x New Executable (NE format). Reads the NE header, segment table, module reference table, and exported name table. For each code segment, reconstructs the segment data from file offsets and resolves imported ordinals against the Win16 KERNEL, USER, and GDI ordinal tables (lines 47–503). `NEBinary.sweep()` disassembles each code segment with CS_ARCH_X86 + CS_MODE_16 and scans for dangerous Win16 API calls (`lstrcpy`, `lstrcat`, `sprintf`, `GetDlgItemText`) that allow attacker-controlled input to overflow fixed-size buffers.
+`NEBinary(path)` parses a Windows 3.x New Executable NE format. Reads the NE header, segment table, module reference table, and exported name table. For each code segment, reconstructs the segment data from file offsets and resolves imported ordinals against the Win16 KERNEL, USER, and GDI ordinal tables lines 47–503. `NEBinary.sweep()` disassembles each code segment with CS_ARCH_X86 + CS_MODE_16 and scans for dangerous Win16 API calls (`lstrcpy`, `lstrcat`, `sprintf`, `GetDlgItemText`) that allow attacker-controlled input to overflow fixed-size buffers.
 
 ---
 

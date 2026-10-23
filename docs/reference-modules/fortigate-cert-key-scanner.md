@@ -22,7 +22,7 @@ Extracts and fingerprints `fgt_512.key`, `fgt2.key`, and `fgt.key` from FortiGat
 
 | Method | Input | qemu-img flag |
 |---|---|---|
-| `from_path()` | OVF ZIP (`.out.zip`) | vmdk (via inner ZIP) |
+| `from_path()` | OVF ZIP (`.out.zip`) | vmdk via inner ZIP |
 | `from_disk()` | KVM QCOW2 (`.qcow2`) | qcow2 |
 | `from_disk()` | Hyper-V VHD (`.vhd`) | vpc |
 | `from_disk()` | Hyper-V VHDX (`.vhdx`) | vhdx |
@@ -120,7 +120,7 @@ Intermediate files live in a temporary directory and are removed before the resu
 
 Results are cached in `~/.ablation/cache/fortigate_cert_key_scanner.json`. The cache key is the file path, size, and modification time in nanoseconds; any change to the file triggers a rescan. Cache reads and writes are protected by `fcntl.flock` so concurrent batch scans on overlapping directories do not corrupt the cache. Cache writes are atomic (write to `.tmp`, then `os.replace`).
 
-Error results are never written to cache. If a scan fails (missing tool, disk full, corrupt firmware), the next run re-attempts the full pipeline. Use `force_rescan=True` to bypass a stale successful-but-wrong cache entry.
+Error results are never written to cache. If a scan fails missing tool, disk full, corrupt firmware, the next run re-attempts the full pipeline. Use `force_rescan=True` to bypass a stale successful-but-wrong cache entry.
 
 ---
 
@@ -166,7 +166,7 @@ Loads the firmware image, maps entropy across the file using a sliding window, a
 
 ## False positives
 
-Version-mismatch findings appear when a known key or certificate is present in a build where it was intentionally removed. Cross-reference against the family table in `FirmwareKeyCorpus` and the product release notes before escalating. Development-only debug keys (identifiable by subject CN matching vendor dev lab naming conventions) are not production findings.
+Version-mismatch findings appear when a known key or certificate is present in a build where it was intentionally removed. Cross-reference against the family table in `FirmwareKeyCorpus` and the product release notes before escalating. Development-only debug keys identifiable by subject CN matching vendor dev lab naming conventions are not production findings.
 
 ---
 
@@ -196,10 +196,10 @@ Each `KeyEntry` in `result.keys`:
 | Attribute | Content |
 |:---|:---|
 | `name` | Key filename (e.g., `'fgt_512.key'`) |
-| `md5` | MD5 hexdigest (identification only) |
-| `sha256` | SHA-256 hexdigest (cross-validation) |
+| `md5` | MD5 hexdigest identification only |
+| `sha256` | SHA-256 hexdigest cross-validation |
 | `family` | Key family name or `'UNKNOWN'` for unrecognized variants |
-| `severity` | `'CRITICAL'` (known-weak key) / `'HIGH'` / `'UNKNOWN'` |
+| `severity` | `'CRITICAL'` known-weak key / `'HIGH'` / `'UNKNOWN'` |
 | `description` | Human-readable note about this key |
 
 ---

@@ -8,9 +8,9 @@ Recover XOR encryption keys from firmware blobs using three attack modes: Known 
 
 1. **Firmware XOR obfuscation uses static repeating keys that can be recovered in seconds.** Vendors apply a single repeating XOR key before flashing firmware to NAND (Fortinet, HiSilicon, a range of industrial targets). The cipher is not cryptographic, it is obfuscation. Three well-known attacks break it: known-plaintext recovery from firmware magic bytes, Index of Coincidence spike detection on sparse images, and transposition frequency analysis. Without automated tooling, analysts perform these manually per engagement.
 
-2. **NAND flash images have overwhelming sparsity: most bytes are 0xFF (erased) or 0x00 (initialized).** This property makes the XOR key immediately recoverable from the most-common-byte-per-column statistic: the most frequent ciphertext byte in each of the key-length columns is `most_common_plaintext XOR key_byte`. The IC spike method identifies the key length first (IC rises sharply at multiples of the true key length), then frequency analysis extracts each byte. Validated on FortiWiFi FWF_60E (IC=0.753, 192× above random baseline, 256 MB NAND) and a 512 MB x86-64 firmware image (IC=0.953, 244× above baseline).
+2. **NAND flash images have overwhelming sparsity: most bytes are 0xFF (erased) or 0x00 initialized.** This property makes the XOR key immediately recoverable from the most-common-byte-per-column statistic: the most frequent ciphertext byte in each of the key-length columns is `most_common_plaintext XOR key_byte`. The IC spike method identifies the key length first IC rises sharply at multiples of the true key length, then frequency analysis extracts each byte. Validated on FortiWiFi FWF_60E (IC=0.753, 192× above random baseline, 256 MB NAND) and a 512 MB x86-64 firmware image (IC=0.953, 244× above baseline).
 
-3. **`AffineMapAnalyzer` proves whether an unknown encryption function is pure XOR or has unexpected bit mixing.** When a firmware encryption routine is identified in a binary but its structure is unknown, `AffineMapAnalyzer` reconstructs the function's GF(2) affine map (A×P + K) by calling the function with unit-vector inputs. A pure XOR cipher produces A = Identity. Zero columns reveal plaintext bits that never affect output (implementation bugs). Off-diagonal entries reveal accidental bit rotation or mixing beyond simple XOR.
+3. **`AffineMapAnalyzer` proves whether an unknown encryption function is pure XOR or has unexpected bit mixing.** When a firmware encryption routine is identified in a binary but its structure is unknown, `AffineMapAnalyzer` reconstructs the function's GF(2) affine map (A×P + K) by calling the function with unit-vector inputs. A pure XOR cipher produces A = Identity. Zero columns reveal plaintext bits that never affect output implementation bugs. Off-diagonal entries reveal accidental bit rotation or mixing beyond simple XOR.
 
 ---
 
@@ -34,7 +34,7 @@ flowchart TD
     M --> N["analyze():\nidentity_diffs = entries where A[r][c] != I[r][c]\nzero_cols: plaintext bits with no output effect\nzero_rows: ciphertext bits independent of plaintext\nVerdict: pure XOR / implementation bug / non-trivial mixing"]
 ```
 
-### KPA magic dictionary (14 entries)
+### KPA magic dictionary 14 entries
 
 | Magic bytes | Label | File offset |
 |---|---|---|
@@ -146,9 +146,9 @@ AffineMapAnalyzer: block_size=16 (128 bits)
 
 ## Pipeline position
 
-**Before this module:** Identify that the firmware is XOR-obfuscated: `binwalk` finds no valid filesystem signatures, or `file` returns "data" with high entropy (~5.5–7.0 bits/byte).
+**Before this module:** Identify that the firmware is XOR-obfuscated: `binwalk` finds no valid filesystem signatures, or `file` returns "data" with high entropy ~5.5–7.0 bits/byte.
 
-**After this module:** Write the decrypted image to disk via `decrypt_file()`. Pass the decrypted file to `FirmwareContainer.from_path()` (for partitioned containers) or directly to `BinaryContext.load_or_build()` (for bare ELF). If `AffineMapAnalyzer` reveals implementation bugs (zero columns or rows), document the finding as a cipher integrity defect: the affected plaintext bits are unprotected regardless of key length.
+**After this module:** Write the decrypted image to disk via `decrypt_file()`. Pass the decrypted file to `FirmwareContainer.from_path()` for partitioned containers or directly to `BinaryContext.load_or_build()` for bare ELF. If `AffineMapAnalyzer` reveals implementation bugs zero columns or rows, document the finding as a cipher integrity defect: the affected plaintext bits are unprotected regardless of key length.
 
 ---
 

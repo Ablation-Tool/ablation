@@ -6,7 +6,7 @@ Four things Ablation could not do before this module:
 
 1. **Hardware FortiGate cert keys were inaccessible.** `FortiOSHardwareExtractor` removes the outer XOR layer from FortiOS hardware `.out` files and recovers key confidence above 0.80. The inner gzip partitions remain encrypted because they carry a second layer: a stream cipher whose key is embedded in the firmware container's RSA signature block. Without this extractor, all 99 hardware FortiGate model variants in the research collection have inaccessible cert keys.
 
-2. **No PKCS#1 v1.5 padding block scanner.** The FGT7K-2 finding (fortigate_7kf_re.py) confirmed that Fortinet embeds a 32-byte RC4 key in the PKCS#1 v1.5 padding of the firmware container's signature. There was no module to locate those blocks in a decrypted binary and extract candidate key material from the non-0xFF padding bytes.
+2. **No PKCS#1 v1.5 padding block scanner.** The FGT7K-2 finding fortigate_7kf_re.py confirmed that Fortinet embeds a 32-byte RC4 key in the PKCS#1 v1.5 padding of the firmware container's signature. There was no module to locate those blocks in a decrypted binary and extract candidate key material from the non-0xFF padding bytes.
 
 3. **No RC4 known-plaintext key tester.** Given candidate keys from PKCS#1 blocks, testing each one against the inner partitions required manual scripting. The gzip magic bytes at partition offsets (0x1f 0x8b 0x08) make a reliable crib for RC4 KPA. This module automates that loop.
 
@@ -46,9 +46,9 @@ To manage the output directory yourself, pass `output_dir=`. The module writes i
 |---|---|---|
 | RC4 stream | PKCS#1 v1.5 candidate tested against gzip magic | Primary path; FGT7K-2 class |
 | XOR repeating | Outer key tested as fallback | Covers cases where both layers use the same key |
-| Override (caller-specified cipher) | `override_key` + `override_cipher` parameter | For keys recovered by hardware teardown or RSA decrypt |
+| Override caller-specified cipher | `override_key` + `override_cipher` parameter | For keys recovered by hardware teardown or RSA decrypt |
 
-Not supported: gzip FENCRYPT (PKZIP DES-based) and AES-CBC. Both require additional firmware loader RE.
+Not supported: gzip FENCRYPT PKZIP DES-based and AES-CBC. Both require additional firmware loader RE.
 
 ---
 
@@ -108,9 +108,9 @@ Fortinet hardware firmware containers include an RSA-2048 signature block in PKC
 [0x00][0x01][PS bytes: should be 0xFF, but Fortinet stores key material here][0x00][DigestInfo][Hash]
 ```
 
-The scanner locates blocks where at least 80% of the PS bytes are 0xFF (real PKCS#1 padding). It extracts the non-0xFF bytes from the padding string as a candidate key. Requiring the 80% threshold prevents the 2-byte `0x00 0x01` pattern from generating false-positive candidates across the full binary.
+The scanner locates blocks where at least 80% of the PS bytes are 0xFF real PKCS#1 padding. It extracts the non-0xFF bytes from the padding string as a candidate key. Requiring the 80% threshold prevents the 2-byte `0x00 0x01` pattern from generating false-positive candidates across the full binary.
 
-After a candidate passes this check, key confirmation requires a full 10-byte gzip header match (magic + deflate method byte + FLG reserved-bit check) before the module streams the partition to disk.
+After a candidate passes this check, key confirmation requires a full 10-byte gzip header match magic + deflate method byte + FLG reserved-bit check before the module streams the partition to disk.
 
 ---
 
@@ -142,7 +142,7 @@ hardware .out
 | Field | Type | Meaning |
 |---|---|---|
 | `outer_key` | bytes | 64-byte XOR key from outer layer |
-| `outer_key_confidence` | float | IC from FortiOSHardwareExtractor (< 0.5 means wrong format) |
+| `outer_key_confidence` | float | IC from FortiOSHardwareExtractor < 0.5 means wrong format |
 | `pkcs1_candidates` | list[bytes] | Candidate keys extracted from PKCS#1 blocks |
 | `partitions` | list[PartitionResult] | One entry per inner partition; `valid_gzip=True` if decrypted |
 | `datafs_path` | str or None | Path to decrypted datafs.tar.gz if the cert partition was recovered |
@@ -182,7 +182,7 @@ Loads the firmware image, maps entropy across the file using a sliding window, a
 
 ## False positives
 
-Version-mismatch findings appear when a known key or certificate is present in a build where it was intentionally removed. Cross-reference against the family table in `FirmwareKeyCorpus` and the product release notes before escalating. Development-only debug keys (identifiable by subject CN matching vendor dev lab naming conventions) are not production findings.
+Version-mismatch findings appear when a known key or certificate is present in a build where it was intentionally removed. Cross-reference against the family table in `FirmwareKeyCorpus` and the product release notes before escalating. Development-only debug keys identifiable by subject CN matching vendor dev lab naming conventions are not production findings.
 
 ---
 

@@ -9,7 +9,7 @@ Traverses the control flow graph from the network entry point and identifies eve
 One thing blocked pre-auth surface mapping before `PreAuthRouteAuditor`:
 
 **Manual route table reading was the only option.**
-Web framework route tables in compiled firmware binaries are initialized at runtime through registration calls such as `route_url_register(path, handler_class)`. Finding which routes skip authentication required reading the route init function manually, identifying the registration call pattern, extracting handler class names, and then tracing those handlers to see whether they gate on session validation. For a binary with 400 routes that takes days. `PreAuthRouteAuditor` does it in a single function call.
+Web framework route tables in compiled firmware binaries are initialized at runtime through registration calls such as `route_url_registerpath, handler_class`. Finding which routes skip authentication required reading the route init function manually, identifying the registration call pattern, extracting handler class names, and then tracing those handlers to see whether they gate on session validation. For a binary with 400 routes that takes days. `PreAuthRouteAuditor` does it in a single function call.
 
 ---
 
@@ -104,7 +104,7 @@ for item in poc:
 Each PoC includes:
 
 - Minimal curl command with the auth bypass path
-- Expected response difference between authenticated and unauthenticated calls (confirms the bypass without guessing)
+- Expected response difference between authenticated and unauthenticated calls confirms the bypass without guessing
 - CWE classification for the PSIRT submission
 - Severity scoring based on the sinks reachable from the handler
 
@@ -128,13 +128,13 @@ The PoC output is paste-ready for a disclosure report. The curl command reproduc
 
 ## False positives
 
-Routes registered with auth middleware at the app level (not as a decorator on the handler function) appear as unauthenticated. The scanner only detects per-route auth decorators; verify app-level middleware before reporting. Informational endpoints (version, health) that are intentionally unauthenticated are expected findings.
+Routes registered with auth middleware at the app level not as a decorator on the handler function appear as unauthenticated. The scanner only detects per-route auth decorators; verify app-level middleware before reporting. Informational endpoints version, health that are intentionally unauthenticated are expected findings.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** No binary analysis required: `from_path(source_root)` operates on Python/JS source files.
+**Before this module:** No binary analysis required: `from_pathsource_root` operates on Python/JS source files.
 
 **After this module:** For HIGH/MEDIUM pre-auth routes that reach business-logic handlers, verify whether the handler reads user-controlled input and passes it to a taint sink. Register with `FindingRegistry`.
 

@@ -27,7 +27,7 @@ For each PE binary:
 1. Builds an IAT map for: `RpcServerRegisterIf`, `RpcServerRegisterIfEx`, `RpcServerRegisterIfEx2`, `RpcServerRegisterIf2`, `RpcServerRegisterIf3`, `RpcServerUseProtseqEpA`, `RpcServerUseProtseqEpW`.
 2. Scans all code sections with Capstone for call sites targeting those IAT entries.
 3. At each `RpcServerRegisterIf*` call site, extracts the first argument (`RPC_SERVER_INTERFACE*`) and reads the interface UUID and transfer syntax UUID from the struct at that address.
-4. At each `RpcServerRegisterIfEx` call site, extracts the second argument (auth level).
+4. At each `RpcServerRegisterIfEx` call site, extracts the second argument auth level.
 5. At each `RpcServerUseProtseqEp*` call site, extracts the endpoint string as UTF-16LE or ASCII.
 6. Reports any interface registered with auth level `RPC_C_AUTHN_LEVEL_NONE` as HIGH (CWE-306).
 
@@ -130,10 +130,10 @@ When `RpcServerRegisterIf` (not `IfEx`) is called, no auth level argument is pas
 | `title` | Short finding title |
 | `location` | UUID string or PE path identifying the relevant interface |
 | `description` | Human-readable explanation of the finding |
-| `va` | VA of the `RpcServerRegisterIf*` call site (0 if not applicable) |
+| `va` | VA of the `RpcServerRegisterIf*` call site 0 if not applicable |
 | `cwe` | CWE identifier string (e.g., `'CWE-306'`) |
 
-The scan also extracts `RPCInterface` objects (inventory, not findings) with `uuid`, `auth_level`, `auth_level_name`, `registration_va`, and `endpoints` fields.
+The scan also extracts `RPCInterface` objects inventory, not findings with `uuid`, `auth_level`, `auth_level_name`, `registration_va`, and `endpoints` fields.
 
 ---
 

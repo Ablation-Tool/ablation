@@ -17,13 +17,13 @@ the kernel API surface, and flags dangerous byte patterns.
 ### Architecture support
 
 `KernelDriverAnalyzer` detects PE machine type on construction:
-- **x86 (IMAGE_FILE_MACHINE_I386, 0x014c):** uses Capstone `CS_MODE_32`; recovers `MajorFunction` from `DRIVER_OBJECT+0x38` (4-byte slots); uses prologue-seeded disassembly for IOCTL extraction and pattern scanning (see below)
-- **x64 (IMAGE_FILE_MACHINE_AMD64, 0x8664):** uses Capstone `CS_MODE_64`; recovers `MajorFunction` from `DRIVER_OBJECT+0x70` (8-byte slots); uses `.pdata`-bounded disassembly
+- **x86 (IMAGE_FILE_MACHINE_I386, 0x014c):** uses Capstone `CS_MODE_32`; recovers `MajorFunction` from `DRIVER_OBJECT+0x38` 4-byte slots; uses prologue-seeded disassembly for IOCTL extraction and pattern scanning see below
+- **x64 (IMAGE_FILE_MACHINE_AMD64, 0x8664):** uses Capstone `CS_MODE_64`; recovers `MajorFunction` from `DRIVER_OBJECT+0x70` 8-byte slots; uses `.pdata`-bounded disassembly
 
 ### What it maps
 
 - **Driver framework:** WDM / KMDF / minifilter classification
-- **DriverEntry** VA and the `MajorFunction` dispatch table (IRP_MJ_* handlers)
+- **DriverEntry** VA and the `MajorFunction` dispatch table IRP_MJ_* handlers
 - **IOCTL codes:** all `CTL_CODE` values found in the binary, decoded
 - **Kernel API surface audit:** 40+ dangerous API patterns across 8 risk classes
 - **Dangerous byte patterns:** MSR writes (`WRMSR`), CR0/CR4 manipulation, `HLT`
@@ -75,16 +75,16 @@ codes = decoder.decode_section(section_code_bytes, section_va)
 ### Boundary-safe disassembly
 
 x86 WDM drivers embed function pointer tables at the start of `.text` and `INIT`
-sections. The byte `0x67` (address-size override prefix) appears as a ModRM byte in
+sections. The byte `0x67` address-size override prefix appears as a ModRM byte in
 those tables; Capstone stops generating instructions when it encounters this sequence.
-`KernelDriverAnalyzer` avoids this by scanning for `55 8B EC` (PUSH EBP; MOV EBP, ESP)
+`KernelDriverAnalyzer` avoids this by scanning for `55 8B EC` PUSH EBP; MOV EBP, ESP
 prologues and disassembling only from known function starts.
 
 For x64, `UNWIND_INFO` data is sometimes embedded after function bodies inside `.text`.
 The `.pdata` exception directory (`IMAGE_DIRECTORY_ENTRY_EXCEPTION`) gives
 `[BeginAddress, EndAddress)` ranges for each function; only those ranges are disassembled.
 
-### IOCTL decoder (standalone)
+### IOCTL decoder standalone
 
 ```python
 from ablation.analyzers.kernel_driver_analyzer import decode_ioctl_code
@@ -244,7 +244,7 @@ print(byovd_result.fmt())
 ### Known-vulnerable driver strings detected
 
 The detector flags strings associated with confirmed BYOVD samples: `\Device\PhysicalMemory`,
-`GIO` (Giga I/O), `MHYPROT` (miHoYo anti-cheat), `dbutil` (Dell BIOS driver), and others
+`GIO` Giga I/O, `MHYPROT` (miHoYo anti-cheat), `dbutil` Dell BIOS driver, and others
 from the loldrivers.io database. A string match elevates the finding confidence even when
 the import table is stripped.
 
@@ -264,7 +264,7 @@ Three gaps made Windows kernel driver analysis manual before these modules:
 
 ## How it works
 
-`KernelDriverAnalyzer.from_path(path)` reads the driver binary with `open(path, 'rb').read()` and parses it via lief as a Windows PE. It scans the IAT for kernel API imports (IOCTL dispatch patterns, dangerous DDI calls, MSR read/write sequences) without iterating func_starts. `ByovdDetector` consumes `KernelDriverAnalyzer` output and scores the driver against a capability matrix (MSR write, PTE mapping, memory read/write, IOCTL exposure) to produce a BYOVD exploitability score. No per-function Capstone disassembly is involved.
+`KernelDriverAnalyzer.from_path(path)` reads the driver binary with `open(path, 'rb').read()` and parses it via lief as a Windows PE. It scans the IAT for kernel API imports IOCTL dispatch patterns, dangerous DDI calls, MSR read/write sequences without iterating func_starts. `ByovdDetector` consumes `KernelDriverAnalyzer` output and scores the driver against a capability matrix MSR write, PTE mapping, memory read/write, IOCTL exposure to produce a BYOVD exploitability score. No per-function Capstone disassembly is involved.
 
 ---
 
@@ -313,7 +313,7 @@ ByovdDetector: BYOVD_CAPABLE  score=3/8
 
 ## False positives
 
-`NEITHER_IOCTL_NO_PROBE` may fire on drivers that resolve `ProbeForRead` dynamically (zero-IAT pattern). `decode_ioctl_code` rejects printable-ASCII 4-byte values to avoid pool tags; a real IOCTL whose all four bytes are coincidentally printable would be missed. Manually verify any METHOD_NEITHER IOCTL against the dispatch handler.
+`NEITHER_IOCTL_NO_PROBE` may fire on drivers that resolve `ProbeForRead` dynamically zero-IAT pattern. `decode_ioctl_code` rejects printable-ASCII 4-byte values to avoid pool tags; a real IOCTL whose all four bytes are coincidentally printable would be missed. Manually verify any METHOD_NEITHER IOCTL against the dispatch handler.
 
 ---
 

@@ -1,6 +1,6 @@
 # Prior Finding Retrieval
 
-Retrieve relevant prior RE findings from `func_id.db` to inject into the LLM analyst loop as context: using four ranked retrieval strategies (exact VA match, callee-set overlap, role-based match, name fuzzy match) entirely in SQLite without requiring a vector database.
+Retrieve relevant prior RE findings from `func_id.db` to inject into the LLM analyst loop as context: using four ranked retrieval strategies exact VA match, callee-set overlap, role-based match, name fuzzy match entirely in SQLite without requiring a vector database.
 
 ---
 
@@ -8,7 +8,7 @@ Retrieve relevant prior RE findings from `func_id.db` to inject into the LLM ana
 
 1. **LLM analysis quality degrades significantly without relevant context: a model analyzing an unnamed function called `fn_0x1234` with no prior evidence produces generic output, while the same model given three prior confirmed findings from similar functions in the same product family produces targeted, accurate hypotheses.** `RAGRetriever` bridges the gap by automatically retrieving the most relevant prior records from `func_id.db` before each `AgentLoop.run()` call.
 
-2. **Four retrieval strategies ranked by signal strength ensure the highest-quality context is always retrieved first**: exact VA + binary match (the same function confirmed before, highest signal), callee-set overlap (functions in the same family by import usage), role-based match (same functional role class), and name fuzzy match (LIKE search on the name column). Results from stronger strategies take priority and weaker strategies fill remaining context budget.
+2. **Four retrieval strategies ranked by signal strength ensure the highest-quality context is always retrieved first**: exact VA + binary match the same function confirmed before, highest signal, callee-set overlap for functions in the same family by import usage, role-based match same functional role class, and name fuzzy match LIKE search on the name column. Results from stronger strategies take priority and weaker strategies fill remaining context budget.
 
 3. **`RAGRetriever` operates entirely on SQLite queries with no vector database requirement**: retrieval runs in milliseconds on `func_id.db` even with thousands of records. This keeps the RE workflow offline-capable and eliminates the operational overhead of running a vector store.
 
@@ -77,7 +77,7 @@ Total: 6 records (budget 8, 2 remaining)
 
 **Callee-set overlap may retrieve records from completely different products that happen to use the same PLT functions**: two functions both calling `recv`, `malloc`, and `free` may be in entirely different roles. The LLM receives the retrieved records as context but should not be assumed to weight them correctly. High-overlap records from confirmed findings in the same vendor/product are the most reliable; low-overlap records from different vendors are context noise.
 
-**Role-based matching uses a simple LIKE query**: a function heuristically classified as `network` role retrieves all `network`-role records, which may include thousands of records in a mature database. The budget cap (8 records) limits context size, but the 8 records may not be the most relevant.
+**Role-based matching uses a simple LIKE query**: a function heuristically classified as `network` role retrieves all `network`-role records, which may include thousands of records in a mature database. The budget cap 8 records limits context size, but the 8 records may not be the most relevant.
 
 ---
 
@@ -89,7 +89,7 @@ Total: 6 records (budget 8, 2 remaining)
 
 ## Reading output
 
-`RAGRetriever(func_db).retrieve(func_addr, binary_sha256, callees, role_hint, name_hint)` returns `list[dict]`: prior finding rows from `func_id.db`, trimmed to fit a token budget:
+`RAGRetriever(func_db).retrievefunc_addr, binary_sha256, callees, role_hint, name_hint` returns `list[dict]`: prior finding rows from `func_id.db`, trimmed to fit a token budget:
 
 | Key | Content |
 |:---|:---|

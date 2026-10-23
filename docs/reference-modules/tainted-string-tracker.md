@@ -6,7 +6,7 @@ Upgrade `SNPRINTF_RODATA` verdicts from `SinkArgClassifier` to `ARG_PROPAGATED` 
 
 ## Why this exists
 
-1. **`SNPRINTF_RODATA` is incomplete, not safe.** `SinkArgClassifier` classifies `system(buf)` as `SNPRINTF_RODATA` when `buf` was written by `snprintf(buf, n, fmt, ...)` with a `.rodata` constant format. That is correct about the format, but says nothing about the `%s` arguments. The pattern:
+1. **`SNPRINTF_RODATA` is incomplete, not safe.** `SinkArgClassifier` classifies `system(buf)` as `SNPRINTF_RODATA` when `buf` was written by `snprintfbuf, n, fmt, ...` with a `.rodata` constant format. That is correct about the format, but says nothing about the `%s` arguments. The pattern:
    ```c
    snprintf(cmd, sizeof(cmd), "%s %s", argv[1], argv[2]);
    system(cmd);
@@ -43,7 +43,7 @@ x86_64 `snprintf` argument positions (SysV ABI):
 
 | Argument | Register | Role |
 |:---|:---|:---|
-| 0 | `rdi` | `buf` (destination buffer: tracked by SAC) |
+| 0 | `rdi` | `buf` destination buffer: tracked by SAC |
 | 1 | `rsi` | `n` (size) |
 | 2 | `rdx` | `fmt` (format string: SAC verifies this is `.rodata`) |
 | 3 | `rcx` | First format arg: **this module classifies** |
@@ -124,7 +124,7 @@ for r in to_trace:
 
 **One-level snprintf search.** The module scans backward up to 1024 bytes from the exec sink call for a preceding CALL to the `snprintf` PLT entry. If the `snprintf` call is more than ~200 instructions before the sink, it will not be found.
 
-**Three format arg positions.** Only `rcx`, `r8`, `r9` (positions 3–5) are classified. Format strings with more than three `%s` substitutions (using stack-passed arguments) are not fully traced.
+**Three format arg positions.** Only `rcx`, `r8`, `r9` positions 3–5 are classified. Format strings with more than three `%s` substitutions using stack-passed arguments are not fully traced.
 
 ---
 

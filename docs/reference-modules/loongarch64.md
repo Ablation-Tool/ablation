@@ -87,7 +87,7 @@ findings = tt.run_interprocedural()
 
 ## PLT/GOT stub format
 
-LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes (same width as AArch64):
+LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes same width as AArch64:
 
 ```
   PLT stub (one external function):
@@ -123,13 +123,13 @@ LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes (same width as AArc
 | Range | ABI names | Role |
 |---|---|---|
 | r0 | `$zero` | Hardwired zero |
-| r1 | `$ra` | Return address (caller-saved) |
-| r2 | `$tp` | Thread pointer (OS-managed) |
+| r1 | `$ra` | Return address caller-saved |
+| r2 | `$tp` | Thread pointer OS-managed |
 | r3 | `$sp` | Stack pointer |
-| r4–r11 | `$a0`–`$a7` | Arguments / return values (caller-saved) |
+| r4–r11 | `$a0`–`$a7` | Arguments / return values caller-saved |
 | r12–r20 | `$t0`–`$t8` | Caller-saved temporaries |
 | r21 | `$r21` | Platform-reserved |
-| r22 | `$fp` | Frame pointer (callee-saved) |
+| r22 | `$fp` | Frame pointer callee-saved |
 | r23–r31 | `$s0`–`$s8` | Callee-saved |
 
 ---
@@ -141,10 +141,10 @@ LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes (same width as AArc
 | ALU 3-reg (`add.d`, `mul.d`,...) | `rd = taint(rj) ∪ taint(rk)` |
 | ALU reg-imm (`addi.d`, `ori`,...) | `rd = taint(rj)` |
 | `andi rd, rj, mask` | `rd = taint(rj)` with `bound = mask` if mask is 2^n-1 |
-| Load (`ld.d`, `ldx.d`,...) | `rd = mem_taint(base, off)` |
-| Store (`st.d`, `stx.d`,...) | `mem(base, off) = taint(rd)` |
+| Load (`ld.d`, `ldx.d`,...) | `rd = mem_taintbase, off` |
+| Store (`st.d`, `stx.d`,...) | `membase, off = taint(rd)` |
 | Atomic (`amadd.d`,...) | `rd = old_mem_taint; mem = taint(rk) ∪ old` |
-| `lu12i.w`, `pcaddi` | `rd = clean` (address constant; not tainted) |
+| `lu12i.w`, `pcaddi` | `rd = clean` address constant; not tainted |
 | `addi.d $sp,$sp,-N` | Frame allocation: rebases `$sp`-relative memory slots |
 | `addi.d $fp,$sp,N` | Records `$fp = $sp + N` in the frame-pointer map |
 | Float ops | Not tracked at GPR level |
@@ -153,7 +153,7 @@ LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes (same width as AArc
 
 ## Syscall tracking
 
-When the constant-folding path has a value for `$a7` (set by `ori $a7,$zero,N` or `addi.d $a7,$zero,N`), the syscall is classified from the 318-entry asm-generic unistd.h table (Linux 6.6).
+When the constant-folding path has a value for `$a7` (set by `ori $a7,$zero,N` or `addi.d $a7,$zero,N`), the syscall is classified from the 318-entry asm-generic unistd.h table Linux 6.6.
 
 **ABI:** syscall number in `$a7`; args in `$a0`–`$a5`; return value in `$a0`.
 
@@ -179,9 +179,9 @@ classify_syscall(146)   # ('setuid', 'escalation')
 
 | Mnemonic | CFG treatment | Taint treatment |
 |---|---|---|
-| `ertn` | No successors (exception return) | Terminates scan of exception handler |
+| `ertn` | No successors exception return | Terminates scan of exception handler |
 | `break N` | No successors (trap) | Terminates scan |
-| `dbcl N` | No successors (debug call) | Terminates scan |
+| `dbcl N` | No successors debug call | Terminates scan |
 | `syscall 0` | Fall-through | Classify via `$a7`; source taints `$a0`, sink emits finding |
 
 ---
@@ -223,7 +223,7 @@ print(stats)
 
 | Source | Section | When present | Yields |
 |---|---|---|---|
-| `.eh_frame` FDE records | `.eh_frame` | GCC default (stripped OK) | Function start VAs |
+| `.eh_frame` FDE records | `.eh_frame` | GCC default stripped OK | Function start VAs |
 | DWARF subprogram entries | `.debug_info` | Requires `-g` build | Name + start + end VA |
 | BTF func_info | `.BTF` + `.BTF.ext` | Kernel modules | Name + VA |
 
@@ -240,15 +240,15 @@ For kernel modules, `_SOURCE_NAMES` and `_SINK_NAMES` extend to kernel-space nam
 | `copy_from_user`, `get_user`, `strncpy_from_user` | source | User-to-kernel memory copy |
 | `memdup_user`, `nla_get_string`, `nla_data` | source | Netlink / sysfs attribute reads |
 | `copy_to_user`, `put_user` | sink | Kernel-to-user memory copy |
-| `call_usermodehelper`, `kernel_execve` | sink (CRITICAL) | Exec from kernel space |
-| `commit_creds`, `prepare_kernel_cred` | escalation (CRITICAL) | Privilege escalation |
+| `call_usermodehelper`, `kernel_execve` | sink CRITICAL | Exec from kernel space |
+| `commit_creds`, `prepare_kernel_cred` | escalation CRITICAL | Privilege escalation |
 | `kmalloc`, `kzalloc`, `vmalloc` | sink (HIGH) | Size-controlled allocation |
 
 ---
 
 ## How it works
 
-`analyze_cfg(cfg, state, insn_frames)` runs a path-insensitive, flow-sensitive dataflow analysis over a LoongArch64 CFG. Instruction frames come from `from_loongarch_frames()` (decoded LA64 instructions); the initial taint `State` seeds argument registers. Each basic block executes the transfer functions for the LoongArch64 instruction set, merging taint state at join points. Called by `TaintTrackerLoongArch64` to propagate attacker-controlled data from source registers to sink call sites.
+`analyze_cfgcfg, state, insn_frames` runs a path-insensitive, flow-sensitive dataflow analysis over a LoongArch64 CFG. Instruction frames come from `from_loongarch_frames()` decoded LA64 instructions; the initial taint `State` seeds argument registers. Each basic block executes the transfer functions for the LoongArch64 instruction set, merging taint state at join points. Called by `TaintTrackerLoongArch64` to propagate attacker-controlled data from source registers to sink call sites.
 
 ---
 
@@ -277,7 +277,7 @@ for f in findings:
 
 ## False positives
 
-**GOT-based indirect calls.** `analyze_cfg()` tracks taint through direct calls resolved by `analysis_loongarch64`'s PLT table. Indirect calls through the GOT (common in shared libraries) are not fully resolved: the callee is recorded as `Unknown`. Use `ppc64_elfv1_resolver` pattern (adapted for LA64) to pre-populate the PLT before analysis.
+**GOT-based indirect calls.** `analyze_cfg()` tracks taint through direct calls resolved by `analysis_loongarch64`'s PLT table. Indirect calls through the GOT common in shared libraries are not fully resolved: the callee is recorded as `Unknown`. Use `ppc64_elfv1_resolver` pattern adapted for LA64 to pre-populate the PLT before analysis.
 
 ---
 

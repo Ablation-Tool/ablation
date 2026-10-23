@@ -1,6 +1,6 @@
 # Windows LE/VxD Analysis
 
-Parse Windows 3.x Linear Executable (LE) Virtual Device Driver binaries: resolving VMM service calls via `INT 0x20 + DWORD service ID`, identifying entry-point functions from the Device Descriptor Block (DDB), and sweeping ring-0 code with a specialized vulnerability query set (ring-0 overflow, ring-0 format string): via `sweeps/win16_le_vxd_sweep.py`.
+Parse Windows 3.x Linear Executable (LE) Virtual Device Driver binaries: resolving VMM service calls via `INT 0x20 + DWORD service ID`, identifying entry-point functions from the Device Descriptor Block (DDB), and sweeping ring-0 code with a specialized vulnerability query set ring-0 overflow, ring-0 format string: via `sweeps/win16_le_vxd_sweep.py`.
 
 ---
 
@@ -10,7 +10,7 @@ Parse Windows 3.x Linear Executable (LE) Virtual Device Driver binaries: resolvi
 
 2. **VxDs have zero imports: ring-0 VMM service calls use `INT 0x20 + DWORD service ID`**, there is no IAT to resolve. `win16_le_vxd_sweep.py` includes a compiled VMM service ID-to-name table derived from the WfW 3.11 and Win 3.1 DDK, mapping each service DWORD to its VMM name (e.g., `0x00010009 → _HeapAllocate`). This provides function-level call context at ring-0 without an import table.
 
-3. **Ring-0 code has a qualitatively different vulnerability profile**: a stack overflow or format string in a VxD does not hit a ring-3 exception handler; it corrupts the ring-0 stack and produces a kernel fault (Blue Screen). `win16_le_vxd_sweep.py` includes ring-0-specific semantic queries: `vxd_ring0_recv_overflow` (ring-0 buffer from network packet data), `vxd_ring0_alloc_overflow` (kernel heap allocation size from 32-bit arithmetic on packet length), and `vxd_format_string_ring0` (wsprintf/sprintf in ring-0 context). These queries target the Windows 3.x era network VxDs (VTDI, VIP, VNBT) where ring-0 packet processing vulnerabilities were historically found.
+3. **Ring-0 code has a qualitatively different vulnerability profile**: a stack overflow or format string in a VxD does not hit a ring-3 exception handler; it corrupts the ring-0 stack and produces a kernel fault Blue Screen. `win16_le_vxd_sweep.py` includes ring-0-specific semantic queries: `vxd_ring0_recv_overflow` ring-0 buffer from network packet data, `vxd_ring0_alloc_overflow` kernel heap allocation size from 32-bit arithmetic on packet length, and `vxd_format_string_ring0` wsprintf/sprintf in ring-0 context. These queries target the Windows 3.x era network VxDs VTDI, VIP, VNBT where ring-0 packet processing vulnerabilities were historically found.
 
 ---
 
@@ -68,7 +68,7 @@ Semantic sweep:
 
 ## False positives
 
-**DDB signature detection**, not all LE binaries are VxDs with a standard DDB. Non-VxD LE binaries (some 32-bit OS/2 executables also use the LE format) will not have a DDB; `scan_ddb()` returns `None` in that case and the sweep continues without entry-point labels.
+**DDB signature detection**, not all LE binaries are VxDs with a standard DDB. Non-VxD LE binaries some 32-bit OS/2 executables also use the LE format will not have a DDB; `scan_ddb()` returns `None` in that case and the sweep continues without entry-point labels.
 
 **`PUSH EBP; MOV EBP, ESP` prologue in 32-bit LE code**, this is standard 32-bit x86 but data sections that happen to contain this byte sequence will produce false function starts. Filter analysis to DDB-identified entry points and call targets before manual review.
 
@@ -90,9 +90,9 @@ Run `win16_le_vxd_sweep.py` on any Windows 3.x VxD binary (`.386`, `.vxd`, `.drv
 | `num_pages` | Total page count in the LE binary |
 | `data_base` | File offset where page data begins |
 
-`LEBinary.code_objects()` returns only objects with the EXECUTABLE flag set. Each result dict has `obj_index`, `vbase`, `vsize`, and `bytes` (assembled code bytes).
+`LEBinary.code_objects()` returns only objects with the EXECUTABLE flag set. Each result dict has `obj_index`, `vbase`, `vsize`, and `bytes` assembled code bytes.
 
-`LEBinary.scan_ddb(code_bytes)` returns `Optional[dict]`: `None` if no VxD DDB signature is found, or a dict with `ddb_off`, `sdk_ver`, `dev_num`, `dev_name`, `ctrl_proc`, `v86_api_proc`, and `pm_api_proc`.
+`LEBinary.scan_ddbcode_bytes` returns `Optional[dict]`: `None` if no VxD DDB signature is found, or a dict with `ddb_off`, `sdk_ver`, `dev_num`, `dev_name`, `ctrl_proc`, `v86_api_proc`, and `pm_api_proc`.
 
 ---
 

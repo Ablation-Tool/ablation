@@ -40,7 +40,7 @@ else:
 |:---|:---|:---|
 | `dylibs()` | `list[str]` | Dylib install names from LC_LOAD_DYLIB commands |
 | `has_code_signature()` | `bool` | True if LC_CODE_SIGNATURE load command is present |
-| `entropy_map()` | `dict[str, float]` | Per-segment Shannon entropy (bits/byte) |
+| `entropy_map()` | `dict[str, float]` | Per-segment Shannon entropy bits/byte |
 | `sections()` | `list[dict]` | Section names, offsets, sizes per segment |
 
 ---

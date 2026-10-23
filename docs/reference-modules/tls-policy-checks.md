@@ -6,7 +6,7 @@ Probe TLS policy enforcement: HSTS header presence and max-age, HTTP→HTTPS red
 
 ## Why this exists
 
-1. **mTLS enforcement is often misconfigured at the path level**: `probe_mtls_enforcement()` tests whether the server requires a client certificate by attempting an unauthenticated TLS connection (no client certificate). A successful HTTP response without a client certificate means mTLS is not enforced, even if the endpoint is documented as mTLS-protected. The check sends the connection to both the root path and well-known API paths.
+1. **mTLS enforcement is often misconfigured at the path level**: `probe_mtls_enforcement()` tests whether the server requires a client certificate by attempting an unauthenticated TLS connection no client certificate. A successful HTTP response without a client certificate means mTLS is not enforced, even if the endpoint is documented as mTLS-protected. The check sends the connection to both the root path and well-known API paths.
 
 2. **ACME challenge endpoint exposure**: `probe_acme_endpoint_exposure()` checks whether `/.well-known/acme-challenge/` is accessible from the external network. If so, an attacker who controls a DNS response can redirect the ACME validation request to issue a fraudulent certificate for the target domain. This check is relevant for any service that uses ACME (Let's Encrypt, ZeroSSL) for certificate provisioning.
 
@@ -66,13 +66,13 @@ tls_enum: api.target.example.com
 
 **`probe_mtls_enforcement()` false negatives at the load balancer**: some deployments terminate mTLS at a load balancer that is not the host being probed. An unauthenticated connection to the load balancer may succeed while mTLS is enforced at the backend. Always verify mTLS enforcement at the backend service layer, not only at the first TLS termination point.
 
-**ACME challenge path exposure is context-dependent**: ACME challenge path accessibility is expected for domain validation services; it is a finding only for services where the domain should not be accessible to ACME validation (internal-only services, services behind a WAF that should block public ACME traffic).
+**ACME challenge path exposure is context-dependent**: ACME challenge path accessibility is expected for domain validation services; it is a finding only for services where the domain should not be accessible to ACME validation internal-only services, services behind a WAF that should block public ACME traffic.
 
 ---
 
 ## Pipeline position
 
-Run TLS policy checks after `TLSAnalyzer` certificate chain analysis. Policy checks require an operational TLS endpoint (not just a certificate file) and produce network findings. They are not run on firmware binaries.
+Run TLS policy checks after `TLSAnalyzer` certificate chain analysis. Policy checks require an operational TLS endpoint not just a certificate file and produce network findings. They are not run on firmware binaries.
 
 ---
 

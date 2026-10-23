@@ -8,7 +8,7 @@ Map LoongArch64 Linux syscall numbers to names and argument signatures using the
 
 1. **LoongArch64 is the primary architecture for new Loongson CPUs used in Chinese domestic server and networking equipment. Ablation's LoongArch64 analysis pipeline requires syscall labeling to identify dangerous syscall patterns such as `execve`, `write` to fixed FDs, and `mmap` with `PROT_EXEC`.** `syscall_loongarch64.py` provides the `$a7 → syscall_name` mapping derived from the Linux `asm-generic/unistd.h` table used by all LoongArch builds.
 
-2. **LoongArch64 does not have a custom syscall table. It uses the Linux `asm-generic` unistd.h directly** (kernel 5.x+). This means syscall numbers are the same as ARM64 asm-generic numbers for the overlapping range, making cross-architecture comparisons straightforward. `syscall_loongarch64.py` documents this explicitly as a reliability guarantee for analysts who may assume LoongArch has a custom table.
+2. **LoongArch64 does not have a custom syscall table. It uses the Linux `asm-generic` unistd.h directly** kernel 5.x+. This means syscall numbers are the same as ARM64 asm-generic numbers for the overlapping range, making cross-architecture comparisons straightforward. `syscall_loongarch64.py` documents this explicitly as a reliability guarantee for analysts who may assume LoongArch has a custom table.
 
 3. **LoongArch64 syscall ABI:** `$a7` = syscall number, `$a0`–`$a5` = arguments (up to 6), `$a0` = return value (negative = `-errno`). `analyze_cfg()` from `analysis_loongarch64.py` labels `syscall` instructions with the resolved syscall name when `$a7` is a `ConstPropAnalysis`-resolved constant at the `syscall` instruction.
 

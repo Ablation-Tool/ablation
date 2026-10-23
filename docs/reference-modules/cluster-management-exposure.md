@@ -10,7 +10,7 @@ Enumerate the combined Docker and Kubernetes cluster management API surface: ide
 
 2. **`check_k8s_network_policy_gaps()` in `docker_enum.py`** probes the Kubernetes API at port 8001 from within the cluster network to identify namespaces without NetworkPolicy objects: the same flat-network finding as `kubernetes-policy-posture.md`, but accessible here from a Docker container context that may not have service account token access.
 
-3. **`check_resource_quota_bypass()`** identifies Kubernetes clusters where individual pods can request unlimited CPU and memory: an indicator that LimitRange and ResourceQuota are not enforced. In clusters without resource quotas, a compromised pod can exhaust host resources (denial-of-service against other pods) or request a pod with `resources.requests.cpu: 1000` to trigger node-level scheduling pressure.
+3. **`check_resource_quota_bypass()`** identifies Kubernetes clusters where individual pods can request unlimited CPU and memory: an indicator that LimitRange and ResourceQuota are not enforced. In clusters without resource quotas, a compromised pod can exhaust host resources denial-of-service against other pods or request a pod with `resources.requests.cpu: 1000` to trigger node-level scheduling pressure.
 
 ---
 
@@ -75,7 +75,7 @@ Cluster management exposure triage:
 
 ## Pipeline position
 
-Run cluster management exposure as the first enumeration step after gaining any foothold within a container or cluster network. The triage severity directly determines the next action: CRITICAL findings (2375/2379 open) enable immediate full cluster compromise without further enumeration.
+Run cluster management exposure as the first enumeration step after gaining any foothold within a container or cluster network. The triage severity directly determines the next action: CRITICAL findings 2375/2379 open enable immediate full cluster compromise without further enumeration.
 
 ---
 

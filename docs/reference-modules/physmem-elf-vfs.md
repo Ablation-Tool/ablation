@@ -4,13 +4,13 @@
 
 ## Why this exists
 
-Reconstructs ELF binaries from physical memory dumps (QEMU ELF core format) without page table walking. Scans the dump for ELF64 x86_64 EXEC/DYN headers, builds a VFS index by content proximity, and extracts each binary by checking PT_LOAD window coverage. Also provides VM RE helpers for `/proc/maps` parsing and call-argument analysis.
+Reconstructs ELF binaries from physical memory dumps QEMU ELF core format without page table walking. Scans the dump for ELF64 x86_64 EXEC/DYN headers, builds a VFS index by content proximity, and extracts each binary by checking PT_LOAD window coverage. Also provides VM RE helpers for `/proc/maps` parsing and call-argument analysis.
 
 ## Key constants
 
 | Constant | Value | Applied to |
 |---|---|---|
-| `_MAX_BINARY_BYTES` | 256 MB | Binary file read cap (SHA256 digest pass) |
+| `_MAX_BINARY_BYTES` | 256 MB | Binary file read cap SHA256 digest pass |
 
 ## Key API
 
@@ -36,17 +36,17 @@ best = match_elf_to_maps(vfs._index, by_bin['/usr/bin/sdnproxy'])
 
 ## CET-aware function detection
 
-Detects both `endbr64` (f3 0f 1e fa, CET/IBT compiled) and `push rbp; mov rbp, rsp` (55 48 89 e5, classic frame) as function prologues.
+Detects both `endbr64` f3 0f 1e fa, CET/IBT compiled and `push rbp; mov rbp, rsp` 55 48 89 e5, classic frame as function prologues.
 
 ## FORGE audit
 
-Gate: **PASSED**. All dump access via `mmap` (no `.read()` on dump file). `_MAX_BINARY_BYTES` (256 MB) applied at SHA256 digest pass (line 577). `min(end, self._size)` bounds mmap slice in `extract_functions`. No lief.parse(). No bare `except:`. No network I/O.
+Gate: **PASSED**. All dump access via `mmap` (no `.read()` on dump file). `_MAX_BINARY_BYTES` (256 MB) applied at SHA256 digest pass line 577. `minend, self._size` bounds mmap slice in `extract_functions`. No lief.parse(). No bare `except:`. No network I/O.
 
 ---
 
 ## How it works
 
-Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation (CRC32 or SHA256 depending on container format) runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
+Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation CRC32 or SHA256 depending on container format runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
 
 ---
 

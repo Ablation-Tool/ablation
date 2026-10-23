@@ -8,7 +8,7 @@ Decode Cisco IOS Type-7 XOR passwords, enumerate running-config and CDP neighbor
 
 1. **Type-7 "encryption" provides no security and must be reported on sight.** IOS `service password-encryption` applies a static-key XOR cipher (the `_XLAT` table has been public since the 1990s) to VTY, console, and auxiliary line passwords. Every Type-7 value in a captured running-config decodes to plaintext in milliseconds. The decoder handles both regular enables and service-password-encrypted line passwords: the same XOR algorithm governs both. When a running-config appears in scope, decode every Type-7 value before any other analysis.
 
-2. **SNMP v1 community strings on network appliances are frequently `public`/`private`.** A correctly guessed SNMP community string grants OID-level read (or write) access to the full device configuration: CDP neighbor table, sysDescr (OS version), running-config via SNMP SET/TFTP. The SNMP helper constructs minimal hand-crafted BER frames, no third-party SNMP library required, and works reliably against both IOS and IOS-XE targets.
+2. **SNMP v1 community strings on network appliances are frequently `public`/`private`.** A correctly guessed SNMP community string grants OID-level read or write access to the full device configuration: CDP neighbor table, sysDescr OS version, running-config via SNMP SET/TFTP. The SNMP helper constructs minimal hand-crafted BER frames, no third-party SNMP library required, and works reliably against both IOS and IOS-XE targets.
 
 3. **TFTP running-config reads expose complete credentials without authentication.** Cisco IOS's `tftp-server` global command allows the device to serve configuration files to TFTP clients. When no `access-class` ACL is applied to the `tftp-server` statement, any host on the network can retrieve the running configuration: including Type-7 passwords, RADIUS/TACACS shared secrets, BGP neighbor passwords, and SNMP community strings. `probe_tftp_config()` sends a TFTP RRQ opcode 1 for `running-config` and returns the config text on success.
 
@@ -35,7 +35,7 @@ flowchart TD
 | `1.3.6.1.2.1.4.21.1.1` | IP routing table first entry |
 | `1.3.6.1.4.1.9.9.23.1.2.1.1.4` | CDP neighbor IP address table |
 | `1.3.6.1.4.1.9.9.23.1.2.1.1.6` | CDP neighbor platform string |
-| `1.3.6.1.4.1.9.2.1.58.0` | IOS `show version` string (Cisco enterprise MIB) |
+| `1.3.6.1.4.1.9.2.1.58.0` | IOS `show version` string Cisco enterprise MIB |
 
 ---
 
@@ -141,7 +141,7 @@ TFTP blocked: TFTP ERROR 1 — File not found
 
 ## False positives
 
-**Type-7 decode produces garbage on malformed input.** `decode_type7()` expects an even-length hex string with a 2-digit decimal seed prefix. Malformed input (odd hex length, non-hex characters, seed ≥ 53) silently returns an empty string. Validate that extracted Type-7 values match `r'^[0-9]{2}[0-9A-Fa-f]+$'` before passing to the decoder.
+**Type-7 decode produces garbage on malformed input.** `decode_type7()` expects an even-length hex string with a 2-digit decimal seed prefix. Malformed input odd hex length, non-hex characters, seed ≥ 53 silently returns an empty string. Validate that extracted Type-7 values match `r'^[0-9]{2}[0-9A-Fa-f]+$'` before passing to the decoder.
 
 **SNMP timeouts on ACL-filtered hosts.** `snmp_get()` returns `{'responsive': False, 'error': 'timed out'}` for both ACL-filtered and genuinely unreachable hosts, there is no distinction. An SNMP ACL that drops packets produces the same result as a host that does not have SNMP enabled. Do not conclude a community string is invalid from a single timeout; retry from a different source address if ACL filtering is suspected.
 
@@ -161,9 +161,9 @@ TFTP blocked: TFTP ERROR 1 — File not found
 
 Each function returns a string or dict, not finding objects.
 
-`decode_type7(enc)` returns the plaintext password string directly (Cisco IOS Type 7 XOR is always reversible).
+`decode_type7(enc)` returns the plaintext password string directly Cisco IOS Type 7 XOR is always reversible.
 
-`snmp_get(host, community, oid)` returns a dict:
+`snmp_gethost, community, oid` returns a dict:
 
 | Field | Content |
 |:---|:---|
@@ -172,7 +172,7 @@ Each function returns a string or dict, not finding objects.
 | `raw` | First 200 hex chars of the raw UDP response |
 | `error` | Error string if `responsive == False` |
 
-`probe_tftp_config(host, filename)` returns a dict with `success: bool`, `data: bytes`, `error: str`.
+`probe_tftp_confighost, filename` returns a dict with `success: bool`, `data: bytes`, `error: str`.
 
 ---
 

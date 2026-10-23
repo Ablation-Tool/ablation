@@ -6,11 +6,11 @@ Resolve Go 1.17+ AMD64 non-NUL-terminated strings in stripped binaries: detectin
 
 ## Why this exists
 
-1. **Go strings are NOT NUL-terminated: they are `(data_ptr, length)` pairs.** In the Go AMD64 register ABI (Go 1.17+), `rax` carries the data pointer (pointing into `.rodata`) and `rbx` carries the exact byte count. A NUL-scan string recovery (reading until `\x00`) will silently truncate any Go string that happens to contain a zero byte, or return false results when two adjacent strings in `.rodata` are scanned as one. `GoStringResolver` reads the exact `rbx` bytes from the `rax`-pointed location, producing the complete untruncated string.
+1. **Go strings are NOT NUL-terminated: they are `data_ptr, length` pairs.** In the Go AMD64 register ABI Go 1.17+, `rax` carries the data pointer (pointing into `.rodata`) and `rbx` carries the exact byte count. A NUL-scan string recovery (reading until `\x00`) will silently truncate any Go string that happens to contain a zero byte, or return false results when two adjacent strings in `.rodata` are scanned as one. `GoStringResolver` reads the exact `rbx` bytes from the `rax`-pointed location, producing the complete untruncated string.
 
 2. **The `lea` and `mov ebx` may be separated by up to 3 non-clobbering instructions: other arguments being set up for the same call.** `GoStringResolver.scan_instructions()` uses a sliding-window scan that tolerates up to 3 intervening instructions between the `lea rax, [rip+disp]` and the `mov ebx, N`, matching the pattern that Go compilers actually emit for string arguments even when multiple arguments are set up simultaneously.
 
-3. **`GoSubprocessScanner` builds on `GoStringResolver` to classify every `os/exec.Command` and `exec.Cmd.Start/Run` call site by command path type: `relative`, `path`, `absolute`, or `dynamic`.** PATH injection is possible at every `path`-type site (bare name without a slash), and CWD injection is possible at every `relative`-type site. Without string resolution, all call sites appear as `dynamic` (unresolved), making injection surface classification impossible.
+3. **`GoSubprocessScanner` builds on `GoStringResolver` to classify every `os/exec.Command` and `exec.Cmd.Start/Run` call site by command path type: `relative`, `path`, `absolute`, or `dynamic`.** PATH injection is possible at every `path`-type site bare name without a slash, and CWD injection is possible at every `relative`-type site. Without string resolution, all call sites appear as `dynamic` unresolved, making injection surface classification impossible.
 
 ---
 
@@ -88,17 +88,17 @@ GoSubprocessScanner results:
 
 ## Pipeline position
 
-Run `GoStringResolver` as part of any Go binary analysis where string content is needed: before or alongside `GoSubprocessScanner`. The resolved strings improve `SemanticSearcher` results (better function descriptions) and enable injection surface classification. On x86-64 Go binaries, string resolution is the difference between `dynamic/MEDIUM` and `path/HIGH` on subprocess call sites.
+Run `GoStringResolver` as part of any Go binary analysis where string content is needed: before or alongside `GoSubprocessScanner`. The resolved strings improve `SemanticSearcher` results better function descriptions and enable injection surface classification. On x86-64 Go binaries, string resolution is the difference between `dynamic/MEDIUM` and `path/HIGH` on subprocess call sites.
 
 ---
 
 ## Reading output
 
-`GoStringResolver.scan_functions(funcs)` returns `Dict[int, Tuple[str, int]]`: string load site VA → `(text, length)` for all resolvable string loads across the provided function list. Each function dict must have `'va'` and `'fileoff'` keys.
+`GoStringResolver.scan_functions(funcs)` returns `Dict[int, Tuple[str, int]]`: string load site VA → `text, length` for all resolvable string loads across the provided function list. Each function dict must have `'va'` and `'fileoff'` keys.
 
-`GoStringResolver.scan_function(func_va, func_file_offset, func_size)` returns the same dict format for a single function.
+`GoStringResolver.scan_functionfunc_va, func_file_offset, func_size` returns the same dict format for a single function.
 
-`build_resolver_from_elf(binary_data, elf_parser)` constructs a `GoStringResolver` for ELF binaries without requiring a `BinaryContext`.
+`build_resolver_from_elfbinary_data, elf_parser` constructs a `GoStringResolver` for ELF binaries without requiring a `BinaryContext`.
 
 ---
 

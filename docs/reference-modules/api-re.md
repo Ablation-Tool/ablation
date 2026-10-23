@@ -41,7 +41,7 @@ CLI: `python api_re.py http://target:port [--depth deep] [--focus jwt] [--output
 | 3 | `fuzz_paths` | Discovery |
 | 3b | `probe_graphql` | GraphQL introspection |
 | 3c | `discover_hidden_params` | Hidden params via JS |
-| 4 | `probe_param` | Injection (path traversal, SQLi, SSTI, SSRF, XXE, prototype pollution) |
+| 4 | `probe_param` | Injection path traversal, SQLi, SSTI, SSRF, XXE, prototype pollution |
 | 4b | `probe_verb_tampering` | API5 BFLA |
 | 4c | `probe_content_type_switch` | Content-type confusion |
 | 4d | `probe_param_pollution` | HPP |
@@ -99,8 +99,8 @@ Gate: **PASSED**. No HIGH or CRITICAL findings.
 
 | Finding | Severity | Location | Description |
 |---|---|---|---|
-| Serialized "parallel" phases | MEDIUM | `_run_phase_captured` (line 131) | `redirect_stdout` requires global lock; phases 17–30 serialize despite 6-worker executor |
-| Double `r.json()` call | LOW | `probe_graphql_advanced` (line 1235/1238) | JSON parsed twice in batch detection check |
+| Serialized "parallel" phases | MEDIUM | `_run_phase_captured` line 131 | `redirect_stdout` requires global lock; phases 17–30 serialize despite 6-worker executor |
+| Double `r.json()` call | LOW | `probe_graphql_advanced` line 1235/1238 | JSON parsed twice in batch detection check |
 
 ---
 
@@ -140,7 +140,7 @@ Rate-limit and authentication findings from internal networks or behind authenti
 
 ## Reading output
 
-`run_re(base_url)` (module-level function) returns an `APIMap` populated with discovered `Endpoint` objects:
+`run_rebase_url` module-level function returns an `APIMap` populated with discovered `Endpoint` objects:
 
 | Attribute | Content |
 |:---|:---|

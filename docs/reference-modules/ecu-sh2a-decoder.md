@@ -9,7 +9,7 @@
 Three things were not possible before in Ablation:
 
 **1. No SH-2A instruction decoding.** Capstone 5.0.7 does not support the Renesas SH-2A ISA
-(SH7058/SH7059), used in Honda and Subaru ECUs. Before this module, any attempt to
+SH7058/SH7059, used in Honda and Subaru ECUs. Before this module, any attempt to
 `BinaryContext.load_or_build()` on a Subaru SH7058S or Honda CBR250RR ROM had no way to
 identify instruction boundaries, preventing WindowAnalyzer, SemanticSearcher, or manual
 capstone trace from working at all. `EcuSH2aDecoder` implements the full SH-2A decoder in
@@ -25,7 +25,7 @@ every caller gets 2 or 4, never wrong.
 **3. No function_starts() for SH-2A flat ROM.** SH-2A ECU ROMs have no ELF headers and no
 symbol tables. Seeding BinaryContext, TaintTracker, or the manual RE workflow requires a
 list of function entry points. `function_starts()` scans the entire ROM for the two SH-2A
-prologue conventions (stack-saving and register-saving leaf functions) in a single O(N) pass
+prologue conventions stack-saving and register-saving leaf functions in a single O(N) pass
 and returns all probable entry VAs without requiring a prior disassembly walk.
 
 ---
@@ -44,8 +44,8 @@ SH-2A first-halfword patterns that indicate a **32-bit** instruction:
 All other first halfwords → 16-bit SH-2 instruction.
 
 **Why `0xF00F` not `0xF0FF` for MOVI20/MOWI20S:** MOVI20 encodes as
-`0000 nnnn iiii 0101` where `nnnn` = Rn (varies, bits 11:8) and `iiii` = imm[19:16]
-(varies, bits 7:4). Using `0xF0FF` as the mask keeps bits[7:4] and would only match
+`0000 nnnn iiii 0101` where `nnnn` = Rn varies, bits 11:8 and `iiii` = imm[19:16]
+varies, bits 7:4. Using `0xF0FF` as the mask keeps bits[7:4] and would only match
 MOWI20 instructions where `imm[19:16] == 0xE`, missing all other immediates. The correct
 mask `0xF00F` keeps only bits[15:12] (must be 0x0) and bits[3:0] (must be 0x5), which is
 the actual fixed discriminator.
@@ -60,11 +60,11 @@ the actual fixed discriminator.
 STS.L PR, @-R15    =  0x4F22
 ```
 
-Saves the procedure register (return address) to the stack. This is the universal
+Saves the procedure register return address to the stack. This is the universal
 SH-2/SH-2A prologue for any non-leaf function. `function_starts()` detects this at every
 even offset.
 
-### Register-saving leaf functions (secondary)
+### Register-saving leaf functions secondary
 
 ```
 STS PR, Rn    =  (hw & 0xF0FF) == 0x002A  (any Rn in 0-15)
@@ -137,11 +137,11 @@ class SH2aInsn:
 | `RETURN` | `rts`, `rts/n` |
 | `BRANCH` | `bra`, `bt`, `bf`, `bt/s`, `bf/s` |
 | `CALL` | `bsr`, `jsr` |
-| `LR_SAVE` | `sts.l pr, @-r15` (stack), `sts pr, Rn` (register) |
+| `LR_SAVE` | `sts.l pr, @-r15` (stack), `sts pr, Rn` register |
 | `LR_RESTORE` | `lds.l @r15+, pr`, `lds Rn, pr` |
 | `LOAD` | `mov.l @(disp,pc)`, `mov.w @(disp,pc)`, `mov.l @r15+,Rn` |
 | `STORE` | `mov.l Rm, @-r15` |
-| `MISC` | All others (mov, add, cmp, movi20, etc.) |
+| `MISC` | All others mov, add, cmp, movi20, etc. |
 
 ---
 
@@ -165,8 +165,8 @@ as `target = None`.
 
 | Mnemonic | Encoding | Decoded |
 |---|---|---|
-| `movi20` | `(hw & 0xF00F) == 0x0005` | rd, imm (signed 20-bit) |
-| `movi20s` | `(hw & 0xF00F) == 0x0007` | rd, imm (shifted 20-bit) |
+| `movi20` | `(hw & 0xF00F) == 0x0005` | rd, imm signed 20-bit |
+| `movi20s` | `(hw & 0xF00F) == 0x0007` | rd, imm shifted 20-bit |
 | `mov.b/w/l @(d12,Rm),R0` | `(hw & 0xF00F) == 0x3001` + sub_op | LOAD + disp12 |
 | `mov.b/w/l R0,@(d12,Rn)` | `(hw & 0xF00F) == 0x3001` + sub_op | STORE + disp12 |
 | `bclr.b/bset.b/bst.b/bld.b` | `(hw & 0xF00F) == 0x3009` | MISC |
@@ -175,9 +175,9 @@ as `target = None`.
 
 ## Limitations
 
-- No SH-2A FPU instructions decoded (not present in ECU firmware; decoded as MISC).
-- `BRAF Rn` / `BSRF Rn` (indirect relative branch/subroutine): decoded as MISC with no
- target (register-indirect, not statically resolvable).
+- No SH-2A FPU instructions decoded not present in ECU firmware; decoded as MISC.
+- `BRAF Rn` / `BSRF Rn` indirect relative branch/subroutine: decoded as MISC with no
+ target register-indirect, not statically resolvable.
 - Unvalidated on real Honda or Subaru ROM: all encoding derived from Renesas SH2A Hardware
  Manual Rev.2.00. A real corpus run is required before treating function_starts() output
  as ground truth for these targets.
@@ -188,7 +188,7 @@ as `target = None`.
 
 ## How it works
 
-Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 
@@ -225,11 +225,11 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 | Attribute | Content |
 |:---|:---|
-| `offset` | Byte offset (or VA if base is set) of this instruction |
+| `offset` | Byte offset or VA if base is set of this instruction |
 | `is_32bit` | `True` for 32-bit SH-2A extended instructions, `False` for 16-bit |
 | `mnemonic` | Instruction mnemonic string (e.g., `'MOV.L'`, `'JSR/N'`, `'BRA'`) |
 | `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'LOAD'` / `'STORE'` / `'MISC'` |
-| `raw` | Raw instruction bytes (2 or 4 bytes) |
+| `raw` | Raw instruction bytes 2 or 4 bytes |
 | `target` | Branch/call target VA (None if not a control-flow instruction) |
 | `rd` / `rs` / `imm` | Decoded operand values (None if not applicable) |
 

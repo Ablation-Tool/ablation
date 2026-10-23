@@ -77,7 +77,7 @@ Binary: /media/cowboy/research/IBM-RE/ISPF-Tools/tasid.exe
 
 **Ordinal-only imports.** Some PE binaries import functions by ordinal instead of name. The classifier cannot match ordinal-only imports to exec-class names.
 
-**NE/LE format.** Pre-Win32 executables (DOS MZ with NE or LE header) are not PE binaries. `is_pe()` returns False for them. These are 16-bit OS2/Windows executables and contain no Win32 exec API imports.
+**NE/LE format.** Pre-Win32 executables DOS MZ with NE or LE header are not PE binaries. `is_pe()` returns False for them. These are 16-bit OS2/Windows executables and contain no Win32 exec API imports.
 
 ---
 

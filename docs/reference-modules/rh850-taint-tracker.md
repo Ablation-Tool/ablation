@@ -20,7 +20,7 @@ Renesas RH850 is the dominant MCU family in automotive ECUs from Denso, Continen
 
 ## Safe usage
 
-**Use `from_bytes(data, base_va)` for flat ROM dumps.** `from_path()` requires an ELF header. Raw ECU firmware images have no ELF header so `from_path()` raises. Pass the raw bytes and a base address instead.
+**Use `from_bytesdata, base_va` for flat ROM dumps.** `from_path()` requires an ELF header. Raw ECU firmware images have no ELF header so `from_path()` raises. Pass the raw bytes and a base address instead.
 
 **Set `double_is_32bit=False` only if the ECU was compiled with `--double=64`.** The default GHS RH850 ABI uses 32-bit doubles. Mismatching the flag shifts argument registers and produces wrong taint assignments for any function taking a `double` parameter.
 
@@ -36,12 +36,12 @@ Three things were not possible before in Ablation:
 
 **1. No flat-ROM / `from_bytes` support for RH850 ECU firmware.** Automotive RH850
 ECU images are frequently shipped as raw binary dumps with no ELF header. `V850TaintTracker` requires `from_path(elf)` and will
-raise on a bare binary. `RH850TaintTracker.from_bytes(data, base_va)` +
-`scan_function(func_va, func_end, init_labels)` gives the same flat-ROM scanning
+raise on a bare binary. `RH850TaintTracker.from_bytesdata, base_va` +
+`scan_functionfunc_va, func_end, init_labels` gives the same flat-ROM scanning
 workflow as `TriCoreTaintTracker`.
 
 **2. GHS CC-RH / IAR `double=32-bit` default not modelled.** In the IAR RH850 ABI
-(§2.7 of GHS-RE-REFERENCE.md), `double` is 32 bits by default: identical to
+§2.7 of GHS-RE-REFERENCE.md, `double` is 32 bits by default: identical to
 `float`.  `V850TaintTracker` uses the GCC V850 ABI where `double=64-bit` consumes
 a register pair (R6:R7 for the first `double` parameter). In GHS-compiled firmware,
 that same parameter fits in R6 alone, leaving R7 free for the next argument.
@@ -61,7 +61,7 @@ membership, so all GHS-mangled variants resolve correctly.
 
 ---
 
-## ABI summary (GHS CC-RH / IAR RH850, GHS-RE-REFERENCE.md §2.2-2.4)
+## ABI summary GHS CC-RH / IAR RH850, GHS-RE-REFERENCE.md §2.2-2.4
 
 | Role | Registers |
 |---|---|
@@ -70,9 +70,9 @@ membership, so all GHS-mangled variants resolve correctly.
 | Return value (64-bit) | R10:R11 |
 | Link register | R31 = LP |
 | Stack pointer | R3 = SP |
-| Global pointer | R4 = GP (never modify) |
-| Table pointer | R5 = TP (never modify) |
-| Element pointer | R30 = EP (preserved) |
+| Global pointer | R4 = GP never modify |
+| Table pointer | R5 = TP never modify |
+| Element pointer | R30 = EP preserved |
 | Caller-saved | R1, R6–R19, LP |
 | Callee-saved | R2, R4 (GP), R5 (TP), R20–R29, EP |
 
@@ -115,7 +115,7 @@ tracker = RH850TaintTracker.from_path('fw64.elf', double_is_32bit=False)
 | Parameter | Default | Description |
 |---|---|---|
 | `data` |: | Raw binary bytes |
-| `base_va` | `0x0` | Load address of first byte (flat ROM) |
+| `base_va` | `0x0` | Load address of first byte flat ROM |
 | `double_is_32bit` | `True` | GHS/IAR default: `double` = 32-bit |
 
 `from_path(elf)` auto-detects text section VA and endianness from lief/pyelftools.
@@ -149,16 +149,16 @@ class TaintFindingRH850:
 | `Foo__ctFv` | `Foo` | GHS constructor mangling |
 | `Bar__dt` | `Bar` | GHS destructor mangling |
 | `__vtblSocket` | `Socket` | vtable symbol |
-| `memcpy` | `memcpy` | no mangling (pass-through) |
+| `memcpy` | `memcpy` | no mangling pass-through |
 
-`_ghs_name_in(sym, name_set)` is the preferred helper: returns `True` if `sym`
+`_ghs_name_insym, name_set` is the preferred helper: returns `True` if `sym`
 or its GHS-normalised form is in `name_set`.
 
 ---
 
 ## `double=32-bit` ABI detail
 
-GHS CC-RH and IAR default to `double=32-bit` (IEC 60559 single precision).
+GHS CC-RH and IAR default to `double=32-bit` IEC 60559 single precision.
 Practical consequence for taint tracking:
 
 ```
@@ -179,16 +179,16 @@ the two ABIs. The `[double=32b]` annotation in finding strings and the
 
 ## Limitations
 
-- Capstone does not support V850/RH850; a custom byte-level decoder (V850Decoder)
+- Capstone does not support V850/RH850; a custom byte-level decoder V850Decoder
  is used. Instruction decoding quality depends on the V850Decoder's opcode
  coverage for the specific RH850 variant.
 - `scan_function` requires caller-supplied function boundaries (no automatic
  function boundary detection in flat ROM mode).
 - `__callt` / `__interrupt` / `__trap` special function types (§2.11) are not
- modelled; these have non-standard return mechanisms (CTRET, EIRET, FERET) and
+ modelled; these have non-standard return mechanisms CTRET, EIRET, FERET and
  no scratch-register semantics. CALLT appears as an unknown call site.
 - GHS `__vtbl` symbols are call-target normalised but vtable dispatch itself
- (indirect call through vtable pointer) is not tracked.
+ indirect call through vtable pointer is not tracked.
 - Loop fixpoint is not computed: taint accumulated on the second loop iteration
  is not propagated to later instructions.
 
@@ -234,8 +234,8 @@ The most common false positive is taint surviving a zero-clear instruction (`xor
 | `sink_name` | Name of the dangerous function reached |
 | `sink_va` | Virtual address of the call site |
 | `source_name` | Name of the taint source (e.g., `recv`, `read`) |
-| `arg_index` | Which argument to the sink carries taint (0-indexed) |
-| `chain` | `[(va, register, operation)]` steps from source to sink |
+| `arg_index` | Which argument to the sink carries taint 0-indexed |
+| `chain` | `[va, register, operation]` steps from source to sink |
 | `path` | `[caller_va, ...]` function VAs traversed interprocedurally |
 | `severity` | `CRITICAL` for exec sinks, `HIGH` for memory sinks |
 

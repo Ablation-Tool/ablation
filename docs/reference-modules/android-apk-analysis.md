@@ -28,7 +28,7 @@ flowchart TD
     A2["DexAnalyzer.from_path(apk_path)"] --> I["scan():\n1. _scan_manifest(mf): debuggable, cleartext, backup,\n   exported components (android:exported=True OR has intent-filter),\n   dangerous permissions, dangerous permission combos\n2. _scan_dex_strings(dex): all strings vs _SECRET_PATTERNS + _WEAK_CRYPTO_STRINGS\n3. _scan_dex_apis(dex): all method refs vs _DANGEROUS_CLASSES + _DANGEROUS_METHODS\nSort by _SEVERITY_RANK"]
 ```
 
-### Dangerous class/method targets (selected)
+### Dangerous class/method targets selected
 
 | Class / Method | Category | Severity |
 |---|---|---|
@@ -43,7 +43,7 @@ flowchart TD
 | `Landroid/webkit/WebView;` | `webview` | MEDIUM |
 | `Ljava/lang/reflect/Method;` | `reflection` | MEDIUM |
 
-### Secret patterns (12 entries, selected)
+### Secret patterns 12 entries, selected
 
 | Pattern | Category |
 |---|---|
@@ -52,7 +52,7 @@ flowchart TD
 | `eyJ...eyJ...[sig]` | `jwt_bearer` |
 | `-----BEGIN [RSA/EC] PRIVATE KEY-----` | `private_key_pem` |
 | Tuya `appKey`/`appSecret` patterns | `tuya_app_key` / `tuya_app_secret` |
-| `[0-9a-fA-F]{64}` (32-byte hex) | `hex_key_32` |
+| `[0-9a-fA-F]{64}` 32-byte hex | `hex_key_32` |
 | `secret=|password=|api_key=...{16,}` | `generic_secret` |
 
 ---
@@ -154,9 +154,9 @@ Summary: CRITICAL=2, HIGH=5, MEDIUM=3, LOW=2, INFO=8
 
 ## Pipeline position
 
-**Before this module:** Confirm the file is a valid APK (ZIP magic at offset 0: `PK\x03\x04`). For APKs with split DEX (multi-dex apps), `iter_dex()` automatically covers all `classes*.dex` files, no special handling needed.
+**Before this module:** Confirm the file is a valid APK (ZIP magic at offset 0: `PK\x03\x04`). For APKs with split DEX multi-dex apps, `iter_dex()` automatically covers all `classes*.dex` files, no special handling needed.
 
-**After this module:** Extract native libraries via `native_libs()` + `extract_native_lib()`, then run `JniBridgeScanner.from_path()` on the APK to correlate DEX `ACC_NATIVE` declarations with ELF JNI exports. For `InMemoryDexClassLoader` findings: capture the DEX bytes passed to the loader at runtime (dynamic analysis): the loaded DEX is not present in the APK at static analysis time.
+**After this module:** Extract native libraries via `native_libs()` + `extract_native_lib()`, then run `JniBridgeScanner.from_path()` on the APK to correlate DEX `ACC_NATIVE` declarations with ELF JNI exports. For `InMemoryDexClassLoader` findings: capture the DEX bytes passed to the loader at runtime dynamic analysis: the loaded DEX is not present in the APK at static analysis time.
 
 ---
 
@@ -170,7 +170,7 @@ Summary: CRITICAL=2, HIGH=5, MEDIUM=3, LOW=2, INFO=8
 | `DexFinding.severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` / `INFO` |
 | `DexFinding.category` | Dotted path: `manifest/debug`, `dyn_load/InMemoryDexClassLoader`, `tls/SSLv3`, etc. |
 | `DexFinding.evidence` | The raw string, class reference, or component name that triggered the finding |
-| `NativeMethod.has_code` | `True` = anomaly (native + DEX code present: possible decompiler artifact) |
+| `NativeMethod.has_code` | `True` = anomaly native + DEX code present: possible decompiler artifact |
 
 ---
 

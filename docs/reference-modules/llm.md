@@ -10,7 +10,7 @@ Claude as a first-class RE participant in a ReAct tool-calling loop.
 
 **Requires:** `pip install ablation[llm]` (adds `anthropic>=0.30.0`)
 
-LlmAnalyst runs Claude (claude-sonnet-5 by default) in a ReAct (Reasoning + Acting) loop over
+LlmAnalyst runs Claude claude-sonnet-5 by default in a ReAct Reasoning + Acting loop over
 an Ablation-instrumented binary. Claude issues tool calls to query the binary context --
 callers, callees, strings, disassembly -- and synthesizes the results into a function name,
 confidence score, and vulnerability hypothesis.
@@ -61,7 +61,7 @@ print(result.hypothesis)
 | `get_context` | Get BinaryContext summary for the binary |
 | `get_prior_findings` | Retrieve similar confirmed findings from func_id.db |
 | `get_cfg` | Get basic block structure for a function |
-| `name_function` | Register a name in NameRegistry (write tool) |
+| `name_function` | Register a name in NameRegistry write tool |
 
 ### ReAct loop behavior
 
@@ -91,15 +91,15 @@ advance, length check, memcpy) is shared across vendors.
 
 LlmAnalyst performs best when:
 
-- The function has clear callee structure (external calls that hint at its role)
-- Prior similar findings exist in `func_id.db` (RAG gives Claude concrete anchors)
+- The function has clear callee structure external calls that hint at its role
+- Prior similar findings exist in `func_id.db` RAG gives Claude concrete anchors
 - You want a structured hypothesis before committing to a manual disassembly session
 
 LlmAnalyst performs poorly when:
 
-- The function is very small (fewer than 10 instructions) -- too little signal
+- The function is very small fewer than 10 instructions -- too little signal
 - The function has only internal calls with no PLT symbols -- Claude cannot infer its role
-- The binary has no string references at all (fully stripped data segments)
+- The binary has no string references at all fully stripped data segments
 
 In those cases, fall back to manual FuncProfiler triage or a targeted SemanticSearcher query.
 

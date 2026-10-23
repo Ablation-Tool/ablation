@@ -77,7 +77,7 @@ Each opcode then maps to one of 11 semantic categories from the BinFuse taxonomy
 | `MEMORY_MGMT_OP` | rep/movs/stos, prefetch, clflush, nop, mfence |
 | `PROCESSOR_STATE_OP` | pushf/popf, cpuid, rdtsc, mrs/msr, svc, hlt |
 | `SYNCHRONIZATION_OP` | lock/xadd, cmpxchg, dmb/dsb/isb, ldaxr/stlxr |
-| `VECTOR_MGMT_OP` | vmovdqu, vpaddb, vpcmpeq, ld1/st1 (ARM NEON) |
+| `VECTOR_MGMT_OP` | vmovdqu, vpaddb, vpcmpeq, ld1/st1 ARM NEON |
 
 This encoding is cross-architecture. x86's `mov rax, [rbp-8]` and ARM64's `ldr x0, [sp, #8]` both produce `DATA_TRANSFER_OP`. A network parser written for MIPS32 and the same parser recompiled for AArch64 produce the same category sequence.
 
@@ -101,13 +101,13 @@ The normalized assembly is not fed to the model alone. It combines with function
 
 The `calls:` and `strings:` fields carry the most signal on stripped binaries. A function that calls `malloc`, `strcpy`, and `syslog` and references `"auth failed"` is described as exactly that, regardless of its own opcode mix. On deeply stripped binaries with no string xrefs, the normalized assembly category sequence and Markov transitions carry the full load.
 
-Operand type normalization follows BinDeep (Tian et al., 2020): keeping memory reference patterns (`MEM[REG]`, `MEM[REG+IMM]`) alongside category labels adds approximately 1.2% F1 over opcode-only encoding (BinDeep Table 3).
+Operand type normalization follows BinDeep Tian et al., 2020: keeping memory reference patterns (`MEM[REG]`, `MEM[REG+IMM]`) alongside category labels adds approximately 1.2% F1 over opcode-only encoding (BinDeep Table 3).
 
 ### Stage 4: Embedding and whitening
 
 #### What the model is
 
-The model is `sentence-transformers/all-mpnet-base-v2`. It produces 768-dimensional vectors. MPNet (Microsoft, 2020) is a masked language model trained on a modified objective that combines masked prediction with permuted prediction, capturing bidirectional context more accurately than BERT's original masked-token approach. The `all-mpnet-base-v2` checkpoint is fine-tuned on over 1 billion sentence pairs for semantic similarity tasks (Reimers and Gurevych, 2019).
+The model is `sentence-transformers/all-mpnet-base-v2`. It produces 768-dimensional vectors. MPNet Microsoft, 2020 is a masked language model trained on a modified objective that combines masked prediction with permuted prediction, capturing bidirectional context more accurately than BERT's original masked-token approach. The `all-mpnet-base-v2` checkpoint is fine-tuned on over 1 billion sentence pairs for semantic similarity tasks Reimers and Gurevych, 2019.
 
 What "fine-tuned for semantic similarity" means in practice: the model has learned that "copies string without checking length" and "strcpy without bounds validation" should land in the same region of the 768-dimensional embedding space, even though the token sequences share no words.
 
@@ -137,7 +137,7 @@ vectors = model.encode(descriptions, normalize_embeddings=True, batch_size=64)
 
 #### The anisotropy problem
 
-Raw sentence-transformer embeddings are anisotropic. The 768 dimensions are not used equally. Most of the variance is concentrated along a small number of principal components that correspond to high-frequency language features (sentence length, common words) rather than semantic content. Two embeddings tend to land close together along those dominant dimensions regardless of whether they are semantically related.
+Raw sentence-transformer embeddings are anisotropic. The 768 dimensions are not used equally. Most of the variance is concentrated along a small number of principal components that correspond to high-frequency language features sentence length, common words rather than semantic content. Two embeddings tend to land close together along those dominant dimensions regardless of whether they are semantically related.
 
 The practical effect: cosine similarity between two randomly chosen sentences from a technical corpus typically runs 0.6-0.9 after L2 normalization. A threshold of 0.6 would return nearly the entire corpus for any query. A threshold of 0.9 would discard true matches. Neither is usable as written.
 
@@ -277,7 +277,7 @@ Queries follow a structured format. Each part steers BERT toward a narrower clus
 | 0.30 - 0.40 | Weak match; skip unless no better candidates exist |
 | < 0.30 | Noise |
 
-Default threshold: 0.30. Raise to 0.40 on large binaries (>15,000 functions) to reduce noise.
+Default threshold: 0.30. Raise to 0.40 on large binaries >15,000 functions to reduce noise.
 
 ---
 
@@ -337,7 +337,7 @@ print(pl.fmt_sweep(pl_results, binary_name='target.so'))
 
 Output shows each confirmed pattern, its CVSS score, and the top candidates in the new binary. Patterns with CVSS >= 7.0 are highlighted for immediate triage.
 
-### Ingest confirmed findings from FindingRegistry (flywheel)
+### Ingest confirmed findings from FindingRegistry flywheel
 
 `ingest_from_registry()` pulls every confirmed finding from a `FindingRegistry` and adds it as a pattern. Call this at the start of each engagement to pull in all past confirmed findings without any manual `pl.add()` calls.
 
@@ -427,7 +427,7 @@ PatternLibrary.sweep  patterns=93  binary=firmware.so
 
 ## Reading output
 
-`SemanticSearcher.from_context(ctx).query(description, top_k)` returns `list[SimilarFunction]`:
+`SemanticSearcher.from_context(ctx).querydescription, top_k` returns `list[SimilarFunction]`:
 
 | Attribute | Content |
 |:---|:---|

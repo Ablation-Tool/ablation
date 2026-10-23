@@ -6,11 +6,11 @@ Identify applicable CVEs based on the detected nginx server version: extracting 
 
 ## Why this exists
 
-1. **nginx is the most widely deployed web front-end in network appliance firmware: FortiProxy, Cisco FMC, and hundreds of embedded management UIs run nginx as the HTTPS layer.** Many deployed appliances run nginx versions that are years behind the current release and have never been patched against public CVEs. A version-linked check finds high-severity issues (RCE, auth bypass) that require nothing more than the detected version number to confirm, no interactive exploit required.
+1. **nginx is the most widely deployed web front-end in network appliance firmware: FortiProxy, Cisco FMC, and hundreds of embedded management UIs run nginx as the HTTPS layer.** Many deployed appliances run nginx versions that are years behind the current release and have never been patched against public CVEs. A version-linked check finds high-severity issues RCE, auth bypass that require nothing more than the detected version number to confirm, no interactive exploit required.
 
 2. **nginx `server_tokens off` suppresses the version from HTTP responses, but not from all locations.** `_extract_version()` attempts version extraction from three sources in order: the `Server` response header, the default nginx error page body, and the `/nginx_status` stub-status endpoint body. Operators who disable `server_tokens` often overlook the stub_status path, which may still expose the exact build version in its response.
 
-3. **CVE-2021-23017 (DNS resolver 1-byte overflow) affects nginx 0.6.18 through 1.20.0: over 14 years of releases, but only when the `resolver` directive is configured and an attacker can perform MITM on the resolver path.** `check_cve_2021_23017()` reports the version-based exposure and notes that exploitability requires resolver configuration. This separates "version is in range" from "the service is exploitable" in the finding output.
+3. **CVE-2021-23017 DNS resolver 1-byte overflow affects nginx 0.6.18 through 1.20.0: over 14 years of releases, but only when the `resolver` directive is configured and an attacker can perform MITM on the resolver path.** `check_cve_2021_23017()` reports the version-based exposure and notes that exploitability requires resolver configuration. This separates "version is in range" from "the service is exploitable" in the finding output.
 
 ---
 
@@ -100,7 +100,7 @@ Run `NginxEnumerator.check_cves()` after `fingerprint()` has successfully extrac
 
 ## Reading findings
 
-`NginxEnumerator(host, port).check_cves()` returns `List[dict]`: CVE findings for the detected version:
+`NginxEnumeratorhost, port.check_cves()` returns `List[dict]`: CVE findings for the detected version:
 
 | Field | Content |
 |:---|:---|

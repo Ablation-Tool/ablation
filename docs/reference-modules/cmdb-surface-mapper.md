@@ -100,9 +100,9 @@ Phase 2
 | Field | Type | Description |
 |---|---|---|
 | `name` | str | Table name from `_CONFIRMED_TABLES` or `table_0x<hex>` |
-| `callers` | List[int] | Function VAs that call `cmf_query_create(table_id)` |
+| `callers` | List[int] | Function VAs that call `cmf_query_createtable_id` |
 | `field_read_count` | int | Count of CMDB accessor calls co-located in caller functions |
-| `reaches_exec` | bool | Any caller co-locates an exec-sink call (co-location, not data flow) |
+| `reaches_exec` | bool | Any caller co-locates an exec-sink call co-location, not data flow |
 | `exec_func_va` | Optional[int] | VA of the function with the co-located exec call |
 | `exec_call_va` | Optional[int] | VA of the exec sink call instruction |
 | `exec_sink_name` | Optional[str] | Name of the exec sink (`system`, `popen`, etc.) |
@@ -111,7 +111,7 @@ Phase 2
 
 ## Known table IDs
 
-Confirmed entries in `_CONFIRMED_TABLES` (update from binary analysis, not guesswork):
+Confirmed entries in `_CONFIRMED_TABLES` update from binary analysis, not guesswork:
 
 | ID | Name | Source |
 |---|---|---|
@@ -131,14 +131,14 @@ disassembly, then add to `_CONFIRMED_TABLES` with a source annotation.
 python3 -m ablation.analyzers.cmdb_surface_mapper /path/to/binary [--json] [--verbose]
 ```
 
-`--json` emits the full surface as a machine-readable JSON object (keys are hex table IDs).
+`--json` emits the full surface as a machine-readable JSON object keys are hex table IDs.
 
 ---
 
 ## FortiWeb RE history
 
-First used in the FortiWeb 7.4.3 engagement (2026-10-04, session 3) to discover
-**FWB-KRB-1** (CVSS 7.2 HIGH): libcmdb_plugin.so Kerberos realm name injected into
+First used in the FortiWeb 7.4.3 engagement 2026-10-04, session 3 to discover
+**FWB-KRB-1** CVSS 7.2 HIGH: libcmdb_plugin.so Kerberos realm name injected into
 `system()` without sanitization. The backward-trace methodology (TaintTracker from
 `system()`) missed this because the CMDB abstraction layer blocked the trace. Forward
 mapping from `cmf_query_create` in libcmdb_plugin.so identified the exec-reach table
@@ -196,7 +196,7 @@ Run `CMDBSurfaceMapper` after identifying a `libcmdb_plugin.so` or equivalent co
 | `reaches_exec` | `True`: advance to Phase 1 (SinkArgClassifier); `False`: skip |
 | `exec_sink_name` | Which exec sink is co-located (`system`, `popen`, etc.) |
 | `exec_func_va` | VA of the function to analyze with SinkArgClassifier |
-| `callers` | All VAs calling `cmf_query_create(table_id)` |
+| `callers` | All VAs calling `cmf_query_createtable_id` |
 
 ---
 

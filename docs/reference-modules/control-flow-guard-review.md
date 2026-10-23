@@ -1,6 +1,6 @@
 # Control Flow Guard Review
 
-Analyze Windows PE binaries for Control Flow Guard (CFG) bypass opportunities: detecting whether CFG is absent, whether export suppression is missing (expanding the valid-target bitmap to the entire export table), and which specific exports are reachable as CFG bypass targets when export suppression is enabled but incomplete.
+Analyze Windows PE binaries for Control Flow Guard (CFG) bypass opportunities: detecting whether CFG is absent, whether export suppression is missing expanding the valid-target bitmap to the entire export table, and which specific exports are reachable as CFG bypass targets when export suppression is enabled but incomplete.
 
 ---
 
@@ -78,7 +78,7 @@ Severity: HIGH  (CFG present but export suppression absent)
 
 ## False positives
 
-**`CFG_TARGET_NOT_SUPPRESSED` fires on exports that appear in the export table but not in the CFG table**: some exports (especially forwarded exports and data exports) are legitimately absent from the CFG table because they are not code entry points. Verify that the flagged export is actual code before treating it as a bypass target.
+**`CFG_TARGET_NOT_SUPPRESSED` fires on exports that appear in the export table but not in the CFG table**: some exports especially forwarded exports and data exports are legitimately absent from the CFG table because they are not code entry points. Verify that the flagged export is actual code before treating it as a bypass target.
 
 **`CFG_ABSENT` on a binary compiled for a non-CFG target (e.g., a debug build or a driver compiled with `/guard:cf-` override) is expected, not a security vulnerability**: check whether the binary is a security-sensitive component before treating CFG absence as a finding.
 
@@ -101,7 +101,7 @@ Run `CFGBypassDetector` when analyzing Windows PE binaries for exploit developme
 | `title` | Short finding title |
 | `location` | PE path or export name identifying the bypass surface |
 | `description` | Explanation of the bypass opportunity and impact |
-| `va` | VA of the relevant export or call site (0 if not applicable) |
+| `va` | VA of the relevant export or call site 0 if not applicable |
 | `cwe` | CWE identifier (e.g., `'CWE-693'`) |
 
 `CFGBypassDetector.cfg_config()` returns a `CFGConfig` object:

@@ -6,7 +6,7 @@ Common questions about Ablation.
 
 ## What does Ablation actually do?
 
-Ablation is a static binary analysis toolkit for vulnerability research. It takes a stripped binary (firmware, kernel module, ECU ROM, application binary) and automates the work of finding attacker-controlled data paths that reach security-sensitive operations: format strings, shell injection, memory corruption, authentication bypasses.
+Ablation is a static binary analysis toolkit for vulnerability research. It takes a stripped binary firmware, kernel module, ECU ROM, application binary and automates the work of finding attacker-controlled data paths that reach security-sensitive operations: format strings, shell injection, memory corruption, authentication bypasses.
 
 It does not emulate, execute, or debug binaries. Everything is static.
 
@@ -14,7 +14,7 @@ It does not emulate, execute, or debug binaries. Everything is static.
 
 ## What architectures are supported?
 
-ARM64, x86-64, x86-32, ARM32, Thumb/Thumb-2, MIPS-32, MIPS-64, nanoMIPS, PPC-32, PPC-64, RISC-V 32, RISC-V 64, ARC EM/HS, V850/RH850, LoongArch64, SH-2A, and BEAM (Erlang/Elixir). Plus ECU-specific ISAs: PPC VLE, MC68K/CPU32, TMS320C28x, M88K/MC88100, and HiSilicon custom RV32.
+ARM64, x86-64, x86-32, ARM32, Thumb/Thumb-2, MIPS-32, MIPS-64, nanoMIPS, PPC-32, PPC-64, RISC-V 32, RISC-V 64, ARC EM/HS, V850/RH850, LoongArch64, SH-2A, and BEAM Erlang/Elixir. Plus ECU-specific ISAs: PPC VLE, MC68K/CPU32, TMS320C28x, M88K/MC88100, and HiSilicon custom RV32.
 
 See [Decompiler and IR Lifter Concepts](concepts-decompiler.md#complete-tool-and-isa-reference) for the full reference.
 
@@ -44,7 +44,7 @@ Most common causes:
 
 3. **All sinks are RODATA_CONST.** If `SinkArgClassifier.classify_all()` shows every shell sink as RODATA_CONST, the binary likely has no command injection path. That's a real result.
 
-4. **Binary is stripped of all function starts.** Check `ctx.func_starts` count. If it is very low, run `GoX86StripScanner` (for Go), `FlatBinaryFuncStartScanner` (for ECU ROMs), or `SemanticSearcher` queries to locate candidates manually.
+4. **Binary is stripped of all function starts.** Check `ctx.func_starts` count. If it is very low, run `GoX86StripScanner` (for Go), `FlatBinaryFuncStartScanner` for ECU ROMs, or `SemanticSearcher` queries to locate candidates manually.
 
 ---
 
@@ -58,7 +58,7 @@ The gate must pass before any new module is committed. See [FORGE](reference-mod
 
 ## Can I use Ablation on Windows PE binaries?
 
-Yes. `BinaryContext.load_or_build()` auto-detects PE format and builds an equivalent context (IAT as PLT, prologue scan for function starts, RIP-relative xref index). Seven dedicated Windows analyzers cover CFG, SafeSEH, ETW, RPC, COM, kernel pool overflow, and BYOVD. See [Windows PE Security Suite](reference-modules/windows-pe.md).
+Yes. `BinaryContext.load_or_build()` auto-detects PE format and builds an equivalent context IAT as PLT, prologue scan for function starts, RIP-relative xref index. Seven dedicated Windows analyzers cover CFG, SafeSEH, ETW, RPC, COM, kernel pool overflow, and BYOVD. See [Windows PE Security Suite](reference-modules/windows-pe.md).
 
 ---
 
@@ -94,4 +94,4 @@ See [Firmware Analysis](reference-modules/firmware-analysis.md) and the [Fortine
 
 ## What file formats are supported for input?
 
-ELF (32 and 64-bit, all supported ISAs), Windows PE (.exe,.dll,.sys), IBM AIX XCOFF (32 and 64-bit), flat ROM images (ECU firmware), BEAM files (Erlang/Elixir), DEX (Android), compiled MicroPython `.mpy`, ArkTS ABC (HarmonyOS), PS3 SELF (via decryptor), PEF (Mac OS 8/9 PowerPC), and various firmware container formats (SquashFS, CramFS, VMDK/OVF, BFF, PAK).
+ELF 32 and 64-bit, all supported ISAs, Windows PE .exe,.dll,.sys, IBM AIX XCOFF 32 and 64-bit, flat ROM images ECU firmware, BEAM files Erlang/Elixir, DEX (Android), compiled MicroPython `.mpy`, ArkTS ABC (HarmonyOS), PS3 SELF via decryptor, PEF (Mac OS 8/9 PowerPC), and various firmware container formats (SquashFS, CramFS, VMDK/OVF, BFF, PAK).

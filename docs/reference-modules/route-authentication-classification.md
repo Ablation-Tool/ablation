@@ -74,7 +74,7 @@ Handlers with sinks: <M>
 
 ## Pipeline position
 
-Run `PreAuthRouteAuditor` immediately after `BinaryContext.load_or_build()` for any firmware binary known to serve an HTTP interface (httpd, lighttpd, nginx-based). This is the Phase 0.5 triage step before `TaintTracker` runs on identified handler VAs.
+Run `PreAuthRouteAuditor` immediately after `BinaryContext.load_or_build()` for any firmware binary known to serve an HTTP interface httpd, lighttpd, nginx-based. This is the Phase 0.5 triage step before `TaintTracker` runs on identified handler VAs.
 
 ---
 
@@ -86,7 +86,7 @@ Run `PreAuthRouteAuditor` immediately after `BinaryContext.load_or_build()` for 
 |:---|:---|
 | `url` | URL path string (e.g., `'/api/v2/upload'`) |
 | `handler` | Handler name string |
-| `middleware` | Middleware name string (empty if none) |
+| `middleware` | Middleware name string empty if none |
 | `method_ids` | `List[int]`: HTTP method ID list |
 | `url_reg_va` | VA of the URL registration call |
 | `handler_reg_va` | VA of the handler registration call |

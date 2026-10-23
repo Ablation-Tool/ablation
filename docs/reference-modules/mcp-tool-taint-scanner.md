@@ -6,9 +6,9 @@
 
 FortiManager v8.0.0 ships an AI/MCP stack (`ai/agent/agent_framework/`). Two confirmed findings required manual source analysis because no automated scanner existed:
 
-1. **FMG-AI-1 (CWE-214, MEDIUM)**, `mcp.py` serializes `request.COOKIES` to JSON and passes it as `--cookies` CLI argument to `/usr/bin/webmcpserver`. The session token is visible in `/proc/<pid>/cmdline` for the subprocess lifetime, world-readable on Linux by default.
+1. **FMG-AI-1 CWE-214, MEDIUM**, `mcp.py` serializes `request.COOKIES` to JSON and passes it as `--cookies` CLI argument to `/usr/bin/webmcpserver`. The session token is visible in `/proc/<pid>/cmdline` for the subprocess lifetime, world-readable on Linux by default.
 
-2. **FMG-AI-2 (CWE-77, MEDIUM)**, `agent_views.py` places a user-supplied FortiGate CLI script as the system-role content to an LLM security analyzer, enabling prompt injection into the AI's trust context.
+2. **FMG-AI-2 CWE-77, MEDIUM**, `agent_views.py` places a user-supplied FortiGate CLI script as the system-role content to an LLM security analyzer, enabling prompt injection into the AI's trust context.
 
 Gap closed: 2026-10-16. Both FMG findings re-detected automatically in validation run.
 
@@ -18,7 +18,7 @@ Gap closed: 2026-10-16. Both FMG findings re-detected automatically in validatio
 
 | Class | CWE | Severity | Pattern |
 |---|---|---|---|
-| `CREDENTIAL_EXPOSURE` | CWE-214 | MEDIUM | `json.dumps(request.COOKIES/headers)` → CLI arg within 30 lines |
+| `CREDENTIAL_EXPOSURE` | CWE-214 | MEDIUM | `json.dumpsrequest.COOKIES/headers` → CLI arg within 30 lines |
 | `PROMPT_INJECTION` | CWE-77 | HIGH/MEDIUM | User-input variable near system-role message assignment |
 | `TRANSPORT_EXPOSURE` | CWE-284 | MEDIUM/LOW | `host="0.0.0.0"` in MCP server config without auth context |
 | `AUTH_BYPASS` | CWE-306 | MEDIUM | `/mcp` route without recognized auth decorator in preceding 8 lines |
@@ -55,13 +55,13 @@ highs = [f for f in findings if f.severity in ('HIGH', 'CRITICAL')]
 
 Gate: **PASSED**. No HIGH or CRITICAL findings. No subprocess, eval, shell=True, or network I/O. All file reads use `errors="replace"` encoding guard. OSError handled. Taint window bounded at 30 lines. Regex patterns compiled at module level.
 
-Validated on FortiManager v8.0.0 AI stack: FMG-AI-1 (CREDENTIAL_EXPOSURE) and FMG-AI-2 (PROMPT_INJECTION) re-detected automatically.
+Validated on FortiManager v8.0.0 AI stack: FMG-AI-1 CREDENTIAL_EXPOSURE and FMG-AI-2 PROMPT_INJECTION re-detected automatically.
 
 ---
 
 ## How it works
 
-`MCPToolTaintScanner.scan_file(path)` reads Python/JavaScript MCP server source files and applies regex-based taint analysis without AST parsing. It detects `tool_name = args["key"]` patterns (taint sources from MCP tool arguments) and traces them to exec-class sinks (`subprocess.run`, `os.system`, `shell=True` patterns) and filesystem sinks (`open(path, 'w')`). `_has_auth_in_window()` checks the surrounding lines for authorization guards. No binary disassembly; no func_starts.
+`MCPToolTaintScanner.scan_file(path)` reads Python/JavaScript MCP server source files and applies regex-based taint analysis without AST parsing. It detects `tool_name = args["key"]` patterns taint sources from MCP tool arguments and traces them to exec-class sinks (`subprocess.run`, `os.system`, `shell=True` patterns) and filesystem sinks (`open(path, 'w')`). `_has_auth_in_window()` checks the surrounding lines for authorization guards. No binary disassembly; no func_starts.
 
 ---
 

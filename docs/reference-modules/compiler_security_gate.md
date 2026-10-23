@@ -38,7 +38,7 @@ raw bytes or guessing at basic block boundaries.
 
 ## Usage
 
-### Build system (Makefile)
+### Build system Makefile
 
 ```makefile
 .PHONY: security-check
@@ -90,9 +90,9 @@ for f in findings:
 
 | Severity | Meaning |
 |---|---|
-| CRITICAL | Taint reaches command injection sink (system, execve, popen, Tcl_Eval, …) |
+| CRITICAL | Taint reaches command injection sink system, execve, popen, Tcl_Eval, … |
 | HIGH | Memory corruption: taint reaches strcpy/memcpy/sprintf size, or format string without literal, or unguarded length underflow |
-| MEDIUM | Taint reaches controlled allocation size (malloc/calloc) |
+| MEDIUM | Taint reaches controlled allocation size malloc/calloc |
 | LOW | All other taint paths |
 
 ## Classes
@@ -136,7 +136,7 @@ exit_code = gate.check(strict=True)  # 1 on any finding
  was already analyzed in the same session, rebuilding takes ~100ms.
 - x86_64 only: `FormatStringScanner`, `HeapVulnScanner`, `LengthUnderflowScanner`.
  For other architectures, only the taint tracker runs.
-- The `taint_dag` field is `None` for non-taint findings (format string, heap, underflow).
+- The `taint_dag` field is `None` for non-taint findings format string, heap, underflow.
 
 ---
 
@@ -148,7 +148,7 @@ Prior to this module, compiler_security_gate required manual work outside the Ab
 
 ## How it works
 
-`CompilerSecurityGate.from_path(path)` accepts a binary path and optionally a pre-built `BinaryContext`. Internally it runs `SinkArgClassifier` to classify all exec-sink call sites (RODATA_CONST / ARG_PROPAGATED / UNKNOWN), then runs `TaintTracker` on ARG_PROPAGATED and UNKNOWN sites. `_taint_dag()` reconstructs a simplified taint chain from the raw taint results. `_normalize_taint()` converts each raw finding to a `GateFinding` with severity based on the sink name. Results are sorted by severity then virtual address.
+`CompilerSecurityGate.from_path(path)` accepts a binary path and optionally a pre-built `BinaryContext`. Internally it runs `SinkArgClassifier` to classify all exec-sink call sites RODATA_CONST / ARG_PROPAGATED / UNKNOWN, then runs `TaintTracker` on ARG_PROPAGATED and UNKNOWN sites. `_taint_dag()` reconstructs a simplified taint chain from the raw taint results. `_normalize_taint()` converts each raw finding to a `GateFinding` with severity based on the sink name. Results are sorted by severity then virtual address.
 
 ---
 
@@ -172,7 +172,7 @@ Prior to this module, compiler_security_gate required manual work outside the Ab
 | `category` | `TAINT_FLOW` / `FORMAT_STRING` / `HEAP` / `LENGTH_UNDERFLOW` |
 | `description` | One-line description of what was detected |
 | `detector` | Name of the sub-scanner that produced this finding |
-| `taint_dag` | `Optional[SemanticBlock]`: DAG adapter block for walking the taint path; `None` for non-taint findings (format string, heap, underflow) |
+| `taint_dag` | `Optional[SemanticBlock]`: DAG adapter block for walking the taint path; `None` for non-taint findings format string, heap, underflow |
 
 ---
 

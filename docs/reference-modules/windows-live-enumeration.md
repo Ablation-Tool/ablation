@@ -1,6 +1,6 @@
 # Windows Live Enumeration
 
-Enumerate COM hijacking candidates (HKCU vs. HKLM CLSID delta), active RPC endpoints, ETW session consumers, named pipe surfaces, service DLL hijacking paths, autoruns, token privileges, and system security feature status (CFG, DEP, ASLR policies): providing a complete Windows live-system attack surface map: via `modules/windows_enum.py` `WindowsEnumerator`.
+Enumerate COM hijacking candidates HKCU vs. HKLM CLSID delta, active RPC endpoints, ETW session consumers, named pipe surfaces, service DLL hijacking paths, autoruns, token privileges, and system security feature status CFG, DEP, ASLR policies: providing a complete Windows live-system attack surface map: via `modules/windows_enum.py` `WindowsEnumerator`.
 
 ---
 
@@ -10,7 +10,7 @@ Enumerate COM hijacking candidates (HKCU vs. HKLM CLSID delta), active RPC endpo
 
 2. **`rpc_endpoints()` enumerates active RPC endpoint mapper registrations**: RPC servers registered with the endpoint mapper often expose privileged functionality without requiring Windows authentication when accessed from the local system. `rpc_endpoints()` queries `ncacn_ip_tcp`, `ncalrpc`, and `ncacn_np` transport bindings and flags endpoints bound to `\pipe\svcctl`, `\pipe\samr`, or interfaces associated with known lateral movement primitives (`IWbemServices`, task scheduler).
 
-3. **`system_security_features()` enumerates mitigation policy status**: Control Flow Guard (CFG) enforcement policy, Data Execution Prevention (DEP) policy (AlwaysOn vs. OptIn vs. OptOut), ASLR mandatory randomization, SEHOP (Structured Exception Handling Overwrite Protection), and Credential Guard / Device Guard status. This is the Windows equivalent of `host-platform-inventory`, it determines which exploit mitigation bypasses are necessary before attempting memory corruption.
+3. **`system_security_features()` enumerates mitigation policy status**: Control Flow Guard (CFG) enforcement policy, Data Execution Prevention (DEP) policy (AlwaysOn vs. OptIn vs. OptOut), ASLR mandatory randomization, SEHOP Structured Exception Handling Overwrite Protection, and Credential Guard / Device Guard status. This is the Windows equivalent of `host-platform-inventory`, it determines which exploit mitigation bypasses are necessary before attempting memory corruption.
 
 ---
 

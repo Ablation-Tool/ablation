@@ -30,7 +30,7 @@ Every finding from the fallback path requires manual confirmation before it is r
 
 **Workaround:** 
 Install Capstone 6.x: `pip install capstone>=6.0.0a1`. Verify with
-`python -c "import capstone; print(capstone.__version__)"`. Always check
+`python -c "import capstone; printcapstone.__version__"`. Always check
 `tracker.has_full_decode` before treating output as precise.
 
 **Resolved in version:** Mitigated by upgrading Capstone. The fallback path remains
@@ -68,8 +68,8 @@ nothing. The P48 prefix is bits [15:11] = `0x18` in the first halfword.
 ## NANOMIPS-KA-003: Indirect JALRC calls not followed interprocedurally
 
 **Description:** 
-`BALC` (direct call) and PLT stubs are resolved interprocedurally. Indirect calls via
-`JALRC` (branch-link-register-compact) are treated as unknown calls: caller-saved registers
+`BALC` direct call and PLT stubs are resolved interprocedurally. Indirect calls via
+`JALRC` branch-link-register-compact are treated as unknown calls: caller-saved registers
 are clobbered and the callee is not entered.
 
 **Triggering conditions:** 

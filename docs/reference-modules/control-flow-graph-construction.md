@@ -10,7 +10,7 @@ Per-function control-flow graph construction for x86-64 ELF binaries using itera
 
 2. **Each ISA has an ISA-specific CFG builder (`cfg_arm64.py`, `cfg_mips.py`, `cfg_riscv.py`, etc.) that handles ISA-specific branch semantics: ARM32 conditional execution, MIPS delay slots, RISC-V compressed (RVC) branches.** The x86-64 `CFGBuilder` in `cfg_builder.py` is the primary builder for stripped server and appliance binaries. ISA-specific builders share the same `CFG`/`BasicBlock` type contracts and produce the same analysis interface.
 
-3. **`CFG.dominator_tree()` computes the dominance relation for loop detection and structured control-flow recovery: a block `d` dominates block `n` if every path from the function entry to `n` passes through `d`.** Back-edges (edges from a block to one of its dominators) identify loop headers. `CFGBuilder` exposes `dominator_tree()` and loop head detection without requiring a full SSA transformation, keeping build time under 10ms per function.
+3. **`CFG.dominator_tree()` computes the dominance relation for loop detection and structured control-flow recovery: a block `d` dominates block `n` if every path from the function entry to `n` passes through `d`.** Back-edges edges from a block to one of its dominators identify loop headers. `CFGBuilder` exposes `dominator_tree()` and loop head detection without requiring a full SSA transformation, keeping build time under 10ms per function.
 
 ---
 
@@ -98,7 +98,7 @@ CFG for <func-va>:
 
 ## False positives
 
-**`build_function()` stops at `jmp` (unconditional jump) without following jump-table targets.** Functions with switch statements that use a `jmp [rax*8+table]` pattern will have their jump-table cases appear as unreachable blocks in the CFG. The `stats()` field `has_indirect_branch: True` flags this. Flow-sensitive analysis on such functions may miss paths through switch cases.
+**`build_function()` stops at `jmp` unconditional jump without following jump-table targets.** Functions with switch statements that use a `jmp [rax*8+table]` pattern will have their jump-table cases appear as unreachable blocks in the CFG. The `stats()` field `has_indirect_branch: True` flags this. Flow-sensitive analysis on such functions may miss paths through switch cases.
 
 **`build_all()` uses `XRefGraph` prologue scan to identify function starts, this misses functions that don't match the prologue pattern (`push rbp; mov rbp, rsp` or `sub rsp, N`).** On heavily optimized binaries or firmware compiled with `-fomit-frame-pointer`, the prologue scan underestimates function count. Supply explicit `func_starts` to `CFGBuilder` when known entry points are available from other sources.
 
@@ -106,7 +106,7 @@ CFG for <func-va>:
 
 ## Pipeline position
 
-Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGBuilder` is a prerequisite for `analyze_function_flow_sensitive()`, `SubsequenceSearcher` (which uses op-category sequences derived from CFG blocks), and `StructureRecovery` (which reads dominator trees). Build once per session and cache: `BinaryContext.load_or_build()` handles this automatically.
+Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGBuilder` is a prerequisite for `analyze_function_flow_sensitive()`, `SubsequenceSearcher` which uses op-category sequences derived from CFG blocks, and `StructureRecovery` which reads dominator trees. Build once per session and cache: `BinaryContext.load_or_build()` handles this automatically.
 
 ---
 
@@ -119,7 +119,7 @@ Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGB
 | `blocks` | `Dict[int, BasicBlock]` keyed by block start VA |
 | `stats()` | `{n_blocks, n_edges, n_loops, has_indirect_branch}` dict |
 | `dominator_tree()` | `Dict[int, int]` mapping each block VA to its immediate dominator VA |
-| `loops()` | List of `(header_va, body_blocks)` natural loop tuples |
+| `loops()` | List of `header_va, body_blocks` natural loop tuples |
 | `successors(va)` | List of successor block VAs for block starting at `va` |
 | `predecessors(va)` | List of predecessor block VAs for block starting at `va` |
 
@@ -128,8 +128,8 @@ Build CFGs after `XRefGraph` provides function boundaries and PLT mapping. `CFGB
 | Attribute | Content |
 |:---|:---|
 | `start` | Start VA of the block |
-| `end` | VA of the last instruction (inclusive) |
-| `insns` | `List[Tuple[int, str, str]]`: `(va, mnemonic, op_str)` per instruction |
+| `end` | VA of the last instruction inclusive |
+| `insns` | `List[Tuple[int, str, str]]`: `va, mnemonic, op_str` per instruction |
 | `succs` | `List[int]`: successor block start VAs |
 
 ---

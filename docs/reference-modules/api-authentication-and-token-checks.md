@@ -8,7 +8,7 @@ Scan live API responses for JWT tokens, test `alg=none` bypass and weak HMAC sec
 
 1. **JWT tokens are transmitted in API responses and response headers, not just in auth endpoints.** Any endpoint that returns a 200 response may embed a JWT in its body or headers (`Authorization`, `Set-Cookie`, `X-Auth-Token`). `analyze_tokens_in_response()` scans all discovered endpoints, not just `/auth` or `/login`, using a structural regex (`eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*`) that matches by the Base64url-encoded `{"` prefix: catching tokens embedded in JSON responses, HTML pages, and custom headers alike.
 
-2. **`alg=none` and weak HMAC secrets are exploitable in minutes but require server-side confirmation.** The `alg=none` bypass forges a new token with `"alg":"none"` and an empty signature, then replays it on the same endpoint: confirmation comes from the server returning anything other than 401. Weak secret cracking iterates 18 known-weak HMAC keys (including `""`, `"secret"`, `"HS256"`, `"your-256-bit-secret"`) and verifies each candidate by computing `HMAC-SHA{256,384,512}(header.payload, candidate)` and comparing to the token's signature bytes. Both attacks produce confirmed exploits, not theoretical findings.
+2. **`alg=none` and weak HMAC secrets are exploitable in minutes but require server-side confirmation.** The `alg=none` bypass forges a new token with `"alg":"none"` and an empty signature, then replays it on the same endpoint: confirmation comes from the server returning anything other than 401. Weak secret cracking iterates 18 known-weak HMAC keys (including `""`, `"secret"`, `"HS256"`, `"your-256-bit-secret"`) and verifies each candidate by computing `HMAC-SHA{256,384,512}header.payload, candidate` and comparing to the token's signature bytes. Both attacks produce confirmed exploits, not theoretical findings.
 
 3. **OAuth2/OIDC attack surface spans 13 discovery paths, redirect URI validation, scope escalation, PKCE downgrade, and default client credentials.** An authorization server with no PKCE requirement allows code injection attacks from public clients. An open `redirect_uri` allows authorization code theft. Default client credentials (`client:secret`, `admin:admin`) against the token endpoint grant immediate access. These checks require live interaction with the authorization server: static analysis of the API docs does not reveal them.
 
@@ -32,11 +32,11 @@ flowchart TD
     J -->|no| N["Return empty findings (no OAuth2 present)"]
 ```
 
-### JWT weak secret dictionary (18 entries)
+### JWT weak secret dictionary 18 entries
 
 | Secret | | Secret | |
 |---|---|---|---|
-| `""` (empty string) | | `"secret"` | |
+| `""` empty string | | `"secret"` | |
 | `"password"` | | `"123456"` | |
 | `"qwerty"` | | `"admin"` | |
 | `"test"` | | `"jwt"` | |

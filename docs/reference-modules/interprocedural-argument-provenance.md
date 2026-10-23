@@ -59,7 +59,7 @@ flowchart TD
 
 | Kind | Display | Source |
 |---|---|---|
-| `arg` | `arg0_entry (rdi@entry)` | Entry argument register seed |
+| `arg` | `arg0_entry rdi@entry` | Entry argument register seed |
 | `const` | `0x4a` | Immediate operand in `mov dst, imm` |
 | `string` | `'/bin/ls'` | RIP-relative LEA resolving to `.rodata` content |
 | `copy` | `arg0_entry (via r13)` | `mov r13, rdi` then `mov rdi, r13` |

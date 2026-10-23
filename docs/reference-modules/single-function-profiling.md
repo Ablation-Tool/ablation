@@ -8,7 +8,7 @@ Produce a complete analysis report for one function in a single call: combining 
 
 1. **Manual triage of a candidate function requires four separate tool calls: enumerate callees, dump disassembly, annotate call arguments, and look up string cross-references.** `FuncProfiler.profile()` collapses these into a single call that returns a `FuncProfile` with all four outputs in one structured block, formatted for immediate reading. On a function with 10 calls and 4 string references, this saves roughly 15 minutes of manual assembly.
 
-2. **`FuncProfiler` integrates sink awareness directly into the profile output: each call site is annotated as `[SINK]` if the callee name appears in the sink catalog (default or custom).** Without sink tagging, an analyst reading raw call output must mentally cross-reference against a sink list. With sink tagging, the first line of the profile shows `2 SINKS` and the sink call sites are marked inline.
+2. **`FuncProfiler` integrates sink awareness directly into the profile output: each call site is annotated as `[SINK]` if the callee name appears in the sink catalog default or custom.** Without sink tagging, an analyst reading raw call output must mentally cross-reference against a sink list. With sink tagging, the first line of the profile shows `2 SINKS` and the sink call sites are marked inline.
 
 3. **`FuncProfiler` accepts custom sinks via `custom_sinks={'exec_handler': [2]}`: the dict maps function names to argument positions.** This allows vendor-specific wrapper functions (`fadcsystem`, `vendor_exec`) to be treated as sinks in the profile without modifying the global sink catalog.
 
@@ -92,7 +92,7 @@ CALLS:
 
 ## Pipeline position
 
-Step 6 in the RE workflow (CLAUDE.md): `FuncProfiler.profile()` on top candidates from `SemanticSearcher`. This is the standard triage step before `SinkArgClassifier`: the profile gives the human analyst enough context (strings, call pattern, sink presence) to decide whether to proceed to taint analysis or discard the candidate.
+Step 6 in the RE workflow CLAUDE.md: `FuncProfiler.profile()` on top candidates from `SemanticSearcher`. This is the standard triage step before `SinkArgClassifier`: the profile gives the human analyst enough context strings, call pattern, sink presence to decide whether to proceed to taint analysis or discard the candidate.
 
 ---
 
@@ -103,11 +103,11 @@ Step 6 in the RE workflow (CLAUDE.md): `FuncProfiler.profile()` on top candidate
 | Attribute | Content |
 |:---|:---|
 | `va` | Entry VA of the profiled function |
-| `end_va` | End VA (last instruction) |
+| `end_va` | End VA last instruction |
 | `size` | Function size in bytes |
-| `strings` | `List[(va, string)]`: string references within the function |
+| `strings` | `List[va, string]`: string references within the function |
 | `calls` | `List[ProfiledCall]`: all call sites with argument register annotations |
-| `sink_calls` | `List[ProfiledCall]`: only the sink-classified calls (property) |
+| `sink_calls` | `List[ProfiledCall]`: only the sink-classified calls property |
 
 `FuncProfile.has_sink(name)` returns `True` if any sink call's `target_name` matches `name`.
 

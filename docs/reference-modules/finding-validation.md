@@ -62,7 +62,7 @@ result = solve_for_sink(ctx, sink_va=0x1234abcd)
 
 ### Limitations
 
-- Memory reads modeled as unconstrained symbolic values (sound over-approximation).
+- Memory reads modeled as unconstrained symbolic values sound over-approximation.
 - Calls clobber caller-saved registers to fresh unconstrained symbols.
 - Indirect jumps stop path enumeration at the branch site.
 - Bounded by `MAX_PATH_BLOCKS` to avoid path explosion on large CFGs.
@@ -71,7 +71,7 @@ result = solve_for_sink(ctx, sink_va=0x1234abcd)
 
 ## FindingRegistry
 
-`FindingRegistry` persists confirmed findings to `~/.ablation/findings.db` (SQLite, never committed to git). It seeds embeddings from `ablation/data/seed_corpus.json` on first run, then extends with every registered finding. The Flywheel replays registered findings as search patterns on every new binary sweep.
+`FindingRegistry` persists confirmed findings to `~/.ablation/findings.db` SQLite, never committed to git. It seeds embeddings from `ablation/data/seed_corpus.json` on first run, then extends with every registered finding. The Flywheel replays registered findings as search patterns on every new binary sweep.
 
 ### Usage
 
@@ -227,7 +227,7 @@ FindingRegistry.stats()
 
 ## Reading output
 
-`PathSolver(data, func_va, func_end_va, plt, cfg, md).solve(target_va)` returns `List[PathResult]`:
+`PathSolverdata, func_va, func_end_va, plt, cfg, md.solvetarget_va` returns `List[PathResult]`:
 
 | Attribute | Content |
 |:---|:---|

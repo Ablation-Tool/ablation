@@ -36,13 +36,13 @@ Key structure:
 | Source | Meaning |
 |---|---|
 | `manual` | Analyst assigned the name based on code inspection |
-| `string` | Name inferred from a nearby string (automated) |
+| `string` | Name inferred from a nearby string automated |
 | `confirmed` | Name tied to a confirmed, disclosed vulnerability |
 
 The `confirmed` source carries the highest priority. It means you completed the full triage,
 trace, and confirmation workflow for this function.
 
-### Usage via BinaryContext (preferred)
+### Usage via BinaryContext preferred
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
@@ -147,10 +147,10 @@ ablation-search my-vendor
 ablation-commit
 ```
 
-### Export patterns for PatternLibrary (flywheel)
+### Export patterns for PatternLibrary flywheel
 
 `export_patterns()` returns all confirmed findings as `{'query': str, 'tag': str}` dicts,
-one per unique (title, description) pair, tagged by CWE class. Unlike `prior_queries()` which
+one per unique title, description pair, tagged by CWE class. Unlike `prior_queries()` which
 returns one entry per CWE class, `export_patterns()` returns every confirmed finding so the
 full history feeds future sweeps.
 
@@ -189,9 +189,9 @@ Prior to this module, registry modules required manual work outside the Ablation
 
 ## How it works
 
-**NameRegistry** writes function names keyed by `(binary_sha256, va)` to `~/.ablation/function_names.json` on every `set_name()` call. `BinaryContext.load_or_build()` calls `NameRegistry.all_names()` at load time and caches the result so that `ctx.name(va)` is a pure in-memory lookup during analysis. The SHA-256 key means names track the exact binary file, not just its filename: version bumps with the same filename do not inherit incorrect names.
+**NameRegistry** writes function names keyed by `binary_sha256, va` to `~/.ablation/function_names.json` on every `set_name()` call. `BinaryContext.load_or_build()` calls `NameRegistry.all_names()` at load time and caches the result so that `ctx.name(va)` is a pure in-memory lookup during analysis. The SHA-256 key means names track the exact binary file, not just its filename: version bumps with the same filename do not inherit incorrect names.
 
-**FindingRegistry** is backed by a user-local SQLite file (`~/.ablation/findings.db`). `register()` inserts a row and returns the row ID as an integer. When an `embedding` is provided, it is L2-normalized before storage as a binary blob. `find_similar(embedding, top_k)` runs cosine similarity over stored embeddings in Python and returns the top-k result rows as dicts. The pre-loaded `ablation/data/seed_corpus.json` populates the DB at first run with patterns from published CVEs, so cross-vendor similarity queries work immediately without any prior registrations.
+**FindingRegistry** is backed by a user-local SQLite file (`~/.ablation/findings.db`). `register()` inserts a row and returns the row ID as an integer. When an `embedding` is provided, it is L2-normalized before storage as a binary blob. `find_similarembedding, top_k` runs cosine similarity over stored embeddings in Python and returns the top-k result rows as dicts. The pre-loaded `ablation/data/seed_corpus.json` populates the DB at first run with patterns from published CVEs, so cross-vendor similarity queries work immediately without any prior registrations.
 
 ---
 
@@ -274,11 +274,11 @@ $ python -m ablation.analyzers.finding_registry list --vendor cisco
 
 ## Reading output
 
-`NameRegistry.get_name(sha256, va)` returns `Optional[str]`: the stored function name for the given binary SHA-256 and VA, or `None` if not registered.
+`NameRegistry.get_namesha256, va` returns `Optional[str]`: the stored function name for the given binary SHA-256 and VA, or `None` if not registered.
 
-`FindingRegistry.register(vendor, product, title, description, cwe_class, severity)` returns an `int`: the new row ID in the findings SQLite table. Rows include `vendor`, `product`, `version`, `binary`, `func_addr`, `cwe_class`, `severity`, `title`, `description`, `source`, and `confirmed` (1/0 boolean).
+`FindingRegistry.registervendor, product, title, description, cwe_class, severity` returns an `int`: the new row ID in the findings SQLite table. Rows include `vendor`, `product`, `version`, `binary`, `func_addr`, `cwe_class`, `severity`, `title`, `description`, `source`, and `confirmed` 1/0 boolean.
 
-`FindingRegistry.find_similar(embedding, top_k)` returns a list of row dicts from the findings table, ranked by embedding cosine similarity.
+`FindingRegistry.find_similarembedding, top_k` returns a list of row dicts from the findings table, ranked by embedding cosine similarity.
 
 ---
 

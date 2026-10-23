@@ -132,7 +132,7 @@ descriptor_va:           (this is the VA in XcoffBinary.exports)
 | Unary | `neg/extsb/extsh/extsw/cntlzw/popcntw` |
 | Compare | `cmpwi/cmplwi/cmpw/cmplw` and 64-bit forms; updates CR state for the following branch |
 | Branch | `b/bl/blr/bctr/bctrl` + all conditional `b*` via `_CRState.decode()` |
-| Float | `fadd/fsub/fmul/fdiv/fmadd` (single and double variants) + `fcmpu/fcmpo` |
+| Float | `fadd/fsub/fmul/fdiv/fmadd` single and double variants + `fcmpu/fcmpo` |
 | SPR | `mfspr/mtspr` (LR=8, CTR=9, XER=1); `mflr/mtlr` suppressed; `mtctr` absorbed into `bctr` |
 | Syscall | `sc` emits `syscall(r0=N)` |
 | Altivec | passes through as `// [va] vmx_insn ops` |

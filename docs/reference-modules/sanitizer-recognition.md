@@ -94,7 +94,7 @@ Run `SanitizerDetector` before or alongside `TaintTracker`. After TaintTracker f
 
 ## Reading output
 
-`audit_coverage(binary_path, func_va)` (the main entry point in `ablation/analyzers/sanitizer_detector.py`) returns a `SanitizerCoverageReport`:
+`audit_coveragebinary_path, func_va` (the main entry point in `ablation/analyzers/sanitizer_detector.py`) returns a `SanitizerCoverageReport`:
 
 | Attribute | Content |
 |:---|:---|

@@ -82,7 +82,7 @@ For structured output, call `java_decompiler.JavaDecompiler(path).analyze()` whi
 | Key | Content |
 |:---|:---|
 | `path` | Absolute path to the analyzed file |
-| `classes` | `List[dict]`: per-class analysis (name, methods, fields) |
+| `classes` | `List[dict]`: per-class analysis name, methods, fields |
 | `security` | Security audit result string |
 | `findings` | `List[dict]`: individual findings with `severity`, `title`, `description` |
 

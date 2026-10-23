@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Lors de n'importe quelle analyse future, qu'il s'agisse d'une version de firmware différente ou d'un autre fournisseur, `pl.sweep(searcher)` exécute automatiquement tous les motifs confirmés.
+Lors de n'importe quelle analyse future, qu'il s'agisse d'une version de firmware différente ou d'un autre fournisseur, `pl.sweepsearcher` exécute automatiquement tous les motifs confirmés.
 
 ---
 

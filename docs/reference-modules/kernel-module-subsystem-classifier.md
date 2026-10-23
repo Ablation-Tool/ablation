@@ -91,7 +91,7 @@ Rules match most-specific first. First match wins.
 | `drivers/` | LOCAL-HARDWARE | No | MEDIUM |
 | `fs/` | LOCAL | No | MEDIUM |
 | `kernel/`, `mm/`, `crypto/`, `lib/`, `security/` | LOCAL | No | MEDIUM |
-| *(fallback)* | LOCAL | No | LOW |
+| *fallback* | LOCAL | No | LOW |
 
 ## Adding rules
 
@@ -111,9 +111,9 @@ Use HIGH confidence for unambiguous subsystems, MEDIUM for broad prefixes where 
 
 ## How it works
 
-`classify(ko_path)` calls `_extract_subsystem_path(ko_path)` to find the path component after the last `/kernel/` directory in the path. It then iterates `_SUBSYSTEM_RULES` in order (most-specific prefix first) and returns on the first match. No file is opened; no disassembly occurs. The rule table is validated at module import time by `_check_rule_order()`, which raises `AssertionError` if a broader rule appears before a more-specific one that it would shadow.
+`classify(ko_path)` calls `_extract_subsystem_path(ko_path)` to find the path component after the last `/kernel/` directory in the path. It then iterates `_SUBSYSTEM_RULES` in order most-specific prefix first and returns on the first match. No file is opened; no disassembly occurs. The rule table is validated at module import time by `_check_rule_order()`, which raises `AssertionError` if a broader rule appears before a more-specific one that it would shadow.
 
-When the path contains no `/kernel/` component, `classify()` returns `confidence="LOW"`, `attack_surface="LOCAL"`, and `rule_matched="(no /kernel/ component in path)"`. When the path contains a `/kernel/` component but no rule prefix matches the subsystem, the fallback uses the top-level directory as the subsystem label and returns `confidence="LOW"`.
+When the path contains no `/kernel/` component, `classify()` returns `confidence="LOW"`, `attack_surface="LOCAL"`, and `rule_matched="no /kernel/ component in path"`. When the path contains a `/kernel/` component but no rule prefix matches the subsystem, the fallback uses the top-level directory as the subsystem label and returns `confidence="LOW"`.
 
 ---
 
@@ -135,10 +135,10 @@ When the path contains no `/kernel/` component, `classify()` returns `confidence
 | `subsystem` | Canonical subsystem label (e.g., `'net/mac80211'`, `'fs/dlm'`, `'drivers/usb/serial'`) |
 | `attack_surface` | Attack-surface label (e.g., `'PROXIMITY'`, `'NETWORK-cluster'`, `'LOCAL-USB'`) |
 | `network_reachable` | `True` if the subsystem is reachable without physical access |
-| `confidence` | `'HIGH'` (exact rule match) / `'MEDIUM'` (broad rule) / `'LOW'` (fallback) |
+| `confidence` | `'HIGH'` exact rule match / `'MEDIUM'` broad rule / `'LOW'` fallback |
 | `rule_matched` | The subsystem prefix rule that fired, for auditability |
 
-Use `classifier.classify_batch(ko_paths)` to classify a list of modules at once.
+Use `classifier.classify_batchko_paths` to classify a list of modules at once.
 
 ---
 

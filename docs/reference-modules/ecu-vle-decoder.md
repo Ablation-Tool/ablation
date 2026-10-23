@@ -6,17 +6,17 @@
 
 ## What this is
 
-VLE (Variable Length Encoding) is a PowerPC instruction set extension that NXP added to the e200z4, e200z6, and e200z7 cores found in automotive ECUs. It lets compilers mix 16-bit and 32-bit instructions in the same binary so firmware fits in smaller flash. Flash is a hard cost constraint on every ECU, so NXP e200 cores use VLE by default in production firmware.
+VLE Variable Length Encoding is a PowerPC instruction set extension that NXP added to the e200z4, e200z6, and e200z7 cores found in automotive ECUs. It lets compilers mix 16-bit and 32-bit instructions in the same binary so firmware fits in smaller flash. Flash is a hard cost constraint on every ECU, so NXP e200 cores use VLE by default in production firmware.
 
 Standard Capstone decodes PowerPC Book E but not VLE. Pointing Capstone at a VLE region produces plausible-looking garbage because 16-bit VLE halfwords satisfy Book E opcode patterns by coincidence. There is no error. The disassembly is just wrong.
 
-`EcuVLEDecoder` is a pure-Python VLE decoder that handles both 16-bit SE (Short Encoding) and 32-bit VLE instructions, identifies function entry points from VLE prologues, and tells the taint tracker whether a code region is VLE or Book E before analysis begins.
+`EcuVLEDecoder` is a pure-Python VLE decoder that handles both 16-bit SE Short Encoding and 32-bit VLE instructions, identifies function entry points from VLE prologues, and tells the taint tracker whether a code region is VLE or Book E before analysis begins.
 
 ---
 
 ## Where it's used
 
-- **GM E39a PCM** (NXP MPC5566, e200z6 core): VLE regions at `0x2A000` and `0x034000`
+- **GM E39a PCM** NXP MPC5566, e200z6 core: VLE regions at `0x2A000` and `0x034000`
 - **GM E54 and E92 ECUs**: factory firmware compiled for NXP e200z cores
 - Any **NXP MPC55xx family** target where `EcuArchDetector` identifies a PPC32 VLE core
 - The `EcuROMLayoutAnalyzer` integration pipeline: called automatically when a CODE region scores above the VLE probe threshold
@@ -51,7 +51,7 @@ Three things were not possible before in Ablation:
 
 **1. No PPC VLE instruction decoder.** Capstone 5.0.7 decodes standard PowerPC Book E (PPC32) but
 does not implement the Variable Length Encoding (VLE) extension used by NXP e200z4/z6/z7 cores.
-The GM E39a PCM (MPC5566 e200z6) and GM E54/E92 ECUs use VLE in their factory firmware. Applying
+The GM E39a PCM MPC5566 e200z6 and GM E54/E92 ECUs use VLE in their factory firmware. Applying
 `disasm_engine.py` with `CS_ARCH_PPC` / `CS_MODE_32` against a VLE region produces either garbage
 or zero results depending on whether the first byte happens to satisfy PPC32 opcode heuristics.
 Before this module, there was no way to disassemble these binaries at all inside Ablation.
@@ -60,7 +60,7 @@ Before this module, there was no way to disassemble these binaries at all inside
 its taint engine from a function-start list. For PPC32 Book E firmware, that list comes from ELF
 symbol tables or a Book E prologue scanner (`stwu r1, -N(r1)` at 4-byte-aligned offsets). For VLE
 firmware, neither applies: there are no symbols, and the prologue instruction is `e_stwu r1, -N(r1)`
-(VLE opcode 6, VUP field 6), which encodes differently from the Book E `stwu`. Before this module,
+VLE opcode 6, VUP field 6, which encodes differently from the Book E `stwu`. Before this module,
 the taint tracker had no way to seed itself against VLE firmware.
 
 **3. No VLE / Book E region discriminator.** The two instruction sets can coexist in the same ROM
@@ -75,14 +75,14 @@ can settle the question by scanning the first N instructions: a VLE stream produ
 
 ## VLE length discrimination
 
-VLE instructions are either 16-bit SE (Short Encoding) or 32-bit, identified by the first byte:
+VLE instructions are either 16-bit SE Short Encoding or 32-bit, identified by the first byte:
 
 ```
 (byte0 & 0x90) == 0x10  →  32-bit VLE or Book E instruction
 otherwise               →  16-bit SE instruction
 ```
 
-This rule holds because NXP assigned the 32-bit VLE opcodes (6, 7, 12–15, 20–22, 28, 30) to slots
+This rule holds because NXP assigned the 32-bit VLE opcodes 6, 7, 12–15, 20–22, 28, 30 to slots
 where bits [7] and [4] of the first byte are always 0 and 1 respectively. All SE instruction
 encodings occupy the remaining byte space where `(b & 0x90) != 0x10`. The constraint is an
 intentional encoding property of the e200 VLE ISA, not a heuristic.
@@ -125,10 +125,10 @@ intentional encoding property of the e200 VLE ISA, not a heuristic.
 | `e_stwu rS, D8(rA)` | `OPVUP(6,6)` = `0x18000600 \|...` | STORE / PROLOGUE |
 | `e_stmw / e_lmw` | `OPVUP(6,9)` / `OPVUP(6,8)` | STORE / LOAD |
 | `e_add16i rD, rA, SI` | `OP(7)` = `0x1C000000` | MISC |
-| `e_lbz / e_stb / e_lha` | `OP(12/13/14)` | LOAD / STORE |
-| `e_lwz / e_stw / e_lhz` | `OP(20/21/22)` | LOAD / STORE |
+| `e_lbz / e_stb / e_lha` | `OP12/13/14` | LOAD / STORE |
+| `e_lwz / e_stw / e_lhz` | `OP20/21/22` | LOAD / STORE |
 | `e_li rD, LI20` | `LI20(28,0)` | MISC |
-| `e_b / e_bl BD24` | `BD24(30,0,0/1)` | BRANCH / CALL |
+| `e_b / e_bl BD24` | `BD2430,0,0/1` | BRANCH / CALL |
 
 Instructions not in this list decode as `se_unknown_XXXX` or `vle32_opN` with `insn_type="MISC"`.
 
@@ -138,13 +138,13 @@ Instructions not in this list decode as `se_unknown_XXXX` or `vle32_opN` with `i
 
 `function_starts()` returns probable function-entry VAs by scanning two prologue forms:
 
-**Frame-allocating prologue** (primary signal):
+**Frame-allocating prologue** primary signal:
 
 ```
 e_stwu r1, -N(r1)
 ```
 
-Encoded as `OPVUP(6,6)` with RS=1, RA=1, and D8 < 0 (bit 7 of D8 set). Detected by scanning
+Encoded as `OPVUP(6,6)` with RS=1, RA=1, and D8 < 0 bit 7 of D8 set. Detected by scanning
 every 4-byte-aligned offset for the exact bit pattern:
 
 ```python
@@ -155,7 +155,7 @@ every 4-byte-aligned offset for the exact bit pattern:
 (word & 0x80) != 0         # D8 < 0 (negative stack frame)
 ```
 
-**Leaf-function prologue** (secondary signal):
+**Leaf-function prologue** secondary signal:
 
 ```
 se_mflr r0
@@ -201,7 +201,7 @@ for va in starts[:10]:
 
 | Parameter | Default | Description |
 |---|---|---|
-| `data` |: | `bytes`, file path (str/Path), or raw bytes buffer |
+| `data` |: | `bytes`, file path str/Path, or raw bytes buffer |
 | `base_va` | 0 | Virtual address of the first byte in `data`. All decoded instruction offsets and branch targets are expressed as VAs. |
 
 ---
@@ -232,8 +232,8 @@ class VLEInsn:
 | `BRANCH` | `se_b`, `se_bc`, `se_bctr`, `e_b` (no link) |
 | `CALL` | `se_bl`, `se_bctrl`, `e_bl` |
 | `PROLOGUE` | `e_stwu r1, -N(r1)` only (not other `e_stwu` variants) |
-| `LOAD` | All load instructions (SE and 32-bit) |
-| `STORE` | All store instructions (SE and 32-bit) |
+| `LOAD` | All load instructions SE and 32-bit |
+| `STORE` | All store instructions SE and 32-bit |
 | `LR_SAVE` | `se_mflr` |
 | `LR_RESTORE` | `se_mtlr` |
 | `MISC` | Everything else |
@@ -267,11 +267,11 @@ Absolute-address variants (`e_ba`, `e_bla`, AA=1) decode with the displacement a
 
 ## Validated results
 
-### E39a corpus image (3 MB, MPC5566 e200z6)
+### E39a corpus image 3 MB, MPC5566 e200z6
 
 File: `E39a_3072KiB_12664221.bin` from PcmHammer corpus.
 
-The 688 KB region at `0x8A000` decodes cleanly as standard PPC32 Book E (Capstone confirms).
+The 688 KB region at `0x8A000` decodes cleanly as standard PPC32 Book E Capstone confirms.
 Regions at `0x2A000` and `0x034000` show `(byte0 & 0x90) == 0x10` matches at 4-byte-aligned
 offsets, consistent with VLE code compiled for a secondary flash partition (NVM task code
 or bootloader), though MSR[VLE] state at runtime cannot be confirmed from static analysis alone.
@@ -312,11 +312,11 @@ for region in layout.code_regions():
 
 - Compact register notation for SE instructions: SE_R and SE_RR formats use 3-bit or 4-bit
  compact register fields that map to a subset of GPRs. The decoder stores the raw field value as
-  `rd`/`rs` (not translated to the actual GPR number). For `se_li`, the 4-bit RX field encodes
+  `rd`/`rs` not translated to the actual GPR number. For `se_li`, the 4-bit RX field encodes
  GPR0-GPR7 as 0-7 and GPR24-GPR31 as 8-15. The current decoder does not perform this translation.
 
 - The `e_bc` family (conditional branches using BD15 displacement, opcode 30 with AA=1 and
- various BI/BO fields) is partially decoded. The basic `e_b`/`e_bl` (BD24 form) is fully
+ various BI/BO fields) is partially decoded. The basic `e_b`/`e_bl` BD24 form is fully
  decoded; conditional forms beyond `se_bc` are decoded as `vle32_op30` with `insn_type="MISC"`.
 
 - VLE MSR[VLE] mode switching is not tracked. A function that switches in or out of VLE mode by
@@ -325,13 +325,13 @@ for region in layout.code_regions():
 
 - Capstone is not invoked. The decoder is pure Python. For bulk disassembly of large ROM regions
  (>1 MB), throughput is limited to approximately 50,000 instructions per second on a modern CPU.
- For scanning only (function_starts), the inner loop is pure struct.unpack_from and runs faster.
+ For scanning only function_starts, the inner loop is pure struct.unpack_from and runs faster.
 
 ---
 
 ## How it works
 
-Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 
@@ -374,11 +374,11 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 | Attribute | Content |
 |:---|:---|
-| `offset` | Instruction VA (base_va + byte offset in buffer) |
+| `offset` | Instruction VA base_va + byte offset in buffer |
 | `is_16bit` | `True` for 16-bit SE format, `False` for 32-bit VLE format |
 | `mnemonic` | Instruction mnemonic string (e.g., `'se_lwz'`, `'e_b'`) |
 | `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'LOAD'` / `'STORE'` / `'LR_SAVE'` / `'LR_RESTORE'` / `'PROLOGUE'` / `'MISC'` |
-| `raw` | Raw instruction bytes (2 or 4 bytes) |
+| `raw` | Raw instruction bytes 2 or 4 bytes |
 | `target` | Branch/call target VA, or `None` for non-control-flow instructions |
 | `rd` / `rs` / `ra` / `imm` | Decoded operand values (None if not applicable) |
 

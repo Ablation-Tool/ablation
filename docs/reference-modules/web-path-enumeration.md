@@ -6,11 +6,11 @@ Decode flatui framework HTTP method integer IDs to HTTP verb sets: scanning rout
 
 ## Why this exists
 
-1. **The flatui framework encodes HTTP methods as integer IDs in `RouteMethodData`.** Without decoding, `PreAuthRouteAuditor` cannot determine whether a pre-auth route accepts only `GET` requests (lower risk: information disclosure at worst) or also accepts `POST`/`PUT`/`DELETE` (higher risk: state mutation and command injection paths). `FlatuiMethodDecoder` resolves the method ID to the actual HTTP verb set.
+1. **The flatui framework encodes HTTP methods as integer IDs in `RouteMethodData`.** Without decoding, `PreAuthRouteAuditor` cannot determine whether a pre-auth route accepts only `GET` requests lower risk: information disclosure at worst or also accepts `POST`/`PUT`/`DELETE` higher risk: state mutation and command injection paths. `FlatuiMethodDecoder` resolves the method ID to the actual HTTP verb set.
 
 2. **Three-stage decoding with fallback**: the decoder first scans known-operation routes (`*Import` handlers → `POST`, read-only resource handlers → `GET`) to anchor the ID→verb mapping, then probes the `RouterHandler` vtable for the method-string comparison code to extract the full mapping, then falls back to a built-in calibration table derived from FortiManager 8.0.0 binary analysis. The three-stage approach ensures correctness even when the binary is stripped.
 
-3. **`FlatuiMethodDecoder.is_likely_write(method_ids)` returns `True` if any method in the set is `POST`, `PUT`, `PATCH`, or `DELETE`**: enabling `PreAuthRouteAuditor` to immediately flag pre-auth routes that accept write methods as higher priority than `GET`-only routes.
+3. **`FlatuiMethodDecoder.is_likely_writemethod_ids` returns `True` if any method in the set is `POST`, `PUT`, `PATCH`, or `DELETE`**: enabling `PreAuthRouteAuditor` to immediately flag pre-auth routes that accept write methods as higher priority than `GET`-only routes.
 
 ---
 
@@ -72,7 +72,7 @@ is_likely_write([11, 15]): True  (15 includes POST/PUT/DELETE)
 
 **Stage 3 calibration table applies FMG 8.0.0 mappings to other targets**: flatui variants in different FortiOS products may use different integer IDs for the same verb. A wrong calibration table hit produces an incorrect verb assignment. Verify method ID mappings from Stage 1/2 results before relying on Stage 3 fallback values for non-FMG targets.
 
-**`is_likely_write()` returns `True` for any method set containing `POST`**: a route that accepts `POST` only for fetching data (non-mutating POST) is still flagged as `is_likely_write`. Validate the actual handler function behavior before treating the route as a state-mutation risk.
+**`is_likely_write()` returns `True` for any method set containing `POST`**: a route that accepts `POST` only for fetching data non-mutating POST is still flagged as `is_likely_write`. Validate the actual handler function behavior before treating the route as a state-mutation risk.
 
 ---
 

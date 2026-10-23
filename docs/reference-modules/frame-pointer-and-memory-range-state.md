@@ -90,7 +90,7 @@ scan() findings:
 
 ## Pipeline position
 
-Run `COMAttackSurfaceMapper` on any Windows PE binary (DLL or EXE) during initial attack surface triage. Pair with `RPCServerAnalyzer` for WinAPI-level IPC analysis and `ETWProviderExtractor` for detection-gap assessment on the same binary.
+Run `COMAttackSurfaceMapper` on any Windows PE binary DLL or EXE during initial attack surface triage. Pair with `RPCServerAnalyzer` for WinAPI-level IPC analysis and `ETWProviderExtractor` for detection-gap assessment on the same binary.
 
 ---
 

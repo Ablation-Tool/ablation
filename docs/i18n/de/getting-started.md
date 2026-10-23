@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Bei jedem zukünftigen Sweep, ob einer anderen Firmware-Version oder einem anderen Hersteller, führt `pl.sweep(searcher)` alle bestätigten Muster automatisch aus.
+Bei jedem zukünftigen Sweep, ob einer anderen Firmware-Version oder einem anderen Hersteller, führt `pl.sweepsearcher` alle bestätigten Muster automatisch aus.
 
 ---
 

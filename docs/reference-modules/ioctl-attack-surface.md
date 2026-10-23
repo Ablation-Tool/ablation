@@ -4,7 +4,7 @@
 
 Maps the complete IOCTL dispatch surface of a Windows kernel driver and flags METHOD_NEITHER codes before manual review begins. An integer-overflow path from a user-supplied length to a kernel allocation is a HIGH finding. Unprobed METHOD_NEITHER dereferences are CRITICAL.
 
-Grounded in TAOSSA Chapter 12 (Windows IPC, DeviceIoControl, IRP dispatch model) and Windows Internals Part 1 Chapter 6 (I/O Manager, IRP, IO_STACK_LOCATION layout).
+Grounded in TAOSSA Chapter 12 (Windows IPC, DeviceIoControl, IRP dispatch model) and Windows Internals Part 1 Chapter 6 I/O Manager, IRP, IO_STACK_LOCATION layout.
 
 ---
 
@@ -40,8 +40,8 @@ Three gaps existed before this module:
 | +0x08 | `OutputBufferLength` | ULONG |
 | +0x10 | `InputBufferLength` | ULONG |
 | +0x18 | `IoControlCode` | ULONG |
-| +0x20 | `Type3InputBuffer` | PVOID (METHOD_NEITHER only) |
-| +0x70 | `SystemBuffer` | PVOID (METHOD_BUFFERED) |
+| +0x20 | `Type3InputBuffer` | PVOID METHOD_NEITHER only |
+| +0x70 | `SystemBuffer` | PVOID METHOD_BUFFERED |
 
 ---
 
@@ -111,7 +111,7 @@ surface = gen.analyze()
 | `InputBufferLength` → `ExAllocatePool*` without bounds check | HIGH |
 | Fixed-size stack buffer copy with user-supplied length | HIGH |
 | `RtlCopyMemory`/`memcpy` call in handler | MEDIUM |
-| METHOD_BUFFERED handler (generally safe) | INFO |
+| METHOD_BUFFERED handler generally safe | INFO |
 
 ---
 
@@ -127,7 +127,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_DRIVER_BYTES=64MB`; `Path.
 
 ## How it works
 
-`IoctlAttackSurfaceGenerator(driver_path).analyze()` reads the driver binary with LIEF, then uses Capstone to disassemble the IOCTL dispatch handler. It decodes `IoControlCode` fields from `IO_STACK_LOCATION` offsets (`+0x18`) found in the disassembly, extracting each raw IOCTL code and its transfer method (bits `[1:0]`). For each decoded code, it traces the corresponding handler to record: whether `ProbeForRead`/`ProbeForWrite` is called, whether `InputBufferLength` reaches an allocation call, and whether any copy or dangerous API is present. File size is capped at `_MAX_DRIVER_BYTES = 64 MB`. An optional `kda_report` (pre-built `KernelDriverReport`) can be supplied to avoid re-parsing.
+`IoctlAttackSurfaceGeneratordriver_path.analyze()` reads the driver binary with LIEF, then uses Capstone to disassemble the IOCTL dispatch handler. It decodes `IoControlCode` fields from `IO_STACK_LOCATION` offsets (`+0x18`) found in the disassembly, extracting each raw IOCTL code and its transfer method (bits `[1:0]`). For each decoded code, it traces the corresponding handler to record: whether `ProbeForRead`/`ProbeForWrite` is called, whether `InputBufferLength` reaches an allocation call, and whether any copy or dangerous API is present. File size is capped at `_MAX_DRIVER_BYTES = 64 MB`. An optional `kda_report` (pre-built `KernelDriverReport`) can be supplied to avoid re-parsing.
 
 ---
 
@@ -153,7 +153,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_DRIVER_BYTES=64MB`; `Path.
 
 ## False positives
 
-IOCTL codes decoded from data sections (jump tables, pool tags) that coincidentally match the `CTL_CODE` pattern. The scanner applies an ASCII-filter (`decode_ioctl_code` rejects all-printable 4-byte values) but this does not eliminate all false positives. Verify each `METHOD_NEITHER` finding against the actual dispatch handler before reporting.
+IOCTL codes decoded from data sections jump tables, pool tags that coincidentally match the `CTL_CODE` pattern. The scanner applies an ASCII-filter (`decode_ioctl_code` rejects all-printable 4-byte values) but this does not eliminate all false positives. Verify each `METHOD_NEITHER` finding against the actual dispatch handler before reporting.
 
 ---
 
@@ -183,9 +183,9 @@ Each `IoctlHandlerProfile` key fields:
 |:---|:---|
 | `ioctl_raw` | Raw IOCTL code value |
 | `method_name` | Transfer method string: `'METHOD_BUFFERED'` / `'METHOD_NEITHER'` / etc. |
-| `risk_level` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` (derived property) |
+| `risk_level` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` derived property |
 | `has_probe` | `True` if handler calls `ProbeForRead`/`ProbeForWrite` |
-| `handler_va` | VA of the dispatch handler function (0 if not located) |
+| `handler_va` | VA of the dispatch handler function 0 if not located |
 | `dangerous_patterns` | `List[IoctlHandlerPattern]`: specific dangerous patterns found |
 
 ---

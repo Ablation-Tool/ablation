@@ -8,7 +8,7 @@ literal-array header boundary.
 
 ## What this is
 
-HarmonyOS applications compile ArkTS source to ABC (Ark Bytecode) files packed inside HAP packages. ABC is a binary format defined by ArkCompiler's `libpandafile`. No Python tool could parse ABC before this stack. `ABCParser` reads the binary format and exposes class names, method metadata, code items, and string references. `ARKDisasm` disassembles the 324-opcode ARK ISA so bytecode is readable. The stack covers ABC versions v9 through v13+ and handles the v12.0.6.0 literal-array header boundary that breaks naive parsers.
+HarmonyOS applications compile ArkTS source to ABC Ark Bytecode files packed inside HAP packages. ABC is a binary format defined by ArkCompiler's `libpandafile`. No Python tool could parse ABC before this stack. `ABCParser` reads the binary format and exposes class names, method metadata, code items, and string references. `ARKDisasm` disassembles the 324-opcode ARK ISA so bytecode is readable. The stack covers ABC versions v9 through v13+ and handles the v12.0.6.0 literal-array header boundary that breaks naive parsers.
 
 ---
 
@@ -39,7 +39,7 @@ HarmonyOS applications compile ArkTS source to ABC (Ark Bytecode) files packed i
 Parses the binary ABC format defined by ArkCompiler's `libpandafile`. ABC files
 appear in HarmonyOS as:
 
-- `modules.abc`: compiled ArkTS module (inside a HAP)
+- `modules.abc`: compiled ArkTS module inside a HAP
 - `*.abc`: individual class or utility files
 - Obfuscated HAP bundles (e.g. WeChat HarmonyOS port)
 
@@ -53,7 +53,7 @@ with ABCParser.from_path('/path/to/modules.abc') as p:
 ```
 
 `from_path()` reads the entire file into memory. The context manager is a no-op
-exit (no file handles kept open); it exists for symmetry with other Ablation parsers.
+exit no file handles kept open; it exists for symmetry with other Ablation parsers.
 
 ### Header
 
@@ -77,7 +77,7 @@ for eid, name in p.iter_class_names():
 ```
 
 Class entity IDs are file offsets. The class name IS the first field of the
-class body (MUTF-8 string), so the entity ID also doubles as the string offset.
+class body MUTF-8 string, so the entity ID also doubles as the string offset.
 
 ### Method Iteration
 
@@ -96,7 +96,7 @@ for method in p.iter_methods():
 | `class_name` | `str` | Decoded class name |
 | `method_name` | `str` | Decoded method name |
 | `access_flags` | `int` | ULEB128-decoded flags |
-| `code_off` | `int` | File offset of CodeItem (0 if none) |
+| `code_off` | `int` | File offset of CodeItem 0 if none |
 | `fqn` | `str` | `ClassName.methodName` |
 | `is_native` | `bool` | `ACC_NATIVE` set (0x100) |
 | `is_abstract` | `bool` | `ACC_ABSTRACT` set (0x400) |
@@ -104,7 +104,7 @@ for method in p.iter_methods():
 
 Note: in dynamic ABC (ECMAScript/ArkTS runtime dialect), `ACC_NATIVE` does **not**
 mean JNI/FFI. All methods in this dialect carry bytecode. Use `napi_boundary.py`
-(forthcoming) to identify actual NAPI bridge methods.
+forthcoming to identify actual NAPI bridge methods.
 
 **Coverage:** `iter_methods()` enumerates class-body methods only (explicitly
 declared methods). Anonymous functions and closures stored in literal arrays are
@@ -132,7 +132,7 @@ register_count(uleb) + parameter_count(uleb) + code_size(uleb)
   + exception_handler_records[exception_handler_count]
 ```
 
-This differs from the static ABC format (which uses fixed u16/u32 fields).
+This differs from the static ABC format which uses fixed u16/u32 fields.
 
 ### Security Queries
 
@@ -253,7 +253,7 @@ text = dis.disasm_method(method, code)
 # +000e  lda.str   0x21  # "L@system.curves;"
 ```
 
-`disasm_method(method, code)` resolves `lda.str` operands via
+`disasm_methodmethod, code` resolves `lda.str` operands via
 `ABCParser.resolve_class_idx()` and appends the string as a `# "..."` comment.
 
 ```python
@@ -307,7 +307,7 @@ Two dialects exist:
 
 - **Dynamic** (ECMAScript/ArkTS runtime): `access_flags` is ULEB128;
   `code_size` is ULEB128. Used in all HAP/APP bundles.
-- **Static** (older compiler): `access_flags` is u32. The parser assumes
+- **Static** older compiler: `access_flags` is u32. The parser assumes
  dynamic dialect, which is backwards-compatible for flags ≤ 0x7F.
 
 ### Version Boundary
@@ -318,9 +318,9 @@ in the fixed 60-byte header. v13+ stores literal arrays in the index section onl
 
 ### String Encoding
 
-Strings use MUTF-8: `uleb128(utf16_len) + bytes[utf16_len>>1] + 0x00`.
+Strings use MUTF-8: `uleb128utf16_len + bytes[utf16_len>>1] + 0x00`.
 `char_count = utf16_len >> 1`. `is_ascii = utf16_len & 1`.
-U+0000 is encoded as `C0 80` (not a real null).
+U+0000 is encoded as `C0 80` not a real null.
 
 ### Class Body Layout
 
@@ -345,7 +345,7 @@ uleb128 access_flags
 MethodTaggedValues (terminated by tag=0)
 ```
 
-Key `MethodTag` values: `CODE=1` (u32 code_off), `SOURCE_LANG=2` (u8),
+Key `MethodTag` values: `CODE=1` u32 code_off, `SOURCE_LANG=2` (u8),
 `DEBUG_INFO=5` (u32).
 
 ---
@@ -407,7 +407,7 @@ for text in dec.decompile_all():
 The lifter follows the Durfina 2012 three-phase pipeline:
 
 1. **Front-end**: `ARKDisasm.iter_insns()` yields `ARKInstruction` objects.
-2. **IR lift**: `_lift(insn, state)` translates each instruction to a
+2. **IR lift**: `_liftinsn, state` translates each instruction to a
  pseudocode statement, updating a register-state dict (`Dict[str, _Reg]`).
 3. **Back-end**: Statements assembled into labelled blocks with `if/goto`
  control flow.
@@ -440,7 +440,7 @@ After all instructions are lifted, three post-processing passes run in order:
 **Pass 1: accumulator copy-propagation** (`_propagate_acc`, Cifuentes §5.4.6).
 For each `_acc = EXPR` line: if the next substantive line's rhs contains `_acc`
 exactly once, substitute EXPR inline and drop the assignment; if it contains no
-`_acc` (dead assignment), drop it silently. Labels and blank lines are
+`_acc` dead assignment, drop it silently. Labels and blank lines are
 transparent for look-ahead. Produces `return foo.bar` instead of
 `_acc = foo.bar; return _acc`.
 
@@ -449,8 +449,8 @@ Parses the flat `label+goto` statement list into `_BB` basic blocks, builds a
 `label → index` map, then runs Pass 2.5 before recursively matching structural
 patterns:
 
-- **While loop**: header block ends with `if (exit_cond) goto L_after`; a later
- block ends with `goto L_head` (back-edge). Emitted as `while (!exit_cond) { body }`.
+- **While loop**: header block ends with `if exit_cond goto L_after`; a later
+ block ends with `goto L_head` back-edge. Emitted as `while !exit_cond { body }`.
 - **If/else**: `if (cond) goto L_else`; last then-block ends with `goto L_end`.
  Emitted as `if (!cond) { then } else { else }`.
 - **Simple if**: `if (cond) goto L_skip`; fall-through is the then-body.
@@ -458,7 +458,7 @@ patterns:
 
 Condition negation is required in all three cases because ARK bytecode encodes
 conditionals as jump-if-false exits: the fall-through path is always the
-then-branch. Unrecognized patterns (exception handlers, non-reducible CFGs)
+then-branch. Unrecognized patterns exception handlers, non-reducible CFGs
 fall back to raw `label+goto` output.
 
 **Pass 2.5: short-circuit evaluation merging** (`_merge_short_circuit`,
@@ -467,7 +467,7 @@ between `_parse_blocks` and `_cfg_emit`. Collapses consecutive conditional
 blocks with the same `goto_tgt` into a single `||`-merged condition. ArkTS
 `a || b` compiles to two consecutive conditional jumps with the same target;
 without this pass both branches appear as raw gotos. Iterates until stable to
-handle chains of three or more conditions (e.g. null/undefined guard triples).
+handle chains of three or more conditions e.g. null/undefined guard triples.
 
 ### Index table routing
 
@@ -477,7 +477,7 @@ ABC `d`-kind operands are indices, not file offsets. Two separate tables exist:
 |---|---|
 | `lda.str` | `class_idx[N]` via `resolve_class_idx(N)` |
 | `ldobjbyname`, `stobjbyname`, `tryldglobalbyname`, `stglobalvar`, etc. | `method_idx[N]` via `resolve_method_idx(N)` |
-| `definefunc`, `definemethod` | direct entity_id (file offset of method item) |
+| `definefunc`, `definemethod` | direct entity_id file offset of method item |
 
 Mixing these tables produces empty strings for any index < 60 (below the
 header boundary). The decompiler routes each instruction category to the
@@ -542,7 +542,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading findings
 
-HarmonyOS analysis uses the same pipeline as Android analysis. `DexAnalyzer(dex_data).scan()` returns `List[DexFinding]`:
+HarmonyOS analysis uses the same pipeline as Android analysis. `DexAnalyzerdex_data.scan()` returns `List[DexFinding]`:
 
 | Attribute | Content |
 |:---|:---|

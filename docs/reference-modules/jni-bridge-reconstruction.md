@@ -133,7 +133,7 @@ for f in findings:
 
 | Field | Content |
 |:---|:---|
-| `severity` | `HIGH` (requires immediate RE) / `MEDIUM` (enumerate and triage) / `INFO` (context) |
+| `severity` | `HIGH` requires immediate RE / `MEDIUM` enumerate and triage / `INFO` (context) |
 | `category` | One of the five `jni/*` categories above |
 | `title` | One-line summary with counts |
 | `detail` | Explanation of the attack surface and RE approach |

@@ -28,17 +28,17 @@ without writing an ISA-specific structurizer.
 
 ## Algorithm
 
-All compiled automotive firmware (AUTOSAR classic, bare-metal ECU C) produces reducible
+All compiled automotive firmware AUTOSAR classic, bare-metal ECU C produces reducible
 CFGs: every back edge has a unique dominating header. The structurizer exploits this:
 
-1. **Compute**: DomTree (Cooper-Harvey-Kennedy), LoopInfo (natural loops from back edges),
+1. **Compute**: DomTree Cooper-Harvey-Kennedy, LoopInfo natural loops from back edges,
  PostDomTree (reversed-CFG DomTree).
-2. **Walk RPO** (dominators before dominated nodes):
+2. **Walk RPO** dominators before dominated nodes:
  - Block is a loop header → emit `WhileNode`, recurse into loop body, skip past exit.
  - Block has two successors (if/else) → find join via `PostDomTree`, emit `IfNode`
  with then/else sub-trees, continue from join block.
  - Block has no successors → emit `ReturnNode`.
- - Otherwise → emit `InsnNode` (sequential), continue.
+ - Otherwise → emit `InsnNode` sequential, continue.
 3. Back-edge-tail blocks inside a loop body become `ContinueNode`; blocks whose only
  successors are outside the loop become `BreakNode`.
 
@@ -103,9 +103,9 @@ def my_emitter(insn):
 print(s.emit(my_emitter, func_name="can_rx_handler"))
 ```
 
-Example output (before: linear lifter, after: structurizer):
+Example output before: linear lifter, after: structurizer:
 
-**Before (v2.63.0, goto-based):**
+**Before v2.63.0, goto-based:**
 ```
 // can_rx_handler @ 0x2400
 {
@@ -120,7 +120,7 @@ Example output (before: linear lifter, after: structurizer):
 }
 ```
 
-**After (v2.65.0+, structured):**
+**After v2.65.0+, structured:**
 ```
 // can_rx_handler @ 0x2400
 {
@@ -147,7 +147,7 @@ Example output (before: linear lifter, after: structurizer):
 | Method | Returns | Description |
 |---|---|---|
 | `structure()` | `StructuredNode` | Build and return the structured tree |
-| `emit(insn_emitter, func_name)` | `str` | Render tree to pseudo-C |
+| `emitinsn_emitter, func_name` | `str` | Render tree to pseudo-C |
 
 ### Node types
 
@@ -217,7 +217,7 @@ Example output (before: linear lifter, after: structurizer):
 
 ## False positives
 
-**Irreducible CFGs.** `Structurizer` relies on dominator-tree analysis, which works correctly only for reducible CFGs. Binaries compiled without optimization (common in ECU firmware) sometimes contain irreducible CFGs due to computed gotos or `setjmp`/`longjmp`. `Structurizer.structure()` raises `StructurizationError` for irreducible CFGs: fall back to raw basic-block listing.
+**Irreducible CFGs.** `Structurizer` relies on dominator-tree analysis, which works correctly only for reducible CFGs. Binaries compiled without optimization common in ECU firmware sometimes contain irreducible CFGs due to computed gotos or `setjmp`/`longjmp`. `Structurizer.structure()` raises `StructurizationError` for irreducible CFGs: fall back to raw basic-block listing.
 
 ---
 

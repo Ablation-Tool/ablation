@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-En cualquier análisis futuro, ya sea de una versión diferente de firmware o de otro proveedor, `pl.sweep(searcher)` ejecuta todos los patrones confirmados automáticamente.
+En cualquier análisis futuro, ya sea de una versión diferente de firmware o de otro proveedor, `pl.sweepsearcher` ejecuta todos los patrones confirmados automáticamente.
 
 ---
 

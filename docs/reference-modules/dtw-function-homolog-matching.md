@@ -10,7 +10,7 @@ Find cross-version function homologs using Dynamic Time Warping on opcode catego
 
 2. **DTW similarity is calibrated: ≥0.85 is a reliable homolog, 0.70-0.85 is a candidate worth manual review, <0.70 is a different function.** The `HomologMatch.similarity` field gives the DTW-derived score (0.0–1.0) alongside `confidence` label (`HIGH`/`MEDIUM`/`LOW`) so triage is immediate without threshold tuning.
 
-3. **`DTWMatcher` is the first step in the three-step cross-version patch analysis workflow**: `DTWMatcher.score_functions()` identifies whether two functions are from the same era (whether they are homologs at all), `MatrixProfileDiff.diff_functions()` then pinpoints exactly which instructions changed within the confirmed homolog pair, and `VersionTracker.find_homolog()` searches the version DB for where the function first appeared.
+3. **`DTWMatcher` is the first step in the three-step cross-version patch analysis workflow**: `DTWMatcher.score_functions()` identifies whether two functions are from the same era whether they are homologs at all, `MatrixProfileDiff.diff_functions()` then pinpoints exactly which instructions changed within the confirmed homolog pair, and `VersionTracker.find_homolog()` searches the version DB for where the function first appeared.
 
 ---
 
@@ -81,21 +81,21 @@ DTW 0x22ccc0 vs 0x23a010
 
 ## False positives
 
-**Short functions (fewer than ~15 instructions) produce unreliable DTW similarity scores: two unrelated short functions can score `same_era` simply because both are short.** Filter `SimilarityReport` results where `len_a < 15` and require manual confirmation before using them as homolog anchors.
+**Short functions fewer than ~15 instructions produce unreliable DTW similarity scores: two unrelated short functions can score `same_era` simply because both are short.** Filter `SimilarityReport` results where `len_a < 15` and require manual confirmation before using them as homolog anchors.
 
-**DTW with sakoe-chiba band (radius 10%) can miss heavily-restructured functions**: a function that was split into two functions or merged from two will score `rewritten` or `different`. If `DTWMatcher` returns no `same_era` match, use `SubsequenceSearcher` to search for a sub-sequence match instead.
+**DTW with sakoe-chiba band radius 10% can miss heavily-restructured functions**: a function that was split into two functions or merged from two will score `rewritten` or `different`. If `DTWMatcher` returns no `same_era` match, use `SubsequenceSearcher` to search for a sub-sequence match instead.
 
 ---
 
 ## Pipeline position
 
-Step 1 of the three-step cross-version patch analysis workflow in `CLAUDE.md`: `DTWMatcher.score_functions()` first (same era?), `MatrixProfileDiff.diff_functions()` second (what changed?), `VersionTracker.find_homolog()` third (first appearance). Run `DTWMatcher` before `MatrixProfileDiff`: only confirmed homologs are worth the full instruction-level diff.
+Step 1 of the three-step cross-version patch analysis workflow in `CLAUDE.md`: `DTWMatcher.score_functions()` first same era?, `MatrixProfileDiff.diff_functions()` second what changed?, `VersionTracker.find_homolog()` third first appearance. Run `DTWMatcher` before `MatrixProfileDiff`: only confirmed homologs are worth the full instruction-level diff.
 
 ---
 
 ## Reading output
 
-`DTWMatcher.score_functions(va_a, va_b)` scores one function pair and returns a `SimilarityReport`:
+`DTWMatcher.score_functionsva_a, va_b` scores one function pair and returns a `SimilarityReport`:
 
 | Attribute | Content |
 |:---|:---|

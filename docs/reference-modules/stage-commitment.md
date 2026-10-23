@@ -161,7 +161,7 @@ Returns a two-element tuple. First element is `True` when the chain is intact,
 | Reason string | Meaning |
 |--------------|---------|
 | `"ok"` | current instance matches the committed hash |
-| `"ok (approved revision)"` | current matches revised hash and approving chain is valid |
+| `"ok approved revision"` | current matches revised hash and approving chain is valid |
 | `"no commitment for stage '...'"` | `commit()` was never called |
 | `"content mutated:..."` | instance changed after commit with no approved revision |
 | `"approving hash mismatch"` | revised_content_hash matches but approving_hash is wrong |
@@ -319,7 +319,7 @@ See `workflow-document.md` for the `WorkflowDocument` API.
 
 ## How it works
 
-Each `commit()` call serializes the `instance` dict to canonical JSON (keys sorted, no extra whitespace) and stores its SHA-256 as `content_hash`. The hash is stored, not the instance content, so future verification only needs the current instance, not the original. `approve()` computes a second hash over the concatenation of `content_hash` and the SHA-256 of the revised instance (or empty string if no revision), binding the approver's identity to both the original and the final content. `verify()` reconstructs both hashes from the current instance and checks them against the stored values. Any post-approval modification changes the hash chain and surfaces as a tamper failure.
+Each `commit()` call serializes the `instance` dict to canonical JSON keys sorted, no extra whitespace and stores its SHA-256 as `content_hash`. The hash is stored, not the instance content, so future verification only needs the current instance, not the original. `approve()` computes a second hash over the concatenation of `content_hash` and the SHA-256 of the revised instance or empty string if no revision, binding the approver's identity to both the original and the final content. `verify()` reconstructs both hashes from the current instance and checks them against the stored values. Any post-approval modification changes the hash chain and surfaces as a tamper failure.
 
 ---
 
@@ -378,7 +378,7 @@ StageCommitment doc_id='cisco/fmc_server'
 | `producer` | Producer identity string |
 | `content_hash` | SHA-256 of the committed stage output |
 | `timestamp` | ISO 8601 commitment time |
-| `lock_mode` | `'no-lock'` (revisable by approver) or `'locked'` (producer signals no revision intended) |
+| `lock_mode` | `'no-lock'` revisable by approver or `'locked'` producer signals no revision intended |
 | `approver` | Approver identity string, or `None` if not yet approved |
 | `revised_content_hash` | SHA-256 of approved revision, or `None` |
 | `approving_hash` | SHA-256 of the approval record itself, or `None` |

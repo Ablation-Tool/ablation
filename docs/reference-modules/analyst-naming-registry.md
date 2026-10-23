@@ -1,6 +1,6 @@
 # Analyst Naming Registry
 
-Persist analyst-assigned function names across RE sessions so that confirmed function identities survive binary reloads, context clears, and session restarts, and take precedence over all automated inference (exports, PLT stubs, or string-derived names).
+Persist analyst-assigned function names across RE sessions so that confirmed function identities survive binary reloads, context clears, and session restarts, and take precedence over all automated inference exports, PLT stubs, or string-derived names.
 
 ---
 
@@ -8,7 +8,7 @@ Persist analyst-assigned function names across RE sessions so that confirmed fun
 
 1. **Stripped binaries have no symbol names: every session starts blind.** On the first pass, the analyst identifies `0x22ccc0` as `recv_handler` through semantic search and taint tracing. Without a persistent name store, the next session starts again from `0x22ccc0`: an address that means nothing until the same identification work is repeated. The registry stores that name and reloads it automatically, so every subsequent session starts from the analyst's accumulated knowledge rather than from zero.
 
-2. **Naming confidence levels differ.** A name derived from a nearby string (`"/recv_handler"` in `.rodata`) carries less confidence than a name confirmed by following a taint path to a CVE-class vulnerability. The registry records the source of every name: `manual` (analyst judgment), `string` (auto-inferred from adjacent strings), or `confirmed` (tied to a disclosed finding). Functions with `source=confirmed` represent the strongest analytical result; functions with `source=string` are working hypotheses. This distinction matters when constructing a call graph narrative for a disclosure report.
+2. **Naming confidence levels differ.** A name derived from a nearby string (`"/recv_handler"` in `.rodata`) carries less confidence than a name confirmed by following a taint path to a CVE-class vulnerability. The registry records the source of every name: `manual` analyst judgment, `string` auto-inferred from adjacent strings, or `confirmed` tied to a disclosed finding. Functions with `source=confirmed` represent the strongest analytical result; functions with `source=string` are working hypotheses. This distinction matters when constructing a call graph narrative for a disclosure report.
 
 3. **The name overlay must take precedence over all other name sources.** `BinaryContext.name(va)` resolves through a four-level hierarchy: overlay (NameRegistry) → export symbols → PLT stubs → hex fallback. Analyst-confirmed names override everything, including export symbols that might carry misleading vendor-assigned names. This priority ensures confirmed names always appear in profiler output, taint traces, and call graph reports: regardless of what the binary's symbol table says.
 
@@ -43,7 +43,7 @@ flowchart TD
 }
 ```
 
-The SHA256 key truncates to 16 hex characters (64-bit prefix). Different builds of the same binary produce different SHA256 values and therefore different key namespaces, ensuring that names from one FortiOS 7.4.1 build never silently apply to a 7.6.0 build.
+The SHA256 key truncates to 16 hex characters 64-bit prefix. Different builds of the same binary produce different SHA256 values and therefore different key namespaces, ensuring that names from one FortiOS 7.4.1 build never silently apply to a 7.6.0 build.
 
 ---
 

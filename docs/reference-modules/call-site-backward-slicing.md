@@ -109,18 +109,18 @@ Each `ChainCallSite`:
 |:---|:---|
 | `site_va` | VA of the `CALL`/`BL` instruction |
 | `target_va` | VA of the called function |
-| `target_name` | Name of the called function (from PLT or names registry) |
+| `target_name` | Name of the called function from PLT or names registry |
 | `target_binary` | Path of the binary containing the target function |
 | `args` | `Dict[str, RegVal]`: argument registers with their symbolic values at the call |
-| `callee_chain` | `Optional[ChainResult]`: recursive chain for this callee (if followed) |
+| `callee_chain` | `Optional[ChainResult]`: recursive chain for this callee if followed |
 | `is_plt_leaf` | `True` if the callee is an external PLT call not followed further |
 
-Call `chain.all_sinks(sink_names)` to get all `(func_va, binary, ChainCallSite)` tuples for any named sink within the full chain.
+Call `chain.all_sinkssink_names` to get all `(func_va, binary, ChainCallSite)` tuples for any named sink within the full chain.
 
 ---
 
 ## See also
 
-- [Register Annotation (Single Function)](register-annotation.md): `RegAnnotator` base for single-function symbolic forward pass
+- [Register Annotation Single Function](register-annotation.md): `RegAnnotator` base for single-function symbolic forward pass
 - [Cross-Binary Taint Analysis](configurable-taint-reporting.md): `CrossBinaryTaintTracker` for labeled taint across library boundaries
 - [CMDB Attack Surface Mapping](finding-corpus-mining.md): `CMDBSurfaceMapper` that identifies callers for IPRegAnnotator analysis

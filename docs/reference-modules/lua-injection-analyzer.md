@@ -4,7 +4,7 @@
 
 Four things were not possible before in Ablation:
 
-1. **Detecting Python→Lua injection**, before this module, no scanner could find unsanitized format() calls feeding into `LuaRuntime.execute()`. FAZ-SIEM-001 (CRITICAL RCE) required full manual reading of compiler.py and rule.py to trace the path.
+1. **Detecting Python→Lua injection**, before this module, no scanner could find unsanitized format() calls feeding into `LuaRuntime.execute()`. FAZ-SIEM-001 CRITICAL RCE required full manual reading of compiler.py and rule.py to trace the path.
 
 2. **Automating cross-product transfer**, FortiManager v8.0.0 was byte-identical to FortiAnalyzer for all 5 SIEM files. Without this scanner, verifying the FAZ findings transferred to FMG required reading the same code twice. The scanner confirms in under 1 second.
 
@@ -27,7 +27,7 @@ Three injection types:
 Severity:
 - **CRITICAL**: format arg includes a known user-input variable name (`description`, `log_str`, `value`, `request`, etc.)
 - **HIGH**: format arg is any non-literal expression
-- **MEDIUM**: subprocess-only path (indirect exploitation)
+- **MEDIUM**: subprocess-only path indirect exploitation
 
 ## Usage
 
@@ -84,7 +84,7 @@ Detected as INDIRECT. Variable `value` is in `_USER_INPUT_NAMES` → CRITICAL.
 - **Module-level code not scanned**: `lua.execute()` outside any function body is not detected. Django apps never do this.
 - **Intra-function taint only**: if a format result is returned from one function and passed to lua.execute in another, it won't be detected.
 - **Severity uses name heuristics**: a local variable named `description` triggers CRITICAL even if it doesn't come from user input. False-positive risk is low in practice.
-- **No cross-file tracking**: import chains (function A formats in file X, result passed to function B with execute in file Y) are not tracked.
+- **No cross-file tracking**: import chains function A formats in file X, result passed to function B with execute in file Y are not tracked.
 
 ---
 
@@ -112,7 +112,7 @@ Detected as INDIRECT. Variable `value` is in `_USER_INPUT_NAMES` → CRITICAL.
 | `rel_path` | Repository-relative path string |
 | `cwe` | CWE identifier (typically `'CWE-94'`: code injection) |
 | `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` |
-| `injection_type` | `'DIRECT'` (string directly from user input), `'INDIRECT'` (via variable), or `'SUBPROCESS'` (via subprocess call) |
+| `injection_type` | `'DIRECT'` string directly from user input, `'INDIRECT'` via variable, or `'SUBPROCESS'` via subprocess call |
 | `exec_line` | Line number of the `lua.execute()` or subprocess call |
 | `exec_text` | Source line text of the execute call |
 | `format_line` | Line number of the format operation (f-string, `.format()`, `%`) |

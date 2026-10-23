@@ -83,7 +83,7 @@ Run `DeprecatedFuncScanner` as an early step in initial triage for any x86-64 EL
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` (gets, getwd) / `HIGH` (strcpy, strcat, sprintf, mktemp) |
+| `severity` | `CRITICAL` gets, getwd / `HIGH` strcpy, strcat, sprintf, mktemp |
 | `func` | Deprecated function name |
 | `call_va` | VA of the deprecated function call |
 | `overflow_offset` | Frame-relative buffer offset in bytes (or `None` if not statically recoverable) |

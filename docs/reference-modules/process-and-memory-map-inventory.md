@@ -73,7 +73,7 @@ scan_dll_hijacking_candidates:
 
 ## False positives
 
-**Anonymous RWX regions in JIT runtimes**: Node.js, Java JVM, Python (via ctypes), and V8-based applications use anonymous RWX pages for JIT-compiled code. These are not shellcode; they are expected behavior. Filter JIT runtime processes by their `cmdline` before reporting RWX as a finding.
+**Anonymous RWX regions in JIT runtimes**: Node.js, Java JVM, Python via ctypes, and V8-based applications use anonymous RWX pages for JIT-compiled code. These are not shellcode; they are expected behavior. Filter JIT runtime processes by their `cmdline` before reporting RWX as a finding.
 
 **`detect_hollow_process()`**: certain anti-cheat and DRM systems deliberately remap the process image at runtime. A hollowed process indicator does not definitively indicate malware; verify by examining the actual mapped content.
 
@@ -91,7 +91,7 @@ Run process and memory map inventory after `host-platform-inventory` establishes
 
 | Field | Content |
 |:---|:---|
-| `severity` | `HIGH` (RWX mapping or writable hijack path) / `MEDIUM` (suspicious load path) |
+| `severity` | `HIGH` RWX mapping or writable hijack path / `MEDIUM` suspicious load path |
 | `title` | Finding code (e.g., `ANONYMOUS_RWX_MAPPING`, `DLL_HIJACK_CANDIDATE`) |
 | `pid` | Process ID |
 | `process` | Process executable path |

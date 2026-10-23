@@ -46,7 +46,7 @@ flowchart TD
 | `DANGEROUS_PERMISSION_COMBO` | HIGH | `RECEIVE_SMS`/`RECORD_AUDIO`/`CAMERA`/`READ_CALL_LOG` + `INTERNET` |
 | `WEAK_HASH` | MEDIUM | `MessageDigest.getInstance("MD5"` or `"SHA1"` |
 | `WEAK_RNG` | MEDIUM | `SecureRandom` fallback or predictable seed patterns |
-| `CLEARTEXT_URL` | MEDIUM | `http://` string literal (non-localhost) |
+| `CLEARTEXT_URL` | MEDIUM | `http://` string literal non-localhost |
 | `CLEARTEXT_NETWORK` | MEDIUM | `URL.openConnection` with `http://` scheme |
 | `DANGEROUS_PERMISSION_COMBO` | MEDIUM | `READ_CONTACTS`/`WRITE_CONTACTS` + `INTERNET` |
 
@@ -113,9 +113,9 @@ MEDIUM (2)
 
 **`HARDCODED_SECRET` fires on any high-entropy string matching a key pattern: including test fixture values and build-time-injected constants that are not real credentials.** Debug builds frequently embed test API keys with real entropy. Cross-reference `HARDCODED_SECRET` findings against the class name: strings in classes ending with `Test`, `Mock`, or `Fixture` are unlikely production secrets. Also check whether the string appears only in `static final` constants initialized to known-bad test values from a test library.
 
-**`EXPORTED_COMPONENT` fires on any exported component with no `permission=` attribute, but deep links and intent filters legitimately require exported components.** Android deep link receivers (handling `android:scheme=` URIs) and system broadcast receivers (ACTION_BOOT_COMPLETED, etc.) must be exported. Confirm that the exported component handles only deep-link intents and does not expose internal data or privileged operations before escalating to HIGH.
+**`EXPORTED_COMPONENT` fires on any exported component with no `permission=` attribute, but deep links and intent filters legitimately require exported components.** Android deep link receivers (handling `android:scheme=` URIs) and system broadcast receivers ACTION_BOOT_COMPLETED, etc. must be exported. Confirm that the exported component handles only deep-link intents and does not expose internal data or privileged operations before escalating to HIGH.
 
-**`REFLECTION` fires on any `Class.forName` or `Method.invoke` reference, but this includes standard Java serialization, dependency injection frameworks (Dagger, Hilt), and annotation processors.** The finding is present because reflection enables dynamic code execution that bypasses static taint analysis. Filter by class path: reflection in `com.google.inject`, `dagger`, `javax.annotation` packages is framework boilerplate; reflection in application-layer classes (company package names) warrants investigation.
+**`REFLECTION` fires on any `Class.forName` or `Method.invoke` reference, but this includes standard Java serialization, dependency injection frameworks Dagger, Hilt, and annotation processors.** The finding is present because reflection enables dynamic code execution that bypasses static taint analysis. Filter by class path: reflection in `com.google.inject`, `dagger`, `javax.annotation` packages is framework boilerplate; reflection in application-layer classes company package names warrants investigation.
 
 ---
 
@@ -123,7 +123,7 @@ MEDIUM (2)
 
 **Before this module:** Unzip the APK to confirm it is a valid ZIP archive with `classes.dex` and `AndroidManifest.xml` entries. Multi-dex APKs have `classes2.dex`, `classes3.dex`, etc.: `APKParser.iter_dex()` handles all of them automatically.
 
-**After this module:** For `DYNAMIC_CODE_LOAD` findings: extract the DEX path passed to `DexClassLoader` from the string constants near the call site, and re-run `DexAnalyzer` on the dynamically loaded DEX if it is accessible (common in sideloaded apps that download plugins). For `EXPORTED_COMPONENT` findings: trace intent-filter data tags to understand what URI parameters the component accepts, then test with `adb shell am start -n <component> -d <uri>` to confirm exposed functionality.
+**After this module:** For `DYNAMIC_CODE_LOAD` findings: extract the DEX path passed to `DexClassLoader` from the string constants near the call site, and re-run `DexAnalyzer` on the dynamically loaded DEX if it is accessible common in sideloaded apps that download plugins. For `EXPORTED_COMPONENT` findings: trace intent-filter data tags to understand what URI parameters the component accepts, then test with `adb shell am start -n <component> -d <uri>` to confirm exposed functionality.
 
 ---
 

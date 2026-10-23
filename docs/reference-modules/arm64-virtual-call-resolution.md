@@ -1,14 +1,14 @@
 # ARM64 Virtual Call Resolution
 
-Reconstruct virtual dispatch tables in stripped ARM64 binaries and resolve `BLR` (branch-to-register) indirect call sites to target function sets: using iResolveX-style candidate vtable extraction, constructor `vptr` detection, and slot-based BLR resolution.
+Reconstruct virtual dispatch tables in stripped ARM64 binaries and resolve `BLR` branch-to-register indirect call sites to target function sets: using iResolveX-style candidate vtable extraction, constructor `vptr` detection, and slot-based BLR resolution.
 
 ---
 
 ## Why this exists
 
-1. **Stripped C++ ARM64 binaries contain `BLR xN` instructions at virtual method call sites: capstone decodes these as indirect branches with no static target, making them invisible to all sink-argument and taint analysis.** `vtable_resolver.py` resolves each `BLR` to a set of possible target VAs by: finding vtable regions in DRELRO (runs of ≥N code pointers), locating constructor `ADRP+ADD+STR` patterns that assign vtable pointers to object instances, and matching each `BLR` at slot offset k to the target set of all vtable entries at position k.
+1. **Stripped C++ ARM64 binaries contain `BLR xN` instructions at virtual method call sites: capstone decodes these as indirect branches with no static target, making them invisible to all sink-argument and taint analysis.** `vtable_resolver.py` resolves each `BLR` to a set of possible target VAs by: finding vtable regions in DRELRO runs of ≥N code pointers, locating constructor `ADRP+ADD+STR` patterns that assign vtable pointers to object instances, and matching each `BLR` at slot offset k to the target set of all vtable entries at position k.
 
-2. **`VtableDispatchScanner` provides the complementary x86-64 analysis: finding all `CALL [reg+disp]` dispatch sites in `.text` and determining which vtable slot offsets are live (dispatched at least once) vs dead (never called).** This allows pruning the virtual call surface: a virtual method that is never dispatched in the binary cannot be a sink reachable via virtual dispatch, reducing false positives in downstream analysis.
+2. **`VtableDispatchScanner` provides the complementary x86-64 analysis: finding all `CALL [reg+disp]` dispatch sites in `.text` and determining which vtable slot offsets are live dispatched at least once vs dead never called.** This allows pruning the virtual call surface: a virtual method that is never dispatched in the binary cannot be a sink reachable via virtual dispatch, reducing false positives in downstream analysis.
 
 3. **Virtual call resolution closes the gap that makes C++ network appliance firmware analysis incomplete.** FortiOS `httpsd`, Cisco IOS-XE management processes, and most modern embedded web servers are written in C++ with virtual dispatch at the core of their plugin architectures. Without resolution, these binaries appear to have no call graph: every virtual dispatch is a dead end.
 
@@ -102,9 +102,9 @@ VtableResolver:
 
 ## False positives
 
-**`extract_vtable_regions` extracts all DRELRO runs of code pointers: function pointer tables that are not vtables (dispatch tables, jump tables for protocol handlers) may be incorrectly included.** Filter by minimum vtable size (`min_slots=3`, the default) and cross-reference against constructor assignments from `detect_ctor_vptr_inits` before treating a candidate as a class vtable.
+**`extract_vtable_regions` extracts all DRELRO runs of code pointers: function pointer tables that are not vtables dispatch tables, jump tables for protocol handlers may be incorrectly included.** Filter by minimum vtable size (`min_slots=3`, the default) and cross-reference against constructor assignments from `detect_ctor_vptr_inits` before treating a candidate as a class vtable.
 
-**BLR resolution to a target set includes all objects of matching vtable shape: if multiple classes share the same vtable structure (same slot count, same type hierarchy), the resolution may include targets from unrelated classes.** Use `CtorVptrInit.init_pc` and `vtable_va` to narrow down which class a specific BLR is dispatching on: `BLRSite.narrowed == True` means the ctor type info was used.
+**BLR resolution to a target set includes all objects of matching vtable shape: if multiple classes share the same vtable structure same slot count, same type hierarchy, the resolution may include targets from unrelated classes.** Use `CtorVptrInit.init_pc` and `vtable_va` to narrow down which class a specific BLR is dispatching on: `BLRSite.narrowed == True` means the ctor type info was used.
 
 ---
 
@@ -116,9 +116,9 @@ Run `extract_vtable_regions` → `detect_ctor_vptr_inits` → `detect_blr_sites`
 
 ## Reading output
 
-`resolve_blr_sites(blr_sites, vtable_regions, ctor_inits)` populates `BLRSite.resolved_targets` in-place and returns the updated list.
+`resolve_blr_sitesblr_sites, vtable_regions, ctor_inits` populates `BLRSite.resolved_targets` in-place and returns the updated list.
 
-`detect_blr_sites(text_data, text_va, text_size)` returns `List[BLRSite]`:
+`detect_blr_sitestext_data, text_va, text_size` returns `List[BLRSite]`:
 
 | Attribute | Content |
 |:---|:---|
@@ -128,7 +128,7 @@ Run `extract_vtable_regions` → `detect_ctor_vptr_inits` → `detect_blr_sites`
 | `resolved_targets` | `List[int]`: resolved target VAs (empty until `resolve_blr_sites` runs) |
 | `narrowed` | `True` if narrowed by constructor type information |
 
-`extract_vtable_regions(binary, text_va, text_size)` returns `List[VtableRegion]`:
+`extract_vtable_regionsbinary, text_va, text_size` returns `List[VtableRegion]`:
 
 | Attribute | Content |
 |:---|:---|

@@ -46,7 +46,7 @@ An extracted key with MD5 matching a known entry gets classified with its family
 
 All FortiGate virtual disk formats use P1 at LBA 2048 (256 MiB ext4 containing `datafs.tar.gz`). FAZ and FMG KVM images use P1 at LBA 8193 and contain no `datafs.tar.gz`; `from_disk()` returns an error result for these, that is correct behavior.
 
-**Requirements:** `qemu-img` and `debugfs` (e2fsprogs) must be on PATH.
+**Requirements:** `qemu-img` and `debugfs` e2fsprogs must be on PATH.
 
 ---
 
@@ -94,7 +94,7 @@ result = FortiGateCertKeyScanner.from_path('/path/to/firmware.zip', force_rescan
 | Field | Description |
 |---|---|
 | `filename` | Key file name inside `datafs.tar.gz` (e.g. `fgt_512.key`) |
-| `md5` | MD5 of the key file (used for family lookup only, not integrity) |
+| `md5` | MD5 of the key file used for family lookup only, not integrity |
 | `sha256` | SHA-256 for cross-validation |
 | `family` | Family name from `KNOWN_KEY_FAMILIES`, or `'UNKNOWN'` |
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `UNKNOWN` |
@@ -129,7 +129,7 @@ Loads the firmware image, maps entropy across the file using a sliding window, a
 
 ## False positives
 
-Version-mismatch findings appear when a known key or certificate is present in a build where it was intentionally removed. Cross-reference against the family table in `FirmwareKeyCorpus` and the product release notes before escalating. Development-only debug keys (identifiable by subject CN matching vendor dev lab naming conventions) are not production findings.
+Version-mismatch findings appear when a known key or certificate is present in a build where it was intentionally removed. Cross-reference against the family table in `FirmwareKeyCorpus` and the product release notes before escalating. Development-only debug keys identifiable by subject CN matching vendor dev lab naming conventions are not production findings.
 
 ---
 
@@ -145,7 +145,7 @@ Version-mismatch findings appear when a known key or certificate is present in a
 
 `FortiGateCertKeyScanner(path).scan()` returns a `CertKeyScanResult`. See [fortigate-cert-key-scanner](fortigate-cert-key-scanner.md) for the full field reference (`path`, `version`, `keys`, `error`).
 
-`FortiBuildTrackClassifier.classify(filename)` returns a `BuildTrackResult`. See [fortibuild-track-classifier](fortibuild-track-classifier.md) for the full field reference (`product`, `version`, `build_number`, `build_track`, `expected_keys`, `key_generation`).
+`FortiBuildTrackClassifier.classifyfilename` returns a `BuildTrackResult`. See [fortibuild-track-classifier](fortibuild-track-classifier.md) for the full field reference (`product`, `version`, `build_number`, `build_track`, `expected_keys`, `key_generation`).
 
 ---
 

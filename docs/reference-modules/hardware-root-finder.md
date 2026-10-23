@@ -53,13 +53,13 @@ HardwareRoot func=0x4010a0
 
 ## False positives
 
-Constants in the MMIO address range that are used as local variables (not actual memory writes/reads) may produce false hits. Verify that the instruction is a memory operation targeting the MMIO range, not an arithmetic operation on an immediate that happens to fall in the range.
+Constants in the MMIO address range that are used as local variables not actual memory writes/reads may produce false hits. Verify that the instruction is a memory operation targeting the MMIO range, not an arithmetic operation on an immediate that happens to fall in the range.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** `HardwareRootFinder('/path/to/binary')` or `HardwareRootFinder.from_context(ctx)`. Configure `extra_ranges` if the target SoC is not in `_MMIO_RANGES` (STM32, BCM, Qualcomm IPQ, Cavium OCTEON, Intel APIC/HPET are built in).
+**Before this module:** `HardwareRootFinder('/path/to/binary')` or `HardwareRootFinder.from_context(ctx)`. Configure `extra_ranges` if the target SoC is not in `_MMIO_RANGES` STM32, BCM, Qualcomm IPQ, Cavium OCTEON, Intel APIC/HPET are built in.
 
 **After this module:** For MMIO write functions, trace what values are written from the call spine to assess whether an attacker-controlled input can reach the hardware register.
 

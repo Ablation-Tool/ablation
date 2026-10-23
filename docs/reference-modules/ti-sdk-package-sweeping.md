@@ -6,11 +6,11 @@ Decode TI CC254x Enhanced 8051 firmware (BLE 4.0 SoC) using the MCS-51 ISA model
 
 ## Why this exists
 
-1. **TI CC254x (CC2540/CC2541) uses an Enhanced 8051 core with hardware AES at SFR 0xB1–0xB3.** `isa_8051.py` models the MCS-51 dual data space (IRAM direct/indirect vs XDATA via MOVX) and the CC254x SFR map. `Mcs51Insn.reads_aes_sfr()` and `writes_aes_sfr()` identify cryptographic key setup and AES engine invocations, which are the primary attack surface in BLE 4.0 firmware: incorrect key scheduling or ECB mode use in the AES SFR block.
+1. **TI CC254x CC2540/CC2541 uses an Enhanced 8051 core with hardware AES at SFR 0xB1–0xB3.** `isa_8051.py` models the MCS-51 dual data space IRAM direct/indirect vs XDATA via MOVX and the CC254x SFR map. `Mcs51Insn.reads_aes_sfr()` and `writes_aes_sfr()` identify cryptographic key setup and AES engine invocations, which are the primary attack surface in BLE 4.0 firmware: incorrect key scheduling or ECB mode use in the AES SFR block.
 
 2. **HiSilicon WS63/Hi3863 NearLink SoCs use a proprietary RISC-V extension named `riscv31`**: Capstone 5.x mishandles all five custom opcode spaces. The most critical gap is opcode `0x1f` (`l.li`): Capstone decodes it as a 4-byte instruction but it is a 6-byte load-immediate, causing a 2-byte misalignment cascade that invalidates all subsequent disassembly. `HiSiliconRV32ExtDecoder` corrects all six custom opcode spaces before passing clean instruction frames to Capstone for the standard RISC-V instruction set.
 
-3. **SDK packages contain heterogeneous artifacts**: TI SDK packages include ARM Cortex-M4 ELF, C28x COFF2, and flat ROM binaries alongside ARM64 host tools. `ti_sweep.py` (the sweep coordinator) dispatches each artifact to the correct decoder chain: ELF targets to `BinaryContext`, COFF2 to `TiCoffLoader`, flat ROM to `EcuArchDetector`, and 8051/riscv31 binaries to their respective ISA decoders.
+3. **SDK packages contain heterogeneous artifacts**: TI SDK packages include ARM Cortex-M4 ELF, C28x COFF2, and flat ROM binaries alongside ARM64 host tools. `ti_sweep.py` the sweep coordinator dispatches each artifact to the correct decoder chain: ELF targets to `BinaryContext`, COFF2 to `TiCoffLoader`, flat ROM to `EcuArchDetector`, and 8051/riscv31 binaries to their respective ISA decoders.
 
 ---
 
@@ -82,9 +82,9 @@ Run TI SDK sweeping on any TI SDK package directory or HiSilicon NearLink firmwa
 
 ## Reading output
 
-**MCS-51 (8051 firmware):** `Mcs51Decoder(data, base_va).decode_range(offset, size)` yields `Mcs51Insn`. See [isa-8051](isa-8051.md) for the full `Mcs51Insn` field reference (`offset`, `raw`, `mnemonic`, `operands`, `insn_type`, `target`, `size`).
+**MCS-51 8051 firmware:** `Mcs51Decoderdata, base_va.decode_rangeoffset, size` yields `Mcs51Insn`. See [isa-8051](isa-8051.md) for the full `Mcs51Insn` field reference (`offset`, `raw`, `mnemonic`, `operands`, `insn_type`, `target`, `size`).
 
-**HiSilicon WS63 (NearLink firmware):** `HiSiliconRV32ExtDecoder(binary, base_va).scan_custom3(code, base_va)` returns `List[HisiInsn]`. See [hisi-rv32-ext](hisi-rv32-ext.md) for the full `HisiInsn` field reference (`address`, `size`, `mnemonic`, `op_str`, `rd`, `rs1`, `rs2`, `funct3`, `funct7`).
+**HiSilicon WS63 (NearLink firmware):** `HiSiliconRV32ExtDecoderbinary, base_va.scan_custom3code, base_va` returns `List[HisiInsn]`. See [hisi-rv32-ext](hisi-rv32-ext.md) for the full `HisiInsn` field reference (`address`, `size`, `mnemonic`, `op_str`, `rd`, `rs1`, `rs2`, `funct3`, `funct7`).
 
 ---
 

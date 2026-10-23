@@ -10,7 +10,7 @@ Low-level Windows PE file parser in `ablation/core/pe_parser.py`. Foundation lay
 
 2. **No dependency on LIEF or pefile for Windows targets.** LIEF's PE support is solid but returns objects tuned for binary instrumentation, not forensic field access. `PEParser` exposes raw field values and section tables with the exact offsets needed for IOCTL code extraction and pool-tag byte-pattern scans.
 
-3. **Static analysis of kernel drivers requires struct-level access to COFF fields.** `KernelDriverAnalyzer` reads `IMAGE_FILE_MACHINE`, `MajorOperatingSystemVersion`, the debug directory (RSDS → PDB path), and the import table for kernel API surface audit. These all require direct field offsets that a high-level abstraction hides.
+3. **Static analysis of kernel drivers requires struct-level access to COFF fields.** `KernelDriverAnalyzer` reads `IMAGE_FILE_MACHINE`, `MajorOperatingSystemVersion`, the debug directory RSDS → PDB path, and the import table for kernel API surface audit. These all require direct field offsets that a high-level abstraction hides.
 
 ---
 
@@ -44,8 +44,8 @@ else:
 | `sections` | `list[dict]` | `{name, va, offset, size, characteristics}` |
 | `imports` | `list[dict]` | `{dll, name, ordinal, va}` |
 | `exports` | `list[dict]` | `{name, va, ordinal}` |
-| `pe_offset` | `int` | File offset of PE header (from DOS stub e_lfanew) |
-| `is_64bit` | `bool` | True for PE32+ (IMAGE_NT_OPTIONAL_HDR64_MAGIC) |
+| `pe_offset` | `int` | File offset of PE header from DOS stub e_lfanew |
+| `is_64bit` | `bool` | True for PE32+ IMAGE_NT_OPTIONAL_HDR64_MAGIC |
 
 ---
 

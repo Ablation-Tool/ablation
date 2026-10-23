@@ -1,6 +1,6 @@
 # SEH and SafeSEH Review
 
-Analyze x86 (32-bit) Windows PE binaries for Structured Exception Handler (SEH) chain vulnerabilities: detecting whether SafeSEH is absent (every SEH overwrite redirects execution), enumerating SafeSEH handler tables, and finding SEH frame setup patterns in the binary's code.
+Analyze x86 (32-bit) Windows PE binaries for Structured Exception Handler (SEH) chain vulnerabilities: detecting whether SafeSEH is absent every SEH overwrite redirects execution, enumerating SafeSEH handler tables, and finding SEH frame setup patterns in the binary's code.
 
 ---
 
@@ -8,7 +8,7 @@ Analyze x86 (32-bit) Windows PE binaries for Structured Exception Handler (SEH) 
 
 1. **x86 Windows uses a stack-linked list of SEH frames: an attacker who overwrites a stack SEH frame can redirect execution to an arbitrary address when an exception fires.** `SEHChainAnalyzer.scan()` checks whether `SafeSEH` (`IMAGE_LOAD_CONFIG.SEHandlerTable`) is present in the binary, how many handlers are registered, and whether the registered handlers are appropriate subset of all exports: a SafeSEH table with zero entries is as bad as no SafeSEH at all.
 
-2. **SafeSEH only protects against SEH-based overwrites when the binary is loaded in a process where all loaded DLLs have SafeSEH tables.** If any DLL lacks a SafeSEH table, the entire protection collapses: `SEHChainAnalyzer` identifies which specific DLL is the weak link. `SEHFinding.severity = 'CRITICAL'` for SafeSEH absent, `'HIGH'` for partial (table present but small).
+2. **SafeSEH only protects against SEH-based overwrites when the binary is loaded in a process where all loaded DLLs have SafeSEH tables.** If any DLL lacks a SafeSEH table, the entire protection collapses: `SEHChainAnalyzer` identifies which specific DLL is the weak link. `SEHFinding.severity = 'CRITICAL'` for SafeSEH absent, `'HIGH'` for partial table present but small.
 
 3. **`SEHChainAnalyzer.seh_frames()` finds SEH frame setup code patterns**: `push handler; push FS:[0]; mov FS:[0], esp`: identifying which functions install SEH handlers and which handler VAs they register. This is the starting point for identifying whether a specific overflowable SEH frame is in a security-sensitive function.
 
@@ -77,7 +77,7 @@ Findings:
 
 ## Pipeline position
 
-Run `SEHChainAnalyzer` on x86 (32-bit) Windows PE binaries identified as security-sensitive. It is x86-only: x86_64 Windows uses a different exception handling mechanism (table-based unwinding) that is not vulnerable to classic SEH overwrites. Use `CFGBypassDetector` for x86_64 Windows bypass analysis.
+Run `SEHChainAnalyzer` on x86 (32-bit) Windows PE binaries identified as security-sensitive. It is x86-only: x86_64 Windows uses a different exception handling mechanism table-based unwinding that is not vulnerable to classic SEH overwrites. Use `CFGBypassDetector` for x86_64 Windows bypass analysis.
 
 ---
 
@@ -92,7 +92,7 @@ Run `SEHChainAnalyzer` on x86 (32-bit) Windows PE binaries identified as securit
 | `title` | Short finding title |
 | `location` | PE path or section name |
 | `description` | Explanation of the SafeSEH bypass condition |
-| `va` | VA of the relevant `push handler_va` instruction (0 if not applicable) |
+| `va` | VA of the relevant `push handler_va` instruction 0 if not applicable |
 | `cwe` | CWE identifier |
 
 ---

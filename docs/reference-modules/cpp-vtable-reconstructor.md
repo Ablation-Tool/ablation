@@ -15,12 +15,12 @@ firmware RE on a non-x86/ARM target had no vtable discovery at all.
 
 **2. Slot naming.** Even on supported arches, the existing modules returned a numbered
 array: `slot_3 → 0x13450`. No names. The Hex-Rays decompiler then showed
-`(alg_vtbl[3])(...)` with no indication that slot 3 is `modexp`. You had to manually trace
+`alg_vtbl[3](...)` with no indication that slot 3 is `modexp`. You had to manually trace
 every slot to figure out what it did before you could start analysis.
 
 **3. Type propagation friction.** Even after naming slots by hand, setting the struct type
 in IDA required calling `set_type` on the producer function return and then hunting down
-every consumer local in every caller (one variable at a time) to propagate the type
+every consumer local in every caller one variable at a time to propagate the type
 through the decompiler. There was no batch automation for this.
 
 `CppVtableReconstructorAnalyzer` resolves all three with a single Python call:
@@ -47,7 +47,7 @@ Output: a JSON-serialisable result object **and** an IDAPython script that emits
 |---|---|---|---|---|---|
 | `ELFVtableReconstructor` | x86-64 only | `.rela.dyn` by class name or VA | ✗ | ✗ | ✗ |
 | `VtableResolver` | ARM64 | `.data.rel.ro` RELATIVE relocs | ✗ | BLR sites | ✗ |
-| `VtableDispatchScanner` | x86-64 | ✗ (takes slot map) | ✗ | `call [reg+disp]` | ✗ |
+| `VtableDispatchScanner` | x86-64 | ✗ takes slot map | ✗ | `call [reg+disp]` | ✗ |
 | **`CppVtableReconstructorAnalyzer`** | **any ELF** | **RELA + byte scan** | **✓** | **x86-64 + ARM64** | **✓** |
 
 ---
@@ -79,15 +79,15 @@ result   = analyzer.scan()
 
 Extracts vtable specs from the binary.
 
-**Primary method (RELA-based):** iterates all ELF relocations and collects entries whose
-addend points into an executable section (a virtual function) and whose address is in a
-data section (a vtable slot). Groups consecutive 8-byte-aligned entries into runs of
+**Primary method RELA-based:** iterates all ELF relocations and collects entries whose
+addend points into an executable section a virtual function and whose address is in a
+data section a vtable slot. Groups consecutive 8-byte-aligned entries into runs of
 `min_slots` or more; each run is one vtable.
 
 This approach works for all dynamic ELFs regardless of architecture: x86-64, ARM64,
 LoongArch64, PPC64, etc. It requires no knowledge of the relocation type.
 
-**Fallback method (byte scan):** when no RELA runs are found (static binary or non-PIE
+**Fallback method byte scan:** when no RELA runs are found (static binary or non-PIE
 executable), scans `.rodata` / `.data.rel.ro` / `.data` for runs of 8-byte values that
 point into `.text`. Correct for PIE ELF where `virtual_address == file_offset` for all
 sections.
@@ -96,11 +96,11 @@ Each `VtableSpec` records:
 - `va`: the vtable pointer address (vfunc[0], what's stored in objects)
 - `slots`: ordered `SlotSpec` list with index, byte offset, function VA, name
 - `has_itanium_header`: True when the 16 bytes before `va` look like offset-to-top=0 +
- RTTI pointer (standard Itanium ABI vtable layout)
+ RTTI pointer standard Itanium ABI vtable layout
 - `ctor_sites`: VAs in the binary that reference this vtable VA (from relocations or
  literal byte scan)
 - `section_name`: the ELF section name containing this vtable, e.g. `.rodata` or `.data`
-- `writable`: True when the containing section has `SHF_WRITE` set (mutable at runtime)
+- `writable`: True when the containing section has `SHF_WRITE` set mutable at runtime
 
 ### Layer 2: `name_slots(specs)`
 
@@ -121,7 +121,7 @@ e.g., `rsa_init` / `rsa_free` / `rsa_compute` → `rsa_vtable`.
 Finds call sites that dispatch through any slot of `spec`.
 
 **x86-64:** delegates to `VtableDispatchScanner`; pattern-matches all
-`call [reg+slot_offset]` encodings (REX prefix variants, disp8/disp32, SIB r12/rsp).
+`call [reg+slot_offset]` encodings REX prefix variants, disp8/disp32, SIB r12/rsp.
 Groups call sites by enclosing function using the binary's symbol table.
 
 **ARM64:** delegates to `vtable_resolver.detect_blr_sites()`; finds
@@ -134,7 +134,7 @@ work, call-site tracing is not yet implemented.
 
 ## IDAPython script
 
-`emit_ida_script(specs, propagation)` generates a script that:
+`emit_ida_scriptspecs, propagation` generates a script that:
 
 1. Calls `idc.parse_decls()` with a C struct definition for each vtable
 2. Calls `idc.set_cmt()` at every ctor reference site (`"vptr → <type_name>"`)
@@ -233,7 +233,7 @@ Added in v2.41.0. v2.49.0 adds `VtableSpec.section_name` and `VtableSpec.writabl
 populated by all three scan paths (RELA-based, byte-scan, and the `_make_spec_from_run` helper).
 A vtable in `.data` with `writable=True` means any kernel or process write primitive reaching
 the vtable data can redirect virtual dispatch. Normal vtables live in `.rodata` or `.data.rel.ro`
-(read-only after RELRO).
+read-only after RELRO.
 
 ## FORGE audit
 
@@ -243,7 +243,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_ELF_BYTES=256MB` + `os.pat
 
 ## How it works
 
-`CppVtableReconstructorAnalyzer.scan()` runs a 3-layer pipeline. **Layer 1** `scan_vtables()` extracts vtable structures via RELA relocations (dynamic ELF) or raw code-pointer scan fallback. No func_starts iteration. **Layer 2** `name_slots()` resolves each slot to a name via export symbols and string xrefs. **Layer 3** `trace_consumers()` finds call sites dispatching through vtable slots: x86-64 via `VtableDispatchScanner`, ARM64 via `vtable_resolver`, other arches via pointer-literal scan. Consumer tracing uses `_func_starts_sorted()` internally.
+`CppVtableReconstructorAnalyzer.scan()` runs a 3-layer pipeline. **Layer 1** `scan_vtables()` extracts vtable structures via RELA relocations dynamic ELF or raw code-pointer scan fallback. No func_starts iteration. **Layer 2** `name_slots()` resolves each slot to a name via export symbols and string xrefs. **Layer 3** `trace_consumers()` finds call sites dispatching through vtable slots: x86-64 via `VtableDispatchScanner`, ARM64 via `vtable_resolver`, other arches via pointer-literal scan. Consumer tracing uses `_func_starts_sorted()` internally.
 
 ---
 

@@ -35,17 +35,17 @@ flowchart TD
 
 ### Call graph queries
 
-**`callers_of(symbol_or_va)`**: accepts either a PLT symbol name (string) or a VA (int). When given a string, it looks up the PLT map to find all functions that call that imported symbol. When given a VA, it looks up all functions that contain a `CALL` to that VA. Returns a list of `(caller_va, caller_name)` tuples, with the best available name from the overlay.
+**`callers_ofsymbol_or_va`**: accepts either a PLT symbol name (string) or a VA (int). When given a string, it looks up the PLT map to find all functions that call that imported symbol. When given a VA, it looks up all functions that contain a `CALL` to that VA. Returns a list of `caller_va, caller_name` tuples, with the best available name from the overlay.
 
-**`callees_of(func_va)`**: returns all `(target_va, target_name)` pairs for calls made from the function starting at `func_va`. Useful for rapidly building a call tree from a specific function of interest.
+**`callees_of(func_va)`**: returns all `target_va, target_name` pairs for calls made from the function starting at `func_va`. Useful for rapidly building a call tree from a specific function of interest.
 
 ### String cross-reference queries
 
-**`string_xrefs(string_va)`**: returns a list of instruction-level code VAs that RIP-relatively reference the given string VA. Multiple instructions in the same function can reference the same string.
+**`string_xrefsstring_va`**: returns a list of instruction-level code VAs that RIP-relatively reference the given string VA. Multiple instructions in the same function can reference the same string.
 
-**`funcs_referencing_string(string_va)`**: maps each instruction VA from `string_xrefs()` to its containing function start using `func_containing()`, then deduplicates. Returns a sorted list of function start VAs. This is the primary way to go from "I know the log message" to "I know which function to analyze".
+**`funcs_referencing_stringstring_va`**: maps each instruction VA from `string_xrefs()` to its containing function start using `func_containing()`, then deduplicates. Returns a sorted list of function start VAs. This is the primary way to go from "I know the log message" to "I know which function to analyze".
 
-**`strings_in_func(func_va)`**: returns all `(string_va, content)` pairs for strings that have a RIP-relative reference inside the function at `func_va`. Useful for characterizing what a function does by its string constants.
+**`strings_in_func(func_va)`**: returns all `string_va, content` pairs for strings that have a RIP-relative reference inside the function at `func_va`. Useful for characterizing what a function does by its string constants.
 
 **`strings_near(va, radius=128)`**: returns all strings in the `strings` dict within `±radius` bytes of `va`. Useful for checking what constant data surrounds a specific address.
 
@@ -133,13 +133,13 @@ ctx.func_containing(0x40a240)
 
 | Method | Returns |
 |:---|:---|
-| `callers_of(sym)` | `List[Tuple[int, str]]`: `(caller_va, name)` |
-| `callees_of(func_va)` | `List[Tuple[int, str]]`: `(target_va, name)` |
-| `string_xrefs(string_va)` | `List[int]`: instruction VAs |
-| `funcs_referencing_string(string_va)` | `List[int]`: function start VAs |
-| `strings_in_func(func_va)` | `List[Tuple[int, str]]`: `(string_va, content)` |
-| `strings_near(va, radius)` | `List[Tuple[int, str]]`: `(string_va, content)` |
-| `func_containing(va)` | `int`: nearest function start VA ≤ va (binary search) |
+| `callers_of(sym)` | `List[Tuple[int, str]]`: `caller_va, name` |
+| `callees_of(func_va)` | `List[Tuple[int, str]]`: `target_va, name` |
+| `string_xrefsstring_va` | `List[int]`: instruction VAs |
+| `funcs_referencing_stringstring_va` | `List[int]`: function start VAs |
+| `strings_in_func(func_va)` | `List[Tuple[int, str]]`: `string_va, content` |
+| `strings_nearva, radius` | `List[Tuple[int, str]]`: `string_va, content` |
+| `func_containing(va)` | `int`: nearest function start VA ≤ va binary search |
 
 ---
 

@@ -9,10 +9,10 @@ Arch-neutral expression simplification, value numbering, and rule-based IR lifti
 1. BinaryLifter and ppc476_decompiler produce stringly-typed IR (C expression
    strings). No shared layer applies constant folding, algebraic simplification,
    or common subexpression elimination before output reaches the user. Complex
-   lifted output like `(uint32_t)(arg0 + 0 + 0)` passes through unchanged.
+   lifted output like `uint32_targ0 + 0 + 0` passes through unchanged.
 2. SinkArgClassifier tracks argument provenance at the instruction level.
    Alias chains like `t0 = arg0 + 8; t1 = t0 - 8` are not simplified before
-   sink classification. ExprLifter collapses `(arg0 + 8) - 8` to `arg0` first.
+   sink classification. ExprLifter collapses `arg0 + 8 - 8` to `arg0` first.
 3. No shared infrastructure exists for per-opcode simplifiers and
    hash-congruence value numbering. Each arch decompiler reimplements ad-hoc
    constant folding separately.
@@ -26,8 +26,8 @@ Three IBM production systems analyzed from extracted binaries. See
 
 | Component | IBM source | Algorithm |
 |:---|:---|:---|
-| `ExprSimplifier` | XLC/OMR WCodeDriver `TR_Simplifier` (1116 per-opcode functions) | Per-opcode dispatch table: `_SIMPLIFIERS[op](node)` |
-| `ValueNumberer` | XLC/OMR `TR_ValueNumberInfo` | Hash-congruence: `(op, ctype, child_vnums)` key + `canShareValueNumber()` gate |
+| `ExprSimplifier` | XLC/OMR WCodeDriver `TR_Simplifier` 1116 per-opcode functions | Per-opcode dispatch table: `_SIMPLIFIERS[op](node)` |
+| `ValueNumberer` | XLC/OMR `TR_ValueNumberInfo` | Hash-congruence: `op, ctype, child_vnums` key + `canShareValueNumber()` gate |
 | `LiftRule` / `ConsumableInsnList` | HATS 7.5 `AbstractRenderingRulesEngine` | Greedy consumption: priority-ordered rules + `PatternComponent.newInstance()` factory |
 | `ExprNode` hierarchy | VisualAge EPDC model layer | Flat frozen dataclass + type annotations |
 
@@ -78,7 +78,7 @@ share the same hash.
 | `is_zero()` | constant with value 0 |
 | `is_one()` | constant with value 1 |
 | `is_leaf()` | node has no children |
-| `can_share()` | node is CSE-eligible (no load/store/call, recursively) |
+| `can_share()` | node is CSE-eligible no load/store/call, recursively |
 
 ---
 
@@ -118,7 +118,7 @@ the opcode simplifier runs, so transformations compose automatically.
 | `add` | 0+x→x, x+0→x, const fold, (x+c1)+c2→x+(c1+c2) |
 | `sub` | x-0→x, x-x→0, const fold |
 | `mul` | 0*x→0, x*1→x, const fold, x*2^N→x<<N |
-| `div` | x/1→x, const fold, x/2^N→x>>N (unsigned) |
+| `div` | x/1→x, const fold, x/2^N→x>>N unsigned |
 | `and_` | 0&x→0, x&x→x, const fold |
 | `or_` | 0|x→x, x|x→x, const fold |
 | `xor` | 0^x→x, x^x→0, const fold |
@@ -155,7 +155,7 @@ pairs = vn.cse_pairs(nodes)
 
 `ValueNumberer` implements XLC/OMR `TR_ValueNumberInfo` hash-congruence:
 two nodes are congruent when they have the same opcode, same ctype, same
-constant/name, and their children have the same value numbers (recursively).
+constant/name, and their children have the same value numbers recursively.
 `can_share()` gates CSE eligibility: loads, stores, and calls always get
 fresh numbers regardless of structural equality.
 

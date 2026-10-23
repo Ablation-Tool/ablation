@@ -10,7 +10,7 @@ Three things were not possible before in Ablation:
 
 **1. No conescan format support.** The ConnorRigby conescan project carries ECU definitions for
 Mazda Renesis and L8 engines on SH705x and SH7055 MCUs. The MX5 definition file alone covers 507
-calibration tables (117 MAP, 107 CURVE, 283 VALUE) across every subsystem: drive-by-wire throttle,
+calibration tables 117 MAP, 107 CURVE, 283 VALUE across every subsystem: drive-by-wire throttle,
 cruise control, idle speed, fuel injection, ignition advance, and VTCS valve control. Without a
 parser for this format, all of those addresses and labels were inaccessible to Ablation.
 
@@ -37,10 +37,10 @@ Each conescan file is a single `<rom>` element (or a `<roms>` wrapper with one c
 `internalidstring`, `memmodel`, `make`, `model`.
 
 **`<scaling>`** elements define named scaling objects: `name`, `storagetype`, `endian`, `toexpr`
-(physical from raw expression), `units`.
+physical from raw expression, `units`.
 
-**`<table>`** elements define calibration objects: `name`, `type` (1D/2D/3D), `address` (hex
-without `0x`), `elements` (count), `scaling` (name reference), `category`.
+**`<table>`** elements define calibration objects: `name`, `type` 1D/2D/3D, `address` (hex
+without `0x`), `elements` (count), `scaling` name reference, `category`.
 
 ```xml
 <rom>
@@ -145,7 +145,7 @@ Return a text block with ECU metadata and table type counts.
 
 ## Validated results
 
-### Mazda MX5 SH7058 (lfg2ee.xml)
+### Mazda MX5 SH7058 lfg2ee.xml
 
 ```
 Conescan  lfg2ee.xml
@@ -155,10 +155,10 @@ Conescan  lfg2ee.xml
 ```
 
 All 117 MAPs have both X and Y axis objects with correct element counts and file addresses.
-Sample MAP (`CC Target APP - Base`): 9 rows (Y axis, 9 speed breakpoints) x 6 cols (X axis,
+Sample MAP (`CC Target APP - Base`): 9 rows Y axis, 9 speed breakpoints x 6 cols (X axis,
 6 gear positions). Data address `0xBA2A0`, X axis at `0xBA288`, Y axis at `0xBA264`.
 
-### Mazda RX8 SH7055 (N3K1EU000.xml)
+### Mazda RX8 SH7055 N3K1EU000.xml
 
 The community RX8 definition file is a minimal example with 2 named scalings and 1 CURVE table.
 The ROM `SW-N3K1EU00013SN020.bin` (512 KB) identifies correctly. A second RX8 ROM
@@ -171,10 +171,10 @@ The ROM `SW-N3K1EU00013SN020.bin` (512 KB) identifies correctly. A second RX8 RO
 
 | Aspect | EcuConescanParser | EcuRomRaiderParser |
 |---|---|---|
-| Variants per file | One (single ROM) | Many (base + 1 to N variants) |
+| Variants per file | One single ROM | Many base + 1 to N variants |
 | Address source | Inline on every table | Variant `<rom>` overlay on base |
 | Scaling definition | Global named `<scaling>` | Inline `<scaling>` inside each `<table>` |
-| `identify_rom()` return type | `bool` | `Optional[str]` (variant xmlid) |
+| `identify_rom()` return type | `bool` | `Optional[str]` variant xmlid |
 | XML type attribute | `1D / 2D / 3D` | `VALUE / 2D / 3D` (no 1D) |
 | Expression field | `toexpr=` | `expression=` |
 
@@ -200,7 +200,7 @@ The ROM `SW-N3K1EU00013SN020.bin` (512 KB) identifies correctly. A second RX8 RO
 
 ## How it works
 
-Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 

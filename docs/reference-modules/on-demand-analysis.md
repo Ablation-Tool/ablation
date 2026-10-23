@@ -44,7 +44,7 @@ The first step uses `lief` to parse the binary format and extract three symbol t
 
 **Understanding the PLT**
 
-The PLT (Procedure Linkage Table) is ELF's mechanism for lazy symbol binding. When you compile C code that calls `strcpy`, the compiler generates a call to a PLT stub. On the first call, the stub invokes the dynamic linker, which resolves the symbol and patches the GOT entry. On subsequent calls, the GOT entry already holds the real address, so the stub jumps directly there.
+The PLT Procedure Linkage Table is ELF's mechanism for lazy symbol binding. When you compile C code that calls `strcpy`, the compiler generates a call to a PLT stub. On the first call, the stub invokes the dynamic linker, which resolves the symbol and patches the GOT entry. On subsequent calls, the GOT entry already holds the real address, so the stub jumps directly there.
 
 Every call to `strcpy` goes through the same stub VA. If you know that PLT stub at `0x3000` maps to `strcpy`, you find every caller by scanning for calls to `0x3000`. BinaryContext builds this mapping from `.rela.plt`.
 
@@ -68,7 +68,7 @@ The x86-64 PLT stub is 16 bytes per import:
 
 After the dynamic linker runs, the GOT slot holds the real function address. The `JMP` at offset 0 goes directly there on every subsequent call, bypassing the `PUSH + JMP` tail entirely.
 
-PE binaries use the IAT (Import Address Table) with the same concept: a table of function pointers patched at load time. BinaryContext reads the import directory's INT and IAT to build `iat_map[thunk_va] = 'module!function'`.
+PE binaries use the IAT Import Address Table with the same concept: a table of function pointers patched at load time. BinaryContext reads the import directory's INT and IAT to build `iat_map[thunk_va] = 'module!function'`.
 
 ---
 
@@ -80,21 +80,21 @@ Recovering function starts in a stripped binary is a two-pass process. The first
 
 C++ exception handling and signal delivery both need to unwind the call stack. GCC solves this by emitting one Frame Description Entry (FDE) per function in `.eh_frame`. The FDE records the function's start VA and byte length. `strip(1)` cannot remove `.eh_frame` because the runtime linker reads it at startup to register unwind information with the OS. Remove it and exception handling breaks. In any binary compiled with GCC or Clang at default settings, `.eh_frame` contains a complete function start list even when the symbol table is gone. This is a design feature of the C++ ABI that becomes a gift for reverse engineering.
 
-**CIE (Common Information Entry)**: one per compilation unit:
+**CIE Common Information Entry**: one per compilation unit:
 
 | Field | Type | Description |
 |---|---|---|
 | `length` | 4 bytes | Total CIE size minus the length field itself |
-| `CIE_id` | 4 bytes | Always 0 (distinguishes CIE from FDE) |
+| `CIE_id` | 4 bytes | Always 0 distinguishes CIE from FDE |
 | `version` | 1 byte | 1 = DWARF 2, 3 = DWARF 3 |
 | `augmentation` | string | `"zR"` = pointer format encoded in aug_data |
-| `code_align` | uleb128 | Instruction size quantum (1 for x86) |
-| `data_align` | sleb128 | Stack slot size factor (−8 for x86-64) |
+| `code_align` | uleb128 | Instruction size quantum 1 for x86 |
+| `data_align` | sleb128 | Stack slot size factor −8 for x86-64 |
 | `return_addr_reg` | uleb128 | Register number of return address |
-| `aug_data` | variable | Pointer encoding byte (pcrel / absolute) |
+| `aug_data` | variable | Pointer encoding byte pcrel / absolute |
 | `initial_insns` | variable | CFA baseline rules (e.g., `push rbp`) |
 
-**FDE (Frame Description Entry)**: one per function, contains the function start VA:
+**FDE Frame Description Entry**: one per function, contains the function start VA:
 
 | Field | Type | Description |
 |---|---|---|
@@ -110,7 +110,7 @@ The `initial_location` encoding depends on the CIE's augmentation byte:
 - `DW_EH_PE_pcrel (0x10)`: `abs_va = FDE_field_va + encoded_value`
 - `DW_EH_PE_absptr (0x00)`: `abs_va = encoded_value` directly
 
-ARM32 binaries use `.ARM.exidx` instead. Each entry is two 32-bit words. The first encodes the function start as a prel31 value: `abs_va = (field_va & ~1) + sign_extend(value, 31)`. PE x86-64 binaries use `.pdata`, which is an array of `RUNTIME_FUNCTION { BeginAddress, EndAddress, UnwindInfoAddress }` structs.
+ARM32 binaries use `.ARM.exidx` instead. Each entry is two 32-bit words. The first encodes the function start as a prel31 value: `abs_va = field_va & ~1 + sign_extendvalue, 31`. PE x86-64 binaries use `.pdata`, which is an array of `RUNTIME_FUNCTION { BeginAddress, EndAddress, UnwindInfoAddress }` structs.
 
 **Pass 2: Callee augmentation**
 
@@ -138,7 +138,7 @@ The pass runs once. Newly discovered callees are added to `func_starts` but thei
 
 ### Step 3: Call graph construction
 
-With function boundaries established, BinaryContext disassembles each function body and extracts every direct call it makes. The result is a flat list of `(caller_va, callee_va, label)` tuples. Indirect calls are skipped because the callee address is not statically determinable. VtableResolver handles C++ virtual dispatch separately.
+With function boundaries established, BinaryContext disassembles each function body and extracts every direct call it makes. The result is a flat list of `caller_va, callee_va, label` tuples. Indirect calls are skipped because the callee address is not statically determinable. VtableResolver handles C++ virtual dispatch separately.
 
 | Architecture | Direct call instructions detected |
 |---|---|
@@ -147,7 +147,7 @@ With function boundaries established, BinaryContext disassembles each function b
 | ARM32 | `BL imm24` / `BLX imm24` |
 | MIPS32 | `JAL imm26` / `JALR $ra,$t9` |
 | LA64 | `BL offset26` / `JIRL $ra,rj,0` |
-| nanoMIPS | `BALC` P32/P16 (bitfield resolved) |
+| nanoMIPS | `BALC` P32/P16 bitfield resolved |
 
 ---
 
@@ -175,7 +175,7 @@ target = insn_va + insn_length + sign_extend32(disp)
 # ADDIU $t0, $t0, lo16  →  full_va = pending_lui[$t0] + sign_extend16(lo16)
 ```
 
-If the resolved address falls in `strings_map`, it is recorded as `str_xref_idx[func_va].append(string_va)`.
+If the resolved address falls in `strings_map`, it is recorded as `str_xref_idx[func_va].appendstring_va`.
 
 ---
 
@@ -200,11 +200,11 @@ Build timing for a 50 MB stripped ELF with 19,000 functions:
 | `lief.parse` | ~80 ms |
 | `.eh_frame` FDE scan | ~30 ms |
 | Callee augmentation | ~250 ms |
-| Call graph (Capstone) | ~3.5 s |
+| Call graph Capstone | ~3.5 s |
 | String xref indexing | ~100 ms |
 | JSON serialize + write | ~200 ms |
 | **First run total** | **~4.2 s** |
-| **Reload (SHA-256 + JSON parse)** | **~130 ms** |
+| **Reload SHA-256 + JSON parse** | **~130 ms** |
 
 ---
 
@@ -237,7 +237,7 @@ A "stored sha256 doesn't match" case happens when two different binaries share a
 | `ctx.exports` | `{str: int}` | Export name to VA |
 | `ctx.strings` | `{int: str}` | String VA to content |
 | `ctx.func_starts` | `list[int]` | Sorted function entry VAs |
-| `ctx.call_edges` | `list[tuple]` | `(caller_va, callee_va, label)` |
+| `ctx.call_edges` | `list[tuple]` | `caller_va, callee_va, label` |
 | `ctx.str_xref_idx` | `{int: list[int]}` | Func VA to referenced string VAs |
 
 ---

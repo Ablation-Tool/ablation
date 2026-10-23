@@ -6,7 +6,7 @@ Find every call site that calls a named imported symbol in a PPC32 BE position-i
 
 ## Why this exists
 
-1. **PPC32 PIC `.so` files do not call imported symbols with a direct `BL symbol` instruction.** Instead, they call a PLT thunk: `LWZ rx,d(r30)` (load GOT entry from r30-relative offset) → `MTCTR rx` → `BCTR`. Two compilation units can share the same thunk VA but reach different PLT slots if their `r30` values differ. A naive thunk-VA matcher produces false positives for every such shared thunk.
+1. **PPC32 PIC `.so` files do not call imported symbols with a direct `BL symbol` instruction.** Instead, they call a PLT thunk: `LWZ rx,d(r30)` load GOT entry from r30-relative offset → `MTCTR rx` → `BCTR`. Two compilation units can share the same thunk VA but reach different PLT slots if their `r30` values differ. A naive thunk-VA matcher produces false positives for every such shared thunk.
 
 2. **`PPC32PLTTracer` verifies each caller's active `r30` against `implied_r30` for the target symbol**: eliminating the false-positive class entirely. The active `r30` is tracked backward from the call site to the `bl _init_r30` or `mflr r30` that establishes the GOT base for that compilation unit. Only callers whose `r30` matches the implied slot offset are reported.
 
@@ -81,7 +81,7 @@ Run `PPC32PLTTracer` after `PPC32ELF` is constructed from the target binary. Use
 
 ## Reading output
 
-`PPC32PLTTracer.find_callers(sym_name)` returns `List[PLTCallSite]`: all verified call sites for the named import:
+`PPC32PLTTracer.find_callerssym_name` returns `List[PLTCallSite]`: all verified call sites for the named import:
 
 | Attribute | Content |
 |:---|:---|

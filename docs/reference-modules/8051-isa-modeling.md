@@ -8,9 +8,9 @@ Model Intel MCS-51 / Enhanced 8051 (CC254x) instruction semantics, memory spaces
 
 1. **The MCS-51 architecture has dual data spaces that are invisible from opcode bytes alone: taint analysis must track which access mode was used.** Direct addressing to `0x80–0xFF` reads from the SFR space; indirect `@Ri` on the same range reads upper IRAM. `MOVC A,@A+DPTR` reads from CODE space; `MOVX A,@DPTR` reads from XDATA. A taint propagation engine that treats all memory accesses as equivalent will produce incorrect results on 8051 firmware, it will mark SFR reads as IRAM reads and miss AES co-processor interactions.
 
-2. **TI BLE-Stack 1.5.2.0 (CC2540/CC2541) uses a compiler-generated computed-call idiom that produces non-instruction bytes in the code stream.** `LCALL <stub>; <addr_hi>; <addr_lo>; <param>` is the function-pointer call pattern: the LCALL target (`computed_call_stub`) reads its own return address from the stack and dispatches to the `(addr_hi << 8) | addr_lo` address with `param` in the accumulator. The 3 bytes following the LCALL are not instructions: they are inline data. A decoder that does not know `computed_call_stub` will attempt to decode them as instructions and produce incorrect offsets for everything downstream.
+2. **TI BLE-Stack 1.5.2.0 CC2540/CC2541 uses a compiler-generated computed-call idiom that produces non-instruction bytes in the code stream.** `LCALL <stub>; <addr_hi>; <addr_lo>; <param>` is the function-pointer call pattern: the LCALL target (`computed_call_stub`) reads its own return address from the stack and dispatches to the `addr_hi << 8 | addr_lo` address with `param` in the accumulator. The 3 bytes following the LCALL are not instructions: they are inline data. A decoder that does not know `computed_call_stub` will attempt to decode them as instructions and produce incorrect offsets for everything downstream.
 
-3. **CC254x BLE security analysis targets the AES co-processor and flash bank-select SFRs specifically.** The AES co-processor is at SFR `0xB1` (ENCDI/ENCDO) and `0xB3` (ENCCS): a `MOV 0xB3,A` write triggers the AES engine. Flash banking is controlled by `FMAP` (`0xF1`) and `MEMCTR` (`0xC7`). `scan_aes_accesses()` and `scan_bank_switches()` perform fast byte-pattern scans for `F5 B1`, `F5 B3`, `E5 B1`, `E5 B3` patterns and `F5/75 + FMAP/MEMCTR` patterns respectively: finding all AES and bank-switch sites without decoding the full binary.
+3. **CC254x BLE security analysis targets the AES co-processor and flash bank-select SFRs specifically.** The AES co-processor is at SFR `0xB1` ENCDI/ENCDO and `0xB3` (ENCCS): a `MOV 0xB3,A` write triggers the AES engine. Flash banking is controlled by `FMAP` (`0xF1`) and `MEMCTR` (`0xC7`). `scan_aes_accesses()` and `scan_bank_switches()` perform fast byte-pattern scans for `F5 B1`, `F5 B3`, `E5 B1`, `E5 B3` patterns and `F5/75 + FMAP/MEMCTR` patterns respectively: finding all AES and bank-switch sites without decoding the full binary.
 
 ---
 
@@ -33,7 +33,7 @@ flowchart TD
 | Space | Access | Address range | Security relevance |
 |---|---|---|---|
 | CODE | `MOVC A,@A+DPTR/PC` | 0x0000–0xFFFF | Read-only after flash; COMP_CALL targets |
-| IRAM | Direct / `@Ri` indirect | 0x00–0xFF (8-bit) | Stack, registers; `0x80–0xFF` = SFR (direct mode only) |
+| IRAM | Direct / `@Ri` indirect | 0x00–0xFF (8-bit) | Stack, registers; `0x80–0xFF` = SFR direct mode only |
 | XDATA | `MOVX A,@DPTR` | 0x0000–0xFFFF | Data; peripheral MMIO at high addresses |
 | SFR | Direct address `0x80–0xFF` | 0x80–0xFF | AES (0xB1/0xB3), bank (0xC7/0xF1), UART, timers |
 | BIT | Bit instructions | Overlaps IRAM 0x20–0x2F + SFRs | Status flags, port bits |
@@ -121,7 +121,7 @@ Bank-select writes: 6
 
 **`scan_aes_accesses()` matches `F5 B1` / `E5 B1` byte pairs that fall mid-instruction.** The byte-pattern scan does not verify that the `F5` or `E5` byte is at an instruction boundary, it finds any occurrence of the two-byte pattern. A 3-byte instruction like `MOV DPTR,#0xF5B1` (opcode `0x90, 0xF5, 0xB1`) would produce a false match if scanned at offset 1. The density of false positives is low (AES SFRs at `0xB1/0xB3` are not common immediate values) but non-zero. Confirm each hit by decoding the instruction at the reported offset and verifying `insn.raw[0] in (0xE5, 0xF5)`.
 
-**`COMP_CALL` detection fires on any LCALL to `computed_call_stub`: including tail calls and error stubs.** Not every LCALL to the stub address is a computed function-pointer call. Some stubs perform fixed actions (error handlers, initialization routines) that happen to share the same dispatch mechanism. Verify `COMP_CALL` findings by confirming the inline target address resolves to a valid function start: i.e., `flat_to_logical(resolver.logical_to_flat(bank, real_target))` produces an offset that begins with a recognizable prologue pattern.
+**`COMP_CALL` detection fires on any LCALL to `computed_call_stub`: including tail calls and error stubs.** Not every LCALL to the stub address is a computed function-pointer call. Some stubs perform fixed actions error handlers, initialization routines that happen to share the same dispatch mechanism. Verify `COMP_CALL` findings by confirming the inline target address resolves to a valid function start: i.e., `flat_to_logical(resolver.logical_to_flat(bank, real_target))` produces an offset that begins with a recognizable prologue pattern.
 
 **`Cc254xBankResolver` assumes `num_banks=4` (CC2540): CC2541 has 8 banks.** The default constructor uses 4 banks. A CC2541 image (256KB) analyzed with `num_banks=4` will produce incorrect `flat_to_logical()` results for flat offsets above `0x27FFF`. Set `num_banks=8` for CC2541 images.
 

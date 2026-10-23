@@ -10,7 +10,7 @@ Classify `fork()` callers in x86-64 ELF binaries as `WORKER`, `EXEC_AFTER_FORK`,
 
 2. **`EXEC_AFTER_FORK` verdict identifies the security-relevant pattern**: child processes that call `exec*()` immediately after `fork()` can be injection vectors if the `exec*()` argument is tainted. The `ForkCallerResult.exec_target` field names the specific `exec` function and `exec_call_va` gives its VA for direct handoff to `TaintTracker`.
 
-3. **`EXIT_IN_CHILD` verdict identifies `fork()` callers used only for daemonization**: the child calls `exit()` immediately after `fork()` (double-fork daemonization pattern). These callers are `ELIMINATED` as injection vectors. Distinguishing them from `WORKER` requires BFS across the child branch, which `ForkExecClassifier.classify_caller()` performs up to its block-walk budget.
+3. **`EXIT_IN_CHILD` verdict identifies `fork()` callers used only for daemonization**: the child calls `exit()` immediately after `fork()` double-fork daemonization pattern. These callers are `ELIMINATED` as injection vectors. Distinguishing them from `WORKER` requires BFS across the child branch, which `ForkExecClassifier.classify_caller()` performs up to its block-walk budget.
 
 ---
 

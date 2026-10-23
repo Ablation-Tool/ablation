@@ -121,7 +121,7 @@ print(pl.fmt_sweep(pl_hits, binary_name='binary.so'))
 
 ---
 
-## Phase 3: Triage (2-3 min per candidate)
+## Phase 3: Triage 2-3 min per candidate
 
 For each candidate above score 0.35, get context before opening a disassembler:
 
@@ -144,7 +144,7 @@ print("callers:", ctx.callers_of(va))
  (`memcpy`, `malloc`, `free`) AND callers in a network-facing function: **high priority,
  trace manually**
 - Only internal helpers, no network-facing callers: **eliminate, mark as FP**
-- Memory functions present but strings point to trusted input (config file, signature DB):
+- Memory functions present but strings point to trusted input config file, signature DB:
  **eliminate, mark as FP**
 
 Log every elimination. False positives recur. Logging prevents re-triaging the same function
@@ -176,14 +176,14 @@ What to look for:
 
 - **Zero-length loop:** `movzx eax, word ptr [rcx + N]` then `add rcx, rax` with no
   `cmp rax, MIN` guard before the addition
-- **Width truncation:** `movzx eax, word ptr [...]` (16-bit from wire), then used as a full
+- **Width truncation:** `movzx eax, word ptr [...]` 16-bit from wire, then used as a full
  32 or 64-bit value in a size calculation downstream
 - **Unchecked copy:** `mov rsi, <length_from_packet>` with no `cmp rsi, MAX` before
   `call memcpy`
 
 ---
 
-## Phase 5: Automated taint (optional)
+## Phase 5: Automated taint optional
 
 For complex functions, use TaintTracker to trace data flow from a source instruction to a
 dangerous sink:
@@ -247,9 +247,9 @@ Before confirming any finding, verify:
 
 - [ ] The length field comes from the network, not from a trusted internal source (signature
  file, config file, hardcoded constant)
-- [ ] The dangerous operation (add, memcpy, malloc) uses the untrusted length directly -- not
+- [ ] The dangerous operation add, memcpy, malloc uses the untrusted length directly -- not
  a separately computed safe value
-- [ ] The function is reachable from a network-facing entry point (trace the caller chain)
+- [ ] The function is reachable from a network-facing entry point trace the caller chain
 - [ ] No guard check exists between the length read and the dangerous operation -- check all
  branches, not just the hot path
 - [ ] The callee actually uses the length parameter -- verify it is not silently discarded

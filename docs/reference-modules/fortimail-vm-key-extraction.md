@@ -6,11 +6,11 @@ Extract PKI private key material (`fgt_512.key`, `fgt_2048.key`) from FortiMail 
 
 ## Why this exists
 
-1. **FortiMail VM firmware packages are distributed as OVF zip archives containing a VMDK virtual disk.** The PKI keys (`fgt_512.key`, `fgt_2048.key`) are stored inside `datafs.tar.gz` on the P2 ext4 partition of the virtual disk: a layout completely different from hardware FortiGate firmware (NAND XOR images). `FortiOSHardwareExtractor` handles NAND flash images; `FortiMailVmdkExtractor` handles the VMDK virtual format.
+1. **FortiMail VM firmware packages are distributed as OVF zip archives containing a VMDK virtual disk.** The PKI keys (`fgt_512.key`, `fgt_2048.key`) are stored inside `datafs.tar.gz` on the P2 ext4 partition of the virtual disk: a layout completely different from hardware FortiGate firmware NAND XOR images. `FortiOSHardwareExtractor` handles NAND flash images; `FortiMailVmdkExtractor` handles the VMDK virtual format.
 
 2. **Root-free ext4 access eliminates the loop mount requirement.** Traditional access to an ext4 filesystem inside a VM disk requires `losetup` and `mount`, both needing root privileges. `FortiMailVmdkExtractor` uses `dd` to extract the P2 partition as a flat image and then runs `debugfs` on that image to dump `datafs.tar.gz` without any root access or loop device.
 
-3. **`VmdkExtractionResult.keys` returns typed `ExtractedKey` objects with RSA key size**: the RSA key size (`bit_size`) distinguishes `fgt_512.key` (512-bit, legacy) from `fgt_2048.key` (2048-bit). The 512-bit key, if present, represents a weak RSA key vulnerability in itself. Both keys' SHA-256 hashes are provided for cross-version comparison.
+3. **`VmdkExtractionResult.keys` returns typed `ExtractedKey` objects with RSA key size**: the RSA key size (`bit_size`) distinguishes `fgt_512.key` 512-bit, legacy from `fgt_2048.key` 2048-bit. The 512-bit key, if present, represents a weak RSA key vulnerability in itself. Both keys' SHA-256 hashes are provided for cross-version comparison.
 
 ---
 
@@ -109,5 +109,5 @@ Run `FortiMailVmdkExtractor` as part of FortiMail VM firmware analysis before an
 ## See also
 
 - [Fortinet Build Track Classification](fortinet-build-track-classification.md): predicts expected key counts from firmware filename
-- [Firmware Extraction](firmware-extraction.md): FortiOS hardware firmware extraction (NAND XOR, not VMDK)
+- [Firmware Extraction](firmware-extraction.md): FortiOS hardware firmware extraction NAND XOR, not VMDK
 - [Firmware Signature and Secret Triage](firmware-signature-and-secret-triage.md): broad key/credential scanning after extraction

@@ -200,7 +200,7 @@ Sessions live at `~/.ablation/sessions/<session_id>.json`. They contain: binary 
 
 ## Scoring internals
 
-`EvidenceScorer.score()` computes `(confidence, status, contradiction_notes)`:
+`EvidenceScorer.score()` computes `confidence, status, contradiction_notes`:
 
 ```python
 scorer = EvidenceScorer(configuration={'family_weights': {...}})
@@ -222,7 +222,7 @@ print(ranker.plan_report(hypotheses, top_n=5))
 
 ## How it works
 
-`HypothesisEngine.from_binary()` builds a `HypothesisSession` keyed to the binary's SHA-256. `seed()` creates `HypothesisRecord` objects with the caller-supplied prior. `add_evidence()` creates an `EvidenceRecord`, appends it to the session, and calls `EvidenceScorer.update_hypothesis()` immediately: confidence is recalculated on every evidence addition, not lazily. `EvidenceScorer.score()` sums per-family contribution (strength × family_weight × independence_factor) with a diminishing-returns multiplier of 1/(1 + ln(count)) for repeated evidence from the same family. State transitions are deterministic: `CONFIRMED` requires confidence ≥ 0.75 plus at least one structural/data-flow/behavioral item and at least two independent families with no hard contradiction; one contradiction item with strength ≥ 0.80 immediately sets `REJECTED`. `plan()` calls `ProbeRanker.generate()` which scores each un-executed probe kind by EIG = disagreement × observability / cost across all active hypotheses and returns the top-n ranked list.
+`HypothesisEngine.from_binary()` builds a `HypothesisSession` keyed to the binary's SHA-256. `seed()` creates `HypothesisRecord` objects with the caller-supplied prior. `add_evidence()` creates an `EvidenceRecord`, appends it to the session, and calls `EvidenceScorer.update_hypothesis()` immediately: confidence is recalculated on every evidence addition, not lazily. `EvidenceScorer.score()` sums per-family contribution strength × family_weight × independence_factor with a diminishing-returns multiplier of 1/(1 + ln(count)) for repeated evidence from the same family. State transitions are deterministic: `CONFIRMED` requires confidence ≥ 0.75 plus at least one structural/data-flow/behavioral item and at least two independent families with no hard contradiction; one contradiction item with strength ≥ 0.80 immediately sets `REJECTED`. `plan()` calls `ProbeRanker.generate()` which scores each un-executed probe kind by EIG = disagreement × observability / cost across all active hypotheses and returns the top-n ranked list.
 
 ---
 
@@ -283,7 +283,7 @@ HypothesisEngine  binary=fmc_server  session=S-7f3a1b2c
 
 **Before this module:** `BinaryContext.load_or_build()` to obtain the binary SHA-256 and architecture. `SemanticSearcher` and `FuncProfiler` results can be fed as evidence items immediately after seeding.
 
-**After this module:** When a hypothesis reaches `CONFIRMED`, its subject fields (e.g., `call_site_va`, `target_va`) are verified ground truth: register the finding with `FindingRegistry.register()` and write to `re/<vendor>/<target>_re.py`. Hypotheses reaching `UNRESOLVED` (observationally equivalent competitors) require a manual probe (`kind='manual'`, `strength=0.95`) to break the tie.
+**After this module:** When a hypothesis reaches `CONFIRMED`, its subject fields (e.g., `call_site_va`, `target_va`) are verified ground truth: register the finding with `FindingRegistry.register()` and write to `re/<vendor>/<target>_re.py`. Hypotheses reaching `UNRESOLVED` observationally equivalent competitors require a manual probe (`kind='manual'`, `strength=0.95`) to break the tie.
 
 ---
 
@@ -298,7 +298,7 @@ HypothesisEngine  binary=fmc_server  session=S-7f3a1b2c
 | `subject` | `dict`: what the hypothesis is about (e.g., `{"va": "0x401920"}`) |
 | `claim` | `dict`: the specific machine-readable claim |
 | `status` | `ConfidenceState`: `'UNTESTED'` / `'PLAUSIBLE'` / `'SUPPORTED'` / `'CONFIRMED'` / `'UNRESOLVED'` / `'REJECTED'` |
-| `prior` | Float: Bayesian prior probability (default 0.5) |
+| `prior` | Float: Bayesian prior probability default 0.5 |
 | `confidence` | Float: posterior confidence after evidence scoring |
 | `support_score` | Float: cumulative support evidence score |
 | `contradiction_score` | Float: cumulative contradiction evidence score |

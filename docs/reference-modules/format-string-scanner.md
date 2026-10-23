@@ -10,7 +10,7 @@ Detect printf-family call sites where the format argument is not a string litera
 
 2. **Manual inspection of every printf-family call site is impractical.** A typical FortiOS or Cisco LINA binary has several hundred printf-family call sites. Walking backwards through disassembly from each one to trace the format register is mechanical work that takes seconds per site, but hours across a full binary. This scanner does it in one pass.
 
-3. **Logging wrappers conceal the real format argument position.** Firmware commonly defines `log_printf(priority, fmt, ...)` or `debug_printf(tag, fmt, ...)` where the format string is not the first argument. A scanner that only looks at `rdi` for every call misses these. This scanner maintains a per-function format-register map so each callee's ABI is handled correctly.
+3. **Logging wrappers conceal the real format argument position.** Firmware commonly defines `log_printfpriority, fmt, ...` or `debug_printftag, fmt, ...` where the format string is not the first argument. A scanner that only looks at `rdi` for every call misses these. This scanner maintains a per-function format-register map so each callee's ABI is handled correctly.
 
 ---
 
@@ -18,7 +18,7 @@ Detect printf-family call sites where the format argument is not a string litera
 
 The scanner operates in three stages: **sink enumeration**, **per-function disassembly**, and **backwards register tracing**.
 
-**Stage 1: Sink enumeration.** The scanner resolves the binary's PLT and maps each imported format-string function (printf, fprintf, snprintf, syslog, err, warn, and common firmware logging wrappers) to the register that carries the format argument under the SysV AMD64 ABI. `printf(fmt, ...)` puts `fmt` in `rdi`; `fprintf(stream, fmt, ...)` puts it in `rsi`; `snprintf(buf, n, fmt, ...)` puts it in `rdx`. This mapping is built once from the PLT and stored as `_fmt_call_vas`.
+**Stage 1: Sink enumeration.** The scanner resolves the binary's PLT and maps each imported format-string function printf, fprintf, snprintf, syslog, err, warn, and common firmware logging wrappers to the register that carries the format argument under the SysV AMD64 ABI. `printffmt, ...` puts `fmt` in `rdi`; `fprintfstream, fmt, ...` puts it in `rsi`; `snprintfbuf, n, fmt, ...` puts it in `rdx`. This mapping is built once from the PLT and stored as `_fmt_call_vas`.
 
 **Stage 2: Per-function disassembly.** For each function start in `func_starts`, the scanner disassembles up to 4096 bytes. It iterates instructions looking for `CALL` instructions whose target is in `_fmt_call_vas`.
 
@@ -131,9 +131,9 @@ for f in findings:
 
 **Stack loads that are always constants.** The scanner flags `rbp-0x20` loads as MEDIUM regardless of whether the value stored there is always a string literal. When the containing function writes a constant string into a stack buffer and then passes it to printf, the scanner raises MEDIUM even though the call is safe. Verify by disassembling the function and checking what writes to that stack slot.
 
-**Logging wrapper arguments.** If a firmware logging wrapper always receives a string literal from its callers but stores it in a local variable first, the scanner may flag the wrapper's internal printf call as MEDIUM (stack_load). Add the wrapper to `_FMT_FUNCS` or verify the wrapper's call sites are all string literals.
+**Logging wrapper arguments.** If a firmware logging wrapper always receives a string literal from its callers but stores it in a local variable first, the scanner may flag the wrapper's internal printf call as MEDIUM stack_load. Add the wrapper to `_FMT_FUNCS` or verify the wrapper's call sites are all string literals.
 
-**20-instruction lookback limit.** If the format register was defined more than 20 instructions before the call (e.g. after a long loop prologue), the scanner returns `unknown` (MEDIUM). This is intentionally conservative, it does not declare the site safe just because it cannot see the definition.
+**20-instruction lookback limit.** If the format register was defined more than 20 instructions before the call e.g. after a long loop prologue, the scanner returns `unknown` (MEDIUM). This is intentionally conservative, it does not declare the site safe just because it cannot see the definition.
 
 ---
 

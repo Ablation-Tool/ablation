@@ -74,7 +74,7 @@ SinkSanitizerFilter:
 
 ## False positives
 
-**Condition 3 (conditional branch guards exec sink) requires that the false edge leads to an error path, not a partial sanitization.** A sanitizer that is called but whose result is not used to prevent the exec sink call specifically the sanitizer return value is ignored will not be detected and the site will remain `ARG_PROPAGATED`. Verify by checking that the branch is conditional on the sanitizer's return, not on an unrelated condition.
+**Condition 3 conditional branch guards exec sink requires that the false edge leads to an error path, not a partial sanitization.** A sanitizer that is called but whose result is not used to prevent the exec sink call specifically the sanitizer return value is ignored will not be detected and the site will remain `ARG_PROPAGATED`. Verify by checking that the branch is conditional on the sanitizer's return, not on an unrelated condition.
 
 **`_SANITIZER_SCAN_WINDOW` is a fixed instruction count**: a sanitizer called more than `_SANITIZER_SCAN_WINDOW` instructions before the exec sink will not be detected. Increase the window for large functions with long sanitizer-to-sink paths.
 
@@ -88,9 +88,9 @@ Run `SinkSanitizerFilter.apply()` immediately after `SinkArgClassifier.classify_
 
 ## Reading output
 
-`SinkSanitizerFilter.apply(classifications)` accepts `List[SinkClassification]` from `SinkArgClassifier` and returns a new `List[SinkClassification]`. `ARG_PROPAGATED` entries where all three sanitizer conditions are confirmed are upgraded to `SANITIZER_VALIDATED`; all other entries pass through unchanged.
+`SinkSanitizerFilter.applyclassifications` accepts `List[SinkClassification]` from `SinkArgClassifier` and returns a new `List[SinkClassification]`. `ARG_PROPAGATED` entries where all three sanitizer conditions are confirmed are upgraded to `SANITIZER_VALIDATED`; all other entries pass through unchanged.
 
-Call `SinkSanitizerFilter.report(classifications)` after `apply()` to get a triage summary string showing how many sites were validated vs. remaining.
+Call `SinkSanitizerFilter.reportclassifications` after `apply()` to get a triage summary string showing how many sites were validated vs. remaining.
 
 ---
 

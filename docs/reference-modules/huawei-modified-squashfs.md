@@ -8,9 +8,9 @@ Decode Synopsys DesignWare ARC 700 / ARC HS variable-length firmware: discrimina
 
 1. **Capstone 5.x does not support `CS_ARCH_ARC`.** The ARC architecture (Synopsys DesignWare ARC 700/HS) is used in embedded IoT devices, network processors, and automotive ECUs. Without `arc_decoder.py`, ARC firmware cannot be disassembled at all in the standard pipeline.
 
-2. **ARC uses a mixed 16/32-bit encoding**: `op5 = (hw0 >> 11) & 0x1f`; values ≥ 24 (0x18) indicate 16-bit "compact" instructions. This single-check width discriminant is O(1) per instruction, enabling fast sequential decode of large ARC firmware images. `ARCDecoder.decode_frames()` implements this discriminant along with control-flow hints for `BL`, `J`, and branch groups.
+2. **ARC uses a mixed 16/32-bit encoding**: `op5 = hw0 >> 11 & 0x1f`; values ≥ 24 (0x18) indicate 16-bit "compact" instructions. This single-check width discriminant is O(1) per instruction, enabling fast sequential decode of large ARC firmware images. `ARCDecoder.decode_frames()` implements this discriminant along with control-flow hints for `BL`, `J`, and branch groups.
 
-3. **`ARCDecoder.has_full_decode()` transparently upgrades to full Capstone decoding** when `capstone` with `CS_ARCH_ARC` is available (capstone next branch), providing complete operand-level disassembly without requiring changes to calling code. This future-proofs the API: callers always call `decode_frames()`, and the level of detail improves automatically when the dependency becomes available.
+3. **`ARCDecoder.has_full_decode()` transparently upgrades to full Capstone decoding** when `capstone` with `CS_ARCH_ARC` is available capstone next branch, providing complete operand-level disassembly without requiring changes to calling code. This future-proofs the API: callers always call `decode_frames()`, and the level of detail improves automatically when the dependency becomes available.
 
 ---
 
@@ -73,26 +73,26 @@ ARCDisasm.function_starts(): <F> ARC functions (push_s blink prologue)
 
 ## Pipeline position
 
-Run `ARCDecoder` / `ARCDisasm` on any ARC 700/HS firmware after `EcuArchDetector` confirms ARC architecture (or after manual confirmation from ELF header). Function starts feed taint analysis via ARC-specific `TaintTracker` (`taint_tracker_arc.py`).
+Run `ARCDecoder` / `ARCDisasm` on any ARC 700/HS firmware after `EcuArchDetector` confirms ARC architecture or after manual confirmation from ELF header. Function starts feed taint analysis via ARC-specific `TaintTracker` (`taint_tracker_arc.py`).
 
 ---
 
 ## Reading output
 
-`ARCDisasm.decode_frames(va, size)` returns a list of `ARCFrame` objects:
+`ARCDisasm.decode_framesva, size` returns a list of `ARCFrame` objects:
 
 | Attribute | Content |
 |:---|:---|
 | `va` | Virtual address of the instruction |
 | `width` | Frame width in bytes: `2` (16-bit) or `4` (32-bit) |
-| `hw0` | First halfword (bits 15:0) |
-| `hw1` | Second halfword (bits 31:16); `0` for 16-bit instructions |
+| `hw0` | First halfword bits 15:0 |
+| `hw1` | Second halfword bits 31:16; `0` for 16-bit instructions |
 | `mnemonic` | Decoded instruction mnemonic string |
 | `op_str` | Operand string |
 | `is_branch` | `True` if the instruction is a branch |
 | `is_call` | `True` if the instruction is a call |
 | `is_ret` | `True` if the instruction is a return |
-| `target` | Resolved branch/call target VA (0 if not computed) |
+| `target` | Resolved branch/call target VA 0 if not computed |
 
 `ARCDisasm.function_starts()` returns `List[int]`: VA list of functions identified by `push_s blink` prologues.
 

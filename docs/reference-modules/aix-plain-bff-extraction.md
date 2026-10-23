@@ -8,7 +8,7 @@ Parse AIX backup-by-name (BFF) archives produced by AIX 4.x and 5.x backup(8): i
 
 1. **GNU tar, ar, and binwalk all fail to extract BFF archives correctly.** `tar` does not recognize the format. `ar` errors on the `0x09 0x00` magic bytes. `binwalk` extracts raw byte-offset slices that are not the actual files, it locates embedded XCOFF magic within the archive data, not the BFF entry boundaries. Without a format-aware extractor, every binary inside a BFF archive is unreachable.
 
-2. **BFF archives use little-endian integer encoding on a big-endian (PowerPC) platform.** All fields in the extended stat block, file size word, and stat summary block are little-endian `uint32`: the opposite of XCOFF and AIX's native byte order. XCOFF tools and most AIX-aware parsers assume big-endian for all fields, producing incorrect sizes that cause them to skip or misread entries. This extractor handles the mixed-endian layout explicitly: magic at offset 0 is `b'\x09\x00'` (LE uint16 value 9), file size at `ext_stat+56` is LE uint32, uid/gid/mode in the stat summary are LE uint32.
+2. **BFF archives use little-endian integer encoding on a big-endian (PowerPC) platform.** All fields in the extended stat block, file size word, and stat summary block are little-endian `uint32`: the opposite of XCOFF and AIX's native byte order. XCOFF tools and most AIX-aware parsers assume big-endian for all fields, producing incorrect sizes that cause them to skip or misread entries. This extractor handles the mixed-endian layout explicitly: magic at offset 0 is `b'\x09\x00'` LE uint16 value 9, file size at `ext_stat+56` is LE uint32, uid/gid/mode in the stat summary are LE uint32.
 
 3. **BFF archives from AIX 4.3.3 and 5.1 contain the primary RE targets for AIX kernel extension analysis.** Kernel extensions (`.ext`), shared objects (`.a` in AIX XCOFF format), and network daemon binaries (`imapd`, `named8`, `gated`, `telnetd`) are all distributed inside BFF archives. `iter_entries()` yields their data bytes directly: ready for `BinaryContext.load_or_build()` or XCOFF parsing without any intermediate extraction step.
 
@@ -38,7 +38,7 @@ flowchart TD
 | `mtime` | 4 bytes | LE uint32 | `ext_stat + 28` |
 | `file_size` | 4 bytes | LE uint32 | `ext_stat + 56` |
 | Zero field | 4 bytes |: | `ext_stat + 60` |
-| Name (null-terminated) | variable | ASCII | `ext_stat + 64` |
+| Name null-terminated | variable | ASCII | `ext_stat + 64` |
 | Name padding | to 8-byte boundary |: |: |
 | Stat summary `uid` | 4 bytes | LE uint32 | `stat + 0` |
 | Stat summary `gid` | 4 bytes | LE uint32 | `stat + 4` |
@@ -147,6 +147,6 @@ telnetd: 234,568 bytes  ELF_magic=01df
 
 ## See also
 
-- [AIX Big Archive Extraction](aix-big-archive-extraction.md): `<bigaf>` format for large AIX archives (different format, same analysis pipeline)
-- [BFF Decompressor](aix-bff-decompressor.md): handles compressed BFF variants (LZW/Huffman) that this module cannot process
+- [AIX Big Archive Extraction](aix-big-archive-extraction.md): `<bigaf>` format for large AIX archives different format, same analysis pipeline
+- [BFF Decompressor](aix-bff-decompressor.md): handles compressed BFF variants LZW/Huffman that this module cannot process
 - [XCOFF Analysis](xcoff-analysis.md): parse and analyze the XCOFF binaries extracted from BFF archives

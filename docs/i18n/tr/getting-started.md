@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Farklı firmware sürümü, farklı satıcı gibi gelecekteki herhangi bir taramada `pl.sweep(searcher)` tüm onaylanan kalıpları otomatik olarak çalıştırır.
+Farklı firmware sürümü, farklı satıcı gibi gelecekteki herhangi bir taramada `pl.sweepsearcher` tüm onaylanan kalıpları otomatik olarak çalıştırır.
 
 ---
 

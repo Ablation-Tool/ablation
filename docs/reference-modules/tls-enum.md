@@ -8,7 +8,7 @@ Three gaps existed before this module:
 
 1. **Manual TLS weakness identification per target.** Checking TLS version support, weak ciphers, HSTS, HPKP, and certificate pinning required separate nmap/openssl invocations per check. This module consolidates all TLS/PKI probes into structured findings lists.
 
-2. **Certificate chain inspection without third-party tools.** The module inspects certificate expiry, self-signed certs, weak signature algorithms (SHA-1, MD5), RSA key size, EV OID presence, hostname mismatches, SCT embedding, and wildcard scope, using Python's `ssl` module alone, no openssl binary required.
+2. **Certificate chain inspection without third-party tools.** The module inspects certificate expiry, self-signed certs, weak signature algorithms SHA-1, MD5, RSA key size, EV OID presence, hostname mismatches, SCT embedding, and wildcard scope, using Python's `ssl` module alone, no openssl binary required.
 
 3. **Raw TLS record probing for downgrade and DPI bypass detection.** Checking FALLBACK_SCSV, GREASE acceptance, fragmented ClientHello bypass, and JA3 fingerprint discrimination requires sending raw ClientHello bytes outside the ssl module's normal validation flow.
 
@@ -18,19 +18,19 @@ Three gaps existed before this module:
 
 2441-line pure network I/O module. No filesystem reads. No subprocess calls. No lief usage. Covers:
 
-- Certificate transparency checks (wildcard SANs, validity window, self-signed, CN/SAN mismatch)
+- Certificate transparency checks wildcard SANs, validity window, self-signed, CN/SAN mismatch
 - TLS inspection/DPI bypass detection (GREASE, large session ID, 0-RTT, fragmented ClientHello)
-- Weak cipher suite enumeration (SSLv3/POODLE, RC4, DES/SWEET32, NULL, EXPORT/FREAK)
-- Certificate pinning bypass detection (HPKP, Expect-CT, SNI-unbound cert swap, security.txt)
+- Weak cipher suite enumeration SSLv3/POODLE, RC4, DES/SWEET32, NULL, EXPORT/FREAK
+- Certificate pinning bypass detection HPKP, Expect-CT, SNI-unbound cert swap, security.txt
 - mTLS enforcement probing (no client cert, 0-RTT session ticket, CertificateRequest scan, bogus SNI)
-- TLS downgrade attack detection (FALLBACK_SCSV, TLS 1.0/1.1 acceptance, HSTS max-age, preload)
-- ACME endpoint exposure (challenge dirs, PKI validation, private CA API, HTTP-01 liveness)
-- Certificate transparency monitoring (SCT OID, recently issued, wildcard, SAN count)
-- TLS session resumption and 0-RTT replay risk (ticket issued, ticket reused, TLS 1.3 path)
-- Weak cipher suite probe (ssl context cipher restriction, RC4, 3DES SWEET32 classification)
-- Legacy TLS version support (TLS 1.0, TLS 1.1 acceptance, TLS 1.3 detection)
-- Certificate attribute and transparency exposure (RSA key size DER parsing, SHA-1/MD5 OID, EV OID, hostname mismatch)
-- Certificate pinning enforcement (HPKP max-age, HSTS preload, Expect-CT, SCT count, issuer recognition)
+- TLS downgrade attack detection FALLBACK_SCSV, TLS 1.0/1.1 acceptance, HSTS max-age, preload
+- ACME endpoint exposure challenge dirs, PKI validation, private CA API, HTTP-01 liveness
+- Certificate transparency monitoring SCT OID, recently issued, wildcard, SAN count
+- TLS session resumption and 0-RTT replay risk ticket issued, ticket reused, TLS 1.3 path
+- Weak cipher suite probe ssl context cipher restriction, RC4, 3DES SWEET32 classification
+- Legacy TLS version support TLS 1.0, TLS 1.1 acceptance, TLS 1.3 detection
+- Certificate attribute and transparency exposure RSA key size DER parsing, SHA-1/MD5 OID, EV OID, hostname mismatch
+- Certificate pinning enforcement HPKP max-age, HSTS preload, Expect-CT, SCT count, issuer recognition
 - Zero Trust / ZTNA bypass surface (direct IP access, SPA enforcement, mTLS, JA3, CORS wildcard, bearer token in URL)
 - Cloud proxy / SSL inspection bypass (TLS fingerprint, h2c upgrade, QUIC/HTTP3, CONNECT pivot, 3-fragment ClientHello)
 
@@ -67,17 +67,17 @@ findings += probe_zero_trust_bypass_surface('target.example.com', port=443)
 
 ## FORGE audit
 
-Gate: **PASSED** (after 2 fixes).
+Gate: **PASSED** after 2 fixes.
 
 | Fix | Location | Description |
 |---|---|---|
-| Missing `return findings` | `probe_tls_downgrade_attack` (line 836) | Function ended without returning findings: silently discarded FALLBACK_SCSV, TLS10, TLS11, HSTS findings |
-| Duplicate `return findings` | `probe_certificate_transparency_monitor` (line 1085) | Unreachable dead code second return |
+| Missing `return findings` | `probe_tls_downgrade_attack` line 836 | Function ended without returning findings: silently discarded FALLBACK_SCSV, TLS10, TLS11, HSTS findings |
+| Duplicate `return findings` | `probe_certificate_transparency_monitor` line 1085 | Unreachable dead code second return |
 
 **Security checks:**
 - No file I/O: no CWE-770 concerns.
 - No `lief.parse()`: no CWE-755 concerns.
-- No bare `except:`: all handlers use `except Exception:`, `except ssl.SSLError:`, `except (ssl.SSLError, OSError):`, `except urllib.error.HTTPError:`, or `except AttributeError:`.
+- No bare `except:`: all handlers use `except Exception:`, `except ssl.SSLError:`, `except ssl.SSLError, OSError:`, `except urllib.error.HTTPError:`, or `except AttributeError:`.
 - All socket reads bounded: `recv(4096)` for raw TLS probes, `recv(1024)` for HTTP CONNECT response, `recvfrom(4096)` for QUIC UDP probe.
 - All `urllib.request.urlopen()` calls read only HTTP headers/status: no `resp.read()` on response bodies.
 - `ssl.CERT_NONE` intentional: probe mode against potentially misconfigured TLS endpoints.

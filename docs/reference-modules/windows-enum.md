@@ -10,7 +10,7 @@ Three gaps existed before this module:
 
 2. **COM hijack detection required manual HKCU vs. HKLM comparison.** The module compares HKCU\\Software\\Classes\\CLSID against HKLM\\SOFTWARE\\Classes\\CLSID, identifying CLSIDs where a user-controlled HKCU registration shadows a machine-level one, an active COM hijack if InprocServer32 differs.
 
-3. **Security feature state (UAC, Secure Boot, Credential Guard, PPL) was not enumerable from one place.** `system_security_features()` reads EnableLUA, DeviceGuard, RunAsPPL, and DisableAntiSpyware in a single pass, producing HIGH/MEDIUM findings for disabled controls.
+3. **Security feature state UAC, Secure Boot, Credential Guard, PPL was not enumerable from one place.** `system_security_features()` reads EnableLUA, DeviceGuard, RunAsPPL, and DisableAntiSpyware in a single pass, producing HIGH/MEDIUM findings for disabled controls.
 
 ## Usage
 
@@ -53,7 +53,7 @@ Gate: **PASSED**. No code changes needed.
 - All subprocess calls use `_run()` which enforces `timeout=15` (default) and catches all exceptions.
 - All PowerShell calls use `_ps()` which wraps `_run()` with `timeout=20`.
 - PowerShell invoked with `-NoProfile -NonInteractive`.
-- COM CLSID per-GUID InprocServer32 queries capped at 30 (prevents timeout on large registries).
+- COM CLSID per-GUID InprocServer32 queries capped at 30 prevents timeout on large registries.
 - Degrades gracefully on non-Windows hosts: each section returns an INFO finding instead of raising.
 
 ---
@@ -85,7 +85,7 @@ results['token']:
 
 ## False positives
 
-**`com_hijack_candidates()` on developer machines**: developer tools (Visual Studio, build systems) legitimately register per-user COM objects in HKCU that shadow HKLM entries. Confirm the CLSID is associated with an application and not a persistence mechanism by checking the registered InprocServer32 DLL path.
+**`com_hijack_candidates()` on developer machines**: developer tools Visual Studio, build systems legitimately register per-user COM objects in HKCU that shadow HKLM entries. Confirm the CLSID is associated with an application and not a persistence mechanism by checking the registered InprocServer32 DLL path.
 
 **`token_privileges()` reporting `SeDebugPrivilege`**: administrators and debuggers legitimately hold SeDebugPrivilege. This is a HIGH finding on service accounts and restricted users, but expected on admin sessions.
 
@@ -107,7 +107,7 @@ Returns `dict[str, list[Finding]]`. `Finding` fields:
 | `category` | Section name (e.g., `'COM Hijacking'`, `'Token Privileges'`, `'Named Pipes'`) |
 | `title` | Short description of the specific finding |
 | `detail` | Full detail string explaining what was found and why it matters |
-| `evidence` | Supporting evidence string (may be empty) |
+| `evidence` | Supporting evidence string may be empty |
 
 ---
 

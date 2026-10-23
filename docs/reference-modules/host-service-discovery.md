@@ -10,7 +10,7 @@ Discover live hosts via ICMP echo requests, grab TCP service banners, enumerate 
 
 2. **`scan_tcp_banner()` connects to a specific port and reads the service banner**: the first bytes returned after connection often identify the service and version without requiring protocol-specific probing. SSH banners (`SSH-2.0-OpenSSH_8.4`), SMTP banners (`220 mail.example.com Postfix`), and HTTP server headers are all returned in the first `recv()`. `fingerprint_os_from_ttl()` uses the TTL value in the IP header to infer OS (TTL ≈ 64 → Linux/macOS; TTL ≈ 128 → Windows; TTL ≈ 255 → network device).
 
-3. **`MDNSDiscovery` and `SSDPDiscovery`** enumerate service types on the local network segment passively. `MDNSDiscovery.query('_http._tcp.local')` sends an mDNS PTR query and collects responses, identifying HTTP services (management interfaces, embedded device dashboards) without TCP scanning. `SSDPDiscovery.discover()` sends an M-SEARCH and collects UPnP device type and location responses.
+3. **`MDNSDiscovery` and `SSDPDiscovery`** enumerate service types on the local network segment passively. `MDNSDiscovery.query('_http._tcp.local')` sends an mDNS PTR query and collects responses, identifying HTTP services management interfaces, embedded device dashboards without TCP scanning. `SSDPDiscovery.discover()` sends an M-SEARCH and collects UPnP device type and location responses.
 
 ---
 
@@ -83,21 +83,21 @@ SSDP devices:
 
 ## Pipeline position
 
-Run host/service discovery after `local-network-inventory` reveals subnets. Discovery results feed banner grabbing, credential testing, and service-specific enumeration modules (Docker, Kubernetes, IOS, etc.).
+Run host/service discovery after `local-network-inventory` reveals subnets. Discovery results feed banner grabbing, credential testing, and service-specific enumeration modules Docker, Kubernetes, IOS, etc..
 
 ---
 
 ## Reading output
 
-`icmp_host_discovery(target_cidr, timeout)` returns `List[dict]`:
+`icmp_host_discoverytarget_cidr, timeout` returns `List[dict]`:
 
 | Field | Content |
 |:---|:---|
 | `host` | IP address string |
 | `latency_ms` | Round-trip latency in milliseconds |
-| `ttl` | IP TTL value from the ICMP reply (0 when TCP fallback was used) |
+| `ttl` | IP TTL value from the ICMP reply 0 when TCP fallback was used |
 
-`scan_tcp_banner(host, port, timeout)` returns a dict:
+`scan_tcp_bannerhost, port, timeout` returns a dict:
 
 | Field | Content |
 |:---|:---|
@@ -106,7 +106,7 @@ Run host/service discovery after `local-network-inventory` reveals subnets. Disc
 | `service_guess` | Identified service name (e.g., `'SSH'`, `'HTTP'`, `'Redis'`, `'unknown'`) |
 | `tls` | `True` if TLS was attempted on this port |
 
-`MDNSDiscovery.query(service_type)` returns `List[dict]` with keys `instance_name`, `host`, `ip`, `port`.
+`MDNSDiscovery.queryservice_type` returns `List[dict]` with keys `instance_name`, `host`, `ip`, `port`.
 
 `SSDPDiscovery.discover(timeout)` returns `List[dict]` with keys `device_type`, `friendly_name`, `ip`, `location_url`.
 

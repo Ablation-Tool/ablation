@@ -4,7 +4,7 @@
 
 Three things were not possible before in Ablation:
 
-1. **Taint tracing Perl script layers that sit above setuid ELFs**, every prior engagement analysis ended at the ELF boundary. RSCT (IBM HMC V11), FortiOS diagnostic scripts, and dozens of embedded Linux targets ship thick Perl layers that call privileged binaries. TaintTracker and SinkArgClassifier are ELF-only; they never see `.pm`/`.pl`. The HMC engagement confirmed a real CWE-78 (ERRM_cli_utils.pm → rmcondition → unsanitized `$resource_name` in qx//) that required manual Perl analysis because no ablation tool could flag it. PerlTaintScanner closes that gap.
+1. **Taint tracing Perl script layers that sit above setuid ELFs**, every prior engagement analysis ended at the ELF boundary. RSCT IBM HMC V11, FortiOS diagnostic scripts, and dozens of embedded Linux targets ship thick Perl layers that call privileged binaries. TaintTracker and SinkArgClassifier are ELF-only; they never see `.pm`/`.pl`. The HMC engagement confirmed a real CWE-78 (ERRM_cli_utils.pm → rmcondition → unsanitized `$resource_name` in qx//) that required manual Perl analysis because no ablation tool could flag it. PerlTaintScanner closes that gap.
 
 2. **Detecting Perl-specific sanitization patterns**, shell injection mitigations in Perl don't look like C. `quotemeta()` is the explicit safe function, but most mature RSCT/IBM Perl uses the single-quote wrapping idiom: `s/'/ /g` stripping followed by `"'". join("' '", @args). "'"`. A generic grep for `system(` or qx// cannot distinguish unsanitized from sanitized; it floods findings with false positives. PerlTaintScanner recognizes all three idioms and reports SANITIZED so true positives stand out.
 
@@ -108,9 +108,9 @@ PerlTaintScanner is independent of BinaryContext, it works entirely on text file
 ## Known limitations
 
 - **Look-back window is function-scoped**: variable assignments before the current function's `sub` keyword are not traced. Module-level globals that flow into a sink require manual inspection.
-- **One-hop caller resolution only**: if a function parameter passes through two hops (A calls B which calls C where the sink is), the intermediate hop is not followed. `PARAM_UNKNOWN` is returned.
+- **One-hop caller resolution only**: if a function parameter passes through two hops A calls B which calls C where the sink is, the intermediate hop is not followed. `PARAM_UNKNOWN` is returned.
 - **Multi-line qx// not detected**: `qx` with the delimiter on a separate line from the variable is not matched by the current regex patterns.
-- **Indirect Getopt hashes**: `$opts{$key}` where `$key` is a variable (not a literal key) will not match the Getopt source pattern.
+- **Indirect Getopt hashes**: `$opts{$key}` where `$key` is a variable not a literal key will not match the Getopt source pattern.
 - **No data flow through arrays**: if the CLI arg is pushed into `@array` and then shifted out in a loop, the array intermediary breaks the backward trace.
 
 ---
@@ -142,7 +142,7 @@ PerlTaintScanner is independent of BinaryContext, it works entirely on text file
 | `sink_type` | `'backtick'` / `'qx'` / `'system'` / `'open_pipe'` |
 | `verdict` | `'INJECTABLE'`: no sanitization found; `'SANITIZED'`: sanitization confirmed; `'PARAM_UNKNOWN'`: input source unclear; `'INTERNAL'`: constant or known-safe value; `'UNKNOWN'`: could not determine |
 | `source_desc` | Human-readable description of the input source |
-| `sanitization` | Description of sanitization found (empty if none) |
+| `sanitization` | Description of sanitization found empty if none |
 | `caller_file` | File where a `PARAM` resolved to an `ARGV` source (None if not applicable) |
 
 ---

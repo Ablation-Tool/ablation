@@ -43,7 +43,7 @@ flowchart TD
 ### Subtraction detection
 
 Accepts two instruction forms:
-- `LEA dest, [base - N]` where `N` is in `[4, 256]` and `base` is not `rbp`/`rsp` (excluding stack frame accesses)
+- `LEA dest, [base - N]` where `N` is in `[4, 256]` and `base` is not `rbp`/`rsp` excluding stack frame accesses
 - `SUB dest, N` where `N` is in `[4, 256]`
 
 The constant range `[4, 256]` covers typical protocol header sizes: IPv4 (20), TCP (20), UDP (8), GRE (4), SCTP (12), PPTP (8), and custom protocol headers up to 256 bytes.
@@ -154,7 +154,7 @@ UnderflowFinding [UNGUARDED]
 |:---|:---|
 | `func_va` | Virtual address of the containing function |
 | `sub_va` | VA of the subtraction instruction (`lea -N` or `sub $N`) |
-| `sub_const` | The constant N subtracted (header size) |
+| `sub_const` | The constant N subtracted header size |
 | `sub_reg` | Destination register family of the subtraction |
 | `truncate_va` | VA of the `movzwl`/`movzbl` truncation instruction |
 | `call_va` | VA of the `CALL` instruction that receives the truncated value |
@@ -167,6 +167,6 @@ UnderflowFinding [UNGUARDED]
 ## See also
 
 - [Taint Analysis](taint-analysis.md): confirm that the length field originates from user-controlled input
-- [Heap Vulnerability Scanner](heap-vulnerability-scanner.md): detects integer overflows before allocation (multiplicative overflow class)
+- [Heap Vulnerability Scanner](heap-vulnerability-scanner.md): detects integer overflows before allocation multiplicative overflow class
 - [Binary Context](binary-context.md): provides `func_starts` and PLT; run first
 - [Path Solver](path-solver.md): feasibility analysis for confirmed unguarded findings

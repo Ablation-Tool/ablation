@@ -70,15 +70,15 @@ XorSolverResult:
 
 ## False positives
 
-**`kpa_attack()` may return a false key if the ciphertext contains a coincidental match of the magic bytes near offset 0.** Verify the recovered key by checking that it repeats consistently throughout the ciphertext (repeat frequency > 95%) and that the decrypted output begins with the expected magic bytes in context. A key that decrypts only the first 4 bytes correctly but fails elsewhere is a false match.
+**`kpa_attack()` may return a false key if the ciphertext contains a coincidental match of the magic bytes near offset 0.** Verify the recovered key by checking that it repeats consistently throughout the ciphertext repeat frequency > 95% and that the decrypted output begins with the expected magic bytes in context. A key that decrypts only the first 4 bytes correctly but fails elsewhere is a false match.
 
-**`recover_by_frequency()` assumes the plaintext is predominantly x86-64 or ARM code: on data-heavy firmware images (calibration tables, configuration databases), frequency analysis will produce an incorrect key.** Pair with `ic_key_length()` Hamming distance to confirm key length independently before trusting the frequency-derived key bytes.
+**`recover_by_frequency()` assumes the plaintext is predominantly x86-64 or ARM code: on data-heavy firmware images calibration tables, configuration databases, frequency analysis will produce an incorrect key.** Pair with `ic_key_length()` Hamming distance to confirm key length independently before trusting the frequency-derived key bytes.
 
 ---
 
 ## Pipeline position
 
-Run `XorSolver` on firmware images that extract as opaque binary blobs: when `FirmwareExtraction` tools (`binwalk`, entropy analysis) show no recognized headers and the entropy plot is uniformly high (typical of XOR obfuscation, not compression). After decryption, re-run extraction and analysis tools on the decrypted image.
+Run `XorSolver` on firmware images that extract as opaque binary blobs: when `FirmwareExtraction` tools (`binwalk`, entropy analysis) show no recognized headers and the entropy plot is uniformly high typical of XOR obfuscation, not compression. After decryption, re-run extraction and analysis tools on the decrypted image.
 
 ---
 
@@ -90,7 +90,7 @@ Run `XorSolver` on firmware images that extract as opaque binary blobs: when `Fi
 |:---|:---|
 | `key` | `Optional[bytes]`: recovered XOR key |
 | `key_length` | `Optional[int]`: length of the recovered key |
-| `method` | `'kpa'` (known-plaintext), `'hamming+freq'` (frequency analysis), or `'manual'` |
+| `method` | `'kpa'` known-plaintext, `'hamming+freq'` frequency analysis, or `'manual'` |
 | `magic_matched` | `Optional[str]`: magic bytes label if KPA matched a known header |
 | `confidence` | Float 0.0–1.0 |
 | `notes` | Additional solver notes |

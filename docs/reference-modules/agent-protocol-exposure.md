@@ -6,7 +6,7 @@ Enumerate unauthenticated agentic API surfaces on exposed LLM inference endpoint
 
 ## Why this exists
 
-1. **LLM agent frameworks expose a control plane API alongside the inference API, and the two are rarely secured independently.** OpenAI Assistants API, LangChain LangServe, AutoGPT, and self-hosted agentic frameworks each add endpoints beyond `/v1/chat/completions`: `/v1/assistants` (list assistants and their tool configurations), `/v1/threads` (conversation session management), `/v1/runs` (task execution tracking), and `/v1/agents` (agent definitions with system prompts and tool bindings). When these endpoints return 200 without an `Authorization` header, an adversary reads the full tool capability map without executing a single inference request.
+1. **LLM agent frameworks expose a control plane API alongside the inference API, and the two are rarely secured independently.** OpenAI Assistants API, LangChain LangServe, AutoGPT, and self-hosted agentic frameworks each add endpoints beyond `/v1/chat/completions`: `/v1/assistants` list assistants and their tool configurations, `/v1/threads` conversation session management, `/v1/runs` task execution tracking, and `/v1/agents` agent definitions with system prompts and tool bindings. When these endpoints return 200 without an `Authorization` header, an adversary reads the full tool capability map without executing a single inference request.
 
 2. **Dangerous tool types in agent definitions are directly exploitable as unauthenticated code execution surfaces.** An assistant with `"tool_type": "bash"` can execute shell commands on the host; `"computer_use"` grants screen and input control; `"file_search"` grants filesystem read; `"code_interpreter"` executes Python in a sandboxed but often misconfigured container. When `/v1/assistants` is unauthenticated, the adversary reads which of these capabilities are active, identifies the assistant IDs, and issues a `/v1/threads` + `/v1/runs` sequence to invoke tool calls directly: without needing to construct a prompt injection chain.
 
@@ -36,7 +36,7 @@ flowchart TD
 |---|---|---|
 | `computer_use` | Screen read, mouse/keyboard input, full desktop control | CRITICAL |
 | `bash` | Shell command execution | CRITICAL |
-| `code_interpreter` | Python execution in container (often misconfigured) | CRITICAL |
+| `code_interpreter` | Python execution in container often misconfigured | CRITICAL |
 | `file_search` | Filesystem read access | CRITICAL |
 | Any tool type | Assistant definition exposure | HIGH |
 
@@ -115,7 +115,7 @@ if status == 200 and 'tool_calls' in body:
 
 ## False positives
 
-**`/v1/assistants` returns 200 with an empty `data` array.** The finding fires on HTTP 200 regardless of whether any assistant definitions are present. An empty `{"data": []}` response confirms the endpoint is unauthenticated and enumerable but does not confirm active dangerous tools. Severity remains HIGH (the endpoint should require auth); downgrade to MEDIUM if the array is empty and note the absence of active tool definitions.
+**`/v1/assistants` returns 200 with an empty `data` array.** The finding fires on HTTP 200 regardless of whether any assistant definitions are present. An empty `{"data": []}` response confirms the endpoint is unauthenticated and enumerable but does not confirm active dangerous tools. Severity remains HIGH the endpoint should require auth; downgrade to MEDIUM if the array is empty and note the absence of active tool definitions.
 
 **Tool-calling `tool_calls` in response does not confirm routing to real execution.** `_TOOL_PROBE_PAYLOAD` causes the model to emit a `tool_calls` JSON object in its response, but the calling application must separately route that object to an actual executor. Many production deployments emit `tool_calls` responses but never wire them to real functions. The finding is `TOOL_CALLING_ACCEPTED`: the model emitted the call. Confirm actual execution by checking whether the application has a tool router (e.g., a `/v1/runs` endpoint that accepts `tool_outputs` submissions).
 

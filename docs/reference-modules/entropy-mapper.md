@@ -31,7 +31,7 @@ Three gaps existed before this module:
 
 ## Detection algorithm
 
-`EntropyMapper` slides a window of `window_size` bytes (default 256) across the binary at `step_size` intervals. For each window it computes Shannon entropy:
+`EntropyMapper` slides a window of `window_size` bytes default 256 across the binary at `step_size` intervals. For each window it computes Shannon entropy:
 
 ```
 H = -Σ p_i * log2(p_i)   for every non-zero byte frequency p_i
@@ -81,7 +81,7 @@ for t in transitions:
 | Field | Description |
 |---|---|
 | `offset_start` | Byte offset where this region begins |
-| `offset_end` | Byte offset where this region ends (exclusive) |
+| `offset_end` | Byte offset where this region ends exclusive |
 | `cls` | `ENCRYPTED` / `CODE` / `SPARSE` / `PADDING` |
 | `avg_entropy` | Mean entropy across all windows in this region |
 | `min_entropy` | Minimum window entropy in the region |
@@ -121,7 +121,7 @@ for start, end in enc_ranges:
 
 ## How it works
 
-`EntropyMapper.scan(path)` reads the binary and slides a configurable window (default 256 bytes, step 64) across every byte. Shannon entropy is computed for each window. Consecutive windows above a high threshold are merged into `EntropyRegion` objects; transitions between high and low entropy are recorded as `EntropyTransition` objects. No disassembly occurs. No function starts are required.
+`EntropyMapper.scan(path)` reads the binary and slides a configurable window default 256 bytes, step 64 across every byte. Shannon entropy is computed for each window. Consecutive windows above a high threshold are merged into `EntropyRegion` objects; transitions between high and low entropy are recorded as `EntropyTransition` objects. No disassembly occurs. No function starts are required.
 
 ---
 
@@ -150,9 +150,9 @@ Each `EntropyRegion`:
 
 | Attribute | Content |
 |:---|:---|
-| `offset_start` / `offset_end` | Byte range (exclusive end) |
+| `offset_start` / `offset_end` | Byte range exclusive end |
 | `cls` | `'ENCRYPTED'` / `'CODE'` / `'SPARSE'` / `'PADDING'` |
-| `avg_entropy` | Mean Shannon entropy (bits/byte) across windows in this region |
+| `avg_entropy` | Mean Shannon entropy bits/byte across windows in this region |
 | `min_entropy` / `max_entropy` | Min/max entropy in the region |
 | `size` | Property: `offset_end - offset_start` |
 

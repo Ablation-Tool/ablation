@@ -6,11 +6,11 @@ Consume a sample of messages from a Kafka topic, submit a JAR file to a Flink cl
 
 ## Why this exists
 
-1. **`kafka_consume_sample()` retrieves actual messages from a Kafka topic**: after `kafka_list_topics()` identifies topic names, `kafka_consume_sample()` fetches the first N messages from partition 0 using a raw `Fetch(v1)` API request. No consumer group offset tracking is used; the fetch starts at offset 0 (the beginning of the retained log). This provides the actual message content: JSON payloads, Avro-encoded data, or plaintext: for topics identified as potentially sensitive during enumeration.
+1. **`kafka_consume_sample()` retrieves actual messages from a Kafka topic**: after `kafka_list_topics()` identifies topic names, `kafka_consume_sample()` fetches the first N messages from partition 0 using a raw `Fetch(v1)` API request. No consumer group offset tracking is used; the fetch starts at offset 0 the beginning of the retained log. This provides the actual message content: JSON payloads, Avro-encoded data, or plaintext: for topics identified as potentially sensitive during enumeration.
 
 2. **`flink_submit_jar_rce()` executes arbitrary code on a Flink cluster**, it uploads a JAR to the Flink JobManager's `/jars/upload` endpoint and triggers execution via `/jars/<id>/run`. The JAR's entry class is called with the Flink TaskManager's JVM process identity and network access. This is the operational execution step that follows `flink_enumerate()` confirming that the upload and run endpoints are accessible. The function returns the Flink job ID and status, which can be monitored via `/jobs/<id>/exceptions` for execution confirmation.
 
-3. **`schema_registry_enumerate()` provides schema definitions for Avro/JSON schema-encoded Kafka topics**: Confluent Schema Registry stores the Avro or JSON schema for each Kafka topic's value type. Retrieving schemas via `/subjects/<topic-value>/versions/latest` reveals field names, types, and whether sensitive fields (SSN, credit card number, password) are part of the schema, even before consuming actual messages. This is the schema-level reconnaissance step.
+3. **`schema_registry_enumerate()` provides schema definitions for Avro/JSON schema-encoded Kafka topics**: Confluent Schema Registry stores the Avro or JSON schema for each Kafka topic's value type. Retrieving schemas via `/subjects/<topic-value>/versions/latest` reveals field names, types, and whether sensitive fields SSN, credit card number, password are part of the schema, even before consuming actual messages. This is the schema-level reconnaissance step.
 
 ---
 
@@ -79,7 +79,7 @@ flink_submit_jar_rce: <flink-host>:8081
 
 **`kafka_consume_sample()` message encoding**: Kafka messages may be Avro-serialized with a 5-byte magic prefix (`\x00` + 4-byte schema ID). Messages that are not plain JSON will appear as binary in `value_raw`. Use `schema_registry_enumerate()` to obtain the Avro schema and deserialize before reporting on message content.
 
-**`flink_submit_jar_rce()` FAILED status**: a `FAILED` job status may indicate the JAR's main class was not found, the JAR has a dependency that Flink's classpath does not include, or the TaskManager ran out of memory. A failed execution is not a false positive for the vulnerability (JAR upload was accepted); it means the payload requires adjustment.
+**`flink_submit_jar_rce()` FAILED status**: a `FAILED` job status may indicate the JAR's main class was not found, the JAR has a dependency that Flink's classpath does not include, or the TaskManager ran out of memory. A failed execution is not a false positive for the vulnerability JAR upload was accepted; it means the payload requires adjustment.
 
 ---
 
@@ -95,7 +95,7 @@ Streaming operational probe functions return `List[{severity, title, detail, hos
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` (credential exposure in messages) / `HIGH` (schema registry) / `MEDIUM` (topic accessible) |
+| `severity` | `CRITICAL` credential exposure in messages / `HIGH` schema registry / `MEDIUM` topic accessible |
 | `title` | Finding code (e.g., `KAFKA_SENSITIVE_SCHEMA_FIELD`, `KAFKA_CREDENTIAL_IN_TOPIC`, `SCHEMA_REGISTRY_SENSITIVE`) |
 | `detail` | Topic name, schema name, or credential field names found in sampled messages |
 | `host` | Broker or schema registry host |

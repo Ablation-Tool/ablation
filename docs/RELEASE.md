@@ -1,6 +1,6 @@
 # Ablation Release Notes
 
-## v2.5.0 (2026-09-25)
+## v2.5.0 2026-09-25
 
 ### FormatStringScanner: fortify variant coverage (`ablation fmtstr`)
 
@@ -28,17 +28,17 @@ paths = tracker.run()
 
 ### BYOVDDetector: expanded to 12 capability classes + PDB fingerprints
 
-Added: DKOM (ObReferenceObjectByHandle), APC_INJECT (KeInitializeApc), DRIVER_LOAD, CALLBACK_REMOVE, PROCESS_KILL, MSR_WRITE (WRMSR instruction scan). Known-driver PDB fingerprint table: mhyprot, RTCore64, dbutil, PROCEXP, iqvw64e, cpuz.
+Added: DKOM (ObReferenceObjectByHandle), APC_INJECT (KeInitializeApc), DRIVER_LOAD, CALLBACK_REMOVE, PROCESS_KILL, MSR_WRITE WRMSR instruction scan. Known-driver PDB fingerprint table: mhyprot, RTCore64, dbutil, PROCEXP, iqvw64e, cpuz.
 
 ---
 
-## v2.4.0 (2026-09-24)
+## v2.4.0 2026-09-24
 
 ### New: Heap Vulnerability Scanner (`ablation heap`)
 
-`HeapVulnScanner` (`heap_vuln_scanner.py`) detects four heap memory corruption classes for x86-64 ELF binaries. Grounded in TAOSSA Ch5 (Memory Corruption) and Ch6 (C Language Issues).
+`HeapVulnScanner` (`heap_vuln_scanner.py`) detects four heap memory corruption classes for x86-64 ELF binaries. Grounded in TAOSSA Ch5 Memory Corruption and Ch6 C Language Issues.
 
-**INT_OVERFLOW_BEFORE_ALLOC** (TAOSSA Ch6 L6-2, L6-3): IMUL/MUL/SHL result fed directly to malloc/calloc/ExAllocatePool without an intermediate overflow check or bounds test. Matches the `width * height` pattern from L6-2 and the `nresp * sizeof(char*)` pattern from the OpenSSH 3.1 challenge-response vulnerability (L6-3).
+**INT_OVERFLOW_BEFORE_ALLOC** TAOSSA Ch6 L6-2, L6-3: IMUL/MUL/SHL result fed directly to malloc/calloc/ExAllocatePool without an intermediate overflow check or bounds test. Matches the `width * height` pattern from L6-2 and the `nresp * sizeof(char*)` pattern from the OpenSSH 3.1 challenge-response vulnerability (L6-3).
 
 **USE_AFTER_FREE**: `free(ptr)` followed by memory dereference of the same source register in the same function, without an intervening write. Detects both `[reg+off]` loads and re-use as a callee argument.
 
@@ -81,8 +81,8 @@ ablation mips  router.elf --le --json mips_findings.json
 Eight scored attack paths:
 - **PHYS_MEM_ARBITRARY_RW**: `MmMapIoSpace` with user-controlled physical address (MmMapIoSpace primitive from PRE ch3 Sample A)
 - **MDL_KERNEL_WRITE**: `IoAllocateMdl` + `MmProbeAndLockPages` + `MmMapLockedPagesSpecifyCache` kernel write chain
-- **MSR_LSTAR_MANIPULATION**: RDMSR/WRMSR targeting `0xC0000082` (syscall handler replacement)
-- **SSDT_HOOK**: CR0 WP-disable sequence + `KeServiceDescriptorTable` (UTF-16LE scan)
+- **MSR_LSTAR_MANIPULATION**: RDMSR/WRMSR targeting `0xC0000082` syscall handler replacement
+- **SSDT_HOOK**: CR0 WP-disable sequence + `KeServiceDescriptorTable` UTF-16LE scan
 - **TOKEN_STEALING_LPE**: `PsInitialSystemProcess` + DKOM token field manipulation
 - **SMEP_BYPASS**: CR4 combined sequence disabling SMEP
 - **APC_KERNEL_INJECTION**: `KeInitializeApc` + `KeInsertQueueApc`
@@ -110,7 +110,7 @@ ablation fmtstr firmware.so --json fmt_findings.json
 
 ---
 
-## v2.0.0 (2026-09-24)
+## v2.0.0 2026-09-24
 
 ### New: Windows Kernel Driver RE (`ablation driver`)
 
@@ -118,17 +118,17 @@ First Windows `.sys` kernel driver support. New CLI command: `ablation driver <f
 
 **KernelDriverAnalyzer** (`ablation/analyzers/kernel_driver_analyzer.py`)
 
-Standalone `decode_ioctl_code(value)`: decodes any CTL_CODE into DeviceType, Access, Function, Method; flags METHOD_NEITHER (raw user pointer, highest attack surface) explicitly.
+Standalone `decode_ioctl_code(value)`: decodes any CTL_CODE into DeviceType, Access, Function, Method; flags METHOD_NEITHER raw user pointer, highest attack surface explicitly.
 
 `KernelDriverAnalyzer.from_path(path).analyze()` returns a `KernelDriverReport` covering:
 
-- **Driver type detection**: WDM, KMDF, or minifilter by import profile. PDB path (RSDS + NB10 debug formats). Authenticode signature presence.
+- **Driver type detection**: WDM, KMDF, or minifilter by import profile. PDB path RSDS + NB10 debug formats. Authenticode signature presence.
 - **MajorFunction extraction**: capstone disassembly of DriverEntry recovers all 28 IRP dispatch slot assignments from `DRIVER_OBJECT+0x70`.
 - **IOCTL extraction**: scans executable sections for CTL_CODE immediates in CMP/MOV instructions. Reports device type, transfer method, user-defined vs system-reserved function range.
 - **Kernel API audit**: 40+ APIs across 12 risk classes: `phys_mem`, `pool_alloc`, `dkom`, `apc_inject`, `privilege` (token stealing via PsInitialSystemProcess), `ssdt_hook`, `mem_copy`, `driver_load`, and more.
-- **Callback detection**: 20+ callbacks tagged edr_like, rootkit_risk, or info. ObRegisterCallbacks + PsSetCreateProcessNotifyRoutineEx (blocking) + KeRegisterBugCheckReasonCallback = rootkit signal.
+- **Callback detection**: 20+ callbacks tagged edr_like, rootkit_risk, or info. ObRegisterCallbacks + PsSetCreateProcessNotifyRoutineEx blocking + KeRegisterBugCheckReasonCallback = rootkit signal.
 - **Pool tag extraction**: byte scan for `41 B8` (MOV R8D) extracts 4-byte printable pool tags for ExAllocatePoolWithTag calls.
-- **Dangerous patterns**: SSDT hook CR0 WP-disable combined sequence, SMEP-disable CR4 combined sequence, MSR_LSTAR targeted read (KASLR defeat) and write (syscall hijack), UTF-16LE `L"KeServiceDescriptorTable"` scan (x64 SSDT lookup via MmGetSystemRoutineAddress), RDMSR/WRMSR, CLI/STI/HLT, SWAPGS, IRETQ, I/O ports, VMware backdoor, deprecated pool allocators.
+- **Dangerous patterns**: SSDT hook CR0 WP-disable combined sequence, SMEP-disable CR4 combined sequence, MSR_LSTAR targeted read KASLR defeat and write syscall hijack, UTF-16LE `L"KeServiceDescriptorTable"` scan (x64 SSDT lookup via MmGetSystemRoutineAddress), RDMSR/WRMSR, CLI/STI/HLT, SWAPGS, IRETQ, I/O ports, VMware backdoor, deprecated pool allocators.
 
 ```bash
 ablation driver malware.sys
@@ -149,9 +149,9 @@ print(ic.fmt())
 
 ---
 
-## v1.8.0 (2026-09-21)
+## v1.8.0 2026-09-21
 
-### New: Time Series Analysis Modules (5 modules)
+### New: Time Series Analysis Modules 5 modules
 
 Adds a complete time series analysis layer on top of the existing RE toolkit. Encodes function disassembly as integer sequences over 12 opcode categories (BinFuse taxonomy), then applies classical time series algorithms for patch diffing, homolog matching, corpus indexing, and behavioral pattern search.
 
@@ -159,11 +159,11 @@ Adds a complete time series analysis layer on top of the existing RE toolkit. En
 
 **MatrixProfileDiff** (`ablation/analyzers/matrix_profile_diff.py`): instruction-level patch diff via Matrix Profile AB-join. Pinpoints changed instruction regions between two function versions. STUMPY-accelerated when available; numpy fallback for function-length sequences.
 
-**DTWMatcher** (`ablation/analyzers/dtw_matcher.py`): cross-version homolog matching via DTW with Sakoe-Chiba band (20% of max length). Semantic affinity cost matrix (ARITHMETIC/LOGIC cost 0.3 vs default 1.0). Verdict thresholds: same_era >=0.85, patched 0.45-0.85, rewritten 0.20-0.45.
+**DTWMatcher** (`ablation/analyzers/dtw_matcher.py`): cross-version homolog matching via DTW with Sakoe-Chiba band 20% of max length. Semantic affinity cost matrix ARITHMETIC/LOGIC cost 0.3 vs default 1.0. Verdict thresholds: same_era >=0.85, patched 0.45-0.85, rewritten 0.20-0.45.
 
 **SAXIndex** (`ablation/analyzers/sax_index.py`): fast approximate corpus index via SAX encoding. Gaussian breakpoints, categorical PAA, MINDIST lower bound for index pruning. Save/load via pickle for persistent indexes.
 
-**SubsequenceSearcher** (`ablation/analyzers/subsequence_searcher.py`): behavioral pattern search. Exact match with wildcards, DTW sliding window approximate match, and `search_like()` for behavioral clone detection. `common_patterns()` reveals structurally common n-grams (tells you what NOT to use as discriminators).
+**SubsequenceSearcher** (`ablation/analyzers/subsequence_searcher.py`): behavioral pattern search. Exact match with wildcards, DTW sliding window approximate match, and `search_like()` for behavioral clone detection. `common_patterns()` reveals structurally common n-grams tells you what NOT to use as discriminators.
 
 ```python
 # Cross-version: find stress handler homolog in v2 binary
@@ -181,18 +181,18 @@ for lib in fw_libs:
 idx.save('firmware_sax.pkl')
 ```
 
-Note: use `discord_threshold=0.5` for MatrixProfileDiff on categorical sequences (default 1.5 is calibrated for continuous time series).
+Note: use `discord_threshold=0.5` for MatrixProfileDiff on categorical sequences default 1.5 is calibrated for continuous time series.
 
 ---
 
-## v1.7.0 (2026-09-21)
+## v1.7.0 2026-09-21
 
 ### New: FuncProfiler
 
 `ablation/analyzers/func_profiler.py`: complete function analysis block in one call.
 
-Replaces the 4-call manual sequence (callees_of, dump_text, annotate_calls, string lookup)
-with a single `fp.profile(va, end_va)` call returning a `FuncProfile` with all data combined.
+Replaces the 4-call manual sequence callees_of, dump_text, annotate_calls, string lookup
+with a single `fp.profileva, end_va` call returning a `FuncProfile` with all data combined.
 
 ```python
 fp = FuncProfiler.from_path('/path/to/binary')
@@ -250,7 +250,7 @@ Pattern registry accumulates over time; hit rates guide which patterns to run fi
 
 ### New: IPRegAnnotator
 
-`ablation/analyzers/ipreg_annotator.py`: interprocedural register annotator (N-hop forward symbolic pass).
+`ablation/analyzers/ipreg_annotator.py`: interprocedural register annotator N-hop forward symbolic pass.
 
 Follows call chains across function AND library boundaries, carrying RegVal arg states at
 each callee entry. At each callee, seeds entry registers from the caller's register state at
@@ -278,7 +278,7 @@ library boundaries and identifies dangerous sink reachability without symbols.
 
 ---
 
-## v1.6.0 (2026-09-21)
+## v1.6.0 2026-09-21
 
 ### New: LibGraph
 
@@ -286,7 +286,7 @@ library boundaries and identifies dangerous sink reachability without symbols.
 
 Load all.so files in a firmware directory once, build a unified index over every
 library, then query callers/exporters/imports across the entire set in a single call.
-Backed by BinaryContext per binary (cache benefits fully apply).
+Backed by BinaryContext per binary cache benefits fully apply.
 
 ```python
 lg = LibGraph.from_dir('/path/to/firmware/rootfs/usr/lib/')
@@ -312,7 +312,7 @@ correlating callers across libraries. One `LibGraph.from_dir()` replaces N per-b
 `ablation/analyzers/reg_annotator.py`: lightweight forward symbolic register pass.
 
 Single forward pass through a function window tracking register assignments
-(mov/lea/xor/call) and annotating call sites with inferred argument register values.
+mov/lea/xor/call and annotating call sites with inferred argument register values.
 No Z3, no lattice. Recovers ~85% of arg values in typical firmware dispatch functions.
 
 ```python
@@ -340,23 +340,23 @@ Handles:
 - mov/lea register-to-register transfers (follows chains: r12 = rsi@entry -> rdx = r12 shows rdx = arg1_entry)
 - RIP-relative.rodata string loads
 - xor reg, reg zeroing
-- Callee-saved register preservation across calls (r12-r15, rbx, rbp survive)
-- Caller-saved clobber (rax, rcx, rdx, rsi, rdi, r8-r11 cleared at call sites)
+- Callee-saved register preservation across calls r12-r15, rbx, rbp survive
+- Caller-saved clobber rax, rcx, rdx, rsi, rdi, r8-r11 cleared at call sites
 - Entry arg seeding: rdi=arg0, rsi=arg1, rdx=arg2, rcx=arg3, r8=arg4, r9=arg5
 
-Does NOT handle branches (single path), loops, or complex stack frame indexing.
+Does NOT handle branches single path, loops, or complex stack frame indexing.
 
 ---
 
-## v1.5.0 (2026-09-21)
+## v1.5.0 2026-09-21
 
 ### New: BinaryContext
 
 `ablation/analyzers/binary_context.py`: pre-computed binary context cache.
 
-Build once (~0.5s for a 24MB ELF), cache to `~/.ablation/cache/`, reload in <110ms.
+Build once ~0.5s for a 24MB ELF, cache to `~/.ablation/cache/`, reload in <110ms.
 Captures: PLT symbol map, exported functions,.rodata strings, function start VAs,
-full call graph as (from_va, to_va, label) edges.
+full call graph as from_va, to_va, label edges.
 
 ```python
 ctx = BinaryContext.load_or_build('/path/to/binary')
@@ -378,16 +378,16 @@ Cache invalidation: SHA256 mismatch triggers rebuild. Safe across firmware versi
 
 ---
 
-## v1.5.1 (2026-09-21)
+## v1.5.1 2026-09-21
 
 ### TaintTracker: custom sinks + seeded entry analysis
 
 `custom_sinks` and `custom_sink_vas` constructor parameters add target-specific
 functions to the sink table without modifying the default list.
 
-`run_on_function_seeded(func_va, seed_arg_indices)` seeds entry argument registers
+`run_on_function_seededfunc_va, seed_arg_indices` seeds entry argument registers
 as tainted before analysis begins; handles CLI handler functions where taint
-originates from the caller (entry args) rather than from recv/read calls.
+originates from the caller entry args rather than from recv/read calls.
 
 ```python
 tt = TaintTracker(binary, xref=xg,
@@ -402,13 +402,13 @@ Changes are backward-compatible: all new parameters default to None.
 
 ---
 
-## v1.4.0 (2026-09-21)
+## v1.4.0 2026-09-21
 
 ### New: WindowAnalyzer
 
 `ablation/analyzers/window_analyzer.py`: LLM-native bulk disassembly window.
 
-One capstone call over a configurable region (default 1536 bytes) with inline annotation of:
+One capstone call over a configurable region default 1536 bytes with inline annotation of:
 - PLT call targets via `.rela.plt` (handles `.plt.sec` CET stubs, `.plt`, `.plt.got`)
 - `.rodata` string references via RIP-relative addressing
 - Function start candidates via endbr64 detection
@@ -428,9 +428,9 @@ pattern recognition; the natural unit for LLM-assisted RE.
 
 ---
 
-## v1.3.0 (2026-09-21)
+## v1.3.0 2026-09-21
 
 ### Infrastructure
 
-- Ablation restructure to installable package (ablation/core + ablation/analyzers).
+- Ablation restructure to installable package ablation/core + ablation/analyzers.
 - Shims preserve compatibility with 665 existing modules in modules/.

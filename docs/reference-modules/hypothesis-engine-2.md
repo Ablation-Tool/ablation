@@ -8,9 +8,9 @@ Coordinate the analysis session lifecycle for a single binary: accepting typed h
 
 1. **Binary RE sessions on stripped firmware accumulate evidence from many analyzers, and without a structured way to associate evidence with competing hypotheses, analysts either over-rely on a single tool's output or lose track of which observations support or contradict each other.** `HypothesisEngine` models competing hypotheses as first-class objects with Bayesian confidence scores. Evidence from `ARM64TaintTracker`, `SemanticSearcher`, `CFGBuilder`, and `XRefGraph` all update the same hypothesis pool via `add_evidence()`, so the confidence scores reflect the full evidence base rather than any single analyzer's finding.
 
-2. **The probe ranker reduces wasted analysis time by ranking which probe to run next based on expected information gain against surviving hypotheses.** For a binary with 15 competing hypotheses about indirect call targets, running all 15 probes sequentially ignores that some probes resolve multiple hypotheses simultaneously. `ProbeRanker.top_probe()` calculates which probe kind: `cfg`, `taint`, `semantic`, `lifter`: maximally reduces uncertainty across surviving (non-CONFIRMED, non-REJECTED) hypotheses. `plan()` returns a dry-run ranked list without executing anything.
+2. **The probe ranker reduces wasted analysis time by ranking which probe to run next based on expected information gain against surviving hypotheses.** For a binary with 15 competing hypotheses about indirect call targets, running all 15 probes sequentially ignores that some probes resolve multiple hypotheses simultaneously. `ProbeRanker.top_probe()` calculates which probe kind: `cfg`, `taint`, `semantic`, `lifter`: maximally reduces uncertainty across surviving non-CONFIRMED, non-REJECTED hypotheses. `plan()` returns a dry-run ranked list without executing anything.
 
-3. **The three-milestone architecture separates plan-and-report (Milestones 1/2) from auto-execution (Milestone 3): allowing the engine to be used as a reasoning aid before probe execution is wired up.** In Milestones 1/2, `step(approved=False)` records the probe for analyst review; the analyst executes it manually and calls `add_evidence()`. In Milestone 3, `step(approved=True, ctx=BinaryContext)` executes the probe via `probe_adapters.execute_probe()` and feeds the result back into the confidence scorer automatically.
+3. **The three-milestone architecture separates plan-and-report Milestones 1/2 from auto-execution Milestone 3: allowing the engine to be used as a reasoning aid before probe execution is wired up.** In Milestones 1/2, `step(approved=False)` records the probe for analyst review; the analyst executes it manually and calls `add_evidence()`. In Milestone 3, `step(approved=True, ctx=BinaryContext)` executes the probe via `probe_adapters.execute_probe()` and feeds the result back into the confidence scorer automatically.
 
 ---
 
@@ -143,9 +143,9 @@ report() excerpt:
 
 **`ConfidenceState.CONFIRMED` at `confidence ≥ 0.90` does not guarantee correctness, it reflects evidence quality, not ground truth.** A hypothesis reaches CONFIRMED when sufficient supporting evidence accumulates. If the supporting evidence comes from analyzers with high reliability scores but the underlying observation is wrong for example a semantic search returning a false positive, the hypothesis can be CONFIRMED incorrectly. Always byte-verify CONFIRMED indirect call targets with `data[off:off+n] == expected_bytes` before recording findings.
 
-**`add_hard_contradiction()` sets `strength=0.95`, but does not block future supporting evidence from recovering the hypothesis.** A hard contradiction drives confidence toward 0.05 (rejection floor) but does not permanently lock the hypothesis as REJECTED. If subsequent evidence with `strength > 0.95` is added in `relation='supports'`, the confidence score can recover. Use `add_hard_contradiction()` for observations that are definitively contradictory (XRef count = 0, invalid VA, wrong architecture), not for weak negative evidence.
+**`add_hard_contradiction()` sets `strength=0.95`, but does not block future supporting evidence from recovering the hypothesis.** A hard contradiction drives confidence toward 0.05 rejection floor but does not permanently lock the hypothesis as REJECTED. If subsequent evidence with `strength > 0.95` is added in `relation='supports'`, the confidence score can recover. Use `add_hard_contradiction()` for observations that are definitively contradictory (XRef count = 0, invalid VA, wrong architecture), not for weak negative evidence.
 
-**`step(approved=False)` records the probe in `session.probes` without executing it: `_executed_kinds` is only updated when `approved=True`.** If `step(approved=False)` is called repeatedly, the same probe kind may appear multiple times in the pending list because `executed_kinds` does not include it. The ranker de-duplicates by `executed_kinds`, which is only updated on approval. For planning-only sessions (Milestones 1/2), call `plan()` for ranked probe lists rather than `step(approved=False)`.
+**`step(approved=False)` records the probe in `session.probes` without executing it: `_executed_kinds` is only updated when `approved=True`.** If `step(approved=False)` is called repeatedly, the same probe kind may appear multiple times in the pending list because `executed_kinds` does not include it. The ranker de-duplicates by `executed_kinds`, which is only updated on approval. For planning-only sessions Milestones 1/2, call `plan()` for ranked probe lists rather than `step(approved=False)`.
 
 ---
 
@@ -172,6 +172,6 @@ report() excerpt:
 
 ## See also
 
-- [Analyzer Probe Adapters](analyzer-probe-adapters.md): concrete adapters that execute probes against BinaryContext (Milestone 3)
+- [Analyzer Probe Adapters](analyzer-probe-adapters.md): concrete adapters that execute probes against BinaryContext Milestone 3
 - [Evidence Scorer](evidence-scorer.md): Bayesian scoring model that maps evidence strength × reliability → confidence update
 - [Probe Ranker](probe-ranker.md): probe catalog and information-gain ranking algorithm

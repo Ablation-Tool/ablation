@@ -1,6 +1,6 @@
 # Understanding Ablation
 
-Ablation is a local reverse-engineering and binary-triage toolkit. Its purpose is to help an analyst make sense of stripped binaries and firmware by building useful structural context, finding functions worth inspecting, and applying targeted static analyses. The analyst (or an assistant such as Codex) uses those outputs to investigate and validate hypotheses. Ablation does not, by itself, prove that a candidate is exploitable.
+Ablation is a local reverse-engineering and binary-triage toolkit. Its purpose is to help an analyst make sense of stripped binaries and firmware by building useful structural context, finding functions worth inspecting, and applying targeted static analyses. The analyst or an assistant such as Codex uses those outputs to investigate and validate hypotheses. Ablation does not, by itself, prove that a candidate is exploitable.
 
 This page describes the implementation and docs in this checkout. It is intended as a practical map of what the system does, where its components live, and how to interpret its results. The package metadata currently reports version 2.5.0; the CLI and update notes contain newer commands and architecture work than the version label and some reference pages, so check `ablation --help` and the implementation before relying on an older example.
 
@@ -14,7 +14,7 @@ Most workflows follow this sequence:
 4. Verify the path and assumptions manually against the binary, its callers, input source, guards, and runtime behavior where possible.
 5. Preserve useful analyst knowledge in the local name, function-identity, pattern, or finding stores, and in the target's session notes.
 
-Ablation is a static analysis toolkit: it reads binaries without executing them. Static analysis can examine all code paths in principle, including error paths and rarely-triggered branches, but it cannot observe actual runtime values, heap layout, or dynamically loaded libraries. The complement is dynamic analysis (fuzzing, debugger tracing, instrumentation): it observes only paths that a given input triggers, but produces exact values and no false positives on executed paths. Ablation's pipeline ends at PathSolver, which is still static. Dynamic confirmation requires running the binary under instrumentation with a crafted input. That is the step that turns a PathSolver result into an observed crash.
+Ablation is a static analysis toolkit: it reads binaries without executing them. Static analysis can examine all code paths in principle, including error paths and rarely-triggered branches, but it cannot observe actual runtime values, heap layout, or dynamically loaded libraries. The complement is dynamic analysis fuzzing, debugger tracing, instrumentation: it observes only paths that a given input triggers, but produces exact values and no false positives on executed paths. Ablation's pipeline ends at PathSolver, which is still static. Dynamic confirmation requires running the binary under instrumentation with a crafted input. That is the step that turns a PathSolver result into an observed crash.
 
 ```mermaid
 flowchart LR
@@ -79,7 +79,7 @@ This is a binary analysis toolkit, not a general source-level decompiler equival
 
 This is semantic similarity over the description corpus, not a direct semantic understanding of arbitrary machine code. In particular, the normal corpus description path does not automatically include a full instruction sequence or invoke angr for every function. A high score says the indexed description resembles the query; it does not establish that the function has the queried behavior. Signature data and analyst-provided names improve context but are also evidence to verify.
 
-`SemanticSearcher` works by vector similarity over function descriptions, not by understanding machine code. `CorpusBuilder` generates a textual description for each function (names, callees, strings, inferred role) and embeds it with `sentence-transformers/all-mpnet-base-v2`. A search query is embedded with the same model and the closest functions by cosine distance are returned. A high score means the function's description resembles the query. It does not mean the function has the queried behavior.
+`SemanticSearcher` works by vector similarity over function descriptions, not by understanding machine code. `CorpusBuilder` generates a textual description for each function names, callees, strings, inferred role and embeds it with `sentence-transformers/all-mpnet-base-v2`. A search query is embedded with the same model and the closest functions by cosine distance are returned. A high score means the function's description resembles the query. It does not mean the function has the queried behavior.
 
 Two consequences follow from this. First, a function with no symbols, no recognizable strings, and no known callees produces a thin description and matches poorly regardless of what the function actually does. Second, a function named `copy_data` that calls `memcpy` ranks high for "buffer copy" even if it is safe. Semantic search narrows the candidate list. `FuncProfiler` and `TaintTracker` determine what the candidates actually do.
 
@@ -105,7 +105,7 @@ A separate legacy `sweeps/base_sweep.py` path has its own extraction and embeddi
 
 `FuncProfiler` bridges the gap between a semantic search result and a TaintTracker run. SemanticSearcher returns a ranked list of candidate VAs. FuncProfiler collects all the context needed to decide whether a candidate is worth tracing: every call site with argument register values annotated, every string reference in the function, and a `*** SINK ***` flag on any call to a dangerous function. Without FuncProfiler, the same information requires four separate calls: `callees_of()`, `dump_text()`, `RegAnnotator`, and a string lookup. FuncProfiler runs all four in one call and formats the output so sink calls stand out immediately.
 
-The argument annotation uses `RegAnnotator`, which traces each argument register backward from the call site for up to 20 instructions to determine its value. A string literal loads from `.rodata` and RegAnnotator labels it with the actual string content. An entry argument passes through unmodified and RegAnnotator labels it `arg0_entry` or `arg1_entry`. A return value from a prior call gets labeled `ret(funcname)`.
+The argument annotation uses `RegAnnotator`, which traces each argument register backward from the call site for up to 20 instructions to determine its value. A string literal loads from `.rodata` and RegAnnotator labels it with the actual string content. An entry argument passes through unmodified and RegAnnotator labels it `arg0_entry` or `arg1_entry`. A return value from a prior call gets labeled `retfuncname`.
 
 ```mermaid
 flowchart TD
@@ -123,7 +123,7 @@ flowchart TD
     style I fill:#14532d,stroke:#166534,color:#dcfce7
 ```
 
-A profile output showing `*** SINK (cmd-exec) ***` where the dangerous argument is labeled `arg1_entry` means a function parameter flows directly into a dangerous call. That is the input that makes `TaintTracker.run_interprocedural()` worth running.
+A profile output showing `*** SINK cmd-exec ***` where the dangerous argument is labeled `arg1_entry` means a function parameter flows directly into a dangerous call. That is the input that makes `TaintTracker.run_interprocedural()` worth running.
 
 ### Names, identities, and findings
 
@@ -171,7 +171,7 @@ flowchart TD
     style E fill:#14532d,stroke:#166534,color:#dcfce7
 ```
 
-**Control flow and data flow.** The `cfg` command builds a Control Flow Graph (CFG): nodes are basic blocks, edges are possible branches. This is control flow analysis. It answers whether one instruction can execute after another. It says nothing about what values the registers hold. Taint analysis is data flow analysis built on top of a CFG: it propagates facts (tainted or clean) along CFG edges through each instruction's transfer function. `dataflow_engine.py` provides the shared CFG worklist and fixed-point machinery; architecture modules define the transfer functions. Correctness depends on the modeled instruction subset, the calling convention model, and CFG recovery quality.
+**Control flow and data flow.** The `cfg` command builds a Control Flow Graph (CFG): nodes are basic blocks, edges are possible branches. This is control flow analysis. It answers whether one instruction can execute after another. It says nothing about what values the registers hold. Taint analysis is data flow analysis built on top of a CFG: it propagates facts tainted or clean along CFG edges through each instruction's transfer function. `dataflow_engine.py` provides the shared CFG worklist and fixed-point machinery; architecture modules define the transfer functions. Correctness depends on the modeled instruction subset, the calling convention model, and CFG recovery quality.
 
 The data flow analysis runs to a fixed point: it propagates facts around the CFG until the taint sets stop changing. For straight-line code this converges in one pass. For loops, the analysis revisits the loop body each time new taint facts appear. When a loop's taint state changes at each iteration, the analysis widens the taint state after a fixed number of passes and forces convergence by treating everything as tainted. The known-anomalies docs refer to this as the "loop fixpoint" limitation. It is conservative: the analysis terminates but may report taint in a register that is only tainted on some loop iterations.
 
@@ -229,7 +229,7 @@ flowchart TD
     style P4 fill:#7f1d1d,stroke:#991b1b,color:#fecaca
 ```
 
-**Calling conventions and ABI.** A calling convention defines which registers hold function arguments, which holds the return value, which the callee must preserve (callee-saved), and which the callee may freely clobber (caller-saved). Every taint tracker embeds a calling convention model. When `run_interprocedural()` reaches a call site, it uses the convention to determine which registers carry tainted arguments into the callee, which register holds the return value, and which caller-saved registers the callee may have clobbered.
+**Calling conventions and ABI.** A calling convention defines which registers hold function arguments, which holds the return value, which the callee must preserve callee-saved, and which the callee may freely clobber caller-saved. Every taint tracker embeds a calling convention model. When `run_interprocedural()` reaches a call site, it uses the convention to determine which registers carry tainted arguments into the callee, which register holds the return value, and which caller-saved registers the callee may have clobbered.
 
 Getting this wrong produces silent incorrect results. A big-endian MIPS32 binary analyzed with `endian='little'` decodes every instruction's register fields incorrectly. An RH850 binary compiled with GHS `double=32-bit` default analyzed with the GCC `double=64-bit` model shifts argument registers for any function with a `double` parameter. The `arch=`, `endian=`, and `double_is_32bit=` parameters control which registers the ABI model assigns to argument positions. For stripped binaries with no symbol information, calling-convention mismatches produce findings at wrong VAs with wrong argument registers cited, which fail byte-verification.
 
@@ -262,7 +262,7 @@ flowchart LR
 
 Ablation's trackers track memory taint at the level of base-register and offset pairs: a store to `r3 + 8` taints the slot `(r3, 8)` and a load from `r3 + 8` later in the same function recovers it. This handles struct field accesses. It does not handle aliased pointers: if `r5` holds the same address as `r3 + 8`, a load from `r5` does not recover the taint stored through `r3 + 8`.
 
-This is why `read(fd, buf, n)` taints `r3` (the byte count returned) but not the buffer. The buffer is written through a pointer in `r4`. Tracking taint into the buffer requires following all loads from any pointer that might alias `r4`. The return-value taint model instead finds paths where the byte count reaches a size argument of `malloc` or `memcpy`, which is a distinct and common vulnerability class.
+This is why `readfd, buf, n` taints `r3` the byte count returned but not the buffer. The buffer is written through a pointer in `r4`. Tracking taint into the buffer requires following all loads from any pointer that might alias `r4`. The return-value taint model instead finds paths where the byte count reaches a size argument of `malloc` or `memcpy`, which is a distinct and common vulnerability class.
 
 ```mermaid
 flowchart TD
@@ -312,17 +312,17 @@ flowchart TD
     style E fill:#14532d,stroke:#166534,color:#dcfce7
 ```
 
-**DTWMatcher.** DTWMatcher uses Dynamic Time Warping over opcode category sequences. Opcode categories are a 12-bucket classification (DATA, ARITH, BIT, CMP, BRANCH, CALL, RET, FRAME, MEMOP, FLOAT, SIMD, OTHER) that normalizes away ISA-specific encoding differences. DTW is warp-invariant so it handles insertions and deletions of basic blocks that Jaccard penalizes unfairly. A function that gained one bounds-check block between firmware versions scores ~0.91 DTW versus ~0.65 4-gram Jaccard because DTW stretches the alignment to absorb the inserted block and scores the structural remainder as a match. The Sakoe-Chiba band (default 20% of sequence length) prevents pathological alignments where a 5-instruction stub matches a 200-instruction function.
+**DTWMatcher.** DTWMatcher uses Dynamic Time Warping over opcode category sequences. Opcode categories are a 12-bucket classification DATA, ARITH, BIT, CMP, BRANCH, CALL, RET, FRAME, MEMOP, FLOAT, SIMD, OTHER that normalizes away ISA-specific encoding differences. DTW is warp-invariant so it handles insertions and deletions of basic blocks that Jaccard penalizes unfairly. A function that gained one bounds-check block between firmware versions scores ~0.91 DTW versus ~0.65 4-gram Jaccard because DTW stretches the alignment to absorb the inserted block and scores the structural remainder as a match. The Sakoe-Chiba band default 20% of sequence length prevents pathological alignments where a 5-instruction stub matches a 200-instruction function.
 
-`find_homologs()` pre-filters all functions in the target binary by opcode histogram L1 distance, then runs full DTW only on the top 200 candidates. Verdict thresholds are `same_era` (≥0.85), `patched` (0.45–0.85), `rewritten` (0.20–0.45), `different` (<0.20).
+`find_homologs()` pre-filters all functions in the target binary by opcode histogram L1 distance, then runs full DTW only on the top 200 candidates. Verdict thresholds are `same_era` (≥0.85), `patched` 0.45–0.85, `rewritten` 0.20–0.45, `different` (<0.20).
 
 **VersionDelta.** VersionDelta localizes the change after a homolog is found. Stage 1 eliminates candidates whose basic block count or edge count differ by more than ±2 or ±30%. Stage 2 ranks survivors by mnemonic 4-gram Jaccard with addresses and immediates normalized to zero. Stage 3 applies SemanticSearcher BERT embeddings to break ties when the top two candidates are within 0.05 Jaccard. The output is a `difflib`-style unified diff with addresses and RIP-relative immediates stripped, so the diff shows only logic changes.
 
 `changed_functions()` scores all functions between two builds and ranks by `change_score`. Functions with `change_score ≥ 0.20` had meaningful code changes, not just recompilation address shifts. This is the entry point for finding what a vendor actually fixed in a firmware update.
 
-**MatrixProfileDiff.** When the change is a multi-instruction insertion or deletion, the inserted region appears as a subsequence in v2 with no close neighbor in v1. MatrixProfileDiff runs STOMP (O(n log n)) to find the region of T1 whose nearest match in T2 is most distant. That region is what changed. STOMP is better than VersionDelta's difflib output for inserted bounds checks (3–5 new instructions in a loop body) or removed authentication blocks.
+**MatrixProfileDiff.** When the change is a multi-instruction insertion or deletion, the inserted region appears as a subsequence in v2 with no close neighbor in v1. MatrixProfileDiff runs STOMP (O(n log n)) to find the region of T1 whose nearest match in T2 is most distant. That region is what changed. STOMP is better than VersionDelta's difflib output for inserted bounds checks 3–5 new instructions in a loop body or removed authentication blocks.
 
-**StructuralSim.** StructuralSim computes a five-signal composite score (opcode histogram, immediate value Jaccard, PLT overlap, branch density, size proximity) for cross-vendor comparison. Immediate value Jaccard is the key signal because struct field offsets, magic constants, and buffer sizes survive recompilation and optimization. A composite score ≥ 0.70 across two vendors' binaries predicts a shared codebase ancestor. When one vendor's version has a confirmed vulnerability, that score predicts whether the other vendor carries the same flaw.
+**StructuralSim.** StructuralSim computes a five-signal composite score opcode histogram, immediate value Jaccard, PLT overlap, branch density, size proximity for cross-vendor comparison. Immediate value Jaccard is the key signal because struct field offsets, magic constants, and buffer sizes survive recompilation and optimization. A composite score ≥ 0.70 across two vendors' binaries predicts a shared codebase ancestor. When one vendor's version has a confirmed vulnerability, that score predicts whether the other vendor carries the same flaw.
 
 ## Crypto and entropy analysis
 
@@ -345,7 +345,7 @@ flowchart TD
 
 **XorKeyRecoverer.** XorKeyRecoverer uses a known-plaintext attack. Firmware images compressed with gzip start with the magic bytes `0x1f 0x8b 0x08`. ELF binaries start with `0x7f 0x45 0x4c 0x46`. XOR-ing the encrypted bytes against the known plaintext recovers the keystream. Firmware stored on NAND flash uses a repeating XOR key aligned to the 64-byte NAND page boundary.
 
-**CryptoAuditor.** CryptoAuditor scans code regions for cryptographic misuse patterns: hardcoded AES keys, ECB mode (identical 16-byte output blocks from identical input), IV set to zero for CBC mode, and RC4 usage in products shipping after 2015.
+**CryptoAuditor.** CryptoAuditor scans code regions for cryptographic misuse patterns: hardcoded AES keys, ECB mode identical 16-byte output blocks from identical input, IV set to zero for CBC mode, and RC4 usage in products shipping after 2015.
 
 **HashAlgoDiscriminator.** HashAlgoDiscriminator finds hash algorithm K-table constants in `.rodata`. SHA-1, SHA-256, and SHA-512 each use unique round constant arrays that are stable across compiler versions and optimization levels. A match identifies the algorithm without disassembling the implementation.
 
@@ -392,7 +392,7 @@ flowchart TD
 
 **FormatStringScanner.** FormatStringScanner identifies format string vulnerabilities by tracing the fmt argument register backward from each printf-family call site. The fmt register varies by function: RDI for `printf`, RSI for `fprintf` and `syslog`, RDX for `snprintf`. A load from `.rodata` means the argument is a string literal and the call is safe. Any other provenance, function argument, stack variable, or register populated by a prior `recv` or `read`: it is a finding. Severity is HIGH when the fmt register holds a function entry argument, because the caller controls the format string directly.
 
-**DeprecatedFuncScanner.** DeprecatedFuncScanner scans the PLT for functions deprecated because of memory safety problems: `gets` (no length limit), `strcpy`/`strcat`/`sprintf` (no size argument), `mktemp` (predictable temp file), `rand` (weak random in security context). Each hit produces a finding with the call site VA and a recommended replacement.
+**DeprecatedFuncScanner.** DeprecatedFuncScanner scans the PLT for functions deprecated because of memory safety problems: `gets` no length limit, `strcpy`/`strcat`/`sprintf` no size argument, `mktemp` predictable temp file, `rand` weak random in security context. Each hit produces a finding with the call site VA and a recommended replacement.
 
 **HeapOverflowScanner** and **IntegerOverflowScanner** find user-controlled values that reach the size argument of `malloc` or `realloc`, and arithmetic before allocation where values could wrap at uint32 or uint16 boundaries.
 
@@ -423,7 +423,7 @@ flowchart TD
     style E fill:#7f1d1d,stroke:#991b1b,color:#fecaca
 ```
 
-**KernelDriverAnalyzer.** KernelDriverAnalyzer detects PE machine type (0x014c for x86-32, 0x8664 for x64) and classifies the driver framework (WDM, KMDF, or minifilter). It recovers the MajorFunction dispatch table from DRIVER_OBJECT, decodes every CTL_CODE in the IRP_MJ_DEVICE_CONTROL handler, audits 40+ kernel API patterns across 8 risk classes, and flags dangerous byte patterns including WRMSR, CR0 modification, and HLT. MSVC-compiled IOCTL switch handlers emit a register subtraction cascade rather than a jump table. The IoctlCascadeDecoder reconstructs every CTL_CODE from the cascade, including codes derived via the push-imm/pop-reg MSVC optimizer idiom.
+**KernelDriverAnalyzer.** KernelDriverAnalyzer detects PE machine type (0x014c for x86-32, 0x8664 for x64) and classifies the driver framework WDM, KMDF, or minifilter. It recovers the MajorFunction dispatch table from DRIVER_OBJECT, decodes every CTL_CODE in the IRP_MJ_DEVICE_CONTROL handler, audits 40+ kernel API patterns across 8 risk classes, and flags dangerous byte patterns including WRMSR, CR0 modification, and HLT. MSVC-compiled IOCTL switch handlers emit a register subtraction cascade rather than a jump table. The IoctlCascadeDecoder reconstructs every CTL_CODE from the cascade, including codes derived via the push-imm/pop-reg MSVC optimizer idiom.
 
 **ByovdDetector.** ByovdDetector classifies eight BYOVD capability classes from the kernel API surface of any `.sys` file. It reads the import table and disassembles DriverEntry to determine whether the driver has physical memory read/write, token stealing, callback removal, SMEP bypass, DSE bypass, MSR write, CR0 write, or debug register write capability. A signed driver with any of these capabilities is a BYOVD candidate.
 
@@ -431,11 +431,11 @@ flowchart TD
 
 ## Kernel and driver analysis
 
-Kernel modules require analysis at the boundary between user space and the kernel. `KernelModuleSubsystemClassifier` maps a kernel module to its subsystem (network, block, filesystem, USB, audio) from exported symbol patterns. `PreAuthExposureScanner` traces code paths reachable before authentication and reports which kernel APIs are callable from unauthenticated input.
+Kernel modules require analysis at the boundary between user space and the kernel. `KernelModuleSubsystemClassifier` maps a kernel module to its subsystem network, block, filesystem, USB, audio from exported symbol patterns. `PreAuthExposureScanner` traces code paths reachable before authentication and reports which kernel APIs are callable from unauthenticated input.
 
 ## Go binary analysis
 
-Go binaries embed the pclntab (PC line table) in the binary for runtime stack traces. The table survives `strip(1)` because Go requires it at runtime. Extracting function names before BERT encoding lifts SemanticSearcher accuracy from approximately 0.20 to 0.70 on stripped Go binaries because the corpus descriptions contain actual function names instead of generic `func_0xABCD` labels.
+Go binaries embed the pclntab PC line table in the binary for runtime stack traces. The table survives `strip(1)` because Go requires it at runtime. Extracting function names before BERT encoding lifts SemanticSearcher accuracy from approximately 0.20 to 0.70 on stripped Go binaries because the corpus descriptions contain actual function names instead of generic `func_0xABCD` labels.
 
 ```mermaid
 flowchart TD
@@ -458,7 +458,7 @@ flowchart TD
 
 ## ECU and automotive analysis
 
-Automotive ECU firmware is a flat binary image with no ELF headers. ISAs are non-standard: TriCore (Bosch, Continental), RH850 (Denso, Bosch), C28x (TI traction inverters), SH-2A (Denso), CPU32/M68K (GM), and VLE (NXP). Calling conventions differ from Linux ABI. Function boundaries require ISA-specific prologue scan heuristics because there is no DWARF metadata.
+Automotive ECU firmware is a flat binary image with no ELF headers. ISAs are non-standard: TriCore Bosch, Continental, RH850 Denso, Bosch, C28x TI traction inverters, SH-2A (Denso), CPU32/M68K (GM), and VLE (NXP). Calling conventions differ from Linux ABI. Function boundaries require ISA-specific prologue scan heuristics because there is no DWARF metadata.
 
 ```mermaid
 flowchart TD
@@ -478,7 +478,7 @@ flowchart TD
 
 Each ISA decoder handles the quirks of its architecture. TriCore uses a hardware-enforced Call Save Area (CSA) instead of a software stack frame. RH850 under GHS ABI defaults to 32-bit double and uses leading-underscore symbol prefixes. C28x is word-addressed: a byte offset and a word address refer to different locations unless the decoder applies the correct scale. VLE uses mixed 16/32-bit instruction widths that require per-instruction length detection.
 
-**ECUSecurityAccessScanner.** ECUSecurityAccessScanner identifies Seed-Key algorithm implementations used for ECU diagnostic access. It flags weak entropy sources (fixed seed, counter-based seed, timestamp-only seed) and documents the algorithm structure for security assessment.
+**ECUSecurityAccessScanner.** ECUSecurityAccessScanner identifies Seed-Key algorithm implementations used for ECU diagnostic access. It flags weak entropy sources fixed seed, counter-based seed, timestamp-only seed and documents the algorithm structure for security assessment.
 
 **ECURomLayoutAnalyzer.** ECURomLayoutAnalyzer classifies ROM regions into code, calibration, and data sections. Calibration regions hold tunable engine maps. Code regions hold the firmware. The classifier feeds downstream analysis with correct base addresses and section types so TaintTracker uses the right segment for string references and function starts.
 
@@ -522,7 +522,7 @@ flowchart TD
     style F fill:#7f1d1d,stroke:#991b1b,color:#fecaca
 ```
 
-**AgentLoop.** AgentLoop runs the ReAct (Reasoning + Acting) loop. Claude issues tool calls, receives results, reasons about them, and issues further tool calls until the task is complete. The two supported tasks are `name_function` and `vuln_hypothesis`.
+**AgentLoop.** AgentLoop runs the ReAct Reasoning + Acting loop. Claude issues tool calls, receives results, reasons about them, and issues further tool calls until the task is complete. The two supported tasks are `name_function` and `vuln_hypothesis`.
 
 **RAGRetriever.** RAGRetriever retrieves confirmed findings from `func_id.db` by embedding similarity. It injects those findings into the context window before the loop starts. This grounds Claude's analysis in concrete patterns from prior engagements rather than pure inference from disassembly.
 
@@ -567,7 +567,7 @@ The sections above cover every major capability. The following entries point to 
 
 Codex can work with Ablation when it can access the checkout or an environment where the Ablation CLI is installed. The interaction is through ordinary shell commands and files: Codex runs a command, reads its output, and decides what evidence to inspect next. This checkout does not require a Codex-specific plugin or MCP server for that workflow.
 
-From the repository environment, install the project into the Python environment used by the shell (or invoke its Python module in that environment):
+From the repository environment, install the project into the Python environment used by the shell or invoke its Python module in that environment:
 
 ```bash
 python -m pip install -e .

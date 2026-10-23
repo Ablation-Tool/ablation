@@ -132,7 +132,7 @@ ConfigMap credentials found:
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` (SA cluster-admin, privileged:true) / `HIGH` (default-ns user, hostPath) / `MEDIUM` (missing readOnlyRootFilesystem) |
+| `severity` | `CRITICAL` SA cluster-admin, privileged:true / `HIGH` (default-ns user, hostPath) / `MEDIUM` (missing readOnlyRootFilesystem) |
 | RBAC `name` | ClusterRoleBinding resource name |
 | RBAC `subject_kind` | `ServiceAccount` / `User` / `Group` |
 | RBAC `subject_namespace` | Namespace of the subject (blank for `User` and `Group`) |

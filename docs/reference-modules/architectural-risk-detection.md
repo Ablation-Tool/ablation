@@ -1,4 +1,4 @@
-# Architectural Risk Detection (Source RE)
+# Architectural Risk Detection Source RE
 
 Build an authentication surface map of a source code repository in under five seconds: classifying every HTTP route handler by its authentication level so the analyst knows exactly which endpoints accept unauthenticated requests before reading a single line of handler code.
 
@@ -138,7 +138,7 @@ ADMIN              3
 
 **Custom auth middleware not in the pattern list.** If a Next.js project wraps all routes with a custom `withAuth()` higher-order function, and that function name appears nowhere in `_AUTH_PATTERNS`, all wrapped routes classify as `NONE`. Add the project-specific pattern to `_AUTH_PATTERNS` or run `ctx.grep(r"withAuth\(")` to find usage before concluding those routes are unprotected.
 
-**DRF import-chain auth not followed.** Import resolution follows only one hop. When authentication logic lives two files deep (route → handler → auth module), the classifier sees `NONE` and marks the route as unprotected. Check `is_low_value=False` NONE results manually before treating them as confirmed findings.
+**DRF import-chain auth not followed.** Import resolution follows only one hop. When authentication logic lives two files deep route → handler → auth module, the classifier sees `NONE` and marks the route as unprotected. Check `is_low_value=False` NONE results manually before treating them as confirmed findings.
 
 **`is_low_value` on non-trivial health checks.** The `is_low_value` classifier uses `health`, `ready`, `ping`, `version`, `info`, and `status` as signals. A route named `status.ts` that also handles webhook events classifies as low-value. Do not skip `is_low_value=True` routes entirely: review them before dismissal.
 

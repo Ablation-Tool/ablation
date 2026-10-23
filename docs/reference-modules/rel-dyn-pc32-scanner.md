@@ -39,7 +39,7 @@ from_path('/path/to/libevfbpv.so')
         └── → Pc32Hit(r_offset, sym_name, family, load_bias)
 ```
 
-The `.rel.dyn` format for i386 is the simplest possible relocation record: 4 bytes for the offset where the fixup is applied, 4 bytes encoding both the symbol index (top 24 bits) and the relocation type (low 8 bits). No addend.
+The `.rel.dyn` format for i386 is the simplest possible relocation record: 4 bytes for the offset where the fixup is applied, 4 bytes encoding both the symbol index top 24 bits and the relocation type low 8 bits. No addend.
 
 ---
 
@@ -115,7 +115,7 @@ sac_results = sac.classify_all()
 
 ## Limitations
 
-**Only LE i386 is supported.** `_parse_elf()` returns False on `EI_DATA=2` (big-endian) or ELFCLASS64. The scanner returns an empty hit list silently, it does not raise. Always verify the binary is i386 LE before assuming a 0-hit result means the binary is clean.
+**Only LE i386 is supported.** `_parse_elf()` returns False on `EI_DATA=2` big-endian or ELFCLASS64. The scanner returns an empty hit list silently, it does not raise. Always verify the binary is i386 LE before assuming a 0-hit result means the binary is clean.
 
 **`exec_names` and `net_names` properties re-scan.** Both properties call `scan()` independently. If you access both in sequence the relocation table is walked twice. Call `scan()` once and filter the returned list instead.
 

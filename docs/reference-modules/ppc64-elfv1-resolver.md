@@ -8,7 +8,7 @@
 
 2. **ctx.func_starts contains OPD entry VAs, not code VAs.** On ELFv1, `nm`/`readelf` report symbol values as the address of the 24-byte OPD descriptor (`code_ptr, TOC_ptr, env_ptr`), not the code address. Disassembling at an OPD VA produces 8 bytes of a pointer, not a function prologue. Every symbol VA must be resolved through the OPD table before disassembling.
 
-3. **BL target decoding on PPC64 requires a sign-extended 24-bit LI.** BL word layout: `opcode(6) | LI(24) | AA(1) | LK(1)`. LI is the number of *words* (not bytes) from the instruction. Correct formula: `li24 = (word>>2)&0xFFFFFF; if li24&0x800000: li24-=0x1000000; target=src_va+li24*4`. Several off-by-one errors arise if the shift/sign-extension is applied to the wrong field width.
+3. **BL target decoding on PPC64 requires a sign-extended 24-bit LI.** BL word layout: `opcode(6) | LI(24) | AA(1) | LK(1)`. LI is the number of *words* not bytes from the instruction. Correct formula: `li24 = (word>>2)&0xFFFFFF; if li24&0x800000: li24-=0x1000000; target=src_va+li24*4`. Several off-by-one errors arise if the shift/sign-extension is applied to the wrong field width.
 
 ---
 
@@ -16,7 +16,7 @@
 
 `Ppc64ElfV1Resolver` parses a PPC64 big-endian ELFv1 binary and resolves all three gaps in a single `resolve()` call:
 
-- Parses `.opd` → `opd_to_code` dict (OPD entry VA → code VA)
+- Parses `.opd` → `opd_to_code` dict OPD entry VA → code VA
 - Parses `.rela.plt` JMP_SLOT relocations → glink stub map (`stub_N = text_va + N*28`, sorted by GOT VA) → name
 - Exposes `bl_target()` for correct big-endian BL decoding
 - `patch_context(ctx)` rewrites `ctx.plt` and `ctx.func_starts` in-place so all downstream tools work correctly
@@ -25,11 +25,11 @@
 
 ## Architecture notes
 
-**OPD section (ELFv1 only):** Each OPD entry is 24 bytes, `(code_va, TOC_ptr, env_ptr)`. `nm`/`readelf -s` report the OPD entry VA as the function address; the actual executable code is at `code_va`. OPD entries are fixed-size, so `opd_to_code[sym_va] = struct.unpack_from('>Q', opd_data, sym_va - opd_base)[0]`.
+**OPD section ELFv1 only:** Each OPD entry is 24 bytes, `code_va, TOC_ptr, env_ptr`. `nm`/`readelf -s` report the OPD entry VA as the function address; the actual executable code is at `code_va`. OPD entries are fixed-size, so `opd_to_code[sym_va] = struct.unpack_from('>Q', opd_data, sym_va - opd_base)[0]`.
 
-**Glink stubs (ELFv1):** 28 bytes each (ELFv1; ELFv2 uses 16). Stubs are at `.text` start: `stub_N = text_va + N*28`. Stub index N corresponds to the Nth entry in `.rela.plt` sorted by GOT slot VA (ascending). The relocation type `R_PPC64_JMP_SLOT = 21` identifies PLT entries.
+**Glink stubs (ELFv1):** 28 bytes each ELFv1; ELFv2 uses 16. Stubs are at `.text` start: `stub_N = text_va + N*28`. Stub index N corresponds to the Nth entry in `.rela.plt` sorted by GOT slot VA ascending. The relocation type `R_PPC64_JMP_SLOT = 21` identifies PLT entries.
 
-**BL encoding:** `word = struct.unpack_from('>I', data, offset)[0]`. `li24 = (word >> 2) & 0xFFFFFF`. Sign-extend: `if li24 & 0x800000: li24 -= 0x1000000`. Target: `src_va + li24 * 4`.
+**BL encoding:** `word = struct.unpack_from('>I', data, offset)[0]`. `li24 = word >> 2 & 0xFFFFFF`. Sign-extend: `if li24 & 0x800000: li24 -= 0x1000000`. Target: `src_va + li24 * 4`.
 
 ---
 
@@ -92,27 +92,27 @@ Ppc64ElfV1Resolver.is_ppc64_elfv1('/path/to/bin')  # -> bool
 | `opd_file_off` | `int` | File offset of `.opd` |
 | `opd_size` | `int` | Size of `.opd` in bytes |
 | `toc` | `int` | Module TOC pointer (from first OPD entry's TOC field) |
-| `text_va` | `int` | VA of `.text` (glink stubs start here) |
+| `text_va` | `int` | VA of `.text` glink stubs start here |
 | `opd_to_code` | `Dict[int, int]` | OPD entry VA → code VA |
 | `opd_to_toc` | `Dict[int, int]` | OPD entry VA → TOC pointer |
 | `stub_map` | `Dict[int, str]` | Glink stub VA → import name |
-| `jmp_slots` | `List[Tuple[int, str]]` | (GOT VA, name) pairs sorted by GOT VA |
+| `jmp_slots` | `List[Tuple[int, str]]` | GOT VA, name pairs sorted by GOT VA |
 | `n_stubs` | `int` | Number of glink stubs |
 
 ---
 
 ## When to use
 
-- Any binary identified as `ELF 64-bit MSB PowerPC64` (big-endian). IBM LoadLeveler, IBM GPFS, AIX POWER Linux binaries.
+- Any binary identified as `ELF 64-bit MSB PowerPC64` big-endian. IBM LoadLeveler, IBM GPFS, AIX POWER Linux binaries.
 - Before running `SinkArgClassifier`, `TaintTracker`, or `FuncProfiler` on a PPC64 BE binary: call `res.patch_context(ctx)` first.
 - When `BinaryContext.summary()` shows `plt_entries: 0` on a PPC64 BE binary: that is this gap.
-- When disassembly at a symbol VA produces garbage (8 bytes of a pointer): the VA is an OPD entry, not code.
+- When disassembly at a symbol VA produces garbage 8 bytes of a pointer: the VA is an OPD entry, not code.
 
 ---
 
 ## How it works
 
-`PPC64ELFv1Resolver.resolve(binary_path)` fills the gap where `BinaryContext.plt` is empty for PPC64 big-endian ELFv1 binaries (AIX-style OPD format). It parses the `.opd` section (Official Procedure Descriptor table), where each entry is a 3-word struct: `{func_entry_va, TOC_va, env_ptr}`. `_resolve_glink()` follows glink stubs that redirect through the PLT lazy-binding chain. Returns a `{stub_va: symbol_name}` dict that callers can merge into `ctx.plt` to make downstream tools PLT-aware for PPC64 BE targets.
+`PPC64ELFv1Resolver.resolvebinary_path` fills the gap where `BinaryContext.plt` is empty for PPC64 big-endian ELFv1 binaries AIX-style OPD format. It parses the `.opd` section Official Procedure Descriptor table, where each entry is a 3-word struct: `{func_entry_va, TOC_va, env_ptr}`. `_resolve_glink()` follows glink stubs that redirect through the PLT lazy-binding chain. Returns a `{stub_va: symbol_name}` dict that callers can merge into `ctx.plt` to make downstream tools PLT-aware for PPC64 BE targets.
 
 ---
 
@@ -142,7 +142,7 @@ Ppc64ElfV1Info(/firmware/aix/libservice.so)
 
 **Before this module:** `BinaryContext.load_or_build()` on the PPC64 BE ELF. Check `ctx.plt`: if empty, run this resolver first.
 
-**After this module:** Merge `Ppc64ElfV1Info.stub_map` into `ctx.plt`: `ctx._plt.update(resolver.info.stub_map)`. All downstream tools (SinkArgClassifier, TaintTracker) then see named imports.
+**After this module:** Merge `Ppc64ElfV1Info.stub_map` into `ctx.plt`: `ctx._plt.updateresolver.info.stub_map`. All downstream tools (SinkArgClassifier, TaintTracker) then see named imports.
 
 ---
 
@@ -156,13 +156,13 @@ Ppc64ElfV1Info(/firmware/aix/libservice.so)
 | `opd_va` | `int` | VA of the OPD (.opd) section |
 | `opd_file_off` | `int` | File offset of OPD section |
 | `opd_size` | `int` | OPD section size in bytes |
-| `toc` | `int` | TOC pointer VA (read from entry-point OPD entry) |
+| `toc` | `int` | TOC pointer VA read from entry-point OPD entry |
 | `text_va` | `int` | VA of the .text section |
 | `text_file_off` | `int` | File offset of .text section |
 | `text_size` | `int` | .text section size in bytes |
-| `opd_to_code` | `Dict[int,int]` | Maps OPD entry VA → code VA (resolved function address) |
+| `opd_to_code` | `Dict[int,int]` | Maps OPD entry VA → code VA resolved function address |
 
-Use `ppc64elfv1_resolve(ctx)` to integrate resolved info into a `BinaryContext` directly: populates `ctx.plt` (stub VA → name) and `ctx.func_starts`.
+Use `ppc64elfv1_resolve(ctx)` to integrate resolved info into a `BinaryContext` directly: populates `ctx.plt` stub VA → name and `ctx.func_starts`.
 
 ---
 

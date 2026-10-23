@@ -72,7 +72,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading output
 
-`analyze_go_garble_binary(binary_path)` returns a dict:
+`analyze_go_garble_binarybinary_path` returns a dict:
 
 | Key | Content |
 |:---|:---|

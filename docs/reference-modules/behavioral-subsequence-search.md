@@ -10,7 +10,7 @@ Find all functions in a binary that contain a specified behavioral operation-cat
 
 2. **Exact subsequence patterns answer questions like "find all functions that contain a COMPARISON_OP followed by a CONDITIONAL_OP followed by a CALL": a pattern that identifies bounds-checked call sites, or its absence identifies unchecked sinks.** The `None` wildcard matches any operation category, allowing patterns like `[COMPARISON_OP, None, None, CALL]` that tolerate two intervening operations between the comparison and the call.
 
-3. **DTW approximate search (`search_dtw()`) finds structural matches even when the implementation uses slightly different instruction sequences: for example, a function that inlines one extra register move before the syscall.** DTW (Dynamic Time Warping) warp-distance matching handles small insertions within the target sequence. The `threshold` and `window_scale` parameters control how much structural variation is tolerated.
+3. **DTW approximate search (`search_dtw()`) finds structural matches even when the implementation uses slightly different instruction sequences: for example, a function that inlines one extra register move before the syscall.** DTW Dynamic Time Warping warp-distance matching handles small insertions within the target sequence. The `threshold` and `window_scale` parameters control how much structural variation is tolerated.
 
 ---
 
@@ -111,7 +111,7 @@ Run `SubsequenceSearcher` after `SemanticSearcher` has identified the top candid
 | `occurrences` | Count of times the pattern occurs within the function |
 | `seq_len` | Total instruction count of the function |
 
-`SubsequenceSearcher.search_like(va, threshold)` returns matches ranked by DTW similarity score:
+`SubsequenceSearcher.search_likeva, threshold` returns matches ranked by DTW similarity score:
 
 | Field | Content |
 |:---|:---|

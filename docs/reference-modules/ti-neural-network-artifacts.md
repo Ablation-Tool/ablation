@@ -1,6 +1,6 @@
 # TI Neural Network Artifact Detection
 
-Detect TVM-generated `tvmgen_*` inference symbols in TI MCU firmware compiled by the TI Neural Network Compiler (NNC, built on Apache TVM): identifying embedded ML inference modules, their operator types, and tensor shapes: across both ELF targets (Cortex-M0+/M33/M4/R5, C29x) and TI COFF2 targets (C28x F28P55x via `TiCoffLoader`).
+Detect TVM-generated `tvmgen_*` inference symbols in TI MCU firmware compiled by the TI Neural Network Compiler NNC, built on Apache TVM: identifying embedded ML inference modules, their operator types, and tensor shapes: across both ELF targets Cortex-M0+/M33/M4/R5, C29x and TI COFF2 targets (C28x F28P55x via `TiCoffLoader`).
 
 ---
 
@@ -10,7 +10,7 @@ Detect TVM-generated `tvmgen_*` inference symbols in TI MCU firmware compiled by
 
 2. **TI NNC targets both ELF and COFF2 binary formats**: Cortex-M33/M4/R5 and C29x targets produce ELF; C28x F28P55x targets produce COFF2. `TiNNCScanner` handles both through a unified `NormSymbol` interface: ELF via `lief`, COFF2 via `TiCoffLoader`. This single API covers all TI NNC target architectures without requiring the caller to know the binary format.
 
-3. **`TiNNCScanResult.modules`** lists all detected `TiNNCModule` entries: each with the operator name, symbol VA, and inferred tensor dimensions (from operator name parsing). `TiNNCScanFinding` records security-relevant observations: large tensor sizes that require heap allocation, extern data symbols that indicate off-chip tensor storage, and mismatched operator/symbol-name patterns.
+3. **`TiNNCScanResult.modules`** lists all detected `TiNNCModule` entries: each with the operator name, symbol VA, and inferred tensor dimensions from operator name parsing. `TiNNCScanFinding` records security-relevant observations: large tensor sizes that require heap allocation, extern data symbols that indicate off-chip tensor storage, and mismatched operator/symbol-name patterns.
 
 ---
 
@@ -74,7 +74,7 @@ Findings:
 
 ## Pipeline position
 
-Run `TiNNCScanner` on any TI MCU firmware as part of initial triage. ML inference presence changes the attack surface assessment and directs deeper analysis toward the inference data path (input tensor provenance, parameter loading).
+Run `TiNNCScanner` on any TI MCU firmware as part of initial triage. ML inference presence changes the attack surface assessment and directs deeper analysis toward the inference data path input tensor provenance, parameter loading.
 
 ---
 

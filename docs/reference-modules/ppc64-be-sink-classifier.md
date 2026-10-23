@@ -13,16 +13,16 @@
  disassembly precisely because no automated per-site classifier existed.
 
 2. **IBM C++ string allocator pattern is pervasive and mistaken for a dangerous copy.**
- IBM LoadLeveler calls `strcpyx(ibm_str_obj, int_size)` as a string heap allocator, r4
+ IBM LoadLeveler calls `strcpyxibm_str_obj, int_size` as a string heap allocator, r4
  is an integer size (or zero), not a source pointer. Without automation, every strcpyx
- call site must be manually inspected to distinguish `strcpyx(sp+N, argv_str)` (overflow)
- from `strcpyx(ibm_obj, 0x98)` (allocator, safe). The IBM allocator pattern appears 12+
+ call site must be manually inspected to distinguish `strcpyxsp+N, argv_str` overflow
+ from `strcpyx(ibm_obj, 0x98)` allocator, safe. The IBM allocator pattern appears 12+
  times in every LoadLeveler binary.
 
 3. **IBM string object pass-through (mr r3, rX) hides stack-buffer destinations.**
  When r3 is set via `mr r3, rX`, the destination is often an IBM string object held in a
  saved non-volatile register (rX = r27/r28/r31, etc.). This looks identical to
-   `addi r31, r1, N; mr r3, r31` (stack buffer destination) in a single-instruction view.
+   `addi r31, r1, N; mr r3, r31` stack buffer destination in a single-instruction view.
  Distinguishing the two requires a backward register trace through the mr chain.
 
 ---
@@ -30,15 +30,15 @@
 ## What it does
 
 `Ppc64BeSinkClassifier` scans a PPC64 BE ELFv1 binary for BL calls to registered sink
-stubs (strcpyx, strcatx, sprintf, memcpy, etc.), disassembles the preceding 12 instructions
-at each call site, and classifies r3 (destination) and r4 (source) using these categories:
+stubs strcpyx, strcatx, sprintf, memcpy, etc., disassembles the preceding 12 instructions
+at each call site, and classifies r3 destination and r4 (source) using these categories:
 
 | Class | Meaning | Risk |
 |---|---|---|
 | `STACK_DEST` | r3 = addi r1, N: raw stack buffer address | DANGEROUS if src=ARG_PROPAGATED |
 | `ARG_PROPAGATED` | r4 from ld 0(arg_reg) or ld N(arg_reg): user-controlled pointer | DANGEROUS if dest=STACK_DEST |
 | `RODATA_TOC` | r4 = ld N(r2): static string from TOC | SAFE |
-| `IMM_SIZE` | r3 = li rX, N (N < 0x2000): IBM string allocator size | SAFE (allocator) |
+| `IMM_SIZE` | r3 = li rX, N (N < 0x2000): IBM string allocator size | SAFE allocator |
 | `IMM` | li with large value | SAFE |
 | `IBM_OBJECT` | r3 via mr from a callee-saved non-volatile: IBM string object | Context-dependent |
 | `MR_FROM` | Intermediate: mr chain followed backward automatically |: |
@@ -89,33 +89,33 @@ clf.add_sink('IBM_sprintf', dest_pos=1, src_pos=2)
 
 ## Architecture notes
 
-**Lookback window:** 12 instructions before the BL (48 bytes) for r3/r4 register tracing.
+**Lookback window:** 12 instructions before the BL 48 bytes for r3/r4 register tracing.
 Sufficient for IBM LoadLeveler patterns where argv-derived loads are 2-5 instructions
 before strcpyx. Increase `_WINDOW` if deeper chains are needed.
 
 **Prologue scan for NONVOL_DEREF demotion:** When a base register is a non-volatile
 (r14-r31), the classifier scans the enclosing function's prologue to determine whether
 that non-volatile was saved from a function argument. Function entry is found by
-scanning raw bytes backward for `mflr r0` (7c 08 02 a6), bounded to 512 instructions.
+scanning raw bytes backward for `mflr r0` 7c 08 02 a6, bounded to 512 instructions.
 `ld r4, 0(r25)` where `mr r25, r3` appears before `stdu` classifies ARG_PROPAGATED.
 `ld r4, 0x250(r9)` from a C++ exception-object non-volatile classifies UNKNOWN.
 
 **mr chain following:** When r3 or r4 is set by `mr rD, rS`, the classifier automatically
 traces backward to find how rS was set. This handles the `addi r31,r1,0x70; mr r3,r31`
-pattern (STACK_DEST) and the `mr r3,r28` IBM string object pattern (IBM_OBJECT or
+pattern STACK_DEST and the `mr r3,r28` IBM string object pattern (IBM_OBJECT or
 UNKNOWN depending on r28's origin).
 
 **TOC-relative loads:** `ld rX, N(r2)` where r2 is the TOC pointer loads a global
-pointer from the TOC. These are classified RODATA_TOC for r4 (static source, safe)
+pointer from the TOC. These are classified RODATA_TOC for r4 static source, safe
 but as UNKNOWN/ARG_PROPAGATED for r4 when the global itself is a user-controlled pointer
-(e.g. a global job-list pointer). Manual verification needed when src=ARG_PROPAGATED
+e.g. a global job-list pointer. Manual verification needed when src=ARG_PROPAGATED
 and the load is from a non-r1 non-r2 non-arg register.
 
 **IBM string allocator detection:** `li r3, N` where N < 0x2000 is the IBM string
 allocator pattern (`strcpyx(new_str, capacity)`). Classified IMM_SIZE, safe.
 
-**PPC64 arg registers:** r3-r10 per ELFv1 ABI. r3 = first arg (dest for str*), r4 =
-second arg (src), r5 = third arg (size for snprintf/memcpy).
+**PPC64 arg registers:** r3-r10 per ELFv1 ABI. r3 = first arg dest for str*, r4 =
+second arg (src), r5 = third arg size for snprintf/memcpy.
 
 ---
 
@@ -136,7 +136,7 @@ second arg (src), r5 = third arg (size for snprintf/memcpy).
 
 ## How it works
 
-`PPC64BESinkClassifier.classify_all()` classifies PPC64 big-endian ELFv1 sink call sites as `RODATA_CONST`, `SNPRINTF_RODATA`, `ARG_PROPAGATED`, or `UNKNOWN`: the same classification set as `SinkArgClassifier` (x86-only). On PPC64 BE, function calls use `bl` (branch-link) with the callee VA as a direct immediate, not an x86 `call` relocation. This classifier scans for `bl` instructions to PLT-resolved sinks, back-traces the argument registers (r3–r10, PPC64 ELFv1 ABI), and classifies whether the argument register holds a RODATA pointer, a format string, or a propagated function argument.
+`PPC64BESinkClassifier.classify_all()` classifies PPC64 big-endian ELFv1 sink call sites as `RODATA_CONST`, `SNPRINTF_RODATA`, `ARG_PROPAGATED`, or `UNKNOWN`: the same classification set as `SinkArgClassifier` x86-only. On PPC64 BE, function calls use `bl` branch-link with the callee VA as a direct immediate, not an x86 `call` relocation. This classifier scans for `bl` instructions to PLT-resolved sinks, back-traces the argument registers r3–r10, PPC64 ELFv1 ABI, and classifies whether the argument register holds a RODATA pointer, a format string, or a propagated function argument.
 
 ---
 
@@ -178,7 +178,7 @@ Ppc64BeSinkClassifier results:
 | `va` | `int` | VA of the BL instruction |
 | `sink_name` | `str` | Sink function name (e.g., `strcpyx`, `sprintf`) |
 | `stub_va` | `int` | VA of the glink PLT stub |
-| `dest_class` | `str` | r3 (destination) classification: `STACK_DEST` / `IMM_SIZE` / `IBM_OBJECT` / `UNKNOWN` |
+| `dest_class` | `str` | r3 destination classification: `STACK_DEST` / `IMM_SIZE` / `IBM_OBJECT` / `UNKNOWN` |
 | `src_class` | `str` | r4 (source) classification: `RODATA_TOC` / `ARG_PROPAGATED` / `IMM` / `UNKNOWN` |
 | `dest_detail` | `str` | Human-readable r3 context (e.g., `sp+0x70`) |
 | `src_detail` | `str` | Human-readable r4 context (e.g., `ld 0(r25) [arg r3]`) |

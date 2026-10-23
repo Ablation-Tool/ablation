@@ -19,7 +19,7 @@ starts. The interprocedural walk can only visit functions it knows about, so a s
 binary analysed with `from_path()` produces significantly fewer findings than a symbolled one.
 
 **Triggering conditions:** 
-- Stripped production binaries without `.symtab` (common on embedded Linux targets)
+- Stripped production binaries without `.symtab` common on embedded Linux targets
 - Binaries built with `--strip-all` or `strip -s`
 
 **Impact:** False negative. Functions that contain taint chains are not visited because
@@ -39,7 +39,7 @@ no `.eh_frame` entry and never called by a BL-discovered site remain unseen.
 
 **Description:** 
 The tracker resolves direct `BL <imm>` calls and PLT stubs. Indirect calls via `BLR Xn`
-(branch-link-register) are treated as unknown calls: caller-saved registers are clobbered
+branch-link-register are treated as unknown calls: caller-saved registers are clobbered
 and the callee is not entered. A tainted argument that reaches a sink inside an indirect
 callee does not surface as a finding.
 
@@ -65,8 +65,8 @@ so you know to investigate the callees.
 ## ARM64-KA-003: SVE / NEON vector registers not tracked
 
 **Description:** 
-The taint model covers 64-bit general-purpose registers (X0-X30, SP, XZR). NEON/AdvSIMD
-vector registers (V0-V31, Q0-Q31) and SVE registers are not tracked. Data routed through
+The taint model covers 64-bit general-purpose registers X0-X30, SP, XZR. NEON/AdvSIMD
+vector registers V0-V31, Q0-Q31 and SVE registers are not tracked. Data routed through
 vector registers loses taint.
 
 **Triggering conditions:** 

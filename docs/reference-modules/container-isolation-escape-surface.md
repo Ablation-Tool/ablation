@@ -1,12 +1,12 @@
 # Tenant Isolation Checking
 
-Detect missing tenant-scope predicates in database queries: finding `findUnique`, `findFirst`, `findMany`, `update`, `delete`, and `upsert` calls (Prisma, Mongoose, SQLAlchemy, raw SQL) where the `where` clause does not include an `orgId`, `projectId`, or `tenantId` field: the highest-yield pattern class in multi-tenant SaaS audits.
+Detect missing tenant-scope predicates in database queries: finding `findUnique`, `findFirst`, `findMany`, `update`, `delete`, and `upsert` calls Prisma, Mongoose, SQLAlchemy, raw SQL where the `where` clause does not include an `orgId`, `projectId`, or `tenantId` field: the highest-yield pattern class in multi-tenant SaaS audits.
 
 ---
 
 ## Why this exists
 
-1. **A single missing `projectId` in a Prisma `findFirst` where clause is an IDOR (Insecure Direct Object Reference): any authenticated user in the system can access records belonging to other tenants.** `SourceIsolationChecker` detects this pattern at scale across entire codebases, finding every query that touches a tenant-scoped resource without the scoping predicate. This is the first scan to run on any multi-tenant SaaS codebase before deeper vulnerability analysis.
+1. **A single missing `projectId` in a Prisma `findFirst` where clause is an IDOR Insecure Direct Object Reference: any authenticated user in the system can access records belonging to other tenants.** `SourceIsolationChecker` detects this pattern at scale across entire codebases, finding every query that touches a tenant-scoped resource without the scoping predicate. This is the first scan to run on any multi-tenant SaaS codebase before deeper vulnerability analysis.
 
 2. **Prisma, Mongoose, and SQLAlchemy each use different syntactic patterns for scoping predicates**: Prisma uses `where: { projectId }`, Mongoose uses `.find({ orgId: req.user.orgId })`, SQLAlchemy uses `.filter(Model.tenant_id == tenant_id)`. `SourceIsolationChecker` includes matchers for all three ORMs plus raw SQL `WHERE tenant_id =` patterns, enabling consistent detection across mixed-ORM codebases.
 

@@ -8,13 +8,13 @@ Cisco IOS and IOS-XE attack surface enumeration: SNMP community string brute-for
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. All socket reads bounded: `recv(1024)` for service banners, `recv(4096)` for flush. HTTP response bodies read with inline `r.read(4 * 1024 * 1024)` cap (4 MB). No file reads. No lief.parse().
+Gate: **PASSED**. No HIGH or CRITICAL findings. All socket reads bounded: `recv(1024)` for service banners, `recv(4096)` for flush. HTTP response bodies read with inline `r.read4 * 1024 * 1024` cap (4 MB). No file reads. No lief.parse().
 
 ---
 
 ## How it works
 
-`IOSEnumerator(host, timeout=8).run()` probes a Cisco IOS/IOS-XE device in sequence: `probe_telnet()` (banner and IOS version without auth), `brute_snmp_communities()` (common community strings), `probe_cdp_info()` (neighbor table via SNMP), `probe_tftp_config()` (TFTP config pull), and `probe_http_api()` (REST API credential probe). Returns `{host, telnet, snmp, cdp_neighbors, tftp_config, http_api, parsed_config, findings}`. `findings` is a list of `{severity, title, detail}` dicts.
+`IOSEnumerator(host, timeout=8).run()` probes a Cisco IOS/IOS-XE device in sequence: `probe_telnet()` banner and IOS version without auth, `brute_snmp_communities()` common community strings, `probe_cdp_info()` neighbor table via SNMP, `probe_tftp_config()` TFTP config pull, and `probe_http_api()` REST API credential probe. Returns `{host, telnet, snmp, cdp_neighbors, tftp_config, http_api, parsed_config, findings}`. `findings` is a list of `{severity, title, detail}` dicts.
 
 ---
 

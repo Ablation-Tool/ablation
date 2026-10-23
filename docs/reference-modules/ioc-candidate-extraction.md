@@ -6,11 +6,11 @@ Detect shell injection vulnerabilities in Perl source code: finding `qx//`, `sys
 
 ## Why this exists
 
-1. **`TaintTracker` is ELF-only, it never sees the Perl script layer above a setuid ELF.** RSCT, IBM HMC, and many embedded Linux targets ship thick `.pm`/`.pl` layers that wrap root-privileged binaries. `PerlTaintScanner` closes this gap: it finds shell sinks with interpolated variables and traces those variables to their origin (CLI args, function parameters, or internal state).
+1. **`TaintTracker` is ELF-only, it never sees the Perl script layer above a setuid ELF.** RSCT, IBM HMC, and many embedded Linux targets ship thick `.pm`/`.pl` layers that wrap root-privileged binaries. `PerlTaintScanner` closes this gap: it finds shell sinks with interpolated variables and traces those variables to their origin CLI args, function parameters, or internal state.
 
 2. **Perl codebases use sanitization idioms that a generic grep cannot recognize.** `quotemeta()` escapes all shell metacharacters; single-quote wrapping (`"'" . join("' '", @args) . "'"`) ensures no word splitting; `s/'/ /g` removes single quotes before interpolation. `PerlTaintScanner` recognizes all three and reports `SANITIZED` rather than false-positiving on them.
 
-3. **Cross-file caller resolution for `PARAM` sources**: when a sink variable comes from `shift(@_)` (a function parameter), the scanner identifies the calling function across files to determine whether the parameter receives user-controlled input or a trusted internal value, avoiding the false-positive class where internal helpers are flagged as injection points.
+3. **Cross-file caller resolution for `PARAM` sources**: when a sink variable comes from `shift(@_)` a function parameter, the scanner identifies the calling function across files to determine whether the parameter receives user-controlled input or a trusted internal value, avoiding the false-positive class where internal helpers are flagged as injection points.
 
 ---
 
@@ -87,7 +87,7 @@ Run `PerlTaintScanner` on any Perl codebase found in firmware (RSCT `.pm` layers
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` (TAINTED) / `MEDIUM` (UNKNOWN) |
-| `verdict` | `TAINTED`, `UNKNOWN`, or `SANITIZED` (sanitized findings are not returned) |
+| `verdict` | `TAINTED`, `UNKNOWN`, or `SANITIZED` sanitized findings are not returned |
 | `file` | Source file path and line number |
 | `snippet` | Code snippet showing the sink and tainted variable |
 | `var` | Tainted variable name |

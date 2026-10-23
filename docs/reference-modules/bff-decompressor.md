@@ -16,12 +16,12 @@ BFF volume header type byte. The type is determined by the low byte of the LE ui
 
 | Value | Format | Handled by |
 |-------|--------|------------|
-| `0x09` | plain backup | `bff_extractor.iter_entries` (no decompression) |
+| `0x09` | plain backup | `bff_extractor.iter_entries` no decompression |
 | `0x0C` | IBM Huffman / `pack` | AIX `restore(8)` required |
-| `0x0E` | compress(1) / LZW | `uncompress -c` (system tool) |
-| `0x10` | gzip variant (AIX 5.2+) | `restore(8)` |
+| `0x0E` | compress(1) / LZW | `uncompress -c` system tool |
+| `0x10` | gzip variant AIX 5.2+ | `restore(8)` |
 
-No compressed BFF samples are currently in the IBM research collection. The Huffman format is proprietary; byte-diffing `pack`/`unpack` output against raw compressed data on an AIX 4.3.3 system is the path to a Python implementation (tracked as XLC-GAP-014).
+No compressed BFF samples are currently in the IBM research collection. The Huffman format is proprietary; byte-diffing `pack`/`unpack` output against raw compressed data on an AIX 4.3.3 system is the path to a Python implementation tracked as XLC-GAP-014.
 
 ## Usage
 
@@ -70,7 +70,7 @@ Gate: **PASSED**.
 
 ## How it works
 
-Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation (CRC32 or SHA256 depending on container format) runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
+Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation CRC32 or SHA256 depending on container format runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
 
 ---
 

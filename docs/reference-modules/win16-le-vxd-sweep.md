@@ -6,7 +6,7 @@
 
 Three things were not possible before in Ablation:
 
-1. **No LE binary could be loaded.** The LE (Linear Executable) format, used by every Windows 3.x VxD, was invisible to Ablation. LIEF rejects it (wrong magic). `pe_sweep.py` reads MZ then checks for `PE\x00\x00`; LE files have `LE` instead and are silently skipped. All ring-0 network stack components (`VIP.386`, `VTCP.386`, `VNBT.386`, `VUDP.386`, `VDHCP.386`, `VTDI.386`, `WSOCK.386`, `WSTCP.386`) were zero-coverage targets.
+1. **No LE binary could be loaded.** The LE Linear Executable format, used by every Windows 3.x VxD, was invisible to Ablation. LIEF rejects it wrong magic. `pe_sweep.py` reads MZ then checks for `PE\x00\x00`; LE files have `LE` instead and are silently skipped. All ring-0 network stack components (`VIP.386`, `VTCP.386`, `VNBT.386`, `VUDP.386`, `VDHCP.386`, `VTDI.386`, `WSOCK.386`, `WSTCP.386`) were zero-coverage targets.
 
 2. **VMM INT-20h service calls were unresolvable.** VxDs have no IAT. All kernel service calls go through `INT 20h` followed by a 4-byte service ID DWORD. Without knowing this convention, every call site in a VxD looked like a non-calling function to the semantic encoder, no call targets, no import names, systematically low scores on every network-sink profile. This module decodes INT-20h + DWORD sequences into named VMM services (`VMM!HeapAllocate`, `VMM!PageLock`, etc.) that the semantic profiles can match.
 
@@ -44,7 +44,7 @@ data_base = le_off + obj_table_off + loader_size + fixup_size
           = 0x10f7  (for VIP.386)
 ```
 
-`obj_table_off` is both the offset to the object table from the LE header start AND the size of the fixed LE header (the object table is always the first structure after the fixed header).
+`obj_table_off` is both the offset to the object table from the LE header start AND the size of the fixed LE header the object table is always the first structure after the fixed header.
 
 ### Object page table entries
 
@@ -92,7 +92,7 @@ Output goes to `reports/sweep_le_<vendor>_<product>_<version>_<ts>.md`.
 
 **`VMM!lstrcpy` / `VMM!lstrcat`**: ring-0 string copies without bounds, same class as Win16 `lstrcpy` but in kernel address space.
 
-**Score threshold**: 0.30 (same as other sweeps). Ring-0 code tends to be tighter and more uniform than user-mode code, so false-positive rates are lower but true-positive scores are also lower.
+**Score threshold**: 0.30 same as other sweeps. Ring-0 code tends to be tighter and more uniform than user-mode code, so false-positive rates are lower but true-positive scores are also lower.
 
 ---
 
@@ -110,7 +110,7 @@ Output goes to `reports/sweep_le_<vendor>_<product>_<version>_<ts>.md`.
 
 ## How it works
 
-`LEBinary(path)` parses a Windows 3.x/9x Linear Executable (LE format) VxD driver. LE is the ring-0 driver format for WfW 3.11 and Windows 9x virtual devices. The parser reads the LE header at the stub MZ offset, extracts the object table (code/data segments), and resolves page offsets to reconstruct loadable segments. `LEBinary.sweep()` disassembles the VxD code section with CS_ARCH_X86 + CS_MODE_32, detects the Device Descriptor Block (DDB) at the entry point, identifies VMM INT 20h service calls, and scans for unsafe string and memory operations accessible from ring-3 IOCTL paths.
+`LEBinary(path)` parses a Windows 3.x/9x Linear Executable LE format VxD driver. LE is the ring-0 driver format for WfW 3.11 and Windows 9x virtual devices. The parser reads the LE header at the stub MZ offset, extracts the object table code/data segments, and resolves page offsets to reconstruct loadable segments. `LEBinary.sweep()` disassembles the VxD code section with CS_ARCH_X86 + CS_MODE_32, detects the Device Descriptor Block (DDB) at the entry point, identifies VMM INT 20h service calls, and scans for unsafe string and memory operations accessible from ring-3 IOCTL paths.
 
 ---
 
@@ -139,7 +139,7 @@ Output goes to `reports/sweep_le_<vendor>_<product>_<version>_<ts>.md`.
 
 ## False positives
 
-**Page mapping edge cases.** LE page offsets use a 4KB page table with encoded page types (normal, iterated, invalid, zeroed). The parser handles all four types, but heavily iterated pages (common in compressed VxDs) expand to large in-memory buffers. If a VxD has > 32 objects, parsing is rejected with `ValueError` at line 342.
+**Page mapping edge cases.** LE page offsets use a 4KB page table with encoded page types normal, iterated, invalid, zeroed. The parser handles all four types, but heavily iterated pages (common in compressed VxDs) expand to large in-memory buffers. If a VxD has > 32 objects, parsing is rejected with `ValueError` at line 342.
 
 ---
 
@@ -153,13 +153,13 @@ Output goes to `reports/sweep_le_<vendor>_<product>_<version>_<ts>.md`.
 
 ## Reading output
 
-`LEBinary.scan_ddb(code_bytes)` returns `Optional[dict]`: `None` if no VxD DDB found, or a dict with:
+`LEBinary.scan_ddbcode_bytes` returns `Optional[dict]`: `None` if no VxD DDB found, or a dict with:
 
 | Key | Content |
 |:---|:---|
 | `sdk_ver` | SDK version word (e.g., `0x030a` = WfW 3.11, `0x030b` = Win 3.1 DDK) |
 | `dev_num` | Microsoft-assigned device number |
-| `dev_name` | Device name string (8 chars, stripped) |
+| `dev_name` | Device name string 8 chars, stripped |
 | `ctrl_proc` | VA of the DDB Control procedure |
 | `v86_api_proc` | VA of the V86 API procedure |
 | `pm_api_proc` | VA of the PM API procedure |

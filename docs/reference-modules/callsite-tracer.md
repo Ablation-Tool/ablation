@@ -20,9 +20,9 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before
 
 ## How it works
 
-`backward_slice` is a forward symbolic simulation that seeds the enclosing function's argument registers (`x0`–`x7`) as `Arg(0)`–`Arg(7)` symbolic values, then simulates instruction by instruction from the function prologue (located by scanning backward for `STP x29, x30, [sp, #-k]!`) to the target call site VA. At each instruction, the simulator updates register state: `ADRP`+`ADD`/`LDR` produces a `Global(name, delta)` if the GOT entry is in the catalogue, `MOV`+`immediate` produces `Const(v)`, register copies propagate the existing symbolic value, and `BL` to an internal function resets caller-saved registers (`x0`–`x18`) to `Unknown`. When the simulation reaches `callsite_va`, the current state of each requested `arg_regs` register is returned as the symbolic value that function will receive.
+`backward_slice` is a forward symbolic simulation that seeds the enclosing function's argument registers (`x0`–`x7`) as `Arg(0)`–`Arg(7)` symbolic values, then simulates instruction by instruction from the function prologue (located by scanning backward for `STP x29, x30, [sp, #-k]!`) to the target call site VA. At each instruction, the simulator updates register state: `ADRP`+`ADD`/`LDR` produces a `Globalname, delta` if the GOT entry is in the catalogue, `MOV`+`immediate` produces `Const(v)`, register copies propagate the existing symbolic value, and `BL` to an internal function resets caller-saved registers (`x0`–`x18`) to `Unknown`. When the simulation reaches `callsite_va`, the current state of each requested `arg_regs` register is returned as the symbolic value that function will receive.
 
-GOT entries are resolved via a static `_GOT` dictionary mapping `(segment_base, got_offset)` → `Global(symbol_name)`. This catalogue is populated per-target and must be extended manually for new shared objects. Entries not in the catalogue resolve to `Unknown`.
+GOT entries are resolved via a static `_GOT` dictionary mapping `segment_base, got_offset` → `Globalsymbol_name`. This catalogue is populated per-target and must be extended manually for new shared objects. Entries not in the catalogue resolve to `Unknown`.
 
 ---
 
@@ -66,7 +66,7 @@ backward_slice(callsite_va=0xC8F3A0, arg_regs=['x0', 'x1']):
 
 ## False positives
 
-**GOT entries not in the `_GOT` catalogue resolve to `Unknown`**: the catalogue is hardcoded to specific `(segment_base, got_offset)` pairs for WeChat libwechatnetwork.so. On any other binary, all GOT-derived values return `Unknown` unless you extend the catalogue. Check the `_GOT` dict at the top of `callsite_tracer.py` and add entries after inspecting GOT entries with `lief`.
+**GOT entries not in the `_GOT` catalogue resolve to `Unknown`**: the catalogue is hardcoded to specific `segment_base, got_offset` pairs for WeChat libwechatnetwork.so. On any other binary, all GOT-derived values return `Unknown` unless you extend the catalogue. Check the `_GOT` dict at the top of `callsite_tracer.py` and add entries after inspecting GOT entries with `lief`.
 
 **Prologue detection is heuristic**: `_fn_start()` scans backward up to 4 KB for an `STP x29, x30, [sp, #-k]!` frame setup instruction. If the enclosing function has an unusual prologue for example a tail-call optimized leaf, the simulation starts at the wrong address and may return `Unknown` for all registers.
 
@@ -90,11 +90,11 @@ backward_slice(callsite_va=0xC8F3A0, arg_regs=['x0', 'x1']):
 |:---|:---|:---|
 | `Const(v)` | `v: int` | Register holds an immediate constant |
 | `Global(name, delta=0)` | `name: str`, `delta: int` | GOT-catalogue global symbol address + byte delta |
-| `Add(base, imm)` | `base: Any`, `imm: int` | `base` (any type) plus an immediate offset |
+| `Addbase, imm` | `base: Any`, `imm: int` | `base` any type plus an immediate offset |
 | `Arg(idx, delta=0)` | `idx: int`, `delta: int` | Caller's `idx`-th argument, optionally shifted by `delta` |
 | `Unknown(reg, pc)` | `reg: str`, `pc: int` | Provenance not resolved before `pc` |
 
-All five types are frozen dataclasses exported from `modules.callsite_tracer`. Use `isinstance(val, Arg)` to check for taintable argument-derived values. `str(val)` produces a human-readable string for all five types (e.g., `'Arg(1)'`, `'Global(mmtls::gILinkKey)'`, `'Unknown(x2@0xC8F3A0)'`).
+All five types are frozen dataclasses exported from `modules.callsite_tracer`. Use `isinstanceval, Arg` to check for taintable argument-derived values. `str(val)` produces a human-readable string for all five types (e.g., `'Arg(1)'`, `'Global(mmtls::gILinkKey)'`, `'Unknown(x2@0xC8F3A0)'`).
 
 ---
 

@@ -6,9 +6,9 @@ Probe Cisco HyperFlex Connect REST APIs, iSCSI/NFS storage interfaces, UCS Manag
 
 ## Why this exists
 
-1. **HyperFlex Connect (port 443) exposes cluster management without second-factor enforcement on default configurations.** `probe_hx_connect()` attempts authentication using default HyperFlex credentials and, on success, enumerates cluster nodes, health status, storage capacity, and active virtual machines. The `stCtlVM` (Storage Controller VM) is a privileged management interface that runs on every HyperFlex node and is accessible from the cluster management network.
+1. **HyperFlex Connect port 443 exposes cluster management without second-factor enforcement on default configurations.** `probe_hx_connect()` attempts authentication using default HyperFlex credentials and, on success, enumerates cluster nodes, health status, storage capacity, and active virtual machines. The `stCtlVM` Storage Controller VM is a privileged management interface that runs on every HyperFlex node and is accessible from the cluster management network.
 
-2. **`_probe_iscsi()` and `_probe_nfs()` enumerate storage interfaces**: HyperFlex exposes iSCSI targets (port 3260) and NFS exports (port 2049) on the storage network. `_probe_iscsi()` sends a raw iSCSI `LoginRequest` PDU to enumerate available targets; `_probe_nfs()` uses the RPC portmapper to discover NFS mount points. Storage interface access on the cluster network may not require the same credentials as the management API.
+2. **`_probe_iscsi()` and `_probe_nfs()` enumerate storage interfaces**: HyperFlex exposes iSCSI targets port 3260 and NFS exports port 2049 on the storage network. `_probe_iscsi()` sends a raw iSCSI `LoginRequest` PDU to enumerate available targets; `_probe_nfs()` uses the RPC portmapper to discover NFS mount points. Storage interface access on the cluster network may not require the same credentials as the management API.
 
 3. **`probe_intersight_api()` and `probe_ucs_manager_api()`** enumerate the Intersight cloud management gateway and UCS Manager local API respectively: both using unauthenticated probe paths. `probe_intersight_api()` checks for version disclosure at the Intersight API base path; `probe_ucs_manager_api()` probes the UCS Manager XMLAPI for capability queries that return hardware inventory without authentication on older firmware versions.
 
@@ -80,7 +80,7 @@ NFS (port 2049): <K> mount points
 
 ## Pipeline position
 
-Run HyperFlex/UCS/Intersight probes after network discovery confirms HyperFlex management IPs (port 443 open with Cisco TLS certificate). Results feed storage lateral movement (NFS mount, iSCSI attach) and management escalation (cluster admin access).
+Run HyperFlex/UCS/Intersight probes after network discovery confirms HyperFlex management IPs port 443 open with Cisco TLS certificate. Results feed storage lateral movement (NFS mount, iSCSI attach) and management escalation cluster admin access.
 
 ---
 

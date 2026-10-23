@@ -68,21 +68,21 @@ findings += detect_driver_exploitation(pe_bytes)
 
 ## FORGE audit
 
-Gate: **PASSED**. 11 CWE-770 fixes applied this session (plus 3 from prior commit):
+Gate: **PASSED**. 11 CWE-770 fixes applied this session plus 3 from prior commit:
 
 | Fix | Function | Old pattern | New pattern |
 |---|---|---|---|
-| sysvipc/shm | `check_ipc_namespace_exposure` | `readlines()` | `read(_MAX_FILE_BYTES).splitlines()` |
-| sysvipc/msg | `check_ipc_namespace_exposure` | `readlines()` | `read(_MAX_FILE_BYTES).splitlines()` |
-| sysvipc/sem | `check_ipc_namespace_exposure` | `readlines()` | `read(_MAX_FILE_BYTES).splitlines()` |
-| /proc/net/if_inet6 | `check_network_interface_exposure` | `readlines()` | `read(_MAX_FILE_BYTES).splitlines()` |
-| /proc/net/arp | `check_network_interface_exposure` | `readlines()` | `read(_MAX_FILE_BYTES).splitlines()` |
-| /proc/net/dev | `check_network_interface_exposure` | `readlines()` | `read(_MAX_FILE_BYTES).splitlines()` |
-| /proc/{pid}/maps | `check_heap_injection_surface` | `readlines()` | `read(_MAX_PROC_BYTES).splitlines()` |
-| YUM.repo files | `check_package_manager_attack_surface` | `for line in fh` | `read(_MAX_FILE_BYTES).splitlines()` |
-| ~/.npmrc | `check_package_manager_attack_surface` | `for line in fh` | `read(_MAX_FILE_BYTES).splitlines()` |
-|.bash_history | `check_log_deletion_patterns` | `for line in fh` | `read(_MAX_FILE_BYTES).splitlines()` |
-| ld.so.conf files | `detect_cron_and_path_hijacking` | `for line in fh` | `read(_MAX_FILE_BYTES).splitlines()` |
+| sysvipc/shm | `check_ipc_namespace_exposure` | `readlines()` | `read_MAX_FILE_BYTES.splitlines()` |
+| sysvipc/msg | `check_ipc_namespace_exposure` | `readlines()` | `read_MAX_FILE_BYTES.splitlines()` |
+| sysvipc/sem | `check_ipc_namespace_exposure` | `readlines()` | `read_MAX_FILE_BYTES.splitlines()` |
+| /proc/net/if_inet6 | `check_network_interface_exposure` | `readlines()` | `read_MAX_FILE_BYTES.splitlines()` |
+| /proc/net/arp | `check_network_interface_exposure` | `readlines()` | `read_MAX_FILE_BYTES.splitlines()` |
+| /proc/net/dev | `check_network_interface_exposure` | `readlines()` | `read_MAX_FILE_BYTES.splitlines()` |
+| /proc/{pid}/maps | `check_heap_injection_surface` | `readlines()` | `read_MAX_PROC_BYTES.splitlines()` |
+| YUM.repo files | `check_package_manager_attack_surface` | `for line in fh` | `read_MAX_FILE_BYTES.splitlines()` |
+| ~/.npmrc | `check_package_manager_attack_surface` | `for line in fh` | `read_MAX_FILE_BYTES.splitlines()` |
+|.bash_history | `check_log_deletion_patterns` | `for line in fh` | `read_MAX_FILE_BYTES.splitlines()` |
+| ld.so.conf files | `detect_cron_and_path_hijacking` | `for line in fh` | `read_MAX_FILE_BYTES.splitlines()` |
 
 No lief.parse(). No HTTP reads. No bare `except:`. All subprocess calls timeout-bounded (3–10 s). No user-controlled data in `shell=True` paths.
 
@@ -165,7 +165,7 @@ check_loaded_kernel_modules():
 
 ## Pipeline position
 
-Run `PrivescEnumerator` on a live host after gaining a shell (unprivileged). Run standalone checks (`check_network_namespace_escape`, `check_heap_injection_surface`) when operating inside a container to confirm escape vectors. For binary analysis of PE files (Windows) on a Linux host, pass the PE bytes to `detect_token_manipulation()` and `detect_driver_exploitation()`.
+Run `PrivescEnumerator` on a live host after gaining a shell unprivileged. Run standalone checks (`check_network_namespace_escape`, `check_heap_injection_surface`) when operating inside a container to confirm escape vectors. For binary analysis of PE files (Windows) on a Linux host, pass the PE bytes to `detect_token_manipulation()` and `detect_driver_exploitation()`.
 
 ---
 
@@ -178,9 +178,9 @@ Run `PrivescEnumerator` on a live host after gaining a shell (unprivileged). Run
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
 | `category` | Descriptive name (e.g., `SUID/SGID Binaries`, `Sudo Access`, `Dangerous Capabilities`) |
 | `count` | Number of vulnerable items found |
-| `items` | List of specific items (paths, binaries, rules) |
+| `items` | List of specific items paths, binaries, rules |
 | `description` | Human-readable explanation of the finding |
-| `exploit` | Suggested exploitation command (present on CRITICAL/HIGH findings) |
+| `exploit` | Suggested exploitation command present on CRITICAL/HIGH findings |
 
 **Standalone function findings dict shape:**
 

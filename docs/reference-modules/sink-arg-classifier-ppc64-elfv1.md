@@ -6,11 +6,11 @@ Classify exec-class sink argument provenance on PPC64 BE ELFv1 ELFs: the POWER L
 
 ## Why this exists
 
-1. **`SinkArgClassifier` hardcodes x86-64 CALL scanning.** The base `SinkArgClassifier` finds call sites by scanning for `0xE8` (x86-64 CALL rel32). On PPC64 BE ELFv1 binaries it returns 0 results regardless of how many exec-class sinks are present.
+1. **`SinkArgClassifier` hardcodes x86-64 CALL scanning.** The base `SinkArgClassifier` finds call sites by scanning for `0xE8` x86-64 CALL rel32. On PPC64 BE ELFv1 binaries it returns 0 results regardless of how many exec-class sinks are present.
 
 2. **PPC64 BE ELFv1 uses TOC-relative inline stubs.** Rather than direct PLT stubs, callers reach imported functions through 7-instruction TOC-indirect stubs. The stub VA is mapped by `BinaryContext._extract_plt_ppc64be()` (gap ID: `LOADL-GAP-002`). Sink call sites emit `bl <stub_va>`; this module scans for those BL instructions.
 
-3. **ELFv1 and ELFv2 differ in TOC discovery.** ELFv1 (big-endian POWER Linux, AIX) stores the TOC base as `r2 = .opd[8]` from the function descriptor. ELFv2 (little-endian ppc64le, OpenPOWER) uses `r2 = .got + 0x8000`. These must not be mixed.
+3. **ELFv1 and ELFv2 differ in TOC discovery.** ELFv1 big-endian POWER Linux, AIX stores the TOC base as `r2 = .opd[8]` from the function descriptor. ELFv2 (little-endian ppc64le, OpenPOWER) uses `r2 = .got + 0x8000`. These must not be mixed.
 
 ---
 
@@ -18,10 +18,10 @@ Classify exec-class sink argument provenance on PPC64 BE ELFv1 ELFs: the POWER L
 
 The scan is identical in structure to [SinkArgClassifierPPC64ELFv2](sink-arg-classifier-ppc64-elfv2.md) with three differences:
 
-| Dimension | ELFv1 (this module) | ELFv2 |
+| Dimension | ELFv1 this module | ELFv2 |
 |:---|:---|:---|
 | Capstone mode | `CS_MODE_64 | CS_MODE_BIG_ENDIAN` | `CS_MODE_64 | CS_MODE_LITTLE_ENDIAN` |
-| TOC discovery | Read `.opd` + 8 (function descriptor slot 1) | `.got.virtual_address + 0x8000` |
+| TOC discovery | Read `.opd` + 8 function descriptor slot 1 | `.got.virtual_address + 0x8000` |
 | Pointer reads | `>Q` / `>I` big-endian | `<Q` / `<I` little-endian |
 
 String-address load patterns handled:
@@ -94,7 +94,7 @@ LR   return address
 
 ## Limitations
 
-**TOC discovery requires an `.opd` section.** If the binary lacks `.opd` (stripped or cross-compiled), `toc_va` defaults to 0 and all TOC-relative address patterns fail to resolve. In that case, `lis+addi` patterns that don't go through the TOC will still work correctly.
+**TOC discovery requires an `.opd` section.** If the binary lacks `.opd` stripped or cross-compiled, `toc_va` defaults to 0 and all TOC-relative address patterns fail to resolve. In that case, `lis+addi` patterns that don't go through the TOC will still work correctly.
 
 **FPR arguments are not tracked.** Floating-point registers (`f1–f13`) are not classified. Exec sinks that receive a format string through a floating-point argument are out of scope.
 

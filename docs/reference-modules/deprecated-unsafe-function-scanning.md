@@ -75,7 +75,7 @@ Report: <N> deprecated function findings
 
 **`buffer_offset` extraction from the preceding LEA instruction is a heuristic, it looks backward from the `gets()` call for a `lea rdi, [rbp-N]` pattern, but the destination buffer may be in a different register or passed as a pre-computed argument.** A `None` `buffer_offset` means the buffer location was not statically recovered, not that the buffer is safe. Confirm with manual disassembly when `buffer_offset` is `None`.
 
-**`getwd()` has a fixed 1024-byte buffer limit specified in POSIX, but implementations may vary.** The finding is always confirmed (no size argument), but the overflow offset requires knowing the actual buffer size used by the caller, which `DeprecatedFuncScanner` does not attempt to recover.
+**`getwd()` has a fixed 1024-byte buffer limit specified in POSIX, but implementations may vary.** The finding is always confirmed no size argument, but the overflow offset requires knowing the actual buffer size used by the caller, which `DeprecatedFuncScanner` does not attempt to recover.
 
 ---
 
@@ -91,7 +91,7 @@ Run `DeprecatedFuncScanner` early in the analysis pipeline: before `SinkArgClass
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` (gets, getwd) / `HIGH` (strcpy, strcat, sprintf) |
+| `severity` | `CRITICAL` gets, getwd / `HIGH` strcpy, strcat, sprintf |
 | `func` | Deprecated function name (e.g., `gets`, `strcpy`) |
 | `call_va` | VA of the call instruction |
 | `buffer_offset` | Destination buffer offset from frame base (or `None` if not statically recoverable) |

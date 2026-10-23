@@ -14,13 +14,13 @@ Kubernetes attack surface enumeration: exposed API server endpoints, RBAC miscon
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. All procfs reads use `f.read(_MAX_FILE_BYTES).splitlines()` including `_check_privileged_caps()` `/proc/self/status` (L2801, fixed this session). HTTP/API responses use inline `resp.read(4 * 1024 * 1024)` cap (4 MB). All kubectl subprocess calls have `timeout=` on continuation lines. No lief.parse().
+Gate: **PASSED**. No HIGH or CRITICAL findings. All procfs reads use `f.read_MAX_FILE_BYTES.splitlines()` including `_check_privileged_caps()` `/proc/self/status` L2801, fixed this session. HTTP/API responses use inline `resp.read4 * 1024 * 1024` cap (4 MB). All kubectl subprocess calls have `timeout=` on continuation lines. No lief.parse().
 
 ---
 
 ## How it works
 
-`K8sEnumerator()` (no constructor args: auto-detects token, CA cert, API server from environment). `enumerate_all()` runs `check_in_k8s()` first to confirm Kubernetes context, then runs RBAC, pod, secret, network policy, and admission controller checks. Escape vectors accumulate in `self.escape_vectors` as `{type, severity, description, exploit}` dicts. Other finding lists (e.g., `clusteradmin_findings`, `privileged_pod_findings`) use `{severity, ...resource-specific keys}`.
+`K8sEnumerator()` no constructor args: auto-detects token, CA cert, API server from environment. `enumerate_all()` runs `check_in_k8s()` first to confirm Kubernetes context, then runs RBAC, pod, secret, network policy, and admission controller checks. Escape vectors accumulate in `self.escape_vectors` as `{type, severity, description, exploit}` dicts. Other finding lists (e.g., `clusteradmin_findings`, `privileged_pod_findings`) use `{severity, ...resource-specific keys}`.
 
 ---
 

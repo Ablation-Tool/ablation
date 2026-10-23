@@ -10,7 +10,7 @@ Parse a fixed-record firmware container image: reading the 84-byte header, walki
 
 2. **Partition payload type affects the correct next-step tool selection.** A partition of type `elf` feeds directly into `BinaryContext.load_or_build()`. A partition of type `gzip` or `xz` requires decompression before analysis. An `ext2/3/4` partition requires mounting or `debugfs` extraction. Identifying the payload type at parse time: rather than running `file` on extracted bytes: lets the analyst route each partition to the correct tool without intermediate steps.
 
-3. **The ext2/3/4 superblock appears at offset `+0x438` inside the partition data, not at byte 0.** A magic-bytes-only scanner that checks only the first 8 bytes of each partition misses ext filesystem partitions, which carry no identifying signature at their start. `FirmwareContainer` checks the first 8 bytes for all other formats (gzip, xz, zstd, lz4, lzo, cpio, ELF, PE), then falls back to the superblock probe at `+0x438` for ext2/3/4.
+3. **The ext2/3/4 superblock appears at offset `+0x438` inside the partition data, not at byte 0.** A magic-bytes-only scanner that checks only the first 8 bytes of each partition misses ext filesystem partitions, which carry no identifying signature at their start. `FirmwareContainer` checks the first 8 bytes for all other formats gzip, xz, zstd, lz4, lzo, cpio, ELF, PE, then falls back to the superblock probe at `+0x438` for ext2/3/4.
 
 ---
 
@@ -37,13 +37,13 @@ flowchart TD
 |---|---|---|
 | `0x0000` | 8 | magic string |
 | `0x0008` | 8 | firmware version string |
-| `0x0010` | 20 | metadata block (reserved) |
-| `0x0024` | 16 | vendor string (null-padded) |
-| `0x0034` | 16 | product string (null-padded) |
-| `0x0044` | 16 | language string (null-padded) |
+| `0x0010` | 20 | metadata block reserved |
+| `0x0024` | 16 | vendor string null-padded |
+| `0x0034` | 16 | product string null-padded |
+| `0x0044` | 16 | language string null-padded |
 | `0x0054` | n × 296 | partition table |
 
-### Partition record (296 bytes each)
+### Partition record 296 bytes each
 
 | Field offset | Length | Field |
 |---|---|---|
@@ -154,7 +154,7 @@ extracted 'kernel' (2,097,152 bytes) → /tmp/kernel.img
 
 ## False positives
 
-**Partition table termination on first all-zero record.** The parser stops when `entry[:4] == b'\x00\x00\x00\x00'`. A firmware image with padding between valid partition entries (zero-filled gaps for alignment) triggers early termination. If `fw.partitions` has fewer entries than expected, check whether the raw image has zero-filled gaps between partition table entries at multiples of 296 bytes from `0x0054`.
+**Partition table termination on first all-zero record.** The parser stops when `entry[:4] == b'\x00\x00\x00\x00'`. A firmware image with padding between valid partition entries zero-filled gaps for alignment triggers early termination. If `fw.partitions` has fewer entries than expected, check whether the raw image has zero-filled gaps between partition table entries at multiples of 296 bytes from `0x0054`.
 
 **`entry[0] not in (ord('V'), 0x00)` termination condition.** The guard checks whether the first byte of the version string is `V` (ASCII 86, the start of common version strings like `V2.1`) or `\x00`. Version strings starting with any other letter (e.g., `R2.1`, `1.4.0`, `FW_v2`) cause early termination. When the version string in the firmware uses a different prefix, remove or adjust this guard and re-parse.
 
@@ -166,7 +166,7 @@ extracted 'kernel' (2,097,152 bytes) → /tmp/kernel.img
 
 **Before this module:** Confirm the image is a `FirmwareContainer`-format file. Check for the 8-byte magic string at `0x00` and a readable product string at `0x34`. If the file starts with a valid ELF header or gzip magic, it is a bare partition, not a container: use `BinaryContext.load_or_build()` directly.
 
-**After this module:** For `elf` partitions: load with `BinaryContext.load_or_build()` and run `CorpusBuilder.build()` before any sweep. For `gzip`/`xz` partitions: decompress and inspect the decompressed content, these typically contain a second-level filesystem (squashfs, cramfs, cpio). For `ext2/3/4` partitions: mount read-only and examine `/etc`, `/usr/sbin`, and daemon startup scripts before identifying analysis targets.
+**After this module:** For `elf` partitions: load with `BinaryContext.load_or_build()` and run `CorpusBuilder.build()` before any sweep. For `gzip`/`xz` partitions: decompress and inspect the decompressed content, these typically contain a second-level filesystem squashfs, cramfs, cpio. For `ext2/3/4` partitions: mount read-only and examine `/etc`, `/usr/sbin`, and daemon startup scripts before identifying analysis targets.
 
 ---
 

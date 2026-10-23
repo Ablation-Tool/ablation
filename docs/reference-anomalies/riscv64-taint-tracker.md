@@ -25,7 +25,7 @@ This is the same limitation as RISCV32-KA-001.
 **Impact:** Analysis abort; possible false clean in batch runners.
 
 **Workaround:** 
-Verify `import capstone; print(capstone.__version__)` returns 5.0+.
+Verify `import capstone; printcapstone.__version__` returns 5.0+.
 
 **Resolved in version:** Mitigated by `requirements.txt` pin.
 
@@ -35,7 +35,7 @@ Verify `import capstone; print(capstone.__version__)` returns 5.0+.
 
 **Description:** 
 RV64GC includes the C extension (RVC). The tracker handles the standard RVC instruction set
-(RV32C + shared RV32C/RV64C forms). Some 2-operand C extension forms use operand positions
+RV32C + shared RV32C/RV64C forms. Some 2-operand C extension forms use operand positions
 that differ from the 3-operand standard forms (`c.addi rd, imm` vs. `add rd, rs1, rs2`).
 The tracker applies corrections for the known 2-operand forms documented in the ISA spec.
 Undocumented or non-standard RVC forms fall through to the conservative fallback.
@@ -51,7 +51,7 @@ at the instruction boundary.
 **Workaround:** 
 Identify unhandled RVC forms via manual inspection when a function is suspicious but the
 tracker finds nothing. Add corrections to the `_COPY_MNEMS` table in `taint_tracker_riscv64.py`
-as new cases are encountered (flywheel principle).
+as new cases are encountered flywheel principle.
 
 **Resolved in version:** Open
 

@@ -51,14 +51,14 @@ print(f"{len(unsafe)} frame(s) use handlers not in SafeSEH table")
 | INFO | `safesh_enabled` | SafeSEH active with N registered handlers |
 | INFO | `seh_frame_count` | N SEH frame installations found in code |
 
-CWE: CWE-693 (Protection Mechanism Failure) on HIGH/MEDIUM.
+CWE: CWE-693 Protection Mechanism Failure on HIGH/MEDIUM.
 
 ---
 
 ## Dependencies
 
 - `lief >= 0.14.0` (x86 PE parsing, `IMAGE_LOAD_CONFIG`)
-- `capstone >= 5.0` (x86 32-bit SEH frame pattern scan)
+- `capstone >= 5.0` x86 32-bit SEH frame pattern scan
 
 ---
 
@@ -74,9 +74,9 @@ x86 (I386) PE only. Calling `from_path()` on an x64 or ARM PE raises `ValueError
 
 `safe_seh_handlers()` reads `IMAGE_LOAD_CONFIG.SEHandlerTable` and `SEHandlerCount` via lief's `load_configuration` attribute, then reads the 4-byte handler RVA array directly from `self._raw` using `_va_to_offset()` to convert VA to file offset.
 
-`seh_frames()` iterates all code sections (sections with `IMAGE_SCN_CNT_CODE` characteristic), disassembles each with `capstone.Cs(CS_ARCH_X86, CS_MODE_32)`, and scans for `PUSH <imm32>` instructions followed within four instructions by a memory operand with `FS:` as the segment register. A match is an SEH frame installation; the immediate operand is the handler VA.
+`seh_frames()` iterates all code sections (sections with `IMAGE_SCN_CNT_CODE` characteristic), disassembles each with `capstone.CsCS_ARCH_X86, CS_MODE_32`, and scans for `PUSH <imm32>` instructions followed within four instructions by a memory operand with `FS:` as the segment register. A match is an SEH frame installation; the immediate operand is the handler VA.
 
-`scan()` combines both: it checks for a null or absent `IMAGE_LOAD_CONFIG` (HIGH finding), reads the SafeSEH table, enumerates SEH frame installations, and cross-references frames against the table to find handlers not in SafeSEH.
+`scan()` combines both: it checks for a null or absent `IMAGE_LOAD_CONFIG` HIGH finding, reads the SafeSEH table, enumerates SEH frame installations, and cross-references frames against the table to find handlers not in SafeSEH.
 
 ---
 
@@ -99,7 +99,7 @@ x86 (I386) PE only. Calling `from_path()` on an x64 or ARM PE raises `ValueError
 | `title` | Short finding title |
 | `location` | PE path or section name |
 | `description` | Human-readable explanation |
-| `va` | VA of the relevant `push handler_va` instruction (0 if not applicable) |
+| `va` | VA of the relevant `push handler_va` instruction 0 if not applicable |
 | `cwe` | CWE identifier string (e.g., `'CWE-693'`) |
 
 ---

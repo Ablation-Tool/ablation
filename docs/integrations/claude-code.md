@@ -1,7 +1,7 @@
 # Using Ablation with Claude Code
 
 Ablation and Claude Code are complementary: Ablation handles the scale problem
-(finding candidates across thousands of stripped functions in seconds), and Claude
+finding candidates across thousands of stripped functions in seconds, and Claude
 handles the interpretation problem (tracing taint paths, explaining CFG structure,
 assessing exploitability). Neither replaces the other. Together they cover the
 full loop from initial scan to confirmed finding.
@@ -63,7 +63,7 @@ Run with ! prefix from any prompt:
 
 ## Typical research session
 
-**Step 1 -- Build corpus (one time per binary)**
+**Step 1 -- Build corpus one time per binary**
 
 ```
 ! ablation corpus firmware.so --product my-target --version 2.1 --sigs
@@ -113,13 +113,13 @@ call, traces argument provenance, and estimates reach from network input.
 
 | Task | Who does it |
 |---|---|
-| Finding candidates across 10,000+ functions | Ablation (sweep, search) |
-| Ranking by behavioral similarity | Ablation (BERT cosine score) |
+| Finding candidates across 10,000+ functions | Ablation sweep, search |
+| Ranking by behavioral similarity | Ablation BERT cosine score |
 | Explaining why a function matches a pattern | Claude |
 | Tracing taint across multiple functions | Ablation (taint) + Claude interpretation |
-| Deciding if a finding is exploitable | Claude (from CFG + insns output) |
+| Deciding if a finding is exploitable | Claude from CFG + insns output |
 | Writing the disclosure section | Claude |
-| Cross-version diffing to confirm regression | Ablation (cross-version workflow) |
+| Cross-version diffing to confirm regression | Ablation cross-version workflow |
 
 ---
 
@@ -134,7 +134,7 @@ call, traces argument provenance, and estimates reach from network input.
 
 ---
 
-## MCP server (coming soon)
+## MCP server coming soon
 
 A structured MCP server wrapping all Ablation commands is planned. It will allow
 Claude Code to invoke Ablation as a tool with structured input/output rather than

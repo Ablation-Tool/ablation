@@ -8,7 +8,7 @@ Classify the provenance of command-string arguments at arbitrary exec-class sink
 
 1. **The overwhelming majority of `system()` / `popen()` / `execve()` call sites in firmware binaries receive a `.rodata` string literal: analyzing these with `TaintTracker` would be pure noise.** `SinkArgClassifier.classify_all()` must run before `TaintTracker` on every binary; it classifies all shell sink call sites into four verdicts and eliminates `RODATA_CONST` and parameterless `SNPRINTF_RODATA` sites from the taint queue. Only `ARG_PROPAGATED` and `UNKNOWN` sites are worth the full taint analysis pass.
 
-2. **`SinkArgClassifier` handles the `__snprintf_chk` calling convention** where the format argument is in `r8` (not `rdx` as in plain `snprintf`), and performs one level of `snprintf` recursion: if the command argument is a stack buffer filled by a preceding `snprintf`, `SinkArgClassifier` classifies *that* `snprintf`'s format argument instead of the buffer pointer. Without this recursion, every `system(buf)` where `buf` was built by `snprintf(buf, n, fmt, ...)` would appear as `UNKNOWN` when the format is actually a `.rodata` constant.
+2. **`SinkArgClassifier` handles the `__snprintf_chk` calling convention** where the format argument is in `r8` (not `rdx` as in plain `snprintf`), and performs one level of `snprintf` recursion: if the command argument is a stack buffer filled by a preceding `snprintf`, `SinkArgClassifier` classifies *that* `snprintf`'s format argument instead of the buffer pointer. Without this recursion, every `system(buf)` where `buf` was built by `snprintfbuf, n, fmt, ...` would appear as `UNKNOWN` when the format is actually a `.rodata` constant.
 
 3. **`SinkClassification.as_dict()` produces structured output that feeds `FindingRegistry` and the pipeline report.** Each verdict has a defined interpretation: `RODATA_CONST` terminates analysis, `SNPRINTF_RODATA` requires manual inspection of the format's `%s` arguments, `ARG_PROPAGATED` feeds `TaintTracker`, and `UNKNOWN` feeds `TaintTracker` at lower priority.
 
@@ -34,7 +34,7 @@ flowchart TD
 | `RODATA_CONST` | Command is a `.rodata` string literal | Stop. No injection possible. |
 | `SNPRINTF_RODATA` | Command built from fixed format string via `snprintf` | Inspect `%s` arguments manually |
 | `ARG_PROPAGATED` | Command came from a function argument register | Feed to `TaintTracker` |
-| `UNKNOWN` | Provenance unresolved within look-back window | Feed to `TaintTracker` (lower priority) |
+| `UNKNOWN` | Provenance unresolved within look-back window | Feed to `TaintTracker` lower priority |
 
 ---
 
@@ -112,7 +112,7 @@ Step 6.5 in the RE workflow: run `SinkArgClassifier.classify_all()` after `FuncP
 | `call_va` | VA of the call instruction |
 | `verdict` | `'RODATA_CONST'`, `'SNPRINTF_RODATA'`, `'ARG_PROPAGATED'`, or `'UNKNOWN'` |
 | `detail` | Human-readable trace description of how the argument was derived |
-| `severity` | `'HIGH'` (ARG_PROPAGATED), `'MEDIUM'` (SNPRINTF_RODATA / UNKNOWN), or `'LOW'` (RODATA_CONST) |
+| `severity` | `'HIGH'` ARG_PROPAGATED, `'MEDIUM'` SNPRINTF_RODATA / UNKNOWN, or `'LOW'` RODATA_CONST |
 
 Only `ARG_PROPAGATED` and `UNKNOWN` sinks are passed to `TaintTracker`.
 

@@ -1,6 +1,6 @@
 # Internal Network Reconnaissance
 
-Parse ARP tables and routing tables, discover adjacent subnets, harvest credentials from the local filesystem, probe cloud metadata services (AWS/GCP/Azure/OCI), enumerate SSH keys and known_hosts, and detect API tokens in environment variables and configuration files: providing lateral movement material from a compromised Linux/macOS host: via `modules/lateral_movement.py`.
+Parse ARP tables and routing tables, discover adjacent subnets, harvest credentials from the local filesystem, probe cloud metadata services AWS/GCP/Azure/OCI, enumerate SSH keys and known_hosts, and detect API tokens in environment variables and configuration files: providing lateral movement material from a compromised Linux/macOS host: via `modules/lateral_movement.py`.
 
 ---
 
@@ -10,7 +10,7 @@ Parse ARP tables and routing tables, discover adjacent subnets, harvest credenti
 
 2. **`CredentialHarvester` extracts credentials from well-known filesystem locations**: `/etc/passwd`, `/etc/shadow`, `/home/*/.netrc`, `/home/*/.ssh/`, `/var/lib/git/.git/config`, and application configuration files in `/etc/` and `/opt/`. `SSHKeyEnumerator` enumerates all RSA/ECDSA/ED25519 private keys and `known_hosts` files found in user home directories, providing direct lateral movement material for SSH-accessible hosts.
 
-3. **`CloudMetadataProber` queries IMDS endpoints**: AWS (`169.254.169.254/latest/meta-data/iam/security-credentials/`), GCP (`169.254.169.254/computeMetadata/v1/instance/service-accounts/`), Azure (`169.254.169.254/metadata/instance/`), and OCI. Successful queries return temporary access credentials (IAM role credentials, service account tokens) that provide cloud API access from the compromised instance.
+3. **`CloudMetadataProber` queries IMDS endpoints**: AWS (`169.254.169.254/latest/meta-data/iam/security-credentials/`), GCP (`169.254.169.254/computeMetadata/v1/instance/service-accounts/`), Azure (`169.254.169.254/metadata/instance/`), and OCI. Successful queries return temporary access credentials IAM role credentials, service account tokens that provide cloud API access from the compromised instance.
 
 ---
 
@@ -85,7 +85,7 @@ SSHKeyEnumerator:
 
 **`scan_subnets()` TCP connect scanning**: TCP SYN to all hosts in a subnet is highly detectable by IDS/IPS systems and will generate alerts in monitored environments. Limit to targeted scanning of specific IPs identified from ARP/routing tables.
 
-**`APITokenDetector.scan_env_variables()`**: environment variables that contain the word `TOKEN`, `KEY`, or `SECRET` in their name but do not hold actual credentials (e.g., `MAX_RETRY_COUNT`) will not produce false matches because the detector checks value format (length ≥ 20, entropy ≥ 3.5 bits/char), not just key name.
+**`APITokenDetector.scan_env_variables()`**: environment variables that contain the word `TOKEN`, `KEY`, or `SECRET` in their name but do not hold actual credentials (e.g., `MAX_RETRY_COUNT`) will not produce false matches because the detector checks value format length ≥ 20, entropy ≥ 3.5 bits/char, not just key name.
 
 ---
 
@@ -101,7 +101,7 @@ Network recon functions return `List[{severity, title, detail, host, port}]`:
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` (credential exposed) / `HIGH` (sensitive service) / `MEDIUM` / `LOW` |
+| `severity` | `CRITICAL` credential exposed / `HIGH` sensitive service / `MEDIUM` / `LOW` |
 | `title` | Finding code (e.g., `CLOUD_IAM_CREDENTIAL_EXPOSED`, `OPEN_PORT_DB`, `SCAN_RESULT`) |
 | `detail` | Host, open ports, or credential/token excerpt |
 | `host` | Target host IP or hostname |

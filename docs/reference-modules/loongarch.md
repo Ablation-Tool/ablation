@@ -6,9 +6,9 @@ Full taint-analysis, syscall labeling, and structural lifting support for LoongA
 
 ## Why this exists
 
-1. **TencentOS 4.6 ships a LoongArch64 architecture across its full software stack: glibc, OpenSSL, QEMU, kernel modules, and EDK2/GRUB2 EFI images: none of which are supported by ARM64 or x86-64 analysis pipelines.** LoongArch64 uses a distinct ISA (Loongson Technology, released 2021) with 32 general-purpose registers, a 4-wide issue pipeline, lp64 ABI ($a0-$a7 args), and LASX/LSX vector extensions. Without dedicated instruction decoding and register-state modeling, taint propagation stalls at the first LoongArch-specific mnemonic: `amswap`, `ldgt`, `ld.d`, `pcaddu12i`, and produces no findings. `taint_tracker_loongarch64.py` provides full labeled-taint coverage for the lp64 ABI.
+1. **TencentOS 4.6 ships a LoongArch64 architecture across its full software stack: glibc, OpenSSL, QEMU, kernel modules, and EDK2/GRUB2 EFI images: none of which are supported by ARM64 or x86-64 analysis pipelines.** LoongArch64 uses a distinct ISA Loongson Technology, released 2021 with 32 general-purpose registers, a 4-wide issue pipeline, lp64 ABI $a0-$a7 args, and LASX/LSX vector extensions. Without dedicated instruction decoding and register-state modeling, taint propagation stalls at the first LoongArch-specific mnemonic: `amswap`, `ldgt`, `ld.d`, `pcaddu12i`, and produces no findings. `taint_tracker_loongarch64.py` provides full labeled-taint coverage for the lp64 ABI.
 
-2. **Syscall analysis for LoongArch64 requires a platform-specific syscall table: Linux LoongArch uses a private syscall number space derived from `arch/loongarch/include/uapi/asm/unistd.h` that shares some NR_ constants with RISC-V but diverges on file I/O, memory management, and process control syscalls.** `syscall_loongarch64.py` provides a complete LoongArch64 Linux syscall table with syscall name, argument count, and annotated known-dangerous entries (execve, openat with O_CREAT, mmap, mprotect) for use during syscall-site taint tracking.
+2. **Syscall analysis for LoongArch64 requires a platform-specific syscall table: Linux LoongArch uses a private syscall number space derived from `arch/loongarch/include/uapi/asm/unistd.h` that shares some NR_ constants with RISC-V but diverges on file I/O, memory management, and process control syscalls.** `syscall_loongarch64.py` provides a complete LoongArch64 Linux syscall table with syscall name, argument count, and annotated known-dangerous entries execve, openat with O_CREAT, mmap, mprotect for use during syscall-site taint tracking.
 
 3. **The LoongArch64 CFG builder must handle the `beqz`/`bnez`/`blt`/`bge` branch instruction family with 26-bit PC-relative offsets and the `jirl`/`bl` call family with 28-bit offsets, these do not map directly to any ARM64 or x86-64 CFG patterns.** `cfg_loongarch64.py` and `insn_loongarch64.py` provide the ISA-native instruction model and CFG construction that `_lift_loongarch64()` in `BinaryLifter` and `taint_tracker_loongarch64.py` depend on.
 
@@ -44,7 +44,7 @@ flowchart TD
 | `syscall_loongarch64.py` | Linux LoongArch64 syscall table with dangerous-syscall annotation |
 | `dwarf_loongarch64.py` | DWARF CFI record parsing for LoongArch64 unwind tables |
 | `loongarch64_max_not_min_scanner.py` | Standalone scanner: andi/ori integer-truncation patterns |
-| `taint_tracker_loongarch64.py` | Labeled-taint: `Taint(labels, bound)` model; `andi` zeros upper bits and bounds taint range |
+| `taint_tracker_loongarch64.py` | Labeled-taint: `Taintlabels, bound` model; `andi` zeros upper bits and bounds taint range |
 
 ---
 

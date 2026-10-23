@@ -6,11 +6,11 @@ Probe DTMF extraction surfaces, detect RTP and SIP covert channels, assess H.323
 
 ## Why this exists
 
-1. **DTMF tones carry authentication credentials: PIN-based phone banking, voicemail passcodes, IVR access codes, and 2FA telephone delivery, and are transmitted through three parallel SIP/RTP mechanisms that each require a distinct extraction probe.** RFC 2833 out-of-band DTMF (RTP PT=101 telephone-event) separates digit events from audio into the RTP stream; SIP INFO Method with `signal=N` carries digits in SIP signaling; NOTIFY Event:telephone-event delivers DTMF state changes via SIP event subscription. `detect_dtmf_extraction_surface()` probes all three, and `probe_rtp_dtmf_digit_theft()` sends a crafted RFC 2833 burst (digits 0–9) directly to the media port to confirm digit injection and extraction in a single RTP flow: without requiring any SDP negotiation.
+1. **DTMF tones carry authentication credentials: PIN-based phone banking, voicemail passcodes, IVR access codes, and 2FA telephone delivery, and are transmitted through three parallel SIP/RTP mechanisms that each require a distinct extraction probe.** RFC 2833 out-of-band DTMF (RTP PT=101 telephone-event) separates digit events from audio into the RTP stream; SIP INFO Method with `signal=N` carries digits in SIP signaling; NOTIFY Event:telephone-event delivers DTMF state changes via SIP event subscription. `detect_dtmf_extraction_surface()` probes all three, and `probe_rtp_dtmf_digit_theft()` sends a crafted RFC 2833 burst digits 0–9 directly to the media port to confirm digit injection and extraction in a single RTP flow: without requiring any SDP negotiation.
 
-2. **SIP and RTP covert channels bypass call-leg-stateful inspection because they use standard-compliant protocol syntax.** NOTIFY and PUBLISH sent out-of-dialog (without a prior SUBSCRIBE state machine) bypass firewalls that track call legs for session gating: the messages are syntactically valid SIP but carry no call-leg context. Binary `application/octet-stream` SIP MESSAGE bodies bypass content inspection that checks for `text/plain` or `application/sdp`. RTP with dynamic payload type 127 (unassigned in RFC 3551) carries arbitrary data unrecognized by VoIP-aware DPI. RTCP APP packets with application name `HACK` (RFC 3550 §6.7) are passed through by any RTCP-capable SBC that does not inspect APP sub-types. `detect_voip_covert_channel()` and `probe_rtp_covert_channel()` identify each of these surfaces.
+2. **SIP and RTP covert channels bypass call-leg-stateful inspection because they use standard-compliant protocol syntax.** NOTIFY and PUBLISH sent out-of-dialog without a prior SUBSCRIBE state machine bypass firewalls that track call legs for session gating: the messages are syntactically valid SIP but carry no call-leg context. Binary `application/octet-stream` SIP MESSAGE bodies bypass content inspection that checks for `text/plain` or `application/sdp`. RTP with dynamic payload type 127 unassigned in RFC 3551 carries arbitrary data unrecognized by VoIP-aware DPI. RTCP APP packets with application name `HACK` RFC 3550 §6.7 are passed through by any RTCP-capable SBC that does not inspect APP sub-types. `detect_voip_covert_channel()` and `probe_rtp_covert_channel()` identify each of these surfaces.
 
-3. **H.323, SCCP, and MGCP deployments predate modern SIP hardening: they carry cleartext signaling with no credential requirement on the base protocol, and most enterprise firewalls inspect them at the ALG layer without enforcing encryption.** H.323 Q.931/H.225 on TCP/1720 transmits call setup in ASN.1 PER encoding with no transport security; Cisco SCCP on TCP/2000 carries phone registration and DTMF in cleartext unless SCCP-TLS (TCP/2443) + CAPF certificate provisioning is explicitly configured; MGCP RFC 3435 §5 mandates IPsec but does not enforce it: any AUEP/RQNT/CRCX command is accepted without authentication. `probe_h323_and_media_gateway()`, `detect_h323_inspection_surface()`, `detect_sccp_skinny_surface()`, and `detect_mgcp_surface()` cover the full legacy stack.
+3. **H.323, SCCP, and MGCP deployments predate modern SIP hardening: they carry cleartext signaling with no credential requirement on the base protocol, and most enterprise firewalls inspect them at the ALG layer without enforcing encryption.** H.323 Q.931/H.225 on TCP/1720 transmits call setup in ASN.1 PER encoding with no transport security; Cisco SCCP on TCP/2000 carries phone registration and DTMF in cleartext unless SCCP-TLS TCP/2443 + CAPF certificate provisioning is explicitly configured; MGCP RFC 3435 §5 mandates IPsec but does not enforce it: any AUEP/RQNT/CRCX command is accepted without authentication. `probe_h323_and_media_gateway()`, `detect_h323_inspection_surface()`, `detect_sccp_skinny_surface()`, and `detect_mgcp_surface()` cover the full legacy stack.
 
 ---
 
@@ -95,9 +95,9 @@ flowchart TD
 | `SCCP_REGISTER_ACK` | CRITICAL | `detect_sccp_skinny_surface` | SCCP RegisterMessage → RegisterAck 0x0081 |
 | `SCCP_KEEPALIVE` | HIGH | `detect_sccp_skinny_surface` | SCCP KeepAlive → KeepAliveAck 0x0120 |
 | `SCCP_MEDIA_OPEN` | HIGH | `detect_sccp_skinny_surface` | SCCP OpenReceiveChannelAck 0x0022 accepted |
-| `MGCP_AUEP_WILDCARD` | CRITICAL | `detect_mgcp_surface` | AUEP *@* → 200 (all endpoints enumerated) |
-| `MGCP_RQNT_WILDCARD` | CRITICAL | `detect_mgcp_surface` | RQNT wildcard → 200 (DTMF notification hijack) |
-| `MGCP_CRCX_UNAUTH` | CRITICAL | `detect_mgcp_surface` | CRCX → 200 (unauthenticated call creation) |
+| `MGCP_AUEP_WILDCARD` | CRITICAL | `detect_mgcp_surface` | AUEP *@* → 200 all endpoints enumerated |
+| `MGCP_RQNT_WILDCARD` | CRITICAL | `detect_mgcp_surface` | RQNT wildcard → 200 DTMF notification hijack |
+| `MGCP_CRCX_UNAUTH` | CRITICAL | `detect_mgcp_surface` | CRCX → 200 unauthenticated call creation |
 | `ASA_VIA_SPOOF_BYPASS` | HIGH | `probe_asa_sip_fixup_legacy` | Different behavior via TEST-NET Via vs normal Via |
 | `ASA_CONTENT_LENGTH_BYPASS` | HIGH | `probe_asa_sip_fixup_legacy` | Content-Length:0 with body passes SBC inspection |
 | `H323_Q931_RESPONSIVE` | HIGH | `probe_h323_and_media_gateway` | TCP/1720 TPKT SETUP → any response |
@@ -108,7 +108,7 @@ flowchart TD
 | `SCCP_SKINNY_RESPONSIVE` | HIGH | `probe_h323_and_media_gateway` | TCP/2000 SCCP KeepAlive → KeepAliveAck |
 | `JANUS_WEBRTC_GATEWAY_UNAUTH` | CRITICAL | `probe_webrtc_signaling_exposure` | GET /janus → welcome response without API key |
 | `JANUS_SESSION_CREATE_UNAUTH` | CRITICAL | `probe_webrtc_signaling_exposure` | POST /janus create → session_id returned |
-| `JITSI_BOSH_ENDPOINT` | HIGH | `probe_webrtc_signaling_exposure` | GET /http-bind → 200 or 400 (confirming response) |
+| `JITSI_BOSH_ENDPOINT` | HIGH | `probe_webrtc_signaling_exposure` | GET /http-bind → 200 or 400 confirming response |
 | `JITSI_CONFIG_DISCLOSED` | HIGH | `probe_webrtc_signaling_exposure` | GET /about/config → TURN/STUN config in body |
 | `TURN_STUN_RESPONSIVE` | HIGH | `probe_webrtc_signaling_exposure` | UDP/3478 STUN Binding Request → 0x0101 response |
 | `TURN_ALLOCATE_UNAUTH` | CRITICAL | `probe_webrtc_signaling_exposure` | TURN Allocate without auth → non-0x0113 response |
@@ -229,13 +229,13 @@ The following illustrates the output format for representative findings. Actual 
 
 ## False positives
 
-**`SIP_NOTIFY_OOD_COVERT` fires whenever an out-of-dialog NOTIFY returns anything other than 481 Call/Transaction Does Not Exist, but RFC 3265 §3.3.4 permits 489 Bad Event as an alternative rejection.** If the server returns 489 (subscription event type not supported), the finding does not fire; if it returns 200 or 202, the covert channel finding fires. Some SIP servers return 405 (Method Not Allowed) rather than 481 for out-of-dialog NOTIFY, which also does not fire the finding. Cross-check by sending a follow-up NOTIFY with a known-bad Event header (e.g., `Event: nonexistent-fake-event`) and compare the response codes.
+**`SIP_NOTIFY_OOD_COVERT` fires whenever an out-of-dialog NOTIFY returns anything other than 481 Call/Transaction Does Not Exist, but RFC 3265 §3.3.4 permits 489 Bad Event as an alternative rejection.** If the server returns 489 subscription event type not supported, the finding does not fire; if it returns 200 or 202, the covert channel finding fires. Some SIP servers return 405 Method Not Allowed rather than 481 for out-of-dialog NOTIFY, which also does not fire the finding. Cross-check by sending a follow-up NOTIFY with a known-bad Event header (e.g., `Event: nonexistent-fake-event`) and compare the response codes.
 
 **`DTMF_DIGIT_INJECT` fires on any UDP port that does not return ICMP Port Unreachable, but many operating systems do not send ICMP unreachables for UDP ports, regardless of whether a process is listening.** A finding that fires on all probed UDP ports in a range without any variation should be treated as a false positive due to ICMP filtering. Confirm `DTMF_DIGIT_INJECT` by correlating with `RFC2833_PT101_NEGOTIATED` (SDP confirms PT=101 support) and by observing whether the target's RTP stream SSRCs change after digit injection.
 
-**`ASA_VIA_SPOOF_BYPASS` measures behavioral difference between a normal Via and a TEST-NET Via, but behavioral differences can arise from routing policy, not ALG inspection.** If the ASA has an ACL that blocks 192.0.2.0/24 source addresses, the differing response is from the ACL, not the SIP ALG. Confirm by sending a Via with a routable external IP that is not the prober's address (another TEST-NET block, 198.51.100.0/24) and checking whether the behavioral difference persists.
+**`ASA_VIA_SPOOF_BYPASS` measures behavioral difference between a normal Via and a TEST-NET Via, but behavioral differences can arise from routing policy, not ALG inspection.** If the ASA has an ACL that blocks 192.0.2.0/24 source addresses, the differing response is from the ACL, not the SIP ALG. Confirm by sending a Via with a routable external IP that is not the prober's address another TEST-NET block, 198.51.100.0/24 and checking whether the behavioral difference persists.
 
-**`H323_ALIAS_OVERLONG` sends a 256-byte alias but confirms only that no crash or timeout occurred, it does not confirm that the field was properly validated.** The finding is marked MEDIUM (heap overflow candidate) because the response arriving confirms the server processed the message, not that it validated the alias length. An actual heap overflow would more likely manifest as a crash, connection reset, or timeout. Treat this finding as a target for manual fuzzing with Peach Fuzzer or Sulley, not as a confirmed exploitable condition.
+**`H323_ALIAS_OVERLONG` sends a 256-byte alias but confirms only that no crash or timeout occurred, it does not confirm that the field was properly validated.** The finding is marked MEDIUM heap overflow candidate because the response arriving confirms the server processed the message, not that it validated the alias length. An actual heap overflow would more likely manifest as a crash, connection reset, or timeout. Treat this finding as a target for manual fuzzing with Peach Fuzzer or Sulley, not as a confirmed exploitable condition.
 
 ---
 
@@ -254,8 +254,8 @@ The following illustrates the output format for representative findings. Actual 
 | `f['severity']` | `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` |
 | `f['title']` | Finding code string (e.g., `MGCP_CRCX_UNAUTH`, `JANUS_SESSION_CREATE_UNAUTH`) |
 | `f['detail']` | Full finding narrative: host:port, observed protocol behavior, protocol reference violated, specific attack chain or exploitation path |
-| `f['host']` | Target host (IP or FQDN) |
-| `f['port']` | Port for this specific finding: note this varies (UDP/2427 for MGCP, TCP/2000 for SCCP, UDP/3478 for STUN) |
+| `f['host']` | Target host IP or FQDN |
+| `f['port']` | Port for this specific finding: note this varies UDP/2427 for MGCP, TCP/2000 for SCCP, UDP/3478 for STUN |
 
 ---
 

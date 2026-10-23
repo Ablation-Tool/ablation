@@ -6,11 +6,11 @@ Recover repeating multi-byte XOR keys from firmware images using three attack mo
 
 ## Why this exists
 
-1. **Firmware XOR obfuscation almost always uses a static, repeating multi-byte key**: the cipher is weak, but key recovery requires knowing the key length first. `XorSolver.solve()` automates the full attack pipeline: try KPA against firmware magic bytes first (fastest, succeeds when ciphertext starts at a known magic value), fall back to IC key-length estimation + frequency analysis when no magic byte match is found.
+1. **Firmware XOR obfuscation almost always uses a static, repeating multi-byte key**: the cipher is weak, but key recovery requires knowing the key length first. `XorSolver.solve()` automates the full attack pipeline: try KPA against firmware magic bytes first fastest, succeeds when ciphertext starts at a known magic value, fall back to IC key-length estimation + frequency analysis when no magic byte match is found.
 
 2. **`kpa_attack()` uses a dictionary of known firmware magic bytes**: ELF (`\x7fELF`), SquashFS (`sqsh`/`hsqs`), ext4 (`\x53\xef`), U-Boot (`\x27\x05\x19\x56`), gzip (`\x1f\x8b`), and others. XOR the first N bytes of the ciphertext against each magic sequence: `key_candidate = ciphertext[:N] ^ magic`. If `key_candidate` repeats throughout the ciphertext, it is the key. This attack takes milliseconds and succeeds for most FortiOS-family firmware.
 
-3. **IC key-length estimation follows the Kasiski/Friedman approach**: compute the index of coincidence for different key-length hypotheses and select the key length with the highest IC. This is then combined with per-position frequency analysis (byte with highest frequency in each key-position slice maps to the most common plaintext byte). `ic_key_length()` + `freq_attack()` are exposed separately for cases where one stage must be customized.
+3. **IC key-length estimation follows the Kasiski/Friedman approach**: compute the index of coincidence for different key-length hypotheses and select the key length with the highest IC. This is then combined with per-position frequency analysis byte with highest frequency in each key-position slice maps to the most common plaintext byte. `ic_key_length()` + `freq_attack()` are exposed separately for cases where one stage must be customized.
 
 ---
 
@@ -96,7 +96,7 @@ Run `XorSolver.solve()` after `EntropyMapper` identifies an encrypted region (`H
 |:---|:---|
 | `key` | Recovered key as `Optional[bytes]` |
 | `key_length` | `Optional[int]`: length of the recovered key |
-| `method` | `'kpa'` (known-plaintext), `'hamming+freq'` (frequency analysis), or `'manual'` |
+| `method` | `'kpa'` known-plaintext, `'hamming+freq'` frequency analysis, or `'manual'` |
 | `magic_matched` | `Optional[str]`: magic bytes label if KPA matched a known header |
 | `confidence` | Float 0.0–1.0: key correctness confidence |
 | `notes` | Additional notes from the solver |

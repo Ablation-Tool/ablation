@@ -1,6 +1,6 @@
 # VXLAN/DCNM Exposure
 
-Probe Cisco DCNM (Data Center Network Manager) and VXLAN VTEP infrastructure: identifying unauthenticated version disclosure at DCNM REST endpoints, VTEP neighbor discovery via BGP EVPN, and firmware/license detail extraction: via `modules/nxos_enum.py` `probe_dcnm()` and `probe_vxlan_vteps()`.
+Probe Cisco DCNM Data Center Network Manager and VXLAN VTEP infrastructure: identifying unauthenticated version disclosure at DCNM REST endpoints, VTEP neighbor discovery via BGP EVPN, and firmware/license detail extraction: via `modules/nxos_enum.py` `probe_dcnm()` and `probe_vxlan_vteps()`.
 
 ---
 
@@ -10,7 +10,7 @@ Probe Cisco DCNM (Data Center Network Manager) and VXLAN VTEP infrastructure: id
 
 2. **VXLAN VTEP discovery via BGP EVPN NLRIs**: `probe_vxlan_vteps()` sends BGP OPEN and UPDATE messages to discover EVPN routes that carry VTEP IP addresses and VNI assignments. This provides the full VXLAN fabric topology from any host that is routable to the BGP reflector, without requiring management plane access.
 
-3. **DCNM has been superseded by NDFC on Nexus Dashboard**, but DCNM deployments (port 9443) remain common in older data center environments. `probe_dcnm()` checks both the legacy DCNM port (9443) and the NDFC path (443), returning whichever responds, so the same function works against both deployment models.
+3. **DCNM has been superseded by NDFC on Nexus Dashboard**, but DCNM deployments port 9443 remain common in older data center environments. `probe_dcnm()` checks both the legacy DCNM port (9443) and the NDFC path (443), returning whichever responds, so the same function works against both deployment models.
 
 ---
 
@@ -71,7 +71,7 @@ probe_vxlan_vteps:
 
 ## Pipeline position
 
-Run VXLAN/DCNM probes after identifying Cisco data center management IPs (port 9443 or NX-API port 443). DCNM version disclosure is low-risk to execute. VTEP discovery provides the VXLAN fabric topology for network segmentation analysis.
+Run VXLAN/DCNM probes after identifying Cisco data center management IPs port 9443 or NX-API port 443. DCNM version disclosure is low-risk to execute. VTEP discovery provides the VXLAN fabric topology for network segmentation analysis.
 
 ---
 
@@ -81,7 +81,7 @@ VXLAN/DCNM probe functions return `List[{severity, title, detail, host, port}]`:
 
 | Field | Content |
 |:---|:---|
-| `severity` | `HIGH` (unauthenticated API) / `MEDIUM` (version disclosure) / `INFO` (version fingerprint) |
+| `severity` | `HIGH` unauthenticated API / `MEDIUM` version disclosure / `INFO` version fingerprint |
 | `title` | Finding code (e.g., `DCNM_UNAUTH_REST_API`, `DCNM_VERSION_DISCLOSURE`, `VXLAN_VTEP_ENUMERATED`) |
 | `detail` | Version string, VTEP IP list, or accessible REST endpoint path |
 | `host` | Target host |
@@ -91,5 +91,5 @@ VXLAN/DCNM probe functions return `List[{severity, title, detail, host, port}]`:
 
 ## See also
 
-- [NX-OS/ACI/APIC Fabric Enumeration](nx-os-aci-apic-fabric-enumeration.md): APIC/ACI fabric enumeration (DCNM successor)
-- [Nexus Dashboard](nexus-dashboard.md): NDFC (replacement for DCNM) on Nexus Dashboard
+- [NX-OS/ACI/APIC Fabric Enumeration](nx-os-aci-apic-fabric-enumeration.md): APIC/ACI fabric enumeration DCNM successor
+- [Nexus Dashboard](nexus-dashboard.md): NDFC replacement for DCNM on Nexus Dashboard

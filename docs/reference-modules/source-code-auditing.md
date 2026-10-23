@@ -8,7 +8,7 @@ Find dangerous code patterns across a source repository: detecting `eval`/`vm.ru
 
 1. **Source RE requires the same sink-to-taint discipline as binary RE, but at the AST level.** `SourceSinkScanner` is the source-code equivalent of `SinkArgClassifier` + `FormatStringScanner`, it identifies every dangerous sink in a repository and classifies each by severity and CWE, providing the starting point for `SourceTaintTracker` dataflow analysis.
 
-2. **Guard-condition detection reduces `HIGH` findings to `MEDIUM` for gated sinks**: `vm.runInContext` gated by `LANGFUSE_CODE_EVAL_DISPATCHER=insecure-local` is a `MEDIUM` (requires explicit misconfiguration), not a `HIGH` (always reachable). This was the LFG-CODEEVAL-1 pattern: the sink was present, dangerous in the abstract, but not exploitable without the env-var gate. `SourceSinkScanner` detects the gate and adjusts severity.
+2. **Guard-condition detection reduces `HIGH` findings to `MEDIUM` for gated sinks**: `vm.runInContext` gated by `LANGFUSE_CODE_EVAL_DISPATCHER=insecure-local` is a `MEDIUM` requires explicit misconfiguration, not a `HIGH` always reachable. This was the LFG-CODEEVAL-1 pattern: the sink was present, dangerous in the abstract, but not exploitable without the env-var gate. `SourceSinkScanner` detects the gate and adjusts severity.
 
 3. **`SinkHit.as_dict()` provides structured output for `AgentLoop` integration**: findings include file path, line number, sink function, CWE, severity, and the snippet. `AgentLoop` can consume these as pre-analyzed candidates for generating vulnerability hypothesis reports, referencing the exact file and line without re-running the scanner.
 
@@ -89,7 +89,7 @@ Run `SourceSinkScanner` immediately after `SourceContext.from_path()` as the fir
 | `line` | Line number |
 | `category` | Sink category (e.g., `code-evaluation`, `subprocess`, `path-traversal`, `ssrf`) |
 | `cwe` | CWE identifier (e.g., `CWE-95`, `CWE-78`, `CWE-22`) |
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` (after guard reduction) |
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` after guard reduction |
 | `base_severity` | Severity before guard reduction |
 | `guarded` | `True` if an env-var or conditional gate was detected near the sink |
 | `description` | Human-readable description of the sink pattern |

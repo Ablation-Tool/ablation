@@ -64,7 +64,7 @@ print(info.expected_keys)   # ['fgt_512.key', 'fgt2.key', 'fgt.key']
 print(info.track)           # 'M'
 ```
 
-Known key families (current table):
+Known key families current table:
 
 | MD5 | Key | Severity |
 |---|---|---|

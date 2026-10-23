@@ -129,15 +129,15 @@ Convert `FindingRegistry.list_findings()` output to SARIF 2.1.0.
 
 Convert sweep results to a flat JSON-serializable dict.
 
-### `findings_to_json(findings)`
+### `findings_to_jsonfindings`
 
 Convert findings list to a JSON-serializable dict.
 
-### `write_sarif(doc, path)`
+### `write_sarifdoc, path`
 
 Write a SARIF dict to a file.
 
-### `write_json(doc, path)`
+### `write_jsondoc, path`
 
 Write a JSON dict to a file.
 
@@ -214,9 +214,9 @@ All export functions are module-level (no class instantiation). They return stru
 | `sweep_to_sarif(sweep_results, binary_path, min_score=0.0)` | `dict`: SARIF 2.1.0 document from `PatternLibrary.sweep()` output |
 | `findings_to_sarif(findings, binary_path=None)` | `dict`: SARIF 2.1.0 document from `FindingRegistry.list_findings()` output |
 | `sweep_to_json(sweep_results, binary_path, min_score=0.0)` | `dict`: flat JSON with `binary`, `findings`, `total_hits` keys |
-| `findings_to_json(findings)` | `dict`: flat JSON with `findings` and `total` keys |
-| `write_sarif(data, path)` | Writes SARIF file; returns `None` |
-| `write_json(data, path)` | Writes JSON file; returns `None` |
+| `findings_to_jsonfindings` | `dict`: flat JSON with `findings` and `total` keys |
+| `write_sarifdata, path` | Writes SARIF file; returns `None` |
+| `write_jsondata, path` | Writes JSON file; returns `None` |
 
 See [JSON and SARIF Export](json-and-sarif-export.md) for the full SARIF schema and field reference.
 

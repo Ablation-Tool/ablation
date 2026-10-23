@@ -4,25 +4,25 @@
 
 ## Why this exists
 
-Cisco NX-OS, ACI/APIC, DCNM, and VXLAN enumeration. Covers: TLS cert OU discriminator (dcnxos vs dcapic), APIC unauthenticated domain listing, APIC REST credential spray, full APIC MIT enumeration (tenants, EPGs, contracts, L3Out networks, VMM domains, audit log, firmware versions, endpoint tracker, out-of-band management), NX-API (port 443/8080), DCNM REST probing, NX-OS SSH banner grab and CLI command execution, VXLAN VTEP discovery, and Cobra SDK package disclosure.
+Cisco NX-OS, ACI/APIC, DCNM, and VXLAN enumeration. Covers: TLS cert OU discriminator dcnxos vs dcapic, APIC unauthenticated domain listing, APIC REST credential spray, full APIC MIT enumeration tenants, EPGs, contracts, L3Out networks, VMM domains, audit log, firmware versions, endpoint tracker, out-of-band management, NX-API port 443/8080, DCNM REST probing, NX-OS SSH banner grab and CLI command execution, VXLAN VTEP discovery, and Cobra SDK package disclosure.
 
 ## Key functions
 
-- `classify_by_cert_ou(host)`: TLS cert OU discriminator (NXOS_SWITCH vs APIC_CONTROLLER)
+- `classify_by_cert_ou(host)`: TLS cert OU discriminator NXOS_SWITCH vs APIC_CONTROLLER
 - `probe_apic_unauthenticated(host)`: aaaListDomains without auth
-- `apic_login(host, user, pwd)`: APIC-cookie token login
-- `apic_enumerate(host, token)`: full MIT enumeration (30+ classes + subtree queries)
-- `apic_get_contract_matrix(host, token)`: EPG-to-EPG contract provided/consumed mapping
-- `apic_get_l3out_networks(host, token)`: L3Out external networks and BGP peers
-- `apic_get_vmm_domains(host, token)`: VMM lateral movement surface (vCenter IPs/creds)
-- `apic_get_audit_log(host, token)`: last 200 config change records
-- `apic_get_endpoints(host, token)`: learned MAC/IP/EPG/physical-path endpoint table
-- `apic_cobra_bulk_extract(host, token)`: Cobra SDK.whl package disclosure
+- `apic_loginhost, user, pwd`: APIC-cookie token login
+- `apic_enumeratehost, token`: full MIT enumeration 30+ classes + subtree queries
+- `apic_get_contract_matrixhost, token`: EPG-to-EPG contract provided/consumed mapping
+- `apic_get_l3out_networkshost, token`: L3Out external networks and BGP peers
+- `apic_get_vmm_domainshost, token`: VMM lateral movement surface (vCenter IPs/creds)
+- `apic_get_audit_loghost, token`: last 200 config change records
+- `apic_get_endpointshost, token`: learned MAC/IP/EPG/physical-path endpoint table
+- `apic_cobra_bulk_extracthost, token`: Cobra SDK.whl package disclosure
 - `probe_nxapi(host)`: NX-API JSON-RPC at /ins
 - `probe_dcnm(host)`: DCNM REST at /rest/*
-- `run_nxos_commands(host, user, pwd)`: SSH CLI batch execution
+- `run_nxos_commandshost, user, pwd`: SSH CLI batch execution
 - `probe_vxlan_vteps(host)`: NVE peer and VNI enumeration
-- `NXOSEnumerator(targets, creds).run()`: orchestrated multi-target scan
+- `NXOSEnumeratortargets, creds.run()`: orchestrated multi-target scan
 
 ## Constructor
 
@@ -43,7 +43,7 @@ Gate: **PASSED**. Six None-dereference guards added (`if not data: return []` / 
 
 ## How it works
 
-`NXOSEnumerator(targets).run()` iterates target hosts: for each host it runs `classify_by_cert_ou()` (OU-based device type discrimination from the TLS certificate), `probe_nxos_ports()` (open port surface), and conditionally `probe_apic_unauthenticated()`, `probe_nxapi()`, `probe_dcnm()`, or `probe_vxlan_vteps()` based on device type and open ports. Standalone functions (`probe_apic_unauthenticated`, `probe_nxapi`, `probe_nxos_ports`) return plain dicts, not finding lists.
+`NXOSEnumerator(targets).run()` iterates target hosts: for each host it runs `classify_by_cert_ou()` OU-based device type discrimination from the TLS certificate, `probe_nxos_ports()` open port surface, and conditionally `probe_apic_unauthenticated()`, `probe_nxapi()`, `probe_dcnm()`, or `probe_vxlan_vteps()` based on device type and open ports. Standalone functions (`probe_apic_unauthenticated`, `probe_nxapi`, `probe_nxos_ports`) return plain dicts, not finding lists.
 
 ---
 
@@ -94,26 +94,26 @@ probe_nxos_ports:
 
 **`probe_apic_unauthenticated()` `aaa_domains` on non-APIC hosts**: the AAA domain list endpoint (`/api/aaaListDomains.json`) may be served by other Cisco web interfaces that share the same URL path. Verify `Content-Type: application/json` and the `imdata` key in the response before treating this as a confirmed APIC surface.
 
-**`classify_by_cert_ou()` misclassification on self-signed certs**: a self-signed certificate with a generic OU (e.g., `Engineering`) will classify as `UNKNOWN` device type. In this case all probe types run (APIC, NX-API, DCNM), which increases probe traffic.
+**`classify_by_cert_ou()` misclassification on self-signed certs**: a self-signed certificate with a generic OU (e.g., `Engineering`) will classify as `UNKNOWN` device type. In this case all probe types run APIC, NX-API, DCNM, which increases probe traffic.
 
 ---
 
 ## Pipeline position
 
-Run `NXOSEnumerator` after port scanning identifies Cisco ACI/NX-OS management ports (TCP/443, TCP/830, TCP/9443). Run `probe_apic_unauthenticated()` directly when targeting known APIC controllers.
+Run `NXOSEnumerator` after port scanning identifies Cisco ACI/NX-OS management ports TCP/443, TCP/830, TCP/9443. Run `probe_apic_unauthenticated()` directly when targeting known APIC controllers.
 
 ---
 
 ## Reading findings
 
-Standalone functions return plain data dicts (not finding lists):
+Standalone functions return plain data dicts not finding lists:
 
 | Function | Return shape |
 |:---|:---|
 | `probe_apic_unauthenticated(host)` | `{host, reachable, aaa_domains: List[str], raw_domains_response}` |
 | `probe_nxapi(host)` | `{host, reachable, version, apis_accessible, error}` |
 | `probe_nxos_ports(host)` | `{host, open_ports: {port: service_name}}` |
-| `probe_vxlan_vteps(local_host)` | `{host, vteps: List[str], error}` |
+| `probe_vxlan_vtepslocal_host` | `{host, vteps: List[str], error}` |
 
 ---
 

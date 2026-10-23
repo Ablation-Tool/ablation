@@ -15,7 +15,7 @@ workaround.
 **Description:** 
 `X86_32TaintTracker` is an intraprocedural analyser. It does not follow taint into callees
 the way the other Ablation taint trackers do. When the tracker reaches a `call` instruction
-to a non-PLT target (an internal function), it applies the CDECL32 caller-save rule:
+to a non-PLT target an internal function, it applies the CDECL32 caller-save rule:
 eax, ecx, edx are cleared. Taint that flows into the callee via a push argument is not
 propagated through the callee's body.
 
@@ -29,7 +29,7 @@ propagated through the callee's body.
 deep from the source are not detected.
 
 **Workaround:** 
-Combine with `XRefGraph.callers_of(sink_plt_va)` to identify entry functions that call
+Combine with `XRefGraph.callers_ofsink_plt_va` to identify entry functions that call
 the sink directly. Then run `X86_32TaintTracker` on each entry function independently.
 For deep call chains, trace each hop manually using `WindowAnalyzer.dump_text()`.
 
@@ -47,7 +47,7 @@ do not use ebp as a frame pointer and do not start with this byte sequence. FPO 
 are not found by the prologue scanner.
 
 **Triggering conditions:** 
-- i386 binaries compiled with `-fomit-frame-pointer` (common in optimised release builds)
+- i386 binaries compiled with `-fomit-frame-pointer` common in optimised release builds
 - Functions where the compiler chose not to use a frame pointer
 
 **Impact:** False negative. FPO functions are not analysed. If a sink call appears inside
@@ -62,7 +62,7 @@ cross-reference analysis, which covers FPO functions when symbols exist.
 
 ---
 
-## X8632-KA-003: GOT-base (ebx in PIC binaries) not emulated
+## X8632-KA-003: GOT-base ebx in PIC binaries not emulated
 
 **Description:** 
 In PIC i386 binaries, the GOT base is held in `ebx`, set by the `__x86.get_pc_thunk.bx`
@@ -90,7 +90,7 @@ GOT-relative access patterns as candidates for manual verification.
 
 **Description:** 
 The stack frame model tracks `esp_delta` via explicit `push`, `pop`, and `add esp, N`
-(call cleanup) instructions. A `sub esp, N` for frame allocation does not adjust
+call cleanup instructions. A `sub esp, N` for frame allocation does not adjust
 `esp_delta`; only explicit push/pop operations do. Stack-based copy loops (e.g., a loop
 that moves data 4 bytes at a time using `esp` as the destination pointer) are not modelled.
 

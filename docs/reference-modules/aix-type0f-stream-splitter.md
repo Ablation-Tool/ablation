@@ -28,7 +28,7 @@ AixType0fStreamSplitter(raw)
              └── Decodes with shared sym_table + final MTF state from primary
 ```
 
-**Shared MTF state:** Both streams share the same `sym_table` (raw[16:272]) and the same K-byte common alphabet. The secondary stream's Huffman decode begins from the final MTF list state at end of primary decode.
+**Shared MTF state:** Both streams share the same `sym_table` raw[16:272] and the same K-byte common alphabet. The secondary stream's Huffman decode begins from the final MTF list state at end of primary decode.
 
 ---
 
@@ -54,8 +54,8 @@ if result.secondary_raw:
 |:---|:---|:---|
 | `format` | `str` | `'two_stream'` (AIX 5.2) or `'single_stream'` (AIX 5.0) |
 | `primary_mtf_indices` | `list[int]` | Primary stream MTF symbol indices |
-| `primary_bwt_last` | `bytes` | Primary stream inverse-MTF output (BWT last column) |
-| `secondary_raw` | `bytes` | Raw secondary block payload (AIX 5.2 only; empty otherwise) |
+| `primary_bwt_last` | `bytes` | Primary stream inverse-MTF output BWT last column |
+| `secondary_raw` | `bytes` | Raw secondary block payload AIX 5.2 only; empty otherwise |
 | `secondary_mtf_indices` | `list[int]` | Secondary MTF indices decoded using final primary MTF state |
 | `secondary_bwt_last` | `bytes` | Inverse-MTF of secondary stream using shared MTF state |
 | `final_mtf_state` | `list[int]` | MTF list state at end of primary decode |
@@ -64,7 +64,7 @@ if result.secondary_raw:
 
 ## Limitations
 
-**Secondary block format is unidentified.** Empirical RE on MQSeries `amqzxma0_nd` (AIX 5.2, 50848-byte entry): the secondary block is not XCOFF32 and not a standard installp format. Decompression of the secondary stream produces bytes, but their semantic structure requires further RE against IBM `liblpp.a`.
+**Secondary block format is unidentified.** Empirical RE on MQSeries `amqzxma0_nd` AIX 5.2, 50848-byte entry: the secondary block is not XCOFF32 and not a standard installp format. Decompression of the secondary stream produces bytes, but their semantic structure requires further RE against IBM `liblpp.a`.
 
 **Single-stream detection is heuristic.** The module detects AIX 5.0 single-stream by the absence of the 0xFF sentinel within the expected bit range. Edge cases with unusual Huffman symbol distributions could misclassify a 5.2 entry if the primary stream happens to produce 256 consecutive 1-bits legitimately.
 

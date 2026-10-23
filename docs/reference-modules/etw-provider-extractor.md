@@ -4,9 +4,9 @@
 
 Two things were not possible before in Ablation:
 
-1. **No ETW provider inventory.** ETW (Event Tracing for Windows) is the primary telemetry layer that EDR products and Windows security features depend on. A binary that imports `EventRegister` but whose provider GUID you don't know is invisible to any GUID-based filtering or suppression tool. Before this module, Ablation had no way to extract provider GUIDs from `EventRegister` call sites or cross-reference them against the table of known security-relevant providers. `pe_sweep.py` flagged ETW imports at the IAT level but did nothing with the GUIDs.
+1. **No ETW provider inventory.** ETW Event Tracing for Windows is the primary telemetry layer that EDR products and Windows security features depend on. A binary that imports `EventRegister` but whose provider GUID you don't know is invisible to any GUID-based filtering or suppression tool. Before this module, Ablation had no way to extract provider GUIDs from `EventRegister` call sites or cross-reference them against the table of known security-relevant providers. `pe_sweep.py` flagged ETW imports at the IAT level but did nothing with the GUIDs.
 
-2. **No detection gap identification.** A binary that registers an ETW provider but never calls `EventWrite` is producing no telemetry: either by design (broken instrumentation) or by intent (registration without writes is a common technique to appear compliant while emitting nothing). Finding that case required counting `EventWrite` call sites manually. Now `write_site_count()` does it in one call, and the `scan()` method automatically flags the gap.
+2. **No detection gap identification.** A binary that registers an ETW provider but never calls `EventWrite` is producing no telemetry: either by design broken instrumentation or by intent registration without writes is a common technique to appear compliant while emitting nothing. Finding that case required counting `EventWrite` call sites manually. Now `write_site_count()` does it in one call, and the `scan()` method automatically flags the gap.
 
 ---
 
@@ -71,20 +71,20 @@ Extend by adding entries to `_KNOWN_PROVIDERS` in the module source.
 
 ## Dependencies
 
-- `lief >= 0.14.0` (PE parsing, IAT)
-- `capstone >= 5.0` (call site scanning, argument extraction)
+- `lief >= 0.14.0` PE parsing, IAT
+- `capstone >= 5.0` call site scanning, argument extraction
 
 ---
 
 ## How it works
 
-`ETWProviderExtractor.from_path(path)` reads the PE with `lief.parse()` and builds an IAT map via `_build_iat()`. `providers()` scans all code sections for call sites that resolve to `EventRegister` or `EventRegisterEx`, then extracts the GUID pointer argument (first argument in the MSVC calling convention) via `_extract_guid_arg()`. `scan()` checks each extracted provider for missing auth level, missing trace level guard, and excessive write sites.
+`ETWProviderExtractor.from_path(path)` reads the PE with `lief.parse()` and builds an IAT map via `_build_iat()`. `providers()` scans all code sections for call sites that resolve to `EventRegister` or `EventRegisterEx`, then extracts the GUID pointer argument first argument in the MSVC calling convention via `_extract_guid_arg()`. `scan()` checks each extracted provider for missing auth level, missing trace level guard, and excessive write sites.
 
 ---
 
 ## Pipeline position
 
-**Before:** Run on x86_64 Windows PE binaries (kernel or user-mode) that may emit ETW events.
+**Before:** Run on x86_64 Windows PE binaries kernel or user-mode that may emit ETW events.
 
 **After:** ETW provider GUIDs can be used to subscribe to the provider in a test environment to observe what events are emitted. HIGH findings indicate missing auth or level guard.
 
@@ -101,9 +101,9 @@ Extend by adding entries to `_KNOWN_PROVIDERS` in the module source.
 | `title` | Short finding title string |
 | `location` | Section name, PE path, or GUID identifying where the issue was found |
 | `description` | Human-readable explanation of the finding |
-| `va` | VA of the relevant `EventRegister` or `EventWrite` call site (0 if not applicable) |
+| `va` | VA of the relevant `EventRegister` or `EventWrite` call site 0 if not applicable |
 
-The scan also extracts `ETWProvider` objects (not findings) accessible via `.providers` on the scanner instance, with fields `guid`, `known_name`, `registration_count`, `registration_vas`.
+The scan also extracts `ETWProvider` objects not findings accessible via `.providers` on the scanner instance, with fields `guid`, `known_name`, `registration_count`, `registration_vas`.
 
 ---
 

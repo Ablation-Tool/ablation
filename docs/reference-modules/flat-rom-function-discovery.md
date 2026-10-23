@@ -6,7 +6,7 @@ Fingerprint the instruction set architecture of a flat ECU ROM image from raw by
 
 ## Why this exists
 
-1. **Flat ECU ROM images have no ELF header, no IHEX record type, and no symbol table: just raw bytes at a base address.** Before any disassembly or analysis can proceed, the ISA must be identified. `EcuArchDetector` distinguishes between ARM Cortex-M (Thumb-2 LE vector table at offset 0), Infineon TriCore AURIX, Motorola M68K/CPU32, PowerPC 32-bit Book E, PowerPC VLE, and Renesas SH-2A/SH-2 using a multi-signal fingerprinting approach.
+1. **Flat ECU ROM images have no ELF header, no IHEX record type, and no symbol table: just raw bytes at a base address.** Before any disassembly or analysis can proceed, the ISA must be identified. `EcuArchDetector` distinguishes between ARM Cortex-M Thumb-2 LE vector table at offset 0, Infineon TriCore AURIX, Motorola M68K/CPU32, PowerPC 32-bit Book E, PowerPC VLE, and Renesas SH-2A/SH-2 using a multi-signal fingerprinting approach.
 
 2. **`EcuArchDetector` uses three independent detection signals: reset vector pointer validity, instruction density signatures, and byte-level statistical patterns: producing a confidence-ranked list of candidates.** `ArchDetectResult.is_confident()` returns `True` when the top candidate has a significant confidence margin over the second candidate, enabling automated pipeline decisions without analyst intervention for common ECU types.
 

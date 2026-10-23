@@ -91,7 +91,7 @@ Raises `ValueError` if `stages` is empty.
 def current(self) -> Stage
 ```
 
-Returns the active (not yet committed) stage.
+Returns the active not yet committed stage.
 
 ---
 
@@ -306,7 +306,7 @@ See `stage-commitment.md` for the full API.
 
 ## How it works
 
-`WorkflowDocument` holds an ordered list of `Stage` objects. `_current_index` tracks which stage is active. `advance(instance)` calls `_validate_instance()` to check required fields and property types against the current stage's schema. On success it stamps the instance into `stage.instance`, marks `committed=True`, records a `StageTransition` in `self.log` for each routing target, and increments `_current_index`. `validate()` runs the same check without advancing: useful for pre-flight before committing a stage. `dirty_since_commit()` detects out-of-band writes by re-hashing all committed instances and comparing to cached values set at `advance()` time.
+`WorkflowDocument` holds an ordered list of `Stage` objects. `_current_index` tracks which stage is active. `advanceinstance` calls `_validate_instance()` to check required fields and property types against the current stage's schema. On success it stamps the instance into `stage.instance`, marks `committed=True`, records a `StageTransition` in `self.log` for each routing target, and increments `_current_index`. `validate()` runs the same check without advancing: useful for pre-flight before committing a stage. `dirty_since_commit()` detects out-of-band writes by re-hashing all committed instances and comparing to cached values set at `advance()` time.
 
 ---
 
@@ -355,13 +355,13 @@ WorkflowDocument id='cisco/fmc_server'
 
 ## False positives
 
-`WorkflowDocument` does not emit security findings. The most common operational error is calling `advance()` with an instance that fails schema validation, this raises `ValueError` with the validation error list. Call `validate(stage_name, instance)` first to pre-check without advancing, then fix any reported errors before calling `advance()`.
+`WorkflowDocument` does not emit security findings. The most common operational error is calling `advance()` with an instance that fails schema validation, this raises `ValueError` with the validation error list. Call `validatestage_name, instance` first to pre-check without advancing, then fix any reported errors before calling `advance()`.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Called at the start of a multi-session RE engagement, before any stage output is produced. For a new target, create with `for_re_session(vendor, target)` and serialize to `re/<vendor>/<target>_workflow.json` immediately so the document survives compaction.
+**Before this module:** Called at the start of a multi-session RE engagement, before any stage output is produced. For a new target, create with `for_re_sessionvendor, target` and serialize to `re/<vendor>/<target>_workflow.json` immediately so the document survives compaction.
 
 **After this module:** Each `advance()` call feeds the committed instance into `StageCommitment.commit()` for tamper-evidence, then into the next analysis stage. At `registration`, pass `finding_id` to `FindingRegistry` and set `forge_gate_passed=True` after FORGE passes.
 

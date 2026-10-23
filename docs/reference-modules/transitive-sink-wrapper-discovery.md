@@ -1,6 +1,6 @@
 # Transitive Sink Wrapper Discovery
 
-Compute the transitive closure of passthrough wrappers around known exec sinks: finding all wrapper functions (at any depth) that propagate their argument to `system`/`popen`/`execve`, so that `TaintTracker` can use the expanded sink list to find injection paths hidden behind multi-level custom wrappers.
+Compute the transitive closure of passthrough wrappers around known exec sinks: finding all wrapper functions at any depth that propagate their argument to `system`/`popen`/`execve`, so that `TaintTracker` can use the expanded sink list to find injection paths hidden behind multi-level custom wrappers.
 
 ---
 
@@ -104,7 +104,7 @@ Run `SinkPropagator.propagate()` before `SinkArgClassifier.classify_all()` on an
 | `wraps_name` | Name of the immediate sink |
 | `chain` | `List[str]`: lineage from root PLT sink to this wrapper |
 
-Add wrapper names to `SinkArgClassifier` by calling `SinkPropagator.add_sink(name, arg_pos)` to extend coverage before running the classifier.
+Add wrapper names to `SinkArgClassifier` by calling `SinkPropagator.add_sinkname, arg_pos` to extend coverage before running the classifier.
 
 ---
 

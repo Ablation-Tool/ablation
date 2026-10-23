@@ -95,7 +95,7 @@ dirty_since_commit(): True  (advance() not yet committed)
 
 ## Pipeline position
 
-`WorkflowDocument` is an optional quality gate layer over the standard Ablation analysis pipeline. Use it on engagements where schema-validated evidence chains are required (formal disclosures, PSIRT submissions). It does not replace `SESSION.md`, it augments it with machine-checkable evidence validation.
+`WorkflowDocument` is an optional quality gate layer over the standard Ablation analysis pipeline. Use it on engagements where schema-validated evidence chains are required formal disclosures, PSIRT submissions. It does not replace `SESSION.md`, it augments it with machine-checkable evidence validation.
 
 ---
 
@@ -106,10 +106,10 @@ dirty_since_commit(): True  (advance() not yet committed)
 | Method | Return |
 |:---|:---|
 | `current_stage()` | Current stage name string (e.g., `triage`, `sweep`, `taint`, `confirmation`) |
-| `history()` | `List[(from_stage, to_stage, status)]`: stage transition history |
-| `validate(stage, evidence_dict)` | `List[str]`: list of validation errors; empty if valid |
+| `history()` | `List[from_stage, to_stage, status]`: stage transition history |
+| `validatestage, evidence_dict` | `List[str]`: list of validation errors; empty if valid |
 | `dirty_since_commit()` | `True` if `advance()` has been called but not yet committed |
-| `advance(next_stage, evidence_dict)` | Moves to next stage; raises `ValidationError` if evidence is invalid |
+| `advancenext_stage, evidence_dict` | Moves to next stage; raises `ValidationError` if evidence is invalid |
 
 ---
 

@@ -71,7 +71,7 @@ a larger `window_insns` parameter if it becomes available.
 
 **Description:** 
 `WindowsPoolTaintTracker` builds its allocation and copy call site maps from the IAT
-(Import Address Table). Drivers that resolve pool allocation functions at runtime via
+Import Address Table. Drivers that resolve pool allocation functions at runtime via
 `MmGetSystemRoutineAddress` and call them through function pointers have a zero-entry IAT
 for those functions. The tracker returns zero findings for such drivers.
 
@@ -94,7 +94,7 @@ zero-IAT drivers, fall back to `WindowAnalyzer.dump_text()` and search for the
 ## WINPOOL-KA-004: lief 0.14.0+ required; older versions may fail PE parsing
 
 **Description:** 
-`WindowsPoolTaintTracker` uses lief for PE parsing (IAT, section headers). lief versions
+`WindowsPoolTaintTracker` uses lief for PE parsing IAT, section headers. lief versions
 before 0.14.0 have known parsing regressions on certain PE/COFF features used by Windows
 kernel drivers (e.g., the `/GUARD:CF` CFG flag table). An environment with lief < 0.14.0
 may fail to parse the IAT correctly and return zero entries.
@@ -105,7 +105,7 @@ may fail to parse the IAT correctly and return zero entries.
 **Impact:** False negative. Zero IAT entries means zero findings.
 
 **Workaround:** 
-Verify `import lief; print(lief.__version__)` returns 0.14.0+. The pinned version in
+Verify `import lief; printlief.__version__` returns 0.14.0+. The pinned version in
 `requirements.txt` covers standard installs.
 
 **Resolved in version:** Mitigated by `requirements.txt` pin.

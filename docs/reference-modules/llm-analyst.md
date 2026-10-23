@@ -1,4 +1,4 @@
-# LLM Analyst (llm_analyst)
+# LLM Analyst llm_analyst
 
 ReAct agent loop for LLM-assisted binary analysis. Seven modules under `ablation/analyzers/llm_analyst/`: `agent_loop.py`, `context_builder.py`, `rag_retriever.py`, `tool_registry.py`, and three task modules in `tasks/`: `vuln_hypothesis.py`, `function_namer.py`, `struct_reconstructor.py`.
 
@@ -6,7 +6,7 @@ ReAct agent loop for LLM-assisted binary analysis. Seven modules under `ablation
 
 ## Why this exists
 
-1. **Semantic gaps that pattern matching cannot close.** SemanticSearcher and SinkArgClassifier reach a ceiling: they can identify that a function calls `memcpy` with an argument from `recv`, but cannot assess whether an intervening `if (len > MAX)` actually prevents overflow. The LLM analyst closes this gap by reasoning over disassembly, callee names, and prior findings in a structured loop.
+1. **Semantic gaps that pattern matching cannot close.** SemanticSearcher and SinkArgClassifier reach a ceiling: they can identify that a function calls `memcpy` with an argument from `recv`, but cannot assess whether an intervening `if len > MAX` actually prevents overflow. The LLM analyst closes this gap by reasoning over disassembly, callee names, and prior findings in a structured loop.
 
 2. **Tool-calling loop prevents hallucination drift.** A single-shot LLM call with raw disassembly produces confident wrong answers. The ReAct loop forces the model to use tools (`get_disassembly`, `get_strings`, `get_imports`) to retrieve specific evidence before committing. `done()` is the only exit: the model cannot stop without stating a name, role, and rationale.
 
@@ -55,29 +55,29 @@ for c in results:
 
 **AgentLoop** drives a Claude ReAct loop. Key parameters:
 - `max_tool_calls=10`: hard budget; loop exits whether or not `done()` is called
-- Loop detector: identical `(tool_name, args)` pair injects `LOOP_DETECTED` error and blocks the call
+- Loop detector: identical `tool_name, args` pair injects `LOOP_DETECTED` error and blocks the call
 - `persist_result()`: writes to `func_id_db` at `confidence >= 0.5`
 
-`run_patch(v1, v2, disasm_v1, disasm_v2)`: single-shot patch analysis (no tool loop needed; disasm already injected).
+`run_patchv1, v2, disasm_v1, disasm_v2`: single-shot patch analysis no tool loop needed; disasm already injected.
 
 ---
 
 ## context_builder.py
 
 **ContextBuilder** assembles the hierarchical prompt. Context ordering (most signal first per O'Reilly "Prompt Engineering for LLMs"):
-1. Prior findings from `func_id_db` (capped at 5, notes trimmed to 150 chars)
-2. Callee names (strongest semantic signal)
-3. String xrefs (capped at 10, trimmed to 120 chars each)
+1. Prior findings from `func_id_db` capped at 5, notes trimmed to 150 chars
+2. Callee names strongest semantic signal
+3. String xrefs capped at 10, trimmed to 120 chars each
 4. CFG summary
-5. Raw disassembly (last: token-expensive)
+5. Raw disassembly last: token-expensive
 
 ---
 
 ## rag_retriever.py
 
-**RAGRetriever** retrieves prior findings from `func_id_db` via four strategies (in priority order):
+**RAGRetriever** retrieves prior findings from `func_id_db` via four strategies in priority order:
 1. Exact binary SHA256 + VA match
-2. Callee-set overlap (LIKE query, parameterized, no injection risk)
+2. Callee-set overlap LIKE query, parameterized, no injection risk
 3. Role-based match
 4. Name fuzzy match
 
@@ -93,7 +93,7 @@ Results ranked by callee overlap score; capped at `_MAX_RESULTS=8`.
 
 ## tasks/vuln_hypothesis.py
 
-Pre-screens PLT callee names against `_DANGEROUS_IMPORTS` (strcpy, memcpy, malloc, free, exec …) before sending to Claude. Functions with no dangerous callees return `confidence=0.0` without a Claude call. `scan_batch()` filters by `min_confidence=0.5`.
+Pre-screens PLT callee names against `_DANGEROUS_IMPORTS` strcpy, memcpy, malloc, free, exec … before sending to Claude. Functions with no dangerous callees return `confidence=0.0` without a Claude call. `scan_batch()` filters by `min_confidence=0.5`.
 
 ---
 

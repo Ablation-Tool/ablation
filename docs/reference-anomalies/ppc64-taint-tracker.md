@@ -13,8 +13,8 @@ workaround.
 ## PPC64-KA-001: ELFv1 function descriptors (.opd) require symbol-table resolution
 
 **Description:** 
-PPC64 ELFv1 (AIX, old Linux PPC64 big-endian) stores function descriptors in the `.opd`
-section: each descriptor is a tuple of (code VA, TOC pointer, environment pointer). A `BL`
+PPC64 ELFv1 AIX, old Linux PPC64 big-endian stores function descriptors in the `.opd`
+section: each descriptor is a tuple of code VA, TOC pointer, environment pointer. A `BL`
 to an ELFv1 function goes through the descriptor. The tracker resolves ELFv1 descriptors
 when the binary has a symbol table that maps descriptor addresses to function names.
 

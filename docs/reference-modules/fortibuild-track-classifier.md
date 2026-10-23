@@ -27,7 +27,7 @@ The M vs F distinction is not documented in Fortinet's public materials. It was 
 | F | v6.x, v7.x | fgt_512.key | Gen1 |
 | F | v8.0+ | fgt_512.key | Gen2 |
 
-M = maintenance track. F = feature track. The product family and architecture (x86-64 vs ARM64) do not affect the key set.
+M = maintenance track. F = feature track. The product family and architecture x86-64 vs ARM64 do not affect the key set.
 
 ---
 
@@ -91,11 +91,11 @@ Fortinet firmware filename (no I/O)
 
 | Field | Type | Meaning |
 |---|---|---|
-| `filename` | str | Input filename (basename only) |
+| `filename` | str | Input filename basename only |
 | `product` | str | Product family, e.g. `FGT_VM64`, `FGT_VM64_HV`, `FOS_VM64_KVM` |
 | `version` | str | Version string, e.g. `7.4.12` |
 | `build_number` | int | Build number, e.g. `2902` |
-| `build_track` | str | `"M"` (maintenance) or `"F"` (feature) |
+| `build_track` | str | `"M"` maintenance or `"F"` (feature) |
 | `expected_keys` | list[str] | Predicted cert key filenames for this image |
 | `key_generation` | str | `"Gen1"` (v6/v7) or `"Gen2"` (v8+) |
 | `error` | str or None | Set if filename does not match the Fortinet pattern |
@@ -113,13 +113,13 @@ Fortinet firmware filename (no I/O)
 
 ## How it works
 
-`FortiBuildTrackClassifier.classify(filename)` is a pure string classifier, no binary parsing. It matches the FortiOS image filename against a table of known build-track naming patterns (e.g. `FGT_<model>-v<major>-build<build>-FORTINET.out`) to extract the hardware model, major version, and build number. `_predict_keys()` maps track+major_version to the set of firmware section keys expected for that release. `BuildTrackResult.discrepancy()` compares predicted keys against actual scanned keys.
+`FortiBuildTrackClassifier.classifyfilename` is a pure string classifier, no binary parsing. It matches the FortiOS image filename against a table of known build-track naming patterns (e.g. `FGT_<model>-v<major>-build<build>-FORTINET.out`) to extract the hardware model, major version, and build number. `_predict_keys()` maps track+major_version to the set of firmware section keys expected for that release. `BuildTrackResult.discrepancy()` compares predicted keys against actual scanned keys.
 
 ---
 
 ## Pipeline position
 
-**Before:** Collect the FortiOS firmware image filename (not path, just basename).
+**Before:** Collect the FortiOS firmware image filename not path, just basename.
 
 **After:** Use `result.track` and `result.major_version` to select the right profile for `FirmwareContainer` and `VersionDelta`.
 
@@ -127,20 +127,20 @@ Fortinet firmware filename (no I/O)
 
 ## Reading output
 
-`FortiBuildTrackClassifier.classify(filename)` returns a `BuildTrackResult`:
+`FortiBuildTrackClassifier.classifyfilename` returns a `BuildTrackResult`:
 
 | Attribute | Content |
 |:---|:---|
-| `filename` | Input filename (basename) |
+| `filename` | Input filename basename |
 | `product` | Product code string (e.g., `'FGT_VM64'`, `'FOS_VM64_KVM'`) |
 | `version` | Version string (e.g., `'7.4.12'`) |
 | `build_number` | Integer build number (e.g., `2902`) |
-| `build_track` | `'M'` (main/GA) or `'F'` (feature/beta) |
+| `build_track` | `'M'` (main/GA) or `'F'` feature/beta |
 | `expected_keys` | List of cert-key names expected for this product/version combo |
 | `key_generation` | `'Gen1'` or `'Gen2'`: key generation epoch |
 | `error` | `None` on success, error string if classification failed |
 
-Use `result.discrepancy(actual_keys)` to compare `expected_keys` against keys found by `FortiGateCertKeyScanner`.
+Use `result.discrepancyactual_keys` to compare `expected_keys` against keys found by `FortiGateCertKeyScanner`.
 
 ---
 

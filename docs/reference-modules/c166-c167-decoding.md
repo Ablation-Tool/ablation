@@ -10,7 +10,7 @@ Decode Infineon/Siemens C166/C167 ECU firmware in pure Python. Parses 2/4-byte v
 
 2. **Function boundary recovery uses the IVT at offset 0 and `CALLS` target scanning.** The C167 Interrupt Vector Table at ROM offset 0 contains vectors for reset, NMI, and all 56 interrupt sources. Each vector is a `JMPS`/`CALLS` instruction pointing to a handler entry point. `EcuC166Decoder.parse_ivt()` extracts these as `IVTEntry` objects with `target_pa` resolved to a physical address, providing a seed function list for `function_starts()` without requiring symbol tables.
 
-3. **All instructions are 2 or 4 bytes, always at even addresses.** The opcode byte alone determines the length via a lookup table. This makes the C166 decoder significantly simpler than variable-length ISAs like M68K, and `EcuC166Decoder.insn_length(byte_off)` is O(1). `C166Insn.is_branch()`, `is_call()`, `is_load()`, and `is_store()` enable CFG construction without full semantic decode.
+3. **All instructions are 2 or 4 bytes, always at even addresses.** The opcode byte alone determines the length via a lookup table. This makes the C166 decoder significantly simpler than variable-length ISAs like M68K, and `EcuC166Decoder.insn_lengthbyte_off` is O(1). `C166Insn.is_branch()`, `is_call()`, `is_load()`, and `is_store()` enable CFG construction without full semantic decode.
 
 ---
 
@@ -86,7 +86,7 @@ Disassembly at 0x0008:
 
 ## Pipeline position
 
-Run `EcuC166Decoder` after `EcuArchDetector` confirms `c166` or `c167` architecture (or when manually confirmed from ECU documentation). `ivt_entries()` provides the seed function list; `function_starts()` extends it via CALLS scanning. Use `C166Insn.is_call()` output for CFG construction and taint analysis on the identified function set.
+Run `EcuC166Decoder` after `EcuArchDetector` confirms `c166` or `c167` architecture or when manually confirmed from ECU documentation. `ivt_entries()` provides the seed function list; `function_starts()` extends it via CALLS scanning. Use `C166Insn.is_call()` output for CFG construction and taint analysis on the identified function set.
 
 ---
 
@@ -103,7 +103,7 @@ The decoder recognises the following instruction types. All type strings appear 
 | `ADD_IMM` | `0x06` | `ADD Rwn, #data16` | Add immediate word; byte1 low nibble = reg. Row x6 col 0. |
 | `JMPS` | `0xFA` | `JMPS seg, caddr` | Absolute code-segment jump |
 | `CALLS` | `0xDA` | `CALLS seg, caddr` | Absolute code-segment call; `target` resolved |
-| `MOV_LD` | `0xF2` / `0xC2` / `0xA2` | `MOV Rwn, mem` / `[Rwm]` | Load (DPP-mapped / internal / indirect) |
+| `MOV_LD` | `0xF2` / `0xC2` / `0xA2` | `MOV Rwn, mem` / `[Rwm]` | Load DPP-mapped / internal / indirect |
 | `MOV_ST` | `0xF6` / `0xB2` | `MOV mem/[Rwm], Rwn` | Store |
 
 ### 2-byte instructions
@@ -129,11 +129,11 @@ The decoder recognises the following instruction types. All type strings appear 
 
 **Opcode table anchor.** The C167CR ISA manual organises 2-byte `nm`-format instructions in a 16x16 table. The lower nibble of the opcode byte selects the addressing mode (row); the upper nibble selects the operation (column). Lower-nibble-0 column maps upper nibbles 0-F to: ADD, ADDC, SUB, SUBC, CMP, XOR, AND, OR, CMPI1, CMPI2, CMPD1, CMPD2, MOVBZ, MOVBS, MOV, MOV. `0xF0=MOV` is byte-verified from MS43; the full column is derived from the same ISA table row.
 
-**Lower-nibble-6 column (4-byte immediate operations).** Instructions with lower nibble 6 are 4-byte: `opcode nm ## ##` where `nm` byte holds flags or register in low nibble, and `## ##` is a 16-bit little-endian immediate or address. Confirmed entries: `0x06`=ADD, `0x46`=CMP, `0x66`=CMP, `0xE6`=MOV.
+**Lower-nibble-6 column 4-byte immediate operations.** Instructions with lower nibble 6 are 4-byte: `opcode nm ## ##` where `nm` byte holds flags or register in low nibble, and `## ##` is a 16-bit little-endian immediate or address. Confirmed entries: `0x06`=ADD, `0x46`=CMP, `0x66`=CMP, `0xE6`=MOV.
 
 **Correction: MOVBZ vs XOR.** Prior analysis assumed `0xC0 nm = XOR`. The ISA table places XOR at `0x50 nm` and MOVBZ at `0xC0 nm`.
 
-**Correction: MS43 inner loop alignment.** The bytes `46 f4 0b 00` at offset 0x02BA46 form a single 4-byte `CMP R4, #0x000B`, not `UNKNOWN_2B` followed by `MUL R0, R0`. The decoder previously misread them as two 2-byte instructions because `0x46` was absent from `_FOUR_BYTE_OPS`. The BMW MS43 SecurityAccess function is a multiply-accumulate hash. Each inner-loop iteration calls `MULU R5, R8`, reads MDL, accumulates into R2, and terminates when `R4 = (base - 1586) + R2 > 11`. The constant `0x91DA` is additive, not a Galois polynomial. No XOR instructions appear in the function.
+**Correction: MS43 inner loop alignment.** The bytes `46 f4 0b 00` at offset 0x02BA46 form a single 4-byte `CMP R4, #0x000B`, not `UNKNOWN_2B` followed by `MUL R0, R0`. The decoder previously misread them as two 2-byte instructions because `0x46` was absent from `_FOUR_BYTE_OPS`. The BMW MS43 SecurityAccess function is a multiply-accumulate hash. Each inner-loop iteration calls `MULU R5, R8`, reads MDL, accumulates into R2, and terminates when `R4 = base - 1586 + R2 > 11`. The constant `0x91DA` is additive, not a Galois polynomial. No XOR instructions appear in the function.
 
 ---
 
@@ -143,7 +143,7 @@ The decoder recognises the following instruction types. All type strings appear 
 
 | Attribute | Content |
 |:---|:---|
-| `pa` | Physical address (file offset for flat ROM) |
+| `pa` | Physical address file offset for flat ROM |
 | `raw` | `bytes`. 2 or 4 raw bytes of the encoded instruction. |
 | `mnemonic` | Decoded mnemonic string such as `'MOV'`, `'CALLS'`, or `'JMPS'` |
 | `insn_type` | Instruction category constant. See **Decoded opcode families** above. |
