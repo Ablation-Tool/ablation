@@ -659,3 +659,42 @@ def solve_for_sink(
     """
     ps = PathSolver(data, func_va, func_end_va, plt, cfg, md, **kwargs)
     return ps.solve_first_sat(target_va)
+
+
+def chain_depth_weight(findings: list, path_length: int = 0) -> float:
+    """Compute a priority weight for a finding chain.
+
+    A single MEDIUM finding is unremarkable. Multiple MEDIUM/LOW findings
+    co-occurring on the same function or call path are a stronger signal than
+    their individual severities suggest — chains indicate that the attacker has
+    multiple viable exploitation routes converging on the same code area.
+
+    Weight formula:
+      base = sum of per-severity scores (CRITICAL=4, HIGH=3, MEDIUM=2, LOW=1)
+      chain_bonus = 0.5 * (len(findings) - 1) for each co-occurring finding
+                    beyond the first
+      depth_penalty = 0 (path_length <= 3), -0.5 * (path_length - 3) for
+                      longer chains (deeper = harder to reach)
+      final = base + chain_bonus + depth_penalty
+
+    Args:
+      findings: list of objects or dicts with a 'severity' attribute/key
+      path_length: number of call-graph hops from the entry point (optional;
+                   use 0 if unknown)
+
+    Returns:
+      float weight >= 0; higher means higher combined priority
+    """
+    _SEV_SCORE: dict[str, float] = {
+        'CRITICAL': 4.0, 'HIGH': 3.0, 'MEDIUM': 2.0, 'LOW': 1.0, 'INFO': 0.5,
+    }
+
+    def _sev(f) -> str:
+        if isinstance(f, dict):
+            return str(f.get('severity', 'LOW')).upper()
+        return str(getattr(f, 'severity', 'LOW')).upper()
+
+    base = sum(_SEV_SCORE.get(_sev(f), 1.0) for f in findings)
+    chain_bonus = 0.5 * max(0, len(findings) - 1)
+    depth_penalty = 0.5 * max(0, path_length - 3)
+    return max(0.0, base + chain_bonus - depth_penalty)
