@@ -6,9 +6,9 @@ Enumerate the Windows COM attack surface in PE binaries: detecting self-register
 
 ## Why this exists
 
-1. **COM is the dominant inter-process and privilege-boundary crossing mechanism on Windows: security tools, browsers, AV products, and OS services all expose COM interfaces.** A PE binary that exports `DllRegisterServer` or `DllGetClassObject` is itself a COM server whose CLSID is an activation target for any process with the right permissions. `COMAttackSurfaceMapper.scan()` identifies all three COM attack vectors in one pass: the binary as a COM server, the binary as a COM client (activation of other objects), and CLSIDs referenced in the binary's read-only data that may be hijackable via registry key manipulation.
+1. **COM is the dominant inter-process and privilege-boundary crossing mechanism on Windows: security tools, browsers, AV products, and OS services all expose COM interfaces.** A PE binary that exports `DllRegisterServer` or `DllGetClassObject` is itself a COM server whose CLSID is an activation target for any process with the right permissions. `COMAttackSurfaceMapper.scan()` identifies all three COM attack vectors in one pass: the binary as a COM server, the binary as a COM client activation of other objects, and CLSIDs referenced in the binary's read-only data that may be hijackable via registry key manipulation.
 
-2. **COM hijacking exploits machine-writable registry keys at `HKCU\Software\Classes\CLSID\{...}`: if a CLSID registered under `HKLM` can be overridden per-user, any low-privilege process can register a malicious COM server for that CLSID.** `cocreate_sites()` returns `(call_va, clsid_string)` tuples for all `CoCreateInstance` call sites, providing the inventory needed to check each referenced CLSID against the registry for hijackability. Without this inventory, COM hijacking assessment requires manual enumeration.
+2. **COM hijacking exploits machine-writable registry keys at `HKCU\Software\Classes\CLSID\{...}`: if a CLSID registered under `HKLM` can be overridden per-user, any low-privilege process can register a malicious COM server for that CLSID.** `cocreate_sites()` returns `call_va, clsid_string` tuples for all `CoCreateInstance` call sites, providing the inventory needed to check each referenced CLSID against the registry for hijackability. Without this inventory, COM hijacking assessment requires manual enumeration.
 
 3. **`CoCreateInstance` combined with `IDispatch::Invoke` is a common DCOM lateral movement pattern: the binary activates a remote COM object and drives it via the `Invoke` dispatch interface.** `scan()` detects `IDispatch` usage (`IDispatch::Invoke`, `CoCreateInstanceEx`, `CLSIDFromString`) combined with `CoCreateInstance` in the same binary and reports `COM_DISPATCH_REMOTE` findings, which are candidates for DCOM-based lateral movement.
 
@@ -85,21 +85,21 @@ The following illustrates the finding report format. Actual CLSIDs and addresses
 
 ## False positives
 
-**`cocreate_sites()` attempts to backtrack from the call VA to the CLSID push argument, but indirect CLSID loading (CLSID from registry, CLSID from configuration file, CLSID from IPC) will produce `(call_va, None)` entries.** A `None` CLSID indicates the CLSID is not statically recoverable. These entries still appear in `COM_HIJACK_CANDIDATE` findings to flag the call site: they require dynamic analysis or manual reverse engineering to resolve.
+**`cocreate_sites()` attempts to backtrack from the call VA to the CLSID push argument, but indirect CLSID loading CLSID from registry, CLSID from configuration file, CLSID from IPC will produce `(call_va, None)` entries.** A `None` CLSID indicates the CLSID is not statically recoverable. These entries still appear in `COM_HIJACK_CANDIDATE` findings to flag the call site: they require dynamic analysis or manual reverse engineering to resolve.
 
-**`COM_DISPATCH_REMOTE` fires on any binary that imports both `CoCreateInstance` and `IDispatch::Invoke`, this includes benign shell extensions and document viewers that use COM for in-process object activation.** Confirm lateral movement potential by checking whether `CoCreateInstanceEx` (cross-machine DCOM) or `CLSCTX_REMOTE_SERVER` flag is used at the specific call site.
+**`COM_DISPATCH_REMOTE` fires on any binary that imports both `CoCreateInstance` and `IDispatch::Invoke`, this includes benign shell extensions and document viewers that use COM for in-process object activation.** Confirm lateral movement potential by checking whether `CoCreateInstanceEx` cross-machine DCOM or `CLSCTX_REMOTE_SERVER` flag is used at the specific call site.
 
 ---
 
 ## Pipeline position
 
-Run `COMAttackSurfaceMapper` on Windows PE binaries (DLLs and EXEs) during Windows privilege escalation and lateral movement triage. The CLSID inventory from `referenced_clsids()` feeds registry hijacking checks: cross-reference each CLSID against `HKCU\Software\Classes\CLSID\` on the target system. See [Windows Artifact Discovery](windows-artifact-discovery.md) for the broader Windows assessment workflow.
+Run `COMAttackSurfaceMapper` on Windows PE binaries DLLs and EXEs during Windows privilege escalation and lateral movement triage. The CLSID inventory from `referenced_clsids()` feeds registry hijacking checks: cross-reference each CLSID against `HKCU\Software\Classes\CLSID\` on the target system. See [Windows Artifact Discovery](windows-artifact-discovery.md) for the broader Windows assessment workflow.
 
 ---
 
 ## Reading findings
 
-`COMAttackSurfaceMapper(pe, path, raw).scan()` returns `list[COMFinding]`:
+`COMAttackSurfaceMapperpe, path, raw.scan()` returns `list[COMFinding]`:
 
 | Attribute | Content |
 |:---|:---|
@@ -108,7 +108,7 @@ Run `COMAttackSurfaceMapper` on Windows PE binaries (DLLs and EXEs) during Windo
 | `title` | Short finding title |
 | `location` | Import name, section, or symbol that triggered the finding |
 | `description` | Detailed explanation with CLSID, VA, or flag specifics |
-| `va` | VA of the relevant call or reference (0 if not applicable) |
+| `va` | VA of the relevant call or reference 0 if not applicable |
 | `cwe` | CWE identifier string, or empty if not classified |
 
 `COMAttackSurfaceMapper.referenced_clsids()` returns `list[str]`: all statically recovered CLSID strings for registry cross-reference.

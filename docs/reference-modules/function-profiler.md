@@ -10,7 +10,7 @@ Generate a complete behavioral profile of a single function in one call: the str
 
 2. **Argument values at call sites change everything.** Seeing `malloc` in a callee list tells you the function allocates memory. Seeing `malloc(rdi=strlen(arg0)+1)`: the argument traced to `strlen` of the first entry argument plus one: tells you whether there is an off-by-one risk. `RegAnnotator` traces register values backwards through the instruction stream so each argument displayed shows its specific computed value, not just a register name like `rdi` or `rbx`.
 
-3. **Sink detection at function scope eliminates false-triage overhead.** Not all calls to `strcpy` are dangerous; many are safe uses with known buffer sizes. The profiler classifies each call site as a sink or not, based on a configurable sink dict (buffer-overflow, cmd-exec, tcl-inject, fmt-string, filesystem), and marks `*** SINK ***` only where a dangerous function is called. Vendor-specific sinks (Fortinet's `fadcsystem`, Cisco's `exec_handler`) can be added without modifying the module.
+3. **Sink detection at function scope eliminates false-triage overhead.** Not all calls to `strcpy` are dangerous; many are safe uses with known buffer sizes. The profiler classifies each call site as a sink or not, based on a configurable sink dict buffer-overflow, cmd-exec, tcl-inject, fmt-string, filesystem, and marks `*** SINK ***` only where a dangerous function is called. Vendor-specific sinks (Fortinet's `fadcsystem`, Cisco's `exec_handler`) can be added without modifying the module.
 
 ---
 
@@ -50,7 +50,7 @@ Each argument displayed in the profile carries a value kind from `RegAnnotator`:
 | `ret` | `ret(malloc)` | Return value of a prior call |
 | `entry_arg` | `arg0_entry` | Entry argument register passed through |
 | `stack_ref` | `[rbp-0x20]` | Stack slot reference |
-| `unknown` | (hidden in non-sink calls) | Not resolved within look-back window |
+| `unknown` | hidden in non-sink calls | Not resolved within look-back window |
 
 ---
 
@@ -120,7 +120,7 @@ for p in profiles:
 
 ## False positives
 
-**Sink calls with hardcoded arguments.** A `system("/bin/ls")` call with a `.rodata` string argument qualifies as a sink but cannot be exploited. The profile marks it `*** SINK (cmd-exec) ***` regardless. Verify the argument kind: if `rdi='hardcoded/path'` (string kind), the call is safe. Only `arg0_entry`, `stack_ref`, or `unknown` as the first argument to a cmd-exec sink represent real risk.
+**Sink calls with hardcoded arguments.** A `system("/bin/ls")` call with a `.rodata` string argument qualifies as a sink but cannot be exploited. The profile marks it `*** SINK cmd-exec ***` regardless. Verify the argument kind: if `rdi='hardcoded/path'` string kind, the call is safe. Only `arg0_entry`, `stack_ref`, or `unknown` as the first argument to a cmd-exec sink represent real risk.
 
 **Unknown argument kind.** When the register annotation cannot trace an argument within its look-back window, it shows `unknown`. This occurs when the argument was computed in a prior function call and stored in a callee-saved register. Treat `unknown` at a sink argument as MEDIUM risk: confirm safety with a manual trace.
 
@@ -130,7 +130,7 @@ for p in profiles:
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher` (to identify candidate VAs). `FuncProfiler.from_context()` takes the shared context.
+**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher` to identify candidate VAs. `FuncProfiler.from_context()` takes the shared context.
 
 **After this module:** For functions with `sink_calls` and non-`string` argument kinds, proceed to `TaintTracker.trace_function()` to confirm that attacker-controlled data reaches the sink. For confirmed sinks, register the function with `ctx.set_name()` and proceed to `FindingRegistry.register()`.
 

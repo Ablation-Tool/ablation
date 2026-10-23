@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Detects use-after-free and double-free patterns in stripped binaries via taint-tracking of heap allocation return values (malloc/jemalloc/tcmalloc). Tracks object lifetimes across function boundaries to identify sites where a freed pointer is used after its free, the primary primitive class for modern heap exploitation.
+Detects use-after-free and double-free patterns in stripped binaries via taint-tracking of heap allocation return values malloc/jemalloc/tcmalloc. Tracks object lifetimes across function boundaries to identify sites where a freed pointer is used after its free, the primary primitive class for modern heap exploitation.
 
 ## Key constants
 
@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `Path.stat().st_size` guard befo
 
 ## How it works
 
-`HeapUAFScanner.scan()` iterates func_starts via `_get_func_starts()` (uses `ctx.func_starts` or extracts from binary). For each function, disassembles with Capstone and runs a forward symbolic pass tracking per-register pointer state: `ALLOC` (malloc/calloc return), `FREE` (passed to free()), `UNKNOWN`. A `HeapFinding(UAF|DOUBLE_FREE|HEAP_OVERFLOW)` is emitted when a `FREE`-state register is dereferenced or freed again, or when an allocation size is bounded but a copy uses a user-controlled length.
+`HeapUAFScanner.scan()` iterates func_starts via `_get_func_starts()` (uses `ctx.func_starts` or extracts from binary). For each function, disassembles with Capstone and runs a forward symbolic pass tracking per-register pointer state: `ALLOC` malloc/calloc return, `FREE` (passed to free()), `UNKNOWN`. A `HeapFindingUAF|DOUBLE_FREE|HEAP_OVERFLOW` is emitted when a `FREE`-state register is dereferenced or freed again, or when an allocation size is bounded but a copy uses a user-controlled length.
 
 ---
 
@@ -51,7 +51,7 @@ for f in findings:
 
 ## False positives
 
-UAF findings may fire when the freeing and the subsequent access are in different functions that the scanner cannot prove are reachable in order. Verify that the code path `free → use` is actually reachable (not guarded by a condition that prevents both from executing) before reporting.
+UAF findings may fire when the freeing and the subsequent access are in different functions that the scanner cannot prove are reachable in order. Verify that the code path `free → use` is actually reachable not guarded by a condition that prevents both from executing before reporting.
 
 ---
 
@@ -71,7 +71,7 @@ UAF findings may fire when the freeing and the subsequent access are in differen
 |:---|:---|
 | `binary` | Path of the analyzed binary |
 | `func_va` | Start VA of the function containing the vulnerability site |
-| `func_name` | Name of the function (if resolved) |
+| `func_name` | Name of the function if resolved |
 | `site_va` | VA of the specific instruction flagged |
 | `kind` | `UAF` / `DOUBLE_FREE` / `HEAP_OVERFLOW` / `TYPE_CONFUSION` |
 | `description` | Description of the specific vulnerability pattern |

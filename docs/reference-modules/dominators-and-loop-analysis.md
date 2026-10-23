@@ -8,7 +8,7 @@ Build dominator tree, post-dominator tree, and identify natural loops from a CFG
 
 1. **Structured control-flow recovery (`Structurizer`) requires a dominator tree to identify the join block of an if/else: the post-dominator of the branch head is the block where both branches merge, which becomes the `IfNode.join` in the recovered AST.** Without the dominator tree, the `Structurizer` cannot determine whether to emit `if/else` or `while` nodes, making firmware disassembly non-human-readable.
 
-2. **Loop natural analysis identifies back edges (edges where the successor dominates the predecessor), these are the loop headers for Relooper `WhileNode` construction.** Identifying back edges from the dominator tree rather than cycle detection is more reliable for reducible CFGs: a function with multiple natural loops produces a correct `WhileNode` for each loop header, while a cycle detector may merge nested loops incorrectly.
+2. **Loop natural analysis identifies back edges edges where the successor dominates the predecessor, these are the loop headers for Relooper `WhileNode` construction.** Identifying back edges from the dominator tree rather than cycle detection is more reliable for reducible CFGs: a function with multiple natural loops produces a correct `WhileNode` for each loop header, while a cycle detector may merge nested loops incorrectly.
 
 3. **`CFG.dominator_tree()` and `CFG.reaching_defs()` are the two structural analysis methods on `CFG`**: dominator tree provides structural shape, reaching definitions (used by `ReachingDefsAnalysis`) provide the data-flow lattice required for `ConstPropAnalysis` and `SCCPAnalysis`. Together they enable the MFP worklist to terminate at the correct fixpoint without over-approximation.
 
@@ -84,7 +84,7 @@ LoopInfo:
 
 ## False positives
 
-**Loop analysis requires a reducible CFG: an irreducible CFG (one with two distinct entry paths to the same block, common in some hand-written assembly or obfuscated code) will produce incorrect `LoopInfo`.** `CFG.is_reducible()` checks for reducibility; if `False`, use `cfg.stats()` to understand the structure before running `Structurizer`.
+**Loop analysis requires a reducible CFG: an irreducible CFG one with two distinct entry paths to the same block, common in some hand-written assembly or obfuscated code will produce incorrect `LoopInfo`.** `CFG.is_reducible()` checks for reducibility; if `False`, use `cfg.stats()` to understand the structure before running `Structurizer`.
 
 **`PostDomTree.ipdom()` may return `None` for blocks with no post-dominator**: blocks on infinite loops have no post-dominator. The `Structurizer` handles this via `BreakNode` emission.
 
@@ -104,9 +104,9 @@ These analyses are internal to the `CFGBuilder` → `Structurizer` pipeline. The
 
 | Attribute | Content |
 |:---|:---|
-| `header` | Block VA of the loop header (the block that dominates all loop body blocks) |
+| `header` | Block VA of the loop header the block that dominates all loop body blocks |
 | `body` | `Set[int]`: block VAs in the loop body |
-| `back_edges` | List of `(tail, header)` back-edge tuples |
+| `back_edges` | List of `tail, header` back-edge tuples |
 
 `PostDomTree.ipdom(va)` returns the immediate post-dominator block VA, or `None` for exit blocks and infinite-loop blocks.
 

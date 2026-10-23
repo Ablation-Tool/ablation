@@ -15,18 +15,18 @@ Ablation spans three levels of abstraction for binary analysis. This document de
 
 ### Decompiler
 
-**Goal:** Machine code → high-level source code (or source-like code).
+**Goal:** Machine code → high-level source code or source-like code.
 
-- **Input:** Native machine code (x86, ARM, PPC, etc.) in a binary or executable. Also applicable to bytecode (JVM, Dalvik, MicroPython).
+- **Input:** Native machine code x86, ARM, PPC, etc. in a binary or executable. Also applicable to bytecode (JVM, Dalvik, MicroPython).
 - **Output:** A high-level language representation: something that looks like C, C++, or pseudo-C.
 - **What it does:**
  - Disassembles machine code to assembly.
- - Recovers control flow (basic blocks, functions, loops, conditionals).
+ - Recovers control flow basic blocks, functions, loops, conditionals.
  - Constructs an intermediate representation (IR) internally.
  - Performs high-level analyses and transformations: data-flow analysis, type/variable recovery, control flow structuring.
  - Pretty-prints the IR to C-like code.
 
-A decompiler usually *includes* a lifter internally (to get to its IR), but its primary purpose is to give you readable high-level code, not just an IR.
+A decompiler usually *includes* a lifter internally to get to its IR, but its primary purpose is to give you readable high-level code, not just an IR.
 
 ### IR Lifter
 
@@ -35,7 +35,7 @@ A decompiler usually *includes* a lifter internally (to get to its IR), but its 
 > An **IR lifter** is a semantic translation engine that takes architecture-specific machine instructions and produces a precise, architecture-neutral intermediate representation. It makes all register, memory, and control-flow effects explicit, organizes them into a control-flow graph, and serves as the foundation upon which program analysis, verification, binary rewriting, and decompilation are built.
 
 - **Input:** Machine code or assembly for a specific architecture.
-- **Output:** Architecture-neutral IR (LLVM IR, VEX, BIL, REIL, or similar CFG of basic blocks).
+- **Output:** Architecture-neutral IR LLVM IR, VEX, BIL, REIL, or similar CFG of basic blocks.
 - **What it does:**
  - Decodes instructions and translates each one's semantics into IR operations.
  - Makes side-effects explicit: register updates, memory writes, flags, control flow.
@@ -49,9 +49,9 @@ An IR lifter is not a decompiler by itself. It is the bridge between "whatever C
 "Lifter" is used broadly to mean any component that moves a lower-level representation to a higher-level one:
 - **IR lifter** (precise): assembly → IR.
 - **Bytecode lifter:** bytecode → IR or high-level AST.
-- Informally, sometimes the front end of a decompiler (machine code → decompiler IR).
+- Informally, sometimes the front end of a decompiler machine code → decompiler IR.
 
-In binary analysis frameworks (angr, BAP, etc.) "lifter" almost always means IR lifter.
+In binary analysis frameworks angr, BAP, etc. "lifter" almost always means IR lifter.
 
 ---
 
@@ -83,8 +83,8 @@ Every binary analysis tool that produces human-readable output operates on this 
 (Low)    └──────────────────────────────┘
 ```
 
-- **IR lifter's job:** Assembly → IR (below the cut line).
-- **Decompiler's job:** IR → High-level code (above the cut line).
+- **IR lifter's job:** Assembly → IR below the cut line.
+- **Decompiler's job:** IR → High-level code above the cut line.
 
 A decompiler is: **disassembler + IR lifter + analysis passes + pretty-printer**. An IR lifter is only the middle step. A decompiler always includes a lifter internally; a lifter by itself does not produce decompiled output.
 
@@ -192,7 +192,7 @@ IR CFG as a diagram:
 
 At this stage: values are explicit temporaries (`t0`, `t1`, …), memory is explicit (`LOAD`/`STORE`), control flow is a graph, but loops and conditionals are still *implicit* in the CFG, not yet `for`/`if` constructs.
 
-### What the IR lifter produces (and stops at)
+### What the IR lifter produces and stops at
 
 The lifter stops here. It does not:
 - Invent `for`/`while` constructs.
@@ -245,7 +245,7 @@ loop_start:                              for (int i = 0; i < n; i++) {
   ELSE GOTO loop_body               →  }
 ```
 
-The IR expresses the *what* (loads, compare, conditional branch). The decompiler recovers the *shape* (loop, condition, increment).
+The IR expresses the *what* loads, compare, conditional branch. The decompiler recovers the *shape* loop, condition, increment.
 
 ---
 
@@ -290,7 +290,7 @@ pop    rbp
 ret
 ```
 
-**Stage 2, IR (lifter output):**
+**Stage 2, IR lifter output:**
 ```text
 func add_to_y(arg0: i32) -> i32 {
 entry:
@@ -326,7 +326,7 @@ Raw bytes  →  Disassembly  →  IR Lifter  →  IR  →  Analysis / Decompilat
 
 **1. Instruction-by-instruction semantics.** For each architecture instruction, the lifter encodes a semantic rule:
 - `ADD reg, reg` → new value = old value + source; flags updated.
-- `CMP reg, imm` → no register change; flags set based on (reg − imm).
+- `CMP reg, imm` → no register change; flags set based on reg − imm.
 - `JZ target` → if zero flag is set, control flow goes to `target`.
 
 The IR makes each of these effects explicit so analysis tools don't have to decode CPU semantics themselves.
@@ -339,7 +339,7 @@ The IR makes each of these effects explicit so analysis tools don't have to deco
 Higher-level components don't need to know about x86's `EFLAGS` vs ARM's `CPSR`; they see "if (x == 0) then branch."
 
 **3. Building basic blocks and CFG.** The lifter:
-- Splits lifted code into basic blocks (straight-line sequences with one entry, one exit).
+- Splits lifted code into basic blocks straight-line sequences with one entry, one exit.
 - Connects blocks based on direct jumps, conditional branches, calls, and returns.
 
 Output is not just linear IR, it is a **graph structure** that models all possible execution paths.
@@ -390,8 +390,8 @@ IF (t8 <= 0) GOTO skip_add ELSE GOTO add_block
 
 1. **Semantically faithful**, accurately models what machine code does, instruction by instruction. Small inaccuracies break symbolic execution and taint analysis.
 2. **Architecture-neutral**, the same IR framework is usable for x86, ARM, MIPS, PPC. Only the lifting rules differ; consumers of IR remain unchanged.
-3. **Explicit and analyzable**, hidden side effects (implicit flag updates, implicit stack pointer changes) become explicit IR operations; control flow is explicit in branches and block edges.
-4. **Amenable to further transformation**, easy to convert to SSA form; easy to apply standard compiler analyses (data-flow, taint tracking, symbolic execution, binary rewriting).
+3. **Explicit and analyzable**, hidden side effects implicit flag updates, implicit stack pointer changes become explicit IR operations; control flow is explicit in branches and block edges.
+4. **Amenable to further transformation**, easy to convert to SSA form; easy to apply standard compiler analyses data-flow, taint tracking, symbolic execution, binary rewriting.
 
 ### What an IR lifter is NOT
 
@@ -401,21 +401,21 @@ IF (t8 <= 0) GOTO skip_add ELSE GOTO add_block
 
 ### Typical use cases
 
-1. **Program analysis frameworks**, angr (VEX IR), BAP (BIL), Binary Ninja (BNIL/LLIL/MLIL), Miasm, REIL.
+1. **Program analysis frameworks**, angr (VEX IR), BAP (BIL), Binary Ninja BNIL/LLIL/MLIL, Miasm, REIL.
 2. **Decompilers**, most decompilers use IR as a stepping stone; the decompiler front end is disassembler + IR lifter.
 3. **Binary rewriting / instrumentation**, insert logging or security checks by reasoning about IR structure.
 4. **Verification and security analysis**, symbolic execution, taint analysis, and model checking all operate on IR graphs rather than CPU-specific artifacts.
 
 ### Intuitive analogy
 
-An IR lifter is a **universal translator**: different CPUs "speak" different machine languages (x86, ARM, PPC, RISC-V). The IR is a common language. The lifter translates each CPU's dialect into that common language, preserving all meaning. Higher-level tools (analyzers, decompilers, optimizers) only need to know the IR, not every CPU dialect.
+An IR lifter is a **universal translator**: different CPUs "speak" different machine languages x86, ARM, PPC, RISC-V. The IR is a common language. The lifter translates each CPU's dialect into that common language, preserving all meaning. Higher-level tools analyzers, decompilers, optimizers only need to know the IR, not every CPU dialect.
 
 ---
 
 ## One-sentence contrast
 
 - **IR lifter:** "Given this architecture's instructions, tell me *exactly* what they do in a uniform IR form."
-- **Decompiler:** "Given this uniform IR, recover the *human-level structure* (types, variables, loops, if/else) and print it as source-like code."
+- **Decompiler:** "Given this uniform IR, recover the *human-level structure* types, variables, loops, if/else and print it as source-like code."
 
 ---
 
@@ -465,7 +465,7 @@ loop_end:
 
 No `while`, no `if`, just blocks, `IF`/`GOTO`, and loads/stores. The **decompiler starts here**.
 
-### Step 1 (decompiler): build SSA
+### Step 1 decompiler: build SSA
 
 Convert memory slots to SSA variables with phi nodes at merge points:
 
@@ -479,7 +479,7 @@ loop_cond:
 
 `MEM[frame-4]` and `MEM[frame-8]` become named SSA variables. Phi nodes represent merge points that the lifter does not model.
 
-### Step 2 (decompiler): recognize loop
+### Step 2 decompiler: recognize loop
 
 `loop_cond` has a back-edge from `inc_i` → pattern: "condition block with back-edge" = **`while` loop**:
 
@@ -489,7 +489,7 @@ while (i_phi < n_arg) {
 }
 ```
 
-### Step 3 (decompiler): recognize if
+### Step 3 decompiler: recognize if
 
 Inside the loop, `loop_body` branches to `do_add` or `inc_i` based on `cond1`. Both converge at `inc_i` → pattern: "branch then converge" = **`if` statement**:
 
@@ -499,7 +499,7 @@ if (v_0 > 0) {
 }
 ```
 
-### Step 4 (decompiler): eliminate phi nodes
+### Step 4 decompiler: eliminate phi nodes
 
 ```text
 i_phi = phi(i_0, i_4)
@@ -514,9 +514,9 @@ i = i + 1;
 
 Phi nodes collapse into a single named variable updated in the loop.
 
-### Step 5 (decompiler): type inference and renaming
+### Step 5 decompiler: type inference and renaming
 
-Usage patterns reveal types: `a_arg` is `int *` (indexed with stride 4), `n_arg` is `int`. Stack slots become `sum` and `i`.
+Usage patterns reveal types: `a_arg` is `int *` indexed with stride 4, `n_arg` is `int`. Stack slots become `sum` and `i`.
 
 ### Final output
 
@@ -557,7 +557,7 @@ Above the line: `while (i < n)` with a declared `int i`.
 | Tool | Stage | Output | Notes |
 |---|---|---|---|
 | `WindowAnalyzer` | 1 | Raw disassembly | No register tracking |
-| `BinaryLifter` (all ISA backends) | 2 → ~3 | Register-tracked pseudo-C per function | Includes NativeVal register state; CFG not fully reconstructed; completeness varies by ISA |
+| `BinaryLifter` all ISA backends | 2 → ~3 | Register-tracked pseudo-C per function | Includes NativeVal register state; CFG not fully reconstructed; completeness varies by ISA |
 | `Ppc32Lifter` | 2 → ~3 | Register-tracked pseudo-C, PPC32 BE | Linear walk only; no loop structuring |
 | `Ppc476Decompiler` | 2 → 3 | Named locals, type annotations, condition expressions, CFG back-edge detection | Closest to a full decompiler for PPC476 Book E targets |
 | `ABCDecompiler` | 2 → 3 | Source-like output | Bytecode input |
@@ -566,23 +566,23 @@ Above the line: `while (i < n)` with a declared `int i`.
 | `MpyLifter` | 2 → ~3 | Source-like output | MicroPython bytecode |
 | `JavaModuleAnalyzer` |: | Parser/scanner | Not a lifter or decompiler; operates on class metadata |
 
-**Key nuance:** "Register-tracked pseudo-C" from `BinaryLifter` backends is not the same as full decompilation. The backends produce output closer to Stage 2 with some Stage 3 features (resolved calls, constant folding) but without loop structuring, phi-node elimination, or type inference across call boundaries. Presence of `NativeVal` register tracking is a prerequisite for decompiler-quality output, not proof of it.
+**Key nuance:** "Register-tracked pseudo-C" from `BinaryLifter` backends is not the same as full decompilation. The backends produce output closer to Stage 2 with some Stage 3 features resolved calls, constant folding but without loop structuring, phi-node elimination, or type inference across call boundaries. Presence of `NativeVal` register tracking is a prerequisite for decompiler-quality output, not proof of it.
 
 ---
 
-## Encyclopedia comparison: IR Lifter vs Decompiler (indirect calls)
+## Encyclopedia comparison: IR Lifter vs Decompiler indirect calls
 
 Focusing on indirect calls, the clearest case where the pipeline cut-line matters:
 
 | Aspect | IR Lifter | Decompiler |
 |---|---|---|
-| Input | Decoded machine instructions (`mov`, `push`, `call eax`, …) | IR (lifter output): explicit `CALL_INDIRECT addr`, stack ops, etc. |
+| Input | Decoded machine instructions (`mov`, `push`, `call eax`, …) | IR lifter output: explicit `CALL_INDIRECT addr`, stack ops, etc. |
 | View of callee | **Address in a register/memory** (`t_fp`), opaque | **Function pointer variable** (`fp`), possibly typed (`int (*)(int)`) |
 | Representation of call | `CALL_INDIRECT t_fp` + explicit stack/PC manipulation | High-level call expression: `fp(y)` |
-| Argument handling | Explicit `STORE(MEM[esp - 4], arg)` + `CALL_INDIRECT` | Abstract arguments: list `[y]` in AST `Call(function=fp, args=[y])` |
-| Return value | Modeled as `eax` (or similar), then `STORE` to a local | Modeled as `RETVAL(fp)` → assigned to `z` in high-level code |
+| Argument handling | Explicit `STOREMEM[esp - 4], arg` + `CALL_INDIRECT` | Abstract arguments: list `[y]` in AST `Call(function=fp, args=[y])` |
+| Return value | Modeled as `eax` or similar, then `STORE` to a local | Modeled as `RETVAL(fp)` → assigned to `z` in high-level code |
 | Control flow | Basic blocks with `CALL_INDIRECT` and `RETURN`/PC updates | Structured control flow: functions, returns, and call expressions |
-| Type information | None or minimal (raw word sizes) | Inferred types: `int (*fp)(int)`, `int y`, `int z`, `int return` |
+| Type information | None or minimal raw word sizes | Inferred types: `int (*fp)(int)`, `int y`, `int z`, `int return` |
 | Naming of entities | Temporaries: `t_fp`, `t_y`, `t_ret`, stack slots `[ebp+8]` | Symbolic names: `fp`, `y`, `z`, `call_through_ptr` |
 | Primary goal | Precisely encode instruction semantics in a common IR | Recover human-understandable program structure and source-like code |
 | Output example | See low-level IR listing above | `int z = fp(y);` |
@@ -632,21 +632,21 @@ Pass `arch=` to `BinaryLifter.from_path()` or `BinaryLifter.from_context()`.
 |---|---|---|---|
 | ARM64 | `arm64` | Full | AAPCS64; x0 |
 | x86-64 | `x86_64`, `x86-64`, `amd64` | Full | SysV AMD64; rax |
-| x86-32 | `x86_32`, `i386`, `i686` | Structural | CDECL (stack args); eax |
+| x86-32 | `x86_32`, `i386`, `i686` | Structural | CDECL stack args; eax |
 | ARM32 | `arm32`, `arm` | Structural | AAPCS; r0-r3 args, r0 return |
 | Thumb / Thumb-2 | `thumb`, `thumb2` | Structural | AAPCS Thumb mode |
 | MIPS-32 BE | `mips32`, `mips`, `mipsbe` | Structural | o32; $a0-$a3, $v0 return |
 | MIPS-32 LE | `mips32el`, `mipsel` | Structural | o32 little-endian |
 | MIPS-64 BE | `mips64`, `mipsn64` | Structural | n64; $a0-$a7, $v0 return |
 | MIPS-64 LE | `mips64el` | Structural | n64 little-endian |
-| nanoMIPS | `nanomips` | Structural (linear walk, no CFG) | o32 ABI |
+| nanoMIPS | `nanomips` | Structural linear walk, no CFG | o32 ABI |
 | PPC-32 | `ppc32`, `ppc`, `powerpc` | Structural | SysV32; r3-r10 args, r3 return |
 | PPC-64 | `ppc64`, `powerpc64` | Structural | ELFv2; r3-r10 args, r3 return |
 | RISC-V 32 | `rv32`, `riscv32` | Structural | psABI; a0-a7 args, a0 return |
 | RISC-V 64 | `rv64`, `riscv64` | Structural | psABI; a0-a7 args, a0 return |
 | ARC EM/HS | `arc`, `arcem`, `archs` | Tool-dependent | requires `arc-elf32-objdump` in PATH |
 | LoongArch64 | `la64`, `loongarch64` | Structural | lp64; $a0-$a7, $a0 return |
-| BEAM (Erlang/Elixir) | `beam`, `erlang`, `elixir` | Module summary | no VA space; pass `va=0` |
+| BEAM Erlang/Elixir | `beam`, `erlang`, `elixir` | Module summary | no VA space; pass `va=0` |
 
 #### Automotive ECUs (via BinaryLifter)
 
@@ -690,9 +690,9 @@ This section documents design patterns extracted from three IBM production tools
 
 ### HATS v75: BMSParser: binary translator for COBOL field operations
 
-**HATS (Host Access Transformation Services) 7.5** added `com.ibm.etools.bms.parser` as a standalone component. It is absent from v71. Its core is `BMSParser.jj`: a JavaCC grammar (1760 lines) that translates COBOL BMS macro definitions into EMF model objects.
+**HATS Host Access Transformation Services 7.5** added `com.ibm.etools.bms.parser` as a standalone component. It is absent from v71. Its core is `BMSParser.jj`: a JavaCC grammar 1760 lines that translates COBOL BMS macro definitions into EMF model objects.
 
-BMS (Basic Mapping Support) defines 3270 screens using COBOL assembler-like macros:
+BMS Basic Mapping Support defines 3270 screens using COBOL assembler-like macros:
 
 ```
 MAPSET    DFHMSD TYPE=&SYSPARM,MODE=INOUT,LANG=COBOL,TIOAPFX=YES
@@ -728,7 +728,7 @@ void field_attrb_value(BMSAttributesType attrb) : {} {
 
 This is a two-level dispatch: `field_keyword()` routes to the right attribute handler; each attribute handler dispatches on attribute values. The factory constructs the output object in phases: `createBMSField()` first, then each attribute sub-rule sets one property.
 
-**Key distinction from AbstractRenderingRulesEngine:** the BMS parser has per-operand sub-dispatch *within* a rule. AbstractRenderingRulesEngine fires one rule per screen region. The BMS parser fires one sub-rule per operand token within a field declaration. Together they define two levels of dispatch: field-level (which rule handles this instruction) and operand-level (how to lift each operand).
+**Key distinction from AbstractRenderingRulesEngine:** the BMS parser has per-operand sub-dispatch *within* a rule. AbstractRenderingRulesEngine fires one rule per screen region. The BMS parser fires one sub-rule per operand token within a field declaration. Together they define two levels of dispatch: field-level which rule handles this instruction and operand-level how to lift each operand.
 
 **v71 vs v75:** v71 has no `bms.parser` JAR. BMS field translation was embedded in the v71 core. v75 refactored it into an explicit JavaCC grammar, making the translation structure machine-readable.
 
@@ -753,9 +753,9 @@ def recognise_load_add(insns):
 
 ### HATS: the pattern-recognition and rewrite engine
 
-**HATS (Host Access Transformation Services) 7.5** transforms IBM 3270 terminal screen fields into web UI components. Its `AbstractRenderingRulesEngine.processScreen()` implements a greedy consumption model that maps directly to an instruction-level rewrite engine.
+**HATS Host Access Transformation Services 7.5** transforms IBM 3270 terminal screen fields into web UI components. Its `AbstractRenderingRulesEngine.processScreen()` implements a greedy consumption model that maps directly to an instruction-level rewrite engine.
 
-The algorithm from `AbstractRenderingRulesEngine` bytecode (hsrendering.jar):
+The algorithm from `AbstractRenderingRulesEngine` bytecode hsrendering.jar:
 
 ```
 1. Build ConsumableFieldList from HsrScreen  (≡ ConsumableInsnList from basic block)
@@ -812,18 +812,18 @@ class ExprLifter:
 
 ### XLC/OMR: value numbering and per-opcode simplifier dispatch
 
-**WCodeDriver** (IBM XL C++ for s390x, 26MB, unstripped) uses the Eclipse OMR JIT framework. Its exported symbols reveal the optimizer pass structure. All passes are confirmed by `c++filt` demangled symbol names.
+**WCodeDriver** IBM XL C++ for s390x, 26MB, unstripped uses the Eclipse OMR JIT framework. Its exported symbols reveal the optimizer pass structure. All passes are confirmed by `c++filt` demangled symbol names.
 
 **Value numbering** (`TR_ValueNumberInfo`, 37 exported functions):
 
 | Symbol | Purpose |
 |:---|:---|
-| `TR_ValueNumberInfo::initializeNode(TR::Node*, int&)` | Assign initial value number to a new node |
-| `TR_ValueNumberInfo::congruentNodes(TR::Node*, TR::Node*)` | Structural equality check: same opcode + same child value numbers |
-| `TR_ValueNumberInfo::canShareValueNumber(TR::Node*)` | CSE eligibility guard: no side effects, no volatile loads |
-| `TR_ValueNumberInfo::setValueNumber(TR::Node*, TR::Node*)` | Assign target's value number to source |
-| `TR_ValueNumberInfo::changeValueNumber(TR::Node*, int)` | Update value number after transformation |
-| `TR_ValueNumberInfo::getValueNumber(TR::Node*)` | Query current value number |
+| `TR_ValueNumberInfo::initializeNodeTR::Node*, int&` | Assign initial value number to a new node |
+| `TR_ValueNumberInfo::congruentNodesTR::Node*, TR::Node*` | Structural equality check: same opcode + same child value numbers |
+| `TR_ValueNumberInfo::canShareValueNumberTR::Node*` | CSE eligibility guard: no side effects, no volatile loads |
+| `TR_ValueNumberInfo::setValueNumberTR::Node*, TR::Node*` | Assign target's value number to source |
+| `TR_ValueNumberInfo::changeValueNumberTR::Node*, int` | Update value number after transformation |
+| `TR_ValueNumberInfo::getValueNumberTR::Node*` | Query current value number |
 
 The OMR approach is hash-congruence: two nodes are congruent if they have the same opcode and their children have the same value numbers. `canShareValueNumber()` gates CSE eligibility before `congruentNodes()` runs. This separates the "are they the same expression" check from the "can we share them" check, because aliasing, volatility, and exception ordering make some structurally-equal nodes unsafe to reuse.
 
@@ -843,7 +843,7 @@ WCodeDriver uses **GEN/KILL bit-vector reaching definitions** (`TR_UseDefInfo`),
 |:---|:---|
 | `TR_Dominators::compress(int)` | Path compression on the dominator forest |
 | `TR_Dominators::eval(int)` | Evaluate semi-dominator of a DFS ancestor |
-| `TR_Dominators::link(int, int)` | Link child to parent in the dominator forest |
+| `TR_Dominators::linkint, int` | Link child to parent in the dominator forest |
 
 No other dominator algorithm uses this exact `compress/eval/link` triad. Lengauer-Tarjan runs in O(n α(n)) and is the standard choice for JIT compilers where dominator computation happens at compile time per-function.
 
@@ -851,9 +851,9 @@ No other dominator algorithm uses this exact `compress/eval/link` triad. Lengaue
 
 **Per-opcode simplifier dispatch** (`TR_Simplifier`, 1116 exported functions):
 
-Every IR opcode has a dedicated simplifier function. Function signature pattern: `xyzSimplifier(TR::Node*, TR::Block*, TR_Simplifier*)`. Examples confirmed in symbol table:
+Every IR opcode has a dedicated simplifier function. Function signature pattern: `xyzSimplifierTR::Node*, TR::Block*, TR_Simplifier*`. Examples confirmed in symbol table:
 
-- `sdivSimplifier`: signed division constant folding (x/1 → x, x/pow2 → shift)
+- `sdivSimplifier`: signed division constant folding x/1 → x, x/pow2 → shift
 - `i2sSimplifier`: integer-to-short sign extension elimination
 - `arraycopybndchkSimplifier`: bounds check removal for provably-safe array copies
 
@@ -890,9 +890,9 @@ class ValueNumberTable:
 
 ### VisualAge CPP EPDC: IR node type hierarchy
 
-**VisualAge CPP iDebug 8.5.7** uses EPDC (Engine Protocol for Debug Communication) to stream type information between the Java debugger frontend and the C++ backend. The wire protocol uses `EStdTreeNode` as a flat discriminated record; the model layer uses polymorphic subclasses.
+**VisualAge CPP iDebug 8.5.7** uses EPDC Engine Protocol for Debug Communication to stream type information between the Java debugger frontend and the C++ backend. The wire protocol uses `EStdTreeNode` as a flat discriminated record; the model layer uses polymorphic subclasses.
 
-**Type hierarchy from `com/ibm/debug/model` class names** (jdebug_sui.exe strings):
+**Type hierarchy from `com/ibm/debug/model` class names** jdebug_sui.exe strings:
 
 | Wire type | Model class | IR analogy |
 |:---|:---|:---|
@@ -917,7 +917,7 @@ new MonitoredExpression(EStdExpression2 wire, int typeId, short typeFlags,
                         Client client, ...)
 ```
 
-The separation of `EStdTreeNode` (flat wire format) from `MonitoredExpressionTreeNode` (model) means the deserializer reads the type discriminator byte, then calls the appropriate subclass constructor. This is a type-tagged union on the wire, polymorphic on the model side.
+The separation of `EStdTreeNode` flat wire format from `MonitoredExpressionTreeNode` (model) means the deserializer reads the type discriminator byte, then calls the appropriate subclass constructor. This is a type-tagged union on the wire, polymorphic on the model side.
 
 **Ablation ExprLifter mapping:**
 
@@ -942,17 +942,17 @@ class LoadNode(IRNode): ...   # memory load
 class AddNode(IRNode):  ...   # addition
 ```
 
-The VisualAge pattern confirms: keep the wire format flat (type-tagged record) and the model layer polymorphic. Never merge both into a single class hierarchy: the wire format must be stable across versions while the model layer evolves.
+The VisualAge pattern confirms: keep the wire format flat type-tagged record and the model layer polymorphic. Never merge both into a single class hierarchy: the wire format must be stable across versions while the model layer evolves.
 
 ---
 
-### RAA (Rational Application Architect), not acquired
+### RAA Rational Application Architect, not acquired
 
-IBM Rational Application Architect contains `com.ibm.raa.core.decompiler.*` implementing Sharir's interval analysis for control-flow structuring (if/while/for recovery from CFG). This is the reference for a future **Structurizer** module.
+IBM Rational Application Architect contains `com.ibm.raa.core.decompiler.*` implementing Sharir's interval analysis for control-flow structuring if/while/for recovery from CFG. This is the reference for a future **Structurizer** module.
 
 RAA is absent from this collection. The DHE mirror (`public.dhe.ibm.com`) has no RAA directory. The collection's Rational subdirectories contain Apex, DOORS, Rose, and RoseRT, not Application Architect.
 
-**Decision:** ExprLifter operates at expression level (single instruction → IR node). It does not perform CFG-level structuring. Sharir's interval analysis is needed for a future Structurizer, not ExprLifter. ExprLifter is not blocked by the absence of RAA.
+**Decision:** ExprLifter operates at expression level single instruction → IR node. It does not perform CFG-level structuring. Sharir's interval analysis is needed for a future Structurizer, not ExprLifter. ExprLifter is not blocked by the absence of RAA.
 
 ---
 
@@ -991,14 +991,14 @@ src/
         └── nodeGenerates64.cc                 — per-node 64-bit POWER emission
 ```
 
-**IR data types (from mangled symbol names):**
+**IR data types from mangled symbol names:**
 
 | Type | Role |
 |:---|:---|
 | `Expression*` | IR expression node (equivalent to `ExprNode`) |
 | `BasicBlock*` | Basic block container |
 | `IR*` | Per-block IR; passed to factory methods |
-| `AbstractOperation*` | IR operation (statement-level node) |
+| `AbstractOperation*` | IR operation statement-level node |
 | `Tlabel` | Branch target label |
 | `TRegID` / `ARegID` | Target (POWER) / abstract register IDs |
 | `TCAccessedVariable` | Shared variable between x86 subject and POWER target |
@@ -1012,7 +1012,7 @@ src/
 3. Emit:      nodeGenerates.cc walks Expression* tree → POWER instructions
 ```
 
-**Key Expression factory methods (from symbol strings):**
+**Key Expression factory methods from symbol strings:**
 
 ```cpp
 // X86DataManagement — load/store with type and sign extension
@@ -1030,11 +1030,11 @@ static AbstractOperation* createLabelVersionOfBranch(IR*, AbstractOperation*, Tl
 
 **FADE decoder: table-driven autogeneration of IR lifting code**
 
-The `Sx86-autogen/` directory is auto-generated: the FADE (Fast Architecture Decoder Engine) tables describe x86 instruction encodings. The autogen step creates `X86FadeIRDelegate.cc`, which calls the appropriate `GenericExpressionInterface` factory method for each x86 opcode. This is the same pattern as HATS BMS parser's JavaCC grammar: machine-readable tables auto-generate the per-opcode translation code.
+The `Sx86-autogen/` directory is auto-generated: the FADE Fast Architecture Decoder Engine tables describe x86 instruction encodings. The autogen step creates `X86FadeIRDelegate.cc`, which calls the appropriate `GenericExpressionInterface` factory method for each x86 opcode. This is the same pattern as HATS BMS parser's JavaCC grammar: machine-readable tables auto-generate the per-opcode translation code.
 
 **Lazy flag evaluation** (`X86LazyFlags.cc`)
 
-x86 EFLAGS (CF, ZF, SF, OF, PF) are computed lazily: they are only evaluated when the translated code reads a flag register. This avoids emitting POWER condition-register update code for every arithmetic instruction when the flags are rarely consumed. The IR keeps flags as separate `Expression*` nodes; `NevisFlagManagement.cc` generates the flag expression when a conditional branch reads CF/ZF/etc.
+x86 EFLAGS CF, ZF, SF, OF, PF are computed lazily: they are only evaluated when the translated code reads a flag register. This avoids emitting POWER condition-register update code for every arithmetic instruction when the flags are rarely consumed. The IR keeps flags as separate `Expression*` nodes; `NevisFlagManagement.cc` generates the flag expression when a conditional branch reads CF/ZF/etc.
 
 **Ablation ExprLifter mapping:**
 
@@ -1061,8 +1061,8 @@ The two-interface split (`GenericExpressionInterface` abstract + `IRMkI` concret
 | Expression factory interface | PowerVM LX86 `GenericExpressionInterface` | Abstract factory API + concrete `IRMkI` implementation: same wire/model split as VisualAge |
 | Per-node POWER emission | PowerVM LX86 `nodeGenerates.cc` | Per-node dispatch table for code generation: mirrors `_SIMPLIFIERS[op]` |
 | Lazy flag computation | PowerVM LX86 `X86LazyFlags.cc` | Flags as deferred `Expression*` nodes; computed only on conditional branch |
-| Expression simplification | XLC/OMR `TR_Simplifier` (1116 functions) | Per-opcode dispatch table: `_SIMPLIFIERS[opcode](node)` |
-| Value numbering / CSE | XLC/OMR `TR_ValueNumberInfo` | Hash-congruence: `(opcode, child_vnums)` key + `canShareValueNumber()` eligibility guard |
+| Expression simplification | XLC/OMR `TR_Simplifier` 1116 functions | Per-opcode dispatch table: `_SIMPLIFIERS[opcode](node)` |
+| Value numbering / CSE | XLC/OMR `TR_ValueNumberInfo` | Hash-congruence: `opcode, child_vnums` key + `canShareValueNumber()` eligibility guard |
 | Dominator computation | XLC/OMR `TR_Dominators` | Lengauer-Tarjan O(n α(n)): `compress/eval/link` |
 | Dataflow representation | XLC/OMR `TR_UseDefInfo` | GEN/KILL bit-vector reaching definitions; no phi nodes |
 | IR node hierarchy | VisualAge EPDC model layer | Flat wire format (`EStdTreeNode`) + polymorphic model (`ScalarNode`, `PtrNode`, …) |

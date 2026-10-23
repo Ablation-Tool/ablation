@@ -9,28 +9,28 @@
 Four things were not possible before in Ablation:
 
 **1. No A2L format support.** ASAM/ASAP2 A2L is the industry-standard ECU calibration description
-format. Every major OEM and supplier uses it: Bosch (EDC16, EDC17, MED17), Continental, Delphi,
+format. Every major OEM and supplier uses it: Bosch EDC16, EDC17, MED17, Continental, Delphi,
 Siemens, Denso, ZF, and most others. A single EDC16U34 A2L file covers 11,427 calibration objects;
 an EDC17CP46 covers 26,016. Without a parser, none of those addresses or labels were accessible to
 Ablation for BinaryContext injection or calibration table scanning.
 
 **2. No cross-ECU scaling resolution.** A2L separates COMPU_METHOD objects (which carry the
-physical conversion formula) from RECORD_LAYOUT objects (which carry the byte layout and type) from
-CHARACTERISTIC objects (which carry the ROM address and dimensions). A table entry carries only
+physical conversion formula) from RECORD_LAYOUT objects which carry the byte layout and type from
+CHARACTERISTIC objects which carry the ROM address and dimensions. A table entry carries only
 names: it references a record layout by name and a compu method by name. Parsing the address
 without resolving the cross-references produces a CalibrationTable with no unit, no scale, and no
 type. This parser builds the COMPU_METHOD and RECORD_LAYOUT dictionaries in one pass before
 processing any CHARACTERISTIC block.
 
 **3. No RAT_FUNC coefficient reduction.** A2L COMPU_METHOD objects describe physical-to-raw
-conversion using the RAT_FUNC formula: `physical = (a*x^2 + b*x + c) / (d*x^2 + e*x + f)`.
+conversion using the RAT_FUNC formula: `physical = a*x^2 + b*x + c / d*x^2 + e*x + f`.
 For the linear case (a=d=e=0), this reduces to scale=b/f, bias=c/f. Extracting scale and bias
 from the six COEFFS values requires parsing the positional fields, detecting non-linear terms,
 and handling the zero-denominator case. Without this reduction, all A2L tables would carry
-scale=0.0 (the non-linear sentinel) even for the majority that are simple linear conversions.
+scale=0.0 the non-linear sentinel even for the majority that are simple linear conversions.
 
 **4. No A2ML / IF_DATA block stripping.** A2L files embed A2ML sub-grammar blocks (transport-layer
-interface definitions) and IF_DATA blocks (INCA and CANape private data) using the same
+interface definitions) and IF_DATA blocks INCA and CANape private data using the same
 `/begin ... /end` syntax as calibration blocks. A2ML blocks can contain `{}`, `()`, and `;`
 characters that break a naive `/begin`-`/end` token counter. Not stripping these blocks first
 causes the parser to miscount nesting depth and either skip legitimate CHARACTERISTIC blocks
@@ -40,7 +40,7 @@ or produce wrong extraction boundaries for the ones immediately after an A2ML bl
 
 ## Format overview
 
-A2L is an ASCII text format encoded in Latin-1 (ISO 8859-1). C-style block comments
+A2L is an ASCII text format encoded in Latin-1 ISO 8859-1. C-style block comments
 (`/*... */`) are valid anywhere. The structure is:
 
 ```
@@ -75,8 +75,8 @@ A2L is an ASCII text format encoded in Latin-1 (ISO 8859-1). C-style block comme
 |---|---|---|---|
 | `IDENTICAL` | 1.0 | 0.0 | physical = raw |
 | `LINEAR` | b | a | physical = a + b * raw |
-| `RAT_FUNC` (linear case) | b/f | c/f | physical = (b*raw + c) / f |
-| `RAT_FUNC` (non-linear) | 0.0 sentinel | 0.0 | a, d, or e non-zero |
+| `RAT_FUNC` linear case | b/f | c/f | physical = b*raw + c / f |
+| `RAT_FUNC` non-linear | 0.0 sentinel | 0.0 | a, d, or e non-zero |
 | All others | 0.0 sentinel | 0.0 | TAB_VERB, FORMULA, etc. |
 
 A scale of `0.0` is the parser's sentinel for "scaling unavailable." The table is still returned
@@ -102,10 +102,10 @@ with all address and dimension information; only the unit conversion is absent.
 | `VALUE` | `VALUE` | `rows=1, cols=1` |
 | `CURVE` | `CURVE` | `rows=1, cols=max_axis_pts` |
 | `MAP` | `MAP` | `rows=Y_AXIS.max_axis_pts, cols=X_AXIS.max_axis_pts` |
-| `CUBOID` and others | `MAP` | same as MAP (first two AXIS_DESCR blocks used) |
+| `CUBOID` and others | `MAP` | same as MAP first two AXIS_DESCR blocks used |
 
 The `max_axis_pts` field in each AXIS_DESCR block is the upper bound for that axis. For
-`STD_AXIS` tables (most common), the actual count is stored as an integer in the ROM image
+`STD_AXIS` tables most common, the actual count is stored as an integer in the ROM image
 at a fixed offset before the data. Use `EcuROMLayoutAnalyzer` to locate that offset if the
 exact dimension matters.
 
@@ -145,7 +145,7 @@ Malformed CHARACTERISTIC blocks are silently skipped so one bad entry does not a
 
 Return `{file_offset: label}` for all tables and their axes. Pass entries to
 `ctx.set_name(offset, name, source="a2l")`. When tables reference shared axis data
-(COM_AXIS), `CalibrationAxis.address` is `None` and no label is emitted for that axis.
+COM_AXIS, `CalibrationAxis.address` is `None` and no label is emitted for that axis.
 
 ### `summary() -> str`
 
@@ -158,7 +158,7 @@ detected byte order.
 |---|---|---|
 | `project_name` | `str` | `/begin PROJECT name` |
 | `module_name` | `str` | `/begin MODULE name` |
-| `byte_order` | `str` | `MSB_FIRST` (big-endian) or `MSB_LAST` (little-endian) |
+| `byte_order` | `str` | `MSB_FIRST` big-endian or `MSB_LAST` little-endian |
 
 ---
 
@@ -203,7 +203,7 @@ A2L  ASAP2_Demo_V161.a2l
   byte_order: little
 ```
 
-Covers all ASAP2 v1.61 CHARACTERISTIC types including CUBOID (treated as MAP).
+Covers all ASAP2 v1.61 CHARACTERISTIC types including CUBOID treated as MAP.
 
 ---
 
@@ -214,7 +214,7 @@ Covers all ASAP2 v1.61 CHARACTERISTIC types including CUBOID (treated as MAP).
 | Format | ASAM/ASAP2 A2L text | TunerPro XDF XML | RomRaider XML |
 | Scaling source | COMPU_METHOD block | MATH equation | expression= attribute |
 | Layout source | RECORD_LAYOUT block | EMBEDDEDDATA attributes | scaling storagetype |
-| Identify ROM | Not supported (no ROM signature) | Not supported | `identify_rom(rom)` |
+| Identify ROM | Not supported no ROM signature | Not supported | `identify_rom(rom)` |
 | Byte order source | `BYTE_ORDER` keyword | `DEFAULTS lsbfirst` | endian= attribute |
 | Address format | Hex literal `0xADDR` | Hex in mmedaddress | Hex without 0x |
 
@@ -245,7 +245,7 @@ the only link to a specific ROM image. Use `EcuRomRaiderParser.identify_rom()` o
 
 ## How it works
 
-Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 
@@ -286,8 +286,8 @@ Calibration data regions contain byte sequences that decode as valid instruction
 | `description` | Human-readable description |
 | `table_type` | `'VALUE'` (scalar) / `'CURVE'` (1-D) / `'MAP'` (2-D) |
 | `address` | File offset of the data block in the ROM |
-| `rows` | Row count (Y-axis length) |
-| `cols` | Column count (X-axis length) |
+| `rows` | Row count Y-axis length |
+| `cols` | Column count X-axis length |
 | `element_bits` | Storage width per element in bits |
 | `scale` / `bias` | Physical-to-raw conversion: `physical = raw * scale + bias` |
 | `unit` | Engineering unit string (e.g., `'°C'`, `'kPa'`) |

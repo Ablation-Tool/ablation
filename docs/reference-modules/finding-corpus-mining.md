@@ -6,7 +6,7 @@ Enumerate the FortiOS/FortiWeb CMDB attack surface: finding every `cmf_query_cre
 
 ## Why this exists
 
-1. **FortiOS and FortiWeb expose configuration through a CMDB (Configuration and Management Database) layer accessed via `cmf_query_create()`.** User-supplied configuration fields flow from CMDB reads to exec-class sinks (`system()`, `execv()`) in handler functions. Without `CMDBSurfaceMapper`, identifying which CMDB tables are attacker-reachable inputs requires manual search across hundreds of call sites.
+1. **FortiOS and FortiWeb expose configuration through a CMDB Configuration and Management Database layer accessed via `cmf_query_create()`.** User-supplied configuration fields flow from CMDB reads to exec-class sinks (`system()`, `execv()`) in handler functions. Without `CMDBSurfaceMapper`, identifying which CMDB tables are attacker-reachable inputs requires manual search across hundreds of call sites.
 
 2. **Analysis direction is forward from CMDB field reads toward exec sinks**: `CMDBSurfaceMapper` complements backward `TaintTracker` analysis by identifying which table IDs have callers that co-locate with exec sinks in the same function body. A function that reads CMDB table 0x4A and then calls `system()` is a high-priority `TaintTracker` target; a function that reads CMDB but calls only logging functions is not.
 
@@ -87,7 +87,7 @@ Run `CMDBSurfaceMapper` as Phase 0.5 triage immediately after `BinaryContext.loa
 
 | Attribute | Content |
 |:---|:---|
-| `name` | Table name string (if recovered from binary) or `None` |
+| `name` | Table name string if recovered from binary or `None` |
 | `callers` | Count of functions that access this table |
 | `reaches_exec` | `True` if any caller reaches an exec-class sink |
 | `exec_func_va` | VA of the function that co-locates the exec sink call (`None` if not found) |

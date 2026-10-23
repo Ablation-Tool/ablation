@@ -83,7 +83,7 @@ Run `LibraryInventory` at session start for any Android APK or firmware root fil
 | `size_kb` | File size in kilobytes |
 | `arch` | Architecture string (e.g., `arm64`, `x86`) |
 | `exports` | Total count of dynamic symbols with a non-zero value |
-| `internal` | BL-target internal function count (−1 if unsupported arch) |
+| `internal` | BL-target internal function count −1 if unsupported arch |
 | `jni` | Count of `Java_*` JNI exports |
 | `has_jni_on_load` | `True` if `JNI_OnLoad` is exported |
 | `security_score` | Integer 0–10: security interest score; higher = more worth analyzing |

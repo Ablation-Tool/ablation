@@ -1,6 +1,6 @@
 # IOS/IOS-XE Appliance Enumeration
 
-Enumerate Cisco IOS and IOS-XE appliances via HTTP/RESTCONF API, SNMP (CDP neighbor table, running-config OID), Telnet banner, TFTP configuration pull, and Type 7 password decoding: detecting AAA configuration, enabled services, and management interface exposure: via `modules/ios_enum.py`.
+Enumerate Cisco IOS and IOS-XE appliances via HTTP/RESTCONF API, SNMP CDP neighbor table, running-config OID, Telnet banner, TFTP configuration pull, and Type 7 password decoding: detecting AAA configuration, enabled services, and management interface exposure: via `modules/ios_enum.py`.
 
 ---
 
@@ -85,7 +85,7 @@ IOS/IOS-XE probe functions return `List[{severity, title, detail, host, port}]`:
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` (plaintext credential) / `HIGH` (unauth access) / `MEDIUM` / `LOW` |
+| `severity` | `CRITICAL` plaintext credential / `HIGH` unauth access / `MEDIUM` / `LOW` |
 | `title` | Finding code (e.g., `IOS_SNMP_PUBLIC_COMMUNITY`, `IOS_TYPE7_PASSWORD`, `IOS_RESTCONF_UNAUTH`) |
 | `detail` | Plaintext password, neighbor list, or OID response |
 | `host` | Target IP |

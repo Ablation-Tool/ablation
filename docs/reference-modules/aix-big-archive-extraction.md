@@ -6,7 +6,7 @@ Detect and handle compressed AIX BFF archives (LZW type `0x0E`, IBM Huffman type
 
 ## Why this exists
 
-1. **AIX 4.3.3 and 5.1 network daemon packages arrive as compressed BFF archives that the plain extractor cannot process.** `bff_extractor.iter_entries()` handles type `0x09` (plain) archives only. `imapd`, `named8`, `gated`, `telnetd`, and most kernel extension packages from AIX 4.3.3 ML11 ship as LZW-compressed (type `0x0E`) or Huffman-compressed (type `0x0C`) archives. Without compression detection, the plain extractor silently produces no entries (the compressed data fails the name-sentinel check immediately): leaving the analyst with no binaries and no error message.
+1. **AIX 4.3.3 and 5.1 network daemon packages arrive as compressed BFF archives that the plain extractor cannot process.** `bff_extractor.iter_entries()` handles type `0x09` (plain) archives only. `imapd`, `named8`, `gated`, `telnetd`, and most kernel extension packages from AIX 4.3.3 ML11 ship as LZW-compressed (type `0x0E`) or Huffman-compressed (type `0x0C`) archives. Without compression detection, the plain extractor silently produces no entries the compressed data fails the name-sentinel check immediately: leaving the analyst with no binaries and no error message.
 
 2. **LZW-compressed BFF archives use standard Unix `compress(1)` encoding on the entry data, accessible via the system `uncompress` command.** Type `0x0E` archives wrap each file's data in LZW format (`0x1F 0x9D` magic). The system `uncompress -c` command decompresses LZW correctly: `bff_decompressor` pipes the archive data through `uncompress` and re-parses the result as a plain BFF stream. This works on any Linux system with the `ncompress` package installed.
 
@@ -33,12 +33,12 @@ flowchart TD
 
 ### BFF volume header type codes
 
-| Type byte (LE uint16 low byte) | Format | Decompression |
+| Type byte LE uint16 low byte | Format | Decompression |
 |---|---|---|
-| `0x09` | Plain backup | `bff_extractor.iter_entries()` (no decompression) |
+| `0x09` | Plain backup | `bff_extractor.iter_entries()` no decompression |
 | `0x0C` | IBM pack / Huffman | Requires AIX `restore(8)`: raises `BFFCompressedError` |
 | `0x0E` | `compress(1)` / LZW | System `uncompress -c` then `iter_entries()` |
-| `0x10`, `0x11` | gzip variant (AIX 5.2+) | Raises `BFFCompressedError` |
+| `0x10`, `0x11` | gzip variant AIX 5.2+ | Raises `BFFCompressedError` |
 
 ---
 
@@ -124,7 +124,7 @@ stream on an AIX 4.3.3 system and open a module gap against XLC-GAP-014.
 
 **LZW decompression via `uncompress -c` requires the `ncompress` package.** On most modern Linux systems (Ubuntu, Debian, CentOS), `uncompress` is not installed by default, it lives in the `ncompress` package. `_try_uncompress_lzw()` calls `subprocess.run(['uncompress', '-c'], ...)`: if `uncompress` is not found, the subprocess returns non-zero and `BFFCompressedError` is raised with the AIX-restore guidance. Install `ncompress` first: `apt install ncompress` or `yum install ncompress`.
 
-**`_try_restore()` returns a temp directory path bytes, not entries.** The current `_try_restore()` implementation returns the temp directory path as bytes (a marker) rather than a list of `BffEntry` objects: the re-packing step from extracted files back to BffEntry objects is not implemented. For Huffman archives where `restore(8)` is available, `BFFDecompressor` still raises `BFFCompressedError`: the AIX restore path is detection only, not full extraction.
+**`_try_restore()` returns a temp directory path bytes, not entries.** The current `_try_restore()` implementation returns the temp directory path as bytes a marker rather than a list of `BffEntry` objects: the re-packing step from extracted files back to BffEntry objects is not implemented. For Huffman archives where `restore(8)` is available, `BFFDecompressor` still raises `BFFCompressedError`: the AIX restore path is detection only, not full extraction.
 
 ---
 
@@ -132,7 +132,7 @@ stream on an AIX 4.3.3 system and open a module gap against XLC-GAP-014.
 
 **Before this module:** Obtain the BFF archive path from the AIX software depot package listing. Call `detect(data)` to determine whether the archive requires `uncompress` or an AIX system before committing to extraction. Most BFF archives from AIX 4.3.3 ML11 and earlier are Huffman-compressed; AIX 5.1 network packages are commonly LZW.
 
-**After this module:** For LZW extraction success: proceed as with plain BFF: write XCOFF binaries to temp files and load with `BinaryContext.load_or_build()`. For `BFFCompressedError` on Huffman archives: use the printed `restore -xvqf` command on an AIX 4.3.3 VM (available as QEMU image in the IBM AIX eval program) and copy the extracted directory tree back for analysis.
+**After this module:** For LZW extraction success: proceed as with plain BFF: write XCOFF binaries to temp files and load with `BinaryContext.load_or_build()`. For `BFFCompressedError` on Huffman archives: use the printed `restore -xvqf` command on an AIX 4.3.3 VM available as QEMU image in the IBM AIX eval program and copy the extracted directory tree back for analysis.
 
 ---
 

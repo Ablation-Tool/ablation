@@ -56,8 +56,8 @@ result = JavaJarScanner.scan_bytes(inner_data, label='nested.jar')
 - Detects constant-pool references, not reachability. A class that references `Runtime.exec()` but never calls it at runtime will still be reported.
 - Obfuscated code that renames `exec` to `e()` will not be detected.
 - Inner classes (`$`) and anonymous classes are scanned individually; a finding in `Foo$Bar.class` is a finding in the outer class `Foo`.
-- Does not parse bytecode (instructions). Cannot determine argument provenance or whether exec is reachable from a network-reachable entry point.
+- Does not parse bytecode instructions. Cannot determine argument provenance or whether exec is reachable from a network-reachable entry point.
 
 ## Pipeline position
 
-Run after `BinaryContext.load_or_build()` when the target includes `.jar` files or BFF archives with Java content. Output is per-JAR summary; pass findings to manual analysis or `TaintTracker` (if a JVM-aware taint tool is available) for reachability verification.
+Run after `BinaryContext.load_or_build()` when the target includes `.jar` files or BFF archives with Java content. Output is per-JAR summary; pass findings to manual analysis or `TaintTracker` if a JVM-aware taint tool is available for reachability verification.

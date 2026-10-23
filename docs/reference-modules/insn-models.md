@@ -1,4 +1,4 @@
-# Instruction Models (insn_arc, insn_x86)
+# Instruction Models insn_arc, insn_x86
 
 Instruction representation, operand parsing, and disassembler backends for ARC EM/HS (`insn_arc.py`) and x86/x86-64 (`insn_x86.py`). These modules define the `Insn` dataclass that every taint tracker, CFG builder, and analysis engine operates on.
 
@@ -8,7 +8,7 @@ Instruction representation, operand parsing, and disassembler backends for ARC E
 
 1. **Taint trackers and CFG builders need a unified instruction type, not raw strings.** Capstone, objdump, and hand-written listings all produce different text forms. The `Insn` dataclass provides a single normalized representation with typed operands (`Reg`, `Imm`, `Mem`) that downstream tools query without parsing strings themselves.
 
-2. **ARC has no Capstone backend; x86 has three text formats.** `insn_arc.py` provides a pure-Python decoder for GNU objdump text output: the only practical disassembly path for ARC EM/HS. `insn_x86.py` handles Intel listing, AT&T objdump (auto-converted), and Capstone structured output. Without this layer, each tool would implement its own text parser.
+2. **ARC has no Capstone backend; x86 has three text formats.** `insn_arc.py` provides a pure-Python decoder for GNU objdump text output: the only practical disassembly path for ARC EM/HS. `insn_x86.py` handles Intel listing, AT&T objdump auto-converted, and Capstone structured output. Without this layer, each tool would implement its own text parser.
 
 3. **Operand typing enables safe taint propagation.** A `Reg` operand carries the register name; a `Mem` operand carries base/index/displacement; an `Imm` carries the immediate value. Taint trackers query `insn.operands[0]` and branch on type rather than parsing instruction text for every propagation step.
 
@@ -34,7 +34,7 @@ class Insn:
     operands: tuple    # (Reg | Imm | Mem | RegList | ...) typed operands
 ```
 
-All `Insn` instances are frozen (hashable), so they can be used as CFG block contents directly.
+All `Insn` instances are frozen hashable, so they can be used as CFG block contents directly.
 
 ---
 
@@ -87,7 +87,7 @@ insns = list(from_capstone(md.disasm(code, va)))
 - Size suffixes stripped (`movq` → `mov`, `cmpb` → `cmp`)
 - `%reg` prefixes stripped
 - `$imm` → bare immediate
-- `disp(%base,%index,scale)` → `[base+index*scale+disp]`
+- `disp%base,%index,scale` → `[base+index*scale+disp]`
 
 ---
 

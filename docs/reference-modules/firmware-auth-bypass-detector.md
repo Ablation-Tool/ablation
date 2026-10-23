@@ -42,13 +42,13 @@ python -m ablation.analyzers.firmware_auth_bypass_detector flasher.exe
 | Severity | Condition |
 |---|---|
 | CRITICAL | `FIRMWARE_IAT_HIGH` imports present + firmware strings present + no signing |
-| HIGH | `FIRMWARE_IAT_HIGH` imports present + no signing (firmware strings absent) |
+| HIGH | `FIRMWARE_IAT_HIGH` imports present + no signing firmware strings absent |
 | MEDIUM | Only `FIRMWARE_IAT_LOW` (generic) + firmware strings + no signing; verify payload manually |
 | CLEAN | Signing imports present, or no firmware imports at all |
 
 ## Pattern sets
 
-### `FIRMWARE_IAT_HIGH` (device-specific)
+### `FIRMWARE_IAT_HIGH` device-specific
 
 HID API: `HidD_SetFeature`, `HidD_GetFeature`, `HidD_SetOutputReport`, `HidD_GetInputReport`,
 `HidD_GetAttributes`, `HidD_GetProductString`, `HidD_GetPreparsedData`, `HidD_GetCaps`
@@ -59,13 +59,13 @@ Setup API: `SetupDiEnumDeviceInterfaces`, `SetupDiGetDeviceInterfaceDetail*`,
 WinUSB: `WinUsb_Initialize`, `WinUsb_WritePipe`, `WinUsb_ReadPipe`,
 `WinUsb_ControlTransfer`, `WinUsb_Free`, `WinUsb_GetDescriptor`
 
-Serial (touch controllers): `SetCommState`, `SetCommTimeouts`, `PurgeComm`, `EscapeCommFunction`
+Serial touch controllers: `SetCommState`, `SetCommTimeouts`, `PurgeComm`, `EscapeCommFunction`
 
 ### `FIRMWARE_IAT_LOW` (generic)
 
 `DeviceIoControl`, `RegQueryValueExA/W`, `RegSetValueExA/W`
 
-### Signing imports (any blocks the finding)
+### Signing imports any blocks the finding
 
 `WinVerifyTrust`, `CryptVerifySignature*`, `CryptVerifyMessage*`,
 `CertVerifyCertificateChainPolicy`, `CertGetCertificateChain`,
@@ -83,7 +83,7 @@ Serial (touch controllers): `SetCommState`, `SetCommTimeouts`, `PurgeComm`, `Esc
 ## Limitations
 
 - Ordinal-only HID imports (HIDdAPI.dll imported by ordinal) are not detected by IAT name matching. Use `pe_sweep.py`'s `_check_firmware_auth_bypass` function instead, which checks imported DLL names.
-- Signing verification implemented in non-standard crypto libraries (custom TLV/ASN.1 parsers) is not detected.
+- Signing verification implemented in non-standard crypto libraries custom TLV/ASN.1 parsers is not detected.
 - The MEDIUM tier requires manual follow-up. `DeviceIoControl` + firmware strings is common in legitimate utilities that are not flashers.
 
 ## FORGE audit
@@ -116,7 +116,7 @@ Loads the firmware image, maps entropy across the file using a sliding window, a
 
 ## False positives
 
-Version-mismatch findings appear when a known key or certificate is present in a build where it was intentionally removed. Cross-reference against the family table in `FirmwareKeyCorpus` and the product release notes before escalating. Development-only debug keys (identifiable by subject CN matching vendor dev lab naming conventions) are not production findings.
+Version-mismatch findings appear when a known key or certificate is present in a build where it was intentionally removed. Cross-reference against the family table in `FirmwareKeyCorpus` and the product release notes before escalating. Development-only debug keys identifiable by subject CN matching vendor dev lab naming conventions are not production findings.
 
 ---
 

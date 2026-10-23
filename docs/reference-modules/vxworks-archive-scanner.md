@@ -14,8 +14,8 @@ Three things were not possible before in Ablation:
 
 For each object file in the archive:
 
-1. Locate each `stwu r1, -N(r1)` instruction (stack frame allocation) where `frame_min <= N <= frame_max`.
-2. Within the same function, find any `bl` that resolves (via R_PPC_REL24) to `strcpy` or `strcat`.
+1. Locate each `stwu r1, -N(r1)` instruction stack frame allocation where `frame_min <= N <= frame_max`.
+2. Within the same function, find any `bl` that resolves via R_PPC_REL24 to `strcpy` or `strcat`.
 3. Report the object file, function name, frame size, and call VA.
 
 ## Usage
@@ -37,11 +37,11 @@ scanner = VxWorksArchiveScanner('/path/to/libwmNet.a',
 | Symbol | Description |
 |--------|-------------|
 | `VxWorksArchiveScanner(archive_path, targets=None)` | Constructor; `targets` filters to named object files |
-| `VxWorksArchiveScanner.scan_strcpy_in_frame(frame_min, frame_max)` | Returns `list[ArchiveSite]` |
-| `VxWorksArchiveScanner.report(findings)` | Human-readable summary string |
+| `VxWorksArchiveScanner.scan_strcpy_in_frameframe_min, frame_max` | Returns `list[ArchiveSite]` |
+| `VxWorksArchiveScanner.reportfindings` | Human-readable summary string |
 | `ArchiveSite.obj_file` | Object file name within the archive |
 | `ArchiveSite.func_name` | Function name (from ELF `.symtab`) |
-| `ArchiveSite.func_va` | Function start VA (section-relative) |
+| `ArchiveSite.func_va` | Function start VA section-relative |
 | `ArchiveSite.call_va` | VA of the `bl strcpy/strcat` instruction |
 | `ArchiveSite.frame_size` | Stack frame size N (bytes) |
 | `ArchiveSite.callee_name` | Resolved callee name (`strcpy` or `strcat`) |
@@ -75,7 +75,7 @@ No HIGH or CRITICAL findings remain.
 
 ## How it works
 
-Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation (CRC32 or SHA256 depending on container format) runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
+Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation CRC32 or SHA256 depending on container format runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
 
 ---
 
@@ -113,11 +113,11 @@ Extraction either succeeds or raises an exception, there are no false positives 
 | Attribute | Content |
 |:---|:---|
 | `obj_file` | Member name of the `.o` archive member containing the finding |
-| `func_name` | Enclosing function symbol name (if resolved) |
+| `func_name` | Enclosing function symbol name if resolved |
 | `func_va` | Function start offset in `.text` |
-| `call_va` | Offset of the `bl` (branch-and-link) instruction |
+| `call_va` | Offset of the `bl` branch-and-link instruction |
 | `frame_size` | Stack frame size allocated at function entry |
-| `callee_name` | Target symbol name from `.rela.text` (or hex address if unresolved) |
+| `callee_name` | Target symbol name from `.rela.text` or hex address if unresolved |
 
 ---
 

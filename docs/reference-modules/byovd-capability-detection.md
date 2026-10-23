@@ -8,9 +8,9 @@ Detect Bring Your Own Vulnerable Driver (BYOVD) capabilities in Windows kernel d
 
 1. **BYOVD attacks load a legitimate, Authenticode-signed driver containing dangerous kernel APIs: `MmMapIoSpace`, `HalTranslateBusAddress`, `ZwOpenProcess`, `IoCreateDevice`, and exploit those APIs through the driver's IOCTL surface to gain kernel-mode capabilities without loading an unsigned driver.** `ByovdDetector` identifies these capability classes statically from imports and string evidence, enabling fast triage of driver files found during firmware or software distribution analysis before PoC effort is invested.
 
-2. **Stage 1 (import signature) catches obvious cases; Stage 2 (IOCTL surface scan) identifies whether the dangerous capabilities are reachable from the IOCTL dispatch table.** A driver importing `MmMapIoSpace` but never reaching it from a valid IOCTL code is a different risk than one where a specific `IOCTL_CODE` directly calls `MmMapIoSpace` with an attacker-controlled physical address. `ByovdReport.risk_level` accounts for this distinction.
+2. **Stage 1 (import signature) catches obvious cases; Stage 2 IOCTL surface scan identifies whether the dangerous capabilities are reachable from the IOCTL dispatch table.** A driver importing `MmMapIoSpace` but never reaching it from a valid IOCTL code is a different risk than one where a specific `IOCTL_CODE` directly calls `MmMapIoSpace` with an attacker-controlled physical address. `ByovdReport.risk_level` accounts for this distinction.
 
-3. **Stage 3 (string evidence) catches drivers that re-implement dangerous operations via direct Object Manager paths or known vulnerable driver strings.** `\\Device\\PhysicalMemory` in strings indicates direct physical memory access without `MmMapIoSpace`, which imports-only analysis would miss. Known vulnerable driver string patterns (device path signatures from public BYOVD PoCs) are matched in the string table.
+3. **Stage 3 string evidence catches drivers that re-implement dangerous operations via direct Object Manager paths or known vulnerable driver strings.** `\\Device\\PhysicalMemory` in strings indicates direct physical memory access without `MmMapIoSpace`, which imports-only analysis would miss. Known vulnerable driver string patterns (device path signatures from public BYOVD PoCs) are matched in the string table.
 
 ---
 
@@ -71,7 +71,7 @@ risk_level: HIGH
 
 **Legitimate kernel drivers may import `MmMapIoSpace` for hardware DMA mapping**: a NIC or storage driver importing `MmMapIoSpace` for DMA is not BYOVD-capable unless the IOCTL surface passes an attacker-controlled physical address. `risk_level` returns `MEDIUM` (not `HIGH`) when Stage 1 detects an import but Stage 2 finds no IOCTL-reachable path, reflecting this distinction.
 
-**Stage 2 IOCTL tracing uses static analysis**: indirect dispatch (function pointer tables, virtual dispatch through objects) may not be traced to all capability call sites. A `risk_level` of `MEDIUM` from Stage 1 alone warrants manual verification of the IOCTL dispatch table before ruling out BYOVD capability.
+**Stage 2 IOCTL tracing uses static analysis**: indirect dispatch function pointer tables, virtual dispatch through objects may not be traced to all capability call sites. A `risk_level` of `MEDIUM` from Stage 1 alone warrants manual verification of the IOCTL dispatch table before ruling out BYOVD capability.
 
 ---
 
@@ -87,7 +87,7 @@ Run `ByovdDetector` as a triage step on any signed Windows kernel driver file fo
 
 | Attribute | Type | Content |
 |:---|:---|:---|
-| `is_byovd_capable` | property → `bool` | `True` if any BYOVD-relevant capability detected (CRITICAL caps, MSR accesses, or known match) |
+| `is_byovd_capable` | property → `bool` | `True` if any BYOVD-relevant capability detected CRITICAL caps, MSR accesses, or known match |
 | `risk_level` | property → `str` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'NONE'` |
 | `capabilities` | `List[ByovdCapability]` | Detected capability list (see `ByovdCapability` fields below) |
 | `msr_accesses` | `List[ByovdMsrAccess]` | Detected MSR read/write instructions |

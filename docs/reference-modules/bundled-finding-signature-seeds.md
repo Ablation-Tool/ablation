@@ -81,7 +81,7 @@ auto_name() report:
 
 ## False positives
 
-**`likely:` prefixed names are inferred labels, not confirmed names.** A function labeled `likely:memcpy` might be a similar but different memory operation. Never treat `likely:` labels as confirmed for security-critical analysis (sink identification, taint source seeding). Confirm with disassembly before escalating.
+**`likely:` prefixed names are inferred labels, not confirmed names.** A function labeled `likely:memcpy` might be a similar but different memory operation. Never treat `likely:` labels as confirmed for security-critical analysis sink identification, taint source seeding. Confirm with disassembly before escalating.
 
 **`auto_name()` renames `ANGR_INFERRED` entries in the corpus DB in-place when `dry_run=False`.** This modifies the persistent database. Run `auto_name(dry_run=True)` first to preview renames before committing.
 
@@ -104,12 +104,12 @@ Run `SigLibrary.auto_name()` after building the initial corpus but before runnin
 | `seed_profile` | Profile bitmask from the seed library |
 | `target_profile` | Profile bitmask from the target function |
 
-`SigLibrary.auto_name()` applies `ctx.set_name(va, name)` for matches above the `MIN_CONFIDENCE` threshold and returns a summary dict:
+`SigLibrary.auto_name()` applies `ctx.set_nameva, name` for matches above the `MIN_CONFIDENCE` threshold and returns a summary dict:
 
 | Field | Content |
 |:---|:---|
 | `renamed` | Count of functions renamed |
-| `top_matches` | List of `(name, count)` for the most frequent matched names |
+| `top_matches` | List of `name, count` for the most frequent matched names |
 
 ---
 

@@ -89,7 +89,7 @@ Run `K8sEnumerator` from within a compromised container after establishing shell
 
 ## Reading findings
 
-`K8sEnumerator.enumerate_all()` returns a dict with the following keys (among others):
+`K8sEnumerator.enumerate_all()` returns a dict with the following keys among others:
 
 | Key | Content |
 |:---|:---|

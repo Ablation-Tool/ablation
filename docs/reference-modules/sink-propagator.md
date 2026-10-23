@@ -5,7 +5,7 @@
 Four things were not possible before in Ablation:
 
 1. **Find injection paths hidden behind custom string-passing wrappers.** TaintTracker
- searches for calls to known PLT sinks (system, popen, etc.). When a binary wraps
+ searches for calls to known PLT sinks system, popen, etc.. When a binary wraps
  system() behind doSystem(string) and systemLog(char*), three levels deep; TaintTracker
  finds zero injection sites while the vulnerability is fully reachable. SinkPropagator
  computes the transitive closure of passthrough wrappers so TaintTracker gets the complete
@@ -91,14 +91,14 @@ a wrapper, and TaintTracker will traverse to them from the other direction.
 
 ## FORGE audit
 
-Gate: **PASSED** (2026-10-13). No HIGH or CRITICAL issues.
+Gate: **PASSED** 2026-10-13. No HIGH or CRITICAL issues.
 
 Tested on:
 - `HSCUserConf` (one vendor's HMC binary): systemLog correctly identified as level-1 wrapper around system@plt.
-- `commandcontrol`, `LoginMOMIssue`, `5250proxy`, `mmhmccmd`, `runUpdate`: all return 0 wrappers (no false positives).
+- `commandcontrol`, `LoginMOMIssue`, `5250proxy`, `mmhmccmd`, `runUpdate`: all return 0 wrappers no false positives.
 - Non-ELF input: raises `ValueError` as expected.
 - Out-of-bounds VA: `_disasm_func` returns empty list.
-- `call_idx=0` (no lookback): `_trace_rdi_at` returns `None`.
+- `call_idx=0` no lookback: `_trace_rdi_at` returns `None`.
 - Idempotence: calling `propagate()` twice yields identical results.
 
 ---
@@ -149,7 +149,7 @@ A function that calls a sink with an argument derived from its parameter but app
 | `call_va` | VA of the call instruction inside the wrapper that reaches the sink |
 | `wraps_va` | VA of the immediate sink being called |
 | `wraps_name` | Name of the immediate sink |
-| `chain` | `List[str]`: lineage from root PLT sink (root last); empty if direct |
+| `chain` | `List[str]`: lineage from root PLT sink root last; empty if direct |
 
 ---
 

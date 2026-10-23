@@ -15,7 +15,7 @@ every tunable subsystem: ignition advance, fuel trim, boost, idle speed, lambda 
 shifting. Without this parser, all of those addresses and labels were inaccessible.
 
 **2. No two-pass inheritance model.** RomRaider XML files split table data across two `<rom>`
-elements: the base entry carries structure (type, dimensions, storagetype, scaling) and the variant
+elements: the base entry carries structure type, dimensions, storagetype, scaling and the variant
 entries carry addresses (`storageaddress`). A flat XML pass that processes both in a single sweep
 cannot join them because the base has no addresses and the variant has no structure. The parser
 builds a keyed structure dictionary from the base in the first pass, then overlays variant address
@@ -23,7 +23,7 @@ dicts in the second pass to produce complete `CalibrationTable` objects.
 
 **3. No ROM identification for variant-addressed definitions.** Each variant carries an
 `internalidstring` (ASCII ECU firmware ID such as `4570LO00`) at a specific `internalidaddress`
-(decimal file offset). The same string is baked into the ECU's flash by Siemens at production.
+decimal file offset. The same string is baked into the ECU's flash by Siemens at production.
 Before `identify_rom()` existed, selecting the right address set for a given ROM file required
 manual inspection of `<romid>` fields and hex editing. `identify_rom()` byte-searches the ROM for
 each variant's ID string in a window around the expected address, with a hex-address fallback for
@@ -31,9 +31,9 @@ community XML files that write decimal offsets using hex digit strings.
 
 **4. No scaling expression parser for community XML dialects.** Community RomRaider XML files use
 at least 14 distinct linear expression forms: `x`, `k*x`, `x*k`, `x/k`, `x*k+b`, `(x*k)+b`,
-`(x*k)-b`, `x+b`, `x-b`, `(x-offset)*k`, and signed variants of each. The BMW MS45 file alone
+`(x*k)-b`, `x+b`, `x-b`, `x-offset*k`, and signed variants of each. The BMW MS45 file alone
 uses `(x-65535)*0.0212` to encode mg/stroke values. No general expression evaluator in Ablation
-handled this; all 14 forms now parse correctly to `(scale, bias)` pairs.
+handled this; all 14 forms now parse correctly to `scale, bias` pairs.
 
 ---
 
@@ -124,7 +124,7 @@ Raises `xml.etree.ElementTree.ParseError` on malformed XML.
 
 ### `variants() -> list[tuple[str, str, int]]`
 
-Return `(xmlid, model, filesize_kb)` for every variant in the file. Useful for listing options
+Return `xmlid, model, filesize_kb` for every variant in the file. Useful for listing options
 before calling `identify_rom()` or `calibration_tables()` directly.
 
 ### `identify_rom(rom, search_window=32) -> Optional[str]`
@@ -141,17 +141,17 @@ versus 1024 KB full flash), returns the variant whose `filesize_kb` is closest t
 files means offset 0x100 = 256, not 100). `identify_rom()` tries both interpretations and
 accepts whichever finds the string.
 
-**False-positive filter:** a match must resolve at least `min(20, base_defs // 5)` table
+**False-positive filter:** a match must resolve at least `min20, base_defs // 5` table
 addresses in the variant. Coincidental string hits in code regions produce matches with 0 to 2
 tables resolved; these are rejected and `None` is returned rather than a wrong identification.
 
-### `calibration_tables(variant_id) -> list[CalibrationTable]`
+### `calibration_tablesvariant_id -> list[CalibrationTable]`
 
 Return all `CalibrationTable` objects for the named variant. Tables whose `storageaddress` is
 absent in the variant are omitted. Axes whose address is absent produce `None` in
 `CalibrationAxis.address`.
 
-### `label_map(variant_id) -> dict[int, str]`
+### `label_mapvariant_id -> dict[int, str]`
 
 Return `{file_offset: label}` for all tables and axes in the variant. Pass entries to
 `ctx.set_name(offset, name, source="romraider")`.
@@ -165,21 +165,21 @@ supplied) the resolved table count broken down by type.
 
 ## Scaling expression parser
 
-`_expr_to_linear(expr)` converts a RomRaider `expression=` attribute to `(scale, bias)` for use
+`_expr_to_linear(expr)` converts a RomRaider `expression=` attribute to `scale, bias` for use
 in `CalibrationTable.scale` and `.bias`. It handles all forms found in the MS43, MS45, and
 Subaru community files:
 
 | Expression form | Result |
 |---|---|
-| `x` | `(1.0, 0.0)` |
+| `x` | `1.0, 0.0` |
 | `k*x` | `(k, 0.0)` |
 | `x*k` or `(x*k)` | `(k, 0.0)` |
-| `x/k` | `(1/k, 0.0)` |
+| `x/k` | `1/k, 0.0` |
 | `x*k+b` or `(x*k)+b` | `(k, b)` |
 | `(x*k)-b` | `(k, -b)` |
 | `x+b` or `x-b` | `(1.0, ±b)` |
-| `(x-offset)*k` | `(k, offset*k)` |
-| `1/(x*k)` or any non-linear form | `(0.0, 0.0)` sentinel |
+| `x-offset*k` | `k, offset*k` |
+| `1/(x*k)` or any non-linear form | `0.0, 0.0` sentinel |
 
 When `scale == 0.0`, callers treat the table as raw-only: `read_data()` still returns integer
 values, but physical unit conversion is not applied.
@@ -217,9 +217,9 @@ Unknown storagetype strings default to `uint8`.
 
 ## Validated results
 
-### BMW Siemens MS45 (MS45 ECU Definitions.xml, 51 variants, 116 KB and 1024 KB)
+### BMW Siemens MS45 MS45 ECU Definitions.xml, 51 variants, 116 KB and 1024 KB
 
-`parser.variants()` returns 51 entries spanning E46 (325i, 328i, 330i, M3), E60 (525i, 530i),
+`parser.variants()` returns 51 entries spanning E46 325i, 328i, 330i, M3, E60 525i, 530i,
 E83 (X3), Z4, and some MPC development board variants.
 
 Identification results on the BMW MS45 corpus:
@@ -235,7 +235,7 @@ Identification results on the BMW MS45 corpus:
 The 116 KB calibration-only partials (the ROM region a flash tool reads without erasing the full
 chip) identify reliably and produce 155 to 218 tables. The 1024 KB full flash ROMs do not identify
 because the community XML's `internalidaddress` values for those variants point to ERASED regions
-(the full flash image stores the ID at a different offset than the calibration partial).
+the full flash image stores the ID at a different offset than the calibration partial.
 
 The false-positive filter eliminates low-table matches from the 1024 KB full flash files.
 
@@ -254,7 +254,7 @@ The false-positive filter eliminates low-table matches from the 1024 KB full fla
  analysis.
 
 - **Duplicate xmlid entries.** Some community XML files reuse the same `xmlid` for a 116 KB and
- 1024 KB variant of the same ECU (same firmware string appears in both partials). `_variant_by_id`
+ 1024 KB variant of the same ECU same firmware string appears in both partials. `_variant_by_id`
  returns the first match, which is correct for calibration partials. To select the 1024 KB
  variant explicitly, call `calibration_tables()` with the full xmlid and inspect the filesize in
   `variants()`.
@@ -264,7 +264,7 @@ The false-positive filter eliminates low-table matches from the 1024 KB full fla
   `table_type="Switch"` or `"BitwiseSwitch"` with `scale=1.0`, but `read_data()` on them returns
  raw bit patterns rather than decoded switch states.
 
-- **Non-linear expressions.** Any expression not matched by `_expr_to_linear` returns `(0.0, 0.0)`
+- **Non-linear expressions.** Any expression not matched by `_expr_to_linear` returns `0.0, 0.0`
  as a sentinel. This includes `1/(x*k)`, `log(x)`, `exp(x)`, and any multi-variable form. The
  table is still parsed and returned; only the scaling is absent.
 
@@ -272,7 +272,7 @@ The false-positive filter eliminates low-table matches from the 1024 KB full fla
 
 ## How it works
 
-Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 
@@ -305,7 +305,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Reading output
 
-`EcuRomRaiderParser.from_file(path)` constructs a parser. Access calibration tables via `parser.calibration_tables(variant_id)` which returns `List[CalibrationTable]`:
+`EcuRomRaiderParser.from_file(path)` constructs a parser. Access calibration tables via `parser.calibration_tablesvariant_id` which returns `List[CalibrationTable]`:
 
 | Attribute | Content |
 |:---|:---|

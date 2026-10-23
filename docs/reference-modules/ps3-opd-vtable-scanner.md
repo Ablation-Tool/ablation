@@ -102,10 +102,10 @@ single-method base classes at the cost of more false positives.
 **`report(vtables, ctx=None, top_n=50, min_slots=0)`** → ASCII table sorted by slot count
 descending.
 
-**`inject_into_context(vtables, ctx)`** → `int`: injects `vtbl_<va>_s<N>` names for all
+**`inject_into_contextvtables, ctx`** → `int`: injects `vtbl_<va>_s<N>` names for all
 non-null, unnamed slots. Returns count of new names added.
 
-**`find_by_method_name(vtables, name, ctx)`** → `List[(vtable, slot_idx, code_va)]`: locate which vtables contain a named method.
+**`find_by_method_namevtables, name, ctx`** → `List[vtable, slot_idx, code_va]`: locate which vtables contain a named method.
 
 ### `OPDVtable` dataclass
 
@@ -122,7 +122,7 @@ non-null, unnamed slots. Returns count of new names added.
 
 ## Validated on
 
-- GoldenEye 007: Reloaded (BLUS30755): 3185 vtables found; processPacket dispatch
+- GoldenEye 007: Reloaded BLUS30755: 3185 vtables found; processPacket dispatch
  located via `find_by_method_name`; Demonware BD class hierarchy mapped
 
 ---
@@ -130,7 +130,7 @@ non-null, unnamed slots. Returns count of new names added.
 ## Gaps and limitations
 
 - Single `toc=` per scan: dual-TOC binaries require two separate scan calls
-- Class hint is proximity-based (nearest string ≤256 bytes); accurate for well-laid-out
+- Class hint is proximity-based nearest string ≤256 bytes; accurate for well-laid-out
  data segments, unreliable when strings and vtables are interleaved
 - RTTI header detection requires `offset-to-top == 0 or 0xFFFFFFFF`: non-standard
  compilers may use other values
@@ -139,7 +139,7 @@ non-null, unnamed slots. Returns count of new names added.
 
 ## How it works
 
-`PS3OPDVtableScanner.scan()` finds C++ vtables in PS3 Cell PPU (PPC64 BE) binaries. `CppVtableReconstructorAnalyzer` cannot handle PPC64 vtables because vtable slot entries are OPD pointers (pointing to a function descriptor in `.opd`, not directly to the function's code). This scanner first resolves the OPD section to build a `{opd_va: code_va}` map, then scans `.rodata` for arrays of OPD pointers that follow the `type_info` pointer pattern. Returns `List[PS3Vtable]` with slot VAs resolved to code addresses.
+`PS3OPDVtableScanner.scan()` finds C++ vtables in PS3 Cell PPU PPC64 BE binaries. `CppVtableReconstructorAnalyzer` cannot handle PPC64 vtables because vtable slot entries are OPD pointers (pointing to a function descriptor in `.opd`, not directly to the function's code). This scanner first resolves the OPD section to build a `{opd_va: code_va}` map, then scans `.rodata` for arrays of OPD pointers that follow the `type_info` pointer pattern. Returns `List[PS3Vtable]` with slot VAs resolved to code addresses.
 
 ---
 
@@ -161,7 +161,7 @@ PS3 OPD vtable scan — 47 vtables found
 
 ## False positives
 
-**OPD pointer false positives.** Any 8-byte-aligned array of pointers in `.rodata` that happen to all point into the `.opd` section is interpreted as a vtable. In binaries with large array-of-function-pointer tables (jump tables, dispatch tables), this can produce false vtable reports. Filter by requiring `slots >= 4` and checking that the `class_hint` (from nearby string xrefs) is a plausible C++ class name.
+**OPD pointer false positives.** Any 8-byte-aligned array of pointers in `.rodata` that happen to all point into the `.opd` section is interpreted as a vtable. In binaries with large array-of-function-pointer tables jump tables, dispatch tables, this can produce false vtable reports. Filter by requiring `slots >= 4` and checking that the `class_hint` from nearby string xrefs is a plausible C++ class name.
 
 ---
 
@@ -179,12 +179,12 @@ PS3 OPD vtable scan — 47 vtables found
 
 | Field | Type | Content |
 |:---|:---|:---|
-| `va` | `int` | Data-segment VA of the first vtable slot (past the RTTI header) |
+| `va` | `int` | Data-segment VA of the first vtable slot past the RTTI header |
 | `slots` | `int` | Number of virtual method slots |
-| `method_vas` | `List[int]` | Resolved code VAs per slot (in slot order) |
-| `null_slots` | `List[int]` | Slot indices (not VAs) of null-stub (deleted/pure-virtual) slots |
+| `method_vas` | `List[int]` | Resolved code VAs per slot in slot order |
+| `null_slots` | `List[int]` | Slot indices (not VAs) of null-stub deleted/pure-virtual slots |
 | `rtti_offset` | `int` | Bytes before `va` where the RTTI header starts |
-| `class_hint` | `str` | Nearest string evidence for class identity (empty if none found) |
+| `class_hint` | `str` | Nearest string evidence for class identity empty if none found |
 
 ---
 

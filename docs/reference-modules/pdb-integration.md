@@ -1,6 +1,6 @@
 # PDB Symbol Integration
 
-Parse Windows PDB (Program Database) symbol files and integrate function names, type information, and source line data into `BinaryContext` via `NameRegistry`: enabling symbol-aware analysis of MSVC-compiled PE binaries without requiring Microsoft's `dbghelp.dll` or a Windows analysis environment.
+Parse Windows PDB Program Database symbol files and integrate function names, type information, and source line data into `BinaryContext` via `NameRegistry`: enabling symbol-aware analysis of MSVC-compiled PE binaries without requiring Microsoft's `dbghelp.dll` or a Windows analysis environment.
 
 ---
 
@@ -81,7 +81,7 @@ names_table() (sample):
 
 **`guid_mismatch` findings are expected for patched binaries**: a security patch that replaces a function without updating the PDB produces a GUID mismatch. The symbols may still be partially valid for unchanged functions but cannot be trusted for patched addresses. Use `pdb` source symbols only for functions not in the patch delta.
 
-**Symbol server download requires network access**: `fetch_pdb()` will fail in air-gapped environments. Supply a locally mirrored PDB path via `load_pdb(pdb_path)` directly when network access is unavailable.
+**Symbol server download requires network access**: `fetch_pdb()` will fail in air-gapped environments. Supply a locally mirrored PDB path via `load_pdbpdb_path` directly when network access is unavailable.
 
 ---
 
@@ -95,9 +95,9 @@ Run `PDBSymbolIntegrator` immediately after `BinaryContext.load_or_build()` for 
 
 `PDBSymbolIntegrator.inject_into_context(ctx, pdb_path=None)` loads PDB symbols into `BinaryContext` via `ctx.set_name()` and returns `int`: the count of symbol names injected. When `pdb_path=None`, the method fetches the PDB from the Microsoft symbol server automatically.
 
-`PDBSymbolIntegrator.load_pdb(pdb_path)` returns `Dict[int, str]`: `{rva: name}` for all public symbols in the PDB without touching `BinaryContext`.
+`PDBSymbolIntegrator.load_pdbpdb_path` returns `Dict[int, str]`: `{rva: name}` for all public symbols in the PDB without touching `BinaryContext`.
 
-`PDBSymbolIntegrator.fetch_pdb(out_dir=None)` downloads the PDB to `out_dir` (or a temp directory) and returns the local path as a string, or `None` on failure.
+`PDBSymbolIntegrator.fetch_pdb(out_dir=None)` downloads the PDB to `out_dir` or a temp directory and returns the local path as a string, or `None` on failure.
 
 After `inject_into_context()`, `ctx.name(va)` returns the PDB symbol name for any function that had one.
 

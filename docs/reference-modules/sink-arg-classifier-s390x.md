@@ -37,8 +37,8 @@ SinkArgClassifierS390X.from_path(ctx.path)
 | Instruction | Classification |
 |:---|:---|
 | `larl %rX, addr` | `RODATA_CONST` if `addr` in `.rodata` |
-| `lghi %rX, imm` / `lhi %rX, imm` | `RODATA_CONST` (immediate) |
-| `lgfi %rX, imm` | `RODATA_CONST` (32-bit sign-extended immediate) |
+| `lghi %rX, imm` / `lhi %rX, imm` | `RODATA_CONST` immediate |
+| `lgfi %rX, imm` | `RODATA_CONST` 32-bit sign-extended immediate |
 | `lgr %rX, %rY` / `lr %rX, %rY` | `ARG_PROPAGATED` if rY in `r2–r6`; recurse otherwise |
 | `la %rX, N(%r15)` / `lay %rX, N(%r15)` | Stack slot address → snprintf back-track |
 | `lgrl %rX, addr` | Load 64-bit from PC-relative → `RODATA_CONST` if target in `.rodata` |
@@ -76,7 +76,7 @@ Summary: ARG_PROPAGATED=1 | RODATA_CONST=5 | UNKNOWN=2
 
 ---
 
-## Calling convention (s390x System V ABI)
+## Calling convention s390x System V ABI
 
 ```
 r2   argument 0 / return value
@@ -87,13 +87,13 @@ r6   argument 4
 r15  stack pointer
 ```
 
-Both 31-bit s390 and 64-bit s390x use this layout. The module handles both word sizes (31-bit and 64-bit pointer arithmetic).
+Both 31-bit s390 and 64-bit s390x use this layout. The module handles both word sizes 31-bit and 64-bit pointer arithmetic.
 
 ---
 
 ## Limitations
 
-**`from_path()` required; `from_context()` is not safe.** `BinaryContext` misclassifies s390x binaries as x86-64 and returns `plt=0`. Always call `SinkArgClassifierS390X.from_path(ctx.path)`, never `SinkArgClassifierS390X.from_context(ctx)`.
+**`from_path()` required; `from_context()` is not safe.** `BinaryContext` misclassifies s390x binaries as x86-64 and returns `plt=0`. Always call `SinkArgClassifierS390X.from_pathctx.path`, never `SinkArgClassifierS390X.from_context(ctx)`.
 
 **LIEF required.** Without LIEF the module cannot enumerate DYNSYM and returns 0 results. Verify `lief` is installed before running on s390x targets.
 

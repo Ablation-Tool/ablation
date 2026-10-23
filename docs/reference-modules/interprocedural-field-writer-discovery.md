@@ -8,7 +8,7 @@ N-hop forward symbolic register pass across function call chains: extending `Reg
 
 1. **Single-function `RegAnnotator` loses provenance at call boundaries: if function A calls function B which calls the dangerous sink, the tainted value's origin appears as `Ret(B)` rather than `Arg(0)` of A.** `IPRegAnnotator` eliminates this gap by following the call chain: it annotates A, then annotates B with A's register state at the B call site as B's entry state, propagating `RegVal` identity across the boundary. A tainted argument that propagates A→B→sink appears as `Arg(0)` throughout the chain.
 
-2. **`IPRegAnnotator` is designed for the step 8 use case in the RE workflow: cross-library call chains.** When a function in `libservice.so` calls a function in `libapi.so` that ultimately calls `Tcl_Eval` or `system`, the cross-library chain requires following call edges across binary boundaries via `LibGraph`. `IPRegAnnotator.annotate_chain()` handles both intra-binary and cross-binary chains using `BinaryContext` (intra) or `LibGraph` (cross-binary).
+2. **`IPRegAnnotator` is designed for the step 8 use case in the RE workflow: cross-library call chains.** When a function in `libservice.so` calls a function in `libapi.so` that ultimately calls `Tcl_Eval` or `system`, the cross-library chain requires following call edges across binary boundaries via `LibGraph`. `IPRegAnnotator.annotate_chain()` handles both intra-binary and cross-binary chains using `BinaryContext` (intra) or `LibGraph` cross-binary.
 
 3. **`IPChain.sink_report()` produces a targeted summary of all call chains that reach a specific sink**: given a set of sink names (e.g., `{'system', 'execve', 'Tcl_Eval'}`), it filters the full chain to only paths that reach those sinks, making the report immediately actionable for CVE documentation.
 
@@ -91,7 +91,7 @@ HOP 1: 0x5000 init_subsystem
 
 ## Pipeline position
 
-Step 8 in the RE workflow (CLAUDE.md): `IPRegAnnotator` for cross-library call chains. Run after `TaintTracker` identifies a sink that is reached across library boundaries: `IPRegAnnotator` provides the argument provenance trace that `TaintTracker`'s intraprocedural analysis cannot follow.
+Step 8 in the RE workflow CLAUDE.md: `IPRegAnnotator` for cross-library call chains. Run after `TaintTracker` identifies a sink that is reached across library boundaries: `IPRegAnnotator` provides the argument provenance trace that `TaintTracker`'s intraprocedural analysis cannot follow.
 
 ---
 
@@ -116,7 +116,7 @@ Each `ChainResult` in the chain:
 | `hop` | Hop depth (0 = root, 1 = callee, 2 = callee's callee, …) |
 | `calls` | `List[ChainCallSite]`: each call site with its argument register annotations |
 
-Call `chain.all_sinks(sink_names)` to get `(func_va, binary, ChainCallSite)` tuples for any named sink in the full chain.
+Call `chain.all_sinkssink_names` to get `(func_va, binary, ChainCallSite)` tuples for any named sink in the full chain.
 
 ---
 

@@ -40,11 +40,11 @@ data from a SecurityAccess response or CAN frame through the cipher function to 
 dangerous sink. `TriCoreTaintTracker` fills this gap.
 
 **2. No TriCore calling-convention model in Ablation.** TriCore uses a hardware-enforced
-CSA (Context Save Area) mechanism where CALL automatically saves the upper context registers D[8]–D[15] and A[10]–A[15] to a dedicated memory area, and RET restores it. No software
+CSA Context Save Area mechanism where CALL automatically saves the upper context registers D[8]–D[15] and A[10]–A[15] to a dedicated memory area, and RET restores it. No software
 push/pop is generated. Without a model of this, a taint tracker either over-clears
-(treats all registers as clobbered) or under-clears (doesn't clobber anything), producing
+treats all registers as clobbered or under-clears (doesn't clobber anything), producing
 false negatives or false positives at every call site. This module implements the
-Infineon TriCore EABI V2.9 / GHS EABI calling convention (GHS-RE-REFERENCE.md §1.2–1.3):
+Infineon TriCore EABI V2.9 / GHS EABI calling convention GHS-RE-REFERENCE.md §1.2–1.3:
 D[4]–D[7] / A[4]–A[7] in; D[2] / A[2] out; lower context clobbered on CALL.
 
 **3. No FCALL/FRET leaf-function support.** GHS-compiled TriCore firmware uses FCALL for leaf functions. FCALL saves A[11] only;
@@ -64,7 +64,7 @@ FRET as call/return boundaries with the same calling-convention semantics as CAL
 | Pointer return | A[2] | `a2` |
 | Stack pointer | A[10] | `sp` |
 | Link register | A[11] | `a11` |
-| Caller-saved (lower context) | D[0]–D[7], A[2]–A[7], A[11], D[15], A[15] |: |
+| Caller-saved lower context | D[0]–D[7], A[2]–A[7], A[11], D[15], A[15] |: |
 | Callee-saved: upper context, HW-enforced | D[8]–D[15], A[0], A[1], sp, A[12]–A[15] |: |
 
 ---
@@ -103,7 +103,7 @@ print(tracker.report(chains))
 | Parameter | Default | Description |
 |---|---|---|
 | `data` |: | `bytes` of the binary image |
-| `base_va` | `0x80000000` | PFLASH base VA for flat ROMs (from TC1.8 §8 Table 13) |
+| `base_va` | `0x80000000` | PFLASH base VA for flat ROMs from TC1.8 §8 Table 13 |
 | `tc_mode` | `CS_MODE_TRICORE_162` | Capstone TC ISA mode (162 = AURIX TC1.6x) |
 
 `from_path(elf)` auto-detects text section VA from lief/pyelftools.
@@ -139,8 +139,8 @@ class TaintFindingTriCore:
 | ALU 3-operand, example: `add d4, d5, d6` | Dest ← taint[src1] ∪ taint[src2] |
 | DSP MAC variants: `maddr`, `msubr`, `maddrs`, `msubrs`, `mulm`, `mulms`, `mulr` | Route via ALU dispatch; source registers propagate to dest |
 | `and` with immediate | Dest bound = imm & 0xFFFF |
-| `extr.u` | Dest bound = (1 << width) - 1 |
-| `LOOP / LOOPU` | A_reg: labels preserved, bound cleared (decrement removes range constraint) |
+| `extr.u` | Dest bound = 1 << width - 1 |
+| `LOOP / LOOPU` | A_reg: labels preserved, bound cleared decrement removes range constraint |
 | `ji Aa` with tainted Aa | CRITICAL finding: tainted-indirect-call target |
 | `call / calla / calli / fcall` | Apply calling-convention effects |
 | `ret / rfe / fret` | End of function trace |
@@ -163,7 +163,7 @@ Sink function (e.g. `memcpy`): records finding if any arg reg is tainted.
 
 ---
 
-## FCALL / FRET (GHS-RE-REFERENCE.md §1.7)
+## FCALL / FRET GHS-RE-REFERENCE.md §1.7
 
 GHS-compiled leaf functions use FCALL. FCALL saves A[11] only; no CSA save is performed.
 The tracker treats FCALL identically to CALL at the call site, and FRET identically to RET. The
@@ -181,7 +181,7 @@ mnemonic set `{'call', 'calla', 'calli', 'fcall'}` covers all call forms;
 - `run()` requires ELF symbols for function boundaries. Flat ROM users must supply
   `func_va` and `func_end` from `FlatBinaryFuncStartScanner`.
 - Capstone 5.0+ required (`CS_ARCH_TRICORE` absent in Capstone ≤ 4.x).
-- CSA memory-dump taint (STLCX/LDLCX) is not modelled; these are rare in normal firmware
+- CSA memory-dump taint STLCX/LDLCX is not modelled; these are rare in normal firmware
  flow outside interrupt handlers.
 
 ---
@@ -226,8 +226,8 @@ The most common false positive is taint surviving a zero-clear instruction (`xor
 | `sink_name` | Name of the dangerous function reached |
 | `sink_va` | Virtual address of the call site |
 | `source_name` | Name of the taint source (e.g., `recv`, `read`) |
-| `arg_index` | Which argument to the sink carries taint (0-indexed) |
-| `chain` | `[(va, register, operation)]` steps from source to sink |
+| `arg_index` | Which argument to the sink carries taint 0-indexed |
+| `chain` | `[va, register, operation]` steps from source to sink |
 | `path` | `[caller_va, ...]` function VAs traversed interprocedurally |
 | `severity` | `CRITICAL` for exec sinks, `HIGH` for memory sinks |
 

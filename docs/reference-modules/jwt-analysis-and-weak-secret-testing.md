@@ -6,7 +6,7 @@ Decode and verify JSON Web Tokens, detect `alg: none` acceptance, brute-force we
 
 ## Why this exists
 
-1. **`forge_jwt()` produces valid-looking JWTs with attacker-controlled claims**, it generates HS256-signed tokens with an arbitrary payload (claims dict) and a known or empty secret. This is used to test whether a server enforces algorithm verification (`alg: none` bypass) and whether a JWT-based authorization system will accept a token whose claims have been modified. `forge_jwt(payload={"role":"admin"}, secret="", alg="none")` produces the classic `alg:none` bypass token.
+1. **`forge_jwt()` produces valid-looking JWTs with attacker-controlled claims**, it generates HS256-signed tokens with an arbitrary payload claims dict and a known or empty secret. This is used to test whether a server enforces algorithm verification (`alg: none` bypass) and whether a JWT-based authorization system will accept a token whose claims have been modified. `forge_jwt(payload={"role":"admin"}, secret="", alg="none")` produces the classic `alg:none` bypass token.
 
 2. **`CryptoAudit.analyze_jwt()` tests live JWT endpoints**, it decodes a captured JWT, attempts `alg: none` replacement, and tests the provided token against the original endpoint to confirm whether the server accepts it. It also scans for weak secrets by attempting HS256 verification with entries from a configurable wordlist (`secret`, `password`, `jwt_secret`, `changeme`, and common variations).
 
@@ -95,7 +95,7 @@ Run JWT analysis after capturing a token from HTTP traffic (via `PCAPAnalyzer`) 
 | `vulns` | `List[str]`: one entry per detected weakness (e.g., `'CRITICAL:WEAK_SECRET: secret is ...'`, `'MEDIUM:HS256: symmetric; secret may be weak'`) |
 | `forged_token` | A forged JWT string when a weakness allows forgery, or `None` |
 
-`CryptoAudit.scan_for_jwts(paths)` scans a list of file paths and returns a list of `(path, token_string)` tuples for all JWT strings found.
+`CryptoAudit.scan_for_jwts(paths)` scans a list of file paths and returns a list of `path, token_string` tuples for all JWT strings found.
 
 ---
 

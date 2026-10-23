@@ -82,7 +82,7 @@ Review bookmarked candidates
 Tools > Ablation > Annotate from Corpus   (if corpus was built externally via CLI)
 ```
 
-For large targets, build the corpus with the CLI first (faster, progress bar):
+For large targets, build the corpus with the CLI first faster, progress bar:
 
 ```bash
 ablation corpus firmware.so --product my-target --sigs

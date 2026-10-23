@@ -25,7 +25,7 @@ Per call site to a format function:
 2. Walk backwards up to 20 instructions to find the last definition of that register
 3. If the definition is `LEA` from `.rodata` → string literal → **safe**
 4. Otherwise → finding
-5. Severity **HIGH** if fmt comes from a function entry argument register (`rdi/rsi/rdx/rcx`); **MEDIUM** if provenance is unclear (stack load, cross-call result)
+5. Severity **HIGH** if fmt comes from a function entry argument register (`rdi/rsi/rdx/rcx`); **MEDIUM** if provenance is unclear stack load, cross-call result
 
 ### Covered functions
 
@@ -65,7 +65,7 @@ highs = [f for f in findings if f.severity == 'HIGH']
 | `callee` | Name of the format function called (e.g. `printf`, `syslog`) |
 | `fmt_reg` | Register that held the format argument |
 | `provenance` | How the register was defined: `rodata` / `arg_passthrough` / `stack_load` / `register` / `unknown` |
-| `severity` | `HIGH` (entry arg passthrough) or `MEDIUM` (unclear provenance) |
+| `severity` | `HIGH` entry arg passthrough or `MEDIUM` unclear provenance |
 | `description` | Human-readable summary of the finding |
 
 ---
@@ -129,7 +129,7 @@ unguarded = [f for f in findings if f.severity == 'HIGH']
 | `func_va` | int | VA of the enclosing function |
 | `site_va` | int | VA of the specific instruction |
 | `description` | str | Human-readable summary of the pattern found |
-| `severity` | str | `HIGH` (direct path) or `MEDIUM` (conditional/unclear) |
+| `severity` | str | `HIGH` direct path or `MEDIUM` conditional/unclear |
 | `alloc_sym` | str | Allocator name, when applicable |
 | `freed_at` | int | VA of the prior `free()` call, for UAF/double-free findings |
 
@@ -166,15 +166,15 @@ For each call site to a SQL sink (`mysql_query`, `mysql_real_query`, `sqlite3_ex
    `RDX` for `sqlite3_exec`/`sqlite3_prepare_v2`).
 2. Walk backward up to 40 instructions looking for how that register was populated:
  - **`LEA reg, [rip+off]`** pointing to `.rodata` → `RODATA_CONST`. 
- Inspect the literal for `%s`: if present, mark `INJECTABLE_LITERAL` (rare but real).
- - **`MOV reg, rbp/rsp+N`** (stack-local buffer): look further back for the
+ Inspect the literal for `%s`: if present, mark `INJECTABLE_LITERAL` rare but real.
+ - **`MOV reg, rbp/rsp+N`** stack-local buffer: look further back for the
      `snprintf`/`sprintf` that filled it. Inspect *its* format string for `%s`.
  - **`MOV reg, rax`** after a call: consider the call's return value as the SQL
  string; mark `RETURN_VALUE` (requires caller trace; verdict = `UNKNOWN`).
  - **Entry register** (`rdi/rsi/rdx/rcx/r8/r9` unchanged since function entry):
  mark `ARG_PROPAGATED`.
 3. For `snprintf`/`sprintf`-built buffers: extract the format string (should be a
-   `LEA`/`MOVQ` from `.rodata`). Scan for `%s` (string interpolation). A `%s`
+   `LEA`/`MOVQ` from `.rodata`). Scan for `%s` string interpolation. A `%s`
  specifier with a non-RODATA argument → `INJECTABLE`.
 4. `%d`, `%u`, `%ld`, `%llu`, `%x` etc. → numeric only → `SAFE_NUMERIC`.
 
@@ -193,11 +193,11 @@ For each call site to a SQL sink (`mysql_query`, `mysql_real_query`, `sqlite3_ex
 
 | Function | SQL arg | Arg position |
 |---|---|---|
-| `mysql_query(conn, sql)` | `RSI` | arg1 |
-| `mysql_real_query(conn, sql, len)` | `RSI` | arg1 |
-| `sqlite3_exec(db, sql,...)` | `RSI` | arg1 |
-| `sqlite3_prepare_v2(db, sql,...)` | `RSI` | arg1 |
-| `sqlite3_prepare(db, sql,...)` | `RSI` | arg1 |
+| `mysql_queryconn, sql` | `RSI` | arg1 |
+| `mysql_real_queryconn, sql, len` | `RSI` | arg1 |
+| `sqlite3_execdb, sql,...` | `RSI` | arg1 |
+| `sqlite3_prepare_v2db, sql,...` | `RSI` | arg1 |
+| `sqlite3_preparedb, sql,...` | `RSI` | arg1 |
 
 ### Usage
 
@@ -227,7 +227,7 @@ injections = [f for f in findings if f.verdict == 'INJECTABLE']
 | `func_va` | VA of the enclosing function |
 | `verdict` | `INJECTABLE` / `INJECTABLE_LITERAL` / `RODATA_CONST` / `SAFE_NUMERIC` / `ARG_PROPAGATED` / `UNKNOWN` |
 | `fmt_string` | Format string literal if resolved (e.g. `"SELECT... WHERE x='%s'"`) |
-| `fmt_va` | VA of the format string in RODATA (if resolved) |
+| `fmt_va` | VA of the format string in RODATA if resolved |
 | `description` | Human-readable summary |
 
 ---
@@ -506,7 +506,7 @@ tracker = ARM64TaintTracker.from_path_full('/path/to/binary')
 findings = tracker.run_interprocedural()
 
 discriminator = ARM64FgetsFdDiscriminator(tracker)
-classified = discriminator.classify(findings)
+classified = discriminator.classifyfindings
 
 for f in classified:
     if f.source_name == "fgets":
@@ -574,17 +574,17 @@ automatically reclassified as `dynamic` since they are not literal command paths
 from ablation.analyzers.go_pclntab import GoFuncTable
 from ablation.analyzers.go_subprocess_scanner import GoSubprocessScanner, scan_binary
 
-# One-shot from path (auto-detects arch)
+# One-shot from path auto-detects arch
 sites = scan_binary('/path/to/go_binary', skip_absolute=True)
 for s in sites:
-    print(s.severity, s.cmd_type, s.cmd_string, s.scanner_func)
+    prints.severity, s.cmd_type, s.cmd_string, s.scanner_func
 
-# Manual pipeline (reuse binary data)
+# Manual pipeline reuse binary data
 data = open('/path/to/go_binary', 'rb').read()
 ft = GoFuncTable.from_binary(data)
 segments = [...]  # PT_LOAD segments from ELF header
 
-scanner = GoSubprocessScanner(data, segments, ft)
+scanner = GoSubprocessScannerdata, segments, ft
 sites = scanner.scan()
 
 # Single function

@@ -137,7 +137,7 @@ execve calls observed:
 | `syscalls` | `List[dict]`: one entry per syscall, each with `name`, `calls`, `errors`, `time_percent`, `total_time` |
 | `error` | Error string if tracing failed (e.g., `'strace not installed'`); absent on success |
 
-`SyscallTracer(pid).trace_detailed(duration, syscall_filter)` returns per-call argument records. Pass `syscall_filter='execve,open,read'` to narrow the trace.
+`SyscallTracer(pid).trace_detailedduration, syscall_filter` returns per-call argument records. Pass `syscall_filter='execve,open,read'` to narrow the trace.
 
 ---
 

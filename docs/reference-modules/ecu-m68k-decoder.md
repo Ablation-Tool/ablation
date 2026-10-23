@@ -35,15 +35,15 @@ Two things were not possible before in Ablation:
 
 **1. No function_starts() for M68K/CPU32 firmware.** Capstone decodes M68K instructions
 but provides no mechanism to locate function entry points in a flat ROM image. The GM P-series
-PCMs (P01/P04/P05/P08/P10/P11/P59) run a CPU32 core; their ROMs have no ELF headers and no
+PCMs P01/P04/P05/P08/P10/P11/P59 run a CPU32 core; their ROMs have no ELF headers and no
 symbol tables. Before this module, seeding the taint tracker with function entry points for
 P-series firmware required manual disassembly to locate LINK prologues. This module scans the
-full ROM for ``LINK.W A6, #-N`` (the GM CPU32 frame-allocation convention) and ``MOVEM.L regs,
--(SP)`` (callee-save leaf functions) at any even offset without calling Capstone, producing a
+full ROM for ``LINK.W A6, #-N`` the GM CPU32 frame-allocation convention and ``MOVEM.L regs,
+-(SP)`` callee-save leaf functions at any even offset without calling Capstone, producing a
 complete function-start list from a single pass over the binary.
 
 **2. No M68K instruction-type classification for the pipeline.** Capstone returns raw mnemonic
-strings. Pipeline stages that route instructions by type (branch, call, return, prologue) had no
+strings. Pipeline stages that route instructions by type branch, call, return, prologue had no
 M68K adapter. ``M68kInsn`` wraps Capstone output with the same typed fields used by ``VLEInsn``, making M68K and PPC VLE firmware interchangeable
 at all pipeline stages downstream of the decoder.
 
@@ -51,14 +51,14 @@ at all pipeline stages downstream of the decoder.
 
 ## CPU32 function prologue forms
 
-### Frame-allocating functions (primary signal)
+### Frame-allocating functions primary signal
 
 ```
 LINK.W A6, #-N
 ```
 
-Encodes as two big-endian 16-bit words: ``0x4E56`` (LINK.W A6 opcode) followed by a signed
-16-bit displacement with bit 15 set (negative, indicating stack frame allocation downward).
+Encodes as two big-endian 16-bit words: ``0x4E56`` LINK.W A6 opcode followed by a signed
+16-bit displacement with bit 15 set negative, indicating stack frame allocation downward.
 This is the standard CPU32 call frame setup in the GM P-series ABI. The frame pointer is A6.
 
 Detection:
@@ -66,18 +66,18 @@ Detection:
 hw == 0x4E56   and   (next_word & 0x8000) != 0
 ```
 
-### Callee-save leaf functions (secondary signal)
+### Callee-save leaf functions secondary signal
 
 ```
 MOVEM.L regs, -(SP)
 ```
 
 Encodes as ``0x48E7`` followed by a 16-bit register mask. When this is the first instruction
-of a function (not the second instruction of a frame-allocating function), it marks a leaf
+of a function not the second instruction of a frame-allocating function, it marks a leaf
 function that saves callee-saved registers without allocating a full frame.
 
 A ``MOVEM.L`` at offset ``i`` is suppressed as a function start when the 16-bit word at
-``i - 4`` equals ``0x4E56`` (LINK.W opcode), indicating it is the instruction immediately
+``i - 4`` equals ``0x4E56`` LINK.W opcode, indicating it is the instruction immediately
 following the prologue LINK.
 
 ---
@@ -137,7 +137,7 @@ class M68kInsn:
 | `RETURN` | `rts`, `rtd`, `rte`, `rtr` |
 | `BRANCH` | `bra.*`, `beq.*`, `bne.*`, `blt.*`, `bgt.*`, `jmp`, all `b*` conditional |
 | `CALL` | `jsr`, `bsr.*` |
-| `PROLOGUE` | `link.w a6, #-N` (negative displacement only) |
+| `PROLOGUE` | `link.w a6, #-N` negative displacement only |
 | `MISC` | All others (`move`, `movem`, `add`, `sub`, `nop`, `link` with positive disp, …) |
 
 ---
@@ -145,7 +145,7 @@ class M68kInsn:
 ## Branch target computation
 
 Capstone M68K formats absolute branch/call targets in `op_str` as `$hexaddr` or
-`$hexaddr.w` / `$hexaddr.l` (with a size suffix).  `EcuM68kDecoder` strips the suffix and
+`$hexaddr.w` / `$hexaddr.l` with a size suffix.  `EcuM68kDecoder` strips the suffix and
 parses the hex value:
 
 ```
@@ -161,7 +161,7 @@ known.
 
 ## Capstone dependency
 
-`function_starts()` and `insn_length()` (fallback) do not require Capstone and work with the
+`function_starts()` and `insn_length()` fallback do not require Capstone and work with the
 pure-Python pattern scan. `disassemble()` and `decode_one()` require Capstone and raise
 ``ImportError`` with install instructions if it is not available.
 
@@ -172,7 +172,7 @@ no 68020-specific instructions appear in GM P-series firmware that CPU32 does no
 
 ## Validated results
 
-### GM P01 ROM (CPU32, J1850 VPW OBD-II)
+### GM P01 ROM CPU32, J1850 VPW OBD-II
 
 ``function_starts()`` on a synthetic P01-pattern ROM block (100 LINK.W prologues, every 32
 bytes) recovers all 100 starts with zero false positives.
@@ -187,7 +187,7 @@ is a frame-allocating function whose start ``function_starts()`` correctly ident
 
 - CPU32-specific instructions (``TBLS``, ``TBLSN``, ``DIVS.L``, ``DIVU.L`` with 32-bit
  operands) may not decode identically between ``CS_MODE_M68K_020`` and a hypothetical
-  ``CS_MODE_M68K_CPU32`` (which Capstone 5.0.7 does not implement).  In the GM P-series corpus
+  ``CS_MODE_M68K_CPU32`` which Capstone 5.0.7 does not implement.  In the GM P-series corpus
  these instructions are absent from SA-handler analysis paths.
 - ``insn_length()`` falls back to 2 when Capstone is unavailable. A caller that iterates
  instructions using ``insn_length()`` without Capstone will advance in 2-byte steps and may
@@ -201,7 +201,7 @@ is a frame-allocating function whose start ``function_starts()`` correctly ident
 
 ## How it works
 
-Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 
@@ -238,12 +238,12 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 | Attribute | Content |
 |:---|:---|
-| `offset` | Byte offset (or VA if base is set) of this instruction |
+| `offset` | Byte offset or VA if base is set of this instruction |
 | `mnemonic` | Instruction mnemonic (e.g., `'MOVE.W'`, `'JSR'`, `'CLR.B'`) |
 | `op_str` | Decoded operands string (e.g., `'D0, 0x1234'`) |
 | `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'MISC'` |
 | `raw` | Raw instruction bytes |
-| `size` | Instruction size in bytes (2, 4, or 6) |
+| `size` | Instruction size in bytes 2, 4, or 6 |
 | `target` | Branch/call target address (None if not a control-flow instruction) |
 
 ---

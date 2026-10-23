@@ -67,7 +67,7 @@ bctr                 ; branch
 
 `WindowAnalyzer` detects this pattern by scanning `.text` for `ld r12, OFF(r2)` preceded by `std r2, 0x18(r1)`. It computes the GOT slot address as `TOC_BASE + displacement` where `TOC_BASE = .got_va + 0x8000` per the ELFv2 ABI. It then matches the GOT slot against the relocation table to recover the symbol name.
 
-The arch is detected from the ELF header: `e_machine == 21` (EM_PPC64) with `EI_DATA == 1` (little-endian) maps to `ppc64le`. `EI_DATA == 2` (big-endian) maps to `ppc64` and uses the existing BSS PLT resolver.
+The arch is detected from the ELF header: `e_machine == 21` EM_PPC64 with `EI_DATA == 1` little-endian maps to `ppc64le`. `EI_DATA == 2` big-endian maps to `ppc64` and uses the existing BSS PLT resolver.
 
 **Known limitation.** The `std r2 + ld r12` pattern could appear in non-stub code that saves the TOC and loads a function pointer from the GOT. The GOT-slot-to-symbol gate limits false positives because the slot must match a known relocation entry.
 
@@ -91,13 +91,13 @@ The arch is detected from the ELF header: `e_machine == 21` (EM_PPC64) with `EI_
 
 | `_elf_arch` value | ELF `e_machine` | Capstone mode |
 |---|---|---|
-| `x86_64` | 62 (EM_X86_64) or default | CS_ARCH_X86 + CS_MODE_64 |
+| `x86_64` | 62 EM_X86_64 or default | CS_ARCH_X86 + CS_MODE_64 |
 | `x86_32` | 3 (EM_386) | CS_ARCH_X86 + CS_MODE_32 |
-| `arm64` | 183 (EM_AARCH64) | CS_ARCH_ARM64 + CS_MODE_ARM |
+| `arm64` | 183 EM_AARCH64 | CS_ARCH_ARM64 + CS_MODE_ARM |
 | `arm32` | 40 (EM_ARM) | CS_ARCH_ARM + CS_MODE_ARM |
 | `ppc32` | 20 (EM_PPC) | CS_ARCH_PPC + CS_MODE_32 + CS_MODE_BIG_ENDIAN |
-| `ppc64` | 21 (EM_PPC64), big-endian | CS_ARCH_PPC + CS_MODE_64 + CS_MODE_BIG_ENDIAN |
-| `ppc64le` | 21 (EM_PPC64), little-endian | CS_ARCH_PPC + CS_MODE_64 + CS_MODE_LITTLE_ENDIAN |
+| `ppc64` | 21 EM_PPC64, big-endian | CS_ARCH_PPC + CS_MODE_64 + CS_MODE_BIG_ENDIAN |
+| `ppc64le` | 21 EM_PPC64, little-endian | CS_ARCH_PPC + CS_MODE_64 + CS_MODE_LITTLE_ENDIAN |
 
 ---
 
@@ -123,7 +123,7 @@ Gate: **PASS**. No CRITICAL or HIGH findings. One open item tracked for follow-u
 
 ## How it works
 
-`WindowAnalyzer.dump_text(va, window)` extracts `window` bytes centered on `va`, disassembles the range with Capstone (x86-64 or ARM64 based on binary architecture), resolves PLT call targets to their names, and annotates `.rodata` string references inline. Returns a list of annotated disassembly lines for LLM or manual analysis. Not a scanner: produces no findings.
+`WindowAnalyzer.dump_textva, window` extracts `window` bytes centered on `va`, disassembles the range with Capstone x86-64 or ARM64 based on binary architecture, resolves PLT call targets to their names, and annotates `.rodata` string references inline. Returns a list of annotated disassembly lines for LLM or manual analysis. Not a scanner: produces no findings.
 
 ---
 
@@ -166,9 +166,9 @@ Use the helper methods to extract structured data from the window:
 
 | Method | Returns |
 |:---|:---|
-| `find_func_starts(va, window)` | `List[int]`: VAs of `[FUNC_START]` entries in the window |
-| `calls_in_window(va, window)` | `List[Tuple[int, int, str]]`: `(call_site_va, target_va, label)` for each call |
-| `dump(va, window, align_back)` | `List[str]`: individual annotated disassembly lines |
+| `find_func_startsva, window` | `List[int]`: VAs of `[FUNC_START]` entries in the window |
+| `calls_in_windowva, window` | `List[Tuple[int, int, str]]`: `call_site_va, target_va, label` for each call |
+| `dumpva, window, align_back` | `List[str]`: individual annotated disassembly lines |
 
 ---
 

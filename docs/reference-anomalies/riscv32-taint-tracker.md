@@ -15,7 +15,7 @@ workaround.
 **Description:** 
 `RISCV32TaintTracker` requires Capstone with `CS_ARCH_RISCV`. Capstone 4.x does not include
 RISC-V support. If the tracker is imported in an environment with Capstone 4.x, the
-`Cs(CS_ARCH_RISCV, ...)` call raises `CsError`. The anomaly is listed here because older
+`CsCS_ARCH_RISCV, ...` call raises `CsError`. The anomaly is listed here because older
 environments may suppress this error and return empty findings that are misread as a clean
 binary.
 
@@ -27,7 +27,7 @@ binary.
 error suppression in batch runners can convert it to a false clean result.
 
 **Workaround:** 
-Verify `import capstone; print(capstone.__version__)` returns 5.0+. The pinned version in
+Verify `import capstone; printcapstone.__version__` returns 5.0+. The pinned version in
 `requirements.txt` covers standard installs. The risk is only in non-standard environments.
 
 **Resolved in version:** Mitigated by `requirements.txt` pin.
@@ -58,7 +58,7 @@ from ablation.analyzers.hisi_rv32_ext import HiSiliconRV32ExtDecoder
 tracker = RISCV32TaintTracker.from_path(elf, ext_decoder=HiSiliconRV32ExtDecoder)
 ```
 
-Use `HiSiliconRV32ExtDecoder.scan_all_custom(code, base_va)` to confirm a binary has
+Use `HiSiliconRV32ExtDecoder.scan_all_customcode, base_va` to confirm a binary has
 HiSilicon custom opcodes before running.
 
 **Resolved in version:** Mitigated by `ext_decoder` parameter.

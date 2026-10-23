@@ -33,9 +33,9 @@ fallback propagation is incorrect.
 
 **Workaround:** 
 1. Check `ARCDecoder().has_full_decode` before running the tracker.
-2. Run `ARCDecoder.scan_unknown_opcodes(data, base_va)` to enumerate unrecognised bytes.
+2. Run `ARCDecoder.scan_unknown_opcodesdata, base_va` to enumerate unrecognised bytes.
 3. For each unknown opcode, manually confirm whether it modifies a register carrying taint.
-4. Add new opcode entries to `ARCDecoder` as a new module gap (flywheel principle).
+4. Add new opcode entries to `ARCDecoder` as a new module gap flywheel principle.
 
 **Resolved in version:** Open. New opcodes must be added to `ARCDecoder` as encountered.
 
@@ -44,13 +44,13 @@ fallback propagation is incorrect.
 ## ARC-KA-002: 16-bit compact instruction handling limited
 
 **Description:** 
-ARC HS supports a compact instruction set (16-bit instructions) for code density. The
+ARC HS supports a compact instruction set 16-bit instructions for code density. The
 `ARCDecoder` decodes 32-bit instructions completely. 16-bit compact instructions are decoded
 on a best-effort basis. Instructions not covered by the compact decoder fall through to the
 conservative fallback.
 
 **Triggering conditions:** 
-- ARC HS firmware compiled with `-msize-level=2` or higher (compact instructions enabled)
+- ARC HS firmware compiled with `-msize-level=2` or higher compact instructions enabled
 - Boot-stage code or ISR handlers where code size is constrained
 
 **Impact:** False negative. Taint propagation at unrecognised compact instructions is

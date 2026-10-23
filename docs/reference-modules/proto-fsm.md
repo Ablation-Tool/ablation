@@ -4,7 +4,7 @@
 
 Extracts the handshake state machine from network protocols in stripped ARM64 binaries using static loop and BSS state-variable analysis. Authentication state transitions become explicit without a running server or traffic capture.
 
-Developed from the MMTLS handshake implementation in WeChat's `libwechatnetwork.so`, applying techniques from two research papers: NEMETYL (segment-based similarity and DBSCAN clustering for message-type inference) and static loop analysis for FSM recovery from 5G protocol implementations.
+Developed from the MMTLS handshake implementation in WeChat's `libwechatnetwork.so`, applying techniques from two research papers: NEMETYL segment-based similarity and DBSCAN clustering for message-type inference and static loop analysis for FSM recovery from 5G protocol implementations.
 
 ---
 
@@ -14,7 +14,7 @@ Three gaps existed before this module:
 
 1. **Handshake FSM recovery required live traffic.** Tools like NEMETYL operate on PCAPs. Stripped ARM64 libraries with no symbols produce no traffic until they run. This module recovers the FSM entirely from static analysis, no emulation, no network capture.
 
-2. **BSS state variables were invisible to generic analysis.** The handshake state machine writes integer state values to fixed BSS addresses and branches on them. No existing static tool identified those addresses as state variables or built a graph from the (read → branch → write) pattern.
+2. **BSS state variables were invisible to generic analysis.** The handshake state machine writes integer state values to fixed BSS addresses and branches on them. No existing static tool identified those addresses as state variables or built a graph from the read → branch → write pattern.
 
 3. **WeChat MMTLS was unanalyzed.** The custom TLS-like handshake in `libwechatnetwork.so` (WeChat 8.0.56 ARM64) had no public FSM reconstruction. This module produced the first static extraction of its authentication state graph.
 
@@ -28,10 +28,10 @@ The extractor runs four phases against the target shared object:
 Scans the handshake function cluster for BSS addresses written with small integer immediates and read before conditional branches. These are the state variables.
 
 **Phase 2, Handshake function cluster** 
-Builds a BL-reachable subgraph from user-supplied seed VAs, bounded by `hop_depth` (default 2 hops). The cluster contains the complete handshake implementation without manual identification.
+Builds a BL-reachable subgraph from user-supplied seed VAs, bounded by `hop_depth` default 2 hops. The cluster contains the complete handshake implementation without manual identification.
 
 **Phase 3, Transition extraction** 
-Finds `(state_read → branch → BL call → state_write)` quads within the cluster. Each quad is an FSM transition.
+Finds `state_read → branch → BL call → state_write` quads within the cluster. Each quad is an FSM transition.
 
 **Phase 4, Graph output** 
 Builds `FSMState` and `FSMTransition` objects and exports a Graphviz DOT graph.
@@ -126,14 +126,14 @@ For other ARM64 targets, supply seed VAs from semantic search results for handsh
 
 `_load()` raises `ValueError` if:
 - The `.so` file exceeds `_MAX_BINARY_BYTES` (256 MB).
-- `lief.parse()` raises an exception (corrupt/unsupported ELF).
+- `lief.parse()` raises an exception corrupt/unsupported ELF.
 - `lief.parse()` returns `None`: checked explicitly to prevent `AttributeError` on the
  subsequent `.segments` access.
 
 ## Known limitations
 
 - Requires at least one known seed VA; the cluster-expansion phase cannot start from zero.
-- Indirect BL calls (function pointers) stop cluster expansion at the indirect site.
+- Indirect BL calls function pointers stop cluster expansion at the indirect site.
 - The BSS state variable heuristic filters out addresses written with large immediates (>255); genuine state variables that use enum values outside that range require a manual seed override.
 
 ## FORGE audit
@@ -144,13 +144,13 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_load()` reads the ELF directly
 
 ## How it works
 
-Four-phase pipeline using `_load()` (lief + raw bytes) directly: no `BinaryContext` required.
+Four-phase pipeline using `_load()` lief + raw bytes directly: no `BinaryContext` required.
 
 **Phase 1**: `identify_state_vars()` scans the entire `.text` section for STR/STP instructions writing small integer immediates (≤255) to BSS addresses, and LDR instructions reading BSS addresses within 4 instructions of a conditional branch. These patterns identify state variables.
 
-**Phase 2**: `build_cluster()` performs BFS from user-supplied seed VAs over direct `BL` edges, bounded by `hop_depth` (default 2). Returns `{fn_va: set_of_callees}`.
+**Phase 2**: `build_cluster()` performs BFS from user-supplied seed VAs over direct `BL` edges, bounded by `hop_depth` default 2. Returns `{fn_va: set_of_callees}`.
 
-**Phase 3**: `analyze_fn()` runs once per cluster function. Returns a `FnProps(va, reads_state_vars, writes_state_vars, calls_insert, calls_delete)` where `reads_state_vars` and `writes_state_vars` are lists of BSS VAs. Then `extract_transitions()` finds `(LDR state_var → branch → BL → STR state_var)` quads and emits `FSMTransition` objects.
+**Phase 3**: `analyze_fn()` runs once per cluster function. Returns a `FnPropsva, reads_state_vars, writes_state_vars, calls_insert, calls_delete` where `reads_state_vars` and `writes_state_vars` are lists of BSS VAs. Then `extract_transitions()` finds `LDR state_var → branch → BL → STR state_var` quads and emits `FSMTransition` objects.
 
 **Phase 4**: `build_fsm()` assigns integer state IDs and `emit_dot()` exports Graphviz DOT.
 
@@ -184,7 +184,7 @@ fn_props[0x246364]
 
 ## False positives
 
-State variable identification heuristic (BSS writes with small immediates ≤255) may pick up non-state counters or flags. Check `observed_values` in each `StateVar`: a genuine state enum has a small number of distinct values (2–8). Counters produce many distinct values and should be excluded.
+State variable identification heuristic BSS writes with small immediates ≤255 may pick up non-state counters or flags. Check `observed_values` in each `StateVar`: a genuine state enum has a small number of distinct values (2–8). Counters produce many distinct values and should be excluded.
 
 ---
 
@@ -192,13 +192,13 @@ State variable identification heuristic (BSS writes with small immediates ≤255
 
 **Before this module:** Use `_load(path)` directly (returns `binary, raw, load_addr`). Identify seed VAs via `SemanticSearcher.query("handshake state machine authentication")` or known entry points. No `BinaryContext` required.
 
-**After this module:** Call `emit_dot(states, transitions, state_vars)` and render with Graphviz to visualize the FSM. Identify missing authentication state checks for example a transition from an unauthenticated state to a sensitive resource that skips the authenticated state.
+**After this module:** Call `emit_dotstates, transitions, state_vars` and render with Graphviz to visualize the FSM. Identify missing authentication state checks for example a transition from an unauthenticated state to a sensitive resource that skips the authenticated state.
 
 ---
 
 ## Reading output
 
-`analyze_fn(raw, binary, fn_va, state_vars)` returns a `FnProps` for one function. Build the protocol FSM by calling it across all functions. The state model objects:
+`analyze_fnraw, binary, fn_va, state_vars` returns a `FnProps` for one function. Build the protocol FSM by calling it across all functions. The state model objects:
 
 `FSMState`:
 
@@ -218,7 +218,7 @@ State variable identification heuristic (BSS writes with small immediates ≤255
 | `trigger_fn` | VA of the function containing `trigger_pc` |
 | `state_var` | BSS VA of the state variable being written |
 
-`StateVar` (input to the analysis):
+`StateVar` input to the analysis:
 
 | Attribute | Content |
 |:---|:---|

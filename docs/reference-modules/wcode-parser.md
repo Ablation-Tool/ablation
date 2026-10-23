@@ -4,7 +4,7 @@
 
 Three numbered gaps in the IBM XLC RE workflow motivated this module:
 
-1. **No W-Code record decoder.** `WcB_Lookup_Bif` in xlCentry 16.1.1.3 parses W-Code binary records using `lwbrx`/`lhbrx` (byte-reversed loads), confirming on-disk big-endian encoding. No Ablation tool handled this format.
+1. **No W-Code record decoder.** `WcB_Lookup_Bif` in xlCentry 16.1.1.3 parses W-Code binary records using `lwbrx`/`lhbrx` byte-reversed loads, confirming on-disk big-endian encoding. No Ablation tool handled this format.
 
 2. **No builtin catalog loader.** The WCB table at `0x12601960` in xlCentry encodes 2000+ IBM POWER intrinsic descriptors with POWER-generation arch masks. Extracting it required understanding the table stride (0x28) and name-pointer layout, none of which was previously documented or automated.
 
@@ -14,7 +14,7 @@ Three numbered gaps in the IBM XLC RE workflow motivated this module:
 
 ## Format reference
 
-### W-Code binary builtin record (big-endian on disk)
+### W-Code binary builtin record big-endian on disk
 
 ```
 +0x00  uint32 BE   type_field_0    compared against WCB entry +0x00 via lwbrx
@@ -84,17 +84,17 @@ Main entry point.
 
 ### `WCodeBuiltinCatalog`
 
-- `WCodeBuiltinCatalog.from_binary(xlcentry_path) → WCodeBuiltinCatalog`: load from ELF binary
+- `WCodeBuiltinCatalog.from_binaryxlcentry_path → WCodeBuiltinCatalog`: load from ELF binary
 - `catalog.lookup(rec) → WCBEntry | None`: look up by WCodeRecord name
 - `catalog.lookup_name(name) → WCBEntry | None`: look up by string name
-- `catalog.arch_mask_to_name(arch_mask) → str`: decode arch_mask to POWER generation string
+- `catalog.arch_mask_to_namearch_mask → str`: decode arch_mask to POWER generation string
 - `len(catalog)`: number of entries loaded
 
-### `WCodeRecord` (dataclass)
+### `WCodeRecord` dataclass
 
 Fields: `type_field_0`, `type_field_1`, `type_field_2`, `name`, `raw`, `short_form`
 
-### `WCBEntry` (dataclass)
+### `WCBEntry` dataclass
 
 Fields: `index`, `name`, `arch_mask`, `field_0`, `field_8`, `field_20`, `name_ptr`
 
@@ -107,13 +107,13 @@ SemanticSearcher → ... → WCodeParser (IBM W-Code IR files or XLC-compiled .o
 ```
 
 Use after identifying a binary was compiled with IBM XLC (xlCentry/xlCcode toolchain marker).
-Complements `wc2llvm` entry-point RE for full W-Code IR file format coverage (XLC-GAP-002).
+Complements `wc2llvm` entry-point RE for full W-Code IR file format coverage XLC-GAP-002.
 
 ---
 
 ## How it works
 
-Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation (CRC32 or SHA256 depending on container format) runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
+Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation CRC32 or SHA256 depending on container format runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
 
 ---
 

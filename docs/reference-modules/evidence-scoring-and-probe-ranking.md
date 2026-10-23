@@ -8,7 +8,7 @@ Rank candidate analysis probes by expected value against a set of surviving vuln
 
 1. **After `SemanticSearcher` and `TaintTracker` produce a set of candidate findings, not all of them warrant the same follow-up effort: some findings are near-certainties, others are speculative.** `ProbeRanker` formalizes this by treating each candidate finding as a hypothesis with a confidence state and each possible next analysis action (manual disasm, PoC attempt, PathSolver run) as a probe. The probe that maximally resolves hypothesis uncertainty per unit analyst cost is ranked first.
 
-2. **`predicted_disagreement × observability × analyzer_reliability / estimated_cost` is the probe selection formula**: `predicted_disagreement` is how much the probe result is expected to differ across surviving hypotheses (a probe that confirms all hypotheses equally is useless); `observability` is how clearly the probe result can be observed (a PathSolver run is more observable than a fuzzing attempt); `analyzer_reliability` is the estimated false-positive rate of the analyzer performing the probe; `estimated_cost` is analyst time in minutes.
+2. **`predicted_disagreement × observability × analyzer_reliability / estimated_cost` is the probe selection formula**: `predicted_disagreement` is how much the probe result is expected to differ across surviving hypotheses a probe that confirms all hypotheses equally is useless; `observability` is how clearly the probe result can be observed (a PathSolver run is more observable than a fuzzing attempt); `analyzer_reliability` is the estimated false-positive rate of the analyzer performing the probe; `estimated_cost` is analyst time in minutes.
 
 3. **`ProbeRanker.top_probe()` returns the single highest-value next action**, it is designed for use in an interactive analysis loop where the analyst completes the top probe, updates hypothesis confidence states (`HypothesisRecord.confidence`), and calls `top_probe()` again to get the next action. This loop continues until all hypotheses reach `CONFIRMED` or `ELIMINATED` confidence state.
 
@@ -108,7 +108,7 @@ Use `ProbeRanker` when multiple candidate findings need prioritization across a 
 
 ## Reading output
 
-`ProbeRanker.rank(hypotheses)` returns a list of ranked probe plan dicts in priority order:
+`ProbeRanker.rankhypotheses` returns a list of ranked probe plan dicts in priority order:
 
 | Field | Content |
 |:---|:---|

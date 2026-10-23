@@ -8,7 +8,7 @@ Parse IBM AIX PowerPC executables in XCOFF32 (magic `0x01DF`, PPC32) or XCOFF64 
 
 1. **LIEF does not support XCOFF.** `lief.parse()` returns `None` on XCOFF input. `BinaryContext` then falls through to a default `x86_64` context with no sections, no symbols, and no function starts. Every AIX RE session using only the existing LIEF stack was silently broken: appearing to succeed but operating on an empty binary model. `xcoff_parser` is the XCOFF-specific replacement.
 
-2. **The `.loader` section survives stripping and holds the complete import/export table.** AIX production builds routinely set `nsyms == 0` in the file header (fully stripped). But the `.loader` section: identified by `s_flags == STYP_LOADER (0x1000)`: is not removed by `strip`. It contains every external reference and definition with name, library origin, virtual address, and storage mapping class. This is the primary RE surface for stripped AIX binaries.
+2. **The `.loader` section survives stripping and holds the complete import/export table.** AIX production builds routinely set `nsyms == 0` in the file header fully stripped. But the `.loader` section: identified by `s_flags == STYP_LOADER (0x1000)`: is not removed by `strip`. It contains every external reference and definition with name, library origin, virtual address, and storage mapping class. This is the primary RE surface for stripped AIX binaries.
 
 3. **XCOFF uses a function-descriptor ABI: exported function VAs in the loader section point to `.data` descriptors, not code.** On PPC32/PPC64, each exported function has a descriptor in `.data` consisting of `{code_va(4), toc_va(4)}` (PPC32) or `{code_va(8), toc_va(8)}` (PPC64). The loader symbol's `l_value` points to the descriptor, not the code. `_resolve_descriptors()` reads the descriptor at `l_value - dsec.vaddr` and writes the true code VA into `sym.code_va`.
 
@@ -38,8 +38,8 @@ flowchart TD
 
 | Magic | Variant | Architecture |
 |---|---|---|
-| `0x01DF` | XCOFF32 | PPC32, big-endian (AIX 4.x/5.x) |
-| `0x01F7` | XCOFF64 | PPC64, big-endian (AIX 5.x/6.x) |
+| `0x01DF` | XCOFF32 | PPC32, big-endian AIX 4.x/5.x |
+| `0x01F7` | XCOFF64 | PPC64, big-endian AIX 5.x/6.x |
 | `0x01EF` | XCOFF64-alt | PPC64, AIX 3.x era (same struct as `0x01F7`) |
 
 ### Section flags
@@ -136,9 +136,9 @@ exports: 847  imports: 312
 
 **`_sym_N` export names in XCOFF64 shared libraries.** The XCOFF64 `.loader` symbol parser uses a validity regex (`_VALID_LDSYM_NAME = r'^[A-Za-z_.@$][A-Za-z0-9_.@$]*$'`) to reject garbage names produced when `l_noff` lands in VPD metadata bytes near the start of the string table. When a legitimate symbol name begins with a digit or contains non-ASCII characters, it is replaced with `_sym_N`. After parsing, call `_merge_symtab64()` to rename any `_sym_N` entries using names recovered from the main symbol table.
 
-**Descriptor resolution fails when `.data` section is absent.** `_resolve_descriptors()` requires both the `.data` section (descriptor storage) and the `.text` section (code boundary verification) to be present in the parsed binary. Static `.o` files and archive members may be missing one or both sections. When `binary.data is None`, all exports have `code_va == 0`. Use the raw `sym.va` as the descriptor address and resolve manually when needed.
+**Descriptor resolution fails when `.data` section is absent.** `_resolve_descriptors()` requires both the `.data` section descriptor storage and the `.text` section code boundary verification to be present in the parsed binary. Static `.o` files and archive members may be missing one or both sections. When `binary.data is None`, all exports have `code_va == 0`. Use the raw `sym.va` as the descriptor address and resolve manually when needed.
 
-**XCOFF32 executables store absolute VAs in the symbol table: object files store section-relative offsets.** `_parse_symtab32()` handles relocatable `.o` files (section-relative semantics); `_parse_symtab32_exe()` handles executables (absolute VA semantics). The parser calls the correct function based on context. When processing an AIX static archive (`.a` file containing `.o` members), use `_parse_symtab32()`, not the exe variant, or the symbol VAs will be wrong.
+**XCOFF32 executables store absolute VAs in the symbol table: object files store section-relative offsets.** `_parse_symtab32()` handles relocatable `.o` files section-relative semantics; `_parse_symtab32_exe()` handles executables absolute VA semantics. The parser calls the correct function based on context. When processing an AIX static archive (`.a` file containing `.o` members), use `_parse_symtab32()`, not the exe variant, or the symbol VAs will be wrong.
 
 ---
 
@@ -155,12 +155,12 @@ exports: 847  imports: 312
 | Field | Content |
 |:---|:---|
 | `binary.arch` | `'ppc32'` or `'ppc64'` |
-| `binary.entry` | Entry point VA (descriptor VA on PPC32; may be 0 for shared libs) |
-| `binary.toc_va` | Table of contents anchor (critical for PPC64 call addressing) |
-| `binary.exports` | `List[XcoffSymbol]`: defined symbols, each with `name`, `va` (descriptor), `code_va` (resolved) |
+| `binary.entry` | Entry point VA descriptor VA on PPC32; may be 0 for shared libs |
+| `binary.toc_va` | Table of contents anchor critical for PPC64 call addressing |
+| `binary.exports` | `List[XcoffSymbol]`: defined symbols, each with `name`, `va` descriptor, `code_va` resolved |
 | `binary.imports` | `List[XcoffSymbol]`: external references with `lib` = archive member name |
 | `sym.code_va` | True code entry point VA after descriptor resolution; 0 if resolution failed |
-| `sym.smclas` | Storage mapping class (see table above) |
+| `sym.smclas` | Storage mapping class see table above |
 | `sec.is_text` / `sec.is_data` | Property-based section type check |
 
 ---

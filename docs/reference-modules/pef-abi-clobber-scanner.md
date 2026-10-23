@@ -63,13 +63,13 @@ findings = scanner.scan(
 ) -> List[ABIClobberFinding]
 ```
 
-For each (sink_va, check_reg) pair, walks backward from the BL instruction at
+For each sink_va, check_reg pair, walks backward from the BL instruction at
 `sink_va`.  The walk stops as soon as one of four conditions is met:
 
 | Stop condition | Verdict | `stop_reason` |
 |---|---|---|
 | Found an instruction that writes `check_reg` | `SAFE` | `reg_written` |
-| Found a `bl` (clobbers r3-r12) | `PLAUSIBLE` | `call_clobber` |
+| Found a `bl` clobbers r3-r12 | `PLAUSIBLE` | `call_clobber` |
 | Found an unconditional `b` / `ba` | `PLAUSIBLE` | `uncond_branch` |
 | Found a `blr` | `PLAUSIBLE` | `return` |
 | Window exhausted | `PLAUSIBLE` | `window_exhausted` |
@@ -99,7 +99,7 @@ PEFABIClobberScanner.report(findings: List[ABIClobberFinding]) -> str
 ```
 
 Static method. Returns a multi-line string summary: count header followed by
-one `fmt()` line per finding, sorted by (site_va, check_reg).
+one `fmt()` line per finding, sorted by site_va, check_reg.
 
 ---
 
@@ -113,8 +113,8 @@ its own `Template`; no shared field extractor assumes a fixed position.
 | Opcode(s) | Form | Dest field | Instructions |
 |---|---|---|---|
 | 12, 13, 14, 15 | D-arith | RT=bits[25:21] | addic, addic., addi/li, addis/lis |
-| 32–35, 40–43 | D-arith | RT=bits[25:21] | lwz, lbz, lhz, lha (+ update forms) |
-| 46 | D-arith | RT=bits[25:21] | lmw (range: RT..r31) |
+| 32–35, 40–43 | D-arith | RT=bits[25:21] | lwz, lbz, lhz, lha + update forms |
+| 46 | D-arith | RT=bits[25:21] | lmw range: RT..r31 |
 | 24–29 | D-logical | RA=bits[20:16] | ori/mr, oris, xori, xoris, andi., andis. |
 | 20, 21, 23 | M-form | RA=bits[20:16] | rlwimi, rlwinm/slwi/srwi, rlwnm |
 | 31 + XO=RT | X-form | RT=bits[25:21] | add, sub, mul, div, mflr, lwzx, lbzx, … |
@@ -124,11 +124,11 @@ its own `Template`; no shared field extractor assumes a fixed position.
 
 | Opcode | Condition | Semantic | Effect on walk |
 |---|---|---|---|
-| 18 | LK=1 | bl / bla | PLAUSIBLE (call_clobber) |
-| 18 | LK=0 | b / ba | PLAUSIBLE (uncond_branch) |
+| 18 | LK=1 | bl / bla | PLAUSIBLE call_clobber |
+| 18 | LK=0 | b / ba | PLAUSIBLE uncond_branch |
 | 19 | XO=16, BO=20 | blr | PLAUSIBLE (return) |
 
-Conditional branches (opcode 16) are transparent; the walk continues through
+Conditional branches opcode 16 are transparent; the walk continues through
 them. This is conservative: it may find a write that is only on one branch of
 a conditional, which a full CFG analysis would flag.
 
@@ -146,13 +146,13 @@ ori  r4, r3, 0    → opcode 24  D-logical dest=RA=bits[20:16]=4  ✓ write dete
 ori  r3, r4, 0    → opcode 24  D-logical dest=RA=bits[20:16]=3  ✓ not r4: SAFE preserved
 ```
 
-The old scanner used `(word >> 21) & 0x1f` for all opcodes. For `ori r4, r3, 0`
-it extracted RS=3 (the source) instead of RA=4 (the destination) and missed the
+The old scanner used `word >> 21 & 0x1f` for all opcodes. For `ori r4, r3, 0`
+it extracted RS=3 the source instead of RA=4 the destination and missed the
 write. For `ori r3, r4, 0` it extracted RS=4 and falsely treated it as a write
 to r4. Two separate `Template` objects with different field names resolve this
 at the structural level.
 
-**2. addic (opcode 12) not in detection list**
+**2. addic opcode 12 not in detection list**
 
 The old scanner detected opcodes 14 and 15 but not 12 (addic) or 13 (addic.).
 `_PRIMARY_WRITE` is a dict keyed on primary opcode; opcodes 12 and 13 are
@@ -172,13 +172,13 @@ seeing `_UNCOND`.
 - **PEF only**: designed for Mac OS 8/9 CFM PEF code sections. For ELF PPC32,
  use `PPC32TaintTracker` (handles GOT2 PIC, import stubs, linked `.so` binaries).
 - **Intra-block only**: the backward walk does not build a CFG. It stops at
- any block-terminating instruction. A full CFG pass (not yet implemented) would
+ any block-terminating instruction. A full CFG pass not yet implemented would
  handle paths where the register is set on all predecessor blocks.
 - **No memory taint**: the scanner checks whether the register was *written*, not
  whether the written value is tainted / network-controlled. A SAFE verdict means
  the register has a defined value; it does not certify that value is safe.
-- **Update-form RA writes**: `lwzu` (opcode 33), `lhzu` (41), `lhau` (43),
-  `lbzu` (35) also write RA (base register update).  These update writes are not
+- **Update-form RA writes**: `lwzu` opcode 33, `lhzu` (41), `lhau` (43),
+  `lbzu` (35) also write RA base register update.  These update writes are not
  currently tracked; only RT is tracked for these opcodes. This is a
  conservative under-approximation (may produce PLAUSIBLE when RA was in fact
  written). Add RA tracking for update-form opcodes if this causes false positives.
@@ -193,7 +193,7 @@ Prior to this module, pef abi clobber scanner required manual work outside the A
 
 ## How it works
 
-`PEFABIClobberScanner.from_bytes(code, base_va)` takes raw PPC32 code bytes from a PEF (Classic Mac OS Portable Executable Format) binary. `scan()` decodes each instruction using a lightweight PPC32 word classifier (`classify(word)`), no Capstone, no func_starts. It tracks callee-saved register state (r13–r31, f14–f31, CR2–CR4) across the instruction stream. `_check_site()` flags sites where a callee-saved register is written before being saved or is read after being clobbered by a prior write without an intervening save.
+`PEFABIClobberScanner.from_bytescode, base_va` takes raw PPC32 code bytes from a PEF Classic Mac OS Portable Executable Format binary. `scan()` decodes each instruction using a lightweight PPC32 word classifier (`classify(word)`), no Capstone, no func_starts. It tracks callee-saved register state r13–r31, f14–f31, CR2–CR4 across the instruction stream. `_check_site()` flags sites where a callee-saved register is written before being saved or is read after being clobbered by a prior write without an intervening save.
 
 ---
 
@@ -232,7 +232,7 @@ PEFABIClobberScanner: 2 site(s): PLAUSIBLE=2  SAFE=0
 
 ## False positives
 
-Conditional branches (opcode 16) are transparent: the backward walk does not stop at `beq`/`bne`. A PLAUSIBLE verdict may result when the register is written on only one branch of a conditional; a full CFG analysis (not implemented) would distinguish this. Inspect the PLAUSIBLE site and trace whether all predecessor blocks write the register before the sink call.
+Conditional branches opcode 16 are transparent: the backward walk does not stop at `beq`/`bne`. A PLAUSIBLE verdict may result when the register is written on only one branch of a conditional; a full CFG analysis not implemented would distinguish this. Inspect the PLAUSIBLE site and trace whether all predecessor blocks write the register before the sink call.
 
 ---
 
@@ -246,7 +246,7 @@ Conditional branches (opcode 16) are transparent: the backward walk does not sto
 
 ## Reading findings
 
-`PEFABIClobberScanner.from_context(ctx).scan(sink_vas, check_regs)` returns `List[ABIClobberFinding]`:
+`PEFABIClobberScanner.from_context(ctx).scansink_vas, check_regs` returns `List[ABIClobberFinding]`:
 
 | Attribute | Content |
 |:---|:---|

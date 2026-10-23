@@ -4,7 +4,7 @@
 
 Three things were not possible before in Ablation:
 
-1. **PPC32TaintTracker cannot load PEF files.** It requires ELF. All PEF CFM PPC32 Mac Classic binaries (PGPuam, PGPuam Server, Tool_Chest networking utilities) required manual analysis because there was no PEF-aware loader in ablation.
+1. **PPC32TaintTracker cannot load PEF files.** It requires ELF. All PEF CFM PPC32 Mac Classic binaries PGPuam, PGPuam Server, Tool_Chest networking utilities required manual analysis because there was no PEF-aware loader in ablation.
 
 2. **CFM import stub resolution was re-derived every session.** Each session re-computed the RTOC-offset formula (`sym[i]` → `i*4` from r2), manually identified stub VAs in the code section, and mapped them to symbol names. PEFBinaryAnalyzer produces the stub table in one call.
 
@@ -12,7 +12,7 @@ Three things were not possible before in Ablation:
 
 ## What it does
 
-Parses the PowerPC PEF (Preferred Executable Format / CFM) container. PEF is the native binary format for Mac OS 8/9 PowerPC executables: it is not ELF and has no dynamic linker. Imports are resolved via CFM TVect stubs in the code section that load function pointers from the TOC (r2-relative).
+Parses the PowerPC PEF Preferred Executable Format / CFM container. PEF is the native binary format for Mac OS 8/9 PowerPC executables: it is not ELF and has no dynamic linker. Imports are resolved via CFM TVect stubs in the code section that load function pointers from the TOC r2-relative.
 
 PEF container structure:
 ```
@@ -97,7 +97,7 @@ PEFBinaryAnalyzer.is_pef(data)   # checks tag1/tag2
 
 ## How it works
 
-`PEFBinaryAnalyzer.from_path(path)` parses a Mac Classic / PEF (CFM) container: the format used by all pre-Intel Mac OS (8.x–9.x) and early Classic Mac OS X PPC applications. `PEFContainer._parse_sections()` extracts loader sections; `_resolve_imports()` walks the import symbol table to build the PLT equivalent. `PPC32TaintTracker` cannot load PEF files (ELF only), so this module provides the PEF-specific binary loading layer so that taint tracking can run on Mac Classic PPC32 binaries.
+`PEFBinaryAnalyzer.from_path(path)` parses a Mac Classic / PEF (CFM) container: the format used by all pre-Intel Mac OS (8.x–9.x) and early Classic Mac OS X PPC applications. `PEFContainer._parse_sections()` extracts loader sections; `_resolve_imports()` walks the import symbol table to build the PLT equivalent. `PPC32TaintTracker` cannot load PEF files ELF only, so this module provides the PEF-specific binary loading layer so that taint tracking can run on Mac Classic PPC32 binaries.
 
 ---
 

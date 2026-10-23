@@ -14,7 +14,7 @@ The module is needed because `unar` is the only reliable Linux tool for Mac arch
 
 ## What it does
 
-Parses the AppleDouble container header (magic `0x00051607`, RFC 1740 / Apple II File Type Note $E0/$E1 format), enumerates all entry descriptors, and returns raw bytes for any entry: primarily the resource fork (entry ID 2).
+Parses the AppleDouble container header (magic `0x00051607`, RFC 1740 / Apple II File Type Note $E0/$E1 format), enumerates all entry descriptors, and returns raw bytes for any entry: primarily the resource fork entry ID 2.
 
 AppleDouble format layout:
 ```
@@ -59,16 +59,16 @@ if AppleDoubleExtractor.is_appledouble(data):
 
 ## Notes
 
-- Offset in each entry is absolute from the start of the AppleDouble file (not from the end of the header). This is the most common off-by-one mistake when parsing manually.
+- Offset in each entry is absolute from the start of the AppleDouble file not from the end of the header. This is the most common off-by-one mistake when parsing manually.
 - AppleSingle (magic `0x00051600`) is rejected with a descriptive error: it embeds both forks inline and requires a different parser.
-- `batch_extract_resource_forks` returns `None` for paths that fail to parse (truncated, wrong magic, missing resource fork entry) rather than raising.
+- `batch_extract_resource_forks` returns `None` for paths that fail to parse truncated, wrong magic, missing resource fork entry rather than raising.
 - `real_name()` decodes the entry using `mac_roman` with error replacement: correct for all Mac OS 8/9 era filenames.
 
 ---
 
 ## How it works
 
-Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation (CRC32 or SHA256 depending on container format) runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
+Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation CRC32 or SHA256 depending on container format runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
 
 ---
 

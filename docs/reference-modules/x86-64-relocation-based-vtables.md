@@ -6,7 +6,7 @@ Find every `CALL [reg+disp]` indirect dispatch site in x86-64 ELF `.text`: deter
 
 ## Why this exists
 
-1. **Virtual function tables are the primary attack surface for type confusion and use-after-free exploitation on x86-64 Windows and Linux.** Knowing which vtable slots are live (dispatched by at least one call site) narrows the set of slots an attacker must control to achieve code execution. Dead slots that appear in the vtable but are never dispatched cannot be hijacked for RCE.
+1. **Virtual function tables are the primary attack surface for type confusion and use-after-free exploitation on x86-64 Windows and Linux.** Knowing which vtable slots are live dispatched by at least one call site narrows the set of slots an attacker must control to achieve code execution. Dead slots that appear in the vtable but are never dispatched cannot be hijacked for RCE.
 
 2. **x86-64 indirect call encoding is non-trivial**: `FF /2` ModRM-based calls cover `[reg]`, `[reg+disp8]`, `[reg+disp32]`, and `[SIB+disp]` forms, and REX.B extends the register field to `r8`–`r15`. `VtableDispatchScanner` handles all encoding forms by decoding the full ModRM/SIB byte sequence, avoiding the false-negative class where indirect calls to `r8`–`r15` slots are missed.
 
@@ -88,13 +88,13 @@ Run `VtableDispatchScanner` on any x86-64 ELF binary where vtable hijacking is a
 
 ## Reading output
 
-`VtableDispatchScanner.scan(slot_map)` returns a `DispatchReport`:
+`VtableDispatchScanner.scanslot_map` returns a `DispatchReport`:
 
 | Method / Attribute | Content |
 |:---|:---|
 | `slot_offsets` | `Dict[str, List[DispatchSite]]`: vtable slot name → list of dispatch sites using that slot |
 | `live()` | Returns only slots with at least one `DispatchSite` |
-| `dead()` | Returns only slots with no `DispatchSite` (unreachable slots) |
+| `dead()` | Returns only slots with no `DispatchSite` unreachable slots |
 | `sites_for(key)` | `List[DispatchSite]` for a named slot |
 
 Each `DispatchSite` has `call_va: int`, `register: str` (base register, e.g., `'rax'`), `slot_offset: int`, and `encoding: str` (`'disp8'` or `'disp32'`).
@@ -103,5 +103,5 @@ Each `DispatchSite` has `call_va: int`, `register: str` (base register, e.g., `'
 
 ## See also
 
-- [PS3 OPD Virtual Tables](ps3-opd-virtual-tables.md): PPC32/PS3 OPD-pointer vtable reconstruction (non-x86 equivalent)
+- [PS3 OPD Virtual Tables](ps3-opd-virtual-tables.md): PPC32/PS3 OPD-pointer vtable reconstruction non-x86 equivalent
 - [Configurable Taint Reporting](configurable-taint-reporting.md): `CrossBinaryTaintTracker` for dispatch-path taint across library boundaries

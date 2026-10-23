@@ -139,7 +139,7 @@ daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin...
 
 **SOAP XXE response contains `root:` from non-filesystem source.** Some APIs echo back user input in error messages or include example file content in WSDL descriptions. An XXE response with `root:` in a WSDL comment or in an echoed request element is not a file read. Confirm the XXE is exploitable by checking whether the response content matches the format of `/etc/passwd` (colon-separated fields with `/bin/bash` or similar) rather than just containing the string `root:`.
 
-**JSON-RPC error code `-32601` (Method Not Found) does not confirm a JSON-RPC endpoint.** The detection ignores `-32601` responses intentionally, it is the standard response when a JSON-RPC server receives a valid request for a non-existent method, but many non-JSON-RPC APIs also return `{"error": {"code": -32601}}` from generic error handlers. The endpoint is confirmed only when `result` is non-null or when a non-`-32601` error code is returned.
+**JSON-RPC error code `-32601` Method Not Found does not confirm a JSON-RPC endpoint.** The detection ignores `-32601` responses intentionally, it is the standard response when a JSON-RPC server receives a valid request for a non-existent method, but many non-JSON-RPC APIs also return `{"error": {"code": -32601}}` from generic error handlers. The endpoint is confirmed only when `result` is non-null or when a non-`-32601` error code is returned.
 
 ---
 

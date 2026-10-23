@@ -6,7 +6,7 @@ Scan Python bytecode (`.pyc`) files for dangerous patterns: parsing code object 
 
 ## Why this exists
 
-1. **FortiSwitch and similar appliances ship only compiled `.pyc` bytecode on the management plane: no `.py` source files.** `PycBytecodeScanner` was built to close `FSW-PYC-GAP`: without it, the entire Python layer of FortiSwitch firmware was opaque to static analysis. `xdis` parses the marshalled code object tree across Python versions (3.4–3.12+), which Python's built-in `marshal.loads()` cannot do when the `.pyc` was compiled by a different Python version than the analysis host.
+1. **FortiSwitch and similar appliances ship only compiled `.pyc` bytecode on the management plane: no `.py` source files.** `PycBytecodeScanner` was built to close `FSW-PYC-GAP`: without it, the entire Python layer of FortiSwitch firmware was opaque to static analysis. `xdis` parses the marshalled code object tree across Python versions 3.4–3.12+, which Python's built-in `marshal.loads()` cannot do when the `.pyc` was compiled by a different Python version than the analysis host.
 
 2. **Every `.pyc` file stores `co_names` in each code object: the list of all attribute and global names referenced by `LOAD_ATTR`, `LOAD_GLOBAL`, and `STORE_ATTR` opcodes.** If a module calls `os.system()`, the string `"system"` appears in `co_names` and `"os"` appears in `co_names`. This provides reliable signal without decompilation, no AST reconstruction, no control-flow analysis, just co_names inspection. The approach is version-agnostic and handles all Python bytecode formats including 3.12's new opcode encoding.
 
@@ -74,7 +74,7 @@ PycBytecodeScanner report:
 
 ## False positives
 
-**`co_names` inspection detects the presence of attribute names, not confirmed call sites.** A module that imports `os` and uses `os.path.system` (unlikely but possible) would trigger `os.system` detection even if it never calls `os.system()`. Confirm with decompilation (`uncompyle6`) or bytecode inspection (`dis`) on flagged files before reporting.
+**`co_names` inspection detects the presence of attribute names, not confirmed call sites.** A module that imports `os` and uses `os.path.system` unlikely but possible would trigger `os.system` detection even if it never calls `os.system()`. Confirm with decompilation (`uncompyle6`) or bytecode inspection (`dis`) on flagged files before reporting.
 
 **`is_clean()` returns `True` when no dangerous `co_names` patterns are found, but a module could contain dangerous logic implemented through ctypes, cffi, or dynamic attribute lookup that does not use predictable name strings.** `is_clean()` means no detected patterns, not confirmed safety.
 
@@ -88,7 +88,7 @@ Run `PycBytecodeScanner.scan_dir()` as the first pass on any firmware with a Pyt
 
 ## Reading output
 
-`PycBytecodeScanner(dangerous_names).scan_file(path)` returns a `PycScanResult` (not a list of findings). See [pyc-bytecode-scanner](pyc-bytecode-scanner.md) for the full field reference.
+`PycBytecodeScannerdangerous_names.scan_file(path)` returns a `PycScanResult` not a list of findings. See [pyc-bytecode-scanner](pyc-bytecode-scanner.md) for the full field reference.
 
 | Attribute | Content |
 |:---|:---|
@@ -96,12 +96,12 @@ Run `PycBytecodeScanner.scan_dir()` as the first pass on any firmware with a Pyt
 | `filename` | Original `.py` source path from the code object |
 | `python_version` | Detected Python version (e.g., `'3.11'`) |
 | `danger_hits` | `FrozenSet[str]`: dangerous names found in bytecode |
-| `confidence` | Property: `'clean'` / `'HIGH'` (os module + danger hits) / `'LOW'` (danger hits only) |
+| `confidence` | Property: `'clean'` / `'HIGH'` os module + danger hits / `'LOW'` danger hits only |
 | `error` | `None` on success, error string on parse failure |
 
 Use `scan_dir(path)` to scan a directory tree and return `List[PycScanResult]`.
 
-`PycBytecodeScanner.report(findings)` returns a formatted scan summary string.
+`PycBytecodeScanner.reportfindings` returns a formatted scan summary string.
 
 ---
 

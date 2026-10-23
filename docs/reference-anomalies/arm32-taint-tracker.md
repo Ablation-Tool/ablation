@@ -5,7 +5,7 @@
 **Format:** ISO 26262 Part 8 / TASKING qualification kit (see `standards-ablation.md` §2.3)
 
 An anomaly is a condition under which `ARM32TaintTracker` is known to produce an incorrect
-result: either a false negative (missed finding) or a false positive (spurious finding).
+result: either a false negative missed finding or a false positive spurious finding.
 Each entry documents the triggering condition, the impact, and the recommended workaround.
 
 ---
@@ -72,13 +72,13 @@ the input fails the validation test.
 
 **Description:** 
 `ARM32TaintTracker` resolves direct `BL <imm>` calls interprocedurally. Indirect calls via
-`BLX Rn` (branch-link to a register) are treated as unknown calls: caller-saved registers
+`BLX Rn` branch-link to a register are treated as unknown calls: caller-saved registers
 are clobbered and the callee is not entered. If the callee is a sink or contains a sink, the
 taint chain is broken at the indirect call.
 
 **Triggering conditions:** 
 - Function pointers stored in structs and dispatched via `BLX R3` or `BLX R1`
-- Callback-based architectures (HAL dispatch tables, RTOS task functions)
+- Callback-based architectures HAL dispatch tables, RTOS task functions
 - VTable dispatch in C++ firmware compiled without devirtualisation
 
 **Impact:** False negative. Taint flowing into an indirect callee is not propagated through

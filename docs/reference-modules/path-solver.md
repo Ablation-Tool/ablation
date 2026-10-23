@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Bounded symbolic execution with Z3 path constraint solving for x86-64. Pipeline position: `cfg_builder → taint_tracker (finds sink VA) → path_solver (finds input)`. Enumerates all simple CFG paths from entry block to target block (DFS, bounded by `max_path_blocks`), symbolically executes each path (register expressions as Z3 BitVec), and asks Z3 to produce concrete register values at function entry that satisfy all constraints. Supports struct-aware memory seeding (`MemoryConstraint`) for constraining field-offset reads on a known struct pointer.
+Bounded symbolic execution with Z3 path constraint solving for x86-64. Pipeline position: `cfg_builder → taint_tracker finds sink VA → path_solver finds input`. Enumerates all simple CFG paths from entry block to target block (DFS, bounded by `max_path_blocks`), symbolically executes each path (register expressions as Z3 BitVec), and asks Z3 to produce concrete register values at function entry that satisfy all constraints. Supports struct-aware memory seeding (`MemoryConstraint`) for constraining field-offset reads on a known struct pointer.
 
 ## Key API
 
@@ -36,13 +36,13 @@ ps = PathSolver(data, func_va, func_end_va, plt, cfg, md, struct_seed=seed)
 
 ## FORGE audit
 
-Gate: **PASSED**. No file reads. No network I/O. No subprocess. No lief.parse(). No bare `except:`. Z3 solver bounded by `z3_timeout_ms` (default 5000 ms). Path enumeration bounded by `max_path_blocks` (40) and `max_paths` (50). Operates entirely on in-memory CFG and register state.
+Gate: **PASSED**. No file reads. No network I/O. No subprocess. No lief.parse(). No bare `except:`. Z3 solver bounded by `z3_timeout_ms` default 5000 ms. Path enumeration bounded by `max_path_blocks` (40) and `max_paths` (50). Operates entirely on in-memory CFG and register state.
 
 ---
 
 ## How it works
 
-`PathSolver` builds a basic-block CFG from the function's Capstone disassembly, then DFS-enumerates all simple paths from the function entry block to the block containing `target_va`, bounded by `max_path_blocks`. For each path, it runs a symbolic execution pass: registers are `z3.BitVec(64)` expressions; arithmetic and comparison instructions add constraints to the Z3 solver; `MemoryConstraint` seeds inject lower/upper bounds for struct-field reads at `(base_reg, byte_offset)` instead of leaving them unconstrained. Z3 is invoked with a per-path timeout (`z3_timeout_ms`). A `sat=True` result includes a concrete model: register values at function entry that make the path constraints satisfiable and therefore the sink reachable.
+`PathSolver` builds a basic-block CFG from the function's Capstone disassembly, then DFS-enumerates all simple paths from the function entry block to the block containing `target_va`, bounded by `max_path_blocks`. For each path, it runs a symbolic execution pass: registers are `z3.BitVec(64)` expressions; arithmetic and comparison instructions add constraints to the Z3 solver; `MemoryConstraint` seeds inject lower/upper bounds for struct-field reads at `base_reg, byte_offset` instead of leaving them unconstrained. Z3 is invoked with a per-path timeout (`z3_timeout_ms`). A `sat=True` result includes a concrete model: register values at function entry that make the path constraints satisfiable and therefore the sink reachable.
 
 ---
 
@@ -91,7 +91,7 @@ for r in results:
 
 **Z3 `UNSAT` on a real path**: the symbolic executor uses bounded BitVec arithmetic; path constraints from loop-carried values or indirect memory reads may be over-constrained, producing `UNSAT` on a path that is actually reachable. Increase `max_path_blocks` or add struct seeding for struct-pointer reads to give Z3 more context.
 
-**`sat=True` on an infeasible path**: under-constrained memory reads (fields Z3 leaves unconstrained) may produce concrete models that satisfy the formula but are not actually reachable in the program. Always confirm the `model` values make semantic sense for the vulnerability class for example an overlong length field should be larger than the allocation size.
+**`sat=True` on an infeasible path**: under-constrained memory reads fields Z3 leaves unconstrained may produce concrete models that satisfy the formula but are not actually reachable in the program. Always confirm the `model` values make semantic sense for the vulnerability class for example an overlong length field should be larger than the allocation size.
 
 ---
 
@@ -105,7 +105,7 @@ for r in results:
 
 ## Reading output
 
-`PathSolver.solve(target_va)` returns `List[PathResult]`:
+`PathSolver.solvetarget_va` returns `List[PathResult]`:
 
 | Attribute | Content |
 |:---|:---|

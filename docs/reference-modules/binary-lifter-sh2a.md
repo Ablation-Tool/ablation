@@ -39,7 +39,7 @@ Two things were not possible before in Ablation:
 
 **1. No pseudo-C IR for Renesas SH-2A MCU firmware.** `BinaryLifter` covered 17 ISAs but had no
 SH-2A backend. SH-2A is the dominant MCU inside Bosch EDC, Denso, and Siemens automotive ECUs
-(SH7058/SH7059 on-chip flash). Without a lifter, security sweeps on ECU firmware produced raw
+SH7058/SH7059 on-chip flash. Without a lifter, security sweeps on ECU firmware produced raw
 disassembly only: no call-chain analysis, no taint annotations, no caller-resolved pseudo-C.
 
 **2. No lifter designed for headerless flat ROM files.** All 17 prior ISA backends assumed an ELF
@@ -87,8 +87,8 @@ Example output:
 |---|---|
 | R4-R7 | arg0-arg3 |
 | R0 | return value |
-| R15 | sp (stack pointer) |
-| PR | link register (return address) |
+| R15 | sp stack pointer |
+| PR | link register return address |
 
 ---
 
@@ -119,7 +119,7 @@ flowchart TD
     style L fill:#14532d,stroke:#166534,color:#dcfce7
 ```
 
-`_lift_sh2a()` uses `EcuSH2aDecoder` (the pre-existing SH-2A decoder) to produce `SH2aInsn`
+`_lift_sh2a()` uses `EcuSH2aDecoder` the pre-existing SH-2A decoder to produce `SH2aInsn`
 objects. Each instruction already carries a pre-decoded `insn_type` field, so `_SH2aState.emit()`
 dispatches on that string directly: no mnemonic regex parsing.
 
@@ -127,17 +127,17 @@ dispatches on that string directly: no mnemonic regex parsing.
 
 | `insn_type` | IR output |
 |---|---|
-| `LR_SAVE` | `// sts.l` (prologue comment, not in IR) |
-| `LR_RESTORE` | `// lds.l` (epilogue comment) |
+| `LR_SAVE` | `// sts.l` prologue comment, not in IR |
+| `LR_RESTORE` | `// lds.l` epilogue comment |
 | `RETURN` | `return rX;` |
-| `CALL` (BSR, with target) | `uint32_t vN = name(arg0,..., arg3);` |
-| `CALL` (JSR, no target) | `uint32_t vN = (*rM)(arg0,..., arg3);` |
-| `BRANCH` (BRA/BRAF) | `goto loc_X;` |
+| `CALL` BSR, with target | `uint32_t vN = namearg0,..., arg3;` |
+| `CALL` JSR, no target | `uint32_t vN = (*rM)arg0,..., arg3;` |
+| `BRANCH` BRA/BRAF | `goto loc_X;` |
 | `BRANCH` (BT/BT/S) | `if (T) goto loc_X;` |
 | `BRANCH` (BF/BF/S) | `if (!T) goto loc_X;` |
-| `LOAD` (MOV.L/W/B @Rm,Rn) | `uint32_t vN = *(uint32_t*)rM;` |
-| `STORE` (MOV.L/W/B Rm,@Rn) | `*(uint32_t*)rN = rM;` |
-| `MISC` (MOV #imm, Rn) | `uint32_t vN = 0x1a;` |
+| `LOAD` MOV.L/W/B @Rm,Rn | `uint32_t vN = *uint32_t*rM;` |
+| `STORE` MOV.L/W/B Rm,@Rn | `*uint32_t*rN = rM;` |
+| `MISC` MOV #imm, Rn | `uint32_t vN = 0x1a;` |
 | `MISC` (other) | `// mnemonic` |
 
 **Delay slots:** SH-2A executes one instruction after BSR/BRA/RTS before the branch takes effect.
@@ -155,11 +155,11 @@ propagates through loads and calls. A call whose arguments include a tainted reg
 
 ## Flat ROM path
 
-When `BinaryLifter._sections` is empty (lief could not parse an ELF/PE header), the lifter
+When `BinaryLifter._sections` is empty lief could not parse an ELF/PE header, the lifter
 treats `func_va` as a direct byte offset into `self.data`. This is correct for all SH-2A ECU
 ROM images, where the MCU flash is mapped at VA 0x00000000 and the raw binary starts at offset 0.
 
-If `func_va >= len(self.data)`, the slice returns empty bytes and the lifter returns a comment
+If `func_va >= lenself.data`, the slice returns empty bytes and the lifter returns a comment
 rather than crashing.
 
 ---
@@ -170,7 +170,7 @@ rather than crashing.
  instructions. This is a structural limitation of the linear-walk approach (no CFG).
 - Indirect call targets (JSR @Rn) are not resolved: they appear as `(*rN)(...)`. Use
   `FlatBinaryFuncStartScanner` to harvest indirect call targets separately.
-- 32-bit SH-2A extension instructions (MOVI20, MOV12, BIT ops) decode as `MISC` and emit
+- 32-bit SH-2A extension instructions MOVI20, MOV12, BIT ops decode as `MISC` and emit
  as comments. The state machine does not model their register effects.
 - No CFG: each function is a linear walk from entry to first RETURN. Back-edges from loops
  appear in the output but the loop body may be partially repeated.
@@ -198,7 +198,7 @@ rather than crashing.
 
 ## False positives
 
-**Indirect calls.** `BinaryLifter` emits `call 0x<target>` for direct branch-and-link instructions. Indirect calls (through a register or through the PLT) are emitted as `call reg` or `call <plt_name>`: the register value at call time is not evaluated symbolically.
+**Indirect calls.** `BinaryLifter` emits `call 0x<target>` for direct branch-and-link instructions. Indirect calls through a register or through the PLT are emitted as `call reg` or `call <plt_name>`: the register value at call time is not evaluated symbolically.
 
 ---
 
@@ -216,8 +216,8 @@ rather than crashing.
 
 The output uses `NativeVal` as the symbolic type for register state. `NativeVal` represents a register value as one of:
 - `Const(v)`: concrete integer constant
-- `Arg(n)`: function argument register (a0–a7 for RISC-V; w0–w7 for AArch64)
-- `Mem(addr_text)`: pointer load
+- `Arg(n)`: function argument register a0–a7 for RISC-V; w0–w7 for AArch64
+- `Memaddr_text`: pointer load
 - `Expr(text)`: complex expression string
 - `Unknown(reg)`: unresolved
 

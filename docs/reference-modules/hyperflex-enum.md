@@ -8,13 +8,13 @@ Cisco HyperFlex attack surface enumeration: HX Connect REST API, iSCSI/NFS expos
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. All HTTP response bodies read with inline `r.read(4 * 1024 * 1024)` cap (4 MB). No file reads. No lief.parse().
+Gate: **PASSED**. No HIGH or CRITICAL findings. All HTTP response bodies read with inline `r.read4 * 1024 * 1024` cap (4 MB). No file reads. No lief.parse().
 
 ---
 
 ## How it works
 
-`HyperFlexEnumerator(host, timeout=8).enumerate_all()` runs six probes in sequence: `probe_hx_connect_api()` (HX Connect login surface), `probe_ucsm_api()` (UCSM XML API), `probe_apic_api()` (APIC REST API), `probe_iscsi_no_chap()` (iSCSI without CHAP), `probe_stctlvm_ssh()` (storage controller VM SSH), and `probe_cluster_discovery()` (cluster node enumeration). Returns a deduplicated `List[dict]`: all findings combined. Each finding uses `_finding()` returning `{severity, title, detail, host, port, evidence}`.
+`HyperFlexEnumerator(host, timeout=8).enumerate_all()` runs six probes in sequence: `probe_hx_connect_api()` HX Connect login surface, `probe_ucsm_api()` UCSM XML API, `probe_apic_api()` APIC REST API, `probe_iscsi_no_chap()` (iSCSI without CHAP), `probe_stctlvm_ssh()` storage controller VM SSH, and `probe_cluster_discovery()` cluster node enumeration. Returns a deduplicated `List[dict]`: all findings combined. Each finding uses `_finding()` returning `{severity, title, detail, host, port, evidence}`.
 
 ---
 
@@ -51,13 +51,13 @@ HyperFlexEnumerator.enumerate_all(): 10.0.0.1
 
 ## False positives
 
-**`probe_hx_connect_api()` default credential finding on locked-down HX Connect**: HyperFlex clusters in hardened configurations disable the web UI and return 403 or redirect to a corporate SSO. The finding fires only on a successful login response (HTTP 200 + token). A 403 or redirect is not a finding.
+**`probe_hx_connect_api()` default credential finding on locked-down HX Connect**: HyperFlex clusters in hardened configurations disable the web UI and return 403 or redirect to a corporate SSO. The finding fires only on a successful login response HTTP 200 + token. A 403 or redirect is not a finding.
 
 ---
 
 ## Pipeline position
 
-Run `HyperFlexEnumerator` after confirming a Cisco HyperFlex management IP via reverse DNS or certificate CN. Run `probe_iscsi_no_chap()` independently when storage traffic is visible on the network (TCP/3260).
+Run `HyperFlexEnumerator` after confirming a Cisco HyperFlex management IP via reverse DNS or certificate CN. Run `probe_iscsi_no_chap()` independently when storage traffic is visible on the network TCP/3260.
 
 ---
 

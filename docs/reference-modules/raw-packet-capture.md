@@ -6,7 +6,7 @@ Capture live network traffic with a raw socket (`AF_PACKET` / `AF_INET` + `SOCK_
 
 ## Why this exists
 
-1. **`RawSniffer` operates without any external network capture dependency.** Using `socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))` (Linux) or `socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)` (macOS), `RawSniffer` captures all Ethernet frames on the specified interface in pure Python. `tcpdump`, `Wireshark`, and `libpcap` are not required: only root privileges and a network interface name.
+1. **`RawSniffer` operates without any external network capture dependency.** Using `socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))` (Linux) or `socket.socketsocket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW` (macOS), `RawSniffer` captures all Ethernet frames on the specified interface in pure Python. `tcpdump`, `Wireshark`, and `libpcap` are not required: only root privileges and a network interface name.
 
 2. **`CredentialExtractor` performs pattern-based credential extraction from live TCP streams**: HTTP Basic Auth `Authorization: Basic` headers, FTP `USER`/`PASS` sequences, and SMTP `AUTH PLAIN` values are identified in real-time as packets are captured. This is suitable for post-compromise network monitoring without installing additional tools.
 
@@ -83,19 +83,19 @@ ARP spoofing: none detected
 
 ## Pipeline position
 
-Run `RawSniffer` during post-compromise dwell operations to map internal network communications. Use `sniff_network()` for short captures (10–60 seconds); save the result to PCAP format and feed to `PCAPAnalyzer` for structured analysis.
+Run `RawSniffer` during post-compromise dwell operations to map internal network communications. Use `sniff_network()` for short captures 10–60 seconds; save the result to PCAP format and feed to `PCAPAnalyzer` for structured analysis.
 
 ---
 
 ## Reading output
 
-`RawSniffer(interface).sniff(duration=10.0)` returns a plain `dict`:
+`RawSnifferinterface.sniff(duration=10.0)` returns a plain `dict`:
 
 | Key | Content |
 |:---|:---|
 | `packets` | Integer: total packets captured |
-| `credentials` | `List[dict]`: cleartext credentials detected (protocol, source, credential fragment) |
-| `connections` | `List[tuple]`: unique `(src_ip, dst_ip, dst_port)` tuples observed |
+| `credentials` | `List[dict]`: cleartext credentials detected protocol, source, credential fragment |
+| `connections` | `List[tuple]`: unique `src_ip, dst_ip, dst_port` tuples observed |
 | `error` | Error string if the socket was unavailable; absent on success |
 
 For mDNS and SSDP service discovery, use `MDNSDiscovery` and `SSDPDiscovery` from the same `modules/net_sniffer.py` module: they are separate classes from `RawSniffer`. The convenience wrapper `sniff_network()` combines all three and also returns `mdns_services`, `ssdp_devices`, and `arp_findings`.

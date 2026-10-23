@@ -71,7 +71,7 @@ for fn in changed:
 
 Functions with `change_score >= 0.20` had meaningful code changes, not just recompilation address shifts.
 
-### Anchor scan (implementation variant classification)
+### Anchor scan implementation variant classification
 
 ```python
 from ablation.analyzers.version_delta import AnchorScanResult, ERA_DISCRIMINATOR_ANCHORS
@@ -82,7 +82,7 @@ for anchor_name, scan_result in result.items():
         print(f"  {anchor_name}: impl_v{scan_result.era} at offset 0x{scan_result.hit_offset:x}")
 ```
 
-Masked byte-pattern anchors classify the implementation variant. Useful for large corpora (28+ builds of the same firmware component) to distinguish ELF32 vs ELF64 calling conventions and major-version register-allocation differences.
+Masked byte-pattern anchors classify the implementation variant. Useful for large corpora 28+ builds of the same firmware component to distinguish ELF32 vs ELF64 calling conventions and major-version register-allocation differences.
 
 ---
 
@@ -95,14 +95,14 @@ Masked byte-pattern anchors classify the implementation variant. Useful for larg
 | Signal | Weight | Details |
 |---|---|---|
 | Opcode category histogram | 0.35 | Cosine similarity on 15-category frequency vector: DATA, ARITH, BIT, CMP, BRANCH, CALL, RET, FRAME, MEMOP, FLOAT, SIMD, NOP, SYSCALL, MISC, OTHER |
-| Immediate value Jaccard | 0.30 | Shared integer constants `0x100–0xFFFFFFFF`: struct offsets, magic bytes, buffer sizes. RIP-relative offsets filtered (position-dependent). |
-| PLT call overlap | 0.20 | Shared external function call set (only when either function has named calls) |
+| Immediate value Jaccard | 0.30 | Shared integer constants `0x100–0xFFFFFFFF`: struct offsets, magic bytes, buffer sizes. RIP-relative offsets filtered position-dependent. |
+| PLT call overlap | 0.20 | Shared external function call set only when either function has named calls |
 | Branch density proximity | 0.10 | Control flow shape: linear / switch / loop-heavy |
 | Size proximity | 0.05 | Instruction count ratio |
 
 Weights are normalized when a signal is absent for example no named PLT calls → weight redistributed to remaining signals.
 
-Why immediates unlock cross-version matching: struct field offsets, magic constants, and buffer sizes survive recompilation. `cmp rax, 0x1000` (4KB limit check) is a stable fingerprint across optimization levels. PLT-only matching fails on functions that call no external symbols; immediate-value overlap works on all of them.
+Why immediates unlock cross-version matching: struct field offsets, magic constants, and buffer sizes survive recompilation. `cmp rax, 0x1000` 4KB limit check is a stable fingerprint across optimization levels. PLT-only matching fails on functions that call no external symbols; immediate-value overlap works on all of them.
 
 ```python
 from modules.structural_sim import (
@@ -134,7 +134,7 @@ dist = score_distribution(corpus_a, corpus_b, sample_n=500)
 print(f"p10={dist['percentiles']['p10']}  p50={dist['percentiles']['p50']}")
 ```
 
-A composite score >= 0.70 across two different vendors' binaries means the functions share a common ancestor (same open-source library or standard protocol implementation). When one vendor's version has a confirmed vulnerability, that score predicts whether the other vendor carries the same flaw.
+A composite score >= 0.70 across two different vendors' binaries means the functions share a common ancestor same open-source library or standard protocol implementation. When one vendor's version has a confirmed vulnerability, that score predicts whether the other vendor carries the same flaw.
 
 ---
 
@@ -206,7 +206,7 @@ for site in blr_sites:
 
 ---
 
-## MatrixProfileDiff (STOMP algorithm)
+## MatrixProfileDiff STOMP algorithm
 
 **File:** `ablation/analyzers/matrix_profile_diff.py`
 
@@ -214,7 +214,7 @@ Matrix Profile-based sequence anomaly detection for binary diffing. Finds the mo
 
 ### How STOMP works
 
-The matrix profile of a sequence T is a vector where entry i holds the z-normalized Euclidean distance from subsequence T[i..i+m] to its nearest neighbor in T. For binary diffing, two sequences T1 (v1 instructions) and T2 (v2 instructions) are compared: the cross-matrix-profile between T1 and T2 finds the subsequence in T1 whose nearest match in T2 is most distant; that is the most changed region.
+The matrix profile of a sequence T is a vector where entry i holds the z-normalized Euclidean distance from subsequence T[i..i+m] to its nearest neighbor in T. For binary diffing, two sequences T1 v1 instructions and T2 v2 instructions are compared: the cross-matrix-profile between T1 and T2 finds the subsequence in T1 whose nearest match in T2 is most distant; that is the most changed region.
 
 ```
   T1 = [mnem_v1_0, mnem_v1_1, ..., mnem_v1_n]
@@ -246,7 +246,7 @@ print(result.anomaly_region)   # (start_idx, end_idx) of most-changed subsequenc
 print(result.change_score)     # 0.0 = identical, 1.0 = completely different
 ```
 
-MatrixProfileDiff complements VersionDelta when the changed region is a long insertion or deletion rather than a point substitution. VersionDelta's `difflib` output is better for single-instruction substitutions. STOMP is better for finding inserted bounds checks (3-5 new instructions in a loop body) or removed authentication blocks.
+MatrixProfileDiff complements VersionDelta when the changed region is a long insertion or deletion rather than a point substitution. VersionDelta's `difflib` output is better for single-instruction substitutions. STOMP is better for finding inserted bounds checks 3-5 new instructions in a loop body or removed authentication blocks.
 
 ---
 
@@ -257,13 +257,13 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. No code changes needed.
 - No file I/O: `extract_fingerprint()` and `fingerprint_sim()` operate on in-memory disassembly instruction lists and numpy arrays. `find_structural_orphans()` and `score_distribution()` iterate over lists of `FunctionFingerprint` NamedTuples.
 - No bare `except:`. No `try/except` blocks in the module at all: pure computation.
 - No lief.parse(). No subprocess. No HTTP reads.
-- Division-by-zero guards: `max(fp_a.n_insns, 1)` (size ratio), `if na > 0 and nb > 0` (cosine sim), `max(len(named_a | named_b), 1)` (PLT Jaccard), `if total_w == 0` (weight normalization).
+- Division-by-zero guards: `maxfp_a.n_insns, 1` size ratio, `if na > 0 and nb > 0` cosine sim, `max(len(named_a | named_b), 1)` PLT Jaccard, `if total_w == 0` weight normalization.
 
 ---
 
 ## How it works
 
-The four modules are independent but follow a common pattern: each module reads from disassembly (instruction lists, CFG edges, section bytes) and returns typed result objects. `VersionDelta.track()` runs a three-stage pipeline: structural pre-filter on CFG shape, mnemonic 4-gram Jaccard, and BERT semantic tiebreaker. `StructuralSim.fingerprint_sim()` computes a five-signal weighted composite over pre-built `FunctionFingerprint` NamedTuples. `VtableResolver` runs four static phases over raw binary bytes and builds a resolved call graph with no symbol information. `MatrixProfileDiff.compare_functions()` applies the STOMP algorithm to normalized mnemonic sequences and returns the highest-distance subsequence as the anomaly region. None of the four modules perform file I/O, network calls, or subprocess execution.
+The four modules are independent but follow a common pattern: each module reads from disassembly instruction lists, CFG edges, section bytes and returns typed result objects. `VersionDelta.track()` runs a three-stage pipeline: structural pre-filter on CFG shape, mnemonic 4-gram Jaccard, and BERT semantic tiebreaker. `StructuralSim.fingerprint_sim()` computes a five-signal weighted composite over pre-built `FunctionFingerprint` NamedTuples. `VtableResolver` runs four static phases over raw binary bytes and builds a resolved call graph with no symbol information. `MatrixProfileDiff.compare_functions()` applies the STOMP algorithm to normalized mnemonic sequences and returns the highest-distance subsequence as the anomaly region. None of the four modules perform file I/O, network calls, or subprocess execution.
 
 ---
 
@@ -315,8 +315,8 @@ compare_functions(insns_v1, insns_v2)
 
 See the individual module pages for module-specific false positive scenarios:
 - **VersionDelta**: BERT tiebreaker may still produce confidence 0.50–0.65 when two functions are nearly structurally identical and differ only in semantic content. Manual patch diff verification is required in this range.
-- **StructuralSim**: Small wrapper functions (< 15 instructions, no PLT calls) frequently exceed the 0.70 threshold against unrelated functions due to opcode histogram alignment. Follow high-score pairs with a semantic check.
-- **VtableResolver**: Constructor vptr stores that use register-indirect `STR xN, [xM]` (field offset not a compile-time constant) are not detected by the `ADRP+ADD+STR` pattern. BLR sites served by these constructors remain unresolved.
+- **StructuralSim**: Small wrapper functions < 15 instructions, no PLT calls frequently exceed the 0.70 threshold against unrelated functions due to opcode histogram alignment. Follow high-score pairs with a semantic check.
+- **VtableResolver**: Constructor vptr stores that use register-indirect `STR xN, [xM]` field offset not a compile-time constant are not detected by the `ADRP+ADD+STR` pattern. BLR sites served by these constructors remain unresolved.
 - **MatrixProfileDiff**: Functions shorter than the window size `m` cannot be profiled. `change_score=None` is returned for pairs where either function has fewer than `m` instructions.
 
 ---
@@ -333,8 +333,8 @@ See the individual module pages for module-specific false positive scenarios:
 
 Each module returns its own typed result. See the module-specific pages for field details:
 
-- `FuncMatcher(ctx).find_homolog(seed_features, target_functions)` → `Optional[HomologMatch]`: best structural match in the target binary. See [Version Delta](version-delta.md).
-- `fingerprint_sim(fp_a, fp_b)` → `float [0.0, 1.0]`. See [Structural Sim](structural-sim.md).
+- `FuncMatcher(ctx).find_homologseed_features, target_functions` → `Optional[HomologMatch]`: best structural match in the target binary. See [Version Delta](version-delta.md).
+- `fingerprint_simfp_a, fp_b` → `float [0.0, 1.0]`. See [Structural Sim](structural-sim.md).
 - `resolve_blr_sites(ctx)` → `List[BLRSite]`. See [ARM64 Virtual Call Resolution](arm64-virtual-call-resolution.md).
 
 ---

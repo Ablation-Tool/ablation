@@ -8,7 +8,7 @@ Load vendor-specific sink registrations and known-safe exec patterns from YAML p
 
 1. **Firmware vendors wrap libc exec functions with vendor-specific helpers: `fadcsystem` in FortiOS, `cpexec` in Cisco IOS, `wm_system` in network appliances, that are not in the default sink catalog but are equally dangerous.** `VendorProfile` registers these wrapper functions as sinks with the correct argument positions, so `SinkArgClassifier.classify_all()` catches them without the analyst manually adding each wrapper per engagement.
 
-2. **Some exec-class call sites are structurally safe by vendor convention**: for example, a `popen` call that always prefixes the command with `unsetenv PATH; /usr/bin/logger` is safe even if the suffix is user-controlled (the unsetenv removes PATH injection and the logger is fixed). `VendorProfile.known_safe_exec_patterns` registers these patterns, allowing `SinkArgClassifier` to automatically mark them as `KNOWN_SAFE` instead of `ARG_PROPAGATED`.
+2. **Some exec-class call sites are structurally safe by vendor convention**: for example, a `popen` call that always prefixes the command with `unsetenv PATH; /usr/bin/logger` is safe even if the suffix is user-controlled the unsetenv removes PATH injection and the logger is fixed. `VendorProfile.known_safe_exec_patterns` registers these patterns, allowing `SinkArgClassifier` to automatically mark them as `KNOWN_SAFE` instead of `ARG_PROPAGATED`.
 
 3. **YAML profiles separate vendor-specific knowledge from core analyzer code**: adding a new vendor's sink catalog requires only creating `ablation/profiles/<vendor>.yaml`, not modifying Python source. `VendorProfile.available_vendors()` lists all installed profiles; `VendorProfile.from_vendor('fortinet')` loads the Fortinet profile.
 
@@ -91,7 +91,7 @@ Apply `VendorProfile.apply_to(clf)` immediately after creating `SinkArgClassifie
 
 ## Reading output
 
-`VendorProfile.from_vendor(vendor_name)` returns a `VendorProfile` object:
+`VendorProfile.from_vendorvendor_name` returns a `VendorProfile` object:
 
 | Attribute | Content |
 |:---|:---|
@@ -100,7 +100,7 @@ Apply `VendorProfile.apply_to(clf)` immediately after creating `SinkArgClassifie
 | `safe_patterns` | `List[dict]`: known-safe exec pattern records with `pattern` and `note` |
 | `sanitizers` | `List[dict]`: known sanitizer function records |
 
-`VendorProfile.apply_to(classifier)` registers all profile sinks into a `SinkArgClassifier` and returns `None`.
+`VendorProfile.apply_toclassifier` registers all profile sinks into a `SinkArgClassifier` and returns `None`.
 
 ---
 

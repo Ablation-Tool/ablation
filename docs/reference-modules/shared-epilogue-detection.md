@@ -1,6 +1,6 @@
 # Shared Epilogue Detection
 
-Detect functions that share a tail block (epilogue) via unconditional jump: marking the shared block's address so the interprocedural taint loop skips it as a phantom function entry point, eliminating false-positive taint paths in corpus-wide analysis.
+Detect functions that share a tail block epilogue via unconditional jump: marking the shared block's address so the interprocedural taint loop skips it as a phantom function entry point, eliminating false-positive taint paths in corpus-wide analysis.
 
 ---
 
@@ -10,7 +10,7 @@ Detect functions that share a tail block (epilogue) via unconditional jump: mark
 
 2. **The phantom taint path is not a false positive that TaintTracker can filter internally**: from TaintTracker's perspective, it is analyzing a real function entry with valid instructions. The only fix is to prevent the shared block from appearing in `func_starts` before the interprocedural loop starts. `EpilogueShareScanner.inject(ctx)` removes shared-epilogue entries from `ctx.func_starts` in place, upstream of TaintTracker.
 
-3. **`EpilogueShareHit` records the function that jumps to the shared block, the shared block VA, and the reason the unconditional jump was classified as an epilogue share**: distinguishing tail calls (different callee signature) from epilogue shares (same frame teardown sequence: `POP RBP / RET` or `LDM SP!,{...,PC}`). This distinction is needed for accurate `report()` output and for manual review of ambiguous cases.
+3. **`EpilogueShareHit` records the function that jumps to the shared block, the shared block VA, and the reason the unconditional jump was classified as an epilogue share**: distinguishing tail calls different callee signature from epilogue shares (same frame teardown sequence: `POP RBP / RET` or `LDM SP!,{...,PC}`). This distinction is needed for accurate `report()` output and for manual review of ambiguous cases.
 
 ---
 
@@ -89,7 +89,7 @@ Run `EpilogueShareScanner` once per binary immediately after `BinaryContext.load
 |:---|:---|
 | `from_func_va` | VA of the function that contains the unconditional jump |
 | `jump_va` | VA of the jump instruction itself |
-| `target_va` | VA where the jump lands (the shared epilogue entry) |
+| `target_va` | VA where the jump lands the shared epilogue entry |
 | `host_func_va` | VA of the function whose body the target lands inside |
 
 `EpilogueShareScanner.inject(ctx)` adds all `target_va` values to `ctx.shared_epilogues` and returns `int`: the count of entries added.

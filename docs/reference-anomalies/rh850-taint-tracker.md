@@ -5,7 +5,7 @@
 **Format:** ISO 26262 Part 8 / TASKING qualification kit (see `standards-ablation.md` §2.3)
 
 An anomaly is a condition under which `RH850TaintTracker` is known to produce an incorrect
-result: either a false negative (missed finding) or a false positive (spurious finding).
+result: either a false negative missed finding or a false positive spurious finding.
 Each entry documents the triggering condition, the impact, and the recommended workaround.
 
 ---
@@ -16,24 +16,24 @@ Each entry documents the triggering condition, the impact, and the recommended w
 Capstone does not support V850/RH850. `RH850TaintTracker` uses a custom byte-level decoder
 (`V850Decoder`) for instruction decode. Instructions whose opcodes are not covered by
 `V850Decoder` are treated as unknown mnemonics. The tracker applies a conservative fallback
-(destination register inherits the union of all source register taints), but the fallback
+destination register inherits the union of all source register taints, but the fallback
 assumes a standard register operand layout. If the unrecognised instruction uses a non-standard
 operand encoding, taint propagation at that instruction is incorrect.
 
 **Triggering conditions:** 
 - RH850 variant opcodes not present in the current `V850Decoder` opcode table
-- Extended instruction sets (RH850/E2x, RH850/E3x FPU extensions, SIMDxxx)
+- Extended instruction sets RH850/E2x, RH850/E3x FPU extensions, SIMDxxx
 - Binaries compiled for custom silicon with vendor-specific instruction extensions
 
 **Impact:** False negative. Taint may stop propagating at the unrecognised instruction,
 causing the tracker to miss a real sink reach.
 
 **Workaround:** 
-1. Run `V850Decoder.scan_unknown_opcodes(data, base_va)` on the function before tracing: it
+1. Run `V850Decoder.scan_unknown_opcodesdata, base_va` on the function before tracing: it
  reports instruction bytes that fell through to the unknown fallback.
 2. For each unknown opcode, manually confirm whether it modifies a tainted register.
 3. If a new opcode pattern is encountered repeatedly, add it to `V850Decoder` as a new module
- gap (flywheel principle).
+ gap flywheel principle.
 
 **Resolved in version:** Open
 
@@ -42,16 +42,16 @@ causing the tracker to miss a real sink reach.
 ## RH850-KA-002: CALLT / interrupt / trap entry points break taint chains
 
 **Description:** 
-`__callt`, `__interrupt`, and `__trap` function types (GHS CC-RH §2.11) use non-standard
-return mechanisms: `CTRET` (CALLT return), `EIRET` (exception return), `FERET` (FE return).
+`__callt`, `__interrupt`, and `__trap` function types GHS CC-RH §2.11 use non-standard
+return mechanisms: `CTRET` CALLT return, `EIRET` exception return, `FERET` FE return.
 These return instructions are not recognised as function boundaries by `RH850TaintTracker`.
 When the tracker encounters a CALLT call site, it treats it as an unknown call site and
-applies the conservative fallback (return register tainted if any arg is tainted), but does
+applies the conservative fallback return register tainted if any arg is tainted, but does
 not enter the callee. When the tracker encounters a CALLT return (`CTRET`), it may not
 terminate the trace correctly.
 
 **Triggering conditions:** 
-- Firmware using `__callt` table entries for hot-path dispatch (Renesas CTBP pattern)
+- Firmware using `__callt` table entries for hot-path dispatch Renesas CTBP pattern
 - Interrupt handlers (`__interrupt`) that process CAN / LIN receive data
 - Trap handlers used as OS call gates in RTOS-based firmware
 
@@ -60,7 +60,7 @@ tracked through it. If an interrupt handler receives attacker data and writes it
 that global will not be tainted.
 
 **Workaround:** 
-1. Identify `__callt` table entries in the binary (CTBP register + table base) and scan them
+1. Identify `__callt` table entries in the binary CTBP register + table base and scan them
  separately using `scan_function()` with `init_labels` seeded from the calling context.
 2. For interrupt handlers, check whether the handler writes to memory also read by traceable
  functions; if so, seed those read sites directly.
@@ -69,14 +69,14 @@ that global will not be tainted.
 
 ---
 
-## RH850-KA-003: Vtable dispatch (indirect call through vtable pointer) not tracked
+## RH850-KA-003: Vtable dispatch indirect call through vtable pointer not tracked
 
 **Description:** 
 `RH850TaintTracker` resolves direct calls and CALLT entries but does not follow indirect
 calls through vtable pointers (load-from-pointer then `jmp`/`jr` sequence). GHS C++ code
 on RH850 dispatches virtual methods through a vtable pointer held in a base-pointer register.
 The tracker recognises a register-indirect call (`jarl [reg]` or `jmp [reg]`) where the
-register holds a tainted value as a CRITICAL finding (tainted indirect call target). However,
+register holds a tainted value as a CRITICAL finding tainted indirect call target. However,
 if the indirect call target is a sink (e.g., a virtual destructor that eventually calls
 `memcpy`), and the register holding the call target is clean but the argument registers are
 tainted, the tracker will not follow into the callee.

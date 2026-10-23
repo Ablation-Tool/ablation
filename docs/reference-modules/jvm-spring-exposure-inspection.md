@@ -8,9 +8,9 @@ Scan AI/MCP server source code (Python, JavaScript, TypeScript) for security vul
 
 1. **FortiManager v8.0.0 ships an AI/MCP stack in `ai/agent/agent_framework/` with two confirmed findings that required manual source read**, no automated scanner existed for MCP server security analysis. `MCPToolTaintScanner` closes TG-FMGMCP-1 and prevents these finding classes from recurring in future MCP targets.
 
-2. **FMG-AI-1 (CWE-214, MEDIUM): `mcp.py` serializes `request.COOKIES` to JSON and passes it as `--cookies` CLI argument to `/usr/bin/webmcpserver`.** The session token is visible in `/proc/<pid>/cmdline` for the subprocess lifetime: world-readable on Linux. `MCPToolTaintScanner` detects any pattern where session credentials or authentication tokens are passed as subprocess CLI arguments rather than via environment variable, stdin, or IPC.
+2. **FMG-AI-1 CWE-214, MEDIUM: `mcp.py` serializes `request.COOKIES` to JSON and passes it as `--cookies` CLI argument to `/usr/bin/webmcpserver`.** The session token is visible in `/proc/<pid>/cmdline` for the subprocess lifetime: world-readable on Linux. `MCPToolTaintScanner` detects any pattern where session credentials or authentication tokens are passed as subprocess CLI arguments rather than via environment variable, stdin, or IPC.
 
-3. **FMG-AI-2 (CWE-77, MEDIUM): `agent_views.py` passes a user-supplied FortiGate CLI script as the system-role content to an LLM security analyzer**, enabling prompt injection into the AI's trust context. The AI treats the user's injected instructions as system-level directives. `MCPToolTaintScanner` detects user-supplied content routed to LLM system-role or system-prompt positions.
+3. **FMG-AI-2 CWE-77, MEDIUM: `agent_views.py` passes a user-supplied FortiGate CLI script as the system-role content to an LLM security analyzer**, enabling prompt injection into the AI's trust context. The AI treats the user's injected instructions as system-level directives. `MCPToolTaintScanner` detects user-supplied content routed to LLM system-role or system-prompt positions.
 
 ---
 
@@ -68,7 +68,7 @@ Findings: <N>
 
 **`COOKIE_CLI` detection uses pattern matching on subprocess argument construction**: a call that passes `--cookies` with a non-sensitive value (e.g., `--cookies '{}'`) will be flagged. Verify that the argument contains session credentials before treating as a security finding.
 
-**`PROMPT_INJECTION` fires on legitimate system prompts**: a system prompt constructed from a static template with a user field embedded only in a data position (not as instructions) may still be flagged. Verify that the user-supplied content is in a position where an LLM would interpret it as instructions, not just data.
+**`PROMPT_INJECTION` fires on legitimate system prompts**: a system prompt constructed from a static template with a user field embedded only in a data position not as instructions may still be flagged. Verify that the user-supplied content is in a position where an LLM would interpret it as instructions, not just data.
 
 ---
 

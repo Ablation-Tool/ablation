@@ -10,7 +10,7 @@ Detect appended payloads, embedded binary content in metadata atoms, malformed b
 
 2. **`udta`, `free`, `skip`, and `uuid` atoms are standard ISO/IEC 14496-12 containers for vendor-specific metadata**, but their contents are opaque to playback software. `video_container.py` checks the entropy of these atom payloads: a `uuid` atom with Shannon entropy > 7.5 bits/byte is almost certainly encrypted or compressed binary content rather than metadata.
 
-3. **EBML (Matroska/MKV) and RIFF (AVI) use distinct TLV encodings**: `_MP4Atom`, `_EBMLElement`, and the RIFF chunk parser each implement the format's length encoding. All three are needed because file extension is unreliable for forensic triage: a `.webm` file with an `.mp4` extension still uses EBML encoding and requires the EBML parser to walk its structure correctly.
+3. **EBML Matroska/MKV and RIFF (AVI) use distinct TLV encodings**: `_MP4Atom`, `_EBMLElement`, and the RIFF chunk parser each implement the format's length encoding. All three are needed because file extension is unreliable for forensic triage: a `.webm` file with an `.mp4` extension still uses EBML encoding and requires the EBML parser to walk its structure correctly.
 
 ---
 
@@ -60,9 +60,9 @@ Findings: <N>
 
 ## False positives
 
-**`uuid` atoms are used legitimately**: vendor-specific metadata (camera make/model, GPS coordinates, color space descriptors) in `uuid` atoms will have high entropy if encoded as binary rather than XML. Verify by checking whether the `uuid` bytes match a known vendor UUID before treating the finding as malicious.
+**`uuid` atoms are used legitimately**: vendor-specific metadata camera make/model, GPS coordinates, color space descriptors in `uuid` atoms will have high entropy if encoded as binary rather than XML. Verify by checking whether the `uuid` bytes match a known vendor UUID before treating the finding as malicious.
 
-**Entropy threshold (7.5 bits/byte)**: compressed video streams normally exceed 7.5 bits/byte. `_high_entropy_fraction()` only checks non-compressed metadata regions (atoms outside `mdat`). Findings in `mdat` itself are not reported.
+**Entropy threshold 7.5 bits/byte**: compressed video streams normally exceed 7.5 bits/byte. `_high_entropy_fraction()` only checks non-compressed metadata regions (atoms outside `mdat`). Findings in `mdat` itself are not reported.
 
 ---
 

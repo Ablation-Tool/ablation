@@ -4,7 +4,7 @@
 
 Five things were not possible before in Ablation:
 
-1. **No sweep path for TI COFF2/AR archives.** All prior sweeps assumed ELF input to `BinaryContext`. C28x `.lib` and `.a` files (cl2000/tiarmclang output) are COFF2 or AR-of-COFF2; `lief.parse()` returns `None` and `capstone` has no C28x support. The sweep routes these through `TiCoffLoader` + `EcuC28xDecoder` directly, bypassing the ELF path entirely.
+1. **No sweep path for TI COFF2/AR archives.** All prior sweeps assumed ELF input to `BinaryContext`. C28x `.lib` and `.a` files cl2000/tiarmclang output are COFF2 or AR-of-COFF2; `lief.parse()` returns `None` and `capstone` has no C28x support. The sweep routes these through `TiCoffLoader` + `EcuC28xDecoder` directly, bypassing the ELF path entirely.
 
 2. **No batch extraction from TI TIREX package zips.** TI distributes SDKs as zip archives with nested directories and sometimes double-nested inner zips. Walking 138 packages (23 GB) with `unzip -l` + per-binary type dispatch was not scriptable without a dedicated sweep entry point.
 
@@ -18,7 +18,7 @@ Five things were not possible before in Ablation:
 
 ## What it does
 
-Batch vulnerability sweep over a TI TIREX SDK package directory (or a single zip or extracted directory). Handles four binary classes:
+Batch vulnerability sweep over a TI TIREX SDK package directory or a single zip or extracted directory. Handles four binary classes:
 
 | Class | Format | Scanner path |
 |---|---|---|
@@ -32,10 +32,10 @@ Batch vulnerability sweep over a TI TIREX SDK package directory (or a single zip
 Phase order per package:
 
 1. **Phase 0 (Triage)**: extract zip, classify binaries by magic/extension, filter ELFs with no PLT exec-class sinks (via `batch_plt_intersect`).
-2. **Phase 1 (NNC scan)**: run `TiNNCScanner` on every COFF/AR and ELF binary. Fast (symbol table only).
-3. **Phase 2 (ELF taint)**: arch-routed `ARM32TaintTracker` / `ARM64TaintTracker` on PLT-passing ELFs.
-4. **Phase 3 (C28x disasm)**: `EcuC28xDecoder.function_starts()` on COFF archives, then `EcuSecurityAccessScanner` on flat ROM `.bin` images.
-5. **Phase 4 (Crypto)**: `HashAlgoDiscriminator` on ARM32 ELFs (first 1 MB).
+2. **Phase 1 NNC scan**: run `TiNNCScanner` on every COFF/AR and ELF binary. Fast symbol table only.
+3. **Phase 2 ELF taint**: arch-routed `ARM32TaintTracker` / `ARM64TaintTracker` on PLT-passing ELFs.
+4. **Phase 3 C28x disasm**: `EcuC28xDecoder.function_starts()` on COFF archives, then `EcuSecurityAccessScanner` on flat ROM `.bin` images.
+5. **Phase 4 (Crypto)**: `HashAlgoDiscriminator` on ARM32 ELFs first 1 MB.
 
 Results are written to `reports/sweep_ti_<package>_<ts>.md` and a master summary to `reports/sweep_ti_master_<ts>.md`.
 
@@ -69,7 +69,7 @@ python3 sweeps/ti_sweep.py /media/cowboy/research/TI-RE/tirex/ --filter simpleli
 
 ## Vuln profiles
 
-TI-specific semantic profiles (in addition to base_sweep.VULN_PROFILES):
+TI-specific semantic profiles in addition to base_sweep.VULN_PROFILES:
 
 | Profile | Target | CWE class |
 |---|---|---|
@@ -86,7 +86,7 @@ TI-specific semantic profiles (in addition to base_sweep.VULN_PROFILES):
 
 ## How it works
 
-Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 
@@ -119,7 +119,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Reading output
 
-`sweep_package(input_path)` returns a `Tuple[str, List[dict], str]`: `(package_name, findings_list, report_markdown)`. Each dict in `findings_list` represents one finding:
+`sweep_packageinput_path` returns a `Tuple[str, List[dict], str]`: `package_name, findings_list, report_markdown`. Each dict in `findings_list` represents one finding:
 
 | Key | Content |
 |:---|:---|
@@ -129,11 +129,11 @@ Calibration data regions contain byte sequences that decode as valid instruction
 | `severity` | `HIGH` or scanner-reported severity string |
 | `title` | Finding description string |
 | `phase` | Phase that produced it: `nnc`, `taint`, or `c28x` |
-| `va` | Virtual address of the finding (NNC findings only) |
-| `symbol` | Symbol name (NNC findings only) |
-| `arch` | Architecture string: `arm32_thumb`, `arm64`, `riscv32` (taint findings only) |
+| `va` | Virtual address of the finding NNC findings only |
+| `symbol` | Symbol name NNC findings only |
+| `arch` | Architecture string: `arm32_thumb`, `arm64`, `riscv32` taint findings only |
 
-`sweep_directory(tirex_dir)` calls `sweep_package` for each `.zip` package in the directory and writes per-package and master Markdown reports to `reports/`.
+`sweep_directorytirex_dir` calls `sweep_package` for each `.zip` package in the directory and writes per-package and master Markdown reports to `reports/`.
 
 ---
 

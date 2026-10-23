@@ -105,7 +105,7 @@ reference but no data; their ROM address is supplied by the variant overlay.
 ### Variant XMLs
 
 Each variant XML carries a `<rom base="...">` attribute and a `<romid>` block. The `base=`
-attribute names either another variant xmlid or `A2L` (the structure root). Address entries
+attribute names either another variant xmlid or `A2L` the structure root. Address entries
 are direct children of `<rom>`:
 
 ```xml
@@ -161,7 +161,7 @@ variant_id = parser.identify_rom(rom)
 
 ## API reference
 
-### `EcuNissanParser.from_dir(definitions_dir)`
+### `EcuNissanParser.from_dirdefinitions_dir`
 
 Load all definitions from a Pytrex NissanDefinitions directory. Reads ScalingData.xml and
 A2L.xml from the top level, then walks all subdirectories loading variant XML files.
@@ -169,10 +169,10 @@ Malformed files and individual load errors are silently skipped. ScalingData.xml
 tolerantly: a missing root close tag is recovered by synthesizing the correct close tag
 before re-parsing.
 
-### `calibration_tables(variant_id) -> list[CalibrationTable]`
+### `calibration_tablesvariant_id -> list[CalibrationTable]`
 
 Return CalibrationTable objects for one variant. Resolves the inheritance chain to build
-a merged address map (child overrides ancestor), then combines structure from A2L.xml and
+a merged address map child overrides ancestor, then combines structure from A2L.xml and
 scaling from ScalingData.xml. Tables not present in the merged address chain are omitted.
 BitwiseSwitch tables are always omitted.
 
@@ -180,13 +180,13 @@ BitwiseSwitch tables are always omitted.
 
 Return all loaded variant xmlid strings, sorted.
 
-### `identify_rom(rom: bytes) -> Optional[str]`
+### `identify_romrom: bytes -> Optional[str]`
 
 Return the variant xmlid whose `internalidstring` matches `rom` at `internalidaddress`.
 Returns None when no variant matches. The `internalidaddress` field is interpreted as a hex
 integer (with or without `0x` prefix).
 
-### `label_map(variant_id) -> dict[int, str]`
+### `label_mapvariant_id -> dict[int, str]`
 
 Return `{file_offset: label}` for all tables and their axes for a variant. Pass entries to
 `ctx.set_name(offset, name, source="nissan-pytrex")`.
@@ -211,7 +211,7 @@ Nissan Pytrex definitions
 | Variant | Model | Tables | Axis addresses |
 |---|---|---|---|
 | CD515 | 350Z 2003 AT USDM | 55 |: |
-| CD001 | 350Z 2003 MT USDM (inherits CD515) | 55 |: |
+| CD001 | 350Z 2003 MT USDM inherits CD515 | 55 |: |
 | CD415 | 350Z | 39 | X Axis + Y Axis per MAP |
 | CF42A | 350Z (largest) | 132 | mixed |
 | CF92A | G35 | 79 |: |
@@ -242,7 +242,7 @@ x_axis=0x836D, y_axis=0x8311, scale=0.78125, unit=`Compensation (%)`.
 | Scaling source | ScalingData.xml library | expression= attribute | MATH equation |
 | Structure source | A2L.xml master | base XML | XDF file |
 | Address source | variant XML overlays | variant XML overlays | XDF file |
-| Inheritance depth | 3 levels (library + structure + address) | 2 levels (base + variant) | 1 level |
+| Inheritance depth | 3 levels library + structure + address | 2 levels base + variant | 1 level |
 | Identify ROM | internalidstring byte match | internalidstring byte match | Not supported |
 | Byte order source | endian= in romid | endian= attribute | lsbfirst in DEFAULTS |
 | Axis addresses | optional per-table child elements | separate X/Y Axis table entries | EMBEDDEDDATA attributes |
@@ -269,13 +269,13 @@ x_axis=0x836D, y_axis=0x8311, scale=0.78125, unit=`Compensation (%)`.
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_XML_BYTES=4MB`; `path.stat().st_size > _MAX_XML_BYTES` guard before every XML read: `_parse_scalings()` (L268), `_parse_structure()` (L305), and `_load_variant()` (L411, added this session; previously missing). `_MAX_WALK_DEPTH=4` caps directory recursion.
+Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_XML_BYTES=4MB`; `path.stat().st_size > _MAX_XML_BYTES` guard before every XML read: `_parse_scalings()` (L268), `_parse_structure()` (L305), and `_load_variant()` L411, added this session; previously missing. `_MAX_WALK_DEPTH=4` caps directory recursion.
 
 ---
 
 ## How it works
 
-Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 
@@ -308,7 +308,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Reading output
 
-`EcuNissanParser.from_file(path)` constructs a parser. Access calibration tables via `parser.tables(xmlid, rom)` which returns `List[CalibrationTable]`:
+`EcuNissanParser.from_file(path)` constructs a parser. Access calibration tables via `parser.tablesxmlid, rom` which returns `List[CalibrationTable]`:
 
 | Attribute | Content |
 |:---|:---|
@@ -319,7 +319,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 | `scale` / `bias` | Physical-to-raw scaling |
 | `unit` | Engineering unit string |
 
-`parser.label_map(xmlid, rom)` returns `Dict[int, str]` for direct `ctx.set_name()` injection.
+`parser.label_mapxmlid, rom` returns `Dict[int, str]` for direct `ctx.set_name()` injection.
 
 ---
 

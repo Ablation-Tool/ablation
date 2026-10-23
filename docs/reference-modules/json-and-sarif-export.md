@@ -81,7 +81,7 @@ The following illustrates SARIF and JSON export output format.
 
 **SARIF `ruleId` collision**: if two different queries have the same tag, `_rule_id()` generates the same `ruleId`. The SARIF spec requires unique `ruleId` values per rule; downstream tools may merge or deduplicate results. Use distinct tags per query to avoid collisions.
 
-**`min_score` in `sweep_to_json()`**: the default `min_score=0.0` includes all hits including low-confidence matches. Pass `min_score=0.75` (the standard sweep threshold) to match the semantic sweep's own reporting threshold.
+**`min_score` in `sweep_to_json()`**: the default `min_score=0.0` includes all hits including low-confidence matches. Pass `min_score=0.75` the standard sweep threshold to match the semantic sweep's own reporting threshold.
 
 ---
 
@@ -104,9 +104,9 @@ Export runs at the end of a sweep or confirmation session, never during triage. 
 | `runs[0].results[*].message.text` | Finding detail string |
 | `runs[0].results[*].locations[*].uri` | File URI of the analyzed binary |
 
-`findings_to_sarif(findings, binary_path)`: same SARIF format, input is a flat finding list.
+`findings_to_sariffindings, binary_path`: same SARIF format, input is a flat finding list.
 
-`sweep_to_json(sweep_results)` and `findings_to_json(findings)` return plain `dict` representations of the same data, suitable for `write_json(data, path)`.
+`sweep_to_jsonsweep_results` and `findings_to_jsonfindings` return plain `dict` representations of the same data, suitable for `write_jsondata, path`.
 
 ---
 

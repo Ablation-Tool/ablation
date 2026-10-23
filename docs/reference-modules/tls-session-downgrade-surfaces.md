@@ -1,12 +1,12 @@
 # TLS Session Downgrade Surfaces
 
-Detect TLS protocol downgrade weaknesses: absence of `TLS_FALLBACK_SCSV` protection (RFC 7507), legacy version acceptance (TLS 1.0/1.1), session ticket reuse enabling retroactive decryption, and TLS 1.3 0-RTT replay surfaces: by sending raw ClientHello records and probing session resumption behavior via `modules/tls_enum.py`.
+Detect TLS protocol downgrade weaknesses: absence of `TLS_FALLBACK_SCSV` protection RFC 7507, legacy version acceptance TLS 1.0/1.1, session ticket reuse enabling retroactive decryption, and TLS 1.3 0-RTT replay surfaces: by sending raw ClientHello records and probing session resumption behavior via `modules/tls_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **`probe_tls_downgrade_attack()` confirms whether the server enforces `TLS_FALLBACK_SCSV` (RFC 7507)**: a client that cannot negotiate TLS 1.3 falls back to a lower version. An active MITM attacker can force this fallback by blocking higher-version records. RFC 7507 requires servers to respond with a fatal `inappropriate_fallback` alert (content type 21, level 2, description 86) when they see `TLS_FALLBACK_SCSV` (0x5600) in a ClientHello with a version below the server's maximum. Absence of this alert means the server does not reject forced downgrades. `probe_tls_downgrade_attack()` sends a TLS 1.1 ClientHello containing `TLS_FALLBACK_SCSV` and checks for the alert response.
+1. **`probe_tls_downgrade_attack()` confirms whether the server enforces `TLS_FALLBACK_SCSV` RFC 7507**: a client that cannot negotiate TLS 1.3 falls back to a lower version. An active MITM attacker can force this fallback by blocking higher-version records. RFC 7507 requires servers to respond with a fatal `inappropriate_fallback` alert content type 21, level 2, description 86 when they see `TLS_FALLBACK_SCSV` (0x5600) in a ClientHello with a version below the server's maximum. Absence of this alert means the server does not reject forced downgrades. `probe_tls_downgrade_attack()` sends a TLS 1.1 ClientHello containing `TLS_FALLBACK_SCSV` and checks for the alert response.
 
 2. **Legacy TLS version acceptance creates a persistent downgrade surface**: TLS 1.0 and 1.1 were deprecated by RFC 8996 in March 2021. Both versions use MAC-then-Encrypt with CBC cipher suites that are vulnerable to BEAST (TLS 1.0) and POODLE class attacks. `probe_tls_downgrade_attack()` attempts a TLS 1.0 and TLS 1.1 handshake using `ssl.SSLContext.minimum_version = ssl.TLSVersion.TLSv1` and flags servers that complete the handshake as `TLS10_ACCEPTED` / `TLS11_ACCEPTED`.
 
@@ -95,7 +95,7 @@ TLS downgrade probe functions return `List[{severity, title, detail, host, port}
 
 | Field | Content |
 |:---|:---|
-| `severity` | `HIGH` (active downgrade) / `MEDIUM` (deprecated version accepted) |
+| `severity` | `HIGH` active downgrade / `MEDIUM` deprecated version accepted |
 | `title` | Finding code (e.g., `NO_FALLBACK_SCSV_PROTECTION`, `TLS10_ACCEPTED`, `TLS11_ACCEPTED`) |
 | `detail` | RFC reference and exploitation context |
 | `host` | Target hostname |

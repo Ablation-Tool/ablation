@@ -10,7 +10,7 @@ Propose and apply function names for stripped binaries using the LLM analyst loo
 
 2. **`RAGRetriever` grounds the LLM's naming in prior confirmed RE work**: before generating a name, it retrieves existing `func_id.db` records that share callee sets or roles with the target function, injecting them as context. A function that calls `recv()`, `strncmp()`, and `send()` with a prior record showing `"role": "http_dispatcher"` will receive a well-grounded name rather than a generic one.
 
-3. **Names are annotated with the source (LLM_INFERRED) and can be batch-applied via `ctx.set_name()` only after analyst review.** Assisted naming proposals are never auto-committed: they are presented as a ranked list for approval, preventing noisy LLM suggestions from polluting the confirmed name space.
+3. **Names are annotated with the source LLM_INFERRED and can be batch-applied via `ctx.set_name()` only after analyst review.** Assisted naming proposals are never auto-committed: they are presented as a ranked list for approval, preventing noisy LLM suggestions from polluting the confirmed name space.
 
 ---
 
@@ -83,7 +83,7 @@ Run assisted naming after `SemanticSearcher` and `FuncProfiler` have identified 
 
 ## Reading output
 
-`name_function(agent_loop, func_addr)` returns a `NamingCandidate`:
+`name_functionagent_loop, func_addr` returns a `NamingCandidate`:
 
 | Attribute | Content |
 |:---|:---|

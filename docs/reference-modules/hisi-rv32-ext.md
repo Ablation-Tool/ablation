@@ -2,7 +2,7 @@
 
 Correct-size disassembly for HiSilicon WS63 / Hi3863 / BS21 (Hi2821) NearLink SoC
 firmware and all other HiSilicon bare-metal RISC-V targets using the proprietary
-`riscv31` core with HCC (Huawei Custom C) ISA extensions.
+`riscv31` core with HCC Huawei Custom C ISA extensions.
 
 ---
 
@@ -26,7 +26,7 @@ HiSilicon's WS63, Hi3863, and BS21 NearLink SoCs use an RV32GC core with six pro
 
 **Pass `ext_decoder=dec` to `RISCV32TaintTracker.from_path()`.** Constructing the tracker without the ext_decoder falls back to plain Capstone. Every custom instruction then misaligns subsequent decodes and the taint analysis runs on wrong instruction boundaries.
 
-**Use `conservative=True` for any binary with unknown `0x7b` (custom-3) semantics.** The decoder knows the encoding but not the semantics of the roughly 9,000 custom-3 variants in WS63 firmware. Conservative mode propagates taint from rs1 and rs2 to rd so no taint path is silently dropped.
+**Use `conservative=True` for any binary with unknown `0x7b` custom-3 semantics.** The decoder knows the encoding but not the semantics of the roughly 9,000 custom-3 variants in WS63 firmware. Conservative mode propagates taint from rs1 and rs2 to rd so no taint path is silently dropped.
 
 **Run `dec.opcode_report()` before taint analysis.** If the report shows `l.li` instances, confirm the lifter walks past them correctly. Each `l.li` is 6 bytes and a plain Capstone pass produces wrong boundaries at every occurrence.
 
@@ -46,7 +46,7 @@ two 16-bit compressed extensions:
 | `0x1f` | reserved | `l.li`: 48-bit long load-immediate | **6 B** |
 | `0x3b` | OP-32 | `beqi`, `bnei`, `bgei`, `blti`, `bgeui`, `bltui` | 4 B |
 | `0x5b` | custom-2 | `muliadd` | 4 B |
-| `0x7b` | custom-3 | R-type dispatch/context (broad multi-op) | 4 B |
+| `0x7b` | custom-3 | R-type dispatch/context broad multi-op | 4 B |
 | (16-bit) | RVC Q1 | `uxtb`, `uxth`: zero-extend to 8/16 bits | 2 B |
 
 Capstone 5.x mishandles all six:
@@ -76,7 +76,7 @@ for taint purposes.
 
 ## Instruction encodings
 
-### 0x0b: `ldmia` / `stmia` (4 bytes, multi-register)
+### 0x0b: `ldmia` / `stmia` 4 bytes, multi-register
 
 Multi-register load/store with banked register lists. HiSilicon equivalent of ARM's
 `ldmia`/`stmia` prologue/epilogue patterns.
@@ -172,7 +172,7 @@ Semantics: rd = rs2 base_op shift_type(rs1, shamt)
 
 Verified: `addshf a0,a1,a2,sll,3` → `0x06C5851B` (rd=a0, rs1=a1, rs2=a2, shamt=3) ✓
 
-Source: `riscv_preshifted_arithmetic.rst` (riscvarchive/riscv-code-size-reduction)
+Source: `riscv_preshifted_arithmetic.rst` riscvarchive/riscv-code-size-reduction
 
 ### 0x5b: `muliadd rd, rs1, rs2, uimm` (4 bytes)
 
@@ -245,28 +245,28 @@ findings = tracker.run_interprocedural()
 
 | Space | Default taint | `conservative=True` |
 |-------|--------------|---------------------|
-| 0x0b (ldmia) | clears taint on each loaded reg (memory not tracked) | same |
+| 0x0b (ldmia) | clears taint on each loaded reg memory not tracked | same |
 | 0x0b (stmia) | no taint propagation to memory | same |
 | 0x1b (addshf) | rs1,rs2 → rd | same |
-| 0x1f (l.li) | constant → rd (no reg src) | same |
-| 0x3b (branches) | none (branch only) | same |
+| 0x1f (l.li) | constant → rd no reg src | same |
+| 0x3b branches | none branch only | same |
 | 0x5b (muliadd) | rs1,rs2 → rd | same |
-| 0x7b (custom-3) | opaque (no propagation) | rs1,rs2 → rd |
-| uxtb / uxth | clears taint (bounds value ≤255/≤65535) | same |
+| 0x7b custom-3 | opaque no propagation | rs1,rs2 → rd |
+| uxtb / uxth | clears taint bounds value ≤255/≤65535 | same |
 
 ## References
 
 - `fbb_ws63/src/drivers/chips/ws63/arch/riscv/riscv31/` (HiSilicon SDK)
 - `riscv-code-size-reduction/existing_extensions/Huawei Custom Extension/` (GitHub)
 - Perotti et al., CARRV 2020: "HW/SW approaches for RISC-V code size reduction"
-- `tools_isa/poc_hisi_asm_map.py` + HiSilicon-patched GCC 7.3.0 (empirical ground truth)
-- RI5CY User Manual (PULP Platform, April 2019): base Xpulp encoding reference
+- `tools_isa/poc_hisi_asm_map.py` + HiSilicon-patched GCC 7.3.0 empirical ground truth
+- RI5CY User Manual PULP Platform, April 2019: base Xpulp encoding reference
 - `trans_xlinx.c.inc`: QEMU xlinx extension RISC-V translator; canonical ground truth
  for `0x0b` ldmia/stmia slot_bit/slot_reg tables and uxtb/uxth 16-bit mask;
  archived at `/media/cowboy/research/hisilicon-ws63-re/online/zip_extract/`
 - `HiMCUGenInstrInfo.td`: vendor LLVM fork (Apache-2.0, © HiSilicon 2024); defines
  GROUP1 16-bit compressed: `c.neg/c.sbz/c.shz/c.swz/c.xori`; does NOT define
- ldmia/stmia/uxtb/uxth (those are in the QEMU C back-end only)
+ ldmia/stmia/uxtb/uxth those are in the QEMU C back-end only
 
 ## Targets
 
@@ -284,7 +284,7 @@ Prior to this module, hisilicon rv32 extension decoder required manual work outs
 
 ## How it works
 
-Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 
@@ -317,12 +317,12 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ## Reading output
 
-`HiSiRV32Ext(ctx).scan_custom3(code, base_va)` returns `List[HisiInsn]`:
+`HiSiRV32Ext(ctx).scan_custom3code, base_va` returns `List[HisiInsn]`:
 
 | Attribute | Content |
 |:---|:---|
 | `address` | VA of the instruction |
-| `size` | Instruction size in bytes (4 for custom-3 encoding) |
+| `size` | Instruction size in bytes 4 for custom-3 encoding |
 | `mnemonic` | Decoded mnemonic string (e.g., `'hisi.conv2d'`, `'hisi.matmul'`) |
 | `op_str` | Decoded operand string |
 | `rd` / `rs1` / `rs2` | Destination and source register indices |

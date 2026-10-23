@@ -81,7 +81,7 @@ CrossBinaryTaintChain (depth=<N>):
 
 ## False positives
 
-**`LibGraph.from_dir()` resolves imports by symbol name: if two `.so` files export the same symbol name, `LibGraph` will pick the first one found (filesystem ordering).** On firmware with multiple ABI-compatible implementations of a symbol (e.g., a debug and release variant of `libservice.so`), the wrong exporting binary may be selected. Always verify the resolved binary path in each `TaintHop`.
+**`LibGraph.from_dir()` resolves imports by symbol name: if two `.so` files export the same symbol name, `LibGraph` will pick the first one found filesystem ordering.** On firmware with multiple ABI-compatible implementations of a symbol (e.g., a debug and release variant of `libservice.so`), the wrong exporting binary may be selected. Always verify the resolved binary path in each `TaintHop`.
 
 **`max_hops=6` stops BFS at 6 library crossings: some taint chains in large firmware ecosystems may require more hops.** Increase `max_hops` if chains are consistently truncated at the limit. The cost is linear in `max_hops` × number of chains explored.
 
@@ -89,17 +89,17 @@ CrossBinaryTaintChain (depth=<N>):
 
 ## Pipeline position
 
-Run `CrossBinaryTaintTracker` after single-binary TaintTracker confirms that a taint path reaches a PLT entry (not a direct sink). `LibGraph.from_dir()` should be built once per firmware image and reused across all analysis passes. The complete cross-binary chains feed `FindingRegistry` for CVE documentation.
+Run `CrossBinaryTaintTracker` after single-binary TaintTracker confirms that a taint path reaches a PLT entry not a direct sink. `LibGraph.from_dir()` should be built once per firmware image and reused across all analysis passes. The complete cross-binary chains feed `FindingRegistry` for CVE documentation.
 
 ---
 
 ## Reading output
 
-`LibGraph.from_dir(dir_path)` returns a `LibGraph` object.
+`LibGraph.from_dirdir_path` returns a `LibGraph` object.
 
-`LibGraph.defined_in(sym_name)` returns the path to the binary that exports `sym_name`, or `None` if unresolved.
+`LibGraph.defined_insym_name` returns the path to the binary that exports `sym_name`, or `None` if unresolved.
 
-`CrossBinaryTaintTracker.run(source_binary, source_va, tainted_args)` returns a list of `TaintChain` objects:
+`CrossBinaryTaintTracker.runsource_binary, source_va, tainted_args` returns a list of `TaintChain` objects:
 
 | Attribute | Content |
 |:---|:---|

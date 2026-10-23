@@ -8,7 +8,7 @@ Extract key material hidden in BMP pixel LSBs using a Shamir-style Lagrange poly
 
 1. **Certain firmware and APK distributions embed key material in BMP pixel LSBs using a Shamir-style Lagrange polynomial scheme over rational arithmetic.** This encoding is not detectable by string scanning, entropy analysis, or conventional secret-scanning tools: the key bits are distributed across pixel LSBs in a mathematically structured way. `LSBStegoReader` implements the full pipeline: seed hash → pixel offset → coordinate pair extraction → Lagrange interpolation → CRT reconstruction.
 
-2. **The Lagrange scheme distributes each key component as `n_groups // type_count` coordinate pairs across `type_count` components.** Reconstruction requires exact rational arithmetic (not floating point), which `LSBStegoReader` performs using the `imath` library for arbitrary-precision integer math. A floating-point interpolation would produce wrong results due to rounding in large polynomial coefficients.
+2. **The Lagrange scheme distributes each key component as `n_groups // type_count` coordinate pairs across `type_count` components.** Reconstruction requires exact rational arithmetic not floating point, which `LSBStegoReader` performs using the `imath` library for arbitrary-precision integer math. A floating-point interpolation would produce wrong results due to rounding in large polynomial coefficients.
 
 3. **The output format applies a non-standard reverse two's-complement transformation to negative polynomial values**, this matches the byte order expected by the consuming library in the firmware. Without this transformation, the recovered key bytes are in the wrong order and the key is unusable for verification. `StegoKeyResult.fmt()` outputs the key in the format the consuming library expects.
 
@@ -72,7 +72,7 @@ Combined key (consuming-library format): <hex-key>
 
 ## False positives
 
-**BMP files without LSB steganography produce garbage coordinate pairs**: `extract_coords()` reads raw bit patterns from any BMP regardless of whether they encode meaningful data. The `type_count` and `n_groups` values will be nonsensical for non-steganographic BMPs, and `recover()` will produce meaningless output. Confirm that a BMP is a likely steganographic carrier (discovered in firmware alongside known-encrypted data) before running recovery.
+**BMP files without LSB steganography produce garbage coordinate pairs**: `extract_coords()` reads raw bit patterns from any BMP regardless of whether they encode meaningful data. The `type_count` and `n_groups` values will be nonsensical for non-steganographic BMPs, and `recover()` will produce meaningless output. Confirm that a BMP is a likely steganographic carrier discovered in firmware alongside known-encrypted data before running recovery.
 
 **The Lagrange scheme requires the correct seed string**: using the wrong seed produces a different `seed_offset` and extracts the wrong pixel region. If recovery produces invalid key material for example fails key verification in the consuming library, try alternative seed strings from observed firmware string constants.
 
@@ -86,7 +86,7 @@ Run `LSBStegoReader` when a BMP file is found embedded in firmware or APK conten
 
 ## Reading output
 
-`LSBStegoReader(pixel_data, seed).extract()` returns a `StegoKeyResult`:
+`LSBStegoReaderpixel_data, seed.extract()` returns a `StegoKeyResult`:
 
 | Attribute | Content |
 |:---|:---|
@@ -103,4 +103,4 @@ Run `LSBStegoReader` when a BMP file is found embedded in firmware or APK conten
 
 - [Firmware Extraction](firmware-extraction.md): outer layer extraction pipeline
 - [Compressed BFF Detection / Entropy Mapping](compressed-bff-detection-and-lzw-attempt.md): entropy analysis to locate encrypted regions before key recovery
-- [Credential/Token/Key Discovery](credential-token-key-discovery.md): live host credential enumeration (complements static firmware triage)
+- [Credential/Token/Key Discovery](credential-token-key-discovery.md): live host credential enumeration complements static firmware triage

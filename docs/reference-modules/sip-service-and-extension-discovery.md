@@ -6,11 +6,11 @@ Fingerprint SIP servers, enumerate valid extensions, probe unauthenticated regis
 
 ## Why this exists
 
-1. **SIP deployments expose version, capability, and extension information in response to unauthenticated RFC-required method messages: OPTIONS, REGISTER, and SUBSCRIBE are mandatory SIP methods that every compliant server must handle, making them ideal fingerprinting vectors.** Without a dedicated enumeration pass, subsequent attack-surface probes have no target extension range, no server identity, and no baseline response codes. `probe_sip_server()` resolves server identity from the `User-Agent`, `Server`, and `Allow` response headers in a single OPTIONS request. `probe_sip_enumeration()` then sweeps a three-extension sample (100, 200, 1000) and detects code-differential enumeration surfaces: if the server returns 200 for valid extensions and 403 for invalid ones, the full range is walkable without authentication.
+1. **SIP deployments expose version, capability, and extension information in response to unauthenticated RFC-required method messages: OPTIONS, REGISTER, and SUBSCRIBE are mandatory SIP methods that every compliant server must handle, making them ideal fingerprinting vectors.** Without a dedicated enumeration pass, subsequent attack-surface probes have no target extension range, no server identity, and no baseline response codes. `probe_sip_server()` resolves server identity from the `User-Agent`, `Server`, and `Allow` response headers in a single OPTIONS request. `probe_sip_enumeration()` then sweeps extension samples 100, 200, and 1000, then detects code-differential enumeration surfaces: if the server returns 200 for valid extensions and 403 for invalid ones, the full range is walkable without authentication.
 
 2. **REGISTER without authentication is a direct call-hijacking primitive: an endpoint that returns 200 OK to a REGISTER without first issuing a 401/407 challenge accepts arbitrary binding updates from any source, routing all inbound calls to attacker-controlled Contact URIs.** `check_unauthenticated_register()` and `probe_sip_registration_hijacking()` cover three distinct surfaces: accepting any REGISTER without challenge (CRITICAL `SIP_UNAUTH_REGISTER`), accepting a REGISTER with Contact pointing to a TEST-NET-3 attacker IP without challenge (CRITICAL `SIP_REGISTRATION_HIJACK`), and accepting a wildcard Expires:0 de-registration without challenge (CRITICAL `SIP_UNAUTH_DEREGISTER`). These three primitives together constitute a complete call-hijacking chain requiring zero credentials.
 
-3. **SIP deployments frequently omit SRTP enforcement: an endpoint that processes INVITE offers with RTP/AVP profile and no crypto= lines without issuing 488 Not Acceptable Here will negotiate unencrypted media for every call, making on-path RTP capture trivial.** `check_srtp_required()` and `probe_sip_media_interception()` jointly assess media-path encryption posture: INVITE with RTP/AVP only (no SAVP, no crypto= lines), offer-less INVITE (late-media model enabling RTP endpoint substitution), unauthenticated dialog event subscription (RFC 4235: real-time active call enumeration), and OPTIONS Allow header SAVP absence (confirms no path to encrypted media for any session).
+3. **SIP deployments frequently omit SRTP enforcement: an endpoint that processes INVITE offers with RTP/AVP profile and no crypto= lines without issuing 488 Not Acceptable Here will negotiate unencrypted media for every call, making on-path RTP capture trivial.** `check_srtp_required()` and `probe_sip_media_interception()` jointly assess media-path encryption posture: INVITE with RTP/AVP only (no SAVP, no crypto= lines), offer-less INVITE late-media model enabling RTP endpoint substitution, unauthenticated dialog event subscription RFC 4235: real-time active call enumeration, and OPTIONS Allow header SAVP absence confirms no path to encrypted media for any session.
 
 ---
 
@@ -53,9 +53,9 @@ flowchart TD
 | `SIP_EXTENSION_FOUND` | MEDIUM | REGISTER differential: 401 for this extension, 403 for baseline |
 | `SIP_AUTH_BYPASS` | CRITICAL | REGISTER for known extension → 200 OK without challenge |
 | `AMI_EXPOSED` | HIGH | TCP/5038 banner returned: Asterisk Manager Interface reachable |
-| `AMI_AUTH_SUCCESS` | CRITICAL | AMI login succeeded with default credential (admin:admin, amp111, password) |
-| `SRTP_NOT_REQUIRED` | MEDIUM | INVITE RTP/AVP → 200 OK (unencrypted media accepted) |
-| `SRTP_REQUIRED` | LOW | INVITE RTP/AVP → 488 Not Acceptable (SRTP enforced: expected) |
+| `AMI_AUTH_SUCCESS` | CRITICAL | AMI login succeeded with default credential admin:admin, amp111, password |
+| `SRTP_NOT_REQUIRED` | MEDIUM | INVITE RTP/AVP → 200 OK unencrypted media accepted |
+| `SRTP_REQUIRED` | LOW | INVITE RTP/AVP → 488 Not Acceptable SRTP enforced: expected |
 
 ### Finding reference: standalone probes
 
@@ -63,13 +63,13 @@ flowchart TD
 |:---|:---|:---|:---|
 | `SIP_EXTENSION_VALID` | HIGH | `probe_sip_enumeration` | OPTIONS for extension → 200 OK |
 | `SIP_INTERNAL_IP_LEAK` | HIGH | `probe_sip_enumeration` | Via header contains RFC1918 address |
-| `SIP_EXTENSION_ENUM` | HIGH | `probe_sip_enumeration` | Different codes for different extensions (code differential) |
+| `SIP_EXTENSION_ENUM` | HIGH | `probe_sip_enumeration` | Different codes for different extensions code differential |
 | `SIP_PRESENCE_UNAUTH` | MEDIUM | `probe_sip_enumeration` | SUBSCRIBE Event:presence → 200 OK without auth |
 | `SIP_UNAUTH_DEREGISTER` | CRITICAL | `probe_sip_registration_hijacking` | REGISTER Expires:0 → 200 OK without auth challenge |
 | `SIP_REGISTRATION_HIJACK` | CRITICAL | `probe_sip_registration_hijacking` | REGISTER with foreign Contact IP → 200 OK without auth |
 | `SIP_CONTACT_DISCLOSURE` | HIGH | `probe_sip_registration_hijacking` | 200 OK contains Contact header with registered UA bindings |
-| `SIP_NO_SRTP_OFFERED` | HIGH | `probe_sip_media_interception` | INVITE RTP/AVP only → 100/180/183/200 (no SRTP rejection) |
-| `SIP_LATE_MEDIA_ACCEPT` | MEDIUM | `probe_sip_media_interception` | Offer-less INVITE → 100/180/183/200 (late-media accepted) |
+| `SIP_NO_SRTP_OFFERED` | HIGH | `probe_sip_media_interception` | INVITE RTP/AVP only → 100/180/183/200 no SRTP rejection |
+| `SIP_LATE_MEDIA_ACCEPT` | MEDIUM | `probe_sip_media_interception` | Offer-less INVITE → 100/180/183/200 late-media accepted |
 | `SIP_DIALOG_MONITOR` | HIGH/CRITICAL | `probe_sip_media_interception` | SUBSCRIBE Event:dialog → 200 OK without auth |
 | `SIP_SAVP_NOT_ADVERTISED` | MEDIUM | `probe_sip_media_interception` | OPTIONS Allow+Supported: no SAVP/SRTP/SDES token |
 | `SIP_ALLOW_REFER` | HIGH | `probe_sip_options_extended` | Allow: REFER in OPTIONS response |
@@ -170,15 +170,15 @@ The following illustrates the output format for representative findings. Actual 
 
 **`enumerate_extensions()` REGISTER differential misidentifies extensions on deployments where 401 vs 403 are not used for the valid/invalid distinction.** The differential interpretation: 401 = extension exists, 403 = extension absent: is documented in Hacking Exposed UC&VoIP ch04 for FreePBX and Trixbox. Cisco Unified Communications Manager (CUCM) returns 403 for both valid and invalid extensions from untrusted source IPs. Asterisk in default configuration returns 401 for all REGISTER attempts regardless of extension validity. Always confirm `SIP_EXTENSION_FOUND` findings by cross-referencing with `probe_sip_enumeration()` OPTIONS responses for the same extension range: a 200 OPTIONS response is a stronger confirmation than the REGISTER differential alone.
 
-**`SIP_DIALOG_MONITOR` fires as HIGH even when no NOTIFY body is received within the timeout.** The function escalates to CRITICAL only when the received NOTIFY body contains `dialog` or `confirmed` keywords. When the server accepts the SUBSCRIBE (200 OK) but does not send a NOTIFY within `timeout` seconds (default 10s), the finding is recorded at HIGH. On deployments where call activity is low, this produces a HIGH finding backed only by the 200 OK response. Verify by extending timeout or running during known active-call periods.
+**`SIP_DIALOG_MONITOR` fires as HIGH even when no NOTIFY body is received within the timeout.** The function escalates to CRITICAL only when the received NOTIFY body contains `dialog` or `confirmed` keywords. When the server accepts the SUBSCRIBE (200 OK) but does not send a NOTIFY within `timeout` seconds default 10s, the finding is recorded at HIGH. On deployments where call activity is low, this produces a HIGH finding backed only by the 200 OK response. Verify by extending timeout or running during known active-call periods.
 
-**`SIP_REGISTRATION_HIJACK` uses TEST-NET-3 (203.0.113.99) as the forged Contact IP.** RFC 5737 designates 203.0.113.0/24 as documentation-only addresses. A server that accepts this Contact update has the vulnerability, but the probe itself routes inbound calls to a non-existent address. Confirm findings manually before escalating: on some SIP proxies, the acceptance of the Contact update does not guarantee that calls are actually redirected (the proxy may re-validate the Contact on routing).
+**`SIP_REGISTRATION_HIJACK` uses TEST-NET-3 203.0.113.99 as the forged Contact IP.** RFC 5737 designates 203.0.113.0/24 as documentation-only addresses. A server that accepts this Contact update has the vulnerability, but the probe itself routes inbound calls to a non-existent address. Confirm findings manually before escalating: on some SIP proxies, the acceptance of the Contact update does not guarantee that calls are actually redirected the proxy may re-validate the Contact on routing.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm that UDP/5060 (or configured SIP port) is reachable with a packet capture tool or `netcat -u`. Identify whether the deployment uses SIP/UDP or SIP/TCP: `_send_udp_sip()` is UDP-only; TCP-based SIP deployments (common on enterprise CUCM) require direct socket sends. Confirm that the AMI port (TCP/5038) is network-accessible before running `check_ami_interface()`.
+**Before this module:** Confirm that UDP/5060 or configured SIP port is reachable with a packet capture tool or `netcat -u`. Identify whether the deployment uses SIP/UDP or SIP/TCP: `_send_udp_sip()` is UDP-only; TCP-based SIP deployments common on enterprise CUCM require direct socket sends. Confirm that the AMI port TCP/5038 is network-accessible before running `check_ami_interface()`.
 
 **After this module:** For `SIP_UNAUTH_REGISTER` and `SIP_REGISTRATION_HIJACK` findings: proceed to `sip-attack-surface-detection.md` probes (`detect_sip_interception_indicators`, `probe_sip_authentication_bypass`) to confirm the full call-hijacking chain. For `AMI_AUTH_SUCCESS`: enumerate AMI commands (`action: command`, `command: sip show peers`) for the full extension registry. For `SIP_NO_SRTP_OFFERED`: proceed to RTP injection surface assessment (`probe_rtp_injection_surface`, `probe_rtp_covert_channel` in `voip-protocol-and-covert-channels.md`). Write confirmed findings to `~/VDT/VULNERABILITIES-<ip>.md`.
 
@@ -191,7 +191,7 @@ The following illustrates the output format for representative findings. Actual 
 | `f['severity']` | `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` |
 | `f['title']` | Finding code string (e.g., `SIP_UNAUTH_REGISTER`, `AMI_AUTH_SUCCESS`) |
 | `f['detail']` | Full finding narrative including host:port, observed behavior, protocol reference, and attack impact |
-| `f['host']` | Target host (IP or FQDN) |
+| `f['host']` | Target host IP or FQDN |
 | `f['port']` | Target port for the specific probe that produced this finding |
 
 ---

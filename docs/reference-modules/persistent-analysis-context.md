@@ -96,7 +96,7 @@ BinaryContext: /path/to/target.elf
 
 ## Pipeline position
 
-`BinaryContext.load_or_build()` is always step 2 in the RE workflow (CLAUDE.md): immediately after session start, before any analysis. Every other analyzer in the pipeline takes a `BinaryContext` input. Build the context once per binary per session; pass the same `ctx` object to all analyzers.
+`BinaryContext.load_or_build()` is always step 2 in the RE workflow CLAUDE.md: immediately after session start, before any analysis. Every other analyzer in the pipeline takes a `BinaryContext` input. Build the context once per binary per session; pass the same `ctx` object to all analyzers.
 
 ---
 
@@ -110,9 +110,9 @@ BinaryContext: /path/to/target.elf
 | `exports` | Dict of export VA → name |
 | `strings` | `List[(va, str)]`: `.rodata` strings |
 | `func_starts` | `List[int]`: function start VAs |
-| `call_edges` | `List[(caller_va, callee_va)]` |
+| `call_edges` | `List[caller_va, callee_va]` |
 | `name(va)` | Named function at VA (or `None`) |
-| `set_name(va, name, source)` | Register a name with source tag |
+| `set_nameva, name, source` | Register a name with source tag |
 | `names_table()` | Formatted table of all named functions |
 
 ---

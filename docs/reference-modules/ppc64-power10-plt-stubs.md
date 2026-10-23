@@ -12,7 +12,7 @@ Scan executable non-`.text` ELF sections for the two Power10 ppc64le ELFv2 PLT s
 
 3. **Form B: 8-byte PLD pcrel stub.** GNU ld emits `pld r12,@got@pcrel / mtctr r12 / bctr` for Power10 PC-relative GOT addressing (`-mpower10-stubs`). `pld` is a prefixed instruction: a 4-byte MLS prefix word + a 4-byte LD-class suffix word, encoding a 34-bit signed PC-relative displacement. Capstone silently produces no decoded instructions for the prefix word, making the entire stub invisible.
 
-4. **The gap affected real targets.** IBM Advance Toolchain 17.0 `glibc-hwcaps/power10/libgo.so` (57 MB, 7 588 PLTGOT relocs) produced 0 SAC results with the old scanner. After integrating this module, all 7 588 stubs resolve: including `execve@0x12f3968 ARG_PROPAGATED`.
+4. **The gap affected real targets.** IBM Advance Toolchain 17.0 `glibc-hwcaps/power10/libgo.so` 57 MB, 7 588 PLTGOT relocs produced 0 SAC results with the old scanner. After integrating this module, all 7 588 stubs resolve: including `execve@0x12f3968 ARG_PROPAGATED`.
 
 ---
 
@@ -51,7 +51,7 @@ flowchart TD
   +4     4E 80 04 20   bctr
 ```
 
-`D = sign_extend_16(word[-4] & 0xFFFF) & ~3`  (DS-form: low 2 bits carry opcode suffix, must be cleared)
+`D = sign_extend_16(word[-4] & 0xFFFF) & ~3`  DS-form: low 2 bits carry opcode suffix, must be cleared
 `GOT_VA = r2 + D`
 
 **Form B instruction encoding:**
@@ -64,7 +64,7 @@ flowchart TD
   +4     4E 80 04 20   bctr
 ```
 
-34-bit displacement: `D = sign_extend_34((d0_hi << 32) | (d0_lo << 16) | d1)`
+34-bit displacement: `D = sign_extend_34(d0_hi << 32 | d0_lo << 16 | d1)`
 `GOT_VA = prefix_VA + D`
 
 ---
@@ -87,7 +87,7 @@ for stub_va, got_va in sorted(stubs.items()):
     print(f'stub=0x{stub_va:x}  got=0x{got_va:x}')
 ```
 
-**Typical output (at17.0 power10/libgo.so, 7 588 stubs):**
+**Typical output at17.0 power10/libgo.so, 7 588 stubs:**
 ```
 stub=0x0007b820  got=0x00d3e9c8   # write
 stub=0x0007b830  got=0x00d3e9d8   # close
@@ -104,12 +104,12 @@ stub=0x012f3960  got=0x01370768   # execve  ← ARG_PROPAGATED
 Gate: **PASSED** (2026-10-22, commit `3da1ef2b`). No HIGH or CRITICAL issues.
 
 Tested on:
-- `at17.0 glibc-hwcaps/power10/libgo.so` (57 MB, 7 588 pltgot relocs): 0 → 7 588 stubs resolved; `execve@0x12f3968` classified `ARG_PROPAGATED`.
+- `at17.0 glibc-hwcaps/power10/libgo.so` 57 MB, 7 588 pltgot relocs: 0 → 7 588 stubs resolved; `execve@0x12f3968` classified `ARG_PROPAGATED`.
 - Non-Power10 ppc64le binary (`pam_hsc.so`, classic ELFv2 stubs): returns empty dict, no false positives.
 - Section with SHF_EXECINSTR cleared: skipped correctly, no stubs returned.
-- Stub at end of section (fewer than 12 bytes remaining): loop exits cleanly, no out-of-bounds read.
+- Stub at end of section fewer than 12 bytes remaining: loop exits cleanly, no out-of-bounds read.
 - DS-form sign extension: `D=0xFFFC` (−4) and `D=0x7FFC` (+32 764) both verified correct against known GOT layout.
-- PLD 34-bit sign extension: form B with `d0_hi=3` (sign bit set for 34-bit) verified to produce correct negative displacement.
+- PLD 34-bit sign extension: form B with `d0_hi=3` sign bit set for 34-bit verified to produce correct negative displacement.
 
 ---
 
@@ -132,5 +132,5 @@ MTCTR+BCTR is not unique to PLT stubs: indirect branch dispatch tables use the s
 ## See also
 
 - [SinkArgClassifierPPC64ELFv2](sink-arg-classifier-ppc64-elfv2.md): parent classifier that integrates this scanner
-- [SinkArgClassifierPPC64ELFv1](sink-arg-classifier-ppc64-elfv1.md): big-endian ELFv1 counterpart (no Power10 support needed: big-endian POWER uses ELFv1 OPD stubs)
+- [SinkArgClassifierPPC64ELFv1](sink-arg-classifier-ppc64-elfv1.md): big-endian ELFv1 counterpart no Power10 support needed: big-endian POWER uses ELFv1 OPD stubs
 - [SinkArgClassifier](sink-arg-classifier.md): x86-64 baseline and full verdict reference

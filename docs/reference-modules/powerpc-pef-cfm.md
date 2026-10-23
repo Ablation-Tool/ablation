@@ -1,12 +1,12 @@
 # PowerPC PEF/CFM Binary Analysis
 
-Parse PowerPC PEF (Preferred Executable Format) binaries used by Mac Classic CFM (Code Fragment Manager): resolving CFM import stubs, mapping symbol names to code VAs, and providing a `BinaryContext`-compatible surface for taint analysis against PGPuam, PGPuam Server, and Mac Classic networking utilities.
+Parse PowerPC PEF Preferred Executable Format binaries used by Mac Classic CFM Code Fragment Manager: resolving CFM import stubs, mapping symbol names to code VAs, and providing a `BinaryContext`-compatible surface for taint analysis against PGPuam, PGPuam Server, and Mac Classic networking utilities.
 
 ---
 
 ## Why this exists
 
-1. **`PPC32TaintTracker` requires ELF, it cannot load PEF files.** All PEF CFM PPC32 Mac Classic binaries (PGPuam, PGPuam Server, and Tool_Chest networking utilities) were analyzed by hand across sessions 3–11 because there was no PEF-aware loader. `PEFBinaryAnalyzer` provides PEF container parsing, section extraction, and import name resolution for the full CFM binary class.
+1. **`PPC32TaintTracker` requires ELF, it cannot load PEF files.** All PEF CFM PPC32 Mac Classic binaries PGPuam, PGPuam Server, and Tool_Chest networking utilities were analyzed by hand across sessions 3–11 because there was no PEF-aware loader. `PEFBinaryAnalyzer` provides PEF container parsing, section extraction, and import name resolution for the full CFM binary class.
 
 2. **CFM import stub resolution was manual every session.** Each session had to re-derive the RTOC-offset formula: `sym[i] → i*4 from r2`: identify which code VAs were stubs, and map them to symbol names. `PEFBinaryAnalyzer.stub_table()` produces the complete stub-to-name mapping in one call, providing the same `dangerous_imports()` interface as `PPC32ELF` for taint analysis.
 
@@ -97,7 +97,7 @@ Run `PEFBinaryAnalyzer` on any Mac Classic `.pfcd`/PEF binary before taint analy
 
 | Attribute | Content |
 |:---|:---|
-| `name` | Section name string (empty if no name in container) |
+| `name` | Section name string empty if no name in container |
 | `kind` | Kind integer: `0=code`, `1=data`, `2=loader` |
 | `kind_name` | Property: `'code'`, `'data'`, or `'loader'` string |
 | `default_address` | Base VA for this section |

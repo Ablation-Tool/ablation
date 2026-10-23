@@ -1,6 +1,6 @@
 # PS3 SELF Decryptor
 
-Decrypt a PS3 SELF (Signed ELF) into a plain ELF that BinaryContext and Capstone can load.
+Decrypt a PS3 SELF Signed ELF into a plain ELF that BinaryContext and Capstone can load.
 
 ---
 
@@ -16,7 +16,7 @@ or returns an empty context. Before this module, decryption required the externa
 analysis session begins.
 
 **2. Auto-detecting the correct keyset from the SELF header.** The `key_rev` field at
-bytes 6-7 of the SCE header identifies the master keyset (ERK + RIV). Without this
+bytes 6-7 of the SCE header identifies the master keyset ERK + RIV. Without this
 module, matching `key_rev` to the right 256-bit ERK and 128-bit RIV required manual
 lookup in `scetool`'s `keys.h` or the aldostools/webMAN-MOD key table: outside the
 analysis loop. `PS3SELFDecryptor.from_path()` reads `key_rev` and selects the keyset
@@ -71,7 +71,7 @@ PS3SELFDecryptor.register_keyset(0x0017, erk_bytes, riv_bytes)
 |---|---|---|
 | `0x0016` | PS3 firmware 3.70: covers most retail titles (e.g. BLUS30755 GoldenEye) | aldostools/webMAN-MOD `data/keys`, verified against naehrwert/scetool |
 
-Add additional keysets at runtime with `PS3SELFDecryptor.register_keyset(rev, erk, riv)`.
+Add additional keysets at runtime with `PS3SELFDecryptor.register_keysetrev, erk, riv`.
 
 ---
 
@@ -81,11 +81,11 @@ Add additional keysets at runtime with `PS3SELFDecryptor.register_keyset(rev, er
 
 | Method | Description |
 |---|---|
-| `from_path(self_path)` | Auto-detect keyset from `key_rev` in SELF header |
+| `from_pathself_path` | Auto-detect keyset from `key_rev` in SELF header |
 | `from_key_rev(key_rev)` | Explicit keyset selection |
-| `register_keyset(rev, erk, riv)` | Add / replace a keyset entry (class method) |
-| `decrypt(in_path, out_path)` | Decrypt to `out_path`; returns `SELFDecryptResult` |
-| `decrypt_to_tmp(in_path)` | Decrypt to temp file; returns path (caller deletes) |
+| `register_keysetrev, erk, riv` | Add / replace a keyset entry; class method |
+| `decryptin_path, out_path` | Decrypt to `out_path`; returns `SELFDecryptResult` |
+| `decrypt_to_tmp(in_path)` | Decrypt to temp file; returns path caller deletes |
 
 ### `SELFDecryptResult`
 
@@ -126,7 +126,7 @@ Add additional keysets at runtime with `PS3SELFDecryptor.register_keyset(rev, er
 
 ## False positives
 
-**Keyset dependency.** `PS3SELFDecryptor` requires pre-loaded keysets (ERK/RIV pairs). `from_path()` auto-selects from the built-in keyset table by `key_rev` header field. If the SELF uses a key revision not in the built-in table, `from_path()` raises `ValueError: no keyset for key_rev=N`. Register the missing keyset with `register_keyset(key_rev, erk, riv)` before calling `from_path()`.
+**Keyset dependency.** `PS3SELFDecryptor` requires pre-loaded keysets ERK/RIV pairs. `from_path()` auto-selects from the built-in keyset table by `key_rev` header field. If the SELF uses a key revision not in the built-in table, `from_path()` raises `ValueError: no keyset for key_rev=N`. Register the missing keyset with `register_keysetkey_rev, erk, riv` before calling `from_path()`.
 
 ---
 
@@ -140,7 +140,7 @@ Add additional keysets at runtime with `PS3SELFDecryptor.register_keyset(rev, er
 
 ## Reading output
 
-`PS3SELFDecryptor.from_path(self_path).decrypt(in_path, out_path)` returns `SELFDecryptResult`.
+`PS3SELFDecryptor.from_pathself_path.decryptin_path, out_path` returns `SELFDecryptResult`.
 
 | Field | Type | Content |
 |:---|:---|:---|

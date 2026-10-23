@@ -12,7 +12,7 @@ Extract XCOFF binaries from AIX installp BFF archives by magic-scan, and enumera
 
 3. **Dangerous import triage requires no AIX environment.** The XCOFF32 loader section (section type `0x0005`) contains an import ID table: null-separated `path/archive/member` strings, that names every dynamically linked function. `XCOFF32Info.dangerous_imports()` scans this table for exec-class and network-class function names. The entire pipeline runs on Linux.
 
-4. **AixBffExtractor and aix_big_ar_extractor address different formats.** `aix_big_ar_extractor` handles AIX `<bigaf>` library archives (shared libraries distributed as `libc.a`, `libm.a`). This module handles AIX installp BFF packages (OS components, management agents). Both embed XCOFF binaries; only the outer container differs.
+4. **AixBffExtractor and aix_big_ar_extractor address different formats.** `aix_big_ar_extractor` handles AIX `<bigaf>` library archives (shared libraries distributed as `libc.a`, `libm.a`). This module handles AIX installp BFF packages OS components, management agents. Both embed XCOFF binaries; only the outer container differs.
 
 ---
 
@@ -120,7 +120,7 @@ The import ID table uses dotted names (`.system`, `.popen`). The scanner strips 
 
 **XCOFF64 extent computation is approximate.** 64-bit XCOFF headers use a different field layout. The extent estimate for XCOFF64 binaries may be imprecise. Verify that extracted bytes produce a valid XCOFF64 header before passing to downstream tools.
 
-**Symbol table name extraction is the `from_scan` path only.** When called via `AixBffExtractor.from_path()`, the binary name is derived from the XCOFF symbol table's first external symbol or from the file offset (`xcoff_at_0x{offset:x}`). The original installp path component (from the BFF file list) is not recovered.
+**Symbol table name extraction is the `from_scan` path only.** When called via `AixBffExtractor.from_path()`, the binary name is derived from the XCOFF symbol table's first external symbol or from the file offset (`xcoff_at_0x{offset:x}`). The original installp path component from the BFF file list is not recovered.
 
 ---
 

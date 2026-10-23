@@ -15,7 +15,7 @@ workaround.
 **Description:** 
 The MIPS64 N64 ABI uses eight argument registers: $a0-$a3 ($4-$7) and four additional
 registers that the N64 ABI designates as $a4-$a7. Capstone names these four as t0-t3
-($8-$11, the O32 temporary register names). The tracker correctly aliases t0-t3 as extra
+$8-$11, the O32 temporary register names. The tracker correctly aliases t0-t3 as extra
 argument registers for taint seeding. However, Capstone names $12-$15 as t4-t7. In O32,
 these are callee-saved; in N64, they are also callee-saved. Any analysis that mixes O32
 and N64 ABI assumptions (e.g., a binary that calls both O32-compiled and N64-compiled

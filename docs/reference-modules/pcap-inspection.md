@@ -1,12 +1,12 @@
 # PCAP Inspection
 
-Extract DNS queries (with NXDOMAIN/domain-flux detection), cleartext credentials (FTP USER/PASS, Telnet login prompts, HTTP Basic Auth), and HTTP request lines from PCAP files: without Scapy, dpkt, or libpcap: using a pure-Python libpcap global header parser that handles Ethernet/IP/TCP/UDP frame reassembly, via `modules/network_analyze.py` `PCAPAnalyzer`.
+Extract DNS queries with NXDOMAIN/domain-flux detection, cleartext credentials FTP USER/PASS, Telnet login prompts, HTTP Basic Auth, and HTTP request lines from PCAP files: without Scapy, dpkt, or libpcap: using a pure-Python libpcap global header parser that handles Ethernet/IP/TCP/UDP frame reassembly, via `modules/network_analyze.py` `PCAPAnalyzer`.
 
 ---
 
 ## Why this exists
 
-1. **`PCAPAnalyzer` extracts cleartext credentials from PCAP files without external tools.** `extract_credentials()` scans TCP payloads for FTP `USER`/`PASS` command sequences (port 21), Telnet `login:` and `Password:` prompts (port 23), and HTTP Basic Auth `Authorization: Basic <base64>` headers (ports 80/8080). Credentials are returned as `[{'proto', 'src', 'dst', 'cred'}]` dicts where `cred` is the decoded plaintext string.
+1. **`PCAPAnalyzer` extracts cleartext credentials from PCAP files without external tools.** `extract_credentials()` scans TCP payloads for FTP `USER`/`PASS` command sequences (port 21), Telnet `login:` and `Password:` prompts (port 23), and HTTP Basic Auth `Authorization: Basic <base64>` headers ports 80/8080. Credentials are returned as `[{'proto', 'src', 'dst', 'cred'}]` dicts where `cred` is the decoded plaintext string.
 
 2. **`analyze_pcap()` provides a single-call PCAP summary**: credential extraction, DNS query enumeration, and HTTP request logging combined in one pass. DNS extraction (`extract_dns()`) returns `[{'query', 'type', 'src', 'rcode', 'qr'}]` dicts; NXDOMAIN responses (rcode=3) are included as domain-flux indicators per the Conficker analysis pattern from Violent Python chapter 4.
 
@@ -95,17 +95,17 @@ Run PCAP inspection on any packet capture obtained from a post-compromise networ
 
 ## Reading output
 
-`PCAPAnalyzer(filepath).run_all()` returns a dict:
+`PCAPAnalyzerfilepath.run_all()` returns a dict:
 
 | Key | Content |
 |:---|:---|
 | `filepath` | Path to the PCAP file |
 | `packet_count` | Total packets parsed from the PCAP |
-| `credentials` | `list`: cleartext credentials extracted (FTP, Telnet, HTTP Basic Auth) |
+| `credentials` | `list`: cleartext credentials extracted FTP, Telnet, HTTP Basic Auth |
 | `dns_queries` | `list`: DNS query records |
 | `http_requests` | `list`: HTTP request records |
 
-The module-level `analyze_pcap(filepath)` is a convenience wrapper that calls `PCAPAnalyzer(filepath).run_all()`.
+The module-level `analyze_pcapfilepath` is a convenience wrapper that calls `PCAPAnalyzerfilepath.run_all()`.
 
 ---
 

@@ -1,6 +1,6 @@
 # Standalone XCOFF Symbol Resolution
 
-Parse IBM AIX XCOFF32 and XCOFF64 executables: extracting import and export symbol names with virtual addresses from the `.loader` section (which survives stripping): without requiring a full `BinaryContext` session, via `ablation/core/xcoff_parser.py`.
+Parse IBM AIX XCOFF32 and XCOFF64 executables: extracting import and export symbol names with virtual addresses from the `.loader` section which survives stripping: without requiring a full `BinaryContext` session, via `ablation/core/xcoff_parser.py`.
 
 ---
 
@@ -86,10 +86,10 @@ Each `XcoffSymbol` entry has:
 | Attribute | Content |
 |:---|:---|
 | `name` | Symbol name string |
-| `va` | Descriptor VA (for functions) or data VA; 0 for imports |
+| `va` | Descriptor VA for functions or data VA; 0 for imports |
 | `lib` | Import library name: non-empty for imports, empty for exports |
 | `smclas` | Storage mapping class integer |
-| `code_va` | Resolved code VA (set after descriptor resolution, 0 otherwise) |
+| `code_va` | Resolved code VA set after descriptor resolution, 0 otherwise |
 | `is_import` | Property: `True` if `lib` is non-empty |
 
 `XCOFFExecutableAnalyzer.from_path(path).exports_table()` returns `Dict[str, int]`: symbol name → code VA for all exported functions.

@@ -73,7 +73,7 @@ BssTaintTracker:
 
 ## False positives
 
-**Adjacent BSS loads in the same basic block may be unrelated pairs that happen to be 8 bytes apart**: array element access patterns produce the same signature. Confirm that the two BSS addresses are pointers (not integers) and that the forward taint actually produces a loop with pointer-increment behavior before treating the result as a decrypt loop.
+**Adjacent BSS loads in the same basic block may be unrelated pairs that happen to be 8 bytes apart**: array element access patterns produce the same signature. Confirm that the two BSS addresses are pointers not integers and that the forward taint actually produces a loop with pointer-increment behavior before treating the result as a decrypt loop.
 
 **`BssTaintTracker` uses register-level taint only**: stack spills of BSS pointers are not tracked. A function that spills the start/end pointers to the stack before the loop will not be detected. For stack-heavy functions, supplement with `ConstPropAnalysis` to trace the stack slot values.
 
@@ -81,7 +81,7 @@ BssTaintTracker:
 
 ## Pipeline position
 
-Run `BssTaintTracker` on stripped kernel binaries where `SemanticSearcher` fails to find a decrypt routine (no string references, no known sink calls). It is a specialized analysis tool for the Fortinet kernel decrypt use case; for general firmware analysis, standard `TaintTracker` with network sources is more appropriate.
+Run `BssTaintTracker` on stripped kernel binaries where `SemanticSearcher` fails to find a decrypt routine no string references, no known sink calls. It is a specialized analysis tool for the Fortinet kernel decrypt use case; for general firmware analysis, standard `TaintTracker` with network sources is more appropriate.
 
 ---
 
@@ -93,7 +93,7 @@ Run `BssTaintTracker` on stripped kernel binaries where `SemanticSearcher` fails
 |:---|:---|
 | `fn_start` | VA of the candidate decrypt function |
 | `fn_name` | Name of the function (from debug info or `sub_VA`) |
-| `bss_pairs` | `List[Tuple[int, int]]`: `(start_bss_addr, end_bss_addr)` bounds pairs used in loops |
+| `bss_pairs` | `List[Tuple[int, int]]`: `start_bss_addr, end_bss_addr` bounds pairs used in loops |
 | `loops` | `List`: detected loop structures in the candidate function |
 
 ---

@@ -51,13 +51,13 @@ flowchart TD
 |---|---|---|
 | `plt` | `Dict[int, str]` | VA → symbol name for all PLT stubs and dynamic imports |
 | `exports` | `Dict[str, int]` | Symbol name → VA for all globally exported functions |
-| `strings` | `Dict[int, str]` | VA → printable ASCII string (length ≥ 4) from `.rodata` |
+| `strings` | `Dict[int, str]` | VA → printable ASCII string length ≥ 4 from `.rodata` |
 | `func_starts` | `List[int]` | Sorted list of function entry VAs from `.eh_frame` + callee augmentation |
-| `call_edges` | `List[Tuple[int, int, str]]` | `(from_va, to_va, label)` flat call graph |
+| `call_edges` | `List[Tuple[int, int, str]]` | `from_va, to_va, label` flat call graph |
 | `thumb_funcs` | `Set[int]` | VAs of ARM Thumb-encoded functions |
 | `arch` | `str` | Architecture string: `x86_64`, `arm64`, `arm32`, `mips32`, `loongarch64`, etc. |
-| `sha256` | `str` | SHA256 hex digest of the binary (cache invalidation key) |
-| `base_va` | `int` | Load base VA (0 for PIE, non-zero for fixed-load binaries) |
+| `sha256` | `str` | SHA256 hex digest of the binary cache invalidation key |
+| `base_va` | `int` | Load base VA 0 for PIE, non-zero for fixed-load binaries |
 
 ### Supported architectures
 
@@ -66,24 +66,24 @@ flowchart TD
 | x86_64 | ELF, PE | Full support; primary development target |
 | x86_32 | ELF, PE | Full support |
 | ARM64 (AArch64) | ELF | Full support |
-| ARM32 (Thumb/ARM) | ELF | Thumb function tracking via `thumb_funcs` |
+| ARM32 Thumb/ARM | ELF | Thumb function tracking via `thumb_funcs` |
 | MIPS32 / MIPS64 | ELF | Function start recovery from `.eh_frame` |
 | LoongArch64 | ELF | Full support |
-| PowerPC32 / PowerPC64 | ELF (XCOFF32 via separate extractor) | |
+| PowerPC32 / PowerPC64 | ELF XCOFF32 via separate extractor | |
 | RISC-V 32 / 64 | ELF | |
 
 ### String cross-reference index
 
 The `_build_string_xref_index()` pass uses a numpy displacement scan to find all RIP-relative references to `.rodata` strings in the code section. This index answers:
-- `ctx.string_xrefs(string_va)` → which instructions reference this string
-- `ctx.funcs_referencing_string(string_va)` → which functions reference this string
+- `ctx.string_xrefsstring_va` → which instructions reference this string
+- `ctx.funcs_referencing_stringstring_va` → which functions reference this string
 - `ctx.strings_in_func(func_va)` → which strings does this function reference
 
 This is the fast path to identifying a function by its log messages or error strings without disassembling it first.
 
 ### Name overlay
 
-The name overlay is a persistent SQLite registry (`~/.ablation/names.db`) keyed on `(sha256, va)`. `ctx.name(va)` checks the overlay first, then exports, then PLT, then falls back to `"0x{va:x}"`. `ctx.set_name()` writes to disk immediately; `ctx.set_names_bulk()` batches writes for performance when registering more than ~10 names at once.
+The name overlay is a persistent SQLite registry (`~/.ablation/names.db`) keyed on `sha256, va`. `ctx.name(va)` checks the overlay first, then exports, then PLT, then falls back to `"0x{va:x}"`. `ctx.set_name()` writes to disk immediately; `ctx.set_names_bulk()` batches writes for performance when registering more than ~10 names at once.
 
 ---
 
@@ -167,7 +167,7 @@ BinaryContext: httpsd
 
 **Go binaries with no `.eh_frame`.** Stripped Go binaries often lack the `.eh_frame` section that provides function start information. `func_starts` may be populated only from the export table or pclntab recovery. For Go binaries, call `patch_context()` with the `GoGoRetriever` result to populate `func_starts` from the pclntab before running any scanner.
 
-**Kernel-space VAs and numpy overflow.** VAs above `2^63 - 1` (kernel addresses on x86_64) cannot be stored as signed `int64`. The context uses `ctypes.c_int64()` bit-casting in `_va_to_i64()` to handle this correctly. Old cache entries built before this fix may have truncated kernel VAs; force-rebuild to correct them.
+**Kernel-space VAs and numpy overflow.** VAs above `2^63 - 1` kernel addresses on x86_64 cannot be stored as signed `int64`. The context uses `ctypes.c_int64()` bit-casting in `_va_to_i64()` to handle this correctly. Old cache entries built before this fix may have truncated kernel VAs; force-rebuild to correct them.
 
 ---
 
@@ -190,15 +190,15 @@ if ctx.names_count():
 
 | Field | Content |
 |:---|:---|
-| `sha256` | First 16 characters of the binary's SHA256 (full hash stored internally) |
+| `sha256` | First 16 characters of the binary's SHA256 full hash stored internally |
 | `arch` | Detected architecture string |
-| `base_va` | Preferred load address (0 for PIE) |
+| `base_va` | Preferred load address 0 for PIE |
 | `func_starts` | Count of function entry VAs (from `.eh_frame` + callee augmentation) |
 | `exports` | Count of named exported functions |
 | `plt entries` | Count of resolved dynamic import symbols |
-| `strings` | Count of printable ASCII strings in `.rodata` (length ≥ 4) |
+| `strings` | Count of printable ASCII strings in `.rodata` length ≥ 4 |
 | `call_edges` | Count of directed call graph edges |
-| `str_xrefs` | Count of (string_va, code_va) RIP-relative reference pairs indexed |
+| `str_xrefs` | Count of string_va, code_va RIP-relative reference pairs indexed |
 | `named funcs` | Count of analyst-confirmed names in the overlay registry |
 
 ---

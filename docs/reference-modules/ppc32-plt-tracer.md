@@ -43,7 +43,7 @@ tracer.elf.print_disasm(sites[0].bl_va - 8*4, n=15, mark=sites[0].bl_va)
 |---|---|---|
 | `bl_va` | `int` | VA of the `BL` instruction |
 | `thunk_va` | `int` | GOT2-PIC: VA of the `LWZ+MTCTR+BCTR` thunk. BSS PLT: VA of the PLT stub. |
-| `caller_r30` | `int` | GOT2-PIC: active r30 at call site (verified). BSS PLT: always `0` (no r30 in use). |
+| `caller_r30` | `int` | GOT2-PIC: active r30 at call site verified. BSS PLT: always `0` no r30 in use. |
 | `func_name` | `Optional[str]` | Nearest export name |
 
 ---
@@ -138,7 +138,7 @@ False positive reduction: libupdatelpu 9→2, libpythonvm 59→1 after r30 check
 
 ---
 
-## BSS PLT: SYSV PIC (IBM HPS, glibc.so files)
+## BSS PLT: SYSV PIC IBM HPS, glibc.so files
 
 SYSV ABI PPC32 `.so` files (glibc-linked, `ET_DYN`) use a different calling
 model: calls go directly via `BL stub_va` with no indirection through r30 or
@@ -170,19 +170,19 @@ and is always called in firmware with many imports.
 ## Assumptions and failure modes
 
 **r30 = GOT2 register.** Standard SysV ABI PPC32. Non-standard toolchains
-using r29 or another register will not match (GOT2-PIC path only).
+using r29 or another register will not match GOT2-PIC path only.
 
 **BCL preamble within 8 KB.** Scan window is 8 KB backward from each BL.
-Very large compilation units (unusual in firmware.so files) could exceed this.
+Very large compilation units unusual in firmware.so files could exceed this.
 Increase `max_scan` parameter to `_get_caller_r30` if needed.
 
-**Thunk pattern = LWZ+MTCTR+BCTR.** Some compilers emit `BCTRL` (link bit set)
+**Thunk pattern = LWZ+MTCTR+BCTR.** Some compilers emit `BCTRL` link bit set
 for PLT calls. This module handles `BCTR` only; extend `_find_thunks` if
 `BCTRL`-based thunks appear.
 
 **Static analysis only.** PLT slots contain on-disk placeholder values;
 the loader patches them at runtime. This module uses symbol names from
-`.rela.plt` (already present in the unloaded image), so no runtime state
+`.rela.plt` already present in the unloaded image, so no runtime state
 is needed.
 
 ---
@@ -207,7 +207,7 @@ Prior to this module, ppc32plttracer required manual work outside the Ablation p
 
 ## False positives
 
-**Thunk VA overlap.** If the target binary is stripped and `PPC32GOT2Resolver` has not been run first, multiple unresolved `BCTRL` sites may share the same thunk VA (the stub VA, not the final target). In this case, `thunk_va` is correct but `caller_r30` may not uniquely identify the call site.
+**Thunk VA overlap.** If the target binary is stripped and `PPC32GOT2Resolver` has not been run first, multiple unresolved `BCTRL` sites may share the same thunk VA the stub VA, not the final target. In this case, `thunk_va` is correct but `caller_r30` may not uniquely identify the call site.
 
 ---
 
@@ -221,12 +221,12 @@ Prior to this module, ppc32plttracer required manual work outside the Ablation p
 
 ## Reading output
 
-`PPC32PLTTracer.find_callers(sym_name)` returns `List[PLTCallSite]`.
+`PPC32PLTTracer.find_callerssym_name` returns `List[PLTCallSite]`.
 
 | Field | Type | Content |
 |:---|:---|:---|
 | `bl_va` | `int` | VA of the BL instruction |
-| `thunk_va` | `int` | VA of the PLT thunk (or stub VA for BSS PLT binaries) |
+| `thunk_va` | `int` | VA of the PLT thunk or stub VA for BSS PLT binaries |
 | `caller_r30` | `int` | r30 value verified against the expected TOC anchor; `0` for BSS PLT |
 | `func_name` | `Optional[str]` | Import name resolved from the PLT entry |
 

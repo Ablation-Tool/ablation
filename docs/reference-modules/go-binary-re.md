@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Go binary reverse engineering for Mach-O and ELF targets (Go 1.16+): pclntab function table parsing, command dispatch map reconstruction, message frame format inference from bufio.Reader call chains, and RIP-relative pointer resolution.
+Go binary reverse engineering for Mach-O and ELF targets Go 1.16+: pclntab function table parsing, command dispatch map reconstruction, message frame format inference from bufio.Reader call chains, and RIP-relative pointer resolution.
 
 ## Key constants
 
@@ -68,14 +68,14 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading output
 
-`analyze(binary_path)` (module-level function) returns an `AnalysisResult`:
+`analyzebinary_path` module-level function returns an `AnalysisResult`:
 
 | Attribute | Content |
 |:---|:---|
 | `binary_path` | Path of the analyzed Go binary |
 | `go_version` | Go toolchain version string extracted from pclntab (e.g., `'go1.21.5'`) |
 | `arch` | Target architecture string |
-| `pclntab_magic` | Pclntab magic value (identifies pclntab format version) |
+| `pclntab_magic` | Pclntab magic value identifies pclntab format version |
 | `num_functions` | Total number of functions recovered from pclntab |
 | `functions` | `List[GoFunc]`: each with `va`, `fileoff`, `name`, `nameoff` |
 | `handlers` | `List[HandlerEntry]`: command dispatch handlers with `cmd_id`, `func_va`, `func_name` |

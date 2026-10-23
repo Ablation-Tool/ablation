@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `Path.stat().st_size` guard befo
 
 ## How it works
 
-`interprocedural_field_writes(ctx, target_gv)` iterates `ctx.func_starts`, disassembles each function with Capstone, and tracks writes to the memory address of `target_gv` (a global variable VA). For each write, it records the value written and the call path leading to the write. Returns a `Dict[int, FuncSummary]` mapping function VA to a summary of field writes within that function.
+`interprocedural_field_writesctx, target_gv` iterates `ctx.func_starts`, disassembles each function with Capstone, and tracks writes to the memory address of `target_gv` a global variable VA. For each write, it records the value written and the call path leading to the write. Returns a `Dict[int, FuncSummary]` mapping function VA to a summary of field writes within that function.
 
 ---
 
@@ -76,7 +76,7 @@ Conditional writes on rarely-taken paths for example error recovery are included
 
 ## Reading output
 
-`interprocedural_field_writes(ctx, target_gv)` returns a `Dict[int, FuncSummary]` keyed by function VA. Each `FuncSummary`:
+`interprocedural_field_writesctx, target_gv` returns a `Dict[int, FuncSummary]` keyed by function VA. Each `FuncSummary`:
 
 | Attribute | Content |
 |:---|:---|

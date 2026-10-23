@@ -1,16 +1,16 @@
 # LLM Analyst Loop
 
-ReAct (Reason + Act) agent loop that drives Claude through a tool-calling conversation to analyze a stripped binary function: recovering function names, roles, confidence scores, and vulnerability hypotheses without symbols or source code.
+ReAct Reason + Act agent loop that drives Claude through a tool-calling conversation to analyze a stripped binary function: recovering function names, roles, confidence scores, and vulnerability hypotheses without symbols or source code.
 
 ---
 
 ## Why this exists
 
-1. **Semantic search identifies function candidates by embedding similarity, but for functions whose role cannot be inferred from adjacent strings or callees alone, reasoning over the actual disassembly is required.** `AgentLoop.run()` gives Claude a set of RE tools (disassembly, CFG, cross-references, string lookup, import lookup, function DB query) and a task ("name this function" or "find vulnerabilities") and lets it reason through the analysis in a bounded multi-turn loop. The result is a structured `AnalysisResult` with a proposed name, role, and confidence score.
+1. **Semantic search identifies function candidates by embedding similarity, but for functions whose role cannot be inferred from adjacent strings or callees alone, reasoning over the actual disassembly is required.** `AgentLoop.run()` gives Claude a set of RE tools: disassembly, CFG, cross-references, string lookup, import lookup, and function DB query; and a task ("name this function" or "find vulnerabilities") and lets it reason through the analysis in a bounded multi-turn loop. The result is a structured `AnalysisResult` with a proposed name, role, and confidence score.
 
 2. **The `RAGRetriever` injects prior analysis results as context before the first tool call: if the same function VA has been analyzed before on any binary with the same SHA-256, the prior result is loaded.** This means the analyst loop does not re-analyze functions it has already confirmed, and can use prior naming to resolve callees. `persist_result()` saves results to the function database so they are available in future sessions.
 
-3. **A budget governor (`max_tool_calls`, default 10) and a loop detector (identical tool+args terminates with a warning) prevent unbounded token consumption.** Without these guards, an unconstrained agentic loop over a complex function would run until context is exhausted. The budget governor ensures that even if Claude does not call `done()` within budget, `run()` returns the best available `AnalysisResult` from the last tool call.
+3. **A budget governor (`max_tool_calls`, default 10) and a loop detector identical tool+args terminates with a warning prevent unbounded token consumption.** Without these guards, an unconstrained agentic loop over a complex function would run until context is exhausted. The budget governor ensures that even if Claude does not call `done()` within budget, `run()` returns the best available `AnalysisResult` from the last tool call.
 
 ---
 
@@ -48,7 +48,7 @@ flowchart TD
 | Field | Type | Description |
 |:---|:---|:---|
 | `func_addr` | `int` | VA of the analyzed function |
-| `name` | `str` | Proposed function name (snake_case) |
+| `name` | `str` | Proposed function name snake_case |
 | `role` | `str` | Role description (e.g., "network input handler") |
 | `confidence` | `float` | 0.0–1.0 confidence in the naming/role |
 | `cve_hypothesis` | `str` | Optional vulnerability hypothesis (populated by `run_patch()`) |
@@ -120,7 +120,7 @@ run_patch() cve_hypothesis:
 
 ## False positives
 
-**`max_tool_calls=10` is a hard budget: functions that require more tool calls to analyze will have lower-confidence results.** Increase `max_tool_calls` for complex functions (large CFGs, indirect dispatch, heavily-inlined code) at the cost of more API tokens per function. The default of 10 is appropriate for 90% of handler-class functions.
+**`max_tool_calls=10` is a hard budget: functions that require more tool calls to analyze will have lower-confidence results.** Increase `max_tool_calls` for complex functions large CFGs, indirect dispatch, heavily-inlined code at the cost of more API tokens per function. The default of 10 is appropriate for 90% of handler-class functions.
 
 **`query_func_db(name)` searches for prior results by name similarity: a query for "parse" may return unrelated functions that were named with "parse" in their description.** The RAG retriever uses embedding similarity, not exact match. Prior results are hints, not ground truth: Claude's `confidence` score accounts for prior result relevance.
 
@@ -128,13 +128,13 @@ run_patch() cve_hypothesis:
 
 ## Pipeline position
 
-Run `AgentLoop` as a targeted tool on `SemanticSearcher` top candidates that need human-quality naming and role analysis, not as a bulk pass over all functions (token cost is per-function). Use `run()` for naming and `run_patch()` for diff-based vulnerability hypothesis generation after `VersionTracker.find_homolog()` identifies a changed function.
+Run `AgentLoop` as a targeted tool on `SemanticSearcher` top candidates that need human-quality naming and role analysis, not as a bulk pass over all functions token cost is per-function. Use `run()` for naming and `run_patch()` for diff-based vulnerability hypothesis generation after `VersionTracker.find_homolog()` identifies a changed function.
 
 ---
 
 ## Reading output
 
-`AgentLoop(ctx, task).run(func_addr)` returns an `AnalysisResult`:
+`AgentLoopctx, task.runfunc_addr` returns an `AnalysisResult`:
 
 | Attribute | Content |
 |:---|:---|
@@ -149,7 +149,7 @@ Run `AgentLoop` as a targeted tool on `SemanticSearcher` top candidates that nee
 | `model` | Claude model ID used |
 | `task` | Task name (e.g., `'name_function'`, `'vulnerability_hypothesis'`) |
 
-`AgentLoop.run_patch(func_addr_v1, func_addr_v2)` returns an `AnalysisResult` for patch diff analysis.
+`AgentLoop.run_patchfunc_addr_v1, func_addr_v2` returns an `AnalysisResult` for patch diff analysis.
 
 ---
 

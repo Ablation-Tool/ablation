@@ -5,7 +5,7 @@
 **Format:** ISO 26262 Part 8 / TASKING qualification kit (see `standards-ablation.md` §2.3)
 
 An anomaly is a condition under which `TriCoreTaintTracker` is known to produce an incorrect
-result: either a false negative (missed finding) or a false positive (spurious finding).
+result: either a false negative missed finding or a false positive spurious finding.
 Each entry documents the triggering condition, the impact, and the recommended workaround.
 
 ---
@@ -28,7 +28,7 @@ correctly attributed.
 - Functions with selective output based on input argument, for example a `get_field` helper that looks up a named field from a message struct
 - SecurityAccess handlers that compute a seed from a received CAN frame field
 
-**Impact:** False negative (label over-approximation). The tracker may report tainted output
+**Impact:** False negative label over-approximation. The tracker may report tainted output
 from a function when only one of several tainted inputs was actually used to produce it. This
 is a conservatism that could miss cases where a specific sanitiser on one path prevents taint.
 In most security analysis scenarios this is acceptable, but in cases where the sanitizer
@@ -51,7 +51,7 @@ header or a previous iteration is not fed back to re-evaluate earlier instructio
 loop-carried accumulator that becomes tainted on iteration N will not be reflected in
 the taint state for iteration N+1 instructions that were already traced.
 
-Note: the `LOOP`/`LOOPU` mnemonic (hardware loop decrement instruction) is handled
+Note: the `LOOP`/`LOOPU` mnemonic hardware loop decrement instruction is handled
 correctly and is not an anomaly. Taint on A_reg propagates through the decrement; the range
 bound is cleared. This anomaly refers to loop body fixpoint convergence, not the `LOOP`
 mnemonic.
@@ -70,7 +70,7 @@ Manually inspect loop bodies in any function flagged by `SemanticSearcher` as a
 copy/hash/crypto pattern. If the function processes attacker-controlled data in a loop,
 treat the loop body's output as tainted regardless of tracker output.
 
-**Resolved in version:** Open. Requires CFG fixpoint (worklist). Tracked as a future gap.
+**Resolved in version:** Open. Requires CFG fixpoint worklist. Tracked as a future gap.
 
 ---
 
@@ -89,7 +89,7 @@ produce spurious results.
 - Flat ROM images from automotive ECU flash dumps
 - Functions with non-standard epilogues or tail-call fall-through
 
-**Impact:** False negative (boundary too small) or false positive (boundary too large, spurious
+**Impact:** False negative boundary too small or false positive (boundary too large, spurious
 instruction decode). The more common failure is false negative from early termination.
 
 **Workaround:** 
@@ -98,16 +98,16 @@ end by locating the RET/FRET instruction in the region. Extend boundaries by 32 
 the scanner estimate and re-run if a finding is suspected but not appearing.
 
 **Resolved in version:** Open for stripped ELF. Flat ROM boundary supply is by design
-(no automatic detection in flat binary without ELF metadata).
+no automatic detection in flat binary without ELF metadata.
 
 ---
 
-## TRICORE-KA-004: CSA memory-dump taint (STLCX / LDLCX) not modelled
+## TRICORE-KA-004: CSA memory-dump taint STLCX / LDLCX not modelled
 
 **Description:** 
-TriCore's hardware CSA (Context Save Area) mechanism uses the `STLCX` / `LDLCX` instructions
+TriCore's hardware CSA Context Save Area mechanism uses the `STLCX` / `LDLCX` instructions
 to save and restore the full upper context to/from memory. `TriCoreTaintTracker` models the
-register-level effects of CSA (upper context preserved across CALL; lower context clobbered)
+register-level effects of CSA upper context preserved across CALL; lower context clobbered
 but does not track taint flowing through the memory CSA area itself. If attacker-controlled
 data is stored into the CSA via `STLCX`, for example via a corrupted upper context during
 an overflow, and then reloaded into a register by `LDLCX`, the tracker will not propagate
@@ -149,7 +149,7 @@ environments may silently fall through to a catch-all handler that masks the err
 but it may be masked by environment-level error suppression.
 
 **Workaround:** 
-Verify `import capstone; print(capstone.__version__)` returns 5.0+ before running. The
+Verify `import capstone; printcapstone.__version__` returns 5.0+ before running. The
 pinned version in `requirements.txt` covers this for standard installs; the risk is only
 in non-standard environments.
 

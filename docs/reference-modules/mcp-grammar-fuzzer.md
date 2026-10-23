@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Atheris-based grammar fuzzer targeting prompt injection via poisoned MCP tool schemas. Attack surface: `description` fields rendered verbatim into LLM context, `name` fields used in routing, `inputSchema` property descriptions injected into tool-call reasoning, and cross-server exfiltration (Server A description reads Server B output). Transport: JSON-RPC 2.0 over stdio.
+Atheris-based grammar fuzzer targeting prompt injection via poisoned MCP tool schemas. Attack surface: `description` fields rendered verbatim into LLM context, `name` fields used in routing, `inputSchema` property descriptions injected into tool-call reasoning, and cross-server exfiltration Server A description reads Server B output. Transport: JSON-RPC 2.0 over stdio.
 
 ## FORGE audit
 
@@ -14,7 +14,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. No unbounded file reads. No HTTP
 
 ## How it works
 
-`MCPGrammarFuzzer.from_path(mcp_config).fuzz()` reads the `.mcp.json` / JSON-RPC 2.0 tool manifest and mutates `description`, `name`, and `inputSchema` property description fields with prompt injection payloads. Uses Atheris (if available) or a deterministic mutation loop. Runs each mutated manifest through a real LLM inference call (subprocess) and checks response for injection markers. Returns `List[MCPTaintFinding]`: one per confirmed injection in a tool field. No binary disassembly.
+`MCPGrammarFuzzer.from_pathmcp_config.fuzz()` reads the `.mcp.json` / JSON-RPC 2.0 tool manifest and mutates `description`, `name`, and `inputSchema` property description fields with prompt injection payloads. Uses Atheris if available or a deterministic mutation loop. Runs each mutated manifest through a real LLM inference call subprocess and checks response for injection markers. Returns `List[MCPTaintFinding]`: one per confirmed injection in a tool field. No binary disassembly.
 
 ---
 
@@ -69,7 +69,7 @@ for f in findings:
 | `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` |
 | `cwe` | CWE identifier string (e.g., `'CWE-78'`) |
 | `description` | Explanation of the taint path or security issue |
-| `snippet` | Source code snippet (may be empty) |
+| `snippet` | Source code snippet may be empty |
 
 ---
 

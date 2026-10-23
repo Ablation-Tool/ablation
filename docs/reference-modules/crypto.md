@@ -92,7 +92,7 @@ Normalized Hamming distance between adjacent ciphertext blocks is minimized when
 
 **Mode 3: Frequency analysis / transposition**
 
-Once key length L is known, split the ciphertext into L byte streams (one per key position). Within each stream, every byte is XOR-ed with the same key byte. Score each candidate key byte (0-255) for each position against the expected opcode frequency distribution for x86-64/ARM code:
+Once key length L is known, split the ciphertext into L byte streams one per key position. Within each stream, every byte is XOR-ed with the same key byte. Score each candidate key byte (0-255) for each position against the expected opcode frequency distribution for x86-64/ARM code:
 
 ```
   for position p in 0..L-1:
@@ -136,7 +136,7 @@ result = solver.kpa_attack(max_probe=64)
 
 Post-access cryptographic posture auditor. Finds JWTs with weak secrets, SAML assertion wrapping risks, hardcoded key material, and TLS endpoint weaknesses.
 
-`scan_for_crypto_anti_patterns(filepath)` enforces a `_MAX_CRYPTO_SCAN_BYTES` (32 MB) limit
+`scan_for_crypto_anti_patternsfilepath` enforces a `_MAX_CRYPTO_SCAN_BYTES` (32 MB) limit
 before reading. Files that exceed the limit return an `INFO/FILE_TOO_LARGE` finding instead of
 being skipped silently.
 
@@ -175,11 +175,11 @@ findings = auditor.scan_jwt_files('/path/to/app/config/')
 
 **File:** `ablation/analyzers/lsb_stego_extractor.py`
 
-Recovers key material hidden in BMP files using LSB steganography combined with a Lagrange polynomial secret-sharing scheme (Shamir-style). Found in stripped ARM32 Android `.so` binaries where multiple seeds index into separate polynomials stored in the LSB channel of a BMP asset.
+Recovers key material hidden in BMP files using LSB steganography combined with a Lagrange polynomial secret-sharing scheme Shamir-style. Found in stripped ARM32 Android `.so` binaries where multiple seeds index into separate polynomials stored in the LSB channel of a BMP asset.
 
 ### Lagrange secret sharing in brief
 
-A Lagrange polynomial through N points uniquely determines a degree-(N-1) polynomial. In Shamir's scheme, the secret is the polynomial's value at x=0. Given N coordinate pairs (x_i, y_i), the secret is reconstructed:
+A Lagrange polynomial through N points uniquely determines a degree-(N-1) polynomial. In Shamir's scheme, the secret is the polynomial's value at x=0. Given N coordinate pairs x_i, y_i, the secret is reconstructed:
 
 ```
   f(x) = Σ y_i * L_i(x)   where L_i(x) = Π (x - x_j)/(x_i - x_j)
@@ -192,11 +192,11 @@ A Lagrange polynomial through N points uniquely determines a degree-(N-1) polyno
   floating-point error. The result is then serialized to bytes.
 ```
 
-The BMP LSB channel stores the coordinate pairs: each pixel's least-significant bit contributes one bit of the point data. The seed string determines the pixel offset (via hash), and the layout describes how many type groups and coordinate pairs follow.
+The BMP LSB channel stores the coordinate pairs: each pixel's least-significant bit contributes one bit of the point data. The seed string determines the pixel offset via hash, and the layout describes how many type groups and coordinate pairs follow.
 
 ### Byte-order behavior
 
-Output bytes are little-endian. Negative polynomial values receive a reverse two's complement transformation where carry propagates from MSByte toward LSByte (not the standard direction). Bit-aligned integers where `nbits % 8 == 0` get one extra trailing zero byte appended. These behaviors match the target binary's `imath mp_int_to_binary` path exactly.
+Output bytes are little-endian. Negative polynomial values receive a reverse two's complement transformation where carry propagates from MSByte toward LSByte not the standard direction. Bit-aligned integers where `nbits % 8 == 0` get one extra trailing zero byte appended. These behaviors match the target binary's `imath mp_int_to_binary` path exactly.
 
 ### Usage
 
@@ -218,7 +218,7 @@ Look for this scheme when:
 
 1. A `.so` imports `read_keys_from_content` or a similarly named symbol.
 2. The BMP is a small image with no obvious visual content.
-3. `mp_rat_read_string` is called with radix 16 (coordinates are hex integers).
+3. `mp_rat_read_string` is called with radix 16 coordinates are hex integers.
 4. A Vandermonde matrix construction precedes Gaussian elimination over rationals.
 5. Output strings are 60-70 bytes each, multiple per seed.
 
@@ -228,11 +228,11 @@ Look for this scheme when:
 
 **File:** `ablation/analyzers/crypto_pattern_detector.py`
 
-Identifies hash algorithms (MD5, SHA-1, SHA-256, SHA-512, CRC32) from K-table and round-constant signatures found in compiled ARM32 / Thumb2 code.
+Identifies hash algorithms MD5, SHA-1, SHA-256, SHA-512, CRC32 from K-table and round-constant signatures found in compiled ARM32 / Thumb2 code.
 
 ### How cryptographic constants appear in compiled code
 
-Each hash algorithm uses unique round constants derived from mathematical functions (cube roots of primes for SHA-256, sine values for MD5). These constants are loaded as 32-bit immediates in compiled code. Two loading mechanisms exist in ARM32 Thumb2:
+Each hash algorithm uses unique round constants derived from mathematical functions cube roots of primes for SHA-256, sine values for MD5. These constants are loaded as 32-bit immediates in compiled code. Two loading mechanisms exist in ARM32 Thumb2:
 
 ```
   MOVW/MOVT pair (Thumb2 large-immediate encoding):
@@ -258,7 +258,7 @@ Each hash algorithm uses unique round constants derived from mathematical functi
 | SHA-512 | Unique K[0..3] lower halves: 0xd728ae22, 0xf3bcc908,... | These do not appear in SHA-256 |
 | CRC32 | Reflected polynomial: 0xedb88320 | |
 
-The shared SHA-256/SHA-512 ambiguity (first eight K-table upper-half words are identical) is resolved by checking for SHA-512-unique lower-half constants.
+The shared SHA-256/SHA-512 ambiguity first eight K-table upper-half words are identical is resolved by checking for SHA-512-unique lower-half constants.
 
 ```python
 from ablation.analyzers.crypto_pattern_detector import HashAlgoDiscriminator
@@ -272,7 +272,7 @@ result = HashAlgoDiscriminator.identify([0xd76aa478, 0xe8c7b756, 0x242070db])
 # HashAlgoMatch(algo='MD5', confidence=37, matched=[...])
 ```
 
-**Important:** MD5 and SHA-1 share the same four initialization constants (A=0x67452301, B=0xEFCDAB89, C=0x98BADCFE, D=0x10325476). Scan the compress function (which uses the K-table), not the init function.
+**Important:** MD5 and SHA-1 share the same four initialization constants (A=0x67452301, B=0xEFCDAB89, C=0x98BADCFE, D=0x10325476). Scan the compress function which uses the K-table, not the init function.
 
 ---
 
@@ -309,7 +309,7 @@ Detects hand-rolled AES-128-CBC patterns in ARM32 Thumb2 binaries. Targets the s
       BLO  loop               ; backward branch
 ```
 
-### Scoring heuristic (four signals)
+### Scoring heuristic four signals
 
 | Signal | Points | How detected |
 |---|---|---|
@@ -349,7 +349,7 @@ Prior to this module, crypto modules required manual work outside the Ablation p
 
 ## How it works
 
-Scans the binary for known cryptographic constants (S-boxes, round constants, magic numbers) using byte-pattern matching against a corpus of 200+ algorithm signatures. Entropy analysis identifies regions likely to contain key material. Key candidates are cross-referenced against the firmware family corpus. Weak algorithm usage is classified by the security property it violates: broken hash (MD5, SHA-1), unauthenticated mode (ECB, CTR without MAC), or short key length.
+Scans the binary for known cryptographic constants S-boxes, round constants, magic numbers using byte-pattern matching against a corpus of 200+ algorithm signatures. Entropy analysis identifies regions likely to contain key material. Key candidates are cross-referenced against the firmware family corpus. Weak algorithm usage is classified by the security property it violates: broken hash MD5, SHA-1, unauthenticated mode ECB, CTR without MAC, or short key length.
 
 ---
 
@@ -418,7 +418,7 @@ Hard-coded constants that share byte patterns with known keys but are not crypto
 
 This page covers two tools with different output types.
 
-`HashAlgoDiscriminator(binary, load_addr).scan_function(va, size)` returns a `HashAlgoMatch`:
+`HashAlgoDiscriminatorbinary, load_addr.scan_functionva, size` returns a `HashAlgoMatch`:
 
 | Attribute | Content |
 |:---|:---|
@@ -426,7 +426,7 @@ This page covers two tools with different output types.
 | `confidence` | Integer 0–100: identification confidence |
 | `matched` | `List[ConstMatch]`: each with `va`, `value`, `name`, `algo` |
 
-`CBCPatternDetector(binary, load_addr).scan_range(va, size)` returns `List[CBCPattern]`: each with fields for the IV load site, encrypt/decrypt direction, and key schedule VA.
+`CBCPatternDetectorbinary, load_addr.scan_rangeva, size` returns `List[CBCPattern]`: each with fields for the IV load site, encrypt/decrypt direction, and key schedule VA.
 | `detail` | What was found and the cryptographic weakness |
 
 ---

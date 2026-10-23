@@ -8,9 +8,9 @@ PLT-call Jaccard, the original cross-version matching signal. It only works on f
 
 `structural_sim.py` replaces that with a five-signal weighted composite that operates on all functions:
 
-1. **Opcode category histogram**, 12-category frequency vector (DATA/ARITH/BIT/CMP/BRANCH/CALL/RET/FLOAT/SIMD/MEMOP/FRAME/OTHER); cosine similarity. Always available.
-2. **Immediate value Jaccard**, shared integer constants ≥ 0x100 (struct offsets, magic bytes, buffer sizes). RIP-relative operands filtered (position-dependent). Available when either function has qualifying immediates.
-3. **PLT call overlap**, external call set match (the original signal, retained at lower weight). Available when either function has PLT calls.
+1. **Opcode category histogram**, 12-category frequency vector DATA/ARITH/BIT/CMP/BRANCH/CALL/RET/FLOAT/SIMD/MEMOP/FRAME/OTHER; cosine similarity. Always available.
+2. **Immediate value Jaccard**, shared integer constants ≥ 0x100 struct offsets, magic bytes, buffer sizes. RIP-relative operands filtered position-dependent. Available when either function has qualifying immediates.
+3. **PLT call overlap**, external call set match the original signal, retained at lower weight. Available when either function has PLT calls.
 4. **Branch density proximity**, branch-insn fraction as a control-flow shape indicator. Always available.
 5. **Size proximity**, instruction count ratio clamped to [0,1]. Always available.
 
@@ -104,9 +104,9 @@ orphans = find_structural_orphans(fps_a=fps_old, fps_b=fps_new, threshold=0.65)
 
 ## False positives
 
-**High similarity score for semantically different functions**: two small wrapper functions (10–15 instructions, no PLT calls, one conditional branch) can produce a similarity score above 0.80 purely from opcode histogram and branch density alignment, even if they have completely different purposes. When using `fingerprint_sim()` to match version-delta candidates, always follow a high-score pair with a semantic check: SemanticSearcher query of both functions or manual disasm comparison.
+**High similarity score for semantically different functions**: two small wrapper functions 10–15 instructions, no PLT calls, one conditional branch can produce a similarity score above 0.80 purely from opcode histogram and branch density alignment, even if they have completely different purposes. When using `fingerprint_sim()` to match version-delta candidates, always follow a high-score pair with a semantic check: SemanticSearcher query of both functions or manual disasm comparison.
 
-**Orphan detection with too-small `bucket_size`**: `find_structural_orphans()` only compares each function in `fps_b` to `bucket_size` candidates in `fps_a` (the nearest by instruction count). A function that grew significantly between versions may land outside the bucket, producing a false orphan. Increase `bucket_size` (default 10) to 25–50 for binaries with large refactors.
+**Orphan detection with too-small `bucket_size`**: `find_structural_orphans()` only compares each function in `fps_b` to `bucket_size` candidates in `fps_a` the nearest by instruction count. A function that grew significantly between versions may land outside the bucket, producing a false orphan. Increase `bucket_size` default 10 to 25–50 for binaries with large refactors.
 
 ---
 
@@ -120,18 +120,18 @@ orphans = find_structural_orphans(fps_a=fps_old, fps_b=fps_new, threshold=0.65)
 
 ## Reading output
 
-`extract_fingerprint(va, insns, calls)` returns a `FunctionFingerprint`:
+`extract_fingerprintva, insns, calls` returns a `FunctionFingerprint`:
 
 | Attribute | Content |
 |:---|:---|
 | `va` | Virtual address of the function |
 | `n_insns` | Total instruction count |
-| `opcode_hist` | `dict`: category → fraction of total instructions (12 categories: DATA/ARITH/BIT/CMP/BRANCH/CALL/RET/FLOAT/SIMD/MEMOP/FRAME/OTHER) |
-| `immediates` | `frozenset[int]`: integer constants ≥ 0x100 from operands (struct offsets, magic bytes, buffer sizes) |
+| `opcode_hist` | `dict`: category → fraction of total instructions 12 categories: DATA/ARITH/BIT/CMP/BRANCH/CALL/RET/FLOAT/SIMD/MEMOP/FRAME/OTHER |
+| `immediates` | `frozenset[int]`: integer constants ≥ 0x100 from operands struct offsets, magic bytes, buffer sizes |
 | `calls` | `list[str]`: PLT-resolved call names |
 | `branch_density` | Float: branch instruction count divided by total instruction count |
 
-`fingerprint_sim(fp_a, fp_b)` returns a float in `[0.0, 1.0]`: weighted composite similarity across available signals.
+`fingerprint_simfp_a, fp_b` returns a float in `[0.0, 1.0]`: weighted composite similarity across available signals.
 
 ---
 

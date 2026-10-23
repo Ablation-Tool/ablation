@@ -29,11 +29,11 @@ for line in lines:
 
 ### `align_to_func_start`
 
-Accepts a call site VA and an optional search window in bytes (default 512). Searches backward for ENDBR64 first because ENDBR64 is always placed at a guaranteed instruction boundary by CET-enabled compilers. Falls back to `push rbp` if ENDBR64 is not found. Returns the VA of the nearest match. Returns `call_site_va - search_back` if neither pattern is found.
+Accepts a call site VA and an optional search window in bytes default 512. Searches backward for ENDBR64 first because ENDBR64 is always placed at a guaranteed instruction boundary by CET-enabled compilers. Falls back to `push rbp` if ENDBR64 is not found. Returns the VA of the nearest match. Returns `call_site_va - search_back` if neither pattern is found.
 
 ### `dump_caller_context`
 
-Accepts a call site VA, an optional search window in bytes, and an optional `max_insns` count (default 30). Calls `align_to_func_start()`, then disassembles forward from the function prologue to the call instruction. Returns the last `max_insns` annotated lines for a clean view of register state at the call site.
+Accepts a call site VA, an optional search window in bytes, and an optional `max_insns` count default 30. Calls `align_to_func_start()`, then disassembles forward from the function prologue to the call instruction. Returns the last `max_insns` annotated lines for a clean view of register state at the call site.
 
 ## Notes
 

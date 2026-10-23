@@ -14,14 +14,14 @@ module. Without a CFG, the `Structurizer` and `DomTree` cannot run on SH-2A (Bos
 Denso, Siemens) ECU firmware. The SH-2A lifter could only produce a linear goto-chain.
 
 **2. No delay-slot semantics in any CFG module.** SH-2A executes one instruction after a
-branch fires: the delay slot. Every prior CFG module (ARM, V850, ARC, x86) works on
+branch fires: the delay slot. Every prior CFG module ARM, V850, ARC, x86 works on
 architectures without delay slots. `cfg_sh2a` attaches the delay-slot instruction to the
 terminating block so that successor VAs are computed from after the delay slot, not from
 after the branch opcode.
 
 **3. No `.flow` / `.flow_r()` interface on any ECU-family CFG.** `dataflow_engine.DomTree`
-and all backward-dataflow passes iterate `cfg.flow` as a list of `(src, dst)` edge tuples.
-`cfg_sh2a.CFG` adds `.flow` (property) and `.flow_r()` (method) so DomTree and LoopInfo
+and all backward-dataflow passes iterate `cfg.flow` as a list of `src, dst` edge tuples.
+`cfg_sh2a.CFG` adds `.flow` property and `.flow_r()` (method) so DomTree and LoopInfo
 from `dataflow_engine` work without any adaptation.
 
 ---
@@ -66,8 +66,8 @@ print("is reducible:", loops.is_reducible())
 | `bf/s` | YES | [target, fall-through after DS] |
 | `bt` | **NO** | [target, fall-through] |
 | `bf` | **NO** | [target, fall-through] |
-| `braf Rn` | indirect: decoded MISC | open block (limitation) |
-| `jmp @Rn` | indirect: decoded MISC | open block (limitation) |
+| `braf Rn` | indirect: decoded MISC | open block limitation |
+| `jmp @Rn` | indirect: decoded MISC | open block limitation |
 
 When the terminator has a delay slot, the delay-slot instruction is the last entry in
 `block.insns`.  Successors are set based on the VA after the delay slot.
@@ -92,11 +92,11 @@ Three-pass construction:
 
 | Field | Type | Description |
 |---|---|---|
-| `start` | `int` | First instruction VA (block label) |
+| `start` | `int` | First instruction VA block label |
 | `insns` | `List[SH2aInsn]` | Instructions, including delay slot when present |
 | `succs` | `List[int]` | Successor block-start VAs |
 | `preds` | `List[int]` | Predecessor block-start VAs |
-| `end` | `int` (property) | VA after last instruction |
+| `end` | `int` property | VA after last instruction |
 | `terminator()` | method | Returns the branch/call/return instruction, or None |
 | `delay_slot()` | method | Returns the delay-slot instruction, or None |
 
@@ -130,8 +130,8 @@ Three-pass construction:
 
 `build_cfg` is a three-pass algorithm over a flat `Sequence[SH2aInsn]` (already decoded by `EcuSH2aDecoder`):
 
-1. **Leader scan**: discovers all block-start VAs: the entry point, all branch targets extracted from `insn.target_va`, and the fall-through address immediately after each terminator (or two instructions after when the terminator has a delay slot). Delay-slot instructions are explicitly excluded from the leader set.
-2. **Partition**: assigns each instruction to the current block. When a terminator with a delay slot is encountered, the next instruction is consumed into the same block (as the delay slot); the block is then closed. Without a delay slot, the block closes at the terminator itself.
+1. **Leader scan**: discovers all block-start VAs: the entry point, all branch targets extracted from `insn.target_va`, and the fall-through address immediately after each terminator or two instructions after when the terminator has a delay slot. Delay-slot instructions are explicitly excluded from the leader set.
+2. **Partition**: assigns each instruction to the current block. When a terminator with a delay slot is encountered, the next instruction is consumed into the same block as the delay slot; the block is then closed. Without a delay slot, the block closes at the terminator itself.
 3. **Edge fill**: iterates over all blocks; for each block's terminator type (`rts`, `bra`, `bt`/`bf`, `jsr`, etc.) the `succs` list is populated from the delay-slot-adjusted successor VA. `preds` is built as the inverse.
 
 Indirect branches (`braf`, `jmp @Rn`) cannot be resolved statically, these produce open blocks with no successors.
@@ -161,7 +161,7 @@ True
 
 ## False positives
 
-**Open blocks from indirect branches:** `braf Rn`, `bsrf Rn`, and `jmp @Rn` produce blocks with no successors because the target VA cannot be resolved from a static instruction sequence. Functions with dispatch tables (switch statements compiled to `jmp @Rn`) will have unreachable blocks in the CFG. `DomTree` and `LoopInfo` handle open blocks gracefully (they are not reachable from the entry block).
+**Open blocks from indirect branches:** `braf Rn`, `bsrf Rn`, and `jmp @Rn` produce blocks with no successors because the target VA cannot be resolved from a static instruction sequence. Functions with dispatch tables (switch statements compiled to `jmp @Rn`) will have unreachable blocks in the CFG. `DomTree` and `LoopInfo` handle open blocks gracefully they are not reachable from the entry block.
 
 **Delay-slot instruction boundary errors:** If `EcuSH2aDecoder` returns a disassembly list with a gap for example truncated ROM or bad start offset, the delay-slot consumer may assign the wrong instruction as the delay slot, shifting all subsequent block boundaries. Verify the input `insns` covers the entire function before building the CFG.
 
@@ -169,9 +169,9 @@ True
 
 ## Pipeline position
 
-**Before this module:** Decode the function with `EcuSH2aDecoder.disassemble(start_va, end_va)` to produce the instruction list. Identify function entry points using `EcuSH2aDecoder.function_starts()` or from IVT entries.
+**Before this module:** Decode the function with `EcuSH2aDecoder.disassemblestart_va, end_va` to produce the instruction list. Identify function entry points using `EcuSH2aDecoder.function_starts()` or from IVT entries.
 
-**After this module:** Pass `cfg` to `DomTree(cfg)` and `LoopInfo(cfg, dom)` from `dataflow_engine` for dominance and loop structure analysis. Use `cfg.flow` as the edge list for backward dataflow passes.
+**After this module:** Pass `cfg` to `DomTree(cfg)` and `LoopInfocfg, dom` from `dataflow_engine` for dominance and loop structure analysis. Use `cfg.flow` as the edge list for backward dataflow passes.
 
 ---
 
@@ -183,7 +183,7 @@ True
 |:---|:---|:---|
 | `blocks` | `Dict[int, Block]` | All basic blocks keyed by start VA |
 | `entry` | `int` | Entry point VA |
-| `flow` | property → `List[Tuple[int,int]]` | All `(src_va, dst_va)` forward edges |
+| `flow` | property → `List[Tuple[int,int]]` | All `src_va, dst_va` forward edges |
 | `flow_r()` | method → `List[Tuple[int,int]]` | Reversed edges for backward dataflow |
 
 Each `Block`:
@@ -191,7 +191,7 @@ Each `Block`:
 | Field | Type | Content |
 |:---|:---|:---|
 | `start` | `int` | VA of the first instruction |
-| `insns` | `List[SH2aInsn]` | Instructions in the block (delay slot last if present) |
+| `insns` | `List[SH2aInsn]` | Instructions in the block delay slot last if present |
 | `succs` | `List[int]` | Start VAs of successor blocks |
 | `preds` | `List[int]` | Start VAs of predecessor blocks |
 | `end` | property → `int` | VA one past the last instruction |

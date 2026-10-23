@@ -60,8 +60,8 @@ python3 -m ablation.analyzers.forge list
 
 `FORGE.audit_module(path)` does this:
 
-1. Loads the SAFE CODE system prompt from `ablation/data/forge_system.md` (external drive fallback).
-2. Checks `~/.ablation/forge_cache.json` for a prior result keyed on `sha256(system_prompt)[:16] + ":" + sha256(file_bytes)[:16]`. If found, returns the cached `ForgeReport` immediately.
+1. Loads the SAFE CODE system prompt from `ablation/data/forge_system.md` external drive fallback.
+2. Checks `~/.ablation/forge_cache.json` for a prior result keyed on `sha256system_prompt[:16] + ":" + sha256file_bytes[:16]`. If found, returns the cached `ForgeReport` immediately.
 3. On cache miss, raises `ForgeAuditRequired` with the file path and instructions.
 
 The audit itself runs inline: read the file in Claude Code, apply the 10-section SAFE CODE review, then call `FORGE.record_result()` to cache the result. Future calls return instantly from cache.
@@ -78,13 +78,13 @@ Four values: `develop`, `debug`, `test`, `deploy`. A `develop` finding is one th
 
 `ForgeReport.report()` prints a stage-risk summary for every HIGH or CRITICAL finding and a cost marker next to each stage: free for DEVELOP, $ for DEBUG, $$ for TEST, $$$ for DEPLOY. The multiples come from software defect cost-of-change research: a DEPLOY-stage bug costs roughly 18 times as much to fix as the same bug caught at DEVELOP.
 
-The FORGE audit plan (Section F of the DEV & TEST ORCHESTRATION PLAN) requires a stage classification for every HIGH and CRITICAL finding. A finding with no stage is treated as DEPLOY.
+The FORGE audit plan Section F of the DEV & TEST ORCHESTRATION PLAN requires a stage classification for every HIGH and CRITICAL finding. A finding with no stage is treated as DEPLOY.
 
 ---
 
 ## record_result()
 
-`FORGE.record_result(path, findings, summary, raw_text)` stores an inline audit result in the cache. `findings` can be a list of `ForgeFinding` objects or a list of dicts with keys `severity`, `category`, `title`, `location`, `description`, `recommendation`, `source`, `cwe`, `detection_stage`.
+`FORGE.record_resultpath, findings, summary, raw_text` stores an inline audit result in the cache. `findings` can be a list of `ForgeFinding` objects or a list of dicts with keys `severity`, `category`, `title`, `location`, `description`, `recommendation`, `source`, `cwe`, `detection_stage`.
 
 ```python
 report = FORGE.record_result(
@@ -150,7 +150,7 @@ FORGE.list_local_modules()    # list registered modules
 
 ## How it works
 
-`FORGE.audit_module(path)` computes a two-part cache key: `sha256(system_prompt)[:16] + ":" + sha256(file_bytes)[:16]`. A hit returns the cached `ForgeReport` in under a millisecond with no LLM call. A miss raises `ForgeAuditRequired`, this is the signal to read the file in the current Claude Code session, apply the 10-section SAFE CODE review, and call `FORGE.record_result()` to write the result to `~/.ablation/forge_cache.json`. Changing either the SOP file or the module source invalidates the cache entry for that module only; changing the SOP invalidates all entries. `gate_passed` is the property checked before `git add`.
+`FORGE.audit_module(path)` computes a two-part cache key: `sha256system_prompt[:16] + ":" + sha256file_bytes[:16]`. A hit returns the cached `ForgeReport` in under a millisecond with no LLM call. A miss raises `ForgeAuditRequired`, this is the signal to read the file in the current Claude Code session, apply the 10-section SAFE CODE review, and call `FORGE.record_result()` to write the result to `~/.ablation/forge_cache.json`. Changing either the SOP file or the module source invalidates the cache entry for that module only; changing the SOP invalidates all entries. `gate_passed` is the property checked before `git add`.
 
 ---
 
@@ -201,7 +201,7 @@ Gate: PASSED — no CRITICAL or HIGH findings.
 | Attribute | Content |
 |:---|:---|
 | `path` | Path to the audited module |
-| `mode` | `'module'` (LLM audit) or `'source'` (static compressor audit) |
+| `mode` | `'module'` LLM audit or `'source'` static compressor audit |
 | `findings` | `list[ForgeFinding]`: individual findings sorted by severity |
 | `summary` | Short summary string |
 | `gate_passed` | Property: `True` if no CRITICAL or HIGH findings |

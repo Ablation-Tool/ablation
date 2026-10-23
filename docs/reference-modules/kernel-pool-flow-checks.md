@@ -86,7 +86,7 @@ Run `WindowsPoolTaintTracker` on any Windows kernel driver PE alongside `CFGBypa
 
 | Field | Content |
 |:---|:---|
-| `severity` | `HIGH` (unbounded user-controlled size) / `MEDIUM` (unchecked with indirect source) |
+| `severity` | `HIGH` unbounded user-controlled size / `MEDIUM` unchecked with indirect source |
 | `title` | `POOL_OVERFLOW` |
 | `detail` | Allocation function, size source, IOCTL transfer type, and call path |
 | `alloc_va` | VA of the `ExAllocatePool*` call |

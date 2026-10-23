@@ -1,6 +1,6 @@
 # TI C28x DSP/MCU Decoding
 
-Decode Texas Instruments TMS320C28x firmware: implementing the 16-bit word-addressed ISA from SPRU430F in pure Python (Capstone has no C28x support): distinguishing 16-bit single-word from 32-bit dual-word instructions for F28x-series MCUs (F28P55x, F28335, F2837x, F2838x) used in EV/HEV traction inverter control units and motor-drive ECUs.
+Decode Texas Instruments TMS320C28x firmware: implementing the 16-bit word-addressed ISA from SPRU430F in pure Python Capstone has no C28x support: distinguishing 16-bit single-word from 32-bit dual-word instructions for F28x-series MCUs F28P55x, F28335, F2837x, F2838x used in EV/HEV traction inverter control units and motor-drive ECUs.
 
 ---
 
@@ -10,7 +10,7 @@ Decode Texas Instruments TMS320C28x firmware: implementing the 16-bit word-addre
 
 2. **C28x uses 16-bit program words stored in little-endian byte order with word addressing**: each address refers to one 16-bit word, not one byte. This is structurally different from byte-addressed ISAs and requires the decoder to correctly translate word addresses to byte offsets before reading instruction words. `EcuC28xDecoder` handles this transparently via the `base_va` parameter.
 
-3. **C28x instruction width is determined by the first word's opcode field**: 16-bit instructions (`1-word`) use opcodes that fit in a single word; 32-bit instructions (`2-word`) use an extended encoding. `EcuC28xDecoder.insn_length(byte_off)` reads the first word and returns either 2 (16-bit) or 4 (32-bit) bytes, enabling O(1) sequential decode.
+3. **C28x instruction width is determined by the first word's opcode field**: 16-bit instructions (`1-word`) use opcodes that fit in a single word; 32-bit instructions (`2-word`) use an extended encoding. `EcuC28xDecoder.insn_lengthbyte_off` reads the first word and returns either 2 (16-bit) or 4 (32-bit) bytes, enabling O(1) sequential decode.
 
 ---
 
@@ -62,7 +62,7 @@ Disassembly at 0x3e8000:
 
 ## False positives
 
-**`function_starts()` heuristic requires `PUSH RB` prologue**: functions that do not save the return block (leaf functions or interrupt service routines) are not detected. Supplement with ELF symbol table entries from `TiCoffLoader` if available, or with call-graph reachability from detected starts.
+**`function_starts()` heuristic requires `PUSH RB` prologue**: functions that do not save the return block leaf functions or interrupt service routines are not detected. Supplement with ELF symbol table entries from `TiCoffLoader` if available, or with call-graph reachability from detected starts.
 
 **Word-addressed instruction decoding at incorrect byte offsets**: C28x word addresses must be even byte offsets. Passing an odd byte offset to `decode_one()` produces incorrect decoding. `function_starts()` seeds use valid even offsets; callers must ensure alignment when using `decode_one()` directly.
 
@@ -84,7 +84,7 @@ Run `EcuC28xDecoder` on any TI F28x-series firmware after `EcuArchDetector` conf
 | `is_32bit` | `True` when the instruction occupies two 16-bit words |
 | `mnemonic` | Instruction mnemonic (e.g., `'MOV'`, `'LCR'`, `'ADDB'`) |
 | `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'LOOP'` / `'MISC'` |
-| `raw` | `bytes`: 2 or 4 raw bytes (little-endian) |
+| `raw` | `bytes`: 2 or 4 raw bytes little-endian |
 | `target` | Word-address branch/call target VA, or `None` |
 | `cond` | Condition name for `B`/`BF` instructions, or `None` for unconditional |
 | `imm` | Immediate operand value, or `None` |

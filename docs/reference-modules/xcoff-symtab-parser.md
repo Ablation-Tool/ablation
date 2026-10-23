@@ -90,7 +90,7 @@ print(dec.decompile(0x10000800))
 |:---|:---|:---|
 | `names_added` | `int` | Count of new names written into BinaryContext |
 | `names_already_present` | `int` | Count of symbols where BinaryContext already had a name at that VA |
-| `symbols` | `list[(int, str)]` | All `(va, name)` pairs found, sorted by VA |
+| `symbols` | `list[int, str]` | All `va, name` pairs found, sorted by VA |
 | `error` | `str` | Non-empty if parsing failed; empty on success |
 
 ---
@@ -108,7 +108,7 @@ The filter has one consequence: if a known function in the binary has no name af
 XCOFF32 has two symbol value interpretations:
 
 - **Archive member (`.o`):** Symbol value is a section-relative offset. VA = `sec_va[scnum] + value`.
-- **Executable:** Symbol value is the absolute VA. The parser handles both cases by attempting the dotted-name path first (archive convention), then falling back to scanning all text-section symbols directly (executable convention) if the first pass returns empty.
+- **Executable:** Symbol value is the absolute VA. The parser handles both cases by attempting the dotted-name path first archive convention, then falling back to scanning all text-section symbols directly executable convention if the first pass returns empty.
 
 ---
 
@@ -124,4 +124,4 @@ XCOFF32 has two symbol value interpretations:
 
 - [Xcoff32Decompiler](xcoff32-decompiler.md): decompiles XCOFF32 functions using the names this module populates
 - [XCOFF Executable Analyzer](xcoff-executable-analyzer.md): higher-level XCOFF32/64 analysis
-- [BFF Extractor](bff-extractor.md): extracts XCOFF32 binaries from AIX BFF archives (run before this)
+- [BFF Extractor](bff-extractor.md): extracts XCOFF32 binaries from AIX BFF archives run before this

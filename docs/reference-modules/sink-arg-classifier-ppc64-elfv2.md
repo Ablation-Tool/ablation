@@ -6,11 +6,11 @@ Classify exec-class sink argument provenance on PPC64 LE ELFv2 ELFs: the little-
 
 ## Why this exists
 
-1. **`sac_for_context()` dispatched ppc64le to the x86_64 classifier.** Before this module, any `BinaryContext` with `EI_DATA=1` (little-endian) and `e_machine=0x15` (EM_PPC64) was routed to the x86_64 `SinkArgClassifier`. That classifier disassembles ppc64le code as x86_64, producing garbage operands and returning 0 results on every binary.
+1. **`sac_for_context()` dispatched ppc64le to the x86_64 classifier.** Before this module, any `BinaryContext` with `EI_DATA=1` little-endian and `e_machine=0x15` EM_PPC64 was routed to the x86_64 `SinkArgClassifier`. That classifier disassembles ppc64le code as x86_64, producing garbage operands and returning 0 results on every binary.
 
 2. **The gap affected a large target set.** HMC management binaries (`hmc.mgmt`, `hmc.common`, `hmc.svrmgmt`) contain 35+ ppc64le shared objects. All returned SAC=0 before this module existed. Affected binaries include every component that manages hardware management controller firmware upgrades.
 
-3. **ELFv2 differs from ELFv1 in TOC discovery.** ELFv1 (big-endian POWER Linux, AIX) reads the TOC base from the `.opd` function descriptor. ELFv2 (ppc64le) uses `r2 = .got.virtual_address + 0x8000` (GNU ld ELFv2 ABI convention). These must not be mixed.
+3. **ELFv2 differs from ELFv1 in TOC discovery.** ELFv1 big-endian POWER Linux, AIX reads the TOC base from the `.opd` function descriptor. ELFv2 (ppc64le) uses `r2 = .got.virtual_address + 0x8000` GNU ld ELFv2 ABI convention. These must not be mixed.
 
 ---
 
@@ -39,7 +39,7 @@ The scan walks backward from the call site and classifies the last instruction t
 
 | Instruction | Classification |
 |:---|:---|
-| `li rX, imm` | `RODATA_CONST` (immediate value) |
+| `li rX, imm` | `RODATA_CONST` immediate value |
 | `lis rX, HI; addi rX, rX, LO` | `RODATA_CONST` if computed address in `.rodata` |
 | `lis rX, HI; ori rX, rX, LO` | `RODATA_CONST` if computed address in `.rodata` |
 | `lis rX, HI; lwz rX, LO(rX)` | `RODATA_CONST` if `*ptr` in `.rodata` |
@@ -50,7 +50,7 @@ The scan walks backward from the call site and classifies the last instruction t
 | `addis rX, r2, HI; addi rX, rX, LO` | TOC-relative address → `RODATA_CONST` if in `.rodata` |
 | `addis rX, r2, HI; ld rX, LO(rX)` | TOC-relative pointer → `RODATA_CONST` if `*ptr` in `.rodata` |
 | `ld rX, N(r2)` | Direct TOC slot dereference → `RODATA_CONST` if slot points to `.rodata` |
-| Register unmodified in window | `ARG_PROPAGATED` if reg is in `r3–r10` (entry arg) |
+| Register unmodified in window | `ARG_PROPAGATED` if reg is in `r3–r10` entry arg |
 
 ---
 
@@ -110,7 +110,7 @@ LR   return address
 |:---|:---|:---|
 | ELFv2-GAP-001 | `5b0ad3a4` | `pltgot_relocations` returns GOT slot VAs, not stub VAs. GNU gold places call stubs in `.fini` (not `.text`). Added `_remap_plt_rev_to_stubs()`: scans every non-`.text` executable section for the 5-instruction `std/addis/ld/mtctr/bctr` stub signature and remaps `_plt_rev` entries to callable stub VAs. |
 | ELFv2-GAP-002 | `5b0ad3a4` | `BinaryContext func_starts` misses function GEPs in large Go DSOs (e.g. `libgo.so` 59 MB), so `classify_all()` never disassembles the function body. Added `_scan_uncovered_bls()` fallback: after the `func_starts` scan, byte-search `.text` for any `BL <stub_va>` not covered by a prior result and classify it directly. |
-| ELFv2-GAP-003 | `b6828c94` | `_scan_uncovered_bls` passed `arg_pos` (integer 0) directly to `_trace_arg` instead of converting it to the Capstone register constant via `_PPC64_ARG_REGS`. This caused the trace to follow `r0` instead of `r3`, always returning `UNKNOWN` for uncovered functions. Also fixed: the GEP backward-scan mask for `addis r2,r12,N` (`0x3C4C0000`). |
+| ELFv2-GAP-003 | `b6828c94` | `_scan_uncovered_bls` passed `arg_pos` integer 0 directly to `_trace_arg` instead of converting it to the Capstone register constant via `_PPC64_ARG_REGS`. This caused the trace to follow `r0` instead of `r3`, always returning `UNKNOWN` for uncovered functions. Also fixed: the GEP backward-scan mask for `addis r2,r12,N` (`0x3C4C0000`). |
 | ELFv2-PLD-GAP-001 | `3da1ef2b` | Power10 (`-mcpu=power10`) objects use two compact PLT stub forms that the classic `addis+ld` scanner misses: Form A (`std r2 / ld r12,D(r2) / mtctr / bctr`) and Form B (`pld r12,@got@pcrel / mtctr / bctr`). Added [`Power10PPC64PLTStubScanner`](ppc64-power10-plt-stubs.md) integrated into `_remap_plt_rev_to_stubs` as a secondary pass. |
 
 ---

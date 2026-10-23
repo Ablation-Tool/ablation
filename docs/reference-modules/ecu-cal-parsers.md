@@ -71,7 +71,7 @@ most aftermarket Subaru/Nissan/Honda definitions. The corpus contains 293 XDF fi
 
 XDF addresses are raw file offsets by default. `BASEOFFSET subtract=0` means no adjustment is
 needed. Supply `base_address` when the definition was authored against a virtual address space
-(rare: most community XDFs use file offsets).
+rare: most community XDFs use file offsets.
 
 ```python
 from ablation.analyzers.ecu_xdf_parser import EcuXDFParser
@@ -93,21 +93,21 @@ for offset, name in parser.label_map().items():
 
 An `XDFTABLE` entry contains up to three `XDFAXIS` children (id=`x`, `y`, `z`). The `z` axis
 always holds the data address in its `EMBEDDEDDATA mmedaddress` attribute. The `x` and `y` axes
-hold axis (breakpoint) addresses.
+hold axis breakpoint addresses.
 
 **Shared axes (DALINK):** when multiple tables share the same x-axis breakpoints, the x-axis
 element carries `<DALINK index="N">` pointing to the table whose axis it borrows. The parser
 resolves this and records the shared address in `CalibrationAxis.shared_from`.
 
 **Scaling:** the `MATH equation="X*k+b"` attribute on the z-axis encodes a linear transform.
-`_math_to_linear()` extracts `(scale, bias)` from simple linear equations. Non-linear equations
+`_math_to_linear()` extracts `scale, bias` from simple linear equations. Non-linear equations
 (e.g. `"(X*2.653)*0.0145"`) return `scale=0.0` as a signal; the raw values are still accessible
 via `read_data()`.
 
 **Endianness:** the `DEFAULTS lsbfirst=` attribute sets byte order for the whole file.
-`lsbfirst=0` (big-endian) is standard for Bosch and BMW ECUs; `lsbfirst=1` for Subaru Denso.
+`lsbfirst=0` big-endian is standard for Bosch and BMW ECUs; `lsbfirst=1` for Subaru Denso.
 
-### Output per 770-table BMW N54 XDF (I8A0S.xdf)
+### Output per 770-table BMW N54 XDF I8A0S.xdf
 
 ```
 XDF  I8A0S.xdf
@@ -120,7 +120,7 @@ XDF  I8A0S.xdf
 | Item | Count |
 |---|---|
 | Total tables parsed | 755 |
-| 2-D maps (rows > 1, cols > 1) | 155 |
+| 2-D maps rows > 1, cols > 1 | 155 |
 | Label map entries | 754 |
 | Tables with valid address | 755 |
 
@@ -128,12 +128,12 @@ XDF  I8A0S.xdf
 
 ## EcuOpenDamosParser
 
-Parses the open_damos.json format used by the open-car-reprog project (Poisson48). This format
-covers Bosch EDC16C34 (PSA 1.6 HDi: Berlingo, C3/C4, 206/207/307, Mazda 2/3), EDC16C39,
+Parses the open_damos.json format used by the open-car-reprog project Poisson48. This format
+covers Bosch EDC16C34 PSA 1.6 HDi: Berlingo, C3/C4, 206/207/307, Mazda 2/3, EDC16C39,
 EDC17C42/49/50, and several other Bosch diesel ECU variants.
 
 The key feature is fingerprint relocation: every axis carries a `fingerprint` array encoding the
-physical breakpoint values (RPM, load percentage, etc.) that the ECU stores in flash. The parser
+physical breakpoint values RPM, load percentage, etc. that the ECU stores in flash. The parser
 converts this fingerprint back to raw integer bytes and searches the target ROM for that exact
 sequence, finding the correct table address in any firmware variant of the ECU family.
 
@@ -158,7 +158,7 @@ For each `CHARACTERISTIC` entry:
 
 1. Take the first axis's `fingerprint` array (e.g. `[400, 650, 750,..., 5300]` RPM).
 2. Divide each value by `factor` and round to get the raw integer the ECU stores.
-3. Pack those integers as `SWORD_BE` (signed 16-bit big-endian) and byte-search the ROM.
+3. Pack those integers as `SWORD_BE` signed 16-bit big-endian and byte-search the ROM.
 4. For each hit at position `idx`: compute `table_start = idx - header_bytes`.
 5. If the table header encodes the expected dimensions (`nx`, `ny`), accept `table_start` as the
  relocated address.
@@ -166,7 +166,7 @@ For each `CHARACTERISTIC` entry:
 The EDC16C34 uses 4-byte headers encoding `(nx, ny)` as two `UWORD_BE` fields. A MAP with
 `dims: {nx: 16, ny: 10}` will have header bytes `00 10 00 0A` immediately before the x-axis data.
 
-### Results on 9663944680.bin (PSA Berlingo EDC16C34)
+### Results on 9663944680.bin PSA Berlingo EDC16C34
 
 ```
 open_damos  open_damos.json
@@ -178,7 +178,7 @@ open_damos  open_damos.json
 16 of 31 MAP/CURVE tables located in firmware `9663944680.bin`. The 9 VALUE tables are scalars
 with no axis fingerprint and are not relocatable by this method. Tables that share the same x-axis
 fingerprint appear at the same relocation address: disambiguation requires a y-axis fingerprint
-check (planned for v2).
+check planned for v2.
 
 ### Notable tables in the EDC16C34 definition
 
@@ -238,7 +238,7 @@ for offset, name in parser.label_map().items():
 
 ## How it works
 
-Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns (UDS handler tables, seed/key routines, calibration write paths) are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
+Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 

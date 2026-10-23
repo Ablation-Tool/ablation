@@ -82,16 +82,16 @@ The following illustrates terminal output format. Actual color sequences are ter
 | Function | Return |
 |:---|:---|
 | `strip(s: str) -> str` | Plain text with all ANSI escape sequences removed |
-| `box(lines, color, width) -> str` | Multi-line bordered box (double-line border) |
-| `sbox(lines, color, width) -> str` | Single-line border variant of `box()` |
-| `section(title, color, width) -> str` | Section header bar with title and horizontal rule |
-| `arrow(label, color) -> str` | Right-pointing arrow with optional label |
+| `boxlines, color, width -> str` | Multi-line bordered box double-line border |
+| `sboxlines, color, width -> str` | Single-line border variant of `box()` |
+| `sectiontitle, color, width -> str` | Section header bar with title and horizontal rule |
+| `arrowlabel, color -> str` | Right-pointing arrow with optional label |
 
-All functions detect terminal color capability at import time (truecolor → ANSI-256 → ANSI-16 → plain text) and respect the `NO_COLOR` environment variable.
+All functions detect terminal color capability at import time truecolor → ANSI-256 → ANSI-16 → plain text and respect the `NO_COLOR` environment variable.
 
 ---
 
 ## See also
 
 - [JSON and SARIF Export](json-and-sarif-export.md): structured export that bypasses terminal presentation for machine-readable output
-- [Markdown Research Reports](markdown-research-reports.md): `generate_report()` for human-readable markdown (no ANSI escapes)
+- [Markdown Research Reports](markdown-research-reports.md): `generate_report()` for human-readable markdown no ANSI escapes

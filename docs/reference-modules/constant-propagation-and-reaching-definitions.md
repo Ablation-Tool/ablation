@@ -6,11 +6,11 @@ Track which instruction definitions reach each program point, and propagate cons
 
 ## Why this exists
 
-1. **`TaintTracker` and `SinkArgClassifier` produce false positives when a register that appears tainted is actually always a constant at the call site**: for example, a buffer size computed as `16 * n` where `n` is a function argument that the caller always passes as `3` (thus always 48). `ConstPropAnalysis` eliminates these false positives by propagating constant values through the CFG and marking registers as `CONST(v)` at each call site. `SCCPAnalysis` (Sparse Conditional Constant Propagation per Wegman-Zadeck) goes further: it marks edges as `EXECUTABLE`/`UNEXECUTABLE` based on conditional branch outcomes, enabling dead-code elimination and unreachable-path pruning.
+1. **`TaintTracker` and `SinkArgClassifier` produce false positives when a register that appears tainted is actually always a constant at the call site**: for example, a buffer size computed as `16 * n` where `n` is a function argument that the caller always passes as `3` thus always 48. `ConstPropAnalysis` eliminates these false positives by propagating constant values through the CFG and marking registers as `CONST(v)` at each call site. `SCCPAnalysis` Sparse Conditional Constant Propagation per Wegman-Zadeck goes further: it marks edges as `EXECUTABLE`/`UNEXECUTABLE` based on conditional branch outcomes, enabling dead-code elimination and unreachable-path pruning.
 
-2. **`ReachingDefsAnalysis` tracks which `(instruction, register)` pairs define a value that may reach each basic block.** This enables use-def chains: given a use of `rdi` at a call site, `ReachingDefsAnalysis` identifies all definitions of `rdi` that might reach that point. Use-def chains are the foundation for `SinkArgClassifier`'s backward walk and `FormatStringScanner`'s provenance trace.
+2. **`ReachingDefsAnalysis` tracks which `instruction, register` pairs define a value that may reach each basic block.** This enables use-def chains: given a use of `rdi` at a call site, `ReachingDefsAnalysis` identifies all definitions of `rdi` that might reach that point. Use-def chains are the foundation for `SinkArgClassifier`'s backward walk and `FormatStringScanner`'s provenance trace.
 
-3. **The MFP (Maximal Fixed Point) worklist framework from Nielson/Nielson/Hankin §2.4.1 provides the termination guarantee**: both analyses iterate until a fixed point where no lattice value changes. For `ConstPropAnalysis` the lattice is `⊤ (unknown) → Const(v) → ⊥ (non-constant)`. For `ReachingDefsAnalysis` the lattice is a gen/kill power set. ACC (Ascending Chain Condition) guarantees termination because both lattices have finite height.
+3. **The MFP Maximal Fixed Point worklist framework from Nielson/Nielson/Hankin §2.4.1 provides the termination guarantee**: both analyses iterate until a fixed point where no lattice value changes. For `ConstPropAnalysis` the lattice is `⊤ (unknown) → Const(v) → ⊥ non-constant`. For `ReachingDefsAnalysis` the lattice is a gen/kill power set. ACC Ascending Chain Condition guarantees termination because both lattices have finite height.
 
 ---
 
@@ -96,26 +96,26 @@ Run `ConstPropAnalysis`/`SCCPAnalysis` before `TaintTracker` when a suspicious c
 
 ## Reading output
 
-`SCCPAnalysis(data, base_addr, arch).solve(func_addr)` returns `Tuple[cp_vals, exec_edges]`:
+`SCCPAnalysisdata, base_addr, arch.solvefunc_addr` returns `Tuple[cp_vals, exec_edges]`:
 
 | Component | Content |
 |:---|:---|
 | `cp_vals` | `Dict[int, Any]`: block label → register state dict (`None` = unreachable / ⊥) |
-| `exec_edges` | `Set[Tuple[int, int]]`: `(src_label, dst_label)` edges proven executable |
+| `exec_edges` | `Set[Tuple[int, int]]`: `src_label, dst_label` edges proven executable |
 
-`ReachingDefsAnalysis(data, base_addr, arch).solve(func_addr)` returns `Tuple[in_sets, out_sets]`:
+`ReachingDefsAnalysisdata, base_addr, arch.solvefunc_addr` returns `Tuple[in_sets, out_sets]`:
 
 | Component | Content |
 |:---|:---|
 | `in_sets` | `Dict[int, FrozenSet]`: reaching definitions at block entry |
 | `out_sets` | `Dict[int, FrozenSet]`: reaching definitions at block exit |
 
-Each set element is a `(register_name, def_va)` tuple where `def_va=None` means the initial unknown definition.
+Each set element is a `register_name, def_va` tuple where `def_va=None` means the initial unknown definition.
 
 ---
 
 ## See also
 
-- [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md): `SCCPAnalysis` (Wegman-Zadeck) and MFP worklist implementation details
+- [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md): `SCCPAnalysis` Wegman-Zadeck and MFP worklist implementation details
 - [CFG Construction](control-flow-graph-construction.md): `CFGBuilder` input
 - [Structured Control-Flow Recovery](structured-control-flow-recovery.md): uses dominator tree from the same pipeline

@@ -2,7 +2,7 @@
 
 **File:** `sweeps/pe_sweep.py`
 
-Semantic vulnerability sweep for Windows PE (i386 and AMD64) binaries. Adapted from
+Semantic vulnerability sweep for Windows PE i386 and AMD64 binaries. Adapted from
 `fortinet_sweep.py` for targets where the binary format is PE rather than ELF.
 Covers `.exe`, `.dll`, `.ocx`, and `.ax` files compiled for x86-32 or x86-64.
 
@@ -41,10 +41,10 @@ or `base_sweep.py` as appropriate.
 | Binary format | ELF | PE32 / PE32+ |
 | Call resolution | ELF PLT (`.plt` section) | PE IAT; i386: absolute addr; AMD64: RIP-relative |
 | Disassembler mode | Capstone x86-64 | CS_MODE_32 (i386) or CS_MODE_64 (AMD64) |
-| Prologue pattern (i386) | N/A | `55 8B EC` / `55 89 E5` (PUSH EBP; MOV EBP,ESP) |
-| Prologue pattern (AMD64) | N/A | `48 83 EC` (SUB RSP,imm8); `55 48 89 E5` (PUSH RBP; MOV RBP,RSP) |
+| Prologue pattern (i386) | N/A | `55 8B EC` / `55 89 E5` PUSH EBP; MOV EBP,ESP |
+| Prologue pattern (AMD64) | N/A | `48 83 EC` SUB RSP,imm8; `55 48 89 E5` PUSH RBP; MOV RBP,RSP |
 | String index | XRefGraph (ELF `.rodata`) | `.rdata` section scan |
-| Taint analysis | Yes (arch-routed) | No (all taint trackers are ELF-only) |
+| Taint analysis | Yes arch-routed | No all taint trackers are ELF-only |
 | SinkArgClassifier | Yes (x86-64) | No |
 
 ---
@@ -53,8 +53,8 @@ or `base_sweep.py` as appropriate.
 
 `pe_sweep.py` detects PE machine type at runtime and routes to the correct path:
 
-- **i386 (IMAGE_FILE_MACHINE_I386):** `CS_MODE_32`; IAT indirect calls via `dword ptr [0xXXXXXX]`; string refs via `push imm32`
-- **AMD64 (IMAGE_FILE_MACHINE_AMD64):** `CS_MODE_64`; IAT indirect calls via `qword ptr [rip + offset]`; string refs via `lea reg, [rip + offset]`
+- **i386 IMAGE_FILE_MACHINE_I386:** `CS_MODE_32`; IAT indirect calls via `dword ptr [0xXXXXXX]`; string refs via `push imm32`
+- **AMD64 IMAGE_FILE_MACHINE_AMD64:** `CS_MODE_64`; IAT indirect calls via `qword ptr [rip + offset]`; string refs via `lea reg, [rip + offset]`
 
 ARM and other architectures are rejected at startup.
 
@@ -158,10 +158,10 @@ Detects three patterns covering MSVC and GCC/Clang x64 ABIs:
 | Pattern | Encoding | Compiler |
 |---|---|---|
 | `PUSH RBP; MOV RBP,RSP` | `55 48 89 E5` | GCC / Clang frame-pointer |
-| `SUB RSP, imm8` | `48 83 EC XX` | MSVC typical (most common) |
+| `SUB RSP, imm8` | `48 83 EC XX` | MSVC typical most common |
 | `MOV [RSP+N], RBX` | `48 89 5C 24 XX` | MSVC callee-save preamble |
 
-FPO recovery (E8 rel32 scanning) is shared between i386 and AMD64 since direct call
+FPO recovery E8 rel32 scanning is shared between i386 and AMD64 since direct call
 encoding is identical in both modes.
 
 ---
@@ -183,7 +183,7 @@ Three things were not possible before in Ablation:
 
 **and** no signing import (`WinVerifyTrust`, `CryptVerifySignature`, `CryptHashData`, `BCryptVerifySignature`, …) is present.
 
-The result appears as `firmware_auth_bypass` in the per-binary result dict and as a **Deterministic Finding** block (before semantic results) in the report.
+The result appears as `firmware_auth_bypass` in the per-binary result dict and as a **Deterministic Finding** block before semantic results in the report.
 
 ---
 
@@ -193,7 +193,7 @@ The result appears as `firmware_auth_bypass` in the per-binary result dict and a
 
 Two things were not possible before in Ablation:
 
-1. Borland BCC32/VCL applications (RADStudio, C++ Builder) place string literals in `.data` rather than `.rdata`. The prior `.rdata`-only scan returned 0 strings for these targets and misclassified them as out-of-scope (no debug strings = nothing to correlate against).
+1. Borland BCC32/VCL applications RADStudio, C++ Builder place string literals in `.data` rather than `.rdata`. The prior `.rdata`-only scan returned 0 strings for these targets and misclassified them as out-of-scope (no debug strings = nothing to correlate against).
 2. A blind `.data` fallback would add noise from live pointers and struct padding, but those sequences are reliably short or non-ASCII: the same 5-printable-byte minimum filter that protects `.rdata` scanning also works for `.data`, making the fallback safe.
 
 `_build_rdata_strings` now calls `_scan_section_strings(pe, data, ".rdata")` first.  When that returns zero strings it retries with `".data"` and prints a `[*] .rdata=0 strings: BCC32/VCL fallback` diagnostic.  The underlying `_scan_section_strings` helper is shared between both calls.
@@ -203,15 +203,15 @@ Two things were not possible before in Ablation:
 ## Limitations
 
 - **No taint analysis**: semantic sweep only. Manual capstone trace required for CONFIRMED findings.
-- **FPO blindness**: functions with non-standard prologues (heavy inlining, naked functions) may be missed.
+- **FPO blindness**: functions with non-standard prologues heavy inlining, naked functions may be missed.
 - **No XRefGraph**: string references limited to `.rdata` (or `.data` fallback) + prologue-bounded disassembly; no full cross-reference graph.
-- **ARM/ARM64 PE**: rejected at startup (no prologue patterns or IAT resolution implemented for those ISAs).
+- **ARM/ARM64 PE**: rejected at startup no prologue patterns or IAT resolution implemented for those ISAs.
 
 ---
 
 ## How it works
 
-`sweep_directory_pe(directory, model, profiles, top_k)` scans a directory for PE files, loads each with `BinaryContext.load_or_build()`, and runs a configurable set of analysis profiles (SAC, taint, firmware-auth-bypass) across all PE files in parallel. Results are returned as `List[dict]`: one dict per PE file. Uses `SemanticSearcher` and `SinkArgClassifier` internally; not a standalone analysis primitive.
+`sweep_directory_pedirectory, model, profiles, top_k` scans a directory for PE files, loads each with `BinaryContext.load_or_build()`, and runs a configurable set of analysis profiles SAC, taint, firmware-auth-bypass across all PE files in parallel. Results are returned as `List[dict]`: one dict per PE file. Uses `SemanticSearcher` and `SinkArgClassifier` internally; not a standalone analysis primitive.
 
 ---
 
@@ -246,7 +246,7 @@ Sweep results inherit false-positive rates of each individual analysis module. R
 
 ## Reading output
 
-`sweep_directory_pe(directory, model, profiles, top_k)` returns `List[dict]`: one dict per analyzed PE file. The `FirmwareAuthBypassFinding` TypedDict (embedded in each result's `firmware_auth_bypass` key) has these fields:
+`sweep_directory_pedirectory, model, profiles, top_k` returns `List[dict]`: one dict per analyzed PE file. The `FirmwareAuthBypassFinding` TypedDict (embedded in each result's `firmware_auth_bypass` key) has these fields:
 
 | Field | Content |
 |:---|:---|
@@ -256,7 +256,7 @@ Sweep results inherit false-positive rates of each individual analysis module. R
 | `evidence` | `List[str]`: IAT names or import strings that triggered the finding |
 | `note` | Human-readable explanation |
 
-Each result dict also contains `binary`, `arch`, `findings` (top-k semantic matches), `firmware_iat`, and `signing_iat` keys.
+Each result dict also contains `binary`, `arch`, `findings` top-k semantic matches, `firmware_iat`, and `signing_iat` keys.
 
 ---
 

@@ -208,13 +208,13 @@ The following illustrates the `evidence` field format for representative finding
 
 **`probe_llm_inference_server_metadata()` probes each platform's canonical port(s) in addition to the supplied `port` argument: a scan against port 80 will also probe Triton ports 8000/8001/8500, TorchServe 8080/8081, and Ollama 11434.** For targets where those canonical ports are not intended to be assessed, pass the specific port and filter findings by `f['port']`. Each finding records the actual port in the `port` field so findings from unintended ports are identifiable.
 
-**Qdrant `QDRANT_SNAPSHOT_CREATE` is a HIGH-severity finding even if snapshot download is subsequently blocked at the network layer.** The probe only confirms that the snapshot creation request was accepted (HTTP 200/201). Whether the resulting snapshot file is downloadable via `GET /collections/{name}/snapshots/{filename}` depends on network controls that this probe does not verify. Escalate to CRITICAL only after confirming the snapshot is downloadable; treat HIGH as indicating a misconfigured admin API regardless.
+**Qdrant `QDRANT_SNAPSHOT_CREATE` is a HIGH-severity finding even if snapshot download is subsequently blocked at the network layer.** The probe only confirms that the snapshot creation request was accepted HTTP 200/201. Whether the resulting snapshot file is downloadable via `GET /collections/{name}/snapshots/{filename}` depends on network controls that this probe does not verify. Escalate to CRITICAL only after confirming the snapshot is downloadable; treat HIGH as indicating a misconfigured admin API regardless.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Run `tiptoe` to identify which LLM-relevant ports are open (11434, 8000, 8080, 8001, 6333, 5001, 3000, 5000). Confirm whether the target is on a private VLAN or externally reachable: unauthenticated Ollama on a public IP is a CRITICAL finding; on a properly isolated internal segment it is MEDIUM (network control partially mitigates). The `https` parameter on `LLMEnumerator` must be set correctly: connecting with TLS to a plain-HTTP port returns no data.
+**Before this module:** Run `tiptoe` to identify which LLM-relevant ports are open: 11434, 8000, 8080, 8001, 6333, 5001, 3000, and 5000. Confirm whether the target is on a private VLAN or externally reachable: unauthenticated Ollama on a public IP is a CRITICAL finding; on a properly isolated internal segment it is MEDIUM network control partially mitigates. The `https` parameter on `LLMEnumerator` must be set correctly: connecting with TLS to a plain-HTTP port returns no data.
 
 **After this module:** For `OLLAMA_UNAUTH_GENERATE`: run `probe_system_prompt_disclosure()` and `probe_prompt_injection_chain()` to assess behavioral attack surface. For `TRITON_REPO_INDEX_UNAUTH` or `TORCHSERVE_MODELS_UNAUTH`: extract handler class paths and attempt `GET /v2/models/{name}/config` (Triton) or `GET /models/{name}` (TorchServe) for full configuration. For `QDRANT_SNAPSHOT_CREATE`: attempt `GET /collections/{name}/snapshots` to enumerate downloadable snapshot names and confirm extractability. For `MLFLOW_MODELS_UNAUTH`: extract artifact URIs and attempt direct S3/GCS path access. Write confirmed findings to `~/VDT/VULNERABILITIES-<ip>.md`.
 
@@ -227,7 +227,7 @@ The following illustrates the `evidence` field format for representative finding
 | `f['severity']` | CRITICAL / HIGH / MEDIUM / LOW / INFO |
 | `f['title']` | Short finding identifier (e.g., `Ollama unauth inference`, `TRITON_REPO_INDEX_UNAUTH`) |
 | `f['detail']` | Full explanation including OWASP LLM category, attack vector, and impact |
-| `f['evidence']` | HTTP status + path + body excerpt (first 150-300 bytes) confirming the finding |
+| `f['evidence']` | HTTP status + path + body excerpt first 150-300 bytes confirming the finding |
 | `f['host']` / `f['port']` | Target host and the actual port where the finding was observed |
 
 ---

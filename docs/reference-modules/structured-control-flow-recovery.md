@@ -8,9 +8,9 @@ Convert a flat basic-block CFG into a tree of structured control-flow nodes (`Se
 
 1. **Binary lifters that emit a flat instruction sequence produce unreadable pseudo-code when the original source had loops and conditional branches: every branch becomes a `goto`, making comprehension harder than reading the disassembly.** `Structurizer` converts the CFG into `IfNode`, `WhileNode`, `SequenceNode`, `BreakNode`, and `ContinueNode` types that directly correspond to C source-level constructs. The output is equivalent to the original C control flow without relying on debug information.
 
-2. **All compiled automotive firmware (AUTOSAR classic, plain-C ECU code) produces *reducible* CFGs: every back edge has a unique dominating loop header.** This property is required by the dominator-driven Relooper algorithm. Reducibility allows a simpler reconstruction than the full Emscripten Relooper needed for irreducible CFGs. For the ECU targets (C166, V850, SH-2A, Renesas RL78) that `Structurizer` primarily targets, reducibility holds universally.
+2. **All compiled automotive firmware AUTOSAR classic, plain-C ECU code produces *reducible* CFGs: every back edge has a unique dominating loop header.** This property is required by the dominator-driven Relooper algorithm. Reducibility allows a simpler reconstruction than the full Emscripten Relooper needed for irreducible CFGs. For the ECU targets C166, V850, SH-2A, Renesas RL78 that `Structurizer` primarily targets, reducibility holds universally.
 
-3. **`PostDomTree` provides the immediate post-dominator for every block: the `join` block where control flow reconverges after an `if`/`else`.** Without the post-dominator tree, recovering the `IfNode` structure requires heuristics (looking for convergence blocks). `PostDomTree.ipdom(n)` gives the exact join block, enabling `Structurizer` to emit `IfNode(then_tree, else_tree)` with the correct subtrees bounded to the join point.
+3. **`PostDomTree` provides the immediate post-dominator for every block: the `join` block where control flow reconverges after an `if`/`else`.** Without the post-dominator tree, recovering the `IfNode` structure requires heuristics looking for convergence blocks. `PostDomTree.ipdom(n)` gives the exact join block, enabling `Structurizer` to emit `IfNodethen_tree, else_tree` with the correct subtrees bounded to the join point.
 
 ---
 
@@ -89,9 +89,9 @@ The following illustrates the structured output format for a simple function. Ac
 
 ## False positives
 
-**`Structurizer` requires a reducible CFG: irreducible CFGs (those with multiple back-edges to the same header block from different blocks) produce incorrect output.** Check `LoopInfo.is_irreducible()` before calling `structurize()`. Irreducible CFGs occasionally appear in hand-written assembly or heavily optimized C; for these, emit a flat sequence with `goto` labels instead.
+**`Structurizer` requires a reducible CFG: irreducible CFGs those with multiple back-edges to the same header block from different blocks produce incorrect output.** Check `LoopInfo.is_irreducible()` before calling `structurize()`. Irreducible CFGs occasionally appear in hand-written assembly or heavily optimized C; for these, emit a flat sequence with `goto` labels instead.
 
-**`PostDomTree.ipdom(n)` returns `None` for blocks with no post-dominator (blocks on infinite loops, or blocks that are always dead code).** `Structurizer` treats a `None` post-dominator as an `IfNode` with no join block: the then-path runs to the end of the function. Verify manually when `ipdom` returns `None` for a conditional branch block.
+**`PostDomTree.ipdom(n)` returns `None` for blocks with no post-dominator blocks on infinite loops, or blocks that are always dead code.** `Structurizer` treats a `None` post-dominator as an `IfNode` with no join block: the then-path runs to the end of the function. Verify manually when `ipdom` returns `None` for a conditional branch block.
 
 ---
 
@@ -105,7 +105,7 @@ Run `Structurizer` as the final pass before presenting lifted output to a human 
 
 ## Reading output
 
-`Structurizer(cfg).structure()` returns the root `StructuredNode` of the AST. `Structurizer(cfg).emit(insn_emitter)` returns the full pseudocode string.
+`Structurizer(cfg).structure()` returns the root `StructuredNode` of the AST. `Structurizer(cfg).emitinsn_emitter` returns the full pseudocode string.
 
 `StructuredNode` subclass types:
 
@@ -115,8 +115,8 @@ Run `Structurizer` as the final pass before presenting lifted output to a human 
 | `InsnNode` | `block_start: int`, `insns: list`, `is_loop_header: bool` | A single basic block's instructions |
 | `IfNode` | `cond_block: int`, `then_body`, `else_body`, `join_block` | `if/else` construct |
 | `WhileNode` | `header_block: int`, `body`, `exit_block` | `while` loop |
-| `BreakNode` | *(no fields)* | `break`: exits innermost loop |
-| `ContinueNode` | *(no fields)* | `continue`: jumps to loop header |
+| `BreakNode` | *no fields* | `break`: exits innermost loop |
+| `ContinueNode` | *no fields* | `continue`: jumps to loop header |
 | `ReturnNode` | `block_start: int`, `insns: list` | `return` from function |
 
 ---

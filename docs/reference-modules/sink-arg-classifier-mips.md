@@ -14,9 +14,9 @@ function argument, or an unresolved unknown.
 Two gaps prevented MIPS32 firmware analysis. Both are now resolved.
 
 1. **MIPS-GAP-001: Call graph silent.** `BinaryContext._build_call_graph_mips()` scanned only for
- JAL (opcode 3). ET_EXEC O32 PIC firmware uses zero JAL instructions. All calls go through
+ JAL opcode 3. ET_EXEC O32 PIC firmware uses zero JAL instructions. All calls go through
    `LW $t9, N($gp)` + `JALR $t9`. `callers_of('system')` returned `[]` on every MIPS32 target.
- Fixed in `BinaryContext` v2.55 (commit bad68e8). See `binary-context.md` MIPS-GAP-001.
+ Fixed in `BinaryContext` v2.55 commit bad68e8. See `binary-context.md` MIPS-GAP-001.
 
 2. **MIPS-GAP-002: No MIPS32 argument classifier.** `SinkArgClassifier.classify_all()` traces
  x86-64 argument registers `rdi`, `rsi`, `rdx`. MIPS32 O32 ABI uses `$a0`–`$a3` for the first
@@ -58,7 +58,7 @@ print(clf.report(results))
 
 `RODATA_CONST` means the sink argument is a pointer directly into `.rodata`. The argument is
 either a direct `LW $aX, N($gp)` where the GOT entry falls in a `.rodata` range, or an ADDIU
-to a zero-immediate (null pointer), or an `ADDIU $aX, $vY, M` where `GOT[N]+M` lands in `.rodata`.
+to a zero-immediate null pointer, or an `ADDIU $aX, $vY, M` where `GOT[N]+M` lands in `.rodata`.
 No injection is possible regardless of caller context.
 
 `SNPRINTF_RODATA` means the sink argument is a stack buffer filled by snprintf or vsnprintf with a
@@ -164,7 +164,7 @@ before the JALR in a different branch, the verdict will be wrong.
 
 ## How it works
 
-`SinkArgClassifierMIPS.from_context(ctx).classify_all()` iterates `ctx.func_starts` (MIPS32 binary) and disassembles each function with Capstone. For each call to a configured exec-class sink (`system`, `execve`, `popen`, etc.), it traces the first argument register (`a0`) backward in the instruction stream using MIPS register conventions. Resolves to `RODATA_CONST` if the argument traces to a `.rodata` address; `ARG_PROPAGATED` if traced to a parameter; `UNKNOWN` if unresolved. Accounts for MIPS delay slot: the instruction after each branch/call is part of the branch semantics.
+`SinkArgClassifierMIPS.from_context(ctx).classify_all()` iterates `ctx.func_starts` MIPS32 binary and disassembles each function with Capstone. For each call to a configured exec-class sink (`system`, `execve`, `popen`, etc.), it traces the first argument register (`a0`) backward in the instruction stream using MIPS register conventions. Resolves to `RODATA_CONST` if the argument traces to a `.rodata` address; `ARG_PROPAGATED` if traced to a parameter; `UNKNOWN` if unresolved. Accounts for MIPS delay slot: the instruction after each branch/call is part of the branch semantics.
 
 ---
 
@@ -208,7 +208,7 @@ Delay-slot misattribution: a load in the delay slot of a branch may be incorrect
 | `call_va` | VA of the `jal` / `jalr` instruction |
 | `verdict` | `'RODATA_CONST'`: hardcoded constant; `'SNPRINTF_RODATA'`: buffer from fixed-format snprintf; `'ARG_PROPAGATED'`: traces to entry-point `$a0`–`$a3`; `'UNKNOWN'`: provenance unresolved |
 | `detail` | Human-readable trace description |
-| `severity` | Derived from verdict: `'LOW'` (RODATA_CONST) / `'MEDIUM'` (SNPRINTF_RODATA/UNKNOWN) / `'HIGH'` (ARG_PROPAGATED) |
+| `severity` | Derived from verdict: `'LOW'` RODATA_CONST / `'MEDIUM'` SNPRINTF_RODATA/UNKNOWN / `'HIGH'` ARG_PROPAGATED |
 
 ---
 

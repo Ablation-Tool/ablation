@@ -1,14 +1,14 @@
 # Business Logic and Version Exposure
 
-Run the parallel phase batch (phases 17-30) of the API RE pipeline against a mapped API: covering CORS misconfiguration, JWT algorithm confusion (RS256→HS256), NoSQL injection, Broken Function Level Authorization (BFLA), excessive data exposure and PII scanning, host header injection, timing-oracle user enumeration, second-order injection, null byte/WAF evasion, OAuth2 dynamic client registration, WebSocket/SSE enumeration, pagination traversal, shadow/deprecated API version detection, and OAuth2 state parameter / PKCE downgrade attacks.
+Run the parallel phase batch phases 17-30 of the API RE pipeline against a mapped API: covering CORS misconfiguration, JWT algorithm confusion RS256→HS256, NoSQL injection, Broken Function Level Authorization (BFLA), excessive data exposure and PII scanning, host header injection, timing-oracle user enumeration, second-order injection, null byte/WAF evasion, OAuth2 dynamic client registration, WebSocket/SSE enumeration, pagination traversal, shadow/deprecated API version detection, and OAuth2 state parameter / PKCE downgrade attacks.
 
 ---
 
 ## Why this exists
 
-1. **CORS misconfiguration with `Access-Control-Allow-Credentials: true` and origin reflection allows cross-origin cookie and token theft, but most API scanners report all CORS issues at the same severity regardless of whether credentials are enabled.** `probe_cors()` distinguishes between three levels: `*` wildcard (data exposure only, no credentials risk), reflected origin without credentials (MEDIUM: cross-origin read allowed), and reflected origin with `Access-Control-Allow-Credentials: true` (CRITICAL: cross-origin token/cookie exfiltration). Only the third combination produces an actionable finding.
+1. **CORS misconfiguration with `Access-Control-Allow-Credentials: true` and origin reflection allows cross-origin cookie and token theft, but most API scanners report all CORS issues at the same severity regardless of whether credentials are enabled.** `probe_cors()` distinguishes between three levels: `*` wildcard data exposure only, no credentials risk, reflected origin without credentials MEDIUM: cross-origin read allowed, and reflected origin with `Access-Control-Allow-Credentials: true` CRITICAL: cross-origin token/cookie exfiltration. Only the third combination produces an actionable finding.
 
-2. **Shadow and deprecated API versions skip hardening applied to current versions: authentication enforcement, validation, and rate limiting added in `/v2` or `/v3` are frequently absent from `/v0`, `/beta`, `/dev`, and `/api/legacy` paths that are never sunset.** `probe_shadow_versions()` probes 16 shadow path patterns and, for each that returns a non-404, checks whether endpoints marked `auth_required` on the current version return 200 on the shadow version: directly confirming authentication bypass via version downgrade (OWASP API9: Improper Inventory Management).
+2. **Shadow and deprecated API versions skip hardening applied to current versions: authentication enforcement, validation, and rate limiting added in `/v2` or `/v3` are frequently absent from `/v0`, `/beta`, `/dev`, and `/api/legacy` paths that are never sunset.** `probe_shadow_versions()` probes 16 shadow path patterns and, for each that returns a non-404, checks whether endpoints marked `auth_required` on the current version return 200 on the shadow version: directly confirming authentication bypass via version downgrade OWASP API9: Improper Inventory Management.
 
 3. **Business logic attacks: negative prices, integer overflow in quantities, privilege escalation via status field injection, and sequence skipping: do not trigger any injection signal and are invisible to automated scanners that only check for error conditions.** `probe_business_logic()` probes numeric parameters (`price`, `amount`, `cost`, `qty`, `balance`) with boundary values (0, -1, 99999999, `NaN`, `Infinity`) and status/role parameters (`status`, `role`, `tier`, `plan`) with privileged strings (`admin`, `approved`, `verified`, `premium`). A sentinel baseline comparison (`__sentinel_xyz_12345__`) ensures that endpoints that accept any value don't generate noise.
 
@@ -169,9 +169,9 @@ The following illustrates the `evidence` field format for representative finding
 | Field | Content |
 |:---|:---|
 | `f['type']` | Finding type: `cors_reflect`, `bfla_admin_accessible`, `nosql_auth_bypass`, `shadow_auth_bypass`, `timing_oracle_user_enum`, `excessive_data_<pii_type>`, `oauth_dynamic_reg_unauth`, `pkce_plain_accepted`, etc. |
-| `f['severity']` (CORS only) | `CRITICAL` (reflect + credentials=true), `MEDIUM` (reflect only), or absent (other phases use `type` as severity signal) |
+| `f['severity']` CORS only | `CRITICAL` (reflect + credentials=true), `MEDIUM` reflect only, or absent (other phases use `type` as severity signal) |
 | `f['path']` or `f['endpoint']` | The API path where the finding was observed |
-| `f['sample']` | Body excerpt (first 100-300 bytes) for BFLA and BOLA findings |
+| `f['sample']` | Body excerpt first 100-300 bytes for BFLA and BOLA findings |
 | `f['matches']` | PII regex match list for data exposure findings |
 
 ---

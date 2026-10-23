@@ -10,7 +10,7 @@ Four things were not possible before in Ablation:
 
 3. **Report the reachability chain per call site.** The module walks one level up the call graph via `call_edges` to show which functions can trigger each dangerous call. Manual call graph tracing before every TaintTracker run is eliminated.
 
-4. **Distinguish CWE-121 (stack overflow) from CWE-377 (race condition in temp file creation).** `gets/getwd` findings carry CWE-121 with overflow metadata. `mktemp/tmpnam` findings carry CWE-377 without overflow metadata. Triagers see the correct class immediately.
+4. **Distinguish CWE-121 stack overflow from CWE-377 race condition in temp file creation.** `gets/getwd` findings carry CWE-121 with overflow metadata. `mktemp/tmpnam` findings carry CWE-377 without overflow metadata. Triagers see the correct class immediately.
 
 ## Dangerous functions detected
 
@@ -18,8 +18,8 @@ Four things were not possible before in Ablation:
 |-----------|-------------------|:---:|------|
 | `gets` | CWE-242 / CWE-121 | ✓ | reads stdin with no bounds check |
 | `getwd` | CWE-242 / CWE-121 | ✓ | unbounded `getcwd` alternative |
-| `mktemp` | CWE-242 / CWE-377 | ✗ | predictable temp filename (race condition) |
-| `tmpnam` | CWE-242 / CWE-377 | ✗ | predictable temp filename (race condition) |
+| `mktemp` | CWE-242 / CWE-377 | ✗ | predictable temp filename race condition |
+| `tmpnam` | CWE-242 / CWE-377 | ✗ | predictable temp filename race condition |
 
 ## Usage
 
@@ -43,7 +43,7 @@ for hit in scanner.scan():
 |--------|-------------|
 | `DeprecatedFuncScanner.from_context(ctx)` | Constructor from existing `BinaryContext` |
 | `DeprecatedFuncScanner.from_path(path)` | Constructor from binary path |
-| `scan()` | Returns `list[DeprecatedHit]`, one per call site (deduped by VA) |
+| `scan()` | Returns `list[DeprecatedHit]`, one per call site deduped by VA |
 | `report(hits)` | Returns formatted string report |
 | `DeprecatedHit.va` | VA of the dangerous `call` instruction |
 | `DeprecatedHit.func_name` | Name of the containing function |
@@ -60,7 +60,7 @@ for hit in scanner.scan():
 
 ## FORGE audit
 
-Gate: **PASSED** (0 CRITICAL, 0 HIGH).
+Gate: **PASSED** 0 CRITICAL, 0 HIGH.
 
 - 1 MEDIUM (§2): `_gets_buf_size` only extracts buffer size from `lea [rbp-N]` patterns. RSP-relative buffers and indirect pointer loads return -1. Documented as a known limitation.
 - 1 LOW (§3): `FileNotFoundError` guard added: raises `ValueError` if `ctx.path` is empty.
@@ -94,7 +94,7 @@ Confirmed on: `commandcontrol` (setuid, 1 confirmed `gets()` hit, 3 callers corr
 
 ## False positives
 
-Frame size analysis (detecting buffer bounds) fails for functions with complex prologues (alloca, variable-length stack frames). For hits where `buf_size == -1`, the buffer size was not determined; the dangerous call is still real but the overflow offset is unknown. Do not dismiss: just note that bounds estimation was not possible.
+Frame size analysis detecting buffer bounds fails for functions with complex prologues alloca, variable-length stack frames. For hits where `buf_size == -1`, the buffer size was not determined; the dangerous call is still real but the overflow offset is unknown. Do not dismiss: just note that bounds estimation was not possible.
 
 ---
 
@@ -102,7 +102,7 @@ Frame size analysis (detecting buffer bounds) fails for functions with complex p
 
 **Before this module:** `BinaryContext.load_or_build()` with `ctx.func_starts` populated.
 
-**After this module:** For `gets`/`mktemp` hits, check whether the buffer address is passed out of the function (heap-copyout pattern) or used only locally. Register with `FindingRegistry`.
+**After this module:** For `gets`/`mktemp` hits, check whether the buffer address is passed out of the function heap-copyout pattern or used only locally. Register with `FindingRegistry`.
 
 ---
 

@@ -37,9 +37,9 @@ AixInstallpDecompressor(raw)
 |:---|:---|:---|
 | d[0] | type byte | 0x0e, 0x0f, 0x10, 0x11 |
 | d[1:4] | version | 0x00 0x01 0x00 for type 0x0e |
-| d[4:8] | field A (big-endian) | uncompressed_size (0x0e) or bwt_index (0x0f) |
-| d[8:12] | field B (big-endian) | purpose unknown |
-| d[12:16] | field C (little-endian) | bwt_index (0x0e) or uncompressed_size (0x0f) |
+| d[4:8] | field A big-endian | uncompressed_size (0x0e) or bwt_index (0x0f) |
+| d[8:12] | field B big-endian | purpose unknown |
+| d[12:16] | field C little-endian | bwt_index (0x0e) or uncompressed_size (0x0f) |
 
 ---
 
@@ -81,7 +81,7 @@ For entries where K < 256 and rare-byte ranks exceed K-1, use `AixInstallpStep4M
 
 ## Limitations
 
-**Multi-cycle BWT.** When K < 256, the LF-map traversal from `bwt_index` may not reach all rows (multiple disjoint cycles). For affected entries, `BwtEulerianReconstructor` recovers the full text.
+**Multi-cycle BWT.** When K < 256, the LF-map traversal from `bwt_index` may not reach all rows multiple disjoint cycles. For affected entries, `BwtEulerianReconstructor` recovers the full text.
 
 **Type 0x0f secondary streams.** Type 0x0f entries may contain a second Huffman stream after the primary. Use `AixType0fStreamSplitter` to recover both streams before calling this module's step 2–4.
 

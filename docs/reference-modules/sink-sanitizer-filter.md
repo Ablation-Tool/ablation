@@ -3,16 +3,16 @@
 ## Why this exists
 
 2 gaps that made ARG_PROPAGATED triage the dominant manual cost of every x86-64
-engagement (TG-FAD-2):
+engagement TG-FAD-2:
 
 1. **SinkArgClassifier and SanitizerDetector produced independent, unconnected
  output.** SinkArgClassifier identified exec-sink call sites where the argument
- comes from a caller-supplied register (ARG_PROPAGATED). SanitizerDetector
+ comes from a caller-supplied register ARG_PROPAGATED. SanitizerDetector
  identified functions that enforce shell-safe allowlists. Neither knew about
  the other. The analyst had to disassemble each ARG_PROPAGATED site manually,
  find the sanitizer call, check that it gated the exec path, and confirm the
  same variable was validated, 30–60 minutes per site on a stripped binary.
- On FortiADC authd (221 functions) this was 5 sites to triage manually.
+ On FortiADC authd 221 functions this was 5 sites to triage manually.
 
 2. **No automated guard verification.** Even when a sanitizer was obviously
  present in the function, confirming that a conditional branch on its return
@@ -37,21 +37,21 @@ three checks on the containing function's disassembly:
 |---|---|
 | **Sanitizer present** | A `SanitizerDetector`-identified `SHELL_SAFE` function is called within `_SANITIZER_SCAN_WINDOW` (256) instructions before the exec call |
 | **Guard present** | Within `_GUARD_SCAN_WINDOW` (12) instructions after the sanitizer call: `test eax, eax` (or `cmp`) followed by a conditional jump: execution is blocked when the sanitizer rejects |
-| **Arg identity** | `rdi` at the sanitizer call site and `rdi` at the exec call site both trace backward to the same source register (same variable, not coincidental rdi sharing) |
+| **Arg identity** | `rdi` at the sanitizer call site and `rdi` at the exec call site both trace backward to the same source register same variable, not coincidental rdi sharing |
 
 Sites passing all three are reclassified to `SANITIZER_VALIDATED` (severity
 lowered from HIGH to LOW). Partial matches are left `ARG_PROPAGATED`.
 
 ### Arg-identity trace
 
-`_trace_first_arg_source(insns, call_idx)` scans backward from `call_idx` up
+`_trace_first_arg_sourceinsns, call_idx` scans backward from `call_idx` up
 to 80 instructions looking for the instruction that last wrote to `rdi`:
 
-- `mov rdi, rX` where `rX` is non-volatile (r12–r15, rbx, rbp): follows one
+- `mov rdi, rX` where `rX` is non-volatile r12–r15, rbx, rbp: follows one
  level backward to find what set rX.
 - `mov rdi, [rX + N]`: returns `rX` as a proxy (struct-field load; matching
  base register is sufficient for the typical firmware save-restore pattern).
-- `lea rdi, [rsp/rbp + N]`: returns `'STACK'` (stack buffer address).
+- `lea rdi, [rsp/rbp + N]`: returns `'STACK'` stack buffer address.
 - Call instruction encountered before a setter: returns `None` (rdi was
  clobbered by the callee; source is unknown).
 - No setter found within window: returns the current target register (rdi if
@@ -89,7 +89,7 @@ results = flt.apply(clf.classify_all())
 
 ## API
 
-### `SinkSanitizerFilter.from_path(path: str) → SinkSanitizerFilter`
+### `SinkSanitizerFilter.from_pathpath: str → SinkSanitizerFilter`
 
 Loads the binary, runs `SanitizerDetector.detect()`, builds the function-start
 list. Run once; `apply()` is then cheap for any classification list.
@@ -99,17 +99,17 @@ list. Run once; `apply()` is then cheap for any classification list.
 Same as `from_path` but reuses an existing `BinaryContext` (shares function
 starts; avoids rebuilding).
 
-### `SinkSanitizerFilter.apply(classifications) → List[SinkClassification]`
+### `SinkSanitizerFilter.applyclassifications → List[SinkClassification]`
 
 Main entry point. Returns a new list. `ARG_PROPAGATED` entries that pass all
 three checks are replaced with a copy whose `verdict = 'SANITIZER_VALIDATED'`
 and `severity = 'LOW'`. Non-`ARG_PROPAGATED` entries are returned unchanged
-(no side effects on the input list).
+no side effects on the input list.
 
-### `SinkSanitizerFilter.report(classifications) → str`
+### `SinkSanitizerFilter.reportclassifications → str`
 
-Prints two sections: SANITIZER_VALIDATED sites (downgraded) and ARG_PROPAGATED
-sites remaining (still require manual triage).
+Prints two sections: SANITIZER_VALIDATED sites downgraded and ARG_PROPAGATED
+sites remaining still require manual triage.
 
 ### `SANITIZER_VALIDATED = 'SANITIZER_VALIDATED'`
 
@@ -120,10 +120,10 @@ Module-level constant for verdict comparisons.
 ## Limitations
 
 - **x86-64 only.** Arg-identity trace uses x86-64 register families and
- calling convention (rdi as arg0). For PPC64, ARM64, or MIPS targets, use
+ calling convention rdi as arg0. For PPC64, ARM64, or MIPS targets, use
  architecture-specific taint trackers.
 - **Single-function scope.** Only scans within the function containing the
- exec call site. Sanitizer calls in caller functions (interprocedural guards)
+ exec call site. Sanitizer calls in caller functions interprocedural guards
  are not detected, use `TaintTracker.run_interprocedural()` for those.
 - **Linear scan, not CFG.** The backward scan does not follow conditional
  branches. A sanitizer on an alternate path (not always executed before the
@@ -139,7 +139,7 @@ Module-level constant for verdict comparisons.
 
 ## How it works
 
-`apply(classifications)` takes the `List[SinkClassification]` from `SinkArgClassifier.classify_all()` and disassembles each calling function. For each site, it performs an arg-identity trace backwards from the sink call to find a `call` to a shell-safe validator that writes the same argument register. If the validator is confirmed shell-safe (via `SanitizerDetector`) and the argument is the same value passed to the sink, the site's verdict is reclassified to `SANITIZER_VALIDATED` with severity lowered to `LOW`. No func_starts iteration: only the functions identified by the incoming classifications are disassembled.
+`applyclassifications` takes the `List[SinkClassification]` from `SinkArgClassifier.classify_all()` and disassembles each calling function. For each site, it performs an arg-identity trace backwards from the sink call to find a `call` to a shell-safe validator that writes the same argument register. If the validator is confirmed shell-safe (via `SanitizerDetector`) and the argument is the same value passed to the sink, the site's verdict is reclassified to `SANITIZER_VALIDATED` with severity lowered to `LOW`. No func_starts iteration: only the functions identified by the incoming classifications are disassembled.
 
 ---
 
@@ -174,7 +174,7 @@ A function with multiple paths where the sanitizer is only on one branch produce
 
 ## Reading output
 
-`SinkSanitizerFilter.from_path(path).apply(classifications)` accepts and returns `List[SinkClassification]`: the same type as `SinkArgClassifier.classify_all()`. Sites where a shell-safe sanitizer guards the argument are reclassified to `verdict='SANITIZER_VALIDATED'` with `severity='LOW'`. All other sites pass through unchanged.
+`SinkSanitizerFilter.from_path(path).applyclassifications` accepts and returns `List[SinkClassification]`: the same type as `SinkArgClassifier.classify_all()`. Sites where a shell-safe sanitizer guards the argument are reclassified to `verdict='SANITIZER_VALIDATED'` with `severity='LOW'`. All other sites pass through unchanged.
 
 | Attribute | Content |
 |:---|:---|

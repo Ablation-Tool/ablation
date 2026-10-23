@@ -1,6 +1,6 @@
 # BwtEulerianReconstructor
 
-Recover the full BWT text for IBM AIX installp entries where the standard LF-map traversal from `bwt_index` is incomplete due to multiple disjoint BWT cycles (K < 256 entries).
+Recover the full BWT text for IBM AIX installp entries where the standard LF-map traversal from `bwt_index` is incomplete due to multiple disjoint BWT cycles K < 256 entries.
 
 ---
 
@@ -8,10 +8,10 @@ Recover the full BWT text for IBM AIX installp entries where the standard LF-map
 
 IBM's installp multi-cycle BWT (K < 256) leaves part of the original text T_step4 unrecoverable when following the LF-map from the recorded `bwt_index`. For `automountd` (U828079.bff, K=56, n=199,196):
 
-- 19 disjoint cycles; `bwt_index=794` lies in the main cycle (111,380 bytes)
+- 19 disjoint cycles; `bwt_index=794` lies in the main cycle 111,380 bytes
 - T_step4[0..87815] are unrecoverable by LF-map traversal alone
 
-An Eulerian circuit on the K-node directed multigraph of the BWT last-column visits every row exactly once and produces a valid candidate ordering for the full text. The circuit is guaranteed to exist because every node (byte value) has equal in-degree and out-degree in the transition graph.
+An Eulerian circuit on the K-node directed multigraph of the BWT last-column visits every row exactly once and produces a valid candidate ordering for the full text. The circuit is guaranteed to exist because every node byte value has equal in-degree and out-degree in the transition graph.
 
 ---
 
@@ -51,7 +51,7 @@ for policy in EdgePolicy:
 
 | Policy | Description |
 |:---|:---|
-| `GREEDY` | First available edge (adjacency list order) |
+| `GREEDY` | First available edge adjacency list order |
 | `NON_MAIN_FIRST` | Prefer edges leaving non-main-cycle nodes |
 | `BWT_INDEX_FIRST` | Start from the known `bwt_index` node before circuit build |
 

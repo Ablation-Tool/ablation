@@ -1,14 +1,14 @@
 # Calibration Parsers
 
-Parse ECU calibration definition files: ASAM/ASAP2 A2L (industry standard for Bosch EDC16/EDC17, Continental, Delphi) and `open_damos.json` (fingerprint-relocated format for PSA/Bosch ECU variant families): producing `CalibrationTable` objects and label maps for injection into `BinaryContext`, enabling calibration variable names to appear in disassembly alongside security-relevant code.
+Parse ECU calibration definition files: ASAM/ASAP2 A2L industry standard for Bosch EDC16/EDC17, Continental, Delphi and `open_damos.json` fingerprint-relocated format for PSA/Bosch ECU variant families: producing `CalibrationTable` objects and label maps for injection into `BinaryContext`, enabling calibration variable names to appear in disassembly alongside security-relevant code.
 
 ---
 
 ## Why this exists
 
-1. **A2L files (ASAM MCD-2 MC standard, ASAP2 v1.31+) contain the ground-truth mapping from ROM addresses to calibration variable names**: a single EDC16 A2L covers 3,999 `CHARACTERISTIC` definitions; a large EDC17 covers 25,000+. `EcuA2LParser.calibration_tables()` parses these and returns typed `CalibrationTable` objects with axis and value ROM addresses, enabling `BinaryContext.set_name()` annotation of fuel maps, injection timing tables, and safety limits that are directly adjacent to security-relevant code.
+1. **A2L files ASAM MCD-2 MC standard, ASAP2 v1.31+ contain the ground-truth mapping from ROM addresses to calibration variable names**: a single EDC16 A2L covers 3,999 `CHARACTERISTIC` definitions; a large EDC17 covers 25,000+. `EcuA2LParser.calibration_tables()` parses these and returns typed `CalibrationTable` objects with axis and value ROM addresses, enabling `BinaryContext.set_name()` annotation of fuel maps, injection timing tables, and safety limits that are directly adjacent to security-relevant code.
 
-2. **`EcuOpenDamosParser` handles `open_damos.json` format with fingerprint relocation**: rather than using fixed ROM addresses (which differ between firmware variants), the parser scans for axis breakpoint value fingerprints in the ROM bytes and adjusts table addresses accordingly. The same `open_damos.json` file works for every PSA/Bosch EDC16C34 firmware variant regardless of minor address differences between software generations.
+2. **`EcuOpenDamosParser` handles `open_damos.json` format with fingerprint relocation**: rather than using fixed ROM addresses which differ between firmware variants, the parser scans for axis breakpoint value fingerprints in the ROM bytes and adjusts table addresses accordingly. The same `open_damos.json` file works for every PSA/Bosch EDC16C34 firmware variant regardless of minor address differences between software generations.
 
 3. **Calibration context is essential for security analysis**: a buffer write to a ROM address that appears to be a vulnerability may be a legitimate calibration update path, or a calibration variable read may be an attacker-controllable input. Annotating calibration addresses in `BinaryContext` allows `FuncProfiler` and `TaintTracker` to correctly label these as calibration reads/writes rather than unknown data accesses.
 
@@ -102,14 +102,14 @@ Run `EcuA2LParser` or `EcuOpenDamosParser` after `BinaryContext.load_or_build()`
 | `description` | Long description string from the calibration file |
 | `category` | Category string from the source file |
 | `table_type` | `'VALUE'`, `'CURVE'`, or `'MAP'` |
-| `address` | File offset of the data block (raw, before relocation) |
+| `address` | File offset of the data block raw, before relocation |
 | `relocated_address` | Fingerprint-relocated address, or `None` if not relocated |
 | `effective_address` | Property: `relocated_address` if set, else `address` |
-| `rows` | Row count (y-axis length) |
-| `cols` | Column count (x-axis length) |
+| `rows` | Row count y-axis length |
+| `cols` | Column count x-axis length |
 | `scale` / `bias` | Physical-unit conversion factors |
 | `unit` | Physical unit string |
-| `x_axis` / `y_axis` | `CalibrationAxis` objects (for CURVE and MAP), or `None` |
+| `x_axis` / `y_axis` | `CalibrationAxis` objects for CURVE and MAP, or `None` |
 | `label_map()` | Returns `{file_offset: label}`: inject into `BinaryContext` via `set_name()` |
 
 `EcuOpenDamosParser.locate_in_rom(rom)` accepts raw ROM bytes and returns `Dict[str, int]`: `{characteristic_name: file_offset}` for every characteristic table found in this ROM variant.

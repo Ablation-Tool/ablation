@@ -30,7 +30,7 @@ the taint passes through stack memory between the source and the sink.
 **Workaround:** 
 Run `SinkArgClassifier.from_path(elf).classify_all()` as a complement. It catches
 ARG_PROPAGATED sink calls that the register-level model misses. Note: `read`/`recv` write
-into a buffer argument (r4 before the call), not into the return value (r3). Use
+into a buffer argument r4 before the call, not into the return value (r3). Use
 `SinkArgClassifier` for flows where the buffer pointer is what reaches the sink.
 
 **Resolved in version:** Open
@@ -40,14 +40,14 @@ into a buffer argument (r4 before the call), not into the return value (r3). Use
 ## PPC32-KA-002: Unresolved GOT2 internal function pointers treated as clobbering calls
 
 **Description:** 
-`PPC32TaintTracker` resolves GOT2 entries that point to PLT stubs (imported functions).
+`PPC32TaintTracker` resolves GOT2 entries that point to PLT stubs imported functions.
 GOT2 entries that point to internal function pointers or data constants are not resolved.
 An indirect `bctrl` through an unresolved GOT2 entry is treated as an unknown call that
-clobbers r3 (the return register). If the callee contains a sink reached via tainted
+clobbers r3 the return register. If the callee contains a sink reached via tainted
 arguments, the finding is missed.
 
 **Triggering conditions:** 
-- GOT2-PIC binaries with internal function pointer tables (common in Cisco IOS)
+- GOT2-PIC binaries with internal function pointer tables common in Cisco IOS
 - Dispatch tables where a network handler selects a function pointer from a GOT2 slot
 
 **Impact:** False negative. Taint that reaches a sink inside an internal GOT2-dispatched
@@ -65,7 +65,7 @@ internal VAs. Add those VAs as custom sinks or trace them separately.
 
 **Description:** 
 Huawei bootloaders use a vendor-specific ELF relocation type (0x40000054) that LIEF reports
-as invalid and discards. The tracker detects this case (zero JUMP_SLOT relocations from LIEF)
+as invalid and discards. The tracker detects this case zero JUMP_SLOT relocations from LIEF
 and falls back to `_load_plt_from_dynsym_raw()`, which loads PLT stub VAs directly from
 SHN_UNDEF dynamic symbols. This fallback works for Huawei GOT2-PIC binaries. It must not
 run on SYSV PIC binaries (IBM HPS, glibc `.so`) because SYSV undefined symbols have

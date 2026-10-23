@@ -68,13 +68,13 @@ if scanner.is_go_x86_64(ctx.path):
 ## Notes
 
 - **Name recovery is partial.** Only functions whose `funcoff` aligns with the start of a
- null-terminated string in the funcnametab get a name. In Go 1.22 (fos_server), this was
- 276/23,396. VA recovery is complete (all 23,396 recovered). This is a known gap: the
+ null-terminated string in the funcnametab get a name. In Go 1.22 fos_server, this was
+ 276/23,396. VA recovery is complete all 23,396 recovered. This is a known gap: the
   `funcoff` interpretation for intra-string offsets in the funcnametab is not yet resolved.
 - **Go 1.16–1.17 and 1.2–1.15** name recovery is not implemented; VAs are recovered.
 - Run `patch_context` BEFORE SemanticSearcher, FuncProfiler, or TaintTracker on any
  stripped Go binary, otherwise those tools have no function windows to work with.
-- The pclntab scan is O(filesize) and typically takes < 1 second for binaries up to 100 MB.
+- The pclntab scan is Ofilesize and typically takes < 1 second for binaries up to 100 MB.
 
 ---
 
@@ -117,9 +117,9 @@ None: pclntab parsing is structural and produces exact function starts. The only
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` for the stripped Go binary. Confirm `ctx.func_starts` is empty or incomplete (pclntab was not found by default extraction).
+**Before this module:** `BinaryContext.load_or_build()` for the stripped Go binary. Confirm `ctx.func_starts` is empty or incomplete pclntab was not found by default extraction.
 
-**After this module:** Call `scanner.scan()` and inject the result: `ctx.set_func_starts(result.func_starts)`. Then run `SemanticSearcher.query()` with the populated starts.
+**After this module:** Call `scanner.scan()` and inject the result: `ctx.set_func_startsresult.func_starts`. Then run `SemanticSearcher.query()` with the populated starts.
 
 ---
 

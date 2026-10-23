@@ -6,7 +6,7 @@ Fast approximate nearest-neighbor function lookup using SAX (Symbolic Aggregate 
 
 ## Why this exists
 
-1. **`SemanticSearcher` runs BERT-class embedding inference: each query takes 50-200ms per function scored, which is acceptable for a shortlist of 10-50 candidates but prohibitive for full-corpus scanning of a 10,000-function binary.** `SAXIndex` encodes each function's operation-category sequence as a short symbolic word (8 characters from an 8-symbol alphabet), then uses edit-distance lookup to find approximate matches in microseconds. The SAX pre-filter narrows the 10,000-function corpus to a 10-100 function shortlist before `SemanticSearcher` runs.
+1. **`SemanticSearcher` runs BERT-class embedding inference: each query takes 50-200ms per function scored, which is acceptable for a shortlist of 10-50 candidates but prohibitive for full-corpus scanning of a 10,000-function binary.** `SAXIndex` encodes each function's operation-category sequence as a short symbolic word 8 characters from an 8-symbol alphabet, then uses edit-distance lookup to find approximate matches in microseconds. The SAX pre-filter narrows the 10,000-function corpus to a 10-100 function shortlist before `SemanticSearcher` runs.
 
 2. **SAX encoding produces the same or nearby words for similar sequences: two functions that both do `[cmp, jmp, call, mov, ret]` with minor variations will produce identical or 1-edit-distance SAX words.** This property enables approximate matching: `query_seq()` returns all functions within a configurable edit distance of the query word. Unlike exact substring matching, SAX tolerates small insertions and deletions that appear when the same algorithm is compiled with different optimization levels.
 
@@ -93,7 +93,7 @@ Use `SAXIndex` as the first filter in a corpus-scale similarity search: index al
 
 ## Reading output
 
-`SAXIndex.query_va(ctx, func_va)` and `SAXIndex.query_seq(seq)` both return `List[SAXMatch]`:
+`SAXIndex.query_vactx, func_va` and `SAXIndex.query_seq(seq)` both return `List[SAXMatch]`:
 
 | Attribute | Content |
 |:---|:---|

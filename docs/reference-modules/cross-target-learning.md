@@ -44,7 +44,7 @@ flowchart TD
 
 ### How embeddings enable cross-vendor matching
 
-The BERT embedding (all-mpnet-base-v2, 768 dimensions) encodes the semantic meaning of a function description rather than its literal text. Two descriptions that say the same thing in different words produce similar vectors.
+The BERT embedding all-mpnet-base-v2, 768 dimensions encodes the semantic meaning of a function description rather than its literal text. Two descriptions that say the same thing in different words produce similar vectors.
 
 A Fortinet finding described as "recvfrom output length used as strcpy size argument without validation" and a Huawei finding described as "network read byte count flows to string copy operation as size parameter" produce vectors with cosine similarity above 0.80 after PCA whitening. The semantic sweep surfaces the Huawei function as a candidate because the underlying vulnerability pattern is the same, even though no word is shared between the two descriptions.
 
@@ -68,7 +68,7 @@ similar = reg.find_similar(new_embedding, top_k=8, min_sim=0.60)
 | `~/.ablation/findings.db` | SQLite; all confirmed findings with embeddings |
 | `ablation/data/seed_corpus.json` | Ships with Ablation; published CVEs as seed patterns |
 
-The seed corpus provides signal on the first engagement against any binary class (network daemons, BMC firmware, kernel drivers). Engagement findings supplement and refine it over time.
+The seed corpus provides signal on the first engagement against any binary class network daemons, BMC firmware, kernel drivers. Engagement findings supplement and refine it over time.
 
 ---
 
@@ -131,7 +131,7 @@ pl.sweep(searcher, top_k=8, min_score=0.30)
 
 ## False positives
 
-**High sweep scores on non-vulnerable functions**: `PatternLibrary.sweep()` uses a minimum score threshold (default 0.30) that is intentionally low. Many functions that score above 0.30 will not have the targeted vulnerability; the sweep produces candidates for manual review, not confirmed findings. Raise `min_score` to 0.50–0.60 if the candidate list is too large for triage.
+**High sweep scores on non-vulnerable functions**: `PatternLibrary.sweep()` uses a minimum score threshold default 0.30 that is intentionally low. Many functions that score above 0.30 will not have the targeted vulnerability; the sweep produces candidates for manual review, not confirmed findings. Raise `min_score` to 0.50–0.60 if the candidate list is too large for triage.
 
 **Patterns that over-match a broad function class**: a confirmed finding described with generic terms (e.g., "reads from network socket into buffer") will match many network-receive functions. Descriptions that include the specific error pattern (e.g., "reads attacker-controlled byte count into fixed-size stack buffer without bounds check") produce more targeted patterns and fewer false candidates.
 
@@ -141,21 +141,21 @@ pl.sweep(searcher, top_k=8, min_score=0.30)
 
 **Before this module:** `CorpusBuilder.build()` to build the function corpus DB, and `SemanticSearcher.build_corpus()` to load the embedding matrix. `FindingRegistry` must have at least one confirmed finding before `ingest_from_registry()` adds any patterns.
 
-**After this module:** `PatternLibrary.sweep()` results feed directly into candidate prioritization. High-score functions (above 0.60) proceed to `FuncProfiler.profile()` and then `TaintTracker.run()`. Low-score functions can be deprioritized without losing confirmed findings from prior engagements.
+**After this module:** `PatternLibrary.sweep()` results feed directly into candidate prioritization. High-score functions above 0.60 proceed to `FuncProfiler.profile()` and then `TaintTracker.run()`. Low-score functions can be deprioritized without losing confirmed findings from prior engagements.
 
 ---
 
 ## Reading output
 
-`PatternLibrary.sweep(searcher, top_k, min_score)` returns `dict[str, list[tuple[float, int, str]]]`: tag → list of `(score, func_id, name)` tuples sorted by descending score:
+`PatternLibrary.sweepsearcher, top_k, min_score` returns `dict[str, list[tuple[float, int, str]]]`: tag → list of `score, func_id, name` tuples sorted by descending score:
 
 | Element | Content |
 |:---|:---|
 | `score` | Float: cosine similarity between the pattern query embedding and the function's corpus embedding |
 | `func_id` | Integer corpus DB row ID for the matched function |
-| `name` | Function name from the corpus (overlay name, export, PLT, or hex VA string) |
+| `name` | Function name from the corpus overlay name, export, PLT, or hex VA string |
 
-`FindingRegistry.find_similar(embedding, top_k, min_sim)` returns `list[dict]`: each dict is a row from `findings.db`:
+`FindingRegistry.find_similarembedding, top_k, min_sim` returns `list[dict]`: each dict is a row from `findings.db`:
 
 | Key | Content |
 |:---|:---|

@@ -15,7 +15,7 @@ ctx = BinaryContext.load_or_build('/path/to/target.elf')
 print(ctx.summary())
 ```
 
-`load_or_build()` auto-detects format (ELF, PE, XCOFF, flat ROM) and architecture. On subsequent runs it reloads from cache in under 200 ms via SHA-256-keyed JSON.
+`load_or_build()` auto-detects format ELF, PE, XCOFF, flat ROM and architecture. On subsequent runs it reloads from cache in under 200 ms via SHA-256-keyed JSON.
 
 ---
 

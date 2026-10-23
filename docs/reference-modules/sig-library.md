@@ -87,8 +87,8 @@ ablation sigs firmware.so --dry-run
  embedding matrix. This is cached to `~/.ablation/sig_cache/` -- subsequent loads
  take ~2ms.
 2. Each incoming description is encoded as a single vector, then cosine similarity is
- computed against the matrix (one matrix multiply: ~1ms for 40 sigs).
-3. The best match is returned if its score exceeds `threshold` (default 0.62).
+ computed against the matrix one matrix multiply: ~1ms for 40 sigs.
+3. The best match is returned if its score exceeds `threshold` default 0.62.
 4. `auto_name()` iterates over all `ANGR_INFERRED` functions in the corpus DB that
  still have placeholder names (`fn_0x*`), builds a description from call targets and
  string references, and renames matches.
@@ -109,16 +109,16 @@ ablation sigs firmware.so --dry-run
 Loads the sentence-transformers model and builds or loads the cached embedding matrix.
 Must be called before `match_description()` or `auto_name()`.
 
-### `match_description(description: str) -> SigMatch | None`
+### `match_descriptiondescription: str -> SigMatch | None`
 
 Match a free-form function description string. Returns `None` if no signature exceeds
 threshold. Does not skip already-named functions -- use this for ad-hoc matching.
 
-### `match_function(name, call_targets, string_xrefs, notes) -> SigMatch | None`
+### `match_functionname, call_targets, string_xrefs, notes -> SigMatch | None`
 
 Higher-level matcher used by `auto_name()`. Skips functions that already have real
 names (i.e., not matching `fn_0x*`). Returns `None` for functions with no signal
-(empty call targets and string xrefs).
+empty call targets and string xrefs.
 
 ### `auto_name(db_path: str, dry_run=False) -> int`
 

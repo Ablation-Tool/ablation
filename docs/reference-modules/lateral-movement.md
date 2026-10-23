@@ -17,7 +17,7 @@ Post-exploitation lateral movement: TCP connect scan, SSH credential spray, SMB/
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. Four CWE-770 reads fixed this session: `/proc/net/arp` (L92) and `/proc/net/route` (L123) changed from `f.readlines()[1:]` to `f.read(_MAX_PROC_BYTES).splitlines()[1:]`; `authorized_keys` (L4924) and `known_hosts` (L4974) changed from `for line in fh:` to `fh.read(_MAX_SSH_FILE_BYTES).splitlines()`. `_MAX_SSH_FILE_BYTES=1MB` constant added. Socket banners bounded at `s.recv(256)`. No lief.parse(). No HTTP reads.
+Gate: **PASSED**. No HIGH or CRITICAL findings. Four CWE-770 reads fixed this session: `/proc/net/arp` (L92) and `/proc/net/route` (L123) changed from `f.readlines()[1:]` to `f.read_MAX_PROC_BYTES.splitlines()[1:]`; `authorized_keys` (L4924) and `known_hosts` (L4974) changed from `for line in fh:` to `fh.read_MAX_SSH_FILE_BYTES.splitlines()`. `_MAX_SSH_FILE_BYTES=1MB` constant added. Socket banners bounded at `s.recv(256)`. No lief.parse(). No HTTP reads.
 
 ---
 
@@ -82,11 +82,11 @@ Run `CloudMetadataProber` immediately after gaining shell access to any host. A 
 
 `CredentialHarvester.findings` shape: `{source, data, severity}`
 
-`CloudMetadataProber.probe_all()` returns a plain data dict (not a findings list):
+`CloudMetadataProber.probe_all()` returns a plain data dict not a findings list:
 
 | Key | Content |
 |:---|:---|
-| `aws_iam_creds` | `{role: str, credentials_json: str}` (raw JSON string from IMDS) |
+| `aws_iam_creds` | `{role: str, credentials_json: str}` raw JSON string from IMDS |
 | `gcp_metadata` | GCP instance metadata dict |
 | `azure_imds` | Azure IMDS response dict |
 | `aws_imdsv1` / `aws_imdsv2` | IMDSv1 and IMDSv2 probe results |

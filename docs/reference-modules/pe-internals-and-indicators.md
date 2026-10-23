@@ -41,15 +41,15 @@ flowchart TD
 
 **DOS header and e_lfanew.** Every PE file begins with the legacy DOS MZ header (`4D 5A`). Bytes 0x3C–0x3F hold `e_lfanew`, the file offset to the PE signature. This indirection exists because PE files must also be valid DOS executables that print "This program cannot be run in DOS mode" when executed on legacy hardware.
 
-**COFF header.** The 20-byte COFF header immediately follows the PE signature. The `Machine` field identifies the architecture: `0x014C` is x86-32 (IMAGE_FILE_MACHINE_I386), `0x8664` is x86-64 (IMAGE_FILE_MACHINE_AMD64). The `Characteristics` field records file-level attributes including whether the image is a DLL, whether it is stripped of relocations, and whether it is a system-level image.
+**COFF header.** The 20-byte COFF header immediately follows the PE signature. The `Machine` field identifies the architecture: `0x014C` is x86-32 IMAGE_FILE_MACHINE_I386, `0x8664` is x86-64 IMAGE_FILE_MACHINE_AMD64. The `Characteristics` field records file-level attributes including whether the image is a DLL, whether it is stripped of relocations, and whether it is a system-level image.
 
-**Optional header.** Despite its name, the optional header is required for executable images. It contains `AddressOfEntryPoint` (RVA of the program's first instruction), `ImageBase` (preferred load address), and the `DataDirectory`: an array of 16 entries pointing to the import table, export table, resource table, security directory, debug directory, and other critical structures.
+**Optional header.** Despite its name, the optional header is required for executable images. It contains `AddressOfEntryPoint` (RVA of the program's first instruction), `ImageBase` preferred load address, and the `DataDirectory`: an array of 16 entries pointing to the import table, export table, resource table, security directory, debug directory, and other critical structures.
 
 **Hardening flags from DllCharacteristics.** The optional header's `DllCharacteristics` field is a bitmask:
 
 | Bit | Constant | Meaning |
 |---|---|---|
-| `0x0040` | `IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE` | ASLR (Dynamic Base) enabled |
+| `0x0040` | `IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE` | ASLR Dynamic Base enabled |
 | `0x0100` | `IMAGE_DLLCHARACTERISTICS_NX_COMPAT` | DEP/NX compatible |
 | `0x0400` | `IMAGE_DLLCHARACTERISTICS_NO_SEH` | No structured exception handlers |
 | `0x4000` | `IMAGE_DLLCHARACTERISTICS_GUARD_CF` | Control Flow Guard enabled |
@@ -146,7 +146,7 @@ Imports (selected):
 
 ## False positives
 
-**Packed or encrypted PE files.** Packers (UPX, MPRESS, custom firmware loaders) present a valid PE header wrapping compressed or encrypted content. The parser will read the header correctly but the section data will contain the packer stub, not the original code. Look for a very small import table (often just `LoadLibrary` / `GetProcAddress`) combined with high-entropy sections as a packing indicator. Use the Entropy Mapper to confirm.
+**Packed or encrypted PE files.** Packers UPX, MPRESS, custom firmware loaders present a valid PE header wrapping compressed or encrypted content. The parser will read the header correctly but the section data will contain the packer stub, not the original code. Look for a very small import table (often just `LoadLibrary` / `GetProcAddress`) combined with high-entropy sections as a packing indicator. Use the Entropy Mapper to confirm.
 
 **Managed .NET assemblies.** .NET binaries are valid PE files but their code lives in the CLR metadata, not in native x86/x64 instructions. The parser reads the PE structure correctly but the IAT will only contain `_CorExeMain` from `mscoree.dll`. Downstream taint and disassembly tools operate on the native stub only, not the managed bytecode.
 

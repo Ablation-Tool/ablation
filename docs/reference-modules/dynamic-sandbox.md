@@ -12,7 +12,7 @@ Two things were not possible before this module:
 
 1. Distinguish branches in leaf functions without a running device. Static analysis produces a list of possible outcomes for a branchy leaf function but cannot say which one the binary selects for a given input. The sandbox executes the function directly so the real output is observed, not inferred.
 
-2. Provide behavioral evidence for the Hypothesis Engine. The engine scores evidence by family: behavioral (strength 1.0), data_flow (0.9), structure (0.75), semantic (0.25). Before DynamicSandbox, the highest-strength evidence any automated analyzer could supply was data_flow. Behavioral evidence requires actual execution, so it was always a gap requiring a running device or a full emulated environment. DynamicSandbox fills that gap on leaf functions without either.
+2. Provide behavioral evidence for the Hypothesis Engine. The engine scores evidence by family: behavioral strength 1.0, data_flow (0.9), structure (0.75), semantic (0.25). Before DynamicSandbox, the highest-strength evidence any automated analyzer could supply was data_flow. Behavioral evidence requires actual execution, so it was always a gap requiring a running device or a full emulated environment. DynamicSandbox fills that gap on leaf functions without either.
 
 ---
 
@@ -67,7 +67,7 @@ Each `SandboxResult.behavioral_signature()` is a compact string (`ret=0x1,writes
 |:---|:---|
 | arm64 / aarch64 | Full: argument registers x0–x7, return value x0 |
 | x86_64 | Full: argument registers rdi/rsi/rdx/rcx/r8/r9, return value rax |
-| la64, mips64 | Stub (architecture not yet wired to Unicorn backend) |
+| la64, mips64 | Stub architecture not yet wired to Unicorn backend |
 
 Both ELF and PE binaries are supported. PE binaries use the IAT range as the abort-hook boundary instead of the PLT range.
 
@@ -77,10 +77,10 @@ Both ELF and PE binaries are supported. PE binaries use the IAT range as the abo
 
 | Call | Description |
 |:---|:---|
-| `DynamicSandbox.from_path(binary, arch)` | Load binary segments into Unicorn and create sandbox |
+| `DynamicSandbox.from_pathbinary, arch` | Load binary segments into Unicorn and create sandbox |
 | `DynamicSandbox.from_context(ctx)` | Same, arch detected from BinaryContext |
-| `sandbox.run_function(va, args, max_insns)` | Execute function at va with register arguments |
-| `sandbox.probe_multiple(va, input_sets)` | Run the same function with multiple input sets; each run gets a clean restore |
+| `sandbox.run_functionva, args, max_insns` | Execute function at va with register arguments |
+| `sandbox.probe_multipleva, input_sets` | Run the same function with multiple input sets; each run gets a clean restore |
 | `LeafFunctionChecker.from_path(binary)` | Build checker from binary's PLT range |
 | `checker.is_leaf(va, ctx)` | True if function has no PLT callees |
 | `checker.check_report(va, ctx)` | Human-readable probe-safety report for va |
@@ -97,9 +97,9 @@ Both ELF and PE binaries are supported. PE binaries use the IAT range as the abo
 | `output_regs` | Register values captured after execution |
 | `return_value` | x0 (arm64) or rax (x86_64) after execution |
 | `executed_insns` | Instruction count for the run |
-| `memory_writes` | List of (address, size, value) tuples from write hooks |
+| `memory_writes` | List of address, size, value tuples from write hooks |
 | `aborted` | True if execution stopped before return |
-| `abort_reason` | Why execution stopped early (PLT stub address or timeout) |
+| `abort_reason` | Why execution stopped early PLT stub address or timeout |
 
 ---
 
@@ -111,9 +111,9 @@ Evidence strength depends on how far execution got:
 
 | Outcome | Strength |
 |:---|:---|
-| PLT call aborted the run | 0.40 (partial behavioral) |
-| Multiple runs, outputs vary by input | 0.60 (clean but non-deterministic) |
-| Multiple runs, consistent behavior observed | 0.75 (behavioral fingerprint confirmed) |
+| PLT call aborted the run | 0.40 partial behavioral |
+| Multiple runs, outputs vary by input | 0.60 clean but non-deterministic |
+| Multiple runs, consistent behavior observed | 0.75 behavioral fingerprint confirmed |
 
 The adapter is registered automatically. Invoke it by scheduling a `dynamic` probe in a Hypothesis Engine session rather than calling DynamicSandbox directly in that context.
 
@@ -154,7 +154,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 
 ## Reading output
 
-`DynamicSandbox.from_context(ctx).probe(va, input_regs)` returns a `SandboxResult`:
+`DynamicSandbox.from_context(ctx).probeva, input_regs` returns a `SandboxResult`:
 
 | Attribute | Content |
 |:---|:---|
@@ -164,7 +164,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 | `return_value` | Return value (`rax`/`r0`) as an integer, or `None` if aborted |
 | `executed_insns` | Number of instructions executed before return or abort |
 | `memory_writes` | `List[Tuple[address, size, value_bytes]]`: all memory stores during execution |
-| `aborted` | `True` if execution was stopped before returning (timeout or unsafe access) |
+| `aborted` | `True` if execution was stopped before returning timeout or unsafe access |
 | `abort_reason` | Reason string when `aborted=True` |
 | `arch` | Architecture of the probe run (e.g., `'arm64'`, `'x86_64'`) |
 

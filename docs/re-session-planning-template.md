@@ -1,6 +1,6 @@
 # RE Session Planning Template
 
-**Standard:** MIL-HDBK-115C Section 4 (Planning and Preparation) 
+**Standard:** MIL-HDBK-115C Section 4 Planning and Preparation 
 **Usage:** Copy to `re/<vendor>/SESSION_<target>.md` at the start of every engagement
 
 ---
@@ -21,7 +21,7 @@ Copy this file to `re/<vendor>/SESSION_<target>.md`. Fill in all fields before r
 
 ---
 
-## 1. Target Identification (MIL-HDBK-115C §4.1)
+## 1. Target Identification MIL-HDBK-115C §4.1
 
 | Field | Value |
 |---|---|
@@ -31,8 +31,8 @@ Copy this file to `re/<vendor>/SESSION_<target>.md`. Fill in all fields before r
 | Endianness | big / little |
 | Size | |
 | SHA256 | `sha256sum <binary>` |
-| Source | (firmware image, installer, download URL) |
-| Download verified | YES / NO (check README.md Download Status if Fortinet) |
+| Source | firmware image, installer, download URL |
+| Download verified | YES / NO check README.md Download Status if Fortinet |
 
 **Artifact collection:**
 
@@ -43,7 +43,7 @@ Copy this file to `re/<vendor>/SESSION_<target>.md`. Fill in all fields before r
 
 ---
 
-## 2. Scope and Purpose (MIL-HDBK-115C §4.2)
+## 2. Scope and Purpose MIL-HDBK-115C §4.2
 
 **Purpose of this RE effort:** 
 for example PSIRT vulnerability research; safety case support; curriculum material
@@ -56,21 +56,21 @@ for example calibration data; bootloader; DRM
 
 ---
 
-## 3. Tool Selection Rationale (MIL-HDBK-115C §4.3)
+## 3. Tool Selection Rationale MIL-HDBK-115C §4.3
 
 | Tool | Reason for selection |
 |---|---|
 | `BinaryContext` | Always first: builds function index and string xrefs |
 | `SemanticSearcher` | Always second: semantic sweep before any manual disasm |
-| *(add tools as selected)* | |
+| *add tools as selected* | |
 
 **Taint tracker selected:** (e.g., `RH850TaintTracker`): **why:** (e.g., GHS CC-RH ABI, `double_is_32bit=True` default matches firmware compiler)
 
-**Known anomalies consulted:** `docs/reference-anomalies/<tracker>.md`: **relevant anomalies:** (list any whose triggering conditions match this target)
+**Known anomalies consulted:** `docs/reference-anomalies/<tracker>.md`: **relevant anomalies:** list any whose triggering conditions match this target
 
 ---
 
-## 4. Documentation Plan (MIL-HDBK-115C §4.4)
+## 4. Documentation Plan MIL-HDBK-115C §4.4
 
 - All findings go in `re/<vendor>/<target>_re.py`
 - This session file is the RE plan per MIL-HDBK-115C §4
@@ -117,7 +117,7 @@ for example calibration data; bootloader; DRM
 
 ## 9. Tool Improvements Identified
 
-*(gaps found in Ablation during this engagement that should become new modules)*
+*gaps found in Ablation during this engagement that should become new modules*
 
 | Gap | Proposed module | Priority |
 |---|---|---|
@@ -127,10 +127,10 @@ for example calibration data; bootloader; DRM
 
 ## 10. Retrospective
 
-*(filled at project close)*
+*filled at project close*
 
 **Total sessions:** N 
-**Total findings:** N CONFIRMED (N CRITICAL, N HIGH, N MEDIUM) 
-**Won't-do-again:** (what would you skip next time) 
+**Total findings:** N CONFIRMED N CRITICAL, N HIGH, N MEDIUM 
+**Won't-do-again:** what would you skip next time 
 **Reusable patterns:** (patterns that should go into `PatternLibrary`) 
-**Ablation gaps found:** (became which modules)
+**Ablation gaps found:** became which modules

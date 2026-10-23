@@ -10,7 +10,7 @@ Map every `os/exec` call site in a stripped Go binary: resolving the static comm
 
 2. **Go pclntab provides function boundaries in stripped binaries.** The `.gopclntab` section embeds a complete function name-to-VA table regardless of whether `strip` was run on the binary. This makes Go substantially different from C firmware: every function name is available, caller/callee relationships are fully recoverable, and the scanner filters out the Go standard library namespace at the name level rather than having to infer it from export tables. The scanner processes only application-package functions: the subset that actually calls `os/exec`: reducing the disassembly pass from the full binary to the relevant application code.
 
-3. **Go 1.17+ AMD64 ABI uses registers for argument passing, not the stack.** In the post-1.17 register ABI, `os/exec.Command(name string, ...)` receives the command string in `rax` (pointer) and `rbx` (length). The `GoStringResolver` 4-instruction window traces the LEA+MOV pair that loads this value, resolving `.rodata` string literals in under a millisecond per call site. Functions that construct the command string at runtime (heap allocation, `fmt.Sprintf`) return `cmd_type=dynamic` rather than a static string.
+3. **Go 1.17+ AMD64 ABI uses registers for argument passing, not the stack.** In the post-1.17 register ABI, `os/exec.Commandname string, ...` receives the command string in `rax` (pointer) and `rbx` (length). The `GoStringResolver` 4-instruction window traces the LEA+MOV pair that loads this value, resolving `.rodata` string literals in under a millisecond per call site. Functions that construct the command string at runtime (heap allocation, `fmt.Sprintf`) return `cmd_type=dynamic` rather than a static string.
 
 ---
 
@@ -115,7 +115,7 @@ MEDIUM    dynamic   github.com/hassio/addon.startAddon   0x4a30c0    os/exec.Com
 
 ## False positives
 
-**Format string arguments classified as dynamic.** `os/exec.Command(fmt.Sprintf("/usr/bin/%s", bin), ...)` loads the command from `fmt.Sprintf`: a function return, not a static `.rodata` LEA. The resolver sees no `lea rax` for the call and returns `dynamic`. This is not a false positive in the security sense (dynamic commands do require manual trace), but it does include findings that are not exploitable when the `fmt.Sprintf` format string is `"absolute"`.
+**Format string arguments classified as dynamic.** `os/exec.Command(fmt.Sprintf("/usr/bin/%s", bin), ...)` loads the command from `fmt.Sprintf`: a function return, not a static `.rodata` LEA. The resolver sees no `lea rax` for the call and returns `dynamic`. This is not a false positive in the security sense dynamic commands do require manual trace, but it does include findings that are not exploitable when the `fmt.Sprintf` format string is `"absolute"`.
 
 **Multi-call-site functions.** A function that calls `os/exec.Command` in two branches: once with a hardcoded absolute path (`/bin/ls`) and once with a dynamic string: produces two `SubprocessSite` entries at different `call_va` values. The absolute finding appears if `skip_absolute=False`. Review both entries before dismissing the function.
 
@@ -135,13 +135,13 @@ MEDIUM    dynamic   github.com/hassio/addon.startAddon   0x4a30c0    os/exec.Com
 
 | Field | Content |
 |:---|:---|
-| `scanner_func` | Full Go package-qualified caller name (from pclntab) |
+| `scanner_func` | Full Go package-qualified caller name from pclntab |
 | `scanner_func_va` | VA of the caller function |
 | `call_va` | VA of the `CALL` / `BL` instruction |
 | `exec_target` | `os/exec.Command` / `os/exec.CommandContext` / `os/exec.(*Cmd).Start` / etc. |
 | `cmd_string` | Resolved command path, or `""` if dynamic |
 | `cmd_type` | `relative` / `path` / `absolute` / `dynamic` |
-| `severity` | `HIGH` (relative) / `MEDIUM` (path or dynamic) / `INFO` (absolute) |
+| `severity` | `HIGH` relative / `MEDIUM` path or dynamic / `INFO` absolute |
 | `note` | Plain-language exploitation note for `relative` and `path` types |
 
 ---

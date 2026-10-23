@@ -14,14 +14,14 @@ Three things were not possible before in Ablation:
 
 AMI CramFS is standard CramFS (`magic=0x28cd3d45`) with one structural change: the inode is extended from 12 to 16 bytes.
 
-**Standard CramFS inode (12 bytes):**
+**Standard CramFS inode 12 bytes:**
 ```
 [w0: mode(16) | uid(16)]
 [w1: size(24) | gid(8)]
 [w2: namelen(6,bits0-5) | offset(26,bits6-31)]
 ```
 
-**AMI extended inode (16 bytes):**
+**AMI extended inode 16 bytes:**
 ```
 [w0: mode(16) | uid(16)]
 [w1: size(24) | gid(8)]
@@ -62,8 +62,8 @@ ext.extract_all('/tmp/bmc_root/', progress=print)
 
 ## Known targets
 
-- QTECH BMC (ASPEED AST2xxx, SPX Redfish): confirmed
-- Supermicro BMC (same AMI SPX stack): expected to work
+- QTECH BMC ASPEED AST2xxx, SPX Redfish: confirmed
+- Supermicro BMC same AMI SPX stack: expected to work
 - Lenovo BMC (AMI SPX): expected to work
 
 ## Size limits
@@ -74,12 +74,12 @@ CramFS partition. The limit is enforced via `os.path.getsize()` before any `read
 
 ## Block-0 prefix handling
 
-Some AMI firmware images prefix block 0 with a raw (uncompressed) data section, typically
+Some AMI firmware images prefix block 0 with a raw uncompressed data section, typically
 a pre-relocated GOT table, before the zlib-compressed file content. When initial decompression
 of a block fails, `_decompress_file` scans for the first valid zlib CMF byte (0x78 followed by
 a valid FLG byte: 0x01, 0x5e, 0x9c, or 0xda) and decompresses from that offset. Prefix bytes
 before the zlib header are discarded as storage overhead. Confirmed on psme-rest-server
-(QTECH G4DCL, 16 384-byte GOT prefix in block 0).
+QTECH G4DCL, 16 384-byte GOT prefix in block 0.
 
 ## FORGE audit
 
@@ -89,7 +89,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_IMAGE_BYTES=256MB`; `os.pa
 
 ## How it works
 
-`AmiCramFSExtractor.from_path()` reads the entire image into memory (size-limited to 256 MB via `os.path.getsize()` guard) and validates the CramFS magic (`0x28cd3d45`). `from_image()` reads only the 8-byte header at the given offset, validates the magic and `total_size`, then reads the exact partition slice. Directory enumeration uses `_parse_entries()`, which reads 16-byte AMI extended inodes at each entry offset: `w0` holds mode and uid, `w1` holds size and gid, `w2` holds `namelen` in bits[8:13], and `w3` holds the data offset in 4-byte units. For regular files, `_decompress_file()` reads the block pointer table at `data_off × 4` and decompresses each 4 KB block with `zlib.decompress()`. When block 0 fails decompression (GOT prefix variant), the function scans for the first valid zlib CMF byte (`0x78` followed by `0x01`, `0x5e`, `0x9c`, or `0xda`) and decompresses from that offset, discarding the prefix.
+`AmiCramFSExtractor.from_path()` reads the entire image into memory (size-limited to 256 MB via `os.path.getsize()` guard) and validates the CramFS magic (`0x28cd3d45`). `from_image()` reads only the 8-byte header at the given offset, validates the magic and `total_size`, then reads the exact partition slice. Directory enumeration uses `_parse_entries()`, which reads 16-byte AMI extended inodes at each entry offset: `w0` holds mode and uid, `w1` holds size and gid, `w2` holds `namelen` in bits[8:13], and `w3` holds the data offset in 4-byte units. For regular files, `_decompress_file()` reads the block pointer table at `data_off × 4` and decompresses each 4 KB block with `zlib.decompress()`. When block 0 fails decompression GOT prefix variant, the function scans for the first valid zlib CMF byte (`0x78` followed by `0x01`, `0x5e`, `0x9c`, or `0xda`) and decompresses from that offset, discarding the prefix.
 
 ---
 
@@ -121,7 +121,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_IMAGE_BYTES=256MB`; `os.pa
 
 ## Pipeline position
 
-**Before this module:** Locate the CramFS partition offset in the BMC firmware image by scanning for the `0x28cd3d45` magic bytes (e.g., `data.find(b'\x45\x3d\xcd\x28')`). Confirm the AMI format by checking that the inode at offset 8 (root inode) has a 16-byte stride: standard CramFS root inodes are 12 bytes. On known AMI SPX images the CramFS typically starts at offset `0x160000`.
+**Before this module:** Locate the CramFS partition offset in the BMC firmware image by scanning for the `0x28cd3d45` magic bytes (e.g., `data.find(b'\x45\x3d\xcd\x28')`). Confirm the AMI format by checking that the inode at offset 8 root inode has a 16-byte stride: standard CramFS root inodes are 12 bytes. On known AMI SPX images the CramFS typically starts at offset `0x160000`.
 
 **After this module:** Write each extracted binary to a temp file and load with `BinaryContext.load_or_build()`. The ARM32 `spx_restservice` and `psme-rest-server` binaries are the primary RE targets: both take HTTP input via FastCGI and call shell sinks. Run `ARM32TaintTracker` after loading.
 
@@ -144,7 +144,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_IMAGE_BYTES=256MB`; `os.pa
 | `is_lnk` | Property: `True` for symbolic links |
 | `byte_offset` | Property: `data_off × 4` in bytes |
 
-`AmiCramFSExtractor.list_files()` yields all file paths as strings (recursive walk).
+`AmiCramFSExtractor.list_files()` yields all file paths as strings recursive walk.
 `AmiCramFSExtractor.extract_file(path)` returns `bytes`: decompressed content of a file at `path`.
 `AmiCramFSExtractor.extract_all(out_dir)` extracts all files to `out_dir`.
 

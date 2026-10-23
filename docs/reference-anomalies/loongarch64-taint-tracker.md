@@ -53,9 +53,9 @@ non-instrumented build. Findings in `__asan_load*`/`__asan_store*` functions are
 false positives.
 
 **Workaround:** 
-Use `LoongArchDecoderV2.from_system_map(System.map)` and call `decode_frames_clean()` to
+Use `LoongArchDecoderV2.from_system_mapSystem.map` and call `decode_frames_clean()` to
 strip instrumentation before running the tracker. Check
-`dec.count_instrumentation(section, base)['pct_instrumentation']` to confirm stripping
+`dec.count_instrumentationsection, base['pct_instrumentation']` to confirm stripping
 worked. Expect ~40% instrumentation on KASAN kernels.
 
 **Resolved in version:** Mitigated by `LoongArchDecoderV2`. Run on KASAN kernels only.
@@ -65,8 +65,8 @@ worked. Expect ~40% instrumentation on KASAN kernels.
 ## LA64-KA-003: LSX/LASX vector instructions decoded as.word; taint through vectors lost
 
 **Description:** 
-The pure-Python decoder decodes LSX (128-bit SIMD) and LASX (256-bit SIMD) instructions
-as `.word` (opaque word). No taint propagation rules are applied to LSX/LASX instructions.
+The pure-Python decoder decodes LSX 128-bit SIMD and LASX 256-bit SIMD instructions
+as `.word` opaque word. No taint propagation rules are applied to LSX/LASX instructions.
 Data that passes through LSX/LASX registers loses taint.
 
 **Triggering conditions:** 
@@ -112,7 +112,7 @@ wrapper patterns. Trace the dispatch function manually using `WindowAnalyzer.dum
 
 **Description:** 
 `LoongArch64TaintTracker` uses a flow-sensitive, path-insensitive fixpoint analysis with
-loop widening. Loop widening (bounded iteration then widen to top) approximates the loop
+loop widening. Loop widening bounded iteration then widen to top approximates the loop
 fixpoint but does not guarantee precision. Taint that accumulates on the third and
 subsequent iterations beyond the widening threshold may not be reflected in the final
 taint state.

@@ -53,17 +53,17 @@ print(f"XFG: {cfg.xfg_enabled}")
 | HIGH | `cfg_disabled` | `IMAGE_GUARD_CF_INSTRUMENTED` not set |
 | HIGH | `cfg_table_absent` | CFG enabled but function table flag absent |
 | MEDIUM | `no_export_suppression` | `IMAGE_GUARD_CF_ENABLE_EXPORT_SUPPRESSION` not set |
-| MEDIUM | `export_not_in_cfg_table` | Specific export absent from CFG table (per export) |
+| MEDIUM | `export_not_in_cfg_table` | Specific export absent from CFG table per export |
 | INFO | `indirect_call_stats` | Count of indirect call/jmp sites |
 
-CWE: CWE-693 (Protection Mechanism Failure) on all HIGH/MEDIUM findings.
+CWE: CWE-693 Protection Mechanism Failure on all HIGH/MEDIUM findings.
 
 ---
 
 ## Dependencies
 
 - `lief >= 0.14.0` (PE parsing, exports, `IMAGE_LOAD_CONFIG`)
-- `capstone >= 5.0` (indirect call counting in code sections)
+- `capstone >= 5.0` indirect call counting in code sections
 
 ---
 
@@ -84,7 +84,7 @@ CWE: CWE-693 (Protection Mechanism Failure) on all HIGH/MEDIUM findings.
 `CFGBypassDetector.from_path()` opens the PE with LIEF and reads `IMAGE_LOAD_CONFIG.GuardFlags`. The flags are tested against four masks:
 
 1. **`IMAGE_GUARD_CF_INSTRUMENTED` (0x100)**: if absent, emits a HIGH `cfg_disabled` finding immediately; no further CFG checks apply.
-2. **`IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT` (0x400)**: if absent, emits HIGH `cfg_table_absent` (the runtime check passes every address regardless of the table).
+2. **`IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT` (0x400)**: if absent, emits HIGH `cfg_table_absent` the runtime check passes every address regardless of the table.
 3. **`IMAGE_GUARD_CF_ENABLE_EXPORT_SUPPRESSION` (0x8000)**: if absent, emits MEDIUM `no_export_suppression`; all exported functions are valid indirect call targets.
 4. **Export-vs-table cross-reference**: when export suppression is enabled, reads all named exports from `PE.exports` and checks each against the CFG function table. Exports absent from the table emit individual MEDIUM `export_not_in_cfg_table` findings.
 
@@ -127,7 +127,7 @@ Findings: 2 high/critical  3 medium  1 info
 
 **Delay-load imports expand the bypass surface:** The Capstone `call reg` / `jmp reg` count includes delay-load thunks, which dispatch to the OS loader. These are legitimate indirect calls, not bypass vectors. Subtract IAT thunk addresses from the indirect call count when sizing the actual attacker-reachable surface.
 
-**`export_not_in_cfg_table` on non-callable exports:** DLL exports that are data symbols (not functions) are never in the CFG table. Distinguish function vs. data exports by checking `lief.PE.Export.Entry.function_rva` vs. data RVAs, or filter to exports whose RVA falls inside a code section.
+**`export_not_in_cfg_table` on non-callable exports:** DLL exports that are data symbols not functions are never in the CFG table. Distinguish function vs. data exports by checking `lief.PE.Export.Entry.function_rva` vs. data RVAs, or filter to exports whose RVA falls inside a code section.
 
 **XFG type-token mismatch not detected:** When XFG is enabled, the runtime also validates a per-call-site type token. A function present in the CFG table may still be blocked by XFG type mismatch. `CFGBypassDetector` reports presence/absence in the table only; it does not analyze XFG type compatibility.
 
@@ -135,7 +135,7 @@ Findings: 2 high/critical  3 medium  1 info
 
 ## Pipeline position
 
-**Before this module:** Use on any Windows PE (kernel module, system DLL, or userland binary). No `BinaryContext` required: `from_path()` uses LIEF directly. Run before any exploit feasibility analysis to confirm whether CFG restricts indirect call targets.
+**Before this module:** Use on any Windows PE kernel module, system DLL, or userland binary. No `BinaryContext` required: `from_path()` uses LIEF directly. Run before any exploit feasibility analysis to confirm whether CFG restricts indirect call targets.
 
 **After this module:** Feed `export_not_in_cfg_table` findings into exploit chain construction, these are the specific exports usable as gadget pivots. Use `va` from each finding for exact address confirmation with `BinaryContext` or WinDbg.
 
@@ -150,9 +150,9 @@ Findings: 2 high/critical  3 medium  1 info
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` / `INFO` |
 | `category` | `cfg_disabled` / `cfg_table_absent` / `no_export_suppression` / `export_not_in_table` / `indirect_call_stats` |
 | `title` | Short description of the bypass opportunity |
-| `location` | Human-readable location string (function name, export name, or PE header field) |
+| `location` | Human-readable location string function name, export name, or PE header field |
 | `description` | Detailed explanation of why this is a bypass surface |
-| `va` | VA of the relevant instruction or table entry (0 if not applicable) |
+| `va` | VA of the relevant instruction or table entry 0 if not applicable |
 | `cwe` | CWE identifier (e.g., `CWE-693`) |
 
 ---

@@ -53,7 +53,7 @@ flowchart TD
 
 ---
 
-## BinaryParser (ELF path)
+## BinaryParser ELF path
 
 ```python
 from ablation.core.binary_parser import BinaryParser
@@ -77,7 +77,7 @@ print(parser.report())
 # Sections: 28
 ```
 
-For the full analysis surface (PLT, exports, func_starts, call_edges, hardening checks), use `BinaryContext` on top of the ELF parser:
+For the full analysis surface PLT, exports, func_starts, call_edges, hardening checks, use `BinaryContext` on top of the ELF parser:
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext

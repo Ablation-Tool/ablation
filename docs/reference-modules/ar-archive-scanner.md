@@ -28,9 +28,9 @@ Scan Unix ar (.a) static library archives for exec-class sinks by dispatching Si
          → report aggregate results
 ```
 
-ar member header layout (60 bytes):
-- `[0:16]`: member name (space-padded), `/` suffix stripped for GNU format
-- `[48:58]`: member size (decimal ASCII)
+ar member header layout 60 bytes:
+- `[0:16]`: member name space-padded, `/` suffix stripped for GNU format
+- `[48:58]`: member size decimal ASCII
 - `[58:60]`: end marker `0x60 0x0a`
 
 ---
@@ -50,7 +50,7 @@ print(scanner.report(results))
 - `size`: member data size in bytes
 - `elf_format`: e.g. `'ELF64-BE-ppc64'`, `'ELF32-LE-x86'`
 - `exec_hits`: count of exec-class sink hits
-- `verdicts`: list of `(sink_name, verdict)` tuples from SAC
+- `verdicts`: list of `sink_name, verdict` tuples from SAC
 - `error`: SAC error string if analysis failed
 
 ---
@@ -83,7 +83,7 @@ ArArchiveScanner: 55 ELF members, 0 with exec-class hits
   ...
 ```
 
-MASS libmass_64.a: 55 ELF64-BE-ppc64 math function objects, 0 exec-class: pure math library (IBM MASS 4.4).
+MASS libmass_64.a: 55 ELF64-BE-ppc64 math function objects, 0 exec-class: pure math library IBM MASS 4.4.
 
 ---
 

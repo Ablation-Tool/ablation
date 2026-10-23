@@ -71,7 +71,7 @@ Every tool takes a `BinaryContext` rather than a raw binary path. This enforces 
 
 ### NativeVal register state machines
 
-Each ISA backend tracks a `NativeVal` slot per register. `NativeVal` carries: `ctype`, `expr`, `is_ptr`, `tainted`, `uses`. State machines are seeded from calling convention (argument registers, return register) and propagated across the CFG.
+Each ISA backend tracks a `NativeVal` slot per register. `NativeVal` carries: `ctype`, `expr`, `is_ptr`, `tainted`, `uses`. State machines are seeded from calling convention argument registers, return register and propagated across the CFG.
 
 **Why:** Typed register state enables three things: (1) emitting readable C expressions rather than raw operand strings; (2) propagating taint through register moves without explicit data-flow graphs; (3) annotating the BinaryLifter output with taint marks at the specific register where user input enters.
 

@@ -1,6 +1,6 @@
 # Docker Inventory and Posture
 
-Enumerate running Docker containers, images, volumes, and network configurations, and assess container isolation posture (socket exposure, privileged flags, capability grants, image security): from a compromised host with Docker socket access, via `modules/docker_enum.py`.
+Enumerate running Docker containers, images, volumes, and network configurations, and assess container isolation posture socket exposure, privileged flags, capability grants, image security: from a compromised host with Docker socket access, via `modules/docker_enum.py`.
 
 ---
 
@@ -8,7 +8,7 @@ Enumerate running Docker containers, images, volumes, and network configurations
 
 1. **Docker socket exposure (`/var/run/docker.sock` mounted in a container) is a direct host escape.** `DockerEnumerator` checks for socket accessibility and, if found, enumerates all containers and images on the host: providing the attack surface inventory needed to plan lateral movement from a compromised container to the underlying host.
 
-2. **`check_container_isolation()`** enumerates the cluster's exposed Docker daemon API (port 2375 TCP, unauthenticated by default on misconfigured deployments) and `unix:///var/run/docker.sock`. It checks for containers running with `--privileged`, `--cap-add SYS_ADMIN`, `--net=host`, and `--pid=host`: each of which enables a distinct container escape path.
+2. **`check_container_isolation()`** enumerates the cluster's exposed Docker daemon API port 2375 TCP, unauthenticated by default on misconfigured deployments and `unix:///var/run/docker.sock`. It checks for containers running with `--privileged`, `--cap-add SYS_ADMIN`, `--net=host`, and `--pid=host`: each of which enables a distinct container escape path.
 
 3. **`check_dependency_confusion_indicators()`** queries the registry for image tags that conflict with public Docker Hub names: a dependency confusion attack surface where an internal image name that is also a public Docker Hub name will pull the public image if the internal registry is unavailable. This is distinct from supply chain analysis (`CompilerSecurityGate`) and operates at the registry pull policy level.
 
@@ -80,7 +80,7 @@ check_container_isolation():
 
 ## Pipeline position
 
-Run `DockerEnumerator` after gaining shell access to a host or container. Use `check_container_isolation()` findings to identify escape primitives; use `enumerate_containers()` to discover lateral movement targets (database containers, secrets managers, internal APIs).
+Run `DockerEnumerator` after gaining shell access to a host or container. Use `check_container_isolation()` findings to identify escape primitives; use `enumerate_containers()` to discover lateral movement targets database containers, secrets managers, internal APIs.
 
 ---
 
@@ -92,7 +92,7 @@ Run `DockerEnumerator` after gaining shell access to a host or container. Use `c
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` |
 | `title` | Finding code (e.g., `CAP_SYS_ADMIN_IN_CONTAINER`, `DOCKER_SOCKET_MOUNTED`) |
-| `detail` | Evidence (capability bit, mount path) |
+| `detail` | Evidence capability bit, mount path |
 | `host` | `localhost` |
 | `port` | `0` |
 

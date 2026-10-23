@@ -1,7 +1,7 @@
 # x86-64 Vtable Analysis
 
 Static C++ vtable reconstruction and dispatch reachability analysis for x86-64 shared
-libraries (ET_DYN ELF). Solves the "all vtable entries are zero in the file" problem that
+libraries ET_DYN ELF. Solves the "all vtable entries are zero in the file" problem that
 makes vtable analysis impossible with naive file-level inspection.
 
 ---
@@ -11,7 +11,7 @@ makes vtable analysis impossible with naive file-level inspection.
 **File:** `ablation/analyzers/elf_vtable_reconstructor.py`
 
 Reconstructs the runtime virtual function table of a C++ class from `.rela.dyn` without
-executing the binary. Works on any x86-64 ET_DYN ELF (shared libraries, PIE executables).
+executing the binary. Works on any x86-64 ET_DYN ELF shared libraries, PIE executables.
 
 ### Why vtable entries are zero in the file
 
@@ -67,11 +67,11 @@ print(ELFVtableReconstructor.report(vtable_map))
 
 | Attribute | Type | Description |
 |---|---|---|
-| `vtable_va` | int | VA of vtable start (offset-to-top word) |
+| `vtable_va` | int | VA of vtable start offset-to-top word |
 | `vtable_ptr` | int | `vtable_va + 0x10`: what the object's vptr holds |
 | `slots` | dict | `{slot_offset: VtableSlot}`: all reconstructed entries |
 | `class_name` | str | Class name (set when using `reconstruct_class`) |
-| `live_slots()` | method | Filtered dict of function (non-RTTI) slots |
+| `live_slots()` | method | Filtered dict of function non-RTTI slots |
 | `get_slot(offset)` | method | Single slot lookup by offset from vtable_ptr |
 | `function_at(offset)` | method | Demangled function name at offset, or None |
 | `slot_for_va(fn_va)` | method | Find slot containing a known function VA |
@@ -80,7 +80,7 @@ print(ELFVtableReconstructor.report(vtable_map))
 
 | Attribute | Type | Description |
 |---|---|---|
-| `slot_index` | int | Slot number (0-based, from vtable_ptr) |
+| `slot_index` | int | Slot number 0-based, from vtable_ptr |
 | `slot_offset` | int | Byte offset from vtable_ptr |
 | `abs_file_offset` | int | Absolute VA of the slot in the file |
 | `function_va` | int | Resolved function VA |
@@ -90,10 +90,10 @@ print(ELFVtableReconstructor.report(vtable_map))
 ### Multiple inheritance note
 
 Classes with multiple inheritance have secondary vtable sub-sections. Each sub-section starts
-with an offset-to-top word (negative value, locating the primary object) followed by an RTTI
+with an offset-to-top word negative value, locating the primary object followed by an RTTI
 pointer and secondary virtual functions. `ELFVtableReconstructor` reconstructs all entries
 in a configurable range from `vtable_va`; secondary sub-sections appear as `is_rtti=True`
-entries at negative `slot_offset` values (below the primary vtable_ptr).
+entries at negative `slot_offset` values below the primary vtable_ptr.
 
 ---
 
@@ -113,10 +113,10 @@ The scanner handles all standard x86-64 indirect call encodings:
 |---|---|---|
 | `call [rax+disp32]` | `FF 90 xx xx xx xx` | Yes |
 | `call [rcx+disp32]` | `FF 91 xx xx xx xx` | Yes |
-|... (all base regs) |... | Yes |
+|... all base regs |... | Yes |
 | `call [r8+disp32]` | `41 FF 90 xx xx xx xx` | Yes (REX.B) |
-| `call [r12+disp32]` | `41 FF 94 24 xx xx xx xx` | Yes (REX.B + SIB) |
-| `call [rax+disp8]` | `FF 50 xx` | Yes (for offsets 0–127) |
+| `call [r12+disp32]` | `41 FF 94 24 xx xx xx xx` | Yes REX.B + SIB |
+| `call [rax+disp8]` | `FF 50 xx` | Yes for offsets 0–127 |
 | REX.W variants | `48 FF 90...` | Yes |
 | REX.RB variants | `45 FF 90...` | Yes |
 
@@ -180,7 +180,7 @@ for name, sites in report.live().items():
 - Scans only ELF sections marked `SHF_EXECINSTR`. Code in non-standard segments is missed.
 - Does not follow cross-library call chains; a vtable method called only from another `.so`
  appears dead when scanning a single library.
-- Does not handle `call [mem+reg*scale+disp]` (VSIB/complex SIB addressing); rare in
+- Does not handle `call [mem+reg*scale+disp]` VSIB/complex SIB addressing; rare in
  compiler-generated C++ vtable dispatch.
 
 ---
@@ -193,7 +193,7 @@ Prior to this module, x86-64 vtable analysis required manual work outside the Ab
 
 ## How it works
 
-`ELFVtableReconstructor.from_path(path)` uses pyelftools to parse the ELF dynamic relocation table (`.rela.dyn`) and resolve PIE vtable slot values that are zero-initialized in the file but populated at load time. `VtableDispatchScanner.__init__(elf_path)` reads the ELF binary with `open(elf_path, 'rb').read()` and scans `.data.rel.ro` for C++ vtable pointer patterns using `bytes.find()`. Neither module iterates per-function func_starts or disassembles with Capstone; both operate on whole-binary byte patterns and relocation entries.
+`ELFVtableReconstructor.from_path(path)` uses pyelftools to parse the ELF dynamic relocation table (`.rela.dyn`) and resolve PIE vtable slot values that are zero-initialized in the file but populated at load time. `VtableDispatchScanner.__init__elf_path` reads the ELF binary with `open(elf_path, 'rb').read()` and scans `.data.rel.ro` for C++ vtable pointer patterns using `bytes.find()`. Neither module iterates per-function func_starts or disassembles with Capstone; both operate on whole-binary byte patterns and relocation entries.
 
 ---
 
@@ -248,7 +248,7 @@ VtableDispatchScanner: lib.so  2 methods scanned
 
 ## False positives
 
-Secondary vtable sub-sections (multiple inheritance) produce `is_rtti=True` entries at negative `slot_offset` values; exclude these from dispatch scanning. `VtableDispatchScanner` may flag indirect `call [reg+disp]` patterns that use the same slot offset but are not C++ vtable dispatch for example struct function pointer tables. Confirm by checking whether the register holds a vtable pointer at the call site.
+Secondary vtable sub-sections multiple inheritance produce `is_rtti=True` entries at negative `slot_offset` values; exclude these from dispatch scanning. `VtableDispatchScanner` may flag indirect `call [reg+disp]` patterns that use the same slot offset but are not C++ vtable dispatch for example struct function pointer tables. Confirm by checking whether the register holds a vtable pointer at the call site.
 
 ---
 

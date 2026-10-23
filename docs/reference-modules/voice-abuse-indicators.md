@@ -8,7 +8,7 @@ Detect telephony denial-of-service susceptibility, call eavesdropping surfaces, 
 
 1. **SIP TDoS and registration exhaustion are not detected by standard port or vulnerability scanners**: `detect_sip_flood_surface()` confirms whether a SIP registrar or proxy enforces rate limits on INVITE floods by sending repeated INVITE messages and measuring response behavior. `detect_tdos_indicators()` tests whether the server accepts caller-ID spoofing via `P-Asserted-Identity` (which enables telephony DoS by impersonating emergency services) and whether REGISTER with rapid `Expires` cycling exhausts session state. Neither attack class appears in a CVE lookup.
 
-2. **SRTP enforcement is optional in SIP and rarely complete in enterprise deployments**: a SIP server that accepts an SDP offer with `RTP/AVP` (cleartext audio) instead of requiring `RTP/SAVP` (SRTP) means an on-path attacker can capture the full audio stream. `detect_voip_eavesdrop_surface()` sends an SDP offer with `RTP/AVP` to test acceptance and probes the RTCP port (media port + 1) to determine whether session metadata is observable without authentication.
+2. **SRTP enforcement is optional in SIP and rarely complete in enterprise deployments**: a SIP server that accepts an SDP offer with `RTP/AVP` cleartext audio instead of requiring `RTP/SAVP` (SRTP) means an on-path attacker can capture the full audio stream. `detect_voip_eavesdrop_surface()` sends an SDP offer with `RTP/AVP` to test acceptance and probes the RTCP port media port + 1 to determine whether session metadata is observable without authentication.
 
 3. **SIP Digest authentication has known weaknesses that probe-based testing directly confirms**: `probe_sip_authentication_weaknesses()` tests nonce replay: it captures the `nonce` from a `401 Unauthorized` challenge and re-uses it in a second REGISTER without incrementing `nc`. Acceptance (`SIP_NONCE_REPLAY_ACCEPTED`) means the server does not enforce nonce count, enabling parallel credential replay. `probe_sip_authentication_bypass()` tests whether the server accepts an INVITE with no authentication header at all (`SIP_UNAUTH_INVITE`) or with a forged Digest response using a blank password (`SIP_DIGEST_BYPASS`, `SIP_AUTH_BYPASS`).
 
@@ -98,7 +98,7 @@ probe_sip_authentication_bypass: <target-host>:5060
 
 **`SIP_NO_RATE_LIMIT` when rate limiting is applied upstream**: a firewall or load balancer rate-limiting SIP upstream of the application may absorb the INVITE burst before it reaches the registrar. The probe result reflects what the registrar sees, not the external boundary. Confirm the network path before reporting.
 
-**`SRTP_NOT_REQUIRED` on internal SIP legs of B2BUAs**: back-to-back user agents (B2BUAs) often accept cleartext RTP on their internal SIP leg while enforcing SRTP on the external leg. Confirm which leg (internal or external) is being probed before escalating to CRITICAL. The `RTCP_PORT_ACCESSIBLE` finding from `detect_voip_eavesdrop_surface` has the same consideration.
+**`SRTP_NOT_REQUIRED` on internal SIP legs of B2BUAs**: back-to-back user agents (B2BUAs) often accept cleartext RTP on their internal SIP leg while enforcing SRTP on the external leg. Confirm which leg internal or external is being probed before escalating to CRITICAL. The `RTCP_PORT_ACCESSIBLE` finding from `detect_voip_eavesdrop_surface` has the same consideration.
 
 **`probe_sip_authentication_bypass` generates authentication log entries**: unlike passive probes, `probe_sip_authentication_bypass()` sends INVITE messages that will appear in the server's authentication audit log. Run only in authorized assessment contexts.
 
@@ -106,7 +106,7 @@ probe_sip_authentication_bypass: <target-host>:5060
 
 ## Pipeline position
 
-Run `detect_sip_flood_surface()` and `detect_sip_eavesdropping_surface()` first: they send passive/read-only requests. Run `detect_voip_eavesdrop_surface()` next (SDP negotiation). Run `probe_sip_authentication_weaknesses()` and `probe_sip_authentication_bypass()` last, after confirming assessment authorization, as they generate auth log entries. Precede all probes with `probe_sip_options()` to confirm a SIP server is present.
+Run `detect_sip_flood_surface()` and `detect_sip_eavesdropping_surface()` first: they send passive/read-only requests. Run `detect_voip_eavesdrop_surface()` next SDP negotiation. Run `probe_sip_authentication_weaknesses()` and `probe_sip_authentication_bypass()` last, after confirming assessment authorization, as they generate auth log entries. Precede all probes with `probe_sip_options()` to confirm a SIP server is present.
 
 ---
 
@@ -116,7 +116,7 @@ Voice abuse probe functions return `List[{severity, title, detail, host, port}]`
 
 | Field | Content |
 |:---|:---|
-| `severity` | `MEDIUM` (TDoS surface) / `HIGH` (authentication bypass) |
+| `severity` | `MEDIUM` (TDoS surface) / `HIGH` authentication bypass |
 | `title` | Finding code (e.g., `SIP_NO_RATE_LIMIT`, `TDOS_INVITE_FLOOD`, `SIP_ANONYMOUS_CALL_ACCEPTED`) |
 | `detail` | Description of the abuse surface and exploitation scenario |
 | `host` | Target host |

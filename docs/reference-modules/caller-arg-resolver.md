@@ -51,7 +51,7 @@ resolve(func_va=0x805842b, func_arg_pos=9)
 | `CONST_NULL` | `push 0`: `system(NULL)` shell probe | Discard: shell probe tests if a shell is available, not exploitable |
 | `CONST_NONZERO` | `push imm32 ≠ 0` or LEA from `.rodata` | Verify: static string to `system()` is benign unless the string is mutable |
 | `ARG_PROPAGATED` | `push [ebp+N]`: value from caller's caller | Continue: trace one more level up or confirm with TaintTracker |
-| `STACK_LOCAL` | `push [ebp-N]` or `lea [ebp-N]` | Investigate: stack buffer: check if its content is user-controlled (snprintf pattern) |
+| `STACK_LOCAL` | `push [ebp-N]` or `lea [ebp-N]` | Investigate: stack buffer: check if its content is user-controlled snprintf pattern |
 | `UNKNOWN` | Push source not resolved within lookback | Manual trace required |
 
 ---

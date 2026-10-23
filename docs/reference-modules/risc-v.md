@@ -6,9 +6,9 @@ Labeled-taint analysis, CFG-fixpoint dataflow, and structural lifting for RISC-V
 
 ## Why this exists
 
-1. **RISC-V has two distinct calling convention variants (RV32 and RV64) that differ in register width and argument register count: RV32 uses `a0-a7` with 32-bit slots while RV64 uses the same register names with 64-bit slots, and a taint tracker that confuses them produces incorrect taint bounds and missed sink arguments.** `taint_tracker_riscv32.py` and `taint_tracker_riscv64.py` provide independent ABI-correct implementations, and `taint_tracker_riscv.py` provides the labeled-taint `TaintEngine` with a `Width` enum (`Width.RV32`/`Width.RV64`) that selects the correct register width at construction time.
+1. **RISC-V has two distinct calling convention variants RV32 and RV64 that differ in register width and argument register count: RV32 uses `a0-a7` with 32-bit slots while RV64 uses the same register names with 64-bit slots, and a taint tracker that confuses them produces incorrect taint bounds and missed sink arguments.** `taint_tracker_riscv32.py` and `taint_tracker_riscv64.py` provide independent ABI-correct implementations, and `taint_tracker_riscv.py` provides the labeled-taint `TaintEngine` with a `Width` enum (`Width.RV32`/`Width.RV64`) that selects the correct register width at construction time.
 
-2. **The labeled-taint model in `taint_tracker_riscv.py`: `Taint(labels: frozenset, bound: Optional[int])`: provides two capabilities that the binary-path trackers lack: label provenance (which source function tainted this register) and bound tracking (andi/ori with immediate masks set `bound`, gating out-of-bounds index findings).** The `TaintState.join()` lattice operation merges taint from CFG merge-points correctly, and `analyze_cfg()` runs a fixpoint analysis over `cfg_riscv.py` basic blocks, finding taint flows that simple linear traversal misses on loops and conditional branches.
+2. **The labeled-taint model in `taint_tracker_riscv.py`: `Taintlabels: frozenset, bound: Optional[int]`: provides two capabilities that the binary-path trackers lack: label provenance which source function tainted this register and bound tracking (andi/ori with immediate masks set `bound`, gating out-of-bounds index findings).** The `TaintState.join()` lattice operation merges taint from CFG merge-points correctly, and `analyze_cfg()` runs a fixpoint analysis over `cfg_riscv.py` basic blocks, finding taint flows that simple linear traversal misses on loops and conditional branches.
 
 3. **RISC-V compressed instructions (RVC, 16-bit `c.*` mnemonics) are used in GCC-compiled RV64GC binaries to reduce code size: a decoder that handles only 32-bit instructions will silently skip 16-bit instructions and produce incorrect CFG edges.** `insn_riscv.py` handles both 32-bit and 16-bit RVC instructions in the same decoder, and `cfg_riscv.py` correctly resolves `c.j`, `c.beqz`, `c.bnez` branch instructions to build complete CFGs.
 
@@ -104,17 +104,17 @@ CFG fixpoint (analyze_cfg):
 
 ## False positives
 
-**`andi` with an immediate bounds the taint but does not clear it.** A tainted register masked with `andi a0, a0, 0x3f` has `bound=0x3f` (maximum value 63). This is not a false positive, it constrains which sinks are reachable, but a tainted index bounded to 63 can still cause a buffer overflow if the destination buffer is fewer than 64 bytes. The bound is a taint-narrowing signal, not a safe-access guarantee.
+**`andi` with an immediate bounds the taint but does not clear it.** A tainted register masked with `andi a0, a0, 0x3f` has `bound=0x3f` maximum value 63. This is not a false positive, it constrains which sinks are reachable, but a tainted index bounded to 63 can still cause a buffer overflow if the destination buffer is fewer than 64 bytes. The bound is a taint-narrowing signal, not a safe-access guarantee.
 
-**CFG fixpoint analysis on loops may report the same taint path multiple times if the loop body contains a sink.** Each fixpoint iteration that visits a basic block with a sink generates a finding. Deduplicate by `(source, sink, va)` before reporting.
+**CFG fixpoint analysis on loops may report the same taint path multiple times if the loop body contains a sink.** Each fixpoint iteration that visits a basic block with a sink generates a finding. Deduplicate by `source, sink, va` before reporting.
 
-**`taint_tracker_riscv.py` (the labeled-taint TCL3 module) and `taint_tracker_riscv64.py` (binary-path module) have different source/sink lists.** The labeled-taint module's source/sink configuration is in `SOURCES`/`SINKS` constants at module level; the binary-path module accepts `sources=` and `sinks=` constructor arguments. Confirm which module is in use before interpreting findings.
+**`taint_tracker_riscv.py` the labeled-taint TCL3 module and `taint_tracker_riscv64.py` binary-path module have different source/sink lists.** The labeled-taint module's source/sink configuration is in `SOURCES`/`SINKS` constants at module level; the binary-path module accepts `sources=` and `sinks=` constructor arguments. Confirm which module is in use before interpreting findings.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** For RVC (compressed instruction) binaries, confirm that `insn_riscv.from_listing()` or `from_capstone()` parses the 16-bit instructions correctly: `objdump --disassemble-all -M no-aliases` is the recommended listing input for RISC-V. For bare-metal RV32 targets (no OS, no glibc), define custom source/sink lists in the binary-path tracker constructor.
+**Before this module:** For RVC compressed instruction binaries, confirm that `insn_riscv.from_listing()` or `from_capstone()` parses the 16-bit instructions correctly: `objdump --disassemble-all -M no-aliases` is the recommended listing input for RISC-V. For bare-metal RV32 targets no OS, no glibc, define custom source/sink lists in the binary-path tracker constructor.
 
 **After this module:** Feed confirmed findings into `FindingRegistry.register()`. For CFG fixpoint findings, verify that the taint path is reachable in one concrete execution by checking whether the basic blocks in the chain are connected in the CFG.
 

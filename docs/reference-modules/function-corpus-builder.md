@@ -10,7 +10,7 @@ Populate `func_id.db` with `ANGR_INFERRED` function records for binaries with no
 
 2. **`ANGR_INFERRED` is a distinct confidence level from `CONFIRMED`, it signals that the function record was machine-generated and has not been validated by a human analyst.** `SemanticSearcher.build_corpus()` accepts `confidence_filter=['CONFIRMED', 'ANGR_INFERRED']` to include inferred records, while sensitive operations for example formal disclosure query `CONFIRMED` only. This separation prevents polluting the confirmed corpus with noisy inferred data while still making the inferred corpus useful for initial triage.
 
-3. **For each function discovered via `eh_frame` FDE entries, `CorpusBuilder` extracts three features that `SemanticSearcher` can match against: PLT callee names (call targets), RIP-relative string literal cross-references (string xrefs), and a heuristic role description.** These three features encode most of what an analyst would manually write in a `CONFIRMED` record, at roughly 100x the speed. `SigLibrary.auto_name()` renames `ANGR_INFERRED` records when a semantic match above a confidence threshold is found.
+3. **For each function discovered via `eh_frame` FDE entries, `CorpusBuilder` extracts three features that `SemanticSearcher` can match against: PLT callee names call targets, RIP-relative string literal cross-references string xrefs, and a heuristic role description.** These three features encode most of what an analyst would manually write in a `CONFIRMED` record, at roughly 100x the speed. `SigLibrary.auto_name()` renames `ANGR_INFERRED` records when a semantic match above a confidence threshold is found.
 
 ---
 
@@ -77,7 +77,7 @@ status():
 
 ## False positives
 
-**`eh_frame` FDE discovery misses functions in binaries compiled with `-fno-exceptions` and without `.eh_frame` section.** For these binaries, combine `CorpusBuilder` with `ARM32FunctionScanner` (prologue scan) or `GoStringResolver.scan_function()` (Go binaries) to supplement function discovery before building the corpus.
+**`eh_frame` FDE discovery misses functions in binaries compiled with `-fno-exceptions` and without `.eh_frame` section.** For these binaries, combine `CorpusBuilder` with `ARM32FunctionScanner` prologue scan or `GoStringResolver.scan_function()` Go binaries to supplement function discovery before building the corpus.
 
 **`ANGR_INFERRED` role assignments are heuristic: a function that calls `recv()` then `strncpy()` will be labeled `network` when it might be a dispatcher that calls both.** Review inferred roles for high-priority functions before promoting their records to `CONFIRMED`.
 

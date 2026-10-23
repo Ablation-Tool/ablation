@@ -80,7 +80,7 @@ info['capabilities']['available_tools'] = ['gdb', 'strings', 'readelf']
 
 **`info['security']['selinux']` is `True` when `/sys/fs/selinux` exists, not when SELinux is enforcing**: `detect_security_features()` checks `os.path.exists('/sys/fs/selinux')`, which is `True` even in permissive mode. It does not distinguish permissive from enforcing. To confirm enforcement, read `/sys/fs/selinux/enforce` separately (value `1` = enforcing, `0` = permissive).
 
-**`info['security']['aslr'] = 'full'` does not guarantee every region is randomized**: some applications disable ASLR for specific threads via `personality(ADDR_NO_RANDOMIZE)`. The `/proc/sys/kernel/randomize_va_space` value reflects the system-wide setting only; per-process enforcement must be verified separately.
+**`info['security']['aslr'] = 'full'` does not guarantee every region is randomized**: some applications disable ASLR for specific threads via `personalityADDR_NO_RANDOMIZE`. The `/proc/sys/kernel/randomize_va_space` value reflects the system-wide setting only; per-process enforcement must be verified separately.
 
 ---
 
@@ -103,11 +103,11 @@ Run `PlatformDetector` as the second step after gaining shell access (after `Net
 | `distro_version` | Distribution version string, or absent |
 | `machine` | CPU architecture string (e.g., `'x86_64'`, `'aarch64'`) |
 | `processor` | Processor identifier string |
-| `pointer_size` | Integer: pointer size in bits (32 or 64) |
+| `pointer_size` | Integer: pointer size in bits 32 or 64 |
 | `byte_order` | `'little'` or `'big'` |
 | `arch_family` | Normalized family: `'x86'` / `'ARM'` / `'MIPS'` / raw machine string |
-| `arch_bits` | Integer: 32 or 64 (set for x86 and ARM) |
-| `kernel` | Kernel version string (Linux only) |
+| `arch_bits` | Integer: 32 or 64 set for x86 and ARM |
+| `kernel` | Kernel version string Linux only |
 | `libc` | C library name (`'glibc'` / `'musl'` / `'uclibc'`), if detectable |
 | `libc_version` | C library version string, if detectable |
 

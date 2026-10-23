@@ -5,23 +5,23 @@
 **Format:** ISO 26262 Part 8 / TASKING qualification kit (see `standards-ablation.md` §2.3)
 
 An anomaly is a condition under which `V850TaintTracker` is known to produce an incorrect
-result: either a false negative (missed finding) or a false positive (spurious finding).
+result: either a false negative missed finding or a false positive spurious finding.
 Each entry documents the triggering condition, the impact, and the recommended workaround.
 
 `V850TaintTracker` is the base tracker for V850/RH850 ELF binaries using the GCC V850 ABI.
-For GHS-compiled or IAR-compiled RH850 firmware (the majority of automotive ECU binaries),
+For GHS-compiled or IAR-compiled RH850 firmware the majority of automotive ECU binaries,
 use `RH850TaintTracker` instead: it corrects the ABI defaults and symbol normalisation
 issues documented in V850-KA-001 and V850-KA-002 below.
 
 ---
 
-## V850-KA-001: GCC double=64-bit ABI mismatches GHS/IAR firmware (false positives)
+## V850-KA-001: GCC double=64-bit ABI mismatches GHS/IAR firmware false positives
 
 **Description:** 
 `V850TaintTracker` models the GCC V850 ABI where `double` is 64 bits, consuming a register
 pair (R6:R7) for the first double-precision floating-point argument. GHS CC-RH and IAR
-RH850 compilers default to `double=32-bit` (IEC 60559 single precision). In GHS-compiled
-firmware, a function `f(double d, int n)` uses R6 for `d` and R7 for `n`. If
+RH850 compilers default to `double=32-bit` IEC 60559 single precision. In GHS-compiled
+firmware, a function `fdouble d, int n` uses R6 for `d` and R7 for `n`. If
 `V850TaintTracker` analyses the same binary, it interprets R7 as the high half of the first
 double argument, not as an independent second argument. A finding that names `r7` as tainted
 at a sink may be misattributed.
@@ -29,7 +29,7 @@ at a sink may be misattributed.
 **Triggering conditions:** 
 - Any RH850/G3M ECU firmware compiled with GHS MULTI or IAR Embedded Workbench
 - Functions with double-precision floating-point parameters in the first four argument slots
-- Sensor fusion, PID control, and calibration-reading functions (common in ECU firmware)
+- Sensor fusion, PID control, and calibration-reading functions common in ECU firmware
 
 **Impact:** False positive. `V850TaintTracker` may report `r7` as tainted at a sink when
 `r7` actually contains an independent unrelated argument in the GHS ABI. The finding may
@@ -55,7 +55,7 @@ in GHS-compiled ELF, and the tracker will not recognise it as a source.
 
 **Triggering conditions:** 
 - GHS-compiled V850/RH850 ELF binaries with Renesas underscore prefix on C symbols
-- C++ firmware with GHS old-style mangling (constructor/destructor/vtable symbols)
+- C++ firmware with GHS old-style mangling constructor/destructor/vtable symbols
 - Any binary where the taint source or sink name is prefixed with `_` in the ELF symtab
 
 **Impact:** False negative. The tracker will not seed taint from `_recv` even though it is
@@ -75,7 +75,7 @@ before checking source/sink membership.
 `V850TaintTracker` requires an ELF binary with valid section headers for function boundary
 detection and VA-to-offset translation. Calling `from_path()` on a flat ROM image (no ELF
 header) raises `lief.bad_file` or equivalent. Unlike `RH850TaintTracker` and
-`TriCoreTaintTracker`, there is no `from_bytes(data, base_va)` constructor.
+`TriCoreTaintTracker`, there is no `from_bytesdata, base_va` constructor.
 
 **Triggering conditions:** 
 - Flat ROM images extracted from automotive ECU flash dumps
@@ -84,7 +84,7 @@ header) raises `lief.bad_file` or equivalent. Unlike `RH850TaintTracker` and
 **Impact:** Analysis abort. Not a silent miss: the error surfaces immediately at load time.
 
 **Workaround:** 
-Use `RH850TaintTracker.from_bytes(data, base_va)` for flat ROM inputs, which was built to
+Use `RH850TaintTracker.from_bytesdata, base_va` for flat ROM inputs, which was built to
 fill this gap.
 
 **Resolved in version:** By design. `RH850TaintTracker` was created to fix this.
@@ -102,7 +102,7 @@ operand encoding, taint propagation at that instruction is incorrect.
 
 **Triggering conditions:** 
 - RH850 variant-specific extended opcodes
-- FPU instructions (V850E2M floating-point extension)
+- FPU instructions V850E2M floating-point extension
 - V850E3V5 SIMD extensions
 
 **Impact:** False negative. Taint may stop propagating at the unrecognised instruction.

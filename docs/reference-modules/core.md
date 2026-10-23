@@ -38,8 +38,8 @@ ctx = BinaryContext.load_from_cache_file('~/.ablation/cache/<slug>.json', orig_p
 | `plt` | `{va: symbol_name}` | All PLT stubs resolved to symbol names |
 | `exports` | `{symbol_name: va}` | All globally exported functions |
 | `strings` | `{va: content}` | Printable strings in `.rodata` (>= 4 chars) |
-| `func_starts` | `[va,...]` | Sorted function entry VAs (eh_frame + callee augmentation) |
-| `call_edges` | `[(from_va, to_va, label)]` | Flat call graph |
+| `func_starts` | `[va,...]` | Sorted function entry VAs eh_frame + callee augmentation |
+| `call_edges` | `[from_va, to_va, label]` | Flat call graph |
 | `_str_xref_idx` | `{string_va: [code_va,...]}` | NumPy-built RIP-relative xref index |
 | `_func_str_idx` | `{func_va: [string_va,...]}` | Per-function string reference index |
 
@@ -88,8 +88,8 @@ little-endian displacement fields at every byte offset using `as_strided`, and c
 `target_va = text_va + pos + 4 + disp32[pos]` in a single broadcast operation. It then
 binary-searches the result against the known string VA array.
 
-This builds `_str_xref_idx` (string_va -> [code_vas]) and `_func_str_idx`
-(func_va -> [string_vas]) in one O(N) pass over the binary.
+This builds `_str_xref_idx` string_va -> [code_vas] and `_func_str_idx`
+func_va -> [string_vas] in one O(N) pass over the binary.
 
 ### PPC64 string xref: 5-pass system (Cell PPU / CryEngine PS3)
 
@@ -104,9 +104,9 @@ path runs five passes against the binary to build equivalent `_str_xref_idx` /
 | 1 | `_build_string_xref_index_ppc64` (main) | TOC far-load: `ADDIS rX, r2, ha16 + LWZ rX, lo16(rX)` | Direct far-TOC string loads |
 | 2 | same | TOC near-load: `LWZ rX, off(r2)` within ±32KB of r2 | Near-TOC string loads |
 | 3 | `_augment_xrefs_ppc64_precall` | Backward scan from BL: `LIS rX, hi + ADDI rX, lo` pre-call pattern | Inline arg-reg loads before calls |
-| 4 | `_augment_xrefs_ppc64_arrays` | Dense string-pointer array in data seg → batch-indexed by (ha16,lo16) key; single O(M×16) scan replaces O(arrays×M) | String pointer arrays via TOC |
-| 5 | `_augment_xrefs_ppc64_twohop` | Near-TOC entry → far string-pointer array (2-hop: load array base from TOC, then index into array); target segment: writable data | **Dominant CryEngine PS3 pattern** |
-| 6 | `_augment_xrefs_ppc64_twohop` (Pass 6) | Same 2-hop mechanism; target segment: X\|R LOAD (code/rodata). Covers arrays that LIEF places in the executable segment | NanoSuit display strings and other rodata arrays |
+| 4 | `_augment_xrefs_ppc64_arrays` | Dense string-pointer array in data seg → batch-indexed by ha16,lo16 key; single O(M×16) scan replaces Oarrays×M | String pointer arrays via TOC |
+| 5 | `_augment_xrefs_ppc64_twohop` | Near-TOC entry → far string-pointer array 2-hop: load array base from TOC, then index into array; target segment: writable data | **Dominant CryEngine PS3 pattern** |
+| 6 | `_augment_xrefs_ppc64_twohop` (Pass 6) | Same 2-hop mechanism; target segment: X\|R LOAD code/rodata. Covers arrays that LIEF places in the executable segment | NanoSuit display strings and other rodata arrays |
 
 **Pass 5/6 detail: the 2-hop pattern:**
 
@@ -121,17 +121,17 @@ consecutive string VAs. It then does a single linear pass over `.text` matching 
 `LWZ rX, off(r2)` whose displacement bytes collide with a discovered slot offset, and
 attributes all strings in the pointed-to array to the enclosing function.
 
-Pass 6 is identical but the "target" segment is the X|R LOAD segment (code/rodata) rather
+Pass 6 is identical but the "target" segment is the X|R LOAD segment code/rodata rather
 than the writable data segment. The two segments are passed separately because LIEF may
 split them differently depending on whether `.rodata` is in the same PT_LOAD as `.text`.
 `_augment_xrefs_ppc64_twohop` accepts optional `target_data`/`target_va` parameters;
-Pass 5 omits them (defaults to ds_data/ds_va); Pass 6 passes `target_data=code_data`.
+Pass 5 omits them defaults to ds_data/ds_va; Pass 6 passes `target_data=code_data`.
 
 For the Crysis 2 PS3 binary (CryEngine 3, Cell PPU, ELFCLASS64), Pass 5 alone produces
 ~12,600 function → string xrefs from 51 array-base TOC slots.
 
 **ELFCLASS64 note:** The Crysis 2 PS3 ELF is ELFCLASS64 despite running in 32-bit
-effective-address mode. The entry-point OPD descriptor (8 bytes: code-VA + TOC-VA) is
+effective-address mode. The entry-point OPD descriptor 8 bytes: code-VA + TOC-VA is
 parsed at `e_entry` using 64-bit struct layout; r2 is extracted from offset 4.
 
 ### Vectorized call graph
@@ -186,7 +186,7 @@ False-positive rate on GCC i386 code is low. The ModRM byte 0xe5 in `89 e5` enco
 Two things were not possible before in Ablation:
 
 1. **String context for stripped i386 ELF32**: `BinaryContext._str_xref_idx` used
- RIP-relative displacement arithmetic (x86-64 only). On a 675KB statically linked i386
+ RIP-relative displacement arithmetic x86-64 only. On a 675KB statically linked i386
  binary this yielded 21 coincidental hits where 548 were correct. `strings_in_func()` and
    `funcs_referencing_string()` were effectively broken for every 32-bit static target,
  making string-guided taint entry-point selection impossible on i386 firmware.
@@ -204,7 +204,7 @@ On i386, the same role is played by 4-byte LE absolute immediates embedded in `p
 `mov reg, imm32`, and `lea reg, [addr]` instructions.  The formula is simply `target_va = u32`.
 
 Without this scanner, a 675KB statically linked i386 binary yields 21 xref pairs from the
-x86-64 scanner (coincidental false hits) instead of the correct 548.
+x86-64 scanner coincidental false hits instead of the correct 548.
 
 ### How it works
 
@@ -233,7 +233,7 @@ print(result.report())
 scanner.inject(ctx)
 ```
 
-**ELF32 only.** PE32 (i386 DLL/EXE) is not supported. Too many false positives from vtable
+**ELF32 only.** PE32 i386 DLL/EXE is not supported. Too many false positives from vtable
 and jump-table entries that accidentally fall in `.rdata` ranges.
 
 ---
@@ -284,13 +284,13 @@ for bb_va, bb in cfg.blocks.items():
 | Field | Type | Description |
 |---|---|---|
 | `start` | `int` | First instruction VA |
-| `end` | `int` | Last instruction VA (inclusive) |
-| `succs` | `List[int]` | Successor VAs (branch targets and fall-through) |
-| `insns` | `List[(va, mnemonic, op_str)]` | Instruction list |
+| `end` | `int` | Last instruction VA inclusive |
+| `succs` | `List[int]` | Successor VAs branch targets and fall-through |
+| `insns` | `List[va, mnemonic, op_str]` | Instruction list |
 
 **Algorithm:** Starts from the function entry VA. At each instruction: branch instructions
 push both fall-through and target onto the queue; unconditional jmp/ret/hlt end the block;
-call instructions push fall-through only (CFGBuilder does not follow cross-function calls).
+call instructions push fall-through only CFGBuilder does not follow cross-function calls.
 The queue runs to empty.
 
 ---
@@ -309,14 +309,14 @@ Static intraprocedural x86-64 taint analysis. Adapts the libdft taint policy fro
 | `mov/movsx/movzx` (XFER) | `dst_taint = src_taint` |
 | `add/sub/and/or/xor/shl` (ALU) | `dst_taint |= operand taints` |
 | `xor rX, rX` / `sub rX, rX` (CLR) | `dst_taint = {}` |
-| `lea` (SPEC) | `dst_taint = union(base_reg, index_reg taints)` |
+| `lea` (SPEC) | `dst_taint = unionbase_reg, index_reg taints` |
 | Call to source function | `rax` tainted; buffer arg tracked if on stack |
 | Call to sink function | Alert if relevant arg register is tainted |
-| Call to unknown function | Caller-saved regs cleared (rax/rcx/rdx/rsi/rdi/r8-r11) |
+| Call to unknown function | Caller-saved regs cleared rax/rcx/rdx/rsi/rdi/r8-r11 |
 
 ### Stack model
 
-Tracks both `rbp-relative` and `rsp-relative` (with delta tracking) stack slots. Taint
+Tracks both `rbp-relative` and `rsp-relative` with delta tracking stack slots. Taint
 follows values through stack loads and stores within the function.
 
 ### Usage
@@ -382,7 +382,7 @@ print(profile.summary())
 ```
 
 **Profile output includes:** basic block count, edge count, PLT calls, string references,
-estimated size, and branch density classification (linear / switch / loop-heavy).
+estimated size, and branch density classification linear / switch / loop-heavy.
 
 ---
 
@@ -517,7 +517,7 @@ ctx.callees_of(0x1d700)      → [(0x3000, "memcpy"), (0x4000, "recv")]
 
 **Before this module:** No prerequisites. `BinaryContext.load_or_build(path)` is the session entry point for every Ablation workflow. It has no dependencies on other Ablation modules.
 
-**After this module:** All other modules consume `BinaryContext`. Standard ordering: `load_or_build()` → `CorpusBuilder.build()` → `SemanticSearcher.query()` → `SinkArgClassifier.classify_all()` → `TaintTracker.run()` (on ARG_PROPAGATED/UNKNOWN sinks only) → `PathSolver.solve()` → `FindingRegistry.register()`.
+**After this module:** All other modules consume `BinaryContext`. Standard ordering: `load_or_build()` → `CorpusBuilder.build()` → `SemanticSearcher.query()` → `SinkArgClassifier.classify_all()` → `TaintTracker.run()` on ARG_PROPAGATED/UNKNOWN sinks only → `PathSolver.solve()` → `FindingRegistry.register()`.
 
 ---
 

@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Detects TLV/chunk parsers in stripped x86-64 binaries that advance the chunk pointer by raw user-supplied length without rounding up to the next 4-byte boundary. Many protocols (SCTP RFC 9260, DNS RFC 1035, GRE, PPTP, IS-IS) require chunk/TLV boundaries to be 4-byte aligned; a parser that does `ptr += raw_length` instead of `ptr += (raw_length + 3) & ~3` will misparse the next chunk because padding bytes become the next type and length fields.
+Detects TLV/chunk parsers in stripped x86-64 binaries that advance the chunk pointer by raw user-supplied length without rounding up to the next 4-byte boundary. Many protocols SCTP RFC 9260, DNS RFC 1035, GRE, PPTP, IS-IS require chunk/TLV boundaries to be 4-byte aligned; a parser that does `ptr += raw_length` instead of `ptr += raw_length + 3 & ~3` will misparse the next chunk because padding bytes become the next type and length fields.
 
 ## Key constants
 
@@ -24,7 +24,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `Path.stat().st_size` guard befo
 
 1. **Chunk header read**: a `movzwl` or `movzbl` instruction reading from a memory operand into a register (the `length_reg`). This matches the typical 16-bit or 8-bit TLV length field read.
 2. **Pointer advance**: within a lookahead window (`ADVANCE_LOOKAHEAD` instructions), an `add` or `lea` that advances a pointer register (`advance_reg`) by exactly `length_reg`. This is `ptr += raw_length`.
-3. **Alignment check**: between steps 1 and 2, the scanner looks for the `(length + 3) & ~3` rounding pattern: either an `add reg, 3; and reg, ~3` sequence or an equivalent `lea`. If found, `aligned=True`.
+3. **Alignment check**: between steps 1 and 2, the scanner looks for the `length + 3 & ~3` rounding pattern: either an `add reg, 3; and reg, ~3` sequence or an equivalent `lea`. If found, `aligned=True`.
 4. **Next field read**: within `READ_LOOKAHEAD` instructions after the advance, the scanner looks for the next chunk header read (a memory dereference through `advance_reg`). If found, its VA is stored in `read_va`.
 
 A finding is emitted when an unaligned advance is detected (`aligned=False`). Aligned advances are also reported (`aligned=True`) to confirm correct protocol implementations.
@@ -53,7 +53,7 @@ ChunkWalkerValidator: sctp_parser_x86-64.elf
 
 ## False positives
 
-**Non-chunk pointer arithmetic:** Any `add reg1, reg2` where `reg2` was loaded from memory by `movzwl`/`movzbl` matches the pattern, regardless of whether it is actually a TLV chunk advance. Length-limited string copies or struct field-guided copies trigger the pattern. Verify candidate VAs with `FuncProfiler` to confirm a TLV loop structure (outer loop over chunk pointer, inner reads for type and value fields).
+**Non-chunk pointer arithmetic:** Any `add reg1, reg2` where `reg2` was loaded from memory by `movzwl`/`movzbl` matches the pattern, regardless of whether it is actually a TLV chunk advance. Length-limited string copies or struct field-guided copies trigger the pattern. Verify candidate VAs with `FuncProfiler` to confirm a TLV loop structure outer loop over chunk pointer, inner reads for type and value fields.
 
 **Alignment pattern in copied register:** The scanner checks for alignment of `length_reg` only between the header read and the advance instruction. If alignment is computed from a copy of `length_reg` in a different register, the `aligned=True` flag is not set, producing a spurious `UNALIGNED` result.
 
@@ -78,7 +78,7 @@ ChunkWalkerValidator: sctp_parser_x86-64.elf
 | `advance_reg` | Register holding the chunk pointer being advanced |
 | `length_reg` | Register holding the raw user-supplied length value |
 | `aligned` | `True` if an alignment rounding pattern was found in the instruction lookahead |
-| `read_va` | VA of the next field read after the advance (0 if not found in window) |
+| `read_va` | VA of the next field read after the advance 0 if not found in window |
 
 `ChunkWalkFinding.fmt()` returns a formatted string tagged `[ALIGNED]` or `[UNALIGNED]`.
 

@@ -10,7 +10,7 @@ Follow tainted arguments across shared library boundaries: extending `TaintTrack
 
 2. **`CrossBinaryTaintTracker` resolves PLT symbol names to export VAs via `LibGraph.defined_in()`** and continues the taint BFS from the exporting binary: producing a `TaintChain` that spans multiple binaries. Each hop is a `TaintHop` with the binary name, function VA, and taint verdict, enabling full attack chain reconstruction across a multi-binary firmware system.
 
-3. **`TaintChain.depth()` and `sink_binary_name()` enable triage prioritization**: short chains (depth ≤ 2) with a `sink_binary_name()` of a privileged binary (e.g., `httpd`, `sslvpnd`) are higher priority than long chains terminating in unprivileged workers. `TaintChain.fmt()` produces a full chain visualization for inclusion in vulnerability findings.
+3. **`TaintChain.depth()` and `sink_binary_name()` enable triage prioritization**: short chains depth ≤ 2 with a `sink_binary_name()` of a privileged binary (e.g., `httpd`, `sslvpnd`) are higher priority than long chains terminating in unprivileged workers. `TaintChain.fmt()` produces a full chain visualization for inclusion in vulnerability findings.
 
 ---
 
@@ -86,7 +86,7 @@ Run `CrossBinaryTaintTracker` after single-binary `TaintTracker` has established
 
 ## Reading output
 
-`CrossBinaryTaintTracker.run(source_binary, source_va, tainted_args)` returns a list of `TaintChain` objects:
+`CrossBinaryTaintTracker.runsource_binary, source_va, tainted_args` returns a list of `TaintChain` objects:
 
 | Attribute | Content |
 |:---|:---|

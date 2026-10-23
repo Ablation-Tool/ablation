@@ -25,18 +25,18 @@ All source PDFs are at `~/Documents/functional-safety-standards/`.
 | `dod-re/MIL-HDBK-115A_2006.pdf` | MIL-HDBK-115A (2006) | [quicksearch.dla.mil](https://quicksearch.dla.mil/) |
 | `dod-re/MIL-HDBK-115B_2011.pdf` | MIL-HDBK-115B (2011) | [quicksearch.dla.mil](https://quicksearch.dla.mil/) |
 | `dod-re/MIL-HDBK-115C_2016.pdf` | MIL-HDBK-115C (2016) | [quicksearch.dla.mil](https://quicksearch.dla.mil/) |
-| `nist-cisa-nsa/NIST_SP800-218_SSDF_v1.1.pdf` | NIST SP 800-218 v1.1 (Feb 2022) | [csrc.nist.gov/pubs/sp/800/218/final](https://csrc.nist.gov/pubs/sp/800/218/final) |
-| `nist-cisa-nsa/NIST_SP800-218r1_SSDF_v1.2_IPD.pdf` | NIST SP 800-218r1 IPD (Dec 2025) | [csrc.nist.gov/pubs/sp/800/218/r1/ipd](https://csrc.nist.gov/pubs/sp/800/218/r1/ipd) |
-| `nist-cisa-nsa/NIST_SP800-218A_SSDF_GenAI.pdf` | NIST SP 800-218A (Jul 2024) | [csrc.nist.gov/pubs/sp/800/218/a/final](https://csrc.nist.gov/pubs/sp/800/218/a/final) |
-| `nist-cisa-nsa/NIST_SP800-160v1r1_Systems_Security_Engineering.pdf` | NIST SP 800-160v1r1 (Nov 2022) | [csrc.nist.gov/pubs/sp/800/160/v1/r1/final](https://csrc.nist.gov/pubs/sp/800/160/v1/r1/final) |
+| `nist-cisa-nsa/NIST_SP800-218_SSDF_v1.1.pdf` | NIST SP 800-218 v1.1 Feb 2022 | [csrc.nist.gov/pubs/sp/800/218/final](https://csrc.nist.gov/pubs/sp/800/218/final) |
+| `nist-cisa-nsa/NIST_SP800-218r1_SSDF_v1.2_IPD.pdf` | NIST SP 800-218r1 IPD Dec 2025 | [csrc.nist.gov/pubs/sp/800/218/r1/ipd](https://csrc.nist.gov/pubs/sp/800/218/r1/ipd) |
+| `nist-cisa-nsa/NIST_SP800-218A_SSDF_GenAI.pdf` | NIST SP 800-218A Jul 2024 | [csrc.nist.gov/pubs/sp/800/218/a/final](https://csrc.nist.gov/pubs/sp/800/218/a/final) |
+| `nist-cisa-nsa/NIST_SP800-160v1r1_Systems_Security_Engineering.pdf` | NIST SP 800-160v1r1 Nov 2022 | [csrc.nist.gov/pubs/sp/800/160/v1/r1/final](https://csrc.nist.gov/pubs/sp/800/160/v1/r1/final) |
 | `nist-cisa-nsa/NIST_SP800-83r1_Malware_Incident_Prevention.pdf` | NIST SP 800-83r1 | [csrc.nist.gov/pubs/sp/800/83/r1/final](https://csrc.nist.gov/pubs/sp/800/83/r1/final) |
 | `nist-cisa-nsa/NIST_SP500-262_StaticAnalysis_Summit.pdf` | NIST SP 500-262 | [csrc.nist.gov/pubs/sp/500/262/final](https://csrc.nist.gov/pubs/sp/500/262/final) |
-| `nist-cisa-nsa/CISA_Secure_by_Design_Oct2023.pdf` | CISA Secure by Design (Oct 2023) | [cisa.gov/securebydesign](https://www.cisa.gov/securebydesign) |
+| `nist-cisa-nsa/CISA_Secure_by_Design_Oct2023.pdf` | CISA Secure by Design Oct 2023 | [cisa.gov/securebydesign](https://www.cisa.gov/securebydesign) |
 | `nist-cisa-nsa/CISA_ESF_Securing_Software_Supply_Chain_Developers.pdf` | NSA/CISA ESF Developers (2022) | [cisa.gov/resources-tools/resources/nsa-cisa-enduring-security-framework](https://www.cisa.gov/resources-tools/resources/nsa-cisa-enduring-security-framework) |
-| `nist-cisa-nsa/NSA_CISA_ESF_SBOM_Consumption_Nov2023.pdf` | NSA/CISA SBOM Consumption (Nov 2023) | [cisa.gov/sbom](https://www.cisa.gov/sbom) |
-| `nist-cisa-nsa/CISA_ESF_OSS_SBOM_Dec2023.pdf` | NSA/CISA OSS + SBOM (Dec 2023) | [cisa.gov/sbom](https://www.cisa.gov/sbom) |
+| `nist-cisa-nsa/NSA_CISA_ESF_SBOM_Consumption_Nov2023.pdf` | NSA/CISA SBOM Consumption Nov 2023 | [cisa.gov/sbom](https://www.cisa.gov/sbom) |
+| `nist-cisa-nsa/CISA_ESF_OSS_SBOM_Dec2023.pdf` | NSA/CISA OSS + SBOM Dec 2023 | [cisa.gov/sbom](https://www.cisa.gov/sbom) |
 | `nist-cisa-nsa/Sandia_RAMSeS_RE_Vision_Whitepaper.pdf` | Sandia RAMSeS | [sandia.gov](https://www.sandia.gov) |
-| `dod-re/DoWI_8430.01_Accelerated_Mission_Software_Sep2026.pdf` | DoWI 8430.01 (Sep 2026) | [dau.edu](https://www.dau.edu) |
+| `dod-re/DoWI_8430.01_Accelerated_Mission_Software_Sep2026.pdf` | DoWI 8430.01 Sep 2026 | [dau.edu](https://www.dau.edu) |
 | `nist-cisa-nsa/NIST_CSWP_29_Secure_Software_Development_Practices.pdf` | NIST CSWP 29 | [csrc.nist.gov/pubs/cswp/29/final](https://csrc.nist.gov/pubs/cswp/29/final) |
 | `nist-cisa-nsa/NIST_SP800-161r1-upd1_SCRM.pdf` | NIST SP 800-161r1-upd1 | [csrc.nist.gov/pubs/sp/800/161/r1/final](https://csrc.nist.gov/pubs/sp/800/161/r1/final) |
 | `nist-cisa-nsa/NIST_SP1347_SSDF_Mapping_to_OWASP_BSIMM.pdf` | NIST SP 1347 | [csrc.nist.gov/pubs/sp/1347/final](https://csrc.nist.gov/pubs/sp/1347/final) |
@@ -56,7 +56,7 @@ TCL is assigned from two factors:
 - **Tool Error Detection (TD):** How likely is a tool error to be detected before reaching the safety item?
 
 TCL3 applies when TI is high and TD is low. For taint trackers and semantic scanners:
-- A false negative (missed finding) may allow a vulnerable product to ship.
+- A false negative missed finding may allow a vulnerable product to ship.
 - A false positive requires manual verification but is not safety-critical.
 - TD for taint trackers is low: false negatives are not caught by any downstream check.
 
@@ -71,7 +71,7 @@ ISO 26262 Part 8 Table 4 specifies five qualification methods for TCL3.
 | **Test suite** | Exhaustive functional tests against the tool's intended behavior | `tests/`: 408+ tests; 85.29% statement coverage on TCL3 taint engine; `fail_under=85` gate in pyproject.toml | MET |
 | **Regression test suite** | Tests that catch regressions when tool is modified | Every module has tests; CI runs full suite | MET |
 | **Known anomalies list** | Documented list of known erroneous results the tool may produce | `docs/reference-anomalies/`: 16 tracker files; per-anomaly regression tests in `tests/conformance/` | MET |
-| **Safety manual** | Document describing how to use the tool safely | `docs/safety-manual.md` (committed v1.0.0) + Section 2.5 of this document | MET |
+| **Safety manual** | Document describing how to use the tool safely | `docs/safety-manual.md` committed v1.0.0 + Section 2.5 of this document | MET |
 | **Tool qualification plan** | Documented plan for meeting TCL3 | This document | MET |
 
 ### 2.3 Known Anomalies List Format
@@ -129,10 +129,10 @@ The following constraints must be satisfied before a taint tracker result is tre
 
 These categories of false negatives are shared across all trackers. They appear in the known-anomaly files for each tracker and are summarized here for cross-reference.
 
-1. **Loop fixpoint:** taint accumulated on the second and subsequent loop iterations is not propagated (all trackers)
-2. **Indirect calls:** callee not entered when the callee address is in a register at the call site (all trackers)
+1. **Loop fixpoint:** taint accumulated on the second and subsequent loop iterations is not propagated all trackers
+2. **Indirect calls:** callee not entered when the callee address is in a register at the call site all trackers
 3. **Stack taint:** data routed through a local stack buffer before the sink is not tracked (all trackers except LoongArch64 which uses `mem_taint`)
-4. **Vector registers:** NEON (ARM32/ARM64), LSX/LASX (LoongArch64), VFP, SIMD taint through vector registers is lost
+4. **Vector registers:** NEON ARM32/ARM64, LSX/LASX (LoongArch64), VFP, SIMD taint through vector registers is lost
 5. **Architecture-specific opcode gaps:** unrecognized opcodes fall to conservative fallback; may miss taint at those instructions
 
 #### 2.5.5 When Not to Use Ablation as the Sole Evidence
@@ -141,14 +141,14 @@ Do not cite a taint tracker zero-findings result as sole evidence that a functio
 
 - The function contains a loop body whose exit value is used in a subsequent sink call
 - The function dispatches to an indirect callee whose address is loaded from a function pointer table
-- The binary uses a vector ISA extension (NEON, LSX, LASX, VFP) for data movement
+- The binary uses a vector ISA extension NEON, LSX, LASX, VFP for data movement
 - The tracker's known-anomaly file lists a triggering condition that matches the binary
 
 In these situations, supplement with `SemanticSearcher`, `SinkArgClassifier`, and manual trace using `WindowAnalyzer.dump_text()` before concluding no finding exists.
 
 ---
 
-## 3. [NIST SSDF v1.1 Practice Groups (SP 800-218)](https://csrc.nist.gov/pubs/sp/800/218/final)
+## 3. [NIST SSDF v1.1 Practice Groups SP 800-218](https://csrc.nist.gov/pubs/sp/800/218/final)
 
 NIST SP 800-218 defines four practice groups. Each maps directly to Ablation's development workflow. The v1.1 text is at [csrc.nist.gov/pubs/sp/800/218/final](https://csrc.nist.gov/pubs/sp/800/218/final). Draft v1.2 is at [csrc.nist.gov/pubs/sp/800/218/r1/ipd](https://csrc.nist.gov/pubs/sp/800/218/r1/ipd).
 
@@ -158,7 +158,7 @@ NIST SP 800-218 defines four practice groups. Each maps directly to Ablation's d
 
 Ablation's development infrastructure requirements:
 - Python 3.11+ with type annotations on all new modules
-- No external network calls in analyzer code (static analysis only)
+- No external network calls in analyzer code static analysis only
 - `pip install -e ~/ablation/` editable install; all deps pinned in `requirements/base.txt`
 - No Ghidra. No proprietary disassemblers with licensing restrictions.
 
@@ -234,21 +234,21 @@ Sections 1, 3, 5, and 10 are the highest-relevance sections for taint tracker mo
 
 - No `assert` for security checks (asserts are stripped by `-O`)
 - No bare `except:` clauses; only `except SpecificException:`
-- All file handles closed by `with` or `try/finally` (reviewed in SAFE CODE section 10)
+- All file handles closed by `with` or `try/finally` reviewed in SAFE CODE section 10
 - Type annotations on all public APIs
 
 **PW.6: Configure the Compilation, Interpreter, and Build Environments to Improve Security**
 
-- `from __future__ import annotations` on all new modules (deferred type evaluation)
+- `from __future__ import annotations` on all new modules deferred type evaluation
 - No `# type: ignore` without explicit justification comment
-- `mypy --strict` on taint tracker modules (enforced via FORGE gate)
+- `mypy --strict` on taint tracker modules enforced via FORGE gate
 
 **PW.7: Review and Analyze Human-Readable Code to Identify Vulnerabilities**
 
 FORGE `audit_module()` performs static analysis on every module before commit. It runs:
 - SourceAuditCompressor to identify high-risk file sections
 - SourceSinkScanner for injection surface
-- SAFE CODE 10-section manual review (performed by maintainer inline)
+- SAFE CODE 10-section manual review performed by maintainer inline
 - Gate fails on any HIGH or CRITICAL finding left unresolved
 
 **PW.8: Test Executable Code to Identify Vulnerabilities**
@@ -256,12 +256,12 @@ FORGE `audit_module()` performs static analysis on every module before commit. I
 - All taint tracker tests verify ABI register invariants, not just "no crash"
 - Tests use byte-exact synthetic firmware sequences, not mock objects
 - `scan_function()` tests verify that specific byte patterns at specific VAs produce specific taint findings
-- After every commit: `pytest -x` must pass (966+ tests as of v2.66.0)
+- After every commit: `pytest -x` must pass 966+ tests as of v2.66.0
 
 **PW.9: Configure Software to Have Secure Settings by Default**
 
-- `RH850TaintTracker.from_bytes(data)` defaults to `double_is_32bit=True` (GHS default)
-- `TriCoreTaintTracker.from_bytes(data)` defaults to TC1.6.2 mode (most common AURIX silicon)
+- `RH850TaintTracker.from_bytes(data)` defaults to `double_is_32bit=True` GHS default
+- `TriCoreTaintTracker.from_bytes(data)` defaults to TC1.6.2 mode most common AURIX silicon
 - All trackers default to `endian='little'` except MIPS and PPC which specify endianness explicitly
 
 ### 3.4 RV: Respond to Vulnerabilities
@@ -269,8 +269,8 @@ FORGE `audit_module()` performs static analysis on every module before commit. I
 **RV.1: Identify and Confirm Vulnerabilities on an Ongoing Basis**
 
 Ablation's own vulnerability surface is primarily:
-1. Processing of untrusted binary inputs (malformed ELF, crafted PE, hostile firmware)
-2. External dependencies (Capstone, lief, pyelftools, unicorn)
+1. Processing of untrusted binary inputs malformed ELF, crafted PE, hostile firmware
+2. External dependencies Capstone, lief, pyelftools, unicorn
 
 For (1): all parsers handle malformed input via `try/except` at ELF/PE load time, not mid-analysis. Add fuzz inputs to the test suite for critical parsers.
 
@@ -289,7 +289,7 @@ When a vulnerability is found in Ablation itself:
 Root cause analysis for every self-vulnerability:
 - Is this a gap in the SAFE CODE audit process? If so, add a new audit question.
 - Is this a gap in FORGE? If so, add a new FORGE check.
-- Can this class of vulnerability be auto-detected? If so, build an Ablation module for it (flywheel principle: RE gaps become neutral modules).
+- Can this class of vulnerability be auto-detected? If so, build an Ablation module for it flywheel principle: RE gaps become neutral modules.
 
 ---
 
@@ -301,7 +301,7 @@ SP 800-160 defines security as an emergent property of a system, not a feature a
 
 A taint tracker that is correct by construction is more secure than one that passes tests. "Correct by construction" for a taint tracker means:
 - The ABI register map is derived from the ISA specification, not inferred from observed behavior
-- Every instruction that could clobber a register is handled explicitly; the default is propagate, not clear (conservative by default)
+- Every instruction that could clobber a register is handled explicitly; the default is propagate, not clear conservative by default
 - Caller-saved vs. callee-saved register sets are modeled exactly from the ABI spec
 
 Ablation's taint trackers satisfy this: each tracker's register maps are documented in the corresponding `docs/reference-modules/<module>.md` with explicit citations to the ABI spec.
@@ -309,8 +309,8 @@ Ablation's taint trackers satisfy this: each tracker's register maps are documen
 ### 4.2 Trustworthy System Decomposition
 
 SP 800-160 requires that trust boundaries be explicit. For Ablation:
-- The boundary is at binary load time: input is untrusted (adversarial firmware), output is Ablation's own findings
-- No finding produced from untrusted input is trusted without manual byte-verification (the byte-verify rule: every VA in a CONFIRMED finding must be byte-checked against the raw binary before status is set)
+- The boundary is at binary load time: input is untrusted adversarial firmware, output is Ablation's own findings
+- No finding produced from untrusted input is trusted without manual byte-verification the byte-verify rule: every VA in a CONFIRMED finding must be byte-checked against the raw binary before status is set
 - The `BinaryContext` cache is trusted after its SHA256 is verified; stale caches are invalidated automatically
 
 ### 4.3 Assurance Evidence
@@ -353,7 +353,7 @@ The SAFE CODE audit and FORGE gate are mandatory gates, not advisory. No module 
 
 ## 6. [NSA/CISA Software Supply Chain Standards](https://www.cisa.gov/resources-tools/resources/nsa-cisa-enduring-security-framework)
 
-### 6.1 Developer Practices (ESF 2022)
+### 6.1 Developer Practices ESF 2022
 
 The ESF developer guide defines ten categories. Ablation's implementation:
 
@@ -361,11 +361,11 @@ The ESF developer guide defines ten categories. Ablation's implementation:
 
 **Build reproducibility:** `pip install -e ~/ablation/` is the canonical install. All tests run against the editable install, not a built wheel. No compiled extensions; pure Python.
 
-**Dependency verification:** Dependencies pinned in `requirements/base.txt`. Capstone, lief, unicorn, and pyelftools are the only non-standard dependencies for analysis modules. MiniLM is the only ML model dependency (sole encoder since ZIM-BERT removal at commit ad6af9e).
+**Dependency verification:** Dependencies pinned in `requirements/base.txt`. Capstone, lief, unicorn, and pyelftools are the only non-standard dependencies for analysis modules. MiniLM is the only ML model dependency sole encoder since ZIM-BERT removal at commit ad6af9e.
 
-**Secure development environments:** `re/<vendor>/` (findings) is local-only and gitignored. No API keys, credentials, or target-identifying information in any committed file.
+**Secure development environments:** `re/<vendor>/` findings is local-only and gitignored. No API keys, credentials, or target-identifying information in any committed file.
 
-### 6.2 SBOM (NSA/CISA Nov 2023)
+### 6.2 SBOM NSA/CISA Nov 2023
 
 Full SBOM guidance is at [cisa.gov/sbom](https://www.cisa.gov/sbom). Ablation generates an SBOM at each release. Minimum content (CycloneDX or SPDX):
 
@@ -379,7 +379,7 @@ SBOM generation command:
 pip-licenses --format=json --output-file=ablation-sbom.json
 ```
 
-### 6.3 Open Source Component Management (NSA/CISA Dec 2023)
+### 6.3 Open Source Component Management NSA/CISA Dec 2023
 
 All Ablation dependencies are open source. The OSS management checklist:
 
@@ -396,7 +396,7 @@ All dependency versions are pinned with exact hashes in `requirements/base.txt`.
 
 MIL-HDBK-115C (2016) is the current US Army standard for reverse engineering. It covers planning, static analysis, dynamic analysis, and documentation. The document is available through the DoD ASSIST database at [quicksearch.dla.mil](https://quicksearch.dla.mil/). Ablation's workflow maps to the MIL-HDBK-115C phases as follows.
 
-### 7.1 Phase 1: Planning and Preparation (MIL-HDBK-115C Section 4)
+### 7.1 Phase 1: Planning and Preparation MIL-HDBK-115C Section 4
 
 MIL-HDBK-115C requires an RE plan before any work begins, covering:
 - Purpose and scope of the RE effort
@@ -404,36 +404,36 @@ MIL-HDBK-115C requires an RE plan before any work begins, covering:
 - Tool and methodology selection
 - Documentation plan
 
-**Ablation mapping:** `re/<vendor>/SESSION_<target>.md` is the RE plan equivalent. The session file documents: target identification, tool selection (which analyzers were run), confirmed findings, and next steps. The root `SESSION.md` provides the cross-target index.
+**Ablation mapping:** `re/<vendor>/SESSION_<target>.md` is the RE plan equivalent. The session file documents: target identification, tool selection which analyzers were run, confirmed findings, and next steps. The root `SESSION.md` provides the cross-target index.
 
 **Gap:** Session files are informal notes; they do not follow a structured template. A standard template would make session files more useful as RE plan documentation.
 
-### 7.2 Phase 2: Static Analysis (MIL-HDBK-115C Section 5)
+### 7.2 Phase 2: Static Analysis MIL-HDBK-115C Section 5
 
 MIL-HDBK-115C defines static analysis as: file format analysis, disassembly, string extraction, import/export analysis, and control flow analysis. Ablation's static analysis pipeline:
 
 | MIL-HDBK-115C requirement | Ablation implementation |
 |---|---|
-| File format analysis | `BinaryContext.load_or_build()` (ELF/PE/Mach-O); `FirmwareContainer` for multi-partition images |
+| File format analysis | `BinaryContext.load_or_build()` ELF/PE/Mach-O; `FirmwareContainer` for multi-partition images |
 | Disassembly | Capstone via `DisasmEngine`; custom decoders for unsupported ISAs |
 | String extraction | `ctx.strings_in_func()`, `ctx.funcs_referencing_string()` |
 | Import/export analysis | `batch_plt_intersect()`, `LibGraph.defined_in()` |
 | Control flow analysis | `CFGBuilder`, `TaintTracker` interprocedural BFS |
 | Semantic labeling | `SemanticSearcher.query()` + `EnginePatternLibrary.label_binary()` |
 
-**Ordering rule:** SemanticSearcher before manual disassembly is mandated by both MIL-HDBK-115C Phase 2 ordering (characterize before detail analysis) and Ablation's own workflow rule.
+**Ordering rule:** SemanticSearcher before manual disassembly is mandated by both MIL-HDBK-115C Phase 2 ordering characterize before detail analysis and Ablation's own workflow rule.
 
-### 7.3 Phase 3: Dynamic Analysis (MIL-HDBK-115C Section 6)
+### 7.3 Phase 3: Dynamic Analysis MIL-HDBK-115C Section 6
 
 MIL-HDBK-115C requires dynamic analysis to confirm findings from static analysis. Ablation's dynamic analysis capability:
 
 - `DynamicSandbox` (Unicorn): leaf-function execution for behavioral confirmation
 - `HypothesisEngine.step(approved=True)`: probe execution with evidence feedback
-- `PathSolver.solve_path()`: constraint-based feasibility check (static but acts as pre-dynamic filter)
+- `PathSolver.solve_path()`: constraint-based feasibility check static but acts as pre-dynamic filter
 
 **Gap:** `DynamicSandbox` currently handles ELF only; PE loader is pending. Windows kernel driver findings (`KernelDriverAnalyzer`) cannot be dynamically confirmed in the current sandbox.
 
-### 7.4 Phase 4: Documentation (MIL-HDBK-115C Section 7)
+### 7.4 Phase 4: Documentation MIL-HDBK-115C Section 7
 
 MIL-HDBK-115C documentation requirements:
 
@@ -443,15 +443,15 @@ MIL-HDBK-115C documentation requirements:
 | Function inventory | `ctx.names_table()` + confirmed names in `function_names.json` | MET |
 | Finding report | `re/<vendor>/<target>_re.py` | MET |
 | Tool list | `CLAUDE.md` "Which tool for which task?" table | MET |
-| Anomaly notes | Known anomalies list | GAP (not yet formalized) |
+| Anomaly notes | Known anomalies list | GAP not yet formalized |
 
 ### 7.5 Sandia RAMSeS Alignment
 
 The Sandia RAMSeS whitepaper describes a provenance-tracking RE platform where every analysis step is logged and reproducible. Ablation's `ScanResultVersionCache` and `FindingRegistry` are the closest equivalent:
-- `ScanResultVersionCache` provides reproducible scanner results keyed by (scanner hash + file hash)
+- `ScanResultVersionCache` provides reproducible scanner results keyed by scanner hash + file hash
 - `FindingRegistry` provides cross-target finding provenance
 
-**Gap:** Individual analysis steps (which function was analyzed, what tool was run, what was found) are not automatically logged. Session files serve this purpose manually. Structured logging of tool invocations would enable full provenance replay.
+**Gap:** Individual analysis steps which function was analyzed, what tool was run, what was found are not automatically logged. Session files serve this purpose manually. Structured logging of tool invocations would enable full provenance replay.
 
 ---
 
@@ -461,56 +461,56 @@ This section lists the concrete requirements derived from all seven frameworks a
 
 ### 8.1 Module Qualification Gate (MQG)
 
-**MQG-001** (ISO 26262 TCL3, NIST SSDF PW.7) 
+**MQG-001** ISO 26262 TCL3, NIST SSDF PW.7 
 Every new analyzer module and every taint tracker must pass the SAFE CODE 10-section audit and FORGE gate (`gate_passed=True`) before any `git add`. No exceptions.
 
-**MQG-002** (ISO 26262 TCL3, NIST SSDF PW.8) 
+**MQG-002** ISO 26262 TCL3, NIST SSDF PW.8 
 Every taint tracker must have tests that verify ABI register invariants using byte-exact synthetic instruction sequences. Tests must assert specific findings at specific VAs, not just "no exception raised."
 
-**MQG-003** (ISO 26262 TCL3 coverage) 
+**MQG-003** ISO 26262 TCL3 coverage 
 `pytest-cov` is in the test suite. Taint trackers require 85% statement coverage. CRITICAL-producing scanners require 80% statement coverage. Coverage report generated on every commit; gate on taint trackers and critical scanners.
 
-**MQG-004** (ISO 26262 TCL3 known anomalies) 
+**MQG-004** ISO 26262 TCL3 known anomalies 
 Every taint tracker must have a corresponding `docs/reference-anomalies/<module>.md` file documenting all known false negative and false positive conditions. Format per Section 2.3. Initial content sourced from SAFE CODE residual risk sections and FORGE audit reports.
 
 ### 8.2 Development Process Requirements (DPR)
 
-**DPR-001** (NIST SSDF PO.3) 
+**DPR-001** NIST SSDF PO.3 
 Dependencies must be pinned with exact versions and hashes in `requirements/base.txt`. Use `pip install --require-hashes` to enforce integrity.
 
-**DPR-002** (NSA/CISA SBOM) 
+**DPR-002** NSA/CISA SBOM 
 Generate an SBOM at each version release using `pip-licenses --format=json`. Save to `ablation-sbom-<version>.json` in the repo root. Not committed to GitHub; generated on demand.
 
-**DPR-003** (NIST SSDF PS.1) 
+**DPR-003** NIST SSDF PS.1 
 Before every push: verify active gh account is `Ablation-Tool`. Command: `gh api user --jq.login` must return `Ablation-Tool` before `git push`.
 
-**DPR-004** (NIST SSDF RV.1) 
+**DPR-004** NIST SSDF RV.1 
 New dependency versions: run `pip-audit` against `requirements/base.txt` before any dependency bump. Block if any known CVE exists for the proposed version.
 
 ### 8.3 RE Workflow Requirements (RWR)
 
-**RWR-001** (MIL-HDBK-115C Phase 1) 
+**RWR-001** MIL-HDBK-115C Phase 1 
 Every engagement starts with a session file (`re/<vendor>/SESSION_<target>.md`) that includes: target identification, artifact hash, tool selection rationale, and documentation plan.
 
-**RWR-002** (MIL-HDBK-115C Phase 2) 
+**RWR-002** MIL-HDBK-115C Phase 2 
 `SemanticSearcher.query()` must be run before any manual disassembly on a new binary or new vulnerability class. This is an existing hard rule; this document adds formal standard basis.
 
-**RWR-003** (NIST SP 800-160, byte-verify rule) 
+**RWR-003** NIST SP 800-160, byte-verify rule 
 No finding is CONFIRMED without byte-verification of every VA in the code trace. `data[offset:offset+n] == expected_bytes` at each documented address. This rule derives from SP 800-160's assurance evidence requirement.
 
-**RWR-004** (MIL-HDBK-115C Phase 4) 
-Session files must document the full function inventory for the target (all confirmed names), the tool list used, and all confirmed findings. At project close, a retrospective is written per the `feedback-re-project-retrospective` rule.
+**RWR-004** MIL-HDBK-115C Phase 4 
+Session files must document the full function inventory for the target all confirmed names, the tool list used, and all confirmed findings. At project close, a retrospective is written per the `feedback-re-project-retrospective` rule.
 
 ### 8.4 ABI Conformance Tests (ACT)
 
-**ACT-001** (ISO 26262 TCL3 test suite) 
+**ACT-001** ISO 26262 TCL3 test suite 
 For each taint tracker, add a `tests/conformance/<arch>_abi_invariants.py` file that tests:
 - Arg register set matches the ISA ABI spec exactly
 - Caller-saved register set matches the ABI spec exactly
-- Return register handling is correct (64-bit return uses correct register pair)
-- `double` type ABI (32-bit or 64-bit) is modeled correctly where applicable
+- Return register handling is correct 64-bit return uses correct register pair
+- `double` type ABI 32-bit or 64-bit is modeled correctly where applicable
 
-**ACT-002** (ISO 26262 TCL3 regression) 
+**ACT-002** ISO 26262 TCL3 regression 
 Each conformance test is a regression anchor. If a refactor changes the register maps, the conformance tests catch it immediately. These tests should be stable across versions unless a new ABI variant is explicitly added.
 
 ---
@@ -519,7 +519,7 @@ Each conformance test is a regression anchor. If a refactor changes the register
 
 Ordered by priority and dependency.
 
-### Phase 1: Immediate (next 1-3 modules)
+### Phase 1: Immediate next 1-3 modules
 
 1. **Known Anomalies Lists:** Create `docs/reference-anomalies/` directory. Write initial entries for `RH850TaintTracker`, `TriCoreTaintTracker`, and `V850TaintTracker` sourced from their SAFE CODE residual risk sections. Format per Section 2.3.
 
@@ -527,7 +527,7 @@ Ordered by priority and dependency.
 
 3. **Coverage Gate:** Add `pytest-cov` to `requirements/base.txt`. Add coverage configuration to `pytest.ini` or `pyproject.toml`. Target: 85% for taint trackers, measured per-module.
 
-### Phase 2: Short Term (next major version)
+### Phase 2: Short Term next major version
 
 4. **Dependency Hashing:** Pin all dependencies with hashes in `requirements/base.txt`. Add `pip-audit` to the pre-commit check sequence in CLAUDE.md.
 
@@ -569,11 +569,11 @@ Ordered by priority and dependency.
 | CISA-SBD2 | Transparency | [CISA Secure by Design](https://www.cisa.gov/securebydesign) | FORGE cache + `docs/ai-provenance-log.md` committed; version log in CHANGELOG | MET |
 | CISA-SBD3 | Leadership | [CISA Secure by Design](https://www.cisa.gov/securebydesign) | SAFE CODE is mandatory, not advisory | MET |
 | ESF-DEV-SRC | Source integrity | [NSA/CISA ESF](https://www.cisa.gov/resources-tools/resources/nsa-cisa-enduring-security-framework) | Single-account; local-only findings | MET |
-| ESF-DEV-DEP | Dependency verification | [NSA/CISA ESF](https://www.cisa.gov/resources-tools/resources/nsa-cisa-enduring-security-framework) | `requirements/hashed.txt` committed (pip-compile --generate-hashes); `scripts/generate-lockfile.sh` for refresh | MET |
+| ESF-DEV-DEP | Dependency verification | [NSA/CISA ESF](https://www.cisa.gov/resources-tools/resources/nsa-cisa-enduring-security-framework) | `requirements/hashed.txt` committed pip-compile --generate-hashes; `scripts/generate-lockfile.sh` for refresh | MET |
 | ESF-SBOM | Software bill of materials | [NSA/CISA SBOM](https://www.cisa.gov/sbom) | `docs/sbom/ablation-sbom.json` committed; `scripts/generate-sbom.sh` for refresh | MET |
 | MHB-PLAN | RE planning | [MIL-HDBK-115C Sec 4](https://quicksearch.dla.mil/) | Session files (`SESSION.md` + per-target `SESSION_<target>.md`) per CLAUDE.md workflow | MET |
 | MHB-STATIC | Static analysis ordering | [MIL-HDBK-115C Sec 5](https://quicksearch.dla.mil/) | SemanticSearcher first rule | MET |
-| MHB-DYNAMIC | Dynamic confirmation | [MIL-HDBK-115C Sec 6](https://quicksearch.dla.mil/) | DynamicSandbox (ELF only); PE support deferred | MET (ELF scope) |
+| MHB-DYNAMIC | Dynamic confirmation | [MIL-HDBK-115C Sec 6](https://quicksearch.dla.mil/) | DynamicSandbox ELF only; PE support deferred | MET ELF scope |
 | MHB-DOC | RE documentation | [MIL-HDBK-115C Sec 7](https://quicksearch.dla.mil/) | Session files + retrospective | MET |
 | MHB-ANOMALY | Anomaly documentation | [MIL-HDBK-115C Sec 7](https://quicksearch.dla.mil/) | `docs/reference-anomalies/`: 16 tracker files; conformance tests cover documented anomalies | MET |
 | ACT-001 | ABI conformance tests | ISO 26262 / ACT | 43 tests in `tests/conformance/` (RH850 and TriCore ABIs verified) | MET |
@@ -591,7 +591,7 @@ Ordered by priority and dependency.
 - ISO-TCL3-TEST: coverage gate enforced; all 408 tests passing
 - ISO-TCL3-KA: `tests/conformance/` regression tests cover documented known anomalies
 - ISO-TCL3-SM: `docs/safety-manual.md` committed v1.0.0
-- SSDF-RV1: `scripts/monitor-supply-chain.sh` (pip-audit, JSON report)
+- SSDF-RV1: `scripts/monitor-supply-chain.sh` pip-audit, JSON report
 - CISA-SBD2: `docs/ai-provenance-log.md` committed
 - ESF-DEV-DEP: `requirements/hashed.txt` committed
 - ESF-SBOM: `docs/sbom/ablation-sbom.json` committed
@@ -600,7 +600,7 @@ Ordered by priority and dependency.
 - DPR-001: `requirements/hashed.txt` committed
 - DPR-003: `scripts/verify-account.sh` automates account check
 - DOWI-AI-SEC: `docs/ai-provenance-log.md` committed; FORGE gate active
-- DOWI-SUPPLY: `scripts/monitor-supply-chain.sh` (pip-audit)
+- DOWI-SUPPLY: `scripts/monitor-supply-chain.sh` pip-audit
 
 ---
 
@@ -608,11 +608,11 @@ Ordered by priority and dependency.
 
 This document is updated when:
 - A new taint tracker or CRITICAL-producing scanner is added to Ablation
-- A gap is closed (update Status in Section 10 and mark Phase in Section 9 complete)
+- A gap is closed update Status in Section 10 and mark Phase in Section 9 complete
 - A new external standard is adopted
 - A known anomaly is discovered and documented
 
 The source PDFs at `~/Documents/functional-safety-standards/` are the authoritative reference. This document summarizes their requirements in Ablation terms; it does not replace them.
 
 **Last updated:** 2026-10-11 v1.4.0 
-**Next review:** On closure of MHB-ANOMALY formalization (structured anomaly template rollout)
+**Next review:** On closure of MHB-ANOMALY formalization structured anomaly template rollout

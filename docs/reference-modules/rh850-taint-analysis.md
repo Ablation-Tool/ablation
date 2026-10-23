@@ -8,7 +8,7 @@ Tracks user-controlled data from source registers R6–R9 through GHS CC-RH / IA
 
 1. **V850TaintTracker requires a well-formed ELF binary. Denso RH850/G3M and Bosch GS327 ECU firmware ships as flat ROM dumps without ELF headers.** The V850 tracker uses `_load_elf()` which calls `lief.parse()`, which returns `None` for raw binary blobs. `RH850TaintTracker.from_bytes(data, base_va=0x0)` skips ELF loading and creates the tracker directly from flat bytes, taking the base virtual address as an explicit parameter. The caller provides function boundaries to `scan_function()` rather than relying on symbol table discovery.
 
-2. **GHS CC-RH and IAR default to `double = 32 bits`, not 64 bits as GCC assumes.** (Reference: GHS-RE-REFERENCE.md §2.7.) In the GHS CC-RH ABI, a `double` argument occupies one arg register, R6, R7, R8, or R9, not a register pair. V850TaintTracker models the GCC ABI where `double = 64 bits` occupies a pair (R6:R7). For a function `foo(char *s, double d)`, V850TaintTracker incorrectly marks R7 as the high half of the double, leaving R7 as the taint destination instead of tracking it as the independent argument `d`. `double_is_32bit=True` (the default) corrects this.
+2. **GHS CC-RH and IAR default to `double = 32 bits`, not 64 bits as GCC assumes.** Reference: GHS-RE-REFERENCE.md §2.7. In the GHS CC-RH ABI, a `double` argument occupies one arg register, R6, R7, R8, or R9, not a register pair. V850TaintTracker models the GCC ABI where `double = 64 bits` occupies a pair (R6:R7). For a function `foochar *s, double d`, V850TaintTracker incorrectly marks R7 as the high half of the double, leaving R7 as the taint destination instead of tracking it as the independent argument `d`. `double_is_32bit=True` the default corrects this.
 
 3. **GHS MULTI uses GCC 2.9.x name mangling: constructors are `Foo__ctN`, destructors `Foo__dtN`, which V850TaintTracker's source/sink resolver does not recognise.** A call to `Foo::Foo()` compiled by GHS appears as `CALL Foo__ct1Foo` in the binary. The V850 resolver checks the symbol name against sink/source tables verbatim: `Foo__ct1Foo` is not in `_SINK_NAMES`. `_ghs_c_name()` strips the `__ctN` suffix to recover `Foo`, which can then match a sink pattern. This prevents constructor calls to dangerous classes from being silently ignored.
 
@@ -32,7 +32,7 @@ flowchart TD
 | Register | Role |
 |---|---|
 | R6, R7, R8, R9 | Argument registers (4 × 32-bit or 4 × 32-bit double when `double_is_32bit=True`) |
-| R10 | Return value (scalar/pointer); R10:R11 for 64-bit return |
+| R10 | Return value scalar/pointer; R10:R11 for 64-bit return |
 | R31 (LP) | Link register |
 | R3 (SP) | Stack pointer |
 | R1, R6–R19, LP | Caller-saved |
@@ -100,7 +100,7 @@ RH850 taint: 3 finding(s)  [double=32b]
 
 ## False positives
 
-**`scan_function()` does not follow calls. Taint may flow into a callee that eventually reaches a sink.** `scan_function()` is intraprocedural only: when a call instruction is encountered, the callee's return registers are marked clean (caller-saved are cleared). Taint that flows through a helper function into a sink in that helper is not reported. Use `run_interprocedural(depth=4)` for full chain analysis; reserve `scan_function()` for targeted analysis of specific functions where boundaries are known.
+**`scan_function()` does not follow calls. Taint may flow into a callee that eventually reaches a sink.** `scan_function()` is intraprocedural only: when a call instruction is encountered, the callee's return registers are marked clean caller-saved are cleared. Taint that flows through a helper function into a sink in that helper is not reported. Use `run_interprocedural(depth=4)` for full chain analysis; reserve `scan_function()` for targeted analysis of specific functions where boundaries are known.
 
 **GHS symbol normalisation `_ghs_c_name()` strips `__ct` / `__dt` suffixes that appear in non-constructor symbols.** Any symbol containing `__ct`, for example `extract_data`, or `__dt`, for example `get_data_length`, will be incorrectly normalised. The implementation searches for the first occurrence of `__ct` or `__dt` as a substring: `extract_data` would become `extra` because `__ct` never appears in that name (it's `ct` without the double underscore). In practice the GHS mangling uses double-underscore separators, but verify manually if a sink matching `extra` or similar appears unexpectedly in findings.
 

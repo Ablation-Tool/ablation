@@ -2,7 +2,7 @@
 
 **File:** `ablation/analyzers/taint_tracker_x86_32.py`
 
-Intraprocedural taint analysis for stripped i386 ELF binaries (32-bit x86, SysV ABI, CDECL32 calling convention). Traces network-sourced data from read/recv/fgets/getenv sources to command-execution sinks (system, popen, execv, execvp) and memory-corruption sinks (strcpy, sprintf, snprintf, memcpy).
+Intraprocedural taint analysis for stripped i386 ELF binaries (32-bit x86, SysV ABI, CDECL32 calling convention). Traces network-sourced data from read/recv/fgets/getenv sources to command-execution sinks system, popen, execv, execvp and memory-corruption sinks strcpy, sprintf, snprintf, memcpy.
 
 First deployed on Acronis True Image 2018 build 15560 rescue environment (`asamba` and `product.bin`, both i386 ELF).
 
@@ -44,7 +44,7 @@ tracker = X86_32TaintTracker.from_path(
 | eax | Return value; caller-saved; tainted by source calls |
 | ecx | Caller-saved; cleared on every unknown call |
 | edx | Caller-saved; cleared on every unknown call |
-| ebx | Callee-saved; **GOT base** in PIC binaries (set by PIC thunk) |
+| ebx | Callee-saved; **GOT base** in PIC binaries set by PIC thunk |
 | esi | Callee-saved |
 | edi | Callee-saved |
 | ebp | Frame base pointer; never tainted |
@@ -62,7 +62,7 @@ call system
 add esp, 12   ; caller cleans stack
 ```
 
-The tracker models this via `esp_stack`: a dict keyed by `esp_delta` (bytes pushed since function entry). At a sink `call`, it maps `arg_idx → esp_stack[esp_delta - arg_idx * 4]`.
+The tracker models this via `esp_stack`: a dict keyed by `esp_delta` bytes pushed since function entry. At a sink `call`, it maps `arg_idx → esp_stack[esp_delta - arg_idx * 4]`.
 
 ---
 
@@ -75,7 +75,7 @@ Handles both i386 PLT stub variants:
 | Non-PIC executable | `ff 25 <abs32>` (`jmp *[abs32]`) | Static binaries, `-no-pie` executables |
 | PIC shared library | `ff a3 <disp32>` (`jmp *[ebx+disp32]`) | `-fpic` shared libs, PIE executables |
 
-Each PLT stub is 16 bytes. Stubs start at `.plt` base + 0x10 (skip the resolver stub). The resolver maps: for each `JUMP_SLOT` relocation at `got_va`, resolve `disp32 = got_va - got_plt_base` (PIC) or `abs32 = got_va` (non-PIC).
+Each PLT stub is 16 bytes. Stubs start at `.plt` base + 0x10 skip the resolver stub. The resolver maps: for each `JUMP_SLOT` relocation at `got_va`, resolve `disp32 = got_va - got_plt_base` (PIC) or `abs32 = got_va` (non-PIC).
 
 ---
 
@@ -91,7 +91,7 @@ Each PLT stub is 16 bytes. Stubs start at `.plt` base + 0x10 (skip the resolver 
 [ebp - N]    localN-1
 ```
 
-The tracker indexes `stack: Dict[int, FrozenSet[str]]` on the signed ebp-relative offset. Positive offsets → incoming arguments (tainted at function entry if passed from sources); negative offsets → locals (tainted when a source-derived value is stored).
+The tracker indexes `stack: Dict[int, FrozenSet[str]]` on the signed ebp-relative offset. Positive offsets → incoming arguments tainted at function entry if passed from sources; negative offsets → locals tainted when a source-derived value is stored.
 
 ---
 
@@ -105,11 +105,11 @@ For full format-string constant detection on i386, pass the result of `SinkArgCl
 
 ## Known limitations
 
-1. **Intraprocedural only.** Does not follow taint across call boundaries. For interprocedural taint, combine with `XRefGraph.callers_of(sink_plt_va)` to identify entry functions.
-2. **Function start detection via prologue scan.** Finds `55 89 e5` (push ebp; mov ebp,esp) prologues. FPO (frame-pointer-omitted) functions are not found unless a `BinaryContext` with full `func_starts` is passed via `from_context(ctx)`.
+1. **Intraprocedural only.** Does not follow taint across call boundaries. For interprocedural taint, combine with `XRefGraph.callers_ofsink_plt_va` to identify entry functions.
+2. **Function start detection via prologue scan.** Finds `55 89 e5` push ebp; mov ebp,esp prologues. FPO frame-pointer-omitted functions are not found unless a `BinaryContext` with full `func_starts` is passed via `from_context(ctx)`.
 3. **GOT-base not emulated.** PIC thunk initialization is not tracked; `ebx` is treated as untainted throughout. This is correct for taint purposes since GOT addresses are constant.
 4. **No loop analysis.** Single linear pass, no fixed-point iteration. Loops with back-edges may miss taint propagation across iterations.
-5. **esp arithmetic.** `sub esp,N` for frame allocation does not adjust `esp_delta`; only explicit `push` / `pop` / `add esp,N` (call cleanup) do. This is correct for the intended use case (call-arg tracking), but stack-based copy loops are not modeled.
+5. **esp arithmetic.** `sub esp,N` for frame allocation does not adjust `esp_delta`; only explicit `push` / `pop` / `add esp,N` call cleanup do. This is correct for the intended use case call-arg tracking, but stack-based copy loops are not modeled.
 
 ---
 
@@ -167,8 +167,8 @@ The most common false positive is taint surviving a zero-clear instruction (`xor
 | `sink_name` | Name of the dangerous function reached |
 | `sink_va` | Virtual address of the call site |
 | `source_name` | Name of the taint source (e.g., `recv`, `read`) |
-| `arg_index` | Which argument to the sink carries taint (0-indexed) |
-| `chain` | `[(va, register, operation)]` steps from source to sink |
+| `arg_index` | Which argument to the sink carries taint 0-indexed |
+| `chain` | `[va, register, operation]` steps from source to sink |
 | `path` | `[caller_va, ...]` function VAs traversed interprocedurally |
 | `severity` | `CRITICAL` for exec sinks, `HIGH` for memory sinks |
 

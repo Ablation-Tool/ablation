@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Reconstructs C++ virtual dispatch tables from x86-64 ET_DYN ELF shared libraries without executing the binary. Walks `.rela.dyn` for R_X86_64_RELATIVE (type 8, in-library functions) and R_X86_64_64 (type 1, exported symbol references) relocation entries to build a slot-index → function-VA map. Uses pure-Python ELF parsing (`struct.unpack_from`), no lief, no Capstone dependency. Enables identifying polymorphic sinks without RTTI or debug symbols.
+Reconstructs C++ virtual dispatch tables from x86-64 ET_DYN ELF shared libraries without executing the binary. Walks `.rela.dyn` for R_X86_64_RELATIVE type 8, in-library functions and R_X86_64_64 type 1, exported symbol references relocation entries to build a slot-index → function-VA map. Uses pure-Python ELF parsing (`struct.unpack_from`), no lief, no Capstone dependency. Enables identifying polymorphic sinks without RTTI or debug symbols.
 
 ## Key constants
 
@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard in `__
 
 ## How it works
 
-`ELFVtableReconstructor.from_path(path)` uses pyelftools to parse the ELF dynamic relocation table (`.rela.dyn`) and resolve PIE vtable slot values that are zero-initialized in the file but populated at load time. Handles `R_X86_64_RELATIVE` (base + addend) and `R_X86_64_64` (sym_value + addend) relocation types. No func_starts iteration: operates on relocation entries and symbol table only.
+`ELFVtableReconstructor.from_path(path)` uses pyelftools to parse the ELF dynamic relocation table (`.rela.dyn`) and resolve PIE vtable slot values that are zero-initialized in the file but populated at load time. Handles `R_X86_64_RELATIVE` base + addend and `R_X86_64_64` sym_value + addend relocation types. No func_starts iteration: operates on relocation entries and symbol table only.
 
 ---
 
@@ -50,7 +50,7 @@ ELFVtableReconstructor: lib.so  class=RequestHandler  slots=12
 
 ## False positives
 
-Secondary vtable sub-sections (multiple inheritance) appear as `is_rtti=True` entries at negative `slot_offset`; these are not virtual function slots. For classes with complex inheritance hierarchies, manually inspect entries near `slot_offset=0x00` for misclassification.
+Secondary vtable sub-sections multiple inheritance appear as `is_rtti=True` entries at negative `slot_offset`; these are not virtual function slots. For classes with complex inheritance hierarchies, manually inspect entries near `slot_offset=0x00` for misclassification.
 
 ---
 
@@ -72,7 +72,7 @@ Secondary vtable sub-sections (multiple inheritance) appear as `is_rtti=True` en
 |:---|:---|
 | `vtable_va` | VA of the vtable data in the binary |
 | `vtable_ptr` | VA that class instances store as their vtable pointer |
-| `class_name` | Demangled class name (empty if not available) |
+| `class_name` | Demangled class name empty if not available |
 | `slots` | `Dict[int, VtableSlot]` keyed by byte offset |
 
 Each `VtableSlot`:

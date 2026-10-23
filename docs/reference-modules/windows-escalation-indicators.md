@@ -69,7 +69,7 @@ scan() findings:
 
 ## False positives
 
-**`no_safe_seh` fires on all 32-bit PE binaries that predate SafeSEH**: binaries compiled before MSVC 7.1 (Visual Studio 2003) do not support SafeSEH. The absence of SafeSEH is a finding, but exploitability requires a stack overflow or format-string write primitive on the same target.
+**`no_safe_seh` fires on all 32-bit PE binaries that predate SafeSEH**: binaries compiled before MSVC 7.1 Visual Studio 2003 do not support SafeSEH. The absence of SafeSEH is a finding, but exploitability requires a stack overflow or format-string write primitive on the same target.
 
 **`seh_frames()` static extraction may not find all frames**: dynamically installed SEH frames (e.g., from compiler-generated `__finally` blocks that are only installed at runtime) are not visible in static analysis. The frame count from `seh_frames()` is a lower bound.
 
@@ -83,7 +83,7 @@ Run `SEHChainAnalyzer` on any x86 32-bit Windows PE binary as part of initial at
 
 ## Reading findings
 
-`SEHChainAnalyzer.scan()` returns a list of finding dicts (Windows escalation variant):
+`SEHChainAnalyzer.scan()` returns a list of finding dicts Windows escalation variant:
 
 | Field | Content |
 |:---|:---|

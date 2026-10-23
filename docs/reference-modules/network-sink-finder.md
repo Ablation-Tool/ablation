@@ -6,9 +6,9 @@ Finds every network-reachable dangerous exec sink in a binary by cross-referenci
 
 ## Why this exists
 
-1. High-SAC binaries (100+ sinks) require cross-referencing network entry points with dangerous sinks. Doing this manually takes 30-50 lines per session because `callers_of`, `reachable_from`, and `SinkArgClassifier` are separate tools with incompatible outputs.
+1. High-SAC binaries 100+ sinks require cross-referencing network entry points with dangerous sinks. Doing this manually takes 30-50 lines per session because `callers_of`, `reachable_from`, and `SinkArgClassifier` are separate tools with incompatible outputs.
 2. `SinkArgClassifier.classify_all()` returns results by call site, not by network reachability. A binary with 363 ARG_PROPAGATED results requires further filtering before any finding is meaningful.
-3. The HACMP-003 analysis (HACMP PPC32 clstrmgr, CONFIRMED HIGH NETWORK_ARG_PROPAGATED_STRCPY) required writing this pattern by hand. `NetworkSinkFinder` encodes that exact pattern so it runs in 3 lines instead of 30.
+3. The HACMP-003 analysis HACMP PPC32 clstrmgr, CONFIRMED HIGH NETWORK_ARG_PROPAGATED_STRCPY required writing this pattern by hand. `NetworkSinkFinder` encodes that exact pattern so it runs in 3 lines instead of 30.
 
 ---
 

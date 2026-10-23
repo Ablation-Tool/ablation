@@ -24,7 +24,7 @@ Three things were not possible before this module:
  entry after the first in a multi-entry block, silently missing files.
 
 3. Decode inode refs without the standard inode table. Huawei VRP images pack the inode ref
- as `(block_byte_offset << 16) | within_decompressed_offset`, which differs from the
+ as `block_byte_offset << 16 | within_decompressed_offset`, which differs from the
  conventional field layout used by most squashfs parsers. Wrong inode ref decoding reads
  the wrong metadata block and produces zero-byte files.
 
@@ -63,7 +63,7 @@ for path, sinks in sorted(hits.items()):
 ## ARM64 BCJ filter bypass
 
 Python's `lzma.decompress(data, format=lzma.FORMAT_XZ)` checks the XZ filter chain declared
-in the block header. When the chain lists filter ID `0x0A` (ARM64 BCJ), pre-5.4.0 liblzma
+in the block header. When the chain lists filter ID `0x0A` ARM64 BCJ, pre-5.4.0 liblzma
 raises `lzma.LZMAError: Corrupt input data`.
 
 The fix: parse the XZ stream header to locate the raw LZMA2 payload (skipping the filter
@@ -81,7 +81,7 @@ Confirmed on: Huawei VRP S6750-H V600R024C00SPC500 (`sqfs_00_00001984.sqfs`).
 
 Squashfs v4 XZ images only. No zstd, lz4, lzo, or zlib support.
 
-The module validates the magic (`0x73717368`), major version (must be 4), and compression
+The module validates the magic (`0x73717368`), major version must be 4, and compression
 ID (must be 4 = XZ) at open time. Block size must be a non-zero power of two and at most 1 MB.
 
 Decompression is bounded: each metadata block decompresses to at most 8 MB
@@ -98,10 +98,10 @@ protect with an external lock.
 XZ compression only. Other squashfs compression algorithms raise `ValueError` at open time.
 
 Fragment table support is partial. Regular file fragments are resolved; fragment-only small
-files (no full data block) require `_read_frag_entry` to be called. This is handled
+files no full data block require `_read_frag_entry` to be called. This is handled
 internally for `extract()`.
 
-Inode type coverage is limited to regular files (type 2/9) and directories (type 1/8).
+Inode type coverage is limited to regular files type 2/9 and directories type 1/8.
 Symlinks, device nodes, FIFOs, and sockets are not traversed.
 
 ## FORGE audit
@@ -112,7 +112,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_DECOMPRESS_BYTES=8MB` caps
 
 ## How it works
 
-Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation (CRC32 or SHA256 depending on container format) runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
+Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation CRC32 or SHA256 depending on container format runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
 
 ---
 

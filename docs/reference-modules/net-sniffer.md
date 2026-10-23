@@ -8,7 +8,7 @@ Raw network capture and credential extraction for post-compromise enumeration. C
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. HTTP XML body reads bounded at `resp.read(65536)`. Socket reads bounded: `sock.recv(4 - len(connack))` (bounded by CONNACK length), `sock.recv(1024)` for banners. Two CWE-770 procfs reads fixed: `/proc/net/arp` and `/proc/net/route` changed from `readlines()` to `read(_MAX_PROC_BYTES).splitlines()`; `_MAX_PROC_BYTES=4MB` constant added. No lief.parse().
+Gate: **PASSED**. No HIGH or CRITICAL findings. HTTP XML body reads bounded at `resp.read(65536)`. Socket reads bounded: `sock.recv(4 - len(connack))` bounded by CONNACK length, `sock.recv(1024)` for banners. Two CWE-770 procfs reads fixed: `/proc/net/arp` and `/proc/net/route` changed from `readlines()` to `read_MAX_PROC_BYTES.splitlines()`; `_MAX_PROC_BYTES=4MB` constant added. No lief.parse().
 
 ---
 
@@ -77,7 +77,7 @@ Run `RawSniffer` after gaining root shell access on a network switch or router w
 |:---|:---|
 | `packets` | Total packets captured |
 | `credentials` | List of extracted credential dicts |
-| `connections` | List of `(src_ip, dst_ip, dst_port)` tuples |
+| `connections` | List of `src_ip, dst_ip, dst_port` tuples |
 
 ---
 

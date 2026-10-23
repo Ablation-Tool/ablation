@@ -14,7 +14,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. No file reads. No HTTP reads. No
 
 ## How it works
 
-`generate_structural_pairs()` computes call-set Jaccard similarity between all function pairs across two firmware versions, using instruction count proximity (within 30%, or 15% for single-PLT-call functions) as a pre-filter. Pairs above `min_jaccard` become positive training examples. The corpus is split 90/10 into `train_pairs` and `eval_pairs`. `finetune_model()` wraps the `sentence-transformers` `SentenceTransformer.fit()` training loop with `CosineSimilarityLoss`, checkpoints to `output_path`, and returns the fine-tuned model. The result is a model that clusters homolog function descriptions more tightly than the pretrained MiniLM-L6-v2 while maintaining discrimination between non-homologs.
+`generate_structural_pairs()` computes call-set Jaccard similarity between all function pairs across two firmware versions, using instruction count proximity within 30%, or 15% for single-PLT-call functions as a pre-filter. Pairs above `min_jaccard` become positive training examples. The corpus is split 90/10 into `train_pairs` and `eval_pairs`. `finetune_model()` wraps the `sentence-transformers` `SentenceTransformer.fit()` training loop with `CosineSimilarityLoss`, checkpoints to `output_path`, and returns the fine-tuned model. The result is a model that clusters homolog function descriptions more tightly than the pretrained MiniLM-L6-v2 while maintaining discrimination between non-homologs.
 
 ---
 
@@ -56,7 +56,7 @@ finetune_model  epochs=4  batch_size=32
 
 ## False positives
 
-**Model collapse with too few training pairs**: if the firmware versions are very similar (minor patch), `generate_structural_pairs()` may produce fewer than ~1000 positive pairs, which is insufficient for meaningful fine-tuning. In this case the loss curve flattens after epoch 1 and `eval_cosine` does not improve past 0.65. Use the pretrained MiniLM instead; fine-tuning on fewer than 1000 pairs will overfit to the available data.
+**Model collapse with too few training pairs**: if the firmware versions are very similar minor patch, `generate_structural_pairs()` may produce fewer than ~1000 positive pairs, which is insufficient for meaningful fine-tuning. In this case the loss curve flattens after epoch 1 and `eval_cosine` does not improve past 0.65. Use the pretrained MiniLM instead; fine-tuning on fewer than 1000 pairs will overfit to the available data.
 
 **False positive pairs from single-PLT-call functions**: wrapper functions around a single `malloc`, `free`, or `memcpy` call produce a very high Jaccard score against each other even when they implement different data structures. The 15% instruction count constraint mitigates this but does not eliminate it entirely. Review `eval_separation()` output after training to confirm the fine-tuned model actually separates non-homologs.
 
@@ -72,9 +72,9 @@ finetune_model  epochs=4  batch_size=32
 
 ## Reading output
 
-`finetune_model(train_pairs, eval_pairs, base_model_name, output_path, epochs, batch_size)` returns a fine-tuned `SentenceTransformer` model (from the `sentence-transformers` package). The trained model is saved to `output_path` and returned directly for immediate use.
+`finetune_modeltrain_pairs, eval_pairs, base_model_name, output_path, epochs, batch_size` returns a fine-tuned `SentenceTransformer` model (from the `sentence-transformers` package). The trained model is saved to `output_path` and returned directly for immediate use.
 
-`generate_structural_pairs(corpus_a, corpus_b, min_plt_calls, min_jaccard, max_pairs)` returns `(train_pairs, eval_pairs)`: lists of `InputExample(texts=[anchor_desc, positive_desc])` used by `finetune_model()`.
+`generate_structural_pairscorpus_a, corpus_b, min_plt_calls, min_jaccard, max_pairs` returns `train_pairs, eval_pairs`: lists of `InputExample(texts=[anchor_desc, positive_desc])` used by `finetune_model()`.
 
 ---
 

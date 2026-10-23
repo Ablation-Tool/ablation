@@ -18,13 +18,13 @@ Four gaps existed before this module:
 
 ## Scope
 
-967-line pure in-memory analysis module. Reads file once (capped at 256 MB), then all analysis operates on the in-memory `bytes` object. No network I/O, no subprocess, no lief. Supports:
+967-line pure in-memory analysis module. Reads file once capped at 256 MB, then all analysis operates on the in-memory `bytes` object. No network I/O, no subprocess, no lief. Supports:
 
-- **MP4/MOV (ISOBMFF)**: Full atom tree walk, DRM atom detection (pssh/encv/enca/sinf/tenc), oversized metadata atoms, embedded binary scan in unknown/metadata atoms, entropy anomaly in non-video atoms
+- **MP4/MOV (ISOBMFF)**: Full atom tree walk, DRM atom detection pssh/encv/enca/sinf/tenc, oversized metadata atoms, embedded binary scan in unknown/metadata atoms, entropy anomaly in non-video atoms
 - **MKV/WebM (EBML)**: EBML element tree walk, ContentEncodings DRM detection, attachment FileData binary scan, oversized Void element detection with entropy check
 - **AVI (RIFF)**: RIFF chunk walk, JUNK/IDIT/ISFT chunk binary scan, oversized JUNK chunk entropy check, size overrun detection
 
-All formats: polyglot detection (prepended magic before container, appended data past declared container end).
+All formats: polyglot detection prepended magic before container, appended data past declared container end.
 
 ---
 
@@ -44,19 +44,19 @@ drm       = [f for f in findings if f.category == 'DRM']
 embedded  = [f for f in findings if f.category == 'EMBEDDED_BINARY']
 ```
 
-`VideoFinding` fields: `offset` (file offset), `severity` (CRITICAL/HIGH/MEDIUM/LOW), `category`, `description`, `detail`.
+`VideoFinding` fields: `offset` file offset, `severity` CRITICAL/HIGH/MEDIUM/LOW, `category`, `description`, `detail`.
 
 Finding categories:
 
 | Category | Description |
 |---|---|
-| `POLYGLOT` | Data outside declared container boundaries (prepended or appended) |
-| `EMBEDDED_BINARY` | Known binary magic (ELF, PE, ZIP, Mach-O, etc.) inside an atom/element/chunk |
+| `POLYGLOT` | Data outside declared container boundaries prepended or appended |
+| `EMBEDDED_BINARY` | Known binary magic ELF, PE, ZIP, Mach-O, etc. inside an atom/element/chunk |
 | `ANOMALOUS_STRUCTURE` | Malformed sizes, atoms extending past file boundary |
 | `DRM` | Encrypted track or protection metadata (pssh, encv, enca, ContentEncodings) |
-| `METADATA_ANOMALY` | Oversized metadata container (udta/free/skip/uuid/Void/JUNK) |
+| `METADATA_ANOMALY` | Oversized metadata container udta/free/skip/uuid/Void/JUNK |
 | `UNKNOWN_TYPE` | Non-printable or unrecognized atom type / EBML element ID |
-| `ENTROPY_ANOMALY` | High-entropy region in non-compressed atom (possible encrypted payload) |
+| `ENTROPY_ANOMALY` | High-entropy region in non-compressed atom possible encrypted payload |
 
 ---
 
@@ -76,10 +76,10 @@ Finding categories:
 
 Gate: **PASSED**. No code changes needed.
 
-- `from_path()`: `p.stat().st_size` check against `_MAX_CONTAINER_BYTES` before `p.read_bytes()`. Raises `ValueError` on oversized files (documented precondition).
+- `from_path()`: `p.stat().st_size` check against `_MAX_CONTAINER_BYTES` before `p.read_bytes()`. Raises `ValueError` on oversized files documented precondition.
 - No file reads inside `scan()` or any analysis method: all work on `self._data` loaded once.
 - No bare `except:`. No try/except inside any parser function: bounds checks prevent exceptions.
-- Recursion bounded: `max_depth=8` (MP4), `max_depth=6` (EBML/RIFF).
+- Recursion bounded: `max_depth=8` (MP4), `max_depth=6` EBML/RIFF.
 - Division guard: `return high / total if total else 0.0` in `_high_entropy_fraction`.
 - EBML element sizes: master element recursion only when `esize < 4 MB`; MP4 container atom recursion only when `data_size < 8 MB`.
 - No lief.parse(). No network I/O. No subprocess.
@@ -88,7 +88,7 @@ Gate: **PASSED**. No code changes needed.
 
 ## How it works
 
-Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation (CRC32 or SHA256 depending on container format) runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
+Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation CRC32 or SHA256 depending on container format runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
 
 ---
 

@@ -12,7 +12,7 @@ Two things blocked firmware analysis before these modules:
 Many vendor firmware images use a layered encryption scheme: an outer XOR key applied to the entire image, then an inner PKCS#1 v1.5 RSA-encrypted RC4 session key embedded in the partially-decrypted data, then the actual payload encrypted with RC4. Each layer requires a different recovery method. Without a reusable chain, each engagement re-discovered the same key recovery steps from scratch. `FirmwareContainerKeyExtractor` packages the full three-stage chain as one call.
 
 **2. Huawei VRP squashfs used a non-standard XZ filter.**
-Standard `unsquashfs` cannot extract Huawei VRP v600R024+ squashfs images because they use the ARM64 BCJ (Branch Call Jump) XZ filter (filter ID 0x0A) rather than the x86 BCJ filter (0x04) that most tools assume. The ARM64 BCJ filter transforms branch target offsets in ARM64 instructions to improve compression ratios. `HuaweiSquashfsExtractor` handles this filter without external tool dependencies.
+Standard `unsquashfs` cannot extract Huawei VRP v600R024+ squashfs images because they use the ARM64 BCJ Branch Call Jump XZ filter (filter ID 0x0A) rather than the x86 BCJ filter (0x04) that most tools assume. The ARM64 BCJ filter transforms branch target offsets in ARM64 instructions to improve compression ratios. `HuaweiSquashfsExtractor` handles this filter without external tool dependencies.
 
 ---
 
@@ -53,7 +53,7 @@ FortiWiFi/FortiGate appliances use NAND flash. Unprogrammed NAND cells read as 0
 
 ### Stage 2: PKCS#1 v1.5 block scan
 
-PKCS#1 v1.5 encryption padding has a fixed structure: `0x00 0x02 [8+ non-zero random bytes] 0x00 [message]`. The scanner finds `0x00 0x02... 0x00` sequences in the partially-decrypted binary and extracts candidate RSA-encrypted RC4 session key blocks. The typical key block size is 256 bytes (RSA-2048), positioned 128 bytes from the start of the cert partition.
+PKCS#1 v1.5 encryption padding has a fixed structure: `0x00 0x02 [8+ non-zero random bytes] 0x00 [message]`. The scanner finds `0x00 0x02... 0x00` sequences in the partially-decrypted binary and extracts candidate RSA-encrypted RC4 session key blocks. The typical key block size is 256 bytes RSA-2048, positioned 128 bytes from the start of the cert partition.
 
 ### Stage 3: RC4 known-plaintext attack
 
@@ -66,7 +66,7 @@ RC4 is a stream cipher. The keystream XORs with plaintext to produce ciphertext:
   keystream[3] = ciphertext[3] XOR 0x00
 ```
 
-The RC4 KSA (Key Scheduling Algorithm) initializes the permutation S from the 128-byte session key. Given the first four keystream bytes and the KSA structure, the full session key is recoverable by inverting the PRGA.
+The RC4 KSA Key Scheduling Algorithm initializes the permutation S from the 128-byte session key. Given the first four keystream bytes and the KSA structure, the full session key is recoverable by inverting the PRGA.
 
 Override the key if already known: `override_key=bytes.fromhex('...')`.
 
@@ -165,7 +165,7 @@ print(ctx.summary())
 
 ## False positives
 
-Version-mismatch findings appear when a known key or certificate is present in a build where it was intentionally removed. Cross-reference against the family table in `FirmwareKeyCorpus` and the product release notes before escalating. Development-only debug keys (identifiable by subject CN matching vendor dev lab naming conventions) are not production findings.
+Version-mismatch findings appear when a known key or certificate is present in a build where it was intentionally removed. Cross-reference against the family table in `FirmwareKeyCorpus` and the product release notes before escalating. Development-only debug keys identifiable by subject CN matching vendor dev lab naming conventions are not production findings.
 
 ---
 

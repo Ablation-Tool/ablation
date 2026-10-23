@@ -8,7 +8,7 @@ Identify unknown functions in stripped binaries by matching their byte patterns,
 
 1. **Stripped firmware contains the same function in every build, unnamed every time.** FortiOS ships dozens of builds per year. The `fadcsystem` command dispatch function appears in every one of them, at a different virtual address, with a different prologue shape. Without a cross-version identity database, each build starts from zero: semantic search, profiler triage, manual disassembly: all to re-confirm a function the analyst confirmed six months ago. `FuncDB` stores confirmed function records keyed by binary SHA256, and `match_by_sig()` finds the same function in the new build in under a second.
 
-2. **Byte-pattern matching needs wildcard masking to survive recompilation.** A naive byte-for-byte comparison fails across compiler version changes or optimization level changes: even when the function logic is identical. The `CALL rel32` instruction encoding changes every build because the callee address changes. The wildcard mask marks those bytes as `0x00` (skip) and the surrounding bytes as `0xff` (must match). The pattern matches even when relative call targets differ between builds.
+2. **Byte-pattern matching needs wildcard masking to survive recompilation.** A naive byte-for-byte comparison fails across compiler version changes or optimization level changes: even when the function logic is identical. The `CALL rel32` instruction encoding changes every build because the callee address changes. The wildcard mask marks those bytes as `0x00` (skip) and the surrounding bytes as `0xff` must match. The pattern matches even when relative call targets differ between builds.
 
 3. **Struct field offsets anchor function identity when byte patterns differ.** An ASLR-compiled `STRUCT_INIT` function has no reliable byte-level fingerprint: the code changes substantially when the struct layout shifts by one field. But the struct itself persists: `gp_name` at offset `0x2b0` is present across every FortiOS major version. `match_by_struct_offset()` finds all functions that access that field, letting the analyst identify the init function by what data structure it initializes rather than by what opcodes it uses.
 
@@ -205,7 +205,7 @@ MATCH 0x40b100 ← http_param_execute [httpsd:7.4.1] score=0.907
 | Field | Content |
 |:---|:---|
 | `FuncRecord.sig_bytes` | Hex-encoded byte sequence (2 chars per byte, e.g., `"55 48 89 e5"`) |
-| `FuncRecord.sig_mask` | Wildcard mask: `ff` = must match, `00` = skip (matches any byte) |
+| `FuncRecord.sig_mask` | Wildcard mask: `ff` = must match, `00` = skip matches any byte |
 | `FuncRecord.role` | Role tag from the taxonomy above |
 | `FuncRecord.confidence` | `CONFIRMED` / `ANGR_INFERRED` / `CANDIDATE` |
 | `match_score` | Proportion of non-wildcard bytes that matched, range 0.0–1.0 |

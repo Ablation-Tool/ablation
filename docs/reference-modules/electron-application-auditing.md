@@ -6,7 +6,7 @@ Scan Electron application JavaScript source for security misconfigurations: dete
 
 ## Why this exists
 
-1. **FortiFone Desktop v8.0 (Electron/Chromium SIP phone client) required reading the Electron security model from scratch for each finding during manual review of `app.asar` JS.** Seven confirmed findings emerged: all of which would have been caught by automated pattern matching. `ElectronSecurityScanner` encodes these patterns so they apply automatically to all Electron-based targets (FortiFone, FortiClient desktop integrations, FPAM browser extension host, any vendor Electron app) without repeated manual effort.
+1. **FortiFone Desktop v8.0 Electron/Chromium SIP phone client required reading the Electron security model from scratch for each finding during manual review of `app.asar` JS.** Seven confirmed findings emerged: all of which would have been caught by automated pattern matching. `ElectronSecurityScanner` encodes these patterns so they apply automatically to all Electron-based targets (FortiFone, FortiClient desktop integrations, FPAM browser extension host, any vendor Electron app) without repeated manual effort.
 
 2. **Electron's security model is systematically different from web browsers: `nodeIntegration: true` in a renderer process gives loaded web content full Node.js system access.** Combining this with an unvalidated IPC handler that accepts renderer-initiated navigation (`webContents.loadURL(userInput)`) or a deep link without scheme validation creates a Remote Code Execution path from a malicious URL opened by the app. `ElectronSecurityScanner` detects these patterns and their combinations.
 
@@ -88,7 +88,7 @@ Total: <N> findings  (<C> critical, <H> high, <M> medium)
 
 ## Pipeline position
 
-Run `ElectronSecurityScanner` after extracting the `.asar` archive from the Electron app bundle. This is a JavaScript-layer scan, independent of the binary analysis pipeline. Feed `CRITICAL` and `HIGH` findings to manual verification, referencing the Electron security documentation (https://www.electronjs.org/docs/latest/tutorial/security).
+Run `ElectronSecurityScanner` after extracting the `.asar` archive from the Electron app bundle. This is a JavaScript-layer scan, independent of the binary analysis pipeline. Feed `CRITICAL` and `HIGH` findings to manual verification, referencing the Electron security documentation https://www.electronjs.org/docs/latest/tutorial/security.
 
 ---
 

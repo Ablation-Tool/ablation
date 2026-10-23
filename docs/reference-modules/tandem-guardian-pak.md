@@ -82,7 +82,7 @@ Run `extract_to()` on any Guardian PAK `.ZIP` file before all other analysis. Th
 
 ## Reading output
 
-`extract_to(data: bytes, dest: Path)` is a module-level function in `ablation/core/guardian_pak_extractor.py`. It returns `List[GuardianFile]`:
+`extract_todata: bytes, dest: Path` is a module-level function in `ablation/core/guardian_pak_extractor.py`. It returns `List[GuardianFile]`:
 
 | Attribute | Content |
 |:---|:---|
@@ -99,5 +99,5 @@ Load a `GuardianFile` for RE by calling `BinaryContext.load_or_build()` with the
 
 ## See also
 
-- [AIX BFF Extraction](aix-bff-extractor.md): `BffExtractor` for AIX BFF/liblpp.a archives (similar COTS-alternative-extraction pattern)
+- [AIX BFF Extraction](aix-bff-extractor.md): `BffExtractor` for AIX BFF/liblpp.a archives similar COTS-alternative-extraction pattern
 - [Persistent Analysis Context](persistent-analysis-context.md): `BinaryContext` for MIPS32 BE analysis after extraction

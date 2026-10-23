@@ -6,7 +6,7 @@ Resolves PPC32 indirect calls (`BCTRL` through CTR) to concrete function
 addresses in stripped binaries that use the GOT2 position-independent calling
 model. Turns 15,000+ question-mark call sites into named function addresses.
 
-Tested: Huawei S6720EI bootload (V200R012C00, Freescale e500mc PPC32 BE).
+Tested: Huawei S6720EI bootload V200R012C00, Freescale e500mc PPC32 BE.
 **15120 / 15339 indirect calls resolved (98.6%). Zero unknowns.**
 
 ---
@@ -51,7 +51,7 @@ result = resolver.resolve()
 
 Two optional parameters improve precision in stripped binaries:
 
-**`fn_starts` (Fix 1: per-function r30 floor):**
+**`fn_starts` Fix 1: per-function r30 floor:**
 
 Pass a sorted list of function entry VAs (e.g. from `lief.parse(p).exported_functions`).
 When provided, a BCL setup site that precedes the current function's entry VA is
@@ -65,18 +65,18 @@ fn_starts = sorted(f.address for f in elf.exported_functions if f.address)
 result = resolver.resolve(fn_starts=fn_starts)
 ```
 
-**`got2_va` / `got2_size` (Fix 2: GOT2 range validation):**
+**`got2_va` / `got2_size` Fix 2: GOT2 range validation:**
 
 Supplied to `__init__` / `from_path` / `from_sections`. When present, any computed
 `entry_va = r30 + disp` that falls outside `[got2_va, got2_va + got2_size)` is
 rejected with reason `entry_va_outside_got2`. `from_path` extracts `.got2`
 automatically via lief.
 
-**Fix 3: generalised r30 setup detection (automatic):**
+**Fix 3: generalised r30 setup detection automatic:**
 
 `_find_r30_setups` now uses a sliding-window scan: up to 16 instructions after the BCL
 for `MFLR r30`, up to 6 more for `ADDIS r30,r30,hi`, up to 6 more for `ADDI r30,r30,lo`.
-Any instruction that writes to r30 (other than the three target instructions) aborts the
+Any instruction that writes to r30 other than the three target instructions aborts the
 search. This handles a third compiler variant found in Huawei CE6810 e500mc `.so` files
 where up to 8 frame spill instructions appear between BCL and MFLR r30. No parameters
 needed; this is always-on.
@@ -84,14 +84,14 @@ needed; this is always-on.
 ## Error conditions
 
 - `from_path()` raises `ValueError` if the file exceeds `_MAX_BINARY_BYTES` (256 MB) or if
-  `lief.parse()` returns `None` (corrupt or unsupported ELF). The `None` case is checked
+  `lief.parse()` returns `None` corrupt or unsupported ELF. The `None` case is checked
  explicitly after the parse call to prevent `AttributeError` in callers.
 
 ---
 
 ## How it works
 
-### Step 1: r30 assignment (compilation unit boundaries)
+### Step 1: r30 assignment compilation unit boundaries
 
 PPC32 PIC code establishes the GOT2 base register once per compilation unit:
 
@@ -112,8 +112,8 @@ sorted lookup. For any BCTRL VA, the live r30 = the setup with the largest
 
 ### Step 2: BCTRL source classification
 
-For each BCTRL, the resolver scans backward from the MTCTR (max 20 insns) to
-identify the source register, then backward from the MTCTR (max 25 insns) to
+For each BCTRL, the resolver scans backward from the MTCTR max 20 insns to
+identify the source register, then backward from the MTCTR max 25 insns to
 classify the load:
 
 | Pattern | Kind | Resolution |
@@ -125,7 +125,7 @@ classify the load:
 
 ### Step 3: Resolution
 
-- **got2:** `entry_va = r30 + disp`; `target = u32(entry_va)` from binary image.
+- **got2:** `entry_va = r30 + disp`; `target = u32entry_va` from binary image.
 - **direct:** target is the inline constant from the ADDIS/ADDI pair.
 - **dynamic:** logged as unresolved with a reason string; not counted in stats.
 
@@ -145,7 +145,7 @@ classify the load:
 | `r30_source` | `Optional[int]` | VA of the BCL that established r30 |
 | `r30` | `Optional[int]` | r30 value at call site |
 | `disp` | `Optional[int]` | Signed GOT2 displacement |
-| `entry_va` | `Optional[int]` | GOT2 entry address (r30 + disp) |
+| `entry_va` | `Optional[int]` | GOT2 entry address r30 + disp |
 
 ### `GOT2UnresolvedCall`
 
@@ -162,7 +162,7 @@ classify the load:
 - `.targets_for(va)`: look up callee for a BCTRL VA
 - `.by_target()`: dict mapping callee VA → list of callers
 - `.report()`: one-line summary string
-- `resolver.export_jsonl(result, out_path)`: write resolved calls as JSONL
+- `resolver.export_jsonlresult, out_path`: write resolved calls as JSONL
 
 ---
 
@@ -176,15 +176,15 @@ built binaries or dynamically linked binaries where relocation is already applie
 It does not support runtime ASLR unless the caller supplies the loaded base.
 
 **Assumption: enclosing CU = nearest preceding BCL.** Correct per PPC32 ABI.
-Functions without their own BCL setup (small leaf functions are common) inherit
+Functions without their own BCL setup small leaf functions are common inherit
 the previous CU's r30; this is the intended behavior.
 
 **Scan window limit.** MTCTR lookback is 20 instructions; load lookback is 25.
 Complex register sequences across basic-block boundaries require CFG analysis.
 In practice this is not observed in the tested binary.
 
-**Dynamic dispatch (219 calls in S6720EI).** LWZX indexed dispatch and non-r30
-LWZ/LWZU loads (struct field access, function pointer arrays) are runtime-only.
+**Dynamic dispatch 219 calls in S6720EI.** LWZX indexed dispatch and non-r30
+LWZ/LWZU loads struct field access, function pointer arrays are runtime-only.
 These are correctly labeled `dynamic` and excluded from the resolution count.
 
 ---
@@ -195,8 +195,8 @@ Confirmed against two manual RE entries from `targets/huawei/s6720_switch_re.py`
 
 | BCTRL VA | Expected target | Result |
 |---|---|---|
-| `0x10023884` | `0x10022ee0` (check_version_compat) | ✓ |
-| `0x100238e8` | `0x100230ac` (flash_compat) | ✓ |
+| `0x10023884` | `0x10022ee0` check_version_compat | ✓ |
+| `0x100238e8` | `0x100230ac` flash_compat | ✓ |
 
 ## FORGE audit
 
@@ -222,7 +222,7 @@ PPC32 GOT2 resolver: 38/42 resolved (90%)
 
 ## False positives
 
-**Dynamic (runtime-only) calls.** PPC32 binaries that use `bctr` (branch to CTR) after loading the address from a computed expression (rather than GOT2) are reported as `dynamic (runtime-only)`: they cannot be resolved statically. These are genuine indirect dispatch sites that require dynamic tracing to resolve.
+**Dynamic runtime-only calls.** PPC32 binaries that use `bctr` branch to CTR after loading the address from a computed expression rather than GOT2 are reported as `dynamic runtime-only`: they cannot be resolved statically. These are genuine indirect dispatch sites that require dynamic tracing to resolve.
 
 ---
 

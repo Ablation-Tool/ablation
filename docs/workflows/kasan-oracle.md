@@ -21,7 +21,7 @@ Two builds of the same kernel tree:
 
 | Build | Path | Has symbols | KASAN |
 |---|---|---|---|
-| KASAN debug | `vmlinuz.elf` or debug `.ko` | yes (System.map) | yes |
+| KASAN debug | `vmlinuz.elf` or debug `.ko` | yes System.map | yes |
 | Production stripped | production `.ko` | no | no |
 
 Both builds must come from the same source tree. Version mismatch causes function
@@ -29,7 +29,7 @@ layout divergence that breaks verification.
 
 ---
 
-## Step 1: Suppress KASAN ghost calls (debug build)
+## Step 1: Suppress KASAN ghost calls debug build
 
 Before scanning the debug build, suppress KASAN/KCOV instrumentation calls.
 Without this, every function has a `bl __asan_load8` ghost call that produces
@@ -112,7 +112,7 @@ Production:        11 confirmed, 3 ELIMINATED
 
 ## When to use this workflow
 
-- Kernel module analysis where the production `.ko` is stripped and short (< 200 functions)
+- Kernel module analysis where the production `.ko` is stripped and short < 200 functions
 - Any target where a debug build with KASAN is available alongside the production build
 - When a production-only scan yields zero hits despite known-buggy code patterns (KASAN
  build can confirm whether optimizer folded the sequence)

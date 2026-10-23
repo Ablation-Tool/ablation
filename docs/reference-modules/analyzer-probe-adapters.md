@@ -8,7 +8,7 @@ Bridge between the Hypothesis Engine's typed `ProbeRecord` requests and the conc
 
 1. **The Hypothesis Engine operates on `ProbeRecord` objects with a `kind` field, it does not import analyzers directly.** Keeping the engine decoupled from analyzer implementations means new analysis capabilities integrate without modifying the engine's scoring or session management code. A `taint` probe dispatches to ARM64TaintTracker, ARM32TaintTracker, x86 TaintTracker, or LoongArch64TaintTracker based on `ctx.arch`: the engine never names a specific tracker.
 
-2. **Probe execution must never raise.** The engine's scoring loop processes evidence in bulk across many hypotheses and many functions. A single failed analyzer call should not abort the session. Every adapter wraps its `execute()` body in a broad `try/except` and returns either an empty list (no evidence) or a low-strength NEUTRAL record describing the failure. This contract makes the engine resilient to missing analyzers, partial binary loads, and unsupported architectures.
+2. **Probe execution must never raise.** The engine's scoring loop processes evidence in bulk across many hypotheses and many functions. A single failed analyzer call should not abort the session. Every adapter wraps its `execute()` body in a broad `try/except` and returns either an empty list no evidence or a low-strength NEUTRAL record describing the failure. This contract makes the engine resilient to missing analyzers, partial binary loads, and unsupported architectures.
 
 3. **Evidence records carry both the observation and the relation/strength pair that the engine uses to update hypothesis scores.** A `DisassemblyAdapter` emitting a NEUTRAL record at strength 0.6 means "this is structural information: the engine should not yet treat it as confirmation." A `TaintAdapter` emitting a SUPPORTS record at strength 0.90 means "a confirmed source→sink path was found, this strongly supports the hypothesis." The adapter, not the engine, determines what relation and strength are appropriate for each observation type.
 
@@ -150,7 +150,7 @@ DTW similarity=0.891
 
 **`LifterAdapter` reports `tainted_vars > 0` from `/* TAINTED */` string counts.** The count is a substring match against `BinaryLifter`'s IR output annotations, it is not a per-variable taint flow. A function with 3 `/* TAINTED */` comments in its IR does not have 3 confirmed taint paths; it has 3 IR lines where the lifter annotated a potentially tainted value. Use `TaintAdapter` to confirm actual source→sink paths.
 
-**`TaintAdapter` path count inflates strength beyond 0.90 ceiling.** The formula `min(0.90, 0.60 + 0.10 × path_count)` reaches the ceiling at 3 paths. A function with 10 source→sink paths does not have stronger confirmation than one with 3: both produce SUPPORTS at 0.90. The ceiling prevents strength from inflating to 1.0 on functions that are merely complex, not definitively vulnerable.
+**`TaintAdapter` path count inflates strength beyond 0.90 ceiling.** The formula `min0.90, 0.60 + 0.10 × path_count` reaches the ceiling at 3 paths. A function with 10 source→sink paths does not have stronger confirmation than one with 3: both produce SUPPORTS at 0.90. The ceiling prevents strength from inflating to 1.0 on functions that are merely complex, not definitively vulnerable.
 
 ---
 
@@ -168,9 +168,9 @@ DTW similarity=0.891
 |:---|:---|
 | `ev.relation` | `NEUTRAL` / `SUPPORTS` / `CONTRADICTS`: engine scoring signal |
 | `ev.strength` | 0.0–0.90: how strongly the observation affects the hypothesis score |
-| `ev.reliability` | 0.8 default (most adapters): confidence in the observation accuracy |
+| `ev.reliability` | 0.8 default most adapters: confidence in the observation accuracy |
 | `ev.family` | `structure` / `data_flow` / `cross_reference` / `semantic` / `version` / `manual` |
-| `ev.observation` | Dict with adapter-specific fields (see table above for per-adapter keys) |
+| `ev.observation` | Dict with adapter-specific fields see table above for per-adapter keys |
 | `ev.analyzer` | Adapter class name (e.g., `TaintAdapter`, `DisassemblyAdapter`) |
 
 ---

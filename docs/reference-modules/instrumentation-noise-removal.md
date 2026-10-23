@@ -1,12 +1,12 @@
 # Post-Linker Compiler Security Gate
 
-Run Ablation's vulnerability detector suite on a freshly compiled binary before it ships: catching post-optimization vulnerabilities that sanitizers (ASan, UBSan) miss because they run before optimization passes complete: documenting each taint finding as a `SemanticBlock` in the DAG Adapter's producer-consumer model for machine-readable dataflow evidence at build time.
+Run Ablation's vulnerability detector suite on a freshly compiled binary before it ships: catching post-optimization vulnerabilities that sanitizers ASan, UBSan miss because they run before optimization passes complete: documenting each taint finding as a `SemanticBlock` in the DAG Adapter's producer-consumer model for machine-readable dataflow evidence at build time.
 
 ---
 
 ## Why this exists
 
-1. **Sanitizers (ASan, UBSan, MSan) run before the optimizer completes**: they instrument the IR before inlining, vectorization, and loop transforms. Post-optimization code can introduce vulnerabilities that are invisible at instrumentation time: an inline that merges a bounds check with a length computation may remove the check entirely. `CompilerSecurityGate` runs on the linker's output: after all optimization passes, and catches these post-optimization findings.
+1. **Sanitizers ASan, UBSan, MSan run before the optimizer completes**: they instrument the IR before inlining, vectorization, and loop transforms. Post-optimization code can introduce vulnerabilities that are invisible at instrumentation time: an inline that merges a bounds check with a length computation may remove the check entirely. `CompilerSecurityGate` runs on the linker's output: after all optimization passes, and catches these post-optimization findings.
 
 2. **`CompilerSecurityGate.check(strict=False)` returns a non-zero exit code when findings exceed threshold**: integrating directly into CI/CD linker steps. `strict=True` fails on any finding; `strict=False` fails only on `CRITICAL` or `HIGH` findings. This is the gating mechanism for preventing vulnerable binaries from reaching the firmware image build.
 

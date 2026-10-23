@@ -104,7 +104,7 @@ ctx = SourceContext.from_git("https://github.com/goauthentik/authentik", "/tmp/a
 | Field | Type | Description |
 |---|---|---|
 | `repo_root` | `Path` | Absolute path to the repository root |
-| `all_files` | `List[SourceFile]` | Every source file (ts, tsx, js, py, rs, go, java, rb, php) |
+| `all_files` | `List[SourceFile]` | Every source file ts, tsx, js, py, rs, go, java, rb, php |
 | `route_files` | `List[SourceFile]` | Subset identified as HTTP route handlers |
 | `summary()` | `str` | File count by language, route count, repo name |
 
@@ -158,7 +158,7 @@ SourceContext  authentik
 
 The triage layer. Assigns every file a 5-bit risk profile and groups files into buckets.
 The profile is a bitmask: each bit signals one security-relevant pattern detected in the
-file. Files sharing a profile are grouped; batch-CLEAN files (profile 0) need only one
+file. Files sharing a profile are grouped; batch-CLEAN files profile 0 need only one
 read to confirm the pattern.
 
 A 2861-file authentik codebase compresses to 72 priority reads without dropping any
@@ -189,7 +189,7 @@ Each bit is detected independently via regex scan:
 | 3 | 8 | `href_binding` | Dynamic `href=${...}` attribute binding (Lit/JSX) |
 | 2 | 4 | `url_assign` | `window.location.assign()`, `window.open(var)`, `navigateToUrl()` |
 | 1 | 1 | `user_data` | API object fields (`.name`, `.email`, `.body`) rendered in templates |
-| 0 (LSB) | 1 | `shared_module` | Reusable base class or shared utility (amplifies risk in combined profiles) |
+| 0 (LSB) | 1 | `shared_module` | Reusable base class or shared utility amplifies risk in combined profiles |
 
 Reading the profile in binary immediately tells you which signals are present. Profile 24
 (`11000`) means `unsafe_render` + `href_binding`. Profile 17 (`10001`) means
@@ -308,13 +308,13 @@ users, which require a session, which require admin privilege.
 Unauthenticated routes with dangerous sinks are the highest-priority finding class. This
 classifier makes that cross-product query possible.
 
-### Auth levels (weakest to strongest)
+### Auth levels weakest to strongest
 
 | Level | Constant | What it means |
 |---|---|---|
 | `NONE` | `AUTH_NONE` | No authentication check found in handler or middleware chain |
 | `API_KEY` | `AUTH_API_KEY` | API key or HTTP Basic auth required |
-| `SESSION` | `AUTH_SESSION` | User session required (cookie, JWT, or OAuth token) |
+| `SESSION` | `AUTH_SESSION` | User session required cookie, JWT, or OAuth token |
 | `INTERNAL` | `AUTH_INTERNAL` | Service-to-service HMAC or admin key required |
 | `ADMIN` | `AUTH_ADMIN` | Global admin credential required |
 
@@ -324,7 +324,7 @@ The classifier inspects two things: inline patterns in the handler file, and the
 middleware list applied to the route.
 
 **Inline patterns** include: imports of auth utilities (`requireAuth`, `isAuthenticated`,
-`login_required`, `Depends(get_current_user)`), decorator usage (`@login_required`,
+`login_required`, `Dependsget_current_user`), decorator usage (`@login_required`,
 `@permission_required`), and session checks (`req.session.userId`, `request.user`).
 
 **Middleware chain** is detected from framework-specific registration patterns:
@@ -406,8 +406,8 @@ from HIGH to MEDIUM.
 |---|---|---|
 | Code eval | CWE-94 | `vm.runInContext()`, `vm.runInNewContext()`, `eval()`, `new Function()` |
 | Subprocess | CWE-78 | `child_process.exec()`, `child_process.spawn()`, `subprocess.run()`, `os.system()` |
-| SSRF | CWE-918 | `fetch(userInput)`, `axios.get(req.query.url)`, `http.get(param)` |
-| Path traversal | CWE-22 | `fs.readFile(userPath)`, `open(req.params.file)`, `Path(user_input)` |
+| SSRF | CWE-918 | `fetch(userInput)`, `axios.getreq.query.url`, `http.get(param)` |
+| Path traversal | CWE-22 | `fs.readFile(userPath)`, `openreq.params.file`, `Pathuser_input` |
 | Unguarded endpoint | CWE-284 | Admin-prefixed routes without auth middleware |
 
 ### Guard-condition detection
@@ -437,7 +437,7 @@ result = vm.runInContext(userScript, ctx)
 | `line_text` | `str` | The matched source line |
 | `category` | `str` | Sink class (e.g., `code_eval`, `subprocess`, `ssrf`, `path_traversal`) |
 | `cwe` | `str` | CWE identifier |
-| `severity` | `str` | `HIGH` or `MEDIUM` (after guard detection) |
+| `severity` | `str` | `HIGH` or `MEDIUM` after guard detection |
 | `description` | `str` | Human-readable finding description |
 | `guarded` | `bool` | `True` when a guard condition was detected near the sink |
 
@@ -588,8 +588,8 @@ template block score higher than two signals in different functions in the same 
 | `rel_path` | `str` | File path relative to repo root |
 | `tags` | `dict[str, list[str]]` | Signal-pair label → matched source lines (e.g., `{"unsafe_render+type_dispatch": [...]}`) |
 | `high_confidence` | `bool` | `True` when a strong co-location heuristic fired |
-| `score` | `int` (property) | Number of signal pairs present (`len(tags)`) |
-| `risk_label` | `str` (property) | `HIGH` (score ≥ 3 or `high_confidence`), `MEDIUM` (score 2), `LOW` (score 1) |
+| `score` | `int` property | Number of signal pairs present (`len(tags)`) |
+| `risk_label` | `str` property | `HIGH` (score ≥ 3 or `high_confidence`), `MEDIUM` (score 2), `LOW` (score 1) |
 
 ### Usage
 
@@ -657,7 +657,7 @@ up to 5 hops deep.
 
 Each `TaintHop` carries `rel_path`, `line`, and `func_name`.
 
-Confidence is derived from call-chain depth: a sink reached directly from the route handler (no intermediate function) is `DIRECT`. Each additional hop between the source and sink lowers confidence by one tier. `has_source` is `False` when the tracker found a chain from a sink backward but did not reach a known source input.
+Confidence is derived from call-chain depth: a sink reached directly from the route handler no intermediate function is `DIRECT`. Each additional hop between the source and sink lowers confidence by one tier. `has_source` is `False` when the tracker found a chain from a sink backward but did not reach a known source input.
 
 ### Usage
 
@@ -773,7 +773,7 @@ SourceTaintTracker: <N> confirmed taint paths
 
 ## Pipeline position
 
-Run `SourceContext` first (loads the codebase once), then `SourceEntryClassifier` (authentication surface map), `SourceSinkScanner` (dangerous call sites), `SourceIsolationChecker` (tenant boundary), and `SourceTaintTracker` (path confirmation). Each tool takes `SourceContext` and augments the picture built by its predecessors. Complete the run with `SourceArchRiskScanner` for framework-level misconfiguration findings.
+Run `SourceContext` first loads the codebase once, then `SourceEntryClassifier` authentication surface map, `SourceSinkScanner` dangerous call sites, `SourceIsolationChecker` tenant boundary, and `SourceTaintTracker` path confirmation. Each tool takes `SourceContext` and augments the picture built by its predecessors. Complete the run with `SourceArchRiskScanner` for framework-level misconfiguration findings.
 
 ---
 
@@ -786,7 +786,7 @@ Each tool in the pipeline returns its own finding type:
 | `SourceEntryClassifier.classify()` | `List[RouteClassification]` | `rel_path`, `auth_level` (`NONE`/`SESSION`/`ADMIN`), `matched_signal`, `is_low_value`, `notes` |
 | `SourceSinkScanner.scan()` | `List[SinkHit]` | `rel_path`, `line`, `line_text`, `category`, `cwe`, `severity`, `guarded` |
 | `SourceIsolationChecker.scan()` | `List[IsolationFinding]` | `rel_path`, `line`, `operation`, `model`, `op_type`, `where_text`, `severity` (`CONFIRMED`/`PLAUSIBLE`/`INFO`), `note` |
-| `SourceTaintTracker.trace_all(sink_hits)` | `List[TaintPath]` | `sink: SinkHit`, `hops: list[TaintHop]`, `confidence` (`DIRECT`/`HIGH`/`MEDIUM`/`LOW`), `has_source: bool` |
+| `SourceTaintTracker.trace_allsink_hits` | `List[TaintPath]` | `sink: SinkHit`, `hops: list[TaintHop]`, `confidence` (`DIRECT`/`HIGH`/`MEDIUM`/`LOW`), `has_source: bool` |
 | `SourceArchRiskScanner.scan()` | `List[ArchRiskFinding]` | `rel_path`, `tags: dict[str, list[str]]`, `high_confidence: bool`, `risk_label` (`HIGH`/`MEDIUM`/`LOW`), `score: int` |
 
 ---

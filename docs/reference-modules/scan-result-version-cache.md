@@ -39,10 +39,10 @@ print(ScanResultVersionCache.report(cache.cache_stats()))
 <scanner_version_hash>|<abspath>|<mtime_ns>|<size_bytes>|<sha256_prefix_16>
 ```
 
-- `scanner_version_hash`: SHA-256 of `inspect.getsource(scanner_class)` truncated to 16 chars. Changes whenever the scanner source changes. No manual version bumping required.
+- `scanner_version_hash`: SHA-256 of `inspect.getsourcescanner_class` truncated to 16 chars. Changes whenever the scanner source changes. No manual version bumping required.
 - `mtime_ns`, `size_bytes`, `sha256_prefix_16`: these identify the file. The SHA-256 prefix catches same-size content changes that preserve mtime.
 
-The fast path uses mtime_ns and size only (a stat call, no file read). Only when the fast path misses does the code read the file to compute the SHA-256. A batch of 1096 cached files costs 1096 stat calls.
+The fast path uses mtime_ns and size only a stat call, no file read. Only when the fast path misses does the code read the file to compute the SHA-256. A batch of 1096 cached files costs 1096 stat calls.
 
 ## Cache file
 
@@ -70,7 +70,7 @@ cache.save()
 
 ## How it works
 
-`for_scanner(scanner_class)` builds a cache key from the scanner class's source file SHA-256 and stores it alongside the results. `get_or_scan(file_path)` computes the SHA-256 of the target file, checks whether both the scanner source and the file hash match the cached values, and returns the cached `list[dict]` on a hit. On a miss it runs the scanner's standard interface (`from_pe32plus(data)` or `scan_binary(path)`) and stores the result as `dataclasses.asdict()` output. `scan_batch()` runs `get_or_scan()` concurrently across a list of files and returns `dict[abspath, list[dict]]`. `save()` flushes all in-memory results to `~/.ablation/cache/scan_results/<ScannerClassName>.json`.
+`for_scannerscanner_class` builds a cache key from the scanner class's source file SHA-256 and stores it alongside the results. `get_or_scanfile_path` computes the SHA-256 of the target file, checks whether both the scanner source and the file hash match the cached values, and returns the cached `list[dict]` on a hit. On a miss it runs the scanner's standard interface (`from_pe32plus(data)` or `scan_binary(path)`) and stores the result as `dataclasses.asdict()` output. `scan_batch()` runs `get_or_scan()` concurrently across a list of files and returns `dict[abspath, list[dict]]`. `save()` flushes all in-memory results to `~/.ablation/cache/scan_results/<ScannerClassName>.json`.
 
 ---
 
@@ -105,7 +105,7 @@ The cache does not introduce false positives, it returns the wrapped scanner's r
 
 ## Reading output
 
-`ScanResultVersionCache(db_path, scanner_class).get_or_scan(file_path, force)` returns `List[dict]`: finding dicts converted from the scanner's dataclass findings via `dataclasses.asdict()`. The schema matches the wrapped scanner's finding class. Pass `force=True` to bypass the cache and always re-scan.
+`ScanResultVersionCachedb_path, scanner_class.get_or_scanfile_path, force` returns `List[dict]`: finding dicts converted from the scanner's dataclass findings via `dataclasses.asdict()`. The schema matches the wrapped scanner's finding class. Pass `force=True` to bypass the cache and always re-scan.
 
 ---
 

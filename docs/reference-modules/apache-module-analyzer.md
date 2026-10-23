@@ -4,9 +4,9 @@
 
 ## Why this exists
 
-FortiAnalyzer v7.6.3 ships a custom Apache module `mod_extension.so` that bypasses MFA via a session skip flag (FAZ-CVE22572 / CVE-2026-22572). Manual disassembly was required because no ablation tool could:
-- Reconstruct the `ap_hook_handler` call graph (register_hooks → handler function)
-- Track APR table get/set patterns (Cookie header → session decrypt)
+FortiAnalyzer v7.6.3 ships a custom Apache module `mod_extension.so` that bypasses MFA via a session skip flag FAZ-CVE22572 / CVE-2026-22572. Manual disassembly was required because no ablation tool could:
+- Reconstruct the `ap_hook_handler` call graph register_hooks → handler function
+- Track APR table get/set patterns Cookie header → session decrypt
 - Identify session skip flag accessor calls in the handler
 
 Gap closed: 2026-10-16. All confirmed FAZ-CVE22572 findings detected automatically in validation.
@@ -17,7 +17,7 @@ Gap closed: 2026-10-16. All confirmed FAZ-CVE22572 findings detected automatical
 
 | Class | CWE | Severity | Pattern |
 |---|---|---|---|
-| `HANDLER_REGISTRATION` | CWE-0 | INFO | `ap_hook_handler(fn, NULL, NULL, APR_HOOK_MIDDLE)` in register_hooks |
+| `HANDLER_REGISTRATION` | CWE-0 | INFO | `ap_hook_handlerfn, NULL, NULL, APR_HOOK_MIDDLE` in register_hooks |
 | `AUTH_TABLE_ACCESS` | CWE-522 | HIGH | `apr_table_get(r->..., "Cookie"/"Authorization")` in handler |
 | `SESSION_SKIP_FLAG` | CWE-287 | HIGH | Call to `session_get_adminuser_skip` / `session_get_admin_prof` / pattern-match |
 | `AUTH_BYPASS_SURFACE` | CWE-287 | **CRITICAL** | Cookie read + decrypt + session skip flag all in same handler |
@@ -50,7 +50,7 @@ findings = ApacheModuleAnalyzer.from_context(ctx).analyze()
 ## Analysis phases
 
 1. **Build PLT**, maps stub VAs to symbol names from `.rela.plt`
-2. **Build rodata index**, maps VAs to string literals (for header key identification)
+2. **Build rodata index**, maps VAs to string literals for header key identification
 3. **Find register_hooks**, scans `.text` for `jmp`/`call` to any `ap_hook_*` PLT stub; walks backwards to function start
 4. **Extract handler registrations**, disassembles register_hooks to find `lea rdi, [rip+N]` before the hook call; resolves handler function VA
 5. **Analyze handler**, tracks `rsi` string loads before `apr_table_get` calls; detects session/auth symbols; fires composite finding
@@ -58,9 +58,9 @@ findings = ApacheModuleAnalyzer.from_context(ctx).analyze()
 
 ## Architecture support
 
-- **x86-64** (ELF): full support (RIP-relative addressing, PLT stub format)
+- **x86-64** (ELF): full support RIP-relative addressing, PLT stub format
 - **ARM64**: basic support (BL instruction scanning for hook registration; `_analyze_handler` uses generic Capstone pass)
-- **x86-32**: not supported (32-bit ELF PLT format differs)
+- **x86-32**: not supported 32-bit ELF PLT format differs
 
 ## FORGE audit
 
@@ -79,7 +79,7 @@ Gate: **PASSED**. No subprocess, eval, shell=True, network I/O. All struct unpac
 [INFO]     HANDLER_REGISTRATION — ap_hook_handler(0x123b, APR_HOOK_MIDDLE)               (0x1236)
 ```
 
-FAZ-CVE22572 (MFA bypass via session skip flag) confirmed via CRITICAL composite finding.
+FAZ-CVE22572 MFA bypass via session skip flag confirmed via CRITICAL composite finding.
 
 ---
 

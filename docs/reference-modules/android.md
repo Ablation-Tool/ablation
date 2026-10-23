@@ -235,7 +235,7 @@ print(DexAnalyzer.report(findings))
 
 **File:** `ablation/analyzers/jni_bridge_scanner.py`
 
-Reconstructs the Java-native boundary from DEX `class_data_item` access flags and ELF dynsym. Three-way classification: confirmed native in both DEX and ELF, ACC_NATIVE with no ELF symbol (stripped or dynamically registered), and `Java_*` ELF symbols with no ACC_NATIVE flag (helpers or dead code).
+Reconstructs the Java-native boundary from DEX `class_data_item` access flags and ELF dynsym. Three-way classification: confirmed native in both DEX and ELF, ACC_NATIVE with no ELF symbol stripped or dynamically registered, and `Java_*` ELF symbols with no ACC_NATIVE flag helpers or dead code.
 
 ### Two JNI registration modes
 
@@ -480,7 +480,7 @@ for e in LibraryInventory.security_entries(entries, min_score=3):
 
 ## How it works
 
-`APKParser` opens the APK as a `zipfile.ZipFile` and parses `AndroidManifest.xml` from the binary AXML chunk format (chunk type `0x0003`). DEX files are parsed via `DEXFile`: the 112-byte header yields offsets to seven flat ID tables (string_ids, type_ids, proto_ids, field_ids, method_ids, class_defs, data). `DexAnalyzer.scan()` iterates all `classes*.dex` files in the APK and matches the full string pool against 12 secret regex patterns and the method reference table against a dangerous class/method list. `JniBridgeScanner.scan()` cross-references DEX `ACC_NATIVE` flags with ELF dynsym exports from bundled `.so` files. `BinderScanner.scan()` identifies `android.os.Binder` subclasses, `$Stub` AIDL classes, and `onTransact()` overrides from class_defs and the manifest.
+`APKParser` opens the APK as a `zipfile.ZipFile` and parses `AndroidManifest.xml` from the binary AXML chunk format (chunk type `0x0003`). DEX files are parsed via `DEXFile`: the 112-byte header yields offsets to seven flat ID tables string_ids, type_ids, proto_ids, field_ids, method_ids, class_defs, data. `DexAnalyzer.scan()` iterates all `classes*.dex` files in the APK and matches the full string pool against 12 secret regex patterns and the method reference table against a dangerous class/method list. `JniBridgeScanner.scan()` cross-references DEX `ACC_NATIVE` flags with ELF dynsym exports from bundled `.so` files. `BinderScanner.scan()` identifies `android.os.Binder` subclasses, `$Stub` AIDL classes, and `onTransact()` overrides from class_defs and the manifest.
 
 ---
 
@@ -543,7 +543,7 @@ Each layer returns typed finding objects. `DexAnalyzer(apk).scan()` returns `Lis
 | `source` | `'manifest'`, `'dex:classes.dex'`, `'native'` |
 | `evidence` | Raw string or API call that triggered the finding |
 
-`JniBridgeScanner(apk).scan()` returns `List[JniBridgeFinding]`. `BinderScanner(apk).scan()` returns `List[BinderFinding]`. Both share the same field structure: `severity`, `category`, `title`, `detail`. `APKParser` returns metadata (no findings).
+`JniBridgeScanner(apk).scan()` returns `List[JniBridgeFinding]`. `BinderScanner(apk).scan()` returns `List[BinderFinding]`. Both share the same field structure: `severity`, `category`, `title`, `detail`. `APKParser` returns metadata no findings.
 
 ---
 

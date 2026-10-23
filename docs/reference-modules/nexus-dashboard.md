@@ -1,6 +1,6 @@
 # Nexus Dashboard Enumeration
 
-Enumerate Cisco Nexus Dashboard (ND), NDI (Network Data & Infrastructure), NDFC (Nexus Dashboard Fabric Controller), and NDO (Nexus Dashboard Orchestrator) management surfaces: including unauthenticated telemetry export, Kafka anomaly streaming, guestshell access, and POAP (Power-On Auto Provisioning): via `modules/nexus_dashboard_enum.py`.
+Enumerate Cisco Nexus Dashboard (ND), NDI Network Data & Infrastructure, NDFC Nexus Dashboard Fabric Controller, and NDO Nexus Dashboard Orchestrator management surfaces: including unauthenticated telemetry export, Kafka anomaly streaming, guestshell access, and POAP Power-On Auto Provisioning: via `modules/nexus_dashboard_enum.py`.
 
 ---
 
@@ -91,7 +91,7 @@ Nexus Dashboard probe functions return `List[{severity, title, detail, host, por
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` (unauthenticated access) / `HIGH` (POAP/config injection) / `MEDIUM` |
+| `severity` | `CRITICAL` unauthenticated access / `HIGH` POAP/config injection / `MEDIUM` |
 | `title` | Finding code (e.g., `ND_KAFKA_TELEMETRY_OPEN`, `ND_POAP_UNAUTHENTICATED`, `ND_ADMIN_EXPOSED`) |
 | `detail` | Platform, version, port, and exploitation context |
 | `host` | Target IP |
@@ -102,5 +102,5 @@ Nexus Dashboard probe functions return `List[{severity, title, detail, host, por
 ## See also
 
 - [NX-OS/ACI/APIC Fabric Enumeration](nx-os-aci-apic-fabric-enumeration.md): APIC/ACI fabric directly, separate from Nexus Dashboard
-- [VXLAN/DCNM Exposure](vxlan-dcnm-exposure.md): DCNM (predecessor to NDFC) and VXLAN VTEP enumeration
+- [VXLAN/DCNM Exposure](vxlan-dcnm-exposure.md): DCNM predecessor to NDFC and VXLAN VTEP enumeration
 - [Messaging/Streaming Enumeration](messaging-streaming-enumeration.md): Kafka topic enumeration for unauthenticated telemetry streams

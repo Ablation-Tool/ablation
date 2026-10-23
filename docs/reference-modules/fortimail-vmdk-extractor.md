@@ -43,12 +43,12 @@ result = FortiMailVmdkExtractor.from_zip(zip_path, output_dir='/tmp/fml_work/')
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `vmdk_path` | `str` | Source VMDK (updated from zip path after extraction) |
+| `vmdk_path` | `str` | Source VMDK updated from zip path after extraction |
 | `raw_path` | `Optional[str]` | Converted raw image path |
 | `partitions` | `List[PartitionInfo]` | MBR partition table entries |
 | `datafs_path` | `Optional[str]` | Extracted `datafs.tar.gz` path |
 | `keys` | `List[ExtractedKey]` | Key objects with MD5, bit size, cert metadata |
-| `errors` | `List[str]` | Non-fatal errors (missing tools, alternate paths tried) |
+| `errors` | `List[str]` | Non-fatal errors missing tools, alternate paths tried |
 
 `result.cleanup()` removes the managed workdir. No-op if `output_dir` was passed.
 
@@ -61,23 +61,23 @@ result = FortiMailVmdkExtractor.from_zip(zip_path, output_dir='/tmp/fml_work/')
 | `sha256` | SHA-256 of raw key file |
 | `bit_size` | RSA key size in bits (from `openssl rsa -text`) |
 | `rsa_valid` | True if `openssl rsa -check` succeeded |
-| `cert_path` | Path to matching `.crt` file (if present) |
+| `cert_path` | Path to matching `.crt` file if present |
 | `cert_md5` | MD5 of the certificate |
 | `cert_subject` | Certificate Subject DN |
 | `cert_not_before` | Certificate Not Before date |
 
 ## Prerequisites
 
-- `qemu-img` (qemu-utils package): VMDK → raw conversion
-- `debugfs` (e2fsprogs package): root-free ext4 access
+- `qemu-img` qemu-utils package: VMDK → raw conversion
+- `debugfs` e2fsprogs package: root-free ext4 access
 - `openssl`: RSA key validation and cert parsing
 
 If `qemu-img` or `debugfs` is missing, `result.errors` records a diagnostic and
-the affected step returns `None` (partial results may still be available).
+the affected step returns `None` partial results may still be available.
 
 ## Confirmed targets
 
-FortiMail VM64 v6.4.3 through v8.0.0 (nine versions byte-verified):
+FortiMail VM64 v6.4.3 through v8.0.0 nine versions byte-verified:
 
 | Version | `fgt_512.key` MD5 | `fgt_2048.key` MD5 |
 |---------|-------------------|--------------------|
@@ -117,7 +117,7 @@ so it generalises without modification.
 
 ## How it works
 
-Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation (CRC32 or SHA256 depending on container format) runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
+Reads the binary header to validate the container magic, walks the partition or directory table, and yields the raw bytes of each embedded payload. Format detection runs on the first 512 bytes of each partition to classify the content as ELF, SquashFS, ext4, JFFS2, or unknown before extraction begins. Checksum validation CRC32 or SHA256 depending on container format runs on the extracted bytes and raises `ExtractionError` if the digest does not match the stored value.
 
 ---
 

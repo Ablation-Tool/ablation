@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Pure-Python ARM32 disassembler. Decodes the fixed 4-byte ARM instruction set (data processing, load/store, branch, multiply, coprocessor) with no external library dependency. Used as the disassembly layer by `arm_symbolic.py` for path-insensitive symbolic execution on ARM32 targets where Capstone is unavailable or where a lightweight dependency-free decoder is required.
+Pure-Python ARM32 disassembler. Decodes the fixed 4-byte ARM instruction set data processing, load/store, branch, multiply, coprocessor with no external library dependency. Used as the disassembly layer by `arm_symbolic.py` for path-insensitive symbolic execution on ARM32 targets where Capstone is unavailable or where a lightweight dependency-free decoder is required.
 
 ## Key constants
 
@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before
 
 ## How it works
 
-`ArmDisasm` decodes ARMv7 32-bit fixed-width instructions in pure Python with no external disassembly libraries. It classifies each instruction word by bits [27:25] into one of five groups: Data Processing (AND/ADD/SUB/MOV/…), Load/Store (LDR/STR/LDRB/…), Branch (B/BL/BX/BLX), Multiply (MUL/MLA/UMULL/…), and Status Register Access (MRS/MSR): then extracts condition code [31:28] and instruction-specific fields to build the decoded instruction. Called by `ARM32TaintTracker` when Capstone is unavailable.
+`ArmDisasm` decodes ARMv7 32-bit fixed-width instructions in pure Python with no external disassembly libraries. It classifies each instruction word by bits [27:25] into one of five groups: Data Processing AND/ADD/SUB/MOV/…, Load/Store LDR/STR/LDRB/…, Branch B/BL/BX/BLX, Multiply MUL/MLA/UMULL/…, and Status Register Access (MRS/MSR): then extracts condition code [31:28] and instruction-specific fields to build the decoded instruction. Called by `ARM32TaintTracker` when Capstone is unavailable.
 
 ---
 
@@ -56,7 +56,7 @@ pop      {r4, r5, r6, pc}
 
 ## False positives
 
-**Non-Thumb2 encoding.** `ArmDisassembler` decodes ARMv7 fixed-width 32-bit instructions (A32 encoding only). It does not decode Thumb-16 or Thumb-32 instructions. If the binary contains Thumb code regions, Capstone with `CS_MODE_THUMB` should be used instead.
+**Non-Thumb2 encoding.** `ArmDisassembler` decodes ARMv7 fixed-width 32-bit instructions A32 encoding only. It does not decode Thumb-16 or Thumb-32 instructions. If the binary contains Thumb code regions, Capstone with `CS_MODE_THUMB` should be used instead.
 
 ---
 

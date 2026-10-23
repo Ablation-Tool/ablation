@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Em qualquer varredura futura, seja de uma versão diferente de firmware ou de outro fornecedor, `pl.sweep(searcher)` executa todos os padrões confirmados automaticamente.
+Em qualquer varredura futura, seja de uma versão diferente de firmware ou de outro fornecedor, `pl.sweepsearcher` executa todos os padrões confirmados automaticamente.
 
 ---
 

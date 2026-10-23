@@ -12,7 +12,7 @@ Two things were not possible before the game RE stack:
 A stripped AAA game binary has 50,000 to 200,000 functions. 60 to 80 percent of those functions are engine infrastructure: memory allocators, renderer, physics, input, audio. An analyst spending time on those functions is not finding game-specific vulnerabilities or logic. `EnginePatternLibrary` labels engine functions in one pass so the analyst starts on the 20 to 40 percent that is game-specific code.
 
 **2. Cell SPU and PEF binary analysis.**
-PS3 game binaries split logic between the main PPU core and up to six SPU coprocessors. The SPU ISA is entirely different from PPC64: 128-bit SIMD-first, no memory hierarchy, no cache. No public RE tool had a Python-accessible SPU disassembler before Ablation. Similarly, Mac OS 8/9 PEF (Preferred Executable Format) binaries require a different ABI scanner than modern Mach-O. Both gaps blocked game RE work on legacy targets.
+PS3 game binaries split logic between the main PPU core and up to six SPU coprocessors. The SPU ISA is entirely different from PPC64: 128-bit SIMD-first, no memory hierarchy, no cache. No public RE tool had a Python-accessible SPU disassembler before Ablation. Similarly, Mac OS 8/9 PEF Preferred Executable Format binaries require a different ABI scanner than modern Mach-O. Both gaps blocked game RE work on legacy targets.
 
 ---
 
@@ -42,7 +42,7 @@ flowchart TD
 
 ### Why three passes instead of one
 
-String markers are fast and precise but miss engine functions that contain no strings (pure computation). The semantic pass is accurate for functions with behavioral signatures but expensive to run on every function. The SAX pass is a structural catch-all but has a higher false-positive rate at lower thresholds, so it runs only on the residual after the more precise passes have claimed their candidates.
+String markers are fast and precise but miss engine functions that contain no strings pure computation. The semantic pass is accurate for functions with behavioral signatures but expensive to run on every function. The SAX pass is a structural catch-all but has a higher false-positive rate at lower thresholds, so it runs only on the residual after the more precise passes have claimed their candidates.
 
 ### Supported engines
 
@@ -130,7 +130,7 @@ sections = extract_spu_text_from_elf(elf_data)
 
 ## Mac OS 8/9 PEF ABI Scanner
 
-PEF (Preferred Executable Format) was the executable format for Mac OS 8 and 9 CFM (Code Fragment Manager) binaries on PowerPC. Two differences from modern Mach-O matter for security analysis:
+PEF Preferred Executable Format was the executable format for Mac OS 8 and 9 CFM Code Fragment Manager binaries on PowerPC. Two differences from modern Mach-O matter for security analysis:
 
 **TOC-based indirect calls.** All function calls go through a Table of Contents pointer in r2. Each function entry point is a two-word descriptor: word 0 is the code address, word 1 is the TOC base for that function. Calling a function requires loading both words and setting r2 before branching. This means `bl` instructions that look like direct calls in the disassembly are TOC-mediated. The analysis must account for the r2 setup.
 

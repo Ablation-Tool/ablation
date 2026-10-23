@@ -1,6 +1,6 @@
 # PPC64 Taint Analysis
 
-Track data flow through PPC64 big-endian and little-endian ELF binaries: supporting ELFv1 (AIX, older Linux PPC64) and ELFv2 (modern OpenPOWER Linux, POWER8+) ABIs with eight integer argument registers (`r3`–`r10`) and propagating taint from `recv`/`read`/`recvfrom` sources through to exec-class sinks: via `ablation/analyzers/taint_tracker_ppc64.py` `PPC64TaintTracker`.
+Track data flow through PPC64 big-endian and little-endian ELF binaries: supporting ELFv1 AIX, older Linux PPC64 and ELFv2 (modern OpenPOWER Linux, POWER8+) ABIs with eight integer argument registers (`r3`–`r10`) and propagating taint from `recv`/`read`/`recvfrom` sources through to exec-class sinks: via `ablation/analyzers/taint_tracker_ppc64.py` `PPC64TaintTracker`.
 
 ---
 
@@ -8,9 +8,9 @@ Track data flow through PPC64 big-endian and little-endian ELF binaries: support
 
 1. **PPC64 BE is the architecture for FortiOS 6.x and earlier binaries**: the target architecture for the original FortiGate taint analysis work. `PPC64TaintTracker` provides the same labeled-taint model as `TaintTrackerARM64` but for PPC64 BE, covering `r3`–`r10` argument registers and the `r2` TOC pointer that distinguishes ELFv1 from ELFv2.
 
-2. **ELFv1 (AIX, old Linux PPC64) uses function descriptors in `.opd`**: each function is a 3-pointer struct (code VA, TOC, environment pointer). Standard VA-based function lookup fails on ELFv1 without first resolving OPD entries. `PPC64TaintTracker.from_context(ctx, endian='big')` handles ELFv1 automatically when `Ppc64ElfV1Resolver` has patched the context; pass `endian='little'` for ELFv2 LE (modern IBM POWER servers, RHEL PPC64LE).
+2. **ELFv1 AIX, old Linux PPC64 uses function descriptors in `.opd`**: each function is a 3-pointer struct code VA, TOC, environment pointer. Standard VA-based function lookup fails on ELFv1 without first resolving OPD entries. `PPC64TaintTracker.from_context(ctx, endian='big')` handles ELFv1 automatically when `Ppc64ElfV1Resolver` has patched the context; pass `endian='little'` for ELFv2 LE modern IBM POWER servers, RHEL PPC64LE.
 
-3. **`PPC64TaintTracker.run_on_function(func_va, func_end_va)` enables targeted per-function analysis**: rather than running the full binary taint scan, the caller specifies the function VA bounds and receives taint findings only for that function. This is the mechanism used by `IPRegAnnotator` to extend taint chains across function boundaries without re-running the full corpus.
+3. **`PPC64TaintTracker.run_on_functionfunc_va, func_end_va` enables targeted per-function analysis**: rather than running the full binary taint scan, the caller specifies the function VA bounds and receives taint findings only for that function. This is the mechanism used by `IPRegAnnotator` to extend taint chains across function boundaries without re-running the full corpus.
 
 ---
 
@@ -71,13 +71,13 @@ Findings: <N>
 
 **ELFv1 OPD resolution required first**: if `Ppc64ElfV1Resolver.patch_context()` has not run, PLT entries point to OPD descriptors rather than code VAs and `run()` will not locate sink call sites. Always run `Ppc64ElfV1Resolver` before `PPC64TaintTracker` on ELFv1 targets.
 
-**`r2` TOC tracking is approximate**: ELFv2 binaries use `r2` as the TOC pointer throughout; ELFv1 sets it per-function via the OPD entry. If a compiler-optimized function repurposes `r2` as a general-purpose register (valid per ABI but rare), the tracker may misidentify it as taint flowing through `r2`.
+**`r2` TOC tracking is approximate**: ELFv2 binaries use `r2` as the TOC pointer throughout; ELFv1 sets it per-function via the OPD entry. If a compiler-optimized function repurposes `r2` as a general-purpose register valid per ABI but rare, the tracker may misidentify it as taint flowing through `r2`.
 
 ---
 
 ## Pipeline position
 
-Run `PPC64TaintTracker` after `BinaryContext.load_or_build()` and `Ppc64ElfV1Resolver.patch_context()` (ELFv1 targets only). Precede with `SinkArgClassifier` using `Ppc64BeSinkClassifier` to eliminate `RODATA_CONST` sinks before tracker invocation. Use `run_on_function()` when `IPRegAnnotator` is extending chains across function boundaries.
+Run `PPC64TaintTracker` after `BinaryContext.load_or_build()` and `Ppc64ElfV1Resolver.patch_context()` ELFv1 targets only. Precede with `SinkArgClassifier` using `Ppc64BeSinkClassifier` to eliminate `RODATA_CONST` sinks before tracker invocation. Use `run_on_function()` when `IPRegAnnotator` is extending chains across function boundaries.
 
 ---
 

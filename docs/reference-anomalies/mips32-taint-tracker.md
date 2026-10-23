@@ -69,7 +69,7 @@ matches an import name the sink check fires. If the target is an internal functi
 the callee is not entered.
 
 **Triggering conditions:** 
-- Function pointer dispatch (callback tables, virtual dispatch in C++)
+- Function pointer dispatch callback tables, virtual dispatch in C++
 - GOT-based indirect calls where the target resolves to an internal function
 
 **Impact:** False negative. Taint flowing into an indirect internal callee is not propagated
@@ -95,7 +95,7 @@ findings.
 - Any big-endian MIPS32 binary analysed without passing `endian='big'`
 - RouterOS builds, Cisco IOS-based appliances, Broadcom set-top box firmware
 
-**Impact:** False negative (no valid findings). The error is not silent: the decode produces
+**Impact:** False negative no valid findings. The error is not silent: the decode produces
 recognisably wrong instructions so the garbled output is obvious on inspection. However if
 the tracker is run in batch mode the empty results may be misread as a clean binary.
 

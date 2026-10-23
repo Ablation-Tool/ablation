@@ -10,7 +10,7 @@ Three gaps existed before this module:
 
 2. **Raw socket, ptrace, and kernel exploit surface detection were uncoordinated.** Checks across `/proc/net/raw`, `/proc/sys/kernel/yama/ptrace_scope`, ASLR state, and procfs capability fields required separate commands. This module consolidates all of them into structured findings lists.
 
-3. **Binary-analysis exploitation techniques (shellcode, process hollowing, NTLM relay, dylib hijacking) had no automated detection.** Functions like `detect_shellcode_patterns`, `detect_process_hollowing`, and `detect_ntlm_relay_surface` analyze raw binary bytes for exploitation primitives without requiring file I/O.
+3. **Binary-analysis exploitation techniques shellcode, process hollowing, NTLM relay, dylib hijacking had no automated detection.** Functions like `detect_shellcode_patterns`, `detect_process_hollowing`, and `detect_ntlm_relay_surface` analyze raw binary bytes for exploitation primitives without requiring file I/O.
 
 ---
 
@@ -18,7 +18,7 @@ Three gaps existed before this module:
 
 2653-line module covering:
 
-**Syscall tracing (live processes):**
+**Syscall tracing live processes:**
 - `SyscallTracer`: strace (Linux) / dtruss (macOS) wrapper: trace, filter, report
 - File access / network / process operations convenience wrappers
 
@@ -30,16 +30,16 @@ Three gaps existed before this module:
 - `detect_heap_spray_artifacts`: ASLR/kptr_restrict/dmesg_restrict/mmap_min_addr/suid_dumpable sysctl checks; large anonymous rwx mappings; VmPeak > 90% RAM
 - `detect_kernel_exploit_surface`: ptrace_scope, zero-size/tainted modules, unprivileged BPF, io_uring, user namespaces, huge pages, vsyscall mapping, kallsyms readability
 
-**Binary analysis (bytes input, no file I/O):**
+**Binary analysis bytes input, no file I/O:**
 - `detect_dylib_hijacking_surface`: Mach-O LC_RPATH writability, LC_LOAD_DYLIB from /tmp, bundled framework injection, DYLD_INSERT_LIBRARIES
 - `detect_macos_task_port_abuse`: task_for_pid, mach_vm_read/write, bootstrap_look_up/register, IOKit
 - `detect_shellcode_patterns`: CALL/POP PIC, FPU FSTENV GetPC, NOP sled, egg hunter, null-free candidate
 - `detect_process_hollowing`: CreateProcess + ZwUnmapViewOfSection, WriteProcessMemory + SetThreadContext + ResumeThread, VirtualAllocEx, CREATE_SUSPENDED
 - `detect_ntlm_relay_surface`: NTLMSSP magic, AcceptSecurityContext, NTLMv1 LM response, pass-the-hash API sequence
-- `detect_exploit_socket_patterns`: reverse shell (socket+connect+dup2+execve), bind shell, raw socket, IP_HDRINCL injection, sendto-only UDP exfil, async multiplexing
+- `detect_exploit_socket_patterns`: reverse shell socket+connect+dup2+execve, bind shell, raw socket, IP_HDRINCL injection, sendto-only UDP exfil, async multiplexing
 
-**Network probes (active network I/O):**
-- `probe_smb_exposure`: SMB2 negotiate, signing enforcement check (port 445/139)
+**Network probes active network I/O:**
+- `probe_smb_exposure`: SMB2 negotiate, signing enforcement check port 445/139
 - `probe_bacnet_exposure`: BACnet Who-Is, I-Am parsing, ReadProperty objectName
 - `probe_ethernet_ip_exposure`: EtherNet/IP ListIdentity, CIP Read Tag service
 - `probe_exposed_debug_interface`: Python debugpy/pdb, Node.js CDP inspector, Delve JSON-RPC, GDB RSP, JDWP handshake
@@ -97,7 +97,7 @@ All probe/detect functions return `list[dict]` with keys: `severity`, `title`, `
 | Constant | Value | Applied to |
 |---|---|---|
 | `_MAX_BINARY_BYTES` | 256 MB | Mach-O binary read cap in `detect_dylib_hijacking_surface` |
-| `_MAX_PROC_BYTES` | 4 MB | All `/proc/*` file reads (status, maps, modules, cmdline, meminfo, kallsyms) |
+| `_MAX_PROC_BYTES` | 4 MB | All `/proc/*` file reads status, maps, modules, cmdline, meminfo, kallsyms |
 | `_MAX_SYSCTL_BYTES` | 256 B | `/proc/sys/*` sysctl single-value reads |
 | `_MAX_SYSFS_BYTES` | 64 B | `/sys/class/net/*/flags` interface flag reads |
 
@@ -105,20 +105,20 @@ All probe/detect functions return `list[dict]` with keys: `severity`, `title`, `
 
 ## FORGE audit
 
-Gate: **PASSED**. 10 CWE-770 fixes applied (9 unbounded procfs reads + 1 unbounded SMB network read):
+Gate: **PASSED**. 10 CWE-770 fixes applied 9 unbounded procfs reads + 1 unbounded SMB network read:
 
 | Fix | Function | Old pattern | New pattern |
 |---|---|---|---|
-| `/proc/{p}/status` CapEff | `detect_raw_socket_creation` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
-| `/proc/{p}/status` TracerPid/Seccomp | `detect_ptrace_abuse` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
-| `/proc/meminfo` MemTotal | `detect_heap_spray_artifacts` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
-| `/proc/{entry}/maps` | `detect_heap_spray_artifacts` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
-| `/proc/{entry}/status` VmPeak | `detect_heap_spray_artifacts` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
-| `/proc/modules` | `detect_kernel_exploit_surface` | `f.readlines()` | `f.read(_MAX_PROC_BYTES).splitlines()` |
-| `/proc/kallsyms` io_uring check | `detect_kernel_exploit_surface` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
-| `/proc/self/maps` vsyscall | `detect_kernel_exploit_surface` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
-| `/proc/kallsyms` symbol count | `detect_kernel_exploit_surface` | `for line in f:` | `f.read(_MAX_PROC_BYTES).splitlines()` |
-| SMB NetBIOS response accumulation | `probe_smb_exposure` | `nb_len` from 3-byte NetBIOS field (max ~16MB, attacker-controlled) | `nb_len = min(struct.unpack(...)[0], 65536)`: CWE-770 |
+| `/proc/{p}/status` CapEff | `detect_raw_socket_creation` | `for line in f:` | `f.read_MAX_PROC_BYTES.splitlines()` |
+| `/proc/{p}/status` TracerPid/Seccomp | `detect_ptrace_abuse` | `for line in f:` | `f.read_MAX_PROC_BYTES.splitlines()` |
+| `/proc/meminfo` MemTotal | `detect_heap_spray_artifacts` | `for line in f:` | `f.read_MAX_PROC_BYTES.splitlines()` |
+| `/proc/{entry}/maps` | `detect_heap_spray_artifacts` | `for line in f:` | `f.read_MAX_PROC_BYTES.splitlines()` |
+| `/proc/{entry}/status` VmPeak | `detect_heap_spray_artifacts` | `for line in f:` | `f.read_MAX_PROC_BYTES.splitlines()` |
+| `/proc/modules` | `detect_kernel_exploit_surface` | `f.readlines()` | `f.read_MAX_PROC_BYTES.splitlines()` |
+| `/proc/kallsyms` io_uring check | `detect_kernel_exploit_surface` | `for line in f:` | `f.read_MAX_PROC_BYTES.splitlines()` |
+| `/proc/self/maps` vsyscall | `detect_kernel_exploit_surface` | `for line in f:` | `f.read_MAX_PROC_BYTES.splitlines()` |
+| `/proc/kallsyms` symbol count | `detect_kernel_exploit_surface` | `for line in f:` | `f.read_MAX_PROC_BYTES.splitlines()` |
+| SMB NetBIOS response accumulation | `probe_smb_exposure` | `nb_len` from 3-byte NetBIOS field max ~16MB, attacker-controlled | `nb_len = min(struct.unpack(...)[0], 65536)`: CWE-770 |
 
 **Additional checks:**
 - No bare `except:`: all handlers use `except Exception:`, `except (PermissionError, FileNotFoundError, OSError):`, or `except (socket.timeout, ConnectionRefusedError, OSError):`.
@@ -131,7 +131,7 @@ Gate: **PASSED**. 10 CWE-770 fixes applied (9 unbounded procfs reads + 1 unbound
 
 ## How it works
 
-`SyscallTrace.trace(pid_or_cmd)` attaches `strace` or `ptrace` to a running process (by PID) or launches a command and traces from the start. Captures each syscall entry and exit, recording syscall number, arguments, and return value. Returns a `List[SyscallEvent]`. Used for runtime verification of findings identified statically: confirm that a discovered command-injection sink actually issues an `execve` or `system` call with attacker-controlled arguments during live testing.
+`SyscallTrace.tracepid_or_cmd` attaches `strace` or `ptrace` to a running process (by PID) or launches a command and traces from the start. Captures each syscall entry and exit, recording syscall number, arguments, and return value. Returns a `List[SyscallEvent]`. Used for runtime verification of findings identified statically: confirm that a discovered command-injection sink actually issues an `execve` or `system` call with attacker-controlled arguments during live testing.
 
 ---
 
@@ -167,7 +167,7 @@ Top syscalls:
 
 ## False positives
 
-**strace overhead.** Attaching `strace` to a running process adds significant per-syscall overhead (ptrace stops for every syscall entry and exit). On high-throughput binaries (servers handling hundreds of requests/second), this can cause timeout failures or missed calls. Use `--trace=execve,openat,read,write` to filter to security-relevant syscalls only.
+**strace overhead.** Attaching `strace` to a running process adds significant per-syscall overhead ptrace stops for every syscall entry and exit. On high-throughput binaries servers handling hundreds of requests/second, this can cause timeout failures or missed calls. Use `--trace=execve,openat,read,write` to filter to security-relevant syscalls only.
 
 ---
 
@@ -181,11 +181,11 @@ Top syscalls:
 
 ## Reading output
 
-`SyscallTracer(pid).trace_process(duration)` returns a `dict` with statistics from `strace -c`:
+`SyscallTracer(pid).trace_processduration` returns a `dict` with statistics from `strace -c`:
 
 | Key | Type | Content |
 |:---|:---|:---|
-| `syscalls` | `List[dict]` | Per-syscall entries (see below) |
+| `syscalls` | `List[dict]` | Per-syscall entries see below |
 | `error` | `Optional[str]` | Error message if tracing failed; `None` on success |
 
 Each entry in `syscalls`:

@@ -167,12 +167,12 @@ PatternLibrary: 33 patterns  (/home/user/.ablation/patterns.json)
 | `Pattern.query` | The semantic search query string |
 | `Pattern.tag` | Vulnerability class tag (e.g., `cmd-exec`, `buffer-overflow`) |
 | `Pattern.confirmed_hit_count` | Count of hits marked `confirmed=True` across all binaries |
-| `Pattern.total_hit_count` | Count of all hits (confirmed + unconfirmed) across all binaries |
+| `Pattern.total_hit_count` | Count of all hits confirmed + unconfirmed across all binaries |
 | `PatternHit.binary` | Binary filename where the hit occurred |
 | `PatternHit.va` | Function VA |
 | `PatternHit.score` | Cosine similarity score from `SemanticSearcher.query()` |
 | `PatternHit.confirmed` | `True` after manual RE confirmation; `False` for unreviewed candidates |
-| `SweepResult.hits` | `List[Tuple[int, float]]`: `(va, score)` pairs for one pattern |
+| `SweepResult.hits` | `List[Tuple[int, float]]`: `va, score` pairs for one pattern |
 
 ---
 

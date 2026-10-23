@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Tracks ARM64 global variable access patterns (ADRP+LDR/STR sequences) to map BSS/data section usage in stripped binaries. Enables identification of state variables and persistent buffers without symbols.
+Tracks ARM64 global variable access patterns ADRP+LDR/STR sequences to map BSS/data section usage in stripped binaries. Enables identification of state variables and persistent buffers without symbols.
 
 ## Key constants
 
@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `Path.stat().st_size` guard befo
 
 ## How it works
 
-`scan(binary_path, text_start, text_size)` reads the binary with a 256 MB size guard, then walks the `.text` range in 4-byte steps. For each word it checks for `STR Xt, [Xn, #imm]` and `STUR Xt, [Xn, #simm]` instructions. For each write, it back-traces the register's SSE (Symbolic Stack Expression) state: `ADRP + ADD/LDR` sequences that resolve to a known GOT slot map the write to a named global symbol. Writes to unknown registers record the raw SSE. Returns `List[WriteRecord]`: one per global variable write site. `report(records)` groups writes by symbol name and prints them.
+`scanbinary_path, text_start, text_size` reads the binary with a 256 MB size guard, then walks the `.text` range in 4-byte steps. For each word it checks for `STR Xt, [Xn, #imm]` and `STUR Xt, [Xn, #simm]` instructions. For each write, it back-traces the register's SSE Symbolic Stack Expression state: `ADRP + ADD/LDR` sequences that resolve to a known GOT slot map the write to a named global symbol. Writes to unknown registers record the raw SSE. Returns `List[WriteRecord]`: one per global variable write site. `report(records)` groups writes by symbol name and prints them.
 
 ---
 

@@ -1,7 +1,7 @@
 # Ablation Safety Manual
 
 **Version:** 1.0.0: 2026-10-10 
-**Standard:** ISO 26262 Part 8 Clause 11 (TCL3 tool qualification requirement) 
+**Standard:** ISO 26262 Part 8 Clause 11 TCL3 tool qualification requirement 
 **Scope:** All taint trackers and all scanners that produce CRITICAL findings
 
 This document is the standalone safety manual required by ISO 26262 Part 8 Clause 11 for TCL3-qualified tools. It describes when each qualified module can be trusted, when it cannot, and what the user must do when confidence is insufficient.
@@ -12,7 +12,7 @@ For full qualification context see `docs/standards-ablation.md`. For known anoma
 
 ## 1. Scope of Qualification
 
-TCL3 applies to modules where a false negative (missed finding) could propagate into a safety case or PSIRT disclosure without detection. The following modules are in TCL3 qualification scope:
+TCL3 applies to modules where a false negative missed finding could propagate into a safety case or PSIRT disclosure without detection. The following modules are in TCL3 qualification scope:
 
 | Module | File | Capability |
 |---|---|---|
@@ -30,7 +30,7 @@ TCL3 applies to modules where a false negative (missed finding) could propagate 
 | RISCV32TaintTracker | `ablation/analyzers/taint_tracker_riscv32.py` | RISC-V 32 interprocedural taint |
 | RISCV64TaintTracker | `ablation/analyzers/taint_tracker_riscv64.py` | RISC-V 64 interprocedural taint |
 | LoongArch64TaintTracker | `ablation/analyzers/taint_tracker_loongarch64.py` | LoongArch64 interprocedural taint |
-| LA64MaxNotMinScanner | `ablation/analyzers/loongarch64_max_not_min_scanner.py` | GCC max-not-min bug (CRITICAL) |
+| LA64MaxNotMinScanner | `ablation/analyzers/loongarch64_max_not_min_scanner.py` | GCC max-not-min bug CRITICAL |
 | WindowsPoolTaintTracker | `ablation/analyzers/windows_pool_taint_tracker.py` | Windows kernel pool taint |
 
 Other Ablation modules (`BinaryContext`, `SemanticSearcher`, utility parsers) are not TCL3 scope and do not require safety manual coverage.
@@ -67,10 +67,10 @@ The following constraints must be satisfied before a taint tracker result is tre
 
 These categories of false negatives are shared across all trackers. They are documented in the known-anomaly files for each tracker and summarised here for cross-reference.
 
-1. **Loop fixpoint**: taint accumulated on the second and subsequent loop iterations is not propagated (all trackers)
-2. **Indirect calls**: callee not entered when the callee address is in a register at the call site (all trackers)
+1. **Loop fixpoint**: taint accumulated on the second and subsequent loop iterations is not propagated all trackers
+2. **Indirect calls**: callee not entered when the callee address is in a register at the call site all trackers
 3. **Stack taint**: data routed through a local stack buffer before the sink is not tracked (all trackers except LoongArch64 which uses `mem_taint`)
-4. **Vector registers**: NEON (ARM32/ARM64), LSX/LASX (LoongArch64), VFP, SIMD: taint through vector registers is lost
+4. **Vector registers**: NEON ARM32/ARM64, LSX/LASX (LoongArch64), VFP, SIMD: taint through vector registers is lost
 5. **Architecture-specific opcode gaps**: unrecognised opcodes fall to conservative fallback; may miss taint at those instructions
 
 ---
@@ -81,7 +81,7 @@ Do not cite a taint tracker zero-findings result as sole evidence that a functio
 
 - The function contains a loop body whose exit value is used in a subsequent sink call
 - The function dispatches to an indirect callee whose address is loaded from a function pointer table
-- The binary uses a vector ISA extension (NEON, LSX, LASX, VFP) for data movement
+- The binary uses a vector ISA extension NEON, LSX, LASX, VFP for data movement
 - The tracker's known-anomaly file lists a triggering condition that matches the binary
 
 In these situations, supplement with `SemanticSearcher`, `SinkArgClassifier`, and manual trace using `WindowAnalyzer.dump_text()` before concluding no finding exists.
@@ -108,6 +108,6 @@ This safety manual is maintained alongside the Ablation codebase. It is updated 
 - The ABI conformance test suite changes
 - A constraint in Section 3 is resolved or a new one is added
 
-**Source document:** `docs/standards-ablation.md` §2.5 (the section this file extracts) 
+**Source document:** `docs/standards-ablation.md` §2.5 the section this file extracts 
 **Known anomalies:** `docs/reference-anomalies/` 
 **Qualification plan:** `docs/standards-ablation.md` §10 compliance matrix

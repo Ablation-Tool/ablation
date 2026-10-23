@@ -110,6 +110,6 @@ Run `SscanfSinkClassifier.classify_all()` alongside `SinkArgClassifier.classify_
 
 ## See also
 
-- [Sink Argument Classifier](sink-argument-classifier.md): exec-class sink classification (complementary)
-- [Deprecated Unsafe Function Scanning](deprecated-unsafe-function-scanning.md): `gets()` detection (another unbounded input function)
+- [Sink Argument Classifier](sink-argument-classifier.md): exec-class sink classification complementary
+- [Deprecated Unsafe Function Scanning](deprecated-unsafe-function-scanning.md): `gets()` detection another unbounded input function
 - [Taint Analysis](taint-analysis.md): confirm `ARG_PROPAGATED` formats are user-controlled

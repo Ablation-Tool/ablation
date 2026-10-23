@@ -155,7 +155,7 @@ pl.record_hit(
 )
 ```
 
-On any future sweep -- different firmware version, different vendor -- `pl.sweep(searcher)`
+On any future sweep -- different firmware version, different vendor -- `pl.sweepsearcher`
 runs all confirmed patterns automatically.
 
 ---

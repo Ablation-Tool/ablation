@@ -8,7 +8,7 @@ Detect the GCC 12.3.1.7 LoongArch64 `min`-to-`max` code generation bug: identify
 
 1. **GCC 12.3.1.7-1.tl4 for LoongArch64 emits `max(a, b)` when the source calls `min(a, b)`.** The branchless min/max pattern uses `masknez`/`maskeqz` to select one of two values; correct `min` requires `maskeqz` to select `Ra` when `Ra < Rb` and `masknez` to select `Rb` otherwise. GCC 12.3.1.7 emits the inverted order, producing `max`. This bug appears in TencentOS 4.6 kernel 6.6.119-52.9.tl4 and any other LoongArch64 target compiled with this GCC version.
 
-2. **A second variant uses immediate-compare instructions (`sltui`/`slti`) with a constant**: `min(x, CONSTANT)` where the bug produces `max(x, CONSTANT)`. This is the higher-severity variant: when `CONSTANT` is a buffer size or allocation limit, the wrong (larger) value passed to a memory sink produces a heap overflow. `LA64MaxNotMinScanner.scan()` detects both the register-compare and immediate-compare variants.
+2. **A second variant uses immediate-compare instructions (`sltui`/`slti`) with a constant**: `minx, CONSTANT` where the bug produces `maxx, CONSTANT`. This is the higher-severity variant: when `CONSTANT` is a buffer size or allocation limit, the wrong (larger) value passed to a memory sink produces a heap overflow. `LA64MaxNotMinScanner.scan()` detects both the register-compare and immediate-compare variants.
 
 3. **`LA64MaxNotMinScanner.from_pe32plus()` supports PE32+ (Windows on LoongArch)**: enabling analysis of LoongArch64 Windows kernel drivers compiled with the same buggy GCC toolchain. This covers LoongArch64 IoT and industrial targets that ship Windows-based firmware.
 
@@ -73,7 +73,7 @@ LA64_MAX_NOT_MIN  pattern@<pattern_va>  a1 -> kmalloc(size)@<sink_va>
 
 ## Pipeline position
 
-Run `LA64MaxNotMinScanner` on any LoongArch64 ELF or PE binary. Prioritize `CRITICAL` findings (flows to sink) for immediate taint verification. The `LoongArch64TaintTracker` can confirm the path from the `max` result to the sink.
+Run `LA64MaxNotMinScanner` on any LoongArch64 ELF or PE binary. Prioritize `CRITICAL` findings flows to sink for immediate taint verification. The `LoongArch64TaintTracker` can confirm the path from the `max` result to the sink.
 
 ---
 
@@ -83,16 +83,16 @@ Run `LA64MaxNotMinScanner` on any LoongArch64 ELF or PE binary. Prioritize `CRIT
 
 | Attribute | Type | Content |
 |:---|:---|:---|
-| `func_va` | `int` | VA of the enclosing function (0 if unknown) |
+| `func_va` | `int` | VA of the enclosing function 0 if unknown |
 | `pattern_va` | `int` | VA of the `slt`/`sltu` instruction starting the 4-insn sequence |
 | `result_reg` | `int` | Register number of the incorrect result |
 | `result_name` | `str` | ABI name of `result_reg` (e.g., `a0`) |
 | `sink_va` | `int` | VA of the `bl` to the sink function |
 | `sink_name` | `str` | PLT symbol name of the sink (e.g., `memcpy`) |
 | `sink_arg` | `str` | Argument label showing which argument receives the wrong value |
-| `context` | `str` | Disassembly snippet (empty string if not available) |
+| `context` | `str` | Disassembly snippet empty string if not available |
 | `fp_class` | `str` | `""` = real finding; `"vec_growth"` = eliminated; `"copy_limit"` = plausible-low |
-| `compare_op` | `str` | `"sltu"` (unsigned) or `"slt"` (signed) |
+| `compare_op` | `str` | `"sltu"` unsigned or `"slt"` (signed) |
 
 ---
 

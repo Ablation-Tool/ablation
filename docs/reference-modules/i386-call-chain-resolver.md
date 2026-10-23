@@ -8,7 +8,7 @@ Multi-level call chain resolver for i386 ELF binaries. Extends `CallerArgResolve
 
 1. **Gap SYNERGY-GAP-004**: `CallerArgResolver` resolves ONE level of callers and returns `UNKNOWN` when a caller passes `push mem [dword ptr [reg]]`: a struct field dereference. Tracing the struct pointer origin (is `reg` a function argument? a network recv return value? a global?) requires a separate pass that `CallerArgResolver` does not perform.
 
-2. **Manual multi-level iteration was impractical**: Upgrading a `CANDIDATE` finding to `CONFIRMED` (network-injectable) requires traversing multiple levels of the call graph. Calling `CallerArgResolver` manually at each level, handling `ARG_PROPAGATED` recursion, detecting `NO_CALLERS`, and stopping at static ceilings is repetitive work that belongs in a module.
+2. **Manual multi-level iteration was impractical**: Upgrading a `CANDIDATE` finding to `CONFIRMED` network-injectable requires traversing multiple levels of the call graph. Calling `CallerArgResolver` manually at each level, handling `ARG_PROPAGATED` recursion, detecting `NO_CALLERS`, and stopping at static ceilings is repetitive work that belongs in a module.
 
 3. **Network source detection**: `CallerArgResolver` classifies call site arguments but does not check whether any callee in the chain is a network input function (`recv`, `recvfrom`, `read`, `accept`, etc.). This module does, enabling `CANDIDATE → CONFIRMED` upgrades.
 
@@ -72,10 +72,10 @@ print(result.report())
 
 | Binary | Func VA | Result | Detail |
 |--------|---------|--------|--------|
-| ccm_eng_inf (Synergy 7.0) | 0x80cf362 (execvp dispatch) | STATIC_CEILING depth=2 | Struct ptr → [ebp+0x14]=func_arg_3 at 0x80d20df; 0x80d20df has NO_CALLERS (func pointer) |
-| ccm_eng_inf | 0x80d4263 (system dispatch) | STATIC_CEILING depth=0 | NO_CALLERS: function pointer dispatch |
-| ccm_eng_ora | 0x80dcb0e (execvp-A) | STATIC_CEILING depth=1 | func pointer at 0x80df88b |
-| ccm_eng_ora | 0x80dcbe1 (execvp-B) | STATIC_CEILING depth=3 | 3 ARG_PROPAGATED callers, all terminate at func pointer |
+| ccm_eng_inf Synergy 7.0 | 0x80cf362 execvp dispatch | STATIC_CEILING depth=2 | Struct ptr → [ebp+0x14]=func_arg_3 at 0x80d20df; 0x80d20df has NO_CALLERS func pointer |
+| ccm_eng_inf | 0x80d4263 system dispatch | STATIC_CEILING depth=0 | NO_CALLERS: function pointer dispatch |
+| ccm_eng_ora | 0x80dcb0e execvp-A | STATIC_CEILING depth=1 | func pointer at 0x80df88b |
+| ccm_eng_ora | 0x80dcbe1 execvp-B | STATIC_CEILING depth=3 | 3 ARG_PROPAGATED callers, all terminate at func pointer |
 | ccm_eng_ora | 0x80e1a0d (system) | STATIC_CEILING depth=1 | func pointer at 0x80e1e87 |
 
 All Synergy 7.0 exec dispatch paths are STATIC_CEILING. Dynamic analysis required to confirm whether function pointer dispatch chains receive network input.
@@ -90,4 +90,4 @@ All Synergy 7.0 exec dispatch paths are STATIC_CEILING. Dynamic analysis require
 
 ## Gap IDs
 
-- `SYNERGY-GAP-004`: static ceiling confirmed for SYNERGY-001 / SYNERGY-002 (Synergy 7.0 ccm_eng_inf/ora)
+- `SYNERGY-GAP-004`: static ceiling confirmed for SYNERGY-001 / SYNERGY-002 Synergy 7.0 ccm_eng_inf/ora

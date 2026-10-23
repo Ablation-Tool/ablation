@@ -1,16 +1,16 @@
 # PPC64 BE Sink Classification
 
-Classify PPC64 big-endian ELFv1 `bl` (branch-link) call sites to dangerous sinks: providing `RODATA_CONST`, `SNPRINTF_RODATA`, `ARG_PROPAGATED`, and `UNKNOWN` verdicts using `r3`/`r4`/`r5` argument register analysis, filling the gap left by `SinkArgClassifier` which only processes x86 `call` instructions.
+Classify PPC64 big-endian ELFv1 `bl` branch-link call sites to dangerous sinks: providing `RODATA_CONST`, `SNPRINTF_RODATA`, `ARG_PROPAGATED`, and `UNKNOWN` verdicts using `r3`/`r4`/`r5` argument register analysis, filling the gap left by `SinkArgClassifier` which only processes x86 `call` instructions.
 
 ---
 
 ## Why this exists
 
-1. **`SinkArgClassifier` scans for `insn.mnemonic.lower() == 'call'` and never fires on PPC64 BE.** PPC64 uses `bl` (branch-and-link) for function calls with a completely different stub layout: calls go through glink stubs and OPD descriptors. This means that for any IBM POWER Linux binary, `SinkArgClassifier.classify_all()` returns zero classifications: every `strcpy`/`sprintf` call site goes unclassified. `LL-008/010/011/012` were found by manual disassembly precisely because no automated classifier existed before `Ppc64BeSinkClassifier`.
+1. **`SinkArgClassifier` scans for `insn.mnemonic.lower() == 'call'` and never fires on PPC64 BE.** PPC64 uses `bl` branch-and-link for function calls with a completely different stub layout: calls go through glink stubs and OPD descriptors. This means that for any IBM POWER Linux binary, `SinkArgClassifier.classify_all()` returns zero classifications: every `strcpy`/`sprintf` call site goes unclassified. `LL-008/010/011/012` were found by manual disassembly precisely because no automated classifier existed before `Ppc64BeSinkClassifier`.
 
-2. **PPC64 uses `r3`/`r4`/`r5` for arguments 0–2 (not `rdi`/`rsi`/`rdx`).** `Ppc64BeSinkClassifier` tracks backward from `bl <sink>` using the PPC64 BE register convention, correctly reading `r3` as arg 0 (dest buffer), `r4` as arg 1 (source or format string), and `r5` as arg 2 (length/size). The `add_sink()` API allows specifying which argument position holds the dangerous input for each sink.
+2. **PPC64 uses `r3`/`r4`/`r5` for arguments 0–2 (not `rdi`/`rsi`/`rdx`).** `Ppc64BeSinkClassifier` tracks backward from `bl <sink>` using the PPC64 BE register convention, correctly reading `r3` as arg 0 dest buffer, `r4` as arg 1 source or format string, and `r5` as arg 2 length/size. The `add_sink()` API allows specifying which argument position holds the dangerous input for each sink.
 
-3. **`Ppc64SinkSite` carries the same verdict taxonomy as `SinkArgClassifier`'s x86 output**: `RODATA_CONST` (safe), `SNPRINTF_RODATA` (safe snprintf with constant format), `ARG_PROPAGATED` (caller-controlled, taint-worthy), `UNKNOWN` (uncertain, requires manual review). This means the same triage rule applies: eliminate `RODATA_CONST` first, then run `TaintTracker` only on `ARG_PROPAGATED`/`UNKNOWN` sites.
+3. **`Ppc64SinkSite` carries the same verdict taxonomy as `SinkArgClassifier`'s x86 output**: `RODATA_CONST` (safe), `SNPRINTF_RODATA` safe snprintf with constant format, `ARG_PROPAGATED` caller-controlled, taint-worthy, `UNKNOWN` uncertain, requires manual review. This means the same triage rule applies: eliminate `RODATA_CONST` first, then run `TaintTracker` only on `ARG_PROPAGATED`/`UNKNOWN` sites.
 
 ---
 
@@ -80,7 +80,7 @@ ARG_PROPAGATED sites:
 
 **PPC64 BE backward walk is bounded to the same basic block**: `r4` loaded in a predecessor block beyond the walk boundary is classified as `UNKNOWN` rather than `ARG_PROPAGATED`. This under-classifies some propagated sinks. Treat `UNKNOWN` with the same priority as `ARG_PROPAGATED` for taint analysis.
 
-**glink stubs complicate `bl` target resolution**: `Ppc64BeSinkClassifier` uses `BinaryContext.plt` to resolve `bl <glink_stub>` to the PLT symbol name. If `Ppc64ElfV1Resolver.patch_context()` has not been run (see [PPC64 ELFv1 Resolution](ppc64-elfv1-resolution.md)), `ctx.plt` is empty and all `bl` targets resolve as `None`, producing zero classifications. Always apply the ELFv1 resolver before running this classifier.
+**glink stubs complicate `bl` target resolution**: `Ppc64BeSinkClassifier` uses `BinaryContext.plt` to resolve `bl <glink_stub>` to the PLT symbol name. If `Ppc64ElfV1Resolver.patch_context()` has not been run see [PPC64 ELFv1 Resolution](ppc64-elfv1-resolution.md), `ctx.plt` is empty and all `bl` targets resolve as `None`, producing zero classifications. Always apply the ELFv1 resolver before running this classifier.
 
 ---
 
@@ -102,7 +102,7 @@ Run `Ppc64BeSinkClassifier.classify_all()` after `Ppc64ElfV1Resolver.patch_conte
 | `call_va` | VA of the call instruction |
 | `verdict` | `'RODATA_CONST'`, `'SNPRINTF_RODATA'`, `'ARG_PROPAGATED'`, or `'UNKNOWN'` |
 | `detail` | Human-readable trace of the argument provenance |
-| `severity` | `'HIGH'` (ARG_PROPAGATED), `'MEDIUM'` (SNPRINTF_RODATA / UNKNOWN), or `'LOW'` (RODATA_CONST) |
+| `severity` | `'HIGH'` ARG_PROPAGATED, `'MEDIUM'` SNPRINTF_RODATA / UNKNOWN, or `'LOW'` RODATA_CONST |
 
 Only `ARG_PROPAGATED` and `UNKNOWN` sinks are passed to `PPC64TaintTracker`.
 

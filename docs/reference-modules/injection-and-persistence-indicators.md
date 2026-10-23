@@ -6,11 +6,11 @@ Detect format string vulnerabilities in x86-64 ELF binaries: finding `printf`/`f
 
 ## Why this exists
 
-1. **Format string vulnerabilities arise when user-controlled data reaches the format argument of `printf` and similar functions.** The format argument is safe only when it is a string literal: a `RIP`-relative load from `.rodata`. Any other provenance (function argument, stack variable, tainted register) is a potential `%n` write or information disclosure. `FormatStringScanner` automates detection of unsafe format argument provenance across the entire binary.
+1. **Format string vulnerabilities arise when user-controlled data reaches the format argument of `printf` and similar functions.** The format argument is safe only when it is a string literal: a `RIP`-relative load from `.rodata`. Any other provenance function argument, stack variable, tainted register is a potential `%n` write or information disclosure. `FormatStringScanner` automates detection of unsafe format argument provenance across the entire binary.
 
 2. **Format argument provenance is determined by backward tracing from the call site**: `FormatStringScanner` identifies the format register for each callee (`RDI` for `printf`, `RSI` for `fprintf`, third argument for `syslog`), then walks backward from the call site to find the last instruction that defined that register. An `LEA` from `.rodata` → string literal → safe. All other definitions → finding.
 
-3. **`FmtStringFinding.verdict()` classifies findings as `POTENTIAL`, `LIKELY`, or `CONFIRMED`**: `POTENTIAL` (register defined by argument load), `LIKELY` (register defined by stack variable from network recv), `CONFIRMED` (register defined by direct `recv`/`read` return value). This three-tier classification maps to `MEDIUM`, `HIGH`, and `CRITICAL` severity respectively.
+3. **`FmtStringFinding.verdict()` classifies findings as `POTENTIAL`, `LIKELY`, or `CONFIRMED`**: `POTENTIAL` register defined by argument load, `LIKELY` register defined by stack variable from network recv, `CONFIRMED` (register defined by direct `recv`/`read` return value). This three-tier classification maps to `MEDIUM`, `HIGH`, and `CRITICAL` severity respectively.
 
 ---
 
@@ -79,7 +79,7 @@ Run `FormatStringScanner` as part of initial binary triage alongside `SinkArgCla
 
 | Field | Content |
 |:---|:---|
-| `severity` | `CRITICAL` (confirmed: network-sourced format arg) / `HIGH` (likely: stack-propagated) |
+| `severity` | `CRITICAL` confirmed: network-sourced format arg / `HIGH` likely: stack-propagated |
 | `title` | Finding code: `FORMAT_STRING_CONFIRMED` or `FORMAT_STRING_LIKELY` |
 | `detail` | Callee name, format register, def VA, and def type |
 | `format_reg` | Register holding the format string argument |

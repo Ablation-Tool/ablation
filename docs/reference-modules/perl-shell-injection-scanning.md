@@ -10,7 +10,7 @@ Statically trace user-controlled input from Perl CLI argument sources (`@ARGV`, 
 
 2. **Perl-specific sanitization idioms produce false positives in naive string scanners.** A generic grep for `` `$var` `` or `system("...$var...")` hits thousands of legitimately sanitized patterns: `quotemeta()`, single-quote wrapping (`"'" . join("' '", @args) . "'"`), and `s/'/ /g` substitutions before shell expansion. The scanner recognizes all three and reports `SANITIZED` rather than flooding the analyst with unreachable findings.
 
-3. **The injection variable often enters through a different file.** The canonical RSCT pattern: `ERRM_cli_utils.pm` receives `$condition_name` via `shift(@_)`, passes it to `qx{lsrsrc -c $condition_name}`. The `.pm` file never touches `@ARGV`. But `rmcondition`: the CLI script: calls `ERRM_cli_utils::remove_condition($ARGV[0])`. The scanner resolves one caller hop and upgrades the verdict from `PARAM_UNKNOWN` to `INJECTABLE`.
+3. **The injection variable often enters through a different file.** The canonical RSCT pattern: `ERRM_cli_utils.pm` receives `$condition_name` via `shift(@_)`, passes it to `qx{lsrsrc -c $condition_name}`. The `.pm` file never touches `@ARGV`. But `rmcondition`: the CLI script: calls `ERRM_cli_utils::remove_condition$ARGV[0]`. The scanner resolves one caller hop and upgrades the verdict from `PARAM_UNKNOWN` to `INJECTABLE`.
 
 ---
 

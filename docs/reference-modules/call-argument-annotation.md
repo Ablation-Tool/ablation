@@ -80,13 +80,13 @@ The following illustrates the annotation output format. Actual addresses and val
 
 ## Pipeline position
 
-Run `RegAnnotator.annotate_calls()` immediately after `TaintTracker` identifies a finding: the annotation adds context to the sink call site (what concrete values are passed) without requiring a second full analysis pass. The annotation output goes into the finding record and CVE documentation.
+Run `RegAnnotator.annotate_calls()` immediately after `TaintTracker` identifies a finding: the annotation adds context to the sink call site what concrete values are passed without requiring a second full analysis pass. The annotation output goes into the finding record and CVE documentation.
 
 ---
 
 ## Reading output
 
-`RegAnnotator.annotate_calls(func_va, func_end_va)` returns `AnnotationResult`:
+`RegAnnotator.annotate_callsfunc_va, func_end_va` returns `AnnotationResult`:
 
 | Field | Content |
 |:---|:---|
@@ -108,11 +108,11 @@ Each `CallSite`:
 
 | `kind` | `display()` output | Meaning |
 |:---|:---|:---|
-| `'arg'` | `arg0_entry (rdi@entry)` | Entry-time argument register (passed through unmodified) |
+| `'arg'` | `arg0_entry rdi@entry` | Entry-time argument register passed through unmodified |
 | `'const'` | `0x<hex>` | Immediate constant propagated to call site |
 | `'string'` | `'<preview>'` | `.rodata` string pointer resolved via LEA |
-| `'copy'` | `<src_val> (via <reg>)` | Copied from another register; chain shows origin |
-| `'ret'` | `ret(<callee>)` | Return value of a prior named call |
+| `'copy'` | `<src_val> via <reg>` | Copied from another register; chain shows origin |
+| `'ret'` | `ret<callee>` | Return value of a prior named call |
 | `'zero'` | `0` | Explicitly zeroed (e.g., `xor reg, reg`) |
 | `'mem'` | `[<desc>]` | Loaded from memory; not statically resolvable |
 | `'unknown'` | `?` | Clobbered or untracked |

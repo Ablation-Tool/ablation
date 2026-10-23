@@ -74,7 +74,7 @@ func_starts after injection: <N>
 
 ## False positives
 
-**Prologue byte patterns in data sections**: the byte sequence `55 89 e5` can appear in data constants by coincidence. `StaticELF32FuncStartScanner` scans only `PT_LOAD + PF_X` (executable) segments, which reduces but does not eliminate data false positives. Functions starting at misidentified addresses will produce garbled `FuncProfiler` output, these are detectable because they decode as invalid instruction sequences.
+**Prologue byte patterns in data sections**: the byte sequence `55 89 e5` can appear in data constants by coincidence. `StaticELF32FuncStartScanner` scans only `PT_LOAD + PF_X` executable segments, which reduces but does not eliminate data false positives. Functions starting at misidentified addresses will produce garbled `FuncProfiler` output, these are detectable because they decode as invalid instruction sequences.
 
 **Call-target fallback may identify data pointers as function starts**: a `call` instruction with a 32-bit relative offset into a non-code region. Use `scan_full()` to check call-target counts; a suspiciously high count relative to primary+secondary counts suggests data-region pollution.
 

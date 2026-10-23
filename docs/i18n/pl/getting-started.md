@@ -152,7 +152,7 @@ pl.record_hit(
 )
 ```
 
-Przy każdym przyszłym skanowaniu, innej wersji oprogramowania sprzętowego, innego dostawcy: `pl.sweep(searcher)` automatycznie uruchamia wszystkie potwierdzone wzorce.
+Przy każdym przyszłym skanowaniu, innej wersji oprogramowania sprzętowego, innego dostawcy: `pl.sweepsearcher` automatycznie uruchamia wszystkie potwierdzone wzorce.
 
 ---
 

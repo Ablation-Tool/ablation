@@ -18,13 +18,13 @@
 
 ## Two tools in one module
 
-### `SanitizerDetector` (x86-64 auto-detection, unchanged)
+### `SanitizerDetector` x86-64 auto-detection, unchanged
 
 Scans all functions in a stripped x86-64 ELF for inline byte-validator loops:
 - `movzx eX, byte ptr [...]` inside a backward edge
 - Range comparisons with `ja`/`jb` against ASCII immediates
 - Dual return (0/1) paths
-- No external calls (pure classifier)
+- No external calls pure classifier
 
 ```python
 from ablation.analyzers.sanitizer_detector import SanitizerDetector
@@ -35,7 +35,7 @@ for p in profiles:
         print(f'{p.func_va:#x}: SHELL_SAFE — {p.detail}')
 ```
 
-### `audit_coverage` / `SanitizerDetector.coverage` (arch-agnostic targeted audit)
+### `audit_coverage` / `SanitizerDetector.coverage` arch-agnostic targeted audit
 
 Given a *specific* function VA, extracts all ASCII character values from:
 1. **Call-arg pattern**: `li`/`mov`-immediate with ASCII value appearing within
@@ -109,7 +109,7 @@ elif r.verdict == 'PARTIAL':
 
 ## How it works
 
-`SanitizerDetector.detect(min_score)` iterates `ctx.func_starts`, disassembles each function with Capstone, and checks for patterns that indicate shell-safe string handling: `strncpy`/`snprintf` with explicit length bounds, bounds-checked `memcpy`, or format strings with no `%s` without width. Scores each function 0–10 by number of sanitizer signals. Functions scoring above `min_score` (default 4) are returned as `SanitizerProfile(shell_safe=True/False, score, func_va, evidence_list)`.
+`SanitizerDetector.detectmin_score` iterates `ctx.func_starts`, disassembles each function with Capstone, and checks for patterns that indicate shell-safe string handling: `strncpy`/`snprintf` with explicit length bounds, bounds-checked `memcpy`, or format strings with no `%s` without width. Scores each function 0–10 by number of sanitizer signals. Functions scoring above `min_score` default 4 are returned as `SanitizerProfile(shell_safe=True/False, score, func_va, evidence_list)`.
 
 ---
 
@@ -148,7 +148,7 @@ A function that compares against a small set of comparison immediates for exampl
 
 ## Pipeline position
 
-**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate sanitizer functions (character validation patterns near taint sinks).
+**Before this module:** `BinaryContext.load_or_build()` and `SemanticSearcher.query()` to identify candidate sanitizer functions character validation patterns near taint sinks.
 
 **After this module:** For `SHELL_UNSAFE` verdict on a function used as a taint-sink guard, treat the guarded path as unvalidated. Re-run `TaintTracker` excluding the sanitizer guard.
 

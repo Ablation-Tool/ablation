@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Converts Ablation vulnerability findings to `findings.json` and pipes them through the BARE binary to get ranked Metasploit module matches. BARE encodes 3,904 Metasploit modules at compile time. AI/ML-specific findings (HPKE, STRAP, RADIUS) typically trigger `no_high_confidence_match`; classic overflow/memcpy primitives surface usable MSF modules.
+Converts Ablation vulnerability findings to `findings.json` and pipes them through the BARE binary to get ranked Metasploit module matches. BARE encodes 3,904 Metasploit modules at compile time. AI/ML-specific findings HPKE, STRAP, RADIUS typically trigger `no_high_confidence_match`; classic overflow/memcpy primitives surface usable MSF modules.
 
 ## FORGE audit
 
@@ -14,7 +14,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. No file reads beyond writing a t
 
 ## How it works
 
-`BareAdapter.run(findings)` serializes ablation vuln findings to a `findings.json` temp file then pipes it through the BARE binary at `~/.local/bin/bare`. BARE has 3,904 Metasploit modules encoded at compile time; it returns a ranked list of modules whose primitive class matches the finding's CWE class and function description. AI/ML-specific findings (HPKE, STRAP, RADIUS dialects) will typically trigger BARE's `no_high_confidence_match` sentinel, this is expected. Classic overflow/memcpy primitives surface usable MSF modules.
+`BareAdapter.runfindings` serializes ablation vuln findings to a `findings.json` temp file then pipes it through the BARE binary at `~/.local/bin/bare`. BARE has 3,904 Metasploit modules encoded at compile time; it returns a ranked list of modules whose primitive class matches the finding's CWE class and function description. AI/ML-specific findings HPKE, STRAP, RADIUS dialects will typically trigger BARE's `no_high_confidence_match` sentinel, this is expected. Classic overflow/memcpy primitives surface usable MSF modules.
 
 ---
 
@@ -61,13 +61,13 @@ print(format_bare_output(bare_result, min_score=0.3))
 
 ## Reading output
 
-`findings_from_results(results, binary_path)` returns a BARE-compatible findings dict:
+`findings_from_resultsresults, binary_path` returns a BARE-compatible findings dict:
 
 | Key | Type | Content |
 |:---|:---|:---|
 | `version` | `int` | Always `1` |
 | `source` | `str` | Always `'ablation'` |
-| `findings` | `List[dict]` | One entry per function with `vuln_notes` (see below) |
+| `findings` | `List[dict]` | One entry per function with `vuln_notes` see below |
 
 Each entry in `findings`:
 
@@ -77,9 +77,9 @@ Each entry in `findings`:
 | `title` | `str` | `"<func_name> (<role>)"` |
 | `description` | `str` | Concatenation of role, vuln notes, and rationale |
 | `target` | `str` | `binary_path` passed to `findings_from_results` |
-| `severity` | `str` | `'critical'` / `'high'` / `'medium'` / `'low'` (derived from confidence) |
+| `severity` | `str` | `'critical'` / `'high'` / `'medium'` / `'low'` derived from confidence |
 
-`run_bare(findings, timeout)` passes this dict to the BARE binary and returns its parsed output dict.
+`run_barefindings, timeout` passes this dict to the BARE binary and returns its parsed output dict.
 
 ---
 

@@ -73,7 +73,7 @@ Privileged pod findings:
 
 ## False positives
 
-**`check_etcd_encryption()` requires access to the API server's encryption config**: the etcd encryption configuration is stored as a file on the control plane node, not exposed via the Kubernetes API. The check infers encryption status from the `EncryptionConfiguration` admission controller presence in the API server flags, which requires access to `/proc/$(pgrep kube-apiserver)/cmdline` or equivalent.
+**`check_etcd_encryption()` requires access to the API server's encryption config**: the etcd encryption configuration is stored as a file on the control plane node, not exposed via the Kubernetes API. The check infers encryption status from the `EncryptionConfiguration` admission controller presence in the API server flags, which requires access to `/proc/$pgrep kube-apiserver/cmdline` or equivalent.
 
 **Wildcard RBAC grants are not always exploitable**: a wildcard grant scoped to a single namespace with no sensitive resources may not provide lateral movement. Combine RBAC findings with `check_k8s_configmap_exposure()` and `check_kubelet_api_exposure()` to prioritize which grants are actionable.
 

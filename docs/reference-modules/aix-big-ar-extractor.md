@@ -8,26 +8,26 @@ Three things were not possible before in Ablation:
 
 2. **Handle AIX 5.x and above library archives.** The `<bigaf>` format is distinct from the old small archive (`<aiaff>`) used on AIX 4.2 and earlier. Modern AIX ships all 32-bit and 64-bit variants of each function as members inside a single `<bigaf>`, with `_64.o` suffix members holding the 64-bit XCOFF64 code.
 
-3. **Filter XCOFF members from metadata entries.** `<bigaf>` archives contain special members (member table, global symbol table) that are not object files. The module's `xcoff_members()` method skips these using magic-byte validation (`0x01DF` = XCOFF32, `0x01F7` = XCOFF64).
+3. **Filter XCOFF members from metadata entries.** `<bigaf>` archives contain special members member table, global symbol table that are not object files. The module's `xcoff_members()` method skips these using magic-byte validation (`0x01DF` = XCOFF32, `0x01F7` = XCOFF64).
 
 ## Format notes
 
-`<bigaf>` (AIX big archive) layout:
+`<bigaf>` AIX big archive layout:
 
 - Magic: `<bigaf>\n` (8 bytes, `0x3c 0x62 0x69 0x67 0x61 0x66 0x3e 0x0a`)
-- Global header (128 bytes total): 8-byte magic + six 20-char text decimal fields
- - `fl_fstmoff`: offset of first member (128 for non-empty archives)
+- Global header 128 bytes total: 8-byte magic + six 20-char text decimal fields
+ - `fl_fstmoff`: offset of first member 128 for non-empty archives
  - `fl_lstmoff`: offset of last member
  - `fl_memoff`, `fl_gstoff`, `fl_gst64off`: member table + symbol tables
 - Member header at each member offset:
- - 112-byte fixed section (6 text-decimal fields + 1 text-octal mode field + 4-char namlen)
- - `ar_namlen` bytes of member name (not null-terminated)
+ - 112-byte fixed section 6 text-decimal fields + 1 text-octal mode field + 4-char namlen
+ - `ar_namlen` bytes of member name not null-terminated
  - 1 null pad byte if `ar_namlen` is odd
  - 2-byte `ar_fmag` = `` `\n `` (`0x60 0x0a`) consistency trailer
  - `ar_size` bytes of member data
- - 1 pad byte if `ar_size` is odd (to align next member to 2-byte boundary)
+ - 1 pad byte if `ar_size` is odd to align next member to 2-byte boundary
 
-Members are a doubly-linked list via `ar_nxtoff` / `ar_prvoff` (text-decimal file offsets).
+Members are a doubly-linked list via `ar_nxtoff` / `ar_prvoff` text-decimal file offsets.
 
 ## Constructor patterns
 
@@ -60,8 +60,8 @@ print(ext.list_members())
 | Method | Purpose |
 |--------|---------|
 | `from_path(path)` → `Dict[str, bytes]` | One-shot extract all members |
-| `extract()` → `Iterator[(name, bytes)]` | All members (including metadata) |
-| `xcoff_members()` → `Iterator[(name, bytes)]` | XCOFF32/64 only |
+| `extract()` → `Iterator[name, bytes]` | All members including metadata |
+| `xcoff_members()` → `Iterator[name, bytes]` | XCOFF32/64 only |
 | `list_members()` → `List[str]` | Names only |
 | `get_member(name)` → `bytes` | Single member, raises KeyError if absent |
 
@@ -69,7 +69,7 @@ print(ext.list_members())
 
 ## How it works
 
-`AixBigArExtractor.__init__()` reads the entire archive into memory and validates the `<bigaf>\n` magic. `extract()` reads the two text-decimal offsets from the 128-byte global header (`fl_fstmoff`, `fl_lstmoff`), then walks the member doubly-linked list via `ar_nxtoff` at each member header. For each member, it parses the 112-byte fixed header, extracts the `ar_namlen`-byte name field, verifies the 2-byte `ar_fmag` consistency trailer (`\x60\x0a`), and yields `(name, member_bytes)`. The metadata-only members (empty name, `/`, `//`): the member table and global symbol tables: are skipped. `xcoff_members()` filters the output of `extract()` by checking that the first 2 bytes of each member are `\x01\xdf` (XCOFF32) or `\x01\xf7` (XCOFF64). If a member header is corrupt at any point, the walk stops cleanly via the `except` guard rather than raising.
+`AixBigArExtractor.__init__()` reads the entire archive into memory and validates the `<bigaf>\n` magic. `extract()` reads the two text-decimal offsets from the 128-byte global header (`fl_fstmoff`, `fl_lstmoff`), then walks the member doubly-linked list via `ar_nxtoff` at each member header. For each member, it parses the 112-byte fixed header, extracts the `ar_namlen`-byte name field, verifies the 2-byte `ar_fmag` consistency trailer (`\x60\x0a`), and yields `name, member_bytes`. The metadata-only members (empty name, `/`, `//`): the member table and global symbol tables: are skipped. `xcoff_members()` filters the output of `extract()` by checking that the first 2 bytes of each member are `\x01\xdf` (XCOFF32) or `\x01\xf7` (XCOFF64). If a member header is corrupt at any point, the walk stops cleanly via the `except` guard rather than raising.
 
 ---
 
@@ -118,7 +118,7 @@ Extraction either succeeds or raises an exception, there are no false positives 
 
 ## Reading output
 
-`AixBigArExtractor.extract()` yields `Tuple[str, bytes]`: `(member_name, member_bytes)`. `from_path()` returns `Dict[str, bytes]`. `xcoff_members()` yields only members whose first 2 bytes match an XCOFF magic.
+`AixBigArExtractor.extract()` yields `Tuple[str, bytes]`: `member_name, member_bytes`. `from_path()` returns `Dict[str, bytes]`. `xcoff_members()` yields only members whose first 2 bytes match an XCOFF magic.
 
 | Value | Content |
 |:---|:---|

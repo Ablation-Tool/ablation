@@ -6,7 +6,7 @@
 
 Two things were not possible before in Ablation:
 
-1. **`BinaryContext` cannot find function starts in stripped static ELF32 binaries.** `BinaryContext._extract_func_starts()` relies on `.symtab` / `.dynsym` (no entries in stripped binaries) and `.eh_frame` (absent in non-exception-aware or `--strip-all` builds). For stripped static i386 ELF binaries, `ctx.func_starts` is empty and `SemanticSearcher`, `SinkArgClassifier`, and `TaintTracker` all return 0 results, not because the binary is safe, but because the analysis has no entry points.
+1. **`BinaryContext` cannot find function starts in stripped static ELF32 binaries.** `BinaryContext._extract_func_starts()` relies on `.symtab` / `.dynsym` no entries in stripped binaries and `.eh_frame` (absent in non-exception-aware or `--strip-all` builds). For stripped static i386 ELF binaries, `ctx.func_starts` is empty and `SemanticSearcher`, `SinkArgClassifier`, and `TaintTracker` all return 0 results, not because the binary is safe, but because the analysis has no entry points.
 
 2. **FPO binaries compiled with `-fomit-frame-pointer` produce no recognizable prologues.** The primary recovery method for x86 (prologue pattern `55 89 e5`: `push ebp; mov ebp, esp`) works for ~95% of GCC i386 output, but GCC with `-fomit-frame-pointer` omits `push ebp` entirely. A second fallback is required for these binaries.
 
@@ -16,12 +16,12 @@ Two things were not possible before in Ablation:
 
 `from_path(path)` reads the binary with `open(path, "rb").read()`, then `_scan_internal()` does:
 
-1. Validates ELF magic, `EI_CLASS=1` (ELFCLASS32), `EI_DATA=1` (little-endian).
+1. Validates ELF magic, `EI_CLASS=1` ELFCLASS32, `EI_DATA=1` little-endian.
 2. Reads the program header table (`e_phoff`, `e_phentsize`, `e_phnum`).
-3. Collects all `PT_LOAD` segments with `PF_X` (execute flag).
+3. Collects all `PT_LOAD` segments with `PF_X` execute flag.
 4. **Primary scan:** searches each executable segment for `\x55\x89\xe5` (`push ebp; mov ebp, esp`).
-5. **Secondary scan** (activates when primary finds < 10 starts): searches for `\x55\x57\x56` (`push ebp; push edi; push esi`) and `\x55\x53` (`push ebp; push ebx`).
-6. **FPO fallback** (activates when primary+secondary still find < 10 starts): collects all `CALL rel32` (`E8 xx xx xx xx`) targets that land within an executable segment. This covers `-fomit-frame-pointer` binaries where no `push ebp` prologue exists.
+5. **Secondary scan** activates when primary finds < 10 starts: searches for `\x55\x57\x56` (`push ebp; push edi; push esi`) and `\x55\x53` (`push ebp; push ebx`).
+6. **FPO fallback** activates when primary+secondary still find < 10 starts: collects all `CALL rel32` (`E8 xx xx xx xx`) targets that land within an executable segment. This covers `-fomit-frame-pointer` binaries where no `push ebp` prologue exists.
 
 Returns a sorted `List[int]` of function entry VAs.
 
@@ -60,7 +60,7 @@ scanner.inject(ctx)
 |:---|:---|
 | `path` | Path to the binary |
 | `starts` | Sorted `List[int]` of function entry VAs |
-| `patterns_used` | List of pattern names that contributed starts (e.g. `['primary (55 89 e5)', 'fpo_call_target (E8 rel32)']`) |
+| `patterns_used` | List of pattern names that contributed starts (e.g. `['primary (55 89 e5)', 'fpo_call_target E8 rel32']`) |
 | `segment_count` | Number of executable `PT_LOAD` segments scanned |
 
 ---
@@ -86,5 +86,5 @@ scanner.inject(ctx)
 ## See also
 
 - [BinaryContext](binary-context.md): calls this scanner via `inject()` when func_starts is empty
-- [FlatBinaryFuncStartScanner](flat-binary-func-start-scanner.md): equivalent for flat ROM images (no ELF header, ISA-agnostic)
+- [FlatBinaryFuncStartScanner](flat-binary-func-start-scanner.md): equivalent for flat ROM images no ELF header, ISA-agnostic
 - [SinkArgClassifier](sink-arg-classifier.md): next step after func_starts are populated

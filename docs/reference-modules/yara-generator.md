@@ -10,7 +10,7 @@ Generate deployment-ready YARA detection rules from Ablation scan findings: IOC 
 
 2. **IOC strings, malware API imports, and byte patterns have different detection properties.** A domain name in a C2 callback requires case-insensitive ASCII/wide matching. A `VirtualAllocEx` import requires a simple string match against the IAT. An anti-debug byte sequence (`EB 04 74 02`) requires a hex pattern match. A single YARA rule format can represent all three, but the generation logic must be type-aware. This module handles each category with the appropriate YARA string type and modifier.
 
-3. **YARA condition logic must balance sensitivity and specificity.** A rule that fires on any single matching string produces too many false positives in large malware corpora. The generator uses `2 of ($s_*)` for IOC strings (requiring two independent matches) and `any of ($api_*)` for CRITICAL API imports (a single CRITICAL import like `NtCreateThreadEx` is a strong signal on its own). This calibration reflects the different false-positive rates of string vs. API indicators.
+3. **YARA condition logic must balance sensitivity and specificity.** A rule that fires on any single matching string produces too many false positives in large malware corpora. The generator uses `2 of ($s_*)` for IOC strings requiring two independent matches and `any of ($api_*)` for CRITICAL API imports (a single CRITICAL import like `NtCreateThreadEx` is a strong signal on its own). This calibration reflects the different false-positive rates of string vs. API indicators.
 
 ---
 
@@ -47,18 +47,18 @@ The SHA256 prefix ensures uniqueness across renamed malware samples. Non-alphanu
 
 | Source | YARA String Type | Modifiers |
 |---|---|---|
-| IOC strings (IP, domain, path, key) | `"quoted string"` | `ascii wide nocase` |
+| IOC strings IP, domain, path, key | `"quoted string"` | `ascii wide nocase` |
 | CRITICAL malware API names | `"quoted string"` | `ascii wide` |
 | Anti-debug byte patterns | `{ HH HH HH }` hex | (none) |
 
 ### Condition assembly
 
 The condition combines the three string categories with `OR`:
-- If IOC strings present: `(2 of ($s_*))`
-- If CRITICAL APIs present: `(any of ($api_*))`
-- If byte patterns present: `(any of ($b_*))`
+- If IOC strings present: `2 of ($s_*)`
+- If CRITICAL APIs present: `any of ($api_*)`
+- If byte patterns present: `any of ($b_*)`
 - If only one category: just that condition
-- If nothing: `false` (empty rule that never matches)
+- If nothing: `false` empty rule that never matches
 
 ---
 
@@ -151,7 +151,7 @@ rule mal_malware_exe_3a4f8c1d2b9e7f5a
 
 **API names in security utilities.** Anti-malware, EDR agents, and debugging tools legitimately import `NtCreateThreadEx`, `VirtualAllocEx`, and other CRITICAL APIs for monitoring purposes. The CRITICAL threshold in the generator is calibrated for untrusted samples: applying generated rules to enterprise endpoint binaries will produce false positives.
 
-**Empty rules (`condition: false`).** When the findings dict is empty (no IOC strings, no CRITICAL APIs, no byte patterns), the generator emits a rule with `condition: false`. This is a syntactically valid YARA rule that never matches. Validate that the findings input is populated before generating rules for deployment.
+**Empty rules (`condition: false`).** When the findings dict is empty no IOC strings, no CRITICAL APIs, no byte patterns, the generator emits a rule with `condition: false`. This is a syntactically valid YARA rule that never matches. Validate that the findings input is populated before generating rules for deployment.
 
 ---
 
@@ -167,9 +167,9 @@ rule mal_malware_exe_3a4f8c1d2b9e7f5a
 
 | Field | Content |
 |:---|:---|
-| `rule.name` | YARA rule identifier (alphanumeric + underscore, unique per binary SHA256) |
+| `rule.name` | YARA rule identifier alphanumeric + underscore, unique per binary SHA256 |
 | `rule.meta` | Dict of metadata fields: description, author_type, date, sha256 |
-| `rule.strings` | List of `(identifier, value, modifiers)` tuples |
+| `rule.strings` | List of `identifier, value, modifiers` tuples |
 | `rule.condition` | YARA condition expression |
 | `rule.to_text()` | Full YARA rule in YARA syntax, ready for deployment |
 

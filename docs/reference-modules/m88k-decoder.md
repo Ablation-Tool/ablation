@@ -1,11 +1,11 @@
-# M88K BCS COFF Support (MC88100 / Motorola 88000)
+# M88K BCS COFF Support MC88100 / Motorola 88000
 
 Parse and disassemble Motorola MC88100 BCS COFF executables.
 
 **Modules:** 
-- `ablation.core.coff_m88k_parser` (file parser) 
-- `ablation.analyzers.isa_m88k` (ISA + ABI constants) 
-- `ablation.analyzers.insn_m88k` (instruction decoder) 
+- `ablation.core.coff_m88k_parser` file parser 
+- `ablation.analyzers.isa_m88k` ISA + ABI constants 
+- `ablation.analyzers.insn_m88k` instruction decoder 
 
 ---
 
@@ -41,7 +41,7 @@ Four things were not possible before in Ablation:
 
 1. **M88K BCS COFF files were completely unreadable**: LIEF does not support
  COFF and does not recognise magic 0x016D; all existing COFF parsers assume
- 2-byte `s_nreloc`/`s_nlnno` fields (standard), but the 88K BCS variant
+ 2-byte `s_nreloc`/`s_nlnno` fields standard, but the 88K BCS variant
  promotes those fields to 4-byte longs, making every section header 44 bytes
  instead of 40. Parsing with the wrong stride corrupts all section names and
  virtual addresses from section 1 onwards. `coff_m88k_parser.parse()` is the
@@ -71,29 +71,29 @@ All MC88100 instruction classes decoded:
 |---|---|---|
 | Immediate | 0x10–0x1F | ADDU, OR, OR.U, AND, XOR, LDA.H, LDA.W |
 | Load/store | 0x00–0x0F, 0x20–0x2F, 0x34–0x38 | All width/signedness variants |
-| Branch | 0x30–0x33 | BR, BR.N, BSR (26-bit PC-relative × 4), BSR.N |
-| Conditional | 0x25, 0x29, 0x2D | BCND / BCND.N (16-bit PC-relative × 4) |
-| CTL (JMP/JSR/MOV) | 0x3D | bits 15:14 select JMP (11), JSR (10), MOV (00/01) |
+| Branch | 0x30–0x33 | BR, BR.N, BSR 26-bit PC-relative × 4, BSR.N |
+| Conditional | 0x25, 0x29, 0x2D | BCND / BCND.N 16-bit PC-relative × 4 |
+| CTL JMP/JSR/MOV | 0x3D | bits 15:14 select JMP (11), JSR (10), MOV (00/01) |
 | Triadic integer | 0x3A–0x3C | partial: function code field not fully decoded |
 | Unknown | all others | decoded as `???XX`, no exception |
 
 Triadic ops (0x3A–0x3C) emit placeholder mnemonics; the full MC88100 PRM
-function-code table (shift, rotate, multiply, divide, …) is the next
+function-code table shift, rotate, multiply, divide, … is the next
 extension point.
 
 ---
 
-## ABI (BCS / Binary Compatibility Standard)
+## ABI BCS / Binary Compatibility Standard
 
 | Register | Role |
 |---|---|
-| r0 | Zero (hardwired) |
-| r1 | Link register (BSR saves PC+4 here) |
-| r2–r9 | Arguments / return values (caller-saved) |
-| r10–r13 | Additional return / scratch (caller-saved) |
+| r0 | Zero hardwired |
+| r1 | Link register BSR saves PC+4 here |
+| r2–r9 | Arguments / return values caller-saved |
+| r10–r13 | Additional return / scratch caller-saved |
 | r14–r25 | Callee-saved |
 | r26–r29 | Caller-saved temporaries |
-| r30 | Frame pointer (callee-saved) |
+| r30 | Frame pointer callee-saved |
 | r31 | Stack pointer |
 
 ---
@@ -129,7 +129,7 @@ The modules were developed against and validated on:
 - **Binary**: Lotus 1-2-3 `moto_gen` license key generator (54,608 bytes,
  88K BCS COFF, January 1993, for DG AViiON / DG/UX Unix systems)
 - **Architecture gap discovered**: section headers are 44 bytes in 88K BCS
- COFF, not 40, because `s_nreloc` and `s_nlnno` are `unsigned long` (4 bytes each)
+ COFF, not 40, because `s_nreloc` and `s_nlnno` are `unsigned long` 4 bytes each
 - **Results**: 73 data refs, 126 function entries, complete key generation
  algorithm reversed (XOR encoding with ASCII offsets 0x30/0x37/0x57/0x61,
  three `%02x%02x` pairs → 12-char activation key)
@@ -141,7 +141,7 @@ See `re/lotus/moto_gen_re.py` for the full findings module.
 ## Extension points
 
 1. **Triadic ops (0x3A–0x3C)**: expand `TRIADIC_OPS` in `isa_m88k.py` with
- the full function-code table from the MC88100 PRM (shift, rotate, cmp, …)
+ the full function-code table from the MC88100 PRM shift, rotate, cmp, …
 2. **DataExplorer AViiON corpus**: larger 88K target set for validating coverage
  of additional instruction encodings
 3. **CFG builder** (`cfg_m88k.py`): block-level control flow graph using the
@@ -192,7 +192,7 @@ for insn in decoder.disassemble_bytes(binary.text.data, base_va=binary.text.vadd
 
 ## False positives
 
-**Symbol table coverage.** `coff_m88k_parser` reads `C_EXT` and `C_WEAKEXT` COFF symbol entries. Static functions (not exported) have `C_STAT` type and are excluded from `b.plt`. Use prologue pattern scanning on `b.sections[0].data` to find static function starts.
+**Symbol table coverage.** `coff_m88k_parser` reads `C_EXT` and `C_WEAKEXT` COFF symbol entries. Static functions not exported have `C_STAT` type and are excluded from `b.plt`. Use prologue pattern scanning on `b.sections[0].data` to find static function starts.
 
 ---
 
@@ -218,7 +218,7 @@ for insn in decoder.disassemble_bytes(binary.text.data, base_va=binary.text.vadd
 
 Each `Section`: `name, vaddr, size, flags, data`; properties `is_text, is_data, va_end`; methods `read_word(va)`, `read_bytes(va, n)`, `contains_va(va)`.
 
-Helper methods on `M88kCoffBinary`: `section(name)`, `text` (property), `data` (property), `va_to_bytes(va, n)`, `words_at(va, count)`.
+Helper methods on `M88kCoffBinary`: `section(name)`, `text` property, `data` property, `va_to_bytes(va, n)`, `words_atva, count`.
 
 ---
 

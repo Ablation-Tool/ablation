@@ -124,12 +124,12 @@ BinFuse maps opcodes to 11 behavioral categories before encoding. The category s
 | Call | Description |
 |---|---|
 | `FindingRegistry.register(...)` | Store a confirmed finding |
-| `FindingRegistry.find_similar(embedding, top_k, min_sim)` | Retrieve structurally similar prior findings |
+| `FindingRegistry.find_similarembedding, top_k, min_sim` | Retrieve structurally similar prior findings |
 | `FindingRegistry.export_patterns()` | Return all confirmed findings as `[{query, tag}]` dicts for manual `pl.add()` |
 | `FindingRegistry.stats()` | Finding count by vendor, product, and CWE class |
 | `FindingRegistry.list_findings(vendor=None)` | List all findings, optionally filtered |
-| `PatternLibrary.ingest_from_registry(reg)` | Pull all confirmed findings into the pattern library (idempotent) |
-| `PatternLibrary.sweep(searcher)` | Run all confirmed patterns against the current binary |
+| `PatternLibrary.ingest_from_registry(reg)` | Pull all confirmed findings into the pattern library idempotent |
+| `PatternLibrary.sweepsearcher` | Run all confirmed patterns against the current binary |
 | `PatternLibrary.record_hit(tag, binary, va, confirmed=True)` | Mark a sweep hit as confirmed |
 
 See [Registry Modules](registry.md) for the full `FindingRegistry` and `NameRegistry` API.
@@ -186,7 +186,7 @@ reg.find_similar(embedding, top_k=3, min_sim=0.60)
 
 **Before this module:** `FindingRegistry` must have at least one confirmed finding for `ingest_from_registry()` to add anything beyond the seed corpus. `SemanticSearcher.build_corpus()` must be called so `sweep()` has an embedding matrix to query against.
 
-**After this module:** Sweep hits (above 0.60) go to `FuncProfiler` and `TaintTracker`. Confirmed findings from this engagement are registered with `FindingRegistry.register()`, closing the loop and growing the pattern library for the next target.
+**After this module:** Sweep hits above 0.60 go to `FuncProfiler` and `TaintTracker`. Confirmed findings from this engagement are registered with `FindingRegistry.register()`, closing the loop and growing the pattern library for the next target.
 
 ---
 
@@ -194,9 +194,9 @@ reg.find_similar(embedding, top_k=3, min_sim=0.60)
 
 The flywheel has no single output type. It is an operational loop between three modules:
 
-1. `PatternLibrary.sweep(searcher, top_k, min_score)` → `dict[str, list[tuple[float, int, str]]]`: tag → `(score, func_id, name)` candidates from prior confirmed patterns.
-2. `FindingRegistry.find_similar(embedding, top_k, min_sim)` → `list[dict]`: confirmed findings from prior engagements whose embeddings are similar to the query. Dict keys: `vendor`, `product`, `version`, `title`, `cwe_class`, `severity`, `func_addr`, `binary`, `similarity`.
-3. `FindingRegistry.register(...)` → `str` (finding ID): persists a new confirmed finding and adds its embedding to the in-memory matrix for immediate similarity queries.
+1. `PatternLibrary.sweepsearcher, top_k, min_score` → `dict[str, list[tuple[float, int, str]]]`: tag → `score, func_id, name` candidates from prior confirmed patterns.
+2. `FindingRegistry.find_similarembedding, top_k, min_sim` → `list[dict]`: confirmed findings from prior engagements whose embeddings are similar to the query. Dict keys: `vendor`, `product`, `version`, `title`, `cwe_class`, `severity`, `func_addr`, `binary`, `similarity`.
+3. `FindingRegistry.register(...)` → `str` finding ID: persists a new confirmed finding and adds its embedding to the in-memory matrix for immediate similarity queries.
 
 See [Finding Validation](finding-validation.md) and [Registry](registry.md) for full API details.
 

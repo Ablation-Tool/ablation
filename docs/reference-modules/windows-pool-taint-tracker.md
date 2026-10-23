@@ -17,7 +17,7 @@ Two things were not possible before in Ablation:
 1. Builds an IAT map for `ExAllocatePool`, `ExAllocatePoolWithTag`, `ExAllocatePool2`, `ExAllocatePool3`, and five other pool allocation variants.
 2. Builds an IAT map for `RtlCopyMemory`, `memmove`, `memcpy`, `RtlMoveMemory`, `RtlCopyBytes`, `RtlCopyUnicodeString`, `ProbeAndReadBuffer`.
 3. Scans all code sections with Capstone. For each allocation call site, extracts the size argument (second argument: `RDX` in x64 fastcall). For each copy call site, extracts the size argument (third argument: `R8`).
-4. Pairs allocation sites with copy sites where the same register carries the size to both calls, within a forward instruction window of ~200 instructions (same-function heuristic).
+4. Pairs allocation sites with copy sites where the same register carries the size to both calls, within a forward instruction window of ~200 instructions same-function heuristic.
 5. Reports unvalidated pairs as HIGH findings with CWE-122.
 
 ---
@@ -56,7 +56,7 @@ pool_findings = tracker.scan()
 | INFO | `alloc_inventory` | Count of allocation and copy call sites |
 | INFO | `no_pool` | No pool allocation imports |
 
-CWE: CWE-122 (Heap-based Buffer Overflow) on HIGH/MEDIUM.
+CWE: CWE-122 Heap-based Buffer Overflow on HIGH/MEDIUM.
 
 ---
 
@@ -81,8 +81,8 @@ For deeper confirmation of a flagged pair, use `TaintTracker` or manual Capstone
 
 ## Dependencies
 
-- `lief >= 0.14.0` (PE parsing, IAT, section headers)
-- `capstone >= 5.0` (x64 call site scanning, register argument extraction)
+- `lief >= 0.14.0` PE parsing, IAT, section headers
+- `capstone >= 5.0` x64 call site scanning, register argument extraction
 
 ---
 
@@ -126,8 +126,8 @@ The most common false positive is taint surviving a zero-clear instruction (`xor
 | `sink_name` | Name of the dangerous function reached |
 | `sink_va` | Virtual address of the call site |
 | `source_name` | Name of the taint source (e.g., `recv`, `read`) |
-| `arg_index` | Which argument to the sink carries taint (0-indexed) |
-| `chain` | `[(va, register, operation)]` steps from source to sink |
+| `arg_index` | Which argument to the sink carries taint 0-indexed |
+| `chain` | `[va, register, operation]` steps from source to sink |
 | `path` | `[caller_va, ...]` function VAs traversed interprocedurally |
 | `severity` | `CRITICAL` for exec sinks, `HIGH` for memory sinks |
 

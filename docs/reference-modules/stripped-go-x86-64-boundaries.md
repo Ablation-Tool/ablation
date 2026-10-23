@@ -8,9 +8,9 @@ Recover function entry points and accurate string contents from stripped Go 1.17
 
 1. **Stripped Go binaries break `.eh_frame`-based function recovery.** Go's runtime stores its own function boundary information in the `pclntab` section (`.gopclntab`): a compressed program counter to line number table that encodes every function start VA, function end VA, and source location. When a Go binary is stripped (`-ldflags="-s -w"`), the `.symtab` is removed but the `pclntab` is typically preserved because the Go runtime uses it for stack unwinding and panic formatting. This module reads the pclntab to recover function boundaries even when all debug symbols are gone.
 
-2. **Go strings are not NUL-terminated: they are length-prefixed.** In C, strings end with a NUL byte; `strlen()` and `BinaryContext`'s string extractor both rely on this convention. Go strings are Go runtime `string` structs: a `(data_ptr, length)` pair. The string bytes in `.rodata` have no NUL terminator, so the C-string extractor either truncates the string early (if the next string's first byte happens to be a word boundary) or reads into adjacent data. The correct reading requires finding the `mov ebx, N` length hint at the call site.
+2. **Go strings are not NUL-terminated: they are length-prefixed.** In C, strings end with a NUL byte; `strlen()` and `BinaryContext`'s string extractor both rely on this convention. Go strings are Go runtime `string` structs: a `data_ptr, length` pair. The string bytes in `.rodata` have no NUL terminator, so the C-string extractor either truncates the string early (if the next string's first byte happens to be a word boundary) or reads into adjacent data. The correct reading requires finding the `mov ebx, N` length hint at the call site.
 
-3. **Go 1.17+ uses a register-based AMD64 ABI that changes argument passing.** Before Go 1.17, the Go ABI passed all arguments on the stack. From Go 1.17, Go adopted a register-based ABI for AMD64 where the first argument is in `rax` (pointer) and the second in `rbx` (length). A string argument is passed as the `(rax, rbx)` pair. Recognizing this pattern at call sites lets Ablation determine accurate string lengths at analysis time.
+3. **Go 1.17+ uses a register-based AMD64 ABI that changes argument passing.** Before Go 1.17, the Go ABI passed all arguments on the stack. From Go 1.17, Go adopted a register-based ABI for AMD64 where the first argument is in `rax` (pointer) and the second in `rbx` (length). A string argument is passed as the `rax, rbx` pair. Recognizing this pattern at call sites lets Ablation determine accurate string lengths at analysis time.
 
 ---
 
@@ -39,7 +39,7 @@ flowchart TD
 
 **VA to file-offset translation** uses the ELF PT_LOAD segment list: for each segment, the scanner checks if the target VA falls within `[p_vaddr, p_vaddr + p_filesz)` and computes `file_offset = va - p_vaddr + p_offset`.
 
-**Window expiration fallback.** If no `mov ebx` is found within `window` (default: 4) instructions after the `lea rax`, the resolver falls back to NUL-terminated reading capped at `fallback_max_len` bytes (default: 256). This handles cases where the Go runtime itself uses the string in a context where the compiler emits a different pattern.
+**Window expiration fallback.** If no `mov ebx` is found within `window` default: 4 instructions after the `lea rax`, the resolver falls back to NUL-terminated reading capped at `fallback_max_len` bytes default: 256. This handles cases where the Go runtime itself uses the string in a context where the compiler emits a different pattern.
 
 **Invalidation.** Any instruction that writes to the `rax` family after a pending `lea rax` invalidates the pending state: a new `lea rax` may follow.
 
@@ -136,9 +136,9 @@ print(f"After: {len(ctx.func_starts)} function starts (+{added} from pclntab)")
 
 **Non-string `lea rax` / `mov ebx` sequences.** Not every `lea rax, [rip+N]` is a string pointer. If the `rax` value points into code rather than `.rodata`, `read_at()` will return bytes that happen to be printable text but are not strings. Verify by checking that the VA falls in a `.rodata` or `__DATA_CONST` segment, not `.text`.
 
-**NUL-fallback over-reads.** When the window expires and the fallback NUL scan runs, it reads up to `fallback_max_len` bytes (default 256). If two Go strings are contiguous in `.rodata` without any NUL separating them (which is normal), the NUL scan will merge them. The length-hint path avoids this entirely; the fallback is accurate only when the string happens to be followed by a NUL.
+**NUL-fallback over-reads.** When the window expires and the fallback NUL scan runs, it reads up to `fallback_max_len` bytes default 256. If two Go strings are contiguous in `.rodata` without any NUL separating them which is normal, the NUL scan will merge them. The length-hint path avoids this entirely; the fallback is accurate only when the string happens to be followed by a NUL.
 
-**pclntab false boundaries.** In binaries with multiple Go versions linked together (uncommon but possible with CGo), the pclntab may include function entries that were inlined or eliminated by the linker. A small percentage of recovered starts will point to code that is not a function entry in the executable version. These produce no false positives in HeapVulnScanner (empty disassembly) but inflate the function count.
+**pclntab false boundaries.** In binaries with multiple Go versions linked together uncommon but possible with CGo, the pclntab may include function entries that were inlined or eliminated by the linker. A small percentage of recovered starts will point to code that is not a function entry in the executable version. These produce no false positives in HeapVulnScanner empty disassembly but inflate the function count.
 
 ---
 
@@ -154,9 +154,9 @@ print(f"After: {len(ctx.func_starts)} function starts (+{added} from pclntab)")
 
 | Field | Content |
 |:---|:---|
-| `scan_instructions()` return | `{string_va: (text, length)}` dict; `text=None` entries excluded |
-| `read_at(va, length)` return | `(text, length)` tuple; `(None, 0)` on failure |
-| `read_nul_terminated(va)` return | `(text, length)` tuple; `(None, 0)` on failure |
+| `scan_instructions()` return | `{string_va: text, length}` dict; `text=None` entries excluded |
+| `read_atva, length` return | `text, length` tuple; `(None, 0)` on failure |
+| `read_nul_terminated(va)` return | `text, length` tuple; `(None, 0)` on failure |
 | pclntab recovered starts | `List[int]` of function entry VAs |
 
 ---

@@ -8,7 +8,7 @@ The EncodingDAG is a bitfield-to-instruction encoding framework for fixed-width 
 
 **The problem it solves**
 
-Every RE tool that supports multiple architectures handles ISA encoding the same way: one bespoke decoder per architecture. Each has its own bit mask arithmetic, its own field extraction, its own opcode dispatch. When you add a new ISA, you write all of that again from scratch. When a bug exists (wrong field offset, endianness error), you fix it in one decoder and have no guarantee the same bug isn't silently present in six others.
+Every RE tool that supports multiple architectures handles ISA encoding the same way: one bespoke decoder per architecture. Each has its own bit mask arithmetic, its own field extraction, its own opcode dispatch. When you add a new ISA, you write all of that again from scratch. When a bug exists wrong field offset, endianness error, you fix it in one decoder and have no guarantee the same bug isn't silently present in six others.
 
 Ablation had the same problem before the EncodingDAG. The docs note: "every ISA decoder embedded its own field extraction logic: bit masks, shifts, and width calculations repeated across each architecture." The PEFABIClobberScanner existed as a concrete casualty. The PPC32 `ori` instruction has its RA field at bits [20:16], not [25:21], and that error was invisible until it silently produced the wrong encoding. Without a structural layer, there was no way to catch it at encode time.
 
@@ -16,13 +16,13 @@ Ablation had the same problem before the EncodingDAG. The docs note: "every ISA 
 
 **The three-layer model**
 
-Layer 1: Raw bytes as an integer. Any fixed-width instruction is packed as an integer (24-bit, 32-bit, etc.). The packing is identical to RGB color packing: `I = B0×65536 + B1×256 + B2`. This isn't aesthetic. It means the opcode (high bits, R channel) clusters visually and numerically. All ADD variants produce the same R value regardless of operands, so a range scan over the integer corpus finds all ADD instructions without a hash lookup.
+Layer 1: Raw bytes as an integer. Any fixed-width instruction is packed as an integer 24-bit, 32-bit, etc.. The packing is identical to RGB color packing: `I = B0×65536 + B1×256 + B2`. This isn't aesthetic. It means the opcode high bits, R channel clusters visually and numerically. All ADD variants produce the same R value regardless of operands, so a range scan over the integer corpus finds all ADD instructions without a hash lookup.
 
 Layer 2: Encoding DAG. A `Field` is a named bit range with an optional fixed value. A `Template` is a sequence of Fields for one instruction form. `Template.encode(values)` packs field values left to right; `Template.decode(I)` extracts them and raises `DecodingError` if any fixed field mismatches. This is the opcode dispatch mechanism. Each `Template` has a fixed opcode `Field`, and `ISASpec.decode()` tries Templates in order, skipping those whose fixed opcode field doesn't match. The PEFABIClobberScanner fix was: define `Field("RA", 5)` at bits [20:16] explicitly, and the wrong-offset bug becomes an `EncodingError` at encode time rather than silent bad output.
 
 Layer 3: Semantic DAG. A `SemanticOp` names what an instruction does and carries typed operands (`register names, immediates, MemRef(base, offset)`). A `DataflowEdge` records explicit producer-consumer links between ops: "node n1 writes r0, node n3 reads r0." A `SemanticBlock` groups ops into a basic block and exposes `dag_nodes()` for topological traversal.
 
-The key property: before the SemanticDAG, taint results were flat (sink, source) pairs. Confirming that a LOAD result flows into an ADD that feeds a STORE required re-deriving register liveness manually. `DataflowEdge` makes that chain explicit and walkable without re-analysis.
+The key property: before the SemanticDAG, taint results were flat sink, source pairs. Confirming that a LOAD result flows into an ADD that feeds a STORE required re-deriving register liveness manually. `DataflowEdge` makes that chain explicit and walkable without re-analysis.
 
 ---
 
@@ -44,9 +44,9 @@ Three things were not possible before in Ablation:
 
 **1. No shared bit-extraction layer.** Every ISA decoder embedded its own field extraction logic: bit masks, shifts, and width calculations repeated across each architecture. Adding a new ISA meant writing those operations from scratch. `Field` and `Template` centralize this so each bit range is defined once and reused by every encoder, decoder, and disassembler that needs it.
 
-**2. No reusable encode/decode round-trip.** Taint trackers and lifters needed to reconstruct instruction encodings to verify byte sequences. Without a shared model, every tool that touched raw bytes had its own ad-hoc packing and unpacking, and they disagreed on edge cases (fixed-field mismatches, register numbering). `ISASpec.encode()` and `ISASpec.decode()` give every tool a single verified round-trip path.
+**2. No reusable encode/decode round-trip.** Taint trackers and lifters needed to reconstruct instruction encodings to verify byte sequences. Without a shared model, every tool that touched raw bytes had its own ad-hoc packing and unpacking, and they disagreed on edge cases fixed-field mismatches, register numbering. `ISASpec.encode()` and `ISASpec.decode()` give every tool a single verified round-trip path.
 
-**3. No semantic-layer dataflow graph.** Before `SemanticBlock`, taint results were flat lists of (sink, source) pairs with no explicit producer-consumer links. Confirming that a LOAD result flows into an ADD that feeds a STORE required manual tracing. `DataflowEdge` records those links explicitly so any tool can walk the DAG without re-deriving it.
+**3. No semantic-layer dataflow graph.** Before `SemanticBlock`, taint results were flat lists of sink, source pairs with no explicit producer-consumer links. Confirming that a LOAD result flows into an ADD that feeds a STORE required manual tracing. `DataflowEdge` records those links explicitly so any tool can walk the DAG without re-deriving it.
 
 ---
 
@@ -123,7 +123,7 @@ The three Layer 1 helpers convert between representations:
 |---|---|---|
 | `rgb_to_bytes(r, g, b)` | Three integers (0-255) | `bytes` of length 3 |
 | `bytes_to_rgb(b)` | `bytes` of length 3 | `(r, g, b)` tuple |
-| `rgb_int(r, g, b)` | Three integers | Single `int` (0-16777215) |
+| `rgb_int(r, g, b)` | Three integers | Single `int` 0-16777215 |
 
 For ISAs with instruction widths other than 24 bits, the packing extends naturally: a
 32-bit ISA uses a 4-byte RGBA integer. The field arithmetic in Layer 2 is width-agnostic;
@@ -241,7 +241,7 @@ node = EncodingNode(tmpl, {"rA": 0, "rB": 1})
 |---|---|---|
 | `node.to_hex()` | `str` | Hex string, e.g. `"0x130100"` |
 | `node.to_bytes()` | `bytes` | Raw byte sequence, e.g. `b'\x13\x01\x00'` |
-| `node.to_rgb()` | `(int, int, int)` | RGB triple, e.g. `(19, 1, 0)` |
+| `node.to_rgb()` | `int, int, int` | RGB triple, e.g. `(19, 1, 0)` |
 | `node.to_rgb_int()` | `int` | Single integer, e.g. `1245440` |
 | `node.all_fields()` | `dict` | All field values including fixed fields |
 | `node.show_layout()` | `str` | ASCII bit-field diagram |
@@ -279,7 +279,7 @@ Operand value types:
 |---|---|---|
 | Register | `str` | `"r0"`, `"rdi"`, `"$a0"` |
 | Immediate | `int` | `4`, `0x1000`, `-8` |
-| Memory reference | `MemRef(base, offset)` | `MemRef("r5", 4)` = `mem[r5 + 4]` |
+| Memory reference | `MemRefbase, offset` | `MemRef("r5", 4)` = `mem[r5 + 4]` |
 
 ```python
 # Register operand
@@ -425,11 +425,11 @@ spec = ISASpec(
 2. Builds a `values` dict by iterating `FieldBinding` entries: resolves registers via
    `reg_table`, copies immediates as-is, splits `MemRef` into base register + offset.
 3. Calls `Template.encode(values)` to get the integer.
-4. Returns an `EncodingNode(template, values)`.
+4. Returns an `EncodingNodetemplate, values`.
 
 ### How decode() works
 
-`ISASpec.decode(raw_bytes)` converts bytes to an integer and tries each registered
+`ISASpec.decoderaw_bytes` converts bytes to an integer and tries each registered
 `Template` in order:
 
 1. Calls `Template.decode(I)` on the integer.
@@ -442,8 +442,8 @@ spec = ISASpec(
 
 The `opcode_field` parameter names the field used as the primary dispatch key. When
 present, decode skips Templates whose `opcode_field` fixed value does not match the
-extracted opcode bits, so the search is O(templates_with_matching_opcode) rather than
-O(all_templates).
+extracted opcode bits, so the search is Otemplates_with_matching_opcode rather than
+Oall_templates.
 
 ```python
 node = spec.encode(SemanticOp("LOAD", {"dst": "r0", "base": "r5", "offset": 4}))
@@ -454,7 +454,7 @@ enode, sop = spec.decode(node.to_bytes())
 
 ---
 
-## ISA-24 (bundled example)
+## ISA-24 bundled example
 
 `ISA24` is a pre-built `ISASpec` for a 24-bit toy ISA bundled with Ablation for testing
 and examples:
@@ -514,7 +514,7 @@ flowchart LR
 
 **Step-by-step example: adding a RISC-V-style R-type instruction.**
 
-R-type encodes three register fields: `rd` (destination), `rs1`, `rs2`, with a 7-bit
+R-type encodes three register fields: `rd` destination, `rs1`, `rs2`, with a 7-bit
 opcode and a 3-bit `funct3` discriminator packed into a 32-bit word:
 
 ```
@@ -585,13 +585,13 @@ instruction encoding.
 | Exception | When raised |
 |---|---|
 | `EncodingError` | Field value too wide for its bit width; no `Binding` found for op name; register not in `reg_table` |
-| `DecodingError` | No `Template` matches the integer (all fixed-field checks fail); raw bytes have wrong length for the ISA width |
+| `DecodingError` | No `Template` matches the integer all fixed-field checks fail; raw bytes have wrong length for the ISA width |
 
 ---
 
 ## How it works
 
-`EncodingDAG` represents ISA instruction encodings as a three-layer DAG for fixed-width architectures. Layer 1: raw bytes / hex / RGB-integer (B0, B1, B2). Layer 2: bitfield template: each node is a named field with width and position, extracted via mask-and-shift. Layer 3: semantic IR: field values mapped to symbolic operands (registers, immediates, targets). The DAG structure allows the same bitfield template to be shared across opcodes that differ only in one field, reducing the encoding table size for dense ISAs.
+`EncodingDAG` represents ISA instruction encodings as a three-layer DAG for fixed-width architectures. Layer 1: raw bytes / hex / RGB-integer B0, B1, B2. Layer 2: bitfield template: each node is a named field with width and position, extracted via mask-and-shift. Layer 3: semantic IR: field values mapped to symbolic operands registers, immediates, targets. The DAG structure allows the same bitfield template to be shared across opcodes that differ only in one field, reducing the encoding table size for dense ISAs.
 
 ---
 
@@ -639,7 +639,7 @@ for op in block.dag_nodes():   # topological order
 
 ## False positives
 
-**Fixed-width ISAs only.** `EncodingDAG` assumes all instructions are the same width (set at construction time). It does not handle variable-length encodings like x86, nanoMIPS, or ARM Thumb2. Use `NanoMIPSDecoder` for nanoMIPS, Capstone for x86.
+**Fixed-width ISAs only.** `EncodingDAG` assumes all instructions are the same width set at construction time. It does not handle variable-length encodings like x86, nanoMIPS, or ARM Thumb2. Use `NanoMIPSDecoder` for nanoMIPS, Capstone for x86.
 
 ---
 
@@ -657,11 +657,11 @@ for op in block.dag_nodes():   # topological order
 
 | Attribute | Type | Content |
 |:---|:---|:---|
-| `template` | `Template` | The `Template` used for encoding (bitfield layout) |
+| `template` | `Template` | The `Template` used for encoding bitfield layout |
 | `field_values` | `Dict[str,int]` | `{field_name: int_value}` for all fields in the template |
-| `to_bytes()` | method | Raw byte encoding (big-endian) |
+| `to_bytes()` | method | Raw byte encoding big-endian |
 | `to_hex()` | method | `'0xRRGGBB'`-style hex string |
-| `to_rgb()` | method | `(R, G, B)` tuple (ISA-24 maps to RGB exactly) |
+| `to_rgb()` | method | `(R, G, B)` tuple ISA-24 maps to RGB exactly |
 | `show_layout()` | method | ASCII bitfield breakdown for debugging |
 
 `ISASpec.decode(data)` returns `(EncodingNode, SemanticOp)`: the raw node and the decoded semantic operation.

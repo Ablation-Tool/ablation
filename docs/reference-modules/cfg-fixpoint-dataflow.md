@@ -8,9 +8,9 @@ Generic Monotone Framework worklist algorithm (`DataflowEngine`) plus pre-built 
 
 1. **ARM32 pool loads (`ldr r0, [pc, #N]`) and `movw`/`movt` immediate chains cannot be resolved by a single-instruction analysis: the constant value is split across two instructions or loaded from a literal pool.** `ConstPropAnalysis` implements a dataflow constant propagation over the CFG, resolving pool loads, immediate chains, and GOT-seeded values. Without it, `SinkArgClassifier` and `TaintTracker` see `rdi = unknown` where they could see `rdi = 0x12345678`.
 
-2. **Thumb `tbh`/`tbb` switch tables (ARM32 `switch` lowering) fragment the CFG: capstone decodes the `tbh` as an indirect branch with no known targets, breaking any analysis that depends on complete successor sets.** `SCCPAnalysis` (sparse conditional constant propagation, Wegman-Zadeck algorithm) propagates conditions through executable edges only. An edge that cannot be reached under SCCP is marked non-executable, which avoids adding its target to the work queue and prevents spurious constant merges. This fixes the switch-table fragmentation: `tbh` targets that are provably unreachable are correctly excluded.
+2. **Thumb `tbh`/`tbb` switch tables (ARM32 `switch` lowering) fragment the CFG: capstone decodes the `tbh` as an indirect branch with no known targets, breaking any analysis that depends on complete successor sets.** `SCCPAnalysis` sparse conditional constant propagation, Wegman-Zadeck algorithm propagates conditions through executable edges only. An edge that cannot be reached under SCCP is marked non-executable, which avoids adding its target to the work queue and prevents spurious constant merges. This fixes the switch-table fragmentation: `tbh` targets that are provably unreachable are correctly excluded.
 
-3. **`ReachingDefsAnalysis` builds ud-chains (use-definition chains) for any `(register, call_site)` pair: answering "where was this register last written before this call?"** Use-definition chains are the foundation for backward slicing (tracing argument values back to their sources), cross-function constant propagation, and inter-procedural taint seeding.
+3. **`ReachingDefsAnalysis` builds ud-chains use-definition chains for any `register, call_site` pair: answering "where was this register last written before this call?"** Use-definition chains are the foundation for backward slicing tracing argument values back to their sources, cross-function constant propagation, and inter-procedural taint seeding.
 
 ---
 
@@ -97,18 +97,18 @@ Run `ConstPropAnalysis` or `ReachingDefsAnalysis` when TaintTracker or SinkArgCl
 
 ## Reading output
 
-`ConstPropAnalysis.solve(func_addr)` returns a `Tuple[Dict[int, Dict[str, LatValue]], Dict[int, Dict[str, LatValue]]]`: `(mfp_out, mfp_in)` keyed by block VA:
+`ConstPropAnalysis.solvefunc_addr` returns a `Tuple[Dict[int, Dict[str, LatValue]], Dict[int, Dict[str, LatValue]]]`: `mfp_out, mfp_in` keyed by block VA:
 
 | Type | Meaning |
 |:---|:---|
 | `Const(v)` | Register holds the constant value `v` at this block entry |
-| `Top` | Value not determinable (set by a non-constant write) |
+| `Top` | Value not determinable set by a non-constant write |
 | `Bottom` | Block unreachable |
 
-`SCCPAnalysis.solve(func_addr)` returns `Tuple[Dict[int, Any], Set[Tuple[int, int]]]`:
+`SCCPAnalysis.solvefunc_addr` returns `Tuple[Dict[int, Any], Set[Tuple[int, int]]]`:
 
 - **First element** (`cp_vals`): `Dict[block_label, Dict[register, LatValue]]`: per-block register constant state; `None` for unreachable blocks.
-- **Second element** (`exec_edges`): `Set[Tuple[int, int]]`: `(src_va, dst_va)` edges proven reachable given the constant conditions.
+- **Second element** (`exec_edges`): `Set[Tuple[int, int]]`: `src_va, dst_va` edges proven reachable given the constant conditions.
 
 ---
 

@@ -6,9 +6,9 @@ Decode Android DEX bytecode to annotated smali output (`DEXDisasm`) and lift DEX
 
 ## Why this exists
 
-1. **Android APKs contain compiled `.dex` bytecode rather than source Java: static analysis of APK security requires disassembling the DEX bytecode to smali and then lifting it to pseudo-Java for comprehension.** `DEXDisasm` decodes all 17 DEX instruction formats and renders smali-style output with full reference resolution (method descriptors, field names, type names, string constants from the DEX flat tables). Without reference resolution, smali output shows numeric indices (`method@0023`) rather than `Lcom/example/Foo;->bar(Ljava/lang/String;)V`.
+1. **Android APKs contain compiled `.dex` bytecode rather than source Java: static analysis of APK security requires disassembling the DEX bytecode to smali and then lifting it to pseudo-Java for comprehension.** `DEXDisasm` decodes all 17 DEX instruction formats and renders smali-style output with full reference resolution method descriptors, field names, type names, string constants from the DEX flat tables. Without reference resolution, smali output shows numeric indices (`method@0023`) rather than `Lcom/example/Foo;->barLjava/lang/String;V`.
 
-2. **`DEXLifter` lifts the decoded instruction stream to pseudo-Java IR without external dependencies**: handling the 90% of real Android methods that use field get/put, invoke-virtual/direct/static, const-string, if-* conditionals, and backward goto (loop) patterns. The result is readable pseudo-Java like `this.apiKey = getString(R.string.api_key)` rather than raw register-based smali operations. Complex methods (switch tables, try/catch blocks) fall back to annotated pseudo-smali that is still more readable than raw smali because all references are resolved.
+2. **`DEXLifter` lifts the decoded instruction stream to pseudo-Java IR without external dependencies**: handling the 90% of real Android methods that use field get/put, invoke-virtual/direct/static, const-string, if-* conditionals, and backward goto (loop) patterns. The result is readable pseudo-Java like `this.apiKey = getStringR.string.api_key` rather than raw register-based smali operations. Complex methods switch tables, try/catch blocks fall back to annotated pseudo-smali that is still more readable than raw smali because all references are resolved.
 
 3. **`DEXDisasm` and `DEXLifter` are consumed by `DexAnalyzer`**: the security scanner described in [DEX Analysis](dex.md), but they are also available as standalone disassembly and lifting tools for targeted method-level analysis without running the full security scan. This allows analysts to disassemble a specific class or lift a specific method without the overhead of APK-wide scanning.
 
@@ -90,13 +90,13 @@ void processInput(String p1) {
 
 ## Pipeline position
 
-`DEXDisasm` and `DEXLifter` are typically consumed through `DexAnalyzer.scan()` (see [DEX Analysis](dex.md)) rather than called directly. Use them directly when you need to inspect a specific method found during `DexAnalyzer` scanning: for example, to read the code of a `HARDCODED_SECRET` method or a `DYNAMIC_CODE_LOAD` site.
+`DEXDisasm` and `DEXLifter` are typically consumed through `DexAnalyzer.scan()` see [DEX Analysis](dex.md) rather than called directly. Use them directly when you need to inspect a specific method found during `DexAnalyzer` scanning: for example, to read the code of a `HARDCODED_SECRET` method or a `DYNAMIC_CODE_LOAD` site.
 
 ---
 
 ## Reading output
 
-`DEXDisasm.disasm_method(class_name, method_name)` returns a list of `DEXInstruction` objects:
+`DEXDisasm.disasm_methodclass_name, method_name` returns a list of `DEXInstruction` objects:
 
 | Attribute | Content |
 |:---|:---|
@@ -106,10 +106,10 @@ void processInput(String p1) {
 | `fmt` | DEX format code string (e.g., `'35c'`) |
 | `regs` | `List[int]`: register indices |
 | `ref_idx` | Reference table index, or `-1` if not applicable |
-| `literal` | Literal value (signed integer), or `0` |
-| `branch` | Branch offset in code units (signed, relative to this instruction), or `0` |
+| `literal` | Literal value signed integer, or `0` |
+| `branch` | Branch offset in code units signed, relative to this instruction, or `0` |
 
-`DEXLifter.lift_method(class_name, method_name)` returns a pseudocode string (pseudo-Java with register annotations).
+`DEXLifter.lift_methodclass_name, method_name` returns a pseudocode string pseudo-Java with register annotations.
 
 ---
 

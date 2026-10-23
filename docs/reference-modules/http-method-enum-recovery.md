@@ -1,12 +1,12 @@
 # Apache Module Analysis
 
-Analyze Apache C module binaries (`.so` files built against APR/APRUTIL) for security vulnerabilities: finding authentication bypass patterns in `ap_hook_check_access` handlers, session skip flag logic, and direct `DECLINED` returns in authentication hooks: as demonstrated by the FortiAnalyzer `mod_extension.so` MFA bypass (CVE-2026-22572 / FAZ-CVE22572).
+Analyze Apache C module binaries (`.so` files built against APR/APRUTIL) for security vulnerabilities: finding authentication bypass patterns in `ap_hook_check_access` handlers, session skip flag logic, and direct `DECLINED` returns in authentication hooks: as demonstrated by the FortiAnalyzer `mod_extension.so` MFA bypass CVE-2026-22572 / FAZ-CVE22572.
 
 ---
 
 ## Why this exists
 
-1. **FortiAnalyzer v7.6.3 ships a custom Apache module `mod_extension.so` that bypasses MFA via a session skip flag.** Manual disassembly (FAZ-CVE22572 / CVE-2026-22572) was required to confirm the bypass surface because no Ablation tool could identify Apache APR hook registration patterns, find the authentication hook handler function, or locate the `DECLINED` return path. `ApacheModuleAnalyzer` closes this gap.
+1. **FortiAnalyzer v7.6.3 ships a custom Apache module `mod_extension.so` that bypasses MFA via a session skip flag.** Manual disassembly FAZ-CVE22572 / CVE-2026-22572 was required to confirm the bypass surface because no Ablation tool could identify Apache APR hook registration patterns, find the authentication hook handler function, or locate the `DECLINED` return path. `ApacheModuleAnalyzer` closes this gap.
 
 2. **Apache modules export hook registration functions (`register_hooks`, `module_name_module`) and register callbacks via `ap_hook_check_access`/`ap_hook_check_access_ex`/`ap_hook_auth_checker`.** `ApacheModuleAnalyzer.from_path()` identifies these registration sites and maps each hook to its handler function VA, enabling `FuncProfiler` to analyze exactly the handler function, not the full module.
 

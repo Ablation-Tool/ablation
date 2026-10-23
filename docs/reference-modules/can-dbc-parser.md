@@ -54,7 +54,7 @@ The DBC raw ID field uses bit 31 to flag 29-bit extended frames:
 | raw_id | is_extended | canonical msg_id |
 |---|---|---|
 | 790 (0x316) | False | 790 |
-| 2164260096 (0x813B3500) | True (bit 31 set) | 0x013B3500 |
+| 2164260096 (0x813B3500) | True bit 31 set | 0x013B3500 |
 | 0x0CF004FE or 0x8CF004FE | True | 0x0CF004FE |
 
 J1939 PGN-based addresses appear as extended frames. The DBC convention is not universal:
@@ -128,15 +128,15 @@ Parse DBC text directly. Used in testing and when the DBC content is already in 
 
 Return all messages sorted by canonical CAN ID.
 
-### `message(can_id: int) -> Optional[CANMessage]`
+### `messagecan_id: int -> Optional[CANMessage]`
 
 Return the message for a canonical CAN ID, or None. Pass the 29-bit ID (not the raw DBC ID
 with bit 31 set).
 
-### `find_signals(pattern: str) -> list[tuple[CANMessage, CANSignal]]`
+### `find_signalspattern: str -> list[tuple[CANMessage, CANSignal]]`
 
-Return all (message, signal) pairs where the signal name contains `pattern` as a
-case-insensitive substring. Results are sorted by (msg_id, signal name).
+Return all message, signal pairs where the signal name contains `pattern` as a
+case-insensitive substring. Results are sorted by msg_id, signal name.
 
 ### `standard_messages() -> list[CANMessage]`
 
@@ -152,7 +152,7 @@ Return total signal count across all messages.
 
 ### `summary() -> str`
 
-Return a short text block with message count (standard/extended split), signal count, and
+Return a short text block with message count standard/extended split, signal count, and
 value table count.
 
 ---
@@ -163,14 +163,14 @@ value table count.
 
 | Field | Type | Description |
 |---|---|---|
-| `msg_id` | `int` | Canonical CAN ID (bit 31 stripped) |
+| `msg_id` | `int` | Canonical CAN ID bit 31 stripped |
 | `name` | `str` | Message name from DBC |
 | `dlc` | `int` | Data length code in bytes |
 | `sender` | `str` | Sender node name |
 | `is_extended` | `bool` | True for 29-bit extended frame |
 | `signals` | `list[CANSignal]` | Signals in this message |
 | `comment` | `str` | Message comment from CM_ record |
-| `raw_id` | property | DBC raw ID (bit 31 set for extended) |
+| `raw_id` | property | DBC raw ID bit 31 set for extended |
 
 ### `CANSignal`
 
@@ -196,7 +196,7 @@ value table count.
 
 ## Validated results
 
-### BMW E39 (3-message sample)
+### BMW E39 3-message sample
 
 ```
 CAN DBC database
@@ -206,7 +206,7 @@ CAN DBC database
   DME_316.Status_DSC: {1: 'OK', 0: 'DSC_ERROR'}
 ```
 
-### BMW E90 (full network)
+### BMW E90 full network
 
 ```
 CAN DBC database
@@ -219,7 +219,7 @@ CAN DBC database
 
 Sample: `TORQ_0A8` comment: `0x0A8 TORQ (DME): Torque/Brake/Clutch Data`
 
-### SAE J1939 (multi-PGN sample)
+### SAE J1939 multi-PGN sample
 
 ```
 CAN DBC database
@@ -229,7 +229,7 @@ CAN DBC database
   EEC1 EngineSpeed: start=24, factor=0.125, decode(2000)=250.0 rpm
 ```
 
-EEC1 message ID: 0x0CF004FE (PGN 0xF004, source 0xFE). Raw DBC ID: 0x8CF004FE (bit 31 set).
+EEC1 message ID: 0x0CF004FE (PGN 0xF004, source 0xFE). Raw DBC ID: 0x8CF004FE bit 31 set.
 Signal decode at raw=2000: 2000 * 0.125 + 0 = 250.0 rpm.
 
 ---
@@ -263,7 +263,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_DBC_BYTES=16MB` at declara
 
 **Pass 1: message and signal parsing:** Splits the text into `BO_` blocks with a regex and parses each block line by line. The raw message ID is read and bit 31 is tested to set `is_extended`; the 29-bit canonical ID is stored in `msg_id`. Each `SG_` line inside the block is parsed with a single compiled regex that extracts `start_bit`, `length`, `byte_order`, `sign`, `factor`, `offset`, `min_val`, `max_val`, `unit`, and `receivers`. Malformed signal lines that fail the regex match are silently skipped.
 
-**Pass 2: comments and value tables:** A second pass over the full file text applies `re.DOTALL` patterns to extract `CM_ BO_` and `CM_ SG_` multi-line comment records, stripping enclosing quotes. `VAL_` records are parsed with a token scanner that reads alternating `integer "string"` pairs. Both comment and value table records are stored by `(raw_id, signal_name)` key and then attached to the already-constructed `CANMessage` and `CANSignal` objects.
+**Pass 2: comments and value tables:** A second pass over the full file text applies `re.DOTALL` patterns to extract `CM_ BO_` and `CM_ SG_` multi-line comment records, stripping enclosing quotes. `VAL_` records are parsed with a token scanner that reads alternating `integer "string"` pairs. Both comment and value table records are stored by `raw_id, signal_name` key and then attached to the already-constructed `CANMessage` and `CANSignal` objects.
 
 ---
 
@@ -291,7 +291,7 @@ EngineSpeed raw=2000 → 250.0 rpm
 
 ## False positives
 
-**29-bit extended frame ID collision:** When two messages in the same DBC file have the same 29-bit ID but different bit-31 extended/standard markers, `CanDbcParser` keeps only one (last-parsed wins). This is a malformed DBC condition; validate with `standard_messages()` + `extended_messages()` to detect duplicate canonical IDs.
+**29-bit extended frame ID collision:** When two messages in the same DBC file have the same 29-bit ID but different bit-31 extended/standard markers, `CanDbcParser` keeps only one last-parsed wins. This is a malformed DBC condition; validate with `standard_messages()` + `extended_messages()` to detect duplicate canonical IDs.
 
 **Motorola byte order decode is not implemented:** `CANSignal.decode()` applies `raw * factor + offset` regardless of `little_endian`. For Motorola byte-order signals, the raw integer passed to `decode()` must already be correctly extracted by the caller (using `start_bit` and `length` with Motorola bit numbering). Passing a naively extracted raw integer to `decode()` on a Motorola signal produces a wrong physical value.
 
@@ -315,7 +315,7 @@ EngineSpeed raw=2000 → 250.0 rpm
 
 | Field | Type | Content |
 |:---|:---|:---|
-| `msg_id` | `int` | Canonical CAN ID (bit 31 stripped): use for `message()` lookup |
+| `msg_id` | `int` | Canonical CAN ID bit 31 stripped: use for `message()` lookup |
 | `is_extended` | `bool` | `True` for J1939/29-bit frames |
 | `signals` | `list[CANSignal]` | All signals in this message |
 | `comment` | `str` | Manufacturer description from CM_ record |
@@ -326,7 +326,7 @@ EngineSpeed raw=2000 → 250.0 rpm
 |:---|:---|:---|
 | `name` | `str` | Signal name: cross-reference against A2L characteristic names |
 | `factor` / `offset` | `float` | `physical = raw * factor + offset` |
-| `value_table` | `dict[int, str]` | Enumerated state names from VAL_ record (fault codes, gear positions) |
+| `value_table` | `dict[int, str]` | Enumerated state names from VAL_ record fault codes, gear positions |
 | `comment` | `str` | Manufacturer description from CM_ record |
 
 ---
