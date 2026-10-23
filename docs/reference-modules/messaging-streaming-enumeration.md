@@ -6,7 +6,7 @@ Enumerate Kafka topics and consumer groups without credentials, probe Flink REST
 
 ## Why this exists
 
-1. **`kafka_list_topics()` enumerates Kafka topics and partition metadata using raw protocol**, it constructs a binary `Metadata(v1)` request (`api_key=3, api_version=1`) directly over TCP without using any Kafka client library, conforming to the Kafka wire protocol. In default deployments, Kafka brokers do not require authentication (`PLAINTEXT` listener). Topic enumeration reveals message streams containing PII, financial data, internal events, and machine-to-machine credentials that flow through the cluster.
+1. **`kafka_list_topics()` enumerates Kafka topics and partition metadata using raw protocol**, it constructs a binary `Metadata(v1)` request `api_key=3, api_version=1` directly over TCP without using any Kafka client library, conforming to the Kafka wire protocol. In default deployments, Kafka brokers do not require authentication (`PLAINTEXT` listener). Topic enumeration reveals message streams containing PII, financial data, internal events, and machine-to-machine credentials that flow through the cluster.
 
 2. **`flink_enumerate()` and `flink_submit_jar_rce()` expose Flink's unauthenticated REST API**: Flink's JobManager REST API port 8081 exposes job listing, task manager metrics, and JAR upload + submission without authentication in default configurations. `flink_submit_jar_rce()` uploads a JAR to `/jars/upload` and submits it to `/jars/<id>/run`, executing arbitrary code in the Flink cluster under the TaskManager process identity. This is a reliable remote code execution primitive on any Flink cluster accessible from the network.
 
@@ -81,7 +81,7 @@ check_nats_exposure: <nats-host>:4222
 
 ## False positives
 
-**`kafka_list_topics()` internal topics**: Kafka clusters always contain internal topics (`__consumer_offsets`, `__transaction_state`) prefixed with `__`. These are system topics and not data exposure findings. Count and report only non-internal topics.
+**`kafka_list_topics()` internal topics**: Kafka clusters always contain internal topics `__consumer_offsets`, `__transaction_state` prefixed with `__`. These are system topics and not data exposure findings. Count and report only non-internal topics.
 
 **`flink_submit_jar_rce()` execution confirmation**: the JAR upload and run API calls return `{job_id: ..., status: RUNNING}` even if the JAR fails to initialize. A `RUNNING` status confirms the JAR was accepted and started; it does not confirm that arbitrary code executed successfully. Verify by checking the job's task metrics or by having the JAR write a canary file.
 
@@ -89,7 +89,7 @@ check_nats_exposure: <nats-host>:4222
 
 ## Pipeline position
 
-Run messaging and streaming enumeration after discovering port 9092 (Kafka), 8081 Flink/Schema Registry, 8080 (NiFi), 15672 (RabbitMQ), or 4222 (NATS). Kafka topics with sensitive stream names (`payments`, `credentials`, `iam-`) are immediate data exfiltration targets; Flink JAR submission is an RCE path.
+Run messaging and streaming enumeration after discovering port 9092 (Kafka), 8081 Flink/Schema Registry, 8080 (NiFi), 15672 (RabbitMQ), or 4222 (NATS). Kafka topics with sensitive stream names `payments`, `credentials`, `iam-` are immediate data exfiltration targets; Flink JAR submission is an RCE path.
 
 ---
 
@@ -100,10 +100,10 @@ Messaging/streaming probe functions return `List[{severity, title, detail, host,
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` unauthenticated access / `HIGH` RCE surface |
-| `title` | Finding code (e.g., `KAFKA_TOPICS_UNAUTH`, `FLINK_JAR_UPLOAD_EXPOSED`) |
+| `title` | Finding code for example `KAFKA_TOPICS_UNAUTH`, `FLINK_JAR_UPLOAD_EXPOSED` |
 | `detail` | Topic list, job count, or RCE function name |
 | `host` | Target IP |
-| `port` | Service port (e.g., `9092` for Kafka, `8081` for Flink) |
+| `port` | Service port for example `9092` for Kafka, `8081` for Flink |
 
 ---
 

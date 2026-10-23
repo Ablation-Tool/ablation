@@ -1,6 +1,6 @@
 # MCP Server Security Scanning
 
-Scan AI/MCP server source code (Python, JavaScript, TypeScript) for security vulnerabilities: detecting session token exposure via CLI arguments, prompt injection into LLM trust contexts, tool call input validation gaps, secret leakage through tool output, and SSRF-prone external URL construction: closing the gap that allowed FortiManager v8.0.0 AI stack findings to require manual source review.
+Scan AI/MCP server source code Python, JavaScript, TypeScript for security vulnerabilities: detecting session token exposure via CLI arguments, prompt injection into LLM trust contexts, tool call input validation gaps, secret leakage through tool output, and SSRF-prone external URL construction: closing the gap that allowed FortiManager v8.0.0 AI stack findings to require manual source review.
 
 ---
 
@@ -66,7 +66,7 @@ Findings: <N>
 
 ## False positives
 
-**`COOKIE_CLI` detection uses pattern matching on subprocess argument construction**: a call that passes `--cookies` with a non-sensitive value (e.g., `--cookies '{}'`) will be flagged. Verify that the argument contains session credentials before treating as a security finding.
+**`COOKIE_CLI` detection uses pattern matching on subprocess argument construction**: a call that passes `--cookies` with a non-sensitive value for example `--cookies '{}'` will be flagged. Verify that the argument contains session credentials before treating as a security finding.
 
 **`PROMPT_INJECTION` fires on legitimate system prompts**: a system prompt constructed from a static template with a user field embedded only in a data position not as instructions may still be flagged. Verify that the user-supplied content is in a position where an LLM would interpret it as instructions, not just data.
 
@@ -85,8 +85,8 @@ Run `MCPToolTaintScanner` on any AI/MCP server codebase as the first scan, along
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` / `MEDIUM` |
-| `title` | Finding code (e.g., `COOKIE_CLI`, `PROMPT_INJECTION`, `TOOL_SSRF`) |
-| `cwe` | CWE identifier (e.g., `CWE-214`, `CWE-77`) |
+| `title` | Finding code for example `COOKIE_CLI`, `PROMPT_INJECTION`, `TOOL_SSRF` |
+| `cwe` | CWE identifier for example `CWE-214`, `CWE-77` |
 | `file` | Source file path |
 | `line` | Line number |
 | `detail` | Code excerpt and exploitation description |

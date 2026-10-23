@@ -36,7 +36,7 @@ scanner = VxWorksArchiveScanner('/path/to/libwmNet.a',
 
 | Symbol | Description |
 |--------|-------------|
-| `VxWorksArchiveScanner(archive_path, targets=None)` | Constructor; `targets` filters to named object files |
+| `VxWorksArchiveScannerarchive_path, targets=None` | Constructor; `targets` filters to named object files |
 | `VxWorksArchiveScanner.scan_strcpy_in_frameframe_min, frame_max` | Returns `list[ArchiveSite]` |
 | `VxWorksArchiveScanner.reportfindings` | Human-readable summary string |
 | `ArchiveSite.obj_file` | Object file name within the archive |
@@ -67,7 +67,7 @@ Gate: **PASSED**. Two fixes applied:
 |---|---|---|
 | CWE-770: unbounded archive read | `__init__` | `_MAX_ARCHIVE_BYTES=128MB` via `os.path.getsize()` guard before archive scan |
 | CWE-770: unbounded member read | `_extract_member` | `_MAX_MEMBER_BYTES=16MB` cap on bytes returned by `ar p` per `.o` member |
-| CWE-20: unguarded `shstrtab.index()` | `sh_name()` inner function in `_parse_elf32_ppc` | `shstrtab.index(b'\x00', name_off)` raised `ValueError` on malformed ELF; now wrapped in `try/except (ValueError, IndexError)` returning `''`: matches the identical guard in the `.symtab` str_data loop |
+| CWE-20: unguarded `shstrtab.index()` | `sh_name()` inner function in `_parse_elf32_ppc` | `shstrtab.index(b'\x00', name_off)` raised `ValueError` on malformed ELF; now wrapped in `try/except ValueError, IndexError` returning `''`: matches the identical guard in the `.symtab` str_data loop |
 
 No HIGH or CRITICAL findings remain.
 

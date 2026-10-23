@@ -84,7 +84,7 @@ Run `IPRegAnnotator.annotate()` on confirmed pre-auth handler VAs or CMDB sink-c
 
 ## Reading output
 
-`IPRegAnnotator.annotate_chain(entry_va, max_hops=2)` returns an `IPChain` object:
+`IPRegAnnotator.annotate_chainentry_va, max_hops=2` returns an `IPChain` object:
 
 | Attribute | Content |
 |:---|:---|
@@ -100,7 +100,7 @@ Each `ChainResult` in the chain:
 | `func_va` | VA of this function |
 | `func_end_va` | End VA of this function |
 | `binary` | Path of the binary containing this function |
-| `hop` | Hop depth (0 = root, 1 = callee, 2 = callee's callee, …) |
+| `hop` | Hop depth 0 = root, 1 = callee, 2 = callee's callee, … |
 | `calls` | `List[ChainCallSite]`: each call site with its argument register annotations |
 
 Each `ChainCallSite`:
@@ -115,7 +115,7 @@ Each `ChainCallSite`:
 | `callee_chain` | `Optional[ChainResult]`: recursive chain for this callee if followed |
 | `is_plt_leaf` | `True` if the callee is an external PLT call not followed further |
 
-Call `chain.all_sinkssink_names` to get all `(func_va, binary, ChainCallSite)` tuples for any named sink within the full chain.
+Call `chain.all_sinkssink_names` to get all `func_va, binary, ChainCallSite` tuples for any named sink within the full chain.
 
 ---
 

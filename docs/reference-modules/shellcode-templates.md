@@ -134,11 +134,11 @@ d823f10000007f00003b00000000000010e1a31a00007f000000000000000000
 
 ## False positives
 
-**ROP gadget scanner detects bytes inside instruction operands.** `find_rop_gadgets()` scans with `bytes.find()`, stepping by 1 byte at each position. An `\xC3` byte appearing as an immediate operand (e.g., `mov al, 0xC3`) registers as a `ret` gadget. Before using any gadget address, disassemble 8 bytes before and after it to confirm the byte falls at an instruction boundary. `capstone.CsCS_ARCH_X86, CS_MODE_64.disasm()` is the appropriate verification.
+**ROP gadget scanner detects bytes inside instruction operands.** `find_rop_gadgets()` scans with `bytes.find()`, stepping by 1 byte at each position. An `\xC3` byte appearing as an immediate operand for example `mov al, 0xC3` registers as a `ret` gadget. Before using any gadget address, disassemble 8 bytes before and after it to confirm the byte falls at an instruction boundary. `capstone.CsCS_ARCH_X86, CS_MODE_64.disasm()` is the appropriate verification.
 
-**ARM64 port field encoding requires big-endian for network order.** `_pack_port()` uses `struct.pack(">H", port)`: big-endian. ARM64 instruction encoding pushes values in little-endian memory order. The `mov_imm8(0, port_val & 0xFFFF)` stores the port as a 16-bit immediate in the register: the subsequent `strh w0, [sp, #2]` writes it to the sockaddr_in at offset 2 network byte order. Ports with `0x00` in their high byte ports 0–255 produce a `movz` that embeds a zero byte in the encoded instruction sequence.
+**ARM64 port field encoding requires big-endian for network order.** `_pack_port()` uses `struct.pack(">H", port)`: big-endian. ARM64 instruction encoding pushes values in little-endian memory order. The `mov_imm80, port_val & 0xFFFF` stores the port as a 16-bit immediate in the register: the subsequent `strh w0, [sp, #2]` writes it to the sockaddr_in at offset 2 network byte order. Ports with `0x00` in their high byte ports 0–255 produce a `movz` that embeds a zero byte in the encoded instruction sequence.
 
-**Staged loader size constraint.** `shellcode_staged_loader()` specifies `map_size` as the amount of second-stage code to read via `read(fd, ...)`. If the second-stage is larger than `map_size`, `read()` returns a partial buffer and the second-stage executes truncated. Pass `map_size` equal to the known second-stage size. The `mmap` call requests `PROT_READ|PROT_WRITE|PROT_EXEC` (value 7), this combination is denied on systems with strict `W^X` enforcement SELinux enforcing, recent grsecurity patches. Verify the target enforces `W^X` before deploying.
+**Staged loader size constraint.** `shellcode_staged_loader()` specifies `map_size` as the amount of second-stage code to read via `readfd, ...`. If the second-stage is larger than `map_size`, `read()` returns a partial buffer and the second-stage executes truncated. Pass `map_size` equal to the known second-stage size. The `mmap` call requests `PROT_READ|PROT_WRITE|PROT_EXEC` (value 7), this combination is denied on systems with strict `W^X` enforcement SELinux enforcing, recent grsecurity patches. Verify the target enforces `W^X` before deploying.
 
 ---
 
@@ -155,14 +155,14 @@ d823f10000007f00003b00000000000010e1a31a00007f000000000000000000
 | Function | Returns | Notes |
 |:---|:---|:---|
 | `shellcode_reverse_tcp_linux_x86_64lhost, lport` | `bytes` | SYS_socket → SYS_connect → dup2×3 → execve |
-| `shellcode_reverse_tcp_linux_arm64(lhost, lport, darwin=False)` | `bytes` | dup3 (Linux) or dup2 (Darwin); svc #0 |
+| `shellcode_reverse_tcp_linux_arm64lhost, lport, darwin=False` | `bytes` | dup3 (Linux) or dup2 (Darwin); svc #0 |
 | `shellcode_bind_tcp_linux_x86_64(port)` | `bytes` | bind → listen → accept → dup2×3 → execve |
 | `shellcode_execve_linux_x86(path)` | `bytes` | JMP/CALL/POP, null-free, `len(path) < 128` |
 | `shellcode_staged_loaderfd, map_size, platform` | `bytes` | mmap(RWX) + read(fd) + jmp |
 | `find_rop_gadgetsbinary_data, base_addr` | `List[RopGadget]` | 8 patterns, overlapping scan |
 | `compute_rop_chain_execvegadgets, bin_sh_addr` | `bytes` | 72 bytes; raises `ValueError` on missing gadget |
 | `detect_bad_bytesshellcode, bad_set` | `dict` | `{found, clean, offsets, bad_bytes_present, summary}` |
-| `encode_xor_rolling(shellcode, key=0xAA)` | `bytes, bytes` | `encoded_payload, x86_64_decoder_stub` |
+| `encode_xor_rollingshellcode, key=0xAA` | `bytes, bytes` | `encoded_payload, x86_64_decoder_stub` |
 
 ---
 
@@ -180,7 +180,7 @@ All shellcode generators return `bytes` position-independent machine code:
 | Attribute | Content |
 |:---|:---|
 | `addr` | Virtual address of the gadget's first byte |
-| `insns` | Human-readable disassembly (e.g., `'pop rdi ; ret'`) |
+| `insns` | Human-readable disassembly for example `'pop rdi ; ret'` |
 | `source` | Binary name the gadget was found in empty string for raw scans |
 | `type` | `'ret'` / `'pop_ret'` / `'syscall'` / `'stack_pivot'` / `'mov_ret'` |
 

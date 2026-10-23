@@ -8,7 +8,7 @@ Enumerate Cisco IOS and IOS-XE appliances via HTTP/RESTCONF API, SNMP CDP neighb
 
 1. **IOS Type 7 password encoding is not encryption**, it is a deterministic XOR obfuscation with a fixed key. `decode_type7()` recovers the plaintext password from any Type 7-encoded string in the running configuration. SNMP community strings and AAA shared secrets stored as Type 7 in the config are trivially recoverable from any config file obtained via TFTP pull, SNMPv2 `sysDescr` response, or REST API.
 
-2. **SNMP OID `1.3.6.1.4.1.9.2.1.55.0` (Cisco `cisco-show-run`) returns the full running configuration on IOS devices that have SNMPv2 public community enabled.** `ios_enum.py` includes a pure-Python SNMP GET request builder using BER/DER encoding (`_ber_oid`, `_ber_int`, `_ber_str`, `_ber_seq`, `_snmp_get_request`): no `pysnmp` dependency required.
+2. **SNMP OID `1.3.6.1.4.1.9.2.1.55.0` (Cisco `cisco-show-run`) returns the full running configuration on IOS devices that have SNMPv2 public community enabled.** `ios_enum.py` includes a pure-Python SNMP GET request builder using BER/DER encoding `_ber_oid`, `_ber_int`, `_ber_str`, `_ber_seq`, `_snmp_get_request`: no `pysnmp` dependency required.
 
 3. **`probe_apic_unauthenticated()`** (from `nxos_enum.py`): the APIC REST API exposes `aaaListDomains.json` without authentication, returning the list of configured authentication domains and the APIC cluster's configured software version. This unauthenticated disclosure is combined with the IOS enumeration results to provide a unified Cisco management surface view.
 
@@ -86,10 +86,10 @@ IOS/IOS-XE probe functions return `List[{severity, title, detail, host, port}]`:
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` plaintext credential / `HIGH` unauth access / `MEDIUM` / `LOW` |
-| `title` | Finding code (e.g., `IOS_SNMP_PUBLIC_COMMUNITY`, `IOS_TYPE7_PASSWORD`, `IOS_RESTCONF_UNAUTH`) |
+| `title` | Finding code for example `IOS_SNMP_PUBLIC_COMMUNITY`, `IOS_TYPE7_PASSWORD`, `IOS_RESTCONF_UNAUTH` |
 | `detail` | Plaintext password, neighbor list, or OID response |
 | `host` | Target IP |
-| `port` | Protocol port (e.g., `161` for SNMP, `443` for RESTCONF) |
+| `port` | Protocol port for example `161` for SNMP, `443` for RESTCONF |
 
 ---
 

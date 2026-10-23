@@ -16,7 +16,7 @@ The SHA-256 key ensures the cache never goes stale. Any change to the binary pro
 
 ### The GUI dependency problem
 
-Getting "which functions call `strcpy`?" in IDA requires the GUI to be open, fully analyzed, and holding a license seat. `ctx.callers_of('strcpy')` answers the same question from the command line, in a script, or inside a taint tracker. No GUI. No license. The call graph lives in memory as a flat Python list, so filtering it is a single linear scan in Python.
+Getting "which functions call `strcpy`?" in IDA requires the GUI to be open, analyzed, and holding a license seat. `ctx.callers_of('strcpy')` answers the same question from the command line, in a script, or inside a taint tracker. No GUI. No license. The call graph lives in memory as a flat Python list, so filtering it is a single linear scan in Python.
 
 ---
 
@@ -92,7 +92,7 @@ C++ exception handling and signal delivery both need to unwind the call stack. G
 | `data_align` | sleb128 | Stack slot size factor −8 for x86-64 |
 | `return_addr_reg` | uleb128 | Register number of return address |
 | `aug_data` | variable | Pointer encoding byte pcrel / absolute |
-| `initial_insns` | variable | CFA baseline rules (e.g., `push rbp`) |
+| `initial_insns` | variable | CFA baseline rules for example `push rbp` |
 
 **FDE Frame Description Entry**: one per function, contains the function start VA:
 

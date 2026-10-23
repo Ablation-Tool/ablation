@@ -90,7 +90,7 @@ Run M88K analysis on any BCS COFF firmware binary confirmed to use the M88K arch
 | Attribute | Content |
 |:---|:---|
 | `address` | Virtual address of the instruction |
-| `mnemonic` | M88100 mnemonic (e.g., `'subu'`, `'st'`, `'jsr'`) |
+| `mnemonic` | M88100 mnemonic for example `'subu'`, `'st'`, `'jsr'` |
 | `op_str` | Operand string |
 | `raw` | 32-bit big-endian instruction word |
 | `is_branch` | `True` if this is a branch instruction |

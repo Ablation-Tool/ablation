@@ -8,9 +8,9 @@ Labeled-taint analysis, CFG-fixpoint dataflow, and structural lifting for RISC-V
 
 1. **RISC-V has two distinct calling convention variants RV32 and RV64 that differ in register width and argument register count: RV32 uses `a0-a7` with 32-bit slots while RV64 uses the same register names with 64-bit slots, and a taint tracker that confuses them produces incorrect taint bounds and missed sink arguments.** `taint_tracker_riscv32.py` and `taint_tracker_riscv64.py` provide independent ABI-correct implementations, and `taint_tracker_riscv.py` provides the labeled-taint `TaintEngine` with a `Width` enum (`Width.RV32`/`Width.RV64`) that selects the correct register width at construction time.
 
-2. **The labeled-taint model in `taint_tracker_riscv.py`: `Taintlabels: frozenset, bound: Optional[int]`: provides two capabilities that the binary-path trackers lack: label provenance which source function tainted this register and bound tracking (andi/ori with immediate masks set `bound`, gating out-of-bounds index findings).** The `TaintState.join()` lattice operation merges taint from CFG merge-points correctly, and `analyze_cfg()` runs a fixpoint analysis over `cfg_riscv.py` basic blocks, finding taint flows that simple linear traversal misses on loops and conditional branches.
+2. **The labeled-taint model in `taint_tracker_riscv.py`: `Taintlabels: frozenset, bound: Optional[int]`: provides two capabilities that the binary-path trackers lack: label provenance which source function tainted this register and bound tracking andi/ori with immediate masks set `bound`, gating out-of-bounds index findings.** The `TaintState.join()` lattice operation merges taint from CFG merge-points correctly, and `analyze_cfg()` runs a fixpoint analysis over `cfg_riscv.py` basic blocks, finding taint flows that simple linear traversal misses on loops and conditional branches.
 
-3. **RISC-V compressed instructions (RVC, 16-bit `c.*` mnemonics) are used in GCC-compiled RV64GC binaries to reduce code size: a decoder that handles only 32-bit instructions will silently skip 16-bit instructions and produce incorrect CFG edges.** `insn_riscv.py` handles both 32-bit and 16-bit RVC instructions in the same decoder, and `cfg_riscv.py` correctly resolves `c.j`, `c.beqz`, `c.bnez` branch instructions to build complete CFGs.
+3. **RISC-V compressed instructions RVC, 16-bit `c.*` mnemonics are used in GCC-compiled RV64GC binaries to reduce code size: a decoder that handles only 32-bit instructions will silently skip 16-bit instructions and produce incorrect CFG edges.** `insn_riscv.py` handles both 32-bit and 16-bit RVC instructions in the same decoder, and `cfg_riscv.py` correctly resolves `c.j`, `c.beqz`, `c.bnez` branch instructions to build complete CFGs.
 
 ---
 
@@ -130,9 +130,9 @@ CFG fixpoint (analyze_cfg):
 | `func_va` | `int` | VA of the function containing the sink call |
 | `func_name` | `str` | Name of the function (from `ctx`) |
 | `sink_va` | `int` | VA of the sink call instruction |
-| `sink_name` | `str` | Sink function name (e.g., `system`, `execve`) |
+| `sink_name` | `str` | Sink function name for example `system`, `execve` |
 | `tainted_args` | `List[int]` | 0-indexed argument positions that are tainted at the call |
-| `source_name` | `str` | Taint source label (e.g., `read`, `recv`) |
+| `source_name` | `str` | Taint source label for example `read`, `recv` |
 
 The RISC-V 32-bit tracker (`taint_tracker_riscv32.py`) returns `TaintFindingRISCV32` with the same fields. bound from andi/ori: `int` or `None` if unbounded |
 

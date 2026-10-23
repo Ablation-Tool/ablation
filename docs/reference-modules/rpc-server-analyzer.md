@@ -113,7 +113,7 @@ When `RpcServerRegisterIf` (not `IfEx`) is called, no auth level argument is pas
 
 ## Pipeline position
 
-**Before:** Run on Windows PE binaries (`.dll`, `.exe`) that expose MSRPC interfaces.
+**Before:** Run on Windows PE binaries `.dll`, `.exe` that expose MSRPC interfaces.
 
 **After:** Use the extracted interface GUID to look up the interface in the RPC interface database. Unauthenticated interfaces (`auth_level=0`) are HIGH findings.
 
@@ -131,7 +131,7 @@ When `RpcServerRegisterIf` (not `IfEx`) is called, no auth level argument is pas
 | `location` | UUID string or PE path identifying the relevant interface |
 | `description` | Human-readable explanation of the finding |
 | `va` | VA of the `RpcServerRegisterIf*` call site 0 if not applicable |
-| `cwe` | CWE identifier string (e.g., `'CWE-306'`) |
+| `cwe` | CWE identifier string for example `'CWE-306'` |
 
 The scan also extracts `RPCInterface` objects inventory, not findings with `uuid`, `auth_level`, `auth_level_name`, `registration_va`, and `endpoints` fields.
 

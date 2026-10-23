@@ -104,8 +104,8 @@ Run `analyze_cfg()` after `SemanticSearcher` identifies handler candidates and b
 | `func_va` | VA of the function containing the sink call |
 | `func_name` | Name of the function (from `ctx`) |
 | `sink_va` | VA of the sink call instruction |
-| `sink_name` | Sink function name (e.g., `system`, `popen`, `execv`) |
-| `tainted_args` | List of tainted argument registers at the call (e.g., `['x0']`) |
+| `sink_name` | Sink function name for example `system`, `popen`, `execv` |
+| `tainted_args` | List of tainted argument registers at the call for example `['x0']` |
 | `source_name` | Taint source label that propagated to the sink |
 | `severity` | `'HIGH'` (default) |
 

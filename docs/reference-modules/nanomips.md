@@ -106,7 +106,7 @@ flowchart TD
     style G fill:#7f1d1d,stroke:#991b1b,color:#fecaca
 ```
 
-The fallback is deliberately conservative. After any call to a known source (`recv`, `read`, etc.), all four argument registers are marked tainted on entry to the next function. This avoids false negatives at the cost of more candidates to triage manually. The decode path is precise: only the actual register that receives the `recv` return value carries taint.
+The fallback is deliberately conservative. After any call to a known source `recv`, `read`, etc., all four argument registers are marked tainted on entry to the next function. This avoids false negatives at the cost of more candidates to triage manually. The decode path is precise: only the actual register that receives the `recv` return value carries taint.
 
 ---
 
@@ -201,8 +201,8 @@ findings = tracker.run_interprocedural()
 |:---|:---|:---|
 | `func_va` | `int` | VA of the function containing the sink call |
 | `sink_va` | `int` | VA of the sink call instruction |
-| `sink_name` | `str` | Sink function name (e.g., `system`, `strcpy`) |
-| `tainted_args` | `List[str]` | Tainted argument registers at the call (e.g., `['a0', 'a1']`) |
+| `sink_name` | `str` | Sink function name for example `system`, `strcpy` |
+| `tainted_args` | `List[str]` | Tainted argument registers at the call for example `['a0', 'a1']` |
 | `source_name` | `str` | Taint source label that propagated to this sink |
 | `full_decode` | `bool` | `True` if Capstone 6.x full decode was used; `False` for conservative frame-walk fallback |
 

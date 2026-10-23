@@ -1,6 +1,6 @@
 # Volatile and Linux Artifact Triage
 
-Capture volatile host state running processes, network connections, kernel modules, open file descriptors before it changes, enumerate Linux filesystem persistence artifacts (cron jobs, systemd unit overrides, LD_PRELOAD entries, SSH `authorized_keys`), and detect ELF runtime injection techniques: providing a complete pre-analysis snapshot for Linux incident response: via `modules/forensics_enum.py` and `modules/process_enum.py`.
+Capture volatile host state running processes, network connections, kernel modules, open file descriptors before it changes, enumerate Linux filesystem persistence artifacts cron jobs, systemd unit overrides, LD_PRELOAD entries, SSH `authorized_keys`, and detect ELF runtime injection techniques: providing a complete pre-analysis snapshot for Linux incident response: via `modules/forensics_enum.py` and `modules/process_enum.py`.
 
 ---
 
@@ -8,7 +8,7 @@ Capture volatile host state running processes, network connections, kernel modul
 
 1. **Volatile data must be captured before any other analysis activity**: running processes, network connection state, kernel modules, and ARP tables are modified by every subsequent command. `enumerate_volatile_forensics()` in `process_enum.py` captures all of these to a timestamped output directory in a single call, establishing the ground-truth state of the host before any analysis tools interact with it.
 
-2. **`analyze_elf_binary_indicators()` performs a broad static analysis pass on a Linux ELF binary**, it detects `LD_PRELOAD` injection (strings referencing `/etc/ld.so.preload`, `putenv("LD_PRELOAD=`)`, GOT overwrite patterns, `dlopen`/`dlsym` dynamic loading of unusual paths, and `ptracePTRACE_ATTACH` calls in non-debugger context. These patterns appear in Linux userspace rootkits, shared library injectors, and credential-harvesting implants.
+2. **`analyze_elf_binary_indicators()` performs a broad static analysis pass on a Linux ELF binary**, it detects `LD_PRELOAD` injection strings referencing `/etc/ld.so.preload`, `putenv("LD_PRELOAD=``, GOT overwrite patterns, `dlopen`/`dlsym` dynamic loading of unusual paths, and `ptracePTRACE_ATTACH` calls in non-debugger context. These patterns appear in Linux userspace rootkits, shared library injectors, and credential-harvesting implants.
 
 3. **`detect_elf_runtime_injection_techniques()` identifies process injection methods**: `PTRACE_POKETEXT` code injection into running process, `/proc/<pid>/mem` write memory write without ptrace, `memfd_create` + `fexecve` fileless execution, and `syscall()` with raw `execve` number syscall obfuscation. These are the Linux equivalents of Windows process hollowing and reflective DLL injection.
 
@@ -81,7 +81,7 @@ detect_elf_runtime_injection_techniques:
 
 **`enumerate_volatile_forensics()` kernel module path check**: some legitimate kernel modules in embedded distributions are located outside `/lib/modules/<kernel>/`. Verify the module's digital signature if kernel module signing is enforced and cross-reference against the expected module list for the distribution before flagging as suspicious.
 
-**`detect_elf_runtime_injection_techniques()` `ptracePTRACE_ATTACH`**: debuggers, performance profilers (`perf`, `gdb`), and containers using user-mode execution tracing all use `PTRACE_ATTACH`. This pattern is only suspicious in a binary that has no other indicators of being a debug tool. Filter by binary path and associated process context.
+**`detect_elf_runtime_injection_techniques()` `ptracePTRACE_ATTACH`**: debuggers, performance profilers `perf`, `gdb`, and containers using user-mode execution tracing all use `PTRACE_ATTACH`. This pattern is only suspicious in a binary that has no other indicators of being a debug tool. Filter by binary path and associated process context.
 
 ---
 
@@ -98,7 +98,7 @@ Volatile/Linux triage functions return `List[{severity, title, detail}]`:
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` / `MEDIUM` |
-| `title` | Finding code (e.g., `LD_PRELOAD_INJECT`, `PTRACE_ATTACH`, `SUSPICIOUS_KERNEL_MODULE`) |
+| `title` | Finding code for example `LD_PRELOAD_INJECT`, `PTRACE_ATTACH`, `SUSPICIOUS_KERNEL_MODULE` |
 | `detail` | VA of the call, library path, module path, or process description |
 
 `enumerate_volatile_forensics()` also returns a `processes` count and a `suspicious_modules` list.

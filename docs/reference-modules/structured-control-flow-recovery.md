@@ -1,6 +1,6 @@
 # Structured Control-Flow Recovery
 
-Convert a flat basic-block CFG into a tree of structured control-flow nodes (`Sequence`, `If`, `While`) using dominator-driven Relooper reconstruction: producing source-level equivalent control flow from compiled MCU/ECU firmware without `goto` statements.
+Convert a flat basic-block CFG into a tree of structured control-flow nodes `Sequence`, `If`, `While` using dominator-driven Relooper reconstruction: producing source-level equivalent control flow from compiled MCU/ECU firmware without `goto` statements.
 
 ---
 

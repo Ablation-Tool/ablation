@@ -10,7 +10,7 @@ Enumerate network interfaces, active connections, listening ports, firewall rule
 
 2. **`run_network_analysis()` produces a combined analysis result**: interfaces with IPs and subnets, all listening TCP/UDP ports with PIDs (if readable from `/proc/<pid>/`), established outbound connections with remote IPs, and `iptables`/`pfctl` firewall rule summary. The subnet list from interface enumeration seeds `icmp_host_discovery()` in `net_sniffer.py` for automatic adjacent subnet scanning.
 
-3. **Firewall rule enumeration**: `NetworkAnalyzer` reads `iptables -L -n` output (Linux) and `pfctl -sr` (macOS) to extract ACCEPT/REJECT/DROP rules. Overly permissive rules (e.g., `ACCEPT all -- 0.0.0.0/0 → 0.0.0.0/0 in the FORWARD chain) indicate a misconfigured host that routes between network segments: a pivot point for reaching otherwise-isolated subnets.
+3. **Firewall rule enumeration**: `NetworkAnalyzer` reads `iptables -L -n` output (Linux) and `pfctl -sr` (macOS) to extract ACCEPT/REJECT/DROP rules. Overly permissive rules for example `ACCEPT all -- 0.0.0.0/0 → 0.0.0.0/0 in the FORWARD chain indicate a misconfigured host that routes between network segments: a pivot point for reaching otherwise-isolated subnets.
 
 ---
 

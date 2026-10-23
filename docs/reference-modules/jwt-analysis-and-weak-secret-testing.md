@@ -8,7 +8,7 @@ Decode and verify JSON Web Tokens, detect `alg: none` acceptance, brute-force we
 
 1. **`forge_jwt()` produces valid-looking JWTs with attacker-controlled claims**, it generates HS256-signed tokens with an arbitrary payload claims dict and a known or empty secret. This is used to test whether a server enforces algorithm verification (`alg: none` bypass) and whether a JWT-based authorization system will accept a token whose claims have been modified. `forge_jwt(payload={"role":"admin"}, secret="", alg="none")` produces the classic `alg:none` bypass token.
 
-2. **`CryptoAudit.analyze_jwt()` tests live JWT endpoints**, it decodes a captured JWT, attempts `alg: none` replacement, and tests the provided token against the original endpoint to confirm whether the server accepts it. It also scans for weak secrets by attempting HS256 verification with entries from a configurable wordlist (`secret`, `password`, `jwt_secret`, `changeme`, and common variations).
+2. **`CryptoAudit.analyze_jwt()` tests live JWT endpoints**, it decodes a captured JWT, attempts `alg: none` replacement, and tests the provided token against the original endpoint to confirm whether the server accepts it. It also scans for weak secrets by attempting HS256 verification with entries from a configurable wordlist `secret`, `password`, `jwt_secret`, `changeme`, and common variations.
 
 3. **`CryptoAudit.scan_process_secrets()` extracts JWTs and signing keys from running process environments**, it reads `/proc/<pid>/environ` for all readable processes and extracts `JWT_SECRET`, `AUTH_SECRET`, `TOKEN_SIGNING_KEY`, and base64-encoded strings that look like JWT header prefixes (`eyJ`). This is the primary method for discovering signing keys from a compromised host.
 
@@ -91,8 +91,8 @@ Run JWT analysis after capturing a token from HTTP traffic (via `PCAPAnalyzer`) 
 |:---|:---|
 | `header` | Decoded JWT header dict |
 | `payload` | Decoded JWT payload dict |
-| `alg` | Algorithm claim string (e.g., `'HS256'`, `'none'`) |
-| `vulns` | `List[str]`: one entry per detected weakness (e.g., `'CRITICAL:WEAK_SECRET: secret is ...'`, `'MEDIUM:HS256: symmetric; secret may be weak'`) |
+| `alg` | Algorithm claim string for example `'HS256'`, `'none'` |
+| `vulns` | `List[str]`: one entry per detected weakness for example `'CRITICAL:WEAK_SECRET: secret is ...'`, `'MEDIUM:HS256: symmetric; secret may be weak'` |
 | `forged_token` | A forged JWT string when a weakness allows forgery, or `None` |
 
 `CryptoAudit.scan_for_jwts(paths)` scans a list of file paths and returns a list of `path, token_string` tuples for all JWT strings found.

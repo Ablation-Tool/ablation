@@ -48,7 +48,7 @@ All source PDFs are at `~/Documents/functional-safety-standards/`.
 
 ### 2.1 Why This Applies to Ablation
 
-ISO 26262 Part 8 Clause 11 defines Tool Confidence Levels (TCL) for software tools used in the development of safety-relevant systems. Ablation analyzes ECU firmware compiled by TCL3-qualified compilers (GHS CC-RH, TASKING TriCore, IAR for RH850). When Ablation reports a CONFIRMED finding against such firmware, that finding may support a safety case or PSIRT disclosure. The tool that produced the finding should meet at least the same standard as the tools that produced the code being analyzed.
+ISO 26262 Part 8 Clause 11 defines Tool Confidence Levels (TCL) for software tools used in the development of safety-relevant systems. Ablation analyzes ECU firmware compiled by TCL3-qualified compilers GHS CC-RH, TASKING TriCore, IAR for RH850. When Ablation reports a CONFIRMED finding against such firmware, that finding may support a safety case or PSIRT disclosure. The tool that produced the finding should meet at least the same standard as the tools that produced the code being analyzed.
 
 TCL is assigned from two factors:
 
@@ -60,7 +60,7 @@ TCL3 applies when TI is high and TD is low. For taint trackers and semantic scan
 - A false positive requires manual verification but is not safety-critical.
 - TD for taint trackers is low: false negatives are not caught by any downstream check.
 
-**Conclusion:** All taint trackers (`ARM32TaintTracker`, `ARM64TaintTracker`, `TriCoreTaintTracker`, `RH850TaintTracker`, `V850TaintTracker`, `MIPS32TaintTracker`, `PPC32TaintTracker`, and all other interprocedural trackers) are developed to TCL3 requirements. Scanners that classify findings as CRITICAL (e.g., `LA64MaxNotMinScanner`, `EcuSecurityAccessScanner`) are also TCL3 scope.
+**Conclusion:** All taint trackers `ARM32TaintTracker`, `ARM64TaintTracker`, `TriCoreTaintTracker`, `RH850TaintTracker`, `V850TaintTracker`, `MIPS32TaintTracker`, `PPC32TaintTracker`, and all other interprocedural trackers are developed to TCL3 requirements. Scanners that classify findings as CRITICAL for example `LA64MaxNotMinScanner`, `EcuSecurityAccessScanner` are also TCL3 scope.
 
 ### 2.2 TCL3 Requirements
 
@@ -78,7 +78,7 @@ ISO 26262 Part 8 Table 4 specifies five qualification methods for TCL3.
 
 The TASKING qualification kit and LDRA materials define the format. Each known anomaly entry requires:
 
-1. **Anomaly ID:** unique identifier within the module (e.g., `RH850-KA-001`)
+1. **Anomaly ID:** unique identifier within the module for example `RH850-KA-001`
 2. **Description:** what the tool gets wrong and under what conditions
 3. **Triggering conditions:** inputs or binary patterns that cause the anomaly
 4. **Impact:** false positive, false negative, or analysis abort
@@ -101,7 +101,7 @@ ISO 26262 Part 8 Clause 11 requires a safety manual for TCL3-qualified tools. Th
 
 #### 2.5.1 Scope of the Safety Manual
 
-This section applies to all taint trackers and all scanners that produce CRITICAL findings. Other Ablation modules (BinaryContext, SemanticSearcher, utility parsers) are not TCL3 scope.
+This section applies to all taint trackers and all scanners that produce CRITICAL findings. Other Ablation modules BinaryContext, SemanticSearcher, utility parsers are not TCL3 scope.
 
 #### 2.5.2 Intended Use
 
@@ -204,7 +204,7 @@ GitHub is the archive. Every module lands in a tagged commit before being refere
 
 Every new analyzer module must satisfy:
 1. No external network calls or subprocess calls at analysis time
-2. No mutable global state (use `@dataclass` instances, not module-level mutable dicts)
+2. No mutable global state use `@dataclass` instances, not module-level mutable dicts
 3. No `eval()`, `exec()`, or shell injection surface in any code path
 4. FORGE audit passes (`gate_passed=True`) before commit
 
@@ -226,9 +226,9 @@ Sections 1, 3, 5, and 10 are the highest-relevance sections for taint tracker mo
 
 **PW.4: Reuse Existing, Well-Secured Software When Feasible**
 
-- All taint trackers subclass a common base (`V850TaintTracker`, `TaintEngine`) rather than duplicating taint propagation logic
+- All taint trackers subclass a common base `V850TaintTracker`, `TaintEngine` rather than duplicating taint propagation logic
 - The flywheel (`FindingRegistry.ingest_from_registry()`) reuses confirmed patterns rather than re-deriving them per engagement
-- Capstone is the only external disassembler dependency; custom decoders exist only where Capstone has no support (V850/RH850, HiSilicon RV32, SH-2A)
+- Capstone is the only external disassembler dependency; custom decoders exist only where Capstone has no support V850/RH850, HiSilicon RV32, SH-2A
 
 **PW.5: Create Source Code by Adhering to Secure Coding Practices**
 

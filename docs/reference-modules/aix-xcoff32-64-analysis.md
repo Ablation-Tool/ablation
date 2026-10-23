@@ -1,6 +1,6 @@
 # AIX XCOFF32/64 Analysis
 
-Parse IBM AIX PowerPC executables in XCOFF32 (magic `0x01DF`, PPC32) or XCOFF64 (magic `0x01F7`/`0x01EF`, PPC64) format: extracting all sections, importing the `.loader` section's complete import/export symbol table with library attribution, resolving function-descriptor VAs to code VAs, and recovering internal function names from the symbol table when the loader section is absent or incomplete.
+Parse IBM AIX PowerPC executables in XCOFF32 magic `0x01DF`, PPC32 or XCOFF64 magic `0x01F7`/`0x01EF`, PPC64 format: extracting all sections, importing the `.loader` section's complete import/export symbol table with library attribution, resolving function-descriptor VAs to code VAs, and recovering internal function names from the symbol table when the loader section is absent or incomplete.
 
 ---
 
@@ -8,7 +8,7 @@ Parse IBM AIX PowerPC executables in XCOFF32 (magic `0x01DF`, PPC32) or XCOFF64 
 
 1. **LIEF does not support XCOFF.** `lief.parse()` returns `None` on XCOFF input. `BinaryContext` then falls through to a default `x86_64` context with no sections, no symbols, and no function starts. Every AIX RE session using only the existing LIEF stack was silently broken: appearing to succeed but operating on an empty binary model. `xcoff_parser` is the XCOFF-specific replacement.
 
-2. **The `.loader` section survives stripping and holds the complete import/export table.** AIX production builds routinely set `nsyms == 0` in the file header fully stripped. But the `.loader` section: identified by `s_flags == STYP_LOADER (0x1000)`: is not removed by `strip`. It contains every external reference and definition with name, library origin, virtual address, and storage mapping class. This is the primary RE surface for stripped AIX binaries.
+2. **The `.loader` section survives stripping and holds the complete import/export table.** AIX production builds routinely set `nsyms == 0` in the file header stripped. But the `.loader` section: identified by `s_flags == STYP_LOADER (0x1000)`: is not removed by `strip`. It contains every external reference and definition with name, library origin, virtual address, and storage mapping class. This is the primary RE surface for stripped AIX binaries.
 
 3. **XCOFF uses a function-descriptor ABI: exported function VAs in the loader section point to `.data` descriptors, not code.** On PPC32/PPC64, each exported function has a descriptor in `.data` consisting of `{code_va(4), toc_va(4)}` (PPC32) or `{code_va(8), toc_va(8)}` (PPC64). The loader symbol's `l_value` points to the descriptor, not the code. `_resolve_descriptors()` reads the descriptor at `l_value - dsec.vaddr` and writes the true code VA into `sym.code_va`.
 

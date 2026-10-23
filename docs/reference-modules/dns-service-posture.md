@@ -1,12 +1,12 @@
 # DNS Service Posture
 
-Probe DNS nameservers for AXFR/IXFR zone transfer acceptance, UDP ANY amplification reflector status, open recursive resolver status, EDNS0 COOKIE support source-port predictability indicator, BIND version disclosure via CHAOS class query, and DNS-over-TLS (DoT, TCP/853) and DNS-over-HTTPS (DoH) encrypted resolver exposure: via `modules/streaming_enum.py` `probe_dns_zone_transfer()`, `probe_dns_recursion()`, and `probe_dns_dot_doh()`.
+Probe DNS nameservers for AXFR/IXFR zone transfer acceptance, UDP ANY amplification reflector status, open recursive resolver status, EDNS0 COOKIE support source-port predictability indicator, BIND version disclosure via CHAOS class query, and DNS-over-TLS DoT, TCP/853 and DNS-over-HTTPS (DoH) encrypted resolver exposure: via `modules/streaming_enum.py` `probe_dns_zone_transfer()`, `probe_dns_recursion()`, and `probe_dns_dot_doh()`.
 
 ---
 
 ## Why this exists
 
-1. **`probe_dns_zone_transfer()` tests whether a nameserver permits unauthenticated AXFR/IXFR**: zone transfer (`AXFR`, DNS type 252) transfers every DNS record in a zone over TCP/53. When a nameserver returns a non-empty AXFR response, every A, AAAA, MX, CNAME, SRV, and TXT record in the zone is disclosed to the requester. `probe_dns_zone_transfer()` also checks IXFR type 251 as a fallback and tests UDP ANY QTYPE 255 amplification: a response exceeding 512 bytes confirms the nameserver is usable as a DNS amplification reflector in DDoS attacks.
+1. **`probe_dns_zone_transfer()` tests whether a nameserver permits unauthenticated AXFR/IXFR**: zone transfer `AXFR`, DNS type 252 transfers every DNS record in a zone over TCP/53. When a nameserver returns a non-empty AXFR response, every A, AAAA, MX, CNAME, SRV, and TXT record in the zone is disclosed to the requester. `probe_dns_zone_transfer()` also checks IXFR type 251 as a fallback and tests UDP ANY QTYPE 255 amplification: a response exceeding 512 bytes confirms the nameserver is usable as a DNS amplification reflector in DDoS attacks.
 
 2. **`probe_dns_recursion()` detects open recursive resolvers**: a resolver that sets both the Recursion Desired (RD) and Recursion Available (RA) flags in response to an external-domain query is an open recursive resolver. Open resolvers are both an information disclosure risk internal resolver reveals which external domains internal hosts query and an amplification attack resource. `probe_dns_recursion()` also queries `version.bind CHAOS TXT` to extract BIND version strings and checks EDNS0 COOKIE support: the primary defense against DNS source-port spoofing attacks.
 
@@ -116,7 +116,7 @@ DNS probe functions return `List[{severity, title, detail, host, port}]`:
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
-| `title` | Finding code (e.g., `DNS_ZONE_TRANSFER_ALLOWED`, `DNS_OPEN_RESOLVER`, `DNS_ANY_AMPLIFICATION`) |
+| `title` | Finding code for example `DNS_ZONE_TRANSFER_ALLOWED`, `DNS_OPEN_RESOLVER`, `DNS_ANY_AMPLIFICATION` |
 | `detail` | Zone name, record count, or amplification factor |
 | `host` | Target nameserver |
 | `port` | UDP/TCP 53, 853, or 443 |

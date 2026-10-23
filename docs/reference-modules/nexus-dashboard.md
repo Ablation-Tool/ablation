@@ -92,10 +92,10 @@ Nexus Dashboard probe functions return `List[{severity, title, detail, host, por
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` unauthenticated access / `HIGH` POAP/config injection / `MEDIUM` |
-| `title` | Finding code (e.g., `ND_KAFKA_TELEMETRY_OPEN`, `ND_POAP_UNAUTHENTICATED`, `ND_ADMIN_EXPOSED`) |
+| `title` | Finding code for example `ND_KAFKA_TELEMETRY_OPEN`, `ND_POAP_UNAUTHENTICATED`, `ND_ADMIN_EXPOSED` |
 | `detail` | Platform, version, port, and exploitation context |
 | `host` | Target IP |
-| `port` | Service port (e.g., `443`, `80`) |
+| `port` | Service port for example `443`, `80` |
 
 ---
 

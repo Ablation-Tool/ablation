@@ -89,15 +89,15 @@ Run `SigLibrary.auto_name()` after `CorpusBuilder.build()` and before `SemanticS
 
 ## Reading output
 
-`SigLibrary.auto_name(db_path, dry_run=False)` renames all `ANGR_INFERRED` placeholder functions in the `func_id_db` SQLite database and returns `int`: the count of functions renamed.
+`SigLibrary.auto_namedb_path, dry_run=False` renames all `ANGR_INFERRED` placeholder functions in the `func_id_db` SQLite database and returns `int`: the count of functions renamed.
 
 `SigLibrary.match_functionname, call_targets, string_xrefs, notes` returns an `Optional[SigMatch]` for a single function record:
 
 | Attribute | Content |
 |:---|:---|
-| `name` | Matched signature name (e.g., `'memcpy'`, `'strlen'`) |
+| `name` | Matched signature name for example `'memcpy'`, `'strlen'` |
 | `aliases` | `List[str]`: alternate known names for this function |
-| `category` | Vulnerability category (e.g., `'memory-safety'`) |
+| `category` | Vulnerability category for example `'memory-safety'` |
 | `cwe_risk` | Associated CWE string, or `None` |
 | `score` | Float 0.0–1.0: embedding cosine similarity |
 

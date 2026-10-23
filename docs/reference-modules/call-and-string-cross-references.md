@@ -10,7 +10,7 @@ Navigate the binary's call graph and string reference index: find every caller o
 
 2. **String cross-references map human-readable evidence to code locations.** Firmware binaries contain error messages, log strings, and protocol strings in `.rodata`. A string like `"SSL_read error: %d"` instantly narrows the relevant code to 1–3 functions. The `funcs_referencing_string()` and `strings_in_func()` methods provide that navigation without disassembly or grep.
 
-3. **RIP-relative string references must be indexed at build time.** On x86-64, string references use RIP-relative addressing (`lea rsi, [rip+offset]`). Computing which instruction references which string requires scanning every instruction in the code section and resolving each RIP-relative displacement against the known string VA set: an O(N×M) operation that is too expensive to run on every query. `BinaryContext` runs this scan once during `_build()` and caches the result as `_str_xref_idx`.
+3. **RIP-relative string references must be indexed at build time.** On x86-64, string references use RIP-relative addressing `lea rsi, [rip+offset]`. Computing which instruction references which string requires scanning every instruction in the code section and resolving each RIP-relative displacement against the known string VA set: an O(N×M) operation that is too expensive to run on every query. `BinaryContext` runs this scan once during `_build()` and caches the result as `_str_xref_idx`.
 
 ---
 
@@ -47,7 +47,7 @@ flowchart TD
 
 **`strings_in_func(func_va)`**: returns all `string_va, content` pairs for strings that have a RIP-relative reference inside the function at `func_va`. Useful for characterizing what a function does by its string constants.
 
-**`strings_near(va, radius=128)`**: returns all strings in the `strings` dict within `±radius` bytes of `va`. Useful for checking what constant data surrounds a specific address.
+**`strings_nearva, radius=128`**: returns all strings in the `strings` dict within `±radius` bytes of `va`. Useful for checking what constant data surrounds a specific address.
 
 ---
 
@@ -113,9 +113,9 @@ ctx.func_containing(0x40a240)
 
 ## False positives
 
-**Tail calls and indirect calls.** The call graph is built from direct `CALL` instructions with immediate targets. Indirect calls (`CALL rax`, `CALL [rbp+8]`) are tracked with label `"indirect"` but cannot be resolved to a target VA at this stage. `callers_of()` results for functions that are primarily called indirectly will be incomplete.
+**Tail calls and indirect calls.** The call graph is built from direct `CALL` instructions with immediate targets. Indirect calls `CALL rax`, `CALL [rbp+8]` are tracked with label `"indirect"` but cannot be resolved to a target VA at this stage. `callers_of()` results for functions that are primarily called indirectly will be incomplete.
 
-**RIP-relative references in non-string contexts.** Not every RIP-relative reference is a string reference. References to other code sections (e.g., `lea rcx, [rip+_init_proc]`) or to function pointers in `.data` will not match any string VA and are silently excluded from the index. The index only records references whose target VA maps to a known entry in `ctx.strings`.
+**RIP-relative references in non-string contexts.** Not every RIP-relative reference is a string reference. References to other code sections for example `lea rcx, [rip+_init_proc]` or to function pointers in `.data` will not match any string VA and are silently excluded from the index. The index only records references whose target VA maps to a known entry in `ctx.strings`.
 
 **`strings_near()` radius granularity.** The proximity radius is a byte-distance heuristic, it does not respect function boundaries. A string from a completely unrelated nearby function can appear within the radius. Use `strings_in_func()` for function-scoped string discovery.
 

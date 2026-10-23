@@ -6,7 +6,7 @@ Pre-computed, serialized binary context cache that captures ELF parsing results 
 
 ## Why this exists
 
-1. **ELF parsing (PLT resolution, `.eh_frame` FDE extraction, string table scan, call edge enumeration) takes 2–5 seconds per binary: on a firmware image with 40 shared libraries, that is 80–200 seconds of parsing overhead per session if re-parsed each time.** `BinaryContext.load_or_build()` builds the context once and serializes it to `~/.ablation/cache/<binary_hash>.pkl`; subsequent loads from cache take under 100ms regardless of binary size.
+1. **ELF parsing PLT resolution, `.eh_frame` FDE extraction, string table scan, call edge enumeration takes 2–5 seconds per binary: on a firmware image with 40 shared libraries, that is 80–200 seconds of parsing overhead per session if re-parsed each time.** `BinaryContext.load_or_build()` builds the context once and serializes it to `~/.ablation/cache/<binary_hash>.pkl`; subsequent loads from cache take under 100ms regardless of binary size.
 
 2. **`BinaryContext` is the single required input for every Ablation analyzer**: `CFGBuilder`, `TaintTracker`, `FuncProfiler`, `SinkArgClassifier`, `FormatStringScanner`, `RegAnnotator`, and all other analyzers accept `from_context(ctx)` and require only the pre-built `BinaryContext`. Building the context once at session start and passing it to all analyzers is the baseline usage pattern described in `CLAUDE.md`.
 
@@ -108,7 +108,7 @@ BinaryContext: /path/to/target.elf
 |:---|:---|
 | `plt_entries` | Dict of PLT entry VA → symbol name |
 | `exports` | Dict of export VA → name |
-| `strings` | `List[(va, str)]`: `.rodata` strings |
+| `strings` | `List[va, str]`: `.rodata` strings |
 | `func_starts` | `List[int]`: function start VAs |
 | `call_edges` | `List[caller_va, callee_va]` |
 | `name(va)` | Named function at VA (or `None`) |

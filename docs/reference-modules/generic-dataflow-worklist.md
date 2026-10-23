@@ -76,7 +76,7 @@ XorSolverResult:
 
 ## False positives
 
-**High confidence (>0.8) does not guarantee the correct key**: if the ciphertext was encrypted with a key that happens to score well on the IC metric but is not the actual key, `XorSolverResult.confidence` will be high but the decrypted output will be garbage. Always verify decryption by checking for expected magic bytes (`\x7fELF`, `\x1f\x8b`, etc.) at known-good offsets in the decrypted output.
+**High confidence (>0.8) does not guarantee the correct key**: if the ciphertext was encrypted with a key that happens to score well on the IC metric but is not the actual key, `XorSolverResult.confidence` will be high but the decrypted output will be garbage. Always verify decryption by checking for expected magic bytes `\x7fELF`, `\x1f\x8b`, etc. at known-good offsets in the decrypted output.
 
 **KPA stage fires on coincidental byte matches**: a `key_candidate` that repeats in the first 64 bytes but diverges afterward is a false match. `kpa_attack()` validates key repetition across the full ciphertext; the confidence score reflects the repetition uniformity.
 

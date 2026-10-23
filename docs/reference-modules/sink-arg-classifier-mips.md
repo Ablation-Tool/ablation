@@ -23,7 +23,7 @@ Two gaps prevented MIPS32 firmware analysis. Both are now resolved.
  four arguments. There was no equivalent register path. Every MIPS32 sink call site returned 0
  results. Fixed here.
 
- Manual analysis of `cwWtpd` (FortiAP MIPS32 Gen1, `/sbin/cwWtpd`) required tracing CAPWAP
+ Manual analysis of `cwWtpd` FortiAP MIPS32 Gen1, `/sbin/cwWtpd` required tracing CAPWAP
  message dispatch tables by hand to confirm FAP-CWMIPS-1. That work identified the specific
  trace pattern: `LW $vX, N($gp)` to load section base from the GOT, followed by
    `ADDIU $aY, $vX, M` to add an offset. Without this module, every shell sink call site on every
@@ -63,10 +63,10 @@ No injection is possible regardless of caller context.
 
 `SNPRINTF_RODATA` means the sink argument is a stack buffer filled by snprintf or vsnprintf with a
 `.rodata` format string. Injection requires controlling a `%s` argument in that format string.
-Integer-only formats (`%d`, `%u`, `%x`) are safe.
+Integer-only formats `%d`, `%u`, `%x` are safe.
 
 `ARG_PROPAGATED` means the argument arrived in an entry register (`$a0`–`$a3`) saved to the stack
-at function entry via the O32 arg-save pattern (`SW $aX, disp($fp)` in the first 20 instructions).
+at function entry via the O32 arg-save pattern `SW $aX, disp($fp` in the first 20 instructions).
 The caller controls it. Move up one level.
 
 `UNKNOWN` means provenance was not resolved in the look-back window. Treat the same as
@@ -128,9 +128,9 @@ LW $aX, N($gp)        # GOT[$gp+N] points directly into .rodata
 
 ## snprintf backtrack
 
-When a sink receives a stack buffer (`ADDIU $aX, $fp, N` or `ADDIU $aX, $sp, N`),
+When a sink receives a stack buffer `ADDIU $aX, $fp, N` or `ADDIU $aX, $sp, N`,
 `_trace_snprintf_buf` searches backward for an `snprintf` or `vsnprintf` call with `$a0` matching
-the same slot. If found, it traces the format argument (`$a2` for snprintf, `$a2` for vsnprintf)
+the same slot. If found, it traces the format argument `$a2` for snprintf, `$a2` for vsnprintf
 to a `.rodata` pointer. A match returns `SNPRINTF_RODATA`.
 
 ---
@@ -164,7 +164,7 @@ before the JALR in a different branch, the verdict will be wrong.
 
 ## How it works
 
-`SinkArgClassifierMIPS.from_context(ctx).classify_all()` iterates `ctx.func_starts` MIPS32 binary and disassembles each function with Capstone. For each call to a configured exec-class sink (`system`, `execve`, `popen`, etc.), it traces the first argument register (`a0`) backward in the instruction stream using MIPS register conventions. Resolves to `RODATA_CONST` if the argument traces to a `.rodata` address; `ARG_PROPAGATED` if traced to a parameter; `UNKNOWN` if unresolved. Accounts for MIPS delay slot: the instruction after each branch/call is part of the branch semantics.
+`SinkArgClassifierMIPS.from_context(ctx).classify_all()` iterates `ctx.func_starts` MIPS32 binary and disassembles each function with Capstone. For each call to a configured exec-class sink `system`, `execve`, `popen`, etc., it traces the first argument register (`a0`) backward in the instruction stream using MIPS register conventions. Resolves to `RODATA_CONST` if the argument traces to a `.rodata` address; `ARG_PROPAGATED` if traced to a parameter; `UNKNOWN` if unresolved. Accounts for MIPS delay slot: the instruction after each branch/call is part of the branch semantics.
 
 ---
 
@@ -202,8 +202,8 @@ Delay-slot misattribution: a load in the delay slot of a branch may be incorrect
 
 | Attribute | Content |
 |:---|:---|
-| `sink_name` | Name of the exec-class sink function (e.g., `'system'`, `'popen'`) |
-| `arg_pos` | 0-indexed argument position analyzed (0 = `$a0`, 1 = `$a1`, etc.) |
+| `sink_name` | Name of the exec-class sink function for example `'system'`, `'popen'` |
+| `arg_pos` | 0-indexed argument position analyzed 0 = `$a0`, 1 = `$a1`, etc. |
 | `func_va` | VA of the calling function |
 | `call_va` | VA of the `jal` / `jalr` instruction |
 | `verdict` | `'RODATA_CONST'`: hardcoded constant; `'SNPRINTF_RODATA'`: buffer from fixed-format snprintf; `'ARG_PROPAGATED'`: traces to entry-point `$a0`–`$a3`; `'UNKNOWN'`: provenance unresolved |

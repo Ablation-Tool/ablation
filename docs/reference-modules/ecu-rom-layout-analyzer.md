@@ -29,7 +29,7 @@ capture only the calibration flash partition; the program flash is absent. Runni
 `EcuSecurityAccessScanner` or any disassembler against such an image produces only false positives
 because the byte patterns it recognizes as M68K or PPC32 instructions do not appear. Before this,
 there was no way to detect this condition programmatically. `ROMLayout.is_calibration_only()` returns
-`(True, reason)` when the layout has zero CODE regions and at least one active non-erased region,
+`True, reason` when the layout has zero CODE regions and at least one active non-erased region,
 so callers can skip code analysis entirely.
 
 **5. No TriCore AURIX layout classification.** The AURIX Interrupt Vector Table (IVT) is 256 entries
@@ -69,7 +69,7 @@ Real-world ROM regions fall into distinct bands:
 | CODE | 5.4 to 6.3 fixed-width ISA | Aligned instruction streams with clustered opcodes |
 
 The overlap between CALIBRATION and CODE in the 4.8 to 6.5 range is the core classification
-problem. Fixed-width ISAs (PPC32, M68k, TriCore, SH) produce lower code entropy than x86 because
+problem. Fixed-width ISAs PPC32, M68k, TriCore, SH produce lower code entropy than x86 because
 their aligned instructions cluster in a smaller opcode space.
 
 ### Fill-byte ratio
@@ -182,9 +182,9 @@ class ROMLayout:
 
 ### `is_calibration_only() -> tuple[bool, str]`
 
-Returns `(True, reason)` when the layout contains no CODE regions and at least one active
+Returns `True, reason` when the layout contains no CODE regions and at least one active
 non-ERASED, non-PADDING region. Returns `(False, "")` when CODE regions are present.
-Returns `(False, "image is fully erased")` when no active regions exist at all.
+Returns `(False, "image is erased")` when no active regions exist at all.
 
 Use this before running `EcuSecurityAccessScanner` or any disassembly pipeline:
 
@@ -244,7 +244,7 @@ cal_only, reason = layout.is_calibration_only()
 # (True, "OBD cal-only dump, program flash absent")
 ```
 
-### GM E38 PCM (E38_2048KiB_12607218.bin, 2 MB, PPC32 full flash)
+### GM E38 PCM E38_2048KiB_12607218.bin, 2 MB, PPC32 full flash
 
 ```
 Offset              Type          Size   Entropy
@@ -358,7 +358,7 @@ for r in layout.ivt_regions():
  windows are at code/calibration boundaries and span less than one window.
 - `detect_reset_vector()` cannot distinguish TriCore from SH705x when both patterns are present.
  Use `EcuXDFParser` to check for an architecture-specific definition file first.
-- On systems without Capstone installed, `_tricore_density` returns `(0.0, False)`, which causes
+- On systems without Capstone installed, `_tricore_density` returns `0.0, False`, which causes
  all TriCore windows to be classified as CALIBRATION. The `arch_hint="tricore"` path requires
   `capstone >= 5.0.1` with TriCore support.
 
@@ -393,7 +393,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, or C28x for vulnerability analysis.
 
 ---
 
@@ -406,7 +406,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 | `file_size` | Total ROM size in bytes |
 | `regions` | `List[ROMRegion]`: entropy-classified regions |
 | `window_size` | Entropy window size used during analysis |
-| `fill_byte` | Fill byte value (`0xFF` for NOR flash, `0x00` for some NAND) |
+| `fill_byte` | Fill byte value `0xFF` for NOR flash, `0x00` for some NAND |
 
 Each `ROMRegion` has:
 

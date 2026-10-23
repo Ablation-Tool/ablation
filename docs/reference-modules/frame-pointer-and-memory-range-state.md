@@ -82,7 +82,7 @@ scan() findings:
 
 ## False positives
 
-**`referenced_clsids()` finds GUID-format strings that are not Windows CLSIDs**: interface IDs (IIDs), category IDs (CATID), and device GUIDs share the same `{8-4-4-4-12}` format. A GUID in a network protocol context is not a COM CLSID. Verify that the GUID appears in a COM registration context (alongside `ProgID`, `InprocServer32`) before treating it as an activation surface.
+**`referenced_clsids()` finds GUID-format strings that are not Windows CLSIDs**: interface IDs (IIDs), category IDs (CATID), and device GUIDs share the same `{8-4-4-4-12}` format. A GUID in a network protocol context is not a COM CLSID. Verify that the GUID appears in a COM registration context alongside `ProgID`, `InprocServer32` before treating it as an activation surface.
 
 **`cocreate_sites()` returns `None` as the CLSID for indirect activations**: a `CoCreateInstance` where the CLSID is loaded from a configuration file, registry key, or computed at runtime cannot be resolved statically. These sites are reported as `CLSID=dynamic` and require dynamic analysis or registry tracing to determine the actual activation target.
 

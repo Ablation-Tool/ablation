@@ -102,7 +102,7 @@ VtableResolver:
 
 ## False positives
 
-**`extract_vtable_regions` extracts all DRELRO runs of code pointers: function pointer tables that are not vtables dispatch tables, jump tables for protocol handlers may be incorrectly included.** Filter by minimum vtable size (`min_slots=3`, the default) and cross-reference against constructor assignments from `detect_ctor_vptr_inits` before treating a candidate as a class vtable.
+**`extract_vtable_regions` extracts all DRELRO runs of code pointers: function pointer tables that are not vtables dispatch tables, jump tables for protocol handlers may be incorrectly included.** Filter by minimum vtable size `min_slots=3`, the default and cross-reference against constructor assignments from `detect_ctor_vptr_inits` before treating a candidate as a class vtable.
 
 **BLR resolution to a target set includes all objects of matching vtable shape: if multiple classes share the same vtable structure same slot count, same type hierarchy, the resolution may include targets from unrelated classes.** Use `CtorVptrInit.init_pc` and `vtable_va` to narrow down which class a specific BLR is dispatching on: `BLRSite.narrowed == True` means the ctor type info was used.
 

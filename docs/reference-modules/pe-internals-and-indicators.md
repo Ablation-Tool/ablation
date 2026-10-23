@@ -150,7 +150,7 @@ Imports (selected):
 
 **Managed .NET assemblies.** .NET binaries are valid PE files but their code lives in the CLR metadata, not in native x86/x64 instructions. The parser reads the PE structure correctly but the IAT will only contain `_CorExeMain` from `mscoree.dll`. Downstream taint and disassembly tools operate on the native stub only, not the managed bytecode.
 
-**Forwarded exports.** Some DLLs export function names that are actually forwarded to another DLL (e.g., `kernel32.dll!HeapAlloc` forwards to `ntdll.dll!RtlAllocateHeap`). The parser records the RVA correctly; the forwarding target is available in the export directory's forwarded string field.
+**Forwarded exports.** Some DLLs export function names that are actually forwarded to another DLL for example `kernel32.dll!HeapAlloc` forwards to `ntdll.dll!RtlAllocateHeap`. The parser records the RVA correctly; the forwarding target is available in the export directory's forwarded string field.
 
 ---
 

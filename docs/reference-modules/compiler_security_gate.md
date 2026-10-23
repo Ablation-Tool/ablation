@@ -5,7 +5,7 @@ suite on a freshly compiled binary (the output of `ld`) before it ships.
 
 ## Why post-linker matters
 
-Traditional compiler security tools (LLVM sanitizers, `-fstack-protector`) run
+Traditional compiler security tools LLVM sanitizers, `-fstack-protector` run
 **before** optimization on the IR. Optimization passes can then remove bounds
 checks the sanitizer already approved, or introduce new unsafe code paths. The
 gate runs on the final binary, after all optimization passes, so it sees what

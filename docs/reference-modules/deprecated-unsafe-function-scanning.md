@@ -1,6 +1,6 @@
 # Deprecated and Unsafe Function Scanning
 
-Detect CWE-242/CWE-377 in stripped binaries without taint analysis: identifying unconditionally dangerous functions (`gets`, `mktemp`, `tmpnam`, `getwd`) directly from PLT entries, computing the overflow offset at each `gets` call site from the preceding `LEA` instruction, and reporting the reachability chain per call site.
+Detect CWE-242/CWE-377 in stripped binaries without taint analysis: identifying unconditionally dangerous functions `gets`, `mktemp`, `tmpnam`, `getwd` directly from PLT entries, computing the overflow offset at each `gets` call site from the preceding `LEA` instruction, and reporting the reachability chain per call site.
 
 ---
 
@@ -92,7 +92,7 @@ Run `DeprecatedFuncScanner` early in the analysis pipeline: before `SinkArgClass
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` gets, getwd / `HIGH` strcpy, strcat, sprintf |
-| `func` | Deprecated function name (e.g., `gets`, `strcpy`) |
+| `func` | Deprecated function name for example `gets`, `strcpy` |
 | `call_va` | VA of the call instruction |
 | `buffer_offset` | Destination buffer offset from frame base (or `None` if not statically recoverable) |
 | `reachability_chain` | List of caller VAs from the entry point down to the deprecated function call |

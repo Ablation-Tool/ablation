@@ -8,7 +8,7 @@ Execute leaf functions with controlled register inputs using Unicorn: capturing 
 
 1. **Static analysis can identify that a function transforms input in some way but cannot determine the exact transformation without running the code.** `DynamicSandbox` executes a leaf function with controlled inputs and captures the output register state, providing ground-truth behavioral evidence: `sandbox.probe(va, inputs={'x0': 0x41414141})` returns `{'x0': 0x12345678}`: the actual output value, not an approximation.
 
-2. **Safety constraints make sandbox execution reliable on unknown firmware code.** The sandbox only executes "leaf functions" (no external calls, verified by `LeafFunctionChecker`) and aborts immediately if execution reaches a PLT stub mapped to an abort-hook region. A hard instruction-count timeout default 100,000 instructions prevents infinite loops. Snapshot/restore keeps binary memory clean between probes: each probe starts from an identical memory state.
+2. **Safety constraints make sandbox execution reliable on unknown firmware code.** The sandbox only executes "leaf functions" no external calls, verified by `LeafFunctionChecker` and aborts immediately if execution reaches a PLT stub mapped to an abort-hook region. A hard instruction-count timeout default 100,000 instructions prevents infinite loops. Snapshot/restore keeps binary memory clean between probes: each probe starts from an identical memory state.
 
 3. **Architecture support is arm64 and x86_64**: the two primary firmware architectures for Ablation's main targets. LoongArch64 and MIPS64 stubs exist for future support but do not execute code. `DynamicSandbox` is described as "Phase 3" in the hypothesis engine plan, complementing static Phase 1 (taint) and Phase 2 semantic analysis.
 
@@ -110,7 +110,7 @@ Run `DynamicSandbox` as Phase 3 in the hypothesis validation pipeline: after sta
 | `abort_reason` | Reason string if aborted, empty otherwise |
 | `arch` | Architecture string (default `'arm64'`) |
 
-`LeafFunctionChecker.is_leaf(va, ctx=None)` returns `True` if the function at `va` makes no external (PLT) calls: use this to identify safe probe candidates before running `DynamicSandbox`.
+`LeafFunctionChecker.is_leafva, ctx=None` returns `True` if the function at `va` makes no external (PLT) calls: use this to identify safe probe candidates before running `DynamicSandbox`.
 
 ---
 

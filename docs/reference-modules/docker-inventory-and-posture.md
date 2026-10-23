@@ -91,7 +91,7 @@ Run `DockerEnumerator` after gaining shell access to a host or container. Use `c
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` |
-| `title` | Finding code (e.g., `CAP_SYS_ADMIN_IN_CONTAINER`, `DOCKER_SOCKET_MOUNTED`) |
+| `title` | Finding code for example `CAP_SYS_ADMIN_IN_CONTAINER`, `DOCKER_SOCKET_MOUNTED` |
 | `detail` | Evidence capability bit, mount path |
 | `host` | `localhost` |
 | `port` | `0` |

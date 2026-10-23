@@ -15,7 +15,7 @@ A developer writes correct C++: `size_t n = std::maxinput_len, min_len`. The com
 
 ## The GCC 12.3.1.7 max-not-min bug
 
-GCC 12.3.1.7 for LoongArch64 miscompiles comparison operations that feed into size calculations. The compiler emits a correct-looking four-instruction sequence but swaps the operands in the final combination step. The result is that `max(a, b)` returns `min(a, b)`.
+GCC 12.3.1.7 for LoongArch64 miscompiles comparison operations that feed into size calculations. The compiler emits a correct-looking four-instruction sequence but swaps the operands in the final combination step. The result is that `maxa, b` returns `mina, b`.
 
 ### The four-instruction sequence
 
@@ -123,7 +123,7 @@ Rust `Vec` append patterns use `bltu remaining_cap,...` to guard the write. Thes
 
 ## How it works
 
-`LA64MaxNotMinScanner.scan()` disassembles the entire `.text` section with a pure-Python LoongArch64 decoder, not Capstone, no func_starts iteration. For each instruction, it detects the GCC-generated `masknez rd, ra, cond + maskeqz rd2, rb, cond + or rd, rd, rd2` pattern that emits `min(a,b)` when the source code called `max(a,b)`. On a match, looks ahead for a sink call malloc/memcpy/recv using the result register. Returns `List[LA64MaxNotMinFinding]` with `pattern_va`, `result_reg`, `sink_va`, `sink_name`, `sink_arg`.
+`LA64MaxNotMinScanner.scan()` disassembles the entire `.text` section with a pure-Python LoongArch64 decoder, not Capstone, no func_starts iteration. For each instruction, it detects the GCC-generated `masknez rd, ra, cond + maskeqz rd2, rb, cond + or rd, rd, rd2` pattern that emits `mina,b` when the source code called `maxa,b`. On a match, looks ahead for a sink call malloc/memcpy/recv using the result register. Returns `List[LA64MaxNotMinFinding]` with `pattern_va`, `result_reg`, `sink_va`, `sink_name`, `sink_arg`.
 
 ---
 

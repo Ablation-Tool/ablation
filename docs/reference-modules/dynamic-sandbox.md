@@ -57,7 +57,7 @@ for r in results:
     print(r.behavioral_signature())
 ```
 
-Each `SandboxResult.behavioral_signature()` is a compact string (`ret=0x1,writes=2,insns=47`) that identifies a run's behavior. Two results with the same signature exhibit the same output for the same input, so matching signatures across different binaries indicate structurally equivalent functions.
+Each `SandboxResult.behavioral_signature()` is a compact string `ret=0x1,writes=2,insns=47` that identifies a run's behavior. Two results with the same signature exhibit the same output for the same input, so matching signatures across different binaries indicate structurally equivalent functions.
 
 ---
 
@@ -82,8 +82,8 @@ Both ELF and PE binaries are supported. PE binaries use the IAT range as the abo
 | `sandbox.run_functionva, args, max_insns` | Execute function at va with register arguments |
 | `sandbox.probe_multipleva, input_sets` | Run the same function with multiple input sets; each run gets a clean restore |
 | `LeafFunctionChecker.from_path(binary)` | Build checker from binary's PLT range |
-| `checker.is_leaf(va, ctx)` | True if function has no PLT callees |
-| `checker.check_report(va, ctx)` | Human-readable probe-safety report for va |
+| `checker.is_leafva, ctx` | True if function has no PLT callees |
+| `checker.check_reportva, ctx` | Human-readable probe-safety report for va |
 | `SandboxResult.behavioral_signature()` | Compact string identifying a run's behavior |
 
 ---
@@ -121,7 +121,7 @@ The adapter is registered automatically. Invoke it by scheduling a `dynamic` pro
 
 ## How it works
 
-Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
+Parses the runtime-specific binary format APK, DEX, `.mpy`, BEAM, Go ELF to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
 
 ---
 
@@ -140,13 +140,13 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
+Standard library calls that resemble dangerous patterns for example `exec` used for shell completions, `eval` used for template rendering with static input are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code Garble-compiled Go, ProGuard-stripped Android produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm the target binary format (APK, `.mpy`, BEAM, Go ELF) before loading. `BinaryContext` is not required for all runtime analyzers.
+**Before this module:** Confirm the target binary format APK, `.mpy`, BEAM, Go ELF before loading. `BinaryContext` is not required for all runtime analyzers.
 
 **After this module:** Feed dangerous call findings to `TaintTracker` or `FindingRegistry` for confirmed findings.
 
@@ -166,7 +166,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 | `memory_writes` | `List[Tuple[address, size, value_bytes]]`: all memory stores during execution |
 | `aborted` | `True` if execution was stopped before returning timeout or unsafe access |
 | `abort_reason` | Reason string when `aborted=True` |
-| `arch` | Architecture of the probe run (e.g., `'arm64'`, `'x86_64'`) |
+| `arch` | Architecture of the probe run for example `'arm64'`, `'x86_64'` |
 
 ---
 

@@ -8,7 +8,7 @@ Scan Android APK packages for hardcoded secrets, dangerous API invocations, cryp
 
 1. **Static analysis of Android APKs requires parsing two distinct binary formats simultaneously: Dalvik Executable (DEX) for bytecode and strings, and Android Binary XML (AXML) for manifest permissions and component declarations.** Tools that use only dexdump or apktool miss the cross-format findings: a `READ_CONTACTS` + `INTERNET` permission combination that feeds into a hardcoded C2 URL requires correlating manifest data with DEX string literals. `DexAnalyzer._scan_manifest()` and `_scan_dex_strings()` run together on the same `APKParser` instance so cross-format signals are always in scope.
 
-2. **Dangerous API detection must distinguish between intentional security mechanisms and misuse: `Cipher.getInstance("AES")` is not a finding by itself; `Cipher.getInstance("AES/ECB/NoPadding")` is.** `CRYPTO_PATTERNS` maps full method-reference strings (`Ljavax/crypto/Cipher;->getInstance(Ljava/lang/String;)`) to severity labels, so method-level precision is preserved. `DANGEROUS_API_PATTERNS` covers reflection (`Class.forName`, `Method.invoke`), subprocess execution (`Runtime.getRuntime`, `ProcessBuilder`), and dynamic code loading (`DexClassLoader`, `PathClassLoader`) with class + method-reference matching that is not fooled by package obfuscation that preserves method names.
+2. **Dangerous API detection must distinguish between intentional security mechanisms and misuse: `Cipher.getInstance("AES")` is not a finding by itself; `Cipher.getInstance("AES/ECB/NoPadding")` is.** `CRYPTO_PATTERNS` maps full method-reference strings (`Ljavax/crypto/Cipher;->getInstance(Ljava/lang/String;)`) to severity labels, so method-level precision is preserved. `DANGEROUS_API_PATTERNS` covers reflection `Class.forName`, `Method.invoke`, subprocess execution `Runtime.getRuntime`, `ProcessBuilder`, and dynamic code loading `DexClassLoader`, `PathClassLoader` with class + method-reference matching that is not fooled by package obfuscation that preserves method names.
 
 3. **Hardcoded secret detection without false positives requires entropy-gated pattern matching, not just keyword presence.** A string containing `api_key` in its literal value is only a finding when the value portion also has sufficient entropy. `_scan_dex_strings()` applies Shannon entropy pre-screening before reporting, reducing noise from help-text strings that mention "API key" in documentation comments while ensuring 32-char hex secrets and base64-encoded tokens are flagged regardless of their surrounding variable name.
 
@@ -132,9 +132,9 @@ MEDIUM (2)
 | Field | Content |
 |:---|:---|
 | `f.severity` | `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` |
-| `f.category` | Finding category string (e.g., `HARDCODED_SECRET`, `EXPORTED_COMPONENT`) |
+| `f.category` | Finding category string for example `HARDCODED_SECRET`, `EXPORTED_COMPONENT` |
 | `f.detail` | Specific evidence: matched string, method reference, permission combination |
-| `f.class_name` | Dalvik class descriptor where the finding was observed (e.g., `Lcom/example/MainActivity;`) |
+| `f.class_name` | Dalvik class descriptor where the finding was observed for example `Lcom/example/MainActivity;` |
 | `f.method_name` | Method name within the class, or `<manifest>` for manifest findings |
 
 ---

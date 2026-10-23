@@ -76,20 +76,20 @@ Run `EcuC28xDecoder` on any TI F28x-series firmware after `EcuArchDetector` conf
 
 ## Reading output
 
-`EcuC28xDecoder.disassemble(start=0, end=None)` returns `List[C28xInsn]`:
+`EcuC28xDecoder.disassemblestart=0, end=None` returns `List[C28xInsn]`:
 
 | Attribute | Content |
 |:---|:---|
 | `word_va` | Word-address VA of the instruction |
 | `is_32bit` | `True` when the instruction occupies two 16-bit words |
-| `mnemonic` | Instruction mnemonic (e.g., `'MOV'`, `'LCR'`, `'ADDB'`) |
+| `mnemonic` | Instruction mnemonic for example `'MOV'`, `'LCR'`, `'ADDB'` |
 | `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'LOOP'` / `'MISC'` |
 | `raw` | `bytes`: 2 or 4 raw bytes little-endian |
 | `target` | Word-address branch/call target VA, or `None` |
 | `cond` | Condition name for `B`/`BF` instructions, or `None` for unconditional |
 | `imm` | Immediate operand value, or `None` |
 
-`EcuC28xDecoder.function_starts()` returns `List[int]`: probable function-start word-VAs collected from direct call targets (`LC`, `LCR`, `FFC` instructions).
+`EcuC28xDecoder.function_starts()` returns `List[int]`: probable function-start word-VAs collected from direct call targets `LC`, `LCR`, `FFC` instructions.
 
 ---
 

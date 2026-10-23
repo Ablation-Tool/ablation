@@ -138,7 +138,7 @@ for f in tagged_findings:
 
 **Keyword collisions in short descriptions.** The keyword `'smb'` matches anything containing that substring: including a finding description mentioning "assembly SMB-like framing pattern" when the analyst meant something unrelated to SMB lateral movement. Add specific context to finding descriptions when generating them programmatically to avoid spurious matches.
 
-**Over-tagging on multi-topic descriptions.** A long finding description that mentions multiple techniques in context ("this overflow enables RCE from unauthenticated WAN, then lateral movement via pass-the-hash") will generate all matching techniques. This is correct behavior but the output can look alarming. Review the full finding context before presenting to stakeholders.
+**Over-tagging on multi-topic descriptions.** A long finding description that mentions multiple techniques in context "this overflow enables RCE from unauthenticated WAN, then lateral movement via pass-the-hash" will generate all matching techniques. This is correct behavior but the output can look alarming. Review the full finding context before presenting to stakeholders.
 
 **Missing techniques.** The `ATTCK_MAP` covers the most common vulnerability-to-technique mappings but is not exhaustive. Firmware-specific techniques for example T1601 Modify System Image are not in the default map. To add a mapping: add a new keyword → technique entry to `ATTCK_MAP` in `ablation/core/attck_tagger.py`.
 
@@ -157,9 +157,9 @@ for f in tagged_findings:
 | Field | Content |
 |:---|:---|
 | `attck_techniques` | List of `{id, name, tactic}` dicts, sorted by ATT&CK kill-chain tactic order |
-| `id` | ATT&CK technique ID (e.g., `T1190`, `T1059.001`) |
+| `id` | ATT&CK technique ID for example `T1190`, `T1059.001` |
 | `name` | Human-readable technique name |
-| `tactic` | ATT&CK tactic name (e.g., `Initial Access`, `Execution`) |
+| `tactic` | ATT&CK tactic name for example `Initial Access`, `Execution` |
 
 ---
 

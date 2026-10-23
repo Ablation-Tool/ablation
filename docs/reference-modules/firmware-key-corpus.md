@@ -143,9 +143,9 @@ Version-mismatch findings appear when a known key or certificate is present in a
 
 ## Reading output
 
-`FortiGateCertKeyScanner(path).scan()` returns a `CertKeyScanResult`. See [fortigate-cert-key-scanner](fortigate-cert-key-scanner.md) for the full field reference (`path`, `version`, `keys`, `error`).
+`FortiGateCertKeyScanner(path).scan()` returns a `CertKeyScanResult`. See [fortigate-cert-key-scanner](fortigate-cert-key-scanner.md) for the full field reference `path`, `version`, `keys`, `error`.
 
-`FortiBuildTrackClassifier.classifyfilename` returns a `BuildTrackResult`. See [fortibuild-track-classifier](fortibuild-track-classifier.md) for the full field reference (`product`, `version`, `build_number`, `build_track`, `expected_keys`, `key_generation`).
+`FortiBuildTrackClassifier.classifyfilename` returns a `BuildTrackResult`. See [fortibuild-track-classifier](fortibuild-track-classifier.md) for the full field reference `product`, `version`, `build_number`, `build_track`, `expected_keys`, `key_generation`.
 
 ---
 

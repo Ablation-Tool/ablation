@@ -94,7 +94,7 @@ Run `EcuM68kDecoder` after `EcuArchDetector` confirms `m68k` architecture. `func
 |:---|:---|
 | `va` | Virtual address |
 | `size` | Instruction size in bytes (2 or 4) |
-| `mnemonic` | M68K mnemonic (e.g., `link.w`, `jsr`, `move.w`) |
+| `mnemonic` | M68K mnemonic for example `link.w`, `jsr`, `move.w` |
 | `operands` | Operand string |
 
 ---

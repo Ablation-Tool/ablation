@@ -8,7 +8,7 @@ Detect SAML assertion wrapping vulnerability surfaces, extract PEM-encoded RSA/E
 
 1. **SAML XML Signature Wrapping (XSW)** is a class of attack where an attacker copies a legitimately signed `<Assertion>` element into a new XML document alongside a forged assertion, relying on the service provider to validate the signed node but process the unsigned node. `CryptoAudit.check_saml_wrapping_risk()` examines SAML response XML to identify whether the SP implementation is likely vulnerable: specifically, whether the `AssertionConsumerServiceURL` is validated, whether the `IssuerID` is checked, and whether the signature references the outer `<Response>` or only the inner `<Assertion>`.
 
-2. **`KeyCryptoAnalyzer` extracts embedded key material from arbitrary binary and configuration data**, it scans for PEM markers (`-----BEGIN RSA PRIVATE KEY-----`, `-----BEGIN EC PRIVATE KEY-----`, `-----BEGIN CERTIFICATE-----`), DER-encoded RSA modulus sequences, and base64-encoded PKCS#8 blocks. This surfaces private keys embedded in firmware images, container filesystem layers, and application configuration files that would otherwise require manual inspection.
+2. **`KeyCryptoAnalyzer` extracts embedded key material from arbitrary binary and configuration data**, it scans for PEM markers `-----BEGIN RSA PRIVATE KEY-----`, `-----BEGIN EC PRIVATE KEY-----`, `-----BEGIN CERTIFICATE-----`, DER-encoded RSA modulus sequences, and base64-encoded PKCS#8 blocks. This surfaces private keys embedded in firmware images, container filesystem layers, and application configuration files that would otherwise require manual inspection.
 
 3. **`check_key_management_weaknessconfig_text`** identifies key management anti-patterns in configuration files: hardcoded signing keys in YAML/JSON/INI format, JWT secrets shorter than 32 characters, symmetric encryption keys stored alongside the data they protect, and certificate pinning disabled via `verify=False` or `SSL_VERIFY=0`. These patterns do not represent broken cryptography but broken key hygiene that makes the cryptographic strength irrelevant.
 
@@ -105,7 +105,7 @@ Run SAML analysis when a SAML SSO endpoint is present; run `KeyCryptoAnalyzer` o
 | `signed` | `True` if a `<ds:Signature>` element is present in the Assertion |
 | `subject` | NameID string from the Subject element, or `None` |
 | `conditions` | `Dict` of NotBefore/NotOnOrAfter expiry values |
-| `vulns` | `List[str]`: one entry per detected vulnerability (e.g., `'UNSIGNED_ASSERTION'`, `'EXPIRED'`, `'MULTIPLE_ASSERTIONS'`, `'COMMENT_INJECTION'`) |
+| `vulns` | `List[str]`: one entry per detected vulnerability for example `'UNSIGNED_ASSERTION'`, `'EXPIRED'`, `'MULTIPLE_ASSERTIONS'`, `'COMMENT_INJECTION'` |
 
 `KeyCryptoAnalyzer.analyze_rsa_keykey_data` accepts raw DER or PEM bytes and returns `list` of finding dicts. `KeyCryptoAnalyzer.scan_certificate_weaknessescert_pem` accepts a PEM-encoded X.509 certificate string and returns a `list` of finding dicts. Both finding dicts use `type`, `severity`, `description`, `detail`, `exploit` keys.
 

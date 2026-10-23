@@ -1,12 +1,12 @@
 # Go Subprocess Surface
 
-Enumerate `os/exec.Command` and `exec.Cmd.Start/Run` call sites in stripped Go binaries: classifying each site by command path type (`relative`, `path`, `absolute`, `dynamic`) to identify PATH injection and CWD injection attack surfaces.
+Enumerate `os/exec.Command` and `exec.Cmd.Start/Run` call sites in stripped Go binaries: classifying each site by command path type `relative`, `path`, `absolute`, `dynamic` to identify PATH injection and CWD injection attack surfaces.
 
 ---
 
 ## Why this exists
 
-1. **Go appliance agents (FortiClient, cloud agents, IoT gateways) frequently invoke system commands via `os/exec.Command()`: without path type classification, the full subprocess attack surface is invisible in a stripped binary.** `GoSubprocessScanner` uses the pclntab function table to enumerate all exec-family call sites, resolves command path strings using `GoStringResolver`, and classifies each site. PATH-type sites (`ping`, `route`, `curl`) are exploitable via `$PATH` injection without any additional code-execution primitives.
+1. **Go appliance agents FortiClient, cloud agents, IoT gateways frequently invoke system commands via `os/exec.Command()`: without path type classification, the full subprocess attack surface is invisible in a stripped binary.** `GoSubprocessScanner` uses the pclntab function table to enumerate all exec-family call sites, resolves command path strings using `GoStringResolver`, and classifies each site. PATH-type sites `ping`, `route`, `curl` are exploitable via `$PATH` injection without any additional code-execution primitives.
 
 2. **The `path` type is the highest-risk finding: a bare command name like `ping` is resolved via `$PATH` at runtime.** If the attacker controls `$PATH` through a prior privilege escalation, environment injection, or a web interface that sets process environment, they can replace `ping` with an arbitrary executable. `GoSubprocessScanner` surfaces every `path`-type site with the command name, providing the exact strings needed to verify PATH hijackability in a target deployment.
 
@@ -96,7 +96,7 @@ Run after stripping and mounting the firmware filesystem. `GoSubprocessScanner` 
 | `severity` | `HIGH` PATH injection / `MEDIUM` DYNAMIC unresolved / `INFO` ABSOLUTE path |
 | `call_va` | VA of the `exec.Command()` or `os.Exec()` call site |
 | `cmd_type` | `PATH` no slash: PATH injection, `ABSOLUTE` hardcoded path, or `DYNAMIC` unresolved at analysis time |
-| `cmd` | Resolved command string (e.g., `ping`, `/usr/bin/sh`) or `<unresolved>` |
+| `cmd` | Resolved command string for example `ping`, `/usr/bin/sh` or `<unresolved>` |
 | `detail` | Exploitation context for PATH findings |
 
 ---

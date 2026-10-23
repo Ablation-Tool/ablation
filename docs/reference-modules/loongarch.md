@@ -119,9 +119,9 @@ The following illustrates the format for representative taint findings. Actual f
 | `func_va` | `int` | VA of the function containing the sink call |
 | `func_name` | `str` | Name of the function (from `ctx`) |
 | `sink_va` | `int` | VA of the sink call instruction |
-| `sink_name` | `str` | Sink function name (e.g., `system`, `execve`) |
-| `tainted_args` | `List[str]` | Tainted argument register names at the call (e.g., `['a0']`) |
-| `source_name` | `str` | Taint source label (e.g., `recv`, `fgets`) |
+| `sink_name` | `str` | Sink function name for example `system`, `execve` |
+| `tainted_args` | `List[str]` | Tainted argument register names at the call for example `['a0']` |
+| `source_name` | `str` | Taint source label for example `recv`, `fgets` |
 | `severity` | `str` | `'HIGH'` for all findings (default) |
 
 ---

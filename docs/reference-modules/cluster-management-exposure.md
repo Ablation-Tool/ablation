@@ -86,7 +86,7 @@ Each probe function returns a list of finding dicts with `{severity, title, deta
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
-| `title` | Finding code (e.g., `DOCKER_DAEMON_TCP_UNAUTH`, `K8S_CLUSTER_ADMIN_SA_PRESENT`) |
+| `title` | Finding code for example `DOCKER_DAEMON_TCP_UNAUTH`, `K8S_CLUSTER_ADMIN_SA_PRESENT` |
 | `detail` | Specific evidence: namespace names, endpoint URLs, policy gaps |
 | `host` | Target host |
 | `port` | Target port |

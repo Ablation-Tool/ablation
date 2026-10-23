@@ -1,12 +1,12 @@
 # FortiMail VM Key Extraction
 
-Extract PKI private key material (`fgt_512.key`, `fgt_2048.key`) from FortiMail VM firmware distributed as VMware OVF/VMDK packages: using a root-free pipeline of OVF zip extraction, VMDK-to-raw conversion via `qemu-img`, MBR partition table parsing, and `debugfs` ext4 access to recover keys from `datafs.tar.gz` on the P2 partition.
+Extract PKI private key material `fgt_512.key`, `fgt_2048.key` from FortiMail VM firmware distributed as VMware OVF/VMDK packages: using a root-free pipeline of OVF zip extraction, VMDK-to-raw conversion via `qemu-img`, MBR partition table parsing, and `debugfs` ext4 access to recover keys from `datafs.tar.gz` on the P2 partition.
 
 ---
 
 ## Why this exists
 
-1. **FortiMail VM firmware packages are distributed as OVF zip archives containing a VMDK virtual disk.** The PKI keys (`fgt_512.key`, `fgt_2048.key`) are stored inside `datafs.tar.gz` on the P2 ext4 partition of the virtual disk: a layout completely different from hardware FortiGate firmware NAND XOR images. `FortiOSHardwareExtractor` handles NAND flash images; `FortiMailVmdkExtractor` handles the VMDK virtual format.
+1. **FortiMail VM firmware packages are distributed as OVF zip archives containing a VMDK virtual disk.** The PKI keys `fgt_512.key`, `fgt_2048.key` are stored inside `datafs.tar.gz` on the P2 ext4 partition of the virtual disk: a layout completely different from hardware FortiGate firmware NAND XOR images. `FortiOSHardwareExtractor` handles NAND flash images; `FortiMailVmdkExtractor` handles the VMDK virtual format.
 
 2. **Root-free ext4 access eliminates the loop mount requirement.** Traditional access to an ext4 filesystem inside a VM disk requires `losetup` and `mount`, both needing root privileges. `FortiMailVmdkExtractor` uses `dd` to extract the P2 partition as a flat image and then runs `debugfs` on that image to dump `datafs.tar.gz` without any root access or loop device.
 
@@ -79,7 +79,7 @@ Keys extracted: 2
 
 **`qemu-img` must be installed**: `FortiMailVmdkExtractor` calls `qemu-img convert` as a subprocess. If `qemu-img` is not available, stage 2 fails with an error in `VmdkExtractionResult`. Check `result.error` before processing `result.keys`.
 
-**`debugfs` key extraction uses a path of `etc/fgt_*.key`**: FortiMail firmware versions that store keys under a different path (e.g., `/etc/ssl/` for newer builds) will produce an empty `result.keys`. Inspect `datafs.tar.gz` directly via `tar -tzf` if `result.keys` is empty.
+**`debugfs` key extraction uses a path of `etc/fgt_*.key`**: FortiMail firmware versions that store keys under a different path for example `/etc/ssl/` for newer builds will produce an empty `result.keys`. Inspect `datafs.tar.gz` directly via `tar -tzf` if `result.keys` is empty.
 
 ---
 

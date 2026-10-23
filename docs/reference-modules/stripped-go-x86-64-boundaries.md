@@ -45,7 +45,7 @@ flowchart TD
 
 ### pclntab-based function boundary recovery
 
-The Go pclntab (`runtime.pclntab`, stored in `.gopclntab`) encodes all function start addresses. Even in stripped binaries, this table is preserved for the Go runtime. The `GoGoRetriever` (companion module, `go_subprocess_scanner.py`) reads the pclntab and injects the recovered function starts into `BinaryContext.func_starts` via `ctx.func_starts += recovered_starts`.
+The Go pclntab `runtime.pclntab`, stored in `.gopclntab` encodes all function start addresses. Even in stripped binaries, this table is preserved for the Go runtime. The `GoGoRetriever` companion module, `go_subprocess_scanner.py` reads the pclntab and injects the recovered function starts into `BinaryContext.func_starts` via `ctx.func_starts += recovered_starts`.
 
 ---
 
@@ -155,8 +155,8 @@ print(f"After: {len(ctx.func_starts)} function starts (+{added} from pclntab)")
 | Field | Content |
 |:---|:---|
 | `scan_instructions()` return | `{string_va: text, length}` dict; `text=None` entries excluded |
-| `read_atva, length` return | `text, length` tuple; `(None, 0)` on failure |
-| `read_nul_terminated(va)` return | `text, length` tuple; `(None, 0)` on failure |
+| `read_atva, length` return | `text, length` tuple; `None, 0` on failure |
+| `read_nul_terminated(va)` return | `text, length` tuple; `None, 0` on failure |
 | pclntab recovered starts | `List[int]` of function entry VAs |
 
 ---

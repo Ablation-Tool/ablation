@@ -1,6 +1,6 @@
 # Industrial/IoT Probes
 
-Probe Modbus TCP for unauthenticated coil/register read access, test MQTT brokers for anonymous connection acceptance and topic wildcard subscription, probe CoAP servers for resource enumeration without DTLS, and test SNMP for default community strings (`public`, `private`, `community`): providing ICS/OT and IoT device exposure assessment: via `modules/net_sniffer.py`.
+Probe Modbus TCP for unauthenticated coil/register read access, test MQTT brokers for anonymous connection acceptance and topic wildcard subscription, probe CoAP servers for resource enumeration without DTLS, and test SNMP for default community strings `public`, `private`, `community`: providing ICS/OT and IoT device exposure assessment: via `modules/net_sniffer.py`.
 
 ---
 
@@ -109,10 +109,10 @@ Industrial IoT probe functions return `List[{severity, title, detail, host, port
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` unauthenticated read/write, `HIGH`, `MEDIUM`, or `LOW` port open |
-| `title` | Finding code (e.g., `MODBUS_READ_COILS_UNAUTH`, `MODBUS_REGISTERS_UNAUTH`, `MODBUS_PORT_OPEN`) |
+| `title` | Finding code for example `MODBUS_READ_COILS_UNAUTH`, `MODBUS_REGISTERS_UNAUTH`, `MODBUS_PORT_OPEN` |
 | `detail` | Function code used, response type, or condition |
 | `host` | Target IP address |
-| `port` | Protocol port (e.g., `502` for Modbus) |
+| `port` | Protocol port for example `502` for Modbus |
 
 ---
 

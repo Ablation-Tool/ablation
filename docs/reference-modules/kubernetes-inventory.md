@@ -10,7 +10,7 @@ Enumerate Kubernetes pods, services, secrets, RBAC bindings, service accounts, a
 
 2. **RBAC `SelfSubjectAccessReview`**: `K8sEnumerator` calls `POST /apis/authorization.k8s.io/v1/selfsubjectaccessreviews` to enumerate which API resources the current service account can access. This establishes the effective permission boundary before attempting resource listing, avoiding 403 errors that would otherwise require blind enumeration of all API paths.
 
-3. **`check_k8s_configmap_exposure()` and `check_kubelet_api_exposure()`** enumerate two distinct exposure classes: ConfigMaps that contain credential-pattern keys (`password`, `secret`, `token`, `api_key`), and the kubelet read-only API (`port 10255`) and read-write API (`port 10250`) that are often exposed within the cluster network without authentication. Both functions operate over raw HTTPS without `kubectl`.
+3. **`check_k8s_configmap_exposure()` and `check_kubelet_api_exposure()`** enumerate two distinct exposure classes: ConfigMaps that contain credential-pattern keys `password`, `secret`, `token`, `api_key`, and the kubelet read-only API (`port 10255`) and read-write API (`port 10250`) that are often exposed within the cluster network without authentication. Both functions operate over raw HTTPS without `kubectl`.
 
 ---
 

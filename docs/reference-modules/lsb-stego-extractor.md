@@ -26,7 +26,7 @@ The firmware encodes key material in a BMP file as follows:
 
 1. Hash a seed string to a pixel offset in the BMP.
 2. Read `type_count` and `n_groups` from the LSB channel at that offset.
-3. Build `type_count × n_groups` coordinate pairs (x, y) from consecutive LSB-encoded hex fields.
+3. Build `type_count × n_groups` coordinate pairs x, y from consecutive LSB-encoded hex fields.
 4. For each of `type_count` key components: run Lagrange interpolation at x=0 over `n_pts = n_groups // type_count` points, using multi-prime CRT for exact integer arithmetic.
 5. Output each component as a hex string in little-endian byte order, with the reverse-TC transformation applied to negative values.
 
@@ -61,7 +61,7 @@ assert result.raw_key_hex == expected_hex, "Key extraction mismatch"
 | `components` | `list[str]`: individual key component hex strings |
 | `type_count` | Number of key components encoded |
 | `n_groups` | Number of coordinate-pair groups |
-| `coord_pairs` | `list[CoordPair]`: raw (x, y) coordinate pairs read from the LSB channel |
+| `coord_pairs` | `list[CoordPair]`: raw x, y coordinate pairs read from the LSB channel |
 | `seed` | Seed string used to locate the pixel offset |
 | `pixel_offset` | Byte offset in the BMP pixel data where the encoding begins |
 
@@ -115,7 +115,7 @@ Key material recovered: per-session encryption keys stored in BMP assets bundled
 
 ## Reading output
 
-`PrimeCoordExtractorbmp_path.extract(seed, n_primes=8)` returns a `StegoKeyResult`:
+`PrimeCoordExtractorbmp_path.extractseed, n_primes=8` returns a `StegoKeyResult`:
 
 | Attribute | Content |
 |:---|:---|

@@ -6,7 +6,7 @@ Rank candidate analysis probes by expected value against a set of surviving vuln
 
 ## Why this exists
 
-1. **After `SemanticSearcher` and `TaintTracker` produce a set of candidate findings, not all of them warrant the same follow-up effort: some findings are near-certainties, others are speculative.** `ProbeRanker` formalizes this by treating each candidate finding as a hypothesis with a confidence state and each possible next analysis action (manual disasm, PoC attempt, PathSolver run) as a probe. The probe that maximally resolves hypothesis uncertainty per unit analyst cost is ranked first.
+1. **After `SemanticSearcher` and `TaintTracker` produce a set of candidate findings, not all of them warrant the same follow-up effort: some findings are near-certainties, others are speculative.** `ProbeRanker` formalizes this by treating each candidate finding as a hypothesis with a confidence state and each possible next analysis action manual disasm, PoC attempt, PathSolver run as a probe. The probe that maximally resolves hypothesis uncertainty per unit analyst cost is ranked first.
 
 2. **`predicted_disagreement × observability × analyzer_reliability / estimated_cost` is the probe selection formula**: `predicted_disagreement` is how much the probe result is expected to differ across surviving hypotheses a probe that confirms all hypotheses equally is useless; `observability` is how clearly the probe result can be observed (a PathSolver run is more observable than a fuzzing attempt); `analyzer_reliability` is the estimated false-positive rate of the analyzer performing the probe; `estimated_cost` is analyst time in minutes.
 
@@ -116,7 +116,7 @@ Use `ProbeRanker` when multiple candidate findings need prioritization across a 
 | `predicted_disagreement` | Float 0.0–1.0: how likely this probe is to change current confidence |
 | `observability` | Float 0.0–1.0: how deterministic the probe result is |
 | `reliability` | Float 0.0–1.0: how repeatable the probe is |
-| `estimated_cost` | Estimated analyst time string (e.g., `5 min`, `30 min`) |
+| `estimated_cost` | Estimated analyst time string for example `5 min`, `30 min` |
 | `probe_value` | Composite score (`predicted_disagreement × observability / estimated_cost_minutes`) |
 
 ---

@@ -80,7 +80,7 @@ NFS (port 2049): <K> mount points
 
 ## Pipeline position
 
-Run HyperFlex/UCS/Intersight probes after network discovery confirms HyperFlex management IPs port 443 open with Cisco TLS certificate. Results feed storage lateral movement (NFS mount, iSCSI attach) and management escalation cluster admin access.
+Run HyperFlex/UCS/Intersight probes after network discovery confirms HyperFlex management IPs port 443 open with Cisco TLS certificate. Results feed storage lateral movement NFS mount, iSCSI attach and management escalation cluster admin access.
 
 ---
 
@@ -91,7 +91,7 @@ HyperFlex/UCS/Intersight probe functions return `List[{severity, title, detail, 
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
-| `title` | Finding code (e.g., `HX_DEFAULT_CRED`, `UCSM_UNAUTHENTICATED_API`, `INTERSIGHT_CLAIM_TOKEN_EXPOSED`) |
+| `title` | Finding code for example `HX_DEFAULT_CRED`, `UCSM_UNAUTHENTICATED_API`, `INTERSIGHT_CLAIM_TOKEN_EXPOSED` |
 | `detail` | Description of the misconfiguration |
 | `host` | Target host IP or hostname |
 | `port` | Service port |

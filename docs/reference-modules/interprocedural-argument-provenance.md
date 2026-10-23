@@ -151,9 +151,9 @@ SINK CALLS in chain from 0x22ccc0:
 
 ## False positives
 
-**Argument value merging across branches.** `RegAnnotator` follows the fall-through path only, it does not enumerate both sides of a conditional branch. When a register receives different values on two paths (e.g., `rdi = '/bin/ls'` on one path and `rdi = arg0_entry` on the other), the annotator records whichever write it encounters last in linear order. This can display the wrong value for argument registers at call sites that follow a conditional assignment.
+**Argument value merging across branches.** `RegAnnotator` follows the fall-through path only, it does not enumerate both sides of a conditional branch. When a register receives different values on two paths for example `rdi = '/bin/ls'` on one path and `rdi = arg0_entry` on the other, the annotator records whichever write it encounters last in linear order. This can display the wrong value for argument registers at call sites that follow a conditional assignment.
 
-**Callee-saved value stale reads.** When the function loads a callee-saved register (`rbx`, `r12`–`r15`) from a stack slot that was previously written by a different function call sequence, the annotator tracks it as `mem[rbp-0x18]`. It cannot determine the actual value stored there without tracing the function that wrote the stack slot. These appear as `mem` kind in the output: always verify manually.
+**Callee-saved value stale reads.** When the function loads a callee-saved register `rbx`, `r12`–`r15` from a stack slot that was previously written by a different function call sequence, the annotator tracks it as `mem[rbp-0x18]`. It cannot determine the actual value stored there without tracing the function that wrote the stack slot. These appear as `mem` kind in the output: always verify manually.
 
 **Cross-binary chain size.** With `max_hops=3` and `max_callees_per_hop=10`, a cross-binary chain can produce very large result trees (up to 10^3 = 1000 call sites across all hops). Use `max_callees_per_hop=3` for initial exploration and only increase it for chains where a specific callee path needs tracing.
 

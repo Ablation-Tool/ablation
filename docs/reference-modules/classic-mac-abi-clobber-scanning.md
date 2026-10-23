@@ -97,7 +97,7 @@ Report:
 | Attribute | Content |
 |:---|:---|
 | `site_va` | VA of the sink `bl` (call) instruction |
-| `check_reg` | Register index examined (e.g., `4` for `r4`) |
+| `check_reg` | Register index examined for example `4` for `r4` |
 | `verdict` | `'PLAUSIBLE'`: backward walk reached function start without a write; `'SAFE'`: register was written before the call |
 | `stop_va` | VA where the backward walk stopped |
 | `stop_reason` | `'reg_written'` / `'call_clobber'` / `'uncond_branch'` / `'return'` / `'window_exhausted'` |

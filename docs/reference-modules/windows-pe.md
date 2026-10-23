@@ -181,7 +181,7 @@ flowchart TD
     style F fill:#7f1d1d,stroke:#991b1b,color:#fecaca
 ```
 
-Combine with `KernelDriverAnalyzer` to avoid re-parsing the PE: `WindowsPoolTaintTracker(path, kda_report=existing_report)`.
+Combine with `KernelDriverAnalyzer` to avoid re-parsing the PE: `WindowsPoolTaintTrackerpath, kda_report=existing_report`.
 
 ---
 

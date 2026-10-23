@@ -87,8 +87,8 @@ Run `SourceSinkScanner` immediately after `SourceContext.from_path()` as the fir
 |:---|:---|
 | `rel_path` | Source file path relative to the repository root |
 | `line` | Line number |
-| `category` | Sink category (e.g., `code-evaluation`, `subprocess`, `path-traversal`, `ssrf`) |
-| `cwe` | CWE identifier (e.g., `CWE-95`, `CWE-78`, `CWE-22`) |
+| `category` | Sink category for example `code-evaluation`, `subprocess`, `path-traversal`, `ssrf` |
+| `cwe` | CWE identifier for example `CWE-95`, `CWE-78`, `CWE-22` |
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` after guard reduction |
 | `base_severity` | Severity before guard reduction |
 | `guarded` | `True` if an env-var or conditional gate was detected near the sink |

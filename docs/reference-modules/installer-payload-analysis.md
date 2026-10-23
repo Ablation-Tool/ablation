@@ -1,6 +1,6 @@
 # Installer Payload Analysis
 
-Detect self-extracting installer format (BitRock LZMA-4.0, NSIS, Inno Setup), decompress the embedded payload, carve all valid PE binaries from the decompressed data, and extract them to a directory for downstream binary analysis: with UPX pre-unpacking when the BitRock stub is UPX-packed.
+Detect self-extracting installer format BitRock LZMA-4.0, NSIS, Inno Setup, decompress the embedded payload, carve all valid PE binaries from the decompressed data, and extract them to a directory for downstream binary analysis: with UPX pre-unpacking when the BitRock stub is UPX-packed.
 
 ---
 

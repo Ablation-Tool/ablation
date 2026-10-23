@@ -8,7 +8,7 @@ Detect Python-to-Lua code injection vulnerabilities: finding `str.format()`, f-s
 
 1. **No Ablation module detected FAZ-SIEM-001 CRITICAL: an unsanitized `description` field embedded in a Lua comment via `.format()`, where `\n` in the description breaks the comment and injects arbitrary Lua code, achieving RCE via `LuaRuntime.execute()`.** Manual source code review was required. `LuaInjectionAnalyzer` automates detection of this pattern class.
 
-2. **Python format operations (`str.format()`, f-strings, `%-formatting`) that embed a string in Lua source have no equivalent to HTML escaping or SQL parameterization**: a `--` comment delimiter is broken by a newline in the embedded string, and a closing `]]` breaks a `[[ ]]` Lua string literal. `LuaInjectionAnalyzer` detects all three embedding contexts: comment (`-- {field}`), string literal (`[[ {field} ]]`), and bare expression (`{field}`).
+2. **Python format operations `str.format()`, f-strings, and `%-formatting` that embed a string in Lua source have no equivalent to HTML escaping or SQL parameterization**: a `--` comment delimiter is broken by a newline in the embedded string, and a closing `]]` breaks a `[[ ]]` Lua string literal. `LuaInjectionAnalyzer` detects all three embedding contexts: comment (`-- {field}`), string literal (`[[ {field} ]]`), and bare expression (`{field}`).
 
 3. **`LuaInjectionFinding.as_dict()` provides the full Python function scope, the format operation line, and the Lua template string**: giving analysts everything needed to reproduce the injection without navigating the source manually. The `escape_needed` field documents what sanitization would fix the finding.
 
@@ -74,13 +74,13 @@ Findings: <N>
 
 **Python format templates that contain Lua-like keywords**: a template that includes `-- ` Python tuple comment or `[[` shell heredoc may be flagged as a Lua injection context. Verify that the format call result is actually passed to a Lua execution context.
 
-**AST analysis parses the template string statically**: a template built from string concatenation (e.g., `lua_code = prefix + user_field + suffix`) without a format call will not be detected. Use `SourceTaintTracker` for dataflow tracing from template construction to execution.
+**AST analysis parses the template string statically**: a template built from string concatenation for example `lua_code = prefix + user_field + suffix` without a format call will not be detected. Use `SourceTaintTracker` for dataflow tracing from template construction to execution.
 
 ---
 
 ## Pipeline position
 
-Run `LuaInjectionAnalyzer` on any Python codebase that interacts with Lua (via `lupa`, `moonscript`, or subprocess `lua`). Run alongside `SourceSinkScanner` as part of the initial source audit, before `SourceTaintTracker`.
+Run `LuaInjectionAnalyzer` on any Python codebase that interacts with Lua via `lupa`, `moonscript`, or subprocess `lua`. Run alongside `SourceSinkScanner` as part of the initial source audit, before `SourceTaintTracker`.
 
 ---
 

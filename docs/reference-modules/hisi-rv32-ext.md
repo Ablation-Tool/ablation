@@ -70,7 +70,7 @@ same `disasm_lite()` signature. It detects all five custom opcode bytes before
 forwarding to Capstone, consuming the correct number of bytes for each.
 
 Push/pop/popret are **not** handled here; they are 16-bit RVC instructions in
-Quadrant-0 custom slots (bits[15:13]=100, bits[1:0]=00) per
+Quadrant-0 custom slots bits[15:13]=100, bits[1:0]=00 per
 `riscv_push_pop_extension.rst`. Capstone's skipdata mode handles them adequately
 for taint purposes.
 
@@ -170,7 +170,7 @@ bits[6:0]   = 0x1b
 Semantics: rd = rs2 base_op shift_type(rs1, shamt)
 ```
 
-Verified: `addshf a0,a1,a2,sll,3` → `0x06C5851B` (rd=a0, rs1=a1, rs2=a2, shamt=3) ✓
+Verified: `addshf a0,a1,a2,sll,3` → `0x06C5851B` rd=a0, rs1=a1, rs2=a2, shamt=3 ✓
 
 Source: `riscv_preshifted_arithmetic.rst` riscvarchive/riscv-code-size-reduction
 
@@ -186,7 +186,7 @@ bits[6:0]   = 0x5b
 Semantics: rd = rs1 + (rs2 * zero_ext(uimm))
 ```
 
-Verified: `muliadd a0,a1,a2,4` → `0x04C5955B` (rd=a0, rs1=a1, rs2=a2, uimm=4) ✓
+Verified: `muliadd a0,a1,a2,4` → `0x04C5955B` rd=a0, rs1=a1, rs2=a2, uimm=4 ✓
 
 Note: spec (`riscv_muladd_extension.rst`) assigns this to custom-1 (0x2b), but
 HiSilicon silicon uses custom-2 (0x5b). `ldmia`/`stmia` were incorrectly attributed
@@ -203,7 +203,7 @@ bits[11:7]  = offset[5:1]    (branch offset, lower 5 bits; bit0=0)
 bits[6:0]   = 0x3b
 ```
 
-Verified: `beqi a0,7,.` → `0x0705003B` (cmpimm=7, rs1=a0, offset=0) ✓
+Verified: `beqi a0,7,.` → `0x0705003B` cmpimm=7, rs1=a0, offset=0 ✓
 
 Note: spec assigns to custom-0 (0x0b); HiSilicon silicon uses `0x3b` for branches and `0x0b` for ldmia/stmia.
 
@@ -264,14 +264,14 @@ findings = tracker.run_interprocedural()
 - `trans_xlinx.c.inc`: QEMU xlinx extension RISC-V translator; canonical ground truth
  for `0x0b` ldmia/stmia slot_bit/slot_reg tables and uxtb/uxth 16-bit mask;
  archived at `/media/cowboy/research/hisilicon-ws63-re/online/zip_extract/`
-- `HiMCUGenInstrInfo.td`: vendor LLVM fork (Apache-2.0, © HiSilicon 2024); defines
+- `HiMCUGenInstrInfo.td`: vendor LLVM fork Apache-2.0, © HiSilicon 2024; defines
  GROUP1 16-bit compressed: `c.neg/c.sbz/c.shz/c.swz/c.xori`; does NOT define
  ldmia/stmia/uxtb/uxth those are in the QEMU C back-end only
 
 ## Targets
 
-- HiSilicon WS63 / Hi3863 (NearLink WS63E kit, BearPi-HH-NB3 LiteOS firmware)
-- HiSilicon BS21 / Hi2821 (NearLink BS21E, BearPi-HH-NB3 SLE firmware)
+- HiSilicon WS63 / Hi3863 NearLink WS63E kit, BearPi-HH-NB3 LiteOS firmware
+- HiSilicon BS21 / Hi2821 NearLink BS21E, BearPi-HH-NB3 SLE firmware
 - Any HiSilicon bare-metal RV32GC firmware using the `riscv31` + HCC extensions
 
 ---
@@ -311,7 +311,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, or C28x for vulnerability analysis.
 
 ---
 
@@ -323,7 +323,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 |:---|:---|
 | `address` | VA of the instruction |
 | `size` | Instruction size in bytes 4 for custom-3 encoding |
-| `mnemonic` | Decoded mnemonic string (e.g., `'hisi.conv2d'`, `'hisi.matmul'`) |
+| `mnemonic` | Decoded mnemonic string for example `'hisi.conv2d'`, `'hisi.matmul'` |
 | `op_str` | Decoded operand string |
 | `rd` / `rs1` / `rs2` | Destination and source register indices |
 | `funct3` / `funct7` | Function code fields from the 32-bit custom-3 encoding |

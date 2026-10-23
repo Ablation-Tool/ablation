@@ -86,7 +86,7 @@ Run `EcuVLEDecoder` after `EcuArchDetector` confirms `ppc_vle` architecture. `fu
 |:---|:---|
 | `va` | Virtual address |
 | `size` | Instruction size in bytes 2 for SE, 4 for standard VLE |
-| `mnemonic` | VLE mnemonic (e.g., `stwu`, `se_li`, `se_bl`) |
+| `mnemonic` | VLE mnemonic for example `stwu`, `se_li`, `se_bl` |
 | `operands` | Operand string |
 
 ---

@@ -43,8 +43,8 @@ scanner = SetuidAuthOracleScanner.from_path('/usr/sbin/authlite', is_privileged=
 
 | Symbol | Description |
 |--------|-------------|
-| `SetuidAuthOracleScanner.from_context(ctx, is_privileged=False)` | Constructor from existing `BinaryContext` |
-| `SetuidAuthOracleScanner.from_path(path, is_privileged=False)` | Constructor from binary path. Raises `ValueError` for files > 256 MB. |
+| `SetuidAuthOracleScanner.from_contextctx, is_privileged=False` | Constructor from existing `BinaryContext` |
+| `SetuidAuthOracleScanner.from_pathpath, is_privileged=False` | Constructor from binary path. Raises `ValueError` for files > 256 MB. |
 | `scan()` | Returns `list[OracleHit]`, one per oracle function found |
 | `report(hits)` | Returns formatted string report |
 | `OracleHit.binary_path` | Path of the binary |
@@ -83,7 +83,7 @@ Gate: **PASSED** 0 CRITICAL, 0 HIGH.
 - 1 MEDIUM false_positive_risk: `lckpwdf`/`ulckpwdf` removed from `_SHADOW_FUNCS`; these lock the shadow file but do not read it. Replaced with `getspent`/`getspent_r`/`shadow_ent`.
 - 1 MEDIUM portability: arch guard added to `__init__`; raises `ValueError` for non-x86-64 `BinaryContext` to prevent silent misclassification.
 
-Confirmed on: `LoginMOMIssue` (setuid, 1 oracle hit, CWE-307 + CWE-338 co-finding, callers: `main`).
+Confirmed on: `LoginMOMIssue` setuid, 1 oracle hit, CWE-307 + CWE-338 co-finding, callers: `main`.
 
 ---
 
@@ -131,9 +131,9 @@ Confirmed on: `LoginMOMIssue` (setuid, 1 oracle hit, CWE-307 + CWE-338 co-findin
 |:---|:---|
 | `binary_path` | Path of the analyzed binary |
 | `is_setuid` | `True` if the binary has the setuid bit set |
-| `shadow_func` | Shadow credential function name (e.g., `'getspnam'`) |
-| `crypt_func` | Password hashing function name (e.g., `'crypt'`) |
-| `cmp_func` | Comparison function name (e.g., `'strcmp'`) |
+| `shadow_func` | Shadow credential function name for example `'getspnam'` |
+| `crypt_func` | Password hashing function name for example `'crypt'` |
+| `cmp_func` | Comparison function name for example `'strcmp'` |
 | `has_rate_limit` | `True` if PAM, `sleep`, or login-tally was detected |
 | `oracle_func_va` | VA of the function containing all three oracle calls |
 | `oracle_func_name` | Resolved name of the oracle function |

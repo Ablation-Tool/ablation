@@ -10,7 +10,7 @@ Reconstruct C++ vtables in PS3 Cell PPU (PPC64) binaries: finding all virtual di
 
 2. **Demonware BD and similar inline-linked C++ class libraries in PS3 game binaries cannot be located without vtable reconstruction**: without vtables there is no way to find `processPacket`, `handleMessage`, or other virtual methods that are the primary network attack surface. `PS3OPDVtableScanner.find_by_method_name()` searches vtable targets for methods matching a name pattern after cross-referencing string literals in the method functions.
 
-3. **`PS3OPDVtableScanner.inject_into_context()` registers discovered vtable base addresses and method VAs in `BinaryContext`**: after injection, `ctx.plt_namemethod_va` returns the slot-based name (e.g., `vtable_0x1234_slot_3`), enabling all downstream analysis tools to show method names instead of raw VAs.
+3. **`PS3OPDVtableScanner.inject_into_context()` registers discovered vtable base addresses and method VAs in `BinaryContext`**: after injection, `ctx.plt_namemethod_va` returns the slot-based name for example `vtable_0x1234_slot_3`, enabling all downstream analysis tools to show method names instead of raw VAs.
 
 ---
 

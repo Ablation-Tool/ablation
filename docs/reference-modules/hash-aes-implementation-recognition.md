@@ -82,7 +82,7 @@ CBCPattern:
 
 **`HashAlgoDiscriminator` may match CRC32 in firmware that implements Ethernet FCS, this is a legitimate CRC32 implementation, not a cryptographic hash usage.** CRC32 findings should be labeled "implementation found" not "cryptographic use found." Distinguish by context: CRC32 in a network receive path is Ethernet FCS, not a hash function.
 
-**`CustomCBCDetector` requires the AES round constants (`0x63`, Rcon table) to be present in the scan range.** AES implementations that load their Rcon table from a different section or compute it on-the-fly will score below the confidence threshold and not generate a `CBCPattern` finding. Use `scan_range()` with a wider range if the S-box or Rcon table is in a separate section.
+**`CustomCBCDetector` requires the AES round constants `0x63`, Rcon table to be present in the scan range.** AES implementations that load their Rcon table from a different section or compute it on-the-fly will score below the confidence threshold and not generate a `CBCPattern` finding. Use `scan_range()` with a wider range if the S-box or Rcon table is in a separate section.
 
 ---
 
@@ -100,7 +100,7 @@ Run `HashAlgoDiscriminator` and `CustomCBCDetector` after `SemanticSearcher` ide
 
 | Attribute | Content |
 |:---|:---|
-| `algo` | Algorithm name (e.g., `'SHA-256'`, `'MD5'`, `'SHA-1'`, `'CRC32'`) |
+| `algo` | Algorithm name for example `'SHA-256'`, `'MD5'`, `'SHA-1'`, `'CRC32'` |
 | `confidence` | Integer 0–100 |
 | `matched` | `List[ConstMatch]`: constant match sites used for identification |
 

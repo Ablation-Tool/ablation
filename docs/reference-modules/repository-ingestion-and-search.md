@@ -76,7 +76,7 @@ Route files (sample):
 
 ## Pipeline position
 
-`SourceContext` is always the first step in any source RE session, it replaces `BinaryContext.load_or_build()` for source-code targets. All downstream source analyzers (`SourceSinkScanner`, `SourceIsolationChecker`, `PreAuthRouteAuditor`, `MCPToolTaintScanner`) accept a `SourceContext` rather than a `BinaryContext`.
+`SourceContext` is always the first step in any source RE session, it replaces `BinaryContext.load_or_build()` for source-code targets. All downstream source analyzers `SourceSinkScanner`, `SourceIsolationChecker`, `PreAuthRouteAuditor`, `MCPToolTaintScanner` accept a `SourceContext` rather than a `BinaryContext`.
 
 ---
 

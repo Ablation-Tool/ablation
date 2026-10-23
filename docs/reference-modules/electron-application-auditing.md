@@ -6,11 +6,11 @@ Scan Electron application JavaScript source for security misconfigurations: dete
 
 ## Why this exists
 
-1. **FortiFone Desktop v8.0 Electron/Chromium SIP phone client required reading the Electron security model from scratch for each finding during manual review of `app.asar` JS.** Seven confirmed findings emerged: all of which would have been caught by automated pattern matching. `ElectronSecurityScanner` encodes these patterns so they apply automatically to all Electron-based targets (FortiFone, FortiClient desktop integrations, FPAM browser extension host, any vendor Electron app) without repeated manual effort.
+1. **FortiFone Desktop v8.0 Electron/Chromium SIP phone client required reading the Electron security model from scratch for each finding during manual review of `app.asar` JS.** Seven confirmed findings emerged: all of which would have been caught by automated pattern matching. `ElectronSecurityScanner` encodes these patterns so they apply automatically to all Electron-based targets FortiFone, FortiClient desktop integrations, FPAM browser extension host, any vendor Electron app without repeated manual effort.
 
 2. **Electron's security model is systematically different from web browsers: `nodeIntegration: true` in a renderer process gives loaded web content full Node.js system access.** Combining this with an unvalidated IPC handler that accepts renderer-initiated navigation (`webContents.loadURL(userInput)`) or a deep link without scheme validation creates a Remote Code Execution path from a malicious URL opened by the app. `ElectronSecurityScanner` detects these patterns and their combinations.
 
-3. **`scan()` returns typed `ElectronFinding` objects with CWE classification and severity**: findings map directly to standard CWE entries (CWE-78 for `nodeIntegration` + `loadURL`, CWE-295 for TLS bypass, CWE-749 for exposed dangerous APIs), enabling consistent severity triage aligned with how the findings are reported downstream.
+3. **`scan()` returns typed `ElectronFinding` objects with CWE classification and severity**: findings map directly to standard CWE entries CWE-78 for `nodeIntegration` + `loadURL`, CWE-295 for TLS bypass, CWE-749 for exposed dangerous APIs, enabling consistent severity triage aligned with how the findings are reported downstream.
 
 ---
 
@@ -100,9 +100,9 @@ Run `ElectronSecurityScanner` after extracting the `.asar` archive from the Elec
 |:---|:---|
 | `rel_path` | Source file path relative to the app root |
 | `lineno` | Line number of the finding |
-| `finding_class` | Finding code (e.g., `node-integration-rce`, `tls-bypass`, `context-isolation-disabled`) |
+| `finding_class` | Finding code for example `node-integration-rce`, `tls-bypass`, `context-isolation-disabled` |
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
-| `cwe` | CWE identifier (e.g., `CWE-78`, `CWE-295`) |
+| `cwe` | CWE identifier for example `CWE-78`, `CWE-295` |
 | `title` | Short description of the misconfiguration |
 | `detail` | Explanation of the attack vector |
 

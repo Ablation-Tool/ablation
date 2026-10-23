@@ -10,7 +10,7 @@ Attach to a running process via `strace` (Linux) or `dtruss` (macOS) and summari
 
 2. **Syscall frequency profiles fingerprint behavior classes.** A daemon that makes 10,000 `recv()` calls and 0 `fork()` calls is a network listener; one that calls `execve()` in response to network input is a command-execution target. The `trace_process()` summary table surfaces this behavioral profile in seconds: before any disassembly is needed, and directs the analyst toward the specific syscall categories worth tracing in detail.
 
-3. **Filtered detail traces narrow the attack surface.** The three focused trace methods (`analyze_file_access`, `analyze_network`, `analyze_process_ops`) each run a `strace -e trace=...` filter pass, returning only the syscalls relevant to the analyst's current question. An analyst asking "what files does this service write during a config change?" runs `analyze_file_access()` and reads a list of `open()` and `write()` calls with full path arguments, not 10,000 lines of mixed output.
+3. **Filtered detail traces narrow the attack surface.** The three focused trace methods `analyze_file_access`, `analyze_network`, `analyze_process_ops` each run a `strace -e trace=...` filter pass, returning only the syscalls relevant to the analyst's current question. An analyst asking "what files does this service write during a config change?" runs `analyze_file_access()` and reads a list of `open()` and `write()` calls with full path arguments, not 10,000 lines of mixed output.
 
 ---
 
@@ -135,7 +135,7 @@ execve calls observed:
 | `total_calls` | Total syscall invocations captured |
 | `total_errors` | Total calls that returned an error |
 | `syscalls` | `List[dict]`: one entry per syscall, each with `name`, `calls`, `errors`, `time_percent`, `total_time` |
-| `error` | Error string if tracing failed (e.g., `'strace not installed'`); absent on success |
+| `error` | Error string if tracing failed for example `'strace not installed'`; absent on success |
 
 `SyscallTracer(pid).trace_detailedduration, syscall_filter` returns per-call argument records. Pass `syscall_filter='execve,open,read'` to narrow the trace.
 

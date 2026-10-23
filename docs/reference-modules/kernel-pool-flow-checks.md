@@ -8,7 +8,7 @@ Detect Windows kernel pool buffer overflow candidates in driver PE binaries: tra
 
 1. **Windows kernel pool overflows via IOCTL size parameters are a well-known privilege escalation vector**: an attacker passes an oversized `InputBufferLength` to trigger an under-allocated pool buffer, then overflows it with subsequent data. `WindowsPoolTaintTracker` automates the detection that was previously done by manually tracing every `ExAllocatePool*` call site to its size argument origin.
 
-2. **`PoolTaintFinding.severity` reflects the quality of bounds checking before the allocation**: a size argument that reaches `ExAllocatePool*` with no comparison or mask operation is `HIGH`; a size with a single bounds check that may be bypassable (e.g., `if (size > MAX) size = MAX` without type coercion check) is `MEDIUM`. This saves triage time by pre-scoring findings.
+2. **`PoolTaintFinding.severity` reflects the quality of bounds checking before the allocation**: a size argument that reaches `ExAllocatePool*` with no comparison or mask operation is `HIGH`; a size with a single bounds check that may be bypassable for example `if (size > MAX size = MAX` without type coercion check) is `MEDIUM`. This saves triage time by pre-scoring findings.
 
 3. **`WindowsPoolTaintTracker` handles both `METHOD_BUFFERED` and `METHOD_NEITHER` IOCTL transfer types**: `METHOD_NEITHER` provides direct userspace buffer pointers (`Type3InputBuffer`) that bypass the kernel's I/O manager input validation, making them a higher-priority taint source. Findings from `METHOD_NEITHER` IOCTLs are annotated in the `PoolTaintFinding` output.
 
@@ -68,7 +68,7 @@ Findings (<M> total):
 
 ## False positives
 
-**Bounds check detection uses static analysis**: a bounds check that is applied before the function entry point (e.g., in the IOCTL dispatch wrapper that filters `InputBufferLength` before calling the allocation function) may not be detected, producing a `HIGH` finding for an allocation that is actually bounded. Validate `HIGH` findings by checking the IOCTL dispatch call chain above the allocation site.
+**Bounds check detection uses static analysis**: a bounds check that is applied before the function entry point for example in the IOCTL dispatch wrapper that filters `InputBufferLength` before calling the allocation function may not be detected, producing a `HIGH` finding for an allocation that is actually bounded. Validate `HIGH` findings by checking the IOCTL dispatch call chain above the allocation site.
 
 **`METHOD_NEITHER` transfer type annotation requires IOCTL code analysis**: if the IOCTL code is not statically determinable for example loaded from a data structure, `transfer_type` is reported as `'unknown'` and the finding severity is not elevated for METHOD_NEITHER.
 
@@ -90,7 +90,7 @@ Run `WindowsPoolTaintTracker` on any Windows kernel driver PE alongside `CFGBypa
 | `title` | `POOL_OVERFLOW` |
 | `detail` | Allocation function, size source, IOCTL transfer type, and call path |
 | `alloc_va` | VA of the `ExAllocatePool*` call |
-| `size_source` | Name of the size source (e.g., `InputBufferLength`) |
+| `size_source` | Name of the size source for example `InputBufferLength` |
 | `bounds_checked` | `False` if no bounds check was found on the size source |
 
 ---

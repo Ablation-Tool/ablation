@@ -10,7 +10,7 @@ Batch-triage all native ELF shared libraries in a directory: producing a per-lib
 
 2. **`LibInventoryEntry.jni_count` and `has_jni_on_load`** identify the libraries that expose a JNI interface to the Android runtime, these are the entry points for native code execution from Java. A library with `has_jni_on_load=True` runs code before any Java method is called, making it the first-hop attack surface for pre-authentication native code execution.
 
-3. **`security_strings_sample`** provides a three-string excerpt of security-relevant strings from each library (`key`, `token`, `password`, `secret`, `admin`, `auth`): giving the analyst a fast preview of whether a library handles credentials before loading the full `BinaryContext`.
+3. **`security_strings_sample`** provides a three-string excerpt of security-relevant strings from each library `key`, `token`, `password`, `secret`, `admin`, `auth`: giving the analyst a fast preview of whether a library handles credentials before loading the full `BinaryContext`.
 
 ---
 
@@ -81,7 +81,7 @@ Run `LibraryInventory` at session start for any Android APK or firmware root fil
 | `path` | Absolute path to the library |
 | `filename` | Library basename |
 | `size_kb` | File size in kilobytes |
-| `arch` | Architecture string (e.g., `arm64`, `x86`) |
+| `arch` | Architecture string for example `arm64`, `x86` |
 | `exports` | Total count of dynamic symbols with a non-zero value |
 | `internal` | BL-target internal function count −1 if unsupported arch |
 | `jni` | Count of `Java_*` JNI exports |

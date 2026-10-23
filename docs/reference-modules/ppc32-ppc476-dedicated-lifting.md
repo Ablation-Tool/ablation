@@ -6,7 +6,7 @@ Python-native PPC32 BE function pseudo-code lifter (`Ppc32Lifter`) and IBM PPC47
 
 ## Why this exists
 
-1. **`BinaryLifter`'s PPC32 backend (`arch='ppc32'`) emits structural output: most instructions appear as comments, conditions are not decoded, and stack accesses are raw offsets like `*(sp-128+0x28)`.** `Ppc32Lifter` fills the PPC32 gap Gap PPC476-GAP-003 for the IBM PPC476 and any PPC32 BE target: it produces named stack local variables (`local_0x28`), typed load annotations (`uint32_t`, `uint16_t`, `uint8_t`, `float`), decoded condition expressions (`if (r3 > 5)`), and PLT call resolution with argument values at call time.
+1. **`BinaryLifter`'s PPC32 backend (`arch='ppc32'`) emits structural output: most instructions appear as comments, conditions are not decoded, and stack accesses are raw offsets like `*(sp-128+0x28)`.** `Ppc32Lifter` fills the PPC32 gap Gap PPC476-GAP-003 for the IBM PPC476 and any PPC32 BE target: it produces named stack local variables (`local_0x28`), typed load annotations `uint32_t`, `uint16_t`, `uint8_t`, `float`, decoded condition expressions (`if (r3 > 5)`), and PLT call resolution with argument values at call time.
 
 2. **`Ppc476Decompiler` is a higher-level analysis pass on top of `Ppc32Lifter`, it adds CFG construction with loop detection, back-edge annotation, and GOT/TOC load annotation specific to the IBM PPC476 Book E ABI.** The PPC476 uses a TOC pointer in r2 for position-independent data access and a different calling convention r3-r10 args, r3 return than PPC-32 Embedded ABI. `Ppc476Decompiler` understands both ABIs and selects the correct one based on the binary's ELF ABI tag.
 
@@ -90,13 +90,13 @@ Ppc64ElfV1Info:
 
 ## Pipeline position
 
-Use `Ppc32Lifter` and `Ppc476Decompiler` after `TaintTracker` identifies a candidate function and manual confirmation is needed, these tools produce human-readable output for manual triage. For PPC64 BE IBM POWER Linux targets, run `Ppc64ElfV1Resolver.patch_context()` before any PLT-dependent tool (`TaintTracker`, `SinkArgClassifier`) to ensure the PLT map is populated.
+Use `Ppc32Lifter` and `Ppc476Decompiler` after `TaintTracker` identifies a candidate function and manual confirmation is needed, these tools produce human-readable output for manual triage. For PPC64 BE IBM POWER Linux targets, run `Ppc64ElfV1Resolver.patch_context()` before any PLT-dependent tool `TaintTracker`, `SinkArgClassifier` to ensure the PLT map is populated.
 
 ---
 
 ## Reading output
 
-`Ppc32Lifter.lift(va, n_insn=150)` returns a `str`: multi-line C-like pseudocode with typed local variables, PPC register comments, and symbolic callee names. There is no structured return object; the full pseudocode is in the string.
+`Ppc32Lifter.liftva, n_insn=150` returns a `str`: multi-line C-like pseudocode with typed local variables, PPC register comments, and symbolic callee names. There is no structured return object; the full pseudocode is in the string.
 
 ---
 

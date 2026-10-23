@@ -99,9 +99,9 @@ Run `BrowserExtensionAuditor` on any Chrome/Edge/Firefox extension extracted fro
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
-| `code` | Finding code slug (e.g., `externally_connectable_broad`, `missing_sender_check`) |
-| `file` | Source file path and line number (e.g., `manifest.json:1`) |
-| `cwe` | CWE identifier (e.g., `CWE-284`) |
+| `code` | Finding code slug for example `externally_connectable_broad`, `missing_sender_check` |
+| `file` | Source file path and line number for example `manifest.json:1` |
+| `cwe` | CWE identifier for example `CWE-284` |
 | `detail` | Human-readable explanation of the vulnerability |
 | `evidence` | Code snippet or JSON fragment confirming the finding |
 

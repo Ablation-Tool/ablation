@@ -94,7 +94,7 @@ Run `PycBytecodeScanner.scan_dir()` as the first pass on any firmware with a Pyt
 |:---|:---|
 | `path` | Path to the `.pyc` file |
 | `filename` | Original `.py` source path from the code object |
-| `python_version` | Detected Python version (e.g., `'3.11'`) |
+| `python_version` | Detected Python version for example `'3.11'` |
 | `danger_hits` | `FrozenSet[str]`: dangerous names found in bytecode |
 | `confidence` | Property: `'clean'` / `'HIGH'` os module + danger hits / `'LOW'` danger hits only |
 | `error` | `None` on success, error string on parse failure |

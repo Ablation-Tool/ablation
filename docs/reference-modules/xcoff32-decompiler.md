@@ -13,7 +13,7 @@
 
 ## Where it's used
 
-- AIX base executables extracted from `.bff` installp archives (`automountd`, `rlogind`, `ksh93`)
+- AIX base executables extracted from `.bff` installp archives `automountd`, `rlogind`, `ksh93`
 - Stripped XCOFF32 binaries where the only function names come from `.symtab` rather than a `.loader` section
 - Any PPC32 BE XCOFF32 binary where you need readable pseudocode, not a raw instruction listing
 
@@ -122,7 +122,7 @@ descriptor_va:           (this is the VA in XcoffBinary.exports)
 
 | Family | Instructions handled |
 |--------|----------------------|
-| Frame | `stwu sp`, `addi sp`; callee-save suppress (`stmw`, `lmw`, `stw/lwz rN>=14`) |
+| Frame | `stwu sp`, `addi sp`; callee-save suppress `stmw`, `lmw`, `stw/lwz rN>=14` |
 | Load | `lwz/lhz/lha/lbz/lfs/lfd` + indexed `lwzx/lhzx/lbzx` + update `lwzu/lhzu/lbzu` + `ld/lwa` |
 | Store | `stw/sth/stb/stfs/stfd` + indexed `stwx/sthx/stbx` + update `stwu/sthu/stbu` + `std/stdx` |
 | Arithmetic | `add/subf/mullw/divw/divwu` + carry `addc/adde` + high-word `mulhw/mulhwu` |
@@ -133,7 +133,7 @@ descriptor_va:           (this is the VA in XcoffBinary.exports)
 | Compare | `cmpwi/cmplwi/cmpw/cmplw` and 64-bit forms; updates CR state for the following branch |
 | Branch | `b/bl/blr/bctr/bctrl` + all conditional `b*` via `_CRState.decode()` |
 | Float | `fadd/fsub/fmul/fdiv/fmadd` single and double variants + `fcmpu/fcmpo` |
-| SPR | `mfspr/mtspr` (LR=8, CTR=9, XER=1); `mflr/mtlr` suppressed; `mtctr` absorbed into `bctr` |
+| SPR | `mfspr/mtspr` LR=8, CTR=9, XER=1; `mflr/mtlr` suppressed; `mtctr` absorbed into `bctr` |
 | Syscall | `sc` emits `syscall(r0=N)` |
 | Altivec | passes through as `// [va] vmx_insn ops` |
 

@@ -92,7 +92,7 @@ Kubernetes policy probe functions return `List[{severity, title, detail, host, p
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
-| `title` | Finding code (e.g., `K8S_CLUSTERROLEBINDING_WILDCARD`, `K8S_NO_NETWORKPOLICY`, `K8S_PRIVILEGED_POD`) |
+| `title` | Finding code for example `K8S_CLUSTERROLEBINDING_WILDCARD`, `K8S_NO_NETWORKPOLICY`, `K8S_PRIVILEGED_POD` |
 | `detail` | Namespace, resource name, or permission details |
 | `host` | Kubernetes API server host |
 | `port` | API server port (typically `6443`) |

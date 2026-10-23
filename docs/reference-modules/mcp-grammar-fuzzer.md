@@ -8,7 +8,7 @@ Atheris-based grammar fuzzer targeting prompt injection via poisoned MCP tool sc
 
 ## FORGE audit
 
-Gate: **PASSED**. No HIGH or CRITICAL findings. No unbounded file reads. No HTTP reads. No lief.parse(). No subprocess calls (`subprocess` is imported at L19 but never used, dead import). Writes mutated JSON schemas to `tempfile.NamedTemporaryFile` (L210), bounded by fuzzer input size. Uses `atheris` for mutation-based fuzzing when available; falls back to manual seed iteration.
+Gate: **PASSED**. No HIGH or CRITICAL findings. No unbounded file reads. No HTTP reads. No lief.parse(). No subprocess calls `subprocess` is imported at L19 but never used, dead import. Writes mutated JSON schemas to `tempfile.NamedTemporaryFile` (L210), bounded by fuzzer input size. Uses `atheris` for mutation-based fuzzing when available; falls back to manual seed iteration.
 
 ---
 
@@ -67,7 +67,7 @@ for f in findings:
 | `line` | Line number of the taint source or sink |
 | `issue_type` | `'BIND_WIDE'` / `'EXEC_IN_ALLOWED'` / `'NO_AUTH'` / `'CREDENTIAL_EXPOSURE'` / `'PROMPT_INJECTION'` |
 | `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` |
-| `cwe` | CWE identifier string (e.g., `'CWE-78'`) |
+| `cwe` | CWE identifier string for example `'CWE-78'` |
 | `description` | Explanation of the taint path or security issue |
 | `snippet` | Source code snippet may be empty |
 

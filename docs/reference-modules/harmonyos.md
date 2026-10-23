@@ -124,7 +124,7 @@ code.exception_handler_count
 code.bytecode          # bytes
 ```
 
-CodeItem binary layout (all ULEB128, confirmed from ArkCompiler ark-rs):
+CodeItem binary layout all ULEB128, confirmed from ArkCompiler ark-rs:
 
 ```
 register_count(uleb) + parameter_count(uleb) + code_size(uleb)
@@ -206,7 +206,7 @@ Both are public API for callers that want to resolve operands without a full pas
 
 Disassembler for the ARK Bytecode ISA. Wraps an `ABCParser` and consumes
 `CodeItem` objects to produce `ARKInstruction` sequences. The full ISA table
-(324 opcodes, ArkCompiler v13.0.0.0) is embedded in the module. No external `isa.json` file required at runtime.
+324 opcodes, ArkCompiler v13.0.0.0 is embedded in the module. No external `isa.json` file required at runtime.
 
 ### Construction
 
@@ -280,7 +280,7 @@ is NOT a file offset; it is an index into the current index region.
 
 ### ISA table design
 
-The embedded `_OPCODE_TABLE` is keyed by `(prefix_byte | None, opcode_byte)`.
+The embedded `_OPCODE_TABLE` is keyed by `prefix_byte | None, opcode_byte`.
 Four prefix groups:
 
 | Prefix | Byte | Examples |
@@ -408,7 +408,7 @@ The lifter follows the Durfina 2012 three-phase pipeline:
 
 1. **Front-end**: `ARKDisasm.iter_insns()` yields `ARKInstruction` objects.
 2. **IR lift**: `_liftinsn, state` translates each instruction to a
- pseudocode statement, updating a register-state dict (`Dict[str, _Reg]`).
+ pseudocode statement, updating a register-state dict `Dict[str, _Reg]`.
 3. **Back-end**: Statements assembled into labelled blocks with `if/goto`
  control flow.
 
@@ -437,14 +437,14 @@ flowchart TD
 
 After all instructions are lifted, three post-processing passes run in order:
 
-**Pass 1: accumulator copy-propagation** (`_propagate_acc`, Cifuentes §5.4.6).
+**Pass 1: accumulator copy-propagation** `_propagate_acc`, Cifuentes §5.4.6.
 For each `_acc = EXPR` line: if the next substantive line's rhs contains `_acc`
 exactly once, substitute EXPR inline and drop the assignment; if it contains no
 `_acc` dead assignment, drop it silently. Labels and blank lines are
 transparent for look-ahead. Produces `return foo.bar` instead of
 `_acc = foo.bar; return _acc`.
 
-**Pass 2: control flow structuring** (`_structure_cfg`, Cifuentes §6.6.1/§6.6.2).
+**Pass 2: control flow structuring** `_structure_cfg`, Cifuentes §6.6.1/§6.6.2.
 Parses the flat `label+goto` statement list into `_BB` basic blocks, builds a
 `label → index` map, then runs Pass 2.5 before recursively matching structural
 patterns:
@@ -493,7 +493,7 @@ Prior to this module, harmonyos / arkts analysis required manual work outside th
 
 ## How it works
 
-Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
+Parses the runtime-specific binary format APK, DEX, `.mpy`, BEAM, Go ELF to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
 
 ---
 
@@ -528,13 +528,13 @@ for m in native_methods:
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
+Standard library calls that resemble dangerous patterns for example `exec` used for shell completions, `eval` used for template rendering with static input are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code Garble-compiled Go, ProGuard-stripped Android produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm the target binary format (APK, `.mpy`, BEAM, Go ELF) before loading. `BinaryContext` is not required for all runtime analyzers.
+**Before this module:** Confirm the target binary format APK, `.mpy`, BEAM, Go ELF before loading. `BinaryContext` is not required for all runtime analyzers.
 
 **After this module:** Feed dangerous call findings to `TaintTracker` or `FindingRegistry` for confirmed findings.
 
@@ -547,7 +547,7 @@ HarmonyOS analysis uses the same pipeline as Android analysis. `DexAnalyzerdex_d
 | Attribute | Content |
 |:---|:---|
 | `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'INFO'` |
-| `category` | Finding category (e.g., `'jni_dangerous_call'`, `'dynamic_code_loading'`) |
+| `category` | Finding category for example `'jni_dangerous_call'`, `'dynamic_code_loading'` |
 | `title` | Short description of the finding |
 
 For native `.so` components extracted from `.hap` packages, the standard binary RE pipeline applies: see [source-code-auditing](source-code-auditing.md) for JavaScript/TypeScript ArkTS source findings.

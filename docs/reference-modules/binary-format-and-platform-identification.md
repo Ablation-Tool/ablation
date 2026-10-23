@@ -8,7 +8,7 @@ Identify a binary's format ELF, PE, Mach-O, architecture 32/64-bit, endianness, 
 
 1. **Every analysis tool must know what it is analyzing before it begins.** Whether to disassemble as x86, ARM, or MIPS; whether to read `.eh_frame` or iterate load commands; whether the PLT is at a fixed offset or in a DataDirectory: all of this depends on knowing the binary's format and architecture. Format identification is the mandatory first step in the pipeline.
 
-2. **Identification must work in environments without LIEF or other libraries.** Deployment contexts for Ablation include CI pipelines, air-gapped analysis hosts, and minimal embedded Python environments. `BinaryParser` uses only Python standard library (`struct`, `pathlib`) to detect format and extract header metadata. LIEF is only required for the deeper parsing done by `BinaryContext`.
+2. **Identification must work in environments without LIEF or other libraries.** Deployment contexts for Ablation include CI pipelines, air-gapped analysis hosts, and minimal embedded Python environments. `BinaryParser` uses only Python standard library `struct`, `pathlib` to detect format and extract header metadata. LIEF is only required for the deeper parsing done by `BinaryContext`.
 
 3. **Mach-O, ELF, and PE detection must be definitive from 4 bytes.** The magic number at byte offset 0 unambiguously identifies the format: `\x7fELF` → ELF, `MZ` → PE, and the four Mach-O magic constants identify 32/64-bit and endianness simultaneously. This 4-byte dispatch defines the correct architecture for a format detection layer.
 
@@ -45,7 +45,7 @@ flowchart TD
 
 ### Architecture detection per format
 
-**ELF:** `EI_CLASS` at byte 4 (`0x01` = 32-bit, `0x02` = 64-bit); `EI_DATA` at byte 5 (`0x01` = little-endian, `0x02` = big-endian). Entry point at byte offset 24 (ELF64) or 24 ELF32, 4 bytes vs 8 bytes.
+**ELF:** `EI_CLASS` at byte 4 `0x01` = 32-bit, `0x02` = 64-bit; `EI_DATA` at byte 5 `0x01` = little-endian, `0x02` = big-endian. Entry point at byte offset 24 (ELF64) or 24 ELF32, 4 bytes vs 8 bytes.
 
 **PE:** Entry point is `AddressOfEntryPoint` from the Optional Header. Architecture from `Machine` field: `0x014C` = x86-32, `0x8664` = x86-64.
 

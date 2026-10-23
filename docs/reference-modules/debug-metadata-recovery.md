@@ -93,7 +93,7 @@ I386AbsoluteXrefScanner:
 
 ## False positives
 
-**`.eh_frame` FDE start addresses include exception landing pads that are not function entry points.** These appear as spurious starts within function bodies. Filter by checking whether the FDE start is within an existing known-function interval (i.e., it would overlap a function already in `ctx.func_starts`).
+**`.eh_frame` FDE start addresses include exception landing pads that are not function entry points.** These appear as spurious starts within function bodies. Filter by checking whether the FDE start is within an existing known-function interval i.e., it would overlap a function already in `ctx.func_starts`.
 
 **`I386AbsoluteXrefScanner` may report false positives for 4-byte LE values in the code stream that coincidentally match a string VA but are operands to instructions where the value is not a pointer.** The false-positive rate is low for typical binaries but increases when `.rodata` is small and the VA space is densely populated.
 

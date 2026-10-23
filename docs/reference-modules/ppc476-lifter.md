@@ -75,7 +75,7 @@ entries and then scans `.text` for the 4-instruction stub pattern to build `stub
 IBM PPC476 uses `glibc 2.15` with the `ppc476-tools-cross-1.0-1.1` toolchain. Ghidra has PPC
 support but is not available in this toolkit. `Ppc32Lifter` fills that role for the specific goal
 of vulnerability analysis: identifying what attacker-controlled data reaches which dangerous
-functions (`execv`, `system`, `sprintf`, `strcpy`) with enough argument detail to assess exploitability.
+functions `execv`, `system`, `sprintf`, `strcpy` with enough argument detail to assess exploitability.
 
 ---
 
@@ -208,7 +208,7 @@ falls back to `ctx.exports`. An unresolved `bl` appears as `0x1000xxxx()`.
 `_extract_plt_ppc32be` is the companion fix in `binary_context.py` that makes this lifter useful.
 
 **What it does:**
-1. Parses `.rela.plt` with big-endian 32-bit RELA format (`>III`, 12 bytes/entry).
+1. Parses `.rela.plt` with big-endian 32-bit RELA format `>III`, 12 bytes/entry.
    `sym_idx = r_info >> 8` (ELF32 encodes sym in the upper 24 bits of `r_info`).
 2. Builds `got_va → sym_name` from the relocation symbol table.
 3. Scans `.text` for the 4-instruction stub pattern:
@@ -300,13 +300,13 @@ assert ctx.plt[0x1000f320] == 'fork'
 
 ## Reading output
 
-`Ppc32Lifter.from_context(ctx).lift(func_va, n_insn=150)` returns a `str`: the pseudo-C disassembly of the function, one statement per line.
+`Ppc32Lifter.from_context(ctx).liftfunc_va, n_insn=150` returns a `str`: the pseudo-C disassembly of the function, one statement per line.
 
 The lifter tracks register state using `_Val` internally. Output lines use C-like expressions:
 - Constants printed as `0xNNN` hex literals
-- Arguments as `a0`, `a1`, etc. (r3 = `a0`, r4 = `a1` per PPC32 calling convention)
+- Arguments as `a0`, `a1`, etc. r3 = `a0`, r4 = `a1` per PPC32 calling convention
 - Named imports as their symbol name resolved from PLT map
-- Memory loads/stores as pointer-cast dereferences (e.g., `*(u32 *)(sp + 0x18)`)
+- Memory loads/stores as pointer-cast dereferences for example `*(u32 *(sp + 0x18)`)
 - Unknown register state as `?<regname>`
 
 ---

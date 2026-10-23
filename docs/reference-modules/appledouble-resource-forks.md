@@ -6,7 +6,7 @@ Parse AppleDouble container files produced by `unar` and Stuffit Expander on Lin
 
 ## Why this exists
 
-1. **`unar` and Stuffit Expander produce `.rsrc` files that are AppleDouble containers, not raw resource forks, and every tool that treated them as raw resource forks produced corrupt results.** An AppleDouble "header file" begins with a 26-byte header (`magic 0x00051607`, version, home filesystem string, entry count) followed by a table of 12-byte entry descriptors. Each descriptor gives an `entry_id`, a byte `offset` from the start of the file, and a `length`. The resource fork entry (`entry_id=2`) is at an offset that varies per file, it is never at offset 0. Feeding the file directly to a resource-fork parser skips past the header by accident only when the header happens to be exactly the right size, which it is not.
+1. **`unar` and Stuffit Expander produce `.rsrc` files that are AppleDouble containers, not raw resource forks, and every tool that treated them as raw resource forks produced corrupt results.** An AppleDouble "header file" begins with a 26-byte header `magic 0x00051607`, version, home filesystem string, entry count followed by a table of 12-byte entry descriptors. Each descriptor gives an `entry_id`, a byte `offset` from the start of the file, and a `length`. The resource fork entry (`entry_id=2`) is at an offset that varies per file, it is never at offset 0. Feeding the file directly to a resource-fork parser skips past the header by accident only when the header happens to be exactly the right size, which it is not.
 
 2. **Cross-archive resource-fork analysis of 533+ Tool_Chest Mac Classic binary archives was not scriptable without a reliable way to strip the AppleDouble wrapper.** Each session required manually computing the entry offset from a hex dump before passing data to the `CODE`/`DATA` resource map parser. `AppleDoubleExtractor.batch_extract_resource_forks()` processes a list of paths and returns `{path: raw_bytes | None}` for the resource fork entry in each: reducing a multi-hour manual process to a single function call.
 
@@ -39,7 +39,7 @@ flowchart TD
 | 5 | `ENTRY_ICON_BW` | Black-and-white icon data |
 | 6 | `ENTRY_ICON_COLOR` | Color icon data |
 | 7 | `ENTRY_FILE_DATES` | File dates created, modified, backup, accessed |
-| 8 | `ENTRY_FINDER_INFO` | 16-byte Finder info (bytes 0-3 = file type, 4-7 = creator) |
+| 8 | `ENTRY_FINDER_INFO` | 16-byte Finder info bytes 0-3 = file type, 4-7 = creator |
 | 9 | `ENTRY_MACINTOSH_INFO` | Macintosh file info flags |
 | 10 | `ENTRY_FILE_DATES_NEW` | Extended file dates |
 
@@ -150,7 +150,7 @@ Batch:
 
 **Before this module:** Extract `.rsrc` files from Mac Classic archives using `unar -forks visible <archive>`. Confirm the output files are AppleDouble not raw resource forks with `is_appledoubledata[:4]`. If the archive was extracted with `unzip` or `tar` on Linux, the resource fork is typically lost: use `unar` specifically.
 
-**After this module:** Feed `ext.resource_fork()` bytes to a Mac OS resource map parser to extract `CODE` resources 68k code segments, `DATA` resources, `STR#` string tables, and `MENU` resources. The `CODE 0` resource contains the jump table for the application: the entry point for Mac Classic binary analysis. Check `finder_info()[0:4]` for the file type (`APPL` = application, `INIT` = system extension, `cdev` = control panel) before selecting the appropriate analysis path.
+**After this module:** Feed `ext.resource_fork()` bytes to a Mac OS resource map parser to extract `CODE` resources 68k code segments, `DATA` resources, `STR#` string tables, and `MENU` resources. The `CODE 0` resource contains the jump table for the application: the entry point for Mac Classic binary analysis. Check `finder_info()[0:4]` for the file type `APPL` = application, `INIT` = system extension, `cdev` = control panel before selecting the appropriate analysis path.
 
 ---
 

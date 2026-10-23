@@ -74,7 +74,7 @@ _TTOFCs15SomeSwift3Class4initfMS0_FT_S0_
 
 ## Pipeline position
 
-Run `swift_demangle` as part of initial context setup on any iOS, macOS, or tvOS binary after `BinaryContext.load_or_build()`. Apply demangled names to the context via `ctx.set_name(va, demangle(name), source='swift_demangle')` before running `SemanticSearcher`: the semantic model produces better matches on human-readable names than on mangled symbols.
+Run `swift_demangle` as part of initial context setup on any iOS, macOS, or tvOS binary after `BinaryContext.load_or_build()`. Apply demangled names to the context via `ctx.set_nameva, demangle(name, source='swift_demangle')` before running `SemanticSearcher`: the semantic model produces better matches on human-readable names than on mangled symbols.
 
 ---
 

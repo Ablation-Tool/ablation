@@ -133,7 +133,7 @@ pl.sweep(searcher, top_k=8, min_score=0.30)
 
 **High sweep scores on non-vulnerable functions**: `PatternLibrary.sweep()` uses a minimum score threshold default 0.30 that is intentionally low. Many functions that score above 0.30 will not have the targeted vulnerability; the sweep produces candidates for manual review, not confirmed findings. Raise `min_score` to 0.50–0.60 if the candidate list is too large for triage.
 
-**Patterns that over-match a broad function class**: a confirmed finding described with generic terms (e.g., "reads from network socket into buffer") will match many network-receive functions. Descriptions that include the specific error pattern (e.g., "reads attacker-controlled byte count into fixed-size stack buffer without bounds check") produce more targeted patterns and fewer false candidates.
+**Patterns that over-match a broad function class**: a confirmed finding described with generic terms for example "reads from network socket into buffer" will match many network-receive functions. Descriptions that include the specific error pattern for example "reads attacker-controlled byte count into fixed-size stack buffer without bounds check" produce more targeted patterns and fewer false candidates.
 
 ---
 

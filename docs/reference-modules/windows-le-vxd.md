@@ -6,9 +6,9 @@ Parse Windows 3.x Linear Executable (LE) Virtual Device Driver binaries: resolvi
 
 ## Why this exists
 
-1. **LIEF and standard PE parsers reject LE binaries.** The LE magic (`'LE'`, `0x4C45`) at the offset stored in the MZ header field `0x3C` is distinct from the PE magic (`'PE\0\0'`). Standard parsers check for `PE` and fail with an invalid signature error. `win16_le_vxd_sweep.py` implements a pure-Python LE header parser that reads the object page table using the LE-specific 3-byte big-endian page number format.
+1. **LIEF and standard PE parsers reject LE binaries.** The LE magic `'LE'`, `0x4C45` at the offset stored in the MZ header field `0x3C` is distinct from the PE magic (`'PE\0\0'`). Standard parsers check for `PE` and fail with an invalid signature error. `win16_le_vxd_sweep.py` implements a pure-Python LE header parser that reads the object page table using the LE-specific 3-byte big-endian page number format.
 
-2. **VxDs have zero imports: ring-0 VMM service calls use `INT 0x20 + DWORD service ID`**, there is no IAT to resolve. `win16_le_vxd_sweep.py` includes a compiled VMM service ID-to-name table derived from the WfW 3.11 and Win 3.1 DDK, mapping each service DWORD to its VMM name (e.g., `0x00010009 → _HeapAllocate`). This provides function-level call context at ring-0 without an import table.
+2. **VxDs have zero imports: ring-0 VMM service calls use `INT 0x20 + DWORD service ID`**, there is no IAT to resolve. `win16_le_vxd_sweep.py` includes a compiled VMM service ID-to-name table derived from the WfW 3.11 and Win 3.1 DDK, mapping each service DWORD to its VMM name for example `0x00010009 → _HeapAllocate`. This provides function-level call context at ring-0 without an import table.
 
 3. **Ring-0 code has a qualitatively different vulnerability profile**: a stack overflow or format string in a VxD does not hit a ring-3 exception handler; it corrupts the ring-0 stack and produces a kernel fault Blue Screen. `win16_le_vxd_sweep.py` includes ring-0-specific semantic queries: `vxd_ring0_recv_overflow` ring-0 buffer from network packet data, `vxd_ring0_alloc_overflow` kernel heap allocation size from 32-bit arithmetic on packet length, and `vxd_format_string_ring0` wsprintf/sprintf in ring-0 context. These queries target the Windows 3.x era network VxDs VTDI, VIP, VNBT where ring-0 packet processing vulnerabilities were historically found.
 
@@ -76,7 +76,7 @@ Semantic sweep:
 
 ## Pipeline position
 
-Run `win16_le_vxd_sweep.py` on any Windows 3.x VxD binary (`.386`, `.vxd`, `.drv` with LE magic). The ring-0-specific query set is unique to this sweep; do not substitute `pe_sweep.py` for LE targets. Findings feed the standard `FindingRegistry` workflow.
+Run `win16_le_vxd_sweep.py` on any Windows 3.x VxD binary `.386`, `.vxd`, `.drv` with LE magic. The ring-0-specific query set is unique to this sweep; do not substitute `pe_sweep.py` for LE targets. Findings feed the standard `FindingRegistry` workflow.
 
 ---
 

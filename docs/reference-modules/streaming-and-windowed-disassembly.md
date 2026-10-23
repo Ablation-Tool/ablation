@@ -84,7 +84,7 @@ The following illustrates annotated disassembly output format. Actual instructio
 
 ## Pipeline position
 
-`WindowAnalyzer.dump_text()` is the standard manual disassembly tool in the RE workflow (CLAUDE.md step 9: "WindowAnalyzer.dump_text() for manual disasm only when automated tools don't have the sink"). Use automated tools (`TaintTracker`, `SinkArgClassifier`) first; `dump_text()` is for the cases where a finding needs manual confirmation or the automated tool has no configured sink for the observed pattern.
+`WindowAnalyzer.dump_text()` is the standard manual disassembly tool in the RE workflow (CLAUDE.md step 9: "WindowAnalyzer.dump_text() for manual disasm only when automated tools don't have the sink"). Use automated tools `TaintTracker`, `SinkArgClassifier` first; `dump_text()` is for the cases where a finding needs manual confirmation or the automated tool has no configured sink for the observed pattern.
 
 ---
 

@@ -10,7 +10,7 @@ Detect telephony denial-of-service susceptibility, call eavesdropping surfaces, 
 
 2. **SRTP enforcement is optional in SIP and rarely complete in enterprise deployments**: a SIP server that accepts an SDP offer with `RTP/AVP` cleartext audio instead of requiring `RTP/SAVP` (SRTP) means an on-path attacker can capture the full audio stream. `detect_voip_eavesdrop_surface()` sends an SDP offer with `RTP/AVP` to test acceptance and probes the RTCP port media port + 1 to determine whether session metadata is observable without authentication.
 
-3. **SIP Digest authentication has known weaknesses that probe-based testing directly confirms**: `probe_sip_authentication_weaknesses()` tests nonce replay: it captures the `nonce` from a `401 Unauthorized` challenge and re-uses it in a second REGISTER without incrementing `nc`. Acceptance (`SIP_NONCE_REPLAY_ACCEPTED`) means the server does not enforce nonce count, enabling parallel credential replay. `probe_sip_authentication_bypass()` tests whether the server accepts an INVITE with no authentication header at all (`SIP_UNAUTH_INVITE`) or with a forged Digest response using a blank password (`SIP_DIGEST_BYPASS`, `SIP_AUTH_BYPASS`).
+3. **SIP Digest authentication has known weaknesses that probe-based testing directly confirms**: `probe_sip_authentication_weaknesses()` tests nonce replay: it captures the `nonce` from a `401 Unauthorized` challenge and re-uses it in a second REGISTER without incrementing `nc`. Acceptance (`SIP_NONCE_REPLAY_ACCEPTED`) means the server does not enforce nonce count, enabling parallel credential replay. `probe_sip_authentication_bypass()` tests whether the server accepts an INVITE with no authentication header at all (`SIP_UNAUTH_INVITE`) or with a forged Digest response using a blank password `SIP_DIGEST_BYPASS`, `SIP_AUTH_BYPASS`.
 
 ---
 
@@ -117,7 +117,7 @@ Voice abuse probe functions return `List[{severity, title, detail, host, port}]`
 | Field | Content |
 |:---|:---|
 | `severity` | `MEDIUM` (TDoS surface) / `HIGH` authentication bypass |
-| `title` | Finding code (e.g., `SIP_NO_RATE_LIMIT`, `TDOS_INVITE_FLOOD`, `SIP_ANONYMOUS_CALL_ACCEPTED`) |
+| `title` | Finding code for example `SIP_NO_RATE_LIMIT`, `TDOS_INVITE_FLOOD`, `SIP_ANONYMOUS_CALL_ACCEPTED` |
 | `detail` | Description of the abuse surface and exploitation scenario |
 | `host` | Target host |
 | `port` | SIP port (typically `5060` UDP or `5061` TLS) |

@@ -99,7 +99,7 @@ Run `CompilerSecurityGate` as a post-link CI/CD step, before the release artifac
 | `func_va` | VA of the function containing the finding |
 | `site_va` | VA of the specific call site sink instruction |
 | `description` | Human-readable explanation of the vulnerability |
-| `detector` | Which scanner produced this finding (e.g., `'taint'`, `'format_string'`) |
+| `detector` | Which scanner produced this finding for example `'taint'`, `'format_string'` |
 | `taint_dag` | Optional `SemanticBlock` DAG for taint path visualization |
 | `fmt()` | Single-line formatted string for build log output |
 

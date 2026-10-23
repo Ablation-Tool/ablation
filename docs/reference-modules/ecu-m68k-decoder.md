@@ -138,7 +138,7 @@ class M68kInsn:
 | `BRANCH` | `bra.*`, `beq.*`, `bne.*`, `blt.*`, `bgt.*`, `jmp`, all `b*` conditional |
 | `CALL` | `jsr`, `bsr.*` |
 | `PROLOGUE` | `link.w a6, #-N` negative displacement only |
-| `MISC` | All others (`move`, `movem`, `add`, `sub`, `nop`, `link` with positive disp, …) |
+| `MISC` | All others `move`, `movem`, `add`, `sub`, `nop`, `link` with positive disp, … |
 
 ---
 
@@ -154,7 +154,7 @@ parses the hex value:
 "$5000.l"  →  0x5000
 ```
 
-Indirect targets (e.g., `JSR (A0)`) return `target = None`; the address is not statically
+Indirect targets for example `JSR (A0`) return `target = None`; the address is not statically
 known.
 
 ---
@@ -165,7 +165,7 @@ known.
 pure-Python pattern scan. `disassemble()` and `decode_one()` require Capstone and raise
 ``ImportError`` with install instructions if it is not available.
 
-Capstone 5.0.7 (`CS_ARCH_M68K`, `CS_MODE_M68K_020`) is used. CPU32 is a 68020 derivative;
+Capstone 5.0.7 `CS_ARCH_M68K`, `CS_MODE_M68K_020` is used. CPU32 is a 68020 derivative;
 no 68020-specific instructions appear in GM P-series firmware that CPU32 does not also support.
 
 ---
@@ -193,7 +193,7 @@ is a frame-allocating function whose start ``function_starts()`` correctly ident
  instructions using ``insn_length()`` without Capstone will advance in 2-byte steps and may
  misalign on 4-byte or 6-byte instructions. Callers that need accurate lengths must have
  Capstone installed.
-- ``function_starts()`` does not detect LINK.L (32-bit displacement variant, opcode ``0x4808``).
+- ``function_starts()`` does not detect LINK.L 32-bit displacement variant, opcode ``0x4808``.
  LINK.L is used for functions with local variable space exceeding 32 KB; this is uncommon in
  embedded firmware but possible.
 
@@ -228,19 +228,19 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, or C28x for vulnerability analysis.
 
 ---
 
 ## Reading output
 
-`EcuM68kDecoder.from_bytes(data, base=0).decode_all()` returns `List[M68kInsn]`:
+`EcuM68kDecoder.from_bytesdata, base=0.decode_all()` returns `List[M68kInsn]`:
 
 | Attribute | Content |
 |:---|:---|
 | `offset` | Byte offset or VA if base is set of this instruction |
-| `mnemonic` | Instruction mnemonic (e.g., `'MOVE.W'`, `'JSR'`, `'CLR.B'`) |
-| `op_str` | Decoded operands string (e.g., `'D0, 0x1234'`) |
+| `mnemonic` | Instruction mnemonic for example `'MOVE.W'`, `'JSR'`, `'CLR.B'` |
+| `op_str` | Decoded operands string for example `'D0, 0x1234'` |
 | `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'MISC'` |
 | `raw` | Raw instruction bytes |
 | `size` | Instruction size in bytes 2, 4, or 6 |

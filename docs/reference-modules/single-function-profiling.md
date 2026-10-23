@@ -10,7 +10,7 @@ Produce a complete analysis report for one function in a single call: combining 
 
 2. **`FuncProfiler` integrates sink awareness directly into the profile output: each call site is annotated as `[SINK]` if the callee name appears in the sink catalog default or custom.** Without sink tagging, an analyst reading raw call output must mentally cross-reference against a sink list. With sink tagging, the first line of the profile shows `2 SINKS` and the sink call sites are marked inline.
 
-3. **`FuncProfiler` accepts custom sinks via `custom_sinks={'exec_handler': [2]}`: the dict maps function names to argument positions.** This allows vendor-specific wrapper functions (`fadcsystem`, `vendor_exec`) to be treated as sinks in the profile without modifying the global sink catalog.
+3. **`FuncProfiler` accepts custom sinks via `custom_sinks={'exec_handler': [2]}`: the dict maps function names to argument positions.** This allows vendor-specific wrapper functions `fadcsystem`, `vendor_exec` to be treated as sinks in the profile without modifying the global sink catalog.
 
 ---
 

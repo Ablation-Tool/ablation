@@ -104,7 +104,7 @@ Run `NginxEnumerator.check_cves()` after `fingerprint()` has successfully extrac
 
 | Field | Content |
 |:---|:---|
-| `id` | CVE identifier (e.g., `'CVE-2013-4547'`) |
+| `id` | CVE identifier for example `'CVE-2013-4547'` |
 | `severity` | `'HIGH'` / `'MEDIUM'` |
 | `desc` | Affected version range, description, and exploit path |
 | `exploit` | Example exploit request string, or `None` |

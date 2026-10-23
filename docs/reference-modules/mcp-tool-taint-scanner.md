@@ -43,11 +43,11 @@ highs = [f for f in findings if f.severity in ('HIGH', 'CRITICAL')]
 
 `PROMPT_INJECTION` starts at MEDIUM, escalates to HIGH when the user-input variable is directly assigned as the `content=` field of a system-role message (direct assignment = higher exploitability).
 
-`TRANSPORT_EXPOSURE` starts at MEDIUM, drops to LOW when auth-related keywords (`auth`, `middleware`, `jwt`, `bearer`) appear in the surrounding ±10-line context.
+`TRANSPORT_EXPOSURE` starts at MEDIUM, drops to LOW when auth-related keywords `auth`, `middleware`, `jwt`, `bearer` appear in the surrounding ±10-line context.
 
 ## Detection limitations
 
-- **CREDENTIAL_EXPOSURE** uses a 30-line window to track `json.dumps(COOKIES)` → launch site. Two-hop taint via an intermediate list variable (e.g., `all_cli_args = ['--cookies', cookies]`) is the maximum tracked depth.
+- **CREDENTIAL_EXPOSURE** uses a 30-line window to track `json.dumps(COOKIES)` → launch site. Two-hop taint via an intermediate list variable for example `all_cli_args = ['--cookies', cookies]` is the maximum tracked depth.
 - **PROMPT_INJECTION** uses a ±20-line window around the system-role assignment; it does not perform full dataflow analysis.
 - **AUTH_BYPASS** only checks decorators in the 8 lines before the route registration; middleware registered at app-init level is not detected.
 
@@ -61,7 +61,7 @@ Validated on FortiManager v8.0.0 AI stack: FMG-AI-1 CREDENTIAL_EXPOSURE and FMG-
 
 ## How it works
 
-`MCPToolTaintScanner.scan_file(path)` reads Python/JavaScript MCP server source files and applies regex-based taint analysis without AST parsing. It detects `tool_name = args["key"]` patterns taint sources from MCP tool arguments and traces them to exec-class sinks (`subprocess.run`, `os.system`, `shell=True` patterns) and filesystem sinks (`open(path, 'w')`). `_has_auth_in_window()` checks the surrounding lines for authorization guards. No binary disassembly; no func_starts.
+`MCPToolTaintScanner.scan_file(path)` reads Python/JavaScript MCP server source files and applies regex-based taint analysis without AST parsing. It detects `tool_name = args["key"]` patterns taint sources from MCP tool arguments and traces them to exec-class sinks `subprocess.run`, `os.system`, `shell=True` patterns and filesystem sinks (`open(path, 'w')`). `_has_auth_in_window()` checks the surrounding lines for authorization guards. No binary disassembly; no func_starts.
 
 ---
 
@@ -113,7 +113,7 @@ for f in findings:
 | `line` | Line number where the issue was detected |
 | `issue_type` | `'BIND_WIDE'` / `'EXEC_IN_ALLOWED'` / `'NO_AUTH'` / `'CREDENTIAL_EXPOSURE'` / `'PROMPT_INJECTION'` |
 | `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` |
-| `cwe` | CWE identifier string (e.g., `'CWE-77'`, `'CWE-798'`) |
+| `cwe` | CWE identifier string for example `'CWE-77'`, `'CWE-798'` |
 | `description` | Human-readable explanation of the issue |
 | `snippet` | Source code snippet at the finding line |
 

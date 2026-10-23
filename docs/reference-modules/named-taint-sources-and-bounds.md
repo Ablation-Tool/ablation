@@ -88,7 +88,7 @@ Labeled taint finding dicts extend the standard taint finding shape with source 
 | `sink` | Sink function name |
 | `tainted_args` | List of tainted argument registers at the call |
 | `sources` | List of named taint source labels that reach this sink |
-| `bound` | Register bound description (e.g., `rdi bound=0xff`) if a bound was declared |
+| `bound` | Register bound description for example `rdi bound=0xff` if a bound was declared |
 | `taint_path` | Register propagation chain |
 
 ---
@@ -96,5 +96,5 @@ Labeled taint finding dicts extend the standard taint finding shape with source 
 ## See also
 
 - [Taint Analysis (x86)](x86.md): base x86/x86-64 taint tracker with standard unlabeled taint
-- [Named Taint Multi-ISA](taint-analysis.md): ISA-specific variants (ARM32, ARM64, MIPS, PPC32, LoongArch64)
+- [Named Taint Multi-ISA](taint-analysis.md): ISA-specific variants ARM32, ARM64, MIPS, PPC32, LoongArch64
 - [Global BSS Taint Tracking](global-symbol-and-bss-tracking.md): BSS-source taint tracking for kernel initrd patterns

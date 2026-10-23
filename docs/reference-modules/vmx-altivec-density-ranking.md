@@ -93,7 +93,7 @@ Run `VMXDensityScanner.inject_labels()` early in the analysis of Cell PPU or IBM
 | `total_insns` | Total instruction count |
 | `vmx_count` | Number of VMX/AltiVec instructions |
 | `density` | Float: `vmx_count / total_insns` |
-| `label` | Property: threshold-based label (e.g., `"vector_math"`, `"vector_trace"`) |
+| `label` | Property: threshold-based label for example `"vector_math"`, `"vector_trace"` |
 
 `VMXFunctionResult.fmt(name_fn)` returns a formatted line for display. Pass `ctx.name` as `name_fn` to include resolved function names.
 

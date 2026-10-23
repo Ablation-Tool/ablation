@@ -10,7 +10,7 @@ Detect packed section entropy, PEB/debugger detection patterns, opaque predicate
 
 2. **`detect_pe_peb_manipulation()` identifies techniques that evade process image inspection**: unlinking from the PEB module list (`InMemoryOrderModuleList` FLINK/BLINK manipulation), erasing the PE header from mapped memory zeroing the MZ/PE magic bytes at the base address, and `NtSetInformationProcess(ProcessBreakOnTermination)` crash-on-inspect patterns. These techniques break the PE introspection tools that security products use to identify malicious code at runtime.
 
-3. **`analyze_elf_binary_indicators()`** provides the Linux-side counterpart: `detect_binary_obfuscation_patterns()` in the same module covers `ptracePTRACE_TRACEME` self-debugging anti-attach, `/proc/self/status` TracerPid check Linux debugger detection, and environment variable sandbox detection (`SANDBOX`, `CUCKOO`, `TRIAGE` in environment variable names accessed by the binary).
+3. **`analyze_elf_binary_indicators()`** provides the Linux-side counterpart: `detect_binary_obfuscation_patterns()` in the same module covers `ptracePTRACE_TRACEME` self-debugging anti-attach, `/proc/self/status` TracerPid check Linux debugger detection, and environment variable sandbox detection `SANDBOX`, `CUCKOO`, `TRIAGE` in environment variable names accessed by the binary.
 
 ---
 
@@ -87,7 +87,7 @@ Run packing and anti-analysis checks as the second analysis step on any PE binar
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` / `MEDIUM` |
-| `title` | Finding code (e.g., `PACKED_STUB`, `DEBUGGER_DETECT_API`, `PEB_MODULE_UNLINK`, `PE_HEADER_ERASE`) |
+| `title` | Finding code for example `PACKED_STUB`, `DEBUGGER_DETECT_API`, `PEB_MODULE_UNLINK`, `PE_HEADER_ERASE` |
 | `detail` | Entropy value, API reference, or PEB manipulation pattern description |
 
 ---

@@ -152,7 +152,7 @@ for f in findings:
 | `func_va` | Virtual address of the function containing the call site |
 | `call_va` | Virtual address of the `CALL` instruction itself |
 | `callee` | Name of the format-string function being called |
-| `fmt_reg` | Register carrying the format argument (`rdi`, `rsi`, or `rdx`) |
+| `fmt_reg` | Register carrying the format argument `rdi`, `rsi`, or `rdx` |
 | `provenance` | `rodata` / `arg_passthrough` / `stack_load` / `register` / `unknown` |
 | `severity` | `HIGH` for `arg_passthrough`; `MEDIUM` for all others |
 | `verdict` | `SAFE` / `VULNERABLE` (HIGH) / `SUSPICIOUS` (MEDIUM) |

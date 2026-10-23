@@ -8,7 +8,7 @@ Enumerate running processes, loaded shared libraries, executable/RWX memory regi
 
 1. **`ProcessEnumerator` reads `/proc/<pid>/maps`, `/proc/<pid>/environ`, and `/proc/<pid>/fd/`**: providing the complete memory layout and open file descriptors for every process the current user can read. RWX memory regions (`rwx` in `/proc/pid/maps` without a backing file) are flagged as potential shellcode injection targets: a process with an anonymous RWX region may be a shellcode host or JIT compiler.
 
-2. **`scan_dll_hijacking_candidates()`** enumerates processes with shared library loads from writable directories: a common misconfiguration where a privileged process (`root`, SUID) loads a `.so` from `/tmp/` or a user-writable path. If the calling user can write to the load path, they can substitute a malicious library and execute code at the privilege level of the target process.
+2. **`scan_dll_hijacking_candidates()`** enumerates processes with shared library loads from writable directories: a common misconfiguration where a privileged process `root`, SUID loads a `.so` from `/tmp/` or a user-writable path. If the calling user can write to the load path, they can substitute a malicious library and execute code at the privilege level of the target process.
 
 3. **`enumerate_volatile_forensics()`** captures volatile system state: process list, network connections, loaded kernel modules (`/proc/modules`), and `/proc/sysrq-trigger` accessibility: to a timestamped output directory. This is the standard pre-rootkit-analysis capture step: volatile state is collected before any analysis tools potentially modify the system.
 
@@ -92,7 +92,7 @@ Run process and memory map inventory after `host-platform-inventory` establishes
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` RWX mapping or writable hijack path / `MEDIUM` suspicious load path |
-| `title` | Finding code (e.g., `ANONYMOUS_RWX_MAPPING`, `DLL_HIJACK_CANDIDATE`) |
+| `title` | Finding code for example `ANONYMOUS_RWX_MAPPING`, `DLL_HIJACK_CANDIDATE` |
 | `pid` | Process ID |
 | `process` | Process executable path |
 | `detail` | Memory range, loaded library path, or writable directory description |

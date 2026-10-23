@@ -8,7 +8,7 @@ Taint analysis, sink classification, structural lifting, and semantic search acr
 
 1. **MIPS-32 big-endian is the dominant ISA for consumer routing firmware: Mikrotik RouterOS, older Cisco IOS images, and embedded HTTP/SNMP stacks frequently ship as MIPS-32 BE ELF, yet the architecture's load-delay slot makes naive taint propagation incorrect.** The instruction immediately after a branch/jump executes before the branch takes effect; a taint tracker that processes instructions in linear order produces false positives and false negatives for any register written in a delay slot. `MIPS32TaintTracker` processes delay slots as part of the preceding branch instruction, consuming them before updating PC, which matches the hardware execution model.
 
-2. **MIPS sink classification requires a platform-specific approach because `sprintf` argument position is different in MIPS32 O32 ABI ($a0 = format, $a1+ = args) versus MIPS64 N64 $a0-$a7 all used, and RouterOS uses a custom memory allocator whose allocation functions are not in the standard PLT.** `SinkArgClassifierMIPS` (`sink_arg_classifier_mips.py`) extends the generic `SinkArgClassifier` with MIPS-specific argument register slots per ABI variant and RouterOS-specific allocation sink signatures. `mips_analyzer.py` wraps the full analysis pipeline for MIPS firmware targets.
+2. **MIPS sink classification requires a platform-specific approach because `sprintf` argument position is different in MIPS32 O32 ABI $a0 = format, $a1+ = args versus MIPS64 N64 $a0-$a7 all used, and RouterOS uses a custom memory allocator whose allocation functions are not in the standard PLT.** `SinkArgClassifierMIPS` (`sink_arg_classifier_mips.py`) extends the generic `SinkArgClassifier` with MIPS-specific argument register slots per ABI variant and RouterOS-specific allocation sink signatures. `mips_analyzer.py` wraps the full analysis pipeline for MIPS firmware targets.
 
 3. **nanoMIPS is a compressed ISA used in MIPS I7200 and P-class cores for code-density-optimized embedded targets, it is not Thumb-equivalent MIPS16e; it requires a distinct decoder.** `taint_tracker_nanomips.py` and `nanomips_decoder.py` provide the instruction model and taint analysis for nanoMIPS binaries, preventing misidentification of nanoMIPS 16-bit opcodes as MIPS32 instructions in `check_rtp_port_range` and related analysis passes.
 
@@ -140,9 +140,9 @@ SinkArgClassifier:
 | `func_va` | `int` | VA of the function containing the sink call |
 | `func_name` | `str` | Name of the function (from `ctx`) |
 | `sink_va` | `int` | VA of the sink call instruction |
-| `sink_name` | `str` | Sink function name (e.g., `system`, `sprintf`) |
+| `sink_name` | `str` | Sink function name for example `system`, `sprintf` |
 | `tainted_args` | `List[int]` | 0-indexed argument positions that are tainted at the call |
-| `source_name` | `str` | Taint source label (e.g., `recv`, `read`) |
+| `source_name` | `str` | Taint source label for example `recv`, `read` |
 
 ---
 

@@ -1,7 +1,7 @@
 # BinaryLifter: SH-2A backend
 
 **File:** `ablation/analyzers/binary_lifter.py` 
-**Arch token:** `sh2a` (aliases: `sh-2a`, `sh2`)
+**Arch token:** `sh2a` aliases: `sh-2a`, `sh2`
 
 ---
 
@@ -212,7 +212,7 @@ rather than crashing.
 
 ## Reading output
 
-`BinaryLifter.from_path(path).lift_function(va, max_insns=512)` returns a `str`: the pseudo-C disassembly of the function at `va`, one statement per line.
+`BinaryLifter.from_path(path).lift_functionva, max_insns=512` returns a `str`: the pseudo-C disassembly of the function at `va`, one statement per line.
 
 The output uses `NativeVal` as the symbolic type for register state. `NativeVal` represents a register value as one of:
 - `Const(v)`: concrete integer constant

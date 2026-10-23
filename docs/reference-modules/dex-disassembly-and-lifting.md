@@ -84,7 +84,7 @@ void processInput(String p1) {
 
 **`disasm_method()` disassembles the bytecode as-is: obfuscated DEX (ProGuard/R8 with identifier scrambling) will produce correct disassembly with scrambled names (`a.b.c.A.a()`).** The instruction decoding is correct regardless of obfuscation; only the human-readable names are affected by obfuscation.
 
-**`DEXLifter` falls back to annotated pseudo-smali for try/catch blocks and switch tables.** These patterns are common in complex methods. The fallback output is still annotated with resolved references but uses register names (v0, v1) rather than inferred type names. Pseudo-Java quality degrades gracefully on complex methods rather than failing.
+**`DEXLifter` falls back to annotated pseudo-smali for try/catch blocks and switch tables.** These patterns are common in complex methods. The fallback output is still annotated with resolved references but uses register names v0, v1 rather than inferred type names. Pseudo-Java quality degrades gracefully on complex methods rather than failing.
 
 ---
 
@@ -102,8 +102,8 @@ void processInput(String p1) {
 |:---|:---|
 | `cu_offset` | Offset in code units from start of `insns[]` |
 | `opcode` | DEX opcode integer |
-| `mnemonic` | DEX mnemonic string (e.g., `'invoke-virtual'`, `'iget-object'`) |
-| `fmt` | DEX format code string (e.g., `'35c'`) |
+| `mnemonic` | DEX mnemonic string for example `'invoke-virtual'`, `'iget-object'` |
+| `fmt` | DEX format code string for example `'35c'` |
 | `regs` | `List[int]`: register indices |
 | `ref_idx` | Reference table index, or `-1` if not applicable |
 | `literal` | Literal value signed integer, or `0` |

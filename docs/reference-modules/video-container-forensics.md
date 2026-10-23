@@ -6,7 +6,7 @@ Detect appended payloads, embedded binary content in metadata atoms, malformed b
 
 ## Why this exists
 
-1. **Video containers are polyglot attack vectors**: MP4 files can embed arbitrary binary content in `udta`, `free`, `skip`, or `uuid` atoms without affecting video playback. `video_container.py` detects appended or prepended non-video payloads (content after `mdat`/`moov` in ISOBMFF, before the `EBML` header in MKV) by walking the container structure rather than relying on file extension or MIME type.
+1. **Video containers are polyglot attack vectors**: MP4 files can embed arbitrary binary content in `udta`, `free`, `skip`, or `uuid` atoms without affecting video playback. `video_container.py` detects appended or prepended non-video payloads content after `mdat`/`moov` in ISOBMFF, before the `EBML` header in MKV by walking the container structure rather than relying on file extension or MIME type.
 
 2. **`udta`, `free`, `skip`, and `uuid` atoms are standard ISO/IEC 14496-12 containers for vendor-specific metadata**, but their contents are opaque to playback software. `video_container.py` checks the entropy of these atom payloads: a `uuid` atom with Shannon entropy > 7.5 bits/byte is almost certainly encrypted or compressed binary content rather than metadata.
 
@@ -80,7 +80,7 @@ Run `VideoForensicsAnalyzer` on any video file received from an untrusted source
 |:---|:---|
 | `offset` | File offset of the suspicious atom or appended region |
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
-| `category` | Finding category (e.g., `EMBEDDED_BINARY`, `POLYGLOT`, `DRM`, `ENTROPY_ANOMALY`, `ANOMALOUS_STRUCTURE`) |
+| `category` | Finding category for example `EMBEDDED_BINARY`, `POLYGLOT`, `DRM`, `ENTROPY_ANOMALY`, `ANOMALOUS_STRUCTURE` |
 | `description` | Short summary of the finding |
 | `detail` | Extended detail: atom type, entropy value, size, or magic bytes |
 

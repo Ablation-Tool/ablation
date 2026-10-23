@@ -71,7 +71,7 @@ scan() findings:
 
 **`no_safe_seh` fires on all 32-bit PE binaries that predate SafeSEH**: binaries compiled before MSVC 7.1 Visual Studio 2003 do not support SafeSEH. The absence of SafeSEH is a finding, but exploitability requires a stack overflow or format-string write primitive on the same target.
 
-**`seh_frames()` static extraction may not find all frames**: dynamically installed SEH frames (e.g., from compiler-generated `__finally` blocks that are only installed at runtime) are not visible in static analysis. The frame count from `seh_frames()` is a lower bound.
+**`seh_frames()` static extraction may not find all frames**: dynamically installed SEH frames for example from compiler-generated `__finally` blocks that are only installed at runtime are not visible in static analysis. The frame count from `seh_frames()` is a lower bound.
 
 ---
 
@@ -88,7 +88,7 @@ Run `SEHChainAnalyzer` on any x86 32-bit Windows PE binary as part of initial at
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` |
-| `title` | Finding code (e.g., `SEH_HANDLER_NOT_IN_TABLE`, `SAFESEH_ABSENT`) |
+| `title` | Finding code for example `SEH_HANDLER_NOT_IN_TABLE`, `SAFESEH_ABSENT` |
 | `install_va` | VA of the SEH frame installation |
 | `handler_va` | VA of the SEH handler |
 | `detail` | Description of the bypass condition |

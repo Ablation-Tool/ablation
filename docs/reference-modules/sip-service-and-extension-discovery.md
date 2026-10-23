@@ -10,7 +10,7 @@ Fingerprint SIP servers, enumerate valid extensions, probe unauthenticated regis
 
 2. **REGISTER without authentication is a direct call-hijacking primitive: an endpoint that returns 200 OK to a REGISTER without first issuing a 401/407 challenge accepts arbitrary binding updates from any source, routing all inbound calls to attacker-controlled Contact URIs.** `check_unauthenticated_register()` and `probe_sip_registration_hijacking()` cover three distinct surfaces: accepting any REGISTER without challenge (CRITICAL `SIP_UNAUTH_REGISTER`), accepting a REGISTER with Contact pointing to a TEST-NET-3 attacker IP without challenge (CRITICAL `SIP_REGISTRATION_HIJACK`), and accepting a wildcard Expires:0 de-registration without challenge (CRITICAL `SIP_UNAUTH_DEREGISTER`). These three primitives together constitute a complete call-hijacking chain requiring zero credentials.
 
-3. **SIP deployments frequently omit SRTP enforcement: an endpoint that processes INVITE offers with RTP/AVP profile and no crypto= lines without issuing 488 Not Acceptable Here will negotiate unencrypted media for every call, making on-path RTP capture trivial.** `check_srtp_required()` and `probe_sip_media_interception()` jointly assess media-path encryption posture: INVITE with RTP/AVP only (no SAVP, no crypto= lines), offer-less INVITE late-media model enabling RTP endpoint substitution, unauthenticated dialog event subscription RFC 4235: real-time active call enumeration, and OPTIONS Allow header SAVP absence confirms no path to encrypted media for any session.
+3. **SIP deployments frequently omit SRTP enforcement: an endpoint that processes INVITE offers with RTP/AVP profile and no crypto= lines without issuing 488 Not Acceptable Here will negotiate unencrypted media for every call, making on-path RTP capture trivial.** `check_srtp_required()` and `probe_sip_media_interception()` jointly assess media-path encryption posture: INVITE with RTP/AVP only no SAVP, no crypto= lines, offer-less INVITE late-media model enabling RTP endpoint substitution, unauthenticated dialog event subscription RFC 4235: real-time active call enumeration, and OPTIONS Allow header SAVP absence confirms no path to encrypted media for any session.
 
 ---
 
@@ -180,7 +180,7 @@ The following illustrates the output format for representative findings. Actual 
 
 **Before this module:** Confirm that UDP/5060 or configured SIP port is reachable with a packet capture tool or `netcat -u`. Identify whether the deployment uses SIP/UDP or SIP/TCP: `_send_udp_sip()` is UDP-only; TCP-based SIP deployments common on enterprise CUCM require direct socket sends. Confirm that the AMI port TCP/5038 is network-accessible before running `check_ami_interface()`.
 
-**After this module:** For `SIP_UNAUTH_REGISTER` and `SIP_REGISTRATION_HIJACK` findings: proceed to `sip-attack-surface-detection.md` probes (`detect_sip_interception_indicators`, `probe_sip_authentication_bypass`) to confirm the full call-hijacking chain. For `AMI_AUTH_SUCCESS`: enumerate AMI commands (`action: command`, `command: sip show peers`) for the full extension registry. For `SIP_NO_SRTP_OFFERED`: proceed to RTP injection surface assessment (`probe_rtp_injection_surface`, `probe_rtp_covert_channel` in `voip-protocol-and-covert-channels.md`). Write confirmed findings to `~/VDT/VULNERABILITIES-<ip>.md`.
+**After this module:** For `SIP_UNAUTH_REGISTER` and `SIP_REGISTRATION_HIJACK` findings: proceed to `sip-attack-surface-detection.md` probes `detect_sip_interception_indicators`, `probe_sip_authentication_bypass` to confirm the full call-hijacking chain. For `AMI_AUTH_SUCCESS`: enumerate AMI commands `action: command`, `command: sip show peers` for the full extension registry. For `SIP_NO_SRTP_OFFERED`: proceed to RTP injection surface assessment `probe_rtp_injection_surface`, `probe_rtp_covert_channel` in `voip-protocol-and-covert-channels.md`. Write confirmed findings to `~/VDT/VULNERABILITIES-<ip>.md`.
 
 ---
 
@@ -189,7 +189,7 @@ The following illustrates the output format for representative findings. Actual 
 | Field | Content |
 |:---|:---|
 | `f['severity']` | `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` |
-| `f['title']` | Finding code string (e.g., `SIP_UNAUTH_REGISTER`, `AMI_AUTH_SUCCESS`) |
+| `f['title']` | Finding code string for example `SIP_UNAUTH_REGISTER`, `AMI_AUTH_SUCCESS` |
 | `f['detail']` | Full finding narrative including host:port, observed behavior, protocol reference, and attack impact |
 | `f['host']` | Target host IP or FQDN |
 | `f['port']` | Target port for the specific probe that produced this finding |

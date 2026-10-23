@@ -6,7 +6,7 @@ Recover function entry points in stripped ARM32 ELF binaries: where `.eh_frame`,
 
 ## Why this exists
 
-1. **Stripped ARM32 firmware has no reliable function boundary information.** On x86-64, `.eh_frame` records unwind information for every function, and `BinaryContext` uses it to recover function starts even in fully stripped binaries. On ARM32, `.eh_frame` is frequently absent in embedded firmware (Fortinet switches, older Cisco routers, embedded IoT devices). Without it, `func_starts` is populated only from export symbols and call targets: missing many internal functions entirely.
+1. **Stripped ARM32 firmware has no reliable function boundary information.** On x86-64, `.eh_frame` records unwind information for every function, and `BinaryContext` uses it to recover function starts even in stripped binaries. On ARM32, `.eh_frame` is frequently absent in embedded firmware Fortinet switches, older Cisco routers, embedded IoT devices. Without it, `func_starts` is populated only from export symbols and call targets: missing many internal functions entirely.
 
 2. **ARM32 and Thumb interworking requires separate scanning strategies.** ARM32 binaries may contain both ARM 4-byte instructions and Thumb 2-byte or 4-byte Thumb-2 code regions. The PUSH-with-LR prologue encodes differently in each mode: ARM32 uses `STMFD r13!, {rN.., lr}` as a 4-byte word; Thumb-2 uses `STMDB SP!, {rN.., lr}` as a 32-bit Thumb encoding; Thumb-1 uses a 16-bit `PUSH {rlist, lr}` halfword. A single scan pattern cannot cover all three, this tool runs mode-appropriate passes.
 
@@ -53,7 +53,7 @@ Thumb-1 `PUSH {rlist, lr}` is a 16-bit instruction encoded as:
 ```
 [rlist] [0xB5]
 ```
-The `0xB5` byte (bit 8 = LR, bits 13–15 = `101` for the PUSH opcode) is the high byte of the little-endian halfword. The scanner finds `\xb5` at byte position 1 of any 2-byte-aligned halfword. This scan is disabled in ARM32 mode because `\xb5` appears inside ARM32 `BL` instruction words at non-aligned positions that would otherwise be flagged.
+The `0xB5` byte bit 8 = LR, bits 13–15 = `101` for the PUSH opcode is the high byte of the little-endian halfword. The scanner finds `\xb5` at byte position 1 of any 2-byte-aligned halfword. This scan is disabled in ARM32 mode because `\xb5` appears inside ARM32 `BL` instruction words at non-aligned positions that would otherwise be flagged.
 
 ---
 

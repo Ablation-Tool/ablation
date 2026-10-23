@@ -105,7 +105,7 @@ dirty_since_commit(): True  (advance() not yet committed)
 
 | Method | Return |
 |:---|:---|
-| `current_stage()` | Current stage name string (e.g., `triage`, `sweep`, `taint`, `confirmation`) |
+| `current_stage()` | Current stage name string for example `triage`, `sweep`, `taint`, `confirmation` |
 | `history()` | `List[from_stage, to_stage, status]`: stage transition history |
 | `validatestage, evidence_dict` | `List[str]`: list of validation errors; empty if valid |
 | `dirty_since_commit()` | `True` if `advance()` has been called but not yet committed |

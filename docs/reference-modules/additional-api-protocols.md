@@ -8,7 +8,7 @@ Enumerate and attack GraphQL, gRPC, SOAP/WSDL, JSON-RPC, and WebSocket interface
 
 1. **GraphQL introspection exposes the entire schema in a single unauthenticated query: types, fields, queries, mutations, and relationships.** A single `POST /graphql` with the `__schema` introspection query returns every type and field name the API exposes. When introspection is disabled, field suggestion errors (`"Did you mean X?"`) leak individual field names through typo probes. When batching is enabled, an array of introspection queries bypasses per-query rate limits and processes the full schema enumeration as a single API call.
 
-2. **gRPC server reflection is the HTTP/2 equivalent of WSDL, and it is commonly left enabled in development deployments.** A gRPC server with reflection enabled responds to a `ListServices` request with every registered service and method definition, including method parameter and return types. Many gRPC services also expose an HTTP/1.1 REST gateway with service listing endpoints (`/v1/services`, `/grpc/services`): accessible without gRPC client tooling. `probe_grpc()` detects both surfaces via `GRPC_REFLECTION_PAYLOAD` and REST path probing.
+2. **gRPC server reflection is the HTTP/2 equivalent of WSDL, and it is commonly left enabled in development deployments.** A gRPC server with reflection enabled responds to a `ListServices` request with every registered service and method definition, including method parameter and return types. Many gRPC services also expose an HTTP/1.1 REST gateway with service listing endpoints `/v1/services`, `/grpc/services`: accessible without gRPC client tooling. `probe_grpc()` detects both surfaces via `GRPC_REFLECTION_PAYLOAD` and REST path probing.
 
 3. **SOAP/WSDL endpoints carry XXE injection risk that pure JSON APIs do not.** A WSDL file retrieval confirms the full operation set; the follow-on XXE probe (`SOAP_XXE` payload with `<!ENTITY xxe SYSTEM "file:///etc/passwd">`) confirms whether the XML parser resolves external entities. An affirmative response containing `root:` or `/bin` is file read from the server filesystem: a direct path to credential extraction.
 
@@ -145,7 +145,7 @@ daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin...
 
 ## Pipeline position
 
-**Before this module:** Run basic HTTP enumeration via `probe_api_surface()` first to confirm the service is reachable and to identify content-type hints (`application/grpc`, `text/xml`, `application/json-rpc`) that indicate which protocol probes are relevant. SOAP and gRPC are rarely present on modern services; use content-type hints to prioritize before running all four protocol probes.
+**Before this module:** Run basic HTTP enumeration via `probe_api_surface()` first to confirm the service is reachable and to identify content-type hints `application/grpc`, `text/xml`, `application/json-rpc` that indicate which protocol probes are relevant. SOAP and gRPC are rarely present on modern services; use content-type hints to prioritize before running all four protocol probes.
 
 **After this module:** For WSDL findings: import the discovered operations into `APIEndpointRegistry` and run `probe_injection_checks()` against each SOAP operation parameter. For GraphQL introspection findings: run `probe_graphql_advanced()` to test batching and alias enumeration before reporting schema exposure: the advanced attacks often reveal higher-severity impacts than schema disclosure alone.
 

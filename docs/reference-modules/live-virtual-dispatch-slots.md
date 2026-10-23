@@ -6,7 +6,7 @@ Enumerate exported Binder service interfaces from Android APK DEX class definiti
 
 ## Why this exists
 
-1. **Binder is Android's primary IPC mechanism: exported services are the first-hop attack surface for privilege escalation.** An app or system service that exports a `Stub` class via `onBind()` exposes its AIDL interface to any caller with the matching permission (or no permission at all, if `android:exported="true"` without `android:permission`). `BinderScanner` maps the complete surface systematically.
+1. **Binder is Android's primary IPC mechanism: exported services are the first-hop attack surface for privilege escalation.** An app or system service that exports a `Stub` class via `onBind()` exposes its AIDL interface to any caller with the matching permission or no permission at all, if `android:exported="true"` without `android:permission`. `BinderScanner` maps the complete surface systematically.
 
 2. **DEX class hierarchy traversal is required to identify Binder servers**: a class becomes a Binder server by extending `Binder` (or `IInterface.Stub`) and overriding `onTransact()`. `BinderScanner.scan()` traverses DEX `ClassDef` superclass chains to find all `Service`/`IntentService` subclasses, then resolves their `IBinder` return type in `onBind()` to identify which ones export a Binder interface.
 
@@ -86,7 +86,7 @@ Run `BinderScanner` on any Android APK system app, security agent, MDM client as
 | Attribute | Content |
 |:---|:---|
 | `severity` | `'CRITICAL'` exported, no permission / `'HIGH'` exported, weak permission / `'MEDIUM'` / `'LOW'` / `'INFO'` |
-| `category` | Finding category (e.g., `'exported_service'`, `'weak_permission'`) |
+| `category` | Finding category for example `'exported_service'`, `'weak_permission'` |
 | `title` | Short finding title |
 | `detail` | Exploitation description and supporting context |
 | `source` | Source location identifier for example service class name or manifest entry |
