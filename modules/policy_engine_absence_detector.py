@@ -200,7 +200,7 @@ class PolicyEngineAbsenceDetector:
             ctx = self._load_ctx()
             plt_names = frozenset(
                 n.split('@')[0].lstrip('_')
-                for n, _ in ctx.plt_entries()
+                for _, n in ctx.plt.items()
             )
         except Exception:
             pass

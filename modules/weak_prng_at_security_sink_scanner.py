@@ -111,7 +111,7 @@ class WeakPRNGAtSecuritySinkScanner:
         return self._ctx
 
     def _plt_name_set(self, ctx) -> frozenset:
-        return frozenset(n.split('@')[0].lstrip('_') for n, _ in ctx.plt_entries())
+        return frozenset(n.split('@')[0].lstrip('_') for _, n in ctx.plt.items())
 
     def _plt_va_map(self, ctx) -> dict[int, str]:
         result: dict[int, str] = {}
