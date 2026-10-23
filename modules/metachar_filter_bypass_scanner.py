@@ -34,6 +34,7 @@ Usage:
 """
 
 from __future__ import annotations
+from modules._disasm_helper import disasm_func
 
 import re
 from dataclasses import dataclass
@@ -116,7 +117,7 @@ class MetacharFilterBypassScanner:
         exec_names = {'system', 'execve', 'execvp', 'execl', 'execle', 'execlp',
                       'popen', 'posix_spawn', 'ShellExecute', 'CreateProcess'}
         va_set: set[int] = set()
-        for name, va in ctx.plt_entries():
+        for va, name in ctx.plt.items():
             base = name.split('@')[0].lstrip('_')
             if base in exec_names:
                 va_set.add(va)
@@ -171,7 +172,7 @@ class MetacharFilterBypassScanner:
 
         for func_va in ctx.func_starts:
             func_name = ctx.name(func_va)
-            insns = list(ctx.disasm_func(func_va))
+            insns = list(disasm_func(ctx, func_va))
             metachar_hits, has_multibyte, has_exec_sink = self._analyze_func(insns, exec_vas)
 
             if len(metachar_hits) < _MIN_METACHAR_CMPS:

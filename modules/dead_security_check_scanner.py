@@ -41,6 +41,7 @@ Usage:
 """
 
 from __future__ import annotations
+from modules._disasm_helper import disasm_func
 
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -124,7 +125,7 @@ class DeadSecurityCheckScanner:
         findings: list[DeadCheckFinding] = []
 
         for func_va in ctx.func_starts:
-            insns = list(ctx.disasm_func(func_va))
+            insns = list(disasm_func(ctx, func_va))
             if len(insns) < 6:
                 continue
 
