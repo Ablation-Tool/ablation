@@ -4,7 +4,7 @@
 
 One thing was not possible before in Ablation:
 
-1. **Flag binaries that combine the three conditions required for data exfiltration: access to sensitive data, untrusted input ingestion, and outbound communications.** Individual signals are common and not findings on their own. It is the combination that matters. `LethalTrifectaScanner` checks for three simultaneous signals: sensitive data strings in rodata (20 patterns: `api_key`, `password`, `jwt`, `aws_access_key`, etc.), untrusted input PLT imports (13 functions: `recv`, `read`, `getenv`, `scanf`, etc.), and outbound communication PLT imports or LLM API host strings. All three together is a HIGH finding. Any two is MEDIUM.
+1. **Flag binaries that combine the three conditions required for data exfiltration: access to sensitive data, untrusted input ingestion, and outbound communications.** Individual signals are common and not findings on their own. It is the combination that matters. `LethalTrifectaScanner` checks for three simultaneous signals: 20 sensitive data string patterns in rodata such as `api_key`, `password`, `jwt`, and `aws_access_key`; 13 untrusted input PLT imports such as `recv`, `read`, `getenv`, and `scanf`; and outbound communication PLT imports or LLM API host strings. All three together is a HIGH finding. Any two is MEDIUM.
 
 ## Usage
 
