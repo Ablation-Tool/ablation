@@ -83,7 +83,7 @@ SSDP devices:
 
 ## Pipeline position
 
-Run host/service discovery after `local-network-inventory` reveals subnets. Discovery results feed banner grabbing, credential testing, and service-specific enumeration modules Docker, Kubernetes, IOS, etc..
+Run host/service discovery after `local-network-inventory` reveals subnets. Discovery results feed banner grabbing, credential testing, and service-specific enumeration modules Docker, Kubernetes, IOS, and similar.
 
 ---
 

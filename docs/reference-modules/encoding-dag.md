@@ -8,7 +8,7 @@ The EncodingDAG is a bitfield-to-instruction encoding framework for fixed-width 
 
 **The problem it solves**
 
-Every RE tool that supports multiple architectures handles ISA encoding the same way: one bespoke decoder per architecture. Each has its own bit mask arithmetic, its own field extraction, its own opcode dispatch. When you add a new ISA, you write all of that again from scratch. When a bug exists wrong field offset, endianness error, you fix it in one decoder and have no guarantee the same bug isn't silently present in six others.
+Every RE tool that supports multiple architectures handles ISA encoding the same way: one bespoke decoder per architecture. Each has its own bit mask arithmetic, its own field extraction, its own opcode dispatch. When you add a new ISA, you write all of that again from scratch. When a bug exists, such as a wrong field offset or endianness error, you fix it in one decoder and have no guarantee the same bug isn't silently present in six others.
 
 Ablation had the same problem before the EncodingDAG. The docs note: "every ISA decoder embedded its own field extraction logic: bit masks, shifts, and width calculations repeated across each architecture." The PEFABIClobberScanner existed as a concrete casualty. The PPC32 `ori` instruction has its RA field at bits [20:16], not [25:21], and that error was invisible until it silently produced the wrong encoding. Without a structural layer, there was no way to catch it at encode time.
 
@@ -16,11 +16,11 @@ Ablation had the same problem before the EncodingDAG. The docs note: "every ISA 
 
 **The three-layer model**
 
-Layer 1: Raw bytes as an integer. Any fixed-width instruction is packed as an integer 24-bit, 32-bit, etc.. The packing is identical to RGB color packing: `I = B0×65536 + B1×256 + B2`. This isn't aesthetic. It means the opcode high bits, R channel clusters visually and numerically. All ADD variants produce the same R value regardless of operands, so a range scan over the integer corpus finds all ADD instructions without a hash lookup.
+Layer 1: Raw bytes as an integer. Any fixed-width instruction is packed as a 24-bit, 32-bit, or similar-width integer. The packing is identical to RGB color packing: `I = B0×65536 + B1×256 + B2`. This isn't aesthetic. It means the opcode, occupying the high bits or R channel, clusters visually and numerically. All ADD variants produce the same R value regardless of operands, so a range scan over the integer corpus finds all ADD instructions without a hash lookup.
 
 Layer 2: Encoding DAG. A `Field` is a named bit range with an optional fixed value. A `Template` is a sequence of Fields for one instruction form. `Template.encode(values)` packs field values left to right; `Template.decode(I)` extracts them and raises `DecodingError` if any fixed field mismatches. This is the opcode dispatch mechanism. Each `Template` has a fixed opcode `Field`, and `ISASpec.decode()` tries Templates in order, skipping those whose fixed opcode field doesn't match. The PEFABIClobberScanner fix was: define `Field("RA", 5)` at bits [20:16] explicitly, and the wrong-offset bug becomes an `EncodingError` at encode time rather than silent bad output.
 
-Layer 3: Semantic DAG. A `SemanticOp` names what an instruction does and carries typed operands (`register names, immediates, MemRef(base, offset)`). A `DataflowEdge` records explicit producer-consumer links between ops: "node n1 writes r0, node n3 reads r0." A `SemanticBlock` groups ops into a basic block and exposes `dag_nodes()` for topological traversal.
+Layer 3: Semantic DAG. A `SemanticOp` names what an instruction does and carries typed operands: register names, immediates, and `MemRef` base/offset pairs. A `DataflowEdge` records explicit producer-consumer links between ops: "node n1 writes r0, node n3 reads r0." A `SemanticBlock` groups ops into a basic block and exposes `dag_nodes()` for topological traversal.
 
 The key property: before the SemanticDAG, taint results were flat sink, source pairs. Confirming that a LOAD result flows into an ADD that feeds a STORE required re-deriving register liveness manually. `DataflowEdge` makes that chain explicit and walkable without re-analysis.
 
@@ -148,10 +148,10 @@ class Field:
     fixed: Optional[int] # None = variable operand; int = opcode discriminator
 ```
 
-**Variable fields** (`fixed=None`) carry operand values. During encode, the caller
+**Variable fields** with `fixed=None` carry operand values. During encode, the caller
 supplies a value; during decode, the extracted bits are returned as-is.
 
-**Fixed fields** (`fixed=<int>`) are opcode discriminators. During encode, the fixed
+**Fixed fields** with `fixed=<int>` are opcode discriminators. During encode, the fixed
 value is packed unconditionally; the caller does not supply it. During decode, if the
 extracted bits do not equal `fixed`, a `DecodingError` is raised. This is how Template
 dispatch works: each Template has a fixed `opcode` field, and decode tries Templates
@@ -169,7 +169,7 @@ first Field occupies the top bits of the integer.
 **How encoding works:**
 
 `Template.encode(values)` iterates Fields from MSB to LSB. For each Field it takes
-`values[name]` (or `fixed` for fixed Fields), validates the width, then packs the value
+`values[name]` or `fixed` for fixed Fields, validates the width, then packs the value
 into the running integer by shifting:
 
 ```
@@ -241,7 +241,7 @@ node = EncodingNode(tmpl, {"rA": 0, "rB": 1})
 |---|---|---|
 | `node.to_hex()` | `str` | Hex string, e.g. `"0x130100"` |
 | `node.to_bytes()` | `bytes` | Raw byte sequence, e.g. `b'\x13\x01\x00'` |
-| `node.to_rgb()` | `int, int, int` | RGB triple, e.g. `(19, 1, 0)` |
+| `node.to_rgb()` | `int, int, int` | RGB triple, e.g. R=19, G=1, B=0 |
 | `node.to_rgb_int()` | `int` | Single integer, e.g. `1245440` |
 | `node.all_fields()` | `dict` | All field values including fixed fields |
 | `node.show_layout()` | `str` | ASCII bit-field diagram |
@@ -350,7 +350,7 @@ blk.add_edge(DataflowEdge("n3", "n4", "r0"))
 `dag_nodes()` yields ops in topological order: a producer is always yielded before all
 its consumers. If the edge graph contains a cycle, it raises `ValueError("cycle
 detected")`. Callers that build blocks from analyzed binaries should wrap the call in
-`try/except ValueError` and fall back to insertion-order iteration (`blk.ops`) when
+`try/except ValueError` and fall back to insertion-order iteration via `blk.ops` when
 a cycle is present. Cycles are rare in well-formed basic blocks but can appear when
 taint edges are added manually.
 
@@ -464,7 +464,7 @@ and examples:
 ```
 
 The 6-bit opcode gives 64 possible instruction forms. Mode distinguishes addressing
-variants (`00` = PC-relative, `10` = register-indirect, `11` = register-register).
+variants: `00` = PC-relative, `10` = register-indirect, `11` = register-register.
 
 | Mnemonic | opcode (bin) | mode | Semantics |
 |---|---|---|---|
@@ -664,7 +664,7 @@ for op in block.dag_nodes():   # topological order
 | `to_rgb()` | method | `(R, G, B)` tuple ISA-24 maps to RGB exactly |
 | `show_layout()` | method | ASCII bitfield breakdown for debugging |
 
-`ISASpec.decode(data)` returns `(EncodingNode, SemanticOp)`: the raw node and the decoded semantic operation.
+`ISASpec.decode(data)` returns a two-element tuple of `EncodingNode` and `SemanticOp`: the raw node and the decoded semantic operation.
 
 `SemanticBlock.dag_nodes()` yields `SemanticOp` instances in topological order.
 
