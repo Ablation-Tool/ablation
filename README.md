@@ -15,7 +15,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 ## Capabilities
 
 <details>
-<summary>Decompilers, Lifters & ISAs</summary>
+<summary>32 Decompilers</summary>
 
 **Native CPUs**
 
