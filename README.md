@@ -196,7 +196,9 @@ Following coordinated disclosure, the **Cisco Product Security Incident Response
 </details>
 
 <details>
-<summary><strong>Quick Start</strong></summary>
+<summary><strong>Setup</strong></summary>
+
+### Install
 
 ```bash
 pip install ablation-tool
@@ -204,32 +206,31 @@ pip install ablation-tool
 
 **Requirements:** Python >= 3.10 · `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
 
-<details>
-<summary><strong>Claude Code Setup & Configuration</strong></summary>
+### Claude Code Configuration
 
-### 1. Launch Session
+#### 1. Launch Session
 ```bash
 cd ~/ablation && claude
 ```
 
-### 2. Set Model
+#### 2. Set Model
 ```text
 /model claude-sonnet-4-6
 ```
 *(or `/model claude-sonnet-4-5`)*
 
-### 3. Define Objective
+#### 3. Define Objective
 ```text
 /goal reverse engineer [target binary, firmware image, or directory]
 ```
 
-### 4. Check Effort Level
+#### 4. Check Effort Level
 Ask inline without interrupting the main context:
 ```text
 /btw What effort level should we be set on right now?
 ```
 
-### Recommended Autonomous Configuration (`/config`)
+#### Recommended Autonomous Configuration (`/config`)
 ```text
 Model                                   claude-sonnet-4-6
 Thinking mode                           true
@@ -245,8 +246,6 @@ Verbose output                          true
 Output style                            Explanatory
 Question auto-continue timeout          never
 ```
-
-</details>
 
 </details>
 
