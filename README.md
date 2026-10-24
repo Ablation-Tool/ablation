@@ -71,6 +71,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 | [**Metadata, DWARF & Demangling**](docs/reference-modules/debug-metadata-recovery.md) | [1](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;[2](ablation/analyzers/dwarf_loongarch64.py) | Recovers function boundaries from `.eh_frame`, DWARF, and BTF when available. Also resolves [i386 absolute immediate cross-references](docs/reference-modules/i386-absolute-cross-references.md) and demangles [Swift symbols](docs/reference-modules/swift-symbol-demangling.md). |
 | [**Entropy Mapper**](docs/reference-modules/entropy-mapper.md) | [1](ablation/analyzers/entropy_mapper.py) | Computes sliding-window Shannon entropy across a binary and marks region transitions so packed or encrypted sections stand out before any unpacking attempt. |
 | [**Unicorn Dynamic Sandbox**](docs/reference-modules/dynamic-sandbox.md) | [1](ablation/analyzers/dynamic_sandbox.py) | Emulates ARM64 or x86-64 leaf functions in Unicorn and captures register and memory writes. Behavioral signatures have evidence strength of 0.40-0.75 so sandbox results confirm static findings rather than replace them. |
+| [**Cryptographic Audit & Key Recovery**](docs/reference-modules/cryptographic-analysis.md) | [1](modules/crypto_audit.py)&nbsp;[2](ablation/analyzers/xor_solver.py) | Recovers repeating-XOR keys, identifies affine cipher mappings, and recognizes AES-CBC and hash implementations in stripped binaries. Also tests JWTs for weak secrets, checks RSA and ECDSA nonce reuse, and flags cipher patterns associated with C2 frameworks. |
 
 </details>
 
@@ -151,11 +152,10 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 </details>
 
 <details>
-<summary>Cryptographic & Protocol Analysis</summary>
+<summary>Protocol Analysis</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
-| [**Cryptographic Audit & Key Recovery**](docs/reference-modules/cryptographic-analysis.md) | [1](modules/crypto_audit.py)&nbsp;[2](ablation/analyzers/xor_solver.py) | Recovers repeating-XOR keys, identifies affine cipher mappings, and recognizes AES-CBC and hash implementations in stripped binaries. Also tests JWTs for weak secrets, checks RSA and ECDSA nonce reuse, and flags cipher patterns associated with C2 frameworks. |
 | [**Protocol FSM & Stego Extractors**](docs/reference-modules/proto-fsm.md) | [1](modules/proto_fsm.py)&nbsp;[2](ablation/analyzers/lsb_stego_extractor.py) | Infers ARM64 protocol state machines from BSS access patterns, including MMTLS variants. The [BMP LSB extractor](docs/reference-modules/lsb-stego-extractor.md) recovers keys hidden in firmware images where crypto material is embedded in image pixels. |
 | [**TLS Probing & Downgrade Analysis**](docs/reference-modules/tls-certificate-and-protocol-probing.md) | [1](ablation/core/tls_analyzer.py)&nbsp;[2](modules/tls_enum.py) | Probes live TCP/TLS connections and inspects certificates and DH parameters. Reports HSTS, mTLS, and CT policy gaps and identifies session resumption configurations that allow protocol downgrade. |
 | [**HTTP/GraphQL/gRPC API Auditing**](docs/reference-modules/unknown-http-api-mapping.md) | [1](modules/api_re.py) | Discovers unknown API schemas and tests each endpoint for BOLA, BFLA, injection, and SSRF. Covers REST, GraphQL, gRPC, SOAP, and WebSocket transports and audits JWT, OAuth, and PKCE authentication flows. |
