@@ -15,7 +15,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 ## Capabilities
 
 <details>
-<summary>32 Decompilers, Lifters & ISAs</summary>
+<summary>Decompilers, Lifters & ISAs</summary>
 
 **Native CPUs**
 
@@ -52,7 +52,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary>Binary Analysis Infrastructure, CFG & Symbolic Execution</summary>
+<summary>Core Analysis Engine, CFG, Symbolic & Labeled Taint</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
@@ -71,14 +71,6 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 | [**Metadata, DWARF & Demangling**](docs/reference-modules/debug-metadata-recovery.md) | [1](ablation/analyzers/i386_absolute_xref_scanner.py)&nbsp;[2](ablation/analyzers/dwarf_loongarch64.py) | Recovers function boundaries from `.eh_frame`, DWARF, and BTF when available. Also resolves [i386 absolute immediate cross-references](docs/reference-modules/i386-absolute-cross-references.md) and demangles [Swift symbols](docs/reference-modules/swift-symbol-demangling.md). |
 | [**Entropy Mapper**](docs/reference-modules/entropy-mapper.md) | [1](ablation/analyzers/entropy_mapper.py) | Computes sliding-window Shannon entropy across a binary and marks region transitions so packed or encrypted sections stand out before any unpacking attempt. |
 | [**Unicorn Dynamic Sandbox**](docs/reference-modules/dynamic-sandbox.md) | [1](ablation/analyzers/dynamic_sandbox.py) | Emulates ARM64 or x86-64 leaf functions in Unicorn and captures register and memory writes. Behavioral signatures have evidence strength of 0.40-0.75 so sandbox results confirm static findings rather than replace them. |
-
-</details>
-
-<details>
-<summary>Taint Analysis</summary>
-
-| Capability | Code | Description |
-|:---|:---|:---|
 | [**x86-64 Taint**](docs/reference-modules/taint-analysis-2.md) | [1](ablation/analyzers/taint_tracker.py)&nbsp;[2](ablation/analyzers/taint_tracker_x86_labeled.py) | Traces register and memory state from source to sink across x86-64 functions. Call `trace_function(func_va)` for a single function or `run_interprocedural()` for cross-call chains. Do not call `.trace()` because that method does not exist. The labeled variant preserves named source labels and bounds on attacker-controlled values. |
 | [**ARM Taint**](docs/reference-modules/taint-analysis-2.md) | [1](ablation/analyzers/taint_tracker_arm64.py)&nbsp;[2](ablation/analyzers/taint_tracker_arm32.py) | ARM64 uses `run(func_va, source_reg, sink_patterns)`. ARM32 uses `run()`. The [labeled ARM32 variant](docs/reference-modules/named-taint-sources-and-bounds.md) names frame slots, pointer offsets, and memory ranges so taint sources are identified in the report. |
 | [**MIPS Taint**](docs/reference-modules/mips.md) | [1](ablation/analyzers/taint_tracker_mips.py)&nbsp;[2](ablation/analyzers/taint_tracker_mips64.py) | Covers MIPS-32, MIPS-64, and [nanoMIPS](docs/reference-modules/nanomips.md). The [labeled MIPS variant](docs/reference-modules/named-taint-sources-and-bounds.md) names sources and sets sinks per call rather than using the default register model. |
@@ -91,7 +83,24 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary>Vulnerability Scanners & Sink Classification</summary>
+<summary>Autonomous Agent Loop, Flywheel & Semantic Corpus</summary>
+
+| Capability | Code | Description |
+|:---|:---|:---|
+| [**LLM Analyst Loop & RAG**](docs/reference-modules/llm-analyst-loop.md) | [1](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;[2](ablation/analyzers/llm_analyst/rag_retriever.py) | Runs a bounded Claude tool-calling loop across 7 dedicated files. Retrieves relevant context from 536 reference module docs, names functions, reconstructs struct layouts, and generates vulnerability hypotheses in sequence. |
+| [**Semantic Code Search**](docs/reference-modules/semantic-code-search.md) | [1](ablation/analyzers/semantic_search.py) | Embeds function descriptions using BAAI/bge-small-en-v1.5 at 384 dimensions via fastembed and ranks results by semantic similarity. Run this before any manual disassembly because it identifies the top candidates in 35 seconds on an 885-function binary. |
+| [**Hypothesis Engine**](docs/reference-modules/hypothesis-engine-2.md) | [1](ablation/analyzers/hypothesis_engine.py) | Persists competing vulnerability explanations across sessions and updates confidence as evidence arrives. Competing hypotheses rank each other so the weakest candidates are deprioritized before manual trace time is spent. |
+| [**Evidence Scoring & Stage Commitments**](docs/reference-modules/evidence-scoring-and-probe-ranking.md) | [1](ablation/analyzers/probe_ranker.py)&nbsp;[2](ablation/analyzers/probe_adapters.py) | Weights different evidence types and dispatches the [probe adapters](docs/reference-modules/analyzer-probe-adapters.md) best suited to collect them. [Stage commitments](docs/reference-modules/stage-commitment.md) are cryptographically signed so partial results cannot be quietly overwritten between sessions. |
+| [**The Flywheel & Cross-Target Learning**](docs/reference-modules/flywheel.md) | [1](ablation/analyzers/pattern_library.py)&nbsp;[2](ablation/analyzers/finding_registry.py) | Replays confirmed finding descriptions and semantic queries from past engagements against new binaries so vendor-specific sink patterns do not need to be rediscovered on each new target. |
+| [**Function Identity & Auto-Naming DB**](docs/reference-modules/function-identity-database.md) | [1](ablation/analyzers/corpus_builder.py)&nbsp;[2](ablation/analyzers/func_id_db.py) | Builds a corpus from one or more binaries and names functions that match [FLIRT-style signatures](docs/reference-modules/signature-based-auto-naming.md) automatically. Analyst-assigned names persist in the registry so `ctx.name(va)` returns the right label across sessions. |
+| [**SAX Indexing & Homolog Search**](docs/reference-modules/sax-approximate-indexing.md) | [1](ablation/analyzers/sax_index.py)&nbsp;[2](ablation/analyzers/subsequence_searcher.py) | Indexes opcode categories with SAX so approximate function lookups run in milliseconds rather than full embedding comparisons. Also flags structural orphans where no similar function exists in the corpus, which often indicates a novel component. |
+| [**Corpus Mining & CVE Patterns**](docs/reference-modules/finding-corpus-mining.md) | [1](sweeps/corpus_miner.py)&nbsp;[2](modules/cve_byte_patterns.py) | Summarizes CWE frequency across a target corpus and checks for CVE byte signatures. Results are cached per binary version so repeated scans of the same firmware build skip the full analysis. |
+| [**KASAN-Oracle Workflow**](docs/workflows/kasan-oracle.md) | [1](ablation/analyzers/loongarch_decoder_v2.py) | Derives vulnerability candidates from a KASAN-instrumented or debug build and verifies each one in the stripped production binary. Confirmed 11 of 14 candidates in TencentOS kernel 6.6.119. |
+
+</details>
+
+<details>
+<summary>Vulnerability Discovery, Taint Scanners & Source Auditing</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
@@ -114,24 +123,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary>Autonomous Agent Loop, Flywheel & Semantic Corpus</summary>
-
-| Capability | Code | Description |
-|:---|:---|:---|
-| [**LLM Analyst Loop & RAG**](docs/reference-modules/llm-analyst-loop.md) | [1](ablation/analyzers/llm_analyst/agent_loop.py)&nbsp;[2](ablation/analyzers/llm_analyst/rag_retriever.py) | Runs a bounded Claude tool-calling loop across 7 dedicated files. Retrieves relevant context from 536 reference module docs, names functions, reconstructs struct layouts, and generates vulnerability hypotheses in sequence. |
-| [**Semantic Code Search**](docs/reference-modules/semantic-code-search.md) | [1](ablation/analyzers/semantic_search.py) | Embeds function descriptions using BAAI/bge-small-en-v1.5 at 384 dimensions via fastembed and ranks results by semantic similarity. Run this before any manual disassembly because it identifies the top candidates in 35 seconds on an 885-function binary. |
-| [**Hypothesis Engine**](docs/reference-modules/hypothesis-engine-2.md) | [1](ablation/analyzers/hypothesis_engine.py) | Persists competing vulnerability explanations across sessions and updates confidence as evidence arrives. Competing hypotheses rank each other so the weakest candidates are deprioritized before manual trace time is spent. |
-| [**Evidence Scoring & Stage Commitments**](docs/reference-modules/evidence-scoring-and-probe-ranking.md) | [1](ablation/analyzers/probe_ranker.py)&nbsp;[2](ablation/analyzers/probe_adapters.py) | Weights different evidence types and dispatches the [probe adapters](docs/reference-modules/analyzer-probe-adapters.md) best suited to collect them. [Stage commitments](docs/reference-modules/stage-commitment.md) are cryptographically signed so partial results cannot be quietly overwritten between sessions. |
-| [**The Flywheel & Cross-Target Learning**](docs/reference-modules/flywheel.md) | [1](ablation/analyzers/pattern_library.py)&nbsp;[2](ablation/analyzers/finding_registry.py) | Replays confirmed finding descriptions and semantic queries from past engagements against new binaries so vendor-specific sink patterns do not need to be rediscovered on each new target. |
-| [**Function Identity & Auto-Naming DB**](docs/reference-modules/function-identity-database.md) | [1](ablation/analyzers/corpus_builder.py)&nbsp;[2](ablation/analyzers/func_id_db.py) | Builds a corpus from one or more binaries and names functions that match [FLIRT-style signatures](docs/reference-modules/signature-based-auto-naming.md) automatically. Analyst-assigned names persist in the registry so `ctx.name(va)` returns the right label across sessions. |
-| [**SAX Indexing & Homolog Search**](docs/reference-modules/sax-approximate-indexing.md) | [1](ablation/analyzers/sax_index.py)&nbsp;[2](ablation/analyzers/subsequence_searcher.py) | Indexes opcode categories with SAX so approximate function lookups run in milliseconds rather than full embedding comparisons. Also flags structural orphans where no similar function exists in the corpus, which often indicates a novel component. |
-| [**Corpus Mining & CVE Patterns**](docs/reference-modules/finding-corpus-mining.md) | [1](sweeps/corpus_miner.py)&nbsp;[2](modules/cve_byte_patterns.py) | Summarizes CWE frequency across a target corpus and checks for CVE byte signatures. Results are cached per binary version so repeated scans of the same firmware build skip the full analysis. |
-| [**KASAN-Oracle Workflow**](docs/workflows/kasan-oracle.md) | [1](ablation/analyzers/loongarch_decoder_v2.py) | Derives vulnerability candidates from a KASAN-instrumented or debug build and verifies each one in the stripped production binary. Confirmed 11 of 14 candidates in TencentOS kernel 6.6.119. |
-
-</details>
-
-<details>
-<summary>Firmware Extraction, ECU & Automotive</summary>
+<summary>Firmware, Automotive ECUs, C++ & Legacy Formats</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
@@ -148,7 +140,7 @@ When used with Codex or Claude Code, it operates as an autonomous reverse engine
 </details>
 
 <details>
-<summary>Mobile, Language Runtimes & Go RE</summary>
+<summary>OS, Mobile & Language Runtimes</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
