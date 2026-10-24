@@ -13,7 +13,7 @@ Ablation is a reverse engineering framework that runs autonomously with AI codin
 ## Capabilities
 
 <details>
-<summary><strong>1. 31 Decompilers, Lifters & ISAs</strong></summary>
+<summary>31 Decompilers, Lifters & ISAs</summary>
 
 **Native CPUs**
 
@@ -49,7 +49,7 @@ Ablation is a reverse engineering framework that runs autonomously with AI codin
 </details>
 
 <details>
-<summary><strong>2. Core Analysis Engine, CFG, Symbolic & Labeled Taint</strong></summary>
+<summary>Core Analysis Engine, CFG, Symbolic & Labeled Taint</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
@@ -72,7 +72,7 @@ Ablation is a reverse engineering framework that runs autonomously with AI codin
 </details>
 
 <details>
-<summary><strong>3. Autonomous Agent Loop, Flywheel & Semantic Corpus</strong></summary>
+<summary>Autonomous Agent Loop, Flywheel & Semantic Corpus</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
@@ -89,7 +89,7 @@ Ablation is a reverse engineering framework that runs autonomously with AI codin
 </details>
 
 <details>
-<summary><strong>4. Vulnerability Discovery, Taint Scanners & Source Auditing</strong></summary>
+<summary>Vulnerability Discovery, Taint Scanners & Source Auditing</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
@@ -113,7 +113,7 @@ Ablation is a reverse engineering framework that runs autonomously with AI codin
 </details>
 
 <details>
-<summary><strong>5. Firmware, Automotive ECUs, C++ & Legacy Formats</strong></summary>
+<summary>Firmware, Automotive ECUs, C++ & Legacy Formats</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
@@ -133,7 +133,7 @@ Ablation is a reverse engineering framework that runs autonomously with AI codin
 </details>
 
 <details>
-<summary><strong>6. OS, Mobile & Language Runtimes</strong></summary>
+<summary>OS, Mobile & Language Runtimes</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
@@ -150,7 +150,7 @@ Ablation is a reverse engineering framework that runs autonomously with AI codin
 </details>
 
 <details>
-<summary><strong>7. Cryptography, TLS, Web/API & AI/MCP Security</strong></summary>
+<summary>Cryptography, TLS, Web/API & AI/MCP Security</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
@@ -164,7 +164,7 @@ Ablation is a reverse engineering framework that runs autonomously with AI codin
 </details>
 
 <details>
-<summary><strong>8. Live Host, Forensics, Network, Cloud & Project Tooling</strong></summary>
+<summary>Live Host, Forensics, Network, Cloud & Project Tooling</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
