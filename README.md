@@ -51,7 +51,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 </details>
 
 <details>
-<summary>Core Analysis Engine, CFG, Symbolic & Labeled Taint</summary>
+<summary>Core Engine</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
