@@ -6,6 +6,10 @@ Ablation is a reverse engineering framework.
 
 Combined with Claude Code or Codex, it becomes an autonomous reverse engineering tool.
 
+Most RE frameworks are interactive human tools. IDA, Binary Ninja, Ghidra forces you load a binary, you click, you annotate, you understand. The AI is bolted on later as an assistant. 
+
+Ablation inverts this: the entire API surface is designed so an LLM agent runs the RE autonomously and a human reviews the output.
+
 ---
 
 ![demo](assets/demos/claude-code-demo.gif)
