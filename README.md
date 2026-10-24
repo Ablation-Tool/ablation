@@ -182,7 +182,7 @@ Ablation is a reverse engineering framework that runs autonomously with AI codin
 ## Setup & About
 
 <details>
-<summary><strong>Install</strong></summary>
+<summary>Install</summary>
 
 ```bash
 pip install ablation-tool
@@ -193,7 +193,7 @@ pip install ablation-tool
 </details>
 
 <details>
-<summary><strong>Claude Code Configuration</strong></summary>
+<summary>Claude Code Configuration</summary>
 
 ### 1. Launch Session
 ```bash
@@ -239,7 +239,7 @@ Question auto-continue timeout          never
 
 
 <details>
-<summary><strong>Acknowledgments</strong></summary>
+<summary>Acknowledgments</summary>
 
 The code couldn't exist without their ideas. Though no code was written by these authors, doctors, and engineers, their work has direct influence on the production of code that makes Ablation what it is.
 
@@ -288,7 +288,7 @@ The code couldn't exist without their ideas. Though no code was written by these
 </details>
 
 <details>
-<summary><strong>Real-World Results</strong></summary>
+<summary>Real-World Results</summary>
 
 Ablation has been used to analyze production firmware and kernel drivers from Cisco, IBM, TencentOS, Huawei, Fortinet, and more.
 
@@ -304,7 +304,7 @@ Following coordinated disclosure, the **Cisco Product Security Incident Response
 </details>
 
 <details>
-<summary><strong>Demonstrations</strong></summary>
+<summary>Demonstrations</summary>
 
 ### Ablation in Action
 
@@ -321,7 +321,7 @@ Following coordinated disclosure, the **Cisco Product Security Incident Response
 </details>
 
 <details>
-<summary><strong>Standards (NIST SP 800-218 · CISA Secure by Design · MIL-HDBK-115C)</strong></summary>
+<summary>Standards (NIST SP 800-218 · CISA Secure by Design · MIL-HDBK-115C)</summary>
 
 **[NIST SP 800-218](https://csrc.nist.gov/pubs/sp/800/218/final)**
 
@@ -351,7 +351,7 @@ The US Department of Defense handbook for reverse engineering methodology define
 </details>
 
 <details>
-<summary><strong>Responsible Use & Contact</strong></summary>
+<summary>Responsible Use & Contact</summary>
 
 **Responsible Use:** Ablation is built for authorized security research. Use it only against systems you own or have explicit written permission to test. Running it against systems without authorization violates computer fraud laws in most jurisdictions. The author is not responsible for misuse.
 
