@@ -26,7 +26,7 @@ Use `pe_sweep.py` when the research target is a Windows PE binary:
 
 - QuickTime for Windows tools and SDKs
 - Windows COM/ActiveX components
-- Win32 media codecs (`.ax`, `.acm`)
+- Win32 media codecs `.ax` and `.acm`
 - Any PE32 (i386) or PE32+ (AMD64) executable or library
 
 **Do not** use this sweep on ELF binaries. For those, use `fortinet_sweep.py`
@@ -100,7 +100,7 @@ python3 sweeps/pe_sweep.py /path/to/target.exe \
     --vendor apple --product quicktime --version 7.0
 ```
 
-Directory scan (`.exe`, `.dll`, `.ocx`, `.ax`):
+Directory scan `.exe`, `.dll`, `.ocx`, and `.ax`:
 
 ```bash
 python3 sweeps/pe_sweep.py /path/to/dir/ \
@@ -148,7 +148,7 @@ iat = _build_iat(pe)
 ### i386
 
 Detects `55 8B EC` (MSVC) and `55 89 E5` (GCC) frame-pointer prologues.
-Binaries compiled with FPO (Frame Pointer Omission, `/O2`) produce fewer detected
+Binaries compiled with FPO Frame Pointer Omission and `/O2` produce fewer detected
 functions; FPO recovery via E8 call-target scanning supplements prologue detection.
 
 ### AMD64
@@ -173,15 +173,15 @@ encoding is identical in both modes.
 Three things were not possible before in Ablation:
 
 1. No cross-vendor detection of unsigned firmware flashers: the gap was found across 8 binaries from a single vendor in the AUO eGalax engagement, any of which would have been caught automatically by this check.
-2. Semantic profiles can only detect what IS present; detecting the *absence* of signing imports (WinVerifyTrust, Crypt*) required a separate deterministic IAT inspector that runs outside the semantic loop.
+2. Semantic profiles can only detect what IS present; detecting the *absence* of signing imports WinVerifyTrust and Crypt* required a separate deterministic IAT inspector that runs outside the semantic loop.
 3. Ordinal-only imports (the eGalaxUpdate2 → HIDdAPI.dll pattern) are invisible to the named-import IAT check; the new detector also inspects imported DLL names to catch firmware-update libraries regardless of whether they're imported by name or ordinal.
 
-`_check_firmware_auth_bypass(pe, iat)` runs on every binary before the semantic sweep.  It fires when:
+`_check_firmware_auth_bypass(pe, iat)` runs on every binary before the semantic sweep. It fires when:
 
-- A firmware-update DLL is imported (`hiddapi.dll`, `hidapi.dll`, `egtouch.dll`), **or**
-- A named IAT entry matches a firmware-update substring (`DevIAP*`, `IAPFlash`, `FirmwareUpdate`, `DevMCUReset`, …)
+- A firmware-update DLL is imported `hiddapi.dll`, `hidapi.dll`, and `egtouch.dll`, **or**
+- A named IAT entry matches a firmware-update substring `DevIAP*`, `IAPFlash`, `FirmwareUpdate`, `DevMCUReset`, and …
 
-**and** no signing import (`WinVerifyTrust`, `CryptVerifySignature`, `CryptHashData`, `BCryptVerifySignature`, …) is present.
+**and** no signing import `WinVerifyTrust`, `CryptVerifySignature`, `CryptHashData`, `BCryptVerifySignature`, and … is present.
 
 The result appears as `firmware_auth_bypass` in the per-binary result dict and as a **Deterministic Finding** block before semantic results in the report.
 
@@ -196,7 +196,7 @@ Two things were not possible before in Ablation:
 1. Borland BCC32/VCL applications RADStudio, C++ Builder place string literals in `.data` rather than `.rdata`. The prior `.rdata`-only scan returned 0 strings for these targets and misclassified them as out-of-scope (no debug strings = nothing to correlate against).
 2. A blind `.data` fallback would add noise from live pointers and struct padding, but those sequences are reliably short or non-ASCII: the same 5-printable-byte minimum filter that protects `.rdata` scanning also works for `.data`, making the fallback safe.
 
-`_build_rdata_strings` now calls `_scan_section_strings(pe, data, ".rdata")` first.  When that returns zero strings it retries with `".data"` and prints a `[*] .rdata=0 strings: BCC32/VCL fallback` diagnostic.  The underlying `_scan_section_strings` helper is shared between both calls.
+`_build_rdata_strings` now calls `_scan_section_strings(pe, data, ".rdata")` first. When that returns zero strings it retries with `".data"` and prints a `[*] .rdata=0 strings: BCC32/VCL fallback` diagnostic. The underlying `_scan_section_strings` helper is shared between both calls.
 
 ---
 
@@ -250,7 +250,7 @@ Sweep results inherit false-positive rates of each individual analysis module. R
 
 | Field | Content |
 |:---|:---|
-| `id` | Finding identifier string (e.g., `'GAP-015'`) |
+| `id` | Finding identifier string such as `'GAP-015'` |
 | `title` | Short finding title |
 | `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'INFO'` |
 | `evidence` | `List[str]`: IAT names or import strings that triggered the finding |

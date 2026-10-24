@@ -4,7 +4,7 @@
 
 Verified import caller finder for PPC32 BE position-independent `.so` files.
 Finds every `BL` instruction in a binary that definitively calls a named
-imported symbol (e.g. `system`, `popen`, `execl`) and eliminates the
+imported symbol such as `system`, `popen`, and `execl` and eliminates the
 false-positive class caused by multiple compilation units sharing a thunk VA.
 
 Validated: Huawei CE6810 switch e500mc `.so` files (7 modules, 184 apparent
@@ -140,7 +140,7 @@ False positive reduction: libupdatelpu 9→2, libpythonvm 59→1 after r30 check
 
 ## BSS PLT: SYSV PIC IBM HPS, glibc.so files
 
-SYSV ABI PPC32 `.so` files (glibc-linked, `ET_DYN`) use a different calling
+SYSV ABI PPC32 `.so` files glibc-linked and `ET_DYN` use a different calling
 model: calls go directly via `BL stub_va` with no indirection through r30 or
 a GOT2 thunk. The `.plt` section has no file content (it is allocated in BSS
 and written by the dynamic linker at load time).
@@ -151,7 +151,7 @@ and written by the dynamic linker at load time).
 1. `bss_plt_stub_map()` correlates `.rela.plt` entry order with `BL` targets
  in `.text` that land in the `.plt` VA range.
 2. Stub index 0 is identified as the smallest BL target T where T+8 is also
- a BL target (stub size = 8 bytes, standard for glibc SYSV PPC32 BSS PLT).
+ a BL target stub size = 8 bytes and standard for glibc SYSV PPC32 BSS PLT.
 3. `resolver_size = first_stub_va - plt_va` is computed empirically.
 4. All callers of each stub are returned via `find_bl_callers()`.
 

@@ -84,7 +84,7 @@ Findings list probes return `{severity, title, detail, host, port}`:
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `title` | Finding code (e.g., `NXAPI_CLI_UNAUTH`, `NXAPI_RUNNING_CONFIG_UNAUTH`, `NXAPI_BASH_EXEC_UNAUTH`) |
+| `title` | Finding code such as `NXAPI_CLI_UNAUTH`, `NXAPI_RUNNING_CONFIG_UNAUTH`, and `NXAPI_BASH_EXEC_UNAUTH` |
 | `detail` | What was found and why it matters |
 | `host` | Target host |
 | `port` | Target port |

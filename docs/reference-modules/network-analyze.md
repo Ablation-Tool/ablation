@@ -77,7 +77,7 @@ connections:
 
 **`get_firewall_rules()` requires root**: on hosts without root access, `iptables -L -n` fails silently; the firewall rules list is empty. An empty result means "could not enumerate" not "no rules."
 
-**`/proc/net/tcp` port encoding**: ports are stored as hex in `/proc/net/tcp` (e.g., `0050` = port 80). `NetworkAnalyzer` converts these; verify conversion is correct for ports above `0x7FFF` on big-endian kernels.
+**`/proc/net/tcp` port encoding**: ports are stored as hex in `/proc/net/tcp` such as `0050` = port 80. `NetworkAnalyzer` converts these; verify conversion is correct for ports above `0x7FFF` on big-endian kernels.
 
 ---
 

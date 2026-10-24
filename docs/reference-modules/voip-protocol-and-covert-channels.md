@@ -229,7 +229,7 @@ The following illustrates the output format for representative findings. Actual 
 
 ## False positives
 
-**`SIP_NOTIFY_OOD_COVERT` fires whenever an out-of-dialog NOTIFY returns anything other than 481 Call/Transaction Does Not Exist, but RFC 3265 §3.3.4 permits 489 Bad Event as an alternative rejection.** If the server returns 489 subscription event type not supported, the finding does not fire; if it returns 200 or 202, the covert channel finding fires. Some SIP servers return 405 Method Not Allowed rather than 481 for out-of-dialog NOTIFY, which also does not fire the finding. Cross-check by sending a follow-up NOTIFY with a known-bad Event header (e.g., `Event: nonexistent-fake-event`) and compare the response codes.
+**`SIP_NOTIFY_OOD_COVERT` fires whenever an out-of-dialog NOTIFY returns anything other than 481 Call/Transaction Does Not Exist, but RFC 3265 §3.3.4 permits 489 Bad Event as an alternative rejection.** If the server returns 489 subscription event type not supported, the finding does not fire; if it returns 200 or 202, the covert channel finding fires. Some SIP servers return 405 Method Not Allowed rather than 481 for out-of-dialog NOTIFY, which also does not fire the finding. Cross-check by sending a follow-up NOTIFY with a known-bad Event header such as `Event: nonexistent-fake-event` and compare the response codes.
 
 **`DTMF_DIGIT_INJECT` fires on any UDP port that does not return ICMP Port Unreachable, but many operating systems do not send ICMP unreachables for UDP ports, regardless of whether a process is listening.** A finding that fires on all probed UDP ports in a range without any variation should be treated as a false positive due to ICMP filtering. Confirm `DTMF_DIGIT_INJECT` by correlating with `RFC2833_PT101_NEGOTIATED` (SDP confirms PT=101 support) and by observing whether the target's RTP stream SSRCs change after digit injection.
 
@@ -243,7 +243,7 @@ The following illustrates the output format for representative findings. Actual 
 
 **Before this module:** Run `sip-service-and-extension-discovery.md` probes to identify SIP server type and confirm media port range via `check_rtp_port_range()`. Observe SDP negotiation during `probe_sip_media_interception()` to identify the active RTP port range for `probe_rtp_dtmf_digit_theft()` and `probe_rtp_covert_channel()`. For H.323 targets, confirm TCP/1720 reachability before running `probe_h323_and_media_gateway()`: the TCP connection attempt will timeout (5s) for each unreachable port. For WebRTC targets, confirm HTTP/HTTPS port accessibility before `probe_webrtc_signaling_exposure()`.
 
-**After this module:** For `MGCP_CRCX_UNAUTH`: attempt MGCP RQNT to inject DTMF events into active calls on the confirmed gateway, referencing the endpoint identifiers returned by AUEP. For `JANUS_SESSION_CREATE_UNAUTH`: proceed to enumerate Janus plugin handles (VideoRoom, AudioBridge, Streaming) via POST /janus/<session_id>. For `ASTERISK_ARI_EXPOSED`: enumerate `/ari/channels`, `/ari/bridges`, `/ari/recordings`, and `/ari/endpoints` for full PBX control surface. For `SCCP_REGISTER_ACK`: capture SCCP traffic with `tshark -d tcp.port==2000,skinny` to reconstruct phone registration sequence and DTMF events. Write confirmed findings to `~/VDT/VULNERABILITIES-<ip>.md`.
+**After this module:** For `MGCP_CRCX_UNAUTH`: attempt MGCP RQNT to inject DTMF events into active calls on the confirmed gateway, referencing the endpoint identifiers returned by AUEP. For `JANUS_SESSION_CREATE_UNAUTH`: proceed to enumerate Janus plugin handles VideoRoom, AudioBridge, and Streaming via POST /janus/<session_id>. For `ASTERISK_ARI_EXPOSED`: enumerate `/ari/channels`, `/ari/bridges`, `/ari/recordings`, and `/ari/endpoints` for full PBX control surface. For `SCCP_REGISTER_ACK`: capture SCCP traffic with `tshark -d tcp.port==2000,skinny` to reconstruct phone registration sequence and DTMF events. Write confirmed findings to `~/VDT/VULNERABILITIES-<ip>.md`.
 
 ---
 
@@ -252,7 +252,7 @@ The following illustrates the output format for representative findings. Actual 
 | Field | Content |
 |:---|:---|
 | `f['severity']` | `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` |
-| `f['title']` | Finding code string (e.g., `MGCP_CRCX_UNAUTH`, `JANUS_SESSION_CREATE_UNAUTH`) |
+| `f['title']` | Finding code string such as `MGCP_CRCX_UNAUTH` and `JANUS_SESSION_CREATE_UNAUTH` |
 | `f['detail']` | Full finding narrative: host:port, observed protocol behavior, protocol reference violated, specific attack chain or exploitation path |
 | `f['host']` | Target host IP or FQDN |
 | `f['port']` | Port for this specific finding: note this varies UDP/2427 for MGCP, TCP/2000 for SCCP, UDP/3478 for STUN |

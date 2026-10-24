@@ -11,7 +11,7 @@ Phase 0.5 of the Fortinet RE methodology.
 
 Enumerates every `cmf_query_create()` call site in a binary, extracts the CMDB table ID
 from the `rdi` argument, then checks whether any caller of that table also calls an
-exec-class sink (`system`, `popen`, `execvp`, etc.) in the same function body.
+exec-class sink `system`, `popen`, and `execvp`, and so on in the same function body.
 
 Output: a map of `table_id → CMDBTableEntry` with exec-reach flag, caller VAs, and
 field-read counts.
@@ -105,7 +105,7 @@ Phase 2
 | `reaches_exec` | bool | Any caller co-locates an exec-sink call co-location, not data flow |
 | `exec_func_va` | Optional[int] | VA of the function with the co-located exec call |
 | `exec_call_va` | Optional[int] | VA of the exec sink call instruction |
-| `exec_sink_name` | Optional[str] | Name of the exec sink (`system`, `popen`, etc.) |
+| `exec_sink_name` | Optional[str] | Name of the exec sink `system` and `popen`, and so on |
 
 ---
 
@@ -154,7 +154,7 @@ Prior to this module, cmdb surface mapper required manual work outside the Ablat
 
 ## How it works
 
-`CMDBSurfaceMapper.from_path(path, extra_sinks=None, extra_tables=None, verbose=False)` parses the ELF binary to extract the PLT and build a function start map. `map()` disassembles each function body with Capstone, collects call sites where `mov edi, <table_id>` precedes a CMDB API call (e.g., `cmf_query_create`), and flags each `CMDBTableEntry` as `reaches_exec=True` when the same caller function body also contains an exec-sink call (`system`, `popen`, `execv`). The output is a `Dict[int, CMDBTableEntry]` keyed by `table_id`. Co-location does not confirm a taint path: use `SinkArgClassifier` and `TaintTracker` to confirm.
+`CMDBSurfaceMapper.from_path(path, extra_sinks=None, extra_tables=None, verbose=False)` parses the ELF binary to extract the PLT and build a function start map. `map()` disassembles each function body with Capstone, collects call sites where `mov edi, <table_id>` precedes a CMDB API call such as `cmf_query_create`, and flags each `CMDBTableEntry` as `reaches_exec=True` when the same caller function body also contains an exec-sink call `system`, `popen`, and `execv`. The output is a `Dict[int, CMDBTableEntry]` keyed by `table_id`. Co-location does not confirm a taint path: use `SinkArgClassifier` and `TaintTracker` to confirm.
 
 ---
 
@@ -194,7 +194,7 @@ Run `CMDBSurfaceMapper` after identifying a `libcmdb_plugin.so` or equivalent co
 | Field | Content |
 |:---|:---|
 | `reaches_exec` | `True`: advance to Phase 1 (SinkArgClassifier); `False`: skip |
-| `exec_sink_name` | Which exec sink is co-located (`system`, `popen`, etc.) |
+| `exec_sink_name` | Which exec sink is co-located `system` and `popen`, and so on |
 | `exec_func_va` | VA of the function to analyze with SinkArgClassifier |
 | `callers` | All VAs calling `cmf_query_createtable_id` |
 

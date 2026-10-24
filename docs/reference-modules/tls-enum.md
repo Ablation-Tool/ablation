@@ -19,10 +19,10 @@ Three gaps existed before this module:
 2441-line pure network I/O module. No filesystem reads. No subprocess calls. No lief usage. Covers:
 
 - Certificate transparency checks wildcard SANs, validity window, self-signed, CN/SAN mismatch
-- TLS inspection/DPI bypass detection (GREASE, large session ID, 0-RTT, fragmented ClientHello)
+- TLS inspection/DPI bypass detection GREASE, large session ID, 0-RTT, and fragmented ClientHello
 - Weak cipher suite enumeration SSLv3/POODLE, RC4, DES/SWEET32, NULL, EXPORT/FREAK
 - Certificate pinning bypass detection HPKP, Expect-CT, SNI-unbound cert swap, security.txt
-- mTLS enforcement probing (no client cert, 0-RTT session ticket, CertificateRequest scan, bogus SNI)
+- mTLS enforcement probing no client cert, 0-RTT session ticket, CertificateRequest scan, and bogus SNI
 - TLS downgrade attack detection FALLBACK_SCSV, TLS 1.0/1.1 acceptance, HSTS max-age, preload
 - ACME endpoint exposure challenge dirs, PKI validation, private CA API, HTTP-01 liveness
 - Certificate transparency monitoring SCT OID, recently issued, wildcard, SAN count
@@ -31,8 +31,8 @@ Three gaps existed before this module:
 - Legacy TLS version support TLS 1.0, TLS 1.1 acceptance, TLS 1.3 detection
 - Certificate attribute and transparency exposure RSA key size DER parsing, SHA-1/MD5 OID, EV OID, hostname mismatch
 - Certificate pinning enforcement HPKP max-age, HSTS preload, Expect-CT, SCT count, issuer recognition
-- Zero Trust / ZTNA bypass surface (direct IP access, SPA enforcement, mTLS, JA3, CORS wildcard, bearer token in URL)
-- Cloud proxy / SSL inspection bypass (TLS fingerprint, h2c upgrade, QUIC/HTTP3, CONNECT pivot, 3-fragment ClientHello)
+- Zero Trust / ZTNA bypass surface direct IP access, SPA enforcement, mTLS, JA3, CORS wildcard, and bearer token in URL
+- Cloud proxy / SSL inspection bypass TLS fingerprint, h2c upgrade, QUIC/HTTP3, CONNECT pivot, and 3-fragment ClientHello
 
 ---
 
@@ -154,7 +154,7 @@ Run TLS enumeration after confirming a listening HTTPS service. Run `probe_tls_d
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `title` | Finding code (e.g., `NO_FALLBACK_SCSV_PROTECTION`, `TLS10_ACCEPTED`, `TLS11_ACCEPTED`, `SHORT_HSTS_MAX_AGE`) |
+| `title` | Finding code such as `NO_FALLBACK_SCSV_PROTECTION`, `TLS10_ACCEPTED`, `TLS11_ACCEPTED`, and `SHORT_HSTS_MAX_AGE` |
 | `detail` | What was found and why it matters |
 | `host` | Target host |
 | `port` | Target port |

@@ -62,7 +62,7 @@ CWE: CWE-693 Protection Mechanism Failure on all HIGH/MEDIUM findings.
 
 ## Dependencies
 
-- `lief >= 0.14.0` (PE parsing, exports, `IMAGE_LOAD_CONFIG`)
+- `lief >= 0.14.0` PE parsing, exports, and `IMAGE_LOAD_CONFIG`
 - `capstone >= 5.0` indirect call counting in code sections
 
 ---
@@ -153,12 +153,12 @@ Findings: 2 high/critical  3 medium  1 info
 | `location` | Human-readable location string function name, export name, or PE header field |
 | `description` | Detailed explanation of why this is a bypass surface |
 | `va` | VA of the relevant instruction or table entry 0 if not applicable |
-| `cwe` | CWE identifier (e.g., `CWE-693`) |
+| `cwe` | CWE identifier such as `CWE-693` |
 
 ---
 
 ## See also
 
-- [PE Sweep](pe-sweep.md): coarse Windows PE security feature check (DEP, ASLR, SafeSEH, CFG); `CFGBypassDetector` extends CFG analysis to per-export bypass surface
+- [PE Sweep](pe-sweep.md): coarse Windows PE security feature check DEP, ASLR, SafeSEH, and CFG; `CFGBypassDetector` extends CFG analysis to per-export bypass surface
 - [BinaryContext](binary-context.md): load PE for further analysis after identifying bypass targets
 - [FindingRegistry](registry.md): register confirmed bypass findings with CWE attribution

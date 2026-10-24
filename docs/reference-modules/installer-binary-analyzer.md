@@ -92,7 +92,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `_MAX_INSTALLER_BYTES=256MB`; `o
 
 ## How it works
 
-`InstallerBinaryAnalyzer.from_path(path).analyze()` detects the installer format (NSIS, Inno Setup, BitRock LZMA) from file magic bytes, decompresses the payload LZMA, zlib, NSIS block, and carves PE binaries from the decompressed data using MZ header scanning. Returns an `InstallerAnalysisResult` with the carved `CarvedBinary` objects and extracted temp file paths. No func_starts or Capstone: purely file-format parsing.
+`InstallerBinaryAnalyzer.from_path(path).analyze()` detects the installer format NSIS, Inno Setup, and BitRock LZMA from file magic bytes, decompresses the payload LZMA, zlib, NSIS block, and carves PE binaries from the decompressed data using MZ header scanning. Returns an `InstallerAnalysisResult` with the carved `CarvedBinary` objects and extracted temp file paths. No func_starts or Capstone: purely file-format parsing.
 
 ---
 

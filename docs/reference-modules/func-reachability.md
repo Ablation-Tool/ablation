@@ -8,7 +8,7 @@ Determine whether a function is reachable at runtime: filtering dead code from `
 
 1. **An ARG_PROPAGATED finding in dead code is not exploitable.** `SinkArgClassifier` makes no distinction between functions that execute at runtime and functions that exist only as unreferenced debug artifacts. Every `ARG_PROPAGATED` site in dead code produces a false positive that `TaintTracker` then spends time on.
 
-2. **The gap is measurable.** IBM RecoveryRMd CSM SAM 2.2.0.1: `func@0x839c14f` contained an `ARG_PROPAGATED` `system()` site. Manual investigation established the function had no callers: all references to `0x839c14f` existed only in `.debug_pubnames` (file offsets `0x3020c`, `0x11eb730`). That investigation took ~20 minutes. This module would have classified it `UNREACHABLE_DEBUG` in milliseconds.
+2. **The gap is measurable.** IBM RecoveryRMd CSM SAM 2.2.0.1: `func@0x839c14f` contained an `ARG_PROPAGATED` `system()` site. Manual investigation established the function had no callers: all references to `0x839c14f` existed only in `.debug_pubnames` file offsets `0x3020c` and `0x11eb730`. That investigation took ~20 minutes. This module would have classified it `UNREACHABLE_DEBUG` in milliseconds.
 
 3. **Call-graph edges alone are insufficient.** A function with no `call_edges` entry could be dead code or could be reached via a function pointer. Checking the call graph without scanning for VA references misclassifies function-pointer-called functions as unreachable.
 
@@ -88,7 +88,7 @@ FuncReachabilityAnalyzer results:
 | `func_va` | `int` | The function VA checked |
 | `verdict` | `str` | One of the four verdicts above |
 | `callers` | `list[int]` | Call-edge source VAs (non-empty for `REACHABLE`) |
-| `refs` | `list[VaRef]` | VA references found in binary (non-empty for `REACHABLE_VIA_PTR`, `UNREACHABLE_DEBUG`) |
+| `refs` | `list[VaRef]` | VA references found in binary non-empty for `REACHABLE_VIA_PTR` and `UNREACHABLE_DEBUG` |
 | `is_reachable` | `bool` | True for `REACHABLE` and `REACHABLE_VIA_PTR` |
 | `reason` | `str` | Human-readable explanation of the verdict |
 
@@ -98,7 +98,7 @@ Each `VaRef` has `file_offset`, `section` (section name or `''`), and `va`.
 
 ## Pointer size detection
 
-The analyzer auto-detects whether to search for 4-byte or 8-byte VA patterns. It first checks `ctx.arch` (e.g. `'x86_32'`, `'ppc32'`), then falls back to the ELF class field. For XCOFF and non-ELF binaries without LIEF support, default is 8 bytes (x86_64). Pass `ctx` with a correct `arch` attribute to ensure the right pointer size.
+The analyzer auto-detects whether to search for 4-byte or 8-byte VA patterns. It first checks `ctx.arch` such as `'x86_32'` and `'ppc32'`, then falls back to the ELF class field. For XCOFF and non-ELF binaries without LIEF support, default is 8 bytes (x86_64). Pass `ctx` with a correct `arch` attribute to ensure the right pointer size.
 
 ---
 

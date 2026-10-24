@@ -9,7 +9,7 @@
 Two things were not possible before in Ablation:
 
 **1. No function-start discovery for flat ROM images without a known ISA.** Every per-ISA decoder
-(`EcuSH2aDecoder`, `EcuVLEDecoder`, `EcuM68kDecoder`) exposes its own `function_starts()` method,
+`EcuSH2aDecoder`, `EcuVLEDecoder`, and `EcuM68kDecoder` exposes its own `function_starts()` method,
 but all of them require you to already know the ISA before you call them. For a ROM that arrives
 without metadata: no ELF header, no debug info, unknown vendor: there was no path from "raw
 bytes" to "set of function entry addresses" without a manual identification step first.
@@ -118,7 +118,7 @@ Same five as `EcuArchDetector`: `arm_cm`, `m68k`, `ppc32`, `ppc_vle`, `sh2a`.
 ## Limitations
 
 - Indirect calls are not resolved. Use `EcuSH2aDecoder` / `EcuVLEDecoder` with a manual
-  `WindowAnalyzer` trace for JSR targets.
+ `WindowAnalyzer` trace for JSR targets.
 - Call-target harvesting is BFS from the reset vector only. Functions reachable only via
  interrupt vectors or RTOS task entry points will appear in prologue hits but not call targets.
 - ARM Cortex-M: BLX with register form indirect is skipped. Only BL absolute offset and
@@ -161,7 +161,7 @@ CALL target heuristic (`call_targets` in result) may include jump tables or data
 
 | Attribute | Content |
 |:---|:---|
-| `arch` | Detected ISA string (e.g., `'PPC32-VLE'`, `'M68K'`, `'SH-2A'`) |
+| `arch` | Detected ISA string such as `'PPC32-VLE'`, `'M68K'`, and `'SH-2A'` |
 | `confidence` | `'HIGH'` / `'MEDIUM'` / `'LOW'`: confidence in the ISA detection |
 | `function_starts` | `List[int]`: probable function entry VAs from prologue scanning |
 | `call_targets` | `List[int]`: all static call targets found during the scan |

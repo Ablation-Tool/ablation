@@ -17,7 +17,7 @@ Two things were not possible before in Ablation:
 `from_path(path)` reads the binary with `open(path, "rb").read()`, then `_scan_internal()` does:
 
 1. Validates ELF magic, `EI_CLASS=1` ELFCLASS32, `EI_DATA=1` little-endian.
-2. Reads the program header table (`e_phoff`, `e_phentsize`, `e_phnum`).
+2. Reads the program header table `e_phoff`, `e_phentsize`, and `e_phnum`.
 3. Collects all `PT_LOAD` segments with `PF_X` execute flag.
 4. **Primary scan:** searches each executable segment for `\x55\x89\xe5` (`push ebp; mov ebp, esp`).
 5. **Secondary scan** activates when primary finds < 10 starts: searches for `\x55\x57\x56` (`push ebp; push edi; push esi`) and `\x55\x53` (`push ebp; push ebx`).

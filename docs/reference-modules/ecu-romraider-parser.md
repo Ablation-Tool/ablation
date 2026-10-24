@@ -257,11 +257,11 @@ The false-positive filter eliminates low-table matches from the 1024 KB full fla
  1024 KB variant of the same ECU same firmware string appears in both partials. `_variant_by_id`
  returns the first match, which is correct for calibration partials. To select the 1024 KB
  variant explicitly, call `calibration_tables()` with the full xmlid and inspect the filesize in
-  `variants()`.
+ `variants()`.
 
 - **Switch and BitwiseSwitch tables.** These are present in the MS45 base definition but have no
  meaningful scaling expression. They are parsed and returned by `calibration_tables()` as
-  `table_type="Switch"` or `"BitwiseSwitch"` with `scale=1.0`, but `read_data()` on them returns
+ `table_type="Switch"` or `"BitwiseSwitch"` with `scale=1.0`, but `read_data()` on them returns
  raw bit patterns rather than decoded switch states.
 
 - **Non-linear expressions.** Any expression not matched by `_expr_to_linear` returns `0.0, 0.0`
@@ -299,7 +299,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, and or C28x for vulnerability analysis.
 
 ---
 

@@ -8,7 +8,7 @@ Probe Nginx web server instances for version disclosure, CVE-exploitable configu
 
 1. **Nginx alias traversal is a distinct attack class not detected by general web scanners**: when a `location /static/` block uses `alias /var/www/static` missing trailing slash, a request for `/static../secret` resolves to `/var/www/secret`. `NginxEnumerator.probe_alias_traversal()` sends crafted requests targeting this off-by-one and checks responses for directory contents or file data that would be inaccessible through the intended path.
 
-2. **`stub_status` and `NX-API` endpoints are disabled by default but commonly left enabled in production**: `probe_stub_status()` checks `/nginx_status`, `/_status`, and `/status` for the nginx stub_status module output active connections, accepted requests, handled requests. `enum_nxapi()` probes for Cisco NX-OS NX-API endpoints (`/ins`, `/api/aaaLogin.json`) that may coexist with an Nginx reverse proxy. Both surfaces are information disclosure findings that seed further enumeration.
+2. **`stub_status` and `NX-API` endpoints are disabled by default but commonly left enabled in production**: `probe_stub_status()` checks `/nginx_status`, `/_status`, and `/status` for the nginx stub_status module output active connections, accepted requests, handled requests. `enum_nxapi()` probes for Cisco NX-OS NX-API endpoints `/ins` and `/api/aaaLogin.json` that may coexist with an Nginx reverse proxy. Both surfaces are information disclosure findings that seed further enumeration.
 
 3. **CVE-2021-23017 off-by-one in Nginx resolver requires confirmation against the specific version and configuration**: `check_cve_2021_23017()` extracts the server version from the `Server:` header and checks if it falls in the affected range 1.17.6–1.21.0. It additionally verifies whether `resolver` is configured by probing DNS resolution behavior. A version-positive finding without a configured `resolver` directive is a false positive; the check differentiates these cases.
 
@@ -81,7 +81,7 @@ NGINX ENUMERATION — target.example.com:443
 
 **`check_cve_2021_23017()` version match without configured `resolver`**: CVE-2021-23017 is only exploitable when the Nginx `resolver` directive is active enabling DNS resolution for upstream proxying. A version-positive finding on an Nginx instance with no `resolver` directive is not exploitable. Review the Nginx configuration to confirm `resolver` is present before escalating.
 
-**`ALIAS_TRAVERSAL` on servers behind a WAF that normalizes path segments**: a WAF performing URL normalization (decoding `%2f`, collapsing `../`) upstream of Nginx will block alias traversal requests before they reach the server. The probe sends encoded path segments; confirm that the request reaches Nginx unmodified by checking access logs or bypassing the WAF in test.
+**`ALIAS_TRAVERSAL` on servers behind a WAF that normalizes path segments**: a WAF performing URL normalization decoding `%2f` and collapsing `../` upstream of Nginx will block alias traversal requests before they reach the server. The probe sends encoded path segments; confirm that the request reaches Nginx unmodified by checking access logs or bypassing the WAF in test.
 
 ---
 
@@ -98,11 +98,11 @@ Run `NginxEnumerator.run()` after confirming an Nginx server via the `Server:` h
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
-| `type` | Finding code (e.g., `ALIAS_TRAVERSAL`, `NXAPI_UNAUTH`, `NGINX_STATUS_EXPOSED`) |
+| `type` | Finding code such as `ALIAS_TRAVERSAL`, `NXAPI_UNAUTH`, and `NGINX_STATUS_EXPOSED` |
 | `description` | One-line finding title |
 | `detail` | Evidence: HTTP method, path, response code, or response excerpt |
 | `exploit` | Ready-to-run curl/command string |
-| `source` | Module that detected the finding (e.g., `nginx_enum`) |
+| `source` | Module that detected the finding such as `nginx_enum` |
 
 ---
 

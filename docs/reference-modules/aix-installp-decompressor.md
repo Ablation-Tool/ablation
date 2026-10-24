@@ -1,6 +1,6 @@
 # AixInstallpDecompressor
 
-Decompress IBM AIX installp BFF archive entries whose magic bytes indicate IBM proprietary compression (types 0x0e, 0x0f, 0x10, 0x11): entries that zlib, bzip2, lzma, and binwalk all fail to handle.
+Decompress IBM AIX installp BFF archive entries whose magic bytes indicate IBM proprietary compression types 0x0e, 0x0f, 0x10, and 0x11: entries that zlib, bzip2, lzma, and binwalk all fail to handle.
 
 ---
 

@@ -70,7 +70,7 @@ print("is reducible:", loops.is_reducible())
 | `jmp @Rn` | indirect: decoded MISC | open block limitation |
 
 When the terminator has a delay slot, the delay-slot instruction is the last entry in
-`block.insns`.  Successors are set based on the VA after the delay slot.
+`block.insns`. Successors are set based on the VA after the delay slot.
 
 ---
 
@@ -118,7 +118,7 @@ Three-pass construction:
 - **`braf`, `bsrf`, `jmp @Rn`**: the `EcuSH2aDecoder` classifies these as `MISC` (no
  explicit decode branch). They are treated as fall-through in the CFG, creating open
  blocks with no successors. Functions that use only `bra`, `bt`, `bf`, `bsr`, `jsr`,
-  `rts`, and `rts/n` are fully correct.  Indirect indirect-jump functions (dispatch
+ `rts`, and `rts/n` are correct. Indirect indirect-jump functions (dispatch
  tables) will have open blocks where the jump is; the structurizer will emit the
  instructions before the jump as a plain sequence.
 - The module does not resolve cross-function CFG edges (calls are treated as
@@ -132,9 +132,9 @@ Three-pass construction:
 
 1. **Leader scan**: discovers all block-start VAs: the entry point, all branch targets extracted from `insn.target_va`, and the fall-through address immediately after each terminator or two instructions after when the terminator has a delay slot. Delay-slot instructions are explicitly excluded from the leader set.
 2. **Partition**: assigns each instruction to the current block. When a terminator with a delay slot is encountered, the next instruction is consumed into the same block as the delay slot; the block is then closed. Without a delay slot, the block closes at the terminator itself.
-3. **Edge fill**: iterates over all blocks; for each block's terminator type (`rts`, `bra`, `bt`/`bf`, `jsr`, etc.) the `succs` list is populated from the delay-slot-adjusted successor VA. `preds` is built as the inverse.
+3. **Edge fill**: iterates over all blocks; for each block's terminator type `rts`, `bra`, `bt`/`bf`, and `jsr`, and so on the `succs` list is populated from the delay-slot-adjusted successor VA. `preds` is built as the inverse.
 
-Indirect branches (`braf`, `jmp @Rn`) cannot be resolved statically, these produce open blocks with no successors.
+Indirect branches `braf` and `jmp @Rn` cannot be resolved statically, these produce open blocks with no successors.
 
 ---
 

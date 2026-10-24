@@ -108,7 +108,7 @@ Extraction either succeeds or raises an exception, there are no false positives 
 | `path` | Filesystem path to the extracted file or partition |
 | `partition_name` | Partition label or index from the container header |
 | `size` | Size of the extracted payload in bytes |
-| `format` | Detected format of the extracted payload (`ext4`, `squashfs`, `ELF`, etc.) |
+| `format` | Detected format of the extracted payload `ext4`, `squashfs`, and `ELF`, and so on |
 
 ---
 

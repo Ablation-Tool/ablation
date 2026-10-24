@@ -25,7 +25,7 @@ Three numbered gaps in the IBM XLC RE workflow motivated this module:
 
 Short form: if record length ≤ 10, the 3-field header comparison is skipped.
 
-### WCB table entry (little-endian in xlCentry memory, stride 0x28)
+### WCB table entry little-endian in xlCentry memory and stride 0x28
 
 ```
 +0x00  uint64 LE   field_0 (type ID)
@@ -166,7 +166,7 @@ Extraction either succeeds or raises an exception, there are no false positives 
 | `path` | Filesystem path to the extracted file or partition |
 | `partition_name` | Partition label or index from the container header |
 | `size` | Size of the extracted payload in bytes |
-| `format` | Detected format of the extracted payload (`ext4`, `squashfs`, `ELF`, etc.) |
+| `format` | Detected format of the extracted payload `ext4`, `squashfs`, and `ELF`, and so on |
 
 ---
 

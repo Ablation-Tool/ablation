@@ -87,7 +87,7 @@ classify(profile_ambiguous)
 
 | Attribute | Content |
 |:---|:---|
-| `name` | Standard function name (e.g., `'malloc'`, `'memcpy'`) |
+| `name` | Standard function name such as `'malloc'` and `'memcpy'` |
 | `min_args` / `max_args` | Argument count range |
 | `arg_roles` | Tuple of `ArgRole`: role tag and direction per argument position |
 | `ret_role` | `RetRole`: return value role pointer, size, status, etc. |

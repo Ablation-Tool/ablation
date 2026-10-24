@@ -7,7 +7,7 @@ Four things were not possible before in Ablation:
 1. **Find injection paths hidden behind custom string-passing wrappers.** TaintTracker
  searches for calls to known PLT sinks system, popen, and similar. When a binary wraps
  system() behind doSystem(string) and systemLog(char*), three levels deep; TaintTracker
- finds zero injection sites while the vulnerability is fully reachable. SinkPropagator
+ finds zero injection sites while the vulnerability is reachable. SinkPropagator
  computes the transitive closure of passthrough wrappers so TaintTracker gets the complete
  sink list.
 

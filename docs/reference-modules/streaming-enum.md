@@ -6,11 +6,11 @@
 
 Three gaps existed before this module:
 
-1. **Streaming infrastructure (Kafka, Flink, NiFi, NATS, RabbitMQ, Pulsar) was not enumerated.** These components expose significant attack surface, unauthenticated topic listing, binary wire protocol probing, management APIs. None were covered by any prior Ablation network module.
+1. **Streaming infrastructure Kafka, Flink, NiFi, NATS, RabbitMQ, and Pulsar was not enumerated.** These components expose significant attack surface, unauthenticated topic listing, binary wire protocol probing, management APIs. None were covered by any prior Ablation network module.
 
 2. **Observability stack exposure Prometheus, Grafana, Jaeger, Loki, Thanos was unprobed.** These components ship with no authentication by default and expose full internal telemetry, trace data, service topology, and alert routing configurations.
 
-3. **Modern orchestration APIs (Temporal, Argo Workflows, HashiCorp Vault/Nomad/Boundary, Cisco NSO, Ansible Tower/AWX) were not covered.** These surfaces expose workflow DAGs, credential stores, network device inventories, and live secret material.
+3. **Modern orchestration APIs Temporal, Argo Workflows, HashiCorp Vault/Nomad/Boundary, Cisco NSO, and Ansible Tower/AWX were not covered.** These surfaces expose workflow DAGs, credential stores, network device inventories, and live secret material.
 
 ---
 
@@ -19,7 +19,7 @@ Three gaps existed before this module:
 4214-line pure network I/O module. No filesystem reads. No subprocess calls. No lief usage. All probes are active send + receive. Covers:
 
 **Streaming:**
-- Kafka binary protocol (ApiVersions, Metadata), REST Proxy 8082/8080, Schema Registry (8081), TLS port (9093)
+- Kafka binary protocol ApiVersions and Metadata, REST Proxy 8082/8080, Schema Registry (8081), TLS port (9093)
 - Apache Flink REST API (8081), RCE via JAR submit
 - Apache NiFi REST API 8080/8443
 - Confluent Schema Registry subjects and config
@@ -125,7 +125,7 @@ All probe functions return `list[dict]` with keys: `severity`, `title`, `detail`
 |---|---|---|
 | `_MAX_HTTP_BYTES` | 4 MB | Kafka/Flink/NiFi/EventStoreDB/NATS module-level `_http_get()` |
 
-Note: Inner probe functions (`probe_jaeger_tracing`, `probe_loki_log_aggregation`, `probe_temporal_workflow`, `probe_argo_workflows`, `probe_elasticsearch_exposure`, `probe_minio_exposure`) use local `_get()` helpers with `r.read(131072)` 128 KB cap. `probe_prometheus_metrics_endpoint` uses `r.read(65536)` (64 KB). `probe_ansible_tower_awx_exposure` uses `r.read(8192)`.
+Note: Inner probe functions `probe_jaeger_tracing`, `probe_loki_log_aggregation`, `probe_temporal_workflow`, `probe_argo_workflows`, `probe_elasticsearch_exposure`, and `probe_minio_exposure` use local `_get()` helpers with `r.read(131072)` 128 KB cap. `probe_prometheus_metrics_endpoint` uses `r.read(65536)` (64 KB). `probe_ansible_tower_awx_exposure` uses `r.read(8192)`.
 
 ---
 
@@ -146,13 +146,13 @@ Gate: **PASSED**. No code changes needed.
 **Known residual:**
 - `probe_ddns_abuse` sends a real DNS UPDATE RFC 2136: active write probe, not read-only. Injects `ablation-test.<zone> A 1.2.3.4`. Accepted by servers with unauthenticated DDNS enabled.
 - `probe_cisco_nso_exposure` can trigger a `sync-from` RPC that causes NSO to actively poll all managed network devices: use with caution in production environments.
-- `probe_ansible_tower_awx_exposure` attempts three default credential pairs (`admin:password`, `admin:Tower`, `admin:admin`): generates authentication log entries.
+- `probe_ansible_tower_awx_exposure` attempts three default credential pairs `admin:password`, `admin:Tower`, and `admin:admin`: generates authentication log entries.
 
 ---
 
 ## How it works
 
-All functions are standalone. Newer probe functions (DNS, gRPC, observability tools) return `{severity, title, detail, host, port}` finding lists. Older enumeration functions (Kafka, Flink, NiFi) return plain data dicts. `enumerate_all(host)` returns a keyed dict with per-service results. `enumerate_streaming_surface(hosts)` sweeps a host list.
+All functions are standalone. Newer probe functions DNS, gRPC, and observability tools return `{severity, title, detail, host, port}` finding lists. Older enumeration functions Kafka, Flink, and NiFi return plain data dicts. `enumerate_all(host)` returns a keyed dict with per-service results. `enumerate_streaming_surface(hosts)` sweeps a host list.
 
 ---
 
@@ -206,7 +206,7 @@ probe_prometheus_metrics_endpoint:
 
 ## Pipeline position
 
-Run `enumerate_all()` after identifying open ports on Kafka (9092), Flink (8081), NiFi 8080/8443, RabbitMQ (15672), or NATS (4222). Run observability probes (`probe_prometheus_metrics_endpoint`, `probe_grafana_dashboard`) when port 9090 or 3000 are confirmed open.
+Run `enumerate_all()` after identifying open ports on Kafka (9092), Flink (8081), NiFi 8080/8443, RabbitMQ (15672), or NATS (4222). Run observability probes `probe_prometheus_metrics_endpoint` and `probe_grafana_dashboard` when port 9090 or 3000 are confirmed open.
 
 ---
 

@@ -47,7 +47,7 @@ print(format_bare_output(bare_result, min_score=0.3))
 
 ## False positives
 
-**AI/ML-specific findings.** BARE's 3,904-module corpus is built from public Metasploit modules. Novel findings against AI/ML inference infrastructure (HPKE key exchange, RADIUS EAP extensions, TensorFlow Serving RPC) produce `no_high_confidence_match` because no public MSF module covers them. The absence of a match does not mean the finding is invalid.
+**AI/ML-specific findings.** BARE's 3,904-module corpus is built from public Metasploit modules. Novel findings against AI/ML inference infrastructure HPKE key exchange, RADIUS EAP extensions, and TensorFlow Serving RPC produce `no_high_confidence_match` because no public MSF module covers them. The absence of a match does not mean the finding is invalid.
 
 ---
 

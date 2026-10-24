@@ -25,12 +25,12 @@ Four gaps existed before this module:
 - SIP registration hijacking Expires:0 de-registration, forged Contact, contact disclosure
 - SIP header injection CRLF injection, null byte in Contact, Via hijack, P-Asserted-Identity spoofing
 - SIP signaling manipulation MESSAGE injection, CANCEL broadcast, NOTIFY injection, Max-Forwards:0
-- DTMF exfiltration surfaces (SIP INFO dtmf-relay, telephone-event NOTIFY, RFC 2833 RTP PT=101)
+- DTMF exfiltration surfaces SIP INFO dtmf-relay, telephone-event NOTIFY, and RFC 2833 RTP PT=101
 - RTP injection surface sequence boundary, injection, DTMF digit theft
-- RTP/RTCP covert channel detection (dynamic PT 127, SSRC=0, RTCP APP "HACK", jumbo frames)
+- RTP/RTCP covert channel detection dynamic PT 127, SSRC=0, RTCP APP "HACK", and jumbo frames
 - SIP covert channel detection binary octet-stream MESSAGE, PUBLISH/NOTIFY out-of-dialog, SIP-over-TCP
 - H.323 inspection surface TCP/1720 Q.931 SETUP, H.245 tunneling, overlong alias bypass, UDP/1719 RAS GRQ
-- SCCP Cisco Skinny surface (RegisterMessage, KeepAlive, unsolicited OpenReceiveChannelAck)
+- SCCP Cisco Skinny surface RegisterMessage, KeepAlive, and unsolicited OpenReceiveChannelAck
 - MGCP surface AUEP wildcard, RQNT, CRCX without auth
 - ASA SIP fixup bypass bare-host Request-URI, Via spoofing, Content-Length:0, negative Expires
 - SIP media interception no SRTP, late media/offer-less INVITE, dialog SUBSCRIBE, SAVP absence
@@ -125,7 +125,7 @@ Gate: **PASSED**. One dead-code fix applied.
 
 `SIPEnumerator(host, port=5060, transport='UDP', timeout=5)` probes a SIP server over UDP or TCP. `enumerate_all()` runs five probes in sequence: `probe_sip_server()` OPTIONS fingerprint, `check_unauthenticated_register()` instant REGISTER bypass, `enumerate_extensions()` extension differential sweep, `check_ami_interface()` Asterisk AMI default credentials, and `check_srtp_required()` RTP/SRTP posture via INVITE. Returns `{host, port, transport, findings: List[dict]}`. Each finding is a `{severity, title, detail, host, port}` dict built by `_finding()`.
 
-Standalone probe functions (`probe_h323_service`, `detect_sccp_skinny_surface`, `detect_mgcp_surface`, etc.) take `host, port, timeout` and return the same `List[{severity, title, detail, host, port}]` shape directly.
+Standalone probe functions `probe_h323_service`, `detect_sccp_skinny_surface`, and `detect_mgcp_surface`, and so on take `host, port, timeout` and return the same `List[{severity, title, detail, host, port}]` shape directly.
 
 ---
 
@@ -182,7 +182,7 @@ probe_h323_service:
 
 ## Pipeline position
 
-Run `SIPEnumerator.enumerate_all()` after port scanning identifies TCP/UDP 5060. Run standalone probes (`detect_sccp_skinny_surface`, `detect_mgcp_surface`) when Cisco CUCM or MGCP gateway ports (2000, 2427) are also open.
+Run `SIPEnumerator.enumerate_all()` after port scanning identifies TCP/UDP 5060. Run standalone probes `detect_sccp_skinny_surface` and `detect_mgcp_surface` when Cisco CUCM or MGCP gateway ports 2000 and 2427 are also open.
 
 ---
 

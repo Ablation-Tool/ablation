@@ -63,7 +63,7 @@ Before encoding, each function's disassembly drops build-specific artifacts:
 rax / x0 / r3 ->  <REG>      register allocation varies by optimization level
 ```
 
-Each opcode then maps to one of 11 semantic categories from the BinFuse taxonomy (Chang et al., TrustCom 2025):
+Each opcode then maps to one of 11 semantic categories from the BinFuse taxonomy Chang et al. and TrustCom 2025:
 
 | Category | Representative opcodes |
 |---|---|
@@ -101,7 +101,7 @@ The normalized assembly is not fed to the model alone. It combines with function
 
 The `calls:` and `strings:` fields carry the most signal on stripped binaries. A function that calls `malloc`, `strcpy`, and `syslog` and references `"auth failed"` is described as exactly that, regardless of its own opcode mix. On deeply stripped binaries with no string xrefs, the normalized assembly category sequence and Markov transitions carry the full load.
 
-Operand type normalization follows BinDeep Tian et al., 2020: keeping memory reference patterns (`MEM[REG]`, `MEM[REG+IMM]`) alongside category labels adds approximately 1.2% F1 over opcode-only encoding (BinDeep Table 3).
+Operand type normalization follows BinDeep Tian et al., 2020: keeping memory reference patterns `MEM[REG]` and `MEM[REG+IMM]` alongside category labels adds approximately 1.2% F1 over opcode-only encoding (BinDeep Table 3).
 
 ### Stage 4: Embedding and whitening
 

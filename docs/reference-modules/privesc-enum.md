@@ -6,11 +6,11 @@ Enumerate SUID/SGID binaries with GTFOBins cross-reference, sudo NOPASSWD polici
 
 ## Why this exists
 
-1. **SUID binary enumeration requires GTFOBins cross-reference to separate actionable from benign**: `PrivescEnumerator.check_suid_binaries()` finds every SUID binary in standard PATH directories, but the set always includes expected system binaries (`sudo`, `su`, `ping`). Without cross-referencing against GTFOBins patterns, the finding list is unactionable noise. `PrivescEnumerator` cross-references against known-exploitable binaries and additionally checks for SUID binaries in world-writable directories and writable SUID binaries: both conditions that allow direct privilege escalation regardless of GTFOBins membership.
+1. **SUID binary enumeration requires GTFOBins cross-reference to separate actionable from benign**: `PrivescEnumerator.check_suid_binaries()` finds every SUID binary in standard PATH directories, but the set always includes expected system binaries `sudo`, `su`, and `ping`. Without cross-referencing against GTFOBins patterns, the finding list is unactionable noise. `PrivescEnumerator` cross-references against known-exploitable binaries and additionally checks for SUID binaries in world-writable directories and writable SUID binaries: both conditions that allow direct privilege escalation regardless of GTFOBins membership.
 
 2. **Standalone check functions cover runtime indicators that require live system access**: `check_loaded_kernel_modules()` compares loaded modules against rootkit signatures (`KNOWN_ROOTKIT_MODULE_LOADED`) and flags modules loaded from non-standard paths. `check_network_namespace_escape()` compares the container's network namespace inode against PID 1's namespace to detect container escape conditions. `check_heap_injection_surface()` scans `/proc/pid/maps` for RWX segments, oversized heaps, and spray indicators. These checks cannot be run from binary analysis alone.
 
-3. **Binary analysis functions operate on raw PE/ELF bytes**: `detect_token_manipulation()`, `detect_uac_bypass_indicators()`, and `detect_driver_exploitation()` take raw bytes and search for Windows privilege escalation patterns (token impersonation sequences, AlwaysInstallElevated registry checks, vulnerable driver signatures) without requiring a Windows execution environment. This enables Windows binary triage from a Linux analysis host.
+3. **Binary analysis functions operate on raw PE/ELF bytes**: `detect_token_manipulation()`, `detect_uac_bypass_indicators()`, and `detect_driver_exploitation()` take raw bytes and search for Windows privilege escalation patterns token impersonation sequences, AlwaysInstallElevated registry checks, and vulnerable driver signatures without requiring a Windows execution environment. This enables Windows binary triage from a Linux analysis host.
 
 ## Key constants
 
@@ -90,7 +90,7 @@ No lief.parse(). No HTTP reads. No bare `except:`. All subprocess calls timeout-
 
 ## How it works
 
-`PrivescEnumerator.enumerate_all()` runs a suite of filesystem and system-state checks on the local host: SUID/SGID binary enumeration, sudo policy parsing, writable path and cron job scanning, Linux capability checks, package manager attack surface, and debug flag detection. Each check appends finding dicts to `self.findings` and the full list is returned. Standalone functions (`check_loaded_kernel_modules()`, `check_network_namespace_escape()`, etc.) are independent and return their own finding lists.
+`PrivescEnumerator.enumerate_all()` runs a suite of filesystem and system-state checks on the local host: SUID/SGID binary enumeration, sudo policy parsing, writable path and cron job scanning, Linux capability checks, package manager attack surface, and debug flag detection. Each check appends finding dicts to `self.findings` and the full list is returned. Standalone functions `check_loaded_kernel_modules()` and `check_network_namespace_escape()`, and so on are independent and return their own finding lists.
 
 ---
 
@@ -157,15 +157,15 @@ check_loaded_kernel_modules():
 
 ## False positives
 
-**`SUID/SGID Binaries` findings include vendor-expected SUID binaries**: the SUID check flags all SUID binaries against a GTFOBins cross-reference. Some SUID binaries are intentionally installed (e.g., `sudo`, `su`, `ping`) and are not misconfiguration findings. Review `items` in the finding dict to identify unexpected binaries not part of the base distribution.
+**`SUID/SGID Binaries` findings include vendor-expected SUID binaries**: the SUID check flags all SUID binaries against a GTFOBins cross-reference. Some SUID binaries are intentionally installed such as `sudo`, `su`, and `ping` and are not misconfiguration findings. Review `items` in the finding dict to identify unexpected binaries not part of the base distribution.
 
-**`UNREFERENCED_KERNEL_MODULE` from `check_loaded_kernel_modules()`**: custom vendor drivers and out-of-tree modules (VirtualBox guest additions, DKMS modules) appear as `UNREFERENCED` since they are not in the reference list. Confirm against the target's installed driver list before escalating.
+**`UNREFERENCED_KERNEL_MODULE` from `check_loaded_kernel_modules()`**: custom vendor drivers and out-of-tree modules VirtualBox guest additions and DKMS modules appear as `UNREFERENCED` since they are not in the reference list. Confirm against the target's installed driver list before escalating.
 
 ---
 
 ## Pipeline position
 
-Run `PrivescEnumerator` on a live host after gaining a shell unprivileged. Run standalone checks (`check_network_namespace_escape`, `check_heap_injection_surface`) when operating inside a container to confirm escape vectors. For binary analysis of PE files (Windows) on a Linux host, pass the PE bytes to `detect_token_manipulation()` and `detect_driver_exploitation()`.
+Run `PrivescEnumerator` on a live host after gaining a shell unprivileged. Run standalone checks `check_network_namespace_escape` and `check_heap_injection_surface` when operating inside a container to confirm escape vectors. For binary analysis of PE files (Windows) on a Linux host, pass the PE bytes to `detect_token_manipulation()` and `detect_driver_exploitation()`.
 
 ---
 
@@ -176,7 +176,7 @@ Run `PrivescEnumerator` on a live host after gaining a shell unprivileged. Run s
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
-| `category` | Descriptive name (e.g., `SUID/SGID Binaries`, `Sudo Access`, `Dangerous Capabilities`) |
+| `category` | Descriptive name such as `SUID/SGID Binaries`, `Sudo Access`, and `Dangerous Capabilities` |
 | `count` | Number of vulnerable items found |
 | `items` | List of specific items paths, binaries, rules |
 | `description` | Human-readable explanation of the finding |
@@ -187,7 +187,7 @@ Run `PrivescEnumerator` on a live host after gaining a shell unprivileged. Run s
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` |
-| `title` | Finding code (e.g., `KNOWN_ROOTKIT_MODULE_LOADED`, `SCCP_KEEPALIVE_RESPONSIVE`) |
+| `title` | Finding code such as `KNOWN_ROOTKIT_MODULE_LOADED` and `SCCP_KEEPALIVE_RESPONSIVE` |
 | `detail` | Explanation of what was found and why it matters |
 
 ---

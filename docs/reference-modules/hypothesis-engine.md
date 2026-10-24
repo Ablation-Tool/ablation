@@ -283,7 +283,7 @@ HypothesisEngine  binary=fmc_server  session=S-7f3a1b2c
 
 **Before this module:** `BinaryContext.load_or_build()` to obtain the binary SHA-256 and architecture. `SemanticSearcher` and `FuncProfiler` results can be fed as evidence items immediately after seeding.
 
-**After this module:** When a hypothesis reaches `CONFIRMED`, its subject fields (e.g., `call_site_va`, `target_va`) are verified ground truth: register the finding with `FindingRegistry.register()` and write to `re/<vendor>/<target>_re.py`. Hypotheses reaching `UNRESOLVED` observationally equivalent competitors require a manual probe (`kind='manual'`, `strength=0.95`) to break the tie.
+**After this module:** When a hypothesis reaches `CONFIRMED`, its subject fields such as `call_site_va` and `target_va` are verified ground truth: register the finding with `FindingRegistry.register()` and write to `re/<vendor>/<target>_re.py`. Hypotheses reaching `UNRESOLVED` observationally equivalent competitors require a manual probe `kind='manual'` and `strength=0.95` to break the tie.
 
 ---
 
@@ -294,8 +294,8 @@ HypothesisEngine  binary=fmc_server  session=S-7f3a1b2c
 | Attribute | Content |
 |:---|:---|
 | `id` | Unique hypothesis identifier string |
-| `kind` | Hypothesis kind (e.g., `'buffer_overflow'`, `'use_after_free'`, `'format_string'`) |
-| `subject` | `dict`: what the hypothesis is about (e.g., `{"va": "0x401920"}`) |
+| `kind` | Hypothesis kind such as `'buffer_overflow'`, `'use_after_free'`, and `'format_string'` |
+| `subject` | `dict`: what the hypothesis is about such as `{"va": "0x401920"}` |
 | `claim` | `dict`: the specific machine-readable claim |
 | `status` | `ConfidenceState`: `'UNTESTED'` / `'PLAUSIBLE'` / `'SUPPORTED'` / `'CONFIRMED'` / `'UNRESOLVED'` / `'REJECTED'` |
 | `prior` | Float: Bayesian prior probability default 0.5 |

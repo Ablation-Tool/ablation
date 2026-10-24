@@ -6,7 +6,7 @@ Recover the full BWT text for IBM AIX installp entries where the standard LF-map
 
 ## Why this exists
 
-IBM's installp multi-cycle BWT (K < 256) leaves part of the original text T_step4 unrecoverable when following the LF-map from the recorded `bwt_index`. For `automountd` (U828079.bff, K=56, n=199,196):
+IBM's installp multi-cycle BWT (K < 256) leaves part of the original text T_step4 unrecoverable when following the LF-map from the recorded `bwt_index`. For `automountd` U828079.bff, K=56, n=199, and 196:
 
 - 19 disjoint cycles; `bwt_index=794` lies in the main cycle 111,380 bytes
 - T_step4[0..87815] are unrecoverable by LF-map traversal alone
@@ -55,7 +55,7 @@ for policy in EdgePolicy:
 | `NON_MAIN_FIRST` | Prefer edges leaving non-main-cycle nodes |
 | `BWT_INDEX_FIRST` | Start from the known `bwt_index` node before circuit build |
 
-**Empirical results** (automountd K=56, n=199,196): GREEDY and NON_MAIN_FIRST both produce T_step4[87816]=0x6e ≠ bwt_buf[0]=0x01. IBM's exact cycle ordering requires `liblpp.a` and cannot be derived from BWT data alone.
+**Empirical results** automountd K=56, n=199, and 196: GREEDY and NON_MAIN_FIRST both produce T_step4[87816]=0x6e ≠ bwt_buf[0]=0x01. IBM's exact cycle ordering requires `liblpp.a` and cannot be derived from BWT data alone.
 
 ---
 

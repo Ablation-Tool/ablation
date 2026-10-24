@@ -67,7 +67,7 @@ GLOBAL: __mmtls_ctx  (3 writes)
 
 ## Pipeline position
 
-**Before this module:** Identify which BSS/data symbols are of interest (e.g., from `SemanticSearcher` or a string xref scan). Pass the binary path and `.text` range to `scan()`.
+**Before this module:** Identify which BSS/data symbols are of interest such as from `SemanticSearcher` or a string xref scan. Pass the binary path and `.text` range to `scan()`.
 
 **After this module:** Inspect `WriteRecord.base_sse` for each hit. `Global(name)` entries confirm writes to known globals. `Unknown` entries point to writes whose base register could not be resolved: investigate those manually with `TaintTracker`.
 
@@ -81,7 +81,7 @@ The slicer returns a list of `WriteRecord` objects per target global symbol.
 |:---|:---|:---|
 | `pc` | `int` | VA of the STR/STP instruction performing the write |
 | `insn` | `str` | Disassembled instruction text |
-| `symbol` | `str` | Target global name (e.g., `mmtls::gILinkKey`) |
+| `symbol` | `str` | Target global name such as `mmtls::gILinkKey` |
 | `field_off` | `int` | Byte offset from the symbol base being written |
 | `size` | `int` | Write size in bytes: 8 for STR, 16 for STP pair |
 | `base_sse` | `SSE` | SSE expression for the base register before `field_off` is applied |

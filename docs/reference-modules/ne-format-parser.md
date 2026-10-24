@@ -6,7 +6,7 @@ Parse NE/LE/LX New Executable format OS/2 and Windows 3.x binaries and check for
 
 ## Why this exists
 
-1. **Gap IBM-OS2-001**: IBM-RE contains OS/2-era software (CM2, NFS-OS2, NOV, IBM4690, OS2-CM2, ImagePlus) whose NE/LX format binaries were classified "no Linux ELFs" without exec-class verification. NOV/noteinet.exe, CM2/alert.exe, OS2-CM2/COMMAC.SYS all required manual hex to identify format and confirm no DosExecPgm/DosStartSession.
+1. **Gap IBM-OS2-001**: IBM-RE contains OS/2-era software CM2, NFS-OS2, NOV, IBM4690, OS2-CM2, and ImagePlus whose NE/LX format binaries were classified "no Linux ELFs" without exec-class verification. NOV/noteinet.exe, CM2/alert.exe, OS2-CM2/COMMAC.SYS all required manual hex to identify format and confirm no DosExecPgm/DosStartSession.
 
 2. **OS/2 ≠ ELF**: SinkArgClassifier and all other Ablation analyzers require ELF input. NE/LX is a completely different binary format DOS stub + New Executable header. There was no path from an NE binary to an exec-class verdict.
 
@@ -29,7 +29,7 @@ NE header offsets all relative to NE header start, 16-bit:
 - `+0x28`: module reference table → array of uint16 offsets into imported names
 - `+0x2a`: imported names table base
 - `+0x2c`: nonresident names table 32-bit, file-absolute
-- `+0x36`: target OS (1=OS/2-1.x, 2=Windows-3.x)
+- `+0x36`: target OS 1=OS/2-1.x and 2=Windows-3.x
 
 ---
 
@@ -48,7 +48,7 @@ print(r.exec_imports)  # [] if safe
 - `format`: `'NE'`, `'LE'`, `'LX'`, `'PE'`, `'MZ-only'`, `'NOT-MZ'`
 - `target_os`: `'OS/2-1.x'`, `'Windows-3.x'`, `'OS/2-2.x'`, etc.
 - `imported_modules`: list of DLL/module names from module reference table
-- `exec_imports`: list of exec-class function names found (`DOSEXECPGM`, etc.)
+- `exec_imports`: list of exec-class function names found `DOSEXECPGM`, and so on
 - `nonresident_names`: first entries from non-resident name table
 - `segment_count`, `module_ref_count`
 

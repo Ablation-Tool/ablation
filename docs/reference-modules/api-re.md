@@ -8,9 +8,9 @@ Three gaps existed before this module:
 
 1. **HTTP API discovery was session-scripted.** Path fuzzing, OpenAPI harvesting, parameter inference, and injection probing each required separate tools. `api_re.py` wraps all 30 phases into one `run_re()` call with structured findings output.
 
-2. **OWASP API Top 10 coverage was incomplete.** BOLA/IDOR, mass assignment, broken function level authorization, excessive data exposure, JWT attacks (alg=none, weak secrets, algorithm confusion), NoSQL injection, business logic abuse, and webhook SSRF each required manual one-off scripts.
+2. **OWASP API Top 10 coverage was incomplete.** BOLA/IDOR, mass assignment, broken function level authorization, excessive data exposure, JWT attacks alg=none, weak secrets, and algorithm confusion, NoSQL injection, business logic abuse, and webhook SSRF each required manual one-off scripts.
 
-3. **Protocol-layer attack surface (gRPC, GraphQL, SOAP, JSON-RPC, OAuth2, WebSocket) was not enumerable from one place.** This module probes all of them in a single pass.
+3. **Protocol-layer attack surface gRPC, GraphQL, SOAP, JSON-RPC, OAuth2, and WebSocket was not enumerable from one place.** This module probes all of them in a single pass.
 
 ---
 
@@ -147,7 +147,7 @@ Rate-limit and authentication findings from internal networks or behind authenti
 | `base_url` | Base URL of the target API |
 | `endpoints` | `List[Endpoint]`: each with `path`, `methods`, `params`, `responses` |
 | `auth_required` | `True` if authentication signals were detected |
-| `framework` | Detected framework string (e.g., `'express'`, `'flask'`), or `None` |
+| `framework` | Detected framework string such as `'express'` and `'flask'`, or `None` |
 | `version` | Detected API version string, or `None` |
 | `findings` | List of free-form finding notes from the analysis |
 

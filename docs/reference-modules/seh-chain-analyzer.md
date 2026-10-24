@@ -57,7 +57,7 @@ CWE: CWE-693 Protection Mechanism Failure on HIGH/MEDIUM.
 
 ## Dependencies
 
-- `lief >= 0.14.0` (x86 PE parsing, `IMAGE_LOAD_CONFIG`)
+- `lief >= 0.14.0` x86 PE parsing and `IMAGE_LOAD_CONFIG`
 - `capstone >= 5.0` x86 32-bit SEH frame pattern scan
 
 ---
@@ -100,7 +100,7 @@ x86 (I386) PE only. Calling `from_path()` on an x64 or ARM PE raises `ValueError
 | `location` | PE path or section name |
 | `description` | Human-readable explanation |
 | `va` | VA of the relevant `push handler_va` instruction 0 if not applicable |
-| `cwe` | CWE identifier string (e.g., `'CWE-693'`) |
+| `cwe` | CWE identifier string such as `'CWE-693'` |
 
 ---
 

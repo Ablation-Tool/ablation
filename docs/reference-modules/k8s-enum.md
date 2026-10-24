@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. All procfs reads use `f.read_MAX
 
 ## How it works
 
-`K8sEnumerator()` no constructor args: auto-detects token, CA cert, API server from environment. `enumerate_all()` runs `check_in_k8s()` first to confirm Kubernetes context, then runs RBAC, pod, secret, network policy, and admission controller checks. Escape vectors accumulate in `self.escape_vectors` as `{type, severity, description, exploit}` dicts. Other finding lists (e.g., `clusteradmin_findings`, `privileged_pod_findings`) use `{severity, ...resource-specific keys}`.
+`K8sEnumerator()` no constructor args: auto-detects token, CA cert, API server from environment. `enumerate_all()` runs `check_in_k8s()` first to confirm Kubernetes context, then runs RBAC, pod, secret, network policy, and admission controller checks. Escape vectors accumulate in `self.escape_vectors` as `{type, severity, description, exploit}` dicts. Other finding lists such as `clusteradmin_findings` and `privileged_pod_findings` use `{severity, ...resource-specific keys}`.
 
 ---
 
@@ -66,7 +66,7 @@ privileged_pod_findings:
 
 ## False positives
 
-**`check_rbac_clusteradmin()` on CI/CD service accounts**: many CI/CD pipelines (ArgoCD, Tekton, Flux) legitimately bind their service accounts to `cluster-admin` for deployment automation. Confirm whether the binding is intentional by checking the bound service account's namespace and workload name before escalating.
+**`check_rbac_clusteradmin()` on CI/CD service accounts**: many CI/CD pipelines ArgoCD, Tekton, and Flux legitimately bind their service accounts to `cluster-admin` for deployment automation. Confirm whether the binding is intentional by checking the bound service account's namespace and workload name before escalating.
 
 **`check_network_policies()` reports `NO_NETWORK_POLICY` per namespace**: a namespace without a NetworkPolicy allows all traffic by default. In single-tenant clusters or staging environments this is often intentional. The finding is accurate; intent must be verified separately.
 
@@ -82,7 +82,7 @@ Run `K8sEnumerator` from inside a pod after gaining container-level shell access
 
 `escape_vectors` shape: `{type, severity, description, exploit}`
 
-Other finding lists (`clusteradmin_findings`, `network_policy_findings`, `privileged_pod_findings`) have resource-specific keys plus `severity`. Read `enumerator.report()` for a formatted summary.
+Other finding lists `clusteradmin_findings`, `network_policy_findings`, and `privileged_pod_findings` have resource-specific keys plus `severity`. Read `enumerator.report()` for a formatted summary.
 
 ---
 

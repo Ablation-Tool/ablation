@@ -96,7 +96,7 @@ Streaming operational probe functions return `List[{severity, title, detail, hos
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` credential exposure in messages / `HIGH` schema registry / `MEDIUM` topic accessible |
-| `title` | Finding code (e.g., `KAFKA_SENSITIVE_SCHEMA_FIELD`, `KAFKA_CREDENTIAL_IN_TOPIC`, `SCHEMA_REGISTRY_SENSITIVE`) |
+| `title` | Finding code such as `KAFKA_SENSITIVE_SCHEMA_FIELD`, `KAFKA_CREDENTIAL_IN_TOPIC`, and `SCHEMA_REGISTRY_SENSITIVE` |
 | `detail` | Topic name, schema name, or credential field names found in sampled messages |
 | `host` | Broker or schema registry host |
 | `port` | Service port |

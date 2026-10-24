@@ -10,7 +10,7 @@ Classify exec-class sink argument provenance on PPC64 BE ELFv1 ELFs: the POWER L
 
 2. **PPC64 BE ELFv1 uses TOC-relative inline stubs.** Rather than direct PLT stubs, callers reach imported functions through 7-instruction TOC-indirect stubs. The stub VA is mapped by `BinaryContext._extract_plt_ppc64be()` (gap ID: `LOADL-GAP-002`). Sink call sites emit `bl <stub_va>`; this module scans for those BL instructions.
 
-3. **ELFv1 and ELFv2 differ in TOC discovery.** ELFv1 big-endian POWER Linux, AIX stores the TOC base as `r2 = .opd[8]` from the function descriptor. ELFv2 (little-endian ppc64le, OpenPOWER) uses `r2 = .got + 0x8000`. These must not be mixed.
+3. **ELFv1 and ELFv2 differ in TOC discovery.** ELFv1 big-endian POWER Linux, AIX stores the TOC base as `r2 = .opd[8]` from the function descriptor. ELFv2 little-endian ppc64le and OpenPOWER uses `r2 = .got + 0x8000`. These must not be mixed.
 
 ---
 

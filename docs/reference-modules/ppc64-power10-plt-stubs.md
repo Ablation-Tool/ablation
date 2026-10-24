@@ -51,7 +51,7 @@ flowchart TD
   +4     4E 80 04 20   bctr
 ```
 
-`D = sign_extend_16(word[-4] & 0xFFFF) & ~3`  DS-form: low 2 bits carry opcode suffix, must be cleared
+`D = sign_extend_16(word[-4] & 0xFFFF) & ~3` DS-form: low 2 bits carry opcode suffix, must be cleared
 `GOT_VA = r2 + D`
 
 **Form B instruction encoding:**
@@ -101,11 +101,11 @@ stub=0x012f3960  got=0x01370768   # execve  ← ARG_PROPAGATED
 
 ## FORGE audit
 
-Gate: **PASSED** (2026-10-22, commit `3da1ef2b`). No HIGH or CRITICAL issues.
+Gate: **PASSED** 2026-10-22 and commit `3da1ef2b`. No HIGH or CRITICAL issues.
 
 Tested on:
 - `at17.0 glibc-hwcaps/power10/libgo.so` 57 MB, 7 588 pltgot relocs: 0 → 7 588 stubs resolved; `execve@0x12f3968` classified `ARG_PROPAGATED`.
-- Non-Power10 ppc64le binary (`pam_hsc.so`, classic ELFv2 stubs): returns empty dict, no false positives.
+- Non-Power10 ppc64le binary `pam_hsc.so` and classic ELFv2 stubs: returns empty dict, no false positives.
 - Section with SHF_EXECINSTR cleared: skipped correctly, no stubs returned.
 - Stub at end of section fewer than 12 bytes remaining: loop exits cleanly, no out-of-bounds read.
 - DS-form sign extension: `D=0xFFFC` (−4) and `D=0x7FFC` (+32 764) both verified correct against known GOT layout.

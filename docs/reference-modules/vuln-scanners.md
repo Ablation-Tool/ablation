@@ -21,7 +21,7 @@ Covers the full `printf` family, `syslog`, `err`/`warn`, and common custom
 ### Detection algorithm
 
 Per call site to a format function:
-1. Identify the fmt register for the callee (`RDI` for `printf`, `RSI` for `fprintf`, `RDX` for `snprintf`, etc.)
+1. Identify the fmt register for the callee: `RDI` for `printf`, `RSI` for `fprintf`, `RDX` for `snprintf`, and so on
 2. Walk backwards up to 20 instructions to find the last definition of that register
 3. If the definition is `LEA` from `.rodata` → string literal → **safe**
 4. Otherwise → finding
@@ -62,7 +62,7 @@ highs = [f for f in findings if f.severity == 'HIGH']
 |---|---|
 | `func_va` | VA of the enclosing function |
 | `call_va` | VA of the format function call site |
-| `callee` | Name of the format function called (e.g. `printf`, `syslog`) |
+| `callee` | Name of the format function called, such as `printf` and `syslog` |
 | `fmt_reg` | Register that held the format argument |
 | `provenance` | How the register was defined: `rodata` / `arg_passthrough` / `stack_load` / `register` / `unknown` |
 | `severity` | `HIGH` entry arg passthrough or `MEDIUM` unclear provenance |
@@ -163,18 +163,18 @@ For each call site to a SQL sink (`mysql_query`, `mysql_real_query`, `sqlite3_ex
 `sqlite3_prepare_v2`, `sqlite3_prepare`):
 
 1. Identify the SQL string register for the callee (`RSI` for `mysql_query`/`mysql_real_query`,
-   `RDX` for `sqlite3_exec`/`sqlite3_prepare_v2`).
+ `RDX` for `sqlite3_exec`/`sqlite3_prepare_v2`).
 2. Walk backward up to 40 instructions looking for how that register was populated:
  - **`LEA reg, [rip+off]`** pointing to `.rodata` → `RODATA_CONST`. 
  Inspect the literal for `%s`: if present, mark `INJECTABLE_LITERAL` rare but real.
  - **`MOV reg, rbp/rsp+N`** stack-local buffer: look further back for the
-     `snprintf`/`sprintf` that filled it. Inspect *its* format string for `%s`.
+ `snprintf`/`sprintf` that filled it. Inspect *its* format string for `%s`.
  - **`MOV reg, rax`** after a call: consider the call's return value as the SQL
  string; mark `RETURN_VALUE` (requires caller trace; verdict = `UNKNOWN`).
  - **Entry register** (`rdi/rsi/rdx/rcx/r8/r9` unchanged since function entry):
  mark `ARG_PROPAGATED`.
 3. For `snprintf`/`sprintf`-built buffers: extract the format string (should be a
-   `LEA`/`MOVQ` from `.rodata`). Scan for `%s` string interpolation. A `%s`
+ `LEA`/`MOVQ` from `.rodata`). Scan for `%s` string interpolation. A `%s`
  specifier with a non-RODATA argument → `INJECTABLE`.
 4. `%d`, `%u`, `%ld`, `%llu`, `%x` etc. → numeric only → `SAFE_NUMERIC`.
 
@@ -222,7 +222,7 @@ injections = [f for f in findings if f.verdict == 'INJECTABLE']
 
 | Field | Description |
 |---|---|
-| `sink_name` | PLT symbol called (`mysql_query`, `sqlite3_exec`, etc.) |
+| `sink_name` | PLT symbol called, such as `mysql_query` and `sqlite3_exec` |
 | `call_va` | VA of the sink call instruction |
 | `func_va` | VA of the enclosing function |
 | `verdict` | `INJECTABLE` / `INJECTABLE_LITERAL` / `RODATA_CONST` / `SAFE_NUMERIC` / `ARG_PROPAGATED` / `UNKNOWN` |
@@ -249,6 +249,7 @@ all_highs = (
     [f for f in heap_findings if f.severity == 'HIGH']
 )
 print(f"{len(all_highs)} HIGH findings across format string and heap classes")
+```
 
 ---
 
@@ -278,12 +279,12 @@ overflow (CWE-122).
 ### Detection algorithm
 
 1. Slide a four-word window over `.text` looking for the exact opcode sequence
-   that matches the MAX pattern (sltu, then masknez with the same cond register,
-   then maskeqz with the same cond register, then or combining the two mask outputs).
+ that matches the MAX pattern (sltu, then masknez with the same cond register,
+ then maskeqz with the same cond register, then or combining the two mask outputs).
 2. Track the `or` result register through register-move instructions for up to 20
-   instructions ahead of the pattern.
+ instructions ahead of the pattern.
 3. Flag the finding when the tracked register reaches a memory-sizing sink argument
-   before being clobbered.
+ before being clobbered.
 
 No capstone dependency. Uses pure 32-bit integer matching against the binutils 2.41
 opcode table. Handles the LoongArch64 PLT two-slot (32-byte) header automatically.
@@ -323,7 +324,7 @@ for f in findings:
 | `result_name` | ABI name of the result register (e.g. `$a2`) |
 | `sink_va` | VA of the `bl` instruction that calls the sink |
 | `sink_name` | PLT symbol name (e.g. `memcpy`) |
-| `sink_arg` | Human label for the dangerous argument (`count`, `size`, etc.) |
+| `sink_arg` | Human label for the dangerous argument `count` and `size`, and so on |
 | `context` | Space-separated hex words of the four-instruction sequence |
 
 ### PE32+ mode (UEFI DXE modules)
@@ -339,10 +340,10 @@ print(scanner.report(findings))
 
 PE32+ (UEFI DXE/PEIM) binaries have no PLT/GOT; external functions such as
 `AllocatePool` and `CopyMem` are called via EFI Boot Services Table pointers
-through `jirl $ra, rj, 0` indirect calls.  The scanner cannot resolve sink names
-automatically.  Instead, in PE32+ mode the scanner flags any `bl` or `jirl` call
+through `jirl $ra, rj, 0` indirect calls. The scanner cannot resolve sink names
+automatically. Instead, in PE32+ mode the scanner flags any `bl` or `jirl` call
 where the max-not-min result is live in an argument register (`$a0`–`$a7`) at
-call time.  Findings use `sink_name="<direct>"` or `"<indirect>"` with
+call time. Findings use `sink_name="<direct>"` or `"<indirect>"` with
 `sink_arg` set to the register name; confirm manually whether the callee is
 `AllocatePool`, `CopyMem`, or another sizing sink.
 
@@ -351,7 +352,7 @@ optional header and code section table, then sets a bias so the standard
 `_words_at()` path resolves VAs to the correct file offsets without copying
 the section into a new buffer.
 
-Validation corpus: TencentOS Server 4.6 EDK2 UEFI (QEMU_EFI.fd, LoongArch64).
+Validation corpus: TencentOS Server 4.6 EDK2 UEFI QEMU_EFI.fd and LoongArch64.
 87 DXE modules, 63 sink-proximate findings, 26 affected modules.
 Highest-risk module: TlsDxe (GUID 3aceb0c0-3c72-11e4-9a56-74d435052646, 13
 findings); network-reachable in PXE/HTTP-boot context, no ASLR.
@@ -361,7 +362,7 @@ findings); network-reachable in PXE/HTTP-boot context, no ASLR.
 The Rust Vec-append pattern uses a `bltu remaining_cap, read_result, error` guard
 immediately before the memcpy call. The scanner does not detect branch-based guards,
 so these appear as candidates and require manual verification. In the TencentOS
-libstd corpus, four Vec-grow functions (around 0x1a3b4, 0x1a974, 0x1af48, 0x1b554)
+libstd corpus, four Vec-grow functions around 0x1a3b4, 0x1a974, 0x1af48, and 0x1b554
 hit this false-positive class.
 
 ---
@@ -371,7 +372,7 @@ hit this false-positive class.
 **File:** `ablation/analyzers/la64_heap_vuln_scanner.py`
 
 Detects integer overflow before heap allocation on LoongArch64 (CWE-190 → CWE-122).
-Finds overflow-prone arithmetic (`mul.w`, `sll.w`, `add.w`, `addi.w`) whose
+Finds overflow-prone arithmetic `mul.w`, `sll.w`, `add.w`, and `addi.w` whose
 result flows into an allocation sink without an intervening bounds check.
 
 The critical class is `mul.w`: LoongArch64 `mul.w rd, rj, rk` computes the low 32
@@ -385,16 +386,16 @@ No capstone dependency. Uses the same pure-Python 32-bit opcode matching as
 ### Detection algorithm
 
 1. Scan `.text` for `BL` to an allocation sink (resolved via `.plt`/`.rela.plt` for
-   shared objects, or `.rela.text` R_LARCH_B26 for kernel modules).
+ shared objects, or `.rela.text` R_LARCH_B26 for kernel modules).
 2. Identify the size argument register (`$a0` for malloc/kmalloc, `$a1` for realloc,
-   `$a2` for posix_memalign, etc.).
+ `$a2` for posix_memalign, etc.).
 3. Trace backward up to 32 instructions from the `BL`, following register-move
-   instructions (`or rd, rj, r0`).
+ instructions (`or rd, rj, r0`).
 4. Find the instruction that last defined the size register.
 5. **Filter:** if that instruction is `addi.w rd, r0, const` (constant load) or any
-   arithmetic with a zero-register operand, skip; not overflow.
+ arithmetic with a zero-register operand, skip; not overflow.
 6. **Filter:** if any `BLT/BGE/BLTU/BGEU/BEQ/BNE` between the definer and the `BL`
-   uses the size register, skip; bounds check present.
+ uses the size register, skip; bounds check present.
 7. Surviving candidates are findings.
 
 ### Severity
@@ -439,8 +440,8 @@ for f in findings:
 | `overflow_op` | Mnemonic: `mul.w`, `sll.w`, `add.w`, `addi.w`, `mul.d`, `sll.d` |
 | `overflow_reg` | Register number of the potentially-wrapped size value (0–31) |
 | `sink_va` | VA of the `bl` to the allocation sink |
-| `sink_name` | PLT symbol name (`malloc`, `calloc`, `kmalloc`, …) |
-| `size_arg` | Argument label (`size`, `nmemb`, `newsize`, `length`) |
+| `sink_name` | PLT symbol name `malloc`, `calloc`, `kmalloc`, and … |
+| `size_arg` | Argument label `size`, `nmemb`, `newsize`, and `length` |
 | `severity` | `HIGH` (32-bit wrap) or `MEDIUM` (64-bit or add-imm) |
 
 ### Known false-positive classes
@@ -486,7 +487,7 @@ For each `TaintFindingARM64` where `"fgets"` is in the source labels:
 3. At each `bl` call site:
  - `fopen`/`fopen64`/`freopen`/`tmpfile` → x0 result = `file`
  - `socket`/`accept`/`accept4` → x0 result = `socket`
- - `open`/`openat`/`creat`/`open64` → x0 result = `file_fd` (raw fd, not FILE*)
+ - `open`/`openat`/`creat`/`open64` → x0 result = `file_fd` raw fd and not FILE*
  - `fdopen` → x0 result = class of x0 input: `file_fd` → `file`; `socket` → `socket`; else `unknown`
  - All other calls: clobber x0–x7 → `unknown`
 4. Track `mov`/`ldr`/`str` for register and stack propagation
@@ -526,7 +527,7 @@ for f in classified:
 
 **Global FILE* (stdin/stdout/stderr)**: These are CLEAN registers at call sites; classified as `file`. They are not network-tainted.
 
-**fdopen with untracked fd**: If the fd argument to `fdopen` came from outside the current function (e.g., as a parameter), the discriminator can't trace its origin and emits `unknown`. Conservative HIGH is correct here; interprocedural analysis is needed to resolve.
+**fdopen with untracked fd**: If the fd argument to `fdopen` came from outside the current function such as as a parameter, the discriminator can't trace its origin and emits `unknown`. Conservative HIGH is correct here; interprocedural analysis is needed to resolve.
 
 **Inlined fopen**: Compiler-inlined file-open sequences won't be recognized as `fopen` calls; the FILE* will be `unknown`. Conservative HIGH. Run `from_path_full` (PLT resolution) to minimize this.
 
@@ -565,7 +566,7 @@ Architecture is detected automatically from the ELF `e_machine` field (EM_AARCH6
 | `absolute` | INFO | Starts with `/`; not directly injectable via CWD/PATH |
 | `dynamic` | MEDIUM | Command not statically resolvable; manual trace required |
 
-Format string arguments (`%s`, `%v`, etc.) and strings longer than 80 chars are
+Format string arguments `%s` and `%v`, and so on and strings longer than 80 chars are
 automatically reclassified as `dynamic` since they are not literal command paths.
 
 ### Usage
@@ -613,16 +614,16 @@ resolve command arguments because it uses x86-64 `LEA`/`MOV` patterns. All ARM64
 call sites are reported as `DYNAMIC` / MEDIUM. Extend `GoStringResolver` with
 ADRP+ADD page-offset pattern matching to fix.
 
-**Stripped stdlib false-positives:** If a Go binary is not fully stripped, pclntab
+**Stripped stdlib false-positives:** If a Go binary is not stripped, pclntab
 names for stdlib wrappers that call `os/exec.Command` internally may appear. The
 scanner skips functions whose names start with known stdlib prefixes
-(`runtime.`, `encoding/`, `net/`, etc.) but internal stdlib wrappers from
+`runtime.`, `encoding/`, and `net/`, and so on but internal stdlib wrappers from
 `os/exec` itself are excluded by `if name in targets: continue`.
 
 ### Validation
 
-Corpus: FortiClientEMS 8.0.0 `emsworkers_linux_arm64` (84,530 functions, arm64),
-`emscli` (27,447 functions, arm64). Three psql format strings found and traced to
+Corpus: FortiClientEMS 8.0.0 `emsworkers_linux_arm64` 84, 530 functions, and arm64,
+`emscli` 27, 447 functions, and arm64. Three psql format strings found and traced to
 HA admin operations; all ELIMINATED as non-exploitable (inputs from
 `GetPostgresqlPassword()`, not user-controlled).
 
@@ -710,8 +711,8 @@ Each scanner on this page returns its own typed list. Finding fields are documen
 
 ## See also
 
-- [BinaryContext](binary-context.md) — function and import resolution before scanning
-- [SinkArgClassifier](sink-arg-classifier.md) — eliminate RODATA_CONST call sites before taint
-- [TaintAnalysis](taint-analysis.md) — confirm propagation from source to flagged sink
-- [PathSolver](path-solver.md) — verify path feasibility for confirmed candidates
-- [FindingRegistry](registry.md) — record confirmed findings
+- [BinaryContext](binary-context.md) : function and import resolution before scanning
+- [SinkArgClassifier](sink-arg-classifier.md) : eliminate RODATA_CONST call sites before taint
+- [TaintAnalysis](taint-analysis.md) : confirm propagation from source to flagged sink
+- [PathSolver](path-solver.md) : verify path feasibility for confirmed candidates
+- [FindingRegistry](registry.md) : record confirmed findings

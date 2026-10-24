@@ -192,7 +192,7 @@ Each entry in `syscalls`:
 
 | Field | Type | Content |
 |:---|:---|:---|
-| `name` | `str` | Syscall name (e.g., `read`, `write`, `mmap`) |
+| `name` | `str` | Syscall name such as `read`, `write`, and `mmap` |
 | `calls` | `int` | Number of times this syscall was invoked |
 | `errors` | `int` | Number of calls that returned an error |
 | `time_percent` | `float` | Percentage of total traced time spent in this syscall |

@@ -95,12 +95,12 @@ Key confirmations:
 | op11=0x2AE | `cfltu` | convert float to unsigned int RI7 scale7; 211 hits Crysis2 |
 | op11=0x2B6 | `cflts` | convert float to signed int RI7 scale7; 244 hits Crysis2 |
 | op11=0x0A0 | `frds` | float round double to single tentative; after csflt, 282 hits |
-| op11=0x0A1 | `fesd` | float extend single to double (tentative; rA=rT-1 pattern, 192 hits) |
+| op11=0x0A1 | `fesd` | float extend single to double tentative; rA=rT-1 pattern and 192 hits |
 | op11=0x0C1 | `addx` | add extended with carry tentative; tree-reduction, 344 hits |
 | op11=0x0D3 | `mpys` | multiply and shift right tentative; in shufb sequences, 224 hits |
-| op11=0x19D | `rotqbyx` | rotate quadword by bytes indexed (tentative; rB=$81 fixed, 402 hits) |
-| op11=0x1A8 | `fence` | data sync barrier (word=0x35000000, rT=rA=rB=$0 always, 210 hits) |
-| op11=0x1A9 | `fence2` | float-pipe drain/sync (rT=$0 always, follows csflt, 127 hits) |
+| op11=0x19D | `rotqbyx` | rotate quadword by bytes indexed tentative; rB=$81 fixed and 402 hits |
+| op11=0x1A8 | `fence` | data sync barrier word=0x35000000, rT=rA=rB=$0 always, and 210 hits |
+| op11=0x1A9 | `fence2` | float-pipe drain/sync rT=$0 always, follows csflt, and 127 hits |
 | op11=0x2C0 | `cg` | carry generate tentative; precedes cgx in multi-precision chain |
 | op11=0x2E0 | `cgx` | carry generate extended tentative; cg→cgx→addx triple |
 | op9=0x043 | `il rt, s16` | sequential immediates 0x4010→0x4015 in addmat |
@@ -157,7 +157,7 @@ Borrow chain (10 hits): `bg op11=0x0C2` borrow generate, observed in subtraction
 |----|------|-------|
 | op11=0x2c1 (op8=0x58) | 75 | appears in both float loops and carry chains; used before shufb |
 | op11=0x059 (op8=0x0b) | 67 | output consumed by sfc/andbi; load variant byte-scaled? |
-| op11=0x229 (op8=0x45) | 59 | inline ASCII data (0x45323030="E200", 0x45333530="E350") between stop/bra |
+| op11=0x229 (op8=0x45) | 59 | inline ASCII data 0x45323030="E200" and 0x45333530="E350" between stop/bra |
 | op11=0x008 (op8=0x01) | 58 | inline constant data (0x01010101 pattern) embedded in text |
 | op11=0x1b4 (op8=0x36) | 50 | rB=$0 always 102/104 hits; I10 always multiple of 128 |
 | op11=0x2c4 (op8=0x58) | 48 | same group as 0x2c1 |
@@ -166,7 +166,7 @@ Borrow chain (10 hits): `bg op11=0x0C2` borrow generate, observed in subtraction
 
 ## Embedded SPU ELF Extraction from PPU ELFs
 
-Crysis 2 PS3 PPU ELF contains 23 embedded SPU ELFs (raw ELF data, machine type 0x17 = SPU):
+Crysis 2 PS3 PPU ELF contains 23 embedded SPU ELFs raw ELF data and machine type 0x17 = SPU:
 
 ```python
 import struct
@@ -201,7 +201,7 @@ Prior to this module, spu disassembler required manual work outside the Ablation
 
 ## How it works
 
-`SPUDisassembler.disassembledata, base_va` decodes Cell BE SPU instructions. The SPU has 128 × 128-bit registers, a 256KB local store, and 32-bit fixed-width big-endian instructions. Format hierarchy (IBM bit notation, bit 0 = MSB): RRR (4-bit op, top nibble 0x8/0xB–0xF), RI18 7-bit op, RI16 9-bit op, RI10 8-bit op, and RR/RI7 11-bit op. Opcode table sourced from IBM SPU ISA v1.2. Dual even/odd pipeline: even-slot instructions (compute) and odd-slot instructions load/store/branch are extracted and reported separately.
+`SPUDisassembler.disassembledata, base_va` decodes Cell BE SPU instructions. The SPU has 128 × 128-bit registers, a 256KB local store, and 32-bit fixed-width big-endian instructions. Format hierarchy IBM bit notation and bit 0 = MSB: RRR 4-bit op and top nibble 0x8/0xB–0xF, RI18 7-bit op, RI16 9-bit op, RI10 8-bit op, and RR/RI7 11-bit op. Opcode table sourced from IBM SPU ISA v1.2. Dual even/odd pipeline: even-slot instructions (compute) and odd-slot instructions load/store/branch are extracted and reported separately.
 
 ---
 
@@ -259,7 +259,7 @@ for seg in sections:
 |:---|:---|
 | `addr` | Virtual address of the instruction |
 | `word` | 32-bit big-endian instruction word |
-| `mnemonic` | SPU instruction mnemonic (e.g., `'lqd'`, `'stqd'`, `'brsl'`) |
+| `mnemonic` | SPU instruction mnemonic such as `'lqd'`, `'stqd'`, and `'brsl'` |
 | `fmt` | Instruction format class string |
 | `rT` | Destination register number bits 0–6 |
 | `rA` | Source register A bits 7–13 |

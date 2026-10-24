@@ -6,7 +6,7 @@ Populate `func_id.db` with `ANGR_INFERRED` function records for binaries with no
 
 ## Why this exists
 
-1. **`SemanticSearcher` requires a populated `func_id.db` corpus to perform semantic search: a binary with zero corpus entries returns no results regardless of how many functions it contains.** For freshly-encountered firmware shared libraries (e.g., a new version of a vendor's `libcrypto_hw.so` with no prior RE coverage), `CorpusBuilder.build()` generates the initial corpus entries automatically by heuristically inferring role and call targets from the binary's PLT and string cross-references.
+1. **`SemanticSearcher` requires a populated `func_id.db` corpus to perform semantic search: a binary with zero corpus entries returns no results regardless of how many functions it contains.** For freshly-encountered firmware shared libraries such as a new version of a vendor's `libcrypto_hw.so` with no prior RE coverage, `CorpusBuilder.build()` generates the initial corpus entries automatically by heuristically inferring role and call targets from the binary's PLT and string cross-references.
 
 2. **`ANGR_INFERRED` is a distinct confidence level from `CONFIRMED`, it signals that the function record was machine-generated and has not been validated by a human analyst.** `SemanticSearcher.build_corpus()` accepts `confidence_filter=['CONFIRMED', 'ANGR_INFERRED']` to include inferred records, while sensitive operations for example formal disclosure query `CONFIRMED` only. This separation prevents polluting the confirmed corpus with noisy inferred data while still making the inferred corpus useful for initial triage.
 

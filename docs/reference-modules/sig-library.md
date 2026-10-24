@@ -117,7 +117,7 @@ threshold. Does not skip already-named functions -- use this for ad-hoc matching
 ### `match_functionname, call_targets, string_xrefs, notes -> SigMatch | None`
 
 Higher-level matcher used by `auto_name()`. Skips functions that already have real
-names (i.e., not matching `fn_0x*`). Returns `None` for functions with no signal
+names i.e. and not matching `fn_0x*`. Returns `None` for functions with no signal
 empty call targets and string xrefs.
 
 ### `auto_name(db_path: str, dry_run=False) -> int`
@@ -205,7 +205,7 @@ Dry run: 47 functions would be renamed (no DB write)
 
 ## False positives
 
-**High similarity score for a function that only calls the matched function.** A thin wrapper around `memcpy` (3–5 instructions: `MOV rdi, …`, `MOV rsi, …`, `CALL memcpy`, `RET`) has the same behavioral description as `memcpy` itself and will score above threshold. Use `--dry-run` to inspect proposed renames and filter out functions where the description is dominated by a single call target rather than a broader pattern.
+**High similarity score for a function that only calls the matched function.** A thin wrapper around `memcpy` 3–5 instructions: `MOV rdi, …`, `MOV rsi, …`, `CALL memcpy`, and `RET` has the same behavioral description as `memcpy` itself and will score above threshold. Use `--dry-run` to inspect proposed renames and filter out functions where the description is dominated by a single call target rather than a broader pattern.
 
 ---
 
@@ -223,7 +223,7 @@ Dry run: 47 functions would be renamed (no DB write)
 
 | Attribute | Content |
 |:---|:---|
-| `name` | Standard library function name (e.g., `'memcpy'`, `'SSL_read'`) |
+| `name` | Standard library function name such as `'memcpy'` and `'SSL_read'` |
 | `aliases` | `List[str]`: alternate names this function is known by |
 | `category` | Category string: `'Memory ops'` / `'String ops'` / `'Heap'` / `'Network'` / etc. |
 | `cwe_risk` | CWE risk identifier if the matched function is security-sensitive, or `None` |

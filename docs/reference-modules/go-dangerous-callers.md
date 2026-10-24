@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Pre-built callgraph scanner for Go binaries: identifies dangerous call sites (unsafe.Pointer casts, reflect.NewAt, os.exec, net/http.Get) with rodata-first string extraction and Go itab resolution. Single text scan builds the full callgraph; subsequent lookups are O(1).
+Pre-built callgraph scanner for Go binaries: identifies dangerous call sites unsafe.Pointer casts, reflect.NewAt, os.exec, and net/http.Get with rodata-first string extraction and Go itab resolution. Single text scan builds the full callgraph; subsequent lookups are O(1).
 
 ## Key constants
 
@@ -20,7 +20,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. `os.path.getsize()` guard before
 
 ## How it works
 
-`GoDangerousCallers.from_context(ctx).scan()` builds a pre-computed callgraph from a single sequential disassembly pass (`{callee_va: caller_va_set}` and `{caller_va: callee_va_set}`) rather than iterating func_starts. Identifies dangerous call targets fmt.Sprintf with tainted variadics, os.exec, unsafe.Pointer casts by Go 1.17+ register ABI (`rax/rbx` = arg0, `rcx/rdx` = arg1). Resolves itabs from `.rodata` for virtual dispatch sites. Returns `List[DangerousCallHit]` sorted by severity.
+`GoDangerousCallers.from_context(ctx).scan()` builds a pre-computed callgraph from a single sequential disassembly pass (`{callee_va: caller_va_set}` and `{caller_va: callee_va_set}`) rather than iterating func_starts. Identifies dangerous call targets fmt.Sprintf with tainted variadics, os.exec, unsafe.Pointer casts by Go 1.17+ register ABI `rax/rbx` = arg0 and `rcx/rdx` = arg1. Resolves itabs from `.rodata` for virtual dispatch sites. Returns `List[DangerousCallHit]` sorted by severity.
 
 ---
 
@@ -51,7 +51,7 @@ DangerousCallHit  os.Getenv  at 0x00423c10 in buildAuthToken (0x00423be0)
 
 ## False positives
 
-Calls to `os/exec.Command` with fully static string arguments hardcoded command paths are not exploitable. Check `string_refs`: if all arguments are constant strings in `.rodata`, the call is likely benign. Context strings that appear only in comment or log branches also produce false hits.
+Calls to `os/exec.Command` with static string arguments hardcoded command paths are not exploitable. Check `string_refs`: if all arguments are constant strings in `.rodata`, the call is likely benign. Context strings that appear only in comment or log branches also produce false hits.
 
 ---
 

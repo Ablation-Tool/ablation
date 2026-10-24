@@ -2,9 +2,9 @@
 
 **File:** `ablation/analyzers/taint_tracker_x86_32.py`
 
-Intraprocedural taint analysis for stripped i386 ELF binaries (32-bit x86, SysV ABI, CDECL32 calling convention). Traces network-sourced data from read/recv/fgets/getenv sources to command-execution sinks system, popen, execv, execvp and memory-corruption sinks strcpy, sprintf, snprintf, memcpy.
+Intraprocedural taint analysis for stripped i386 ELF binaries 32-bit x86, SysV ABI, and CDECL32 calling convention. Traces network-sourced data from read/recv/fgets/getenv sources to command-execution sinks system, popen, execv, execvp and memory-corruption sinks strcpy, sprintf, snprintf, memcpy.
 
-First deployed on Acronis True Image 2018 build 15560 rescue environment (`asamba` and `product.bin`, both i386 ELF).
+First deployed on Acronis True Image 2018 build 15560 rescue environment `asamba` and `product.bin` and both i386 ELF.
 
 Confirmed findings that drove this module:
 - **ATI-KRB-001**: `asamba_mount_cifs_krb5` (0x804ec40): `snprintf` injects five Kerberos credential fields into `/bin/mount.cifs` command string → `system()`. toupper-only sanitizer at 0x804de18 does not strip shell metacharacters. CWE-78 HIGH.
@@ -166,7 +166,7 @@ The most common false positive is taint surviving a zero-clear instruction (`xor
 |:---|:---|
 | `sink_name` | Name of the dangerous function reached |
 | `sink_va` | Virtual address of the call site |
-| `source_name` | Name of the taint source (e.g., `recv`, `read`) |
+| `source_name` | Name of the taint source such as `recv` and `read` |
 | `arg_index` | Which argument to the sink carries taint 0-indexed |
 | `chain` | `[va, register, operation]` steps from source to sink |
 | `path` | `[caller_va, ...]` function VAs traversed interprocedurally |

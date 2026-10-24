@@ -230,7 +230,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, and or C28x for vulnerability analysis.
 
 ---
 
@@ -240,11 +240,11 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 | Attribute | Content |
 |:---|:---|
-| `arch` | Best-match ISA string (e.g., `'PPC32-VLE'`, `'M68K'`, `'SH-2A'`, `'ARM-Thumb'`) |
+| `arch` | Best-match ISA string such as `'PPC32-VLE'`, `'M68K'`, `'SH-2A'`, and `'ARM-Thumb'` |
 | `confidence` | `'HIGH'` / `'MEDIUM'` / `'LOW'`: confidence in the ISA detection |
 | `score` | Numeric density score of the winning hypothesis |
 | `reason` | One-line human-readable explanation of why this ISA was chosen |
-| `candidates` | `List[ArchCandidate]`: all scored hypotheses (each with `arch`, `score`, `reason`) |
+| `candidates` | `List[ArchCandidate]`: all scored hypotheses each with `arch`, `score`, and `reason` |
 
 `result.is_confident` is `True` when `confidence` is `'HIGH'` or `'MEDIUM'`.
 

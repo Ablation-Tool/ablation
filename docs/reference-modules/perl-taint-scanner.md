@@ -117,13 +117,13 @@ PerlTaintScanner is independent of BinaryContext, it works entirely on text file
 
 ## How it works
 
-`PerlTaintScanner` takes a list of Perl source `Path` objects. For each file, `_FileAnalysis._parse_functions()` splits the source into function scopes by scanning for `sub name {` declarations. `scan()` iterates each file's functions and applies regex patterns to identify taint sources (`$ENV{...}`, `param(...)`, `<STDIN>`, CGI input) and sink calls (`system`, backtick exec, `open`, `eval`, `DBI`). `_FileAnalysis.lines_in_func()` limits sink search to the current function scope. No binary parsing; no disassembly.
+`PerlTaintScanner` takes a list of Perl source `Path` objects. For each file, `_FileAnalysis._parse_functions()` splits the source into function scopes by scanning for `sub name {` declarations. `scan()` iterates each file's functions and applies regex patterns to identify taint sources `$ENV{...}`, `param(...)`, `<STDIN>`, and CGI input and sink calls `system`, backtick exec, `open`, `eval`, and `DBI`. `_FileAnalysis.lines_in_func()` limits sink search to the current function scope. No binary parsing; no disassembly.
 
 ---
 
 ## Pipeline position
 
-**Before:** Collect Perl source files (`.pl`, `.pm`, CGI scripts) from the target.
+**Before:** Collect Perl source files `.pl`, `.pm`, and CGI scripts from the target.
 
 **After:** HIGH findings require manual confirmation that the taint source reaches the sink without sanitization. Check for `use strict` and `use warnings` as context.
 

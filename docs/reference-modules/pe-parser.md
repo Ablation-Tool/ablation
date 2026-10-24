@@ -40,7 +40,7 @@ else:
 | Attribute/Method | Returns | Notes |
 |:---|:---|:---|
 | `valid` | `bool` | True if MZ + PE signatures verified |
-| `machine` | `int` | IMAGE_FILE_MACHINE value (0x014c=i386, 0x8664=AMD64) |
+| `machine` | `int` | IMAGE_FILE_MACHINE value 0x014c=i386 and 0x8664=AMD64 |
 | `sections` | `list[dict]` | `{name, va, offset, size, characteristics}` |
 | `imports` | `list[dict]` | `{dll, name, ordinal, va}` |
 | `exports` | `list[dict]` | `{name, va, ordinal}` |

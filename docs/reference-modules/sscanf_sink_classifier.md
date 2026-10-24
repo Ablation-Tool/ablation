@@ -34,7 +34,7 @@ clf = SscanfSinkClassifier.from_context(ctx)
 | Verdict | Severity | Meaning |
 |---------|----------|---------|
 | `RODATA_SAFE` | LOW | Format in `.rodata`, no unbounded `%s`. ELIMINATED. |
-| `RODATA_UNSAFE` | HIGH | Format in `.rodata`, has unbounded `%s` (e.g., `"%s %d"`). |
+| `RODATA_UNSAFE` | HIGH | Format in `.rodata`, has unbounded `%s` such as `"%s %d"`. |
 | `DYNAMIC_FMT` | MEDIUM | Runtime-built via snprintf. Verify format template is constant. |
 | `ARG_PROPAGATED` | HIGH | Format came from a caller argument. Format injection risk. |
 | `UNKNOWN` | MEDIUM | Provenance not resolved in 40-instruction window. |
@@ -57,7 +57,7 @@ Parses the resolved `.rodata` format string byte-by-byte to detect `%s` without 
 
 - `%s` → UNSAFE no width
 - `%20s` → SAFE explicit width 20
-- `%05s` → SAFE (`0` consumed as flag, `5` is width)
+- `%05s` → SAFE `0` consumed as flag and `5` is width
 - `%*s` → SAFE assignment-suppressed: no buffer write
 - `%%` → SAFE escaped percent, not a specifier
 - `%ls`, `%hs` → UNSAFE length modifier, no width
@@ -70,7 +70,7 @@ When the format register traces to a stack slot that was previously written by a
 
 Workflow for DYNAMIC_FMT sites:
 1. Find the snprintf call in the disassembly
-2. Trace the snprintf format argument (rdx for snprintf, r8 for `__snprintf_chk`)
+2. Trace the snprintf format argument rdx for snprintf and r8 for `__snprintf_chk`
 3. If that format is RODATA_CONST → the runtime format has bounded `%s` from a constant template (safe)
 4. If that format is ARG_PROPAGATED → format injection risk
 
@@ -92,7 +92,7 @@ flagged_fmt = [r for r in fmt_results if r.needs_investigation]
 
 ## FORGE audit
 
-gate_passed=True. 1 MEDIUM finding (dead-sink filter when `_plt_caller_counts` empty, fixed before recording).
+gate_passed=True. 1 MEDIUM finding dead-sink filter when `_plt_caller_counts` empty and fixed before recording.
 
 ---
 
@@ -150,7 +150,7 @@ SinkClassification  sscanf  call_va=0x00402310  func=parse_config (0x004022c0)
 
 | Attribute | Content |
 |:---|:---|
-| `sink_name` | Name of the sscanf-family function (e.g., `'sscanf'`, `'vsscanf'`) |
+| `sink_name` | Name of the sscanf-family function such as `'sscanf'` and `'vsscanf'` |
 | `fmt_arg_pos` | 0-indexed position of the format-string argument |
 | `func_va` | VA of the calling function |
 | `call_va` | VA of the call instruction |

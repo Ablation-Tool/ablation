@@ -17,7 +17,7 @@ Two things were not possible before in Ablation:
 1. Builds an IAT map for `EventRegister`, `EventRegisterEx`, `EventWrite*`, and `EventUnregister`.
 2. Scans code sections for `EventRegister` call sites with Capstone. For x64, it reads the GUID pointer from `RCX` (via `lea rcx, [rip+offset]` or `mov rcx, imm64`). For x86, it reads the first push before the call.
 3. Reads 16 bytes at the GUID pointer as a `bytes_le` UUID.
-4. Cross-references each extracted GUID against a table of 15 known security-relevant Windows ETW providers (Security-Auditing, PowerShell, Antimalware-Engine, RPC, DCOM, etc.).
+4. Cross-references each extracted GUID against a table of 15 known security-relevant Windows ETW providers Security-Auditing, PowerShell, Antimalware-Engine, RPC, and DCOM, and so on.
 5. Counts `EventWrite*` call sites independently. Flags a detection gap if providers are registered but `EventWrite` is never called.
 
 ---

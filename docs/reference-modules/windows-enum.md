@@ -60,7 +60,7 @@ Gate: **PASSED**. No code changes needed.
 
 ## How it works
 
-`WindowsEnumerator().enumerate_all()` runs each registered enumeration section (`com`, `rpc`, `etw`, `pipes`, `secfeatures`, `servicedll`, `autoruns`, `token`, `modules`) and returns `dict[str, list[Finding]]`. Each `Finding` is a dataclass with `{severity, category, title, detail, evidence}`. On non-Windows hosts each section returns an INFO finding stub instead of raising.
+`WindowsEnumerator().enumerate_all()` runs each registered enumeration section `com`, `rpc`, `etw`, `pipes`, `secfeatures`, `servicedll`, `autoruns`, `token`, and `modules` and returns `dict[str, list[Finding]]`. Each `Finding` is a dataclass with `{severity, category, title, detail, evidence}`. On non-Windows hosts each section returns an INFO finding stub instead of raising.
 
 ---
 
@@ -104,7 +104,7 @@ Returns `dict[str, list[Finding]]`. `Finding` fields:
 | Field | Content |
 |:---|:---|
 | `severity` | `'HIGH'` / `'MEDIUM'` / `'LOW'` / `'INFO'` |
-| `category` | Section name (e.g., `'COM Hijacking'`, `'Token Privileges'`, `'Named Pipes'`) |
+| `category` | Section name such as `'COM Hijacking'`, `'Token Privileges'`, and `'Named Pipes'` |
 | `title` | Short description of the specific finding |
 | `detail` | Full detail string explaining what was found and why it matters |
 | `evidence` | Supporting evidence string may be empty |

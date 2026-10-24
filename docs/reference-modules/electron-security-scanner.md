@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-FortiFone Desktop v8.0 build 67 is an Electron/Chromium SIP phone client. Manual source review of the extracted `app.asar` produced seven confirmed findings that required reading the Electron security model from scratch each engagement, no automated scanner existed. The same patterns (nodeIntegration, IPC without sender check, server-controlled loadURL) appear in every Electron app.
+FortiFone Desktop v8.0 build 67 is an Electron/Chromium SIP phone client. Manual source review of the extracted `app.asar` produced seven confirmed findings that required reading the Electron security model from scratch each engagement, no automated scanner existed. The same patterns nodeIntegration, IPC without sender check, and server-controlled loadURL appear in every Electron app.
 
 Gap closed: 2026-10-16. All confirmed FFO findings re-detected automatically in validation run on FortiFone main.js.
 
@@ -78,7 +78,7 @@ Gate: **PASSED**. No subprocess, eval, shell=True, or network I/O. All file read
 
 ## How it works
 
-Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
+Parses the runtime-specific binary format APK, DEX, `.mpy`, BEAM, and Go ELF to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
 
 ---
 
@@ -109,13 +109,13 @@ for f in findings:
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
+Standard library calls that resemble dangerous patterns such as `exec` used for shell completions and `eval` used for template rendering with static input are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code Garble-compiled Go and ProGuard-stripped Android produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm the target binary format (APK, `.mpy`, BEAM, Go ELF) before loading. `BinaryContext` is not required for all runtime analyzers.
+**Before this module:** Confirm the target binary format APK, `.mpy`, BEAM, and Go ELF before loading. `BinaryContext` is not required for all runtime analyzers.
 
 **After this module:** Feed dangerous call findings to `TaintTracker` or `FindingRegistry` for confirmed findings.
 
@@ -130,9 +130,9 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 | `path` | Absolute path to the file containing the finding |
 | `rel_path` | Source file path relative to the app root |
 | `lineno` | Line number of the finding |
-| `finding_class` | Finding code (e.g., `'node-integration-rce'`, `'tls-bypass'`, `'context-isolation-disabled'`) |
+| `finding_class` | Finding code such as `'node-integration-rce'`, `'tls-bypass'`, and `'context-isolation-disabled'` |
 | `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` |
-| `cwe` | CWE identifier (e.g., `'CWE-78'`, `'CWE-295'`) |
+| `cwe` | CWE identifier such as `'CWE-78'` and `'CWE-295'` |
 | `title` | Short description of the misconfiguration |
 | `detail` | Extended explanation of the security impact |
 

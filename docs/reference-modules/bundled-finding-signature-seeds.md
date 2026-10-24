@@ -6,11 +6,11 @@ Pre-bundled behavioral signature library for stripped function identification: m
 
 ## Why this exists
 
-1. **BERT-based semantic search produces embedding-space nearest neighbors, but `SigLibrary` adds a structured behavioral profile layer: each signature has an explicit description, category, and confidence threshold calibrated against known-good and known-bad examples.** `SigLibrary.match_description()` returns a `SigMatch` with a `likely:` prefixed name and a confidence score, providing a more actionable label than raw embedding similarity for common library functions (`memcpy`, `strcpy`, `strlen`, `malloc`).
+1. **BERT-based semantic search produces embedding-space nearest neighbors, but `SigLibrary` adds a structured behavioral profile layer: each signature has an explicit description, category, and confidence threshold calibrated against known-good and known-bad examples.** `SigLibrary.match_description()` returns a `SigMatch` with a `likely:` prefixed name and a confidence score, providing a more actionable label than raw embedding similarity for common library functions `memcpy`, `strcpy`, `strlen`, and `malloc`.
 
-2. **`SigLibrary.auto_name()` renames all `ANGR_INFERRED` placeholder functions in a corpus database in a single pass**: functions that were auto-named by angr's decompiler (e.g., `sub_0x1d700`) but not yet confirmed by a human analyst. The `likely:` prefix distinguishes machine-inferred names from human-confirmed names, preventing accidental trust of inferred labels in downstream RE work.
+2. **`SigLibrary.auto_name()` renames all `ANGR_INFERRED` placeholder functions in a corpus database in a single pass**: functions that were auto-named by angr's decompiler such as `sub_0x1d700` but not yet confirmed by a human analyst. The `likely:` prefix distinguishes machine-inferred names from human-confirmed names, preventing accidental trust of inferred labels in downstream RE work.
 
-3. **The bundled `sigs.json` ships with Ablation and covers the functions most commonly mistaken in binary RE: `memcpy`/`memmove` confusion, `strcpy`/`strncpy` misidentification, `malloc`/`calloc`/`realloc` distinction, and dangerous one-shot functions (`gets`, `sprintf` with fixed dest).** The confidence thresholds are set conservatively: a function must score >0.85 against a profile to receive the `likely:` label, reducing false positive auto-naming.
+3. **The bundled `sigs.json` ships with Ablation and covers the functions most commonly mistaken in binary RE: `memcpy`/`memmove` confusion, `strcpy`/`strncpy` misidentification, `malloc`/`calloc`/`realloc` distinction, and dangerous one-shot functions `gets` and `sprintf` with fixed dest.** The confidence thresholds are set conservatively: a function must score >0.85 against a profile to receive the `likely:` label, reducing false positive auto-naming.
 
 ---
 
@@ -99,7 +99,7 @@ Run `SigLibrary.auto_name()` after building the initial corpus but before runnin
 
 | Field | Content |
 |:---|:---|
-| `name` | Matched library function name (e.g., `likely:memcpy`) |
+| `name` | Matched library function name such as `likely:memcpy` |
 | `confidence` | Float 0.0–1.0: profile similarity score |
 | `seed_profile` | Profile bitmask from the seed library |
 | `target_profile` | Profile bitmask from the target function |

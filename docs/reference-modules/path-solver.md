@@ -4,7 +4,7 @@
 
 ## Why this exists
 
-Bounded symbolic execution with Z3 path constraint solving for x86-64. Pipeline position: `cfg_builder → taint_tracker finds sink VA → path_solver finds input`. Enumerates all simple CFG paths from entry block to target block (DFS, bounded by `max_path_blocks`), symbolically executes each path (register expressions as Z3 BitVec), and asks Z3 to produce concrete register values at function entry that satisfy all constraints. Supports struct-aware memory seeding (`MemoryConstraint`) for constraining field-offset reads on a known struct pointer.
+Bounded symbolic execution with Z3 path constraint solving for x86-64. Pipeline position: `cfg_builder → taint_tracker finds sink VA → path_solver finds input`. Enumerates all simple CFG paths from entry block to target block DFS and bounded by `max_path_blocks`, symbolically executes each path (register expressions as Z3 BitVec), and asks Z3 to produce concrete register values at function entry that satisfy all constraints. Supports struct-aware memory seeding (`MemoryConstraint`) for constraining field-offset reads on a known struct pointer.
 
 ## Key API
 

@@ -223,7 +223,7 @@ Example output before: linear lifter, after: structurizer:
 
 ## Pipeline position
 
-**Before this module:** Build the basic-block CFG with the appropriate arch-specific CFG builder (e.g., `cfg_builder.build_cfg()` for x86-64, `build_cfg_sh2a()` for SH-2A).
+**Before this module:** Build the basic-block CFG with the appropriate arch-specific CFG builder such as `cfg_builder.build_cfg()` for x86-64 and `build_cfg_sh2a()` for SH-2A.
 
 **After this module:** Pass the structured tree to `Ppc32Lifter` or `BinaryLifter` to emit pseudocode, or pattern-match directly against the `IfNode`/`WhileNode`/`SequenceNode` tree structure.
 

@@ -43,7 +43,7 @@ Gate: **PASSED**. Six None-dereference guards added (`if not data: return []` / 
 
 ## How it works
 
-`NXOSEnumerator(targets).run()` iterates target hosts: for each host it runs `classify_by_cert_ou()` OU-based device type discrimination from the TLS certificate, `probe_nxos_ports()` open port surface, and conditionally `probe_apic_unauthenticated()`, `probe_nxapi()`, `probe_dcnm()`, or `probe_vxlan_vteps()` based on device type and open ports. Standalone functions (`probe_apic_unauthenticated`, `probe_nxapi`, `probe_nxos_ports`) return plain dicts, not finding lists.
+`NXOSEnumerator(targets).run()` iterates target hosts: for each host it runs `classify_by_cert_ou()` OU-based device type discrimination from the TLS certificate, `probe_nxos_ports()` open port surface, and conditionally `probe_apic_unauthenticated()`, `probe_nxapi()`, `probe_dcnm()`, or `probe_vxlan_vteps()` based on device type and open ports. Standalone functions `probe_apic_unauthenticated`, `probe_nxapi`, and `probe_nxos_ports` return plain dicts, not finding lists.
 
 ---
 
@@ -94,7 +94,7 @@ probe_nxos_ports:
 
 **`probe_apic_unauthenticated()` `aaa_domains` on non-APIC hosts**: the AAA domain list endpoint (`/api/aaaListDomains.json`) may be served by other Cisco web interfaces that share the same URL path. Verify `Content-Type: application/json` and the `imdata` key in the response before treating this as a confirmed APIC surface.
 
-**`classify_by_cert_ou()` misclassification on self-signed certs**: a self-signed certificate with a generic OU (e.g., `Engineering`) will classify as `UNKNOWN` device type. In this case all probe types run APIC, NX-API, DCNM, which increases probe traffic.
+**`classify_by_cert_ou()` misclassification on self-signed certs**: a self-signed certificate with a generic OU such as `Engineering` will classify as `UNKNOWN` device type. In this case all probe types run APIC, NX-API, DCNM, which increases probe traffic.
 
 ---
 

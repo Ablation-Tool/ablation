@@ -47,7 +47,7 @@ findings = scanner.scan(
 PEFABIClobberScanner.from_bytes(code: bytes, base_va: int = 0)
 ```
 
-`code` is the raw bytes of the PEF code section.  `base_va` is the virtual
+`code` is the raw bytes of the PEF code section. `base_va` is the virtual
 address of the first byte (offset 0 in `code`). All sink VAs and stop VAs in
 results are relative to `base_va`.
 
@@ -64,7 +64,7 @@ findings = scanner.scan(
 ```
 
 For each sink_va, check_reg pair, walks backward from the BL instruction at
-`sink_va`.  The walk stops as soon as one of four conditions is met:
+`sink_va`. The walk stops as soon as one of four conditions is met:
 
 | Stop condition | Verdict | `stop_reason` |
 |---|---|---|
@@ -160,7 +160,7 @@ explicit entries. There is no implicit "other" path.
 
 **3. Unconditional branch not treated as basic-block boundary**
 
-The old scanner's backward walk crossed `b target` (opcode 18, LK=0) without
+The old scanner's backward walk crossed `b target` opcode 18 and LK=0 without
 stopping, entering the preceding basic block or function. `classify()` returns
 `_UNCOND` for opcode 18 with LK=0; the scanner returns PLAUSIBLE immediately on
 seeing `_UNCOND`.
@@ -170,7 +170,7 @@ seeing `_UNCOND`.
 ## Limitations
 
 - **PEF only**: designed for Mac OS 8/9 CFM PEF code sections. For ELF PPC32,
- use `PPC32TaintTracker` (handles GOT2 PIC, import stubs, linked `.so` binaries).
+ use `PPC32TaintTracker` handles GOT2 PIC, import stubs, and linked `.so` binaries.
 - **Intra-block only**: the backward walk does not build a CFG. It stops at
  any block-terminating instruction. A full CFG pass not yet implemented would
  handle paths where the register is set on all predecessor blocks.
@@ -178,7 +178,7 @@ seeing `_UNCOND`.
  whether the written value is tainted / network-controlled. A SAFE verdict means
  the register has a defined value; it does not certify that value is safe.
 - **Update-form RA writes**: `lwzu` opcode 33, `lhzu` (41), `lhau` (43),
-  `lbzu` (35) also write RA base register update.  These update writes are not
+ `lbzu` (35) also write RA base register update. These update writes are not
  currently tracked; only RT is tracked for these opcodes. This is a
  conservative under-approximation (may produce PLAUSIBLE when RA was in fact
  written). Add RA tracking for update-form opcodes if this causes false positives.
@@ -251,7 +251,7 @@ Conditional branches opcode 16 are transparent: the backward walk does not stop 
 | Attribute | Content |
 |:---|:---|
 | `site_va` | VA of the sink `bl` instruction |
-| `check_reg` | Register index examined (e.g., `4` for `r4`) |
+| `check_reg` | Register index examined such as `4` for `r4` |
 | `verdict` | `'PLAUSIBLE'`: argument register was last written before the intermediate call, leaving it clobbered; `'SAFE'`: register was re-written after all calls before reaching the sink |
 | `stop_va` | VA where the backward walk stopped |
 | `stop_reason` | `'reg_written'` / `'call_clobber'` / `'uncond_branch'` / `'return'` / `'window_exhausted'` |

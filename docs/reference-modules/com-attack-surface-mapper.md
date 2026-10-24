@@ -8,7 +8,7 @@ Three things were not possible before in Ablation:
 
 2. **No CoCreateInstance call site analysis.** A binary that calls `CoCreateInstance` is activating a COM object at runtime. If the CLSID it passes resolves to a machine-writable registry key (a key under `HKCU` or under a user-writable `HKLM` path), an attacker can redirect that activation to their own DLL. Extracting the CLSID argument from a `CoCreateInstance` call site distinguishing a hardcoded GUID constant from a computed one required manual disassembly. There was no automated path.
 
-3. **No COM marshaling / IDispatch surface inventory.** `CoMarshalInterface` and `CoUnmarshalInterface` enable cross-process and cross-machine COM calls. If marshaled data is attacker-influenced, the deserialization path (`IStream`, `IMoniker`) is an exploitation vector. `IDispatch.Invoke` makes a COM object scriptable via OLE automation. Neither of these import categories was tracked in Ablation's Windows PE analysis.
+3. **No COM marshaling / IDispatch surface inventory.** `CoMarshalInterface` and `CoUnmarshalInterface` enable cross-process and cross-machine COM calls. If marshaled data is attacker-influenced, the deserialization path `IStream` and `IMoniker` is an exploitation vector. `IDispatch.Invoke` makes a COM object scriptable via OLE automation. Neither of these import categories was tracked in Ablation's Windows PE analysis.
 
 ---
 
@@ -75,7 +75,7 @@ COM hijacking works when a DLL is loaded via a CLSID registered under `HKCU\Soft
 
 1. **Export scan**: checks the PE export table for `DllGetClassObject`, `DllRegisterServer`, `DllUnregisterServer`, `DllCanUnloadNow` using LIEF's `binary.exported_functions`. Any of these marks the DLL as a COM server.
 2. **GUID string scan**: walks `.rdata` and `.data` sections for the regex `{[0-9A-F]{8}-[0-9A-F]{4}-...}` to collect CLSID string references. Each unique GUID is stored in the CLSID inventory.
-3. **CoCreateInstance call site scan**: Capstone disassembles each code section; for each `call CoCreateInstance*` instruction, the preceding `lea` or `mov` loading the first argument (`rcx` on x64, stack push on x86) is backtracked to extract the CLSID binary value (16 bytes at the pointed-to address in `.rdata`).
+3. **CoCreateInstance call site scan**: Capstone disassembles each code section; for each `call CoCreateInstance*` instruction, the preceding `lea` or `mov` loading the first argument `rcx` on x64 and stack push on x86 is backtracked to extract the CLSID binary value (16 bytes at the pointed-to address in `.rdata`).
 4. **IAT import scan**: checks the PE import table for `CoMarshalInterface`, `CoUnmarshalInterface`, `CoMarshalInterThreadInterfaceInStream`, `Invoke`, `GetIDsOfNames` using LIEF `binary.imports`.
 5. **Finding emission**: emits a `COMFinding` per category. `com_hijack_risk` is emitted only when both COM server exports AND CLSID references are found together.
 
@@ -131,12 +131,12 @@ COMAttackSurfaceMapper: shdocvw.dll
 | `location` | Human-readable location string CLSID, export name, or registry key path |
 | `description` | Detailed explanation of the attack vector |
 | `va` | VA of the relevant instruction 0 if not applicable |
-| `cwe` | CWE identifier (e.g., `CWE-284`, `CWE-346`) |
+| `cwe` | CWE identifier such as `CWE-284` and `CWE-346` |
 
 ---
 
 ## See also
 
 - [CFG Bypass Detector](cfg-bypass-detector.md): companion Windows PE scanner for CFG bypass surface analysis
-- [PE Sweep](pe-sweep.md): coarse Windows PE security feature check (DEP, ASLR, SafeSEH)
+- [PE Sweep](pe-sweep.md): coarse Windows PE security feature check DEP, ASLR, and SafeSEH
 - [FindingRegistry](registry.md): register confirmed COM hijacking findings

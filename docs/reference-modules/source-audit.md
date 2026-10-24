@@ -116,7 +116,7 @@ Each `SourceFile` carries three attributes used throughout the pipeline:
 |---|---|---|
 | `path` | `Path` | Absolute path on disk |
 | `rel_path` | `str` | Path relative to `repo_root`; used in all report output |
-| `suffix` | `str` | File extension (e.g., `.ts`, `.py`) |
+| `suffix` | `str` | File extension such as `.ts` and `.py` |
 
 The `read()` helper returns the file's text content. All downstream analyzers call this
 rather than opening the file directly.
@@ -170,7 +170,7 @@ milliseconds. Compare this to `SemanticSearcher` in binary RE, which uses MiniLM
 embeddings to rank functions by semantic similarity to a query; that does involve a
 model inference step. `SourceAuditCompressor` is the source-side analog: it trades
 semantic recall for speed, and it works because the signal patterns it tracks
-(`innerHTML=`, direct `eval()`, `window.location.assign()`) have very low false-negative
+`innerHTML=`, direct `eval()`, and `window.location.assign()` have very low false-negative
 rates within the vulnerability categories they cover. A file that contains none of those
 literal patterns provably contains none of those risk signals.
 
@@ -188,7 +188,7 @@ Each bit is detected independently via regex scan:
 | 4 (MSB) | 16 | `unsafe_render` | `unsafeHTML()`, `innerHTML=`, `dangerouslySetInnerHTML`, `eval()`, `new Function()` |
 | 3 | 8 | `href_binding` | Dynamic `href=${...}` attribute binding (Lit/JSX) |
 | 2 | 4 | `url_assign` | `window.location.assign()`, `window.open(var)`, `navigateToUrl()` |
-| 1 | 1 | `user_data` | API object fields (`.name`, `.email`, `.body`) rendered in templates |
+| 1 | 1 | `user_data` | API object fields `.name`, `.email`, and `.body` rendered in templates |
 | 0 (LSB) | 1 | `shared_module` | Reusable base class or shared utility amplifies risk in combined profiles |
 
 Reading the profile in binary immediately tells you which signals are present. Profile 24
@@ -325,7 +325,7 @@ middleware list applied to the route.
 
 **Inline patterns** include: imports of auth utilities (`requireAuth`, `isAuthenticated`,
 `login_required`, `Dependsget_current_user`), decorator usage (`@login_required`,
-`@permission_required`), and session checks (`req.session.userId`, `request.user`).
+`@permission_required`), and session checks `req.session.userId` and `request.user`.
 
 **Middleware chain** is detected from framework-specific registration patterns:
 `router.use(authMiddleware)` in Express, `app.include_router(router, dependencies=...)`
@@ -435,7 +435,7 @@ result = vm.runInContext(userScript, ctx)
 | `rel_path` | `str` | File path relative to repo root |
 | `line` | `int` | Line number |
 | `line_text` | `str` | The matched source line |
-| `category` | `str` | Sink class (e.g., `code_eval`, `subprocess`, `ssrf`, `path_traversal`) |
+| `category` | `str` | Sink class such as `code_eval`, `subprocess`, `ssrf`, and `path_traversal` |
 | `cwe` | `str` | CWE identifier |
 | `severity` | `str` | `HIGH` or `MEDIUM` after guard detection |
 | `description` | `str` | Human-readable finding description |
@@ -516,9 +516,9 @@ Custom field names can be added via `checker.add_scope_field("workspaceId")`.
 |---|---|---|
 | `rel_path` | `str` | File path relative to repo root |
 | `line` | `int` | Line number |
-| `operation` | `str` | Full ORM call (e.g., `prisma.user.findUnique`) |
-| `model` | `str` | ORM model name (e.g., `user`, `trace`) |
-| `op_type` | `str` | Operation type (`findUnique`, `findMany`, `update`, `delete`, `upsert`) |
+| `operation` | `str` | Full ORM call such as `prisma.user.findUnique` |
+| `model` | `str` | ORM model name such as `user` and `trace` |
+| `op_type` | `str` | Operation type `findUnique`, `findMany`, `update`, `delete`, and `upsert` |
 | `where_text` | `str` | Extracted where-clause text from source |
 | `severity` | `str` | `CONFIRMED`, `PLAUSIBLE`, or `INFO` |
 | `note` | `str` | Classifier note explaining the finding |
@@ -586,7 +586,7 @@ template block score higher than two signals in different functions in the same 
 | Field | Type | Description |
 |---|---|---|
 | `rel_path` | `str` | File path relative to repo root |
-| `tags` | `dict[str, list[str]]` | Signal-pair label → matched source lines (e.g., `{"unsafe_render+type_dispatch": [...]}`) |
+| `tags` | `dict[str, list[str]]` | Signal-pair label → matched source lines such as `{"unsafe_render+type_dispatch": [...]}` |
 | `high_confidence` | `bool` | `True` when a strong co-location heuristic fired |
 | `score` | `int` property | Number of signal pairs present (`len(tags)`) |
 | `risk_label` | `str` property | `HIGH` (score ≥ 3 or `high_confidence`), `MEDIUM` (score 2), `LOW` (score 1) |

@@ -66,7 +66,7 @@ findings = ApacheModuleAnalyzer.from_context(ctx).analyze()
 
 Gate: **PASSED**. No subprocess, eval, shell=True, network I/O. All struct unpacks bounds-checked. lief.parse() wrapped in try/except. `_read_va()` guards on VA range. All loop bounds use `range(0, len(data) - N)` to prevent OOB reads.
 
-## Validation (mod_extension.so, FortiAnalyzer v7.6.3)
+## Validation mod_extension.so and FortiAnalyzer v7.6.3
 
 ```
 [CRITICAL] AUTH_BYPASS_SURFACE — Cookie → decrypt_and_auth → session_get_adminuser_skip (0x123b)
@@ -85,7 +85,7 @@ FAZ-CVE22572 MFA bypass via session skip flag confirmed via CRITICAL composite f
 
 ## How it works
 
-Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
+Parses the runtime-specific binary format APK, DEX, `.mpy`, BEAM, and Go ELF to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
 
 ---
 
@@ -117,13 +117,13 @@ for f in findings:
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
+Standard library calls that resemble dangerous patterns such as `exec` used for shell completions and `eval` used for template rendering with static input are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code Garble-compiled Go and ProGuard-stripped Android produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm the target binary format (APK, `.mpy`, BEAM, Go ELF) before loading. `BinaryContext` is not required for all runtime analyzers.
+**Before this module:** Confirm the target binary format APK, `.mpy`, BEAM, and Go ELF before loading. `BinaryContext` is not required for all runtime analyzers.
 
 **After this module:** Feed dangerous call findings to `TaintTracker` or `FindingRegistry` for confirmed findings.
 
@@ -138,11 +138,11 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 | `binary` | Path of the analyzed Apache module `.so` |
 | `finding_class` | `HANDLER_REGISTRATION` / `AUTH_TABLE_ACCESS` / `SESSION_SKIP_FLAG` / `AUTH_BYPASS_SURFACE` / `APR_TABLE_WRITE` |
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` / `INFO` |
-| `cwe` | CWE identifier (e.g., `CWE-284`, `CWE-200`) |
+| `cwe` | CWE identifier such as `CWE-284` and `CWE-200` |
 | `va` | VA of the instruction or call site |
 | `title` | Short description of the vulnerability |
 | `detail` | Detailed explanation of the attack vector |
-| `symbol` | PLT symbol involved (e.g., `apr_table_get`): present on table-access findings |
+| `symbol` | PLT symbol involved such as `apr_table_get`: present on table-access findings |
 | `header` | Header key string for table-access findings |
 
 ---

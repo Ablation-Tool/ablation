@@ -10,7 +10,7 @@ Multi-level call chain resolver for i386 ELF binaries. Extends `CallerArgResolve
 
 2. **Manual multi-level iteration was impractical**: Upgrading a `CANDIDATE` finding to `CONFIRMED` network-injectable requires traversing multiple levels of the call graph. Calling `CallerArgResolver` manually at each level, handling `ARG_PROPAGATED` recursion, detecting `NO_CALLERS`, and stopping at static ceilings is repetitive work that belongs in a module.
 
-3. **Network source detection**: `CallerArgResolver` classifies call site arguments but does not check whether any callee in the chain is a network input function (`recv`, `recvfrom`, `read`, `accept`, etc.). This module does, enabling `CANDIDATE → CONFIRMED` upgrades.
+3. **Network source detection**: `CallerArgResolver` classifies call site arguments but does not check whether any callee in the chain is a network input function `recv`, `recvfrom`, `read`, and `accept`, and so on. This module does, enabling `CANDIDATE → CONFIRMED` upgrades.
 
 ---
 

@@ -165,11 +165,11 @@ reg.find_similar(query_vec, top_k=3, min_sim=0.75)
 
 | Field | Content |
 |:---|:---|
-| `vendor` | Vendor string (e.g., `fortinet`, `cisco`, `generic`) |
-| `product` | Binary or product name (e.g., `httpsd`, `lina`) |
+| `vendor` | Vendor string such as `fortinet`, `cisco`, and `generic` |
+| `product` | Binary or product name such as `httpsd` and `lina` |
 | `version` | Firmware version string |
 | `func_addr` | VA of the confirmed vulnerable function |
-| `cwe_class` | CWE code (e.g., `CWE-78`, `CWE-122`) |
+| `cwe_class` | CWE code such as `CWE-78` and `CWE-122` |
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
 | `title` | One-line description: what the function does and what the vulnerability is |
 | `description` | Extended description used for embedding: sink type, call chain, vuln detail |

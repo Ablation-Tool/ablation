@@ -11,7 +11,7 @@ Upgrade `SNPRINTF_RODATA` verdicts from `SinkArgClassifier` to `ARG_PROPAGATED` 
    snprintf(cmd, sizeof(cmd), "%s %s", argv[1], argv[2]);
    system(cmd);
    ```
-   produces `SNPRINTF_RODATA`. The format is indeed a `.rodata` literal. But `cmd` contains `argv[1]` and `argv[2]`, making this a confirmed command injection path. Without this module, the finding is classified at MEDIUM and deprioritized.
+ produces `SNPRINTF_RODATA`. The format is indeed a `.rodata` literal. But `cmd` contains `argv[1]` and `argv[2]`, making this a confirmed command injection path. Without this module, the finding is classified at MEDIUM and deprioritized.
 
 2. **The gap is real.** Gap ID `SAC-FORMAT-001`. `SNPRINTF_RODATA` verdicts in firmware binaries frequently use format strings like `"/bin/tool %s"` or `"cmd %s %s"` with user-supplied format arguments. The format is fixed; the injection path is through the `%s` slots.
 
@@ -124,7 +124,7 @@ for r in to_trace:
 
 **One-level snprintf search.** The module scans backward up to 1024 bytes from the exec sink call for a preceding CALL to the `snprintf` PLT entry. If the `snprintf` call is more than ~200 instructions before the sink, it will not be found.
 
-**Three format arg positions.** Only `rcx`, `r8`, `r9` positions 3–5 are classified. Format strings with more than three `%s` substitutions using stack-passed arguments are not fully traced.
+**Three format arg positions.** Only `rcx`, `r8`, `r9` positions 3–5 are classified. Format strings with more than three `%s` substitutions using stack-passed arguments are not traced.
 
 ---
 

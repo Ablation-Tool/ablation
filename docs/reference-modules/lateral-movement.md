@@ -23,7 +23,7 @@ Gate: **PASSED**. No HIGH or CRITICAL findings. Four CWE-770 reads fixed this se
 
 ## How it works
 
-`CloudMetadataProber().probe_all()` returns `self.results`: a dict with keys `aws_imdsv1`, `aws_imdsv2`, `aws_iam_creds`, `gcp_metadata`, `azure_imds`, `oci_imds`. `CredentialHarvester()` scans local files (`~/.kube/config`, `~/.aws/credentials`, environment variables) and appends `{source, data, severity}` finding dicts. `LateralMovementEnumerator()` probes SMB null sessions and WMI unauthenticated access.
+`CloudMetadataProber().probe_all()` returns `self.results`: a dict with keys `aws_imdsv1`, `aws_imdsv2`, `aws_iam_creds`, `gcp_metadata`, `azure_imds`, `oci_imds`. `CredentialHarvester()` scans local files `~/.kube/config`, `~/.aws/credentials`, and environment variables and appends `{source, data, severity}` finding dicts. `LateralMovementEnumerator()` probes SMB null sessions and WMI unauthenticated access.
 
 ---
 

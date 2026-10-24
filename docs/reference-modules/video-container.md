@@ -53,7 +53,7 @@ Finding categories:
 | `POLYGLOT` | Data outside declared container boundaries prepended or appended |
 | `EMBEDDED_BINARY` | Known binary magic ELF, PE, ZIP, Mach-O, etc. inside an atom/element/chunk |
 | `ANOMALOUS_STRUCTURE` | Malformed sizes, atoms extending past file boundary |
-| `DRM` | Encrypted track or protection metadata (pssh, encv, enca, ContentEncodings) |
+| `DRM` | Encrypted track or protection metadata pssh, encv, enca, and ContentEncodings |
 | `METADATA_ANOMALY` | Oversized metadata container udta/free/skip/uuid/Void/JUNK |
 | `UNKNOWN_TYPE` | Non-printable or unrecognized atom type / EBML element ID |
 | `ENTROPY_ANOMALY` | High-entropy region in non-compressed atom possible encrypted payload |
@@ -138,7 +138,7 @@ Extraction either succeeds or raises an exception, there are no false positives 
 | `path` | Filesystem path to the extracted file or partition |
 | `partition_name` | Partition label or index from the container header |
 | `size` | Size of the extracted payload in bytes |
-| `format` | Detected format of the extracted payload (`ext4`, `squashfs`, `ELF`, etc.) |
+| `format` | Detected format of the extracted payload `ext4`, `squashfs`, and `ELF`, and so on |
 
 ---
 

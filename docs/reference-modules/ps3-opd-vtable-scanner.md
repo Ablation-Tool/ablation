@@ -139,7 +139,7 @@ non-null, unnamed slots. Returns count of new names added.
 
 ## How it works
 
-`PS3OPDVtableScanner.scan()` finds C++ vtables in PS3 Cell PPU PPC64 BE binaries. `CppVtableReconstructorAnalyzer` cannot handle PPC64 vtables because vtable slot entries are OPD pointers (pointing to a function descriptor in `.opd`, not directly to the function's code). This scanner first resolves the OPD section to build a `{opd_va: code_va}` map, then scans `.rodata` for arrays of OPD pointers that follow the `type_info` pointer pattern. Returns `List[PS3Vtable]` with slot VAs resolved to code addresses.
+`PS3OPDVtableScanner.scan()` finds C++ vtables in PS3 Cell PPU PPC64 BE binaries. `CppVtableReconstructorAnalyzer` cannot handle PPC64 vtables because vtable slot entries are OPD pointers pointing to a function descriptor in `.opd` and not directly to the function's code. This scanner first resolves the OPD section to build a `{opd_va: code_va}` map, then scans `.rodata` for arrays of OPD pointers that follow the `type_info` pointer pattern. Returns `List[PS3Vtable]` with slot VAs resolved to code addresses.
 
 ---
 
