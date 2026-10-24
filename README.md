@@ -165,7 +165,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 </details>
 
 <details>
-<summary>Live Host, Forensics, Network & Cloud</summary>
+<summary>Live Ecosystems</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
