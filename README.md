@@ -11,7 +11,7 @@ Ablation is a reverse engineering framework that runs autonomously when paired w
 ## Capabilities
 
 <details>
-<summary>32 Decompilers</summary>
+<summary>35 Decompilers</summary>
 
 **Native CPUs**
 
@@ -44,6 +44,9 @@ Ablation is a reverse engineering framework that runs autonomously when paired w
 | [**DEX**](docs/reference-modules/dex.md) | Dalvik · ART |
 | [**ARK**](docs/reference-modules/harmonyos.md) | ArkTS |
 | [**MicroPython**](docs/reference-modules/micropython.md) | .mpy v6 |
+| [**BEAM**](docs/reference-modules/beam.md) | Erlang BEAM bytecode |
+| [**Java**](docs/reference-modules/java-class-jar-parsing.md) | .class · JAR |
+| [**Python**](docs/reference-modules/python-pyc-scanning.md) | .pyc (3.8–3.12) |
 
 </details>
 
