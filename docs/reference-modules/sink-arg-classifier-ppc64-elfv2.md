@@ -8,7 +8,7 @@ Classify exec-class sink argument provenance on PPC64 LE ELFv2 ELFs: the little-
 
 1. **`sac_for_context()` dispatched ppc64le to the x86_64 classifier.** Before this module, any `BinaryContext` with `EI_DATA=1` little-endian and `e_machine=0x15` EM_PPC64 was routed to the x86_64 `SinkArgClassifier`. That classifier disassembles ppc64le code as x86_64, producing garbage operands and returning 0 results on every binary.
 
-2. **The gap affected a large target set.** HMC management binaries (`hmc.mgmt`, `hmc.common`, `hmc.svrmgmt`) contain 35+ ppc64le shared objects. All returned SAC=0 before this module existed. Affected binaries include every component that manages hardware management controller firmware upgrades.
+2. **The gap affected a large target set.** HMC management binaries `hmc.mgmt`, `hmc.common`, and `hmc.svrmgmt` contain 35+ ppc64le shared objects. All returned SAC=0 before this module existed. Affected binaries include every component that manages hardware management controller firmware upgrades.
 
 3. **ELFv2 differs from ELFv1 in TOC discovery.** ELFv1 big-endian POWER Linux, AIX reads the TOC base from the `.opd` function descriptor. ELFv2 (ppc64le) uses `r2 = .got.virtual_address + 0x8000` GNU ld ELFv2 ABI convention. These must not be mixed.
 

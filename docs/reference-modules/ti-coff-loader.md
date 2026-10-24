@@ -100,7 +100,7 @@ Symbol table entry 18 bytes, little-endian:
 |---|---|---|---|
 | 0 | 8 | `name` | inline or (0x00000000 + strtab offset) |
 | 8 | 4 | `value` | address or size |
-| 12 | 2 | `scnum` | section number (0=undef, -1=abs, 1+=section) |
+| 12 | 2 | `scnum` | section number 0=undef, -1=abs, and 1+=section |
 | 14 | 2 | `type` | type bits |
 | 16 | 1 | `sclass` | storage class |
 | 17 | 1 | `numaux` | number of auxiliary entries following |
@@ -154,7 +154,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, and or C28x for vulnerability analysis.
 
 ---
 

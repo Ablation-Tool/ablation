@@ -1,7 +1,7 @@
 # ECU Calibration Definition Parsers
 
 **Files:**
-- `ablation/analyzers/ecu_cal_def.py`: shared dataclasses (`CalibrationTable`, `CalibrationAxis`)
+- `ablation/analyzers/ecu_cal_def.py`: shared dataclasses `CalibrationTable` and `CalibrationAxis`
 - `ablation/analyzers/ecu_xdf_parser.py`: TunerPro XDF (XML) parser
 - `ablation/analyzers/ecu_open_damos_parser.py`: open_damos.json parser with fingerprint relocation
 
@@ -91,7 +91,7 @@ for offset, name in parser.label_map().items():
 
 ### XDF format internals
 
-An `XDFTABLE` entry contains up to three `XDFAXIS` children (id=`x`, `y`, `z`). The `z` axis
+An `XDFTABLE` entry contains up to three `XDFAXIS` children id=`x`, `y`, and `z`. The `z` axis
 always holds the data address in its `EMBEDDEDDATA mmedaddress` attribute. The `x` and `y` axes
 hold axis breakpoint addresses.
 
@@ -160,7 +160,7 @@ For each `CHARACTERISTIC` entry:
 2. Divide each value by `factor` and round to get the raw integer the ECU stores.
 3. Pack those integers as `SWORD_BE` signed 16-bit big-endian and byte-search the ROM.
 4. For each hit at position `idx`: compute `table_start = idx - header_bytes`.
-5. If the table header encodes the expected dimensions (`nx`, `ny`), accept `table_start` as the
+5. If the table header encodes the expected dimensions `nx` and `ny`, accept `table_start` as the
  relocated address.
 
 The EDC16C34 uses 4-byte headers encoding `(nx, ny)` as two `UWORD_BE` fields. A MAP with
@@ -284,7 +284,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, and or C28x for vulnerability analysis.
 
 ---
 

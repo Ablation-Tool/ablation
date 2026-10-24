@@ -4,7 +4,7 @@
 
 Two things were not possible before in Ablation:
 
-1. **No PDB fetch or parse path.** Windows system binaries ntdll, kernel32, lsass components ship with matching PDB files on Microsoft's public symbol server. The GUID identifying the correct PDB is embedded in the PE's CodeView debug directory (`RSDS` record). Before this module, getting symbol names for a Windows binary in Ablation required an external tool (WinDbg, `symchk.exe`, or `llvm-pdbutil`) and then manually feeding names in. There was no automated path from a PE file on disk to a name-populated `BinaryContext`.
+1. **No PDB fetch or parse path.** Windows system binaries ntdll, kernel32, lsass components ship with matching PDB files on Microsoft's public symbol server. The GUID identifying the correct PDB is embedded in the PE's CodeView debug directory (`RSDS` record). Before this module, getting symbol names for a Windows binary in Ablation required an external tool WinDbg, `symchk.exe`, and or `llvm-pdbutil` and then manually feeding names in. There was no automated path from a PE file on disk to a name-populated `BinaryContext`.
 
 2. **No MSF/PDB public symbols parser.** Parsing the Multi-Stream File (MSF 7.0) container, navigating the DBI stream to find the public symbols stream index, and reading `S_PUB32` CodeView records to extract `{rva: name}` pairs is a multi-step binary format exercise. Before this module, Ablation had no Python-native implementation of this. `pefile` has no PDB support. `lief` reads the CodeView entry but does not parse the PDB file itself.
 
@@ -76,7 +76,7 @@ The GUID is formatted without hyphens 32 uppercase hex chars followed by the dec
 ## Dependencies
 
 - `lief >= 0.14.0` PE parsing, debug directory
-- Python standard library only for MSF parsing (`struct`, `urllib.request`)
+- Python standard library only for MSF parsing `struct` and `urllib.request`
 - Network access required for `fetch_pdb()` can be skipped with a local PDB path
 
 ---

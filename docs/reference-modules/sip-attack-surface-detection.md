@@ -210,7 +210,7 @@ The following illustrates the output format for representative findings. Actual 
 
 ## Pipeline position
 
-**Before this module:** Run `sip-service-and-extension-discovery.md` probes first to confirm SIP responsiveness, identify the server type (Asterisk, FreePBX, CUCM), and obtain a baseline response code for unauthenticated REGISTER. Server type informs which authentication-bypass probes are most likely to succeed: Asterisk deployments are more susceptible to digest-bypass findings; CUCM deployments are more likely to show `SIP_PROXY_AUTH_ONLY`.
+**Before this module:** Run `sip-service-and-extension-discovery.md` probes first to confirm SIP responsiveness, identify the server type Asterisk, FreePBX, and CUCM, and obtain a baseline response code for unauthenticated REGISTER. Server type informs which authentication-bypass probes are most likely to succeed: Asterisk deployments are more susceptible to digest-bypass findings; CUCM deployments are more likely to show `SIP_PROXY_AUTH_ONLY`.
 
 **After this module:** For `REFER_UNAUTH` and `REINVITE_MEDIA_REDIRECT` CRITICAL findings: construct a full call-hijacking proof-of-concept using `detect_dtmf_extraction_surface()` and `probe_rtp_covert_channel()` from `voip-protocol-and-covert-channels.md` to demonstrate the media-layer impact. For `SIP_DIGEST_BYPASS` or `NONCE_REPLAY_ACCEPTED`: enumerate all extensions via `SIPEnumerator.enumerate_extensions()` to identify all registrable AoRs. For `HEADER_INJECTION_CRLF`: escalate to manual SIP proxy analysis to test Log4j-class downstream injection impact. Write confirmed findings to `~/VDT/VULNERABILITIES-<ip>.md`.
 
@@ -221,7 +221,7 @@ The following illustrates the output format for representative findings. Actual 
 | Field | Content |
 |:---|:---|
 | `f['severity']` | `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` |
-| `f['title']` | Finding code string (e.g., `REFER_UNAUTH`, `SIP_DIGEST_BYPASS`) |
+| `f['title']` | Finding code string such as `REFER_UNAUTH` and `SIP_DIGEST_BYPASS` |
 | `f['detail']` | Full finding narrative: host:port, observed response code, protocol standard violated, specific attack impact, reference citations |
 | `f['host']` | Target host IP or FQDN |
 | `f['port']` | Target port for this finding's probe |

@@ -134,7 +134,7 @@ PEF Preferred Executable Format was the executable format for Mac OS 8 and 9 CFM
 
 **TOC-based indirect calls.** All function calls go through a Table of Contents pointer in r2. Each function entry point is a two-word descriptor: word 0 is the code address, word 1 is the TOC base for that function. Calling a function requires loading both words and setting r2 before branching. This means `bl` instructions that look like direct calls in the disassembly are TOC-mediated. The analysis must account for the r2 setup.
 
-**OT string function register-clobber hazard.** The Open Transport API (`OTStrCat`, `OTStrCopy`, `OTMemcpy`) clobbers caller-saved registers at call sites beyond the standard PPC32 ABI convention. A caller that does not reload a clobbered register after an OT call can use a stale value in a subsequent operation.
+**OT string function register-clobber hazard.** The Open Transport API `OTStrCat`, `OTStrCopy`, and `OTMemcpy` clobbers caller-saved registers at call sites beyond the standard PPC32 ABI convention. A caller that does not reload a clobbered register after an OT call can use a stale value in a subsequent operation.
 
 ### PEFABIClobberScanner
 
@@ -157,7 +157,7 @@ Built on the EncodingDAG template system. Handles `ori` RA-field encoding, `addi
 
 ## How it works
 
-Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
+Parses the runtime-specific binary format APK, DEX, `.mpy`, BEAM, and Go ELF to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
 
 ---
 
@@ -222,13 +222,13 @@ for f in findings:
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
+Standard library calls that resemble dangerous patterns such as `exec` used for shell completions and `eval` used for template rendering with static input are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code Garble-compiled Go and ProGuard-stripped Android produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm the target binary format (APK, `.mpy`, BEAM, Go ELF) before loading. `BinaryContext` is not required for all runtime analyzers.
+**Before this module:** Confirm the target binary format APK, `.mpy`, BEAM, and Go ELF before loading. `BinaryContext` is not required for all runtime analyzers.
 
 **After this module:** Feed dangerous call findings to `TaintTracker` or `FindingRegistry` for confirmed findings.
 
@@ -241,7 +241,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 | Attribute | Content |
 |:---|:---|
 | `va` | VA of the matched function in the binary |
-| `engine` | Engine key (e.g., `'ue4'`, `'unity'`, `'godot'`) |
+| `engine` | Engine key such as `'ue4'`, `'unity'`, and `'godot'` |
 | `name` | Canonical engine function name |
 | `confidence` | Float 0.0–1.0: match confidence |
 | `match_kind` | `'string_marker'` / `'string_pattern'` / `'semantic'` / `'sax'` |

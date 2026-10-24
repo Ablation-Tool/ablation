@@ -87,7 +87,7 @@ No subprocess. No shell=True. No lief.parse(). No bare `except:`. `_extract_name
 
 ## How it works
 
-Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
+Parses the runtime-specific binary format APK, DEX, `.mpy`, BEAM, and Go ELF to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
 
 ---
 
@@ -118,13 +118,13 @@ print(scanner.report(results))
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
+Standard library calls that resemble dangerous patterns such as `exec` used for shell completions and `eval` used for template rendering with static input are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code Garble-compiled Go and ProGuard-stripped Android produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm the target binary format (APK, `.mpy`, BEAM, Go ELF) before loading. `BinaryContext` is not required for all runtime analyzers.
+**Before this module:** Confirm the target binary format APK, `.mpy`, BEAM, and Go ELF before loading. `BinaryContext` is not required for all runtime analyzers.
 
 **After this module:** Feed dangerous call findings to `TaintTracker` or `FindingRegistry` for confirmed findings.
 
@@ -138,7 +138,7 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 |:---|:---|
 | `path` | Path to the `.pyc` file |
 | `filename` | `co_filename` string from the top-level code object (the original `.py` source path) |
-| `python_version` | Version string (e.g., `'3.4'`, `'3.11'`) |
+| `python_version` | Version string such as `'3.4'` and `'3.11'` |
 | `co_names` | `FrozenSet[str]`: all name references in the bytecode |
 | `danger_hits` | `FrozenSet[str]`: intersection of `co_names` with `dangerous_names` |
 | `os_module_present` | `True` if `'os'` appears in `co_names` |

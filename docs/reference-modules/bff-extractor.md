@@ -8,7 +8,7 @@ Four things were not possible before in Ablation:
 
 2. **Make XCOFF binaries reachable.** XCOFF binaries inside BFF archives are invisible to LIEF, which returns `None` for XCOFF inputs. Without a BFF extractor, the XCOFF binaries could not be extracted, so `xcoff_parser` and `BinaryContext._build_xcoff` had nothing to parse.
 
-3. **Handle AIX kernel extensions, shared objects, and loadable modules.** AIX 4.3.3 and 5.x ship all kernel networking drivers (`netintf`, `afinet`, `striped`) and loadable modules inside BFF containers. These are primary RE targets for the AIX network server analysis.
+3. **Handle AIX kernel extensions, shared objects, and loadable modules.** AIX 4.3.3 and 5.x ship all kernel networking drivers `netintf`, `afinet`, and `striped` and loadable modules inside BFF containers. These are primary RE targets for the AIX network server analysis.
 
 4. **Resolve the mixed-endian BFF layout.** BFF archives from an AIX/PowerPC big-endian platform store all integer fields in little-endian byte order. COFF/XCOFF tools that assume big-endian for all fields misread sizes and fail to locate data. This module handles the LE integer layout explicitly.
 
@@ -112,7 +112,7 @@ Extraction either succeeds or raises an exception, there are no false positives 
 | `path` | Filesystem path to the extracted file or partition |
 | `partition_name` | Partition label or index from the container header |
 | `size` | Size of the extracted payload in bytes |
-| `format` | Detected format of the extracted payload (`ext4`, `squashfs`, `ELF`, etc.) |
+| `format` | Detected format of the extracted payload `ext4`, `squashfs`, and `ELF`, and so on |
 
 ---
 

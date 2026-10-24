@@ -182,7 +182,7 @@ as `target = None`.
  Manual Rev.2.00. A real corpus run is required before treating function_starts() output
  as ground truth for these targets.
 - `function_starts()` does not walk call graph from reset vector.
-  `FlatBinaryFuncStartScanner` adds that capability once built.
+ `FlatBinaryFuncStartScanner` adds that capability once built.
 
 ---
 
@@ -215,7 +215,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, and or C28x for vulnerability analysis.
 
 ---
 
@@ -227,7 +227,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 |:---|:---|
 | `offset` | Byte offset or VA if base is set of this instruction |
 | `is_32bit` | `True` for 32-bit SH-2A extended instructions, `False` for 16-bit |
-| `mnemonic` | Instruction mnemonic string (e.g., `'MOV.L'`, `'JSR/N'`, `'BRA'`) |
+| `mnemonic` | Instruction mnemonic string such as `'MOV.L'`, `'JSR/N'`, and `'BRA'` |
 | `insn_type` | `'BRANCH'` / `'CALL'` / `'RETURN'` / `'LOAD'` / `'STORE'` / `'MISC'` |
 | `raw` | Raw instruction bytes 2 or 4 bytes |
 | `target` | Branch/call target VA (None if not a control-flow instruction) |

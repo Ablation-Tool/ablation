@@ -5,7 +5,7 @@
 ## Why this exists
 
 FortiMail VM firmware ships as an OVF/VMDK package rather than a `.out` file.
-Its PKI keys (`fgt_512.key`, `fgt_2048.key`) live in `datafs.tar.gz` on the P2
+Its PKI keys `fgt_512.key` and `fgt_2048.key` live in `datafs.tar.gz` on the P2
 ext4 partition of the virtual disk, a layout that `FortiOSHardwareExtractor`
 and `FirmwareContainerKeyExtractor` do not handle.
 
@@ -166,7 +166,7 @@ Extraction either succeeds or raises an exception, there are no false positives 
 | `path` | Filesystem path to the extracted file or partition |
 | `partition_name` | Partition label or index from the container header |
 | `size` | Size of the extracted payload in bytes |
-| `format` | Detected format of the extracted payload (`ext4`, `squashfs`, `ELF`, etc.) |
+| `format` | Detected format of the extracted payload `ext4`, `squashfs`, and `ELF`, and so on |
 
 ---
 

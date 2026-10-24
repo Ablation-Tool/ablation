@@ -87,7 +87,7 @@ for f in iter_files(data):
 Gate: **PASSED** 0 HIGH, 0 CRITICAL.
 
 - 1 MEDIUM FORGE §3: `zlib.decompress()` has no `max_length`: a crafted PAK could cause OOM via zlib bomb. Acceptable for trusted RE corpus use; callers consuming untrusted PAK files should pre-screen decompressed size.
-- 1 LOW FORGE §6: the docstring listed specific record type code values (`0x6891`, `0xDF3B`, `0x0F02`) as if they were authoritative. Fixed before commit: docstring now explicitly states codes are not stable and documents the content-detection approach instead.
+- 1 LOW FORGE §6: the docstring listed specific record type code values `0x6891`, `0xDF3B`, and `0x0F02` as if they were authoritative. Fixed before commit: docstring now explicitly states codes are not stable and documents the content-detection approach instead.
 - 1 LOW FORGE §2: the `< 4` chunk size guard in `iter_files` discarded legitimate small data chunks for example 3-byte or 1-byte payloads. Fixed before commit: guard changed to skip only truly empty blocks (`if not chunk`).
 
 Confirmed on two NSK middleware PTF archives 66 files / ~130 MB and 83 files / ~139 MB decompressed.
@@ -134,7 +134,7 @@ Extraction either succeeds or raises an exception, there are no false positives 
 | `path` | Filesystem path to the extracted file or partition |
 | `partition_name` | Partition label or index from the container header |
 | `size` | Size of the extracted payload in bytes |
-| `format` | Detected format of the extracted payload (`ext4`, `squashfs`, `ELF`, etc.) |
+| `format` | Detected format of the extracted payload `ext4`, `squashfs`, and `ELF`, and so on |
 
 ---
 

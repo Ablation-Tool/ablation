@@ -47,7 +47,7 @@ for hit in scanner.scan():
 | `report(hits)` | Returns formatted string report |
 | `DeprecatedHit.va` | VA of the dangerous `call` instruction |
 | `DeprecatedHit.func_name` | Name of the containing function |
-| `DeprecatedHit.plt_name` | Name of the dangerous function (`gets`, `mktemp`, etc.) |
+| `DeprecatedHit.plt_name` | Name of the dangerous function `gets` and `mktemp`, and so on |
 | `DeprecatedHit.buf_size` | Destination buffer size in bytes; -1 if unknown |
 | `DeprecatedHit.overflow_offset` | Bytes from buffer start to saved RIP; -1 if unknown |
 | `DeprecatedHit.callers` | Names of functions that call the containing function |
@@ -56,7 +56,7 @@ for hit in scanner.scan():
 
 - **x86-64 only.** Buffer size calculation uses `[rbp-N]` frame convention. No ARM/MIPS support.
 - **One-level caller walk.** `callers` shows direct callers only: not the full reachability chain.
-- **Buffer size is -1 for wrapper functions.** If `gets(rdi)` where rdi is a parameter (e.g., `readStdin(char* buf)`), the buffer is allocated in the caller. The scanner reports the buffer in the caller only if the caller directly calls `gets`.
+- **Buffer size is -1 for wrapper functions.** If `gets(rdi)` where rdi is a parameter such as `readStdin(char* buf)`, the buffer is allocated in the caller. The scanner reports the buffer in the caller only if the caller directly calls `gets`.
 
 ## FORGE audit
 
@@ -66,13 +66,13 @@ Gate: **PASSED** 0 CRITICAL, 0 HIGH.
 - 1 LOW (§3): `FileNotFoundError` guard added: raises `ValueError` if `ctx.path` is empty.
 - 1 LOW (§5): `_find_func_start` changed from O(n) linear scan to `bisect.bisect_right` O(log n).
 
-Confirmed on: `commandcontrol` (setuid, 1 confirmed `gets()` hit, 3 callers correctly attributed).
+Confirmed on: `commandcontrol` setuid, 1 confirmed `gets()` hit, and 3 callers correctly attributed.
 
 ---
 
 ## How it works
 
-`DeprecatedFuncScanner.from_context(ctx).scan()` iterates `ctx.func_starts` and disassembles each function with Capstone. For each call to a deprecated/dangerous PLT function (`gets`, `mktemp`, `tmpnam`, `sprintf` without bounds), it computes: the buffer size from frame prologue analysis (`sub rsp, N`), the overflow offset to saved RIP, and the CWE class. Returns a list of `DeprecatedHit` objects sorted by VA.
+`DeprecatedFuncScanner.from_context(ctx).scan()` iterates `ctx.func_starts` and disassembles each function with Capstone. For each call to a deprecated/dangerous PLT function `gets`, `mktemp`, `tmpnam`, and `sprintf` without bounds, it computes: the buffer size from frame prologue analysis (`sub rsp, N`), the overflow offset to saved RIP, and the CWE class. Returns a list of `DeprecatedHit` objects sorted by VA.
 
 ---
 
@@ -94,7 +94,7 @@ Confirmed on: `commandcontrol` (setuid, 1 confirmed `gets()` hit, 3 callers corr
 
 ## False positives
 
-Frame size analysis detecting buffer bounds fails for functions with complex prologues alloca, variable-length stack frames. For hits where `buf_size == -1`, the buffer size was not determined; the dangerous call is still real but the overflow offset is unknown. Do not dismiss: just note that bounds estimation was not possible.
+Frame size analysis detecting buffer bounds fails for functions with complex prologues alloca, variable-length stack frames. For hits where `buf_size == -1`, the buffer size was not determined; the dangerous call is still real but the overflow offset is unknown. Do not dismiss: just bounds estimation was not possible.
 
 ---
 
@@ -115,8 +115,8 @@ Frame size analysis detecting buffer bounds fails for functions with complex pro
 | `va` | VA of the call instruction |
 | `func_va` | Start VA of the containing function |
 | `func_name` | Name of the containing function |
-| `plt_name` | Name of the dangerous deprecated function (e.g., `gets`, `mktemp`) |
-| `cwe` | CWE identifier (e.g., `CWE-242/CWE-121`, `CWE-242/CWE-377`) |
+| `plt_name` | Name of the dangerous deprecated function such as `gets` and `mktemp` |
+| `cwe` | CWE identifier such as `CWE-242/CWE-121` and `CWE-242/CWE-377` |
 | `reason` | One-line description of why this function is dangerous |
 | `buf_size` | Bytes from buffer start to frame base (`-1` if unknown) |
 | `frame_size` | Total stack frame allocation in bytes (`-1` if unknown) |

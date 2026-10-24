@@ -94,7 +94,7 @@ print(syms.get('strcpy', 'not linked'))
 
 **Before this module:** Read the raw XCOFF binary bytes. This function is a standalone call, no BinaryContext needed.
 
-**After this module:** Use the returned `{name: va}` dict to check whether a target binary imports dangerous symbols (`strcpy`, `system`, `execve`) before committing to a full `xcoff_parser.parse()` call.
+**After this module:** Use the returned `{name: va}` dict to check whether a target binary imports dangerous symbols `strcpy`, `system`, and `execve` before committing to a full `xcoff_parser.parse()` call.
 
 ---
 
@@ -108,7 +108,7 @@ print(syms.get('strcpy', 'not linked'))
 |:---|:---|:---|
 | `loader_symbols` result key | `str` | Exported or defined symbol name |
 | `loader_symbols` result value | `int` | VA of the symbol in the text section |
-| `loader_imports` result key | `str` | Library archive member name (e.g., `/lib/libc.a(shr.o)`) |
+| `loader_imports` result key | `str` | Library archive member name such as `/lib/libc.a(shr.o)` |
 | `loader_imports` result value | `List[str]` | Names of symbols imported from that library member |
 
 ---

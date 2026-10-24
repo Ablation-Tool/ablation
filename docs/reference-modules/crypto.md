@@ -65,7 +65,7 @@ Automated XOR decryption for firmware. Firmware XOR obfuscation almost always us
 
 **Mode 1: Known-plaintext attack (KPA)**
 
-When the plaintext at a fixed offset is known (ELF magic `\x7fELF` at offset 0, gzip magic `\x1f\x8b` at offset 0, etc.), XOR the ciphertext bytes against the known plaintext to derive the key bytes:
+When the plaintext at a fixed offset is known ELF magic `\x7fELF` at offset 0 and gzip magic `\x1f\x8b` at offset 0, and so on, XOR the ciphertext bytes against the known plaintext to derive the key bytes:
 
 ```
   ciphertext[i] = plaintext[i] XOR key[i % key_length]
@@ -272,7 +272,7 @@ result = HashAlgoDiscriminator.identify([0xd76aa478, 0xe8c7b756, 0x242070db])
 # HashAlgoMatch(algo='MD5', confidence=37, matched=[...])
 ```
 
-**Important:** MD5 and SHA-1 share the same four initialization constants (A=0x67452301, B=0xEFCDAB89, C=0x98BADCFE, D=0x10325476). Scan the compress function which uses the K-table, not the init function.
+**Important:** MD5 and SHA-1 share the same four initialization constants A=0x67452301, B=0xEFCDAB89, C=0x98BADCFE, and D=0x10325476. Scan the compress function which uses the K-table, not the init function.
 
 ---
 
@@ -422,7 +422,7 @@ This page covers two tools with different output types.
 
 | Attribute | Content |
 |:---|:---|
-| `algo` | Algorithm name string (e.g., `'SHA-256'`, `'MD5'`, `'CRC32'`) |
+| `algo` | Algorithm name string such as `'SHA-256'`, `'MD5'`, and `'CRC32'` |
 | `confidence` | Integer 0–100: identification confidence |
 | `matched` | `List[ConstMatch]`: each with `va`, `value`, `name`, `algo` |
 

@@ -127,7 +127,7 @@ split them differently depending on whether `.rodata` is in the same PT_LOAD as 
 `_augment_xrefs_ppc64_twohop` accepts optional `target_data`/`target_va` parameters;
 Pass 5 omits them defaults to ds_data/ds_va; Pass 6 passes `target_data=code_data`.
 
-For the Crysis 2 PS3 binary (CryEngine 3, Cell PPU, ELFCLASS64), Pass 5 alone produces
+For the Crysis 2 PS3 binary CryEngine 3, Cell PPU, and ELFCLASS64, Pass 5 alone produces
 ~12,600 function → string xrefs from 51 array-base TOC slots.
 
 **ELFCLASS64 note:** The Crysis 2 PS3 ELF is ELFCLASS64 despite running in 32-bit
@@ -151,7 +151,7 @@ starts because it relies on symbol tables. Without `func_starts`, SemanticSearch
 TaintTracker have no function boundaries and cannot run.
 
 `BinaryContext` automatically calls `StaticELF32FuncStartScanner` for `x86_32` binaries when
-`func_starts` would otherwise be empty.  The scanner scans every PT_LOAD+PF_X segment for the
+`func_starts` would otherwise be empty. The scanner scans every PT_LOAD+PF_X segment for the
 3-byte i386 function prologue pattern `55 89 e5` (`push ebp; mov ebp, esp`), the canonical CDECL frame setup emitted by GCC for every non-leaf function. Secondary patterns (`55 57 56`,
 `55 53`) are tried only when the primary count is under ten, indicating a non-CDECL binary.
 
@@ -173,7 +173,7 @@ scanner.inject(ctx)
 ```
 
 False-positive rate on GCC i386 code is low. The ModRM byte 0xe5 in `89 e5` encodes
-(mod=11, reg=ESP, rm=EBP), a combination that occurs inside other instruction operands rarely enough to be negligible in practice.
+mod=11, reg=ESP, and rm=EBP, a combination that occurs inside other instruction operands rarely enough to be negligible in practice.
 
 ---
 
@@ -188,12 +188,12 @@ Two things were not possible before in Ablation:
 1. **String context for stripped i386 ELF32**: `BinaryContext._str_xref_idx` used
  RIP-relative displacement arithmetic x86-64 only. On a 675KB statically linked i386
  binary this yielded 21 coincidental hits where 548 were correct. `strings_in_func()` and
-   `funcs_referencing_string()` were effectively broken for every 32-bit static target,
+ `funcs_referencing_string()` were effectively broken for every 32-bit static target,
  making string-guided taint entry-point selection impossible on i386 firmware.
 
 2. **Function-level attribution of i386 string refs**: even when string VAs were known,
  there was no way to ask "which function references this string?" on i386 because
-   `_func_str_idx` was empty. `inject()` populates both indexes in the same format as the
+ `_func_str_idx` was empty. `inject()` populates both indexes in the same format as the
  x86-64 scanner so all downstream `ctx` calls work identically regardless of bitness.
 
 ### Why the default xref index finds almost nothing in i386 code
@@ -201,7 +201,7 @@ Two things were not possible before in Ablation:
 The default `BinaryContext` xref scanner is built for x86-64, where the compiler encodes
 data references as RIP-relative 32-bit signed displacements: `target_va = insn_end_va + disp32`.
 On i386, the same role is played by 4-byte LE absolute immediates embedded in `push imm32`,
-`mov reg, imm32`, and `lea reg, [addr]` instructions.  The formula is simply `target_va = u32`.
+`mov reg, imm32`, and `lea reg, [addr]` instructions. The formula is simply `target_va = u32`.
 
 Without this scanner, a 675KB statically linked i386 binary yields 21 xref pairs from the
 x86-64 scanner coincidental false hits instead of the correct 548.
@@ -214,7 +214,7 @@ x86-64 scanner coincidental false hits instead of the correct 548.
 3. Attribute each hit to the enclosing function via `func_containing()`.
 4. Populate `ctx._str_xref_idx` and `ctx._func_str_idx` in the same format as the x86-64 index.
 
-`BinaryContext` calls this scanner automatically for `x86_32` binaries.  StaticELF32FuncStartScanner
+`BinaryContext` calls this scanner automatically for `x86_32` binaries. StaticELF32FuncStartScanner
 must already have run (so `func_starts` is populated) before this scanner fires.
 
 ```python
@@ -432,7 +432,7 @@ libservice.so:recv_wrapper [tainted: arg0]
 | `hops` | Ordered list of `TaintHop` objects, one per function in the chain |
 | `sink_binary` | Path to the binary where the dangerous sink was reached |
 | `sink_va` | VA of the sink call |
-| `sink_name` | Name of the sink function (`system`, `execve`, `memcpy`, etc.) |
+| `sink_name` | Name of the sink function `system`, `execve`, and `memcpy`, and so on |
 | `tainted_args` | Which arguments arrived tainted at the sink |
 | `source_name` | Entry-point function name where the taint was introduced |
 | `depth` | Number of hops in the chain |
@@ -455,7 +455,7 @@ Three problems with stripped firmware RE before these analyzers existed:
 
 `BinaryContext.load_or_build()` is the entry point for every analysis. On first call, it parses the ELF, resolves the PLT, extracts strings, builds `func_starts`, traces call edges, and persists everything to a SHA256-keyed JSON cache (`~/.ablation/cache/`). On subsequent calls with the same binary, it loads the cache in ~110ms.
 
-Higher-level analyzers (`TaintTracker`, `PathSolver`, `XRefGraph`, `CFGBuilder`) consume `BinaryContext` rather than re-parsing the binary. This means every analyzer shares the same function list, string table, and call graph, keeping analysis results consistent across tools.
+Higher-level analyzers `TaintTracker`, `PathSolver`, `XRefGraph`, and `CFGBuilder` consume `BinaryContext` rather than re-parsing the binary. This means every analyzer shares the same function list, string table, and call graph, keeping analysis results consistent across tools.
 
 ---
 
@@ -509,7 +509,7 @@ ctx.callees_of(0x1d700)      → [(0x3000, "memcpy"), (0x4000, "recv")]
 
 ## False positives
 
-`BinaryContext`, `XRefGraph`, `CFGBuilder`, and `FuncProfiler` do not emit security findings. `TaintTracker` FPs fall into two categories: (1) taint propagated through a callee that zeroes the register (`xor rX, rX` is modeled as clear, but a callee that unconditionally zeroes a register is not), and (2) source functions called on trusted data where the function name matches a source pattern (e.g., a `read()` call reading from a local file, not a socket). Use `SinkArgClassifier` to eliminate RODATA_CONST call sites before running `TaintTracker`; this removes the most common FP class before any taint analysis begins.
+`BinaryContext`, `XRefGraph`, `CFGBuilder`, and `FuncProfiler` do not emit security findings. `TaintTracker` FPs fall into two categories: (1) taint propagated through a callee that zeroes the register `xor rX, rX` is modeled as clear, and but a callee that unconditionally zeroes a register is not, and (2) source functions called on trusted data where the function name matches a source pattern such as a `read()` call reading from a local file and not a socket. Use `SinkArgClassifier` to eliminate RODATA_CONST call sites before running `TaintTracker`; this removes the most common FP class before any taint analysis begins.
 
 ---
 

@@ -91,7 +91,7 @@ The tracker is **path-insensitive**: it does not branch-fork the taint state at 
 - A value that is tainted on one branch of a conditional is considered tainted after the merge point.
 - This prevents false negatives at the cost of some false positives on paths that are not actually reachable together.
 
-`setcc` instructions (e.g., `sete al`) are treated as always untainted: they produce a known 0/1 value derived from flags, not from tainted data, so they do not propagate taint.
+`setcc` instructions such as `sete al` are treated as always untainted: they produce a known 0/1 value derived from flags, not from tainted data, so they do not propagate taint.
 
 ---
 

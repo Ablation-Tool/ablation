@@ -213,7 +213,7 @@ Each `PartitionResult`:
 
 | Attribute | Content |
 |:---|:---|
-| `kind` | Filesystem kind (e.g., `'gzip'`, `'squashfs-le'`, `'jffs2-be-node'`) |
+| `kind` | Filesystem kind such as `'gzip'`, `'squashfs-le'`, and `'jffs2-be-node'` |
 | `offset` | Byte offset in the decrypted full image |
 | `encrypted_path` | Path to the raw encrypted partition bytes |
 | `decrypted_path` | Path to the decrypted partition (None if not recovered) |

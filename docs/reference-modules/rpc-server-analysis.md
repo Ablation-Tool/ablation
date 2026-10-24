@@ -95,7 +95,7 @@ Run `RPCServerAnalyzer` on any Windows service DLL or EXE with `RpcServer*` impo
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` unauthenticated interface / `MEDIUM` exposed endpoint |
-| `title` | Finding code (e.g., `RPC_UNAUTHENTICATED_INTERFACE`, `RPC_NULL_SESSION_TRANSPORT`) |
+| `title` | Finding code such as `RPC_UNAUTHENTICATED_INTERFACE` and `RPC_NULL_SESSION_TRANSPORT` |
 | `detail` | UUID, auth level, and transport endpoint |
 | `uuid` | RPC interface UUID string |
 | `auth_level` | `RPC_C_AUTHN_LEVEL_NONE` or higher auth level constant |

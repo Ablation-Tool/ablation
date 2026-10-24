@@ -66,7 +66,7 @@ Run `HyperFlexEnumerator` after confirming a Cisco HyperFlex management IP via r
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `title` | Finding name (e.g., `UCSM XML API accessible`, `iSCSI no-CHAP target accessible`) |
+| `title` | Finding name such as `UCSM XML API accessible` and `iSCSI no-CHAP target accessible` |
 | `detail` | What was found and why it matters |
 | `host` | Target host |
 | `port` | Target port |

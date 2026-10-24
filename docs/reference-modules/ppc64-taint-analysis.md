@@ -1,6 +1,6 @@
 # PPC64 Taint Analysis
 
-Track data flow through PPC64 big-endian and little-endian ELF binaries: supporting ELFv1 AIX, older Linux PPC64 and ELFv2 (modern OpenPOWER Linux, POWER8+) ABIs with eight integer argument registers (`r3`–`r10`) and propagating taint from `recv`/`read`/`recvfrom` sources through to exec-class sinks: via `ablation/analyzers/taint_tracker_ppc64.py` `PPC64TaintTracker`.
+Track data flow through PPC64 big-endian and little-endian ELF binaries: supporting ELFv1 AIX, older Linux PPC64 and ELFv2 modern OpenPOWER Linux and POWER8+ ABIs with eight integer argument registers (`r3`–`r10`) and propagating taint from `recv`/`read`/`recvfrom` sources through to exec-class sinks: via `ablation/analyzers/taint_tracker_ppc64.py` `PPC64TaintTracker`.
 
 ---
 
@@ -93,7 +93,7 @@ Run `PPC64TaintTracker` after `BinaryContext.load_or_build()` and `Ppc64ElfV1Res
 | `sink_va` | VA of the sink call instruction |
 | `sink_name` | Name of the sink function |
 | `tainted_args` | `List[int]`: 0-indexed argument positions that carry tainted values |
-| `source_name` | Name of the taint source (e.g., `'recv'`, `'read'`) |
+| `source_name` | Name of the taint source such as `'recv'` and `'read'` |
 
 ---
 

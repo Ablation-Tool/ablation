@@ -8,7 +8,7 @@ ReAct agent loop for LLM-assisted binary analysis. Seven modules under `ablation
 
 1. **Semantic gaps that pattern matching cannot close.** SemanticSearcher and SinkArgClassifier reach a ceiling: they can identify that a function calls `memcpy` with an argument from `recv`, but cannot assess whether an intervening `if len > MAX` actually prevents overflow. The LLM analyst closes this gap by reasoning over disassembly, callee names, and prior findings in a structured loop.
 
-2. **Tool-calling loop prevents hallucination drift.** A single-shot LLM call with raw disassembly produces confident wrong answers. The ReAct loop forces the model to use tools (`get_disassembly`, `get_strings`, `get_imports`) to retrieve specific evidence before committing. `done()` is the only exit: the model cannot stop without stating a name, role, and rationale.
+2. **Tool-calling loop prevents hallucination drift.** A single-shot LLM call with raw disassembly produces confident wrong answers. The ReAct loop forces the model to use tools `get_disassembly`, `get_strings`, and `get_imports` to retrieve specific evidence before committing. `done()` is the only exit: the model cannot stop without stating a name, role, and rationale.
 
 3. **Pre-screening and RAG amortize the token cost.** `vuln_hypothesis.py` skips Claude calls entirely for functions with no dangerous callees. `rag_retriever.py` injects confirmed prior findings from `func_id_db`, so the model often needs only 1–2 tool calls (usually just `done()`).
 

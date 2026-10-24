@@ -94,7 +94,7 @@ backward_slice(callsite_va=0xC8F3A0, arg_regs=['x0', 'x1']):
 | `Arg(idx, delta=0)` | `idx: int`, `delta: int` | Caller's `idx`-th argument, optionally shifted by `delta` |
 | `Unknown(reg, pc)` | `reg: str`, `pc: int` | Provenance not resolved before `pc` |
 
-All five types are frozen dataclasses exported from `modules.callsite_tracer`. Use `isinstanceval, Arg` to check for taintable argument-derived values. `str(val)` produces a human-readable string for all five types (e.g., `'Arg(1)'`, `'Global(mmtls::gILinkKey)'`, `'Unknown(x2@0xC8F3A0)'`).
+All five types are frozen dataclasses exported from `modules.callsite_tracer`. Use `isinstanceval, Arg` to check for taintable argument-derived values. `str(val)` produces a human-readable string for all five types such as `'Arg(1)'`, `'Global(mmtls::gILinkKey)'`, and `'Unknown(x2@0xC8F3A0)'`.
 
 ---
 

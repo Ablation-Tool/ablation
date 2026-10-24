@@ -2,7 +2,7 @@
 
 ## Why this exists
 
-3 gaps that blocked analysis of any PPC64 big-endian ELFv1 binary (IBM POWER Linux, LoadLeveler):
+3 gaps that blocked analysis of any PPC64 big-endian ELFv1 binary IBM POWER Linux and LoadLeveler:
 
 1. **BinaryContext.plt is empty for PPC64 BE binaries.** `BinaryContext._extract_plt` checks for `ELFDATA2LSB` and calls the ELFv2 path; big-endian PPC64 falls through to a generic JUMP_SLOT loop that maps GOT slot VAs, not stub VAs. `SinkArgClassifier` needs stub VA → symbol_name; the generic path produces the wrong keys. Result: `plt_entries=0` on every IBM Linux POWER binary.
 
@@ -17,7 +17,7 @@
 `Ppc64ElfV1Resolver` parses a PPC64 big-endian ELFv1 binary and resolves all three gaps in a single `resolve()` call:
 
 - Parses `.opd` → `opd_to_code` dict OPD entry VA → code VA
-- Parses `.rela.plt` JMP_SLOT relocations → glink stub map (`stub_N = text_va + N*28`, sorted by GOT VA) → name
+- Parses `.rela.plt` JMP_SLOT relocations → glink stub map `stub_N = text_va + N*28` and sorted by GOT VA → name
 - Exposes `bl_target()` for correct big-endian BL decoding
 - `patch_context(ctx)` rewrites `ctx.plt` and `ctx.func_starts` in-place so all downstream tools work correctly
 
@@ -142,7 +142,7 @@ Ppc64ElfV1Info(/firmware/aix/libservice.so)
 
 **Before this module:** `BinaryContext.load_or_build()` on the PPC64 BE ELF. Check `ctx.plt`: if empty, run this resolver first.
 
-**After this module:** Merge `Ppc64ElfV1Info.stub_map` into `ctx.plt`: `ctx._plt.updateresolver.info.stub_map`. All downstream tools (SinkArgClassifier, TaintTracker) then see named imports.
+**After this module:** Merge `Ppc64ElfV1Info.stub_map` into `ctx.plt`: `ctx._plt.updateresolver.info.stub_map`. All downstream tools SinkArgClassifier and TaintTracker then see named imports.
 
 ---
 

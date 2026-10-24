@@ -119,7 +119,7 @@ sac_results = sac.classify_all()
 
 **`exec_names` and `net_names` properties re-scan.** Both properties call `scan()` independently. If you access both in sequence the relocation table is walked twice. Call `scan()` once and filter the returned list instead.
 
-**Only `R_386_PC32` (type 2) is covered.** Other i386 relocation types (`R_386_GOT32X`, `R_386_PLT32`) that could also represent import calls are not matched.
+**Only `R_386_PC32` (type 2) is covered.** Other i386 relocation types `R_386_GOT32X` and `R_386_PLT32` that could also represent import calls are not matched.
 
 ---
 

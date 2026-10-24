@@ -62,7 +62,7 @@ cdp_neighbors: [{'label': '10.0.0.2'}, {'label': '10.0.0.3'}]
 
 ## Pipeline position
 
-Run `IOSEnumerator` after confirming a Cisco IOS device via SSH banner or HTTPS certificate CN. Run standalone probes (`probe_cisco_aaa_bypass`, `probe_cisco_snmp_extended`) for targeted AAA/SNMP surface analysis.
+Run `IOSEnumerator` after confirming a Cisco IOS device via SSH banner or HTTPS certificate CN. Run standalone probes `probe_cisco_aaa_bypass` and `probe_cisco_snmp_extended` for targeted AAA/SNMP surface analysis.
 
 ---
 
@@ -73,8 +73,8 @@ Run `IOSEnumerator` after confirming a Cisco IOS device via SSH banner or HTTPS 
 | Field | Content |
 |:---|:---|
 | `severity` | `HIGH` / `MEDIUM` / `LOW` / `INFO` |
-| `title` | Short finding name (e.g., `IOS Telnet Open: Version Exposed`, `IOS SNMP Weak Community: public`) |
-| `detail` | Detail string (version string, SNMP sysDescr excerpt, etc.) |
+| `title` | Short finding name such as `IOS Telnet Open: Version Exposed` and `IOS SNMP Weak Community: public` |
+| `detail` | Detail string version string and SNMP sysDescr excerpt, and so on |
 
 ---
 

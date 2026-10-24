@@ -83,7 +83,7 @@ Each `HardwareAccess` has:
 | `func_va` | Containing function start VA |
 | `site_va` | VA of the individual MMIO read/write instruction |
 | `mmio_addr` | The MMIO address referenced |
-| `mmio_label` | Range label (e.g., `'STM32-APB/AHB'`) |
+| `mmio_label` | Range label such as `'STM32-APB/AHB'` |
 | `mnemonic` | Instruction mnemonic at `site_va` |
 | `is_write` | `True` if this is a store to MMIO |
 

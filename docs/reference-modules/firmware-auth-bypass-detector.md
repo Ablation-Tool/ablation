@@ -141,7 +141,7 @@ Version-mismatch findings appear when a known key or certificate is present in a
 | `firmware_iat` | `List[str]`: firmware-related IAT import names |
 | `signing_iat` | `List[str]`: signing-related IAT import names |
 | `firmware_strings` | `List[str]`: firmware-related strings found in the binary |
-| `arch` | Detected architecture string (e.g., `'x86_64'`, `'ARM'`) |
+| `arch` | Detected architecture string such as `'x86_64'` and `'ARM'` |
 | `has_resources` | `True` if the binary has embedded PE resources |
 
 ---

@@ -138,12 +138,12 @@ LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes same width as AArch
 
 | Instruction class | Propagation |
 |---|---|
-| ALU 3-reg (`add.d`, `mul.d`,...) | `rd = taint(rj) ∪ taint(rk)` |
-| ALU reg-imm (`addi.d`, `ori`,...) | `rd = taint(rj)` |
+| ALU 3-reg `add.d`, `mul.d`, and ... | `rd = taint(rj) ∪ taint(rk)` |
+| ALU reg-imm `addi.d`, `ori`, and ... | `rd = taint(rj)` |
 | `andi rd, rj, mask` | `rd = taint(rj)` with `bound = mask` if mask is 2^n-1 |
-| Load (`ld.d`, `ldx.d`,...) | `rd = mem_taintbase, off` |
-| Store (`st.d`, `stx.d`,...) | `membase, off = taint(rd)` |
-| Atomic (`amadd.d`,...) | `rd = old_mem_taint; mem = taint(rk) ∪ old` |
+| Load `ld.d`, `ldx.d`, and ... | `rd = mem_taintbase, off` |
+| Store `st.d`, `stx.d`, and ... | `membase, off = taint(rd)` |
+| Atomic `amadd.d` and ... | `rd = old_mem_taint; mem = taint(rk) ∪ old` |
 | `lu12i.w`, `pcaddi` | `rd = clean` address constant; not tainted |
 | `addi.d $sp,$sp,-N` | Frame allocation: rebases `$sp`-relative memory slots |
 | `addi.d $fp,$sp,N` | Records `$fp = $sp + N` in the frame-pointer map |
@@ -277,7 +277,7 @@ for f in findings:
 
 ## False positives
 
-**GOT-based indirect calls.** `analyze_cfg()` tracks taint through direct calls resolved by `analysis_loongarch64`'s PLT table. Indirect calls through the GOT common in shared libraries are not fully resolved: the callee is recorded as `Unknown`. Use `ppc64_elfv1_resolver` pattern adapted for LA64 to pre-populate the PLT before analysis.
+**GOT-based indirect calls.** `analyze_cfg()` tracks taint through direct calls resolved by `analysis_loongarch64`'s PLT table. Indirect calls through the GOT common in shared libraries are not resolved: the callee is recorded as `Unknown`. Use `ppc64_elfv1_resolver` pattern adapted for LA64 to pre-populate the PLT before analysis.
 
 ---
 
@@ -298,8 +298,8 @@ for f in findings:
 | `func_va` | `int` | VA of the function containing the sink call |
 | `func_name` | `str` | Name of the function (from `ctx`) |
 | `sink_va` | `int` | VA of the sink call instruction |
-| `sink_name` | `str` | Sink function name (e.g., `system`, `popen`) |
-| `tainted_args` | `List[str]` | Tainted argument registers at the call (e.g., `['a0']`) |
+| `sink_name` | `str` | Sink function name such as `system` and `popen` |
+| `tainted_args` | `List[str]` | Tainted argument registers at the call such as `['a0']` |
 | `source_name` | `str` | Taint source label that propagated to this sink |
 | `severity` | `str` | `'HIGH'` for all findings (default) |
 

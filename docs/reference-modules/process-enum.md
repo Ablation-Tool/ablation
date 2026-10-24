@@ -6,7 +6,7 @@
 
 Full Linux process analysis and binary threat detection toolkit. Covers:
 - Process enumeration via `/proc` name, cmdline, environ, maps, status, fds
-- Hollow process detection (TracerPid, exe/cmdline mismatch, deleted exe)
+- Hollow process detection TracerPid, exe/cmdline mismatch, and deleted exe
 - DLL hijacking candidates writable mapped paths, LD_LIBRARY_PATH manipulation
 - Cron persistence world-writable cron files, reverse-shell patterns, writable-path cron entries
 - Volatile forensics timestomping, log tampering, memory artifacts
@@ -15,7 +15,7 @@ Full Linux process analysis and binary threat detection toolkit. Covers:
 - Ptrace instrumentation detection Valgrind, Intel PIN, ASan/TSan/UBSan in process maps
 - DLL injection traces, named pipe abuse, Windows service manipulation binary bytes
 - Heap spray pattern detection (HeapAlloc + large alloc + NOP sled + landing constants)
-- ROP chain indicators (RETN density, stack pivot gadgets, VirtualProtect chaining, DEP bypass)
+- ROP chain indicators RETN density, stack pivot gadgets, VirtualProtect chaining, and DEP bypass
 - Anti-disassembly techniques constant jumps, impossible disassembly, SEH flow, self-modification
 - Junk code / opaque predicates NOP sleds, dead blocks, XOR/AND/SUB predicates
 - Sandbox environment indicators /proc/cpuinfo hypervisor flag, DMI strings, analysis tool processes
@@ -100,7 +100,7 @@ No lief.parse(). No HTTP reads. No bare `except:`. All binary-analysis functions
 
 ## How it works
 
-`ProcessEnumerator()` reads `/proc/<pid>/` entries maps, status, cmdline, comm, environ, fds for all processes. All reads are bounded by `_MAX_PROC_BYTES` (4 MB) or `_MAX_FILE_BYTES` (64 KB). Standalone functions like `detect_hollow_process()`, `detect_cron_persistence()`, and `detect_process_injection_surface()` each read specific `/proc/` entries and return findings independently. Binary analysis functions (`detect_heap_spray_patterns()`, `detect_rop_chain_indicators()`, etc.) accept raw `bytes` with no file I/O. All findings use `_make_finding()` which returns `{severity, title, detail, host: 'localhost', port: 0}`.
+`ProcessEnumerator()` reads `/proc/<pid>/` entries maps, status, cmdline, comm, environ, fds for all processes. All reads are bounded by `_MAX_PROC_BYTES` (4 MB) or `_MAX_FILE_BYTES` (64 KB). Standalone functions like `detect_hollow_process()`, `detect_cron_persistence()`, and `detect_process_injection_surface()` each read specific `/proc/` entries and return findings independently. Binary analysis functions `detect_heap_spray_patterns()` and `detect_rop_chain_indicators()`, and so on accept raw `bytes` with no file I/O. All findings use `_make_finding()` which returns `{severity, title, detail, host: 'localhost', port: 0}`.
 
 ---
 
@@ -140,7 +140,7 @@ detect_cron_persistence():
 
 ## False positives
 
-**`detect_sandbox_environment_indicators()` fires on cloud VM instances**: cloud providers use hypervisor flags in `/proc/cpuinfo` and DMI strings (`Google`, `Amazon`, `Microsoft Corporation`) that match the sandbox indicator signatures. On cloud hosts this is expected and not a sandbox finding. Filter by checking whether the hypervisor DMI string matches the known cloud provider for the deployment environment.
+**`detect_sandbox_environment_indicators()` fires on cloud VM instances**: cloud providers use hypervisor flags in `/proc/cpuinfo` and DMI strings `Google`, `Amazon`, and `Microsoft Corporation` that match the sandbox indicator signatures. On cloud hosts this is expected and not a sandbox finding. Filter by checking whether the hypervisor DMI string matches the known cloud provider for the deployment environment.
 
 **`detect_ptrace_instrumentation()` fires on CI/CD agents**: `Valgrind`, `AddressSanitizer`, and Intel PIN appear in process maps on testing hosts. If the host is a CI agent or developer workstation, instrumentation tool presence is expected. Confirm against the host's role before escalating.
 
@@ -148,7 +148,7 @@ detect_cron_persistence():
 
 ## Pipeline position
 
-Run `detect_hollow_process()` and `detect_process_injection_surface()` immediately after gaining shell access. Run binary analysis functions (`detect_rop_chain_indicators()`, `detect_anti_disassembly_techniques()`) during static analysis of suspected malware samples from the host.
+Run `detect_hollow_process()` and `detect_process_injection_surface()` immediately after gaining shell access. Run binary analysis functions `detect_rop_chain_indicators()` and `detect_anti_disassembly_techniques()` during static analysis of suspected malware samples from the host.
 
 ---
 
@@ -159,7 +159,7 @@ All standalone functions return `List[{severity, title, detail, host: 'localhost
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `title` | Finding code (e.g., `HOLLOW_PROCESS`, `WRITABLE_CRON_FILE`, `CRON_REVERSE_SHELL`) |
+| `title` | Finding code such as `HOLLOW_PROCESS`, `WRITABLE_CRON_FILE`, and `CRON_REVERSE_SHELL` |
 | `detail` | Explanation of what was found and why it matters |
 | `host` | Always `'localhost'`: these are local-system findings |
 | `port` | Always `0`: these are local-system findings |

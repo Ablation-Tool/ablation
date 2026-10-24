@@ -10,7 +10,7 @@ Three things were not possible before in Ablation:
 
 2. **Large-model DOS programs use segment-relative addressing that breaks flat-address disassemblers.** These utilities are compiled with Microsoft's LARGE memory model: CS is not zero, there are hundreds of far-call relocations, and function entry points are CS:IP pairs relative to a dynamically chosen load segment. Treating the code section as a flat address stream produces wrong disassembly. This module recovers function starts from near-call targets and `push bp; mov bp, sp` prologues within the flat code section, then disassembles each function in CS_MODE_16 at its correct flat offset.
 
-3. **No DOS-specific vulnerability profiles existed.** DOS real-mode programs use `rep movsb/movsw/stosw` for memory operations, `INT 21h` for I/O, and CX-controlled copy loops, all different from the 32/64-bit world. Generic profiles either miss these patterns or produce high false-positive rates. This module introduces three profiles: `dos_unbounded_copy` rep movs/stos without CX guard, excluding compile-time constant CX, `dos_int21_recv_path` INT 21h near a memory-loaded AH, and `dos_fixed_stack_alloc` (sub sp, N > 0x100 near external input paths).
+3. **No DOS-specific vulnerability profiles existed.** DOS real-mode programs use `rep movsb/movsw/stosw` for memory operations, `INT 21h` for I/O, and CX-controlled copy loops, all different from the 32/64-bit world. Generic profiles either miss these patterns or produce high false-positive rates. This module introduces three profiles: `dos_unbounded_copy` rep movs/stos without CX guard, excluding compile-time constant CX, `dos_int21_recv_path` INT 21h near a memory-loaded AH, and `dos_fixed_stack_alloc` sub sp and N > 0x100 near external input paths.
 
 ---
 

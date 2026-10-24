@@ -265,7 +265,7 @@ dd if=package.run bs=1 skip=$(awk "NR<=$skip{c+=length(\$0)+1} END{print c}" pac
 Never execute `.run` files; the embedded `upgrade-tool` writes to NPU hardware
 via `/dev/davinciN` ioctls.
 
-### Mate60Pro partition table (ALN-AL00, HarmonyOS 4.x, 206.0.0.108 SP6)
+### Mate60Pro partition table ALN-AL00, HarmonyOS 4.x, and 206.0.0.108 SP6
 
 UFS sector size: **4096 bytes** (non-standard GPT; header_size field = 65536).
 Three GPT header copies at file offsets 0x200, 0x28A00, 0x2CE00 primary, backup, vendor recovery.
@@ -298,7 +298,7 @@ RSA-PSS/SHA-256, valid 2025–2055. Issuer: Huawei internal Product CA.
 **File:** `targets/huawei/ma5800_olt_re.py`
 
 Reverse-engineered proprietary firmware container used in Huawei MA5800/MA5600/EA5800
-carrier OLT packages (SmartAX series, GPON/XGS-PON OLTs).
+carrier OLT packages SmartAX series and GPON/XGS-PON OLTs.
 
 ### HUAWEI PRODUCT BINARY FILE format
 
@@ -395,7 +395,7 @@ Upgrade validation path embedded in HS8145C5: `file:/var/UpgradeCheck.xml`.
 ### Cross-product PKI note
 
 All Huawei product lines use CMS/PKCS#7 OID `1.2.840.113549.1.7.2` for firmware
-signing (Ascend NPU, VRP OLT/router/switch, iBMC HPM, ONT). Single Huawei internal PKI;
+signing Ascend NPU, VRP OLT/router/switch, iBMC HPM, and ONT. Single Huawei internal PKI;
 compromise of the Signature Center CA would affect all product lines simultaneously.
 
 ---
@@ -414,7 +414,7 @@ Magic prefix: `"RPG_"` followed by platform codename and version string.
 The NE8000 uses two nested codenames:
 
 - **YUNSHAN**: outer container (`RPG_YUNSHANV800R023C00SPC500B697`)
-- **PNF**: inner platform package (`RPG_PNF`, `PKG_PNFV800R023C00SPC500B697`)
+- **PNF**: inner platform package `RPG_PNF` and `PKG_PNFV800R023C00SPC500B697`
 
 "PNF" = Physical Network Function; Huawei's NFV architecture term for hardware
 appliances (counterpart is VNF = Virtual Network Function for VM-based NE deployment).
@@ -446,7 +446,7 @@ patPkgType:  COLD           (requires system reboot to activate)
 `patchtype.info` format: `<pkg_name>:<comma-separated CPT type IDs>`
 
 `patchpkg.txt` manifest columns 14 fields, tab-separated:
-`SHA256  NA  path  filename  dest  type_id  0  owner:uid  group:gid  perms  NA  0  NA  NA`
+`SHA256 NA path filename dest type_id 0 owner:uid group:gid perms NA 0 NA NA`
 
 ### Filesystem users from patch file ownership
 
@@ -489,8 +489,8 @@ Reverse-engineered S6720EI campus switch bootloader SquashFS VRP V200R012C00.
 
 | Component | Detail |
 |---|---|
-| Management CPU | Freescale e500mc (PowerPC 32-bit, big-endian) |
-| Data-plane ASIC | Broadcom BCM56xxx (Trident2/Tomahawk, iProc) |
+| Management CPU | Freescale e500mc PowerPC 32-bit and big-endian |
+| Data-plane ASIC | Broadcom BCM56xxx Trident2/Tomahawk and iProc |
 | Secondary CPU | HiSilicon Hi1215 board initialization |
 | OS | Wind River Linux 6.0.0.36 (LTSI) |
 | Kernel | Linux 3.10.62-ltsi-WR6.0.0.36_standard |
@@ -565,15 +565,15 @@ No ELF files are present at the.cc top level; all code is nested inside the Squa
 | `0x1200061A/1B` | `arm` | ARM (SoC undetermined) | unknown |
 | `CR55MPUB`, `CR56MPUC` | VRP V8 | CR55/CR56 core-router card | VRP V8 linecard |
 
-HWTYPE prefix `0x12xxxxxx` = CE6810 chassis board (vs `0x4xxxxxxx` = ARM in MA5800, `0x1xxxxxxx` = x86 in MA5800). String HWTYPEs CR55MPUB, CR56MPUC = named router-on-card modules.
+HWTYPE prefix `0x12xxxxxx` = CE6810 chassis board vs `0x4xxxxxxx` = ARM in MA5800 and `0x1xxxxxxx` = x86 in MA5800. String HWTYPEs CR55MPUB, CR56MPUC = named router-on-card modules.
 
 ### Boot stacks (`oslist.ini`)
 
-**P3041 MPU stack** (e500mc, configs 0x1200060C/0D/02/05):
+**P3041 MPU stack** e500mc and configs 0x1200060C/0D/02/05:
 - `uboot_ppc3041.bin` → `3041_tor_uImage.bin` 5MB kernel + `rootfs_3041_tor.sqfs` (8.7MB) + `rootfs_3041_vrp.img` 31MB VRP app rootfs
 - `rcw_3041_tor_68.bin` Reset Configuration Word #68
 
-**P2020 LPU stack** (e500v2, configs 0x12000608/09):
+**P2020 LPU stack** e500v2 and configs 0x12000608/09:
 - `uboot_ppc2020.bin` → `dc2020_5810_uImage.bin` (4.4MB) + `rootfs_2020_5810.sqfs` (8.8MB) + `rootfs_2020_vrp.img` (22MB)
 - `TOR_CE5810_48T4S_EI_CPLD.bin` (156KB CE5810 ToR CPLD firmware; **no.cms signature**)
 
@@ -686,7 +686,7 @@ Three server BMC generations from the Chinese-Mirrors corpus.
 | iBMC 3.x V3 servers | ~2016-2020 | Standard IPMI HPM.1 (`PICMGFWU` magic) | Checksum only |
 | iBMC 6.x V5 servers | ~2019+ | Huawei extended HPM.1 = manifest + CMS/PKCS#7 + HPM.1 | CMS/PKCS#7 |
 
-### Standard HPM.1 (iBMC 3.x, RH1288V3 V3.97)
+### Standard HPM.1 iBMC 3.x and RH1288V3 V3.97
 
 ```
 0x00  8   Magic: "PICMGFWU"
@@ -698,7 +698,7 @@ Three server BMC generations from the Chinese-Mirrors corpus.
 Size: 42.6MB. Model UID: 0x00010F00. Active mode: Immediately no BMC reboot required.
 Package also contains: BIOS V521 6.1MB, unknown format, 3 CPLD binaries.
 
-### Huawei extended HPM.1 (iBMC 6.x, 2288HV5 V6.27)
+### Huawei extended HPM.1 iBMC 6.x and 2288HV5 V6.27
 
 Pre-pended manifest block:
 ```
@@ -734,7 +734,7 @@ Platform codename "M2": all packages named `M2V800R02{2,3,4}CxxSPCxxxBxxx.rpg`.
 | Boot | U-Boot uImage (0x27051956) | UEFI + ARM64 Linux Image (MZ/0x4D5A0091) |
 | NPU | Huawei CX68M 80 or 160 core | Not present as separate entry |
 | VRP rootfs | `vrp_ppc_rtos_mpu.img` | `vrp_arm64_mpu.img` |
-| TPM | None | TPM 2.0 (`tpm_arm64.img`, `tpm2.0_arm64.img`) |
+| TPM | None | TPM 2.0 `tpm_arm64.img` and `tpm2.0_arm64.img` |
 | Container entries | 33 | 34–35 |
 
 ### RPG container format (same as NE8000 version 0x00000002)
@@ -776,7 +776,7 @@ Sub-header notable fields:
 |---|---|
 | 0x000040–0x000043 | P40xx/P30xx PowerPC MPU variants V800R022 only |
 | 0x000050–0x000051 | Hi1610 AArch64 MPU variants V800R023+ |
-| 0x005638 | VRP V8 RPG SquashFS (0x56='V', 0x38='8') |
+| 0x005638 | VRP V8 RPG SquashFS 0x56='V' and 0x38='8' |
 | 0xFF5638 | VRP V8 ASDK SquashFS Application SDK |
 | 0x005637 | VRP V8 rlist file integrity list |
 | 0x005678/0x005679 | Device lock file hardware attestation |
@@ -859,7 +859,7 @@ Flash base: 0x90100000 AHB/AXI-mapped NOR flash
 | application_sign.bin | 0x90115000 | 398KB | Main application bare-metal or minimal RTOS |
 | bs21_all_nv.bin | 0x9017E000 | 4KB | Non-volatile config storage |
 
-### WS63 / Hi3863 partition map (1.4MB, LiteOS)
+### WS63 / Hi3863 partition map 1.4MB and LiteOS
 
 Flash base: 0x200000 QSPI NOR flash
 
@@ -879,7 +879,7 @@ Flash base: 0x200000 QSPI NOR flash
 **BS21:** loaderboot → partition.bin → flashboot (A/B) → application 
 **WS63:** root_loaderboot → root_params → SSB → flashboot (A/B) → LiteOS app
 
-WS63 adds an explicit SSB Secure Secondary Boot stage and A/B NV redundancy that BS21 lacks. Every component ends in `_sign.bin`; per-partition signing before packaging. The fwpkg container has no CMS/PKCS#7 wrapper (unlike VRP, iBMC, HPM); package integrity relies on individual partition signatures.
+WS63 adds an explicit SSB Secure Secondary Boot stage and A/B NV redundancy that BS21 lacks. Every component ends in `_sign.bin`; per-partition signing before packaging. The fwpkg container has no CMS/PKCS#7 wrapper unlike VRP, iBMC, and HPM; package integrity relies on individual partition signatures.
 
 ### Security findings
 

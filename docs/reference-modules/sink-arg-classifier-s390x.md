@@ -8,7 +8,7 @@ Classify exec-class sink argument provenance on s390 (31-bit) and s390x (64-bit)
 
 1. **`BinaryContext` misidentifies s390x binaries as x86-64.** For `e_machine=0x0016` (EM_S390), `BinaryContext` falls through to its x86-64 PLT parser, which returns `plt=0` on every s390x binary. `SinkArgClassifier` is then called with an empty PLT map and produces 0 results, not because the binary is safe, but because the architecture detection is broken. Gap ID: `S390-GAP-001`.
 
-2. **The gap affects real IBM targets.** Confirmed on: IBM ClearCase `linux_390` (`cleartool`, 20516 bytes), IBM Rational BuildForge 7.1.1.3 `bfagent` (s390x), IBM XL C/C++ Compiler 1.2.0 runtime for s390x. All three returned `BinaryContext.arch='x86_64'` with `plt=0` before this module existed.
+2. **The gap affects real IBM targets.** Confirmed on: IBM ClearCase `linux_390` `cleartool` and 20516 bytes, IBM Rational BuildForge 7.1.1.3 `bfagent` (s390x), IBM XL C/C++ Compiler 1.2.0 runtime for s390x. All three returned `BinaryContext.arch='x86_64'` with `plt=0` before this module existed.
 
 3. **The module bypasses BinaryContext entirely.** `SinkArgClassifierS390X.from_path()` uses LIEF directly for DYNSYM enumeration and Capstone `CS_ARCH_SYSZ` for disassembly, completely bypassing the broken `BinaryContext` s390x path.
 

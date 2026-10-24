@@ -6,7 +6,7 @@ Parse the XCOFF32 or XCOFF64 `.symtab` section and populate `BinaryContext` with
 
 ## Why this exists
 
-1. **`BinaryContext`'s symbol-name feed is gated on `.loader`.** `BinaryContext` calls `xcoff_parser` internally, but its name-population path requires the `.loader` section to be present and populated. Many AIX firmware executables extracted from BFF archives (especially `automountd`, `rlogind`, `ksh93`, `nfsd`) have a full `.symtab` but an absent, minimal, or incomplete `.loader` section. Without this module, `ctx.names_count()` returns 0 for those binaries and every `ctx.name(va)` call returns the raw VA hex string.
+1. **`BinaryContext`'s symbol-name feed is gated on `.loader`.** `BinaryContext` calls `xcoff_parser` internally, but its name-population path requires the `.loader` section to be present and populated. Many AIX firmware executables extracted from BFF archives especially `automountd`, `rlogind`, `ksh93`, and `nfsd` have a full `.symtab` but an absent, minimal, or incomplete `.loader` section. Without this module, `ctx.names_count()` returns 0 for those binaries and every `ctx.name(va)` call returns the raw VA hex string.
 
 2. **The "Name everything" workflow rule cannot be met without it.** `ctx.set_name()` requires a known VA. Without `.symtab` names in context, every subsequent tool call: `SinkArgClassifier`, `TaintTracker`, `Xcoff32Decompiler`: produces output filled with raw hex addresses instead of function names.
 
@@ -97,7 +97,7 @@ print(dec.decompile(0x10000800))
 
 ## Storage class filter
 
-Only `C_EXT` (2) and `C_HIDEXT` (107) symbols are extracted. Internal compiler symbols (`C_FILE`, `C_STAT`, `C_FCN`, etc.) are skipped: they clutter the name table without adding RE value.
+Only `C_EXT` (2) and `C_HIDEXT` (107) symbols are extracted. Internal compiler symbols `C_FILE`, `C_STAT`, and `C_FCN`, and so on are skipped: they clutter the name table without adding RE value.
 
 The filter has one consequence: if a known function in the binary has no name after parsing, check whether it carries a non-standard storage class in the raw symbol table. This happens occasionally with IBM XLC-compiled libraries that use `C_FUN` (142) for internal functions.
 

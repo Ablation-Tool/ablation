@@ -12,7 +12,7 @@ Five things were not possible before in Ablation:
 
 4. **No NNC artifact sweep across a package corpus.** `TiNNCScanner` existed as a single-binary tool. The sweep runs it as a fast symbol-table-only pass across every `.a` / ELF file in a package before the slower taint analysis starts, so TINCC findings are always collected even when taint is skipped.
 
-5. **No ARM32 Thumb triage path for embedded MCU ELFs.** Prior ARM32 sweeps targeted Linux userspace (function prologues at PUSH {r4,lr} or PUSH {r4-r11,lr}). Cortex-M Thumb firmware compiled with tiarmclang uses different prologue patterns and has no dynamic linker; `batch_plt_intersect` only works for binaries with a PLT section, which many bare-metal ELFs lack.
+5. **No ARM32 Thumb triage path for embedded MCU ELFs.** Prior ARM32 sweeps targeted Linux userspace function prologues at PUSH {r4, lr} or PUSH {r4-r11, and lr}. Cortex-M Thumb firmware compiled with tiarmclang uses different prologue patterns and has no dynamic linker; `batch_plt_intersect` only works for binaries with a PLT section, which many bare-metal ELFs lack.
 
 ---
 
@@ -113,7 +113,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, and or C28x for vulnerability analysis.
 
 ---
 

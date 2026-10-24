@@ -171,7 +171,7 @@ for name, sites in report.live().items():
 | Attribute | Type | Description |
 |---|---|---|
 | `call_va` | int | VA of the `call` instruction |
-| `register` | str | Base register (e.g. `'rax'`, `'r12'`) |
+| `register` | str | Base register such as `'rax'` and `'r12'` |
 | `slot_offset` | int | Displacement used in the instruction |
 | `encoding` | str | `'disp8'` or `'disp32'` |
 
@@ -264,7 +264,7 @@ Secondary vtable sub-sections multiple inheritance produce `is_rtti=True` entrie
 
 `ELFVtableReconstructor.from_path(path).reconstruct_class('ClassName')` returns a `VtableMap`. See [elf-vtable-reconstructor](elf-vtable-reconstructor.md) for the full field reference.
 
-`CppVtableReconstructorAnalyzer.from_context(ctx).scan()` returns a `VtableReconstructorResult`. See [cpp-vtable-reconstructor](cpp-vtable-reconstructor.md) for the full field reference (`vtables`, `propagation`, `binary_path`, `arch`, `named_slot_count`, `total_slot_count`, `resolved_call_count`).
+`CppVtableReconstructorAnalyzer.from_context(ctx).scan()` returns a `VtableReconstructorResult`. See [cpp-vtable-reconstructor](cpp-vtable-reconstructor.md) for the full field reference `vtables`, `propagation`, `binary_path`, `arch`, `named_slot_count`, `total_slot_count`, and `resolved_call_count`.
 
 ---
 

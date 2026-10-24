@@ -80,7 +80,7 @@ Finding dicts in the result's `*_findings` keys use `{severity, title, detail, h
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `INFO` |
-| `title` | Finding description (e.g., `Docker daemon API unauthenticated on TCP port`) |
+| `title` | Finding description such as `Docker daemon API unauthenticated on TCP port` |
 | `detail` | What was found and why it matters |
 | `host` | Target host where the finding was observed |
 | `port` | Target port where the finding was observed |

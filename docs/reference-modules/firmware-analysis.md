@@ -181,7 +181,7 @@ Version-mismatch findings appear when a known key or certificate is present in a
 
 `FirmwareContainerKeyExtractor.from_path(path).extract()` returns an `ExtractionResult`. See [firmware-container-key-extractor](firmware-container-key-extractor.md) for the `ExtractionResult` / `PartitionResult` field reference.
 
-`FirmwareAuthBypassDetector.from_path(path).scan()` returns a `FirmwareAuthBypassResult`. See [firmware-auth-bypass-detector](firmware-auth-bypass-detector.md) for the field reference (`path`, `is_vulnerable`, `severity`, `summary`, `arch`).
+`FirmwareAuthBypassDetector.from_path(path).scan()` returns a `FirmwareAuthBypassResult`. See [firmware-auth-bypass-detector](firmware-auth-bypass-detector.md) for the field reference `path`, `is_vulnerable`, `severity`, `summary`, and `arch`.
 | `evidence` | Byte offset or string excerpt that triggered the finding |
 
 ---

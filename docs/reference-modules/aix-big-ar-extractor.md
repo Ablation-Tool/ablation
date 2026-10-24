@@ -4,17 +4,17 @@
 
 Three things were not possible before in Ablation:
 
-1. **Extract XCOFF members from AIX big archives.** GNU `ar` reports "file format not recognized" for `<bigaf>` files. AIX ships all system libraries (`libc.a`, `libm.a`, `libpthreads.a`, `libbsd.a`) as big archives. Without extraction, the XCOFF32/XCOFF64 object files inside are inaccessible to `BinaryContext` or `xcoff_parser`.
+1. **Extract XCOFF members from AIX big archives.** GNU `ar` reports "file format not recognized" for `<bigaf>` files. AIX ships all system libraries `libc.a`, `libm.a`, `libpthreads.a`, and `libbsd.a` as big archives. Without extraction, the XCOFF32/XCOFF64 object files inside are inaccessible to `BinaryContext` or `xcoff_parser`.
 
 2. **Handle AIX 5.x and above library archives.** The `<bigaf>` format is distinct from the old small archive (`<aiaff>`) used on AIX 4.2 and earlier. Modern AIX ships all 32-bit and 64-bit variants of each function as members inside a single `<bigaf>`, with `_64.o` suffix members holding the 64-bit XCOFF64 code.
 
-3. **Filter XCOFF members from metadata entries.** `<bigaf>` archives contain special members member table, global symbol table that are not object files. The module's `xcoff_members()` method skips these using magic-byte validation (`0x01DF` = XCOFF32, `0x01F7` = XCOFF64).
+3. **Filter XCOFF members from metadata entries.** `<bigaf>` archives contain special members member table, global symbol table that are not object files. The module's `xcoff_members()` method skips these using magic-byte validation `0x01DF` = XCOFF32 and `0x01F7` = XCOFF64.
 
 ## Format notes
 
 `<bigaf>` AIX big archive layout:
 
-- Magic: `<bigaf>\n` (8 bytes, `0x3c 0x62 0x69 0x67 0x61 0x66 0x3e 0x0a`)
+- Magic: `<bigaf>\n` 8 bytes and `0x3c 0x62 0x69 0x67 0x61 0x66 0x3e 0x0a`
 - Global header 128 bytes total: 8-byte magic + six 20-char text decimal fields
  - `fl_fstmoff`: offset of first member 128 for non-empty archives
  - `fl_lstmoff`: offset of last member
@@ -69,7 +69,7 @@ print(ext.list_members())
 
 ## How it works
 
-`AixBigArExtractor.__init__()` reads the entire archive into memory and validates the `<bigaf>\n` magic. `extract()` reads the two text-decimal offsets from the 128-byte global header (`fl_fstmoff`, `fl_lstmoff`), then walks the member doubly-linked list via `ar_nxtoff` at each member header. For each member, it parses the 112-byte fixed header, extracts the `ar_namlen`-byte name field, verifies the 2-byte `ar_fmag` consistency trailer (`\x60\x0a`), and yields `name, member_bytes`. The metadata-only members (empty name, `/`, `//`): the member table and global symbol tables: are skipped. `xcoff_members()` filters the output of `extract()` by checking that the first 2 bytes of each member are `\x01\xdf` (XCOFF32) or `\x01\xf7` (XCOFF64). If a member header is corrupt at any point, the walk stops cleanly via the `except` guard rather than raising.
+`AixBigArExtractor.__init__()` reads the entire archive into memory and validates the `<bigaf>\n` magic. `extract()` reads the two text-decimal offsets from the 128-byte global header `fl_fstmoff` and `fl_lstmoff`, then walks the member doubly-linked list via `ar_nxtoff` at each member header. For each member, it parses the 112-byte fixed header, extracts the `ar_namlen`-byte name field, verifies the 2-byte `ar_fmag` consistency trailer (`\x60\x0a`), and yields `name, member_bytes`. The metadata-only members empty name, `/`, and `//`: the member table and global symbol tables: are skipped. `xcoff_members()` filters the output of `extract()` by checking that the first 2 bytes of each member are `\x01\xdf` (XCOFF32) or `\x01\xf7` (XCOFF64). If a member header is corrupt at any point, the walk stops cleanly via the `except` guard rather than raising.
 
 ---
 
@@ -122,7 +122,7 @@ Extraction either succeeds or raises an exception, there are no false positives 
 
 | Value | Content |
 |:---|:---|
-| `member_name` | Archive member name (e.g., `frexp.o`, `frexp_64.o`) |
+| `member_name` | Archive member name such as `frexp.o` and `frexp_64.o` |
 | `member_bytes` | Raw bytes of the XCOFF object file |
 | First 2 bytes `\x01\xdf` | XCOFF32: 32-bit PowerPC object code |
 | First 2 bytes `\x01\xf7` | XCOFF64: 64-bit PowerPC object code |

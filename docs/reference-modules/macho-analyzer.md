@@ -8,7 +8,7 @@ Deep static analysis of macOS Mach-O binaries: load commands, segments, dynamic 
 
 1. **macOS targets require Mach-O parsing** that goes beyond LIEF's default load-command enumeration. `MachoAnalyzer` extracts dylib names, code signing status, and entropy per segment: indicators not returned by `BinaryContext` on macOS binaries.
 
-2. **Entropy mapping per segment.** Packed or encrypted Mach-O payloads (dylib injection, MalwareBytes case studies) exhibit abnormal per-segment entropy. `MachoAnalyzer.entropy_map()` returns segment-level entropy without requiring LIEF.
+2. **Entropy mapping per segment.** Packed or encrypted Mach-O payloads dylib injection and MalwareBytes case studies exhibit abnormal per-segment entropy. `MachoAnalyzer.entropy_map()` returns segment-level entropy without requiring LIEF.
 
 3. **Code signing presence check.** `has_code_signature()` locates `LC_CODE_SIGNATURE` in load commands: the minimum gate check before deeper malware analysis.
 

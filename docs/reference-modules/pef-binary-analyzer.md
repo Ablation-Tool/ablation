@@ -45,7 +45,7 @@ Loader section:
   String table: loader strings (NUL-terminated names)
 ```
 
-CFM stub pattern (lwz rX, N(r2) where N = sym_index × 4):
+CFM stub pattern lwz rX and N(r2 where N = sym_index × 4):
 ```
 lwz  rX, N(r2)    ; load TVect pointer from TOC
 lwz  r0, 0(rX)    ; load function pointer from TVect

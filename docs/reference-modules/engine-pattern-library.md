@@ -280,7 +280,7 @@ Prior to this module, enginepatternlibrary required manual work outside the Abla
 ## How it works
 
 `EnginePatternLibrary.label_binary(ctx, xg)` runs three passes against `ctx.func_starts`:
-1. **String-marker pass:** finds string constants unique to each engine (e.g., `"UE4"`, `"idTech"`) in the binary and labels functions that reference them.
+1. **String-marker pass:** finds string constants unique to each engine such as `"UE4"` and `"idTech"` in the binary and labels functions that reference them.
 2. **Semantic pass:** queries `SemanticSearcher` with engine-specific natural-language descriptions and labels high-confidence hits.
 3. **SAX structural pass:** encodes each function's opcode sequence as SAX symbols and finds approximate nearest neighbors in the engine corpus.
 
@@ -317,7 +317,7 @@ EnginePatternLibrary: game.exe  labeled=1847 / 2310 functions (79.9%)
 
 ## False positives
 
-Game code that happens to reference engine string constants (e.g., a debug log line with "UE4 version") produces false labels. For `conf < 0.8`, manually inspect the function before marking it as engine code. SAX-structural matches have the highest false-positive rate; filter to `conf >= 0.85` for automated exclusion.
+Game code that happens to reference engine string constants such as a debug log line with "UE4 version" produces false labels. For `conf < 0.8`, manually inspect the function before marking it as engine code. SAX-structural matches have the highest false-positive rate; filter to `conf >= 0.85` for automated exclusion.
 
 ---
 
@@ -336,12 +336,12 @@ Game code that happens to reference engine string constants (e.g., a debug log l
 | Attribute | Content |
 |:---|:---|
 | `va` | VA of the matched function in the target binary |
-| `engine` | Engine identifier string (e.g., `'ue4'`, `'unity'`, `'godot'`) |
-| `category` | Functional category (e.g., `'memory'`, `'render'`, `'network'`) |
-| `name` | Canonical engine function name (e.g., `'FMemory::Malloc'`) |
+| `engine` | Engine identifier string such as `'ue4'`, `'unity'`, and `'godot'` |
+| `category` | Functional category such as `'memory'`, `'render'`, and `'network'` |
+| `name` | Canonical engine function name such as `'FMemory::Malloc'` |
 | `confidence` | Float 0.0–1.0: match confidence from the signature |
 | `match_kind` | `'string_marker'` / `'string_pattern'` / `'semantic'` / `'sax'` |
-| `sig_id` | Stable signature identifier (e.g., `'ue4.fmemory.malloc'`) |
+| `sig_id` | Stable signature identifier such as `'ue4.fmemory.malloc'` |
 
 Use `label.strip()` to test if the match is high-confidence enough to exclude from manual analysis.
 

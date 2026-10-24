@@ -43,13 +43,13 @@ Output: `reports/sweep_ne_<vendor>_<product>_<version>_<ts>.md`
 
 ## GAP-A: thin wrapper false positives
 
-Functions with ≤15 instructions containing exactly one import call score high on nearly every profile because the semantic embedding is dominated by the single import name. Confirmed across three corpora (AlphaSmart WSCONV, WfW TCP/IP-32, Apple QTVR). These should be traced manually before recording as CONFIRMED. The fix is a thin-wrapper filter in the sweep post-processor, tracked as GAP-A.
+Functions with ≤15 instructions containing exactly one import call score high on nearly every profile because the semantic embedding is dominated by the single import name. Confirmed across three corpora AlphaSmart WSCONV, WfW TCP/IP-32, and Apple QTVR. These should be traced manually before recording as CONFIRMED. The fix is a thin-wrapper filter in the sweep post-processor, tracked as GAP-A.
 
 ---
 
 ## How it works
 
-`NEBinary(path)` parses a Windows 3.x New Executable NE format. Reads the NE header, segment table, module reference table, and exported name table. For each code segment, reconstructs the segment data from file offsets and resolves imported ordinals against the Win16 KERNEL, USER, and GDI ordinal tables lines 47–503. `NEBinary.sweep()` disassembles each code segment with CS_ARCH_X86 + CS_MODE_16 and scans for dangerous Win16 API calls (`lstrcpy`, `lstrcat`, `sprintf`, `GetDlgItemText`) that allow attacker-controlled input to overflow fixed-size buffers.
+`NEBinary(path)` parses a Windows 3.x New Executable NE format. Reads the NE header, segment table, module reference table, and exported name table. For each code segment, reconstructs the segment data from file offsets and resolves imported ordinals against the Win16 KERNEL, USER, and GDI ordinal tables lines 47–503. `NEBinary.sweep()` disassembles each code segment with CS_ARCH_X86 + CS_MODE_16 and scans for dangerous Win16 API calls `lstrcpy`, `lstrcat`, `sprintf`, and `GetDlgItemText` that allow attacker-controlled input to overflow fixed-size buffers.
 
 ---
 
@@ -102,7 +102,7 @@ The semantic sweep returns a `dict` keyed by vulnerability profile name, each va
 | `name` | `str` | Function name (from ordinal table or auto-generated `sub_NNNN`) |
 | `va` | `int` | Segment-relative VA of the function |
 | `score` | `float` | Semantic similarity score (0.0–1.0) |
-| `seg_name` | `str` | NE segment name (e.g., `seg_1`) |
+| `seg_name` | `str` | NE segment name such as `seg_1` |
 | `insn_count` | `int` | Number of disassembled instructions |
 
 ---

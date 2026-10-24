@@ -76,8 +76,8 @@ pop      {r4, r5, r6, pc}
 |:---|:---|
 | `address` | Virtual address of the instruction |
 | `encoding` | Raw 32-bit instruction encoding |
-| `mnemonic` | Instruction mnemonic string (e.g., `'ldr'`, `'bl'`, `'mov'`) |
-| `operands` | Decoded operands as a string (e.g., `'r0, [r1, #4]'`) |
+| `mnemonic` | Instruction mnemonic string such as `'ldr'`, `'bl'`, and `'mov'` |
+| `operands` | Decoded operands as a string such as `'r0, [r1, and #4]'` |
 
 ---
 

@@ -6,7 +6,7 @@ Instruction representation, operand parsing, and disassembler backends for ARC E
 
 ## Why this exists
 
-1. **Taint trackers and CFG builders need a unified instruction type, not raw strings.** Capstone, objdump, and hand-written listings all produce different text forms. The `Insn` dataclass provides a single normalized representation with typed operands (`Reg`, `Imm`, `Mem`) that downstream tools query without parsing strings themselves.
+1. **Taint trackers and CFG builders need a unified instruction type, not raw strings.** Capstone, objdump, and hand-written listings all produce different text forms. The `Insn` dataclass provides a single normalized representation with typed operands `Reg`, `Imm`, and `Mem` that downstream tools query without parsing strings themselves.
 
 2. **ARC has no Capstone backend; x86 has three text formats.** `insn_arc.py` provides a pure-Python decoder for GNU objdump text output: the only practical disassembly path for ARC EM/HS. `insn_x86.py` handles Intel listing, AT&T objdump auto-converted, and Capstone structured output. Without this layer, each tool would implement its own text parser.
 
@@ -84,7 +84,7 @@ insns = list(from_capstone(md.disasm(code, va)))
 
 `att_to_intel(line)` converts objdump AT&T syntax to Intel before parsing. Key transformations:
 - Reversed operand order (`movq %rsi,%rdi` → `mov rdi, rsi`)
-- Size suffixes stripped (`movq` → `mov`, `cmpb` → `cmp`)
+- Size suffixes stripped `movq` → `mov` and `cmpb` → `cmp`
 - `%reg` prefixes stripped
 - `$imm` → bare immediate
 - `disp%base,%index,scale` → `[base+index*scale+disp]`

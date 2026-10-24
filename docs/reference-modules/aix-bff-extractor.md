@@ -8,11 +8,11 @@ Extract XCOFF binaries from AIX installp BFF archives by magic-scan, and enumera
 
 1. **No standard Linux tool can extract AIX installp BFF archives.** `pax(1)` requires AIX. `restore(8)` requires AIX tape devices. GNU `tar` does not understand the BFF container format and fails silently. Before this module, every IBM AIX installp package (`.bff`) was opaque to the analysis chain. Trigger: gap ID `CSMSAMRD-GAP-002`.
 
-2. **The outer BFF envelope does not need to be fully parsed.** BFF archives contain XCOFF binaries at 4-byte-aligned offsets. The XCOFF32 magic bytes (`0x01\xdf`) are reliably distinct. The module locates every XCOFF binary by magic scan, validates the `FILHDR`, computes the binary extent from section headers and symbol table layout, and returns raw XCOFF bytes. No BFF block-structure parser required.
+2. **The outer BFF envelope does not need to be parsed.** BFF archives contain XCOFF binaries at 4-byte-aligned offsets. The XCOFF32 magic bytes (`0x01\xdf`) are reliably distinct. The module locates every XCOFF binary by magic scan, validates the `FILHDR`, computes the binary extent from section headers and symbol table layout, and returns raw XCOFF bytes. No BFF block-structure parser required.
 
 3. **Dangerous import triage requires no AIX environment.** The XCOFF32 loader section (section type `0x0005`) contains an import ID table: null-separated `path/archive/member` strings, that names every dynamically linked function. `XCOFF32Info.dangerous_imports()` scans this table for exec-class and network-class function names. The entire pipeline runs on Linux.
 
-4. **AixBffExtractor and aix_big_ar_extractor address different formats.** `aix_big_ar_extractor` handles AIX `<bigaf>` library archives (shared libraries distributed as `libc.a`, `libm.a`). This module handles AIX installp BFF packages OS components, management agents. Both embed XCOFF binaries; only the outer container differs.
+4. **AixBffExtractor and aix_big_ar_extractor address different formats.** `aix_big_ar_extractor` handles AIX `<bigaf>` library archives shared libraries distributed as `libc.a` and `libm.a`. This module handles AIX installp BFF packages OS components, management agents. Both embed XCOFF binaries; only the outer container differs.
 
 ---
 
@@ -110,13 +110,13 @@ for name, xcoff_bytes in AixBffExtractor.from_path('/path/to/pkg.bff'):
 | EXEC | `system`, `popen`, `fork`, `vfork`, `execve`, `execvp`, `execl`, `execle`, `execvpe`, `posix_spawn`, `posix_spawnp` |
 | NET | `socket`, `bind`, `connect`, `recv`, `send`, `gethostbyname`, `getaddrinfo` |
 
-The import ID table uses dotted names (`.system`, `.popen`). The scanner strips the leading dot before comparing.
+The import ID table uses dotted names `.system` and `.popen`. The scanner strips the leading dot before comparing.
 
 ---
 
 ## Limitations
 
-**Incomplete BFF downloads produce false structure.** If a `.bff` file was incompletely downloaded (e.g., an `.aria2` partial-download file is present alongside it), the magic scan may locate partial XCOFF headers. Always check the IBM-RE download status table in `README.md` before analyzing an image: incomplete downloads are flagged with `.aria2` files in the research collection.
+**Incomplete BFF downloads produce false structure.** If a `.bff` file was incompletely downloaded such as an `.aria2` partial-download file is present alongside it, the magic scan may locate partial XCOFF headers. Always check the IBM-RE download status table in `README.md` before analyzing an image: incomplete downloads are flagged with `.aria2` files in the research collection.
 
 **XCOFF64 extent computation is approximate.** 64-bit XCOFF headers use a different field layout. The extent estimate for XCOFF64 binaries may be imprecise. Verify that extracted bytes produce a valid XCOFF64 header before passing to downstream tools.
 

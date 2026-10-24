@@ -14,7 +14,7 @@ The module is needed because `unar` is the only reliable Linux tool for Mac arch
 
 ## What it does
 
-Parses the AppleDouble container header (magic `0x00051607`, RFC 1740 / Apple II File Type Note $E0/$E1 format), enumerates all entry descriptors, and returns raw bytes for any entry: primarily the resource fork entry ID 2.
+Parses the AppleDouble container header magic `0x00051607` and RFC 1740 / Apple II File Type Note $E0/$E1 format, enumerates all entry descriptors, and returns raw bytes for any entry: primarily the resource fork entry ID 2.
 
 AppleDouble format layout:
 ```
@@ -106,7 +106,7 @@ Extraction either succeeds or raises an exception, there are no false positives 
 | `path` | Filesystem path to the extracted file or partition |
 | `partition_name` | Partition label or index from the container header |
 | `size` | Size of the extracted payload in bytes |
-| `format` | Detected format of the extracted payload (`ext4`, `squashfs`, `ELF`, etc.) |
+| `format` | Detected format of the extracted payload `ext4`, `squashfs`, and `ELF`, and so on |
 
 ---
 

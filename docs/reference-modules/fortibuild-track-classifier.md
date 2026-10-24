@@ -132,9 +132,9 @@ Fortinet firmware filename (no I/O)
 | Attribute | Content |
 |:---|:---|
 | `filename` | Input filename basename |
-| `product` | Product code string (e.g., `'FGT_VM64'`, `'FOS_VM64_KVM'`) |
-| `version` | Version string (e.g., `'7.4.12'`) |
-| `build_number` | Integer build number (e.g., `2902`) |
+| `product` | Product code string such as `'FGT_VM64'` and `'FOS_VM64_KVM'` |
+| `version` | Version string such as `'7.4.12'` |
+| `build_number` | Integer build number such as `2902` |
 | `build_track` | `'M'` (main/GA) or `'F'` feature/beta |
 | `expected_keys` | List of cert-key names expected for this product/version combo |
 | `key_generation` | `'Gen1'` or `'Gen2'`: key generation epoch |

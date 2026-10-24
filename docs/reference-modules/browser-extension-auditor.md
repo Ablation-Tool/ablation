@@ -78,7 +78,7 @@ python3 -m ablation.analyzers.browser_extension_auditor /path/to/ext/ --severity
 
 ## How it works
 
-Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
+Parses the runtime-specific binary format APK, DEX, `.mpy`, BEAM, and Go ELF to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
 
 ---
 
@@ -97,13 +97,13 @@ Parses the runtime-specific binary format (APK, DEX, `.mpy`, BEAM, Go ELF) to ex
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns (e.g., `exec` used for shell completions, `eval` used for template rendering with static input) are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code (Garble-compiled Go, ProGuard-stripped Android) produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
+Standard library calls that resemble dangerous patterns such as `exec` used for shell completions and `eval` used for template rendering with static input are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code Garble-compiled Go and ProGuard-stripped Android produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm the target binary format (APK, `.mpy`, BEAM, Go ELF) before loading. `BinaryContext` is not required for all runtime analyzers.
+**Before this module:** Confirm the target binary format APK, `.mpy`, BEAM, and Go ELF before loading. `BinaryContext` is not required for all runtime analyzers.
 
 **After this module:** Feed dangerous call findings to `TaintTracker` or `FindingRegistry` for confirmed findings.
 
@@ -118,9 +118,9 @@ Standard library calls that resemble dangerous patterns (e.g., `exec` used for s
 | `path` | Absolute path to the file containing the finding |
 | `rel_path` | Path relative to the extension root |
 | `lineno` | Line number of the finding |
-| `finding_class` | Finding code (e.g., `'EXT_CONN_BROAD'`, `'MSG_HANDLER_PREAUTH'`, `'NATIVE_MSG_NO_ALLOWLIST'`) |
+| `finding_class` | Finding code such as `'EXT_CONN_BROAD'`, `'MSG_HANDLER_PREAUTH'`, and `'NATIVE_MSG_NO_ALLOWLIST'` |
 | `severity` | `'HIGH'` / `'MEDIUM'` |
-| `cwe` | CWE identifier (e.g., `'CWE-346'`, `'CWE-285'`) |
+| `cwe` | CWE identifier such as `'CWE-346'` and `'CWE-285'` |
 | `title` | Short description of the vulnerability |
 | `detail` | Extended explanation |
 | `snippet` | Source code snippet at the finding line |

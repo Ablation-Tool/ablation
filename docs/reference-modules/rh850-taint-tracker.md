@@ -42,7 +42,7 @@ workflow as `TriCoreTaintTracker`.
 
 **2. GHS CC-RH / IAR `double=32-bit` default not modelled.** In the IAR RH850 ABI
 §2.7 of GHS-RE-REFERENCE.md, `double` is 32 bits by default: identical to
-`float`.  `V850TaintTracker` uses the GCC V850 ABI where `double=64-bit` consumes
+`float`. `V850TaintTracker` uses the GCC V850 ABI where `double=64-bit` consumes
 a register pair (R6:R7 for the first `double` parameter). In GHS-compiled firmware,
 that same parameter fits in R6 alone, leaving R7 free for the next argument.
 Without the `double_is_32bit` flag, an analyst reading a finding that says "r7
@@ -50,10 +50,10 @@ tainted" might misinterpret it as the high half of a 64-bit double rather than a
 independent tainted argument. `RH850TaintTracker` stores this flag on the tracker
 and propagates it into every `TaintFindingRH850` and the `report()` output.
 
-**3. GHS old-style symbol mangling (`__ct`, `__dt`, `__vtbl`) not handled.**
+**3. GHS old-style symbol mangling `__ct`, `__dt`, and `__vtbl` not handled.**
 GHS MULTI uses GCC 2.9.x / ARM libiberty mangling (not Itanium ABI `_Z...`).
 Constructors appear as `Foo__ct`, destructors as `Foo__dt`, vtable symbols as
-`__vtblFoo`.  Renesas assembler additionally prepends a leading `_` to every C symbol, so `recv` appears as `_recv` in ELF exports.  `V850TaintTracker`'s source/sink resolver compares
+`__vtblFoo`. Renesas assembler additionally prepends a leading `_` to every C symbol, so `recv` appears as `_recv` in ELF exports. `V850TaintTracker`'s source/sink resolver compares
 raw ELF symbol names against C-level source/sink sets, so `_recv` is not matched
 as `recv` and `Foo__ct` is not matched at all. `RH850TaintTracker` applies
 `_ghs_c_name()` normalisation at every call site before checking source/sink
@@ -233,7 +233,7 @@ The most common false positive is taint surviving a zero-clear instruction (`xor
 |:---|:---|
 | `sink_name` | Name of the dangerous function reached |
 | `sink_va` | Virtual address of the call site |
-| `source_name` | Name of the taint source (e.g., `recv`, `read`) |
+| `source_name` | Name of the taint source such as `recv` and `read` |
 | `arg_index` | Which argument to the sink carries taint 0-indexed |
 | `chain` | `[va, register, operation]` steps from source to sink |
 | `path` | `[caller_va, ...]` function VAs traversed interprocedurally |

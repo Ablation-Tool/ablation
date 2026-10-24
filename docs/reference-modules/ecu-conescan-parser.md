@@ -193,7 +193,7 @@ The ROM `SW-N3K1EU00013SN020.bin` (512 KB) identifies correctly. A second RX8 RO
  return `scale=0.0` as a sentinel. The table is still parsed and returned; only scaling is absent.
 
 - **3D table with missing axis child.** A `type="3D"` table whose XML is missing either the
-  `<table type="X Axis">` or `<table type="Y Axis">` child is silently skipped. Degenerate MAP
+ `<table type="X Axis">` or `<table type="Y Axis">` child is silently skipped. Degenerate MAP
  entries in community definition files are discarded rather than returned with incorrect dimensions.
 
 ---
@@ -227,7 +227,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, and or C28x for vulnerability analysis.
 
 ---
 
@@ -237,7 +237,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 | Attribute | Content |
 |:---|:---|
-| `xmlid` | ROM ID string (e.g., `'LFG2EE'`) |
+| `xmlid` | ROM ID string such as `'LFG2EE'` |
 | `make` / `model` / `memmodel` | ECU metadata strings |
 | `internal_id_address` | File offset for ROM identification (int) |
 | `internal_id_string` | ASCII string expected at `internal_id_address` |

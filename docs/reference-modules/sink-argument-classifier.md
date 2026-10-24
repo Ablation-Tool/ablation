@@ -106,8 +106,8 @@ Step 6.5 in the RE workflow: run `SinkArgClassifier.classify_all()` after `FuncP
 
 | Attribute | Content |
 |:---|:---|
-| `sink_name` | Sink function name (e.g., `'system'`, `'popen'`, `'execve'`) |
-| `arg_pos` | 0-indexed argument position being classified (e.g., `0` for the first arg) |
+| `sink_name` | Sink function name such as `'system'`, `'popen'`, and `'execve'` |
+| `arg_pos` | 0-indexed argument position being classified such as `0` for the first arg |
 | `func_va` | VA of the calling function containing this call site |
 | `call_va` | VA of the call instruction |
 | `verdict` | `'RODATA_CONST'`, `'SNPRINTF_RODATA'`, `'ARG_PROPAGATED'`, or `'UNKNOWN'` |

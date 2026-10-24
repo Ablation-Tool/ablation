@@ -6,7 +6,7 @@
 
 Two gaps existed before this module:
 
-1. **STR/STP writers to BSS targets required manual identification.** In stripped ARM64 binaries, finding every instruction that writes a specific BSS address (e.g., a global struct field like `gILinkKey`) required manual disassembly browsing. No automated backward-slice tool existed in the Ablation pipeline.
+1. **STR/STP writers to BSS targets required manual identification.** In stripped ARM64 binaries, finding every instruction that writes a specific BSS address such as a global struct field like `gILinkKey` required manual disassembly browsing. No automated backward-slice tool existed in the Ablation pipeline.
 
 2. **EmTaint-style Structured Symbolic Expression analysis was absent.** The EmTaint approach provenance trees for memory access expressions enables precise identification of all writers to a target address, distinguishing "exact" writers statically resolved EA equals target from "possible" writers EA involves a memory load that could resolve to target. No SSE-based backward slicer existed for stripped ARM64.
 

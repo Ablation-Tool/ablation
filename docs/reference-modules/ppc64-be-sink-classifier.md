@@ -3,10 +3,10 @@
 ## Why this exists
 
 3 gaps that blocked automated sink classification on PPC64 big-endian ELFv1 binaries
-(IBM POWER Linux, LoadLeveler):
+IBM POWER Linux and LoadLeveler:
 
 1. **SinkArgClassifier is x86-only.** `SinkArgClassifier.classify_all()` scans for
-   `insn.mnemonic.lower() == 'call'` to find call sites.  On PPC64, the branch-with-link
+ `insn.mnemonic.lower() == 'call'` to find call sites. On PPC64, the branch-with-link
  instruction is `bl`, not `call`. For any IBM POWER Linux binary the result is zero
  classifications, every strcpyx/sprintf/memcpy call site is invisibly missed.
  LL-008, LL-010, LL-011, LL-012, and LL-013 (IBM LoadLeveler) were all found by manual
@@ -19,10 +19,10 @@
  from `strcpyx(ibm_obj, 0x98)` allocator, safe. The IBM allocator pattern appears 12+
  times in every LoadLeveler binary.
 
-3. **IBM string object pass-through (mr r3, rX) hides stack-buffer destinations.**
+3. **IBM string object pass-through mr r3 and rX hides stack-buffer destinations.**
  When r3 is set via `mr r3, rX`, the destination is often an IBM string object held in a
- saved non-volatile register (rX = r27/r28/r31, etc.). This looks identical to
-   `addi r31, r1, N; mr r3, r31` stack buffer destination in a single-instruction view.
+ saved non-volatile register rX = r27/r28/r31, and so on. This looks identical to
+ `addi r31, r1, N; mr r3, r31` stack buffer destination in a single-instruction view.
  Distinguishing the two requires a backward register trace through the mr chain.
 
 ---
@@ -122,7 +122,7 @@ second arg (src), r5 = third arg size for snprintf/memcpy.
 ## Depends on
 
 - `Ppc64ElfV1Resolver`: for glink stub map and BL caller enumeration
-- `capstone` (`CS_ARCH_PPC`, `CS_MODE_64 | CS_MODE_BIG_ENDIAN`): for per-site disassembly
+- `capstone` `CS_ARCH_PPC` and `CS_MODE_64 | CS_MODE_BIG_ENDIAN`: for per-site disassembly
 
 ## When to use
 
@@ -176,12 +176,12 @@ Ppc64BeSinkClassifier results:
 | Field | Type | Content |
 |:---|:---|:---|
 | `va` | `int` | VA of the BL instruction |
-| `sink_name` | `str` | Sink function name (e.g., `strcpyx`, `sprintf`) |
+| `sink_name` | `str` | Sink function name such as `strcpyx` and `sprintf` |
 | `stub_va` | `int` | VA of the glink PLT stub |
 | `dest_class` | `str` | r3 destination classification: `STACK_DEST` / `IMM_SIZE` / `IBM_OBJECT` / `UNKNOWN` |
 | `src_class` | `str` | r4 (source) classification: `RODATA_TOC` / `ARG_PROPAGATED` / `IMM` / `UNKNOWN` |
-| `dest_detail` | `str` | Human-readable r3 context (e.g., `sp+0x70`) |
-| `src_detail` | `str` | Human-readable r4 context (e.g., `ld 0(r25) [arg r3]`) |
+| `dest_detail` | `str` | Human-readable r3 context such as `sp+0x70` |
+| `src_detail` | `str` | Human-readable r4 context such as `ld 0(r25) [arg r3]` |
 | `fmt_class` | `str` | Format-string classification for sprintf/snprintf only; `CATGETS_RETURN` or empty |
 | `fmt_detail` | `str` | Human-readable format-string source context |
 | `interesting` | `bool` | `True` when dest=`STACK_DEST`, src=`ARG_PROPAGATED`, fmt_class != `CATGETS_RETURN` |

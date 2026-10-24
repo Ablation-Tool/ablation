@@ -6,7 +6,7 @@ Forward register-state exec-sink classifier for i386 ELF binaries.
 
 ## Why this exists
 
-1. **Gap RMC-GAP-002 / COMMSVR-GAP-004 / HACMP-GAP-001**: The main `SinkArgClassifier` hardcodes x86-64 registers (`rdi`, `rsi`, `rdx`). i386 cdecl passes all arguments on the stack (`push` or `sub esp; mov [esp+N]`). This module is the canonical i386-aware variant.
+1. **Gap RMC-GAP-002 / COMMSVR-GAP-004 / HACMP-GAP-001**: The main `SinkArgClassifier` hardcodes x86-64 registers `rdi`, `rsi`, and `rdx`. i386 cdecl passes all arguments on the stack (`push` or `sub esp; mov [esp+N]`). This module is the canonical i386-aware variant.
 
 2. **Forward-state vs backward-scan**: `sink_arg_classifier_x86_32.py` uses a backward push-count scan with a fixed lookback window. When the exec argument register is loaded far before the call beyond the window and aliased through several `mov reg, reg2` instructions, the backward scan returns UNKNOWN. This module uses a forward register-state pass, no lookback limit.
 
@@ -78,8 +78,8 @@ Same as SinkArgClassifier: `RODATA_CONST` / `SNPRINTF_RODATA` / `ARG_PROPAGATED`
 
 | Binary | Sites | ARG_PROPAGATED | RODATA_CONST | UNKNOWN |
 |--------|-------|----------------|--------------|---------|
-| ccm_eng_inf Synergy 7.0 | 18 | 4 (0x80cf3c8 ✓, 0x80cf5a2 ✓, 0x80d427a ✓) | 10 | 4 |
-| ccm_eng_ora Synergy 7.0 | 17 | 4 (0x80dcb74 ✓, 0x80dcd4e ✓, 0x80e1a26 ✓) | 10 | 3 |
+| ccm_eng_inf Synergy 7.0 | 18 | 4 0x80cf3c8 ✓, 0x80cf5a2 ✓, and 0x80d427a ✓ | 10 | 4 |
+| ccm_eng_ora Synergy 7.0 | 17 | 4 0x80dcb74 ✓, 0x80dcd4e ✓, and 0x80e1a26 ✓ | 10 | 3 |
 
 All ARG_PROPAGATED findings byte-verified against known synergy_re.py entries.
 

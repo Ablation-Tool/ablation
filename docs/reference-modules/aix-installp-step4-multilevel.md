@@ -8,7 +8,7 @@ Multi-level escape decoder for IBM AIX installp BFF step 4: handling rare bytes 
 
 1. **The single-level step4 decoder silently drops rare bytes with sorted-rank j ≥ K-1.** For K=56, this means any rare byte with j ≥ 55 is lost. These bytes produce no output: they are either dropped or emitted as raw escape pairs rather than the intended byte.
 
-2. **Empirical RE on VIOS `automountd` (U828079.bff, K=56) proves a j=185 case exists.** `sym_table[241]=0xdf` carries j=185, which far exceeds the single-level limit of 54. The byte 0xdf is part of the XCOFF32 magic `0x01df`: without decoding it, XCOFF32 magic verification fails.
+2. **Empirical RE on VIOS `automountd` U828079.bff and K=56 proves a j=185 case exists.** `sym_table[241]=0xdf` carries j=185, which far exceeds the single-level limit of 54. The byte 0xdf is part of the XCOFF32 magic `0x01df`: without decoding it, XCOFF32 magic verification fails.
 
 3. **IBM `liblpp.a` uses a level-k E-run scheme for large j.** The level-k hypothesis encodes rare byte R with rank j using k escape bytes followed by a term byte, where `k = floorj / (K - 1) + 1`.
 

@@ -10,7 +10,7 @@ Generate a complete behavioral profile of a single function in one call: the str
 
 2. **Argument values at call sites change everything.** Seeing `malloc` in a callee list tells you the function allocates memory. Seeing `malloc(rdi=strlen(arg0)+1)`: the argument traced to `strlen` of the first entry argument plus one: tells you whether there is an off-by-one risk. `RegAnnotator` traces register values backwards through the instruction stream so each argument displayed shows its specific computed value, not just a register name like `rdi` or `rbx`.
 
-3. **Sink detection at function scope eliminates false-triage overhead.** Not all calls to `strcpy` are dangerous; many are safe uses with known buffer sizes. The profiler classifies each call site as a sink or not, based on a configurable sink dict buffer-overflow, cmd-exec, tcl-inject, fmt-string, filesystem, and marks `*** SINK ***` only where a dangerous function is called. Vendor-specific sinks (Fortinet's `fadcsystem`, Cisco's `exec_handler`) can be added without modifying the module.
+3. **Sink detection at function scope eliminates false-triage overhead.** Not all calls to `strcpy` are dangerous; many are safe uses with known buffer sizes. The profiler classifies each call site as a sink or not, based on a configurable sink dict buffer-overflow, cmd-exec, tcl-inject, fmt-string, filesystem, and marks `*** SINK ***` only where a dangerous function is called. Vendor-specific sinks Fortinet's `fadcsystem` and Cisco's `exec_handler` can be added without modifying the module.
 
 ---
 

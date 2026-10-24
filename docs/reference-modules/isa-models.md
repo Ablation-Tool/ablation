@@ -8,9 +8,9 @@ Per-architecture ISA constant tables and ABI models used internally by instructi
 
 1. **Every taint tracker and CFG builder needs the same ABI facts.** Register names, argument registers, return registers, stack pointer, frame pointer, and calling convention conventions differ by architecture and by mode within an architecture. Duplicating these tables across 14 arch-specific modules would make them drift. The ISA model files are the single source of truth.
 
-2. **`canon_reg()` is the shared contract.** Across all arch ISA files, the central function is `canon_reg(name) -> canonical_name`. Callers that receive a register from a disassembler in any variant form (e.g., `w5`, `x5`, `r5d`, `r5`) get back the canonical name that the taint tracker uses as its key. Without this contract, each tool would independently parse register aliases and they would diverge.
+2. **`canon_reg()` is the shared contract.** Across all arch ISA files, the central function is `canon_reg(name) -> canonical_name`. Callers that receive a register from a disassembler in any variant form such as `w5`, `x5`, `r5d`, and `r5` get back the canonical name that the taint tracker uses as its key. Without this contract, each tool would independently parse register aliases and they would diverge.
 
-3. **Mode-aware facts avoid silent wrong behavior.** ARM32 has A32 and Thumb modes; PPC has 32/64 with ELFv1/ELFv2 ABIs; ARC has EM and HS cores. Width-specific facts (`bits`, `ptr_bytes`, `arg_regs`) are gated by an explicit `Mode` query so callers cannot accidentally apply 64-bit facts to 32-bit binaries.
+3. **Mode-aware facts avoid silent wrong behavior.** ARM32 has A32 and Thumb modes; PPC has 32/64 with ELFv1/ELFv2 ABIs; ARC has EM and HS cores. Width-specific facts `bits`, `ptr_bytes`, and `arg_regs` are gated by an explicit `Mode` query so callers cannot accidentally apply 64-bit facts to 32-bit binaries.
 
 ---
 

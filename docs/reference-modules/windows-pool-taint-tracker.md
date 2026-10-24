@@ -125,7 +125,7 @@ The most common false positive is taint surviving a zero-clear instruction (`xor
 |:---|:---|
 | `sink_name` | Name of the dangerous function reached |
 | `sink_va` | Virtual address of the call site |
-| `source_name` | Name of the taint source (e.g., `recv`, `read`) |
+| `source_name` | Name of the taint source such as `recv` and `read` |
 | `arg_index` | Which argument to the sink carries taint 0-indexed |
 | `chain` | `[va, register, operation]` steps from source to sink |
 | `path` | `[caller_va, ...]` function VAs traversed interprocedurally |

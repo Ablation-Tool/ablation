@@ -1,12 +1,12 @@
 # Forensics Enumeration
 
-Detect Windows rootkit indicators SEH chain access, SSDT hooks, DPC/timer abuse, live Linux memory artifacts (anonymous RWX mappings, `/dev/shm` execution, interpreter injection), forensic artifact presence $MFT, LNK files, Prefetch, EVTX, and binary obfuscation patterns: from raw binary data or live procfs: via `modules/forensics_enum.py`.
+Detect Windows rootkit indicators SEH chain access, SSDT hooks, DPC/timer abuse, live Linux memory artifacts anonymous RWX mappings, `/dev/shm` execution, and interpreter injection, forensic artifact presence $MFT, LNK files, Prefetch, EVTX, and binary obfuscation patterns: from raw binary data or live procfs: via `modules/forensics_enum.py`.
 
 ---
 
 ## Why this exists
 
-1. **SEH-based exploit detection requires byte-level pattern matching that generic AV cannot perform**: `detect_seh_chain_corruption()` searches for Windows SEH access patterns (`FS:[0]` or `GS:[0]` register loads), POPAD+JMP eggscan sequences (classic SEH overwrite: POPAD restores registers, JMP skips nSEH), VEH installation patterns (`RtlAddVectoredExceptionHandler` import), and custom exception handler field writes. These are malware and exploit delivery indicators that are only detectable at the byte level in stripped or packed binaries.
+1. **SEH-based exploit detection requires byte-level pattern matching that generic AV cannot perform**: `detect_seh_chain_corruption()` searches for Windows SEH access patterns (`FS:[0]` or `GS:[0]` register loads), POPAD+JMP eggscan sequences classic SEH overwrite: POPAD restores registers and JMP skips nSEH, VEH installation patterns (`RtlAddVectoredExceptionHandler` import), and custom exception handler field writes. These are malware and exploit delivery indicators that are only detectable at the byte level in stripped or packed binaries.
 
 2. **SSDT and DPC abuse indicates kernel rootkits operating below the process layer**: `detect_ssdt_hook_indicators()` searches for kernel function pointer manipulation patterns SSDT index-based call sequences. `detect_dpc_timer_abuse()` finds `KeInsertQueueDpc`, `KeInitializeTimer`, and `KeSetTimerEx` import strings alongside `KeWaitForSingleObject` in a tight call window: the signature of timing-based rootkit persistence via deferred procedure calls.
 
@@ -100,7 +100,7 @@ detect_linux_memory_artifacts:
 
 ## Pipeline position
 
-Run binary analysis functions (`detect_seh_chain_corruption()`, `detect_dpc_timer_abuse()`) during static analysis of suspected malware samples. Run `detect_linux_memory_artifacts()` immediately upon gaining shell access to a live host, it provides a fast indicator-of-compromise sweep in under one second.
+Run binary analysis functions `detect_seh_chain_corruption()` and `detect_dpc_timer_abuse()` during static analysis of suspected malware samples. Run `detect_linux_memory_artifacts()` immediately upon gaining shell access to a live host, it provides a fast indicator-of-compromise sweep in under one second.
 
 ---
 
@@ -111,7 +111,7 @@ All three detection functions return `List[{severity, title, detail}]`:
 | Field | Content |
 |:---|:---|
 | `severity` | `CRITICAL` / `HIGH` |
-| `title` | Finding code (e.g., `SEH_CHAIN_ACCESSED`, `POPAD_JMP_EGGSCAN`, `HIGH_FREQUENCY_TIMER`, `ANONYMOUS_RWX_MAPPING`) |
+| `title` | Finding code such as `SEH_CHAIN_ACCESSED`, `POPAD_JMP_EGGSCAN`, `HIGH_FREQUENCY_TIMER`, and `ANONYMOUS_RWX_MAPPING` |
 | `detail` | Instruction VA, PID/process name, or memory range providing evidence |
 
 `detect_linux_memory_artifacts()` additionally includes `pid` and `process` fields in `detail`.

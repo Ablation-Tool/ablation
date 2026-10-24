@@ -188,7 +188,7 @@ A2L  03L906018CG_5152_504704_P643_X5F5_EDC17CP46_2.7.a2l
   byte_order: little
 ```
 
-The EDC17CP46 runs on an Infineon TriCore TC1766 (little-endian, `MSB_LAST`). Virtual addresses
+The EDC17CP46 runs on an Infineon TriCore TC1766 little-endian and `MSB_LAST`. Virtual addresses
 start at `0x80000000`: the TriCore PFLASH segment base. Pass this as `base_address=0x80000000`
 to shift addresses down to ROM file offsets when needed.
 
@@ -272,7 +272,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, and or C28x for vulnerability analysis.
 
 ---
 
@@ -290,7 +290,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 | `cols` | Column count X-axis length |
 | `element_bits` | Storage width per element in bits |
 | `scale` / `bias` | Physical-to-raw conversion: `physical = raw * scale + bias` |
-| `unit` | Engineering unit string (e.g., `'°C'`, `'kPa'`) |
+| `unit` | Engineering unit string such as `'°C'` and `'kPa'` |
 | `x_axis` / `y_axis` | `CalibrationAxis` for axis labels (None for scalar tables) |
 
 `parser.label_map()` returns `Dict[int, str]` for direct `ctx.set_name()` injection.

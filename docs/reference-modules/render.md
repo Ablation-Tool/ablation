@@ -92,7 +92,7 @@ Color constants are empty strings in plain mode, so the same code works in every
 
 ## How it works
 
-At import time, `render.py` checks `sys.stdout.isatty()`, the `NO_COLOR` environment variable, and `COLORTERM` / `TERM` to set the module-level `MODE` constant. All color constants (`RED`, `GREEN`, etc.) are then set to the appropriate ANSI escape sequences for the detected mode, or to empty strings if `MODE='plain'`. This means callers can concatenate color constants with strings unconditionally: in plain mode the concatenation produces no escape codes and the string is unchanged. `box()`, `sbox()`, `section()`, and `arrow()` build framed output strings using Unicode box-drawing characters; in plain mode they fall back to ASCII borders. `strip(s)` uses a compiled regex to remove all ANSI escape sequences for computing display-width of a colored string.
+At import time, `render.py` checks `sys.stdout.isatty()`, the `NO_COLOR` environment variable, and `COLORTERM` / `TERM` to set the module-level `MODE` constant. All color constants `RED` and `GREEN`, and so on are then set to the appropriate ANSI escape sequences for the detected mode, or to empty strings if `MODE='plain'`. This means callers can concatenate color constants with strings unconditionally: in plain mode the concatenation produces no escape codes and the string is unchanged. `box()`, `sbox()`, `section()`, and `arrow()` build framed output strings using Unicode box-drawing characters; in plain mode they fall back to ASCII borders. `strip(s)` uses a compiled regex to remove all ANSI escape sequences for computing display-width of a colored string.
 
 ---
 
@@ -150,7 +150,7 @@ In `plain` mode pipe/redirect, the same code prints:
 | `arrowlabel, color` | Right-arrow label string |
 | `strip(s)` | Input string with ANSI escape codes removed |
 
-ANSI color constants (`RED`, `ORANGE`, `YELLOW`, `GREEN`, `GRAY`, `WHITE`, `BOLD`, `DIM`, `RESET`) are auto-selected based on terminal capability.
+ANSI color constants `RED`, `ORANGE`, `YELLOW`, `GREEN`, `GRAY`, `WHITE`, `BOLD`, `DIM`, and `RESET` are auto-selected based on terminal capability.
 
 ---
 

@@ -63,7 +63,7 @@ The pattern that does not work: em dashes where a period would do. Parenthetical
 
 ## How it works
 
-`check(text)` splits the input on newlines and applies a fixed set of compiled `re.Pattern` rules to each line: `em_dash` matches `\s—\s` or `—`; `parenthetical` matches `\([^)]{8,}\)` parenthetical phrases over 8 characters; `filler` matches a list of banned phrases (e.g., `comprehensive`, `fully`, `simply`, `leverage`); `ai_copy` matches phrases common in AI-generated prose (e.g., `delve into`, `in the realm of`). Each match produces a `ProseIssue` with rule, line, column, matched text, and a suggestion string. `check_file(path)` reads the file and calls `check()`. `reportissues, filename` formats them as a human-readable list. The CLI entry point exits with code 1 on any violation so it can gate pre-commit hooks.
+`check(text)` splits the input on newlines and applies a fixed set of compiled `re.Pattern` rules to each line: `em_dash` matches `\s: \s` or `: `; `parenthetical` matches `\([^)]{8,}\)` parenthetical phrases over 8 characters; `filler` matches a list of banned phrases such as `fully`, `simply`, and `uses`; `ai_copy` matches phrases common in AI-generated prose such as `delve into` and `in the realm of`. Each match produces a `ProseIssue` with rule, line, column, matched text, and a suggestion string. `check_file(path)` reads the file and calls `check()`. `reportissues, filename` formats them as a human-readable list. The CLI entry point exits with code 1 on any violation so it can gate pre-commit hooks.
 
 ---
 
@@ -87,7 +87,7 @@ forge.md:41:9  parenthetical  "(parse, scan, detect)"
 
 **`parenthetical` false positive on code spans**: a parenthetical like `e.g. SHA256` or `default 0.62` exceeds 8 characters and will trigger the rule even though it is appropriate in technical docs. Inline code using backticks instead of parentheses to avoid the rule: `` default `0.62` `` instead of `default 0.62`.
 
-**`filler` on legitimate compound words**: phrases like `simply put` and `leverages` are caught by the filler and ai_copy rules, but a domain-specific compound like `leverage ratio` in a finance context is not a filler phrase. Extend the rule set with a per-project allowlist if the default rules produce excessive noise.
+**`filler` on legitimate compound words**: phrases like `simply put` and `uses` are caught by the filler and ai_copy rules, but a domain-specific compound like `uses ratio` in a finance context is not a filler phrase. Extend the rule set with a per-project allowlist if the default rules produce excessive noise.
 
 ---
 

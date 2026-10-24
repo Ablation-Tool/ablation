@@ -456,9 +456,9 @@ Batch triage scanner for directories of native ELF `.so` files. Returns a scored
 
 | Signal | Points |
 |---|---|
-| Credential-field format string (`sk=%s`, `password=%s`, `token=%s`) | +3 |
-| Credential-field name or exec pattern (`system(`, `/bin/sh`) | +2 |
-| Crypto primitive string (`AES`, `HMAC`, `SHA256`, `DTLS`) | +1 |
+| Credential-field format string `sk=%s`, `password=%s`, and `token=%s` | +3 |
+| Credential-field name or exec pattern `system(` and `/bin/sh` | +2 |
+| Crypto primitive string `AES`, `HMAC`, `SHA256`, and `DTLS` | +1 |
 | JNI count >= 50 | +2 |
 | JNI count >= 10 | +1 |
 | Internal function count >= 1000 | +2 |
@@ -518,13 +518,13 @@ BinderScanner report:
 
 **`generic_secret` matches template placeholder values.** Strings like `"secret=YOUR_SECRET_HERE"` or `"api_key=<replace>"` trigger the pattern. The `evidence` field exposes the raw string: discard matches under 16 characters or containing obvious placeholder text.
 
-**ProGuard-obfuscated APKs produce incomplete method reference graphs.** On heavily obfuscated APKs, class and method names are single letters. String pool scanning and dangerous API detection remain effective; class-name-based analysis (exported component names, Binder service class lookup) is unreliable. Cross-reference findings with `DexDisasm` output at the method level.
+**ProGuard-obfuscated APKs produce incomplete method reference graphs.** On heavily obfuscated APKs, class and method names are single letters. String pool scanning and dangerous API detection remain effective; class-name-based analysis exported component names and Binder service class lookup is unreliable. Cross-reference findings with `DexDisasm` output at the method level.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm the target binary format (APK, `.mpy`, BEAM, Go ELF) before loading. `BinaryContext` is not required for all runtime analyzers.
+**Before this module:** Confirm the target binary format APK, `.mpy`, BEAM, and Go ELF before loading. `BinaryContext` is not required for all runtime analyzers.
 
 **After this module:** Feed dangerous call findings to `TaintTracker` or `FindingRegistry` for confirmed findings.
 
@@ -537,7 +537,7 @@ Each layer returns typed finding objects. `DexAnalyzer(apk).scan()` returns `Lis
 | Attribute | Content |
 |:---|:---|
 | `severity` | `'CRITICAL'` / `'HIGH'` / `'MEDIUM'` / `'LOW'` |
-| `category` | Finding category (e.g., `'manifest/debuggable'`, `'api/js_interface'`, `'secret/aws_key'`) |
+| `category` | Finding category such as `'manifest/debuggable'`, `'api/js_interface'`, and `'secret/aws_key'` |
 | `title` | Short description of the finding |
 | `detail` | Extended explanation |
 | `source` | `'manifest'`, `'dex:classes.dex'`, `'native'` |

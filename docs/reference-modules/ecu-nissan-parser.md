@@ -73,7 +73,7 @@ The `expression=` field is a linear formula in `x`. Supported forms:
 | `x/k` | 1/k | 0.0 |
 | `x*k+b` or `(x*k)+b` | k | b |
 | `x+b` or `x-b` | 1.0 | b or -b |
-| Non-linear (e.g., `1881.6/x`) | 0.0 sentinel | 0.0 |
+| Non-linear such as `1881.6/x` | 0.0 sentinel | 0.0 |
 
 A scale of `0.0` is the sentinel for "scaling unavailable." The table is still returned with
 all address and dimension information; only the unit conversion is absent.
@@ -302,7 +302,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, and or C28x for vulnerability analysis.
 
 ---
 

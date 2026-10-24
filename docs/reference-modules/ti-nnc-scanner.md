@@ -25,7 +25,7 @@ The scanner operates entirely from symbol tables: no disassembly required for it
 **What it detects:**
 
 - `tvmgen_*_run` entrypoints: the compiled model inference call
-- Normalization parameter symbols (`bias_data`, `scale_data`, `shift_data` for NPU-QAT; `input_reciprocal_scale_data`, `input_zero_point_data` for CPU QDQ)
+- Normalization parameter symbols `bias_data`, `scale_data`, `shift_data` for NPU-QAT; `input_reciprocal_scale_data`, and `input_zero_point_data` for CPU QDQ
 - Weak symbol binding on normalization arrays: override risk
 - Hardware NPU mode vs software fallback (from `tvmgen_*_finished` volatile flag presence)
 - Multi-model NPU contention when multiple modules target the hardware accelerator
@@ -94,7 +94,7 @@ input_int = clip(round(input_float * reciprocal_scale) + zero_point, min, max)
 
 ## Architecture note
 
-The NNC is Apache TVM under the hood. `tvmc` is TVM's CLI frontend. The `tvmgen_<name>` naming convention, struct layout (`tvmgen_<name>_inputs`, `tvmgen_<name>_outputs`), and normalization symbol names are all deterministic from TVM's TI backend code generation. Multi-model compilation assigns one `mod_<name>.a` per model, each with its own `tvmgen_<name>.h` header. EdgeAI Studio calls Tiny ML ModelMaker which calls `tvmc` directly.
+The NNC is Apache TVM under the hood. `tvmc` is TVM's CLI frontend. The `tvmgen_<name>` naming convention, struct layout `tvmgen_<name>_inputs` and `tvmgen_<name>_outputs`, and normalization symbol names are all deterministic from TVM's TI backend code generation. Multi-model compilation assigns one `mod_<name>.a` per model, each with its own `tvmgen_<name>.h` header. EdgeAI Studio calls Tiny ML ModelMaker which calls `tvmc` directly.
 
 ---
 
@@ -127,7 +127,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
-**After this module:** Feed decoded instructions to the appropriate taint tracker (RH850, TriCore, SH-2A, or C28x) for vulnerability analysis.
+**After this module:** Feed decoded instructions to the appropriate taint tracker RH850, TriCore, SH-2A, and or C28x for vulnerability analysis.
 
 ---
 
@@ -146,7 +146,7 @@ Each `TiNNCScanFinding`:
 
 | Attribute | Content |
 |:---|:---|
-| `finding_id` | Stable identifier string (e.g., `'TINCC-001'`) |
+| `finding_id` | Stable identifier string such as `'TINCC-001'` |
 | `severity` | `'HIGH'` / `'MEDIUM'` / `'INFO'` |
 | `title` | Short finding title |
 | `description` | Human-readable description of the finding |
