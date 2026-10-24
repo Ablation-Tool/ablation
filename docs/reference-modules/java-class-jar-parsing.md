@@ -1,16 +1,16 @@
-# HarmonyOS/ArkTS Bytecode Analysis
+# Java .class and JAR Analysis
 
-Parse and disassemble HarmonyOS/ArkTS `.abc` Ark Bytecode files: covering both DYNAMIC (ECMAScript/ArkTS runtime) and STATIC (typed ArkTS) dialects: producing structured method inventories and smali-style instruction output for security analysis of HAP application packages and embedded ArkTS modules.
+Parse Java `.class` files and JAR archives, scan the JVM constant pool for security-relevant patterns, and detect deserialization gadget chains, ClassLoader abuse, Spring endpoint exposure, and hardcoded credentials without bytecode decompilation.
 
 ---
 
 ## Why this exists
 
-1. **HarmonyOS applications HAP packages ship compiled `.abc` bytecode, not `.py` or `.js` source files.** `ABCParser` provides the only programmatic access to method names, class hierarchies, and literal string tables in these binaries. Without it, analyzing a FortiClient HarmonyOS HAP or a WeChat `.abc` module requires reverse-engineering the ArkCompiler binary format from scratch for each engagement.
+1. **Java `.class` files store every method name, class reference, and string literal in an unobfuscated constant pool.** `parse_class_file()` reads the pool directly so dangerous patterns like `Runtime.exec`, `ObjectInputStream`, and `InvokerTransformer` are visible without decompiling any bytecode. This works on any Java version because the pool format has been stable since JDK 1.0.
 
-2. **Two ABC dialects exist in the wild with different `access_flags` encodings**: DYNAMIC ECMAScript/ArkTS runtime, `access_flags` as ULEB128 and STATIC typed ArkTS, `access_flags` as `u32`. `ABCParser.from_path()` auto-detects the dialect from the ABC header version. Using the wrong decoder silently produces wrong method metadata: `ABCParser` handles this transparently.
+2. **JAR files are ZIP archives containing dozens or hundreds of `.class` files.** `analyze_jar()` and `scan_jar_for_vulnerabilities()` open the ZIP, iterate every entry, and apply the constant pool scanner to each class in one pass. Scanning a JAR individually per class would require the caller to manage ZIP iteration.
 
-3. **`ARKDisasm` decodes the full ArkCompiler ISA v13.0.0.0, 324 opcodes across 4 prefix groups**: producing both structured `ARKInstruction` objects and smali-style text output for manual review. `ARKInstruction.is_call()`, `is_string_load()`, `string_id()`, and `func_entity_id()` enable automated security pattern scanning dangerous function calls, string argument extraction without full decompilation.
+3. **Spring Framework security gaps require cross-class analysis.** A controller class with `@RequestMapping` is a live HTTP endpoint. If it lacks `@PreAuthorize` or `@Secured`, the endpoint is unauthenticated. `analyze_spring_application_context()` detects this pattern across all classes in a JAR so unprotected endpoints are reported before manual review begins.
 
 ---
 
@@ -18,10 +18,11 @@ Parse and disassemble HarmonyOS/ArkTS `.abc` Ark Bytecode files: covering both D
 
 ```mermaid
 flowchart TD
-    A["ABCParser.from_path(abc_path)"] --> B["parse() → ABCFile\n  ABCHeader: version, class_region_offset, methods_region_size\n  has_literal_in_header() → version-specific boundary check\n  ABCIndexHeader: class index, method index"]
-    B --> C["methods() → Iterator[MethodInfo]\n  MethodInfo:\n    fqn() → 'ClassName.methodName' fully-qualified name\n    is_native(), is_abstract(), is_static(), has_code() → bool\n    code_item → CodeItem (bytecode offset + size)"]
-    B --> D["ARKDisasm.disasm_method(method_info) → List[ARKInstruction]\n  Decode bytecode at code_item.offset\n  ArkCompiler ISA v13.0.0.0: 324 opcodes, 4 prefix groups\n  ARKInstruction:\n    mnemonic: str\n    operands: List\n    is_call() → bool\n    is_string_load() → bool\n    string_id() → Optional[int]  (index into literal string table)"]
-    D --> E["disasm_text(method_info) → str\n  Smali-style text output for manual review"]
+    A["parse_class_file(data) or analyze_jar(jar_path)"] --> B["ConstantPool.parse()\n  Read cp_count entries\n  UTF8 strings, class refs, method refs\n  Long/Double consume 2 slots"]
+    B --> C["scan_constant_pool_strings(data)\n  Linear scan for tag=1 UTF8 entries\n  No bytecode decode needed\n  Finds: exec, ClassLoader, ObjectInputStream\n  JNDI, XXE, SSRF, hardcoded literals"]
+    C --> D["detect_java_deserialization_exploitation()\n  InvokerTransformer / ChainedTransformer\n  Commons Collections gadget chain\n  SerializedLambda (Java 8+ gadget)\n  0xACED0005 magic in pool"]
+    D --> E["analyze_spring_application_context()\n  @RequestMapping without @PreAuthorize\n  Spring Actuator endpoint exposure\n  @Value with hardcoded literal"]
+    E --> F["synthesize_findings(all_results) → List[dict]\n  severity: CRITICAL / HIGH / MEDIUM\n  exploit: reproduction path\n  detail: constant pool evidence"]
 ```
 
 ---
@@ -29,93 +30,90 @@ flowchart TD
 ## Usage
 
 ```python
-from ablation.analyzers.abc_parser import ABCParser
-from ablation.analyzers.abc_disasm import ARKDisasm
+from modules.java_re import parse_class_file, analyze_jar, scan_java_artifacts, synthesize_findings
 
-with ABCParser.from_path('/path/to/modules.abc') as parser:
-    abc_file = parser.parse()
+# Single .class file
+with open('Target.class', 'rb') as f:
+    result = parse_class_file(f.read())
+print(result['findings'])
 
-    print(f"ABC version: {abc_file.header.version_tuple()}")
-    print(f"Dialect: {'DYNAMIC' if abc_file.header.has_literal_in_header() else 'STATIC'}")
+# JAR file
+result = analyze_jar('/path/to/app.jar')
+for finding in synthesize_findings([result]):
+    print(f"[{finding['severity']}] {finding['title']}")
+    print(f"  {finding['detail']}")
 
-    # Inventory all methods
-    for method in abc_file.methods():
-        if method.has_code():
-            print(f"  {method.fqn()}  native={method.is_native()}")
+# Filesystem scan
+results = scan_java_artifacts(roots=['/opt/tomcat/webapps'])
+for finding in synthesize_findings(results):
+    print(finding)
+```
 
-    # Disassemble a specific method
-    disasm = ARKDisasm(abc_file)
-    for method in abc_file.methods():
-        if 'processPacket' in method.fqn():
-            insns = disasm.disasm_method(method)
-            for insn in insns:
-                print(f"  {insn.mnemonic} {insn.operands}")
-                if insn.is_string_load():
-                    str_val = abc_file.string_at(insn.string_id())
-                    print(f"    → string: {str_val!r}")
-            print(disasm.disasm_text(method))
+```python
+from modules.java_decompiler import scan_jar_for_vulnerabilities, report_java_findings
+
+findings = scan_jar_for_vulnerabilities('/path/to/app.jar')
+print(report_java_findings(findings))
 ```
 
 ---
 
 ## Example output
 
-The following illustrates the ABC analysis output format. Actual method names are HAP-specific.
-
 ```
-ABCParser: modules.abc  (v12.0.6.0, DYNAMIC dialect)
+[CRITICAL] Deserialization gadget chain
+  detail: InvokerTransformer in constant pool — Commons Collections gadget chain
+  class: com.example.PayloadHandler
+  exploit: Pass gadget payload to any ObjectInputStream.readObject() endpoint
 
-Methods: <N> total  (<M> with code)
+[HIGH] Unprotected Spring endpoint
+  detail: @RequestMapping present, no @PreAuthorize or @Secured annotation found
+  class: com.example.AdminController
+  exploit: Enumerate endpoints via /actuator/mappings or path brute-force
 
-Selected methods:
-  com.example.app.NetworkHandler.processPacket  has_code=True  native=False
-  com.example.app.Config.load                  has_code=True  native=False
+[HIGH] URLClassLoader reference
+  detail: java/net/URLClassLoader in constant pool — remote class loading possible
+  class: com.example.PluginLoader
 
-Disassembly of processPacket:
-  ldai    0x0
-  sta     v0
-  ldobj.v v1, 0x1234  → string: "recv"
-  call.virt.short v2, v3
+[MEDIUM] Hardcoded Spring @Value literal
+  detail: Spring @Value with hardcoded literal (not a placeholder): "secret-key-abc123"
+  exploit: Extract literal from constant pool at build time
 ```
 
 ---
 
 ## False positives
 
-**`ABCParser` covers ABC versions 9–13**: version 14+ if released may use a different header layout. `ABCHeader.version_tuple()` returns the version; check against the supported range before relying on parse output.
+**`InvokerTransformer` in test or utility JARs is not always exploitable.** The constant pool scanner flags any class that references the gadget symbol. Confirm that the class is reachable from a deserialization entry point before reporting CRITICAL.
 
-**`is_call()` identifies method invocation opcodes**, it does not distinguish between safe internal calls and security-sensitive calls to network or filesystem APIs. Use `string_id()` and `func_entity_id()` to extract the actual callee name from the literal string table before treating a call as security-relevant.
+**Spring `@RequestMapping` on internal classes is not always an HTTP surface.** Some Spring classes use the annotation for internal routing. Confirm the class is registered as a `@Controller` or `@RestController` before reporting the endpoint as unauthenticated.
 
 ---
 
 ## Pipeline position
 
-Run `ABCParser.from_path()` on any extracted HarmonyOS `.abc` file before security analysis. Use `ARKDisasm.disasm_text()` for manual review of suspicious methods. Feed `is_call()` patterns to automated sink detection by matching `func_entity_id()` against known dangerous method names.
+**Before this module:** no prerequisites for `.class` files. For JAR files, confirm the archive is not encrypted or nested inside another container format.
+
+**After this module:** pass `CRITICAL` deserialization findings to `detect_java_deserialization_exploitation()` for gadget chain confirmation. Pass Spring endpoint findings to manual HTTP surface review.
 
 ---
 
-## Reading output
+## Reading findings
 
-`ABCParser.get_all_methods()` returns `List[MethodInfo]` (also available as `iter_methods()` for memory-efficient iteration):
+`synthesize_findings()` returns `List[dict]`:
 
-| Attribute | Content |
+| Key | Content |
 |:---|:---|
-| `entity_id` | File offset of the method item |
-| `class_name` | Decoded class name string |
-| `method_name` | Decoded method name string |
-| `class_idx` | `u16` class index |
-| `proto_idx` | `u16` prototype index (`0xffff` = no prototype) |
-| `access_flags` | Decoded ULEB128 access flags |
-| `code_off` | File offset of `CodeItem`; `0` = abstract or native method |
-| `source_lang` | `0` = ECMAScript/ArkTS, `1` = Java, `-1` = not present |
-| `fqn` | Property: `class_name.method_name` fully-qualified name |
-
-`ABCParser.get_code(method)` returns the `CodeItem` for a given `MethodInfo` (or raw `code_off`), or `None` for abstract/native methods.
+| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
+| `title` | Short description of the finding |
+| `detail` | Constant pool evidence string |
+| `class` | Qualified class name where found |
+| `exploit` | Reproduction path or attack vector |
 
 ---
 
 ## See also
 
-- [DEX Disassembly and Lifting](dex-disassembly-and-lifting.md): Android DEX equivalent parser and lifter
-- [Source Dangerous Sink Detection](source-dangerous-sink-detection.md): `SourceSinkScanner` for source-level JavaScript before compilation to ABC
-- [Electron Application Auditing](electron-application-auditing.md): JavaScript-layer security scanning for Electron-based apps
+- [DEX](dex.md): Android Dalvik bytecode analysis
+- [ARK](harmonyos.md): HarmonyOS ArkTS bytecode analysis
+- [Python .pyc](python-pyc-scanning.md): compiled Python bytecode scanning
