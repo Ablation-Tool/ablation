@@ -73,36 +73,16 @@ Ablation is a reverse engineering framework built for both LLM agents and human 
 <details>
 <summary>Taint Analysis</summary>
 
-Source-to-sink register and memory dataflow tracking across 18 ISAs. All basic trackers use `run()`. The x86-64 primary tracker also accepts `trace_function(func_va)`. Do not call `.trace()` because that method does not exist on any tracker.
-
-| Capability | Code | ISA | Notes |
-|:---|:---|:---|:---|
-| [**x86-64 Taint**](docs/reference-modules/taint-analysis-2.md) | [1](ablation/analyzers/taint_tracker.py) | x86-64 | `trace_function(func_va)` · `run_interprocedural()` |
-| [**x86-64 Labeled Taint**](docs/reference-modules/named-taint-sources-and-bounds.md) | [1](ablation/analyzers/taint_tracker_x86_labeled.py) | x86-64 | Preserves source labels and bounds on attacker-controlled values |
-| [**ARM64 Taint**](docs/reference-modules/taint-analysis-2.md) | [1](ablation/analyzers/taint_tracker_arm64.py) | ARM64 | `run(func_va, source_reg, sink_patterns)` |
-| [**ARM32 Taint**](docs/reference-modules/taint-analysis-2.md) | [1](ablation/analyzers/taint_tracker_arm32.py) | ARM32 | `run()` |
-| [**ARM32 Labeled Taint**](docs/reference-modules/named-taint-sources-and-bounds.md) | [1](ablation/analyzers/taint_tracker_arm32_labeled.py) | ARM32 | Labels frame slots, pointer offsets, and memory ranges so taint sources are named in the report |
-| [**MIPS Taint**](docs/reference-modules/taint-analysis-2.md) | [1](ablation/analyzers/taint_tracker_mips.py) | MIPS-32 | `run()` |
-| [**MIPS Labeled Taint**](docs/reference-modules/named-taint-sources-and-bounds.md) | [1](ablation/analyzers/taint_tracker_mips_labeled.py) | MIPS-32 | Names sources and sets sinks per call rather than using the default register model |
-| [**MIPS-64 Taint**](docs/reference-modules/taint-analysis-2.md) | [1](ablation/analyzers/taint_tracker_mips64.py) | MIPS-64 | `run()` |
-| [**PPC32 Taint**](docs/reference-modules/ppc32-taint-tracker.md) | [1](ablation/analyzers/taint_tracker_ppc32.py) | PPC-32 | `run()` |
-| [**PPC64 Taint**](docs/reference-modules/ppc64-taint-analysis.md) | [1](ablation/analyzers/taint_tracker_ppc64.py) | PPC-64 | Uses a boolean `Dict[str, bool]` path model. This is not the labeled-taint API. |
-| [**PPC Labeled Taint**](docs/reference-modules/named-taint-sources-and-bounds.md) | [1](ablation/analyzers/taint_tracker_ppc_labeled.py) | PPC-32/64 | `run(func_va, sources, sinks)` |
-| [**RISC-V Taint**](docs/reference-modules/risc-v.md) | [1](ablation/analyzers/taint_tracker_riscv.py) | RV32 + RV64 | `run()` |
-| [**RISC-V 32 Taint**](docs/reference-modules/risc-v.md) | [1](ablation/analyzers/taint_tracker_riscv32.py) | RV32 | `run()` |
-| [**RISC-V 64 Taint**](docs/reference-modules/risc-v.md) | [1](ablation/analyzers/taint_tracker_riscv64.py) | RV64 | `run()` |
-| [**RISC-V Labeled Taint**](docs/reference-modules/named-taint-sources-and-bounds.md) | [1](ablation/analyzers/taint_tracker_riscv_labeled.py) | RV32 + RV64 | `run(func_va, sources, sinks)` |
-| [**ARC Taint**](docs/reference-modules/binary-lifter.md) | [1](ablation/analyzers/taint_tracker_arc.py) | ARC EM/HS | `run()` |
-| [**ARC Labeled Taint**](docs/reference-modules/named-taint-sources-and-bounds.md) | [1](ablation/analyzers/taint_tracker_arc_labeled.py) | ARC EM/HS | `run(func_va, sources, sinks)` |
-| [**V850 Taint**](docs/reference-modules/v850-rh850.md) | [1](ablation/analyzers/taint_tracker_v850.py) | V850 | BSS-path model |
-| [**RH850 Taint**](docs/reference-modules/v850-rh850.md) | [1](ablation/analyzers/taint_tracker_rh850.py) | RH850 | ECU automotive taint |
-| [**TriCore Taint**](docs/reference-modules/tricore-taint-tracker.md) | [1](ablation/analyzers/taint_tracker_tricore.py) | TriCore TC1.6x | ECU automotive taint |
-| [**nanoMIPS Taint**](docs/reference-modules/nanomips.md) | [1](ablation/analyzers/taint_tracker_nanomips.py) | nanoMIPS | `run()` |
-| [**LoongArch64 Taint**](docs/reference-modules/loongarch64-2.md) | [1](ablation/analyzers/taint_tracker_loongarch64.py) | LoongArch64 | `run()` |
-| [**i386 Taint**](docs/reference-modules/taint-analysis-2.md) | [1](ablation/analyzers/taint_tracker_i386.py) | i386 | `run()` |
-| [**x86-32 Taint**](docs/reference-modules/taint-analysis-2.md) | [1](ablation/analyzers/taint_tracker_x86_32.py) | x86-32 | `run()` |
-| [**Cross-Library Taint (LibGraph)**](docs/reference-modules/cross-library-analysis.md) | [1](ablation/analyzers/cross_binary_taint.py)&nbsp;[2](ablation/analyzers/lib_graph.py) | All ELF | Traces argument taint across .so boundaries so a vulnerable sink in a shared library is flagged even when the call site is in a different binary. |
-| [**Source Taint Tracker**](docs/reference-modules/source-code-auditing.md) | [1](ablation/analyzers/source_taint_tracker.py) | Python/JS source | Source-level dangerous-sink taint for repository auditing. |
+| Capability | Code | Description |
+|:---|:---|:---|
+| [**x86-64 Taint**](docs/reference-modules/taint-analysis-2.md) | [1](ablation/analyzers/taint_tracker.py)&nbsp;[2](ablation/analyzers/taint_tracker_x86_labeled.py) | Traces register and memory state from source to sink across x86-64 functions. Call `trace_function(func_va)` for a single function or `run_interprocedural()` for cross-call chains. Do not call `.trace()` because that method does not exist. The labeled variant preserves named source labels and bounds on attacker-controlled values. |
+| [**ARM Taint**](docs/reference-modules/taint-analysis-2.md) | [1](ablation/analyzers/taint_tracker_arm64.py)&nbsp;[2](ablation/analyzers/taint_tracker_arm32.py) | ARM64 uses `run(func_va, source_reg, sink_patterns)`. ARM32 uses `run()`. The [labeled ARM32 variant](docs/reference-modules/named-taint-sources-and-bounds.md) names frame slots, pointer offsets, and memory ranges so taint sources are identified in the report. |
+| [**MIPS Taint**](docs/reference-modules/mips.md) | [1](ablation/analyzers/taint_tracker_mips.py)&nbsp;[2](ablation/analyzers/taint_tracker_mips64.py) | Covers MIPS-32, MIPS-64, and [nanoMIPS](docs/reference-modules/nanomips.md). The [labeled MIPS variant](docs/reference-modules/named-taint-sources-and-bounds.md) names sources and sets sinks per call rather than using the default register model. |
+| [**PowerPC Taint**](docs/reference-modules/ppc32-taint-tracker.md) | [1](ablation/analyzers/taint_tracker_ppc32.py)&nbsp;[2](ablation/analyzers/taint_tracker_ppc64.py) | PPC32 and PPC64 basic trackers plus a [labeled variant](docs/reference-modules/named-taint-sources-and-bounds.md) for both. The PPC64 basic tracker uses a boolean `Dict[str, bool]` path model, not the labeled-taint API. |
+| [**RISC-V Taint**](docs/reference-modules/risc-v.md) | [1](ablation/analyzers/taint_tracker_riscv.py)&nbsp;[2](ablation/analyzers/taint_tracker_riscv32.py) | Unified RV32/RV64 tracker, plus dedicated RV32-only and RV64-only variants, plus a [labeled variant](docs/reference-modules/named-taint-sources-and-bounds.md) for named source tracking across both widths. |
+| [**Embedded ISA Taint**](docs/reference-modules/taint-analysis-2.md) | [1](ablation/analyzers/taint_tracker_arc.py)&nbsp;[2](ablation/analyzers/taint_tracker_v850.py) | Dedicated `run()` trackers for ARC EM/HS, V850, [RH850](docs/reference-modules/v850-rh850.md), [TriCore TC1.6x](docs/reference-modules/tricore-taint-tracker.md), LoongArch64, i386, and x86-32. ARC also has a [labeled variant](docs/reference-modules/named-taint-sources-and-bounds.md). |
+| [**Cross-Library Taint**](docs/reference-modules/cross-library-analysis.md) | [1](ablation/analyzers/cross_binary_taint.py)&nbsp;[2](ablation/analyzers/lib_graph.py) | Traces argument taint across .so boundaries so a vulnerable sink in a shared library is flagged even when the call site is in a different binary. |
+| [**Source Taint Tracker**](docs/reference-modules/source-code-auditing.md) | [1](ablation/analyzers/source_taint_tracker.py) | Source-level dangerous-sink taint for Python and JavaScript repository auditing. |
 
 </details>
 
@@ -196,7 +176,7 @@ Source-to-sink register and memory dataflow tracking across 18 ISAs. All basic t
 </details>
 
 <details>
-<summary>Live Host, Forensics, Network, Cloud & Cisco</summary>
+<summary>Live Host, Forensics, Network & Cloud</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
