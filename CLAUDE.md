@@ -4,8 +4,8 @@
 
 Binary RE toolkit for stripped firmware. No symbols. No source.
 
-**Version:** 2.57.0 — `pip install -e ~/ablation/` (editable install, already done)
-**GitHub:** `Ablation-Tool/ablation` — all repo ops via `gh` CLI. `mcp__github` is BANNED.
+**Version:** 2.57.0. Install: `pip install -e ~/ablation/`
+**GitHub:** `Ablation-Tool/ablation`. All repo ops via `gh` CLI. `mcp__github` is BANNED.
 
 ---
 
@@ -63,14 +63,14 @@ See `docs/reference-modules/` for per-module constructor patterns and key method
 4. `SemanticSearcher.query()`: sweep ALL vuln classes before touching disasm
 5. `PatternLibrary.sweep()`: replay confirmed patterns from prior engagements
 6. `FuncProfiler.profile()` on top candidates
-6.5. `SinkArgClassifier.from_context(ctx).classify_all()`: classify ALL shell sink call sites as RODATA_CONST / SNPRINTF_RODATA / ARG_PROPAGATED / UNKNOWN — **eliminate RODATA_CONST and parameterless SNPRINTF_RODATA before TaintTracker runs**. Use `from_context(ctx)`, not `from_path()` — `from_path()` returns ~22 func_starts on stripped binaries.
+6.5. `SinkArgClassifier.from_context(ctx).classify_all()`: classify ALL shell sink call sites as RODATA_CONST / SNPRINTF_RODATA / ARG_PROPAGATED / UNKNOWN. Eliminate RODATA_CONST and parameterless SNPRINTF_RODATA before TaintTracker runs. Use `from_context(ctx)`, not `from_path()`: `from_path()` returns ~22 func_starts on stripped binaries.
 7. `TaintTracker` on ARG_PROPAGATED / UNKNOWN sinks only (not RODATA_CONST)
 8. `IPRegAnnotator` for cross-library call chains
 9. `WindowAnalyzer.dump_text()` for manual disasm only when automated tools don't have the sink
 
 **Confirming a finding:**
 
-0. **Byte-verify every VA.** `data = open(binary,'rb').read(); off = va - base; assert data[off:off+n] == expected_bytes`. No exceptions. C16 was carried as CONFIRMED HIGH for six sessions on pattern-match alone — the bytes were wrong.
+0. **Byte-verify every VA.** `data = open(binary,'rb').read(); off = va - base; assert data[off:off+n] == expected_bytes`. No exceptions. C16 was carried as CONFIRMED HIGH for six sessions on pattern-match alone. The bytes were wrong.
 1. `PathSolver.solve_path()` for feasibility
 2. `ctx.set_name(va, name, source="confirmed")`
 3. `PatternLibrary.record_hit(confirmed=True)`
@@ -85,7 +85,7 @@ See `docs/reference-modules/` for per-module constructor patterns and key method
 3. Wire: `from_context(ctx)` classmethod, `scan()` → findings list, `report(findings)` → str
 4. Run on a known-positive binary first; analyze FPs (cross-BB clobber? trusted source? callee reads register?)
 5. Add to `docs/guide-tool-selection.md`
-6. Write `docs/reference-modules/<module>.md` — open with "Why this exists" as numbered gaps
+6. Write `docs/reference-modules/<module>.md`. Open with "Why this exists" as numbered gaps.
 
 **Cross-version patch analysis:**
 
