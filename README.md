@@ -71,7 +71,7 @@ Ablation is a reverse engineering framework built for both LLM agents and human 
 </details>
 
 <details>
-<summary>Taint Analysis — 18 ISAs · 26 Tracker Files</summary>
+<summary>Taint Analysis: 18 ISAs · 26 Tracker Files</summary>
 
 Source-to-sink register and memory dataflow tracking across 18 ISAs. All basic trackers use `run()`. The x86-64 primary tracker also accepts `trace_function(func_va)`. Do not call `.trace()` because that method does not exist on any tracker.
 
@@ -107,7 +107,7 @@ Source-to-sink register and memory dataflow tracking across 18 ISAs. All basic t
 </details>
 
 <details>
-<summary>Vulnerability Scanners & Sink Classification — 53 Modules</summary>
+<summary>Vulnerability Scanners & Sink Classification: 53 Modules</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
