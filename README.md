@@ -3,9 +3,7 @@
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/standards-ablation.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/standards-ablation.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/standards-ablation.md) [![Sponsor Me](https://img.shields.io/badge/Sponsor%20Me-%23ea4aaa?logo=githubsponsors&logoColor=white)](docs/SPONSORS.md)
 
 ---
-
- Ablation is a reverse engineering framework built for autonomous operation with AI coding agents.
-
+Ablation is a reverse engineering framework that runs autonomously with AI coding agents.
 ---
 
 ![demo](assets/demos/claude-code-demo.gif)
