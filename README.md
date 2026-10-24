@@ -133,7 +133,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 </details>
 
 <details>
-<summary>OS, Mobile & Language Runtimes</summary>
+<summary>Multi-Architecture Analysis Matrix</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
