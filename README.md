@@ -11,7 +11,7 @@ Ablation is a reverse engineering framework that runs autonomously when paired w
 ## Capabilities
 
 <details>
-<summary>35 Decompilers</summary>
+<summary>39 Decompilers</summary>
 
 **Native CPUs**
 
