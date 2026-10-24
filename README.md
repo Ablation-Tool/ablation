@@ -177,7 +177,7 @@
 </details>
 
 
-## Setup
+## Setup & About
 
 <details>
 <summary><strong>Install</strong></summary>
@@ -235,9 +235,6 @@ Question auto-continue timeout          never
 </details>
 
 
----
-
-## About
 
 <details>
 <summary><strong>Acknowledgments</strong></summary>
