@@ -8,8 +8,6 @@
 
 ![demo](demos/claude-code-demo.gif)
 
----
-
 ## Capabilities
 
 <details>
@@ -178,9 +176,11 @@
 
 </details>
 
----
 
-## Real-World Results
+## Project Background & Governance
+
+<details>
+<summary><strong>Real-World Results</strong></summary>
 
 Ablation has been used to analyze production firmware and kernel drivers from Cisco, IBM, TencentOS, Huawei, Fortinet, and more.
 
@@ -193,9 +193,10 @@ Following coordinated disclosure, the **Cisco Product Security Incident Response
 | [CVE‑2026‑76413](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Single Sign-On Token Forgery | **8.5 High** |
 | [CVE‑2026‑76447](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4) | Identity Services Engine (ISE) | OCSP Responder Authentication Bypass | **5.3 Medium** |
 
----
+</details>
 
-## Quick Start
+<details>
+<summary><strong>Quick Start</strong></summary>
 
 ```bash
 pip install ablation-tool
@@ -247,9 +248,7 @@ Question auto-continue timeout          never
 
 </details>
 
----
-
-## Project Background & Governance
+</details>
 
 <details>
 <summary><strong>Demonstrations</strong></summary>
