@@ -338,7 +338,7 @@ Following coordinated disclosure, the **Cisco Product Security Incident Response
 </details>
 
 <details>
-<summary>Standards (NIST SP 800-218 · CISA Secure by Design · MIL-HDBK-115C)</summary>
+<summary>Code Standards</summary>
 
 **[NIST SP 800-218](https://csrc.nist.gov/pubs/sp/800/218/final)**
 
