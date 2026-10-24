@@ -63,7 +63,7 @@ See `docs/reference-modules/` for per-module constructor patterns and key method
 4. `SemanticSearcher.query()`: sweep ALL vuln classes before touching disasm
 5. `PatternLibrary.sweep()`: replay confirmed patterns from prior engagements
 6. `FuncProfiler.profile()` on top candidates
-6.5. `SinkArgClassifier.from_path(elf).classify_all()`: classify ALL shell sink call sites as RODATA_CONST / SNPRINTF_RODATA / ARG_PROPAGATED / UNKNOWN — **eliminate RODATA_CONST and parameterless SNPRINTF_RODATA before TaintTracker runs**
+6.5. `SinkArgClassifier.from_context(ctx).classify_all()`: classify ALL shell sink call sites as RODATA_CONST / SNPRINTF_RODATA / ARG_PROPAGATED / UNKNOWN — **eliminate RODATA_CONST and parameterless SNPRINTF_RODATA before TaintTracker runs**. Use `from_context(ctx)`, not `from_path()` — `from_path()` returns ~22 func_starts on stripped binaries.
 7. `TaintTracker` on ARG_PROPAGATED / UNKNOWN sinks only (not RODATA_CONST)
 8. `IPRegAnnotator` for cross-library call chains
 9. `WindowAnalyzer.dump_text()` for manual disasm only when automated tools don't have the sink
@@ -104,6 +104,7 @@ See `docs/reference-modules/` for per-module constructor patterns and key method
 - **No findings in repo:** reports, disclosures, and write-ups never go into the ablation repo.
 - **No Ghidra:** ever.
 - **Semantic sweep first:** before ANY manual disasm on a new binary or new vuln class.
+- **FORGE gate:** run `FORGE.audit_module()` on every new `.py` before any `git commit`. Gate must pass.
 - **Gaps become modules:** every missing sink, scanner pattern, or analysis gap → new ablation module. Never a workaround script.
 - **Findings go in RE modules:** `re/<vendor>/<target>_re.py`. Nowhere else. NOT `modules/`.
 - **Name everything:** `ctx.set_name()` the moment a function is confirmed. `ctx.name(va)` everywhere.
