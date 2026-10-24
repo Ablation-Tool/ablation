@@ -62,7 +62,7 @@
     ],
     "doc_accurate": true,
     "doc_notes": "",
-    "limitations": "M88K: string op_str \u2014 taint cannot query by operand type",
+    "limitations": "M88K: string op_str — taint cannot query by operand type",
     "dependencies": [
       "capstone",
       "lief"
@@ -151,7 +151,7 @@
       "docs/reference-modules/analysis-engine.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "analysis-engine.md documents only 3 of 9 per-arch engines \u2014 HIGH mislead risk",
+    "doc_notes": "analysis-engine.md documents only 3 of 9 per-arch engines — HIGH mislead risk",
     "limitations": "Loop convergence depends on lattice height",
     "dependencies": [
       null
@@ -286,7 +286,7 @@
       "ablation/analyzers/binary_context.py"
     ],
     "entry_point": "WindowAnalyzer(ctx).dump_text(func_va,n_insns) -> str",
-    "what_it_does": "Annotated x86-64 disassembly window around a VA with BinaryContext name annotations. Used for manual verification only \u2014 semantic sweep first per CLAUDE.md.",
+    "what_it_does": "Annotated x86-64 disassembly window around a VA with BinaryContext name annotations. Used for manual verification only — semantic sweep first per CLAUDE.md.",
     "inputs": "Function VA + instruction count",
     "outputs": "Multi-line annotated disassembly string",
     "scope": "x86-64 only",
@@ -509,7 +509,7 @@
     "reference_docs": [],
     "doc_accurate": null,
     "doc_notes": "No standalone reference doc",
-    "limitations": "build_cfg(insns,entry,isa) \u2014 unique: requires IsaModel arg",
+    "limitations": "build_cfg(insns,entry,isa) — unique: requires IsaModel arg",
     "dependencies": [
       "insn_riscv"
     ],
@@ -1208,8 +1208,8 @@
       "docs/reference-modules/insn-models.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops \u2014 runtime failure if doc followed",
-    "limitations": "insn-models.md uses wrong field names (.va/.operands) \u2014 code uses .address/.ops",
+    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops — runtime failure if doc followed",
+    "limitations": "insn-models.md uses wrong field names (.va/.operands) — code uses .address/.ops",
     "dependencies": [
       "isa_arc",
       "capstone"
@@ -1239,8 +1239,8 @@
       "docs/reference-modules/insn-models.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops \u2014 runtime failure if doc followed",
-    "limitations": "insn-models.md uses wrong field names (.va/.operands) \u2014 code uses .address/.ops",
+    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops — runtime failure if doc followed",
+    "limitations": "insn-models.md uses wrong field names (.va/.operands) — code uses .address/.ops",
     "dependencies": [
       "isa_arm32",
       "capstone"
@@ -1270,8 +1270,8 @@
       "docs/reference-modules/insn-models.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops \u2014 runtime failure if doc followed",
-    "limitations": "insn-models.md uses wrong field names (.va/.operands) \u2014 code uses .address/.ops",
+    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops — runtime failure if doc followed",
+    "limitations": "insn-models.md uses wrong field names (.va/.operands) — code uses .address/.ops",
     "dependencies": [
       "isa_aarch64",
       "capstone"
@@ -1291,7 +1291,7 @@
       "ablation/analyzers/insn_loongarch64.py"
     ],
     "entry_point": "Insn dataclass: .address, .mnemonic, .ops (List[Operand]); Reg/Imm/Mem operand types",
-    "what_it_does": "Typed instruction model for LoongArch64. Consumed by labeled taint trackers and analysis engines. No Mem type \u2014 load/store by mnemonic only.",
+    "what_it_does": "Typed instruction model for LoongArch64. Consumed by labeled taint trackers and analysis engines. No Mem type — load/store by mnemonic only.",
     "inputs": "Capstone CsInsn or raw decode",
     "outputs": "Insn dataclass with .address/.ops",
     "scope": "LoongArch64",
@@ -1301,8 +1301,8 @@
       "docs/reference-modules/insn-models.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops \u2014 runtime failure if doc followed. No Mem type \u2014 load/store by mnemonic only",
-    "limitations": "insn-models.md uses wrong field names (.va/.operands) \u2014 code uses .address/.ops",
+    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops — runtime failure if doc followed. No Mem type — load/store by mnemonic only",
+    "limitations": "insn-models.md uses wrong field names (.va/.operands) — code uses .address/.ops",
     "dependencies": [
       "isa_loongarch64",
       "capstone"
@@ -1322,7 +1322,7 @@
       "ablation/analyzers/insn_m88k.py"
     ],
     "entry_point": "Insn dataclass: .address, .mnemonic, .ops (List[Operand]); Reg/Imm/Mem operand types",
-    "what_it_does": "Typed instruction model for M88K. Consumed by labeled taint trackers and analysis engines. String op_str only \u2014 no typed operands.",
+    "what_it_does": "Typed instruction model for M88K. Consumed by labeled taint trackers and analysis engines. String op_str only — no typed operands.",
     "inputs": "Capstone CsInsn or raw decode",
     "outputs": "Insn dataclass with .address/.ops",
     "scope": "M88K",
@@ -1332,8 +1332,8 @@
       "docs/reference-modules/insn-models.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops \u2014 runtime failure if doc followed. String op_str only \u2014 no typed operands",
-    "limitations": "insn-models.md uses wrong field names (.va/.operands) \u2014 code uses .address/.ops",
+    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops — runtime failure if doc followed. String op_str only — no typed operands",
+    "limitations": "insn-models.md uses wrong field names (.va/.operands) — code uses .address/.ops",
     "dependencies": [
       "isa_m88k",
       "capstone"
@@ -1363,8 +1363,8 @@
       "docs/reference-modules/insn-models.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops \u2014 runtime failure if doc followed",
-    "limitations": "insn-models.md uses wrong field names (.va/.operands) \u2014 code uses .address/.ops",
+    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops — runtime failure if doc followed",
+    "limitations": "insn-models.md uses wrong field names (.va/.operands) — code uses .address/.ops",
     "dependencies": [
       "isa_mips",
       "capstone"
@@ -1394,8 +1394,8 @@
       "docs/reference-modules/insn-models.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops \u2014 runtime failure if doc followed",
-    "limitations": "insn-models.md uses wrong field names (.va/.operands) \u2014 code uses .address/.ops",
+    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops — runtime failure if doc followed",
+    "limitations": "insn-models.md uses wrong field names (.va/.operands) — code uses .address/.ops",
     "dependencies": [
       "isa_ppc",
       "capstone"
@@ -1425,8 +1425,8 @@
       "docs/reference-modules/insn-models.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops \u2014 runtime failure if doc followed",
-    "limitations": "insn-models.md uses wrong field names (.va/.operands) \u2014 code uses .address/.ops",
+    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops — runtime failure if doc followed",
+    "limitations": "insn-models.md uses wrong field names (.va/.operands) — code uses .address/.ops",
     "dependencies": [
       "isa_riscv",
       "capstone"
@@ -1456,8 +1456,8 @@
       "docs/reference-modules/insn-models.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops \u2014 runtime failure if doc followed",
-    "limitations": "insn-models.md uses wrong field names (.va/.operands) \u2014 code uses .address/.ops",
+    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops — runtime failure if doc followed",
+    "limitations": "insn-models.md uses wrong field names (.va/.operands) — code uses .address/.ops",
     "dependencies": [
       "isa_v850",
       "capstone"
@@ -1487,8 +1487,8 @@
       "docs/reference-modules/insn-models.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops \u2014 runtime failure if doc followed",
-    "limitations": "insn-models.md uses wrong field names (.va/.operands) \u2014 code uses .address/.ops",
+    "doc_notes": "insn-models.md CRITICAL: doc claims .va/.operands fields; code uses .address/.ops — runtime failure if doc followed",
+    "limitations": "insn-models.md uses wrong field names (.va/.operands) — code uses .address/.ops",
     "dependencies": [
       "isa_x86",
       "capstone"
@@ -1516,7 +1516,7 @@
     "evidence": "No tests",
     "reference_docs": [],
     "doc_accurate": null,
-    "doc_notes": "No reference-anomalies doc; lacks from_path/from_context \u2014 violates architecture.md",
+    "doc_notes": "No reference-anomalies doc; lacks from_path/from_context — violates architecture.md",
     "limitations": "No classmethods; intraprocedural only",
     "dependencies": [
       "capstone",
@@ -1727,7 +1727,7 @@
     "evidence": "No tests",
     "reference_docs": [],
     "doc_accurate": null,
-    "doc_notes": "No classmethods \u2014 violates architecture.md; superseded by X86_32TaintTracker",
+    "doc_notes": "No classmethods — violates architecture.md; superseded by X86_32TaintTracker",
     "limitations": "No classmethods; legacy only",
     "dependencies": [
       "capstone",
@@ -1841,7 +1841,7 @@
     "evidence": "No tests",
     "reference_docs": [],
     "doc_accurate": null,
-    "doc_notes": "from_context missing \u2014 violates architecture.md",
+    "doc_notes": "from_context missing — violates architecture.md",
     "limitations": "No from_context; no stack taint; no loop fixpoint",
     "dependencies": [
       "capstone",
@@ -1962,7 +1962,7 @@
       "docs/reference-modules/ppc32-taint-tracker.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "DOC MISMATCH: doc says 'taints r3 from return value'; code taints buffer register (r4 for recv/read, r3 for fgets). Misleading \u2014 could cause false-negative assumptions.",
+    "doc_notes": "DOC MISMATCH: doc says 'taints r3 from return value'; code taints buffer register (r4 for recv/read, r3 for fgets). Misleading — could cause false-negative assumptions.",
     "limitations": "No stack taint; GOT2 internal callee gaps",
     "dependencies": [
       "capstone",
@@ -1996,7 +1996,7 @@
       "docs/reference-modules/ppc64-taint-analysis.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "HIGH MISMATCH: doc claims 'same labeled-taint model as ARM64TaintTracker'. FALSE \u2014 PPC64TaintTracker uses Dict[str,bool] boolean taint, NOT Taint(labels,bound). Labeled version is taint_tracker_ppc_labeled.py.",
+    "doc_notes": "HIGH MISMATCH: doc claims 'same labeled-taint model as ARM64TaintTracker'. FALSE — PPC64TaintTracker uses Dict[str,bool] boolean taint, NOT Taint(labels,bound). Labeled version is taint_tracker_ppc_labeled.py.",
     "limitations": "No stack taint; ELFv1 stripped requires Ppc64ElfV1Resolver preprocessing; TOC-slot gaps",
     "dependencies": [
       "capstone",
@@ -2026,7 +2026,7 @@
     "evidence": "tests/test_taint_ppc.py",
     "reference_docs": [],
     "doc_accurate": null,
-    "doc_notes": "NO reference doc found \u2014 undocumented in reference-modules/",
+    "doc_notes": "NO reference doc found — undocumented in reference-modules/",
     "limitations": "Requires Insn stream; no from_path",
     "dependencies": [
       "insn_ppc",
@@ -2323,7 +2323,7 @@
     "reference_docs": [],
     "doc_accurate": null,
     "doc_notes": "No reference doc",
-    "limitations": "Per-binary TaintTracker instantiated per hop \u2014 may be slow on large firmware",
+    "limitations": "Per-binary TaintTracker instantiated per hop — may be slow on large firmware",
     "dependencies": [
       "LibGraph",
       "TaintTracker"
@@ -2352,7 +2352,7 @@
     "reference_docs": [],
     "doc_accurate": null,
     "doc_notes": "No reference doc",
-    "limitations": "context() is lazy \u2014 first call triggers full BinaryContext build",
+    "limitations": "context() is lazy — first call triggers full BinaryContext build",
     "dependencies": [
       "BinaryContext"
     ],
@@ -2371,7 +2371,7 @@
       "ablation/analyzers/source_taint_tracker.py"
     ],
     "entry_point": "Module-level API; used by SourceSinkScanner",
-    "what_it_does": "Source-code-level taint. Builds CallGraph from parsed function defs. Propagates taint from source\u2192sink through call graph. TaintPath with line numbers. Confidence attenuated at >2 hops.",
+    "what_it_does": "Source-code-level taint. Builds CallGraph from parsed function defs. Propagates taint from source→sink through call graph. TaintPath with line numbers. Confidence attenuated at >2 hops.",
     "inputs": "Python/C/Go source files",
     "outputs": "List[TaintPath] with line numbers",
     "scope": "Python source primary",
@@ -2399,9 +2399,9 @@
       "ablation/analyzers/source_sink_scanner.py"
     ],
     "entry_point": "source_sink_scanner module functions",
-    "what_it_does": "Finds dangerous source\u2192sink paths in Python source code. User-controlled input to dangerous API calls. Source/sink catalogs for Python.",
+    "what_it_does": "Finds dangerous source→sink paths in Python source code. User-controlled input to dangerous API calls. Source/sink catalogs for Python.",
     "inputs": "Python source files",
-    "outputs": "List of source\u2192sink paths",
+    "outputs": "List of source→sink paths",
     "scope": "Python source",
     "status": "implemented",
     "evidence": "No tests",
@@ -2635,7 +2635,7 @@
     ],
     "doc_accurate": true,
     "doc_notes": "",
-    "limitations": "from_path on stripped binaries returns ~22 func_starts \u2014 use from_context",
+    "limitations": "from_path on stripped binaries returns ~22 func_starts — use from_context",
     "dependencies": [
       "capstone",
       "lief"
@@ -2667,7 +2667,7 @@
     ],
     "doc_accurate": true,
     "doc_notes": "",
-    "limitations": "from_path on stripped binaries returns ~22 func_starts \u2014 use from_context",
+    "limitations": "from_path on stripped binaries returns ~22 func_starts — use from_context",
     "dependencies": [
       "capstone",
       "lief"
@@ -2699,7 +2699,7 @@
     ],
     "doc_accurate": true,
     "doc_notes": "",
-    "limitations": "from_path on stripped binaries returns ~22 func_starts \u2014 use from_context",
+    "limitations": "from_path on stripped binaries returns ~22 func_starts — use from_context",
     "dependencies": [
       "capstone",
       "lief"
@@ -2731,7 +2731,7 @@
     ],
     "doc_accurate": true,
     "doc_notes": "",
-    "limitations": "from_path on stripped binaries returns ~22 func_starts \u2014 use from_context",
+    "limitations": "from_path on stripped binaries returns ~22 func_starts — use from_context",
     "dependencies": [
       "capstone",
       "lief"
@@ -2763,7 +2763,7 @@
     ],
     "doc_accurate": true,
     "doc_notes": "",
-    "limitations": "from_path on stripped binaries returns ~22 func_starts \u2014 use from_context",
+    "limitations": "from_path on stripped binaries returns ~22 func_starts — use from_context",
     "dependencies": [
       "capstone",
       "lief"
@@ -2795,7 +2795,7 @@
     ],
     "doc_accurate": true,
     "doc_notes": "",
-    "limitations": "from_path on stripped binaries returns ~22 func_starts \u2014 use from_context",
+    "limitations": "from_path on stripped binaries returns ~22 func_starts — use from_context",
     "dependencies": [
       "capstone",
       "lief"
@@ -2827,7 +2827,7 @@
     ],
     "doc_accurate": true,
     "doc_notes": "",
-    "limitations": "from_path on stripped binaries returns ~22 func_starts \u2014 use from_context",
+    "limitations": "from_path on stripped binaries returns ~22 func_starts — use from_context",
     "dependencies": [
       "capstone",
       "lief"
@@ -2859,7 +2859,7 @@
     ],
     "doc_accurate": true,
     "doc_notes": "",
-    "limitations": "from_path on stripped binaries returns ~22 func_starts \u2014 use from_context",
+    "limitations": "from_path on stripped binaries returns ~22 func_starts — use from_context",
     "dependencies": [
       "capstone",
       "lief"
@@ -2891,7 +2891,7 @@
     ],
     "doc_accurate": true,
     "doc_notes": "",
-    "limitations": "from_path on stripped binaries returns ~22 func_starts \u2014 use from_context",
+    "limitations": "from_path on stripped binaries returns ~22 func_starts — use from_context",
     "dependencies": [
       "capstone",
       "lief"
@@ -2923,7 +2923,7 @@
     ],
     "doc_accurate": true,
     "doc_notes": "",
-    "limitations": "from_path on stripped binaries returns ~22 func_starts \u2014 use from_context",
+    "limitations": "from_path on stripped binaries returns ~22 func_starts — use from_context",
     "dependencies": [
       "capstone",
       "lief"
@@ -3038,7 +3038,7 @@
     "reference_docs": [],
     "doc_accurate": null,
     "doc_notes": "No reference doc",
-    "limitations": "Static pattern matching \u2014 FPs possible on non-libc code",
+    "limitations": "Static pattern matching — FPs possible on non-libc code",
     "dependencies": [
       "capstone"
     ],
@@ -3144,7 +3144,7 @@
       "ablation/analyzers/format_string_scanner.py"
     ],
     "entry_point": "FormatStringScanner.from_context(ctx)|from_path(path); .scan(); .report(findings)",
-    "what_it_does": "Detects non-constant format string args at printf-family and syslog/err/warn call sites in x86-64 ELF. Walks \u226420 instructions back from call site; classifies rodata/arg_passthrough/stack_load/register/unknown.",
+    "what_it_does": "Detects non-constant format string args at printf-family and syslog/err/warn call sites in x86-64 ELF. Walks ≤20 instructions back from call site; classifies rodata/arg_passthrough/stack_load/register/unknown.",
     "inputs": "x86-64 ELF",
     "outputs": "List[FmtStringFinding] with severity (HIGH/MEDIUM/SAFE)",
     "scope": "x86-64 ELF",
@@ -3175,7 +3175,7 @@
       "ablation/analyzers/heap_vuln_scanner.py"
     ],
     "entry_point": "HeapVulnScanner.from_context(ctx)|from_path(path); .scan()",
-    "what_it_does": "4 heap corruption classes on x86-64 ELF/PE: INT_OVERFLOW_BEFORE_ALLOC, USE_AFTER_FREE, DOUBLE_FREE, OFF_BY_ONE_ALLOC (strlen\u2192malloc without +1).",
+    "what_it_does": "4 heap corruption classes on x86-64 ELF/PE: INT_OVERFLOW_BEFORE_ALLOC, USE_AFTER_FREE, DOUBLE_FREE, OFF_BY_ONE_ALLOC (strlen→malloc without +1).",
     "inputs": "x86-64 ELF or PE",
     "outputs": "List[HeapFinding] with kind/func_va/site_va/severity",
     "scope": "x86-64 ELF/PE",
@@ -3266,7 +3266,7 @@
       "ablation/analyzers/lua_injection_analyzer.py"
     ],
     "entry_point": "LuaInjectionAnalyzer.from_path(path)|from_context(ctx:SourceContext); .scan(); .report(findings)",
-    "what_it_does": "Detects Python\u2192Lua code injection (CWE-94): unsanitized user strings in f-string/format() passed to lua.execute()/lua.eval()/subprocess Lua. DIRECT/INDIRECT/SUBPROCESS patterns. Confirmed: FAZ-SIEM-001 (CRITICAL), FAZ-SIEM-002.",
+    "what_it_does": "Detects Python→Lua code injection (CWE-94): unsanitized user strings in f-string/format() passed to lua.execute()/lua.eval()/subprocess Lua. DIRECT/INDIRECT/SUBPROCESS patterns. Confirmed: FAZ-SIEM-001 (CRITICAL), FAZ-SIEM-002.",
     "inputs": "Python source directory",
     "outputs": "List[LuaInjectionFinding] with CWE/severity/injection_type",
     "scope": "Python source",
@@ -3626,7 +3626,7 @@
       "ablation/analyzers/mcp_tool_taint_scanner.py"
     ],
     "entry_point": "MCPToolTaintScanner.from_path(path)|from_context(ctx); .scan()",
-    "what_it_does": "Detects security issues in MCP (Model Context Protocol) tool implementations in Python/JS/TS source: CWE-668/284/306/214/77 \u2014 excessive capability exposure, missing auth, tool injection, sensitive data exposure, command injection.",
+    "what_it_does": "Detects security issues in MCP (Model Context Protocol) tool implementations in Python/JS/TS source: CWE-668/284/306/214/77 — excessive capability exposure, missing auth, tool injection, sensitive data exposure, command injection.",
     "inputs": "Python/JS/TypeScript source",
     "outputs": "List of MCP security findings",
     "scope": "Python/JS/TS source",
@@ -3657,7 +3657,7 @@
       "ablation/analyzers/firmware_analyzer.py"
     ],
     "entry_point": "FirmwareContainerExtractor.from_path(path); .extract() -> ExtractResult",
-    "what_it_does": "FortiGate hardware firmware: ZIP\u2192gzip\u219264-byte XOR cipher\u2192partition image. Handles 16 partition types.",
+    "what_it_does": "FortiGate hardware firmware: ZIP→gzip→64-byte XOR cipher→partition image. Handles 16 partition types.",
     "inputs": "FortiGate firmware ZIP",
     "outputs": "ExtractResult with partition images",
     "scope": "FortiGate hardware firmware (x86/ARM/MIPS)",
@@ -3803,7 +3803,7 @@
     "reference_docs": [],
     "doc_accurate": null,
     "doc_notes": "",
-    "limitations": "x86 only (not x64 \u2014 different SEH model)",
+    "limitations": "x86 only (not x64 — different SEH model)",
     "dependencies": [],
     "source_unit": "A09"
   },
@@ -4694,7 +4694,7 @@
     "reference_docs": [],
     "doc_accurate": null,
     "doc_notes": "",
-    "limitations": "Unknown opcodes emitted as .data directives \u2014 silently incomplete on new opcode versions",
+    "limitations": "Unknown opcodes emitted as .data directives — silently incomplete on new opcode versions",
     "dependencies": [],
     "source_unit": "A11"
   },
@@ -5010,7 +5010,7 @@
     "entry_point": "JNIBridgeScanner.from_context(ctx)|from_path(path); .scan()",
     "what_it_does": "Identifies JNI bridge functions in Android native .so libraries: RegisterNatives patterns, JNI_OnLoad, Java_* symbol naming. Maps Java method signatures to native implementations.",
     "inputs": "Android native .so (ELF)",
-    "outputs": "JNI bridge map (Java signature \u2192 native VA)",
+    "outputs": "JNI bridge map (Java signature → native VA)",
     "scope": "Android ARM/ARM64/x86 .so",
     "status": "implemented",
     "evidence": "No test",
@@ -5144,7 +5144,7 @@
       "ablation/analyzers/llm_analyst/agent_loop.py"
     ],
     "entry_point": "AgentLoop(ctx,tools).run(task) -> AgentResult",
-    "what_it_does": "AI agent loop using claude-sonnet-5 model ID \u2014 INVALID; will fail at API call.",
+    "what_it_does": "AI agent loop using claude-sonnet-5 model ID — INVALID; will fail at API call.",
     "inputs": "Task + BinaryContext",
     "outputs": "AgentResult",
     "scope": "Any binary",
@@ -5152,7 +5152,7 @@
     "evidence": "No test",
     "reference_docs": [],
     "doc_accurate": false,
-    "doc_notes": "CRITICAL: model ID 'claude-sonnet-5' invalid \u2014 no such model. Will fail at client.messages.create().",
+    "doc_notes": "CRITICAL: model ID 'claude-sonnet-5' invalid — no such model. Will fail at client.messages.create().",
     "limitations": "Requires model ID update",
     "dependencies": [
       "anthropic SDK"
@@ -5209,7 +5209,7 @@
     "reference_docs": [],
     "doc_accurate": null,
     "doc_notes": "",
-    "limitations": "BGE small (384-dim) \u2014 consistent with SemanticSearcher",
+    "limitations": "BGE small (384-dim) — consistent with SemanticSearcher",
     "dependencies": [
       "fastembed"
     ],
@@ -5267,7 +5267,7 @@
       "docs/reference-modules/dtw-function-homolog-matching.md"
     ],
     "doc_accurate": false,
-    "doc_notes": "MISMATCH: doc shows HomologMatch.confidence ('HIGH'/'MEDIUM'/'LOW') \u2014 field missing. score_functions() shown with list args \u2014 takes individual VAs.",
+    "doc_notes": "MISMATCH: doc shows HomologMatch.confidence ('HIGH'/'MEDIUM'/'LOW') — field missing. score_functions() shown with list args — takes individual VAs.",
     "limitations": "",
     "dependencies": "",
     "source_unit": "A12"
@@ -5568,7 +5568,7 @@
     ],
     "doc_accurate": true,
     "doc_notes": "",
-    "limitations": "Linear only \u2014 branches are comments; from_context fails on XCOFF32",
+    "limitations": "Linear only — branches are comments; from_context fails on XCOFF32",
     "dependencies": [
       "capstone",
       "lief"
@@ -5597,7 +5597,7 @@
     "evidence": "No test",
     "reference_docs": [],
     "doc_accurate": true,
-    "doc_notes": "NOTE: Ppc476Lifter is verbatim copy of Ppc32Lifter. concepts-decompiler.md incorrectly maps Ppc476Decompiler to ppc476_lifter.py \u2014 it lives in ppc476_decompiler.py.",
+    "doc_notes": "NOTE: Ppc476Lifter is verbatim copy of Ppc32Lifter. concepts-decompiler.md incorrectly maps Ppc476Decompiler to ppc476_lifter.py — it lives in ppc476_decompiler.py.",
     "limitations": "Linear only",
     "dependencies": [
       "capstone",
@@ -5814,7 +5814,7 @@
       "ablation/analyzers/vtable_resolver.py"
     ],
     "entry_point": "VtableResolver.from_context(ctx); .resolve() -> Dict[int,VtableSpec]",
-    "what_it_does": "Resolves C++ vtable layouts from RTTI and .rodata pointer patterns in x86-64 ELF. Returns slot\u2192function-VA maps.",
+    "what_it_does": "Resolves C++ vtable layouts from RTTI and .rodata pointer patterns in x86-64 ELF. Returns slot→function-VA maps.",
     "inputs": "BinaryContext",
     "outputs": "Dict[vtable_va, VtableSpec]",
     "scope": "x86-64 ELF",
@@ -5949,12 +5949,12 @@
       "ablation/analyzers/arm64_fgets_fd_discriminator.py"
     ],
     "entry_point": "ARM64FgetsFdDiscriminator.from_context(ctx); .discriminate(call_va) -> str",
-    "what_it_does": "Distinguishes FILE*-backed fgets (file input \u2014 lower risk) from socket-fd-backed reads (network input \u2014 higher risk) at ARM64 call sites. Reduces false positives in taint analysis.",
+    "what_it_does": "Distinguishes FILE*-backed fgets (file input — lower risk) from socket-fd-backed reads (network input — higher risk) at ARM64 call sites. Reduces false positives in taint analysis.",
     "inputs": "Call site VA + BinaryContext",
     "outputs": "'file' | 'socket' | 'unknown'",
     "scope": "ARM64 ELF",
     "status": "implemented",
-    "evidence": "Partial \u2014 file-versus-socket-input-discrimination.md",
+    "evidence": "Partial — file-versus-socket-input-discrimination.md",
     "reference_docs": [
       "docs/reference-modules/file-versus-socket-input-discrimination.md"
     ],
@@ -6153,7 +6153,7 @@
       "ablation/analyzers/dynamic_sandbox.py"
     ],
     "entry_point": "DynamicSandbox.from_context(ctx); .emulate(func_va,args) -> EmulationResult",
-    "what_it_does": "Real Unicorn-based dynamic emulation sandbox for short function sequences. NOT stub/mock \u2014 actual CPU emulation. Used by DynamicProbeAdapter for hypothesis confirmation.",
+    "what_it_does": "Real Unicorn-based dynamic emulation sandbox for short function sequences. NOT stub/mock — actual CPU emulation. Used by DynamicProbeAdapter for hypothesis confirmation.",
     "inputs": "Function VA + argument values + BinaryContext",
     "outputs": "EmulationResult with register/memory state",
     "scope": "x86-64/ARM (Unicorn supported ISAs)",
@@ -6163,7 +6163,7 @@
       "docs/reference-modules/dynamic-sandbox.md"
     ],
     "doc_accurate": true,
-    "doc_notes": "Doc slightly overstates strength (minor) \u2014 otherwise accurate.",
+    "doc_notes": "Doc slightly overstates strength (minor) — otherwise accurate.",
     "limitations": "Short sequences only; no OS syscall emulation by default",
     "dependencies": [
       "unicorn"
@@ -6341,7 +6341,7 @@
     ],
     "doc_accurate": null,
     "doc_notes": "",
-    "limitations": "Indirect calls not resolved \u2014 may undercount reachable",
+    "limitations": "Indirect calls not resolved — may undercount reachable",
     "dependencies": "",
     "source_unit": "A14"
   },
@@ -6395,7 +6395,7 @@
     "reference_docs": [],
     "doc_accurate": null,
     "doc_notes": "",
-    "limitations": "Internal only \u2014 use BinaryContext",
+    "limitations": "Internal only — use BinaryContext",
     "dependencies": "",
     "source_unit": "C01"
   },
@@ -6414,7 +6414,7 @@
       "ablation/core/elf_parser.py"
     ],
     "entry_point": "parse_elf(path) -> ELFParser; ELFParser class",
-    "what_it_does": "Full ELF32/64 parser: headers, sections, program headers, symbol tables (.symtab/.dynsym), relocations (.rel/.rela), DWARF (.debug_info/.eh_frame), string tables. Pure Python struct parsing \u2014 no LIEF dependency.",
+    "what_it_does": "Full ELF32/64 parser: headers, sections, program headers, symbol tables (.symtab/.dynsym), relocations (.rel/.rela), DWARF (.debug_info/.eh_frame), string tables. Pure Python struct parsing — no LIEF dependency.",
     "inputs": "ELF file path",
     "outputs": "ELFParser with all section/symbol data",
     "scope": "ELF32/64 all endiannesses",
@@ -6579,7 +6579,7 @@
       "ablation/core/firmware_analyzer.py"
     ],
     "entry_point": "FirmwareAnalyzer.from_path(path); .analyze() -> FirmwareAnalysis",
-    "what_it_does": "Firmware format detection and triage: entropy analysis, partition type detection, format fingerprinting. Internal to core/ \u2014 higher-level extraction in ablation/analyzers/.",
+    "what_it_does": "Firmware format detection and triage: entropy analysis, partition type detection, format fingerprinting. Internal to core/ — higher-level extraction in ablation/analyzers/.",
     "inputs": "Firmware file path",
     "outputs": "FirmwareAnalysis with format/entropy/type",
     "scope": "Firmware blobs",
@@ -7330,7 +7330,7 @@
       "modules/agent_authority_audit.py"
     ],
     "entry_point": "AgentAuthorityAudit(path).scan() -> List[AuthorityFinding]; from_context(ctx)",
-    "what_it_does": "Maps PLT imports to 7 capability categories. Detects agent type (ai_agent/web_agent/cli_agent). Flags capabilities beyond what the agent type legitimately needs \u2014 confused-deputy pattern.",
+    "what_it_does": "Maps PLT imports to 7 capability categories. Detects agent type (ai_agent/web_agent/cli_agent). Flags capabilities beyond what the agent type legitimately needs — confused-deputy pattern.",
     "inputs": "Binary path or BinaryContext",
     "outputs": "List[AuthorityFinding] with agent_type/excess_capabilities/severity",
     "scope": "ELF/PE (all arches)",
@@ -7397,7 +7397,7 @@
     "reference_docs": [],
     "doc_accurate": true,
     "doc_notes": "",
-    "limitations": "Regex JSON proximity scan \u2014 FPs on dense rodata; runtime-defined tools not found",
+    "limitations": "Regex JSON proximity scan — FPs on dense rodata; runtime-defined tools not found",
     "dependencies": [
       null
     ],
@@ -7695,7 +7695,7 @@
       "docs/reference-modules/dynamic-sandbox.md"
     ],
     "doc_accurate": null,
-    "doc_notes": "path_solver should have its own doc \u2014 currently misattributed to dynamic-sandbox.md",
+    "doc_notes": "path_solver should have its own doc — currently misattributed to dynamic-sandbox.md",
     "limitations": "",
     "dependencies": "z3-solver,capstone,BinaryContext",
     "source_unit": "M03"
@@ -7832,7 +7832,7 @@
     "reference_docs": [],
     "doc_accurate": null,
     "doc_notes": "",
-    "limitations": "Brute force \u2014 slow on large binaries",
+    "limitations": "Brute force — slow on large binaries",
     "dependencies": "",
     "source_unit": "M03"
   },
@@ -8334,7 +8334,7 @@
     "entry_point": "XcoffLoaderSymbols.from_path(path); .symbols() -> Dict[str,int]",
     "what_it_does": "Extracts loader-section symbols from AIX XCOFF binaries (import/export VAs).",
     "inputs": "XCOFF binary path",
-    "outputs": "Symbol name\u2192VA dict",
+    "outputs": "Symbol name→VA dict",
     "scope": "XCOFF32/XCOFF64",
     "status": "implemented",
     "evidence": "No test",
@@ -8413,7 +8413,7 @@
       "modules/arm_symbolic.py"
     ],
     "entry_point": "ARM symbolic register tracking functions",
-    "what_it_does": "Symbolic register value tracking for ARM \u2014 lightweight alternative to full DataflowEngine.",
+    "what_it_does": "Symbolic register value tracking for ARM — lightweight alternative to full DataflowEngine.",
     "inputs": "ARM function bytes",
     "outputs": "Register value map",
     "scope": "ARM ELF",
@@ -8428,7 +8428,7 @@
   },
   {
     "name": "HeapUAFScanner",
-    "category": "Vulnerability Scanner \u2014 Memory Corruption",
+    "category": "Vulnerability Scanner — Memory Corruption",
     "secondary_tags": [
       "UAF",
       "double-free",
@@ -8458,7 +8458,7 @@
   },
   {
     "name": "ChunkWalkerValidator",
-    "category": "Vulnerability Scanner \u2014 Protocol Parsing",
+    "category": "Vulnerability Scanner — Protocol Parsing",
     "secondary_tags": [
       "TLV",
       "chunk",
@@ -8487,7 +8487,7 @@
   },
   {
     "name": "SetuidAuthOracleScanner",
-    "category": "Vulnerability Scanner \u2014 Authentication",
+    "category": "Vulnerability Scanner — Authentication",
     "secondary_tags": [
       "CWE-307",
       "CWE-338",
@@ -8508,7 +8508,7 @@
     "reference_docs": [],
     "doc_accurate": null,
     "doc_notes": "",
-    "limitations": "x86-64 ELF ONLY \u2014 hard ValueError for non-x86-64",
+    "limitations": "x86-64 ELF ONLY — hard ValueError for non-x86-64",
     "dependencies": [
       "capstone"
     ],
@@ -8516,7 +8516,7 @@
   },
   {
     "name": "CVEScanner",
-    "category": "Vulnerability Scanner \u2014 CVE Pattern Matching",
+    "category": "Vulnerability Scanner — CVE Pattern Matching",
     "secondary_tags": [
       "CVE",
       "byte-pattern",
@@ -8719,7 +8719,7 @@
       "modules/version_tracker.py"
     ],
     "entry_point": "VersionTracker.find_homolog(binary_v2,va_v1) -> int; VersionDelta.compute(ctx1,ctx2)",
-    "what_it_does": "Tracks function homologs across binary versions. Used in cross-version patch analysis workflow (step 3: DTWMatcher \u2192 MatrixProfileDiff \u2192 VersionTracker).",
+    "what_it_does": "Tracks function homologs across binary versions. Used in cross-version patch analysis workflow (step 3: DTWMatcher → MatrixProfileDiff → VersionTracker).",
     "inputs": "Two BinaryContext versions + source VA",
     "outputs": "Homolog VA in target version",
     "scope": "Any binary",
@@ -9423,5 +9423,36 @@
     "limitations": "",
     "dependencies": [],
     "source_unit": "S01"
+  },
+  {
+    "name": "Agentic GraphRAG",
+    "category": "AI-Assisted RE / Graph Memory",
+    "workflow_stage": "triage",
+    "scope": "Any binary / any architecture",
+    "secondary_tags": [
+      "Agentic GraphRAG",
+      "GraphRAG",
+      "knowledge graph",
+      "SQLite",
+      "graph memory",
+      "session start"
+    ],
+    "dependencies": [],
+    "entry_point": "KnowledgeGraph.open(); .get_context_for_binary(arch, fmt); .get_recommendations_for_task(task, arch); .get_gap_candidates()",
+    "status": "implemented",
+    "what_it_does": "Agentic GraphRAG graph memory substrate. Indexes all 334 Ablation modules, 14 architecture families, 24 vulnerability classes, 4 known analysis gaps, and prior RE session/finding history as a queryable SQLite graph. get_context_for_binary(arch, fmt) traverses module-to-architecture edges, known gap nodes, and prior session verdicts to return a structured context string in one call, replacing the 3-5 reference file reads previously needed before tool selection. get_gap_candidates() surfaces modules with high false-positive rates across accumulated runs, identifying where new KnownGap nodes are needed (MUSE pattern).",
+    "inputs": "arch string + fmt string for context queries; module_name, arch, results dict for run recording",
+    "outputs": "Structured context string for LLM prompt; ordered tool sequence string; list of gap candidate dicts",
+    "limitations": "Phase 3 deferred: automatic session/finding ingestion not yet wired into live RE workflow. Phase 4 deferred: get_recommendations_for_task sorts by workflow_stage only, no semantic matching on task description. DB at ~/.ablation/knowledge_graph.db is outside the repo and must be bootstrapped on each machine.",
+    "paths": [
+      "ablation/analyzers/knowledge_graph.py"
+    ],
+    "reference_docs": [
+      "docs/reference-modules/knowledge-graph.md"
+    ],
+    "source_unit": "A12",
+    "evidence": "23 pytest tests pass; bootstrap produces 334 Module nodes, 14 Arch, 24 VulnClass, 4 KnownGap, 94 Session, 76 Finding, 5581 Doc nodes",
+    "doc_accurate": true,
+    "doc_notes": ""
   }
 ]
