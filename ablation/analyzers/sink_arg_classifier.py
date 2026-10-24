@@ -5,12 +5,15 @@ arbitrary exec-class sink call sites in x86-64 ELF binaries.
 The question at every shell-invoking sink (system/popen/fadcsystem/execve) is:
   "Where did this command string come from?"
 
-Four primary verdicts:
+Five primary verdicts:
   RODATA_CONST       — LEA from .rodata: hardcoded literal. No injection possible.
   SNPRINTF_RODATA    — snprintf(buf, n, <rodata_fmt>, ...) → buf passed to sink.
                        Format is fixed. Injection requires control over a %s arg.
   ARG_PROPAGATED     — arrived from an entry-argument register. Caller controls it.
   UNKNOWN            — provenance not resolved within look-back window.
+  UNICODE_WRAPPER    — function calls Unicode_GetAllocBytes before the sink (VMware VDDK
+                       pattern). The function is a thin Unicode-to-POSIX converter; the
+                       real question is what the *caller* passes. Not a direct finding.
 
 Gap this fills vs. FormatStringScanner:
   • Works on any PLT sink + argument position, not just printf-family.
@@ -39,7 +42,7 @@ Usage:
         print(r.fmt())
 
     # Filter to non-safe findings only
-    flagged = [r for r in results if r.verdict != 'RODATA_CONST']
+    flagged = [r for r in results if r.verdict not in ('RODATA_CONST', 'UNICODE_WRAPPER')]
 
 CLI:
     python3 -m ablation.analyzers.sink_arg_classifier /path/to/binary
@@ -488,6 +491,7 @@ RODATA_CONST    = 'RODATA_CONST'     # hardcoded literal in .rodata
 SNPRINTF_RODATA = 'SNPRINTF_RODATA'  # built by snprintf with rodata format string
 ARG_PROPAGATED  = 'ARG_PROPAGATED'   # came from a caller-supplied argument register
 UNKNOWN         = 'UNKNOWN'          # provenance not resolved
+UNICODE_WRAPPER = 'UNICODE_WRAPPER'  # VMware Unicode-to-POSIX wrapper; trace callers
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
@@ -510,6 +514,7 @@ class SinkClassification:
                 SNPRINTF_RODATA: 'MEDIUM',
                 ARG_PROPAGATED:  'HIGH',
                 UNKNOWN:         'MEDIUM',
+                UNICODE_WRAPPER: 'LOW',
             }.get(self.verdict, 'MEDIUM')
 
     def fmt(self) -> str:
@@ -1062,6 +1067,37 @@ class SinkArgClassifier:
                 return candidate
         return func_va
 
+    # ── Unicode wrapper detection ─────────────────────────────────────────────
+
+    def _get_unicode_get_alloc_bytes_va(self) -> int:
+        """Return PLT VA of Unicode_GetAllocBytes, or 0 if not imported."""
+        return self._plt_rev.get('Unicode_GetAllocBytes', 0)
+
+    def _is_unicode_wrapper_func(self, insns: list, sink_call_idx: int) -> bool:
+        """
+        Return True if the function is a VMware Unicode-to-POSIX wrapper.
+
+        Pattern: Unicode_GetAllocBytes(rdi) is called somewhere before the POSIX
+        sink call, and the result flows into the sink arg.  The search window is
+        the first sink_call_idx instructions of the function.
+
+        This pattern appears in VMware VDDK's Unicode_Popen, Unicode_System,
+        Unicode_Execv, Unicode_Execvp, Unicode_Execve, etc.  These are thin
+        converters; the real taint question belongs to their callers.
+        """
+        ugab_va = self._get_unicode_get_alloc_bytes_va()
+        if not ugab_va:
+            return False
+        # Scan from the top of the function up to (but not including) the sink call.
+        limit = min(sink_call_idx, 30)
+        for i in range(limit):
+            insn = insns[i]
+            if insn.mnemonic.lower() != 'call' or not insn.operands:
+                continue
+            if insn.operands[0].type == X86_OP_IMM and insn.operands[0].imm == ugab_va:
+                return True
+        return False
+
     # ── main scan ─────────────────────────────────────────────────────────────
 
     def classify_all(self) -> List[SinkClassification]:
@@ -1135,6 +1171,18 @@ class SinkArgClassifier:
             if arg_pos >= len(_ARG_POS_TO_REG):
                 continue
 
+            # Check for VMware Unicode-to-POSIX wrapper before full backward trace.
+            if self._is_unicode_wrapper_func(insns, i):
+                results.append(SinkClassification(
+                    sink_name=sink_name,
+                    arg_pos=arg_pos,
+                    func_va=func_va,
+                    call_va=insn.address,
+                    verdict=UNICODE_WRAPPER,
+                    detail='Unicode_GetAllocBytes called before sink — VDDK Unicode wrapper',
+                ))
+                continue
+
             arg_reg_id = _ARG_POS_TO_REG[arg_pos]
             arg_canon = self._reg_id_to_canon(arg_reg_id)
 
@@ -1169,6 +1217,12 @@ class SinkArgClassifier:
             lines.append(
                 f'\n  DEAD IMPORTS (0 callers — ELIMINATED): '
                 + ', '.join(sorted(self._dead_sinks))
+            )
+        wrappers = by_verdict.get(UNICODE_WRAPPER, 0)
+        if wrappers:
+            lines.append(
+                f'\n  NOTE: {wrappers} UNICODE_WRAPPER result(s) — VMware VDDK Unicode-to-POSIX '
+                f'wrappers. Not direct findings. Trace their callers if arg source is unclear.'
             )
         investigate = by_verdict.get(ARG_PROPAGATED, 0) + by_verdict.get(UNKNOWN, 0)
         if investigate:
