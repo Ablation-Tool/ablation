@@ -189,6 +189,15 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Parse TI COFF2 object files and AR archives" | `TiCoffLoader.from_path(path)` |
 | "Parse Motorola 88K BCS COFF executable (magic 0x016D, DG AViiON / DG/UX)" | `from ablation.core.coff_m88k_parser import parse; b = parse(path)` |
 | "Disassemble MC88100 instructions / find function starts on 88K binary" | `M88kDecoder(b).disassemble_va(va)` / `.function_starts()` / `.string_refs()` |
+| "Locate MetaKit VFS appended to a TclKit binary (BitRock installer, embedded appliance)" | `MetaKitParser.from_path(path)` → `.found`, `.mk_start`, `.schema` |
+| "Extract all files from a TclKit MetaKit VFS" | `parser.iter_files()` → yields `(label, bytes)` per zlib blob |
+| "Get BitRock file manifest from MetaKit (lists installed files + LZMA chunk offsets)" | `parser.get_manifest()` → bytes of the first large text blob |
+| "Extract ELF .so binaries embedded in MetaKit (tbcload, lzmadec, cookfs...)" | `parser.find_embedded_elfs()` → `{label: bytes}` — feed each to `BinaryContext` |
+| "Extract Tcl scripts and TclPro ByteCode blobs from MetaKit" | `parser.find_tcl_scripts()` → `{label: bytes}` |
+| "Decode TclPro ByteCode 1.3/1.7 to instructions and literal strings" | `TclProDecoder.from_bytes(blob)` → `.disassemble()`, `.get_strings()`, `.report()` |
+| "Find all TclPro ByteCode streams inside a binary blob" | `TclProDecoder.find_all_in_blob(data)` → list of decoders |
+| "Screen TclPro bytecodes for exec/network/install security patterns" | `dec.security_strings()` / `dec.has_eval_stk()` |
+| "Full disassembly with literal annotations for TclPro bytecodes" | `dec.dump()` |
 
 ---
 
