@@ -6,75 +6,6 @@
 
 ---
 
-## Real-World Results
-
-Ablation has been used to analyze production firmware and kernel drivers from Cisco, IBM, TencentOS, Huawei, Fortinet, and more.
-
-Following coordinated disclosure, the **Cisco Product Security Incident Response Team (PSIRT)** adopted Ablation for internal vulnerability triage and continues to use it to evaluate ongoing disclosure reports. Cisco Adaptive Security Appliance (ASA) LINA is among the artifacts analyzed, with findings submitted through CERT/CC VINCE.
-
-| CVE | Product | Title | CVSS |
-|---|---|---|---|
-| [CVE‑2026‑76420](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Peer Impersonation | **9.0 Critical** |
-| [CVE‑2026‑76412](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Privilege Escalation to root | **8.5 High** |
-| [CVE‑2026‑76413](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Single Sign-On Token Forgery | **8.5 High** |
-| [CVE‑2026‑76447](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4) | Identity Services Engine (ISE) | OCSP Responder Authentication Bypass | **5.3 Medium** |
-
----
-
-## Quick Start
-
-```bash
-pip install ablation-tool
-```
-
-**Requirements:** Python >= 3.10 · `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
-
-<details>
-<summary><strong>Claude Code Setup & Configuration</strong></summary>
-
-### 1. Launch Session
-```bash
-cd ~/ablation && claude
-```
-
-### 2. Set Model
-```text
-/model claude-sonnet-4-6
-```
-*(or `/model claude-sonnet-4-5`)*
-
-### 3. Define Objective
-```text
-/goal reverse engineer [target binary, firmware image, or directory]
-```
-
-### 4. Check Effort Level
-Ask inline without interrupting the main context:
-```text
-/btw What effort level should we be set on right now?
-```
-
-### Recommended Autonomous Configuration (`/config`)
-```text
-Model                                   claude-sonnet-4-6
-Thinking mode                           true
-Auto-compact                            true
-Continue automatically at usage limit   true
-Dynamic workflows                       true
-Dynamic workflow size                   unrestricted
-Rewind code (checkpoints)               true
-Use auto mode during plan               true
-Default permission mode                 Manual
-Respect .gitignore in file picker       true
-Verbose output                          true
-Output style                            Explanatory
-Question auto-continue timeout          never
-```
-
-</details>
-
----
-
 ![demo](demos/claude-code-demo.gif)
 
 ---
@@ -244,6 +175,75 @@ Question auto-continue timeout          never
 | [**Containers,&nbsp;Kubernetes&nbsp;&&nbsp;Cloud&nbsp;Services**](docs/reference-modules/docker-inventory-and-posture.md) | [1](modules/docker_enum.py)&nbsp;[2](modules/k8s_enum.py) | Audit Docker posture, [container escape surfaces](docs/reference-modules/container-isolation-escape-surface.md), [K8s inventory](docs/reference-modules/kubernetes-inventory.md), [RBAC/identity](docs/reference-modules/kubernetes-identity-and-rbac.md), [network/pod policies](docs/reference-modules/kubernetes-policy-posture.md), and [etcd/kubelet exposure](docs/reference-modules/cluster-management-exposure.md); plus probe [Kafka/Flink/RabbitMQ](docs/reference-modules/messaging-streaming-enumeration.md), [Redis/ES/MinIO](docs/reference-modules/database-storage-exposure.md), [Prometheus/Grafana/Jaeger](docs/reference-modules/observability-exposure.md), [vCenter/Rancher/Consul/Argo](docs/reference-modules/orchestration-management-exposure.md), [CI/CD pipelines](docs/reference-modules/ci-cd-and-artifact-services.md), [Vault/Boundary](docs/reference-modules/secrets-access-infrastructure.md), and [DNS posture](docs/reference-modules/dns-service-posture.md). |
 | [**VoIP&nbsp;&&nbsp;Real-Time&nbsp;Communications**](docs/reference-modules/sip-service-and-extension-discovery.md) | [1](modules/sip_enum.py) | Enumerate SIP extensions, inspect [SDP/RTP/SRTP/WebRTC signaling posture](docs/reference-modules/media-and-signaling-posture.md), probe [H.323/SCCP/MGCP gateways](docs/reference-modules/legacy-voice-protocols.md), and check [voice abuse/DTMF indicators](docs/reference-modules/voice-abuse-indicators.md). |
 | [**Diffing,&nbsp;FORGE&nbsp;Quality&nbsp;Gates&nbsp;&&nbsp;Exports**](docs/workflows/cross-version.md) | [1](ablation/analyzers/version_delta.py)&nbsp;[2](ablation/analyzers/forge.py) | Behavioral version diffing, [Linux kernel subsystem classification](docs/reference-modules/kernel-module-subsystem-classifier.md), [FORGE self-auditing module gates](docs/reference-modules/forge.md), [85% taint coverage gate](docs/reference-modules/coverage-gate.md), [YARA generation](docs/reference-modules/yara-generator.md), [JSON/SARIF 2.1.0 export](docs/reference-modules/json-and-sarif-export.md), [Markdown reports](docs/reference-modules/markdown-research-reports.md), [Binary Ninja plugin](docs/reference-modules/binary-ninja-plugin.md), [terminal UI](docs/reference-modules/terminal-presentation.md), [prose linting](docs/reference-modules/documentation-prose-checks.md), [multi-phase directory sweeps](docs/reference-modules/generic-vulnerability-profile-sweeps.md), and [SBOM/supply-chain automation](docs/reference-modules/dependency-and-supply-chain-tooling.md). |
+
+</details>
+
+---
+
+## Real-World Results
+
+Ablation has been used to analyze production firmware and kernel drivers from Cisco, IBM, TencentOS, Huawei, Fortinet, and more.
+
+Following coordinated disclosure, the **Cisco Product Security Incident Response Team (PSIRT)** adopted Ablation for internal vulnerability triage and continues to use it to evaluate ongoing disclosure reports. Cisco Adaptive Security Appliance (ASA) LINA is among the artifacts analyzed, with findings submitted through CERT/CC VINCE.
+
+| CVE | Product | Title | CVSS |
+|---|---|---|---|
+| [CVE‑2026‑76420](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Peer Impersonation | **9.0 Critical** |
+| [CVE‑2026‑76412](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Privilege Escalation to root | **8.5 High** |
+| [CVE‑2026‑76413](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-fmc2-multivulns-HXgcqRG) | Secure Firewall Management Center (FMC) | Single Sign-On Token Forgery | **8.5 High** |
+| [CVE‑2026‑76447](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ise-multiauth-bypass-sgD2HbL4) | Identity Services Engine (ISE) | OCSP Responder Authentication Bypass | **5.3 Medium** |
+
+---
+
+## Quick Start
+
+```bash
+pip install ablation-tool
+```
+
+**Requirements:** Python >= 3.10 · `capstone`, `numpy`, `lief`, `sentence-transformers`, `pyelftools`
+
+<details>
+<summary><strong>Claude Code Setup & Configuration</strong></summary>
+
+### 1. Launch Session
+```bash
+cd ~/ablation && claude
+```
+
+### 2. Set Model
+```text
+/model claude-sonnet-4-6
+```
+*(or `/model claude-sonnet-4-5`)*
+
+### 3. Define Objective
+```text
+/goal reverse engineer [target binary, firmware image, or directory]
+```
+
+### 4. Check Effort Level
+Ask inline without interrupting the main context:
+```text
+/btw What effort level should we be set on right now?
+```
+
+### Recommended Autonomous Configuration (`/config`)
+```text
+Model                                   claude-sonnet-4-6
+Thinking mode                           true
+Auto-compact                            true
+Continue automatically at usage limit   true
+Dynamic workflows                       true
+Dynamic workflow size                   unrestricted
+Rewind code (checkpoints)               true
+Use auto mode during plan               true
+Default permission mode                 Manual
+Respect .gitignore in file picker       true
+Verbose output                          true
+Output style                            Explanatory
+Question auto-continue timeout          never
+```
 
 </details>
 
