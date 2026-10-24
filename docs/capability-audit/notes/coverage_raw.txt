@@ -1,0 +1,437 @@
+=== COVERAGE SUMMARY ===
+Total code files: 407
+Covered (mentioned in ≥1 unit): 401 (98%)
+Uncovered: 6 (1%)
+
+=== PER-UNIT FILE MENTIONS ===
+  A01: 12 file(s) mentioned
+  A02: 48 file(s) mentioned
+  A03: 22 file(s) mentioned
+  A04: 22 file(s) mentioned
+  A05: 19 file(s) mentioned
+  A06: 17 file(s) mentioned
+  A07: 17 file(s) mentioned
+  A08: 26 file(s) mentioned
+  A09: 20 file(s) mentioned
+  A10: 25 file(s) mentioned
+  A11: 17 file(s) mentioned
+  A12: 35 file(s) mentioned
+  A13: 23 file(s) mentioned
+  A14: 26 file(s) mentioned
+  C01: 24 file(s) mentioned
+  M01: 17 file(s) mentioned
+  M02: 13 file(s) mentioned
+  M03: 35 file(s) mentioned
+  M04: 43 file(s) mentioned
+  S01: 10 file(s) mentioned
+
+=== COVERED FILES ===
+  ablation/__init__.py | code-ablation | 2 lines | units: A04, A12
+  ablation/analyzers/__init__.py | code-ablation | 268 lines | units: A04, A12
+  ablation/analyzers/abc_decompiler.py | code-ablation | 1098 lines | units: A11
+  ablation/analyzers/abc_disasm.py | code-ablation | 608 lines | units: A11
+  ablation/analyzers/abc_parser.py | code-ablation | 742 lines | units: A11
+  ablation/analyzers/aix_bff_extractor.py | code-ablation | 820 lines | units: A09
+  ablation/analyzers/aix_big_ar_extractor.py | code-ablation | 167 lines | units: A09
+  ablation/analyzers/aix_type0f_stream_splitter.py | code-ablation | 287 lines | units: A09
+  ablation/analyzers/analysis_arc.py | code-ablation | 114 lines | units: A02
+  ablation/analyzers/analysis_arm32.py | code-ablation | 114 lines | units: A02
+  ablation/analyzers/analysis_arm64.py | code-ablation | 110 lines | units: A02
+  ablation/analyzers/analysis_loongarch64.py | code-ablation | 117 lines | units: A02
+  ablation/analyzers/analysis_mips.py | code-ablation | 114 lines | units: A02
+  ablation/analyzers/analysis_ppc.py | code-ablation | 114 lines | units: A02
+  ablation/analyzers/analysis_riscv.py | code-ablation | 125 lines | units: A02, A05
+  ablation/analyzers/analysis_v850.py | code-ablation | 113 lines | units: A02
+  ablation/analyzers/analysis_x86.py | code-ablation | 114 lines | units: A02
+  ablation/analyzers/apache_module_analyzer.py | code-ablation | 650 lines | units: A08
+  ablation/analyzers/appledouble_extractor.py | code-ablation | 291 lines | units: A09
+  ablation/analyzers/ar_archive_scanner.py | code-ablation | 212 lines | units: A09
+  ablation/analyzers/arc_decoder.py | code-ablation | 392 lines | units: A05, A10
+  ablation/analyzers/argv_build_to_sink.py | code-ablation | 292 lines | units: A07
+  ablation/analyzers/arm32_function_scanner.py | code-ablation | 181 lines | units: A14
+  ablation/analyzers/arm32_reg_annotator.py | code-ablation | 278 lines | units: A14
+  ablation/analyzers/arm64_fgets_fd_discriminator.py | code-ablation | 187 lines | units: A14
+  ablation/analyzers/beam_context.py | code-ablation | 1487 lines | units: A01
+  ablation/analyzers/binary_context.py | code-ablation | 3475 lines | units: A01, A12
+  ablation/analyzers/binary_lifter.py | code-ablation | 4596 lines | units: A01
+  ablation/analyzers/binder_scanner.py | code-ablation | 247 lines | units: A11
+  ablation/analyzers/browser_extension_auditor.py | code-ablation | 592 lines | units: A11
+  ablation/analyzers/bss_taint_tracker.py | code-ablation | 310 lines | units: A04
+  ablation/analyzers/byovd_detector.py | code-ablation | 602 lines | units: A08
+  ablation/analyzers/caller_arg_resolver.py | code-ablation | 442 lines | units: A14, M03
+  ablation/analyzers/cfg_arc.py | code-ablation | 165 lines | units: A02
+  ablation/analyzers/cfg_arm32.py | code-ablation | 138 lines | units: A02
+  ablation/analyzers/cfg_arm64.py | code-ablation | 121 lines | units: A02
+  ablation/analyzers/cfg_builder.py | code-ablation | 547 lines | units: A01, A02, A03
+  ablation/analyzers/cfg_bypass_detector.py | code-ablation | 339 lines | units: A09
+  ablation/analyzers/cfg_loongarch64.py | code-ablation | 172 lines | units: A02
+  ablation/analyzers/cfg_mips.py | code-ablation | 172 lines | units: A02
+  ablation/analyzers/cfg_ppc.py | code-ablation | 127 lines | units: A02
+  ablation/analyzers/cfg_riscv.py | code-ablation | 132 lines | units: A02, A05
+  ablation/analyzers/cfg_sh2a.py | code-ablation | 286 lines | units: A02
+  ablation/analyzers/cfg_v850.py | code-ablation | 162 lines | units: A02
+  ablation/analyzers/cfg_x86.py | code-ablation | 128 lines | units: A02
+  ablation/analyzers/cmdb_surface_mapper.py | code-ablation | 465 lines | units: A08
+  ablation/analyzers/com_attack_surface_mapper.py | code-ablation | 381 lines | units: A09
+  ablation/analyzers/command_table_scanner.py | code-ablation | 406 lines | units: A08
+  ablation/analyzers/compiler_security_gate.py | code-ablation | 459 lines | units: A08
+  ablation/analyzers/corpus_builder.py | code-ablation | 281 lines | units: A12
+  ablation/analyzers/cross_binary_taint.py | code-ablation | 479 lines | units: A06
+  ablation/analyzers/crypto_pattern_detector.py | code-ablation | 395 lines | units: A14
+  ablation/analyzers/dataflow_engine.py | code-ablation | 1627 lines | units: A01, A02
+  ablation/analyzers/deprecated_func_scanner.py | code-ablation | 299 lines | units: A08
+  ablation/analyzers/dex_analyzer.py | code-ablation | 392 lines | units: A11
+  ablation/analyzers/dex_disasm.py | code-ablation | 924 lines | units: A11
+  ablation/analyzers/dex_lifter.py | code-ablation | 758 lines | units: A11
+  ablation/analyzers/dtw_matcher.py | code-ablation | 327 lines | units: A12
+  ablation/analyzers/dwarf_loongarch64.py | code-ablation | 299 lines | units: A14
+  ablation/analyzers/dynamic_sandbox.py | code-ablation | 594 lines | units: A14
+  ablation/analyzers/ecu_a2l_parser.py | code-ablation | 643 lines | units: A10
+  ablation/analyzers/ecu_arch_detector.py | code-ablation | 712 lines | units: A10
+  ablation/analyzers/ecu_c166_decoder.py | code-ablation | 710 lines | units: A10
+  ablation/analyzers/ecu_c28x_decoder.py | code-ablation | 491 lines | units: A10
+  ablation/analyzers/ecu_cal_def.py | code-ablation | 117 lines | units: A10
+  ablation/analyzers/ecu_conescan_parser.py | code-ablation | 427 lines | units: A10
+  ablation/analyzers/ecu_m68k_decoder.py | code-ablation | 295 lines | units: A10
+  ablation/analyzers/ecu_open_damos_parser.py | code-ablation | 377 lines | units: A10
+  ablation/analyzers/ecu_rom_layout_analyzer.py | code-ablation | 489 lines | units: A10
+  ablation/analyzers/ecu_romraider_parser.py | code-ablation | 676 lines | units: A10
+  ablation/analyzers/ecu_security_access_scanner.py | code-ablation | 331 lines | units: A10
+  ablation/analyzers/ecu_sh2a_decoder.py | code-ablation | 484 lines | units: A02, A10
+  ablation/analyzers/ecu_vle_decoder.py | code-ablation | 572 lines | units: A10
+  ablation/analyzers/ecu_xdf_parser.py | code-ablation | 354 lines | units: A10
+  ablation/analyzers/electron_security_scanner.py | code-ablation | 552 lines | units: A11
+  ablation/analyzers/encoding_dag.py | code-ablation | 596 lines | units: A01
+  ablation/analyzers/engine_pattern_library.py | code-ablation | 896 lines | units: A14
+  ablation/analyzers/entropy_mapper.py | code-ablation | 320 lines | units: A01, M04
+  ablation/analyzers/epilogue_share_scanner.py | code-ablation | 186 lines | units: A10
+  ablation/analyzers/etw_provider_extractor.py | code-ablation | 378 lines | units: A09
+  ablation/analyzers/evidence_scorer.py | code-ablation | 230 lines | units: A12
+  ablation/analyzers/expr_lifter.py | code-ablation | 676 lines | units: A01
+  ablation/analyzers/finding_registry.py | code-ablation | 589 lines | units: A12
+  ablation/analyzers/firmware_container.py | code-ablation | 212 lines | units: A09
+  ablation/analyzers/firmware_container_key_extractor.py | code-ablation | 539 lines | units: A09
+  ablation/analyzers/flat_binary_func_start_scanner.py | code-ablation | 471 lines | units: A10
+  ablation/analyzers/flatui_method_decoder.py | code-ablation | 177 lines | units: A08
+  ablation/analyzers/forge.py | code-ablation | 678 lines | units: A14
+  ablation/analyzers/fork_exec_classifier.py | code-ablation | 530 lines | units: A08
+  ablation/analyzers/format_string_scanner.py | code-ablation | 415 lines | units: A08
+  ablation/analyzers/fortibuild_track_classifier.py | code-ablation | 180 lines | units: A09
+  ablation/analyzers/fortigate_cert_key_scanner.py | code-ablation | 626 lines | units: A09
+  ablation/analyzers/fortimail_vmdk_extractor.py | code-ablation | 588 lines | units: A09
+  ablation/analyzers/fortios_firmware_extractor.py | code-ablation | 422 lines | units: A09
+  ablation/analyzers/func_id_db.py | code-ablation | 574 lines | units: A12
+  ablation/analyzers/func_profiler.py | code-ablation | 319 lines | units: A14
+  ablation/analyzers/func_reachability.py | code-ablation | 251 lines | units: A14
+  ablation/analyzers/go_pclntab.py | code-ablation | 255 lines | units: A11
+  ablation/analyzers/go_string_resolver.py | code-ablation | 469 lines | units: A11
+  ablation/analyzers/go_subprocess_scanner.py | code-ablation | 470 lines | units: A08
+  ablation/analyzers/go_x86_strip_scanner.py | code-ablation | 415 lines | units: A11
+  ablation/analyzers/heap_vuln_scanner.py | code-ablation | 529 lines | units: A08
+  ablation/analyzers/hisi_rv32_ext.py | code-ablation | 576 lines | units: A10
+  ablation/analyzers/hypothesis_engine.py | code-ablation | 421 lines | units: A12
+  ablation/analyzers/hypothesis_models.py | code-ablation | 440 lines | units: A12
+  ablation/analyzers/i386_absolute_xref_scanner.py | code-ablation | 238 lines | units: A14
+  ablation/analyzers/i386_call_chain_resolver.py | code-ablation | 450 lines | units: A14
+  ablation/analyzers/insn_arc.py | code-ablation | 254 lines | units: A02, A03
+  ablation/analyzers/insn_arm32.py | code-ablation | 475 lines | units: A02, A03
+  ablation/analyzers/insn_arm64.py | code-ablation | 266 lines | units: A02, A03
+  ablation/analyzers/insn_loongarch64.py | code-ablation | 118 lines | units: A02, A03
+  ablation/analyzers/insn_m88k.py | code-ablation | 259 lines | units: A03
+  ablation/analyzers/insn_mips.py | code-ablation | 298 lines | units: A02, A03
+  ablation/analyzers/insn_ppc.py | code-ablation | 409 lines | units: A02, A03
+  ablation/analyzers/insn_riscv.py | code-ablation | 219 lines | units: A02, A03
+  ablation/analyzers/insn_v850.py | code-ablation | 274 lines | units: A02, A03
+  ablation/analyzers/insn_x86.py | code-ablation | 429 lines | units: A02, A03
+  ablation/analyzers/intoverflow_scanner_arm32.py | code-ablation | 415 lines | units: A08
+  ablation/analyzers/ipreg_annotator.py | code-ablation | 400 lines | units: A14, M03
+  ablation/analyzers/isa_arc.py | code-ablation | 230 lines | units: A02, A03
+  ablation/analyzers/isa_arm32.py | code-ablation | 369 lines | units: A02, A03
+  ablation/analyzers/isa_arm64.py | code-ablation | 236 lines | units: A02, A03
+  ablation/analyzers/isa_loongarch64.py | code-ablation | 243 lines | units: A03
+  ablation/analyzers/isa_m88k.py | code-ablation | 173 lines | units: A03
+  ablation/analyzers/isa_mips.py | code-ablation | 276 lines | units: A02, A03
+  ablation/analyzers/isa_ppc.py | code-ablation | 412 lines | units: A02, A03
+  ablation/analyzers/isa_riscv.py | code-ablation | 297 lines | units: A02, A03
+  ablation/analyzers/isa_v850.py | code-ablation | 224 lines | units: A02, A03
+  ablation/analyzers/isa_x86.py | code-ablation | 364 lines | units: A02, A03
+  ablation/analyzers/java_jar_scanner.py | code-ablation | 299 lines | units: A11
+  ablation/analyzers/jni_bridge_scanner.py | code-ablation | 348 lines | units: A11
+  ablation/analyzers/kernel_driver_analyzer.py | code-ablation | 1731 lines | units: A08
+  ablation/analyzers/kernel_module_subsystem_classifier.py | code-ablation | 231 lines | units: A08
+  ablation/analyzers/la64_heap_vuln_scanner.py | code-ablation | 491 lines | units: A08
+  ablation/analyzers/length_underflow.py | code-ablation | 436 lines | units: A08
+  ablation/analyzers/lib_graph.py | code-ablation | 275 lines | units: A06
+  ablation/analyzers/library_inventory.py | code-ablation | 718 lines | units: A11
+  ablation/analyzers/llm_analyst/__init__.py | code-ablation | 31 lines | units: A04, A12
+  ablation/analyzers/llm_analyst/agent_loop.py | code-ablation | 324 lines | units: A12
+  ablation/analyzers/llm_analyst/context_builder.py | code-ablation | 199 lines | units: A12
+  ablation/analyzers/llm_analyst/rag_retriever.py | code-ablation | 134 lines | units: A12
+  ablation/analyzers/llm_analyst/tasks/__init__.py | code-ablation | 0 lines | units: A04, A12
+  ablation/analyzers/llm_analyst/tasks/function_namer.py | code-ablation | 131 lines | units: A12
+  ablation/analyzers/llm_analyst/tasks/struct_reconstructor.py | code-ablation | 222 lines | units: A12
+  ablation/analyzers/llm_analyst/tasks/vuln_hypothesis.py | code-ablation | 127 lines | units: A12
+  ablation/analyzers/llm_analyst/tool_registry.py | code-ablation | 403 lines | units: A12
+  ablation/analyzers/loongarch64_max_not_min_scanner.py | code-ablation | 753 lines | units: A08
+  ablation/analyzers/loongarch_decoder.py | code-ablation | 877 lines | units: A03, A10
+  ablation/analyzers/lsb_stego_extractor.py | code-ablation | 377 lines | units: A14
+  ablation/analyzers/lua_injection_analyzer.py | code-ablation | 534 lines | units: A08
+  ablation/analyzers/matrix_profile_diff.py | code-ablation | 369 lines | units: A12
+  ablation/analyzers/mcp_tool_taint_scanner.py | code-ablation | 564 lines | units: A08
+  ablation/analyzers/name_registry.py | code-ablation | 139 lines | units: A12
+  ablation/analyzers/nanomips_decoder.py | code-ablation | 324 lines | units: A10
+  ablation/analyzers/ne_format_parser.py | code-ablation | 304 lines | units: A09
+  ablation/analyzers/nested_archive_scanner.py | code-ablation | 225 lines | units: A09
+  ablation/analyzers/network_sink_finder.py | code-ablation | 189 lines | units: A07
+  ablation/analyzers/opseq.py | code-ablation | 291 lines | units: A12, A14
+  ablation/analyzers/pattern_library.py | code-ablation | 493 lines | units: A12, A14
+  ablation/analyzers/pdb_symbol_integrator.py | code-ablation | 454 lines | units: A09
+  ablation/analyzers/pe_sink_classifier.py | code-ablation | 212 lines | units: A07
+  ablation/analyzers/pef_abi_clobber_scanner.py | code-ablation | 397 lines | units: A13
+  ablation/analyzers/pef_binary_analyzer.py | code-ablation | 495 lines | units: A13
+  ablation/analyzers/perl_taint_scanner.py | code-ablation | 472 lines | units: A08
+  ablation/analyzers/ppc32_lifter.py | code-ablation | 433 lines | units: A13
+  ablation/analyzers/ppc32_plt_tracer.py | code-ablation | 516 lines | units: A13
+  ablation/analyzers/ppc476_decompiler.py | code-ablation | 697 lines | units: A13
+  ablation/analyzers/ppc476_lifter.py | code-ablation | 433 lines | units: A13
+  ablation/analyzers/ppc64_be_call_scanner.py | code-ablation | 177 lines | units: A05, A13
+  ablation/analyzers/ppc64_be_sink_classifier.py | code-ablation | 646 lines | units: A13
+  ablation/analyzers/ppc64_dynds_classifier.py | code-ablation | 475 lines | units: A13
+  ablation/analyzers/ppc64_elfv1_resolver.py | code-ablation | 419 lines | units: A13
+  ablation/analyzers/ppc64_power10_plt_stubs.py | code-ablation | 180 lines | units: A13
+  ablation/analyzers/ppc64_vmx_density.py | code-ablation | 353 lines | units: A13
+  ablation/analyzers/preauth_route_auditor.py | code-ablation | 493 lines | units: A08
+  ablation/analyzers/priv_drop_before_exec.py | code-ablation | 288 lines | units: A06
+  ablation/analyzers/probe_adapters.py | code-ablation | 538 lines | units: A12
+  ablation/analyzers/probe_ranker.py | code-ablation | 241 lines | units: A12
+  ablation/analyzers/ps3_opd_vtable_scanner.py | code-ablation | 484 lines | units: A13
+  ablation/analyzers/ps3_self_decryptor.py | code-ablation | 359 lines | units: A13
+  ablation/analyzers/pthread_once_detector.py | code-ablation | 494 lines | units: A06
+  ablation/analyzers/pyc_bytecode_scanner.py | code-ablation | 395 lines | units: A11
+  ablation/analyzers/reg_annotator.py | code-ablation | 786 lines | units: A14, M03
+  ablation/analyzers/rel_dyn_pc32_scanner.py | code-ablation | 273 lines | units: A13
+  ablation/analyzers/rpc_server_analyzer.py | code-ablation | 457 lines | units: A09
+  ablation/analyzers/sanitizer_detector.py | code-ablation | 854 lines | units: A07
+  ablation/analyzers/sax_index.py | code-ablation | 357 lines | units: A12
+  ablation/analyzers/scan_result_version_cache.py | code-ablation | 292 lines | units: A14
+  ablation/analyzers/seh_chain_analyzer.py | code-ablation | 305 lines | units: A09
+  ablation/analyzers/semantic_search.py | code-ablation | 647 lines | units: A12
+  ablation/analyzers/setuid_before_fork.py | code-ablation | 284 lines | units: A08
+  ablation/analyzers/setuid_obfuscated_exec.py | code-ablation | 316 lines | units: A08
+  ablation/analyzers/sig_library.py | code-ablation | 260 lines | units: A12
+  ablation/analyzers/sink_arg_classifier.py | code-ablation | 1464 lines | units: A07
+  ablation/analyzers/sink_arg_classifier_arm32.py | code-ablation | 597 lines | units: A07
+  ablation/analyzers/sink_arg_classifier_i386.py | code-ablation | 360 lines | units: A07
+  ablation/analyzers/sink_arg_classifier_mips.py | code-ablation | 776 lines | units: A05, A07
+  ablation/analyzers/sink_arg_classifier_ppc32.py | code-ablation | 686 lines | units: A05, A07, A13
+  ablation/analyzers/sink_arg_classifier_ppc64.py | code-ablation | 670 lines | units: A05, A07, A13
+  ablation/analyzers/sink_arg_classifier_ppc64_elfv1.py | code-ablation | 778 lines | units: A07
+  ablation/analyzers/sink_arg_classifier_ppc64_elfv2.py | code-ablation | 1022 lines | units: A07
+  ablation/analyzers/sink_arg_classifier_s390.py | code-ablation | 597 lines | units: A07
+  ablation/analyzers/sink_arg_classifier_x86_32.py | code-ablation | 977 lines | units: A04, A07
+  ablation/analyzers/sink_propagator.py | code-ablation | 535 lines | units: A07
+  ablation/analyzers/sink_sanitizer_filter.py | code-ablation | 521 lines | units: A07
+  ablation/analyzers/source_arch_risk.py | code-ablation | 289 lines | units: A06
+  ablation/analyzers/source_audit_compressor.py | code-ablation | 392 lines | units: A06
+  ablation/analyzers/source_entry_classifier.py | code-ablation | 319 lines | units: A06
+  ablation/analyzers/source_ingestion.py | code-ablation | 317 lines | units: A06
+  ablation/analyzers/source_isolation_checker.py | code-ablation | 498 lines | units: A06
+  ablation/analyzers/source_sink_scanner.py | code-ablation | 314 lines | units: A06
+  ablation/analyzers/source_taint_tracker.py | code-ablation | 567 lines | units: A06
+  ablation/analyzers/sql_sink_scanner.py | code-ablation | 551 lines | units: A08
+  ablation/analyzers/sscanf_sink_classifier.py | code-ablation | 696 lines | units: A08
+  ablation/analyzers/stage_commitment.py | code-ablation | 230 lines | units: A14
+  ablation/analyzers/static_elf32_func_start_scanner.py | code-ablation | 239 lines | units: A14
+  ablation/analyzers/static_link_sink_scanner.py | code-ablation | 452 lines | units: A07
+  ablation/analyzers/structurizer.py | code-ablation | 538 lines | units: A01
+  ablation/analyzers/subsequence_searcher.py | code-ablation | 361 lines | units: A12
+  ablation/analyzers/syscall_loongarch64.py | code-ablation | 475 lines | units: A14
+  ablation/analyzers/taint_tracker.py | code-ablation | 296 lines | units: A04, A06
+  ablation/analyzers/taint_tracker_arc.py | code-ablation | 548 lines | units: A05
+  ablation/analyzers/taint_tracker_arc_labeled.py | code-ablation | 857 lines | units: A02, A05
+  ablation/analyzers/taint_tracker_arm32.py | code-ablation | 517 lines | units: A04
+  ablation/analyzers/taint_tracker_arm32_labeled.py | code-ablation | 1209 lines | units: A02, A04
+  ablation/analyzers/taint_tracker_arm64.py | code-ablation | 1103 lines | units: A02, A04
+  ablation/analyzers/taint_tracker_i386.py | code-ablation | 412 lines | units: A04
+  ablation/analyzers/taint_tracker_loongarch64.py | code-ablation | 1049 lines | units: A02, A06
+  ablation/analyzers/taint_tracker_mips.py | code-ablation | 568 lines | units: A05, M04
+  ablation/analyzers/taint_tracker_mips64.py | code-ablation | 751 lines | units: A05
+  ablation/analyzers/taint_tracker_mips_labeled.py | code-ablation | 915 lines | units: A02, A05
+  ablation/analyzers/taint_tracker_nanomips.py | code-ablation | 678 lines | units: A05
+  ablation/analyzers/taint_tracker_ppc32.py | code-ablation | 1068 lines | units: A05
+  ablation/analyzers/taint_tracker_ppc64.py | code-ablation | 712 lines | units: A05
+  ablation/analyzers/taint_tracker_ppc_labeled.py | code-ablation | 963 lines | units: A02, A05
+  ablation/analyzers/taint_tracker_rh850.py | code-ablation | 350 lines | units: A06
+  ablation/analyzers/taint_tracker_riscv.py | code-ablation | 578 lines | units: A02, A05
+  ablation/analyzers/taint_tracker_riscv32.py | code-ablation | 731 lines | units: A05
+  ablation/analyzers/taint_tracker_riscv64.py | code-ablation | 666 lines | units: A05
+  ablation/analyzers/taint_tracker_tricore.py | code-ablation | 875 lines | units: A06
+  ablation/analyzers/taint_tracker_v850.py | code-ablation | 993 lines | units: A02, A06
+  ablation/analyzers/taint_tracker_x86.py | code-ablation | 1520 lines | units: A04
+  ablation/analyzers/taint_tracker_x86_32.py | code-ablation | 653 lines | units: A04
+  ablation/analyzers/taint_tracker_x86_labeled.py | code-ablation | 936 lines | units: A02, A04
+  ablation/analyzers/tainted_string_tracker.py | code-ablation | 268 lines | units: A04
+  ablation/analyzers/ti_coff_loader.py | code-ablation | 353 lines | units: A10
+  ablation/analyzers/ti_nnc_scanner.py | code-ablation | 563 lines | units: A10
+  ablation/analyzers/v850_decoder.py | code-ablation | 331 lines | units: A10
+  ablation/analyzers/vendor_profile.py | code-ablation | 155 lines | units: A14
+  ablation/analyzers/version_delta.py | code-ablation | 1016 lines | units: A14
+  ablation/analyzers/vtable_dispatch_scanner.py | code-ablation | 262 lines | units: A13
+  ablation/analyzers/vtable_resolver.py | code-ablation | 473 lines | units: A13, M03
+  ablation/analyzers/wcode_parser.py | code-ablation | 549 lines | units: A13
+  ablation/analyzers/window_analyzer.py | code-ablation | 1019 lines | units: A01
+  ablation/analyzers/windows_pool_taint_tracker.py | code-ablation | 361 lines | units: A04
+  ablation/analyzers/workflow_document.py | code-ablation | 328 lines | units: A14
+  ablation/analyzers/xcoff32_decompiler.py | code-ablation | 832 lines | units: A13
+  ablation/analyzers/xcoff_symtab_parser.py | code-ablation | 320 lines | units: A13
+  ablation/analyzers/xor_solver.py | code-ablation | 605 lines | units: A14
+  ablation/analyzers/xref_graph.py | code-ablation | 776 lines | units: A01
+  ablation/core/__init__.py | code-ablation | 31 lines | units: A04, A12
+  ablation/core/aix_installp_decompressor.py | code-ablation | 652 lines | units: C01
+  ablation/core/aix_installp_step4_multilevel.py | code-ablation | 317 lines | units: C01
+  ablation/core/apk_parser.py | code-ablation | 846 lines | units: C01
+  ablation/core/attck_tagger.py | code-ablation | 829 lines | units: C01
+  ablation/core/bff_extractor.py | code-ablation | 188 lines | units: A09, C01, M03
+  ablation/core/binary_parser.py | code-ablation | 246 lines | units: C01
+  ablation/core/bv41_decoder.py | code-ablation | 285 lines | units: C01
+  ablation/core/bwt_eulerian_reconstructor.py | code-ablation | 301 lines | units: C01
+  ablation/core/coff_m88k_parser.py | code-ablation | 162 lines | units: C01
+  ablation/core/disasm_engine.py | code-ablation | 952 lines | units: C01
+  ablation/core/elf_parser.py | code-ablation | 1366 lines | units: C01
+  ablation/core/firmware_analyzer.py | code-ablation | 518 lines | units: C01
+  ablation/core/guardian_pak_extractor.py | code-ablation | 254 lines | units: C01
+  ablation/core/macho_analyzer.py | code-ablation | 261 lines | units: C01
+  ablation/core/pe_analyzer.py | code-ablation | 139 lines | units: C01
+  ablation/core/pe_parser.py | code-ablation | 960 lines | units: A08, C01
+  ablation/core/platform_detect.py | code-ablation | 205 lines | units: C01
+  ablation/core/prose.py | code-ablation | 184 lines | units: C01
+  ablation/core/render.py | code-ablation | 124 lines | units: C01
+  ablation/core/shellcode_utils.py | code-ablation | 1646 lines | units: C01
+  ablation/core/swift_demangle.py | code-ablation | 364 lines | units: C01
+  ablation/core/tls_analyzer.py | code-ablation | 2770 lines | units: C01
+  ablation/core/xcoff_parser.py | code-ablation | 737 lines | units: A13, C01
+  ablation/core/yara_generator.py | code-ablation | 736 lines | units: C01
+  ablation/data/__init__.py | code-ablation | 0 lines | units: A04, A12
+  ablation/export/__init__.py | code-ablation | 5 lines | units: A04, A12
+  ablation/integrations/__init__.py | code-ablation | 1 lines | units: A04, A12
+  modules/__init__.py | code-modules | 2 lines | units: A04, A12
+  modules/_disasm_helper.py | code-modules | 61 lines | units: M03
+  modules/agent_authority_audit.py | code-modules | 223 lines | units: M02
+  modules/agent_observability_audit.py | code-modules | 172 lines | units: M02
+  modules/agent_tool_surface_enumerator.py | code-modules | 155 lines | units: M02
+  modules/ai_control_indicators.py | code-modules | 146 lines | units: M02
+  modules/ami_cramfs_extractor.py | code-modules | 333 lines | units: M03
+  modules/analyze_all_jni.py | code-modules | 349 lines | units: A11, M04
+  modules/anti_analysis_string_detector.py | code-modules | 144 lines | units: M04
+  modules/api_re.py | code-modules | 2985 lines | units: M02
+  modules/arm64_global_tracker.py | code-modules | 464 lines | units: M03
+  modules/arm_disasm.py | code-modules | 333 lines | units: M03
+  modules/arm_symbolic.py | code-modules | 567 lines | units: M03
+  modules/attack_labeler.py | code-modules | 141 lines | units: M04
+  modules/bare_adapter.py | code-modules | 140 lines | units: M03
+  modules/bff_decompressor.py | code-modules | 205 lines | units: M03
+  modules/build_integrity_analyzer.py | code-modules | 235 lines | units: A01, M04
+  modules/build_provenance_extractor.py | code-modules | 213 lines | units: M04
+  modules/callsite_tracer.py | code-modules | 323 lines | units: M03
+  modules/can_dbc_parser.py | code-modules | 327 lines | units: M04
+  modules/chunk_walker_validator.py | code-modules | 376 lines | units: M04
+  modules/cpp_vtable_reconstructor.py | code-modules | 960 lines | units: M03
+  modules/crypto_audit.py | code-modules | 4703 lines | units: M02
+  modules/cve_byte_patterns.py | code-modules | 286 lines | units: M04
+  modules/dead_security_check_scanner.py | code-modules | 205 lines | units: M04
+  modules/deep_jni_analysis.py | code-modules | 246 lines | units: M04
+  modules/dependency_confusion_scanner.py | code-modules | 179 lines | units: M04
+  modules/deprecated_crypto_scanner.py | code-modules | 203 lines | units: M04
+  modules/docker_enum.py | code-modules | 1844 lines | units: M01
+  modules/ecu_nissan_parser.py | code-modules | 542 lines | units: A10, M04
+  modules/elf_anomaly_scanner.py | code-modules | 157 lines | units: M04
+  modules/elf_vtable_reconstructor.py | code-modules | 319 lines | units: M03
+  modules/entropy_analyzer.py | code-modules | 173 lines | units: M04
+  modules/firmware_auth_bypass_detector.py | code-modules | 333 lines | units: M04
+  modules/firmware_pki_checker.py | code-modules | 172 lines | units: M04
+  modules/forensics_enum.py | code-modules | 4219 lines | units: M01
+  modules/go_binary_re.py | code-modules | 1290 lines | units: M03
+  modules/go_dangerous_callers.py | code-modules | 923 lines | units: M03
+  modules/go_garble_re.py | code-modules | 543 lines | units: M03
+  modules/hardcoded_credential_scanner.py | code-modules | 177 lines | units: M04
+  modules/hardware_root_finder.py | code-modules | 321 lines | units: M04
+  modules/heap_uaf_scanner.py | code-modules | 414 lines | units: M04
+  modules/huawei_squashfs_extractor.py | code-modules | 569 lines | units: M03
+  modules/hyperflex_enum.py | code-modules | 1301 lines | units: M01
+  modules/installer_binary_analyzer.py | code-modules | 388 lines | units: M03
+  modules/interproc_field_writer.py | code-modules | 685 lines | units: M03
+  modules/ioctl_attack_surface.py | code-modules | 623 lines | units: M03
+  modules/ios_enum.py | code-modules | 5105 lines | units: M01
+  modules/isa_8051.py | code-modules | 674 lines | units: M03
+  modules/java_decompiler.py | code-modules | 1987 lines | units: M03
+  modules/java_re.py | code-modules | 3975 lines | units: M03
+  modules/k8s_enum.py | code-modules | 5154 lines | units: M01
+  modules/lateral_movement.py | code-modules | 7817 lines | units: M01
+  modules/lethal_trifecta_scanner.py | code-modules | 171 lines | units: M04
+  modules/libfunc_db.py | code-modules | 615 lines | units: M04
+  modules/llm_behavior_security_probes.py | code-modules | 104 lines | units: M02
+  modules/llm_enum.py | code-modules | 4506 lines | units: M02
+  modules/mcp_grammar_fuzzer.py | code-modules | 294 lines | units: M02
+  modules/metachar_filter_bypass_scanner.py | code-modules | 214 lines | units: M04
+  modules/mips_analyzer.py | code-modules | 699 lines | units: M04
+  modules/mpy_lifter.py | code-modules | 610 lines | units: M03
+  modules/net_sniffer.py | code-modules | 3423 lines | units: M01
+  modules/network_analyze.py | code-modules | 4234 lines | units: M01
+  modules/nexus_dashboard_enum.py | code-modules | 1520 lines | units: M01
+  modules/nginx_enum.py | code-modules | 2293 lines | units: M02
+  modules/non_constant_time_comparator_scanner.py | code-modules | 205 lines | units: M04
+  modules/nxos_enum.py | code-modules | 1605 lines | units: M01
+  modules/obfuscated_string_decoder.py | code-modules | 244 lines | units: M04
+  modules/path_solver.py | code-modules | 700 lines | units: M03
+  modules/physmem_elf_vfs.py | code-modules | 730 lines | units: M01
+  modules/policy_engine_absence_detector.py | code-modules | 233 lines | units: M04
+  modules/ppc32_func_discovery.py | code-modules | 217 lines | units: M03
+  modules/ppc32_got2_resolver.py | code-modules | 801 lines | units: M03
+  modules/ppc32_heap_slot_scanner.py | code-modules | 397 lines | units: M03
+  modules/privesc_enum.py | code-modules | 4523 lines | units: M01
+  modules/process_enum.py | code-modules | 3862 lines | units: M01
+  modules/process_injection_combo_scanner.py | code-modules | 160 lines | units: M04
+  modules/prompt_injection_sink_classifier.py | code-modules | 213 lines | units: M02
+  modules/proto_fsm.py | code-modules | 602 lines | units: M02
+  modules/sbom_extractor.py | code-modules | 240 lines | units: M04
+  modules/setuid_auth_oracle_scanner.py | code-modules | 313 lines | units: M04
+  modules/signal_handler_race_scanner.py | code-modules | 268 lines | units: M04
+  modules/signed_length_arg_scanner.py | code-modules | 229 lines | units: M04
+  modules/sip_enum.py | code-modules | 6004 lines | units: M01
+  modules/sizeof_ptr_detector.py | code-modules | 199 lines | units: M04
+  modules/spu_disassembler.py | code-modules | 611 lines | units: M03
+  modules/sse_slicer.py | code-modules | 398 lines | units: M03
+  modules/streaming_enum.py | code-modules | 4214 lines | units: M01
+  modules/structural_sim.py | code-modules | 343 lines | units: M04
+  modules/syscall_trace.py | code-modules | 2653 lines | units: M01
+  modules/third_party_library_identifier.py | code-modules | 260 lines | units: M04
+  modules/tls_enum.py | code-modules | 2441 lines | units: M02
+  modules/toctou_scanner.py | code-modules | 222 lines | units: M04
+  modules/truncation_at_sink_scanner.py | code-modules | 228 lines | units: M04
+  modules/uninitialized_var_path_scanner.py | code-modules | 303 lines | units: M04
+  modules/version_delta_finetune.py | code-modules | 220 lines | units: M04
+  modules/video_container.py | code-modules | 967 lines | units: M03
+  modules/vxworks_archive_scanner.py | code-modules | 302 lines | units: M04
+  modules/weak_prng_at_security_sink_scanner.py | code-modules | 207 lines | units: M04
+  modules/windows_enum.py | code-modules | 784 lines | units: M01
+  modules/xcoff_executable_analyzer.py | code-modules | 135 lines | units: M03
+  modules/xcoff_loader_symbols.py | code-modules | 289 lines | units: M03
+  sweeps/__init__.py | code-sweep | 0 lines | units: A04, A12
+  sweeps/android_sweep.py | code-sweep | 341 lines | units: S01
+  sweeps/base_sweep.py | code-sweep | 388 lines | units: S01
+  sweeps/corpus_miner.py | code-sweep | 491 lines | units: S01
+  sweeps/fortinet_sweep.py | code-sweep | 714 lines | units: S01
+  sweeps/pe_sweep.py | code-sweep | 1002 lines | units: S01
+  sweeps/report_generator.py | code-sweep | 225 lines | units: S01
+  sweeps/ti_sweep.py | code-sweep | 854 lines | units: A06, A10, S01
+  sweeps/win16_le_vxd_sweep.py | code-sweep | 911 lines | units: S01
+  sweeps/win16_mz_dos_sweep.py | code-sweep | 390 lines | units: S01
+  sweeps/win16_ne_sweep.py | code-sweep | 1036 lines | units: S01
+
+=== UNCOVERED FILES ===
+  ablation/analyzers/loongarch_decoder_v2.py | code-ablation | 348 lines | suggested: A??
+  ablation/cli.py | code-ablation | 1317 lines | suggested: A??
+  ablation/export/json_export.py | code-ablation | 66 lines | suggested: A??
+  ablation/export/sarif.py | code-ablation | 202 lines | suggested: A??
+  ablation/integrations/binja_plugin.py | code-ablation | 221 lines | suggested: A??
+  docs/demo_curl.py | code-other | 126 lines | suggested: ??
