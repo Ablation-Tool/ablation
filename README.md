@@ -75,7 +75,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 </details>
 
 <details>
-<summary>Autonomous Agent Loop, Flywheel & Semantic Corpus</summary>
+<summary>ReAct (Reasoning + Acting)</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
