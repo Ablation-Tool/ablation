@@ -4,6 +4,7 @@
 
 Ablation is a reverse engineering framework that runs autonomously with AI coding agents.
 
+---
 
 ![demo](assets/demos/claude-code-demo.gif)
 
