@@ -6,7 +6,7 @@ KASAN/KCOV-aware LoongArch64 instruction decoder that tags and strips instrument
 
 ## Why this exists
 
-1. **A TencentOS 4.6 kernel built with `CONFIG_KASAN=y` / `CONFIG_KCOV=y` injects a 4–6 instruction shadow-check preamble before virtually every memory access.** The sequence — `srli.d` / `lu12i.w` / `addi.d` / `ld.b` / conditional branch / `bl __asan_load8` — is pure instrumentation overhead. Running the V1 decoder or `LoongArch64TaintTracker` directly against such a binary produces thousands of false call edges into `__asan_load8_noabort`, `__sanitizer_cov_trace_pc`, and similar KASAN/KCOV stubs. Roughly 40% of instructions in `kvm_eiointc_write` and similar hot functions are ghosts.
+1. **A TencentOS 4.6 kernel built with `CONFIG_KASAN=y` / `CONFIG_KCOV=y` injects a 4–6 instruction shadow-check preamble before virtually every memory access.** The sequence is `srli.d` / `lu12i.w` / `addi.d` / `ld.b` / conditional branch / `bl __asan_load8`, and it is pure instrumentation overhead. Running the V1 decoder or `LoongArch64TaintTracker` directly against such a binary produces thousands of false call edges into `__asan_load8_noabort`, `__sanitizer_cov_trace_pc`, and similar KASAN/KCOV stubs. Roughly 40% of instructions in `kvm_eiointc_write` and similar hot functions are ghosts.
 
 2. **`LoongArchDecoderV2` runs a two-pass semantic layer on top of the V1 fixed-width decode.** Pass 1 tags every `bl` targeting a known KASAN or KCOV VA as `is_instrumentation=True`. Pass 2 walks backward from each tagged `bl` and tags the shadow-address preamble instructions with `idiom="kasan_shadow"`. `decode_frames_clean()` then skips all tagged frames, leaving only real program instructions for the taint tracker.
 
@@ -76,7 +76,7 @@ Parses a kernel `System.map` file (`<hex_va> <type> <symbol>` per line). Extract
 
 | Method | Returns | Description |
 |:---|:---|:---|
-| `decode_frames_v2(data, base_addr)` | `List[LoongArchFrameV2]` | Full decode with both tagging passes applied. Returns a list (not iterator) — pass 2 needs random access. |
+| `decode_frames_v2(data, base_addr)` | `List[LoongArchFrameV2]` | Full decode with both tagging passes applied. Returns a list, not an iterator, because pass 2 needs random access. |
 | `decode_frames_clean(data, base_addr)` | `Iterator[LoongArchFrameV2]` | Yields only frames where `is_instrumentation=False`. |
 | `count_instrumentation(data, base_addr)` | `dict` | Returns `{total, instrumentation, real, pct_instrumentation}`. |
 
@@ -162,9 +162,9 @@ print(tt.report(findings))
 
 ## False positives
 
-**Shadow-check preamble sequences that precede a non-instrumentation branch are not fully tagged.** The backward walk stops at any branch instruction to prevent mis-tagging control flow that belongs to real program logic. A KASAN sequence that contains an internal conditional branch (uncommon but possible in inlined helpers) will be partially tagged: the `bl` is marked but some preamble instructions before the branch remain real. This is the safe side — under-stripping produces no false positives, only retained noise.
+**Shadow-check preamble sequences that precede a non-instrumentation branch are not tagged.** The backward walk stops at any branch instruction to prevent mis-tagging control flow that belongs to real program logic. A KASAN sequence that contains an internal conditional branch will be partially tagged: the `bl` is marked but some preamble instructions before the branch remain real. This is the safe side because under-stripping produces no false positives, only retained noise.
 
-**An incorrect `max_preamble` value can leave preamble instructions untagged.** The default of 6 covers the full TencentOS 4.6 KASAN idiom. Kernels compiled with extended KASAN checks (e.g., `CONFIG_KASAN_GENERIC` with multi-byte granularity) may emit longer preambles. If `count_instrumentation()` shows unexpectedly low `pct_instrumentation` on a known KASAN build, try `max_preamble=10`.
+**An incorrect `max_preamble` value can leave preamble instructions untagged.** The default of 6 covers the full TencentOS 4.6 KASAN idiom. Kernels compiled with `CONFIG_KASAN_GENERIC` may emit longer preambles. If `count_instrumentation()` shows unexpectedly low `pct_instrumentation` on a known KASAN build, try `max_preamble=10`.
 
 **A missing or wrong `System.map` produces zero tagging.** If `from_system_map()` is given a path to the wrong kernel's map, none of the instrumentation VAs will match and all frames will be returned as real. Verify that `dec._instr_vas` is non-empty after construction.
 
@@ -194,8 +194,8 @@ print(tt.report(findings))
 | `idiom` | Meaning |
 |:---|:---|
 | `""` | Real program instruction |
-| `"kasan"` | `bl` to a KASAN reporter (`__asan_load*`, `__kasan_*`) |
-| `"kasan_shadow"` | Shadow-address preamble (`srli.d`, `lu12i.w`, `addi.d`, `ld.b`, etc.) |
+| `"kasan"` | `bl` to a KASAN reporter: `__asan_load*` or `__kasan_*` |
+| `"kasan_shadow"` | Shadow-address preamble: `srli.d`, `lu12i.w`, `addi.d`, `ld.b` |
 | `"kcov"` | `bl` to a KCOV tracer (`__sanitizer_cov_*`) |
 
 ---
