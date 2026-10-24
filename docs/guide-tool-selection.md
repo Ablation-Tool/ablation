@@ -147,6 +147,8 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Classify PPC64 Cell PPU functions as dynamic data structure traversal" | `DynDSClassifier.from_context(ctx).classify()` |
 | "Cache any scanner's results across sessions" | `ScanResultVersionCache.for_scanner(ScannerClass).get_or_scan(path)` |
 | "Classify Linux.ko attack surface from kernel source tree path" | `KernelModuleSubsystemClassifier().classify(ko_path)` |
+| "Find Q-shell / dispatch-table command handlers in ELF data segment (IBM Sentinel, server firmware)" | `CommandTableScanner.from_context(ctx).scan()` → list of CommandTable; each entry has name, handler_va, entry_va; see docs/reference-modules/command-table-scanner.md |
+| "Flag pthread_once() lazy-init wrappers misidentified as auth checks in stripped non-PIE ELF" | `PthreadOnceDetector.from_context(ctx).detect()` → list of PthreadOnceResult with verdict LAZY_INIT/POSSIBLE_AUTH/UNKNOWN; see docs/reference-modules/pthread-once-detector.md |
 
 ---
 
