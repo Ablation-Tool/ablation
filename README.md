@@ -8,6 +8,8 @@ Ablation is a reverse engineering framework that runs autonomously with AI codin
 
 ---
 
+![demo](assets/demos/claude-code-demo.gif)
+
 ## Capabilities
 
 <details>
@@ -303,10 +305,6 @@ Following coordinated disclosure, the **Cisco Product Security Incident Response
 
 <details>
 <summary>Demonstrations</summary>
-
-### Claude Code Demo
-
-![Claude Code Demo](assets/demos/claude-code-demo.gif)
 
 ### Ablation in Action
 
