@@ -76,6 +76,13 @@ try:
 except ImportError:
     pass
 
+_DECOMP_OK = False
+try:
+    from ablation.core.aix_installp_decompressor import AixInstallpDecompressor as _AixDecompressor
+    _DECOMP_OK = True
+except ImportError:
+    pass
+
 _XCOFF_PARSER_OK = False
 try:
     from ablation.core.xcoff_parser import parse as _xcoff_parse
@@ -560,14 +567,23 @@ class AixBffExtractor:
     """
     Extract XCOFF32 and XCOFF64 binaries from AIX installp BFF archives.
 
-    Uses magic-byte scanning rather than parsing the BFF container structure,
-    which requires AIX-specific metadata tables not present on Linux.
+    Two extraction strategies are used in order:
 
-    The extractor finds every XCOFF binary at a 4-byte-aligned offset in the
-    archive, validates its file header, and computes the correct byte extent
-    from the XCOFF section map and symbol table.  This approach handles all
-    known IBM package layouts including multi-component BFF archives that
-    contain several XCOFF binaries at different offsets.
+    1. Structured BFF parse (ablation.core.bff_extractor.iter_entries):
+       Parses the AIX backup-by-name container to get properly bounded file
+       entries.  Handles uncompressed XCOFF entries directly; for IBM-compressed
+       entries (first byte 0x0e/0x0f/0x10/0x11) attempts decompression via
+       AixInstallpDecompressor and yields the result only when the decompressed
+       output is a valid XCOFF binary.
+
+       Compression note: IBM's BFF uses a proprietary BWT + Huffman pipeline.
+       AIX 4.3.x entries use a reduced-alphabet (K < 256) BWT whose multi-cycle
+       structure prevents exact reconstruction with the current decoder.  AIX 5.x+
+       single-cycle entries decompress correctly.  Compressed entries that cannot
+       be decoded are silently skipped.
+
+    2. Magic-byte fallback: used when iter_entries raises (non-standard BFF),
+       and as a sub-scan on decompressed blobs (e.g. .a library archives).
 
     Also useful as a general XCOFF scanner for arbitrary blobs: firmware
     images, filesystem dumps, and memory captures that embed XCOFF objects.
@@ -611,24 +627,74 @@ class AixBffExtractor:
 
     # ── core extraction ───────────────────────────────────────────────────────
 
+    def _scan_blob(
+        self, name_hint: str, blob: bytes
+    ) -> Iterator[Tuple[str, bytes]]:
+        """Yield XCOFF binaries found within blob.
+
+        Fast path: if blob itself starts with XCOFF magic, yield it directly.
+        Slow path: scan blob for embedded XCOFF via magic-byte scanner (handles
+        .a library archives that may contain multiple XCOFF members).
+        """
+        xcoff_magic = (b'\x01\xdf', b'\x01\xf7')
+        if len(blob) < self._min_size:
+            return
+        if blob[:2] in xcoff_magic:
+            yield name_hint, blob
+            return
+        # blob is not itself an XCOFF binary (e.g. a .a archive or config file).
+        # Use a sub-extractor to magic-scan the decompressed blob content.
+        sub = AixBffExtractor(
+            blob,
+            include_debug=self._include_debug,
+            min_size=self._min_size,
+        )
+        pos = 0
+        while pos < len(blob) - 20:
+            magic_off = sub._find_xcoff_magic(pos)
+            if magic_off == -1:
+                break
+            xcoff_bytes = sub._extract_one(magic_off)
+            if xcoff_bytes and len(xcoff_bytes) >= self._min_size:
+                sub_name = sub._name_hint(magic_off) or name_hint
+                yield sub_name, xcoff_bytes
+                pos = magic_off + len(xcoff_bytes)
+            else:
+                pos = magic_off + 4
+
     def extract(self) -> Iterator[Tuple[str, bytes]]:
         """
         Yield (name_hint, xcoff_bytes) for each embedded XCOFF binary.
 
-        Uses ablation.core.bff_extractor.iter_entries when available — this is
-        the correct structured path that respects the BFF container layout.
-        Falls back to magic-byte scanning for compressed or non-standard archives
-        where the structured parser raises ValueError.
+        Structured path (preferred): uses ablation.core.bff_extractor.iter_entries
+        to parse the BFF container layout.  Handles two entry kinds:
+          - Uncompressed XCOFF (entry.data starts with XCOFF magic): yield directly.
+          - IBM-compressed entries (first byte in 0x0e-0x11): attempt decompression
+            with AixInstallpDecompressor; yield only if the decompressed result
+            starts with valid XCOFF magic.  Invalid decompression output is silently
+            discarded — the IBM multi-cycle BWT means decompression may be
+            approximate for AIX 4.3.x entries with K < 256 common-alphabet bytes.
+
+        Falls back to magic-byte scanning when iter_entries raises (non-standard BFF).
         """
         if _BFF_OK:
             try:
                 xcoff_magic = (b'\x01\xdf', b'\x01\xf7')
                 for entry in _iter_bff_entries(self._data):
-                    if (not entry.is_dir
-                            and len(entry.data) >= self._min_size
-                            and entry.data[:2] in xcoff_magic):
-                        name = entry.rel_path.split('/')[-1] or 'xcoff'
+                    if entry.is_dir or len(entry.data) < self._min_size:
+                        continue
+                    name = entry.rel_path.split('/')[-1] or 'xcoff'
+                    if entry.data[:2] in xcoff_magic:
+                        # Uncompressed XCOFF stored directly in the BFF entry.
                         yield name, entry.data
+                    elif (_DECOMP_OK
+                            and entry.data[0] in (0x0e, 0x0f, 0x10, 0x11)):
+                        # IBM-compressed entry: decompress, then validate output.
+                        try:
+                            decompressed = _AixDecompressor(entry.data).decompress()
+                        except Exception:
+                            continue
+                        yield from self._scan_blob(name, decompressed)
                 return
             except (ValueError, Exception):
                 pass  # fall through to magic scan
