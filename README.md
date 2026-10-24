@@ -151,7 +151,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 </details>
 
 <details>
-<summary>Cryptography, TLS, Web/API & AI/MCP Security</summary>
+<summary>Cryptographic & Protocol Analysis</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
