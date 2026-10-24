@@ -11,7 +11,7 @@ Ablation is a reverse engineering framework built for both LLM agents and human 
 ## Capabilities
 
 <details>
-<summary>32 ISA Decoders, Lifters & VM Runtimes</summary>
+<summary>32 Decompilers, Lifters & ISAs</summary>
 
 **Native CPUs**
 
