@@ -179,7 +179,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 </details>
 
 <details>
-<summary>Cross-Version Diffing, FORGE & Export Tooling</summary>
+<summary>DocIN (Documentation + Integrity)</summary>
 
 | Capability | Code | Description |
 |:---|:---|:---|
