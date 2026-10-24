@@ -2,13 +2,7 @@
 
 ![](https://komarev.com/ghpvc/?username=Ablation-Tool&color=grey) [![NIST SP 800-218](https://img.shields.io/badge/NIST%20SP%20800--218-SSDF-grey)](docs/standards-ablation.md) [![CISA Secure by Design](https://img.shields.io/badge/CISA-Secure%20by%20Design-grey)](docs/standards-ablation.md) [![MIL-HDBK-115C](https://img.shields.io/badge/MIL--HDBK--115C-Compliant-grey)](docs/standards-ablation.md) [![Sponsor Me](https://img.shields.io/badge/Sponsor%20Me-%23ea4aaa?logo=githubsponsors&logoColor=white)](docs/SPONSORS.md)
 
-Ablation is a reverse engineering framework.
-
-Combined with Claude Code or Codex, it becomes an autonomous reverse engineering tool.
-
-Most RE frameworks are interactive human tools. IDA, Binary Ninja, Ghidra forces you load a binary, you click, you annotate, you understand. The AI is bolted on later as an assistant. 
-
-Ablation inverts this: the entire API surface is designed so an LLM agent runs the RE autonomously and a human reviews the output.
+Ablation is a reverse engineering framework built for both LLM agents and human analysts.
 
 ---
 
