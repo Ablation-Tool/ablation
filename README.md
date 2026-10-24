@@ -177,11 +177,7 @@
 </details>
 
 
-## Project Background & Governance
-
-<details>
-<summary><strong>Setup</strong></summary>
-
+## Setup
 ### Install
 
 ```bash
@@ -231,7 +227,10 @@ Output style                            Explanatory
 Question auto-continue timeout          never
 ```
 
-</details>
+
+---
+
+## About
 
 <details>
 <summary><strong>Acknowledgments</strong></summary>
