@@ -159,13 +159,14 @@ These functions take text strings from configuration files, shadow databases, or
 | `check_shadow_password_weakness(shadow_content)` | /etc/shadow content | Weak hash algorithms, empty passwords |
 | `check_password_policy_weakness(pam_config_text)` | PAM config | Absent length or complexity requirements |
 | `detect_password_in_binary(data)` | Binary data | Cleartext credential strings |
+| `check_jwt_weakness(token)` | JWT string | Returns a single finding dict for the first weakness found: alg:none, kid path traversal, HS256/RS256 confusion, short signature, or no expiry claim |
 
 ## Primality and number-theory functions
 
 | Function | Description |
 | -------- | ----------- |
 | `miller_rabin_primality(n, rounds)` | Returns True if n passes Miller-Rabin primality testing |
-| `check_weak_prime(n)` | Flags safe prime failures, small prime factors, smooth numbers |
+| `check_weak_prime(n)` | Flags even modulus, small factors (trial division to 65537), perfect square, Fermat factoring feasibility, composite by Miller-Rabin, and sub-1024-bit primes |
 | `check_discrete_log_weakness(p, g)` | Flags weak DH parameters: small group order or non-prime p |
 | `check_birthday_collision_risk(hash_bits, num_samples)` | Estimates birthday collision probability |
 | `extract_rsa_modulus_from_cert_der(der_bytes)` | Returns RSA modulus integer from certificate DER bytes |
@@ -179,7 +180,9 @@ These functions take text strings from configuration files, shadow databases, or
 
 ## Findings format
 
-All methods use the same dict structure:
+Two dict schemas coexist in this module.
+
+`CryptoAudit` and `KeyCryptoAnalyzer` class methods return:
 
 | Field | Description |
 | ----- | ----------- |
@@ -188,6 +191,18 @@ All methods use the same dict structure:
 | `description` | Human-readable description |
 | `detail` | Supporting context such as algorithm, key size, or path |
 | `exploit` | Suggested proof-of-concept command or formula |
+
+Standalone binary analysis, config analysis, and network probe functions return:
+
+| Field | Description |
+| ----- | ----------- |
+| `title` | Short label for the finding class |
+| `severity` | CRITICAL, HIGH, MEDIUM, LOW, or INFO |
+| `detail` | Human-readable description with context |
+| `host` | Target host string, or `localhost` for non-network checks |
+| `port` | Target port, or `0` for non-network checks |
+
+`check_jwt_weakness` returns a single dict using the standalone schema, not a list.
 
 ## Limitations
 
