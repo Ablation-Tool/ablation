@@ -680,7 +680,7 @@ When uncertain, default to more detail and explicit INFERRED reasoning.
 <details>
 <summary>ABL-RUB-TR-001</summary>
 
-ABL-RUB-TR-001 runs before any deeper rubric. Given multiple targets, it produces a structured per-target assessment and ranks them from most to least urgent — so you know where to point ABL-RUB-RE-001 or ABL-RUB-RE-002 first. The model is forbidden from going deep on any single target.
+Multi-target attack surface triage. Ranks targets by priority and outputs a structured deep-dive plan. Run before ABL-RUB-RE-001 or ABL-RUB-RE-002.
 
 ---
 
