@@ -1,6 +1,7 @@
 """
 test_llm_analyst.py — Tests for llm_analyst: schemas, FuncDB execution log,
-AgentLoop cascade routing, and SDK/CLI transport dispatch.
+AgentLoop cascade routing, SDK/CLI transport dispatch, KG wiring, and
+ContextBuilder epistemic rendering.
 """
 
 from __future__ import annotations
@@ -271,3 +272,124 @@ class TestAgentLoopTransport:
         assert r['result_name'] == 'parse_radius'
         assert r['input_tokens'] == 500
         assert r['output_tokens'] == 80
+
+
+# ── ContextBuilder — system prompt + epistemic rendering ─────────────────────
+
+class TestContextBuilder:
+    def test_system_prompt_no_react_language(self):
+        from ablation.analyzers.llm_analyst.context_builder import ContextBuilder
+        cb = ContextBuilder(product='FortiOS', version='7.4')
+        p = cb.system_prompt()
+        assert 'ReAct' not in p
+        assert 'done()' not in p
+        assert 'Use tools in a ReAct loop' not in p
+        assert 'stopped after' not in p
+        assert 'pre-loaded' in p
+
+    def test_system_prompt_appends_kg_context(self):
+        from ablation.analyzers.llm_analyst.context_builder import ContextBuilder
+        cb = ContextBuilder()
+        p = cb.system_prompt(kg_context='Modules: SinkArgClassifier\nGaps: stripped Go')
+        assert '[KNOWLEDGE GRAPH' in p
+        assert 'SinkArgClassifier' in p
+        assert 'stripped Go' in p
+
+    def test_system_prompt_no_kg_section_when_empty(self):
+        from ablation.analyzers.llm_analyst.context_builder import ContextBuilder
+        cb = ContextBuilder()
+        p = cb.system_prompt(kg_context='')
+        assert 'KNOWLEDGE GRAPH' not in p
+
+    def test_prior_findings_shows_epistemic(self):
+        from ablation.analyzers.llm_analyst.context_builder import ContextBuilder
+        cb = ContextBuilder()
+        findings = [{
+            'name': 'parse_attr', 'role': 'RADIUS_ATTR_HANDLER',
+            'confidence': 'CONFIRMED', 'epistemic': 'confirmed',
+            'retrieval_source': 'callee_overlap',
+            'product': 'CiscoASA', 'version': '9.8', 'notes': '',
+        }]
+        block = cb._format_prior_findings(findings)
+        assert '[confirmed]' in block
+        assert 'via:callee_overlap' in block
+        assert 'CONFIRMED above CANDIDATE' in block
+
+    def test_prior_findings_candidate_tagged(self):
+        from ablation.analyzers.llm_analyst.context_builder import ContextBuilder
+        cb = ContextBuilder()
+        findings = [{
+            'name': 'fn', 'role': 'UNKNOWN',
+            'confidence': 'CANDIDATE', 'epistemic': 'candidate',
+            'retrieval_source': 'role_match',
+            'product': 'X', 'version': '1.0', 'notes': '',
+        }]
+        block = cb._format_prior_findings(findings)
+        assert '[candidate]' in block
+        assert 'via:role_match' in block
+
+
+# ── AgentLoop KnowledgeGraph wiring ──────────────────────────────────────────
+
+class TestAgentLoopKGWiring:
+    def _make_loop(self, kg=None, arch='', fmt=''):
+        from ablation.analyzers.llm_analyst.agent_loop import AgentLoop
+        reg = MagicMock()
+        return AgentLoop(reg, knowledge_graph=kg, arch=arch, fmt=fmt)
+
+    def test_no_kg_context_when_no_kg(self):
+        loop = self._make_loop()
+        assert loop._kg_context == ''
+
+    def test_no_kg_context_when_no_arch(self):
+        kg = MagicMock()
+        loop = self._make_loop(kg=kg, arch='')
+        assert loop._kg_context == ''
+        kg.get_context_for_binary.assert_not_called()
+
+    def test_kg_context_fetched_at_init(self):
+        kg = MagicMock()
+        kg.get_context_for_binary.return_value = 'Modules: TaintTracker\nGaps: stripped Go'
+        loop = self._make_loop(kg=kg, arch='x86-64', fmt='elf64')
+        assert 'TaintTracker' in loop._kg_context
+        kg.get_context_for_binary.assert_called_once_with(
+            arch='x86-64', fmt='elf64', intent='sweep'
+        )
+
+    def test_kg_exception_produces_empty_context(self):
+        kg = MagicMock()
+        kg.get_context_for_binary.side_effect = RuntimeError('DB unavailable')
+        loop = self._make_loop(kg=kg, arch='ppc32', fmt='xcoff32')
+        assert loop._kg_context == ''
+
+    def test_kg_context_injected_into_system_prompt(self):
+        """KG context appears in the system prompt sent to the LLM."""
+        from ablation.analyzers.llm_analyst.agent_loop import AgentLoop
+        from ablation.analyzers.func_id_db import FuncDB
+        import tempfile, os
+
+        kg = MagicMock()
+        kg.get_context_for_binary.return_value = 'Modules: SinkArgClassifier\nArch: x86-64'
+
+        reg = MagicMock()
+        reg._get_strings.return_value   = '{"strings": []}'
+        reg._get_cfg.return_value       = ''
+        reg._get_disassembly.return_value = 'nop'
+        reg._get_imports.return_value   = '{"imports": []}'
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db   = FuncDB(os.path.join(tmpdir, 'test.db'))
+            loop = AgentLoop(reg, func_db=db, api_key='sk-ant-test',
+                             knowledge_graph=kg, arch='x86-64', fmt='elf64')
+
+            captured_system = []
+            def fake_sdk(system, prompt, model):
+                captured_system.append(system)
+                return ('{"name":"fn","confidence":0.5}', 100, 20)
+
+            with patch.object(loop, '_call_sdk', side_effect=fake_sdk):
+                loop.run(0x1000, task='name_function')
+
+        assert captured_system, 'SDK was not called'
+        assert 'KNOWLEDGE GRAPH' in captured_system[0]
+        assert 'SinkArgClassifier' in captured_system[0]

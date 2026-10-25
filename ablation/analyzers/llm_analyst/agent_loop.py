@@ -91,16 +91,19 @@ class AgentLoop:
 
     def __init__(
         self,
-        registry:       ToolRegistry,
+        registry:        ToolRegistry,
         func_db=None,
-        product:        str = 'unknown',
-        version:        str = 'unknown',
-        binary_hint:    str = '',
-        binary_sha256:  str = '',
-        max_tool_calls: int = 10,
-        model:          Optional[str] = None,
-        api_key:        Optional[str] = None,
-        verbose:        bool = False,
+        product:         str = 'unknown',
+        version:         str = 'unknown',
+        binary_hint:     str = '',
+        binary_sha256:   str = '',
+        max_tool_calls:  int = 10,
+        model:           Optional[str] = None,
+        api_key:         Optional[str] = None,
+        knowledge_graph=None,
+        arch:            str = '',
+        fmt:             str = '',
+        verbose:         bool = False,
     ):
         self._registry      = registry
         self._func_db       = func_db
@@ -109,7 +112,11 @@ class AgentLoop:
         self._binary_sha256 = binary_sha256
         self._model         = model      # None = use cascade routing per task
         self._api_key       = api_key
+        self._kg            = knowledge_graph
+        self._arch          = arch
+        self._fmt           = fmt
         self._verbose       = verbose
+        self._kg_context    = self._fetch_kg_context()
 
     # ── public API ────────────────────────────────────────────────────────────
 
@@ -159,7 +166,7 @@ class AgentLoop:
         except Exception:
             imports = '(imports unavailable)'
 
-        system_prompt = self._ctx.system_prompt()
+        system_prompt = self._ctx.system_prompt(kg_context=self._kg_context)
         user_message  = self._ctx.user_prompt(
             func_addr=func_addr,
             task=task,
@@ -202,7 +209,7 @@ class AgentLoop:
         )
         return self._run_analysis(
             func_addr_v1, 'patch_analysis',
-            self._ctx.system_prompt(), patch_prompt,
+            self._ctx.system_prompt(kg_context=self._kg_context), patch_prompt,
             pre_calls=0,
         )
 
@@ -233,6 +240,29 @@ class AgentLoop:
             ))
         except Exception:
             pass
+
+    # ── KnowledgeGraph memory interface ───────────────────────────────────────
+
+    def _fetch_kg_context(self) -> str:
+        """
+        Fetch arch/format context from the KnowledgeGraph at construction time.
+
+        Returns an empty string when no KG is configured, when arch is unknown,
+        or when the KG raises.  Fetched once at construction so every run() call
+        shares the same context without paying the SQLite round-trip again.
+        """
+        if self._kg is None or not self._arch:
+            return ''
+        try:
+            return self._kg.get_context_for_binary(
+                arch=self._arch,
+                fmt=self._fmt or '',
+                intent='sweep',
+            )
+        except Exception as exc:
+            if self._verbose:
+                print(f'[llm_analyst] KG context fetch failed: {exc}')
+            return ''
 
     # ── transport ─────────────────────────────────────────────────────────────
 

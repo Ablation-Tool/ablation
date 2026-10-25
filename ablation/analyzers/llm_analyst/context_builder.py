@@ -55,19 +55,17 @@ TASK_INSTRUCTIONS = {
 }
 
 SYSTEM_PROMPT_TEMPLATE = """\
-You are a senior x86-64 reverse engineer analyzing {product} binary version {version}.
+You are a senior reverse engineer analyzing {product} version {version}.
 Binary: {binary_hint}
-Architecture: x86-64 ELF, stripped (no debug symbols, PIE).
 
-You have access to tools that query the binary and the function identity database.
-Use tools in a ReAct loop: reason, then act (call a tool), then reason again from the result.
+All binary data (disassembly, strings, imports, CFG) is pre-loaded in the user message.
+No tool calls are available — produce a JSON result directly from the pre-loaded data.
 
 Rules:
-- Always emit a brief "reasoning" sentence before each tool call.
-- Call get_disassembly only after reviewing callee names and strings — it is token-expensive.
-- Call done() when you have sufficient confidence. Do not loop indefinitely.
-- You will be stopped after {max_tool_calls} tool calls whether or not you call done().
 - Disassembly offsets are relative to the function entry — +0000 is the first instruction.
+- Prior findings from func_id_db are listed at the top of the user message.
+  Weight CONFIRMED findings above CANDIDATE; use retrieval_source as a confidence signal.
+- Respond with a single JSON object only — no prose, no markdown fences.
 
 Ablation role taxonomy (use one of these or UNKNOWN):
 AAA_DISPATCH, RADIUS_PARSER, RADIUS_ATTR_HANDLER, RADIUS_DISPATCH,
@@ -101,20 +99,26 @@ class ContextBuilder:
         product:       str = 'unknown',
         version:       str = 'unknown',
         binary_hint:   str = '',
-        max_tool_calls: int = 10,
+        max_tool_calls: int = 10,   # kept for API compat; unused in single-shot mode
     ):
         self.product        = product
         self.version        = version
         self.binary_hint    = binary_hint
-        self.max_tool_calls = max_tool_calls
 
-    def system_prompt(self) -> str:
-        return SYSTEM_PROMPT_TEMPLATE.format(
+    def system_prompt(self, kg_context: str = '') -> str:
+        """
+        Build the system prompt.  kg_context is optional KnowledgeGraph output
+        (get_context_for_binary) that is appended as a [KNOWLEDGE GRAPH] section
+        when provided — the memory interface surface from the dual-graph architecture.
+        """
+        base = SYSTEM_PROMPT_TEMPLATE.format(
             product=self.product,
             version=self.version,
             binary_hint=self.binary_hint or 'unknown',
-            max_tool_calls=self.max_tool_calls,
         ).strip()
+        if kg_context.strip():
+            base += f'\n\n[KNOWLEDGE GRAPH — arch context from prior RE sessions]\n{kg_context.strip()}'
+        return base
 
     def user_prompt(
         self,
@@ -153,16 +157,25 @@ class ContextBuilder:
     def _format_prior_findings(self, findings: list[dict] | None) -> str:
         if not findings:
             return ''
-        lines = ['[PRIOR FINDINGS from func_id_db — confirmed RE on similar functions]']
+        lines = ['[PRIOR FINDINGS from func_id_db — weight CONFIRMED above CANDIDATE]']
         for f in findings[:5]:  # cap at 5 to control token budget
-            name = f.get('name', '')
-            role = f.get('role', '')
-            conf = f.get('confidence', '')
-            notes = (f.get('notes') or '')[:150]
-            product = f.get('product', '')
-            ver = f.get('version', '')
+            name     = f.get('name', '')
+            role     = f.get('role', '')
+            conf     = f.get('confidence', '')
+            epistemic = f.get('epistemic', '')
+            source   = f.get('retrieval_source', '')
+            notes    = (f.get('notes') or '')[:150]
+            product  = f.get('product', '')
+            ver      = f.get('version', '')
+
+            tag = ''
+            if epistemic:
+                tag = f' [{epistemic}]'
+            if source:
+                tag += f' via:{source}'
+
             lines.append(
-                f'  {name} | {role} | {conf} | {product} {ver}'
+                f'  {name} | {role} | {conf}{tag} | {product} {ver}'
                 + (f'\n    note: {notes}' if notes else '')
             )
         lines.append('')
