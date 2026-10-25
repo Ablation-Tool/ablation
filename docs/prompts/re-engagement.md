@@ -1,4 +1,6 @@
-# ABL-RUB-RE-001 Analysis Rubric
+# Analysis Rubric
+
+**Designation:** `ABL-RUB-RE-001`
 
 **Pair with:** `re-session-planning-template.md` (session structure) and `guide-tool-selection.md` (tool ordering)  
 **Usage:** Paste this block at the start of any RE session — before calling any Ablation tool — to set the analysis mode. Replace `[DEFINE YOUR TARGET QUEUE HERE]` with your binary or target list.

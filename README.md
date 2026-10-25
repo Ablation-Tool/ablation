@@ -202,7 +202,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 
 | Prompt | Description |
 |:---|:---|
-| [**ABL-RUB-RE-001 Analysis Rubric**](docs/prompts/re-engagement.md) | Session-starter prompt that sets exhaustive, lossless RE mode before any Ablation tool call. Enforces `INFERRED:` labeling for static analysis gaps, byte-verify-before-CONFIRMED discipline, second-pass review, and SinkArgClassifier verdict vocabulary. Works on any target: stripped binary firmware, source code, binary protocols, or bytecode. |
+| [**Analysis Rubric**](docs/prompts/re-engagement.md) `ABL-RUB-RE-001` | Session-starter prompt that sets exhaustive, lossless RE mode before any Ablation tool call. Enforces `INFERRED:` labeling for static analysis gaps, byte-verify-before-CONFIRMED discipline, second-pass review, and SinkArgClassifier verdict vocabulary. Works on any target: stripped binary firmware, source code, binary protocols, or bytecode. |
 
 </details>
 
