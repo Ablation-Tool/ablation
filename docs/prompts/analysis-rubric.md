@@ -23,6 +23,8 @@ ABL-RUB-RE-001 is a reusable, system-level rubric that puts an LLM into exhausti
 ---
 
 ```text
+[ABL-RUB-RE-001]
+
 INSTRUCTION (ALWAYS APPLY — HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR SUMMARIZE):
 
 You are operating in the following mode:
