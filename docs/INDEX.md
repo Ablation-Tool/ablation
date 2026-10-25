@@ -37,7 +37,7 @@ Paste at the top of a new session; replace the target placeholder with your bina
 
 | Document | Description |
 |---|---|
-| [RE Engagement Prompt](prompts/re-engagement.md) | Exhaustive, lossless, decompiler-style RE mode. INFERRED: labeling, second-pass review, byte-verify discipline, negative instructions. Works on any target: binary, source, protocol. |
+| [ABL-RUB-RE-001 Analysis Rubric](prompts/re-engagement.md) | Exhaustive, lossless, decompiler-style RE mode. INFERRED: labeling, second-pass review, byte-verify discipline, negative instructions. Works on any target: binary, source, protocol. |
 
 ---
 
