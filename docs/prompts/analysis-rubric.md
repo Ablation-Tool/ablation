@@ -677,6 +677,249 @@ When uncertain, default to more detail and explicit INFERRED reasoning.
 
 </details>
 
+<details>
+<summary>ABL-RUB-TR-001</summary>
+
+ABL-RUB-TR-001 is the multi-target triage mode you run before applying a deeper rubric. Given multiple targets, it drives an LLM to produce a structured, comparative assessment across all of them — type, attack surface, data sensitivity, likely vulnerability classes, environmental risk, and an explicit HIGH/MED/LOW priority per target — then ranks them globally from most to least urgent for deep follow-up.
+
+Breadth over depth. Consistent fields per target. Explicit cross-target reasoning. The model is strictly forbidden from drifting into full reverse engineering on any single target.
+
+---
+
+```text
+[ABL-RUB-TR-001]
+
+INSTRUCTION (ALWAYS APPLY – HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR SLIP INTO DEEP REVERSE ENGINEERING):
+
+You are operating in the following mode:
+FAST, STRUCTURED, MULTI-TARGET TRIAGE – ATTACK-SURFACE–DRIVEN PRIORITIZATION.
+
+You will be given MULTIPLE TARGETS (e.g., binaries, services, hosts, applications,
+components, codebases, or subsystems). Your job is to perform a first-pass,
+comparative triage across ALL of them.
+
+You are NOT doing deep forensic analysis or full reverse engineering here.
+You ARE doing:
+- Wide coverage across all targets,
+- Structured, repeatable assessment per target,
+- Explicit, reasoned ranking by which targets deserve deep analysis first.
+
+Breadth > Depth. Prioritized coverage > Exhaustive per-target detail.
+
+===============================================================================
+GLOBAL META-RULES
+===============================================================================
+
+[0.1] OBJECTIVE: DIRECT DEEP ATTENTION WHERE IT MATTERS MOST
+-------------------------------------------------------------
+Your main outcome is a clear, justified ordering of targets by follow-up importance.
+Each per-target assessment exists to support that ordering, not to be a final
+detailed security report.
+
+[0.2] FORBIDDEN: FULL LINE-BY-LINE / PATCH-LEVEL ANALYSIS
+----------------------------------------------------------
+You MUST NOT reverse engineer line by line, perform full patch diffing, or enumerate
+every possible vulnerability in a single target. If you start drifting into that:
+- Stop and summarize the insight.
+- Tie it to triage priority.
+- Move on to the next target.
+
+[0.3] ALWAYS REASON COMPARATIVELY
+----------------------------------
+Always ask: relative to the other targets, is this one more exposed, more critical,
+more complex, or more likely to harbor impactful bugs?
+
+You MUST produce:
+- Per-target structured summaries, AND
+- A final cross-target prioritized list.
+
+[0.4] EVIDENCE vs INFERENCE (BE EXPLICIT)
+------------------------------------------
+For each important statement, be clear whether it is directly supported by given
+information or inferred from patterns, naming, or common setups. Label inferences:
+- "INFERRED: … (confidence: high/medium/low)"
+
+You MAY infer aggressively, but you MUST mark and justify it.
+
+[0.5] USE A FIXED PER-TARGET TEMPLATE
+--------------------------------------
+For EVERY target, use the SAME structure:
+
+- Target Label
+- Snapshot Summary (1–3 sentences)
+- Inferred Type / Role
+- Inferred Domain / Business Context
+- Key Entry Points / Exposed Interfaces / Attack Surface
+- Data Sensitivity / Criticality
+- Likely Vulnerability Classes
+- Environmental / Contextual Risk Factors
+- Complexity / Observability
+- Red Flags / Notable Signals
+- Triage Priority (HIGH / MEDIUM / LOW with rationale)
+- Suggested Next Steps for Deeper Work
+
+[0.6] TIME-BOX PER TARGET
+--------------------------
+Spend proportional time per target. Do not let one interesting target consume
+disproportionate analysis. Note urgency in Red Flags and Triage Priority, then move on.
+
+===============================================================================
+TARGET INGESTION AND LABELING
+===============================================================================
+
+[1.1] IDENTIFY TARGET BOUNDARIES
+---------------------------------
+Targets are separated as:
+
+--- TARGET 1 START ---
+[info for target 1]
+--- TARGET 1 END ---
+
+Label them T1, T2, T3, … in the order provided. Treat each block as a separate target.
+
+[1.2] SNAPSHOT SUMMARY PER TARGET
+----------------------------------
+1–3 sentences: what it appears to be, how it is used, any immediately obvious risk clues.
+
+===============================================================================
+PER-TARGET TRIAGE DIMENSIONS (MANDATORY — ALL FIELDS REQUIRED)
+===============================================================================
+
+[2.1] INFERRED TYPE / ROLE
+--------------------------
+Categorize the technical nature and deployment role. Examples:
+- Internet-facing web/API backend
+- Internal microservice or worker
+- Native binary (CLI tool, service, agent, daemon)
+- Database or data store
+- Library / SDK
+- Embedded firmware or driver component
+
+Provide a concise label and 1–3 sentences explaining key evidence. Include confidence level.
+
+[2.2] INFERRED DOMAIN / BUSINESS CONTEXT
+-----------------------------------------
+State the functional/business purpose. Examples:
+- Authentication / identity
+- Payments / billing
+- Embedded control / hardware management
+- DevOps / infrastructure
+- Content storage/delivery
+
+State domain, supporting evidence, and confidence level.
+
+[2.3] KEY ENTRY POINTS / EXPOSED INTERFACES / ATTACK SURFACE
+--------------------------------------------------------------
+Identify HOW an attacker can interact with this target. For each interface:
+- Name the interface (network port, socket path, argv, env var, USB, UART, etc.)
+- Specify trust level (untrusted / semi-trusted / trusted)
+- Note complexity (simple parameter vs complex file/protocol parser)
+- Note likely exposure (public internet / internal network / single host)
+
+[2.4] DATA SENSITIVITY / CRITICALITY
+--------------------------------------
+Classify Low / Medium / High. Justify in 3–6 sentences covering:
+- What data it handles (credentials, PII, financial, config, etc.)
+- What capabilities it grants (privilege escalation, code execution, config change)
+- Downstream effects if compromised
+
+[2.5] LIKELY VULNERABILITY CLASSES
+------------------------------------
+List 3–7 categories most relevant and plausible for this target. For each:
+- 1–3 sentences tying it specifically to this target.
+
+Consider:
+- Binary targets: buffer overflows, OOB reads/writes, use-after-free, integer issues,
+  format strings, race conditions, env var injection, wire-format trust
+- Web/API: injection, authN/authZ flaws, IDOR, deserialization, file upload
+- Infra/cloud: misconfigured IAM, SSRF, weak egress controls
+
+[2.6] ENVIRONMENTAL / CONTEXTUAL RISK FACTORS
+----------------------------------------------
+3–6 sentences covering:
+- Factors that raise risk (internet-facing, multi-tenant, hard to patch, legacy)
+- Factors that mitigate risk (network segmentation, monitoring, compensating controls)
+
+[2.7] COMPLEXITY / OBSERVABILITY
+----------------------------------
+2–5 sentences estimating:
+- Code/system complexity (size, layers, dynamic loading, custom protocols)
+- Ease of investigating incidents (logging, tracing, monitoring)
+
+[2.8] RED FLAGS / NOTABLE SIGNALS
+-----------------------------------
+List any "this smells bad" signals visible at high level:
+- Hard-coded secrets, direct input concatenation into commands/queries
+- TODO/FIXME around security, mentions of legacy/bypass modes
+- Highly privileged operations triggered by untrusted inputs
+- Known-vulnerable components
+
+Say "None obvious from provided context" if truly none.
+
+[2.9] TRIAGE PRIORITY
+-----------------------
+Use HIGH / MEDIUM / LOW. Provide a 4–8 sentence rationale that:
+- Synthesizes attack surface, sensitivity, vuln classes, context, and red flags
+- Emphasizes comparison to other targets
+
+[2.10] SUGGESTED NEXT STEPS
+-----------------------------
+1–3 concrete next steps when this target is chosen for deeper work. Reference
+which rubric to apply next where applicable (e.g., apply ABL-RUB-RE-001 for
+deep RE, ABL-RUB-RE-002 for patch diffing between versions).
+
+===============================================================================
+CROSS-TARGET RANKING (REQUIRED — PRODUCE AFTER ALL PER-TARGET BLOCKS)
+===============================================================================
+
+[3.1] OVERALL TRIAGE RANKING (MOST TO LEAST URGENT)
+-----------------------------------------------------
+List all targets in descending priority order. For targets at the same level,
+still order them and explain the fine-grained preference. For each entry:
+- Designation (T1, T2, etc.) and priority level
+- 2–4 sentences explaining placement
+
+[3.2] SUGGESTED DEEP-DIVE PLAN (MANDATORY)
+--------------------------------------------
+For the top 1–3 targets:
+- State the order in which to analyze deeply
+- Specify the primary focus and which rubric to apply next
+
+===============================================================================
+NEGATIVE INSTRUCTIONS
+===============================================================================
+
+You MUST NOT:
+- Ignore any target
+- Skip any mandatory per-target field
+- Omit the Overall Triage Ranking
+- Treat all targets as effectively identical without justification
+- Get lost in deep technical exploration of one target at the expense of others
+
+If a particular target looks very high-value:
+- Note it in Red Flags and Triage Priority
+- State the recommended next rubric
+- Move on
+
+===============================================================================
+TASK
+===============================================================================
+
+You will be given K targets.
+
+1) Label them T1, T2, … TK.
+2) For EACH target, produce a structured block with all fields from [2.1]–[2.10].
+3) After all per-target blocks:
+   - Produce "Overall Triage Ranking (Most to Least Urgent)."
+   - Produce "Suggested Deep-Dive Plan" for the top targets.
+
+Remain in ABL-RUB-TR-001 mode for the entire response.
+Favor structured breadth and comparative prioritization over exhaustive depth.
+When uncertain, label INFERRED with confidence level and reasoning.
+```
+
+</details>
+
 ---
 
 ## Related documents
