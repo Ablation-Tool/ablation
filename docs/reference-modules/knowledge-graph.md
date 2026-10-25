@@ -27,9 +27,15 @@ flowchart TD
     E --> F[json_extract → Session nodes for arch, most recent 5]
     F --> G[DETECTS edges → Module nodes for vuln_class]
     G --> H[Structured context string for LLM prompt]
-    C -->|get_recommendations_for_task| I[Module nodes for arch or all]
-    I --> J[Sort by _WORKFLOW_ORDER index]
-    J --> K[Ordered tool list with entry_point]
+    C -->|get_recommendations_for_task| I{embeddings table populated?}
+    I -->|yes — semantic path| I2[Embed task description → query vector]
+    I2 --> I3[Cosine sim vs 5587 Doc embeddings → top-60 Doc IDs]
+    I3 --> I4[DOCUMENTED_BY edges backward → Module IDs + scores]
+    I4 --> I5[Arch filter → semantic_ranked list]
+    I5 --> I6[Pad to top_k with stage-sorted arch fills]
+    I6 --> K[score= entries first, fill entries after]
+    I -->|no embeddings — fallback| J[Sort by _WORKFLOW_ORDER index]
+    J --> K
     C -->|get_gap_candidates| L[All AnalysisEvent nodes]
     L --> M[Python-side grouping by module and arch]
     M --> N{event_count >= min_events?}
@@ -75,13 +81,62 @@ flowchart TD
 
 ### Workflow stage ordering
 
-`get_recommendations_for_task()` sorts all returned modules by this sequence:
+`get_recommendations_for_task()` sorts fill entries (and the fallback path) by this sequence:
 
 ```
 triage → sweep → corpus → profile → classify → taint → confirm → analysis
 ```
 
 Modules with unknown `workflow_stage` sort last.
+
+### Semantic recommendation pipeline
+
+When Doc node embeddings exist, `get_recommendations_for_task()` runs the following pipeline:
+
+```
+task_description
+      │
+      ▼
+BAAI/bge-small-en-v1.5     384-dim L2-normalised vectors, cached in _EMBED_MODEL_CACHE
+      │
+      ▼  query vector (384 floats)
+      │
+matrix @ query_vec          5,587 Doc embeddings (8.6 MB) loaded from embeddings table;
+                             one matrix-vector multiply on CPU, ~1-2 ms
+      │
+      ▼  5,587 cosine scores  (dot product = cosine sim because BGE is L2-normalised)
+      │
+top 60 Doc IDs              argsort descending, take top_k * 4
+      │
+DOCUMENTED_BY edges (backward)
+      │                      edge direction: src=Module dst=Doc
+      ▼                      query: SELECT src FROM edges WHERE dst=? AND type='DOCUMENTED_BY'
+module_score dict            best score per Module across its Doc chunks
+      │
+arch filter                 keep only modules with a SUPPORTS edge to arch://<arch>
+      │
+      ▼  semantic_ranked     sorted by score descending, up to top_k
+      │
+stage-sorted fill           if len(semantic_ranked) < top_k, pad with arch modules
+                             ordered by workflow_stage that aren't already ranked
+      │
+      ▼
+[RECOMMENDED TOOL SEQUENCE — <task_description>]
+  1. SetuidAuthOracleScanner  [analysis]  score=0.760   ← semantically matched
+  2. X86_32TaintTracker       [analysis]  score=0.731   ← semantically matched
+  3. ShellcodeUtils           [triage]                  ← stage-sorted fill
+  4. base_sweep               [triage]                  ← stage-sorted fill
+  ...
+```
+
+`score=` is present only on semantically matched entries. Fill entries have no score. The two tiers are visually distinct so the analyst knows which tools the graph has textual evidence for versus which are present on workflow-position grounds.
+
+**DOCUMENTED_BY coverage.** The `sync --embed` run wires DOCUMENTED_BY edges from Module nodes to H2-chunked Doc nodes using two-pass matching:
+
+1. LIKE query on `Module.props.reference_docs` — matches modules that explicitly list their doc file
+2. Normalized stem match — strips all non-alphanumeric characters and lowercases both the md filename stem and the module name; catches e.g. `x86-32-taint-tracker.md` → `X86_32TaintTracker`
+
+381 of 540 reference docs are concept guides, multi-module overviews, or platform analysis docs that don't map to a single module. These remain unlinked intentionally — they still influence cosine ranking but don't resolve to a specific module recommendation.
 
 ### Pre-disclosure security
 
@@ -121,7 +176,7 @@ gaps = g.get_gap_candidates(fp_threshold=0.3, min_events=5)
 
 `get_context_with_coverage()` returns a `(context_str, ContextCoverage)` pair. `ContextCoverage` carries `coverage_score` (0.0-1.0), `arch_family_used`, `intent`, and raw counts. Call `cov.sufficient()` to gate graph-informed decisions.
 
-`get_recommendations_for_task()` uses semantic vector retrieval when Doc node embeddings exist (built with `embed_doc_nodes()`). Without embeddings it falls back to `workflow_stage` ordering. With embeddings, each Module is ranked by the cosine similarity of its documentation chunks against the task description.
+`get_recommendations_for_task()` returns up to `top_k=15` modules in two tiers. When Doc embeddings exist: semantically matched modules first (with `score=X.XXX`), then stage-sorted fills to reach `top_k`. Without embeddings: pure stage-sort fallback. See **Semantic recommendation pipeline** above for the full retrieval flow.
 
 ### Phase 3: GraphSession
 
@@ -152,12 +207,64 @@ gs.record_finding('finding://IBM-001', 'CWE-78', 0x1234, 'CONFIRMED', True, 'pre
 count = g.embed_doc_nodes(model_name='BAAI/bge-small-en-v1.5')  # one-time; or via --embed
 ```
 
-Embeds all 5,577 Doc nodes and stores float32 vectors in the `embeddings` table. Requires `fastembed` (already a SemanticSearcher dependency). Run once after bootstrap; re-run after `--sync` to pick up new Doc nodes. After embedding, `get_recommendations_for_task()` automatically switches to the semantic path.
+Embeds all Doc nodes and stores float32 vectors in the `embeddings` table. Requires `fastembed` (already a SemanticSearcher dependency). Run once after bootstrap; re-run after `--sync` to pick up new Doc nodes. `get_recommendations_for_task()` detects the table automatically and switches to the semantic path.
 
 ```bash
 python3 -I sweeps/build_ablation_graph.py --bootstrap --embed
 python3 -I sweeps/build_ablation_graph.py --sync --embed
 ```
+
+**Embedding details.** Model: `BAAI/bge-small-en-v1.5` (384 dimensions, L2-normalised at output). Storage: one 1,536-byte float32 BLOB per Doc node in the `embeddings` table (~8.6 MB total for 5,587 nodes). Cosine similarity is computed as a matrix-vector dot product (`matrix @ query_vec`) because BGE vectors are unit-length, making dot product equal cosine similarity with no division. Total inference pass: ~11 seconds on CPU for 5,587 chunks; model weights cached in fastembed's local directory after first run.
+
+The `embeddings` table is gated — `get_recommendations_for_task()` checks `SELECT 1 FROM embeddings LIMIT 1` before switching paths. Existing sessions without `fastembed` installed see no behavior change until `--embed` is run.
+
+### Self-evolution loop
+
+AnalysisEvent nodes accumulate across sessions. `get_gap_candidates()` aggregates them to surface patterns that warrant a new ablation module:
+
+```
+Session 1:  gs.record('SinkArgClassifier', {fp_rate: 0.92, root_cause: 'xcoff_no_plt'})
+Session 2:  gs.record('SinkArgClassifier', {fp_rate: 0.87, root_cause: 'xcoff_no_plt'})
+Session 3:  gs.record('SinkArgClassifier', {fp_rate: 0.91, root_cause: 'xcoff_no_plt'})
+Session 4:  gs.record('SinkArgClassifier', {fp_rate: 0.89, root_cause: 'xcoff_no_plt'})
+Session 5:  gs.record('SinkArgClassifier', {fp_rate: 0.88, root_cause: 'xcoff_no_plt'})
+```
+
+```python
+gaps = g.get_gap_candidates(fp_threshold=0.3, min_events=5)
+# → [{'module': 'SinkArgClassifier', 'arch': 'ppc32',
+#     'avg_fp_rate': 0.894, 'root_causes': ['xcoff_no_plt']}]
+```
+
+The analyst documents the gap and suppresses the events:
+
+```python
+g.add_gap_node(
+    'gap://ppc32/xcoff_no_plt',
+    arch='ppc32',
+    description='XCOFF32 has no .rel.plt; SinkArgClassifier misidentifies rodata calls as sinks',
+    root_cause='xcoff_no_plt',
+    module_needed='SinkArgClassifierXCOFF',
+    supersedes_event_ids=[event_id_1, event_id_2, event_id_3, event_id_4, event_id_5],
+)
+```
+
+Session 6's `get_context_for_binary(arch='ppc32', ...)` now includes:
+
+```
+[KNOWN GAPS for arch=ppc32]
+  XCOFF32 has no .rel.plt; SinkArgClassifier misidentifies rodata calls as sinks
+    module_needed: SinkArgClassifierXCOFF
+```
+
+The analyst sees the gap before running the tool and skips it or reaches for the workaround.
+
+**Suppression has two independent mechanisms:**
+
+1. **SUPERSEDES edges** — explicit event IDs passed to `add_gap_node()`. Those events are excluded from all future `get_gap_candidates()` scoring regardless of root_cause.
+2. **root_cause string match** — any future AnalysisEvent with a `root_cause` matching a documented KnownGap for the same arch is also excluded. Covers future sessions automatically without needing per-event SUPERSEDES edges.
+
+**Recency weighting.** `get_gap_candidates()` applies time-decay to events before averaging fp_rate: events older than 30 days get 50% weight; older than 90 days get 10%. A module that was broken six months ago but has been running cleanly on recent targets does not stay flagged as a gap candidate.
 
 ### Gap documentation API
 
@@ -267,11 +374,32 @@ python3 -I sweeps/build_ablation_graph.py --bootstrap --embed
   'root_causes': ['XCOFF_no_plt', 'FCode_not_C_stack']}]
 ```
 
+```
+>>> rec = g.get_recommendations_for_task('find command injection in setuid binaries', arch='x86_32')
+>>> print(rec)
+[RECOMMENDED TOOL SEQUENCE — find command injection in setuid binaries]
+  1. SetuidAuthOracleScanner  [analysis]  score=0.760
+     SetuidAuthOracleScanner.from_context(ctx)|from_path(path); .scan() -> List[OracleHit]
+  2. X86_32TaintTracker  [analysis]  score=0.731
+     X86_32TaintTracker.from_path(path)|from_context(ctx)
+  3. ShellcodeUtils  [triage]
+     shellcode utility functions
+  4. base_sweep  [triage]
+     python3 sweeps/base_sweep.py <binary>
+  ...
+  15. CommandTableScanner  [analysis]
+     CommandTableScanner.from_context(ctx); .scan()
+```
+
+Entries 1–2 carry `score=` — they were ranked by cosine similarity of their documentation chunks against the task description. Entries 3–15 have no score — they are stage-sorted fills drawn from the x86_32 arch module set to pad the list to `top_k=15`.
+
 ---
 
 ## False positives
 
 **`get_context_for_binary` returns no modules for a valid arch.** This happens when the bootstrap has not been run or when the arch identifier passed by the caller does not match the canonical form in the graph. The canonical forms are: `ppc32`, `ppc64`, `arm64`, `arm32`, `x86_64`, `x86_32`, `mips32`, `mips64`, `riscv32`, `riscv64`, `m88k`, `m68k`, `sh2a`, `sh4`, `loongarch64`. Run `--bootstrap` first, then confirm the arch string matches one of these.
+
+**`get_recommendations_for_task` returns only fill entries with no `score=`.** This means no Doc nodes for the given arch's modules ranked in the top-60 cosine hits. The most common cause is that those modules' reference docs are not yet linked with DOCUMENTED_BY edges (run `--sync --embed` to repair). A task description that is very arch-neutral (e.g. "parse binary") will also produce few semantic hits since most reference docs are tool-specific rather than platform-specific.
 
 **`get_gap_candidates` returns no results despite known failures.** Results only appear after `add_run()` has been called enough times to cross `min_events`. The default is 5 events per module-arch pair. If you have 4 failing runs and want to surface the pattern earlier, pass `min_events=3`. Events whose `root_cause` matches a documented KnownGap for that arch are also excluded, as are events with SUPERSEDES edges from a KnownGap. If the gap is already documented but events keep disappearing, check that the KnownGap node's `root_cause` field matches the event's `root_cause` string exactly.
 
