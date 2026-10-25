@@ -30,7 +30,7 @@ Semantic firmware analysis for vulnerability researchers.
 
 ---
 
-## Prompts
+## Rubric Library
 
 Session-starter prompts that set the analysis mode before calling any Ablation tool.
 Paste at the top of a new session; replace the target placeholder with your binary or target list.

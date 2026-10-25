@@ -198,7 +198,7 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 </details>
 
 <details>
-<summary>Prompt Rubrics</summary>
+<summary>Rubric Library</summary>
 
 | Prompt | Description |
 |:---|:---|
