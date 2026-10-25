@@ -4,6 +4,18 @@ Find cross-version function homologs using Dynamic Time Warping on opcode catego
 
 ---
 
+## What is Dynamic Time Warping
+
+Dynamic Time Warping is a sequence alignment algorithm that measures similarity between two sequences that may differ in length or timing. The name comes from speech recognition, where the same spoken word takes a different number of milliseconds depending on the speaker and pace. A naive comparison that lines up elements position-by-position gets the wrong answer because it penalizes timing differences that have nothing to do with whether the content is the same.
+
+DTW solves this by allowing each position in one sequence to align against a range of positions in the other rather than forcing a strict one-to-one positional match. The algorithm finds the path through a cost matrix that minimizes total distance while still requiring the path to advance forward in both sequences. The result is a single distance score that reflects how similar two sequences are regardless of where individual elements appear.
+
+For assembly comparison, position-to-position matching fails because a compiler can insert a bounds check, a vendor can add a logging block, or a security patch can insert two instructions between two existing ones. Any of those changes shift every subsequent instruction's position by the length of the insertion. An n-gram Jaccard or Euclidean measure sees large differences throughout the sequence because of one local change. DTW stretches the alignment to accommodate the insertion and scores the unchanged portions as matching because they still line up under the warped path.
+
+The Sakoe-Chiba band constrains how far the alignment is allowed to warp at any position. Without a band, DTW allows arbitrarily large warps so two structurally different functions can find a low-cost alignment by skipping most of their content. A 10% radius band limits the warp to within 10% of the sequence length at each step. This prevents false matches between unrelated functions while still tolerating the small insertions and deletions that appear between firmware versions of the same function.
+
+---
+
 ## Why this exists
 
 1. **Cross-version patch analysis requires finding the same function across firmware versions, but functions that gain or lose one validation block between versions have low 4-gram Jaccard similarity even though the core logic is identical.** `DTWMatcher` uses DTW on opcode category sequences instead of n-gram bags: DTW is warp-invariant and handles insertions/deletions by aligning non-identical-length sequences, achieving ~0.91 similarity for a function with one inserted block versus Jaccard's ~0.65 for the same pair.
