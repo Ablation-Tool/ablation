@@ -1,5 +1,4 @@
-# ABL-RUB-RE-001
-## Analysis Rubric
+# Analysis Rubric
 
 A set of session-starter prompts that enforce exhaustive, lossless reverse engineering discipline before any Ablation tool call. Each prompt sets the analysis mode — what to label, what not to compress, how to handle gaps — so the same standards apply regardless of target type or architecture.
 
