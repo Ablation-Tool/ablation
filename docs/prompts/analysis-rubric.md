@@ -9,7 +9,9 @@ Each rubric:
 - Constrains how the model should reason and write (structure, level of detail, handling of ambiguity)
 - Is packaged as a standalone prompt you can paste in front of any task, so the model consistently behaves the same way
 
-> **Beta** — These rubrics are completely optional and experimental. They may change, be removed, or be replaced as we learn what actually improves analysis quality.
+## Beta
+
+Optional and experimental. May change or be removed.
 
 ---
 
