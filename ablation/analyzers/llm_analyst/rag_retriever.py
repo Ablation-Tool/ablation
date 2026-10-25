@@ -9,6 +9,11 @@ Retrieval strategy (ordered by signal strength):
 
 Results are ranked, deduped, and trimmed to a token budget before injection.
 No vector DB required — all retrieval is SQLite queries against func_id_db.
+
+Each result carries:
+  epistemic  — 'confirmed' (FORGE-gated, confidence=CONFIRMED) or 'candidate' (sweep output, unverified)
+  retrieval_source — which strategy produced this result
+LLM context builders should weight 'confirmed' findings above 'candidate' ones.
 """
 
 from __future__ import annotations
@@ -41,30 +46,32 @@ class RAGRetriever:
         seen_ids = set()
         results = []
 
-        def _add(rows):
+        def _add(rows, source: str):
             for r in rows:
                 rid = r.get('id')
                 if rid in seen_ids:
                     continue
                 seen_ids.add(rid)
-                results.append(self._trim_row(r))
+                results.append(self._trim_row(r, source=source))
 
         # 1. Exact binary + VA match — highest confidence prior
         if binary_sha256:
-            _add(self._exact_match(binary_sha256, func_addr))
+            _add(self._exact_match(binary_sha256, func_addr), source='exact_match')
 
         # 2. Callee-set overlap — strongest structural signal
         if callees:
-            _add(self._callee_overlap(callees, limit=_MAX_IMPORT_OVERLAP_RESULTS))
+            _add(self._callee_overlap(callees, limit=_MAX_IMPORT_OVERLAP_RESULTS), source='callee_overlap')
 
         # 3. Role-based — prior functions in the same role class
         if role_hint:
-            _add(self._db.match_by_role(role_hint)[:_MAX_IMPORT_OVERLAP_RESULTS])
+            _add(self._db.match_by_role(role_hint)[:_MAX_IMPORT_OVERLAP_RESULTS], source='role_match')
 
         # 4. Name fuzzy — useful when we have a partial name from strings
         if name_hint:
-            _add(self._db.match_by_name(name_hint)[:3])
+            _add(self._db.match_by_name(name_hint)[:3], source='name_fuzzy')
 
+        # Confirmed findings first so LLM weights them above unverified candidates
+        results.sort(key=lambda r: 0 if r['epistemic'] == 'confirmed' else 1)
         return results[:_MAX_RESULTS]
 
     # ── retrieval strategies ──────────────────────────────────────────────────
@@ -120,15 +127,18 @@ class RAGRetriever:
 
     # ── output normalization ──────────────────────────────────────────────────
 
-    def _trim_row(self, row: dict) -> dict:
+    def _trim_row(self, row: dict, source: str = '') -> dict:
         """Trim a func_id_db row to fields relevant for LLM context injection."""
+        confidence = row.get('confidence', '')
         return {
-            'id':         row.get('id'),
-            'name':       row.get('name', ''),
-            'role':       row.get('role', ''),
-            'confidence': row.get('confidence', ''),
-            'product':    row.get('product', ''),
-            'version':    row.get('version', ''),
-            'notes':      (row.get('notes') or '')[:200],
-            'va':         row.get('va', 0),
+            'id':               row.get('id'),
+            'name':             row.get('name', ''),
+            'role':             row.get('role', ''),
+            'confidence':       confidence,
+            'epistemic':        'confirmed' if confidence == 'CONFIRMED' else 'candidate',
+            'retrieval_source': source,
+            'product':          row.get('product', ''),
+            'version':          row.get('version', ''),
+            'notes':            (row.get('notes') or '')[:200],
+            'va':               row.get('va', 0),
         }
