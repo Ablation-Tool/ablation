@@ -4,12 +4,6 @@ A structured collection of named, versionable LLM "behavior specifications" that
 
 ---
 
-## Analysis Rubric
-
-Session-starter prompts that set analysis mode before any Ablation tool call. Covers what to label, what not to compress, and what constitutes a complete result.
-
-**Pair with:** `re-session-planning-template.md` (session structure) and `guide-tool-selection.md` (tool ordering)
-
 <details>
 <summary>ABL-RUB-RE-001</summary>
 
