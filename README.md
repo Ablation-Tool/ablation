@@ -297,6 +297,7 @@ The code couldn't exist without their ideas. Though no code was written by these
 | Evasive Malware | [Kyle Cucci](https://github.com/d4rksystem) |
 | Hacking Cryptography | [Kamran Khan](https://github.com/krkhan), [Bill Cox](https://github.com/waywardgeek) |
 | Real-World Cryptography | David Wong |
+| Agentic GraphRAG | [Anthony Alcaraz](https://github.com/anthonyalcaraz), [Sam Julien](https://github.com/samjulien) |
 
 **Honorable Mention**
 
