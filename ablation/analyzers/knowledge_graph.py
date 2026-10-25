@@ -740,27 +740,53 @@ class KnowledgeGraph:
                 if mid not in module_score or score > module_score[mid]:
                     module_score[mid] = score
 
+        arch_rows: list[Any] = []
         if arch:
-            arch_set = {m['id'] for m in self._modules_for_arch(f'arch://{arch}')}
+            arch_rows = self._modules_for_arch(f'arch://{arch}')
+            arch_set = {m['id'] for m in arch_rows}
             module_score = {k: v for k, v in module_score.items() if k in arch_set}
 
-        if not module_score:
+        if not module_score and not arch_rows:
             return self._recommendations_stage_sort(task_description, arch)
 
-        ranked = sorted(module_score.items(), key=lambda x: x[1], reverse=True)[:top_k]
+        # Semantic results: highest cosine score per module, descending.
+        semantic_ranked = sorted(module_score.items(), key=lambda x: x[1], reverse=True)[:top_k]
+        semantic_ids = {mid for mid, _ in semantic_ranked}
+
+        # Stage-sorted fill: pad to top_k with arch modules absent from semantic pool.
+        fill_rows: list[Any] = []
+        if len(semantic_ranked) < top_k:
+            if arch:
+                candidates = arch_rows
+            else:
+                candidates = list(self._con.execute(
+                    "SELECT * FROM nodes WHERE type='Module' LIMIT 50"
+                ).fetchall())
+            for row in sorted(candidates, key=_stage_sort_key):
+                if len(semantic_ranked) + len(fill_rows) >= top_k:
+                    break
+                if row['id'] not in semantic_ids:
+                    fill_rows.append(row)
 
         lines = [f"[RECOMMENDED TOOL SEQUENCE — {task_description}]"]
-        for i, (mid, score) in enumerate(ranked, 1):
+        idx = 1
+        for mid, score in semantic_ranked:
             row = self._con.execute("SELECT * FROM nodes WHERE id=?", (mid,)).fetchone()
             if not row:
                 continue
             p = _props(row)
-            name = p.get('name', mid)
-            stage = p.get('workflow_stage', '')
-            entry = p.get('entry_point', '')
-            lines.append(f"  {i}. {name}  [{stage}]  score={score:.3f}")
-            if entry:
-                lines.append(f"     {entry}")
+            lines.append(
+                f"  {idx}. {p.get('name', mid)}  [{p.get('workflow_stage','')}]  score={score:.3f}"
+            )
+            if p.get('entry_point'):
+                lines.append(f"     {p['entry_point']}")
+            idx += 1
+        for row in fill_rows:
+            p = _props(row)
+            lines.append(f"  {idx}. {p.get('name', row['id'])}  [{p.get('workflow_stage','')}]")
+            if p.get('entry_point'):
+                lines.append(f"     {p['entry_point']}")
+            idx += 1
 
         return "\n".join(lines) if len(lines) > 1 else self._recommendations_stage_sort(task_description, arch)
 
