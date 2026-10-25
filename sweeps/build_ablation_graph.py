@@ -420,39 +420,7 @@ def bootstrap(db_path: str | None = None) -> KnowledgeGraph:
         )
 
     # ── Step 6: reference-modules/*.md → Doc nodes ────────────────────────────
-    if _REF_DOCS.exists():
-        doc_count = 0
-        with g._con:
-            for md_path in sorted(_REF_DOCS.glob('*.md')):
-                chunks = _chunk_ref_doc(md_path)
-                for anchor, text in chunks:
-                    doc_id = f"doc://{md_path.name}#{anchor}"
-                    # Find matching module by reference_docs path
-                    rel = str(md_path.relative_to(_REPO))
-                    rows = g._con.execute(
-                        "SELECT id FROM nodes WHERE type='Module' AND props LIKE ?",
-                        (f'%{md_path.name}%',),
-                    ).fetchall()
-                    module_id = rows[0]['id'] if rows else None
-
-                    g._con.execute(
-                        "INSERT OR REPLACE INTO nodes (id, type, props) VALUES (?, ?, ?)",
-                        (doc_id, 'Doc', json.dumps({
-                            'module_id': module_id or '',
-                            'section': anchor,
-                            'text': text[:2000],  # cap at 2000 chars per chunk
-                            'source_file': rel,
-                        })),
-                    )
-                    if module_id:
-                        g._con.execute(
-                            "INSERT OR IGNORE INTO edges (src, dst, type, props) VALUES (?, ?, ?, '{}')",
-                            (module_id, doc_id, 'DOCUMENTED_BY'),
-                        )
-                    doc_count += 1
-        print(f"[bootstrap] Doc nodes: {doc_count}")
-    else:
-        print(f"[bootstrap] {_REF_DOCS} not found — skipping Doc nodes")
+    _sync_doc_nodes(g, label="bootstrap")
 
     # ── Step 7: re/*/SESSION_*.md → Session + Binary nodes ───────────────────
     _sync_sessions(g)
@@ -524,11 +492,82 @@ def sync(db_path: str | None = None) -> KnowledgeGraph:
 
     print(f"[sync] New Module nodes added: {added}")
 
+    _sync_doc_nodes(g, label="sync")
     _sync_sessions(g)
     _sync_findings(g)
 
     print(f"[sync] DONE — total nodes: {g.node_count()}  total edges: {g.edge_count()}")
     return g
+
+
+# ── Shared doc-node sync helper ──────────────────────────────────────────────
+
+def _sync_doc_nodes(g: KnowledgeGraph, label: str = "sync") -> None:
+    """Create/update Doc nodes and DOCUMENTED_BY edges from reference-modules/*.md.
+
+    Two-pass module matching per file:
+      1. LIKE query on Module.props (matches reference_docs field)
+      2. Normalized stem → module ID lookup (handles 264 modules with no reference_docs)
+    Creates DOCUMENTED_BY edges for ALL matching modules, not just the first.
+    Idempotent: INSERT OR REPLACE on nodes, INSERT OR IGNORE on edges.
+    """
+    import re as _re
+    if not _REF_DOCS.exists():
+        print(f"[{label}] {_REF_DOCS} not found — skipping Doc nodes")
+        return
+
+    def _norm(s: str) -> str:
+        return _re.sub(r'[^a-z0-9]', '', s.lower())
+
+    # Build normalized-name → module-id map from current nodes in DB
+    norm_to_ids: dict[str, list[str]] = {}
+    for r in g._con.execute("SELECT id FROM nodes WHERE type='Module'").fetchall():
+        mid = r['id']
+        name = mid[len('module://'):]
+        n = _norm(name)
+        norm_to_ids.setdefault(n, []).append(mid)
+
+    doc_count = 0
+    edge_count = 0
+    with g._con:
+        for md_path in sorted(_REF_DOCS.glob('*.md')):
+            chunks = _chunk_ref_doc(md_path)
+            rel = str(md_path.relative_to(_REPO))
+
+            # Pass 1: modules that explicitly list this file in reference_docs
+            module_ids = [r['id'] for r in g._con.execute(
+                "SELECT id FROM nodes WHERE type='Module' AND props LIKE ?",
+                (f'%{md_path.name}%',),
+            ).fetchall()]
+
+            # Pass 2: normalized stem match for modules without reference_docs set
+            if not module_ids:
+                n = _norm(md_path.stem)
+                module_ids = norm_to_ids.get(n, [])
+
+            primary_id = module_ids[0] if module_ids else ''
+
+            for anchor, text in chunks:
+                doc_id = f"doc://{md_path.name}#{anchor}"
+                g._con.execute(
+                    "INSERT OR REPLACE INTO nodes (id, type, props) VALUES (?, ?, ?)",
+                    (doc_id, 'Doc', json.dumps({
+                        'module_id': primary_id,
+                        'section': anchor,
+                        'text': text[:2000],
+                        'source_file': rel,
+                    })),
+                )
+                for mid in module_ids:
+                    g._con.execute(
+                        "INSERT OR IGNORE INTO edges (src, dst, type, props) "
+                        "VALUES (?, ?, ?, '{}')",
+                        (mid, doc_id, 'DOCUMENTED_BY'),
+                    )
+                    edge_count += 1
+                doc_count += 1
+
+    print(f"[{label}] Doc nodes: {doc_count}  DOCUMENTED_BY edges added: {edge_count}")
 
 
 # ── Shared session/finding sync helpers ──────────────────────────────────────
