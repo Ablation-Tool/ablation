@@ -1,16 +1,16 @@
-# Dependency and Supply Chain Tooling
+# SBOM & Supply-Chain Tooling
 
-`pyproject.toml` package configuration, dependency declarations, optional extras, and supply chain integrity controls for the `ablation-tool` package: covering core runtime dependencies, optional ML/decompiler extras, console entry points, and package discovery.
+Extract a software bill of materials from a stripped firmware binary. Identifies embedded open-source library versions, build toolchain strings, and dynamic linker dependencies without source code or debug symbols.
 
 ---
 
 ## Why this exists
 
-1. **Ablation has hard runtime dependencies that must be pinned to floor versions to prevent breakage from upstream API changes: `capstone>=5.0.1` changed the `CsInsn.bytes` attribute to return `bytes` instead of `bytearray` in 5.x, breaking all `insn.bytes[0]` index patterns in 4.x code.** `pyproject.toml` records the minimum compatible versions for all six core dependencies `capstone`, `numpy`, `lief`, `fastembed`, `pyelftools`, ensuring that `pip install ablation-tool` on a fresh environment produces a working installation. Without floor pins, a user running 4.x capstone would get silent malfunction rather than a clear version error.
+1. **Firmware vendors strip binaries but do not strip version strings.** Libraries such as OpenSSL, zlib, and BusyBox embed a human-readable version string in their `.rodata` section because they use it for diagnostic output. `SBOMExtractor` sweeps every printable byte sequence in the binary for 22 known patterns so a version like `OpenSSL 1.1.1k` surfaces even when every symbol is gone.
 
-2. **Not all use cases require the full dependency stack: `fastembed` pulls in `onnxruntime` which is ~500MB; `angr` is ~1GB with all symbolic execution backends; `sentence-transformers` requires PyTorch ~2GB for CPU builds.** The optional extras system `[llm]`, `[finetune]`, `[binary]`, `[full]` allows users to install only what they need. The `[full]` extra installs everything: anthropic SDK for LLM analyst loop, sentence-transformers for fine-tune, lief for binary analysis, angr for optional symbolic execution, and bitstring for binary format parsing. A `pip install ablation-tool` without extras installs only the 500KB core stack needed for static taint analysis.
+2. **Some libraries ship no version string at all.** `ThirdPartyLibraryIdentifier` closes this gap with byte-level function prologue signatures: the AES S-box constant `{0x63, 0x7c, 0x77...}`, SHA-256 init constants, and zlib's Adler-32 modulus appear at fixed offsets in every build of those libraries regardless of compiler or strip flags. Three or more signatures from the same library constitute a match.
 
-3. **OIDC trusted publishing used in the release workflow requires the package to be registered under the `Ablation-Tool` GitHub organization with `id-token: write` permissions: the `[project.urls]` table in `pyproject.toml` must list the canonical `Homepage` and `Source` URLs matching the PyPI trusted publisher configuration.** Without these URLs, the OIDC attestation cannot be verified, and PyPI will reject the upload. The `pyproject.toml` configuration is the source of truth for both the package metadata and the OIDC publisher identity.
+3. **Knowing which library is present is not enough without a license.** Each identified component carries an SPDX license identifier so the output can feed a compliance check. `OpenSSL` maps to `OpenSSL`, `zlib` to `Zlib`, `musl` to `MIT`, and so on. Components with no known license are flagged with an empty `spdx_id` for manual review.
 
 ---
 
@@ -18,134 +18,99 @@
 
 ```mermaid
 flowchart TD
-    A["pyproject.toml"] --> B["[build-system]:\nrequires = ['setuptools>=68', 'wheel']\nbuild-backend = 'setuptools.build_meta'\n→ python -m build produces sdist + wheel"]
-    A --> C["[project]:\nname = 'ablation-tool'\nversion = '2.81.0'\nrequires-python = '>=3.10'\ndependencies (core):\n  capstone>=5.0.1   → ISA disassembly (all backends)\n  numpy>=1.26.0     → embedding math, similarity\n  lief>=0.16.0      → ELF/PE binary parsing\n  fastembed>=0.3.0  → semantic search embeddings\n  pyelftools>=0.29  → DWARF, ELF symbol tables"]
-    A --> D["[project.optional-dependencies]:\n  [llm]: anthropic>=0.30.0\n    (LLM analyst loop, hypothesis engine)\n  [finetune]: sentence-transformers>=2.7.0\n    (corpus fine-tuning, version delta)\n  [binary]: lief>=0.16.0\n    (explicit binary extra; lief also in core)\n  [full]: anthropic + angr>=9.2.90 + bitstring<4.0\n         + sentence-transformers + lief\n    (complete stack: all features enabled)"]
-    A --> E["[project.scripts]:\n  ablation = 'ablation.cli:main'\n  ablation-sweep = 'sweeps.base_sweep:main'\n→ Console entry points registered by pip"]
-    A --> F["[project.urls]:\n  Homepage = 'https://github.com/Ablation-Tool/ablation'\n  Issues = '.../.../issues'\n  Changelog = '.../blob/main/docs/CHANGELOG.md'\n  Source = 'https://github.com/Ablation-Tool/ablation'\n→ Displayed on PyPI package page\n→ Required for OIDC trusted publishing identity"]
-    A --> G["[tool.setuptools.packages.find]:\n  include = ['ablation*', 'sweeps*', 'modules*']\n→ Discovers all sub-packages automatically\n→ Includes ablation.analyzers, ablation.core, ablation.data"]
-    A --> H["[tool.setuptools.package-data]:\n  '*' = ['py.typed']        → PEP 561 type stubs marker\n  'ablation.data' = ['*.json']  → Bundled data files (sink patterns, etc.)"]
+    IN(["binary path"])
+
+    S1["Source 1 · Version strings\nregex sweep over printable rodata\n22 patterns: OpenSSL, zlib, BusyBox,\nLinux kernel, OpenSSH, curl, musl..."]
+
+    S2["Source 2 · Byte signatures\nThirdPartyLibraryIdentifier\nFLIRT-style prologue matching\nrequires ≥3 hits per library"]
+
+    S3["Source 3 · ELF/PE metadata\nDT_NEEDED shared library names\n.comment build toolchain string"]
+
+    MERGE["Merge & deduplicate\nHIGH confidence first\nalpha sort within tier"]
+
+    OUT(["List[SBOMComponent]\nname · version · source · spdx_id · confidence"])
+
+    IN  --> S1
+    IN  --> S2
+    IN  --> S3
+    S1  --> MERGE
+    S2  --> MERGE
+    S3  --> MERGE
+    MERGE --> OUT
 ```
 
-### Dependency reference
+### SBOMComponent fields
 
-| Dependency | Floor version | Role |
-|:---|:---|:---|
-| `capstone` | `>=5.0.1` | ISA disassembly for all 18 architecture backends |
-| `numpy` | `>=1.26.0` | Embedding similarity math; fastembed vector operations |
-| `lief` | `>=0.16.0` | ELF/PE/Mach-O binary parsing; section map, PLT, DWARF |
-| `fastembed` | `>=0.3.0` | ONNX-based embedding for semantic search |
-| `pyelftools` | `>=0.29` | DWARF CFI records, symbol table, section headers |
-| `anthropic` | `>=0.30.0` | LLM analyst loop, hypothesis engine (`[llm]` extra) |
-| `sentence-transformers` | `>=2.7.0` | Corpus fine-tuning, version delta (`[finetune]` extra) |
-| `angr` | `>=9.2.90` | Optional symbolic execution backend (`[full]` extra) |
-| `bitstring` | `<4.0` | Binary format parsing for some decoders (`[full]` extra) |
-
-### Install profiles
-
-| Command | What's installed | Use case |
-|:---|:---|:---|
-| `pip install ablation-tool` | Core 5 deps | Static taint analysis, binary lifting, semantic search |
-| `pip install ablation-tool[llm]` | + anthropic | LLM analyst loop, hypothesis engine |
-| `pip install ablation-tool[finetune]` | + sentence-transformers | Corpus fine-tuning, version delta |
-| `pip install ablation-tool[full]` | All deps | Complete feature set |
-| `pip install -e ".[full]"` | Editable + all | Development (current install at `~/ablation/`) |
+| Field | Content |
+|:---|:---|
+| `name` | Canonical library name, e.g. `OpenSSL`, `zlib`, `BusyBox` |
+| `version` | Version string recovered from binary, or `'unknown'` / `'dynamic'` |
+| `source` | `'version_string'` / `'signature'` / `'metadata(DT_NEEDED)'` / `'metadata(.comment)'` |
+| `spdx_id` | SPDX license identifier, e.g. `OpenSSL`, `Zlib`, `MIT`, `GPL-2.0-only` |
+| `confidence` | `HIGH` (version string or signature hit) / `MEDIUM` (metadata only) |
+| `notes` | Matched signature names for signature-source components |
 
 ---
 
 ## Usage
 
-```bash
-# Development install (already done — editable with all extras)
-pip install -e ~/ablation/".[full]"
+```python
+from modules.sbom_extractor import SBOMExtractor
 
-# Check installed version
-python -c "import ablation; print(ablation.__version__)"
+# Standalone
+extractor = SBOMExtractor('/path/to/firmware.bin')
+components = extractor.extract()
+print(extractor.report(components))
 
-# Verify entry points are registered
-ablation --help
-ablation-sweep --help
+# With existing BinaryContext (avoids re-reading the file)
+from ablation.analyzers.binary_context import BinaryContext
+ctx = BinaryContext.load_or_build('/path/to/firmware.bin')
+extractor = SBOMExtractor.from_context(ctx)
+components = extractor.extract()
 
-# Check what's installed
-pip show ablation-tool
+# Filter to HIGH confidence only
+high = [c for c in components if c.confidence == 'HIGH']
 
-# Upgrade to latest PyPI release
-pip install --upgrade ablation-tool
-
-# Upgrade with all extras
-pip install --upgrade "ablation-tool[full]"
-
-# Check dependency tree
-pip show ablation-tool | grep Requires
-# or with pip-tree (if installed)
-pipdeptree -p ablation-tool
-```
-
-### Updating the version
-
-```bash
-# Edit pyproject.toml version field
-# Then verify the build:
-pip install build
-python -m build --wheel
-pip show dist/ablation_tool-<version>-py3-none-any.whl
+# Filter to components with known CVE exposure
+# (signature source notes carry CVE references when version is in a vulnerable range)
+vuln = [c for c in components if any('CVE' in n for n in c.notes)]
 ```
 
 ---
 
 ## Example output
 
-The following illustrates representative output from package inspection commands. Actual version numbers will reflect the current release.
-
 ```
-$ pip show ablation-tool
-Name: ablation-tool
-Version: <version>
-Summary: Semantic function matching for stripped firmware. No symbols. No source. No setup.
-Home-page: https://github.com/Ablation-Tool/ablation
-Author: <author>
-License: <license>
-Location: <site-packages-path>
-Requires: capstone, fastembed, lief, numpy, pyelftools
-Required-by:
+SBOMExtractor: 6 component(s) in /path/to/firmware.bin
 
-$ ablation --help
-usage: ablation [-h] ...
-Ablation binary RE toolkit v<version>
+  HIGH    OpenSSL 1.1.1k  (via version_string)  license=OpenSSL
+  HIGH    zlib 1.2.11     (via version_string)  license=Zlib
+  HIGH    BusyBox v1.33.1 (via version_string)  license=GPL-2.0-only
+  HIGH    musl 1.2.3      (via signature)  license=MIT  [AES S-box constant; SHA-256 H0 init constant]
+  MEDIUM  libssl.so.1.1   (via metadata(DT_NEEDED))
+  MEDIUM  (build toolchain) GCC: (GNU) 10.2.1  (via metadata(.comment))
 ```
 
 ---
 
 ## False positives
 
-**`lief` appears in both core dependencies and in the `[binary]` optional extra.** This is intentional: `lief` is required for core binary analysis and is listed in core `dependencies`. The `[binary]` extra exists for downstream packages that want to express "I need ablation with binary analysis capability" as an install constraint without depending on the full extras stack. `pip install ablation-tool[binary]` installs no additional packages beyond what `pip install ablation-tool` already provides.
+**Version string patterns match substrings.** A binary that logs `"OpenSSL error"` without embedding a version number will not match because all patterns require a version string after the library name. A binary that ships a static error message like `"zlib 1.2.11 is required"` in a log message will match — confirm the version is from the library itself, not a requirements check.
 
-**`bitstring<4.0` has an upper-bound cap: `bitstring` 4.x introduced breaking API changes that affect the binary decoder modules using it.** If a future `pip install --upgrade ablation-tool[full]` pulls in `bitstring>=4.0`, it may silently break bitstream decoding. The `<4.0` cap prevents this. When upgrading Ablation, check whether `bitstring` 4.x compatibility has been explicitly addressed before removing the cap.
+**Byte signature matching requires three hits per library.** A single AES S-box constant in an unrelated crypto implementation will not fire because `ThirdPartyLibraryIdentifier` requires `min_matches=2` by default. Raise to 3 for lower false-positive rate on larger binaries.
+
+**DT_NEEDED entries reflect link-time dependencies, not runtime presence.** A library listed in DT_NEEDED may be dlopen'd and absent from the firmware image. These entries are `MEDIUM` confidence for this reason.
 
 ---
 
 ## Pipeline position
 
-The `pyproject.toml` configuration is the source of truth for the package, it gates installation, entry-point registration, and package discovery. Any change to the dependency floor versions, package discovery paths, or entry point targets must be tested with a fresh `pip install -e ".[full]"` before committing. See [CI and Release Automation](ci-and-release-automation.md) for the full release pipeline.
-
----
-
-## Reading output
-
-`pyproject.toml` is a configuration file, not a Python API. Relevant commands:
-
-| Command | Output |
-|:---|:---|
-| `pip show ablation-tool` | Installed version, location, and dependency list |
-| `ablation --help` | Available CLI entry points and flags |
-| `pip install -e ".[full]"` | Exit 0 on success; dependency resolution errors on stdout |
-
-`FORGE.audit_module()` produces a structured report; see [FORGE Module](forge.md) for the output schema.
+Run `SBOMExtractor` as the first step on any new firmware image before taint analysis, because a vulnerable library version (e.g. OpenSSL <1.1.1l for CVE-2021-3711) changes which functions are worth tracing. Feed identified library names into `SemanticSearcher` to locate the relevant parse and crypto functions in the binary.
 
 ---
 
 ## See also
 
-- [CI and Release Automation](ci-and-release-automation.md): publish workflow that uses `python -m build` and `pypa/gh-action-pypi-publish`
-- [Coverage Gate](coverage-gate.md): `[tool.coverage.run]` and `[tool.pytest.ini_options]` sections of `pyproject.toml`
-- [FORGE Module](forge.md): pre-commit quality gate; runs before git commit, independent of package build
+- [Third-Party Library Identifier](third-party-library-identifier.md): the signature engine `SBOMExtractor` calls for non-version-string detection
+- [Semantic Search](semantic-search.md): query for library-specific functions once a library is confirmed present
+- [Finding Registry](registry.md): record confirmed vulnerable component versions as findings
