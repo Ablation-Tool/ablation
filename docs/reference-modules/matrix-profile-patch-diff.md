@@ -135,6 +135,7 @@ Each `ChangeRegion` has:
 
 ## See also
 
-- [DTW Function Homolog Matching](dtw-function-homolog-matching.md): step 1: confirms homologs before diffing
+- [DTW & Matrix Profile Similarity](dtw-matrix-profile-similarity.md): combined entry point covering both tools and the two-step pipeline
+- [DTW Function Homolog Matching](dtw-function-homolog-matching.md): step 1 detail: confirms homologs before diffing
 - [Behavioral Subsequence Search](behavioral-subsequence-search.md): for finding a known subsequence in a new binary without a confirmed homolog VA
 - [CFG Fixpoint Dataflow](cfg-fixpoint-dataflow.md): for semantic understanding of the changed region identified by the diff

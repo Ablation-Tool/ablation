@@ -133,6 +133,7 @@ Step 1 of the three-step cross-version patch analysis workflow in `CLAUDE.md`: `
 
 ## See also
 
+- [DTW & Matrix Profile Similarity](dtw-matrix-profile-similarity.md): combined entry point covering both tools and the two-step pipeline
 - [Matrix Profile Patch Diff](matrix-profile-patch-diff.md): instruction-level change localization within confirmed homologs
 - [Behavioral Subsequence Search](behavioral-subsequence-search.md): find split/merged functions that DTW misses
 - [Function Corpus Builder](function-corpus-builder.md): corpus required for homolog matching against unlabeled binaries
