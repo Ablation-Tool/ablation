@@ -200,9 +200,9 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 <details>
 <summary>Rubric Library</summary>
 
-| Prompt | Description |
+| Capability | Description |
 |:---|:---|
-| [**Analysis Rubric**](docs/prompts/analysis-rubric.md) | Session-starter prompts that set analysis mode before any Ablation tool call. Covers what to label, what not to compress, and what constitutes a complete result. |
+| [**Index**](docs/prompts/analysis-rubric.md) | A structured collection of named, versionable LLM "behavior specifications" that you can apply to different tasks to get consistent, high-quality analyses on demand. |
 
 </details>
 
