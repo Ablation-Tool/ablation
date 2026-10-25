@@ -9,19 +9,14 @@ Each rubric:
 - Constrains how the model should reason and write (structure, level of detail, handling of ambiguity)
 - Is packaged as a standalone prompt you can paste in front of any task, so the model consistently behaves the same way
 
+> **Beta** — These rubrics are completely optional and experimental. They may change, be removed, or be replaced as we learn what actually improves analysis quality.
+
 ---
 
 <details>
 <summary>ABL-RUB-RE-001</summary>
 
-ABL-RUB-RE-001 is a reusable, system-level rubric that puts an LLM into exhaustive, white-box, decompiler-style reverse engineering mode. It instructs the model to:
-
-- Analyze code line by line, covering every function, branch, loop, error path, and edge case
-- Trace data flow, state changes, and side effects from inputs to outputs
-- Fully enumerate and explain validation, security, and error-handling logic
-- Infer missing or opaque behavior by default, clearly labeling it as "INFERRED" with supporting reasoning
-- Automatically infer the likely domain (e.g., malware, web app, protocol, firmware) and tailor the analysis to that context
-- Produce a structured, spec-like report detailed enough for a developer to re-implement a functionally and structurally equivalent version of the code
+Use this when you want an exhaustive breakdown of a binary or source file — every function, branch, and data flow. It produces a detailed spec-level report.
 
 ---
 
@@ -273,15 +268,7 @@ and any known context (product name, version, role in the system).
 <details>
 <summary>ABL-RUB-RE-002</summary>
 
-ABL-RUB-RE-002 given two versions of the same binary (OLD and NEW), this rubric drives an LLM to perform exhaustive, security-focused patch analysis. It requires the model to:
-
-- Identify all meaningful changes between OLD and NEW at the function/region level
-- Describe how control flow, data flow, and state handling differ
-- Infer the likely original bug or vulnerability the patch is addressing
-- Explain how the NEW version attempts to fix it
-- Assess whether the fix appears complete and robust, and highlight any residual risks or new regressions
-
-The rubric enforces coverage of every modified function/region and a clear, explicit verdict on patch sufficiency.
+Use this when you have two versions of the same binary and want to know what changed, what was fixed, and whether the fix holds.
 
 ---
 
