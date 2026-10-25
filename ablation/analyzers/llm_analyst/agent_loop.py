@@ -341,8 +341,14 @@ class AgentLoop:
         """
         import anthropic
 
-        api_key = self._api_key or os.environ.get('ANTHROPIC_API_KEY')
-        client  = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
+        api_key      = self._api_key or os.environ.get('ANTHROPIC_API_KEY')
+        workspace_id = os.environ.get('ANTHROPIC_WORKSPACE_ID', '')
+        kwargs: dict = {}
+        if api_key:
+            kwargs['api_key'] = api_key
+        if workspace_id:
+            kwargs['default_headers'] = {'anthropic-workspace-id': workspace_id}
+        client = anthropic.Anthropic(**kwargs)
 
         if self._verbose:
             print(f'[llm_analyst] sdk call (model={model}, prompt_len={len(prompt)})')
