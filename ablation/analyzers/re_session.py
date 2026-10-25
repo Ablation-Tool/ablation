@@ -218,6 +218,55 @@ class RESession:
         """Return all event_ids recorded in this session, in call order."""
         return [e['event_id'] for e in self._events]
 
+    def close_session(self, finding_ids: list[str] | None = None) -> str | None:
+        """Create a SessionToolChain hyperedge linking session, arch, modules, and findings.
+
+        Call once at session end, after all tool runs and update_confirmed() calls.
+        finding_ids: list of Finding node IDs (e.g. ['finding://IBM-001']) confirmed
+                     in this session. Defaults to empty.
+
+        Returns the chain_id of the created hyperedge, or None if no tools were run.
+        """
+        if not self._events:
+            return None
+
+        seen: set[str] = set()
+        module_ids: list[str] = []
+        for e in self._events:
+            mid = f"module://{e['cls_name']}"
+            if mid not in seen:
+                seen.add(mid)
+                module_ids.append(mid)
+
+        resolved_findings = finding_ids or []
+        member_ids = (
+            [self._session_id, f'arch://{self._arch}']
+            + module_ids
+            + resolved_findings
+        )
+        roles = (
+            ['session', 'arch']
+            + ['module'] * len(module_ids)
+            + ['finding'] * len(resolved_findings)
+        )
+
+        chain_id = f"chain://{self._session_id.replace('session://', '')}"
+        self._g.add_hyperedge(
+            edge_type='SessionToolChain',
+            edge_id=chain_id,
+            member_ids=member_ids,
+            roles=roles,
+            props={
+                'session_id': self._session_id,
+                'arch': self._arch,
+                'tool_count': len(module_ids),
+                'confirmed_count': len(resolved_findings),
+            },
+        )
+        log.debug('RESession.close_session → %s  tools=%d  confirmed=%d',
+                  chain_id, len(module_ids), len(resolved_findings))
+        return chain_id
+
     # ── Context manager ──────────────────────────────────────────────────────
 
     def close(self) -> None:

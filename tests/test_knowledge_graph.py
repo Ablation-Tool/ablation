@@ -31,6 +31,8 @@ def test_schema_creates_tables(g):
     }
     assert 'nodes' in tables
     assert 'edges' in tables
+    assert 'hyperedges' in tables
+    assert 'hyperedge_members' in tables
 
 
 def test_empty_graph_returns_zero_counts(g):
@@ -276,6 +278,75 @@ def test_get_gap_candidates_sorted_by_fp_rate(g):
     candidates = g.get_gap_candidates(fp_threshold=0.3, min_events=5)
     assert candidates[0]['module'] == 'ModA'
     assert candidates[1]['module'] == 'ModB'
+
+
+# ── Hyperedge API ─────────────────────────────────────────────────────────────
+
+def test_add_hyperedge_creates_edge_and_members(g):
+    g.add_hyperedge(
+        'SessionToolChain', 'chain://test',
+        member_ids=['session://s1', 'arch://ppc32', 'module://SinkArgClassifier'],
+        roles=['session', 'arch', 'module'],
+        props={'session_id': 'session://s1', 'arch': 'ppc32'},
+    )
+    assert g.hyperedge_count('SessionToolChain') == 1
+    members = g.get_hyperedge_members('chain://test')
+    assert len(members) == 3
+    roles = {m['role'] for m in members}
+    assert roles == {'session', 'arch', 'module'}
+
+
+def test_add_hyperedge_default_role(g):
+    g.add_hyperedge('TestEdge', 'chain://x', member_ids=['node://a', 'node://b'])
+    members = g.get_hyperedge_members('chain://x')
+    assert all(m['role'] == 'member' for m in members)
+
+
+def test_add_hyperedge_role_length_mismatch_raises(g):
+    with pytest.raises(ValueError):
+        g.add_hyperedge('T', 'chain://bad',
+                        member_ids=['a', 'b'], roles=['r1'])
+
+
+def test_add_hyperedge_idempotent(g):
+    g.add_hyperedge('T', 'chain://dup', member_ids=['node://x'], roles=['m'])
+    g.add_hyperedge('T', 'chain://dup', member_ids=['node://x'], roles=['m'])
+    assert g.hyperedge_count() == 1
+
+
+def test_get_hyperedges_for_node_finds_by_member(g):
+    g.add_hyperedge('SessionToolChain', 'chain://c1',
+                    member_ids=['arch://ppc32', 'module://SinkArgClassifier'],
+                    roles=['arch', 'module'])
+    g.add_hyperedge('SessionToolChain', 'chain://c2',
+                    member_ids=['arch://arm64'],
+                    roles=['arch'])
+    results = g.get_hyperedges_for_node('arch://ppc32')
+    assert len(results) == 1
+    assert results[0]['id'] == 'chain://c1'
+
+
+def test_get_hyperedges_for_node_edge_type_filter(g):
+    g.add_hyperedge('TypeA', 'chain://a', member_ids=['node://x'], roles=['m'])
+    g.add_hyperedge('TypeB', 'chain://b', member_ids=['node://x'], roles=['m'])
+    assert len(g.get_hyperedges_for_node('node://x', edge_type='TypeA')) == 1
+    assert len(g.get_hyperedges_for_node('node://x', edge_type='TypeB')) == 1
+    assert len(g.get_hyperedges_for_node('node://x')) == 2
+
+
+def test_get_context_includes_tool_chains(g):
+    g.add_hyperedge(
+        'SessionToolChain', 'chain://ibm-iplrom',
+        member_ids=['session://ibm-iplrom', 'arch://ppc32',
+                    'module://SinkArgClassifier', 'finding://IBM-001'],
+        roles=['session', 'arch', 'module', 'finding'],
+        props={'session_id': 'session://ibm-iplrom', 'arch': 'ppc32',
+               'tool_count': 1, 'confirmed_count': 1},
+    )
+    ctx = g.get_context_for_binary(arch='ppc32', fmt='xcoff32')
+    assert 'TOOL CHAINS' in ctx
+    assert 'SinkArgClassifier' in ctx
+    assert 'confirmed=1' in ctx
 
 
 # ── Context manager ───────────────────────────────────────────────────────────

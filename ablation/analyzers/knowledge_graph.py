@@ -67,10 +67,23 @@ CREATE TABLE IF NOT EXISTS edges (
     props TEXT NOT NULL DEFAULT '{}',
     PRIMARY KEY (src, dst, type)
 );
-CREATE INDEX IF NOT EXISTS idx_nodes_type ON nodes(type);
-CREATE INDEX IF NOT EXISTS idx_edges_src  ON edges(src);
-CREATE INDEX IF NOT EXISTS idx_edges_dst  ON edges(dst);
-CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(type);
+CREATE TABLE IF NOT EXISTS hyperedges (
+    id    TEXT PRIMARY KEY,
+    type  TEXT NOT NULL,
+    props TEXT NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS hyperedge_members (
+    hyperedge_id TEXT NOT NULL,
+    node_id      TEXT NOT NULL,
+    role         TEXT NOT NULL DEFAULT 'member',
+    PRIMARY KEY (hyperedge_id, node_id)
+);
+CREATE INDEX IF NOT EXISTS idx_nodes_type          ON nodes(type);
+CREATE INDEX IF NOT EXISTS idx_edges_src           ON edges(src);
+CREATE INDEX IF NOT EXISTS idx_edges_dst           ON edges(dst);
+CREATE INDEX IF NOT EXISTS idx_edges_type          ON edges(type);
+CREATE INDEX IF NOT EXISTS idx_hyperedges_type     ON hyperedges(type);
+CREATE INDEX IF NOT EXISTS idx_hyperedge_members_node ON hyperedge_members(node_id);
 """
 
 
@@ -267,6 +280,17 @@ class KnowledgeGraph:
                     lines.append(f"  {p.get('name', m['id'])}")
                 lines.append("")
 
+        chains = self._chains_for_arch(arch)
+        if chains:
+            lines.append(f"[TOOL CHAINS for arch={arch}]")
+            for chain in chains:
+                modules = [m['node_id'].replace('module://', '') for m in chain['members']
+                           if m['role'] == 'module']
+                confirmed = sum(1 for m in chain['members'] if m['role'] == 'finding')
+                session = chain['props'].get('session_id', chain['id'])
+                lines.append(f"  {session}  tools={modules}  confirmed={confirmed}")
+            lines.append("")
+
         if not lines:
             return f"[No graph context for arch={arch} fmt={fmt}]"
         return "\n".join(lines)
@@ -350,6 +374,94 @@ class KnowledgeGraph:
 
         return sorted(candidates, key=lambda x: x['avg_fp_rate'], reverse=True)
 
+    # ── Hyperedge API ─────────────────────────────────────────────────────────
+
+    def add_hyperedge(
+        self,
+        edge_type: str,
+        edge_id: str,
+        member_ids: list[str],
+        roles: list[str] | None = None,
+        props: dict[str, Any] | None = None,
+    ) -> None:
+        """Insert or replace a hyperedge connecting multiple nodes.
+
+        member_ids: ordered list of node IDs that participate in this edge.
+        roles: parallel list of role labels (e.g. 'session', 'arch', 'module',
+               'finding'). Defaults to 'member' for all if not provided.
+        props: arbitrary metadata stored as JSON on the hyperedge node.
+        """
+        resolved_roles = roles if roles else ['member'] * len(member_ids)
+        if len(resolved_roles) != len(member_ids):
+            raise ValueError('roles and member_ids must have the same length')
+        self._con.execute(
+            "INSERT OR REPLACE INTO hyperedges (id, type, props) VALUES (?, ?, ?)",
+            (edge_id, edge_type, json.dumps(props or {})),
+        )
+        for node_id, role in zip(member_ids, resolved_roles):
+            self._con.execute(
+                "INSERT OR REPLACE INTO hyperedge_members"
+                " (hyperedge_id, node_id, role) VALUES (?, ?, ?)",
+                (edge_id, node_id, role),
+            )
+        self._con.commit()
+
+    def get_hyperedges_for_node(
+        self,
+        node_id: str,
+        edge_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return all hyperedges that contain node_id as a member.
+
+        Each result dict has: id, type, props (decoded), members (list of
+        {node_id, role} dicts).
+        """
+        if edge_type:
+            rows = self._con.execute(
+                """
+                SELECT h.id, h.type, h.props FROM hyperedges h
+                JOIN hyperedge_members hm ON hm.hyperedge_id = h.id
+                WHERE hm.node_id = ? AND h.type = ?
+                """,
+                (node_id, edge_type),
+            ).fetchall()
+        else:
+            rows = self._con.execute(
+                """
+                SELECT h.id, h.type, h.props FROM hyperedges h
+                JOIN hyperedge_members hm ON hm.hyperedge_id = h.id
+                WHERE hm.node_id = ?
+                """,
+                (node_id,),
+            ).fetchall()
+        result = []
+        for row in rows:
+            members = self.get_hyperedge_members(row['id'])
+            try:
+                p = json.loads(row['props'])
+            except (json.JSONDecodeError, TypeError):
+                p = {}
+            result.append({'id': row['id'], 'type': row['type'], 'props': p, 'members': members})
+        return result
+
+    def get_hyperedge_members(self, edge_id: str) -> list[dict[str, str]]:
+        """Return all members of a hyperedge as {node_id, role} dicts."""
+        rows = self._con.execute(
+            "SELECT node_id, role FROM hyperedge_members WHERE hyperedge_id = ?",
+            (edge_id,),
+        ).fetchall()
+        return [{'node_id': r['node_id'], 'role': r['role']} for r in rows]
+
+    def hyperedge_count(self, edge_type: str | None = None) -> int:
+        """Return total hyperedges, or hyperedges of a specific type."""
+        if edge_type:
+            row = self._con.execute(
+                "SELECT COUNT(*) FROM hyperedges WHERE type=?", (edge_type,)
+            ).fetchone()
+        else:
+            row = self._con.execute("SELECT COUNT(*) FROM hyperedges").fetchone()
+        return int(row[0])
+
     # ── Stats helpers ─────────────────────────────────────────────────────────
 
     def node_count(self, node_type: str | None = None) -> int:
@@ -421,6 +533,28 @@ class KnowledgeGraph:
             """,
             (vc_id,),
         ).fetchall()
+
+    def _chains_for_arch(self, arch: str, limit: int = 5) -> list[dict[str, Any]]:
+        rows = self._con.execute(
+            """
+            SELECT h.id, h.props FROM hyperedges h
+            JOIN hyperedge_members hm ON hm.hyperedge_id = h.id
+            WHERE h.type = 'SessionToolChain'
+              AND hm.node_id = ?
+            ORDER BY json_extract(h.props, '$.date') DESC
+            LIMIT ?
+            """,
+            (f'arch://{arch}', limit),
+        ).fetchall()
+        result = []
+        for row in rows:
+            members = self.get_hyperedge_members(row['id'])
+            try:
+                p = json.loads(row['props'])
+            except (json.JSONDecodeError, TypeError):
+                p = {}
+            result.append({'id': row['id'], 'props': p, 'members': members})
+        return result
 
     # ── Context manager ──────────────────────────────────────────────────────
 

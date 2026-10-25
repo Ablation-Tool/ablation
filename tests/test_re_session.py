@@ -212,6 +212,54 @@ def test_update_confirmed_unknown_event_logs_warning(ctx, graph, caplog):
     assert 'not in this session' in caplog.text
 
 
+# ── close_session ────────────────────────────────────────────────────────────
+
+def test_close_session_returns_none_with_no_runs(ctx, graph):
+    with _make_session(ctx, graph) as s:
+        result = s.close_session()
+    assert result is None
+
+
+def test_close_session_creates_hyperedge(ctx, graph):
+    with _make_session(ctx, graph) as s:
+        s.run(_FakeTool)
+        chain_id = s.close_session()
+        assert chain_id is not None
+        assert chain_id.startswith('chain://')
+        assert graph.hyperedge_count('SessionToolChain') == 1
+
+
+def test_close_session_members_include_arch_and_module(ctx, graph):
+    with _make_session(ctx, graph) as s:
+        s.run(_FakeTool)
+        chain_id = s.close_session()
+        members = graph.get_hyperedge_members(chain_id)
+    roles = {m['role'] for m in members}
+    assert 'arch' in roles
+    assert 'module' in roles
+    assert 'session' in roles
+
+
+def test_close_session_includes_findings(ctx, graph):
+    with _make_session(ctx, graph) as s:
+        s.run(_FakeTool)
+        chain_id = s.close_session(finding_ids=['finding://test-001'])
+        members = graph.get_hyperedge_members(chain_id)
+    finding_members = [m for m in members if m['role'] == 'finding']
+    assert len(finding_members) == 1
+    assert finding_members[0]['node_id'] == 'finding://test-001'
+
+
+def test_close_session_deduplicates_modules(ctx, graph):
+    with _make_session(ctx, graph) as s:
+        s.run(_FakeTool)
+        s.run(_FakeTool)  # same class name — should appear only once as module member
+        chain_id = s.close_session()
+        members = graph.get_hyperedge_members(chain_id)
+    module_members = [m for m in members if m['role'] == 'module']
+    assert len(module_members) == 1
+
+
 # ── Context manager ───────────────────────────────────────────────────────────
 
 def test_context_manager_closes_graph(ctx, tmp_path):
