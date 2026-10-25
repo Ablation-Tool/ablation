@@ -78,34 +78,47 @@ python3 -m ablation.analyzers.browser_extension_auditor /path/to/ext/ --severity
 
 ## How it works
 
-Parses the runtime-specific binary format APK, DEX, `.mpy`, BEAM, and Go ELF to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
+1. Load `manifest.json` and parse `externally_connectable.matches`, `content_scripts`, and `permissions`.
+2. Enumerate all `.js`/`.ts`/`.mjs` files under the extension root; pre-filter with `_EXT_QUICK_RE` (must contain a Chrome extension API reference).
+3. Per file: detect `MSG_HANDLER_PREAUTH` by scanning `onMessage`/`onMessageExternal` listener bodies for payload use before a `sender.id`/`sender.url`/`sender.origin` check; detect `CONTENT_SCRIPT_DOM_HOOK`, `WEBSOCKET_BUS`, `NATIVE_MSG_NO_ALLOWLIST`, and `PERSISTENT_DATA_CLEAR` with targeted regex passes.
+4. Return `List[ExtFinding]` sorted by severity.
 
 ---
 
 ## Example output
 
 ```
-[HIGH] DANGEROUS_CALL   Runtime.exec() in com.example.CommandHandler:42
-  detail: argument constructed from user-supplied intent extra
-  evidence: exec(getIntent().getStringExtra("cmd"))
+BrowserExtensionAuditor — 2 finding(s) [HIGH: 2]
+======================================================================
+[HIGH] EXT_CONN_BROAD: externally_connectable grants message API access to broad origins
+  File: manifest.json:1
+  CWE:  CWE-346
+  The extension exposes chrome.runtime.sendMessage() to web pages matching one or more wildcard patterns.
+  Evidence: broad patterns: ['https://*/*']
 
-[MEDIUM] UNTRUSTED_INPUT   eval() in main.js:118
-  detail: JSON.parse result passed directly to eval
+[HIGH] MSG_HANDLER_PREAUTH: Message handler processes payload before sender validation
+  File: background.js:42
+  CWE:  CWE-285
+  The onMessage/onMessageExternal handler uses request content before checking sender.id or sender.url.
+  Evidence: first payload use: line 44; sender check: ABSENT
+  Snippet: chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 ```
 
 ---
 
 ## False positives
 
-Standard library calls that resemble dangerous patterns such as `exec` used for shell completions and `eval` used for template rendering with static input are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code Garble-compiled Go and ProGuard-stripped Android produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
+**`MSG_HANDLER_PREAUTH`** fires when payload destructuring (`const { type } = request`) precedes the sender check, even when the destructuring itself is not a privileged action. Review the full 50-line handler window before escalating.
+
+**`EXT_CONN_BROAD`** fires for enterprise extensions that intentionally use `*://*/*` under managed deployment with policy-enforced origin restriction. Verify whether `externally_connectable` is narrowed via enterprise policy.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Confirm the target binary format APK, `.mpy`, BEAM, and Go ELF before loading. `BinaryContext` is not required for all runtime analyzers.
+**Before this module:** Unpack the extension (CRX → zip). No `BinaryContext` required.
 
-**After this module:** Feed dangerous call findings to `TaintTracker` or `FindingRegistry` for confirmed findings.
+**After this module:** If `WEBSOCKET_BUS` fires, manually enumerate the loopback port. If `EXT_CONN_BROAD` + `MSG_HANDLER_PREAUTH` both fire, escalate to `FindingRegistry` as a confused-deputy chain. Pair with `JWTAnalysis` for extensions that handle auth tokens.
 
 ---
 
