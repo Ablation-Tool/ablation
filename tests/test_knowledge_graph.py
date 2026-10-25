@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import datetime
 
-from ablation.analyzers.knowledge_graph import ContextCoverage, GraphSession, KnowledgeGraph, VALID_INTENTS
+from ablation.analyzers.knowledge_graph import ContextCoverage, GraphSession, KnowledgeGraph, SessionQuality, VALID_INTENTS
 
 
 @pytest.fixture
@@ -795,3 +795,379 @@ def test_embed_doc_nodes_and_semantic_recommendations(g):
     lines = [l.strip() for l in rec.splitlines() if 'SinkArgClassifier' in l or 'TaintTracker' in l or 'BinaryContext' in l]
     sac_pos = next((i for i, l in enumerate(lines) if 'SinkArgClassifier' in l), None)
     assert sac_pos is not None and sac_pos == 0
+
+
+# ── Improvement 1: Causal execution chains (CAUSED_BY edges) ─────────────────
+
+def test_add_analysis_event_with_parent_creates_caused_by_edge(g):
+    eid1 = g.add_analysis_event(
+        session_id='session://s1', module='SinkArgClassifier', arch='ppc32',
+        candidates=5, confirmed=0, fp_rate=1.0,
+    )
+    eid2 = g.add_analysis_event(
+        session_id='session://s1', module='TaintTracker', arch='ppc32',
+        candidates=3, confirmed=1, fp_rate=0.67,
+        parent_event_id=eid1,
+    )
+    edge = g._con.execute(
+        "SELECT * FROM edges WHERE src=? AND type='CAUSED_BY'", (eid2,)
+    ).fetchone()
+    assert edge is not None
+    assert edge['dst'] == eid1
+
+
+def test_add_run_with_parent_event_id(g):
+    eid1 = g.add_run('BinaryContext', '/fw.bin', 'x86_64',
+                     {'session_id': 'session://s1', 'candidates': 0, 'fp_rate': 0.0})
+    eid2 = g.add_run('SemanticSearcher', '/fw.bin', 'x86_64',
+                     {'session_id': 'session://s1', 'candidates': 2, 'fp_rate': 0.5},
+                     parent_event_id=eid1)
+    assert g.edge_count('CAUSED_BY') == 1
+    edge = g._con.execute("SELECT dst FROM edges WHERE type='CAUSED_BY'").fetchone()
+    assert edge['dst'] == eid1
+
+
+def test_get_execution_chain_returns_ordered_events(g):
+    eid1 = g.add_analysis_event(
+        session_id='session://s1', module='BinaryContext', arch='x86_64',
+        candidates=0, confirmed=0, fp_rate=0.0,
+        timestamp='2026-10-01T10:00:00',
+    )
+    eid2 = g.add_analysis_event(
+        session_id='session://s1', module='SinkArgClassifier', arch='x86_64',
+        candidates=5, confirmed=0, fp_rate=1.0,
+        timestamp='2026-10-01T10:01:00',
+        parent_event_id=eid1,
+    )
+    eid3 = g.add_analysis_event(
+        session_id='session://s1', module='TaintTracker', arch='x86_64',
+        candidates=2, confirmed=1, fp_rate=0.5,
+        timestamp='2026-10-01T10:02:00',
+        parent_event_id=eid2,
+    )
+    chain = g.get_execution_chain('session://s1')
+    assert len(chain) == 3
+    assert chain[0]['module'] == 'BinaryContext'
+    assert chain[0]['parent_event_id'] is None
+    assert chain[1]['module'] == 'SinkArgClassifier'
+    assert chain[1]['parent_event_id'] == eid1
+    assert chain[2]['module'] == 'TaintTracker'
+    assert chain[2]['parent_event_id'] == eid2
+
+
+def test_get_execution_chain_empty_session(g):
+    assert g.get_execution_chain('session://nonexistent') == []
+
+
+def test_get_execution_replay_traverses_finding_to_chain(g):
+    g.add_node('Session', 'session://s1', {'arch': 'ppc32'})
+    eid1 = g.add_analysis_event(
+        session_id='session://s1', module='BinaryContext', arch='ppc32',
+        candidates=0, confirmed=0, fp_rate=0.0,
+        timestamp='2026-10-01T09:00:00',
+    )
+    eid2 = g.add_analysis_event(
+        session_id='session://s1', module='SinkArgClassifier', arch='ppc32',
+        candidates=3, confirmed=1, fp_rate=0.67,
+        timestamp='2026-10-01T09:01:00',
+        parent_event_id=eid1,
+    )
+    g.record_finding(
+        finding_id='finding://REPLAY-001', cwe='CWE-78', va=0x1234,
+        status='CONFIRMED', byte_verified=True,
+        disclosure_status='public', session_id='session://s1',
+    )
+    replay = g.get_execution_replay('finding://REPLAY-001')
+    assert len(replay) == 2
+    modules = [e['module'] for e in replay]
+    assert modules == ['BinaryContext', 'SinkArgClassifier']
+
+
+def test_get_execution_replay_no_found_in_edge(g):
+    g.add_node('Finding', 'finding://ORPHAN', {'status': 'CONFIRMED'})
+    assert g.get_execution_replay('finding://ORPHAN') == []
+
+
+def test_graph_session_auto_chains_events(g):
+    gs = g.session('session://target', arch='x86_64', binary_path='/fw.bin')
+    eid1 = gs.record('BinaryContext', {'candidates': 0, 'fp_rate': 0.0})
+    eid2 = gs.record('SinkArgClassifier', {'candidates': 5, 'fp_rate': 0.8})
+    eid3 = gs.record('TaintTracker', {'candidates': 2, 'fp_rate': 0.5})
+    # CAUSED_BY chain: eid2→eid1, eid3→eid2
+    assert g.edge_count('CAUSED_BY') == 2
+    chain = g.get_execution_chain('session://target')
+    assert len(chain) == 3
+    assert chain[1]['parent_event_id'] == eid1
+    assert chain[2]['parent_event_id'] == eid2
+
+
+def test_graph_session_execution_chain_shortcut(g):
+    gs = g.session('session://target', arch='arm64')
+    gs.record('BinaryContext', {'candidates': 0, 'fp_rate': 0.0})
+    gs.record('SinkArgClassifier', {'candidates': 3, 'fp_rate': 0.33})
+    chain = gs.execution_chain()
+    assert len(chain) == 2
+
+
+# ── Improvement 2: Session recency labels ────────────────────────────────────
+
+def test_context_labels_recent_session(g):
+    import datetime
+    recent_date = (
+        datetime.datetime.utcnow() - datetime.timedelta(days=30)
+    ).strftime('%Y-%m-%d')
+    g.add_node('Session', 'session://recent', {
+        'arch': 'x86_64', 'date': recent_date,
+        'verdict': 'COMPLETE', 'tool_sequence': [],
+    })
+    ctx = g.get_context_for_binary(arch='x86_64', fmt='elf64')
+    assert '[recent]' in ctx
+
+
+def test_context_labels_old_session_as_prior(g):
+    g.add_node('Session', 'session://old', {
+        'arch': 'x86_64', 'date': '2020-01-01',
+        'verdict': 'COMPLETE', 'tool_sequence': [],
+    })
+    ctx = g.get_context_for_binary(arch='x86_64', fmt='elf64')
+    assert '[prior]' in ctx
+
+
+def test_context_labels_both_tiers_when_mixed(g):
+    import datetime
+    recent = (datetime.datetime.utcnow() - datetime.timedelta(days=10)).strftime('%Y-%m-%d')
+    g.add_node('Session', 'session://s1', {
+        'arch': 'x86_64', 'date': recent, 'verdict': 'COMPLETE', 'tool_sequence': [],
+    })
+    g.add_node('Session', 'session://s2', {
+        'arch': 'x86_64', 'date': '2019-06-01', 'verdict': 'COMPLETE', 'tool_sequence': [],
+    })
+    ctx = g.get_context_for_binary(arch='x86_64', fmt='elf64')
+    assert '[recent]' in ctx
+    assert '[prior]' in ctx
+
+
+# ── Improvement 3: SessionQuality evaluation ─────────────────────────────────
+
+def test_evaluate_session_empty_session(g):
+    sq = g.evaluate_session('session://nonexistent')
+    assert sq.tools_run == 0
+    assert sq.candidates_flagged == 0
+    assert sq.candidates_confirmed == 0
+    assert sq.candidates_eliminated == 0
+    assert sq.candidates_open == 0
+    assert sq.tool_efficiency == {}
+
+
+def test_evaluate_session_counts_events(g):
+    for _ in range(3):
+        g.add_analysis_event(
+            session_id='session://s1', module='SinkArgClassifier', arch='x86_64',
+            candidates=4, confirmed=1, fp_rate=0.75,
+        )
+    sq = g.evaluate_session('session://s1')
+    assert sq.tools_run == 3
+    assert sq.candidates_flagged == 12
+    assert sq.candidates_confirmed == 3
+    assert sq.tool_efficiency.get('SinkArgClassifier') == pytest.approx(3 / 12)
+
+
+def test_evaluate_session_counts_eliminated_findings(g):
+    g.add_node('Session', 'session://s2', {'arch': 'ppc32'})
+    g.record_finding(
+        finding_id='finding://ELIM-001', cwe='CWE-78', va=0x1000,
+        status='ELIMINATED', byte_verified=False,
+        disclosure_status='public', session_id='session://s2',
+    )
+    g.record_finding(
+        finding_id='finding://CONF-001', cwe='CWE-78', va=0x2000,
+        status='CONFIRMED', byte_verified=True,
+        disclosure_status='public', session_id='session://s2',
+    )
+    sq = g.evaluate_session('session://s2')
+    assert sq.candidates_eliminated == 1
+
+
+def test_session_quality_candidates_open(g):
+    g.add_analysis_event(
+        session_id='session://s1', module='Mod', arch='x86_64',
+        candidates=10, confirmed=2, fp_rate=0.2,
+    )
+    g.add_node('Session', 'session://s1', {'arch': 'x86_64'})
+    g.record_finding(
+        finding_id='finding://E1', cwe='CWE-78', va=0x1, status='ELIMINATED',
+        byte_verified=False, disclosure_status='public', session_id='session://s1',
+    )
+    sq = g.evaluate_session('session://s1')
+    # flagged=10, confirmed=2, eliminated=1 → open=7
+    assert sq.candidates_open == 7
+
+
+def test_session_quality_str_includes_key_fields(g):
+    g.add_analysis_event(
+        session_id='session://s1', module='Mod', arch='x86_64',
+        candidates=5, confirmed=1, fp_rate=0.8,
+    )
+    sq = g.evaluate_session('session://s1')
+    s = str(sq)
+    assert 'flagged=5' in s
+    assert 'confirmed=1' in s
+
+
+def test_graph_session_quality_shortcut(g):
+    gs = g.session('session://s1', arch='x86_64')
+    gs.record('SinkArgClassifier', {'candidates': 3, 'confirmed': 1, 'fp_rate': 0.67})
+    sq = gs.quality()
+    assert isinstance(sq, SessionQuality)
+    assert sq.tools_run == 1
+
+
+# ── Improvement 4: Module confidence backpropagation ─────────────────────────
+
+def test_update_module_confidence_increases_on_confirmed(g):
+    g.add_node('Module', 'module://SAC', {'name': 'SAC', 'workflow_stage': 'classify'})
+    g.add_node('Architecture', 'arch://ppc32', {'name': 'ppc32'})
+    g.add_edge('module://SAC', 'arch://ppc32', 'SUPPORTS')
+
+    new_conf = g.update_module_confidence('module://SAC', 'ppc32', +0.10)
+    assert new_conf == pytest.approx(0.80, abs=0.001)  # 0.7 + 0.1
+
+
+def test_update_module_confidence_decreases_on_eliminated(g):
+    g.add_node('Module', 'module://SAC', {'name': 'SAC', 'workflow_stage': 'classify'})
+    g.add_node('Architecture', 'arch://ppc32', {'name': 'ppc32'})
+    g.add_edge('module://SAC', 'arch://ppc32', 'SUPPORTS')
+
+    new_conf = g.update_module_confidence('module://SAC', 'ppc32', -0.05)
+    assert new_conf == pytest.approx(0.65, abs=0.001)  # 0.7 - 0.05
+
+
+def test_update_module_confidence_clamps_at_max(g):
+    g.add_node('Module', 'module://SAC', {'name': 'SAC', 'workflow_stage': 'classify'})
+    g.add_node('Architecture', 'arch://ppc32', {'name': 'ppc32'})
+    g.add_edge('module://SAC', 'arch://ppc32', 'SUPPORTS')
+
+    for _ in range(20):
+        g.update_module_confidence('module://SAC', 'ppc32', +0.10)
+    conf = g.update_module_confidence('module://SAC', 'ppc32', 0.0)
+    assert conf <= 1.00
+
+
+def test_update_module_confidence_clamps_at_min(g):
+    g.add_node('Module', 'module://SAC', {'name': 'SAC', 'workflow_stage': 'classify'})
+    g.add_node('Architecture', 'arch://ppc32', {'name': 'ppc32'})
+    g.add_edge('module://SAC', 'arch://ppc32', 'SUPPORTS')
+
+    for _ in range(30):
+        g.update_module_confidence('module://SAC', 'ppc32', -0.10)
+    conf = g.update_module_confidence('module://SAC', 'ppc32', 0.0)
+    assert conf >= 0.10
+
+
+def test_update_module_confidence_no_op_missing_edge(g):
+    result = g.update_module_confidence('module://NONEXISTENT', 'ppc32', +0.10)
+    assert result == 0.5  # sentinel for missing edge
+
+
+def test_record_finding_triggers_confidence_update(g):
+    g.add_node('Module', 'module://SinkArgClassifier',
+               {'name': 'SinkArgClassifier', 'workflow_stage': 'classify'})
+    g.add_node('Architecture', 'arch://ppc32', {'name': 'ppc32'})
+    g.add_edge('module://SinkArgClassifier', 'arch://ppc32', 'SUPPORTS')
+    g.add_node('Session', 'session://s1', {'arch': 'ppc32'})
+
+    g.record_finding(
+        finding_id='finding://CONF-001', cwe='CWE-78', va=0x1234,
+        status='CONFIRMED', byte_verified=True,
+        disclosure_status='public', session_id='session://s1',
+        triggering_module='SinkArgClassifier',
+    )
+    # Confidence should have increased from 0.7 to 0.8
+    edge_row = g._con.execute(
+        "SELECT props FROM edges WHERE src='module://SinkArgClassifier' AND dst='arch://ppc32' AND type='SUPPORTS'"
+    ).fetchone()
+    conf = json.loads(edge_row['props']).get('confidence', 0.7)
+    assert conf == pytest.approx(0.80, abs=0.001)
+
+
+def test_record_finding_triggers_confidence_decrease_on_eliminated(g):
+    g.add_node('Module', 'module://SinkArgClassifier',
+               {'name': 'SinkArgClassifier', 'workflow_stage': 'classify'})
+    g.add_node('Architecture', 'arch://ppc32', {'name': 'ppc32'})
+    g.add_edge('module://SinkArgClassifier', 'arch://ppc32', 'SUPPORTS')
+    g.add_node('Session', 'session://s1', {'arch': 'ppc32'})
+
+    g.record_finding(
+        finding_id='finding://ELIM-001', cwe='CWE-78', va=0x1234,
+        status='ELIMINATED', byte_verified=False,
+        disclosure_status='public', session_id='session://s1',
+        triggering_module='SinkArgClassifier',
+    )
+    edge_row = g._con.execute(
+        "SELECT props FROM edges WHERE src='module://SinkArgClassifier' AND dst='arch://ppc32' AND type='SUPPORTS'"
+    ).fetchone()
+    conf = json.loads(edge_row['props']).get('confidence', 0.7)
+    assert conf == pytest.approx(0.65, abs=0.001)
+
+
+def test_graph_session_record_finding_with_triggering_module(g):
+    g.add_node('Module', 'module://TaintTracker',
+               {'name': 'TaintTracker', 'workflow_stage': 'taint'})
+    g.add_node('Architecture', 'arch://x86_64', {'name': 'x86_64'})
+    g.add_edge('module://TaintTracker', 'arch://x86_64', 'SUPPORTS')
+    g.add_node('Session', 'session://s1', {'arch': 'x86_64'})
+
+    gs = g.session('session://s1', arch='x86_64')
+    gs.record_finding(
+        finding_id='finding://TT-001', cwe='CWE-78', va=0xABCD,
+        status='CONFIRMED', byte_verified=True,
+        disclosure_status='public', triggering_module='TaintTracker',
+    )
+    edge_row = g._con.execute(
+        "SELECT props FROM edges WHERE src='module://TaintTracker' AND dst='arch://x86_64' AND type='SUPPORTS'"
+    ).fetchone()
+    conf = json.loads(edge_row['props']).get('confidence', 0.7)
+    assert conf == pytest.approx(0.80, abs=0.001)
+
+
+def test_modules_sorted_by_confidence_within_stage(g):
+    g.add_node('Architecture', 'arch://ppc32', {'name': 'ppc32'})
+    for name, conf in [('ModA', 0.9), ('ModB', 0.5), ('ModC', 0.7)]:
+        g.add_node('Module', f'module://{name}', {'name': name, 'workflow_stage': 'classify'})
+        g.add_edge(f'module://{name}', 'arch://ppc32', 'SUPPORTS', {'confidence': conf})
+
+    ctx = g.get_context_for_binary(arch='ppc32', fmt='xcoff32')
+    pos_a = ctx.index('ModA')
+    pos_b = ctx.index('ModB')
+    pos_c = ctx.index('ModC')
+    # ModA (0.9) first, then ModC (0.7), then ModB (0.5)
+    assert pos_a < pos_c < pos_b
+
+
+def test_confidence_shown_in_context_when_non_default(g):
+    g.add_node('Architecture', 'arch://ppc32', {'name': 'ppc32'})
+    g.add_node('Module', 'module://SAC', {'name': 'SAC', 'workflow_stage': 'classify'})
+    g.add_edge('module://SAC', 'arch://ppc32', 'SUPPORTS', {'confidence': 0.95})
+    ctx = g.get_context_for_binary(arch='ppc32', fmt='xcoff32')
+    assert 'conf=0.95' in ctx
+
+
+def test_default_confidence_not_shown_in_context(g):
+    g.add_node('Architecture', 'arch://ppc32', {'name': 'ppc32'})
+    g.add_node('Module', 'module://SAC', {'name': 'SAC', 'workflow_stage': 'classify'})
+    g.add_edge('module://SAC', 'arch://ppc32', 'SUPPORTS')
+    ctx = g.get_context_for_binary(arch='ppc32', fmt='xcoff32')
+    assert 'conf=' not in ctx  # default 0.7 is silent
+
+
+# ── SessionQuality export ─────────────────────────────────────────────────────
+
+def test_session_quality_is_exported(g):
+    from ablation.analyzers.knowledge_graph import SessionQuality
+    sq = SessionQuality(
+        session_id='session://x', tools_run=2,
+        candidates_flagged=5, candidates_confirmed=1,
+        candidates_eliminated=2, tool_efficiency={'ModA': 0.2},
+    )
+    assert sq.candidates_open == 2
+    assert 'ModA' in str(sq)

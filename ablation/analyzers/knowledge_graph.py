@@ -47,7 +47,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-__all__ = ['KnowledgeGraph', 'GraphSession', 'ContextCoverage', 'VALID_INTENTS']
+__all__ = ['KnowledgeGraph', 'GraphSession', 'ContextCoverage', 'SessionQuality', 'VALID_INTENTS']
 
 # Valid intent values for get_context_for_binary() and RESession.
 # sweep       — full initial binary sweep; all sections included (default).
@@ -118,6 +118,41 @@ class ContextCoverage:
             f"modules={self.module_count}  gaps={self.gap_count}  "
             f"sessions={self.session_count}  chains={self.chain_count}"
         )
+
+
+@dataclasses.dataclass(frozen=True)
+class SessionQuality:
+    """Per-session quality metrics derived from AnalysisEvent nodes.
+
+    tool_efficiency maps module_name → confirmed / candidates for that module
+    within this session (undefined / absent when candidates == 0).
+    candidates_open = flagged - confirmed - eliminated.
+    """
+
+    session_id: str
+    tools_run: int
+    candidates_flagged: int
+    candidates_confirmed: int
+    candidates_eliminated: int
+    tool_efficiency: dict[str, float]
+
+    @property
+    def candidates_open(self) -> int:
+        return max(
+            0, self.candidates_flagged - self.candidates_confirmed - self.candidates_eliminated
+        )
+
+    def __str__(self) -> str:
+        eff_str = ', '.join(
+            f"{m}={v:.2f}" for m, v in sorted(self.tool_efficiency.items())
+        )
+        return (
+            f"SessionQuality({self.session_id}  "
+            f"tools={self.tools_run}  flagged={self.candidates_flagged}  "
+            f"confirmed={self.candidates_confirmed}  eliminated={self.candidates_eliminated}  "
+            f"open={self.candidates_open}  efficiency={{{eff_str}}})"
+        )
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS nodes (
@@ -219,8 +254,14 @@ class KnowledgeGraph:
         root_cause: str = '',
         intent: str = 'sweep',
         timestamp: str | None = None,
+        parent_event_id: str | None = None,
     ) -> str:
-        """Record one tool run as an AnalysisEvent node. Returns the event id."""
+        """Record one tool run as an AnalysisEvent node. Returns the event id.
+
+        parent_event_id: the event that triggered this run (e.g. an SAC event whose
+        candidates motivated a TaintTracker call). When provided, a CAUSED_BY edge is
+        written from this event to its parent, forming the causal execution chain.
+        """
         event_id = f"event://{uuid.uuid4().hex[:12]}"
         props: dict[str, Any] = {
             'session_id': session_id,
@@ -236,6 +277,8 @@ class KnowledgeGraph:
         self.add_node('AnalysisEvent', event_id, props)
         if session_id:
             self.add_edge(event_id, session_id, 'RECORDS')
+        if parent_event_id:
+            self.add_edge(event_id, parent_event_id, 'CAUSED_BY')
         return event_id
 
     def record_finding(
@@ -248,11 +291,18 @@ class KnowledgeGraph:
         disclosure_status: str,
         session_id: str,
         access_level: str = 'public',
+        triggering_module: str | None = None,
     ) -> None:
         """Record a finding and link it to its session.
 
         disclosure_status='pre-disclosure' findings are excluded from default
         get_context_for_binary() output (access_level='public' filter).
+
+        triggering_module: the module name (not URI) that first flagged this
+        finding (e.g. 'SinkArgClassifier'). When provided, module confidence for
+        the session's arch is updated automatically — +0.10 for CONFIRMED/BYTE_VERIFIED,
+        -0.05 for ELIMINATED/NOT_EXPLOITABLE — implementing a lightweight form of
+        semantic backpropagation so future tool ranking reflects observed accuracy.
         """
         props: dict[str, Any] = {
             'cwe': cwe,
@@ -265,18 +315,29 @@ class KnowledgeGraph:
         self.add_node('Finding', finding_id, props)
         self.add_edge(finding_id, session_id, 'FOUND_IN')
 
+        if triggering_module:
+            arch = self._arch_for_session(session_id)
+            module_id = f'module://{triggering_module}'
+            status_upper = status.upper()
+            if status_upper in ('CONFIRMED', 'BYTE_VERIFIED', 'CONFIRMED_HIGH', 'CONFIRMED_MEDIUM'):
+                self.update_module_confidence(module_id, arch, +0.10)
+            elif status_upper in ('ELIMINATED', 'NOT_EXPLOITABLE', 'SAFE', 'INVALID'):
+                self.update_module_confidence(module_id, arch, -0.05)
+
     def add_run(
         self,
         module_name: str,
         binary_path: str,
         arch: str,
         results: dict[str, Any],
+        parent_event_id: str | None = None,
     ) -> str:
         """Record a tool run as an AnalysisEvent. Returns event_id.
 
         results keys: session_id, candidates, confirmed, fp_rate, root_cause, intent.
-        Only add_run() writes AnalysisEvent nodes during a live session;
-        callers do not execute SQL directly.
+        parent_event_id: event whose output motivated this run; creates a CAUSED_BY
+        edge so the full causal chain is queryable via get_execution_chain().
+        Only add_run() writes AnalysisEvent nodes during a live session.
         """
         return self.add_analysis_event(
             session_id=str(results.get('session_id', '')),
@@ -287,6 +348,7 @@ class KnowledgeGraph:
             fp_rate=float(results.get('fp_rate', 0.0)),
             root_cause=str(results.get('root_cause', '')),
             intent=str(results.get('intent', 'sweep')),
+            parent_event_id=parent_event_id,
         )
 
     # ── Query API ─────────────────────────────────────────────────────────────
@@ -501,6 +563,176 @@ class KnowledgeGraph:
             })
 
         return sorted(candidates, key=lambda x: x['avg_fp_rate'], reverse=True)
+
+    def get_execution_chain(self, session_id: str) -> list[dict[str, Any]]:
+        """Return the ordered causal chain of tool runs for a session.
+
+        Each dict has: event_id, module, arch, candidates, confirmed, fp_rate,
+        timestamp, parent_event_id (or None if the event was the first in the chain).
+
+        Events are ordered by timestamp ascending. CAUSED_BY edges are resolved so
+        callers can reconstruct the full DAG: which tool result motivated the next.
+        """
+        rows = self._con.execute(
+            """
+            SELECT id, props FROM nodes
+            WHERE type = 'AnalysisEvent'
+              AND json_extract(props, '$.session_id') = ?
+            ORDER BY json_extract(props, '$.timestamp')
+            """,
+            (session_id,),
+        ).fetchall()
+
+        # Build parent lookup from CAUSED_BY edges.
+        parent_map: dict[str, str] = {}
+        for row in rows:
+            parent_row = self._con.execute(
+                "SELECT dst FROM edges WHERE src = ? AND type = 'CAUSED_BY' LIMIT 1",
+                (row['id'],),
+            ).fetchone()
+            if parent_row:
+                parent_map[row['id']] = parent_row['dst']
+
+        chain = []
+        for row in rows:
+            try:
+                p = json.loads(row['props'])
+            except (json.JSONDecodeError, TypeError):
+                p = {}
+            chain.append({
+                'event_id': row['id'],
+                'module': p.get('module', ''),
+                'arch': p.get('arch', ''),
+                'candidates': p.get('candidates', 0),
+                'confirmed': p.get('confirmed', 0),
+                'fp_rate': p.get('fp_rate', 0.0),
+                'timestamp': p.get('timestamp', ''),
+                'parent_event_id': parent_map.get(row['id']),
+            })
+        return chain
+
+    def get_execution_replay(self, finding_id: str) -> list[dict[str, Any]]:
+        """Return the full tool chain that produced a given finding.
+
+        Traverses: finding → FOUND_IN → Session → events for that session
+        (via get_execution_chain). Returns an empty list if the finding has
+        no FOUND_IN edge or its session has no recorded events.
+        """
+        row = self._con.execute(
+            "SELECT dst FROM edges WHERE src = ? AND type = 'FOUND_IN' LIMIT 1",
+            (finding_id,),
+        ).fetchone()
+        if not row:
+            return []
+        return self.get_execution_chain(row['dst'])
+
+    def evaluate_session(self, session_id: str) -> 'SessionQuality':
+        """Compute quality metrics for a session from its AnalysisEvent nodes.
+
+        tool_efficiency[module] = confirmed / candidates when candidates > 0.
+        Callers can pass the result to update_module_confidence() to propagate
+        session-level accuracy back into the module graph.
+        """
+        rows = self._con.execute(
+            """
+            SELECT props FROM nodes
+            WHERE type = 'AnalysisEvent'
+              AND json_extract(props, '$.session_id') = ?
+            """,
+            (session_id,),
+        ).fetchall()
+
+        tools_run = len(rows)
+        total_candidates = 0
+        total_confirmed = 0
+        per_module_cands: dict[str, int] = {}
+        per_module_conf: dict[str, int] = {}
+
+        for row in rows:
+            try:
+                p = json.loads(row['props'])
+            except (json.JSONDecodeError, TypeError):
+                continue
+            mod = str(p.get('module', 'unknown'))
+            cands = int(p.get('candidates', 0))
+            conf = int(p.get('confirmed', 0))
+            total_candidates += cands
+            total_confirmed += conf
+            per_module_cands[mod] = per_module_cands.get(mod, 0) + cands
+            per_module_conf[mod] = per_module_conf.get(mod, 0) + conf
+
+        # Count eliminated findings (status ELIMINATED / NOT_EXPLOITABLE).
+        elim_rows = self._con.execute(
+            """
+            SELECT COUNT(*) FROM nodes n
+            JOIN edges e ON e.src = n.id
+            WHERE n.type = 'Finding'
+              AND e.type = 'FOUND_IN'
+              AND e.dst = ?
+              AND (
+                json_extract(n.props, '$.status') = 'ELIMINATED'
+                OR json_extract(n.props, '$.status') = 'NOT_EXPLOITABLE'
+                OR json_extract(n.props, '$.status') = 'SAFE'
+                OR json_extract(n.props, '$.status') = 'INVALID'
+              )
+            """,
+            (session_id,),
+        ).fetchone()
+        total_eliminated = int(elim_rows[0]) if elim_rows else 0
+
+        efficiency: dict[str, float] = {}
+        for mod, cands in per_module_cands.items():
+            if cands > 0:
+                efficiency[mod] = round(per_module_conf.get(mod, 0) / cands, 3)
+
+        return SessionQuality(
+            session_id=session_id,
+            tools_run=tools_run,
+            candidates_flagged=total_candidates,
+            candidates_confirmed=total_confirmed,
+            candidates_eliminated=total_eliminated,
+            tool_efficiency=efficiency,
+        )
+
+    def update_module_confidence(
+        self,
+        module_id: str,
+        arch: str,
+        delta: float,
+    ) -> float:
+        """Adjust the confidence score on a Module→Arch SUPPORTS edge by delta.
+
+        Confidence is stored as a float in the SUPPORTS edge props under key
+        'confidence', clamped to [0.10, 1.00]. Returns the new confidence value.
+        If the SUPPORTS edge does not exist, this is a no-op and returns 0.5.
+
+        Positive delta (+0.10) when the module produced a CONFIRMED finding;
+        negative delta (-0.05) when the module flagged a candidate that was
+        subsequently ELIMINATED.  Over many sessions this shifts tool ranking so
+        modules with demonstrated accuracy for a given arch surface first.
+        """
+        arch_id = f'arch://{arch}' if not arch.startswith('arch://') else arch
+        row = self._con.execute(
+            "SELECT props FROM edges WHERE src=? AND dst=? AND type='SUPPORTS'",
+            (module_id, arch_id),
+        ).fetchone()
+        if not row:
+            return 0.5
+
+        try:
+            props = json.loads(row['props'])
+        except (json.JSONDecodeError, TypeError):
+            props = {}
+
+        current = float(props.get('confidence', 0.7))
+        new_conf = round(max(0.10, min(1.00, current + delta)), 4)
+        props['confidence'] = new_conf
+        self._con.execute(
+            "UPDATE edges SET props=? WHERE src=? AND dst=? AND type='SUPPORTS'",
+            (json.dumps(props), module_id, arch_id),
+        )
+        self._con.commit()
+        return new_conf
 
     def add_gap_node(
         self,
@@ -828,7 +1060,15 @@ class KnowledgeGraph:
             lines.append(f"[MODULES for arch={effective_arch}]")
             for m in modules:
                 p = _props(m)
-                lines.append(f"  {p.get('name', m['id'])}  [{p.get('workflow_stage', '')}]")
+                try:
+                    ep = json.loads(m['edge_props'])  # type: ignore[index]
+                    conf = ep.get('confidence')
+                except (json.JSONDecodeError, TypeError, IndexError, KeyError):
+                    conf = None
+                conf_str = f"  conf={conf:.2f}" if conf is not None and conf != 0.7 else ''
+                lines.append(
+                    f"  {p.get('name', m['id'])}  [{p.get('workflow_stage', '')}]{conf_str}"
+                )
                 if p.get('entry_point'):
                     lines.append(f"    entry: {p['entry_point']}")
                 if p.get('limitations'):
@@ -863,13 +1103,15 @@ class KnowledgeGraph:
                 sessions = all_sessions
             if sessions:
                 lines.append(f"[PRIOR SESSIONS for arch={effective_arch}]")
+                now_for_sessions = datetime.datetime.utcnow()
                 for s in sessions:
                     p = _props(s)
                     verdict = p.get('verdict', '?')
                     tools = p.get('tool_sequence', [])
                     date = p.get('date', '')
+                    tier = _session_recency_tier(date, now_for_sessions)
                     lines.append(
-                        f"  {s['id']}  date={date}  verdict={verdict}  tools={tools}"
+                        f"  [{tier}] {s['id']}  date={date}  verdict={verdict}  tools={tools}"
                     )
                 lines.append("")
 
@@ -937,7 +1179,7 @@ class KnowledgeGraph:
     def _modules_for_arch(self, arch_id: str) -> list[sqlite3.Row]:
         rows = self._con.execute(
             """
-            SELECT n.* FROM nodes n
+            SELECT n.*, e.props as edge_props FROM nodes n
             JOIN edges e ON e.src = n.id
             WHERE n.type = 'Module'
               AND e.type = 'SUPPORTS'
@@ -946,7 +1188,20 @@ class KnowledgeGraph:
             """,
             (arch_id,),
         ).fetchall()
-        return sorted(rows, key=_stage_sort_key)
+        return sorted(rows, key=_confidence_stage_sort_key)
+
+    def _arch_for_session(self, session_id: str) -> str:
+        """Return the arch string for a Session node, or '' if not found."""
+        row = self._con.execute(
+            "SELECT props FROM nodes WHERE id=? AND type='Session'",
+            (session_id,),
+        ).fetchone()
+        if not row:
+            return ''
+        try:
+            return str(json.loads(row['props']).get('arch', ''))
+        except (json.JSONDecodeError, TypeError):
+            return ''
 
     def _gaps_for_arch(self, arch: str) -> list[sqlite3.Row]:
         return self._con.execute(
@@ -1028,23 +1283,37 @@ class GraphSession:
         gs = g.session('session://ibm-target', arch='ppc32', binary_path='/path/fw.bin')
         ctx = gs.context('xcoff32')                         # get_context_for_binary shortcut
         # ... run BinaryContext, SinkArgClassifier, TaintTracker ...
-        gs.record('SinkArgClassifier', {'candidates': 5, 'confirmed': 1, 'fp_rate': 0.8})
-        gs.record_finding('finding://IBM-001', 'CWE-78', 0x1234, 'CONFIRMED', True, 'pre-disclosure')
+        event1 = gs.record('SinkArgClassifier', {'candidates': 5, 'confirmed': 1, 'fp_rate': 0.8})
+        gs.record('TaintTracker', {'candidates': 3, 'confirmed': 1, 'fp_rate': 0.67})
+        # ↑ TaintTracker's event automatically gets a CAUSED_BY edge to event1.
+        gs.record_finding('finding://IBM-001', 'CWE-78', 0x1234, 'CONFIRMED', True,
+                          'pre-disclosure', triggering_module='SinkArgClassifier')
+
+    Auto-chaining: each record() call stores the returned event_id and passes it as
+    parent_event_id to the next call, building the causal chain automatically.
     """
 
     kg: KnowledgeGraph
     session_id: str
     arch: str
     binary_path: str = ''
+    _last_event_id: str = dataclasses.field(default='', init=False, repr=False)
 
     def record(self, module_name: str, results: dict[str, Any]) -> str:
-        """Record a tool run. session_id, arch, and binary_path are pre-filled. Returns event_id."""
-        return self.kg.add_run(
+        """Record a tool run. session_id, arch, binary_path, and causal chain are pre-filled.
+
+        Returns event_id. Automatically sets parent_event_id to the previous event
+        in this session so the causal chain is built without any extra caller work.
+        """
+        event_id = self.kg.add_run(
             module_name,
             self.binary_path,
             self.arch,
             {'session_id': self.session_id, **results},
+            parent_event_id=self._last_event_id or None,
         )
+        self._last_event_id = event_id
+        return event_id
 
     def record_finding(
         self,
@@ -1054,8 +1323,13 @@ class GraphSession:
         status: str,
         byte_verified: bool,
         disclosure_status: str,
+        triggering_module: str | None = None,
     ) -> None:
-        """Record a confirmed finding. session_id is pre-filled."""
+        """Record a finding. session_id is pre-filled.
+
+        triggering_module: the module that first flagged this candidate. When
+        provided, module confidence is updated automatically (backpropagation).
+        """
         self.kg.record_finding(
             finding_id=finding_id,
             cwe=cwe,
@@ -1064,11 +1338,20 @@ class GraphSession:
             byte_verified=byte_verified,
             disclosure_status=disclosure_status,
             session_id=self.session_id,
+            triggering_module=triggering_module,
         )
 
     def context(self, fmt: str, **kwargs: Any) -> str:
         """Shortcut for get_context_for_binary() with this session's arch pre-filled."""
         return self.kg.get_context_for_binary(self.arch, fmt, **kwargs)
+
+    def quality(self) -> 'SessionQuality':
+        """Return quality metrics for this session. Shortcut for evaluate_session()."""
+        return self.kg.evaluate_session(self.session_id)
+
+    def execution_chain(self) -> list[dict[str, Any]]:
+        """Return the ordered causal tool chain for this session."""
+        return self.kg.get_execution_chain(self.session_id)
 
     def __enter__(self) -> 'GraphSession':
         return self
@@ -1117,6 +1400,34 @@ def _stage_sort_key(row: sqlite3.Row) -> int:
         return _WORKFLOW_ORDER.index(stage)
     except ValueError:
         return len(_WORKFLOW_ORDER)
+
+
+def _confidence_stage_sort_key(row: sqlite3.Row) -> tuple[int, float]:
+    """Sort key: (workflow_stage_index, -confidence).
+
+    Primary: workflow stage order (triage first).
+    Secondary: higher confidence sorts first within the same stage.
+    When no confidence is stored on the SUPPORTS edge, defaults to 0.7.
+    """
+    stage_idx = _stage_sort_key(row)
+    try:
+        edge_props = json.loads(row['edge_props'])  # type: ignore[index]
+        confidence = float(edge_props.get('confidence', 0.7))
+    except (json.JSONDecodeError, TypeError, IndexError, KeyError):
+        confidence = 0.7
+    return (stage_idx, -confidence)
+
+
+def _session_recency_tier(date_str: str, now: datetime.datetime) -> str:
+    """Return 'recent' (< 90 days) or 'prior' for a session date string."""
+    if not date_str:
+        return 'prior'
+    try:
+        ts = datetime.datetime.fromisoformat(date_str[:10])
+        age_days = (now - ts).days
+        return 'recent' if age_days < 90 else 'prior'
+    except (ValueError, TypeError):
+        return 'prior'
 
 
 # ── FORGE gate ────────────────────────────────────────────────────────────────
