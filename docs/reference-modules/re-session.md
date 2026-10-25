@@ -67,15 +67,16 @@ with RESession(ctx, arch='ppc32', session_id='session://ibm-iplrom') as s:
 ### Constructor
 
 ```python
-RESession(ctx, arch, session_id, graph=None)
+RESession(ctx, arch, session_id, graph=None, intent='sweep')
 ```
 
 | Parameter | Type | Description |
 |---|---|---|
 | `ctx` | `BinaryContext` | Active binary context for this session |
-| `arch` | `str` | Canonical arch string (`ppc32`, `arm64`, etc.) |
+| `arch` | `str` | Canonical arch string. Examples: `ppc32`, `arm64`, `mips`. |
 | `session_id` | `str` | Session node ID to link events to (`session://name`) |
 | `graph` | `KnowledgeGraph` | Optional; opens default graph if not provided |
+| `intent` | `str` | RE task type stored on every AnalysisEvent. One of `'sweep'` (default), `'confirm'`, `'version_diff'`. ValueError on any other value. |
 
 ### Methods
 
@@ -87,7 +88,7 @@ Instantiates `tool_cls` via `from_context(ctx)`, calls `method` (or the canonica
 
 - `method`: override the canonical method name (e.g. `'profile'` instead of `'profile_many'`)
 - `root_cause`: stored on the AnalysisEvent (e.g. `'XCOFF_no_plt'`)
-- `**method_kwargs`: passed through to the method (e.g. `description=...`, `top_k=...`)
+- `**method_kwargs`: passed through to the method. Examples: `description=...`, `top_k=...`.
 
 ```python
 s.update_confirmed(event_id, confirmed)
@@ -159,7 +160,7 @@ with RESession(ctx, arch='ppc32', session_id='session://ibm-iplrom', graph=g) as
 
 **`update_confirmed()` logs a warning and does nothing.** The event_id is not in the current session's event list. This happens when an event_id from a previous session is passed. Only events created by this session instance can be updated.
 
-**`fp_rate` stays 0.0 for TaintTracker runs.** Expected — fp_rate for non-classifier tools is only known after confirmation. Call `update_confirmed()` after PathSolver.
+**`fp_rate` stays 0.0 for TaintTracker runs.** Expected. fp_rate for non-classifier tools is only known after confirmation. Call `update_confirmed()` after PathSolver.
 
 ---
 

@@ -111,10 +111,24 @@ g.add_run(module_name, binary_path, arch, results)   # preferred write path in s
 ### Query API
 
 ```python
-ctx  = g.get_context_for_binary(arch, fmt, vuln_class=None, access_level='public')
+ctx  = g.get_context_for_binary(arch, fmt, vuln_class=None, access_level='public', intent='sweep')
+ctx, cov = g.get_context_with_coverage(arch, fmt, vuln_class=None, access_level='public', intent='sweep')
 rec  = g.get_recommendations_for_task(task_description, arch=None)
 gaps = g.get_gap_candidates(fp_threshold=0.3, min_events=5)
 ```
+
+`intent` controls which sections appear in the context string. Three values are accepted: `'sweep'` is the default and includes all sections; `'confirm'` filters sessions to those with a non-empty verdict; `'version_diff'` omits gaps and sessions. Any other value raises ValueError.
+
+`get_context_with_coverage()` returns a `(context_str, ContextCoverage)` pair. `ContextCoverage` carries `coverage_score` (0.0-1.0), `arch_family_used`, `intent`, and raw counts. Call `cov.sufficient()` to gate graph-informed decisions.
+
+### Gap documentation API
+
+```python
+g.add_gap_node(gap_id, arch, description, root_cause='', workaround='',
+               module_needed='', supersedes_event_ids=None)
+```
+
+Creates a KnownGap node and optionally adds SUPERSEDES edges from the gap to specific AnalysisEvent IDs. Events that are superseded, or whose `root_cause` matches a documented KnownGap for the same arch, are excluded from `get_gap_candidates()` scoring. Use this when you have documented a gap and want prior failing events to stop appearing as candidates.
 
 ### Stats
 
@@ -219,7 +233,7 @@ python3 -I sweeps/build_ablation_graph.py --sync
 
 **`get_context_for_binary` returns no modules for a valid arch.** This happens when the bootstrap has not been run or when the arch identifier passed by the caller does not match the canonical form in the graph. The canonical forms are: `ppc32`, `ppc64`, `arm64`, `arm32`, `x86_64`, `x86_32`, `mips32`, `mips64`, `riscv32`, `riscv64`, `m88k`, `m68k`, `sh2a`, `sh4`, `loongarch64`. Run `--bootstrap` first, then confirm the arch string matches one of these.
 
-**`get_gap_candidates` returns no results despite known failures.** Results only appear after `add_run()` has been called enough times to cross `min_events`. The default is 5 events per module-arch pair. If you have 4 failing runs and want to surface the pattern earlier, pass `min_events=3`.
+**`get_gap_candidates` returns no results despite known failures.** Results only appear after `add_run()` has been called enough times to cross `min_events`. The default is 5 events per module-arch pair. If you have 4 failing runs and want to surface the pattern earlier, pass `min_events=3`. Events whose `root_cause` matches a documented KnownGap for that arch are also excluded, as are events with SUPERSEDES edges from a KnownGap. If the gap is already documented but events keep disappearing, check that the KnownGap node's `root_cause` field matches the event's `root_cause` string exactly.
 
 **Session nodes show `verdict=''` for sessions that completed.** The session parser reads `**Status:**` from SESSION markdown files. Sessions that record status on a line without that exact prefix will not parse the verdict field. Edit the SESSION file to match the format or call `add_node` directly to set the verdict.
 
