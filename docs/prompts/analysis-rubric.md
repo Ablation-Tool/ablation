@@ -273,13 +273,15 @@ and any known context (product name, version, role in the system).
 <details>
 <summary>ABL-RUB-RE-002</summary>
 
-ABL-RUB-RE-002 is a reusable, system-level rubric that puts an LLM into exhaustive, differential, security-focused patch analysis mode. It instructs the model to:
+ABL-RUB-RE-002 – Patch Diffing Rubric. Given two versions of the same binary (OLD and NEW), this rubric drives an LLM to perform exhaustive, security-focused patch analysis. It requires the model to:
 
-- Compare two versions of the same artifact (OLD and NEW) at every level: control flow, data flow, validation, error handling, and structure
-- Infer the likely original bug or vulnerability motivating the patch
-- Explain the patch mechanism step-by-step and evaluate whether the fix is complete and robust
-- Identify new risks or regressions introduced by the patched version
-- Produce a structured, spec-grade report with a clear patch sufficiency verdict
+- Identify all meaningful changes between OLD and NEW at the function/region level
+- Describe how control flow, data flow, and state handling differ
+- Infer the likely original bug or vulnerability the patch is addressing
+- Explain how the NEW version attempts to fix it
+- Assess whether the fix appears complete and robust, and highlight any residual risks or new regressions
+
+The rubric enforces coverage of every modified function/region and a clear, explicit verdict on patch sufficiency.
 
 ---
 
