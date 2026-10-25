@@ -1,16 +1,16 @@
 # YARA Rule Generation
 
-Generate deployment-ready YARA detection rules from Ablation scan findings: IOC strings, CRITICAL-severity malware API imports, anti-debug byte patterns, and confirmed vulnerability signatures: with auto-generated metadata including the source binary's SHA256.
+Generate deployment-ready YARA detection rules from Ablation scan findings. Inputs are PE scan findings dicts, raw IOC string lists, or one of eight built-in malware-category templates. All paths produce a `YARARule` object with calibrated condition logic and ATT&CK technique metadata.
 
 ---
 
 ## Why this exists
 
-1. **Findings without detection rules have limited operational value.** An analyst who identifies a backdoor or malware sample in a firmware image needs to answer: "can I detect this at scale: across my environment, across ingested samples, across new firmware versions?" A YARA rule answers that question universally. Without automatic rule generation, analysts must manually translate findings into detection signatures: a step they skip under time pressure.
+1. **Findings without detection rules have limited operational value.** An analyst who identifies a backdoor or malware sample in a firmware image still needs to answer whether this is detectable at scale across the environment, across ingested samples, and across new firmware versions. A YARA rule answers that question. Without automatic rule generation, analysts must manually translate findings into detection signatures, a step they skip under time pressure.
 
-2. **IOC strings, malware API imports, and byte patterns have different detection properties.** A domain name in a C2 callback requires case-insensitive ASCII/wide matching. A `VirtualAllocEx` import requires a simple string match against the IAT. An anti-debug byte sequence (`EB 04 74 02`) requires a hex pattern match. A single YARA rule format can represent all three, but the generation logic must be type-aware. This module handles each category with the appropriate YARA string type and modifier.
+2. **IOC strings, malware API imports, and byte patterns have different detection properties.** A domain name in a C2 callback requires case-insensitive ASCII/wide matching. A `VirtualAllocEx` import requires a simple string match against the IAT. An anti-debug byte sequence (`EB 04 74 02`) requires a hex pattern match. The generator handles each category with the appropriate YARA string type and modifier so a single rule covers all three evidence types.
 
-3. **YARA condition logic must balance sensitivity and specificity.** A rule that fires on any single matching string produces too many false positives in large malware corpora. The generator uses `2 of ($s_*)` for IOC strings requiring two independent matches and `any of ($api_*)` for CRITICAL API imports (a single CRITICAL import like `NtCreateThreadEx` is a strong signal on its own). This calibration reflects the different false-positive rates of string vs. API indicators.
+3. **YARA condition logic must balance sensitivity and specificity.** A rule that fires on any single matching string produces too many false positives in large malware corpora. The generator uses `2 of ($s_*)` for IOC strings requiring two independent matches and `any of ($api_*)` for CRITICAL API imports because a single CRITICAL import like `NtCreateThreadEx` is a strong signal on its own. The eight built-in rules use calibrated conditions derived from API co-occurrence patterns documented in Mohanta & Saldanha, "Malware Analysis and Detection Engineering" (Apress, 2020).
 
 ---
 
@@ -18,21 +18,43 @@ Generate deployment-ready YARA detection rules from Ablation scan findings: IOC 
 
 ```mermaid
 flowchart TD
-    A[findings dict or raw strings list] --> B{Generation path}
-    B -->|PE scan findings| C["generate_from_pe_findings(findings, filepath)"]
-    B -->|raw strings| D["generate_from_strings(strings, name)"]
-    B -->|process injection| E["generate_process_injection_rule()"]
-    C --> F[rule name: mal_{basename}_{sha256_16}]
-    F --> G[meta: description, author_type, date, sha256]
-    G --> H["Process IOC strings:\nfor each ioc in findings['ioc_strings']\nescape and add with 'ascii wide nocase'\ndedup by value"]
-    H --> I["Process CRITICAL malware APIs:\nfor each api where severity=='CRITICAL'\nadd import name with 'ascii wide'\ndedup"]
-    I --> J["Process anti_debug byte patterns:\nhex-format bytes or parse hex strings\nadd as { XX XX XX } byte pattern"]
-    J --> K["Assemble condition:\n2 of ($s_*) for strings\nany of ($api_*) for APIs\nany of ($b_*) for bytes\nOR combination"]
-    K --> L[YARARule.to_text(): serialize to YARA syntax]
-    D --> M["Sanitize identifiers: _IDENT_RE strips non-alphanumeric\nDedup by string value\n'any of them' condition"]
-    M --> L
-    E --> N["Hardcoded API triad: VirtualAllocEx + WriteProcessMemory + CreateRemoteThread\nAdditional: QueueUserAPC, RtlCreateUserThread, NtCreateThreadEx\nCondition: 3 of ($write_*) and ($create_remote or $queue_apc)"]
-    N --> L
+    IN1(["PE scan findings dict\n+ filepath"]):::input
+    IN2(["raw strings list\n+ name"]):::input
+    IN3(["malware category\nbuilt-in rule"]):::input
+
+    P1["generate_from_pe_findings()\nIOC strings · CRITICAL APIs · anti-debug bytes\nRule name: mal_{basename}_{sha256[:16]}"]:::primary
+    P2["generate_from_strings()\nSanitize identifiers · dedup\ncondition: any of them"]:::secondary
+    P3["generate_*_rule()\nor builtin_rules() for all 8\nHardcoded API triads · ATT&CK metadata"]:::tertiary
+
+    RULE["YARARule\nname · meta · strings · condition"]:::neutral
+
+    OUT1(["rule.to_text()\nYARA syntax ready for deployment"]):::output
+    OUT2(["write_rules_file(rules, path)\nbatch .yar output"]):::output
+
+    IN1 --> P1
+    IN2 --> P2
+    IN3 --> P3
+    P1 --> RULE
+    P2 --> RULE
+    P3 --> RULE
+    RULE --> OUT1
+    RULE --> OUT2
+
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#546e7a,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:3px
+    linkStyle 7 stroke:#2e7d32,stroke-width:2px
 ```
 
 ### Rule naming
@@ -47,7 +69,7 @@ The SHA256 prefix ensures uniqueness across renamed malware samples. Non-alphanu
 
 | Source | YARA String Type | Modifiers |
 |---|---|---|
-| IOC strings IP, domain, path, key | `"quoted string"` | `ascii wide nocase` |
+| IOC strings (IP, domain, path, key) | `"quoted string"` | `ascii wide nocase` |
 | CRITICAL malware API names | `"quoted string"` | `ascii wide` |
 | Anti-debug byte patterns | `{ HH HH HH }` hex | (none) |
 
@@ -58,7 +80,26 @@ The condition combines the three string categories with `OR`:
 - If CRITICAL APIs present: `any of ($api_*)`
 - If byte patterns present: `any of ($b_*)`
 - If only one category: just that condition
-- If nothing: `false` empty rule that never matches
+- If nothing: `false` (empty rule that never matches)
+
+---
+
+## Built-in rule generators
+
+Eight hardcoded malware-category rules cover the most common firmware threat classes. Each function returns a `YARARule` with ATT&CK technique metadata and a condition calibrated to the API co-occurrence patterns for that category.
+
+| Function | Rule name | ATT&CK technique | Key indicators |
+|:---|:---|:---|:---|
+| `generate_process_injection_rule()` | `process_injection_classic` | T1055 | VirtualAllocEx + WriteProcessMemory + CreateRemoteThread |
+| `generate_ransomware_rule()` | `ransomware_generic` | T1486 | CryptEncrypt + FindFirstFile + vssadmin delete shadows |
+| `generate_rootkit_rule()` | `kernel_rootkit_generic` | T1014 | KeServiceDescriptorTable + IoCreateDevice + SSDT targets |
+| `generate_downloader_rule()` | `downloader_dropper_generic` | T1105 | MSXML2.ServerXMLHTTP + ADODB.Stream + PS DownloadFile |
+| `generate_rat_rule()` | `rat_generic` | T1219 | WSAStartup + SetWindowsHookEx + BitBlt + OpenClipboard |
+| `generate_keylogger_rule()` | `keylogger_generic` | T1056.001 | SetWindowsHookEx + GetAsyncKeyState + special-key strings |
+| `generate_fileless_powershell_rule()` | `fileless_powershell_macro` | T1059.001 / T1546.003 | -EncodedCommand + IEX + WMI EventFilter + VBA AutoOpen |
+| `generate_worm_rule()` | `worm_lateral_movement` | T1021 / T1570 | WMI /node: + NetShareEnum + CopyFileEx + CreateRemoteThread |
+
+`builtin_rules()` returns all eight as a list in the order above.
 
 ---
 
@@ -69,6 +110,15 @@ from ablation.core.yara_generator import (
     generate_from_pe_findings,
     generate_from_strings,
     generate_process_injection_rule,
+    generate_ransomware_rule,
+    generate_rootkit_rule,
+    generate_downloader_rule,
+    generate_rat_rule,
+    generate_keylogger_rule,
+    generate_fileless_powershell_rule,
+    generate_worm_rule,
+    builtin_rules,
+    write_rules_file,
     YARARule,
 )
 
@@ -92,22 +142,28 @@ strings = ['evil.example.com', 'cmd.exe /c', 'HTTP/1.1 200 OK']
 rule = generate_from_strings(strings, name='suspicious_agent')
 print(rule.to_text())
 
-# Pre-built process injection detection rule
+# Single built-in rule
 rule = generate_process_injection_rule()
 print(rule.to_text())
+
+# All eight built-in rules at once
+rules = builtin_rules()
+for r in rules:
+    print(r.name, len(r.strings), 'strings')
+
+# Write multiple rules to a .yar file
+write_rules_file(rules, '/path/to/output.yar')
 ```
 
 ### Building a rule manually
 
 ```python
-from ablation.core.yara_generator import YARARule
-
 rule = YARARule(
     name="custom_backdoor_detection",
     meta={
         "description": "Confirmed backdoor: recv_handler at 0x22ccc0",
         "author": "ablation",
-        "date": "2026-10-16",
+        "date": "2026-10-25",
     },
     strings=[
         ("$str_0", '"admin_backdoor_key"', "ascii wide nocase"),
@@ -129,7 +185,7 @@ rule mal_malware_exe_3a4f8c1d2b9e7f5a
     meta:
         description = "Auto-generated rule for malware.exe"
         author_type = "automated"
-        date = "2026-10-16"
+        date = "2026-10-25"
         sha256 = "3a4f8c1d2b9e7f5aabcdef1234567890..."
 
     strings:
@@ -147,19 +203,19 @@ rule mal_malware_exe_3a4f8c1d2b9e7f5a
 
 ## False positives
 
-**Shared IOC strings with common values.** If an IOC string is a common domain or IP address for example `127.0.0.1`, `example.com`, the `2 of ($s_*)` condition does not filter it out. Only one instance of a widely shared string could still match alongside another one. Remove obviously common values from the IOC strings input before calling the generator.
+**Shared IOC strings with common values.** If an IOC string is a common domain or IP address such as `127.0.0.1` or `example.com`, the `2 of ($s_*)` condition does not filter it out because one widely shared string could still match alongside another. Remove obviously common values from the IOC strings input before calling the generator.
 
-**API names in security utilities.** Anti-malware, EDR agents, and debugging tools legitimately import `NtCreateThreadEx`, `VirtualAllocEx`, and other CRITICAL APIs for monitoring purposes. The CRITICAL threshold in the generator is calibrated for untrusted samples: applying generated rules to enterprise endpoint binaries will produce false positives.
+**API names in security utilities.** Anti-malware agents, EDR tools, and debugging utilities legitimately import `NtCreateThreadEx`, `VirtualAllocEx`, and other CRITICAL APIs for monitoring purposes. The CRITICAL threshold is calibrated for untrusted samples so applying generated rules to enterprise endpoint binaries will produce false positives.
 
-**Empty rules (`condition: false`).** When the findings dict is empty no IOC strings, no CRITICAL APIs, no byte patterns, the generator emits a rule with `condition: false`. This is a syntactically valid YARA rule that never matches. Validate that the findings input is populated before generating rules for deployment.
+**Empty rules (`condition: false`).** When the findings dict is empty (no IOC strings, no CRITICAL APIs, no byte patterns), the generator emits a rule with `condition: false`. This is a syntactically valid YARA rule that never matches. Validate that the findings input is populated before generating rules for deployment.
 
 ---
 
 ## Pipeline position
 
-**Before this module:** Any Ablation scanner that produces findings with `type`/`description`/`severity` fields. PE scan findings from the PE analyzer; string extractions from `BinaryContext.strings`; byte patterns from confirmed vulnerability findings.
+**Before this module:** Any Ablation scanner that produces findings with `type`, `description`, and `severity` fields. PE scan findings from the PE analyzer; string extractions from `BinaryContext.strings`; byte patterns from confirmed vulnerability findings.
 
-**After this module:** YARA rules are ready for deployment to YARA scanners, threat intelligence platforms, or host-based detection systems. Rules should be tested against a known-positive sample before deployment.
+**After this module:** YARA rules are ready for deployment to YARA scanners, threat intelligence platforms, or host-based detection systems. Test each rule against a known-positive sample before deployment.
 
 ---
 
@@ -167,9 +223,9 @@ rule mal_malware_exe_3a4f8c1d2b9e7f5a
 
 | Field | Content |
 |:---|:---|
-| `rule.name` | YARA rule identifier alphanumeric + underscore, unique per binary SHA256 |
-| `rule.meta` | Dict of metadata fields: description, author_type, date, sha256 |
-| `rule.strings` | List of `identifier, value, modifiers` tuples |
+| `rule.name` | YARA rule identifier (alphanumeric + underscore, unique per binary SHA256) |
+| `rule.meta` | Dict of metadata fields: description, author_type, date, sha256, technique |
+| `rule.strings` | List of `(identifier, value, modifiers)` tuples |
 | `rule.condition` | YARA condition expression |
 | `rule.to_text()` | Full YARA rule in YARA syntax, ready for deployment |
 
