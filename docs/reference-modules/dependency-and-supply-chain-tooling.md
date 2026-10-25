@@ -36,25 +36,32 @@ CycloneDX and SPDX are the two standard machine-readable SBOM formats. CycloneDX
 
 ```mermaid
 flowchart TD
-    IN(["binary path"])
+    IN(["firmware binary"]):::input
 
-    S1["Source 1 · Version strings\nregex sweep over printable rodata\n22 patterns: OpenSSL, zlib, BusyBox,\nLinux kernel, OpenSSH, curl, musl..."]
+    S1["Source 1 · Version Strings\nRegex sweep over printable rodata\n22 patterns: OpenSSL · zlib · BusyBox\nLinux kernel · OpenSSH · curl · musl"]:::ver
 
-    S2["Source 2 · Byte signatures\nThirdPartyLibraryIdentifier\nFLIRT-style prologue matching\nrequires ≥3 hits per library"]
+    S2["Source 2 · Byte Signatures\nThirdPartyLibraryIdentifier\nFLIRT-style prologue matching\nRequires ≥3 hits per library"]:::sig
 
-    S3["Source 3 · ELF/PE metadata\nDT_NEEDED shared library names\n.comment build toolchain string"]
+    S3["Source 3 · ELF / PE Metadata\nDT_NEEDED shared library names\n.comment build toolchain string"]:::meta
 
-    MERGE["Merge & deduplicate\nHIGH confidence first\nalpha sort within tier"]
+    MERGE["Merge & Deduplicate\nHIGH confidence first\nAlpha sort within tier"]:::merge
 
-    OUT(["List[SBOMComponent]\nname · version · source · spdx_id · confidence"])
+    OUT(["List[SBOMComponent]\nname · version · source · spdx_id · confidence"]):::output
 
     IN  --> S1
     IN  --> S2
     IN  --> S3
-    S1  --> MERGE
-    S2  --> MERGE
-    S3  --> MERGE
+    S1  -->|"HIGH confidence"| MERGE
+    S2  -->|"HIGH confidence"| MERGE
+    S3  -->|"MEDIUM confidence"| MERGE
     MERGE --> OUT
+
+    classDef input  fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef ver    fill:#1b5e20,stroke:#2e7d32,color:#fff
+    classDef sig    fill:#e65100,stroke:#bf360c,color:#fff
+    classDef meta   fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef merge  fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output fill:#004d40,stroke:#00695c,color:#fff
 ```
 
 ### SBOMComponent fields
