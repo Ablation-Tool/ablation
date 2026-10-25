@@ -273,7 +273,7 @@ and any known context (product name, version, role in the system).
 <details>
 <summary>ABL-RUB-RE-002</summary>
 
-ABL-RUB-RE-002 – Patch Diffing Rubric. Given two versions of the same binary (OLD and NEW), this rubric drives an LLM to perform exhaustive, security-focused patch analysis. It requires the model to:
+ABL-RUB-RE-002 given two versions of the same binary (OLD and NEW), this rubric drives an LLM to perform exhaustive, security-focused patch analysis. It requires the model to:
 
 - Identify all meaningful changes between OLD and NEW at the function/region level
 - Describe how control flow, data flow, and state handling differ
