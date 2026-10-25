@@ -245,6 +245,7 @@ rule mal_malware_exe_3a4f8c1d2b9e7f5a
 
 ## See also
 
+- [YARA, JSON & SARIF Export](export.md): SARIF 2.1.0 and flat JSON export from the same findings that feed rule generation
 - [ATT&CK Labeling](attandck-labeling.md): enrich findings with technique IDs before generating rules
 - [Binary Context](binary-context.md): provides string extractions for rule generation
 - [Finding Registry](finding-registry.md): source of confirmed findings for high-confidence rule generation
