@@ -16,29 +16,26 @@ Track a confirmed vulnerable function across firmware patch releases. Verify the
 
 The three-stage pipeline works without symbol names or stable VAs:
 
-```
-  func_va_v1
-       |
-       v
-  [Stage 1] Structural pre-filter
-    basic_block_count ±2 AND edge_count ±30%
-    → reduces N=thousands to N~tens
-       |
-       v
-  [Stage 2] Mnemonic 4-gram Jaccard
-    normalize: strip addresses, normalize immediates
-    build 4-gram sets from mnemonic sequence
-    Jaccard(A,B) = |A ∩ B| / |A ∪ B|
-    keep top-10 candidates
-       |
-       v (only if top-2 within 0.05 of each other)
-  [Stage 3] BERT semantic tiebreaker
-    SemanticSearcher encoding for both functions
-    cosine similarity in 768-dim space
-    breaks structural ties
-       |
-       v
-  result.va_v2  result.confidence  result.stage
+```mermaid
+flowchart TD
+    IN(["func_va_v1"])
+
+    S1["Stage 1 · Structural pre-filter\nbasic_block_count ±2  ·  edge_count ±30%\nreduces N=thousands to N~tens\nno instruction decode — CFG header only"]
+
+    S2["Stage 2 · Mnemonic 4-gram Jaccard\nstrip addresses · normalize immediates\nbuild 4-gram sets from mnemonic sequence\nJaccard(A,B) = |A ∩ B| / |A ∪ B|\nkeep top-10 candidates"]
+
+    TIE{"top-2 scores\nwithin 0.05?"}
+
+    S3["Stage 3 · BERT semantic tiebreaker\nSemanticSearcher encoding for both functions\ncosine similarity in 768-dim space"]
+
+    OUT(["result.va_v2  ·  result.confidence  ·  result.stage"])
+
+    IN --> S1
+    S1 -->|"N~tens candidates"| S2
+    S2 --> TIE
+    TIE -->|"yes — tie"| S3
+    TIE -->|"no — clear winner"| OUT
+    S3 --> OUT
 ```
 
 ---
