@@ -1,16 +1,16 @@
 # Binary Ninja Plugin
 
-Ablation integration for Binary Ninja: annotates the disassembly with corpus function names, pattern sweep results, and semantic search navigation — all backed by the same `BinaryContext` session cache used in CLI analysis.
+The Binary Ninja plugin reads the ablation session cache and applies function names, sweep hits, and semantic search results to the disassembly view. Names set with `ctx.set_name()` appear in the function list immediately because Binary Ninja re-renders on rename.
 
 ---
 
 ## Why this exists
 
-1. **Names recovered by ablation (`ctx.set_name()`) are invisible in Binary Ninja until manually re-entered.** The plugin reads `~/.ablation/func_id.db` on binary open and applies every confirmed name to the matching function address — the function list and cross-reference graph update immediately, with no re-analysis required.
+1. **Names recovered by ablation (`ctx.set_name()`) are invisible in Binary Ninja until manually re-entered.** The plugin reads `~/.ablation/func_id.db` on binary open and applies every confirmed name to the matching function address, so the function list and cross-reference graph update immediately with no re-analysis required.
 
-2. **Pattern sweeps and semantic queries run from the CLI; the Binary Ninja view stays out of sync.** `Ablation > Sweep Binary` runs `CorpusBuilder` → `SemanticSearcher` → `PatternLibrary.sweep()` inline and bookmarks every hit with a score annotation, so sweep candidates are visible in the disassembly without a separate terminal session.
+2. **Pattern sweeps and semantic queries run from the CLI; the Binary Ninja view stays out of sync.** `Ablation > Sweep Binary` builds a corpus, runs the pattern library sweep inline, and bookmarks every hit with a score annotation so sweep candidates are visible in the disassembly without a separate terminal session.
 
-3. **Navigating to a semantically described function requires knowing its address.** `Ablation > Semantic Search` takes a plain-English query, runs `SemanticSearcher.query()` against the session corpus, and jumps the Binary Ninja view to the highest-scoring result — top-10 results are listed in the result panel.
+3. **Navigating to a semantically described function requires knowing its address.** `Ablation > Semantic Search` takes a plain-English query and navigates the Binary Ninja view to the highest-scoring function. The top 10 results and their scores appear in the result panel.
 
 ---
 
