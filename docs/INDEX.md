@@ -30,6 +30,17 @@ Semantic firmware analysis for vulnerability researchers.
 
 ---
 
+## Prompts
+
+Session-starter prompts that set the analysis mode before calling any Ablation tool.
+Paste at the top of a new session; replace the target placeholder with your binary or target list.
+
+| Document | Description |
+|---|---|
+| [RE Engagement Prompt](prompts/re-engagement.md) | Exhaustive, lossless, decompiler-style RE mode. INFERRED: labeling, second-pass review, byte-verify discipline, negative instructions. Works on any target: binary, source, protocol. |
+
+---
+
 ## Workflows
 
 Step-by-step guides for common research tasks.
