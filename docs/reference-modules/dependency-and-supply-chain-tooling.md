@@ -62,6 +62,14 @@ flowchart TD
     classDef meta   fill:#4a148c,stroke:#6a1b9a,color:#fff
     classDef merge  fill:#37474f,stroke:#546e7a,color:#fff
     classDef output fill:#004d40,stroke:#00695c,color:#fff
+
+    linkStyle 0 stroke:#2e7d32,stroke-width:2px
+    linkStyle 1 stroke:#e65100,stroke-width:2px
+    linkStyle 2 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 3 stroke:#2e7d32,stroke-width:2px
+    linkStyle 4 stroke:#e65100,stroke-width:2px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px,stroke-dasharray:6 3
+    linkStyle 6 stroke:#00695c,stroke-width:3px
 ```
 
 ### SBOMComponent fields
