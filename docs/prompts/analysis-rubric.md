@@ -1,12 +1,14 @@
-# Analysis Rubric
+# Rubric Library
+
+A structured collection of named, versionable LLM "behavior specifications" that you can apply to different tasks to get consistent, high-quality analyses on demand.
+
+---
+
+## Analysis Rubric
 
 Session-starter prompts that set analysis mode before any Ablation tool call. Covers what to label, what not to compress, and what constitutes a complete result.
 
 **Pair with:** `re-session-planning-template.md` (session structure) and `guide-tool-selection.md` (tool ordering)
-
----
-
-## Prompts
 
 <details>
 <summary>ABL-RUB-RE-001</summary>
