@@ -680,7 +680,7 @@ When uncertain, default to more detail and explicit INFERRED reasoning.
 <details>
 <summary>ABL-RUB-TR-001</summary>
 
-Multi-target attack surface triage. Ranks targets by priority and outputs a structured deep-dive plan. Run before ABL-RUB-RE-001 or ABL-RUB-RE-002.
+Use this when you have multiple targets and want to know which one to dig into first. It goes through each one and gives you a ranked list with suggested next steps.
 
 ---
 
