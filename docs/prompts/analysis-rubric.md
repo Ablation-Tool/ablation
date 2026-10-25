@@ -1,12 +1,16 @@
 # ABL-RUB-RE-001
 ## Analysis Rubric
 
-**Pair with:** `re-session-planning-template.md` (session structure) and `guide-tool-selection.md` (tool ordering)  
-**Usage:** Paste this block at the start of any RE session — before calling any Ablation tool — to set the analysis mode. Replace `[DEFINE YOUR TARGET QUEUE HERE]` with your binary or target list.
+A set of session-starter prompts that enforce exhaustive, lossless reverse engineering discipline before any Ablation tool call. Each prompt sets the analysis mode — what to label, what not to compress, how to handle gaps — so the same standards apply regardless of target type or architecture.
 
-This prompt works on any target: stripped firmware, source code, binary protocols, web backends, bytecode. The directives are domain-agnostic; the Ablation tool ordering in Directive 3 applies specifically to binary targets.
+**Pair with:** `re-session-planning-template.md` (session structure) and `guide-tool-selection.md` (tool ordering)
 
 ---
+
+## Prompts
+
+<details>
+<summary>ABL-RUB-RE-001</summary>
 
 ```text
 INSTRUCTION (ALWAYS APPLY — HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR SUMMARIZE):
@@ -248,6 +252,8 @@ Paste a single binary path, a list of targets with priorities, or a
 snippet of source code. For binary targets, include: path, size, arch,
 and any known context (product name, version, role in the system).
 ```
+
+</details>
 
 ---
 
