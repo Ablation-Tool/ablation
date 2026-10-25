@@ -4,6 +4,18 @@ Localize instruction-level changes between two versions of the same function usi
 
 ---
 
+## What is Matrix Profile
+
+The Matrix Profile is a data structure that records, for every subsequence in a time series, the distance to its nearest neighbor elsewhere in the same series or in a second series. The term "profile" refers to the array of those nearest-neighbor distances indexed by position. A low value at position k means the subsequence starting at k has a close match somewhere. A high value means it does not.
+
+The AB-join variant computes this between two separate sequences rather than within one. For every subsequence window in sequence A, it finds the closest matching window in sequence B. The result is a distance profile over A: each position shows how well that region of A is represented in B. Positions with high distance have no counterpart in B, which means they were added, removed, or substantially rewritten between the two versions.
+
+This property makes Matrix Profile well suited for patch localization. A security patch typically changes one tight region of a function and leaves the rest intact. The distance profile for the patched function will show a spike at exactly that region and near-zero values everywhere else. A refactor produces multiple spikes spread across the profile. A complete rewrite produces uniformly high distances. The shape of the profile distinguishes these cases without requiring the analyst to read the full disassembly of both versions.
+
+The window size controls the granularity of detection. A window of 4 instructions finds patches that touch as few as 4 consecutive opcodes. Smaller windows catch finer changes but also fire on noise from compiler rescheduling. The default window of 4 is tuned for the size of a typical security check: one compare instruction and one conditional branch, with context instructions on either side.
+
+---
+
 ## Why this exists
 
 1. **Once `DTWMatcher` confirms that two functions are homologs, the next question is: exactly what changed?** `MatrixProfileDiff` answers this at instruction-level precision by computing the AB-join distance profile between the two versions' opcode category sequences: high distance at position k means there is no close match for that subsequence in the other version, i.e., that region was changed. This points an analyst directly to the patched instruction window without requiring manual comparison of the full disassembly.
