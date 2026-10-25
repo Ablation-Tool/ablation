@@ -213,6 +213,7 @@ A SARIF output that contains no results (`"results": []`) is valid and expected 
 
 ## See also
 
+- [YARA, JSON & SARIF Export](yara-json-sarif-export.md): combined entry point covering all three formats together
 - [YARA Rule Generation](yara-generator.md): generate YARA detection rules from the same confirmed findings
 - [Finding Registry](registry.md): persistent finding storage that `findings_to_sarif()` consumes
 - [Pattern Library](pattern-library.md): `PatternLibrary.sweep()` that `sweep_to_sarif()` consumes
