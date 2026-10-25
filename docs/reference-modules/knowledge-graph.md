@@ -121,6 +121,44 @@ gaps = g.get_gap_candidates(fp_threshold=0.3, min_events=5)
 
 `get_context_with_coverage()` returns a `(context_str, ContextCoverage)` pair. `ContextCoverage` carries `coverage_score` (0.0-1.0), `arch_family_used`, `intent`, and raw counts. Call `cov.sufficient()` to gate graph-informed decisions.
 
+`get_recommendations_for_task()` uses semantic vector retrieval when Doc node embeddings exist (built with `embed_doc_nodes()`). Without embeddings it falls back to `workflow_stage` ordering. With embeddings, each Module is ranked by the cosine similarity of its documentation chunks against the task description.
+
+### Phase 3: GraphSession
+
+```python
+gs = g.session(session_id, arch, binary_path='')  # -> GraphSession
+```
+
+Returns a `GraphSession` that pre-fills `session_id`, `arch`, and `binary_path` for every `record()` call. Use at RE session start so each tool run only passes the results dict:
+
+```python
+g  = KnowledgeGraph.open()
+gs = g.session('session://ibm-target', arch='ppc32', binary_path='/path/fw.bin')
+ctx = gs.context('xcoff32')                      # get_context_for_binary shortcut
+
+# After each tool runs:
+gs.record('SinkArgClassifier', {'candidates': 5, 'confirmed': 1, 'fp_rate': 0.8})
+gs.record('TaintTracker',      {'candidates': 2, 'confirmed': 2, 'fp_rate': 0.0})
+
+# After confirming a finding:
+gs.record_finding('finding://IBM-001', 'CWE-78', 0x1234, 'CONFIRMED', True, 'pre-disclosure')
+```
+
+`GraphSession` is also a context manager: `with g.session(...) as gs: ...`.
+
+### Phase 4: Vector retrieval
+
+```python
+count = g.embed_doc_nodes(model_name='BAAI/bge-small-en-v1.5')  # one-time; or via --embed
+```
+
+Embeds all 5,577 Doc nodes and stores float32 vectors in the `embeddings` table. Requires `fastembed` (already a SemanticSearcher dependency). Run once after bootstrap; re-run after `--sync` to pick up new Doc nodes. After embedding, `get_recommendations_for_task()` automatically switches to the semantic path.
+
+```bash
+python3 -I sweeps/build_ablation_graph.py --bootstrap --embed
+python3 -I sweeps/build_ablation_graph.py --sync --embed
+```
+
 ### Gap documentation API
 
 ```python
@@ -191,6 +229,8 @@ Bootstrap before the first session:
 python3 -I sweeps/build_ablation_graph.py --bootstrap
 # Adds new modules and sessions without wiping existing data:
 python3 -I sweeps/build_ablation_graph.py --sync
+# Bootstrap + embed Doc nodes for semantic recommendations:
+python3 -I sweeps/build_ablation_graph.py --bootstrap --embed
 ```
 
 ---

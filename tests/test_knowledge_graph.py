@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import datetime
 
-from ablation.analyzers.knowledge_graph import ContextCoverage, KnowledgeGraph, VALID_INTENTS
+from ablation.analyzers.knowledge_graph import ContextCoverage, GraphSession, KnowledgeGraph, VALID_INTENTS
 
 
 @pytest.fixture
@@ -649,3 +649,149 @@ def test_gap_candidates_excludes_documented_root_cause(g):
     )
     candidates = g.get_gap_candidates(fp_threshold=0.3, min_events=3)
     assert candidates == []
+
+
+# ── Phase 3: GraphSession ─────────────────────────────────────────────────────
+
+def test_schema_creates_embeddings_table(g):
+    tables = {
+        r[0] for r in g._con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
+    assert 'embeddings' in tables
+
+
+def test_graph_session_factory_returns_graph_session(g):
+    gs = g.session('session://test', arch='ppc32', binary_path='/fw/test.bin')
+    assert isinstance(gs, GraphSession)
+    assert gs.session_id == 'session://test'
+    assert gs.arch == 'ppc32'
+    assert gs.binary_path == '/fw/test.bin'
+
+
+def test_graph_session_record_stores_event(g):
+    gs = g.session('session://target', arch='arm64', binary_path='/fw/arm.bin')
+    eid = gs.record('SinkArgClassifier', {'candidates': 5, 'confirmed': 1, 'fp_rate': 0.8})
+    assert eid.startswith('event://')
+    assert g.node_count('AnalysisEvent') == 1
+    row = g._con.execute("SELECT props FROM nodes WHERE type='AnalysisEvent'").fetchone()
+    p = json.loads(row['props'])
+    assert p['module'] == 'SinkArgClassifier'
+    assert p['arch'] == 'arm64'
+    assert p['session_id'] == 'session://target'
+
+
+def test_graph_session_record_prefills_session_id(g):
+    gs = g.session('session://xyz', arch='x86_64')
+    gs.record('TaintTracker', {'candidates': 2, 'confirmed': 2, 'fp_rate': 0.0})
+    row = g._con.execute("SELECT props FROM nodes WHERE type='AnalysisEvent'").fetchone()
+    p = json.loads(row['props'])
+    assert p['session_id'] == 'session://xyz'
+
+
+def test_graph_session_record_finding(g):
+    g.add_node('Session', 'session://s1', {})
+    gs = g.session('session://s1', arch='ppc32')
+    gs.record_finding(
+        finding_id='finding://GS-001',
+        cwe='CWE-78',
+        va=0xdeadbeef,
+        status='CONFIRMED',
+        byte_verified=True,
+        disclosure_status='pre-disclosure',
+    )
+    assert g.node_count('Finding') == 1
+    assert g.edge_count('FOUND_IN') == 1
+    row = g._con.execute("SELECT props FROM nodes WHERE id='finding://GS-001'").fetchone()
+    p = json.loads(row['props'])
+    assert p['cwe'] == 'CWE-78'
+    assert p['status'] == 'CONFIRMED'
+
+
+def test_graph_session_context_shortcut(g):
+    g.add_node('Architecture', 'arch://x86_64', {'name': 'x86_64'})
+    g.add_node('Module', 'module://BinaryContext', {
+        'name': 'BinaryContext', 'workflow_stage': 'triage',
+    })
+    g.add_edge('module://BinaryContext', 'arch://x86_64', 'SUPPORTS')
+    gs = g.session('session://s1', arch='x86_64')
+    ctx = gs.context('elf64')
+    assert 'BinaryContext' in ctx
+
+
+def test_graph_session_context_manager(g):
+    with g.session('session://s1', arch='ppc32') as gs:
+        eid = gs.record('TestMod', {'candidates': 1, 'confirmed': 1, 'fp_rate': 0.0})
+    assert eid.startswith('event://')
+    assert g.node_count('AnalysisEvent') == 1
+
+
+def test_graph_session_binary_path_defaults_empty(g):
+    gs = g.session('session://s1', arch='arm32')
+    assert gs.binary_path == ''
+
+
+# ── Phase 4: Vector retrieval ─────────────────────────────────────────────────
+
+def test_recommendations_stage_sort_used_when_no_embeddings(g):
+    g.add_node('Architecture', 'arch://ppc32', {'name': 'ppc32'})
+    for name, stage in [
+        ('TaintTracker', 'taint'), ('BinaryContext', 'triage'),
+    ]:
+        g.add_node('Module', f"module://{name}", {'name': name, 'workflow_stage': stage})
+        g.add_edge(f"module://{name}", 'arch://ppc32', 'SUPPORTS')
+    rec = g.get_recommendations_for_task('find overflows', arch='ppc32')
+    # Stage-sort: triage before taint
+    assert rec.index('BinaryContext') < rec.index('TaintTracker')
+    # No score column in stage-sort output
+    assert 'score=' not in rec
+
+
+def test_embed_doc_nodes_raises_without_fastembed(g, monkeypatch):
+    import builtins
+    real_import = builtins.__import__
+
+    def mock_import(name, *args, **kwargs):
+        if name in ('fastembed', 'numpy'):
+            raise ImportError(f"mocked: {name} not available")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, '__import__', mock_import)
+    with pytest.raises(ImportError, match="fastembed"):
+        g.embed_doc_nodes()
+
+
+def test_embed_doc_nodes_skips_when_no_doc_nodes(g):
+    fastembed = pytest.importorskip('fastembed')
+    count = g.embed_doc_nodes()
+    assert count == 0
+    assert g._con.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0] == 0
+
+
+def test_embed_doc_nodes_and_semantic_recommendations(g):
+    fastembed = pytest.importorskip('fastembed')
+    import numpy as np
+
+    g.add_node('Architecture', 'arch://x86_64', {'name': 'x86_64'})
+    for name, stage, doc_text in [
+        ('TaintTracker', 'taint', 'interprocedural taint tracking from network recv to exec sinks'),
+        ('BinaryContext', 'triage', 'binary parsing PLT exports function starts cache'),
+        ('SinkArgClassifier', 'classify', 'exec sink argument provenance classification shell injection'),
+    ]:
+        g.add_node('Module', f"module://{name}", {'name': name, 'workflow_stage': stage})
+        g.add_edge(f"module://{name}", 'arch://x86_64', 'SUPPORTS')
+        g.add_node('Doc', f"doc://{name}#usage", {'text': doc_text, 'module_id': f"module://{name}"})
+        g.add_edge(f"module://{name}", f"doc://{name}#usage", 'DOCUMENTED_BY')
+
+    count = g.embed_doc_nodes()
+    assert count == 3
+
+    # Vector search for "shell injection" should surface SinkArgClassifier first
+    rec = g.get_recommendations_for_task('shell injection classification', arch='x86_64')
+    assert 'score=' in rec
+    assert 'SinkArgClassifier' in rec
+    # SinkArgClassifier should rank first (most relevant doc)
+    lines = [l.strip() for l in rec.splitlines() if 'SinkArgClassifier' in l or 'TaintTracker' in l or 'BinaryContext' in l]
+    sac_pos = next((i for i, l in enumerate(lines) if 'SinkArgClassifier' in l), None)
+    assert sac_pos is not None and sac_pos == 0

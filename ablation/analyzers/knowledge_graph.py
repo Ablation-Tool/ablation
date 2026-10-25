@@ -47,7 +47,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-__all__ = ['KnowledgeGraph', 'ContextCoverage', 'VALID_INTENTS']
+__all__ = ['KnowledgeGraph', 'GraphSession', 'ContextCoverage', 'VALID_INTENTS']
 
 # Valid intent values for get_context_for_binary() and RESession.
 # sweep       — full initial binary sweep; all sections included (default).
@@ -83,6 +83,10 @@ _ARCH_FAMILIES: dict[str, list[str]] = {
     'i386':     ['x86', 'x86_32', 'i686'],
     's390x':    ['s390', 'ibm390'],
 }
+
+# Module-level cache for embedding models (shared across KnowledgeGraph instances in the
+# same process so the model loads only once per session).
+_EMBED_MODEL_CACHE: dict[str, Any] = {}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -145,6 +149,12 @@ CREATE INDEX IF NOT EXISTS idx_edges_dst           ON edges(dst);
 CREATE INDEX IF NOT EXISTS idx_edges_type          ON edges(type);
 CREATE INDEX IF NOT EXISTS idx_hyperedges_type     ON hyperedges(type);
 CREATE INDEX IF NOT EXISTS idx_hyperedge_members_node ON hyperedge_members(node_id);
+CREATE TABLE IF NOT EXISTS embeddings (
+    node_id TEXT PRIMARY KEY,
+    model   TEXT NOT NULL,
+    vec     BLOB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_embeddings_model ON embeddings(model);
 """
 
 
@@ -341,33 +351,66 @@ class KnowledgeGraph:
         task_description: str,
         arch: str | None = None,
     ) -> str:
-        """Return an ordered tool sequence sorted by workflow_stage.
+        """Return an ordered tool sequence for the given task.
 
-        If arch is provided, filters to modules that SUPPORTS that arch.
-        Otherwise returns all Module nodes in workflow_stage order.
-        The task_description is currently used as a label only; semantic
-        filtering requires a vector index (Phase 4).
+        When vector embeddings exist (built with embed_doc_nodes()), returns modules
+        ranked by semantic similarity between task_description and their documentation
+        chunks — the Phase 4 GraphRAG retrieval path.  Falls back to workflow_stage
+        ordering when no embeddings are present or when fastembed/numpy are unavailable.
+
+        If arch is provided, filters the result to modules that SUPPORTS that arch.
         """
-        if arch:
-            modules = self._modules_for_arch(f"arch://{arch}")
-        else:
-            rows = self._con.execute(
-                "SELECT * FROM nodes WHERE type='Module' LIMIT 50"
-            ).fetchall()
-            modules = list(rows)
+        has_embeddings = bool(
+            self._con.execute("SELECT 1 FROM embeddings LIMIT 1").fetchone()
+        )
+        if has_embeddings:
+            return self._recommendations_semantic(task_description, arch)
+        return self._recommendations_stage_sort(task_description, arch)
 
-        modules = sorted(modules, key=_stage_sort_key)
+    def embed_doc_nodes(self, model_name: str = 'BAAI/bge-small-en-v1.5') -> int:
+        """Embed all Doc nodes and store float32 vectors in the embeddings table.
 
-        lines = [f"[RECOMMENDED TOOL SEQUENCE — {task_description}]"]
-        for i, m in enumerate(modules, 1):
-            p = _props(m)
-            name = p.get('name', m['id'])
-            stage = p.get('workflow_stage', '')
-            entry = p.get('entry_point', '')
-            lines.append(f"  {i}. {name}  [{stage}]")
-            if entry:
-                lines.append(f"     {entry}")
-        return "\n".join(lines)
+        Requires fastembed: pip install fastembed.
+        Idempotent: re-running replaces existing embeddings.
+        Uses the same model as SemanticSearcher so cached model weights are shared.
+        Returns the number of Doc nodes embedded.
+        """
+        try:
+            import numpy as np
+            from fastembed import TextEmbedding
+        except ImportError as exc:
+            raise ImportError(
+                "fastembed and numpy are required for vector retrieval: "
+                "pip install fastembed numpy"
+            ) from exc
+
+        rows = self._con.execute(
+            "SELECT id, props FROM nodes WHERE type='Doc'"
+        ).fetchall()
+
+        texts: list[str] = []
+        node_ids: list[str] = []
+        for row in rows:
+            text = _props(row).get('text', '')
+            if text:
+                texts.append(text)
+                node_ids.append(row['id'])
+
+        if not texts:
+            return 0
+
+        if model_name not in _EMBED_MODEL_CACHE:
+            _EMBED_MODEL_CACHE[model_name] = TextEmbedding(model_name)
+        model = _EMBED_MODEL_CACHE[model_name]
+
+        vectors = [np.array(v, dtype='float32') for v in model.embed(texts)]
+
+        self._con.executemany(
+            "INSERT OR REPLACE INTO embeddings (node_id, model, vec) VALUES (?, ?, ?)",
+            [(nid, model_name, vec.tobytes()) for nid, vec in zip(node_ids, vectors)],
+        )
+        self._con.commit()
+        return len(node_ids)
 
     def get_gap_candidates(
         self,
@@ -597,7 +640,129 @@ class KnowledgeGraph:
             row = self._con.execute("SELECT COUNT(*) FROM edges").fetchone()
         return int(row[0])
 
+    # ── Session factory ──────────────────────────────────────────────────────
+
+    def session(
+        self,
+        session_id: str,
+        arch: str,
+        binary_path: str = '',
+    ) -> 'GraphSession':
+        """Return a GraphSession that pre-fills session_id/arch/binary_path for record() calls.
+
+        Use at RE session start so each tool run only passes the results dict:
+
+            gs = g.session('session://ibm-target', arch='ppc32', binary_path='/path/fw.bin')
+            gs.record('SinkArgClassifier', {'candidates': 5, 'confirmed': 1, 'fp_rate': 0.8})
+        """
+        return GraphSession(kg=self, session_id=session_id, arch=arch, binary_path=binary_path)
+
     # ── Private helpers ──────────────────────────────────────────────────────
+
+    def _recommendations_stage_sort(
+        self, task_description: str, arch: str | None
+    ) -> str:
+        """Return modules ordered by workflow_stage. Used when no embeddings exist."""
+        if arch:
+            modules = self._modules_for_arch(f"arch://{arch}")
+        else:
+            rows = self._con.execute(
+                "SELECT * FROM nodes WHERE type='Module' LIMIT 50"
+            ).fetchall()
+            modules = list(rows)
+
+        modules = sorted(modules, key=_stage_sort_key)
+
+        lines = [f"[RECOMMENDED TOOL SEQUENCE — {task_description}]"]
+        for i, m in enumerate(modules, 1):
+            p = _props(m)
+            name = p.get('name', m['id'])
+            stage = p.get('workflow_stage', '')
+            entry = p.get('entry_point', '')
+            lines.append(f"  {i}. {name}  [{stage}]")
+            if entry:
+                lines.append(f"     {entry}")
+        return "\n".join(lines)
+
+    def _recommendations_semantic(
+        self, task_description: str, arch: str | None, top_k: int = 15
+    ) -> str:
+        """Return modules ranked by cosine similarity of task_description to Doc embeddings.
+
+        Traversal: task → embed → cosine-sim vs all Doc embeddings → top-k doc IDs →
+        DOCUMENTED_BY edges (Module→Doc, reversed) → Module IDs → arch filter → ranked output.
+
+        Falls back to _recommendations_stage_sort if fastembed/numpy are unavailable or
+        no module scores survive the arch filter.
+        """
+        try:
+            import numpy as np
+            from fastembed import TextEmbedding
+        except ImportError:
+            return self._recommendations_stage_sort(task_description, arch)
+
+        model_name = 'BAAI/bge-small-en-v1.5'
+        if model_name not in _EMBED_MODEL_CACHE:
+            _EMBED_MODEL_CACHE[model_name] = TextEmbedding(model_name)
+        model = _EMBED_MODEL_CACHE[model_name]
+
+        query_vec = np.array(next(model.embed([task_description])), dtype='float32')
+
+        rows = self._con.execute("SELECT node_id, vec FROM embeddings").fetchall()
+        if not rows:
+            return self._recommendations_stage_sort(task_description, arch)
+
+        doc_ids = [r['node_id'] for r in rows]
+        dim = query_vec.shape[0]
+        flat = b''.join(bytes(r['vec']) for r in rows)
+        try:
+            matrix = np.frombuffer(flat, dtype='float32').reshape(len(rows), dim)
+        except ValueError:
+            # Corrupt or mis-dimensioned BLOB in embeddings table; fall back to stage-sort.
+            return self._recommendations_stage_sort(task_description, arch)
+
+        # BGE vectors are L2-normalised; dot product equals cosine similarity.
+        scores = matrix @ query_vec
+
+        n_top = min(top_k * 4, len(doc_ids))
+        top_idx = np.argsort(scores)[::-1][:n_top]
+
+        # Follow DOCUMENTED_BY edges backward: edge src=Module, dst=Doc.
+        module_score: dict[str, float] = {}
+        for i in top_idx:
+            doc_id = doc_ids[int(i)]
+            score = float(scores[int(i)])
+            for mr in self._con.execute(
+                "SELECT src FROM edges WHERE dst=? AND type='DOCUMENTED_BY'",
+                (doc_id,),
+            ).fetchall():
+                mid = mr['src']
+                if mid not in module_score or score > module_score[mid]:
+                    module_score[mid] = score
+
+        if arch:
+            arch_set = {m['id'] for m in self._modules_for_arch(f'arch://{arch}')}
+            module_score = {k: v for k, v in module_score.items() if k in arch_set}
+
+        if not module_score:
+            return self._recommendations_stage_sort(task_description, arch)
+
+        ranked = sorted(module_score.items(), key=lambda x: x[1], reverse=True)[:top_k]
+
+        lines = [f"[RECOMMENDED TOOL SEQUENCE — {task_description}]"]
+        for i, (mid, score) in enumerate(ranked, 1):
+            row = self._con.execute("SELECT * FROM nodes WHERE id=?", (mid,)).fetchone()
+            if not row:
+                continue
+            p = _props(row)
+            name = p.get('name', mid)
+            stage = p.get('workflow_stage', '')
+            entry = p.get('entry_point', '')
+            lines.append(f"  {i}. {name}  [{stage}]  score={score:.3f}")
+            if entry:
+                lines.append(f"     {entry}")
+
+        return "\n".join(lines) if len(lines) > 1 else self._recommendations_stage_sort(task_description, arch)
 
     def _build_context(
         self,
@@ -823,6 +988,67 @@ class KnowledgeGraph:
 
     def __exit__(self, *_: object) -> None:
         self.close()
+
+
+# ── GraphSession ──────────────────────────────────────────────────────────────
+
+@dataclasses.dataclass
+class GraphSession:
+    """Live RE session handle that pre-fills session_id/arch/binary_path for write calls.
+
+    Obtain via KnowledgeGraph.session():
+
+        g = KnowledgeGraph.open()
+        gs = g.session('session://ibm-target', arch='ppc32', binary_path='/path/fw.bin')
+        ctx = gs.context('xcoff32')                         # get_context_for_binary shortcut
+        # ... run BinaryContext, SinkArgClassifier, TaintTracker ...
+        gs.record('SinkArgClassifier', {'candidates': 5, 'confirmed': 1, 'fp_rate': 0.8})
+        gs.record_finding('finding://IBM-001', 'CWE-78', 0x1234, 'CONFIRMED', True, 'pre-disclosure')
+    """
+
+    kg: KnowledgeGraph
+    session_id: str
+    arch: str
+    binary_path: str = ''
+
+    def record(self, module_name: str, results: dict[str, Any]) -> str:
+        """Record a tool run. session_id, arch, and binary_path are pre-filled. Returns event_id."""
+        return self.kg.add_run(
+            module_name,
+            self.binary_path,
+            self.arch,
+            {'session_id': self.session_id, **results},
+        )
+
+    def record_finding(
+        self,
+        finding_id: str,
+        cwe: str,
+        va: int | str,
+        status: str,
+        byte_verified: bool,
+        disclosure_status: str,
+    ) -> None:
+        """Record a confirmed finding. session_id is pre-filled."""
+        self.kg.record_finding(
+            finding_id=finding_id,
+            cwe=cwe,
+            va=va,
+            status=status,
+            byte_verified=byte_verified,
+            disclosure_status=disclosure_status,
+            session_id=self.session_id,
+        )
+
+    def context(self, fmt: str, **kwargs: Any) -> str:
+        """Shortcut for get_context_for_binary() with this session's arch pre-filled."""
+        return self.kg.get_context_for_binary(self.arch, fmt, **kwargs)
+
+    def __enter__(self) -> 'GraphSession':
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        pass
 
 
 # ── Module-level helpers ──────────────────────────────────────────────────────

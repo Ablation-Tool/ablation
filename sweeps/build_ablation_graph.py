@@ -607,6 +607,10 @@ def _main() -> None:
         '--db', default=None,
         help='Path to knowledge_graph.db (default: ~/.ablation/knowledge_graph.db)',
     )
+    parser.add_argument(
+        '--embed', action='store_true',
+        help='Embed Doc nodes with BAAI/bge-small-en-v1.5 after bootstrap/sync (requires fastembed)',
+    )
     args = parser.parse_args()
 
     if not args.bootstrap and not args.sync:
@@ -619,6 +623,14 @@ def _main() -> None:
         bootstrap(args.db)
     elif args.sync:
         sync(args.db)
+
+    if args.embed:
+        from ablation.analyzers.knowledge_graph import KnowledgeGraph
+        print("[embed] Embedding Doc nodes with BAAI/bge-small-en-v1.5 ...")
+        g = KnowledgeGraph.open(args.db)
+        count = g.embed_doc_nodes()
+        g.close()
+        print(f"[embed] {count} Doc nodes embedded.")
 
 
 if __name__ == '__main__':
