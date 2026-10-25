@@ -1,17 +1,9 @@
 # Rubric Library
 
+Optional and experimental. May change or be removed.
+
 A collection of reusable, system-level instruction blocks ("rubrics") designed to control how an LLM thinks and works on a task.
 
-Each rubric:
-
-- Defines a mode of operation (e.g., deep reverse engineering, security review, refactor planning)
-- Specifies what must be covered (e.g., functions, branches, data flow, security checks)
-- Constrains how the model should reason and write (structure, level of detail, handling of ambiguity)
-- Is packaged as a standalone prompt you can paste in front of any task, so the model consistently behaves the same way
-
-## Beta
-
-Optional and experimental. May change or be removed.
 
 ---
 
