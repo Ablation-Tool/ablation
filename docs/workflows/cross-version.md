@@ -19,27 +19,24 @@ The three-stage pipeline works without symbol names or stable VAs:
 ```mermaid
 flowchart TD
     IN(["func_va_v1"])
-    S1["Stage 1\nStructural pre-filter"]
-    S2["Stage 2\nMnemonic 4-gram Jaccard"]
-    TIE{"Top-2 scores\nwithin 0.05?"}
-    S3["Stage 3\nBERT semantic tiebreaker"]
-    OUT(["result.va_v2 · confidence · stage"])
 
-    IN  --> S1
-    S1  -->|"N~tens candidates"| S2
-    S2  --> TIE
-    TIE -->|"yes — too close to call"| S3
+    S1["Stage 1 · Structural pre-filter\nbasic_block_count ±2  ·  edge_count ±30%\nreduces N=thousands to N~tens\nno instruction decode — CFG header only"]
+
+    S2["Stage 2 · Mnemonic 4-gram Jaccard\nstrip addresses · normalize immediates\nbuild 4-gram sets from mnemonic sequence\nJaccard(A,B) = |A ∩ B| / |A ∪ B|\nkeep top-10 candidates"]
+
+    TIE{"top-2 scores\nwithin 0.05?"}
+
+    S3["Stage 3 · BERT semantic tiebreaker\nSemanticSearcher encoding for both functions\ncosine similarity in 768-dim space"]
+
+    OUT(["result.va_v2  ·  result.confidence  ·  result.stage"])
+
+    IN --> S1
+    S1 -->|"N~tens candidates"| S2
+    S2 --> TIE
+    TIE -->|"yes — tie"| S3
     TIE -->|"no — clear winner"| OUT
-    S3  --> OUT
+    S3 --> OUT
 ```
-
-**Stage 1 — Structural pre-filter.** Every function in v2 has a basic block count and an edge count. Stage 1 keeps only functions where both numbers are within ±2 blocks and ±30% edges of the v1 target. This drops the candidate pool from thousands to tens without reading a single instruction because the CFG header is all that gets parsed.
-
-**Stage 2 — Mnemonic 4-gram Jaccard.** For the surviving candidates, VersionDelta strips memory addresses and normalizes immediates from each function's instruction sequence, then builds a set of 4-tuples of consecutive mnemonics (e.g. `{MOV, CMP, JNZ, CALL}`). It computes the Jaccard similarity between the v1 function's 4-gram set and each candidate's, keeping the top 10. Jaccard works here because the mnemonic sequence of a function survives recompilation better than exact byte patterns — a compiler may change an offset but it rarely changes `CMP reg, imm / JZ` to something structurally different.
-
-**Tiebreaker check.** If the top-2 Jaccard scores are within 0.05 of each other, Stage 2 does not have enough confidence to declare a winner. Stage 3 runs. If there is a clear gap, the result is returned immediately without touching the embedding model.
-
-**Stage 3 — BERT semantic tiebreaker.** Only runs when Stage 2 produces a near-tie. Both functions are encoded by `SemanticSearcher` into 768-dimensional vectors, and cosine similarity picks the closer one. This is the most expensive step so it is intentionally last.
 
 ---
 
