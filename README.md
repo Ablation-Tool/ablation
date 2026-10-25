@@ -194,7 +194,15 @@ Ablation is an AI-assisted reverse engineering (AIARE) framework.
 | [**ATT&CK Labeling**](docs/reference-modules/attandck-labeling.md) | [1](ablation/core/attck_tagger.py) | ATT&CK labeling assigns MITRE ATT&CK technique IDs to findings based on vulnerability class, sink type, and exploitation primitive. A command injection in a pre-auth route is tagged T1059 and T1190. ATLAS IDs are assigned to AI and ML-specific findings. Labeled findings export to SARIF and JSON with structured ATT&CK mappings. |
 | [**SBOM & Supply-Chain Tooling**](docs/reference-modules/dependency-and-supply-chain-tooling.md) | [1](modules/sbom_extractor.py)&nbsp;[2](modules/third_party_library_identifier.py) | SBOM extraction identifies embedded library versions, copyright strings, and linker artifacts to produce a bill of materials. Third-party fingerprinting records component provenance in stripped binaries. Dependency confusion checks whether internal package names could be shadowed. Output follows CycloneDX format with version, hash, and licenses. |
 | [**Binary Ninja Plugin**](docs/reference-modules/binary-ninja-plugin.md) | [1](ablation/integrations/binja_plugin.py) | The Binary Ninja plugin annotates the disassembly with function names, taint findings, and session verdicts from BinaryContext. Names set via `ctx.set_name()` appear immediately in the function list. Finding annotations mark vulnerable call sites at the instruction level. The plugin reads from the session cache so loading an analyzed binary is instant. |
-| [**Analysis Rubric**](docs/prompts/re-engagement.md) | — | Session-starter prompt that sets exhaustive, lossless RE mode before any Ablation tool call. Enforces `INFERRED:` labeling for static analysis gaps, byte-verify-before-CONFIRMED discipline, second-pass review, and SinkArgClassifier verdict vocabulary. Works on any target: stripped binary firmware, source code, binary protocols, or bytecode. |
+
+</details>
+
+<details>
+<summary>Rubrics & Prompts</summary>
+
+| Prompt | Description |
+|:---|:---|
+| [**Analysis Rubric**](docs/prompts/re-engagement.md) | Session-starter prompt that sets exhaustive, lossless RE mode before any Ablation tool call. Enforces `INFERRED:` labeling for static analysis gaps, byte-verify-before-CONFIRMED discipline, second-pass review, and SinkArgClassifier verdict vocabulary. Works on any target: stripped binary firmware, source code, binary protocols, or bytecode. |
 
 </details>
 
