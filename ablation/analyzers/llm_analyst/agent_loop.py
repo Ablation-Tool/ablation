@@ -1,33 +1,47 @@
 """
-agent_loop.py — ReAct agent loop for LLM-assisted binary analysis.
+agent_loop.py — Single-shot LLM analysis of binary functions via the claude CLI.
 
-Loop structure:
-  system prompt → initial user message (context)
-  → Claude responds with tool_use blocks
-  → dispatch each tool via tool_registry
-  → inject tool_result back as user message
-  → repeat until Claude calls done() or budget exhausted
+Instead of a multi-turn ReAct loop via the Anthropic SDK (which requires
+ANTHROPIC_API_KEY), all binary data is pre-fetched from ToolRegistry in Python,
+assembled into a single prompt, and sent to `claude -p -` which uses the existing
+claudeAiOauth credentials from ~/.claude/.credentials.json.
 
-Budget governor: hard stop at max_tool_calls.
-Loop detector: identical tool+args pair terminates with a warning injection.
+Public API is unchanged: AgentLoop, AnalysisResult, run(), run_patch(),
+persist_result(), _model, _registry, _func_db, _build_result().
+
+Architecture change: max_tool_calls is now unused (no loop). The tool_calls
+field in AnalysisResult counts the number of pre-fetch calls made (0–4).
 """
 
 from __future__ import annotations
 
 import json
 import os
-import hashlib
-from dataclasses import dataclass, field
+import re
+import subprocess
+import tempfile
+from dataclasses import dataclass
 from typing import Optional
 
-import anthropic
-
-from .tool_registry import TOOL_SCHEMAS, ToolRegistry
+from .tool_registry import ToolRegistry
 from .context_builder import ContextBuilder
 from .rag_retriever import RAGRetriever
 
-# Default model — capable enough for RE reasoning without Opus cost
-_DEFAULT_MODEL = 'claude-sonnet-5'
+_DEFAULT_MODEL = 'claude-opus-4-7'
+
+# Appended to every prompt — overrides the ContextBuilder "call done()/tools"
+# instructions since no tools are wired in the child session.
+_JSON_INSTRUCTION = (
+    '\n\n[OUTPUT INSTRUCTIONS]\n'
+    'All binary data is pre-loaded above. No tool calls are available.\n'
+    'Respond with ONLY a valid JSON object — no prose, no markdown fences:\n'
+    '{"name": "snake_case_name", "role": "ROLE_FROM_TAXONOMY", '
+    '"confidence": 0.0, "rationale": "explanation", "vuln_notes": ""}'
+)
+
+# Denied in every child session to block prompt-injection-to-shell paths.
+# Untrusted firmware strings land in the prompt; Bash/Edit/Write must be off.
+_DISALLOWED_TOOLS = 'Bash,Edit,Write,MultiEdit,WebSearch,WebFetch,Workflow,Agent,Task'
 
 
 # ── Result type ────────────────────────────────────────────────────────────────
@@ -41,7 +55,7 @@ class AnalysisResult:
     rationale:    str
     vuln_notes:   str
     tool_calls:   int
-    finished:     bool   # True = done() called; False = budget exhausted
+    finished:     bool
     model:        str
     task:         str
 
@@ -50,12 +64,11 @@ class AnalysisResult:
 
 class AgentLoop:
     """
-    Drives Claude through a ReAct tool-calling loop to analyze a binary function.
+    Single-shot LLM analysis of a binary function via the claude CLI.
 
-    Usage:
-        registry = ToolRegistry(binary_path, func_db)
-        loop = AgentLoop(registry, func_db=func_db, product='my-target', version='1.0')
-        result = loop.run(func_addr=0x1fa00, task='name_function')
+    Pre-fetches disassembly, strings, imports, and CFG from ToolRegistry,
+    assembles them into one prompt, and calls `claude -p -` once.
+    No ANTHROPIC_API_KEY required — uses the session's claudeAiOauth token.
     """
 
     def __init__(
@@ -75,10 +88,8 @@ class AgentLoop:
         self._rag           = RAGRetriever(func_db) if func_db else None
         self._ctx           = ContextBuilder(product, version, binary_hint, max_tool_calls)
         self._binary_sha256 = binary_sha256
-        self._max_calls     = max_tool_calls
         self._model         = model
         self._verbose       = verbose
-        self._client        = anthropic.Anthropic()
 
     # ── public API ────────────────────────────────────────────────────────────
 
@@ -94,10 +105,40 @@ class AgentLoop:
         role_hint:    str = '',
     ) -> AnalysisResult:
         """
-        Run the ReAct loop for a single function.
-        Returns AnalysisResult whether or not done() was called.
+        Analyze a single function. Pre-fetches all binary data, then makes one
+        claude CLI call. Raises RuntimeError on transport/auth failure.
         """
         prior = self._retrieve_prior(func_addr, callees, role_hint)
+
+        # Pre-fetch data that the tool loop would have requested lazily
+        pre_calls = 0
+        if strings is None:
+            try:
+                strings = json.loads(
+                    self._registry._get_strings(func_addr)
+                ).get('strings', [])
+                pre_calls += 1
+            except Exception:
+                strings = []
+
+        if not cfg_summary:
+            try:
+                cfg_summary = self._registry._get_cfg(func_addr)
+                pre_calls += 1
+            except Exception:
+                cfg_summary = ''
+
+        try:
+            disasm = self._registry._get_disassembly(func_addr, n_insns=60)
+            pre_calls += 1
+        except Exception:
+            disasm = '(disassembly unavailable)'
+
+        try:
+            imports = self._registry._get_imports(func_addr)
+            pre_calls += 1
+        except Exception:
+            imports = '(imports unavailable)'
 
         system_prompt = self._ctx.system_prompt()
         user_message  = self._ctx.user_prompt(
@@ -111,74 +152,14 @@ class AgentLoop:
             cfg_summary=cfg_summary,
         )
 
-        messages = [{'role': 'user', 'content': user_message}]
-        tool_call_count = 0
-        seen_calls: set[str] = set()   # for loop detection
-
-        while tool_call_count < self._max_calls:
-            response = self._call_claude(system_prompt, messages)
-            assistant_content = response.content
-
-            # Append the full assistant turn
-            messages.append({'role': 'assistant', 'content': assistant_content})
-
-            # Collect all tool_use blocks in this turn
-            tool_uses = [b for b in assistant_content if b.type == 'tool_use']
-
-            if not tool_uses:
-                # Text-only response — model chose to stop without calling done()
-                break
-
-            # Process each tool call; collect results for the user turn
-            tool_results = []
-            done_result  = None
-
-            for tool_use in tool_uses:
-                tool_call_count += 1
-
-                # Loop detection
-                call_sig = self._call_signature(tool_use.name, tool_use.input)
-                if call_sig in seen_calls:
-                    result_content = json.dumps({
-                        'error': 'LOOP_DETECTED — you already called this tool with these args. '
-                                 'Use done() to finish or try a different tool.'
-                    })
-                    if self._verbose:
-                        print(f'[loop] {tool_use.name}({tool_use.input})')
-                else:
-                    seen_calls.add(call_sig)
-
-                    if tool_use.name == 'done':
-                        done_result = tool_use.input
-                        result_content = json.dumps({'status': 'analysis complete'})
-                    else:
-                        result_content = self._registry.dispatch(tool_use.name, tool_use.input)
-                        if self._verbose:
-                            print(f'[tool] {tool_use.name}({tool_use.input}) → {result_content[:120]}')
-
-                tool_results.append({
-                    'type':        'tool_result',
-                    'tool_use_id': tool_use.id,
-                    'content':     result_content,
-                })
-
-            # Append tool results as a user turn
-            messages.append({'role': 'user', 'content': tool_results})
-
-            if done_result is not None:
-                return self._build_result(
-                    func_addr, task, done_result, tool_call_count, finished=True
-                )
-
-        # Budget exhausted — extract best available answer from last assistant text
-        return self._build_result(
-            func_addr, task,
-            self._extract_partial(messages),
-            tool_call_count,
-            finished=False,
+        prompt = (
+            f'{user_message}\n\n'
+            f'[DISASSEMBLY]\n{disasm}\n\n'
+            f'[IMPORTS]\n{imports}'
+            f'{_JSON_INSTRUCTION}'
         )
 
-    # ── patch analysis variant ────────────────────────────────────────────────
+        return self._run_cli(func_addr, task, system_prompt, prompt, pre_calls)
 
     def run_patch(
         self,
@@ -189,119 +170,27 @@ class AgentLoop:
         version_v1:   str,
         version_v2:   str,
     ) -> AnalysisResult:
-        """Compare two function versions. Returns patch characterization in vuln_notes."""
+        """Compare two function versions. Raises RuntimeError on transport failure."""
         prior = self._retrieve_prior(func_addr_v1, callees=None, role_hint='')
-
-        prompt = self._ctx.patch_prompt(
-            func_addr_v1, func_addr_v2,
-            disasm_v1, disasm_v2,
-            version_v1, version_v2,
-            prior_findings=prior,
+        patch_prompt = (
+            self._ctx.patch_prompt(
+                func_addr_v1, func_addr_v2,
+                disasm_v1, disasm_v2,
+                version_v1, version_v2,
+                prior_findings=prior,
+            )
+            + _JSON_INSTRUCTION
         )
-        system_prompt = self._ctx.system_prompt()
-        messages = [{'role': 'user', 'content': prompt}]
-
-        # Single-shot for patch analysis — no tool loop needed (disasm already injected)
-        response = self._call_claude(system_prompt, messages)
-        messages.append({'role': 'assistant', 'content': response.content})
-
-        # Extract tool call if model used done()
-        for block in response.content:
-            if block.type == 'tool_use' and block.name == 'done':
-                return self._build_result(func_addr_v1, 'patch_analysis', block.input, 1, True)
-
-        return self._build_result(
+        return self._run_cli(
             func_addr_v1, 'patch_analysis',
-            self._extract_partial(messages), 1, False
-        )
-
-    # ── Claude API call ───────────────────────────────────────────────────────
-
-    def _call_claude(self, system: str, messages: list) -> anthropic.types.Message:
-        return self._client.messages.create(
-            model=self._model,
-            max_tokens=2048,
-            system=system,
-            tools=TOOL_SCHEMAS,
-            tool_choice={'type': 'auto'},
-            messages=messages,
-        )
-
-    # ── helpers ───────────────────────────────────────────────────────────────
-
-    def _retrieve_prior(
-        self, func_addr: int, callees: list | None, role_hint: str
-    ) -> list[dict]:
-        if self._rag is None:
-            return []
-        return self._rag.retrieve(
-            func_addr=func_addr,
-            binary_sha256=self._binary_sha256,
-            callees=callees or [],
-            role_hint=role_hint,
-        )
-
-    @staticmethod
-    def _call_signature(tool_name: str, args: dict) -> str:
-        """Stable hash of a tool call for loop detection."""
-        canonical = json.dumps({'t': tool_name, 'a': args}, sort_keys=True)
-        return hashlib.md5(canonical.encode()).hexdigest()
-
-    @staticmethod
-    def _extract_partial(messages: list) -> dict:
-        """
-        Pull a best-effort result from the last assistant message
-        when the loop ends without a done() call.
-        """
-        for msg in reversed(messages):
-            if msg.get('role') != 'assistant':
-                continue
-            for block in (msg.get('content') or []):
-                text = getattr(block, 'text', None)
-                if text:
-                    return {
-                        'name':       'unknown__budget_exhausted',
-                        'role':       'UNKNOWN',
-                        'confidence': 0.1,
-                        'rationale':  text[:500],
-                        'vuln_notes': '',
-                    }
-        return {
-            'name':       'unknown__no_response',
-            'role':       'UNKNOWN',
-            'confidence': 0.0,
-            'rationale':  'No analysis produced',
-            'vuln_notes': '',
-        }
-
-    def _build_result(
-        self,
-        func_addr:  int,
-        task:       str,
-        done_args:  dict,
-        tool_calls: int,
-        finished:   bool,
-    ) -> AnalysisResult:
-        return AnalysisResult(
-            func_addr=func_addr,
-            name=done_args.get('name', ''),
-            role=done_args.get('role', 'UNKNOWN'),
-            confidence=float(done_args.get('confidence', 0.0)),
-            rationale=done_args.get('rationale', ''),
-            vuln_notes=done_args.get('vuln_notes', ''),
-            tool_calls=tool_calls,
-            finished=finished,
-            model=self._model,
-            task=task,
+            self._ctx.system_prompt(), patch_prompt,
+            pre_calls=0,
         )
 
     # ── result persistence ────────────────────────────────────────────────────
 
     def persist_result(self, result: AnalysisResult, binary_sha256: str):
-        """
-        Write an AnalysisResult back into func_id_db as ANGR_INFERRED confidence.
-        Only persists if confidence >= 0.5 and a name was produced.
-        """
+        """Write a high-confidence result back into func_id_db as ANGR_INFERRED."""
         if self._func_db is None:
             return
         if result.confidence < 0.5 or not result.name:
@@ -318,7 +207,160 @@ class AgentLoop:
                 name=result.name,
                 role=result.role,
                 confidence='ANGR_INFERRED',
-                notes=f'LLM-inferred ({result.model}, {result.tool_calls} tool calls). {result.rationale[:200]}',
+                notes=(
+                    f'LLM-inferred ({result.model}, {result.tool_calls} pre-fetched sources). '
+                    f'{result.rationale[:200]}'
+                ),
             ))
         except Exception:
-            pass   # binary may not be registered; silent skip
+            pass
+
+    # ── CLI orchestration ─────────────────────────────────────────────────────
+
+    def _run_cli(
+        self,
+        func_addr:  int,
+        task:       str,
+        system:     str,
+        prompt:     str,
+        pre_calls:  int,
+    ) -> AnalysisResult:
+        # Transport errors propagate — a broken backend must not silently fill
+        # func_id_db with zero-confidence rows.
+        text = self._call_claude_cli(system, prompt)
+
+        try:
+            done_args = self._parse_json_response(text)
+            finished = True
+        except ValueError:
+            # Model responded but not in JSON — soft failure, not a backend error
+            if self._verbose:
+                print(f'[llm_analyst] JSON parse failed, raw: {text[:200]}')
+            done_args = {
+                'name':       'unknown__parse_failed',
+                'role':       'UNKNOWN',
+                'confidence': 0.0,
+                'rationale':  text[:500],
+                'vuln_notes': '',
+            }
+            finished = False
+
+        return self._build_result(func_addr, task, done_args, pre_calls, finished)
+
+    def _call_claude_cli(self, system: str, prompt: str) -> str:
+        """
+        Invoke `claude -p -` in an isolated child session and return the text result.
+
+        Isolation:
+          --bare              skips Stop/PostToolUse hooks and auto-memory so
+                              batch calls don't trigger chimes or persist state
+          --system-prompt     replaces the default system prompt (incl. CLAUDE.md)
+                              with the RE-specific prompt
+          --disallowedTools   removes Bash/Edit/Write to block prompt-injection paths
+          cwd=tempdir         no project CLAUDE.md in scope
+
+        Raises RuntimeError on non-zero exit or is_error=true in the envelope.
+        """
+        cmd = [
+            'claude', '-p', '-',
+            '--output-format', 'json',
+            '--system-prompt', system,
+            '--disallowedTools', _DISALLOWED_TOOLS,
+        ]
+        if self._model:
+            cmd += ['--model', self._model]
+
+        if self._verbose:
+            print(f'[llm_analyst] calling claude CLI '
+                  f'(model={self._model}, prompt_len={len(prompt)})')
+
+        # Run in a tempdir so no project CLAUDE.md loads
+        with tempfile.TemporaryDirectory() as cwd:
+            proc = subprocess.run(
+                cmd,
+                input=prompt,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                cwd=cwd,
+            )
+
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f'claude CLI exit {proc.returncode}: '
+                f'{(proc.stderr or proc.stdout)[:300]}'
+            )
+
+        # --output-format json produces a JSON array of events; find the result event
+        try:
+            events = json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            return proc.stdout.strip()
+
+        result_event = next(
+            (e for e in events if e.get('type') == 'result'),
+            None,
+        )
+        if result_event is None:
+            raise RuntimeError(f'no result event in claude CLI output: {proc.stdout[:300]}')
+
+        if result_event.get('is_error'):
+            raise RuntimeError(
+                f'claude CLI is_error=true: {result_event.get("result", "")[:300]}'
+            )
+
+        return result_event.get('result', '').strip()
+
+    # ── helpers ───────────────────────────────────────────────────────────────
+
+    def _parse_json_response(self, text: str) -> dict:
+        """
+        Extract a JSON object from the model's text response.
+        Strips markdown code fences if present. Raises ValueError if not found.
+        """
+        cleaned = re.sub(r'^```(?:json)?\s*\n?', '', text, flags=re.MULTILINE)
+        cleaned = re.sub(r'\n?```\s*$', '', cleaned, flags=re.MULTILINE)
+        match = re.search(r'\{.*\}', cleaned.strip(), re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+        raise ValueError(f'no valid JSON object in response: {text[:200]}')
+
+    def _retrieve_prior(
+        self, func_addr: int, callees: list | None, role_hint: str
+    ) -> list[dict]:
+        if self._rag is None:
+            return []
+        return self._rag.retrieve(
+            func_addr=func_addr,
+            binary_sha256=self._binary_sha256,
+            callees=callees or [],
+            role_hint=role_hint,
+        )
+
+    def _build_result(
+        self,
+        func_addr:  int,
+        task:       str,
+        done_args:  dict,
+        tool_calls: int,
+        finished:   bool,
+    ) -> AnalysisResult:
+        try:
+            confidence = float(done_args.get('confidence', 0.0))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        return AnalysisResult(
+            func_addr=func_addr,
+            name=done_args.get('name', ''),
+            role=done_args.get('role', 'UNKNOWN'),
+            confidence=confidence,
+            rationale=done_args.get('rationale', ''),
+            vuln_notes=done_args.get('vuln_notes', ''),
+            tool_calls=tool_calls,
+            finished=finished,
+            model=self._model,
+            task=task,
+        )

@@ -42,7 +42,7 @@ PRAGMA temp_store   = MEMORY;
 # Schema  (version tracked in user_version)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS binaries (
@@ -134,6 +134,22 @@ CREATE TABLE IF NOT EXISTS call_chain_steps (
 
 CREATE INDEX IF NOT EXISTS idx_call_chain_steps_chain
     ON call_chain_steps(chain_id);
+
+-- One row per RAGRetriever.retrieve() call — used for RAGAS-style evaluation.
+-- strategies_fired: JSON array of strategy names that returned ≥1 result.
+CREATE TABLE IF NOT EXISTS retrieval_log (
+    id               INTEGER PRIMARY KEY,
+    func_addr        INTEGER NOT NULL,
+    binary_sha256    TEXT    NOT NULL DEFAULT '',
+    strategies_fired TEXT    NOT NULL DEFAULT '[]',
+    confirmed_count  INTEGER NOT NULL DEFAULT 0,
+    candidate_count  INTEGER NOT NULL DEFAULT 0,
+    result_count     INTEGER NOT NULL DEFAULT 0,
+    queried_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_retrieval_log_func
+    ON retrieval_log(binary_sha256, func_addr);
 """
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -246,6 +262,27 @@ class FuncDB:
 
     def __enter__(self): return self
     def __exit__(self, *_): self.close()
+
+    # ── retrieval log ─────────────────────────────────────────────────────────
+
+    def log_retrieval(
+        self,
+        func_addr:        int,
+        binary_sha256:    str,
+        strategies_fired: list[str],
+        results:          list[dict],
+    ) -> None:
+        """Record one RAGRetriever.retrieve() call for evaluation/diagnostics."""
+        confirmed = sum(1 for r in results if r.get('epistemic') == 'confirmed')
+        with self._con:
+            self._con.execute(
+                'INSERT INTO retrieval_log'
+                '(func_addr,binary_sha256,strategies_fired,'
+                ' confirmed_count,candidate_count,result_count)'
+                ' VALUES(?,?,?,?,?,?)',
+                (func_addr, binary_sha256, json.dumps(strategies_fired),
+                 confirmed, len(results) - confirmed, len(results)),
+            )
 
     # ── binary registry ──────────────────────────────────────────────────────
 

@@ -43,16 +43,21 @@ class RAGRetriever:
         Retrieve prior findings relevant to the function under analysis.
         Returns a list of finding dicts ready for context_builder injection.
         """
-        seen_ids = set()
-        results = []
+        seen_ids      = set()
+        results       = []
+        strategies_hit: list[str] = []
 
         def _add(rows, source: str):
+            added = 0
             for r in rows:
                 rid = r.get('id')
                 if rid in seen_ids:
                     continue
                 seen_ids.add(rid)
                 results.append(self._trim_row(r, source=source))
+                added += 1
+            if added:
+                strategies_hit.append(source)
 
         # 1. Exact binary + VA match — highest confidence prior
         if binary_sha256:
@@ -72,7 +77,12 @@ class RAGRetriever:
 
         # Confirmed findings first so LLM weights them above unverified candidates
         results.sort(key=lambda r: 0 if r['epistemic'] == 'confirmed' else 1)
-        return results[:_MAX_RESULTS]
+        final = results[:_MAX_RESULTS]
+
+        if hasattr(self._db, 'log_retrieval'):
+            self._db.log_retrieval(func_addr, binary_sha256, strategies_hit, final)
+
+        return final
 
     # ── retrieval strategies ──────────────────────────────────────────────────
 
