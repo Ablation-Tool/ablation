@@ -288,9 +288,6 @@ The rubric enforces coverage of every modified function/region and a clear, expl
 ```text
 [ABL-RUB-RE-002]
 
-ID: ABL-RUB-RE-002
-TITLE: Patch Diffing Rubric (Master Template for Deep Binary / Low-Level Patch Analysis)
-
 INSTRUCTION (ALWAYS APPLY – HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR SUMMARIZE):
 
 You are operating in the following mode:
