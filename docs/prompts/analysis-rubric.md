@@ -11,6 +11,17 @@ Session-starter prompts that set analysis mode before any Ablation tool call. Co
 <details>
 <summary>ABL-RUB-RE-001</summary>
 
+ABL-RUB-RE-001 is a reusable, system-level rubric that puts an LLM into exhaustive, white-box, decompiler-style reverse engineering mode. It instructs the model to:
+
+- Analyze code line by line, covering every function, branch, loop, error path, and edge case
+- Trace data flow, state changes, and side effects from inputs to outputs
+- Fully enumerate and explain validation, security, and error-handling logic
+- Infer missing or opaque behavior by default, clearly labeling it as "INFERRED" with supporting reasoning
+- Automatically infer the likely domain (e.g., malware, web app, protocol, firmware) and tailor the analysis to that context
+- Produce a structured, spec-like report detailed enough for a developer to re-implement a functionally and structurally equivalent version of the code
+
+---
+
 ```text
 INSTRUCTION (ALWAYS APPLY — HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR SUMMARIZE):
 
