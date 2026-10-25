@@ -680,9 +680,7 @@ When uncertain, default to more detail and explicit INFERRED reasoning.
 <details>
 <summary>ABL-RUB-TR-001</summary>
 
-ABL-RUB-TR-001 is the multi-target triage mode you run before applying a deeper rubric. Given multiple targets, it drives an LLM to produce a structured, comparative assessment across all of them — type, attack surface, data sensitivity, likely vulnerability classes, environmental risk, and an explicit HIGH/MED/LOW priority per target — then ranks them globally from most to least urgent for deep follow-up.
-
-Breadth over depth. Consistent fields per target. Explicit cross-target reasoning. The model is strictly forbidden from drifting into full reverse engineering on any single target.
+ABL-RUB-TR-001 runs before any deeper rubric. Given multiple targets, it produces a structured per-target assessment and ranks them from most to least urgent — so you know where to point ABL-RUB-RE-001 or ABL-RUB-RE-002 first. The model is forbidden from going deep on any single target.
 
 ---
 
