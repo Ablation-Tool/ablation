@@ -4,6 +4,16 @@ Extract a software bill of materials from a stripped firmware binary. Identifies
 
 ---
 
+## What is an SBOM
+
+An SBOM — Software Bill of Materials — is a list of every software component inside a product: library name, version, and license. The concept comes from physical manufacturing, where a bill of materials lists every part that goes into a product so that a recall or defect can be traced to the exact affected units.
+
+In firmware RE, an SBOM answers the question "which third-party libraries did the vendor ship, and are any of them vulnerable?" A vendor may ship OpenSSL 1.1.1k inside a firewall appliance without disclosing it. If a CVE drops for OpenSSL 1.1.1k two years later, the only way to know whether that appliance is affected is to have an SBOM. `SBOMExtractor` builds that list from the binary itself because vendors do not publish one.
+
+The two dominant SBOM interchange formats are CycloneDX (used by OWASP) and SPDX (used by the Linux Foundation). Both represent the same data — component name, version, hash, license — in different schemas. `SBOMComponent` fields map to both conventions so output can be converted to either format.
+
+---
+
 ## Why this exists
 
 1. **Firmware vendors strip binaries but do not strip version strings.** Libraries such as OpenSSL, zlib, and BusyBox embed a human-readable version string in their `.rodata` section because they use it for diagnostic output. `SBOMExtractor` sweeps every printable byte sequence in the binary for 22 known patterns so a version like `OpenSSL 1.1.1k` surfaces even when every symbol is gone.
