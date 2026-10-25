@@ -1,32 +1,52 @@
 """
-agent_loop.py — Single-shot LLM analysis of binary functions via the claude CLI.
+agent_loop.py — Single-shot LLM analysis of binary functions.
 
-Instead of a multi-turn ReAct loop via the Anthropic SDK (which requires
-ANTHROPIC_API_KEY), all binary data is pre-fetched from ToolRegistry in Python,
-assembled into a single prompt, and sent to `claude -p -` which uses the existing
-claudeAiOauth credentials from ~/.claude/.credentials.json.
+Sends pre-fetched binary data (disassembly, strings, imports, CFG) in one
+prompt; returns a structured AnalysisResult.  Two transport backends:
+
+  SDK (preferred): uses anthropic.Anthropic().messages.create() — requires
+    ANTHROPIC_API_KEY env var or explicit api_key= argument.  Returns real
+    token counts for the execution log.
+
+  CLI (fallback): shells out to `claude -p -` via subprocess.  Used when no
+    API key is available (e.g., oauth-only sessions).  Token counts are 0.
+
+Cascade routing (book Ch. 8 pattern): model is auto-selected per task unless
+overridden with model=.  Cheap tasks (naming, struct) use a fast model;
+complex tasks (exploit chain) use the full model.
 
 Public API is unchanged: AgentLoop, AnalysisResult, run(), run_patch(),
 persist_result(), _model, _registry, _func_db, _build_result().
-
-Architecture change: max_tool_calls is now unused (no loop). The tool_calls
-field in AnalysisResult counts the number of pre-fetch calls made (0–4).
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from typing import Optional
 
 from .tool_registry import ToolRegistry
 from .context_builder import ContextBuilder
 from .rag_retriever import RAGRetriever
+from .schemas import AnalysisOutput, parse_analysis_output
 
-_DEFAULT_MODEL = 'claude-opus-4-7'
+# ── cascade routing ────────────────────────────────────────────────────────────
+# Maps task name → model tier.  Only ~20% of tasks (exploit_chain) justify the
+# full frontier model.  Callers can override per-instance with model=.
+
+_MODEL_FOR_TASK: dict[str, str] = {
+    'name_function':     'claude-haiku-4-5',
+    'struct_reconstruct': 'claude-haiku-4-5',
+    'vuln_hypothesis':   'claude-sonnet-4-6',
+    'patch_analysis':    'claude-sonnet-4-6',
+    'exploit_chain':     'claude-opus-4-7',
+}
+_DEFAULT_TASK_MODEL = 'claude-sonnet-4-6'
 
 # Appended to every prompt — overrides the ContextBuilder "call done()/tools"
 # instructions since no tools are wired in the child session.
@@ -39,7 +59,6 @@ _JSON_INSTRUCTION = (
 )
 
 # Denied in every child session to block prompt-injection-to-shell paths.
-# Untrusted firmware strings land in the prompt; Bash/Edit/Write must be off.
 _DISALLOWED_TOOLS = 'Bash,Edit,Write,MultiEdit,WebSearch,WebFetch,Workflow,Agent,Task'
 
 
@@ -63,11 +82,11 @@ class AnalysisResult:
 
 class AgentLoop:
     """
-    Single-shot LLM analysis of a binary function via the claude CLI.
+    Single-shot LLM analysis of a binary function.
 
     Pre-fetches disassembly, strings, imports, and CFG from ToolRegistry,
-    assembles them into one prompt, and calls `claude -p -` once.
-    No ANTHROPIC_API_KEY required — uses the session's claudeAiOauth token.
+    assembles them into one prompt, and calls the Anthropic SDK (or falls back
+    to the claude CLI subprocess when no API key is available).
     """
 
     def __init__(
@@ -79,7 +98,8 @@ class AgentLoop:
         binary_hint:    str = '',
         binary_sha256:  str = '',
         max_tool_calls: int = 10,
-        model:          str = _DEFAULT_MODEL,
+        model:          Optional[str] = None,
+        api_key:        Optional[str] = None,
         verbose:        bool = False,
     ):
         self._registry      = registry
@@ -87,7 +107,8 @@ class AgentLoop:
         self._rag           = RAGRetriever(func_db) if func_db else None
         self._ctx           = ContextBuilder(product, version, binary_hint, max_tool_calls)
         self._binary_sha256 = binary_sha256
-        self._model         = model
+        self._model         = model      # None = use cascade routing per task
+        self._api_key       = api_key
         self._verbose       = verbose
 
     # ── public API ────────────────────────────────────────────────────────────
@@ -105,11 +126,10 @@ class AgentLoop:
     ) -> AnalysisResult:
         """
         Analyze a single function. Pre-fetches all binary data, then makes one
-        claude CLI call. Raises RuntimeError on transport/auth failure.
+        LLM call via SDK or claude CLI. Raises RuntimeError on transport failure.
         """
         prior = self._retrieve_prior(func_addr, callees, role_hint)
 
-        # Pre-fetch data that the tool loop would have requested lazily
         pre_calls = 0
         if strings is None:
             try:
@@ -158,7 +178,7 @@ class AgentLoop:
             f'{_JSON_INSTRUCTION}'
         )
 
-        return self._run_cli(func_addr, task, system_prompt, prompt, pre_calls)
+        return self._run_analysis(func_addr, task, system_prompt, prompt, pre_calls)
 
     def run_patch(
         self,
@@ -180,7 +200,7 @@ class AgentLoop:
             )
             + _JSON_INSTRUCTION
         )
-        return self._run_cli(
+        return self._run_analysis(
             func_addr_v1, 'patch_analysis',
             self._ctx.system_prompt(), patch_prompt,
             pre_calls=0,
@@ -214,9 +234,19 @@ class AgentLoop:
         except Exception:
             pass
 
-    # ── CLI orchestration ─────────────────────────────────────────────────────
+    # ── transport ─────────────────────────────────────────────────────────────
 
-    def _run_cli(
+    def _use_sdk(self) -> bool:
+        """True when an API key is available (explicit arg or ANTHROPIC_API_KEY env)."""
+        return bool(self._api_key or os.environ.get('ANTHROPIC_API_KEY'))
+
+    def _effective_model(self, task: str) -> str:
+        """Return the model to use for this task — explicit override or cascade default."""
+        if self._model:
+            return self._model
+        return _MODEL_FOR_TASK.get(task, _DEFAULT_TASK_MODEL)
+
+    def _run_analysis(
         self,
         func_addr:  int,
         task:       str,
@@ -224,35 +254,88 @@ class AgentLoop:
         prompt:     str,
         pre_calls:  int,
     ) -> AnalysisResult:
-        # Transport errors propagate — a broken backend must not silently fill
-        # func_id_db with zero-confidence rows.
-        text = self._call_claude_cli(system, prompt)
+        """
+        Dispatch to SDK or CLI, parse with Pydantic, log execution, return result.
+        Transport errors propagate — a broken backend must not silently fill
+        func_id_db with zero-confidence rows.
+        """
+        model = self._effective_model(task)
+        t0 = time.monotonic()
+
+        if self._use_sdk():
+            text, in_tok, out_tok = self._call_sdk(system, prompt, model)
+        else:
+            text  = self._call_claude_cli(system, prompt, model)
+            in_tok = out_tok = 0
+
+        latency_ms = int((time.monotonic() - t0) * 1000)
 
         try:
-            done_args = self._parse_json_response(text)
+            output   = parse_analysis_output(text)
             finished = True
-        except ValueError:
-            # Model responded but not in JSON — soft failure, not a backend error
+        except Exception:
             if self._verbose:
-                print(f'[llm_analyst] JSON parse failed, raw: {text[:200]}')
-            done_args = {
-                'name':       'unknown__parse_failed',
-                'role':       'UNKNOWN',
-                'confidence': 0.0,
-                'rationale':  text[:500],
-                'vuln_notes': '',
-            }
+                print(f'[llm_analyst] parse failed; raw: {text[:200]}')
+            output = AnalysisOutput(
+                name='unknown__parse_failed',
+                role='UNKNOWN',
+                confidence=0.0,
+                rationale=text[:500],
+                vuln_notes='',
+            )
             finished = False
 
-        return self._build_result(func_addr, task, done_args, pre_calls, finished)
+        result = self._build_result(func_addr, task, output, pre_calls, finished, model)
 
-    def _call_claude_cli(self, system: str, prompt: str) -> str:
+        if self._func_db and hasattr(self._func_db, 'log_execution'):
+            self._func_db.log_execution(
+                task=task,
+                func_addr=func_addr,
+                binary_sha256=self._binary_sha256,
+                model=model,
+                input_tokens=in_tok,
+                output_tokens=out_tok,
+                latency_ms=latency_ms,
+                finished=finished,
+                result_name=result.name,
+                result_role=result.role,
+                result_confidence=result.confidence,
+            )
+
+        return result
+
+    def _call_sdk(self, system: str, prompt: str, model: str) -> tuple[str, int, int]:
+        """
+        Call the Anthropic SDK directly. Returns (text, input_tokens, output_tokens).
+        Raises RuntimeError on API error or empty content.
+        """
+        import anthropic
+
+        api_key = self._api_key or os.environ.get('ANTHROPIC_API_KEY')
+        client  = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
+
+        if self._verbose:
+            print(f'[llm_analyst] sdk call (model={model}, prompt_len={len(prompt)})')
+
+        message = client.messages.create(
+            model=model,
+            max_tokens=512,
+            system=system,
+            messages=[{'role': 'user', 'content': prompt}],
+        )
+
+        if not message.content:
+            raise RuntimeError('Anthropic SDK returned empty content')
+
+        text = message.content[0].text
+        return text, message.usage.input_tokens, message.usage.output_tokens
+
+    def _call_claude_cli(self, system: str, prompt: str, model: str) -> str:
         """
         Invoke `claude -p -` in an isolated child session and return the text result.
 
         Isolation:
           --system-prompt     replaces the default system prompt (incl. CLAUDE.md)
-                              with the RE-specific prompt
           --disallowedTools   removes Bash/Edit/Write to block prompt-injection paths
           cwd=tempdir         no project CLAUDE.md loads in the child session
 
@@ -263,15 +346,12 @@ class AgentLoop:
             '--output-format', 'json',
             '--system-prompt', system,
             '--disallowedTools', _DISALLOWED_TOOLS,
+            '--model', model,
         ]
-        if self._model:
-            cmd += ['--model', self._model]
 
         if self._verbose:
-            print(f'[llm_analyst] calling claude CLI '
-                  f'(model={self._model}, prompt_len={len(prompt)})')
+            print(f'[llm_analyst] cli call (model={model}, prompt_len={len(prompt)})')
 
-        # Run in a tempdir so no project CLAUDE.md loads
         with tempfile.TemporaryDirectory() as cwd:
             proc = subprocess.run(
                 cmd,
@@ -288,7 +368,6 @@ class AgentLoop:
                 f'{(proc.stderr or proc.stdout)[:300]}'
             )
 
-        # --output-format json produces a JSON array of events; find the result event
         try:
             events = json.loads(proc.stdout)
         except json.JSONDecodeError:
@@ -310,21 +389,6 @@ class AgentLoop:
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
-    def _parse_json_response(self, text: str) -> dict:
-        """
-        Extract a JSON object from the model's text response.
-        Strips markdown code fences if present. Raises ValueError if not found.
-        """
-        cleaned = re.sub(r'^```(?:json)?\s*\n?', '', text, flags=re.MULTILINE)
-        cleaned = re.sub(r'\n?```\s*$', '', cleaned, flags=re.MULTILINE)
-        match = re.search(r'\{.*\}', cleaned.strip(), re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group())
-            except json.JSONDecodeError:
-                pass
-        raise ValueError(f'no valid JSON object in response: {text[:200]}')
-
     def _retrieve_prior(
         self, func_addr: int, callees: list | None, role_hint: str
     ) -> list[dict]:
@@ -341,23 +405,20 @@ class AgentLoop:
         self,
         func_addr:  int,
         task:       str,
-        done_args:  dict,
+        output:     AnalysisOutput,
         tool_calls: int,
         finished:   bool,
+        model:      str,
     ) -> AnalysisResult:
-        try:
-            confidence = float(done_args.get('confidence', 0.0))
-        except (TypeError, ValueError):
-            confidence = 0.0
         return AnalysisResult(
             func_addr=func_addr,
-            name=done_args.get('name', ''),
-            role=done_args.get('role', 'UNKNOWN'),
-            confidence=confidence,
-            rationale=done_args.get('rationale', ''),
-            vuln_notes=done_args.get('vuln_notes', ''),
+            name=output.name,
+            role=output.role,
+            confidence=output.confidence,
+            rationale=output.rationale,
+            vuln_notes=output.vuln_notes,
             tool_calls=tool_calls,
             finished=finished,
-            model=self._model,
+            model=model,
             task=task,
         )

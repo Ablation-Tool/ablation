@@ -20,6 +20,7 @@ from .agent_loop    import AgentLoop, AnalysisResult
 from .tool_registry import ToolRegistry, TOOL_SCHEMAS
 from .context_builder import ContextBuilder
 from .rag_retriever import RAGRetriever
+from .schemas import AnalysisOutput, parse_analysis_output
 
 __all__ = [
     'AgentLoop',
@@ -28,4 +29,6 @@ __all__ = [
     'TOOL_SCHEMAS',
     'ContextBuilder',
     'RAGRetriever',
+    'AnalysisOutput',
+    'parse_analysis_output',
 ]

@@ -42,7 +42,7 @@ PRAGMA temp_store   = MEMORY;
 # Schema  (version tracked in user_version)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_SCHEMA_VERSION = 3
+_SCHEMA_VERSION = 4
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS binaries (
@@ -150,6 +150,28 @@ CREATE TABLE IF NOT EXISTS retrieval_log (
 
 CREATE INDEX IF NOT EXISTS idx_retrieval_log_func
     ON retrieval_log(binary_sha256, func_addr);
+
+-- One row per AgentLoop.run() call — execution trace for cost tracking and
+-- self-evolution evaluation.  input/output_tokens are 0 when the subprocess
+-- claude CLI path is used (token counts unavailable without the SDK).
+CREATE TABLE IF NOT EXISTS execution_log (
+    id                INTEGER PRIMARY KEY,
+    task              TEXT    NOT NULL DEFAULT '',
+    func_addr         INTEGER NOT NULL DEFAULT 0,
+    binary_sha256     TEXT    NOT NULL DEFAULT '',
+    model             TEXT    NOT NULL DEFAULT '',
+    input_tokens      INTEGER NOT NULL DEFAULT 0,
+    output_tokens     INTEGER NOT NULL DEFAULT 0,
+    latency_ms        INTEGER NOT NULL DEFAULT 0,
+    finished          INTEGER NOT NULL DEFAULT 0,
+    result_name       TEXT    NOT NULL DEFAULT '',
+    result_role       TEXT    NOT NULL DEFAULT '',
+    result_confidence REAL    NOT NULL DEFAULT 0.0,
+    ran_at            TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_execution_log_binary
+    ON execution_log(binary_sha256, func_addr);
 """
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -282,6 +304,35 @@ class FuncDB:
                 ' VALUES(?,?,?,?,?,?)',
                 (func_addr, binary_sha256, json.dumps(strategies_fired),
                  confirmed, len(results) - confirmed, len(results)),
+            )
+
+    # ── execution log ─────────────────────────────────────────────────────────
+
+    def log_execution(
+        self,
+        task:              str,
+        func_addr:         int,
+        binary_sha256:     str,
+        model:             str,
+        input_tokens:      int,
+        output_tokens:     int,
+        latency_ms:        int,
+        finished:          bool,
+        result_name:       str,
+        result_role:       str,
+        result_confidence: float,
+    ) -> None:
+        """Record one AgentLoop.run() call for cost tracking and evaluation."""
+        with self._con:
+            self._con.execute(
+                'INSERT INTO execution_log'
+                '(task,func_addr,binary_sha256,model,'
+                ' input_tokens,output_tokens,latency_ms,finished,'
+                ' result_name,result_role,result_confidence)'
+                ' VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                (task, func_addr, binary_sha256, model,
+                 input_tokens, output_tokens, latency_ms, int(finished),
+                 result_name, result_role, result_confidence),
             )
 
     # ── binary registry ──────────────────────────────────────────────────────
