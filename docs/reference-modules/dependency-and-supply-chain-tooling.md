@@ -38,22 +38,27 @@ CycloneDX and SPDX are the two standard machine-readable SBOM formats. CycloneDX
 flowchart TD
     IN(["firmware binary"]):::input
 
-    S1["Source 1 · Version Strings\nRegex sweep over printable rodata\n22 patterns: OpenSSL · zlib · BusyBox\nLinux kernel · OpenSSH · curl · musl"]:::ver
-
-    S2["Source 2 · Byte Signatures\nThirdPartyLibraryIdentifier\nFLIRT-style prologue matching\nRequires ≥3 hits per library"]:::sig
-
+    S1["Source 1 · Version Strings\n22 patterns: OpenSSL · zlib · BusyBox\nLinux kernel · OpenSSH · curl · musl"]:::ver
+    S2["Source 2 · Byte Signatures\nThirdPartyLibraryIdentifier\nFLIRT-style prologue matching\n≥3 hits per library"]:::sig
     S3["Source 3 · ELF / PE Metadata\nDT_NEEDED shared library names\n.comment build toolchain string"]:::meta
 
-    MERGE["Merge & Deduplicate\nHIGH confidence first\nAlpha sort within tier"]:::merge
+    C1(["HIGH confidence"]):::ver
+    C2(["HIGH confidence"]):::sig
+    C3(["MEDIUM confidence"]):::meta
+
+    MERGE["Merge & Deduplicate\nAlpha sort within tier"]:::merge
 
     OUT(["List[SBOMComponent]\nname · version · source · spdx_id · confidence"]):::output
 
-    IN  --> S1
-    IN  --> S2
-    IN  --> S3
-    S1  -->|"HIGH confidence"| MERGE
-    S2  -->|"HIGH confidence"| MERGE
-    S3  -->|"MEDIUM confidence"| MERGE
+    IN --> S1
+    IN --> S2
+    IN --> S3
+    S1 --> C1
+    S2 --> C2
+    S3 --> C3
+    C1 --> MERGE
+    C2 --> MERGE
+    C3 --> MERGE
     MERGE --> OUT
 
     classDef input  fill:#0d47a1,stroke:#1565c0,color:#fff
@@ -68,8 +73,11 @@ flowchart TD
     linkStyle 2 stroke:#6a1b9a,stroke-width:2px
     linkStyle 3 stroke:#2e7d32,stroke-width:2px
     linkStyle 4 stroke:#e65100,stroke-width:2px
-    linkStyle 5 stroke:#6a1b9a,stroke-width:2px,stroke-dasharray:6 3
-    linkStyle 6 stroke:#00695c,stroke-width:3px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
+    linkStyle 6 stroke:#2e7d32,stroke-width:2px
+    linkStyle 7 stroke:#e65100,stroke-width:2px
+    linkStyle 8 stroke:#6a1b9a,stroke-width:2px,stroke-dasharray:6 3
+    linkStyle 9 stroke:#00695c,stroke-width:3px
 ```
 
 ### SBOMComponent fields
