@@ -9,7 +9,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ablation.analyzers.knowledge_graph import ContextCoverage, KnowledgeGraph
+import datetime
+
+from ablation.analyzers.knowledge_graph import ContextCoverage, KnowledgeGraph, VALID_INTENTS
 
 
 @pytest.fixture
@@ -481,3 +483,169 @@ def test_context_manager_closes_connection(tmp_path):
     # Connection closed — accessing it should raise
     with pytest.raises(Exception):
         kg._con.execute("SELECT 1")
+
+
+# ── Intent routing ────────────────────────────────────────────────────────────
+
+def test_invalid_intent_raises_value_error(g):
+    with pytest.raises(ValueError, match="intent must be one of"):
+        g.get_context_for_binary(arch='ppc32', fmt='xcoff32', intent='bad_intent')
+
+
+def test_valid_intents_set():
+    assert VALID_INTENTS == frozenset({'sweep', 'confirm', 'version_diff'})
+
+
+def test_context_sweep_is_default(g):
+    _add_module_for_arch(g, 'ppc32', 'ModA')
+    ctx_default, cov_default = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32')
+    ctx_sweep, cov_sweep = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32', intent='sweep')
+    assert ctx_default == ctx_sweep
+    assert cov_default.intent == 'sweep'
+
+
+def test_coverage_intent_field(g):
+    _, cov = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32', intent='confirm')
+    assert cov.intent == 'confirm'
+
+
+def test_context_non_sweep_adds_intent_header(g):
+    _add_module_for_arch(g, 'ppc32', 'ModA')  # must have content for lines to render
+    ctx = g.get_context_for_binary(arch='ppc32', fmt='xcoff32', intent='confirm')
+    assert '[INTENT: confirm]' in ctx
+
+
+def test_context_confirm_filters_sessions_without_verdict(g):
+    g.add_node('Session', 'session://s1', {'arch': 'ppc32', 'date': '2026-01-01', 'verdict': 'CONFIRMED'})
+    g.add_node('Session', 'session://s2', {'arch': 'ppc32', 'date': '2026-01-02', 'verdict': ''})
+    _add_module_for_arch(g, 'ppc32', 'ModA')
+    ctx, cov = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32', intent='confirm')
+    assert 'session://s1' in ctx
+    assert 'session://s2' not in ctx
+    assert cov.session_count == 1
+
+
+def test_context_version_diff_excludes_gaps_and_sessions(g):
+    _add_module_for_arch(g, 'ppc32', 'ModA')
+    g.add_node('KnownGap', 'gap://ppc32-plt', {'description': 'PLT gap', 'arch': 'ppc32'})
+    g.add_node('Session', 'session://s1', {'arch': 'ppc32', 'date': '2026-01-01', 'verdict': 'CONFIRMED'})
+    ctx, cov = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32', intent='version_diff')
+    assert '[KNOWN GAPS' not in ctx
+    assert '[PRIOR SESSIONS' not in ctx
+    assert cov.gap_count == 0
+    assert cov.session_count == 0
+
+
+def test_coverage_str_includes_intent(g):
+    _, cov = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32', intent='version_diff')
+    assert 'intent=version_diff' in str(cov)
+
+
+# ── Timestamp and SUPERSEDES ──────────────────────────────────────────────────
+
+def test_analysis_event_has_timestamp(g):
+    g.add_run(
+        module_name='TestModule',
+        binary_path='/fake/binary',
+        arch='ppc32',
+        results={'session_id': 'session://t1', 'candidates': 2, 'confirmed': 0,
+                 'fp_rate': 0.5, 'root_cause': ''},
+    )
+    row = g._con.execute("SELECT props FROM nodes WHERE type='AnalysisEvent'").fetchone()
+    props = json.loads(row['props'])
+    assert 'timestamp' in props
+    # Timestamp should be parseable ISO8601
+    dt = datetime.datetime.fromisoformat(props['timestamp'])
+    assert dt.year >= 2024
+
+
+def test_analysis_event_stores_intent(g):
+    g.add_analysis_event(
+        session_id='session://t1', module='TestModule', arch='ppc32',
+        candidates=1, confirmed=0, fp_rate=0.5, root_cause='', intent='confirm',
+    )
+    row = g._con.execute("SELECT props FROM nodes WHERE type='AnalysisEvent'").fetchone()
+    props = json.loads(row['props'])
+    assert props['intent'] == 'confirm'
+
+
+def test_add_gap_node_creates_known_gap(g):
+    g.add_gap_node(
+        gap_id='gap://ppc32/xcoff_no_plt',
+        arch='ppc32',
+        description='XCOFF binaries have no PLT; SinkArgClassifier misclassifies sinks',
+        root_cause='XCOFF_no_plt',
+        module_needed='SinkArgClassifierXCOFF',
+    )
+    assert g.node_count('KnownGap') == 1
+    row = g._con.execute("SELECT props FROM nodes WHERE type='KnownGap'").fetchone()
+    props = json.loads(row['props'])
+    assert props['arch'] == 'ppc32'
+    assert props['root_cause'] == 'XCOFF_no_plt'
+
+
+def test_add_gap_node_adds_supersedes_edges(g):
+    # Create two AnalysisEvent nodes first
+    g.add_analysis_event(
+        session_id='session://x', module='SinkArgClassifier', arch='ppc32',
+        candidates=0, confirmed=0, fp_rate=0.9, root_cause='XCOFF_no_plt',
+    )
+    eid = g._con.execute(
+        "SELECT id FROM nodes WHERE type='AnalysisEvent'"
+    ).fetchone()['id']
+
+    g.add_gap_node(
+        gap_id='gap://ppc32/xcoff_no_plt',
+        arch='ppc32',
+        description='XCOFF PLT gap',
+        root_cause='XCOFF_no_plt',
+        supersedes_event_ids=[eid],
+    )
+    edge = g._con.execute(
+        "SELECT * FROM edges WHERE src='gap://ppc32/xcoff_no_plt' AND type='SUPERSEDES'"
+    ).fetchone()
+    assert edge is not None
+    assert edge['dst'] == eid
+
+
+def test_gap_candidates_excludes_superseded_events(g):
+    # Insert 5 high-fp events for SinkArgClassifier/ppc32 with a known root_cause.
+    for i in range(5):
+        eid = g.add_analysis_event(
+            session_id=f'session://s{i}', module='SinkArgClassifier', arch='ppc32',
+            candidates=0, confirmed=0, fp_rate=0.9, root_cause='XCOFF_no_plt',
+        )
+    # Document the gap — its SUPERSEDES edges cover these events.
+    all_eids = [
+        r['id'] for r in g._con.execute(
+            "SELECT id FROM nodes WHERE type='AnalysisEvent'"
+        ).fetchall()
+    ]
+    g.add_gap_node(
+        gap_id='gap://ppc32/xcoff_no_plt',
+        arch='ppc32',
+        description='XCOFF PLT gap',
+        root_cause='XCOFF_no_plt',
+        supersedes_event_ids=all_eids,
+    )
+    candidates = g.get_gap_candidates(fp_threshold=0.3, min_events=3)
+    # All events superseded; should return no candidates.
+    assert candidates == []
+
+
+def test_gap_candidates_excludes_documented_root_cause(g):
+    # Insert 5 high-fp events with a root_cause that matches a KnownGap.
+    for i in range(5):
+        g.add_analysis_event(
+            session_id=f'session://s{i}', module='SinkArgClassifier', arch='ppc32',
+            candidates=0, confirmed=0, fp_rate=0.85, root_cause='XCOFF_no_plt',
+        )
+    # KnownGap without explicit SUPERSEDES edges — root_cause matching filter only.
+    g.add_gap_node(
+        gap_id='gap://ppc32/xcoff_no_plt',
+        arch='ppc32',
+        description='XCOFF PLT gap',
+        root_cause='XCOFF_no_plt',
+    )
+    candidates = g.get_gap_candidates(fp_threshold=0.3, min_events=3)
+    assert candidates == []

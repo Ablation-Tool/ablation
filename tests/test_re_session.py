@@ -1,4 +1,5 @@
 """Tests for RESession automatic write-back."""
+import datetime
 import json
 from unittest.mock import MagicMock, patch
 
@@ -269,3 +270,32 @@ def test_context_manager_closes_graph(ctx, tmp_path):
     # After __exit__, connection should be closed; further execute raises.
     with pytest.raises(Exception):
         g._con.execute("SELECT 1")
+
+
+# ── Intent parameter ──────────────────────────────────────────────────────────
+
+def test_invalid_intent_raises(ctx, graph):
+    with pytest.raises(ValueError, match="intent must be one of"):
+        RESession(ctx, arch='ppc32', session_id='session://x', graph=graph, intent='bad')
+
+
+def test_session_intent_stored_in_event(ctx, graph):
+    with RESession(ctx, arch='ppc32', session_id='session://x', graph=graph, intent='confirm') as s:
+        s.run(_FakeTool)
+        row = graph._con.execute(
+            "SELECT props FROM nodes WHERE type='AnalysisEvent'"
+        ).fetchone()
+        props = json.loads(row['props'])
+        assert props['intent'] == 'confirm'
+
+
+def test_session_event_has_timestamp(ctx, graph):
+    with RESession(ctx, arch='ppc32', session_id='session://x', graph=graph) as s:
+        s.run(_FakeTool)
+        row = graph._con.execute(
+            "SELECT props FROM nodes WHERE type='AnalysisEvent'"
+        ).fetchone()
+        props = json.loads(row['props'])
+        assert 'timestamp' in props
+        dt = datetime.datetime.fromisoformat(props['timestamp'])
+        assert dt.year >= 2024

@@ -19,7 +19,7 @@ Usage::
     from ablation.analyzers.taint_tracker_ppc32 import PPC32TaintTracker
     from ablation.analyzers.semantic_search import SemanticSearcher
 
-    with RESession(ctx, arch='ppc32', session_id='session://ibm-iplrom') as s:
+    with RESession(ctx, arch='ppc32', session_id='session://ibm-iplrom', intent='sweep') as s:
         classifications = s.run(SinkArgClassifier)
         paths           = s.run(PPC32TaintTracker)
         hits            = s.run(SemanticSearcher,
@@ -34,7 +34,7 @@ import json
 import logging
 from typing import Any, Callable
 
-from ablation.analyzers.knowledge_graph import KnowledgeGraph
+from ablation.analyzers.knowledge_graph import KnowledgeGraph, VALID_INTENTS
 
 __all__ = ['RESession']
 
@@ -134,10 +134,16 @@ class RESession:
         arch: str,
         session_id: str,
         graph: KnowledgeGraph | None = None,
+        intent: str = 'sweep',
     ) -> None:
+        if intent not in VALID_INTENTS:
+            raise ValueError(
+                f"intent must be one of {sorted(VALID_INTENTS)}, got {intent!r}"
+            )
         self._ctx = ctx
         self._arch = arch
         self._session_id = session_id
+        self._intent = intent
         self._g = graph if graph is not None else KnowledgeGraph.open()
         # Each entry: {'event_id': str, 'candidates': int, 'cls_name': str}
         self._events: list[dict[str, Any]] = []
@@ -176,6 +182,7 @@ class RESession:
                 'confirmed': confirmed,
                 'fp_rate': fp_rate,
                 'root_cause': root_cause,
+                'intent': self._intent,
             },
         )
         self._events.append({'event_id': event_id, 'candidates': candidates, 'cls_name': cls_name})

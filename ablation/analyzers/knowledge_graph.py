@@ -40,13 +40,20 @@ Usage::
 from __future__ import annotations
 
 import dataclasses
+import datetime
 import json
 import sqlite3
 import uuid
 from pathlib import Path
 from typing import Any
 
-__all__ = ['KnowledgeGraph', 'ContextCoverage']
+__all__ = ['KnowledgeGraph', 'ContextCoverage', 'VALID_INTENTS']
+
+# Valid intent values for get_context_for_binary() and RESession.
+# sweep       — full initial binary sweep; all sections included (default).
+# confirm     — confirming a known candidate; sessions filtered to those with a verdict.
+# version_diff — cross-version patch comparison; gaps and sessions excluded.
+VALID_INTENTS: frozenset[str] = frozenset({'sweep', 'confirm', 'version_diff'})
 
 _DEFAULT_DB = Path.home() / '.ablation' / 'knowledge_graph.db'
 
@@ -84,6 +91,7 @@ class ContextCoverage:
 
     coverage_score: 0.0–1.0 composite.  Weights: modules 50%, sessions 30%, chains 20%.
     Gaps do not raise the score — knowing what is missing is metadata, not coverage.
+    intent: the RE task type that shaped which sections were included.
     """
 
     arch: str
@@ -93,6 +101,7 @@ class ContextCoverage:
     session_count: int
     chain_count: int
     coverage_score: float
+    intent: str = 'sweep'
 
     def sufficient(self, threshold: float = 0.3) -> bool:
         """True when coverage_score >= threshold.  Default 0.3 ≈ ~2 modules present."""
@@ -101,7 +110,7 @@ class ContextCoverage:
     def __str__(self) -> str:
         flag = '  [arch-family fallback]' if self.arch_family_used else ''
         return (
-            f"coverage={self.coverage_score:.2f}{flag}  "
+            f"coverage={self.coverage_score:.2f}{flag}  intent={self.intent}  "
             f"modules={self.module_count}  gaps={self.gap_count}  "
             f"sessions={self.session_count}  chains={self.chain_count}"
         )
@@ -198,6 +207,8 @@ class KnowledgeGraph:
         confirmed: int,
         fp_rate: float,
         root_cause: str = '',
+        intent: str = 'sweep',
+        timestamp: str | None = None,
     ) -> str:
         """Record one tool run as an AnalysisEvent node. Returns the event id."""
         event_id = f"event://{uuid.uuid4().hex[:12]}"
@@ -209,6 +220,8 @@ class KnowledgeGraph:
             'confirmed': confirmed,
             'fp_rate': fp_rate,
             'root_cause': root_cause,
+            'intent': intent,
+            'timestamp': timestamp or datetime.datetime.utcnow().isoformat(),
         }
         self.add_node('AnalysisEvent', event_id, props)
         if session_id:
@@ -251,7 +264,7 @@ class KnowledgeGraph:
     ) -> str:
         """Record a tool run as an AnalysisEvent. Returns event_id.
 
-        results keys: session_id, candidates, confirmed, fp_rate, root_cause.
+        results keys: session_id, candidates, confirmed, fp_rate, root_cause, intent.
         Only add_run() writes AnalysisEvent nodes during a live session;
         callers do not execute SQL directly.
         """
@@ -263,6 +276,7 @@ class KnowledgeGraph:
             confirmed=int(results.get('confirmed', 0)),
             fp_rate=float(results.get('fp_rate', 0.0)),
             root_cause=str(results.get('root_cause', '')),
+            intent=str(results.get('intent', 'sweep')),
         )
 
     # ── Query API ─────────────────────────────────────────────────────────────
@@ -273,13 +287,19 @@ class KnowledgeGraph:
         fmt: str,
         vuln_class: str | None = None,
         access_level: str = 'public',
+        intent: str = 'sweep',
     ) -> str:
         """Return structured context for an LLM prompt given a binary's arch and format.
 
+        intent: RE task type — 'sweep' (default), 'confirm', or 'version_diff'.
+          sweep       — all sections; full context for initial binary analysis.
+          confirm     — sessions filtered to those with a non-empty verdict.
+          version_diff — gaps and sessions omitted; only modules and tool chains.
+
         Traverses:
           arch → Module nodes (SUPPORTS edges) → sorted by workflow_stage
-          arch → KnownGap nodes (json_extract match)
-          arch → Session nodes (most recent 5 verdicts)
+          arch → KnownGap nodes (json_extract match)  [omitted for version_diff]
+          arch → Session nodes (most recent 5 verdicts)  [omitted for version_diff]
           vuln_class → Module nodes (DETECTS edges, if provided)
           arch → SessionToolChain hyperedges (most recent 5)
 
@@ -287,7 +307,7 @@ class KnowledgeGraph:
         notes the substitution in the returned string.  See get_context_with_coverage()
         for the full (context_str, ContextCoverage) form.
         """
-        ctx, _ = self._build_context(arch, fmt, vuln_class, access_level)
+        ctx, _ = self._build_context(arch, fmt, vuln_class, access_level, intent)
         return ctx
 
     def get_context_with_coverage(
@@ -296,12 +316,14 @@ class KnowledgeGraph:
         fmt: str,
         vuln_class: str | None = None,
         access_level: str = 'public',
+        intent: str = 'sweep',
     ) -> 'tuple[str, ContextCoverage]':
         """Return (context_str, ContextCoverage) for the given arch and format.
 
         ContextCoverage carries:
           coverage_score: 0.0–1.0 composite (modules 50%, sessions 30%, chains 20%)
           arch_family_used: True when the returned context is for a family arch
+          intent: the RE task type that shaped which sections were included
           module_count, gap_count, session_count, chain_count: raw counts
 
         Use coverage.sufficient() to gate whether to proceed with graph-informed
@@ -312,7 +334,7 @@ class KnowledgeGraph:
                 # graph is thin; proceed manually
                 ...
         """
-        return self._build_context(arch, fmt, vuln_class, access_level)
+        return self._build_context(arch, fmt, vuln_class, access_level, intent)
 
     def get_recommendations_for_task(
         self,
@@ -352,30 +374,74 @@ class KnowledgeGraph:
         fp_threshold: float = 0.3,
         min_events: int = 5,
     ) -> list[dict[str, Any]]:
-        """Return modules whose avg fp_rate exceeds fp_threshold over >= min_events runs.
+        """Return modules whose weighted avg fp_rate exceeds fp_threshold over >= min_events runs.
+
+        Three filters remove already-documented gaps from the results:
+          1. Events pointed to by a SUPERSEDES edge from any KnownGap node.
+          2. Events whose root_cause matches a documented KnownGap root_cause for the same arch.
+        Recency weighting: events older than 30 days receive 50% weight; older than
+        90 days receive 10% weight.  Events without a timestamp receive full weight.
 
         These are MUSE candidates: modules that frequently fail on a specific
         architecture but have no KnownGap node yet. Callers should create a
-        KnownGap node and HAS_GAP edge for each returned entry.
+        KnownGap node and HAS_GAP edge for each returned entry, or call add_gap_node().
         """
-        rows = self._con.execute(
-            "SELECT props FROM nodes WHERE type='AnalysisEvent'"
-        ).fetchall()
+        now = datetime.datetime.utcnow()
 
+        # Events explicitly superseded by a KnownGap via SUPERSEDES edge.
+        superseded: set[str] = set()
+        for row in self._con.execute(
+            """
+            SELECT e.dst FROM edges e
+            JOIN nodes n ON n.id = e.src
+            WHERE e.type = 'SUPERSEDES' AND n.type = 'KnownGap'
+            """
+        ).fetchall():
+            superseded.add(row[0])
+
+        # Root causes documented in KnownGap nodes, keyed by arch.
+        documented: dict[str, set[str]] = {}
+        for row in self._con.execute(
+            "SELECT props FROM nodes WHERE type='KnownGap'"
+        ).fetchall():
+            try:
+                p = json.loads(row['props'])
+            except (json.JSONDecodeError, TypeError):
+                continue
+            a = str(p.get('arch', ''))
+            rc = str(p.get('root_cause', ''))
+            if a and rc:
+                documented.setdefault(a, set()).add(rc)
+
+        # Load AnalysisEvent nodes, applying both exclusion filters.
+        rows = self._con.execute(
+            "SELECT id, props FROM nodes WHERE type='AnalysisEvent'"
+        ).fetchall()
         groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
         for r in rows:
+            if r['id'] in superseded:
+                continue
             try:
                 p = json.loads(r['props'])
             except (json.JSONDecodeError, TypeError):
                 continue
-            key = (str(p.get('module', '')), str(p.get('arch', '')))
+            a = str(p.get('arch', ''))
+            rc = str(p.get('root_cause', ''))
+            if rc and rc in documented.get(a, set()):
+                continue
+            key = (str(p.get('module', '')), a)
             groups.setdefault(key, []).append(p)
 
         candidates: list[dict[str, Any]] = []
         for (module, arch), events in groups.items():
             if len(events) < min_events:
                 continue
-            avg_fp = sum(float(e.get('fp_rate', 0.0)) for e in events) / len(events)
+            total_w = sum(_event_weight(e.get('timestamp', ''), now) for e in events)
+            weighted_fp = sum(
+                float(e.get('fp_rate', 0.0)) * _event_weight(e.get('timestamp', ''), now)
+                for e in events
+            )
+            avg_fp = weighted_fp / total_w if total_w > 0 else 0.0
             if avg_fp < fp_threshold:
                 continue
             root_causes = sorted({
@@ -392,6 +458,34 @@ class KnowledgeGraph:
             })
 
         return sorted(candidates, key=lambda x: x['avg_fp_rate'], reverse=True)
+
+    def add_gap_node(
+        self,
+        gap_id: str,
+        arch: str,
+        description: str,
+        root_cause: str = '',
+        workaround: str = '',
+        module_needed: str = '',
+        supersedes_event_ids: list[str] | None = None,
+    ) -> None:
+        """Create a KnownGap node and optionally add SUPERSEDES edges to AnalysisEvents.
+
+        gap_id: stable identifier, e.g. 'gap://ppc32/xcoff_no_plt'.
+        supersedes_event_ids: AnalysisEvent IDs that this gap documents. SUPERSEDES
+        edges are added from the gap node to each event so get_gap_candidates()
+        excludes them from future gap scoring.
+        """
+        props: dict[str, Any] = {
+            'arch': arch,
+            'description': description,
+            'root_cause': root_cause,
+            'workaround': workaround,
+            'module_needed': module_needed,
+        }
+        self.add_node('KnownGap', gap_id, props)
+        for event_id in (supersedes_event_ids or []):
+            self.add_edge(gap_id, event_id, 'SUPERSEDES')
 
     # ── Hyperedge API ─────────────────────────────────────────────────────────
 
@@ -511,10 +605,26 @@ class KnowledgeGraph:
         fmt: str,
         vuln_class: str | None,
         access_level: str,
+        intent: str = 'sweep',
     ) -> 'tuple[str, ContextCoverage]':
-        """Build context string and coverage metadata. Used by both public context methods."""
+        """Build context string and coverage metadata. Used by both public context methods.
+
+        intent routing:
+          sweep       — all sections (default).
+          confirm     — sessions filtered to those with a non-empty verdict.
+          version_diff — gaps and sessions omitted; only modules and tool chains returned.
+        """
+        if intent not in VALID_INTENTS:
+            raise ValueError(
+                f"intent must be one of {sorted(VALID_INTENTS)}, got {intent!r}"
+            )
+
         effective_arch, family_used = self._resolve_arch_with_modules(arch)
         lines: list[str] = []
+
+        if intent != 'sweep':
+            lines.append(f"[INTENT: {intent}]")
+            lines.append("")
 
         if family_used:
             lines.append(
@@ -534,31 +644,43 @@ class KnowledgeGraph:
                     lines.append(f"    limits: {p['limitations']}")
             lines.append("")
 
-        gaps = self._gaps_for_arch(effective_arch)
-        if gaps:
-            lines.append(f"[KNOWN GAPS for arch={effective_arch}]")
-            for g in gaps:
-                p = _props(g)
-                desc = p.get('description', g['id'])
-                lines.append(f"  {desc}")
-                if p.get('workaround'):
-                    lines.append(f"    workaround: {p['workaround']}")
-                if p.get('module_needed'):
-                    lines.append(f"    module_needed: {p['module_needed']}")
-            lines.append("")
+        # Gaps: omitted for version_diff (cross-version diff doesn't need gap context).
+        if intent == 'version_diff':
+            gaps: list[sqlite3.Row] = []
+        else:
+            gaps = self._gaps_for_arch(effective_arch)
+            if gaps:
+                lines.append(f"[KNOWN GAPS for arch={effective_arch}]")
+                for g in gaps:
+                    p = _props(g)
+                    desc = p.get('description', g['id'])
+                    lines.append(f"  {desc}")
+                    if p.get('workaround'):
+                        lines.append(f"    workaround: {p['workaround']}")
+                    if p.get('module_needed'):
+                        lines.append(f"    module_needed: {p['module_needed']}")
+                lines.append("")
 
-        sessions = self._sessions_for_arch(effective_arch)
-        if sessions:
-            lines.append(f"[PRIOR SESSIONS for arch={effective_arch}]")
-            for s in sessions:
-                p = _props(s)
-                verdict = p.get('verdict', '?')
-                tools = p.get('tool_sequence', [])
-                date = p.get('date', '')
-                lines.append(
-                    f"  {s['id']}  date={date}  verdict={verdict}  tools={tools}"
-                )
-            lines.append("")
+        # Sessions: omitted for version_diff; confirm filters to sessions with a verdict.
+        if intent == 'version_diff':
+            sessions: list[sqlite3.Row] = []
+        else:
+            all_sessions = self._sessions_for_arch(effective_arch)
+            if intent == 'confirm':
+                sessions = [s for s in all_sessions if _props(s).get('verdict', '')]
+            else:
+                sessions = all_sessions
+            if sessions:
+                lines.append(f"[PRIOR SESSIONS for arch={effective_arch}]")
+                for s in sessions:
+                    p = _props(s)
+                    verdict = p.get('verdict', '?')
+                    tools = p.get('tool_sequence', [])
+                    date = p.get('date', '')
+                    lines.append(
+                        f"  {s['id']}  date={date}  verdict={verdict}  tools={tools}"
+                    )
+                lines.append("")
 
         if vuln_class:
             vc_modules = self._modules_for_vuln_class(f"vuln://{vuln_class}")
@@ -598,6 +720,7 @@ class KnowledgeGraph:
             session_count=sc,
             chain_count=cc,
             coverage_score=coverage_score,
+            intent=intent,
         )
         has_content = bool(modules or gaps or sessions or chains)
         context_str = (
@@ -703,6 +826,29 @@ class KnowledgeGraph:
 
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
+
+def _event_weight(timestamp_str: str, now: datetime.datetime) -> float:
+    """Recency weight for a single AnalysisEvent.
+
+    Events without a timestamp (written before this field existed) receive full
+    weight to avoid penalizing existing data.  Age buckets:
+      <30 days  → 1.0 (full)
+      30–90 days → 0.5 (half)
+      >90 days   → 0.1 (marginal)
+    """
+    if not timestamp_str:
+        return 1.0
+    try:
+        ts = datetime.datetime.fromisoformat(timestamp_str)
+        age_days = (now - ts).days
+        if age_days < 30:
+            return 1.0
+        if age_days < 90:
+            return 0.5
+        return 0.1
+    except (ValueError, TypeError):
+        return 1.0
+
 
 def _props(row: sqlite3.Row) -> dict[str, Any]:
     """Decode a node's props JSON, returning {} on any error."""
