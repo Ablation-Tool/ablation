@@ -224,6 +224,8 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Find AIX PPC32 external-call stub VAs for system()/popen()/exec*() in XCOFF32" | `XCOFF32Info.from_path(path).import_stubs()` → `{'.system': va, '.popen': va, ...}`; searches COFF symtab (inline) then stub pattern lwz r12+stw r2 |
 | "Find all callers of an AIX PPC32 import stub" | `XCOFF32Info.from_path(path).callers_of(stub_va)` → `[call_va, ...]`; exhaustive bl scan of .text |
 | "Triage dangerous imports + stub VAs + caller count in one call AIX XCOFF32" | `XCOFF32Info.from_path(path).summary()` |
+| "AIX XCOFF32: stride BL scan — all call sites, immune to embedded trap/NULL-word tables in .text" | `from ablation.analyzers.xcoff32_call_scanner import XCOFF32CallScanner; s = XCOFF32CallScanner.from_binary(binary); s.named_calls()` → `{import_name: [caller_vas]}`; `s.calls_to(stub_va)` for one target; `s.scan_all()` for full {target: [callers]} map; see docs/reference-modules/xcoff32-call-scanner.md |
+| "AIX XCOFF32: classify TOC slots from LDREL — identify function import stubs vs data pointers" | `from ablation.core.xcoff_parser import classify_toc_slots; slots = classify_toc_slots(binary)` → `{toc_offset: XcoffTocSlot}`; kind = FUNC_IMPORT/DATA_PTR/SECTION_REF/UNKNOWN; use after parse() to map TOC[N] to import names without manual LDSYM counting |
 | "Extract files from Huawei VRP squashfs v4 XZ image" | `HuaweiSquashfsExtractorsqfs_path.extractinner_path` |
 | "Extract files from AMI BMC CramFS firmware" | `AmiCramFSExtractor.from_imageima_path, offset.extract_file('/path')` |
 | "Extract FortiOS hardware firmware .out file" | `FortiOSHardwareExtractor.from_path(fw).extract_to(outdir)` |

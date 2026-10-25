@@ -116,6 +116,11 @@ _LDHDR64_FMT = '>IIIIIIQQQQ'
 _LDHDR64_SZ  = 56
 
 
+# XCOFF32 loader relocation: 12 bytes
+# l_vaddr(I), l_symndx(i), l_rtype(H), l_rsecnm(h)
+_LDREL32_FMT = '>IiHh'
+_LDREL32_SZ  = 12
+
 # XCOFF32 symbol table entry: 18 bytes
 _SYMENT32_FMT = '>8sIhHBB'   # name(8B), value(4B), scnum(2B sn), type(2B), sclass(1B), numaux(1B)
 _SYMENT32_SZ  = 18
@@ -165,6 +170,26 @@ class XcoffSymbol:
 
 
 @dataclass
+class XcoffTocSlot:
+    """One XCOFF32 TOC slot classified from LDREL records.
+
+    FUNC_IMPORT — pre-link word is 0; the slot holds a function descriptor
+                  pointer filled by the dynamic linker.  name = import symbol name.
+    DATA_PTR    — pre-link word is non-zero; the slot is a self-relative offset
+                  into .data or .bss.  name = section name ('.data' or '.bss').
+    SECTION_REF — same as DATA_PTR but symndx looks like a bare section number
+                  (1..nscns), not a LDSYM index.
+    UNKNOWN     — doesn't fit either pattern cleanly; inspect manually.
+    """
+    toc_offset: int   # byte offset from toc_va (e.g. 0xa4 for gets in yppasswd)
+    va: int           # absolute VA of this TOC word in the data section
+    prelink: int      # the word value before dynamic linking (0 = function stub)
+    symndx: int       # raw l_symndx from LDREL (signed)
+    kind: str         # 'FUNC_IMPORT' | 'DATA_PTR' | 'SECTION_REF' | 'UNKNOWN'
+    name: str         # import symbol name, section name, or ''
+
+
+@dataclass
 class XcoffBinary:
     """Parsed XCOFF32 or XCOFF64 binary."""
 
@@ -174,10 +199,11 @@ class XcoffBinary:
     text_start: int
     data_start: int
     toc_va:     int
-    sections:   List[XcoffSection] = field(default_factory=list)
-    exports:    List[XcoffSymbol]  = field(default_factory=list)
-    imports:    List[XcoffSymbol]  = field(default_factory=list)
-    _sec_map:   Dict[str, XcoffSection] = field(default_factory=dict, repr=False)
+    sections:    List[XcoffSection] = field(default_factory=list)
+    exports:     List[XcoffSymbol]  = field(default_factory=list)
+    imports:     List[XcoffSymbol]  = field(default_factory=list)
+    _sec_map:    Dict[str, XcoffSection] = field(default_factory=dict, repr=False)
+    loader_data: bytes = field(default=b'', repr=False)
 
     def section(self, name: str) -> Optional[XcoffSection]:
         return self._sec_map.get(name)
@@ -602,6 +628,112 @@ def _merge_symtab64(
             loader_exports.append(sym)
 
 
+def classify_toc_slots(binary: XcoffBinary) -> Dict[int, XcoffTocSlot]:
+    """Parse XCOFF32 LDREL records and classify all TOC slots by kind.
+
+    Returns a dict keyed by ``toc_offset`` (byte distance from toc_va).
+    Only XCOFF32 (ppc32) binaries are supported; returns {} for ppc64.
+
+    Classification:
+    - FUNC_IMPORT  pre-link word == 0; symndx resolves to an imported LDSYM
+    - DATA_PTR     pre-link word != 0; the slot is a section-relative data pointer
+    - SECTION_REF  pre-link word != 0; symndx matches a section number (1..nscns)
+    - UNKNOWN      any other combination
+
+    The primary discriminator is always the pre-link word value, which is 0 for
+    every function-descriptor slot that the dynamic linker must fill.  The symndx
+    is used only for name lookup on FUNC_IMPORT slots; section-number symndx
+    values (1, 2, 3) on non-zero slots confirm DATA_PTR/SECTION_REF.
+
+    Requires that ``binary.loader_data`` is non-empty (populated by ``parse()``).
+    Requires that ``binary.data`` is available and contains the pre-link TOC words.
+    """
+    if binary.arch != 'ppc32' or not binary.loader_data:
+        return {}
+
+    ldr = binary.loader_data
+    if len(ldr) < 32:
+        return {}
+
+    (l_version, l_nsyms, l_nreloc, _l_istlen,
+     _l_nimpid, l_impoff, l_stlen, l_stoff) = struct.unpack_from(_LDHDR32_FMT, ldr, 0)
+
+    # Build flat LDSYM name list for symndx lookup
+    stab = ldr[l_stoff:l_stoff + l_stlen] if l_stoff + l_stlen <= len(ldr) else b''
+    ldsym_names: List[str] = []
+    sym_base = 32
+    for i in range(l_nsyms):
+        off = sym_base + i * _LDSYM32_SZ
+        if off + _LDSYM32_SZ > len(ldr):
+            break
+        name8    = ldr[off:off + 8]
+        l_zeroes = struct.unpack_from('>I', name8, 0)[0]
+        l_noff   = struct.unpack_from('>I', name8, 4)[0]
+        if l_zeroes != 0:
+            sname = name8.rstrip(b'\x00').decode('ascii', errors='replace')
+        elif l_noff < len(stab):
+            try:
+                null_pos = stab.index(b'\x00', l_noff)
+                sname = stab[l_noff:null_pos].decode('utf-8', errors='replace')
+            except ValueError:
+                sname = stab[l_noff:].decode('utf-8', errors='replace')
+        else:
+            sname = f'_sym_{i}'
+        ldsym_names.append(sname)
+
+    # LDREL table starts immediately after LDSYM table
+    reloc_base = sym_base + l_nsyms * _LDSYM32_SZ
+    toc_va = binary.toc_va
+    data_sec = binary.data
+
+    result: Dict[int, XcoffTocSlot] = {}
+    for r in range(l_nreloc):
+        off = reloc_base + r * _LDREL32_SZ
+        if off + _LDREL32_SZ > len(ldr):
+            break
+
+        l_vaddr, l_symndx, _l_rtype, _l_rsecnm = struct.unpack_from(_LDREL32_FMT, ldr, off)
+
+        # Only classify TOC-range slots (within 512 bytes of toc_va in either direction)
+        toc_offset = l_vaddr - toc_va
+        if not (-512 <= toc_offset <= 1024):
+            continue
+
+        # Read pre-link word from data section
+        prelink = 0
+        if data_sec is not None:
+            data_off = l_vaddr - data_sec.vaddr
+            if 0 <= data_off <= len(data_sec.data) - 4:
+                prelink = struct.unpack_from('>I', data_sec.data, data_off)[0]
+
+        # Classify
+        nscns = len(binary.sections)
+        if prelink == 0 and 0 <= l_symndx < len(ldsym_names):
+            kind = 'FUNC_IMPORT'
+            name = ldsym_names[l_symndx]
+        elif prelink != 0 and 1 <= l_symndx <= nscns:
+            kind = 'SECTION_REF'
+            sec = binary.sections[l_symndx - 1]
+            name = sec.name
+        elif prelink != 0:
+            kind = 'DATA_PTR'
+            name = ''
+        else:
+            kind = 'UNKNOWN'
+            name = ldsym_names[l_symndx] if 0 <= l_symndx < len(ldsym_names) else ''
+
+        result[toc_offset] = XcoffTocSlot(
+            toc_offset=toc_offset,
+            va=l_vaddr,
+            prelink=prelink,
+            symndx=l_symndx,
+            kind=kind,
+            name=name,
+        )
+
+    return result
+
+
 def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
     """Parse an XCOFF32 or XCOFF64 binary.
 
@@ -693,6 +825,7 @@ def parse(path: str | Path, data: Optional[bytes] = None) -> XcoffBinary:
         toc_va=toc_va,
         sections=sections,
         _sec_map=sec_map,
+        loader_data=loader_data,
     )
 
     # Parse .loader section
