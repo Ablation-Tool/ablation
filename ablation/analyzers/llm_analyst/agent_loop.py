@@ -16,7 +16,6 @@ field in AnalysisResult counts the number of pre-fetch calls made (0–4).
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import tempfile
@@ -252,12 +251,10 @@ class AgentLoop:
         Invoke `claude -p -` in an isolated child session and return the text result.
 
         Isolation:
-          --bare              skips Stop/PostToolUse hooks and auto-memory so
-                              batch calls don't trigger chimes or persist state
           --system-prompt     replaces the default system prompt (incl. CLAUDE.md)
                               with the RE-specific prompt
           --disallowedTools   removes Bash/Edit/Write to block prompt-injection paths
-          cwd=tempdir         no project CLAUDE.md in scope
+          cwd=tempdir         no project CLAUDE.md loads in the child session
 
         Raises RuntimeError on non-zero exit or is_error=true in the envelope.
         """
