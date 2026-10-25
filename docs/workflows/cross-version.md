@@ -18,24 +18,38 @@ The three-stage pipeline works without symbol names or stable VAs:
 
 ```mermaid
 flowchart TD
-    IN(["func_va_v1"])
+    IN(["func_va_v1"]):::input
 
-    S1["Stage 1 · Structural pre-filter\nbasic_block_count ±2  ·  edge_count ±30%\nreduces N=thousands to N~tens\nno instruction decode — CFG header only"]
+    S1["Stage 1 · Structural pre-filter\nbasic_block_count ±2  ·  edge_count ±30%\nReduces N=thousands to N~tens\nNo instruction decode · CFG header only"]:::stage1
 
-    S2["Stage 2 · Mnemonic 4-gram Jaccard\nstrip addresses · normalize immediates\nbuild 4-gram sets from mnemonic sequence\nJaccard(A,B) = |A ∩ B| / |A ∪ B|\nkeep top-10 candidates"]
+    S2["Stage 2 · Mnemonic 4-gram Jaccard\nStrip addresses · normalize immediates\nBuild 4-gram sets from mnemonic sequence\nJaccard(A,B) = |A ∩ B| / |A ∪ B|\nKeep top-10 candidates"]:::stage2
 
-    TIE{"top-2 scores\nwithin 0.05?"}
+    TIE{"Top-2 scores\nwithin 0.05?"}:::decision
 
-    S3["Stage 3 · BERT semantic tiebreaker\nSemanticSearcher encoding for both functions\ncosine similarity in 768-dim space"]
+    S3["Stage 3 · BERT semantic tiebreaker\nSemanticSearcher encoding for both functions\nCosine similarity in 768-dim space"]:::stage3
 
-    OUT(["result.va_v2  ·  result.confidence  ·  result.stage"])
+    OUT(["result.va_v2  ·  result.confidence  ·  result.stage"]):::output
 
-    IN --> S1
-    S1 -->|"N~tens candidates"| S2
-    S2 --> TIE
-    TIE -->|"yes — tie"| S3
-    TIE -->|"no — clear winner"| OUT
-    S3 --> OUT
+    IN  --> S1
+    S1  -->|"N~tens candidates"| S2
+    S2  --> TIE
+    TIE -->|"yes · tie"| S3
+    TIE -->|"no · clear winner"| OUT
+    S3  --> OUT
+
+    classDef input    fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef stage1   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef stage2   fill:#004d40,stroke:#00695c,color:#fff
+    classDef decision fill:#37474f,stroke:#546e7a,color:#fff
+    classDef stage3   fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef output   fill:#1b5e20,stroke:#2e7d32,color:#fff
+
+    linkStyle 0 stroke:#e65100,stroke-width:2px
+    linkStyle 1 stroke:#004d40,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#6a1b9a,stroke-width:2px,stroke-dasharray:6 3
+    linkStyle 4 stroke:#2e7d32,stroke-width:3px
+    linkStyle 5 stroke:#6a1b9a,stroke-width:2px
 ```
 
 ---
