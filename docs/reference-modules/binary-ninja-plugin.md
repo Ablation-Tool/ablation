@@ -1,16 +1,16 @@
-# Browser Extension Auditing
+# Binary Ninja Plugin
 
-Audit Chrome/Edge/Firefox extension security: detecting broadly-wildcarded `externally_connectable` host patterns, privileged Chrome messaging bus exposure, unsafe `eval()` usage, CSP policy weaknesses, and host permission over-grants: with findings mapped to CWE and severity for systematic extension security review.
+Ablation integration for Binary Ninja: annotates the disassembly with corpus function names, pattern sweep results, and semantic search navigation — all backed by the same `BinaryContext` session cache used in CLI analysis.
 
 ---
 
 ## Why this exists
 
-1. **FortiClient EMS ships a browser extension (FPAM) that exposes a privileged Chrome messaging bus to web pages via `externally_connectable`.** Manual analysis of `manifest.json` and the background service worker confirmed FPAM-EXT-1: the `externally_connectable` host pattern included broad wildcards, enabling any page matching the pattern to send privileged messages to the extension: a cross-origin privilege escalation vector. `BrowserExtensionAuditor` automates detection of this pattern class across all browser extension targets.
+1. **Names recovered by ablation (`ctx.set_name()`) are invisible in Binary Ninja until manually re-entered.** The plugin reads `~/.ablation/func_id.db` on binary open and applies every confirmed name to the matching function address — the function list and cross-reference graph update immediately, with no re-analysis required.
 
-2. **`externally_connectable` with `*://*/ ` or `<all_urls>` gives every web page access to the extension's `chrome.runtime.sendMessage` bus**: if the background service worker does not validate the sender identity, any malicious page can invoke extension APIs that have access to browser storage, native messaging, or cross-domain network requests. `BrowserExtensionAuditor` detects both the broad pattern and the missing sender-check pattern simultaneously.
+2. **Pattern sweeps and semantic queries run from the CLI; the Binary Ninja view stays out of sync.** `Ablation > Sweep Binary` runs `CorpusBuilder` → `SemanticSearcher` → `PatternLibrary.sweep()` inline and bookmarks every hit with a score annotation, so sweep candidates are visible in the disassembly without a separate terminal session.
 
-3. **`BrowserExtensionAuditor.scan_file()` processes individual JS files**: enabling targeted analysis of a specific service worker or content script alongside the full extension scan. `ExtFinding.finding_class` categorizes findings into `externally_connectable_broad`, `missing_sender_check`, `eval_usage`, `csp_unsafe`, and `overgrant_permission` for triage prioritization.
+3. **Navigating to a semantically described function requires knowing its address.** `Ablation > Semantic Search` takes a plain-English query, runs `SemanticSearcher.query()` against the session corpus, and jumps the Binary Ninja view to the highest-scoring result — top-10 results are listed in the result panel.
 
 ---
 
@@ -18,96 +18,83 @@ Audit Chrome/Edge/Firefox extension security: detecting broadly-wildcarded `exte
 
 ```mermaid
 flowchart TD
-    A["BrowserExtensionAuditor.from_path(extension_root)"] --> B["scan() → List[ExtFinding]\n  Parse manifest.json:\n    Check externally_connectable.matches for broad patterns\n    Check permissions for over-grant (tabs, <all_urls>, nativeMessaging)\n    Check content_security_policy for unsafe-inline / unsafe-eval\n  Scan background service worker + content scripts:\n    Missing sender check: chrome.runtime.onMessageExternal.addListener\n      without event.sender validation\n    eval/Function() usage\n    innerHTML assignment with non-const string\n  → List[ExtFinding]"]
-    B --> C["ExtFinding:\n  path: Path\n  rel_path: str\n  lineno: int\n  finding_class: str\n  severity: CRITICAL | HIGH | MEDIUM | LOW\n  cwe: str\n  title: str\n  detail: str\n  snippet: str\n  evidence: str\n  fmt() → str"]
-    A --> D["scan_file(path) → List[ExtFinding]\n  Scan a single JS file\n  Returns findings for that file only"]
+    A["Binary Ninja opens binary"] --> B["binja_plugin.py:\n  sha256(bv.file.filename)[:16]\n  _db_has_binary(sha) → bool"]
+    B -->|"corpus entry exists"| C["_load_corpus(sha)\n  SELECT va, name FROM functions\n  WHERE binary_id.sha256 LIKE sha%\n  → {va: name}"]
+    C --> D["For each func in bv.functions:\n  if va in corpus and name not sub_/fn_:\n    func.name = corpus[va]\n  Tag type: Ablation-Sig"]
+
+    E["Ablation > Sweep Binary"] --> F["CorpusBuilder.build(path)\n  → /tmp/ablation_binja_<stem>.db"]
+    F --> G["SemanticSearcher.build_corpus()"]
+    G --> H["PatternLibrary.sweep(searcher, top_k=5, min_score=0.30)\n  → {query: SearchResult}"]
+    H --> I["bv.get_function_at(va).add_tag(Ablation-Sweep, score)\n  for each hit"]
+
+    J["Ablation > Semantic Search"] --> K["bn.get_text_line_input('Query')"]
+    K --> L["SemanticSearcher.query(query, top_k=10)\n  → List[FuncMatch]"]
+    L --> M["bv.navigate(bv.view, results[0].va)\n  show top-10 summary"]
 ```
+
+---
+
+## Installation
+
+Copy `ablation/integrations/binja_plugin.py` to the Binary Ninja plugins directory and restart Binary Ninja:
+
+```
+macOS:   ~/Library/Application Support/Binary Ninja/plugins/
+Linux:   ~/.binaryninja/plugins/
+Windows: %APPDATA%\Binary Ninja\plugins\
+```
+
+The `ablation` package must be installed in the same Python environment Binary Ninja uses:
+
+```bash
+pip install ablation
+# verify from Binary Ninja's Python console:
+# >>> import ablation
+```
+
+---
+
+## Commands
+
+| Command | Action |
+|:---|:---|
+| `Ablation > Annotate from Corpus` | Load confirmed names from `~/.ablation/func_id.db` into the function list |
+| `Ablation > Sweep Binary` | Run pattern sweep; bookmark hits with score tags |
+| `Ablation > Semantic Search` | Query by description; navigate to top result |
 
 ---
 
 ## Usage
 
+**Load names after a CLI session:**
+
 ```python
-from ablation.analyzers.browser_extension_auditor import BrowserExtensionAuditor
-
-# Full extension scan (extracted or unpacked .crx / .xpi)
-auditor = BrowserExtensionAuditor.from_path('/tmp/fpam_extension_extracted/')
-findings = auditor.scan()
-print(BrowserExtensionAuditor.report(findings))
-
-# Filter by finding class
-ec_findings = [f for f in findings if f.finding_class == 'externally_connectable_broad']
-for f in ec_findings:
-    print(f.fmt())
-
-# Single file scan
-single = BrowserExtensionAuditor.scan_file('/tmp/fpam_extension_extracted/background.js')
-for f in single:
-    print(f.fmt())
+# In a CLI session, confirm names as usual:
+ctx.set_name(0xdeadbeef, "parse_http_request", source="confirmed")
+# Then in Binary Ninja: Ablation > Annotate from Corpus
+# All set_name() entries for this binary appear in the function list immediately.
 ```
 
-To unpack a `.crx` before scanning:
-```bash
-# Chrome CRX3 is a protobuf wrapper around a zip
-unzip -q extension.crx -d /tmp/extension_extracted/ 2>/dev/null || \
-  python3 -c "import zipfile; zipfile.ZipFile('extension.crx').extractall('/tmp/extension_extracted/')"
-```
+**Sweep from Binary Ninja:**
+
+Open the binary, then run `Ablation > Sweep Binary`. On the first run, `CorpusBuilder` takes ~30s to build the function corpus; subsequent runs read from the cached `.db` at `/tmp/ablation_binja_<stem>.db`.
+
+**Semantic search:**
+
+Run `Ablation > Semantic Search`, type a description such as `"HTTP chunked transfer decoder"`, and Binary Ninja navigates to the highest-confidence match. The top-10 results with addresses and scores appear in the result dialog.
 
 ---
 
-## Example output
+## Notes
 
-The following illustrates the browser extension audit output format. Actual findings are extension-specific.
-
-```
-BrowserExtensionAuditor: fpam_extension_extracted/
-
-[CRITICAL] externally_connectable_broad: Broad externally_connectable host pattern
-  File: manifest.json:1
-  CWE: CWE-284
-  externally_connectable.matches includes '*://*/' — all web pages can message this extension
-  Evidence: "*://*/"
-
-[HIGH] missing_sender_check: onMessageExternal listener without sender validation
-  File: background.js:<line>
-  CWE: CWE-284
-  chrome.runtime.onMessageExternal.addListener without event.sender check
-
-Total: <N> findings  (<C> critical, <H> high)
-```
-
----
-
-## False positives
-
-**`externally_connectable_broad` fires on `https://*.example.com/*` patterns**: subdomain-wildcarded patterns are flagged as broad because they cover all subdomains including attacker-controlled ones if the root domain allows user subdomains. Validate whether the wildcarded domain is single-vendor or user-extensible before treating as critical.
-
-**Missing sender check pattern uses regex matching**: an `onMessageExternal` listener that performs sender validation in a called helper function will be flagged as missing the check if the helper is not inlined. Inspect the listener body for indirect validation before reporting.
-
----
-
-## Pipeline position
-
-Run `BrowserExtensionAuditor` on any Chrome/Edge/Firefox extension extracted from a firmware package or client software installer. Pair with `ElectronSecurityScanner` for Electron-based desktop apps that include embedded browser extensions.
-
----
-
-## Reading findings
-
-`BrowserExtensionAuditor.audit()` returns a list of finding dicts:
-
-| Field | Content |
-|:---|:---|
-| `severity` | `CRITICAL` / `HIGH` / `MEDIUM` / `LOW` |
-| `code` | Finding code slug for example `externally_connectable_broad`, `missing_sender_check` |
-| `file` | Source file path and line number for example `manifest.json:1` |
-| `cwe` | CWE identifier for example `CWE-284` |
-| `detail` | Human-readable explanation of the vulnerability |
-| `evidence` | Code snippet or JSON fragment confirming the finding |
+- The corpus DB at `~/.ablation/func_id.db` is matched by SHA-256 prefix: the same DB used across CLI sessions. Re-open the binary after a CLI session to pick up new names without reinstalling the plugin.
+- `Ablation-Sweep` tags appear as `!` markers in the Binary Ninja function list. `Ablation-Sig` tags mark corpus-named functions.
+- The plugin imports `ablation` lazily inside each command handler: Binary Ninja will start cleanly even if `ablation` is not installed, and will show an install prompt on first use.
 
 ---
 
 ## See also
 
-- [Electron Application Auditing](electron-application-auditing.md): Electron app security scanning similar pattern class
-- [Source Dangerous Sink Detection](source-dangerous-sink-detection.md): `SourceSinkScanner` for source-level JavaScript dangerous sinks
+- [BinaryContext](binary-context.md): the session cache and `ctx.set_name()` API
+- [Semantic Search](semantic-search.md): `SemanticSearcher.query()` — the same engine the plugin calls
+- [Pattern Library](pattern-library.md): `PatternLibrary.sweep()` — sweep patterns behind `Ablation > Sweep Binary`
