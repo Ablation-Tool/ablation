@@ -24,6 +24,14 @@ Each SARIF result carries a rule ID derived from the pattern tag and query, a se
 
 ---
 
+## What is flat JSON export
+
+JSON (JavaScript Object Notation) is a human-readable text format for structured data. The flat JSON export in this module produces a simple, schema-free document that lists every sweep hit or confirmed finding with its virtual address and score. Unlike SARIF, flat JSON has no required schema so any script, dashboard, or downstream tool can consume it without a SARIF parser.
+
+Flat JSON is the right choice when the consumer is a Python script, a CI pipeline that needs to count findings above a threshold, or a Grafana dashboard. SARIF is the right choice when the consumer is GitHub Code Scanning, VS Code, or any tool that expects the OASIS standard. Both formats are produced from the same input dict so there is no reason to choose one exclusively.
+
+---
+
 ## Why this exists
 
 1. **Findings without detection rules have limited operational value.** An analyst who identifies a backdoor or malware sample in a firmware image still needs to answer whether this is detectable at scale across the environment, across ingested samples, and across new firmware versions. A YARA rule answers that question. Without automatic rule generation, analysts must manually translate findings into detection signatures, a step they skip under time pressure.
@@ -149,6 +157,22 @@ flowchart TD
     linkStyle 7 stroke:#546e7a,stroke-width:2px
     linkStyle 8 stroke:#2e7d32,stroke-width:3px
 ```
+
+### SARIF field reference
+
+Each sweep hit becomes one SARIF `result` entry with these fields:
+
+| Field | Value |
+|:---|:---|
+| `ruleId` | `<tag>/<query-slug>` e.g. `buffer-overflow/strcpy-no-length-check` |
+| `level` | `warning` for sweep hits; `error` for CRITICAL/HIGH confirmed findings |
+| `physicalLocation.address.absoluteAddress` | Virtual address as integer |
+| `physicalLocation.address.name` | VA as hex string e.g. `0x1fa00` |
+| `properties.score` | Cosine similarity score |
+| `properties.va` | VA as hex string |
+| `properties.tag` | Pattern tag from the sweep |
+
+For confirmed findings from `FindingRegistry`, the rule ID is `ablation/<CWE>` and the level reflects the finding's severity field rather than a fixed `warning`.
 
 ---
 
