@@ -39,13 +39,14 @@ Usage::
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import sqlite3
 import uuid
 from pathlib import Path
 from typing import Any
 
-__all__ = ['KnowledgeGraph']
+__all__ = ['KnowledgeGraph', 'ContextCoverage']
 
 _DEFAULT_DB = Path.home() / '.ablation' / 'knowledge_graph.db'
 
@@ -53,6 +54,57 @@ _DEFAULT_DB = Path.home() / '.ablation' / 'knowledge_graph.db'
 _WORKFLOW_ORDER = [
     'triage', 'sweep', 'corpus', 'profile', 'classify', 'taint', 'confirm', 'analysis',
 ]
+
+# Arch-family fallback table.  When a primary arch has no Module nodes, these
+# candidates are tried in order.  Only the first candidate with modules is used.
+_ARCH_FAMILIES: dict[str, list[str]] = {
+    'ppc32':    ['ppc32be', 'powerpc', 'ppc'],
+    'ppc32be':  ['ppc32', 'powerpc', 'ppc'],
+    'ppc64':    ['ppc64be', 'ppc64le', 'powerpc64'],
+    'ppc64be':  ['ppc64', 'ppc64le', 'powerpc64'],
+    'ppc64le':  ['ppc64', 'ppc64be', 'powerpc64'],
+    'powerpc':  ['ppc32', 'ppc32be', 'ppc'],
+    'arm64':    ['aarch64', 'arm64be'],
+    'aarch64':  ['arm64', 'arm64be'],
+    'arm32':    ['armv7', 'armhf', 'armel', 'arm'],
+    'armv7':    ['arm32', 'armhf', 'armel'],
+    'mips32':   ['mips', 'mipsel', 'mipsbe'],
+    'mips':     ['mips32', 'mipsel', 'mipsbe'],
+    'mips64':   ['mips64el', 'mips64be'],
+    'x86_64':   ['amd64', 'x64'],
+    'amd64':    ['x86_64', 'x64'],
+    'i386':     ['x86', 'x86_32', 'i686'],
+    's390x':    ['s390', 'ibm390'],
+}
+
+
+@dataclasses.dataclass(frozen=True)
+class ContextCoverage:
+    """Coverage metadata returned alongside the context string from get_context_with_coverage().
+
+    coverage_score: 0.0–1.0 composite.  Weights: modules 50%, sessions 30%, chains 20%.
+    Gaps do not raise the score — knowing what is missing is metadata, not coverage.
+    """
+
+    arch: str
+    arch_family_used: bool
+    module_count: int
+    gap_count: int
+    session_count: int
+    chain_count: int
+    coverage_score: float
+
+    def sufficient(self, threshold: float = 0.3) -> bool:
+        """True when coverage_score >= threshold.  Default 0.3 ≈ ~2 modules present."""
+        return self.coverage_score >= threshold
+
+    def __str__(self) -> str:
+        flag = '  [arch-family fallback]' if self.arch_family_used else ''
+        return (
+            f"coverage={self.coverage_score:.2f}{flag}  "
+            f"modules={self.module_count}  gaps={self.gap_count}  "
+            f"sessions={self.session_count}  chains={self.chain_count}"
+        )
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS nodes (
@@ -229,71 +281,38 @@ class KnowledgeGraph:
           arch → KnownGap nodes (json_extract match)
           arch → Session nodes (most recent 5 verdicts)
           vuln_class → Module nodes (DETECTS edges, if provided)
+          arch → SessionToolChain hyperedges (most recent 5)
 
-        Finding nodes with disclosure_status='pre-disclosure' are excluded
-        when access_level='public' (the default).
+        If arch has no Module nodes, tries _ARCH_FAMILIES fallback candidates and
+        notes the substitution in the returned string.  See get_context_with_coverage()
+        for the full (context_str, ContextCoverage) form.
         """
-        lines: list[str] = []
+        ctx, _ = self._build_context(arch, fmt, vuln_class, access_level)
+        return ctx
 
-        modules = self._modules_for_arch(f"arch://{arch}")
-        if modules:
-            lines.append(f"[MODULES for arch={arch}]")
-            for m in modules:
-                p = _props(m)
-                lines.append(f"  {p.get('name', m['id'])}  [{p.get('workflow_stage', '')}]")
-                if p.get('entry_point'):
-                    lines.append(f"    entry: {p['entry_point']}")
-                if p.get('limitations'):
-                    lines.append(f"    limits: {p['limitations']}")
-            lines.append("")
+    def get_context_with_coverage(
+        self,
+        arch: str,
+        fmt: str,
+        vuln_class: str | None = None,
+        access_level: str = 'public',
+    ) -> 'tuple[str, ContextCoverage]':
+        """Return (context_str, ContextCoverage) for the given arch and format.
 
-        gaps = self._gaps_for_arch(arch)
-        if gaps:
-            lines.append(f"[KNOWN GAPS for arch={arch}]")
-            for g in gaps:
-                p = _props(g)
-                desc = p.get('description', g['id'])
-                lines.append(f"  {desc}")
-                if p.get('workaround'):
-                    lines.append(f"    workaround: {p['workaround']}")
-                if p.get('module_needed'):
-                    lines.append(f"    module_needed: {p['module_needed']}")
-            lines.append("")
+        ContextCoverage carries:
+          coverage_score: 0.0–1.0 composite (modules 50%, sessions 30%, chains 20%)
+          arch_family_used: True when the returned context is for a family arch
+          module_count, gap_count, session_count, chain_count: raw counts
 
-        sessions = self._sessions_for_arch(arch)
-        if sessions:
-            lines.append(f"[PRIOR SESSIONS for arch={arch}]")
-            for s in sessions:
-                p = _props(s)
-                verdict = p.get('verdict', '?')
-                tools = p.get('tool_sequence', [])
-                date = p.get('date', '')
-                lines.append(f"  {s['id']}  date={date}  verdict={verdict}  tools={tools}")
-            lines.append("")
+        Use coverage.sufficient() to gate whether to proceed with graph-informed
+        decisions or fall back to manual lookup:
 
-        if vuln_class:
-            vc_modules = self._modules_for_vuln_class(f"vuln://{vuln_class}")
-            if vc_modules:
-                lines.append(f"[MODULES for vuln_class={vuln_class}]")
-                for m in vc_modules:
-                    p = _props(m)
-                    lines.append(f"  {p.get('name', m['id'])}")
-                lines.append("")
-
-        chains = self._chains_for_arch(arch)
-        if chains:
-            lines.append(f"[TOOL CHAINS for arch={arch}]")
-            for chain in chains:
-                modules = [m['node_id'].replace('module://', '') for m in chain['members']
-                           if m['role'] == 'module']
-                confirmed = sum(1 for m in chain['members'] if m['role'] == 'finding')
-                session = chain['props'].get('session_id', chain['id'])
-                lines.append(f"  {session}  tools={modules}  confirmed={confirmed}")
-            lines.append("")
-
-        if not lines:
-            return f"[No graph context for arch={arch} fmt={fmt}]"
-        return "\n".join(lines)
+            ctx, cov = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32')
+            if not cov.sufficient():
+                # graph is thin; proceed manually
+                ...
+        """
+        return self._build_context(arch, fmt, vuln_class, access_level)
 
     def get_recommendations_for_task(
         self,
@@ -485,6 +504,121 @@ class KnowledgeGraph:
         return int(row[0])
 
     # ── Private helpers ──────────────────────────────────────────────────────
+
+    def _build_context(
+        self,
+        arch: str,
+        fmt: str,
+        vuln_class: str | None,
+        access_level: str,
+    ) -> 'tuple[str, ContextCoverage]':
+        """Build context string and coverage metadata. Used by both public context methods."""
+        effective_arch, family_used = self._resolve_arch_with_modules(arch)
+        lines: list[str] = []
+
+        if family_used:
+            lines.append(
+                f"[NOTE: arch={arch} has no modules; using family arch={effective_arch}]"
+            )
+            lines.append("")
+
+        modules = self._modules_for_arch(f"arch://{effective_arch}")
+        if modules:
+            lines.append(f"[MODULES for arch={effective_arch}]")
+            for m in modules:
+                p = _props(m)
+                lines.append(f"  {p.get('name', m['id'])}  [{p.get('workflow_stage', '')}]")
+                if p.get('entry_point'):
+                    lines.append(f"    entry: {p['entry_point']}")
+                if p.get('limitations'):
+                    lines.append(f"    limits: {p['limitations']}")
+            lines.append("")
+
+        gaps = self._gaps_for_arch(effective_arch)
+        if gaps:
+            lines.append(f"[KNOWN GAPS for arch={effective_arch}]")
+            for g in gaps:
+                p = _props(g)
+                desc = p.get('description', g['id'])
+                lines.append(f"  {desc}")
+                if p.get('workaround'):
+                    lines.append(f"    workaround: {p['workaround']}")
+                if p.get('module_needed'):
+                    lines.append(f"    module_needed: {p['module_needed']}")
+            lines.append("")
+
+        sessions = self._sessions_for_arch(effective_arch)
+        if sessions:
+            lines.append(f"[PRIOR SESSIONS for arch={effective_arch}]")
+            for s in sessions:
+                p = _props(s)
+                verdict = p.get('verdict', '?')
+                tools = p.get('tool_sequence', [])
+                date = p.get('date', '')
+                lines.append(
+                    f"  {s['id']}  date={date}  verdict={verdict}  tools={tools}"
+                )
+            lines.append("")
+
+        if vuln_class:
+            vc_modules = self._modules_for_vuln_class(f"vuln://{vuln_class}")
+            if vc_modules:
+                lines.append(f"[MODULES for vuln_class={vuln_class}]")
+                for m in vc_modules:
+                    p = _props(m)
+                    lines.append(f"  {p.get('name', m['id'])}")
+                lines.append("")
+
+        chains = self._chains_for_arch(effective_arch)
+        if chains:
+            lines.append(f"[TOOL CHAINS for arch={effective_arch}]")
+            for chain in chains:
+                chain_mods = [
+                    mb['node_id'].replace('module://', '')
+                    for mb in chain['members']
+                    if mb['role'] == 'module'
+                ]
+                confirmed = sum(1 for mb in chain['members'] if mb['role'] == 'finding')
+                session = chain['props'].get('session_id', chain['id'])
+                lines.append(f"  {session}  tools={chain_mods}  confirmed={confirmed}")
+            lines.append("")
+
+        mc, gc, sc, cc = len(modules), len(gaps), len(sessions), len(chains)
+        coverage_score = round(
+            0.5 * min(mc / 3, 1.0) +
+            0.3 * min(sc / 2, 1.0) +
+            0.2 * min(cc / 2, 1.0),
+            3,
+        )
+        coverage = ContextCoverage(
+            arch=effective_arch,
+            arch_family_used=family_used,
+            module_count=mc,
+            gap_count=gc,
+            session_count=sc,
+            chain_count=cc,
+            coverage_score=coverage_score,
+        )
+        has_content = bool(modules or gaps or sessions or chains)
+        context_str = (
+            "\n".join(lines)
+            if has_content
+            else f"[No graph context for arch={arch} fmt={fmt}]"
+        )
+        return context_str, coverage
+
+    def _resolve_arch_with_modules(self, arch: str) -> tuple[str, bool]:
+        """Return (effective_arch, family_used).
+
+        If arch has no Module nodes, iterates _ARCH_FAMILIES[arch] and returns
+        the first candidate that has modules.  Returns (arch, False) if none found.
+        """
+        if self._modules_for_arch(f'arch://{arch}'):
+            return arch, False
+        for candidate in _ARCH_FAMILIES.get(arch, []):
+            if self._modules_for_arch(f'arch://{candidate}'):
+                return candidate, True
+        return arch, False
 
     def _modules_for_arch(self, arch_id: str) -> list[sqlite3.Row]:
         rows = self._con.execute(

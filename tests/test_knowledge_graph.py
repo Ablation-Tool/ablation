@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ablation.analyzers.knowledge_graph import KnowledgeGraph
+from ablation.analyzers.knowledge_graph import ContextCoverage, KnowledgeGraph
 
 
 @pytest.fixture
@@ -347,6 +347,128 @@ def test_get_context_includes_tool_chains(g):
     assert 'TOOL CHAINS' in ctx
     assert 'SinkArgClassifier' in ctx
     assert 'confirmed=1' in ctx
+
+
+# ── Arch-family fallback ──────────────────────────────────────────────────────
+
+def _add_module_for_arch(g, arch, name='TestModule'):
+    g.add_node('Architecture', f'arch://{arch}', {'name': arch})
+    g.add_node('Module', f'module://{name}', {'name': name, 'workflow_stage': 'triage'})
+    g.add_edge(f'module://{name}', f'arch://{arch}', 'SUPPORTS')
+
+
+def test_arch_family_fallback_uses_related_arch(g):
+    _add_module_for_arch(g, 'powerpc', 'TestModule')
+    ctx = g.get_context_for_binary(arch='ppc32', fmt='xcoff32')
+    assert 'TestModule' in ctx
+
+
+def test_arch_family_fallback_notes_substitution(g):
+    _add_module_for_arch(g, 'powerpc', 'TestModule')
+    ctx = g.get_context_for_binary(arch='ppc32', fmt='xcoff32')
+    assert 'NOTE' in ctx
+    assert 'ppc32' in ctx
+    assert 'powerpc' in ctx
+
+
+def test_arch_family_no_fallback_when_primary_has_modules(g):
+    _add_module_for_arch(g, 'ppc32', 'PrimaryModule')
+    _add_module_for_arch(g, 'powerpc', 'FamilyModule')
+    ctx = g.get_context_for_binary(arch='ppc32', fmt='xcoff32')
+    assert 'PrimaryModule' in ctx
+    assert 'FamilyModule' not in ctx
+    assert 'NOTE' not in ctx
+
+
+def test_arch_family_unknown_arch_no_crash(g):
+    ctx = g.get_context_for_binary(arch='riscv64', fmt='elf64')
+    assert 'No graph context' in ctx
+
+
+def test_arch_family_fallback_reflected_in_coverage(g):
+    _add_module_for_arch(g, 'aarch64', 'ARM64Module')
+    _, cov = g.get_context_with_coverage(arch='arm64', fmt='elf64')
+    assert cov.arch_family_used is True
+    assert cov.arch == 'aarch64'
+    assert cov.module_count == 1
+
+
+# ── ContextCoverage and get_context_with_coverage ────────────────────────────
+
+def test_get_context_with_coverage_returns_tuple(g):
+    result = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32')
+    assert isinstance(result, tuple)
+    assert len(result) == 2
+    ctx, cov = result
+    assert isinstance(ctx, str)
+    assert isinstance(cov, ContextCoverage)
+
+
+def test_coverage_score_zero_empty_graph(g):
+    _, cov = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32')
+    assert cov.coverage_score == 0.0
+    assert cov.module_count == 0
+    assert cov.session_count == 0
+    assert cov.chain_count == 0
+
+
+def test_coverage_score_with_modules(g):
+    _add_module_for_arch(g, 'ppc32', 'ModA')
+    _add_module_for_arch(g, 'ppc32', 'ModB')
+    _, cov = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32')
+    # 0.5 * min(2/3, 1.0) = 0.333
+    assert cov.coverage_score == pytest.approx(0.333, abs=0.001)
+    assert cov.module_count == 2
+
+
+def test_coverage_score_full(g):
+    for name in ['ModA', 'ModB', 'ModC']:
+        _add_module_for_arch(g, 'ppc32', name)
+    for i in range(2):
+        g.add_node('Session', f'session://s{i}', {'arch': 'ppc32', 'date': f'2026-01-0{i+1}', 'verdict': 'COMPLETE'})
+    g.add_hyperedge('SessionToolChain', 'chain://c1',
+                    member_ids=['session://s0', 'arch://ppc32', 'module://ModA'],
+                    roles=['session', 'arch', 'module'],
+                    props={'session_id': 'session://s0', 'arch': 'ppc32'})
+    g.add_hyperedge('SessionToolChain', 'chain://c2',
+                    member_ids=['session://s1', 'arch://ppc32', 'module://ModB'],
+                    roles=['session', 'arch', 'module'],
+                    props={'session_id': 'session://s1', 'arch': 'ppc32'})
+    _, cov = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32')
+    assert cov.coverage_score == pytest.approx(1.0, abs=0.001)
+
+
+def test_coverage_sufficient_default_threshold(g):
+    _add_module_for_arch(g, 'ppc32', 'ModA')
+    _add_module_for_arch(g, 'ppc32', 'ModB')
+    _, cov = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32')
+    assert cov.sufficient()  # 0.333 >= 0.3
+
+
+def test_coverage_not_sufficient_empty(g):
+    _, cov = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32')
+    assert not cov.sufficient()
+
+
+def test_coverage_str_contains_score(g):
+    _, cov = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32')
+    s = str(cov)
+    assert 'coverage=' in s
+    assert 'modules=' in s
+    assert 'sessions=' in s
+
+
+def test_coverage_str_notes_family_fallback(g):
+    _add_module_for_arch(g, 'powerpc', 'TestModule')
+    _, cov = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32')
+    assert 'arch-family fallback' in str(cov)
+
+
+def test_coverage_gaps_not_counted_in_score(g):
+    g.add_node('KnownGap', 'gap://ppc32-plt', {'description': 'PLT missing', 'arch': 'ppc32'})
+    _, cov = g.get_context_with_coverage(arch='ppc32', fmt='xcoff32')
+    assert cov.gap_count == 1
+    assert cov.coverage_score == 0.0  # gaps do not raise score
 
 
 # ── Context manager ───────────────────────────────────────────────────────────
