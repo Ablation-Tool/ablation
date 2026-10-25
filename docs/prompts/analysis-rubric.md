@@ -1,6 +1,6 @@
 # Analysis Rubric
 
-A set of session-starter prompts that enforce exhaustive, lossless reverse engineering discipline before any Ablation tool call. Each prompt sets the analysis mode — what to label, what not to compress, how to handle gaps — so the same standards apply regardless of target type or architecture.
+Session-starter prompts that set analysis mode before any Ablation tool call. Covers what to label, what not to compress, and what constitutes a complete result.
 
 **Pair with:** `re-session-planning-template.md` (session structure) and `guide-tool-selection.md` (tool ordering)
 
