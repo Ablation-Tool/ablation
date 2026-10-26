@@ -155,6 +155,14 @@ def _detect_arch_pe(binary) -> str:
             return 'arm64'
         if m == lief.PE.MACHINE_TYPES.ARMNT:
             return 'arm32'
+        # Use .value for newer machine types not yet in all LIEF builds.
+        # LoongArch64: 0x6232 (UEFI PE32+ LA64 firmware modules)
+        # RISC-V 64-bit: 0x5064
+        _v = m.value if hasattr(m, 'value') else int(m)
+        if _v == 0x6232:
+            return 'loongarch64'
+        if _v == 0x5064:
+            return 'riscv64'
     except Exception:
         pass
     return 'x86_64'
@@ -3163,6 +3171,20 @@ class BinaryContext:
                 b'\x55\x8b\xec',       # push ebp; mov ebp, esp  (MSVC)
                 b'\x55\x89\xe5',       # push ebp; mov ebp, esp  (GCC)
             ],
+            # LoongArch64 UEFI (EDK2/GCC): function prologues open with
+            #   addi.d $sp, $sp, -N  (encoding: 0x02C00063 | (((-N & 0xFFF) << 10)))
+            # Patterns for N = 16..128 in 16-byte steps (most common UEFI frame sizes).
+            # Extend this list with additional frame sizes as needed.
+            'loongarch64': [
+                b'\x63\xc0\xff\x02',   # addi.d $sp, $sp, -16
+                b'\x63\x80\xff\x02',   # addi.d $sp, $sp, -32
+                b'\x63\x40\xff\x02',   # addi.d $sp, $sp, -48
+                b'\x63\x00\xff\x02',   # addi.d $sp, $sp, -64
+                b'\x63\xc0\xfe\x02',   # addi.d $sp, $sp, -80
+                b'\x63\x80\xfe\x02',   # addi.d $sp, $sp, -96
+                b'\x63\x40\xfe\x02',   # addi.d $sp, $sp, -112
+                b'\x63\x00\xfe\x02',   # addi.d $sp, $sp, -128
+            ],
         }
 
         patterns = _PROLOGUES.get(self.arch, [])
@@ -3189,6 +3211,8 @@ class BinaryContext:
     def _build_call_graph_pe(self, data: bytes, binary) -> None:
         """Call graph for PE x86_64/x86_32: vectorized 0xe8 scan on executable sections."""
         if self.arch not in ('x86_64', 'x86_32'):
+            # Non-x86 PE (e.g. LA64, arm64): no call graph built yet.
+            # Future: wire a BL-opcode scan for loongarch64 / arm64 here.
             return
         if not _NUMPY_OK:
             self._build_call_graph_pe_sequential(data, binary)
