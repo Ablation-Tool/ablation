@@ -283,3 +283,17 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Feed game RE findings back into engine library flywheel" | `lib.ingest_from_findings(registry.confirmed(), engine='unreal')` |
 | "Track RE session state across stages with schema validation" | `WorkflowDocument.for_re_sessionvendor, target` |
 | "Audit finding provenance and detect cross-session tampering" | `StageCommitment.verifystage_name, instance` |
+
+
+---
+
+## FPGA firmware / hardware RE
+
+| Task | First reach |
+|---|---|
+| "Parse a Xilinx .bit file header (design, part, date, bitstream)" | `XilinxBitfile.from_path(path).summary()` |
+| "Extract embedded strings from an uncompressed FPGA bitstream" | `XilinxBitfile.from_path(path).extract_strings(min_len=6)` |
+| "Get IDCODE from an uncompressed 7-series bitfile" | `XilinxBitfile.from_path(path).idcode_candidate()` |
+| "Check if a bitfile was compressed by Vivado" | `XilinxBitfile.from_path(path).is_compressed()` |
+| "Batch-parse all .bit files in a directory" | `scan_directory('/path/to/dir', '*.bit')` |
+| "Map known Xilinx device IDCODEs" | `from ablation.analyzers.xilinx_bitfile import XILINX_IDCODES` |
