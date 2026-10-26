@@ -75,6 +75,7 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass, field
+from enum import IntEnum
 from typing import Iterator, List, Optional, Tuple
 
 
@@ -120,6 +121,61 @@ _REG_SP   = 3   # $sp
 
 
 # ---------------------------------------------------------------------------
+# Structured operand types
+# ---------------------------------------------------------------------------
+
+class LoongArchOpType(IntEnum):
+    """Operand type code.  Mirrors Capstone CS_OP_* numbering for portability."""
+    INVALID = 0
+    REG     = 1   # integer register  $r0-$r31
+    IMM     = 2   # immediate value (signed)
+    MEM     = 3   # memory operand (reserved; not yet emitted by this decoder)
+    FREG    = 4   # FP register       $f0-$f31
+    VREG    = 5   # LSX 128-bit       $vr0-$vr31
+    XREG    = 6   # LASX 256-bit      $xr0-$xr31
+    CFR     = 7   # condition flag    $fcc0-$fcc7
+    FCSR    = 8   # FP control/status $fcsr0-$fcsr3
+    SCR     = 9   # scratch control   $scr0-$scr3
+
+
+@dataclass
+class LoongArchOperand:
+    """Single decoded instruction operand.
+
+    Access patterns:
+        op.type == LoongArchOpType.REG  → op.reg  (register index 0-31)
+        op.type == LoongArchOpType.IMM  → op.imm  (signed integer)
+        op.reg_name                     → ABI name, e.g. "$a0", "$sp"
+
+    MEM operands are not yet emitted; the decoder stores base and displacement
+    as separate REG and IMM operands in the current implementation.
+    """
+    type: LoongArchOpType
+    reg:  int = 0   # register index (for REG/FREG/VREG/XREG/CFR/FCSR/SCR types)
+    imm:  int = 0   # immediate value (for IMM type)
+
+    @property
+    def reg_name(self) -> str:
+        """Return the ABI register name string for this operand."""
+        t = self.type
+        if t == LoongArchOpType.REG:
+            return _R_LP64[self.reg & 0x1f]
+        if t == LoongArchOpType.FREG:
+            return _F_LP64[self.reg & 0x1f]
+        if t == LoongArchOpType.VREG:
+            return _V_NAMES[self.reg & 0x1f]
+        if t == LoongArchOpType.XREG:
+            return _X_NAMES[self.reg & 0x1f]
+        if t == LoongArchOpType.CFR:
+            return _C_NAMES[self.reg & 0x7]
+        if t == LoongArchOpType.FCSR:
+            return _FC_NAMES[self.reg & 0x3]
+        if t == LoongArchOpType.SCR:
+            return _CR_NAMES[self.reg & 0x3]
+        return ''
+
+
+# ---------------------------------------------------------------------------
 # Frame record
 # ---------------------------------------------------------------------------
 
@@ -135,6 +191,7 @@ class LoongArchFrame:
     is_call:   bool = False
     is_ret:    bool = False
     target:    int  = 0       # resolved PC-relative target VA (0 = indirect/unknown)
+    operands:  List[LoongArchOperand] = field(default_factory=list)
 
     def __str__(self) -> str:
         tgt = f" -> {self.target:#x}" if self.target else ""
@@ -676,58 +733,77 @@ def _parse_format(fmt: str) -> List[Tuple[str, str, str]]:
 # Operand renderer
 # ---------------------------------------------------------------------------
 
-def _render_operands(fmt: str, insn: int, va: int) -> Tuple[str, int]:
-    """
-    Render the operand string for an instruction.
+def _render_operands(
+    fmt: str, insn: int, va: int,
+) -> Tuple[str, int, List[LoongArchOperand]]:
+    """Render the operand string and structured operand list for an instruction.
 
-    Returns (op_str, branch_target) where branch_target is the resolved
-    PC-relative target VA for 'sb' operands, or 0 for non-branch / indirect.
+    Returns (op_str, branch_target, operands) where:
+      op_str        — comma-separated text representation (backward-compatible)
+      branch_target — resolved PC-relative target VA for 'sb' operands, else 0
+      operands      — list of LoongArchOperand objects, one per token
     """
     tokens = _parse_format(fmt)
     if not tokens:
-        return "", 0
+        return "", 0, []
 
-    parts:  List[str] = []
-    target: int       = 0
+    parts:    List[str]              = []
+    ops:      List[LoongArchOperand] = []
+    target:   int                    = 0
 
     for esc1, esc2, bf in tokens:
         imm_u = _decode_imm(bf, insn, signed=False)
         imm_s = _decode_imm(bf, insn, signed=True)
 
         if esc1 == 'r':
-            parts.append(_R_LP64[imm_u & 0x1f])
+            idx = imm_u & 0x1f
+            parts.append(_R_LP64[idx])
+            ops.append(LoongArchOperand(type=LoongArchOpType.REG, reg=idx))
 
         elif esc1 == 'f':
             if esc2 == 'c':
-                parts.append(_FC_NAMES[imm_u & 0x3])
+                idx = imm_u & 0x3
+                parts.append(_FC_NAMES[idx])
+                ops.append(LoongArchOperand(type=LoongArchOpType.FCSR, reg=idx))
             else:
-                parts.append(_F_LP64[imm_u & 0x1f])
+                idx = imm_u & 0x1f
+                parts.append(_F_LP64[idx])
+                ops.append(LoongArchOperand(type=LoongArchOpType.FREG, reg=idx))
 
         elif esc1 == 'c':
             if esc2 == 'r':
-                parts.append(_CR_NAMES[imm_u & 0x3])
+                idx = imm_u & 0x3
+                parts.append(_CR_NAMES[idx])
+                ops.append(LoongArchOperand(type=LoongArchOpType.SCR, reg=idx))
             else:
-                parts.append(_C_NAMES[imm_u & 0x7])
+                idx = imm_u & 0x7
+                parts.append(_C_NAMES[idx])
+                ops.append(LoongArchOperand(type=LoongArchOpType.CFR, reg=idx))
 
         elif esc1 == 'v':
-            parts.append(_V_NAMES[imm_u & 0x1f])
+            idx = imm_u & 0x1f
+            parts.append(_V_NAMES[idx])
+            ops.append(LoongArchOperand(type=LoongArchOpType.VREG, reg=idx))
 
         elif esc1 == 'x':
-            parts.append(_X_NAMES[imm_u & 0x1f])
+            idx = imm_u & 0x1f
+            parts.append(_X_NAMES[idx])
+            ops.append(LoongArchOperand(type=LoongArchOpType.XREG, reg=idx))
 
         elif esc1 == 'u':
             parts.append(f"0x{imm_u:x}")
+            ops.append(LoongArchOperand(type=LoongArchOpType.IMM, imm=imm_u))
 
         elif esc1 == 's':
             if esc2 == 'b':
-                # PC-relative branch offset; target = instruction VA + signed offset
                 target = (va + imm_s) & 0xffffffffffffffff
                 parts.append(f"{imm_s}")
+                ops.append(LoongArchOperand(type=LoongArchOpType.IMM, imm=imm_s))
             else:
-                # 'so' (memory offset) or plain 's' immediate — signed decimal
                 parts.append(f"{imm_s}")
+                ops.append(LoongArchOperand(type=LoongArchOpType.IMM, imm=imm_s))
 
-    return ", ".join(parts), target
+    return ", ".join(parts), target, ops
 
 
 # ---------------------------------------------------------------------------
@@ -823,7 +899,7 @@ class LoongArchDecoder:
 
         for match, mask, name, fmt in _OPCODES:
             if (insn & mask) == match:
-                op_str, br_target = _render_operands(fmt, insn, va)
+                op_str, br_target, operands = _render_operands(fmt, insn, va)
                 is_br, is_call, is_ret, target = _classify_cf(insn, va, br_target)
                 return LoongArchFrame(
                     va        = va,
@@ -835,6 +911,7 @@ class LoongArchDecoder:
                     is_call   = is_call,
                     is_ret    = is_ret,
                     target    = target,
+                    operands  = operands,
                 )
 
         # Unknown encoding (likely LSX/LASX or future extension)
@@ -844,6 +921,7 @@ class LoongArchDecoder:
             insn     = insn,
             mnemonic = ".word",
             op_str   = f"0x{insn:08x}",
+            operands = [LoongArchOperand(type=LoongArchOpType.IMM, imm=insn)],
         )
 
     def decode_frames(self, data: bytes, base_addr: int = 0) -> Iterator[LoongArchFrame]:

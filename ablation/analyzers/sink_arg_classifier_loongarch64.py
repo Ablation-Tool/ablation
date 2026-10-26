@@ -153,6 +153,7 @@ import struct
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Tuple
 
+from ablation.analyzers.loongarch_decoder import LoongArchOpType
 from ablation.analyzers.sink_arg_classifier import (
     SinkClassification,
     RODATA_CONST,
@@ -163,15 +164,21 @@ from ablation.analyzers.sink_arg_classifier import (
 
 _LOOKBACK = 80
 
-_LA64_ARG_REGS: Tuple[str, ...] = (
-    '$a0', '$a1', '$a2', '$a3', '$a4', '$a5', '$a6', '$a7',
+# lp64 ABI register indices (match _R_LP64 in loongarch_decoder.py)
+_GPR_NAMES: Tuple[str, ...] = (
+    '$zero', '$ra',  '$tp',  '$sp',  '$a0',  '$a1',  '$a2',  '$a3',
+    '$a4',   '$a5',  '$a6',  '$a7',  '$t0',  '$t1',  '$t2',  '$t3',
+    '$t4',   '$t5',  '$t6',  '$t7',  '$t8',  '$r21', '$fp',  '$s0',
+    '$s1',   '$s2',  '$s3',  '$s4',  '$s5',  '$s6',  '$s7',  '$s8',
 )
-_LA64_ARG_REG_SET = frozenset(_LA64_ARG_REGS)
 
-_LA64_CALLEE_REGS: Tuple[str, ...] = (
-    '$s0', '$s1', '$s2', '$s3', '$s4', '$s5', '$s6', '$s7', '$s8', '$fp',
-)
-_LA64_CALLEE_REG_SET = frozenset(_LA64_CALLEE_REGS)
+# Argument registers: $a0-$a7 = indices 4-11
+_LA64_ARG_REG_IDX    = frozenset(range(4, 12))
+# Callee-saved: $fp=22, $s0-$s8=23-31
+_LA64_CALLEE_REG_IDX = frozenset({22, 23, 24, 25, 26, 27, 28, 29, 30, 31})
+_REG_ZERO = 0   # $zero
+_REG_SP   = 3   # $sp
+_A0_IDX   = 4   # first argument register ($a0)
 
 _DEFAULT_SINKS_LA64: Dict[str, int] = {
     'execv':   0,
@@ -194,29 +201,6 @@ _STORE_MNEMONICS = frozenset({
     'stx.d', 'stx.w', 'stx.b', 'stx.h',
     'fst.d', 'fst.s', 'fstx.d', 'fstx.s',
 })
-
-
-def _parse_regs(op_str: str) -> List[str]:
-    """Return all register tokens from a comma-separated operand string."""
-    return [p.strip() for p in op_str.split(',') if p.strip().startswith('$')]
-
-
-def _dest_reg(op_str: str) -> Optional[str]:
-    """Return the destination register (first operand) of an LA64 instruction."""
-    parts = _parse_regs(op_str)
-    return parts[0] if parts else None
-
-
-def _imm_from_opstr(op_str: str) -> Optional[int]:
-    """Extract the last numeric token from an operand string."""
-    for p in reversed([p.strip() for p in op_str.split(',')]):
-        if p.startswith('$'):
-            continue
-        try:
-            return int(p, 0)
-        except ValueError:
-            pass
-    return None
 
 
 def _elf64_shdr(data: bytes, e_shoff: int, entsize: int, idx: int) -> dict:
@@ -320,15 +304,15 @@ def _extract_plt_la64(data: bytes) -> Dict[int, str]:
         if (len(frames) >= 2
                 and 'pcaddu12i' in frames[0].mnemonic
                 and 'ld.d' in frames[1].mnemonic):
-            try:
-                imm20 = int(frames[0].op_str.split(',')[-1].strip())
-                imm12 = int(frames[1].op_str.split(',')[-1].strip())
+            f0, f1 = frames[0], frames[1]
+            if (len(f0.operands) >= 2 and f0.operands[1].type == LoongArchOpType.IMM
+                    and len(f1.operands) >= 3 and f1.operands[2].type == LoongArchOpType.IMM):
+                imm20    = f0.operands[1].imm
+                imm12    = f1.operands[2].imm
                 got_addr = stub_va + imm20 * 0x1000 + imm12
                 sym = got_to_sym.get(got_addr)
                 if sym:
                     result[stub_va] = sym
-            except (ValueError, IndexError):
-                pass
         stub_va += 16
 
     return result
@@ -354,8 +338,9 @@ class SinkArgClassifierLA64:
     the stack, passed through multiple callee-saved registers) result in
     UNKNOWN, not a false RODATA_CONST.
 
-    Register naming note: the trace operates on op_str text tokens such as
-    '$a0', '$s1'.  No Capstone register IDs are used anywhere in this module.
+    Register representation: the trace operates on lp64 register indices
+    (int, 0-31) from frame.operands[n].reg rather than op_str text tokens.
+    No Capstone register IDs are used anywhere in this module.
     """
 
     def __init__(self, ctx) -> None:
@@ -539,10 +524,10 @@ class SinkArgClassifierLA64:
         self,
         frames: list,
         call_idx: int,
-        target_reg: str,
+        target_reg: int,
         depth: int = 0,
     ) -> Tuple[str, str]:
-        """Backward-trace what loaded target_reg before the call at call_idx.
+        """Backward-trace what loaded target_reg (register index) before the call.
 
         Walks backward from call_idx through the decoded frame window looking
         for the instruction that last wrote target_reg.  Classifies it as
@@ -579,52 +564,57 @@ class SinkArgClassifierLA64:
         if depth > 1:
             return (UNKNOWN, 'max recursion depth')
 
-        limit = max(call_idx - _LOOKBACK, -1)
+        limit    = max(call_idx - _LOOKBACK, -1)
+        tregname = _GPR_NAMES[target_reg & 0x1f]
 
         for j in range(call_idx - 1, limit, -1):
             f    = frames[j]
             mnem = f.mnemonic
-            ops  = f.op_str
 
             if mnem in _STORE_MNEMONICS:
-                continue  # stores write memory, not registers
-
-            dest = _dest_reg(ops)
-            if dest != target_reg:
                 continue
 
-            # Pattern: or $rD, $rS, $zero (register copy or NULL)
-            if mnem == 'or':
-                parts = [p.strip() for p in ops.split(',')]
-                if len(parts) == 3:
-                    src1, src2 = parts[1], parts[2]
-                    # Both sources zero: NULL literal
-                    if src1 == '$zero' and src2 == '$zero':
-                        return (RODATA_CONST, f'or {target_reg}, $zero, $zero -> NULL')
-                    # One source zero: the other is the actual value
-                    active = None
-                    if src2 == '$zero' and src1 != '$zero':
-                        active = src1
-                    elif src1 == '$zero' and src2 != '$zero':
-                        active = src2
-                    if active:
-                        if active in _LA64_ARG_REG_SET:
-                            return (ARG_PROPAGATED,
-                                    f'or {target_reg}, {active}, $zero (entry arg)')
-                        if active in _LA64_CALLEE_REG_SET:
-                            return (ARG_PROPAGATED,
-                                    f'or {target_reg}, {active}, $zero '
-                                    f'(callee-saved; SAC-LA64-CALLEE-001)')
-                        # Two non-zero sources: recurse on the first non-zero
-                        return self._trace_arg(frames, j, active, depth + 1)
-                    if src1 != '$zero':
-                        return self._trace_arg(frames, j, src1, depth + 1)
+            # Destination must be a GPR matching target_reg
+            if (not f.operands
+                    or f.operands[0].type != LoongArchOpType.REG
+                    or f.operands[0].reg != target_reg):
+                continue
 
-            # Pattern: pcaddi $rD, imm (PC-relative address to .rodata or elsewhere)
-            if mnem == 'pcaddi':
-                imm = _imm_from_opstr(ops)
-                if imm is not None:
-                    target_va = f.va + imm * 4
+            # Pattern: or $rD, $rS1, $rS2 (register copy or NULL)
+            if mnem == 'or' and len(f.operands) == 3:
+                s1 = f.operands[1]
+                s2 = f.operands[2]
+                s1i = s1.reg if s1.type == LoongArchOpType.REG else -1
+                s2i = s2.reg if s2.type == LoongArchOpType.REG else -1
+
+                if s1i == _REG_ZERO and s2i == _REG_ZERO:
+                    return (RODATA_CONST, f'or {tregname}, $zero, $zero -> NULL')
+
+                active = None
+                if s2i == _REG_ZERO and s1i not in (_REG_ZERO, -1):
+                    active = s1i
+                elif s1i == _REG_ZERO and s2i not in (_REG_ZERO, -1):
+                    active = s2i
+
+                if active is not None:
+                    aname = _GPR_NAMES[active & 0x1f]
+                    if active in _LA64_ARG_REG_IDX:
+                        return (ARG_PROPAGATED,
+                                f'or {tregname}, {aname}, $zero (entry arg)')
+                    if active in _LA64_CALLEE_REG_IDX:
+                        return (ARG_PROPAGATED,
+                                f'or {tregname}, {aname}, $zero '
+                                f'(callee-saved; SAC-LA64-CALLEE-001)')
+                    return self._trace_arg(frames, j, active, depth + 1)
+
+                if s1i not in (_REG_ZERO, -1):
+                    return self._trace_arg(frames, j, s1i, depth + 1)
+
+            # Pattern: pcaddi $rD, imm
+            if mnem == 'pcaddi' and len(f.operands) >= 2:
+                imm_op = f.operands[1]
+                if imm_op.type == LoongArchOpType.IMM:
+                    target_va = f.va + imm_op.imm * 4
                     if self._is_rodata(target_va):
                         return (RODATA_CONST,
                                 f'pcaddi -> 0x{target_va:x} in .rodata')
@@ -632,24 +622,23 @@ class SinkArgClassifierLA64:
                             f'pcaddi -> 0x{target_va:x} not in .rodata')
 
             # Pattern: pcalau12i $rD, imm (first half of GOT-relative load)
-            if mnem == 'pcalau12i':
-                imm20 = _imm_from_opstr(ops)
-                if imm20 is not None:
-                    page_va = (f.va & ~0xFFF) + (imm20 << 12)
-                    # Look ahead for the paired ld.d completing the GOT load
+            if mnem == 'pcalau12i' and len(f.operands) >= 2:
+                imm_op = f.operands[1]
+                if imm_op.type == LoongArchOpType.IMM:
+                    page_va = (f.va & ~0xFFF) + (imm_op.imm << 12)
                     for k in range(j + 1, min(j + 5, len(frames))):
                         nf = frames[k]
-                        nf_dest = _dest_reg(nf.op_str)
-                        if nf_dest != target_reg:
-                            if nf_dest is not None:
-                                break
-                            continue
+                        # Stop if another instruction writes target_reg before ld.d
+                        if (nf.operands
+                                and nf.operands[0].type == LoongArchOpType.REG
+                                and nf.operands[0].reg != target_reg):
+                            break
                         if nf.mnemonic not in ('ld.d', 'ldptr.d'):
+                            continue
+                        if (len(nf.operands) < 3
+                                or nf.operands[2].type != LoongArchOpType.IMM):
                             break
-                        disp = _imm_from_opstr(nf.op_str)
-                        if disp is None:
-                            break
-                        got_va = page_va + disp
+                        got_va = page_va + nf.operands[2].imm
                         ptr    = self._read_u64(got_va)
                         if ptr is not None:
                             if self._is_rodata(ptr):
@@ -660,50 +649,51 @@ class SinkArgClassifierLA64:
                         return (UNKNOWN, f'pcalau12i+ld.d GOT[0x{got_va:x}] unreadable')
                     return (UNKNOWN, f'pcalau12i 0x{page_va:x}: no paired ld.d within 4')
 
-            # Pattern: addi.w / addi.d $rD, $zero, 0 or $rD, $base, off
-            if mnem in ('addi.w', 'addi.d'):
-                parts = [p.strip() for p in ops.split(',')]
-                if len(parts) == 3:
-                    base_r = parts[1]
-                    if base_r == '$zero':
-                        try:
-                            val = int(parts[2], 0)
-                            if val == 0:
-                                return (RODATA_CONST, f'{mnem} {target_reg}, $zero, 0 -> NULL')
-                            return (UNKNOWN, f'{mnem} {target_reg}, $zero, {val:#x} (literal)')
-                        except ValueError:
-                            pass
-                    if base_r in _LA64_ARG_REG_SET:
-                        return (ARG_PROPAGATED,
-                                f'{mnem} {target_reg}, {base_r}, ... (arg-base offset)')
-                    if base_r in _LA64_CALLEE_REG_SET:
-                        return (ARG_PROPAGATED,
-                                f'{mnem} {target_reg}, {base_r}, ... (callee-saved-base offset)')
+            # Pattern: addi.w / addi.d $rD, $rBase, imm
+            if mnem in ('addi.w', 'addi.d') and len(f.operands) >= 3:
+                base_op = f.operands[1]
+                imm_op  = f.operands[2]
+                base_i  = base_op.reg if base_op.type == LoongArchOpType.REG else -1
+                imm_val = imm_op.imm  if imm_op.type  == LoongArchOpType.IMM  else 0
+                if base_i == _REG_ZERO:
+                    if imm_val == 0:
+                        return (RODATA_CONST, f'{mnem} {tregname}, $zero, 0 -> NULL')
+                    return (UNKNOWN, f'{mnem} {tregname}, $zero, {imm_val:#x} (literal)')
+                if base_i in _LA64_ARG_REG_IDX:
+                    bname = _GPR_NAMES[base_i & 0x1f]
+                    return (ARG_PROPAGATED,
+                            f'{mnem} {tregname}, {bname}, ... (arg-base offset)')
+                if base_i in _LA64_CALLEE_REG_IDX:
+                    bname = _GPR_NAMES[base_i & 0x1f]
+                    return (ARG_PROPAGATED,
+                            f'{mnem} {tregname}, {bname}, ... (callee-saved-base offset)')
 
-            # Pattern: ld.d / ldptr.d / similar $rD, $rBase, off (struct field load)
-            if mnem in _LOAD_MNEMONICS:
-                parts = [p.strip() for p in ops.split(',')]
-                if len(parts) >= 2:
-                    base_r = parts[1]
-                    if base_r in _LA64_ARG_REG_SET:
-                        return (ARG_PROPAGATED,
-                                f'{mnem} {target_reg}, {base_r}, ... (field of arg struct)')
-                    if base_r in _LA64_CALLEE_REG_SET:
-                        return (ARG_PROPAGATED,
-                                f'{mnem} {target_reg}, {base_r}, ... '
-                                f'(callee-saved struct; SAC-LA64-CALLEE-001)')
-                    if base_r == '$sp':
-                        return (UNKNOWN, f'{mnem} {target_reg}, $sp, ... (stack slot)')
+            # Pattern: ld.d / ldptr.d / similar $rD, $rBase, off
+            if mnem in _LOAD_MNEMONICS and len(f.operands) >= 2:
+                base_op = f.operands[1]
+                base_i  = base_op.reg if base_op.type == LoongArchOpType.REG else -1
+                if base_i in _LA64_ARG_REG_IDX:
+                    bname = _GPR_NAMES[base_i & 0x1f]
+                    return (ARG_PROPAGATED,
+                            f'{mnem} {tregname}, {bname}, ... (field of arg struct)')
+                if base_i in _LA64_CALLEE_REG_IDX:
+                    bname = _GPR_NAMES[base_i & 0x1f]
+                    return (ARG_PROPAGATED,
+                            f'{mnem} {tregname}, {bname}, ... '
+                            f'(callee-saved struct; SAC-LA64-CALLEE-001)')
+                if base_i == _REG_SP:
+                    return (UNKNOWN, f'{mnem} {tregname}, $sp, ... (stack slot)')
 
             # Pseudo-ops the decoder may emit
             if mnem in ('move', 'li', 'la.local', 'la.global', 'la.pcrel'):
-                imm = _imm_from_opstr(ops)
-                if imm is not None and imm == 0:
-                    return (RODATA_CONST, f'{mnem} {target_reg}, 0 -> NULL')
-                return (UNKNOWN, f'{mnem} {target_reg}: literal address')
+                if (len(f.operands) >= 2
+                        and f.operands[1].type == LoongArchOpType.IMM
+                        and f.operands[1].imm == 0):
+                    return (RODATA_CONST, f'{mnem} {tregname}, 0 -> NULL')
+                return (UNKNOWN, f'{mnem} {tregname}: literal address')
 
         return (UNKNOWN,
-                f'{target_reg} not found within {_LOOKBACK}-insn backward window')
+                f'{tregname} not found within {_LOOKBACK}-insn backward window')
 
     # ── Classification ────────────────────────────────────────────────────────
 
@@ -728,14 +718,14 @@ class SinkArgClassifierLA64:
             len(frames),
         )
 
-        if arg_pos >= len(_LA64_ARG_REGS):
+        if arg_pos > 7:
             return SinkClassification(
                 sink_name, arg_pos, 0, caller_va, UNKNOWN,
                 f'arg_pos {arg_pos} out of range for LA64 ($a0-$a7 only)', '',
             )
 
-        target_reg         = _LA64_ARG_REGS[arg_pos]
-        verdict, detail    = self._trace_arg(frames, call_idx, target_reg)
+        target_reg_idx     = _A0_IDX + arg_pos   # $a0=4, $a1=5, ..., $a7=11
+        verdict, detail    = self._trace_arg(frames, call_idx, target_reg_idx)
         severity           = '' if verdict in (RODATA_CONST, SNPRINTF_RODATA) else 'HIGH'
         func_va            = frames[0].va if frames else 0
 

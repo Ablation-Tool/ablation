@@ -215,10 +215,18 @@ class LoongArchDecoderV2(LoongArchDecoder):
         base = self.decode_one(data, va)
         if base is None:
             return LoongArchFrameV2(va=va, width=4, insn=0, mnemonic=".word", op_str="0x00000000")
-        # Convert LoongArchFrame to LoongArchFrameV2
-        d = dataclasses.asdict(base)
-        v2 = LoongArchFrameV2(**d)
-        return v2
+        return LoongArchFrameV2(
+            va        = base.va,
+            width     = base.width,
+            insn      = base.insn,
+            mnemonic  = base.mnemonic,
+            op_str    = base.op_str,
+            is_branch = base.is_branch,
+            is_call   = base.is_call,
+            is_ret    = base.is_ret,
+            target    = base.target,
+            operands  = base.operands,
+        )
 
     def _tag_instrumentation(self, frames: List[LoongArchFrameV2]) -> None:
         """Pass 1: tag BL calls to instrumentation VAs.
