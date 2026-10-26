@@ -60,6 +60,17 @@ from capstone import arm64 as C_ARM64
 _TOP = object()
 
 
+# ─── Raw (non-Capstone) instruction proxy ─────────────────────────────────────
+
+@dataclass
+class RawInsn:
+    """Lightweight instruction proxy for arches without Capstone support."""
+    address:  int
+    word:     int    # raw instruction word (32-bit for most RISC)
+    mnemonic: str    # decoded mnemonic (for report output only)
+    size:     int = 4
+
+
 # ─── Lattice ──────────────────────────────────────────────────────────────────
 
 class Lattice(ABC):
@@ -131,6 +142,31 @@ class ArchConfig(ABC):
 
     @abstractmethod
     def all_regs(self) -> List[str]: ...
+
+
+class RawArchConfig(ArchConfig):
+    """
+    ArchConfig subclass for architectures without Capstone support.
+
+    Concrete subclasses implement `decode_range()` to produce `RawInsn`
+    objects instead of Capstone `CsInsn` objects.  CFGBuilder detects
+    `isinstance(arch, RawArchConfig)` and calls `decode_range()` instead of
+    `arch.cs().disasm()`.
+
+    `cs()` returns None — do not call it.
+    All other abstract methods receive `RawInsn` instances, not CsInsn.
+    """
+
+    def cs(self):
+        return None
+
+    @abstractmethod
+    def decode_range(self, data: bytes, base: int, addr: int, n_bytes: int) -> List[RawInsn]:
+        """
+        Decode instructions starting at `addr` from `data` (file bytes, base=0
+        mapped to virtual address `base`).  Return at most n_bytes of decoded
+        instructions.  Stop at the first instruction that cannot be decoded.
+        """
 
 
 class ARM32Config(ArchConfig):
@@ -319,6 +355,16 @@ def make_arch(arch: str) -> ArchConfig:
         return ARM64Config()
     if arch in ('thumb', 'thumb2', 'arm32t'):
         return THUMB2Config()
+    # Lazy imports for configs defined in arch_configs_raw.py
+    if arch in ('alpha', 'alpha_axp', 'axp'):
+        from ablation.analyzers.arch_configs_raw import AlphaAXPConfig
+        return AlphaAXPConfig()
+    if arch in ('ppc64', 'ppc64be', 'power64'):
+        from ablation.analyzers.arch_configs_raw import PPC64BEConfig
+        return PPC64BEConfig()
+    if arch in ('x86_64', 'x86-64', 'amd64'):
+        from ablation.analyzers.arch_configs_raw import X86_64Config
+        return X86_64Config()
     raise ValueError(f'Unknown arch: {arch!r}')
 
 
@@ -442,6 +488,8 @@ class CFGBuilder:
         off = addr - self.base
         if off < 0 or off >= len(self.data):
             return []
+        if isinstance(self.arch, RawArchConfig):
+            return self.arch.decode_range(self.data, self.base, addr, n_bytes)
         return list(self.arch.cs().disasm(
             self.data[off: off + n_bytes], addr
         ))
