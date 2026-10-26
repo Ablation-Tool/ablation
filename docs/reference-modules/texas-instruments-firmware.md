@@ -1,4 +1,4 @@
-# Texas Instruments Firmware & Embedded ML Models
+# TI Embedded ML Models
 
 Texas Instruments MCU toolchains produce a binary format called COFF2 — not ELF. Standard tools (`lief`, `BinaryContext`) cannot read it, so TI firmware has historically been a blind spot. This capability closes that gap, and goes one step further: TI's neural-network compiler embeds ML inference models directly into firmware, and those models carry a weak-symbol supply-chain risk that is invisible without symbol-table analysis.
 
