@@ -767,6 +767,9 @@ class BinaryContext:
                 if len(chunk) < 6:
                     break
                 start = 4 if chunk[:4] == _ENDBR64 else 0
+                # IBT .plt.sec stubs: endbr64 + bnd jmp *[rip+disp32] — skip the f2 BND prefix
+                if start < len(chunk) and chunk[start] == 0xf2:
+                    start += 1
                 if len(chunk) < start + 6:
                     continue
                 if chunk[start:start + 2] == b'\xff\x25':
