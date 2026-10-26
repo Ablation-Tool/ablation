@@ -64,13 +64,13 @@ BoMC IMM2 sessions 1–9:
 - CD7200-001 ELIMINATED: security-password reference is a filter, not a reader. No vulnerability.
 - New ablation module: ppc32_func_discovery.py (commit 9e5af87), 18 919 functions found.
 
-**5. zOS-IOC/iocchk** (z/OS GOFF/XOBJ, 84KB, s390x)
+**5. zOS-IOC/iocchk** (z/OS Program Object, 84KB, s390x LE)
 `re/ibm/zos_ioc_re.py`
-- No Ghidra. Raw binary analysis: extract GOFF section headers,
-  identify TEXT/DATA/BSS records, dump symbol table if present.
-  String scan + SVC opcode sweep (0x0A xx pattern).
-  Look for hardcoded credentials or privileged z/OS SVC calls
-  (SVC 0=EXCP, SVC 3=WAIT, SVC 13=ABEND). No full disasm needed.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. IOC-001 SAFE.
+- Actual format: z/OS Program Object (IEWPLMH), not raw GOFF.
+- No exec-class sinks. No credentials. All SVCs are LE boilerplate (CEEPIPI, ABEND U4093).
+- SVC 0 EXCP apparent at 0x3e34 is a false positive from a data table — dismissed.
+- Purpose: read-only IOC DLL reference checker using IBM binder API (__iew_*).
 
 **6. z390-PTFs/uq33628, uq33629, uq33906** (EBCDIC XMIT, s390)
 `re/ibm/z390_ptf_re.py`

@@ -38,11 +38,37 @@ pytest: **1904 passed**
 | DX-003 | execlp | 0x12032180c | ELIMINATED — libc chain call |
 | DX-004 | popen | (no callers) | SAFE — exported, unused internally |
 
+### trace_arg() result for DX-001 (session 13, later in session)
+
+Extended `insn_alpha.py` with `AlphaArgTrace` dataclass and `trace_arg()` backward
+scan method. Results for DX-001 system() call at 0x12028d76c:
+
+```
+$a0 (r16): BIS_MOV — MOV r10 → r16  (bis r10,r10,r16)  @ 0x12028d768
+r10 ($s1): BIS_MOV — MOV r16 → r10  (bis r16,r16,r10)  @ 0x12028d6bc
+```
+
+Interpretation: the wrapper function at **0x12028d6a0** receives a command string
+in its own `$a0`, saves it to `$s1` (callee-saved) for preservation across
+intermediate calls, then restores `$s1 → $a0` and passes it straight to `system()`.
+
+This is a **pass-through / wrapper pattern**. The command arg is dynamic (not a
+constant). DX-001 remains **CANDIDATE MEDIUM** — exploitability depends on whether
+the wrapper at 0x12028d6a0 is reachable from attacker-controlled input.
+
+insn_alpha.py additions committed in a878b1aa:
+- `AlphaArgTrace` dataclass
+- `trace_arg(caller_va, reg=16, window=32)` backward scanner
+- `_CALLEE_SAVED` set: BSR skipped for r9-r15 (callee-saved registers preserved across calls)
+- `bis Ra, Ra, Rc` now correctly recognized as BIS_MOV (Ra==Rb case)
+- `_load()` caching; `_try_read_string()` helper
+
 ### Open items
 
-- DX-001: Manual `WindowAnalyzer.dump_text()` on 0x12028d76c ± 32 instructions to
-  trace argument construction ($a0 before BSR to system()). Required before
-  upgrading from CANDIDATE to CONFIRMED.
+- DX-001: CANDIDATE MEDIUM — wrapper at 0x12028d6a0; need call-graph to find all
+  callers and determine if any accept attacker-controlled input.
+  Further analysis would require identifying the function name (stripped binary)
+  or disassembling its callers with `trace_arg()` on each BSR that targets 0x12028d6a0.
 
 ### Key constants (for future cross-reference)
 
