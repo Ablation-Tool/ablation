@@ -8,7 +8,7 @@ A collection of reusable, system-level instruction blocks ("rubrics") designed t
 ---
 
 <details>
-<summary>ABL-RUB-RE-001 — deep RE</summary>
+<summary>deep RE ABL-RUB-RE-001</summary>
 
 Use this when you want an exhaustive breakdown of a binary or source file — every function, branch, and data flow. It produces a detailed spec-level report.
 
@@ -260,7 +260,7 @@ and any known context (product name, version, role in the system).
 </details>
 
 <details>
-<summary>ABL-RUB-RE-002 — patch diffing</summary>
+<summary>patch diffing ABL-RUB-RE-002</summary>
 
 Use this when you have two versions of the same binary and want to know what changed, what was fixed, and whether the fix holds.
 
@@ -659,7 +659,7 @@ When uncertain, default to more detail and explicit INFERRED reasoning.
 </details>
 
 <details>
-<summary>ABL-RUB-TR-001 — multi-target triage</summary>
+<summary>multi-target triage ABL-RUB-TR-001</summary>
 
 Use this when you have multiple targets and want to know which one to dig into first. It goes through each one and gives you a ranked list with suggested next steps.
 
@@ -900,7 +900,7 @@ When uncertain, label INFERRED with confidence level and reasoning.
 </details>
 
 <details>
-<summary>ABL-RUB-RF-001 — refactor planning</summary>
+<summary>refactor planning ABL-RUB-RF-001</summary>
 
 Use this when you have a codebase you need to restructure. It maps modules, coupling, and fragile areas, then gives you a phased plan for making changes safely.
 
@@ -1173,7 +1173,7 @@ rather than style nitpicks or small local fixes.
 </details>
 
 <details>
-<summary>ABL-RUB-SA-001 — source audit</summary>
+<summary>source audit ABL-RUB-SA-001</summary>
 
 Use this when you have source code and want an exhaustive security audit. It maps every source, sink, trust boundary, and assumption, then gives you a prioritized list of vulnerabilities and fixes.
 
