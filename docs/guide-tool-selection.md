@@ -2,7 +2,7 @@
 
 Task-to-tool lookup. For constructor patterns and key methods, see `docs/reference-modules/`.
 
-**Ordering:** BinaryContext → SemanticSearcher new binary/vuln class → FuncProfiler candidate → **SinkArgClassifier** eliminate RODATA_CONST first → **NetworkSinkFinder** (networked binary: filter to network-reachable sinks; returns {} immediately if no network PLT) → TaintTracker ARG_PROPAGATED/UNKNOWN sinks only → PathSolver confirm feasibility. Manual capstone only when TaintTracker has no configured sink. For targets with a Perl scripting layer, run `PerlTaintScanner` in parallel with TaintTracker, it is independent of BinaryContext.
+**Ordering:** BinaryContext → SemanticSearcher new binary/vuln class → FuncProfiler candidate → **SinkArgClassifier** eliminate RODATA_CONST first → post-SAC filters: TaintedStringTracker → SnprintfVariableFilter → SinkSanitizerFilter → FuncReachabilityAnalyzer → **NetworkSinkFinder** (networked binaries only) → TaintTracker ARG_PROPAGATED/UNKNOWN sinks only → PathSolver confirm feasibility. Manual capstone only when TaintTracker has no configured sink. Conditional: VtableDispatchMapper after BinaryContext (C++ binaries); CommandTableScanner after SemanticSearcher (dispatch-table targets); SetuidBeforeForkAnalyzer after BinaryContext (setuid binaries). For targets with a Perl scripting layer, run `PerlTaintScanner` in parallel with TaintTracker, it is independent of BinaryContext.
 
 ---
 

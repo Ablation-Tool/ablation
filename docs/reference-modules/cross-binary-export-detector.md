@@ -123,13 +123,14 @@ CrossBinaryExportDetector: PanGPS
 ## Pipeline position
 
 ```
-BinaryContext → VtableDispatchMapper
-    → CrossBinaryExportDetector(vtable_mapper=mapper)   ← here
-    → SinkArgClassifier (on the identified functions)
-    → TaintTracker
+BinaryContext.load_or_build()
+    → VtableDispatchMapper
+    → CrossBinaryExportDetector(vtable_mapper=mapper)   ← here (step 2.6)
+    → SemanticSearcher → FuncProfiler
+    → SinkArgClassifier → [post-SAC filters] → TaintTracker
 ```
 
-Run after `VtableDispatchMapper` to get accurate vtable exclusion. The results tell you which zero-caller functions are real entry points that deserve taint analysis.
+Run after `VtableDispatchMapper` (step 2.5) to get accurate vtable exclusion. The results tell you which zero-caller functions are real entry points from companion binaries — treat them as taint entry points alongside network sources.
 
 ---
 

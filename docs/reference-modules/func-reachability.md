@@ -114,7 +114,7 @@ The analyzer auto-detects whether to search for 4-byte or 8-byte VA patterns. It
 
 **Before:** `SinkArgClassifier.classify_all()`: produces the findings to filter.
 
-**After:** `FuncReachabilityAnalyzer.filter_unreachablefindings` removes `UNREACHABLE_DEBUG` and `UNREACHABLE_NOREF` entries before `TaintTracker` runs.
+**After:** `FuncReachabilityAnalyzer.filter_unreachable(findings)` removes `UNREACHABLE_DEBUG` and `UNREACHABLE_NOREF` entries. Pass the filtered set to `NetworkSinkFinder` (networked binaries) or directly to `TaintTracker` (local-only binaries).
 
 ---
 

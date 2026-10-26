@@ -141,12 +141,15 @@ popen @ 0x001591f0  SNPRINTF_RODATA_VARIABLE  HIGH
 
 ```
 BinaryContext → SinkArgClassifier.classify_all()
+    → TaintedStringTracker.upgrade_snprintf_rodata()
     → SnprintfVariableFilter.apply()    ← here
-    → filter(verdict == SNPRINTF_RODATA_VARIABLE)
-    → TaintTracker (on the %s argument of the snprintf call)
+    → SinkSanitizerFilter.apply()
+    → FuncReachabilityAnalyzer.filter_unreachable()
+    → NetworkSinkFinder (networked binaries)
+    → TaintTracker
 ```
 
-Apply immediately after `SAC.classify_all()`, before any triage. The upgraded verdict ensures `SNPRINTF_RODATA_VARIABLE` findings are not silently deprioritized against `ARG_PROPAGATED` findings.
+Apply immediately after `TaintedStringTracker`, before `SinkSanitizerFilter`. The upgraded verdict ensures `SNPRINTF_RODATA_VARIABLE` findings are not silently deprioritized against `ARG_PROPAGATED` findings.
 
 ---
 

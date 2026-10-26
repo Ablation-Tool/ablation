@@ -132,7 +132,7 @@ for r in to_trace:
 
 **Before:** `SinkArgClassifier.classify_all()`: produces the `SNPRINTF_RODATA` verdicts to upgrade.
 
-**After:** Treat upgraded `TaintedFormatResult` objects the same as `ARG_PROPAGATED` findings from SAC. Pass them to `TaintTracker`.
+**After:** Treat upgraded `TaintedFormatResult` objects the same as `ARG_PROPAGATED` findings from SAC. Continue through the post-SAC filter chain: `SnprintfVariableFilter` → `SinkSanitizerFilter` → `FuncReachabilityAnalyzer` → `NetworkSinkFinder` (networked binaries), then `TaintTracker`.
 
 ---
 
