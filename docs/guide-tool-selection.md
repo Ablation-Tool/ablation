@@ -69,6 +69,12 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Alpha AXP ECOFF: scan exec-class (system/popen/execve) call sites" | `AlphaEcoffScanner(binary).scan()` → `List[AlphaExecFinding]`; byte-verified BSR targets; call `trace_arg(f.caller_va)` on each finding to classify the argument |
 | "Alpha AXP: build per-function CFG from raw ECOFF binary" | `AlphaCFGBuilder(data, sections, gp_value).build(func_va)` → `Dict[va, BasicBlock]`; BFS from entry; handles BR/Bcc/RET/JMP/BSR |
 | "Alpha AXP: trace return value of a function (for BSR_RETVAL from trace_arg)" | `AlphaCFGBuilder(data, sections, gp_value).trace_return_value(cfg, ret_reg=0)` → `List[ReturnTrace]`; one result per RET block; closes BSR_RETVAL from trace_arg |
+| "Alpha AXP: build SSA form for a function (correct reaching-def across blocks)" | `SSABuilder(cfg, AlphaAXPConfig()).build()` → `SSAForm`; `ssa.reaching_def('r0', ret_va)` replaces trace_arg() linear scan; `ssa.defs_of(name)` / `ssa.uses_of(name)` for def-use chains |
+| "Alpha AXP: CFG-fixpoint taint (crosses basic blocks, models callee return values)" | `AlphaTaintTracker.from_path(binary).run_interprocedural(depth=3)` → `List[AlphaTaintFinding]`; replaces linear-scan trace_arg for multi-block functions |
+| "Alpha AXP: CFG-fixpoint taint single function" | `AlphaTaintTracker.from_path(binary).scan_function(func_va, init_taint={'r16': frozenset([TaintLabel('argv')])})` |
+| "x86-64 / Alpha AXP: lift function to IR node tree" | `AlphaIRLifter(data, sections, gp).lift_cfg(cfg)` / `X86_64IRLifter().lift_cfg(cfg)` → `IRIG`; use `PseudoCEmitter(irig).emit()` for pseudo-C |
+| "Recover struct field layout from IRIG load/store patterns" | `StructLayoutAnalyzer(irig).analyze()` → `List[StructDef]`; pass to `PseudoCEmitter(irig, structs=structs)` to get `ctx->field_18` instead of `*(r1+0x18)` |
+| "IR-backed pseudo-C lift with struct annotation (Alpha AXP or x86-64)" | `BinaryLifter(binary, arch='alpha').lift_function_ir(va)` → str; drives full pipeline: CFG → IR → struct recovery → pseudo-C |
 
 ---
 
