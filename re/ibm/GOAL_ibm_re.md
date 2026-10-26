@@ -83,9 +83,11 @@ BoMC IMM2 sessions 1–9:
 
 **7. hyper-protect SE headers** (IBMSecEx, 720B each, s390x Ultravisor)
 `re/ibm/hpse_re.py`
-- Parse both SE headers byte-by-byte: magic (IBMSecEx), version,
-  measurement fields, key material offsets. Map structure against
-  public IBM Ultravisor documentation. No code — pure format RE.
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. HPSE-001 SAFE.
+- Format: ASCII magic "IBMSecEx", big-endian, version 0.1.0, 720 bytes total.
+- Parsed: nonce (0x10, per-image unique), measurements (0x50-0x8F, 64B SHA-256),
+  2 host key slots (0xA0-0x2CF, 576B encrypted). No credentials or code.
+- Differing fields between headers: nonce, image size (f_0x30), feature flags (f_0x48).
 
 **8. NC-AS400/qzrdu0mm.sav** (OS/400 SAVLIB, 182KB)
 `re/ibm/as400_re.py`
