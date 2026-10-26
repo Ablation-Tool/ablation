@@ -176,8 +176,10 @@ def _transfer(insn_va: int, word: int, state: AlphaTaintState,
 
     # BSR: call — result register is tainted if callee_results says so
     if op == _OP_BSR:
-        hint = word & 0x3FFF
-        callee_va = (insn_va + 4) + hint * 4
+        disp21 = word & 0x1FFFFF
+        if disp21 & 0x100000:
+            disp21 -= 0x200000
+        callee_va = (insn_va + 4) + disp21 * 4
         result_labels = callee_results.get(callee_va, CLEAN)
         state.set(ra, result_labels)
         # Caller-save: clobber r0–r8, r23–r28 (they are undefined after a call)
@@ -297,8 +299,10 @@ class AlphaTaintTracker:
         return self._syms.get(va, f'sub_{va:x}')
 
     def _resolve_bsr_target(self, insn_va: int, word: int) -> Optional[int]:
-        hint = word & 0x3FFF
-        return (insn_va + 4) + hint * 4
+        disp21 = word & 0x1FFFFF
+        if disp21 & 0x100000:
+            disp21 -= 0x200000
+        return (insn_va + 4) + disp21 * 4
 
     def _is_sink(self, va: int) -> Optional[str]:
         """Return the sink name if va is a known exec-class sink call target."""
@@ -492,8 +496,10 @@ class AlphaTaintTracker:
             word = struct.unpack_from('<I', data, off)[0]
             op = (word >> 26) & 0x3F
             if op == _OP_BSR:
-                hint = word & 0x3FFF
-                target = (va + 4) + hint * 4
+                disp21 = word & 0x1FFFFF
+                if disp21 & 0x100000:
+                    disp21 -= 0x200000
+                target = (va + 4) + disp21 * 4
                 if text_start <= target < text_end:
                     targets.add(target)
             va += 4

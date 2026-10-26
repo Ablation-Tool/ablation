@@ -537,11 +537,9 @@ print(f'{len(all_findings)} findings across binary')
 
 4. **No floating-point registers.** Alpha has a separate FP register file (f0–f31). Exec-class sinks use integer registers only, so this is rarely a gap in practice.
 
-5. **BSR displacement computation.** Alpha BSR uses a 21-bit signed displacement in *instruction units*. The `_resolve_bsr_target()` formula is `(va + 4) + hint * 4` where `hint` is the 14-bit *hint* field from the instruction word — not the full 21-bit branch displacement. This is correct for direct BSR (where hint carries the low 14 bits of the displacement), but may diverge from actual targets in position-independent code.
+5. **Stripped binaries fall back to heuristic function discovery.** `_heuristic_func_list()` only finds BSR targets, not all functions — prologue patterns are not used. Some functions will be missed.
 
-6. **Stripped binaries fall back to heuristic function discovery.** `_heuristic_func_list()` only finds BSR targets, not all functions — prologue patterns are not used. Some functions will be missed.
-
-7. **ECOFF only for `from_path()`.** The ELF fallback in `from_path()` does not attempt to resolve GP from `.dynamic` or `.got`. GP will be `None`, making all GP-relative address resolutions fail.
+6. **ECOFF only for `from_path()`.** The ELF fallback in `from_path()` does not attempt to resolve GP from `.dynamic` or `.got`. GP will be `None`, making all GP-relative address resolutions fail.
 
 ---
 

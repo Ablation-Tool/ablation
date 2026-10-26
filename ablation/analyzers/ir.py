@@ -340,8 +340,10 @@ class AlphaIRLifter(IRLifter):
 
         # BSR  ra, target — branch-and-link (call)
         if op == _A_OP_BSR:
-            hint = word & 0x3FFF
-            call_target_va = (va + 4) + hint * 4
+            disp21 = word & 0x1FFFFF
+            if disp21 & 0x100000:
+                disp21 -= 0x200000
+            call_target_va = (va + 4) + disp21 * 4
             return [IRAssign(
                 IRReg(_alpha_reg(ra)),
                 IRCall(IRConst(call_target_va), args=(), ret_reg='r0'),
