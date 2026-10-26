@@ -559,9 +559,17 @@ class PseudoCEmitter:
     argument is a constant, a GP-relative string, or a function argument.
     """
 
-    def __init__(self, irig: IRIG, names: Optional[Dict[int, str]] = None):
+    def __init__(self,
+                 irig:    IRIG,
+                 names:   Optional[Dict[int, str]] = None,
+                 structs: Optional[List] = None):
         self._irig  = irig
         self._names = names or {}   # VA → function name (from BinaryContext)
+        # Build a fast lookup: (base_reg_name, offset) → field_name
+        self._field_names: Dict[tuple, str] = {}
+        for s in (structs or []):
+            for off, fld in s.fields.items():
+                self._field_names[(s.base_reg, off)] = fld.field_name()
 
     def _func_name(self, va: int) -> str:
         return self._names.get(va, f'sub_{va:x}')
@@ -579,6 +587,10 @@ class PseudoCEmitter:
             args_s = ', '.join(self._node(a) for a in n.args)
             return f'phi({args_s})'
         if isinstance(n, IRLoad):
+            # Attempt struct field annotation before falling back to raw deref
+            field = self._struct_field(n.addr)
+            if field:
+                return field
             addr_s = self._node(n.addr)
             w = n.width // 8
             return f'*(u{n.width}*){addr_s}' if w != 8 else f'*{addr_s}'
@@ -593,10 +605,34 @@ class PseudoCEmitter:
             return f'{tgt}({args_s})'
         return repr(n)
 
+    def _struct_field(self, addr: IRNode) -> Optional[str]:
+        """Return 'base->field_name' if addr matches a known struct access."""
+        if isinstance(addr, IRBinop) and addr.op == '+':
+            lhs, rhs = addr.lhs, addr.rhs
+            if isinstance(lhs, IRReg) and isinstance(rhs, IRConst):
+                key = (lhs.name, rhs.value)
+                fname = self._field_names.get(key)
+                if fname:
+                    return f'{self._node(lhs)}->{fname}'
+            if isinstance(lhs, IRConst) and isinstance(rhs, IRReg):
+                key = (rhs.name, lhs.value)
+                fname = self._field_names.get(key)
+                if fname:
+                    return f'{self._node(rhs)}->{fname}'
+        if isinstance(addr, IRReg):
+            key = (addr.name, 0)
+            fname = self._field_names.get(key)
+            if fname:
+                return f'{self._node(addr)}->{fname}'
+        return None
+
     def _stmt(self, s: IRNode, pad: str) -> str:
         if isinstance(s, IRAssign):
             return f'{pad}{self._node(s.dest)} = {self._node(s.rhs)};'
         if isinstance(s, IRStore):
+            field = self._struct_field(s.addr)
+            if field:
+                return f'{pad}{field} = {self._node(s.val)};'
             return f'{pad}*({self._node(s.addr)}) = {self._node(s.val)};'
         if isinstance(s, IRReturn):
             v = self._node(s.val) if s.val else 'void'

@@ -354,6 +354,71 @@ class BinaryLifter:
             return self._lift_beam(va, max_insns)
         return f"// unsupported arch: {self.arch}\n"
 
+    def lift_function_ir(
+        self,
+        va:          int,
+        max_insns:   int = 4096,
+        annotate_structs: bool = True,
+    ) -> str:
+        """
+        IR-backed pseudo-C lift using the full pipeline:
+          AlphaCFGBuilder / dataflow_engine CFGBuilder
+          → AlphaIRLifter / X86_64IRLifter
+          → StructLayoutAnalyzer (when annotate_structs=True)
+          → PseudoCEmitter
+
+        Supported arches: alpha, alpha_axp, x86_64, x86-64, amd64.
+        Falls back to lift_function() for other arches.
+
+        Returns a multi-line pseudo-C string with struct field annotations.
+        """
+        from ablation.analyzers.ir import (
+            AlphaIRLifter, X86_64IRLifter, PseudoCEmitter,
+        )
+        from ablation.analyzers.struct_layout import StructLayoutAnalyzer
+
+        names = {**self._plt, **self._names}
+
+        if self.arch in ('alpha', 'alpha_axp', 'axp'):
+            try:
+                from ablation.analyzers.alpha_cfg import AlphaCFGBuilder
+                from ablation.analyzers.insn_alpha import AlphaEcoffScanner
+                scanner = AlphaEcoffScanner(self.path)
+                data, gp, sections = scanner._load()
+                builder = AlphaCFGBuilder(data, sections, gp)
+                cfg = builder.build(va, max_insns=max_insns)
+                lifter = AlphaIRLifter(data=data, sections=sections, gp_value=gp)
+                irig = lifter.lift_cfg(cfg)
+                structs = StructLayoutAnalyzer(irig).analyze() if annotate_structs else []
+                return PseudoCEmitter(irig, names=names, structs=structs).emit()
+            except Exception as exc:
+                return f'// lift_function_ir: alpha: {exc}\n'
+
+        if self.arch in ('x86_64', 'x86-64', 'amd64'):
+            try:
+                from ablation.analyzers.dataflow_engine import CFGBuilder, make_arch
+                arch_cfg = make_arch('x86_64')
+                cfg = CFGBuilder(arch_cfg, self.data, self._base_va()).build(
+                    va, max_insns=max_insns
+                )
+                lifter = X86_64IRLifter()
+                irig = lifter.lift_cfg(cfg)
+                structs = StructLayoutAnalyzer(irig).analyze() if annotate_structs else []
+                return PseudoCEmitter(irig, names=names, structs=structs).emit()
+            except Exception as exc:
+                return f'// lift_function_ir: x86_64: {exc}\n'
+
+        return self.lift_function(va, max_insns=max_insns)
+
+    def _base_va(self) -> int:
+        """Return the lowest mapped virtual address for this binary."""
+        if self._sections:
+            return min(
+                (s.va for s in self._sections.values() if hasattr(s, 'va') and s.va),
+                default=0,
+            )
+        return 0
+
     @classmethod
     def report(cls, binary_path: str, va: int, arch: str = "arm64") -> None:
         """Convenience: lift and print a single function."""
