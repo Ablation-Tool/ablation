@@ -30,7 +30,7 @@
 
 ---
 
-## What Alpha AXP is
+## What Alpha AXP is <sup>[↑](#alphatainttracker)</sup>
 
 **Alpha AXP** (also written Alpha or DEC Alpha) is a 64-bit RISC processor architecture designed by Digital Equipment Corporation (DEC) and released in 1992. It was DEC's attempt to replace their aging 32-bit VAX line with something fast enough to last twenty years. The architecture was pure 64-bit from day one — no 32-bit compatibility mode, no segmentation, no x87 float stack. Every instruction is 32 bits wide, every register is 64 bits wide, and the load/store model is strict (no memory-to-memory operations).
 
@@ -40,9 +40,9 @@ DEC was acquired by Compaq in 1998. Compaq was acquired by HP in 2002. HP EOL'd 
 
 **Why Alpha binaries show up in RE work:** industrial control systems, telecoms infrastructure, financial backend systems, and military/government installations ran Tru64 or OpenVMS for decades and many never migrated off. When you're doing RE on legacy infrastructure or doing firmware analysis on hardware that predates ARM-everywhere, you encounter Alpha. It is also common in IBM research/academic code distributions and in archived OS source trees.
 
-### Chip generations
+### Chip generations <sup>[↑](#alphatainttracker)</sup>
 
-#### Alpha 21064 — EV4 (1992)
+#### Alpha 21064 — EV4 (1992) <sup>[↑](#alphatainttracker)</sup>
 
 The first Alpha chip. DEC shipped it at 150–200 MHz in the DEC 3000 workstation and DEC 4000/7000/10000 server lines. Systems running it shipped with **OSF/1 1.x–3.x** (later renamed Tru64) and **OpenVMS 6.x**.
 
@@ -65,7 +65,7 @@ When you see ZAPNOT (zero bytes not) patterns interleaved with loads and stores,
 
 ---
 
-#### Alpha 21164 — EV5 (1995) and EV56 (1996)
+#### Alpha 21164 — EV5 (1995) and EV56 (1996) <sup>[↑](#alphatainttracker)</sup>
 
 DEC's second-generation Alpha. Shipped in the DEC AlphaServer 2000, 4000, and 8000 lines at 266–500 MHz. The primary platform for **Tru64 UNIX 4.x–5.x** and **OpenVMS 7.x**.
 
@@ -90,7 +90,7 @@ Code that runs on both 21064 and 21164+ checks `AMASK` at startup and branches t
 
 ---
 
-#### Alpha 21264 — EV6 (1998), EV67 (1999), EV68 (2001)
+#### Alpha 21264 — EV6 (1998), EV67 (1999), EV68 (2001) <sup>[↑](#alphatainttracker)</sup>
 
 Compaq's (ex-DEC) third-generation Alpha. Shipped in the AlphaServer ES40, DS20, and GS-series at 466–1000 MHz. The primary platform for **Tru64 UNIX 5.1** and **OpenVMS 7.3**. Also used in the Nintendo GameBoy Advance predecessor project (cancelled) and Cray supercomputer nodes.
 
@@ -117,7 +117,7 @@ When you see `CTPOP` or `CTLZ` in a binary, you have an EV67+ target. These appe
 
 ---
 
-#### Summary: what each generation means when you see a binary
+#### Summary: what each generation means when you see a binary <sup>[↑](#alphatainttracker)</sup>
 
 | You see this in the disassembly | What it tells you |
 |:--|:--|
@@ -128,7 +128,7 @@ When you see `CTPOP` or `CTLZ` in a binary, you have an EV67+ target. These appe
 | CTPOP / CTLZ / CTTZ | EV67+ target (21264A or later) |
 | None of the above, strict LDQ/STQ only | 21064 strict target — oldest and most restrictive |
 
-### Binary formats: ECOFF vs ELF
+### Binary formats: ECOFF vs ELF <sup>[↑](#alphatainttracker)</sup>
 
 Alpha binaries come in two formats:
 
@@ -138,7 +138,7 @@ Alpha binaries come in two formats:
 
 ---
 
-## Taint tracking vs. decompilation — what each one does
+## Taint tracking vs. decompilation — what each one does <sup>[↑](#alphatainttracker)</sup>
 
 Ablation has two separate pipelines for Alpha AXP. They answer different questions.
 
@@ -162,7 +162,7 @@ Steps 1–2 classify the easy cases (hardcoded strings, GP-relative constants). 
 
 ---
 
-## Why AlphaTaintTracker exists (gaps in the linear scanner)
+## Why AlphaTaintTracker exists (gaps in the linear scanner) <sup>[↑](#alphatainttracker)</sup>
 
 The existing `taint_tracker_*.py` family — and `AlphaEcoffScanner.trace_arg()` — does **linear backward scans within a single basic-block window**. That is fast and sufficient for the common case (a string constant loaded two instructions before the call). Three concrete gaps motivated a CFG-aware replacement:
 
@@ -180,11 +180,11 @@ The existing `taint_tracker_*.py` family — and `AlphaEcoffScanner.trace_arg()`
 
 ---
 
-## Alpha AXP architecture background
+## Alpha AXP architecture background <sup>[↑](#alphatainttracker)</sup>
 
 Understanding the tracker requires knowing the Alpha register file and calling convention.
 
-### Integer register file
+### Integer register file <sup>[↑](#alphatainttracker)</sup>
 
 | Register(s) | ABI name | Role |
 |:--|:--|:--|
@@ -203,7 +203,7 @@ Understanding the tracker requires knowing the Alpha register file and calling c
 
 The tracker initialises r16–r21 as tainted (`arg_0`–`arg_5`) for library-function scanning. When scanning a specific call site you typically seed only the registers you care about.
 
-### Instruction encoding
+### Instruction encoding <sup>[↑](#alphatainttracker)</sup>
 
 All Alpha instructions are 32 bits wide, aligned on 4-byte boundaries.
 
@@ -238,7 +238,7 @@ Key opcodes for taint analysis:
 | 0x1A, hint=2 | RET | Return: indirect branch through ra (usually r26). |
 | 0x38–0x3F | BLBS/BEQ/BLT/BLE/BLBC/BNE/BGE/BGT | Conditional branches. |
 
-### BSR target encoding
+### BSR target encoding <sup>[↑](#alphatainttracker)</sup>
 
 BSR uses a 21-bit PC-relative displacement in **instruction units** (each unit = 4 bytes):
 
@@ -248,7 +248,7 @@ target_va = (BSR_va + 4) + sign_extend_21(disp21) * 4
 
 The transfer function and `_resolve_bsr_target()` both use this formula.
 
-### ECOFF / ELF and the GP register
+### ECOFF / ELF and the GP register <sup>[↑](#alphatainttracker)</sup>
 
 Tru64 / OSF/1 binaries are **ECOFF** (alpha-specific). ELF binaries exist for Linux Alpha and some cross-compiled targets. Key difference for analysis:
 
@@ -259,7 +259,7 @@ Without a correct GP value, `LDA/LDAH/LDQ` address resolution fails silently —
 
 ---
 
-## Module relationships
+## Module relationships <sup>[↑](#alphatainttracker)</sup>
 
 ```
 AlphaTaintTracker
@@ -277,7 +277,7 @@ AlphaTaintTracker
 
 ---
 
-## Constructor
+## Constructor <sup>[↑](#alphatainttracker)</sup>
 
 ```python
 AlphaTaintTracker(
@@ -299,7 +299,7 @@ tracker = AlphaTaintTracker.from_path('/path/to/binary')
 
 ---
 
-## `scan_function(func_va, init_taint=None, callee_results=None, max_insns=4096)`
+## `scan_function(func_va, init_taint=None, callee_results=None, max_insns=4096)` <sup>[↑](#alphatainttracker)</sup>
 
 Scans a single function for exec-class sink calls with tainted arguments.
 
@@ -326,7 +326,7 @@ Returns `List[AlphaTaintFinding]`.
 
 ---
 
-## `run_interprocedural(depth=3, max_insns=4096)`
+## `run_interprocedural(depth=3, max_insns=4096)` <sup>[↑](#alphatainttracker)</sup>
 
 Scans the entire binary across up to `depth` fixpoint iterations to discover taint paths through wrapper chains.
 
@@ -353,7 +353,7 @@ Returns deduplicated `List[AlphaTaintFinding]`.
 
 ---
 
-## `AlphaTaintFinding`
+## `AlphaTaintFinding` <sup>[↑](#alphatainttracker)</sup>
 
 ```python
 @dataclass
@@ -384,7 +384,7 @@ Sink matching strips leading underscores and `@version` suffixes to handle OSF/1
 
 ---
 
-## `AlphaTaintState`
+## `AlphaTaintState` <sup>[↑](#alphatainttracker)</sup>
 
 Represents the register taint map at a point in the program.
 
@@ -409,7 +409,7 @@ state.copy()                  # deep copy
 
 ---
 
-## `TaintLabel`
+## `TaintLabel` <sup>[↑](#alphatainttracker)</sup>
 
 ```python
 @dataclass(frozen=True)
@@ -431,7 +431,7 @@ findings = tracker.scan_function(func_va, init_taint=init)
 
 ---
 
-## Transfer function
+## Transfer function <sup>[↑](#alphatainttracker)</sup>
 
 `_transfer(insn_va, word, state, callee_results)` updates `state` in-place for one instruction. The table covers every Alpha opcode the tracker handles explicitly; all others default to **CLEAN write to Ra** (conservative — treats the result as untainted).
 
@@ -458,11 +458,11 @@ findings = tracker.scan_function(func_va, init_taint=init)
 
 ---
 
-## `AlphaCFGBuilder`
+## `AlphaCFGBuilder` <sup>[↑](#alphatainttracker)</sup>
 
 `AlphaCFGBuilder(data, sections, gp_value)` constructs per-function CFGs. Used internally by `AlphaTaintTracker`.
 
-### `build(func_va, max_insns=4096) → CFG`
+### `build(func_va, max_insns=4096) → CFG` <sup>[↑](#alphatainttracker)</sup>
 
 Builds the CFG via a recursive-descent worklist starting at `func_va`. Each time it encounters a branch:
 
@@ -474,7 +474,7 @@ Builds the CFG via a recursive-descent worklist starting at `func_va`. Each time
 
 Returns a `CFG` with `blocks: Dict[int, BasicBlock]` and `entry: int`.
 
-### `BasicBlock`
+### `BasicBlock` <sup>[↑](#alphatainttracker)</sup>
 
 ```python
 @dataclass
@@ -488,7 +488,7 @@ class BasicBlock:
     is_jmp:    bool                   # True if block ends with indirect JMP (target unknown)
 ```
 
-### `trace_return_value(cfg, ret_reg=0, window=32) → List[ReturnTrace]`
+### `trace_return_value(cfg, ret_reg=0, window=32) → List[ReturnTrace]` <sup>[↑](#alphatainttracker)</sup>
 
 For each `is_ret` block in `cfg`, scans backward through the block's last `window` instructions to identify what value is in `ret_reg` (default r0, the return value) at the RET. Returns one `ReturnTrace` per exit block.
 
@@ -506,7 +506,7 @@ For each `is_ret` block in `cfg`, scans backward through the block's last `windo
 
 ---
 
-## `AlphaEcoffScanner`
+## `AlphaEcoffScanner` <sup>[↑](#alphatainttracker)</sup>
 
 `AlphaEcoffScanner` (in `insn_alpha.py`) is the **fast first-pass** tool. Use it before `AlphaTaintTracker` to quickly locate call sites and do single-block argument traces.
 
@@ -528,7 +528,7 @@ print(trace)
 
 ---
 
-## Worked example
+## Worked example <sup>[↑](#alphatainttracker)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker_alpha import AlphaTaintTracker, TaintLabel
@@ -557,7 +557,7 @@ print(f'{len(all_findings)} findings across binary')
 
 ---
 
-## Limitations
+## Limitations <sup>[↑](#alphatainttracker)</sup>
 
 1. **Memory taint is not modelled.** If user-controlled data is written to a local stack buffer and then loaded into an argument register via `LDQ Ra, offset(sp)`, the taint on `Ra` depends on whether `sp` itself is tainted (it isn't, normally). Stack-allocated command buffers built with `strcpy` / `snprintf` will be missed unless you seed `sp` as tainted, which produces massive over-approximation.
 
@@ -573,7 +573,7 @@ print(f'{len(all_findings)} findings across binary')
 
 ---
 
-## Comparison with existing trackers
+## Comparison with existing trackers <sup>[↑](#alphatainttracker)</sup>
 
 | Property | `trace_arg()` (linear backward) | `AlphaTaintTracker` (CFG fixpoint) |
 |:--|:--|:--|
