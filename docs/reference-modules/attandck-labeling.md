@@ -18,18 +18,50 @@ Automatically annotate Ablation findings with MITRE ATT&CK technique IDs and tac
 
 ```mermaid
 flowchart TD
-    A[finding dict: type + description] --> B[tag_finding]
-    B --> C["Build search_text: lower(type) + lower(description)"]
-    C --> D{for each keyword in ATTCK_MAP}
-    D --> E{keyword in search_text?}
-    E -->|yes| F["Look up technique: id, name, tactic"]
-    F --> G{id already seen?}
-    G -->|no| H[add to techniques list]
-    G -->|yes| I[deduplicate: skip]
+    A(["finding dict\ntype + description"]):::input
+    B["tag_finding()"]:::primary
+    C["Build search_text\nlower(type) + lower(description)"]:::secondary
+    D{"for each keyword\nin ATTCK_MAP"}:::neutral
+    E{"keyword in\nsearch_text?"}:::neutral
+    F["Look up technique\nid · name · tactic"]:::secondary
+    G{"id already\nseen?"}:::neutral
+    H["add to techniques list"]:::secondary
+    I["skip (duplicate)"]:::neutral
+    J["sort by TACTIC_ORDER\nkill-chain position"]:::secondary
+    K(["finding dict +\nattck_techniques appended"]):::output
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E -->|yes| F
+    F --> G
+    G -->|no| H
+    G -->|yes| I
     E -->|no| D
     H --> D
-    D -->|exhausted all 100+ keywords| J[sort techniques by TACTIC_ORDER kill-chain position]
-    J --> K[return finding dict with attck_techniques list appended]
+    D -->|all keywords matched| J
+    J --> K
+
+    classDef input     fill:#0d47a1,stroke:#1565c0,color:#fff
+    classDef primary   fill:#e65100,stroke:#bf360c,color:#fff
+    classDef secondary fill:#004d40,stroke:#00695c,color:#fff
+    classDef tertiary  fill:#4a148c,stroke:#6a1b9a,color:#fff
+    classDef neutral   fill:#37474f,stroke:#546e7a,color:#fff
+    classDef output    fill:#1b5e20,stroke:#2e7d32,color:#fff
+
+    linkStyle 0 stroke:#bf360c,stroke-width:2px
+    linkStyle 1 stroke:#00695c,stroke-width:2px
+    linkStyle 2 stroke:#546e7a,stroke-width:2px
+    linkStyle 3 stroke:#546e7a,stroke-width:2px
+    linkStyle 4 stroke:#00695c,stroke-width:2px
+    linkStyle 5 stroke:#546e7a,stroke-width:2px
+    linkStyle 6 stroke:#00695c,stroke-width:2px
+    linkStyle 7 stroke:#546e7a,stroke-width:2px
+    linkStyle 8 stroke:#546e7a,stroke-width:2px
+    linkStyle 9 stroke:#546e7a,stroke-width:2px
+    linkStyle 10 stroke:#00695c,stroke-width:2px
+    linkStyle 11 stroke:#2e7d32,stroke-width:3px
 ```
 
 ### Keyword-to-technique mapping
