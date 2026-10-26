@@ -122,9 +122,12 @@ BoMC IMM2 sessions 1–9:
 
 **11. collections/firmware/system-firmware/01VL930_139_040.img** (308MB POWER7)
 `re/ibm/power7_fw_re.py`
-- binwalk -e first (UI\x00\x03 container). Map internal FW sections.
-  Extract PPC ELFs. SemanticSearcher sweep on largest ELF only
-  (time-box to 2 sessions).
+- [x] COMPLETE (session 14, 2026-10-25). FORGE PASS. POWER7-FW-001 SAFE.
+- IBM UFI container (UI\x00\x03, FW930.41, build 2021-03-03).
+- 29 ELF headers scanned; 4 CHRP false positives; 25 real ELFs.
+- Largest ELF (2.3MB ePAPR boot shim, PPC64 LE ELFv2, not stripped):
+  SinkArgClassifierPPC64 = 0 exec-class sites. No credentials.
+- ARM BE ELFs = IBM FSP service processor firmware (14 ELFs, 7 A/B pairs).
 
 ---
 
