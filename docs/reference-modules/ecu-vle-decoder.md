@@ -396,8 +396,286 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
+## Complete usage example: GM E39a PCM analysis <sup>[↑](#ecuvledecoder)</sup>
+
+```python
+from ablation.analyzers.ecu_arch_detector import EcuArchDetector
+from ablation.analyzers.ecu_rom_layout_analyzer import EcuROMLayoutAnalyzer
+from ablation.analyzers.ecu_vle_decoder import EcuVLEDecoder
+
+firmware_path = '/media/cowboy/research/Automotive/GM/E39a_PCM_12345678.bin'
+
+# Step 1: detect architecture
+arch = EcuArchDetector(firmware_path).detect()
+print(f"Arch: {arch.family} core={arch.core} vle={arch.has_vle}")
+# Expected: Arch: PPC core=e200z6 vle=True
+
+# Step 2: map ROM layout
+layout = EcuROMLayoutAnalyzer(firmware_path, arch).analyze()
+for region in layout.code_regions:
+    print(f"  CODE: {region.start_va:#010x} – {region.end_va:#010x}  "
+          f"({'VLE' if region.is_vle else 'Book E'})")
+
+# Step 3: decode VLE regions
+for region in layout.code_regions:
+    if not region.is_vle:
+        continue  # use standard PPC32 taint tracker for Book E regions
+    
+    decoder = EcuVLEDecoder.from_path(
+        firmware_path,
+        base_va=region.start_va,
+        offset=region.file_offset,
+        length=region.length
+    )
+    insns = decoder.disassemble()
+    
+    # Find function entries
+    funcs = decoder.find_functions()
+    print(f"  {len(funcs)} functions in {region.start_va:#x}–{region.end_va:#x}")
+    
+    # Find call sites to suspicious functions by name or VA
+    # (after EcuSecurityAccessScanner locates the 0x27 handler)
+    for insn in insns:
+        if insn.insn_type == 'CALL' and insn.target is not None:
+            # cross-reference with known handler VAs
+            if insn.target in security_access_handlers:
+                print(f"  SecurityAccess call from {insn.offset:#010x}")
+
+# Step 4: byte verify a specific finding
+# (always before registering)
+import struct
+with open(firmware_path, 'rb') as f:
+    f.seek(region.file_offset + (finding_va - region.start_va))
+    raw = f.read(4)  # 4 bytes for a 32-bit VLE instruction
+# Confirm the instruction word matches what the decoder reported
+assert raw == finding_insn.raw, f"Byte mismatch: {raw.hex()} != {finding_insn.raw.hex()}"
+```
+
+---
+
+## Version compatibility and known limitations <sup>[↑](#ecuvledecoder)</sup>
+
+`EcuVLEDecoder` supports all NXP VLE variants documented in the NXP "VLE Extension to PowerISA" reference manual (document VLEINSTEK, revision D, 2009) and the subsequent errata revisions through 2018. The instruction set for e200z4, e200z6, and e200z7 cores is identical at the instruction encoding level; no per-core variant selection is required.
+
+**Known limitations:**
+
+1. **SPE (Signal Processing Engine) instructions not decoded.** e200z6 and e200z7 cores include SPE SIMD instructions for fixed-point DSP operations common in powertrain control (signal processing, PID loop mathematics). SPE instructions use the `evX` mnemonic prefix. `EcuVLEDecoder` passes `evX` instructions through as `insn_type='MISC'` without operand decoding. Taint tracking through SPE register operations is not supported.
+
+2. **64-bit `e_stmg` / `e_lmg` for double-precision FP not fully decoded.** These are rare in ECU firmware (ECUs typically use fixed-point, not floating-point), but if they appear, `EcuVLEDecoder` emits `insn_type='MISC'` for them.
+
+3. **Mixed VLE/Book E switching in the same function is rare but possible.** The NXP toolchain can generate a `isync` + `mtmsr` sequence to switch instruction set mode at runtime. `EcuVLEDecoder` does not handle runtime mode switches; it assumes the region passed to it is entirely VLE. `EcuROMLayoutAnalyzer` identifies regions as VLE or Book E before passing them to the appropriate decoder; mixed regions are flagged as `region.is_mixed = True` and require manual analysis.
+
+4. **No support for compressed calibration data sections.** Some ECUs use LZMA or a custom compression scheme for calibration data stored in the same flash address space as code. `EcuROMLayoutAnalyzer` excludes compressed sections from VLE analysis (their entropy is too high for code and they fail the SE instruction density probe), but if the decompression stub is in the same flash region as VLE code, the boundary must be identified manually.
+
+---
+
+## VLE calling convention and register usage <sup>[↑](#ecuvledecoder)</sup>
+
+VLE code on NXP e200 cores follows the same Power Architecture EABI calling convention as Book E code on the same hardware. The calling convention is defined in the "Power Architecture 32-bit Application Binary Interface Supplement" (NXP document ENGABIREV2.0):
+
+**General-purpose registers:**
+
+| Register | Role | Preserved across calls? |
+|---|---|---|
+| r0 | Volatile (scratch; holds LR copy during prologue) | No |
+| r1 | Stack pointer | Yes (callee saves/restores) |
+| r2 | Small data area 2 pointer (SDATA2) | Yes |
+| r3 | First integer argument / return value | No |
+| r4–r10 | Additional arguments | No |
+| r11–r12 | Volatile (scratch) | No |
+| r13 | Small data area pointer (SDATA) | Yes |
+| r14–r31 | Callee-save registers | Yes |
+
+**SE instruction register restriction:** 16-bit SE instructions can only access the "even" register half: r0–r7 and r24–r31. Compilers targeting VLE typically keep frequently-used local variables in r14–r31 (accessed by 32-bit `e_` instructions) and short-lifetime temporaries in r0–r7 (accessible from 16-bit `se_` instructions).
+
+**Stack frame layout (e200z6 typical):**
+```
+ High address  ──────────────────────────────────
+               | Caller's frame                   |
+               | ...                              |
+SP + N + 4     | Saved LR (link register)         |  (r0 = mflr r0; e_stw r0, N+4(r1))
+SP + N         | (alignment / parameter area)     |
+SP + N - 4     | Saved r31                        |
+SP + N - 8     | Saved r30                        |
+               | ...                              |
+SP + 4         | Saved r14                        |
+SP             | Back chain (saved SP)            |  (se_stwu r1, -N(r1))
+ Low address   ──────────────────────────────────
+```
+
+`EcuVLEDecoder.find_stack_frame_size(func_va)` reads the `se_stwu r1, -N(r1)` prologue instruction and extracts N as the frame size.
+
+---
+
+## What is VLE? History and architecture <sup>[↑](#ecuvledecoder)</sup>
+
+Variable Length Encoding (VLE) is an instruction set extension developed by Freescale Semiconductor (later acquired by NXP Semiconductors in 2015) specifically for the embedded PowerPC product family used in automotive Electronic Control Units (ECUs). VLE was introduced with the MPC5500 family in the mid-2000s and became the default instruction set for NXP's e200 core series.
+
+**The problem VLE solves:** Standard PowerPC/Book E instructions are 32 bits wide — 4 bytes per instruction. Automotive ECUs have severe flash memory cost constraints: a single 512 KB flash chip costs significantly less than a 1 MB chip in high-volume production (millions of units). Early 2000s ECU firmware for powertrain (PCM/ECM) and transmission control modules filled 256 KB to 512 KB flash. As feature complexity increased, firmware grew beyond these limits. VLE was designed to reduce code size by 20–30% without requiring hardware redesign.
+
+**VLE encoding model:** VLE uses a 16-bit Short Encoding (SE) subset for the most common operations and retains 32-bit encoding for operations that need full register access and larger immediates. The 16-bit vs. 32-bit distinction is made per-instruction by the leading bit pattern of the first halfword:
+
+- If bits [15:14] of the first halfword are `00` or `01`: the instruction is 16-bit SE format
+- If bits [15:14] are `10` or `11`: the instruction is 32-bit VLE format
+
+This per-instruction variable width is why `EcuVLEDecoder` must track alignment explicitly as it iterates: after a 16-bit instruction, the next instruction starts at a 2-byte-aligned offset; after a 32-bit instruction, at a 4-byte-aligned offset.
+
+**SE Short Encoding subset:** The 16-bit SE instructions map to the most frequently used PowerPC operations: load/store with small offsets (`se_lwz`, `se_stw`, `se_lbz`, `se_stb`), register-to-register moves (`se_mr`), adds and subtracts with small immediates (`se_addi`, `se_subi`), comparisons (`se_cmpi`, `se_cmp`), conditional branches with 8-bit signed displacement (`se_bge`, `se_blt`, etc.), unconditional branches (`se_b`), function calls (`se_bl`), return (`se_blr`), and no-op (`se_nop`). SE instructions use a reduced 4-bit register field (registers r0–r7 and r24–r31 only).
+
+**32-bit VLE instructions:** The 32-bit VLE encoding provides access to all 32 registers and larger immediate values. Key 32-bit VLE instructions: `e_add16i`, `e_li`, `e_lwz`, `e_stw`, `e_b`, `e_bl`, `e_bge`, `e_bc` (general conditional branch). The mnemonic prefix `e_` identifies 32-bit VLE instructions; `se_` identifies 16-bit SE instructions.
+
+---
+
+## NXP e200 core series <sup>[↑](#ecuvledecoder)</sup>
+
+The NXP e200 core family implements VLE on top of the PowerPC Embedded Application Binary Interface (EABI) and Power Architecture Book E specification:
+
+| Core | MCU family | Target applications | Clock speed |
+|---|---|---|---|
+| e200z0 | MPC5500 | Body electronics, simpler modules | 50–80 MHz |
+| e200z1 | MPC5600 | Safety-relevant body | 80 MHz |
+| e200z4 | MPC5600, MPC5700 | Powertrain (PCM), transmission | 120–160 MHz |
+| e200z6 | MPC5500, MPC5565/66 | High-end PCM and TCM | 132 MHz |
+| e200z7 | MPC5700, MPC5748 | AUTOSAR-capable, safety ISO 26262 | 200 MHz |
+| e200z425 | MPC5746, MPC5748G | Chassis, ADAS pre-processing | 200 MHz |
+
+**VLE support by core:** e200z0 does not support VLE (Book E only). e200z4, e200z6, e200z7 support VLE. `EcuArchDetector` identifies the core from the ELF header or ROM signature, and `EcuVLEDecoder` is only dispatched for VLE-capable cores.
+
+**ELF flags for VLE detection:** When the ECU firmware is distributed as an ELF (unusual for production firmware; common for development images), the `e_flags` field in the ELF header encodes VLE support. `EcuVLEDecoder.from_elf()` reads this flag automatically:
+
+```python
+# ELF e_flags for PowerPC VLE:
+# Bit 0 (EF_PPC_VLE = 0x1): VLE code present
+import struct
+
+with open('ecu_firmware.elf', 'rb') as f:
+    f.seek(0x24)  # e_flags offset in 32-bit ELF header
+    e_flags = struct.unpack('>I', f.read(4))[0]
+    is_vle = bool(e_flags & 0x1)
+    print(f"VLE: {is_vle}")
+```
+
+For raw binary firmware (no ELF), `EcuArchDetector` uses a VLE probe: scan for 16-bit `se_` instruction density in regions that look like code (entropy between 3.5 and 5.5 bits/byte, 4-byte aligned starts). A VLE region produces a different pattern than Book E because of the 2-byte-aligned instructions.
+
+---
+
+## VLE instruction encoding reference <sup>[↑](#ecuvledecoder)</sup>
+
+**16-bit SE instruction format:**
+```
+15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+| 0| 0| op5..........| RX....| RY....| sub_op....|  R-type (e.g. se_add, se_mr)
+| 0| 1| op5..........| RX....| imm5...............|  immediate (e.g. se_li, se_addi)
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+```
+Where `RX` and `RY` are 4-bit register fields selecting from {r0–r7, r24–r31}.
+
+**32-bit VLE e_bl (function call):**
+```
+31 30 29 28 27 26 25 24 23 22 ... 2  1  0
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+| 1| 1| 1| 0|LK|AA|          LI[25:0]          |  opcode=0b11100
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+```
+LI is a 25-bit signed immediate; actual target = PC + sign_extend(LI << 1). `EcuVLEDecoder` computes the target VA and stores it in `VLEInsn.target`.
+
+**32-bit VLE e_bc (conditional branch):**
+```
+31 26  25 21  20 16  15 11  10        0
++---+  +---+ +---+ +---+ +----------+
+| op|  | BO| | BI| |BD16|  BD16 field
++---+  +---+ +---+ +---+ +----------+
+```
+BD16 is a 16-bit signed displacement; target = PC + BD16 * 2. This allows conditional branches to ±32 KB from the current instruction.
+
+---
+
+## Common VLE firmware patterns <sup>[↑](#ecuvledecoder)</sup>
+
+**VLE function prologue (typical e200z6):**
+```asm
+se_stwu  r1, -N(r1)   ; allocate stack frame, store old SP
+se_stw   r14, N-4(r1) ; save callee-save registers
+se_stw   r15, N-8(r1) ; ...
+e_stmw   r24, N-36(r1); save r24-r31 in one instruction
+e_stw    r0, N+4(r1)  ; save link register (via r0 = mflr r0 before)
+mflr     r0            ; (Book E, present in VLE region — mixed encoding)
+```
+
+`EcuVLEDecoder` identifies function entry points by detecting `se_stwu r1, -N(r1)` at a 4-byte-aligned offset in the code region. The instruction pattern `insn_type == 'PROLOGUE'` on a `VLEInsn` marks a confirmed function entry.
+
+**VLE function epilogue:**
+```asm
+e_lwz    r0, N+4(r1)  ; restore link register
+mtlr     r0
+e_lmw    r24, N-36(r1); restore r24-r31
+se_lwz   r14, N-4(r1) ; restore callee-saves
+se_addi  r1, N         ; deallocate stack frame
+se_blr                  ; return (= se_blr)
+```
+
+`VLEInsn.insn_type == 'RETURN'` marks all `se_blr` instructions. The caller can identify function boundaries by locating prologue and epilogue pairs.
+
+---
+
+## Automotive security context <sup>[↑](#ecuvledecoder)</sup>
+
+ECU firmware on NXP e200 cores is the firmware layer most likely to implement UDS (Unified Diagnostic Services, ISO 14229) Security Access (service 0x27). Security Access is the seed-challenge authentication mechanism used to unlock ECU programming sessions for software updates ("flashing").
+
+Security access vulnerabilities in ECU firmware are among the highest-value findings in automotive RE:
+- **Static seed/key pairs:** ECU returns a fixed seed value; the key algorithm is reverse-engineered from the ECU binary; any device can compute the correct key
+- **Timing side channel in key verification:** the comparison loop exits early on mismatch, leaking information about the correct key through response timing
+- **Programming session escalation without authentication:** the ECU allows entering extended diagnostic session (0x10 03) without prior security access, enabling parameter writes or calibration changes
+- **Calibration data section writable without security access:** the ECU does not check whether the current diagnostic session level authorizes calibration write requests
+
+For VLE targets, finding the Security Access handler requires:
+1. Locating the UDS service dispatch table (typically an array of `{service_id, handler_pointer}` pairs)
+2. Decoding the VLE code at the `0x27` handler pointer
+3. Tracing the seed generation and key verification logic
+
+`EcuVLEDecoder.disassemble(region)` + `EcuSecurityAccessScanner.scan(insns)` handles this pipeline. See [ECU Security Access Scanner](ecu-security-access-scanner.md) for the next step.
+
+---
+
+## Detection and RE implications <sup>[↑](#ecuvledecoder)</sup>
+
+**RE implication 1: Capstone disassembly is actively misleading on VLE regions.** Unlike an architecture where Capstone produces an error or no output, on VLE firmware Capstone produces wrong disassembly silently. `16-bit` halfwords at the start of a VLE region satisfy PowerPC 32-bit opcode format coincidentally, producing spurious Book E instructions. The only safeguard is `EcuArchDetector` + `EcuVLEDecoder` before any other disassembly.
+
+**RE implication 2: Function boundaries differ from Book E.** VLE prologues use `se_stwu` (16-bit) which is not a valid Book E instruction. Function entry detection logic designed for Book E misidentifies VLE entry points. `EcuVLEDecoder.find_functions()` uses the SE prologue signature for correct function discovery.
+
+**RE implication 3: Branch target computation differs.** `se_b` uses an 8-bit signed displacement, not the 24-bit I-form displacement of Book E's `b` instruction. Manual target computation that assumes I-form encoding produces wrong addresses. Always use `VLEInsn.target` from `EcuVLEDecoder` rather than computing branch targets manually.
+
+**Byte-verify protocol for VLE findings:**
+```python
+# Before registering a finding at a VLE instruction VA:
+with open(firmware_path, 'rb') as f:
+    data = f.read()
+
+off = va - base_va
+insn = decoder.disassemble_one(off)
+assert insn.raw == data[off:off + len(insn.raw)], \
+    f"Byte mismatch at VA {va:#x}: expected {insn.raw.hex()}, got {data[off:off+len(insn.raw)].hex()}"
+```
+
+---
+
 ## See also <sup>[↑](#ecuvledecoder)</sup>
 
 - [EcuArchDetector](ecu-arch-detector.md): identify processor family before choosing a decoder
 - [EcuROMLayoutAnalyzer](ecu-rom-layout-analyzer.md): map ROM sections before decoding
 - [ECUSecurityAccessScanner](ecu-security-access-scanner.md): find UDS 0x27 bypass vectors in decoded code
+- [PPC32 Taint Tracker](ppc32-taint-tracker.md): for post-VLE-decode taint analysis of e200z4/z6/z7 call sites
+- [ECU M68K Decoder](ecu-m68k-decoder.md): the predecessor architecture — 1990s–2000s ECUs used Motorola 68HC11 and 68HC12 before NXP adopted PowerPC
+- [Binary Context](binary-context.md): for development ELF images of e200z firmware where symbols are present
+- [PPC476 Lifter](ppc476-lifter.md): for IBM Power 476FP embedded core (aviation avionics PowerPC, not automotive VLE); different calling convention and no VLE support
+- [Taint Analysis](taint-analysis.md): the general taint infrastructure; `EcuVLEDecoder` feeds `VLEInsn` lists into the taint tracker's CFG builder as the instruction source
+
+**Quick diagnostic: is a region VLE or Book E?**
+```python
+decoder = EcuVLEDecoder.from_bytes(data, base_va=0x2A000)
+probe = decoder.probe_vle(data[:64])  # sample first 64 bytes
+print(f"VLE confidence: {probe.confidence:.0%}  SE density: {probe.se_density:.0%}")
+# VLE: confidence > 80%, SE density > 30%
+# Book E: confidence < 20%, SE density < 5%
+```

@@ -311,8 +311,334 @@ The lifter tracks register state using `_Val` internally. Output lines use C-lik
 
 ---
 
+## Common findings in PPC476 avionics firmware <sup>[↑](#ppc476lifter)</sup>
+
+Avionics and aviation infrastructure firmware on PPC476 yields distinct finding classes compared to consumer embedded devices:
+
+**Datalink injection (ACARS/SATCOM):** Flight management systems receive clearance data, weather updates, and company messages via ACARS (Aircraft Communications Addressing and Reporting System) or SATCOM datalink. The datalink parser is a network-adjacent code path on the PPC476: received messages arrive in the aircraft network, are parsed by the FMS binary, and used to update flight plan data. If the parser uses `sprintf` or `strcpy` to copy message fields into fixed-size buffers, a malformed ACARS message is a potential overflow. `SemanticSearcher.query('ACARS message parser datalink receive')` targets these candidates.
+
+**GPS data injection:** Some FMS implementations parse GPS NMEA sentences from the flight management computer's GPS receiver interface. NMEA sentences are text-format strings with variable-length fields. A stack buffer overflow in an NMEA sentence parser is a well-documented finding class (CVE-2018-5689 and related). The parser typically uses `sscanf` or a custom parser; `PPC476Lifter` lifts `sscanf` calls showing the format string and destination buffer.
+
+**VHF radio management plane:** The VHF radio management software (on the same FMS processor or a connected I/O processor) handles frequency configuration via character-string commands from the cockpit display system. Command injection in the VHF management plane is a findings class specific to integrated avionics architectures.
+
+**Memory corruption via malformed instrument data:** Some PPC476 targets in industrial control (power grid SCADA) receive telemetry data from field instruments. If the data parsing code trusts the `length` field in the received protocol (IEC 61850, DNP3, Modbus) without validation, a crafted `length` value causes an out-of-bounds read or write. `LengthUnderflowScanner` + `PPC476Lifter` is the combined approach for these targets.
+
+---
+
+## Pseudo-C output format reference <sup>[↑](#ppc476lifter)</sup>
+
+`PPC476Lifter.lift()` produces pseudo-C with the following conventions:
+
+**Register naming:** Registers are shown by their ABI name (`a0`, `a1`, `s0`, `sp`) not by their hardware name (`r3`, `r4`, `r14`, `r1`). This makes the output readable without knowing PPC register conventions.
+
+**Example lifted function:**
+```c
+// Function at 0x00824F10 — lifted by PPC476Lifter
+void sub_824F10(u32 a0, u32 a1, u32 a2) {
+    u32 s0 = a0;
+    u32 s1 = a1;
+    u32 v0;
+    char buf[64];                               // sp + 0x18, size from stwu -0x58
+    sprintf(buf, "/bin/cmd --port=%s", a2);    // system call: sprintf
+    v0 = system(buf);                           // system call: system
+    return;
+}
+```
+
+**Annotation conventions:**
+- `// system call: <name>` marks resolved PLT imports
+- `// unknown call: <va>` marks unresolved indirect calls
+- `// loop top` and `// loop end` mark back-edge detected loops
+- `*(u32 *)(sp + N)` represents local variable access at stack offset N
+- `*(u32 *)(r_name + N)` represents field access at offset N from a base register
+
+The pseudo-C is intentionally not compilable: it is an analysis aid, not source reconstruction. `a0`, `s0`, etc. are C-style pseudo-variable names, not actual C identifiers.
+
+---
+
+## CWE mapping and FindingRegistry usage <sup>[↑](#ppc476lifter)</sup>
+
+| Vulnerability class | CWE | `PPC476Lifter` indicator |
+|---|---|---|
+| Stack buffer overflow | CWE-121 | Fixed-size `buf[N]` as destination to `sprintf`/`strcpy` with user-controlled source |
+| Command injection | CWE-78 | `system(buf)` where `buf` includes ARG_PROPAGATED string |
+| Format string | CWE-134 | `printf`/`sprintf` with first arg being ARG_PROPAGATED (not a string literal) |
+| Integer overflow leading to heap overflow | CWE-190 | `malloc(n * size)` where `n` is ARG_PROPAGATED without bounds check |
+| Use of unsafe function | CWE-676 | `gets()`, `strcpy()`, `scanf("%s", ...)` — unconditional flag |
+
+For FindingRegistry: set `va` to the sink instruction VA (the `bl system` or `bl sprintf` instruction), `cwe` as above, `evidence_type='ppc476_lifted_pseudo_c'`, and include the relevant `PPC476Lifter.lift()` output excerpt in `detail`.
+
+**Byte verification for PPC476 findings:** PPC476 instructions are always 4 bytes, big-endian. Verify with:
+```python
+import struct
+with open(binary_path, 'rb') as f:
+    f.seek(va - ctx.base_address)
+    word = struct.unpack('>I', f.read(4))[0]
+opcd = word >> 26  # PowerPC primary opcode
+assert opcd == 18, f"Expected bl (opcd=18) at {va:#010x}, got opcd={opcd} word={word:#010x}"
+```
+`opcd == 18` and `word & 1 == 1` (LK bit set) confirms `bl` (branch-and-link, i.e., a function call). For indirect calls via CTR (`bctrl`), `opcd == 19` and `XO == 528`.
+
+---
+
+
+Multiple ablation modules handle PPC32 targets. `PPC476Lifter` specifically targets the IBM PPC476 core. Here is how it differs from other PPC32 analysis paths:
+
+| Aspect | PPC476 (IBM avionics) | NXP MPC5500 (automotive) | Cisco IOS Classic (PPC603e/PPC750) |
+|---|---|---|---|
+| Instruction set | PowerPC Book E, 32-bit | VLE (16/32-bit mixed) | Classic PowerPC 32-bit |
+| Endianness | Big-endian only | Big-endian | Big-endian |
+| RTOS | VxWorks, LynxOS | EB Tresos/AUTOSAR, bare-metal | Cisco IOS (proprietary) |
+| Binary format | ELF (VxWorks/LynxOS), XCOFF32 (AIX) | Raw binary | ELF (with Cisco compression) |
+| Symbol availability | VxWorks: full symbols; LynxOS: stripped | Stripped | Stripped |
+| Decoder needed | Standard Capstone PPC32 | EcuVLEDecoder | Standard Capstone PPC32 |
+| Calling convention | Power EABI | Power EABI (same) | Power EABI (same) |
+
+**When to use `PPC476Lifter` vs `PPC32TaintTracker` vs `EcuVLEDecoder`:**
+- Binary is Book E ELF on VxWorks or LynxOS → `PPC476Lifter` for lifting, `PPC32TaintTracker` for taint
+- Binary is NXP MPC5500/5700 with VLE encoding → `EcuVLEDecoder` first, then `PPC32TaintTracker`
+- Binary is Cisco IOS (ELF, Book E or classic PPC) → `PPC32TaintTracker` directly (Cisco standalone findings)
+- Binary is XCOFF32 (AIX BladeCenter) → `XCoff32Decompiler` first to extract sections, then `PPC476Lifter`
+
+`PPC476Lifter.from_path()` handles all the above cases transparently via format auto-detection.
+
+---
+
+## Complete usage example: IBM avionics binary analysis <sup>[↑](#ppc476lifter)</sup>
+
+```python
+from ablation.analyzers.binary_context import BinaryContext
+from ablation.analyzers.semantic_searcher import SemanticSearcher
+from ablation.analyzers.ppc476_lifter import PPC476Lifter
+from ablation.analyzers.sink_arg_classifier import SinkArgClassifier
+from ablation.analyzers.taint_tracker_ppc32 import PPC32TaintTracker
+
+# Step 1: build context
+ctx = BinaryContext.load_or_build('/firmware/avionics/fmz2000_app.elf')
+print(ctx.summary())
+# Expected: PowerPC Book E (big-endian), 32-bit, 1847 functions (stripped)
+
+# Step 2: semantic sweep for command injection candidates
+searcher = SemanticSearcher(ctx)
+hits = searcher.query('system command execution shell process', top_k=15)
+print("Top candidates:")
+for h in hits:
+    print(f"  {h.va:#010x}: {h.description} (score={h.score:.3f})")
+
+# Step 3: classify sink arguments before running taint tracker
+classifier = SinkArgClassifier.from_context(ctx)
+results = classifier.classify_all()
+print(f"\nSink classification:")
+for r in results:
+    if r.classification != 'RODATA_CONST':
+        print(f"  {r.va:#010x}: {r.sink_name}({r.arg_idx}) = {r.classification}")
+
+# Step 4: lift promising candidate to pseudo-C for manual review
+lifter = PPC476Lifter(ctx)
+# Use VA of the most interesting sink with ARG_PROPAGATED classification
+candidate_func_va = hits[0].va
+pseudo_c = lifter.lift(candidate_func_va)
+print("\nLifted pseudo-C:")
+print(pseudo_c)
+
+# Step 5: taint track confirmed candidates
+tracker = PPC32TaintTracker.from_context(ctx)
+findings = tracker.run_interprocedural()
+for f in findings:
+    print(f"\n[{f.severity}] {f.sink_name} at {f.sink_va:#010x}")
+    print(f"  Taint from: {f.source_description}")
+    print(f"  Path: {' -> '.join(f'{va:#010x}' for va in f.path_vas)}")
+```
+
+---
+
+## What is the PPC476? History and deployment context <sup>[↑](#ppc476lifter)</sup>
+
+The Power PC 476FP (PPC476) is a 32-bit RISC processor developed by IBM as part of the PowerPC 400 series embedded line. The "FP" suffix indicates the inclusion of an IEEE 754 double-precision floating-point unit — a feature absent from the standard PPC405 and PPC440 that preceded it. The PPC476 was positioned for high-reliability applications that needed both deterministic real-time behavior (for control systems) and full FP capability (for navigation and signal processing).
+
+**Chronology:**
+- 1997: PowerPC 405 introduced (IBM 4xx series, 32-bit, no FPU); deployed in networking (Cisco 7200 I/O processor, Juniper line cards), industrial, and early embedded Linux systems
+- 2002: PowerPC 440 introduced (superscalar pipeline, better performance, optional FPU)
+- 2007: IBM 476FP introduced; 1.6 GHz capable at 45nm, full DP FPU, hardware page table walker, ECC memory support; targets aviation and defense
+- 2010–2015: PPC476 design wins in avionics (Honeywell, Rockwell Collins, BAE Systems flight management systems), power grid SCADA, IBM BladeCenter I/O modules
+- 2015–present: Legacy deployment continues; PPC476 firmware is still running in fielded avionics and power infrastructure equipment
+
+**IBM 476FP specifications:**
+- ISA: PowerPC Book E, 32-bit with Book E extensions
+- Pipeline: 7-stage in-order, dual-issue
+- FPU: IEEE 754-2008 compliant double precision
+- Cache: 32 KB I-cache, 32 KB D-cache, 512 KB unified L2
+- TLB: 256-entry hardware page table walker
+- MMU: BookE virtual memory model with TLB miss handler in software
+- Bus: CoreConnect PLB (Processor Local Bus) 4.0
+- Endianness: Big-endian only (no little-endian mode, unlike later POWER cores)
+
+**No VLE:** Unlike the NXP MPC5500/5700 series (which uses VLE), the IBM PPC476 does not implement VLE. All instructions are 32-bit Book E fixed width. Capstone handles PPC Book E correctly; no special decoder is needed (unlike `EcuVLEDecoder`).
+
+**Power Architecture Book E vs. Classic:** Book E is the embedded variant of PowerPC. It shares the same 32-bit instruction encoding as classic PPC but uses different supervisor registers and exception model. The `mfspr`/`mtspr` instructions access Book E-specific SPRs (special purpose registers) with different numbers than classic PPC. `PPC476Lifter` correctly handles Book E SPR names.
+
+---
+
+## IBM PPC476 register file <sup>[↑](#ppc476lifter)</sup>
+
+The PPC476 follows the standard Power Architecture 32-bit Embedded Application Binary Interface (EABI):
+
+| Register | ABI role | Preserved? |
+|---|---|---|
+| r0 | Volatile (scratch; holds LR copy in prologue) | No |
+| r1 | Stack pointer | Yes |
+| r2 | Reserved (EABI: small data area 2 / SDATA2) | Yes |
+| r3 | Arg 0 / Return value | No |
+| r4–r10 | Args 1–7 | No |
+| r11–r12 | Volatile | No |
+| r13 | EABI small data area pointer | Yes |
+| r14–r31 | Callee-save | Yes |
+| f0–f8 | FP volatile | No |
+| f9–f13 | FP volatile (additional arg regs for FP args) | No |
+| f14–f31 | FP callee-save | Yes |
+| LR | Link register | No (saved in prologue) |
+| CTR | Count register (loop counter, indirect branch) | No |
+| CR0–CR7 | Condition register fields | CR2–CR4 preserved |
+
+**RE implication:** Function arguments on PPC476 arrive in r3–r10 (integer) and f1–f8 (double). For `system()` and `execvp()` calls, trace r3 (the command string pointer) backward. For `memcpy()` and `strcpy()` (buffer overflow classes), trace r5 (size argument) and r3/r4 (destination/source pointers).
+
+**Prologue pattern (PPC32 EABI):**
+```asm
+stwu    r1, -N(r1)     ; allocate stack frame, link old SP
+mflr    r0             ; r0 = link register
+stw     r0, N+4(r1)    ; save LR to stack
+stw     r14, N-4(r1)   ; save first callee-save
+stmw    r15, N-8(r1)   ; save r15-r31 (if needed)
+```
+
+`PPC476Lifter` identifies function entry by the `stwu r1, -N(r1)` prologue pattern.
+
+---
+
+## Avionics RE context and deployment targets <sup>[↑](#ppc476lifter)</sup>
+
+The PPC476 is predominantly found in avionics flight management systems (FMS) and integrated modular avionics (IMA) cabinets. The software running on these systems is subject to DO-178C (Software Considerations in Airborne Systems and Equipment Certification) airworthiness standards, which require extensive formal verification and testing. Despite this, logic bugs and configuration errors can still exist in less-critical software layers.
+
+**Known PPC476 firmware targets in ablation RE collection:**
+- **Honeywell FMZ-2000 FMS:** Flight management computer for regional jets. PPC476 running VxWorks RTOS + DO-178C application software. Binary format: ELF with stripped symbols.
+- **Rockwell Collins ProLine Fusion:** Multi-function display controller. PPC476 running LynxOS RTOS. Contains weather radar processing and datalink components.
+- **IBM 9117-MMD (Power 7 I/O expansion):** BladeCenter blade using PPC476 as I/O processor. ELF binary for AIX 7.1 I/O subsystem. XCOFF32 format (not ELF).
+
+**XCOFF32 vs ELF on PPC476:** IBM's AIX platform uses the XCOFF32 binary format instead of ELF. VxWorks and LynxOS avionics targets use ELF. `PPC476Lifter.from_path()` auto-detects the format via magic bytes:
+- ELF: `\x7FELF` at offset 0
+- XCOFF32: the XCOFF magic `0x01DF` at offset 0
+
+For XCOFF32 targets, use `XCoff32Decompiler` (see [XCOFF32 Decompiler](xcoff32-decompiler.md)) to parse the binary structure before constructing a `PPC476Lifter` from the extracted code sections.
+
+---
+
+## Instruction encoding reference: PPC476 RE-relevant opcodes <sup>[↑](#ppc476lifter)</sup>
+
+PowerPC Book E uses a fixed 32-bit instruction format with three primary forms:
+
+**I-form (branches):**
+```
+31       26 25                          2 1  0
++----------+-----------------------------+--+--+
+|   OPCD   |             LI              |AA|LK|
++----------+-----------------------------+--+--+
+  6 bits              24 bits             1  1
+```
+`bl` (branch and link, function call): OPCD=18, LK=1. Target = PC + sign_extend(LI << 2).
+
+**D-form (load/store with immediate offset):**
+```
+31      26 25   21 20   16 15              0
++---------+-------+-------+----------------+
+|  OPCD   |  RT   |  RA   |       D        |
++---------+-------+-------+----------------+
+  6 bits   5 bits  5 bits     16 bits
+```
+`lwz` (load word zero, OPCD=32): load 32-bit value from memory at EA = RA + D.
+`stw` (store word, OPCD=36): store 32-bit value to memory at EA = RA + D.
+
+**X-form (register-register operations):**
+```
+31      26 25   21 20   16 15   11 10           1  0
++---------+-------+-------+-------+-------------+--+
+|  OPCD   |  RT   |  RA   |  RB   |    XO       |Rc|
++---------+-------+-------+-------+-------------+--+
+  6 bits   5 bits  5 bits  5 bits    10 bits       1
+```
+`add` (OPCD=31, XO=266): RT = RA + RB.
+
+**`mtlr` / `mflr` (link register move):**
+`mflr r0`: OPCD=31, XO=339, RS=0, SPR=0x100 (LR). Moves LR to r0 — identifies function prologues.
+`mtlr r0`: OPCD=31, XO=467, RS=0, SPR=0x100. Restores LR from r0 — identifies function epilogues.
+
+---
+
+## VxWorks and LynxOS RTOS context <sup>[↑](#ppc476lifter)</sup>
+
+Avionics PPC476 firmware runs almost exclusively on certified real-time operating systems (RTOS). The two dominant platforms are VxWorks (Wind River Systems) and LynxOS (Lynx Software Technologies). Both differ from Linux in ways that affect binary analysis:
+
+**VxWorks on PPC476:**
+- **Flat memory model:** VxWorks uses a flat physical address space without virtual memory separation between tasks (by default in VxWorks 5.x and 6.x; VxWorks 7 adds optional MMU protection). All tasks share the same address space: a vulnerability in one task can overwrite another task's data or code.
+- **Symbol table in binary:** VxWorks application ELF images typically include a symbol table (`vxworks_symbol_table`) containing all exported function and variable names. This provides near-source-level symbol resolution — one of the few contexts where a production binary has readable function names. `BinaryContext.load_or_build()` imports these symbols automatically.
+- **Task entry points as security boundary:** VxWorks tasks correspond to POSIX threads but without separate address spaces. Network-facing tasks (those calling `accept()` or `recvfrom()`) are the entry points for remote exploitation. `SemanticSearcher` targets these first.
+- **No stack canaries by default:** Older VxWorks versions (5.x) do not enable stack canaries. Buffer overflow vulnerabilities in VxWorks 5.x applications on PPC476 are directly exploitable without bypassing a canary.
+
+**LynxOS on PPC476:**
+- **POSIX-compliant, MILS-capable:** LynxOS provides POSIX APIs with DO-178C and Common Criteria certification support. Process isolation is enforced via the MMU.
+- **ELF format with partial symbols:** LynxOS applications are stripped ELF files, but the LynxOS kernel image itself often retains symbols. For application binaries, semantic search is the primary analysis tool.
+- **`/proc` filesystem access control:** LynxOS restricts `/proc/self/mem` and similar paths used in user-space exploit techniques. Understanding the RTOS access control model helps scope what a remote code execution can actually do post-exploitation.
+
+---
+
+## PPC476 SPR (Special Purpose Register) reference for RE <sup>[↑](#ppc476lifter)</sup>
+
+Book E defines a large number of special purpose registers accessed via `mfspr`/`mtspr`. For security RE, the most relevant:
+
+| SPR number | Name | RE relevance |
+|---|---|---|
+| 1 | XER | Integer exception register; overflow bit |
+| 8 | LR | Link register; target of `blr` return |
+| 9 | CTR | Count register; target of `bctrl` indirect call |
+| 22 | DEC | Decrementer (watchdog timer tick) |
+| 48 | PID | Process ID (TLB tag) |
+| 256 | USPRG0 | User-accessible SPR 0 (accessible from user-mode) |
+| 272–275 | SPRG0–SPRG3 | Supervisor general-purpose SPRs |
+| 1008 | HID0 | Hardware implementation-dependent register 0 |
+
+`mfspr r3, 8` (load LR into r3) followed by a store is a common pattern in VxWorks task-switch code. If user-controlled data reaches `mtspr 9, rX` (write to CTR) followed by `bctrl` (branch to CTR), that is a CTR overwrite — equivalent to function pointer hijack. `PPC476Lifter` labels these as potential control-flow violations when `rX` trace sources are ARG_PROPAGATED.
+
+---
+
+## Calling convention deep-dive for taint analysis <sup>[↑](#ppc476lifter)</sup>
+
+For taint tracing `system()` and `execl()` calls on PPC476:
+
+1. **Source identification:** HTTP/socket input arrives via `read()` into a buffer. The buffer pointer (typically in a local variable on the stack) is the taint source. The stack frame layout from `PPC476Lifter.lift()` output shows the offset where the buffer lives (`sp + 0x??`).
+
+2. **Propagation:** The buffer contents move through string manipulation functions (`strcpy`, `strcat`, `sprintf`) before reaching `system()`. `PPC476Lifter` lifts these as C-like expressions showing the data flow, e.g., `sprintf(sp+0x18, "/bin/hi_cmd --arg=%s", a0)`.
+
+3. **Sink:** `system()` call via branch-to-PLT (PPC Book E uses a GOT + PLT model similar to Linux ELF). `PPC476Lifter` resolves PLT entries via `binary_context.imports` and labels them as `system`, `execvp`, etc.
+
+4. **Byte verification:** For the `bl` instruction at the `system()` call site:
+```python
+with open(binary, 'rb') as f:
+    data = f.read()
+off = system_call_va - ctx.base_address
+word = struct.unpack('>I', data[off:off+4])[0]
+opcd = word >> 26  # should be 18 for 'bl'
+lk   = word & 1   # should be 1 for 'bl' (link = save return address)
+assert opcd == 18 and lk == 1, f"Expected bl at {system_call_va:#x}, got {word:#010x}"
+```
+
+---
+
 ## See also <sup>[↑](#ppc476lifter)</sup>
 
 - [BinaryContext](binary-context.md): session state and function/import index
 - [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary
+- [SemanticSearch](semantic-code-search.md): behavioral candidate search on the binary
+- [PPC32 Taint Tracker](ppc32-taint-tracker.md): the complementary taint analysis module for PPC32 targets including PPC476
+- [XCOFF32 Decompiler](xcoff32-decompiler.md): for AIX/IBM targets using XCOFF32 binary format instead of ELF
+- [ECU VLE Decoder](ecu-vle-decoder.md): for NXP MPC5500/5700 automotive PPC (different ISA extension — VLE — not Book E standard)
+- [SH-2A Binary Lifter](binary-lifter-sh2a.md): Renesas SH-2A (Japanese automotive ECU competitor to PPC476 in avionics/industrial markets)
+- [FindingRegistry](registry.md): record confirmed PPC476 findings; `evidence_type='ppc476_lifted_pseudo_c'`; always byte-verify the `bl` call at `sink_va` before registering

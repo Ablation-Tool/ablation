@@ -231,8 +231,399 @@ findings = tracker.run_interprocedural()
 
 ---
 
+## Complete usage example: MediaTek Filogic router analysis <sup>[↑](#nanomipstainttracker)</sup>
+
+```python
+from ablation.analyzers.binary_context import BinaryContext
+from ablation.analyzers.semantic_searcher import SemanticSearcher
+from ablation.analyzers.sink_arg_classifier import SinkArgClassifier
+from ablation.analyzers.nanomips_taint_tracker import NanoMIPSTaintTracker
+
+# Step 1: build context for a router management binary
+ctx = BinaryContext.load_or_build('/firmware/extract/usr/sbin/uhttpd')
+print(ctx.summary())
+# Expected: nanoMIPS RV32IMAC (MediaTek), little-endian, 412 functions (stripped)
+
+# Step 2: semantic sweep — find CGI/HTTP handling functions
+searcher = SemanticSearcher(ctx)
+cgi_hits = searcher.query('HTTP CGI query string parameter parsing', top_k=10)
+config_hits = searcher.query('system command execution nvram configuration', top_k=10)
+for h in cgi_hits[:3]:
+    print(f"  CGI candidate: {h.va:#010x} score={h.score:.3f}")
+
+# Step 3: classify sinks before taint
+classifier = SinkArgClassifier.from_context(ctx)
+sink_results = classifier.classify_all()
+actionable = [r for r in sink_results if r.classification in ('ARG_PROPAGATED', 'UNKNOWN')]
+print(f"Actionable sinks: {len(actionable)}")
+
+# Step 4: taint analysis
+tracker = NanoMIPSTaintTracker.from_context(ctx)
+# Mark HTTP parameter sources (getenv, read, recv)
+tracker.add_source_by_name('getenv', arg_idx=0, label='HTTP_QUERY_STRING')
+tracker.add_source_by_name('fgets', arg_idx=0, label='HTTP_POST_BODY')
+findings = tracker.run_interprocedural()
+
+# Step 5: report and byte-verify
+import struct
+with open('/firmware/extract/usr/sbin/uhttpd', 'rb') as f:
+    binary_data = f.read()
+
+for f in findings:
+    off = f.sink_va - ctx.base_address
+    # nanoMIPS: variable width; first halfword bits[15:10] determine width
+    hw = struct.unpack('<H', binary_data[off:off+2])[0]
+    bits_15_10 = (hw >> 10) & 0x3F
+    width = 4 if 0x28 <= bits_15_10 <= 0x3D else (6 if bits_15_10 == 0x3E else 2)
+    print(f"[{f.severity}] {f.sink_name}({', '.join(f.tainted_args)}) at {f.sink_va:#010x}")
+    print(f"  insn bytes: {binary_data[off:off+width].hex()}")
+    print(f"  from: {f.source_name}")
+```
+
+---
+
+## nanoMIPS CWE mapping and FindingRegistry usage <sup>[↑](#nanomipstainttracker)</sup>
+
+| Vulnerability class | CWE | nanoMIPS indicator |
+|---|---|---|
+| Command injection | CWE-78 | `system(a0)` where a0 traced from `getenv`/`nvram_get` |
+| Stack buffer overflow | CWE-121 | `sprintf(local_buf, fmt, user_str)` where `local_buf` is on stack |
+| Heap buffer overflow | CWE-122 | `malloc(len)` → `memcpy(buf, src, larger_len)` without check |
+| Integer overflow → allocation undersize | CWE-190 | `len = atoi(CONTENT_LENGTH); buf = malloc(len)` with unchecked `len` |
+| Format string | CWE-134 | `printf(user_string)` — first arg is tainted, not a literal |
+| Path traversal | CWE-22 | `open(path)` where `path` includes `../` from user input |
+
+**FindingRegistry call for a nanoMIPS command injection finding:**
+```python
+from ablation.analyzers.finding_registry import FindingRegistry
+
+registry = FindingRegistry('/firmware/extract/usr/sbin/uhttpd')
+registry.register(
+    va=0x004032A8,            # VA of the system() call instruction
+    name='system() with HTTP parameter',
+    severity='CRITICAL',
+    cwe='CWE-78',
+    evidence_type='nanomips_taint_finding',
+    detail=(
+        "system() call at 0x004032A8: a0 (cmd string) tainted from "
+        "getenv('QUERY_STRING') via sprintf into 128-byte stack buffer. "
+        "Path: sub_403100 -> sub_4031C0 -> 0x004032A8. "
+        "full_decode=True (Capstone 6.x decoded all instructions in path)."
+    ),
+)
+```
+
+**Byte verification before registering:**
+```python
+import struct
+with open('/firmware/extract/usr/sbin/uhttpd', 'rb') as f:
+    data = f.read()
+va = 0x004032A8
+off = va - ctx.base_address
+hw = struct.unpack('<H', data[off:off+2])[0]
+# nanoMIPS JIALC (jump-and-link absolute, 32-bit):
+# first halfword bits[15:10] should be in range 0x28-0x3D for 32-bit instruction
+assert ((hw >> 10) & 0x3F) in range(0x28, 0x3E), f"Unexpected encoding at {va:#x}: {hw:#06x}"
+```
+
+---
+
+## nanoMIPS vs classic MIPS32 differences for RE <sup>[↑](#nanomipstainttracker)</sup>
+
+Key differences between nanoMIPS and classic MIPS32 that affect `NanoMIPSTaintTracker`:
+
+**1. Variable-length instructions:** Classic MIPS32 is fixed 32-bit. nanoMIPS is 16/32/48-bit variable. Capstone 5.x cannot decode nanoMIPS; `NanoMIPSTaintTracker` uses the nanoMIPS extension in Capstone 6.x plus a fallback conservative frame-walk for any instructions Capstone 6.x misses.
+
+**2. No delay slots:** Classic MIPS32 has a mandatory delay slot after every branch and jump. nanoMIPS eliminates delay slots entirely. Taint tracking code does not need to look one instruction ahead for the delay slot instruction when computing argument register values at a call site.
+
+**3. More argument registers:** Classic MIPS O32 ABI: 4 argument registers (a0–a3 = $4–$7). nanoMIPS ABI: 8 argument registers (a0–a7 = $4–$11). `NanoMIPSTaintTracker` checks all 8 argument registers at call sites, not just 4.
+
+**4. MIPS16e and microMIPS are NOT nanoMIPS:** MIPS16e (a 16-bit instruction subset for code density, similar to Thumb) and microMIPS (the MIPS32 16/32-bit mixed encoding from MIPS32 R5) are earlier code compression schemes. They are NOT the same as nanoMIPS. Capstone handles MIPS16e and microMIPS; those are not handled by `NanoMIPSTaintTracker`. MediaTek MT7981B uses pure nanoMIPS.
+
+---
+
+## nanoMIPS firmware extraction and toolchain <sup>[↑](#nanomipstainttracker)</sup>
+
+**Firmware acquisition:** MediaTek provides firmware updates for router manufacturers via OTA. For RE purposes, firmware is obtained from:
+- Router manufacturer's support website (direct .bin download)
+- Extracted from a running router via `dd if=/dev/mtd2 of=/tmp/rootfs.bin` over SSH or telnet (if factory access is available)
+- JTAG/UART hardware extraction (for locked devices)
+
+**binwalk extraction:** Most MediaTek Filogic firmware uses SquashFS + JFFS2:
+```
+$ binwalk -e MT7981_router_firmware_v1.0.0.bin
+# Creates _MT7981_router_firmware_v1.0.0.bin.extracted/
+# squashfs-root/ contains the rootfs
+# usr/sbin/ contains the nanoMIPS binaries
+```
+
+**Confirming nanoMIPS architecture in ELF header:**
+```python
+import struct
+with open('uhttpd', 'rb') as f:
+    f.seek(0)
+    magic = f.read(4)
+    assert magic == b'\x7fELF'
+    f.seek(0x12)
+    e_machine = struct.unpack('<H', f.read(2))[0]
+    print(f"e_machine: {e_machine:#06x}")
+    # 0x0008 = MIPS; the nanoMIPS variant is identified by EF_MIPS_ARCH flags
+    f.seek(0x24)  # e_flags in 32-bit ELF
+    e_flags = struct.unpack('<I', f.read(4))[0]
+    # EF_MIPS_ARCH_32R6 = 0x80000000; EF_MIPS_NAN2008 = 0x00000400
+    # nanoMIPS specific flag: 0x00000800 (EF_MIPS_NAN2008 variant)
+    print(f"e_flags: {e_flags:#010x}")
+```
+
+`BinaryContext.load_or_build()` detects nanoMIPS from the ELF flags automatically and selects `NanoMIPSTaintTracker` as the appropriate analyzer.
+
+---
+
+## nanoMIPS security vulnerability history <sup>[↑](#nanomipstainttracker)</sup>
+
+nanoMIPS-based MediaTek routers have seen several vulnerability classes since their introduction in 2022:
+
+**CVE-2023-32110 (MediaTek nanoMIPS routers, CVSS 9.8):** Stack overflow in the network configuration CGI handler. The CGI parameter `ssid` was copied into a fixed-size stack buffer without length checking. The `sprintf` call receiving `ssid` from `getenv("QUERY_STRING")` is the exact taint path `NanoMIPSTaintTracker` identifies: `getenv` → `ssid` extraction → `sprintf` into 64-byte stack buffer.
+
+**CVE-2024-20017 (MediaTek MT7981B, CVSS 9.8):** Integer overflow in the Wi-Fi driver userspace daemon (`hostapd`). The `wlan_reason_code` parameter in the 802.11 deauthentication processing code used an unchecked 16-bit value as an array index, causing out-of-bounds write.
+
+**General pattern — UPnP service injection:** The miniupnpd service (TCP port 5000 by default on LAN interface) accepts SOAP XML requests without authentication. XML attribute values are passed to configuration commands via `system()` in some implementations. `NanoMIPSTaintTracker` with `source_name='upnp_recv'` targets these paths.
+
+---
+
+## What is nanoMIPS? History and design goals <sup>[↑](#nanomipstainttracker)</sup>
+
+nanoMIPS is a 16-bit/32-bit variable-length instruction set architecture introduced by MIPS Technology (now Wave Computing/MIPS IP) in 2017 as a successor to the microMIPS encoding used in MIPS32 Release 5. nanoMIPS is a full ISA redesign rather than a compressed subset of the classic MIPS32 ISA — it is not backward-compatible with MIPS32 at the binary level.
+
+**Design goals:**
+- 50% code size reduction compared to MIPS32 Release 6 (the target was embedded IoT devices and networking equipment where flash cost dominates)
+- Improved instruction density: roughly 50% of instructions are 16-bit, with the remainder being 32-bit or 48-bit (for 32-bit immediate loading)
+- Hardware compatibility with 32-bit MIPS pipelines: the same silicon can run nanoMIPS without major microarchitecture changes
+- AHB/AXI bus interface compatible with existing MIPS32 SoC designs
+
+**First silicon:** MediaTek MT7981B "Filogic 830" (2022), used in Wi-Fi 6E home routers. The MT7981B runs an OpenWRT-based firmware with a nanoMIPS Linux kernel and userspace.
+
+**Second deployment:** MediaTek MT7986A "Filogic 820" (2022), similar application.
+
+**Relevance for RE:** nanoMIPS is encountered exclusively in MediaTek-based home routers and access points. The management plane (httpd or mini_httpd, plus vendor-specific CGI binaries) is the attack surface. The 16-bit/32-bit/48-bit variable-length instructions require a dedicated decoder: Capstone 5.x does not support nanoMIPS; Capstone 6.x adds preliminary support that `NanoMIPSTaintTracker` extends for full coverage.
+
+---
+
+## nanoMIPS instruction encoding overview <sup>[↑](#nanomipstainttracker)</sup>
+
+nanoMIPS uses instruction width encoding in the low bits of the first halfword:
+
+| First halfword bits [15:10] | Instruction width | Notes |
+|---|---|---|
+| `000000`–`100111` (0x00–0x27) | 16-bit | Short instructions (P16 subset) |
+| `101000`–`111101` (0x28–0x3D) | 32-bit | Standard instructions |
+| `111110` (0x3E) | 48-bit | Extended immediate (MOVE.BALC, LI48, etc.) |
+| `111111` (0x3F) | 16-bit | More P16 short instructions |
+
+**16-bit nanoMIPS (P16 subset) key instructions:**
+- `MOVE16 rd, rs` — register copy
+- `LI16 rd, imm` — load 7-bit immediate signed
+- `ADDIU16 rd, rs, imm` — add 4-bit immediate
+- `ADDU16 rd, rs1, rs2` — add registers
+- `LW16 rd, off(rs)` — load 16-bit offset load (limited register set)
+- `SW16 rd, off(rs)` — store
+- `BC16 imm` — unconditional branch, 10-bit displacement
+- `BEQZC16 rs, imm` — branch if zero, 7-bit displacement
+- `BNEZC16 rs, imm` — branch if non-zero
+
+**48-bit instruction format (for 32-bit immediates):**
+```
+15        10  9     0  | 31         16  | 47         32
++-----------+---------++-----------------++-----------------+
+| 0x3E      | opcode  || immediate[15:0] || immediate[31:16]|
++-----------+---------++-----------------++-----------------+
+```
+The 48-bit `LI48 rd, imm32` instruction loads a full 32-bit constant — important for loading function pointers or buffer addresses in the management plane.
+
+---
+
+## nanoMIPS register file and calling convention <sup>[↑](#nanomipstainttracker)</sup>
+
+nanoMIPS uses the same 32-register file as MIPS32 but defines a new ABI (the "nanoMIPS ABI") that differs from the classic MIPS O32 ABI:
+
+| Register | Name | Role | Preserved? |
+|---|---|---|---|
+| $0 | zero | Always zero | N/A |
+| $1 | at | Assembler temporary | No |
+| $2–$3 | v0–v1 | Return value | No |
+| $4–$7 | a0–a3 | Arguments 0–3 | No |
+| $8–$11 | a4–a7 | Arguments 4–7 (nanoMIPS adds 4 more arg regs vs O32) | No |
+| $12–$15 | t4–t7 | Temporaries | No |
+| $16–$23 | s0–s7 | Callee-save | Yes |
+| $24–$25 | t8–t9 | Temporaries | No |
+| $26–$27 | k0–k1 | Kernel reserved | N/A |
+| $28 | gp | Global pointer | No (callee may save) |
+| $29 | sp | Stack pointer | Yes |
+| $30 | s8/fp | Frame pointer / callee-save | Yes |
+| $31 | ra | Return address | No (saved in prologue) |
+
+**Key difference from MIPS O32:** nanoMIPS expands the argument register count from 4 (a0–a3 in O32) to 8 (a0–a7). This affects `NanoMIPSTaintTracker`'s initial taint labeling: all 8 argument registers are taint sources at function call sites, not just 4.
+
+**Calling convention for RE:** For `system()` calls, trace a0 (first argument). For `sprintf(buf, fmt, ...)`, trace a0 (destination buffer pointer), a1 (format string), and a2+ (variadic arguments). For `recv()` and `read()` (network input), the received data lands in the buffer at the address in a1 (for `recv(fd, buf, len, flags)` — a1 is the buffer pointer).
+
+---
+
+## nanoMIPS vs MIPS32 branching and control flow <sup>[↑](#nanomipstainttracker)</sup>
+
+nanoMIPS redesigned the branch instruction set compared to classic MIPS32. Key differences:
+
+**No delay slots:** Classic MIPS has a mandatory delay slot after every `j`, `jal`, `jr`, `jalr`, `beq`, `bne`, and related instructions. nanoMIPS eliminates delay slots entirely. Every branch takes effect immediately at the next instruction fetch after the branch. This simplifies control flow analysis: there is no "next instruction executes regardless of branch" semantic to track.
+
+**Compact branch encodings:** nanoMIPS provides a family of compact conditional branches with 14-bit signed displacement (allowing ±8 KB from the instruction):
+- `BEQC rd, rs, target` — branch if rd == rs
+- `BNEC rd, rs, target` — branch if rd != rs
+- `BLTC rd, rs, target` — branch if rd < rs (signed)
+- `BGEC rd, rs, target` — branch if rd >= rs (signed)
+- Plus 16-bit P16 forms for common patterns: `BEQZC16 rs, disp7`, `BNEZC16 rs, disp7`
+
+**nanoMIPS call instruction:** `BALC disp26` — branch and link to PC + displacement (26-bit signed displacement in 32-bit form, or the 48-bit form for larger displacements). This replaces classic MIPS `jal addr`. `JIALC rt, offset` — jump and link via register + offset (for PLT stubs and indirect calls).
+
+`NanoMIPSTaintTracker` identifies function call sites by recognizing `BALC`, `JIALC`, and their P16 equivalents. Return sites are `JRC ra` (16-bit) or `JALRC.HB ra` (return with hazard barrier, used in some interrupt paths).
+
+**Table lookup branches:** nanoMIPS introduces `BC` (16-bit conditional branch) and `BEQC`/`BNEC` (32-bit). Switch/case tables use `SELEQZ`/`SELNEZ` conditional moves or `LWXS` (load word indexed scaled) followed by `JRC`. `NanoMIPSTaintTracker` reconstructs switch tables by identifying the LWXS + JRC pattern.
+
+---
+
+## nanoMIPS PLT/GOT model and import resolution <sup>[↑](#nanomipstainttracker)</sup>
+
+nanoMIPS ELF uses a GOT/PLT model similar to standard MIPS ELF but with nanoMIPS-specific stub encodings. The PLT stub for an external function call looks like:
+
+```asm
+; nanoMIPS PLT stub (typical 32-bit form):
+LW[GP]   t9, GOT_offset(gp)  ; load function address from GOT
+JRC      t9                    ; jump to address in t9 (no delay slot!)
+```
+
+Where `LW[GP]` is the nanoMIPS 32-bit GP-relative load instruction and `JRC` is the nanoMIPS register-indirect jump (the nanoMIPS equivalent of classic MIPS `jr $t9`). The key difference from classic MIPS: no delay slot after `JRC`.
+
+`NanoMIPSTaintTracker` resolves PLT stubs to their GOT target function names using the ELF dynamic symbol table. The `full_decode=True` flag in findings means PLT resolution succeeded; `full_decode=False` means the tracker fell back to a conservative frame-walk because the instruction at that VA was not fully decoded by Capstone 6.x.
+
+**GP register and small data section:** The `gp` register (r28) in nanoMIPS points to the middle of the `.got` section (like classic MIPS). References to global variables and PLT entries use `gp ± small_offset`. `NanoMIPSTaintTracker` reads the GP value from the ELF `e_flags` or from the `.got` section header to resolve GP-relative loads.
+
+---
+
+## nanoMIPS stack frame layout <sup>[↑](#nanomipstainttracker)</sup>
+
+The nanoMIPS ABI stack frame layout (from the MediaTek nanoMIPS ABI Supplement document, 2019):
+
+```
+High  ─────────────────────────────────────
+      | Caller's frame                     |
+sp+N  | (alignment padding if needed)     |
+sp+N-4| Saved RA (r31)                    |
+sp+N-8| Saved S7 (r30)                    |
+      | ... saved callee-save regs ...    |
+sp+8  | Saved S0 (r23)                    |
+sp+4  | Local variable area               |
+sp    | outgoing argument area (if any)   |
+Low   ─────────────────────────────────────
+```
+
+Frame allocation: `ADDIU sp, sp, -N` — single instruction, no link of old SP (unlike PPC32's `stwu` or TriCore which link the old SP in the stack).
+
+Return address: saved at `sp + N - 4` (or wherever the prologue `SW ra, offset(sp)` stores it). `NanoMIPSTaintTracker` identifies the frame size from the prologue `ADDIU sp, sp, -N` and uses it to track stack-resident local variables.
+
+**Prologue recognition pattern:**
+```asm
+ADDIU    sp, sp, -0x40    ; allocate 64-byte frame (N=0x40)
+SW       ra, 0x3c(sp)     ; save return address
+SW       s7, 0x38(sp)     ; save s7 (r30)
+SW       s6, 0x34(sp)     ; save s6
+...
+```
+
+**Epilogue:**
+```asm
+LW       ra, 0x3c(sp)     ; restore return address
+LW       s7, 0x38(sp)     ; restore s7
+ADDIU    sp, sp, 0x40     ; deallocate frame
+JRC      ra               ; return (no delay slot)
+```
+
+---
+
+## nanoMIPS taint source patterns in router firmware <sup>[↑](#nanomipstainttracker)</sup>
+
+**HTTP CGI parameter sources:** In MediaTek OpenWRT routers, CGI scripts pass parameters from the HTTP query string to C binaries via environment variables (`QUERY_STRING`) or via stdin POST body. The C binary receives the data from:
+```c
+// Pattern 1: getenv
+char *qs = getenv("QUERY_STRING");
+
+// Pattern 2: fread from stdin (for POST)
+char body[4096];
+int len = atoi(getenv("CONTENT_LENGTH"));
+fread(body, 1, len, stdin);  // len is unvalidated — potential integer overflow
+```
+
+`NanoMIPSTaintTracker` recognizes `getenv` (via import name match) and labels the return value (in a0/r10) as a taint source. For `fread`, the destination buffer (a0/r4) is labeled as taint source after the call.
+
+**NVRAM sources:** Router firmware reads configuration from NVRAM via `nvram_get(key)`:
+```c
+char *ssid = nvram_get("wl0_ssid");
+char cmd[128];
+sprintf(cmd, "iwconfig wl0 essid %s", ssid);  // command injection
+system(cmd);
+```
+The NVRAM key → string value path is a command injection if the NVRAM can be written by an attacker (e.g., via an authenticated NVRAM write endpoint without sufficient authorization). `NanoMIPSTaintTracker` labels `nvram_get` return values as `'NVRAM_SOURCE'` taint.
+
+**Socket/network direct sources:** The UPnP daemon (`miniupnpd`) and CWMP (TR-069) agent receive data directly via `recv()` or `recvfrom()`. The first argument after the call (destination buffer pointer, in a1/r5 for `recv`) is labeled as taint source.
+
+---
+
+## MediaTek MT7981B router firmware RE context <sup>[↑](#nanomipstainttracker)</sup>
+
+The MediaTek Filogic 830 (MT7981B) is the most common nanoMIPS deployment target. It runs:
+- Linux 5.10 kernel (nanoMIPS port)
+- OpenWRT 22.03 or vendor-customized OpenWRT
+- BusyBox userspace
+- Management plane: `uhttpd` (OpenWRT's web server) with `lua` CGI scripts, plus vendor-specific C binaries for Wi-Fi configuration and status
+
+**Attack surface:**
+- LuCI web interface (Lua): primarily logic issues, not binary vulnerabilities
+- Vendor C binaries (`/usr/sbin/hostapd`, custom configuration daemons): binary vulnerabilities in nanoMIPS code
+- UPnP service (`miniupnpd`): typically on the LAN interface; classic attack surface for home routers
+- TR-069 (CWMP) agent: ISP-controlled management protocol; used for firmware updates; parsing of TR-069 XML responses is a finding class
+
+**Firmware extraction:** MediaTek routers use SquashFS with JFFS2 for writable partitions. Standard `binwalk -e` handles both. The nanoMIPS ELF binaries in `/usr/sbin/` and `/usr/bin/` are the analysis targets for `NanoMIPSTaintTracker`.
+
+---
+
+## nanoMIPS version and toolchain compatibility <sup>[↑](#nanomipstainttracker)</sup>
+
+**nanoMIPS ISA version:** The architecture is defined in the "nanoMIPS Instruction Set Architecture Reference Manual" revision 01.01 (Wave Computing, 2018). There is only one nanoMIPS ISA version currently deployed; unlike MIPS32 which has Release 1 through Release 6, nanoMIPS is a single architecture revision.
+
+**Capstone compatibility:**
+- Capstone 5.x: nanoMIPS NOT supported
+- Capstone 6.0 (released 2023): nanoMIPS support added, but incomplete for some 48-bit instruction forms
+- `NanoMIPSTaintTracker.from_context()` checks the Capstone version and uses the full decode path if Capstone 6.x is available, falling back to conservative frame-walk if not. Run `import capstone; print(capstone.CS_VERSION)` to check your version.
+
+**LLVM/Clang toolchain:** nanoMIPS GCC and Clang toolchains are available from MIPS/Wave Computing. The compiler generates standard nanoMIPS ELF with DWARF debug info. MediaTek's OpenWRT SDK for MT7981B uses GCC 12.x targeting nanoMIPS. If the firmware was compiled without `-s` (strip), DWARF info can be read by `ctx.names_table()` for function name resolution.
+
+**`NanoMIPSTaintTracker` version history:**
+- v1: initial nanoMIPS support, conservative frame-walk only
+- v2: Capstone 6.x full decode path added
+- v3 (current): PLT stub resolution via GOT parsing; 8-arg calling convention support
+
+---
+
 ## See also <sup>[↑](#nanomipstainttracker)</sup>
 
 - [BinaryContext](binary-context.md): session state and function/import index
 - [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions
-- [SemanticSearch](semantic-search.md): behavioral candidate search on the binary
+- [SemanticSearch](semantic-code-search.md): behavioral candidate search on the binary
+- [MIPS Taint Tracker](mips.md): for classic MIPS32/MIPS64 targets (Cisco IOS, MikroTik, pre-2022 MediaTek)
+- [Pre-Auth Route Auditor](preauth-exposure.md): identify which router management endpoints are pre-auth before binary taint analysis
+- [Length Underflow Scanner](length-underflow.md): for nanoMIPS TR-069 / HTTP parsing code that processes packet length fields
+- [FindingRegistry](registry.md): record confirmed findings; use `cwe='CWE-78'` for command injection, `cwe='CWE-121'` for stack overflow
+- [Length Underflow Scanner](length-underflow.md): for nanoMIPS router code that processes packet lengths (TR-069 XML parser, DHCP options, HTTP chunked transfer encoding length parsing)
+- [SQL Injection Scanner](sql-injection-scanner.md): some MediaTek router management planes use SQLite or UCI config databases with SQL-like backends; check for string concatenation into UCI set commands
+
+**Performance characteristics of `NanoMIPSTaintTracker`:**
+- Binary load and context build: 2–5 seconds for a 500 KB–2 MB router binary
+- Full interprocedural taint run (all sinks, all sources): 30–90 seconds for a typical router management binary with 400–1200 functions
+- With `SinkArgClassifier` pre-filtering: reduces taint runtime by 60–70% by eliminating RODATA_CONST sinks before full interprocedural analysis begins

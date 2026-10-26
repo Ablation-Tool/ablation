@@ -310,8 +310,199 @@ Additional methods:
 
 ---
 
+## What is MicroPython? <sup>[↑](#mpylifter)</sup>
+
+MicroPython is a lean implementation of Python 3, initially created by Damien George and first released in 2014 via a Kickstarter campaign for the pyboard hardware. The project's goal was to bring a full Python interpreter to microcontrollers with as little as 256 KB flash and 16 KB RAM — an environment where CPython's full runtime (typically requiring several MB of RAM) could not fit.
+
+MicroPython achieves this compactness through several architectural compromises:
+
+- **Reduced standard library:** The standard library is a strict subset of CPython's. Modules like `re` (regex), `json`, `socket`, `struct`, `os`, and `hashlib` are present but with reduced functionality. Many CPython modules are entirely absent (no `threading`, `multiprocessing`, `asyncio` module — async is handled by the `uasyncio` shim, a MicroPython-specific implementation).
+- **QSTR intern pool:** All identifier strings are interned at compile time and stored as 16-bit integer IDs (QSTRs). This eliminates per-string heap allocation for identifiers during execution and is the source of the `.mpy` file's compact representation.
+- **No garbage-collected closures by default:** On bare-metal ports, MicroPython uses a simplified mark-and-sweep GC with configurable heap sizes (typically 16 KB to 512 KB). Python closures are supported but heap-allocated.
+- **`.mpy` pre-compiled bytecode:** To avoid RAM-resident compilation, applications are distributed as pre-compiled `.mpy` files rather than `.py` source. The `.mpy` file contains the raw bytecode and QSTR table without the Python source text.
+
+MicroPython is now maintained by the MicroPython Foundation and is used in millions of devices. The codebase is in active development; the bytecode format has changed between major versions, requiring version detection when analyzing `.mpy` files from firmware.
+
+**Historical significance for RE:** MicroPython changed the embedded firmware landscape by enabling rapid scripting on constrained hardware. Security researchers began encountering `.mpy` files in IoT firmware starting around 2017–2018. The lack of standard disassembler support for `.mpy` (neither Ghidra nor IDA support it natively) means raw bytecode inspection or tools like `mpy-tool.py` (from the MicroPython source tree) are the primary analysis path without ablation support.
+
+---
+
+## MicroPython firmware targets <sup>[↑](#mpylifter)</sup>
+
+MicroPython is deployed in a wide range of embedded platforms with distinct security implications:
+
+**ESP8266 / ESP32 (Espressif):** The most common MicroPython platform. The ESP8266 and ESP32 run MicroPython as the primary application environment. Firmware consists of a binary compiled MicroPython interpreter (ELF) plus a FAT filesystem image containing `.py` and `.mpy` user scripts. Network-facing scripts (those importing `socket`, `network`, or `asyncio`) are the primary RE targets.
+
+**Raspberry Pi Pico (RP2040):** MicroPython runs bare-metal on the RP2040 dual-core ARM Cortex-M0+. The UF2 firmware image includes the MicroPython interpreter plus a littlefs filesystem with user scripts. GPIO and I2C/SPI access via the `machine` module can directly control hardware peripherals: `machine.mem32` provides unconstrained memory-mapped I/O access.
+
+**pyboard (STM32):** The original MicroPython hardware. STM32F4 series MCU. Similar to Pico but with richer peripheral set (CAN bus, DAC, advanced timers).
+
+**OpenMV (STM32H7):** Machine vision platform. Adds `image`, `sensor`, and `tf` (TensorFlow Lite) modules on top of standard MicroPython. The `tf.load_builtin_model()` function loads signed TensorFlow Lite models from flash; unsigned model loading is a finding class specific to OpenMV.
+
+**Industrial PLCs:** Several industrial controller vendors (some Beckhoff, some Siemens Edge devices) embed MicroPython as a user scripting engine within their PLC firmware. The `machine.mem32` access on these platforms can directly read/write PLC register banks: attacker-controlled scripts with `machine.mem32` access can manipulate physical I/O.
+
+**IoT security cameras and routers:** Some consumer devices (WYZE cameras, certain Netgear routers with management plane scripting) include MicroPython for configuration scripts. These scripts may handle network input from the device's management port.
+
+---
+
+## MicroPython module naming conventions <sup>[↑](#mpylifter)</sup>
+
+MicroPython uses two naming conventions for modules that are source of analysis confusion:
+
+**`u`-prefixed modules:** MicroPython's built-in subset modules use a `u` prefix to distinguish them from the standard CPython names: `uos`, `ure`, `ujson`, `uhashlib`, `usocket`, `ubinascii`, `uio`. When an application imports `import os`, MicroPython silently redirects to `uos` if the host doesn't have a custom `os.py` module in its filesystem. The QSTR visible in the `.mpy` `IMPORT_NAME` instruction may be either `os` or `uos` depending on the firmware version.
+
+`MpyLifter` normalizes these: when scanning `IMPORT_NAME` QSTRs, both `os` and `uos` map to the same dangerous-module flag. The normalization table in `MpyLifter._DANGEROUS_MODULES` lists all canonical names and their `u`-prefixed equivalents.
+
+**Port-specific modules:** Each hardware port (ESP8266, ESP32, RP2040, STM32) adds port-specific modules:
+- ESP8266/ESP32: `esp`, `esp32`, `network`, `smartconfig`
+- RP2040: `rp2`, `machine` (with RP2040-specific submodules: `machine.Pin`, `machine.SPI`, `machine.I2C`, `machine.UART`, `machine.ADC`)
+- STM32: `stm`, `pyb` (pyboard-specific)
+- Unix port: `posix` (adds shell execution capabilities absent from embedded ports)
+
+Port-specific modules are not covered by the standard QSTR scan. When analyzing firmware from an unknown port, check `lifter.imports()` for unfamiliar module names and cross-reference against the MicroPython port documentation to understand what capabilities they expose.
+
+---
+
+## Calling convention: MicroPython C extension modules <sup>[↑](#mpylifter)</sup>
+
+MicroPython C extension modules (written in C, compiled into the firmware binary) are callable from MicroPython scripts as standard Python functions. From the bytecode perspective, a call to a C extension function looks identical to a Python function call: the QSTR for the function name appears in `LOAD_NAME` or `LOAD_ATTR`, and `CALL_FUNCTION` follows.
+
+The vulnerability surface of C extension modules:
+- Buffer overflow in argument validation (C code receives a `mp_obj_t` and must validate length)
+- Integer overflow in size calculations when allocating response buffers
+- Use-after-free from improper reference counting
+
+When `MpyLifter` identifies a call to an unknown symbol (not in its built-in QSTR table), that call targets either a user-defined Python function or a C extension module. The distinction requires inspecting the ELF binary: if the QSTR string appears in the firmware's `.rodata` section as part of a `QDEF` macro expansion, it is a C extension.
+
+`BinaryContext.load_or_build()` on the firmware ELF, combined with `SemanticSearcher.query('mp_obj_t argument validation buffer overflow')`, identifies candidate C extension functions for further binary analysis.
+
+---
+
+## MicroPython QSTR encoding and version detection <sup>[↑](#mpylifter)</sup>
+
+**QSTR (Qualified String):** MicroPython interns all identifier strings as QSTRs — 16-bit integer IDs that map to string values. Built-in QSTR IDs (like `'exec'` = 23, `'machine'` = 2045) are defined at compile time in the MicroPython source. User-defined identifiers (local variable names, function names) are added dynamically by the compiler.
+
+The `.mpy` file format stores QSTRs as length-prefixed byte sequences (not as integer IDs) because the QSTR ID table is runtime-specific. When `MpyLifter` reads a `.mpy` file, it encounters QSTR bytes and reconstructs the string name directly. This makes `.mpy` files more portable across MicroPython builds than CPython `.pyc` files (which embed QSTR IDs that vary by build).
+
+**MicroPython version detection:**
+```python
+from ablation.analyzers.mpy_lifter import MpyLifter
+
+with open('module.mpy', 'rb') as f:
+    data = f.read()
+
+# .mpy header: bytes 0-5
+# byte 0: 'M' (0x4D)
+# byte 1: version (currently 6 for MicroPython 1.20+)
+# byte 2: feature flags (bit 0 = native code present, bit 1 = debug info)
+# bytes 3-4: QSTR window size
+magic = data[0]    # should be 0x4D = 'M'
+version = data[1]  # mpy format version (not MicroPython interpreter version)
+flags = data[2]
+has_native = bool(flags & 0x01)
+has_debug = bool(flags & 0x02)
+print(f"mpy format v{version}, native={has_native}, debug={has_debug}")
+```
+
+MicroPython `.mpy` format versions:
+- Version 3: MicroPython 1.9.4 and earlier
+- Version 4: MicroPython 1.11–1.12
+- Version 5: MicroPython 1.13–1.18
+- Version 6: MicroPython 1.19+ (current as of 2024)
+
+`MpyLifter` supports all versions 3–6. Version 6 introduced a new bytecode encoding for `LOAD_CONST_OBJ` and restructured the code object header.
+
+---
+
+## MicroPython bytecode instruction set <sup>[↑](#mpylifter)</sup>
+
+MicroPython bytecode is a compact, variable-length encoding. Instructions range from 1 to 6 bytes. The primary instructions relevant to security analysis:
+
+| Bytecode | Name | Security relevance |
+|---|---|---|
+| `0x11` | `LOAD_NAME` | Load identifier by QSTR. If QSTR = `'exec'`, `'eval'`, or `'__import__'`: code execution |
+| `0x12` | `LOAD_GLOBAL` | Load global name. Same analysis as `LOAD_NAME`. |
+| `0x15` | `LOAD_ATTR` | Load attribute. `machine` → `mem32`/`mem8`/`Pin` hardware access |
+| `0x18` | `IMPORT_NAME` | Import module by QSTR. `'os'`, `'socket'`, `'machine'` indicate capability |
+| `0x34` | `CALL_FUNCTION` | Call with N args. Precedes all function calls; QSTR of the function name is in the preceding `LOAD_NAME`. |
+| `0x41` | `MAKE_FUNCTION` | Create a function from a nested code object in the constant table |
+| `0x53` | `YIELD_VALUE` | Generator yield — indicates an async pattern |
+
+`MpyLifter` scans all `LOAD_NAME`, `LOAD_GLOBAL`, `LOAD_ATTR`, and `IMPORT_NAME` instructions for their QSTR values. No bytecode execution is required: the QSTR immediately follows the opcode byte in the encoding.
+
+---
+
+## Usage: full MicroPython firmware scan <sup>[↑](#mpylifter)</sup>
+
+```python
+from ablation.analyzers.mpy_lifter import MpyLifter
+import os
+
+# Scan all .mpy files extracted from firmware filesystem
+all_findings = []
+for root, dirs, files in os.walk('/firmware/extract/'):
+    for fname in files:
+        if not fname.endswith('.mpy'):
+            continue
+        path = os.path.join(root, fname)
+        try:
+            lifter = MpyLifter(path)
+            findings = lifter.scan()
+            if findings:
+                all_findings.append((path, findings))
+        except Exception as e:
+            print(f"Parse error {path}: {e}")
+
+# Report
+for path, findings in sorted(all_findings,
+                             key=lambda x: max(f.severity for f in x[1]),
+                             reverse=True):
+    print(f"\n=== {path} ===")
+    for f in findings:
+        print(f"  [{f.severity}] {f.type}: {f.detail!r} in {f.function}()")
+
+# Source reconstruction of flagged modules
+for path, findings in all_findings:
+    if any(f.severity == 'HIGH' for f in findings):
+        lifter = MpyLifter(path)
+        print(f"\n--- DECOMPILED: {path} ---")
+        print(lifter.lift_module())
+```
+
+---
+
+## False positives <sup>[↑](#mpylifter)</sup>
+
+**`machine` module in non-networked contexts.** `machine.Pin` and `machine.SPI` are normal hardware interface code in embedded firmware. A `machine` import finding is only exploitable if the script also imports `socket` or `network` and handles externally-received data. The scanner reports `MEDIUM` for `machine` alone; escalate to `HIGH` only when combined with a network source.
+
+**`exec()` in test runners.** MicroPython test frameworks (like the built-in `unittest` module and community `upytest`) use `exec()` to run test cases dynamically. Test scripts that import `unittest` + use `exec()` are expected behavior. Exclude `test_*.mpy` and `*_test.mpy` files from the scan.
+
+**`import os` without `os.system()`.** The `os` module in MicroPython provides filesystem operations (`os.listdir`, `os.mkdir`, `os.rename`) but NOT `os.system()`. MicroPython's `os` module does not include `os.system`. The command execution function is `os.system` only if the port-specific extension is compiled in (common on Unix port; absent on bare-metal ports). Verify with `lifter.imports()` that `'os'` and `'system'` both appear before reporting command injection.
+
+---
+
 ## See also <sup>[↑](#mpylifter)</sup>
 
-- [PycBytecodeScanner](pyc-bytecode-scanner.md): CPython `.pyc` bytecode scanner (FortiSwitch v7 and other Python 3 targets)
+- [PycBytecodeScanner](python-pyc-scanning.md): CPython `.pyc` bytecode scanner (FortiSwitch v7 and other Python 3 targets)
 - [BinaryContext](binary-context.md): native binary context for the ELF/C layer alongside MicroPython scripting modules
 - [FindingRegistry](registry.md): record confirmed findings from `.mpy` analysis
+- [RISC-V Taint Tracker](risc-v.md): for ESP32-C3/C6 MicroPython firmware where the vulnerability is in the native C layer called via NAPI
+- [ARM Taint Tracker](taint-tracker-alpha.md): for Raspberry Pi Pico (Cortex-M0+) native code called from MicroPython
+- [Semantic Code Search](semantic-code-search.md): identify MicroPython modules by their semantic content before running `MpyLifter`
+- [Binary Context](binary-context.md): for the ELF firmware binary that contains the C extension modules called from `.mpy` scripts
+- [Taint Tracker (ARM32)](taint-tracker-alpha.md): for C extension modules on ARM Cortex-M targets (ESP32-S2, STM32, RP2040 ARM Cortex-M0+)
+
+---
+
+## CWE mapping for MicroPython findings <sup>[↑](#mpylifter)</sup>
+
+| Finding type | CWE | Notes |
+|---|---|---|
+| `exec()` or `eval()` with user input | CWE-95 | Improper Neutralization of Directives in Dynamically Evaluated Code |
+| `os.system()` or `subprocess` with user input | CWE-78 | OS Command Injection |
+| `machine.mem32[addr] = value` with user-controlled addr | CWE-787 | Out-of-bounds write via direct memory mapped I/O |
+| `__import__(name)` with user-controlled name | CWE-610 | Externally Controlled Reference to a Resource in Another Sphere |
+| C extension buffer overflow (argument validation) | CWE-120 | Buffer Copy without Checking Size of Input |
+| Unverified firmware update via `ota_update()` | CWE-494 | Download of Code Without Integrity Check |
+
+Register findings with `FindingRegistry.register()`, setting `cwe` to the appropriate CWE string from this table. For `machine.mem32` findings on industrial PLC targets, also set `severity='CRITICAL'` and add a note in `detail` identifying the specific register bank that can be corrupted (e.g., `'GPIO output register bank — can flip physical I/O pins'`).

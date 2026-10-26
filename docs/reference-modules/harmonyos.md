@@ -627,8 +627,43 @@ After this module: for `loadLibrarySync` or `loadLibrary` calls found in decompi
 
 ---
 
+## HarmonyOS security model overview <sup>[↑](#abcdecompiler)</sup>
+
+HarmonyOS uses a capability-based permission model where applications declare required permissions in their `config.json` or `module.json5` manifest. Unlike Android where manifest permissions are largely advisory at install time, HarmonyOS enforces capabilities at the microkernel level via the LiteOS-A / LiteOS-M kernel used in HarmonyOS 2.x, or via the OpenHarmony kernel in HarmonyOS 3.x+.
+
+**Security-relevant ABC analysis targets:**
+
+- **`ohos.permission.READ_CONTACTS`** — claimed by the app's manifest but unused at runtime is a low-risk false positive. Flag when the manifest claims the permission AND the ABC bytecode shows `ContactsDataAbility` or `person.query` string constants.
+- **`ohos.permission.WRITE_CONTACTS`** — combining write access to contacts with network permission (`ohos.permission.INTERNET`) is a stalkerware indicator.
+- **`SystemCapability.Telephony.SmsMms`** — SMS sending capability. Flag `sms.sendShortMessage` string constants in combination with network source input.
+- **Remote Function Access (RFA):** HarmonyOS 3.x introduced cross-device RPC via `DistributedAbilityManager`. Calls to `connectAbility` with a remote device ID as the target are a cross-device attack surface. String constants containing `deviceId` plus `connectAbility` indicate distributed application logic that warrants security review.
+
+**NAPI bridge findings:** When `find_native_methods()` identifies a native call in ABC bytecode, the actual vulnerability is in the C/C++ `.so` library, not in the ArkTS code. The ABC analysis establishes the call site; native analysis (via `BinaryContext` on the extracted `.so`) provides the vulnerability evidence. Both layers are required for a complete finding.
+
+---
+
+## ArkCompiler versions and ABC format evolution <sup>[↑](#abcdecompiler)</sup>
+
+The ArkCompiler (formerly ES2ABC) has evolved rapidly since HarmonyOS 2.0:
+
+| HarmonyOS version | ArkCompiler version | Key ABC format changes |
+|---|---|---|
+| 2.0 (2021) | ArkCompiler 1.0 | Initial ABC format; ECMA 2015 bytecode |
+| 3.0 (2022) | ArkCompiler 2.0 | ArkTS type annotations in bytecode; new method flags |
+| 3.1 (2022) | ArkCompiler 2.1 | Literal array boundary change (v12/v13 split) |
+| 4.0 (2023) | ArkCompiler 3.0 | TypeAnnotation section added; class hierarchy metadata |
+| 5.0 (2024) | ArkCompiler 4.0 | Encrypted ABC optional; static initialization order metadata |
+
+`ABCParser.version_string()` reads the format version from the ABC header and returns a version tuple. `ABCDecompiler` automatically selects the parsing strategy for the detected version. For encrypted ABC (HarmonyOS 5.0+), `ABCParser.is_encrypted()` returns `True` and parsing is not possible without the decryption key.
+
+---
+
 ## See also <sup>[↑](#abcdecompiler)</sup>
 
 - [BinaryContext](binary-context.md): native binary context for NAPI `.so` libraries extracted from HAP packages
 - [TaintTracker](taint-tracker-alpha.md): trace dangerous call sites found in ABC decompiler output to their sources
 - [FindingRegistry](registry.md): record confirmed findings from ABC analysis
+- [Java .class and JAR Analysis](java-class-jar-parsing.md): analogous approach for JVM bytecode; compare constant pool vs. string table scanning
+- [DEX](dex.md): Android Dalvik bytecode — the predecessor architecture that HarmonyOS diverged from
+- [Python .pyc](python-pyc-scanning.md): analogous bytecode scanning for embedded Python management planes
+- [Pre-Auth Route Auditor](preauth-exposure.md): for HarmonyOS system service exposure analysis — which `Ability` endpoints are accessible without authentication

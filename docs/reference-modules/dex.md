@@ -372,8 +372,159 @@ After this module: for `DYNAMIC_CODE_LOAD` findings, extract the DEX path passed
 
 ---
 
+## AndroidManifest.xml analysis <sup>[↑](#dexanalyzer)</sup>
+
+`APKParser` parses the binary-encoded `AndroidManifest.xml` (Android Binary XML format, stored as a flat byte sequence with a ResChunk header, not as readable XML text) and extracts security-relevant information:
+
+**Declared permissions:** `manifest.uses_permissions` lists every `<uses-permission android:name="...">` declaration. High-risk combinations:
+- `RECORD_AUDIO` + `INTERNET` + `FOREGROUND_SERVICE` → persistent microphone surveillance
+- `READ_CONTACTS` + `INTERNET` + `RECEIVE_BOOT_COMPLETED` → contact exfiltration on boot
+- `ACCESS_FINE_LOCATION` + `INTERNET` + `RECEIVE_BOOT_COMPLETED` → persistent location tracking
+- `REQUEST_INSTALL_PACKAGES` + `INTERNET` → silent APK installation (dropper behavior)
+- `BIND_ACCESSIBILITY_SERVICE` → accessibility service (full screen/input access)
+
+**Exported components:** `manifest.exported_components` lists components with `android:exported="true"`. Exported Activities can be launched by any app without permission. Exported Services can be bound to remotely. Exported ContentProviders can be queried from other apps. If an exported component handles sensitive data (shown in the DEX string analysis) without permission checking, it is a privilege escalation vulnerability.
+
+**`debuggable` flag:** `manifest.debuggable` = `True` means the app can be debugged with `adb`. A system app with `android:debuggable="true"` is a serious security issue: it allows full process inspection and code injection via `adb jdwp`.
+
+**`minSdkVersion`:** Apps targeting very old API levels (`minSdkVersion < 21`) may rely on deprecated security mechanisms (pre-L TLS defaults, implicit intents, etc.).
+
+**Firebase Dynamic Links and deep links:** `<intent-filter>` entries with `<data android:scheme="http">` or `<data android:scheme="app-custom-scheme">` declare the app as a handler for those URLs. Combined with JavaScript injection in WebViews, these create open redirect vulnerabilities.
+
+`DexAnalyzer.analyze_apk(path)` calls `APKParser` internally and returns a combined result with both manifest and DEX findings. Manifest findings are stored in `result.manifest_findings` and do not require DEX byte-verification: the evidence is the manifest entry itself.
+
+---
+
+## Android security patterns by API category <sup>[↑](#dexanalyzer)</sup>
+
+Different Android API categories have distinct security patterns that `DexAnalyzer` targets:
+
+**Telephony APIs (high-value in spyware):**
+- `android.telephony.SmsManager.sendTextMessage` → sends SMS without user interaction; present in premium SMS fraud apps
+- `android.telephony.TelephonyManager.getDeviceId` → IMEI harvesting (requires READ_PHONE_STATE permission; flag when combined with network permission)
+- `android.telephony.TelephonyManager.getSubscriberId` → SIM IMSI harvesting
+- `android.telephony.TelephonyManager.getSimSerialNumber` → ICCID harvesting
+
+**Location APIs:**
+- `android.location.LocationManager.requestLocationUpdates` → continuous location tracking
+- `com.google.android.gms.location.FusedLocationProviderClient.requestLocationUpdates` → Google Play Services location (more precise; battery-efficient)
+
+**Camera and microphone:**
+- `android.hardware.camera2.CameraDevice.createCaptureSession` → camera recording
+- `android.media.MediaRecorder.setAudioSource` with `AudioSource.MIC` (value 1) → microphone recording; the integer constant `1` appears in `const/4` before `setAudioSource`
+
+**Clipboard and accessibility:**
+- `android.content.ClipboardManager.getPrimaryClip` → clipboard access (passwords, tokens)
+- `android.accessibilityservice.AccessibilityService` → the declared service class; all installed accessibility services can read screen content and inject input events
+
+**Root detection evasion (malware indicator):**
+- `java.io.File.exists` called with paths `/system/bin/su`, `/system/xbin/su`, `/sbin/su` → root detection check (presence of this check is a dual-signal: both commercial apps checking for rooted devices AND malware checking whether it has root access)
+
+---
+
+## DEX instruction set overview <sup>[↑](#dexanalyzer)</sup>
+
+The Dalvik bytecode instruction set uses 16-bit (2-byte) instruction units. Most instructions fit in one 16-bit unit, but some use 2, 3, 4, or 5 units for wide operations, fill-array-data, and packed-switch tables. Unlike JVM bytecode (8-bit opcode), Dalvik opcodes are 8-bit with an 8-bit payload in the same 16-bit unit.
+
+**Register model:** Dalvik is register-based, not stack-based. Each method has a fixed number of registers (declared in the method's code item header). The last N registers hold the method's input parameters; the earlier registers are locals.
+
+Security-critical Dalvik opcodes:
+
+| Opcode | Name | Security relevance |
+|---|---|---|
+| `0x6E` | `invoke-virtual` | Call a virtual method. Target is a method reference. |
+| `0x71` | `invoke-static` | Call a static method. Includes `Runtime.exec()`. |
+| `0x77` | `invoke-interface` | Call an interface method. |
+| `0x1A` | `const-string` | Load a string constant into a register. Credential candidates appear here. |
+| `0x1C` | `const-class` | Load a Class object. Used in `Class.forName()` dynamic loading. |
+| `0x22` | `new-instance` | Create a new object. `new-instance ProcessBuilder` precedes command execution. |
+| `0x52` | `iget-object` | Load an object field. |
+| `0xE6` | `invoke-polymorphic` | Java 9+ `MethodHandle.invoke`. Dynamic dispatch. |
+| `0xFF` | (extended) | DEX extended opcodes via `0xFF` prefix: `invoke-polymorphic/range`, `const-method-handle`, `const-method-type`. |
+
+`DexAnalyzer` uses string_ids and method_refs from the DEX header sections rather than bytecode decoding for its primary scan, which makes it version-independent. Bytecode inspection is only used for `DexClassLoader` argument extraction (the path argument must be traced from the `const-string` that precedes the call).
+
+---
+
+## DEX format structure <sup>[↑](#dexanalyzer)</sup>
+
+The `.dex` file format (designed by Dan Bornstein at Android/Google, first released 2008) is organized as a series of section tables pointed to by the file header:
+
+```
+DEX header (0x70 bytes):
+  magic[8]          = "dex\n035\0" (API 13) or "dex\n039\0" (API 28+)
+  checksum[4]       = Adler-32 of everything after offset 8
+  SHA-1[20]         = SHA-1 of everything after offset 32
+  file_size[4]
+  header_size[4]    = 0x70
+  endian_tag[4]     = 0x12345678 (little-endian) or 0x78563412 (big-endian, rare)
+  link_size[4], link_off[4]
+  map_off[4]        = offset to map_list section
+  string_ids_size[4], string_ids_off[4]    ← key for string table scanning
+  type_ids_size[4], type_ids_off[4]
+  proto_ids_size[4], proto_ids_off[4]
+  field_ids_size[4], field_ids_off[4]
+  method_ids_size[4], method_ids_off[4]    ← key for import scanning
+  class_defs_size[4], class_defs_off[4]   ← key for class hierarchy
+  data_size[4], data_off[4]
+```
+
+The string_ids section is an array of 4-byte offsets into the data section, each pointing to a ULEB128-prefixed UTF-8 string. `DexAnalyzer.scan_strings()` reads the string_ids table and iterates all strings in O(N) time without parsing any bytecode.
+
+The method_ids section is an array of 8-byte `{class_idx, proto_idx, name_idx}` tuples. Each entry identifies a method by its class type, prototype (argument/return types), and name. `DexAnalyzer.scan_imports()` scans method_ids for class names matching dangerous patterns (`java/lang/Runtime`, `java/lang/ProcessBuilder`, etc.) and name strings matching dangerous method names (`exec`, `loadLibrary`, etc.).
+
+---
+
+## ART vs Dalvik and vdex files <sup>[↑](#dexanalyzer)</sup>
+
+Since Android 5.0 (2014), Android uses ART (Android Runtime) instead of Dalvik. ART ahead-of-time compiles DEX bytecode to native code stored in `.oat` files. The original DEX bytecode is preserved in `.vdex` (Verified DEX) files inside the `.oat` container. For security analysis:
+
+- Firmware system apps (e.g., `/system/app/Settings/Settings.apk`) ship with pre-compiled `.oat` files. The DEX content can be extracted from the `.vdex` file using `oatdump --oat-file=base.odex` or by reading the embedded DEX from the `.vdex` header (format documented in AOSP `art/libdexfile/dex/dex_file_loader.cc`).
+- Third-party APKs installed at runtime are stored in `dalvik-cache/` as `.dex` or `.odex` files. These are directly readable by `DexAnalyzer`.
+- For ART 10+, `.vdex` files contain the compressed DEX with a `quicken_info` table that maps DEX opcodes to ART-specific quick opcodes. `DexAnalyzer` reads the underlying DEX byte stream, not the quicken-modified bytecode.
+
+`APKParser.iter_dex()` handles `.vdex` extraction automatically when the input path points to an OAT directory containing a `.vdex` file alongside the `.odex`.
+
+---
+
+## Android version compatibility <sup>[↑](#dexanalyzer)</sup>
+
+DEX format versions have evolved with Android API levels:
+
+| DEX magic | Android API | Key changes |
+|---|---|---|
+| `dex\n035\0` | API 13 (Android 3.2) | Baseline DEX format used through API 23 |
+| `dex\n037\0` | API 24 (Android 7.0) | Default methods, method parameter annotations |
+| `dex\n038\0` | API 26 (Android 8.0) | `invoke-polymorphic` and `invoke-custom` opcodes |
+| `dex\n039\0` | API 28 (Android 9.0) | `const-method-handle`, `const-method-type` opcodes |
+| `cdex\001` | API 28+ | CompactDEX: compressed representation, only in firmware images |
+
+`DexAnalyzer.version()` reads the magic and returns the format version string. CompactDEX (`cdex`) files require `cdex2dex` conversion before standard analysis; `APKParser` handles this conversion automatically when the input is an APEX or system image.
+
+---
+
 ## See also <sup>[↑](#dexanalyzer)</sup>
 
 - [DEX Disassembly and Lifting](dex-disassembly-and-lifting.md): bytecode-level DEX instruction disassembly and lifting to IR
 - [Android](android.md): full Android RE pipeline: APK, native library (JNI), Binder surface
 - [Android Binder Surface](android-binder-surface.md): Binder IPC attack surface analysis
+- [Java .class and JAR Analysis](java-class-jar-parsing.md): JVM bytecode — the platform DEX was adapted from; compare string_ids scanning to constant pool scanning
+- [HarmonyOS ABC Decompiler](harmonyos.md): HarmonyOS ArkTS bytecode — Huawei's Dalvik-influenced but distinct format
+- [Python .pyc](python-pyc-scanning.md): analogous bytecode scanning for Python management planes
+- [Taint Analysis](taint-analysis.md): for confirming that DEX-identified `Runtime.exec` call sites receive attacker-controlled arguments
+- [Length Underflow Scanner](length-underflow.md): for JNI native libraries called from Android DEX code that process network packet lengths
+- [Pre-Auth Route Auditor](preauth-exposure.md): for Android apps that expose HTTP servers (e.g., apps using NanoHTTPD): determine which URL paths are accessible without authentication
+- [Binary Context](binary-lifting.md): for JNI native libraries (`.so` files in `lib/<abi>/` inside the APK) called from DEX code
+
+**DEX analysis quick reference: when to stop at DEX vs. go native:**
+- Finding: `System.loadLibrary("exploit-helper")` → go native: extract `libexploit-helper.so` from APK `lib/arm64-v8a/`, run `BinaryContext.load_or_build()` on it
+- Finding: `Runtime.exec("cmd")` with literal string → DEX-layer confirmed; register as DEX finding
+- Finding: `Runtime.exec(variable)` where variable source is unclear → trace argument source; if from user input (Intent extra, network read), register as taint finding
+- Finding: `Class.forName(className)` where `className` is from an Intent extra → dynamic class loading with attacker-controlled class name; CRITICAL
+- Finding: `new ProcessBuilder(cmd_array)` where `cmd_array` is constructed from user input → `ProcessBuilder` command injection; CRITICAL; use `CWE-78` in FindingRegistry
+
+**Estimated scan times (empirical):**
+- Single small APK (< 1 MB, < 5,000 methods): < 1 second
+- Typical 10–30 MB APK with 30,000–80,000 methods: 2–8 seconds
+- Large system APK (Settings, SystemUI) with 100,000+ methods: 15–40 seconds
+- Multi-dex APK (4+ dex files, e.g., Google Maps): 30–90 seconds for full string + import scan

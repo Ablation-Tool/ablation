@@ -468,8 +468,101 @@ After this module: for `CODE_EXEC` findings (`os:cmd`, `erlang:open_port`), exam
 
 ---
 
+## BEAM security vulnerability classes <sup>[↑](#beamcontext)</sup>
+
+Erlang and Elixir applications expose several vulnerability classes that differ from C/C++ firmware:
+
+**`os:cmd/1` and `erlang:open_port/2` command injection:** The most common critical finding in Erlang server code. `os:cmd(Cmd)` executes `Cmd` in a POSIX shell. If `Cmd` is constructed by string concatenation from user input, it is a command injection vulnerability. Unlike C code where the command injection is a `system()` call, Erlang's `os:cmd` always invokes a shell (`/bin/sh -c`), making it trivially injectable with `;`, `&&`, or `|` metacharacters.
+
+**Atom exhaustion:** Erlang atoms are global, permanent, and limited (default: 1,048,576 atoms). `erlang:binary_to_atom/2` called with user-controlled input creates new atoms until the atom table is exhausted, crashing the entire Erlang node. `BEAMContext` flags `binary_to_atom/2` calls where the argument is not a literal.
+
+**ETS / Mnesia injection:** `ets:lookup(Table, Key)` where `Key` is user-controlled is an Erlang Term Structure table injection. Since ETS keys are arbitrary Erlang terms, a crafted key can be used to extract records, bypass access control, or cause memory exhaustion with large binary keys.
+
+**Unsafe deserialization:** `erlang:binary_to_term/1` and `erlang:term_to_binary/1` are Erlang's serialization primitives. `binary_to_term/1` deserializes arbitrary Erlang terms from binary, including function references (`fun` objects). Deserializing a `fun` from untrusted input allows executing arbitrary Erlang code. The safe alternative is `binary_to_term(Bin, [safe])`, which rejects `fun` objects. `BEAMContext` flags `binary_to_term/1` calls that use the unsafe single-argument form.
+
+---
+
+## Erlang OTP version and firmware context <sup>[↑](#beamcontext)</sup>
+
+Erlang OTP (Open Telecom Platform) is the standard framework that ships with the Erlang runtime. `.beam` files compiled by different OTP versions may have different chunk layouts:
+
+| OTP version | Key changes relevant to analysis |
+|---|---|
+| OTP 18 (2015) | `ExDc` chunk added (ExDoc documentation) |
+| OTP 21 (2018) | `Line` chunk format change |
+| OTP 23 (2020) | `Dbgi` chunk replaces `Abst`+`AbstA` for debug info |
+| OTP 24 (2021) | JIT compilation for x86-64 (`.beam` format unchanged) |
+| OTP 25 (2022) | Type-based optimization metadata in `Type` chunk |
+| OTP 26 (2023) | `Meta` chunk added |
+
+`BEAMContext` reads the `Attr` chunk which contains the compiled OTP version string. This helps confirm which chunk layout to expect.
+
+**Firmware targets with Erlang management planes:**
+- **Ericsson network equipment:** Classic Erlang deployment. The Ericsson CXC 132 9029 "comea" management system and many Ericsson RBS (Radio Base Station) management layers run on Erlang OTP.
+- **RabbitMQ:** Message broker written in Erlang. Deployed in many enterprise firmware platforms for telemetry collection. Vulnerable to CVE-2023-46118 (HTTP API DoS via large message body).
+- **Ejabberd:** XMPP server in Erlang. Some embedded communication appliances include ejabberd.
+- **CouchDB:** Erlang-based document database. Used in some network appliance management planes.
+
+---
+
+## Elixir bytecode on the BEAM <sup>[↑](#beamcontext)</sup>
+
+Elixir compiles to standard BEAM `.beam` files. Elixir-compiled modules are distinguishable by their `Attr` chunk: Elixir modules have `{vsn,[...]}` in their attribute list but also contain `{elixir_version,...}`. The module name is typically `'Elixir.ModuleName'` (prefixed with `Elixir.`).
+
+`BEAMContext` handles Elixir-compiled `.beam` files identically to Erlang-compiled ones: the chunk format is the same. Elixir-specific APIs that map to dangerous Erlang functions:
+- `System.cmd/3` → `os:cmd/1` equivalent (but with safer argument quoting)
+- `System.shell/2` → `os:cmd/1` with explicit shell invocation
+- `Port.open/2` → `erlang:open_port/2`
+- `:binary.to_term/1` → `erlang:binary_to_term/1` (unsafe form)
+- `Kernel.apply/2` → `erlang:apply/2` — dynamic function dispatch
+
+The `BEAMContext.dangerous_imports` list includes Elixir module-function pairs as well as the underlying Erlang BIFs they call.
+
+---
+
 ## See also <sup>[↑](#beamcontext)</sup>
 
 - [BinaryContext](binary-context.md): native binary context for NIF `.so` libraries loaded via `erlang:load_nif/2`
 - [TaintTracker](taint-tracker-alpha.md): trace dangerous call arguments to their sources when `os:cmd` or `erlang:open_port` is confirmed
 - [FindingRegistry](registry.md): record confirmed findings from BEAM analysis
+- [Python .pyc](python-pyc-scanning.md): analogous bytecode scanning approach for Python management planes
+- [Java .class and JAR Analysis](java-class-jar-parsing.md): analogous constant pool approach for JVM bytecode
+- [HarmonyOS ABC Decompiler](harmonyos.md): ArkTS bytecode — another managed language bytecode format encountered in firmware
+- [Semantic Code Search](semantic-code-search.md): semantic embedding for BEAM function names when `BEAMContext.functions` identifies candidate function names before taint analysis
+- [Pre-Auth Route Auditor](preauth-exposure.md): for Erlang Cowboy or Phoenix web applications — determine which HTTP routes are accessible without authentication
+- [SQL Injection Scanner](sql-injection-scanner.md): Erlang applications using `mysql_otp` or `epgsql` may construct SQL strings with user input; `BEAMContext.strings` surfaces string templates used in SQL construction
+
+---
+
+## Complete example: Erlang/Elixir firmware scan <sup>[↑](#beamcontext)</sup>
+
+```python
+from ablation.analyzers.beam_context import BEAMContext
+import os
+
+# Scan all .beam files in an OTP release directory
+results = []
+for root, dirs, files in os.walk('/firmware/extract/lib/'):
+    for fname in files:
+        if not fname.endswith('.beam'):
+            continue
+        path = os.path.join(root, fname)
+        ctx = BEAMContext.from_file(path)
+        if ctx.dangerous_imports:
+            results.append(ctx)
+
+# Sort by severity
+results.sort(key=lambda c: len([i for i in c.dangerous_imports if i.severity == 'CRITICAL']), reverse=True)
+
+for ctx in results:
+    print(f"\n=== {ctx.module_name} ({ctx.source_file or 'no source'}) ===")
+    for imp in ctx.dangerous_imports:
+        print(f"  [{imp.severity}] {imp.module}:{imp.function}/{imp.arity}")
+    for s in ctx.strings[:5]:
+        if any(kw in s for kw in ['password', 'secret', 'token', 'key']):
+            print(f"  [CREDENTIAL CANDIDATE] {s[:80]}")
+
+print(f"\nTotal: {len(results)} modules with dangerous imports")
+```
+
+**Byte verification for BEAM findings:** BEAM does not use virtual addresses. A finding's "byte evidence" is the import table entry index in the `ImpT` chunk plus the `Code` chunk's call instruction offset. Use `ctx.import_table[idx]` to verify the import exists and `ctx.code_chunk_calls(import_idx)` to verify the call site offset before registering a finding. For `FindingRegistry`, use `cwe='CWE-78'` for `os:cmd` findings and `cwe='CWE-502'` for `binary_to_term/1` (unsafe deserialization) findings. The `va` field should be set to `0` (BEAM has no VA model); use `evidence_type='beam_import_table'` and `detail=f"{module}:{function}/{arity} import index {idx}"` to record the finding location.
