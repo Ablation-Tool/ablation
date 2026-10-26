@@ -1427,6 +1427,9 @@ def sac_for_context(ctx):
     if arch in ('s390', 's390x'):
         from ablation.analyzers.sink_arg_classifier_s390 import SinkArgClassifierS390X
         return SinkArgClassifierS390X.from_context(ctx)
+    if arch in ('loongarch64', 'la64', 'loongarch'):
+        from ablation.analyzers.sink_arg_classifier_loongarch64 import SinkArgClassifierLA64
+        return SinkArgClassifierLA64.from_context(ctx)
     return SinkArgClassifier.from_context(ctx)
 
 

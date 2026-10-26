@@ -89,6 +89,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "MIPS32 O32: classify exec-sink arguments on BE or LE MIPS firmware" | `SinkArgClassifierMIPS.from_context(ctx).classify_all()`: add vendor sinks with `clf.add_sinkname, arg_pos` |
 | "s390/s390x IBM Z Linux: classify exec-sink arguments: BinaryContext returns plt=0 S390-GAP-001" | `SinkArgClassifierS390.from_path(elf).classify_all()`: use `from_path()` not `from_context()` to bypass BinaryContext's s390 PLT parse gap; `is_s390(path)` detects e_machine=0x0016 |
 | "ppc64/ppc64le IBM POWER Linux ABIv2: classify exec-sink arguments: ARCH-GAP-PPC64LE" | `SinkArgClassifierPPC64.from_context(ctx).classify_all()`: handles both LE and BE via EI_DATA detection; resolves TOC-relative addis-r2+addi/ld address patterns; r3-r10 argument registers; see docs/reference-modules/ppc64-le-sink-classifier.md |
+| "LoongArch64 LA64: classify exec-sink arguments: Alpine musl and LoongOS; BinaryContext returns plt=0 for large GOT: use this module not sac_for_path" | `SinkArgClassifierLA64.from_context(ctx).classify_all()`: uses LoongArchDecoderV2 for call site discovery and backward trace; no Capstone; PLT resolved via raw ELF byte decode; $a0-$a7 arg registers; add execline wrappers with `clf.add_sink('xexec_ae', 0)` etc; sac_for_context() dispatches here automatically for arch='loongarch64'; ground truth: mqtt-exec 0.7.1 and execline 2.9.9.1 Alpine 3.24.3 LA64 |
 | "Does sscanf/scanf/fscanf format string have unbounded %s?" | `SscanfSinkClassifier.from_path(elf).classify_all()`: RODATA_SAFE=eliminated, RODATA_UNSAFE=HIGH, DYNAMIC_FMT=verify snprintf template manually |
 | "Find wrappers around system/popen/exec* multi-level injection chains" | `SinkPropagator.from_context(ctx).propagate()` |
 | "Register vendor-specific sinks + known-safe patterns" | `VendorProfile.from_vendor('fortinet').apply_to(clf)` |
@@ -297,3 +298,8 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Check if a bitfile was compressed by Vivado" | `XilinxBitfile.from_path(path).is_compressed()` |
 | "Batch-parse all .bit files in a directory" | `scan_directory('/path/to/dir', '*.bit')` |
 | "Map known Xilinx device IDCODEs" | `from ablation.analyzers.xilinx_bitfile import XILINX_IDCODES` |
+| "Extract constants from Verilog/VHDL source (parameters, defines, VHDL constants)" | `VerilogSemantic.from_directory(src_dir).constants()` |
+| "Extract FSM state encodings from Verilog/VHDL" | `VerilogSemantic.from_directory(src_dir).state_encodings()` |
+| "Search Verilog/VHDL source for a protocol pattern" | `VerilogSemantic.from_directory(src_dir).query('opcode broadcast reset')` |
+| "List all module/entity names in a source tree" | `VerilogSemantic.from_directory(src_dir).modules()` |
+| "Get port bit widths from Verilog/VHDL" | `VerilogSemantic.from_directory(src_dir).port_widths()` |
