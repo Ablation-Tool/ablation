@@ -34,7 +34,7 @@ flowchart TD
 
 ### Keyword-to-technique mapping
 
-The `ATTCK_MAP` dict maps lowercased keyword fragments to `{id, name, tactic}` dicts. Keywords are matched as substrings, not exact words, so `'unauthenticated'` matches `"unauthenticated RCE in login endpoint"`. All 14 ATT&CK tactics are covered:
+The `ATTCK_MAP` dict maps lowercased keyword fragments to `{id, name, tactic}` dicts. Keywords are matched as substrings, not exact words, so `'unauthenticated'` matches `"unauthenticated RCE in login endpoint"`. 12 of 14 ATT&CK tactics are covered. Reconnaissance (TA0043) and Resource Development (TA0042) are excluded because firmware vulnerability findings do not map to pre-attack preparation activities.
 
 | Tactic | Example mappings |
 |---|---|
