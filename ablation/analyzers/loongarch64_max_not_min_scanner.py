@@ -392,6 +392,57 @@ class LA64MaxNotMinScanner:
 
         return cls(data, base, {}, text_va, text_sz, is_rel=False, pe32plus=True)
 
+    @classmethod
+    def from_system_map(cls, path: str, sysmap_path: str) -> 'LA64MaxNotMinScanner':
+        """
+        Load a vmlinux (or similar fully-linked kernel ELF) for scanning.
+
+        Kernel images define memory sinks internally — there is no .rela.plt
+        section.  This constructor reads System.map to build the plt dict from
+        T/t/W/w symbols whose names appear in _SINKS, then delegates to the
+        standard scan() / _check_lookahead() path unchanged.
+
+        System.map format (one entry per line):
+            <hex_va> <type> <name>
+        where <type> is one of: T t W w (text/weak symbols — function bodies).
+
+        Parameters
+        ----------
+        path      : path to the vmlinux ELF (may be stripped)
+        sysmap_path: path to System.map (e.g. /boot/System.map-6.6.119)
+        """
+        data = Path(path).read_bytes()
+        base    = 0
+        text_va = 0
+        text_sz = len(data)
+
+        if _LIEF_OK:
+            try:
+                binary = lief.parse(data)
+                if isinstance(binary, lief.ELF.Binary):
+                    base = binary.imagebase
+                    sec = binary.get_section('.text')
+                    if sec:
+                        text_va = int(sec.virtual_address)
+                        text_sz = int(sec.size)
+            except Exception:
+                pass
+
+        plt: Dict[int, str] = {}
+        with open(sysmap_path) as fh:
+            for line in fh:
+                parts = line.split()
+                if len(parts) < 3 or parts[1] not in ('T', 't', 'W', 'w'):
+                    continue
+                name = parts[2]
+                if name in _SINKS:
+                    try:
+                        plt[int(parts[0], 16)] = name
+                    except ValueError:
+                        continue
+
+        return cls(data, base, plt, text_va, text_sz, is_rel=False)
+
     # ------------------------------------------------------------------
 
     def _words_at(self, va: int, count: int) -> Optional[List[int]]:

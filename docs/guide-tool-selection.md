@@ -65,6 +65,7 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "LoongArch64: trace recv (TencentOS 4.6)" | `LoongArch64TaintTracker.from_path(elf).run_interprocedural()` |
 | "LoongArch64: find GCC 12.3.1.7 max-not-min bug in ELF" | `LA64MaxNotMinScanner.from_path(elf).scan()` |
 | "LoongArch64: find GCC 12.3.1.7 max-not-min bug in UEFI PE32+" | `LA64MaxNotMinScanner.from_pe32plus(data).scan()` |
+| "LoongArch64: find GCC 12.3.1.7 max-not-min bug in Linux kernel (vmlinux)" | `LA64MaxNotMinScanner.from_system_map('vmlinux', 'System.map').scan()` — System.map provides VA→name mapping for internal kernel sinks (kmalloc, vmalloc, kzalloc, __kmalloc); kernel modules (.ko ET_REL) use `from_path()` instead |
 | "LoongArch64: find integer overflow before malloc" | `LA64HeapVulnScanner.from_path(elf).scan()` |
 | "Alpha AXP ECOFF: scan exec-class (system/popen/execve) call sites" | `AlphaEcoffScanner(binary).scan()` → `List[AlphaExecFinding]`; byte-verified BSR targets; call `trace_arg(f.caller_va)` on each finding to classify the argument |
 | "Alpha AXP: build per-function CFG from raw ECOFF binary" | `AlphaCFGBuilder(data, sections, gp_value).build(func_va)` → `Dict[va, BasicBlock]`; BFS from entry; handles BR/Bcc/RET/JMP/BSR |

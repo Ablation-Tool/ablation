@@ -131,6 +131,21 @@ data = open('TlsDxe.efi', 'rb').read()
 findings = LA64MaxNotMinScanner.from_pe32plus(data).scan()
 ```
 
+Linux kernel (`vmlinux` — fully linked, no PLT):
+
+```python
+# vmlinux has no .rela.plt; sinks (kmalloc, vmalloc, kzalloc, __kmalloc) are
+# defined internally. System.map provides the VA → name mapping at build time.
+findings = LA64MaxNotMinScanner.from_system_map(
+    '/boot/vmlinux',
+    '/boot/System.map-6.6.119'
+).scan()
+```
+
+Note: kernel modules (`.ko`) are ET_REL and are already handled by `from_path()` —
+the scanner reads `R_LARCH_B26` relocations from `.rela.text` to identify sink calls.
+`from_system_map()` is only needed for the fully-linked vmlinux image.
+
 ### False positive class <sup>[↑](#compiler-defect-detection)</sup>
 
 Rust `Vec` append patterns use `bltu remaining_cap,...` to guard the write. These have a conditional branch between the `or` instruction and the sink call that guards against the wrong result. The branch means the minimum is never actually used as an allocation size without first checking capacity. Verify manually before reporting any finding where a conditional branch on the result register appears within the 20-instruction tracking window.
