@@ -313,9 +313,39 @@ check via awk on imm2.xml. No injection in installer itself.
 
 No attacker-controlled data reaches any system() call. **No finding.**
 
+## Session 10 — asu64 Full Exec-Class Sweep
+
+**Binary**: `/tmp/bomc_work/asu64`, x86_64 ELF, 21MB, not stripped, debug_info
+
+**PLT addresses**: `system@plt=0x6b8fb0`, `popen@plt=0x6b8050`
+
+**popen() — 15 sites, ALL RODATA_CONST**
+
+| Function | Count | Commands |
+|---|---|---|
+| `checkOSBitWithSoftwareBit()` | 1 | `popen("uname -m", "r")` |
+| `ibmcKCS::OpenIPMI_CheckKernel()` | 2 | `"uname -r"`, `"dmesg | grep..."` |
+| `ibmcKCS::OpenIPMI_InstallDriver()` | 5 | `/etc/init.d/ipmi start`, `modprobe ipmi_*` ×4 |
+| `OpenIPMI_CheckKernel()` [free fn] | 2 | same as class version |
+| `OpenIPMI_InstallDriver()` [free fn] | 5 | same as class version |
+
+**system() — 6 sites**
+
+| VA | Function | Verdict |
+|---|---|---|
+| 0x6d88fd, 0x6d8a85 | `checkPatchable(char*)` | ELIMINATED — argv[0] (session 1) |
+| 0x96c4ff | `LinOS::reboot()` | SAFE — `system("reboot")` RODATA_CONST |
+| 0x6e2d68 | `ImmUsbLanCfg::CState(std::string)` | SAFE — `StartCState("")`, `StopCState(" --stop")` hardcoded |
+| 0x6e2857 | `ImmUsbLanCfg::RumImmUsbLanCfgCmd(std::string)` | SAFE — 9 callers all use hardcoded or hardware-enum args |
+| 0x6e3269 | `ImmUsbLanCfg::PingImmInterface(std::string addr)` | CANDIDATE MEDIUM (BOMC-ASU-002) |
+
+**BOMC-ASU-002 update**: `PingImmInterface` has 0 direct callers. fn ptr stored at CIM descriptor table entries (0x440a08, 0x10e9700, 0x1532f68). CIM dispatch context: invoked via WBEM `ExecMethod` on HTTPS:5989. addr = WBEM method argument, no sanitization path observed. Requires authenticated CIM credentials.
+
 ## Next Targets
 
-1. asu64 — 15 popen() + Linux::execCmd() callers
+1. LiveOS squashfs (1d) — mount + setuid sweep + exec-class scan
+2. SHA256 similarity check (1e) — CR7/CR8/CR9 variants
+3. BOMC-ASU-002 — CIM dispatch trace (lower priority; requires CIM framework analysis)
 
 ## SH4 Ablation Gap
 
