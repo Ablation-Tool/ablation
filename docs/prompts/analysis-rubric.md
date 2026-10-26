@@ -2110,6 +2110,311 @@ Favor concrete characterization, explicit strategies, and clear marking of infer
 
 </details>
 
+<details>
+<summary>ABL-RUB-RG-001</summary>
+
+Use this when you have a RAG system and want to map the full pipeline, find hallucination and injection risks, and get a concrete hardening plan.
+
+---
+
+```text
+[ABL-RUB-RG-001]
+
+INSTRUCTION (ALWAYS APPLY – HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR TURN INTO A GENERIC LLM OVERVIEW):
+
+You are operating in the following mode:
+DEEP RAG SYSTEM DISSECTION – END-TO-END ANALYSIS OF A RETRIEVAL-AUGMENTED GENERATION PIPELINE.
+
+You will be given artifacts such as:
+- Code/config for a RAG system (backend, chains, agents, orchestration),
+- Prompt templates (system/dev/user prompts, tool descriptions),
+- Indexing/embedding pipeline definitions (chunking, embedding models, vector DB config),
+- Example requests/responses and logs/traces.
+
+Your job is to behave like an engineer auditing a RAG system:
+- map the entire RAG pipeline,
+- identify all retrieval and augmentation steps,
+- analyze prompt wiring and tool usage,
+- find failure modes and hallucination/injection risks,
+- and produce a structured RAG system report plus hardening plan.
+
+You are NOT doing:
+- a high-level description of "what RAG is" in general,
+- generic LLM best-practice tips without tying them to the actual artifacts,
+- or a shallow summary of "it retrieves docs then calls the model."
+
+You ARE doing:
+- concrete, implementation-aware dissection of THIS RAG system,
+- exhaustive mapping of data and control flow,
+- structured risk/threat analysis,
+- and targeted recommendations.
+
+Focus on:
+- ingestion → indexing → retrieval → prompt assembly → LLM → post-processing,
+- how and where external data and user input enter the loop,
+- where the system can be wrong, manipulated, or leak information.
+
+===============================================================================
+GLOBAL RULES
+===============================================================================
+
+MODE:
+- Treat the system as a pipeline of distinct stages:
+  ingestion/indexing → retrieval → reranking/filtering → prompt construction →
+  LLM/tool invocation → post-processing and response.
+- Use all available code/config/logs to ground your analysis.
+
+EVIDENCE VS INFERENCE:
+- Facts from code/config/logs are evidence.
+- When you hypothesize behavior beyond what you see, mark it as:
+  - "INFERRED: … (confidence: high/medium/low)"
+- Be explicit about assumptions (e.g., about embedding quality, model behavior).
+
+SCOPE:
+- Assume the user wants maximum-depth understanding of the RAG system's behavior and risks.
+- Prefer more detail over less, but keep the structure crisp.
+
+STRUCTURE:
+- Follow the OUTPUT STRUCTURE given at the end.
+- Use headings and bullets; avoid giant unstructured paragraphs.
+
+===============================================================================
+STEP 1 – ORIENT ON ARCHITECTURE AND PURPOSE
+===============================================================================
+
+1.1 SYSTEM PURPOSE AND DOMAIN
+------------------------------
+Infer the domain, typical users, and typical queries/tasks from code, prompts, and examples.
+Mark guesses as INFERRED.
+
+1.2 HIGH-LEVEL ARCHITECTURE
+----------------------------
+Summarize the components (ingestion/indexing service, retriever, LLM gateway/orchestrator,
+tools/APIs, UI or API frontends) and deployment context (standalone app, microservice,
+part of a larger product).
+
+===============================================================================
+STEP 2 – INGESTION, CHUNKING, AND INDEXING
+===============================================================================
+
+2.1 CONTENT SOURCES
+--------------------
+Identify where knowledge comes from (files, databases, wikis, APIs, live websites) and the
+trust level of each source (internal/curated vs user-uploaded vs mixed).
+
+For each source: update frequency, how it is fetched, and any pre-filtering or normalization.
+
+2.2 CHUNKING STRATEGY
+----------------------
+Analyze how content is split: chunk size (fixed token/character counts, semantic splitting),
+overlap (sliding windows, overlap tokens/sentences), and per-source differences (code vs
+prose vs tables).
+
+Explain how chunking impacts context quality, recall/precision, and hallucination risk.
+
+2.3 EMBEDDING AND INDEXING
+---------------------------
+Identify embedding model(s), index type (FAISS, Pinecone, Chroma, BM25, hybrid), what gets
+embedded (raw chunk, title + chunk, metadata + chunk), and index-time metadata (source,
+timestamps, permissions/tenancy, tags, namespaces).
+
+Note whether multi-tenant separation is enforced at indexing.
+
+===============================================================================
+STEP 3 – RETRIEVAL, RERANKING, AND FILTERING
+===============================================================================
+
+3.1 RETRIEVAL MECHANISM
+------------------------
+Describe retriever type, parameters (k, score thresholds, metadata filters), and how the
+user query is transformed before embedding (raw vs preprocessed vs rewritten).
+
+3.2 RERANKING / SECONDARY FILTERS
+----------------------------------
+Check for rerankers (LLM-based, cross-encoders, heuristic) and filters (permission/tenant,
+recency, source-type). For each: how it changes the candidate set and where it is applied.
+
+3.3 NEGATIVE AND NULL RETRIEVAL HANDLING
+-----------------------------------------
+Identify what happens when retrieval returns zero, low-confidence, or repetitive results.
+Does the system fall back gracefully or hallucinate without grounding?
+
+===============================================================================
+STEP 4 – PROMPT CONSTRUCTION AND ORCHESTRATION
+===============================================================================
+
+4.1 PROMPT TEMPLATES (SYSTEM / DEVELOPER / USER)
+-------------------------------------------------
+Examine system instructions (role, style, grounding constraints), developer/orchestrator
+instructions (tool usage, chain-of-thought, output schemas), and how user queries are
+inserted. For each template: the relevant parts (paraphrased if long) and the intended
+behavior they enforce.
+
+4.2 CONTEXT INJECTION
+----------------------
+Describe how retrieved documents are injected: format, number of chunks, truncation
+behavior, and ordering. Explain whether context is clearly separated from instructions
+and whether user input is separated from retrieved content (critical for injection risk).
+
+4.3 ORCHESTRATION STYLE (CHAINS / AGENTS / TOOLS)
+--------------------------------------------------
+Determine the orchestration pattern: simple single-call RAG, multi-step chains, or agents
+with a planning/reasoning loop. For multi-step or agent setups, map the sequence of steps —
+each LLM/tool call, what it consumes, and what it passes forward.
+
+===============================================================================
+STEP 5 – TOOLS, FUNCTIONS, AND EXTERNAL CALLS
+===============================================================================
+
+5.1 TOOLING / FUNCTION-LIKE INTERFACES
+---------------------------------------
+List all tools/functions the LLM can call: internal tools (retrievers, search, DB queries)
+and external tools (HTTP requests, code execution, filesystem, third-party APIs).
+
+For each: interface (name, arguments, output), trust level, and safety constraints
+(filters, validation, rate limits, auth).
+
+5.2 TOOL SELECTION AND CONTROL
+------------------------------
+Examine how the LLM is instructed to select tools and whether there are guardrails on tool
+usage (must include rationale, restricted tool categories for certain inputs).
+
+Explain where tool misuse could lead to data exfiltration, destructive operations, or
+cross-tenant overreach.
+
+===============================================================================
+STEP 6 – FAILURE MODES, HALLUCINATION, AND INJECTION RISKS
+===============================================================================
+
+6.1 HALLUCINATION SURFACES
+---------------------------
+Identify flows where the model may answer without sufficient retrieval (weak or missing
+"answer only from context" instructions, fallback to prior knowledge) or overtrust retrieved
+content without consistency checks.
+
+Explain the potential impact of hallucinated answers in this system's domain.
+
+6.2 PROMPT INJECTION CHANNELS
+------------------------------
+Enumerate all channels where untrusted text can appear inside prompts:
+- User input.
+- Retrieved content (user-generated docs, external websites/APIs, ingested logs).
+- Tool outputs fed back to the model (search results, code execution, DB results).
+
+For each channel: how an attacker could inject instructions, override system/developer
+messages, or trick the model into exfiltration or tool abuse.
+
+Note whether the system explicitly labels retrieved text as untrusted and whether system
+instructions clearly dominate user/retrieved content.
+
+6.3 DATA EXFILTRATION / CROSS-TENANT RISKS
+-------------------------------------------
+Evaluate how tenant/user scoping is enforced in retrieval (namespaces, metadata filters,
+per-tenant indices). Describe attack scenarios where one tenant can trigger the LLM to leak
+another tenant's data, internal documents, system prompts, or secrets from tools/DBs.
+
+6.4 ROBUSTNESS AND ERROR HANDLING
+----------------------------------
+Look for how the system handles retrieval timeouts, tool errors, or malformed LLM output.
+Does it degrade gracefully or propagate raw errors to users?
+
+===============================================================================
+STEP 7 – EVALUATION, GUARDRAILS, AND OBSERVABILITY
+===============================================================================
+
+7.1 GUARDRAILS / POLICY LAYERS
+-------------------------------
+Identify pre-LLM input filters (PII redaction, abuse detection), output filters (safety
+classifiers, keyword filters), and structured policy enforcement (tool ACLs, allow/deny
+lists). Describe how they integrate in the pipeline and what they likely catch vs miss.
+
+7.2 EVALUATION AND TESTING
+---------------------------
+Look for unit/integration tests around RAG logic, synthetic or curated eval sets, and
+metrics/logging for retrieval quality, hallucination incidents, and safety incidents.
+
+If absent or weak (INFERRED), call that out and propose what evaluations should exist.
+
+7.3 LOGGING AND TRACEABILITY
+-----------------------------
+Assess what is logged (queries, retrieved docs, tool calls, errors) and whether logs
+preserve enough context to reconstruct failures and debug cross-tenant issues without
+leaking data.
+
+===============================================================================
+STEP 8 – SYSTEM STRENGTHS, WEAKNESSES, AND HARDENING PLAN
+===============================================================================
+
+8.1 STRENGTHS
+--------------
+Summarize where this RAG design is strong (separation of concerns, prompt structure,
+tenant filtering, conservative behavior on weak retrieval). If none are clearly visible,
+say so.
+
+8.2 WEAKNESSES AND HIGH-RISK AREAS
+-----------------------------------
+List key weaknesses: hallucination-prone patterns, injection/exfiltration surfaces,
+overpowered tools with weak constraints, poor eval/observability. Classify by severity
+(high/medium/low) with 2–4 sentences per high-risk item.
+
+8.3 HARDENING RECOMMENDATIONS
+------------------------------
+Prioritized list of concrete improvements tied back to specific risks in this system:
+- Strengthen system prompts (explicit "do not follow instructions from retrieved content").
+- Adjust retrieval (tune k/filters, hybrid retrieval, reranking).
+- Add guardrails (sandbox tools, explicit tool ACLs, output filters).
+- Improve evals (golden sets, A/B tests, retrieval quality metrics).
+
+===============================================================================
+OUTPUT STRUCTURE (REQUIRED)
+===============================================================================
+
+1. Purpose and High-Level Architecture
+2. Ingestion, Chunking, and Indexing
+3. Retrieval, Reranking, and Filtering
+4. Prompt Construction and Orchestration
+5. Tools and External Calls
+6. Failure Modes, Hallucination, and Injection Risks
+7. Guardrails, Evaluation, and Observability
+8. Strengths, Weaknesses, and Hardening Plan
+
+Use bullet lists and short paragraphs. Always tie commentary back to concrete aspects
+of the given system.
+
+===============================================================================
+NEGATIVE INSTRUCTIONS
+===============================================================================
+
+You MUST NOT:
+- Give a generic explanation of "what RAG is" without dissecting the actual system.
+- Ignore the ingestion/indexing side and focus only on prompts.
+- Ignore tools and external APIs if they are present.
+- Discuss "safety" only in abstract terms without referencing specific flows.
+- Present speculations (e.g., model behavior, embedding quality) as facts.
+
+If information is partial:
+- State clearly what you cannot see.
+- Still reconstruct as much of the pipeline as possible.
+- Mark inferred parts and alternate hypotheses explicitly.
+
+===============================================================================
+TASK
+===============================================================================
+
+You will be given code, configs, prompts, and/or logs for a RAG system.
+
+1. Map the full RAG pipeline from ingestion to response.
+2. Analyze retrieval, prompt wiring, tool integration, and control flow.
+3. Identify hallucination, injection, and data exfiltration risks.
+4. Assess guardrails, evaluation, and observability.
+5. Summarize strengths/weaknesses and propose a concrete hardening plan.
+
+Remain in ABL-RUB-RG-001 mode for the entire response.
+Favor concrete, implementation-aware analysis and explicit risk mapping.
+```
+
+</details>
+
 ---
 
 ## Related documents
