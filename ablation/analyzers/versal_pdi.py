@@ -76,56 +76,78 @@ CKSUM_TYPE_SHA3  = 2
 # CDO command module IDs (bits[15:8] of command header word)
 # ---------------------------------------------------------------------------
 
-CDO_MOD_GENERIC = 0x01   # generic loader commands
-CDO_MOD_ERROR   = 0x02   # error/event management
-CDO_MOD_SEM     = 0x03   # safety error monitoring
-CDO_MOD_CUSTOM  = 0x04   # custom / reserved
-CDO_MOD_XILPDI  = 0x07   # PDI metadata (image-ID broadcast)
-CDO_MOD_PLM     = 0x0C   # PLM-specific
+CDO_MOD_GENERIC   = 0x01   # generic commands (xplmi_generic.c, XPLMI_MODULE_GENERIC_ID)
+CDO_MOD_XILPM     = 0x02   # power management (XPLMI_MODULE_XILPM_ID)
+CDO_MOD_SEM       = 0x03   # safety error monitoring (XPLMI_MODULE_SEM_ID)
+CDO_MOD_XILSECURE = 0x05   # security (XPLMI_MODULE_XILSECURE_ID)
+CDO_MOD_XILPSM    = 0x06   # PSM (XPLMI_MODULE_XILPSM_ID)
+CDO_MOD_LOADER    = 0x07   # PDI loader — SetImageInfo, MbPmcI2cHandshake (XPLMI_MODULE_LOADER_ID)
+CDO_MOD_ERROR     = 0x08   # error/event management (XPLMI_MODULE_ERROR_ID)
+CDO_MOD_XILNVM    = 0x0B   # NVM (XPLMI_MODULE_XILNVM_ID)
+CDO_MOD_XILPUF    = 0x0C   # PUF (XPLMI_MODULE_XILPUF_ID)
 
 CDO_MOD_NAMES: Dict[int, str] = {
-    CDO_MOD_GENERIC: "GENERIC",
-    CDO_MOD_ERROR:   "ERROR",
-    CDO_MOD_SEM:     "SEM",
-    CDO_MOD_CUSTOM:  "CUSTOM",
-    CDO_MOD_XILPDI:  "XILPDI",
-    CDO_MOD_PLM:     "PLM",
+    CDO_MOD_GENERIC:   "GENERIC",
+    CDO_MOD_XILPM:     "XILPM",
+    CDO_MOD_SEM:       "SEM",
+    CDO_MOD_XILSECURE: "XILSECURE",
+    CDO_MOD_XILPSM:    "XILPSM",
+    CDO_MOD_LOADER:    "LOADER",
+    CDO_MOD_ERROR:     "ERROR",
+    CDO_MOD_XILNVM:    "XILNVM",
+    CDO_MOD_XILPUF:    "XILPUF",
 }
 
 # ---------------------------------------------------------------------------
 # CDO command IDs for CDO_MOD_GENERIC (bits[7:0])
 # ---------------------------------------------------------------------------
 
-CDO_CMD_WRITE        = 0x01   # WRITE32: addr, value
-CDO_CMD_MASK_WRITE   = 0x03   # MASKWRITE32: addr, mask, value
-CDO_CMD_MASK_POLL    = 0x05   # MASKPOLL32: addr, mask, value, count
-CDO_CMD_DELAY        = 0x08   # DELAY: cycles
-CDO_CMD_DMA_WRITE    = 0x0E   # DMA_WRITE: addr_hi, addr_lo, len, data...
-CDO_CMD_NPI_WRITE    = 0x13   # NPI_WRITE: npi_addr, data...  (CFRAME config)
-CDO_CMD_KEYHOLE      = 0x0D   # MASK_KEYHOLE: bulk write via keyhole register
-CDO_CMD_MARKER       = 0x16   # MARKER: embedded string label
-CDO_CMD_LOG_STRING   = 0x14   # LOG_STRING
-CDO_CMD_SSIT_SYNC    = 0x19   # SSIT_SYNC_SLAVES / string label (varies)
-CDO_CMD_NOP          = 0x1B   # NOP
-CDO_CMD_BEGIN        = 0x1C   # BEGIN (event logging scope)
-CDO_CMD_END          = 0x1D   # END
+# Module GENERIC (0x01) command IDs — indexed positions from xplmi_generic.c handler array
+CDO_CMD_FEATURES         = 0x00
+CDO_CMD_MASK_POLL        = 0x01   # MaskPoll: addr, mask, value, count
+CDO_CMD_MASK_WRITE       = 0x02   # MaskWrite: addr, mask, value
+CDO_CMD_WRITE            = 0x03   # Write: addr, value  (NPI/CFRAME config and register writes)
+CDO_CMD_DELAY            = 0x04   # Delay: cycles
+CDO_CMD_DMA_WRITE        = 0x05   # DmaWrite: addr_hi, addr_lo, len, data...
+CDO_CMD_MASK_POLL64      = 0x06   # MaskPoll64: addr_hi, addr_lo, mask, value, count
+CDO_CMD_MASK_WRITE64     = 0x07   # MaskWrite64: addr_hi, addr_lo, mask, value
+CDO_CMD_WRITE64          = 0x08   # Write64: addr_hi, addr_lo, value
+CDO_CMD_KEYHOLE          = 0x0D   # DmaWriteKeyHole: bulk write via keyhole register
+CDO_CMD_SSIT_SYNC_MASTER = 0x0E   # SsitSyncMaster
+CDO_CMD_SSIT_SYNC_SLAVES = 0x0F   # SsitSyncSlaves
+CDO_CMD_NOP              = 0x11   # Nop
+CDO_CMD_LOG_STRING       = 0x17   # LogString: string payload
+CDO_CMD_MARKER           = 0x19   # Marker: id, string...
+CDO_CMD_PROC             = 0x1A   # Proc
+CDO_CMD_BEGIN            = 0x1B   # Begin
+CDO_CMD_END              = 0x1C   # End
+CDO_CMD_BREAK            = 0x1D   # Break
+CDO_CMD_OT_CHECK         = 0x1E   # OTCheck
 
-CDO_CMD_XILPDI_IMGID = 0x04   # XILPDI module: image-ID broadcast (4-word payload)
+# Module LOADER (0x07) command IDs
+CDO_CMD_LOADER_SET_IMAGE_INFO = 0x04   # SetImageInfo: img_id, uid, parent_uid, func_id
 
 CDO_CMD_NAMES_GENERIC: Dict[int, str] = {
-    CDO_CMD_WRITE:      "WRITE32",
-    CDO_CMD_MASK_WRITE: "MASK_WRITE32",
-    CDO_CMD_MASK_POLL:  "MASK_POLL32",
-    CDO_CMD_DELAY:      "DELAY",
-    CDO_CMD_DMA_WRITE:  "DMA_WRITE",
-    CDO_CMD_NPI_WRITE:  "NPI_WRITE",
-    CDO_CMD_KEYHOLE:    "KEYHOLE_WRITE",
-    CDO_CMD_MARKER:     "MARKER",
-    CDO_CMD_LOG_STRING: "LOG_STRING",
-    CDO_CMD_SSIT_SYNC:  "SSIT_SYNC",
-    CDO_CMD_NOP:        "NOP",
-    CDO_CMD_BEGIN:      "BEGIN",
-    CDO_CMD_END:        "END",
+    CDO_CMD_FEATURES:         "Features",
+    CDO_CMD_MASK_POLL:        "MaskPoll",
+    CDO_CMD_MASK_WRITE:       "MaskWrite",
+    CDO_CMD_WRITE:            "Write",
+    CDO_CMD_DELAY:            "Delay",
+    CDO_CMD_DMA_WRITE:        "DmaWrite",
+    CDO_CMD_MASK_POLL64:      "MaskPoll64",
+    CDO_CMD_MASK_WRITE64:     "MaskWrite64",
+    CDO_CMD_WRITE64:          "Write64",
+    CDO_CMD_KEYHOLE:          "DmaWriteKeyHole",
+    CDO_CMD_SSIT_SYNC_MASTER: "SsitSyncMaster",
+    CDO_CMD_SSIT_SYNC_SLAVES: "SsitSyncSlaves",
+    CDO_CMD_NOP:              "Nop",
+    CDO_CMD_LOG_STRING:       "LogString",
+    CDO_CMD_MARKER:           "Marker",
+    CDO_CMD_PROC:             "Proc",
+    CDO_CMD_BEGIN:            "Begin",
+    CDO_CMD_END:              "End",
+    CDO_CMD_BREAK:            "Break",
+    CDO_CMD_OT_CHECK:         "OTCheck",
 }
 
 
@@ -155,8 +177,8 @@ class CdoCommand:
     def cmd_name(self) -> str:
         if self.module_id == CDO_MOD_GENERIC:
             return CDO_CMD_NAMES_GENERIC.get(self.cmd_id, f"cmd{self.cmd_id:#04x}")
-        if self.module_id == CDO_MOD_XILPDI and self.cmd_id == CDO_CMD_XILPDI_IMGID:
-            return "IMG_ID"
+        if self.module_id == CDO_MOD_LOADER and self.cmd_id == CDO_CMD_LOADER_SET_IMAGE_INFO:
+            return "SetImageInfo"
         return f"cmd{self.cmd_id:#04x}"
 
 
@@ -357,10 +379,10 @@ class VersalPdi:
         for img in self.result.images:
             if img.git_hash:
                 return f"{img.git_hash:08x}"
-        # Fall back: look for XILPDI IMG_ID command in CDO sections
+        # Fall back: look for LOADER SetImageInfo command in CDO sections
         for cdo in self.result.cdo_sections:
             for cmd in cdo.commands:
-                if cmd.module_id == CDO_MOD_XILPDI and cmd.cmd_id == CDO_CMD_XILPDI_IMGID:
+                if cmd.module_id == CDO_MOD_LOADER and cmd.cmd_id == CDO_CMD_LOADER_SET_IMAGE_INFO:
                     if len(cmd.payload) >= 4:
                         return f"{cmd.payload[3]:08x}"
         return ""
@@ -531,13 +553,13 @@ class VersalPdi:
     def _parse_image_headers_best_effort(
         self, warnings: List[str]
     ) -> List[PdiImageHeader]:
-        """Scan CDO XILPDI IMG_ID commands to recover image IDs for boot PDI."""
+        """Scan CDO LOADER SetImageInfo commands to recover image IDs for boot PDI."""
         # Boot PDI IHT offsets are opaque; discover images from embedded CDO commands.
         found: List[PdiImageHeader] = []
         for cdo in self._scan_cdo_sections([]):
             for cmd in cdo.commands:
-                if (cmd.module_id == CDO_MOD_XILPDI and
-                        cmd.cmd_id == CDO_CMD_XILPDI_IMGID and
+                if (cmd.module_id == CDO_MOD_LOADER and
+                        cmd.cmd_id == CDO_CMD_LOADER_SET_IMAGE_INFO and
                         len(cmd.payload) >= 4):
                     found.append(PdiImageHeader(
                         offset=cmd.offset,
@@ -677,9 +699,8 @@ class VersalPdi:
                 payload=tuple(payload),
             )
 
-            # -- post-process: extract string from SSIT_SYNC / MARKER payloads --
-            if module_id == CDO_MOD_GENERIC and cmd_id in (CDO_CMD_SSIT_SYNC,
-                                                            CDO_CMD_MARKER,
+            # -- post-process: extract string from MARKER / LogString payloads --
+            if module_id == CDO_MOD_GENERIC and cmd_id in (CDO_CMD_MARKER,
                                                             CDO_CMD_LOG_STRING):
                 # Payload word 0 is often a type/id; words 1+ are ASCII text
                 raw = b""
@@ -689,8 +710,8 @@ class VersalPdi:
                 if txt:
                     cmd.string_payload = txt
 
-            # -- post-process: NPI address if WRITE32 / NPI_WRITE to fabric space --
-            if module_id == CDO_MOD_GENERIC and cmd_id in (CDO_CMD_WRITE, CDO_CMD_NPI_WRITE):
+            # -- post-process: NPI address if Write / Write64 to 0xF0000000+ (NPI/NoC space) --
+            if module_id == CDO_MOD_GENERIC and cmd_id in (CDO_CMD_WRITE, CDO_CMD_WRITE64):
                 if payload:
                     addr = payload[0]
                     # NPI address space: 0xF1xxxxxx (PMC/NPI) or 0xF0xxxxxx

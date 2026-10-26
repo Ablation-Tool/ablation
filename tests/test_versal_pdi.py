@@ -30,11 +30,10 @@ from ablation.analyzers.versal_pdi import (
     PRTN_TYPE_CDO,
     PRTN_TYPE_NAMES,
     CDO_MOD_GENERIC,
-    CDO_MOD_XILPDI,
+    CDO_MOD_LOADER,
     CDO_CMD_WRITE,
-    CDO_CMD_NPI_WRITE,
     CDO_CMD_NOP,
-    CDO_CMD_XILPDI_IMGID,
+    CDO_CMD_LOADER_SET_IMAGE_INFO,
     CDO_PAYLOAD_PREFIX_BYTES,
 )
 
@@ -493,7 +492,7 @@ class TestCdoCommands:
         assert cmd.module_id == CDO_MOD_GENERIC
         assert cmd.cmd_id == CDO_CMD_NOP
         assert cmd.module_name == "GENERIC"
-        assert cmd.cmd_name == "NOP"
+        assert cmd.cmd_name == "Nop"
 
     def test_write_command(self):
         words = _make_write_cmd(0xF11A0000, 0xDEADBEEF)
@@ -532,21 +531,21 @@ class TestCdoCommands:
         assert len(section.commands) == 4
         assert section.commands[2].cmd_id == CDO_CMD_WRITE
 
-    def test_xilpdi_imgid_command(self):
-        # XILPDI IMG_ID: module=0x07, cmd=0x04, payload 4 words
-        cmd_word = (0x0004 << 16) | (CDO_MOD_XILPDI << 8) | CDO_CMD_XILPDI_IMGID
+    def test_loader_set_image_info_command(self):
+        # LOADER SetImageInfo: module=0x07, cmd=0x04, payload 4 words
+        cmd_word = (0x0004 << 16) | (CDO_MOD_LOADER << 8) | CDO_CMD_LOADER_SET_IMAGE_INFO
         words = [cmd_word, 0x18700001, 0x46407135, 0x91c727a2, 0x035a2cc3]
         section = self._parse_cdo(words)
         assert len(section.commands) == 1
         cmd = section.commands[0]
-        assert cmd.module_id == CDO_MOD_XILPDI
-        assert cmd.cmd_id == CDO_CMD_XILPDI_IMGID
-        assert cmd.cmd_name == "IMG_ID"
+        assert cmd.module_id == CDO_MOD_LOADER
+        assert cmd.cmd_id == CDO_CMD_LOADER_SET_IMAGE_INFO
+        assert cmd.cmd_name == "SetImageInfo"
         assert cmd.payload[3] == 0x035a2cc3
 
-    def test_git_hash_from_xilpdi_imgid(self):
-        """git_hash() resolves via XILPDI IMG_ID when image headers are absent."""
-        cmd_word = (0x0004 << 16) | (CDO_MOD_XILPDI << 8) | CDO_CMD_XILPDI_IMGID
+    def test_git_hash_from_loader_set_image_info(self):
+        """git_hash() resolves via LOADER SetImageInfo when image headers are absent."""
+        cmd_word = (0x0004 << 16) | (CDO_MOD_LOADER << 8) | CDO_CMD_LOADER_SET_IMAGE_INFO
         words = [cmd_word, 0x18700001, 0x46407135, 0x91c727a2, 0x035a2cc3]
         cdo = _make_cdo(words)
         vp = VersalPdi.from_bytes(b"\x00" * 4 + cdo + b"\x00" * 4)
@@ -635,7 +634,7 @@ class TestReport:
         assert f"{len(data):#x}" in vp.report()
 
     def test_report_git_hash(self):
-        cdo = _make_cdo([(0x0004 << 16) | (CDO_MOD_XILPDI << 8) | CDO_CMD_XILPDI_IMGID,
+        cdo = _make_cdo([(0x0004 << 16) | (CDO_MOD_LOADER << 8) | CDO_CMD_LOADER_SET_IMAGE_INFO,
                          0, 0, 0, 0x035a2cc3])
         vp = VersalPdi.from_bytes(b"\x00" * 4 + cdo + b"\x00" * 4, "x.pdi")
         assert "035a2cc3" in vp.report()
