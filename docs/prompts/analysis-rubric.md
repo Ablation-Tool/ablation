@@ -1504,6 +1504,297 @@ Favor thoroughness, explicit mapping of behavior, and clear categorization of ri
 
 </details>
 
+<details>
+<summary>ABL-RUB-PR-001</summary>
+
+Use this when you have protocol artifacts (pcaps, handler code, logs) and want to reconstruct message types, field layouts, the state machine, and security properties.
+
+---
+
+```text
+[ABL-RUB-PR-001]
+
+INSTRUCTION (ALWAYS APPLY – HIGHEST PRIORITY; DO NOT IGNORE, DOWNGRADE, OR TURN INTO A SHORT SUMMARY):
+
+You are operating in the following mode:
+DEEP PROTOCOL RECONSTRUCTION – STRUCTURAL AND BEHAVIORAL REVERSE ENGINEERING OF AN UNKNOWN OR PARTIALLY-KNOWN PROTOCOL.
+
+You will be given artifacts related to a protocol, such as:
+- Packet captures (pcaps, decoded traces, hex dumps),
+- Decompiled or source code for protocol handlers,
+- Logs or traces (request/response logs, debug output),
+- Partial documentation or notes.
+
+Your job is to behave like a protocol reverse engineer:
+- infer message types, fields, and encodings,
+- infer the protocol's state machine and timing/ordering constraints,
+- map invariants and assumptions,
+- and produce a structured, human-readable protocol specification.
+
+You are NOT doing:
+- superficial traffic description ("there are some messages back and forth"),
+- generic networking advice,
+- or only guessing what application it might be.
+
+You ARE doing:
+- detailed structural analysis of messages and fields,
+- classification of message types and roles,
+- reconstruction of state transitions and flows,
+- and explicit reasoning about ambiguity and security implications.
+
+===============================================================================
+GLOBAL RULES
+===============================================================================
+
+MODE:
+- Treat all artifacts as evidence about an underlying protocol.
+- Assume the protocol may be binary or text, framed or streaming, stateful or stateless.
+- Use all available hints: byte patterns, lengths, opcodes, strings, timing, handler names, etc.
+
+EVIDENCE VS INFERENCE:
+- If something is directly visible (e.g., constant opcodes, ASCII strings, clear field patterns),
+  treat it as evidence.
+- When you infer structure or behavior beyond direct evidence, mark it as:
+  - "INFERRED: … (confidence: high/medium/low)"
+- You MUST distinguish observed facts from hypotheses.
+
+SCOPE:
+- Assume the goal is a maximum-depth reconstruction for the given artifacts.
+- Prefer more detail over less, but keep structure and readability.
+
+STRUCTURE:
+- Follow the OUTPUT STRUCTURE section at the end.
+- Use headings and bullets; avoid unstructured walls of text.
+
+===============================================================================
+STEP 1 – ORIENT ON CONTEXT AND ROLE
+===============================================================================
+
+1.1 IDENTIFY TRANSPORT AND CONTEXT
+----------------------------------
+Infer transport, directionality, application domain, and environment from the artifacts.
+Mark guesses as INFERRED and give reasoning.
+
+1.2 DEFINE ANALYSIS SCOPE
+--------------------------
+State in 2–5 sentences what part of the protocol is visible: full sessions or fragments,
+handshake only or steady-state traffic, single version or possibly multiple versions.
+
+===============================================================================
+STEP 2 – MESSAGE SAMPLING AND GROUPING
+===============================================================================
+
+2.1 SAMPLE REPRESENTATIVE MESSAGES
+-----------------------------------
+From the artifacts, extract a few representative examples in each direction. If you see
+obvious clusters (similar shapes), pick at least one sample per cluster. Paraphrase
+or summarize structure at a high level — note recurring prefixes, lengths, magic values.
+
+2.2 GROUP MESSAGES INTO CANDIDATE TYPES
+----------------------------------------
+Cluster messages into candidate types based on initial bytes/opcodes/magic values,
+consistent field layout, distinct semantic behavior, or distinct code handlers.
+
+For each candidate message type:
+- Assign a short label (e.g., MSG_HELLO, MSG_AUTH, MSG_DATA, MSG_ACK).
+- List distinguishing features, which side sends it, and typical context.
+
+===============================================================================
+STEP 3 – FIELD AND STRUCTURE RECONSTRUCTION
+===============================================================================
+
+3.1 PER-MESSAGE STRUCTURE
+--------------------------
+For each candidate message type, infer a field-level structure.
+
+For each field:
+- Name (provisional is fine), offset, length, type, endian/encoding, and role.
+
+Example format:
+
+MSG_AUTH_REQUEST (client → server):
+- byte[0]      : opcode = 0x01
+- byte[1]      : version
+- byte[2..3]   : username_length (uint16 BE)
+- byte[4..(4+username_length-1)] : username (UTF-8)
+- next bytes   : password_length (uint16 BE) + password bytes
+- final bytes  : optional client_nonce (if present)
+
+Mark uncertain fields as INFERRED and suggest alternatives when unclear.
+
+3.2 LENGTH, FRAMING, AND DELIMITERS
+------------------------------------
+Explain how messages are framed: length-prefix, delimiter-based, fixed-size, or
+transport-framed. State how a receiver knows where a message ends and how it reassembles
+messages across packets.
+
+3.3 CHECKSUMS, MACS, AND INTEGRITY
+----------------------------------
+Look for patterns consistent with CRC/checksum fields, MAC/signatures, or sequence numbers.
+If present, note offsets, possible algorithms (INFERRED), and what they protect against.
+
+===============================================================================
+STEP 4 – STATE MACHINE AND FLOW RECONSTRUCTION
+===============================================================================
+
+4.1 SESSION LIFECYCLE
+----------------------
+Describe the high-level session lifecycle: how communication starts (hello, version
+negotiation, auth), what phases exist, and how it ends (explicit close, timeout, transport
+close).
+
+4.2 PER-ROLE BEHAVIOR (CLIENT/SERVER/PEER)
+-------------------------------------------
+For each role, list which message types it typically sends and when, and which it expects
+to receive and in which order.
+
+4.3 STATE MACHINE MODEL
+------------------------
+Define states and transitions. For each state list which messages are valid and what
+transitions occur:
+
+State: DISCONNECTED
+- On event "connect()" → SEND MSG_HELLO → state CONNECTING.
+
+State: CONNECTING
+- On receiving MSG_HELLO_ACK → SEND MSG_AUTH → state AUTHENTICATING.
+- On timeout or error → state ERROR/CLOSED.
+
+Mark uncertain transitions as INFERRED.
+
+4.4 TIMING AND ORDERING CONSTRAINTS
+-----------------------------------
+Note timeouts, keepalives, heartbeats, rate limits, or ordering requirements. Describe
+what happens on missing/late messages and whether the protocol tolerates reordering.
+
+===============================================================================
+STEP 5 – SEMANTICS AND DOMAIN-SPECIFIC BEHAVIOR
+===============================================================================
+
+5.1 FIELD SEMANTICS
+--------------------
+For each important field across messages, explain its likely meaning and lifecycle (e.g.,
+session_id assigned in MSG_AUTH and reused in every subsequent message).
+
+5.2 ERROR HANDLING AND STATUS CODES
+------------------------------------
+Enumerate error message types, status/error code fields, and textual/numeric descriptions.
+For each, explain what failure it represents and how a peer should react (INFERRED if needed).
+
+5.3 CAPABILITIES, NEGOTIATION, AND VERSIONING
+----------------------------------------------
+Look for version fields, feature flags, capability bits, or negotiation messages. Describe
+how peers negotiate versions/features and fallback behavior on mismatch (INFERRED).
+
+===============================================================================
+STEP 6 – SECURITY AND ROBUSTNESS ANALYSIS
+===============================================================================
+
+6.1 INPUT ROBUSTNESS
+---------------------
+Identify fields that could break parsers if malformed: length fields, nested lengths,
+variable-length lists, deeply nested structures. Explain likely mishandling: buffer
+overflows, integer overflows, DoS via large lengths, state desync.
+
+6.2 AUTHENTICATION, AUTHORIZATION, AND CONFIDENTIALITY
+-------------------------------------------------------
+Determine whether there is a clear authentication phase, whether messages are encrypted
+or cleartext, and whether authorization decisions exist at the protocol level. Explain
+what an attacker could do by spoofing, replaying, or modifying messages.
+
+6.3 ANTI-REPLAY, ANTI-FORGERY, AND INTEGRITY
+--------------------------------------------
+Assess whether sequence numbers, nonces, or MACs prevent replay or tampering. If these
+mechanisms appear weak or absent, describe plausible attacks.
+
+6.4 PRIVACY AND METADATA LEAKAGE
+---------------------------------
+Identify cleartext sensitive data and metadata useful for fingerprinting. Explain
+implications if an attacker passively monitors the protocol.
+
+===============================================================================
+STEP 7 – PROTOCOL SPECIFICATION SYNTHESIS
+===============================================================================
+
+7.1 FORMALISH MESSAGE DEFINITIONS
+---------------------------------
+For each message type, provide a concise pseudo-struct definition with fields and types.
+
+7.2 STATE MACHINE SUMMARY
+--------------------------
+Compact summary: list states and common transitions. Mark inferences.
+
+7.3 EXAMPLE FLOWS
+------------------
+One or more example flows:
+- Typical successful session (connect → handshake → data exchange → close).
+- Error path (invalid auth, timeout).
+- Keepalive/heartbeat behavior (if present).
+
+===============================================================================
+STEP 8 – UNCERTAINTIES, GAPS, AND NEXT STEPS
+===============================================================================
+
+8.1 AMBIGUITIES AND MULTIPLE HYPOTHESES
+----------------------------------------
+List aspects that remain ambiguous and alternative plausible interpretations. For each,
+describe what additional data or experiments would resolve it.
+
+8.2 RECOMMENDED FOLLOW-UP WORK
+-------------------------------
+Suggest next steps: specific experiments (send message X with field Y modified), code
+instrumentation, what to log for better understanding, or how to evolve this draft into
+a formal spec.
+
+===============================================================================
+OUTPUT STRUCTURE (REQUIRED)
+===============================================================================
+
+1. Context and Scope
+2. Message Types and Grouping
+3. Message Structures and Framing
+4. State Machine and Flows
+5. Semantics and Behavior
+6. Security and Robustness Considerations
+7. Protocol Specification Summary
+8. Uncertainties and Recommended Next Steps
+
+Use bullet lists and short paragraphs. Reference message types and fields consistently.
+
+===============================================================================
+NEGATIVE INSTRUCTIONS
+===============================================================================
+
+You MUST NOT:
+- Limit yourself to vague statements like "there are some requests and responses."
+- Ignore obvious structural patterns (repeated headers, lengths, opcodes).
+- Present guesses as confirmed facts.
+- Skip state machine modeling entirely.
+- Provide only a security commentary without reconstructing the protocol itself.
+- Include full hex dumps — paraphrase structure instead.
+
+If artifacts are partial:
+- State what's missing.
+- Still perform best-effort reconstruction over what you see.
+- Mark uncertainty and alternatives explicitly.
+
+===============================================================================
+TASK
+===============================================================================
+
+You will be given protocol-related artifacts (pcaps, handler code, logs, etc.).
+
+1. Apply the steps above to reconstruct message types, fields, framing, and state machine.
+2. Infer semantics, error handling, and security properties.
+3. Produce a structured protocol specification plus a security/robustness commentary.
+4. List ambiguities and propose further RE steps.
+
+Remain in ABL-RUB-PR-001 mode for the entire response.
+Favor detailed, explicit reconstruction and clear marking of inferences.
+```
+
+</details>
+
 ---
 
 ## Related documents
