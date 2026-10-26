@@ -1,4 +1,4 @@
-# HiSilicon RV32 Extension Decoder
+# HiSiliconRV32ExtDecoder
 
 Correct-size disassembly for HiSilicon WS63 / Hi3863 / BS21 (Hi2821) NearLink SoC
 firmware and all other HiSilicon bare-metal RISC-V targets using the proprietary
@@ -6,7 +6,7 @@ firmware and all other HiSilicon bare-metal RISC-V targets using the proprietary
 
 ---
 
-## What this is
+## What this is <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 HiSilicon's WS63, Hi3863, and BS21 NearLink SoCs use an RV32GC core with six proprietary opcode spaces. Capstone 5.x does not recognize any of them. When Capstone encounters a HiSilicon custom instruction, it reads the wrong number of bytes and misaligns every decode that follows in the function. The 48-bit `l.li` instruction is the most dangerous case: a single occurrence shifts all subsequent decodes by two bytes with no error or warning.
 
@@ -14,7 +14,7 @@ HiSilicon's WS63, Hi3863, and BS21 NearLink SoCs use an RV32GC core with six pro
 
 ---
 
-## Where it's used
+## Where it's used <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 - **HiSilicon WS63 / Hi3863**: NearLink WS63E development kit firmware, BearPi-HH-NB3 LiteOS images
 - **HiSilicon BS21 / Hi2821**: NearLink BS21E firmware, BearPi-HH-NB3 SLE images
@@ -22,7 +22,7 @@ HiSilicon's WS63, Hi3863, and BS21 NearLink SoCs use an RV32GC core with six pro
 
 ---
 
-## Safe usage
+## Safe usage <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 **Pass `ext_decoder=dec` to `RISCV32TaintTracker.from_path()`.** Constructing the tracker without the ext_decoder falls back to plain Capstone. Every custom instruction then misaligns subsequent decodes and the taint analysis runs on wrong instruction boundaries.
 
@@ -34,7 +34,7 @@ HiSilicon's WS63, Hi3863, and BS21 NearLink SoCs use an RV32GC core with six pro
 
 ---
 
-## The problem: six custom opcode spaces
+## The problem: six custom opcode spaces <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 HiSilicon's `riscv31` core extends base RV32GC with six custom opcode spaces plus
 two 16-bit compressed extensions:
@@ -63,7 +63,7 @@ Capstone 5.x mishandles all six:
 `l.li` is architecturally the most dangerous: every occurrence silently shifts
 the decoder 2 bytes behind the true instruction stream for the rest of the function.
 
-## What this module provides
+## What this module provides <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 `HiSiliconRV32ExtDecoder` is a drop-in replacement for `capstone.Cs` with the
 same `disasm_lite()` signature. It detects all five custom opcode bytes before
@@ -74,9 +74,9 @@ Quadrant-0 custom slots bits[15:13]=100, bits[1:0]=00 per
 `riscv_push_pop_extension.rst`. Capstone's skipdata mode handles them adequately
 for taint purposes.
 
-## Instruction encodings
+## Instruction encodings <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
-### 0x0b: `ldmia` / `stmia` 4 bytes, multi-register
+### 0x0b: `ldmia` / `stmia` 4 bytes, multi-register <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 Multi-register load/store with banked register lists. HiSilicon equivalent of ARM's
 `ldmia`/`stmia` prologue/epilogue patterns.
@@ -122,7 +122,7 @@ untainted. `stmia` stores registers to memory; destination memory not tracked.
 Verified from `trans_xlinx.c.inc` (QEMU xlinx extension implementation,
 `/media/cowboy/research/hisilicon-ws63-re/online/zip_extract/`).
 
-### 16-bit: `uxtb rd', imm` / `uxth rd'` (2 bytes)
+### 16-bit: `uxtb rd', imm` / `uxth rd'` (2 bytes) <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 Zero-extend-to-8 and zero-extend-to-16 in the compressed instruction space.
 
@@ -147,7 +147,7 @@ respectively, a bounding operation that clears taint, equivalent to `andi rd, rd
 
 Verified from `trans_xlinx.c.inc` mask `(insn & 0xFC5F) == 0x9C01`.
 
-### 0x1f: `l.li rd, imm32` (6 bytes)
+### 0x1f: `l.li rd, imm32` (6 bytes) <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 ```
 bytes[0:4] (LE uint32):  { imm[15:0] :: funct3=0 :: rd[4:0] :: 0x1f }
@@ -158,7 +158,7 @@ Verified: `l.li a0, 0x12345678` → `1f 05 78 56 34 12`
 - Word = 0x5678051F: bits[11:7]=10(a0), bits[31:16]=0x5678
 - HWord = 0x1234: imm[31:16]=0x1234 → full imm=0x12345678 ✓
 
-### 0x1b: `addshf/subshf/orshf/xorshf/andshf` (4 bytes)
+### 0x1b: `addshf/subshf/orshf/xorshf/andshf` (4 bytes) <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 ```
 bits[31:25] = {shift_type[1:0], shamt[4:0]}   (sll=00, srl=01, sra=10, ror=11)
@@ -174,7 +174,7 @@ Verified: `addshf a0,a1,a2,sll,3` → `0x06C5851B` rd=a0, rs1=a1, rs2=a2, shamt=
 
 Source: `riscv_preshifted_arithmetic.rst` riscvarchive/riscv-code-size-reduction
 
-### 0x5b: `muliadd rd, rs1, rs2, uimm` (4 bytes)
+### 0x5b: `muliadd rd, rs1, rs2, uimm` (4 bytes) <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 ```
 bits[31:25] = uimm[7:1]   (uimm[0]=0 always; unsigned 7-bit × 2)
@@ -192,7 +192,7 @@ Note: spec (`riscv_muladd_extension.rst`) assigns this to custom-1 (0x2b), but
 HiSilicon silicon uses custom-2 (0x5b). `ldmia`/`stmia` were incorrectly attributed
 to `0x5b` in prior versions; ground truth from `trans_xlinx.c.inc` places them at `0x0b`.
 
-### 0x3b: `beqi/bnei/bgei/blti/bgeui/bltui` (4 bytes)
+### 0x3b: `beqi/bnei/bgei/blti/bgeui/bltui` (4 bytes) <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 ```
 bits[31:24] = cmpimm[7:0]    (8-bit signed comparison immediate)
@@ -207,7 +207,7 @@ Verified: `beqi a0,7,.` → `0x0705003B` cmpimm=7, rs1=a0, offset=0 ✓
 
 Note: spec assigns to custom-0 (0x0b); HiSilicon silicon uses `0x3b` for branches and `0x0b` for ldmia/stmia.
 
-### 0x7b: custom-3 R-type (4 bytes)
+### 0x7b: custom-3 R-type (4 bytes) <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 ```
 image  = {funct7[6:0]} :: {rs2[4:0]} :: {rs1[4:0]} :: {funct3[2:0]} :: {rd[4:0]} :: 0x7b
@@ -217,7 +217,7 @@ syntax = "hisi.{funct3}.{funct7:02x}  {rd}, {rs1}, {rs2}"
 ~9000 occurrences, ~8900 unique encodings in WS63-liteos-app. Semantics unknown;
 conservative taint: rs1,rs2 → rd when `HiSiliconRV32ExtDecoder(conservative=True)`.
 
-## Usage
+## Usage <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 ```python
 from ablation.analyzers.hisi_rv32_ext import HiSiliconRV32ExtDecoder
@@ -225,23 +225,23 @@ from ablation.analyzers.taint_tracker_riscv32 import RISCV32TaintTracker
 
 dec = HiSiliconRV32ExtDecoder()
 
-# Standalone: drop-in for capstone.Cs.disasm_lite
+# HiSiliconRV32ExtDecoder
 for addr, sz, mnem, ops in dec.disasm_lite(code_bytes, base_va):
     print(f"0x{addr:08x}  {sz}  {mnem}  {ops}")
 
-# Inventory of all HiSilicon custom instructions (4-byte stride scanner)
+# HiSiliconRV32ExtDecoder
 for insn in dec.scan_all_custom(code_bytes, base_va):
     print(insn.mnemonic, insn.taint_sources, '->', insn.taint_dest)
 
-# Frequency report
+# HiSiliconRV32ExtDecoder
 print(dec.opcode_report(code_bytes, base_va))
 
-# With taint tracking
+# HiSiliconRV32ExtDecoder
 tracker = RISCV32TaintTracker.from_path(elf_path, ext_decoder=dec)
 findings = tracker.run_interprocedural()
 ```
 
-## Taint semantics
+## Taint semantics <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 | Space | Default taint | `conservative=True` |
 |-------|--------------|---------------------|
@@ -254,7 +254,7 @@ findings = tracker.run_interprocedural()
 | 0x7b custom-3 | opaque no propagation | rs1,rs2 → rd |
 | uxtb / uxth | clears taint bounds value ≤255/≤65535 | same |
 
-## References
+## References <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 - `fbb_ws63/src/drivers/chips/ws63/arch/riscv/riscv31/` (HiSilicon SDK)
 - `riscv-code-size-reduction/existing_extensions/Huawei Custom Extension/` (GitHub)
@@ -268,7 +268,7 @@ findings = tracker.run_interprocedural()
  GROUP1 16-bit compressed: `c.neg/c.sbz/c.shz/c.swz/c.xori`; does NOT define
  ldmia/stmia/uxtb/uxth those are in the QEMU C back-end only
 
-## Targets
+## Targets <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 - HiSilicon WS63 / Hi3863 NearLink WS63E kit, BearPi-HH-NB3 LiteOS firmware
 - HiSilicon BS21 / Hi2821 NearLink BS21E, BearPi-HH-NB3 SLE firmware
@@ -276,19 +276,19 @@ findings = tracker.run_interprocedural()
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 Prior to this module, hisilicon rv32 extension decoder required manual work outside the Ablation pipeline. This module integrates the capability directly so findings feed the shared `PatternLibrary` and `FindingRegistry` without a separate toolchain.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 
-## Example output
+## Example output <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 ```
 [CRITICAL] WEAK_SEED   UDS 0x27 0x01 at ROM:0x8004A0
@@ -301,13 +301,13 @@ Reads the ROM image at the specified base address and applies the ISA decoder to
 
 ---
 
-## False positives
+## False positives <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 Calibration data regions contain byte sequences that decode as valid instructions in some ISAs. Confirm candidate function VAs against the ROM layout from `ECURomLayoutAnalyzer` before treating them as code. Security Access sequences in boot ROM are expected and not findings unless the seed/key algorithm is cryptographically weak.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 **Before this module:** `ECUArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
@@ -315,7 +315,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 `HiSiRV32Ext(ctx).scan_custom3code, base_va` returns `List[HisiInsn]`:
 
@@ -332,7 +332,7 @@ Use `scan_all_custom()` to scan all HiSilicon custom opcode spaces in one pass.
 
 ---
 
-## See also
+## See also <sup>[↑](#hisiliconrv32extdecoder)</sup>
 
 - [ECUArchDetector](ecu-arch-detector.md): identify processor family before choosing a decoder
 - [ECURomLayoutAnalyzer](ecu-rom-layout-analyzer.md): map ROM sections before decoding

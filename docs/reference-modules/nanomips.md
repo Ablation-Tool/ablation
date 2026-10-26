@@ -1,4 +1,4 @@
-# nanoMIPS Taint Analysis
+# NanoMIPSTaintTracker
 
 Interprocedural taint tracker for nanoMIPS binaries. Two-path execution: register-level decode via Capstone 6.x, or conservative frame-walk fallback on Capstone 5.x.
 
@@ -6,13 +6,13 @@ Targets: Ingenic X-series SoCs JZ4780, X1000, X2000, MediaTek Helio embedded, MI
 
 ---
 
-## What this is
+## What this is <sup>[↑](#nanomipstainttracker)</sup>
 
 nanoMIPS is a variable-width MIPS extension with 16-bit, 32-bit, and 48-bit instructions and no branch delay slots. Ingenic X-series and MediaTek Helio embedded targets use it. No public taint tool handled nanoMIPS before this tracker. `NanoMIPSTaintTracker` runs full register-level decode on Capstone 6.x and falls back to a conservative BFS walk on Capstone 5.x so analysis works on both environments.
 
 ---
 
-## Where it's used
+## Where it's used <sup>[↑](#nanomipstainttracker)</sup>
 
 - **Ingenic JZ4780 / X1000 / X2000**: SoC firmware from Ingenic SDK releases
 - **MediaTek Helio embedded**: nanoMIPS targets in MediaTek embedded product lines
@@ -20,7 +20,7 @@ nanoMIPS is a variable-width MIPS extension with 16-bit, 32-bit, and 48-bit inst
 
 ---
 
-## Safe usage
+## Safe usage <sup>[↑](#nanomipstainttracker)</sup>
 
 **Check `tracker.has_full_decode` before reporting.** The Capstone 5.x fallback marks all `$a0`-`$a3` tainted after any source call. This generates more candidates to triage manually. If `has_full_decode=False`, treat all findings as over-approximate.
 
@@ -32,7 +32,7 @@ nanoMIPS is a variable-width MIPS extension with 16-bit, 32-bit, and 48-bit inst
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#nanomipstainttracker)</sup>
 
 Two things were not possible before `NanoMIPSTaintTracker`:
 
@@ -44,7 +44,7 @@ The two BALC forms P32 and P16 encode call targets as signed PC-relative offsets
 
 ---
 
-## ISA overview
+## ISA overview <sup>[↑](#nanomipstainttracker)</sup>
 
 nanoMIPS uses three instruction widths. The width is determined by bits[15:11] of the first halfword:
 
@@ -85,7 +85,7 @@ MIPS32 delay slots required the instruction after a branch or call to execute be
 
 ---
 
-## Two execution paths
+## Two execution paths <sup>[↑](#nanomipstainttracker)</sup>
 
 ```mermaid
 flowchart TD
@@ -121,7 +121,7 @@ The fallback is deliberately conservative. After any call to a known source `rec
 
 ---
 
-## PLT stub unwrapping
+## PLT stub unwrapping <sup>[↑](#nanomipstainttracker)</sup>
 
 nanoMIPS PLT stubs are 12 bytes. Each stub loads the GOT address and jumps through it. The tracker identifies `.plt` section boundaries and resolves PLT call targets to import names before the interprocedural walk begins.
 
@@ -151,7 +151,7 @@ Without PLT unwrapping, every call to `strcpy` or `system` terminates the interp
 
 ---
 
-## Usage
+## Usage <sup>[↑](#nanomipstainttracker)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker_nanomips import NanoMIPSTaintTracker
@@ -173,7 +173,7 @@ findings = tracker.run_interprocedural()
 
 ---
 
-## Sources and sinks
+## Sources and sinks <sup>[↑](#nanomipstainttracker)</sup>
 
 | Category | Functions |
 |---|---|
@@ -184,16 +184,16 @@ findings = tracker.run_interprocedural()
 
 ---
 
-## How it works
+## How it works <sup>[↑](#nanomipstainttracker)</sup>
 
 `NanoMIPSDecoder.decodedata, offset` decodes one nanoMIPS instruction from a byte buffer at `offset`. nanoMIPS uses variable-width instructions: 16, 32, or 48 bits. Frame width is determined by bits[14:10] of the first 16-bit halfword: `0b11111` → 48-bit; `0bXX111` → 32-bit; all others → 16-bit. Returns a decoded frame with mnemonic, operands, and byte length. `TaintTrackerNanoMIPS` uses this decoder with a Capstone 6.x path register-level and a conservative frame-walk fallback on Capstone 5.x.
 
 ---
 
-## Example output
+## Example output <sup>[↑](#nanomipstainttracker)</sup>
 
 ```
-# NanoMIPSFrame.__str__() — variable-width instruction decode:
+# NanoMIPSTaintTracker
 0x00400100  [32-bit]  d8600001    addiu r3, r0, 0x1
 0x00400104  [16-bit]  2400        lw r2, [r2]
 0x00400106  [32-bit]  d4830000    lw r4, 0(r3)
@@ -202,13 +202,13 @@ findings = tracker.run_interprocedural()
 
 ---
 
-## False positives
+## False positives <sup>[↑](#nanomipstainttracker)</sup>
 
 **Capstone 5.x fallback.** On Capstone 5.x (no nanoMIPS support), `TaintTrackerNanoMIPS` uses the conservative frame-walk fallback. This fallback identifies basic block boundaries correctly but may attribute taint to slightly wrong register numbers. Upgrade to Capstone 6.x for full register-level decode.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#nanomipstainttracker)</sup>
 
 **Before this module:** Confirm the binary targets nanoMIPS (check ELF e_machine = 8 with e_flags `EF_MIPS_ARCH_32R6 | EF_MIPS_NAN2008`).
 
@@ -216,7 +216,7 @@ findings = tracker.run_interprocedural()
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#nanomipstainttracker)</sup>
 
 `scan_sources_to_sinks(ctx)` returns `List[NanoMIPSTaintFinding]`.
 
@@ -231,7 +231,7 @@ findings = tracker.run_interprocedural()
 
 ---
 
-## See also
+## See also <sup>[↑](#nanomipstainttracker)</sup>
 
 - [BinaryContext](binary-context.md): session state and function/import index
 - [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions

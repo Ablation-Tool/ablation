@@ -1,20 +1,20 @@
-# MIPS ISA Support
+# MIPS32TaintTracker
 
 Taint analysis, sink classification, structural lifting, and semantic search across MIPS-32/64 big-endian and little-endian, nanoMIPS, and RouterOS embedded firmware targets.
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#mips32tainttracker)</sup>
 
-1. **MIPS-32 big-endian is the dominant ISA for consumer routing firmware: Mikrotik RouterOS, older Cisco IOS images, and embedded HTTP/SNMP stacks frequently ship as MIPS-32 BE ELF, yet the architecture's load-delay slot makes naive taint propagation incorrect.** The instruction immediately after a branch/jump executes before the branch takes effect; a taint tracker that processes instructions in linear order produces false positives and false negatives for any register written in a delay slot. `MIPS32TaintTracker` processes delay slots as part of the preceding branch instruction, consuming them before updating PC, which matches the hardware execution model.
+1. MIPS-32 big-endian is the dominant ISA for consumer routing firmware. Mikrotik RouterOS, older Cisco IOS images, and embedded HTTP/SNMP stacks ship as MIPS-32 BE ELF. The architecture's load-delay slot makes naive taint propagation incorrect: the instruction immediately after a branch executes before the branch takes effect, so a linear-order tracker produces false results for any register written in a delay slot. `MIPS32TaintTracker` processes delay slots as part of the preceding branch, matching the hardware execution model.
 
-2. **MIPS sink classification requires a platform-specific approach because `sprintf` argument position is different in MIPS32 O32 ABI $a0 = format, $a1+ = args versus MIPS64 N64 $a0-$a7 all used, and RouterOS uses a custom memory allocator whose allocation functions are not in the standard PLT.** `SinkArgClassifierMIPS` (`sink_arg_classifier_mips.py`) extends the generic `SinkArgClassifier` with MIPS-specific argument register slots per ABI variant and RouterOS-specific allocation sink signatures. `mips_analyzer.py` wraps the full analysis pipeline for MIPS firmware targets.
+2. MIPS sink classification requires a platform-specific approach. `sprintf` argument position differs by ABI: MIPS32 O32 puts the format in `$a0`; MIPS64 N64 uses `$a0`-`$a7` for all arguments. RouterOS uses a custom allocator whose functions are not in the standard PLT. `SinkArgClassifierMIPS` extends the generic classifier with MIPS-specific argument register slots and RouterOS-specific allocation sink signatures.
 
-3. **nanoMIPS is a compressed ISA used in MIPS I7200 and P-class cores for code-density-optimized embedded targets, it is not Thumb-equivalent MIPS16e; it requires a distinct decoder.** `taint_tracker_nanomips.py` and `nanomips_decoder.py` provide the instruction model and taint analysis for nanoMIPS binaries, preventing misidentification of nanoMIPS 16-bit opcodes as MIPS32 instructions in `check_rtp_port_range` and related analysis passes.
+3. nanoMIPS is a compressed ISA used in MIPS I7200 and P-class cores for code-density-optimized embedded targets. It is not MIPS16e; it requires a distinct decoder. `taint_tracker_nanomips.py` and `nanomips_decoder.py` provide the instruction model and taint analysis for nanoMIPS binaries, preventing misidentification of 16-bit opcodes as MIPS32 instructions.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#mips32tainttracker)</sup>
 
 ```mermaid
 flowchart TD
@@ -48,7 +48,7 @@ flowchart TD
     linkStyle 8 stroke:#2e7d32,stroke-width:3px
 ```
 
-### Module inventory
+### Module inventory <sup>[↑](#mips32tainttracker)</sup>
 
 | Module | Role |
 |:---|:---|
@@ -66,47 +66,47 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#mips32tainttracker)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker_mips import MIPS32TaintTracker
 
-# MIPS-32 big-endian (RouterOS, Cisco IOS)
+# MIPS32TaintTracker
 tracker = MIPS32TaintTracker.from_path('/path/to/mips32.elf')
 findings = tracker.run()
 for f in findings:
     print(f"{f.source_name} → {f.sink_name} @ {f.sink_va:#x}")
 
-# Interprocedural (follows call edges depth-limited)
+# MIPS32TaintTracker
 chains = tracker.run_interprocedural(depth=4)
 
-# MIPS-64 N64 ABI
+# MIPS32TaintTracker
 from ablation.analyzers.taint_tracker_mips64 import MIPS64TaintTracker
 tracker64 = MIPS64TaintTracker.from_path('/path/to/mips64.elf')
 findings = tracker64.run()
 
-# Sink argument classification (run before TaintTracker to reduce false positives)
+# MIPS32TaintTracker
 from ablation.analyzers.sink_arg_classifier_mips import SinkArgClassifierMIPS
 clf = SinkArgClassifierMIPS.from_path('/path/to/mips32.elf')
 classified = clf.classify_all()
-# Filter to non-RODATA_CONST before running taint tracker
+# MIPS32TaintTracker
 for va, classification in classified.items():
     if classification not in ('RODATA_CONST', 'SNPRINTF_RODATA'):
-        print(f"{va:#x}: {classification} — run taint tracker")
+        print(f"{va:#x}: {classification} - run taint tracker")
 
-# Structural lifting via BinaryLifter
+# MIPS32TaintTracker
 from ablation.analyzers.binary_lifter import BinaryLifter
 lifter = BinaryLifter.from_path('/path/to/mips32.elf', arch='mips32')
 print(lifter.lift_function(0x400a00))
 
-# Little-endian (mipsel)
+# MIPS32TaintTracker
 lifter_el = BinaryLifter.from_path('/path/to/mipsel.elf', arch='mips32el')
 print(lifter_el.lift_function(0x400a00))
 ```
 
 ---
 
-## Example output
+## Example output <sup>[↑](#mips32tainttracker)</sup>
 
 The following illustrates the format for representative taint findings. Actual function names, addresses, and call chains reflect the specific binary.
 
@@ -114,22 +114,22 @@ The following illustrates the format for representative taint findings. Actual f
 [CRITICAL] recv → system @ <va>
   Chain: recv($v0) → lw $a0, sp+0x1c → jal system
   Taint: $v0 (recv return, unbound)
-  Sink: system — shell injection via unvalidated recv buffer
+  Sink: system - shell injection via unvalidated recv buffer
 
 [HIGH] fgets → sprintf @ <va>
   Chain: fgets($v0) → move $a1, $v0 → jal sprintf($a0=<fmt>, $a1=<tainted>)
   Taint: $v0 (fgets input), $a1 propagated
-  Sink: sprintf argument-1 — format-string or buffer overflow candidate
+  Sink: sprintf argument-1 - format-string or buffer overflow candidate
 
 SinkArgClassifier:
-  <va>: RODATA_CONST (format from .rodata — not a finding)
-  <va>: ARG_PROPAGATED ($a0 from caller) — run taint tracker
-  <va>: UNKNOWN — run taint tracker
+  <va>: RODATA_CONST (format from .rodata - not a finding)
+  <va>: ARG_PROPAGATED ($a0 from caller) - run taint tracker
+  <va>: UNKNOWN - run taint tracker
 ```
 
 ---
 
-## False positives
+## False positives <sup>[↑](#mips32tainttracker)</sup>
 
 **MIPS delay slots in tainted branches produce apparent taint flows that are not real.** When a branch instruction `beq $t0, $zero, target` has a tainted register in the condition, the delay slot's instruction executes regardless of branch direction. A taint sink in the delay slot appears to execute on both branch paths, but it only executes once before the branch takes effect. The tracker models this correctly, but output that shows the delay slot instruction as a taint step may be confusing, it is the branch pre-condition, not a conditional write.
 
@@ -137,7 +137,7 @@ SinkArgClassifier:
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#mips32tainttracker)</sup>
 
 **Before this module:** Run `SinkArgClassifierMIPS.classify_all()` to eliminate `RODATA_CONST` and `SNPRINTF_RODATA` sites, this typically reduces TaintTracker input by 40-60% on firmware binaries. For little-endian MIPS (mipsel), specify `arch='mips32el'` or `arch='mips64el'` in `BinaryLifter.from_path()`.
 
@@ -145,7 +145,7 @@ SinkArgClassifier:
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#mips32tainttracker)</sup>
 
 `MIPS32TaintTracker.from_context(ctx).scan()` returns `List[TaintFinding32Mips]`.
 
@@ -161,7 +161,7 @@ SinkArgClassifier:
 
 ---
 
-## See also
+## See also <sup>[↑](#mips32tainttracker)</sup>
 
 - [Binary Lifter](binary-lifter.md): `arch='mips32'`/`'mips64'`/`'nanomips'` structural lifting
 - [Sink Arg Classifier](sink-arg-classifier.md): generic sink classification; MIPS variant extends it

@@ -1,4 +1,4 @@
-# M88K BCS COFF Support MC88100 / Motorola 88000
+# M88kDecoder
 
 Parse and disassemble Motorola MC88100 BCS COFF executables.
 
@@ -9,13 +9,13 @@ Parse and disassemble Motorola MC88100 BCS COFF executables.
 
 ---
 
-## What this is
+## What this is <sup>[↑](#m88kdecoder)</sup>
 
 Motorola MC88100 is a RISC processor from the late 1980s used in Motorola 88000 workstations and legacy industrial systems. MC88100 BCS COFF executables are still in the wild. Capstone 5.x removed its incomplete 88K stub. GNU binutils dropped 88K support around 2020. `M88kDecoder` and `coff_m88k_parser` are the only current Python tools for this ISA. They parse the 88K BCS COFF format correctly where standard parsers corrupt section headers, decode all MC88100 instruction classes, and recover function boundaries from call sites in stripped binaries.
 
 ---
 
-## Where it's used
+## Where it's used <sup>[↑](#m88kdecoder)</sup>
 
 - Motorola 88000 workstation binaries
 - Legacy industrial systems running MC88100 firmware
@@ -23,7 +23,7 @@ Motorola MC88100 is a RISC processor from the late 1980s used in Motorola 88000 
 
 ---
 
-## Safe usage
+## Safe usage <sup>[↑](#m88kdecoder)</sup>
 
 **Parse with `coff_m88k_parser.parse()` before passing to `M88kDecoder`.** Standard COFF parsers use 40-byte section headers. The 88K BCS COFF uses 44-byte section headers with 4-byte `nreloc` and `nlnno` fields. A standard parser corrupts all section names and virtual addresses from the first section onward.
 
@@ -35,11 +35,11 @@ Motorola MC88100 is a RISC processor from the late 1980s used in Motorola 88000 
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#m88kdecoder)</sup>
 
 Four things were not possible before in Ablation:
 
-1. **M88K BCS COFF files were completely unreadable**: LIEF does not support
+1. M88K BCS COFF files were completely unreadable. LIEF does not support
  COFF and does not recognise magic 0x016D; all existing COFF parsers assume
  2-byte `s_nreloc`/`s_nlnno` fields standard, but the 88K BCS variant
  promotes those fields to 4-byte longs, making every section header 44 bytes
@@ -47,23 +47,23 @@ Four things were not possible before in Ablation:
  virtual addresses from section 1 onwards. `coff_m88k_parser.parse()` is the
  first Python parser that handles this correctly.
 
-2. **No M88K disassembler survives in the Python ecosystem**: Capstone 5.x
+2. No M88K disassembler survives in the Python ecosystem. Capstone 5.x
  removed its incomplete 88K stub. GNU binutils dropped 88K support circa
  2020. Radare2 has no M88K plugin. `M88kDecoder` provides a pure-Python decoder for all MC88100 instruction classes: immediate, load/store, branch, conditional branch, register-to-register, and triadic ops.
 
-3. **Function start detection on a dead ISA with no symbols**: the BCS COFF
+3. Function start detection on a dead ISA with no symbols is not possible without a custom scanner. The BCS COFF
  symbol table is typically stripped. `function_starts()` recovers function
- boundaries by scanning all BSR/BSR.N call sites in.text, validated at 126
+ boundaries by scanning all BSR/BSR.N call sites in .text, validated at 126
  unique function entries on the moto_gen binary.
 
-4. **Data reference recovery without Capstone**: `string_refs()` scans for
+4. Data reference recovery without Capstone required a purpose-built scanner. `string_refs()` scans for
  consecutive OR.U + OR instruction pairs (the canonical 88K 32-bit constant
- load idiom) where the computed VA falls in.data, validated at 73 string
+ load idiom) where the computed VA falls in .data, validated at 73 string
  and format-string references on the same binary.
 
 ---
 
-## Supported ISA subset
+## Supported ISA subset <sup>[↑](#m88kdecoder)</sup>
 
 All MC88100 instruction classes decoded:
 
@@ -83,7 +83,7 @@ extension point.
 
 ---
 
-## ABI BCS / Binary Compatibility Standard
+## ABI BCS / Binary Compatibility Standard <sup>[↑](#m88kdecoder)</sup>
 
 | Register | Role |
 |---|---|
@@ -98,7 +98,7 @@ extension point.
 
 ---
 
-## Quick start
+## Quick start <sup>[↑](#m88kdecoder)</sup>
 
 ```python
 from ablation.core.coff_m88k_parser import parse
@@ -107,22 +107,22 @@ from ablation.analyzers.insn_m88k import M88kDecoder
 binary = parse('/path/to/target.coff')
 dec = M88kDecoder(binary)
 
-# Disassemble from entry point
+# M88kDecoder
 for insn in dec.disassemble_va(binary.entry, max_insns=40):
     print(insn)
 
-# Find all callable functions (BSR targets)
+# M88kDecoder
 for va in sorted(dec.function_starts()):
     print(f'func_{va:08x}')
 
-# Find all 32-bit constant loads pointing into .data
+# M88kDecoder
 for code_va, data_va in sorted(dec.string_refs().items()):
     print(f'{code_va:#010x} -> {data_va:#010x}')
 ```
 
 ---
 
-## Key findings from first target
+## Key findings from first target <sup>[↑](#m88kdecoder)</sup>
 
 The modules were developed against and validated on:
 
@@ -138,7 +138,7 @@ See `re/lotus/moto_gen_re.py` for the full findings module.
 
 ---
 
-## Extension points
+## Extension points <sup>[↑](#m88kdecoder)</sup>
 
 1. **Triadic ops (0x3A–0x3C)**: expand `TRIADIC_OPS` in `isa_m88k.py` with
  the full function-code table from the MC88100 PRM shift, rotate, cmp, …
@@ -152,13 +152,13 @@ See `re/lotus/moto_gen_re.py` for the full findings module.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#m88kdecoder)</sup>
 
 `CoffM88kParser.parse(path)` reads a Motorola 88000 BCS COFF executable (COFF magic 0x016D). LIEF and Capstone have no 88000 support; this pure-Python parser extracts section headers, section data, symbol table, and string table from the COFF layout. Returns an `M88kBinary` with section data bytes and a PLT-like import table derived from the COFF symbol table. Consumed by `M88KDisassembler` and `M88KTaintTracker`.
 
 ---
 
-## Usage
+## Usage <sup>[↑](#m88kdecoder)</sup>
 
 ```python
 from ablation.core.coff_m88k_parser import parse
@@ -173,10 +173,10 @@ for insn in decoder.disassemble_bytes(binary.text.data, base_va=binary.text.vadd
 
 ---
 
-## Example output
+## Example output <sup>[↑](#m88kdecoder)</sup>
 
 ```
-# coff_m88k_parser.parse() — M88kBinary attribute access:
+# M88kDecoder
 >>> b = parse('netmgr88k')
 >>> hex(b.entry_va)
 '0x8000c'
@@ -190,13 +190,13 @@ for insn in decoder.disassemble_bytes(binary.text.data, base_va=binary.text.vadd
 
 ---
 
-## False positives
+## False positives <sup>[↑](#m88kdecoder)</sup>
 
 **Symbol table coverage.** `coff_m88k_parser` reads `C_EXT` and `C_WEAKEXT` COFF symbol entries. Static functions not exported have `C_STAT` type and are excluded from `b.plt`. Use prologue pattern scanning on `b.sections[0].data` to find static function starts.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#m88kdecoder)</sup>
 
 **Before this module:** Confirm the binary has COFF magic 0x016D (`file -b target` shows `mc68k COFF` or `m88k COFF`).
 
@@ -204,7 +204,7 @@ for insn in decoder.disassemble_bytes(binary.text.data, base_va=binary.text.vadd
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#m88kdecoder)</sup>
 
 `parse(path)` returns an `M88kCoffBinary`.
 
@@ -222,7 +222,7 @@ Helper methods on `M88kCoffBinary`: `section(name)`, `text` property, `data` pro
 
 ---
 
-## See also
+## See also <sup>[↑](#m88kdecoder)</sup>
 
 - [BinaryContext](binary-context.md): session state and function/import index
 - [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions

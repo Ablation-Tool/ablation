@@ -3,15 +3,25 @@
 **Module:** `ablation.analyzers.xcoff32_decompiler`  
 **Class:** `Xcoff32Decompiler`
 
+- [What this is](#what-this-is)
+- [Where it's used](#where-its-used)
+- [Safe usage](#safe-usage)
+- [Why this exists](#why-this-exists)
+- [Usage](#usage)
+- [AIX PPC32 calling convention](#aix-ppc32-calling-convention)
+- [Function descriptor format](#function-descriptor-format)
+- [Instruction coverage](#instruction-coverage)
+- [Limitations](#limitations)
+
 ---
 
-## What this is
+## What this is <sup>[↑](#xcoff32decompiler)</sup>
 
 `Xcoff32Decompiler` converts AIX PPC32 XCOFF32 functions to C-like pseudocode. It resolves AIX function descriptors before disassembly, names TOC-relative operands from the symbol map, and emits output through the standard `from_context(ctx)` interface. No Ghidra. No LIEF.
 
 ---
 
-## Where it's used
+## Where it's used <sup>[↑](#xcoff32decompiler)</sup>
 
 - AIX base executables extracted from `.bff` installp archives `automountd`, `rlogind`, `ksh93`
 - Stripped XCOFF32 binaries where the only function names come from `.symtab` rather than a `.loader` section
@@ -19,7 +29,7 @@
 
 ---
 
-## Safe usage
+## Safe usage <sup>[↑](#xcoff32decompiler)</sup>
 
 **Pass a code VA, not a descriptor VA.** `XcoffBinary.exports` keys are descriptor VAs in `.data`. Call `Xcoff32Decompiler.from_context(ctx)` and let it resolve the descriptor, then call `decompile(code_va)` with the resolved entry point. Passing a descriptor VA to `decompile()` disassembles `.data` bytes as instructions and produces garbage output.
 
@@ -35,7 +45,7 @@
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#xcoff32decompiler)</sup>
 
 Three gaps in the existing toolchain make PPC32 AIX RE slower than it should be.
 
@@ -50,7 +60,7 @@ AIX PPC32 code loads nearly every global symbol via `lwz rN, off(r2)`. Without a
 
 ---
 
-## Usage
+## Usage <sup>[↑](#xcoff32decompiler)</sup>
 
 ```python
 from ablation.analyzers.xcoff32_decompiler import Xcoff32Decompiler
@@ -87,7 +97,7 @@ loc_0x10001020:
 
 ---
 
-## AIX PPC32 calling convention
+## AIX PPC32 calling convention <sup>[↑](#xcoff32decompiler)</sup>
 
 ```
 r1    stack pointer (grows down; stwu r1,-N(r1) allocates)
@@ -103,7 +113,7 @@ CTR   computed branch target (loaded by mtctr, jumped by bctr)
 
 ---
 
-## Function descriptor format
+## Function descriptor format <sup>[↑](#xcoff32decompiler)</sup>
 
 Each exported symbol name in the symbol table points to a descriptor in `.data`, not directly to `.text`.
 
@@ -118,7 +128,7 @@ descriptor_va:           (this is the VA in XcoffBinary.exports)
 
 ---
 
-## Instruction coverage
+## Instruction coverage <sup>[↑](#xcoff32decompiler)</sup>
 
 | Family | Instructions handled |
 |--------|----------------------|
@@ -139,7 +149,7 @@ descriptor_va:           (this is the VA in XcoffBinary.exports)
 
 ---
 
-## Limitations
+## Limitations <sup>[↑](#xcoff32decompiler)</sup>
 
 XCOFF64 is not supported. `from_context()` raises if the binary magic is `0x01f7`. Use `XcoffSymtabParser` for XCOFF64 name resolution and disassemble with a separate tool.
 

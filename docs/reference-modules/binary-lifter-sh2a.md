@@ -1,17 +1,17 @@
-# BinaryLifter: SH-2A backend
+# BinaryLifterSH2A
 
 **File:** `ablation/analyzers/binary_lifter.py` 
 **Arch token:** `sh2a` aliases: `sh-2a`, `sh2`
 
 ---
 
-## What this is
+## What this is <sup>[↑](#binaryliftersh2a)</sup>
 
 Renesas SH-2A MCUs power Bosch EDC17, Denso, and Siemens automotive ECUs. Firmware ships as a headerless flat ROM image where virtual address equals file offset. Standard `BinaryLifter` backends require an ELF section map to translate addresses to bytes. The SH-2A backend adds explicit flat-ROM support and lifts functions to annotated pseudo-C so call chains, taint annotations, and caller-resolved pseudocode are available for ECU firmware with no ELF header.
 
 ---
 
-## Where it's used
+## Where it's used <sup>[↑](#binaryliftersh2a)</sup>
 
 - **Bosch EDC17**: SH7058/SH7059 flat ROM images from automotive ECUs
 - **Denso and Siemens ECUs**: SH-2A core firmware distributed as raw flash images
@@ -19,7 +19,7 @@ Renesas SH-2A MCUs power Bosch EDC17, Denso, and Siemens automotive ECUs. Firmwa
 
 ---
 
-## Safe usage
+## Safe usage <sup>[↑](#binaryliftersh2a)</sup>
 
 **Specify `arch="sh2a"` explicitly.** `BinaryLifter.from_path()` defaults to arm64. Passing an SH-2A binary without the arch token produces misidentified instructions with no error.
 
@@ -33,7 +33,7 @@ Renesas SH-2A MCUs power Bosch EDC17, Denso, and Siemens automotive ECUs. Firmwa
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#binaryliftersh2a)</sup>
 
 Two things were not possible before in Ablation:
 
@@ -49,20 +49,20 @@ path that works correctly when `_sections` is empty.
 
 ---
 
-## Usage
+## Usage <sup>[↑](#binaryliftersh2a)</sup>
 
 ```python
 from ablation.analyzers.binary_lifter import BinaryLifter
 
-# Flat ECU ROM (base_va=0, VA==file_offset)
+# BinaryLifterSH2A
 lifter = BinaryLifter.from_path("sh7058_ecu.bin", arch="sh2a")
 print(lifter.lift_function(0x1000))
 
-# With confirmed function names
+# BinaryLifterSH2A
 lifter._names[0x2400] = "can_rx_handler"
 print(lifter.lift_function(0x2400))
 
-# With taint from a prior analysis
+# BinaryLifterSH2A
 lifter._taint_map[0x1000] = {"r4"}   # R4 carries tainted data at this function
 print(lifter.lift_function(0x1000))
 ```
@@ -81,7 +81,7 @@ Example output:
 
 ---
 
-## Architecture mapping
+## Architecture mapping <sup>[↑](#binaryliftersh2a)</sup>
 
 | SH-2A | BinaryLifter |
 |---|---|
@@ -92,7 +92,7 @@ Example output:
 
 ---
 
-## How it works
+## How it works <sup>[↑](#binaryliftersh2a)</sup>
 
 ```mermaid
 flowchart TD
@@ -172,7 +172,7 @@ propagates through loads and calls. A call whose arguments include a tainted reg
 
 ---
 
-## Flat ROM path
+## Flat ROM path <sup>[↑](#binaryliftersh2a)</sup>
 
 When `BinaryLifter._sections` is empty lief could not parse an ELF/PE header, the lifter
 treats `func_va` as a direct byte offset into `self.data`. This is correct for all SH-2A ECU
@@ -183,7 +183,7 @@ rather than crashing.
 
 ---
 
-## Limitations
+## Limitations <sup>[↑](#binaryliftersh2a)</sup>
 
 - Conditional branches emit `if (T)` / `if (!T)`: the T-bit value is not tracked across
  instructions. This is a structural limitation of the linear-walk approach (no CFG).
@@ -196,10 +196,10 @@ rather than crashing.
 
 ---
 
-## Example output
+## Example output <sup>[↑](#binaryliftersh2a)</sup>
 
 ```
-# BinaryLifter.lift_function(0x22ccc0) output (ARM64):
+# BinaryLifterSH2A
 // httpsd_handle_request @ 0x22ccc0
 {
   v1 = arg0;
@@ -215,13 +215,13 @@ rather than crashing.
 
 ---
 
-## False positives
+## False positives <sup>[↑](#binaryliftersh2a)</sup>
 
 **Indirect calls.** `BinaryLifter` emits `call 0x<target>` for direct branch-and-link instructions. Indirect calls through a register or through the PLT are emitted as `call reg` or `call <plt_name>`: the register value at call time is not evaluated symbolically.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#binaryliftersh2a)</sup>
 
 **Before this module:** Run `TaintTracker` or `SinkArgClassifier` first to identify which functions are worth lifting to pseudocode.
 
@@ -229,7 +229,7 @@ rather than crashing.
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#binaryliftersh2a)</sup>
 
 `BinaryLifter.from_path(path).lift_functionva, max_insns=512` returns a `str`: the pseudo-C disassembly of the function at `va`, one statement per line.
 
@@ -242,7 +242,7 @@ The output uses `NativeVal` as the symbolic type for register state. `NativeVal`
 
 ---
 
-## See also
+## See also <sup>[↑](#binaryliftersh2a)</sup>
 
 - [BinaryContext](binary-context.md): session state and function/import index
 - [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions

@@ -1,20 +1,20 @@
-# C166/C167 ECU Decoding
+# EcuC166Decoder
 
 Decode Infineon/Siemens C166/C167 ECU firmware in pure Python. Parses 2/4-byte variable-length instructions, identifies function starts via the Interrupt Vector Table and `CALLS` prologue patterns, and recovers stack-frame allocations. Covers BMW MS43, Bosch KW1, Motronic M3.x, and Daimler/VW ECU targets; Capstone has no C166 support.
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#ecuc166decoder)</sup>
 
-1. **Capstone has no C166 support.** `CS_ARCH_*` has no entry for the C166/C167 ISA. Before this module, analyzing BMW MS43, Bosch KW1, Motronic M3.x, and other C167-based ECU firmware required external tools such as PEMicro or IDA with a C166 plugin, neither of which is scriptable from Python. `EcuC166Decoder` implements the instruction decoder in pure Python from the Infineon C167CR V1.0 ISA reference.
+1. Capstone has no C166 support. `CS_ARCH_*` has no entry for the C166/C167 ISA. Before this module, analyzing BMW MS43, Bosch KW1, Motronic M3.x, and other C167-based ECU firmware required external tools such as PEMicro or IDA with a C166 plugin, neither of which is scriptable from Python. `EcuC166Decoder` implements the instruction decoder in pure Python from the Infineon C167CR V1.0 ISA reference.
 
-2. **Function boundary recovery uses the IVT at offset 0 and `CALLS` target scanning.** The C167 Interrupt Vector Table at ROM offset 0 contains vectors for reset, NMI, and all 56 interrupt sources. Each vector is a `JMPS`/`CALLS` instruction pointing to a handler entry point. `EcuC166Decoder.parse_ivt()` extracts these as `IVTEntry` objects with `target_pa` resolved to a physical address, providing a seed function list for `function_starts()` without requiring symbol tables.
+2. Function boundary recovery uses the IVT at offset 0 and `CALLS` target scanning. The C167 Interrupt Vector Table at ROM offset 0 contains vectors for reset, NMI, and all 56 interrupt sources. Each vector is a `JMPS`/`CALLS` instruction pointing to a handler entry point. `EcuC166Decoder.parse_ivt()` extracts these as `IVTEntry` objects with `target_pa` resolved to a physical address, providing a seed function list for `function_starts()` without requiring symbol tables.
 
-3. **All instructions are 2 or 4 bytes, always at even addresses.** The opcode byte alone determines the length via a lookup table. This makes the C166 decoder significantly simpler than variable-length ISAs like M68K, and `EcuC166Decoder.insn_lengthbyte_off` is O(1). `C166Insn.is_branch()`, `is_call()`, `is_load()`, and `is_store()` enable CFG construction without full semantic decode.
+3. All instructions are 2 or 4 bytes, always at even addresses. The opcode byte alone determines the length via a lookup table, so `EcuC166Decoder.insn_length(byte_off)` is O(1). This makes the C166 decoder significantly simpler than variable-length ISAs like M68K. `C166Insn.is_branch()`, `is_call()`, `is_load()`, and `is_store()` enable CFG construction without full semantic decode.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#ecuc166decoder)</sup>
 
 ```mermaid
 flowchart TD
@@ -38,24 +38,24 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#ecuc166decoder)</sup>
 
 ```python
 from ablation.analyzers.ecu_c166_decoder import EcuC166Decoder
 
 decoder = EcuC166Decoder.from_path('/path/to/bmw_ms43.bin', base_pa=0x0000)
 
-# IVT function seeds
+# EcuC166Decoder
 ivt = decoder.parse_ivt()
 print(f"IVT entries: {len(ivt)}")
 for entry in ivt[:5]:
     print(f"  vector={entry.index}  pa={entry.pa:#x}  target_pa={entry.target_pa:#x}")
 
-# All function starts
+# EcuC166Decoder
 starts = decoder.function_starts()
 print(f"Found {len(starts)} functions (IVT + CALLS scan)")
 
-# Disassemble a function
+# EcuC166Decoder
 for insn in decoder.disassemble(starts[0], starts[1]):
     flag = ''
     if insn.is_call: flag = ' [CALL]'
@@ -65,7 +65,7 @@ for insn in decoder.disassemble(starts[0], starts[1]):
 
 ---
 
-## Example output
+## Example output <sup>[↑](#ecuc166decoder)</sup>
 
 The following illustrates C166/C167 disassembly output format. Actual addresses and instruction counts are ROM-specific.
 
@@ -87,7 +87,7 @@ Disassembly at 0x0008:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#ecuc166decoder)</sup>
 
 **`function_starts()` seed expansion via CALLS target scan may include data constants that match CALLS encoding.** Validate starts against known code regions within the ROM address range. IVT seeds are always valid entry points; CALLS-scan additions should be validated by checking that the first instruction decodes as a valid C166 opcode.
 
@@ -95,17 +95,17 @@ Disassembly at 0x0008:
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#ecuc166decoder)</sup>
 
 Run `EcuC166Decoder` after `EcuArchDetector` confirms `c166` or `c167` architecture or when manually confirmed from ECU documentation. `ivt_entries()` provides the seed function list; `function_starts()` extends it via CALLS scanning. Use `C166Insn.is_call()` output for CFG construction and taint analysis on the identified function set.
 
 ---
 
-## Decoded opcode families
+## Decoded opcode families <sup>[↑](#ecuc166decoder)</sup>
 
 The decoder recognises the following instruction types. All type strings appear in `C166Insn.insn_type`.
 
-### 4-byte instructions (in `_FOUR_BYTE_OPS`)
+### 4-byte instructions (in `_FOUR_BYTE_OPS`) <sup>[↑](#ecuc166decoder)</sup>
 
 | `insn_type` | Opcode | Form | Notes |
 |:---|:---|:---|:---|
@@ -117,7 +117,7 @@ The decoder recognises the following instruction types. All type strings appear 
 | `MOV_LD` | `0xF2` / `0xC2` / `0xA2` | `MOV Rwn, mem` / `[Rwm]` | Load DPP-mapped / internal / indirect |
 | `MOV_ST` | `0xF6` / `0xB2` | `MOV mem/[Rwm], Rwn` | Store |
 
-### 2-byte instructions
+### 2-byte instructions <sup>[↑](#ecuc166decoder)</sup>
 
 | `insn_type` | Opcode | Form | Confirmation source |
 |:---|:---|:---|:---|
@@ -148,7 +148,7 @@ The decoder recognises the following instruction types. All type strings appear 
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#ecuc166decoder)</sup>
 
 `EcuC166Decoder.disassemble` returns `list[C166Insn]`. Pass start and end physical address bounds; omitting both disassembles the entire ROM:
 
@@ -177,7 +177,7 @@ The decoder recognises the following instruction types. All type strings appear 
 
 ---
 
-## See also
+## See also <sup>[↑](#ecuc166decoder)</sup>
 
 - [Flat ROM Function Discovery](flat-rom-function-discovery.md): `EcuArchDetector` for architecture identification before this decoder
 - [M68K/CPU32 Decoding](m68k-cpu32-decoding.md): M68K decoder for other ECU targets including GM P-series

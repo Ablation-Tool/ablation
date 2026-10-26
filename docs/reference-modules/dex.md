@@ -1,20 +1,20 @@
-# Android DEX Security Analysis
+# DexAnalyzer
 
 Scan Android APK packages for hardcoded secrets, dangerous API invocations, cryptographic misuse, cleartext network endpoints, exported attack surface, and dangerous permission combinations: without external dependencies, using ablation's native DEX and AXML parsers.
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#dexanalyzer)</sup>
 
-1. **Static analysis of Android APKs requires parsing two distinct binary formats simultaneously: Dalvik Executable (DEX) for bytecode and strings, and Android Binary XML (AXML) for manifest permissions and component declarations.** Tools that use only dexdump or apktool miss the cross-format findings: a `READ_CONTACTS` + `INTERNET` permission combination that feeds into a hardcoded C2 URL requires correlating manifest data with DEX string literals. `DexAnalyzer._scan_manifest()` and `_scan_dex_strings()` run together on the same `APKParser` instance so cross-format signals are always in scope.
+1. Static analysis of Android APKs requires parsing two distinct binary formats simultaneously: Dalvik Executable (DEX) for bytecode and strings, and Android Binary XML (AXML) for manifest permissions and component declarations. Tools that use only dexdump or apktool miss cross-format findings. A `READ_CONTACTS` + `INTERNET` permission combination that feeds into a hardcoded C2 URL requires correlating manifest data with DEX string literals. `DexAnalyzer._scan_manifest()` and `_scan_dex_strings()` run together on the same `APKParser` instance so cross-format signals are always in scope.
 
-2. **Dangerous API detection must distinguish between intentional security mechanisms and misuse: `Cipher.getInstance("AES")` is not a finding by itself; `Cipher.getInstance("AES/ECB/NoPadding")` is.** `CRYPTO_PATTERNS` maps full method-reference strings (`Ljavax/crypto/Cipher;->getInstance(Ljava/lang/String;)`) to severity labels, so method-level precision is preserved. `DANGEROUS_API_PATTERNS` covers reflection `Class.forName`, `Method.invoke`, subprocess execution `Runtime.getRuntime`, `ProcessBuilder`, and dynamic code loading `DexClassLoader`, `PathClassLoader` with class + method-reference matching that is not fooled by package obfuscation that preserves method names.
+2. Dangerous API detection must distinguish between intentional security mechanisms and misuse. `Cipher.getInstance("AES")` is not a finding by itself; `Cipher.getInstance("AES/ECB/NoPadding")` is. `CRYPTO_PATTERNS` maps full method-reference strings to severity labels, preserving method-level precision. `DANGEROUS_API_PATTERNS` covers reflection (`Class.forName`, `Method.invoke`), subprocess execution (`Runtime.getRuntime`, `ProcessBuilder`), and dynamic code loading (`DexClassLoader`, `PathClassLoader`) with class-and-method-reference matching that is not fooled by package obfuscation.
 
-3. **Hardcoded secret detection without false positives requires entropy-gated pattern matching, not just keyword presence.** A string containing `api_key` in its literal value is only a finding when the value portion also has sufficient entropy. `_scan_dex_strings()` applies Shannon entropy pre-screening before reporting, reducing noise from help-text strings that mention "API key" in documentation comments while ensuring 32-char hex secrets and base64-encoded tokens are flagged regardless of their surrounding variable name.
+3. Hardcoded secret detection without false positives requires entropy-gated pattern matching, not keyword presence alone. A string containing `api_key` is only a finding when the value portion has sufficient entropy. `_scan_dex_strings()` applies Shannon entropy pre-screening before reporting, reducing noise from documentation strings while ensuring 32-char hex secrets and base64-encoded tokens are flagged regardless of their surrounding variable name.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#dexanalyzer)</sup>
 
 ```mermaid
 flowchart TD
@@ -44,7 +44,7 @@ flowchart TD
     linkStyle 8 stroke:#2e7d32,stroke-width:3px
 ```
 
-### Finding reference
+### Finding reference <sup>[↑](#dexanalyzer)</sup>
 
 | Category | Severity | Trigger condition |
 |:---|:---|:---|
@@ -67,29 +67,29 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#dexanalyzer)</sup>
 
 ```python
 from ablation.analyzers.dex_analyzer import DexAnalyzer
 
-# Full scan from APK path
+# DexAnalyzer
 scanner = DexAnalyzer.from_path('/path/to/app.apk')
 findings = scanner.scan()
 print(DexAnalyzer.report(findings))
 
-# Filter by severity
+# DexAnalyzer
 critical = [f for f in findings if f.severity == 'CRITICAL']
 for f in critical:
     print(f"[{f.category}] {f.class_name}.{f.method_name}: {f.detail}")
 
-# Individual scan phases
+# DexAnalyzer
 from ablation.core.apk_parser import APKParser
 apk = APKParser('/path/to/app.apk')
 manifest = apk.parse_manifest()
 scanner = DexAnalyzer(apk)
 manifest_findings = scanner._scan_manifest(manifest)
 
-# All DEX files in APK (multi-dex support)
+# DexAnalyzer
 for dex in apk.iter_dex():
     string_findings = scanner._scan_dex_strings(dex)
     api_findings = scanner._scan_dex_apis(dex)
@@ -97,13 +97,13 @@ for dex in apk.iter_dex():
 
 ---
 
-## Example output
+## Example output <sup>[↑](#dexanalyzer)</sup>
 
 The following illustrates the report format for representative findings. Actual class names, method names, string values, and permission lists will reflect the specific APK.
 
 ```
 ============================================================
-DEX SECURITY SCAN — <apk-filename>
+DEX SECURITY SCAN - <apk-filename>
 ============================================================
 
 CRITICAL (3)
@@ -124,7 +124,7 @@ MEDIUM (2)
 
 ---
 
-## False positives
+## False positives <sup>[↑](#dexanalyzer)</sup>
 
 **`HARDCODED_SECRET` fires on any high-entropy string matching a key pattern: including test fixture values and build-time-injected constants that are not real credentials.** Debug builds frequently embed test API keys with real entropy. Cross-reference `HARDCODED_SECRET` findings against the class name: strings in classes ending with `Test`, `Mock`, or `Fixture` are unlikely production secrets. Also check whether the string appears only in `static final` constants initialized to known-bad test values from a test library.
 
@@ -134,7 +134,7 @@ MEDIUM (2)
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#dexanalyzer)</sup>
 
 **Before this module:** Unzip the APK to confirm it is a valid ZIP archive with `classes.dex` and `AndroidManifest.xml` entries. Multi-dex APKs have `classes2.dex`, `classes3.dex`, etc.: `APKParser.iter_dex()` handles all of them automatically.
 
@@ -142,7 +142,7 @@ MEDIUM (2)
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#dexanalyzer)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -154,7 +154,7 @@ MEDIUM (2)
 
 ---
 
-## See also
+## See also <sup>[↑](#dexanalyzer)</sup>
 
 - [DEX Disassembly and Lifting](dex-disassembly-and-lifting.md): bytecode-level DEX instruction disassembly and lifting to IR
 - [Android](android.md): full Android RE pipeline: APK, native library (JNI), Binder surface

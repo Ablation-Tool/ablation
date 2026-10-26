@@ -4,7 +4,7 @@
 
 ---
 
-## What this is
+## What this is <sup>[↑](#ecuvledecoder)</sup>
 
 VLE Variable Length Encoding is a PowerPC instruction set extension that NXP added to the e200z4, e200z6, and e200z7 cores found in automotive ECUs. It lets compilers mix 16-bit and 32-bit instructions in the same binary so firmware fits in smaller flash. Flash is a hard cost constraint on every ECU, so NXP e200 cores use VLE by default in production firmware.
 
@@ -14,7 +14,7 @@ Standard Capstone decodes PowerPC Book E but not VLE. Pointing Capstone at a VLE
 
 ---
 
-## Where it's used
+## Where it's used <sup>[↑](#ecuvledecoder)</sup>
 
 - **GM E39a PCM** NXP MPC5566, e200z6 core: VLE regions at `0x2A000` and `0x034000`
 - **GM E54 and E92 ECUs**: factory firmware compiled for NXP e200z cores
@@ -23,7 +23,7 @@ Standard Capstone decodes PowerPC Book E but not VLE. Pointing Capstone at a VLE
 
 ---
 
-## Pipeline
+## Pipeline <sup>[↑](#ecuvledecoder)</sup>
 
 ```mermaid
 flowchart TD
@@ -57,7 +57,7 @@ Without `EcuVLEDecoder`, the function-start scan on a VLE binary returns empty b
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#ecuvledecoder)</sup>
 
 Three things were not possible before in Ablation:
 
@@ -85,7 +85,7 @@ can settle the question by scanning the first N instructions: a VLE stream produ
 
 ---
 
-## VLE length discrimination
+## VLE length discrimination <sup>[↑](#ecuvledecoder)</sup>
 
 VLE instructions are either 16-bit SE Short Encoding or 32-bit, identified by the first byte:
 
@@ -101,9 +101,9 @@ intentional encoding property of the e200 VLE ISA, not a heuristic.
 
 ---
 
-## Instruction coverage
+## Instruction coverage <sup>[↑](#ecuvledecoder)</sup>
 
-### 16-bit SE instructions decoded
+### 16-bit SE instructions decoded <sup>[↑](#ecuvledecoder)</sup>
 
 | Instruction | Encoding | Type |
 |---|---|---|
@@ -130,7 +130,7 @@ intentional encoding property of the e200 VLE ISA, not a heuristic.
 | `se_b BD8` | BD8 form | BRANCH |
 | `se_bl BD8` | BD8 form (LK=1) | CALL |
 
-### 32-bit VLE instructions decoded
+### 32-bit VLE instructions decoded <sup>[↑](#ecuvledecoder)</sup>
 
 | Instruction | Op / Encoding | Type |
 |---|---|---|
@@ -146,7 +146,7 @@ Instructions not in this list decode as `se_unknown_XXXX` or `vle32_opN` with `i
 
 ---
 
-## function_starts() algorithm
+## function_starts() algorithm <sup>[↑](#ecuvledecoder)</sup>
 
 `function_starts()` returns probable function-entry VAs by scanning two prologue forms:
 
@@ -180,7 +180,7 @@ not a function start itself.
 
 ---
 
-## Usage
+## Usage <sup>[↑](#ecuvledecoder)</sup>
 
 ```python
 from ablation.analyzers.ecu_vle_decoder import EcuVLEDecoder
@@ -209,7 +209,7 @@ for va in starts[:10]:
     print(f"  0x{va:08X}")
 ```
 
-### Constructor parameters
+### Constructor parameters <sup>[↑](#ecuvledecoder)</sup>
 
 | Parameter | Default | Description |
 |---|---|---|
@@ -218,7 +218,7 @@ for va in starts[:10]:
 
 ---
 
-## VLEInsn fields
+## VLEInsn fields <sup>[↑](#ecuvledecoder)</sup>
 
 ```python
 @dataclass
@@ -252,9 +252,9 @@ class VLEInsn:
 
 ---
 
-## Branch target computation
+## Branch target computation <sup>[↑](#ecuvledecoder)</sup>
 
-### `se_b` / `se_bl`
+### `se_b` / `se_bl` <sup>[↑](#ecuvledecoder)</sup>
 
 The 8-bit signed displacement (BD8) is in bits[7:0] of the 16-bit halfword. Target:
 
@@ -262,7 +262,7 @@ The 8-bit signed displacement (BD8) is in bits[7:0] of the 16-bit halfword. Targ
 target = instruction_VA + 2 + sign_extend(BD8) * 2
 ```
 
-### `e_b` / `e_bl`
+### `e_b` / `e_bl` <sup>[↑](#ecuvledecoder)</sup>
 
 The 24-bit signed displacement (BD24) is in bits[24:1] of the 32-bit word (bit[0] = LK). Target:
 
@@ -277,9 +277,9 @@ Absolute-address variants `e_ba`, `e_bla`, AA=1 decode with the displacement as 
 
 ---
 
-## Validated results
+## Validated results <sup>[↑](#ecuvledecoder)</sup>
 
-### E39a corpus image 3 MB, MPC5566 e200z6
+### E39a corpus image 3 MB, MPC5566 e200z6 <sup>[↑](#ecuvledecoder)</sup>
 
 File: `E39a_3072KiB_12664221.bin` from PcmHammer corpus.
 
@@ -293,7 +293,7 @@ or bootloader), though MSR[VLE] state at runtime cannot be confirmed from static
 
 ---
 
-## Integration with existing ECU pipeline
+## Integration with existing ECU pipeline <sup>[↑](#ecuvledecoder)</sup>
 
 ```python
 from ablation.analyzers.ecu_rom_layout_analyzer import EcuROMLayoutAnalyzer
@@ -320,7 +320,7 @@ for region in layout.code_regions():
 
 ---
 
-## Limitations
+## Limitations <sup>[↑](#ecuvledecoder)</sup>
 
 - Compact register notation for SE instructions: SE_R and SE_RR formats use 3-bit or 4-bit
  compact register fields that map to a subset of GPRs. The decoder stores the raw field value as
@@ -341,13 +341,13 @@ for region in layout.code_regions():
 
 ---
 
-## How it works
+## How it works <sup>[↑](#ecuvledecoder)</sup>
 
 Reads the ROM image at the specified base address and applies the ISA decoder to recover instruction objects. Function boundaries are identified from preamble/epilogue patterns specific to the target compiler and ABI. Security-relevant patterns UDS handler tables, seed/key routines, calibration write paths are identified by combining structural matching with known compiler output signatures. Decoded results are stored in a `BinaryContext`-compatible format for downstream analysis.
 
 ---
 
-## Example output
+## Example output <sup>[↑](#ecuvledecoder)</sup>
 
 ```
 $ python3 -c "
@@ -366,13 +366,13 @@ for i in dec.disassemble(start=0x2A000, end=0x2A040):
 
 ---
 
-## False positives
+## False positives <sup>[↑](#ecuvledecoder)</sup>
 
 Calibration data regions contain byte sequences that decode as valid instructions in some ISAs. Confirm candidate function VAs against the ROM layout from `ECURomLayoutAnalyzer` before treating them as code. Security Access sequences in boot ROM are expected and not findings unless the seed/key algorithm is cryptographically weak.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#ecuvledecoder)</sup>
 
 **Before this module:** `EcuArchDetector` to identify the processor family and confirm this decoder applies to the target ROM.
 
@@ -380,7 +380,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#ecuvledecoder)</sup>
 
 `EcuVLEDecoderdata, base_va=0.disassemble()` (or `from_path()` / `from_bytes()`) returns `list[VLEInsn]`:
 
@@ -396,7 +396,7 @@ Calibration data regions contain byte sequences that decode as valid instruction
 
 ---
 
-## See also
+## See also <sup>[↑](#ecuvledecoder)</sup>
 
 - [EcuArchDetector](ecu-arch-detector.md): identify processor family before choosing a decoder
 - [EcuROMLayoutAnalyzer](ecu-rom-layout-analyzer.md): map ROM sections before decoding

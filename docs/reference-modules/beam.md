@@ -1,4 +1,4 @@
-# Erlang / BEAM Analysis
+# BeamContext
 
 **File:** `ablation/analyzers/beam_context.py`
 
@@ -6,13 +6,13 @@
 
 ---
 
-## What this is
+## What this is <sup>[↑](#beamcontext)</sup>
 
 Erlang applications compile to `.beam` files, one per module, using the IFF container format. Standard RE tools built for ELF or PE cannot read this format, so Erlang services are opaque to the normal Ablation pipeline. `BeamContext` maps BEAM structure to ELF-equivalent concepts: exports become symbols, imports become PLT entries, atoms become the string table. The same triage workflow then applies to OTP applications, Elixir services, and any BEAM-platform infrastructure.
 
 ---
 
-## Where it's used
+## Where it's used <sup>[↑](#beamcontext)</sup>
 
 - **OTP applications**: `ebin/` directories from compiled Erlang/OTP releases
 - **Elixir Mix releases**: precompiled BEAM files in Mix release directories
@@ -21,7 +21,7 @@ Erlang applications compile to `.beam` files, one per module, using the IFF cont
 
 ---
 
-## Safe usage
+## Safe usage <sup>[↑](#beamcontext)</sup>
 
 **Check `ctx.obfuscated` before relying on function names.** An obfuscated BEAM file has its `Dbgi` chunk stripped so `ast_functions` is empty and export/import analysis is the only available path. Reporting zero dangerous imports on an obfuscated module without flagging the obfuscation is a false negative.
 
@@ -33,7 +33,7 @@ Erlang applications compile to `.beam` files, one per module, using the IFF cont
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#beamcontext)</sup>
 
 Two things blocked BEAM security analysis before this module:
 
@@ -45,7 +45,7 @@ Erlang obfuscators strip or corrupt the `Dbgi` debug chunk and the `AtU8` atom t
 
 ---
 
-## How BEAM files are structured
+## How BEAM files are structured <sup>[↑](#beamcontext)</sup>
 
 A BEAM file is an IFF Interchange File Format container. IFF was designed for structured binary data exchange. The BEAM format uses it to pack all module information into one file with self-describing chunk types.
 
@@ -100,21 +100,21 @@ The ImpT entries encode calls as three atom indices: `module_atom_idx, function_
 
 ---
 
-## BeamContext
+## BeamContext <sup>[↑](#beamcontext)</sup>
 
-### Build and load
+### Build and load <sup>[↑](#beamcontext)</sup>
 
 ```python
 from ablation.analyzers.beam_context import BeamContext
 
 ctx = BeamContext.from_path('/path/to/module.beam')
 print(ctx.summary())
-# Module: my_module
-# Exports: 12  Imports: 34  Atoms: 187  Literals: 5
-# Debug info: yes (42 functions)
+# BeamContext
+# BeamContext
+# BeamContext
 ```
 
-### What gets extracted
+### What gets extracted <sup>[↑](#beamcontext)</sup>
 
 | Chunk | Field | Analog in ELF |
 |---|---|---|
@@ -125,7 +125,7 @@ print(ctx.summary())
 | StrT | `strings` | Raw string table segments |
 | Dbgi | `ast_functions` | DWARF debug info: source file, function names, line numbers |
 
-### Atom and string search
+### Atom and string search <sup>[↑](#beamcontext)</sup>
 
 ```python
 for atom in ctx.atoms:
@@ -137,7 +137,7 @@ for s in ctx.strings:
         print(f"[str]  {s}")
 ```
 
-### Dangerous import detection
+### Dangerous import detection <sup>[↑](#beamcontext)</sup>
 
 ```python
 from ablation.analyzers.beam_context import BeamContext, SEVERITY_CODE_EVAL
@@ -148,7 +148,7 @@ for imp in dangerous:
     print(f"[{imp.severity}] {imp.module}:{imp.function}/{imp.arity}")
 ```
 
-### Severity tiers
+### Severity tiers <sup>[↑](#beamcontext)</sup>
 
 | Constant | Meaning |
 |---|---|
@@ -158,7 +158,7 @@ for imp in dangerous:
 | `SEVERITY_CODE_EVAL` | Runtime code loading or ETF AST evaluation `erl_eval:exprs`, `code:load_binary` |
 | `SEVERITY_CODE_EXEC` | OS-level process execution or port driver spawn `os:cmd`, `erlang:open_port` |
 
-### High-risk import signatures
+### High-risk import signatures <sup>[↑](#beamcontext)</sup>
 
 | Module | Function | Severity | What it does |
 |---|---|---|---|
@@ -170,11 +170,11 @@ for imp in dangerous:
 | `gen_tcp` | `connect` | NETWORK | Outbound TCP connection |
 | `erlang` | `apply` | DISPATCH | Dynamic dispatch high volume |
 
-### Why `erlang:open_port` is dangerous
+### Why `erlang:open_port` is dangerous <sup>[↑](#beamcontext)</sup>
 
 `erlang:open_port({spawn, "ls -la"}, [])` executes an OS command in a subprocess and returns its output. It is Erlang's equivalent of `popen`. Unlike `os:cmd` (which shells through `/bin/sh`), `open_port` with `{spawn_executable, "/bin/sh"}` passes arguments directly. Both patterns are CODE_EXEC severity.
 
-### Obfuscation detection
+### Obfuscation detection <sup>[↑](#beamcontext)</sup>
 
 ```python
 if ctx.obfuscated:
@@ -184,7 +184,7 @@ if ctx.obfuscated:
 
 Missing or stripped chunks indicate deliberate obfuscation. A missing Dbgi chunk means no source-level function names or line numbers. Triage falls back to export/import analysis only.
 
-### Source-level function list
+### Source-level function list <sup>[↑](#beamcontext)</sup>
 
 When the Dbgi chunk is present, `ast_functions` gives AST-level function definitions:
 
@@ -195,7 +195,7 @@ for fn in ctx.ast_functions:
 
 ---
 
-## Sweeping a release directory
+## Sweeping a release directory <sup>[↑](#beamcontext)</sup>
 
 OTP applications compile to a directory of `.beam` files under `ebin/`. Sweep the whole directory at once:
 
@@ -206,7 +206,7 @@ results = sweep_beam_dir('/path/to/app/ebin/')
 print(fmt_sweep(results, min_severity=SEVERITY_CODE_EXEC))
 ```
 
-### Diffing releases
+### Diffing releases <sup>[↑](#beamcontext)</sup>
 
 ```python
 from ablation.analyzers.beam_context import sweep_beam_diff, fmt_sweep_diff
@@ -216,36 +216,36 @@ diff = sweep_beam_diff(
     '/path/to/app-1.1/ebin/',
 )
 print(fmt_sweep_diff(diff))
-# Shows: added/removed exports, new dangerous imports, changed function arities
+# BeamContext
 ```
 
 ---
 
-## CLI
+## CLI <sup>[↑](#beamcontext)</sup>
 
 ```bash
-# Summarize a single .beam file
+# BeamContext
 python3 -m ablation.analyzers.beam_context /path/to/module.beam
 
-# Sweep a release directory
+# BeamContext
 python3 -m ablation.analyzers.beam_context --dir /path/to/ebin/
 
-# Diff two releases
+# BeamContext
 python3 -m ablation.analyzers.beam_context --diff /path/v1/ebin/ /path/v2/ebin/
 
-# Filter by minimum severity
+# BeamContext
 python3 -m ablation.analyzers.beam_context --dir /path/to/ebin/ --min-severity CODE_EXEC
 ```
 
 ---
 
-## How it works
+## How it works <sup>[↑](#beamcontext)</sup>
 
 Parses the runtime-specific binary format APK, DEX, `.mpy`, BEAM, Go ELF to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
 
 ---
 
-## Usage
+## Usage <sup>[↑](#beamcontext)</sup>
 
 ```python
 from ablation.analyzers.beam_context import BeamContext, SEVERITY_CODE_EXEC
@@ -260,7 +260,7 @@ for imp in dangerous:
 
 ---
 
-## Example output
+## Example output <sup>[↑](#beamcontext)</sup>
 
 ```
 [HIGH] DANGEROUS_CALL   Runtime.exec() in com.example.CommandHandler:42
@@ -273,13 +273,13 @@ for imp in dangerous:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#beamcontext)</sup>
 
 Standard library calls that resemble dangerous patterns for example `exec` used for shell completions, `eval` used for template rendering with static input are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code Garble-compiled Go, ProGuard-stripped Android produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#beamcontext)</sup>
 
 **Before this module:** Confirm the target binary format APK, `.mpy`, BEAM, Go ELF before loading. `BinaryContext` is not required for all runtime analyzers.
 
@@ -287,7 +287,7 @@ Standard library calls that resemble dangerous patterns for example `exec` used 
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#beamcontext)</sup>
 
 `BeamContext.from_path(path)` returns a `BeamContext` object, this is the parsed module surface, not a list of findings:
 
@@ -307,7 +307,7 @@ Dangerous imports are identified inline: `import.dangerous == True` and `import.
 
 ---
 
-## See also
+## See also <sup>[↑](#beamcontext)</sup>
 
 - [BinaryContext](binary-context.md): native binary context when the runtime wraps a native library
 - [TaintAnalysis](taint-analysis.md): trace dangerous calls found in the runtime layer

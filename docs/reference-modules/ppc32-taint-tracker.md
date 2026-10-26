@@ -11,13 +11,13 @@ Linux userspace little-endian, older Fortinet hardware big-endian.
 
 ---
 
-## What this is
+## What this is <sup>[↑](#ppc32tainttracker)</sup>
 
 32-bit PowerPC firmware appears across router IOS images, embedded bootloaders, and VxWorks targets. These binaries use GOT2 position-independent code where r30 holds a per-function GOT2 anchor computed at runtime. Standard PLT resolution fails on these because LIEF discards Huawei vendor relocation types. `PPC32TaintTracker` resolves PLT stubs directly from raw ELF dynamic symbol entries when LIEF returns zero relocations, so taint paths through the network stack resolve correctly on both standard and vendor ELF formats.
 
 ---
 
-## Where it's used
+## Where it's used <sup>[↑](#ppc32tainttracker)</sup>
 
 - **Cisco IOS 7200 / 3700**: big-endian PPC32 router firmware
 - **Huawei S6720 / S6720EI**: big-endian GOT2 PIC bootloaders
@@ -27,7 +27,7 @@ Linux userspace little-endian, older Fortinet hardware big-endian.
 
 ---
 
-## Safe usage
+## Safe usage <sup>[↑](#ppc32tainttracker)</sup>
 
 **Pass `endian='little'` for POWER LE Linux binaries.** The default is big-endian. A wrong endian setting decodes every instruction incorrectly with no error.
 
@@ -39,7 +39,7 @@ Linux userspace little-endian, older Fortinet hardware big-endian.
 
 ---
 
-## Usage
+## Usage <sup>[↑](#ppc32tainttracker)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker_ppc32 import PPC32TaintTracker
@@ -54,7 +54,7 @@ for f in findings:
 
 ---
 
-## ABI model
+## ABI model <sup>[↑](#ppc32tainttracker)</sup>
 
 PPC32 System V / EABI:
 
@@ -72,7 +72,7 @@ GOT2: `lwz rX, N(r30)` / `mtctr rX` / `[crclr cr1eq]` / `bctrl`.
 
 ---
 
-## GOT2 PIC support Huawei / embedded Linux
+## GOT2 PIC support Huawei / embedded Linux <sup>[↑](#ppc32tainttracker)</sup>
 
 PPC32 GOT2 PIC binaries reserve r30 as the per-compilation-unit GOT2 anchor.
 Each function prologue captures the PC using a `bcl 20,31,$+4` / `mflr r30`
@@ -92,7 +92,7 @@ value. The tracker pre-computes r30 for every function in `_func_r30`.
 GOT2 entries that point to PLT stubs are indexed in `_got2_va_to_name`. At each
 `bctrl` site the tracker computes `got2_va = r30 + disp` and resolves the name.
 
-### LIEF limitation on Huawei PPC32
+### LIEF limitation on Huawei PPC32 <sup>[↑](#ppc32tainttracker)</sup>
 
 Huawei bootloaders use vendor-specific ELF relocation type `0x40000054`, which
 LIEF reports as invalid and discards. This causes LIEF to return 0 JUMP_SLOT
@@ -109,7 +109,7 @@ from `.rela.plt` R_PPC_JMP_SLOT entries. The guard prevents
 `_load_plt_from_dynsym_raw()` from running on these binaries; undefined
 symbols in SYSV PIC have `st_value=0` and adding them would corrupt the PLT map.
 
-### GCC `crclr cr1eq` between mtctr and bctrl
+### GCC `crclr cr1eq` between mtctr and bctrl <sup>[↑](#ppc32tainttracker)</sup>
 
 GCC PPC32 emits `crclr cr1eq` (or `creqv`) between `mtctr rX` and `bctrl` as
 a variadic calling convention indicator. The 2-instruction look-back pattern
@@ -119,7 +119,7 @@ The resolver handles this: when `prev1` is not `PPC_INS_MTCTR` but `prev2` is,
 and `prev3` (the instruction 3 before `bctrl`) is `PPC_INS_LWZ`, the window
 shifts one slot back to recover the `lwz+mtctr` pair.
 
-### Prologue window
+### Prologue window <sup>[↑](#ppc32tainttracker)</sup>
 
 PPC32 prologues save LR (`mflr r0`), spill callee-saved registers (`stmw r30`
 or individual `stw r30`/`stw r31`), and set up the frame pointer before the
@@ -128,7 +128,7 @@ function, so a 64-byte 16-instruction window is used.
 
 ---
 
-## Sources and sinks
+## Sources and sinks <sup>[↑](#ppc32tainttracker)</sup>
 
 **Sources** mark r3 tainted after call:
 `recv`, `recvfrom`, `recvmsg`, `read`, `pread`, `fread`, `fgets`, `gets`, `getenv`
@@ -160,7 +160,7 @@ broader argument-provenance classification when taint finds nothing.
 
 ---
 
-## Taint propagation
+## Taint propagation <sup>[↑](#ppc32tainttracker)</sup>
 
 Register taint propagates through arithmetic ops, logic ops, register moves, and `lwz` pointer dereferences from tainted base registers. `li`/`lis` immediate loads and `mflr` clear
 destination taint. Loads from a non-tainted base register also clear destination
@@ -173,7 +173,7 @@ passing them to sinks will show 0 findings; use `SinkArgClassifier` for those.
 
 ---
 
-## Interprocedural depth
+## Interprocedural depth <sup>[↑](#ppc32tainttracker)</sup>
 
 `run_interprocedural(depth=4)` seeds from functions that call a source, then
 follows tainted arguments through direct BL calls up to `depth` hops. GOT2
@@ -182,7 +182,7 @@ treated as clobbering r3–r10.
 
 ---
 
-## Known limitations
+## Known limitations <sup>[↑](#ppc32tainttracker)</sup>
 
 1. **Memory taint**: stack buffers are not modelled. Any flow that routes tainted
  data through a local buffer before the sink call is invisible to the tracker.
@@ -199,19 +199,19 @@ treated as clobbering r3–r10.
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#ppc32tainttracker)</sup>
 
 Prior to this module, ppc32tainttracker required manual work outside the Ablation pipeline. This module integrates the capability directly so findings feed the shared `PatternLibrary` and `FindingRegistry` without a separate toolchain.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#ppc32tainttracker)</sup>
 
 Seeds the worklist with every call site of each configured source function. For each seeded location, a linear Capstone disassembly pass applies the taint lattice rules instruction by instruction, propagating taint through register moves, arithmetic, and memory operations. When a call instruction targets a PLT stub that resolves to a sink function and the relevant argument register is tainted, a `TaintFinding` is emitted. Internal calls push a new entry onto the worklist so taint follows the call graph interprocedurally up to `max_depth` levels.
 
 ---
 
-## Example output
+## Example output <sup>[↑](#ppc32tainttracker)</sup>
 
 ```
 [CRITICAL] system() at 0x4023A0
@@ -224,13 +224,13 @@ Seeds the worklist with every call site of each configured source function. For 
 
 ---
 
-## False positives
+## False positives <sup>[↑](#ppc32tainttracker)</sup>
 
 The most common false positive is taint surviving a zero-clear instruction `xor rax, rax`. The `CLR` rule in the taint lattice clears taint unconditionally on self-XOR, but some architectures use different clearing idioms. Use `SinkArgClassifier` to pre-filter `RODATA_CONST` call sites before running the taint tracker, these are not findings regardless of register state.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#ppc32tainttracker)</sup>
 
 **Before this module:** `BinaryContext.load_or_build()`, then `SinkArgClassifier.classify_all()` to eliminate `RODATA_CONST` call sites. Only pass `ARG_PROPAGATED` and `UNKNOWN` sinks to the taint tracker.
 
@@ -238,7 +238,7 @@ The most common false positive is taint surviving a zero-clear instruction `xor 
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#ppc32tainttracker)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -252,7 +252,7 @@ The most common false positive is taint surviving a zero-clear instruction `xor 
 
 ---
 
-## See also
+## See also <sup>[↑](#ppc32tainttracker)</sup>
 
 - [TaintAnalysis](taint-analysis.md): multi-architecture taint tracking reference
 - [SinkArgClassifier](sink-arg-classifier.md): pre-filter RODATA_CONST sinks before taint

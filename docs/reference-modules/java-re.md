@@ -1,31 +1,31 @@
-# Java RE
+# JavaREAnalyzer
 
 **File:** `modules/java_re.py`
 
-## Why this exists
+## Why this exists <sup>[↑](#javareanalyzer)</sup>
 
 Java.class/.jar reverse engineering: constant pool analysis, method signature extraction, field access mapping, and cross-reference building. Provides the Java-tier analysis complement to native ARM64/x86 RE for mixed Java+JNI targets.
 
-## Key constants
+## Key constants <sup>[↑](#javareanalyzer)</sup>
 
 | Constant | Value | Applied to |
 |---|---|---|
 | `_MAX_FILE_BYTES` | 64 MB |.class/.jar file read cap |
 | `_MAX_ENTRY_BYTES` | 16 MB | ZIP entry read cap |
 
-## FORGE audit
+## FORGE audit <sup>[↑](#javareanalyzer)</sup>
 
 Gate: **PASSED**. No HIGH or CRITICAL findings. ZIP entry sizes checked via `zf.getinfo(cname).file_size > _MAX_ENTRY_BYTES` before extraction. `_MAX_FILE_BYTES=64MB`. No lief.parse(). No HTTP reads.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#javareanalyzer)</sup>
 
 Parses the runtime-specific binary format APK, DEX, `.mpy`, BEAM, and Go ELF to extract the class/function/module structure, import graph, and callable inventory. Dangerous API calls are identified by matching against a curated sink list for the runtime. For runtimes that support decompilation, a pseudo-code representation is generated for each dangerous call site to assist manual review.
 
 ---
 
-## Usage
+## Usage <sup>[↑](#javareanalyzer)</sup>
 
 ```python
 from modules.java_re import JavaREAnalyzer
@@ -38,7 +38,7 @@ for f in findings:
 
 ---
 
-## Example output
+## Example output <sup>[↑](#javareanalyzer)</sup>
 
 ```
 [HIGH] DANGEROUS_CALL   Runtime.exec() in com.example.CommandHandler:42
@@ -51,13 +51,13 @@ for f in findings:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#javareanalyzer)</sup>
 
 Standard library calls that resemble dangerous patterns such as `exec` used for shell completions and `eval` used for template rendering with static input are not findings. Confirm that the argument reaching the dangerous call is user-controlled before escalating. Obfuscated code Garble-compiled Go and ProGuard-stripped Android produces incomplete call graphs: findings from incomplete graphs carry lower confidence.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#javareanalyzer)</sup>
 
 **Before this module:** Confirm the target binary format APK, `.mpy`, BEAM, and Go ELF before loading. `BinaryContext` is not required for all runtime analyzers.
 
@@ -65,7 +65,7 @@ Standard library calls that resemble dangerous patterns such as `exec` used for 
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#javareanalyzer)</sup>
 
 `analyze_jarjar_path` returns a dict:
 
@@ -83,7 +83,7 @@ Standard library calls that resemble dangerous patterns such as `exec` used for 
 
 ---
 
-## See also
+## See also <sup>[↑](#javareanalyzer)</sup>
 
 - [BinaryContext](binary-context.md): native binary context when the runtime wraps a native library
 - [TaintAnalysis](taint-analysis.md): trace dangerous calls found in the runtime layer

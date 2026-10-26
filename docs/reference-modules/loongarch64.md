@@ -1,10 +1,10 @@
-# LoongArch64 Analysis Stack
+# LoongArch64TaintTracker
 
 Pure-Python LoongArch64 (LA64) decoder, CFG builder, and interprocedural taint tracker. Capstone 5.x has no LoongArch support, so the entire decode path is Python. Instruction table source: binutils 2.41 `opcodes/loongarch-opc.c`. Targets stripped ELF binaries compiled for the lp64 ABI: TencentOS 4.6 server packages, Loongson firmware, EDK2/GRUB2 EFI modules, and kernel drivers.
 
 ---
 
-## What this is
+## What this is <sup>[↑](#loongarch64tainttracker)</sup>
 
 LoongArch is a RISC ISA designed by Loongson Technology for Chinese-market server and desktop CPUs. TencentOS, Kylin, and UOS all ship LoongArch64 packages. Production servers from Loongson use this ISA exclusively. Capstone 5.x has no LoongArch support, so any RE tool that depends on Capstone is blind to this architecture.
 
@@ -12,7 +12,7 @@ This stack is the only public RE toolkit built specifically for LA64. It covers 
 
 ---
 
-## Where it's used
+## Where it's used <sup>[↑](#loongarch64tainttracker)</sup>
 
 - **TencentOS 4.6**: server packages and kernel modules distributed as stripped ELF
 - **Loongson 3A5000 / 3A6000 firmware**: EDK2 and GRUB2 EFI modules
@@ -21,7 +21,7 @@ This stack is the only public RE toolkit built specifically for LA64. It covers 
 
 ---
 
-## Safe usage
+## Safe usage <sup>[↑](#loongarch64tainttracker)</sup>
 
 **Verify the architecture before constructing.** Passing an ARM64 or x86-64 ELF to `LoongArch64TaintTracker` produces wrong function starts with no error. Check `e_machine == 0x102` in the ELF header first.
 
@@ -35,7 +35,7 @@ This stack is the only public RE toolkit built specifically for LA64. It covers 
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#loongarch64tainttracker)</sup>
 
 Two gaps blocked LoongArch64 security analysis before this stack:
 
@@ -47,7 +47,7 @@ A kernel binary built with `CONFIG_KASAN=y` inserts a 4–6 instruction shadow-m
 
 ---
 
-## Module stack
+## Module stack <sup>[↑](#loongarch64tainttracker)</sup>
 
 ```mermaid
 flowchart TD
@@ -78,7 +78,7 @@ flowchart TD
 
 ---
 
-## Quick start
+## Quick start <sup>[↑](#loongarch64tainttracker)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker_loongarch64 import LoongArch64TaintTracker
@@ -87,14 +87,14 @@ tt = LoongArch64TaintTracker.from_path("libc-2.38.so.loongarch64")
 findings = tt.run_interprocedural()
 print(tt.report(findings))
 
-# Stripped binary: use from_path_full for full function coverage
+# LoongArch64TaintTracker
 tt = LoongArch64TaintTracker.from_path_full("libssl.so.3.0.loongarch64")
 findings = tt.run_interprocedural()
 ```
 
 ---
 
-## PLT/GOT stub format
+## PLT/GOT stub format <sup>[↑](#loongarch64tainttracker)</sup>
 
 LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes same width as AArch64:
 
@@ -115,7 +115,7 @@ LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes same width as AArch
 
 `_load_elf()` merges all PLT stub addresses from `.rela.plt` + `.dynsym` into the symbol map. A `bl <plt_stub_va>` resolves to the exact imported name without requiring the ±16-byte tolerance scan in `_PLT_TOL`.
 
-### LoongArch relocation types
+### LoongArch relocation types <sup>[↑](#loongarch64tainttracker)</sup>
 
 | Constant | Value | Meaning |
 |---|---|---|
@@ -127,7 +127,7 @@ LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes same width as AArch
 
 ---
 
-## lp64 register roles
+## lp64 register roles <sup>[↑](#loongarch64tainttracker)</sup>
 
 | Range | ABI names | Role |
 |---|---|---|
@@ -143,21 +143,21 @@ LoongArch PLT stubs are 4 instructions × 4 bytes = 16 bytes same width as AArch
 
 ---
 
-## Structured operand API
+## Structured operand API <sup>[↑](#loongarch64tainttracker)</sup>
 
 `LoongArchOpType` and `LoongArchOperand` were added in session 15.
-Before them, every tool that needed to inspect instruction operands had to parse `frame.op_str` — splitting on commas, stripping whitespace, checking whether a token begins with `$`.
+Before them, every tool that needed to inspect instruction operands had to parse `frame.op_str`: splitting on commas, stripping whitespace, checking whether a token begins with `$`.
 That approach was fragile and duplicated per-mnemonic knowledge across multiple modules.
 
-### Why this exists
+### Why this exists <sup>[↑](#loongarch64tainttracker)</sup>
 
 1. `SinkArgClassifierLA64._trace_arg()` needed to check whether the destination register of an `or` instruction matched a target register index, whether a `pcaddi` immediate pointed into `.rodata`, and whether an `ld.d` loaded from a callee-saved base. Every one of those checks parsed `op_str` differently from the others. A structured layer removes all of them.
 
-2. `TaintTracker` on LA64 cannot propagate taint without knowing which registers an instruction reads and writes. The op_str representation has no field for "this instruction writes operand 0 and reads operands 1 and 2" — that distinction requires per-mnemonic parsing or a typed operand list.
+2. `TaintTracker` on LA64 cannot propagate taint without knowing which registers an instruction reads and writes. The op_str representation has no field for "this instruction writes operand 0 and reads operands 1 and 2"; that distinction requires per-mnemonic parsing or a typed operand list.
 
 3. New scanners added during RE (CFG builders, data-flow wallets) should not need to learn the op_str grammar. `frame.operands[n].reg` or `frame.operands[n].imm` gives them the value directly.
 
-### Types
+### Types <sup>[↑](#loongarch64tainttracker)</sup>
 
 ```python
 class LoongArchOpType(IntEnum):
@@ -185,7 +185,7 @@ class LoongArchOperand:
 `LoongArchOpType` numbering matches Capstone's `CS_OP_*` constants.
 When the project contributes the decoder to Capstone, consumer code that checks `op.type == REG` will not need updating.
 
-### Access patterns
+### Access patterns <sup>[↑](#loongarch64tainttracker)</sup>
 
 ```python
 from ablation.analyzers.loongarch_decoder import LoongArchDecoder, LoongArchOpType
@@ -193,25 +193,25 @@ from ablation.analyzers.loongarch_decoder import LoongArchDecoder, LoongArchOpTy
 dec = LoongArchDecoder()
 frame = dec.decode_one(insn_bytes, va)
 
-# Check destination register
+# LoongArch64TaintTracker
 if frame.operands and frame.operands[0].type == LoongArchOpType.REG:
     dest_idx  = frame.operands[0].reg       # integer index 0-31
     dest_name = frame.operands[0].reg_name  # e.g. "$a0"
 
-# Check immediate
+# LoongArch64TaintTracker
 if len(frame.operands) >= 2 and frame.operands[1].type == LoongArchOpType.IMM:
     offset = frame.operands[1].imm   # signed integer
 
-# Check whether dest is an argument register ($a0-$a7 = indices 4-11)
+# LoongArch64TaintTracker
 _ARG_IDX = frozenset(range(4, 12))
 if frame.operands[0].reg in _ARG_IDX:
     ...
 
-# op_str is still populated for backward compat and human-readable display
+# LoongArch64TaintTracker
 print(frame)   # 0x00001000  001500a4  or           $a0, $a1, $zero
 ```
 
-### Register index reference
+### Register index reference <sup>[↑](#loongarch64tainttracker)</sup>
 
 | Index | ABI name | Role |
 |---|---|---|
@@ -223,7 +223,7 @@ print(frame)   # 0x00001000  001500a4  or           $a0, $a1, $zero
 | 22 | `$fp` | Frame pointer (callee-saved) |
 | 23–31 | `$s0`–`$s8` | Callee-saved |
 
-### MEM operands
+### MEM operands <sup>[↑](#loongarch64tainttracker)</sup>
 
 MEM operands are reserved and not yet emitted.
 Load and store instructions produce separate REG (base) and IMM (displacement) operands.
@@ -231,7 +231,7 @@ A future pass can fuse adjacent REG+IMM pairs into a MEM operand when a full mem
 
 ---
 
-## Taint propagation rules
+## Taint propagation rules <sup>[↑](#loongarch64tainttracker)</sup>
 
 | Instruction class | Propagation |
 |---|---|
@@ -248,7 +248,7 @@ A future pass can fuse adjacent REG+IMM pairs into a MEM operand when a full mem
 
 ---
 
-## Syscall tracking
+## Syscall tracking <sup>[↑](#loongarch64tainttracker)</sup>
 
 When the constant-folding path has a value for `$a7` (set by `ori $a7,$zero,N` or `addi.d $a7,$zero,N`), the syscall is classified from the 318-entry asm-generic unistd.h table Linux 6.6.
 
@@ -272,7 +272,7 @@ classify_syscall(146)   # ('setuid', 'escalation')
 
 ---
 
-## Exception path CFG treatment
+## Exception path CFG treatment <sup>[↑](#loongarch64tainttracker)</sup>
 
 | Mnemonic | CFG treatment | Taint treatment |
 |---|---|---|
@@ -283,34 +283,34 @@ classify_syscall(146)   # ('setuid', 'escalation')
 
 ---
 
-## KASAN/KCOV stripping
+## KASAN/KCOV stripping <sup>[↑](#loongarch64tainttracker)</sup>
 
 A TencentOS kernel built with `CONFIG_KASAN=y` has roughly 40% of its instructions as instrumentation ghosts. Without stripping, taint analysis on the debug kernel produces thousands of false edges into `__asan_load8_noabort` and similar.
 
 ```python
 from ablation.analyzers.loongarch_decoder_v2 import LoongArchDecoderV2
 
-# Load symbol VAs from System.map (parses "<va> <type> <name>" format)
+# LoongArch64TaintTracker
 dec = LoongArchDecoderV2.from_system_map("/path/to/System.map")
 
-# Full decode with instrumentation tags visible
+# LoongArch64TaintTracker
 for frame in dec.decode_frames_v2(section_bytes, base_addr):
     if frame.is_instrumentation:
         print(f"  [ghost {frame.idiom}] {frame.va:#x}")
 
-# Clean decode: only real program instructions
+# LoongArch64TaintTracker
 for frame in dec.decode_frames_clean(section_bytes, base_addr):
     print(frame)
 
-# Coverage stats
+# LoongArch64TaintTracker
 stats = dec.count_instrumentation(section_bytes, base_addr)
 print(stats)
-# {"total": 208, "instrumentation": 84, "real": 124, "pct_instrumentation": 40.4}
+# LoongArch64TaintTracker
 ```
 
 ---
 
-## Function start detection
+## Function start detection <sup>[↑](#loongarch64tainttracker)</sup>
 
 `from_path()` uses two sources:
 1. Symbol table entries (`st_value` in `.symtab` / `.dynsym`) within `.text`.
@@ -328,7 +328,7 @@ Use `from_path_full()` for stripped TencentOS binaries. `.eh_frame` recovers lea
 
 ---
 
-## Kernel module sources and sinks
+## Kernel module sources and sinks <sup>[↑](#loongarch64tainttracker)</sup>
 
 For kernel modules, `_SOURCE_NAMES` and `_SINK_NAMES` extend to kernel-space names:
 
@@ -343,13 +343,13 @@ For kernel modules, `_SOURCE_NAMES` and `_SINK_NAMES` extend to kernel-space nam
 
 ---
 
-## How it works
+## How it works <sup>[↑](#loongarch64tainttracker)</sup>
 
 `analyze_cfgcfg, state, insn_frames` runs a path-insensitive, flow-sensitive dataflow analysis over a LoongArch64 CFG. Instruction frames come from `from_loongarch_frames()` decoded LA64 instructions; the initial taint `State` seeds argument registers. Each basic block executes the transfer functions for the LoongArch64 instruction set, merging taint state at join points. Called by `TaintTrackerLoongArch64` to propagate attacker-controlled data from source registers to sink call sites.
 
 ---
 
-## Usage
+## Usage <sup>[↑](#loongarch64tainttracker)</sup>
 
 ```python
 from ablation.analyzers.loongarch64_max_not_min_scanner import LA64MaxNotMinScanner
@@ -362,23 +362,23 @@ for f in findings:
 
 ---
 
-## Example output
+## Example output <sup>[↑](#loongarch64tainttracker)</sup>
 
 ```
-# analyze_cfg(cfg, state, insn_frames) taint output (same State.tainted_sinks format):
+# LoongArch64TaintTracker
 [LA64-TAINT] tlv_parse (0x4a2000) -> memcpy($a0, $a1, $a2) @ 0x4a2140  [src: recv]
 [LA64-TAINT] tlv_parse (0x4a2000) -> snprintf($a0) @ 0x4a2200  [src: recv]
 ```
 
 ---
 
-## False positives
+## False positives <sup>[↑](#loongarch64tainttracker)</sup>
 
 **GOT-based indirect calls.** `analyze_cfg()` tracks taint through direct calls resolved by `analysis_loongarch64`'s PLT table. Indirect calls through the GOT common in shared libraries are not resolved: the callee is recorded as `Unknown`. Use `ppc64_elfv1_resolver` pattern adapted for LA64 to pre-populate the PLT before analysis.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#loongarch64tainttracker)</sup>
 
 **Before this module:** Build the LoongArch64 CFG with `from_loongarch_frames()`. Seed the initial `State` with tainted argument registers for the function entry point.
 
@@ -386,7 +386,7 @@ for f in findings:
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#loongarch64tainttracker)</sup>
 
 `scan_sources_to_sinks(ctx)` returns `List[TaintFindingLA64]`.
 
@@ -402,7 +402,7 @@ for f in findings:
 
 ---
 
-## See also
+## See also <sup>[↑](#loongarch64tainttracker)</sup>
 
 - [BinaryContext](binary-context.md): session state and function/import index
 - [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions

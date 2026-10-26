@@ -1,4 +1,4 @@
-# Ppc32Lifter: IBM PPC476 backend
+# Ppc476Lifter
 
 **File:** `ablation/analyzers/ppc32_lifter.py` 
 **Class:** `Ppc32Lifter` 
@@ -6,7 +6,7 @@
 
 ---
 
-## What this is
+## What this is <sup>[↑](#ppc476lifter)</sup>
 
 IBM PPC476 is a 32-bit big-endian PowerPC core Book E architecture used in IBM embedded
 appliances and storage controllers. Firmware targeting this core runs against a glibc 2.15
@@ -17,7 +17,7 @@ names with argument values, and emits C-like pseudo-code tagged with instruction
 
 ---
 
-## Where it's used
+## Where it's used <sup>[↑](#ppc476lifter)</sup>
 
 - **IBM PPC476 sysroot binaries**: glibc 2.15 targets built with `ppc476-tools-cross-1.0`
 - **IBM embedded appliance firmware** that ships PPC32 BE ELF binaries against a glibc-2.15 base
@@ -25,7 +25,7 @@ names with argument values, and emits C-like pseudo-code tagged with instruction
 
 ---
 
-## Safe usage
+## Safe usage <sup>[↑](#ppc476lifter)</sup>
 
 **Clear the `BinaryContext` cache after the `_extract_plt_ppc32be` fix ships.** Contexts built
 before commit `03bd8a5` have `plt = {}` for PPC32 targets. Delete
@@ -51,7 +51,7 @@ privileged instructions do not carry attacker data.
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#ppc476lifter)</sup>
 
 Three things were not possible before this module:
 
@@ -79,7 +79,7 @@ functions `execv`, `system`, `sprintf`, `strcpy` with enough argument detail to 
 
 ---
 
-## Usage
+## Usage <sup>[↑](#ppc476lifter)</sup>
 
 ```python
 from ablation.analyzers.binary_context import BinaryContext
@@ -88,7 +88,7 @@ from ablation.analyzers.ppc32_lifter import Ppc32Lifter
 ctx = BinaryContext.load_or_build('/tmp/ppc476/opt/ppc476-tools/ppc/usr/bin/rpcgen')
 lifter = Ppc32Lifter.from_context(ctx)
 
-# Lift a single function by VA
+# Ppc476Lifter
 pseudo = lifter.lift(0x10002754, n_insn=80)
 print(pseudo)
 ```
@@ -115,7 +115,7 @@ from a developer-controlled global rather than from network input.
 
 ---
 
-## Architecture mapping
+## Architecture mapping <sup>[↑](#ppc476lifter)</sup>
 
 | PPC476 register | ABI role | Lifter treatment |
 |---|---|---|
@@ -132,7 +132,7 @@ from a developer-controlled global rather than from network input.
 
 ---
 
-## PPC476 Book E extensions
+## PPC476 Book E extensions <sup>[↑](#ppc476lifter)</sup>
 
 PPC476 adds these instructions to the base PowerPC 32-bit ISA. Capstone decodes them
 correctly under `CS_ARCH_PPC | CS_MODE_32 | CS_MODE_BIG_ENDIAN`.
@@ -148,7 +148,7 @@ correctly under `CS_ARCH_PPC | CS_MODE_32 | CS_MODE_BIG_ENDIAN`.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#ppc476lifter)</sup>
 
 ```
 BinaryContext.plt        ─────────────────┐
@@ -163,7 +163,7 @@ BinaryContext.plt        ─────────────────┐
   │   yields (address, mnemonic, op_str) for each insn
   │
   ├─ _lift_insn(va, mn, op, regs)
-  │   regs: Dict[int, _Val]   — register state map
+  │   regs: Dict[int, _Val]   - register state map
   │   _Val.kind: const|arg|stack|mem|sym|expr|unknown
   │
   │   per-instruction dispatch:
@@ -203,7 +203,7 @@ falls back to `ctx.exports`. An unresolved `bl` appears as `0x1000xxxx()`.
 
 ---
 
-## PPC32 BE PLT extraction
+## PPC32 BE PLT extraction <sup>[↑](#ppc476lifter)</sup>
 
 `_extract_plt_ppc32be` is the companion fix in `binary_context.py` that makes this lifter useful.
 
@@ -242,7 +242,7 @@ assert ctx.plt[0x1000f320] == 'fork'
 
 ---
 
-## Limitations
+## Limitations <sup>[↑](#ppc476lifter)</sup>
 
 - **Linear walk, not CFG.** The lifter does not follow branches. Functions with early-exit paths
  show incomplete register state at later instructions. Use `n_insn` to limit output to the path
@@ -267,10 +267,10 @@ assert ctx.plt[0x1000f320] == 'fork'
 
 ---
 
-## Example output
+## Example output <sup>[↑](#ppc476lifter)</sup>
 
 ```
-# Ppc32Lifter.lift(func_va) output:
+# Ppc476Lifter
 // PPC32 lift of 0x10002480 @ 0x10002480
 //
   [0x10002480] sp -= 64;
@@ -284,13 +284,13 @@ assert ctx.plt[0x1000f320] == 'fork'
 
 ---
 
-## False positives
+## False positives <sup>[↑](#ppc476lifter)</sup>
 
 **No branch condition lifting.** `Ppc32Lifter` emits `if <va>: goto <va>` placeholders for all conditional branches, it does not evaluate the condition expression. The branch condition must be inferred from the instructions that set CR0/CR1 before the branch instruction.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#ppc476lifter)</sup>
 
 **Before this module:** Run `PPC32TaintTracker` and `PPC32PLTTracer` to confirm the function contains tainted argument paths to dangerous sinks.
 
@@ -298,7 +298,7 @@ assert ctx.plt[0x1000f320] == 'fork'
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#ppc476lifter)</sup>
 
 `Ppc32Lifter.from_context(ctx).liftfunc_va, n_insn=150` returns a `str`: the pseudo-C disassembly of the function, one statement per line.
 
@@ -311,7 +311,7 @@ The lifter tracks register state using `_Val` internally. Output lines use C-lik
 
 ---
 
-## See also
+## See also <sup>[↑](#ppc476lifter)</sup>
 
 - [BinaryContext](binary-context.md): session state and function/import index
 - [TaintAnalysis](taint-analysis.md): dataflow tracking on resolved functions

@@ -1,20 +1,20 @@
-# TI C28x DSP/MCU Decoding
+# EcuC28xDecoder
 
 Decode Texas Instruments TMS320C28x firmware: implementing the 16-bit word-addressed ISA from SPRU430F in pure Python Capstone has no C28x support: distinguishing 16-bit single-word from 32-bit dual-word instructions for F28x-series MCUs F28P55x, F28335, F2837x, F2838x used in EV/HEV traction inverter control units and motor-drive ECUs.
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#ecuc28xdecoder)</sup>
 
-1. **Capstone 5.x has no C28x support.** The TMS320C28x is TI's primary 32-bit fixed-point DSP/MCU core for real-time control applications: EV/HEV traction inverter firmware compiled with `cl2000` or `c29clang` is C28x firmware. Without `ecu_c28x_decoder.py`, this entire class of automotive and industrial firmware cannot be disassembled by any existing pipeline tool.
+1. Capstone 5.x has no C28x support. The TMS320C28x is TI's primary 32-bit fixed-point DSP/MCU core for real-time control applications. EV/HEV traction inverter firmware compiled with `cl2000` or `c29clang` is C28x firmware. Without `ecu_c28x_decoder.py`, this entire class of automotive and industrial firmware cannot be disassembled by any existing pipeline tool.
 
-2. **C28x uses 16-bit program words stored in little-endian byte order with word addressing**: each address refers to one 16-bit word, not one byte. This is structurally different from byte-addressed ISAs and requires the decoder to correctly translate word addresses to byte offsets before reading instruction words. `EcuC28xDecoder` handles this transparently via the `base_va` parameter.
+2. C28x uses 16-bit program words with word addressing: each address refers to one 16-bit word, not one byte. This is structurally different from byte-addressed ISAs and requires the decoder to translate word addresses to byte offsets before reading instruction words. `EcuC28xDecoder` handles this transparently via the `base_va` parameter.
 
-3. **C28x instruction width is determined by the first word's opcode field**: 16-bit instructions (`1-word`) use opcodes that fit in a single word; 32-bit instructions (`2-word`) use an extended encoding. `EcuC28xDecoder.insn_lengthbyte_off` reads the first word and returns either 2 (16-bit) or 4 (32-bit) bytes, enabling O(1) sequential decode.
+3. C28x instruction width is determined by the first word's opcode field. 16-bit instructions use opcodes that fit in a single word; 32-bit instructions use an extended encoding. `EcuC28xDecoder.insn_length(byte_off)` reads the first word and returns either 2 or 4 bytes, enabling O(1) sequential decode.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#ecuc28xdecoder)</sup>
 
 ```mermaid
 flowchart TD
@@ -36,7 +36,7 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#ecuc28xdecoder)</sup>
 
 ```python
 from ablation.analyzers.ecu_c28x_decoder import EcuC28xDecoder
@@ -52,7 +52,7 @@ for insn in decoder.disassemble(starts[0], starts[0] + 0x40):
 
 ---
 
-## Example output
+## Example output <sup>[↑](#ecuc28xdecoder)</sup>
 
 The following illustrates C28x disassembly output format. Actual addresses are firmware-specific.
 
@@ -70,7 +70,7 @@ Disassembly at 0x3e8000:
 
 ---
 
-## False positives
+## False positives <sup>[↑](#ecuc28xdecoder)</sup>
 
 **`function_starts()` heuristic requires `PUSH RB` prologue**: functions that do not save the return block leaf functions or interrupt service routines are not detected. Supplement with ELF symbol table entries from `TiCoffLoader` if available, or with call-graph reachability from detected starts.
 
@@ -78,13 +78,13 @@ Disassembly at 0x3e8000:
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#ecuc28xdecoder)</sup>
 
 Run `EcuC28xDecoder` on any TI F28x-series firmware after `EcuArchDetector` confirms C28x architecture. Function starts seed C28x-specific taint analysis. Pair with `TiCoffLoader` for symbol names when the firmware was compiled with debug symbols.
 
 ---
 
-## Reading output
+## Reading output <sup>[↑](#ecuc28xdecoder)</sup>
 
 `EcuC28xDecoder.disassemblestart=0, end=None` returns `List[C28xInsn]`:
 
@@ -103,7 +103,7 @@ Run `EcuC28xDecoder` on any TI F28x-series firmware after `EcuArchDetector` conf
 
 ---
 
-## See also
+## See also <sup>[↑](#ecuc28xdecoder)</sup>
 
 - [TI COFF Archive Loading](ti-coff-archive-loading.md): `TiCoffLoader` for symbol names in COFF2-format C28x firmware
 - [TI Neural Network Artifact Detection](ti-neural-network-artifacts.md): `TiNNCScanner` for detecting TVM inference modules in C28x firmware

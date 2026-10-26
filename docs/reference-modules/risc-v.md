@@ -1,20 +1,20 @@
-# RISC-V ISA Support
+# RISCVTaintTracker
 
 Labeled-taint analysis, CFG-fixpoint dataflow, and structural lifting for RISC-V 32-bit and 64-bit binaries: covering RV32I/M/A/C and RV64GC Linux psABI targets.
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#riscvtainttracker)</sup>
 
-1. **RISC-V has two distinct calling convention variants RV32 and RV64 that differ in register width and argument register count: RV32 uses `a0-a7` with 32-bit slots while RV64 uses the same register names with 64-bit slots, and a taint tracker that confuses them produces incorrect taint bounds and missed sink arguments.** `taint_tracker_riscv32.py` and `taint_tracker_riscv64.py` provide independent ABI-correct implementations, and `taint_tracker_riscv.py` provides the labeled-taint `TaintEngine` with a `Width` enum (`Width.RV32`/`Width.RV64`) that selects the correct register width at construction time.
+1. RISC-V has two distinct calling convention variants with different register widths. RV32 uses `a0-a7` as 32-bit argument slots; RV64 uses the same register names with 64-bit slots. A tracker that confuses them produces incorrect taint bounds and misses sink arguments. `taint_tracker_riscv32.py` and `taint_tracker_riscv64.py` provide independent ABI-correct implementations. `taint_tracker_riscv.py` adds a labeled-taint `TaintEngine` with a `Width` enum that selects the correct variant at construction.
 
-2. **The labeled-taint model in `taint_tracker_riscv.py`: `Taintlabels: frozenset, bound: Optional[int]`: provides two capabilities that the binary-path trackers lack: label provenance which source function tainted this register and bound tracking andi/ori with immediate masks set `bound`, gating out-of-bounds index findings.** The `TaintState.join()` lattice operation merges taint from CFG merge-points correctly, and `analyze_cfg()` runs a fixpoint analysis over `cfg_riscv.py` basic blocks, finding taint flows that simple linear traversal misses on loops and conditional branches.
+2. The labeled-taint model in `taint_tracker_riscv.py` provides two capabilities the binary-path trackers lack. Label provenance records which source function tainted each register. Bound tracking records `andi`/`ori` immediate masks in a `bound` field, gating out-of-bounds index findings. `TaintState.join()` merges taint from CFG merge-points, and `analyze_cfg()` runs a fixpoint analysis over `cfg_riscv.py` basic blocks, finding flows that linear traversal misses on loops and conditional branches.
 
-3. **RISC-V compressed instructions RVC, 16-bit `c.*` mnemonics are used in GCC-compiled RV64GC binaries to reduce code size: a decoder that handles only 32-bit instructions will silently skip 16-bit instructions and produce incorrect CFG edges.** `insn_riscv.py` handles both 32-bit and 16-bit RVC instructions in the same decoder, and `cfg_riscv.py` correctly resolves `c.j`, `c.beqz`, `c.bnez` branch instructions to build complete CFGs.
+3. RISC-V compressed instructions (RVC, 16-bit `c.*` mnemonics) appear in GCC-compiled RV64GC binaries. A decoder that handles only 32-bit instructions silently skips 16-bit instructions and produces incorrect CFG edges. `insn_riscv.py` handles both encodings in the same decoder. `cfg_riscv.py` correctly resolves `c.j`, `c.beqz`, and `c.bnez` branch instructions to build complete CFGs.
 
 ---
 
-## How it works
+## How it works <sup>[↑](#riscvtainttracker)</sup>
 
 ```mermaid
 flowchart TD
@@ -38,7 +38,7 @@ flowchart TD
     linkStyle 3 stroke:#2e7d32,stroke-width:3px
 ```
 
-### Module inventory
+### Module inventory <sup>[↑](#riscvtainttracker)</sup>
 
 | Module | Role |
 |:---|:---|
@@ -52,12 +52,12 @@ flowchart TD
 
 ---
 
-## Usage
+## Usage <sup>[↑](#riscvtainttracker)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker_riscv import TaintEngine, Width
 
-# Labeled-taint engine (listing path)
+# RISCVTaintTracker
 from ablation.analyzers.insn_riscv import from_listing
 eng = TaintEngine(Width.RV64)
 eng.taint_register("a0", "user")
@@ -65,7 +65,7 @@ findings = eng.run(from_listing(objdump_text))
 for f in findings:
     print(f"{f.address:#x} [{f.kind}] {f.detail} <- {sorted(f.labels)}")
 
-# CFG fixpoint analysis
+# RISCVTaintTracker
 from ablation.analyzers.analysis_riscv import analyze_cfg
 from ablation.analyzers.taint_tracker_riscv import TaintState
 
@@ -73,24 +73,24 @@ init = TaintState(Width.RV64)
 init.taint_reg("a0", "user")
 result = analyze_cfg(insns, Width.RV64, initial=init)
 
-# Binary-path tracker (RV64)
+# RISCVTaintTracker
 from ablation.analyzers.taint_tracker_riscv64 import RV64TaintTracker
 tracker = RV64TaintTracker.from_path('/path/to/riscv64.elf')
 findings = tracker.run()
 
-# Structural lifting via BinaryLifter
+# RISCVTaintTracker
 from ablation.analyzers.binary_lifter import BinaryLifter
 lifter = BinaryLifter.from_path('/path/to/rv64.elf', arch='rv64')
 print(lifter.lift_function(0x10430))
 
-# RV32
+# RISCVTaintTracker
 lifter32 = BinaryLifter.from_path('/path/to/rv32.elf', arch='rv32')
 print(lifter32.lift_function(0x10000))
 ```
 
 ---
 
-## Example output
+## Example output <sup>[↑](#riscvtainttracker)</sup>
 
 The following illustrates the format for representative taint findings. Actual values reflect the specific binary.
 
@@ -102,17 +102,17 @@ The following illustrates the format for representative taint findings. Actual v
 [HIGH] fgets → sprintf @ <va>
   Chain: fgets(a0) → mv a1, a0 → jal sprintf(a0=<fmt>, a1=tainted)
   Width: RV64; Taint: a1 label={'user'}, bound=None
-  Sink: sprintf arg-1 — format string candidate
+  Sink: sprintf arg-1 - format string candidate
 
 CFG fixpoint (analyze_cfg):
   Block <va>: a0 = Taint({'user'}, None)
   Block <va> (merge): a0 = join(Taint({'user'}, None), Taint()) = Taint({'user'}, None)
-  Block <va>: sink jal strcpy — a1 tainted
+  Block <va>: sink jal strcpy - a1 tainted
 ```
 
 ---
 
-## False positives
+## False positives <sup>[↑](#riscvtainttracker)</sup>
 
 **`andi` with an immediate bounds the taint but does not clear it.** A tainted register masked with `andi a0, a0, 0x3f` has `bound=0x3f` maximum value 63. This is not a false positive, it constrains which sinks are reachable, but a tainted index bounded to 63 can still cause a buffer overflow if the destination buffer is fewer than 64 bytes. The bound is a taint-narrowing signal, not a safe-access guarantee.
 
@@ -122,7 +122,7 @@ CFG fixpoint (analyze_cfg):
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#riscvtainttracker)</sup>
 
 **Before this module:** For RVC compressed instruction binaries, confirm that `insn_riscv.from_listing()` or `from_capstone()` parses the 16-bit instructions correctly: `objdump --disassemble-all -M no-aliases` is the recommended listing input for RISC-V. For bare-metal RV32 targets no OS, no glibc, define custom source/sink lists in the binary-path tracker constructor.
 
@@ -130,7 +130,7 @@ CFG fixpoint (analyze_cfg):
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#riscvtainttracker)</sup>
 
 `RISCV64TaintTracker.from_context(ctx).run()` returns `List[TaintFindingRISCV64]`.
 
@@ -148,7 +148,7 @@ The RISC-V 32-bit tracker (`taint_tracker_riscv32.py`) returns `TaintFindingRISC
 
 ---
 
-## See also
+## See also <sup>[↑](#riscvtainttracker)</sup>
 
 - [Binary Lifter](binary-lifter.md): `arch='rv32'`/`'rv64'` structural lifting
 - [Taint Analysis](taint-analysis.md): general labeled-taint model documentation

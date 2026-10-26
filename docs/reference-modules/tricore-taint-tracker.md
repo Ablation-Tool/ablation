@@ -4,13 +4,13 @@
 
 ---
 
-## What this is
+## What this is <sup>[↑](#tricoretainttracker)</sup>
 
 Infineon TriCore is the dominant MCU in modern automotive ADAS and powertrain ECUs. TriCore uses a hardware-enforced Context Save Area (CSA) mechanism where CALL automatically saves upper-context registers to a dedicated memory region. No software push/pop is generated. Standard taint trackers treat all registers as clobbered at every call, which misses paths through TriCore's callee-saved registers. `TriCoreTaintTracker` implements the full Infineon EABI V2.9 calling convention including FCALL/FRET leaf functions so taint paths through SecurityAccess and CAN frame handlers trace correctly.
 
 ---
 
-## Where it's used
+## Where it's used <sup>[↑](#tricoretainttracker)</sup>
 
 - **Bosch ME17 ECUs**: AURIX TC2xx/TC3xx powertrain firmware
 - **Continental MG1 ECUs**: TriCore-based engine and transmission controllers
@@ -18,7 +18,7 @@ Infineon TriCore is the dominant MCU in modern automotive ADAS and powertrain EC
 
 ---
 
-## Safe usage
+## Safe usage <sup>[↑](#tricoretainttracker)</sup>
 
 **Pass the correct `base_va` for flash-mapped binaries.** AURIX maps flash at 0x80000000 or 0xA0000000. A wrong `base_va` shifts every function address so findings report incorrect VAs and byte-verification fails.
 
@@ -30,7 +30,7 @@ Infineon TriCore is the dominant MCU in modern automotive ADAS and powertrain EC
 
 ---
 
-## Why this exists
+## Why this exists <sup>[↑](#tricoretainttracker)</sup>
 
 Three things were not possible before in Ablation:
 
@@ -54,7 +54,7 @@ FRET as call/return boundaries with the same calling-convention semantics as CAL
 
 ---
 
-## ABI summary: Infineon TriCore EABI V2.9 / GHS-RE-REFERENCE.md §1.2–1.3
+## ABI summary: Infineon TriCore EABI V2.9 / GHS-RE-REFERENCE.md §1.2–1.3 <sup>[↑](#tricoretainttracker)</sup>
 
 | Role | Registers | Capstone names |
 |---|---|---|
@@ -69,7 +69,7 @@ FRET as call/return boundaries with the same calling-convention semantics as CAL
 
 ---
 
-## Usage
+## Usage <sup>[↑](#tricoretainttracker)</sup>
 
 ```python
 from ablation.analyzers.taint_tracker_tricore import TriCoreTaintTracker
@@ -98,7 +98,7 @@ print(tracker.report(chains))
 
 ---
 
-## Constructor parameters
+## Constructor parameters <sup>[↑](#tricoretainttracker)</sup>
 
 | Parameter | Default | Description |
 |---|---|---|
@@ -110,7 +110,7 @@ print(tracker.report(chains))
 
 ---
 
-## TaintFindingTriCore fields
+## TaintFindingTriCore fields <sup>[↑](#tricoretainttracker)</sup>
 
 ```python
 @dataclass
@@ -126,7 +126,7 @@ class TaintFindingTriCore:
 
 ---
 
-## Taint propagation rules
+## Taint propagation rules <sup>[↑](#tricoretainttracker)</sup>
 
 | Instruction class | Rule |
 |---|---|
@@ -148,7 +148,7 @@ class TaintFindingTriCore:
 
 ---
 
-## Calling convention effects at call site
+## Calling convention effects at call site <sup>[↑](#tricoretainttracker)</sup>
 
 ```
 for r in {d4,d5,d6,d7,a4,a5,a6,a7}:
@@ -163,7 +163,7 @@ Sink function (e.g. `memcpy`): records finding if any arg reg is tainted.
 
 ---
 
-## FCALL / FRET GHS-RE-REFERENCE.md §1.7
+## FCALL / FRET GHS-RE-REFERENCE.md §1.7 <sup>[↑](#tricoretainttracker)</sup>
 
 GHS-compiled leaf functions use FCALL. FCALL saves A[11] only; no CSA save is performed.
 The tracker treats FCALL identically to CALL at the call site, and FRET identically to RET. The
@@ -172,7 +172,7 @@ mnemonic set `{'call', 'calla', 'calli', 'fcall'}` covers all call forms;
 
 ---
 
-## Limitations
+## Limitations <sup>[↑](#tricoretainttracker)</sup>
 
 - Intra-procedural by default. `run_interprocedural(depth=N)` follows tainted D[4]–D[7]
  / A[4]–A[7] into callees but does not model return-value aliasing across call chains.
@@ -186,13 +186,13 @@ mnemonic set `{'call', 'calla', 'calli', 'fcall'}` covers all call forms;
 
 ---
 
-## How it works
+## How it works <sup>[↑](#tricoretainttracker)</sup>
 
 Seeds the worklist with every call site of each configured source function. For each seeded location, a linear Capstone disassembly pass applies the taint lattice rules instruction by instruction, propagating taint through register moves, arithmetic, and memory operations. When a call instruction targets a PLT stub that resolves to a sink function and the relevant argument register is tainted, a `TaintFinding` is emitted. Internal calls push a new entry onto the worklist so taint follows the call graph interprocedurally up to `max_depth` levels.
 
 ---
 
-## Example output
+## Example output <sup>[↑](#tricoretainttracker)</sup>
 
 ```
 [CRITICAL] system() at 0x4023A0
@@ -205,13 +205,13 @@ Seeds the worklist with every call site of each configured source function. For 
 
 ---
 
-## False positives
+## False positives <sup>[↑](#tricoretainttracker)</sup>
 
 The most common false positive is taint surviving a zero-clear instruction `xor rax, rax`. The `CLR` rule in the taint lattice clears taint unconditionally on self-XOR, but some architectures use different clearing idioms. Use `SinkArgClassifier` to pre-filter `RODATA_CONST` call sites before running the taint tracker, these are not findings regardless of register state.
 
 ---
 
-## Pipeline position
+## Pipeline position <sup>[↑](#tricoretainttracker)</sup>
 
 **Before this module:** `BinaryContext.load_or_build()`, then `SinkArgClassifier.classify_all()` to eliminate `RODATA_CONST` call sites. Only pass `ARG_PROPAGATED` and `UNKNOWN` sinks to the taint tracker.
 
@@ -219,7 +219,7 @@ The most common false positive is taint surviving a zero-clear instruction `xor 
 
 ---
 
-## Reading findings
+## Reading findings <sup>[↑](#tricoretainttracker)</sup>
 
 | Field | Content |
 |:---|:---|
@@ -233,7 +233,7 @@ The most common false positive is taint surviving a zero-clear instruction `xor 
 
 ---
 
-## See also
+## See also <sup>[↑](#tricoretainttracker)</sup>
 
 - [TaintAnalysis](taint-analysis.md): multi-architecture taint tracking reference
 - [SinkArgClassifier](sink-arg-classifier.md): pre-filter RODATA_CONST sinks before taint
