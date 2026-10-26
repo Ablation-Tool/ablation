@@ -76,6 +76,7 @@ Analyze hardware description language source files: extract constants, compare v
 |---|---|
 | [DocxReExtractor](reference-modules/docx-re-extractor.md) | Extract paragraphs, register tables, and named constants from .docx ASIC specifications (stdlib only, no python-docx) |
 | [HdlHtmlExtractor](reference-modules/hdl-html-extractor.md) | Extract VHDL/Verilog from HDL Designer HTML exports (ContentFrame0.htm files) and feed into VerilogSemantic |
+| [LatexReExtractor](reference-modules/latex-re-extractor.md) | Extract sections, \\newcommand constants, tabular tables, inline numeric parameters, and labeled items from LaTeX ASIC/firmware specs |
 | [VerilogSemantic](reference-modules/verilog-semantic.md) | Extract constants, signal widths, FSM states from a single Verilog/VHDL source tree |
 | [HDLVersionDiff](reference-modules/hdl-version-diff.md) | Compare two HDL source versions: added/removed/changed constants, signals, ports, FSM states |
 | [OneHotFSMExtractor](reference-modules/one-hot-fsm-extractor.md) | Extract state transition tables from one-hot `assign d_next[N] = ...` Verilog FSMs |

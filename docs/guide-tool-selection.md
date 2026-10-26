@@ -315,6 +315,11 @@ Task-to-tool lookup. For constructor patterns and key methods, see `docs/referen
 | "Extract text, register tables, and constants from a .docx ASIC specification" | `DocxReExtractor.from_path(path).register_tables()` |
 | "Get all tables from a .docx spec as structured row/cell data" | `DocxReExtractor.from_path(path).tables()` |
 | "Get full plain text from a .docx ASIC spec" | `DocxReExtractor.from_path(path).text()` |
+| "Extract architecture parameters (speed, depth, count) from a LaTeX TDR or spec" | `LatexReExtractor.from_tar(tar, member).parameters()` or `from_path(tex).parameters()` |
+| "Extract \\newcommand / \\def constant definitions from a LaTeX document" | `LatexReExtractor.from_path(tex).commands()` |
+| "Extract tabular register-map tables from a LaTeX spec" | `LatexReExtractor.from_path(tex).tables()` |
+| "Navigate section hierarchy of a LaTeX spec" | `LatexReExtractor.from_path(tex).sections()` |
+| "Extract \\textbf{label}: description pairs from LaTeX itemize lists" | `LatexReExtractor.from_path(tex).labeled_items()` |
 | "Extract VHDL/Verilog source from HDL Designer HTML exports (*.htm ContentFrame files)" | `HdlHtmlExtractor.from_directory(htm_dir).to_semantic()` |
 | "Get clean source text from an HDL Designer HTML export file" | `HdlHtmlExtractor.from_directory(htm_dir).text('module.vhd')` |
 | "Write clean .vhd/.v files from HDL Designer HTML export (for HDLVersionDiff input)" | `HdlHtmlExtractor.from_directory(htm_dir).write_vhd(output_dir)` |
